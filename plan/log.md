@@ -18593,3 +18593,44 @@ GX_PARITY_REF_DIR=<gx refs> python $D/cyclone_golden_identity.py $D/out/cyclone_
 python $D/eigen_branch.py $D/out/eigen_branch.json
 bash $D/run_identity.sh <main tree> <this tree> $D/out/identity
 ```
+## 2026-09-20 — Q31 rebased on 2.2.0, three manifest baselines re-measured
+
+**Why CI was red.** Run 35518660118 had exactly two red jobs out of 40, `repo-hygiene` and
+`ci-required`. The aggregator failed in 3s because `repo-hygiene` had, so there was no
+failing test anywhere in the run. The one real failure was the package architecture
+manifest: `test_python_files: topology count regressed to 81, above baseline 80`.
+
+**Three baselines moved, not one.** The checker stops at the first regression, so fixing the
+topology count only exposed the next gate. Each number below is the value the checker
+reported, set verbatim and re-run until clean, rather than the old number plus a delta:
+
+- `test_python_files` 80 -> 81, for `tests/unit/operators/test_laguerre_sink_contract.py`.
+- `installable_source_python_lines` 92943 -> 93023, for `nu_hyper_m_const` carried end to
+  end plus the startup refusal.
+- `test_python_lines` 92533 -> 92814, for the nine contract cases and the ledger rows.
+
+Each carries its reason in the manifest, as the target-30 and target-45000 policies require.
+
+**Merge of main (2.2.0) was clean** — no conflicts. `plan.md`, `plan/log.md` and
+`tools/package_architecture_manifest.toml` came through identical to `main`, so no
+queue-table row was reverted and no table acquired a second `baseline` key. The dot-precision
+allowlist in `tests/unit/solvers/test_linear_krylov_core.py` is keyed by `file:line` and
+survived the merge unshifted; it was re-run to confirm rather than assumed.
+
+## 2026-09-21 — Q10 sheared-status fixture repair and main integration
+
+CI run `35567276915`, shard 3, exposed a fixture with four hard-coded ky rows
+on a three-row half-spectrum grid. Derive the state shape from the grid and
+run the existing three status tests for both supported combinations: full
+layout/full-complex FFT and half layout/compressed real FFT. The raw sheared
+API's full-complex default remains explicit; its half-spectrum refusal is
+not bypassed. All six cases pass on the supported CPU environment before
+integration. No production code changes are needed for this fixture defect.
+Integrate main `4605d0b49`, preserve both log histories, and remeasure source
+and test budgets. Half-layout default adoption remains blocked by the recorded
+adjoint slowdown and pending current-head CI, not promoted by these tests.
+The float32 replay exposed a separate fixture tolerance below round-off:
+the successful-budget control now uses `max(1e-8, 10*eps)`. The deliberately
+starved budget stays at `1e-14`; no production tolerance or refusal is changed.
+After integration, all six status cases pass in float32 and float64; 177
+release/ledger/sink tests, Ruff and the measured architecture gate also pass.

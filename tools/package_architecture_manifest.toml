@@ -241,7 +241,25 @@ recursive = true
 # live in test_nonlinear.py without that file acquiring the layout contract as
 # a second subject. It sits under tests/unit/nonlinear because the state it is
 # about is the nonlinear route's.
-baseline = 80
+# 80 -> 81: tests/unit/operators/test_laguerre_sink_contract.py. The target is
+# 30, so a new file needs a reason: this one owns whether a *declared*
+# velocity-space regularization actually acts, which is a different object from
+# what any existing operator test asserts. The sibling file in this directory,
+# test_linear_collisions_coverage.py, is about a different module
+# (operators.linear.collisions) and pins provenance, shape and pytree contracts
+# inside the collision kernels; the subject here is the hypercollision branch
+# structure in operators.linear.dissipation -- that nu_hyper_l and nu_hyper_lm
+# reach the distribution only through the constant-coefficient branch, so under
+# the shipped defaults (hypercollisions_const = 0, hypercollisions_kz = 1) a
+# deck that declared a Laguerre sink ran with none and said nothing. Two
+# statements cannot be filed anywhere else: the refusal, that declaring a
+# Laguerre channel while the branch carrying it is off is an error rather than
+# a silent no-op, and nu_hyper_m_const, the per-branch Hermite rate without
+# which a constant-branch Laguerre sink cannot be added beside GX's |k_z|
+# Hermite hypercollisions without damping Hermite twice. The refusal is raised
+# at startup and the rate is carried through config and LinearParams, so the
+# contract spans four modules and is named after none of them.
+baseline = 81
 target = 30
 
 [[topology_policy.counts]]
@@ -1092,7 +1110,22 @@ recursive = true
 # without which Phi2_kxt was 11% and Wphi_kxst 13% wrong on a half axis. The
 # rest is the docstrings at each of those sites stating why ``Nyc`` cannot
 # stand in for ``Ny``. Target unchanged.
-baseline = 93430
+# 92943 -> 93023 (queue row Q31). The declared velocity-space regularization
+# contract. Most of it is the new per-branch Hermite rate nu_hyper_m_const,
+# which has to be carried end to end before it can mean anything: declared on
+# RuntimeCollisionConfig, threaded through LinearParams as a pytree leaf so it
+# survives a jit round trip, and read in dissipation.py by the constant-branch
+# coefficient and by the static-zero test that decides whether the branch is
+# built at all. It defaults to None and falls back to the shared nu_hyper_m, so
+# every existing deck keeps its current coefficient. The remainder is the
+# refusal in startup.py -- declaring a Laguerre channel while the branch that
+# carries it is off is now an error rather than a silent no-op -- and the
+# assembly and streaming call sites that pass the rate down. Measured, not
+# assumed. Target unchanged.
+# 93023 -> 93037: RuntimeConfig's existing cross-section validator closes the
+# two higher-level off switches: a declared Laguerre channel is also refused
+# when physics.hypercollisions or the term weight disables the whole operator.
+baseline = 93524
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1396,7 +1429,21 @@ recursive = true
 # name; the runtime and artifact suites gain the layout round trips; and one
 # test pins the Nyquist weight on the grid a deck builds when it names no
 # layout, which is the path the default takes.
-baseline = 92793
+# 92533 -> 92814 (queue row Q31). Nine cases in the new Laguerre-sink contract
+# file plus the evidence-ledger rows that register Q31's predictions. The cases
+# are what the contract is: that the |k_z| branch carries no Laguerre index at
+# all, that a Laguerre channel declared while its branch is off is refused and
+# accepted when it is on, that the per-branch Hermite rate defaults to the
+# shared one and reproduces the old coefficient when omitted, that a pure
+# Laguerre sink damps at exactly the declared rate and hardest at the Laguerre
+# cutoff, that adding it leaves the |k_z| branch untouched, and that the rate
+# survives a LinearParams pytree round trip. Each runs the real
+# hypercollision contribution rather than a stub, because what is pinned is
+# which branch a declared rate actually reaches. Measured. Target unchanged.
+# 92814 -> 92843: two cases exercise the physics- and term-level off switches
+# through RuntimeConfig.validate, the owner of cross-section consistency.
+# Integrated sink contracts and explicit full/half sheared-status coverage.
+baseline = 93125
 target = 35000
 
 [[line_budget_policy.counts]]

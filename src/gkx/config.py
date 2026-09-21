@@ -479,6 +479,7 @@ class RuntimeCollisionConfig:
     p_hyper: float = 4.0
     nu_hyper_l: float = 0.0
     nu_hyper_m: float = 1.0
+    nu_hyper_m_const: float | None = None
     nu_hyper_lm: float = 0.0
     p_hyper_l: float = 6.0
     p_hyper_m: float | None = None
@@ -491,6 +492,40 @@ class RuntimeCollisionConfig:
     damp_ends_amp: float = 0.1
     damp_ends_widthfrac: float = 0.125
     damp_ends_scale_by_dt: bool = False
+
+    def __post_init__(self) -> None:
+        self._check_declared_velocity_regularization()
+
+    def _check_declared_velocity_regularization(self) -> None:
+        """Refuse a Laguerre sink that the selected branch cannot apply.
+
+        ``nu_hyper_l`` and ``nu_hyper_lm`` reach the distribution only through
+        the constant-coefficient hypercollision branch; the ``|k_z|`` branch
+        carries no Laguerre index.  With the shipped defaults
+        (``hypercollisions_const = 0``, ``hypercollisions_kz = 1``) a deck that
+        declares a Laguerre sink therefore ran with **no** Laguerre sink and no
+        diagnostic.  A declared regularization must act, so say so here instead
+        of silently discarding it.
+        """
+
+        if self.hypercollisions_const != 0.0:
+            return
+        declared = {
+            name: getattr(self, name)
+            for name in ("nu_hyper_l", "nu_hyper_lm")
+            if getattr(self, name) != 0.0
+        }
+        if not declared:
+            return
+        named = ", ".join(f"{k}={v!r}" for k, v in sorted(declared.items()))
+        raise ValueError(
+            f"[collisions] declares a Laguerre hypercollision sink ({named}) "
+            "while hypercollisions_const = 0.0, so the constant-coefficient "
+            "branch that carries the Laguerre index is off and the sink would "
+            "be silently inert. Set hypercollisions_const = 1.0 to apply it "
+            "(and nu_hyper_m_const = 0.0 to keep the |k_z| branch as the only "
+            "Hermite damping), or remove the Laguerre coefficients."
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -858,6 +893,20 @@ class RuntimeConfig:
             errors.append("a case needs at least one kinetic species")
         if bool(self.physics.linear) and bool(self.physics.nonlinear):
             errors.append("physics.linear and physics.nonlinear cannot both be true")
+        laguerre_sink_declared = any(
+            float(getattr(self.collisions, name)) != 0.0
+            for name in ("nu_hyper_l", "nu_hyper_lm")
+        )
+        if laguerre_sink_declared and not bool(self.physics.hypercollisions):
+            errors.append(
+                "a declared Laguerre hypercollision sink requires "
+                "physics.hypercollisions = true"
+            )
+        if laguerre_sink_declared and float(self.terms.hypercollisions) == 0.0:
+            errors.append(
+                "a declared Laguerre hypercollision sink requires a nonzero "
+                "terms.hypercollisions weight"
+            )
         if float(self.time.dt) <= 0.0:
             errors.append("time.dt must be positive")
         if float(self.time.t_max) <= 0.0:
