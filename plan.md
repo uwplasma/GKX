@@ -119,6 +119,21 @@ This bounded counterexample and its exact reproduction are in the work log.
 Calibrate rejection and stationary stopping power together before changing the
 policy; passing a fixed-window uncertainty test does not close this gate.
 
+[Draft #271](https://github.com/uwplasma/GKX/pull/271), head `7f4b0332a`, adds
+mandatory retained-sample and IAT-span floors, with strengthen-only settings.
+The source shrinks ten lines; 33 window tests, focused runtime checks and strict
+Sphinx pass. Independent frozen-seed replay gives at most 2/128 drift stops and
+128/128 stationary stops per regular-sampling stratum. This is bounded empirical
+calibration, not a population guarantee; current-head CI and adaptive/guarded
+physical-trace qualification remain open.
+
+The next adaptive-statistics design to test is a provenance-fixed analysis
+cadence, complete equal-duration trapezoidal bin means, and one common covered
+interval for mean/IAT/SEM/guards. Do not infer that cadence from observed gaps:
+inserting interpolated samples must not increase effective information. Require
+densification invariance, physical-time window selection, partial-tail neutrality,
+uniform-grid parity and an adaptive runtime plumbing test before adoption.
+
 ### Execution decisions from the September 21 review
 
 - **Statistics before transport promotion:** test the actual repeated-look
