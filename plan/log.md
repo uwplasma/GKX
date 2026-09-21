@@ -18275,6 +18275,58 @@ carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main`
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
 
+### 2026-09-21 — varying-B streaming/mirror exchange (EM0)
+
+Extends #269 at `f4fda382f` without changing runtime source. The existing field
+test file shares its species/source-quadratic helpers and adds a periodic
+varying-B refinement at Nz=16/32/64/128. All three fields are nonzero; the
+independent volume weight is proportional to `1/(abs(gradpar)*B)`. The real
+contraction of `nT H*` with streaming plus mirror approaches zero, while
+uniform-weight and reversed-mirror controls retain defects around 4e-4–5e-4.
+Each isolated term is nonzero. This follows Mandell et al. (2018), equations
+4.4–4.6, linked in the theory page. It certifies relative volume weighting and
+term-level exchange, not absolute units or full physical EM free energy.
+
+The coarse defect is about 4.20e-6; refined defects are below 3e-8 in float32
+and 5e-17 in float64 on the tested CPU. Float32 uses a roundoff-aware resolved
+bound and a 32-fold reduction, rather than requiring the float64 100-fold
+reduction at the roundoff floor. Wrong-sign/weight controls remain separated.
+Supported JAX 0.10.2 CPU verification: all 45 field tests pass in x64;
+27 pass with x64 disabled, excluding 18 explicitly float64-parametrized cases.
+Both runs make FutureWarning fatal. Ruff, formatting, architecture, diff and
+strict Sphinx pass. The justified test budget increases by 182 lines, reusing
+one existing file; no new files or runtime code are added. Full energy-budget,
+perpendicular-Ampere normalization and EM transport gates remain open.
+
+### 2026-09-21 — independent compressional-field normalization control
+
+The existing field test now checks finite-FLR perpendicular pressure balance
+against 96-node Gauss-Laguerre velocity quadrature, then checks the magnetic
+Hamiltonian and particle-flux field factor. The stored field is
+`bpar = delta B_parallel / (rho_* B(z))`; the local-beta factor is therefore
+`beta_ref / bmag^2`. The exact GX implementation anchor is
+[`2e417afe62f4ad730fae005fb8927337e1cbefa3`](https://bitbucket.org/gyrokinetics/gx/commits/2e417afe62f4ad730fae005fb8927337e1cbefa3).
+Removing the inverse-square field factor changes the test result by 26.7%;
+inserting an extra B factor in the particle channel changes it by 73.4%.
+The spatial flux weights are reused, not independently validated here.
+Heat-flux normalization and the full electromagnetic energy budget remain open.
+
+Supported JAX 0.10.2 CPU: independent whole-module x64 verification passes
+46 tests with FutureWarning fatal; the revised oracle also passes in float32.
+Ruff, formatting, architecture, diff and strict Sphinx checks pass. No runtime
+code or new files; the existing test file grows by 149 deliberate lines.
+
+### 2026-09-21 — complete conservative linear exchange control
+
+Extended the existing varying-B refinement test to the assembled zero-drive
+linear RHS, with nonzero streaming, mirror, curvature and grad-B contributions.
+Each drift separately conserves the source quadratic; wrong imaginary factors
+fail, as do the existing wrong-volume/sign controls. All three fields remain
+nonzero. Independent x64 verification of the extended test passes on JAX 0.10.2;
+the full module and float32 selection also pass in the implementation review.
+This is an instantaneous algebraic exchange gate, not physical free-energy
+identification or nonlinear/heat-flux/source/sink/time-integration validation.
+No runtime changes or new files; shared setup limits test growth to 45 lines.
 ## 2026-09-20 — Q31 rebased on 2.2.0, three manifest baselines re-measured
 
 **Why CI was red.** Run 35518660118 had exactly two red jobs out of 40, `repo-hygiene` and
@@ -18298,3 +18350,17 @@ Each carries its reason in the manifest, as the target-30 and target-45000 polic
 queue-table row was reverted and no table acquired a second `baseline` key. The dot-precision
 allowlist in `tests/unit/solvers/test_linear_krylov_core.py` is keyed by `file:line` and
 survived the merge unshifted; it was re-run to confirm rather than assumed.
+
+### 2026-09-21 — EM0 physical fluctuation-energy identification
+
+Integrate main `4605d0b49` into #269 and identify its source quadratic with
+particle entropy, electrostatic Boltzmann subtraction and explicit magnetic
+energy using Howes (2006), B19--B20, and GX Appendix A normalization. The
+existing field tests exercise constant B and varying B under the B^-2 cache
+convention; removing either magnetic B^2 factor fails. The added oracle is
+87 lines in the existing test file, with no runtime or new-file changes.
+All 46 field tests pass in x64; the three focused cases pass in f32 and x64,
+with FutureWarning fatal on supported JAX 0.10.2. Strict Sphinx, Ruff and the
+measured architecture gate pass. Zonal/gauge, general multimode weighting,
+nonlinear transfer, flux normalization, sources/sinks and time-integrated
+budgets remain open. This identity does not qualify EM turbulent transport.

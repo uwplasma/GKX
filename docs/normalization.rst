@@ -88,6 +88,29 @@ mistaken convention: omitting the wave-number conversion costs about 30 per
 cent in a growth rate near its peak, where the curve is flat, but 54 per cent
 in the frequency.
 
+The stored compressional field is the local fractional perturbation
+
+.. math::
+
+   \mathtt{bpar}=\frac{\delta B_\parallel}{\rho_* B(z)},\qquad
+   \frac{\delta B_\parallel}{\rho_* B_N}=\mathtt{bmag}(z)\,\mathtt{bpar}.
+
+Thus perpendicular Ampere's law uses the local beta
+:math:`\beta_{\rm ref}/\mathtt{bmag}^2`, while the magnetic Hamiltonian and
+fluxes use ``bpar`` directly because
+:math:`\mu\delta B_\parallel=(\mu B)(\delta B_\parallel/B)`.  `GX equations
+(15)--(16) <https://arxiv.org/html/2209.06731v3>`_ provide the magnetic
+Hamiltonian background, but the paper's reference-field normalization does not
+by itself disambiguate the stored field for variable :math:`B`.  The local
+convention is stated explicitly in the GX implementation correction
+`2e417afe62f4ad730fae005fb8927337e1cbefa3
+<https://bitbucket.org/gyrokinetics/gx/commits/2e417afe62f4ad730fae005fb8927337e1cbefa3>`_.
+GKX checks this convention for compressional pressure balance, the magnetic
+Hamiltonian, and the particle-flux field factor.  The particle-flux check
+reuses the production spatial quadrature weights, so it is not an independent
+validation of that quadrature.  Heat flux and the complete electromagnetic
+free-energy budget remain open.
+
 For the Cyclone base case we take the reference length :math:`L_{ref}=a` so
 that the input gradients are expressed as
 :math:`a/L_T` and :math:`a/L_n`. With :math:`R_0 = R/a`, this means
