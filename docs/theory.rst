@@ -91,8 +91,33 @@ and normalized residuals must agree. Variable-:math:`B` cases test GKX's
 additional :math:`B^{-2}` perpendicular-Ampere convention only: its physical
 normalization remains unqualified by those paper equations. Prescribed FLR
 and spatial coefficients do not certify geometry normalization. These are
-algebra gates, not the still-required independent free-energy identity or EM
-transport benchmark. Zonal/gauge and AD tests remain separate.
+algebra gates, not a physical free-energy invariant or EM transport benchmark.
+Zonal/gauge tests remain separate.
+
+The same test checks the constant-:math:`B`, nonzonal source quadratic implied by
+`GX (arXiv v3), (12), (16), and (32)--(34)
+<https://arxiv.org/html/2209.06731v3>`_.  For the retained basis it independently
+forms
+
+.. math::
+
+   S_\phi=\sum_{s\ell}n_sZ_sJ_\ell G_{s\ell0},\quad
+   S_A=\sum_{s\ell}n_sZ_sv_{th,s}J_\ell G_{s\ell1},\quad
+   S_B=\sum_{s\ell}n_sT_sJ_\ell^B G_{s\ell0},
+
+and
+
+.. math::
+
+   F_{\rm src}=\frac12\sum_{s\ell m}n_sT_s|G_{s\ell m}|^2
+   +\frac12\operatorname{Re}(\phi^*S_\phi-A_\parallel^*S_A+B_\parallel^*S_B).
+
+With two kinetic species, default field scales, and finite retained
+Laguerre--Hermite resolution, the componentwise JAX convention is
+:math:`\operatorname{conj}(\nabla_G F_{\rm src})=n_sT_sH_s`.  This is an
+algebraic :math:`G\mapsto H` check, not a streaming-balance proof or a physical
+variable-:math:`B` invariant.  The runtime ``Wg + Wphi + Wapar`` diagnostic is a
+distinct monitoring quantity and contains no :math:`B_\parallel` contribution.
 
 Linear gyrokinetic operator
 ---------------------------
