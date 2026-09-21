@@ -1096,7 +1096,12 @@ recursive = true
 # 93023 -> 93037: RuntimeConfig's existing cross-section validator closes the
 # two higher-level off switches: a declared Laguerre channel is also refused
 # when physics.hypercollisions or the term weight disables the whole operator.
-baseline = 93037
+# 93037 -> 93054: pr3-cm's three refusal thresholds are floored at 64 eps of the
+# probe dtype. They were float64 literals, and at GKX's default float32 the
+# round-off alone (~0.6 eps) exceeded two of them, so a z-local operator was
+# refused as not z-local. One helper, one constant and the measurement that
+# sizes it. Target unchanged.
+baseline = 93054
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1406,7 +1411,12 @@ recursive = true
 # which branch a declared rate actually reaches. Measured. Target unchanged.
 # 92814 -> 92843: two cases exercise the physics- and term-level off switches
 # through RuntimeConfig.validate, the owner of cross-section consistency.
-baseline = 92843
+# 92843 -> 92939: the float32 pr3-cm build test. The suite runs at float64, so
+# it builds in a fresh interpreter with x64 off and checks the z-local fixture
+# builds, the collisional one still falls back and the zonal one still refuses.
+# 92939 -> 92979: one shared mutation adds a resolved second singular component
+# and checks dense fallback plus explicit refusal in float32 and float64.
+baseline = 92979
 target = 35000
 
 [[line_budget_policy.counts]]
