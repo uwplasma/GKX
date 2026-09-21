@@ -1044,7 +1044,38 @@ recursive = true
 # window mean stays outside the graph (one float32 ulp if it does not); and the
 # hashable projector signature that lets the `ky` axis layout cross a jit
 # boundary that a grid cannot. Target unchanged.
-baseline = 91798
+# 91655 -> 92017 (queue row Q29). Closing the two coverage holes #242 and #253
+# recorded. The status half threads one `ImplicitSolveStats` leaf through the
+# IMEX diagnostic carry and through both sheared scan forms, which needs a
+# stats-threading twin of the IMEX solve-step closure and of the IMEX state
+# advance -- the advance is shared, not duplicated: the plain form is the same
+# code with a status that is `None` -- plus the `return_solve_stats` keyword on
+# the four library doors that reach those scans. The projection half is one
+# call. The rest is the two flatteners moved out of `results.py` into the
+# module that owns solver status, so the in-memory result and the saved summary
+# file cannot spell the same keys differently, and the docstrings that state
+# which route now reports what. Target unchanged.
+# 91655 -> 92452: landing pr3-cm (Q28). Roughly half of the new module is the
+# host-side build -- the column probes, the block-Thomas factorization and the
+# Sherman-Morrison factors -- and the other half is the two structural
+# measurements that decide whether the exact solve may be used at all, plus the
+# explanations that make them readable: why the z-mean drift diagonal is read
+# off the line solve's own coefficients rather than off an assembled matrix,
+# why a broken l-tridiagonal structure is a fallback while a broken z-locality
+# is a refusal, and why a block with no field part is the ordinary case rather
+# than a degenerate one. Those cannot be shortened without turning a measured
+# guard back into an assumption, which is exactly what Q26 recorded as the
+# reason pr3-cm had never landed. Target unchanged.
+# 91655 -> 91784: Q28, the three defaults Q26 recorded but could not set.
+# The executable change is three literals and one dict-to-function swap;
+# the rest is the measurement each default now rests on, which the diff
+# cannot carry -- the power-iteration residual ladder that shows neither 40
+# nor 200 certifies, the four-way method/step-policy table that shows the
+# defaulted dt=0.1 overflowing whatever the scheme and rk4 costing 29.1%
+# fewer RHS evaluations only once the CFL controller is on, and the
+# velocity-resolution ladder that shows (12, 24) eleven times closer than
+# (24, 12) at the same Nl*Nm. Target unchanged.
+baseline = 93086
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1323,7 +1354,33 @@ recursive = true
 # executable from a recompiled one is to count the compiles, and the only way
 # to tell a *reusable* graph from one that merely repeats is to run a second
 # geometry through it and compare the answer bit for bit.
-baseline = 91733
+# 91565 -> 92089 (queue row Q29). Thirteen cases, one per route the two
+# recorded holes left open: a starved inner budget carried and refused on the
+# IMEX diagnostics route, on both sheared IMEX doors and through an `sspx3`
+# step's three solves; an explicit sheared method reporting a null status and a
+# bitwise unchanged state; the saved summary carrying the result's own status
+# keys and reporting `None` rather than a fabricated converged one; and the two
+# raw drivers projecting a supplied state, agreeing with each other bitwise,
+# giving its off-chain rows exactly zero cotangent, and leaving a periodic deck
+# the same array object. Each asserts on a real run rather than a fake, because
+# what is being pinned is which route has a channel at all.
+# 91565 -> 91853: pr3-cm's structural contract (Q28), added to the Krylov-core
+# suite rather than to a new file. Two guards need a fixture each, and neither
+# is broken by monkeypatching the checker: one switches on the collision
+# operator, which really does couple the Laguerre index beyond l +- 1, and the
+# other widens the grid, which really does add zonal rows whose adiabatic
+# <phi> sums over z. Building the operator twice is most of the count; the rest
+# is the assertions' reasons, which say what a future operator change would be
+# breaking rather than restating the number.
+# 91565 -> 91721: Q28's tests for the three defaults it set. The Krylov one
+# asserts the whole KrylovConfig/dominant_eigenpair default intersection
+# rather than the one field, so the class of defect is guarded; the time
+# ones pin the chose-a-step / chose-no-step split in both directions and
+# assert that every shipped deck still chooses its own dt, which is what
+# keeps the pairing change inert for them; the resolution one pins the pair,
+# its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
+# 92533 -> 92699 after merging the four PERF-ADJOINT regression cases above.
+baseline = 92699
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -18,7 +18,11 @@ from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.operators.collision import CollisionOperator
 from gkx.operators.fluxes import heat_flux_species, heat_flux_total
 from gkx.operators.moments import fieldline_quadrature_weights
-from gkx.solvers_linear_implicit import _build_implicit_operator
+from gkx.solvers_linear_implicit import (
+    ImplicitSolveStats,
+    _build_implicit_operator,
+    _empty_implicit_solve_stats,
+)
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.linked import mask_supplied_state
 from gkx.operators.linear.cache_builder import (
@@ -52,7 +56,7 @@ from gkx.solvers_nonlinear_explicit import (
 )
 from gkx.solvers_nonlinear_imex import (
     integrate_cached_imex_scan,
-    solve_imex_step,
+    solve_imex_step_with_stats,
 )
 from gkx.solvers_time_explicit import (
     _laguerre_velocity_max,
@@ -98,11 +102,18 @@ def _warn_if_window_exceeds_divergence_knee(
 
 
 class ShearedTransportTrace(NamedTuple):
-    """Final state and compact heat-flux history from a sheared run."""
+    """Final state and compact heat-flux history from a sheared run.
+
+    ``solve_stats`` is the convergence summary of every implicit GMRES solve of
+    a ``method="imex"`` run, and is populated only when the caller asked for it
+    with ``return_solve_stats=True``; it stays ``None`` for explicit methods and
+    for runs that did not ask, so a graph that does not read it is unchanged.
+    """
 
     final_state: jnp.ndarray
     time: jnp.ndarray
     heat_flux: jnp.ndarray
+    solve_stats: ImplicitSolveStats | None = None
 
 
 def _linear_rhs_jit_for_terms(term_cfg: TermConfig):
@@ -191,9 +202,18 @@ def integrate_nonlinear_cached(
 
     ``return_solve_stats=True`` appends the IMEX implicit solve summary
     (``None`` for explicit methods, which have no implicit solve).
+
+    ``G0`` is a state this driver did not build, so on a linked (twist-shift)
+    deck it is projected onto the chain cover before the run starts, exactly as
+    the runtime does at intake (queue row Q19) and as the entry points above
+    this one do (Q23). The projection is a ``where`` against a mask fixed by the
+    deck's topology, applied once here and outside the compiled scan, so the
+    scan's graph is unchanged and periodic or full-cover decks get the same
+    array object back.
     """
 
     term_cfg = terms or TermConfig()
+    G0 = mask_supplied_state(G0, cache)
     if method in {"imex", "semi-implicit"}:
         if collision_operator is not None:
             raise NotImplementedError(
@@ -267,7 +287,13 @@ def integrate_nonlinear(
     collision_operator: CollisionOperator | None = None,
     return_solve_stats: bool = False,
 ) -> tuple[Any, ...] | jnp.ndarray:
-    """Integrate the nonlinear system using built-in cache construction."""
+    """Integrate the nonlinear system using built-in cache construction.
+
+    A supplied ``G0`` is projected onto the linked chain cover by
+    :func:`integrate_nonlinear_cached`, which this driver builds the cache for
+    and then delegates to, so both raw drivers take the same view of a state
+    they did not build.
+    """
 
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     if cache is None:
@@ -562,8 +588,13 @@ def _integrate_nonlinear_sheared_scan(
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
     implicit_preconditioner: str | None = None,
-) -> tuple[jnp.ndarray, Any]:
-    """Run the shared shearing-coordinate scan with optional transport output."""
+) -> tuple[jnp.ndarray, Any, ImplicitSolveStats | None]:
+    """Run the shared shearing-coordinate scan with optional transport output.
+
+    Returns the final state, the scan output, and the implicit solve status of
+    a ``method="imex"`` run (``None`` for the explicit methods, which take no
+    implicit solve and so add no carry leaf).
+    """
 
     if str(grid.boundary).lower() not in {"periodic", "linked"} or bool(grid.non_twist):
         raise NotImplementedError(
@@ -702,7 +733,15 @@ def _integrate_nonlinear_sheared_scan(
         )
         return fields, updated_cache
 
-    def advance(current, derivative, time, dt_local):
+    def advance(current, derivative, time, dt_local, solve_stats=None):
+        """Advance one sheared step, folding any implicit solve into the status.
+
+        ``solve_stats`` rides through the scan carry because a traced step
+        cannot raise, exactly as the cached IMEX and implicit linear scans do
+        (queue row Q15). Explicit methods pass ``None`` straight back, so they
+        add no carry leaf and compile unchanged.
+        """
+
         new_time = time + dt_local
         if method_key == "imex":
             current_cache = cache_at(current)
@@ -740,9 +779,10 @@ def _integrate_nonlinear_sheared_scan(
             if operator.squeeze_species:
                 guess = guess[None, ...]
                 rhs = rhs[None, ...]
-            solution = solve_imex_step(
+            solution, solve_stats = solve_imex_step_with_stats(
                 guess,
                 rhs,
+                solve_stats,
                 linear_rhs_fn=linear_rhs_fn,
                 cache=endpoint_cache,
                 params=params,
@@ -760,7 +800,11 @@ def _integrate_nonlinear_sheared_scan(
             )
             if operator.squeeze_species:
                 solution = solution[0]
-            return endpoint_rhs._replace(state=project_state(solution)), new_time
+            return (
+                endpoint_rhs._replace(state=project_state(solution)),
+                new_time,
+                solve_stats,
+            )
         if method_key == "euler":
             trial = current.state + dt_local * derivative
         elif method_key == "rk2":
@@ -807,17 +851,26 @@ def _integrate_nonlinear_sheared_scan(
                 + 0.25 * dt_local * derivative
                 + 0.75 * dt_local * (stage2_derivative_base)
             )
-        return coordinates(trial, new_time, time), new_time
+        return coordinates(trial, new_time, time), new_time, solve_stats
 
     def local_dt(current_fields, dt_previous):
         if time_step_policy is None:
             return dt_value
         return time_step_policy.update_dt(current_fields, dt_previous)
 
-    def state_only_step(
-        carry: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray], index: jnp.ndarray
-    ):
-        state, adaptive_time, dt_previous = carry
+    # The status leaf exists only on the route that takes an implicit solve, so
+    # the explicit sheared scans keep exactly the carry they had.
+    carries_solve_stats = method_key == "imex"
+
+    def _stats_of(carry, position: int):
+        return carry[position] if carries_solve_stats else None
+
+    def _stats_tail(solve_stats):
+        return (solve_stats,) if carries_solve_stats else ()
+
+    def state_only_step(carry: tuple[Any, ...], index: jnp.ndarray):
+        state, adaptive_time, dt_previous = carry[:3]
+        solve_stats = _stats_of(carry, 3)
         fixed_time = (
             initial_time_value + jnp.asarray(index, dtype=real_dtype) * dt_value
         )
@@ -829,21 +882,26 @@ def _integrate_nonlinear_sheared_scan(
         else:
             derivative, current_fields, _ = rhs_at(current)
         dt_local = local_dt(current_fields, dt_previous)
-        advanced, new_time = advance(current, derivative, time, dt_local)
+        advanced, new_time, solve_stats = advance(
+            current, derivative, time, dt_local, solve_stats
+        )
         next_carry = (
             jnp.asarray(advanced.state, dtype=state_dtype),
             jnp.asarray(new_time, dtype=real_dtype),
             jnp.asarray(dt_local, dtype=real_dtype),
-        )
+        ) + _stats_tail(solve_stats)
         return next_carry, None
 
-    def endpoint_step(carry, index: jnp.ndarray):
-        state, adaptive_time, dt_previous, derivative, current_fields = carry
+    def endpoint_step(carry: tuple[Any, ...], index: jnp.ndarray):
+        state, adaptive_time, dt_previous, derivative, current_fields = carry[:5]
+        solve_stats = _stats_of(carry, 5)
         del index
         time = adaptive_time
         current = coordinates(state, time, time)
         dt_local = local_dt(current_fields, dt_previous)
-        advanced, new_time = advance(current, derivative, time, dt_local)
+        advanced, new_time, solve_stats = advance(
+            current, derivative, time, dt_local, solve_stats
+        )
         if method_key == "imex":
             next_derivative = jnp.zeros_like(advanced.state)
             fields, advanced_cache = fields_at(advanced)
@@ -855,7 +913,7 @@ def _integrate_nonlinear_sheared_scan(
             jnp.asarray(dt_local, dtype=real_dtype),
             jnp.asarray(next_derivative, dtype=state_dtype),
             fields,
-        )
+        ) + _stats_tail(solve_stats)
         if not record_transport:
             return next_carry, fields
         apar = jnp.zeros_like(fields.phi) if fields.apar is None else fields.apar
@@ -879,11 +937,16 @@ def _integrate_nonlinear_sheared_scan(
         initial_time_value,
         initial_dt_value,
     )
+    initial_stats = (
+        _empty_implicit_solve_stats(state_dtype) if carries_solve_stats else None
+    )
     if not record_transport and not return_fields:
         state_final_carry, output = jax.lax.scan(
-            state_only_step, initial_state_carry, jnp.arange(steps)
+            state_only_step,
+            initial_state_carry + _stats_tail(initial_stats),
+            jnp.arange(steps),
         )
-        return state_final_carry[0], output
+        return state_final_carry[0], output, _stats_of(state_final_carry, 3)
 
     initial_update = coordinates(
         initial_state_carry[0], initial_state_carry[1], initial_state_carry[1]
@@ -895,14 +958,18 @@ def _integrate_nonlinear_sheared_scan(
         initial_derivative, initial_fields, _ = rhs_at(initial_update)
     # Some field-solve policies use a lower internal precision. Match the scan
     # carry to the requested state precision just as every subsequent step does.
-    initial_endpoint_carry = initial_state_carry + (
-        jnp.asarray(initial_derivative, dtype=state_dtype),
-        initial_fields,
+    initial_endpoint_carry = (
+        initial_state_carry
+        + (
+            jnp.asarray(initial_derivative, dtype=state_dtype),
+            initial_fields,
+        )
+        + _stats_tail(initial_stats)
     )
     endpoint_final_carry, output = jax.lax.scan(
         endpoint_step, initial_endpoint_carry, jnp.arange(steps)
     )
-    return endpoint_final_carry[0], output
+    return endpoint_final_carry[0], output, _stats_of(endpoint_final_carry, 5)
 
 
 def integrate_nonlinear_sheared(
@@ -928,7 +995,8 @@ def integrate_nonlinear_sheared(
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
     implicit_preconditioner: str | None = None,
-) -> tuple[jnp.ndarray, FieldState] | jnp.ndarray:
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...] | jnp.ndarray:
     """Integrate the standard-flux-tube shearing-coordinate foundation.
 
     This research path supports fixed-step Euler, midpoint RK2, three-stage
@@ -938,9 +1006,16 @@ def integrate_nonlinear_sheared(
     current basis and rebuilds the implicit linear operator in the endpoint
     basis. ``compressed_real_fft`` evaluates the nonlinear bracket in the
     equivalent canonical shearing-coordinate representation.
+
+    ``return_solve_stats=True`` appends the implicit solve summary of a
+    ``method="imex"`` run (:class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`,
+    ``None`` for the explicit methods). The traced scan cannot raise on a
+    starved inner budget, so this is the convergence channel; a host-side caller
+    turns it into a refusal with
+    :func:`~gkx.solvers_linear_implicit.require_converged_implicit_solves`.
     """
 
-    final_state, fields = _integrate_nonlinear_sheared_scan(
+    final_state, fields, solve_stats = _integrate_nonlinear_sheared_scan(
         G0,
         grid,
         geom,
@@ -963,9 +1038,10 @@ def integrate_nonlinear_sheared(
         implicit_restart=implicit_restart,
         implicit_preconditioner=implicit_preconditioner,
     )
-    if return_fields:
-        return final_state, fields
-    return final_state
+    head: tuple[Any, ...] = (final_state, fields) if return_fields else (final_state,)
+    if return_solve_stats:
+        return (*head, solve_stats)
+    return head if return_fields else final_state
 
 
 def integrate_nonlinear_sheared_transport(
@@ -998,15 +1074,21 @@ def integrate_nonlinear_sheared_transport(
     implicit_relax: float = 0.7,
     implicit_restart: int = 20,
     implicit_preconditioner: str | None = None,
+    return_solve_stats: bool = False,
 ) -> ShearedTransportTrace:
     """Integrate a sheared run and record canonical heat flux at every step.
 
     With ``fixed_dt=False``, ``steps`` is the accepted-step budget and ``time``
     records the resulting nonuniform physical-time grid. ``initial_time`` and
     ``initial_dt`` continue a prior trace without resetting the shearing basis.
+
+    ``return_solve_stats=True`` fills the trace's ``solve_stats`` field with the
+    implicit solve summary of a ``method="imex"`` run; it stays ``None``
+    otherwise, so a caller that does not ask reads and compiles exactly what it
+    did before.
     """
 
-    final_state, samples = _integrate_nonlinear_sheared_scan(
+    final_state, samples, solve_stats = _integrate_nonlinear_sheared_scan(
         G0,
         grid,
         geom,
@@ -1038,7 +1120,9 @@ def integrate_nonlinear_sheared_transport(
         implicit_preconditioner=implicit_preconditioner,
     )
     time, heat_flux = samples
-    return ShearedTransportTrace(final_state, time, heat_flux)
+    return ShearedTransportTrace(
+        final_state, time, heat_flux, solve_stats if return_solve_stats else None
+    )
 
 
 def integrate_nonlinear_imex_cached(

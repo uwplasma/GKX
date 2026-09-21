@@ -1,0 +1,31 @@
+[     2.2s rss<=0.44G] t_matvec 0.414 ms
+[     2.2s rss<=0.44G] building runtime geometry
+[     2.2s rss<=0.44G] building spectral grid
+[     2.2s rss<=0.44G] building runtime linear parameters
+[     2.2s rss<=0.44G] selected ky index 6 at ky=0.3000
+[     2.2s rss<=0.44G] starting Krylov solve
+[     2.2s rss<=0.44G] building linear cache
+[     2.2s rss<=0.44G] krylov method=adaptive dim=24 restarts=2
+[     2.2s rss<=0.44G] running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09
+[    45.0s rss<=0.85G] adaptive solve finished with eig=0.0987757-0.276905j residual=6.48e-15 converged=True stable=True
+[    45.0s rss<=0.85G] Krylov solve complete: gamma=0.098776 omega=0.276905
+RESULT {"adaptive": {"adaptive_residual": 6.4794892043143395e-15, "operator_applications": 96699, "restarts": 1, "solver_s": 42.807631458039396}, "arm": "adaptive", "case": "d96l8", "certified": true, "certified_residual": 6.479489204314337e-15, "cost": {"t_matvec_s": 0.00041379197500646114}, "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/measure.py", "--arm", "adaptive", "--case", "d96l8", "--label", "A2_adaptive"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "66c32b0825ae8306d005fc93368786ea514bc367"}, "gkx": "/Users/rogeriojorge/local/GKX-worktrees/pr3cm-preconditioner/src/gkx/__init__.py", "jax": "0.10.2", "loadavg": [9.171875, 8.98681640625, 8.8173828125], "x64": true}, "gamma_omega": [0.0987757461278695, 0.2769045684044536], "ky": 0.3, "label": "A2_adaptive", "lambda": [0.0987757461278695, -0.2769045684044536], "matvec_equivalents": {"certification": 1, "route_operator_applications": 96699, "total": 96700}, "n": 18432, "peak_rss_gib": 0.8521270751953125, "process_seconds": 45.26281112496508, "residual_gate": 1e-09, "route_s": 42.84119012497831}
+       45.68 real       123.52 user         5.76 sys
+           915030016  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               73388  page reclaims
+                  94  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                 221  voluntary context switches
+             1209173  involuntary context switches
+       1564904378210  instructions retired
+        436055755144  cycles elapsed
+           617124096  peak memory footprint
+exit 0

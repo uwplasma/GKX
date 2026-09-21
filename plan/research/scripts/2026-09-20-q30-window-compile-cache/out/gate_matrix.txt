@@ -27,4 +27,3 @@ x64  cyc_rk2_nockpt   BITWISE
 x64  cyc_rk3_nockpt   BITWISE
 x64  cyc_rk4_nockpt   ULP 0/0/1
 x64  kbm_rk3_nockpt   ULP 3/0/0
-

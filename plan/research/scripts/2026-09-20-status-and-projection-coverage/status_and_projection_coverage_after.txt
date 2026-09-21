@@ -1,0 +1,54 @@
+arm=after gkx=<worktrees>/status-and-projection-coverage/src/gkx/__init__.py
+deck: ny=8 nx=8 nz=16; cover 25/64 (ky, kx) modes; chain kx rows=[0, 1, 2, 6, 7]; off-chain kx rows=[3, 4, 5]
+state (1, 4, 8, 8, 8, 16) n=32768 off-chain unknowns=19968 (0.6094 of the state)
+supplied state: max|G|=9.999999e-01 off-chain max=9.999999e-01
+one nonlinear RHS: chain rows change 2.369696e-02 relative when the off-chain rows are present (chain |dG| max 7.657306e+00)
+    amplitude max|G|=1.000000e+00: chain-row relative change=2.369696e-02
+    amplitude max|G|=1.000000e-02: chain-row relative change=2.372095e-04
+    amplitude max|G|=1.000000e-04: chain-row relative change=2.372119e-06
+    amplitude max|G|=1.414214e-10: chain-row relative change=3.354691e-12
+integrate_nonlinear_cached (8 rk3 steps, dt=0.001) from the supplied state vs the on-cover state: final-state max relative difference=0.000000e+00; final-state off-chain max=0.000000e+00; heat flux=-1.427970945532e-02 vs -1.427970945532e-02, relative difference=0.000000e+00
+integrate_nonlinear from the same supplied state is bitwise equal to integrate_nonlinear_cached=True
+no-op arm, linked deck from the runtime's own on-cover initial condition: final-state checksum=a6a12d2c079b17d0 heat flux=7.783082805432e-25
+linked deck, jit(integrate_nonlinear_cached), steps=8: optimized HLO = module 3988 instructions, sha256 d9c30d987033bc1e; ENTRY 50 instructions, normalized sha256 5ee17a426a507a01; scan body 264 instructions, normalized sha256 d243263d2c8c0131
+linked deck, jit(integrate_nonlinear_cached), steps=16: optimized HLO = module 3988 instructions, sha256 4676e6ca90af8d93; ENTRY 50 instructions, normalized sha256 466e089f2ae6b3fe; scan body 264 instructions, normalized sha256 4a2fb43348270f8a
+no-op arm, periodic deck: cover is every mode=True; final-state checksum=5419144f226e2f25 heat flux=4.277964576458e-01
+periodic deck, jit(integrate_nonlinear_cached), steps=8: optimized HLO = module 2793 instructions, sha256 f316dcd70d119529; ENTRY 39 instructions, normalized sha256 ff0968fd09e2fb5e; scan body 188 instructions, normalized sha256 a61e078ed883e9a5
+periodic deck, jit(integrate_nonlinear_cached), steps=16: optimized HLO = module 2793 instructions, sha256 3958fc002ea0c2fb; ENTRY 39 instructions, normalized sha256 c6162165815426e3; scan body 188 instructions, normalized sha256 0346ae81f2138c8d
+IMEX diagnostics, starved budget: solves=4 unconverged=4 max_relative_residual=4.472169e-07 max_iterations=1 converged=n/a; host gate refuses: RuntimeError
+IMEX diagnostics, generous budget: solves=4 unconverged=0 max_relative_residual=2.292385e-09 max_iterations=2 converged=True; host gate accepts
+IMEX diagnostics scan HLO (plain): 9619 instructions, sha256 d889cb6645f6e9f4
+IMEX diagnostics scan HLO (with_stats): 10238 instructions, sha256 73a7a07f2b12ad1f
+sheared IMEX, starved budget: solves=4 unconverged=4 max_relative_residual=5.977043e-07 max_iterations=1 converged=n/a; host gate refuses: RuntimeError
+sheared IMEX transport, starved budget: solves=4 unconverged=4 max_relative_residual=5.977043e-07 max_iterations=1 converged=n/a; host gate refuses: RuntimeError
+sheared IMEX, generous budget: solves=4 unconverged=0 max_relative_residual=3.061006e-09 max_iterations=2 converged=True; host gate accepts
+sheared IMEX transport, generous budget: solves=4 unconverged=0 max_relative_residual=3.061006e-09 max_iterations=2 converged=True; host gate accepts
+sheared IMEX scan HLO (plain): 7624 instructions, sha256 8ffe71d1738162c1
+sheared IMEX scan HLO (with_stats): 8817 instructions, sha256 93db789f3b57abae
+sheared rk2 scan HLO (control, no implicit solve): 7215 instructions, sha256 68217ba419168dee
+saved linear summary (krylov): solver-status keys present=['eigen_route', 'eigen_residual', 'eigen_tolerance', 'eigen_certified', 'eigen_inner_converged', 'implicit_converged', 'implicit_max_relative_residual', 'implicit_max_iterations', 'implicit_unconverged_solves']
+    eigen_route=adaptive
+    eigen_residual=1.940442e-15
+    eigen_tolerance=1.000000e-09
+    eigen_certified=True
+    eigen_inner_converged=None
+    implicit_converged=None
+    implicit_max_relative_residual=None
+    implicit_max_iterations=None
+    implicit_unconverged_solves=None
+<worktrees>/status-and-projection-coverage/src/gkx/diagnostics/growth_rates.py:427: RuntimeWarning: no stationary growth window found; falling back to log-linear auto window selection
+  warnings.warn(
+<worktrees>/status-and-projection-coverage/src/gkx/workflows/runtime/diagnostics.py:525: RuntimeWarning: fit not settled: gamma moves 36.4% (to -0.209432) when the fit window is halved -- the mode has not reached exponential dominance; extend the run
+  warnings.warn(
+saved linear summary (implicit time run): solver-status keys present=['eigen_route', 'eigen_residual', 'eigen_tolerance', 'eigen_certified', 'eigen_inner_converged', 'implicit_converged', 'implicit_max_relative_residual', 'implicit_max_iterations', 'implicit_unconverged_solves']
+    eigen_route=None
+    eigen_residual=None
+    eigen_tolerance=None
+    eigen_certified=None
+    eigen_inner_converged=None
+    implicit_converged=True
+    implicit_max_relative_residual=8.182994e-07
+    implicit_max_iterations=2
+    implicit_unconverged_solves=0
+linear pilot certified eigenpair (krylov) from a supplied state: gamma=1.156212538480758667e-01 omega=2.411787658929824829e-01 residual=8.319672e-07 certified=True route=adaptive
+linear pilot time fit (explicit_time) from a supplied state: gamma=1.156180399480198906e-01 omega=2.411964219216982674e-01

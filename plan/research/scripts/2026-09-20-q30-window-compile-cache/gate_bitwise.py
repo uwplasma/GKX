@@ -124,7 +124,7 @@ for key in sorted(arrays):
 print(
     json.dumps(
         {
-            "gkx": gkx.__file__,
+            "gkx": str(Path(gkx.__file__).resolve().relative_to(Path.cwd())),
             "x64": bool(jax.config.jax_enable_x64),
             "sha256": digest.hexdigest(),
             "value": arrays["value"].tolist(),

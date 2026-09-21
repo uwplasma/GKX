@@ -264,6 +264,105 @@ name = "ion"
         load_runtime_from_toml(path)
 
 
+def _minimal_deck(time_table: str) -> str:
+    return f"""
+schema_version = 1
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+kinetic = true
+
+[grid]
+Nx = 1
+Ny = 8
+Nz = 16
+{time_table}
+"""
+
+
+def test_deck_without_a_chosen_step_gets_the_cfl_controller_and_rk4(
+    tmp_path: Path,
+) -> None:
+    """A step nobody chose must not be applied as a fixed one.
+
+    ``TimeConfig.dt`` defaults to 0.1, which is ~7.8x the CFL-stable step of
+    the shipped Cyclone deck: applied fixed, it overflows to a
+    FloatingPointError whatever the scheme. With the controller on, the same
+    deck integrates and rk4 covers the horizon in 29.1% fewer right-hand-side
+    evaluations than rk2. So the integrator and the step policy are defaulted
+    as a pair, and only where the deck chose no step.
+    """
+
+    for table in ("", "\n[time]\nt_max = 4.0\n"):
+        path = tmp_path / f"deck{len(table)}.toml"
+        path.write_text(_minimal_deck(table), encoding="utf-8")
+        cfg, _ = load_runtime_from_toml(path)
+        assert cfg.time.fixed_dt is False
+        assert cfg.time.method == "rk4"
+
+
+def test_deck_that_chooses_a_step_keeps_the_fixed_rk2_pairing(
+    tmp_path: Path,
+) -> None:
+    """Every shipped deck sets ``dt``, so none of them may move.
+
+    Fourteen shipped decks and parity fixtures omit ``fixed_dt`` and depend on
+    it being ``True`` at their own ``dt``; several back evidence-ledger rows.
+    A chosen step keeps rk2 too, because a fixed step gives rk4 no step-size
+    compensation for its four stages -- it would simply be twice the cost.
+    """
+
+    path = tmp_path / "chosen.toml"
+    path.write_text(_minimal_deck("\n[time]\nt_max = 4.0\ndt = 0.002\n"), "utf-8")
+    cfg, _ = load_runtime_from_toml(path)
+    assert cfg.time.dt == 0.002
+    assert cfg.time.fixed_dt is True
+    assert cfg.time.method == "rk2"
+
+
+def test_deck_overrides_still_win_over_the_unchosen_step_pairing(
+    tmp_path: Path,
+) -> None:
+    """The coupling supplies defaults; it never overrides what the deck said."""
+
+    path = tmp_path / "explicit.toml"
+    path.write_text(
+        _minimal_deck('\n[time]\nt_max = 4.0\nmethod = "rk3"\nfixed_dt = true\n'),
+        encoding="utf-8",
+    )
+    cfg, _ = load_runtime_from_toml(path)
+    assert cfg.time.method == "rk3"
+    assert cfg.time.fixed_dt is True
+
+
+def test_every_shipped_deck_chooses_its_own_step() -> None:
+    """The guard that makes the pairing change inert for shipped decks.
+
+    If a deck ever ships without ``dt``, it silently moves onto the CFL
+    controller and its recorded numbers move with it. This test is what makes
+    that a deliberate act rather than an accident.
+    """
+
+    import tomllib
+
+    paths = sorted((REPO_ROOT / "examples").rglob("*.toml"))
+    paths += sorted((REPO_ROOT / "benchmarks").rglob("*.toml"))
+    paths += sorted((REPO_ROOT / "tools" / "comparison").rglob("*.toml"))
+    missing = []
+    for deck in paths:
+        data = tomllib.loads(deck.read_text(encoding="utf-8"))
+        if "schema_version" not in data and "grid" not in data:
+            continue  # not a GKX runtime deck (e.g. a GX-schema reference file)
+        table = data.get("time")
+        if isinstance(table, dict) and "dt" not in table:
+            missing.append(str(deck.relative_to(REPO_ROOT)))
+    assert missing == []
+
+
 def test_load_runtime_from_toml_roundtrip(tmp_path: Path) -> None:
     toml = """
 [[species]]

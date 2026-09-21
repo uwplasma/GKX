@@ -45,4 +45,3 @@ call 1: wall 0.116s compiles 0 compile 0.000s exec 0.116s
 call 2: wall 0.113s compiles 0 compile 0.000s exec 0.113s
 call 3: wall 0.112s compiles 0 compile 0.000s exec 0.112s
 load after:  4.41 4.84 5.20
-

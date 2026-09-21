@@ -75,6 +75,7 @@ from gkx.solvers_nonlinear_imex import (
     make_imex_diagnostic_step,
     make_imex_nonlinear_term,
     make_imex_solve_step,
+    make_imex_solve_step_with_stats,
     run_imex_diagnostic_scan,
     solve_imex_step,
 )
@@ -306,8 +307,13 @@ def integrate_nonlinear_explicit_diagnostics(
     external_phi: jnp.ndarray | float | None = None,
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, SimulationDiagnostics]:
-    """Integrate nonlinear system and return runtime diagnostics."""
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...]:
+    """Integrate nonlinear system and return runtime diagnostics.
+
+    ``return_solve_stats=True`` appends the implicit solve summary of an IMEX
+    run (``None`` for the explicit methods, which take no implicit solve).
+    """
 
     if method in _IMEX_METHODS:
         return integrate_nonlinear_imex_diagnostics(
@@ -317,6 +323,7 @@ def integrate_nonlinear_explicit_diagnostics(
             params,
             dt=dt,
             steps=steps,
+            return_solve_stats=return_solve_stats,
             **_options_from_scope(locals(), _IMEX_DIAGNOSTIC_OPTION_KEYS),
         )
 
@@ -331,7 +338,7 @@ def integrate_nonlinear_explicit_diagnostics(
             **_options_from_scope(locals(), _EXPLICIT_DIAGNOSTIC_OPTION_KEYS),
         )
     )
-    return t, diag_out
+    return (t, diag_out, None) if return_solve_stats else (t, diag_out)
 
 
 def integrate_nonlinear_explicit_diagnostics_state(
@@ -441,6 +448,7 @@ def _imex_nonlinear_diagnostics_deps() -> IMEXNonlinearDiagnosticsDeps:
         build_imex_operator_fn=build_nonlinear_imex_operator,
         make_imex_nonlinear_term_fn=make_imex_nonlinear_term,
         make_imex_solve_step_fn=make_imex_solve_step,
+        make_imex_solve_step_with_stats_fn=make_imex_solve_step_with_stats,
         solve_imex_step_fn=solve_imex_step,
         make_imex_step_fn=make_imex_diagnostic_step,
         run_imex_scan_fn=run_imex_diagnostic_scan,
@@ -483,8 +491,17 @@ def integrate_nonlinear_imex_diagnostics(
     fixed_mode_kx_index: int | None = None,
     external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, SimulationDiagnostics]:
-    """IMEX nonlinear integrator with runtime diagnostics."""
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...]:
+    """IMEX nonlinear integrator with runtime diagnostics.
+
+    Returns ``(t, diagnostics)``, or ``(t, diagnostics, stats)`` with
+    ``return_solve_stats=True``. The scan cannot raise on a starved inner
+    budget, so ``stats``
+    (:class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`) is this route's
+    convergence channel; a host-side caller turns it into a refusal with
+    :func:`~gkx.solvers_linear_implicit.require_converged_implicit_solves`.
+    """
 
     options = _options_from_scope(locals(), _IMEX_DIAGNOSTIC_OPTION_KEYS)
     return integrate_imex_nonlinear_diagnostics_impl(
@@ -495,6 +512,7 @@ def integrate_nonlinear_imex_diagnostics(
         dt,
         steps,
         deps=_imex_nonlinear_diagnostics_deps(),
+        return_solve_stats=return_solve_stats,
         **options,
     )
 

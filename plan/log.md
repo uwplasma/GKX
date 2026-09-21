@@ -17240,7 +17240,7 @@ entry is left standing as written, because rewriting a recorded measurement
 after the fact is worse than correcting it forward; this entry is the
 correction, and Q10's queue row points at it.
 
-## 2026-09-20 — Q30: the adjoint heat-flux window recompiled on every call, because a jaxpr compares by identity (plan §5.3)
+## 2026-09-20 — PERF-ADJOINT: the adjoint heat-flux window recompiled on every call, because a jaxpr compares by identity (plan §5.3)
 
 **Outcome: the differentiated window compiles once and the compile is reused
 across calls and across geometries. Compilations per call 13 → 0 and wall per
@@ -17451,3 +17451,1037 @@ than through `gkx.cli`, so `gkx.compilation_cache`'s persistent cache is **not**
 installed and every compilation counted here is a cold XLA compilation
 in-process. Scripts, raw outputs and `SHA256SUMS.txt` in
 `plan/research/scripts/2026-09-20-q30-window-compile-cache/`.
+## 2026-09-20 — status and projection reach every route (Q29, Q15 and Q23 follow-ups)
+
+Branch `fix/status-and-projection-coverage`, from `38d7c4277` (`origin/main`).
+
+**Question.** Two rows in this thread finished with a recorded hole in their own
+log entry. #242 (Q15) gave runtime results structured solver status and made the
+runtime fail closed on an unconverged scan, and recorded that it had not reached
+**the IMEX diagnostics route, the sheared IMEX route, or the saved summary
+files**. #253 (Q23) projected a supplied state onto the linked chain cover at
+`gkx.prepare`, the prepared object's `run`/`run_arrays`, the shared diagnostics
+integrator and the objective adjoint, and recorded that it had not reached **the
+raw `integrate_nonlinear` and `integrate_nonlinear_cached` drivers**. One PR,
+because the sheared scan and the raw drivers are the same file and each hole is
+the policy already chosen rather than a new one.
+
+**Decisions.** No third policy was invented; each half extends the contract it
+belongs to, and both refusals below are refusals to invent one.
+
+- **Status is carried, not raised, below the runtime.** The IMEX diagnostic
+  carry grows one `ImplicitSolveStats` leaf and both sheared scan forms grow the
+  same leaf, folded once per implicit solve -- three times per step under
+  `sspx3`, which is why the fold is threaded through the stage composition
+  rather than summarizing only the last stage. `integrate_nonlinear_imex_diagnostics`,
+  `integrate_nonlinear_explicit_diagnostics`, `integrate_nonlinear_sheared` and
+  `integrate_nonlinear_sheared_transport` take `return_solve_stats=True` and
+  append the stats, exactly as `integrate_linear` and `integrate_nonlinear`
+  already do. They do **not** raise. #242's fail-closed rule is a *host-boundary*
+  rule and these are library entry points: a refusal here would need a host
+  synchronization on a route whose purpose is a reused compiled graph, which is
+  #253's own argument against rejecting at a traced boundary.
+  `require_converged_implicit_solves` stays the one gate, and the tests call it
+  on the stats each route returns. **No runtime route reaches either of these
+  two routes today** (`workflows/` has no reference to either), so there is no
+  new host boundary to close; the one host boundary these rows do touch is the
+  artifact writer, and the runtime already fails closed before it.
+- **The sheared status leaf exists only on the route that solves.**
+  `carries_solve_stats` is `method_key == "imex"`, a static Python decision, so
+  the explicit sheared scans keep exactly the carry they had rather than
+  passing a dead status through. `ShearedTransportTrace` gains a trailing
+  `solve_stats` field (default `None`) rather than a second return value,
+  because that door already returns a named tuple.
+- **Saved summaries report what the result reports.** `*.summary.json` -- the
+  prefix form, the `--out` JSON form and the NetCDF bundle's sidecar -- now
+  carries the nine flat `eigen_*` and `implicit_*` keys, `None` where no such
+  solve ran, never a fabricated converged one. The two flatteners move out of
+  `workflows/runtime/results.py` into the modules that own each status type
+  (`solvers_linear_implicit.implicit_solve_payload`,
+  `solvers_linear_krylov.eigen_status_payload`) so that the in-memory result and
+  the file cannot spell the same status differently. That home is also what
+  keeps the layering baseline at 5: `artifacts` is layer 6 and `workflows` is
+  layer 7, so reading the flatteners out of `workflows` would have been a sixth
+  upward import, while `solvers` is layer 3 and is read downward.
+- **Projection at the raw drivers, applied once.** `integrate_nonlinear_cached`
+  calls `mask_supplied_state(G0, cache)` before it builds anything;
+  `integrate_nonlinear` builds the cache and delegates, so both raw doors take
+  the same view of the same array and a test pins that they agree bitwise.
+  Projection, not rejection, for #253's reasons unchanged.
+
+**What the rows cost the raw drivers, measured.** #253's linked nonlinear
+Cyclone grid, Nx8/Ny8/Nz16, Nl4/Nm8, jtwist 1, `damp_ends_rate` .1; the chains
+cover kx rows `{0,1,2,6,7}` and rows `{3,4,5}` are 19968 unknowns = 60.94% of
+the state. The supplied state is broadband at saturated amplitude
+(`max|G|` = 1), which is the state these drivers are documented to take. Eight
+rk3 steps at dt 1e-3.
+
+| quantity | before | after |
+|---|---|---|
+| one nonlinear RHS, chain rows, relative to the on-cover arm | 2.369696e-02 | 2.369696e-02 |
+| `integrate_nonlinear_cached` final state, relative to the projected arm | 1.060277e+00 | 0 |
+| its final-state off-chain max \|G\| | 9.999598e-01 | 0 |
+| its final heat flux | −1.427385146170e-02 | −1.427970945532e-02 |
+| …relative to the projected arm | 4.102320e-04 | 0 |
+| `integrate_nonlinear` equals `integrate_nonlinear_cached` bitwise | yes | yes |
+
+The RHS row is a property of the state, not of the branch, and is printed on
+both arms for exactly that reason: it is *why* the trajectory moves, and it
+reproduces #253's number to every digit. The effect is quadratic in amplitude --
+2.369696e-02 at `max|G|` 1, 2.372095e-04 at 1e-2, 2.372119e-06 at 1e-4 and
+3.354691e-12 at the runtime seed's 1.414214e-10 -- so a linear-seed state shows
+almost nothing here and a saturated restart shows all of it. The 1.060277e+00
+is #253's own figure for the same window through `gkx.prepare`: the raw driver
+was moving the trajectory by the same 106%, one floor down, with no contract
+saying so. The heat-flux row is *not* #253's 3.35e+00; that was a maximum over
+a diagnostics series, and a raw driver returns no series, so what is reported
+here is the single final-step flux.
+
+**HLO: what the opted-out paths compile.** Optimized HLO of `jax.jit` around
+each route, instruction lines only, `metadata={…}` stripped. A module-level
+count alone cannot say *where* work was added, because a per-step addition
+inside a `while` body and a one-off addition before the loop are both a fixed
+number of instructions in a module whose trip count is a constant. So the
+driver's module is also split by computation, and the per-computation hash is
+taken after rewriting every `%name` to its index of first appearance in that
+computation -- XLA numbers instructions module-wide, so adding anything to the
+entry renumbers `%fusion.37` into `%fusion.38` inside an untouched loop body,
+and that renumbering is the only thing the normalization removes.
+
+| graph | before | after, stats not requested | after, `return_solve_stats=True` |
+|---|---|---|---|
+| IMEX diagnostics scan | 9619, `d889cb6645f6e9f4` | 9619, `d889cb6645f6e9f4` | 10238, `73a7a07f2b12ad1f` |
+| sheared IMEX scan | 7624, `8ffe71d1738162c1` | 7624, `8ffe71d1738162c1` | 8817, `93db789f3b57abae` |
+| sheared rk2 scan (control) | 7215, `68217ba419168dee` | 7215, `68217ba419168dee` | — |
+
+Every graph that does not ask for the stats compiles the module it compiled
+before, **byte for byte**, as #242 measured for the scans it reached. Asking
+costs +619 and +1193 instructions, which is SOLVAX's true-residual
+recomputation -- one operator application per solve, which XLA removes when
+nothing reads it -- plus the scalar folds.
+
+| `jit(integrate_nonlinear_cached)` | before | after |
+|---|---|---|
+| linked, steps 8: module | 3910, `839ff1a5be6a8c3c` | 3988, `d9c30d987033bc1e` |
+| linked, steps 8: ENTRY | 46, `0b5eeb14685aa856` | 50, `5ee17a426a507a01` |
+| linked, steps 8: **scan body** | 264, `d243263d2c8c0131` | 264, **`d243263d2c8c0131`** |
+| linked, steps 16: **scan body** | 264, `4a2fb43348270f8a` | 264, **`4a2fb43348270f8a`** |
+| periodic, steps 8: module | 2793, `f316dcd70d119529` | 2793, `f316dcd70d119529` |
+| periodic, steps 16: module | 2793, `3958fc002ea0c2fb` | 2793, `3958fc002ea0c2fb` |
+| periodic: ENTRY / scan body | 39 / 188 | 39 / 188, same hashes |
+
+The linked deck's **compiled scan is the graph it was**: the same 264
+instructions with the same normalized hash at both step counts. The module's
++78 and the entry's +4 are the projection: `select` 131→140, `broadcast`
+735→745, `constant` 215→225, `gather` 36→39, `fusion` 119→122. The select is
+cheap enough that XLA clones it into the entry's consumer fusions rather than
+materializing it once, which is the same fusion-interior accounting Q27 had to
+separate from materialized bytes; none of those clones is inside the loop. The
+periodic deck is byte-identical end to end, including the raw module hash, so
+the no-op really is a no-op.
+
+**What a starved budget now reports.** Linked 4×4×8, Nl2/Nm8, four steps at
+dt 1e-3; starved is `implicit_tol` 1e-14 with `implicit_maxiter` 1 and
+`implicit_restart` 1, generous is 1e-8 / 200 / 20.
+
+| route | starved | generous |
+|---|---|---|
+| IMEX diagnostics | 4 of 4 unconverged, max rel. residual 4.472169e-07, 1 iteration; **host gate refuses** | 0 of 4, 2.292385e-09, 2 iterations; host gate accepts |
+| sheared IMEX (`integrate_nonlinear_sheared`) | 4 of 4, 5.977043e-07, 1 iteration; **refuses** | 0 of 4, 3.061006e-09, 2 iterations; accepts |
+| sheared IMEX transport | 4 of 4, 5.977043e-07, 1 iteration; **refuses** | 0 of 4, 3.061006e-09, 2 iterations; accepts |
+
+On the `before` arm every one of those six cells is *unavailable*: the routes
+have no `return_solve_stats` at all, which is the finding rather than a gap in
+the measurement.
+
+**What a saved summary now carries.** Same pilot as #247: Nx8/Ny16/Nz16,
+ky 0.3, Nl4/Nm8.
+
+| saved run | before | after |
+|---|---|---|
+| krylov | none of the nine keys present | `eigen_route=adaptive`, `eigen_residual=1.940442e-15`, `eigen_tolerance=1.000000e-09`, `eigen_certified=True`; `implicit_*` null |
+| implicit time run | none of the nine keys present | `implicit_converged=True`, `implicit_max_relative_residual=8.182994e-07`, `implicit_max_iterations=2`, `implicit_unconverged_solves=0`; `eigen_*` null |
+
+**Nothing else moved.** Bitwise identical across the two arms: the linked deck's
+run from the runtime's own on-cover initial condition (final-state checksum
+`a6a12d2c079b17d0`, final heat flux 7.783082805432e-25), the periodic deck's
+run (`5419144f226e2f25`, 4.277964576458e-01), all six unchanged HLO
+fingerprints above, and #247's linear pilot from a supplied state -- certified
+eigenpair γ=.1156212538480758667, ω=.2411787658929824829, residual 8.319672e-07,
+certified, route `adaptive`, and the explicit-time fit γ=.1156180399480198906,
+ω=.2411964219216982674, which are #247's and #253's values to every printed
+digit.
+
+**Contract.**
+- `advance_imex_nonlinear_state_with_stats` and `make_imex_solve_step_with_stats`
+  are the status-threading twins of the plain forms. The advance is *shared*,
+  not duplicated: one implementation threads whatever the solve step carries,
+  and the plain entry point passes a status of `None`, so its graph is the graph
+  it was. `make_imex_diagnostic_step(..., solve_step_with_stats=…)` grows the
+  carry only when given one, and `run_imex_diagnostic_scan(...,
+  return_solve_stats=True)` reads the trailing leaf back.
+- The production IMEX diagnostics route always carries the leaf and drops it
+  unless asked, which is what lets XLA remove the arithmetic behind it -- the
+  same shape `_scan_implicit_outputs` and `integrate_cached_imex_scan` already
+  had.
+- `mask_supplied_state` is applied at `integrate_nonlinear_cached`; public
+  signatures are otherwise unchanged apart from the new keyword.
+- `docs/solvers.rst` states both halves where the Q15 and Q23 contracts are
+  already stated, and `docs/api.rst` names the raw drivers beside `gkx.prepare`.
+
+**Limitations.**
+- `integrate_nonlinear_sharded` still takes the state it is given. It is not one
+  of the two drivers this row names and it has its own sharded intake, but the
+  contract is therefore still not the whole library's.
+- The **sheared** route's own supplied state is *not* projected, and this is a
+  decision rather than an omission: it rebuilds the cache per step in the
+  shearing basis, so a cover fixed by the deck's twist-shift topology is not the
+  right projector there. That question is open, not closed.
+- The linear **scan** summary (`kind="linear_scan"`) saves no solver status,
+  because a scan holds no per-point status to save.
+- No runtime route reaches the IMEX diagnostics or sheared routes, so the
+  fail-closed half of #242's policy is exercised in tests by calling the shared
+  gate, not by a runtime path.
+- Measurements are CPU, x64, on one linked nonlinear grid, one periodic grid,
+  one small linked IMEX grid and #247's linear pilot, at 4--8 step windows. No
+  production-size run, and no timing (shared machine, 1-min load 8--19).
+
+**Tests** (one invocation per row; x64 as CI runs).
+
+| selection | result |
+|---|---|
+| `tests/unit/nonlinear` + `tests/unit/solvers/test_time_integrators.py` | 358 passed (348 + 10 new) |
+| `tests/integration/runtime/test_runtime_runner.py` | 180 passed |
+| `tests/integration/runtime/test_runtime_artifacts.py` | 88 passed (85 + 3 new) |
+| `tests/unit/solvers/test_linear_krylov_core.py` | 98 passed |
+| `tests/unit/linear/test_linear_helpers_extra.py` | 67 passed |
+| CI `parallel-autodiff` lane, exactly as `ci.yml` runs it (`XLA_FLAGS=--xla_force_host_platform_device_count=4` as an environment variable, `--maxfail=1 --disable-warnings`; this is where the autodiff-objective selection runs) | 284 passed, 1 skipped |
+| `tests/release/test_release_gates.py tests/release/test_evidence_ledger.py` | 152 passed |
+
+The thirteen new cases are one per route the two holes left open: a starved inner
+budget carried and refused on the IMEX diagnostics route, on both sheared IMEX
+doors and through an `sspx3` step's three solves; the explicit sheared method
+reporting a null status and a bitwise unchanged state; a saved summary carrying
+the result's own status keys and reporting `None` rather than a fabricated
+converged one; and the two raw drivers projecting a supplied state, agreeing
+with each other bitwise, giving its off-chain rows exactly zero cotangent, and
+handing a periodic deck back the same array object. One existing sheared
+assertion was written as a bitwise equality between the `return_fields=True` and
+`return_fields=False` scan forms and had to be corrected to compare each form
+against itself: those are two graphs (one takes the fixed-step time, the other
+the accumulated one) and their difference is a pre-existing property of the
+route, not of this branch. No existing test's asserted number changed.
+
+Also passing: ruff 0.16.4 check and format, mypy 2.3.1 as CI (186 source files),
+`sphinx -W` (sphinx-build 9.0.4), gitleaks 8.30.1 on the branch range,
+`tools/release/check_package_architecture_manifest.py` and
+`check_repository_size_manifest.py`.
+
+**Manifest.** `installable_source_python_lines` 91655 → 92017 and
+`test_python_lines` 91565 → 92089, both the measured counts. Source file count
+unchanged at 186, under its 193 baseline; no new source module. `layer_policy`
+upward imports stay at 5, which is why the two flatteners landed in the solver
+modules rather than in `workflows/runtime/solver_status.py`.
+
+**Environment.** Apple M3 Max (14 cores, 36 GiB), shared with four sibling
+lanes (1-min load 8--19), Python 3.11.14, JAX/jaxlib 0.10.2, NumPy 2.4.6,
+SciPy 1.17.1, SOLVAX 0.20.0; `PYTHONPATH=$PWD/src:$PWD JAX_ENABLE_X64=true
+GKX_X64=1 MPLBACKEND=Agg JAX_PLATFORMS=cpu nice -n 10`, one heavy process at a
+time, `gkx.__file__` verified in each worktree. Commands (repository root), run
+once per worktree with `before` = a detached checkout of `38d7c4277` and
+`after` = this branch:
+```
+D=plan/research/scripts/2026-09-20-status-and-projection-coverage
+python $D/status_and_projection_coverage.py <before|after>
+```
+The `.txt` logs are those runs with local paths replaced by `<worktrees>` and
+`<scratch>`. The script was ruff-formatted before the recorded runs, so the
+committed file is the one that produced them.
+
+**Artifacts** (`plan/research/scripts/2026-09-20-status-and-projection-coverage/`, SHA-256):
+```
+23ae9bcab1ec34d9a264a6a415c15728d8d2d436d7ed247441c9b8248544795c  status_and_projection_coverage.py
+f7c49bbb860ae8a16bddb86dba54c06045553dc1b27daf7bcdf4b82d08fb3b1f  status_and_projection_coverage_after.txt
+fb3d34eebd7e46e8a047a8dfe0f6ccb3c9441bb949b9a852798d7f06f500a726  status_and_projection_coverage_before.txt
+```
+
+**Terminal state.** Every owned process ended; nothing was left running at the
+commit. The `before` arm's detached worktree was removed.
+
+**Next question.** `integrate_nonlinear_sharded` and the sheared route's own
+supplied state are what is left of the projection contract, and the second is a
+real question rather than a missing call: what *is* the chain cover of a deck
+whose radial wavenumbers move every step?
+
+---
+
+## 2026-09-20 — Q28: `pr3-cm` in `src/`, and the two levers re-measured there (plan §5.1 L4/L5)
+
+Q26 (#257) closed with one sentence that made this row: Q21's two inner-solve
+levers are not adoptable in `src/`, and the reason is not the rewritten
+threshold — the shift-invert Q21 measured is not the shift-invert GKX ships,
+and the block-Thomas apply accelerates a z-local block `src/` never builds. Q7
+(#236) adopted `pr3-cm` as *the L4 design to carry forward*, not as code. This
+row writes it, fixes the defect the diagnosis turned up on the way, and
+re-measures both levers through the shipped code path against a same-session
+`adaptive` control.
+
+### 1. The budget cap has three causes, not one
+
+Q26 recorded that on the shipped Cyclone deck at `(Nz, Nl, Nm) = (96, 4, 8)`
+`KrylovConfig(method="shift_invert")` leaves **48 of 48** inner solves
+unconverged at maximum relative residual **34** against a 1e-4 tolerance, every
+solve at the budget cap, with the outer pair rejected at residual 0.987 in
+float64. That reproduces here on `195205961` exactly — 48/48, residual 34,
+2880 = 48 × 60 iterations, outer 0.986671 — and
+`plan/research/scripts/2026-09-19-pr3cm-src/diagnose.py` separates it into
+three compounding causes, all measured on the very first right-hand side the
+outer Arnoldi generates, in float64, as relative residuals against `‖b‖`:
+
+| preconditioner | `x = 0` | `x0 = M⁻¹b` | restart 20 × 3 from `x0` | restart 20 × 3 from 0 |
+|---|---|---|---|---|
+| `hermite-line` | 1 | **25.4** | 9.18 | 0.9951 |
+| `field-corrected` | 1 | **20.7** | 13.0 | 0.9995 |
+| `damping` | 1 | **3.53** | 2.16 | 0.8575 |
+| `pr3-cm` (this row) | 1 | 1.29 | 0.304 | 0.2990 |
+
+**Cause 1, and the one that produced the number 34: the initial guess.** The
+shifted FGMRES was seeded with `x0 = M⁻¹b`. Under right preconditioning the
+first Krylov vector *is* `M⁻¹b`, so a cycle from zero already minimizes over a
+space containing that point: the guess can never help, and when `M` is a poor
+approximate inverse it starts the solve an order of magnitude **behind** the
+trivial guess, which is what the reported residual then says. Removing it moves
+the shipped route's reported inner residual from 34 to ~1 with no other change.
+This is a correctness fix in its own right, independent of any preconditioner.
+
+**Cause 2, the real one: `hermite-line` does not converge at this size.** With
+the guess gone the honest number is ~1, not 34, and it is still a failure. On
+the same right-hand side, unrestarted:
+
+| preconditioner | restart 20 × 3 | 20 × 15 | 60 × 5 | 300 × 1 | 600 × 1 |
+|---|---|---|---|---|---|
+| `hermite-line` | 0.9951 (60) | 0.9950 (300) | 0.9871 (300) | 0.9047 (300) | **0.5493 (600)** |
+| `pr3-cm` | 0.2990 (60) | 0.1767 (300) | 0.00715 (300) | **9.92e-05 (252, converged)** | 9.92e-05 (252) |
+
+`hermite-line` needs more than 600 unrestarted iterations to reach a 1e-4 inner
+tolerance and never gets there; `pr3-cm` reaches it in 252. This is Q7's
+measurement — `hermite-line` stalls from `(64, 8, 32)` while `pr3-cm` converges
+— reproduced inside `src/`'s own solve rather than on an assembled matrix.
+
+**Cause 3: the shipped restart is too short for any preconditioner.** At
+`shift_restart=20` even `pr3-cm` stalls: 300 iterations as GMRES(20) × 15 leave
+0.177, while the same 252 iterations in one cycle converge. Restart loss, not
+budget, is what the default `shift_maxiter=50`/`shift_restart=20` buys.
+
+So Q26's "not a budget shortfall, not a precision effect" stands, and the
+missing third option was the preconditioner — plus an initial guess that was
+inflating the reported number by 25×.
+
+### 2. What landed
+
+`src/gkx/solvers_linear_precond_pr3.py` is `pr3-cm`, selectable as
+`KrylovConfig(shift_preconditioner="pr3-cm")`. The split is Q7's: the shipped
+Hermite line solve already inverts streaming, hypercollisions **and the z-mean
+of the drift diagonal** exactly, and everything else — the exact `ω_d(z)`, the
+mirror term, the drive, the end damping, collisions and the local field
+response — is z-local, so it is a batch of dense `(l, m)` blocks, one per
+`(species, ky, kx, z)`. With `s₁ = σ/2 − α` one Peaceman–Rachford double sweep
+of the two shifted halves costs one solve of each and **no operator application
+at all**; `pr3-cm` is three such sweeps from zero. The z-mean drift diagonal is
+read off the line solve's own coefficients rather than off an assembled matrix,
+so the quantity `D̃` subtracts is bit-for-bit the quantity `S̃` adds.
+
+`α` follows Q7's scalar symbol rule `α = −√(s₁ d)` unless
+`KrylovConfig.shift_precond_alpha` names one. At `(96, 8, 24)` the
+implementation returns **α = −8.82076**, against the **−8.81** Q7 recorded for
+the same rung from the same rule — an independent reproduction of that
+arithmetic through different code.
+
+The z-local block is solved exactly by **block-Thomas in the Laguerre index plus
+one Sherman–Morrison correction** (Q21's lever), storing `3 Nl Nm²` entries
+instead of the dense `(Nl Nm)²`. `KrylovConfig.shift_precond_block_solve`
+selects it: `"auto"` (default) takes it when the structure holds, `"dense"` is
+the control, `"block-thomas"` refuses rather than falling back.
+
+The factors cost `Nl·Nm` probes of the z-local operator and a host
+factorization, built once per shift **outside** the jit and handed to the
+compiled Arnoldi as an operand rather than captured as a literal.
+
+**Two structural preconditions, measured at every build, not assumed.**
+
+* *l-tridiagonal plus rank one* — what the exact solve needs. On the shipped
+  deck's rung: largest off-tridiagonal entry **exactly 0.0** against a block
+  norm of 13.0, largest rank-one singular-value ratio **6.0e-15**. When it
+  fails, `"auto"` falls back to the dense batched inverse (the same
+  preconditioner, a costlier apply) and records why in
+  `EigenSolveStatus.inner["preconditioner_setup"]`. The test breaks it for
+  real rather than by monkeypatching the check: switching on the collision
+  operator couples the Laguerre index beyond `l ± 1`. The shipped deck runs at
+  `ν = 0`, which is why the production chain measures exactly zero there.
+* *z-locality of the non-streaming part* — what the whole splitting needs. This
+  one is a **refusal**, not a fallback, because a z-coupled `D̃` is not the
+  other half of this operator and no block solve repairs that. It is checked
+  against the operator itself on a random vector, so a coupling the column
+  probes cannot see is still caught: defect **1.6e-16** on the shipped deck's
+  rung. It finds a real case — a grid carrying zonal `(ky = 0, kx > 0)` rows
+  under adiabatic electrons, whose `⟨φ⟩` is a sum over z
+  (`_zonal_adiabatic_correction`). The linear eigen route escapes it by
+  reducing the grid to one non-zero `ky`; the refusal names `hermite-line` and
+  `field-corrected` as the routes that do apply.
+
+One defect found by writing those tests: a block whose field part is
+identically zero — the ordinary case for every row the field solve masks out —
+has no Sherman–Morrison pivot, and dividing by it produced a NaN that sent an
+otherwise exact build to the dense fallback.
+
+### 3. The levers re-measured in `src/`
+
+All arms below certify with GKX's own `_eigenpair_relative_residual` against the
+original matrix-free operator; the gate is the shipped one and nothing about
+certification changed.
+
+**Host.** Contended throughout by four concurrent lanes on this shared machine:
+the 1-minute load average sat at 7–12 during the `(96, 4, 8)` block and reached
+15–36 during the `(96, 8, 24)` block. Every arm ran single-threaded
+(`OMP_NUM_THREADS=1`, `--xla_cpu_multi_thread_eigen=false
+intra_op_parallelism_threads=1`) in a fresh process, but no wall time here is
+reproducible and none is quoted as a result. The verdict rests on the
+load-independent quantities §5.1 names: matvec-equivalents, inner-iteration
+counts, factor bytes, the certified residual and the returned pair.
+Matvec-equivalents follow Q21's registered accounting
+(`plan/research/scripts/2026-09-19-inner-solve-cost/PREDICTIONS.txt`) so the
+rows can be read against each other: one inner FGMRES iteration costs
+`1 + c_P`, plus one operator application per outer restart and one for
+certification, plus setup converted at `t_mv`.
+
+**`c_P` had to be re-measured, and the first attempt was wrong.** `measure.py`
+times the matvec at the start of an arm and the apply at the end, twenty
+minutes apart on this host, and under a load that moved between 7 and 70 that
+is not a ratio of two comparable numbers. It showed: four measurements of the
+same dense `pr3-cm` apply at the same rung returned `c_P` of **0.96, 6.04,
+18.08 and 19.30**, and a value below 1 is not physical for a batch of dense
+192 × 192 solves against one matrix-free operator application. Those arm-file
+values are not used. `costmodel.py` measures the ratio the only way that
+survives a moving load: one process, every candidate built up front, then nine
+rounds that time the matvec and each apply **back to back**, rotating the order
+so nothing is systematically first. Every `c_P` quoted below is the median over
+those nine rounds, with the observed range beside it, and every conclusion drawn
+from one is checked to hold at the cheapest `c_P` observed as well as at the
+median.
+
+#### The shipped Cyclone deck at `(Nz, Nl, Nm) = (96, 4, 8)`, n = 3072
+
+`adaptive` is the control and ran twice, first and fourth. Both shift-invert
+arms use `krylov_dim=48, restarts=2, shift_maxiter=600, shift_restart=600,
+shift_tol=1e-6`; the last three rows are the shipped budget
+(`shift_maxiter=50, shift_restart=20, shift_tol=1e-4`) for reference.
+
+| arm | certified | residual | inner iterations | unconverged | `c_P` (median [range]) | matvec-equiv | factors |
+|---|---|---|---|---|---|---|---|
+| `adaptive` (control) | **yes** | 4.040979e-15 | — | — | — | **33916** | — |
+| `adaptive` (repeat) | **yes** | 4.040979e-15 | — | — | — | **33916** | — |
+| `pr3-cm`, block-Thomas ×2 | **yes** | 3.25e-07 | 13996 | **0/96** | 4.35 [2.16, 5.19] | 74900 | 1.28 MB |
+| `pr3-cm`, dense ×2 | **yes** | 3.25e-07 | 13996 | **0/96** | 3.07 [1.79, 3.39] | **57000** | 1.57 MB |
+| `hermite-line`, same budget | no | **0.9954** | — | 96/96 | 0.80 [0.26, 0.95] | — | — |
+| `pr3-cm`, shipped budget | no | 0.0855 | — | 48/48 | — | — | 1.28 MB |
+| `hermite-line`, shipped budget | no | non-finite pair | — | 48/48 | — | — | — |
+
+Both `adaptive` runs return λ = 0.10128649783814778 − 0.2454963203262298j
+bitwise. Every `pr3-cm` arm returns 0.1012865000560938 − 0.2454962958399525j,
+which agrees with the control to **eight significant figures** in γ and seven in
+ω, at a certified residual of 3.25e-07 against the shipped 1e-6 gate.
+
+#### Q21's r96 rung, `(Nz, Nl, Nm) = (96, 8, 24)`, n = 18432
+
+The `adaptive` control here reproduces Q21's published r96 numbers exactly —
+**96700 operator applications at residual 6.48e-15** — which is the check that
+this rung is Q21's rung.
+
+| arm | certified | residual | inner iterations | unconverged | `c_P` (median [range]) | matvec-equiv | factors |
+|---|---|---|---|---|---|---|---|
+| `adaptive` (control) | **yes** | 6.48e-15 | — | — | — | **96700** | — |
+| `adaptive` (repeat) | **yes** | 6.48e-15 | — | — | — | **96700** | — |
+| `pr3-cm`, block-Thomas ×2 | **yes** | 1.67e-07 | 24188 | **0/96** | 8.09 [3.68, 14.72] | **220000** | 21.8 MB |
+| `pr3-cm`, dense ×2 | **yes** | 1.67e-07 | 24188 | **0/96** | 13.76 [9.38, 20.53] | 357000 | 56.6 MB |
+| `hermite-line`, same shift and budget | no | **0.999919** | — | 96/96 | 1.04 [0.77, 1.26] | — | — |
+| `pr3-cm`, block-Thomas, propagator shift | no | 0.0565 | — | 96/96 | — | — | 21.8 MB |
+| `pr3-cm`, dense, propagator shift | no | 0.0565 | — | 96/96 | — | — | 56.6 MB |
+| `hermite-line`, propagator shift | no | **0.9981** | — | 96/96 | — | — | — |
+
+Both certified arms return λ = 0.0987757453836732 − 0.2769045667141013j (they
+differ in the 17th digit) against the control's 0.0987757461278695 −
+0.2769045684044536j: **eight significant figures** in γ. They also run the same
+**24188** inner iterations and certify at the same **1.67e-07**, which is the
+exactness claim again, this time on a certified pair.
+
+The `hermite-line` row is the control that isolates the preconditioner from
+everything else: it runs **the same shift and the same 600-iteration
+unrestarted budget** as the two certified arms above it and still leaves 96 of
+96 inner solves unconverged and the outer pair at 0.999919. Neither the shift
+nor the budget is what stops the shipped route on this deck.
+
+The rows marked *propagator shift* take the shift the shipped default derives
+with no user input, which at this rung lands at −3.1e-04 + 4.65e-02j — the wrong
+side of the imaginary axis from a target at −0.277j. They are kept because they
+are what a first run gets, and because they are the pair where both block solves
+ran alternated on the same shift: identical inner-iteration counts and an
+identical outer residual of 0.056482 to six digits, which is the exactness claim
+stated as a measurement. The certified row uses Q7's protocol shift, the target
+plus 0.05 in growth.
+
+#### Lever 2, the exact z-block apply: adopted
+
+Both block solves return **the same preconditioner**, and that is measured
+rather than argued. At `(96, 4, 8)` all four `pr3-cm` arms run **13996** inner
+iterations and certify at **3.25e-07**, and the returned pairs differ in the
+17th digit (0.1012865000560938 against 0.10128650005609378); at `(96, 8, 24)`
+the two alternated arms run identically and reach an outer residual of
+**0.056482** to six digits. A direct apply comparison on the same vector agrees
+to **7.4e-16** on the shipped deck's rung and 6.4e-16 on the test fixture.
+
+What it buys is memory unconditionally, and apply cost above a block size:
+
+| rung | block size `Nl·Nm` | factors, block-Thomas | factors, dense | ratio | `c_P`, block-Thomas | `c_P`, dense | cheaper in |
+|---|---|---|---|---|---|---|---|
+| `(96, 4, 8)` | 32 | 1.28 MB | 1.57 MB | 1.23× | 4.35 | 3.07 | **dense, 7/9 rounds** |
+| `(96, 8, 24)` | 192 | 21.8 MB | 56.6 MB | **2.60×** | 8.09 | 13.76 | **block-Thomas, 9/9 rounds** |
+
+The apply's absolute cost is not reproducible on this host, but its *sign* is,
+and the sign is what the claim needs. In the nine interleaved rounds at each
+rung the dense inverse is cheaper in seven of nine at `Nl·Nm = 32` (median
+ratio 0.71) and block-Thomas is cheaper in **nine of nine** at `Nl·Nm = 192`
+(median ratio 1.70). So `Nl` sequential batched `Nm × Nm` solves lose to one
+batched 32 × 32 GEMM and win against a 192 × 192 one, which is the same
+crossover Q21 saw between its r96 (1.07× isolated) and production (1.83×
+composed) rungs.
+
+The 2.60× at r96 is Q21's 2.59× at the same rung, reproduced through different
+code. Two points do not calibrate a crossover, so `"auto"` takes the exact
+solve whenever the structure allows it and the two other settings are left for
+a user who is measuring; the sign change is recorded here and in
+`docs/numerics.rst` rather than hidden behind an invented threshold.
+
+**Verdict on lever 2: adopted.** Under the rewritten gate this is a memory
+reduction and an exactness property at an unchanged iteration count, with the
+certification applied exactly as before and the returned pair unchanged to
+roundoff. It is not made unconditional: `"dense"` is the cheaper apply below
+the crossover and stays reachable.
+
+#### Lever 1, the inexact-Krylov tolerance schedule: unblocked, not landed
+
+Q26's reason for rejecting it was that **no tolerance was setting the cost** —
+every inner solve sat at the budget cap and none converged, so relaxing the
+tolerance could not remove work that the tolerance was not requesting. That is
+no longer true. With `pr3-cm` the inner solves converge:
+
+| rung | preconditioner | unconverged solves | maximum inner relative residual |
+|---|---|---|---|
+| `(96, 4, 8)` | `hermite-line` | 96/96 | 0.996 |
+| `(96, 4, 8)` | `pr3-cm` | **0/96** | ≤ 1e-6 |
+| `(96, 8, 24)` | `hermite-line` | 96/96 | 0.998 |
+| `(96, 8, 24)` | `pr3-cm` | **0/96** | ≤ 1e-6 |
+
+So the lever now has room, and the room is the whole 13996 and 24188 inner
+iterations: every one of them is bought by the tolerance rather than by the
+cap. What it does **not** yet have is a driver. The Simoncini–Szyld rule sets
+step `j`'s tolerance from the outer residual at step `j−1`, and `src/`'s
+restarted Arnoldi does not compute one: it evaluates the Rayleigh quotient only
+at restart boundaries, of which the configuration above has two. Landing the
+schedule therefore needs a per-Arnoldi-step original-operator residual, which is
+one extra operator application per step inside the jitted `fori_loop` — a
+change to the outer loop, not to the preconditioner, and its own row.
+
+**Verdict on lever 1: not landed, and the blocker has changed** from "no
+tolerance is setting the cost" to "no per-step residual to drive the schedule".
+That is progress worth recording precisely, because it is the difference
+between a lever with no landing site and a lever with a named prerequisite.
+
+### 4. The gate, applied
+
+**`adaptive` stays the runtime default, and the numbers say so at both rungs.**
+Against the same-session control, with every arm certified against the original
+operator:
+
+| rung | `adaptive` matvec-equiv | best certified `pr3-cm` | ratio at the median `c_P` | ratio at the **cheapest** `c_P` observed |
+|---|---|---|---|---|
+| `(96, 4, 8)`, n = 3072 | **33916** | 57000 (dense) | 1.68× **more** | 1.15× more |
+| `(96, 8, 24)`, n = 18432 | **96700** | 220000 (block-Thomas) | 2.27× **more** | 1.17× more |
+
+The right-hand column is there because `c_P` is the one quantity this host
+would not hold still. It does not matter: **at every `c_P` observed in
+eighteen interleaved rounds, at either rung, shift-invert with `pr3-cm` costs
+more matvec-equivalents to a certified pair than `adaptive` does.** The
+conclusion does not depend on the timing noise at all.
+
+There is no reading of the rewritten gate on which that is an adoption: the
+gate adopts a *cost reduction*, and this is a cost increase.
+`KrylovConfig.method` stays `"adaptive"`, `shift_preconditioner` stays
+`"auto"` and `"auto"` still resolves to `hermite-line`/`field-corrected`.
+**Nothing a user does not ask for changes.**
+
+Where the cost sits is worth recording, because it is Q21's conclusion
+reproduced in `src/`. The iteration counts alone are **below** the control —
+13996 and 24188 against 33916 and 96700 — so with a free preconditioner apply
+`pr3-cm` would be 2.4× and 4.0× *cheaper* than `adaptive`. The entire gap is
+the apply. **The route is apply-bound, not iteration-bound**, exactly as Q21
+found on its own harness, and the levers that matter next are a cheaper apply
+or a device apply rather than fewer iterations.
+
+What *is* adopted is the improvement to the shift-invert route itself, which
+§5.1 explicitly distinguishes from making a candidate the default. On the
+shipped Cyclone deck that route previously failed closed at every rung tried,
+at outer residual 0.99 with 48/48 or 96/96 inner solves unconverged. With
+`shift_preconditioner="pr3-cm"` it certifies, at both rungs, to eight
+significant figures of the control's γ:
+
+| rung | before (`hermite-line`) | after (`pr3-cm`) |
+|---|---|---|
+| `(96, 4, 8)` | rejected, outer residual 0.9954 | **certified, 3.25e-07** |
+| `(96, 8, 24)` | rejected, outer residual 0.9981 | **certified, 1.67e-07** |
+
+Two user-visible changes follow, and both are opt-in or corrective:
+
+1. `shift_preconditioner="pr3-cm"` and the two fields that configure it,
+   `shift_precond_alpha` and `shift_precond_block_solve`, are new. A user who
+   does not name them sees nothing new.
+2. The shifted FGMRES no longer seeds itself with `M⁻¹b`. This one is
+   **not** opt-in, because it is a correctness fix: the old guess could only
+   move the solve away from the answer, and it is what made the reported inner
+   residual 34 instead of ~1. Every route that reaches an inner solve sees it.
+   On this deck the shift-invert route failed before and after, so no certified
+   number moves; the reported *inner* residual does, and the `hermite-line`
+   arm at the shipped budget now returns a non-finite Ritz pair rather than one
+   at residual 0.987 — both rejections, both failing closed into the propagator
+   fallback, which certifies neither.
+
+Two things this row does **not** claim. It does not claim a wall-clock result:
+the host carried four concurrent lanes at load 7–62 throughout. And it does not
+reach the production chain `(96, 16, 48)`, n = 73728, where Q7 and Q21 measured
+their headline numbers; the two rungs here are the one Q26 recorded and Q21's
+r96, and the ratio moved from 1.57× to 1.43× between them, which is a trend of
+two points and not an extrapolation.
+
+### 5. Limitations
+
+* **No production chain.** `(96, 16, 48)`, n = 73728 — Q7's and Q21's rung — was
+  not run. At the restart length `pr3-cm` needs here, a flexible FGMRES basis of
+  600 columns at that n is about 1.4 GB before the operator, and at the host
+  load this row ran under the arm would not have finished inside its cap. The
+  two rungs measured are the one Q26 recorded and Q21's r96.
+* **No wall-clock result.** Load 7–70 from concurrent lanes throughout. The
+  `c_P` values in the arm files are **wrong and are not used**: they time the
+  matvec and the apply twenty minutes apart, and four measurements of the same
+  dense apply returned 0.96, 6.04, 18.08 and 19.30. `costmodel.py` replaces
+  them with interleaved rounds, whose spread is still 1.5–4× within a rung,
+  which is why the apply-cost claim is a sign (consistent in 7/9 and 9/9
+  rounds) rather than a factor, and why the gate verdict is checked at the
+  cheapest `c_P` observed as well as at the median.
+* **The certified r96 arm uses Q7's protocol shift**, the target plus 0.05 in
+  growth, not the shift `shift_source="propagator"` derives. At that rung the
+  derived shift lands at −3.1e-04 + 4.65e-02j, on the wrong side of the
+  imaginary axis from a target at −0.277j, and no preconditioner rescues a shift
+  that is not near the wanted eigenvalue. That is a separate defect of the
+  shift seed, not of this row, and it is why the propagator-shift rows are
+  reported alongside rather than dropped.
+* **The exact solve's build probes the z-local block twice**, once with the
+  field response and once without, which is what makes peak resident memory
+  *higher* for block-Thomas (1.83 GB against 1.55–1.58 GB at r96) even though
+  its factors are 2.60× smaller. Q21 recorded the same prototype artefact.
+  Differencing one probe against a field-only apply would remove it.
+* **Two rungs do not calibrate the apply crossover.** `"auto"` therefore always
+  takes the exact solve when the structure allows it, which is the wrong choice
+  below `Nl·Nm ≈ 32` on this host by about 1.6× in `c_P`.
+* The structural guards are measured on this operator, on these rungs. They are
+  re-measured at every build precisely because that is all they can claim.
+
+### 6. Tests
+
+`tests/unit/solvers/test_linear_krylov_core.py` gains the `pr3-cm` block: the
+structural contract (off-tridiagonal entry exactly 0, rank-one ratio 6.0e-15,
+z-locality defect 1.6e-16), the exact-equals-dense claim with the smaller
+factors, both guards, the parameter rule, the missing-factors refusal and the
+route-level selection with its reported setup. Neither guard is exercised by
+monkeypatching the checker: the collision operator really does couple the
+Laguerre index beyond `l ± 1`, and a multi-`kx` grid really does add zonal rows
+whose `⟨φ⟩` sums over z. The existing name-resolution test now supplies the
+factors instead of exempting the new names, and the right-preconditioning test
+asserts that no `x0` is passed at all.
+
+The dot-precision allowlist entry in that file moved 809 → 834 as the pr3-cm
+import, names and factors argument went in above it; the same
+`jnp.tensordot(eigvecs.T, V[:krylov_dim], axes=1)` of
+`_propagator_arnoldi_restart_step` was verified at the new line and the move
+history extended.
+
+Gates run: `ruff check .`, `ruff format --check .`, mypy, the Krylov-core,
+adaptive-eigenmode, time-integrator, runtime-runner and autodiff-objective
+selections, the CI parallel lane with
+`XLA_FLAGS=--xla_force_host_platform_device_count=4` as an environment variable,
+`tests/release/test_release_gates.py`, `tests/release/test_evidence_ledger.py`,
+both manifests and the repository size check.
+
+### 7. Environment
+
+macOS 14.4.1 arm64 (M3, 14 cores), python 3.11.14, jax/jaxlib 0.10.2,
+solvax 0.20.0, `JAX_PLATFORMS=cpu`, `JAX_ENABLE_X64=true`, `GKX_X64=1`,
+`XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"`,
+`OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=VECLIB_MAXIMUM_THREADS=1`, ruff 0.16.4.
+Base commit for the diagnosis `195205961`.
+
+Scripts, commands and every arm's raw output in
+`plan/research/scripts/2026-09-19-pr3cm-src/`: `diagnose.py` (the budget-cap
+separation), `measure.py` (the arms), `costmodel.py` (the interleaved `c_P`
+rounds), `run_arms.sh` (one fresh single-threaded process per arm, load
+recorded at every boundary), and the `out/`, `d96/`, `d96b/`, `ab/`, `r96/`,
+`r96s/` and `cost/` output directories with their `supervisor.txt`.
+Q7's `bakeoff.py` is imported unchanged for the case construction, so the
+operator, the deck and the seed are the ones Q7 and Q21 measured.
+
+**A measurement lesson worth keeping.** Two timings taken twenty minutes apart
+on a shared host are not a ratio, however many repetitions each one has. The
+arm files' `c_P` looked plausible in isolation and only failed the physics
+check — a dense 192 × 192 batched solve cannot cost less than one matrix-free
+operator application — when four of them were put side by side. Any quantity
+defined as a ratio of two timings has to be measured by interleaving them, not
+by measuring each well.
+
+**Next question.** Landing the inexact-Krylov schedule now needs one thing:
+a per-Arnoldi-step original-operator residual inside the shift-invert
+`fori_loop`, at one extra operator application per step. With it, the 13996 and
+24188 inner iterations above are the budget the schedule would cut — Q21
+measured 1.67× on its own harness. Separately, the shift `shift_source
+="propagator"` derives is wrong-signed at `(96, 8, 24)`; a shift that is not
+near the target is not something any preconditioner can repair, and it is the
+cheaper of the two to fix.
+
+## 2026-09-20 — Q28: the three defaults Q26 recorded but could not set
+
+**Outcome: all three measured and set. A first run now takes a balanced
+velocity resolution at the same cost, an integrator paired with the step
+policy that pays for it, and one power-iteration count instead of two.**
+Branch `perf/default-resolution-and-integrator` off `origin/main` `38d7c4277`.
+
+Q26 (#257) rewrote the §5.1 adoption rule, audited the defaults a first run
+takes, and fixed one real bug. It recorded three defaults as suspicious and
+left them, because it had no measurement. This row measured each and set each.
+
+### The table
+
+| default | old | measurement | new | accuracy |
+|---|---|---|---|---|
+| `KrylovConfig.power_iters` | 200 | residual 9.501e-01 at 40 applies, 9.467e-01 at 200, against a 1.192e-04 gate; ladder stalls at 5.96e-03 by 10000 applies and never certifies | **40** | no change: the pair is rejected at both, so 5× the applies buys nothing |
+| `TimeConfig` method/step pairing, deck chose no `dt` | `rk2`, `dt=0.1`, `fixed_dt=True` | both fixed-step arms raise `FloatingPointError` (dt=0.1 is 7.8× the CFL-stable 0.01281); CFL-controlled rk2/rk3/rk4 cost 15612/13536/**11072** RHS evaluations | **`rk4` + CFL controller** | γ −2.63e-04 against rk2's −1.72e-04, both against the certified 0.10128645 — same scale, 29.1% cheaper |
+| `Nl`/`Nm` linear fallback | `(24, 12)` | certified adaptive eigensolves at seven rungs on the shipped Cyclone deck | **`(12, 24)`** | −4.405% → **+0.400%** of the tracked golden, at identical `Nl*Nm` |
+
+Nothing above quotes a wall time as a result. The host carried four sibling
+lanes throughout at 1-minute load 24–141, and the same `(24, 12)` rung took
+121 s, 173 s and 308 s in three runs that returned bit-identical numbers. The
+cost figures are propagator applies, step and RHS-evaluation counts, and
+`Nl*Nm`, none of which depends on load.
+
+### 1. `power_iters`: the two entry points now agree, at 40
+
+`KrylovConfig.power_iters` was 200 while `dominant_eigenpair(power_iters=…)`
+defaulted to 40 — one route, two costs depending on which door it is entered
+by, and two compilations of a scan whose length is a static argument.
+
+The question the task set was "find out which value is right". The measured
+answer is **neither**. Ladder on the shipped Cyclone deck at `(Nl, Nm)=(4, 8)`,
+`ky=0.3`, float32, against that rung's certified adaptive eigenpair
+γ = 0.10128645. Cost is exact: the route is one `lax.scan` of length
+`power_iters` over a single `_advance_imex2` apply.
+
+| applies | γ | residual | gate | certified |
+|---:|---|---|---|---|
+| 40 | 0.18119842 | 9.501e-01 | 1.192e-04 | no |
+| 80 | 0.22636196 | 9.255e-01 | 1.192e-04 | no |
+| 200 | 0.12442227 | 9.467e-01 | 1.192e-04 | no |
+| 400 | 0.09790193 | 9.214e-01 | 1.192e-04 | no |
+| 1000 | 0.08590183 | 4.358e-01 | 1.192e-04 | no |
+| 2000 | 0.09348834 | 1.105e-01 | 1.192e-04 | no |
+| 5000 | 0.10113729 | 6.182e-03 | 1.192e-04 | no |
+| 10000 | 0.10106588 | 5.959e-03 | 1.192e-04 | no |
+
+Five times the applies moves the residual from 9.501e-01 to 9.467e-01 — 0.4%
+of an O(1) quantity — and the pair is rejected at both. γ is not even monotone
+through the range: it runs 0.181, 0.226, 0.124, 0.098, 0.086, 0.093, 0.101,
+because at `power_dt=0.01` the propagator's dominant eigenvalue is barely
+separated and the iterate cycles among subdominant branches before settling.
+The residual does fall past 400 applies, but it stalls near 6e-03 and never
+reaches the gate: 250× the default buys a pair that is still rejected.
+
+So the value cannot be chosen for accuracy, and is chosen for cost and for
+agreeing with the public signature. This is safe to do because the route is
+not on any shipped path: no deck and no Krylov contract sets `method="power"`,
+`shift_source="power"` or `fallback_method="power"`, every shipped contract
+sets `power_iters` explicitly (60, 60, 80, 60, 60), and with the default
+`certify=True` the route raises at 40 and at 200 alike. The change makes a
+rejection cheaper; it does not make an answer different.
+
+The test asserts the whole `KrylovConfig`/signature default **intersection**
+rather than this one field, so the class of defect is guarded and not the
+instance of it.
+
+### 2. `TimeConfig` vs `ExplicitTimeConfig`: the pairing is what is defaulted
+
+The two surfaces were recorded as disagreeing for no stated reason. They
+disagree for one real reason, and it is `dt`: a **required** field on
+`ExplicitTimeConfig` and a **defaulted** one on `TimeConfig`. A caller of the
+library struct has always chosen a step, so treating it as the CFL controller's
+initial guess cannot silently substitute a step nobody asked for. A deck may
+not have chosen one.
+
+Measured on the shipped Cyclone deck at `(Nl, Nm)=(4, 8)`, `ky=0.3`, with the
+`TimeConfig` dataclass defaults, against the same certified γ = 0.10128645:
+
+| method / policy | γ | ω | resolved dt | steps | RHS evals | rel. error |
+|---|---|---|---|---:|---:|---|
+| rk2, fixed dt=0.1 | — | — | 0.1 | — | — | `FloatingPointError` |
+| rk4, fixed dt=0.1 | — | — | 0.1 | — | — | `FloatingPointError` |
+| rk2, CFL-controlled | 0.10126899 | 0.24556943 | 0.0128109 | 7806 | 15612 | −1.72e-04 |
+| rk3, CFL-controlled | 0.10126041 | 0.24556234 | 0.0221629 | 4512 | 13536 | −2.57e-04 |
+| rk4, CFL-controlled | 0.10125984 | 0.24555422 | 0.0361268 | 2768 | 11072 | −2.63e-04 |
+
+Three things follow, and all three matter:
+
+**Changing `method` alone would not have fixed anything.** rk4 at the defaulted
+fixed `dt=0.1` overflows exactly as rk2 does. The defaulted step is 7.8× the
+CFL-stable 0.01281 for this deck, and no integrator order rescues that.
+
+**rk4 is not more accurate here; it is cheaper at the same accuracy.** rk2's
+error is −1.72e-04 and rk4's is −2.63e-04, so rk4 is nominally 1.5× further
+out. Both are two orders of magnitude below the discretization error of the
+rung itself — `(4, 8)` is 8.9% from the golden — and the difference is the
+growth-rate fit window, not the integration order, because the controller hands
+each scheme a different step. What is not in doubt is the cost: 11072 RHS
+evaluations against 15612, a **29.1% reduction**, which is exactly
+4/(2.82·2) — rk4's CFL prefactor buys a 2.82× longer step for twice the work
+per step. Under the §5.1 rule as Q26 rewrote it, a reproducible ~29% cost
+reduction at no accuracy loss is adoptable.
+
+**The pairing is the unit, so `fixed_dt` is not flipped globally.** rk4 only
+pays because the controller gives it the longer step; at a *fixed* step it has
+no step-size compensation and is simply twice the cost of rk2. And fourteen
+shipped decks and parity fixtures omit `fixed_dt` and depend on `True` —
+`cyclone.toml`, `etg.toml`, `runtime_etg.toml`,
+`cyclone_coulomb_collisions.toml`, `runtime_cyclone_quasilinear.toml`,
+`runtime_kbm.toml`, `runtime_circular_vmec_linear.toml`,
+`runtime_batch_ky_scan.toml` and the six `tools/comparison/fixtures/parity/`
+decks — and several back evidence-ledger rows. Flipping the field would move
+validated numbers.
+
+So the coupling is applied at the one place a deck becomes a `TimeConfig`,
+`workflows.runtime.toml._normalize_time_overrides`: a deck that supplies no
+`dt` gets `fixed_dt=False` and `method="rk4"`, and a deck that supplies `dt`
+is untouched. **Every shipped deck supplies `dt`**, so none of them moves, and
+`test_every_shipped_deck_chooses_its_own_step` asserts that so a future deck
+cannot drift onto the controller by accident. An explicit `method` or
+`fixed_dt` in the deck still wins over the pairing.
+
+The dataclass defaults themselves are left as they are, and both docstrings now
+carry the reason rather than leaving the divergence to look accidental.
+
+### 3. `Nl`/`Nm` fallback: `(24, 12)` → `(12, 24)`, at the same cost
+
+The task said to reuse #238 and #252 rather than re-run. **That was not
+possible, and the reason is worth recording**: #238 and #252 are Laguerre-only
+ladders (`Nl` 16/24/32/48/64 at `Nm` pinned to 96) on the *parity fixture*
+`cyclone_salpha_itg_*.toml` at `ky=0.55`, with collisionality as the second
+axis. They are not `(Nl, Nm)` ladders and they are not the shipped deck at
+`ky=0.3`. Before this row the shipped deck had exactly three certified Krylov
+points — `(4, 8)`, `(16, 48)` and `(24, 12)` — and one four-rung *time-path*
+GPU sweep in `docs/_static/cyclone_resolution_subset.csv`. The ladder below is
+new.
+
+Certified adaptive eigensolves on `examples/linear/axisymmetric/cyclone.toml`
+at its own `ky=0.3`, float32, against the tracked golden γ = 0.09302951 in
+`src/gkx/data/cyclone_reference_adiabatic.csv`. Every rung is certified against
+the original operator at the 1.192e-04 float32 gate.
+
+| Nl | Nm | `Nl*Nm` | γ | ω | rel. to golden | residual |
+|---:|---:|---:|---|---|---|---|
+| 8 | 24 | 192 | 0.09877566 | 0.27690458 | +6.177% | 3.16e-06 |
+| 8 | 32 | 256 | 0.09801412 | 0.27764836 | +5.358% | 3.97e-06 |
+| **24** | **12** | **288** | 0.08893196 | 0.28021976 | **−4.405%** | 2.39e-06 |
+| **12** | **24** | **288** | 0.09340143 | 0.28955653 | **+0.400%** | 3.27e-06 |
+| 12 | 32 | 384 | 0.09263792 | 0.28890607 | −0.421% | 3.93e-06 |
+| 16 | 32 | 512 | 0.09284505 | 0.28150889 | −0.198% | 4.13e-06 |
+| 24 | 24 | 576 | 0.09368346 | 0.28402495 | +0.703% | 3.67e-06 |
+| 16 | 48 | 768 | 0.09309106 | 0.28203276 | +0.066% | 5.55e-06 |
+
+`(12, 24)` carries the same `Nl*Nm` as `(24, 12)` — the same state size and so
+the same cost per propagator apply — for **eleven times less error**. That
+makes it a strict improvement rather than a trade, which is why it is adopted
+without needing the §5.1 cost rule at all.
+
+Three things the ladder says that a single comparison would not:
+
+- It is a **balance**, not "more Hermite wins". `Nl=8` is worse than both 288
+  rungs at either Hermite count (+6.18% and +5.36%). Parallel phase mixing sets
+  an ITG growth rate and needs Hermite resolution; the FLR response still needs
+  enough Laguerre. A deck whose physics runs the other way — the shipped ETG
+  decks at `Nl=24`/`Nm=8` — must still say so, and all of them do.
+- **Spending more is not bought.** 384 lands at −0.421% and 576 at +0.703%,
+  both further out than 288's +0.400%, at 1.33× and 2× the cost. The sequence
+  is non-monotone through this region; only 768 (2.67× the cost) clearly
+  improves on it, at +0.066%. A cost increase of that size is not a decision a
+  fallback should make on a deck's behalf.
+- The ladder **reproduces** what was already recorded. `(24, 12)` returns
+  0.08893196 and `(16, 48)` returns 0.09309106 at residual 5.55e-06, matching
+  Q26's independent runs at a different SHA in a different worktree digit for
+  digit, and `(12, 24)`'s 0.09340143 sits 0.05% from the office-GPU time-path
+  0.09345269 in `docs/_static/cyclone_resolution_subset.csv` — a certified
+  eigensolve and an initial-value fit agreeing on a rung neither had measured
+  before.
+
+Blast radius: no shipped deck moves, because every `[run]` table sets `Nl`
+explicitly. Two tests pinned `(24, 12)` and are updated. The pair now has one
+owner, `startup._RUNTIME_LINEAR_HL_FALLBACK`, which `api.prepared` reads
+instead of repeating, so a prepared summary cannot describe a resolution the
+runtime will not build.
+
+### Reproducibility of the headline pair
+
+The `(24, 12)` → `(12, 24)` claim was re-measured A/B/A/B on the committed tree
+at `5342917e0`, alternating arms in fresh processes:
+
+| arm | rep | γ | ω | residual | wall | 1-min load |
+|---|---|---|---|---|---:|---:|
+| `(24, 12)` | 1 | 0.08893196 | 0.28021976 | 2.39e-06 | 121 s | 29 |
+| `(12, 24)` | 1 | 0.09340143 | 0.28955653 | 3.27e-06 | 149 s | 40 |
+| `(24, 12)` | 2 | 0.08893196 | 0.28021976 | 2.39e-06 | 173 s | 48 |
+| `(12, 24)` | 2 | 0.09340143 | 0.28955653 | 3.27e-06 | 145 s | 39 |
+
+Bit-identical within each arm; the eigensolve is deterministic. The wall times
+of the *same* arm differ by 1.4× across repetitions, which is the clearest
+statement of why no wall time in this entry is a result. Rep 1 of `(24, 12)`
+ran with `dirty_src=False` and rep 2 with `dirty_src=True` — the difference
+being a comment reword in `startup.py` and a manifest baseline — and returned
+the same eight digits, which is the check that the working-tree state did not
+reach the numbers.
+
+### Limitations
+
+- **One deck, one `ky`, one geometry.** All three measurements are the shipped
+  Cyclone s-α case at `ky=0.3` (the power and time arms at its `(4, 8)` rung).
+  Nothing here is a claim about another geometry, another `ky` or a kinetic-
+  electron case.
+- **The resolution ladder is certified, not converged.** Every rung passes the
+  original-operator residual gate, but the sequence is non-monotone through
+  288–576, so `+0.400%` is where this case lands at that budget, not an error
+  bound for another case. `Nl` and `Nm` should still be set in `[run]`, and the
+  docs still say so.
+- **No wall-clock win is claimed anywhere.** The host was contended for the
+  whole session; see the A/B table above.
+- **`power_dt` was not swept.** The power ladder holds `power_dt=0.01`, the
+  shipped default. A different `power_dt` would change where the route stalls;
+  it would not make 200 certify, since 10000 applies at this `power_dt` do not.
+- **The float32 gate is the one in force.** Every rung is certified at
+  1.192e-04, the float32 floor, not the 1e-09 float64 gate. Q26's float64
+  control at `(16, 48)` gives 0.09309117 against float32's 0.09309106 — 1.2e-06
+  relative — so the ladder's ordering is far above precision noise, but the
+  ladder itself was not repeated in float64.
+- **`ExplicitTimeConfig`'s own defaults are unchanged**, as is
+  `TimeConfig.fixed_dt`. The coupling changes what a *deck* with no chosen step
+  resolves to, not what a Python caller constructing `TimeConfig()` directly
+  gets. That caller is an expert surface and is left alone deliberately.
+
+### Left alone, with the reason
+
+- **`TimeConfig.method` stays `rk2` for a deck that chose `dt`.** At a fixed
+  step rk4 costs twice as much per step with no step-size compensation, and the
+  measurement gives no reason to double a chosen-step deck's cost.
+- **`TimeConfig.fixed_dt` stays `True`.** Fourteen shipped decks and parity
+  fixtures depend on it, as listed above.
+- **A grid-aware `(Nl, Nm)` policy was considered and rejected.** It would need
+  a ladder across grids to calibrate, and this row measured one grid. Inventing
+  a scaling rule from a single `Nz` would be a policy without a measurement,
+  which is the thing this row exists to stop doing.
+- **`docs/_static/cyclone_scan_table_lowres.csv` and `…_highres.csv` are
+  byte-identical**, so the tracked artifact records a *zero* `(8, 24)` →
+  `(16, 48)` change, which contradicts this ladder. Noticed while gathering
+  evidence; not this row's to fix, and flagged for a follow-up rather than
+  quietly regenerated.
+
+### Gates
+
+`ruff check .`, `ruff format --check .`, `mypy` on the changed modules,
+`sphinx -W -b html docs`, both release manifests
+(`check_package_architecture_manifest.py`, `check_repository_size_manifest.py`),
+`tests/release/test_release_gates.py`, `tests/release/test_evidence_ledger.py`,
+and the Krylov-core, adaptive-eigenmode, time-integrator, runtime-config,
+runtime-runner, prepared-simulation, CLI, nonlinear and validation selections,
+plus both CI shards that set
+`XLA_FLAGS=--xla_force_host_platform_device_count=4` in the environment as
+`ci.yml` does.
+
+Both line-budget baselines in `tools/package_architecture_manifest.toml` are
+set to the numbers the checker reported — 91655 → 91784 for `src/gkx` and
+91565 → 91721 for the tests — not to a delta.
+
+### Environment
+
+macOS 14.4.1 arm64 (M3, 14 logical CPUs), python 3.11.14, jax/jaxlib 0.10.2,
+numpy 2.4.6, scipy 1.17.1, `JAX_PLATFORMS=cpu`, float32 working precision
+(`JAX_ENABLE_X64` unset for the measurement arms; the gates run with
+`JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg` as `ci.yml` sets them),
+`nice -n 10`, venv `gkx-review-20260913`. Four sibling agent lanes shared the
+host; 1-minute load 24–141 across the session, recorded per arm as
+`loadavg_start`/`loadavg_end` in every record.
+
+### Commands
+
+Harness and per-arm records in
+`plan/research/scripts/2026-09-20-default-resolution-and-integrator/`
+(`measure.py`, `run_arms.sh`, `out/`, `SHA256SUMS.txt`). Each arm is one fresh
+process printing one `ENV` line and one `RESULT` line, so every record carries
+its own interpreter, library versions, precision, worktree, HEAD, `dirty_src`
+flag and host load.
+
+```
+export PYTHONPATH="$REPO/src:$REPO" JAX_PLATFORMS=cpu
+S=plan/research/scripts/2026-09-20-default-resolution-and-integrator/measure.py
+DECK=examples/linear/axisymmetric/cyclone.toml
+
+# power-iteration ladder
+for N in 40 80 200 400 1000 2000 5000 10000; do
+  python "$S" power "$DECK" --label "p-iters$N" --Nl 4 --Nm 8 --power-iters "$N"
+done
+
+# time integrator and step policy
+python "$S" time "$DECK" --label t-rk2-fixed    --solver explicit_time \
+  --Nl 4 --Nm 8 --time-method rk2 --fixed-dt true
+python "$S" time "$DECK" --label t-rk4-adaptive --solver explicit_time \
+  --Nl 4 --Nm 8 --time-method rk4 --fixed-dt false      # and rk2/rk3, fixed/adaptive
+
+# velocity-space ladder
+for pair in "24 12" "12 24" "8 24" "8 32" "12 32" "16 32" "24 24" "16 48"; do
+  read -r nl nm <<< "$pair"
+  python "$S" resolution "$DECK" --label "r-nl${nl}-nm${nm}" --Nl "$nl" --Nm "$nm"
+done
+```
+
+`bash plan/research/scripts/2026-09-20-default-resolution-and-integrator/run_arms.sh`
+runs all of them in order.
+
+## 2026-09-20 — release 2.2.0
+
+**Version.** 2.2.0, chosen by the maintainer. Nothing is removed since 2.1.0; two shipped
+defaults change (the linear resolution fallback and the integrator/step pairing), several
+routes gain reporting, and `pr3-cm` and the opt-in ky >= 0 layout are added. SemVer minor.
+plan.md's research-grade milestone moves 2.2.0 -> 2.3.0, exit criteria unchanged.
+
+**This release chain contains** #261 (Q28, pr3-cm in src/ and the shifted-FGMRES initial-guess
+fix), #262 (Q29, the three defaults) and #263 (Q30, solver status and state projection
+coverage), merged as one chain so CI runs once on the head. Three lanes had independently
+taken Q28 while running in parallel; the rows are numbered here by merge order.
+
+**Repaired in passing.** The Q30 row wrote `max|G|` with unescaped pipes, which split the
+table row into seven cells; the pipes are escaped.
+
+**CI shard cap (2026-09-20, during the 2.2.0 chain).** `quick-tests (linear-core)` timed out
+at 15m15s against its 15-minute cap, which GitHub reports as a cancelled job, so the
+aggregator failed with no failing test. The shard had been growing with the tests it
+carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main` was one
+commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
+had 15; splitting the lane is the follow-up.

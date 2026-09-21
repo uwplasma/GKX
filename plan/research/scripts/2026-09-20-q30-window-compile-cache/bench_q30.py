@@ -126,9 +126,9 @@ fn = jax.value_and_grad(objective)
 tprim = jnp.asarray(params.tprim)
 
 report = {
-    "gkx": gkx.__file__,
+    "gkx": str(Path(gkx.__file__).resolve().relative_to(Path.cwd())),
     "jax": jax.__version__,
-    "host": platform.node(),
+    "platform": platform.system(),
     "platforms": os.environ.get("JAX_PLATFORMS", ""),
     "x64": bool(jax.config.jax_enable_x64),
     "grid": [args.Nx, args.Ny, args.Nz, args.Nl, args.Nm],

@@ -130,7 +130,7 @@ Run to saturation once, then differentiate the physical window:
 ``loss`` compiles once.  The differentiated scan is one ``jax.jit`` graph whose
 arrays are all arguments, so the same executable serves every geometry the
 optimizer proposes; only a new state shape, integrator, term set or window
-length compiles again.  Through GKX 2.1.0 this route recompiled thirteen XLA
+length compiles again.  Through GKX 2.2.0 this route recompiled thirteen XLA
 modules on every call, which was most of the wall time of an objective
 evaluation.  :doc:`solvers` has the measurements and the identity gate.
 
