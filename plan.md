@@ -12,9 +12,9 @@ Five PRs are open against `main` at this checkpoint:
 
 - [#260](https://github.com/uwplasma/GKX/pull/260) implements the declared
   velocity-regularization contract and Laguerre-sink experiment. Its historical
-  PR title says Q31; this plan calls the lane **VEL-REG**. Review still finds no
-  tested sink strength that converges the target branch, an incomplete evidence
-  manifest, three private-path additions, and a higher-level configuration path
+  PR title says Q31; this plan calls the lane **VEL-REG**. The registered sink
+  campaign has no committed outcome yet, so no conclusion about its tested
+  strengths is justified. Review also found three private-path additions and a higher-level configuration path
   that can disable the sink without the intended refusal; it is not ready.
 - [#264](https://github.com/uwplasma/GKX/pull/264) makes the finite-window
   adjoint compile reusable across calls and geometries. It is ready for review
@@ -43,10 +43,10 @@ not name #260 or #264.
 | Order | Stable ID | Next bounded result | Admission / exit gate |
 |---:|---|---|---|
 | 1 | **VEL-REG** | Finish #260, then refine the slowly converging Laguerre branch under explicitly declared regularization and velocity limits. | Residual-qualified eigenpairs, spectra that resolve the retained cutoff, and ledger declarations; no collisionless value is promoted from an unconverged truncation. |
-| 2 | **EM-FIELD** | Validate independent field equations and energy channels in order: EM0 electrostatic identities, EM1 `A_parallel`, then EM2 reduced `delta B_parallel`. | Geometry/FLR normalization, signs and weighted free-energy exchange close independently before coupled waves or any broad electromagnetic campaign. |
+| 2 | **EM-FIELD** | Follow §3.3: EM0 independent three-field algebra and energy, EM1 waves and limits, EM2 matched ITG–KBM scans, then EM3 nonlinear transport. | Geometry/FLR normalization, field ratios, weighted free-energy exchange and independent reference comparisons; never equate a two-field result with full electromagnetic validation. |
 | 3 | **STOP-CAL** | Calibrate sequential nonlinear stopping on correlated and drifting traces. | Repeated-look false-stop and coverage tests pass on synthetic controls and held-out traces; fixed-window AR(1) coverage alone is insufficient. |
 | 4 | **GEO-TOPO** | State and test the derivative contract for linked geometry topology. | The topology map is fixed or changes fail explicitly; derivatives are checked on each smooth stratum and are not claimed across link-map changes. |
-| 5 | **OPT-HOLDOUT** | Evaluate linear, quasilinear and finite-window nonlinear objectives on held-out equilibria and controls. | Training choices are frozen first; held-out accuracy, stationarity, uncertainty and resolution gates are reported separately for each objective. No broad nonlinear campaign starts before VEL-REG, EM-FIELD and STOP-CAL. |
+| 5 | **OPT-HOLDOUT** | Evaluate linear, quasilinear and finite-window nonlinear objectives on held-out equilibria and controls. | Training choices are frozen first; held-out accuracy, stationarity, uncertainty and resolution gates are reported separately. Nonlinear campaigns require VEL-REG and STOP-CAL; electromagnetic campaigns additionally require their EM-FIELD prerequisites. |
 | 6 | **PERF-ADJOINT** | Rebase and finish #264's reusable adjoint executable. | Value/gradient identity, cross-geometry reuse with zero steady recompiles, and bounded cold/steady CPU and GPU measurements. |
 | 7 | **PERF-HALF** | Finish #266 and adopt the half-spectrum runtime layout. | Full/half physics and artifact interchange pass in float32/x64; accepted wall time and materialized/peak memory are recorded on CPU and GPU. |
 | 8 | **PERF-SOLVAX** | Finish #265 and #267; retain only measured `pr3-cm` improvements. | Certified residuals and refusal controls are unchanged; factor/apply memory and time are accepted only over their measured size and precision envelope. |

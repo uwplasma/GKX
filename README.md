@@ -27,12 +27,9 @@ If you are choosing between gyrokinetic codes, this is what GKX does and where
 each item's evidence is. It records scope, not quality; see
 [how GKX compares](#how-gkx-compares).
 
-- **Hermite-Laguerre velocity moments.** Velocity space is two spectral indices
-  rather than a grid, so the state is one array and the whole step is dense
-  linear algebra on it. Low moments are the fluid quantities, but a finite
-  truncation is only a declared reduced closure after its velocity convergence
-  or regularization has been demonstrated; a small basis is not automatically
-  resolved.
+- **Hermite-Laguerre velocity moments.** Velocity space uses two spectral
+  indices; low moments represent fluid quantities. A small truncation is not
+  automatically resolved: its closure or regularization needs validation.
   [theory](docs/theory.rst), [methods](docs/algorithms.rst).
 - **Differentiable objective paths, including selected equilibrium controls.**
   JAX provides implicit reverse rules for certified eigenvalues and selected
