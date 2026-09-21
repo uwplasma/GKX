@@ -114,7 +114,7 @@ record: dict = {
     "nu_hyper_l_arg": args.nu_hyper_l,
     "Nl": args.nl,
     "Nm": args.nm,
-    "host": platform.node(),
+    "platform": platform.system(),
     "python": sys.version.split()[0],
     "jax": jax.__version__,
     "numpy": np.__version__,
