@@ -39,9 +39,26 @@ that the z-local block is **exactly** block-tridiagonal in the Laguerre index
 with ``Nm x Nm`` blocks once the field term is removed, and that the field term
 itself is **exactly** rank one per ``(kx, z)``. So ``D~ - s1`` is solved exactly
 by block-Thomas in the Laguerre index plus one Sherman-Morrison correction,
-which stores ``3 Nl Nm^2`` entries instead of the dense ``(Nl Nm)^2`` and is the
-same preconditioner to the last bit -- Q21 measured the two solves agreeing to
-4.4e-16, with every iteration count unchanged.
+which is the same preconditioner to the last bit -- Q21 measured the two solves
+agreeing to 4.4e-16, with every iteration count unchanged.
+
+The Laguerre couplings are themselves banded in the Hermite index, because the
+mirror term is the only thing that moves ``l`` and it moves ``(l, m)`` to
+``(l +- 1, m +- 1)``. Measured on this operator the half-width is 1, and the
+elimination therefore stores ``Nl Nm^2`` Schur inverses plus ``2 Nl (2p+1) Nm``
+coupling diagonals rather than the ``3 Nl Nm^2`` of a dense-band factorization
+-- 1.5x smaller at ``Nl Nm = 36`` rising to 2.7x at 768, where the dense
+``(Nl Nm)^2`` inverse is 3.0x and 14.2x larger. The half-width is measured, never
+assumed; a coupling too wide for the band to pay for itself sends the build to
+the dense fallback with the measured width recorded.
+
+:func:`solvax.block_thomas_factor_ops` owns the Schur elimination: that is the
+numerically delicate half, and its operator-coupling contract is exactly the
+banded form above. Only the substitution is written out here, unrolled over the
+Laguerre index; :func:`solvax.block_thomas_solve_ops` runs the same two
+recurrences as ``lax.scan``s, which is what keeps *its* solve transposable on
+JAX before 0.10, and the tests pin the two against each other bitwise. See
+:func:`_block_thomas_substitute` for why GKX does not simply call it.
 
 That exactness is a property of the operator, not a law, so it is measured and
 not assumed. :func:`build_pr3_factors` verifies it and falls back to the dense
@@ -62,12 +79,14 @@ carry them as literals. :func:`build_pr3_apply` is the traced side.
 
 from __future__ import annotations
 
+import functools
 from dataclasses import replace
 from typing import Any, Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import solvax
 
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
@@ -111,20 +130,25 @@ _RANK_ONE_RATIO_TOL: float = 1.0e-8
 # a refusal threshold, not a fallback one: a defect above it means the operator
 # is not z-local and the split this module implements does not describe it.
 _LOCALITY_DEFECT_TOL: float = 1.0e-8
+# A Laguerre coupling entry counts as present above this fraction of the block
+# norm. The mirror term puts every one of them on the Hermite diagonals 0 and
+# +-1, so the measured half-width is 1 and the next occupied diagonal is at
+# exactly 0.0; this threshold has three orders of magnitude of daylight either
+# side and only has to separate "structurally absent" from "small".
+_COUPLING_BAND_TOL: float = 1.0e-13
 
 
 class Pr3BlockThomasFactors(NamedTuple):
-    """Exact ``(D~ - s1)^-1``: block-Thomas in ``l`` plus Sherman-Morrison.
+    """Exact ``(D~ - s1)^-1``: SOLVAX block-Thomas in ``l``, plus Sherman-Morrison.
 
-    ``dinv``, ``f`` and ``q`` are the forward-elimination factors of the
-    tridiagonal part, stacked ``(Nl, nblocks, Nm, Nm)``; ``w`` and ``tu`` are
-    the Sherman-Morrison row and the solved rank-one column, and ``denom`` is
-    ``1 + w . tu`` per block.
+    ``schur`` is :class:`solvax.OperatorBlockTridiagFactors` under
+    ``store="inverse"``: the Schur inverses ``Delta_a^-1`` stacked
+    ``(nblocks, Nl, Nm, Nm)``, carrying the Laguerre couplings as Hermite
+    diagonals in its ``params``. ``w`` and ``tu`` are the Sherman-Morrison row
+    and the solved rank-one column, and ``denom`` is ``1 + w . tu`` per block.
     """
 
-    dinv: jnp.ndarray
-    f: jnp.ndarray
-    q: jnp.ndarray
+    schur: Any
     w: jnp.ndarray
     tu: jnp.ndarray
     denom: jnp.ndarray
@@ -279,6 +303,11 @@ def check_block_structure(
     its Laguerre tridiagonal, and ``rank_one_ratio_max`` the largest
     second-to-first singular-value ratio of the field part. Both are reported
     against ``block_norm_max`` so a caller can judge them relatively.
+
+    ``coupling_halfwidth`` is the Hermite half-width of the two Laguerre
+    couplings: how far off its own diagonal the ``l -> l +- 1`` block reaches in
+    the Hermite index. The banded storage pays for itself while ``2p+1 <= Nm``,
+    so this is a third fallback condition and not only a diagnostic.
     """
 
     view = no_phi.reshape(no_phi.shape[0], nl, nm, nl, nm)
@@ -289,13 +318,18 @@ def check_block_structure(
                 off = max(off, float(np.abs(view[:, a, :, b, :]).max()))
     field = with_phi - no_phi
     singular = np.linalg.svd(field, compute_uv=False)
+    norm = float(np.abs(no_phi).max())
+    _diag, lower, upper = _laguerre_bands(no_phi, nl, nm, 0.0)
     return {
         "off_tridiagonal_max": off,
-        "block_norm_max": float(np.abs(no_phi).max()),
+        "block_norm_max": norm,
         "rank_one_s0_max": float(singular[:, 0].max()),
         "rank_one_s1_max": float(singular[:, 1].max()),
         "rank_one_ratio_max": float(
             (singular[:, 1] / np.maximum(singular[:, 0], 1.0e-300)).max()
+        ),
+        "coupling_halfwidth": float(
+            _coupling_halfwidth(lower, upper, max(norm, 1.0e-300))
         ),
     }
 
@@ -323,50 +357,190 @@ def _rank_one_factors(field: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return u, w
 
 
-def _block_thomas_factorize(
+def _shift(values: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
+    """``v[i] -> v[i + offset]`` along ``axis``, zero filled at both ends."""
+
+    if offset == 0:
+        return values
+    index: list[Any] = [slice(None)] * values.ndim
+    index[axis] = slice(offset, None) if offset > 0 else slice(None, offset)
+    kept = values[tuple(index)]
+    pad_shape = list(values.shape)
+    pad_shape[axis] = abs(offset)
+    pad = jnp.zeros(pad_shape, values.dtype)
+    parts = [kept, pad] if offset > 0 else [pad, kept]
+    return jnp.concatenate(parts, axis=axis)
+
+
+@functools.lru_cache(maxsize=None)
+def _coupling_action(halfwidth: int) -> Callable[..., jnp.ndarray]:
+    """SOLVAX's coupling contract for Hermite-banded Laguerre couplings.
+
+    ``couple(params, a, Z, which=..., transpose=...)`` returns ``L_a Z`` or
+    ``U_a Z`` for a 2-D ``Z``, reading the coupling as ``2p+1`` Hermite
+    diagonals: ``(C Z)[i] = sum_o band[p+o, i] Z[i+o]``, and transposed
+    ``(C^T Z)[i] = sum_o band[p-o, i+o] Z[i+o]``.
+
+    Cached on the half-width so that repeated builds hand ``jit`` the *same*
+    function object. SOLVAX carries ``couple`` as static pytree metadata, so a
+    fresh closure per shift would recompile the factorization every time.
+    """
+
+    def couple(
+        bands: tuple[jnp.ndarray, jnp.ndarray],
+        index: jnp.ndarray,
+        operand: jnp.ndarray,
+        *,
+        which: str,
+        transpose: bool,
+    ) -> jnp.ndarray:
+        band = bands[0] if which == "lower" else bands[1]
+        row = band[index]
+        out = jnp.zeros_like(operand)
+        for offset in range(-halfwidth, halfwidth + 1):
+            weight = (
+                _shift(row[halfwidth - offset], offset, 0)
+                if transpose
+                else row[halfwidth + offset]
+            )
+            out = out + weight[:, None] * _shift(operand, offset, 0)
+        return out
+
+    return couple
+
+
+def _laguerre_bands(
     no_phi: np.ndarray, nl: int, nm: int, shift: complex
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Forward-elimination factors of ``T - shift I`` for the l-tridiagonal part."""
+    """``T - shift I`` as diagonal blocks and the two Laguerre couplings."""
 
-    view = no_phi.reshape(no_phi.shape[0], nl, nm, nl, nm).copy()
-    eye = np.eye(nm, dtype=np.complex128)
-    for a in range(nl):
-        view[:, a, :, a, :] -= shift * eye
     nblocks = no_phi.shape[0]
-    dinv = np.zeros((nl, nblocks, nm, nm), dtype=np.complex128)
-    f = np.zeros((nl, nblocks, nm, nm), dtype=np.complex128)
-    q = np.zeros((nl, nblocks, nm, nm), dtype=np.complex128)
-    pivot = view[:, 0, :, 0, :].copy()
-    dinv[0] = np.linalg.inv(pivot)
+    view = no_phi.reshape(nblocks, nl, nm, nl, nm)
+    eye = np.eye(nm, dtype=np.complex128)
+    diag = np.stack([view[:, a, :, a, :] for a in range(nl)], axis=1) - shift * eye
+    lower = np.zeros((nblocks, nl, nm, nm), dtype=np.complex128)
+    upper = np.zeros_like(lower)
     for a in range(1, nl):
-        lower = view[:, a, :, a - 1, :]
-        upper = view[:, a - 1, :, a, :]
-        q[a - 1] = np.einsum("bij,bjk->bik", dinv[a - 1], upper, optimize=True)
-        pivot = view[:, a, :, a, :] - np.einsum(
-            "bij,bjk->bik", lower, q[a - 1], optimize=True
+        lower[:, a] = view[:, a, :, a - 1, :]
+    for a in range(nl - 1):
+        upper[:, a] = view[:, a, :, a + 1, :]
+    return diag, lower, upper
+
+
+def _coupling_halfwidth(lower: np.ndarray, upper: np.ndarray, scale: float) -> int:
+    """Smallest ``p`` holding every coupling entry inside ``|i - j| <= p``."""
+
+    nm = lower.shape[-1]
+    out = 0
+    for offset in range(-(nm - 1), nm):
+        for band in (lower, upper):
+            entry = float(
+                np.abs(np.diagonal(band, offset=offset, axis1=-2, axis2=-1)).max()
+            )
+            if entry > _COUPLING_BAND_TOL * scale:
+                out = max(out, abs(offset))
+    return out
+
+
+def _hermite_band(blocks: np.ndarray, halfwidth: int) -> np.ndarray:
+    """``(..., Nm, Nm)`` -> ``(..., 2p+1, Nm)`` with ``band[p+o, i] = C[i, i+o]``."""
+
+    nm = blocks.shape[-1]
+    out = np.zeros((*blocks.shape[:-2], 2 * halfwidth + 1, nm), dtype=np.complex128)
+    rows = np.arange(nm)
+    for offset in range(-halfwidth, halfwidth + 1):
+        cols = rows + offset
+        inside = (cols >= 0) & (cols < nm)
+        out[..., halfwidth + offset, rows[inside]] = blocks[
+            ..., rows[inside], cols[inside]
+        ]
+    return out
+
+
+def _block_thomas_factors(
+    no_phi: np.ndarray, nl: int, nm: int, shift: complex, halfwidth: int
+) -> Any:
+    """SOLVAX's Schur elimination of the l-tridiagonal part, one shift.
+
+    ``store="inverse"`` is the storage that matches what this preconditioner
+    does with the factors: every application is a matrix product against
+    ``Delta_a^-1`` rather than a pair of triangular solves, which is what the
+    superseded host factorization stored and measurably the cheaper of the two
+    here. It costs SOLVAX a transposed coupling action per elimination step,
+    which the banded action supplies.
+    """
+
+    diag, lower, upper = _laguerre_bands(no_phi, nl, nm, shift)
+    couple = _coupling_action(halfwidth)
+
+    def factor(blocks: jnp.ndarray, bands: tuple[jnp.ndarray, ...]) -> Any:
+        return solvax.block_thomas_factor_ops(blocks, couple, bands, store="inverse")
+
+    # SOLVAX eliminates in the precision of the arrays it is handed, and a GKX
+    # runtime that has not switched on x64 canonicalizes complex128 down to
+    # complex64 at the ``jnp.asarray`` boundary. The superseded host
+    # factorization was complex128 whatever the runtime precision was, so the
+    # elimination is pinned to it here and its result is re-canonicalized on
+    # the way out: the stored factors keep exactly the dtype they had before,
+    # and only the arithmetic that produces them is protected.
+    with jax.enable_x64(True):
+        factors = jax.jit(jax.vmap(factor))(
+            jnp.asarray(diag),
+            (
+                jnp.asarray(_hermite_band(lower, halfwidth)),
+                jnp.asarray(_hermite_band(upper, halfwidth)),
+            ),
         )
-        dinv[a] = np.linalg.inv(pivot)
-        f[a] = np.einsum("bij,bjk->bik", dinv[a], lower, optimize=True)
-    return dinv, f, q
+        factors = jax.tree.map(np.asarray, factors)
+    factors = jax.tree.map(jnp.asarray, factors)
+    return replace(factors, work_dtype=factors.blocks.dtype)
 
 
-def _thomas_solve(
-    dinv: jnp.ndarray, f: jnp.ndarray, q: jnp.ndarray, nl: int, nm: int
+def _block_thomas_substitute(
+    factors: Any, nl: int, nm: int
 ) -> Callable[[jnp.ndarray], jnp.ndarray]:
-    """``x -> (T - shift)^-1 x`` on stacked ``(nblocks, Nl*Nm)`` rows."""
+    """``x -> (T - shift)^-1 x``, SOLVAX's substitution unrolled over ``l``.
+
+    These are exactly the two recurrences :func:`solvax.block_thomas_solve_ops`
+    documents and runs -- a downward sweep forming
+    ``sigma_a = b_a - U_a Delta_{a+1}^-1 sigma_{a+1}`` and an upward one forming
+    ``x_a = Delta_a^-1 (sigma_a - L_a x_{a-1})`` -- against the same factors, and
+    the two agree bitwise, which a test pins.
+
+    SOLVAX runs them as ``lax.scan``s because that is what keeps *its* solve
+    transposable on JAX releases before 0.10. GKX only ever applies this
+    preconditioner forwards and never differentiates through it, so it does not
+    need that property, and at the Laguerre block counts this operator has it
+    costs real time: a scan of this recurrence is 1.6x to 1.9x slower than the
+    unrolled form at ``Nl`` of 6 to 16 on CPU, which is why SOLVAX's own
+    stored-band solve unrolls for block counts in this range as well.
+    """
+
+    inverses = factors.blocks  # (nblocks, Nl, Nm, Nm), Delta_a^-1
+    lower, upper = factors.params  # (nblocks, Nl, 2p+1, Nm)
+    halfwidth = (lower.shape[-2] - 1) // 2
+
+    def coupled(band: jnp.ndarray, a: int, rows: jnp.ndarray) -> jnp.ndarray:
+        out = jnp.zeros_like(rows)
+        for offset in range(-halfwidth, halfwidth + 1):
+            out = out + band[:, a, halfwidth + offset] * _shift(rows, offset, -1)
+        return out
 
     def solve(x: jnp.ndarray) -> jnp.ndarray:
         rows = x.reshape(x.shape[0], nl, nm)
-        forward = [jnp.einsum("bij,bj->bi", dinv[0], rows[:, 0])]
-        for a in range(1, nl):
-            forward.append(
-                jnp.einsum("bij,bj->bi", dinv[a], rows[:, a])
-                - jnp.einsum("bij,bj->bi", f[a], forward[a - 1])
-            )
-        back: list[jnp.ndarray] = [forward[nl - 1]]
+        sigma = [rows[:, nl - 1]]
         for a in range(nl - 2, -1, -1):
-            back.append(forward[a] - jnp.einsum("bij,bj->bi", q[a], back[-1]))
-        return jnp.stack(back[::-1], axis=1).reshape(x.shape[0], nl * nm)
+            forward = jnp.einsum("bij,bj->bi", inverses[:, a + 1], sigma[-1])
+            sigma.append(rows[:, a] - coupled(upper, a, forward))
+        sigma.reverse()
+        out = [jnp.einsum("bij,bj->bi", inverses[:, 0], sigma[0])]
+        for a in range(1, nl):
+            out.append(
+                jnp.einsum(
+                    "bij,bj->bi", inverses[:, a], sigma[a] - coupled(lower, a, out[-1])
+                )
+            )
+        return jnp.stack(out, axis=1).reshape(x.shape[0], nl * nm)
 
     return solve
 
@@ -515,16 +689,19 @@ def build_pr3_factors(
         no_phi[:, diagonal, diagonal] -= mean_drift
         structure = check_block_structure(with_phi, no_phi, nl, nm)
         scale = max(structure["block_norm_max"], 1.0e-300)
+        halfwidth = int(structure["coupling_halfwidth"])
         exact = (
             structure["off_tridiagonal_max"] <= _TRIDIAGONAL_RELATIVE_TOL * scale
             and structure["rank_one_ratio_max"] <= _RANK_ONE_RATIO_TOL
+            and 2 * halfwidth + 1 <= nm
         )
         broken = (
             "the z-local block is not l-tridiagonal in the Laguerre index plus "
-            f"a rank-one field part: largest off-tridiagonal entry "
-            f"{structure['off_tridiagonal_max']:.3e} against block norm "
-            f"{structure['block_norm_max']:.3e}, largest rank-one "
-            f"singular-value ratio {structure['rank_one_ratio_max']:.3e}"
+            f"a rank-one field part with Hermite-banded couplings: largest "
+            f"off-tridiagonal entry {structure['off_tridiagonal_max']:.3e} "
+            f"against block norm {structure['block_norm_max']:.3e}, largest "
+            f"rank-one singular-value ratio {structure['rank_one_ratio_max']:.3e}"
+            f", Laguerre coupling Hermite half-width {halfwidth} against Nm={nm}"
         )
         if not exact and block_solve == "block-thomas":
             raise ValueError(
@@ -534,18 +711,14 @@ def build_pr3_factors(
             )
         if exact:
             u, w = _rank_one_factors(with_phi - no_phi)
-            dinv, f, q = _block_thomas_factorize(no_phi, nl, nm, s1)
-            solve = jax.jit(
-                _thomas_solve(jnp.asarray(dinv), jnp.asarray(f), jnp.asarray(q), nl, nm)
-            )
+            schur = _block_thomas_factors(no_phi, nl, nm, s1, halfwidth)
+            solve = jax.jit(_block_thomas_substitute(schur, nl, nm))
             tu = np.asarray(solve(jnp.asarray(u)))
             denom = 1.0 + np.einsum("bi,bi->b", w, tu)
             if np.all(np.isfinite(denom)) and float(np.abs(denom).min()) > 0.0:
                 reason = "block is l-tridiagonal plus rank one"
                 blocks_pytree = Pr3BlockThomasFactors(
-                    dinv=jnp.asarray(dinv),
-                    f=jnp.asarray(f),
-                    q=jnp.asarray(q),
+                    schur=schur,
                     w=jnp.asarray(w),
                     tu=jnp.asarray(tu),
                     denom=jnp.asarray(denom),
@@ -657,7 +830,7 @@ def _block_solver(
         inverse = blocks.inverse
         return lambda rows: jnp.einsum("bij,bj->bi", inverse, rows)
 
-    tridiagonal = _thomas_solve(blocks.dinv, blocks.f, blocks.q, nl, nm)
+    tridiagonal = _block_thomas_substitute(blocks.schur, nl, nm)
     w, tu, denom = blocks.w, blocks.tu, blocks.denom
 
     def solve(rows: jnp.ndarray) -> jnp.ndarray:
