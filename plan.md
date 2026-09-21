@@ -67,8 +67,8 @@ not name #260 or #264.
 `damp_ends_rate` implementation already exists; do not reopen that
 implementation step. [#194](https://github.com/uwplasma/GKX/issues/194) still
 owns the deck conversion and regeneration of every affected reference and
-downstream artifact. Complete that migration before VEL-REG or EM-FIELD uses an
-end-damped case for timestep, convergence or physics evidence. This is separate
+downstream artifact. For each admitted case, complete its migration before
+VEL-REG or EM-FIELD uses it for timestep, convergence or physics evidence. This is separate
 from the repaired-build evidence still required for historical 2.0.0 results.
 Unrelated cases and maintenance work need not wait. Any later legacy instruction
 to implement the rate is a historical checkpoint, not current work.
