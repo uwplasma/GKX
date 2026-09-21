@@ -18362,3 +18362,34 @@ handles belong only in untracked private operational notes.
   affected physics case only after its rate and reference qualification;
   unrelated work may continue. Finite-shear analytic AD/JIT coverage is now an
   explicit GEO-TOPO requirement, not a new research lane.
+
+### 2026-09-21 — first rate-qualified reference preflight
+
+Read-only inspection of the live GX source corrects the admission blocker. The
+primary checkout is clean in the relevant files at public upstream
+[GX commit `3865a5377`](https://bitbucket.org/gyrokinetics/gx/commits/3865a53778862e1686f414bf6f416339e24887c9): `dampEnds_linked` takes one
+`get_id3()` value while its launch caps `gridDim.z` at 65,535. Executable SHA-256
+`787eb0145937e653c08750fd7168029c20772ce3e6c2a2a3b58c70aab128dc9b` has no repaired-source build record.
+
+An uncommitted sibling has the grid-stride loop, but its binary also contains an
+unrelated kz-hypercollision normalization change and is inadmissible. Start from
+public commit `3865a5377`, change only `dampEnds_linked` to iterate
+`idzlm += blockDim.z * gridDim.z` as adjacent copy-back kernels do, record that
+isolated patch and its base in reproducible provenance, and hash patch and binary.
+
+The first case is only `cyclone_salpha_itg`. In its shipped GX deck set `[Time]`
+`dt = 0.002`, `fixed_dt = true`, retain RK4/`t_max = 150`, and set diagnostic
+`nwrite = 100`. Amplitude `0.1`, width `0.125` and reference step `0.002` give
+rate `50`. Require exit zero, a fixed-step trace, final time approximately 150,
+751 samples, eleven finite positive-ky rows, and input, executable and NetCDF
+hashes; the NetCDF hash is also the imported-geometry dependency.
+
+Then migrate the GKX fixture itself—a manifest-only `damp_ends_rate` is ignored
+by the comparison driver—to rate `50.0` with repository-relative provenance for
+legacy fixture SHA-256 `e828bd40f56d63de4c89e8be2a4f11268357ac466034c96087ab1186f93042e6`.
+Run `GX_PARITY_REF_DIR="$REF_DIR" JAX_ENABLE_X64=true PYTHONPATH=src "$PYTHON"`
+`tools/comparison/build_gx_parity_matrix.py --manifest "$MANIFEST" --cases`
+`cyclone_salpha_itg --stem "$OUT/baseline"` at `.002`/75,000, then exact
+`ky=.30000001192092896` at `.001`/150,000 and `.0005`/300,000. Require finite
+growth/frequency and both half-horizon shifts; three levels support convergence,
+two show sensitivity only. No simulation or result is claimed here.
