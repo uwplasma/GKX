@@ -1360,10 +1360,10 @@ recursive = true
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
-# 92533 -> 92605: production-cadence sequential stopping controls retain the
+# 92533 -> 92606: production-cadence sequential stopping controls retain the
 # predeclared drifting negative and stationary positive populations, including
 # exact retained-sample and IAT-span boundaries. No fixture or helper is added.
-baseline = 92605
+baseline = 92606
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -18311,3 +18311,11 @@ physical minimum could be ignored by `max`. Short-run bypass now applies only
 to step-capped runs; adaptive runs keep the stopping callback even with a small
 nominal chunk. Nonfinite minimum windows are explicitly rejected. Existing
 tests pin both behaviors. The complete source change remains net smaller.
+
+CI then exposed a stale prepared-runtime assertion: it still expected a
+16-step fixed run to admit saturation stopping. The existing test now checks
+both sides of the new boundary (255 steps prepare, 256 refuse), rather than
+weakening the stopping policy. All 180 tests in the affected runtime file pass
+on supported JAX 0.10.2/x64 CPU (52 warnings from the existing short/unstable
+smoke cases). This follow-up adds one test line and no runtime changes; fresh
+CI is required on the updated head.

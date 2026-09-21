@@ -1316,8 +1316,9 @@ def test_prepare_runtime_nonlinear_reuses_existing_execution_contract() -> None:
         np.asarray(diagnostics.heat_flux_t), np.asarray(direct.diagnostics.heat_flux_t)
     )
     np.testing.assert_allclose(np.asarray(state), direct.state)
+    assert prepare(cfg, Nl=2, Nm=2, steps=255, resolved_diagnostics=False) is not None
     with pytest.raises(ValueError, match="cannot stop early at saturation"):
-        prepare(cfg, Nl=2, Nm=2, steps=16, resolved_diagnostics=False)
+        prepare(cfg, Nl=2, Nm=2, steps=256, resolved_diagnostics=False)
     full_horizon = replace(cfg, time=replace(cfg.time, run_to="t_max"))
     with pytest.raises(ValueError, match="only support explicit methods"):
         prepare(full_horizon, Nl=2, Nm=2, steps=2, method="imex")
