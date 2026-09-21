@@ -18335,3 +18335,30 @@ makes no eigenpair-convergence claim. All five PRs remain open with current CI
 pending. Public records use repository-relative sources and generic execution
 labels; host aliases, process IDs, private directories and resumable job
 handles belong only in untracked private operational notes.
+
+### Follow-up: reviewed contracts, migration prerequisite, and SOLVAX merge
+
+- [SOLVAX #116](https://github.com/uwplasma/SOLVAX/pull/116) merged as
+  `d7aafe959` after all nine checks, including combined coverage, passed on
+  exact head `6a4084927`. Admin merge bypassed the review requirement, not a
+  failing check. Its remote and unoccupied local branch refs were removed with
+  expected-SHA protection; commits remain in main and checkouts were preserved.
+  This fixes complex equilibration, not GKX's unqualified Ruiz timing evidence.
+- GKX #269 now publishes `7c36fab05`: geometry-derived FLR coefficients connect
+  to an independently assembled three-field system under both magnetic-metric
+  policies and nonunit `rho_star`. Root CPU JAX 0.10.2 reruns pass 38 x64 and
+  20 float32 cases. Net +67 test lines reuse the existing oracle; no runtime
+  change or new file. This verifies declared algebra, not physical varying-B
+  normalization or the electromagnetic invariant.
+- GKX #266 publishes the line-neutral stale monkeypatch repair `9c8614b10`.
+  The earlier full integration attempt stopped at that test after 246 passes,
+  14 skips and one deselection; the repaired containing file passes 88 tests.
+  A fresh full integration run is active on that exact source. No full-suite
+  pass or half-layout adoption is claimed until its terminal result and CI.
+- [Issue #194 checkpoint](https://github.com/uwplasma/GKX/issues/194#issuecomment-5755570573)
+  distinguishes merged rate/provenance/refusal infrastructure (#212/#223/#224)
+  from outstanding case migration and reference regeneration. A fresh main CPU
+  selection passes 31 damping/migration tests. The current queue admits each
+  affected physics case only after its rate and reference qualification;
+  unrelated work may continue. Finite-shear analytic AD/JIT coverage is now an
+  explicit GEO-TOPO requirement, not a new research lane.
