@@ -318,12 +318,7 @@ def integrate_nonlinear(
 
 
 def _identity_state(state: jnp.ndarray) -> jnp.ndarray:
-    """Return the state unchanged, from a module-level function object.
-
-    ``lambda state: state`` would be a fresh object on every call, and the
-    window's projector is closed over by the compiled window below, whose trace
-    cache is keyed on the function it is asked to compile.
-    """
+    """Use a stable function identity for the compiled window's projector."""
 
     return state
 
@@ -363,34 +358,15 @@ def _nonlinear_heat_flux_window_total(
     checkpoint: bool,
     projector_signature: tuple[int, bool, int] | None,
 ) -> jnp.ndarray:
-    """Return the windowed heat-flux sum as one compiled graph (queue row Q30).
+    """Compile a reusable heat-flux sum for fixed shapes and static options.
 
-    :func:`nonlinear_heat_flux_window` used to run this scan eagerly, and an
-    eager ``lax.scan`` or ``lax.cond`` is dispatched on the jaxpr its body was
-    just traced into. A jaxpr compares by identity, so a jaxpr rebuilt on every
-    call misses every lowering cache below it, and the route recompiled its four
-    scans and nine conds on each objective evaluation -- the route an
-    optimization loop calls in a loop. Under one ``jax.jit`` the trace cache is
-    keyed on this module-level function, the argument avals and the static
-    arguments below, all of which repeat, so the graph is compiled once and
-    reused -- including through ``jax.value_and_grad``, whose derived jaxprs are
-    memoized on the traced jaxpr that cache hands back.
+    Arrays are operands, not captured geometry constants. A module-level JIT
+    avoids rebuilding eager scan/cond executables on each objective call and
+    permits reuse through ``value_and_grad``. Projector layout is static and
+    has no derivative; configuration or topology changes may recompile.
 
-    Every array the window reads is an **argument**, not a captured constant:
-    the state, the linear cache, the grid, the parameters, the quadrature
-    weights and the step indices arrive as operands, the placement the eager
-    scan already gave them. That is what makes the graph reusable -- a captured
-    array would pin this geometry into the executable and recompile on the next
-    one an optimizer proposes. Only what cannot be an operand is static: the
-    step, the window tail, the integrator, the term switches, the collision
-    model, and the projector's grid signature
-    (:func:`~gkx.operators.nonlinear.projection.hermitian_projector_signature`),
-    which is axis layout and has no derivative.
-
-    The window's mean -- ``total_heat / tail`` -- is deliberately **not** here.
-    Inside the graph XLA fuses that divide into the scan's accumulation and the
-    result moves by one float32 ulp against the eager route; outside it, the
-    value and the adjoint are bitwise what they were.
+    Keep ``total_heat / tail`` outside this graph: fusing the mean into the
+    accumulation changed float32 rounding in the reference comparison.
     """
 
     project_state: Callable[[jnp.ndarray], jnp.ndarray] = (
@@ -493,15 +469,10 @@ def nonlinear_heat_flux_window(
     has been remeasured for the case at hand with
     ``tools/campaigns/nonlinear_gradient_window.py``.
 
-    **The window compiles once** (queue row Q30). Everything that has to be read
-    on the host stays here -- the linked cache, the quadrature weights, the
-    projector's axis layout, the chain-cover projection of ``saturated_state``
-    -- and the differentiated scan runs as one graph in
-    :func:`_nonlinear_heat_flux_window_total`, whose compile is reused across
-    calls and across the geometries an optimizer proposes. Calls repeat at the
-    same resolution and the same options, so the only reasons to recompile are
-    real ones: a new state shape, a different integrator or term set, a window
-    of a different length.
+    Host-side geometry/layout preparation stays here. The differentiated scan
+    in :func:`_nonlinear_heat_flux_window_total` reuses its executable for
+    matching shapes, topology and static options, with geometry arrays passed
+    as operands. See ``docs/nonlinear_autodiff.rst`` for scope and evidence.
     """
 
     count = int(steps)
