@@ -4,6 +4,37 @@ Append-only record. The active plan is [plan.md](../plan.md); dated audits are i
 [baseline/](baseline/) and research reports in [research/](research/). Entries are
 observations at their stated revisions, not current validation claims.
 
+## 2026-09-21 — publication and handoff checkpoint
+
+The session's reviewed implementation is published in PRs #264–#273. Main is
+`4605d0b49`; an open PR is not integrated evidence. The following unfinished
+work is now recoverable without private machine state:
+
+- [#274](https://github.com/uwplasma/GKX/pull/274),
+  `draft/em-multimode-handoff` at `4f3bdfca5`: unfinished multimode EM energy
+  oracle, stacked on #269. Debug scaffolding remains; success and architecture
+  gates are unverified. Do not merge or promote its physical identity.
+- [#275](https://github.com/uwplasma/GKX/pull/275),
+  `draft/physical-cadence-handoff` at `fac721059`: adaptive-analysis prototype
+  and tests, stacked on #271. Negative uncertainty coverage blocks adoption.
+  Reconcile its historical base before resuming; no runtime default is promoted.
+- `3f62fe1d0` in #268 preserves the fixed-window covariance preregistration.
+  No new random paths or physical runs have been generated for it.
+
+An older staged release snapshot contained 226 changed files: every working
+blob is already reachable in published Git history. It was not recommitted.
+The earlier physical-energy source/test changes are likewise published in
+#269; its obsolete local architecture count is superseded by the integrated
+count. Two old Q28-to-Q29 log-label edits are superseded by #268's stable-ID
+queue and are not new implementation. Historical scratch/stash and rewritten
+commit identities are not candidates for blindly replaying onto current main.
+
+Resume from public PR branches, not old checkout names. Read each current-head
+handoff, `plan.md`, and the relevant dated evidence in this log. Preserve the
+distinction between exact-head CI, recorded local checks and physics acceptance.
+At this checkpoint required CI remains incomplete; no merge or release is
+authorized by this publication-only audit. No new numerical campaign was run.
+
 ## 2026-08-21 — repository and runtime audit
 
 - Audited `main` at `5f3ab32e`, GitHub PR metadata, branch protection,
