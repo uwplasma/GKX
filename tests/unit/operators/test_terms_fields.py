@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from gkx.config import CycloneBaseCase, GridConfig
+from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig
 from gkx.geometry import SAlphaGeometry
 from gkx.core_grid import build_spectral_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
@@ -17,6 +17,34 @@ from gkx.operators.linear.moments import quasineutrality_phi
 from gkx.operators.linear.params import LinearParams
 from gkx.parallel.velocity_drive import electrostatic_phi_reference
 from gkx.terms.fields import _solve_fields_impl, solve_fields
+
+
+def _assert_three_field_residual(
+    out, G, jl, jb, B, k2, beta, charge, density, temp, mass, vth, tol, iy=0, ix=0
+):
+    for iz in range(B.size):
+        M, rhs = np.diag([0.0, k2[iz], 1.0]), np.zeros(3, dtype=complex)
+        for s in range(charge.size):
+            j, p = jl[s, :, iz], jb[s, :, iz]
+            g0, g1 = G[s, :, 0, iy, ix, iz], G[s, :, 1, iy, ix, iz]
+            M[0, 0] += density[s] * charge[s] ** 2 / temp[s] * (1 - j @ j)
+            M[0, 2] -= density[s] * charge[s] * (j @ p)
+            M[2, 0] += beta / 2 / B[iz] ** 2 * density[s] * charge[s] * (j @ p)
+            M[2, 2] += beta / 2 / B[iz] ** 2 * density[s] * temp[s] * (p @ p)
+            M[1, 1] += beta / 2 * density[s] * charge[s] ** 2 / mass[s] * (j @ j)
+            rhs += [
+                density[s] * charge[s] * (j @ g0),
+                beta / 2 * density[s] * charge[s] * vth[s] * (j @ g1),
+                -beta / 2 / B[iz] ** 2 * density[s] * temp[s] * (p @ g0),
+            ]
+        actual = np.array(
+            [out.phi[iy, ix, iz], out.apar[iy, ix, iz], out.bpar[iy, ix, iz]]
+        )
+        expected = np.linalg.solve(M, rhs)
+        np.testing.assert_allclose(actual, expected, rtol=tol, atol=tol * 1e-3)
+        scale = np.linalg.norm(M) * np.linalg.norm(actual) + np.linalg.norm(rhs)
+        assert np.linalg.norm(M @ actual - rhs) / scale < tol
+        assert np.linalg.norm(M @ (-actual) - rhs) / scale > 100 * tol
 
 
 @pytest.mark.parametrize("dtype,tol", [(jnp.float32, 3e-6), (jnp.float64, 3e-13)])
@@ -86,28 +114,60 @@ def test_three_field_dense_system_independent_moments(
     )
     # The paper's Eq. 34 has no B^-2. At variable B this independently
     # assembles GKX's current convention, whose physical normalization is open.
-    for iz in range(3):
-        M, rhs = np.diag([0.0, k2[iz], 1.0]), np.zeros(3, dtype=complex)
-        for s in range(2):
-            j, p = jl[s, :, iz], jb[s, :, iz]
-            g0, g1 = G[s, :, 0, 0, 0, iz], G[s, :, 1, 0, 0, iz]
-            M[0, 0] += n[s] * z[s] ** 2 / T[s] * (1 - j @ j)
-            M[0, 2] -= n[s] * z[s] * (j @ p)
-            M[2, 0] += beta / 2 / B[iz] ** 2 * n[s] * z[s] * (j @ p)
-            M[2, 2] += beta / 2 / B[iz] ** 2 * n[s] * T[s] * (p @ p)
-            M[1, 1] += beta / 2 * n[s] * z[s] ** 2 / mass[s] * (j @ j)
-            rhs += [
-                n[s] * z[s] * (j @ g0),
-                beta / 2 * n[s] * z[s] * vth[s] * (j @ g1),
-                -beta / 2 / B[iz] ** 2 * n[s] * T[s] * (p @ g0),
-            ]
-        actual = np.array([out.phi[0, 0, iz], out.apar[0, 0, iz], out.bpar[0, 0, iz]])
-        expected = np.linalg.solve(M, rhs)
-        np.testing.assert_allclose(actual, expected, rtol=tol, atol=tol * 1e-3)
-        scale = np.linalg.norm(M) * np.linalg.norm(actual) + np.linalg.norm(rhs)
-        assert np.linalg.norm(M @ actual - rhs) / scale < tol
-        # A sign mutation must not satisfy this independently assembled system.
-        assert np.linalg.norm(M @ (-actual) - rhs) / scale > 100 * tol
+    _assert_three_field_residual(out, G, jl, jb, B, k2, beta, z, n, T, mass, vth, tol)
+
+
+def test_geometry_flr_matches_independent_three_field_residual():
+    """Validate declared GKX FLR/B conventions, not physical B normalization."""
+    dtype = np.float64 if jax.config.x64_enabled else np.float32
+    tol = 3e-13 if jax.config.x64_enabled else 5e-6
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=4, Nz=8, Lx=8.0, Ly=7.0, boundary="periodic")
+    )
+    geom = SAlphaGeometry.from_config(
+        GeometryConfig(
+            R0=2.77778, epsilon=0.18, kperp2_bmag=False, bessel_bmag_power=1.0
+        )
+    )
+    charge = np.array([1.0, -1.0], dtype=dtype)
+    density = np.array([0.9, 1.1], dtype=dtype)
+    temp = np.array([1.0, 1.7], dtype=dtype)
+    mass = np.array([1.3, 0.04], dtype=dtype)
+    vth, rho = np.sqrt(temp / mass), np.sqrt(temp * mass) / np.abs(charge)
+    beta = 0.04
+    params = LinearParams(beta=beta, fapar=1.0, tau_e=0.0, rho=jnp.asarray(rho))
+    cache = build_linear_cache(grid, geom, params, Nl=3, Nm=2)
+    iy, ix = 1, 0
+    G = np.zeros((2, 3, 2, grid.ky.size, grid.kx.size, grid.z.size), complex)
+    phase = np.array([1.0, 0.7, 1.2, 0.8, 1.1, 0.6, 0.9, 1.3])
+    G[:, :, 0, iy, ix] = np.array([[0.3 + 0.2j], [-0.4 + 0.5j]])[:, :, None] * phase
+    G[:, :, 1, iy, ix] = np.array([[0.1 - 0.3j], [0.2 + 0.4j]])[:, :, None] * phase
+    ctype = jnp.complex128 if dtype == np.float64 else jnp.complex64
+    values = dict(
+        charge=charge, density=density, temp=temp, mass=mass, tz=temp / charge, vth=vth
+    )
+    out = solve_fields(
+        jnp.asarray(G, ctype),
+        cache,
+        params,
+        fapar=1.0,
+        w_bpar=1.0,
+        **{key: jnp.asarray(value, dtype) for key, value in values.items()},
+    )
+    theta = jnp.asarray(grid.z, dtype=dtype)
+    gds2, gds21, gds22 = (np.asarray(x) for x in geom.metric_coeffs(theta))
+    ky, kx_hat = dtype(grid.ky[iy]), dtype(grid.kx[ix]) / dtype(geom.s_hat)
+    k2 = ky * (ky * gds2 + 2 * kx_hat * gds21) + kx_hat**2 * gds22
+    B = np.asarray(geom.bmag(theta))
+    b = rho[:, None] ** 2 * k2[None, :] / B[None, :]
+    jl = np.stack(
+        [np.exp(-b / 2), -b / 2 * np.exp(-b / 2), b**2 / 8 * np.exp(-b / 2)], axis=1
+    )
+    jb = jl + np.concatenate([np.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+    assert 0 < iy < grid.ky.size - 1 and b.size > 0 and np.all(b > 0) and np.ptp(B) > 0
+    _assert_three_field_residual(
+        out, G, jl, jb, B, k2, beta, charge, density, temp, mass, vth, tol, iy, ix
+    )
 
 
 def _build_case(
