@@ -18277,13 +18277,14 @@ had 15; splitting the lane is the follow-up.
 
 ## 2026-09-20 — Q10: the ky >= 0 layout becomes the default (draft, handed off)
 
-**Outcome: the default is flipped and the published physics is shown not to
-move; the full opt-out identity gate and the three stale-`Ny` test fixes pass.
-The benchmark-host window split and remaining integration suites are still
-outstanding, so the PR is a draft.** Branch `perf/ky-half-default`, rebased
-onto `origin/main` `eeb3481c6`. `perf/ky-half-spectrum-switch` was examined and
-rejected as a base: it is fully merged (#258) and carries no commit `main`
-lacks.
+**Outcome: the code flips the default; the recorded full-layout compatibility
+fixtures stay unchanged, and the opt-out identity, integration and stale-`Ny`
+test gates pass. Adoption is nevertheless blocked: the eager window-gradient
+benchmark has a measured half-layout regression that must be reconciled with
+#264 on a combined head before the default is ready.** Branch `perf/ky-half-default`,
+rebased onto `origin/main` `eeb3481c6`. `perf/ky-half-spectrum-switch` was
+examined and rejected as a base: it is fully merged (#258) and carries no
+commit `main` lacks.
 
 **What changed.** `[grid] ky_layout` (`GridConfig.ky_layout`) defaults to
 `"half"`; `"full"` is the opt-out. Every grid a run builds reads the key, so
@@ -18303,12 +18304,49 @@ arm order rotated, 4 blocks x 7 reps; `timing_table.py` over `out/nopool_*`):
 | RHS VJP | 0.828 | 0.961 |
 | eager window VJP | 2.313 | not run |
 
-The eager window VJP recompiles 13 modules on every call (counted with
-`jax.monitoring` compile events), which is #264's defect. Its
-compile/execution split was started on the benchmark host
-(`run_window_split.sh`, gate relaxed to mean core busy 0.12 because no six
-cores met 0.05) and was not collected before hand-off; the first local attempt
-ran on a saturated laptop and was discarded.
+**Window-gradient regression.** The compile split completed on source
+`38d7c4277db1bf9a4fee2292d3aea2f3c00ca31d`, not on the current PR head. It
+used JAX 0.10.2, the 32x32x24, Nl4/Nm8 six-step window, four arm-rotated blocks,
+and one first call plus three repeats per arm and block. The 32 call-level rows
+are in `out/window_compile_split_calls.csv`; each row carries the source and
+script hashes, options, state shape, load, raw-input hash, wall time, backend
+compile count and durations. The measured script differs from the public
+`window_compile_split.py` only in sanitized provenance text and formatting;
+the measured kernel and event accounting are unchanged.
+
+`38d7c4277` is an ancestor of tested PR source `9c8614b10` and already contains
+the opt-in half-layout machinery, but it predates this PR's default and artifact
+changes. The result is therefore a blocking regression signal, not an exact
+performance measurement of `9c8614b10`.
+
+Median across the four blocks; repeated calls are first reduced to each
+block's median of three (seconds):
+
+| call | full wall / compile / remainder | half wall / compile / remainder | half/full wall / compile / remainder | backend compiles full / half |
+|---|---|---|---|---|
+| first | 31.080 / 21.086 / 9.967 | 57.164 / 27.109 / 29.966 | 1.839 / 1.286 / 3.007 | 444 / 405 |
+| repeated | 18.986 / 9.304 / 9.637 | 47.101 / 16.425 / 30.762 | 2.481 / 1.765 / 3.192 | 13 / 13 |
+
+Here `compile` is the sum of JAX monitoring's trace, lowering and backend
+compile durations. `remainder` is `wall - compile`: it is an estimate, not a
+true compilation-free kernel time. In particular every repeated call still
+compiled 13 backend modules. The 2.481x repeated wall regression is real, but
+monitoring phases may overlap and the 3.192x remainder ratio is not a clean
+attribution; it motivates measuring execution separately.
+
+The public driver invocation is:
+
+```
+D="$(pwd)/plan/research/scripts/2026-09-20-q10-ky-half-default"
+LOADMAX=10 BUSYMEAN=0.12 BUSYWORST=0.25 PY=python \
+  bash "$D/run_window_split.sh" "$D" <tree-at-38d7c4277> \
+  12-17 12-17,30-35 4
+```
+
+The raw JSON files remain private because their provenance field contains a
+machine-local path; their exact SHA256 values are retained in the compact CSV.
+The next relevant performance gate is a compilation-free measurement on a
+combined #264 + #266 exact head, not a retiming of this stale 13-compile route.
 
 **What did not move.**
 
@@ -18374,8 +18412,9 @@ are gitignored and are not part of that manifest; every listed entry therefore
 verifies from a clean checkout rather than naming a file that was never
 committed.
 
-**Outstanding.** The full opt-out identity and integration gates are complete.
-Collect the benchmark-host window-split records.
+**Decision.** The identity and integration gates are complete, but the
+half-layout default is blocked by the window-gradient regression above until
+it is reconciled and retested with #264's reusable adjoint path.
 
 ```
 export MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
