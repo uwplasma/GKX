@@ -41,6 +41,8 @@ _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
 _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+_IMEX2_GAMMA = 1.0 - 1.0 / 2.0**0.5
+_IMEX2_DELTA = 1.0 - 1.0 / (2.0 * _IMEX2_GAMMA)
 
 
 def _completed_step_state_mask(cache: LinearCache) -> jnp.ndarray:
@@ -303,10 +305,16 @@ def _linear_native_step(
     if method_key == "imex2":
         dG = rhs(G)
         dG_explicit = dG + damping * G
-        G_half = (G + 0.5 * dt_val * dG_explicit) / (1.0 + 0.5 * dt_val * damping)
-        dG_half = rhs(G_half)
-        dG_half_explicit = dG_half + damping * G_half
-        return (G + dt_val * dG_half_explicit) / (1.0 + dt_val * damping)
+        G_stage = (G + _IMEX2_GAMMA * dt_val * dG_explicit) / (
+            1.0 + _IMEX2_GAMMA * dt_val * damping
+        )
+        dG_stage_explicit = rhs(G_stage) + damping * G_stage
+        return (
+            G
+            + dt_val
+            * (_IMEX2_DELTA * dG_explicit + (1.0 - _IMEX2_DELTA) * dG_stage_explicit)
+            - (1.0 - _IMEX2_GAMMA) * dt_val * damping * G_stage
+        ) / (1.0 + _IMEX2_GAMMA * dt_val * damping)
     return _linear_explicit_stage_update(
         G,
         dt_val,

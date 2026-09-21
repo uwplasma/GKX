@@ -1096,7 +1096,10 @@ recursive = true
 # 93023 -> 93037: RuntimeConfig's existing cross-section validator closes the
 # two higher-level off switches: a declared Laguerre channel is also refused
 # when physics.hypercollisions or the term weight disables the whole operator.
-baseline = 93037
+# 93037 -> 93053: replace the first-order ``imex2`` final damping solve with
+# the second-order, L-stable diagonal ARS(2,2,2) stages and carry collision and
+# hypercollision term weights through all three native linear routes.
+baseline = 93053
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1406,7 +1409,10 @@ recursive = true
 # which branch a declared rate actually reaches. Measured. Target unchanged.
 # 92814 -> 92843: two cases exercise the physics- and term-level off switches
 # through RuntimeConfig.validate, the owner of cross-section consistency.
-baseline = 92843
+# 92843 -> 92969: scalar and noncommuting order, stiff-limit, state/parameter
+# derivatives, route parity, and zero/fractional dissipation-weight regressions
+# for the corrected shared ``imex2`` step. No new test file.
+baseline = 92969
 target = 35000
 
 [[line_budget_policy.counts]]
