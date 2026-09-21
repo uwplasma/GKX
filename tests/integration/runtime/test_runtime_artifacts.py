@@ -1149,8 +1149,8 @@ def test_runtime_artifact_geometry_and_input_group_writers(
         lambda arr: np.asarray([-0.2, 0.0, 0.2], dtype=np.float32),
     )
     monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.real_fft_unique_ky",
-        lambda arr: np.asarray([0.0, 0.3], dtype=np.float32),
+        "gkx.artifacts.nonlinear_netcdf._half_ky_values_of",
+        lambda _grid: np.asarray([0.0, 0.3], dtype=np.float32),
     )
 
     geom_group = _Group()
