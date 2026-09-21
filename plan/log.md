@@ -18319,3 +18319,19 @@ in the first agent check is excluded from numerical evidence. #266 at
 reproduced failures pass without adding files or lines. Both await updated CI.
 The plan/README revision passes 152 release tests and a strict Sphinx HTML
 build. These checks do not certify the unexecuted regularization campaign.
+
+Latest verified branch state: #264 remains open at `57dac7fce`; that commit
+merges `main` into the feature branch and does not mean the PR merged. The local
+#265 integration `f8d20c6c1` combines the SOLVAX factors with #267's float32
+guards and passes 13 `pr3` tests, the float32 subprocess gate, typing and the
+architecture check. Those are correctness gates only: #265's recorded
+timing/factor experiment used JAX 0.9.2, below GKX's dependency floor, and its
+performance claims require a supported-environment rerun or withdrawal. #266
+now publishes its privacy follow-up at `1fb01fa1`; all 44 present manifest
+entries verify, while 29 referenced logs remain absent. #267's larger
+shipped-Cyclone control leaves only `2.04x` headroom below the float32 rank-one
+threshold, so the public review bounds the result to that measured case and
+makes no eigenpair-convergence claim. All five PRs remain open with current CI
+pending. Public records use repository-relative sources and generic execution
+labels; host aliases, process IDs, private directories and resumable job
+handles belong only in untracked private operational notes.
