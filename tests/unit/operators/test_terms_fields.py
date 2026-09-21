@@ -8,10 +8,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from scipy.special import eval_laguerre, j1
 
 from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig
+from gkx.core_ky_layout import transport_mode_weights
 from gkx.geometry import SAlphaGeometry
 from gkx.core_grid import build_spectral_grid
+from gkx.operators.fluxes import particle_flux_channel_species
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import build_H, quasineutrality_phi
 from gkx.operators.linear.params import LinearParams
@@ -26,6 +29,25 @@ def _analytic_gyro_coefficients(b):
         [np.exp(-b / 2), -b / 2 * np.exp(-b / 2), b**2 / 8 * np.exp(-b / 2)], axis=1
     )
     return jl, jl + np.concatenate([np.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+
+
+def _direct_bpar_laguerre_coefficients(b, nl):
+    """Project 2 mu B J1(alpha)/alpha by independent Gauss-Laguerre quadrature."""
+
+    nodes, weights = np.polynomial.laguerre.laggauss(96)
+    alpha = np.sqrt(2.0 * nodes[:, None] * np.ravel(b)[None, :])
+    kernel = 2.0 * nodes[:, None] * j1(alpha) / alpha
+    coeff = [
+        np.sum(
+            weights[:, None]
+            * (-1) ** ell
+            * eval_laguerre(ell, nodes)[:, None]
+            * kernel,
+            axis=0,
+        )
+        for ell in range(nl)
+    ]
+    return np.stack(coeff).reshape((nl,) + np.shape(b))
 
 
 def _electromagnetic_species(dtype):
@@ -449,6 +471,133 @@ def test_variable_b_streaming_mirror_weighted_exchange_converges():
     assert min(rate for pair in isolated_rates for rate in pair) > 10 * tol
     assert min(wrong_weights[-2:]) > 10 * tol
     assert min(wrong_signs[-2:]) > 10 * tol
+
+
+def test_variable_b_bpar_local_normalization_pressure_and_flux():
+    """Check local-beta balance and Bpar factors in H and particle flux."""
+
+    dtype = np.float64 if jax.config.x64_enabled else np.float32
+    ctype = jnp.complex128 if dtype == np.float64 else jnp.complex64
+    tol = 2e-11 if dtype == np.float64 else 3e-5
+    grid = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=12, Lx=8.0, Ly=7.0))
+    geom = SAlphaGeometry(
+        q=1.4,
+        s_hat=0.0,
+        epsilon=0.22,
+        R0=2.77778,
+        kperp2_bmag=True,
+        bessel_bmag_power=0.0,
+    )
+    beta = 0.06
+    species = {
+        "charge": jnp.asarray([1.0, -1.0], dtype),
+        "density": jnp.ones(2, dtype),
+        "temp": jnp.ones(2, dtype),
+        "mass": jnp.ones(2, dtype),
+        "tz": jnp.asarray([1.0, -1.0], dtype),
+        "vth": jnp.ones(2, dtype),
+    }
+    params = LinearParams(
+        beta=beta,
+        tau_e=0.0,
+        rho=jnp.asarray([0.7, 0.7], dtype),
+        density=species["density"],
+        temp=species["temp"],
+        tz=species["tz"],
+        vth=species["vth"],
+    )
+    cache = build_linear_cache(grid, geom, params, Nl=3, Nm=1)
+    iy, ix = 1, 0
+    z = np.asarray(grid.z)
+    G = np.zeros((2, 3, 1, grid.ky.size, grid.kx.size, grid.z.size), complex)
+    pressure_seed = 0.18 + 0.04 * np.cos(z) + 0.03j * np.sin(2.0 * z)
+    G[:, 0, 0, iy, ix] = pressure_seed
+    out = solve_fields(
+        jnp.asarray(G, ctype), cache, params, fapar=0.0, w_bpar=1.0, **species
+    )
+
+    B = np.asarray(cache.bmag)
+    direct_jb = np.moveaxis(
+        _direct_bpar_laguerre_coefficients(np.asarray(cache.b[:, iy, ix]), 3), 0, 1
+    )
+    cached_jb = np.asarray(cache.JlB[:, :, iy, ix])
+    np.testing.assert_allclose(cached_jb, direct_jb, rtol=tol, atol=tol)
+    nt = np.ones(2)[:, None, None]
+    pressure = np.sum(nt * direct_jb * G[:, :, 0, iy, ix], axis=(0, 1))
+    susceptibility = np.sum(nt * direct_jb**2, axis=(0, 1))
+    local_beta_half = beta / (2.0 * B**2)
+    expected_bpar = (
+        -local_beta_half * pressure / (1.0 + local_beta_half * susceptibility)
+    )
+    actual_bpar = np.asarray(out.bpar[iy, ix])
+    np.testing.assert_allclose(np.asarray(out.phi[iy, ix]), 0.0, atol=tol)
+    np.testing.assert_allclose(actual_bpar, expected_bpar, rtol=tol, atol=tol)
+    total_pressure = pressure + susceptibility * actual_bpar
+    balance = B**2 * actual_bpar + beta / 2.0 * total_pressure
+    assert np.linalg.norm(balance) < tol * np.linalg.norm(total_pressure)
+    wrong_ref_beta = -(beta / 2.0) * pressure / (1.0 + beta / 2.0 * susceptibility)
+    assert np.linalg.norm(actual_bpar - wrong_ref_beta) > 100 * tol * np.linalg.norm(
+        actual_bpar
+    )
+
+    external_bpar = np.zeros_like(np.asarray(out.bpar))
+    external_bpar[iy, ix] = (0.04 + 0.03j) * (1.0 + 0.2 * np.cos(z))
+    zero = jnp.zeros_like(out.phi)
+    H_bpar = build_H(
+        jnp.zeros_like(jnp.asarray(G, ctype)),
+        cache.Jl,
+        zero,
+        species["tz"],
+        bpar=jnp.asarray(external_bpar, ctype),
+        JlB=cache.JlB,
+    )
+    expected_H = direct_jb * external_bpar[iy, ix][None, None, :]
+    np.testing.assert_allclose(
+        np.asarray(H_bpar[:, :, 0, iy, ix]), expected_H, rtol=tol, atol=tol
+    )
+    assert np.linalg.norm(expected_H - B[None, None, :] * expected_H) > 100 * tol
+
+    G_flux = np.array(G, copy=True)
+    for s in range(2):
+        for ell in range(3):
+            G_flux[s, ell, 0, iy, ix] = (0.03 + 0.02j * (s + ell + 1)) * np.exp(
+                1j * (ell + 1) * z
+            )
+    channels = particle_flux_channel_species(
+        jnp.asarray(G_flux, ctype),
+        zero,
+        zero,
+        jnp.asarray(external_bpar, ctype),
+        cache,
+        grid,
+        params,
+        fieldline_quadrature_weights(geom, grid)[1],
+        use_dealias=False,
+    )
+    direct_uB = np.sum(direct_jb * G_flux[:, :, 0, iy, ix], axis=1)
+    flux_fac = np.asarray(fieldline_quadrature_weights(geom, grid)[1])
+    fac = np.asarray(
+        transport_mode_weights(grid.ky, grid.kx.size, ny_full=grid.ny_full)
+    )[iy, ix]
+
+    def direct_flux_for(bpar):
+        velocity = 1j * float(grid.ky[iy]) * bpar
+        return (
+            2.0
+            * fac
+            * np.sum(
+                flux_fac[None, :] * np.real(np.conj(velocity)[None, :] * direct_uB),
+                axis=1,
+            )
+            * np.asarray(species["density"] * species["tz"])
+        )
+
+    direct_flux = direct_flux_for(external_bpar[iy, ix])
+    np.testing.assert_allclose(np.asarray(channels[2]), direct_flux, rtol=tol, atol=tol)
+    wrong_flux = direct_flux_for(B * external_bpar[iy, ix])
+    assert np.linalg.norm(direct_flux - wrong_flux) > 100 * tol * np.linalg.norm(
+        direct_flux
+    )
 
 
 def _build_case(

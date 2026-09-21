@@ -18297,3 +18297,21 @@ Both runs make FutureWarning fatal. Ruff, formatting, architecture, diff and
 strict Sphinx pass. The justified test budget increases by 182 lines, reusing
 one existing file; no new files or runtime code are added. Full energy-budget,
 perpendicular-Ampere normalization and EM transport gates remain open.
+
+### 2026-09-21 — independent compressional-field normalization control
+
+The existing field test now checks finite-FLR perpendicular pressure balance
+against 96-node Gauss-Laguerre velocity quadrature, then checks the magnetic
+Hamiltonian and particle-flux field factor. The stored field is
+`bpar = delta B_parallel / (rho_* B(z))`; the local-beta factor is therefore
+`beta_ref / bmag^2`. The exact GX implementation anchor is
+[`2e417afe62f4ad730fae005fb8927337e1cbefa3`](https://bitbucket.org/gyrokinetics/gx/commits/2e417afe62f4ad730fae005fb8927337e1cbefa3).
+Removing the inverse-square field factor changes the test result by 26.7%;
+inserting an extra B factor in the particle channel changes it by 73.4%.
+The spatial flux weights are reused, not independently validated here.
+Heat-flux normalization and the full electromagnetic energy budget remain open.
+
+Supported JAX 0.10.2 CPU: independent whole-module x64 verification passes
+46 tests with FutureWarning fatal; the revised oracle also passes in float32.
+Ruff, formatting, architecture, diff and strict Sphinx checks pass. No runtime
+code or new files; the existing test file grows by 149 deliberate lines.
