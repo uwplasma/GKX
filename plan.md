@@ -34,10 +34,11 @@ Five PRs are open against `main` at this checkpoint:
   review (**PERF-SOLVAX**).
 - [#266](https://github.com/uwplasma/GKX/pull/266) makes the `ky >= 0` state
   layout the runtime default and preserves full-layout interchange; it remains
-  a draft (**PERF-HALF**). Head `1fb01fa1` publishes the stale-shape fix and
-  sanitized provenance. All 44 present manifest entries verify, but 29
-  referenced logs are absent; the full-layout opt-out identity and remaining
-  integration gates are still due
+  a draft (**PERF-HALF**). Head `ea6b1464e` includes the stale-shape fix,
+  sanitized provenance and a self-contained 44-entry checksum manifest;
+  29 absent, untracked log entries were removed. The time-integrator and
+  example files pass 109 tests (14 skips); the full-layout opt-out identity
+  and remaining integration gates are still due
   ([review](https://github.com/uwplasma/GKX/pull/266#issuecomment-5755283569)).
 - [#267](https://github.com/uwplasma/GKX/pull/267) floors `pr3-cm` structure
   tolerances at float32 round-off without hiding measured nonlocal couplings
