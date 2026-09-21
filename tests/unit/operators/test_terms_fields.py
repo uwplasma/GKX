@@ -20,6 +20,8 @@ from gkx.operators.linear.moments import build_H, quasineutrality_phi
 from gkx.operators.linear.params import LinearParams
 from gkx.operators.moments import fieldline_quadrature_weights
 from gkx.parallel.velocity_drive import electrostatic_phi_reference
+from gkx.terms.assembly import assemble_rhs_terms_cached
+from gkx.terms.config import TermConfig
 from gkx.terms.fields import _solve_fields_impl, solve_fields
 from gkx.terms.linear_terms import linked_streaming_contribution, mirror_contribution
 
@@ -316,7 +318,7 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
     assert jnp.abs(jnp.real(jnp.sum(exchange))) < tol * scale
 
 
-def test_variable_b_streaming_mirror_weighted_exchange_converges():
+def test_variable_b_conservative_linear_weighted_exchange_converges():
     """Periodic streaming/mirror exchange converges in the volume measure.
 
     This is a term-level gate, not a full free-energy budget with drives,
@@ -331,9 +333,17 @@ def test_variable_b_streaming_mirror_weighted_exchange_converges():
         beta=0.04,
         fapar=1.0,
         tau_e=0.0,
+        charge_sign=jax_values["charge"],
+        density=jax_values["density"],
+        temp=jax_values["temp"],
+        mass=jax_values["mass"],
+        tz=jax_values["tz"],
+        vth=jax_values["vth"],
         rho=jnp.asarray(rho, dtype),
         rho_star=0.8,
         kpar_scale=1.0 / (1.4 * 2.77778),
+        fprim=jnp.zeros(2, dtype),
+        tprim=jnp.zeros(2, dtype),
     )
     geom = SAlphaGeometry(
         q=1.4,
@@ -348,6 +358,15 @@ def test_variable_b_streaming_mirror_weighted_exchange_converges():
     wrong_weights = []
     wrong_signs = []
     isolated_rates = []
+    total_defects = []
+    drift_defects = {"curvature": [], "gradb": []}
+    drift_mutations = []
+    conservative_terms = TermConfig(
+        collisions=0.0,
+        hypercollisions=0.0,
+        hyperdiffusion=0.0,
+        end_damping=0.0,
+    )
     for nz in (16, 32, 64, 128):
         grid = build_spectral_grid(
             GridConfig(Nx=1, Ny=4, Nz=nz, Lx=8.0, Ly=7.0, boundary="periodic")
@@ -365,7 +384,13 @@ def test_variable_b_streaming_mirror_weighted_exchange_converges():
             + 0.17 * np.cos(7.0 * z)
         )
         G_jax = jnp.asarray(G, ctype)
-        fields = solve_fields(G_jax, cache, params, fapar=1.0, w_bpar=1.0, **jax_values)
+        total_rhs, fields, contributions = assemble_rhs_terms_cached(
+            G_jax,
+            cache,
+            params,
+            terms=conservative_terms,
+            use_custom_vjp=False,
+        )
         assert all(
             np.linalg.norm(np.asarray(field[iy, ix])) > 0.0
             for field in (fields.phi, fields.apar, fields.bpar)
@@ -463,12 +488,32 @@ def test_variable_b_streaming_mirror_weighted_exchange_converges():
                 normalized_rate(mirror, independent_vol),
             )
         )
+        total_defects.append(normalized_rate(total_rhs, independent_vol))
+        for name in ("curvature", "gradb"):
+            contribution = contributions[name]
+            assert np.linalg.norm(np.asarray(contribution)) > 10 * tol
+            drift_defects[name].append(normalized_rate(contribution, independent_vol))
+            drift_mutations.append(normalized_rate(1j * contribution, independent_vol))
+        for name in (
+            "diamagnetic",
+            "collisions",
+            "hypercollisions",
+            "hyperdiffusion",
+            "end_damping",
+        ):
+            np.testing.assert_allclose(np.asarray(contributions[name]), 0.0, atol=tol)
 
     min_reduction = 100 if dtype == np.float64 else 32
     resolved_tol = tol if dtype == np.float64 else 8 * np.finfo(dtype).eps
     assert defects[0] > min_reduction * max(defects[1:])
     assert max(defects[1:]) < resolved_tol
+    assert total_defects[0] > min_reduction * max(total_defects[1:])
+    assert max(total_defects[1:]) < resolved_tol
+    assert (
+        max(rate for rates in drift_defects.values() for rate in rates) < resolved_tol
+    )
     assert min(rate for pair in isolated_rates for rate in pair) > 10 * tol
+    assert min(drift_mutations) > 10 * tol
     assert min(wrong_weights[-2:]) > 10 * tol
     assert min(wrong_signs[-2:]) > 10 * tol
 

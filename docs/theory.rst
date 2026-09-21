@@ -134,8 +134,16 @@ For varying :math:`B`, the companion term-level gate follows `Mandell et al.
 mirror forcing with :math:`n_sT_sH_s^*` and the field-line volume weight
 :math:`J(z)\propto 1/(|\mathrm{gradpar}|B)`.  The periodic boundary contribution
 vanishes, and the finite-resolution defect converges once aliased products are
-resolved.  This does not promote the source quadratic to a complete physical
-variable-:math:`B` electromagnetic free energy or test the omitted budget terms.
+resolved.  Differentiating the reduced source quadratic with its self-consistent
+fields gives the same weighted :math:`n_sT_sH_s^*` contraction.  With equilibrium
+gradients, collisions, hyper-dissipation, and end damping disabled, the gate
+also contracts the complete assembled linear right-hand side: streaming,
+mirror, curvature, and grad-:math:`B`.  Every retained term is nonzero, while
+wrong volume/sign and missing-imaginary-unit controls produce nonzero exchange.
+This variational identity does not promote the source quadratic to a complete
+physical variable-:math:`B` electromagnetic free energy.  Nonlinear transfer,
+heat-flux normalization, sources, sinks, and time-discretization remain outside
+this instantaneous algebra gate.
 
 Linear gyrokinetic operator
 ---------------------------

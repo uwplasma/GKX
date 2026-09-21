@@ -18315,3 +18315,15 @@ Supported JAX 0.10.2 CPU: independent whole-module x64 verification passes
 46 tests with FutureWarning fatal; the revised oracle also passes in float32.
 Ruff, formatting, architecture, diff and strict Sphinx checks pass. No runtime
 code or new files; the existing test file grows by 149 deliberate lines.
+
+### 2026-09-21 — complete conservative linear exchange control
+
+Extended the existing varying-B refinement test to the assembled zero-drive
+linear RHS, with nonzero streaming, mirror, curvature and grad-B contributions.
+Each drift separately conserves the source quadratic; wrong imaginary factors
+fail, as do the existing wrong-volume/sign controls. All three fields remain
+nonzero. Independent x64 verification of the extended test passes on JAX 0.10.2;
+the full module and float32 selection also pass in the implementation review.
+This is an instantaneous algebraic exchange gate, not physical free-energy
+identification or nonlinear/heat-flux/source/sink/time-integration validation.
+No runtime changes or new files; shared setup limits test growth to 45 lines.

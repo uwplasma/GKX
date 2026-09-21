@@ -1368,7 +1368,9 @@ recursive = true
 # 92874 -> 93023: variable-B compressional-field normalization is checked
 # against dimensional pressure balance and independent Gauss-Laguerre
 # Hamiltonian/flux quadrature, including wrong-B-factor controls.
-baseline = 93023
+# 93023 -> 93068: the varying-B source-functional exchange gate now covers
+# the complete conservative linear RHS and nonvacuous curvature/grad-B terms.
+baseline = 93068
 target = 35000
 
 [[line_budget_policy.counts]]
