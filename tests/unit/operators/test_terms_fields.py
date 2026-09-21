@@ -13,10 +13,17 @@ from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig
 from gkx.geometry import SAlphaGeometry
 from gkx.core_grid import build_spectral_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.operators.linear.moments import quasineutrality_phi
+from gkx.operators.linear.moments import build_H, quasineutrality_phi
 from gkx.operators.linear.params import LinearParams
 from gkx.parallel.velocity_drive import electrostatic_phi_reference
 from gkx.terms.fields import _solve_fields_impl, solve_fields
+
+
+def _analytic_gyro_coefficients(b):
+    jl = np.stack(
+        [np.exp(-b / 2), -b / 2 * np.exp(-b / 2), b**2 / 8 * np.exp(-b / 2)], axis=1
+    )
+    return jl, jl + np.concatenate([np.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
 
 
 def _assert_three_field_residual(
@@ -60,13 +67,10 @@ def test_three_field_dense_system_independent_moments(
     cache, params, *_ = _build_case(beta=beta, fapar=1.0)
     b = np.array([[0.2, 0.5, 0.8], [0.04, 0.1, 0.16]])
     # Analytic Laguerre coefficients, not a field/cache helper's reduction.
-    jl = np.stack(
-        [np.exp(-b / 2), -b / 2 * np.exp(-b / 2), b * b / 8 * np.exp(-b / 2)], axis=1
-    )
+    jl, jb = _analytic_gyro_coefficients(b)
     np.testing.assert_allclose(
         np.moveaxis(J_l_all(jnp.asarray(b, dtype), 2), 0, 1), jl, rtol=tol
     )
-    jb = jl + np.concatenate([np.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
     B = np.array([0.8, 1.0, 1.3]) if variable_b else np.ones(3)
     k2 = np.array([0.3, 0.4, 0.7])
     cache = replace(
@@ -152,13 +156,14 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
     values = dict(
         charge=charge, density=density, temp=temp, mass=mass, tz=temp / charge, vth=vth
     )
+    jax_values = {key: jnp.asarray(value, dtype) for key, value in values.items()}
     out = solve_fields(
         jnp.asarray(G, ctype),
         cache,
         params,
         fapar=1.0,
         w_bpar=1.0,
-        **{key: jnp.asarray(value, dtype) for key, value in values.items()},
+        **jax_values,
     )
     theta = jnp.asarray(grid.z, dtype=dtype)
     gds2, gds21, gds22 = (np.asarray(x) for x in geom.metric_coeffs(theta))
@@ -167,14 +172,80 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
     k2 = ky * (ky * gds2 + 2 * kx_hat * gds21) + kx_hat**2 * gds22
     B = np.asarray(geom.bmag(theta))
     b = rho[:, None] ** 2 * k2[None, :] / B[None, :] ** (2 * kperp2_bmag + 1)
-    jl = np.stack(
-        [np.exp(-b / 2), -b / 2 * np.exp(-b / 2), b**2 / 8 * np.exp(-b / 2)], axis=1
-    )
-    jb = jl + np.concatenate([np.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+    jl, jb = _analytic_gyro_coefficients(b)
     assert 0 < iy < grid.ky.size - 1 and b.size > 0 and np.all(b > 0) and np.ptp(B) > 0
     _assert_three_field_residual(
         out, G, jl, jb, B, k2, beta, charge, density, temp, mass, vth, tol, iy, ix
     )
+
+    # GX v3 Eqs. 12, 16, and 32--34 imply this discrete source quadratic.
+    # At constant B it checks GKX's G -> H algebra, not a physical energy norm.
+    flat_geom = replace(geom, epsilon=0.0)
+    flat_cache = build_linear_cache(grid, flat_geom, params, Nl=3, Nm=2)
+    flat_out = solve_fields(
+        jnp.asarray(G, ctype), flat_cache, params, fapar=1.0, w_bpar=1.0, **jax_values
+    )
+    flat_B = np.asarray(flat_geom.bmag(theta))
+    flat_b = rho[:, None] ** 2 * k2[None, :] / flat_B[None, :] ** (2 * kperp2_bmag + 1)
+    flat_jl, flat_jb = _analytic_gyro_coefficients(flat_b)
+    assert np.ptp(flat_B) == 0.0 and all(
+        np.any(np.abs(np.asarray(field[iy, ix])) > 0)
+        for field in (flat_out.phi, flat_out.apar, flat_out.bpar)
+    )
+    jl_jax, jb_jax = jnp.asarray(flat_jl, dtype), jnp.asarray(flat_jb, dtype)
+    nt = jnp.asarray(density * temp, dtype)
+
+    def source_energy(G_in):
+        fields = solve_fields(
+            G_in, flat_cache, params, fapar=1.0, w_bpar=1.0, **jax_values
+        )
+        g0, g1 = G_in[:, :, 0, iy, ix], G_in[:, :, 1, iy, ix]
+        sphi = jnp.sum(
+            jnp.asarray(density * charge, dtype)[:, None, None] * jl_jax * g0,
+            axis=(0, 1),
+        )
+        sa = jnp.sum(
+            jnp.asarray(density * charge * vth, dtype)[:, None, None] * jl_jax * g1,
+            axis=(0, 1),
+        )
+        sb = jnp.sum(nt[:, None, None] * jb_jax * g0, axis=(0, 1))
+        kinetic = 0.5 * jnp.sum(
+            nt[:, None, None, None] * jnp.abs(G_in[:, :, :, iy, ix]) ** 2
+        )
+        field = 0.5 * jnp.real(
+            jnp.sum(
+                jnp.conj(fields.phi[iy, ix]) * sphi
+                - jnp.conj(fields.apar[iy, ix]) * sa
+                + jnp.conj(fields.bpar[iy, ix]) * sb
+            )
+        )
+        return kinetic + field
+
+    G_jax = jnp.asarray(G, ctype)
+    gradient = jax.grad(source_energy)(G_jax)
+    H = build_H(
+        G_jax,
+        flat_cache.Jl,
+        flat_out.phi,
+        jax_values["tz"],
+        flat_out.apar,
+        jax_values["vth"],
+        flat_out.bpar,
+        flat_cache.JlB,
+    )
+    direction = (
+        jnp.zeros_like(G_jax)
+        .at[:, :, :, iy, ix]
+        .set((0.4 + 0.3j) * jnp.conj(G_jax[:, :, :, iy, ix]) + 0.02)
+    )
+    actual = jnp.real(jnp.sum(gradient * direction))
+    expected = jnp.real(
+        jnp.sum(
+            jnp.conj(nt[:, None, None, None] * H[:, :, :, iy, ix])
+            * direction[:, :, :, iy, ix]
+        )
+    )
+    assert jnp.allclose(actual, expected, rtol=tol, atol=tol)
 
 
 def _build_case(
