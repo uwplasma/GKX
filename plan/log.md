@@ -18625,3 +18625,16 @@ Six merged remote topic refs were removed after exact-tip ancestry checks:
 `evidence/inner-solve-cost`, `evidence/laguerre-sink`,
 `evidence/q9-idle-host-timing`, and `fix/status-and-projection-coverage`.
 All commits remain in main; occupied local branches and worktrees are preserved.
+
+### 2026-09-21 — EM identity, metric Jacobians and merged-branch cleanup
+
+PR #269 at `d8b1c01ed` integrates main and adds the bounded physical-energy
+identification described in its theory section: 46 field tests pass in x64,
+with three focused identity cases in both precisions. PR #270 at `138341c7c`
+integrates main and strengthens the existing metric regression to all nine
+components, preventing cancellation between derivative errors; 44 geometry
+tests pass per precision. Both await required CI and remain unmerged.
+Twenty additional remote refs whose exact tips are ancestors of main were
+removed atomically with expected-tip leases, excluding every open PR branch.
+All commits remain reachable from main; all occupied local branches/worktrees
+remain untouched. Unique unmerged history was not deleted.

@@ -69,18 +69,22 @@ Integration and open implementation PRs at this checkpoint:
   shared rank-two control at ratio `2e-5`: auto falls back to dense and explicit
   block-Thomas refuses in both precisions. All 12 PR3 tests pass; CI is pending.
 
-- [#269](https://github.com/uwplasma/GKX/pull/269), head `a9192443c`, tests
+- [#269](https://github.com/uwplasma/GKX/pull/269), head `d8b1c01ed`, tests
   independent three-field algebra, compressional pressure/Hamiltonian/particle
   field-factor normalization, and complete conservative linear exchange in
   varying B. The field module passes 46 x64 tests and 28 float32 tests (18
   explicit-float64 cases excluded); final extended exchange checks independently
   pass both precisions with FutureWarning fatal. Wrong weights/signs/B factors
   fail controls. Existing files and shared fixtures only; no runtime changes.
-  Physical free-energy identification, spatial flux quadrature, heat flux and
-  nonlinear/source/sink/time-integrated electromagnetic budgets remain open.
-- [#270](https://github.com/uwplasma/GKX/pull/270), head `073ede00a`, removes
+  The source quadratic now matches independently normalized physical energy
+  for finite-FLR, nonzonal, periodic per-mode cases, with discriminating varying-B
+  tests limited to the B^-2 cache convention. All 46 field tests pass in x64;
+  the three new identity cases pass in both precisions. Zonal/gauge, multimode
+  weighting, spatial flux quadrature, heat flux and nonlinear/source/sink/time-
+  integrated electromagnetic budgets remain open. Main is integrated; CI pending.
+- [#270](https://github.com/uwplasma/GKX/pull/270), head `138341c7c`, removes
   analytic metric shear concretization: 44 geometry tests pass per precision,
-  including AD/JIT versus finite differences for both shear signs. Source
+  including componentwise AD/JIT versus finite differences for both shear signs. Source
   shrinks by four lines; tests add 35. S-alpha `gds22` becomes theta-shaped;
   cross-zero/topology derivatives and other host sampling seams remain outside
   this bounded GEO-TOPO repair.
