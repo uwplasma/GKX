@@ -1063,7 +1063,11 @@ recursive = true
 # fewer RHS evaluations only once the CFL controller is on, and the
 # velocity-resolution ladder that shows (12, 24) eleven times closer than
 # (24, 12) at the same Nl*Nm. Target unchanged.
-baseline = 92943
+# 92943 -> 93132: SOLVAX owns pr3-cm's Schur elimination, while GKX retains the
+# measured Hermite-band coupling action, unrolled substitution and structural
+# refusals. The refusals and band detector share the probe-precision round-off
+# floor so the same measured structure is usable in float32. Target unchanged.
+baseline = 93132
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1360,7 +1364,10 @@ recursive = true
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
-baseline = 92533
+# 92533 -> 92722: the SOLVAX substitution and measured-band tests plus the
+# float32 subprocess gate. The latter admits probe noise, rejects a wider
+# Hermite band, retains the collisional fallback and retains the zonal refusal.
+baseline = 92722
 target = 35000
 
 [[line_budget_policy.counts]]

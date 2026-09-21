@@ -132,10 +132,22 @@ _RANK_ONE_RATIO_TOL: float = 1.0e-8
 _LOCALITY_DEFECT_TOL: float = 1.0e-8
 # A Laguerre coupling entry counts as present above this fraction of the block
 # norm. The mirror term puts every one of them on the Hermite diagonals 0 and
-# +-1, so the measured half-width is 1 and the next occupied diagonal is at
-# exactly 0.0; this threshold has three orders of magnitude of daylight either
-# side and only has to separate "structurally absent" from "small".
+# +-1. This threshold is also floored at the probe precision below, because at
+# float32 a structurally absent diagonal can carry probe round-off.
 _COUPLING_BAND_TOL: float = 1.0e-13
+# These are float64 values. The probes run at the ambient JAX precision, and
+# in float32 round-off alone puts the defect and the rank-one ratio at ~0.6 eps
+# (6.7e-8, 6.0e-8), so each is floored at this many eps of the probe dtype:
+# inert in float64 (1.4e-14), 7.6e-6 in float32 -- 20x below the smallest real
+# break measured (a 1.5e-4 Laguerre coupling at nu = 0.01).
+_ROUNDOFF_EPS_MULTIPLE: float = 64.0
+
+
+def _refusal_tolerance(float64_value: float) -> float:
+    """``float64_value``, floored at the probe precision's round-off level."""
+
+    eps = float(np.finfo(jax.dtypes.canonicalize_dtype(np.complex128)).eps)
+    return max(float64_value, _ROUNDOFF_EPS_MULTIPLE * eps)
 
 
 class Pr3BlockThomasFactors(NamedTuple):
@@ -437,7 +449,7 @@ def _coupling_halfwidth(lower: np.ndarray, upper: np.ndarray, scale: float) -> i
             entry = float(
                 np.abs(np.diagonal(band, offset=offset, axis1=-2, axis2=-1)).max()
             )
-            if entry > _COUPLING_BAND_TOL * scale:
+            if entry > _refusal_tolerance(_COUPLING_BAND_TOL) * scale:
                 out = max(out, abs(offset))
     return out
 
@@ -648,13 +660,14 @@ def build_pr3_factors(
 
     with_phi = _probe_z_local_blocks(local_apply, shape, batch=probe_batch)
     locality = _block_representation_defect(local_apply, with_phi, shape)
-    if not (locality <= _LOCALITY_DEFECT_TOL):
+    locality_tol = _refusal_tolerance(_LOCALITY_DEFECT_TOL)
+    if not (locality <= locality_tol):
         raise ValueError(
             "the pr3-cm preconditioner splits the operator into a spectral "
             "streaming half and a z-local half, and this operator's non-"
             "streaming part is not z-local: a dense block representation "
             f"reproduces it only to relative {locality:.3e} against a "
-            f"{_LOCALITY_DEFECT_TOL:.0e} tolerance. Use shift_preconditioner="
+            f"{locality_tol:.1e} tolerance. Use shift_preconditioner="
             "'hermite-line' or 'field-corrected' instead."
         )
     mean_drift = _z_mean_drift_diagonal(seed, cache, params, term_cfg)
@@ -690,9 +703,11 @@ def build_pr3_factors(
         structure = check_block_structure(with_phi, no_phi, nl, nm)
         scale = max(structure["block_norm_max"], 1.0e-300)
         halfwidth = int(structure["coupling_halfwidth"])
+        tridiagonal_tol = _refusal_tolerance(_TRIDIAGONAL_RELATIVE_TOL) * scale
+        rank_one_tol = _refusal_tolerance(_RANK_ONE_RATIO_TOL)
         exact = (
-            structure["off_tridiagonal_max"] <= _TRIDIAGONAL_RELATIVE_TOL * scale
-            and structure["rank_one_ratio_max"] <= _RANK_ONE_RATIO_TOL
+            structure["off_tridiagonal_max"] <= tridiagonal_tol
+            and structure["rank_one_ratio_max"] <= rank_one_tol
             and 2 * halfwidth + 1 <= nm
         )
         broken = (
@@ -758,6 +773,7 @@ def build_pr3_factors(
         "blocks": nblocks,
         "block_size": nl * nm,
         "locality_defect": locality,
+        "locality_tolerance": locality_tol,
         "factor_bytes": nbytes,
         "structure": structure,
     }

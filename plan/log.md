@@ -18274,3 +18274,35 @@ aggregator failed with no failing test. The shard had been growing with the test
 carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main` was one
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
+
+## 2026-09-20 — SOLVAX block-Thomas and float32 structural gates
+
+The `pr3-cm` z-block Schur elimination now belongs to SOLVAX
+`block_thomas_factor_ops`; `solvax>=0.22.0` is the first released floor that
+provides it. GKX retains the measured Hermite-band coupling action, the unrolled
+forward substitution, and the Sherman-Morrison field correction. The unrolled
+substitution is pinned bitwise to `block_thomas_solve_ops` on the same factors.
+
+The recorded A/B matrix in
+`plan/research/scripts/2026-09-20-solvax-block-thomas/out/ab_apply.txt` measures
+full-apply relative differences of `6.7e-16` to `9.6e-16`, factor storage
+`1.43x` to `2.61x` smaller over `Nl*Nm=36..768`, and z-block solve ratios
+`0.95x`, `0.85x`, `0.85x`, and `0.80x` versus the superseded factorization.
+The largest full-apply timing is noisy and is not promoted as a wall-time claim.
+
+Ruiz equilibration is negative and is not wired in. On the `(Nz,Nl,Nm) =
+(96,4,8)` control, Hermite-line leaves true residual `0.549` after 600
+iterations; magnitude-based row/column equilibration leaves `0.588` and row-only
+equilibration `0.574`. Standalone equilibration improves the unpreconditioned
+residual only from `0.331` to `0.296`, while `pr3-cm` already reaches `1e-4` in
+252 iterations and changes only to 246 with equilibration. The retained record
+is `plan/research/scripts/2026-09-20-solvax-block-thomas/out/equilibrate.txt`.
+
+The float32 integration floors the locality, rank-one, off-tridiagonal, and
+Hermite-band detection thresholds at `64*eps` of the probe precision. A fresh
+float32 process exercises the real operator at the small structural fixture,
+admits synthetic off-band round-off, and still sends a genuinely wider band to
+the dense fallback. This is bounded evidence, not a size-independent proof:
+on the separate `(96,4,8)` signed control the rank-one ratio is `3.74e-6`
+against the `7.63e-6` floor, only `2.04x` headroom. The structured/dense apply
+there agrees to `4.32e-7`; no eigenpair-convergence claim follows.
