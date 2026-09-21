@@ -1050,6 +1050,18 @@ recursive = true
 # why the half dealias mask is built rather than sliced when the slice agrees,
 # and why an even grid's Nyquist row is now a flux representative in both
 # layouts. Target unchanged.
+# 91655 -> 91798 (queue row Q30, the adjoint window's compiled graph). The
+# differentiated scan moves under one module-level `jax.jit`, so the body it
+# already had gains a signature: ten static arguments and seven operands, each
+# of which had to be named because *why* a thing is an operand rather than a
+# constant is the whole contract -- an array captured into the module pins that
+# geometry into the executable and recompiles on the next one an optimizer
+# proposes. The body itself is unchanged, line for line, from the eager version
+# it replaces. The rest is the explanation the diff cannot carry: that a jaxpr
+# compares by identity, which is why the eager route recompiled at all; why the
+# window mean stays outside the graph (one float32 ulp if it does not); and the
+# hashable projector signature that lets the `ky` axis layout cross a jit
+# boundary that a grid cannot. Target unchanged.
 # 91655 -> 92017 (queue row Q29). Closing the two coverage holes #242 and #253
 # recorded. The status half threads one `ImplicitSolveStats` leaf through the
 # IMEX diagnostic carry and through both sheared scan forms, which needs a
@@ -1096,7 +1108,10 @@ recursive = true
 # 93023 -> 93037: RuntimeConfig's existing cross-section validator closes the
 # two higher-level off switches: a declared Laguerre channel is also refused
 # when physics.hypercollisions or the term weight disables the whole operator.
-baseline = 93037
+# 93037 -> 93151: PERF-ADJOINT moves the nonlinear heat-flux window under one
+# reusable compiled graph and passes geometry/cache arrays as operands instead
+# of stale captured constants. Measured after the current-main merge.
+baseline = 93151
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1368,6 +1383,13 @@ recursive = true
 # buffer assignment. The first carries a small HLO module as a fixture,
 # because the distinction it pins is a property of where an instruction is
 # written and cannot be stated without a computation around it.
+# 91565 -> 91733 (queue row Q30). Four cases for the adjoint window's compiled
+# graph, and one shared helper that counts XLA module compilations at
+# `backend_compile_and_load`. That counter is the reason for the size: a cache
+# hit leaves no trace an assertion can read, so the only way to tell a reused
+# executable from a recompiled one is to count the compiles, and the only way
+# to tell a *reusable* graph from one that merely repeats is to run a second
+# geometry through it and compare the answer bit for bit.
 # 91565 -> 92089 (queue row Q29). Thirteen cases, one per route the two
 # recorded holes left open: a starved inner budget carried and refused on the
 # IMEX diagnostics route, on both sheared IMEX doors and through an `sspx3`
@@ -1406,7 +1428,9 @@ recursive = true
 # which branch a declared rate actually reaches. Measured. Target unchanged.
 # 92814 -> 92843: two cases exercise the physics- and term-level off switches
 # through RuntimeConfig.validate, the owner of cross-section consistency.
-baseline = 92843
+# 92843 -> 92966: four PERF-ADJOINT regression cases cover compile reuse across
+# calls/geometries and value/gradient parity on the current merged baseline.
+baseline = 92966
 target = 35000
 
 [[line_budget_policy.counts]]

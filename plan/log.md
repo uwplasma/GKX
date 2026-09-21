@@ -17240,6 +17240,224 @@ entry is left standing as written, because rewriting a recorded measurement
 after the fact is worse than correcting it forward; this entry is the
 correction, and Q10's queue row points at it.
 
+## 2026-09-20 — PERF-ADJOINT: the adjoint heat-flux window recompiled on every call, because a jaxpr compares by identity (plan §5.3)
+
+**Outcome: the differentiated window compiles once and the compile is reused
+across calls and across geometries. Compilations per call 13 → 0 and wall per
+call 5.16 s → 0.140 s (two-sided `ky`) and 7.18 s → 0.114 s (half `ky`) on
+the shipped Cyclone deck. The cause is none of the three the report proposed.**
+Branch `perf/eager-adjoint-compile-cache` off `origin/main` `38d7c4277`.
+
+### The cause
+
+The report's candidates were the window rebuilding its linked-chain cache and
+handing XLA fresh concrete constants, a closure captured per call, or a
+non-hashable static argument. It is none of them, and the reproduction has no
+GKX in it:
+
+```python
+def body(carry, x):
+    return carry * 0.5 + x, None
+jax.lax.scan(body, jnp.float32(1.0), jnp.arange(4, dtype=jnp.float32))
+```
+
+Three identical calls compile a module each. An eager `lax.scan` or `lax.cond`
+is dispatched on the jaxpr its body was just traced into, and
+`jax._src.core.ClosedJaxpr` inherits `object.__eq__` and `object.__hash__` — a
+jaxpr compares by **identity**. A jaxpr rebuilt on each call is a new key, so
+every lowering cache under it misses. Neither the values, nor what the body
+closes over, nor the hashability of anything enters it;
+`jaxpr_identity.py` prints both dunders and the three compiles.
+
+The linked-cache rebuild is real and does force the geometry to stay concrete,
+but it costs no compile: on `main` a repeated call compiles exactly the window's
+four scans and nine conds and nothing from `build_linear_cache`.
+
+### The fix
+
+The differentiated window now runs as one module-level `jax.jit`,
+`_nonlinear_heat_flux_window_total`. `jax.jit`'s trace cache is keyed on the
+function object, the argument avals and the static arguments, all of which
+repeat, so the traced jaxpr is the *same object* on the next call and every
+cache below it — including the ones `jax.value_and_grad` derives, which are
+`weakref_lru_cache`d on that jaxpr — hits.
+
+Everything that has to be read on the host stays in
+`nonlinear_heat_flux_window`, outside the graph: the linked cache build (whose
+`jtwist` is an integer read off the shear and refuses a traced geometry), the
+quadrature weights, the chain-cover projection of `saturated_state` (Q23), and
+the projector's `ky` axis layout, which now crosses the boundary as a hashable
+`(ny_full, two_sided, nx)` signature rather than as a grid.
+
+**Every array is an argument.** State, cache, grid, parameters, quadrature
+weights and step indices are operands, which is the placement the eager scan
+already gave them and the reason the graph is reusable: a captured array would
+pin *this* geometry into the executable and recompile on the next one, and a new
+geometry on every objective evaluation is what
+`examples/optimization/QA_optimization.py` does. Only what cannot be an operand
+is static: the step, the window tail, the integrator, the term switches, the
+collision model, the checkpoint flag and the projector signature.
+
+### Compilations and wall time
+
+Cyclone nonlinear deck at Nx=Ny=16, Nz=12, Nl=2, Nm=4, `window_steps=6`,
+`method="rk3"`, `checkpoint=True`, `compressed_real_fft=True`,
+`laguerre_mode="grid"`, `jax.value_and_grad` with respect to `tprim`, float32.
+`backend_compile_and_load` is wrapped to count modules and accumulate their
+time; each call is forced to the host with `jax.block_until_ready`. Two runs of
+one warm-up plus three timed calls, arms interleaved
+(`bench_q30.py`, `out/time_*.json`).
+
+| arm | tree | first call | compiles | steady call | compiles | compile s | exec s |
+|---|---|---:|---:|---:|---:|---:|---:|
+| two-sided `ky` | `main` | 11.03, 11.13 s | 405 | 4.92–5.36 s | **13** | 2.95–3.31 | 1.93–2.14 |
+| two-sided `ky` | branch | 7.31, 7.34 s | 123 | **0.139–0.141 s** | **0** | 0 | 0.139–0.141 |
+| half `ky` | `main` | 12.31, 12.43 s | 365 | 7.04–7.36 s | **13** | 5.05–5.36 | 1.87–2.05 |
+| half `ky` | branch | 6.78, 6.82 s | 105 | **0.112–0.116 s** | **0** | 0 | 0.112–0.116 |
+
+Steady-state speed-up 37× on the two-sided arm and 63× on the half arm. The
+first call is cheaper too — 11.08 → 7.32 s and 12.37 → 6.80 s — because
+one graph replaces the thirteen and the small modules around them. The compile
+share of a steady call on `main` is 59.8–62.7% (two-sided) and 71.7–74.2%
+(half), which brackets the report's 60–75%.
+
+Load averages were 3.45/4.50/5.14 before and 4.41/4.84/5.20 after, so the wall
+times are not idle-host numbers; the compile *counts* are exact and
+load-independent, and the 37× and 63× are far outside any load effect.
+
+### A side effect the half-`ky` adoption gate should have (Q10, Q27)
+
+The layout A/B that prompted this row was measuring compile time. Per call on
+`main` the half arm is 1.39× *slower* than the two-sided one; with the graph
+cached it is 1.22× **faster** (0.114 s against 0.140 s). Q10's remaining item
+was "one idle-host wall-clock A/B for the strided in-fusion reads Q27 could not
+price"; this is one point for it, on the adjoint window rather than on a bare
+RK step, and it points the same way as Q27's corrected byte ledger.
+
+### Identity: where it is bitwise, and where it is not
+
+The gate was to be bitwise. It is in 20 of 26 configurations — every one that
+uses the shipped default `checkpoint=True` except RK2 under x64. Each case
+differentiates the windowed heat flux with respect to both drive gradients at
+once and compares the value and both adjoint components as raw bytes
+(`gate_bitwise.py`, SHA-256 over the concatenated buffers), on a 16×16×12,
+Nl=2, Nm=4 grid over a six-step window.
+
+| case | float32 | x64 |
+|---|---|---|
+| Cyclone rk3 / rk4 / half `ky` / tail 4-of-9 / uncompressed FFT / exact Laguerre | bitwise | bitwise |
+| Cyclone rk2 | bitwise | **2 ulps** (value) |
+| KBM (electromagnetic) rk3, full and half `ky` | bitwise | bitwise |
+| Cyclone rk2 / rk3, `checkpoint=False` | **1 ulp** (value / `fprim` adjoint) | bitwise |
+| Cyclone rk4, `checkpoint=False` | bitwise | **1 ulp** (`fprim` adjoint) |
+| KBM rk3, `checkpoint=False` | **11 ulps** (value) | **3 ulps** (value) |
+
+The largest deviation is 11 float32 ulps, 1.3e-6 relative. The window's own
+measured float32 roundoff against float64 is 5.7e-6, 48 ulps (Q14), so every
+deviation here is inside the precision the route already declares, and the
+electromagnetic case is the largest for the reason Q18 recorded: its flux is a
+near-cancelling sum of three channels.
+
+**Two placement choices were forced by this gate, not chosen for taste.**
+
+- `total_heat / tail` is computed *outside* the graph. The first version of
+  this change divided inside, and the same matrix run against it was bitwise in
+  20 of 26 cases but a *different* 20: RK2 and the KBM deck (both `ky` arms)
+  moved in float32, and RK4 moved under x64, each by one ulp. Inside the graph
+  XLA fuses the divide into the scan's accumulation; outside it, those four are
+  bitwise and nothing that was bitwise before regressed. The divide costs
+  nothing outside, so there is no reason to pay it.
+- The step indices are an operand rather than an in-graph `iota`, so that
+  `index >= count - tail` stays the comparison the eager route compiled instead
+  of a constant XLA can fold when the window has no tail.
+
+**Why the rest cannot be removed.** A reusable graph has to take the grid and
+the quadrature weights as operands. On the eager route they are *concrete*
+arrays — `grid.ky`, `grid.dealias_mask` and `flux_factor` never carry a
+parameter tangent — so every expression built from them inside the scan body
+is executed eagerly and enters the traced body as a folded constant. As
+arguments they are tracers and those expressions are staged. The forward scan
+body goes from 716 to 719 equations and, counting nested sub-jaxprs, from 831
+to 954 primitives (`mul` 238→286, `reduce_sum` 18→30, `broadcast_in_dim`
+48→69, `cond` 6→9); the reverse body from 783 to 786 and 948 to 1071. No step
+does different arithmetic — the same formulas, evaluated in the graph rather
+than before it — but a reduction whose operands arrive from a different
+placement can be tiled differently, and that is what the residual ulps are.
+XLA hoists the loop-invariant part out of the while body, which the wall times
+bear out.
+
+It is **not** the linear cache. A probe confirms `cache.kperp2`, `cache.Jl`,
+`cache.JlB` and `cache.ky` become tracers on `main` when the gradient is taken
+with respect to `rho_star`, and `main`'s scan body is unchanged at 716/783 —
+as it is for `tprim`, `beta` and `tau_e`.
+
+### Changes
+
+- `src/gkx/solvers_nonlinear_state_integration.py`:
+  `_nonlinear_heat_flux_window_total`, the compiled window, and
+  `_identity_state`, a module-level stand-in for the no-projection case (a
+  `lambda` would be a fresh object and a fresh compile key).
+  `nonlinear_heat_flux_window` keeps every host-side step and calls it.
+- `src/gkx/operators/nonlinear/projection.py`: `hermitian_projector_signature`
+  and `hermitian_projector_for_signature` split the host read of the `ky` axis
+  from the projector it names. `_make_hermitian_projector` is now the
+  composition of the two and returns the identical cached object.
+- `docs/solvers.rst` gains "One adjoint window graph";
+  `docs/nonlinear_autodiff.rst` says the loss compiles once.
+- `tools/package_architecture_manifest.toml`: the installable-source and test
+  line budgets rise by the measured counts, each with the reason the ratchet
+  asks for. The per-file budget is untouched --
+  `solvers_nonlinear_state_integration.py` is 1116 lines against a limit of
+  1200.
+
+### Tests
+
+`tests/unit/nonlinear/test_nonlinear_helpers_extra.py`:
+
+- `test_window_adjoint_compiles_one_graph_and_reuses_it` — zero XLA
+  compilations across two warm calls, counted at
+  `jax._src.compiler.backend_compile_and_load`. On `main`: 26.
+- `test_window_adjoint_reuses_its_graph_for_a_new_geometry` — zero across a
+  changed flux tube, which repeated calls alone would not have shown. On
+  `main`: 13.
+- `test_window_adjoint_shared_graph_is_not_stale_for_a_new_geometry` — the
+  failure mode reuse buys. The window for geometry B compiled cold, and the
+  same window run on the graph geometry A compiled, compared bit for bit: a
+  leaked constant would not perturb the answer, it would replace it.
+- `test_compiled_window_rebuilds_the_projector_the_eager_route_used` — the
+  signature names the identical cached projector object, so the graph is not
+  keyed on one projector and running another.
+
+### What was tried and rejected
+
+- **Dividing by the window tail inside the graph** — one ulp on four
+  configurations (RK2 and the KBM deck in float32, RK4 under x64), measured
+  above, and the divide costs nothing outside.
+- **Making the grid a `jax.jit` static argument** so its masks and weights stay
+  host-folded. Not taken: `flux_factor` is geometry-dependent and would remain
+  an operand either way, and a mode-selected grid carries a `ky_mode` array in
+  its pytree aux data, which a static argument would have to hash.
+- **Qualifying selected linear/reference grids for this nonlinear route.** A
+  bounded probe wraps `lambda grid: jnp.sum(grid.ky)` in `jax.jit`, then passes
+  two fresh `select_ky_grid(build_spectral_grid(...), [1, 2])` results. The
+  first call succeeds and the second raises JAX's metadata-equality error:
+  `ky_mode` is an array in `SpectralGrid` auxiliary data. Nonlinear runtime
+  uses the complete grid (`ky_mode=None`), so this is recorded for a future
+  central grid-pytree repair rather than broadened inside the window cache fix.
+- **A content-keyed compile cache over the eager dispatch**, which would be
+  bitwise by construction because it would compile the very jaxpr the eager
+  route builds. Rejected: it means reimplementing `jax.jit`'s cache on
+  JAX-internal jaxpr structure, for the primal *and* for every jaxpr the AD
+  transforms derive, to buy a few ulps.
+
+### Environment
+
+macOS 14.4.1 arm64 (M3), python 3.11.14, jax/jaxlib 0.10.2, `JAX_PLATFORMS=cpu`,
+`nice -n 10`, ruff 0.16.4, mypy 2.3.1. The library is imported directly rather
+than through `gkx.cli`, so `gkx.compilation_cache`'s persistent cache is **not**
+installed and every compilation counted here is a cold XLA compilation
+in-process. Scripts, raw outputs and `SHA256SUMS.txt` in
+`plan/research/scripts/2026-09-20-q30-window-compile-cache/`.
 ## 2026-09-20 — status and projection reach every route (Q29, Q15 and Q23 follow-ups)
 
 Branch `fix/status-and-projection-coverage`, from `38d7c4277` (`origin/main`).

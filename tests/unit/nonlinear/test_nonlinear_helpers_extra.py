@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import fields as dataclass_fields
 from dataclasses import replace
 from gkx.config import CycloneBaseCase, GridConfig
@@ -3683,3 +3684,125 @@ def test_an_explicit_sheared_method_reports_no_implicit_status() -> None:
     np.testing.assert_array_equal(
         np.asarray(state_only), np.asarray(state_only_reference)
     )
+
+
+@contextmanager
+def _counting_backend_compiles() -> Iterator[dict[str, int]]:
+    """Count backend compilations, skipping if JAX moves the private hook."""
+
+    compiler = pytest.importorskip("jax._src.compiler")
+    original = getattr(compiler, "backend_compile_and_load", None)
+    if original is None:
+        pytest.skip("jax._src.compiler.backend_compile_and_load is not available")
+    counter = {"compiles": 0}
+
+    def counting(*args, **kwargs):
+        counter["compiles"] += 1
+        return original(*args, **kwargs)
+
+    compiler.backend_compile_and_load = counting
+    try:
+        yield counter
+    finally:
+        compiler.backend_compile_and_load = original
+
+
+def _window_value_and_grad(grid, geom, state, params):
+    """Differentiate the window through the drive, the way callers do."""
+
+    def objective(tprim):
+        return nonlinear_heat_flux_window(
+            state,
+            grid,
+            geom,
+            replace(params, tprim=tprim),
+            dt=DT_WINDOW_GRADIENT,
+            steps=STEPS,
+            terms=ES_TERMS,
+            method="rk2",
+        )
+
+    return jax.value_and_grad(objective)
+
+
+def _moved_geometry(grid, *, epsilon: float, alpha: float):
+    """Change differentiable shape while preserving linked-chain topology."""
+
+    cfg = CycloneBaseCase(grid=GridConfig(Nx=NX, Ny=NY, Nz=NZ, Lx=6.0, Ly=6.0))
+    shape = replace(
+        SAlphaGeometry.from_config(cfg.geometry), epsilon=epsilon, alpha=alpha
+    )
+    return ensure_flux_tube_geometry_data(shape, grid.z)
+
+
+def test_window_adjoint_compiles_one_graph_and_reuses_it(case_grid):
+    """Repeated objective evaluations reuse the compiled adjoint window."""
+
+    grid, geom = case_grid
+    state = _seed(grid, 1, 17)
+    params = LinearParams()
+    value_and_grad = _window_value_and_grad(grid, geom, state, params)
+    drive = jnp.asarray(params.tprim)
+    jax.block_until_ready(value_and_grad(drive))
+    with _counting_backend_compiles() as counter:
+        jax.block_until_ready(value_and_grad(drive))
+        jax.block_until_ready(value_and_grad(drive * 1.01))
+    assert counter["compiles"] == 0
+
+
+def test_window_adjoint_reuses_its_graph_for_a_new_geometry(case_grid):
+    """Differentiable geometry changes do not trigger recompilation."""
+
+    grid, geom = case_grid
+    state = _seed(grid, 1, 17)
+    params = LinearParams()
+    jax.block_until_ready(
+        _window_value_and_grad(grid, geom, state, params)(jnp.asarray(params.tprim))
+    )
+    moved = _moved_geometry(grid, epsilon=0.19, alpha=0.1)
+    with _counting_backend_compiles() as counter:
+        jax.block_until_ready(
+            _window_value_and_grad(grid, moved, state, params)(
+                jnp.asarray(params.tprim)
+            )
+        )
+    assert counter["compiles"] == 0
+
+
+def test_window_adjoint_shared_graph_is_not_stale_for_a_new_geometry(case_grid):
+    """A reused graph retains no stale geometry in values or gradients."""
+
+    grid, geom = case_grid
+    state = _seed(grid, 1, 17)
+    params = LinearParams()
+    drive = jnp.asarray(params.tprim)
+    moved = _moved_geometry(grid, epsilon=0.19, alpha=0.1)
+
+    jax.clear_caches()
+    cold = jax.block_until_ready(
+        _window_value_and_grad(grid, moved, state, params)(drive)
+    )
+    jax.clear_caches()
+    jax.block_until_ready(_window_value_and_grad(grid, geom, state, params)(drive))
+    warm = jax.block_until_ready(
+        _window_value_and_grad(grid, moved, state, params)(drive)
+    )
+
+    assert np.asarray(cold[0]).tobytes() == np.asarray(warm[0]).tobytes()
+    assert np.asarray(cold[1]).tobytes() == np.asarray(warm[1]).tobytes()
+
+
+def test_compiled_window_rebuilds_the_projector_the_eager_route_used():
+    """The topology signature resolves to the eager route's cached projector."""
+
+    cfg = CycloneBaseCase(grid=GridConfig(Nx=NX, Ny=NY, Nz=NZ, Lx=6.0, Ly=6.0))
+    grid = build_spectral_grid(cfg.grid)
+    ky = np.asarray(grid.ky)
+    nx = int(np.asarray(grid.kx).size)
+    signature = nonlinear_projection.hermitian_projector_signature(ky, nx)
+    assert hash(signature) == hash(
+        nonlinear_projection.hermitian_projector_signature(ky, nx)
+    )
+    assert nonlinear_projection.hermitian_projector_for_signature(
+        signature
+    ) is _make_hermitian_projector(ky, nx)

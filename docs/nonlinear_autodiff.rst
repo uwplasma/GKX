@@ -127,6 +127,16 @@ Run to saturation once, then differentiate the physical window:
 
    heat_flux, gradient = jax.value_and_grad(loss)(theta0)
 
+``loss`` compiles once.  The differentiated scan is one ``jax.jit`` graph whose
+arrays are all arguments, so the same executable serves every geometry the
+optimizer proposes; only a new state shape, integrator, term set or window
+length compiles again.  Through GKX 2.2.0 this route recompiled thirteen XLA
+modules on every call, which was most of the wall time of an objective
+evaluation.  :doc:`solvers` has the measurements and the identity gate.
+This qualification covers complete nonlinear grids.  Mode-selected linear and
+reference grids carry array-valued ``ky_mode`` pytree metadata and are not
+qualified inputs to the compiled nonlinear window.
+
 The saturation state is fixed inside ``loss`` by design. For continuation,
 refresh it after an accepted geometry step. Choose a window of several measured
 heat-flux autocorrelation times, check the AD direction with a local line
