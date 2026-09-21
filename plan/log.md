@@ -18358,16 +18358,24 @@ paths; the public driver below and the pinned commits reproduce the gate. The
 three stale-`Ny` fixture/example failures are fixed, and their containing test
 files pass 109 tests with 14 optional examples skipped.
 
+**Full integration gate.** On exact source
+`9c8614b105d9e29fb42a3f9c7d38ba0a0cf88f9d`, JAX/JAXLIB 0.10.2, x64 and
+CPU-only, `python -m pytest -x tests/integration` completed in 607.78 s:
+566 passed, 15 skipped, one deselected, 79 warnings. Fourteen skips are the
+explicit data-or-long-run cases in `test_examples.py`; the remaining skip is
+the QI adaptive-observable case whose optional cached VMEC geometry was not
+available. The deselected node is the suite's default `slow` case,
+`test_qi_sparse_full_frequency_ladder`. The run therefore covers every
+non-slow integration test available in the supported environment.
+
 **Evidence manifest.** `SHA256SUMS.txt` covers the tracked, reproducible
 scripts and result artifacts in this repository. Raw execution `.log` files
 are gitignored and are not part of that manifest; every listed entry therefore
 verifies from a clean checkout rather than naming a file that was never
 committed.
 
-**Outstanding.** The full opt-out identity gate is complete. (1) Collect the
-benchmark-host window-split records. (2) Complete the remaining integration
-suites; the 109-test result above covers only the time-integrator and example
-test files.
+**Outstanding.** The full opt-out identity and integration gates are complete.
+Collect the benchmark-host window-split records.
 
 ```
 export MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
