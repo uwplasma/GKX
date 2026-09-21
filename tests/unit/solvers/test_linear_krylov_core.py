@@ -2759,6 +2759,40 @@ def _pr3_setup(*, Nx: int = 1, Nl: int = 6, Nm: int = 6, nu: float = 0.0):
 _PR3_SIGMA = 0.05 - 0.2j
 
 
+def _pr3_build_with_rank_two_field(*, block_solve: str):
+    """Build after adding a 2e-5 second singular component to the field block."""
+
+    cache, params, v0, term_cfg = _pr3_setup()
+    original_probe = pr3._probe_z_local_blocks
+    with_phi = None
+
+    def rank_two_probe(apply, shape, *, batch):
+        nonlocal with_phi
+        blocks = original_probe(apply, shape, batch=batch)
+        if with_phi is None:
+            with_phi = blocks
+        else:
+            field = with_phi - blocks
+            singular = np.linalg.svd(field, compute_uv=False)
+            iblock = int(np.argmax(singular[:, 0]))
+            u, s, vh = np.linalg.svd(field[iblock], full_matrices=False)
+            with_phi[iblock] += 2.0e-5 * s[0] * np.outer(u[:, 1], vh[1])
+        return blocks
+
+    pr3._probe_z_local_blocks = rank_two_probe
+    try:
+        return pr3.build_pr3_factors(
+            v0,
+            cache,
+            params,
+            term_cfg,
+            jnp.asarray(_PR3_SIGMA, dtype=v0.dtype),
+            block_solve=block_solve,
+        )[1]
+    finally:
+        pr3._probe_z_local_blocks = original_probe
+
+
 def test_pr3_z_block_is_l_tridiagonal_plus_a_rank_one_field_part() -> None:
     """The structural property the exact solve is allowed to assume.
 
@@ -2856,6 +2890,16 @@ def test_pr3_falls_back_to_the_dense_inverse_when_the_structure_breaks() -> None
         )
 
 
+def test_pr3_refuses_a_rank_two_field_part() -> None:
+    """The relaxed round-off floor must not admit a resolved second field part."""
+
+    meta = _pr3_build_with_rank_two_field(block_solve="auto")
+    assert meta["block_solve"] == "dense"
+    assert meta["structure"]["rank_one_ratio_max"] == pytest.approx(2.0e-5, rel=0.01)
+    with pytest.raises(ValueError, match="rank-one"):
+        _pr3_build_with_rank_two_field(block_solve="block-thomas")
+
+
 def test_pr3_refuses_a_grid_whose_non_streaming_part_is_not_z_local() -> None:
     """z-locality is a refusal, not a fallback.
 
@@ -2878,6 +2922,98 @@ def test_pr3_refuses_a_grid_whose_non_streaming_part_is_not_z_local() -> None:
     # asked for pr3-cm by name and needs a route, not a verdict.
     with pytest.raises(ValueError, match="hermite-line"):
         pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma, block_solve="dense")
+
+
+_PR3_FLOAT32_SCRIPT = """
+import json, sys
+import jax, jax.numpy as jnp
+assert not jax.config.read("jax_enable_x64")
+import gkx.solvers_linear_precond_pr3 as pr3
+from unit.solvers.test_linear_krylov_core import (
+    _pr3_setup, _PR3_SIGMA, test_pr3_refuses_a_rank_two_field_part,
+)
+
+def build(**kw):
+    solve = kw.pop("block_solve", "auto")
+    cache, params, v0, term_cfg = _pr3_setup(**kw)
+    v0 = v0.astype(jnp.complex64)
+    sigma = jnp.asarray(_PR3_SIGMA, dtype=v0.dtype)
+    try:
+        factors, meta = pr3.build_pr3_factors(
+            v0, cache, params, term_cfg, sigma, block_solve=solve
+        )
+    except ValueError as exc:
+        return None, {"error": str(exc)}
+    apply = pr3.build_pr3_apply(v0, cache, params, term_cfg, factors)
+    return apply(v0.reshape(-1)), meta
+
+fast, exact = build(block_solve="block-thomas")
+slow, dense = build(block_solve="dense")
+exact["dtype"] = str(fast.dtype)
+exact["apply_relative"] = float(
+    jnp.linalg.norm(fast - slow) / jnp.linalg.norm(slow)
+)
+test_pr3_refuses_a_rank_two_field_part()
+json.dump({
+    "exact": exact,
+    "auto": build()[1],
+    "collisional": build(nu=0.01)[1],
+    "zonal": build(Nx=4)[1],
+}, sys.stdout, default=str)
+"""
+
+
+def test_pr3_builds_at_float32_and_still_refuses_what_float64_refuses() -> None:
+    """Float32 admits the exact fixture while retaining all three guards.
+
+    The suite runs at float64, so a fresh x64-off interpreter checks the apply,
+    off-band and rank-two fallback, explicit rank-two refusal, and nonlocality.
+    """
+
+    import json
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    tests_root = Path(__file__).resolve().parents[2]
+    repo_root = tests_root.parent
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"JAX_ENABLE_X64", "GKX_X64"}
+    }
+    env["JAX_ENABLE_X64"] = "false"
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(repo_root / "src"), str(repo_root), str(tests_root)]
+        + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", _PR3_FLOAT32_SCRIPT],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=repo_root,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+
+    exact = report["exact"]
+    assert "error" not in exact, exact.get("error")
+    assert exact["dtype"] == "complex64"
+    assert exact["block_solve"] == "block-thomas"
+    assert 1.0e-8 < exact["locality_defect"] <= exact["locality_tolerance"]
+    assert exact["locality_tolerance"] < 1.0e-4
+    # The same preconditioner both ways, to float32 accuracy.
+    assert exact["apply_relative"] < 1.0e-5
+    assert report["auto"]["block_solve"] == "block-thomas"
+
+    collisional = report["collisional"]
+    assert collisional["block_solve"] == "dense"
+    assert "not l-tridiagonal" in collisional["block_solve_reason"]
+
+    assert "not z-local" in report["zonal"]["error"]
 
 
 def test_pr3_parameter_follows_the_symbol_rule_and_is_overridable() -> None:
