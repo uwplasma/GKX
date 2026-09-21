@@ -18274,3 +18274,27 @@ aggregator failed with no failing test. The shard had been growing with the test
 carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main` was one
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
+
+## 2026-09-20 — Q31 rebased on 2.2.0, three manifest baselines re-measured
+
+**Why CI was red.** Run 35518660118 had exactly two red jobs out of 40, `repo-hygiene` and
+`ci-required`. The aggregator failed in 3s because `repo-hygiene` had, so there was no
+failing test anywhere in the run. The one real failure was the package architecture
+manifest: `test_python_files: topology count regressed to 81, above baseline 80`.
+
+**Three baselines moved, not one.** The checker stops at the first regression, so fixing the
+topology count only exposed the next gate. Each number below is the value the checker
+reported, set verbatim and re-run until clean, rather than the old number plus a delta:
+
+- `test_python_files` 80 -> 81, for `tests/unit/operators/test_laguerre_sink_contract.py`.
+- `installable_source_python_lines` 92943 -> 93023, for `nu_hyper_m_const` carried end to
+  end plus the startup refusal.
+- `test_python_lines` 92533 -> 92814, for the nine contract cases and the ledger rows.
+
+Each carries its reason in the manifest, as the target-30 and target-45000 policies require.
+
+**Merge of main (2.2.0) was clean** — no conflicts. `plan.md`, `plan/log.md` and
+`tools/package_architecture_manifest.toml` came through identical to `main`, so no
+queue-table row was reverted and no table acquired a second `baseline` key. The dot-precision
+allowlist in `tests/unit/solvers/test_linear_krylov_core.py` is keyed by `file:line` and
+survived the merge unshifted; it was re-run to confirm rather than assumed.
