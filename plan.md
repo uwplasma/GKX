@@ -62,14 +62,15 @@ The implementation PRs below are open against `main` at this checkpoint:
   shared rank-two control at ratio `2e-5`: auto falls back to dense and explicit
   block-Thomas refuses in both precisions. All 12 PR3 tests pass; CI is pending.
 
-- [#269](https://github.com/uwplasma/GKX/pull/269), head `963d7cd5a`, repairs a
-  vacuous FLR guard and tests independent three-field algebra plus constant-B
-  streaming and varying-B weighted streaming/mirror exchange. The full field
-  file passes 45 x64 tests; 27 float32 tests pass with 18 explicit-float64 cases
-  excluded, all with FutureWarning fatal. Wrong weights/signs fail the exchange
-  controls. Shared helpers limit the latest extension to 182 net test lines;
-  no runtime changes or new files. Absolute normalization and the full physical
-  electromagnetic energy budget remain open.
+- [#269](https://github.com/uwplasma/GKX/pull/269), head `a9192443c`, tests
+  independent three-field algebra, compressional pressure/Hamiltonian/particle
+  field-factor normalization, and complete conservative linear exchange in
+  varying B. The field module passes 46 x64 tests and 28 float32 tests (18
+  explicit-float64 cases excluded); final extended exchange checks independently
+  pass both precisions with FutureWarning fatal. Wrong weights/signs/B factors
+  fail controls. Existing files and shared fixtures only; no runtime changes.
+  Physical free-energy identification, spatial flux quadrature, heat flux and
+  nonlinear/source/sink/time-integrated electromagnetic budgets remain open.
 - [#270](https://github.com/uwplasma/GKX/pull/270), head `073ede00a`, removes
   analytic metric shear concretization: 44 geometry tests pass per precision,
   including AD/JIT versus finite differences for both shear signs. Source
@@ -98,8 +99,14 @@ to implement the rate is a historical checkpoint, not current work.
 [Draft #272](https://github.com/uwplasma/GKX/pull/272), `2121cbf2e`, migrates
 one Cyclone fixture and records a matched three-timestep GPU ladder. The
 middle-to-fine fitted gamma/omega changes are below 4e-7 relatively, but observed
-orders are 1.108/.896, not a second-order certificate. Audit fitting/sampling
-before expanding the reference matrix. The permanent eleven-mode scan is
+orders are 1.108/.896, not a second-order certificate. The audit isolated a
+first-order defect in `imex2` with nonzero diagonal damping: the final stage
+uses backward Euler instead of a second-order split. A scalar exact-solution
+control reproduces it without fitting or transients. Repair and test damping
+flags across cached/diagnostic/Krylov routes, assess stiff-mode behavior, then
+rerun the ladder before expanding the matrix. Preserve pre-repair results
+([audit](https://github.com/uwplasma/GKX/pull/272#issuecomment-5756782223)).
+The permanent eleven-mode scan is
 preserved; this single-mode pilot does not close #194 or velocity convergence.
 
 | Order | Stable ID | Next bounded result | Admission / exit gate |
@@ -127,7 +134,7 @@ This bounded counterexample and its exact reproduction are in the work log.
 Calibrate rejection and stationary stopping power together before changing the
 policy; passing a fixed-window uncertainty test does not close this gate.
 
-[Draft #271](https://github.com/uwplasma/GKX/pull/271), head `a76b492d3`, adds
+[Draft #271](https://github.com/uwplasma/GKX/pull/271), head `8e89ce4a6`, adds
 mandatory retained-sample and IAT-span floors, with strengthen-only settings.
 The source shrinks eight lines; 33 window tests and all 180 runtime tests pass.
 CI's stale prepared-run boundary assertion is repaired without changing the
@@ -149,6 +156,16 @@ unchanged. Minimum analysis effort must be calibrated on the fixed-cadence
 representation; neither reusing 256 as a bin count nor adding an eight-bin
 structural floor inherits the native-sample calibration. Keep posthoc quadrature
 verification separate from runtime stopping-policy promotion.
+
+The subsequent fixed-bin calibration also remains unpromoted: its selected
+256-bin/F20 rule passes the specified drift/power screen but first-stop nominal
+95% interval coverage falls to 108/128 (84.4%) in one audit stratum. The exact
+CPU reproduction is in #271's logbook. Sampling invariance does not establish
+coverage; do not tune larger floors on these spent audit seeds. Preregister a
+fresh post-admission fixed estimation window and compare uncertainty estimators
+on new controls, with finite-ensemble uncertainty reported. Sequential coverage
+requires additional justified assumptions, not a generic confidence-sequence
+citation. Runtime promotion remains withheld.
 
 ### Execution decisions from the September 21 review
 
