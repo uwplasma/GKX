@@ -18487,3 +18487,25 @@ look cadence and held-out seeds before selecting a minimal policy correction.
 [Flegal–Gong, section 2](https://arxiv.org/html/1303.0238v1) motivates minimum
 variance-estimation effort and sequential calibration under stated asymptotic
 assumptions; it does not certify this nonstationary stopping heuristic.
+
+### 2026-09-21 — concise entry point and evidence-based admission
+
+Reviewed main `eeb3481c6` and open #260/#264–#271 without treating pending CI
+or draft experiments as merged evidence. The README shrinks from 575 to 243
+lines on the plan branch (main has 583), retaining CLI/Python/AD entry points,
+the principal figures and the ledger-checked parity table. Historical parity
+and QA figures now carry adjacent current-operator and failed-promotion limits;
+input/model details link to their existing documentation. No files or runtime
+features are added. The status-page baseline is refreshed, the README ceiling
+is stated as a target, and large EM AD admission now requires a measured
+memory/time/communication pilot rather than an arbitrary GPU count. The EM4
+reference gap is scoped to the selected case, not a claim of literature absence.
+
+Verification: supported JAX 0.10.2/x64 CPU checks on main pass all 134 selected
+diagnostics/field/geometry tests (two growth-fit warnings and two field-test
+scatter FutureWarnings). On this documentation branch, all 152 evidence-ledger
+and release tests pass with three existing CFL warnings; strict Sphinx passes.
+These checks establish documentation/contract consistency, not new physics.
+Pending work remains reference migration, physical-time stopping, weighted EM
+energy qualification, velocity convergence and independently validated transport
+optimization. No release or merge is justified by this documentation change.

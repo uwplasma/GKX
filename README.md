@@ -5,166 +5,40 @@
 [![CI](https://github.com/uwplasma/GKX/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/GKX/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/uwplasma/GKX/graph/badge.svg)](https://codecov.io/gh/uwplasma/GKX)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue.svg)](pyproject.toml)
+[![Python](https://img.shields.io/pypi/pyversions/gkx)](pyproject.toml)
 [![Docs](https://readthedocs.org/projects/gkx/badge/?version=latest)](https://gkx.readthedocs.io)
 
-GKX is a JAX-native gyrokinetic solver for tokamak and stellarator flux tubes:
-it takes a VMEC equilibrium or an analytic geometry, computes linear stability
-and nonlinear turbulence in a Hermite-Laguerre velocity basis, and provides
-CPU/GPU autodiff for the bounded linear, quasilinear and finite-window nonlinear
-objective paths documented below.
+JAX-native gyrokinetics for tokamak and stellarator flux tubes: linear
+stability, nonlinear turbulence, and differentiable objectives on CPUs and GPUs.
+GKX uses Hermite–Laguerre velocity moments and accepts analytic or VMEC/VMEX
+geometry. Research claims are bounded by the [validated scope](#claim-scope).
 
-<img src="docs/_static/turbulence_loop.webp" width="720" alt="Saturated ITG turbulence on a Cyclone flux tube, shown as a perpendicular cut and as the field-aligned tube">
+<img src="docs/_static/turbulence_loop.webp" width="720" alt="Cyclone ITG turbulence: perpendicular cut and field-aligned tube">
 
-Saturated ITG turbulence on a Cyclone flux tube: the perpendicular cut, and the
-same data as the field-aligned tube in real space. Amplitude is steady across
-the loop, not growing.
-[Full-rate movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4).
+A recorded Cyclone ITG simulation, shown in perpendicular and real-space views.
+[Movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)
+· [reproduction](tools/artifacts/build_turbulence_movie.py).
 
-## What GKX offers
-
-This capability map links each feature to its evidence; boundaries are
-summarized under [claim scope](#claim-scope).
-
-- **Hermite-Laguerre velocity moments.** Velocity space uses two spectral
-  indices; low moments represent fluid quantities. A small truncation is not
-  automatically resolved: its closure or regularization needs validation.
-  [theory](docs/theory.rst), [methods](docs/algorithms.rst).
-- **Differentiable objective paths, including selected equilibrium controls.**
-  JAX provides implicit reverse rules for certified eigenvalues and selected
-  eigenvector observables, plus a block-checkpointed discrete adjoint for a
-  prescribed post-saturation nonlinear heat-flux window. Each claim is bounded
-  by its geometry, topology, resolution and validation gate; this is not a
-  claim that every solver path or topology change is differentiable.
-  [eigensolver](docs/differentiable_eigensolver.rst),
-  [nonlinear autodiff](docs/nonlinear_autodiff.rst).
-- **Every returned eigenpair is certified against the original operator.** The
-  routes with no convergence test of their own are checked against the same
-  residual gate and raise when they fail it; the opt-out is explicit and
-  reports the residual. Results carry the residual, the gate and the route.
-  [solvers](docs/solvers.rst).
-- **Matrix-free eigensolves at sizes a dense operator cannot represent.** The
-  full gyrokinetic RHS is applied inside a restarted eigensolver, `O(n m)`
-  instead of `O(n^2)`: at `n = 494,592` the dense complex128 operator alone
-  would be 3.6 TiB.
-  [eigensolver](docs/differentiable_eigensolver.rst).
-- **Twist-and-shift linked chains, solved on the modes the chains couple.**
-  Seeds and Krylov vectors are projected onto the chain cover, supplied states
-  and restarts are projected at intake, and certification still applies the
-  unprojected operator so an unexpected coupling fails closed.
-  [solvers](docs/solvers.rst).
-- **Five collision operators, through gyrokinetic Coulomb.** Each is checked
-  against its published closed form, and a multispecies Coulomb request is
-  refused rather than silently extrapolated.
-  [operators](docs/operators.rst).
-- **VMEC, Boozer, Miller and VMEX geometry paths.** Selected smooth,
-  fixed-topology metric and control paths remain differentiable in process;
-  topology changes and arbitrary equilibrium controls are outside that claim.
-  [geometry](docs/geometry.rst).
-- **One TOML, one executable, resolved decks.** `--estimate` sizes the grid from
-  the geometry and explains every entry; finished runs write their reproducing
-  deck. [inputs](docs/inputs.rst).
-- **Under-resolved runs warn instead of reporting a number.** Saturation is a
-  stationarity test on flux, field energy, and free energy; unresolved `ky`
-  cutoffs are reported.
-  [`saturation.py`](src/gkx/diagnostics/saturation.py),
-  [numerics](docs/numerics.rst).
-- **One compiled graph per nonlinear route.** The two entry points into an
-  explicit nonlinear diagnostics run are bitwise identical in float32 and x64,
-  for values and gradients.
-  [solvers](docs/solvers.rst).
-- **Every published number is indexed to the artifact it comes from.** An
-  evidence ledger records its artifact, generator, and reference; CI recomputes
-  the parity percentages, and release scope bounds the claims.
-  [release scope](docs/release_scope.rst),
-  [verification matrix](docs/verification_matrix.rst).
-
-## Install
+## Start here
 
 ```bash
 pip install gkx
+gkx                 # self-contained linear Cyclone demonstration
 gkx --help
-gkx
 ```
 
-Python 3.11+. The wheel installs CPU JAX; for GPU or TPU, install an
-accelerator-enabled JAX wheel from the
-[JAX installation guide](https://docs.jax.dev/en/latest/installation.html).
+Python 3.11+. For GPUs, install the appropriate
+[JAX accelerator wheel](https://docs.jax.dev/en/latest/installation.html).
+The no-input demo uses a deliberately coarse velocity grid: it checks the
+workflow and agrees with its discrete eigenvalue within 1%, not a converged
+gyrokinetic reference. It writes the resolved input, diagnostic tables and plot.
 
-`gkx` with no arguments runs a self-contained linear Cyclone demo — no input
-file, no data download. It takes well under a minute on a laptop CPU, prints
-the fitted `gamma` and `omega`, and writes
-`gkx_default_linear.{toml,summary.json,timeseries.csv,eigenfunction.csv,png}`.
-
-The demo runs a deliberately coarse velocity grid (`Nl = 7`, `Nm = 14`), so it
-is not a converged physics result. It is resolved *for the case it builds*: its
-step stays under the estimated CFL bound and its horizon is long enough to fit,
-so the growth rate it prints agrees with that case's certified eigenvalue to
-better than 1%, and it runs without warnings. A gate holds it there.
-
-Development checkout:
+For checked-in examples and development:
 
 ```bash
 git clone https://github.com/uwplasma/GKX
 cd GKX
 pip install -e ".[dev]"
-```
-
-## Run an equilibrium
-
-Point the executable at a VMEC or [VMEX](https://github.com/uwplasma/vmex)
-`wout` file to get a nonlinear ITG run, its figures, a restartable NetCDF
-bundle, and the resolved deck that reproduces it — without writing a TOML first.
-
-```bash
-gkx wout_circular_tokamak.nc --estimate   # size the grid, print reasoning, exit
-gkx wout_circular_tokamak.nc              # run it
-gkx plot wout_circular_tokamak/gkx.out.nc # replot a saved bundle
-```
-
-`--estimate` derives a minimum grid from the geometry and explains every entry:
-
-```
-equilibrium: /path/to/wout_circular_tokamak.nc
-geometry: shat=+1.7190 q=2.066 nfp=1 |B| wells=1 anisotropy=0.214 -> ky_max*rho >= 2.2
-    nx = 96       square perpendicular box (Lx = Ly), so Nx tracks Ny
-    ny = 96       tokamak class (nfp = 1, anisotropy 0.214) asks ky_max*rho >= 2.2 (standard); reach ((Ny-1)//3)*dky = 2.21 at dky = 0.071
-    nz = 48       scan found Nz weakly coupled (flux 8.47/8.78/8.39 at 24/32/48); floors: 16/2pi-period x 1, 6 x 1 |B| wells
-    nl = 4        Laguerre FLR floor with hypercollisions; the scan converged at Nl=4
-    nm = 8        hypercollisions: t_quiet ~ 5.5*sqrt(Nm) recurrence sets the published floor (4,8)
-    dt = 0.0071   explicit CFL bound cfl_fac*cfl/sum(omega_max) at this grid; the adaptive stepper raises it toward the measured ExB limit
- t_max = 400      8 x t_sat ~ 50 hard cap; run_to = "saturation" stops earlier
-```
-
-`--estimate=cautious` and `--estimate=standard` select the target-error tier.
-This is a calibrated starting point, not a convergence proof: tokamak rungs
-saturated with `64^2` about 8% above the converged `96/128` flux, while the
-stellarator ladder was still falling at `128^2`. Matched `Nx`/`Ny` convergence
-is still yours.
-
-A completed run groups everything under `./<wout-stem>/`:
-
-| Artifact | Contents |
-| --- | --- |
-| `gkx.toml` | the fully resolved deck that reproduces this run |
-| `gkx.summary.json` | fitted scalars, saturation verdict, and the averaging window |
-| `gkx.out.nc` | diagnostic history, geometry, spectra, and input metadata |
-| `gkx.big.nc` | final spectral and real-space fields and moments |
-| `gkx.restart.nc` | packed Hermite-Laguerre state for continuation |
-| `gkx.{flux_time,flux_spectra,phi2_spectra,snapshot_xy,flux_tube_3d,summary}.png` | the standard figure set |
-
-An under-resolved run warns instead of reporting the number:
-
-```
-warning: heat-flux ky cutoff is unresolved: the highest 10% of retained positive-ky modes reach 100% of the spectral peak (warning threshold 10%). Increase Ny at fixed Ly, then repeat matched Nx/Ny convergence; this warning is necessary, not sufficient, for resolution.
-saturation: not saturated by the time horizon window=[3.06144,6] heat_flux=3.15837e-06+/-3.70499e-07 rel_sem=0.117307 tau_ac=0.521488
-```
-
-### Run a checked-in case
-
-Every shipped example is a runtime TOML the executable accepts directly:
-
-```bash
 gkx examples/linear/axisymmetric/cyclone.toml
 gkx run-runtime-nonlinear \
   --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
@@ -172,122 +46,64 @@ gkx run-runtime-nonlinear \
 gkx plot cyclone.out.nc
 ```
 
-The first prints the converged eigenvalue and its residual from the certified
-Krylov path:
+The 200-step example is a short execution check, not a saturation guarantee.
+Linear results report eigenvalue residuals; resolution convergence is a separate
+test. More cases: [linear](examples/linear), [nonlinear](examples/nonlinear),
+[optimization](examples/optimization), [teaching](examples/theory_and_demos).
 
+## Run your equilibrium
+
+```bash
+gkx wout_circular_tokamak.nc --estimate   # explain the proposed grid
+gkx wout_circular_tokamak.nc              # nonlinear ITG run
+gkx plot wout_circular_tokamak/gkx.out.nc  # regenerate plots
 ```
-runtime: adaptive solve finished with eig=0.0930891-0.282015j residual=6.08e-05 converged=True stable=True
-ky=0.3000 gamma=0.093089 omega=0.282015
-```
 
-`gkx run` auto-detects linear versus nonlinear from `[physics]`. A deck without
-an `[output] path` and without `--out` writes no files. Examples live under
-[`examples/linear`](examples/linear), [`examples/nonlinear`](examples/nonlinear),
-[`examples/optimization`](examples/optimization),
-[`examples/theory_and_demos`](examples/theory_and_demos), and
-[`benchmarks`](benchmarks).
+[VMEX](https://github.com/uwplasma/vmex) and VMEC `wout` files use the same
+entry point. The output directory contains `gkx.toml`, diagnostic and restart
+NetCDF bundles, a summary, and flux/spectrum/field-line figures.
+`--estimate=cautious` chooses a more conservative starting grid; neither
+estimate replaces convergence in box size, spatial/velocity resolution and time.
 
-## Configure a run
+Use [common_input.toml](examples/common_input.toml) as the configuration
+template. [Inputs](docs/inputs.rst) explains all keys; [outputs](docs/outputs.rst)
+explains units and artifacts. Important controls:
 
-One TOML file. Every key has a default, so a working input is short.
-[`examples/common_input.toml`](examples/common_input.toml) shows every section
-with its defaults; it is a template rather than a runnable case, because its
-`vmec_file` is supplied by the CLI from the `wout` you pass. The key-by-key
-reference is [inputs](https://gkx.readthedocs.io/en/latest/inputs.html).
+- `tprim`, `fprim`: normalized inverse temperature/density gradient lengths.
+- `Nl`, `Nm`: Laguerre/perpendicular and Hermite/parallel velocity resolution.
+- `gamma`, `omega`: linear growth rate and oscillation frequency.
+- `Wphi`, `Wg`: field-energy and distribution/free-energy diagnostics,
+  **not heat flux**; their precise definitions are in [theory](docs/theory.rst).
+- `run_to="saturation"`: apply statistical stopping gates;
+  `run_to="t_max"`: use a prescribed horizon.
 
-| Section | Controls | Common keys |
-| --- | --- | --- |
-| `[[species]]` | one block per species | `charge`, `mass`, `temperature`, `tprim`, `fprim`, `nu`, `kinetic` |
-| `[grid]` | resolution and box | `Nx`, `Ny`, `Nz`, `Lx`, `Ly`, `boundary` |
-| `[geometry]` | equilibrium | `model`, `q`, `s_hat`, `epsilon`, `R0`, `geometry_file` |
-| `[time]` | integration | `t_max`, `dt`, `method`, `run_to`, `collision_operator` |
-| `[physics]` | what to include | `linear`, `nonlinear`, `electrostatic`, `adiabatic_electrons`, `tau_e` |
-| `[init]` | initial condition | `init_field`, `init_amp`, `gaussian_width` |
-| `[collisions]` | collision and hypercollision rates | `nu_hermite`, `nu_laguerre`, `nu_hyper`, `p_hyper` |
-| `[terms]` | switch individual terms on/off (0/1) | `streaming`, `mirror`, `curvature`, `diamagnetic`, `nonlinear` |
-| `[run]`, `[scan]` | single run / `k_y` scan resolution | `ky`, `Nl`, `Nm`, `solver` |
-| `[normalization]` | benchmark normalization contract | `contract`, `diagnostic_norm` |
-| `[fit]` | growth-rate fit window | `auto_window`, `window_method` |
+A quiet field-energy trace does not establish stationary transport.
+Adaptive-time averaging and sequential stopping still require qualification.
+[Statistics and resolution](docs/numerics.rst) · [active plan](plan.md).
 
-`[terms]` is the debugging lever: setting one coefficient to `0.0` removes
-exactly that term, which is how most physics gates isolate what they test.
+## Capabilities
 
-| `[geometry] model` | Gives you | Needs |
-| --- | --- | --- |
-| `"s-alpha"` | circular tokamak, `B = B0/(1 + eps cos theta)` | `q`, `s_hat`, `epsilon`, `R0` |
-| `"slab"` | uniform field, sharpest numerics tests | grid only |
-| `"imported-eik"` / `"vmec-eik"` | Miller or full 3D stellarator from a file | `geometry_file` |
+| Capability | Implementation and boundary |
+| --- | --- |
+| Velocity moments | Hermite–Laguerre recurrences; closure/dissipation and truncation must converge for the chosen observable |
+| Linear stability | Certified eigenpairs, matrix-free routes and linked twist-and-shift chains; [solvers](docs/solvers.rst) |
+| Electrostatic and electromagnetic fields | Kinetic/adiabatic species and three-field equations; broad full-EM transport qualification remains open |
+| Geometry | Analytic, Miller, VMEC/Boozer and VMEX paths; derivatives on supported smooth, fixed-topology controls |
+| Collisions | LB/Dougherty, Sugama variants and bounded Coulomb projections; [species/moment/wavelength limits](docs/operators.rst) |
+| Derivatives | Implicit eigenmode rules and checkpointed finite-window nonlinear adjoints |
+| Parallel work | Independent scans and ensembles; production nonlinear domain decomposition is not established |
+| Reproducibility | Resolved decks, restart bundles, [evidence ledger](docs/verification_matrix.rst) and explicit failure status |
 
-Miller equilibria and VMEC/Boozer flux tubes are also built in-process through
-the Python API. Differentiability is established only for the smooth,
-fixed-topology controls documented in [geometry](docs/geometry.rst).
-
-GKX also consumes a [VMEX](https://github.com/uwplasma/vmex) stellarator-mirror
-hybrid directly from memory. VMEX supplies the field-line closure, Clebsch
-metric, and equal-arc grid; GKX evaluates linear and quasilinear objectives.
-The periodic parallel FFT requires a closed field line, so open-ended mirrors
-are not admitted. The shipped closed racetrack is solved to a converged
-fixed-boundary equilibrium, and its reported field-strength ratio is a
-flux-tube modulation depth, not a mirror ratio. Details:
-[geometry](docs/geometry.rst#closed-vmex-mirror-geometry).
-
-### Run control
-
-| Key | Default | Effect |
-| --- | --- | --- |
-| `[time] run_to = "saturation"` | on for diagnosed nonlinear runs | integrate in chunks and stop once the heat flux is stationary |
-| `[time] run_to = "t_max"` | — | fixed horizon; `--no-until-saturated` does the same from the CLI |
-| `[time] t_max` | deck | hard cap either way |
-| `[time] saturation_rel_sem` | `0.05` | stop when the autocorrelation-corrected relative SEM of the windowed mean falls below this |
-| `[time] saturation_min_window` | 10 autocorrelation times | shortest window allowed to declare saturation |
-| `[time] method` | `rk3` | explicit integrator |
-| `[time] collision_operator` | `lenard_bernstein` | see the collision table below |
-
-Saturation also requires the two halves of the window to agree within twice
-their combined SEM, and holds the field energy `Wphi` and free energy `Wg` to
-the same stationarity, so a flat-looking flux over a still-evolving state does
-not count as converged.
-
-![What saturation means across three cases](docs/_static/saturation_examples.png)
-
-The stop policy replayed on three tracked runs, each stopped by a different
-gate: an ITER-model case that clears the flux gates early but waits on `Wg`
-stationarity and stops at 66% of `t_max`; a circular-tokamak case where the
-relative SEM is binding, stopping at 62%; and an under-resolved D-shape case
-whose relative SEM never falls below the threshold, so it runs the full horizon
-and the summary reports *not saturated* rather than a number. Grey is the
-horizon that would never have been integrated.
-Gates: [`src/gkx/diagnostics/saturation.py`](src/gkx/diagnostics/saturation.py).
-
-## Performance
-
-![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
-
-Cold wall time and peak memory across the tracked cases, including JAX startup
-and compilation. The executable enables JAX's persistent compilation cache, so
-a rerun of an unchanged case is warm. Warm timings, per-case GPU ratios, and
-profiler artifacts: [performance](docs/performance.rst).
-
-On an Apple M3 Max (JAX CPU, float32) the shipped default deck at `96x96x48`
-runs `t_max = 200` in roughly 1.0–1.6 hours, about 97% of it time stepping.
-Cost is linear in degrees of freedom at about 196 ns per `Nx*Ny*Nz*Nl*Nm`
-element per step, flat from 64x64x24 to 96x96x48. Within a step, about 60% is
-data movement and 39% the FFTs; physics arithmetic is not separately measurable
-because XLA fuses it into those kernels.
-
-Maintained parallel routes cover independent `k_y` scans, quasilinear/UQ
-ensembles, and file-backed tasks, all deterministically ordered and
-serial-identity gated.
-Sensitivity sweeps can use the same deterministic independent-work
-reconstruction, but they need a dedicated matched scaling artifact before any
-speedup claim is promoted; nonlinear whole-state and domain decomposition stay
-diagnostic only. Details: [parallelization](docs/parallelization.rst).
+The distribution state is `G[species, laguerre, hermite, ky, kx, z]`.
+Perpendicular dynamics use Fourier transforms; the parallel grid follows a field
+line. Streaming couples neighboring Hermite orders; mirror/drift terms couple
+nearby moments. This structure does not make the full nonlinear system a
+block-tridiagonal solve. [Equations](docs/theory.rst) · [methods](docs/algorithms.rst).
 
 ## From Python
 
 ```python
 import jax.numpy as jnp
-
 from gkx import CycloneBaseCase, LinearParams, integrate_linear_from_config
 from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
@@ -295,113 +111,72 @@ from gkx.geometry import SAlphaGeometry
 cfg = CycloneBaseCase()
 grid = build_spectral_grid(cfg.grid)
 geometry = SAlphaGeometry.from_config(cfg.geometry)
-state = jnp.zeros((2, 2, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
+state = jnp.zeros((2, 2, grid.ky.size, grid.kx.size, grid.z.size),
+                  dtype=jnp.complex64)
 state = state.at[0, 0, 0, 0, :].set(1.0e-3)
 trajectory, potential = integrate_linear_from_config(
     state, grid, geometry, LinearParams(), cfg.time
 )
 ```
 
-For repeated nonlinear calls with fixed geometry and numerical policy, prepare
-the compiled simulation once with an explicit `steps`. This prepared scan has
-a fixed length, unlike saturation-based stopping. The case API is
-`gkx.prepare(case, steps=N)`; `warmup()` moves compilation out of the first
-timed `solve`.
+For repeated fixed-length runs, `gkx.prepare(case, steps=N)` prepares a case;
+`warmup()` separates compilation from timed solves. This differs from adaptive
+saturation stopping. See [API](docs/api.rst) and [examples](docs/examples.rst).
+
+## Differentiate a nonlinear window
+
+Given a detached saturated state, compatible grid, parameters, and a smooth
+fixed-topology `geometry(shape)` function, the objective is:
 
 ```python
-from gkx.solvers_nonlinear_diagnostic_integration import prepare_nonlinear_explicit_diagnostics
+import gkx
+import jax
 
-simulation = prepare_nonlinear_explicit_diagnostics(
-    initial_state, grid, geometry, parameters,
-    dt=0.02, steps=400, resolved_diagnostics=False,
-)
-time, diagnostics, final_state, fields = simulation.run()
+def loss(shape):
+    return gkx.nonlinear_heat_flux_window(
+        saturated, grid, geometry(shape), params, dt, steps, terms=terms
+    )
+
+heat_flux, gradient = jax.value_and_grad(loss)(shape0)
 ```
 
-The prepared object accepts another same-shape initial state without rebuilding
-the scan; a matched cache/parameter PyTree stays dynamic for autodiff. Full API:
-[gkx.readthedocs.io](https://gkx.readthedocs.io).
+This is the derivative of the prescribed discrete window at fixed initial state,
+not a certified derivative of infinite-time mean transport. The complete
+[nonlinear AD guide](docs/nonlinear_autodiff.rst) covers state preparation,
+checkpointing and finite-difference checks.
+[Eigenmode derivatives](docs/differentiable_eigensolver.rst) instead use implicit
+eigenvalue rules and bordered solves for eigenvector observables.
 
-## What GKX solves
+![Checkpointed adjoint memory and derivative checks](docs/_static/nonlinear_autodiff_validation.png)
 
-The gyrokinetic equation for the perturbed distribution of each species,
-expanded in a **Hermite-Laguerre** velocity basis:
+The recorded 1024-step Cyclone experiment reduces temporary state from
+7.82 GB to 187 MB on CPU and 7.80 GB to 148 MB on GPU, at 1.92×/1.77× runtime.
+This is a scoped checkpointing measurement, not a universal speed or memory bound.
+[Recipe and horizon limits](docs/nonlinear_autodiff.rst).
 
-```
-delta f_s = F_Maxwellian * sum_{m,l}  G_s^{m,l}  psi_m(v_par / v_th)  L_l(mu B / T)
-```
+### QA optimization
 
-with `psi_m = H_m / sqrt(2^m m! sqrt(pi))` the normalized Hermite functions and
-`L_l` the Laguerre polynomials. Velocity space becomes two spectral indices: `m`
-resolves parallel dynamics (Landau damping, parallel heat flux), `l` resolves
-perpendicular dynamics (FLR effects, trapping). The evolved state is one array,
-`G[species, laguerre l, hermite m, ky, kx, z]`, and each physical effect is a
-coupling on it:
+[QA_optimization.py](examples/optimization/QA_optimization.py) couples VMEX's
+vacuum QA objectives to a prescribed GKX heat-flux window. Finite profile
+gradients drive turbulence even when the equilibrium is vacuum.
 
-| Term | What it does to `G` | Set by |
-| --- | --- | --- |
-| Parallel streaming | couples `m` to `m±1` (a ladder in Hermite index) | geometry `gradpar` |
-| Magnetic mirror | couples `m` and `l` together | `bgrad` |
-| Curvature / grad-B drift | multiplies by `i(k · v_d)` | geometry curvature |
-| Diamagnetic drive | injects free energy from the gradients | `[[species]] tprim`, `fprim` |
-| Collisions | couples moments within a species | `collision_operator` |
-| Nonlinearity | `E × B` convolution in `(kx, ky)`, pseudo-spectral | nonlinear solver |
-| Field solve | quasineutrality + parallel Ampere for `phi`, `A_par`, `B_par` | `beta`, species list |
+![Initial and candidate QA equilibria](docs/_static/qa_transport_equilibria.png)
+![Historical matched QA heat-flux traces and convergence](docs/_static/qa_transport_reduction.svg)
 
-Perpendicular directions are Fourier (`kx`, `ky`); the parallel direction `z`
-follows a field line. Electrons are kinetic or Boltzmann. The spectral indices
-share one state array, while the operators use structured couplings and
-transforms rather than a dense global matrix. Derivation: [theory](docs/theory.rst).
-
-**Velocity resolution.** Truncating the Hermite ladder at `m = M` reflects free
-energy as recurrence at `t_rec ~ 2 sqrt(M) / (k_par v_th)`, so adding moments is
-a weak fix. Default hypercollisions cut the revival to 0.0009 at `M = 16`; an
-opt-in reflectionless closure (Kanekar et al., JPP **81**, 305810104 (2015))
-needs no tuning but does not beat a well-tuned hypercollision. Tables and scans:
-[numerics](docs/numerics.rst).
-
-## Collision operators
-
-| `collision_operator` | Model | Reference |
-| --- | --- | --- |
-| `none` / `lenard_bernstein` | Conserving diagonal Lenard-Bernstein/Dougherty relaxation | built in |
-| `sugama` | Drift-kinetic Sugama, conservative by construction | Frei, Ernst & Ricci (2022), Eqs. (C6a)-(C6f) |
-| `improved_sugama` | Improved Sugama, corrected Pfirsch-Schlüter friction | Sugama et al. (2019); Frei, Ernst & Ricci (2022) |
-| `coulomb` | Drift-kinetic linearized Coulomb (Landau) | Frei, Ernst & Ricci (2022), Eqs. (C9a)-(C9f) |
-| `coulomb_finite_kperp` | Gyrokinetic Coulomb retaining finite `k_perp` | Frei, Ball, Hoffmann, Jorge, Ricci & Stenger (2021), Eqs. (3.47)-(3.50) |
-
-![Collision operator comparison](docs/_static/collision_operator_comparison.png)
-
-The models agree in the collisionless limit and separate as collisionality
-rises. Every shipped matrix is checked against the published closed forms:
-conservation and Onsager self-adjointness at 5.6e-17 and 8.3e-17 against a
-5e-12 gate, published Appendix-C coefficients at 1.1e-16, and an H-theorem
-maximum eigenvalue of 9.0e-18. Coulomb tables are generated for like-species
-collisions; a multispecies request is refused rather than silently
-extrapolated. Equations and convergence panels: [operators](docs/operators.rst),
-metrics in
-[`collision_operator_verification.json`](docs/_static/collision_operator_verification.json).
+These initial/candidate comparisons are retained as historical, negative
+qualification evidence. They predate the periodic hypercollision correction;
+4 of 48 nominal traces fail final drift. **Statistically resolved QA transport
+reduction is not established.** Promotion requires stationary individual traces,
+correlation-aware uncertainty, resolved spectra, independent seeds and
+grid/timestep convergence on the current operator.
+[Conditions, scripts and results](docs/stellarator_optimization.rst).
 
 ## Validation
 
-**Landau damping** against the roots of `1 + T_i/T_e + zeta Z(zeta) = 0`, from
-GKX's own linear operator extrapolated to zero collisionality:
-
-| | exact | GKX | error |
-| --- | --- | --- | --- |
-| `T_e/T_i = 1`, `omega` | 2.045904866 | 2.047220793 | 0.064% |
-| `T_e/T_i = 1`, `gamma` | -0.851330459 | -0.849234188 | 0.246% |
-| `T_e/T_i = 10`, `omega` | 3.728834801 | 3.728993838 | 0.004% |
-| `T_e/T_i = 10`, `gamma` | -0.058337421 | -0.058339802 | 0.004% |
-
-A collisionless truncated Hermite system has a purely real spectrum (measured
-2.8e-14, gated below 1e-11), so it cannot Landau damp at all — the damping is a
-transient ending at recurrence, and the root is a pole reached by `nu -> 0`
-extrapolation, not an eigenvalue.
-
-**Linear benchmark parity**, as `100 * max|GKX - ref| / max|ref|` over each scan
-against the references in
-[`tools/benchmark_atlas_manifest.toml`](tools/benchmark_atlas_manifest.toml):
+The table reports historical tracked linear-scan differences:
+`100 * max|GKX − reference| / max|reference|`. It is not fresh certification of
+the current operator; [damping-reference migration](https://github.com/uwplasma/GKX/issues/194)
+and affected benchmark regeneration remain open.
 
 | Case | `gamma` | `omega` |
 | --- | ---: | ---: |
@@ -413,144 +188,46 @@ against the references in
 | Cyclone ITG | 6.83% | 1.59% |
 | **KBM** | **20.0%** | **11.1%** |
 
-KBM is the known outlier, published at its claim level rather than smoothed
-over. This is agreement against those tracked scans, not a claim of identical
-physics options or feature coverage in the reference codes. Detail:
-[benchmarks](docs/benchmarks.rst) and the
-[verification matrix](docs/verification_matrix.rst).
+KBM remains an explicit discrepancy. CI recomputes these percentages from their
+tracked sources; that is artifact consistency, not proof of matched physical
+models. [Benchmarks](docs/benchmarks.rst) · [verification matrix](docs/verification_matrix.rst)
+· [related codes](docs/codes.rst).
 
-## Differentiate the solver
+## Performance and parallelism
 
-A certified eigenpair objective is directly differentiable:
+![Recorded runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
 
-```python
-settings = gkx.AdaptiveLinearEigensolverConfig(tolerance=1e-9, candidate_count=2)
+Compare at matched accuracy and uncertainty, including compilation, spin-up,
+forward/gradient evaluation and peak memory. Smaller state storage does not
+guarantee faster execution. [Measurements and reproduction](docs/performance.rst).
 
-def objective(boundary):
-    values = gkx.solver_objective_vector_from_geometry(
-        build_solver_geometry(boundary),
-        n_laguerre=16, n_hermite=24,
-        eigensolver="adaptive-propagator", adaptive_config=settings,
-    )
-    return values[-1]          # quasilinear transport objective
-
-value, gradient = jax.value_and_grad(objective)(initial_shape)
-```
-
-Reverse mode uses `dλ/dp = wᴴ(dA/dp)v / (wᴴv)` plus a bordered solve for
-eigenvector observables — no differentiation through the iteration. The default
-stays dense so established results are unchanged. See
-[eigensolver](docs/differentiable_eigensolver.rst).
-
-GKX also differentiates one bounded nonlinear objective: physical heat flux
-averaged over a prescribed post-saturation RK window, via a block-checkpointed
-discrete adjoint storing `O(sqrt(N))` states.
-
-```python
-def loss(shape):
-    return gkx.nonlinear_heat_flux_window(
-        saturated, grid, geometry(shape), params, dt, steps, terms=terms
-    )
-
-heat_flux, gradient = jax.value_and_grad(loss)(shape0)
-```
-
-![Nonlinear adjoint memory and derivative validation](docs/_static/nonlinear_autodiff_validation.png)
-
-On a 16x16x16 Cyclone case over a 1024-step window, checkpointing cuts measured
-temporary state from 7.82 GB to 187 MB on CPU and 7.80 GB to 148 MB on an RTX
-A4000, for 1.92x and 1.77x more runtime. The exact discrete differentiation and
-centered finite differences agree to 1e-11 through 512 steps and 2.7e-9 at 1024,
-inside the 1e-6 gate, and part at 2048 where chaotic trajectory separation sets
-the useful window length. [nonlinear autodiff](docs/nonlinear_autodiff.rst).
-
-### QA shape optimization through turbulence
-
-[`QA_optimization.py`](examples/optimization/QA_optimization.py) adds this heat
-flux as a fourth objective to VMEX's vacuum QA ladder, composing VMEX's implicit
-equilibrium derivative with GKX's derivative of the prescribed discrete
-window.
-
-![Initial and optimized QA equilibria](docs/_static/qa_transport_equilibria.png)
-
-Eight low-order boundary coefficients move; aspect ratio changes by +0.0115% and
-mean iota by -0.044%, while the QA residual goes from 5.88e-4 to 1.54e-3.
-
-![Matched QA heat-flux traces and convergence](docs/_static/qa_transport_reduction.svg)
-
-These historical traces predate the periodic hypercollision correction and must
-be regenerated; they are not evidence for the current operator. The preliminary
-12.26% reduction across 24 nominal pairs has a conditional 95% CI of
-10.64-13.88%, and is **not statistically resolved**: 4 of 48 nominal traces fail
-the published per-trace final-drift test. Promotion requires stationary
-individual traces, autocorrelation-aware batches, resolved spectral tails, and
-grid/timestep convergence; nonlinear optimization evidence requires matched,
-replicated, long post-saturation windows. Every row is in
-[`qa_transport_summary.csv`](docs/_static/qa_transport_summary.csv); the campaign
-is in [stellarator optimization](docs/stellarator_optimization.rst).
-
-## How GKX compares
-
-GKX shares its Hermite-Laguerre gyro-moment velocity representation with GX,
-which makes GX the closest algorithmic and parity reference.
-
-| | GKX | GX | GENE |
-| --- | --- | --- | --- |
-| Velocity space | Hermite-Laguerre moments | Hermite-Laguerre moments | grid in `(v_par, mu)` |
-| Collision models | 5, through gyrokinetic Coulomb | Dougherty + hypercollisions | Landau and model operators |
-| Differentiable | selected bounded JAX objective paths | not a design goal | not a design goal |
-
-This records scope, not quality; see [related codes](docs/codes.rst).
+Independent `ky` scans and ensembles preserve serial ordering.
+Sensitivity sweeps can use the same deterministic independent-work
+reconstruction, but they need a dedicated matched scaling artifact before
+speedup promotion. Whole-state nonlinear sharding remains a correctness/profiling
+route, not a production scaling claim. [Parallelization](docs/parallelization.rst).
 
 ## Claim scope
 
-Release claims are bounded by the [release scope](docs/release_scope.rst).
+- Quasilinear outputs are screening/ranking diagnostics,
+  **not a runtime/TOML absolute-flux predictor**. The declared Solovev and
+  shaped-pressure stress outliers remain outside the scoped model claim.
+- Coulomb support is bounded by species, moments and wavelength; finite-`k`
+  tables do not establish arbitrary-order or unlike-species Landau physics.
+- W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron
+  extensions are deferred.
+- Full three-field EM transport, equilibrium ExB flow shear and production
+  nonlinear domain decomposition remain open qualification goals.
 
-Quasilinear outputs support ranking, correlation studies, and optimization
-screening, **not a runtime/TOML absolute-flux predictor**. Promotion remains
-rejected: the declared Solovev and shaped-pressure stress outliers are retained,
-the best tracked candidate misses the 0.35 transport gate, and the
-positive-growth mixing-length rule predicts zero for HSX and W7-X where the
-tracked nonlinear windows are finite. Derivations, calibration splits, and
-holdout gates: [quasilinear](docs/quasilinear.rst).
-
-Collision operators are validated for like-species collisions and run on the
-fixed-step cached integrator. W7-X zonal long-window recurrence/damping and
-W7-X TEM / kinetic-electron extensions are deferred. Production nonlinear
-domain decomposition and equilibrium ExB flow shear remain open.
-
-## Reproducing the figures
-
-The table records each figure's regeneration path or retired-generator status.
-Where a figure has a machine-readable companion, that companion is the artifact
-of record.
-
-| Figure | Command |
-| --- | --- |
-| `turbulence_loop.webp` | `tools/artifacts/build_turbulence_movie.py` (two-stage; recipe in its docstring) |
-| `collision_operator_comparison.png` | `examples/theory_and_demos/collision_operator_comparison.py` with `NU_SCAN = True` |
-| `collision_operator_verification.png` | `tools/artifacts/build_linear_validation_artifacts.py collision-verification` |
-| `landau_damping_validation.png` | `tools/artifacts/build_landau_damping_figure.py` |
-| `benchmark_linear_parity.png` | `tools/artifacts/build_benchmark_parity_figure.py` |
-| `eigensolver_reach.png` | `tools/artifacts/build_eigensolver_reach_figure.py` |
-| `autodiff_inverse_twomode.png` | `examples/theory_and_demos/autodiff_inverse_twomode.py` |
-| `nonlinear_autodiff_validation.png` | `tools/artifacts/build_nonlinear_autodiff_figure.py` |
-| `qa_transport_equilibria.png`, `qa_transport_reduction.svg` | `tools/artifacts/build_qa_transport_figures.py` |
-| `quasilinear_stellarator_usefulness.png` | generator retired — not regenerable; JSON companion is the record |
-| `saturation_examples.png` | `tools/artifacts/build_saturation_figure.py` |
-| `methods_velocity_truncation.png`, `methods_chain_transform_ledger.png`, `methods_eigen_route_cost.png`, `methods_cross_code_ky_scan.png` | `tools/artifacts/build_methods_figures.py all` (re-renders from the tracked evidence under `plan/research/scripts/`) |
-| `runtime_memory_benchmark.png` | `tools/artifacts/build_runtime_memory_figure.py` (re-renders from the tracked CSV); `benchmarks/performance/benchmark_runtime_memory.py` re-measures it |
+[Release scope](docs/release_scope.rst) is the claim authority;
+[plan.md](plan.md) is the execution authority. No new release is scheduled.
 
 ## Documentation and development
 
-Full documentation is at **[gkx.readthedocs.io](https://gkx.readthedocs.io)**.
-Start with the [quickstart](https://gkx.readthedocs.io/en/latest/quickstart.html)
-and [input reference](https://gkx.readthedocs.io/en/latest/inputs.html), then
-[physics](docs/theory.rst), [operators](docs/operators.rst),
-[numerics](docs/numerics.rst), [geometry](docs/geometry.rst),
-[outputs](docs/outputs.rst), [testing](docs/testing.rst),
-[code structure](docs/code_structure.rst), and
-[release scope](docs/release_scope.rst).
+[Quickstart](docs/quickstart.rst) · [physics](docs/theory.rst) ·
+[geometry](docs/geometry.rst) · [numerics](docs/numerics.rst) ·
+[figure recipes](docs/manuscript_figures.rst) · [testing](docs/testing.rst) ·
+[full documentation](https://gkx.readthedocs.io)
 
 ```bash
 pytest
@@ -559,17 +236,8 @@ ruff check .
 python -m sphinx -W -b html docs docs/_build/html
 ```
 
-The package-wide CI coverage gate is at least 95%. Physics, convergence,
-comparison, differentiability, and performance gates are required in addition to
-line coverage.
-
-## Contributing
-
-Bug reports, decks that misbehave and physics questions are all welcome. Start
-with [CONTRIBUTING.md](CONTRIBUTING.md): it covers the environment this code
-needs (jax >= 0.10.1, and the two precision variables the nightly job sets),
-what a change is expected to carry, and how published numbers are gated.
-
-## License
-
+Coverage is only one gate: physics, mathematical identities, convergence,
+derivatives and performance need separate evidence.
+Bug reports and reproducible problem decks are welcome; see
+[CONTRIBUTING.md](CONTRIBUTING.md) for supported dependencies and review rules.
 GKX is distributed under the [MIT License](LICENSE).

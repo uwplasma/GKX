@@ -1,7 +1,7 @@
 Research status
 ===============
 
-Reviewed against main a99dac89 on 2026-09-06.
+Reviewed against main eeb3481c6 (2.2.0) on 2026-09-21.
 The active execution queue is
 `plan.md <https://github.com/uwplasma/GKX/blob/main/plan.md>`_;
 :doc:`research_grade_program` records the technical decisions and sources.
