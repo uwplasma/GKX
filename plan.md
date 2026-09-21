@@ -63,12 +63,22 @@ The stable IDs below replace sequential Q-numbers for new work. Legacy Q1-Q30
 labels are historical only; in particular, the old Q28 and Q30 rows below do
 not name #260 or #264.
 
+**Admission prerequisite for affected physics campaigns:** the explicit
+`damp_ends_rate` implementation already exists; do not reopen that
+implementation step. [#194](https://github.com/uwplasma/GKX/issues/194) still
+owns the deck conversion and regeneration of every affected reference and
+downstream artifact. Complete that migration before VEL-REG or EM-FIELD uses an
+end-damped case for timestep, convergence or physics evidence. This is separate
+from the repaired-build evidence still required for historical 2.0.0 results.
+Unrelated cases and maintenance work need not wait. Any later legacy instruction
+to implement the rate is a historical checkpoint, not current work.
+
 | Order | Stable ID | Next bounded result | Admission / exit gate |
 |---:|---|---|---|
 | 1 | **VEL-REG** | Finish #260, then refine the slowly converging Laguerre branch under explicitly declared regularization and velocity limits. | Residual-qualified eigenpairs, spectra that resolve the retained cutoff, and ledger declarations; no collisionless value is promoted from an unconverged truncation. |
 | 2 | **EM-FIELD** | Follow §3.3: EM0 independent three-field algebra and energy, EM1 waves and limits, EM2 matched ITG–KBM scans, then EM3 nonlinear transport. | Geometry/FLR normalization, field ratios, weighted free-energy exchange and independent reference comparisons; never equate a two-field result with full electromagnetic validation. |
 | 3 | **STOP-CAL** | Calibrate sequential nonlinear stopping on correlated and drifting traces. | Repeated-look false-stop and coverage tests pass on synthetic controls and held-out traces; fixed-window AR(1) coverage alone is insufficient. |
-| 4 | **GEO-TOPO** | State and test the derivative contract for linked geometry topology. | The topology map is fixed or changes fail explicitly; derivatives are checked on each smooth stratum and are not claimed across link-map changes. |
+| 4 | **GEO-TOPO** | State and test the derivative contract for linked geometry topology, including the finite-shear analytic metric path. | The topology map is fixed or changes fail explicitly; each smooth stratum is free of tracer-to-host concretization and has JAX AD/JIT versus finite-difference checks. In particular, finite nonzero `s_hat` must trace through the `SAlphaGeometry` and `SlabGeometry` metric paths; no derivative is claimed across zero-shear or link-map changes. |
 | 5 | **OPT-HOLDOUT** | Evaluate linear, quasilinear and finite-window nonlinear objectives on held-out equilibria and controls. | Training choices are frozen first; held-out accuracy, stationarity, uncertainty and resolution gates are reported separately. Nonlinear campaigns require VEL-REG and STOP-CAL; electromagnetic campaigns additionally require their EM-FIELD prerequisites. |
 | 6 | **PERF-ADJOINT** | Rebase and finish #264's reusable adjoint executable. | Value/gradient identity, cross-geometry reuse with zero steady recompiles, and bounded cold/steady CPU and GPU measurements. |
 | 7 | **PERF-HALF** | Finish #266 and adopt the half-spectrum runtime layout. | Full/half physics and artifact interchange pass in float32/x64; accepted wall time and materialized/peak memory are recorded on CPU and GPU. |
