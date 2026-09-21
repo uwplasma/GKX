@@ -1063,7 +1063,12 @@ recursive = true
 # fewer RHS evaluations only once the CFL controller is on, and the
 # velocity-resolution ladder that shows (12, 24) eleven times closer than
 # (24, 12) at the same Nl*Nm. Target unchanged.
-baseline = 92943
+# 92943 -> 92960: pr3-cm's three refusal thresholds floored at 64 eps of the
+# probe dtype. They were float64 literals, and at GKX's default float32 the
+# round-off alone (~0.6 eps) exceeded two of them, so a z-local operator was
+# refused as not z-local. One helper, one constant and the measurement that
+# sizes it. Target unchanged.
+baseline = 92960
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1360,7 +1365,10 @@ recursive = true
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
-baseline = 92533
+# 92533 -> 92629: the float32 pr3-cm build test. The suite runs at float64, so
+# it builds in a fresh interpreter with x64 off and checks the z-local fixture
+# builds, the collisional one still falls back and the zonal one still refuses.
+baseline = 92629
 target = 35000
 
 [[line_budget_policy.counts]]
