@@ -13,8 +13,9 @@ species; periodic and twist-and-shift domains; and analytic, Miller, and VMEC
 geometry.
 
 The differentiable eigenpair API this path uses ships in SOLVAX 0.12.0, so the
-feature installs from released packages; ``pyproject.toml`` requires that
-version.  GKX CI no longer pins a SOLVAX commit.
+feature installs from released packages. ``pyproject.toml`` requires 0.22.0,
+for an unrelated structured-solve primitive (see :doc:`numerics`), which
+includes it.  GKX CI no longer pins a SOLVAX commit.
 
 The matrix-free storage is ``O(n m)`` for state size ``n`` and subspace size
 ``m``, versus ``O(n^2)`` for dense validation.  A complex128 matrix for the

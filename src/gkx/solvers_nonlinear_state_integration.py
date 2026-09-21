@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import replace
+from functools import partial
 from typing import Any, Callable, NamedTuple
 
 import jax
@@ -39,6 +40,8 @@ from gkx.operators.nonlinear.projection import (
     _make_compressed_real_fft_projector,
     _make_hermitian_projector,
     advance_shearing_coordinates,
+    hermitian_projector_for_signature,
+    hermitian_projector_signature,
 )
 from gkx.operators.nonlinear.rhs import (
     linear_rhs_jit_for_terms_impl,
@@ -314,6 +317,113 @@ def integrate_nonlinear(
     )
 
 
+def _identity_state(state: jnp.ndarray) -> jnp.ndarray:
+    """Use a stable function identity for the compiled window's projector."""
+
+    return state
+
+
+@partial(
+    jax.jit,
+    static_argnames=(
+        "dt",
+        "count",
+        "tail",
+        "method",
+        "term_cfg",
+        "compressed_real_fft",
+        "laguerre_mode",
+        "collision_operator",
+        "checkpoint",
+        "projector_signature",
+    ),
+)
+def _nonlinear_heat_flux_window_total(
+    initial_state: jnp.ndarray,
+    cache: LinearCache,
+    grid: SpectralGrid,
+    params: LinearParams,
+    flux_factor: jnp.ndarray,
+    initial_heat: jnp.ndarray,
+    indices: jnp.ndarray,
+    *,
+    dt: float,
+    count: int,
+    tail: int,
+    method: str,
+    term_cfg: TermConfig,
+    compressed_real_fft: bool,
+    laguerre_mode: str,
+    collision_operator: CollisionOperator | None,
+    checkpoint: bool,
+    projector_signature: tuple[int, bool, int] | None,
+) -> jnp.ndarray:
+    """Compile a reusable heat-flux sum for fixed shapes and static options.
+
+    Arrays are operands, not captured geometry constants. A module-level JIT
+    avoids rebuilding eager scan/cond executables on each objective call and
+    permits reuse through ``value_and_grad``. Projector layout is static and
+    has no derivative; configuration or topology changes may recompile.
+
+    Keep ``total_heat / tail`` outside this graph: fusing the mean into the
+    accumulation changed float32 rounding in the reference comparison.
+    """
+
+    project_state: Callable[[jnp.ndarray], jnp.ndarray] = (
+        _identity_state
+        if projector_signature is None
+        else hermitian_projector_for_signature(projector_signature)
+    )
+
+    def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
+        return nonlinear_rhs_cached(
+            state,
+            cache,
+            params,
+            term_cfg,
+            compressed_real_fft=compressed_real_fft,
+            laguerre_mode=laguerre_mode,
+            collision_operator=collision_operator,
+            differentiable=True,
+        )
+
+    def advance(carry: tuple[jnp.ndarray, jnp.ndarray], index: jnp.ndarray):
+        state, total_heat = carry
+        state = project_state(state)
+        derivative, _ = rhs(state)
+        next_state = advance_explicit_nonlinear_state(
+            state,
+            derivative,
+            jnp.asarray(dt, dtype=jnp.real(state).dtype),
+            method=method,
+            rhs_fn=rhs,
+            project_state=project_state,
+            state_dtype=state.dtype,
+        )
+        _, fields = rhs(next_state)
+        zero = jnp.zeros_like(fields.phi)
+        heat = heat_flux_total(
+            next_state,
+            fields.phi,
+            zero if fields.apar is None else fields.apar,
+            zero if fields.bpar is None else fields.bpar,
+            cache,
+            grid,
+            params,
+            flux_factor,
+        )
+        include = jnp.asarray(index >= count - tail, dtype=heat.dtype)
+        return (next_state, total_heat + include * heat), None
+
+    (_, total_heat), _ = checkpointed_explicit_scan(
+        advance,
+        (jax.lax.stop_gradient(initial_state), initial_heat),
+        indices,
+        checkpoint=checkpoint,
+    )
+    return total_heat
+
+
 def nonlinear_heat_flux_window(
     saturated_state: jnp.ndarray,
     grid: SpectralGrid,
@@ -358,6 +468,11 @@ def nonlinear_heat_flux_window(
     useful design direction; pass ``None`` to silence the check when the knee
     has been remeasured for the case at hand with
     ``tools/campaigns/nonlinear_gradient_window.py``.
+
+    Host-side geometry/layout preparation stays here. The differentiated scan
+    in :func:`_nonlinear_heat_flux_window_total` reuses its executable for
+    matching shapes, topology and static options, with geometry arrays passed
+    as operands. See ``docs/nonlinear_autodiff.rst`` for scope and evidence.
     """
 
     count = int(steps)
@@ -377,64 +492,37 @@ def nonlinear_heat_flux_window(
     geometry = ensure_flux_tube_geometry_data(geom, grid.z)
     cache = build_linear_cache(grid, geometry, params, Nl=Nl, Nm=Nm)
     _volume_factor, flux_factor = fieldline_quadrature_weights(geometry, grid)
-    project_state: Callable[[jnp.ndarray], jnp.ndarray] = (
-        _make_hermitian_projector(np.asarray(grid.ky), int(np.asarray(grid.kx).size))
+    projector_signature = (
+        hermitian_projector_signature(
+            np.asarray(grid.ky), int(np.asarray(grid.kx).size)
+        )
         if compressed_real_fft
-        else lambda state: state
+        else None
     )
-
-    def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
-        return nonlinear_rhs_cached(
-            state,
-            cache,
-            params,
-            term_cfg,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-            collision_operator=collision_operator,
-            differentiable=True,
-        )
-
-    def advance(carry: tuple[jnp.ndarray, jnp.ndarray], index: jnp.ndarray):
-        state, total_heat = carry
-        state = project_state(state)
-        derivative, _ = rhs(state)
-        next_state = advance_explicit_nonlinear_state(
-            state,
-            derivative,
-            jnp.asarray(dt, dtype=jnp.real(state).dtype),
-            method=method,
-            rhs_fn=rhs,
-            project_state=project_state,
-            state_dtype=state.dtype,
-        )
-        _, fields = rhs(next_state)
-        zero = jnp.zeros_like(fields.phi)
-        heat = heat_flux_total(
-            next_state,
-            fields.phi,
-            zero if fields.apar is None else fields.apar,
-            zero if fields.bpar is None else fields.bpar,
-            cache,
-            grid,
-            params,
-            flux_factor,
-        )
-        include = jnp.asarray(index >= count - tail, dtype=heat.dtype)
-        return (next_state, total_heat + include * heat), None
-
     initial_state = jax.lax.stop_gradient(
         mask_supplied_state(jnp.asarray(saturated_state), cache)
     )
     heat_dtype = jnp.result_type(
         jnp.real(initial_state), flux_factor, *jax.tree_util.tree_leaves(params)
     )
-    initial_heat = jnp.zeros((), dtype=heat_dtype)
-    (_, total_heat), _ = checkpointed_explicit_scan(
-        advance,
-        (initial_state, initial_heat),
+    total_heat = _nonlinear_heat_flux_window_total(
+        initial_state,
+        cache,
+        grid,
+        params,
+        flux_factor,
+        jnp.zeros((), dtype=heat_dtype),
         jnp.arange(count),
+        dt=dt,
+        count=count,
+        tail=tail,
+        method=method,
+        term_cfg=term_cfg,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        collision_operator=collision_operator,
         checkpoint=checkpoint,
+        projector_signature=projector_signature,
     )
     return total_heat / tail
 

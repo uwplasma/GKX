@@ -108,7 +108,7 @@ def _compute_damping(
     if v.ndim == 5 and hyper_damp.ndim == 6:
         hyper_damp = hyper_damp[0]
     damping = (1.0 if term_cfg is None else term_cfg.collisions) * collision_damping(
-        cache, params, real_dtype, squeeze_species=(v.ndim == 5)
+        cache, params, real_dtype, squeeze_species=v.ndim == 5
     ) + (1.0 if term_cfg is None else term_cfg.hypercollisions) * hyper_damp
     return damping.astype(real_dtype)
 
@@ -120,7 +120,7 @@ def _advance_imex2(
     term_cfg: TermConfig,
     dt: jnp.ndarray,
 ) -> jnp.ndarray:
-    damping = _compute_damping(v, cache, params)
+    damping = _compute_damping(v, cache, params, term_cfg)
     return _linear_native_step(
         v,
         damping,

@@ -3,7 +3,7 @@ Release Scope and Claim Boundaries
 
 .. warning::
 
-   Review snapshot: GKX 2.2.0, 2026-09-20. The 2.0.0 end-damping regression
+   Review snapshot: GKX 2.3.0, 2026-09-21. The 2.0.0 end-damping regression
    (`issue 192 <https://github.com/uwplasma/GKX/issues/192>`_) is closed by
    `PR 197 <https://github.com/uwplasma/GKX/pull/197>`_, which restores the
    per-step contract and reproduces the recorded artifact bit-identically. That

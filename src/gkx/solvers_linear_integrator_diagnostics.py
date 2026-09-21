@@ -69,16 +69,18 @@ def _linear_damping(
     real_dtype: Any,
     *,
     include_collisions: bool = True,
+    terms: LinearTerms | None = None,
 ) -> jnp.ndarray:
-    hyper_damp = hypercollision_damping(cache, params, real_dtype)
+    terms = LinearTerms() if terms is None else terms
+    hyper_damp = terms.hypercollisions * hypercollision_damping(
+        cache, params, real_dtype
+    )
     if G.ndim == 5 and hyper_damp.ndim == 6:
         hyper_damp = hyper_damp[0]
     damping = hyper_damp
     if include_collisions:
-        # A moment collision operator replaces the built-in diagonal term;
-        # keeping both would apply collisions twice.
-        damping = damping + collision_damping(
-            cache, params, real_dtype, squeeze_species=(G.ndim == 5)
+        damping = damping + terms.collisions * collision_damping(
+            cache, params, real_dtype, squeeze_species=G.ndim == 5
         )
     return damping.astype(real_dtype)
 
@@ -356,6 +358,7 @@ def integrate_linear_diagnostics(
             params,
             real_dtype,
             include_collisions=collision_operator is None,
+            terms=terms_use,
         )
 
         def advance(state: jnp.ndarray, stats: Any) -> tuple[jnp.ndarray, Any]:
