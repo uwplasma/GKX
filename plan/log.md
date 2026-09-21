@@ -18283,14 +18283,21 @@ provides it. GKX retains the measured Hermite-band coupling action, the unrolled
 forward substitution, and the Sherman-Morrison field correction. The unrolled
 substitution is pinned bitwise to `block_thomas_solve_ops` on the same factors.
 
-The recorded A/B matrix in
-`plan/research/scripts/2026-09-20-solvax-block-thomas/out/ab_apply.txt` measures
+The A/B record in
+`plan/research/scripts/2026-09-20-solvax-block-thomas/out/ab_apply.txt` reported
 full-apply relative differences of `6.7e-16` to `9.6e-16`, factor storage
 `1.43x` to `2.61x` smaller over `Nl*Nm=36..768`, and z-block solve ratios
 `0.95x`, `0.85x`, `0.85x`, and `0.80x` versus the superseded factorization.
-The largest full-apply timing is noisy and is not promoted as a wall-time claim.
+That record used JAX 0.9.2, below GKX's supported `jax>=0.10.1` floor. Its
+timings and numerical-identity measurements are therefore withdrawn pending a
+rerun on a supported JAX release; they are retained only as an invalidated
+record, not as performance or correctness evidence.
 
-Ruiz equilibration is negative and is not wired in. On the `(Nz,Nl,Nm) =
+The Ruiz equilibration record does not carry interpreter or library-version
+provenance. Its numerical comparison is unpromoted pending a rerun that records
+a supported runtime, and is not used to justify a solver choice. The
+unimplemented candidate remains unwired. For traceability, the invalidated
+record reported that on the `(Nz,Nl,Nm) =
 (96,4,8)` control, Hermite-line leaves true residual `0.549` after 600
 iterations; magnitude-based row/column equilibration leaves `0.588` and row-only
 equilibration `0.574`. Standalone equilibration improves the unpreconditioned

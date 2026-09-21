@@ -758,7 +758,7 @@ def build_pr3_factors(
         s1=jnp.asarray(s1, dtype=jnp.complex128),
         blocks=blocks_pytree,
     )
-    nbytes = int(sum(int(np.asarray(a).size) * 16 for a in jax.tree.leaves(factors)))
+    nbytes = int(sum(np.asarray(a).nbytes for a in jax.tree.leaves(factors)))
     meta: dict[str, Any] = {
         "block_solve": (
             "block-thomas"

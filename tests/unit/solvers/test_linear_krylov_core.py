@@ -2828,6 +2828,9 @@ def test_pr3_exact_block_solve_equals_the_dense_inverse_and_is_smaller() -> None
         f"block-Thomas and dense applies differ by {relative:.3g}"
     )
     assert exact_meta["factor_bytes"] < dense_meta["factor_bytes"]
+    assert exact_meta["factor_bytes"] == sum(
+        np.asarray(leaf).nbytes for leaf in jax.tree.leaves(exact)
+    )
 
 
 def test_pr3_substitution_matches_solvax_block_thomas_solve_ops() -> None:
@@ -2968,6 +2971,9 @@ def build(**kw):
     except ValueError as exc:
         return None, {"error": str(exc)}
     apply = pr3.build_pr3_apply(v0, cache, params, term_cfg, factors)
+    meta["actual_factor_bytes"] = sum(
+        np.asarray(leaf).nbytes for leaf in jax.tree.leaves(factors)
+    )
     return apply(v0.reshape(-1)), meta
 
 fast, exact = build(block_solve="block-thomas")
@@ -3050,6 +3056,7 @@ def test_pr3_builds_at_float32_and_still_refuses_what_float64_refuses() -> None:
     assert "error" not in exact, exact.get("error")
     assert exact["dtype"] == "complex64"
     assert exact["block_solve"] == "block-thomas"
+    assert exact["factor_bytes"] == exact["actual_factor_bytes"]
     assert 1.0e-8 < exact["locality_defect"] <= exact["locality_tolerance"]
     assert exact["locality_tolerance"] < 1.0e-4
     # The same preconditioner both ways, to float32 accuracy.

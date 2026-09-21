@@ -1364,10 +1364,11 @@ recursive = true
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
-# 92533 -> 92722: the SOLVAX substitution and measured-band tests plus the
+# 92533 -> 92729: the SOLVAX substitution and measured-band tests plus the
 # float32 subprocess gate. The latter admits probe noise, rejects a wider
-# Hermite band, retains the collisional fallback and retains the zonal refusal.
-baseline = 92722
+# Hermite band, retains the collisional fallback and retains the zonal refusal;
+# both precisions also pin reported factor bytes to the arrays' actual storage.
+baseline = 92729
 target = 35000
 
 [[line_budget_policy.counts]]
