@@ -18327,3 +18327,40 @@ the full module and float32 selection also pass in the implementation review.
 This is an instantaneous algebraic exchange gate, not physical free-energy
 identification or nonlinear/heat-flux/source/sink/time-integration validation.
 No runtime changes or new files; shared setup limits test growth to 45 lines.
+## 2026-09-20 — Q31 rebased on 2.2.0, three manifest baselines re-measured
+
+**Why CI was red.** Run 35518660118 had exactly two red jobs out of 40, `repo-hygiene` and
+`ci-required`. The aggregator failed in 3s because `repo-hygiene` had, so there was no
+failing test anywhere in the run. The one real failure was the package architecture
+manifest: `test_python_files: topology count regressed to 81, above baseline 80`.
+
+**Three baselines moved, not one.** The checker stops at the first regression, so fixing the
+topology count only exposed the next gate. Each number below is the value the checker
+reported, set verbatim and re-run until clean, rather than the old number plus a delta:
+
+- `test_python_files` 80 -> 81, for `tests/unit/operators/test_laguerre_sink_contract.py`.
+- `installable_source_python_lines` 92943 -> 93023, for `nu_hyper_m_const` carried end to
+  end plus the startup refusal.
+- `test_python_lines` 92533 -> 92814, for the nine contract cases and the ledger rows.
+
+Each carries its reason in the manifest, as the target-30 and target-45000 policies require.
+
+**Merge of main (2.2.0) was clean** — no conflicts. `plan.md`, `plan/log.md` and
+`tools/package_architecture_manifest.toml` came through identical to `main`, so no
+queue-table row was reverted and no table acquired a second `baseline` key. The dot-precision
+allowlist in `tests/unit/solvers/test_linear_krylov_core.py` is keyed by `file:line` and
+survived the merge unshifted; it was re-run to confirm rather than assumed.
+
+### 2026-09-21 — EM0 physical fluctuation-energy identification
+
+Integrate main `4605d0b49` into #269 and identify its source quadratic with
+particle entropy, electrostatic Boltzmann subtraction and explicit magnetic
+energy using Howes (2006), B19--B20, and GX Appendix A normalization. The
+existing field tests exercise constant B and varying B under the B^-2 cache
+convention; removing either magnetic B^2 factor fails. The added oracle is
+87 lines in the existing test file, with no runtime or new-file changes.
+All 46 field tests pass in x64; the three focused cases pass in f32 and x64,
+with FutureWarning fatal on supported JAX 0.10.2. Strict Sphinx, Ruff and the
+measured architecture gate pass. Zonal/gauge, general multimode weighting,
+nonlinear transfer, flux normalization, sources/sinks and time-integrated
+budgets remain open. This identity does not qualify EM turbulent transport.

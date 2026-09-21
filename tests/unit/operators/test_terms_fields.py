@@ -96,6 +96,49 @@ def _three_field_source_quadratic(G, cache, params, source_args):
     )
 
 
+def _three_field_physical_energy_channels(
+    G, fields, cache, params, zweight, jax_values, iy, ix
+):
+    """Return particle, magnetic, and wrong-B magnetic energy channels."""
+
+    H = build_H(
+        G,
+        cache.Jl,
+        fields.phi,
+        jax_values["tz"],
+        fields.apar,
+        jax_values["vth"],
+        fields.bpar,
+        cache.JlB,
+    )
+    nt = jax_values["density"] * jax_values["temp"]
+    entropy = 0.5 * jnp.sum(
+        zweight[None, None, None, :]
+        * nt[:, None, None, None]
+        * jnp.abs(H[:, :, :, iy, ix]) ** 2
+    )
+    boltzmann = 0.5 * jnp.sum(
+        zweight
+        * jnp.abs(fields.phi[iy, ix]) ** 2
+        * jnp.sum(
+            jax_values["density"] * jax_values["charge"] ** 2 / jax_values["temp"]
+        )
+    )
+
+    def field_energy(field, metric):
+        return jnp.sum(zweight * metric * jnp.abs(field[iy, ix]) ** 2 / params.beta)
+
+    B2 = cache.bmag**2
+    apar_metric = cache.kperp2[iy, ix]
+    return (
+        entropy - boltzmann,
+        field_energy(fields.apar, apar_metric * B2),
+        field_energy(fields.bpar, B2),
+        field_energy(fields.apar, apar_metric),
+        field_energy(fields.bpar, 1.0),
+    )
+
+
 def _assert_three_field_residual(
     out, G, jl, jb, B, k2, beta, charge, density, temp, mass, vth, tol, iy=0, ix=0
 ):
@@ -283,6 +326,25 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
         flat_out.bpar,
         flat_cache.JlB,
     )
+    source_args = (
+        jl_jax,
+        jb_jax,
+        jnp.ones(grid.z.size, dtype=dtype),
+        values,
+        jax_values,
+        iy,
+        ix,
+    )
+    source_energy = _three_field_source_quadratic(
+        G_jax, flat_cache, params, source_args
+    )
+    physical_channels = _three_field_physical_energy_channels(
+        G_jax, flat_out, flat_cache, params, source_args[2], jax_values, iy, ix
+    )
+    physical_energy = sum(physical_channels[:3])
+    np.testing.assert_allclose(
+        np.asarray(source_energy), np.asarray(physical_energy), rtol=tol, atol=tol
+    )
     np.testing.assert_allclose(
         np.asarray(jnp.conj(gradient[:, :, :, iy, ix])),
         np.asarray(nt[:, None, None, None] * H[:, :, :, iy, ix]),
@@ -361,6 +423,8 @@ def test_variable_b_conservative_linear_weighted_exchange_converges():
     total_defects = []
     drift_defects = {"curvature": [], "gradb": []}
     drift_mutations = []
+    energy_errors = []
+    energy_mutations = []
     conservative_terms = TermConfig(
         collisions=0.0,
         hypercollisions=0.0,
@@ -438,6 +502,27 @@ def test_variable_b_conservative_linear_weighted_exchange_converges():
             rtol=tol,
             atol=tol,
         )
+        source_energy = _three_field_source_quadratic(
+            G_jax,
+            cache,
+            params,
+            (jl_jax, jb_jax, independent_vol, values, jax_values, iy, ix),
+        )
+        physical_channels = _three_field_physical_energy_channels(
+            G_jax, fields, cache, params, independent_vol, jax_values, iy, ix
+        )
+        physical_energy = sum(physical_channels[:3])
+        energy_scale = jnp.abs(physical_energy)
+        energy_errors.append(
+            float(jnp.abs(source_energy - physical_energy) / energy_scale)
+        )
+        for channel, wrong_channel in zip(
+            physical_channels[1:3], physical_channels[3:], strict=True
+        ):
+            wrong_energy = physical_energy - channel + wrong_channel
+            energy_mutations.append(
+                float(jnp.abs(source_energy - wrong_energy) / jnp.abs(channel))
+            )
 
         streaming = linked_streaming_contribution(
             G_jax,
@@ -512,6 +597,8 @@ def test_variable_b_conservative_linear_weighted_exchange_converges():
     assert (
         max(rate for rates in drift_defects.values() for rate in rates) < resolved_tol
     )
+    assert max(energy_errors) < resolved_tol
+    assert min(energy_mutations) > 10 * tol
     assert min(rate for pair in isolated_rates for rate in pair) > 10 * tol
     assert min(drift_mutations) > 10 * tol
     assert min(wrong_weights[-2:]) > 10 * tol

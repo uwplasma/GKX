@@ -145,6 +145,7 @@ class LinearParams:
     p_hyper: float = 4.0
     nu_hyper_l: float = 0.0
     nu_hyper_m: float = 1.0
+    nu_hyper_m_const: float | None = None
     nu_hyper_lm: float = 0.0
     p_hyper_l: float = 6.0
     p_hyper_m: float = 20.0
@@ -163,6 +164,23 @@ class LinearParams:
     ampere_g0_scale: float = 0.5
     bpar_beta_scale: float = 0.5
     damp_ends_rate: float | jnp.ndarray | None = None
+
+    def const_branch_nu_hyper_m(self):
+        """Return the Hermite hypercollision rate the *constant* branch uses.
+
+        ``nu_hyper_m`` drives both hypercollision branches, so a run that wants
+        the shipped ``|k_z|`` Hermite model *and* a constant-branch Laguerre
+        sink would otherwise damp Hermite twice.  ``nu_hyper_m_const`` splits
+        the two: ``None`` keeps the historical behaviour (the constant branch
+        reuses ``nu_hyper_m``), and ``0.0`` gives a pure Laguerre sink beside an
+        unchanged ``|k_z|`` branch.  This is the only knob the Laguerre
+        regularization contract (:ref:`plan 0.5 <velocity-regularization>`)
+        needs that the operator could not express.
+        """
+
+        if self.nu_hyper_m_const is None:
+            return self.nu_hyper_m
+        return self.nu_hyper_m_const
 
     def end_damping_strength(self, dt, dtype):
         """Explicit rate overrides legacy A/dt (or A when dt is absent/zero)."""
@@ -199,6 +217,7 @@ class LinearParams:
             self.p_hyper,
             self.nu_hyper_l,
             self.nu_hyper_m,
+            self.nu_hyper_m_const,
             self.nu_hyper_lm,
             self.p_hyper_l,
             self.p_hyper_m,

@@ -70,6 +70,7 @@ class _ScalarParams:
     nu_hyper: jnp.ndarray
     nu_hyper_l: jnp.ndarray
     nu_hyper_m: jnp.ndarray
+    nu_hyper_m_const: jnp.ndarray
     nu_hyper_lm: jnp.ndarray
     hypercollisions_const: jnp.ndarray
     hypercollisions_kz: jnp.ndarray
@@ -272,6 +273,9 @@ def _scalar_params(
         nu_hyper=jnp.asarray(params.nu_hyper, dtype=real_dtype),
         nu_hyper_l=jnp.asarray(params.nu_hyper_l, dtype=real_dtype),
         nu_hyper_m=jnp.asarray(params.nu_hyper_m, dtype=real_dtype),
+        nu_hyper_m_const=jnp.asarray(
+            params.const_branch_nu_hyper_m(), dtype=real_dtype
+        ),
         nu_hyper_lm=jnp.asarray(params.nu_hyper_lm, dtype=real_dtype),
         hypercollisions_const=jnp.asarray(
             params.hypercollisions_const, dtype=real_dtype
@@ -525,6 +529,7 @@ def _shared_linked_streaming_hypercollisions(
             hypercollisions_const=scalars.hypercollisions_const,
             hypercollisions_kz=scalars.hypercollisions_kz,
             dtype=real_dtype,
+            nu_hyper_m_const=scalars.nu_hyper_m_const,
         )
         or _is_static_zero(
             weights.hypercollisions * scalars.hypercollisions_kz, real_dtype
@@ -591,6 +596,7 @@ def _shared_linked_streaming_hypercollisions(
         hypercollisions_const=scalars.hypercollisions_const,
         weight=weights.hypercollisions,
         hermite_window=hermite_window,
+        nu_hyper_m_const=scalars.nu_hyper_m_const,
     )
     return weights.streaming * transformed[0], local + transformed[1]
 
@@ -637,6 +643,7 @@ def _dissipation_contributions(
             hypercollisions_const=scalars.hypercollisions_const,
             hypercollisions_kz=scalars.hypercollisions_kz,
             weight=weights.hypercollisions,
+            nu_hyper_m_const=scalars.nu_hyper_m_const,
             linked_indices=cache.linked_indices,
             linked_kz=cache.linked_kz,
             linked_inverse_permutation=cache.linked_inverse_permutation,
