@@ -94,7 +94,7 @@ and spatial coefficients do not certify geometry normalization. These are
 algebra gates, not a physical free-energy invariant or EM transport benchmark.
 Zonal/gauge tests remain separate.
 
-The same test checks the constant-:math:`B`, nonzonal source quadratic implied by
+The companion geometry-to-field test checks the constant-:math:`B`, nonzonal quadratic implied by
 `GX (arXiv v3), (12), (16), and (32)--(34)
 <https://arxiv.org/html/2209.06731v3>`_.  For the retained basis it independently
 forms
