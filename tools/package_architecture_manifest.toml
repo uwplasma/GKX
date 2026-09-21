@@ -1101,7 +1101,9 @@ recursive = true
 # round-off alone (~0.6 eps) exceeded two of them, so a z-local operator was
 # refused as not z-local. One helper, one constant and the measurement that
 # sizes it. Target unchanged.
-baseline = 93054
+# 93054 -> 93344: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
+# measured on the merged tree; each PR carries its own justification.
+baseline = 93344
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1416,7 +1418,9 @@ recursive = true
 # builds, the collisional one still falls back and the zonal one still refuses.
 # 92939 -> 92979: one shared mutation adds a resolved second singular component
 # and checks dense fallback plus explicit refusal in float32 and float64.
-baseline = 92979
+# 92979 -> 94057: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
+# measured on the merged tree; each PR carries its own justification.
+baseline = 94057
 target = 35000
 
 [[line_budget_policy.counts]]
