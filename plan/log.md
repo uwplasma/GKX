@@ -18334,13 +18334,25 @@ Q9's harness seeds a random state over the grid's own row count, so a half
 arm starts from a different, non-real state and cannot be compared
 element-wise.
 
-**Outstanding.** (1) Run `run_identity.sh` (`new_full` vs `main`, f32 and
-x64); it must be bitwise. (2) Fix
-`test_imex_diagnostics_route_carries_unconverged_solves_to_the_host_gate`,
-`test_imex_diagnostics_default_return_is_two_elements` and one
-`test_examples.py` case, which build `Ny`-row states. (3) Finish the
-integration suites from `test_examples.py` on. (4) Collect the benchmark-host
-window-split records.
+**Bounded hand-off verification.** On the current branch under JAX/JAXLIB
+0.10.2 on CPU, the full-layout opt-out is bitwise against pinned `main`
+`eeb3481c6` in both f32 and x64 on a reduced 8x8x8, Nl1/Nm2, two-step
+scan-and-window gate: 18 of 18
+arrays in each precision, `max_rel = 0`. This supports the opt-out but does
+not close the authoritative `run_identity.sh` gate: its fixed 64x64x24 RHS/VJP
+case and its full 100-step trajectory matrix in both precisions remain to run.
+The three stale-`Ny` fixture/example failures are fixed, and their containing
+test files now pass 109 tests with 14 optional examples skipped.
+
+**Evidence manifest.** `SHA256SUMS.txt` covers the tracked, reproducible
+scripts and result artifacts in this repository. Raw execution `.log` files
+are gitignored and are not part of that manifest; every listed entry therefore
+verifies from a clean checkout rather than naming a file that was never
+committed.
+
+**Outstanding.** (1) Run `run_identity.sh` (`new_full` vs pinned `main`, f32
+and x64); it must be bitwise. (2) Collect the benchmark-host window-split
+records.
 
 ```
 export MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
