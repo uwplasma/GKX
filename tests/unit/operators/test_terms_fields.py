@@ -233,19 +233,12 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
         flat_out.bpar,
         flat_cache.JlB,
     )
-    direction = (
-        jnp.zeros_like(G_jax)
-        .at[:, :, :, iy, ix]
-        .set((0.4 + 0.3j) * jnp.conj(G_jax[:, :, :, iy, ix]) + 0.02)
+    np.testing.assert_allclose(
+        np.asarray(jnp.conj(gradient[:, :, :, iy, ix])),
+        np.asarray(nt[:, None, None, None] * H[:, :, :, iy, ix]),
+        rtol=tol,
+        atol=tol,
     )
-    actual = jnp.real(jnp.sum(gradient * direction))
-    expected = jnp.real(
-        jnp.sum(
-            jnp.conj(nt[:, None, None, None] * H[:, :, :, iy, ix])
-            * direction[:, :, :, iy, ix]
-        )
-    )
-    assert jnp.allclose(actual, expected, rtol=tol, atol=tol)
 
 
 def _build_case(
