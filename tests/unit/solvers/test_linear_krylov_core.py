@@ -2862,6 +2862,77 @@ def test_pr3_exact_block_solve_equals_the_dense_inverse_and_is_smaller() -> None
         f"block-Thomas and dense applies differ by {relative:.3g}"
     )
     assert exact_meta["factor_bytes"] < dense_meta["factor_bytes"]
+    assert exact_meta["factor_bytes"] == sum(
+        np.asarray(leaf).nbytes for leaf in jax.tree.leaves(exact)
+    )
+
+
+def test_pr3_substitution_matches_solvax_block_thomas_solve_ops() -> None:
+    """GKX's unrolled substitution is SOLVAX's, and has to stay SOLVAX's.
+
+    The Schur elimination is :func:`solvax.block_thomas_factor_ops`; only the
+    substitution is written out in GKX, unrolled over the Laguerre index,
+    because a ``lax.scan`` of this recurrence is 1.6x-1.9x slower than an
+    unrolled one at the ``Nl`` this operator runs (SOLVAX's own stored-band
+    solve unrolls for block counts in the same range). That is a performance
+    reason to keep a transcription, and it is only admissible while the
+    transcription is exact -- so this pins it against
+    :func:`solvax.block_thomas_solve_ops` on the very same factors, where the
+    two agree bitwise rather than to a tolerance.
+    """
+
+    cache, params, v0, term_cfg = _pr3_setup()
+    sigma = jnp.asarray(_PR3_SIGMA, dtype=v0.dtype)
+
+    factors, meta = pr3.build_pr3_factors(
+        v0, cache, params, term_cfg, sigma, block_solve="block-thomas"
+    )
+    assert meta["block_solve"] == "block-thomas"
+    schur = factors.blocks.schur
+    nl, nm = int(v0.shape[0]), int(v0.shape[1])
+
+    rng = np.random.default_rng(3)
+    nblocks = int(schur.blocks.shape[0])
+    rows = jnp.asarray(
+        rng.standard_normal((nblocks, nl * nm))
+        + 1j * rng.standard_normal((nblocks, nl * nm)),
+        dtype=schur.blocks.dtype,
+    )
+
+    ours = pr3._block_thomas_substitute(schur, nl, nm)(rows)
+    theirs = jax.vmap(solvax.block_thomas_solve_ops)(
+        schur, rows.reshape(nblocks, nl, nm)
+    ).reshape(nblocks, nl * nm)
+    assert jnp.array_equal(ours, theirs), (
+        "the unrolled substitution has drifted from "
+        "solvax.block_thomas_solve_ops on identical factors; it is only worth "
+        "keeping while it is the same recurrence"
+    )
+
+
+def test_pr3_measures_the_hermite_band_of_the_laguerre_couplings() -> None:
+    """The banded coupling storage is earned by a measurement, not assumed.
+
+    The mirror term is the only thing that moves the Laguerre index and it
+    moves ``(l, m)`` to ``(l +- 1, m +- 1)``, so the ``l -> l +- 1`` blocks are
+    Hermite-tridiagonal and the elimination stores ``2p+1`` diagonals per
+    coupling instead of an ``Nm x Nm`` block. A term that widened that band
+    would make the band storage larger than the block it replaces, and the
+    build has to notice rather than silently grow the factors.
+    """
+
+    cache, params, v0, term_cfg = _pr3_setup()
+    sigma = jnp.asarray(_PR3_SIGMA, dtype=v0.dtype)
+
+    factors, meta = pr3.build_pr3_factors(v0, cache, params, term_cfg, sigma)
+
+    assert meta["structure"]["coupling_halfwidth"] == 1.0, (
+        "the Laguerre couplings are no longer Hermite-tridiagonal; the banded "
+        "coupling action and its storage claim both rest on that"
+    )
+    lower, upper = factors.blocks.schur.params
+    assert lower.shape[-2] == upper.shape[-2] == 3
+    assert meta["block_solve"] == "block-thomas"
 
 
 def test_pr3_falls_back_to_the_dense_inverse_when_the_structure_breaks() -> None:
@@ -2926,6 +2997,7 @@ def test_pr3_refuses_a_grid_whose_non_streaming_part_is_not_z_local() -> None:
 
 _PR3_FLOAT32_SCRIPT = """
 import json, sys
+import numpy as np
 import jax, jax.numpy as jnp
 assert not jax.config.read("jax_enable_x64")
 import gkx.solvers_linear_precond_pr3 as pr3
@@ -2945,6 +3017,9 @@ def build(**kw):
     except ValueError as exc:
         return None, {"error": str(exc)}
     apply = pr3.build_pr3_apply(v0, cache, params, term_cfg, factors)
+    meta["actual_factor_bytes"] = sum(
+        np.asarray(leaf).nbytes for leaf in jax.tree.leaves(factors)
+    )
     return apply(v0.reshape(-1)), meta
 
 fast, exact = build(block_solve="block-thomas")
@@ -2953,12 +3028,29 @@ exact["dtype"] = str(fast.dtype)
 exact["apply_relative"] = float(
     jnp.linalg.norm(fast - slow) / jnp.linalg.norm(slow)
 )
+# Probe noise outside the physical Hermite tridiagonal must not widen its
+# stored band, while a coupling above the measured float32 floor must. Then
+# force that measured width through the real build to exercise its cost
+# fallback rather than only testing the detector.
+noise = np.zeros((1, 2, 6, 6), dtype=np.complex64)
+rows = np.arange(5)
+noise[..., rows, rows + 1] = 1.0
+noise[..., 0, 5] = 5.0e-7
+roundoff_width = pr3._coupling_halfwidth(noise, noise, 1.0)
+noise[..., 0, 5] = 1.0e-4
+wide_width = pr3._coupling_halfwidth(noise, noise, 1.0)
+measured_width = pr3._coupling_halfwidth
+pr3._coupling_halfwidth = lambda *_args: wide_width
+wide = build()[1]
+pr3._coupling_halfwidth = measured_width
 test_pr3_refuses_a_rank_two_field_part()
 json.dump({
     "exact": exact,
     "auto": build()[1],
     "collisional": build(nu=0.01)[1],
     "zonal": build(Nx=4)[1],
+    "band_widths": [roundoff_width, wide_width],
+    "wide": wide,
 }, sys.stdout, default=str)
 """
 
@@ -3003,11 +3095,18 @@ def test_pr3_builds_at_float32_and_still_refuses_what_float64_refuses() -> None:
     assert "error" not in exact, exact.get("error")
     assert exact["dtype"] == "complex64"
     assert exact["block_solve"] == "block-thomas"
+    assert exact["factor_bytes"] == exact["actual_factor_bytes"]
     assert 1.0e-8 < exact["locality_defect"] <= exact["locality_tolerance"]
     assert exact["locality_tolerance"] < 1.0e-4
     # The same preconditioner both ways, to float32 accuracy.
     assert exact["apply_relative"] < 1.0e-5
-    assert report["auto"]["block_solve"] == "block-thomas"
+    auto = report["auto"]
+    assert auto["block_solve"] == "block-thomas"
+    assert auto["structure"]["coupling_halfwidth"] == 1.0
+
+    assert report["band_widths"] == [1, 5]
+    assert report["wide"]["block_solve"] == "dense"
+    assert "half-width 5 against Nm=6" in report["wide"]["block_solve_reason"]
 
     collisional = report["collisional"]
     assert collisional["block_solve"] == "dense"

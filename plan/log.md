@@ -18736,3 +18736,40 @@ print(sweep((20260913, 20260914), (32, 64, 128, 256, 512)))
 print(sweep((20260923, 20260924), (256,)))
 PY
 ```
+## 2026-09-20 — SOLVAX block-Thomas and float32 structural gates
+
+The `pr3-cm` z-block Schur elimination now belongs to SOLVAX
+`block_thomas_factor_ops`; `solvax>=0.22.0` is the first released floor that
+provides it. GKX retains the measured Hermite-band coupling action, the unrolled
+forward substitution, and the Sherman-Morrison field correction. The unrolled
+substitution is pinned bitwise to `block_thomas_solve_ops` on the same factors.
+
+The supported-runtime A/B record in
+`plan/research/scripts/2026-09-20-solvax-block-thomas/out/ab_apply.txt` uses
+JAX/JAXLIB 0.10.2 and measures full-apply relative differences of `7.1e-16` to
+`8.9e-16`, bitwise agreement with SOLVAX's substitution, and actual factor
+storage `1.43x` to `2.61x` smaller over `Nl*Nm=36..768`. These correctness and
+storage results supersede the original below-floor record, which remains in Git
+history. The host was heavily contended (14 CPUs, load 44 at the start), so the
+record supports no speed claim despite retaining the raw timings.
+
+The Ruiz equilibration record does not carry interpreter or library-version
+provenance. Its numerical comparison is unpromoted pending a rerun that records
+a supported runtime, and is not used to justify a solver choice. The
+unimplemented candidate remains unwired. For traceability, the invalidated
+record reported that on the `(Nz,Nl,Nm) =
+(96,4,8)` control, Hermite-line leaves true residual `0.549` after 600
+iterations; magnitude-based row/column equilibration leaves `0.588` and row-only
+equilibration `0.574`. Standalone equilibration improves the unpreconditioned
+residual only from `0.331` to `0.296`, while `pr3-cm` already reaches `1e-4` in
+252 iterations and changes only to 246 with equilibration. The retained record
+is `plan/research/scripts/2026-09-20-solvax-block-thomas/out/equilibrate.txt`.
+
+The float32 integration floors the locality, rank-one, off-tridiagonal, and
+Hermite-band detection thresholds at `64*eps` of the probe precision. A fresh
+float32 process exercises the real operator at the small structural fixture,
+admits synthetic off-band round-off, and still sends a genuinely wider band to
+the dense fallback. This is bounded evidence, not a size-independent proof:
+on the separate `(96,4,8)` signed control the rank-one ratio is `3.74e-6`
+against the `7.63e-6` floor, only `2.04x` headroom. The structured/dense apply
+there agrees to `4.32e-7`; no eigenpair-convergence claim follows.
