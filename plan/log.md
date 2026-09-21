@@ -18432,3 +18432,20 @@ Repository hygiene also removed six fully merged remote refs with atomic
 expected-SHA leases: `fix/r0-f32-bracket-rank`, four `phase0/*` maintenance
 refs, and `plan/synthesis-20260906`. Each tip is an ancestor of `main`; no open
 PR, occupied worktree, local file or commit history was removed.
+
+### Float32 rank-two refusal follow-up
+
+Independent review of #267 found that its negative controls exercised locality
+and off-band coupling, not the relaxed rank-one threshold. Head `c9d9aeef4`
+adds one shared `2e-5` second-singular-component control: `auto` selects dense
+factors and explicit block-Thomas refuses in x64 and the existing float32
+subprocess. Reusing assertions and shortening redundant prose limits growth to
+40 test lines, with no new files or executable source changes. All 12 PR3 tests
+pass on JAX 0.10.2; an independent two-test rerun passes in 19.97 s.
+
+Merge `d7afa47ba` integrates that exact head into #265 with both ancestries
+preserved. All 14 combined PR3 tests pass with SOLVAX 0.24, and the independent
+two-test rerun passes in 22.57 s. Architecture, formatting and diff checks pass;
+the unchanged SOLVAX 0.22 API gate is retained, not rerun. Both PRs still require
+fresh CI. The 64-epsilon threshold is not size-independent, and any increase
+requires renewed positive and negative controls, not an automatic adjustment.

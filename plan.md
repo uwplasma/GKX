@@ -30,9 +30,10 @@ The implementation PRs below are open against `main` at this checkpoint:
   ([review](https://github.com/uwplasma/GKX/pull/264#issuecomment-5755621929)).
   The PR remains open (**PERF-ADJOINT**).
 - [#265](https://github.com/uwplasma/GKX/pull/265) adopts SOLVAX's block-Thomas
-  factors for `pr3-cm`. Published head `ccf79ec8f` integrates #267 with preserved
+  factors for `pr3-cm`. Published head `d7afa47ba` integrates #267 with preserved
   ancestry and passes the float32, float64, typing and architecture gates; the
-  PR remains a draft and awaits fresh CI. A supported JAX 0.10.2 rerun
+  PR remains a draft and awaits fresh CI. The shared rank-two refusal control
+  passes in both precisions; all 14 PR3 tests pass. A supported JAX 0.10.2 rerun
   replaces the below-floor experiment: apply agreement is below `9e-16`,
   with `1.43x`–`2.61x` smaller factor storage. Contended timings support no
   speed claim; focused SOLVAX 0.22.0 minimum-version tests also pass
@@ -40,22 +41,26 @@ The implementation PRs below are open against `main` at this checkpoint:
   Ruiz remains unpromoted pending versioned evidence (**PERF-SOLVAX**).
 - [#266](https://github.com/uwplasma/GKX/pull/266) makes the `ky >= 0` state
   layout the runtime default and preserves full-layout interchange; it remains
-  a draft (**PERF-HALF**). Head `07fdc5792` preserves source `9c8614b10` with
+  a draft (**PERF-HALF**). Head `769147929` preserves source `9c8614b10` with
   sanitized provenance and a self-contained 45-entry checksum manifest;
   29 absent, untracked log entries were removed. The time-integrator and
   example files pass 109 tests (14 skips). The full-layout opt-out gate
   against pinned main passes all 246 arrays bitwise in f32/x64. Integration
   passes 566 tests, with 15 skips and one default slow-test deselection.
-  The collected window-split campaign reports a CPU half-layout slowdown
-  while both arms repeatedly compile; a controlled combined
-  #264/#266 measurement remains necessary before default adoption
-  ([review](https://github.com/uwplasma/GKX/pull/266#issuecomment-5755717065)).
+  The combined #264/#266 CPU retest removes steady recompilation but retains
+  a 27.9% half-layout slowdown, alongside 15.3% lower whole-process peak RSS.
+  Values and `tprim` gradients match bitwise. This six-step seeded workload on
+  a shared host does not establish saturated-run or GPU performance; default
+  adoption remains blocked
+  ([review](https://github.com/uwplasma/GKX/pull/266#issuecomment-5755930872)).
 - [#267](https://github.com/uwplasma/GKX/pull/267) floors `pr3-cm` structure
   tolerances at float32 round-off without hiding measured nonlocal couplings
   (**PERF-PR3-F32**). A larger shipped-Cyclone control records rank-one ratio
   `3.74e-6` against the `7.63e-6` floor: only `2.04x` headroom. That bounded
   result is documented in the public review; it is not a size-independent
-  tolerance proof or an eigenpair-convergence claim.
+  tolerance proof or an eigenpair-convergence claim. Head `c9d9aeef4` adds a
+  shared rank-two control at ratio `2e-5`: auto falls back to dense and explicit
+  block-Thomas refuses in both precisions. All 12 PR3 tests pass; CI is pending.
 
 - [#269](https://github.com/uwplasma/GKX/pull/269), head `f4fda382f`, repairs a
   vacuous FLR guard and adds independent geometry-to-field residuals plus
