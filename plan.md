@@ -18,16 +18,17 @@ Five PRs are open against `main` at this checkpoint:
   sanitized reproduction metadata, and closed higher-level sink-disable paths
   in `cee4bf3f6`; 132 tests pass, one skips, and fresh CI remains required.
 - [#264](https://github.com/uwplasma/GKX/pull/264) makes the finite-window
-  adjoint compile reusable across calls and geometries. Remote head `57dac7fce`
-  contains a merge of current `main`; that records branch ancestry, not a merge
-  of the PR itself. Nineteen focused window tests and the local architecture,
-  checksum and diff gates pass; fresh CI is pending on this head
+  adjoint compile reusable across calls and geometries. Remote head `89217e2e3`
+  adds only formatting atop reviewed head `57dac7fce`, whose merge of current
+  `main` records branch ancestry, not a merge of the PR itself. Nineteen focused
+  window tests and the local architecture, checksum and diff gates pass; fresh
+  CI is pending on the format-only head
   ([review](https://github.com/uwplasma/GKX/pull/264#issuecomment-5755283451)).
   The PR remains open (**PERF-ADJOINT**).
 - [#265](https://github.com/uwplasma/GKX/pull/265) adopts SOLVAX's block-Thomas
-  factors for `pr3-cm`. Local merge `f8d20c6c1` integrates #267 with preserved
-  ancestry and passes the float32, float64, typing and architecture gates; it
-  is not published, and the remote PR remains the older draft. Its recorded
+  factors for `pr3-cm`. Published head `c660519ed` integrates #267 with preserved
+  ancestry and passes the float32, float64, typing and architecture gates; the
+  PR remains a draft and awaits fresh CI. Its recorded
   timing/factor experiment used JAX 0.9.2, below GKX's dependency floor, so
   those claims require a supported-environment rerun or withdrawal before
   review (**PERF-SOLVAX**).
@@ -46,8 +47,8 @@ Five PRs are open against `main` at this checkpoint:
   tolerance proof or an eigenpair-convergence claim.
 
 At this snapshot all five PRs remain open. CI is running on refreshed heads;
-#265/#266 remain drafts, #265's verified local integration is not published,
-and all five await current CI. None is treated as merged evidence.
+#265/#266 remain drafts, and all five await current CI. None is treated as
+merged evidence.
 
 The stable IDs below replace sequential Q-numbers for new work. Legacy Q1-Q30
 labels are historical only; in particular, the old Q28 and Q30 rows below do
