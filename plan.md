@@ -43,7 +43,8 @@ Integration and open implementation PRs at this checkpoint:
   Ruiz remains unpromoted pending versioned evidence (**PERF-SOLVAX**).
 - [#266](https://github.com/uwplasma/GKX/pull/266) makes the `ky >= 0` state
   layout the runtime default and preserves full-layout interchange; it remains
-  a draft (**PERF-HALF**). Head `769147929` preserves source `9c8614b10` with
+  a draft (**PERF-HALF**). Head `32fc4452d` integrates main; its prior head
+  `759f2aac6` preserves source `9c8614b10` with
   sanitized provenance and a self-contained 45-entry checksum manifest;
   29 absent, untracked log entries were removed. The time-integrator and
   example files pass 109 tests (14 skips). The full-layout opt-out gate
@@ -53,7 +54,11 @@ Integration and open implementation PRs at this checkpoint:
   a 27.9% half-layout slowdown, alongside 15.3% lower whole-process peak RSS.
   Values and `tprim` gradients match bitwise. This six-step seeded workload on
   a shared host does not establish saturated-run or GPU performance; default
-  adoption remains blocked
+  adoption remains blocked. The previous head failed wide coverage shard 3:
+  its sheared-status fixture hard-coded a full ky axis on a half-layout grid.
+  `32fc4452d` derives shapes from the grid and tests both supported layout/FFT
+  combinations: six cases pass in each precision, plus 177 release/ledger/sink
+  tests. Main conflicts are resolved; fresh required CI is still pending
   ([review](https://github.com/uwplasma/GKX/pull/266#issuecomment-5755930872)).
 - [#267](https://github.com/uwplasma/GKX/pull/267) floors `pr3-cm` structure
   tolerances at float32 round-off without hiding measured nonlocal couplings
@@ -80,9 +85,9 @@ Integration and open implementation PRs at this checkpoint:
   cross-zero/topology derivatives and other host sampling seams remain outside
   this bounded GEO-TOPO repair.
 
-Except #260, these PRs remain open. CI is running on refreshed heads;
-#265/#266 remain drafts, and all await current CI. None is treated as
-merged evidence.
+Except #260, these PRs remain open. #265/#266 remain drafts;
+required checks across the open PRs remain
+incomplete. None is treated as merged evidence.
 
 The stable IDs below replace sequential Q-numbers for new work. Legacy Q1-Q30
 labels are historical only; in particular, the old Q28 and Q30 rows below do
@@ -111,11 +116,18 @@ rerun the ladder before expanding the matrix. Preserve pre-repair results
 The permanent eleven-mode scan is
 preserved; this single-mode pilot does not close #194 or velocity convergence.
 
+[PR #273](https://github.com/uwplasma/GKX/pull/273), `2505c8273`, repairs
+diagonal `imex2` with ARS(2,2,2) and honors damping term weights in cached,
+diagnostic and Krylov routes. It passes 284 affected x64 and 13 focused f32
+tests on main `4605d0b49`, with 16 additional source lines and no new files.
+Review and complete CI, then rerun #272's ladder before regenerating references.
+The scalar/order tests do not themselves certify the gyrokinetic benchmark.
+
 | Order | Stable ID | Next bounded result | Admission / exit gate |
 |---:|---|---|---|
 | 1 | **VEL-REG** | With #260 merged, refine the slowly converging Laguerre branch after the affected reference/integrator repairs, under explicitly declared regularization and velocity limits. | Residual-qualified eigenpairs, spectra that resolve the retained cutoff, and ledger declarations; no collisionless value is promoted from an unconverged truncation. |
 | 2 | **EM-FIELD** | Follow §3.3: EM0 independent three-field algebra and energy, EM1 waves and limits, EM2 matched ITG–KBM scans, then EM3 nonlinear transport. | Geometry/FLR normalization, field ratios, weighted free-energy exchange and independent reference comparisons; never equate a two-field result with full electromagnetic validation. |
-| 3 | **STOP-CAL** | Calibrate sequential nonlinear stopping on correlated and drifting traces. | Repeated-look false-stop and coverage tests pass on synthetic controls and held-out traces; fixed-window AR(1) coverage alone is insufficient. |
+| 3 | **STOP-CAL** | Qualify long-run variance estimators on fixed-cadence bins before any further stopping-floor calibration. | Analytic finite-window Gaussian controls and preregistered intermittent/physical traces pass coverage with finite-ensemble uncertainty; only then repeat the drift/power and stopped-time gates. |
 | 4 | **GEO-TOPO** | State and test the derivative contract for linked geometry topology, including the finite-shear analytic metric path. | The topology map is fixed or changes fail explicitly; each smooth stratum is free of tracer-to-host concretization and has JAX AD/JIT versus finite-difference checks. In particular, finite nonzero `s_hat` must trace through the `SAlphaGeometry` and `SlabGeometry` metric paths; no derivative is claimed across zero-shear or link-map changes. |
 | 5 | **OPT-HOLDOUT** | Evaluate linear, quasilinear and finite-window nonlinear objectives on held-out equilibria and controls. | Training choices are frozen first; held-out accuracy, stationarity, uncertainty and resolution gates are reported separately. Nonlinear campaigns require VEL-REG and STOP-CAL; electromagnetic campaigns additionally require their EM-FIELD prerequisites. |
 | 6 | **PERF-ADJOINT** | Rebase and finish #264's reusable adjoint executable. | Value/gradient identity, cross-geometry reuse with zero steady recompiles, and bounded cold/steady CPU and GPU measurements. |
@@ -163,11 +175,16 @@ The subsequent fixed-bin calibration also remains unpromoted: its selected
 256-bin/F20 rule passes the specified drift/power screen but first-stop nominal
 95% interval coverage falls to 108/128 (84.4%) in one audit stratum. The exact
 CPU reproduction is in #271's logbook. Sampling invariance does not establish
-coverage; do not tune larger floors on these spent audit seeds. Preregister a
-fresh post-admission fixed estimation window and compare uncertainty estimators
-on new controls, with finite-ensemble uncertainty reported. Sequential coverage
-requires additional justified assumptions, not a generic confidence-sequence
-citation. Runtime promotion remains withheld.
+coverage; do not tune larger floors on these spent audit seeds. A preregistered
+two-stage follow-up then separated admission from a fixed 2,048-bin estimation
+window. All stationary controls completed and drift admission stayed at most
+2/128, but pooled 95% coverage was 93.51% for Sokal and 91.36% for fixed
+64-bin batch means. On the spent Gaussian controls, exact finite-window
+variance restored about 95% coverage before and after admission conditioning;
+the leading defect is covariance-estimator bias, especially at long correlation.
+The next action is estimator-bias qualification on newly frozen stochastic and
+physical traces, not another floor sweep. Sequential coverage still requires
+additional justified assumptions. Runtime promotion remains withheld.
 
 ### Execution decisions from the September 21 review
 
@@ -1221,8 +1238,11 @@ gates; near crossings track several modes.
 
 ### 4.2 Contribution A — adjoint linear and quasilinear optimization through VMEX in stellarator geometry (under one GPU-day)
 
-No differentiable GK code has been run in stellarator geometry; the only
-gradient-based nonlinear stellarator optimization used SPSA.
+The cited comparison set contains GS2 quasilinear optimization with
+finite-difference Levenberg--Marquardt and GX nonlinear optimization with SPSA
+([survey](plan/research/2026-09-06_differentiable_landscape.md)). It does not
+support a broad claim about every differentiable GK code, so no such novelty
+claim is made here.
 
 1. Reproduce Jorge et al. 2024: precise QH nfp=4, s=0.25, α=0, ten
    k_y ∈ [0.3, 3], f_Q = Σ γ/⟨k⊥²⟩; their Levenberg–Marquardt with finite

@@ -18557,3 +18557,71 @@ that main baseline. Combined release, ledger and sink-contract tests pass
 177/177 with three existing CFL warnings. Occupied worktree branches remain
 preserved; subsequent physics campaigns still require the integrator/reference
 and stopping-coverage gates recorded above.
+
+### 2026-09-21 — STOP-CAL two-stage and variance-oracle diagnostics
+
+These are previously unpublished, spent synthetic controls, not an independent new
+qualification. The preregistration fixed seeds 20261001/20261002, 128 paths per
+stratum, 8,192 bins, Gaussian AR(1) rho 0.60/0.90/0.975 and a rho 0.90
+intermittent control with 2% standardized positive bursts. Admission used 256
+complete bins, resolved Sokal IAT, a 20-IAT span and split-half stationarity,
+checked every 128 or 512 bins. After admission it discarded `ceil(5*tau)` bins
+and estimated over exactly 2,048 bins without peeking. The comparison was Sokal
+SEM versus 32 nonoverlapping 64-bin batch means.
+
+Every stationary stratum admitted and completed 128/128 paths; the largest
+drift admission count was 2/128 (Wilson 95% interval 0.43%--5.52%). Total cost
+ranged from a 2,325-bin median to a 3,726.9-bin worst-stratum 90th percentile.
+Sokal covered 1915/2048 means, 93.51% (Wilson 92.36%--94.49%); batch means
+covered 1871/2048, 91.36% (Wilson 90.06%--92.50%). Neither supports nominal
+95% uncertainty, and no parameter was changed after observing the result.
+
+The exact Gaussian diagnostic reused those same spent paths. For unit-variance
+edge AR(1) values and piecewise-linear bin means,
+
+```
+gamma_0 = (1 + rho)/2
+gamma_k = (1 + rho)^2 rho^(k-1)/4,  k >= 1
+Var(mean_n) = [n gamma_0 + 2 sum_{k=1}^{n-1}(n-k) gamma_k] / n^2.
+```
+
+At `n=2048`, exact variances are 0.001951217651367188, 0.009234309196472168
+and 0.03783023357391354 for rho 0.60, 0.90 and 0.975. Coverage separates as:
+
+| fixed Gaussian window | oracle normal | Sokal | 64-bin batch means |
+|---|---:|---:|---:|
+| predetermined, 768 unique paths | 730/768 | 727/768 | 698/768 |
+| admission-conditioned, 128-bin looks | 731/768 | 725/768 | 709/768 |
+| admission-conditioned, 512-bin looks | 729/768 | 719/768 | 698/768 |
+
+Thus oracle coverage remains about 95% after conditioning. At rho 0.975,
+median estimated-variance/exact-variance ratios are 0.81--0.91 for Sokal and
+0.48--0.50 for batch means; a 64-bin batch spans only 1.6 exact IATs. The next
+STOP-CAL experiment must preregister and qualify the covariance estimator on
+new seeds, intermittent controls and physical traces before revisiting stopping
+floors. This finite AR(1) diagnosis is not a guarantee for deterministic
+turbulence, unknown long memory or a runtime policy.
+
+Reproduction uses public commit `a76b492d3`, CPython 3.11.14, JAX/jaxlib
+0.10.2, NumPy 2.4.6 and SciPy 1.17.1. Independent stratum streams are
+`SeedSequence([seed, round(1000*rho), innovation_code])`; discard 8,192 edge
+draws from `x_t=rho*x_(t-1)+sqrt(1-rho^2)*epsilon_t`, then form bins as
+`(x[:-1] + x[1:])/2`. Gaussian controls use `epsilon=z`; the intermittent
+control uses
+`epsilon=[z+3(B-0.02)/sqrt(0.02*0.98)]/sqrt(10)`, with standard normal `z`
+and `B ~ Bernoulli(0.02)`. Apply the equations and fixed windows above. These
+declarations reproduce the inputs and analytic oracle; the controls remain
+review evidence rather than tracked runtime qualification.
+
+### 2026-09-21 — Integration handoff
+
+PR #273 (`2505c8273`, `fix/imex2-ars222-order`) contains the reviewed diagonal
+ARS repair: 284 x64 and 13 focused f32 tests pass; CI and the regenerated GPU
+ladder remain required. PR #266 (`32fc4452d`) incorporates main and repairs
+the layout-dependent sheared-status fixture, with six cases passing in each
+precision and 177 release/ledger/sink tests passing. Neither PR is merged.
+Six merged remote topic refs were removed after exact-tip ancestry checks:
+`docs/methods-and-features`, `evidence/eigen-laguerre-spectrum`,
+`evidence/inner-solve-cost`, `evidence/laguerre-sink`,
+`evidence/q9-idle-host-timing`, and `fix/status-and-projection-coverage`.
+All commits remain in main; occupied local branches and worktrees are preserved.
