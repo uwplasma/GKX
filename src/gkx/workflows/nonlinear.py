@@ -283,7 +283,7 @@ def _saturation_stop_condition(
         ),
     )
     # The chunked route records one diagnostic sample per step.
-    if int(ctx.steps) < max(int(stop_cfg.min_samples), 8):
+    if not ctx.adaptive_chunked and int(ctx.steps) < max(int(stop_cfg.min_samples), 8):
         return None
 
     def check(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:

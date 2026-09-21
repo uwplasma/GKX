@@ -1406,7 +1406,10 @@ recursive = true
 # which branch a declared rate actually reaches. Measured. Target unchanged.
 # 92814 -> 92843: two cases exercise the physics- and term-level off switches
 # through RuntimeConfig.validate, the owner of cross-section consistency.
-baseline = 92843
+# 92843 -> 92916: production-cadence sequential stopping controls retain the
+# predeclared drifting negative and stationary positive populations, including
+# exact retained-sample and IAT-span boundaries. No fixture or helper is added.
+baseline = 92916
 target = 35000
 
 [[line_budget_policy.counts]]
