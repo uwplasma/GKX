@@ -24,18 +24,21 @@ Integration and open implementation PRs at this checkpoint:
   in `cee4bf3f6`; 132 focused tests pass, one skips. The source contract is
   integrated; the registered physics experiment still has no committed outcome.
 - [#264](https://github.com/uwplasma/GKX/pull/264) makes the finite-window
-  adjoint compile reusable across calls and geometries. Head `d92f3100c`
-  removes 29 net lines of repeated source documentation without changing
-  executable statements. Its ancestor `57dac7fce` merges main into the branch,
-  not the PR itself. Nineteen focused window tests and the architecture,
-  formatting and diff gates pass; fresh CI is pending
+  adjoint compile reusable across calls and geometries. Head `bb63aeb81`
+  integrates main and removes 42 redundant test-docstring lines. All 89 helper
+  tests pass; four cache/geometry/projector cases pass separately in f32/x64.
+  Reuse is bounded by shapes, dtypes, topology and static options; selected-mode
+  linear/reference grids remain outside the nonlinear qualification. Architecture,
+  typing, strict docs and evidence-hash gates pass; fresh CI is pending
   ([review](https://github.com/uwplasma/GKX/pull/264#issuecomment-5755621929)).
   The PR remains open (**PERF-ADJOINT**).
 - [#265](https://github.com/uwplasma/GKX/pull/265) adopts SOLVAX's block-Thomas
-  factors for `pr3-cm`. Published head `d7afa47ba` integrates #267 with preserved
-  ancestry and passes the float32, float64, typing and architecture gates; the
+  factors for `pr3-cm`. Published head `e6492c223` integrates main and #267 with
+  preserved ancestry and passes the supported typing and architecture gates; the
   PR remains a draft and awaits fresh CI. The shared rank-two refusal control
-  passes in both precisions; all 14 PR3 tests pass. A supported JAX 0.10.2 rerun
+  passes in both precisions; 14 PR3 tests pass with an x64 parent and dedicated
+  f32 subprocess controls. Two legacy x64-specific assertions fail under a
+  globally-f32 parent; no whole-suite f32-portability claim is made. A JAX 0.10.2 rerun
   replaces the below-floor experiment: apply agreement is below `9e-16`,
   with `1.43x`–`2.61x` smaller factor storage. Contended timings support no
   speed claim; focused SOLVAX 0.22.0 minimum-version tests also pass
@@ -65,7 +68,7 @@ Integration and open implementation PRs at this checkpoint:
   (**PERF-PR3-F32**). A larger shipped-Cyclone control records rank-one ratio
   `3.74e-6` against the `7.63e-6` floor: only `2.04x` headroom. That bounded
   result is documented in the public review; it is not a size-independent
-  tolerance proof or an eigenpair-convergence claim. Head `c9d9aeef4` adds a
+  tolerance proof or an eigenpair-convergence claim. Head `49e1a91d3` integrates main and adds a
   shared rank-two control at ratio `2e-5`: auto falls back to dense and explicit
   block-Thomas refuses in both precisions. All 12 PR3 tests pass; CI is pending.
 
@@ -107,24 +110,20 @@ from the repaired-build evidence still required for historical 2.0.0 results.
 Unrelated cases and maintenance work need not wait. Any later legacy instruction
 to implement the rate is a historical checkpoint, not current work.
 
-[Draft #272](https://github.com/uwplasma/GKX/pull/272), `2121cbf2e`, migrates
-one Cyclone fixture and records a matched three-timestep GPU ladder. The
-middle-to-fine fitted gamma/omega changes are below 4e-7 relatively, but observed
-orders are 1.108/.896, not a second-order certificate. The audit isolated a
-first-order defect in `imex2` with nonzero diagonal damping: the final stage
-uses backward Euler instead of a second-order split. A scalar exact-solution
-control reproduces it without fitting or transients. Repair and test damping
-flags across cached/diagnostic/Krylov routes, assess stiff-mode behavior, then
-rerun the ladder before expanding the matrix. Preserve pre-repair results
-([audit](https://github.com/uwplasma/GKX/pull/272#issuecomment-5756782223)).
-The permanent eleven-mode scan is
-preserved; this single-mode pilot does not close #194 or velocity convergence.
+[Draft #272](https://github.com/uwplasma/GKX/pull/272), `7d4d3a57c`, now
+integrates #273 and preserves both matched GPU ladders. The original fitted
+orders 1.108/.896 exposed the diagonal damping defect; corrected orders are
+2.033/1.885 for gamma/omega. The fine-rung conditional Richardson differences
+are below 1e-8 relatively, much smaller than half-horizon variation and the
+remaining GX mismatch. Audit estimator/window matching next, then the remaining
+modes and affected decks; the permanent eleven-mode scan is unchanged. This
+single-mode timestep result does not close #194 or velocity convergence.
 
 [PR #273](https://github.com/uwplasma/GKX/pull/273), `2505c8273`, repairs
 diagonal `imex2` with ARS(2,2,2) and honors damping term weights in cached,
 diagnostic and Krylov routes. It passes 284 affected x64 and 13 focused f32
 tests on main `4605d0b49`, with 16 additional source lines and no new files.
-Review and complete CI, then rerun #272's ladder before regenerating references.
+Review and complete CI; #272 records the corrected ladder before broader regeneration.
 The scalar/order tests do not themselves certify the gyrokinetic benchmark.
 
 | Order | Stable ID | Next bounded result | Admission / exit gate |
@@ -152,7 +151,7 @@ This bounded counterexample and its exact reproduction are in the work log.
 Calibrate rejection and stationary stopping power together before changing the
 policy; passing a fixed-window uncertainty test does not close this gate.
 
-[Draft #271](https://github.com/uwplasma/GKX/pull/271), head `8e89ce4a6`, adds
+[Draft #271](https://github.com/uwplasma/GKX/pull/271), head `108d39d79`, adds
 mandatory retained-sample and IAT-span floors, with strengthen-only settings.
 The source shrinks eight lines; 33 window tests and all 180 runtime tests pass.
 CI's stale prepared-run boundary assertion is repaired without changing the
@@ -189,6 +188,12 @@ the leading defect is covariance-estimator bias, especially at long correlation.
 The next action is estimator-bias qualification on newly frozen stochastic and
 physical traces, not another floor sweep. Sequential coverage still requires
 additional justified assumptions. Runtime promotion remains withheld.
+
+Estimator terminology: historical "Sokal" labels here name GKX's first-negative-
+lag FFT autocorrelation integral, not Sokal's self-consistent window algorithm.
+A spent-control lugsail batch-means audit worsened first-stop coverage, so no
+estimator substitution is admitted. Qualify fixed-window uncertainty first;
+an exploratory 90% coverage floor cannot certify a nominal 95% interval.
 
 ### Execution decisions from the September 21 review
 

@@ -18638,3 +18638,35 @@ Twenty additional remote refs whose exact tips are ancestors of main were
 removed atomically with expected-tip leases, excluding every open PR branch.
 All commits remain reachable from main; all occupied local branches/worktrees
 remain untouched. Unique unmerged history was not deleted.
+
+### 2026-09-21 — Corrected ladder and solver integration checkpoint
+
+PR #272 `7d4d3a57c` integrates #273 `2505c8273` and records three successful
+corrected GPU runs: fitted gamma/omega orders 2.033/1.885. Raw provenance,
+runtime/memory and limitations remain in that branch's log. On the existing
+GX output, averaging instantaneous diagnostics over approximately [105,150]
+instead of [75,150] changes gamma from .09306419716077916 to
+.09305750588532043 and omega from .2820201554196946 to .28202102775067356.
+Fine-rung GKX relative differences then become -1.37646e-4 and -4.64606e-7.
+This posthoc window audit explains part, not all, of the mismatch; it does not
+retune acceptance. GX lacks complex mode history, so identical complex-phi
+estimators cannot be reconstructed. No further GPU job remains from this ladder.
+
+Current reviewed integrations: #264 `bb63aeb81` (89 helper tests, four focused
+cases in both precisions, 42 test-prose lines removed); #267 `49e1a91d3`
+(12 supported PR3 tests); draft #265 `e6492c223` (14 supported PR3 tests,
+SOLVAX 0.24); draft #271 `108d39d79` (33 window and 180 runtime tests).
+The PR3 suites include isolated f32 refusal controls; two legacy x64-specific
+assertions fail in a globally-f32 parent and are not represented as portable.
+All integrations preserve ancestry and measured budgets; required CI and
+scientific promotion gates remain open. None of these PRs is merged.
+
+The statistics review tested literature-fixed lugsail batch means on spent
+controls, not fresh qualification: first-stop coverage changed from 1403/1536
+to 1373/1536 on selection seeds and 1434/1536 to 1419/1536 on audit seeds.
+Direct substitution is therefore withheld. Bias reduction at fixed windows
+does not establish stopped-time coverage. See [Vats--Flegal](https://arxiv.org/abs/1809.04541)
+and [Flegal--Jones](https://arxiv.org/abs/0811.1729) for covariance-estimation
+assumptions, not a guarantee for deterministic turbulence. The next experiment
+must freeze its estimator, sampling protocol and nominal-coverage tolerance
+before new seeds; fixed-window qualification precedes runtime-policy changes.
