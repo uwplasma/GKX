@@ -287,7 +287,7 @@ def test_every_linear_row_declares_its_velocity_regularization(row: dict) -> Non
 def test_rows_without_an_ell_space_sink_report_their_limit(row: dict) -> None:
     """A row with no ell-space sink says whether its value is converged.
 
-    #252 and Q31 measured, on the Cyclone s-alpha ITG mode at ky = .55, that the
+    #252 measured, on the Cyclone s-alpha ITG mode at ky = .55, that the
     collisionless Laguerre spectrum carries a cutoff pile-up which relocates to
     0.79-0.85 of every new ``Nl`` rather than resolving. A row whose only
     velocity dissipation is the Hermite ``|k_z|`` branch therefore cannot claim

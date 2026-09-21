@@ -96,7 +96,7 @@
 host = "office"
 gpu = "RTX A4000 (index 0), guarded: no compute process at launch"
 cores = "taskset 20-35 (cores 11 and 18 measured busy at launch; another lane)"
-venv = "/home/rjorge/venvs/gkx-nl"
+venv = "external gkx-nl environment; executable supplied by GKX_PYTHON"
 x64 = true
 branch = "evidence/laguerre-sink"
 base = "origin/main 38d7c4277"

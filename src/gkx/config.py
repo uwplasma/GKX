@@ -870,6 +870,20 @@ class RuntimeConfig:
             errors.append("a case needs at least one kinetic species")
         if bool(self.physics.linear) and bool(self.physics.nonlinear):
             errors.append("physics.linear and physics.nonlinear cannot both be true")
+        laguerre_sink_declared = any(
+            float(getattr(self.collisions, name)) != 0.0
+            for name in ("nu_hyper_l", "nu_hyper_lm")
+        )
+        if laguerre_sink_declared and not bool(self.physics.hypercollisions):
+            errors.append(
+                "a declared Laguerre hypercollision sink requires "
+                "physics.hypercollisions = true"
+            )
+        if laguerre_sink_declared and float(self.terms.hypercollisions) == 0.0:
+            errors.append(
+                "a declared Laguerre hypercollision sink requires a nonzero "
+                "terms.hypercollisions weight"
+            )
         if float(self.time.dt) <= 0.0:
             errors.append("time.dt must be positive")
         if float(self.time.t_max) <= 0.0:

@@ -1093,7 +1093,10 @@ recursive = true
 # carries it is off is now an error rather than a silent no-op -- and the
 # assembly and streaming call sites that pass the rate down. Measured, not
 # assumed. Target unchanged.
-baseline = 93023
+# 93023 -> 93037: RuntimeConfig's existing cross-section validator closes the
+# two higher-level off switches: a declared Laguerre channel is also refused
+# when physics.hypercollisions or the term weight disables the whole operator.
+baseline = 93037
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1401,7 +1404,9 @@ recursive = true
 # survives a LinearParams pytree round trip. Each runs the real
 # hypercollision contribution rather than a stub, because what is pinned is
 # which branch a declared rate actually reaches. Measured. Target unchanged.
-baseline = 92814
+# 92814 -> 92843: two cases exercise the physics- and term-level off switches
+# through RuntimeConfig.validate, the owner of cross-section consistency.
+baseline = 92843
 target = 35000
 
 [[line_budget_policy.counts]]

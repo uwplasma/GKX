@@ -12,7 +12,8 @@ set -u
 RUN_DIR="$1"; shift
 SRC="$RUN_DIR/src_stage"
 DECKS="$SRC/plan/research/scripts/2026-09-20-laguerre-sink"
-VENV=/home/rjorge/venvs/gkx-nl/bin
+: "${GKX_PYTHON:?set GKX_PYTHON to the campaign Python executable}"
+: "${GX_PARITY_REF_DIR:?set GX_PARITY_REF_DIR to the matched reference directory}"
 GPU="${GPU:-0}"
 CORES="${CORES:-0-15}"
 TIMEOUT="${TIMEOUT:-5400}"
@@ -55,11 +56,11 @@ for KEY in "$@"; do
         CUDA_VISIBLE_DEVICES="$GPU" \
         XLA_PYTHON_CLIENT_PREALLOCATE=false \
         JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg \
-        GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs \
+        GX_PARITY_REF_DIR="$GX_PARITY_REF_DIR" \
     taskset -c "$CORES" \
     /usr/bin/time -v -o "$RUN_DIR/results/$KEY.time.txt" \
     timeout --signal=TERM --kill-after=10s "$TIMEOUT" \
-    "$VENV/python" "$DECKS/sink_spectrum.py" \
+    "$GKX_PYTHON" "$DECKS/sink_spectrum.py" \
       --key "$KEY" --nu 0.0 --nu-hyper-l "$HL" --p-hyper-l 6.0 \
       --nu-hyper-m-const 0.0 --nl "$NL" --nm 96 \
       --repo "$SRC" --deck-dir "$DECKS" \

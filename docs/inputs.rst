@@ -534,7 +534,9 @@ Notable runtime-only keys:
   ``nu_hyper_l`` and ``nu_hyper_lm`` act **only** in the constant-coefficient
   branch -- the :math:`|k_z|` kernel carries no Laguerre index -- so a deck
   that declares either while ``hypercollisions_const = 0.0`` (the default) is
-  refused rather than run without the sink it asked for.
+  refused rather than run without the sink it asked for. Case validation also
+  refuses either declaration when ``[physics] hypercollisions = false`` or
+  ``[terms] hypercollisions = 0.0`` disables the whole operator.
 * ``[collisions] nu_hyper_m_const``: the constant branch's Hermite rate.
   Omitted (the default) it reuses ``nu_hyper_m``, which is the historical
   behaviour and damps Hermite in *both* branches when both are on. Set it to

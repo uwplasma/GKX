@@ -24,7 +24,12 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from gkx.config import RuntimeCollisionConfig
+from gkx.config import (
+    RuntimeCollisionConfig,
+    RuntimeConfig,
+    RuntimePhysicsConfig,
+    RuntimeTermsConfig,
+)
 from gkx.operators.linear.dissipation import hypercollisions_contribution
 from gkx.operators.linear.params import LinearParams
 
@@ -106,6 +111,30 @@ def test_declared_laguerre_sink_with_its_branch_is_accepted() -> None:
     assert cfg.nu_hyper_m_const == 0.0
     # The shipped default stays a legal, sink-free configuration.
     assert RuntimeCollisionConfig().nu_hyper_l == 0.0
+
+
+@pytest.mark.parametrize(
+    "disabled_section",
+    [
+        {"physics": RuntimePhysicsConfig(hypercollisions=False)},
+        {"terms": RuntimeTermsConfig(hypercollisions=0.0)},
+    ],
+)
+def test_declared_laguerre_sink_disabled_above_its_branch_is_refused(
+    disabled_section: dict,
+) -> None:
+    """Cross-section validation refuses either higher-level off switch."""
+
+    cfg = RuntimeConfig(
+        collisions=RuntimeCollisionConfig(
+            nu_hyper_l=0.1,
+            hypercollisions_const=1.0,
+            nu_hyper_m_const=0.0,
+        ),
+        **disabled_section,
+    )
+    with pytest.raises(ValueError, match="declared Laguerre hypercollision sink"):
+        cfg.validate()
 
 
 def test_const_branch_hermite_rate_defaults_to_the_shared_one() -> None:

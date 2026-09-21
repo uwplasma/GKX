@@ -1218,8 +1218,10 @@ Because ``nu_hyper_l`` is branch-bound, a deck that set it under the shipped
 defaults used to run with **no** Laguerre sink and no diagnostic.  That is now
 an error: :class:`~gkx.config.RuntimeCollisionConfig` refuses a nonzero
 ``nu_hyper_l`` or ``nu_hyper_lm`` while ``hypercollisions_const = 0.0``, and
-names the two ways to fix it.  A declared regularization either acts or the run
-stops; it is never silently discarded.
+names the two ways to fix it.  Cross-section case validation also refuses those
+channels when ``RuntimePhysicsConfig.hypercollisions`` or
+``RuntimeTermsConfig.hypercollisions`` disables the whole operator.  A declared
+regularization either acts or the run stops; it is never silently discarded.
 
 This matters beyond configuration hygiene.  For the Cyclone s-:math:`\alpha`
 adiabatic-electron ITG mode at :math:`k_y \rho_i = 0.55`, certified eigenpairs
