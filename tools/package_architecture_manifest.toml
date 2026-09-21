@@ -1368,7 +1368,9 @@ recursive = true
 # float32 subprocess gate. The latter admits probe noise, rejects a wider
 # Hermite band, retains the collisional fallback and retains the zonal refusal;
 # both precisions also pin reported factor bytes to the arrays' actual storage.
-baseline = 92729
+# 92729 -> 92768: one shared mutation adds a resolved second singular component
+# and checks dense fallback plus explicit refusal in float32 and float64.
+baseline = 92768
 target = 35000
 
 [[line_budget_policy.counts]]

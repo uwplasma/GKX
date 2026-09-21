@@ -2759,6 +2759,40 @@ def _pr3_setup(*, Nx: int = 1, Nl: int = 6, Nm: int = 6, nu: float = 0.0):
 _PR3_SIGMA = 0.05 - 0.2j
 
 
+def _pr3_build_with_rank_two_field(*, block_solve: str):
+    """Build after adding a 2e-5 second singular component to the field block."""
+
+    cache, params, v0, term_cfg = _pr3_setup()
+    original_probe = pr3._probe_z_local_blocks
+    with_phi = None
+
+    def rank_two_probe(apply, shape, *, batch):
+        nonlocal with_phi
+        blocks = original_probe(apply, shape, batch=batch)
+        if with_phi is None:
+            with_phi = blocks
+        else:
+            field = with_phi - blocks
+            singular = np.linalg.svd(field, compute_uv=False)
+            iblock = int(np.argmax(singular[:, 0]))
+            u, s, vh = np.linalg.svd(field[iblock], full_matrices=False)
+            with_phi[iblock] += 2.0e-5 * s[0] * np.outer(u[:, 1], vh[1])
+        return blocks
+
+    pr3._probe_z_local_blocks = rank_two_probe
+    try:
+        return pr3.build_pr3_factors(
+            v0,
+            cache,
+            params,
+            term_cfg,
+            jnp.asarray(_PR3_SIGMA, dtype=v0.dtype),
+            block_solve=block_solve,
+        )[1]
+    finally:
+        pr3._probe_z_local_blocks = original_probe
+
+
 def test_pr3_z_block_is_l_tridiagonal_plus_a_rank_one_field_part() -> None:
     """The structural property the exact solve is allowed to assume.
 
@@ -2927,6 +2961,16 @@ def test_pr3_falls_back_to_the_dense_inverse_when_the_structure_breaks() -> None
         )
 
 
+def test_pr3_refuses_a_rank_two_field_part() -> None:
+    """The relaxed round-off floor must not admit a resolved second field part."""
+
+    meta = _pr3_build_with_rank_two_field(block_solve="auto")
+    assert meta["block_solve"] == "dense"
+    assert meta["structure"]["rank_one_ratio_max"] == pytest.approx(2.0e-5, rel=0.01)
+    with pytest.raises(ValueError, match="rank-one"):
+        _pr3_build_with_rank_two_field(block_solve="block-thomas")
+
+
 def test_pr3_refuses_a_grid_whose_non_streaming_part_is_not_z_local() -> None:
     """z-locality is a refusal, not a fallback.
 
@@ -2957,7 +3001,9 @@ import numpy as np
 import jax, jax.numpy as jnp
 assert not jax.config.read("jax_enable_x64")
 import gkx.solvers_linear_precond_pr3 as pr3
-from unit.solvers.test_linear_krylov_core import _pr3_setup, _PR3_SIGMA
+from unit.solvers.test_linear_krylov_core import (
+    _pr3_setup, _PR3_SIGMA, test_pr3_refuses_a_rank_two_field_part,
+)
 
 def build(**kw):
     solve = kw.pop("block_solve", "auto")
@@ -2982,7 +3028,6 @@ exact["dtype"] = str(fast.dtype)
 exact["apply_relative"] = float(
     jnp.linalg.norm(fast - slow) / jnp.linalg.norm(slow)
 )
-
 # Probe noise outside the physical Hermite tridiagonal must not widen its
 # stored band, while a coupling above the measured float32 floor must. Then
 # force that measured width through the real build to exercise its cost
@@ -2998,6 +3043,7 @@ measured_width = pr3._coupling_halfwidth
 pr3._coupling_halfwidth = lambda *_args: wide_width
 wide = build()[1]
 pr3._coupling_halfwidth = measured_width
+test_pr3_refuses_a_rank_two_field_part()
 json.dump({
     "exact": exact,
     "auto": build()[1],
@@ -3010,17 +3056,10 @@ json.dump({
 
 
 def test_pr3_builds_at_float32_and_still_refuses_what_float64_refuses() -> None:
-    """The refusal thresholds sit above round-off at the precision that runs.
+    """Float32 admits the exact fixture while retaining all three guards.
 
-    GKX's default precision is float32, and the probes run at the ambient JAX
-    precision. There round-off alone puts the locality defect and the rank-one
-    ratio at ~0.6 eps -- 6.7e-8 and 6.0e-8 on this fixture -- above the float64
-    tolerances of 1e-8, so a genuinely z-local operator used to be refused as
-    "not z-local" and the exact block solve was refused as "not rank one". The
-    guards must still bite on the genuine breaks, which are far above float32
-    round-off: the zonal defect is O(0.1) and the collisional Laguerre coupling
-    1.5e-4 relative. The suite runs at float64, so this runs in a fresh
-    interpreter with x64 off.
+    The suite runs at float64, so a fresh x64-off interpreter checks the apply,
+    off-band and rank-two fallback, explicit rank-two refusal, and nonlocality.
     """
 
     import json

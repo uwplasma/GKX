@@ -138,8 +138,8 @@ _COUPLING_BAND_TOL: float = 1.0e-13
 # These are float64 values. The probes run at the ambient JAX precision, and
 # in float32 round-off alone puts the defect and the rank-one ratio at ~0.6 eps
 # (6.7e-8, 6.0e-8), so each is floored at this many eps of the probe dtype:
-# inert in float64 (1.4e-14), 7.6e-6 in float32 -- 20x below the smallest real
-# break measured (a 1.5e-4 Laguerre coupling at nu = 0.01).
+# inert in float64 (1.4e-14), 7.6e-6 in float32. For the off-band check that is
+# 20x below the measured 1.5e-4 Laguerre coupling at nu = 0.01.
 _ROUNDOFF_EPS_MULTIPLE: float = 64.0
 
 
