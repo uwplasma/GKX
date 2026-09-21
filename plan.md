@@ -1,6 +1,6 @@
 # GKX research plan
 
-## Current status and priority queue (2026-09-20)
+## Current status and priority queue (2026-09-21)
 
 This is the execution authority for the 2.3.0 research-grade milestone. The
 baseline is `origin/main` at `eeb3481c6` (2.2.0). Claim scope remains bounded by
@@ -158,11 +158,13 @@ verification separate from runtime stopping-policy promotion.
   Audit adaptive sampling separately: `saturation_stop_decision` currently
   uses median sample spacing and an unweighted mean. A regular-sample AR(1)
   result does not validate a physical-time average on irregular samples.
-- **References before convergence claims:** finish one #194 migrated Cyclone
-  reference and its three-level timestep ladder before expanding the affected
-  atlas. Keep physical collision and artificial regularization limits distinct.
-- **Electromagnetics remains core:** close varying-B weighted energy exchange
-  after the bounded #269 controls; then follow EM1–EM3, including independent
+- **References before convergence claims:** #272 records the first migrated
+  Cyclone three-level timestep ladder; explain its fitted orders before expanding
+  the affected atlas. Keep physical collision and artificial regularization
+  limits distinct.
+- **Electromagnetics remains core:** #269 tests varying-B weighted
+  streaming/mirror exchange. Close absolute field/channel normalization and
+  the full energy budget next; then follow EM1–EM3, including independent
   GS2/stella anchors and channel-resolved transport. Finite-beta geometry alone
   is not electromagnetic fluctuation validation.
 - **Warm continuation, not a new derivative:** extend the existing accepted-state
@@ -232,11 +234,10 @@ follow-ups are governed by the stable-ID queue above.
 | Q29 | `perf/default-resolution-and-integrator` | the three defaults Q26 (#257) recorded but could not change for want of a measurement — **done**. All three measured on the shipped Cyclone deck and set. (1) `KrylovConfig.power_iters` 200 → **40**, agreeing with the `dominant_eigenpair` signature: the raw power route's residual is 9.501e-01 at 40 applies and 9.467e-01 at 200 against a 1.192e-04 gate, so 5× the applies moves an O(1) residual by 0.4% and the pair is rejected either way; the ladder stalls at ~6e-03 by 5000 applies and never certifies, so the value cannot be chosen for accuracy and is chosen for cost. Nothing shipped takes the route and `certify=True` raises at both values. (2) `TimeConfig` vs `ExplicitTimeConfig`: they differ for one real reason — `dt` is *required* on the library struct and *defaulted* on the deck struct — so the **pairing** is defaulted, not either field. A deck that chose no `dt` now gets the CFL controller and rk4 with it; a deck that chose `dt` keeps rk2 at that fixed step. rk2/rk4 at the defaulted fixed dt=0.1 both raise `FloatingPointError` (7.8× the CFL-stable 0.01281); CFL-controlled rk2/rk3/rk4 give γ .10126899/.10126041/.10125984 against the certified .10128645 (≤2.7e-04) at 15612/13536/**11072** RHS evaluations, so rk4 is **29.1% cheaper**, exactly 4/(2.82·2). `fixed_dt` is *not* flipped globally: fourteen shipped decks and parity fixtures omit it and depend on `True`. (3) `Nl`/`Nm` linear fallback (24,12) → **(12,24)**, the same `Nl*Nm`: certified adaptive eigensolves against the tracked GX golden γ=.09302951 give −4.405% at (24,12) and **+0.400%** at (12,24), eleven times less error at identical cost; (8,24)/(8,32) are worse than both, and (12,32)/(16,32)/(24,24) at 1.33–2× the cost land at −0.421%/−0.198%/+0.703%, so spending more is not bought. No shipped deck moves — every `[run]` table sets `Nl`. Host carried four sibling lanes at 1-minute load 28–141 throughout, so no wall time is quoted as a result: the cost numbers are propagator applies, step and RHS-evaluation counts, and `Nl*Nm` | Q26 | CPU |
 | Q30 | `fix/status-and-projection-coverage` | the two coverage holes #242 (Q15) and #253 (Q23) recorded in their own log entries, closed together because they are one file apart and one policy each — **done, this PR**. *Status*: the IMEX diagnostics carry and both sheared scan forms now fold an `ImplicitSolveStats` leaf, and `integrate_nonlinear_imex_diagnostics`, `integrate_nonlinear_explicit_diagnostics`, `integrate_nonlinear_sheared` and `integrate_nonlinear_sheared_transport` take `return_solve_stats=True`; a starved budget (tol 1e-14, one iteration) is carried as 4 of 4 unconverged solves on every one of them and refused by the *same* `require_converged_implicit_solves`, while a generous budget converges in ≤2 iterations at 2.3e-09 (diagnostics) and 3.1e-09 (sheared). `*.summary.json` now writes the nine `eigen_*`/`implicit_*` keys the in-memory result reports, from the same two flatteners — a krylov run saves `eigen_certified=True` at residual 1.94e-15, an implicit time run saves `implicit_converged=True` at 8.18e-07 — where before **none of the nine keys existed on disk**. Opted-out graphs are byte-identical: IMEX diagnostics scan 9619 instructions `d889cb6645f6e9f4` and sheared IMEX scan 7624 `8ffe71d1738162c1` on both arms, with the explicit sheared control at 7215 `68217ba419168dee`; asking for the stats costs +619 and +1193. *Projection*: `integrate_nonlinear_cached` projects a supplied state once before the scan is built and `integrate_nonlinear` reaches it by delegation. On #253's linked deck the 8-step final state moved **1.060277e+00 relative** and its off-chain rows carried `max\|G\|`=9.999598e-01 before, both exactly 0 after; the run's final heat flux moved 4.102320e-04; one RHS's chain rows move 2.369696e-02 and the effect is quadratic in amplitude (2.372095e-04 at 1e-2). The scan body is untouched — 264 instructions, name-normalized sha256 `d243263d2c8c0131` on **both** arms — while ENTRY goes 46→50 and the module 3910→3988, which is the mask select cloned into the entry's consumer fusions. The periodic deck is byte-identical end to end (module 2793 `f316dcd70d119529`) and the certified eigenpair (γ=.1156212538480758667, residual 8.319672e-07) and explicit-time fit are #247's values to every printed digit. Not covered: `integrate_nonlinear_sharded`, the sheared route's own supplied state (its per-step cache is rebuilt in the shearing basis, so a fixed chain cover is the wrong projector there) and the linear *scan* summary, which has no per-point status to save | Q15, Q23 merged | CPU |
 
-This branch no longer carries a README rewrite. `main`'s README has since taken
-the corrections that mattered (the capability table, the Cite section, the demo's
-resolution, the prepare paragraph, the CONTRIBUTING link), so the conflict was
-resolved in `main`'s favour. Shortening the README remains open as 0.3.1 and is
-separate work.
+The README revision in #268 reduces 583 lines on the pinned main to 243,
+retaining runnable entry points, figures and bounded claims. It is pending
+integration, not another open writing task. Phase dates below are historical
+estimates: the stable-ID dependencies and scientific exit gates govern execution.
 
 An independent agent should be able to resume from this file alone: the current
 status and stable-ID queue select the work, while the referenced phase sections

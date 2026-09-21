@@ -18509,3 +18509,17 @@ These checks establish documentation/contract consistency, not new physics.
 Pending work remains reference migration, physical-time stopping, weighted EM
 energy qualification, velocity convergence and independently validated transport
 optimization. No release or merge is justified by this documentation change.
+
+### 2026-09-21 — reconcile the active queue after independent review
+
+The plan now distinguishes completed #272 timestep measurements from their
+unresolved fitted order, and #269 weighted streaming/mirror exchange from the
+remaining absolute normalization and full energy budget. Removed the stale
+statement that this branch carries no README rewrite. Historical week labels
+are estimates; dependencies and scientific exits control execution.
+
+Verification: all 138 `tests/release/test_release_gates.py` tests pass on the
+supported CPU environment, with three existing CFL warnings. This is a
+documentation consistency result, not new physics certification. The next
+independent tasks are the reference fit/sampling audit, physical-cadence stopping
+calibration, and the compressional-field normalization oracle. No release.
