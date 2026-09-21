@@ -1360,9 +1360,9 @@ recursive = true
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
-# 92533 -> 92664: independent geometry -> FLR -> three-field residual and
-# source-energy-gradient coverage; the shared helper avoids duplicating the oracle.
-baseline = 92664
+# 92533 -> 92692: independent geometry -> FLR -> three-field residual,
+# source-gradient, and periodic-streaming exchange coverage.
+baseline = 92692
 target = 35000
 
 [[line_budget_policy.counts]]

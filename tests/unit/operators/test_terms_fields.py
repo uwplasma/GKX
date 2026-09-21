@@ -17,6 +17,7 @@ from gkx.operators.linear.moments import build_H, quasineutrality_phi
 from gkx.operators.linear.params import LinearParams
 from gkx.parallel.velocity_drive import electrostatic_phi_reference
 from gkx.terms.fields import _solve_fields_impl, solve_fields
+from gkx.terms.linear_terms import linked_streaming_contribution
 
 
 def _analytic_gyro_coefficients(b):
@@ -239,6 +240,33 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
         rtol=tol,
         atol=tol,
     )
+    streamed = linked_streaming_contribution(
+        G_jax,
+        phi=flat_out.phi,
+        apar=flat_out.apar,
+        bpar=flat_out.bpar,
+        Jl=flat_cache.Jl,
+        JlB=flat_cache.JlB,
+        tz=jax_values["tz"],
+        vth=jax_values["vth"],
+        sqrt_p=flat_cache.sqrt_p,
+        sqrt_m=flat_cache.sqrt_m_ladder,
+        kpar_scale=jnp.asarray(params.kpar_scale, dtype),
+        weight=jnp.asarray(1.0, dtype),
+        kz=flat_cache.kz,
+        dz=flat_cache.dz,
+        hermite_closure="truncation",
+    )
+    # Truncation keeps the Hermite ladder symmetric; periodic d/dz is skew-adjoint.
+    # This isolates streaming and makes no curved-geometry or nonlinear claim.
+    exchange = (
+        nt[:, None, None, None]
+        * jnp.conj(H[:, :, :, iy, ix])
+        * streamed[:, :, :, iy, ix]
+    )
+    scale = jnp.sum(jnp.abs(exchange))
+    assert scale > 0.0
+    assert jnp.abs(jnp.real(jnp.sum(exchange))) < tol * scale
 
 
 def _build_case(
