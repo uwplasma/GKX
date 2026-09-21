@@ -14,8 +14,9 @@ Five PRs are open against `main` at this checkpoint:
   velocity-regularization contract and Laguerre-sink experiment. Its historical
   PR title says Q31; this plan calls the lane **VEL-REG**. The registered sink
   campaign has no committed outcome yet, so no conclusion about its tested
-  strengths is justified. Review also found three private-path additions and a higher-level configuration path
-  that can disable the sink without the intended refusal; it is not ready.
+  strengths is justified. Independent review removed the unsupported outcome,
+  sanitized reproduction metadata, and closed higher-level sink-disable paths
+  in `cee4bf3f6`; 132 tests pass, one skips, and fresh CI remains required.
 - [#264](https://github.com/uwplasma/GKX/pull/264) makes the finite-window
   adjoint compile reusable across calls and geometries. It is ready for review
   but currently conflicts with `main`; this plan calls it **PERF-ADJOINT**.
@@ -24,7 +25,8 @@ Five PRs are open against `main` at this checkpoint:
   fails (**PERF-SOLVAX**).
 - [#266](https://github.com/uwplasma/GKX/pull/266) makes the `ky >= 0` state
   layout the runtime default and preserves full-layout interchange; it remains
-  a draft (**PERF-HALF**).
+  a draft (**PERF-HALF**). Review reproduced three stale-shape failures; two
+  substitutions in `65f2d5966` fix them, with full integration gates still due.
 - [#267](https://github.com/uwplasma/GKX/pull/267) floors `pr3-cm` structure
   tolerances at float32 round-off without hiding measured nonlocal couplings
   (**PERF-PR3-F32**). Its local float32 and architecture checks pass, but the

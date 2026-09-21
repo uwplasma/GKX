@@ -18274,3 +18274,48 @@ aggregator failed with no failing test. The shard had been growing with the test
 carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main` was one
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
+
+### 2026-09-20 — independent integration review and current priorities
+
+Baseline `eeb3481c6` (2.2.0); this review does not promote new physics or a release.
+The plan now uses stable semantic IDs for next work, preserves detailed phase
+requirements, and archives the contradictory opening checkpoints. README claims
+now distinguish a truncated model from a validated closure and finite-window,
+fixed-topology sensitivities from unrestricted transport derivatives.
+
+Independent reviews cover #260 and #264–#267. #264 needs conflict resolution;
+#265 needs an architecture-gate repair and semantic integration with #267.
+#260 must remove an unsupported sink-outcome claim, sanitize public reproduction
+metadata, and check higher-level switches that can disable a declared sink.
+No green test substitutes for the missing registered regularization experiment.
+The full EM0 three-field/energy → EM1 wave → EM2 ITG–KBM → EM3 transport ladder
+remains mandatory for the electromagnetic claim.
+
+Verification on the baseline: `python -m pytest -q -o addopts='' tests/release`
+passed 152 tests in 16.53s, with three expected fixed-step CFL warnings.
+CPU JAX 0.10.2, x64 enabled; this is a focused infrastructure check, not a
+new physics campaign. The earlier review additionally passed 56 selected
+ledger, preconditioner, collision and correlated-statistics checks.
+
+Removed 27 merged remote branch references and 40 unoccupied merged local
+references after ancestry/PR checks; expected-SHA remote leases protected
+against concurrent changes. All tips remain reachable from main; no worktree,
+unmerged change or commit history was deleted. Main's authors are human, but
+five historical commits contain AI co-author trailers; no history rewrite was
+performed. New commits contain no such trailers. Public handoffs must use
+repository-relative sources and generic execution examples; private operational
+details remain outside Git.
+
+An independent SOLVAX check reproduced the complex-to-real equilibration cast
+reported in #265. [SOLVAX #116](https://github.com/uwplasma/SOLVAX/pull/116)
+preserves complex phase with a one-line implementation change and four new
+parameterized cases; all ten equilibration tests pass. This does not change
+GKX's negative equilibration experiment or adopt that method.
+
+Follow-up review fixes: #260 at `cee4bf3f6` passes 132 contract/configuration/
+public-type tests with one skip on JAX 0.10.2; the below-floor environment used
+in the first agent check is excluded from numerical evidence. #266 at
+`65f2d5966` replaces two stale full-Ny allocations by `grid.ky.size`; all three
+reproduced failures pass without adding files or lines. Both await updated CI.
+The plan/README revision passes 152 release tests and a strict Sphinx HTML
+build. These checks do not certify the unexecuted regularization campaign.
