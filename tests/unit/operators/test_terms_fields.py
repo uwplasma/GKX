@@ -480,7 +480,7 @@ def test_adiabatic_zonal_field_solve_uses_cached_jacobian() -> None:
     )
     G = jnp.zeros_like(G)
     z = jnp.asarray(cache.bmag)
-    zonal_profile = 0.2 + 0.05j * z
+    zonal_profile = jnp.asarray(0.2 + 0.05j * z, dtype=G.dtype)
     G = G.at[0, 0, 0, 0, 1, :].set(zonal_profile)
 
     out_base = _solve_fields_impl(
@@ -523,7 +523,7 @@ def test_serial_reference_matches_canonical_zonal_value_and_gradient() -> None:
     G = (
         jnp.zeros_like(G)
         .at[0, 0, 0, 0, 1, :]
-        .set(0.2 + 0.05j * jnp.asarray(cache.bmag))
+        .set(jnp.asarray(0.2 + 0.05j * cache.bmag, dtype=G.dtype))
     )
 
     def production_phi(G_in: jnp.ndarray) -> jnp.ndarray:
