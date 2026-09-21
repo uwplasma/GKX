@@ -680,6 +680,9 @@ def test_shearing_coordinate_tangent_matches_finite_difference() -> None:
 
 
 def test_sheared_integrator_zero_shear_identity_and_full_step_remap() -> None:
+    # The comparison is between the compressed bracket and the full-complex one
+    # the sheared integrator uses by default, and the state is Hermitian-
+    # completed, so both sides need the two-sided ky axis.
     grid = build_spectral_grid(
         GridConfig(
             Nx=4,
@@ -688,6 +691,7 @@ def test_sheared_integrator_zero_shear_identity_and_full_step_remap() -> None:
             Lx=2.0 * np.pi,
             Ly=2.0 * np.pi,
             boundary="periodic",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
@@ -811,6 +815,8 @@ def test_sheared_integrator_zero_shear_identity_and_full_step_remap() -> None:
 def test_linked_sheared_integrator_has_exact_zero_shear_trajectory_identity(
     method: str,
 ) -> None:
+    # Both trajectories run with ``compressed_real_fft=False``, and that bracket
+    # is defined on the two-sided ky axis only.
     grid = build_spectral_grid(
         GridConfig(
             Nx=8,
@@ -819,6 +825,7 @@ def test_linked_sheared_integrator_has_exact_zero_shear_trajectory_identity(
             Lx=2.0 * np.pi,
             Ly=2.0 * np.pi,
             boundary="linked",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
@@ -919,6 +926,9 @@ def test_linked_sheared_cache_preserves_chains_and_has_correct_tangent() -> None
 
 
 def _small_sheared_transport_case():
+    # The sheared-transport routes evaluate the bracket with full complex
+    # transforms unless asked otherwise, and the state is built by completing
+    # the Hermitian partners, so this case lives on the two-sided ky axis.
     grid = build_spectral_grid(
         GridConfig(
             Nx=4,
@@ -927,6 +937,7 @@ def _small_sheared_transport_case():
             Lx=2.0 * np.pi,
             Ly=2.0 * np.pi,
             boundary="periodic",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
@@ -1278,6 +1289,9 @@ def test_sheared_runge_kutta_recovers_observed_order_on_physical_rhs(
     minimum_order: float,
 ) -> None:
     jax.clear_caches()
+    # ``integrate_nonlinear_sheared`` brackets with full complex transforms by
+    # default, and the initial state is Hermitian-completed, so the convergence
+    # study is run on the two-sided ky axis.
     grid = build_spectral_grid(
         GridConfig(
             Nx=4,
@@ -1286,6 +1300,7 @@ def test_sheared_runge_kutta_recovers_observed_order_on_physical_rhs(
             Lx=2.0 * np.pi,
             Ly=2.0 * np.pi,
             boundary="periodic",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
@@ -1347,6 +1362,9 @@ def test_sheared_runge_kutta_recovers_observed_order_on_physical_rhs(
 def test_strong_flow_shear_suppresses_linear_itg_amplitude_after_dt_refinement() -> (
     None
 ):
+    # ``integrate_nonlinear_sheared`` brackets with full complex transforms by
+    # default, and the seed is Hermitian-completed, so this deck asks for the
+    # two-sided ky axis.
     grid = build_spectral_grid(
         GridConfig(
             Nx=8,
@@ -1355,6 +1373,7 @@ def test_strong_flow_shear_suppresses_linear_itg_amplitude_after_dt_refinement()
             Lx=2.0 * np.pi / 0.2,
             Ly=2.0 * np.pi / 0.3,
             boundary="periodic",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18)

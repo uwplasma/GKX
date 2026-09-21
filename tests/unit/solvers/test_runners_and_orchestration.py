@@ -150,7 +150,7 @@ def test_integrate_linear_from_config_applies_selected_collision_operator():
         time_cfg = dataclasses.replace(cfg.time, collision_operator=name)
         # Nl * Nm must match the tabulated eight-moment drift-kinetic matrix.
         G = jnp.zeros(
-            (4, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
+            (4, 2, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
         )
         G = G.at[0, 0, 1, 0, :].set(1.0e-3)
         return integrate_linear_from_config(G, grid, geom, params, time_cfg)[0]

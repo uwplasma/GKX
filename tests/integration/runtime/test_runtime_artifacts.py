@@ -89,6 +89,8 @@ from gkx.solvers_time_explicit import (
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.terms.config import FieldState
 from gkx.workflows.runtime.artifacts import (
+    KY_WEIGHTING_PAIR,
+    KY_WEIGHTING_PER_ROW,
     _ensure_parent,
     _artifact_base,
     _condense_kx,
@@ -750,12 +752,51 @@ def test_runtime_artifact_condense_output_helpers_reject_bad_axis_lengths() -> N
     )
     with pytest.raises(ValueError, match="ky-kx diagnostic ky length"):
         _condense_kykx_for_output(
+            np.zeros((4, 7)),
+            full_ny=5,
+            full_nx=7,
+            active_ny=active.shape[0],
+            active_nx=active.shape[1],
+        )
+    # Nyc = 1 + 5 // 2 = 3 is a *valid* length: it is the half-spectrum block.
+    # What it cannot be served without is the family's ky weighting, because a
+    # half-axis row of a Hermitian-weighted reduction carries the conjugate
+    # partner's share and a transport row does not. The refusal names both
+    # conventions rather than guessing one.
+    with pytest.raises(ValueError, match="ky_weighting"):
+        _condense_kykx_for_output(
             np.zeros((3, 7)),
             full_ny=5,
             full_nx=7,
             active_ny=active.shape[0],
             active_nx=active.shape[1],
         )
+    half_block = full[:3]
+    np.testing.assert_allclose(
+        _condense_kykx_for_output(
+            half_block,
+            full_ny=5,
+            full_nx=7,
+            active_ny=active.shape[0],
+            active_nx=active.shape[1],
+            ky_weighting=KY_WEIGHTING_PAIR,
+        ),
+        active,
+    )
+    # The other convention divides the pair weight back out, so a paired row
+    # publishes the per-row value the two-sided axis stores. Ny = 5 is odd, so
+    # only row 0 is self-conjugate and rows 1 and 2 carry the weight 2.
+    np.testing.assert_allclose(
+        _condense_kykx_for_output(
+            half_block,
+            full_ny=5,
+            full_nx=7,
+            active_ny=active.shape[0],
+            active_nx=active.shape[1],
+            ky_weighting=KY_WEIGHTING_PER_ROW,
+        ),
+        active / np.asarray([1.0, 2.0])[:, None],
+    )
     with pytest.raises(ValueError, match="ky-kx diagnostic kx length"):
         _condense_kykx_for_output(
             np.zeros((active.shape[0], 6)),
@@ -1434,7 +1475,11 @@ def test_write_runtime_nonlinear_artifacts_writes_nonlinear_netcdf_bundle(
     )
 
     cfg = RuntimeConfig(
-        grid=GridConfig(Nx=8, Ny=8, Nz=6, Lx=1.0, Ly=1.0),
+        # Every diagnostic above is hand-built with Ny = 8 ky rows, so this
+        # case describes a two-sided run and has to say so; the layout-
+        # invariance of the published bundle is gated separately, on a real
+        # run of both axes, in test_ky_half_spectrum_output.py.
+        grid=GridConfig(Nx=8, Ny=8, Nz=6, Lx=1.0, Ly=1.0, ky_layout="full"),
         time=TimeConfig(compressed_real_fft=True),
     )
 
@@ -2329,7 +2374,9 @@ def test_flux_fac_nonzero_matches_positive_ky_convention() -> None:
     """
 
     cfg = CycloneBaseCase()
-    grid = build_spectral_grid(replace(cfg.grid, Ny=8, Nx=4))
+    # The two-sided axis by name: this test is about how the two-sided rule
+    # treats a row that only the two-sided axis stores with a negative sign.
+    grid = build_spectral_grid(replace(cfg.grid, Ny=8, Nx=4, ky_layout="full"))
     fac = np.asarray(_transport_mode_weight(grid, use_dealias=False))
     ky = np.asarray(grid.ky, dtype=float)
     nyquist = np.argmin(ky)  # the single -Ny/2 entry

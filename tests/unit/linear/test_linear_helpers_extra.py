@@ -662,8 +662,13 @@ def test_sheared_kx_cache_zero_shear_identity_and_tangent(spectral_grid) -> None
             atol=2.0e-7,
         )
 
+    # The ky extent is the grid's stored row count, not Ny: what this test
+    # compares is one cache against another on the same grid, and a ramp of
+    # whatever length that grid holds serves it either way.
+    state_shape = (2, 3, int(grid.ky.size), int(grid.kx.size), int(grid.z.size))
     G = (
-        jnp.arange(2 * 3 * 4 * 4 * 8, dtype=jnp.float32).reshape(2, 3, 4, 4, 8) / 1000.0
+        jnp.arange(int(np.prod(state_shape)), dtype=jnp.float32).reshape(state_shape)
+        / 1000.0
     ).astype(jnp.complex64)
     rhs_base, phi_base = linear_rhs_cached(G, cache, params, use_jit=False)
     rhs_identity, phi_identity = linear_rhs_cached(

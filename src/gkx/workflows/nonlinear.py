@@ -14,6 +14,7 @@ import numpy as np
 from jax.typing import ArrayLike
 
 from gkx.artifacts.io import write_netcdf_restart_state
+from gkx.core_ky_layout import source_ny_full
 from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics.analysis import fit_growth_rate
 from gkx.diagnostics.saturation import (
@@ -849,10 +850,17 @@ def _run_runtime_nonlinear(*args: Any, **kwargs: Any) -> Any:
     return run_runtime_nonlinear(*args, **kwargs)
 
 
-def write_restart_state(path: str | Path, state: np.ndarray) -> Path:
-    """Write a complex restart state in the runtime NetCDF layout."""
+def write_restart_state(
+    path: str | Path, state: np.ndarray, *, ny_full: int | None = None
+) -> Path:
+    """Write a complex restart state in the runtime NetCDF layout.
 
-    return write_netcdf_restart_state(path, state)
+    ``ny_full`` is the length of the two-sided ``ky`` axis, and is what lets
+    the writer keep a half-spectrum state out of the one file size whose
+    meaning is already taken; see :func:`gkx.artifacts.io.write_netcdf_restart_state`.
+    """
+
+    return write_netcdf_restart_state(path, state, ny_full=ny_full)
 
 
 def _embed_linear_seed_on_full_grid(
@@ -911,7 +919,9 @@ def run_secondary_seed(
     if result.state is None:
         raise RuntimeError("Secondary seed run did not return a final state.")
     state_full = _embed_linear_seed_on_full_grid(cfg, result.state, ky_target=ky_target)
-    return write_restart_state(restart_path, state_full)
+    geom = build_flux_tube_geometry(cfg.geometry)
+    grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
+    return write_restart_state(restart_path, state_full, ny_full=source_ny_full(grid))
 
 
 def build_secondary_stage2_config(

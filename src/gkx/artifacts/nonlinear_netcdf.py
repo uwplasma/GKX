@@ -13,7 +13,7 @@ from gkx.artifacts.io import (
     _resolve_restart_path,
     _resolved_species_time,
 )
-from gkx.core_ky_layout import HALF, source_ky_layout, source_ny_full
+from gkx.core_ky_layout import HALF, half_ky_values, source_ky_layout, source_ny_full
 from gkx.artifacts.spectral_layout import (
     KY_WEIGHTING_PAIR,
     KY_WEIGHTING_PER_ROW,
@@ -39,7 +39,6 @@ from gkx.artifacts.spectral_layout import (
 from gkx.core_grid import (
     build_spectral_grid,
     real_fft_ordered_kx,
-    real_fft_unique_ky,
 )
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.geometry import (
@@ -53,16 +52,18 @@ from gkx.runtime import build_runtime_geometry, build_runtime_linear_params
 def _half_ky_values_of(grid: Any) -> np.ndarray:
     """Return the ``ky >= 0`` magnitudes of a grid, from either layout.
 
-    ``real_fft_unique_ky`` takes the two-sided axis and keeps its first
-    ``Nyc`` entries; handed a half axis it would keep the first
-    ``1 + Nyc // 2`` of those and silently publish a shorter ``ky`` axis, so
-    a grid that already stores the half axis is passed through instead.
+    :func:`gkx.core_ky_layout.half_ky_values` takes the two-sided axis and
+    keeps its first ``Nyc`` entries; handed a half axis it would keep the
+    first ``1 + Nyc // 2`` of those and silently publish a shorter ``ky``
+    axis, so a grid that already stores the half axis is passed through
+    instead.  Both branches stay on the host: these values go straight into a
+    NetCDF variable, and a device round trip would buy nothing.
     """
 
     ky = np.asarray(grid.ky)
     if source_ky_layout(grid) == HALF:
         return np.abs(ky)
-    return np.asarray(real_fft_unique_ky(ky))
+    return np.asarray(half_ky_values(ky))
 
 
 def _build_output_grid_and_geometry(cfg: Any) -> tuple[Any, Any]:

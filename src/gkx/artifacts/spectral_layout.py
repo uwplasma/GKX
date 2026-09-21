@@ -311,12 +311,27 @@ def _condense_kx(arr: np.ndarray) -> np.ndarray:
     return _take_axis(arr, _dealiased_kx_indices(np.asarray(arr).shape[-1]), axis=-1)
 
 
-def _condense_ky(arr: np.ndarray) -> np.ndarray:
-    return _take_axis(arr, _dealiased_ky_indices(np.asarray(arr).shape[-1]), axis=-1)
+def _condense_ky(arr: np.ndarray, *, ny_full: int | None = None) -> np.ndarray:
+    """Keep the dealiased ``ky >= 0`` rows of a ``ky``-resolved array.
+
+    ``ny_full`` is the length of the two-sided axis; without it the row count
+    is taken from the array, which is the right answer only when the array is
+    the two-sided axis.
+    """
+
+    rows = int(np.asarray(arr).shape[-1])
+    return _take_axis(
+        arr, _dealiased_ky_indices(rows if ny_full is None else int(ny_full)), axis=-1
+    )
 
 
-def _condense_kykx(arr: np.ndarray) -> np.ndarray:
-    out = _take_axis(arr, _dealiased_ky_indices(np.asarray(arr).shape[-2]), axis=-2)
+def _condense_kykx(arr: np.ndarray, *, ny_full: int | None = None) -> np.ndarray:
+    """Keep the dealiased ``ky >= 0`` / ``kx`` block; see :func:`_condense_ky`."""
+
+    rows = int(np.asarray(arr).shape[-2])
+    out = _take_axis(
+        arr, _dealiased_ky_indices(rows if ny_full is None else int(ny_full)), axis=-2
+    )
     return _take_axis(out, _dealiased_kx_indices(np.asarray(arr).shape[-1]), axis=-1)
 
 
