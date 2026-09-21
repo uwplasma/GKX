@@ -290,6 +290,77 @@ def integrated_autocorrelation_time(signal: np.ndarray, dt: float) -> float:
     return sokal_autocorrelation_time(signal, dt)[0]
 
 
+def _complete_time_bin_means(
+    t: np.ndarray, values: np.ndarray, *, analysis_dt: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return edges and first/second moments of complete physical-time bins.
+
+    The first moment and exact square of the piecewise-linear interpolant are
+    integrated, so inserting collinear samples leaves both unchanged.
+    ``analysis_dt`` is declared independently of the samples and must be no
+    smaller than every observed gap, so denser output cannot manufacture
+    additional analysis samples.  An incomplete final bin is omitted.
+    """
+
+    recorded_time = np.asarray(t)
+    time = np.asarray(recorded_time, dtype=float)
+    signal = np.asarray(values, dtype=float)
+    dt = float(analysis_dt)
+    if time.ndim != 1 or signal.ndim != 1 or time.size != signal.size:
+        raise ValueError("t and values must be one-dimensional arrays of equal length")
+    if (
+        time.size < 2
+        or not np.all(np.isfinite(time))
+        or not np.all(np.isfinite(signal))
+    ):
+        raise ValueError("t and values must contain at least two finite samples")
+    if not np.isfinite(dt) or dt <= 0.0:
+        raise ValueError("analysis_dt must be finite and positive")
+    gaps = np.diff(time)
+    if np.any(gaps <= 0.0):
+        raise ValueError("t must be strictly increasing")
+    time_dtype = (
+        recorded_time.dtype
+        if np.issubdtype(recorded_time.dtype, np.floating)
+        else np.dtype(float)
+    )
+    tolerance = (
+        32.0 * np.finfo(time_dtype).eps * max(1.0, float(np.max(np.abs(time))), dt)
+    )
+    if np.any(gaps > dt + tolerance):
+        raise ValueError("analysis_dt must be at least every observed time gap")
+
+    ratio = (time[-1] - time[0]) / dt
+    n_bins = int(np.floor(ratio + 32.0 * np.finfo(float).eps * max(1.0, ratio)))
+    if n_bins == 0:
+        empty = np.empty(0)
+        return empty, empty.copy(), empty.copy()
+    edges = time[0] + dt * np.arange(n_bins + 1, dtype=float)
+    segment = np.clip(np.searchsorted(time, edges, side="right") - 1, 0, time.size - 2)
+    offset = edges - time[segment]
+    slopes = np.diff(signal) / gaps
+    integral = np.concatenate(
+        ([0.0], np.cumsum(0.5 * (signal[:-1] + signal[1:]) * gaps))
+    )
+    square_integral = np.concatenate(
+        (
+            [0.0],
+            np.cumsum(
+                gaps
+                * (signal[:-1] ** 2 + signal[:-1] * signal[1:] + signal[1:] ** 2)
+                / 3.0
+            ),
+        )
+    )
+    left = signal[segment]
+    at_edge = left + slopes[segment] * offset
+    at_edges = integral[segment] + 0.5 * (left + at_edge) * offset
+    square_at_edges = square_integral[segment] + (
+        offset * (left**2 + left * at_edge + at_edge**2) / 3.0
+    )
+    return edges[1:], np.diff(at_edges) / dt, np.diff(square_at_edges) / dt
+
+
 def _correlated_sample_stats(
     t: np.ndarray, q: np.ndarray
 ) -> tuple[float, float, float]:
@@ -320,63 +391,164 @@ def windowed_nonlinear_metrics(
     result: object,
     *,
     start_fraction: float = 0.5,
+    analysis_dt: float | None = None,
 ) -> NonlinearWindowMetrics:
-    """Return late-window transport and envelope metrics from a nonlinear runtime result."""
+    """Return late-window transport and envelope metrics from a nonlinear run.
+
+    Irregular output requires an explicit ``analysis_dt`` and is averaged in
+    complete physical-time bins.  Without it, uniform output keeps the legacy
+    sample-window behavior.
+    """
 
     diagnostics = getattr(result, "diagnostics", result)
     if diagnostics is None:
         raise ValueError("nonlinear diagnostics are required")
     if not 0.0 <= float(start_fraction) < 1.0:
         raise ValueError("start_fraction must be in [0, 1)")
-    t = np.asarray(getattr(diagnostics, "t", None), dtype=float)
+    recorded_t = np.asarray(getattr(diagnostics, "t", None))
+    t = np.asarray(recorded_t, dtype=float)
     if t.ndim != 1 or t.size == 0:
         raise ValueError("diagnostics.t must be a non-empty one-dimensional array")
-    tail_fraction = max(np.finfo(float).eps, 1.0 - float(start_fraction))
-    mask, tmin, tmax = _tail_window(t, tail_fraction)
-    heat_flux = np.asarray(getattr(diagnostics, "heat_flux_t"), dtype=float)[mask]
-    wphi = np.asarray(getattr(diagnostics, "Wphi_t"), dtype=float)[mask]
-    wg = np.asarray(getattr(diagnostics, "Wg_t"), dtype=float)[mask]
-    heat_flux = heat_flux[np.isfinite(heat_flux)]
-    wphi = wphi[np.isfinite(wphi)]
-    wg = wg[np.isfinite(wg)]
-    if heat_flux.size == 0 or wphi.size == 0 or wg.size == 0:
+    gaps = np.diff(t)
+    if not np.all(np.isfinite(t)) or np.any(gaps <= 0.0):
+        raise ValueError("diagnostics.t must be finite and strictly increasing")
+    time_dtype = (
+        recorded_t.dtype
+        if np.issubdtype(recorded_t.dtype, np.floating)
+        else np.dtype(float)
+    )
+    time_roundoff = 8.0 * np.finfo(time_dtype).eps * max(1.0, float(np.max(np.abs(t))))
+    uniform = gaps.size < 2 or float(np.ptp(gaps)) <= time_roundoff
+    if analysis_dt is None and not uniform:
+        raise ValueError("irregular diagnostics.t requires an explicit analysis_dt")
+    if analysis_dt is not None:
+        dt = float(analysis_dt)
+        if not np.isfinite(dt) or dt <= 0.0:
+            raise ValueError("analysis_dt must be finite and positive")
+        if np.any(gaps > dt + time_roundoff):
+            raise ValueError("analysis_dt must be at least every observed time gap")
+    raw_heat = np.asarray(getattr(diagnostics, "heat_flux_t"), dtype=float)
+    raw_wphi = np.asarray(getattr(diagnostics, "Wphi_t"), dtype=float)
+    raw_wg = np.asarray(getattr(diagnostics, "Wg_t"), dtype=float)
+    raw_series = (raw_heat, raw_wphi, raw_wg)
+    if any(series.ndim != 1 or series.size != t.size for series in raw_series):
         raise ValueError(
-            "windowed diagnostics must contain finite heat/Wphi/Wg samples"
+            "heat_flux_t, Wphi_t, and Wg_t must be one-dimensional and match t"
         )
-
     phi_mode = getattr(diagnostics, "phi_mode_t", None)
     envelope_mean: float | None = None
     envelope_std: float | None = None
     envelope_max: float | None = None
-    if phi_mode is not None:
-        envelope = np.abs(np.asarray(phi_mode)[mask])
-        envelope = envelope[np.isfinite(envelope)]
-        if envelope.size:
-            envelope_mean = float(np.mean(envelope))
-            envelope_std = float(np.std(envelope))
-            envelope_max = float(np.max(envelope))
 
-    tau_ac, n_eff, span = _correlated_sample_stats(t[mask], heat_flux)
-    heat_flux_std = float(np.std(heat_flux))
+    if analysis_dt is None:
+        tail_fraction = max(np.finfo(float).eps, 1.0 - float(start_fraction))
+        mask, tmin, tmax = _tail_window(t, tail_fraction)
+        heat_flux, wphi, wg = raw_heat[mask], raw_wphi[mask], raw_wg[mask]
+        heat_flux = heat_flux[np.isfinite(heat_flux)]
+        wphi = wphi[np.isfinite(wphi)]
+        wg = wg[np.isfinite(wg)]
+        if heat_flux.size == 0 or wphi.size == 0 or wg.size == 0:
+            raise ValueError(
+                "windowed diagnostics must contain finite heat/Wphi/Wg samples"
+            )
+        if phi_mode is not None:
+            envelope = np.abs(np.asarray(phi_mode)[mask])
+            envelope = envelope[np.isfinite(envelope)]
+            if envelope.size:
+                envelope_mean = float(np.mean(envelope))
+                envelope_std = float(np.std(envelope))
+                envelope_max = float(np.max(envelope))
+        tau_ac, n_eff, span = _correlated_sample_stats(t[mask], heat_flux)
+        nsamples = int(np.count_nonzero(mask))
+        heat_mean, heat_std = float(np.mean(heat_flux)), float(np.std(heat_flux))
+        sem_std = heat_std
+        heat_rms = float(np.sqrt(np.mean(np.square(heat_flux))))
+        wphi_mean, wphi_std = float(np.mean(wphi)), float(np.std(wphi))
+        wg_mean, wg_std = float(np.mean(wg)), float(np.std(wg))
+    else:
+        if any(not np.all(np.isfinite(series)) for series in raw_series):
+            raise ValueError("physical-time diagnostics must be finite and match t")
+        cutoff = float(
+            np.asarray(t[0] + float(start_fraction) * (t[-1] - t[0]), dtype=time_dtype)
+        )
+        tail_t = np.asarray(np.concatenate(([cutoff], t[t > cutoff])), dtype=time_dtype)
+
+        def _bin(series: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+            tail_values = np.concatenate(
+                ([np.interp(cutoff, t, series)], series[t > cutoff])
+            )
+            return _complete_time_bin_means(
+                tail_t, tail_values, analysis_dt=float(analysis_dt)
+            )
+
+        def _moments(
+            series: np.ndarray,
+        ) -> tuple[np.ndarray, np.ndarray, float, float, float]:
+            center = float(series[0])
+            edges, centered_bins, centered_square = _bin(series - center)
+            if centered_bins.size < 4:
+                raise ValueError(
+                    "physical-time window requires four complete analysis bins"
+                )
+            centered_mean = float(np.mean(centered_bins))
+            mean = center + centered_mean
+            variance = max(float(np.mean(centered_square)) - centered_mean**2, 0.0)
+            std = float(np.sqrt(variance))
+            return edges, centered_bins + center, mean, std, float(np.hypot(mean, std))
+
+        edges, heat_bins, heat_mean, heat_std, heat_rms = _moments(raw_heat)
+        tmin, tmax = cutoff, float(edges[-1])
+        sem_std = float(np.std(heat_bins))
+        _, _, wphi_mean, wphi_std, _ = _moments(raw_wphi)
+        _, _, wg_mean, wg_std, _ = _moments(raw_wg)
+        if phi_mode is not None:
+            envelope = np.abs(np.asarray(phi_mode))
+            if (
+                envelope.ndim != 1
+                or envelope.size != t.size
+                or not np.all(np.isfinite(envelope))
+            ):
+                raise ValueError("physical-time phi_mode_t must be finite and match t")
+            _, _, envelope_mean, envelope_std, _ = _moments(envelope)
+            inside = (t > cutoff) & (t < tmax)
+            envelope_max = float(
+                np.max(
+                    np.concatenate(
+                        (
+                            [np.interp(cutoff, t, envelope)],
+                            envelope[inside],
+                            [np.interp(tmax, t, envelope)],
+                        )
+                    )
+                )
+            )
+        tau_ac = integrated_autocorrelation_time(heat_bins, dt)
+        n_eff = (
+            min(float(heat_bins.size), heat_bins.size * dt / (2.0 * tau_ac))
+            if tau_ac > 0.0
+            else float(heat_bins.size)
+        )
+        span = float(heat_bins.size * dt)
+        nsamples = int(heat_bins.size)
 
     return NonlinearWindowMetrics(
         tmin=float(tmin if tmin is not None else t[0]),
         tmax=float(tmax if tmax is not None else t[-1]),
-        nsamples=int(np.count_nonzero(mask)),
-        heat_flux_mean=float(np.mean(heat_flux)),
-        heat_flux_std=float(np.std(heat_flux)),
-        heat_flux_rms=float(np.sqrt(np.mean(np.square(heat_flux)))),
-        wphi_mean=float(np.mean(wphi)),
-        wphi_std=float(np.std(wphi)),
-        wg_mean=float(np.mean(wg)),
-        wg_std=float(np.std(wg)),
+        nsamples=nsamples,
+        heat_flux_mean=heat_mean,
+        heat_flux_std=heat_std,
+        heat_flux_rms=heat_rms,
+        wphi_mean=wphi_mean,
+        wphi_std=wphi_std,
+        wg_mean=wg_mean,
+        wg_std=wg_std,
         phi_mode_envelope_mean=envelope_mean,
         phi_mode_envelope_std=envelope_std,
         phi_mode_envelope_max=envelope_max,
         heat_flux_tau_ac=tau_ac,
         window_in_tau_ac=(span / tau_ac if tau_ac > 0.0 else float("inf")),
         heat_flux_n_eff=float(n_eff),
-        heat_flux_stderr=float(heat_flux_std / np.sqrt(max(n_eff, 1.0))),
+        heat_flux_stderr=float(sem_std / np.sqrt(max(n_eff, 1.0))),
     )
 
 

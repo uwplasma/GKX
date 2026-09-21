@@ -5,6 +5,7 @@ import pytest
 
 from gkx.diagnostics.analysis import (
     ModeSelection,
+    _complete_time_bin_means,
     _log_amp_phase,
     density_moment,
     extract_mode,
@@ -22,6 +23,74 @@ from gkx.diagnostics.analysis import (
     select_fit_window_loglinear,
     select_fit_window_stationary,
 )
+
+
+def test_complete_time_bin_means_are_physical_and_representation_invariant() -> None:
+    t = np.array([0.0, 1.0, 1.4, 2.0, 3.0, 4.0, 4.4])
+    signal = 3.0 + 2.0 * t
+    edges, means, _ = _complete_time_bin_means(t, signal, analysis_dt=1.0)
+    np.testing.assert_allclose(edges, [1.0, 2.0, 3.0, 4.0])
+    np.testing.assert_allclose(means, 3.0 + 2.0 * (edges - 0.5))
+
+    dense = np.sort(np.unique(np.concatenate((t, np.linspace(0.0, 4.4, 89)))))
+    dense_edges, dense_means, _ = _complete_time_bin_means(
+        dense, 3.0 + 2.0 * dense, analysis_dt=1.0
+    )
+    np.testing.assert_allclose(dense_edges, edges)
+    np.testing.assert_allclose(dense_means, means)
+
+    piecewise_t = np.array([0.0, 1.0, 1.4, 2.4, 3.0, 4.0])
+    piecewise_y = np.array([0.0, 2.0, -1.0, 4.0, 3.0, 5.0])
+    expected = _complete_time_bin_means(piecewise_t, piecewise_y, analysis_dt=1.0)
+    dense_t = np.sort(
+        np.unique(np.concatenate((piecewise_t, np.linspace(0.0, 4.0, 101))))
+    )
+    actual = _complete_time_bin_means(
+        dense_t, np.interp(dense_t, piecewise_t, piecewise_y), analysis_dt=1.0
+    )
+    for actual_part, expected_part in zip(actual, expected, strict=True):
+        np.testing.assert_allclose(actual_part, expected_part)
+
+    _, triangle_mean, triangle_square = _complete_time_bin_means(
+        np.array([0.0, 1.0, 2.0]), np.array([0.0, 1.0, 0.0]), analysis_dt=2.0
+    )
+    np.testing.assert_allclose(triangle_mean, [0.5])
+    np.testing.assert_allclose(triangle_square, [1.0 / 3.0])
+
+
+def test_complete_time_bin_means_omit_partial_tail_and_refuse_oversampling() -> None:
+    complete_t = np.array([0.0, 0.4, 1.0, 1.6, 2.0])
+    complete_y = complete_t**2
+    expected = _complete_time_bin_means(complete_t, complete_y, analysis_dt=1.0)
+    with_tail = _complete_time_bin_means(
+        np.append(complete_t, 2.4), np.append(complete_y, 2.4**2), analysis_dt=1.0
+    )
+    for actual_part, expected_part in zip(with_tail, expected, strict=True):
+        np.testing.assert_allclose(actual_part, expected_part)
+
+    with pytest.raises(ValueError, match="at least every observed time gap"):
+        _complete_time_bin_means(complete_t, complete_y, analysis_dt=0.5)
+    edges, means, squares = _complete_time_bin_means(
+        np.array([0.0, 0.4]), np.array([1.0, 2.0]), analysis_dt=1.0
+    )
+    assert edges.size == means.size == squares.size == 0
+
+
+@pytest.mark.parametrize(
+    ("t", "values", "dt", "match"),
+    [
+        ([0.0, 1.0], [1.0], 1.0, "equal length"),
+        ([0.0, np.nan], [1.0, 2.0], 1.0, "finite samples"),
+        ([0.0, 1.0], [1.0, np.inf], 1.0, "finite samples"),
+        ([0.0, 0.0], [1.0, 2.0], 1.0, "strictly increasing"),
+        ([0.0, 1.0], [1.0, 2.0], 0.0, "finite and positive"),
+        ([0.0, 1.0], [1.0, 2.0], -1.0, "finite and positive"),
+        ([0.0, 1.0], [1.0, 2.0], np.nan, "finite and positive"),
+    ],
+)
+def test_complete_time_bin_means_validate_inputs(t, values, dt, match) -> None:
+    with pytest.raises(ValueError, match=match):
+        _complete_time_bin_means(np.asarray(t), np.asarray(values), analysis_dt=dt)
 
 
 def test_growth_rate_public_facades_point_to_numerical_owners() -> None:
@@ -891,6 +960,98 @@ def test_window_metrics_report_independent_samples_not_output_count() -> None:
         np.sqrt(metrics.nsamples / metrics.heat_flux_n_eff), rel=1e-6
     )
     assert metrics.window_in_tau_ac > 1.0
+
+
+def test_window_metrics_use_declared_physical_time_bins_for_irregular_output() -> None:
+    from gkx.diagnostics.analysis import windowed_nonlinear_metrics
+
+    uniform_t = np.linspace(0.0, 10.0, 101)
+    dense_t = np.sort(
+        np.unique(np.concatenate((uniform_t, np.linspace(0.0, 1.0, 1001))))
+    )
+
+    class _Diag:
+        t = dense_t
+        heat_flux_t = 10.0 + dense_t
+        Wphi_t = 2.0 * heat_flux_t
+        Wg_t = 3.0 * heat_flux_t
+        phi_mode_t = heat_flux_t.astype(complex)
+
+    with pytest.raises(ValueError, match="requires an explicit analysis_dt"):
+        windowed_nonlinear_metrics(_Diag(), start_fraction=0.5)
+
+    metrics = windowed_nonlinear_metrics(_Diag(), start_fraction=0.5, analysis_dt=0.1)
+    assert metrics.tmin == pytest.approx(5.0)
+    assert metrics.tmax == pytest.approx(10.0)
+    assert metrics.nsamples == 50
+    assert metrics.heat_flux_mean == pytest.approx(17.5)
+    assert metrics.heat_flux_std == pytest.approx(np.sqrt(25.0 / 12.0))
+    assert metrics.heat_flux_rms == pytest.approx(np.sqrt(925.0 / 3.0))
+    assert metrics.wphi_mean == pytest.approx(35.0)
+    assert metrics.wg_mean == pytest.approx(52.5)
+    assert metrics.phi_mode_envelope_mean == pytest.approx(17.5)
+
+    full = windowed_nonlinear_metrics(_Diag(), start_fraction=0.0, analysis_dt=0.1)
+    assert full.heat_flux_mean == pytest.approx(15.0)
+
+    _Diag.t = uniform_t
+    _Diag.heat_flux_t = 10.0 + uniform_t
+    _Diag.Wphi_t = 2.0 * _Diag.heat_flux_t
+    _Diag.Wg_t = 3.0 * _Diag.heat_flux_t
+    _Diag.phi_mode_t = _Diag.heat_flux_t.astype(complex)
+    legacy = windowed_nonlinear_metrics(_Diag(), start_fraction=0.0)
+    assert legacy.heat_flux_mean == pytest.approx(15.0)
+    assert legacy.nsamples == 101
+
+
+def test_window_metrics_preserve_float32_uniform_time_and_centered_moments() -> None:
+    from gkx.diagnostics.analysis import windowed_nonlinear_metrics
+
+    class _Diag:
+        t = np.float32(100.0) + np.arange(21, dtype=np.float32) * np.float32(0.1)
+        heat_flux_t = np.ones(21)
+        Wphi_t = np.ones(21)
+        Wg_t = np.ones(21)
+        phi_mode_t = None
+
+    assert windowed_nonlinear_metrics(_Diag(), start_fraction=0.0).nsamples == 21
+
+    _Diag.t = np.arange(9.0)
+    triangle = np.tile([0.0, 1.0], 4)
+    triangle = np.append(triangle, 0.0)
+    _Diag.heat_flux_t = 1.0e8 + triangle
+    _Diag.Wphi_t = _Diag.heat_flux_t
+    _Diag.Wg_t = _Diag.heat_flux_t
+    metrics = windowed_nonlinear_metrics(_Diag(), start_fraction=0.0, analysis_dt=2.0)
+    assert metrics.heat_flux_mean == pytest.approx(1.0e8 + 0.5)
+    assert metrics.heat_flux_std == pytest.approx(np.sqrt(1.0 / 12.0))
+    assert metrics.heat_flux_rms == pytest.approx(
+        np.hypot(1.0e8 + 0.5, np.sqrt(1.0 / 12.0))
+    )
+    assert metrics.heat_flux_stderr == pytest.approx(0.0, abs=1.0e-12)
+
+
+def test_window_metrics_refuse_unproven_cadence_and_mismatched_series() -> None:
+    from gkx.diagnostics.analysis import windowed_nonlinear_metrics
+
+    class _Diag:
+        t = np.array([0.0, 1.0, 2.00005, 3.00005, 4.0001])
+        heat_flux_t = np.ones(5)
+        Wphi_t = np.ones(5)
+        Wg_t = np.ones(5)
+        phi_mode_t = None
+
+    with pytest.raises(ValueError, match="requires an explicit analysis_dt"):
+        windowed_nonlinear_metrics(_Diag(), start_fraction=0.0)
+    _Diag.heat_flux_t = np.ones(4)
+    with pytest.raises(ValueError, match="match t"):
+        windowed_nonlinear_metrics(_Diag(), start_fraction=0.0, analysis_dt=1.1)
+    _Diag.heat_flux_t = np.ones(5)
+    with pytest.raises(ValueError, match="four complete analysis bins"):
+        windowed_nonlinear_metrics(_Diag(), start_fraction=0.0, analysis_dt=1.1)
+    _Diag.t = np.array([0.0, 1.0, 1.0, 2.0, 3.0])
+    with pytest.raises(ValueError, match="finite and strictly increasing"):
+        windowed_nonlinear_metrics(_Diag(), start_fraction=0.0, analysis_dt=1.0)
 
 
 def _transient_then_exponential(
