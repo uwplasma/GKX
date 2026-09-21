@@ -36,16 +36,16 @@ The implementation PRs below are open against `main` at this checkpoint:
   Ruiz remains unpromoted pending versioned evidence (**PERF-SOLVAX**).
 - [#266](https://github.com/uwplasma/GKX/pull/266) makes the `ky >= 0` state
   layout the runtime default and preserves full-layout interchange; it remains
-  a draft (**PERF-HALF**). Source head `9c8614b10` includes the stale-shape fix,
-  sanitized provenance and a self-contained 44-entry checksum manifest;
+  a draft (**PERF-HALF**). Head `07fdc5792` preserves source `9c8614b10` with
+  sanitized provenance and a self-contained 45-entry checksum manifest;
   29 absent, untracked log entries were removed. The time-integrator and
   example files pass 109 tests (14 skips). The full-layout opt-out gate
   against pinned main passes all 246 arrays bitwise in f32/x64. Integration
   passes 566 tests, with 15 skips and one default slow-test deselection.
-  The recovered window-split campaign reports a CPU half-layout slowdown
-  while both arms repeatedly compile; collection and a controlled combined
-  #264/#266 measurement remain necessary before default adoption
-  ([review](https://github.com/uwplasma/GKX/pull/266#issuecomment-5755283569)).
+  The collected window-split campaign reports a CPU half-layout slowdown
+  while both arms repeatedly compile; a controlled combined
+  #264/#266 measurement remains necessary before default adoption
+  ([review](https://github.com/uwplasma/GKX/pull/266#issuecomment-5755717065)).
 - [#267](https://github.com/uwplasma/GKX/pull/267) floors `pr3-cm` structure
   tolerances at float32 round-off without hiding measured nonlocal couplings
   (**PERF-PR3-F32**). A larger shipped-Cyclone control records rank-one ratio
