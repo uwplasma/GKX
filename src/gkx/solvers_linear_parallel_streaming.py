@@ -341,7 +341,9 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             vth6
             * (
                 l_norm * jnp.asarray(params.nu_hyper_l, dtype=real_dtype) * ratio_l
-                + m_norm * jnp.asarray(params.nu_hyper_m, dtype=real_dtype) * ratio_m
+                + m_norm
+                * jnp.asarray(params.const_branch_nu_hyper_m(), dtype=real_dtype)
+                * ratio_m
             )
             + jnp.asarray(params.nu_hyper_lm, dtype=real_dtype) * ratio_lm
         )

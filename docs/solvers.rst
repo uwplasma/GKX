@@ -399,7 +399,10 @@ The linear operator supports:
 
 * Lenard--Bernstein diagonal damping with rate ``nu``;
 * velocity-space hyper-collisions controlled by ``nu_hyper_l``,
-  ``nu_hyper_m``, ``nu_hyper_lm`` and their exponents; and
+  ``nu_hyper_m``, ``nu_hyper_m_const``, ``nu_hyper_lm`` and their exponents.
+  The Laguerre channels reach the distribution only through the
+  constant-coefficient branch, so they need ``hypercollisions_const``; see
+  :ref:`velocity-regularization`; and
 * smooth field-aligned end damping controlled by ``damp_ends_widthfrac`` and
   ``damp_ends_amp``.
 

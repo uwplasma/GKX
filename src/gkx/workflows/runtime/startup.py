@@ -337,6 +337,11 @@ def build_runtime_linear_params(
     )
     return replace(
         params,
+        nu_hyper_m_const=(
+            None
+            if cfg.collisions.nu_hyper_m_const is None
+            else float(cfg.collisions.nu_hyper_m_const)
+        ),
         nu_hermite=float(cfg.collisions.nu_hermite),
         nu_laguerre=float(cfg.collisions.nu_laguerre),
         damp_ends_amp=float(cfg.collisions.damp_ends_amp),

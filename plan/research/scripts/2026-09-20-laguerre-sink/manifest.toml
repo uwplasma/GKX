@@ -1,0 +1,129 @@
+# Q31 declared Laguerre sink / velocity-space regularization contract
+# (plan §0.5 (iii)-(iv))
+#
+# Registered 2026-09-20 BEFORE any run, as Q3 (#234), Q8 (#238) and Q16 (#252)
+# did. Registered under the row number Q28; four lanes picked that number
+# independently, so the maintainer's allocation moved this row to Q31 (Q28 went
+# to #261) and the number was renamed here after registration. No prediction,
+# deck, strength, rung, method or baseline changed with it. Baselines below are
+# placeholders until the measured numbers replace them; no baseline in this file
+# is a delta.
+#
+# One strength was ADDED after registration and is marked as such below:
+# nu_hyper_l = 0.03, queued once the Nl24 rungs showed the pile-up surviving at
+# 0.01 and gone at 0.1, to bracket the strength at which it is removed. It
+# tests no prediction that the registered three do not already test.
+#
+# Question. §0.5 steps (i) and (ii) are closed and both hand the same question
+# forward. (i) #234: removing the grad-B drift removes the ITG itself, so drift
+# ablation cannot discriminate. (ii) #252: the non-monotone small-nu ladders are
+# ONE slowly converging branch (phi(z) overlap >= 0.991 on all 30 pairs), the
+# only Nl-converged ladder (nu = 1e-2) is the only one whose Laguerre
+# free-energy spectrum decays monotonically, and every unconverged ladder
+# carries a cutoff pile-up whose last interior maximum sits at 0.79-0.85 of Nl
+# at EVERY rung, so raising Nl relocates it instead of resolving it. §0.5
+# therefore concludes the answer is a DECLARED sink or regularization, not
+# another rung. This row asks: (a) what does GKX's Laguerre hypercollision
+# channel actually do, and does the shipped configuration let a user declare
+# one at all; (b) at ky = .55, Nm96, Nz96, does a declared Laguerre sink give an
+# Nl-converged collisionless-limit growth rate, and at what strength does the
+# answer stop moving; (c) what must a collisionless atlas row declare.
+#
+# Predictions.
+#  P1 (the channel is branch-bound, and declaring it is currently silent).
+#     `nu_hyper_l` reaches the distribution only through the
+#     constant-coefficient branch: `_hypercollision_kz_source` carries no
+#     Laguerre index. With the shipped defaults (`hypercollisions_const = 0`,
+#     `hypercollisions_kz = 1`) a deck that sets `nu_hyper_l` runs with no
+#     Laguerre sink and no diagnostic. Falsified if any code path applies
+#     `nu_hyper_l` with `hypercollisions_const = 0`.
+#  P2 (the pure sink is not expressible on `origin/main`). `nu_hyper_m` drives
+#     BOTH branches, so §0.5 (iii)'s "const-branch Hermite coefficient zeroed"
+#     cannot be configured without also removing the |k_z| Hermite
+#     hypercollisions that GX's deck requires. Falsified if a per-branch Hermite
+#     coefficient already exists.
+#  P3 (the sink removes the pile-up). With the sink declared at
+#     `nu_hyper_l` in {0.01, 0.1, 0.5}, `p_hyper_l = 6`, the certified
+#     eigenvector's Laguerre free-energy spectrum has NO strict interior local
+#     maximum at Nl 24/32/48 for at least the two strongest strengths, i.e. the
+#     0.79-0.85-of-Nl cutoff pile-up #252 found at every collisionless rung is
+#     removed rather than relocated. Falsified if an interior maximum survives
+#     at `nu_hyper_l = 0.5` at any rung.
+#  P4 (the sink buys Nl convergence at strong coupling). At
+#     `nu_hyper_l = 0.5` the growth rate is Nl-converged by #238's own rule:
+#     |d gamma|/gamma from Nl32 to Nl48 below 2%, against the collisionless
+#     -26.2% #252 measured on the same rungs. Falsified if that change exceeds
+#     5%.
+#  P5 (the limit is the question, and it may not exist). As the sink is
+#     weakened the Nl-converged value is NOT expected to survive: the
+#     prediction registered here is that the Nl32->Nl48 change grows
+#     monotonically as `nu_hyper_l` falls, exceeding 5% at `nu_hyper_l = 0.01`,
+#     so that no single strength is simultaneously (a) weak enough to be a
+#     collisionless limit and (b) Nl-independent. If that holds, the declared
+#     answer to §0.5 is that a sink makes the mode computable but does NOT
+#     deliver a resolution-independent collisionless growth rate at this ky, and
+#     an atlas row must report the extrapolation rather than a number.
+#     Falsified if some strength gives both |d gamma|/gamma < 2% across
+#     Nl32->Nl48 AND a gamma within 2% of the nu_hyper_l -> 0 extrapolate.
+#  P6 (the two regularizations disagree). The nu_hyper_l -> 0 extrapolate of
+#     the sink arm and the species-nu -> 0 extrapolate of #252's Dougherty-class
+#     ladders (reused, not re-run) differ by more than 10%, because they damp
+#     different parts of the spectrum: the sink is a pure ell^6 cutoff filter
+#     while the conserving collision term acts at low ell too. Falsified if they
+#     agree within 5%.
+#
+# Method. Q16's harness verbatim (one fresh process per case, the runtime
+# `adaptive` eigensolve through `run_runtime_linear(solver="krylov",
+# krylov_cfg=KrylovConfig())`, re-certified with
+# `_eigenpair_relative_residual` on an independently built cache), with the
+# deck's `[collisions]` block overridden per case. Initial-value fits are NOT
+# used: #252 showed the fits agree with the eigenvalue only where the runner
+# marks them settled.
+#
+# The (iv) arm is #252's twelve certified eigenpairs at species
+# nu in {0, 1e-3, 3e-3, 1e-2} x Nl in {24, 32, 48}, reused from
+# plan/research/scripts/2026-09-18-eigen-laguerre-spectrum/results/. They are
+# re-read here, not re-run; their SHA-256 values are recorded below.
+#
+# Source change under measurement: `nu_hyper_m_const`, a per-branch Hermite
+# hypercollision rate (None keeps the historical shared `nu_hyper_m`), plus a
+# `RuntimeCollisionConfig` refusal for a declared-but-inert Laguerre sink. The
+# operator identity checks are in
+# tests/unit/operators/test_laguerre_sink_contract.py and run on every rung of
+# the gate, not only here.
+
+[environment]
+host = "Linux GPU worker"
+gpu = "RTX A4000 (index 0), guarded: no compute process at launch"
+cores = "taskset 20-35 (cores 11 and 18 measured busy at launch; another lane)"
+environment = "Python executable supplied by GKX_PYTHON; record package versions"
+x64 = true
+branch = "evidence/laguerre-sink"
+base = "origin/main 38d7c4277"
+
+[deck]
+file = "cyclone_salpha_itg_sink.toml"
+ky = 0.55
+Nm = 96
+Nz = 96
+ntheta = 32
+nperiod = 2
+Nx = 1
+boundary = "linked"
+damp_ends_rate = 50.0
+species_nu = 0.0
+
+[sink]
+p_hyper_l = 6.0
+nu_hyper_m_const = 0.0
+hypercollisions_const = 1.0
+hypercollisions_kz = 1.0
+strengths = [0.01, 0.1, 0.5]
+strengths_added_after_registration = [0.03]
+laguerre_rungs = [24, 32, 48]
+
+# Measured results are written to results.json / summary.txt by summarize.py and
+# transcribed into plan/log.md. The [baselines] table below is filled in from
+# the checker's own output after the runs, never by hand and never as a delta.
+[baselines]
+status = "unfilled at registration"

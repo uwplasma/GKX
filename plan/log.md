@@ -18344,3 +18344,66 @@ environment variable failed before integration; its corrected attempt and both
 refinements exited zero. CPU verification passes 17 damping-reference tests.
 Next: fit/sampling audit, remaining modes and affected decks, then spatial and
 velocity convergence. Do not close #194 from this single-mode ladder.
+## 2026-09-20 — Q31 rebased on 2.2.0, three manifest baselines re-measured
+
+**Why CI was red.** Run 35518660118 had exactly two red jobs out of 40, `repo-hygiene` and
+`ci-required`. The aggregator failed in 3s because `repo-hygiene` had, so there was no
+failing test anywhere in the run. The one real failure was the package architecture
+manifest: `test_python_files: topology count regressed to 81, above baseline 80`.
+
+**Three baselines moved, not one.** The checker stops at the first regression, so fixing the
+topology count only exposed the next gate. Each number below is the value the checker
+reported, set verbatim and re-run until clean, rather than the old number plus a delta:
+
+- `test_python_files` 80 -> 81, for `tests/unit/operators/test_laguerre_sink_contract.py`.
+- `installable_source_python_lines` 92943 -> 93023, for `nu_hyper_m_const` carried end to
+  end plus the startup refusal.
+- `test_python_lines` 92533 -> 92814, for the nine contract cases and the ledger rows.
+
+Each carries its reason in the manifest, as the target-30 and target-45000 policies require.
+
+**Merge of main (2.2.0) was clean** — no conflicts. `plan.md`, `plan/log.md` and
+`tools/package_architecture_manifest.toml` came through identical to `main`, so no
+queue-table row was reverted and no table acquired a second `baseline` key. The dot-precision
+allowlist in `tests/unit/solvers/test_linear_krylov_core.py` is keyed by `file:line` and
+survived the merge unshifted; it was re-run to confirm rather than assumed.
+
+### 2026-09-21 — corrected ARS timestep ladder (PR #273)
+
+Preserve the preceding pre-repair ladder. Integrate #273, source
+`2505c8273796ce303f54b63095257cc25161cda1`, into this draft: the only numerical
+difference from that source is the existing 13-line rate-50 fixture, SHA256
+`0e1d787b576507d2916158801638b295b4edb80f10c43aa60cae20517f33c1ac`.
+Reuse the exact GX NetCDF, geometry, ky, Nl16/Nm48/Nz96, T=150, fit intervals
+and public reproduction command above. JAX/jaxlib 0.10.2, CUDA, x64; sequential
+runs on an idle RTX A4000. All three commands exited zero.
+
+| dt | steps | gamma | omega | primary wall (s) | command wall (s) |
+|---:|---:|---:|---:|---:|---:|
+| .002 | 75000 | .09304471104548986 | .28202090533922286 | 52.6988 | 81.36 |
+| .001 | 150000 | .0930446997066841 | .2820208985577783 | 102.9454 | 156.81 |
+| .0005 | 300000 | .09304469693598345 | .2820208967220387 | 204.0838 | 308.13 |
+
+Successive-difference orders are **2.033 for gamma and 1.885 for omega**,
+supporting approximately second-order behavior of these fitted observables.
+Three-rung Richardson estimates are .09304469604001148 and
+.2820208960406516; fine-minus-estimate relative differences are 9.63e-9 and
+2.42e-9. These are conditional extrapolations, not rigorous error bounds.
+The separate half-horizon relative shifts remain about +3e-5 and -6.4e-5,
+much larger than timestep sensitivity. Against the unchanged GX extractor,
+fine-rung relative differences are -2.09535e-4 and +2.62854e-6. Diagnose fit
+interval/estimator and finite-horizon effects before attributing that gap to
+velocity truncation. This single mode does not close #194 or velocity convergence.
+
+Driver device peaks are 97.89 MiB on each rung; host peaks are 1047.19,
+1049.92 and 1050.48 MiB. Whole-command peak RSS is 1179464, 1183028 and
+1184376 KiB. These scoped measurements are not a speedup claim against GX,
+which evolved eleven modes. CPU verification on the integrated source passes
+25 end-damping tests plus the linked-domain end-damping physics gate.
+
+New per-rung CSV SHA256 values, in timestep order:
+`e9d1ddb0f10e74c0607d46c7ed5744022c8f6eee43f25280c77ced71948eca79`,
+`622ab0b7919fa727ff5b4d2b7b7928e6b6532bc27ddde0a9d15c15b3ad93be71`,
+`a4fb4a323ffb9252100c9369b882471b9c0be2a67c7f52bdc50b7601d89ee117`.
+Raw outputs remain untracked; hashes identify originals, not timing-invariant
+reruns. Required CI and #273 review remain prerequisites to merging this draft.

@@ -16,7 +16,9 @@ from gkx.core_grid import build_spectral_grid
 from gkx.core_velocity import _gyro_bessel_factors, J_l_all
 import gkx.operators.linear as linear_cache
 import gkx.solvers_linear_integrators as linear_integrators
+import gkx.solvers_linear_integrator_diagnostics as linear_diagnostics
 import gkx.solvers_linear_implicit as linear_implicit
+import gkx.solvers_linear_krylov_algorithms as krylov_algorithms
 import gkx.operators.linear.dissipation as linear_dissipation
 import gkx.terms.linear_terms as linear_terms
 from gkx.operators.linear.cache_arrays import hypercollision_damping
@@ -1791,6 +1793,7 @@ def test_integrate_linear_diagnostics_species_none_and_5d_density_paths(
         ("sspx3", -0.7 + 0.3j, 0.0, 2.6),
         ("imex", -0.7 + 0.3j, 0.8, 0.95),
         ("imex2", -0.7 + 0.3j, 0.0, 1.9),
+        ("imex2", -0.7 + 0.3j, 0.8, 1.9),
     ],
 )
 def test_integrate_linear_cached_impl_observed_order_against_exact_solution(
@@ -1834,6 +1837,68 @@ def test_integrate_linear_cached_impl_observed_order_against_exact_solution(
 
     metrics = estimate_observed_order(np.array(step_sizes), np.array(errors))
     assert metrics.asymptotic_order >= min_order
+
+
+@pytest.mark.parametrize(
+    ("collision_weight", "hypercollision_weight", "expected"),
+    [(0.0, 0.0, 0.0), (0.25, 0.5, 2.0)],
+)
+def test_imex_routes_respect_dissipation_term_weights(
+    monkeypatch, collision_weight: float, hypercollision_weight: float, expected: float
+) -> None:
+    modules = (linear_integrators, linear_diagnostics, krylov_algorithms)
+    for module in modules:
+        monkeypatch.setattr(
+            module, "collision_damping", lambda *_args, **_kwargs: jnp.asarray(6.0)
+        )
+        monkeypatch.setattr(
+            module, "hypercollision_damping", lambda *_args: jnp.asarray(1.0)
+        )
+    terms = LinearTerms(
+        collisions=collision_weight, hypercollisions=hypercollision_weight
+    )
+    state = jnp.asarray([1.0 + 0.0j])
+    _, cached = linear_integrators._prepared_linear_state_and_damping(
+        state, object(), object(), terms=terms
+    )
+    diagnostics = linear_diagnostics._linear_damping(
+        state, object(), object(), jnp.float32, terms=terms
+    )
+    krylov = krylov_algorithms._compute_damping(
+        state, object(), object(), linear_terms_to_term_config(terms)
+    )
+    np.testing.assert_allclose([cached, diagnostics, krylov], expected)
+
+
+def test_imex2_observed_order_for_noncommuting_split() -> None:
+    from gkx.solvers_time_explicit_steps import _linear_native_step
+
+    explicit = np.asarray([[0.0, 1.0], [-0.4, 0.2]])
+    damping = np.asarray([0.3, 1.1])
+    operator = explicit - np.diag(damping)
+    eigenvalues, eigenvectors = np.linalg.eig(operator)
+    initial = np.asarray([1.0, -0.25])
+    exact = eigenvectors @ (
+        np.exp(eigenvalues) * np.linalg.solve(eigenvectors, initial)
+    )
+    step_sizes: list[float] = []
+    errors: list[float] = []
+    for steps in (4, 8, 16, 32):
+        dt = 1.0 / steps
+        state = jnp.asarray(initial)
+        for _ in range(steps):
+            state = _linear_native_step(
+                state,
+                jnp.asarray(damping),
+                jnp.asarray(dt),
+                method_key="imex2",
+                rhs=lambda value: jnp.asarray(operator) @ value,
+            )
+        step_sizes.append(dt)
+        errors.append(float(np.max(np.abs(np.asarray(state) - exact))))
+
+    metrics = estimate_observed_order(np.asarray(step_sizes), np.asarray(errors))
+    assert metrics.asymptotic_order >= 1.9
 
 
 def test_linked_chain_cover_mask_matches_the_built_cache(spectral_grid) -> None:

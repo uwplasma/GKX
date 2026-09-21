@@ -27,6 +27,7 @@ class _HypercollisionCoefficients:
     nu_hyper: jnp.ndarray
     nu_hyper_l: jnp.ndarray
     nu_hyper_m: jnp.ndarray
+    nu_hyper_m_const: jnp.ndarray
     nu_hyper_lm: jnp.ndarray
     hyper_ratio: jnp.ndarray
     ratio_l: jnp.ndarray
@@ -596,10 +597,12 @@ def _hypercollision_operator_is_static_zero(
     hypercollisions_const: jnp.ndarray,
     hypercollisions_kz: jnp.ndarray,
     dtype: jnp.dtype,
+    nu_hyper_m_const: jnp.ndarray | None = None,
 ) -> bool:
+    const_nu_m = nu_hyper_m if nu_hyper_m_const is None else nu_hyper_m_const
     const_branch_zero = (
         _is_static_zero(weight * hypercollisions_const * nu_hyper_l, dtype)
-        and _is_static_zero(weight * hypercollisions_const * nu_hyper_m, dtype)
+        and _is_static_zero(weight * hypercollisions_const * const_nu_m, dtype)
         and _is_static_zero(weight * hypercollisions_const * nu_hyper_lm, dtype)
     )
     isotropic_branch_zero = _is_static_zero(weight * nu_hyper, dtype)
@@ -623,13 +626,16 @@ def _constant_hypercollision_contribution(
     hypercollisions_const: jnp.ndarray,
     weight: jnp.ndarray,
     hermite_window: HermiteWindow | None = None,
+    nu_hyper_m_const: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     l_norm = jnp.asarray(max(G.shape[1], 1), dtype=ratio_l.dtype)
     m_norm = jnp.asarray(
         max(hermite_total_of(hermite_window, G.shape[2]), 1), dtype=ratio_m.dtype
     )
     scaled_nu_l = l_norm * nu_hyper_l
-    scaled_nu_m = m_norm * nu_hyper_m
+    scaled_nu_m = m_norm * (
+        nu_hyper_m if nu_hyper_m_const is None else nu_hyper_m_const
+    )
     vth_s = vth[:, None, None, None, None, None]
     const_term = -(
         vth_s * (scaled_nu_l * ratio_l + scaled_nu_m * ratio_m) + nu_hyper_lm * ratio_lm
@@ -697,6 +703,7 @@ def _inactive_hypercollision_result(
     hypercollisions_const: jnp.ndarray,
     hypercollisions_kz: jnp.ndarray,
     dtype: jnp.dtype,
+    nu_hyper_m_const: jnp.ndarray | None = None,
 ) -> jnp.ndarray | None:
     """Return a zero result when all hypercollision branches are statically off."""
 
@@ -709,6 +716,7 @@ def _inactive_hypercollision_result(
         hypercollisions_const=hypercollisions_const,
         hypercollisions_kz=hypercollisions_kz,
         dtype=dtype,
+        nu_hyper_m_const=nu_hyper_m_const,
     ):
         return _zeros_like_result(
             G,
@@ -719,6 +727,7 @@ def _inactive_hypercollision_result(
             nu_hyper_lm,
             hypercollisions_const,
             hypercollisions_kz,
+            *(() if nu_hyper_m_const is None else (nu_hyper_m_const,)),
         )
     return None
 
@@ -792,6 +801,7 @@ def hypercollisions_contribution(
     hypercollisions_const: jnp.ndarray,
     hypercollisions_kz: jnp.ndarray,
     weight: jnp.ndarray,
+    nu_hyper_m_const: jnp.ndarray | None = None,
     linked_indices: tuple[jnp.ndarray, ...] | None = None,
     linked_kz: tuple[jnp.ndarray, ...] | None = None,
     linked_inverse_permutation: jnp.ndarray | None = None,
@@ -807,6 +817,7 @@ def hypercollisions_contribution(
         nu_hyper=nu_hyper,
         nu_hyper_l=nu_hyper_l,
         nu_hyper_m=nu_hyper_m,
+        nu_hyper_m_const=(nu_hyper_m if nu_hyper_m_const is None else nu_hyper_m_const),
         nu_hyper_lm=nu_hyper_lm,
         hyper_ratio=hyper_ratio,
         ratio_l=ratio_l,
@@ -840,6 +851,7 @@ def hypercollisions_contribution(
         hypercollisions_const=coeffs.hypercollisions_const,
         hypercollisions_kz=coeffs.hypercollisions_kz,
         dtype=real_dtype,
+        nu_hyper_m_const=coeffs.nu_hyper_m_const,
     )
     if inactive_result is not None:
         return inactive_result
@@ -859,6 +871,7 @@ def hypercollisions_contribution(
         hypercollisions_const=coeffs.hypercollisions_const,
         weight=weight,
         hermite_window=hermite_window,
+        nu_hyper_m_const=coeffs.nu_hyper_m_const,
     )
     if _is_static_zero(weight * coeffs.hypercollisions_kz, real_dtype):
         return dG
