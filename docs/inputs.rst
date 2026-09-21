@@ -531,6 +531,18 @@ Notable runtime-only keys:
 * ``[collisions] nu_hyper_l`` / ``nu_hyper_m`` / ``nu_hyper_lm`` and
   ``p_hyper_l`` / ``p_hyper_m`` / ``p_hyper_lm``: Laguerre-only,
   Hermite-only, and mixed hypercollision channels.
+  ``nu_hyper_l`` and ``nu_hyper_lm`` act **only** in the constant-coefficient
+  branch -- the :math:`|k_z|` kernel carries no Laguerre index -- so a deck
+  that declares either while ``hypercollisions_const = 0.0`` (the default) is
+  refused rather than run without the sink it asked for. Case validation also
+  refuses either declaration when ``[physics] hypercollisions = false`` or
+  ``[terms] hypercollisions = 0.0`` disables the whole operator.
+* ``[collisions] nu_hyper_m_const``: the constant branch's Hermite rate.
+  Omitted (the default) it reuses ``nu_hyper_m``, which is the historical
+  behaviour and damps Hermite in *both* branches when both are on. Set it to
+  ``0.0`` alongside ``hypercollisions_const = 1.0`` to declare a pure Laguerre
+  sink while the :math:`|k_z|` Hermite hypercollisions stay exactly as the
+  reference code sets them. See :ref:`velocity-regularization`.
 * ``[collisions] D_hyper`` / ``p_hyper_kperp``: perpendicular hyperdiffusion
   amplitude and exponent.
 * ``[normalization] flux_scale``: multiplicative factor applied to
