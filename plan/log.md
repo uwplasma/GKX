@@ -18582,3 +18582,157 @@ with FutureWarning fatal on supported JAX 0.10.2. Strict Sphinx, Ruff and the
 measured architecture gate pass. Zonal/gauge, general multimode weighting,
 nonlinear transfer, flux normalization, sources/sinks and time-integrated
 budgets remain open. This identity does not qualify EM turbulent transport.
+## 2026-09-21 — STOP-CAL retained-window safeguard
+
+Base `eeb3481c6`: the existing strong-drift AR(1) control stops 69/128 times
+at runtime's 128-step look cadence, versus 0/128 at sparse reference looks.
+The paired stationary control stops 128/128 times. The repair adds gates only:
+retained samples ≥ max(256, configured minimum), and retained span ≥
+max(20 τ, configured physical minimum). Existing transient selection, SEM,
+Wphi/Wg guards and maximum horizon are unchanged. Stops can be delayed or
+prevented; this does not establish stationarity or sequential interval coverage.
+
+Calibration uses the existing `_stationary_ar1` test generator, 128 paths of
+4096 samples, rho=0.5/0.75/0.95, and looks every 128/256 samples. Compare
+`10 + noise` with `10 + t/64 + noise`. Select on seeds 20260921/20260922,
+freeze the candidate, then test seeds 20260923/20260924. Independent replay
+of the implemented policy gives at most 2/128 drift stops per latter stratum,
+all 128 stationary paths stopping, and median stationary stops of 384/512
+samples respectively. The separately tested 50-IAT-only alternative reaches
+18/128 drift stops. Neither result is a population error-rate bound.
+
+Regression tests include the production first look, paired stationary power,
+retained 255/256-sample and exact 20-IAT boundaries, and strengthen-only user
+settings. Reproduce with `PYTHONPATH=src:. JAX_PLATFORMS=cpu JAX_ENABLE_X64=true
+GKX_X64=1 python -m pytest -q tests/validation/quasilinear/test_quasilinear_window.py`.
+The source owner shrinks by ten lines through comment consolidation; deliberate
+test growth adds the missing negative/positive and boundary controls, with no
+new files. Adaptive-time averaging, guard-trace calibration, intermittent
+controls and held-out physical traces remain open in STOP-CAL; no new transport
+optimization claim follows. See the authoritative queue in
+[PR #268](https://github.com/uwplasma/GKX/pull/268).
+
+Independent review of #271 found two integration edges before merging: the
+nominal adaptive chunk length was mistaken for a total sample cap, and a NaN
+physical minimum could be ignored by `max`. Short-run bypass now applies only
+to step-capped runs; adaptive runs keep the stopping callback even with a small
+nominal chunk. Nonfinite minimum windows are explicitly rejected. Existing
+tests pin both behaviors. The complete source change remains net smaller.
+
+CI then exposed a stale prepared-runtime assertion: it still expected a
+16-step fixed run to admit saturation stopping. The existing test now checks
+both sides of the new boundary (255 steps prepare, 256 refuse), rather than
+weakening the stopping policy. All 180 tests in the affected runtime file pass
+on supported JAX 0.10.2/x64 CPU (52 warnings from the existing short/unstable
+smoke cases). This follow-up adds one test line and no runtime changes; fresh
+CI is required on the updated head.
+
+### Physical-cadence follow-up: no stopping rule promoted
+
+The raw 256-sample floor is not invariant to output density. This follow-up
+instead formed complete unit-duration means of the piecewise-linear recorded
+signal from a fixed run-start origin, kept the 20-IAT span gate, and swept
+minimum bin counts 32, 64, 128, 256 and 512. Each stratum contains 128 paths of
+4096 bins at AR(1) rho 0.5, 0.75 or 0.95, inspected every 128 or 512 bins.
+Stationary paths are `10 + noise`; negative controls are
+`10 + t/64 + noise`. Seeds 20260913/20260914 select the candidate and
+20260923/20260924 audit it. The latter seeds were hidden from this bin-floor
+selection, but had already appeared in the earlier raw-sample study, so they
+are not a globally untouched STOP-CAL holdout.
+
+| minimum complete bins | worst train drift stops | minimum stationary stops | worst first-stop 95% coverage | median first stop |
+|---:|---:|---:|---:|---:|
+| 32 | 62/128 | 128/128 | 90/128 | 128–512 |
+| 64 | 62/128 | 128/128 | 90/128 | 128–512 |
+| 128 | 34/128 | 128/128 | 93/128 | 256–512 |
+| 256 | 4/128 | 128/128 | 100/128 | 320–512 |
+| 512 | 0/128 | 128/128 | 111/128 | 640–1024 |
+
+The predeclared power/drift screen (at most 6/128 false stops and at least
+116/128 stationary stops in every stratum) selects 256 bins. On the held-out
+audit it has at most 2/128 drift stops, 128/128 stationary stops and median
+first stops of 256–512 bins. It nevertheless fails the equally necessary
+coverage audit: the worst first-stop coverage is 108/128 (84.4%) at rho=0.95;
+pooled coverage is 1434/1536 (93.36%). Increasing the floor after seeing that
+result would tune on the holdout, so no complete-bin floor is promoted.
+The 6/128 cutoff is an empirical gate for these finite ensembles, not a bound
+on a population false-stop probability.
+
+Sampling invariance itself passes. Across all 768 held-out paths, native
+integer-time samples, exact half-step piecewise-linear densification, and the
+same dense record with an unmatched 0.4-bin final tail each give 4096 complete
+bins. Maximum bin disagreement is 7.28e-12 and no 128-bin-look verdict changes.
+This relies on a bin origin and cadence frozen at run start; a rolling
+`start_fraction` cutoff is not equivalent.
+
+The next calibration must preregister first-stop coverage as a selection gate,
+use new seeds and physical traces, and compare a fresh post-admission fixed
+estimation window against a stopping-time-valid method. Flegal--Gong's
+[relative fixed-width rule](https://arxiv.org/abs/1303.0238) is only
+asymptotically valid under an FCLT and strongly consistent variance estimate;
+the finite-bin failure above is not repaired by citing that limit. General
+[confidence sequences](https://doi.org/10.1214/20-AOS1991) are time-uniform,
+but their martingale/sub-Gaussian conditions do not automatically hold for an
+unknown turbulent correlation process. The underlying requirements come from
+[Glynn--Whitt](https://doi.org/10.1214/aoap/1177005777); strongly consistent
+batch means need additional dependence assumptions, as in
+[Jones et al.](https://arxiv.org/abs/math/0601446). Runtime integration
+therefore remains blocked. When resumed, metadata must persist the declared
+analysis cadence, run-start bin origin and partial-bin accumulator through
+restart, and must refuse any diagnostic gap larger than that cadence.
+
+The calibration uses CPython 3.11.14, JAX/jaxlib 0.10.2 and NumPy 2.4.6 on CPU
+at source commit `a76b492d3`. The representation measurement used the proposed
+physical-bin helper in an unpublished review patch; it is evidence for that
+helper's contract, not a claim about the published source at this commit.
+
+The table is reproduced by the following bounded CPU command (the output is a
+tuple of worst false stops, minimum stationary stops, worst covered first-stop
+intervals, pooled coverage, and the median-stop range):
+
+```sh
+PYTHONPATH=src:. JAX_PLATFORMS=cpu python - <<'PY'
+import numpy as np
+from gkx.diagnostics.saturation import _halves_stationary, _sokal_window_mean_sem
+
+def ar1(rho, seed):
+    rng = np.random.default_rng(seed)
+    x = rng.standard_normal((128, 4097))
+    for i in range(1, 4097):
+        x[:, i] = rho*x[:, i-1] + np.sqrt(1-rho**2)*x[:, i]
+    return x
+
+def accept(y, floor):
+    w = y[int(np.argmax(y >= np.median(y))):]
+    if w.size < floor:
+        return None
+    mean, sem, tau, resolved = _sokal_window_mean_sem(w, 1.0)
+    passed = (resolved and w.size >= 20*tau and sem/abs(mean) <= .05
+              and _halves_stationary(w, 1.0)[3])
+    return (mean, sem) if passed else None
+
+def sweep(seeds, floors):
+    rows = {floor: [] for floor in floors}
+    for seed in seeds:
+      for rho in (.5, .75, .95):
+        x = ar1(rho, seed); t = np.arange(4097)
+        stationary = ((10+x[:, :-1]) + (10+x[:, 1:]))/2
+        points = 10 + t/64 + x; drifting = (points[:, :-1] + points[:, 1:])/2
+        for step in (128, 512):
+          looks = tuple(range(step, 4097, step))
+          for floor in floors:
+            false = sum(any(accept(y[:n], floor) for n in looks) for y in drifting)
+            first = [next(((n, r) for n in looks
+                     if (r := accept(y[:n], floor))), None) for y in stationary]
+            covered = sum(abs(r[1][0]-10) <= 1.96*r[1][1] for r in first if r)
+            stops = [r[0] for r in first if r]
+            rows[floor].append((false, len(stops), covered, np.median(stops)))
+    return {f: (max(x[0] for x in r), min(x[1] for x in r),
+                min(x[2] for x in r), sum(x[2] for x in r)/sum(x[1] for x in r),
+                (min(x[3] for x in r), max(x[3] for x in r)))
+            for f, r in rows.items()}
+
+print(sweep((20260913, 20260914), (32, 64, 128, 256, 512)))
+print(sweep((20260923, 20260924), (256,)))
+PY
+```

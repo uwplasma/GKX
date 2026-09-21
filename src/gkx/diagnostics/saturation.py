@@ -32,25 +32,18 @@ class SaturationStopConfig:
     """Stop policy for ``run_to = "saturation"`` nonlinear runs."""
 
     rel_sem: float = 0.05
-    # Minimum averaging-window span in time units. None derives it from the
-    # trace itself as ten integrated autocorrelation times.
+    # Optional absolute floor on the averaging-window span. Every accepted
+    # window must also span at least twenty integrated autocorrelation times.
     min_window: float | None = None
-    min_samples: int = 16
+    min_samples: int = 256
 
 
 _SATURATION_VALUE_FLOOR = 1.0e-12
-# How far above the floor a mean must sit before the relative SEM built on it
-# means anything. Generous, because the cost of waiting is wall time and the
-# cost of stopping early is a silently truncated run.
-#
-# This threshold is absolute, and a heat flux is not: its scale is set by the
-# initial amplitude the deck seeds and by the diagnostic normalization it
-# picks. So it covers a dead trace only when that trace happens to sit below
-# it, and cannot be the whole protection against one. What a dead trace shows
-# in every normalization is that it has no correlation time this sampling can
-# resolve, which is the gate that actually carries the case; see the
-# ``resolved`` definition in ``_sokal_window_mean_sem``.
+# This absolute threshold only catches dead traces at its scale. The resolved
+# correlation-time gate below supplies the scale-independent protection.
 _SATURATION_SIGNAL_FACTOR = 1.0e3
+_MIN_RETAINED_SAMPLES = 256
+_MIN_IAT_SPANS = 20.0
 _SATURATION_DECISION_FIELDS = (
     "window_tmin",
     "window_tmax",
@@ -60,6 +53,8 @@ _SATURATION_DECISION_FIELDS = (
     "rel_sem",
     "tau_ac",
     "tau_ac_resolved",
+    "min_samples",
+    "min_iat_spans",
     "min_window",
     "first_half_mean",
     "second_half_mean",
@@ -87,23 +82,10 @@ def _sokal_window_mean_sem(
     """
 
     tau, cut, rho = sokal_autocorrelation_time(values, dt)
-    # Resolved means the trace showed this sampling a correlation time: the
-    # autocorrelation came back inside the window, and the time it integrates
-    # to is longer than the interval it was sampled at. A correlation time
-    # shorter than one sample is not a measurement of anything -- it is the
-    # discretization floor, and it is what uncorrelated noise returns.
-    #
-    # Both halves of that matter, and for the same reason: ``min_window`` is
-    # derived as ``10 tau``, so a ``tau`` at the floor makes the window-length
-    # requirement vacuous exactly on the traces carrying the least information.
-    # Requiring only ``tau > 0`` is not enough, because the lag-one sample
-    # autocorrelation of white noise is positive about half the time: measured
-    # over 400 realizations of a flat trace, 190 produced a positive ``tau``
-    # and saturated, at any amplitude -- scaling a trace cannot change its
-    # autocorrelation. Across those same 400, ``tau`` never exceeded
-    # ``0.883 dt``, while the shipped nonlinear decks measure ``tau`` between
-    # ``8.5 dt`` and ``81 dt``. One sampling interval sits in that gap with an
-    # order of magnitude of room on the physical side.
+    # A correlation time at or below one sample is the discretization floor,
+    # not resolved physics. Positive lag-one noise made 190/400 flat traces
+    # stop before this gate; their tau never exceeded 0.883 dt, while measured
+    # deck traces span 8.5--81 dt.
     resolved = cut < rho.size and tau > dt
     n_eff = (
         min(float(values.size), values.size * dt / (2.0 * tau))
@@ -124,6 +106,8 @@ def _empty_saturation_decision(
         saturated=False,
         reasons=[reason],
         n_window=0,
+        min_samples=max(int(cfg.min_samples), _MIN_RETAINED_SAMPLES),
+        min_iat_spans=_MIN_IAT_SPANS,
         config=asdict(cfg),
     )
     return decision
@@ -166,8 +150,9 @@ def saturation_stop_decision(
     Saturation requires all of: a resolved ``tau_ac`` (the autocorrelation
     crosses zero inside the window, and not at the first lag -- a trace that
     decorrelates within one diagnostic sample has shown no correlation time,
-    only noise), window span at least ``min_window``
-    (default ``10 tau_ac``), IAT-corrected relative SEM at most ``rel_sem``,
+    only noise), at least ``min_samples`` retained samples, window span at
+    least ``20 tau_ac`` and any larger configured ``min_window``, IAT-corrected
+    relative SEM at most ``rel_sem``,
     first/second half-window means within twice their combined SEM, and --
     when ``guard`` (Wphi) or ``free_energy_guard`` (Wg) is given -- the same
     half-window stationarity on each guard over the same window. Guards have no
@@ -179,8 +164,10 @@ def saturation_stop_decision(
     cfg = config or SaturationStopConfig()
     if float(cfg.rel_sem) <= 0.0:
         raise ValueError("rel_sem must be positive")
-    if cfg.min_window is not None and float(cfg.min_window) < 0.0:
-        raise ValueError("min_window must be non-negative when supplied")
+    if cfg.min_window is not None and (
+        not math.isfinite(float(cfg.min_window)) or float(cfg.min_window) < 0.0
+    ):
+        raise ValueError("min_window must be finite and non-negative when supplied")
     t = np.asarray(time, dtype=float).reshape(-1)
     y = np.asarray(values, dtype=float).reshape(-1)
     if t.size != y.size:
@@ -195,7 +182,7 @@ def saturation_stop_decision(
     )
     if wg is not None and wg.size != t.size:
         raise ValueError("free_energy_guard must match the time axis")
-    min_samples = max(int(cfg.min_samples), 8)
+    min_samples = max(int(cfg.min_samples), _MIN_RETAINED_SAMPLES)
     if t.size < min_samples:
         return _empty_saturation_decision(cfg, reason="trace_shorter_than_min_samples")
     start = int(np.argmax(y >= np.median(y)))
@@ -209,7 +196,10 @@ def saturation_stop_decision(
 
     mean, sem, tau, tau_resolved = _sokal_window_mean_sem(wy, dt)
     span = float(wt[-1] - wt[0])
-    min_window = 10.0 * tau if cfg.min_window is None else float(cfg.min_window)
+    min_window = max(
+        _MIN_IAT_SPANS * tau,
+        0.0 if cfg.min_window is None else float(cfg.min_window),
+    )
     rel_sem = float(sem / max(abs(mean), _SATURATION_VALUE_FLOOR))
     first_mean, second_mean, halves_sem, stationary = _halves_stationary(wy, dt)
     guard_stationary = None if g is None else _halves_stationary(g[start:], dt)[3]
@@ -243,6 +233,8 @@ def saturation_stop_decision(
         "rel_sem": rel_sem,
         "tau_ac": float(tau),
         "tau_ac_resolved": bool(tau_resolved),
+        "min_samples": min_samples,
+        "min_iat_spans": _MIN_IAT_SPANS,
         "min_window": float(min_window),
         "first_half_mean": first_mean,
         "second_half_mean": second_mean,
