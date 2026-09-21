@@ -18274,3 +18274,73 @@ aggregator failed with no failing test. The shard had been growing with the test
 carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main` was one
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
+
+### 2026-09-21 — issue #194: first fixed-rate Cyclone timestep ladder
+
+Source: main `eeb3481c6` plus the 13-line change to
+`tools/comparison/fixtures/parity/cyclone_salpha_itg.toml`: explicit fixed steps,
+rate 50 and structured legacy provenance. This preserves the absorber at
+dt=.002 while allowing timestep refinement without changing its rate. The
+permanent eleven-mode atlas manifest is unchanged; this pilot selects one mode.
+This is partial progress on #194, not regeneration of the full affected atlas.
+
+The self-run GX reference uses upstream `3865a53778862e1686f414bf6f416339e24887c9`
+and the isolated linked-damping repair documented in
+[the reference-build record](https://github.com/uwplasma/GKX/blob/16d98efcc/plan/log.md).
+Patch SHA256: `bcc7113f69553351ebb46f30bd383d37396ad86eba0d455ba26bdf95f38c923d`.
+Use upstream `benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in`
+with fixed RK4 dt=.002, T=150, and diagnostic nwrite=100. The reference runs
+all eleven positive ky modes; it is not a published reference or velocity limit.
+Input SHA256: `ae98aebeb7f2a6c496dbbeb4036d0dab0a72232c518ac85f70ba7eb0916979f4`;
+binary: `1ffefc33a30259a89e381d952bb2d093e2cba24e0ff6f4ebd3a8ea508e1f7e33`;
+terminal NetCDF: `f7142ca447af34897fa81936d0c62c09896dd1fadb7b16d7ac7e0d3ae380b628`.
+All 131 numeric variables are finite. The 751 samples end at 150.0000071246177;
+the final diagnostic interval is .198, not the normal .2. The public extractor
+averages samples 375:751, giving gamma=.09306419716077916 and
+omega=.2820201554196946 at ky=.30000001192092896.
+
+GKX uses that NetCDF's geometry, Nl16/Nm48/Nz96, IMEX2, T=150, rate 50,
+Cyclone normalization without diagnostic rescaling, and JAX 0.10.2/CUDA/x64.
+The primary fit interval is [105,150]; the separate half-horizon probe fits
+[52.5,75]. All three pass the existing 5% half-horizon agreement criterion.
+
+| dt | steps | gamma | omega | primary wall (s) | full command wall (s) |
+|---:|---:|---:|---:|---:|---:|
+| .002 | 75000 | .09304484383977978 | .2820208078331837 | 50.5578 | 78.53 |
+| .001 | 150000 | .09304476623049032 | .2820208497961978 | 96.9467 | 148.09 |
+| .0005 | 300000 | .09304473023000857 | .28202087233897055 | 191.3673 | 289.42 |
+
+Middle-to-fine relative changes are 3.86916e-7 (gamma) and 7.99330e-8 (omega).
+Observed dyadic orders are 1.108 and .896: these tiny fitted-output changes do
+**not** establish second-order integration. Resolve fit/sampling and precision
+effects before claiming an asymptotic order. Fine-rung differences from GX are
+-0.020918% and +0.0002542%, respectively. No velocity convergence, nonlinear
+transport or speedup is inferred; GX ran eleven modes and GKX only one.
+
+Reproduction: stage the verified NetCDF as
+`tools_out/issue194/reference/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc`.
+Copy the first case in `tools/gx_parity_matrix_manifest.toml` into an ignored
+manifest three times, preserving its other fields, with distinct keys
+`cyclone_rate_dt002`, `cyclone_rate_dt001`, `cyclone_rate_dt0005`, the table's
+dt/steps, and `ky=[0.30000001192092896]`. Label geometry as imported GX and
+reference_provenance with the source/patch/NetCDF hashes above. Then run:
+
+```bash
+GX_PARITY_REF_DIR="$PWD/tools_out/issue194/reference" PYTHONPATH=src \
+JAX_ENABLE_X64=true GKX_X64=1 python tools/comparison/build_gx_parity_matrix.py \
+  --manifest tools_out/issue194/ladder.toml \
+  --reference-dir tools_out/issue194/reference \
+  --cases cyclone_rate_dt002 cyclone_rate_dt001 cyclone_rate_dt0005 \
+  --stem tools_out/issue194/results/ladder
+```
+
+The three original per-rung CSV hashes, in timestep order, are
+`14b4e28f2d6cef496f6fcb486713ba8a405ff9a0968c29e20c5b2b9c7937754b`,
+`158b0d3480342c86b1bff5895e865b90bc634b8721ad29a1ce6dd48a26c05d88`,
+`26a5fce1b6937dc661bb7b31dbe9dcb7330b51b0080ada2c3bbfb07688f61901`.
+Raw outputs are untracked; these identify measured originals, not expected
+byte-identical reruns with new timings. An initial launch missing the geometry
+environment variable failed before integration; its corrected attempt and both
+refinements exited zero. CPU verification passes 17 damping-reference tests.
+Next: fit/sampling audit, remaining modes and affected decks, then spatial and
+velocity convergence. Do not close #194 from this single-mode ladder.
