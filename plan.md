@@ -62,13 +62,14 @@ The implementation PRs below are open against `main` at this checkpoint:
   shared rank-two control at ratio `2e-5`: auto falls back to dense and explicit
   block-Thomas refuses in both precisions. All 12 PR3 tests pass; CI is pending.
 
-- [#269](https://github.com/uwplasma/GKX/pull/269), head `f4fda382f`, repairs a
-  vacuous FLR guard and adds independent geometry-to-field residuals plus
-  constant-B source-quadratic and truncated-Hermite streaming identities. The
-  full field file passes 44 x64 tests with `FutureWarning` treated as an error;
-  both policy cases also pass in float32, and sign mutations fail the identity.
-  Net +159 test lines reuse existing oracles; no runtime changes or new files.
-  The full varying-B energy contract remains open.
+- [#269](https://github.com/uwplasma/GKX/pull/269), head `963d7cd5a`, repairs a
+  vacuous FLR guard and tests independent three-field algebra plus constant-B
+  streaming and varying-B weighted streaming/mirror exchange. The full field
+  file passes 45 x64 tests; 27 float32 tests pass with 18 explicit-float64 cases
+  excluded, all with FutureWarning fatal. Wrong weights/signs fail the exchange
+  controls. Shared helpers limit the latest extension to 182 net test lines;
+  no runtime changes or new files. Absolute normalization and the full physical
+  electromagnetic energy budget remain open.
 - [#270](https://github.com/uwplasma/GKX/pull/270), head `073ede00a`, removes
   analytic metric shear concretization: 44 geometry tests pass per precision,
   including AD/JIT versus finite differences for both shear signs. Source
@@ -93,6 +94,13 @@ VEL-REG or EM-FIELD uses it for timestep, convergence or physics evidence. This 
 from the repaired-build evidence still required for historical 2.0.0 results.
 Unrelated cases and maintenance work need not wait. Any later legacy instruction
 to implement the rate is a historical checkpoint, not current work.
+
+[Draft #272](https://github.com/uwplasma/GKX/pull/272), `2121cbf2e`, migrates
+one Cyclone fixture and records a matched three-timestep GPU ladder. The
+middle-to-fine fitted gamma/omega changes are below 4e-7 relatively, but observed
+orders are 1.108/.896, not a second-order certificate. Audit fitting/sampling
+before expanding the reference matrix. The permanent eleven-mode scan is
+preserved; this single-mode pilot does not close #194 or velocity convergence.
 
 | Order | Stable ID | Next bounded result | Admission / exit gate |
 |---:|---|---|---|
@@ -119,10 +127,11 @@ This bounded counterexample and its exact reproduction are in the work log.
 Calibrate rejection and stationary stopping power together before changing the
 policy; passing a fixed-window uncertainty test does not close this gate.
 
-[Draft #271](https://github.com/uwplasma/GKX/pull/271), head `7f4b0332a`, adds
+[Draft #271](https://github.com/uwplasma/GKX/pull/271), head `a76b492d3`, adds
 mandatory retained-sample and IAT-span floors, with strengthen-only settings.
-The source shrinks ten lines; 33 window tests, focused runtime checks and strict
-Sphinx pass. Independent frozen-seed replay gives at most 2/128 drift stops and
+The source shrinks eight lines; 33 window tests and all 180 runtime tests pass.
+CI's stale prepared-run boundary assertion is repaired without changing the
+policy. Independent frozen-seed replay gives at most 2/128 drift stops and
 128/128 stationary stops per regular-sampling stratum. This is bounded empirical
 calibration, not a population guarantee; current-head CI and adaptive/guarded
 physical-trace qualification remain open.
@@ -133,6 +142,13 @@ interval for mean/IAT/SEM/guards. Do not infer that cadence from observed gaps:
 inserting interpolated samples must not increase effective information. Require
 densification invariance, physical-time window selection, partial-tail neutrality,
 uniform-grid parity and an adaptive runtime plumbing test before adoption.
+
+The first runtime-binning prototype is withheld: a raw 256-sample minimum can
+be unlocked by interpolating the same trace, while physical bin statistics are
+unchanged. Minimum analysis effort must be calibrated on the fixed-cadence
+representation; neither reusing 256 as a bin count nor adding an eight-bin
+structural floor inherits the native-sample calibration. Keep posthoc quadrature
+verification separate from runtime stopping-policy promotion.
 
 ### Execution decisions from the September 21 review
 
