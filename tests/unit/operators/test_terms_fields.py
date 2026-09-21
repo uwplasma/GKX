@@ -15,9 +15,10 @@ from gkx.core_grid import build_spectral_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import build_H, quasineutrality_phi
 from gkx.operators.linear.params import LinearParams
+from gkx.operators.moments import fieldline_quadrature_weights
 from gkx.parallel.velocity_drive import electrostatic_phi_reference
 from gkx.terms.fields import _solve_fields_impl, solve_fields
-from gkx.terms.linear_terms import linked_streaming_contribution
+from gkx.terms.linear_terms import linked_streaming_contribution, mirror_contribution
 
 
 def _analytic_gyro_coefficients(b):
@@ -25,6 +26,50 @@ def _analytic_gyro_coefficients(b):
         [np.exp(-b / 2), -b / 2 * np.exp(-b / 2), b**2 / 8 * np.exp(-b / 2)], axis=1
     )
     return jl, jl + np.concatenate([np.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+
+
+def _electromagnetic_species(dtype):
+    values = {
+        "charge": np.array([1.0, -1.0], dtype=dtype),
+        "density": np.array([0.9, 1.1], dtype=dtype),
+        "temp": np.array([1.0, 1.7], dtype=dtype),
+        "mass": np.array([1.3, 0.04], dtype=dtype),
+    }
+    values["vth"] = np.sqrt(values["temp"] / values["mass"])
+    values["tz"] = values["temp"] / values["charge"]
+    rho = np.sqrt(values["temp"] * values["mass"]) / np.abs(values["charge"])
+    jax_values = {key: jnp.asarray(value, dtype) for key, value in values.items()}
+    nt = jnp.asarray(values["density"] * values["temp"], dtype)
+    return values, jax_values, rho, nt
+
+
+def _three_field_source_quadratic(G, cache, params, source_args):
+    jl, jb, zweight, values, jax_values, iy, ix = source_args
+    fields = solve_fields(G, cache, params, fapar=1.0, w_bpar=1.0, **jax_values)
+    g0, g1 = G[:, :, 0, iy, ix], G[:, :, 1, iy, ix]
+    density, charge = values["density"], values["charge"]
+    nt = jax_values["density"] * jax_values["temp"]
+    moments = jnp.stack(
+        [
+            jnp.sum((density * charge)[:, None, None] * jl * g0, axis=(0, 1)),
+            -jnp.sum(
+                (density * charge * values["vth"])[:, None, None] * jl * g1,
+                axis=(0, 1),
+            ),
+            jnp.sum(nt[:, None, None] * jb * g0, axis=(0, 1)),
+        ]
+    )
+    kinetic = 0.5 * jnp.sum(
+        zweight[None, None, None, :]
+        * nt[:, None, None, None]
+        * jnp.abs(G[:, :, :, iy, ix]) ** 2
+    )
+    field_values = jnp.stack(
+        [fields.phi[iy, ix], fields.apar[iy, ix], fields.bpar[iy, ix]]
+    )
+    return kinetic + 0.5 * jnp.real(
+        jnp.sum(zweight[None, :] * jnp.conj(field_values) * moments)
+    )
 
 
 def _assert_three_field_residual(
@@ -138,11 +183,10 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
             bessel_bmag_power=1.0,
         )
     )
-    charge = np.array([1.0, -1.0], dtype=dtype)
-    density = np.array([0.9, 1.1], dtype=dtype)
-    temp = np.array([1.0, 1.7], dtype=dtype)
-    mass = np.array([1.3, 0.04], dtype=dtype)
-    vth, rho = np.sqrt(temp / mass), np.sqrt(temp * mass) / np.abs(charge)
+    values, jax_values, rho, nt = _electromagnetic_species(dtype)
+    charge, density, temp, mass, vth = (
+        values[key] for key in ("charge", "density", "temp", "mass", "vth")
+    )
     beta = 0.04
     params = LinearParams(
         beta=beta, fapar=1.0, tau_e=0.0, rho=jnp.asarray(rho), rho_star=0.8
@@ -154,10 +198,6 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
     G[:, :, 0, iy, ix] = np.array([[0.3 + 0.2j], [-0.4 + 0.5j]])[:, :, None] * phase
     G[:, :, 1, iy, ix] = np.array([[0.1 - 0.3j], [0.2 + 0.4j]])[:, :, None] * phase
     ctype = jnp.complex128 if dtype == np.float64 else jnp.complex64
-    values = dict(
-        charge=charge, density=density, temp=temp, mass=mass, tz=temp / charge, vth=vth
-    )
-    jax_values = {key: jnp.asarray(value, dtype) for key, value in values.items()}
     out = solve_fields(
         jnp.asarray(G, ctype),
         cache,
@@ -194,36 +234,21 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
         for field in (flat_out.phi, flat_out.apar, flat_out.bpar)
     )
     jl_jax, jb_jax = jnp.asarray(flat_jl, dtype), jnp.asarray(flat_jb, dtype)
-    nt = jnp.asarray(density * temp, dtype)
-
-    def source_energy(G_in):
-        fields = solve_fields(
-            G_in, flat_cache, params, fapar=1.0, w_bpar=1.0, **jax_values
-        )
-        g0, g1 = G_in[:, :, 0, iy, ix], G_in[:, :, 1, iy, ix]
-        sphi = jnp.sum(
-            jnp.asarray(density * charge, dtype)[:, None, None] * jl_jax * g0,
-            axis=(0, 1),
-        )
-        sa = jnp.sum(
-            jnp.asarray(density * charge * vth, dtype)[:, None, None] * jl_jax * g1,
-            axis=(0, 1),
-        )
-        sb = jnp.sum(nt[:, None, None] * jb_jax * g0, axis=(0, 1))
-        kinetic = 0.5 * jnp.sum(
-            nt[:, None, None, None] * jnp.abs(G_in[:, :, :, iy, ix]) ** 2
-        )
-        field = 0.5 * jnp.real(
-            jnp.sum(
-                jnp.conj(fields.phi[iy, ix]) * sphi
-                - jnp.conj(fields.apar[iy, ix]) * sa
-                + jnp.conj(fields.bpar[iy, ix]) * sb
-            )
-        )
-        return kinetic + field
-
     G_jax = jnp.asarray(G, ctype)
-    gradient = jax.grad(source_energy)(G_jax)
+    gradient = jax.grad(_three_field_source_quadratic)(
+        G_jax,
+        flat_cache,
+        params,
+        (
+            jl_jax,
+            jb_jax,
+            jnp.ones(grid.z.size, dtype=dtype),
+            values,
+            jax_values,
+            iy,
+            ix,
+        ),
+    )
     H = build_H(
         G_jax,
         flat_cache.Jl,
@@ -267,6 +292,163 @@ def test_geometry_flr_matches_independent_three_field_residual(kperp2_bmag):
     scale = jnp.sum(jnp.abs(exchange))
     assert scale > 0.0
     assert jnp.abs(jnp.real(jnp.sum(exchange))) < tol * scale
+
+
+def test_variable_b_streaming_mirror_weighted_exchange_converges():
+    """Periodic streaming/mirror exchange converges in the volume measure.
+
+    This is a term-level gate, not a full free-energy budget with drives,
+    collisions, damping, curvature, or nonlinear transfer.
+    """
+
+    dtype = np.float64 if jax.config.x64_enabled else np.float32
+    ctype = jnp.complex128 if dtype == np.float64 else jnp.complex64
+    tol = 3e-12 if dtype == np.float64 else 2e-5
+    values, jax_values, rho, nt = _electromagnetic_species(dtype)
+    params = LinearParams(
+        beta=0.04,
+        fapar=1.0,
+        tau_e=0.0,
+        rho=jnp.asarray(rho, dtype),
+        rho_star=0.8,
+        kpar_scale=1.0 / (1.4 * 2.77778),
+    )
+    geom = SAlphaGeometry(
+        q=1.4,
+        s_hat=0.0,
+        epsilon=0.18,
+        R0=2.77778,
+        kperp2_bmag=True,
+        bessel_bmag_power=1.0,
+    )
+
+    defects = []
+    wrong_weights = []
+    wrong_signs = []
+    isolated_rates = []
+    for nz in (16, 32, 64, 128):
+        grid = build_spectral_grid(
+            GridConfig(Nx=1, Ny=4, Nz=nz, Lx=8.0, Ly=7.0, boundary="periodic")
+        )
+        cache = build_linear_cache(grid, geom, params, Nl=3, Nm=4)
+        iy, ix = 1, 0
+        z = np.asarray(grid.z, dtype=dtype)
+        G = np.zeros((2, 3, 4, grid.ky.size, grid.kx.size, nz), complex)
+        s, ell, m = np.indices((2, 3, 4))
+        k1, k2 = 1 + (s + ell + 2 * m) % 5, 1 + (2 * s + 2 * ell + m) % 6
+        amp = 0.02 * (1 + s + ell) + 0.015j * (1 + m)
+        G[:, :, :, iy, ix] = amp[..., None] * (
+            np.exp(1j * k1[..., None] * z)
+            + 0.31 * np.exp(-1j * k2[..., None] * z)
+            + 0.17 * np.cos(7.0 * z)
+        )
+        G_jax = jnp.asarray(G, ctype)
+        fields = solve_fields(G_jax, cache, params, fapar=1.0, w_bpar=1.0, **jax_values)
+        assert all(
+            np.linalg.norm(np.asarray(field[iy, ix])) > 0.0
+            for field in (fields.phi, fields.apar, fields.bpar)
+        )
+
+        theta = jnp.asarray(grid.z, dtype=dtype)
+        B = np.asarray(geom.bmag(theta))
+        k2 = np.asarray(cache.kperp2[iy, ix]) * B**2
+        b = rho[:, None] ** 2 * k2[None, :] / B[None, :] ** 3
+        jl, jb = _analytic_gyro_coefficients(b)
+        jl_jax, jb_jax = jnp.asarray(jl, dtype), jnp.asarray(jb, dtype)
+        independent_jacobian = 1.0 / (abs(geom.gradpar()) * B)
+        independent_vol = jnp.asarray(
+            independent_jacobian / independent_jacobian.sum(), dtype
+        )
+        vol, _ = fieldline_quadrature_weights(geom, grid)
+        np.testing.assert_allclose(
+            np.asarray(vol), np.asarray(independent_vol), rtol=tol
+        )
+
+        H = build_H(
+            G_jax,
+            cache.Jl,
+            fields.phi,
+            jax_values["tz"],
+            fields.apar,
+            jax_values["vth"],
+            fields.bpar,
+            cache.JlB,
+        )
+        gradient = jax.grad(_three_field_source_quadratic)(
+            G_jax,
+            cache,
+            params,
+            (jl_jax, jb_jax, independent_vol, values, jax_values, iy, ix),
+        )
+        expected_gradient = (
+            independent_vol[None, None, None, :]
+            * nt[:, None, None, None]
+            * H[:, :, :, iy, ix]
+        )
+        np.testing.assert_allclose(
+            np.asarray(jnp.conj(gradient[:, :, :, iy, ix])),
+            np.asarray(expected_gradient),
+            rtol=tol,
+            atol=tol,
+        )
+
+        streaming = linked_streaming_contribution(
+            G_jax,
+            phi=fields.phi,
+            apar=fields.apar,
+            bpar=fields.bpar,
+            Jl=cache.Jl,
+            JlB=cache.JlB,
+            tz=jax_values["tz"],
+            vth=jax_values["vth"],
+            sqrt_p=cache.sqrt_p,
+            sqrt_m=cache.sqrt_m_ladder,
+            kpar_scale=jnp.asarray(params.kpar_scale, dtype),
+            weight=jnp.asarray(1.0, dtype),
+            kz=cache.kz,
+            dz=cache.dz,
+            hermite_closure="truncation",
+        )
+        mirror = mirror_contribution(
+            H,
+            vth=jax_values["vth"],
+            bgrad=cache.bgrad,
+            ell=cache.l,
+            sqrt_m=cache.sqrt_m,
+            sqrt_m_p1=cache.sqrt_m_p1,
+            weight=jnp.asarray(1.0, dtype),
+        )
+
+        def normalized_rate(rhs, zweight):
+            exchange = (
+                zweight[None, None, None, :]
+                * nt[:, None, None, None]
+                * jnp.conj(H[:, :, :, iy, ix])
+                * rhs[:, :, :, iy, ix]
+            )
+            scale = jnp.sum(jnp.abs(exchange))
+            assert scale > 0.0
+            return float(jnp.abs(jnp.real(jnp.sum(exchange))) / scale)
+
+        defects.append(normalized_rate(streaming + mirror, independent_vol))
+        wrong_weights.append(
+            normalized_rate(streaming + mirror, jnp.ones(nz, dtype=dtype) / nz)
+        )
+        wrong_signs.append(normalized_rate(streaming - mirror, independent_vol))
+        isolated_rates.append(
+            (
+                normalized_rate(streaming, independent_vol),
+                normalized_rate(mirror, independent_vol),
+            )
+        )
+
+    min_reduction = 100 if dtype == np.float64 else 32
+    resolved_tol = tol if dtype == np.float64 else 8 * np.finfo(dtype).eps
+    assert defects[0] > min_reduction * max(defects[1:])
+    assert max(defects[1:]) < resolved_tol
+    assert min(rate for pair in isolated_rates for rate in pair) > 10 * tol
+    assert min(wrong_weights[-2:]) > 10 * tol
+    assert min(wrong_signs[-2:]) > 10 * tol
 
 
 def _build_case(

@@ -18274,3 +18274,26 @@ aggregator failed with no failing test. The shard had been growing with the test
 carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main` was one
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
+
+### 2026-09-21 — varying-B streaming/mirror exchange (EM0)
+
+Extends #269 at `f4fda382f` without changing runtime source. The existing field
+test file shares its species/source-quadratic helpers and adds a periodic
+varying-B refinement at Nz=16/32/64/128. All three fields are nonzero; the
+independent volume weight is proportional to `1/(abs(gradpar)*B)`. The real
+contraction of `nT H*` with streaming plus mirror approaches zero, while
+uniform-weight and reversed-mirror controls retain defects around 4e-4–5e-4.
+Each isolated term is nonzero. This follows Mandell et al. (2018), equations
+4.4–4.6, linked in the theory page. It certifies relative volume weighting and
+term-level exchange, not absolute units or full physical EM free energy.
+
+The coarse defect is about 4.20e-6; refined defects are below 3e-8 in float32
+and 5e-17 in float64 on the tested CPU. Float32 uses a roundoff-aware resolved
+bound and a 32-fold reduction, rather than requiring the float64 100-fold
+reduction at the roundoff floor. Wrong-sign/weight controls remain separated.
+Supported JAX 0.10.2 CPU verification: all 45 field tests pass in x64;
+27 pass with x64 disabled, excluding 18 explicitly float64-parametrized cases.
+Both runs make FutureWarning fatal. Ruff, formatting, architecture, diff and
+strict Sphinx pass. The justified test budget increases by 182 lines, reusing
+one existing file; no new files or runtime code are added. Full energy-budget,
+perpendicular-Ampere normalization and EM transport gates remain open.

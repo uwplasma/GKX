@@ -1362,7 +1362,10 @@ recursive = true
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
 # 92533 -> 92692: independent geometry -> FLR -> three-field residual,
 # source-gradient, and periodic-streaming exchange coverage.
-baseline = 92692
+# 92692 -> 92874: varying-B streaming/mirror exchange with independently
+# weighted volume, refinement and wrong-weight/sign controls; shared fixtures
+# keep the constant-B and varying-B oracles in the existing field test file.
+baseline = 92874
 target = 35000
 
 [[line_budget_policy.counts]]

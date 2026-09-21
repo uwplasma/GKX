@@ -128,6 +128,15 @@ This excludes curved-geometry, drive, collision, boundary-damping and nonlinear
 terms. The runtime ``Wg + Wphi + Wapar`` diagnostic is a
 distinct monitoring quantity and contains no :math:`B_\parallel` contribution.
 
+For varying :math:`B`, the companion term-level gate follows `Mandell et al.
+(2018), (4.4)--(4.6)
+<https://doi.org/10.1017/S0022377818000041>`_: it contracts streaming plus
+mirror forcing with :math:`n_sT_sH_s^*` and the field-line volume weight
+:math:`J(z)\propto 1/(|\mathrm{gradpar}|B)`.  The periodic boundary contribution
+vanishes, and the finite-resolution defect converges once aliased products are
+resolved.  This does not promote the source quadratic to a complete physical
+variable-:math:`B` electromagnetic free energy or test the omitted budget terms.
+
 Linear gyrokinetic operator
 ---------------------------
 
