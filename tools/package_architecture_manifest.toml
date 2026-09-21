@@ -1406,7 +1406,10 @@ recursive = true
 # which branch a declared rate actually reaches. Measured. Target unchanged.
 # 92814 -> 92843: two cases exercise the physics- and term-level off switches
 # through RuntimeConfig.validate, the owner of cross-section consistency.
-baseline = 92843
+# 92843 -> 92878: trace both analytic metrics through eager/JIT AD at positive
+# and negative finite shear, compare them with centered finite differences, and
+# preserve the distinct exact-zero metric value. The source line budget shrinks.
+baseline = 92878
 target = 35000
 
 [[line_budget_policy.counts]]
