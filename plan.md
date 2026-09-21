@@ -102,7 +102,7 @@ to implement the rate is a historical checkpoint, not current work.
 | 4 | **GEO-TOPO** | State and test the derivative contract for linked geometry topology, including the finite-shear analytic metric path. | The topology map is fixed or changes fail explicitly; each smooth stratum is free of tracer-to-host concretization and has JAX AD/JIT versus finite-difference checks. In particular, finite nonzero `s_hat` must trace through the `SAlphaGeometry` and `SlabGeometry` metric paths; no derivative is claimed across zero-shear or link-map changes. |
 | 5 | **OPT-HOLDOUT** | Evaluate linear, quasilinear and finite-window nonlinear objectives on held-out equilibria and controls. | Training choices are frozen first; held-out accuracy, stationarity, uncertainty and resolution gates are reported separately. Nonlinear campaigns require VEL-REG and STOP-CAL; electromagnetic campaigns additionally require their EM-FIELD prerequisites. |
 | 6 | **PERF-ADJOINT** | Rebase and finish #264's reusable adjoint executable. | Value/gradient identity, cross-geometry reuse with zero steady recompiles, and bounded cold/steady CPU and GPU measurements. |
-| 7 | **PERF-HALF** | Finish #266 and adopt the half-spectrum runtime layout. | Full/half physics and artifact interchange pass in float32/x64; accepted wall time and materialized/peak memory are recorded on CPU and GPU. |
+| 7 | **PERF-HALF** | Qualify #266 as an optional layout; change the default only after workload-level adoption gates pass. | Full/half physics and artifact interchange pass in float32/x64; accepted wall time and materialized/peak memory are recorded on CPU and GPU. A smaller state or compiler byte count cannot override a measured adjoint slowdown. |
 | 8 | **PERF-SOLVAX** | Finish #265 and #267; retain only measured `pr3-cm` improvements. | Certified residuals and refusal controls are unchanged; factor/apply memory and time are accepted only over their measured size and precision envelope. |
 | 9 | **PERF-ENVELOPE** | Consolidate forward, adjoint and eigensolver cost after the open performance PRs land. | Publish accepted time and memory, not op-count proxies alone, on named CPU/GPU cases; record regressions and crossover sizes. |
 | 10 | **COLL-ENV** | Complete the collision-model support envelope. | Species, geometry, precision, conservation and velocity-resolution limits are explicit; unsupported combinations fail closed. |
@@ -118,6 +118,41 @@ reference checkpoints; the paired stationary control stops 128/128 times.
 This bounded counterexample and its exact reproduction are in the work log.
 Calibrate rejection and stationary stopping power together before changing the
 policy; passing a fixed-window uncertainty test does not close this gate.
+
+### Execution decisions from the September 21 review
+
+- **Statistics before transport promotion:** test the actual repeated-look
+  cadence, stationary stopping power, and held-out drifting/bursting traces.
+  Minimum effort is an operational safeguard, not a stationarity theorem.
+  Audit adaptive sampling separately: `saturation_stop_decision` currently
+  uses median sample spacing and an unweighted mean. A regular-sample AR(1)
+  result does not validate a physical-time average on irregular samples.
+- **References before convergence claims:** finish one #194 migrated Cyclone
+  reference and its three-level timestep ladder before expanding the affected
+  atlas. Keep physical collision and artificial regularization limits distinct.
+- **Electromagnetics remains core:** close varying-B weighted energy exchange
+  after the bounded #269 controls; then follow EM1–EM3, including independent
+  GS2/stella anchors and channel-resolved transport. Finite-beta geometry alone
+  is not electromagnetic fluctuation validation.
+- **Warm continuation, not a new derivative:** extend the existing accepted-state
+  helper to device arrays; rejected trials must not mutate it. Regenerate fields
+  consistently, test changed-geometry state interpretation, and compare warm/cold
+  runs at equal uncertainty. Keep the fixed-state finite-window adjoint contract;
+  final transport improvement needs independent cold-start holdouts.
+- **No speculative coordinate rewrite:** first close smooth fixed-topology
+  geometry derivatives. An alternative mapping needs a measured conditioning,
+  resolution or boundary benefit. ESSOS island fields require a separately
+  justified domain/equilibrium model, not only substituted metrics.
+- **Release evidence, not release pressure:** current-head CI, migrated physics
+  references and the declared scientific exits remain mandatory. Simplify the
+  README and experiment drivers without erasing negative results or treating
+  historical artifact-backed comparisons as fresh current-operator validation.
+
+Statistical rationale: [Flegal–Gong](https://arxiv.org/abs/1303.0238) establishes
+asymptotic fixed-width results under stationary-limit assumptions, not arbitrary
+drift rejection; [Parker et al.](https://arxiv.org/abs/1807.04779) motivates
+correlation-aware turbulence averages. [stella's verification suite](https://github.com/stellaGK/stella#verification-of-stella-output)
+provides independent term, boundary, electromagnetic and restart test patterns.
 
 ## Archived opening checkpoints
 
@@ -416,34 +451,33 @@ skips tied to a version probe.
 
 ### 3.4 Statistics module and protocol
 
-`src/gkx/diagnostics/statistics.py`, extending `diagnostics/saturation.py`
-and consumed by stopping, cross-code comparison and optimization acceptance.
-Defaults and their sources are in the
-[statistics report](plan/research/2026-09-06_saturation_statistics.md).
+Extend the existing statistics and saturation owners; do not create a competing
+module or estimator. The [earlier report](plan/research/2026-09-06_saturation_statistics.md)
+is a candidate-method review, not a validated universal stopping recipe.
 
-1. Pre-register in the input: ε_rel, α=0.05, N_τ, T_min, T_max, checkpoint
-   spacing. Nothing is tuned after seeing Q(t).
-2. Sample Q_s, Γ_s, Π_s per species and per field channel at Δt_s ≈ 0.2 τ_int.
-3. Transient cut by MSER-5 on batch-of-5 means; a cut in the second half is
-   invalid and extends the run by 10%. Cross-check Geweke |z|<2 and
-   Heidelberger–Welch.
-4. τ_int by Sokal window (C=5) and by batch means; flag if they differ by 2×.
-5. Require T_avg ≥ 50 τ_int and T_min = 300 a/c_s.
-6. Batches of max(⌊√n⌋, 5τ_int) samples with ≥20 batches; choose the largest
-   count whose lag-1 batch correlation is below its standard error; apply the
-   lag-1 (BMBC) correction.
-7. Report mean ± t_{K−1,0.975}·SE with ESS and T_avg/τ_int.
-8. Stationarity: split halves differ by < 2 pooled SE; trend slope × T_avg
-   < SE.
-9. Multivariate stop on (Q_i, Q_e, Γ) with the Vats–Flegal–Jones bound
-   (minESS at ε=0.3, α=0.05: 171 for p=1, 209 for p=2).
-10. Precision stop: 95% half-width ≤ 5% of |mean|; absolute floor near zero.
-11. Rules checked at 10% increments of n and not before n*.
-12. Persistence over two consecutive checkpoints.
-13. Near marginality (skewness>1 or Hurst>0.5) fit a log-link ARMA and
-    forecast the required T; report "unconverged" if orders disagree.
-14. Output JSON: cut, both τ_int, ESS, mESS, CI, tests passed, T_max hit.
-    Never a bare mean.
+1. Pre-register the observable, transient rule, relative/absolute precision,
+   confidence level, minimum effort, maximum horizon and actual look cadence.
+   Distinguish a SEM threshold from a confidence-interval half-width.
+2. Define the physical-time average and sampling contract. For regular samples,
+   use the shared correlation estimator; for adaptive sampling, qualify uniform
+   diagnostic resampling or a time-weighted estimator before claiming coverage.
+3. Calibrate transient removal, minimum effort and drift guards together at
+   runtime cadence. Freeze candidate policies before independent seeds; require
+   drift rejection **and** stationary stopping power. Include burst/ARMA controls
+   and held-out physical traces, not only a fixed-window AR(1) test.
+4. Compare IAT-based uncertainty with a qualified batch-means estimate. Report
+   ESS, retained duration, sample count, estimated uncertainty and failed guards.
+   Neither a flat field energy nor small relative SEM establishes stationarity.
+5. Keep physical minimum duration case-specific. Do not impose the old universal
+   `300 a/c_s`, or promote `50 tau` alone, without calibration. A minimum raw
+   sample count is a finite-sample safeguard whose cadence sensitivity must be
+   tested, not a universal effective-sample threshold.
+6. For electromagnetic totals include field-channel covariance; for optimization
+   separate within-trace uncertainty from independent-seed variation. Qualify
+   intervals at the selected stopping time, not only at fixed horizons.
+7. Record the exact stop reason, cut, guards, sampling policy, estimated IAT,
+   uncertainty and horizon exhaustion in existing artifacts. Failed calibration
+   or a maximum-horizon exit is not a converged transport result.
 
 Comparisons report Δ = Q̄_A − Q̄_B with CI ±1.96√(SE_A²+SE_B²); "converged"
 means the CI contains zero **and** its half-width is below ε_rel·Q̄. A wide
