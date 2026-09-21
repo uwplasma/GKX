@@ -301,8 +301,8 @@ trajectory, potential = integrate_linear_from_config(
 ```
 
 For repeated nonlinear calls with fixed geometry and numerical policy, prepare
-the compiled simulation once with an explicit `steps`. Saturation chooses the
-length mid-run, so it cannot be compiled ahead of time. The case API is
+the compiled simulation once with an explicit `steps`. This prepared scan has
+a fixed length, unlike saturation-based stopping. The case API is
 `gkx.prepare(case, steps=N)`; `warmup()` moves compilation out of the first
 timed `solve`.
 
