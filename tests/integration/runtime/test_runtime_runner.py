@@ -5132,7 +5132,7 @@ def test_saturation_stop_condition_off_without_diagnostics_or_enough_steps() -> 
 
     # Too few steps to ever reach a decision: stay off the chunked route rather
     # than wrap the same integration in a loop that can only run out of steps.
-    cfg, ctx, policy = _stop_policy_inputs(steps=3)
+    cfg, ctx, policy = _stop_policy_inputs(steps=255)
     assert _saturation_stop_condition(cfg, ctx, policy) is None
 
 

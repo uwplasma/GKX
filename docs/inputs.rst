@@ -384,11 +384,15 @@ Diagnosed nonlinear runs stop at saturation by default (``[time] run_to =
 "saturation"``): the runtime integrates in chunks and, after each chunk, tests
 the accumulated heat-flux trace with spin-up excluded. It stops once the
 autocorrelation-corrected relative SEM of the windowed mean is at or below
-``saturation_rel_sem``, the window is at least ``saturation_min_window`` long,
-and the first and second halves of the window agree within twice their combined
-SEM. The same stationarity test guards the electrostatic field energy ``Wphi``
-and gyrokinetic free energy ``Wg``. ``t_max`` remains the hard cap, so a run
-that never saturates behaves exactly as before.
+``saturation_rel_sem``, the retained window has at least 256 samples and spans
+at least 20 integrated autocorrelation times, any larger
+``saturation_min_window`` is met, and the first and second halves agree within
+twice their combined SEM. The same drift-consistency guard is applied to the
+electrostatic field energy ``Wphi`` and gyrokinetic free energy ``Wg``. These
+operational finite-sample safeguards provide neither a universal sequential-
+confidence guarantee nor qualification for irregular adaptive-time sampling.
+``t_max`` remains the hard cap, so a run that never saturates behaves exactly
+as before.
 The chosen window and its ``mean +/- SEM`` are printed in the run summary and
 recorded under ``saturation`` in the summary JSON. Pass
 ``--no-until-saturated`` (or set ``run_to = "t_max"``) for a fixed horizon.
@@ -607,8 +611,12 @@ Notable runtime-only keys:
   ``tests/validation/quasilinear/test_quasilinear_window.py``; mild drift,
   burn-in, repeated-look coverage and real turbulent traces remain open gates.
 * ``[time] saturation_min_window``: minimum averaging-window span in time
-  units before a run may stop. When omitted, the requirement is derived from
-  the trace itself as ten integrated autocorrelation times.
+  units before a run may stop. The effective requirement is the larger of this
+  value and twenty integrated autocorrelation times; omitting it retains the
+  correlation-time floor. Every accepted window also retains at least 256
+  samples. These are finite-sample safeguards calibrated on regularly sampled
+  synthetic traces, not a guarantee for irregular adaptive-time sampling or
+  arbitrary nonstationarity.
 * ``[time] nstep_restart``: when writing a nonlinear NetCDF bundle,
   checkpoint every ``nstep_restart`` steps instead of waiting for the end of
   the run. This is useful for long adaptive runs and batch jobs.

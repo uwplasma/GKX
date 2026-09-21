@@ -633,7 +633,7 @@ def test_saturation_stop_decision_rejects_unresolved_or_short_traces() -> None:
     assert decision["saturated"] is False
     assert decision["reasons"]
 
-    short = saturation_stop_decision(t[:8], growing[:8])
+    short = saturation_stop_decision(t[:128], growing[:128])
     assert short["saturated"] is False
     assert short["reasons"] == ["trace_shorter_than_min_samples"]
     assert short["mean"] is None
@@ -664,6 +664,11 @@ def test_saturation_stop_decision_guard_blocks_drifting_free_energy() -> None:
 def test_saturation_stop_decision_honors_min_window_override() -> None:
     t, heat = _spinup_then_plateau()
 
+    derived = saturation_stop_decision(
+        t, heat, config=SaturationStopConfig(min_window=0.0)
+    )
+    assert derived["min_window"] == pytest.approx(20.0 * derived["tau_ac"])
+
     decision = saturation_stop_decision(
         t, heat, config=SaturationStopConfig(rel_sem=0.05, min_window=1.0e6)
     )
@@ -671,6 +676,40 @@ def test_saturation_stop_decision_honors_min_window_override() -> None:
     assert decision["saturated"] is False
     assert "window_below_min_window" in decision["reasons"]
     assert decision["min_window"] == pytest.approx(1.0e6)
+
+
+def test_saturation_stop_decision_applies_mandatory_sample_floor(monkeypatch) -> None:
+    time = np.arange(257, dtype=float)
+    values = np.concatenate(([0.0], 10.0 + np.cos(np.arange(256) / 10.0)))
+    config = SaturationStopConfig(min_samples=1, min_window=0.0)
+
+    short = saturation_stop_decision(time[:-1], values[:-1], config=config)
+    boundary = saturation_stop_decision(time, values, config=config)
+    strengthened = saturation_stop_decision(
+        time, values, config=SaturationStopConfig(min_samples=300)
+    )
+
+    assert short["reasons"] == ["post_spinup_window_too_short"]
+    assert boundary["n_window"] == 256
+    assert boundary["min_samples"] == 256
+    assert boundary["min_iat_spans"] == pytest.approx(20.0)
+    assert boundary["min_window"] == pytest.approx(20.0 * boundary["tau_ac"])
+    assert "window_below_min_window" not in boundary["reasons"]
+    assert strengthened["reasons"] == ["trace_shorter_than_min_samples"]
+    assert strengthened["min_samples"] == 300
+
+    monkeypatch.setattr(
+        "gkx.diagnostics.saturation._sokal_window_mean_sem",
+        lambda x, _dt: (float(np.mean(x)), 0.01, 1.0, True),
+    )
+    constant = np.full(256, 10.0)
+    exact = saturation_stop_decision(np.linspace(0.0, 20.0, 256), constant)
+    below = saturation_stop_decision(
+        np.linspace(0.0, np.nextafter(20.0, 0.0), 256), constant
+    )
+    assert exact["saturated"] is True
+    assert exact["window_span"] == exact["min_window"] == pytest.approx(20.0)
+    assert below["reasons"] == ["window_below_min_window"]
 
 
 def test_saturation_stop_decision_refuses_a_trace_that_never_left_zero() -> None:
@@ -722,7 +761,7 @@ def test_saturation_stop_decision_refuses_a_flux_stationary_from_t_zero() -> Non
     but a few decades above that floor passed every other gate and stopped in
     its first chunk, at any amplitude: the correlation time of such a trace
     crosses zero at lag one, which made ``tau_ac`` exactly zero, which made the
-    derived ``min_window = 10 tau_ac`` zero as well. The window-length
+    derived IAT-scaled ``min_window`` zero as well. The window-length
     requirement therefore vanished precisely on the traces carrying the least
     information, and the relative SEM of a long stretch of uncorrelated samples
     is tiny.
@@ -817,25 +856,49 @@ def test_correlated_sem_has_fixed_horizon_ar1_coverage(
         assert naive_coverage < 0.75
 
 
-def test_saturation_causal_prefixes_reject_strong_ar1_drift(record_property) -> None:
+@pytest.mark.parametrize(
+    "checkpoints",
+    [(512, 1024, 2048, 4096), tuple(range(128, 4097, 128))],
+    ids=("sparse_reference", "production_cadence"),
+)
+def test_saturation_causal_prefixes_reject_strong_ar1_drift(
+    checkpoints: tuple[int, ...], record_property
+) -> None:
     """Bounded negative control, not a proof of sequential interval coverage.
 
     Flegal–Gong (2015), arXiv:1303.0238, motivates testing the stopping rule,
     not just fixed-window SEM. Predeclared rho=.75, seed=20260913, 128 draws,
-    checkpoints 512/1024/2048/4096, and <=5% ever-stopped rate. The mean rises
-    eight noise standard deviations per 512 samples; every prefix is drifting.
+    and <=5% ever-stopped rate. Test both the reference checkpoints and the
+    production 128-step cadence. The mean rises eight noise standard deviations
+    per 512 samples; every prefix is drifting.
     """
     time = np.arange(4096, dtype=float)
     series = 10.0 + time / 64.0 + _stationary_ar1(0.75, seed=20260913, draws=128)
     stopped = sum(
         any(
             saturation_stop_decision(time[:n], row[:n])["saturated"]
-            for n in (512, 1024, 2048, 4096)
+            for n in checkpoints
         )
         for row in series
     )
+    record_property("checkpoint_schedule", ",".join(map(str, checkpoints)))
     record_property("false_stops", stopped)
     assert stopped / len(series) <= 0.05, stopped
+
+
+def test_saturation_production_cadence_stops_stationary_ar1(record_property) -> None:
+    """The paired stationary control retains >=90% stopping power by 4096."""
+    time = np.arange(4096, dtype=float)
+    series = 10.0 + _stationary_ar1(0.75, seed=20260913, draws=128)
+    stopped = sum(
+        any(
+            saturation_stop_decision(time[:n], row[:n])["saturated"]
+            for n in range(128, 4097, 128)
+        )
+        for row in series
+    )
+    record_property("stops", stopped)
+    assert stopped / len(series) >= 0.90, stopped
 
 
 def test_sokal_reports_a_constant_trace_as_unresolved() -> None:

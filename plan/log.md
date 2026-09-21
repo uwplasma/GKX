@@ -18274,3 +18274,33 @@ aggregator failed with no failing test. The shard had been growing with the test
 carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main` was one
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
+
+## 2026-09-21 — STOP-CAL retained-window safeguard
+
+Base `eeb3481c6`: the existing strong-drift AR(1) control stops 69/128 times
+at runtime's 128-step look cadence, versus 0/128 at sparse reference looks.
+The paired stationary control stops 128/128 times. The repair adds gates only:
+retained samples ≥ max(256, configured minimum), and retained span ≥
+max(20 τ, configured physical minimum). Existing transient selection, SEM,
+Wphi/Wg guards and maximum horizon are unchanged. Stops can be delayed or
+prevented; this does not establish stationarity or sequential interval coverage.
+
+Calibration uses the existing `_stationary_ar1` test generator, 128 paths of
+4096 samples, rho=0.5/0.75/0.95, and looks every 128/256 samples. Compare
+`10 + noise` with `10 + t/64 + noise`. Select on seeds 20260921/20260922,
+freeze the candidate, then test seeds 20260923/20260924. Independent replay
+of the implemented policy gives at most 2/128 drift stops per latter stratum,
+all 128 stationary paths stopping, and median stationary stops of 384/512
+samples respectively. The separately tested 50-IAT-only alternative reaches
+18/128 drift stops. Neither result is a population error-rate bound.
+
+Regression tests include the production first look, paired stationary power,
+retained 255/256-sample and exact 20-IAT boundaries, and strengthen-only user
+settings. Reproduce with `PYTHONPATH=src:. JAX_PLATFORMS=cpu JAX_ENABLE_X64=true
+GKX_X64=1 python -m pytest -q tests/validation/quasilinear/test_quasilinear_window.py`.
+The source owner shrinks by ten lines through comment consolidation; deliberate
+test growth adds the missing negative/positive and boundary controls, with no
+new files. Adaptive-time averaging, guard-trace calibration, intermittent
+controls and held-out physical traces remain open in STOP-CAL; no new transport
+optimization claim follows. See the authoritative queue in
+[PR #268](https://github.com/uwplasma/GKX/pull/268).
