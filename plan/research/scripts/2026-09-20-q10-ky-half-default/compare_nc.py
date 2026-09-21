@@ -7,6 +7,15 @@ relative difference, with "bitwise" reserved for an exact zero.  A variable
 present in one dump and not the other, or one whose shape moved, is a failure
 on its own -- those are the ways a published file changes without any number
 looking wrong.
+
+Every row also carries ``max_abs`` and ``ref_peak``, because ``max_rel`` is
+normalized by the variable's own peak and says nothing on its own about a
+variable that is numerically zero.  ``TurbulentHeating`` is exactly that on an
+electrostatic deck: the diagnostic is a difference of two O(1) terms that
+cancel, it peaks at 3e-17 against a field energy of 2e-2, and the two layouts'
+answers for it differ in the sixteenth significant figure of the terms.  Read
+as ``max_rel`` alone that is 1.4e-3 and looks like a result moving; read with
+``ref_peak`` it is a ratio of two roundoff residues.
 """
 
 from __future__ import annotations
@@ -43,7 +52,7 @@ for key in keys:
         )
         continue
     if a.size == 0:
-        rows.append({"key": key, "max_rel": 0.0})
+        rows.append({"key": key, "max_rel": 0.0, "max_abs": 0.0, "ref_peak": 0.0})
         n_bitwise += 1
         continue
     x = np.asarray(a, dtype=np.complex128)
@@ -58,14 +67,24 @@ for key in keys:
         failures.append({"key": key, "why": "nonfinite-pattern"})
         continue
     if bad_ref.all():
-        rows.append({"key": key, "max_rel": 0.0, "note": "non-finite in both arms"})
+        rows.append(
+            {
+                "key": key,
+                "max_rel": 0.0,
+                "max_abs": 0.0,
+                "ref_peak": 0.0,
+                "note": "non-finite in both arms",
+            }
+        )
         n_bitwise += 1
         continue
     x = np.where(bad_ref, 0.0, x)
     y = np.where(bad_new, 0.0, y)
-    scale = float(np.max(np.abs(x))) if np.any(np.abs(x) > 0) else 1.0
-    rel = float(np.max(np.abs(x - y)) / scale)
-    rows.append({"key": key, "max_rel": rel})
+    peak = float(np.max(np.abs(x)))
+    scale = peak if peak > 0.0 else 1.0
+    abs_diff = float(np.max(np.abs(x - y)))
+    rel = abs_diff / scale
+    rows.append({"key": key, "max_rel": rel, "max_abs": abs_diff, "ref_peak": peak})
     worst = max(worst, rel)
     if rel == 0.0:
         n_bitwise += 1
@@ -85,7 +104,11 @@ summary = {
 args.out.write_text(json.dumps(summary, indent=2))
 print(f"variables {len(rows)}  bitwise {n_bitwise}  max_rel {worst:.3e}")
 for row in summary["over_rtol"][:25]:
-    print(f"  over rtol {row['max_rel']:.3e}  {row['key']}")
+    print(
+        f"  over rtol {row['max_rel']:.3e}"
+        f"  (max_abs {row['max_abs']:.3e} of peak {row['ref_peak']:.3e})"
+        f"  {row['key']}"
+    )
 for fail in failures[:25]:
     print(f"  FAIL {fail}")
 raise SystemExit(1 if failures else 0)
