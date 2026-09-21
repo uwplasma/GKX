@@ -42,8 +42,8 @@ by block-Thomas in the Laguerre index plus one Sherman-Morrison correction,
 which is the same preconditioner to round-off -- Q21 measured the two solves
 agreeing to 4.4e-16, with every iteration count unchanged.
 
-The Laguerre couplings are banded in the Hermite index: drift terms preserve
-``m``, while mirror terms couple neighboring Hermite orders. On this tested
+Off-diagonal Laguerre couplings are banded in Hermite: their drift blocks
+preserve ``m``, while mirror blocks couple neighboring orders. On this tested
 operator the measured half-width is 1, and the
 elimination therefore stores ``Nl Nm^2`` Schur inverses plus ``2 Nl (2p+1) Nm``
 coupling diagonals rather than the ``3 Nl Nm^2`` of a dense-band factorization
