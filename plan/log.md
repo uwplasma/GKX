@@ -18283,15 +18283,14 @@ provides it. GKX retains the measured Hermite-band coupling action, the unrolled
 forward substitution, and the Sherman-Morrison field correction. The unrolled
 substitution is pinned bitwise to `block_thomas_solve_ops` on the same factors.
 
-The A/B record in
-`plan/research/scripts/2026-09-20-solvax-block-thomas/out/ab_apply.txt` reported
-full-apply relative differences of `6.7e-16` to `9.6e-16`, factor storage
-`1.43x` to `2.61x` smaller over `Nl*Nm=36..768`, and z-block solve ratios
-`0.95x`, `0.85x`, `0.85x`, and `0.80x` versus the superseded factorization.
-That record used JAX 0.9.2, below GKX's supported `jax>=0.10.1` floor. Its
-timings and numerical-identity measurements are therefore withdrawn pending a
-rerun on a supported JAX release; they are retained only as an invalidated
-record, not as performance or correctness evidence.
+The supported-runtime A/B record in
+`plan/research/scripts/2026-09-20-solvax-block-thomas/out/ab_apply.txt` uses
+JAX/JAXLIB 0.10.2 and measures full-apply relative differences of `7.1e-16` to
+`8.9e-16`, bitwise agreement with SOLVAX's substitution, and actual factor
+storage `1.43x` to `2.61x` smaller over `Nl*Nm=36..768`. These correctness and
+storage results supersede the original below-floor record, which remains in Git
+history. The host was heavily contended (14 CPUs, load 44 at the start), so the
+record supports no speed claim despite retaining the raw timings.
 
 The Ruiz equilibration record does not carry interpreter or library-version
 provenance. Its numerical comparison is unpromoted pending a rerun that records

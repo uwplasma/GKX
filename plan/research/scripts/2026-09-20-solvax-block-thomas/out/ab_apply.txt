@@ -1,71 +1,71 @@
-env {'base': 'eeb3481c6', 'head': '51ce69d07', 'dirty_src': False, 'jax': '0.9.2', 'solvax': '0.24.0', 'x64': True, 'XLA_FLAGS': '--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1', 'load_start': (14.541015625, 20.4462890625, 19.09326171875)}
+env {'base': 'eeb3481c6', 'head': 'c660519ed', 'dirty_src': False, 'python': '3.11.14', 'jax': '0.10.2', 'jaxlib': '0.10.2', 'solvax': '0.24.0', 'numpy': '2.4.6', 'x64': True, 'XLA_FLAGS': '--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1', 'load_start': (44.16845703125, 40.94921875, 34.60986328125)}
 
 === (Nl, Nm, Nz) = (6, 6, 8), Nl*Nm = 36 ===
   coupling half-width 1
-  full apply agreement      6.721e-16
+  full apply agreement      7.108e-16
   factor bytes              369,184 -> 258,592  (1.43x smaller)
   full apply, interleaved:
-    base          median    0.189 ms  [  0.126,   0.566]  x1.000
-    new           median    0.185 ms  [  0.123,   0.399]  x0.981
+    base          median    0.554 ms  [  0.395,   4.222]  x1.000
+    new           median    0.548 ms  [  0.306,   7.986]  x0.989
   z-block shipped-scan  vs shipped 0.000e+00
-  z-block solvax-scan   vs shipped 2.299e-16
-  z-block new           vs shipped 2.299e-16
+  z-block solvax-scan   vs shipped 2.339e-16
+  z-block new           vs shipped 2.339e-16
   z-block new vs solvax-scan bitwise: True
   z-block solve, interleaved:
-    shipped       median    0.040 ms  [  0.027,   0.305]  x1.000
-    shipped-scan  median    0.050 ms  [  0.038,   0.135]  x1.237
-    solvax-scan   median    0.060 ms  [  0.045,   0.339]  x1.481
-    new           median    0.038 ms  [  0.021,   0.171]  x0.948
+    shipped       median    0.255 ms  [  0.227,   0.518]  x1.000
+    shipped-scan  median    0.321 ms  [  0.289,   0.892]  x1.257
+    solvax-scan   median    0.295 ms  [  0.188,   0.932]  x1.155
+    new           median    0.196 ms  [  0.166,   0.841]  x0.766
 
 === (Nl, Nm, Nz) = (8, 12, 24), Nl*Nm = 96 ===
   coupling half-width 1
-  full apply agreement      8.659e-16
+  full apply agreement      8.602e-16
   factor bytes              5,604,896 -> 2,950,688  (1.90x smaller)
   full apply, interleaved:
-    base          median    1.190 ms  [  0.931,   3.051]  x1.000
-    new           median    1.028 ms  [  0.832,   2.060]  x0.864
+    base          median    3.831 ms  [  1.983,   4.654]  x1.000
+    new           median    2.964 ms  [  1.538,   3.627]  x0.774
   z-block shipped-scan  vs shipped 0.000e+00
-  z-block solvax-scan   vs shipped 2.963e-16
-  z-block new           vs shipped 2.963e-16
+  z-block solvax-scan   vs shipped 2.808e-16
+  z-block new           vs shipped 2.808e-16
   z-block new vs solvax-scan bitwise: True
   z-block solve, interleaved:
-    shipped       median    0.229 ms  [  0.192,   0.451]  x1.000
-    shipped-scan  median    0.433 ms  [  0.362,   0.644]  x1.893
-    solvax-scan   median    0.567 ms  [  0.408,   1.111]  x2.481
-    new           median    0.194 ms  [  0.155,   0.407]  x0.850
+    shipped       median    0.558 ms  [  0.493,   0.646]  x1.000
+    shipped-scan  median    0.768 ms  [  0.644,   1.235]  x1.377
+    solvax-scan   median    0.898 ms  [  0.736,   1.594]  x1.609
+    new           median    0.441 ms  [  0.353,   0.740]  x0.791
 
 === (Nl, Nm, Nz) = (8, 24, 24), Nl*Nm = 192 ===
   coupling half-width 1
-  full apply agreement      9.266e-16
+  full apply agreement      8.619e-16
   factor bytes              21,825,056 -> 9,438,752  (2.31x smaller)
   full apply, interleaved:
-    base          median    3.357 ms  [  2.958,   9.792]  x1.000
-    new           median    2.853 ms  [  2.557,   5.293]  x0.850
+    base          median    3.929 ms  [  3.701,   4.546]  x1.000
+    new           median    3.183 ms  [  2.919,   3.514]  x0.810
   z-block shipped-scan  vs shipped 0.000e+00
-  z-block solvax-scan   vs shipped 3.173e-16
-  z-block new           vs shipped 3.173e-16
+  z-block solvax-scan   vs shipped 2.802e-16
+  z-block new           vs shipped 2.802e-16
   z-block new vs solvax-scan bitwise: True
   z-block solve, interleaved:
-    shipped       median    0.965 ms  [  0.790,   2.271]  x1.000
-    shipped-scan  median    2.324 ms  [  1.610,   8.006]  x2.407
-    solvax-scan   median    2.163 ms  [  1.564,   3.821]  x2.240
-    new           median    0.823 ms  [  0.661,   2.220]  x0.853
+    shipped       median    1.082 ms  [  0.957,   1.555]  x1.000
+    shipped-scan  median    1.905 ms  [  1.652,   2.625]  x1.760
+    solvax-scan   median    1.739 ms  [  1.593,   2.431]  x1.606
+    new           median    0.804 ms  [  0.736,   1.624]  x0.743
 
 === (Nl, Nm, Nz) = (16, 48, 24), Nl*Nm = 768 ===
   coupling half-width 1
-  full apply agreement      9.610e-16
+  full apply agreement      8.855e-16
   factor bytes              172,230,176 -> 66,061,856  (2.61x smaller)
   full apply, interleaved:
-    base          median   23.352 ms  [ 18.056,  47.042]  x1.000
-    new           median   22.532 ms  [ 15.889,  47.828]  x0.965
+    base          median   28.375 ms  [ 22.072,  61.753]  x1.000
+    new           median   26.764 ms  [ 20.312,  48.117]  x0.943
   z-block shipped-scan  vs shipped 0.000e+00
-  z-block solvax-scan   vs shipped 3.512e-16
-  z-block new           vs shipped 3.512e-16
+  z-block solvax-scan   vs shipped 3.064e-16
+  z-block new           vs shipped 3.064e-16
   z-block new vs solvax-scan bitwise: True
   z-block solve, interleaved:
-    shipped       median    6.602 ms  [  5.572,  11.619]  x1.000
-    shipped-scan  median   12.544 ms  [  9.689,  17.594]  x1.900
-    solvax-scan   median   10.467 ms  [  8.472,  16.787]  x1.585
-    new           median    5.289 ms  [  4.472,   9.431]  x0.801
-load_end (18.35009765625, 20.19287109375, 19.15625)
+    shipped       median    6.584 ms  [  5.732,   9.879]  x1.000
+    shipped-scan  median    9.817 ms  [  8.919,  27.579]  x1.491
+    solvax-scan   median    8.497 ms  [  7.526,  26.718]  x1.291
+    new           median    5.038 ms  [  4.475,  14.067]  x0.765
+load_end (22.6728515625, 34.53125, 32.7958984375)
 exit 0
