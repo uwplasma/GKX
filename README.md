@@ -8,7 +8,11 @@
 [![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue.svg)](pyproject.toml)
 [![Docs](https://readthedocs.org/projects/gkx/badge/?version=latest)](https://gkx.readthedocs.io)
 
-GKX is a JAX-native gyrokinetic solver for tokamak and stellarator flux tubes: it takes a VMEC equilibrium or an analytic geometry, computes linear stability and nonlinear turbulence in a Hermite-Laguerre velocity basis, and differentiates the whole path end to end on CPUs and GPUs.
+GKX is a JAX-native gyrokinetic solver for tokamak and stellarator flux tubes:
+it takes a VMEC equilibrium or an analytic geometry, computes linear stability
+and nonlinear turbulence in a Hermite-Laguerre velocity basis, and provides
+CPU/GPU autodiff for the bounded linear, quasilinear and finite-window nonlinear
+objective paths documented below.
 
 <img src="docs/_static/turbulence_loop.webp" width="720" alt="Saturated ITG turbulence on a Cyclone flux tube, shown as a perpendicular cut and as the field-aligned tube">
 
@@ -25,13 +29,17 @@ each item's evidence is. It records scope, not quality; see
 
 - **Hermite-Laguerre velocity moments.** Velocity space is two spectral indices
   rather than a grid, so the state is one array and the whole step is dense
-  linear algebra on it. Low moments are the fluid quantities, so a small
-  truncation is a closure rather than an unresolved grid.
+  linear algebra on it. Low moments are the fluid quantities, but a finite
+  truncation is only a declared reduced closure after its velocity convergence
+  or regularization has been demonstrated; a small basis is not automatically
+  resolved.
   [theory](docs/theory.rst), [methods](docs/algorithms.rst).
-- **Exact derivatives of the whole path, including the equilibrium.** JAX
-  autodiff end to end on CPUs and GPUs: implicit reverse rules for eigenvalues
-  and eigenvector observables, and a block-checkpointed discrete adjoint for a
-  post-saturation nonlinear heat-flux window.
+- **Differentiable objective paths, including selected equilibrium controls.**
+  JAX provides implicit reverse rules for certified eigenvalues and selected
+  eigenvector observables, plus a block-checkpointed discrete adjoint for a
+  prescribed post-saturation nonlinear heat-flux window. Each claim is bounded
+  by its geometry, topology, resolution and validation gate; this is not a
+  claim that every solver path or topology change is differentiable.
   [eigensolver](docs/differentiable_eigensolver.rst),
   [nonlinear autodiff](docs/nonlinear_autodiff.rst).
 - **Every returned eigenpair is certified against the original operator.** The
@@ -477,7 +485,8 @@ the useful window length. [nonlinear autodiff](docs/nonlinear_autodiff.rst).
 
 [`QA_optimization.py`](examples/optimization/QA_optimization.py) adds this heat
 flux as a fourth objective to VMEX's vacuum QA ladder, composing VMEX's implicit
-equilibrium derivative with the exact GKX window derivative.
+equilibrium derivative with GKX's derivative of the prescribed discrete
+window.
 
 ![Initial and optimized QA equilibria](docs/_static/qa_transport_equilibria.png)
 

@@ -1,84 +1,76 @@
 # GKX research plan
 
-**Authoritative execution plan, consolidated 2026-09-06.** Baseline: main
-[a99dac89](https://github.com/uwplasma/GKX/commit/a99dac898334414d31733f6d286bd4c36983702e)
-(2.0.0 plus #193/#195). This document supersedes the roadmaps proposed in
-[#198](https://github.com/uwplasma/GKX/pull/198),
-[#203](https://github.com/uwplasma/GKX/pull/203),
-[#204](https://github.com/uwplasma/GKX/pull/204) and
-[#205](https://github.com/uwplasma/GKX/pull/205); their measurements, audits
-and reasoning are kept in [plan/baseline](plan/baseline/),
-[plan/research](plan/research/) and [plan/log.md](plan/log.md). No other
-roadmap is active. This plan changes no solver, test, data or release.
+## Current status and priority queue (2026-09-20)
 
-**Status 2026-09-12:** main carries this authoritative plan: #206 merged as
-`e6fb735e9`, followed by status correction #221 (`2333d6a4f`). This file is the
-execution authority, not an open proposal waiting for #206 to land.
+This is the execution authority for the 2.3.0 research-grade milestone. The
+baseline is `origin/main` at `eeb3481c6` (2.2.0). Claim scope remains bounded by
+[release scope](docs/release_scope.rst) and the evidence ledger; an open PR,
+passing unit test or successful reduced model is not by itself a promoted
+physics claim.
 
-The repair backlog largely landed, but **Phase 0.1's rate migration is not
-complete** (§0.1 item 4). Merged: #197, #199, #207, #215, #210, then #218
-(consolidating #213/#214/#216/#217) and #219 (consolidating #209/#211, and
-carrying #196/#200/#201/#208). Closed as superseded: #202, and the six retired by
-those consolidations. #212 merged as `c0c818361` after 41 successful checks and
-one skipped check. Three benchmark parameter comparisons treated optional
-values as numbers; the exact-optional/numeric repair at `ce5ffe657` passed the
-actual failing CI selections and CPU/GPU checks recorded in the log. Reference-rate
-conversion/provenance and deprecated-key migration remain separate open gates.
-#223 subsequently merged as `5f4cea140` with 41 successful / one skipped check;
-#224 merged as `d8c0139e8`; #225 merged as `52b8dd693`, both with green checks.
-#226 targets main and includes the remaining spectral/sharding repair and compact
-scatter consolidation. Its failing sharded-RHS check must pass before merge.
-No release is authorized by these maintenance merges.
+Five PRs are open against `main` at this checkpoint:
 
-**Parallel checkpoint, 2026-09-12:** independent nonzonal three-field algebra,
-fixed-window AR(1) uncertainty, and conservative refinement-admission tests are
-implemented; these are partial gates, not completed EM0, statistics or velocity
-validation. See the reproducible [handoff](plan/log.md#2026-09-12--parallel-independent-validation-gates).
-The next order is:
+- [#260](https://github.com/uwplasma/GKX/pull/260) implements the declared
+  velocity-regularization contract and Laguerre-sink experiment. Its historical
+  PR title says Q31; this plan calls the lane **VEL-REG**. Review still finds no
+  tested sink strength that converges the target branch, an incomplete evidence
+  manifest, three private-path additions, and a higher-level configuration path
+  that can disable the sink without the intended refusal; it is not ready.
+- [#264](https://github.com/uwplasma/GKX/pull/264) makes the finite-window
+  adjoint compile reusable across calls and geometries. It is ready for review
+  but currently conflicts with `main`; this plan calls it **PERF-ADJOINT**.
+- [#265](https://github.com/uwplasma/GKX/pull/265) adopts SOLVAX's block-Thomas
+  factors for `pr3-cm`; it remains a draft and its architecture check currently
+  fails (**PERF-SOLVAX**).
+- [#266](https://github.com/uwplasma/GKX/pull/266) makes the `ky >= 0` state
+  layout the runtime default and preserves full-layout interchange; it remains
+  a draft (**PERF-HALF**).
+- [#267](https://github.com/uwplasma/GKX/pull/267) floors `pr3-cm` structure
+  tolerances at float32 round-off without hiding measured nonlocal couplings
+  (**PERF-PR3-F32**). Its local float32 and architecture checks pass, but the
+  tolerance is supported by only the current fixture.
 
-1. Merge maintenance/validation changes only after their own required checks.
-2. The matched GX Nl=24 discriminator finished: GX shares the ~24.7% growth
-   change to Nl=32 (§0.5). Inspect common truncation/closure and mode identity,
-   then register a residual-qualified next rung; neither rung is converged.
-3. Repair periodic kz hypercollisions and the corresponding spectral
-   preconditioner in a separate numerical PR. Regenerate affected periodic QA
-   transport results before promoting them; linked parity is not invalidated
-   by this periodic-only RHS defect.
-4. Close EM0's geometry/FLR normalization and weighted free-energy identities,
-   then EM1 waves. The new B=1 algebra oracle alone is not EM validation.
-5. Calibrate causal stopping on correlated/drifting traces before tuning shorter
-   production windows. Fixed-window coverage does not certify repeated stopping.
+At this snapshot #264 has a green required-check set but must be rebased; #260
+and #267 still have required checks pending, and #265/#266 are not review-ready
+while they remain drafts. #265 and #267 edit the same solver path, so their
+combined result requires fresh float32 and float64 tests after integration.
+None is treated as merged evidence.
 
-No new experimental lane or broad nonlinear campaign is introduced here.
+The stable IDs below replace sequential Q-numbers for new work. Legacy Q1-Q30
+labels are historical only; in particular, the old Q28 and Q30 rows below do
+not name #260 or #264.
 
-**Review checkpoint, 2026-09-13:** an independent read-only review
-([research note](plan/research/2026-09-13_solver_velocity_throughput_review.md),
-scripts and logs beside it) measured the rejected shift-invert pilot on its
-exact assembled operator, re-read the existing GX Nl24/Nl32 outputs, and
-counted the nonlinear step's HLO operations. It changes the order of work
-inside items 2 and 3 above and inside Phase 5, not the phases themselves:
-the exact sparse route and a size ladder come before any preconditioner
-change (§5.1 L1–L6); the Nl swing is a stationary truncated eigenmode with a
-non-decaying Laguerre spectrum, so drift ablations and a Laguerre sink come
-before another resolution rung (§0.5); and an op-name HLO ledger, batched
-linked-chain FFTs and the ky ≥ 0 layout come before scatter micro-work or
-sharding (§5.3 N0–N7; once-per-step Hermitian completion was measured and
-rejected in #231).
+| Order | Stable ID | Next bounded result | Admission / exit gate |
+|---:|---|---|---|
+| 1 | **VEL-REG** | Finish #260, then refine the slowly converging Laguerre branch under explicitly declared regularization and velocity limits. | Residual-qualified eigenpairs, spectra that resolve the retained cutoff, and ledger declarations; no collisionless value is promoted from an unconverged truncation. |
+| 2 | **EM-FIELD** | Validate independent field equations and energy channels in order: EM0 electrostatic identities, EM1 `A_parallel`, then EM2 reduced `delta B_parallel`. | Geometry/FLR normalization, signs and weighted free-energy exchange close independently before coupled waves or any broad electromagnetic campaign. |
+| 3 | **STOP-CAL** | Calibrate sequential nonlinear stopping on correlated and drifting traces. | Repeated-look false-stop and coverage tests pass on synthetic controls and held-out traces; fixed-window AR(1) coverage alone is insufficient. |
+| 4 | **GEO-TOPO** | State and test the derivative contract for linked geometry topology. | The topology map is fixed or changes fail explicitly; derivatives are checked on each smooth stratum and are not claimed across link-map changes. |
+| 5 | **OPT-HOLDOUT** | Evaluate linear, quasilinear and finite-window nonlinear objectives on held-out equilibria and controls. | Training choices are frozen first; held-out accuracy, stationarity, uncertainty and resolution gates are reported separately for each objective. No broad nonlinear campaign starts before VEL-REG, EM-FIELD and STOP-CAL. |
+| 6 | **PERF-ADJOINT** | Rebase and finish #264's reusable adjoint executable. | Value/gradient identity, cross-geometry reuse with zero steady recompiles, and bounded cold/steady CPU and GPU measurements. |
+| 7 | **PERF-HALF** | Finish #266 and adopt the half-spectrum runtime layout. | Full/half physics and artifact interchange pass in float32/x64; accepted wall time and materialized/peak memory are recorded on CPU and GPU. |
+| 8 | **PERF-SOLVAX** | Finish #265 and #267; retain only measured `pr3-cm` improvements. | Certified residuals and refusal controls are unchanged; factor/apply memory and time are accepted only over their measured size and precision envelope. |
+| 9 | **PERF-ENVELOPE** | Consolidate forward, adjoint and eigensolver cost after the open performance PRs land. | Publish accepted time and memory, not op-count proxies alone, on named CPU/GPU cases; record regressions and crossover sizes. |
+| 10 | **COLL-ENV** | Complete the collision-model support envelope. | Species, geometry, precision, conservation and velocity-resolution limits are explicit; unsupported combinations fail closed. |
+| 11 | **SLIM** | Remove duplicate paths, prose and artifacts only after their owners and evidence are identified. | Public API, artifact regeneration and numerical sentinels remain stable; archived evidence is referenced rather than silently erased. |
 
-**Handoff queue, 2026-09-13 (execution resumed; updated 2026-09-14).** #226
-merged normally as `06606e404`; #227 merged as `578b97074` after a fresh green
-run on its updated head. The results of the first queue batch land together
-through one merge chain in which each branch merges its predecessor (§14
-rule 9): #228 plan → #230 Q1 → #231 Q4 → #229 Q5 → #232 Q2 → #233 Q12 →
-#234 Q3 → the queue-update PR (#235). The second batch landed as #236 Q7, #238
-Q8 and the chain #237 Q6 → #239 Q13; Q16–Q21 were added from their results
-and from the comparison codes installed on 2026-09-14 (§2.4). **Finalized 2026-09-15:** the paused lanes
-landed as #240 (Q14), #242 (Q15), #243 (Q9), #244 (Q17) and #245 (Q20), and GKX 2.1.0
-was released from the merged tree; the research-grade milestone is now 2.2.0 (§1.2). Work continues in the order below; each row
-is one PR from a fresh worktree off `origin/main`. Rows marked *parallel*
-may run concurrently; the others wait for the named dependency. The #228 PR
-body carries the same queue with per-row entry points, commands, gates and
-the repository rules an agent must follow.
+These lanes may overlap only when they do not consume the same validation
+evidence or campaign budget. Maintenance and performance PRs may land after
+their own gates, but they do not reorder the physics dependencies above.
+
+## Archived opening checkpoints
+
+The superseded 2026-09-06 through 2026-09-15 checkpoints are preserved in the
+legacy queue below, the numbered phase sections, [work log](plan/log.md),
+[PR ledger](plan/pr_ledger.md), and Git history. They explain prior decisions
+but are not current instructions. The #198/#203/#204/#205 roadmap references
+remain indexed in §16.
+
+### Legacy Q1-Q30 queue archive
+
+The rows below preserve the decisions and measurements that led to the current
+queue. Completed or superseded rows are not instructions to rerun work. Open
+follow-ups are governed by the stable-ID queue above.
 
 | ID | Branch | Plan step | Depends on | Compute |
 |---|---|---|---|---|
@@ -146,11 +138,13 @@ phase.
 4. Before any run longer than an hour, write down the falsifiable question,
    the ledger rows it will produce, the cost cap and the stop condition; then
    run.
-5. After each step, append one entry to [plan/log.md](plan/log.md): commit,
-   environment, exact command, inputs and reference hashes, result, failed or
-   skipped checks, elapsed time, artifact location, next decision. For remote
-   jobs also host, directory, PID and last verified state. Unknown is not
-   finished.
+5. After each step, append one public entry to [plan/log.md](plan/log.md):
+   commit, reproducible environment, exact command, inputs and reference
+   hashes, result, failed or skipped checks, elapsed time, repository-relative
+   artifact location and next decision. Never commit private host aliases,
+   usernames, home or checkout paths, process IDs, scheduler identifiers, or
+   private artifact/script names. Keep operational state needed to resume a
+   remote job in a separate untracked private note. Unknown is not finished.
 6. Commit small changes as Rogerio Jorge, no AI co-author trailers. Open a
    PR per step with the template in §14. Never merge without the maintainer's
    approval; never force-push a shared branch.
@@ -1652,9 +1646,13 @@ needs an alternative allocation before its pilot.
 3. Commits as Rogerio Jorge; no AI co-author trailers; no force-push to shared
    branches; no history rewrite.
 4. Numbers live in the ledger; prose cites rows.
-5. Remote jobs: unknown is not finished; check before launching; never
-   duplicate an unverified campaign; record host, directory, PID and last
-   verified state.
+5. Remote jobs: unknown is not finished; check before launching and never
+   duplicate an unverified campaign. Public logs and artifacts must not contain
+   private host aliases, usernames, home or checkout paths, process IDs,
+   scheduler identifiers, or private artifact/script names. Record the last
+   verified scientific state publicly using generic labels and
+   repository-relative paths; keep resumable operational details in a separate
+   untracked private note.
 6. Pin companion versions (VMEX, ESSOS, SOLVAX, JAX) and raw sources; preserve
    upstream licenses and credit.
 7. Physics sentinels run on solver changes even when no assertion changed;
