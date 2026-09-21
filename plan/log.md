@@ -18773,3 +18773,13 @@ the dense fallback. This is bounded evidence, not a size-independent proof:
 on the separate `(96,4,8)` signed control the rank-one ratio is `3.74e-6`
 against the `7.63e-6` floor, only `2.04x` headroom. The structured/dense apply
 there agrees to `4.32e-7`; no eigenpair-convergence claim follows.
+
+## 2026-09-21 — release 2.3.0
+
+Cut from the integration chain #276, which merged #264, #265, #267, #269,
+#270, #271 and #273 and ran CI once on the combined tree. The SOLVAX floor
+rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
+0.22.0; checked against every PyPI wheel from 0.12.0 to 0.24.0). The
+research-grade milestone moves to 2.4.0; its exits were not required for this
+release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
+red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
