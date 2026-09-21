@@ -18304,3 +18304,10 @@ new files. Adaptive-time averaging, guard-trace calibration, intermittent
 controls and held-out physical traces remain open in STOP-CAL; no new transport
 optimization claim follows. See the authoritative queue in
 [PR #268](https://github.com/uwplasma/GKX/pull/268).
+
+Independent review of #271 found two integration edges before merging: the
+nominal adaptive chunk length was mistaken for a total sample cap, and a NaN
+physical minimum could be ignored by `max`. Short-run bypass now applies only
+to step-capped runs; adaptive runs keep the stopping callback even with a small
+nominal chunk. Nonfinite minimum windows are explicitly rejected. Existing
+tests pin both behaviors. The complete source change remains net smaller.

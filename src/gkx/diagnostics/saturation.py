@@ -164,8 +164,10 @@ def saturation_stop_decision(
     cfg = config or SaturationStopConfig()
     if float(cfg.rel_sem) <= 0.0:
         raise ValueError("rel_sem must be positive")
-    if cfg.min_window is not None and float(cfg.min_window) < 0.0:
-        raise ValueError("min_window must be non-negative when supplied")
+    if cfg.min_window is not None and (
+        not math.isfinite(float(cfg.min_window)) or float(cfg.min_window) < 0.0
+    ):
+        raise ValueError("min_window must be finite and non-negative when supplied")
     t = np.asarray(time, dtype=float).reshape(-1)
     y = np.asarray(values, dtype=float).reshape(-1)
     if t.size != y.size:

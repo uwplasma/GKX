@@ -5134,6 +5134,9 @@ def test_saturation_stop_condition_off_without_diagnostics_or_enough_steps() -> 
     # than wrap the same integration in a loop that can only run out of steps.
     cfg, ctx, policy = _stop_policy_inputs(steps=255)
     assert _saturation_stop_condition(cfg, ctx, policy) is None
+    # Adaptive steps is a chunk estimate, not a cap on accumulated samples.
+    ctx = replace(ctx, steps=20, adaptive_chunked=True)
+    assert _saturation_stop_condition(cfg, ctx, policy) is not None
 
 
 # ---- from test_restart_gate.py ----

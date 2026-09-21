@@ -677,6 +677,12 @@ def test_saturation_stop_decision_honors_min_window_override() -> None:
     assert "window_below_min_window" in decision["reasons"]
     assert decision["min_window"] == pytest.approx(1.0e6)
 
+    for invalid in (float("nan"), float("inf"), -1.0):
+        with pytest.raises(ValueError, match="finite and non-negative"):
+            saturation_stop_decision(
+                t, heat, config=SaturationStopConfig(min_window=invalid)
+            )
+
 
 def test_saturation_stop_decision_applies_mandatory_sample_floor(monkeypatch) -> None:
     time = np.arange(257, dtype=float)
