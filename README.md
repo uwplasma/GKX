@@ -57,9 +57,10 @@ summarized under [claim scope](#claim-scope).
   against its published closed form, and a multispecies Coulomb request is
   refused rather than silently extrapolated.
   [operators](docs/operators.rst).
-- **VMEC, Boozer, Miller and VMEX geometries, differentiable in-process.** The
-  metric coefficients stay differentiable, which is the path stellarator shape
-  optimization uses. [geometry](docs/geometry.rst).
+- **VMEC, Boozer, Miller and VMEX geometry paths.** Selected smooth,
+  fixed-topology metric and control paths remain differentiable in process;
+  topology changes and arbitrary equilibrium controls are outside that claim.
+  [geometry](docs/geometry.rst).
 - **One TOML, one executable, resolved decks.** `--estimate` sizes the grid from
   the geometry and explains every entry; finished runs write their reproducing
   deck. [inputs](docs/inputs.rst).
@@ -218,8 +219,8 @@ exactly that term, which is how most physics gates isolate what they test.
 | `"imported-eik"` / `"vmec-eik"` | Miller or full 3D stellarator from a file | `geometry_file` |
 
 Miller equilibria and VMEC/Boozer flux tubes are also built in-process through
-the Python API, where the metric coefficients stay differentiable — the path
-stellarator shape optimization uses. See [geometry](docs/geometry.rst).
+the Python API. Differentiability is established only for the smooth,
+fixed-topology controls documented in [geometry](docs/geometry.rst).
 
 GKX also consumes a [VMEX](https://github.com/uwplasma/vmex) stellarator-mirror
 hybrid directly from memory. VMEX supplies the field-line closure, Clebsch
@@ -274,8 +275,9 @@ element per step, flat from 64x64x24 to 96x96x48. Within a step, about 60% is
 data movement and 39% the FFTs; physics arithmetic is not separately measurable
 because XLA fuses it into those kernels.
 
-Parallelism is production for independent `k_y` scans, quasilinear/UQ ensembles,
-and file-backed tasks, all deterministically ordered and serial-identity gated.
+Maintained parallel routes cover independent `k_y` scans, quasilinear/UQ
+ensembles, and file-backed tasks, all deterministically ordered and
+serial-identity gated.
 Sensitivity sweeps can use the same deterministic independent-work
 reconstruction, but they need a dedicated matched scaling artifact before any
 speedup claim is promoted; nonlinear whole-state and domain decomposition stay
@@ -440,8 +442,8 @@ eigenvector observables — no differentiation through the iteration. The defaul
 stays dense so established results are unchanged. See
 [eigensolver](docs/differentiable_eigensolver.rst).
 
-GKX also differentiates one production nonlinear objective: the physical heat
-flux averaged over a post-saturation RK window, via a block-checkpointed
+GKX also differentiates one bounded nonlinear objective: physical heat flux
+averaged over a prescribed post-saturation RK window, via a block-checkpointed
 discrete adjoint storing `O(sqrt(N))` states.
 
 ```python
@@ -496,7 +498,7 @@ which makes GX the closest algorithmic and parity reference.
 | --- | --- | --- | --- |
 | Velocity space | Hermite-Laguerre moments | Hermite-Laguerre moments | grid in `(v_par, mu)` |
 | Collision models | 5, through gyrokinetic Coulomb | Dougherty + hypercollisions | Landau and model operators |
-| Differentiable | JAX autodiff end to end | not a design goal | not a design goal |
+| Differentiable | selected bounded JAX objective paths | not a design goal | not a design goal |
 
 This records scope, not quality; see [related codes](docs/codes.rst).
 

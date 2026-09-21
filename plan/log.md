@@ -18377,6 +18377,26 @@ public commit `3865a5377`, change only `dampEnds_linked` to iterate
 `idzlm += blockDim.z * gridDim.z` as adjacent copy-back kernels do, record that
 isolated patch and its base in reproducible provenance, and hash patch and binary.
 
+The complete source change in `src/device_funcs.cu` is:
+
+```diff
+diff --git a/src/device_funcs.cu b/src/device_funcs.cu
+index 52b993b3..fdec6da5 100644
+--- a/src/device_funcs.cu
++++ b/src/device_funcs.cu
+@@ -2830,3 +2830,5 @@ __global__ void __launch_bounds__(512) dampEnds_linked(cuComplex* G,
+   // note: only damp ends of non-zonal (ky>0) modes, since ky=0 modes should be periodic
+-  if (unmasked(idx,idy) && idy > 0 && idzlm < nz*nMoms) {
++  if (unmasked(idx,idy) && idy > 0) {
++    // dG_all.z is capped: cover every z/moment index as in linkedCopyBackAll.
++    for (; idzlm < nz*nMoms; idzlm += blockDim.z * gridDim.z) {
+     unsigned int idz = idzlm % nz;
+@@ -2874,2 +2876,3 @@ __global__ void __launch_bounds__(512) dampEnds_linked(cuComplex* G,
+     GRhs[globalIdx] = GRhs[globalIdx] - nu*amp*H_;
++    }
+   }
+```
+
 The first case is only `cyclone_salpha_itg`. In its shipped GX deck set `[Time]`
 `dt = 0.002`, `fixed_dt = true`, retain RK4/`t_max = 150`, and set diagnostic
 `nwrite = 100`. Amplitude `0.1`, width `0.125` and reference step `0.002` give
@@ -18393,3 +18413,22 @@ Run `GX_PARITY_REF_DIR="$REF_DIR" JAX_ENABLE_X64=true PYTHONPATH=src "$PYTHON"`
 `ky=.30000001192092896` at `.001`/150,000 and `.0005`/300,000. Require finite
 growth/frequency and both half-horizon shifts; three levels support convergence,
 two show sensitivity only. No simulation or result is claimed here.
+
+An isolated repair-only local build applied exactly the patch above to public
+[GX commit `3865a5377`](https://bitbucket.org/gyrokinetics/gx/commits/3865a53778862e1686f414bf6f416339e24887c9)
+at local human commit `d8a71e7879531a8520609d9b3351766ee966807a`; patch SHA-256 is
+`bcc7113f69553351ebb46f30bd383d37396ad86eba0d455ba26bdf95f38c923d`.
+Build configuration SHA-256 `adce5f6b950b447d16392b5713cddbd7aed1f4fd6a9e322e7855bea934597d54` used
+CUDA 11.5.119, GCC 10.4, sm_86, C++17, `-use_fast_math -fPIC -rdc=true -O3`.
+The two-job build exited zero in 72.91 s; binary SHA-256 is
+`1ffefc33a30259a89e381d952bb2d093e2cba24e0ff6f4ebd3a8ea508e1f7e33`.
+These hashes identify the inspected build; the private machine configuration is
+not a public binary-reproduction recipe. Tracked source is clean. Exact-once host coverage passed below, at and above the
+65,535 cap, including 73,728 and 294,912 indices; Euclidean quotient/remainder
+gives the general uniqueness argument. No GX simulation or reference result is
+claimed, and operational paths and logs remain private.
+
+Repository hygiene also removed six fully merged remote refs with atomic
+expected-SHA leases: `fix/r0-f32-bracket-rank`, four `phase0/*` maintenance
+refs, and `plan/synthesis-20260906`. Each tip is an ancestor of `main`; no open
+PR, occupied worktree, local file or commit history was removed.

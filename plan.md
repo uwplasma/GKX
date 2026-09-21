@@ -8,6 +8,10 @@ baseline is `origin/main` at `eeb3481c6` (2.2.0). Claim scope remains bounded by
 passing unit test or successful reduced model is not by itself a promoted
 physics claim.
 
+Start work from the stable-ID queue in this section. The numbered phases below
+retain acceptance detail and historical decisions; they do not create a second
+active queue, and any conflicting adoption instruction there is superseded here.
+
 The implementation PRs below are open against `main` at this checkpoint:
 
 - [#260](https://github.com/uwplasma/GKX/pull/260) implements the declared
@@ -53,12 +57,13 @@ The implementation PRs below are open against `main` at this checkpoint:
   result is documented in the public review; it is not a size-independent
   tolerance proof or an eigenpair-convergence claim.
 
-- [#269](https://github.com/uwplasma/GKX/pull/269), head `9e5fb781f`, repairs a
-  vacuous FLR guard and adds independent geometry-to-field residuals plus a
-  constant-B source-quadratic gradient identity. Root reruns pass 38 x64 and
-  20 float32 cases; A/B sign mutations fail the componentwise identity. Net
-  +131 test lines reuse existing oracles; no runtime changes or new files.
-  Physical varying-B normalization and streaming energy balance remain open.
+- [#269](https://github.com/uwplasma/GKX/pull/269), head `f4fda382f`, repairs a
+  vacuous FLR guard and adds independent geometry-to-field residuals plus
+  constant-B source-quadratic and truncated-Hermite streaming identities. The
+  full field file passes 44 x64 tests with `FutureWarning` treated as an error;
+  both policy cases also pass in float32, and sign mutations fail the identity.
+  Net +159 test lines reuse existing oracles; no runtime changes or new files.
+  The full varying-B energy contract remains open.
 - [#270](https://github.com/uwplasma/GKX/pull/270), head `073ede00a`, removes
   analytic metric shear concretization: 44 geometry tests pass per precision,
   including AD/JIT versus finite differences for both shear signs. Source
@@ -155,20 +160,20 @@ resolution, the prepare paragraph, the CONTRIBUTING link), so the conflict was
 resolved in `main`'s favour. Shortening the README remains open as 0.3.1 and is
 separate work.
 
-An independent agent should be able to resume from this file alone: every
-phase has numbered steps with an owner, an entry point, an exit condition, the
-ledger rows it produces and its cost. Read §0 first, then the lowest open
-phase.
+An independent agent should be able to resume from this file alone: the current
+status and stable-ID queue select the work, while the referenced phase sections
+supply its entry point, evidence requirements, exit condition and cost.
 
 ---
 
 ## 0. How to use this plan
 
-1. Read §1 (destination), §2 (what is true today) and §3 (how evidence is
-   produced and gated). Everything after that is the queue.
-2. Take the lowest phase with an unmet exit. Within a phase, take the lowest
-   unmet numbered step. Do not start a later phase's expensive campaign while a
-   cheaper earlier gate is open, except where a step is marked *parallel*.
+1. Read the current status and stable-ID queue above, then §1 (destination) and
+   §3 (how evidence is produced and gated). Section 2 and the legacy Q queue are
+   historical records, not a second source of current work.
+2. Take the first admitted stable-ID lane. Use its referenced numbered phase
+   only for acceptance gates and detailed sequencing; overlap lanes only under
+   the current queue's evidence and campaign-budget rule.
 3. **Check the environment before believing a failure.** The package requires
    `jax>=0.10.1`; `gkx.objectives.core` opts into
    `eig(..., enable_eigvec_derivs=True)`, which older jax rejects with a
@@ -250,7 +255,10 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
 
 ---
 
-## 2. Current truth at a99dac89
+## 2. Historical truth at a99dac89 (2026-09-06 baseline)
+
+This section records the evidence state that shaped the numbered phases. Use the
+current status and stable-ID queue above for present work and PR dispositions.
 
 ### 2.1 Established and not established
 
@@ -280,7 +288,7 @@ gyaradax exist) or "exact saturated transport gradients" (no code has them).
   1e-6 from its geometry tensor by the periodic mean ratio Σ(|∇x|/B)/Σ(1/B).
 - Office GPU box: connection timed out on both days.
 
-### 2.3 Open PR dispositions (Phase 0 executes these)
+### 2.3 Historical PR dispositions
 
 | PR | Content | Disposition |
 |---|---|---|
@@ -1419,7 +1427,10 @@ its own certification evidence, proposed as the next row.
 Adoption threshold: ≥20% total-workload saving outside timing noise, no
 failed physics or gradient gate, no unreported memory regression.
 
-### 5.3 Algorithm experiments, in order
+### 5.3 Historical algorithm experiments and gates
+
+The sequence below records the decisions and proposed gates as they stood when
+measured. Current adoption work is selected from the stable-ID queue above.
 
 Reuse prepared kernels and bounded caches; remove traced host conversions;
 profile materialized copies and FFT layout; accept microkernel work only if
