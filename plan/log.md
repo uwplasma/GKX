@@ -18278,10 +18278,12 @@ had 15; splitting the lane is the follow-up.
 ## 2026-09-20 — Q10: the ky >= 0 layout becomes the default (draft, handed off)
 
 **Outcome: the default is flipped and the published physics is shown not to
-move; the opt-out identity gate and three test fixes are outstanding, so the
-PR is a draft.** Branch `perf/ky-half-default`, rebased onto `origin/main`
-`eeb3481c6`. `perf/ky-half-spectrum-switch` was examined and rejected as a
-base: it is fully merged (#258) and carries no commit `main` lacks.
+move; the full opt-out identity gate and the three stale-`Ny` test fixes pass.
+The benchmark-host window split and remaining integration suites are still
+outstanding, so the PR is a draft.** Branch `perf/ky-half-default`, rebased
+onto `origin/main` `eeb3481c6`. `perf/ky-half-spectrum-switch` was examined and
+rejected as a base: it is fully merged (#258) and carries no commit `main`
+lacks.
 
 **What changed.** `[grid] ky_layout` (`GridConfig.ky_layout`) defaults to
 `"half"`; `"full"` is the opt-out. Every grid a run builds reads the key, so
@@ -18334,15 +18336,27 @@ Q9's harness seeds a random state over the grid's own row count, so a half
 arm starts from a different, non-real state and cannot be compared
 element-wise.
 
-**Bounded hand-off verification.** On the current branch under JAX/JAXLIB
-0.10.2 on CPU, the full-layout opt-out is bitwise against pinned `main`
-`eeb3481c6` in both f32 and x64 on a reduced 8x8x8, Nl1/Nm2, two-step
-scan-and-window gate: 18 of 18
-arrays in each precision, `max_rel = 0`. This supports the opt-out but does
-not close the authoritative `run_identity.sh` gate: its fixed 64x64x24 RHS/VJP
-case and its full 100-step trajectory matrix in both precisions remain to run.
-The three stale-`Ny` fixture/example failures are fixed, and their containing
-test files now pass 109 tests with 14 optional examples skipped.
+**Full opt-out identity gate.** `run_identity.sh` compared pinned `main`
+`eeb3481c6e5e1893cb71c97cc6da0af9a0ee5c76` with branch head
+`ea6b1464e228e4849666ef2d620a8e44cf78c7ce` under JAX/JAXLIB 0.10.2 on CPU.
+All eight generation arms returned zero and the complete run took 8m57s.
+The fixed 64x64x24 RHS/VJP matrix was bitwise for 58/58 arrays in each of f32
+and x64; the full 100-step trajectory matrix was bitwise for 65/65 arrays in
+each precision. Thus all 246/246 compared arrays are bitwise equal, with
+`max_rel = 0` in all four comparisons. The raw result pairs have matching
+SHA256 values:
+
+| comparison | arrays | ref and `new_full` SHA256 |
+|---|---:|---|
+| RHS/VJP f32 | 58/58 | `e70bdb749042384ea0c065732b68ec4c69e19b0907a424166cc4c607f4c28337` |
+| trajectory f32 | 65/65 | `bd9d66ee457ba24361d8f0702edf6bb71016ee1cb3455ab667f2bc0ff014d568` |
+| RHS/VJP x64 | 58/58 | `284f004eb89b7b867c87d0ee79bdd069ff8357472d61e287f48bc439eadd126d` |
+| trajectory x64 | 65/65 | `37ee524f990f86580c7a3476b141f24786cd9534373a6670d61be9c81801f406` |
+
+The raw execution logs are not published because they contain machine-local
+paths; the public driver below and the pinned commits reproduce the gate. The
+three stale-`Ny` fixture/example failures are fixed, and their containing test
+files pass 109 tests with 14 optional examples skipped.
 
 **Evidence manifest.** `SHA256SUMS.txt` covers the tracked, reproducible
 scripts and result artifacts in this repository. Raw execution `.log` files
@@ -18350,10 +18364,10 @@ are gitignored and are not part of that manifest; every listed entry therefore
 verifies from a clean checkout rather than naming a file that was never
 committed.
 
-**Outstanding.** (1) Run `run_identity.sh` (`new_full` vs pinned `main`, f32
-and x64); it must be bitwise. (2) Collect the benchmark-host window-split
-records. (3) Complete the remaining integration suites; the 109-test result
-above covers only the time-integrator and example test files.
+**Outstanding.** The full opt-out identity gate is complete. (1) Collect the
+benchmark-host window-split records. (2) Complete the remaining integration
+suites; the 109-test result above covers only the time-integrator and example
+test files.
 
 ```
 export MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
