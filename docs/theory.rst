@@ -115,8 +115,17 @@ and
 With two kinetic species, default field scales, and finite retained
 Laguerre--Hermite resolution, the componentwise JAX convention is
 :math:`\operatorname{conj}(\nabla_G F_{\rm src})=n_sT_sH_s`.  This is an
-algebraic :math:`G\mapsto H` check, not a streaming-balance proof or a physical
-variable-:math:`B` invariant.  The runtime ``Wg + Wphi + Wapar`` diagnostic is a
+algebraic :math:`G\mapsto H` check, not a physical variable-:math:`B` invariant.
+The symmetric truncated Hermite ladder and skew-adjoint periodic derivative
+also give the tested streaming-only identity
+
+.. math::
+
+   \operatorname{Re}\sum_{s\ell mz}n_sT_sH_{s\ell m}^*
+   (\partial_tG_{s\ell m})_{\rm stream}=0.
+
+This excludes curved-geometry, drive, collision, boundary-damping and nonlinear
+terms. The runtime ``Wg + Wphi + Wapar`` diagnostic is a
 distinct monitoring quantity and contains no :math:`B_\parallel` contribution.
 
 Linear gyrokinetic operator
