@@ -23,9 +23,8 @@ the loop, not growing.
 
 ## What GKX offers
 
-If you are choosing between gyrokinetic codes, this is what GKX does and where
-each item's evidence is. It records scope, not quality; see
-[how GKX compares](#how-gkx-compares).
+This capability map links each feature to its evidence; boundaries are
+summarized under [claim scope](#claim-scope).
 
 - **Hermite-Laguerre velocity moments.** Velocity space uses two spectral
   indices; low moments represent fluid quantities. A small truncation is not
@@ -62,26 +61,22 @@ each item's evidence is. It records scope, not quality; see
   metric coefficients stay differentiable, which is the path stellarator shape
   optimization uses. [geometry](docs/geometry.rst).
 - **One TOML, one executable, resolved decks.** `--estimate` sizes the grid from
-  the geometry and explains every entry; a finished run writes the resolved deck
-  that reproduces it. [inputs](docs/inputs.rst).
+  the geometry and explains every entry; finished runs write their reproducing
+  deck. [inputs](docs/inputs.rst).
 - **Under-resolved runs warn instead of reporting a number.** Saturation is a
-  stationarity test on the flux and on the field and free energies, not a
-  fixed horizon, and an unresolved `ky` cutoff is reported as unresolved.
+  stationarity test on flux, field energy, and free energy; unresolved `ky`
+  cutoffs are reported.
   [`saturation.py`](src/gkx/diagnostics/saturation.py),
   [numerics](docs/numerics.rst).
 - **One compiled graph per nonlinear route.** The two entry points into an
-  explicit nonlinear diagnostics run return bitwise identical arrays, in
-  float32 and under x64, for value and for gradient.
+  explicit nonlinear diagnostics run are bitwise identical in float32 and x64,
+  for values and gradients.
   [solvers](docs/solvers.rst).
 - **Every published number is indexed to the artifact it comes from.** An
-  evidence ledger names the artifact, the generator and the reference for each
-  one, CI recomputes the parity percentages below from their tracked scans, and
-  a claim-scope page bounds what the release asserts.
+  evidence ledger records its artifact, generator, and reference; CI recomputes
+  the parity percentages, and release scope bounds the claims.
   [release scope](docs/release_scope.rst),
   [verification matrix](docs/verification_matrix.rst).
-
-Methods, the decisions behind them, and what each measurement does not show:
-[methods and decisions](docs/algorithms.rst).
 
 ## Install
 
@@ -227,14 +222,12 @@ the Python API, where the metric coefficients stay differentiable — the path
 stellarator shape optimization uses. See [geometry](docs/geometry.rst).
 
 GKX also consumes a [VMEX](https://github.com/uwplasma/vmex) stellarator-mirror
-hybrid directly from memory, with no file round trip: VMEX owns the field-line
-closure, the Clebsch metric, and the equal-arc grid, and GKX evaluates its
-linear and quasilinear objectives on them. The parallel direction is a periodic
-FFT, so the field line must close; open-ended mirrors are a different model and
-are not admitted. The shipped case is a closed racetrack, solved to a converged
-fixed-boundary equilibrium before anything is measured on it, and the
-field-strength ratio its figure reports is a flux-tube modulation depth rather
-than a mirror ratio. Geometry, that figure, and the admission review:
+hybrid directly from memory. VMEX supplies the field-line closure, Clebsch
+metric, and equal-arc grid; GKX evaluates linear and quasilinear objectives.
+The periodic parallel FFT requires a closed field line, so open-ended mirrors
+are not admitted. The shipped closed racetrack is solved to a converged
+fixed-boundary equilibrium, and its reported field-strength ratio is a
+flux-tube modulation depth, not a mirror ratio. Details:
 [geometry](docs/geometry.rst#closed-vmex-mirror-geometry).
 
 ### Run control
@@ -308,11 +301,10 @@ trajectory, potential = integrate_linear_from_config(
 ```
 
 For repeated nonlinear calls with fixed geometry and numerical policy, prepare
-the compiled simulation once and reuse it. A prepared object compiles one scan
-of a fixed length, so give it an explicit `steps`; the shipped decks stop at
-saturation instead, which decides the length mid-run and cannot be compiled
-ahead of time. Through the case API that is `gkx.prepare(case, steps=N)`, and
-`warmup()` moves the compile out of the first timed `solve`.
+the compiled simulation once with an explicit `steps`. Saturation chooses the
+length mid-run, so it cannot be compiled ahead of time. The case API is
+`gkx.prepare(case, steps=N)`; `warmup()` moves compilation out of the first
+timed `solve`.
 
 ```python
 from gkx.solvers_nonlinear_diagnostic_integration import prepare_nonlinear_explicit_diagnostics
@@ -325,8 +317,8 @@ time, diagnostics, final_state, fields = simulation.run()
 ```
 
 The prepared object accepts another same-shape initial state without rebuilding
-the scan, and a matched cache/parameter PyTree can stay dynamic for autodiff.
-Full API: [gkx.readthedocs.io](https://gkx.readthedocs.io).
+the scan; a matched cache/parameter PyTree stays dynamic for autodiff. Full API:
+[gkx.readthedocs.io](https://gkx.readthedocs.io).
 
 ## What GKX solves
 
@@ -355,17 +347,15 @@ coupling on it:
 | Field solve | quasineutrality + parallel Ampere for `phi`, `A_par`, `B_par` | `beta`, species list |
 
 Perpendicular directions are Fourier (`kx`, `ky`); the parallel direction `z`
-follows a field line. Electrons are kinetic or Boltzmann. Because `m` and `l`
-are the same kind of index as `kx` and `ky`, the whole problem is dense linear
-algebra on one array. Derivation: [theory](docs/theory.rst).
+follows a field line. Electrons are kinetic or Boltzmann. The spectral indices
+share one state array, while the operators use structured couplings and
+transforms rather than a dense global matrix. Derivation: [theory](docs/theory.rst).
 
-**Velocity resolution.** Truncating the Hermite ladder at `m = M` makes its end
-a reflecting wall, returning free energy as recurrence at
-`t_rec ~ 2 sqrt(M) / (k_par v_th)`. Since `t_rec` grows only as `sqrt(M)`,
-adding moments is a weak fix and the ladder has to absorb instead. Hypercollisions
-are the default and cut the revival to 0.0009 at `M = 16`; an opt-in
-reflectionless closure (Kanekar et al., JPP **81**, 305810104 (2015)) needs no
-tuning but does not beat a well-tuned hypercollision. Tables and scans:
+**Velocity resolution.** Truncating the Hermite ladder at `m = M` reflects free
+energy as recurrence at `t_rec ~ 2 sqrt(M) / (k_par v_th)`, so adding moments is
+a weak fix. Default hypercollisions cut the revival to 0.0009 at `M = 16`; an
+opt-in reflectionless closure (Kanekar et al., JPP **81**, 305810104 (2015))
+needs no tuning but does not beat a well-tuned hypercollision. Tables and scans:
 [numerics](docs/numerics.rst).
 
 ## Collision operators
@@ -391,9 +381,6 @@ metrics in
 [`collision_operator_verification.json`](docs/_static/collision_operator_verification.json).
 
 ## Validation
-
-Every figure is anchored to an exact root, a published coefficient, or a
-tracked reference run.
 
 **Landau damping** against the roots of `1 + T_i/T_e + zeta Z(zeta) = 0`, from
 GKX's own linear operator extrapolated to zero collisionality:
@@ -432,10 +419,7 @@ physics options or feature coverage in the reference codes. Detail:
 
 ## Differentiate the solver
 
-GKX applies the full gyrokinetic RHS inside a restarted eigensolver, so storage
-is `O(n m)` rather than `O(n²)`. The dense path is bounded by memory, not speed:
-at `n = 494,592` a complex128 operator alone would be 3.6 TiB, while the
-matrix-free solve took 1,504 s.
+A certified eigenpair objective is directly differentiable:
 
 ```python
 settings = gkx.AdaptiveLinearEigensolverConfig(tolerance=1e-9, candidate_count=2)
@@ -514,20 +498,19 @@ which makes GX the closest algorithmic and parity reference.
 | Collision models | 5, through gyrokinetic Coulomb | Dougherty + hypercollisions | Landau and model operators |
 | Differentiable | JAX autodiff end to end | not a design goal | not a design goal |
 
-This records scope, not quality: both codes are mature and each is stronger than
-GKX in areas GKX does not attempt. See [related codes](docs/codes.rst).
+This records scope, not quality; see [related codes](docs/codes.rst).
 
 ## Claim scope
 
 Release claims are bounded by the [release scope](docs/release_scope.rst).
 
-Quasilinear outputs are for ranking, correlation studies, and optimization
-screening. They are **not a runtime/TOML absolute-flux predictor**: absolute-flux
-promotion stays rejected while the declared Solovev and shaped-pressure stress
-outliers are retained, the best tracked candidate misses the 0.35 transport
-gate, and the positive-growth mixing-length rule predicts zero for HSX and W7-X
-where the tracked nonlinear windows are finite. Derivations, calibration splits,
-and holdout gates: [quasilinear](docs/quasilinear.rst).
+Quasilinear outputs support ranking, correlation studies, and optimization
+screening, **not a runtime/TOML absolute-flux predictor**. Promotion remains
+rejected: the declared Solovev and shaped-pressure stress outliers are retained,
+the best tracked candidate misses the 0.35 transport gate, and the
+positive-growth mixing-length rule predicts zero for HSX and W7-X where the
+tracked nonlinear windows are finite. Derivations, calibration splits, and
+holdout gates: [quasilinear](docs/quasilinear.rst).
 
 Collision operators are validated for like-species collisions and run on the
 fixed-step cached integrator. W7-X zonal long-window recurrence/damping and
@@ -536,8 +519,9 @@ domain decomposition and equilibrium ExB flow shear remain open.
 
 ## Reproducing the figures
 
-Every figure regenerates from a checked-in script; where a figure has a
-machine-readable companion, that companion is the artifact of record.
+The table records each figure's regeneration path or retired-generator status.
+Where a figure has a machine-readable companion, that companion is the artifact
+of record.
 
 | Figure | Command |
 | --- | --- |
