@@ -26,12 +26,14 @@ Five PRs are open against `main` at this checkpoint:
   ([review](https://github.com/uwplasma/GKX/pull/264#issuecomment-5755283451)).
   The PR remains open (**PERF-ADJOINT**).
 - [#265](https://github.com/uwplasma/GKX/pull/265) adopts SOLVAX's block-Thomas
-  factors for `pr3-cm`. Published head `c660519ed` integrates #267 with preserved
+  factors for `pr3-cm`. Published head `ccf79ec8f` integrates #267 with preserved
   ancestry and passes the float32, float64, typing and architecture gates; the
-  PR remains a draft and awaits fresh CI. Its recorded
-  timing/factor experiment used JAX 0.9.2, below GKX's dependency floor, so
-  those claims require a supported-environment rerun or withdrawal before
-  review (**PERF-SOLVAX**).
+  PR remains a draft and awaits fresh CI. A supported JAX 0.10.2 rerun
+  replaces the below-floor experiment: apply agreement is below `9e-16`,
+  with `1.43x`–`2.61x` smaller factor storage. Contended timings support no
+  speed claim; focused SOLVAX 0.22.0 minimum-version tests also pass
+  ([review](https://github.com/uwplasma/GKX/pull/265#issuecomment-5755378085)).
+  Ruiz remains unpromoted pending versioned evidence (**PERF-SOLVAX**).
 - [#266](https://github.com/uwplasma/GKX/pull/266) makes the `ky >= 0` state
   layout the runtime default and preserves full-layout interchange; it remains
   a draft (**PERF-HALF**). Head `ea6b1464e` includes the stale-shape fix,
