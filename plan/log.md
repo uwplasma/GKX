@@ -18352,7 +18352,8 @@ committed.
 
 **Outstanding.** (1) Run `run_identity.sh` (`new_full` vs pinned `main`, f32
 and x64); it must be bitwise. (2) Collect the benchmark-host window-split
-records.
+records. (3) Complete the remaining integration suites; the 109-test result
+above covers only the time-integrator and example test files.
 
 ```
 export MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
