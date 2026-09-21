@@ -8,7 +8,7 @@ baseline is `origin/main` at `eeb3481c6` (2.2.0). Claim scope remains bounded by
 passing unit test or successful reduced model is not by itself a promoted
 physics claim.
 
-Five PRs are open against `main` at this checkpoint:
+The implementation PRs below are open against `main` at this checkpoint:
 
 - [#260](https://github.com/uwplasma/GKX/pull/260) implements the declared
   velocity-regularization contract and Laguerre-sink experiment. Its historical
@@ -36,11 +36,12 @@ Five PRs are open against `main` at this checkpoint:
   Ruiz remains unpromoted pending versioned evidence (**PERF-SOLVAX**).
 - [#266](https://github.com/uwplasma/GKX/pull/266) makes the `ky >= 0` state
   layout the runtime default and preserves full-layout interchange; it remains
-  a draft (**PERF-HALF**). Head `ea6b1464e` includes the stale-shape fix,
+  a draft (**PERF-HALF**). Head `dd1438aa3` includes the stale-shape fix,
   sanitized provenance and a self-contained 44-entry checksum manifest;
   29 absent, untracked log entries were removed. The time-integrator and
-  example files pass 109 tests (14 skips); the full-layout opt-out identity
-  and remaining integration gates are still due
+  example files pass 109 tests (14 skips). The full-layout opt-out gate
+  against pinned main passes all 246 arrays bitwise in f32/x64; remaining
+  integration suites and the benchmark window split are still due
   ([review](https://github.com/uwplasma/GKX/pull/266#issuecomment-5755283569)).
 - [#267](https://github.com/uwplasma/GKX/pull/267) floors `pr3-cm` structure
   tolerances at float32 round-off without hiding measured nonlocal couplings
@@ -49,8 +50,13 @@ Five PRs are open against `main` at this checkpoint:
   result is documented in the public review; it is not a size-independent
   tolerance proof or an eigenpair-convergence claim.
 
-At this snapshot all five PRs remain open. CI is running on refreshed heads;
-#265/#266 remain drafts, and all five await current CI. None is treated as
+- [#269](https://github.com/uwplasma/GKX/pull/269) replaces a vacuous zero-mode
+  FLR cache test with a nonzero-mode, varying-field check at no net line cost.
+  Focused tests pass in both precisions and removing the B factor fails the
+  repaired assertion. This strengthens one guard; it does not close EM0.
+
+At this snapshot these PRs remain open. CI is running on refreshed heads;
+#265/#266 remain drafts, and all await current CI. None is treated as
 merged evidence.
 
 The stable IDs below replace sequential Q-numbers for new work. Legacy Q1-Q30
