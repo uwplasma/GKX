@@ -18449,3 +18449,41 @@ two-test rerun passes in 22.57 s. Architecture, formatting and diff checks pass;
 the unchanged SOLVAX 0.22 API gate is retained, not rerun. Both PRs still require
 fresh CI. The 64-epsilon threshold is not size-independent, and any increase
 requires renewed positive and negative controls, not an automatic adjustment.
+
+### STOP-CAL: replay the existing drift control at runtime cadence
+
+At exact main `eeb3481c6`, independent CPU review reproduced the existing
+predeclared AR(1) drift control at the runtime's 128-step look cadence. With
+128 paths, rho=.75, seed 20260913 and horizon 4096, ever-stops are 0 at the
+existing sparse checkpoints, 69 at runtime cadence, and 128 for the paired
+stationary control. This is a named synthetic counterexample to the existing
+5% drift-rejection target, not a universal turbulent false-stop rate or proof
+that a finite prefix can predict arbitrary future drift. No policy has changed.
+
+From the pinned repository with development dependencies:
+
+```bash
+PYTHONPATH=src:.:tests JAX_ENABLE_X64=true GKX_X64=1 python - <<'PY'
+import numpy as np
+from gkx.diagnostics.saturation import saturation_stop_decision
+from validation.quasilinear.test_quasilinear_window import _stationary_ar1
+t = np.arange(4096, dtype=float)
+noise = _stationary_ar1(0.75, seed=20260913, draws=128)
+for label, trend, looks in (
+    ('drift_sparse', t / 64, (512, 1024, 2048, 4096)),
+    ('drift_runtime', t / 64, range(128, 4097, 128)),
+    ('stationary_runtime', 0, range(128, 4097, 128)),
+):
+    count = sum(any(saturation_stop_decision(t[:n], row[:n])['saturated']
+                    for n in looks) for row in 10 + trend + noise)
+    print(label, count, '/ 128')
+PY
+```
+
+An isolated test-only extension retains the existing <=5% rejection bound and
+adds >=90% stationary stopping power; it produces one expected failure and two
+passes, so it is not yet published as a passing CI gate. Next: vary correlation,
+look cadence and held-out seeds before selecting a minimal policy correction.
+[Flegal–Gong, section 2](https://arxiv.org/html/1303.0238v1) motivates minimum
+variance-estimation effort and sequential calibration under stated asymptotic
+assumptions; it does not certify this nonstationary stopping heuristic.

@@ -112,6 +112,13 @@ These lanes may overlap only when they do not consume the same validation
 evidence or campaign budget. Maintenance and performance PRs may land after
 their own gates, but they do not reorder the physics dependencies above.
 
+STOP-CAL now has a reproduced production-cadence gap: the existing strong-drift
+AR(1) control stops 69/128 times with 128-step looks, versus 0/128 at its sparse
+reference checkpoints; the paired stationary control stops 128/128 times.
+This bounded counterexample and its exact reproduction are in the work log.
+Calibrate rejection and stationary stopping power together before changing the
+policy; passing a fixed-window uncertainty test does not close this gate.
+
 ## Archived opening checkpoints
 
 The superseded 2026-09-06 through 2026-09-15 checkpoints are preserved in the
