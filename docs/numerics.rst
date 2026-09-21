@@ -403,16 +403,23 @@ completion by hand.
 
 ``full``
   ``Nky = Ny``, the two-sided ``fftfreq`` order
-  :math:`[0, 1, \dots, N_y/2 - 1, -N_y/2, \dots, -1]`. This is the layout the
-  **evolved state uses today**. Half of it is redundant, because a real field
-  obeys the reality condition
-  :math:`F(-k_y, -k_x, z) = F^{*}(k_y, k_x, z)`.
+  :math:`[0, 1, \dots, N_y/2 - 1, -N_y/2, \dots, -1]`. Half of it is
+  redundant, because a real field obeys the reality condition
+  :math:`F(-k_y, -k_x, z) = F^{*}(k_y, k_x, z)`, so the negative rows are
+  rebuilt in the bracket and after every Runge--Kutta stage. This was the
+  evolved state's layout through 2.2.0 and is still reachable, with
+  ``[grid] ky_layout = "full"``, for reproducing such a run bit for bit.
 
 ``half``
   ``Nky = Nyc = 1 + Ny // 2``, the non-negative ``rfftfreq`` rows. The reality
-  condition holds by construction. GX, stella and GS2 evolve this layout, and
-  GKX already uses it for restart files, NetCDF output, the ``ky`` spectra and
-  real-space snapshots.
+  condition holds by construction. **This is the default after 2.2.0.** GX,
+  stella and GS2 evolve this layout, and GKX already used it for restart
+  files, NetCDF output, the ``ky`` spectra and real-space snapshots.
+
+``Ny`` means the same thing in both, and it is the one that matters to a deck:
+the length of the physical ``y`` axis, and so the resolution of the run.
+``Nyc`` is a storage count. A deck that names ``Ny = 64`` resolves the same
+wavenumbers on either axis.
 
 The boundary between the two sits at I/O and at the nonlinear bracket, not in
 the middle of the step. Restart files store ``Nyc`` rows and
@@ -473,16 +480,39 @@ summand is odd in :math:`k_x` and cancels pairwise --- and no run reaches the
 row in any case, since two-thirds dealiasing zeroes everything at or above
 :math:`N_y/3`.
 
-Plan 5.3 N3 moves the evolved state to the ``half`` layout, which removes the
+Plan 5.3 N3 moved the evolved state to the ``half`` layout, which removes the
 per-stage completion that the repository XLA profile attributes 41.9 per cent
-of step time to. The layout now works end to end below the runtime ---
-:func:`gkx.core_grid.build_spectral_grid` takes a ``ky_layout``, the bracket
-computes on the stored rows and does not widen, and the per-stage projector
-becomes the identity rather than a cheaper copy. Measured on the bytes that own
-an output buffer, the full-versus-half HLO ledger gives the promised saving on
-the RHS graph and a larger one on the RK step graph of a linked deck. It is
-**not the default** all the same: what is left is the runtime grid flip and the
-diagnostics and NetCDF condensation chain. See :doc:`performance`.
+of step time to, and after 2.2.0 that layout is what a run takes. The layout
+travels with the configuration: :attr:`gkx.config.GridConfig.ky_layout` is a
+deck key, and :func:`gkx.core_grid.build_spectral_grid` reads it unless a
+caller overrides it, so the solver, the diagnostics, the restart writer and
+the NetCDF writer --- which each build their own grid from the same config ---
+cannot end up on different axes. Measured on idle pinned cores, the RK3 step
+runs at 0.60x the two-sided one at ``64x64x24`` and 0.54x at ``32x32x24``;
+see :doc:`performance` for the A/B and for the one number that moves the other
+way.
+
+Two things the layout does **not** change, and both are gated rather than
+asserted. The published NetCDF bundle is unchanged, variable for variable and
+dimension for dimension: the file has always stored the dealiased
+``ky >= 0`` block, and the writer divides the pair weight back out of the
+reductions that carry it
+(``Phi2``, ``Wg``, ``Wphi``, ``Wapar``, ``TurbulentHeating``) so a published
+row means what it always meant. And a restart file written by either axis
+loads onto either axis, including files written by 2.2.0 and earlier, because the block
+they store is the same block.
+
+One reduction did have to change to keep that promise, and it is worth stating
+because it looks like it should not have. The sum over ``ky`` **at fixed**
+``kx`` is not layout-invariant under the pair weight: the reality condition
+pairs :math:`(k_y, k_x)` with :math:`(-k_y, -k_x)`, not with
+:math:`(-k_y, k_x)`, so a weighted sum over the stored rows charges the
+partner's share to the mirrored ``kx`` column and returns the ``kx``-reflected
+spectrum. On one field at ``16x16x24`` that is an 11 per cent error on
+``Phi2_kxt`` and 13 per cent on ``Wphi_kxst`` --- plausible-looking, and
+wrong. The half-axis reductions therefore add the ``kx`` mirror of their
+paired-row part, which restores the two-sided answer to roundoff. The
+two-sided expressions are untouched.
 
 Equilibrium-flow shearing coordinates
 --------------------------------------

@@ -18274,3 +18274,82 @@ aggregator failed with no failing test. The shard had been growing with the test
 carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main` was one
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
+
+## 2026-09-20 — Q10: the ky >= 0 layout becomes the default (draft, handed off)
+
+**Outcome: the default is flipped and the published physics is shown not to
+move; the opt-out identity gate and three test fixes are outstanding, so the
+PR is a draft.** Branch `perf/ky-half-default`, rebased onto `origin/main`
+`eeb3481c6`. `perf/ky-half-spectrum-switch` was examined and rejected as a
+base: it is fully merged (#258) and carries no commit `main` lacks.
+
+**What changed.** `[grid] ky_layout` (`GridConfig.ky_layout`) defaults to
+`"half"`; `"full"` is the opt-out. Every grid a run builds reads the key, so
+the solver, diagnostics, restart writer and NetCDF writer cannot disagree.
+Restart loaders take the target layout and the two-sided length `ny_full`;
+the binary restart writer widens a half state before writing, because a
+`Nyc`-row file is already the packed interchange order and the reader tells
+the two apart by size alone.
+
+**Wall clock** (office, tree `38d7c4277`, CPUs 12-17 with idle HT siblings,
+arm order rotated, 4 blocks x 7 reps; `timing_table.py` over `out/nopool_*`):
+
+| kernel | 32x32x24 half/full | 64x64x24 half/full |
+|---|---|---|
+| RK3 step, 5 steps jitted | 0.543 | 0.603 |
+| nonlinear RHS | 0.492 | 0.628 |
+| RHS VJP | 0.828 | 0.961 |
+| eager window VJP | 2.313 | not run |
+
+The eager window VJP recompiles 13 modules on every call (counted with
+`jax.monitoring` compile events), which is #264's defect. Its
+compile/execution split was started on the office host
+(`run_window_split.sh`, gate relaxed to mean core busy 0.12 because no six
+cores met 0.05) and was not collected before hand-off; the first local attempt
+ran on a saturated laptop and was discarded.
+
+**What did not move.**
+
+* Cyclone parity generator (`run_runtime_scan` on the `cyclone_salpha_itg`
+  fixture, eight tracked ky, reduced `Nl=4, Nm=8`, 3000 steps) and the linear
+  example's certified Krylov eigenvalue at ky 0.3: every gamma and omega
+  bitwise equal to `main` (`cyclone_golden_identity.py`).
+* Nonlinear NetCDF bundle, 225 variables, no shape change in any arm. x64:
+  221 bitwise; the other four are `TurbulentHeating`, peak 3.1e-17 against a
+  field energy of 1.9e-2, a cancellation residue (`compare_nc.py` now prints
+  `max_abs` and `ref_peak` beside `max_rel`). float32: 186 bitwise, the rest
+  at float32 roundoff, `HeatFlux_st` 3.41e-7.
+* Restarts: NetCDF and binary files written on either axis load onto either,
+  `max|delta| = 0` in all four directions, including a two-sided file.
+* Eigen routes: 57 in-band ky targets pick the same row on both axes; only an
+  out-of-band Nyquist target lands on the opposite sign; the shipped linear
+  deck's eigenvalue at ky 0.55 is bitwise equal across layouts.
+
+**Found and fixed.** The identity harness's `sitecustomize.py` pinned the
+`GridConfig` class default but not the `GridConfig` instances that
+`RuntimeConfig`, `Case`, `CycloneBaseCase` and `KBMBaseCase` build at import,
+so the "full" arm ran on the half axis. It now rebuilds those instances and
+refuses to start if any stale one remains. The driver's half arm was removed:
+Q9's harness seeds a random state over the grid's own row count, so a half
+arm starts from a different, non-real state and cannot be compared
+element-wise.
+
+**Outstanding.** (1) Run `run_identity.sh` (`new_full` vs `main`, f32 and
+x64); it must be bitwise. (2) Fix
+`test_imex_diagnostics_route_carries_unconverged_solves_to_the_host_gate`,
+`test_imex_diagnostics_default_return_is_two_elements` and one
+`test_examples.py` case, which build `Ny`-row states. (3) Finish the
+integration suites from `test_examples.py` on. (4) Collect the office
+window-split records.
+
+```
+export MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
+D=plan/research/scripts/2026-09-20-q10-ky-half-default
+python $D/timing_table.py
+python $D/restart_round_trip.py $D/out/restart_round_trip.json
+for L in full half; do python $D/netcdf_layout_ab.py $D/out/nc_$L.npz --ky-layout $L; done
+python $D/compare_nc.py $D/out/nc_full.npz $D/out/nc_half.npz $D/out/nc_compare.json
+GX_PARITY_REF_DIR=<gx refs> python $D/cyclone_golden_identity.py $D/out/cyclone_golden_branch.json
+python $D/eigen_branch.py $D/out/eigen_branch.json
+bash $D/run_identity.sh <main tree> <this tree> $D/out/identity
+```
