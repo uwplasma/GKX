@@ -3684,7 +3684,6 @@ def test_an_explicit_sheared_method_reports_no_implicit_status() -> None:
     np.testing.assert_array_equal(
         np.asarray(state_only), np.asarray(state_only_reference)
     )
-# ---- Q30: the eager adjoint route's compiled graph ----
 
 
 @contextmanager
