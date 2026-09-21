@@ -364,7 +364,21 @@ transport-window, and profiler gates.
 
 For scan workloads, the default path is the custom fixed-step ``imex2``
 owner. This keeps stepping shape-stable and improves throughput for multi-ky
-scans.
+scans. For a diagonal non-negative damping operator :math:`D` and explicit
+remainder :math:`E`, it uses the `ARS(2,2,2) split
+<https://doi.org/10.1016/S0168-9274(97)00056-1>`_ (section 2.6) with
+:math:`\gamma=1-1/\sqrt{2}` and :math:`\delta=1-1/(2\gamma)`:
+
+.. math::
+
+   Y &= (I + \gamma hD)^{-1}\left(y_n + \gamma hE(y_n)\right), \\
+   y_{n+1} &= (I + \gamma hD)^{-1}\left[y_n
+      + h\delta E(y_n) + h(1-\delta)E(Y) - h(1-\gamma)DY\right].
+
+The split is second order and L-stable for pure damping. For linear :math:`E`
+with :math:`D=0`, its stability polynomial equals explicit midpoint's and has
+the same stability restriction. Coupled explicit/implicit stability remains
+problem dependent.
 
 Nonlinear FFT bracket
 ---------------------
