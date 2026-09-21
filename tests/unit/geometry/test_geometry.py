@@ -155,8 +155,43 @@ def test_salpha_geometry_auto_zero_shat_threshold_matches_reference_default():
     geom = SAlphaGeometry.from_config(
         GeometryConfig(s_hat=0.1 * ZERO_SHAT_THRESHOLD, zero_shat=False)
     )
+    theta = jnp.array([-1.0, 0.0, 1.0])
+    _gds2, _gds21, gds22 = geom.metric_coeffs(theta)
 
     assert geom.s_hat == pytest.approx(0.0)
+    assert jnp.allclose(gds22, jnp.ones_like(theta))
+
+
+@pytest.mark.parametrize("geometry_type", [SAlphaGeometry, SlabGeometry])
+@pytest.mark.parametrize("shear_value", [0.8, -0.8])
+def test_analytic_metric_finite_shear_jit_gradient_matches_finite_difference(
+    geometry_type,
+    shear_value: float,
+) -> None:
+    dtype = jnp.float64 if bool(jax.config.read("jax_enable_x64")) else jnp.float32
+    theta = jnp.asarray([-0.7, 0.2, 1.1], dtype=dtype)
+    shear = jnp.asarray(shear_value, dtype=dtype)
+    step = jnp.asarray(1.0e-5 if dtype == jnp.float64 else 1.0e-3, dtype=dtype)
+
+    def metric_sum(s_hat: jnp.ndarray) -> jnp.ndarray:
+        if geometry_type is SAlphaGeometry:
+            geom = SAlphaGeometry(q=1.4, s_hat=s_hat, epsilon=0.18, alpha=0.2)
+        else:
+            geom = SlabGeometry(s_hat=s_hat)
+        return sum(jnp.sum(coeff) for coeff in geom.metric_coeffs(theta))
+
+    gradient = jax.grad(metric_sum)(shear)
+    compiled_gradient = jax.jit(jax.grad(metric_sum))(shear)
+    finite_difference = (metric_sum(shear + step) - metric_sum(shear - step)) / (
+        2.0 * step
+    )
+
+    np.testing.assert_allclose(
+        np.asarray([gradient, compiled_gradient]),
+        finite_difference,
+        rtol=2.0e-3 if dtype == jnp.float32 else 2.0e-8,
+        atol=2.0e-4 if dtype == jnp.float32 else 2.0e-10,
+    )
 
 
 def test_bmag_and_omega_d_shapes():

@@ -1360,7 +1360,10 @@ recursive = true
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
-baseline = 92533
+# 92533 -> 92568: trace both analytic metrics through eager/JIT AD at positive
+# and negative finite shear, compare them with centered finite differences, and
+# preserve the distinct exact-zero metric value. The source line budget shrinks.
+baseline = 92568
 target = 35000
 
 [[line_budget_policy.counts]]
