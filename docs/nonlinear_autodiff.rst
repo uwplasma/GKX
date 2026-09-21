@@ -127,10 +127,10 @@ Run to saturation once, then differentiate the physical window:
 
    heat_flux, gradient = jax.value_and_grad(loss)(theta0)
 
-``loss`` compiles once.  The differentiated scan is one ``jax.jit`` graph whose
-arrays are all arguments, so the same executable serves every geometry the
-optimizer proposes; only a new state shape, integrator, term set or window
-length compiles again.  Through GKX 2.2.0 this route recompiled thirteen XLA
+The differentiated scan reuses one ``jax.jit`` graph for matching shapes,
+dtypes, topology and static options. Geometry arrays are arguments, not captured
+constants; changes to static configuration can recompile. Through GKX 2.2.0
+the recorded workload recompiled thirteen XLA
 modules on every call, which was most of the wall time of an objective
 evaluation.  :doc:`solvers` has the measurements and the identity gate.
 This qualification covers complete nonlinear grids.  Mode-selected linear and
