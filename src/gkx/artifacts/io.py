@@ -30,6 +30,8 @@ from gkx.workflows.runtime.diagnostic_arrays import (
     timestep_cost_payload,
     validate_finite_runtime_diagnostics,
 )
+from gkx.solvers_linear_implicit import implicit_solve_payload
+from gkx.solvers_linear_krylov import eigen_status_payload
 
 _RUNTIME_FIELD_NAMES = ("phi", "apar", "bpar")
 
@@ -414,6 +416,12 @@ def _runtime_linear_summary(result: Any) -> dict[str, Any]:
             result.z is not None and result.eigenfunction is not None
         ),
         "has_quasilinear": bool(getattr(result, "quasilinear", None) is not None),
+        # Solver status, with the same key names the in-memory result reports.
+        # A saved run used to carry no convergence channel at all, so a reader
+        # could not tell a certified eigenpair or a converged implicit scan from
+        # an unchecked one (queue row Q29).
+        **eigen_status_payload(getattr(result, "eigen_status", None)),
+        **implicit_solve_payload(getattr(result, "implicit_solve", None)),
     }
     if getattr(result, "quasilinear", None) is not None:
         summary["quasilinear"] = result.quasilinear
@@ -542,6 +550,9 @@ def _nonlinear_summary(result: Any) -> dict[str, Any]:
         "n_state_shape": None
         if result.state is None
         else list(np.asarray(result.state).shape),
+        # Every implicit GMRES solve of an IMEX run, as the in-memory result
+        # reports it; None for explicit methods (queue row Q29).
+        **implicit_solve_payload(getattr(result, "implicit_solve", None)),
     }
     if diag is not None:
         payload.update(

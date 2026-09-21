@@ -235,6 +235,56 @@ def _normalize_geometry_overrides(overrides: dict | None) -> dict | None:
     return dict(overrides)
 
 
+def _normalize_time_overrides(overrides: Any) -> dict[str, Any] | None:
+    """Pair the integrator with the step policy when the deck chose no step.
+
+    ``ExplicitTimeConfig.dt`` is a required field and ``TimeConfig.dt`` carries
+    a default of 0.1. That is the whole of the real difference between the two
+    time-configuration surfaces: a caller of the library struct has always
+    chosen a step, a deck may not have. So the two ``fixed_dt`` defaults are
+    not the same question and must not simply be made equal -- ``fixed_dt=True``
+    is right for a step the user chose, and fourteen shipped decks and parity
+    fixtures omit ``fixed_dt`` and depend on it.
+
+    What is wrong is applying a *defaulted* step as a fixed one. Measured on
+    the shipped Cyclone deck at (Nl,Nm)=(4,8), ky=0.3, with the ``TimeConfig``
+    dataclass defaults, against that rung's certified adaptive eigenpair
+    gamma=0.10128645:
+
+    ===================  ==========  =======  ==========  ==============
+    method / policy      gamma       steps    RHS evals   rel. error
+    ===================  ==========  =======  ==========  ==============
+    rk2, fixed dt=0.1    FAILS       --       --          FloatingPointError
+    rk4, fixed dt=0.1    FAILS       --       --          FloatingPointError
+    rk2, CFL-controlled  0.10126899    7806      15612    -1.72e-04
+    rk3, CFL-controlled  0.10126041    4512      13536    -2.57e-04
+    rk4, CFL-controlled  0.10125984    2768      11072    -2.63e-04
+    ===================  ==========  =======  ==========  ==============
+
+    The defaulted dt=0.1 is ~7.8x the CFL-stable 0.01281 for this deck, so both
+    fixed-step arms overflow whatever the scheme. With the controller on, all
+    three schemes agree to better than 3e-4 and rk4 reaches the same horizon in
+    29.1% fewer right-hand-side evaluations -- exactly 4/(2.82*2), because rk4's
+    CFL prefactor buys a 2.82x longer step for twice the work per step. rk4 is
+    therefore paired with the controller and only with it: at a *fixed* step
+    rk4 has no step-size compensation and is simply twice the cost of rk2, so
+    the dataclass default stays rk2 for a deck that chose its own dt.
+
+    A deck that sets ``dt`` keeps today's behaviour exactly, and every shipped
+    deck sets it, so this changes none of them.
+    """
+
+    raw = dict(overrides) if isinstance(overrides, dict) else {}
+    if "dt" in raw:
+        return raw or None
+    # No step was chosen: hand the step to the CFL controller and give it the
+    # scheme that makes the controller's step cheapest. An explicit ``method``
+    # or ``fixed_dt`` in the deck still wins.
+    raw.setdefault("fixed_dt", False)
+    raw.setdefault("method", "rk4")
+    return raw
+
+
 def _runtime_base_config(data: dict[str, Any]) -> RuntimeConfig:
     """Return a runtime config after applying common dataclass sections."""
 
@@ -244,7 +294,7 @@ def _runtime_base_config(data: dict[str, Any]) -> RuntimeConfig:
             RuntimeConfig(),
             {
                 "grid": data.get("grid"),
-                "time": data.get("time"),
+                "time": _normalize_time_overrides(data.get("time")),
                 "geometry": _normalize_geometry_overrides(data.get("geometry")),
                 "init": data.get("init"),
             },

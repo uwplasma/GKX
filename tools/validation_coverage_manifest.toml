@@ -258,6 +258,7 @@ owned_modules = [
   "gkx.solvers_linear_krylov_algorithms",
   "gkx.solvers_linear_krylov",
   "gkx.solvers_linear_krylov_propagator",
+  "gkx.solvers_linear_precond_pr3",
   "gkx.terms.config",
   "gkx.terms.fields",
   "gkx.operators.linear.dissipation",

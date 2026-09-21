@@ -22,13 +22,16 @@ from gkx.solvers_nonlinear_diagnostic_integration import (
 )
 from gkx.solvers_nonlinear_imex import (
     advance_imex_nonlinear_state,
+    advance_imex_nonlinear_state_with_stats,
     imex_fixed_point_guess,
     integrate_cached_imex_scan,
     make_imex_diagnostic_step,
     make_imex_nonlinear_term,
     make_imex_solve_step,
+    make_imex_solve_step_with_stats,
     run_imex_diagnostic_scan,
     solve_imex_step,
+    solve_imex_step_with_stats,
 )
 from gkx.solvers_nonlinear_state_integration import (
     DIVERGENCE_KNEE_STEPS,
@@ -46,6 +49,7 @@ __all__ = [
     "advance_explicit_nonlinear_state",
     "DIVERGENCE_KNEE_STEPS",
     "advance_imex_nonlinear_state",
+    "advance_imex_nonlinear_state_with_stats",
     "checkpoint_explicit_step",
     "ExplicitNonlinearDiagnosticsDeps",
     "integrate_explicit_nonlinear_diagnostics_impl",
@@ -69,7 +73,9 @@ __all__ = [
     "make_imex_diagnostic_step",
     "make_imex_nonlinear_term",
     "make_imex_solve_step",
+    "make_imex_solve_step_with_stats",
     "run_imex_diagnostic_scan",
     "solve_imex_step",
+    "solve_imex_step_with_stats",
     "ShearedTransportTrace",
 ]

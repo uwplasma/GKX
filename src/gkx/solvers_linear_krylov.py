@@ -45,6 +45,7 @@ from gkx.solvers_linear_krylov_algorithms import (
     dominant_eigenpair_propagator_cached,
     dominant_eigenpair_shift_invert_cached,
 )
+from gkx.solvers_linear_precond_pr3 import PR3_PRECOND_NAMES, build_pr3_factors
 
 
 @dataclass(frozen=True)
@@ -63,7 +64,18 @@ class KrylovConfig:
     omega_cap_factor: float = 2.0
     omega_sign: int = 0
     method: str = "adaptive"
-    power_iters: int = 200
+    # Matches the ``dominant_eigenpair(power_iters=40)`` signature default: one
+    # route, one cost, whichever door it is entered by. The two used to disagree
+    # by 5x, and the larger value bought nothing. Measured on the shipped Cyclone
+    # deck at (Nl,Nm)=(4,8), ky=0.3, float32, against that rung's certified
+    # adaptive eigenpair gamma=0.10128645: the route's residual is 9.501e-01 at
+    # 40 applies and 9.467e-01 at 200, both against a 1.192e-04 gate, so 5x the
+    # propagator applies moves the residual by 0.4% of an O(1) quantity and the
+    # pair is rejected either way. The ladder only reaches 6.2e-03 at 5000
+    # applies and then stalls -- 5.96e-03 at 10000 -- so no affordable setting
+    # certifies and the value cannot be chosen for accuracy. It is therefore
+    # chosen for cost, and for agreeing with the public signature.
+    power_iters: int = 40
     power_dt: float = 0.01
     propagator_steps: int = 1
     shift: complex | None = None
@@ -75,6 +87,16 @@ class KrylovConfig:
     # but all run the one SOLVAX FGMRES solve; the label is not a compile key.
     shift_solve_method: str = "batched"
     shift_preconditioner: str | None = "auto"
+    # Only ``pr3-cm`` reads the two fields below. ``shift_precond_alpha`` is its
+    # Peaceman-Rachford parameter; None takes Q7's scalar symbol-bound rule
+    # ``alpha = -sqrt(s1 d)``, which that row measured as good as a per-rung scan
+    # at Nz=96. ``shift_precond_block_solve`` picks how its z-local block is
+    # inverted: "auto" takes the exact block-Thomas plus Sherman-Morrison solve
+    # when the block really is l-tridiagonal plus rank one and the dense batched
+    # inverse when it is not, "block-thomas" refuses instead of falling back, and
+    # "dense" is the control the fallback measures against.
+    shift_precond_alpha: float | complex | None = None
+    shift_precond_block_solve: str = "auto"
     shift_selection: str = "targeted"
     # Certified against the original operator in the working dtype, so this is
     # raised to that dtype's noise floor; the default is a float64 gate.
@@ -123,6 +145,25 @@ class EigenSolveStatus:
         }
 
 
+def eigen_status_payload(status: EigenSolveStatus | None) -> dict[str, Any]:
+    """Flatten an eigen solve status into scalar keys; ``None`` when none ran.
+
+    This is the one spelling of those keys. A runtime result's ``summary()``
+    and the saved ``*.summary.json`` both read it, so a run held in memory and
+    the same run read back from disk report the same status under the same
+    names.
+    """
+
+    inner = None if status is None else status.inner
+    return {
+        "eigen_route": None if status is None else status.route,
+        "eigen_residual": None if status is None else status.residual,
+        "eigen_tolerance": None if status is None else status.tolerance,
+        "eigen_certified": None if status is None else status.certified,
+        "eigen_inner_converged": None if inner is None else inner["converged"],
+    }
+
+
 _StatusCallback = Callable[[str], None] | None
 
 # Base residual gate for the certified adaptive branch. The effective gate is
@@ -162,6 +203,8 @@ def _normalized_config(options: Mapping[str, Any]) -> KrylovConfig:
         shift_restart=max(int(value("shift_restart")), 1),
         shift_solve_method=str(value("shift_solve_method")),
         shift_preconditioner=value("shift_preconditioner"),
+        shift_precond_alpha=value("shift_precond_alpha"),
+        shift_precond_block_solve=str(value("shift_precond_block_solve")),
         shift_selection=str(value("shift_selection")),
         shift_outer_residual_tol=float(value("shift_outer_residual_tol")),
         mode_family=mode_family,
@@ -387,9 +430,18 @@ def _inner_solve_summary(stats: InnerSolveStats, tol: float) -> str:
 
 
 def _inner_solve_status(
-    stats: InnerSolveStats, tol: float, preconditioner: str
+    stats: InnerSolveStats,
+    tol: float,
+    preconditioner: str,
+    preconditioner_setup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return one shift-invert build's inner FGMRES solves as host scalars."""
+    """Return one shift-invert build's inner FGMRES solves as host scalars.
+
+    ``preconditioner_setup`` carries what a preconditioner with host-side setup
+    measured while building itself -- for ``pr3-cm``, which z-block solve its
+    structural check selected and why, its parameter and the factors' size. It
+    is ``None`` for every preconditioner that has no setup to report.
+    """
 
     unconverged = int(np.asarray(stats.unconverged_solves))
     return {
@@ -400,6 +452,9 @@ def _inner_solve_status(
         "total_iterations": int(np.asarray(stats.total_iterations)),
         "tolerance": float(tol),
         "preconditioner": str(preconditioner),
+        "preconditioner_setup": (
+            None if preconditioner_setup is None else dict(preconditioner_setup)
+        ),
     }
 
 
@@ -562,7 +617,33 @@ def _shift_invert_branch(
         if automatic and preconditioner == "hermite-line"
         else (preconditioner,)
     )
+    precond_meta: dict[str, Any] | None = None
     for attempt, mode in enumerate(preconditioners):
+        precond_factors = None
+        if str(mode).strip().lower() in PR3_PRECOND_NAMES:
+            # pr3-cm is the one preconditioner with host-side setup: Nl*Nm probes
+            # of the z-local operator and a factorization, built once per shift
+            # outside the jit and handed in as an operand.
+            _status(status_callback, "building pr3-cm factors")
+            precond_factors, precond_meta = build_pr3_factors(
+                v_init,
+                cache,
+                params,
+                term_cfg,
+                sigma,
+                alpha=cfg.shift_precond_alpha,
+                block_solve=cfg.shift_precond_block_solve,
+            )
+            _status(
+                status_callback,
+                "pr3-cm factors: "
+                f"{precond_meta['block_solve']} solve, "
+                f"alpha={precond_meta['alpha'][0]:.6g}"
+                f"{precond_meta['alpha'][1]:+.6g}j "
+                f"({precond_meta['alpha_source']}), "
+                f"{precond_meta['factor_bytes'] / 1e6:.1f} MB; "
+                f"{precond_meta['block_solve_reason']}",
+            )
         _status(status_callback, f"running shift-invert Arnoldi ({mode})")
         eig_si, vec_si, inner_stats = _shift_invert_eigenpair_with_inner_stats(
             v_init,
@@ -584,6 +665,7 @@ def _shift_invert_branch(
             select_targeted=select_targeted,
             select_growth=select_growth,
             select_overlap=bool(select_overlap),
+            precond_factors=precond_factors,
         )
         eig_host = complex(np.asarray(eig_si))
         residual = _eigenpair_relative_residual(eig_si, vec_si, cache, params, term_cfg)
@@ -641,7 +723,7 @@ def _shift_invert_branch(
         residual=residual,
         tolerance=residual_tol,
         certified=True,
-        inner=_inner_solve_status(inner_stats, cfg.shift_tol, str(mode)),
+        inner=_inner_solve_status(inner_stats, cfg.shift_tol, str(mode), precond_meta),
     )
     return eig_si, vec_si, status
 
@@ -926,6 +1008,8 @@ def dominant_eigenpair(
     shift_restart: int = 20,
     shift_solve_method: str = "batched",
     shift_preconditioner: str | None = "auto",
+    shift_precond_alpha: float | complex | None = None,
+    shift_precond_block_solve: str = "auto",
     shift_selection: str = "targeted",
     shift_outer_residual_tol: float = 1.0e-6,
     mode_family: str = "auto",

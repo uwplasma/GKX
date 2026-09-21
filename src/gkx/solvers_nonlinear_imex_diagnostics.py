@@ -16,6 +16,10 @@ from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.config import TermConfig
 
+from gkx.solvers_linear_implicit import (
+    ImplicitSolveStats,
+    _empty_implicit_solve_stats,
+)
 from gkx.solvers_nonlinear_explicit import (
     _SSPX3_ADT,
     _SSPX3_W1,
@@ -27,13 +31,56 @@ FieldSolveFn = Callable[..., object]
 NonlinearTermFn = Callable[[jnp.ndarray], jnp.ndarray]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
 SolveStepFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
+StatsSolveStepFn = Callable[
+    [jnp.ndarray, jnp.ndarray, ImplicitSolveStats],
+    tuple[jnp.ndarray, ImplicitSolveStats],
+]
 DiagnosticFn = Callable[..., Any]
 CollisionSplitFn = Callable[[jnp.ndarray, Any, jnp.ndarray, str], jnp.ndarray]
 DiagnosticStepFn = Callable[
-    [tuple[Any, Any, Any, Any, Any], Any],
-    tuple[tuple[Any, Any, Any, Any, Any], tuple[Any, Any]],
+    [tuple[Any, ...], Any],
+    tuple[tuple[Any, ...], tuple[Any, Any]],
 ]
 DiagnosticScanOutput = tuple[jnp.ndarray, tuple[Any, Any]]
+
+
+def _advance_imex_nonlinear_state(
+    G: jnp.ndarray,
+    stats: Any,
+    *,
+    dt_val: jnp.ndarray,
+    method: str,
+    nonlinear_term: NonlinearTermFn,
+    solve_step: Callable[[jnp.ndarray, jnp.ndarray, Any], tuple[jnp.ndarray, Any]],
+    project_state: ProjectFn,
+) -> tuple[jnp.ndarray, Any]:
+    """One IMEX step, threading whatever solve status ``solve_step`` carries.
+
+    SSPX3 takes three implicit solves per step, so the status is threaded
+    through all three rather than summarizing only the last one.
+    """
+
+    if method == "sspx3":
+
+        def _euler_step(
+            G_state: jnp.ndarray, carried: Any, dt_stage: jnp.ndarray
+        ) -> tuple[jnp.ndarray, Any]:
+            rhs_stage = G_state + dt_stage * nonlinear_term(G_state)
+            return solve_step(G_state, rhs_stage, carried)
+
+        G1, stats = _euler_step(G, stats, _SSPX3_ADT * dt_val)
+        G2_euler, stats = _euler_step(G1, stats, _SSPX3_ADT * dt_val)
+        G2 = project_state((1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler)
+        G3, stats = _euler_step(G2, stats, _SSPX3_ADT * dt_val)
+        return (
+            (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
+            + _SSPX3_W3 * G1
+            + (_SSPX3_W2 - 1.0) * G2
+            + G3
+        ), stats
+
+    rhs = G + dt_val * nonlinear_term(G)
+    return solve_step(G, rhs, stats)
 
 
 def advance_imex_nonlinear_state(
@@ -47,25 +94,44 @@ def advance_imex_nonlinear_state(
 ) -> jnp.ndarray:
     """Advance one IMEX nonlinear step with optional SSPX3 stage composition."""
 
-    if method == "sspx3":
+    def _stats_free(
+        G_state: jnp.ndarray, rhs: jnp.ndarray, carried: Any
+    ) -> tuple[jnp.ndarray, Any]:
+        return solve_step(G_state, rhs), carried
 
-        def _euler_step(G_state: jnp.ndarray, dt_stage: jnp.ndarray) -> jnp.ndarray:
-            rhs_stage = G_state + dt_stage * nonlinear_term(G_state)
-            return solve_step(G_state, rhs_stage)
+    G_new, _ = _advance_imex_nonlinear_state(
+        G,
+        None,
+        dt_val=dt_val,
+        method=method,
+        nonlinear_term=nonlinear_term,
+        solve_step=_stats_free,
+        project_state=project_state,
+    )
+    return G_new
 
-        G1 = _euler_step(G, _SSPX3_ADT * dt_val)
-        G2_euler = _euler_step(G1, _SSPX3_ADT * dt_val)
-        G2 = project_state((1.0 - _SSPX3_W1) * G + (_SSPX3_W1 - 1.0) * G1 + G2_euler)
-        G3 = _euler_step(G2, _SSPX3_ADT * dt_val)
-        return (
-            (1.0 - _SSPX3_W2 - _SSPX3_W3) * G
-            + _SSPX3_W3 * G1
-            + (_SSPX3_W2 - 1.0) * G2
-            + G3
-        )
 
-    rhs = G + dt_val * nonlinear_term(G)
-    return solve_step(G, rhs)
+def advance_imex_nonlinear_state_with_stats(
+    G: jnp.ndarray,
+    stats: ImplicitSolveStats,
+    *,
+    dt_val: jnp.ndarray,
+    method: str,
+    nonlinear_term: NonlinearTermFn,
+    solve_step: StatsSolveStepFn,
+    project_state: ProjectFn,
+) -> tuple[jnp.ndarray, ImplicitSolveStats]:
+    """Advance one IMEX step and fold every implicit solve into ``stats``."""
+
+    return _advance_imex_nonlinear_state(
+        G,
+        stats,
+        dt_val=dt_val,
+        method=method,
+        nonlinear_term=nonlinear_term,
+        solve_step=solve_step,
+        project_state=project_state,
+    )
 
 
 def make_imex_diagnostic_step(
@@ -93,22 +159,49 @@ def make_imex_diagnostic_step(
     damping: Any | None = None,
     collision_scheme: str = "implicit",
     apply_collision_split_fn: CollisionSplitFn | None = None,
+    solve_step_with_stats: StatsSolveStepFn | None = None,
 ) -> DiagnosticStepFn:
-    """Build one IMEX diagnostic scan step with injected runtime seams."""
+    """Build one IMEX diagnostic scan step with injected runtime seams.
 
-    def step(
-        carry: tuple[Any, Any, Any, Any, Any],
-        idx: Any,
-    ) -> tuple[tuple[Any, Any, Any, Any, Any], tuple[Any, Any]]:
-        G, G_prev_step, fields_prev_step, diag_prev, t_prev = carry
-        G_new = advance_imex_nonlinear_state(
+    With ``solve_step_with_stats`` the carry grows one
+    :class:`~gkx.solvers_linear_implicit.ImplicitSolveStats` leaf and every
+    implicit solve folds into it, which is how this route gets a convergence
+    channel a traced step cannot raise on (queue row Q15). Without it the step
+    keeps exactly the five-element carry, and the same solve, it had.
+    """
+
+    carries_solve_stats = solve_step_with_stats is not None
+
+    def _advance(G: jnp.ndarray, stats: Any) -> tuple[jnp.ndarray, Any]:
+        if solve_step_with_stats is None:
+            return (
+                advance_imex_nonlinear_state(
+                    G,
+                    dt_val=dt_val,
+                    method=method,
+                    nonlinear_term=nonlinear_term,
+                    solve_step=solve_step,
+                    project_state=project_state,
+                ),
+                stats,
+            )
+        return advance_imex_nonlinear_state_with_stats(
             G,
+            stats,
             dt_val=dt_val,
             method=method,
             nonlinear_term=nonlinear_term,
-            solve_step=solve_step,
+            solve_step=solve_step_with_stats,
             project_state=project_state,
         )
+
+    def step(
+        carry: tuple[Any, ...],
+        idx: Any,
+    ) -> tuple[tuple[Any, ...], tuple[Any, Any]]:
+        G, G_prev_step, fields_prev_step, diag_prev, t_prev = carry[:5]
+        solve_stats = carry[5] if carries_solve_stats else None
+        G_new, solve_stats = _advance(G, solve_stats)
         if use_collision_split and damping is not None:
             if apply_collision_split_fn is None:
                 raise ValueError(
@@ -143,32 +236,44 @@ def make_imex_diagnostic_step(
             t_new=t_new,
             progress_total=progress_total,
         )
-        return (G_new, G_new, fields_new, diag, t_new), (diag, t_new)
+        next_carry: tuple[Any, ...] = (G_new, G_new, fields_new, diag, t_new)
+        if carries_solve_stats:
+            next_carry = (*next_carry, solve_stats)
+        return next_carry, (diag, t_new)
 
     return step
 
 
 def run_imex_diagnostic_scan(
     step_fn: DiagnosticStepFn,
-    initial_carry: tuple[Any, Any, Any, Any, Any],
+    initial_carry: tuple[Any, ...],
     *,
     steps: int,
     checkpoint: bool,
-) -> DiagnosticScanOutput:
-    """Run the fixed-step IMEX diagnostic scan."""
+    return_solve_stats: bool = False,
+) -> DiagnosticScanOutput | tuple[Any, ...]:
+    """Run the fixed-step IMEX diagnostic scan.
+
+    ``return_solve_stats=True`` appends the carry's trailing
+    :class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`, or ``None`` when
+    the step was built without one. A caller that does not ask never reads the
+    leaf, so XLA drops the status arithmetic and the compiled scan is the graph
+    it was before.
+    """
 
     scan_step = jax.checkpoint(step_fn) if checkpoint else step_fn
     idx = jnp.arange(steps, dtype=jnp.int32)
-    (
-        (G_final, _G_prev_last, _fields_prev_last, _diag_last, _t_last),
-        scan_diag_out,
-    ) = jax.lax.scan(
+    final_carry, scan_diag_out = jax.lax.scan(
         scan_step,
         initial_carry,
         idx,
         length=steps,
     )
-    return G_final, scan_diag_out
+    G_final = final_carry[0]
+    if not return_solve_stats:
+        return G_final, scan_diag_out
+    solve_stats = final_carry[5] if len(final_carry) > 5 else None
+    return G_final, scan_diag_out, solve_stats
 
 
 @dataclass(frozen=True)
@@ -187,6 +292,7 @@ class IMEXNonlinearDiagnosticsDeps:
     collision_damping_fn: Callable[..., Any]
     make_imex_nonlinear_term_fn: Callable[..., Any]
     make_imex_solve_step_fn: Callable[..., Any]
+    make_imex_solve_step_with_stats_fn: Callable[..., Any]
     solve_imex_step_fn: Callable[..., Any]
     make_diagnostic_tuple_fn: Callable[..., Any]
     make_imex_step_fn: Callable[..., Any]
@@ -221,6 +327,7 @@ class _IMEXRuntimeOperators:
     collision_policy: Any
     nonlinear_term: NonlinearTermFn
     solve_step: SolveStepFn
+    solve_step_with_stats: StatsSolveStepFn
 
 
 @dataclass(frozen=True)
@@ -402,27 +509,30 @@ def _build_imex_runtime_operators(
         nonlinear_term_fn=deps.nonlinear_term_fn,
         nonlinear_contribution_fn=deps.nonlinear_contribution_fn,
     )
+    solve_policy = {
+        "linear_rhs_fn": linear_rhs_fn,
+        "cache": prepared.cache,
+        "params": params,
+        "linear_cfg": prepared.linear_cfg,
+        "external_phi": external_phi,
+        "dt_val": prepared.dt_val,
+        "implicit_iters": implicit_iters,
+        "implicit_relax": implicit_relax,
+        "matvec": prepared.implicit_operator.matvec,
+        "shape": prepared.implicit_operator.shape,
+        "implicit_tol": implicit_tol,
+        "implicit_maxiter": implicit_maxiter,
+        "implicit_restart": implicit_restart,
+        "precond_op": prepared.implicit_operator.precond_op,
+    }
     solve_step = deps.make_imex_solve_step_fn(
-        linear_rhs_fn=linear_rhs_fn,
-        cache=prepared.cache,
-        params=params,
-        linear_cfg=prepared.linear_cfg,
-        external_phi=external_phi,
-        dt_val=prepared.dt_val,
-        implicit_iters=implicit_iters,
-        implicit_relax=implicit_relax,
-        matvec=prepared.implicit_operator.matvec,
-        shape=prepared.implicit_operator.shape,
-        implicit_tol=implicit_tol,
-        implicit_maxiter=implicit_maxiter,
-        implicit_restart=implicit_restart,
-        precond_op=prepared.implicit_operator.precond_op,
-        solve_step_fn=deps.solve_imex_step_fn,
+        **solve_policy, solve_step_fn=deps.solve_imex_step_fn
     )
     return _IMEXRuntimeOperators(
         collision_policy=collision_policy,
         nonlinear_term=nonlinear_term,
         solve_step=solve_step,
+        solve_step_with_stats=deps.make_imex_solve_step_with_stats_fn(**solve_policy),
     )
 
 
@@ -478,6 +588,7 @@ def _make_imex_scan_step(
         method=method,
         nonlinear_term=runtime_ops.nonlinear_term,
         solve_step=runtime_ops.solve_step,
+        solve_step_with_stats=runtime_ops.solve_step_with_stats,
         project_state=prepared.project_state,
         state_dtype=prepared.state_dtype,
         real_dtype=prepared.real_dtype,
@@ -513,8 +624,13 @@ def _run_imex_diagnostic_scan_and_finalize(
     sample_stride: int,
     diagnostics_stride: int,
     external_phi: jnp.ndarray | float | None,
-) -> tuple[jnp.ndarray, SimulationDiagnostics]:
-    """Run the fixed-step IMEX scan and finalize diagnostics."""
+) -> tuple[jnp.ndarray, SimulationDiagnostics, ImplicitSolveStats | None]:
+    """Run the fixed-step IMEX scan and finalize diagnostics.
+
+    The scan always carries the solve status, as the cached IMEX and implicit
+    linear scans do; it is read back here and dropped by the caller that did not
+    ask for it, which is what lets XLA remove the arithmetic behind it.
+    """
 
     fields0 = deps.compute_fields_fn(
         prepared.G0,
@@ -526,7 +642,7 @@ def _run_imex_diagnostic_scan_and_finalize(
     diag_zero = compute_diag_from_state(
         prepared.G0, fields0, prepared.G0, fields0, prepared.dt_val
     )
-    _G_final, scan_diag_out = deps.run_imex_scan_fn(
+    _G_final, scan_diag_out, solve_stats = deps.run_imex_scan_fn(
         step,
         (
             prepared.G0,
@@ -534,9 +650,11 @@ def _run_imex_diagnostic_scan_and_finalize(
             fields0,
             diag_zero,
             jnp.asarray(0.0, dtype=prepared.real_dtype),
+            _empty_implicit_solve_stats(prepared.state_dtype),
         ),
         steps=steps,
         checkpoint=checkpoint,
+        return_solve_stats=True,
     )
 
     diag, t = scan_diag_out
@@ -550,7 +668,7 @@ def _run_imex_diagnostic_scan_and_finalize(
         resolved_diagnostics=True,
         resolved_to_numpy=True,
     )
-    return jnp.asarray(diag_out.t), diag_out
+    return jnp.asarray(diag_out.t), diag_out, solve_stats
 
 
 def _build_imex_scan_context(
@@ -638,7 +756,7 @@ def _integrate_imex_nonlinear_diagnostics_core(
     runtime: _IMEXRuntimeOptions,
     diagnostics: _IMEXDiagnosticOptions,
     scan: _IMEXScanOptions,
-) -> tuple[jnp.ndarray, SimulationDiagnostics]:
+) -> tuple[jnp.ndarray, SimulationDiagnostics, ImplicitSolveStats | None]:
     context = _build_imex_scan_context(
         G0,
         grid,
@@ -772,8 +890,13 @@ def integrate_imex_nonlinear_diagnostics_impl(
     fixed_mode_kx_index: int | None = None,
     external_phi: jnp.ndarray | float | None = None,
     show_progress: bool = False,
-) -> tuple[jnp.ndarray, SimulationDiagnostics]:
-    """Integrate an IMEX nonlinear run and return diagnostics."""
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...]:
+    """Integrate an IMEX nonlinear run and return diagnostics.
+
+    Returns ``(t, diagnostics)``, or ``(t, diagnostics, stats)`` with
+    ``return_solve_stats=True``.
+    """
     options = _imex_option_bundle(
         cache=cache,
         terms=terms,
@@ -803,7 +926,7 @@ def integrate_imex_nonlinear_diagnostics_impl(
         show_progress=show_progress,
         collision_scheme=collision_scheme,
     )
-    return _integrate_imex_nonlinear_diagnostics_core(
+    t, diag, solve_stats = _integrate_imex_nonlinear_diagnostics_core(
         G0,
         grid,
         geom,
@@ -815,11 +938,16 @@ def integrate_imex_nonlinear_diagnostics_impl(
         diagnostics=options.diagnostics,
         scan=options.scan,
     )
+    if return_solve_stats:
+        return t, diag, solve_stats
+    return t, diag
 
 
 __all__ = [
     "IMEXNonlinearDiagnosticsDeps",
+    "StatsSolveStepFn",
     "advance_imex_nonlinear_state",
+    "advance_imex_nonlinear_state_with_stats",
     "make_imex_diagnostic_step",
     "integrate_imex_nonlinear_diagnostics_impl",
     "run_imex_diagnostic_scan",

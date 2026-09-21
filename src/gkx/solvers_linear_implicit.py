@@ -41,6 +41,7 @@ __all__ = [
     "_build_implicit_operator",
     "_build_shifted_hermite_preconditioner",
     "_integrate_linear_implicit_cached",
+    "implicit_solve_payload",
     "require_converged_implicit_solves",
 ]
 
@@ -129,6 +130,27 @@ class ImplicitSolveSummary:
             "solves": self.solves,
             "unconverged_solves": self.unconverged_solves,
         }
+
+
+def implicit_solve_payload(summary: ImplicitSolveSummary | None) -> dict[str, Any]:
+    """Flatten an implicit-solve summary into scalar keys; ``None`` when none ran.
+
+    This is the one spelling of those keys. A runtime result's ``summary()``
+    and the saved ``*.summary.json`` both read it, so a run held in memory and
+    the same run read back from disk report the same status under the same
+    names.
+    """
+
+    return {
+        "implicit_converged": None if summary is None else summary.converged,
+        "implicit_max_relative_residual": (
+            None if summary is None else summary.max_relative_residual
+        ),
+        "implicit_max_iterations": None if summary is None else summary.max_iterations,
+        "implicit_unconverged_solves": (
+            None if summary is None else summary.unconverged_solves
+        ),
+    }
 
 
 def require_converged_implicit_solves(

@@ -242,11 +242,20 @@ class PreparedSimulation:
             print(f"{key}: {value}", file=stream)
 
 
-# The runtime resolves [run] Nl/Nm per call, and its fallback differs by kind:
-# a linear call defaults to (24, 12), a nonlinear one to (4, 8). See
-# ``_CASE_LINEAR_SPECS`` and ``_CASE_NONLINEAR_SPECS`` in
-# ``gkx.workflows.runtime.commands``.
-_RUNTIME_RESOLUTION_DEFAULTS = {"linear": (24, 12), "nonlinear": (4, 8)}
+def _runtime_resolution_defaults() -> dict[str, tuple[int, int]]:
+    """Mirror the runtime's own per-kind velocity fallback, from its owner.
+
+    The runtime resolves ``[run]`` Nl/Nm per call and its fallback differs by
+    kind: a linear call takes ``startup._RUNTIME_LINEAR_HL_FALLBACK``, a
+    nonlinear one (4, 8). See ``_CASE_LINEAR_SPECS`` and
+    ``_CASE_NONLINEAR_SPECS`` in ``gkx.workflows.runtime.commands``. This reads
+    the linear pair from that owner rather than repeating it, because a summary
+    that disagrees with the runtime describes a calculation that will not run.
+    """
+
+    from gkx.workflows.runtime.startup import _RUNTIME_LINEAR_HL_FALLBACK
+
+    return {"linear": _RUNTIME_LINEAR_HL_FALLBACK, "nonlinear": (4, 8)}
 
 
 def _resolve_velocity_resolution(
@@ -261,7 +270,7 @@ def _resolve_velocity_resolution(
     reported ``4, 8`` for a deck that asks for ``16, 48``.
     """
 
-    default_l, default_m = _RUNTIME_RESOLUTION_DEFAULTS.get(kind, (4, 8))
+    default_l, default_m = _runtime_resolution_defaults().get(kind, (4, 8))
     run = getattr(case, "run", None)
     deck_l = getattr(run, "Nl", None)
     deck_m = getattr(run, "Nm", None)

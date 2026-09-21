@@ -80,7 +80,25 @@ class GridConfig:
 
 @dataclass(frozen=True)
 class TimeConfig:
-    """Time integration parameters."""
+    """Time integration parameters.
+
+    ``method`` and ``fixed_dt`` here differ from
+    :class:`gkx.solvers_time_explicit.ExplicitTimeConfig` (``"rk4"`` and
+    ``False``) on purpose, and the reason is ``dt``: it is a *required* field
+    there and a defaulted one here. A caller of the library struct has always
+    chosen a step, so treating it as a CFL seed is safe; a deck may not have
+    chosen one, and fourteen shipped decks and parity fixtures omit ``fixed_dt``
+    and depend on ``True``.
+
+    So the pairing, not either field alone, is what is defaulted. A deck that
+    chooses ``dt`` gets ``rk2`` at that fixed step -- the cheaper scheme, since
+    a fixed step gives rk4 no step-size compensation for its four stages. A deck
+    that chooses no ``dt`` gets the step from the CFL controller and ``rk4``
+    with it, which reaches a given horizon in 29.1% fewer right-hand-side
+    evaluations than ``rk2`` because its CFL prefactor is 2.82 against 1.0.
+    ``gkx.workflows.runtime.toml._normalize_time_overrides`` applies that
+    coupling and carries the measurement.
+    """
 
     t_max: float = 100.0
     dt: float = 0.1
