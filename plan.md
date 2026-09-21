@@ -18,12 +18,12 @@ The implementation PRs below are open against `main` at this checkpoint:
   sanitized reproduction metadata, and closed higher-level sink-disable paths
   in `cee4bf3f6`; 132 tests pass, one skips, and fresh CI remains required.
 - [#264](https://github.com/uwplasma/GKX/pull/264) makes the finite-window
-  adjoint compile reusable across calls and geometries. Remote head `89217e2e3`
-  adds only formatting atop reviewed head `57dac7fce`, whose merge of current
-  `main` records branch ancestry, not a merge of the PR itself. Nineteen focused
-  window tests and the local architecture, checksum and diff gates pass; fresh
-  CI is pending on the format-only head
-  ([review](https://github.com/uwplasma/GKX/pull/264#issuecomment-5755283451)).
+  adjoint compile reusable across calls and geometries. Head `d92f3100c`
+  removes 29 net lines of repeated source documentation without changing
+  executable statements. Its ancestor `57dac7fce` merges main into the branch,
+  not the PR itself. Nineteen focused window tests and the architecture,
+  formatting and diff gates pass; fresh CI is pending
+  ([review](https://github.com/uwplasma/GKX/pull/264#issuecomment-5755621929)).
   The PR remains open (**PERF-ADJOINT**).
 - [#265](https://github.com/uwplasma/GKX/pull/265) adopts SOLVAX's block-Thomas
   factors for `pr3-cm`. Published head `ccf79ec8f` integrates #267 with preserved
@@ -36,12 +36,15 @@ The implementation PRs below are open against `main` at this checkpoint:
   Ruiz remains unpromoted pending versioned evidence (**PERF-SOLVAX**).
 - [#266](https://github.com/uwplasma/GKX/pull/266) makes the `ky >= 0` state
   layout the runtime default and preserves full-layout interchange; it remains
-  a draft (**PERF-HALF**). Head `dd1438aa3` includes the stale-shape fix,
+  a draft (**PERF-HALF**). Source head `9c8614b10` includes the stale-shape fix,
   sanitized provenance and a self-contained 44-entry checksum manifest;
   29 absent, untracked log entries were removed. The time-integrator and
   example files pass 109 tests (14 skips). The full-layout opt-out gate
-  against pinned main passes all 246 arrays bitwise in f32/x64; remaining
-  integration suites and the benchmark window split are still due
+  against pinned main passes all 246 arrays bitwise in f32/x64. Integration
+  passes 566 tests, with 15 skips and one default slow-test deselection.
+  The recovered window-split campaign reports a CPU half-layout slowdown
+  while both arms repeatedly compile; collection and a controlled combined
+  #264/#266 measurement remain necessary before default adoption
   ([review](https://github.com/uwplasma/GKX/pull/266#issuecomment-5755283569)).
 - [#267](https://github.com/uwplasma/GKX/pull/267) floors `pr3-cm` structure
   tolerances at float32 round-off without hiding measured nonlocal couplings
@@ -50,10 +53,18 @@ The implementation PRs below are open against `main` at this checkpoint:
   result is documented in the public review; it is not a size-independent
   tolerance proof or an eigenpair-convergence claim.
 
-- [#269](https://github.com/uwplasma/GKX/pull/269) replaces a vacuous zero-mode
-  FLR cache test with a nonzero-mode, varying-field check at no net line cost.
-  Focused tests pass in both precisions and removing the B factor fails the
-  repaired assertion. This strengthens one guard; it does not close EM0.
+- [#269](https://github.com/uwplasma/GKX/pull/269), head `9e5fb781f`, repairs a
+  vacuous FLR guard and adds independent geometry-to-field residuals plus a
+  constant-B source-quadratic gradient identity. Root reruns pass 38 x64 and
+  20 float32 cases; A/B sign mutations fail the componentwise identity. Net
+  +131 test lines reuse existing oracles; no runtime changes or new files.
+  Physical varying-B normalization and streaming energy balance remain open.
+- [#270](https://github.com/uwplasma/GKX/pull/270), head `073ede00a`, removes
+  analytic metric shear concretization: 44 geometry tests pass per precision,
+  including AD/JIT versus finite differences for both shear signs. Source
+  shrinks by four lines; tests add 35. S-alpha `gds22` becomes theta-shaped;
+  cross-zero/topology derivatives and other host sampling seams remain outside
+  this bounded GEO-TOPO repair.
 
 At this snapshot these PRs remain open. CI is running on refreshed heads;
 #265/#266 remain drafts, and all await current CI. None is treated as
