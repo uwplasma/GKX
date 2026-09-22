@@ -1268,6 +1268,7 @@ def validate_manifest(
 
         allowed_tool_roots = (
             REPO_ROOT / "tools",
+            REPO_ROOT / "scripts" / "checks",
             REPO_ROOT / "benchmarks" / "performance",
         )
         for tool in lists["profiling_tools"]:

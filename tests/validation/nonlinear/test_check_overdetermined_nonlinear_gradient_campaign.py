@@ -9,7 +9,7 @@ import pytest
 
 
 ROOT = REPO_ROOT
-SCRIPT = ROOT / "tools" / "release" / "check_nonlinear_optimization_gates.py"
+SCRIPT = ROOT / "scripts" / "checks" / "check_nonlinear_optimization_gates.py"
 
 
 def _load_tool_module():

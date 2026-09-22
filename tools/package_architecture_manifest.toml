@@ -289,7 +289,10 @@ recursive = true
 # Folding it into an existing builder would give that builder a second input
 # root; splitting it per figure would cost three more files against the same
 # target. It renders committed evidence and runs no solver.
-baseline = 96
+# 96 -> 78 (SLIM-TOOLS tranche 1): eight zero-reference or campaign-only files
+# deleted and the ten tools/release gates moved to scripts/checks/ behind
+# scripts/check.py. Measured; map in plan/research/2026-09-22-slim-tools/MAP.md.
+baseline = 78
 target = 0
 
 [[topology_policy.counts]]
@@ -1516,7 +1519,9 @@ recursive = true
 # parsed by computation rather than scanned as one string, and
 # `memory_analysis` is threaded beside it as the compiler's own check.
 # The evidence probe `gather_probe.py` is the rest of the count.
-baseline = 78901
+# 78901 -> 63832 (SLIM-TOOLS tranche 1): deletions plus the tools/release move
+# to scripts/checks/, same change as the file count above. Measured.
+baseline = 63832
 target = 0
 
 [[line_budget_policy.counts]]

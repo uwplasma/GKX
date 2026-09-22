@@ -336,7 +336,7 @@ def nonlinear_replicate_spread_report(
     ----------
     ensembles:
         Sequence of ensemble JSON payloads, typically produced by
-        ``tools/release/check_nonlinear_transport_gates.py ensemble``.
+        ``scripts/check.py nonlinear-transport ensemble``.
     case:
         Human-readable label for the diagnostic artifact.
     config:

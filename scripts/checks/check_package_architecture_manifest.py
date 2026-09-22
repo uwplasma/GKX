@@ -853,7 +853,7 @@ def _role_and_action(rel: Path) -> tuple[str, str, str]:
                     "belongs under tools/artifacts if output is referenced",
                 )
             if stem.startswith(("check_", "audit_", "run_tests", "run_wide_coverage")):
-                return "release gate", "move", "belongs under tools/release"
+                return "release gate", "move", "belongs under scripts/checks"
             if stem.startswith(
                 (
                     "write_",
@@ -883,6 +883,11 @@ def _role_and_action(rel: Path) -> tuple[str, str, str]:
             }.get(folder, "organized maintenance tool")
             return role, "keep-or-merge", f"owned by tools/{folder}"
         return "tool support file", "keep-or-review", "non-python tool asset"
+
+    if parts[0] == "scripts":
+        if len(parts) > 2 and parts[1] == "checks":
+            return "release gate", "keep-or-merge", "dispatched by scripts/check.py"
+        return "developer command", "keep", "at most eight scripts/ commands"
 
     if parts[0] == "examples":
         return (

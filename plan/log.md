@@ -18783,3 +18783,31 @@ rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
 research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
+
+## 2026-09-22 - SLIM-TOOLS tranche 1 (slim/tools-benchmarks-1)
+
+Baseline:
+- GKX SHA: f9485f044ab79d9d22b06162376ea11a640621b8 (main, 2.3.0)
+- companion SHAs: none
+- source/test/tool files and lines: tools/ 123 files, 96 Python / 78,901 lines; benchmarks/ 23 files; scripts/ 0 Python
+- relevant existing gate: ci.yml "Repository size manifest" step and "Tracked release artifacts are up to date"
+
+Scope:
+- intended change: map every tools/ and benchmarks/ file to its users; delete zero-reference and plan-only campaign files; move tools/release/* behind one `scripts/check.py` command
+- non-goals: moving manifests, profilers, comparison tools, campaign modules or benchmark decks (tranche 2); README.md and examples (other lanes)
+- prospective acceptance and rollback criteria: every deleted file has zero non-plan references; the four tracked docs/_static JSONs regenerate identically except for the renamed command/file strings; CI green
+
+Changes:
+- files/functions removed, merged, or added: 16 files deleted (3,757 lines; 8 Python in tools/, 1 in benchmarks/); tools/release/*.py (10) moved to scripts/checks/; scripts/check.py added (subcommands size, architecture, parallel-scaling, quasilinear, vmec-boozer, readiness, validation-coverage, test-gates, nonlinear-transport, nonlinear-optimization); map at plan/research/2026-09-22-slim-tools/MAP.md
+- public/schema behavior: none in the package; CI and release commands renamed; release_readiness.json and technical_release_status.json change only in those strings
+
+Evidence:
+- focused tests: tests/release, tests/tools, parallel/benchmark/nonlinear/quasilinear/stellarator gate tests, runtime config: 703 passed, 2 skipped after fixes (one earlier failure was ENOSPC on the host)
+- repo-hygiene step from ci.yml run with bare python3.11: exit 0; tracked-JSON diff gate clean on a second run
+- architecture: tool_python_files 96 -> 78, tool_python_lines 78,901 -> 63,832 (baselines lowered to measured); scripts 11 files / 11,992 lines before check.py; test lines unchanged
+- tracked files 2,107 -> 2,091 (+ check.py, MAP.md), tracked bytes 24,607,135 -> about 24.47 MB
+
+Outcome:
+- partial: tranche 1 done; paused before sphinx and CI
+- remaining blocker: none known; docs build and full CI not yet run
+- next task: CI on the PR, then tranche 2 from MAP.md

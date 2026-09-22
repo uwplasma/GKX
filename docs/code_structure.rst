@@ -628,7 +628,7 @@ Traceability For Refactors
 --------------------------
 
 Refactor work is tracked in ``tools/validation_coverage_manifest.toml``. The
-manifest is checked by ``tools/release/check_validation_coverage_manifest.py`` and
+manifest is checked by ``scripts/check.py validation-coverage`` and
 requires every high-priority module to name its source path, owning lane,
 reference anchors, physics and numerics contracts, fast tests, artifacts, and
 next coverage tests. Update it whenever a source extraction changes module
@@ -902,9 +902,9 @@ Use the non-destructive audit helper before release cleanups:
 
 .. code-block:: bash
 
-   python tools/release/check_repository_size_manifest.py audit --top 30
-   python tools/release/check_repository_size_manifest.py
-   python tools/release/check_repository_size_manifest.py release-artifacts
+   python scripts/check.py size audit --top 30
+   python scripts/check.py size
+   python scripts/check.py size release-artifacts
 
 The report separates tracked file size from ignored local artifact roots such
 as ``tools_out/``, ``docs/_build/``, ``dist/``, virtual environments, and caches.
@@ -926,8 +926,8 @@ hosted as release assets. The reproducible preview-compression command is:
 
 .. code-block:: bash
 
-   python tools/release/check_repository_size_manifest.py compress-previews --mode release --max-width 2200 --colors 192
-   python tools/release/check_repository_size_manifest.py compress-previews --mode docs --min-bytes 300000 --max-width 1800 --colors 192
+   python scripts/check.py size compress-previews --mode release --max-width 2200 --colors 192
+   python scripts/check.py size compress-previews --mode docs --min-bytes 300000 --max-width 1800 --colors 192
 
 The first command only touches release-manifest previews, so update
 ``tools/release_artifact_manifest.toml`` with the new sizes and checksums after
