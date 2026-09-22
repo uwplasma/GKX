@@ -17271,6 +17271,224 @@ entry is left standing as written, because rewriting a recorded measurement
 after the fact is worse than correcting it forward; this entry is the
 correction, and Q10's queue row points at it.
 
+## 2026-09-20 — PERF-ADJOINT: the adjoint heat-flux window recompiled on every call, because a jaxpr compares by identity (plan §5.3)
+
+**Outcome: the differentiated window compiles once and the compile is reused
+across calls and across geometries. Compilations per call 13 → 0 and wall per
+call 5.16 s → 0.140 s (two-sided `ky`) and 7.18 s → 0.114 s (half `ky`) on
+the shipped Cyclone deck. The cause is none of the three the report proposed.**
+Branch `perf/eager-adjoint-compile-cache` off `origin/main` `38d7c4277`.
+
+### The cause
+
+The report's candidates were the window rebuilding its linked-chain cache and
+handing XLA fresh concrete constants, a closure captured per call, or a
+non-hashable static argument. It is none of them, and the reproduction has no
+GKX in it:
+
+```python
+def body(carry, x):
+    return carry * 0.5 + x, None
+jax.lax.scan(body, jnp.float32(1.0), jnp.arange(4, dtype=jnp.float32))
+```
+
+Three identical calls compile a module each. An eager `lax.scan` or `lax.cond`
+is dispatched on the jaxpr its body was just traced into, and
+`jax._src.core.ClosedJaxpr` inherits `object.__eq__` and `object.__hash__` — a
+jaxpr compares by **identity**. A jaxpr rebuilt on each call is a new key, so
+every lowering cache under it misses. Neither the values, nor what the body
+closes over, nor the hashability of anything enters it;
+`jaxpr_identity.py` prints both dunders and the three compiles.
+
+The linked-cache rebuild is real and does force the geometry to stay concrete,
+but it costs no compile: on `main` a repeated call compiles exactly the window's
+four scans and nine conds and nothing from `build_linear_cache`.
+
+### The fix
+
+The differentiated window now runs as one module-level `jax.jit`,
+`_nonlinear_heat_flux_window_total`. `jax.jit`'s trace cache is keyed on the
+function object, the argument avals and the static arguments, all of which
+repeat, so the traced jaxpr is the *same object* on the next call and every
+cache below it — including the ones `jax.value_and_grad` derives, which are
+`weakref_lru_cache`d on that jaxpr — hits.
+
+Everything that has to be read on the host stays in
+`nonlinear_heat_flux_window`, outside the graph: the linked cache build (whose
+`jtwist` is an integer read off the shear and refuses a traced geometry), the
+quadrature weights, the chain-cover projection of `saturated_state` (Q23), and
+the projector's `ky` axis layout, which now crosses the boundary as a hashable
+`(ny_full, two_sided, nx)` signature rather than as a grid.
+
+**Every array is an argument.** State, cache, grid, parameters, quadrature
+weights and step indices are operands, which is the placement the eager scan
+already gave them and the reason the graph is reusable: a captured array would
+pin *this* geometry into the executable and recompile on the next one, and a new
+geometry on every objective evaluation is what
+`examples/optimization/QA_optimization.py` does. Only what cannot be an operand
+is static: the step, the window tail, the integrator, the term switches, the
+collision model, the checkpoint flag and the projector signature.
+
+### Compilations and wall time
+
+Cyclone nonlinear deck at Nx=Ny=16, Nz=12, Nl=2, Nm=4, `window_steps=6`,
+`method="rk3"`, `checkpoint=True`, `compressed_real_fft=True`,
+`laguerre_mode="grid"`, `jax.value_and_grad` with respect to `tprim`, float32.
+`backend_compile_and_load` is wrapped to count modules and accumulate their
+time; each call is forced to the host with `jax.block_until_ready`. Two runs of
+one warm-up plus three timed calls, arms interleaved
+(`bench_q30.py`, `out/time_*.json`).
+
+| arm | tree | first call | compiles | steady call | compiles | compile s | exec s |
+|---|---|---:|---:|---:|---:|---:|---:|
+| two-sided `ky` | `main` | 11.03, 11.13 s | 405 | 4.92–5.36 s | **13** | 2.95–3.31 | 1.93–2.14 |
+| two-sided `ky` | branch | 7.31, 7.34 s | 123 | **0.139–0.141 s** | **0** | 0 | 0.139–0.141 |
+| half `ky` | `main` | 12.31, 12.43 s | 365 | 7.04–7.36 s | **13** | 5.05–5.36 | 1.87–2.05 |
+| half `ky` | branch | 6.78, 6.82 s | 105 | **0.112–0.116 s** | **0** | 0 | 0.112–0.116 |
+
+Steady-state speed-up 37× on the two-sided arm and 63× on the half arm. The
+first call is cheaper too — 11.08 → 7.32 s and 12.37 → 6.80 s — because
+one graph replaces the thirteen and the small modules around them. The compile
+share of a steady call on `main` is 59.8–62.7% (two-sided) and 71.7–74.2%
+(half), which brackets the report's 60–75%.
+
+Load averages were 3.45/4.50/5.14 before and 4.41/4.84/5.20 after, so the wall
+times are not idle-host numbers; the compile *counts* are exact and
+load-independent, and the 37× and 63× are far outside any load effect.
+
+### A side effect the half-`ky` adoption gate should have (Q10, Q27)
+
+The layout A/B that prompted this row was measuring compile time. Per call on
+`main` the half arm is 1.39× *slower* than the two-sided one; with the graph
+cached it is 1.22× **faster** (0.114 s against 0.140 s). Q10's remaining item
+was "one idle-host wall-clock A/B for the strided in-fusion reads Q27 could not
+price"; this is one point for it, on the adjoint window rather than on a bare
+RK step, and it points the same way as Q27's corrected byte ledger.
+
+### Identity: where it is bitwise, and where it is not
+
+The gate was to be bitwise. It is in 20 of 26 configurations — every one that
+uses the shipped default `checkpoint=True` except RK2 under x64. Each case
+differentiates the windowed heat flux with respect to both drive gradients at
+once and compares the value and both adjoint components as raw bytes
+(`gate_bitwise.py`, SHA-256 over the concatenated buffers), on a 16×16×12,
+Nl=2, Nm=4 grid over a six-step window.
+
+| case | float32 | x64 |
+|---|---|---|
+| Cyclone rk3 / rk4 / half `ky` / tail 4-of-9 / uncompressed FFT / exact Laguerre | bitwise | bitwise |
+| Cyclone rk2 | bitwise | **2 ulps** (value) |
+| KBM (electromagnetic) rk3, full and half `ky` | bitwise | bitwise |
+| Cyclone rk2 / rk3, `checkpoint=False` | **1 ulp** (value / `fprim` adjoint) | bitwise |
+| Cyclone rk4, `checkpoint=False` | bitwise | **1 ulp** (`fprim` adjoint) |
+| KBM rk3, `checkpoint=False` | **11 ulps** (value) | **3 ulps** (value) |
+
+The largest deviation is 11 float32 ulps, 1.3e-6 relative. The window's own
+measured float32 roundoff against float64 is 5.7e-6, 48 ulps (Q14), so every
+deviation here is inside the precision the route already declares, and the
+electromagnetic case is the largest for the reason Q18 recorded: its flux is a
+near-cancelling sum of three channels.
+
+**Two placement choices were forced by this gate, not chosen for taste.**
+
+- `total_heat / tail` is computed *outside* the graph. The first version of
+  this change divided inside, and the same matrix run against it was bitwise in
+  20 of 26 cases but a *different* 20: RK2 and the KBM deck (both `ky` arms)
+  moved in float32, and RK4 moved under x64, each by one ulp. Inside the graph
+  XLA fuses the divide into the scan's accumulation; outside it, those four are
+  bitwise and nothing that was bitwise before regressed. The divide costs
+  nothing outside, so there is no reason to pay it.
+- The step indices are an operand rather than an in-graph `iota`, so that
+  `index >= count - tail` stays the comparison the eager route compiled instead
+  of a constant XLA can fold when the window has no tail.
+
+**Why the rest cannot be removed.** A reusable graph has to take the grid and
+the quadrature weights as operands. On the eager route they are *concrete*
+arrays — `grid.ky`, `grid.dealias_mask` and `flux_factor` never carry a
+parameter tangent — so every expression built from them inside the scan body
+is executed eagerly and enters the traced body as a folded constant. As
+arguments they are tracers and those expressions are staged. The forward scan
+body goes from 716 to 719 equations and, counting nested sub-jaxprs, from 831
+to 954 primitives (`mul` 238→286, `reduce_sum` 18→30, `broadcast_in_dim`
+48→69, `cond` 6→9); the reverse body from 783 to 786 and 948 to 1071. No step
+does different arithmetic — the same formulas, evaluated in the graph rather
+than before it — but a reduction whose operands arrive from a different
+placement can be tiled differently, and that is what the residual ulps are.
+XLA hoists the loop-invariant part out of the while body, which the wall times
+bear out.
+
+It is **not** the linear cache. A probe confirms `cache.kperp2`, `cache.Jl`,
+`cache.JlB` and `cache.ky` become tracers on `main` when the gradient is taken
+with respect to `rho_star`, and `main`'s scan body is unchanged at 716/783 —
+as it is for `tprim`, `beta` and `tau_e`.
+
+### Changes
+
+- `src/gkx/solvers_nonlinear_state_integration.py`:
+  `_nonlinear_heat_flux_window_total`, the compiled window, and
+  `_identity_state`, a module-level stand-in for the no-projection case (a
+  `lambda` would be a fresh object and a fresh compile key).
+  `nonlinear_heat_flux_window` keeps every host-side step and calls it.
+- `src/gkx/operators/nonlinear/projection.py`: `hermitian_projector_signature`
+  and `hermitian_projector_for_signature` split the host read of the `ky` axis
+  from the projector it names. `_make_hermitian_projector` is now the
+  composition of the two and returns the identical cached object.
+- `docs/solvers.rst` gains "One adjoint window graph";
+  `docs/nonlinear_autodiff.rst` says the loss compiles once.
+- `tools/package_architecture_manifest.toml`: the installable-source and test
+  line budgets rise by the measured counts, each with the reason the ratchet
+  asks for. The per-file budget is untouched --
+  `solvers_nonlinear_state_integration.py` is 1116 lines against a limit of
+  1200.
+
+### Tests
+
+`tests/unit/nonlinear/test_nonlinear_helpers_extra.py`:
+
+- `test_window_adjoint_compiles_one_graph_and_reuses_it` — zero XLA
+  compilations across two warm calls, counted at
+  `jax._src.compiler.backend_compile_and_load`. On `main`: 26.
+- `test_window_adjoint_reuses_its_graph_for_a_new_geometry` — zero across a
+  changed flux tube, which repeated calls alone would not have shown. On
+  `main`: 13.
+- `test_window_adjoint_shared_graph_is_not_stale_for_a_new_geometry` — the
+  failure mode reuse buys. The window for geometry B compiled cold, and the
+  same window run on the graph geometry A compiled, compared bit for bit: a
+  leaked constant would not perturb the answer, it would replace it.
+- `test_compiled_window_rebuilds_the_projector_the_eager_route_used` — the
+  signature names the identical cached projector object, so the graph is not
+  keyed on one projector and running another.
+
+### What was tried and rejected
+
+- **Dividing by the window tail inside the graph** — one ulp on four
+  configurations (RK2 and the KBM deck in float32, RK4 under x64), measured
+  above, and the divide costs nothing outside.
+- **Making the grid a `jax.jit` static argument** so its masks and weights stay
+  host-folded. Not taken: `flux_factor` is geometry-dependent and would remain
+  an operand either way, and a mode-selected grid carries a `ky_mode` array in
+  its pytree aux data, which a static argument would have to hash.
+- **Qualifying selected linear/reference grids for this nonlinear route.** A
+  bounded probe wraps `lambda grid: jnp.sum(grid.ky)` in `jax.jit`, then passes
+  two fresh `select_ky_grid(build_spectral_grid(...), [1, 2])` results. The
+  first call succeeds and the second raises JAX's metadata-equality error:
+  `ky_mode` is an array in `SpectralGrid` auxiliary data. Nonlinear runtime
+  uses the complete grid (`ky_mode=None`), so this is recorded for a future
+  central grid-pytree repair rather than broadened inside the window cache fix.
+- **A content-keyed compile cache over the eager dispatch**, which would be
+  bitwise by construction because it would compile the very jaxpr the eager
+  route builds. Rejected: it means reimplementing `jax.jit`'s cache on
+  JAX-internal jaxpr structure, for the primal *and* for every jaxpr the AD
+  transforms derive, to buy a few ulps.
+
+### Environment
+
+macOS 14.4.1 arm64 (M3), python 3.11.14, jax/jaxlib 0.10.2, `JAX_PLATFORMS=cpu`,
+`nice -n 10`, ruff 0.16.4, mypy 2.3.1. The library is imported directly rather
+than through `gkx.cli`, so `gkx.compilation_cache`'s persistent cache is **not**
+installed and every compilation counted here is a cold XLA compilation
+in-process. Scripts, raw outputs and `SHA256SUMS.txt` in
+`plan/research/scripts/2026-09-20-q30-window-compile-cache/`.
 ## 2026-09-20 — status and projection reach every route (Q29, Q15 and Q23 follow-ups)
 
 Branch `fix/status-and-projection-coverage`, from `38d7c4277` (`origin/main`).
@@ -18555,6 +18773,58 @@ documentation consistency result, not new physics certification. The next
 independent tasks are the reference fit/sampling audit, physical-cadence stopping
 calibration, and the compressional-field normalization oracle. No release.
 
+### 2026-09-21 — varying-B streaming/mirror exchange (EM0)
+
+Extends #269 at `f4fda382f` without changing runtime source. The existing field
+test file shares its species/source-quadratic helpers and adds a periodic
+varying-B refinement at Nz=16/32/64/128. All three fields are nonzero; the
+independent volume weight is proportional to `1/(abs(gradpar)*B)`. The real
+contraction of `nT H*` with streaming plus mirror approaches zero, while
+uniform-weight and reversed-mirror controls retain defects around 4e-4–5e-4.
+Each isolated term is nonzero. This follows Mandell et al. (2018), equations
+4.4–4.6, linked in the theory page. It certifies relative volume weighting and
+term-level exchange, not absolute units or full physical EM free energy.
+
+The coarse defect is about 4.20e-6; refined defects are below 3e-8 in float32
+and 5e-17 in float64 on the tested CPU. Float32 uses a roundoff-aware resolved
+bound and a 32-fold reduction, rather than requiring the float64 100-fold
+reduction at the roundoff floor. Wrong-sign/weight controls remain separated.
+Supported JAX 0.10.2 CPU verification: all 45 field tests pass in x64;
+27 pass with x64 disabled, excluding 18 explicitly float64-parametrized cases.
+Both runs make FutureWarning fatal. Ruff, formatting, architecture, diff and
+strict Sphinx pass. The justified test budget increases by 182 lines, reusing
+one existing file; no new files or runtime code are added. Full energy-budget,
+perpendicular-Ampere normalization and EM transport gates remain open.
+
+### 2026-09-21 — independent compressional-field normalization control
+
+The existing field test now checks finite-FLR perpendicular pressure balance
+against 96-node Gauss-Laguerre velocity quadrature, then checks the magnetic
+Hamiltonian and particle-flux field factor. The stored field is
+`bpar = delta B_parallel / (rho_* B(z))`; the local-beta factor is therefore
+`beta_ref / bmag^2`. The exact GX implementation anchor is
+[`2e417afe62f4ad730fae005fb8927337e1cbefa3`](https://bitbucket.org/gyrokinetics/gx/commits/2e417afe62f4ad730fae005fb8927337e1cbefa3).
+Removing the inverse-square field factor changes the test result by 26.7%;
+inserting an extra B factor in the particle channel changes it by 73.4%.
+The spatial flux weights are reused, not independently validated here.
+Heat-flux normalization and the full electromagnetic energy budget remain open.
+
+Supported JAX 0.10.2 CPU: independent whole-module x64 verification passes
+46 tests with FutureWarning fatal; the revised oracle also passes in float32.
+Ruff, formatting, architecture, diff and strict Sphinx checks pass. No runtime
+code or new files; the existing test file grows by 149 deliberate lines.
+
+### 2026-09-21 — complete conservative linear exchange control
+
+Extended the existing varying-B refinement test to the assembled zero-drive
+linear RHS, with nonzero streaming, mirror, curvature and grad-B contributions.
+Each drift separately conserves the source quadratic; wrong imaginary factors
+fail, as do the existing wrong-volume/sign controls. All three fields remain
+nonzero. Independent x64 verification of the extended test passes on JAX 0.10.2;
+the full module and float32 selection also pass in the implementation review.
+This is an instantaneous algebraic exchange gate, not physical free-energy
+identification or nonlinear/heat-flux/source/sink/time-integration validation.
+No runtime changes or new files; shared setup limits test growth to 45 lines.
 ## 2026-09-20 — Q31 rebased on 2.2.0, three manifest baselines re-measured
 
 **Why CI was red.** Run 35518660118 had exactly two red jobs out of 40, `repo-hygiene` and
@@ -18797,3 +19067,217 @@ batch size and batch count growing
 ([Vats--Flegal](https://arxiv.org/abs/1809.04541),
 [Flegal--Jones](https://doi.org/10.1214/09-AOS735)). Neither those asymptotics nor
 this experiment supplies time-uniform coverage.
+### 2026-09-21 — EM0 physical fluctuation-energy identification
+
+Integrate main `4605d0b49` into #269 and identify its source quadratic with
+particle entropy, electrostatic Boltzmann subtraction and explicit magnetic
+energy using Howes (2006), B19--B20, and GX Appendix A normalization. The
+existing field tests exercise constant B and varying B under the B^-2 cache
+convention; removing either magnetic B^2 factor fails. The added oracle is
+87 lines in the existing test file, with no runtime or new-file changes.
+All 46 field tests pass in x64; the three focused cases pass in f32 and x64,
+with FutureWarning fatal on supported JAX 0.10.2. Strict Sphinx, Ruff and the
+measured architecture gate pass. Zonal/gauge, general multimode weighting,
+nonlinear transfer, flux normalization, sources/sinks and time-integrated
+budgets remain open. This identity does not qualify EM turbulent transport.
+## 2026-09-21 — STOP-CAL retained-window safeguard
+
+Base `eeb3481c6`: the existing strong-drift AR(1) control stops 69/128 times
+at runtime's 128-step look cadence, versus 0/128 at sparse reference looks.
+The paired stationary control stops 128/128 times. The repair adds gates only:
+retained samples ≥ max(256, configured minimum), and retained span ≥
+max(20 τ, configured physical minimum). Existing transient selection, SEM,
+Wphi/Wg guards and maximum horizon are unchanged. Stops can be delayed or
+prevented; this does not establish stationarity or sequential interval coverage.
+
+Calibration uses the existing `_stationary_ar1` test generator, 128 paths of
+4096 samples, rho=0.5/0.75/0.95, and looks every 128/256 samples. Compare
+`10 + noise` with `10 + t/64 + noise`. Select on seeds 20260921/20260922,
+freeze the candidate, then test seeds 20260923/20260924. Independent replay
+of the implemented policy gives at most 2/128 drift stops per latter stratum,
+all 128 stationary paths stopping, and median stationary stops of 384/512
+samples respectively. The separately tested 50-IAT-only alternative reaches
+18/128 drift stops. Neither result is a population error-rate bound.
+
+Regression tests include the production first look, paired stationary power,
+retained 255/256-sample and exact 20-IAT boundaries, and strengthen-only user
+settings. Reproduce with `PYTHONPATH=src:. JAX_PLATFORMS=cpu JAX_ENABLE_X64=true
+GKX_X64=1 python -m pytest -q tests/validation/quasilinear/test_quasilinear_window.py`.
+The source owner shrinks by ten lines through comment consolidation; deliberate
+test growth adds the missing negative/positive and boundary controls, with no
+new files. Adaptive-time averaging, guard-trace calibration, intermittent
+controls and held-out physical traces remain open in STOP-CAL; no new transport
+optimization claim follows. See the authoritative queue in
+[PR #268](https://github.com/uwplasma/GKX/pull/268).
+
+Independent review of #271 found two integration edges before merging: the
+nominal adaptive chunk length was mistaken for a total sample cap, and a NaN
+physical minimum could be ignored by `max`. Short-run bypass now applies only
+to step-capped runs; adaptive runs keep the stopping callback even with a small
+nominal chunk. Nonfinite minimum windows are explicitly rejected. Existing
+tests pin both behaviors. The complete source change remains net smaller.
+
+CI then exposed a stale prepared-runtime assertion: it still expected a
+16-step fixed run to admit saturation stopping. The existing test now checks
+both sides of the new boundary (255 steps prepare, 256 refuse), rather than
+weakening the stopping policy. All 180 tests in the affected runtime file pass
+on supported JAX 0.10.2/x64 CPU (52 warnings from the existing short/unstable
+smoke cases). This follow-up adds one test line and no runtime changes; fresh
+CI is required on the updated head.
+
+### Physical-cadence follow-up: no stopping rule promoted
+
+The raw 256-sample floor is not invariant to output density. This follow-up
+instead formed complete unit-duration means of the piecewise-linear recorded
+signal from a fixed run-start origin, kept the 20-IAT span gate, and swept
+minimum bin counts 32, 64, 128, 256 and 512. Each stratum contains 128 paths of
+4096 bins at AR(1) rho 0.5, 0.75 or 0.95, inspected every 128 or 512 bins.
+Stationary paths are `10 + noise`; negative controls are
+`10 + t/64 + noise`. Seeds 20260913/20260914 select the candidate and
+20260923/20260924 audit it. The latter seeds were hidden from this bin-floor
+selection, but had already appeared in the earlier raw-sample study, so they
+are not a globally untouched STOP-CAL holdout.
+
+| minimum complete bins | worst train drift stops | minimum stationary stops | worst first-stop 95% coverage | median first stop |
+|---:|---:|---:|---:|---:|
+| 32 | 62/128 | 128/128 | 90/128 | 128–512 |
+| 64 | 62/128 | 128/128 | 90/128 | 128–512 |
+| 128 | 34/128 | 128/128 | 93/128 | 256–512 |
+| 256 | 4/128 | 128/128 | 100/128 | 320–512 |
+| 512 | 0/128 | 128/128 | 111/128 | 640–1024 |
+
+The predeclared power/drift screen (at most 6/128 false stops and at least
+116/128 stationary stops in every stratum) selects 256 bins. On the held-out
+audit it has at most 2/128 drift stops, 128/128 stationary stops and median
+first stops of 256–512 bins. It nevertheless fails the equally necessary
+coverage audit: the worst first-stop coverage is 108/128 (84.4%) at rho=0.95;
+pooled coverage is 1434/1536 (93.36%). Increasing the floor after seeing that
+result would tune on the holdout, so no complete-bin floor is promoted.
+The 6/128 cutoff is an empirical gate for these finite ensembles, not a bound
+on a population false-stop probability.
+
+Sampling invariance itself passes. Across all 768 held-out paths, native
+integer-time samples, exact half-step piecewise-linear densification, and the
+same dense record with an unmatched 0.4-bin final tail each give 4096 complete
+bins. Maximum bin disagreement is 7.28e-12 and no 128-bin-look verdict changes.
+This relies on a bin origin and cadence frozen at run start; a rolling
+`start_fraction` cutoff is not equivalent.
+
+The next calibration must preregister first-stop coverage as a selection gate,
+use new seeds and physical traces, and compare a fresh post-admission fixed
+estimation window against a stopping-time-valid method. Flegal--Gong's
+[relative fixed-width rule](https://arxiv.org/abs/1303.0238) is only
+asymptotically valid under an FCLT and strongly consistent variance estimate;
+the finite-bin failure above is not repaired by citing that limit. General
+[confidence sequences](https://doi.org/10.1214/20-AOS1991) are time-uniform,
+but their martingale/sub-Gaussian conditions do not automatically hold for an
+unknown turbulent correlation process. The underlying requirements come from
+[Glynn--Whitt](https://doi.org/10.1214/aoap/1177005777); strongly consistent
+batch means need additional dependence assumptions, as in
+[Jones et al.](https://arxiv.org/abs/math/0601446). Runtime integration
+therefore remains blocked. When resumed, metadata must persist the declared
+analysis cadence, run-start bin origin and partial-bin accumulator through
+restart, and must refuse any diagnostic gap larger than that cadence.
+
+The calibration uses CPython 3.11.14, JAX/jaxlib 0.10.2 and NumPy 2.4.6 on CPU
+at source commit `a76b492d3`. The representation measurement used the proposed
+physical-bin helper in an unpublished review patch; it is evidence for that
+helper's contract, not a claim about the published source at this commit.
+
+The table is reproduced by the following bounded CPU command (the output is a
+tuple of worst false stops, minimum stationary stops, worst covered first-stop
+intervals, pooled coverage, and the median-stop range):
+
+```sh
+PYTHONPATH=src:. JAX_PLATFORMS=cpu python - <<'PY'
+import numpy as np
+from gkx.diagnostics.saturation import _halves_stationary, _sokal_window_mean_sem
+
+def ar1(rho, seed):
+    rng = np.random.default_rng(seed)
+    x = rng.standard_normal((128, 4097))
+    for i in range(1, 4097):
+        x[:, i] = rho*x[:, i-1] + np.sqrt(1-rho**2)*x[:, i]
+    return x
+
+def accept(y, floor):
+    w = y[int(np.argmax(y >= np.median(y))):]
+    if w.size < floor:
+        return None
+    mean, sem, tau, resolved = _sokal_window_mean_sem(w, 1.0)
+    passed = (resolved and w.size >= 20*tau and sem/abs(mean) <= .05
+              and _halves_stationary(w, 1.0)[3])
+    return (mean, sem) if passed else None
+
+def sweep(seeds, floors):
+    rows = {floor: [] for floor in floors}
+    for seed in seeds:
+      for rho in (.5, .75, .95):
+        x = ar1(rho, seed); t = np.arange(4097)
+        stationary = ((10+x[:, :-1]) + (10+x[:, 1:]))/2
+        points = 10 + t/64 + x; drifting = (points[:, :-1] + points[:, 1:])/2
+        for step in (128, 512):
+          looks = tuple(range(step, 4097, step))
+          for floor in floors:
+            false = sum(any(accept(y[:n], floor) for n in looks) for y in drifting)
+            first = [next(((n, r) for n in looks
+                     if (r := accept(y[:n], floor))), None) for y in stationary]
+            covered = sum(abs(r[1][0]-10) <= 1.96*r[1][1] for r in first if r)
+            stops = [r[0] for r in first if r]
+            rows[floor].append((false, len(stops), covered, np.median(stops)))
+    return {f: (max(x[0] for x in r), min(x[1] for x in r),
+                min(x[2] for x in r), sum(x[2] for x in r)/sum(x[1] for x in r),
+                (min(x[3] for x in r), max(x[3] for x in r)))
+            for f, r in rows.items()}
+
+print(sweep((20260913, 20260914), (32, 64, 128, 256, 512)))
+print(sweep((20260923, 20260924), (256,)))
+PY
+```
+## 2026-09-20 — SOLVAX block-Thomas and float32 structural gates
+
+The `pr3-cm` z-block Schur elimination now belongs to SOLVAX
+`block_thomas_factor_ops`; `solvax>=0.22.0` is the first released floor that
+provides it. GKX retains the measured Hermite-band coupling action, the unrolled
+forward substitution, and the Sherman-Morrison field correction. The unrolled
+substitution is pinned bitwise to `block_thomas_solve_ops` on the same factors.
+
+The supported-runtime A/B record in
+`plan/research/scripts/2026-09-20-solvax-block-thomas/out/ab_apply.txt` uses
+JAX/JAXLIB 0.10.2 and measures full-apply relative differences of `7.1e-16` to
+`8.9e-16`, bitwise agreement with SOLVAX's substitution, and actual factor
+storage `1.43x` to `2.61x` smaller over `Nl*Nm=36..768`. These correctness and
+storage results supersede the original below-floor record, which remains in Git
+history. The host was heavily contended (14 CPUs, load 44 at the start), so the
+record supports no speed claim despite retaining the raw timings.
+
+The Ruiz equilibration record does not carry interpreter or library-version
+provenance. Its numerical comparison is unpromoted pending a rerun that records
+a supported runtime, and is not used to justify a solver choice. The
+unimplemented candidate remains unwired. For traceability, the invalidated
+record reported that on the `(Nz,Nl,Nm) =
+(96,4,8)` control, Hermite-line leaves true residual `0.549` after 600
+iterations; magnitude-based row/column equilibration leaves `0.588` and row-only
+equilibration `0.574`. Standalone equilibration improves the unpreconditioned
+residual only from `0.331` to `0.296`, while `pr3-cm` already reaches `1e-4` in
+252 iterations and changes only to 246 with equilibration. The retained record
+is `plan/research/scripts/2026-09-20-solvax-block-thomas/out/equilibrate.txt`.
+
+The float32 integration floors the locality, rank-one, off-tridiagonal, and
+Hermite-band detection thresholds at `64*eps` of the probe precision. A fresh
+float32 process exercises the real operator at the small structural fixture,
+admits synthetic off-band round-off, and still sends a genuinely wider band to
+the dense fallback. This is bounded evidence, not a size-independent proof:
+on the separate `(96,4,8)` signed control the rank-one ratio is `3.74e-6`
+against the `7.63e-6` floor, only `2.04x` headroom. The structured/dense apply
+there agrees to `4.32e-7`; no eigenpair-convergence claim follows.
+
+## 2026-09-21 — release 2.3.0
+
+Cut from the integration chain #276, which merged #264, #265, #267, #269,
+#270, #271 and #273 and ran CI once on the combined tree. The SOLVAX floor
+rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
+0.22.0; checked against every PyPI wheel from 0.12.0 to 0.24.0). The
+research-grade milestone moves to 2.4.0; its exits were not required for this
+release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
+red shards), #272 (draft Cyclone reference migration), #268, #274, #275.

@@ -1316,8 +1316,9 @@ def test_prepare_runtime_nonlinear_reuses_existing_execution_contract() -> None:
         np.asarray(diagnostics.heat_flux_t), np.asarray(direct.diagnostics.heat_flux_t)
     )
     np.testing.assert_allclose(np.asarray(state), direct.state)
+    assert prepare(cfg, Nl=2, Nm=2, steps=255, resolved_diagnostics=False) is not None
     with pytest.raises(ValueError, match="cannot stop early at saturation"):
-        prepare(cfg, Nl=2, Nm=2, steps=16, resolved_diagnostics=False)
+        prepare(cfg, Nl=2, Nm=2, steps=256, resolved_diagnostics=False)
     full_horizon = replace(cfg, time=replace(cfg.time, run_to="t_max"))
     with pytest.raises(ValueError, match="only support explicit methods"):
         prepare(full_horizon, Nl=2, Nm=2, steps=2, method="imex")
@@ -5132,8 +5133,11 @@ def test_saturation_stop_condition_off_without_diagnostics_or_enough_steps() -> 
 
     # Too few steps to ever reach a decision: stay off the chunked route rather
     # than wrap the same integration in a loop that can only run out of steps.
-    cfg, ctx, policy = _stop_policy_inputs(steps=3)
+    cfg, ctx, policy = _stop_policy_inputs(steps=255)
     assert _saturation_stop_condition(cfg, ctx, policy) is None
+    # Adaptive steps is a chunk estimate, not a cap on accumulated samples.
+    ctx = replace(ctx, steps=20, adaptive_chunked=True)
+    assert _saturation_stop_condition(cfg, ctx, policy) is not None
 
 
 # ---- from test_restart_gate.py ----

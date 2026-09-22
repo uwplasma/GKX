@@ -374,6 +374,69 @@ call is unchanged at one.  ``profile_runtime_kernels.py nonlinear-step-hlo``
 reports ``--route diagnostics`` and ``--route runtime`` as that one graph and
 keeps the retired placement under ``--route eager-scan``.
 
+One adjoint window graph
+------------------------
+
+:func:`~gkx.solvers_nonlinear_state_integration.nonlinear_heat_flux_window` is
+the route a transport optimization takes, and through GKX 2.2.0 it
+**recompiled on every call** (queue row Q30).  It ran its scans eagerly, and an
+eager ``lax.scan`` or ``lax.cond`` is dispatched on the jaxpr its body was just
+traced into; a jaxpr compares by identity, so a jaxpr rebuilt per call missed
+every lowering cache below it.  On the shipped Cyclone deck at 16x16x12,
+Nl=2, Nm=4, a six-step RK3 window differentiated with ``jax.value_and_grad``,
+that was
+thirteen XLA modules -- four scans and nine conds -- on the first call and on
+every call after it, and 60 to 74 per cent of the wall time of each objective
+evaluation.
+
+The differentiated scan now runs as one ``jax.jit`` graph.  Everything that has
+to be read on the host stays outside it: the linked cache build, whose
+``jtwist`` is an integer read off the shear and refuses a traced geometry; the
+quadrature weights; the chain-cover projection of the supplied state; and the
+Hermitian projector's ``ky`` axis layout, which crosses the boundary as a
+hashable signature rather than as a grid.  Every array is an **argument**, not
+a captured constant, which is what lets the same executable serve the next
+geometry an optimizer proposes instead of recompiling for it.  Measured on
+XLA:CPU with jax 0.10.2, two runs of three timed calls each:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 24 54
+
+   * - ``ky`` layout
+     - compilations per call
+     - wall per call
+   * - two-sided
+     - 13 -> **0**
+     - 4.92-5.36 s -> 0.139-0.141 s (**37x**)
+   * - half-spectrum
+     - 13 -> **0**
+     - 7.04-7.36 s -> 0.112-0.116 s (**63x**)
+
+The first call is cheaper too, 11.0 s to 7.3 s and 12.4 s to 6.8 s, because one
+graph replaces the thirteen and the small modules around them.
+
+**Identity.**  The value and both adjoint components are bitwise unchanged
+against the eager route in twenty of twenty-six gate configurations -- every
+one that uses the default ``checkpoint=True`` except RK2 under x64 -- across
+RK2/RK3/RK4, two-sided and half ``ky``, a window tail, the uncompressed FFT
+path, exact Laguerre quadrature, and an electromagnetic KBM deck, in
+``float32`` and under ``JAX_ENABLE_X64``.  The six that move do so by 1 to 11
+``float32`` ulps and 1 to 3 double ulps, all in the value rather than in the
+gradient except one.  They are roundoff, and they are structural rather than
+incidental: a graph that can be reused across geometries has to take its grid
+and its quadrature weights as operands, and on the eager route those were
+concrete arrays whose products were folded on the host before the scan body was
+traced.  The window's own measured ``float32`` roundoff against ``float64`` is
+48 ulps (queue row Q14), four times the largest deviation here.
+
+**What this does not change.**  The discrete adjoint, the checkpoint schedule,
+the gradient contract, and the warning at the divergence knee are the ones GKX
+2.1.0 shipped.  The mean over the window is still taken outside the graph,
+because inside it XLA fuses the divide into the scan's accumulation: with the
+divide inside, RK2 and the electromagnetic deck moved by one ``float32`` ulp
+and RK4 by one double ulp, and with it outside those four are bitwise.
+
 Differentiable eigenmodes
 -------------------------
 

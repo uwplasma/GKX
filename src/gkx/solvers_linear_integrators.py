@@ -64,18 +64,22 @@ def _prepared_linear_state_and_damping(
     params: LinearParams,
     *,
     include_collisions: bool = True,
+    terms: LinearTerms | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
     state_dtype = jnp.result_type(G0, base_dtype)
     G0 = jnp.asarray(G0, dtype=state_dtype)
     real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
-    hyper_damp = hypercollision_damping(cache, params, real_dtype)
+    terms = LinearTerms() if terms is None else terms
+    hyper_damp = terms.hypercollisions * hypercollision_damping(
+        cache, params, real_dtype
+    )
     if G0.ndim == 5 and hyper_damp.ndim == 6:
         hyper_damp = hyper_damp[0]
     damping = hyper_damp
     if include_collisions:
-        damping = damping + collision_damping(
-            cache, params, real_dtype, squeeze_species=(G0.ndim == 5)
+        damping = damping + terms.collisions * collision_damping(
+            cache, params, real_dtype, squeeze_species=G0.ndim == 5
         )
     return G0, damping.astype(real_dtype)
 
@@ -207,6 +211,7 @@ def _integrate_linear_cached_impl(
         cache,
         params,
         include_collisions=collision_operator is None,
+        terms=terms,
     )
     real_dtype = jnp.real(jnp.empty((), dtype=G0.dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
@@ -451,7 +456,7 @@ def _integrate_species_sharded_explicit(
         solve_fields_species_shard,
     )
 
-    state, _damping = _prepared_linear_state_and_damping(G0, cache, params)
+    state, _damping = _prepared_linear_state_and_damping(G0, cache, params, terms=terms)
     real_dtype = jnp.real(jnp.empty((), dtype=state.dtype)).dtype
     dt_val = jnp.asarray(dt, dtype=real_dtype)
     devices = _resolve_parallel_devices(

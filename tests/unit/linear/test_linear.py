@@ -1138,20 +1138,20 @@ def test_build_H_adds_bpar_to_m0():
 
 
 def test_linear_cache_bessel_bmag_power_scales_b():
-    grid_cfg = GridConfig(Nx=1, Ny=1, Nz=8, Lx=6.0, Ly=6.0)
-    grid = build_spectral_grid(grid_cfg)
-    geom_base = SAlphaGeometry.from_config(GeometryConfig(R0=2.77778))
-    geom_bmag = SAlphaGeometry.from_config(
-        GeometryConfig(R0=2.77778, kperp2_bmag=False, bessel_bmag_power=1.0)
+    grid = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0))
+    common = dict(R0=2.77778, epsilon=0.18, kperp2_bmag=False)
+    geometries = (
+        SAlphaGeometry.from_config(GeometryConfig(**common, bessel_bmag_power=0.0)),
+        SAlphaGeometry.from_config(GeometryConfig(**common, bessel_bmag_power=1.0)),
     )
     params = LinearParams()
-    cache_base = build_linear_cache(grid, geom_base, params, Nl=2, Nm=2)
-    cache_bmag = build_linear_cache(grid, geom_bmag, params, Nl=2, Nm=2)
-    bmag = geom_bmag.bmag(jnp.asarray(grid.z))
-    ratio = cache_bmag.b / cache_base.b
-    expected = (1.0 / bmag)[None, None, None, :]
-    mask = jnp.isfinite(ratio)
-    assert jnp.allclose(ratio[mask], expected[mask], rtol=1.0e-6, atol=1.0e-8)
+    base, scaled = (
+        build_linear_cache(grid, geom, params, Nl=2, Nm=2) for geom in geometries
+    )
+    bmag = geometries[0].bmag(jnp.asarray(grid.z))
+    base_b, scaled_b = base.b[0, 1, 0], scaled.b[0, 1, 0]
+    assert jnp.all(base_b > 0.0) and jnp.max(bmag) > jnp.min(bmag)
+    assert jnp.allclose(scaled_b / base_b, 1.0 / bmag, rtol=1.0e-6, atol=1.0e-8)
 
 
 def test_build_linear_cache_accepts_sampled_geometry_contract():

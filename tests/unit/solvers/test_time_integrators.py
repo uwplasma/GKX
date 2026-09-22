@@ -45,6 +45,7 @@ from gkx.terms.nonlinear import (
 )
 from types import SimpleNamespace
 import gkx.solvers_linear_implicit as implicit_linear
+import gkx.solvers_linear_krylov_algorithms as krylov_algorithms
 import gkx.solvers_nonlinear_imex as imex_module
 import gkx.solvers_nonlinear_imex_diagnostics as imex_diagnostics
 import gkx.solvers_time_explicit as eti
@@ -236,10 +237,70 @@ def test_native_diagonal_imex_step_matches_scalar_amplification(
     if method == "imex":
         expected = (1.0 + dt * explicit_rate) / (1.0 + dt * damping)
     else:
-        half = (1.0 + 0.5 * dt * explicit_rate) / (1.0 + 0.5 * dt * damping)
-        expected = (1.0 + dt * explicit_rate * half) / (1.0 + dt * damping)
+        gamma = 1.0 - 1.0 / np.sqrt(2.0)
+        delta = 1.0 - 1.0 / (2.0 * gamma)
+        stage = (1.0 + gamma * dt * explicit_rate) / (1.0 + gamma * dt * damping)
+        expected = (
+            1.0
+            + dt * explicit_rate * (delta + (1.0 - delta) * stage)
+            - (1.0 - gamma) * dt * damping * stage
+        ) / (1.0 + gamma * dt * damping)
     assert calls == expected_calls
     np.testing.assert_allclose(np.asarray(result), [expected], rtol=1.0e-6)
+
+
+def test_imex2_gradient_stiff_limit_and_krylov_route(monkeypatch) -> None:
+    """The shared ARS step is differentiable and L-stable for pure damping."""
+    damping = jnp.asarray(100.0)
+    dt = jnp.asarray(1.0)
+
+    def step(state):
+        return _linear_native_step(
+            state, damping, dt, method_key="imex2", rhs=lambda value: -damping * value
+        )
+
+    gamma = 1.0 - 1.0 / np.sqrt(2.0)
+    factor = (1.0 + (2.0 * gamma - 1.0) * damping) / (1.0 + gamma * damping) ** 2
+
+    value, tangent = jax.jvp(step, (jnp.asarray(1.0),), (jnp.asarray(1.0),))
+    assert abs(float(value)) < 0.05
+    assert float(tangent) == pytest.approx(float(factor))
+
+    def response(coefficient):
+        return _linear_native_step(
+            jnp.asarray(1.0),
+            coefficient,
+            dt,
+            method_key="imex2",
+            rhs=lambda state: -coefficient * state,
+        )
+
+    coefficient = jnp.asarray(0.7)
+    derivative = jax.grad(response)(coefficient)
+    epsilon = 1.0e-3
+    finite_difference = (
+        response(coefficient + epsilon) - response(coefficient - epsilon)
+    ) / (2.0 * epsilon)
+    assert float(derivative) == pytest.approx(float(finite_difference), rel=1.0e-4)
+
+    split_terms = object()
+    seen_terms = []
+
+    def fake_damping(_state, _cache, _params, term_cfg=None):
+        seen_terms.append(term_cfg)
+        return damping
+
+    monkeypatch.setattr(krylov_algorithms, "_compute_damping", fake_damping)
+    monkeypatch.setattr(
+        krylov_algorithms,
+        "_apply_operator",
+        lambda state, *_args, **_kwargs: -damping * state,
+    )
+    routed = krylov_algorithms._advance_imex2(
+        jnp.asarray(1.0), object(), object(), split_terms, dt
+    )
+    assert float(routed) == pytest.approx(float(value))
+    assert seen_terms == [split_terms]
 
 
 def test_explicit_from_config_preserves_adaptive_controls(monkeypatch) -> None:
