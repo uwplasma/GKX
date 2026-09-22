@@ -19281,3 +19281,22 @@ rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
 research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
+
+## 2026-09-22 — final plan revision: validation matrix and VMEX turbulence example
+
+Added "Final revision and entry point (2026-09-22)" at the top of `plan.md`.
+It records 2.3.0, the SOLVAX 0.25.0 complex-equilibration fix, the #266 split
+(forward 0.54–0.60x, adjoint window 1.28x slower, sharded runs refused because
+`Nyc` is odd when `Ny` is a multiple of four), dispositions for #266, #268,
+#272, #274 and #275, the full validation and benchmark matrix audited on main
+at 2.3.0 (ES/EM, tokamak/stellarator, linear/nonlinear, each collision
+operator) with a closing action per cell, the build order for a VMEX
+QA-plus-turbulence example on several field lines and radii, sixteen new
+stable IDs and the order of work, with the citation DOI last.
+
+No plan line was deleted. The 2026-09-21 refresh (#268) had rewritten 135
+lines of the previous plan (115 removed outright, 20 edited); all of them are
+restored verbatim in Appendix R, grouped under their original headings, and a
+line-by-line check confirms every non-blank line of main's `plan.md` is
+present. #268's README rewrite was not carried because it removed pinned
+claim-scope sentences asserted by the stellarator scope tests.

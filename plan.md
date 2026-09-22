@@ -1,5 +1,259 @@
 # GKX research plan
 
+## Final revision and entry point (2026-09-22)
+
+This section is the entry point for anyone picking up GKX. It supersedes the
+ordering in "Current status and priority queue (2026-09-21)" below, which is
+kept unchanged as the record of that review. Nothing in this plan has been
+deleted: text rewritten on 2026-09-21 is preserved word for word in Appendix R,
+and `plan/log.md` remains the append-only logbook. When a statement here and a
+statement further down disagree, this section is current and the other is
+history.
+
+Baseline: `origin/main` at `f9485f044`, released as **2.3.0** on 2026-09-21
+(PyPI and GitHub). Claim scope is still bounded by
+[release scope](docs/release_scope.rst) and the evidence ledger.
+
+### F.1 What changed since the 2026-09-21 review
+
+- **2.3.0 shipped** through integration PR #276, which merged #264 (adjoint
+  window compiled once: 13 compiles per call to 0), #265 (SOLVAX block-Thomas
+  elimination in `pr3-cm`; factor storage 1.43–2.61x smaller, apply agreement
+  below 1e-15, Cyclone still 252 iterations), #267 (float32 refusal floors),
+  #269 (three-field algebra and weighted streaming tests), #270 (finite-shear
+  metrics traced without host callbacks), #271 (retained-window floors before
+  saturation statistics) and #273 (diagonal `imex2` order via ARS(2,2,2)).
+  #260 (declared velocity regularization) merged before it.
+- **SOLVAX floor is `solvax>=0.22.0`**, verified against every PyPI wheel from
+  0.12.0 to 0.24.0: `block_thomas_factor_ops` first appears in 0.22.0.
+- **SOLVAX `equilibrate` complex bug is fixed upstream.** 0.24.0 cast complex
+  matrices to float64 and dropped the imaginary part; SOLVAX #116 (`6a40849`)
+  fixed it and shipped in SOLVAX 0.25.0, checked on the PyPI wheel. GKX never
+  calls `equilibrate` (Ruiz did not help the `hermite-line` stall: residual
+  0.549 without, 0.588 with, after 600 iterations), so GKX's floor does not
+  move for it.
+- **The half-layout default (#266) is faster forward and slower backward.**
+  RK3 step 0.54–0.60x and nonlinear RHS 0.49–0.63x of the full layout, but the
+  adjoint heat-flux window is 1.28x slower (27.9%) after #264 removed
+  recompilation, and sharded runs refuse: `Nyc = 1 + Ny/2` is odd whenever
+  `Ny` is a multiple of four, and the shard map needs the ky extent divisible
+  by the device count. Both are blockers for a default flip, not for the
+  layout itself.
+
+### F.2 Open PR dispositions
+
+| PR | Disposition | Next action |
+|---|---|---|
+| #266 PERF-HALF | Split. | Land the `[grid] ky_layout` deck key, restart interchange and NetCDF pair-fold fixes (without the fold `Phi2_kxt` is 11% and `Wphi_kxst` 13% wrong on a half axis) with the default left at `"full"`. Flip the default in a follow-up only after SHARD-PAD and ADJ-HALF (F.5) close. |
+| #268 plan refresh | Carried by this revision. | Its plan and docs changes are in this branch with every removed plan line restored (Appendix R). Its README rewrite is not carried: it dropped two pinned claim-scope sentences ("post-saturation"; "preliminary 12.26% reduction … not statistically resolved … replicated") that `tests/validation/stellarator/test_vmex_qa_transport_optimization.py` asserts. Close #268 when this merges. |
+| #272 Cyclone reference migration (issue #194) | Review and merge. | First migrated three-level timestep ladder; explain the fitted orders before expanding to the other clamp-voided references (VAL-REF). |
+| #274 EM multimode energy oracle | Preservation only; do not merge. | Source for EM-ENERGY; rebase on main, remove debug prints, test. |
+| #275 physical-cadence statistics | Preservation only; do not merge. | Source for STAT-CADENCE; reconcile with #271's floors. |
+
+### F.3 Destination
+
+GKX is to be **validated and benchmarked** across electrostatic and
+electromagnetic physics, tokamak and stellarator geometry, linear and
+nonlinear regimes, and each shipped collision operator; and it is to be
+**usable as a turbulence objective inside VMEX optimization**, fast enough to
+run on one or several field lines at one or several radii. "Validated" means a
+ledger row against a ranked reference (§3.1) at a stated tolerance, pinned by a
+test. "Benchmarked" means time-to-solution at matched accuracy against the
+reference code on the same hardware, recorded under the §5.1 protocol.
+
+### F.4 Validation and benchmark matrix (audit of `main` at 2.3.0)
+
+Reference ranks follow §3.1: 1 analytic, 2 published, 3 upstream goldens,
+5 self-run. "Clamp" is the GX linked end-damping launch-cap defect (§3.7),
+which voids four GX goldens.
+
+**Tokamak, electrostatic**
+
+| Cell | Status at 2.3.0 | Pinned by | Closing action (ID) |
+|---|---|---|---|
+| Cyclone s-α adiabatic, linear | Provisional: 6.83% γ / 1.59% ω headline; parity matrix 0.6% on 10 of 11 settled ky; ky .55 truncation-limited | ledger `L-lin-cyclone-salpha`; `tools/comparison/fixtures/parity/cyclone_salpha_itg.toml` | Regenerate the golden from a repaired GX build (#272 first); GS2 and gyaradax agree within 1.1% at ky .30 (Q20) — promote those into fixtures (VAL-REF, VAL-XCODE) |
+| Cyclone Miller adiabatic, linear | Provisional: 5.51% / 1.25%; parity 2.4% | `L-lin-cyclone-miller` | Same (VAL-REF) |
+| Miller kinetic electrons, linear | Not validated: 1 of 7 ky settled, 10.8% | `docs/verification_matrix.rst`; `cyclone_miller_kinetic_electrons.toml` | Regenerate golden; add GS2/stella kinetic-electron runs (VAL-KE) |
+| TEM, linear | Failing: γ off by up to 4.25x, sign flips; case definition incomplete | `docs/_static/tem_branch_parity_audit.json` | Complete the case definition from the source paper, then rerun (VAL-KE) |
+| ETG, linear | Passing, 0.04% / 0.074% | `L-lin-etg` | Add a rank-2 published anchor (VAL-XCODE) |
+| Landau damping | Passing, 0.004–0.25% | `tests/validation/physics_gates/test_hermite_hierarchy_physics.py` | — |
+| Rosenbluth–Hinton residual | Not found | — | Add the analytic row (VAL-ANALYTIC) |
+| Zonal flow / GAM, Miller | Open: residual 0.192 vs ~0.19 read off a figure | `docs/_static/miller_zonal_response_pilot.json` | Tie to Rosenbluth–Hinton and a digitized published curve (VAL-ANALYTIC) |
+| Nonlinear Cyclone / Miller | Trajectory windows within 10% (Miller 9.5%) of self-run GX; outputs untracked | `docs/_static/nonlinear_cyclone{,_miller}_gate_summary.json` | GX Table 1 and Dimits bracket under the statistics protocol (§2.2, §2.3; STAT-*) |
+
+**Stellarator, electrostatic**
+
+| Cell | Status at 2.3.0 | Pinned by | Closing action (ID) |
+|---|---|---|---|
+| W7-X adiabatic, linear | Passing, 0.265%; eigenfunction overlap 0.9999999994 | `L-lin-w7x` | Record `W7X_IMPORTED_ARGS` (VAL-PROV) |
+| "HSX" (Nührenberg–Zille QHS), linear | Provisional, 0.577% | `L-lin-hsx` | Record run arguments; fix the manifest's configuration name (VAL-PROV) |
+| QA / QH from VMEX, linear | Geometry parity and AD/FD checks only; no growth-rate reference | `docs/_static/vmec_boozer_parity_matrix.json` | GX and stella growth rates on the same VMEX equilibria (VAL-STELL) |
+| Kinetic electrons / TEM | Not claimed (`docs/release_scope.rst`) | `w7x_tem_extension_status.json` | After VAL-KE closes on tokamaks (VAL-STELL) |
+| Zonal flow, W7-X | Failing at 3 of 4 kx; artifact not regenerable (dt 0.1 unstable) | `docs/_static/w7x_zonal_reference_compare.json` | Rerun at a stable dt from tracked inputs, against the published stella/GENE figure (VAL-STELL) |
+| Nonlinear W7-X / HSX | Windows within 10% / 5% of self-run GX; W7-X exact-state audit 4.62e-5 | `nonlinear_{w7x,hsx}_gate_summary.json` | W7-X bean (§2.5) under the statistics protocol |
+
+**Electromagnetic**
+
+| Cell | Status at 2.3.0 | Pinned by | Closing action (ID) |
+|---|---|---|---|
+| Field algebra (EM0) | Partial: three-field residuals, pressure balance, varying-B exchange (#269) | `tests/unit/operators/test_terms_fields.py` | Close the full varying-B energy budget (EM-ENERGY; #274 is the unfinished attempt) |
+| Kinetic Alfvén wave | Ledger says passing (0.0004%); `verification_matrix.rst` says deferred | `L-lin-kaw` | Reconcile the two (DOCS-LEDGER); add a shear-Alfvén frequency test (VAL-ANALYTIC) |
+| KBM, A∥ only, linear | Provisional: 20.0% / 11.1% headline; parity 1.3% on 3 of 5 settled; 0.3% GX build floor | `L-lin-kbm` | Regenerate golden (VAL-REF) |
+| Full EM with B∥, linear (EM1–EM2) | Not validated: no three-field linear reference | — | GS2 and stella three-field KBM ladders (EM-B-PAR) |
+| Nonlinear EM | KBM window 0.93% to t ≤ 100 against self-run GX | `docs/_static/nonlinear_kbm_gate_summary.json` | GX Table 2 with kinetic electrons (EM3) |
+| Stellarator EM (EM4) | Not started; finite-β geometry tests only | `tests/validation/stellarator/test_finite_beta_vmec_boozer_parity.py` | Linear W7-X finite-β against stella (EM4) |
+
+**Collision operators** (`src/gkx/operators/linear/collision_factory.py`)
+
+| Operator | Status at 2.3.0 | Closing action (ID) |
+|---|---|---|
+| `lenard_bernstein` / Dougherty (default) | Matches GX `vnewk=1e-2` to ≤5e-7 in γ at Nl 24/32 (Q17, research script, not CI) | Move Q17 into a CI fixture; add a collisional-ITG ν scan against GS2 (COLL-RUNTIME) |
+| `sugama`, `improved_sugama`, `coulomb` | Closed-form gates pass (conservation 5.6e-17, self-adjointness, H-theorem, Spitzer–Härm); collisional zonal response (Frei 2022) passes | Runtime collisional-ITG and conductivity benchmarks against GS2/GENE-published values (COLL-RUNTIME) |
+| `coulomb_finite_kperp` | Research-only, like-species only; 8/18-moment tables have 22.9–95.8% block errors | Keep refused for runtime until C1–C2 close (§6) |
+| Hypercollisions | Hermite |kz| form identical to GX; shipped default is the constant-coefficient form and `p_hyper_m = 20` where GX uses min(20, Nm/2) | Document the difference; do not flip the default (earlier decision) |
+| Laguerre sink (VEL-REG) | Contract landed (#260); registered sink campaign has no recorded result | Run the registered campaign and the velocity-convergence table (§0.5) |
+| Nonlinear Coulomb (C4) | Parked | — |
+
+**Gaps ranked by how much they block the destination claim**
+
+1. Full electromagnetics with B∥ (EM-ENERGY, EM-B-PAR, EM3).
+2. Kinetic electrons (VAL-KE), on which EM3 also depends.
+3. Tokamak reference validity: four clamp-voided goldens and issue #194 (VAL-REF).
+4. Nonlinear statistical validation: GX Table 1, Dimits bracket, W7-X bean (STAT-*).
+5. Runtime validation of non-default collision operators (COLL-RUNTIME).
+6. Stellarator breadth: provenance, QA/QH growth-rate references, W7-X zonal flow, EM4 (VAL-PROV, VAL-STELL).
+7. Analytic tier: Rosenbluth–Hinton, shear-Alfvén (VAL-ANALYTIC).
+8. `docs/verification_matrix.rst` disagrees with the ledger (Cyclone, KBM and HSX marked Closed there, provisional in the ledger; KAW the reverse). Generate it from the ledger (DOCS-LEDGER, part of Phase 7).
+
+**Benchmark lane.** Each cell above that closes also gets a time-to-solution
+row against the reference code that validated it, at matched accuracy, on the
+office host (CPU for GS2/stella, A4000 for GX and gyaradax), following §5.1:
+pinned SHA, clean tree, alternating arms, raw records committed. The existing
+comparison (§2.4) covers Cyclone ky .30 only; stella's 1.40–1.47x excess on
+Cyclone is unexplained and must be resolved before any stella timing is cited.
+
+### F.5 Turbulence-optimization example through VMEX (OPT-VMEX-NL)
+
+**What exists.**
+
+- GKX already ships `examples/optimization/QA_optimization.py`: VMEX's QA
+  mode ladder plus a fourth objective tuple `(turbulent_transport, 0.0,
+  transport_weight)` that calls `gkx.nonlinear_heat_flux_window` on one field
+  line (`s_index=7, alpha=0.0`), saturating with a fixed 8000 steps and
+  re-saturating after each stage. Its 12.26% reduction is documented as
+  "not statistically resolved"; the traces predate the periodic hypercollision
+  fix and must be regenerated. Its text is pinned by
+  `tests/validation/stellarator/test_vmex_qa_transport_optimization.py`.
+- VMEX's own `examples/optimization/QA_optimization.py` has no turbulence term.
+  Its closest sibling, `QA_optimization_ballooning.py`, sweeps five field lines
+  (`zeta0s`) over several surfaces and optimizes a softmax
+  `T·logsumexp(λ/T)` of the per-line growth rates. That is the pattern to copy.
+- Differentiable per-line geometry: `vmex.core.turbulence.gk_fieldline_geometry`
+  (pure JAX, GS2/GX normalization, takes an integer `s_index`) and GKX's
+  `flux_tube_geometry_from_vmec_boozer_state` (takes a physical `torflux`, goes
+  through `booz_xform_jax`, stellarator-symmetric only, not covered by tests).
+- The window objective differentiates geometry and `tprim`/`fprim`, holds the
+  saturated state fixed (`stop_gradient`), checkpoints in O(√N) memory, and
+  since #264 compiles once and is reused across geometries of equal shape.
+- Recorded costs: 6-step window value+gradient at 16×16×12, Nl2/Nm4 on CPU
+  0.139 s steady, 7.3 s first call; 1024-step window at 16×16×16 4.3 s plus
+  11.6 s compile on an A4000, 177 s on CPU; saturation plus a 2048-step ladder
+  about 40 min on an A4000.
+
+**What is missing, in build order.**
+
+1. **Physical radius.** Add a physical-`s` selector to VMEX's
+   `gk_fieldline_geometry` (interpolate on the full mesh, so the same radius
+   is used at every ladder NS). VMEX PR.
+2. **Multi-tube objective.** One saturated state per (s, α) tube; the window
+   is evaluated per tube and reduced by a mean or by the ballooning softmax.
+   Tubes with equal grids are batched with `vmap` over the geometry pytree,
+   which reuses the single compiled window from #264. GKX PR adding
+   `nonlinear_heat_flux_windows(states, grid, geoms, …)` next to the
+   single-tube function.
+3. **Fast preset.** A named preset at the smallest resolution that passes the
+   velocity- and spatial-convergence checks for this case (starting point:
+   16×16×12, Nl4/Nm8, the rk4+CFL default), a window below the 1024-step
+   divergence knee, and warm continuation (`SaturationWarmStart`, currently
+   off) so each ladder stage restarts from the accepted state instead of
+   re-saturating from noise. Record wall time per objective+gradient per tube
+   on CPU and on one A4000; the target is minutes per stage on one GPU, and
+   the measured number goes in the example header.
+4. **Saturation gate in the Python path.** Replace the fixed 8000 steps with
+   the runtime stop policy (`src/gkx/diagnostics/saturation.py`: ≥256 retained
+   samples, ≥20 autocorrelation times, relative SEM ≤ 0.05, half-window
+   agreement, field- and free-energy stationarity guards), so an unsaturated
+   tube is refused rather than optimized.
+5. **The example.** `examples/optimization/QA_optimization_turbulence.py` in
+   VMEX, written to VMEX's flat template (plan `vmex/plan.md` example rules:
+   one parameter block, `ci_smoke` switch, no argparse, no `__main__`),
+   identical to `QA_optimization.py` plus the turbulence tuple, with
+   `SURFACES_S = [0.5]` and `ALPHAS = [0.0]` as defaults and the multi-radius,
+   multi-line case one list edit away. Add its CI-smoke entry to VMEX's
+   `tests/test_examples.py` and a row to `examples/README.md`. The GKX example
+   stays as the pinned evidence record until the VMEX one supersedes it.
+6. **Evidence for a design claim.** Follow §4.7: held-out surfaces, field
+   lines and ky reserved before optimizing; independent cold-start holdouts
+   at equal uncertainty; an SPSA control. Until then the example demonstrates
+   the pipeline, not a transport reduction.
+
+**Cross-repository housekeeping this needs.**
+
+- VMEX's `[turbulence]` extra requires `gkx>=1.8.0` and its nightly lane pins
+  `gkx==1.8.0`; both must move to `gkx>=2.3.0` (the compiled-once window and
+  the retained-window floors are 2.3.0 features).
+- VMEX pins `solvax>=0.21.0`, GKX `>=0.22.0`; installing both resolves to
+  ≥0.22.0, which is fine, but VMEX's floor should be raised to what its own
+  imports need, verified the same way GKX's was.
+- No package caps JAX; the joint floor is JAX 0.10.1, Python 3.11. Local
+  development environments below that (JAX 0.9.2 was found on the maintainer
+  laptop) make mypy and solver tests fail spuriously; use a JAX ≥0.10.2 venv.
+- `booz_xform_jax` needs no change for this example; its one open issue (#3)
+  is unrelated.
+
+### F.6 Stable IDs added by this revision
+
+| ID | Work | Depends on | Compute |
+|---|---|---|---|
+| SHARD-PAD | Pad the half-layout ky extent to a multiple of the device count (or split unevenly) so sharded runs accept `Nyc` | #266 split | CPU, 4 fake devices |
+| ADJ-HALF | Profile why the half-layout adjoint window is 1.28x slower while the RHS VJP alone is 0.83–0.96x; fix or choose the layout by run type | #264 (merged) | CPU, then A4000 |
+| VAL-REF | Regenerate the four clamp-voided GX goldens from a repaired build; file the upstream report; finish issue #194 | #272 | office GPU |
+| VAL-XCODE | Promote the Q20 GS2/stella/gyaradax controls into tracked fixtures; resolve stella's 1.4x excess | VAL-REF | office CPU/GPU |
+| VAL-KE | Kinetic-electron and TEM cases fully defined and run against GS2/stella | VAL-REF | office CPU |
+| VAL-ANALYTIC | Rosenbluth–Hinton residual and shear-Alfvén frequency rows | — | CPU |
+| VAL-PROV | Record W7-X and HSX run arguments; fix the HSX manifest name | — | none |
+| VAL-STELL | QA/QH growth-rate references; W7-X zonal flow rerun at a stable dt; stellarator kinetic electrons after VAL-KE | VAL-PROV | office GPU |
+| EM-ENERGY | Full varying-B energy budget (from #274) | — | CPU |
+| EM-B-PAR | Three-field (A∥, B∥) KBM linear ladders against GS2 and stella | EM-ENERGY | office CPU |
+| COLL-RUNTIME | Q17 into CI; collisional-ITG ν scan and conductivity against GS2/GENE-published | — | office CPU |
+| STAT-CADENCE | Physical-time averaging on irregular samples (from #275), reconciled with #271 | — | CPU |
+| OPT-VMEX-NL | F.5 steps 1–5 | VMEX physical-s PR | A4000 |
+| OPT-EVIDENCE | F.5 step 6 (§4.7 acceptance) | OPT-VMEX-NL, STAT-CADENCE, VEL-REG | GPU-days |
+| DOCS-LEDGER | Generate `docs/verification_matrix.rst` from the ledger | — | none |
+| CI-SPLIT | Split the `linear-core` quick-test shard (15m15s against a raised 25-minute cap) | — | none |
+
+### F.7 Order of work
+
+1. Merge this plan revision; close #268.
+2. Review and merge #272; land the #266 split (default stays full).
+3. In parallel, the CPU-only lanes that unblock the most: VAL-PROV,
+   VAL-ANALYTIC, DOCS-LEDGER, CI-SPLIT, SHARD-PAD, ADJ-HALF, EM-ENERGY,
+   COLL-RUNTIME (Q17 part), and VEL-REG's registered campaign.
+4. OPT-VMEX-NL steps 1–5 (VMEX physical-s PR, GKX multi-tube PR, then the
+   VMEX example). This gives a working, timed example early; it does not wait
+   for the validation lanes.
+5. Office lanes in sequence as the GPU is free: VAL-REF → VAL-XCODE → VAL-KE
+   → EM-B-PAR → VAL-STELL; then GX Table 1, Dimits bracket and W7-X bean under
+   the statistics protocol.
+6. OPT-EVIDENCE once statistics and velocity convergence are qualified.
+7. Flip the half-layout default when SHARD-PAD and ADJ-HALF close.
+8. **Citation DOI last**: mint the Zenodo DOI only after this plan's 2.4.0
+   exits are met and the plan is marked final (§0.3 item 2 and the Phase 7
+   checklist), so the archived version is the validated one.
+
+Cut patch releases (2.3.x) for merged correctness and performance work as it
+lands; 2.4.0 is the research-grade release and requires the exit checklist.
+
 ## Current status and priority queue (2026-09-21)
 
 This is the execution authority for the 2.3.0 research-grade milestone. The
