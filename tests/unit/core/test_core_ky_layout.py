@@ -21,6 +21,7 @@ import numpy as np
 import pytest
 
 from gkx.core_ky_layout import (
+    FULL,
     HALF,
     conjugate_kx_order,
     describe,
@@ -607,19 +608,31 @@ def test_the_half_axis_weight_sums_a_non_zero_nyquist_row_correctly(ny: int) -> 
     )
 
 
+def test_the_default_deck_builds_the_two_sided_axis() -> None:
+    """``[grid] ky_layout`` defaults to ``"full"``; ``"half"`` is an opt-in."""
+
+    from gkx.config import GridConfig
+    from gkx.core_grid import build_spectral_grid
+
+    assert GridConfig().ky_layout == FULL
+    grid = build_spectral_grid(GridConfig(Nx=4, Ny=8, Nz=2))
+    assert source_ky_layout(grid) == FULL
+    assert int(grid.ky.size) == 8
+
+
 @pytest.mark.parametrize("ny", (4, 8, 16, 32))
-def test_the_default_grid_weights_its_nyquist_row_once(ny: int) -> None:
-    """The Nyquist rule, on the grid a deck builds when it names no layout.
+def test_the_half_deck_grid_weights_its_nyquist_row_once(ny: int) -> None:
+    """The Nyquist rule, on the grid a deck builds when it names ``"half"``.
 
     The tests above cut their half axis from a two-sided parent with
     ``select_real_fft_ky_grid``, which is how the GX-comparison views are made.
     A run does not build its grid that way: ``build_spectral_grid`` reads
-    ``GridConfig.ky_layout``, and since the default flip that is the half axis.
-    Whether the Nyquist row is found on it depends on ``ny_full`` reaching the
-    grid from the config, which is a different path from the one above and the
-    one the default takes. So this pins the rule where the default runs it:
-    weight 1 on the Nyquist row for the Hermitian reductions, 0.5 for the flux
-    representative, and a non-zero Nyquist row summed exactly once.
+    ``GridConfig.ky_layout``. Whether the Nyquist row is found on it depends on
+    ``ny_full`` reaching the grid from the config, which is a different path
+    from the one above and the one a ``ky_layout = "half"`` deck takes. So this
+    pins the rule where such a deck runs it: weight 1 on the Nyquist row for
+    the Hermitian reductions, 0.5 for the flux representative, and a non-zero
+    Nyquist row summed exactly once.
     """
 
     from gkx.config import GridConfig
@@ -627,7 +640,7 @@ def test_the_default_grid_weights_its_nyquist_row_once(ny: int) -> None:
     from gkx.operators.moments import _hermitian_mode_weight, _transport_mode_weight
 
     grid = build_spectral_grid(
-        GridConfig(Nx=4, Ny=ny, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
+        GridConfig(Nx=4, Ny=ny, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi, ky_layout="half")
     )
     assert source_ky_layout(grid) == HALF
     assert source_ny_full(grid) == ny

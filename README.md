@@ -68,15 +68,15 @@ each item's evidence is. It records scope, not quality; see
   explicit nonlinear diagnostics run return bitwise identical arrays, in
   float32 and under x64, for value and for gradient.
   [solvers](docs/solvers.rst).
-- **The evolved state stores only the `ky >= 0` rows.** A real field's negative
-  rows are the conjugates of its positive ones, so storing them costs a
-  per-stage Hermitian completion that the repository profile charges 41.9 per
-  cent of step time to. After 2.2.0 the state keeps `1 + Ny/2` rows instead and
-  the completion is gone: on pinned idle cores an RK3 step of the shipped
-  nonlinear deck takes 0.60x the two-sided time at `64x64x24`. `Ny` still sets
-  the resolution, the published NetCDF bundle is unchanged, restart files load
-  across both axes, and `[grid] ky_layout = "full"` restores the two-sided
-  state. [numerics](docs/numerics.rst), [performance](docs/performance.rst).
+- **The evolved state can store only the `ky >= 0` rows, on request.** A real
+  field's negative rows are the conjugates of its positive ones, so storing
+  them costs a per-stage Hermitian completion. `[grid] ky_layout = "half"`
+  keeps `1 + Ny/2` rows instead: on pinned idle cores an RK3 step of the
+  shipped nonlinear deck takes 0.54x to 0.60x the two-sided time, but the
+  checkpointed heat-flux window gradient takes 1.28x as long, so the default
+  stays `"full"`. `Ny` sets the resolution either way, the published NetCDF
+  bundle does not depend on the choice, and restart files load across both
+  axes. [numerics](docs/numerics.rst), [performance](docs/performance.rst).
 - **Every published number is indexed to the artifact it comes from.** An
   evidence ledger names the artifact, the generator and the reference for each
   one, CI recomputes the parity percentages below from their tracked scans, and

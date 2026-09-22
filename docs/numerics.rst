@@ -427,15 +427,15 @@ completion by hand.
   :math:`[0, 1, \dots, N_y/2 - 1, -N_y/2, \dots, -1]`. Half of it is
   redundant, because a real field obeys the reality condition
   :math:`F(-k_y, -k_x, z) = F^{*}(k_y, k_x, z)`, so the negative rows are
-  rebuilt in the bracket and after every Runge--Kutta stage. This was the
-  evolved state's layout through 2.2.0 and is still reachable, with
-  ``[grid] ky_layout = "full"``, for reproducing such a run bit for bit.
+  rebuilt in the bracket and after every Runge--Kutta stage. **This is the
+  evolved state's default layout**, ``[grid] ky_layout = "full"``.
 
 ``half``
   ``Nky = Nyc = 1 + Ny // 2``, the non-negative ``rfftfreq`` rows. The reality
-  condition holds by construction. **This is the default after 2.2.0.** GX,
-  stella and GS2 evolve this layout, and GKX already used it for restart
-  files, NetCDF output, the ``ky`` spectra and real-space snapshots.
+  condition holds by construction. A deck opts in with
+  ``[grid] ky_layout = "half"``. GX, stella and GS2 evolve this layout, and GKX
+  already used it for restart files, NetCDF output, the ``ky`` spectra and
+  real-space snapshots.
 
 ``Ny`` means the same thing in both, and it is the one that matters to a deck:
 the length of the physical ``y`` axis, and so the resolution of the run.
@@ -501,17 +501,18 @@ summand is odd in :math:`k_x` and cancels pairwise --- and no run reaches the
 row in any case, since two-thirds dealiasing zeroes everything at or above
 :math:`N_y/3`.
 
-Plan 5.3 N3 moved the evolved state to the ``half`` layout, which removes the
+Plan 5.3 N3 makes the ``half`` layout reachable from a deck, which removes the
 per-stage completion that the repository XLA profile attributes 41.9 per cent
-of step time to, and after 2.2.0 that layout is what a run takes. The layout
-travels with the configuration: :attr:`gkx.config.GridConfig.ky_layout` is a
+of step time to. It is an opt-in, not the default, because the reverse pass
+does not share the forward gain (:doc:`performance`). The layout travels with
+the configuration: :attr:`gkx.config.GridConfig.ky_layout` is a
 deck key, and :func:`gkx.core_grid.build_spectral_grid` reads it unless a
 caller overrides it, so the solver, the diagnostics, the restart writer and
 the NetCDF writer --- which each build their own grid from the same config ---
 cannot end up on different axes. Measured on idle pinned cores, the RK3 step
 runs at 0.60x the two-sided one at ``64x64x24`` and 0.54x at ``32x32x24``;
-see :doc:`performance` for the A/B and for the one number that moves the other
-way.
+see :doc:`performance` for the A/B and for the adjoint number that moves the
+other way.
 
 Two things the layout does **not** change, and both are gated rather than
 asserted. The published NetCDF bundle is unchanged, variable for variable and

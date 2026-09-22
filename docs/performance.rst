@@ -85,13 +85,15 @@ float32) with the shipped default deck at ``96x96x48``:
   sweeping ``Ny`` shows the lowering flat at every extent, ``Nyc = 32``
   included, so the extent's factorization never entered it.
 
-  **After 2.2.0 the half layout is the default**, and the saving above is a
+  The half layout is reachable from a deck as ``[grid] ky_layout = "half"``
+  and is an **opt-in; the default stays two-sided**. Its forward saving is a
   wall-clock measurement rather than a byte count. Both arms of the A/B are
   the same binary lowering the shipped Cyclone nonlinear deck onto the two
   axes; they ran on six physical cores of an idle 36-core host, pinned with
   ``taskset``, with the cores *and their hyperthread siblings* verified below
   5 per cent busy before every arm and the arm order rotated between blocks.
-  Medians of four blocks, each seven timed repetitions after a warm call:
+  Medians of four blocks, each seven timed repetitions after a warm call,
+  half over full:
 
   .. list-table::
      :header-rows: 1
@@ -109,22 +111,22 @@ float32) with the shipped default deck at ``96x96x48``:
        - 0.83x
        - 0.96x
 
-  So the step runs 1.7 to 1.9 times faster, which is the 41.9 per cent
-  recovered and then some. ``fused_interior_bytes`` does rise on the half
-  layout, by 146 and 171 per cent on the two RK3 graphs --- more strided
-  in-fusion reads, which allocate nothing but are not free --- and this
-  measurement is what settles whether they cost time. They do not.
+  So a forward step runs 1.7 to 1.9 times faster on the half axis.
+  ``fused_interior_bytes`` does rise on the half layout, by 146 and 171 per
+  cent on the two RK3 graphs --- more strided in-fusion reads, which allocate
+  nothing but are not free --- and this measurement is what settles that they
+  do not cost forward time.
 
-  One number moves the other way and is not a throughput regression. The
-  **eager** checkpointed heat-flux window gradient measures 2.31x at
-  32x32x24. This route is not jitted as a whole and recompiles thirteen XLA
-  modules on **every call** (counted with JAX's compile-duration events), so
-  its wall time mixes compilation with execution and an optimization loop
-  pays the compilation per objective evaluation. How the 2.31x divides
-  between the two has not yet been measured on an idle host, and no split is
-  claimed here. The per-call recompilation is its own defect, addressed
-  separately in #264; a jitted run that compiles once is covered by the RK3
-  and RHS rows above.
+  The reverse pass is why the default does not move. The checkpointed
+  heat-flux window gradient (Cyclone deck, ``32x32x24``, ``Nl = 4``,
+  ``Nm = 8``, six RK3 steps, x64 on six CPU cores, after the per-call
+  recompilation of #264 was removed) has a pooled steady-call median of
+  9.54 s on the half axis against 7.46 s on the full one, **1.28x**, with
+  bitwise-identical value and gradient. Whole-process peak RSS is 0.85x.
+  Disabling checkpointing brings the ratio to 1.03x, so the cost sits in the
+  checkpointed reverse, which is where it has to be removed before the half
+  layout can become the default. Until then a forward nonlinear run is the
+  case to opt in for, and a gradient run should stay on ``"full"``.
 - Geometry construction, compilation, plotting, and I/O are seconds each and
   are not worth optimizing against the stepping cost.
 

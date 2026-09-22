@@ -1155,8 +1155,8 @@ def build_nonlinear_step_hlo_parser() -> argparse.ArgumentParser:
         "ledger's point is the difference between them. The default is the "
         "deck's own [grid] ky_layout, so an unflagged run ledgers the graph a "
         "run of that deck actually compiles; the evidence drivers pass both "
-        "explicitly, which is what keeps the archive comparable across the "
-        "default change after 2.2.0.",
+        "explicitly, which is what keeps the archive comparable whatever the "
+        "deck names.",
     )
     parser.add_argument(
         "--route",

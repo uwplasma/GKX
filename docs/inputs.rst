@@ -469,16 +469,23 @@ from this deck is stored. It is a storage choice, not a resolution one: ``Ny``
 means the length of the physical ``y`` axis in both, so a deck resolves the
 same wavenumbers either way.
 
-``"half"`` (the default after 2.2.0)
+``"full"`` (the default)
+  Store the two-sided ``fftfreq`` axis of length ``Ny`` and rebuild the
+  negative rows in the bracket and after every stage. Every run of 2.3.0 and
+  earlier used this layout, and it reproduces them bit for bit.
+
+``"half"`` (opt-in)
   Store the ``Nyc = 1 + Ny // 2`` non-negative rows and let the reality
   condition hold by construction. The per-stage Hermitian completion
-  disappears, and the RK3 step measures 0.60x the two-sided one at
-  ``64x64x24`` on idle pinned cores (:doc:`performance`).
-
-``"full"``
-  Store the two-sided ``fftfreq`` axis of length ``Ny`` and rebuild the
-  negative rows in the bracket and after every stage. Set this to reproduce a
-  2.2.0-or-earlier run bit for bit.
+  disappears: on idle pinned CPU cores the RK3 step measures 0.54x the
+  two-sided one at ``32x32x24`` and 0.60x at ``64x64x24``. The reverse pass
+  does not share the gain: the checkpointed heat-flux window gradient takes
+  1.28x as long as on the two-sided axis (:doc:`performance`). A forward
+  nonlinear run is the case the opt-in is for; a gradient run should stay on
+  ``"full"``. A run that shards the ``ky`` axis across devices needs ``Nyc``
+  divisible by the device count, and ``Nyc`` is odd whenever ``Ny`` is a
+  multiple of four, so such a run is refused on this layout; shard
+  ``species_hermite`` instead.
 
 The published NetCDF bundle does not depend on the choice, and a restart file
 written under either loads under either, including files written by 2.2.0
