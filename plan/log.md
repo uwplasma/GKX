@@ -18783,3 +18783,32 @@ rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
 research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
+
+## 2026-09-22 - DOCS-CURRENT (G.3) and DOCS-LEDGER (F.6), branch docs/current-2.3 (paused, partial)
+
+Baseline:
+- GKX SHA: f9485f044 (release 2.3.0)
+- companion SHAs: none
+- source/test/tool files and lines: docs/*.rst 33 pages, 20,831 lines at baseline
+- relevant existing gate: tests/release/test_evidence_ledger.py; REQUIRED_PHRASES in tests/release/test_release_gates.py; tools/release checkers that read docs pages
+
+Scope:
+- intended change: docs current with 2.3.0; verification matrix generated from tools/evidence_ledger.toml; remove roadmap pages from public docs
+- non-goals: README, examples/, tools/, page renames or moves
+- prospective acceptance and rollback criteria: sphinx -W passes; pinned claim-scope phrases unchanged; regenerated release JSONs byte-identical
+
+Changes:
+- added scripts/validation_matrix.py (renders the ledger block of docs/verification_matrix.rst; --check); two tests in tests/release/test_evidence_ledger.py (block current; no ledger lane restated by hand)
+- rewrote docs/verification_matrix.rst (961 -> ~420 lines): Cyclone, KBM, HSX no longer "Closed"; KAW no longer "Deferred"; off-ledger lanes listed as non-claims
+- rewrote docs/release_scope.rst (591 -> ~200 lines); deleted docs/research_grade_plan.rst and docs/research_grade_program.rst; docs/manuscript_figures.rst made :orphan: and removed from nav
+- audited and edited: algorithms, theory, solvers, testing, manuscript_figures (see PR handoff for items)
+
+Evidence:
+- focused tests: tests/release/test_evidence_ledger.py 30 passed; test_release_gates.py -k claim_scope 2 passed
+- regenerated quasilinear_promotion_guardrails.json, release_readiness.json, technical_release_status.json byte-identical to tracked
+- sphinx -W build of the final tree NOT run (paused; baseline build passes, ~6 min)
+
+Outcome:
+- partial; paused by the maintainer
+- remaining blocker: 20 pages not yet edited; audit findings recorded in the PR handoff
+- next task: resume the page audit from the PR handoff list, then sphinx -W and the release checkers

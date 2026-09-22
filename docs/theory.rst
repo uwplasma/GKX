@@ -27,9 +27,12 @@ benchmark commonly used in gyrokinetic validation studies. [Dimits00]_
 
 The default boundary condition is a linked (twist-and-shift) flux tube, so the
 parallel derivative couples Fourier modes across adjacent :math:`k_x` indices.
-For non-twisting flux tubes (NTFT), GKX employs an ``m0`` and
-``deltaKx`` formulation compatible with GX, which modifies the effective
-:math:`k_\perp` and drift terms using the same twist factor and linking indices.
+``GridConfig(non_twist=True)`` selects the non-twisting flux tube (NTFT): the
+linear cache shifts :math:`k_x` along the field line by
+:math:`\delta k_x = k_y f_{twist}(z) + \rho_* m_0/x_0`, with
+:math:`f_{twist} = \hat{s}\,g_{ds21}/g_{ds22}` and :math:`m_0` the nearest-integer
+link index, in both :math:`k_\perp` and the drifts
+(``gkx.operators.linear.cache_builder._build_ntft_kperp_and_drift_arrays``).
 
 Hermite-Laguerre velocity space
 -------------------------------
@@ -221,24 +224,10 @@ The diamagnetic drive term :math:`\mathcal{D}_{\ell m}` follows a Laguerre
 formulation with explicit :math:`a/L_n` and :math:`a/L_T` dependence,
 including a separate coupling in :math:`m=2` for temperature-gradient drive.
 
-Field-aligned streaming representation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-To maintain compatibility with audited reference benchmarks, GKX supports
-applying the parallel derivative to a gyrokinetic variable that includes the
-explicit field terms but omits the full :math:`H_{\ell m}` correction at
-``m>1``. This is achieved by defining
-
-.. math::
-
-   \tilde{G}_{\ell m} = G_{\ell m}
-   + \frac{Z_s}{T_s} J_\ell \phi\,\delta_{m0}
-   - \frac{Z_s v_{th}}{T_s} J_\ell A_\parallel\,\delta_{m1}
-   + J_\ell^B B_\parallel\,\delta_{m0},
-
-and then applying the parallel derivative to :math:`\tilde{G}` before the
-Hermite ladder. This preserves the validated linked-boundary operator contract
-used by the imported-geometry and benchmark lanes.
+Streaming acts on :math:`H`: the parallel derivative is applied to
+:math:`H_{\ell m}` (field terms included at :math:`m = 0, 1`) before the
+Hermite ladder, periodically or along the linked twist-and-shift chains
+(``gkx.terms.linear_terms.streaming_contribution``).
 
 Nonlinear E×B and flutter terms
 -------------------------------
