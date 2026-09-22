@@ -104,6 +104,81 @@ Implementation lanes beyond these are opened from PERF-LIT's ranked list.
    on the office host as the GPU is free.
 5. Citation DOI last, after the 2.4.0 exits (F.7 step 8).
 
+### G.5 Lane status at the 2026-09-22 pause
+
+All eight lanes ran in parallel from `main` `f9485f044` (2.3.0) and were paused
+by the maintainer. Each draft PR carries a Handoff section (done and verified,
+not done, raw-record locations, ordered next steps) and a `plan/log.md` entry.
+None is merged; none had CI polled at the pause.
+
+| Lane | PR | Branch @ head | State at pause | First next step |
+|---|---|---|---|---|
+| PERF-LIT | #284 | `research/perf-lit-20260922` @ `499606337` | A4000 profile done; `REPORT.md` and three literature surveys committed; ranked list below | GPU `PHASE=extra` run, which tests ranked item 1 directly; CPU and adaptive-eigen runs on an idle host |
+| PERF-ADJ | #279 | `perf/adjoint-window` @ `632d10eb0` | Diagnosis only, no `src/` change. The half layout loses time when several RHS evaluations are chained inside one compiled step (window forward 5x slower; one RHS is faster). XLA appears to duplicate the linear RHS; `lax.optimization_barrier` helps (bitwise identical) but does not close the gap | Op-by-op profile of the half RK3 step on a quiet host; find the barrier placement that matches full bitwise |
+| PERF-LAYOUT | #282 | `perf/ky-layout-deck-key` @ `8ddf49301` | #266 merged in with the default reset to `"full"`; 329 tests pass; identity gate 1 of 8 comparisons done (f32 RHS/VJP 58/58 bitwise). SHARD-PAD designed (pad ky, place evenly, slice inside `jit`), branch `perf/ky-shard-pad` has no commits | Finish both identity scripts (each output ~330 MB, allow ≥3 GB free); then CI; then SHARD-PAD |
+| SOLVAX-DIRECT | #280 | `research/solvax-direct-20260922` @ `361a8caba` | Inventory done: SOLVAX's SuperLU/MUMPS factor reuses transpose solves but is eager-only with no derivative; no cuDSS/FFI route; GKX's existing `sparse_shift_invert` stops paying off above ~10k unknowns. Exact sparse assembly of GKX's operators verified (3.9e-16). Collision blocks are z-local and small: a batched dense solve, not sparse direct | Assemble the larger sizes; benchmark MUMPS/SuperLU vs `pr3-cm` at matched residual; full shift-invert vs `adaptive` |
+| README-SHOWCASE | #285 | `docs/readme-showcase` @ `56c58ebeb` | `scripts/figures.py` + `figures.toml` produce linear, nonlinear and GX-defect figures (243 KiB). GX defects verified from source: end-damping launch cap (Cyclone ky .55, Nl32/Nm96: GKX +3.97% from stock GX, −0.23% from patched GX); single-precision hypercollision overflow (off for Nm 77–85, NaN from Nm 86). The KAW claim was dropped (no data). README text not yet rewritten | `python scripts/figures.py proof_tests`, then the ~300-line README |
+| DOCS-CURRENT | #283 | `docs/current-2.3` @ `47ad30c5d` | Verification matrix generated from the ledger by `scripts/validation_matrix.py` with a drift test; roadmap pages removed from public docs; five pages updated to 2.3.0; 19 pages still to audit | Remaining pages, then `sphinx-build -W` and the link check |
+| SLIM-TOOLS | #278 | `slim/tools-benchmarks-1` @ `33d2dc0fc` | Tranche 1: 16 unused files (3,757 lines) deleted, `tools/release/*` moved to `scripts/checks/` behind `scripts/check.py`; tools Python 96 → 78 files, 78,901 → 63,832 lines; full map in `plan/research/2026-09-22-slim-tools/MAP.md` | CI, then tranche 2 from MAP.md |
+| EXAMPLES-GALLERY | #281 | `examples/gallery` @ `fbba85503` | Survey and complete old→new path map only; no file moved. 59 non-example files name example paths. `examples/common_input.toml` and `examples/vmec/` stay (code depends on them) | Move per the map; one parametrized smoke test using the time solver at small Nz |
+
+**Decisions recorded at the pause** (made by the supervisor; revisit only with
+a measured reason):
+
+- Examples without a gallery slot: the differentiable geometry bridge goes to
+  `09_autodiff`; the quasilinear implicit-sensitivity script to `08_quasilinear`;
+  the reduced stellarator ITG suite is deleted (it exercises the deprecated
+  reduced ODE model; recoverable from `f9485f044`).
+- The CLI linear resolution fallback is still (Nl, Nm) = (24, 12) while the
+  Python API uses (12, 24) since 2.2.0 (found by DOCS-CURRENT). This is a bug:
+  **CLI-RES**, a one-line fix plus a test, ahead of everything else below.
+- Merge order when CI is green: #277 (this plan) → #278 → #283 → #285 → #281
+  (touches paths the others name) → #282 → #279, #284, #280 as research
+  records. README example links are updated after #281 lands.
+- Disk: the laptop ran out of space several times during the parallel run
+  (session scratch reached 25 GB: identity-gate outputs and per-lane venvs).
+  Large runs go to the office host; keep ≥10 GB free locally; delete a lane's
+  venv and raw outputs once its records are committed.
+
+**PERF-LIT ranked implementation list** (details and acceptance tests in
+`plan/research/2026-09-22-perf-lit/REPORT.md`):
+
+1. Window adjoint: drop the per-step remat inside checkpoint blocks under a
+   memory budget (measured 2.16x overhead today; expect 1.5–2x on the gradient). GKX.
+2. Warm-started re-saturation and batched tubes (F.5 steps 2–4): re-saturating
+   a tube (~42 s) costs more than its gradient (~21 s, derived). GKX.
+3. ky ≥ 0 layout as default after ADJ-HALF and SHARD-PAD (step traffic is
+   concatenate 10–25% and elementwise 35–48% of GPU time). GKX.
+4. The ~1.2 ms field-solve latency floor: fuse, command buffers, `scan` unroll. GKX.
+5. Left-eigenvector gradient from one shift-invert factor as a traced SOLVAX
+   primitive (`pure_callback` + `custom_linear_solve`, transpose solves). SOLVAX, then GKX.
+6. Device apply for `pr3-cm` via batched banded z-local blocks (GX's IMEX
+   pattern; reused by §5.4 implicit streaming). SOLVAX kernel, GKX operator.
+7. Ensemble-averaged window gradients plus Lyapunov/autocorrelation
+   measurements (finite windows are biased). GKX.
+8. Precision audit: `HIGHEST` on invariant-carrying contractions, TF32 check,
+   complex64 vs complex128 window gradients. GKX.
+
+### G.6 Phases from here to GKX 3.0
+
+The phases of the archived plan (§23 there: H0, A–I) are kept and mapped onto
+the lanes. A phase is done when its exit is met on `main` with CI green.
+
+| Phase | Content (lanes and IDs) | Exit |
+|---|---|---|
+| **P0 — land the paused wave** | CLI-RES; merge #277; finish and merge #278, #283, #285, #281, #282; keep #279/#280/#284 as research records and continue them | All eight lanes either merged or carried by a follow-up PR with the same Handoff; `main` green |
+| **P1 — derivatives fast and lean** (was Phase H prerequisites) | PERF-LIT items 1, 2, 4 and 8; PERF-ADJ (ADJ-HALF); SHARD-PAD | Window gradient ≤ 1.2x its value+grad time per step without inner remat, at unchanged values/gradients; half-layout window no slower than full; recorded per-tube objective+gradient time on CPU and one A4000 |
+| **P2 — solvers into JAX** (SOLVAX-DIRECT; PERF-LIT items 5, 6) | Traced sparse-direct primitive with transpose-solve adjoint in SOLVAX; batched banded device kernel; GKX consumers for shift-invert eigen derivatives and `pr3-cm` | A measured win at matched residual under the §5.1 gate, or a logged negative result; SOLVAX release and GKX floor raised only for what GKX imports |
+| **P3 — VMEX turbulence optimization** (OPT-VMEX-NL, F.5) | Physical-s selector in VMEX; multi-tube batched window in GKX; fast preset; saturation gate in the Python path; `QA_optimization_turbulence.py` in VMEX; VMEX pins moved to `gkx>=2.3.0` | Example runs in minutes per stage on one A4000 with recorded timings; CI smoke passes |
+| **P4 — slim to the architecture targets** (archived §2.4, §8; SLIM-TOOLS tranche 2, ARCH-A, TEST-CONSOLIDATE) | `tools/` to zero Python; `scripts/` ≤ 8 commands; source contraction by owner; tests to the §17.3 topology; generated evidence out of Git | src ≤ 45 files / 45k lines; tests ≤ 30 files / 35k lines; clone < 20 MB; each PR reports the §8.2 gates |
+| **P5 — validation matrix** (F.4, F.6: VAL-REF, VAL-XCODE, VAL-KE, VAL-ANALYTIC, VAL-PROV, VAL-STELL, EM-ENERGY, EM-B-PAR, COLL-RUNTIME, STAT-CADENCE; VEL-REG campaign) | Office lanes in sequence as the GPU is free; CPU lanes in parallel | Every F.4 cell either validated at a stated tolerance or named as a limitation in the docs |
+| **P6 — docs and examples final** (archived §18, §19, §20) | Docs information architecture; examples gallery complete with plots; README figures regenerated from the final evidence | `sphinx-build -W` and link check green; every example smoke-tested; every README number traced to the ledger |
+| **P7 — research-grade release and DOI** (2.4.0; then 3.0 when P4 targets are met) | OPT-EVIDENCE (§4.7); statistics protocol; exit checklist | 2.4.0 exits met; Zenodo DOI minted last |
+
+P1, P3's VMEX-side step, P4 and the CPU lanes of P5 can run in parallel; P2
+feeds P1's eigen-derivative path and P3's linear objectives. The DOI waits for
+P7.
+
 ## Final revision and entry point (2026-09-22)
 
 This section is the entry point for anyone picking up GKX. It supersedes the

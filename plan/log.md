@@ -19316,3 +19316,28 @@ README target to a VMEX-style showcase with proof tests and GX-failure cases,
 and opens lanes PERF-LIT, PERF-ADJ, PERF-LAYOUT, SOLVAX-DIRECT,
 README-SHOWCASE, DOCS-CURRENT, SLIM-TOOLS, EXAMPLES-GALLERY, ARCH-A and
 TEST-CONSOLIDATE. No plan line removed.
+
+## 2026-09-22 — parallel lanes paused; plan updated with lane status and phases
+
+Baseline:
+- GKX SHA: `f9485f044` (2.3.0); plan branch `plan/final-revision-20260922` (#277).
+
+Scope:
+- Eight lanes ran in parallel (PERF-LIT #284, PERF-ADJ #279, PERF-LAYOUT #282,
+  SOLVAX-DIRECT #280, README-SHOWCASE #285, DOCS-CURRENT #283, SLIM-TOOLS #278,
+  EXAMPLES-GALLERY #281) and were paused by the maintainer. All are drafts
+  with a Handoff section and their own log entries; none merged.
+
+Changes to the plan:
+- Added G.5 (lane status table with branch heads and first next steps;
+  decisions: example dispositions, CLI-RES bug, merge order, disk policy;
+  PERF-LIT's ranked list) and G.6 (phases P0–P7 to GKX 3.0 mapped onto the
+  archived plan's H0/A–I, each with an exit). No line removed.
+- Committed PERF-LIT's REPORT.md and three literature surveys to #284; the
+  lane had paused before writing them into the tree.
+
+Outcome:
+- Partial by design (pause). Remaining blocker: the laptop disk filled
+  repeatedly (session scratch 25 GB); large runs move to the office host.
+- Next task: P0 — CLI-RES, then land #277 and the paused lanes in the G.5
+  merge order.
