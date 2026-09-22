@@ -18810,4 +18810,4 @@ Evidence:
 Outcome:
 - accepted, rejected, or partial: partial (paused by the maintainer)
 - remaining blocker: none technical; laptop disk was full (56 MiB free) for part of the session
-- next task: steps 2-4 in the PR #<this PR> handoff
+- next task: steps 2-4 in the PR #280 handoff
