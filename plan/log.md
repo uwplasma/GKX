@@ -18783,3 +18783,29 @@ rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
 research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
+
+## 2026-09-22 - EXAMPLES-GALLERY (G.3), branch examples/gallery — paused before implementation
+
+Baseline:
+- GKX SHA: f9485f044 (main, 2.3.0 merge)
+- companion SHAs: none used
+- source/test/tool files and lines: `examples/` 81 tracked files, 36 Python files, 5,145 Python lines
+- relevant existing gate: `tests/integration/examples/test_examples.py` (820 lines, runtime-core CI shard); `tests/validation/stellarator/test_vmex_qa_transport_optimization.py` (pinned QA text/constants)
+
+Scope:
+- intended change: reorganize `examples/` into the numbered gallery of archived-plan §19.1 in the §19.2 style, one parametrized smoke test, `examples/README.md` index
+- non-goals: README.md edits (README-SHOWCASE lane), anything in `benchmarks/` except new files under `benchmarks/cases/`, regenerating tracked figures
+- prospective acceptance: every group runs at smoke resolution in CI or skips with a stated data reason; pinned QA sentences/constants unchanged; tests/release green
+
+Changes:
+- none committed yet; this entry records the completed survey and the proposed file map (see the draft PR Handoff)
+
+Evidence:
+- reference web: 59 non-example files name example paths (tests, tools/*.toml lanes, docs, ci.yml, release.yml, src docstrings, benchmarks/*.py); `src/gkx/data/common_input.toml` is a symlink to `examples/common_input.toml` and `src/gkx/geometry/vmec_boozer_core.py` resolves `examples/vmec/`, so both stay in place
+- smoke-cost probe (JAX 0.10.2, x64, laptop CPU): Cyclone linear Ny=8 Nz=16 Nl=2 Nm=4 — krylov 39.6 s first call (compile), 0.57 s second; explicit time solver 8.0 s / 6.4 s. Nz=32 Nl=4 Nm=8, 3-ky scan: krylov 88 s, time 63 s. Smoke decks must use the time solver at Nz<=16 to stay within seconds
+- the baseline timing of test_examples.py was interrupted by a full disk (ENOSPC), not measured
+
+Outcome:
+- partial: survey and map done, no files moved
+- remaining blocker: none technical; stellarator groups (02, 04, 10) need vmex, which CI does not install, so their smoke tests skip unless vmex is present
+- next task: execute the map in the PR Handoff
