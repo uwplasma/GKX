@@ -20,7 +20,16 @@ from gkx.artifacts.spectral_layout import (
     _require_netcdf4,
     _validate_netcdf_schema_version,
 )
-from gkx.core_ky_layout import nyc_from_ny, to_full
+from gkx.core_ky_layout import (
+    FULL,
+    HALF,
+    KY_AXIS,
+    KyLayout,
+    is_half,
+    nyc_from_ny,
+    to_full,
+    to_half,
+)
 from gkx.diagnostics import (
     ResolvedDiagnostics,
     SimulationDiagnostics,
@@ -730,12 +739,35 @@ def _expand_netcdf_restart_state_full_ky(
     return out
 
 
-def write_netcdf_restart_state(path: str | Path, state: ArrayLike) -> Path:
-    """Write a restart state in flat complex64 restart layout."""
+def write_netcdf_restart_state(
+    path: str | Path, state: ArrayLike, *, ny_full: int | None = None
+) -> Path:
+    """Write a restart state in flat complex64 restart layout.
 
+    The file carries no header, so the reader tells its two accepted forms
+    apart by size alone: ``Ny`` stored ``ky`` rows is GKX's own state order,
+    and ``Nyc = 1 + Ny // 2`` rows is the packed positive-``ky`` interchange
+    order, whose axes are permuted (:doc:`inputs`).  A half-spectrum state
+    would land on the second size while holding the first order, and the
+    reader has nothing to tell the two apart with -- it would return a
+    scrambled state of the right shape and dtype.
+
+    So a half-spectrum state is widened before it is written, which needs
+    ``ny_full``: the length of the two-sided axis.  The widening is exact and
+    costs only file size, because every row it adds is the conjugate of a row
+    already there.  Nothing about an existing file changes: a two-sided state
+    is written exactly as before, byte for byte.
+
+    ``ny_full=None`` writes whatever it is handed, which is what a caller that
+    already holds a two-sided state does.
+    """
+
+    arr = np.asarray(state, dtype=np.complex64)
+    if ny_full is not None and is_half(int(arr.shape[KY_AXIS]), int(ny_full)):
+        arr = np.asarray(to_full(arr, ny_full=int(ny_full)), dtype=np.complex64)
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    np.asarray(state, dtype=np.complex64).tofile(out)
+    arr.tofile(out)
     return out
 
 
@@ -748,8 +780,17 @@ def load_netcdf_restart_state(
     ny: int,
     nx: int,
     nz: int,
+    ky_layout: KyLayout = FULL,
 ) -> np.ndarray:
-    """Load a NetCDF restart file into GKX's full Hermitian layout."""
+    """Load a NetCDF restart file onto ``ky_layout``.
+
+    ``ny`` is the length of the two-sided axis in both layouts; ``ky_layout``
+    says how many rows the caller wants back, ``Ny`` or
+    ``Nyc = 1 + Ny // 2``.  The file itself is unchanged by the layout: it has
+    always stored the dealiased ``ky >= 0`` block, which is why a run started
+    on either axis can continue from a file written by the other, and why a
+    2.1.0 restart still loads (plan 5.3 N3, queue row Q10).
+    """
 
     try:
         from netCDF4 import Dataset
@@ -776,10 +817,13 @@ def load_netcdf_restart_state(
             f"restart Nz={state_active.shape[-1]} does not match requested {int(nz)}"
         )
     if state_active.shape[3] == int(ny):
-        return _expand_netcdf_restart_state_full_ky(state_active, nx_full=nx)
+        full = _expand_netcdf_restart_state_full_ky(state_active, nx_full=nx)
+        return to_half(full, ny_full=int(ny)) if ky_layout == HALF else full
     positive_ky = _expand_netcdf_restart_state_to_full_positive_ky(
         state_active, ny_full=ny, nx_full=nx
     )
+    if ky_layout == HALF:
+        return positive_ky
     return _expand_positive_ky_to_full(positive_ky, ny_full=ny)
 
 
@@ -811,8 +855,18 @@ def _resolve_restart_path(out: str | Path, cfg: Any, *, for_write: bool) -> Path
 
 
 def _condense_resolved_for_output(
-    resolved: ResolvedDiagnostics | None,
+    resolved: ResolvedDiagnostics | None, *, ny_full: int | None = None
 ) -> ResolvedDiagnostics | None:
+    """Condense fresh diagnostics onto the axes an existing bundle already uses.
+
+    ``ny_full`` is the length of the two-sided ``ky`` axis.  The number of
+    dealiased rows is a property of ``Ny``; taking it from the array's own
+    length keeps ``1 + (Nyc - 1) // 3`` rows of a half-spectrum diagnostic,
+    which is neither the published length nor anything else, and the append
+    then fails on a shape mismatch against the loaded history -- or, at a
+    resolution where the two happen to agree, does not.
+    """
+
     if resolved is None:
         return None
     payload: dict[str, np.ndarray | None] = {}
@@ -823,23 +877,25 @@ def _condense_resolved_for_output(
         elif field.name.endswith(("_kxt", "_kxst")):
             payload[field.name] = _condense_kx(np.asarray(value))
         elif field.name.endswith(("_kyt", "_kyst")):
-            payload[field.name] = _condense_ky(np.asarray(value))
+            payload[field.name] = _condense_ky(np.asarray(value), ny_full=ny_full)
         elif field.name.endswith(("_kxkyt", "_kxkyst")):
-            payload[field.name] = _condense_kykx(np.asarray(value))
+            payload[field.name] = _condense_kykx(np.asarray(value), ny_full=ny_full)
         else:
             payload[field.name] = np.asarray(value)
     return ResolvedDiagnostics(**payload)
 
 
 def _condense_diagnostics_for_netcdf_output(
-    diag: SimulationDiagnostics,
+    diag: SimulationDiagnostics, *, ny_full: int | None = None
 ) -> SimulationDiagnostics:
     # Nonlinear NetCDF output artifacts do not persist the monitored complex mode trace.
     # Drop it when appending from an existing artifact so restart concatenation
     # preserves the exact on-disk schema instead of mixing persisted and transient
     # diagnostics.
     return replace(
-        diag, phi_mode_t=None, resolved=_condense_resolved_for_output(diag.resolved)
+        diag,
+        phi_mode_t=None,
+        resolved=_condense_resolved_for_output(diag.resolved, ny_full=ny_full),
     )
 
 

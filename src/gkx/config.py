@@ -73,6 +73,29 @@ class GridConfig:
     ntheta: int | None = None
     nperiod: int | None = None
     zp: int | None = None
+    #: Layout of the ``ky`` axis of every spectral array built from this grid
+    #: (:mod:`gkx.core_ky_layout`, plan 5.3 N3).  ``"half"`` -- the default --
+    #: stores the ``Nyc = 1 + Ny // 2`` non-negative rows and lets the reality
+    #: condition hold by construction; ``"full"`` stores the two-sided
+    #: ``fftfreq`` axis of length ``Ny`` and rebuilds the negative rows in the
+    #: bracket and after every stage.  ``Ny`` means the same thing in both:
+    #: the length of the physical ``y`` axis, and therefore the resolution of
+    #: the run.  Nothing about the physics, the resolution or the published
+    #: output depends on the choice; the step does.  Measured on idle pinned
+    #: cores at ``64x64x24``, the half axis runs an RK3 step at 0.60x the
+    #: two-sided one and a standalone RHS at 0.63x, and XLA's own buffer
+    #: assignment asks for 44 to 66 per cent less scratch.  ``"full"`` is kept
+    #: for reproducing a 2.2.0-or-earlier run bit for bit and for the A/B tools.
+    ky_layout: str = "half"
+
+    def __post_init__(self) -> None:
+        layout = str(self.ky_layout).strip().lower()
+        if layout not in ("full", "half"):
+            raise ValueError(
+                f"unknown [grid] ky_layout '{self.ky_layout}'; expected 'full' or 'half'"
+            )
+        if layout != self.ky_layout:
+            object.__setattr__(self, "ky_layout", layout)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

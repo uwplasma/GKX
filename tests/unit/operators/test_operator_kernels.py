@@ -1740,14 +1740,15 @@ def test_drift_kinetic_collision_model_is_blocked_for_short_wave_itg() -> None:
     geometry = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18)
     params = LinearParams(fprim=2.2, tprim=6.9, damp_ends_amp=0.0)
     random = np.random.default_rng(7)
+    # Draw the noise on the two-sided axis and keep the rows this grid stores.
+    # The fits below read ky rows 2 and 3 over a window in which the growth
+    # rate still depends on where the mode started, so the seed has to land on
+    # the same rows whichever layout the grid uses.
+    shape = (2, 4, int(grid.ny_full), 2, 16)
     state = jnp.asarray(
-        1.0e-5
-        * (
-            random.standard_normal((2, 4, 8, 2, 16))
-            + 1j * random.standard_normal((2, 4, 8, 2, 16))
-        ),
+        1.0e-5 * (random.standard_normal(shape) + 1j * random.standard_normal(shape)),
         dtype=jnp.complex64,
-    )
+    )[..., : int(grid.ky.size), :, :]
     operator = DriftKineticMomentCollisionOperator.from_improved_species(
         jnp.ones(1), jnp.ones(1), jnp.ones(1)
     )

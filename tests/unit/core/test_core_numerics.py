@@ -39,6 +39,7 @@ from gkx.core_grid import (
     select_ky_grid,
     select_real_fft_ky_grid,
 )
+from gkx.core_ky_layout import rows_for_layout
 from gkx.callbacks import (
     _PROGRESS_START,
     _emit_progress,
@@ -749,12 +750,13 @@ def test_build_spectral_grid_shapes():
     """Grid arrays should have consistent shapes."""
     cfg = GridConfig(Nx=8, Ny=6, Nz=4, Lx=2.0, Ly=3.0)
     grid = build_spectral_grid(cfg)
+    nky = rows_for_layout(cfg.Ny, cfg.ky_layout)
     assert grid.kx.shape == (cfg.Nx,)
-    assert grid.ky.shape == (cfg.Ny,)
+    assert grid.ky.shape == (nky,)
     assert grid.z.shape == (cfg.Nz,)
-    assert grid.kx_grid.shape == (cfg.Ny, cfg.Nx)
-    assert grid.ky_grid.shape == (cfg.Ny, cfg.Nx)
-    assert grid.dealias_mask.shape == (cfg.Ny, cfg.Nx)
+    assert grid.kx_grid.shape == (nky, cfg.Nx)
+    assert grid.ky_grid.shape == (nky, cfg.Nx)
+    assert grid.dealias_mask.shape == (nky, cfg.Nx)
 
 
 def test_build_spectral_grid_spacing():
@@ -810,7 +812,9 @@ def test_grid_config_explicit_zp():
 def test_compressed_real_fft_wavenumbers_match_gx_native_layout():
     """compressed real-FFT helpers should expose positive Nyquist multipliers."""
 
-    cfg = GridConfig(Nx=4, Ny=10, Nz=4, Lx=2.0, Ly=20.0)
+    # Both helpers exist to compress a two-sided axis, so the grid they read
+    # is the two-sided one; on a half axis there is nothing left to compress.
+    cfg = GridConfig(Nx=4, Ny=10, Nz=4, Lx=2.0, Ly=20.0, ky_layout="full")
     grid = build_spectral_grid(cfg)
     dkx = 2.0 * jnp.pi / cfg.Lx
     dky = 2.0 * jnp.pi / cfg.Ly
@@ -848,7 +852,9 @@ def test_select_real_fft_ky_grid_uses_explicit_positive_dump_values():
 def test_twothirds_mask_matches_strict_twothirds_cutoff():
     """The nonlinear two-thirds mask excludes the |k| = 1/3 shell."""
 
-    cfg = GridConfig(Nx=96, Ny=96, Nz=4, Lx=2.0 * jnp.pi, Ly=96.0)
+    # The GX view is cut from the two-sided axis by ``real_fft_unique_ky``, and
+    # the row counts below count the rows of a 96-point two-sided grid.
+    cfg = GridConfig(Nx=96, Ny=96, Nz=4, Lx=2.0 * jnp.pi, Ly=96.0, ky_layout="full")
     grid = build_spectral_grid(cfg)
     gx_grid = select_real_fft_ky_grid(grid, real_fft_unique_ky(grid.ky))
     mask = jnp.asarray(gx_grid.dealias_mask)

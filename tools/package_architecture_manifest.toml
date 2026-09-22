@@ -414,7 +414,15 @@ reason = "Fused stellarator_tables and stellarator_reduced; reduce by deduplicat
 
 [[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
-baseline_lines = 1076
+# 1076 -> 1154: the ky >= 0 default (plan 5.3 N3, Q10). A half-spectrum
+# diagnostic carries the conjugate partner's share at weight 2 in the families
+# reduced with the Hermitian pair weight, so the writer needs to know which
+# family each published prefix belongs to (_KY_WEIGHTING_BY_PREFIX) and divides
+# it back out before writing; the fixed-kx ky reduction folds onto
+# (ky, kx) <-> (-ky, -kx) pairs; and the ky/y axes are built from ``ny_full``
+# rather than the stored row count. Each is a published-number contract, so it
+# stays with the one schema owner rather than moving to a helper module.
+baseline_lines = 1154
 target_lines = 1000
 reason = "One NetCDF schema owner keeps dimensions, geometry, diagnostics, restart, and final-field variables consistent; reduce helper repetition without splitting the schema again."
 
@@ -433,7 +441,13 @@ path = "artifacts/io.py"
 # subsumes the other, so the count is the sum rather than new surface.
 # 1096 -> 1099: recording which scan points were seeded from a neighbour.
 # A warm-started number that does not say so is not reproducible.
-baseline_lines = 1099
+# 1099 -> 1151: the ky >= 0 default (plan 5.3 N3, Q10). The restart loader and
+# writer take the layout the caller wants and the two-sided length ``ny_full``,
+# because a half-spectrum file and GKX's packed interchange order share one
+# size and a header-free reader cannot tell them apart; the diagnostics
+# condensation takes ``ny_full`` for the same reason. Most of the growth is the
+# docstrings that state those two facts at the functions that depend on them.
+baseline_lines = 1151
 target_lines = 1000
 reason = "One runtime I/O owner keeps summaries, tables, restart packing, and diagnostic reload consistent; reduce repeated serializers without restoring format-specific modules."
 
@@ -460,7 +474,11 @@ path = "runtime.py"
 # 513 -> 781: absorbs workflows/runtime/execution.py, which had exactly one consumer -- this
 # file -- and handed it most of its names. That is a split module, not an
 # interface, so the two rejoin. No definition changed and no export moved.
-baseline_lines = 781
+# 781 -> 798: the restart loader behind the facade takes the ky layout the run
+# asked for (Q10, plan 5.3 N3). The two loader calls are written out with their
+# keywords instead of splatting one shared dict, because a dict of mixed int
+# and layout values types as ``dict[str, object]`` and mypy rejects the splat.
+baseline_lines = 798
 target_lines = 500
 reason = "Public runtime facade; the overage is the exploded __all__ list, so shrink it by removing exports rather than by splitting the facade."
 
@@ -478,7 +496,10 @@ path = "workflows/nonlinear.py"
 # recording why refusing is still correct: quietly dropping the stop condition
 # would hand back a simulation that integrates past where the deck asked it to
 # stop. No branch was added; the dispatcher's shape is unchanged.
-baseline_lines = 1023
+# 1023 -> 1032: the secondary-seed restart writer takes ``ny_full`` (Q10, plan
+# 5.3 N3), so a half-spectrum state is widened before it lands on the one file
+# size whose meaning is already the packed interchange order.
+baseline_lines = 1032
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -1081,6 +1102,14 @@ recursive = true
 # fewer RHS evaluations only once the CFL controller is on, and the
 # velocity-resolution ladder that shows (12, 24) eleven times closer than
 # (24, 12) at the same Nl*Nm. Target unchanged.
+# 92943 -> 93430: Q10, the ky >= 0 default (plan 5.3 N3). The layout moves
+# onto GridConfig so every grid a run builds reads it; the restart loaders and
+# writers take the layout and the two-sided length ``ny_full``; the NetCDF
+# writer divides the Hermitian pair weight back out of the families that carry
+# it and folds the fixed-kx ky reduction onto (ky, kx) <-> (-ky, -kx) pairs,
+# without which Phi2_kxt was 11% and Wphi_kxst 13% wrong on a half axis. The
+# rest is the docstrings at each of those sites stating why ``Nyc`` cannot
+# stand in for ``Ny``. Target unchanged.
 # 92943 -> 93023 (queue row Q31). The declared velocity-space regularization
 # contract. Most of it is the new per-branch Hermite rate nu_hyper_m_const,
 # which has to be carried end to end before it can mean anything: declared on
@@ -1400,6 +1429,13 @@ recursive = true
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
+# 92533 -> 92793: Q10, the ky >= 0 default (plan 5.3 N3). Tests that built a
+# state of ``Ny`` rows now read the grid's stored row count; tests whose subject
+# is the two-sided axis (the end-damping and cover-mask mirrors, which name an
+# unrelated positive row on a half axis) ask for ``ky_layout = "full"`` by
+# name; the runtime and artifact suites gain the layout round trips; and one
+# test pins the Nyquist weight on the grid a deck builds when it names no
+# layout, which is the path the default takes.
 # 92533 -> 92814 (queue row Q31). Nine cases in the new Laguerre-sink contract
 # file plus the evidence-ledger rows that register Q31's predictions. The cases
 # are what the contract is: that the |k_z| branch carries no Laguerre index at
@@ -1516,7 +1552,10 @@ recursive = true
 # parsed by computation rather than scanned as one string, and
 # `memory_analysis` is threaded beside it as the compiler's own check.
 # The evidence probe `gather_probe.py` is the rest of the count.
-baseline = 78901
+# 78901 -> 78904: Q10. `profile_runtime_kernels.py --ky-layout` now defaults to
+# the deck's own layout instead of forcing "full", so an unflagged ledger
+# compiles the graph a run of that deck compiles; the help text says so.
+baseline = 78904
 target = 0
 
 [[line_budget_policy.counts]]

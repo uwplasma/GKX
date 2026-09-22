@@ -200,7 +200,7 @@ def test_compute_b_shape_and_value(cyclone_world):
     """b should match k_perp^2 for s-alpha geometry."""
     cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     b = compute_b(grid, geom, rho=1.0)
-    assert b.shape == (cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+    assert b.shape == (grid.ky.size, cfg.grid.Nx, cfg.grid.Nz)
     kx0 = grid.kx[0]
     ky0 = grid.ky[0]
     theta0 = grid.z[0]
@@ -238,7 +238,10 @@ def test_slab_itg_matrix_matches_published_gyro_moment_hierarchy(only_terms) -> 
     observed = np.empty((mode_count, mode_count), dtype=complex)
     for column in range(mode_count):
         laguerre_order, hermite_order = divmod(column, nm)
-        state = np.zeros((1, nl, nm, 4, 1, 8), dtype=complex)
+        # Row 1 is ``+ky_1`` on either ky layout, and the published matrix is a
+        # single-mode statement, so the axis length is the grid's to state and
+        # the row index is not.
+        state = np.zeros((1, nl, nm, int(grid.ky.size), 1, 8), dtype=complex)
         state[0, laguerre_order, hermite_order, 1, 0] = phase
         rhs, _ = linear_rhs_cached(
             jnp.asarray(state), cache, params, terms=terms, use_jit=False
@@ -1168,6 +1171,11 @@ def test_build_linear_cache_accepts_sampled_geometry_contract():
 
 
 def test_build_linear_cache_restores_linked_end_damping_on_full_fft_grid(spectral_grid):
+    # The two-sided axis is this test's subject, not its setting: the mirror
+    # row below is ``(-j) % Nky``, which names the conjugate partner only when
+    # the negative rows are stored. On the half axis it names an unrelated
+    # positive row, so the grid asks for ``"full"`` by name rather than
+    # inheriting whichever layout ships.
     grid = spectral_grid(
         Nx=8,
         Ny=8,
@@ -1176,6 +1184,7 @@ def test_build_linear_cache_restores_linked_end_damping_on_full_fft_grid(spectra
         Ly=2.0 * np.pi,
         boundary="linked",
         y0=1.0,
+        ky_layout="full",
     )
     geom = SAlphaGeometry.from_config(GeometryConfig(s_hat=0.8))
     cache = build_linear_cache(grid, geom, LinearParams(), Nl=2, Nm=2)
@@ -1350,7 +1359,7 @@ def test_streaming_zero_for_constant_z(cyclone_world, only_terms):
         damp_ends_widthfrac=0.0,
     )
 
-    G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 3, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     G = G.at[:, 1:, ...].set(1.0)
     terms = only_terms(streaming=1.0)
     dG, _phi = linear_rhs(G, grid, geom, params, terms=terms)
@@ -1361,22 +1370,22 @@ def test_linear_rhs_shapes(cyclone_world):
     """RHS and potential should have consistent shapes."""
     cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 3, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     dG, phi = linear_rhs(G, grid, geom, params)
     assert dG.shape == G.shape
-    assert phi.shape == (cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+    assert phi.shape == (grid.ky.size, cfg.grid.Nx, cfg.grid.Nz)
 
 
 def test_linear_param_validation(cyclone_world):
     """Invalid parameters should be rejected in checked paths."""
     cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
-    G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 3, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     with pytest.raises(ValueError):
         compute_b(grid, geom, rho=0.0)
     with pytest.raises(ValueError):
         quasineutrality_phi(
             G[None, ...],
-            jnp.ones((1, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)),
+            jnp.ones((1, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz)),
             tau_e=-1.0,
             charge=jnp.array([1.0]),
             density=jnp.array([1.0]),
@@ -1401,7 +1410,7 @@ def test_integrate_linear_shapes(cyclone_world):
     """Integrator should return a time series of phi with expected length."""
     cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     _, phi_t = integrate_linear(G, grid, geom, params, dt=0.1, steps=3, method="rk4")
     assert phi_t.shape[0] == 3
 
@@ -1410,7 +1419,7 @@ def test_integrate_linear_progress_with_sample_stride_gt_one(cyclone_world):
     """Sampled progress reporting must compute diagnostics before emitting callbacks."""
     cfg, grid, geom = cyclone_world(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
 
     _, phi_t = integrate_linear(
         G,
@@ -1431,7 +1440,7 @@ def test_integrate_linear_methods(cyclone_world):
     """Explicit and IMEX paths should run without error."""
     cfg, grid, geom = cyclone_world(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     for method in ("euler", "rk2", "imex", "semi-implicit", "sspx3"):
         _, phi_t = integrate_linear(
             G, grid, geom, params, dt=0.1, steps=2, method=method
@@ -1443,7 +1452,7 @@ def test_integrate_linear_with_cache(cyclone_world):
     """Integrate with a precomputed cache path."""
     cfg, grid, geom = cyclone_world(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     cache = build_linear_cache(grid, geom, params, G.shape[0], G.shape[1])
     _, phi_t = integrate_linear(
         G, grid, geom, params, dt=0.1, steps=2, method="rk4", cache=cache
@@ -1455,7 +1464,7 @@ def test_integrate_linear_donation_matches_nondonated(cyclone_world):
     """Donating the initial state must not change the trajectory."""
     cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    shape = (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+    shape = (2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz)
     G = (
         jnp.arange(np.prod(shape), dtype=jnp.float32)
         .reshape(shape)
@@ -1486,7 +1495,7 @@ def test_integrate_linear_checkpoint_runs(cyclone_world):
     """Checkpointed integration should run on a tiny grid."""
     cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     _, phi_t = integrate_linear(
         G, grid, geom, params, dt=0.1, steps=2, method="rk4", checkpoint=True
     )
@@ -1497,7 +1506,7 @@ def test_integrate_linear_invalid_method(cyclone_world):
     """Invalid integrator names should raise a ValueError."""
     cfg, grid, geom = cyclone_world(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     with pytest.raises(ValueError):
         integrate_linear(G, grid, geom, params, dt=0.1, steps=2, method="rk5")
 
@@ -1506,7 +1515,7 @@ def test_linear_cache_matches_rhs(cyclone_world):
     """Cached RHS should match the direct RHS for the same inputs."""
     cfg, grid, geom = cyclone_world(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     cache = build_linear_cache(grid, geom, params, G.shape[0], G.shape[1])
     dG0, phi0 = linear_rhs(G, grid, geom, params)
     dG1, phi1 = linear_rhs_cached(G, cache, params)
@@ -1521,7 +1530,7 @@ def test_linear_cached_rhs_replaces_builtin_collision_operator(
 
     cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.ones((1, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
+    G = jnp.ones((1, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     cache = build_linear_cache(grid, geom, params, Nl=1, Nm=2)
     terms = only_terms(collisions=0.25)
 
@@ -1542,7 +1551,7 @@ def test_linear_cached_rhs_replaces_builtin_collision_operator(
 def test_linear_cached_rhs_rejects_invalid_collision_shape(cyclone_world):
     cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.ones((1, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
+    G = jnp.ones((1, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     cache = build_linear_cache(grid, geom, params, Nl=1, Nm=2)
 
     class InvalidCollision:
@@ -1564,7 +1573,7 @@ def test_linear_integrator_applies_custom_collision_each_step(
 ):
     cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G0 = jnp.ones((1, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
+    G0 = jnp.ones((1, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
 
     class DragCollision:
         def apply(self, context):
@@ -1621,11 +1630,13 @@ def test_linear_rhs_multispecies_shapes(cyclone_world):
         fprim=jnp.array([0.0, 0.0]),
         tprim=jnp.array([0.0, 0.0]),
     )
-    G = jnp.zeros((2, 2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
+    G = jnp.zeros(
+        (2, 2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64
+    )
     cache = build_linear_cache(grid, geom, params, Nl=G.shape[1], Nm=G.shape[2])
     dG, phi = linear_rhs_cached(G, cache, params)
     assert dG.shape == G.shape
-    assert phi.shape == (cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+    assert phi.shape == (grid.ky.size, cfg.grid.Nx, cfg.grid.Nz)
 
 
 def test_implicit_preconditioner_hermite_line_shape_and_finite(cyclone_world):
@@ -1814,7 +1825,7 @@ def test_jit_path_handles_tracers(cyclone_world):
 
     cfg, grid, geom = cyclone_world(Nx=8, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
 
     @jax.jit
     def _run(G_in):
@@ -1828,7 +1839,7 @@ def test_integrate_linear_implicit_runs(cyclone_world):
     """Implicit path should run on a tiny grid."""
     cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams(nu=0.1)
-    G = jnp.zeros((1, 1, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((1, 1, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     _, phi_t = integrate_linear(
         G,
         grid,
@@ -1848,7 +1859,7 @@ def test_implicit_standard_and_diagnostic_routes_match(cyclone_world, only_terms
 
     cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     params = LinearParams(nu=0.1)
-    state = jnp.zeros((1, 1, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    state = jnp.zeros((1, 1, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
     terms = only_terms()
     common = dict(
         dt=0.1,
@@ -1906,7 +1917,7 @@ def test_energy_operator_and_drive_coeffs():
 def test_mirror_curvature_terms_activate_with_drift_scale(cyclone_world, only_terms):
     """Drift/mirror terms should activate when omega_d_scale is nonzero."""
     cfg, grid, geom = cyclone_world(Nx=2, Ny=2, Nz=8, Lx=6.0, Ly=6.0)
-    G = jnp.zeros((1, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
+    G = jnp.zeros((1, 3, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     G = G.at[0, 1, 1, 0, :].set(1.0 + 0.0j)
 
     params_off = LinearParams(
@@ -1937,7 +1948,7 @@ def test_mirror_curvature_terms_activate_with_drift_scale(cyclone_world, only_te
 def test_diamagnetic_drive_populates_second_hermite_moment(cyclone_world, only_terms):
     """Diamagnetic drive should populate the m=2 component when enabled."""
     cfg, grid, geom = cyclone_world(Nx=2, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
-    G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
+    G = jnp.zeros((2, 3, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     ky_index = 1
     G = G.at[0, 0, ky_index, 0, :].set(1.0 + 0.0j)
 
@@ -1970,7 +1981,7 @@ def test_diamagnetic_drive_populates_second_hermite_moment(cyclone_world, only_t
 def test_diamagnetic_drive_vanishes_for_zonal_mode(cyclone_world, only_terms):
     """Diamagnetic drive should vanish for the ky=0 mode."""
     cfg, grid, geom = cyclone_world(Nx=2, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
-    G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
+    G = jnp.zeros((2, 3, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     G = G.at[0, 0, 0, 0, :].set(1.0 + 0.0j)
     params = LinearParams(
         omega_d_scale=0.0,
@@ -2006,7 +2017,7 @@ def test_apar_streaming_coupling_changes_rhs(cyclone_world):
     """Finite beta should modify streaming via Apar coupling."""
     cfg, grid, geom = cyclone_world(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
 
-    G = jnp.zeros((2, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
+    G = jnp.zeros((2, 3, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
     z = grid.z
     G = G.at[0, 1, 1, 0, :].set(jnp.sin(z) + 0.0j)
 

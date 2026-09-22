@@ -461,6 +461,34 @@ Supported sections include:
 * ``[terms]`` (toggle linear terms)
 * ``[krylov]`` (Krylov solver settings)
 
+The ``ky`` storage layout
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``[grid] ky_layout`` selects how the ``ky`` axis of every spectral array built
+from this deck is stored. It is a storage choice, not a resolution one: ``Ny``
+means the length of the physical ``y`` axis in both, so a deck resolves the
+same wavenumbers either way.
+
+``"half"`` (the default after 2.2.0)
+  Store the ``Nyc = 1 + Ny // 2`` non-negative rows and let the reality
+  condition hold by construction. The per-stage Hermitian completion
+  disappears, and the RK3 step measures 0.60x the two-sided one at
+  ``64x64x24`` on idle pinned cores (:doc:`performance`).
+
+``"full"``
+  Store the two-sided ``fftfreq`` axis of length ``Ny`` and rebuild the
+  negative rows in the bracket and after every stage. Set this to reproduce a
+  2.2.0-or-earlier run bit for bit.
+
+The published NetCDF bundle does not depend on the choice, and a restart file
+written under either loads under either, including files written by 2.2.0
+and earlier.
+Results move by the layout's own roundoff --- a half-spectrum operand changes
+the shape of the batch handed to ``irfft2``/``rfft2`` and the CPU FFT's
+reduction order with it --- which on a 20-step nonlinear trajectory measures
+3.4e-7 relative on the heat flux in float32. :doc:`numerics` states the
+contract.
+
 Runtime sections
 ^^^^^^^^^^^^^^^^
 

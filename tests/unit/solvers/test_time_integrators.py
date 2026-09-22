@@ -2175,7 +2175,7 @@ def _imex_diagnostics_deck():
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams()
-    state = jnp.zeros((1, 2, 3, 4, 4, 4), dtype=jnp.complex64)
+    state = jnp.zeros((1, 2, 3, grid.ky.size, 4, 4), dtype=jnp.complex64)
     state = state.at[0, 0, 0, 1, 0, :].set(1.0e-2 + 0.5e-2j)
     return grid, geom, params, state, TermConfig(nonlinear=1.0)
 

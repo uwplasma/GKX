@@ -244,7 +244,9 @@ def test_nonlinear_imex_parameter_gradient_rebuilds_operator() -> None:
 def test_nonlinear_imex_heat_flux_gradient_matches_finite_difference() -> None:
     """Implicit VJPs should differentiate a physical endpoint heat flux."""
 
-    grid_cfg = GridConfig(Nx=2, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
+    # The integration runs with ``compressed_real_fft=False``, and the
+    # full-complex bracket is defined on the two-sided ky axis only.
+    grid_cfg = GridConfig(Nx=2, Ny=4, Nz=4, Lx=6.0, Ly=6.0, ky_layout="full")
     cfg = CycloneBaseCase(grid=grid_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = ensure_flux_tube_geometry_data(
@@ -555,7 +557,9 @@ def test_prepared_nonlinear_arrays_accept_matched_dynamic_cache_and_params():
 def test_block_checkpointed_nonlinear_heat_flux_gradient_matches_finite_difference():
     """The bounded-memory adjoint must differentiate the physical heat flux."""
 
-    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
+    # The window is integrated with ``compressed_real_fft=False``, and that
+    # bracket refuses a grid that stores only the ky >= 0 half.
+    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0, ky_layout="full")
     cfg = CycloneBaseCase(grid=grid_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = ensure_flux_tube_geometry_data(
@@ -619,7 +623,7 @@ def test_prepared_nonlinear_arrays_differentiate_dynamic_geometry(
     geometry = ensure_flux_tube_geometry_data(analytic_geometry, grid.z)
     params = LinearParams()
     state = jnp.zeros(
-        (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64
+        (2, 2, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64
     )
     profile = 1.0e-4 * (1.0 + 0.2 * jnp.cos(grid.z))
     state = state.at[0, 0, 1, 0, :].set(profile + 0.3j * profile * jnp.sin(grid.z))
@@ -822,7 +826,7 @@ def test_nonlinear_adaptive_dt_includes_linear_frequency_cap():
     geom = SAlphaGeometry.from_config(cfg.geometry)
     geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
     params = LinearParams(tprim=3.0, fprim=1.0)
-    G = jnp.zeros((2, 4, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
+    G = jnp.zeros((2, 4, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz))
     terms = TermConfig(nonlinear=0.0)
 
     cfl = 0.5
@@ -889,7 +893,7 @@ def test_nonlinear_gamma_omega_use_previous_step_not_previous_diagnostic(method:
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams()
 
-    shape = (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+    shape = (2, 2, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz)
     base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
     G = jnp.asarray(base + 1.0j * (base + 1.0), dtype=jnp.complex64)
     terms = TermConfig(nonlinear=0.0)
@@ -964,7 +968,7 @@ def test_nonlinear_imex_diagnostics_match_operator_dtype_under_x64():
         grid = build_spectral_grid(cfg.grid)
         geom = SAlphaGeometry.from_config(cfg.geometry)
         params = LinearParams()
-        shape = (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+        shape = (2, 2, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz)
         base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
         G = jnp.asarray(base + 1.0j * (base + 1.0), dtype=jnp.complex64)
 
@@ -997,7 +1001,7 @@ def test_nonlinear_state_diagnostics_can_freeze_one_mode(method: str):
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams()
 
-    shape = (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+    shape = (2, 2, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz)
     base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
     G = jnp.asarray(base + 1.0j * (base + 1.0), dtype=jnp.complex64)
 
@@ -1027,7 +1031,11 @@ def test_linked_boundary_heat_flux_window_gradient_matches_finite_difference() -
     without it, not because the boundary needs it.
     """
 
-    grid_cfg = GridConfig(Nx=8, Ny=8, Nz=8, Lx=6.0, Ly=6.0, boundary="linked")
+    # The window runs with ``compressed_real_fft=False``, and the full-complex
+    # bracket only accepts a two-sided ky axis, so the deck declares one.
+    grid_cfg = GridConfig(
+        Nx=8, Ny=8, Nz=8, Lx=6.0, Ly=6.0, boundary="linked", ky_layout="full"
+    )
     cfg = CycloneBaseCase(grid=grid_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = ensure_flux_tube_geometry_data(
@@ -1227,7 +1235,10 @@ def test_adaptive_time_step_run_compiles_and_matches_the_eager_trajectory() -> N
         integrate_nonlinear_sheared_transport,
     )
 
-    grid_cfg = GridConfig(Nx=8, Ny=8, Nz=8, Lx=6.0, Ly=6.0)
+    # ``integrate_nonlinear_sheared_transport`` evaluates its bracket with full
+    # complex transforms, which need the two-sided ky axis. The subject here is
+    # the adaptive step under jit, so the layout is pinned rather than varied.
+    grid_cfg = GridConfig(Nx=8, Ny=8, Nz=8, Lx=6.0, Ly=6.0, ky_layout="full")
     cfg = CycloneBaseCase(grid=grid_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = ensure_flux_tube_geometry_data(
@@ -1762,7 +1773,7 @@ def _prepared_and_runtime_nonlinear_route_outputs(*, method: str, fixed_dt: bool
     params = LinearParams()
     key = jax.random.PRNGKey(20260918)
     state = 1.0e-3 * jax.random.normal(
-        key, (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+        key, (2, 2, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz)
     )
     options = dict(
         dt=0.01,
@@ -1830,7 +1841,7 @@ def test_nonlinear_route_reference_holds_for_value_and_gradient(x64: bool) -> No
         geom = SAlphaGeometry.from_config(cfg.geometry)
         params = LinearParams()
         direction = 1.0e-3 * jax.random.normal(
-            jax.random.PRNGKey(6), (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+            jax.random.PRNGKey(6), (2, 2, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz)
         )
         options = dict(
             dt=0.01,
