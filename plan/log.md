@@ -18783,3 +18783,31 @@ rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
 research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
+
+## 2026-09-22 - SOLVAX-DIRECT (plan G.2), step 1 and start of step 2; branch research/solvax-direct-20260922 (paused)
+
+Baseline:
+- GKX SHA: f9485f044 (origin/main, 2.3.0)
+- companion SHAs: SOLVAX 7b8ca55 (origin/main, 0.25.0), DKX 91e0582c (read-only)
+- source/test/tool files and lines: unchanged; one research script added
+- relevant existing gate: plan section 5.1 L4/L5 adoption gate (rewritten 2026-09-19)
+
+Scope:
+- intended change: inventory SOLVAX's direct/preconditioner routes; assemble the operators GKX solves (shift-invert `A - sigma I`, implicit/IMEX `I - dt A`, implicit streaming, collisions) as exact CSR; benchmark sparse direct (MUMPS, SuperLU, cuDSS if a GPU is free) against Krylov + `pr3-cm`; land a jit-compatible SOLVAX sparse-direct solve with a factor-reusing adjoint only if it wins
+- non-goals: no GKX `src/` change, no SOLVAX release
+- prospective acceptance and rollback criteria: section 5.1 gate (reproducible cost reduction at unchanged certification)
+
+Changes:
+- files/functions removed, merged, or added: `plan/research/2026-09-22-solvax-direct/operators.py` (assembly by moment-graph probing + Curtis-Powell-Reid compression, Kronecker column grouping, complex verification, structure stats)
+- public/schema behavior: none
+
+Evidence:
+- focused tests: none (research script only)
+- physics/mathematics/numerics gates: on the c24 case (Nz,Nl,Nm)=(24,8,16), n=3072, ky=0.3, the compressed `A` matches GKX's operator to 3.9e-16 (complex random probes) with 432 products against 3072 for column sampling; pattern probing must use a zero threshold, because the phi-to-streaming coupling reaches 1e-10 relative at high Laguerre index and a 1e-13 threshold dropped 12,216 entries (error 7.6e-12)
+- CPU/NVIDIA measurements: c24 structure, `A`: nnz 247,160 (80.5/row, max 221), RCM bandwidth 650; `A_S`: 170,496 (55.5/row); `A_C` (nu=0.01): 10,176 (3.3/row), z-local, RCM bandwidth 15. No factorization timings yet. office GPUs were both in use by other lanes (18:07), so no cuDSS run.
+- values, tolerances, residuals, uncertainty: PyMUMPS 0.4.0 builds on macOS arm64 against MacPorts MUMPS 5.6.2/MPICH with the classic linker; SOLVAX `SpluFactorization(backend="mumps")` then agrees with SuperLU on a test matrix
+
+Outcome:
+- accepted, rejected, or partial: partial (paused by the maintainer)
+- remaining blocker: none technical; laptop disk was full (56 MiB free) for part of the session
+- next task: steps 2-4 in the PR #<this PR> handoff
