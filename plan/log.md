@@ -18783,3 +18783,45 @@ rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
 research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
+
+## 2026-09-22 - PERF-ADJ / ADJ-HALF (G.2, F.6), branch perf/adjoint-window (paused)
+
+Baseline:
+- GKX SHA: f9485f044 (main at 2.3.0)
+- companion SHAs: none; JAX/JAXLIB 0.10.2, Python 3.11, x64, XLA:CPU, 14-core laptop
+- source/test/tool files and lines: no source change yet; harnesses in
+  `plan/research/scripts/2026-09-22-perf-adj/`
+- relevant existing gate: #264 window compile cache; #266 comment 5755930872 (half 1.28x slower)
+
+Scope:
+- intended change: find and remove the half-layout adjoint-window penalty; cut adjoint time/memory
+- non-goals: flipping the ky layout default (PERF-LAYOUT)
+- prospective acceptance and rollback criteria: A/B/A/B win at bitwise (or stated-tolerance) value and gradient
+
+Changes:
+- none to `src/`; two measurement scripts added
+
+Evidence (host load average 25-44 throughout: timings are indicative only; ratios repeated 2-4x):
+- Cyclone `runtime_cyclone_nonlinear.toml`, 16x16x(Nz 24, ntheta wins), Nl4/Nm8, rk3, 6-step window,
+  steady medians: e2e value_and_grad full 1.23 s, half 1.93 s; window VJP alone (cache fixed)
+  full 1.35 s / half 1.72 s; **window forward alone full 0.27 s / half 1.36 s (5x)**; host cache prep
+  under JVP 0.01-0.04 s (negligible). Temp bytes: VJP full 169 MB / half 119 MB; fwd 101 / 63 MB.
+  Values and gradients agree between layouts to the last digit printed.
+- Single differentiable RHS: half 6-9 ms vs full 9-13 ms (half faster, as expected). One RK3 step
+  (3 RHS): **half 110-890 ms vs full 29-64 ms**. So the loss is not in the RHS, the FFTs, or the
+  backward pass as such: composing RHS evaluations in one XLA module blows up on the half layout.
+- HLO of the half RK3 step: 3x the multiplies/broadcasts of full (2150 vs 480) with identical FFT
+  counts; the linear-RHS fusion appears 3-4 times with identical operands (fusion duplication,
+  recompute into several consumers). On full, the Hermitian projector `to_full(to_half(.))` is a
+  concatenate that forces each stage state to materialize; on half it is the identity, so nothing does.
+- `lax.optimization_barrier` on the projector and on the RHS output: bitwise-identical state,
+  helps (half step ~100-250 ms) but does not close the gap to full. Root cause inside the fused
+  RHS composition not yet pinned.
+- RHS VJP alone is ~10x its forward on both layouts (full 76-124 ms vs 9-13 ms): the general
+  adjoint-cost target after the half fix.
+
+Outcome:
+- partial (paused by maintainer). Diagnosis narrowed to XLA fusion duplication in the half-layout
+  multi-stage step; no fix landed.
+- remaining blocker: per-op profile of the half RK3 step (xprof installed in the scratch venv).
+- next task: see the PR Handoff.
