@@ -1896,3 +1896,190 @@ needs an alternative allocation before its pilot.
   [1643f0e7](https://github.com/uwplasma/GKX/blob/1643f0e72a6310068b3387cceb94e39922020597/plan.md),
   [29e559e0](https://github.com/uwplasma/GKX/blob/29e559e0/plan.md),
   [635f6454](https://github.com/uwplasma/GKX/blob/635f6454/plan.md)).
+
+## Appendix R — plan text retained verbatim from main `f9485f044`
+
+The 2026-09-21 priorities refresh rewrote these lines. They are kept here word
+for word, grouped under the heading they sat beneath, so the plan remains a
+complete handoff: the status notes, merge records and ordering decisions below
+are history that later sections build on. Where they disagree with the body
+above, the body is current and this appendix is the record of what was decided
+then.
+
+### R · from “GKX research plan”
+
+**Authoritative execution plan, consolidated 2026-09-06.** Baseline: main
+[a99dac89](https://github.com/uwplasma/GKX/commit/a99dac898334414d31733f6d286bd4c36983702e)
+(2.0.0 plus #193/#195). This document supersedes the roadmaps proposed in
+[#198](https://github.com/uwplasma/GKX/pull/198),
+[#203](https://github.com/uwplasma/GKX/pull/203),
+[#204](https://github.com/uwplasma/GKX/pull/204) and
+[#205](https://github.com/uwplasma/GKX/pull/205); their measurements, audits
+and reasoning are kept in [plan/baseline](plan/baseline/),
+[plan/research](plan/research/) and [plan/log.md](plan/log.md). No other
+roadmap is active. This plan changes no solver, test, data or release.
+
+**Status 2026-09-12:** main carries this authoritative plan: #206 merged as
+`e6fb735e9`, followed by status correction #221 (`2333d6a4f`). This file is the
+execution authority, not an open proposal waiting for #206 to land.
+
+The repair backlog largely landed, but **Phase 0.1's rate migration is not
+complete** (§0.1 item 4). Merged: #197, #199, #207, #215, #210, then #218
+(consolidating #213/#214/#216/#217) and #219 (consolidating #209/#211, and
+carrying #196/#200/#201/#208). Closed as superseded: #202, and the six retired by
+those consolidations. #212 merged as `c0c818361` after 41 successful checks and
+one skipped check. Three benchmark parameter comparisons treated optional
+values as numbers; the exact-optional/numeric repair at `ce5ffe657` passed the
+actual failing CI selections and CPU/GPU checks recorded in the log. Reference-rate
+conversion/provenance and deprecated-key migration remain separate open gates.
+#223 subsequently merged as `5f4cea140` with 41 successful / one skipped check;
+#224 merged as `d8c0139e8`; #225 merged as `52b8dd693`, both with green checks.
+#226 targets main and includes the remaining spectral/sharding repair and compact
+scatter consolidation. Its failing sharded-RHS check must pass before merge.
+No release is authorized by these maintenance merges.
+
+**Parallel checkpoint, 2026-09-12:** independent nonzonal three-field algebra,
+fixed-window AR(1) uncertainty, and conservative refinement-admission tests are
+implemented; these are partial gates, not completed EM0, statistics or velocity
+validation. See the reproducible [handoff](plan/log.md#2026-09-12--parallel-independent-validation-gates).
+The next order is:
+
+1. Merge maintenance/validation changes only after their own required checks.
+2. The matched GX Nl=24 discriminator finished: GX shares the ~24.7% growth
+   change to Nl=32 (§0.5). Inspect common truncation/closure and mode identity,
+   then register a residual-qualified next rung; neither rung is converged.
+3. Repair periodic kz hypercollisions and the corresponding spectral
+   preconditioner in a separate numerical PR. Regenerate affected periodic QA
+   transport results before promoting them; linked parity is not invalidated
+   by this periodic-only RHS defect.
+4. Close EM0's geometry/FLR normalization and weighted free-energy identities,
+   then EM1 waves. The new B=1 algebra oracle alone is not EM validation.
+5. Calibrate causal stopping on correlated/drifting traces before tuning shorter
+   production windows. Fixed-window coverage does not certify repeated stopping.
+
+No new experimental lane or broad nonlinear campaign is introduced here.
+
+**Review checkpoint, 2026-09-13:** an independent read-only review
+([research note](plan/research/2026-09-13_solver_velocity_throughput_review.md),
+scripts and logs beside it) measured the rejected shift-invert pilot on its
+exact assembled operator, re-read the existing GX Nl24/Nl32 outputs, and
+counted the nonlinear step's HLO operations. It changes the order of work
+inside items 2 and 3 above and inside Phase 5, not the phases themselves:
+the exact sparse route and a size ladder come before any preconditioner
+change (§5.1 L1–L6); the Nl swing is a stationary truncated eigenmode with a
+non-decaying Laguerre spectrum, so drift ablations and a Laguerre sink come
+before another resolution rung (§0.5); and an op-name HLO ledger, batched
+linked-chain FFTs and the ky ≥ 0 layout come before scatter micro-work or
+sharding (§5.3 N0–N7; once-per-step Hermitian completion was measured and
+rejected in #231).
+
+**Handoff queue, 2026-09-13 (execution resumed; updated 2026-09-14).** #226
+merged normally as `06606e404`; #227 merged as `578b97074` after a fresh green
+run on its updated head. The results of the first queue batch land together
+through one merge chain in which each branch merges its predecessor (§14
+rule 9): #228 plan → #230 Q1 → #231 Q4 → #229 Q5 → #232 Q2 → #233 Q12 →
+#234 Q3 → the queue-update PR (#235). The second batch landed as #236 Q7, #238
+Q8 and the chain #237 Q6 → #239 Q13; Q16–Q21 were added from their results
+and from the comparison codes installed on 2026-09-14 (§2.4). **Finalized 2026-09-15:** the paused lanes
+landed as #240 (Q14), #242 (Q15), #243 (Q9), #244 (Q17) and #245 (Q20), and GKX 2.1.0
+was released from the merged tree; the research-grade milestone is now 2.2.0 (§1.2). Work continues in the order below; each row
+is one PR from a fresh worktree off `origin/main`. Rows marked *parallel*
+may run concurrently; the others wait for the named dependency. The #228 PR
+body carries the same queue with per-row entry points, commands, gates and
+the repository rules an agent must follow.
+
+### R · from “GKX research plan”
+
+This branch no longer carries a README rewrite. `main`'s README has since taken
+the corrections that mattered (the capability table, the Cite section, the demo's
+resolution, the prepare paragraph, the CONTRIBUTING link), so the conflict was
+resolved in `main`'s favour. Shortening the README remains open as 0.3.1 and is
+separate work.
+
+An independent agent should be able to resume from this file alone: every
+phase has numbered steps with an owner, an entry point, an exit condition, the
+ledger rows it produces and its cost. Read §0 first, then the lowest open
+phase.
+
+### R · from “0. How to use this plan”
+
+1. Read §1 (destination), §2 (what is true today) and §3 (how evidence is
+   produced and gated). Everything after that is the queue.
+2. Take the lowest phase with an unmet exit. Within a phase, take the lowest
+   unmet numbered step. Do not start a later phase's expensive campaign while a
+   cheaper earlier gate is open, except where a step is marked *parallel*.
+
+### R · from “0. How to use this plan”
+
+5. After each step, append one entry to [plan/log.md](plan/log.md): commit,
+   environment, exact command, inputs and reference hashes, result, failed or
+   skipped checks, elapsed time, artifact location, next decision. For remote
+   jobs also host, directory, PID and last verified state. Unknown is not
+   finished.
+
+### R · from “2. Current truth at a99dac89”
+
+## 2. Current truth at a99dac89
+
+### R · from “2.3 Open PR dispositions (Phase 0 executes these)”
+
+### 2.3 Open PR dispositions (Phase 0 executes these)
+
+### R · from “3.4 Statistics module and protocol”
+
+`src/gkx/diagnostics/statistics.py`, extending `diagnostics/saturation.py`
+and consumed by stopping, cross-code comparison and optimization acceptance.
+Defaults and their sources are in the
+[statistics report](plan/research/2026-09-06_saturation_statistics.md).
+
+1. Pre-register in the input: ε_rel, α=0.05, N_τ, T_min, T_max, checkpoint
+   spacing. Nothing is tuned after seeing Q(t).
+2. Sample Q_s, Γ_s, Π_s per species and per field channel at Δt_s ≈ 0.2 τ_int.
+3. Transient cut by MSER-5 on batch-of-5 means; a cut in the second half is
+   invalid and extends the run by 10%. Cross-check Geweke |z|<2 and
+   Heidelberger–Welch.
+4. τ_int by Sokal window (C=5) and by batch means; flag if they differ by 2×.
+5. Require T_avg ≥ 50 τ_int and T_min = 300 a/c_s.
+6. Batches of max(⌊√n⌋, 5τ_int) samples with ≥20 batches; choose the largest
+   count whose lag-1 batch correlation is below its standard error; apply the
+   lag-1 (BMBC) correction.
+7. Report mean ± t_{K−1,0.975}·SE with ESS and T_avg/τ_int.
+8. Stationarity: split halves differ by < 2 pooled SE; trend slope × T_avg
+   < SE.
+9. Multivariate stop on (Q_i, Q_e, Γ) with the Vats–Flegal–Jones bound
+   (minESS at ε=0.3, α=0.05: 171 for p=1, 209 for p=2).
+10. Precision stop: 95% half-width ≤ 5% of |mean|; absolute floor near zero.
+11. Rules checked at 10% increments of n and not before n*.
+12. Persistence over two consecutive checkpoints.
+13. Near marginality (skewness>1 or Hurst>0.5) fit a log-link ARMA and
+    forecast the required T; report "unconverged" if orders disagree.
+14. Output JSON: cut, both τ_int, ESS, mESS, CI, tests passed, T_max hit.
+    Never a bare mean.
+
+### R · from “3.3 Ladder”
+
+| **EM4** finite-β stellarator | 1. Freeze one nested-surface W7-X equilibrium, flux tube and profiles; check geometry against an independent interface. 2. Frozen-geometry β scan with kinetic electrons and both magnetic fields; then one self-consistent finite-pressure VMEX equilibrium; record which β and which geometry derivatives changed. 3. Linear modes against stella or GENE on the same equilibrium; GX as a moment-method control where qualified. 4. One stationary nonlinear point, neighboring field line, parallel-domain refinement. 5. Global EUTERPE/GENE-3D results motivate scope checks only. | linear: reproducible full-EM stellarator modes with qualified geometry. nonlinear: one point with declared uncertainty, reported without a parity claim | stella/GENE self-run (5); no published local nonlinear EM stellarator benchmark exists | linear yes; nonlinear point reported |
+
+### R · from “4.2 Contribution A — adjoint linear and quasilinear optimization through VMEX in stellarator geometry (under one GPU-day)”
+
+No differentiable GK code has been run in stellarator geometry; the only
+gradient-based nonlinear stellarator optimization used SPSA.
+
+### R · from “5.3 Algorithm experiments, in order”
+
+### 5.3 Algorithm experiments, in order
+
+### R · from “7.4 README”
+
+The current 270 lines are the ceiling. Order: pitch → figure → install →
+
+### R · from “12. Parked, with entry triggers”
+
+| Nonlinear EM AD at scale | EM5 linear/QL derivatives published and a ≥100-GPU allocation |
+
+### R · from “14. Working rules”
+
+5. Remote jobs: unknown is not finished; check before launching; never
+   duplicate an unverified campaign; record host, directory, PID and last
+   verified state.
+
