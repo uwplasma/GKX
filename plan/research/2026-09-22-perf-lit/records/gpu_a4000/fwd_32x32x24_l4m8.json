@@ -1,0 +1,736 @@
+{
+ "argv": [
+  "forward",
+  "--nx",
+  "32",
+  "--ny",
+  "32",
+  "--nz",
+  "24",
+  "--nl",
+  "4",
+  "--nm",
+  "8",
+  "--repeats",
+  "7",
+  "--trace-dir",
+  "~/perflit_gpu/trace_fwd_32x32x24_l4m8",
+  "--label",
+  "fwd_32x32x24_l4m8",
+  "--out",
+  "~/perflit_gpu/fwd_32x32x24_l4m8.json"
+ ],
+ "command": "forward",
+ "derived": {
+  "bracket_s_estimate": 0.0010295600077370182,
+  "step_over_rhs": 2.282192714768927
+ },
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   22.1767578125,
+   19.00732421875,
+   18.57763671875
+  ],
+  "loadavg_start": [
+   22.69921875,
+   18.9404296875,
+   18.55078125
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "graphs": {
+  "fields": {
+   "argument_bytes": 8680500,
+   "compile_s": 0.2681614309985889,
+   "device_peak_bytes": 78392064,
+   "first_call_s": 0.0036809559969697148,
+   "generated_code_bytes": 0,
+   "hlo": {
+    "concatenate": 0,
+    "constant_bytes": 92,
+    "copy": 0,
+    "fft": 0,
+    "fft_shapes": [],
+    "fused_interior_bytes": 0,
+    "gather": 0,
+    "materialized_bytes": 0,
+    "scatter": 0,
+    "transpose": 0
+   },
+   "host_peak_bytes": 1057112064,
+   "lower_s": 0.07425384400994517,
+   "output_bytes": 196608,
+   "temp_bytes": 504880,
+   "warm_median_s": 0.0011646979983197525,
+   "warm_s": [
+    0.0024542860046494752,
+    0.0011902480036951602,
+    0.00124493200564757,
+    0.0011646979983197525,
+    0.0010904019873123616,
+    0.001106501993490383,
+    0.001096302003134042
+   ]
+  },
+  "hermitian_projector": {
+   "argument_bytes": 6291456,
+   "compile_s": 0.0766170169954421,
+   "device_peak_bytes": 78392064,
+   "first_call_s": 0.0011178739950992167,
+   "generated_code_bytes": 1760,
+   "hlo": {
+    "concatenate": 1,
+    "constant_bytes": 128,
+    "copy": 0,
+    "fft": 0,
+    "fft_shapes": [],
+    "fused_interior_bytes": 0,
+    "gather": 1,
+    "materialized_bytes": 6291456,
+    "scatter": 0,
+    "transpose": 0
+   },
+   "host_peak_bytes": 1215197184,
+   "lower_s": 0.010062250992632471,
+   "output_bytes": 6291456,
+   "temp_bytes": 0,
+   "warm_median_s": 0.0002615280100144446,
+   "warm_s": [
+    0.00029169600747991353,
+    0.00020827099797315896,
+    0.00017921801190823317,
+    0.0002116980031132698,
+    0.0002615280100144446,
+    0.0004786180070368573,
+    0.0003567509993445128
+   ]
+  },
+  "linear_rhs": {
+   "argument_bytes": 7485940,
+   "compile_s": 1.5805791019956814,
+   "device_peak_bytes": 78392064,
+   "first_call_s": 0.03152889299963135,
+   "generated_code_bytes": 5728,
+   "hlo": {
+    "concatenate": 15,
+    "constant_bytes": 4772,
+    "copy": 0,
+    "fft": 10,
+    "fft_shapes": [
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "IFFT"
+     }
+    ],
+    "fused_interior_bytes": 28404252,
+    "gather": 14,
+    "materialized_bytes": 2838528,
+    "scatter": 0,
+    "transpose": 0
+   },
+   "host_peak_bytes": 1143795712,
+   "lower_s": 0.3470352290023584,
+   "output_bytes": 6291456,
+   "temp_bytes": 4615728,
+   "warm_median_s": 0.0012755880015902221,
+   "warm_s": [
+    0.001661506001255475,
+    0.0013010300026508048,
+    0.0011220230080652982,
+    0.0012215539900353178,
+    0.0014834210014669225,
+    0.0012755880015902221,
+    0.0012201380013721064
+   ]
+  },
+  "nonlinear_rhs": {
+   "argument_bytes": 7981720,
+   "compile_s": 1.6341098600096302,
+   "device_peak_bytes": 78392064,
+   "first_call_s": 0.012932791010825895,
+   "generated_code_bytes": 5856,
+   "hlo": {
+    "concatenate": 20,
+    "constant_bytes": 4956,
+    "copy": 0,
+    "fft": 15,
+    "fft_shapes": [
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "c64",
+      "out_shape": "2,1,5,1,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "c64",
+      "out_shape": "2,1,5,8,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "f32",
+      "out_shape": "2,1,5,1,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "f32",
+      "out_shape": "2,1,5,8,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32,32",
+      "out_dtype": "c64",
+      "out_shape": "1,5,8,24,32,17",
+      "type": "RFFT"
+     }
+    ],
+    "fused_interior_bytes": 36268572,
+    "gather": 17,
+    "materialized_bytes": 27967488,
+    "scatter": 0,
+    "transpose": 16
+   },
+   "host_peak_bytes": 1215197184,
+   "lower_s": 0.32715039399045054,
+   "output_bytes": 6291456,
+   "temp_bytes": 17892912,
+   "warm_median_s": 0.0023051480093272403,
+   "warm_s": [
+    0.002695322997169569,
+    0.002297897997777909,
+    0.002276800005347468,
+    0.0023051480093272403,
+    0.002249323995783925,
+    0.002376200005528517,
+    0.002316573998541571
+   ]
+  },
+  "rk3_step": {
+   "argument_bytes": 7981720,
+   "compile_s": 3.023359178987448,
+   "device_peak_bytes": 109811712,
+   "first_call_s": 0.01980201600235887,
+   "generated_code_bytes": 5856,
+   "hlo": {
+    "concatenate": 90,
+    "constant_bytes": 6108,
+    "copy": 0,
+    "fft": 45,
+    "fft_shapes": [
+     {
+      "count": 3,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "c64",
+      "out_shape": "2,1,5,1,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "c64",
+      "out_shape": "2,1,5,8,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "f32",
+      "out_shape": "2,1,5,1,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "f32",
+      "out_shape": "2,1,5,8,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32,32",
+      "out_dtype": "c64",
+      "out_shape": "1,5,8,24,32,17",
+      "type": "RFFT"
+     }
+    ],
+    "fused_interior_bytes": 288245532,
+    "gather": 81,
+    "materialized_bytes": 130166784,
+    "scatter": 0,
+    "transpose": 46
+   },
+   "host_peak_bytes": 1357934592,
+   "lower_s": 0.43882017201394774,
+   "output_bytes": 6291456,
+   "temp_bytes": 40234288,
+   "warm_median_s": 0.005260791993350722,
+   "warm_s": [
+    0.005765648995293304,
+    0.005783581989817321,
+    0.005680222995579243,
+    0.005260791993350722,
+    0.0048343539965571836,
+    0.00515512700076215,
+    0.0049479560111649334
+   ]
+  }
+ },
+ "host_peak_bytes": 1370939392,
+ "label": "fwd_32x32x24_l4m8",
+ "method": "rk3",
+ "precision": "32",
+ "process_s": 16.996167364995927,
+ "shape": [
+  1,
+  4,
+  8,
+  32,
+  32,
+  24
+ ],
+ "state_bytes": 6291456,
+ "trace_top_ops": {
+  "by_category": {
+   "concatenate": {
+    "frac": 0.10359817203652066,
+    "us": 1846.8500000000001
+   },
+   "dispatch_memcpy": {
+    "frac": 0.042511683928447605,
+    "us": 757.8579999999998
+   },
+   "fft": {
+    "frac": 0.15606310005714905,
+    "us": 2782.1449999999995
+   },
+   "gather_scatter": {
+    "frac": 0.0013427346260054662,
+    "us": 23.937
+   },
+   "matmul": {
+    "frac": 0.08717184422864754,
+    "us": 1554.017
+   },
+   "other_fusion": {
+    "frac": 0.48430688371807057,
+    "us": 8633.764
+   },
+   "reduce": {
+    "frac": 0.0015509014053473342,
+    "us": 27.64800000000001
+   },
+   "transpose_copy": {
+    "frac": 0.12345467999981151,
+    "us": 2200.833
+   }
+  },
+  "calls": 5,
+  "scope": "device",
+  "top": [
+   {
+    "count": 5,
+    "frac": 0.2200288639983773,
+    "name": "loop_add_fusion_3",
+    "us": 3922.4660000000003
+   },
+   {
+    "count": 15,
+    "frac": 0.06994493537125486,
+    "name": "loop_add_fusion_2",
+    "us": 1246.912
+   },
+   {
+    "count": 5,
+    "frac": 0.060470794610348357,
+    "name": "loop_slice_fusion_1",
+    "us": 1078.016
+   },
+   {
+    "count": 5,
+    "frac": 0.05414344446855261,
+    "name": "loop_slice_fusion_2",
+    "us": 965.218
+   },
+   {
+    "count": 105,
+    "frac": 0.04882663718039302,
+    "name": "void scal_kernel_val<float2, float2>(cublasScalParamsVal<float2, float2>)",
+    "us": 870.435
+   },
+   {
+    "count": 5,
+    "frac": 0.04352755576188368,
+    "name": "input_concatenate_fusion_1",
+    "us": 775.9680000000001
+   },
+   {
+    "count": 30,
+    "frac": 0.042836583412669674,
+    "name": "void vector_fft_c2r<32u, EPT<32u>, 32u, 16u, (padding_t)14, (twiddle_t)0, (loadstore_modifier_t)3, (layout_t)0, unsigned",
+    "us": 763.6499999999999
+   },
+   {
+    "count": 30,
+    "frac": 0.04035944922357324,
+    "name": "MemcpyD2D",
+    "us": 719.4899999999999
+   },
+   {
+    "count": 30,
+    "frac": 0.0400271452621555,
+    "name": "void vector_fft<32u, EPT<8u>, 32u, 10u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned int, ",
+    "us": 713.5659999999998
+   },
+   {
+    "count": 30,
+    "frac": 0.038345207048254525,
+    "name": "void scal_kernel_val<float, float>(cublasScalParamsVal<float, float>)",
+    "us": 683.5820000000001
+   },
+   {
+    "count": 15,
+    "frac": 0.03722157763381179,
+    "name": "wrapped_transpose",
+    "us": 663.5509999999999
+   },
+   {
+    "count": 15,
+    "frac": 0.028526645908701,
+    "name": "loop_subtract_fusion",
+    "us": 508.54600000000005
+   },
+   {
+    "count": 15,
+    "frac": 0.0279109524109763,
+    "name": "input_concatenate_fusion_16",
+    "us": 497.57
+   },
+   {
+    "count": 15,
+    "frac": 0.02043102808024568,
+    "name": "void vector_fft_r2c<32u, EPT<32u>, 32u, 16u, (padding_t)14, (twiddle_t)0, (loadstore_modifier_t)3, (layout_t)0, unsigned",
+    "us": 364.22499999999997
+   },
+   {
+    "count": 15,
+    "frac": 0.02002883034166277,
+    "name": "input_transpose_fusion_6",
+    "us": 357.055
+   },
+   {
+    "count": 15,
+    "frac": 0.01760223731887919,
+    "name": "input_transpose_fusion_7",
+    "us": 313.796
+   },
+   {
+    "count": 15,
+    "frac": 0.015246772152793403,
+    "name": "void regular_fft<32u, EPT<8u>, 32u, 16u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)1, unsigned int,",
+    "us": 271.805
+   },
+   {
+    "count": 5,
+    "frac": 0.013405245017516073,
+    "name": "input_transpose_fusion_11",
+    "us": 238.976
+   },
+   {
+    "count": 15,
+    "frac": 0.012915147159496699,
+    "name": "loop_concatenate_fusion_2",
+    "us": 230.23899999999998
+   },
+   {
+    "count": 5,
+    "frac": 0.01281821582166249,
+    "name": "input_transpose_fusion_10",
+    "us": 228.511
+   },
+   {
+    "count": 30,
+    "frac": 0.012107554294450927,
+    "name": "void regular_fft<24u, EPT<4u, 6u>, 16u, 21u, (padding_t)14, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned",
+    "us": 215.842
+   },
+   {
+    "count": 5,
+    "frac": 0.009578252197839551,
+    "name": "input_transpose_fusion_9",
+    "us": 170.75199999999998
+   },
+   {
+    "count": 5,
+    "frac": 0.007391968116769949,
+    "name": "loop_slice_fusion",
+    "us": 131.777
+   },
+   {
+    "count": 15,
+    "frac": 0.006953925977217095,
+    "name": "input_transpose_fusion_8",
+    "us": 123.96799999999999
+   },
+   {
+    "count": 30,
+    "frac": 0.006549933213859475,
+    "name": "void regular_fft<96u, EPT<4u, 6u>, 8u, 10u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned i",
+    "us": 116.766
+   },
+   {
+    "count": 30,
+    "frac": 0.006359828871313104,
+    "name": "void regular_fft<48u, EPT<6u, 8u>, 16u, 12u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned ",
+    "us": 113.37700000000002
+   },
+   {
+    "count": 30,
+    "frac": 0.00634013969331553,
+    "name": "void regular_fft<72u, EPT<8u, 9u>, 16u, 12u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned ",
+    "us": 113.02600000000002
+   },
+   {
+    "count": 30,
+    "frac": 0.00616411507634577,
+    "name": "void regular_fft<120u, EPT<10u, 12u>, 8u, 16u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigne",
+    "us": 109.88800000000003
+   },
+   {
+    "count": 5,
+    "frac": 0.005683048436724142,
+    "name": "loop_negate_real_fusion_1",
+    "us": 101.312
+   },
+   {
+    "count": 15,
+    "frac": 0.005413794720518007,
+    "name": "loop_multiply_fusion_8",
+    "us": 96.51199999999999
+   }
+  ],
+  "total_us": 17827.052000000003
+ }
+}

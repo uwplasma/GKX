@@ -1,0 +1,167 @@
+{
+ "argv": [
+  "fftfloor",
+  "--forward-json",
+  "~/perflit_gpu/fwd_32x32x24_l8m16.json",
+  "--repeats",
+  "7",
+  "--label",
+  "fft_32x32x24_l8m16",
+  "--out",
+  "~/perflit_gpu/fft_32x32x24_l8m16.json"
+ ],
+ "command": "fftfloor",
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   17.0302734375,
+   18.04345703125,
+   18.26904296875
+  ],
+  "loadavg_start": [
+   17.0302734375,
+   18.04345703125,
+   18.26904296875
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "fft_fraction_upper": 0.29228133836804304,
+ "fft_seconds_per_rhs": 0.002905132991145365,
+ "host_peak_bytes": 844038144,
+ "label": "fft_32x32x24_l8m16",
+ "precision": "32",
+ "process_s": 1.7406982029933715,
+ "rhs_seconds": 0.00993950899282936,
+ "rows": [
+  {
+   "count": 1,
+   "fft_length": "120",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,1,120",
+   "type": "FFT",
+   "warm_median_s": 9.17089928407222e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "72",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,1,72",
+   "type": "FFT",
+   "warm_median_s": 0.00011659500887617469
+  },
+  {
+   "count": 1,
+   "fft_length": "48",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,16,48",
+   "type": "FFT",
+   "warm_median_s": 9.847299952525645e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "24",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,175,24",
+   "type": "FFT",
+   "warm_median_s": 0.0001657069951761514
+  },
+  {
+   "count": 1,
+   "fft_length": "96",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,4,96",
+   "type": "FFT",
+   "warm_median_s": 0.00010451000707689673
+  },
+  {
+   "count": 1,
+   "fft_length": "32",
+   "out_dtype": "c64",
+   "out_shape": "2,1,11,1,24,17,32",
+   "type": "IFFT",
+   "warm_median_s": 9.943099576048553e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "32",
+   "out_dtype": "c64",
+   "out_shape": "2,1,11,16,24,17,32",
+   "type": "IFFT",
+   "warm_median_s": 0.0005167519993847236
+  },
+  {
+   "count": 1,
+   "fft_length": "120",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,1,120",
+   "type": "IFFT",
+   "warm_median_s": 8.992000948637724e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "72",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,1,72",
+   "type": "IFFT",
+   "warm_median_s": 8.7342006736435e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "48",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,16,48",
+   "type": "IFFT",
+   "warm_median_s": 8.623699250165373e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "24",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,175,24",
+   "type": "IFFT",
+   "warm_median_s": 0.00021995199494995177
+  },
+  {
+   "count": 1,
+   "fft_length": "96",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,4,96",
+   "type": "IFFT",
+   "warm_median_s": 8.753000292927027e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "32",
+   "out_dtype": "f32",
+   "out_shape": "2,1,11,1,24,32,32",
+   "type": "IRFFT",
+   "warm_median_s": 9.596098971087486e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "32",
+   "out_dtype": "f32",
+   "out_shape": "2,1,11,16,24,32,32",
+   "type": "IRFFT",
+   "warm_median_s": 0.0007111289887689054
+  },
+  {
+   "count": 1,
+   "fft_length": "32,32",
+   "out_dtype": "c64",
+   "out_shape": "1,11,16,24,32,17",
+   "type": "RFFT",
+   "warm_median_s": 0.0003338850074214861
+  }
+ ],
+ "source": "~/perflit_gpu/fwd_32x32x24_l8m16.json"
+}

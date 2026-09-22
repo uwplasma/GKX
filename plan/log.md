@@ -18783,3 +18783,32 @@ rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
 research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
+
+## 2026-09-22 - PERF-LIT profile and literature survey (research/perf-lit-20260922), paused
+
+Baseline:
+- GKX SHA: `f9485f044` (2.3.0), clean `src/`.
+- companion SHAs: SOLVAX 0.22.0 on the office GPU venv, 0.24.0 locally; JAX/jaxlib 0.10.2.
+- source/test/tool files and lines: unchanged (docs/research only).
+- relevant existing gate: none; research lane (plan.md G.2 PERF-LIT).
+
+Scope:
+- intended change: measured profile of the forward step, the window adjoint and the linear eigen derivative; literature and software survey tied to the measured bottlenecks; ranked implementation list.
+- non-goals: any `src/` change.
+- prospective acceptance and rollback criteria: every number is a committed record or marked derived/UNVERIFIED.
+
+Changes:
+- added `plan/research/2026-09-22-perf-lit/` (`profile_perf_lit.py`, `run_profile.sh`, `run_pr3.sh`, `summarize.py`, `records/`).
+- public/schema behavior: none.
+
+Evidence:
+- focused tests: none (no code path changed).
+- CPU/NVIDIA measurements (one RTX A4000, complex64, shipped linked Cyclone nonlinear deck, random masked state, `records/gpu_a4000/`):
+  - RK3 step 5.26 / 18.0 / 15.6 / 69.4 ms at 32x32x24 Nl4/Nm8, 32x32x24 Nl8/Nm16, 64x64x24 Nl4/Nm8, 64x64x24 Nl8/Nm16; device time fft 12-16%, concatenate 10-25%, other elementwise fusions 35-48%, cuBLAS 8-9%; 21-42x the state materialized per step; field solve flat at 1.17-1.32 ms.
+  - `nonlinear_heat_flux_window` value+gradient (tprim scale and nine geometry arrays), 16x16x16 Nl4/Nm8 rk3: 256 steps 0.941 s with block checkpointing vs 0.435 s without (2.16x; temp 61 MB vs 4,425 MB), value 0.148 s; 1024 steps 3.72 s (7.0x value, temp 103 MB; unchecked runs out of memory at 16.5 GiB); 32x32x24 256 steps 5.21 s (5.4x value, temp 359 MB). Compile 20-26 s per gradient graph.
+  - dense growth-rate value+gradient: 0.033 s (n=144), 0.99 s (n=1,536), 2.83 s (n=3,072).
+  - office CPU single-thread x64 `adaptive` control at Q28 `d96`: 33,915 operator applications, 30.5 s, 1.29 GB max RSS (`records/cpu_pr3/A1_adaptive.txt`).
+- values, tolerances, residuals, uncertainty: checkpointed and unchecked gradients agree to the printed 6 digits at 256 steps. Host load 13-23 on 36 cores (office) during the GPU runs.
+
+Outcome:
+- partial (paused by the maintainer). Main finding: the window adjoint rematerializes every step inside each checkpoint block, costing a second forward recompute (measured 2.16x vs unchecked); on the GPU the step is traffic-bound (concatenate plus elementwise), not FFT-bound; re-saturation per evaluation, not the gradient, dominates the VMEX objective at 32x32x24 (derived). Not run: `PHASE=extra` (inner-remat-off variants, complex128 comparison, source-mapped traces), the `pr3-cm` `d96` arm, CPU forward/window rows, the adaptive-eigen row on an idle host. The ranked list and survey are in the PR body.

@@ -1,0 +1,116 @@
+{
+ "argv": [
+  "window",
+  "--nx",
+  "32",
+  "--ny",
+  "32",
+  "--nz",
+  "24",
+  "--steps",
+  "256",
+  "--checkpoint",
+  "block",
+  "--repeats",
+  "3",
+  "--label",
+  "win32_256",
+  "--out",
+  "~/perflit_gpu/win32_256.json"
+ ],
+ "arms": {
+  "value": {
+   "argument_bytes": 868,
+   "compile_s": 3.248502439004369,
+   "device_peak_bytes": 86740736,
+   "first_call_s": 1.0151925109967124,
+   "generated_code_bytes": 6546020,
+   "host_peak_bytes": 1288437760,
+   "lower_s": 1.2105496389995096,
+   "objective": 1.6842852346599102e-05,
+   "output_bytes": 4,
+   "temp_bytes": 49936504,
+   "warm_median_s": 0.9685174899932463,
+   "warm_s": [
+    0.9685853769915411,
+    0.9681550150125986,
+    0.9685174899932463
+   ]
+  },
+  "value_and_grad_block": {
+   "argument_bytes": 868,
+   "compile_s": 18.513590929011116,
+   "device_peak_bytes": 378898944,
+   "first_call_s": 5.3255071849998785,
+   "generated_code_bytes": 6557088,
+   "grad_geometry_norm": 1.0726508662628476e-05,
+   "grad_tprim_scale": 3.232131712138653e-05,
+   "host_peak_bytes": 1958371328,
+   "lower_s": 7.485033313991153,
+   "objective": 1.6842852346599102e-05,
+   "output_bytes": 960,
+   "temp_bytes": 359261312,
+   "warm_median_s": 5.211171475006267,
+   "warm_s": [
+    5.1813932259974536,
+    5.334337419990334,
+    5.211171475006267
+   ]
+  }
+ },
+ "command": "window",
+ "derived": {
+  "value_and_grad_block_over_value": 5.380565171871709
+ },
+ "dt": 0.03890582546591759,
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   19.33203125,
+   16.9755859375,
+   17.67041015625
+  ],
+  "loadavg_start": [
+   16.537109375,
+   16.53369140625,
+   17.61376953125
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "geometry_fields": [
+  "bmag_profile",
+  "bgrad_profile",
+  "gds2_profile",
+  "cv_profile",
+  "gb_profile",
+  "cv0_profile",
+  "gb0_profile",
+  "jacobian_profile",
+  "grho_profile"
+ ],
+ "geometry_values": 216,
+ "host_peak_bytes": 1958371328,
+ "label": "win32_256",
+ "method": "rk3",
+ "precision": "32",
+ "process_s": 63.44441844300309,
+ "shape": [
+  1,
+  4,
+  8,
+  32,
+  32,
+  24
+ ],
+ "state_bytes": 6291456,
+ "steps": 256
+}
