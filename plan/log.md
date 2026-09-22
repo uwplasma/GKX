@@ -19300,3 +19300,19 @@ restored verbatim in Appendix R, grouped under their original headings, and a
 line-by-line check confirms every non-blank line of main's `plan.md` is
 present. #268's README rewrite was not carried because it removed pinned
 claim-scope sentences asserted by the stellarator scope tests.
+
+## 2026-09-22 — plan revision, second pass: GKX 3 contract re-adopted
+
+Baseline: GKX `main` `f9485f044` (2.3.0). Measured tracked inventory: src 187
+Python files / 93,344 lines; tests 81 / 94,057; tools 96 / 78,901; benchmarks
+23 files; examples 81 files; docs 824 PNG/JSON/CSV; plan 712 files; 2,107
+files, 24.6 MB. The 2026-08-30 plan (#163) targets were src ≤45 files and
+≤45,000 lines, tests ≤30 files and ≤35,000 lines, zero `tools/` Python.
+
+Added section G to `plan.md`: re-adopts the 2026-08-30 contract (archived
+verbatim at `plan/archive/2026-08-30-gkx3-modernization-plan.md`, the
+maintainer's copy; it differs from the #163 blob in 14 lines), revises the
+README target to a VMEX-style showcase with proof tests and GX-failure cases,
+and opens lanes PERF-LIT, PERF-ADJ, PERF-LAYOUT, SOLVAX-DIRECT,
+README-SHOWCASE, DOCS-CURRENT, SLIM-TOOLS, EXAMPLES-GALLERY, ARCH-A and
+TEST-CONSOLIDATE. No plan line removed.

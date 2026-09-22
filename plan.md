@@ -1,5 +1,109 @@
 # GKX research plan
 
+## Revision 2026-09-22 (second pass): back to the GKX 3 contract, plus the performance and derivative program
+
+This section is now the entry point. The "Final revision and entry point
+(2026-09-22)" section below (F.1–F.7) stays in force for its validation
+matrix, VMEX example build order and stable IDs; where the two disagree on
+priority or repository organization, this section wins. Nothing was deleted.
+
+### G.1 Why this revision
+
+The authoritative plan of 2026-08-30, "GKX 3.0 research-grade modernization
+plan" (merged in #163, replaced on 2026-09-06), set hard architecture targets,
+a target source tree, a proof-oriented test design, a documentation and
+example layout, and an agent operating contract. It is archived verbatim at
+[plan/archive/2026-08-30-gkx3-modernization-plan.md](plan/archive/2026-08-30-gkx3-modernization-plan.md).
+The plans written after 2026-09-06 concentrated on validation and performance
+evidence and stopped enforcing those targets, and the repository grew:
+
+| Measure (tracked files on `main` at 2.3.0) | Now | 2026-08-30 target (§2.4 there) |
+|---|---:|---:|
+| `src/gkx/**/*.py` files | 187 | ≤ 45 |
+| Installable Python source lines | 93,344 | ≤ 45,000 |
+| `tests/**/*.py` files | 81 | ≤ 30 |
+| Test Python lines | 94,057 | ≤ 35,000 |
+| `tools/` Python files / lines | 96 / 78,901 | 0 / 0 |
+| `benchmarks/` files | 23 (12 Python) | validation inputs only, under `benchmarks/cases/` |
+| `examples/` files | 81 (36 Python) | 10–12 numbered groups (§19.1 there) |
+| `docs/` PNG/JSON/CSV files | 824 | generated evidence out of Git (§21.3 there) |
+| `plan/` files | 712 | plan, log and archive |
+| All tracked files / bytes | 2,107 / 24.6 MB | clone below 20 MB |
+
+The current architecture manifest only gates against regression from a legacy
+allowance; a green check does not mean the target topology is near.
+
+**Decision.** The 2026-08-30 contract is re-adopted for architecture (§2.4, §8,
+§8.1, §8.2 there), JAX and performance practice (§16), tests (§17), documentation
+(§18), examples (§19), packaging and hygiene (§21, including the eight `scripts/`
+commands of §21.4) and the agent contract (§25). Its physical scope (§2.1–§2.3)
+is unchanged. One target is revised at the maintainer's request:
+
+- **README (replaces §18.4 there).** Model it on VMEX's README: short,
+  self-contained sections, each with one purpose and, where it helps, one
+  figure; no long prose. It must show (a) the main capabilities with figures
+  from validated cases, (b) analytic-limit and exact-identity checks
+  ("proof tests": Landau damping roots, conservation, self-adjointness,
+  H-theorem, Spitzer–Härm, Rosenbluth–Hinton once added), with the measured
+  error, and (c) cases where GX cannot give the right answer and GKX does, with
+  the reason (for example, GX's linked end-damping launch cap leaves Hermite
+  moments m ≥ 42 undamped when Nz·Nl·Nm exceeds 65,535, §3.7; GX has no
+  derivatives; GX needs an NVIDIA GPU). Every such claim links its evidence and
+  respects the pinned claim-scope sentences. About 300 lines, like VMEX's.
+
+### G.2 Performance and derivative program
+
+Goal: make GKX's forward runs and, above all, its derivatives faster and
+leaner in memory, so the VMEX turbulence optimization (F.5) runs in minutes
+per stage on one GPU. Rules come from §16 of the archived plan: measure before
+changing, separate compile from execution, report peak device and host memory,
+compare at matched accuracy, and log negative results.
+
+Known facts at 2.3.0:
+
+- Adjoint window: O(√N) block checkpointing already cuts memory from 7.8 GB
+  to 148 MB (1024 steps, 16×16×16); #264 removed per-call recompilation.
+- Half ky layout: forward 0.54–0.60x of full, adjoint window 1.28x, sharded
+  runs refused for odd `Nyc`.
+- `pr3-cm` shift-invert is apply-bound and costs 1.68–2.27x the `adaptive`
+  route (#261); `hermite-line` stalls, and Ruiz equilibration does not help.
+- SOLVAX already owns Krylov methods, block-Thomas, tridiagonal solves,
+  chunked Jacobians and equilibration; DKX uses SOLVAX's compression route to a
+  sparse direct factorization (MUMPS, with SuperLU measured 20x slower there).
+
+Lanes (stable IDs):
+
+| ID | Work | Output |
+|---|---|---|
+| PERF-LIT | Literature and code survey of preconditioners and direct/iterative solvers for Hermite–Laguerre flux-tube gyrokinetics and their adjoints (GENE/PETSc–SLEPc, CGYRO and stella implicit schemes, GX, response-matrix streaming, velocity-space multigrid, block preconditioners), and of routes into JAX: XLA FFI bindings to MUMPS, SuperLU_DIST, cuDSS/cuSOLVER; `jax.lax.custom_linear_solve` and implicit-function adjoints; checkpointing schedules (revolve); mixed precision. Paired with a measured profile of GKX's forward step and adjoint window (time and peak memory, CPU and one A4000). | `plan/research/` report ranking options by measured bottleneck, expected gain and effort; which part belongs in SOLVAX |
+| PERF-ADJ | ADJ-HALF (F.6) plus adjoint memory and time: profile the window VJP, remove the half-layout penalty, test remat and donation choices | GKX PR with before/after at matched values and gradients |
+| PERF-LAYOUT | #266 split and SHARD-PAD (F.6) | GKX PR(s) |
+| SOLVAX-DIRECT | Sparse direct and preconditioner backends reachable from JAX with implicit adjoints, benchmarked on GKX-assembled operators (shift-invert eigenproblems, implicit streaming §5.4, IMEX collision solves) | SOLVAX PR(s) and a GKX consumer PR when a measured win exists |
+
+Implementation lanes beyond these are opened from PERF-LIT's ranked list.
+
+### G.3 Repository and documentation lanes
+
+| ID | Work | Constraint |
+|---|---|---|
+| README-SHOWCASE | README per G.1 with figures and proof-test results | Pinned claim-scope sentences unchanged; figures regenerable by one command |
+| DOCS-CURRENT | Bring `docs/` up to date with 2.3.0; generate the verification matrix from the ledger (DOCS-LEDGER); remove stale pages; start the §18.1 information architecture | No claim beyond the ledger |
+| SLIM-TOOLS | Map every file in `tools/` and `benchmarks/` to its users (CI, tests, docs, other tools); delete what nothing uses; move what CI needs into the `scripts/` commands of §21.4 | Each deletion shows zero references; CI stays green |
+| EXAMPLES-GALLERY | Reorganize `examples/` into the numbered gallery of §19.1 in the §19.2 style (no argparse, no `main()`, no `__main__`) with smoke tests | Keep the pinned QA example evidence reachable; update tests that name moved paths |
+| ARCH-A | Source contraction toward §8 of the archived plan, one owner per equation and algorithm | Opened after SLIM-TOOLS; every PR reports the §8.2 gates |
+| TEST-CONSOLIDATE | Tests toward the §17.3 topology, keeping E1–E3 proof tests | Opened after ARCH-A starts |
+
+### G.4 Order of work
+
+1. Now, in parallel: PERF-LIT, PERF-ADJ, PERF-LAYOUT, SOLVAX-DIRECT (inventory
+   and benchmark first), README-SHOWCASE, DOCS-CURRENT, SLIM-TOOLS (tranche 1:
+   zero-reference deletions plus the full map), EXAMPLES-GALLERY.
+2. From PERF-LIT's ranking: the top implementation lanes, in GKX or SOLVAX.
+3. ARCH-A and TEST-CONSOLIDATE, measured against the §2.4 targets.
+4. OPT-VMEX-NL (F.5) once PERF-ADJ lands; the validation lanes of F.6 continue
+   on the office host as the GPU is free.
+5. Citation DOI last, after the 2.4.0 exits (F.7 step 8).
+
 ## Final revision and entry point (2026-09-22)
 
 This section is the entry point for anyone picking up GKX. It supersedes the
