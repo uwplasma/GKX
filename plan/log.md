@@ -18783,3 +18783,32 @@ rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
 research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
+
+## 2026-09-22 - README-SHOWCASE (G.3), branch docs/readme-showcase (paused, partial)
+
+Baseline:
+- GKX SHA: f9485f044 (2.3.0)
+- companion SHAs: none; GX source read at bc2fe552 for the defect claims
+- source/test/tool files and lines: unchanged; adds scripts/figures.py and scripts/figures.toml
+- relevant existing gate: tests/release/test_release_gates.py (README phrases, parity table), tests/release/test_evidence_ledger.py, tests/validation/stellarator/test_vmex_qa_transport_optimization.py
+
+Scope:
+- intended change: README per plan.md G.1 (VMEX-style sections, capability figures, proof-test table, evidence-backed GX comparison); one config-driven generator for every new README figure (archived plan section 21.4 `scripts/figures.py`)
+- non-goals: docs/*.rst, examples/, tools/, benchmarks/, the ledger
+- acceptance: pinned claim-scope sentences unchanged; figures regenerable by one command; README numbers recomputed from tracked artifacts
+
+Changes:
+- added scripts/figures.py, scripts/figures.toml; docs/_static/readme/readme_{linear,nonlinear,gx_defects}.{png,json} (243 KiB PNG total)
+- README.md not yet rewritten
+
+Evidence:
+- `JAX_ENABLE_X64=true PYTHONPATH=src:. python scripts/figures.py linear nonlinear gx_defects` (JAX 0.10.2) recomputes Cyclone 6.83%/1.59%, W7-X 0.265%/0.296%, KBM 20.0%/11.1% (same as the ledger rows), W7-X eigenfunction overlap 0.9999999994
+- GX end-damping clamp: Cyclone ky 0.55, Nl32/Nm96 (294,912 indices, 77.8% undamped): GKX - GX(shipped kernel) = +3.97% in gamma; GKX - GX(grid-stride loop) = -0.23%; values from the 2026-09-05 entries above
+- GX float32 kz-hypercollision coefficient at p = 20: finite to Nm 76, zero for Nm 77-85, NaN from Nm 86 (numpy float32, matches the logged Nm 96 NaN run)
+- proof-test numbers, measured but not yet plotted: collision conservation 2.2e-16 (max over sugama/improved_sugama/coulomb), self-adjointness 3.4e-17, H-theorem 4.0e-17, Coulomb Appendix C coefficients 2.2e-16, collisionless Hermite max|Re| 1.6e-14, Laguerre round trip (Nl <= 64) 2.1e-12, Gauss-Laguerre moments 4.7e-14, Spitzer-Harm gamma_E 0.11-0.61%, Landau 0.246%/0.064% (Te/Ti 1) and 0.004%/0.004% (Te/Ti 10)
+- not verified, so not to be claimed: "a freshly built GX does not reproduce its own KAW reference" (docs/verification_matrix.rst prose only; no log entry or artifact)
+
+Outcome:
+- partial; paused by the maintainer before the README rewrite
+- remaining blocker: none technical; the proof_tests builder takes ~4 CPU-minutes (Landau nu-scan)
+- next task: build proof_tests, rewrite README.md (~300 lines), run the README gates, open for review
