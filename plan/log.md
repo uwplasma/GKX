@@ -19120,3 +19120,36 @@ the successful-budget control now uses `max(1e-8, 10*eps)`. The deliberately
 starved budget stays at `1e-14`; no production tolerance or refusal is changed.
 After integration, all six status cases pass in float32 and float64; 177
 release/ledger/sink tests, Ruff and the measured architecture gate also pass.
+
+## 2026-09-22 - PERF-LAYOUT: #266 split (deck key and interchange, default unchanged) - `perf/ky-layout-deck-key`
+
+Paused by the maintainer mid-lane; this entry is the handoff.
+
+Baseline:
+- GKX SHA: `f9485f044` (main, 2.3.0); #266 head `32fc4452d` merged in, conflicts only in `plan/log.md` (both histories kept) and the architecture manifest (remeasured).
+- companion SHAs: none.
+- source/test/tool files and lines: src 93830, tests 94358, tools 78904 (manifest baselines set to these measured counts).
+- relevant existing gate: #266's `run_identity.sh` (Q9 `rhs_identity.py`/`gate_traj.py`, `new_full` vs `main`, must be bitwise in f32 and x64).
+
+Scope:
+- intended change: land #266's `[grid] ky_layout` deck key, restart interchange, NetCDF pair-weight division and fixed-kx pair fold, and `PreparedSimulation.state_shape`, with `GridConfig.ky_layout` defaulting to `"full"` (plan F.2). Docs describe `"half"` as an opt-in: RK3 step 0.54x/0.60x, checkpointed window gradient 1.28x.
+- non-goals: flipping the default (waits for SHARD-PAD and ADJ-HALF); editing plan.md (the plan revision owns the Q10 row, so #266's plan.md edit is not carried).
+- acceptance: default runs bitwise equal to main in f32 and x64; #266's failing tests pass.
+
+Changes:
+- `src/gkx/config.py` default `"full"`; module/docs/README wording; `tools/profiling/profile_runtime_kernels.py` help text.
+- `tests/unit/core/test_core_ky_layout.py`: new `test_the_default_deck_builds_the_two_sided_axis`; the Nyquist-weight test names `ky_layout="half"`.
+- `tests/tools/profiling/test_nonlinear_gradient_evidence_contracts.py::test_gradient_window_nz_override_wins_over_shipped_ntheta` sizes ky from the grid's layout (failed on #266).
+- `plan/research/scripts/2026-09-22-ky-layout-split/run_identity_default.sh`: the same gate with no layout pin (proves the shipped default, not only the opt-out).
+
+Evidence:
+- focused tests: `tests/unit/core/test_core_ky_layout.py` + `tests/unit/solvers/test_linear_krylov_core.py`, x64, jax 0.10.2: 329 passed. Ruff check/format clean; architecture manifest checker passes.
+- identity (office host CPU, jax 0.10.2, pinned-full arm of `run_identity.sh`, ref `f9485f044` vs new `2055c9649`): RHS/VJP f32 58/58 bitwise, `max_rel = 0`. The f32 trajectory, both x64 arms and the whole unpinned `run_identity_default.sh` gate were stopped by the pause and are NOT verified. A first local attempt was void (disk full, truncated npz) and was deleted.
+- CPU/NVIDIA measurements: none new; numbers quoted in docs are #266's.
+
+Outcome:
+- partial. Draft PR open; CI not polled.
+- remaining blocker: identity gate completion (3 of 4 pinned comparisons, all 4 unpinned).
+- next task: finish the identity gates; then SHARD-PAD (below).
+
+SHARD-PAD (not started in code; branch `perf/ky-shard-pad` created at `2055c9649`, no commits). Findings: JAX 0.10.2 refuses an uneven `NamedSharding` on `device_put` and on `jit` in/out shardings (checked with 2 fake CPU devices, extent 5), but a slice or `with_sharding_constraint` to an uneven extent inside `jit` is accepted. The runtime ky route runs the whole explicit scan as `jax.jit(run_raw)(prepared.G0)` in `_run_explicit_diagnostic_scan_and_finalize` (`src/gkx/solvers_nonlinear_diagnostics.py`), so the proposed scheme is: pass a ky `NamedSharding` down as an explicit `state_sharding` option (`integrate_nonlinear_explicit_diagnostics_state` -> `_integrate_nonlinear_explicit_diagnostics_impl` -> `integrate_explicit_nonlinear_diagnostics_impl` -> `_run_explicit_scan_components`), zero-pad `prepared.G0` on ky to a multiple of the device count and `device_put` it evenly, and slice the pad off as the first op inside the jit (then `with_sharding_constraint` on the sliced state). Pad rows never reach an operator, weight or diagnostic, and a divisible extent keeps today's path. The final-state route (`integrate_nonlinear_from_config`) and IMEX need either the same hook or an explicit refusal. Rejected alternative: widening the half state to the two-sided axis for the sharded arm, because its resolved diagnostics and fields would come back with `Ny` rows, not `Nyc`.

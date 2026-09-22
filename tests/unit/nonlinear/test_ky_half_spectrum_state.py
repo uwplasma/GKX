@@ -96,9 +96,9 @@ def _grid_cfg(ny: int, nx: int = 8, nz: int = 8) -> GridConfig:
     """A deck for the layout comparisons, with the two-sided axis named.
 
     Every test below builds both layouts from one config and compares them, so
-    neither arm may come from a default: after the flip the default is the
-    half axis, and a "full" arm that silently became half would turn each of
-    these comparisons into a tautology that passes.
+    neither arm may come from a default: if the default ever changes, a
+    "full" arm that silently became half would turn each of these comparisons
+    into a tautology that passes.
     """
 
     return GridConfig(Nx=nx, Ny=ny, Nz=nz, Lx=62.8, Ly=62.8, ky_layout=FULL)

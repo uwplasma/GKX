@@ -414,7 +414,7 @@ reason = "Fused stellarator_tables and stellarator_reduced; reduce by deduplicat
 
 [[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
-# 1076 -> 1154: the ky >= 0 default (plan 5.3 N3, Q10). A half-spectrum
+# 1076 -> 1154: the ky >= 0 layout as a deck key (plan 5.3 N3, Q10). A half-spectrum
 # diagnostic carries the conjugate partner's share at weight 2 in the families
 # reduced with the Hermitian pair weight, so the writer needs to know which
 # family each published prefix belongs to (_KY_WEIGHTING_BY_PREFIX) and divides
@@ -441,7 +441,7 @@ path = "artifacts/io.py"
 # subsumes the other, so the count is the sum rather than new surface.
 # 1096 -> 1099: recording which scan points were seeded from a neighbour.
 # A warm-started number that does not say so is not reproducible.
-# 1099 -> 1151: the ky >= 0 default (plan 5.3 N3, Q10). The restart loader and
+# 1099 -> 1151: the ky >= 0 layout as a deck key (plan 5.3 N3, Q10). The restart loader and
 # writer take the layout the caller wants and the two-sided length ``ny_full``,
 # because a half-spectrum file and GKX's packed interchange order share one
 # size and a header-free reader cannot tell them apart; the diagnostics
@@ -1102,7 +1102,7 @@ recursive = true
 # fewer RHS evaluations only once the CFL controller is on, and the
 # velocity-resolution ladder that shows (12, 24) eleven times closer than
 # (24, 12) at the same Nl*Nm. Target unchanged.
-# 92943 -> 93430: Q10, the ky >= 0 default (plan 5.3 N3). The layout moves
+# 92943 -> 93430: Q10, the ky >= 0 layout as a deck key (plan 5.3 N3). The layout moves
 # onto GridConfig so every grid a run builds reads it; the restart loaders and
 # writers take the layout and the two-sided length ``ny_full``; the NetCDF
 # writer divides the Hermitian pair weight back out of the families that carry
@@ -1132,7 +1132,9 @@ recursive = true
 # sizes it. Target unchanged.
 # 93054 -> 93344: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
-baseline = 93344
+# 93344 -> 93830: #266 split (PERF-LAYOUT): ky_layout deck key, restart
+# interchange and NetCDF pair-fold fixes, default unchanged. Measured.
+baseline = 93830
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1429,13 +1431,12 @@ recursive = true
 # assert that every shipped deck still chooses its own dt, which is what
 # keeps the pairing change inert for them; the resolution one pins the pair,
 # its Nl*Nm budget and its Hermite-over-Laguerre balance separately.
-# 92533 -> 92793: Q10, the ky >= 0 default (plan 5.3 N3). Tests that built a
+# 92533 -> 92793: Q10, the ky >= 0 layout as a deck key (plan 5.3 N3). Tests that built a
 # state of ``Ny`` rows now read the grid's stored row count; tests whose subject
 # is the two-sided axis (the end-damping and cover-mask mirrors, which name an
 # unrelated positive row on a half axis) ask for ``ky_layout = "full"`` by
 # name; the runtime and artifact suites gain the layout round trips; and one
-# test pins the Nyquist weight on the grid a deck builds when it names no
-# layout, which is the path the default takes.
+# test pins the Nyquist weight on the grid a ky_layout = "half" deck builds.
 # 92533 -> 92814 (queue row Q31). Nine cases in the new Laguerre-sink contract
 # file plus the evidence-ledger rows that register Q31's predictions. The cases
 # are what the contract is: that the |k_z| branch carries no Laguerre index at
@@ -1456,7 +1457,9 @@ recursive = true
 # and checks dense fallback plus explicit refusal in float32 and float64.
 # 92979 -> 94057: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
-baseline = 94057
+# 94057 -> 94358: #266 split (PERF-LAYOUT): ky_layout deck key, restart
+# interchange and NetCDF pair-fold fixes, default unchanged. Measured.
+baseline = 94358
 target = 35000
 
 [[line_budget_policy.counts]]

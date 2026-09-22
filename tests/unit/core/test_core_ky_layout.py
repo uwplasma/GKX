@@ -1,16 +1,15 @@
 """Contract tests for the ``ky`` axis layout (plan 5.3 N3).
 
-GKX evolves the ``ky >= 0`` rows by default, as GX, stella and GS2 do, and keeps
-the two-sided axis -- which rebuilds its negative half by the reality condition
--- as an explicit opt-out.  The conversion between the two layouts is one rule
+GKX evolves the two-sided axis by default -- rebuilding its negative half by the
+reality condition -- and evolves the ``ky >= 0`` rows, as GX, stella and GS2
+do, when a deck opts in with ``[grid] ky_layout = "half"``.  The conversion between the two layouts is one rule
 with one owner instead of five hand-written copies, and the rule is pinned here
 where it is easy to get wrong: at ``ky = 0``, at the Nyquist row, and on an odd
 ``Ny`` where ``Nyc`` does not determine ``Ny``.
 
 Most tests here pin the contract itself and name the layout they build.
-``test_the_default_grid_weights_its_nyquist_row_once`` is the exception: it
-builds its grid with no layout named, so it checks the rule on the axis a run
-actually takes.
+``test_the_default_deck_builds_the_two_sided_axis`` is the exception: it builds
+its grid with no layout named, so it pins which axis a run takes by default.
 """
 
 from __future__ import annotations
