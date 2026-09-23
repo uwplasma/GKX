@@ -18812,3 +18812,35 @@ Outcome:
 - partial; paused by the maintainer
 - remaining blocker: 20 pages not yet edited; audit findings recorded in the PR handoff
 - next task: resume the page audit from the PR handoff list, then sphinx -W and the release checkers
+
+## 2026-09-22 - DOCS-CURRENT (G.3) and DOCS-LEDGER (F.6), branch docs/current-2.3 (resumed, complete)
+
+Baseline:
+- GKX SHA: f9485f044 (release 2.3.0); branch head before this entry ae72991c1
+- companion SHAs: none
+- source/test/tool files and lines: docs/*.rst 33 pages, 20,831 lines at baseline
+- relevant existing gate: sphinx -W (docs-and-packaging); repo-hygiene manifests; REQUIRED_PHRASES; tests/release/test_evidence_ledger.py
+
+Scope:
+- intended change: every docs page current with 2.3.0; verification matrix generated from the ledger; machine paths out of the tracked docs/_static JSONs named in the paused handoff; the four generator-less docs/_static JSONs decided
+- non-goals: README (the showcase lane owns it), src/, page renames or moves (after SLIM-TOOLS rewires checkers that read page paths)
+- prospective acceptance and rollback criteria: sphinx -W clean; linkcheck with no 404/410; repo-hygiene step reproduced green; pinned phrases kept; regenerated release JSONs match the commit
+
+Changes:
+- 23 remaining pages audited against src/, tests/, docs/_static and plan/log.md and rewritten; docs rst 20,831 -> 12,865 lines over 31 pages
+- [Lin99], [Dorland00], [Jenko00] cited again (the three sphinx -W failures on the paused head)
+- tools/artifacts/build_tem_validation_artifacts.py records checkout-relative paths; tem_branch_parity_audit.json and w7x_tem_extension_status.json regenerated (only path strings changed)
+- examples/theory_and_demos/differentiable_geometry_bridge.py records vmex/booz_xform_jax paths relative to their checkouts; its JSON and the generator-less vmec_boozer_parity_matrix.json scrubbed to match (numeric fingerprints unchanged; release_readiness.json content hash updated)
+- deleted eigensolver_cost_model.json, geometric_saturation_predictor.json, qa_transport_weight_scan.json, quasilinear_skill_audit.json: no page, test, manifest or ledger row references them and SLIM-TOOLS (#278) deletes their builders
+- test_python_lines 94057 -> 94082 and tool_python_lines 78901 -> 78908, measured
+
+Evidence:
+- sphinx -W -b html: 0 warnings (about 80 s on the laptop)
+- linkcheck: 18 broken, all 403 from AIP/SIAM/ACM/MDPI; 0 with 404/410
+- repo-hygiene step reproduced: ruff check/format, size, release-artifacts, version, architecture, parallel manifests, the four regenerated JSONs match the commit
+- pytest tests/release, benchmark contracts, QL guardrails, vmex QA scope, parallel artifacts, gradient evidence contracts: all passed; test_differentiable_geometry_objectives artifact subset: 18 passed
+
+Outcome:
+- complete for the page audit; PR #283 ready for review after CI
+- remaining blocker: (Nl, Nm) fallback text is correct only once #286 merges; tools/release paths in docs move to scripts/check.py once #278 merges
+- next task: merge origin/main after #278 and rewrite tools/release paths; see the PR handoff for items found outside docs
