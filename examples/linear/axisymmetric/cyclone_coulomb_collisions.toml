@@ -12,9 +12,12 @@ schema_version = 1
 #   "coulomb_finite_kperp"  gyrokinetic Coulomb           (Frei 2021, 3.47-3.50)
 #
 # Two constraints apply to the moment operators:
-#   * Nl * Nm must equal 8, the tabulated Hermite-Laguerre truncation.
+#   * (Nl, Nm) must be the tabulated (J+1, P+1) basis: (2, 4), or (3, 6) for
+#     the 18-moment finite-Larmor table. The transposed (4, 2) has the same
+#     moment count but pairs the coefficients with the wrong moments, and is
+#     refused.
 #   * They run on the fixed-step cached integrator, so solver = "time";
-#     the Krylov eigenvalue path does not carry them.
+#     the Krylov and explicit_time paths do not carry them and refuse them.
 
 [[species]]
 name = "ion"
@@ -102,8 +105,8 @@ nonlinear = 0.0
 
 [run]
 ky = 0.3
-Nl = 4
-Nm = 2
+Nl = 2
+Nm = 4
 solver = "time"
 
 [fit]

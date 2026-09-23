@@ -148,9 +148,9 @@ def test_integrate_linear_from_config_applies_selected_collision_operator():
 
     def evolve(name):
         time_cfg = dataclasses.replace(cfg.time, collision_operator=name)
-        # Nl * Nm must match the tabulated eight-moment drift-kinetic matrix.
+        # (Nl, Nm) must be the (J+1, P+1) basis of the drift-kinetic matrix.
         G = jnp.zeros(
-            (4, 2, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
+            (2, 4, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
         )
         G = G.at[0, 0, 1, 0, :].set(1.0e-3)
         return integrate_linear_from_config(G, grid, geom, params, time_cfg)[0]
@@ -168,26 +168,69 @@ def test_integrate_linear_from_config_applies_selected_collision_operator():
     assert jnp.all(jnp.isfinite(sugama)) and jnp.all(jnp.isfinite(improved))
 
 
-def test_integrate_linear_from_config_reports_moment_basis_mismatch():
-    """A basis the tabulated matrix cannot act on must fail with guidance."""
+def test_integrate_linear_from_config_requires_the_table_moment_basis():
+    """Only the table's (Nl, Nm) = (J+1, P+1) = (2, 4) may run.
 
-    grid_cfg = GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
+    The transposed (4, 2) has the right moment count, so without the check it
+    ran silently on the wrong moments (the state is packed m*Nl + l).
+    """
+
     cfg = CycloneBaseCase(
-        grid=grid_cfg,
-        time=TimeConfig(
-            t_max=0.2,
-            dt=0.1,
-            method="rk2",
-            collision_operator="sugama",
-        ),
+        grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0),
+        time=TimeConfig(t_max=0.1, dt=0.05, method="rk2", collision_operator="sugama"),
     )
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams(nu=0.05)
-    G = jnp.zeros((3, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128)
 
-    with pytest.raises(ValueError, match="8-moment"):
-        integrate_linear_from_config(G, grid, geom, params, cfg.time)
+    def run(nl, nm):
+        G = jnp.zeros((nl, nm, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), jnp.complex128)
+        G = G.at[0, 0, 1, 0, :].set(1.0e-3)
+        return integrate_linear_from_config(G, grid, geom, params, cfg.time)[0]
+
+    for nl, nm in ((3, 3), (4, 2)):
+        with pytest.raises(ValueError, match=r"8-moment basis \(Nl, Nm\) = \(2, 4\)"):
+            run(nl, nm)
+    with pytest.raises(ValueError, match="Set Nl=2, Nm=4"):
+        run(4, 2)
+    assert jnp.all(jnp.isfinite(run(2, 4)))
+
+
+def test_check_moment_basis_names_the_finite_wavelength_table_layout():
+    """Each shipped finite-Larmor table accepts only its own (J+1, P+1)."""
+
+    from gkx.operators.linear.collision_factory import collision_operator_from_config
+
+    species = {name: jnp.ones(1) for name in ("density", "mass", "temperature")}
+    check = runners._check_moment_basis_matches_operator
+    for (nl, nm), bad in (((2, 4), (4, 2)), ((3, 6), (6, 3))):
+        op = collision_operator_from_config(
+            "coulomb_finite_kperp", moments=nl * nm, **species
+        )
+        check(op, "coulomb_finite_kperp", jnp.zeros((nl, nm, 1, 1, 1)))
+        with pytest.raises(ValueError, match=f"Set Nl={nl}, Nm={nm}"):
+            check(op, "coulomb_finite_kperp", jnp.zeros(bad + (1, 1, 1)))
+
+
+def test_krylov_and_explicit_runtime_refuse_a_moment_collision_operator():
+    """Paths that cannot carry the operator must refuse, not run as LB."""
+
+    from gkx.config import RuntimeConfig, RuntimeSpeciesConfig
+    from gkx.runtime import run_runtime_linear
+
+    base = RuntimeConfig()
+    cfg = dataclasses.replace(
+        base,
+        grid=dataclasses.replace(base.grid, Nx=1, Ny=4, Nz=8, boundary="periodic"),
+        time=dataclasses.replace(base.time, collision_operator="sugama"),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+    )
+    for solver, path in (
+        ("krylov", "Krylov eigenvalue"),
+        ("explicit_time", "explicit"),
+    ):
+        with pytest.raises(NotImplementedError, match=path):
+            run_runtime_linear(cfg, ky_target=0.2, Nl=2, Nm=4, solver=solver)
 
 
 def test_config_collision_operator_rejects_unsupported_solver_paths(monkeypatch):

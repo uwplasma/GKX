@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 
 _COLLISION_MATRIX_DATA = "advanced_collision_six_moment.npy"
 _COLLISION_MATRIX_METADATA = "advanced_collision_six_moment.json"
+# ``(Nl, Nm) = (J+1, P+1)`` of the P=3, J=1 Appendix C truncation (Frei, Ernst
+# & Ricci 2022); the transposed (4, 2) would pair coefficients with wrong moments.
+DRIFT_KINETIC_MOMENT_LAYOUT: tuple[int, int] = (2, 4)
 
 # Every moment contraction here goes through _exact_einsum. An unpinned dot may be
 # lowered to TF32 on recent NVIDIA GPUs, which breaks the conservation identities
@@ -39,6 +42,8 @@ def _collision_matrix_bundle() -> tuple[np.ndarray, dict[str, Any]]:
     matrices = np.load(io.BytesIO(payload), allow_pickle=False)
     if list(matrices.shape) != metadata.get("shape"):
         raise ValueError("collision coefficient shape does not match metadata")
+    if (metadata.get("Nl"), metadata.get("Nm")) != DRIFT_KINETIC_MOMENT_LAYOUT:
+        raise ValueError("collision coefficient moment layout does not match metadata")
     return np.asarray(matrices), metadata
 
 

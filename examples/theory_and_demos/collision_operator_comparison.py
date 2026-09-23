@@ -40,10 +40,10 @@ from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.params import COLLISION_OPERATOR_NAMES, LinearParams
 from gkx.solvers_time_runners import integrate_linear_from_config
 
-# The drift-kinetic tables are the eight-moment truncation of the reference
-# papers, so the run must use Nl * Nm = 8.
-HERMITE_COUNT = 4
+# The drift-kinetic tables are the eight-moment P=3, J=1 truncation of the
+# reference papers, so the run must use (Nl, Nm) = (J+1, P+1) = (2, 4).
 LAGUERRE_COUNT = 2
+HERMITE_COUNT = 4
 # "none" and "lenard_bernstein" both keep the built-in diagonal term.
 MODELS = tuple(name for name in COLLISION_OPERATOR_NAMES if name != "none")
 
@@ -75,7 +75,7 @@ def run_case(model: str, collisionality: float, t_max: float = 2.0) -> dict:
     )
 
     state = jnp.zeros(
-        (HERMITE_COUNT, LAGUERRE_COUNT, grid.ky.size, grid.kx.size, grid.z.size),
+        (LAGUERRE_COUNT, HERMITE_COUNT, grid.ky.size, grid.kx.size, grid.z.size),
         dtype=jnp.complex128,
     )
     state = state.at[0, 0, 1, 0, :].set(1.0e-3)
@@ -162,7 +162,7 @@ if NU_SCAN:
 else:
     rows = [run_case(model, NU) for model in MODELS]
     width = max(len(model) for model in MODELS)
-    print(f"Cyclone ITG, nu = {NU}, (Nl, Nm) = ({HERMITE_COUNT}, {LAGUERRE_COUNT})\n")
+    print(f"Cyclone ITG, nu = {NU}, (Nl, Nm) = ({LAGUERRE_COUNT}, {HERMITE_COUNT})\n")
     print(f"{'collision_operator':<{width}}  {'growth rate':>12}  {'|G|':>14}")
     for row in rows:
         print(
