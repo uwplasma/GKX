@@ -262,7 +262,7 @@ def block_checkpoint_plan(
 
 
 def checkpointed_explicit_scan(
-    step: Callable[..., object],
+    step: Callable[..., Any],
     initial_carry: Any,
     indices: jnp.ndarray,
     *,
