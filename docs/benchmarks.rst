@@ -32,8 +32,8 @@ Drivers:
 
 .. code-block:: bash
 
-   python scripts/benchmarks/cyclone_linear_benchmark.py --outdir tools_out/cyclone_benchmark
-   python scripts/benchmarks/kbm_linear_comparison.py
+   python scripts/benchmark.py linear_benchmark cyclone --outdir tools_out/cyclone_benchmark
+   python scripts/benchmark.py linear_benchmark kbm
    gkx run --config benchmarks/cases/secondary_slab.toml
    python scripts/benchmarks/secondary_slab_workflow.py
 
@@ -44,7 +44,7 @@ contract test keeps the fit window tied to the deck's ``t_max``.
 
 The KBM driver plots the reviewed fixed-beta ``ky`` comparison table
 ``docs/_static/comparison/kbm_reference_candidates.csv``. Regenerate that table
-from a matched external output with ``scripts/comparison/compare_gx_kbm.py``.
+from a matched external output with ``scripts/comparison/compare_gx_kbm.py`` (retired; :ref:`retired-generators`).
 
 Regenerate the atlas figures with:
 
@@ -365,10 +365,10 @@ tiles. Their comparison figures are regenerable renders.
 - ``docs/_static/nonlinear_w7x_gate_summary.json``,
   ``docs/_static/nonlinear_hsx_gate_summary.json`` and
   ``docs/_static/nonlinear_kbm_gate_summary.json``: long-window nonlinear
-  lanes. Figures: ``scripts/comparison/make_reference_panels.py``.
+  lanes. Figures: ``scripts/comparison/make_reference_panels.py`` (retired; :ref:`retired-generators`).
 - KBM eigenfunction overlap on the tracked KBM candidate table, a
   branch-identity diagnostic. Figure:
-  ``scripts/artifacts/generate_linear_reference_overlays.py overlap-summary``.
+  ``scripts/artifacts/generate_linear_reference_overlays.py overlap-summary`` (retired; :ref:`retired-generators`).
   The raw mode-shape evidence is tracked as JSON gate reports and GKX traces
   under ``docs/_static/reference_modes/``, with frozen GX raw-mode bundles under
   ``docs/_static/comparison/reference_modes/``.

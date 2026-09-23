@@ -240,3 +240,108 @@ and 18,000 lines. This tranche is a relocation, not a contraction. The next
 tranches contract by package. Artifacts are the largest, and
 `build_linear_validation_artifacts.py` alone is 7,565 lines. Each deletion must
 clear the output-consumer check above.
+
+## Tranche 3 (branch `slim/scripts-3`)
+
+Base: `origin/chain/p0` at `f005418bf5756417d6a0b845c18ae192aab86d9a` (#293),
+where `scripts/` held 106 Python files and 78,277 lines and `tests/` 81 files
+and 94,628 lines. After: `scripts/` 61 files and 45,496 lines; `tests/` 80 files
+and 91,877 lines.
+
+**Rule applied.** A script stays if a CI step, a gate under `scripts/checks/`,
+a manifest a gate or test reads, an example, `scripts/figures.py`, the evidence
+ledger, `tools/benchmark_refresh_manifest.toml`, or a test of library or
+scientific behaviour needs it. Docs mentions, plan notes, provenance strings
+inside tracked JSONs, and tests that only exercised the script itself do not
+keep it. A deleted builder's tracked outputs stay under `docs/_static` as
+committed fixtures; every gate that read one reads it unchanged (the four
+JSONs the repo-hygiene step regenerates are byte-identical).
+
+**Recovery.** `git show f005418bf575:<path>` restores the file at its
+`scripts/` path, which is the path the docs commands use (the docs page
+`manuscript_figures.rst#retired-generators` says so, and each retired mention is
+marked). If that commit is not on `main` when this is read, the same file is on
+`main` at `29362737f96c` under its pre-tranche-2 path (last column), differing
+only in the path edits of tranche 2 and #293.
+
+**Kept on purpose, with the reason** (candidates for a later tranche):
+- `profiling/profile_nonlinear_adjoint_checkpointing.py`,
+  `profiling/profile_nonlinear_window_device_parity.py`: pinned by
+  `tests/tools/profiling/test_nonlinear_gradient_evidence_contracts.py`, which
+  exists because an earlier deletion left the autodiff page on literals.
+- `artifacts/build_linear_validation_artifacts.py`: the collision-table
+  generator of `src/gkx/data/*` (package data), the `collision-verification`
+  ledger row, the `figures` refresh jobs, and `scripts/figures.py`.
+- `comparison/{build_gx_parity_matrix,compare_gx_imported_linear,compare_gx_nonlinear,compare_gx_rhs_terms}.py`,
+  `artifacts/make_tables.py`, `artifacts/make_benchmark_atlas.py`: evidence
+  ledger generators and `benchmark_refresh_manifest.toml` jobs.
+- every `campaigns/` module: imported by `scripts/checks/` gates, by
+  `examples/theory_and_demos/differentiable_geometry_bridge.py`, or by tests
+  that pin campaign policy and claim scope (`test_vmex_qa_transport_optimization.py`).
+- `checks/`: the CI gates (11,904 lines). Reaching the 18,000-line target needs
+  these merged, not deleted.
+
+**Merged.** `benchmarks/{cyclone,etg,kinetic,tem}_linear_benchmark.py` and
+`benchmarks/kbm_linear_comparison.py` (394 lines) became
+`benchmarks/linear_benchmark.py <case>` (235 lines, one `CASES` table).
+Fingerprint: every solver and figure call the four drivers make (arguments,
+deck hash, ky arrays, output paths), recorded with the solver stubbed, is
+identical old vs new for each case with and without `--ky`; the KBM plot is
+byte-identical (sha256 `fe7f746e...`). The ledger row `L-lin-etg` now names
+`scripts/benchmarks/linear_benchmark.py etg`.
+
+**Pruned inside a kept file.** `build_linear_validation_artifacts.py`
+7,565 -> 5,155 lines: the docs-only subcommands `observed-order`, `kbm-branch`,
+`collision-response`, `collision-itg`, and 14 multiprecision helpers no
+remaining code called. `collision-verification` JSON and PNG and the
+`collision-table` array are byte-identical before and after (the array also
+equals the shipped `src/gkx/data/advanced_collision_six_moment.npy`).
+
+**Also removed:** `scripts/gkx_2_code_inventory.csv` (a stale snapshot nothing
+reads; `python scripts/check.py architecture inventory --csv-out` regenerates
+it), `tools/exact_state_lanes.office.toml` (read only by the deleted audit and
+its test), `tests/tools/comparison/test_exact_state_audit.py`.
+
+| Path | Lines | Users at `f005418bf575` | Disposition | Recovery |
+| --- | ---: | --- | --- | --- |
+| `scripts/artifacts/build_benchmark_parity_figure.py` | 266 | none | **deleted** | `f005418bf575` / `29362737f96c:tools/artifacts/build_benchmark_parity_figure.py` |
+| `scripts/artifacts/build_eigensolver_reach_figure.py` | 130 | none | **deleted** | `f005418bf575` / `29362737f96c:tools/artifacts/build_eigensolver_reach_figure.py` |
+| `scripts/artifacts/build_methods_figures.py` | 584 | manifest: package_architecture_manifest.toml; docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/build_methods_figures.py` |
+| `scripts/artifacts/build_nonlinear_validation_panels.py` | 679 | docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/build_nonlinear_validation_panels.py` |
+| `scripts/artifacts/build_nonlinear_window_fd_audit.py` | 583 | scripts: build_vmec_boozer_nonlinear_window_fd_audit.py; docs (1 pages) | **deleted**: script users deleted or edited here; docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/build_nonlinear_window_fd_audit.py` |
+| `scripts/artifacts/build_qi_branch_refinement_gate.py` | 329 | docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/build_qi_branch_refinement_gate.py` |
+| `scripts/artifacts/build_tem_validation_artifacts.py` | 683 | docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/build_tem_validation_artifacts.py` |
+| `scripts/artifacts/build_turbulence_hero.py` | 199 | tests: test_plotting.py | **deleted**: tests of this script only, removed | `f005418bf575` / `29362737f96c:tools/artifacts/build_turbulence_hero.py` |
+| `scripts/artifacts/build_vmec_boozer_aggregate_holdout_gate.py` | 803 | provenance field in 2 `docs/_static` files | **deleted** | `f005418bf575` / `29362737f96c:tools/artifacts/build_vmec_boozer_aggregate_holdout_gate.py` |
+| `scripts/artifacts/build_vmec_boozer_aggregate_objective_gate.py` | 1850 | tests: test_check_vmec_boozer_gates.py; provenance field in 2 `docs/_static` files | **deleted**: tests of this script only, removed | `f005418bf575` / `29362737f96c:tools/artifacts/build_vmec_boozer_aggregate_objective_gate.py` |
+| `scripts/artifacts/build_vmec_boozer_gradient_holdout_matrix.py` | 365 | none | **deleted** | `f005418bf575` / `29362737f96c:tools/artifacts/build_vmec_boozer_gradient_holdout_matrix.py` |
+| `scripts/artifacts/build_vmec_boozer_nonlinear_window_fd_audit.py` | 665 | docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/build_vmec_boozer_nonlinear_window_fd_audit.py` |
+| `scripts/artifacts/build_w7x_zonal_reference_artifacts.py` | 800 | tests: test_reference_comparison_tools.py; scripts: build_w7x_zonal_validation_artifacts.py; docs (2 pages) | **deleted**: tests of this script only, removed; script users deleted or edited here; docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/build_w7x_zonal_reference_artifacts.py` |
+| `scripts/artifacts/build_w7x_zonal_validation_artifacts.py` | 1481 | docs (2 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/build_w7x_zonal_validation_artifacts.py` |
+| `scripts/artifacts/build_window_statistics_validation.py` | 237 | src: analysis.py | **deleted**: docstring cites the tracked JSON | `f005418bf575` / `29362737f96c:tools/artifacts/build_window_statistics_validation.py` |
+| `scripts/artifacts/build_zonal_flow_artifacts.py` | 2603 | benchmarks: collisional_zonal_response.toml; docs (4 pages) | **deleted**: deck comment updated; docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/build_zonal_flow_artifacts.py` |
+| `scripts/artifacts/gate_laguerre_nonlinear_modes.py` | 401 | manifest: performance_optimization_manifest.toml; docs (1 pages) | **deleted**: dropped from `profiling_tools`; docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/gate_laguerre_nonlinear_modes.py` |
+| `scripts/artifacts/generate_electrostatic_parallel_gates.py` | 792 | manifest: performance_optimization_manifest.toml; scripts: generate_linear_rhs_parallel_gates.py; docs (2 pages); provenance field in 1 `docs/_static` files | **deleted**: dropped from `profiling_tools`; script users deleted or edited here; docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/generate_electrostatic_parallel_gates.py` |
+| `scripts/artifacts/generate_linear_reference_overlays.py` | 829 | docs (3 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/generate_linear_reference_overlays.py` |
+| `scripts/artifacts/generate_linear_rhs_parallel_gates.py` | 1031 | manifest: performance_optimization_manifest.toml; scripts: profile_linear_rhs_parallel_slices.py; docs (3 pages) | **deleted**: dropped from `profiling_tools`; script users deleted or edited here; docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/generate_linear_rhs_parallel_gates.py` |
+| `scripts/artifacts/generate_nonlinear_sharding_production_gate.py` | 647 | docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/generate_nonlinear_sharding_production_gate.py` |
+| `scripts/artifacts/generate_parallel_identity_gate.py` | 980 | manifest: performance_optimization_manifest.toml; docs (4 pages) | **deleted**: dropped from `profiling_tools`; docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/generate_parallel_identity_gate.py` |
+| `scripts/artifacts/generate_velocity_parallel_gates.py` | 806 | manifest: performance_optimization_manifest.toml; docs (2 pages) | **deleted**: dropped from `profiling_tools`; docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/generate_velocity_parallel_gates.py` |
+| `scripts/artifacts/plot_external_vmec_nonlinear_convergence_gate.py` | 1049 | none | **deleted** | `f005418bf575` / `29362737f96c:tools/artifacts/plot_external_vmec_nonlinear_convergence_gate.py` |
+| `scripts/artifacts/plot_quasilinear_diagnostics.py` | 691 | docs (2 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/plot_quasilinear_diagnostics.py` |
+| `scripts/artifacts/plot_scaling_panels.py` | 766 | manifest: performance_optimization_manifest.toml; docs (2 pages) | **deleted**: dropped from `profiling_tools`; docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/plot_scaling_panels.py` |
+| `scripts/artifacts/plot_stellarator_optimization_uq.py` | 350 | docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/plot_stellarator_optimization_uq.py` |
+| `scripts/artifacts/plot_w7x_fluctuation_spectrum_panel.py` | 496 | docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:tools/artifacts/plot_w7x_fluctuation_spectrum_panel.py` |
+| `scripts/benchmarks/basis_orthonormality.py` | 45 | docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:benchmarks/basis_orthonormality.py` |
+| `scripts/benchmarks/benchmark_nonlinear_suite.py` | 142 | docs (1 pages) | **deleted**: docs marked retired | `f005418bf575` / `29362737f96c:benchmarks/performance/benchmark_nonlinear_suite.py` |
+| `scripts/comparison/build_exact_state_audit.py` | 639 | tests: test_exact_state_audit.py; manifest: exact_state_lanes.office.toml; docs (2 pages) | **deleted**: tests of this script only, removed; docs marked retired | `f005418bf575` / `29362737f96c:tools/comparison/build_exact_state_audit.py` |
+| `scripts/comparison/compare_gx_kbm.py` | 1510 | tests: test_reference_comparison_tools.py; scripts: generate_linear_reference_overlays.py, make_tables.py; docs (2 pages) | **deleted**: tests of this script only, removed; script users deleted or edited here; docs marked retired | `f005418bf575` / `29362737f96c:tools/comparison/compare_gx_kbm.py` |
+| `scripts/comparison/compare_runtime.py` | 1025 | tests: test_exact_state_audit.py, test_reference_comparison_tools.py; scripts: build_exact_state_audit.py | **deleted**: tests of this script only, removed; script users deleted or edited here | `f005418bf575` / `29362737f96c:tools/comparison/compare_runtime.py` |
+| `scripts/comparison/ky_diagnostics.py` | 698 | tests: test_reference_comparison_tools.py; manifest: package_architecture_manifest.toml | **deleted**: tests of this script only, removed | `f005418bf575` / `29362737f96c:tools/comparison/ky_diagnostics.py` |
+| `scripts/comparison/make_reference_panels.py` | 636 | tests: test_reference_comparison_tools.py; docs (1 pages) | **deleted**: tests of this script only, removed; docs marked retired | `f005418bf575` / `29362737f96c:tools/comparison/make_reference_panels.py` |
+| `scripts/profiling/aggregate_device_z_pencil_granularity.py` | 264 | manifest: performance_optimization_manifest.toml | **deleted**: dropped from `profiling_tools` | `f005418bf575` / `29362737f96c:tools/profiling/aggregate_device_z_pencil_granularity.py` |
+| `scripts/profiling/profile_device_z_pencil_scaling_decomposition.py` | 630 | manifest: performance_optimization_manifest.toml; docs (1 pages) | **deleted**: dropped from `profiling_tools`; docs marked retired | `f005418bf575` / `29362737f96c:tools/profiling/profile_device_z_pencil_scaling_decomposition.py` |
+| `scripts/profiling/profile_device_z_pencil_transport_window.py` | 953 | tests: test_nonlinear_sharding_profile_contracts.py; manifest: performance_optimization_manifest.toml | **deleted**: tests of this script only, removed; dropped from `profiling_tools` | `f005418bf575` / `29362737f96c:tools/profiling/profile_device_z_pencil_transport_window.py` |
+| `scripts/profiling/profile_linear_rhs_parallel_slices.py` | 855 | tests: test_runtime_and_scaling_profile_contracts.py; manifest: performance_optimization_manifest.toml; docs (2 pages) | **deleted**: tests of this script only, removed; dropped from `profiling_tools`; docs marked retired | `f005418bf575` / `29362737f96c:tools/profiling/profile_linear_rhs_parallel_slices.py` |
+| `scripts/profiling/profile_linear_rhs_terms.py` | 609 | tests: test_runtime_and_scaling_profile_contracts.py; manifest: performance_optimization_manifest.toml; docs (1 pages) | **deleted**: tests of this script only, removed; dropped from `profiling_tools`; docs marked retired | `f005418bf575` / `29362737f96c:tools/profiling/profile_linear_rhs_terms.py` |
+| `scripts/profiling/profile_parallel_workloads.py` | 1112 | tests: test_runtime_and_scaling_profile_contracts.py; docs (1 pages) | **deleted**: tests of this script only, removed; docs marked retired | `f005418bf575` / `29362737f96c:tools/profiling/profile_parallel_workloads.py` |

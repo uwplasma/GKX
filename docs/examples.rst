@@ -82,8 +82,8 @@ lanes:
 
    # point CONFIG at the top of the script at cyclone.toml or runtime_etg.toml
    python examples/utilities/runtime_from_toml.py
-   python scripts/benchmarks/etg_linear_benchmark.py --outdir tools_out/etg
-   python scripts/benchmarks/kbm_linear_comparison.py --output tools_out/kbm_linear_comparison.png
+   python scripts/benchmark.py linear_benchmark etg --outdir tools_out/etg
+   python scripts/benchmark.py linear_benchmark kbm --outdir tools_out
 
    gkx run-runtime-linear \
      --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
@@ -173,41 +173,41 @@ check.
 
    * - Command
      - What it compares
-   * - ``python scripts/artifacts/generate_parallel_identity_gate.py ky-scan``
+   * - ``python scripts/artifacts/generate_parallel_identity_gate.py ky-scan`` (retired; :ref:`retired-generators`)
      - Real Cyclone linear solver: serial against fixed-shape ``k_y``-batched
        scans; ``gamma`` and ``omega`` must be identical.
-   * - ``python scripts/artifacts/generate_parallel_identity_gate.py logical-cpu --logical-devices 2``
+   * - ``python scripts/artifacts/generate_parallel_identity_gate.py logical-cpu --logical-devices 2`` (retired; :ref:`retired-generators`)
      - ``RuntimeParallelConfig`` and pytree outputs for independent scans (the
        API used by UQ and sensitivity ensembles); not a nonlinear performance
        claim.
-   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py hermite-exchange --logical-devices 2``
+   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py hermite-exchange --logical-devices 2`` (retired; :ref:`retired-generators`)
      - ``shard_map`` nearest-neighbor exchange of Hermite moments.
-   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py field-reduce --logical-devices 2``
+   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py field-reduce --logical-devices 2`` (retired; :ref:`retired-generators`)
      - ``shard_map`` reduction/broadcast over a Hermite mesh.
-   * - ``python scripts/artifacts/generate_electrostatic_parallel_gates.py field-reduce --logical-devices 2``
+   * - ``python scripts/artifacts/generate_electrostatic_parallel_gates.py field-reduce --logical-devices 2`` (retired; :ref:`retired-generators`)
      - Hermite-sharded ``m=0`` density reduction against the production
        electrostatic quasineutrality solve.
-   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py hermite-ladder --logical-devices 2``
+   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py hermite-ladder --logical-devices 2`` (retired; :ref:`retired-generators`)
      - Hermite exchange plus the ``sqrt(m+1)`` / ``sqrt(m)`` streaming-ladder
        coefficients.
-   * - ``python scripts/artifacts/generate_electrostatic_parallel_gates.py drift --logical-devices 2``
+   * - ``python scripts/artifacts/generate_electrostatic_parallel_gates.py drift --logical-devices 2`` (retired; :ref:`retired-generators`)
      - Hermite-sharded mirror and curvature/grad-B drift slices (offset-1 and
        offset-2 Hermite exchanges) against the production linear RHS with only
        those terms enabled.
-   * - ``python scripts/artifacts/generate_electrostatic_parallel_gates.py diamagnetic --logical-devices 2``
+   * - ``python scripts/artifacts/generate_electrostatic_parallel_gates.py diamagnetic --logical-devices 2`` (retired; :ref:`retired-generators`)
      - Hermite-sharded electrostatic diamagnetic drive: the field-reduction
        gate followed by the local ``m=0`` and ``m=2`` drive masks on each shard.
-   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py periodic-streaming --logical-devices 2``
+   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py periodic-streaming --logical-devices 2`` (retired; :ref:`retired-generators`)
      - Periodic spectral parallel derivative plus Hermite streaming ladder
        through ``shard_map``, against the production streaming operator.
-   * - ``python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming --logical-devices 2``
+   * - ``python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming --logical-devices 2`` (retired; :ref:`retired-generators`)
      - Streaming-only ``linear_rhs_cached`` against the velocity-sharded
        periodic streaming path (streaming term only; not a linear-scan or
        nonlinear speedup claim).
-   * - ``python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic --logical-devices 2``
+   * - ``python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic --logical-devices 2`` (retired; :ref:`retired-generators`)
      - Streaming plus electrostatic ``phi``, with the field solve on the
        Hermite-sharded reduction.
-   * - ``python scripts/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices --logical-devices 2``
+   * - ``python scripts/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices --logical-devices 2`` (retired; :ref:`retired-generators`)
      - Full opt-in electrostatic linear-slices call graph for streaming,
        mirror, curvature, grad-B, and diamagnetic drive.
 
@@ -235,6 +235,7 @@ engineering sweep helper:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/profiling/profile_linear_rhs_parallel_slices.py > scripts/profiling/profile_linear_rhs_parallel_slices.py
    python scripts/profiling/profile_linear_rhs_parallel_slices.py sweep \
      --platform cpu --devices 1,2,4,8 --nms 64,128 \
      --nl 4 --ny 32 --nz 128 --rtol 1e-5
@@ -370,15 +371,15 @@ discussion:
 
 .. code-block:: bash
 
-   python scripts/benchmarks/cyclone_linear_benchmark.py
-   python scripts/benchmarks/etg_linear_benchmark.py
-   python scripts/benchmarks/kbm_linear_comparison.py
-   python scripts/benchmarks/kinetic_linear_benchmark.py
-   python scripts/benchmarks/tem_linear_benchmark.py
+   python scripts/benchmark.py linear_benchmark cyclone
+   python scripts/benchmark.py linear_benchmark etg
+   python scripts/benchmark.py linear_benchmark kbm
+   python scripts/benchmark.py linear_benchmark kinetic
+   python scripts/benchmark.py linear_benchmark tem
 
-``kbm_linear_comparison.py`` plots the reviewed fixed-beta ``ky`` table. The
+``linear_benchmark kbm`` plots the reviewed fixed-beta ``ky`` table. The
 matched rerun and branch-continuity analysis live in
-``scripts/comparison/compare_gx_kbm.py``.
+``scripts/comparison/compare_gx_kbm.py`` (retired; :ref:`retired-generators`).
 
 The kinetic-electron script loads
 ``examples/linear/axisymmetric/runtime_kinetic_electron.toml``. The same input
@@ -399,6 +400,7 @@ blocks without running a full benchmark case:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/benchmarks/basis_orthonormality.py > scripts/benchmarks/basis_orthonormality.py
    python scripts/benchmarks/basis_orthonormality.py
    python examples/theory_and_demos/cyclone_geometry.py
    python examples/theory_and_demos/autodiff_inverse_growth.py

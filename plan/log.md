@@ -20465,3 +20465,49 @@ Outcome:
 - next task: F.5 step 4 saturation gate; ensemble windows (PERF-LIT item 7)
 
 2026-09-23 addendum (final pause): merged origin/main (#293 landed) into perf/adjoint-window-2 cleanly; PR #297 retargeted to main as a draft. CI on d1720ec33 had 25 passing and 12 still running when paused (mypy fixed in d1720ec33; nothing else had failed). Office outputs deleted; the jax 0.10.2 venv under the lane directory is kept.
+## 2026-09-23 - SLIM-SCRIPTS tranche 3 (G.3/G.6 P4), branch slim/scripts-3
+
+Baseline:
+- GKX SHA: f005418bf (origin/chain/p0, #293)
+- companion SHAs: none
+- source/test/tool files and lines: scripts/ 106 Python files, 78,277 lines; tests/ 81 files, 94,628 lines; src/ unchanged
+- relevant existing gate: repo-hygiene step (four regenerated docs/_static JSONs diffed), scripts/check.py architecture, tests/release/test_evidence_ledger.py, tests/validation/benchmarks/test_benchmark_contracts.py
+
+Scope:
+- intended change: contract scripts/ by deleting every module that no CI step, gate, manifest, example, ledger row or library test needs; merge near-duplicate drivers; keep gate-read outputs as fixtures
+- non-goals: src/ behaviour, the scripts/checks/ gates, campaigns/ (tested policy), anything that writes package data
+- acceptance: hygiene JSONs byte-identical; every touched test file passes; merged/pruned paths fingerprinted old vs new
+
+Changes:
+- 41 modules deleted (artifacts 28, comparison 5, profiling 6, benchmarks 2); tests of those modules only removed (test_exact_state_audit.py and parts of four tests/tools files and test_plotting.py); tracked-artifact contracts in those files kept
+- four linear benchmark drivers + the KBM plotter merged into scripts/benchmarks/linear_benchmark.py <case>
+- build_linear_validation_artifacts.py 7,565 -> 5,155: docs-only subcommands and dead helpers removed
+- performance_optimization_manifest.toml profiling_tools pruned to kept tools; docs mark each retired generator and point to a new "Retired generators" section; MAP.md gains the tranche-3 table with recovery SHAs
+- architecture baselines lowered to measured: scripts files 106 -> 61, lines 78,277 -> 45,496; tests files 81 -> 80, lines 94,628 -> 91,877
+
+Evidence:
+- repo-hygiene step run locally (stdlib python 3.11): all gates pass; quasilinear_promotion_guardrails.json, vmec_boozer_differentiability_claim_guard.json, technical_release_status.json, release_readiness.json byte-identical
+- linear_benchmark fingerprint: every solver/figure call (args, deck hash, ky arrays, output paths) identical old vs new for cyclone, etg (with and without --ky), kinetic, tem; KBM PNG sha256 identical
+- build_linear_validation_artifacts: collision-verification JSON and PNG and collision-table .npy byte-identical old vs new; the .npy equals the shipped src/gkx/data/advanced_collision_six_moment.npy
+- pytest (JAX 0.10.2, x64): tests/tools, tests/release, tests/validation/{quasilinear,stellarator,benchmarks/test_benchmark_contracts.py}, tests/unit/objectives, the nonlinear evidence/window/campaign tests, collision and Hermite physics gates, test_plotting.py, test_parallel_artifacts.py all pass; sphinx -W html build passes; ruff check/format clean; validation-coverage gate passes
+
+Outcome:
+- complete pending CI and review; scripts/ is still 27,496 lines over the 18,000 target and 49 files over 12
+- remaining blocker: the rest is gates (scripts/checks/, 11,904 lines), ledger/refresh generators, campaigns imported by gates/examples/tests, and package-data generation; each needs a merge or a maintainer decision, not a reference sweep
+- next task: tranche 4 = merge scripts/checks/ into fewer modules behind check.py; decide whether campaign policy moves into src or its tests retire; move the collision-table generator next to the package data it writes
+
+## 2026-09-23 - SLIM-SCRIPTS tranche 3, paused (final pause)
+
+Baseline:
+- GKX SHA: 48536d159 (main after #293) merged cleanly into slim/scripts-3
+
+Scope:
+- no content change since the entry above; merge of origin/main and PR #294 retargeted to main as a draft
+
+Evidence:
+- CI on d33ca29ad (pre-merge head): 35 checks passed, 0 failed; wide-coverage and two quick-tests shards still pending at the pause, so ci-required had no conclusion
+- recovery SHA f005418bf is an ancestor of main, so the MAP.md recovery commands resolve on main
+
+Outcome:
+- paused by the maintainer; nothing running locally or on the office host (no office runs were used)
+- next task: let CI finish on the merged head; if green, mark #294 ready; then tranche 4 (merge scripts/checks/ behind check.py)

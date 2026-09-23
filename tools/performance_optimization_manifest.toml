@@ -97,9 +97,6 @@ cases = ["cyclone-nonlinear", "kbm-nonlinear", "w7x-nonlinear", "hsx-nonlinear"]
 profiling_tools = [
   "scripts/profiling/profile_runtime_kernels.py",
   "scripts/profiling/profile_nonlinear_sharding.py",
-  "scripts/profiling/profile_linear_rhs_terms.py",
-  "scripts/artifacts/generate_linear_rhs_parallel_gates.py",
-  "scripts/artifacts/gate_laguerre_nonlinear_modes.py",
 ]
 metrics = [
   "field_solve_s",
@@ -225,15 +222,8 @@ priority = "medium"
 platforms = ["multi_cpu", "multi_gpu"]
 cases = ["linear-scans", "ensemble-uq", "autodiff-sensitivities", "nonlinear-pilot"]
 profiling_tools = [
-  "scripts/artifacts/plot_scaling_panels.py",
-  "scripts/artifacts/generate_parallel_identity_gate.py",
-  "scripts/artifacts/generate_velocity_parallel_gates.py",
-  "scripts/artifacts/generate_electrostatic_parallel_gates.py",
-  "scripts/artifacts/generate_linear_rhs_parallel_gates.py",
   "scripts/checks/check_parallel_scaling_artifacts.py",
-  "scripts/profiling/profile_linear_rhs_parallel_slices.py",
   "scripts/profiling/profile_nonlinear_sharding.py",
-  "scripts/profiling/aggregate_device_z_pencil_granularity.py",
 ]
 metrics = [
   "strong_scaling_speedup",
@@ -352,20 +342,9 @@ bottleneck_hypotheses = [
 ]
 optimization_actions = [
   "prioritize sharded linear scans, UQ ensembles, and autodiff sensitivity batches",
-  "use scripts/artifacts/generate_parallel_identity_gate.py ky-scan as the release identity gate for fixed-shape ky batching",
-  "use scripts/artifacts/generate_parallel_identity_gate.py logical-cpu as the RuntimeParallelConfig/batch_map logical-CPU identity gate",
-  "use scripts/artifacts/generate_velocity_parallel_gates.py hermite-exchange as the first shard_map Hermite ghost-exchange communication gate",
-  "use scripts/artifacts/generate_velocity_parallel_gates.py field-reduce as the shard_map velocity field-reduction/broadcast gate",
-  "use scripts/artifacts/generate_electrostatic_parallel_gates.py field-reduce as the electrostatic quasineutrality field-reduction gate",
-  "use scripts/artifacts/generate_velocity_parallel_gates.py hermite-ladder as the shard_map Hermite streaming-ladder coefficient gate",
-  "use scripts/artifacts/generate_electrostatic_parallel_gates.py drift as the electrostatic mirror/curvature/grad-B drift-slice identity gate",
-  "use scripts/artifacts/generate_electrostatic_parallel_gates.py diamagnetic as the electrostatic diamagnetic-drive identity gate",
-  "use scripts/artifacts/generate_velocity_parallel_gates.py periodic-streaming as the periodic linear streaming microkernel identity gate",
-  "use scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming as the streaming-only linear RHS call-graph identity gate",
-  "use scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic as the electrostatic field-solve-to-streaming call-graph identity gate",
-  "use scripts/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices as the composed electrostatic linear-RHS identity gate",
+  "keep the ky-scan, logical-CPU, Hermite-exchange, field-reduce, Hermite-ladder, drift, diamagnetic, periodic-streaming and linear-RHS call-graph identity gates as committed fixtures checked by scripts/check.py parallel-scaling; their generators were retired in SLIM-SCRIPTS tranche 3 and are recoverable from the SHA recorded in plan/research/2026-09-22-slim-tools/MAP.md",
   "use scripts/checks/check_parallel_scaling_artifacts.py as the fast local contract check for tracked large-run scaling artifacts",
-  "use scripts/profiling/profile_linear_rhs_parallel_slices.py as the engineering profile before making any Hermite-sharded RHS speedup claim",
+  "recover the retired linear-RHS parallel-slices profiler (plan/research/2026-09-22-slim-tools/MAP.md) before making any Hermite-sharded RHS speedup claim",
   "gate CPU sharding locally and two-GPU sharding on office",
   "profile fixed-step nonlinear state sharding and keep local plus two-GPU identity artifacts attached to the manifest",
   "keep z-axis FFT sharding as exploratory until a dedicated communication/layout gate passes",

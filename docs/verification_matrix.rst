@@ -326,7 +326,7 @@ Linear
    * - Shaped tokamak zonal flow / GAM (Merlo et al. Case III)
      - open
      - ``docs/_static/miller_zonal_response_pilot.json`` from
-       ``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel``: residual
+       ``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel`` (retired; :ref:`retired-generators`): residual
        ``0.192`` against about ``0.19``, :math:`\omega_{GAM} R_0/v_i \approx 2.20`
        against about ``2.24``, :math:`\gamma_{GAM} R_0/v_i \approx -0.176`
        against about ``-0.17``, all read off published figures. No

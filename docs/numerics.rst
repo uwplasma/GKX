@@ -832,7 +832,7 @@ paper normalization converts as
 :math:`\nu = \nu_i^*\epsilon^{3/2}/(\sqrt{2}q) = 0.0499921`, so
 :math:`t\nu=30` is solver time of about 600. The geometry and time contract is
 ``benchmarks/cases/collisional_zonal_response.toml``, and
-``scripts/artifacts/build_zonal_flow_artifacts.py`` owns the traces and the gate.
+``scripts/artifacts/build_zonal_flow_artifacts.py`` (retired; :ref:`retired-generators`) owns the traces and the gate.
 
 Landau damping against the exact kinetic roots
 ----------------------------------------------

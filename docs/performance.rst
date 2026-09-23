@@ -191,6 +191,7 @@ mode-resolved histories:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/benchmarks/benchmark_nonlinear_suite.py > scripts/benchmarks/benchmark_nonlinear_suite.py
    python scripts/benchmarks/benchmark_nonlinear_suite.py --steps 200 --dt 0.0377 \
      --out tools_out/gkx_nl_bench.csv
    python scripts/benchmarks/benchmark_nonlinear_suite.py --laguerre-mode spectral
@@ -262,6 +263,7 @@ Nonlinear RHS split (Cyclone)
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml \
      --repeats 10 \
      --out docs/_static/nonlinear_rhs_profile_gpu.csv
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_scaling_panels.py > scripts/artifacts/plot_scaling_panels.py
    python scripts/artifacts/plot_scaling_panels.py rhs-profile \
      --out docs/_static/nonlinear_rhs_profile.png
 
@@ -359,6 +361,7 @@ nonlinear runs:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/profiling/profile_linear_rhs_terms.py > scripts/profiling/profile_linear_rhs_terms.py
    python scripts/profiling/profile_linear_rhs_terms.py \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
      --ky 0.3 --Nl 4 --Nm 8 --repeats 8 \
@@ -408,6 +411,7 @@ zero-collision fast path:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/generate_linear_rhs_parallel_gates.py > scripts/artifacts/generate_linear_rhs_parallel_gates.py
    python scripts/artifacts/generate_linear_rhs_parallel_gates.py zero-norm-state-window \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
      --ky 0.3 --Nl 4 --Nm 8 \
@@ -515,6 +519,7 @@ end-of-run scalar diagnostics:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/gate_laguerre_nonlinear_modes.py > scripts/artifacts/gate_laguerre_nonlinear_modes.py
    python scripts/artifacts/gate_laguerre_nonlinear_modes.py \
      --case cyclone --case kbm --case w7x --case hsx \
      --out-json docs/_static/laguerre_mode_gate.json \
@@ -653,7 +658,7 @@ velocity-space linear-slice regime map is
 ``linear_rhs_parallel_slices_sweep.json``. The earlier two-device linear scaling
 data in ``docs/_static/scaling_speedup_data.csv`` was measured on a Diffrax
 linear route GKX no longer ships; it is a historical record, replotted with
-``python scripts/artifacts/plot_scaling_panels.py legacy-two-device``, not a
+``python scripts/artifacts/plot_scaling_panels.py legacy-two-device`` (retired; :ref:`retired-generators`), not a
 reproducible artifact.
 
 Communication-aware nonlinear domain decomposition remains diagnostic until the

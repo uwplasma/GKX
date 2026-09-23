@@ -115,6 +115,7 @@ solves in parallel and keeps the serial ordering of the spectrum:
      --workers 2 \
      --out tools_out/cyclone_quasilinear_scan
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_quasilinear_diagnostics.py > scripts/artifacts/plot_quasilinear_diagnostics.py
    python scripts/artifacts/plot_quasilinear_diagnostics.py spectrum \
      --spectrum tools_out/cyclone_quasilinear_scan.quasilinear_spectrum.csv \
      --out tools_out/quasilinear_cyclone_spectrum.png
@@ -302,7 +303,7 @@ Implementation map
      - train/holdout/audit schemas, spectrum integration, nonlinear-window
        ingestion, scale fitting and scoring
    * - Plotting tools
-     - ``scripts/artifacts/plot_quasilinear_diagnostics.py``,
+     - ``scripts/artifacts/plot_quasilinear_diagnostics.py`` (retired; :ref:`retired-generators`),
        ``scripts/artifacts/plot_quasilinear_calibration.py``
      - spectrum, shape-gate and calibration figures
    * - Differentiability gates
@@ -590,7 +591,7 @@ They include:
 
 The QI seed equilibrium (``quasilinear_vmec_qi_seed_linear_spectrum_scan``)
 peaks at :math:`\gamma \approx 3.8\times10^{-3}` near ``ky = 0.143``, below the
-0.02 nonlinear-launch threshold of ``scripts/artifacts/build_qi_branch_refinement_gate.py``,
+0.02 nonlinear-launch threshold of ``scripts/artifacts/build_qi_branch_refinement_gate.py`` (retired; :ref:`retired-generators`),
 so no nonlinear window exists for it.
 
 Results
@@ -745,6 +746,7 @@ KBM has no shape gate because its nonlinear lane is electromagnetic.
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_quasilinear_diagnostics.py > scripts/artifacts/plot_quasilinear_diagnostics.py
    python scripts/artifacts/plot_quasilinear_diagnostics.py shape-gate \
      --spectrum docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv \
      --nonlinear tools_out/final_nonlinear_audit/hsx_nonlinear_t50.out.nc \

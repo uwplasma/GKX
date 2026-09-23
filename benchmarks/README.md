@@ -22,9 +22,8 @@ without copying large artifacts into this directory.
 Run from the repository root, for example:
 
 ```bash
-python scripts/benchmark.py cyclone_linear_benchmark --outdir tools_out/cyclone_benchmark
-python scripts/benchmark.py kbm_linear_comparison \
-  --output tools_out/kbm_linear_comparison.png
+python scripts/benchmark.py linear_benchmark cyclone --outdir tools_out/cyclone_benchmark
+python scripts/benchmark.py linear_benchmark kbm --outdir tools_out
 python -m gkx.cli run-runtime-linear --config benchmarks/cases/secondary_slab.toml
 python scripts/benchmark.py secondary_slab_workflow
 ```

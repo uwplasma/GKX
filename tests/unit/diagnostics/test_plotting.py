@@ -8,7 +8,6 @@ matplotlib.use("Agg")
 
 import pathlib
 import importlib.util
-import runpy
 
 import numpy as np
 
@@ -872,11 +871,6 @@ def test_movie_imported_geometry_requires_physical_profiles():
     )()
     module._require_movie_geometry_profiles(geometry, model="vmec")
     module._require_movie_geometry_profiles(object(), model="s-alpha")
-
-
-def test_turbulence_hero_imports_promoted_geometry_helpers():
-    root = pathlib.Path(__file__).parents[3]
-    runpy.run_path(str(root / "scripts" / "artifacts" / "build_turbulence_hero.py"))
 
 
 def test_phi_xy_snapshot_figure_renders(tmp_path):

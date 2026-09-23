@@ -298,31 +298,31 @@ gates.
    * - ``scripts/checks/check_validation_coverage_manifest.py gate-index``
      - ``docs/_static/validation_gate_index.json``: 17 of 18 tracked reports
        pass; ``quasilinear_model_selection_status.json`` is open.
-   * - ``scripts/artifacts/generate_linear_reference_overlays.py kbm`` / ``w7x``
+   * - ``scripts/artifacts/generate_linear_reference_overlays.py kbm`` (retired; :ref:`retired-generators`) / ``w7x``
      - ``docs/_static/reference_modes/*_eigenfunction_reference_overlay_ky0p3000.json``;
        gate: overlap >= 0.95, relative :math:`L^2` <= 0.25. KBM 0.999985 /
        0.00721; W7-X 0.9999999994 / 3.33e-5.
-   * - ``scripts/artifacts/build_linear_validation_artifacts.py observed-order``
+   * - ``scripts/artifacts/build_linear_validation_artifacts.py observed-order`` (retired subcommand; :ref:`retired-generators`)
      - ``docs/_static/cyclone_resolution_observed_order.json`` (Cyclone
        :math:`k_y=0.30`, ``(Nl,Nm)`` = (4,8), (6,12), (12,24), (16,32)); passes.
-   * - ``scripts/artifacts/build_linear_validation_artifacts.py kbm-branch``
+   * - ``scripts/artifacts/build_linear_validation_artifacts.py kbm-branch`` (retired subcommand; :ref:`retired-generators`)
      - ``docs/_static/kbm_branch_gate_summary.json``; passes the adjacent
        jump and successive-overlap gates.
    * - ``scripts/comparison/compare_gx_nonlinear.py diagnostics --summary-json``
      - ``docs/_static/nonlinear_{cyclone,cyclone_miller,kbm,hsx,w7x}_gate_summary.json``;
        all pass the release-window gate.
-   * - ``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel``
+   * - ``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel`` (retired; :ref:`retired-generators`)
      - ``docs/_static/miller_zonal_response_pilot.json`` (Merlo Case III,
        ``Nm=144``, ``dt=0.0025``). ``gate_report`` pins GKX's converged values;
        ``literature_comparison`` fails on residual (0.206 vs 0.19, tolerance
        0.015) and GAM frequency (2.345 vs 2.24, tolerance 0.10) and passes on
        damping (-0.184 vs -0.17, tolerance 0.03).
-   * - ``scripts/artifacts/build_w7x_zonal_validation_artifacts.py`` and
-       ``scripts/artifacts/build_w7x_zonal_reference_artifacts.py compare``
+   * - ``scripts/artifacts/build_w7x_zonal_validation_artifacts.py`` (retired; :ref:`retired-generators`) and
+       ``scripts/artifacts/build_w7x_zonal_reference_artifacts.py compare`` (retired; :ref:`retired-generators`)
      - ``docs/_static/w7x_zonal_reference_compare.json``: open. Time coverage
        passes at all four :math:`k_x\rho_i`; the residual passes only at 0.05;
        the late-envelope gate fails at all four.
-   * - ``scripts/comparison/build_exact_state_audit.py report``
+   * - ``scripts/comparison/build_exact_state_audit.py report`` (retired; :ref:`retired-generators`)
      - ``docs/_static/w7x_exact_state_audit.json``: max finite pointwise
        relative error 4.62e-5 against a 1e-4 gate.
    * - ``scripts/checks/check_nonlinear_transport_gates.py runtime-outputs``
