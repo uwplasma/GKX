@@ -49,6 +49,7 @@ from gkx.config import (
     RuntimeSpeciesConfig,
     RuntimeTermsConfig,
 )
+from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import jax
@@ -569,8 +570,10 @@ def test_compressed_real_fft_bracket_match():
 
 
 def test_compressed_real_fft_toggle_matches_full_fft_for_hermitian():
+    # The subject is the agreement between the two bracket routes, so the grid
+    # has to carry the two-sided ky axis the full-FFT route reads.
     grid = build_spectral_grid(
-        GridConfig(Nx=6, Ny=8, Nz=1, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
+        GridConfig(Nx=6, Ny=8, Nz=1, Lx=2.0 * np.pi, Ly=2.0 * np.pi, ky_layout="full")
     )
     ny = grid.ky.size
     nx = grid.kx.size
@@ -738,8 +741,10 @@ def test_compressed_real_fft_toggle_matches_full_fft_for_hermitian():
 
 
 def test_full_fft_shearing_phase_preserves_poisson_bracket_coordinates():
+    # This pins the shearing phase inside the full-FFT bracket, which is defined
+    # only on the two-sided ky axis, so the grid declares that layout.
     grid = build_spectral_grid(
-        GridConfig(Nx=6, Ny=6, Nz=1, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
+        GridConfig(Nx=6, Ny=6, Nz=1, Lx=2.0 * np.pi, Ly=2.0 * np.pi, ky_layout="full")
     )
     rng = np.random.default_rng(401)
     G = rng.normal(size=(1, 1, 1, 6, 6, 1)) + 1j * rng.normal(size=(1, 1, 1, 6, 6, 1))
@@ -1847,7 +1852,10 @@ def test_leading_finite_prefix_all_invalid_returns_empty() -> None:
 
 
 def test_embed_linear_seed_on_full_grid_passthrough_and_invalid_shape() -> None:
-    cfg = _base_cfg()
+    # The helper widens a single-ky linear seed onto the two-sided ky axis, so
+    # the deck it reads has to ask for that layout.
+    base = _base_cfg()
+    cfg = replace(base, grid=replace(base.grid, ky_layout="full"))
     full_shape = (1, 3, 8, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
     full_state = np.ones(full_shape, dtype=np.complex64)
     embedded = _embed_linear_seed_on_full_grid(cfg, full_state, ky_target=0.1)

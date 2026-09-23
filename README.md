@@ -68,6 +68,15 @@ each item's evidence is. It records scope, not quality; see
   explicit nonlinear diagnostics run return bitwise identical arrays, in
   float32 and under x64, for value and for gradient.
   [solvers](docs/solvers.rst).
+- **The evolved state can store only the `ky >= 0` rows, on request.** A real
+  field's negative rows are the conjugates of its positive ones, so storing
+  them costs a per-stage Hermitian completion. `[grid] ky_layout = "half"`
+  keeps `1 + Ny/2` rows instead: on pinned idle cores an RK3 step of the
+  shipped nonlinear deck takes 0.54x to 0.60x the two-sided time, but the
+  checkpointed heat-flux window gradient takes 1.28x as long, so the default
+  stays `"full"`. `Ny` sets the resolution either way, the published NetCDF
+  bundle does not depend on the choice, and restart files load across both
+  axes. [numerics](docs/numerics.rst), [performance](docs/performance.rst).
 - **Every published number is indexed to the artifact it comes from.** An
   evidence ledger names the artifact, the generator and the reference for each
   one, CI recomputes the parity percentages below from their tracked scans, and

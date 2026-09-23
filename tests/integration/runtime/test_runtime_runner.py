@@ -15,6 +15,7 @@ from gkx.config import (
     TimeConfig,
 )
 from gkx.core_grid import build_spectral_grid
+from gkx.core_ky_layout import source_ny_full
 from gkx.diagnostics import SimulationDiagnostics, ResolvedDiagnostics
 from gkx.solvers_linear_implicit import ImplicitSolveStats
 from gkx.solvers_linear_krylov import EigenSolveStatus
@@ -2395,6 +2396,13 @@ def test_runtime_gaussian_single_moment_uses_configured_parallel_envelope() -> N
 
 
 def test_runtime_full_ky_initial_condition_mirrors_negative_ky_block() -> None:
+    """The two-sided seed writes each mode's conjugate partner as well.
+
+    Named as a two-sided case because that is its whole subject: a half
+    axis stores no negative row to mirror onto, so the rule this pins is
+    inapplicable there rather than merely unnecessary.
+    """
+
     cfg = replace(
         _base_runtime_cfg(),
         grid=GridConfig(
@@ -2407,6 +2415,7 @@ def test_runtime_full_ky_initial_condition_mirrors_negative_ky_block() -> None:
             y0=0.2,
             ntheta=16,
             nperiod=1,
+            ky_layout="full",
         ),
         init=InitializationConfig(
             init_field="density",
@@ -3213,9 +3222,25 @@ def test_runtime_init_all_preserves_hermite_moment_normalization(
 
 
 def test_runtime_random_multimode_init_matches_glibc_random_sequence() -> None:
+    """The seeded pattern is pinned against a two-sided expectation array.
+
+    The glibc draw order is the same on both axes -- it runs over the
+    dealiased positive rows, which are the same rows -- but the expectation
+    below is written out for the two-sided grid, conjugate partners included,
+    so the grid it is compared against has to be that one.
+    """
+
     cfg = replace(
         _base_runtime_cfg(),
-        grid=GridConfig(Nx=6, Ny=8, Nz=8, Lx=6.28, Ly=6.28, boundary="periodic"),
+        grid=GridConfig(
+            Nx=6,
+            Ny=8,
+            Nz=8,
+            Lx=6.28,
+            Ly=6.28,
+            boundary="periodic",
+            ky_layout="full",
+        ),
         init=InitializationConfig(
             init_field="density",
             init_amp=1.0,
@@ -5253,8 +5278,13 @@ def test_restart_gate_nonlinear_matches_continuous(tmp_path: Path) -> None:
     assert full.state is not None
 
     restart_path = tmp_path / "restart.bin"
+    # A raw restart carries no header, so its size is what tells GKX's own
+    # state order from the packed interchange order; ny_full is what keeps a
+    # half-spectrum state out of the size the interchange form already owns.
     write_netcdf_restart_state(
-        restart_path, np.asarray(part1.state, dtype=np.complex64)
+        restart_path,
+        np.asarray(part1.state, dtype=np.complex64),
+        ny_full=int(cfg.grid.Ny),
     )
 
     cfg_restart = replace(
@@ -5480,7 +5510,12 @@ def test_restart_gate_append_on_restart_preserves_full_history(tmp_path: Path) -
     )
     np.testing.assert_allclose(
         np.asarray(loaded.resolved.Phi2_kxkyt),
-        _condense_kykx(np.asarray(full.diagnostics.resolved.Phi2_kxkyt)),
+        # The published block is the dealiased ky >= 0 rows of the *two-sided*
+        # axis, so the count comes from Ny however many rows the run stored.
+        _condense_kykx(
+            np.asarray(full.diagnostics.resolved.Phi2_kxkyt),
+            ny_full=int(cfg.grid.Ny),
+        ),
         rtol=1.0e-6,
         atol=1.0e-8,
     )
@@ -5607,7 +5642,13 @@ def test_restart_round_trip_drops_off_chain_rows_and_keeps_the_rest(tmp_path) ->
     assert np.max(np.abs(written[off])) > 0.0
 
     path = tmp_path / "state.restart.bin"
-    write_netcdf_restart_state(path, written)
+    # The writer widens a half-spectrum state before it writes, so what
+    # lands on disk is the two-sided form whose size the reader can read
+    # unambiguously; a round trip through it has to come back bitwise on
+    # either axis. The random state below is not Hermitian, and it does
+    # not need to be: the widening and the narrowing are inverse on the
+    # rows that are stored.
+    write_netcdf_restart_state(path, written, ny_full=source_ny_full(grid))
     cfg_restart = replace(
         cfg,
         init=replace(cfg.init, init_file=str(path), init_file_mode="replace"),
@@ -5648,7 +5689,13 @@ def test_restart_round_trip_is_bitwise_on_a_periodic_deck(tmp_path) -> None:
         np.complex64
     )
     path = tmp_path / "state.restart.bin"
-    write_netcdf_restart_state(path, written)
+    # The writer widens a half-spectrum state before it writes, so what
+    # lands on disk is the two-sided form whose size the reader can read
+    # unambiguously; a round trip through it has to come back bitwise on
+    # either axis. The random state below is not Hermitian, and it does
+    # not need to be: the widening and the narrowing are inverse on the
+    # rows that are stored.
+    write_netcdf_restart_state(path, written, ny_full=source_ny_full(grid))
     cfg_restart = replace(
         cfg,
         init=replace(cfg.init, init_file=str(path), init_file_mode="replace"),

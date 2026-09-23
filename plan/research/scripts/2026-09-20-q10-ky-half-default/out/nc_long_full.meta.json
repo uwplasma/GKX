@@ -1,0 +1,60 @@
+{
+  "gkx": "<branch tree>/src/gkx/__init__.py",
+  "ky_layout": "full",
+  "paths": {
+    "big": "arm.big.nc",
+    "out": "arm.out.nc",
+    "restart": "arm.restart.nc",
+    "summary": "arm.summary.json"
+  },
+  "summary:summary": {
+    "Wapar_last": 0.0,
+    "Wg_last": 0.031184039358777633,
+    "Wphi_last": 0.0004937151696480049,
+    "dt_mean": 0.010000000000000002,
+    "gamma_last": 0.07673022278778532,
+    "heat_flux_last": 0.002327574239051753,
+    "implicit_converged": null,
+    "implicit_max_iterations": null,
+    "implicit_max_relative_residual": null,
+    "implicit_unconverged_solves": null,
+    "kind": "nonlinear",
+    "kx_selected": 0.0,
+    "ky_selected": 0.1773049645390071,
+    "n_samples": 41,
+    "n_state_shape": [
+      1,
+      2,
+      4,
+      16,
+      16,
+      24
+    ],
+    "omega_last": 0.1656644357579776,
+    "particle_flux_last": 0.0,
+    "t_last": 3.9999999999999587,
+    "timestep_cost": {
+      "cfl": null,
+      "cost_growth_ratio": 1.0000000000000002,
+      "dt_collapse_ratio": 1.0,
+      "dt_final": 0.01,
+      "dt_initial": 0.01,
+      "dt_max": 0.01,
+      "dt_min": 0.01,
+      "n_samples": 41,
+      "notes": [
+        "dt series is strided: the step count is an estimate that charges each gap to its final step size"
+      ],
+      "steps": 398.99999999999585,
+      "steps_are_exact": false,
+      "steps_per_unit_time": 99.99999999999999,
+      "steps_per_unit_time_first_quarter": 100.0,
+      "steps_per_unit_time_last_quarter": 100.00000000000001,
+      "t_end": 3.9999999999999587,
+      "t_span": 3.989999999999959,
+      "t_start": 0.01,
+      "wall_seconds": 6.208072167006321,
+      "wall_seconds_per_unit_time": 1.5559078112797957
+    }
+  }
+}

@@ -18894,6 +18894,325 @@ the full module and float32 selection also pass in the implementation review.
 This is an instantaneous algebraic exchange gate, not physical free-energy
 identification or nonlinear/heat-flux/source/sink/time-integration validation.
 No runtime changes or new files; shared setup limits test growth to 45 lines.
+
+## 2026-09-20 — Q10: the ky >= 0 layout becomes the default (draft, handed off)
+
+**Outcome: the code flips the default; the recorded full-layout compatibility
+fixtures stay unchanged, and the opt-out identity, integration and stale-`Ny`
+test gates pass. Adoption is nevertheless blocked: after #264 removes recurrent
+compilation on an exact combined head, the measured half-layout window gradient
+is still 27.9% slower in steady calls.** Branch `perf/ky-half-default`,
+rebased onto `origin/main` `eeb3481c6`. `perf/ky-half-spectrum-switch` was
+examined and rejected as a base: it is fully merged (#258) and carries no
+commit `main` lacks.
+
+**What changed.** `[grid] ky_layout` (`GridConfig.ky_layout`) defaults to
+`"half"`; `"full"` is the opt-out. Every grid a run builds reads the key, so
+the solver, diagnostics, restart writer and NetCDF writer cannot disagree.
+Restart loaders take the target layout and the two-sided length `ny_full`;
+the binary restart writer widens a half state before writing, because a
+`Nyc`-row file is already the packed interchange order and the reader tells
+the two apart by size alone.
+
+**Wall clock** (benchmark host, tree `38d7c4277`, CPUs 12-17 with idle HT siblings,
+arm order rotated, 4 blocks x 7 reps; `timing_table.py` over `out/nopool_*`):
+
+| kernel | 32x32x24 half/full | 64x64x24 half/full |
+|---|---|---|
+| RK3 step, 5 steps jitted | 0.543 | 0.603 |
+| nonlinear RHS | 0.492 | 0.628 |
+| RHS VJP | 0.828 | 0.961 |
+| eager window VJP | 2.313 | not run |
+
+**Window-gradient regression.** The compile split completed on source
+`38d7c4277db1bf9a4fee2292d3aea2f3c00ca31d`, not on the current PR head. It
+used JAX 0.10.2, the 32x32x24, Nl4/Nm8 six-step window, four arm-rotated blocks,
+and one first call plus three repeats per arm and block. The 32 call-level rows
+are in `out/window_compile_split_calls.csv`; each row carries the source and
+script hashes, options, state shape, load, raw-input hash, wall time, backend
+compile count and durations. The measured script differs from the public
+`window_compile_split.py` only in sanitized provenance text and formatting;
+the measured kernel and event accounting are unchanged.
+
+`38d7c4277` is an ancestor of tested PR source `9c8614b10` and already contains
+the opt-in half-layout machinery, but it predates this PR's default and artifact
+changes. The result is therefore a blocking regression signal, not an exact
+performance measurement of `9c8614b10`.
+
+Median across the four blocks; repeated calls are first reduced to each
+block's median of three (seconds):
+
+| call | full wall / compile / remainder | half wall / compile / remainder | half/full wall / compile / remainder | backend compiles full / half |
+|---|---|---|---|---|
+| first | 31.080 / 21.086 / 9.967 | 57.164 / 27.109 / 29.966 | 1.839 / 1.286 / 3.007 | 444 / 405 |
+| repeated | 18.986 / 9.304 / 9.637 | 47.101 / 16.425 / 30.762 | 2.481 / 1.765 / 3.192 | 13 / 13 |
+
+Here `compile` is the sum of JAX monitoring's trace, lowering and backend
+compile durations. `remainder` is `wall - compile`: it is an estimate, not a
+true compilation-free kernel time. In particular every repeated call still
+compiled 13 backend modules. The 2.481x repeated wall regression is real, but
+monitoring phases may overlap and the 3.192x remainder ratio is not a clean
+attribution; it motivates measuring execution separately.
+
+The public driver invocation is:
+
+```
+D="$(pwd)/plan/research/scripts/2026-09-20-q10-ky-half-default"
+LOADMAX=10 BUSYMEAN=0.12 BUSYWORST=0.25 PY=python \
+  bash "$D/run_window_split.sh" "$D" <tree-at-38d7c4277> \
+  12-17 12-17,30-35 4
+```
+
+The raw JSON files remain private because their provenance field contains a
+machine-local path; their exact SHA256 values are retained in the compact CSV.
+The 32 legacy rows have `compile_scope=monitoring_trace_lowering_backend`; the
+five added resource-and-answer columns are empty because that campaign did not
+measure them.  The combined-head rows below use `backend_funnel`, the compiler
+entry point through which every lowered module passes.
+
+**Combined reusable-adjoint result.** The follow-up used local integration
+commit `944faacb2ad919838b3236839ed4bbb98ad970b4`, whose exact public parents are
+this PR at `07fdc57924da93c56055afb5dfae23dec00c0b73` and #264 at
+`d92f3100c984bba10ac5ec7ef5daea4a5a6611ba`. The runtime sources merged
+without conflict. The only integration resolutions were the measured package
+manifest counts (`src=93544`, `tests=92960`, `tools=78904`) and #264's
+full-complex sheared-bracket test fixture: it names `ky_layout="full"` and
+sizes its state from the merged grid. Thus the measured source can be rebuilt
+from two public commits without depending on the local merge object.
+
+The public #264 driver is
+`plan/research/scripts/2026-09-20-q30-window-compile-cache/bench_q30.py` at
+`d92f3100c`; its SHA256 is
+`ab80a3c54cc5ae05a7a3040b7fa606ab532bc4fac2b161e9dd937e164f65164d`.
+For each arm, from the repository root, the measured invocation was:
+
+```
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=1 OMP_NUM_THREADS=6 \
+  taskset -c 6-11 nice -n 15 /usr/bin/time -v -o <resource.txt> \
+  timeout 900s python \
+  plan/research/scripts/2026-09-20-q30-window-compile-cache/bench_q30.py \
+  <result.json> --Nx 32 --Ny 32 --Nz 24 --Nl 4 --Nm 8 \
+  --window-steps 6 --reps 3 --ky-mode <full-or-half>
+```
+
+For these new rows `compile_total_s` is backend compile time and
+`execution_remainder_s` is wall minus that value. It is not a kernel timer;
+on the cold call it still includes tracing, lowering and other host work. On
+an admitted steady call the backend count and subtraction are both zero, so
+the recorded wall time is the quantity compared below.
+
+The model was the Cyclone nonlinear runtime deck, RK3, checkpointed,
+compressed-real FFT and grid Laguerre mode, on a 32x32x24 grid with Nl4/Nm8
+and a six-step window. JAX/JAXLIB 0.10.2 ran CPU-only and x64 on six logical
+CPUs of a 36-CPU host. Each arm was a fresh process with one cold call and
+three steady calls. Three blocks rotated full/half order as full-half,
+half-full, full-half. The initial load averages were 7.46/5.23/4.96 and
+unrelated work occupied about five CPU cores; this run was low priority and
+affinity-limited to six cores. It returned zero under a 2700 s campaign cap,
+took about five minutes, and every one of the 18 steady calls crossed the
+backend compiler funnel zero times.
+
+Median of each block's three steady calls, followed by the pooled median of all
+nine steady calls (seconds):
+
+| layout | block 1 | block 2 | block 3 | pooled |
+|---|---:|---:|---:|---:|
+| full | 6.869 | 7.796 | 7.460 | 7.460 |
+| half | 8.899 | 9.943 | 9.610 | 9.541 |
+
+The half/full pooled steady ratio is **1.279**: after #264 removes recurrent
+compilation, the half layout remains 27.9% slower on this objective. Cold wall
+medians were 22.833 s full and 21.742 s half; cold backend-compile medians were
+9.944 s and 8.212 s. Every call returned bitwise-identical value
+`2.2797168615764328e-05` and `tprim` gradient
+`[1.4574502715873373e-05]` across layouts and blocks.
+
+The process-level peak RSS median was 2102 MiB full (range 2050--2118) and
+1781 MiB half (1743--1787), a half/full ratio of 0.847. This is the maximum of
+the entire fresh process, including Python, cold compilation and all four
+calls; it is not steady-kernel memory. Shared-host load remains a timing
+limitation despite rotation and affinity, and this CPU result makes no GPU
+claim. The objective differentiates only the single `tprim` parameter through
+six steps from the driver's normalized seed; it is neither a saturated-state
+physics result nor a general performance result for other objectives. The 24
+new call rows in `out/window_compile_split_calls.csv` preserve
+logical arm IDs, exact raw-result and resource-record hashes, wall time,
+backend compile count and time, whole-process RSS, value and gradient without
+publishing machine-local raw artifact names.
+
+**Checkpoint discriminator.** A second combined-head campaign changed exactly one
+line in the public driver above:
+
+```diff
+-        checkpoint=True,
++        checkpoint=False,
+```
+
+The resulting measurement script has SHA256
+`a4fc215608362098c14c3401601d45c98873ea073f4707f4da2201968d174578`.
+It used the same source, runtime, model, grid, six-step window, affinity and
+invocation, changing `--reps` to 2. Two blocks rotated full/half order; each
+arm was a fresh process, so the CSV adds exactly 12 calls (four cold and eight
+steady). Initial load averages were 1.83/3.77/4.31. Every steady call crossed
+the backend compiler funnel zero times.
+
+| layout | block 1 steady median | block 2 steady median | pooled steady median | process RSS median |
+|---|---:|---:|---:|---:|
+| full | 4.002 s | 4.196 s | 4.141 s | 4093 MiB |
+| half | 4.322 s | 4.176 s | 4.251 s | 2626 MiB |
+
+The half/full pooled ratio falls from 1.279 with checkpointing to **1.027**
+without it. The layouts remain bitwise equal to each other: value
+`2.2797168615764328e-05`, gradient `[1.4574502715873375e-05]`. Relative to
+the checkpointed campaign, the value is exact and the gradient differs by one
+float64 ULP (`1.6940658945086007e-21`). Disabling checkpointing is not a
+default-policy repair: whole-process peak RSS rises to about 1.95x for full
+and 1.47x for half, and a six-step window does not bound long-window memory.
+
+**Endpoint discriminator.** To remove the heat-flux diagnostic while keeping
+the same six-step differentiated trajectory, make the following edits to the
+original public driver, retaining its compiler counter and report loop. The
+abbreviated diff shows edit locations, not a patch for `git apply`:
+
+```diff
+-from gkx.solvers_nonlinear_state_integration import nonlinear_heat_flux_window
++from gkx.operators.linear.cache_builder import build_linear_cache
++from gkx.solvers_nonlinear_state_integration import integrate_nonlinear
+@@
+ dt = float(cfg.time.dt)
++cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
++seed_mode = g0[..., ky_i, kx_i, :]
+@@
+ def objective(tprim):
+-    return nonlinear_heat_flux_window(
++    final_state = integrate_nonlinear(
+         g0,
+         grid,
+         geom,
+         replace(params, tprim=tprim),
+-        dt,
+-        args.window_steps,
++        dt=dt,
++        steps=args.window_steps,
+         terms=terms,
+         method="rk3",
+-        checkpoint=True,
++        cache=cache,
+         compressed_real_fft=True,
+         laguerre_mode="grid",
+-    )
++        return_fields=False,
++    )[0]
++    return jnp.real(jnp.vdot(seed_mode, final_state[..., ky_i, kx_i, :]))
+@@
+-fn = jax.value_and_grad(objective)
++fn = jax.jit(jax.value_and_grad(objective))
+```
+
+This measurement script has SHA256
+`1274beff88b5769d85f8b58203c67b40b95c5149797274074285e5bc2049ef14`.
+The same two-block, rotated, fresh-process cadence adds 12 more calls; all
+eight steady calls crossed the backend compiler funnel zero times. The
+campaign did not separately sample host load, so those CSV fields are empty.
+
+| layout | block 1 steady median | block 2 steady median | pooled steady median | process RSS median |
+|---|---:|---:|---:|---:|
+| full | 3.888 s | 3.906 s | 3.899 s | 2108 MiB |
+| half | 16.549 s | 17.999 s | 17.324 s | 1917 MiB |
+
+The endpoint half/full ratio is **4.444**. All 12 calls returned the same
+value `0.0002918839151225744` and `tprim` gradient
+`[1.3133016542317785e-08]` bitwise across layouts and blocks. This shows that
+the heat-flux reduction is not necessary for the observed half-layout reverse
+slowdown, but it does not localize the cause: selecting one endpoint mode can
+enable layout-specific XLA dead-code elimination and fusion, so this ratio is
+not transferable to the production heat-window objective. Both discriminator
+campaigns are short shared-host CPU measurements, make no GPU claim and do
+not justify flipping the default. Compiler profiling remains a separate
+follow-up.
+
+**What did not move.**
+
+* Cyclone parity generator (`run_runtime_scan` on the `cyclone_salpha_itg`
+  fixture, eight tracked ky, reduced `Nl=4, Nm=8`, 3000 steps) and the linear
+  example's certified Krylov eigenvalue at ky 0.3: every gamma and omega
+  bitwise equal to `main` (`cyclone_golden_identity.py`).
+* Nonlinear NetCDF bundle, 225 variables, no shape change in any arm. x64:
+  221 bitwise; the other four are `TurbulentHeating`, peak 3.1e-17 against a
+  field energy of 1.9e-2, a cancellation residue (`compare_nc.py` now prints
+  `max_abs` and `ref_peak` beside `max_rel`). float32: 186 bitwise, the rest
+  at float32 roundoff, `HeatFlux_st` 3.41e-7.
+* Restarts: NetCDF and binary files written on either axis load onto either,
+  `max|delta| = 0` in all four directions, including a two-sided file.
+* Eigen routes: 57 in-band ky targets pick the same row on both axes; only an
+  out-of-band Nyquist target lands on the opposite sign; the shipped linear
+  deck's eigenvalue at ky 0.55 is bitwise equal across layouts.
+
+**Found and fixed.** The identity harness's `sitecustomize.py` pinned the
+`GridConfig` class default but not the `GridConfig` instances that
+`RuntimeConfig`, `Case`, `CycloneBaseCase` and `KBMBaseCase` build at import,
+so the "full" arm ran on the half axis. It now rebuilds those instances and
+refuses to start if any stale one remains. The driver's half arm was removed:
+Q9's harness seeds a random state over the grid's own row count, so a half
+arm starts from a different, non-real state and cannot be compared
+element-wise.
+
+**Full opt-out identity gate.** `run_identity.sh` compared pinned `main`
+`eeb3481c6e5e1893cb71c97cc6da0af9a0ee5c76` with branch head
+`ea6b1464e228e4849666ef2d620a8e44cf78c7ce` under JAX/JAXLIB 0.10.2 on CPU.
+All eight generation arms returned zero and the complete run took 8m57s.
+The fixed 64x64x24 RHS/VJP matrix was bitwise for 58/58 arrays in each of f32
+and x64; the full 100-step trajectory matrix was bitwise for 65/65 arrays in
+each precision. Thus all 246/246 compared arrays are bitwise equal, with
+`max_rel = 0` in all four comparisons. The raw result pairs have matching
+SHA256 values:
+
+| comparison | arrays | ref and `new_full` SHA256 |
+|---|---:|---|
+| RHS/VJP f32 | 58/58 | `e70bdb749042384ea0c065732b68ec4c69e19b0907a424166cc4c607f4c28337` |
+| trajectory f32 | 65/65 | `bd9d66ee457ba24361d8f0702edf6bb71016ee1cb3455ab667f2bc0ff014d568` |
+| RHS/VJP x64 | 58/58 | `284f004eb89b7b867c87d0ee79bdd069ff8357472d61e287f48bc439eadd126d` |
+| trajectory x64 | 65/65 | `37ee524f990f86580c7a3476b141f24786cd9534373a6670d61be9c81801f406` |
+
+The raw execution logs are not published because they contain machine-local
+paths; the public driver below and the pinned commits reproduce the gate. The
+three stale-`Ny` fixture/example failures are fixed, and their containing test
+files pass 109 tests with 14 optional examples skipped.
+
+**Full integration gate.** On exact source
+`9c8614b105d9e29fb42a3f9c7d38ba0a0cf88f9d`, JAX/JAXLIB 0.10.2, x64 and
+CPU-only, `python -m pytest -x tests/integration` completed in 607.78 s:
+566 passed, 15 skipped, one deselected, 79 warnings. Fourteen skips are the
+explicit data-or-long-run cases in `test_examples.py`; the remaining skip is
+the QI adaptive-observable case whose optional cached VMEC geometry was not
+available. The deselected node is the suite's default `slow` case,
+`test_qi_sparse_full_frequency_ladder`. The run therefore covers every
+non-slow integration test available in the supported environment.
+
+**Evidence manifest.** `SHA256SUMS.txt` covers the tracked, reproducible
+scripts and result artifacts in this repository. Raw execution `.log` files
+are gitignored and are not part of that manifest; every listed entry therefore
+verifies from a clean checkout rather than naming a file that was never
+committed.
+
+**Decision.** The identity and integration gates are complete, and the exact
+combined-head retest confirms that compilation was not the whole regression.
+Half layout saves whole-process peak RSS here but remains slower on the steady
+window gradient, so adopting it as the runtime default stays blocked. This
+evidence update neither flips nor reverts the runtime default in the draft;
+that source decision follows review of the measured tradeoff.
+
+```
+export MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
+D=plan/research/scripts/2026-09-20-q10-ky-half-default
+python $D/timing_table.py
+python $D/restart_round_trip.py $D/out/restart_round_trip.json
+for L in full half; do python $D/netcdf_layout_ab.py $D/out/nc_$L.npz --ky-layout $L; done
+python $D/compare_nc.py $D/out/nc_full.npz $D/out/nc_half.npz $D/out/nc_compare.json
+GX_PARITY_REF_DIR=<gx refs> python $D/cyclone_golden_identity.py $D/out/cyclone_golden_branch.json
+python $D/eigen_branch.py $D/out/eigen_branch.json
+bash $D/run_identity.sh <main tree> <this tree> $D/out/identity
+```
 ## 2026-09-20 — Q31 rebased on 2.2.0, three manifest baselines re-measured
 
 **Why CI was red.** Run 35518660118 had exactly two red jobs out of 40, `repo-hygiene` and
@@ -19417,6 +19736,57 @@ Outcome:
 - partial: tranche 1 done; paused before sphinx and CI
 - remaining blocker: none known; docs build and full CI not yet run
 - next task: CI on the PR, then tranche 2 from MAP.md
+## 2026-09-21 — Q10 sheared-status fixture repair and main integration
+
+CI run `35567276915`, shard 3, exposed a fixture with four hard-coded ky rows
+on a three-row half-spectrum grid. Derive the state shape from the grid and
+run the existing three status tests for both supported combinations: full
+layout/full-complex FFT and half layout/compressed real FFT. The raw sheared
+API's full-complex default remains explicit; its half-spectrum refusal is
+not bypassed. All six cases pass on the supported CPU environment before
+integration. No production code changes are needed for this fixture defect.
+Integrate main `4605d0b49`, preserve both log histories, and remeasure source
+and test budgets. Half-layout default adoption remains blocked by the recorded
+adjoint slowdown and pending current-head CI, not promoted by these tests.
+The float32 replay exposed a separate fixture tolerance below round-off:
+the successful-budget control now uses `max(1e-8, 10*eps)`. The deliberately
+starved budget stays at `1e-14`; no production tolerance or refusal is changed.
+After integration, all six status cases pass in float32 and float64; 177
+release/ledger/sink tests, Ruff and the measured architecture gate also pass.
+
+## 2026-09-22 - PERF-LAYOUT: #266 split (deck key and interchange, default unchanged) - `perf/ky-layout-deck-key`
+
+Paused by the maintainer mid-lane; this entry is the handoff.
+
+Baseline:
+- GKX SHA: `f9485f044` (main, 2.3.0); #266 head `32fc4452d` merged in, conflicts only in `plan/log.md` (both histories kept) and the architecture manifest (remeasured).
+- companion SHAs: none.
+- source/test/tool files and lines: src 93830, tests 94358, tools 78904 (manifest baselines set to these measured counts).
+- relevant existing gate: #266's `run_identity.sh` (Q9 `rhs_identity.py`/`gate_traj.py`, `new_full` vs `main`, must be bitwise in f32 and x64).
+
+Scope:
+- intended change: land #266's `[grid] ky_layout` deck key, restart interchange, NetCDF pair-weight division and fixed-kx pair fold, and `PreparedSimulation.state_shape`, with `GridConfig.ky_layout` defaulting to `"full"` (plan F.2). Docs describe `"half"` as an opt-in: RK3 step 0.54x/0.60x, checkpointed window gradient 1.28x.
+- non-goals: flipping the default (waits for SHARD-PAD and ADJ-HALF); editing plan.md (the plan revision owns the Q10 row, so #266's plan.md edit is not carried).
+- acceptance: default runs bitwise equal to main in f32 and x64; #266's failing tests pass.
+
+Changes:
+- `src/gkx/config.py` default `"full"`; module/docs/README wording; `tools/profiling/profile_runtime_kernels.py` help text.
+- `tests/unit/core/test_core_ky_layout.py`: new `test_the_default_deck_builds_the_two_sided_axis`; the Nyquist-weight test names `ky_layout="half"`.
+- `tests/tools/profiling/test_nonlinear_gradient_evidence_contracts.py::test_gradient_window_nz_override_wins_over_shipped_ntheta` sizes ky from the grid's layout (failed on #266).
+- `plan/research/scripts/2026-09-22-ky-layout-split/run_identity_default.sh`: the same gate with no layout pin (proves the shipped default, not only the opt-out).
+
+Evidence:
+- focused tests: `tests/unit/core/test_core_ky_layout.py` + `tests/unit/solvers/test_linear_krylov_core.py`, x64, jax 0.10.2: 329 passed. Ruff check/format clean; architecture manifest checker passes.
+- identity (office host CPU, jax 0.10.2, pinned-full arm of `run_identity.sh`, ref `f9485f044` vs new `2055c9649`): RHS/VJP f32 58/58 bitwise, `max_rel = 0`. The f32 trajectory, both x64 arms and the whole unpinned `run_identity_default.sh` gate were stopped by the pause and are NOT verified. A first local attempt was void (disk full, truncated npz) and was deleted.
+- CPU/NVIDIA measurements: none new; numbers quoted in docs are #266's.
+
+Outcome:
+- partial. Draft PR open; CI not polled.
+- remaining blocker: identity gate completion (3 of 4 pinned comparisons, all 4 unpinned).
+- next task: finish the identity gates; then SHARD-PAD (below).
+
+SHARD-PAD (not started in code; branch `perf/ky-shard-pad` created at `2055c9649`, no commits). Findings: JAX 0.10.2 refuses an uneven `NamedSharding` on `device_put` and on `jit` in/out shardings (checked with 2 fake CPU devices, extent 5), but a slice or `with_sharding_constraint` to an uneven extent inside `jit` is accepted. The runtime ky route runs the whole explicit scan as `jax.jit(run_raw)(prepared.G0)` in `_run_explicit_diagnostic_scan_and_finalize` (`src/gkx/solvers_nonlinear_diagnostics.py`), so the proposed scheme is: pass a ky `NamedSharding` down as an explicit `state_sharding` option (`integrate_nonlinear_explicit_diagnostics_state` -> `_integrate_nonlinear_explicit_diagnostics_impl` -> `integrate_explicit_nonlinear_diagnostics_impl` -> `_run_explicit_scan_components`), zero-pad `prepared.G0` on ky to a multiple of the device count and `device_put` it evenly, and slice the pad off as the first op inside the jit (then `with_sharding_constraint` on the sliced state). Pad rows never reach an operator, weight or diagnostic, and a divisible extent keeps today's path. The final-state route (`integrate_nonlinear_from_config`) and IMEX need either the same hook or an explicit refusal. Rejected alternative: widening the half state to the two-sided axis for the sharded arm, because its resolved diagnostics and fields would come back with `Ny` rows, not `Nyc`.
+
 ## 2026-09-22 — final plan revision: validation matrix and VMEX turbulence example
 
 Added "Final revision and entry point (2026-09-22)" at the top of `plan.md`.
@@ -19776,3 +20146,44 @@ Evidence:
 Outcome:
 - partial (paused). Remaining blocker: GPU A/B (barriers may cost on GPU: tests/unit/parallel/test_parallel_linear_velocity.py records a guarded-RHS barrier measuring slower on a sharded path), the rest of the CPU campaign, docs, CI.
 - next task: see PR #279 Handoff.
+
+## 2026-09-22 - PERF-LAYOUT resumed: identity gates closed, SHARD-PAD opened - `perf/ky-layout-deck-key`, `perf/ky-shard-pad`
+
+Baseline:
+- GKX SHA: `main` `f9485f044` for the identity gate; #282 head `8ddf49301` tested (it differs from `2055c9649` only in tests, docstrings and the manifest), then merged with `main` `29362737f` (#277; `plan/log.md` conflict resolved by keeping both histories).
+- companion SHAs: none.
+- source/test/tool lines: #282 unchanged (93830 / 94358 / 78904); #287 src 93831, tests 94432 (measured).
+- relevant existing gates: `run_identity.sh` (pinned full) and `run_identity_default.sh` (no pin); `tests/unit/parallel/test_parallel_nonlinear_routing.py`.
+
+Scope:
+- intended change: finish #282's identity evidence; SHARD-PAD (plan F.6), so a sharded run accepts `Nyc`.
+- non-goals: real ky partitioning of nonlinear runs; flipping the default.
+- acceptance: 8/8 comparisons bitwise; half layout routed on 2 and 4 fake devices and matching serial.
+
+Changes:
+- #282: summarized comparison records in `plan/research/scripts/2026-09-22-ky-layout-split/records/{pinned,default}/` (raw npz deleted on the office host).
+- #287 (stacked on #282): `shard_nonlinear_state` places an extent the devices do not divide replicated on the mesh instead of refusing; docs say the ky route does not split the scan; routing test on both layouts; a test pins the replicated scan; probe `plan/research/scripts/2026-09-22-shard-pad/ky_partition_probe.py` + `.json`.
+
+Evidence:
+- identity (office CPU, jax 0.10.2, own venv, ref `f9485f044` vs `8ddf49301`): pinned-full RHS/VJP 58/58 and trajectory 65/65 bitwise in f32 and x64; unpinned default the same, 58/58 and 65/65 in f32 and x64, max_rel 0 everywhere.
+- SHARD-PAD probe (CPU, 2 and 4 fake devices, `Ny = 8`): runtime `axis="ky"` scan input is `P()` on both layouts (the initial-state projection `setup.project_state` drops the placement), so the divisible case never ran split; half (`Nyc = 5`) now runs and matches serial. `[time] state_sharding="ky"` fails on the two-sided axis in XLA:CPU's FFT thunk (`RET_CHECK ... IsMonotonicWithDim0Major`, after a partitioner all-gather on ky gives the z FFT layout {5,4,2,1,0,3}) and raises a raw `IndivisibleError` on the half axis. Forcing the split in the runtime jit gives the same FFT failure.
+- tests: routing file passes in float32 and x64 with 4 devices; release gates, parallel core, runners tests pass; ruff, mypy (changed module) and the architecture manifest check pass.
+- CPU/NVIDIA timing: none (no timing claim; both A4000s were in use by other processes).
+
+Outcome:
+- #282 identity: done, 8/8 bitwise. SHARD-PAD: done for the runtime route, whose ky split was never real; real ky partitioning is blocked on XLA:CPU and is a separate follow-up (repro, workaround, GPU check, explicit message for an uneven `[time] state_sharding`).
+- remaining blocker for the default flip: ADJ-HALF (plan F.5).
+- next task: merge `main` again after #278 and move `tools/release/*` invocations to `python scripts/check.py`; retarget #287 to `main` once #282 lands.
+
+## 2026-09-22 - PERF-LAYOUT paused again - `perf/ky-layout-deck-key` (#282), `perf/ky-shard-pad` (#287)
+
+Paused by the maintainer while CI was queued. Nothing is running locally or on the office host.
+
+Baseline: #282 head `258e27b8c`, #287 head `085620a9f`; `main` `29362737f`.
+Evidence: unchanged from the entry above (identity 8/8 bitwise; SHARD-PAD probe recorded).
+Outcome: both PRs ready for review, CI not observed to completion. When paused, #282 had 4 checks passing and 33 still pending, and #287 had 3 passing and 34 pending. Neither had any failure. The earlier CI run at `8ddf49301` was fully green.
+Next steps, in order:
+1. Read `gh pr checks 282` and `gh pr checks 287` and fix any real failure.
+2. After #278 merges, merge `main` into #282 and then into #287. Use `python scripts/check.py <subcommand>` in place of `tools/release/*`.
+3. Land #282, then retarget #287 to `main`.
+4. Flip the default only after ADJ-HALF closes.

@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 from support.paths import REPO_ROOT, load_artifact_tool, load_tool_script
 
+from gkx.core_ky_layout import rows_for_layout, source_ky_layout
 from gkx.solvers_nonlinear_state_integration import DIVERGENCE_KNEE_STEPS
 
 STATIC = REPO_ROOT / "docs" / "_static"
@@ -99,8 +100,14 @@ def test_gradient_window_nz_override_wins_over_shipped_ntheta() -> None:
         {"Nx": 6, "Ny": 4, "Nz": 10},
     )
 
-    assert case["shape"][-3:] == (4, 6, 10)
-    assert case["grid"].z.size == 10
+    # The ky extent is the stored row count of the deck's own layout: Ny = 4
+    # rows on the two-sided axis, Nyc = 3 on the half one. Either way it is
+    # the Ny override, not the shipped deck's Ny, that sets it.
+    grid = case["grid"]
+    ky_rows = rows_for_layout(4, source_ky_layout(grid))
+    assert int(grid.ky.size) == ky_rows
+    assert case["shape"][-3:] == (ky_rows, 6, 10)
+    assert grid.z.size == 10
 
 
 def test_docs_page_names_every_generator() -> None:

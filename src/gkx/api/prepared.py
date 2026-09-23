@@ -17,9 +17,11 @@ solving it directly.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, cast
 
 import numpy as np
+
+from gkx.core_ky_layout import FULL, KyLayout, rows_for_layout
 
 
 def _case_kind(case: Any) -> str:
@@ -33,17 +35,18 @@ def _state_shape(case: Any, *, n_laguerre: int, n_hermite: int) -> tuple[int, ..
 
     grid = case.grid
     n_species = sum(1 for s in case.species if getattr(s, "kinetic", False))
-    # The evolved state is two-sided in ky (gkx.core_ky_layout): the runtime
-    # allocates grid.ky.size == Ny rows and rebuilds the negative half by the
-    # reality condition. Reporting Nyc here advertised, and costed, half the
-    # array the run actually holds.
-    #
-    # Plan 5.3 N3 moves the state to the half layout and this line moves with
-    # it. The half layout is available below the runtime today
-    # (build_spectral_grid(..., ky_layout=HALF)), but the runtime still builds
-    # its grid two-sided, so Ny is still what a prepared case allocates. What
-    # this line must never do is report a layout the runtime did not build.
-    n_ky = int(grid.Ny)
+    # How many ky rows the run allocates, which is a question about the
+    # layout and not about the resolution (gkx.core_ky_layout, plan 5.3 N3).
+    # A two-sided state holds Ny rows and rebuilds the negative half by the
+    # reality condition; a half-spectrum state holds Nyc = 1 + Ny // 2 and
+    # does not. What this line must never do is report a layout the run did
+    # not build: reporting Nyc for a two-sided run halves the array it
+    # advertises and costs, and reporting Ny for a half-spectrum run doubles
+    # it. Reading the same key the grid was built from is what keeps the two
+    # in step.
+    n_ky = rows_for_layout(
+        int(grid.Ny), cast(KyLayout, str(getattr(grid, "ky_layout", FULL)).lower())
+    )
     return (
         max(n_species, 1),
         int(n_laguerre),

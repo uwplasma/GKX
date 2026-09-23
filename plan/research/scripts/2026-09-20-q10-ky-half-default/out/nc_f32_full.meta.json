@@ -1,0 +1,60 @@
+{
+  "gkx": "<branch tree>/src/gkx/__init__.py",
+  "ky_layout": "full",
+  "paths": {
+    "big": "arm.big.nc",
+    "out": "arm.out.nc",
+    "restart": "arm.restart.nc",
+    "summary": "arm.summary.json"
+  },
+  "summary:summary": {
+    "Wapar_last": 0.0,
+    "Wg_last": 0.02149331197142601,
+    "Wphi_last": 0.0006593191064894199,
+    "dt_mean": 0.009999999776482582,
+    "gamma_last": -0.010109459049999714,
+    "heat_flux_last": 8.52369557833299e-05,
+    "implicit_converged": null,
+    "implicit_max_iterations": null,
+    "implicit_max_relative_residual": null,
+    "implicit_unconverged_solves": null,
+    "kind": "nonlinear",
+    "kx_selected": 0.0,
+    "ky_selected": 0.1773049682378769,
+    "n_samples": 3,
+    "n_state_shape": [
+      1,
+      2,
+      4,
+      16,
+      16,
+      24
+    ],
+    "omega_last": 0.13353508710861206,
+    "particle_flux_last": 0.0,
+    "t_last": 0.20000001788139343,
+    "timestep_cost": {
+      "cfl": null,
+      "cost_growth_ratio": null,
+      "dt_collapse_ratio": 1.0,
+      "dt_final": 0.009999999776482582,
+      "dt_initial": 0.009999999776482582,
+      "dt_max": 0.009999999776482582,
+      "dt_min": 0.009999999776482582,
+      "n_samples": 3,
+      "notes": [
+        "dt series is strided: the step count is an estimate that charges each gap to its final step size"
+      ],
+      "steps": 19.00000223517423,
+      "steps_are_exact": false,
+      "steps_per_unit_time": 100.00000223517422,
+      "steps_per_unit_time_first_quarter": null,
+      "steps_per_unit_time_last_quarter": null,
+      "t_end": 0.20000001788139343,
+      "t_span": 0.19000001810491085,
+      "t_start": 0.009999999776482582,
+      "wall_seconds": 4.9431728750350885,
+      "wall_seconds_per_unit_time": 26.016696863184794
+    }
+  }
+}

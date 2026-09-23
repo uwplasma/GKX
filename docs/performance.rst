@@ -85,11 +85,48 @@ float32) with the shipped default deck at ``96x96x48``:
   sweeping ``Ny`` shows the lowering flat at every extent, ``Nyc = 32``
   included, so the extent's factorization never entered it.
 
-  The evolved state is **still two-sided by default**, now for a different
-  reason: what is left is the runtime grid flip and the diagnostics and NetCDF
-  condensation chain, not the layout's cost. Until that work lands the layout
-  is available below the runtime and is not the default, and **no part of the
-  41.9 per cent is claimed as recovered**.
+  The half layout is reachable from a deck as ``[grid] ky_layout = "half"``
+  and is an **opt-in; the default stays two-sided**. Its forward saving is a
+  wall-clock measurement rather than a byte count. Both arms of the A/B are
+  the same binary lowering the shipped Cyclone nonlinear deck onto the two
+  axes; they ran on six physical cores of an idle 36-core host, pinned with
+  ``taskset``, with the cores *and their hyperthread siblings* verified below
+  5 per cent busy before every arm and the arm order rotated between blocks.
+  Medians of four blocks, each seven timed repetitions after a warm call,
+  half over full:
+
+  .. list-table::
+     :header-rows: 1
+
+     * - kernel
+       - 32x32x24
+       - 64x64x24
+     * - one nonlinear RHS
+       - 0.49x
+       - 0.63x
+     * - RK3 step (5 steps, jitted scan)
+       - 0.54x
+       - 0.60x
+     * - RHS gradient (jitted VJP)
+       - 0.83x
+       - 0.96x
+
+  So a forward step runs 1.7 to 1.9 times faster on the half axis.
+  ``fused_interior_bytes`` does rise on the half layout, by 146 and 171 per
+  cent on the two RK3 graphs --- more strided in-fusion reads, which allocate
+  nothing but are not free --- and this measurement is what settles that they
+  do not cost forward time.
+
+  The reverse pass is why the default does not move. The checkpointed
+  heat-flux window gradient (Cyclone deck, ``32x32x24``, ``Nl = 4``,
+  ``Nm = 8``, six RK3 steps, x64 on six CPU cores, after the per-call
+  recompilation of #264 was removed) has a pooled steady-call median of
+  9.54 s on the half axis against 7.46 s on the full one, **1.28x**, with
+  bitwise-identical value and gradient. Whole-process peak RSS is 0.85x.
+  Disabling checkpointing brings the ratio to 1.03x, so the cost sits in the
+  checkpointed reverse, which is where it has to be removed before the half
+  layout can become the default. Until then a forward nonlinear run is the
+  case to opt in for, and a gradient run should stay on ``"full"``.
 - Geometry construction, compilation, plotting, and I/O are seconds each and
   are not worth optimizing against the stepping cost.
 
