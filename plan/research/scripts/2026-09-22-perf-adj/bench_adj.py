@@ -36,6 +36,8 @@ ap.add_argument("--method", default="rk3")
 ap.add_argument("--parts", default="e2e,window,fwd")
 ap.add_argument("--out", type=Path, default=None)
 ap.add_argument("--profile-dir", type=Path, default=None)
+ap.add_argument("--budget", default="default",
+                help="adjoint memory budget in bytes, 'none' (nested schedule) or 'default'")
 ap.add_argument("--hlo-dir", type=Path, default=None)
 args = ap.parse_args()
 
@@ -78,7 +80,7 @@ from tools.profiling.profile_runtime_kernels import (  # noqa: E402
 cfg, _ = load_runtime_from_toml(
     Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml")
 )
-cfg = replace(cfg, grid=replace(cfg.grid, Nx=args.Nx, Ny=args.Ny, Nz=args.Nz))
+cfg = replace(cfg, grid=replace(cfg.grid, Nx=args.Nx, Ny=args.Ny, Nz=args.Nz, ntheta=None))
 geom = build_runtime_geometry(cfg)
 grid = build_spectral_grid(
     apply_imported_geometry_grid_defaults(geom, cfg.grid),
@@ -98,6 +100,8 @@ g0 = jnp.asarray(
 g0 = g0 / jnp.maximum(jnp.max(jnp.abs(g0)), 1e-30) * 1e-2
 dt = float(cfg.time.dt)
 steps = args.steps
+budget = (sni.ADJOINT_MEMORY_BUDGET_BYTES if args.budget == "default"
+          else None if args.budget == "none" else int(float(args.budget)))
 
 
 def objective(tprim):
@@ -105,6 +109,7 @@ def objective(tprim):
         g0, grid, geom, replace(params, tprim=tprim), dt, steps,
         terms=terms, method=args.method, checkpoint=True,
         compressed_real_fft=True, laguerre_mode="grid", divergence_knee_steps=None,
+        adjoint_memory_budget_bytes=budget,
     )
 
 
@@ -114,6 +119,7 @@ report = {
     "x64": bool(jax.config.jax_enable_x64),
     "grid": [args.Nx, args.Ny, args.Nz, args.Nl, args.Nm], "ky": args.ky,
     "state_shape": list(g0.shape), "steps": steps, "method": args.method,
+    "budget": budget, "devices": [str(d) for d in jax.devices()],
 }
 
 
@@ -151,7 +157,7 @@ init = jax.lax.stop_gradient(mask_supplied_state(g0, cache))
 heat0 = jnp.zeros((), dtype=jnp.result_type(jnp.real(init), flux_factor))
 static = dict(dt=dt, count=count, tail=tail, method=args.method, term_cfg=term_cfg,
               compressed_real_fft=True, laguerre_mode="grid", collision_operator=None,
-              checkpoint=True, projector_signature=sig)
+              checkpoint=True, projector_signature=sig, memory_budget_bytes=budget)
 
 
 def window_of_params(p, c):

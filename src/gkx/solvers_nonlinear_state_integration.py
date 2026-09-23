@@ -81,6 +81,11 @@ from gkx.terms.nonlinear import nonlinear_em_contribution
 #: QA_optimization.py`` runs at exactly 1024, one rung below the departure.
 DIVERGENCE_KNEE_STEPS = 1024
 
+#: Default storage the window's reverse pass may spend on checkpointed states
+#: and step residuals before it falls back to the nested (three-forward)
+#: schedule. See :func:`gkx.solvers_nonlinear_explicit.block_checkpoint_plan`.
+ADJOINT_MEMORY_BUDGET_BYTES = 2 * 1024**3
+
 
 def _warn_if_window_exceeds_divergence_knee(
     steps: int, knee: int | None = DIVERGENCE_KNEE_STEPS
@@ -336,6 +341,7 @@ def _identity_state(state: jnp.ndarray) -> jnp.ndarray:
         "collision_operator",
         "checkpoint",
         "projector_signature",
+        "memory_budget_bytes",
     ),
 )
 def _nonlinear_heat_flux_window_total(
@@ -357,6 +363,7 @@ def _nonlinear_heat_flux_window_total(
     collision_operator: CollisionOperator | None,
     checkpoint: bool,
     projector_signature: tuple[int, bool, int] | None,
+    memory_budget_bytes: int | None = None,
 ) -> jnp.ndarray:
     """Compile a reusable heat-flux sum for fixed shapes and static options.
 
@@ -420,6 +427,7 @@ def _nonlinear_heat_flux_window_total(
         (jax.lax.stop_gradient(initial_state), initial_heat),
         indices,
         checkpoint=checkpoint,
+        memory_budget_bytes=memory_budget_bytes,
     )
     return total_heat
 
@@ -440,6 +448,7 @@ def nonlinear_heat_flux_window(
     laguerre_mode: str = "grid",
     collision_operator: CollisionOperator | None = None,
     divergence_knee_steps: int | None = DIVERGENCE_KNEE_STEPS,
+    adjoint_memory_budget_bytes: int | None = ADJOINT_MEMORY_BUDGET_BYTES,
 ) -> jnp.ndarray:
     r"""Mean physical heat flux over a differentiable nonlinear window.
 
@@ -468,6 +477,12 @@ def nonlinear_heat_flux_window(
     useful design direction; pass ``None`` to silence the check when the knee
     has been remeasured for the case at hand with
     ``tools/campaigns/nonlinear_gradient_window.py``.
+
+    ``adjoint_memory_budget_bytes`` bounds the reverse pass's checkpoint
+    storage. When the block-only schedule fits, each step's forward runs twice
+    in a gradient instead of three times; otherwise, or with ``None``, the
+    nested :math:`O(\sqrt{N})` schedule is used. It changes cost, not the
+    discrete adjoint.
 
     Host-side geometry/layout preparation stays here. The differentiated scan
     in :func:`_nonlinear_heat_flux_window_total` reuses its executable for
@@ -523,6 +538,11 @@ def nonlinear_heat_flux_window(
         collision_operator=collision_operator,
         checkpoint=checkpoint,
         projector_signature=projector_signature,
+        memory_budget_bytes=(
+            None
+            if adjoint_memory_budget_bytes is None
+            else int(adjoint_memory_budget_bytes)
+        ),
     )
     return total_heat / tail
 

@@ -32,6 +32,7 @@ from gkx.solvers_nonlinear_diagnostic_integration import (
     prepare_nonlinear_explicit_diagnostics,
 )
 from gkx.solvers_nonlinear_state_integration import (
+    ADJOINT_MEMORY_BUDGET_BYTES,
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
@@ -604,6 +605,84 @@ def test_block_checkpointed_nonlinear_heat_flux_gradient_matches_finite_differen
     np.testing.assert_allclose(
         np.asarray(gradient), np.asarray(centered_fd), rtol=5.0e-2, atol=1.0e-16
     )
+
+
+@pytest.mark.parametrize("ky_layout", ["full", "half"])
+def test_block_only_adjoint_schedule_keeps_the_window_gradient(ky_layout: str):
+    """Dropping the inner remat changes cost, not the value or either gradient.
+
+    The block-only schedule (default budget) is compared with the nested one
+    (budget ``None``) for the value, ``d/d tprim`` and a geometry direction (the
+    drift profiles), and both derivatives are checked against centered finite
+    differences, on both ``ky`` layouts with the compressed real-FFT bracket
+    and rk3. The budget fallback is pinned on the scan itself in
+    ``tests/unit/solvers/test_time_integrators.py``.
+    """
+
+    from gkx.core_ky_layout import FULL, HALF, to_half
+
+    grid_cfg = GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(
+        cfg.grid, ky_layout=FULL if ky_layout == "full" else HALF
+    )
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
+    x64 = bool(jax.config.jax_enable_x64)
+    state = jnp.zeros(
+        (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz),
+        dtype=jnp.complex128 if x64 else jnp.complex64,
+    )
+    profile = 1.0e-4 * (1.0 + 0.2 * jnp.cos(grid.z))
+    state = state.at[0, 0, 1, 0, :].set(profile + 0.3j * profile * jnp.sin(grid.z))
+    state = state.at[0, 1, 1, 0, :].set(0.25j * profile)
+    state = state.at[0, 0, 1, 1, :].set((0.2 - 0.1j) * profile)
+    if ky_layout == "half":
+        state = to_half(state, ny_full=cfg.grid.Ny)
+    terms = TermConfig(nonlinear=1.0)
+
+    def window(rlt, drift_scale, budget):
+        scaled = replace(
+            geom,
+            gb_profile=geom.gb_profile * drift_scale,
+            cv_profile=geom.cv_profile * drift_scale,
+        )
+        return nonlinear_heat_flux_window(
+            state,
+            grid,
+            scaled,
+            replace(LinearParams(), tprim=rlt),
+            dt=0.01,
+            steps=11,
+            method="rk3",
+            tail_steps=7,
+            terms=terms,
+            adjoint_memory_budget_bytes=budget,
+        )
+
+    point = (jnp.asarray(6.9), jnp.asarray(1.0))
+
+    def value_and_both(budget):
+        value, grads = jax.value_and_grad(
+            lambda rlt, scale: window(rlt, scale, budget), argnums=(0, 1)
+        )(*point)
+        return np.asarray([value, *grads])
+
+    block = value_and_both(ADJOINT_MEMORY_BUDGET_BYTES)
+    nested = value_and_both(None)
+    assert np.all(np.isfinite(block)) and np.all(block[1:] != 0.0)
+    np.testing.assert_allclose(block, nested, rtol=1.0e-12 if x64 else 1.0e-6)
+
+    h = 1.0e-2
+    fd_tprim = (
+        window(point[0] + h, point[1], None) - window(point[0] - h, point[1], None)
+    ) / (2 * h)
+    fd_geom = (
+        window(point[0], point[1] + h, None) - window(point[0], point[1] - h, None)
+    ) / (2 * h)
+    np.testing.assert_allclose(block[1], float(fd_tprim), rtol=5.0e-2)
+    np.testing.assert_allclose(block[2], float(fd_geom), rtol=5.0e-2)
 
 
 @pytest.mark.parametrize("checkpoint", [False, True])

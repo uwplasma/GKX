@@ -153,3 +153,11 @@ def step_c(G, c):
 bench("rk3_step_barrier_rhs", step_c, g0, cache)
 cc = jax.jit(step_c)(g0, cache)
 print("bitwise_c", bool(jnp.all(a == cc)))
+
+if os.environ.get("PROFILE_DIR"):
+    fn = jax.jit(step_c if os.environ.get("PROFILE_VARIANT") == "barrier" else step)
+    jax.block_until_ready(fn(g0, cache))
+    jax.profiler.start_trace(os.environ["PROFILE_DIR"])
+    for _ in range(3):
+        jax.block_until_ready(fn(g0, cache))
+    jax.profiler.stop_trace()
