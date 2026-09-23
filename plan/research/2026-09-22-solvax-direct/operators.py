@@ -39,10 +39,12 @@ from scipy.sparse.csgraph import reverse_cuthill_mckee
 REPO = Path(__file__).resolve().parents[3]
 DECK = "examples/linear/axisymmetric/cyclone.toml"
 
-# name: (Nz, ntheta, nperiod, Nl, Nm). "r48", "r96" and "prod" are the rungs of
-# the 2026-09-13 exact ladder and of Q7/Q21/Q28, so the rows compare directly.
+# name: (Nz, ntheta, nperiod, Nl, Nm). "d96" is Q28's and PERF-LIT's control
+# (plan/research/scripts/2026-09-19-pr3cm-src); "r48", "r96" and "prod" are the
+# rungs of the 2026-09-13 exact ladder and of Q7/Q21, so the rows compare directly.
 CASES = {
     "c24": (24, 24, 1, 8, 16),
+    "d96": (96, 32, 2, 4, 8),
     "r48": (48, 16, 2, 8, 16),
     "c48": (48, 16, 2, 16, 48),
     "r96": (96, 32, 2, 8, 24),
@@ -127,7 +129,12 @@ class Case:
     def apply_fn(self, which: str):
         from gkx.solvers_linear_krylov_algorithms import _apply_operator
 
-        terms, cache, params, shape = self.term_config(which), self.cache, self.params, self.shape
+        terms, cache, params, shape = (
+            self.term_config(which),
+            self.cache,
+            self.params,
+            self.shape,
+        )
 
         def apply(x):
             return _apply_operator(x.reshape(shape), cache, params, terms).reshape(-1)
@@ -135,7 +142,7 @@ class Case:
         return apply
 
 
-def moment_graph(apply, shape, *, probes=(1 / 3, 2 / 3), rtol=0.0):
+def moment_graph(apply, shape, *, probes=(1 / 3, 2 / 3), rtol=0.0, batch=64):
     """Couplings between (l, m) moments, split into z-local and chain-wide.
 
     Returns two boolean (Nl*Nm, Nl*Nm) arrays ``local[row, col]`` and
@@ -150,11 +157,20 @@ def moment_graph(apply, shape, *, probes=(1 / 3, 2 / 3), rtol=0.0):
     batched = jax.jit(jax.vmap(apply))
     for frac in probes:
         z0 = min(max(int(round(frac * (nz - 1))), 0), nz - 1)
-        seeds = np.zeros((nb, nb, nz), np.complex128)
-        seeds[np.arange(nb), np.arange(nb), z0] = 1.0 + 0.5j
-        out = np.asarray(batched(jnp.asarray(seeds.reshape(nb, -1)))).reshape(nb, nb, nz)
-        scale = np.abs(out).max()
-        hit = np.abs(out) > rtol * scale
+        hit = np.zeros((nb, nb, nz), bool)
+        scale = 0.0
+        mags = []
+        for lo in range(0, nb, batch):
+            hi = min(lo + batch, nb)
+            seeds = np.zeros((hi - lo, nb, nz), np.complex128)
+            seeds[np.arange(hi - lo), np.arange(lo, hi), z0] = 1.0 + 0.5j
+            out = np.abs(np.asarray(batched(jnp.asarray(seeds.reshape(hi - lo, -1)))))
+            out = out.reshape(hi - lo, nb, nz)
+            scale = max(scale, float(out.max()))
+            mags.append((lo, hi, out))
+        for lo, hi, out in mags:
+            hit[lo:hi] = out > rtol * scale
+        del mags
         at = hit[:, :, z0]
         off = hit.copy()
         off[:, :, z0] = False
@@ -203,53 +219,75 @@ def pattern_from_graph(local, chain, nz):
     """Kronecker expansion of the moment graph: z-local -> I, chain-wide -> ones."""
 
     return (
-        sp.kron(sp.csr_matrix(local), sp.identity(nz, format="csr"))
-        + sp.kron(sp.csr_matrix(chain), sp.csr_matrix(np.ones((nz, nz))))
-    ).tocsr().astype(bool).astype(np.float64)
+        (
+            sp.kron(sp.csr_matrix(local), sp.identity(nz, format="csr"))
+            + sp.kron(sp.csr_matrix(chain), sp.csr_matrix(np.ones((nz, nz))))
+        )
+        .tocsr()
+        .astype(bool)
+        .astype(np.float64)
+    )
 
 
-def assemble(case: Case, which: str, *, batch: int = 64):
-    """Exact CSR matrix of one operator, with assembly statistics."""
+def assemble(case: Case, which: str, *, batch: int = 32):
+    """Exact CSR matrix of one operator, with assembly statistics.
 
-    from solvax.compression import matrix_from_products
+    Products are taken ``batch`` groups at a time and scattered straight into
+    the CSR data array, so peak memory is the pattern plus one batch of images,
+    not every image at once. The diagonal is always in the pattern, so a shift
+    ``A - sigma I`` keeps it.
+    """
 
     apply = case.apply_fn(which)
+    nz = case.shape[-1]
     stats: dict = {}
     t = time.perf_counter()
     local, chain = moment_graph(apply, case.shape)
-    pattern = pattern_from_graph(local, chain, case.shape[-1])
+    local = local | (np.eye(local.shape[0], dtype=bool) & ~chain)
+    pattern = pattern_from_graph(local, chain, nz)
+    pattern.sort_indices()
     stats["probe_s"] = time.perf_counter() - t
     t = time.perf_counter()
-    groups = kron_groups(local, chain, case.shape[-1])
+    groups = kron_groups(local, chain, nz)
     stats["coloring_s"] = time.perf_counter() - t
-    batched = jax.jit(jax.vmap(apply))
     n = case.n
-    seeds = []
-    for g in groups:
-        s = np.zeros(n, np.complex128)
-        s[g] = 1.0
-        seeds.append(s)
-    t = time.perf_counter()
-    images = []
-    for start in range(0, len(seeds), batch):
-        images.append(np.asarray(batched(jnp.asarray(np.stack(seeds[start : start + batch])))))
-    images = np.concatenate(images)
-    stats["products_s"] = time.perf_counter() - t
-    def cached(v):  # matrix_from_products calls groups in order; replay the batch
-        cached.k += 1
-        return images[cached.k - 1]
+    col_group = np.empty(n, np.int32)
+    for k, g in enumerate(groups):
+        col_group[g] = k
+    rows = np.repeat(np.arange(n, dtype=np.int32), np.diff(pattern.indptr))
+    entry_group = col_group[pattern.indices]
+    order = np.argsort(entry_group, kind="stable")
+    bounds = np.searchsorted(
+        entry_group[order], np.arange(0, len(groups) + batch, batch)
+    )
+    data = np.empty(pattern.nnz, np.complex128)
+    batched = jax.jit(jax.vmap(apply))
 
-    cached.k = 0
+    def seeds_for(lo, hi):
+        s = np.zeros((hi - lo, n), np.complex128)
+        for k in range(lo, hi):
+            s[k - lo, groups[k]] = 1.0
+        return jnp.asarray(s)
+
     t = time.perf_counter()
-    matrix = matrix_from_products(cached, pattern, groups=groups, dtype=np.complex128)
-    matrix.eliminate_zeros()
-    stats["recover_s"] = time.perf_counter() - t
+    jax.block_until_ready(batched(seeds_for(0, min(batch, len(groups)))))
+    stats["compile_s"] = time.perf_counter() - t
+    t = time.perf_counter()
+    for b, lo in enumerate(range(0, len(groups), batch)):
+        hi = min(lo + batch, len(groups))
+        images = np.asarray(batched(seeds_for(lo, hi)))
+        sel = order[bounds[b] : bounds[min(b + 1, len(bounds) - 1)]]
+        data[sel] = images[entry_group[sel] - lo, rows[sel]]
+    stats["products_s"] = time.perf_counter() - t
+    del rows, entry_group, order
+    matrix = sp.csr_matrix((data, pattern.indices, pattern.indptr), shape=(n, n))
     stats["verify_rel"] = verify(matrix, apply)
     stats["products"] = len(groups)
     stats["pattern_nnz"] = int(pattern.nnz)
+    stats["exact_zeros"] = int((data == 0).sum())
     stats["moment_links_local"] = int(local.sum())
     stats["moment_links_chain"] = int(chain.sum())
-    return matrix.tocsr(), stats
+    return matrix, stats
 
 
 def verify(matrix, apply, samples: int = 3, seed: int = 0) -> float:
@@ -262,9 +300,13 @@ def verify(matrix, apply, samples: int = 3, seed: int = 0) -> float:
     rng = np.random.default_rng(seed)
     worst = 0.0
     for _ in range(samples):
-        v = rng.standard_normal(matrix.shape[1]) + 1j * rng.standard_normal(matrix.shape[1])
+        v = rng.standard_normal(matrix.shape[1]) + 1j * rng.standard_normal(
+            matrix.shape[1]
+        )
         ref = np.asarray(apply(jnp.asarray(v)))
-        worst = max(worst, float(np.linalg.norm(matrix @ v - ref) / np.linalg.norm(ref)))
+        worst = max(
+            worst, float(np.linalg.norm(matrix @ v - ref) / np.linalg.norm(ref))
+        )
     return worst
 
 
@@ -276,10 +318,14 @@ def structure(matrix) -> dict:
     coo = A.tocoo()
     row_nnz = np.diff(A.indptr)
     bw = int(np.abs(coo.row - coo.col).max()) if A.nnz else 0
-    perm = reverse_cuthill_mckee((abs(A) + abs(A.T)).tocsr(), symmetric_mode=True)
-    P = A[perm][:, perm].tocoo()
-    bw_rcm = int(np.abs(P.row - P.col).max()) if A.nnz else 0
-    sym = abs(abs(A) - abs(A).T).sum() / max(abs(A).sum(), 1e-300)
+    S = A.copy()
+    S.data = np.abs(S.data)
+    perm = reverse_cuthill_mckee((S + S.T).tocsr(), symmetric_mode=True)
+    inv = np.empty_like(perm)
+    inv[perm] = np.arange(n)
+    bw_rcm = int(np.abs(inv[coo.row] - inv[coo.col]).max()) if A.nnz else 0
+    sym = abs(S - S.T).sum() / max(S.sum(), 1e-300)
+    del S
     return {
         "n": n,
         "nnz": int(A.nnz),
@@ -304,4 +350,6 @@ if __name__ == "__main__":  # pragma: no cover - smoke run
     a = p.parse_args()
     c = Case(a.case, a.ky, nu=0.01 if a.which == "collisions" else 0.0)
     M, st = assemble(c, a.which)
-    print(json.dumps({"case": a.case, "ky": c.ky, "which": a.which} | st | structure(M)))
+    print(
+        json.dumps({"case": a.case, "ky": c.ky, "which": a.which} | st | structure(M))
+    )
