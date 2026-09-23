@@ -629,7 +629,10 @@ def _build_explicit_scan_closures(
         params,
         deps=deps,
         method=options.method,
-        diagnostics_stride=options.diagnostics_stride,
+        # Refresh diagnostics on the rows the output keeps: a sample stride
+        # that is not a multiple of diagnostics_stride would otherwise retain
+        # rows whose diagnostics belong to an earlier step.
+        diagnostics_stride=max(options.sample_stride, options.diagnostics_stride, 1),
         show_progress=options.show_progress,
         steps=options.steps,
         external_phi=options.external_phi,
