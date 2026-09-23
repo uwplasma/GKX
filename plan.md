@@ -179,6 +179,51 @@ P1, P3's VMEX-side step, P4 and the CPU lanes of P5 can run in parallel; P2
 feeds P1's eigen-derivative path and P3's linear objectives. The DOI waits for
 P7.
 
+### G.7 Handoff at the second pause (2026-09-22, evening)
+
+State of `main`: `29362737f` (#277 merged: this plan). Nothing else merged
+since 2.3.0. Every lane below has a Handoff section in its PR body and a
+`plan/log.md` entry; resume from those.
+
+| PR | Branch | State | Notes |
+|---|---|---|---|
+| #288 | `slim/tools-benchmarks-2` | ready | slim(tools): tranche 2 - move all tools/ and benchmark Python behind s |
+| #287 | `perf/ky-shard-pad` | ready | parallel: accept ky extents the devices do not divide (SHARD-PAD) |
+| #286 | `fix/cli-resolution-fallback` | ready | fix(cli): take the Nl/Nm fallbacks from the runtime owner |
+| #285 | `docs/readme-showcase` | ready | docs(readme): README showcase with validated figures, proof tests and  |
+| #284 | `research/perf-lit-20260922` | draft | research(perf-lit): measured GKX profile and ranked performance/deriva |
+| #283 | `docs/current-2.3` | draft | docs: current with 2.3.0; verification matrix generated from the evide |
+| #282 | `perf/ky-layout-deck-key` | ready | ky layout: deck key and interchange, default unchanged (#266 split) |
+| #281 | `examples/gallery` | draft | examples: numbered gallery (G.3 EXAMPLES-GALLERY) — draft, paused |
+| #280 | `research/solvax-direct-20260922` | draft | SOLVAX-DIRECT: operator assembly harness and inventory (paused, draft) |
+| #279 | `perf/adjoint-window` | draft | perf(adjoint): PERF-ADJ diagnosis of the half-layout window penalty (p |
+| #278 | `slim/tools-benchmarks-1` | draft | slim(tools): tranche 1 - delete zero-reference tools, consolidate rele |
+| #275 | `draft/physical-cadence-handoff` | draft | WIP handoff: physical-cadence statistics prototype (not for adoption) |
+| #274 | `draft/em-multimode-handoff` | draft | WIP handoff: multimode electromagnetic energy oracle (unqualified) |
+| #272 | `prep/issue194-cyclone-rate` | ready | validation: migrate Cyclone absorber rate with a matched timestep ladd |
+| #266 | `perf/ky-half-default` | draft | Q10: make the ky >= 0 layout the default (draft, handoff) |
+
+**Merge queue, in order, when each is green** (use `gh pr merge <n> --merge --admin`; resolve `plan/log.md` conflicts by union, keeping every line):
+
+1. #278 SLIM-TOOLS tranche 1. Already merged with main at `ac65b570d`, and its repo-hygiene step passes locally. It moves `tools/release/*` behind `scripts/check.py`. Every later PR that calls `tools/release/...` must switch to `python scripts/check.py <subcommand>`.
+2. #286 CLI-RES. `gkx run`, `gkx scan` and `gkx.run_linear_case` still defaulted to (Nl, Nm) = (24, 12); the nonlinear CLI used (24, 12) instead of (4, 8). Now one owner in `startup`. 407 tests pass.
+3. #272. Cyclone absorber-rate migration (issue #194). After merging main, the diff is one fixture change plus its log entry; 62 damping tests pass locally.
+4. #288 SLIM-TOOLS tranche 2. Conflicts with main until #278 lands; rebase it on main after that.
+5. #283 DOCS-CURRENT, then #285 README-SHOWCASE, then #281 EXAMPLES-GALLERY, whose path moves touch what the others name. Update README example links after #281.
+6. #282 (ky deck key, default full), then #287 (SHARD-PAD, stacked on #282). After both, close #266 as superseded.
+7. Research records #279, #280 and #284: merge once repo-hygiene passes, or continue the lanes (PERF-LIT ranked items 1–8; P1, P2 in G.6).
+
+**Where CI was at pause.** GitHub runners were saturated by about 12 concurrent PRs, and each full run took over an hour. Next time, integrate ready lanes into one chain branch and run CI once (the 2.3.0 pattern, #276) instead of running every PR's CI in parallel.
+
+**Not yet in any lane**, from #283's findings:
+- `gkx run` and `gkx scan` print a spurious deprecation warning.
+- The Krylov eigen path silently ignores `collision_operator`; it must refuse it or honour it.
+- Three tracked `docs/_static` JSONs contain absolute local paths.
+
+Separate sessions the maintainer started are fixing three more: the collision moment-layout check, ky-sharded nonlinear runs on XLA:CPU, and a stale final sample in streamed nonlinear diagnostics.
+
+**Resources.** Heavy runs belong on `ssh office`. Keep at least 10 GB free on the laptop.
+
 ## Final revision and entry point (2026-09-22)
 
 This section is the entry point for anyone picking up GKX. It supersedes the
