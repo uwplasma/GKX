@@ -20404,3 +20404,31 @@ Evidence:
 Outcome:
 - paused; PR #296 converted to draft
 - next task: let CI finish on the pushed head, confirm ci-required, then mark #296 ready; then INVENTORY §5 ranks 1, 3, 4
+
+## 2026-09-23 - SOLVAX-DIRECT (plan G.2) complete: gradient rows, prod, cuDSS; GKX #295 consumer
+
+Baseline:
+- GKX: #280 on main at 29362737f; consumer #295 based on origin/chain/p0 f005418bf. SOLVAX #121 on 7b8ca55.
+
+Scope:
+- finish the #280 handoff: gradient against dense and `adaptive`, clean d96 rows, prod, cuDSS; consumer PR
+
+Changes:
+- #280: final records (`run3`, `grad`, `extra`, `cudss`), `cudss.py`, `gradient.py --arm gkx`, `bench.py --save-matrix`, REPORT.md final section
+- #295: `solver_growth_rate_from_geometry(eigensolver="sparse-direct")`; source +96 lines (baseline 93953 -> 94049), tests +52 (94628 -> 94680)
+
+Evidence:
+- n=3,072 growth-rate value+grad: dense 154-193 s, adaptive 117-183 s, direct jitted 4.1-5.5 s, GKX #295 eager 19.2-19.9 s; gradient vs dense 2.0e-13 to 2.9e-13
+- eigenpair: r96 direct about 109 s against adaptive 300 s (same eigenvalue); prod direct 0.0930911733-0.2820327315j, residual 1.7e-13, about 1,250 s (Arnoldi 1,011 s)
+- prod solve: MUMPS 117 s factor / 1.0-1.7 s solve (6.3 GB); cuDSS on A4000 15.5 s / 0.026 s; pr3-cm 322 s (1e-6)
+
+Outcome:
+- accepted for review: SOLVAX #121 (CI green), GKX #295 (paired gate skips until a SOLVAX release carries #121)
+- next task: SOLVAX release; raise the GKX floor; cache the pattern in #295; GPU factor behind the primitive
+
+## 2026-09-23 - SOLVAX-DIRECT paused (final pause, out of credits)
+
+- State: #280 and #295 are merged with main 48536d159 and pushed; #295 is back to draft with base main. SOLVAX #121 CI is fully green.
+- CI at the pause, before the merges (runners backed up): #280 had 26 checks passed, 11 pending and none failed. #295 had 10 passed and 27 pending after its mypy fix (the type-ignored import, which follows the adaptive route). The merges restarted both runs.
+- Office: raw outputs and the GPU venv are deleted; the MUMPS conda env and the clones remain under `lanes/solvax-direct` (2.6 GB).
+- Next: CI green on #280 and #295; SOLVAX release with #121; raise the GKX floor; cache the pattern in #295.

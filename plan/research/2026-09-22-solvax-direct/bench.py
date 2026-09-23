@@ -386,6 +386,7 @@ def main() -> None:
     p.add_argument("--eig-tol", type=float, default=1e-12)
     p.add_argument("--skip", nargs="*", default=[])
     p.add_argument("--shift", type=complex, default=None)
+    p.add_argument("--save-matrix", default=None, help="write B = A - sigma I (npz)")
     p.add_argument("--out", default=None)
     args = p.parse_args()
 
@@ -420,6 +421,8 @@ def main() -> None:
     rec["shift_seed_s"] = time.perf_counter() - t
     B = (A - sigma * sp.identity(case.n, dtype=np.complex128, format="csr")).tocsr()
     log(f"sigma {sigma}")
+    if args.save_matrix:
+        sp.save_npz(args.save_matrix, B, compressed=False)
 
     rng = np.random.default_rng(2)
     direct = {}

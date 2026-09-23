@@ -108,7 +108,9 @@ def grad_norm(g) -> float:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--arm", required=True, choices=("direct", "dense", "adaptive"))
+    p.add_argument(
+        "--arm", required=True, choices=("direct", "dense", "adaptive", "gkx")
+    )
     p.add_argument("--nz", type=int, default=96)
     p.add_argument("--nl", type=int, default=4)
     p.add_argument("--nm", type=int, default=8)
@@ -176,6 +178,23 @@ def main() -> None:
         vg = jax.jit(jax.value_and_grad(gamma))
         rec["value_s"], v = timed_calls(value, (geo_vars,), args.repeats)
         rec["value_and_grad_s"], (v, g) = timed_calls(vg, (geo_vars,), args.repeats)
+    elif args.arm == "gkx":
+        # The GKX consumer: solver_growth_rate_from_geometry(eigensolver="sparse-direct").
+        def gamma(v):
+            return gkx.solver_growth_rate_from_geometry(
+                with_geometry(geometry, v),
+                n_laguerre=args.nl,
+                n_hermite=args.nm,
+                eigensolver="sparse-direct",
+                shift=args.shift,
+                candidates=args.candidates,
+            )
+
+        clear = solvax.clear_factor_cache
+        rec["value_s"], v = timed_calls(gamma, (geo_vars,), args.repeats, before=clear)
+        rec["value_and_grad_s"], (v, g) = timed_calls(
+            jax.value_and_grad(gamma), (geo_vars,), args.repeats, before=clear
+        )
     elif args.arm == "adaptive":
 
         def gamma(v):
