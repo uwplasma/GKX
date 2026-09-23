@@ -1,0 +1,115 @@
+{
+  "backend": "cpu",
+  "devices": 4,
+  "jax": "0.10.2",
+  "runtime_ky_route": {
+    "full/2": {
+      "placed_input": {
+        "fully_replicated": false,
+        "n_devices": 2,
+        "spec": "P(None, None, None, 'd', None, None)"
+      },
+      "scan_input": {
+        "fully_replicated": true,
+        "n_devices": 2,
+        "spec": "P()"
+      },
+      "state_shape": [
+        1,
+        3,
+        4,
+        8,
+        1,
+        16
+      ]
+    },
+    "full/4": {
+      "placed_input": {
+        "fully_replicated": false,
+        "n_devices": 4,
+        "spec": "P(None, None, None, 'd', None, None)"
+      },
+      "scan_input": {
+        "fully_replicated": true,
+        "n_devices": 4,
+        "spec": "P()"
+      },
+      "state_shape": [
+        1,
+        3,
+        4,
+        8,
+        1,
+        16
+      ]
+    },
+    "half/2": {
+      "placed_input": {
+        "fully_replicated": true,
+        "n_devices": 2,
+        "spec": "P()"
+      },
+      "scan_input": {
+        "fully_replicated": true,
+        "n_devices": 2,
+        "spec": "P()"
+      },
+      "state_shape": [
+        1,
+        3,
+        4,
+        5,
+        1,
+        16
+      ]
+    },
+    "half/4": {
+      "placed_input": {
+        "fully_replicated": true,
+        "n_devices": 4,
+        "spec": "P()"
+      },
+      "scan_input": {
+        "fully_replicated": true,
+        "n_devices": 4,
+        "spec": "P()"
+      },
+      "state_shape": [
+        1,
+        3,
+        4,
+        5,
+        1,
+        16
+      ]
+    }
+  },
+  "time_state_sharding_ky": {
+    "full/2": {
+      "error": "JaxRuntimeError: INTERNAL: RET_CHECK failure (external/xla/xla/backends/cpu/runtime/fft_thunk.cc:168) LayoutUtil::IsMonotonicWithDim0Major(input_shape_.layout()) ",
+      "final_state": {
+        "fully_replicated": false,
+        "n_devices": 2,
+        "spec": "P(None, None, None, 'd', None, None)"
+      },
+      "ky_extent": 8
+    },
+    "full/4": {
+      "error": "JaxRuntimeError: INTERNAL: RET_CHECK failure (external/xla/xla/backends/cpu/runtime/fft_thunk.cc:168) LayoutUtil::IsMonotonicWithDim0Major(input_shape_.layout()) ",
+      "final_state": {
+        "fully_replicated": false,
+        "n_devices": 4,
+        "spec": "P(None, None, None, 'd', None, None)"
+      },
+      "ky_extent": 8
+    },
+    "half/2": {
+      "error": "IndivisibleError: Sharding NamedSharding(mesh=Mesh('d': 2, axis_types=(Auto,)), spec=P(None, None, None, 'd', None, None), memory_kind=device) implies that array axis 3 is partitioned 2 times, but the dimension size is 5 (full shape: (1, 3, 4, 5, 1, 16), per",
+      "ky_extent": 5
+    },
+    "half/4": {
+      "error": "IndivisibleError: Sharding NamedSharding(mesh=Mesh('d': 4, axis_types=(Auto,)), spec=P(None, None, None, 'd', None, None), memory_kind=device) implies that array axis 3 is partitioned 4 times, but the dimension size is 5 (full shape: (1, 3, 4, 5, 1, 16), per",
+      "ky_extent": 5
+    }
+  }
+}

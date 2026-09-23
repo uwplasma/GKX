@@ -1134,7 +1134,10 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 93344 -> 93830: #266 split (PERF-LAYOUT): ky_layout deck key, restart
 # interchange and NetCDF pair-fold fixes, default unchanged. Measured.
-baseline = 93830
+# 93830 -> 93831: SHARD-PAD (plan F.6). The ky route places an extent its
+# devices do not divide replicated on the mesh instead of refusing it; the
+# refusal's message is gone and the reason is stated once. Measured.
+baseline = 93831
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1459,7 +1462,11 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 94057 -> 94358: #266 split (PERF-LAYOUT): ky_layout deck key, restart
 # interchange and NetCDF pair-fold fixes, default unchanged. Measured.
-baseline = 94358
+# 94358 -> 94432: SHARD-PAD (plan F.6). The runtime ky routing test runs on
+# both layouts (Nyc = 5 on two and four devices); the refusal test becomes the
+# two placement tests; and one test pins that the ky route's scan runs
+# replicated, the fact that makes an uneven placement lose nothing.
+baseline = 94432
 target = 35000
 
 [[line_budget_policy.counts]]
