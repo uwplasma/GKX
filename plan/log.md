@@ -20265,3 +20265,81 @@ Evidence:
 Outcome:
 - page audit complete; PR still draft
 - next task: confirm ci-required on #283, mark ready; after #278 merges, merge origin/main and rewrite tools/release paths in docs to scripts/check.py subcommands; land after #286
+
+## 2026-09-22 - README-SHOWCASE (G.3), branch docs/readme-showcase (paused, partial)
+
+Baseline:
+- GKX SHA: f9485f044 (2.3.0)
+- companion SHAs: none; GX source read at bc2fe552 for the defect claims
+- source/test/tool files and lines: unchanged; adds scripts/figures.py and scripts/figures.toml
+- relevant existing gate: tests/release/test_release_gates.py (README phrases, parity table), tests/release/test_evidence_ledger.py, tests/validation/stellarator/test_vmex_qa_transport_optimization.py
+
+Scope:
+- intended change: README per plan.md G.1 (VMEX-style sections, capability figures, proof-test table, evidence-backed GX comparison); one config-driven generator for every new README figure (archived plan section 21.4 `scripts/figures.py`)
+- non-goals: docs/*.rst, examples/, tools/, benchmarks/, the ledger
+- acceptance: pinned claim-scope sentences unchanged; figures regenerable by one command; README numbers recomputed from tracked artifacts
+
+Changes:
+- added scripts/figures.py, scripts/figures.toml; docs/_static/readme/readme_{linear,nonlinear,gx_defects}.{png,json} (243 KiB PNG total)
+- README.md not yet rewritten
+
+Evidence:
+- `JAX_ENABLE_X64=true PYTHONPATH=src:. python scripts/figures.py linear nonlinear gx_defects` (JAX 0.10.2) recomputes Cyclone 6.83%/1.59%, W7-X 0.265%/0.296%, KBM 20.0%/11.1% (same as the ledger rows), W7-X eigenfunction overlap 0.9999999994
+- GX end-damping clamp: Cyclone ky 0.55, Nl32/Nm96 (294,912 indices, 77.8% undamped): GKX - GX(shipped kernel) = +3.97% in gamma; GKX - GX(grid-stride loop) = -0.23%; values from the 2026-09-05 entries above
+- GX float32 kz-hypercollision coefficient at p = 20: finite to Nm 76, zero for Nm 77-85, NaN from Nm 86 (numpy float32, matches the logged Nm 96 NaN run)
+- proof-test numbers, measured but not yet plotted: collision conservation 2.2e-16 (max over sugama/improved_sugama/coulomb), self-adjointness 3.4e-17, H-theorem 4.0e-17, Coulomb Appendix C coefficients 2.2e-16, collisionless Hermite max|Re| 1.6e-14, Laguerre round trip (Nl <= 64) 2.1e-12, Gauss-Laguerre moments 4.7e-14, Spitzer-Harm gamma_E 0.11-0.61%, Landau 0.246%/0.064% (Te/Ti 1) and 0.004%/0.004% (Te/Ti 10)
+- not verified, so not to be claimed: "a freshly built GX does not reproduce its own KAW reference" (docs/verification_matrix.rst prose only; no log entry or artifact)
+
+Outcome:
+- partial; paused by the maintainer before the README rewrite
+- remaining blocker: none technical; the proof_tests builder takes ~4 CPU-minutes (Landau nu-scan)
+- next task: build proof_tests, rewrite README.md (~300 lines), run the README gates, open for review
+
+## 2026-09-22 - README-SHOWCASE (G.3), branch docs/readme-showcase (resumed, complete)
+
+Baseline:
+- GKX SHA: f9485f044 (2.3.0); branch head before this entry 56c58ebeb
+- companion SHAs: none
+- source/test/tool files and lines: unchanged; README.md, scripts/figures.py, docs/_static/readme/readme_proof_tests.{png,json}
+- relevant existing gate: tests/release/test_release_gates.py, tests/release/test_evidence_ledger.py, tests/validation/stellarator/test_vmex_qa_transport_optimization.py, tools/release/check_quasilinear_promotion_guardrails.py
+
+Scope:
+- intended change: finish G.1's README: proof-test figure, rewritten README with capability figures, a proof-test table and the GX-defect section
+- non-goals: docs/*.rst, examples/ (the gallery lane moves files; the README links only examples/), tools/
+- acceptance: pinned claim-scope sentences unchanged; every new number from a tracked artifact, a figure JSON or a cited log entry
+
+Changes:
+- README.md 583 -> 349 lines: pitch and five bullets, install, run an equilibrium, Python, linear physics (figure + the gated 7-row parity table), nonlinear (figure), collisions (prose), proof tests (figure + table), where GX gives the wrong answer (figure + two defects + scope table), derivatives and the pinned QA section, performance, claim scope, figure regeneration, development, license
+- dropped from the README (kept in docs): input reference tables, run-control table, velocity-basis table, the old per-figure generator table
+- scripts/figures.py: proof-test legend moved off the last row
+
+Evidence:
+- `JAX_ENABLE_X64=true python scripts/figures.py proof_tests` on the office host (CPU, JAX 0.10.2): 6 min 56 s wall, 0.79 GB peak RSS. Collision invariants 2.2e-16 (gate 1e-12), self-adjointness 3.4e-17 (1e-12), H-theorem 5.6e-17 (1e-12), Coulomb C9a-f 2.2e-16 (1e-10), collisionless max|Re lambda| 2.4e-14 (1e-11), Laguerre round trip 1.2e-12 (1e-10), Gauss-Laguerre moments 4.9e-14 (1e-10), Landau 0.246%/0.064% and 0.004%/0.004% (1%/0.5%), Spitzer-Harm 0.11-0.61% (1.5%)
+- every tolerance tick equals the threshold its named test asserts (test_collision_physics.py, test_hermite_hierarchy_physics.py, test_core_numerics.py)
+- nonlinear panel (b) metric checked in tools/comparison/compare_gx_nonlinear.py: time mean of the pointwise relative difference, not a window statistic; the caption says so
+- local (JAX 0.10.2): test_release_gates.py + test_evidence_ledger.py + test_vmex_qa_transport_optimization.py pass (31 s); quasilinear guardrails passed (0 failed gates); architecture and size manifests pass
+
+Outcome:
+- complete pending CI and review
+- remaining blocker: none. After #278 merges, the README's `python tools/release/run_test_gates.py fast` becomes `python scripts/check.py test-gates fast`
+- next task: merge origin/main after #278, update that line, rerun the README gates
+
+## 2026-09-22 - README-SHOWCASE (G.3), paused again after merging main
+
+Baseline:
+- GKX SHA: 29362737f (main after #277); branch head 896631af4 before this entry
+
+Scope:
+- no content change since the resumed entry above; merge of origin/main (#277) into docs/readme-showcase
+
+Changes:
+- plan/log.md conflict resolved by keeping every line of both sides (main's new entries first, then this lane's)
+
+Evidence:
+- after the merge, test_release_gates.py + test_evidence_ledger.py + test_vmex_qa_transport_optimization.py pass locally (JAX 0.10.2, x64); architecture and size manifests pass; gitleaks clean
+- CI on 4d764e7bd (pre-merge) had 11 passes, 0 failures when it was superseded; CI on the merged head was still queued (runner backlog) at the pause, with no job failures
+
+Outcome:
+- paused by the maintainer; no process running locally or on the office host
+- office host keeps only the lane clone and its venv (lanes/readme-showcase under the home directory); no raw outputs beyond the two committed README figure files
+- next task: (1) wait for ci-required on the head; (2) when #278 is on main, merge origin/main and change the README's `python tools/release/run_test_gates.py fast` to `python scripts/check.py test-gates fast`; (3) rerun the three README test files; (4) push and leave for the supervisor to merge
