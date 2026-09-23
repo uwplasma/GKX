@@ -5,7 +5,7 @@
     python scripts/figures.py --list          # names, outputs and inputs
 
 Run from the repository root with ``PYTHONPATH=src:.`` (the ``proof_tests``
-builder imports two generators under ``tools/artifacts``) and
+builder imports two generators under ``scripts/artifacts``) and
 ``JAX_ENABLE_X64=true``: the exact-identity residuals are float64 statements.
 Each builder also writes ``<output>.json`` beside the PNG with every number it
 plots, so the README can cite a machine-readable companion.
@@ -373,7 +373,7 @@ def _spitzer_harm() -> dict[str, float]:
     import jax.numpy as jnp
 
     from gkx.operators.linear.collisions import solve_driven_collision_response
-    from tools.artifacts.build_linear_validation_artifacts import (
+    from scripts.artifacts.build_linear_validation_artifacts import (
         coulomb_drift_kinetic_moment_matrices,
     )
 
@@ -413,7 +413,7 @@ def _spitzer_harm() -> dict[str, float]:
 
 
 def _landau() -> dict[str, float]:
-    from tools.artifacts.build_landau_damping_figure import measure, operator_matrix
+    from scripts.artifacts.build_landau_damping_figure import measure, operator_matrix
 
     spectrum = np.linalg.eigvals(operator_matrix(64, 0.0, 1.0))
     result = {"collisionless_real_part": float(np.abs(spectrum.real).max())}

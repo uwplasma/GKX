@@ -27,7 +27,13 @@ import numpy as np
 import jax._src.compiler as _jc
 
 ap = argparse.ArgumentParser()
-for name, default in (("--Nx", 32), ("--Ny", 32), ("--Nz", 24), ("--Nl", 4), ("--Nm", 8)):
+for name, default in (
+    ("--Nx", 32),
+    ("--Ny", 32),
+    ("--Nz", 24),
+    ("--Nl", 4),
+    ("--Nm", 8),
+):
     ap.add_argument(name, type=int, default=default)
 ap.add_argument("--steps", type=int, default=6)
 ap.add_argument("--reps", type=int, default=3)
@@ -36,8 +42,11 @@ ap.add_argument("--method", default="rk3")
 ap.add_argument("--parts", default="e2e,window,fwd")
 ap.add_argument("--out", type=Path, default=None)
 ap.add_argument("--profile-dir", type=Path, default=None)
-ap.add_argument("--budget", default="default",
-                help="adjoint memory budget in bytes, 'none' (nested schedule) or 'default'")
+ap.add_argument(
+    "--budget",
+    default="default",
+    help="adjoint memory budget in bytes, 'none' (nested schedule) or 'default'",
+)
 ap.add_argument("--hlo-dir", type=Path, default=None)
 args = ap.parse_args()
 
@@ -80,7 +89,9 @@ from tools.profiling.profile_runtime_kernels import (  # noqa: E402
 cfg, _ = load_runtime_from_toml(
     Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml")
 )
-cfg = replace(cfg, grid=replace(cfg.grid, Nx=args.Nx, Ny=args.Ny, Nz=args.Nz, ntheta=None))
+cfg = replace(
+    cfg, grid=replace(cfg.grid, Nx=args.Nx, Ny=args.Ny, Nz=args.Nz, ntheta=None)
+)
 geom = build_runtime_geometry(cfg)
 grid = build_spectral_grid(
     apply_imported_geometry_grid_defaults(geom, cfg.grid),
@@ -89,37 +100,66 @@ grid = build_spectral_grid(
 params = build_runtime_linear_params(cfg, Nm=args.Nm, geom=geom)
 terms = build_runtime_term_config(cfg)
 ky_i, kx_i = _select_nonlinear_mode_indices(
-    grid, ky_target=0.3, kx_target=None, use_dealias_mask=bool(cfg.time.nonlinear_dealias)
+    grid,
+    ky_target=0.3,
+    kx_target=None,
+    use_dealias_mask=bool(cfg.time.nonlinear_dealias),
 )
 g0 = jnp.asarray(
     _build_initial_condition(
-        grid, geom, cfg, ky_index=ky_i, kx_index=kx_i, Nl=args.Nl, Nm=args.Nm,
+        grid,
+        geom,
+        cfg,
+        ky_index=ky_i,
+        kx_index=kx_i,
+        Nl=args.Nl,
+        Nm=args.Nm,
         nspecies=len(cfg.species),
     )
 )
 g0 = g0 / jnp.maximum(jnp.max(jnp.abs(g0)), 1e-30) * 1e-2
 dt = float(cfg.time.dt)
 steps = args.steps
-budget = (sni.ADJOINT_MEMORY_BUDGET_BYTES if args.budget == "default"
-          else None if args.budget == "none" else int(float(args.budget)))
+budget = (
+    sni.ADJOINT_MEMORY_BUDGET_BYTES
+    if args.budget == "default"
+    else None
+    if args.budget == "none"
+    else int(float(args.budget))
+)
 
 
 def objective(tprim):
     return sni.nonlinear_heat_flux_window(
-        g0, grid, geom, replace(params, tprim=tprim), dt, steps,
-        terms=terms, method=args.method, checkpoint=True,
-        compressed_real_fft=True, laguerre_mode="grid", divergence_knee_steps=None,
+        g0,
+        grid,
+        geom,
+        replace(params, tprim=tprim),
+        dt,
+        steps,
+        terms=terms,
+        method=args.method,
+        checkpoint=True,
+        compressed_real_fft=True,
+        laguerre_mode="grid",
+        divergence_knee_steps=None,
         adjoint_memory_budget_bytes=budget,
     )
 
 
 tprim0 = jnp.asarray(params.tprim)
 report = {
-    "gkx": gkx.__file__, "jax": jax.__version__, "host": platform.node(),
+    "gkx": gkx.__file__,
+    "jax": jax.__version__,
+    "host": platform.node(),
     "x64": bool(jax.config.jax_enable_x64),
-    "grid": [args.Nx, args.Ny, args.Nz, args.Nl, args.Nm], "ky": args.ky,
-    "state_shape": list(g0.shape), "steps": steps, "method": args.method,
-    "budget": budget, "devices": [str(d) for d in jax.devices()],
+    "grid": [args.Nx, args.Ny, args.Nz, args.Nl, args.Nm],
+    "ky": args.ky,
+    "state_shape": list(g0.shape),
+    "steps": steps,
+    "method": args.method,
+    "budget": budget,
+    "devices": [str(d) for d in jax.devices()],
 }
 
 
@@ -133,8 +173,12 @@ def timed(fn, *a, reps=args.reps):
         wall = time.perf_counter() - t0
         rows.append({"wall": wall, "compiles": _COUNT["n"], "compile_s": _COUNT["s"]})
     steady = [r["wall"] for r in rows[1:]]
-    return out, {"cold": rows[0], "steady_median": statistics.median(steady),
-                 "steady": steady, "steady_compiles": [r["compiles"] for r in rows[1:]]}
+    return out, {
+        "cold": rows[0],
+        "steady_median": statistics.median(steady),
+        "steady": steady,
+        "steady_compiles": [r["compiles"] for r in rows[1:]],
+    }
 
 
 parts = args.parts.split(",")
@@ -155,14 +199,25 @@ _vf, flux_factor = fieldline_quadrature_weights(geometry, grid)
 sig = hermitian_projector_signature(np.asarray(grid.ky), int(np.asarray(grid.kx).size))
 init = jax.lax.stop_gradient(mask_supplied_state(g0, cache))
 heat0 = jnp.zeros((), dtype=jnp.result_type(jnp.real(init), flux_factor))
-static = dict(dt=dt, count=count, tail=tail, method=args.method, term_cfg=term_cfg,
-              compressed_real_fft=True, laguerre_mode="grid", collision_operator=None,
-              checkpoint=True, projector_signature=sig, memory_budget_bytes=budget)
+static = dict(
+    dt=dt,
+    count=count,
+    tail=tail,
+    method=args.method,
+    term_cfg=term_cfg,
+    compressed_real_fft=True,
+    laguerre_mode="grid",
+    collision_operator=None,
+    checkpoint=True,
+    projector_signature=sig,
+    memory_budget_bytes=budget,
+)
 
 
 def window_of_params(p, c):
     return sni._nonlinear_heat_flux_window_total(
-        init, c, grid, p, flux_factor, heat0, jnp.arange(count), **static)
+        init, c, grid, p, flux_factor, heat0, jnp.arange(count), **static
+    )
 
 
 if "window" in parts:
@@ -182,9 +237,14 @@ if "window" in parts:
         args.hlo_dir.mkdir(parents=True, exist_ok=True)
         (args.hlo_dir / f"window_vjp_{args.ky}.hlo.txt").write_text(compiled.as_text())
     out, stats = timed(compiled, tprim0)
-    stats.update(lower_s=t_lower, compile_s=t_compile,
-                 temp_bytes=int(ma.temp_size_in_bytes), arg_bytes=int(ma.argument_size_in_bytes),
-                 value=repr(np.asarray(out[0]).tolist()), grad=repr(np.asarray(out[1]).tolist()))
+    stats.update(
+        lower_s=t_lower,
+        compile_s=t_compile,
+        temp_bytes=int(ma.temp_size_in_bytes),
+        arg_bytes=int(ma.argument_size_in_bytes),
+        value=repr(np.asarray(out[0]).tolist()),
+        grad=repr(np.asarray(out[1]).tolist()),
+    )
     report["window_vjp"] = stats
     print("window_vjp", json.dumps(stats), flush=True)
     if args.profile_dir is not None:
@@ -198,7 +258,9 @@ if "fwd" in parts:
     compiled = f.lower(tprim0).compile()
     ma = compiled.memory_analysis()
     out, stats = timed(compiled, tprim0)
-    stats.update(temp_bytes=int(ma.temp_size_in_bytes), value=repr(np.asarray(out).tolist()))
+    stats.update(
+        temp_bytes=int(ma.temp_size_in_bytes), value=repr(np.asarray(out).tolist())
+    )
     report["window_fwd"] = stats
     print("window_fwd", json.dumps(stats), flush=True)
 
@@ -209,8 +271,12 @@ if "prep" in parts:
         c = build_linear_cache(grid, geometry, p, Nl=Nl, Nm=Nm)
         return jax.tree_util.tree_reduce(
             lambda a, b: a + b,
-            [jnp.sum(jnp.abs(x)) for x in jax.tree_util.tree_leaves(c)
-             if hasattr(x, "dtype") and jnp.issubdtype(x.dtype, jnp.inexact)])
+            [
+                jnp.sum(jnp.abs(x))
+                for x in jax.tree_util.tree_leaves(c)
+                if hasattr(x, "dtype") and jnp.issubdtype(x.dtype, jnp.inexact)
+            ],
+        )
 
     _, stats = timed(jax.value_and_grad(prep), tprim0)
     report["prep_grad"] = stats

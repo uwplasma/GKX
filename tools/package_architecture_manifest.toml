@@ -309,7 +309,8 @@ recursive = true
 # their shared runner _command.py; tools_python_files fell 78 -> 0 in the same
 # change. The target of 12 is met by contracting these packages, not by
 # moving them again. Measured.
-baseline = 104
+# 104 -> 106: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline = 106
 target = 12
 
 
@@ -426,7 +427,8 @@ reason = "Fused stellarator_tables and stellarator_reduced; reduce by deduplicat
 
 [[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
-baseline_lines = 1076
+# 1076 -> 1154: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline_lines = 1154
 target_lines = 1000
 reason = "One NetCDF schema owner keeps dimensions, geometry, diagnostics, restart, and final-field variables consistent; reduce helper repetition without splitting the schema again."
 
@@ -445,7 +447,8 @@ path = "artifacts/io.py"
 # subsumes the other, so the count is the sum rather than new surface.
 # 1096 -> 1099: recording which scan points were seeded from a neighbour.
 # A warm-started number that does not say so is not reproducible.
-baseline_lines = 1099
+# 1099 -> 1151: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline_lines = 1151
 target_lines = 1000
 reason = "One runtime I/O owner keeps summaries, tables, restart packing, and diagnostic reload consistent; reduce repeated serializers without restoring format-specific modules."
 
@@ -472,7 +475,8 @@ path = "runtime.py"
 # 513 -> 781: absorbs workflows/runtime/execution.py, which had exactly one consumer -- this
 # file -- and handed it most of its names. That is a split module, not an
 # interface, so the two rejoin. No definition changed and no export moved.
-baseline_lines = 781
+# 781 -> 798: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline_lines = 798
 target_lines = 500
 reason = "Public runtime facade; the overage is the exploded __all__ list, so shrink it by removing exports rather than by splitting the facade."
 
@@ -490,7 +494,8 @@ path = "workflows/nonlinear.py"
 # recording why refusing is still correct: quietly dropping the stop condition
 # would hand back a simulation that integrates past where the deck asked it to
 # stop. No branch was added; the dispatcher's shape is unchanged.
-baseline_lines = 1023
+# 1023 -> 1032: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline_lines = 1032
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -1118,7 +1123,8 @@ recursive = true
 # 93054 -> 93344: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
 # 93344 -> 93359: single owner for the CLI/case Nl/Nm fallbacks plus its test.
-baseline = 93359
+# 93359 -> 93953: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline = 93953
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1436,7 +1442,8 @@ recursive = true
 # 92979 -> 94057: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
 # 94057 -> 94107: single owner for the CLI/case Nl/Nm fallbacks plus its test.
-baseline = 94107
+# 94107 -> 94628: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline = 94628
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1546,5 +1553,6 @@ recursive = true
 # 25000 -> 77373 (SLIM-TOOLS tranche 2): 63,832 lines moved from tools/ and
 # 1,348 from benchmarks/, plus about 200 lines of command dispatchers; tool lines
 # fell to 0 in the same change. Measured.
-baseline = 77373
+# 77373 -> 78277: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline = 78277
 target = 18000

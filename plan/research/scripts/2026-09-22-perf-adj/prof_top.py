@@ -18,7 +18,7 @@ for e in events:
         count[e["name"]] += 1
 top = int(sys.argv[2]) if len(sys.argv) > 2 else 30
 for name, dur in total.most_common(top):
-    print(f"{dur/1e3:10.2f} ms  x{count[name]:5d}  {name[:110]}")
+    print(f"{dur / 1e3:10.2f} ms  x{count[name]:5d}  {name[:110]}")
 
 skip = ("ThreadpoolListener", "ThunkExecutor", "$", "while")
 groups = collections.Counter()
@@ -30,4 +30,4 @@ for name, dur in total.items():
     groups[key] += dur
 print("--- by kind (ms):", round(sum(groups.values()) / 1e3, 1))
 for key, dur in groups.most_common(15):
-    print(f"{dur/1e3:10.2f} ms  {key}")
+    print(f"{dur / 1e3:10.2f} ms  {key}")
