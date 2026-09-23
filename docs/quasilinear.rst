@@ -150,7 +150,7 @@ Executable usage
 .. code-block:: bash
 
    gkx run-runtime-linear \
-     --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
+     --config examples/08_quasilinear/case_full.toml \
      --out tools_out/cyclone_quasilinear
 
 or enable the diagnostic for another linear runtime TOML:
@@ -158,7 +158,7 @@ or enable the diagnostic for another linear runtime TOML:
 .. code-block:: bash
 
    gkx run-runtime-linear \
-     --config examples/linear/axisymmetric/cyclone.toml \
+     --config examples/01_linear_tokamak/case_full.toml \
      --quasilinear \
      --ql-mode saturated \
      --ql-saturation-rule mixing_length \
@@ -173,7 +173,7 @@ preserving the serial ordering of the output spectrum:
 .. code-block:: bash
 
    gkx scan-runtime-linear \
-     --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
+     --config examples/08_quasilinear/case_full.toml \
      --ky-values 0.1,0.2,0.3,0.4 \
      --quasilinear \
      --workers 2 \
@@ -210,7 +210,7 @@ The shaped-tokamak Miller companion uses the same pattern, with the positive
 .. code-block:: bash
 
    gkx scan-runtime-linear \
-     --config examples/linear/axisymmetric/runtime_cyclone_miller_quasilinear.toml \
+     --config benchmarks/cases/cyclone_miller_quasilinear.toml \
      --ky-values 0.1,0.2,0.3,0.4,0.5 \
      --quasilinear \
      --out docs/_static/quasilinear_cyclone_miller_spectrum_scan
@@ -536,7 +536,7 @@ Implicit sensitivity example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The user-facing example
-``examples/theory_and_demos/quasilinear_implicit_sensitivity.py`` applies the
+``examples/08_quasilinear/implicit_sensitivity.py`` applies the
 implicit gate to a tiny Cyclone linear-RHS fixture. The differentiated
 observable is
 
@@ -561,7 +561,7 @@ without relying on unsupported JAX eigenvector derivatives.
 
 .. code-block:: bash
 
-   python examples/theory_and_demos/quasilinear_implicit_sensitivity.py
+   python examples/08_quasilinear/implicit_sensitivity.py
 
 
 The lower panels compare the implicit left/right derivative against central
@@ -792,7 +792,7 @@ machine-specific benchmark WOUT:
    vmex input.NuhrenbergZille_1988_QHS
    cd ../..
    gkx scan-runtime-linear \
-     --config examples/linear/non-axisymmetric/runtime_hsx_linear_quasilinear.toml \
+     --config examples/02_linear_stellarator/case_full.toml \
      --ky-values 0.047619047619047616,0.09523809523809523,0.14285714285714285,0.19047619047619047,0.23809523809523808,0.2857142857142857 \
      --Nl 4 --Nm 8 --solver time --dt 0.005 --steps 400 \
      --quasilinear \
@@ -850,7 +850,7 @@ ignored local ``tools_out/*.eik.nc`` file:
    vmex input.nfp3_QI_fixed_resolution_final
    cd ../..
    gkx scan-runtime-linear \
-     --config examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml \
+     --config benchmarks/cases/w7x_linear_quasilinear_vmec.toml \
      --ky-values 0.047619047619047616,0.09523809523809523,0.14285714285714285,0.19047619047619047,0.23809523809523808,0.2857142857142857 \
      --Nl 4 --Nm 8 --solver time --dt 0.005 --steps 400 \
      --quasilinear \

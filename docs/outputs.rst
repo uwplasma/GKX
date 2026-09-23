@@ -207,8 +207,8 @@ Use the plotting helper to visualize nonlinear diagnostic histories from
 
 .. code-block:: bash
 
-   # point RUN_PATH (and optionally OUT) at the top of the script at the bundle
-   python examples/utilities/plot_runtime_outputs.py
+   # runs a short case, saves the bundle, reloads and plots it
+   python examples/12_restart_and_analysis/run.py
 
 The script reads ``Diagnostics/t`` together with ``Phi2_t``, ``Wg_st``,
 ``Wphi_st``, and ``HeatFlux_st`` (when present) and produces a 2x2 panel.

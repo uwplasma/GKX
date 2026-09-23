@@ -112,7 +112,7 @@ class LinearParams:
     :func:`build_linear_params` copies across unchanged. They are *not*
     :math:`R/L_T` and :math:`R/L_n`; multiply by :math:`R/a` to quote a result
     in those. The defaults are the Cyclone base case, matching
-    ``examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_t400.toml``
+    ``benchmarks/cases/cyclone_nonlinear_t400.toml``
     and :class:`gkx.config.ModelConfig`, so
     :math:`R/L_T = 2.49 \times 2.77778 = 6.92`.
 

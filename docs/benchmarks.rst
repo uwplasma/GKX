@@ -458,7 +458,7 @@ The current extended panel covers:
 - KBM Miller exact late growth window
 
 The kinetic-electron scan is defined by
-``examples/linear/axisymmetric/runtime_kinetic_electron.toml`` and runs through
+``examples/05_kinetic_electrons/case_full.toml`` and runs through
 the unified runtime API. Native fixed-step RK4 is the sole owner.
 Its effective reference seed, linked-boundary damping, species, and
 electromagnetic toggles are explicit in that file rather than being applied by
@@ -484,7 +484,7 @@ three frequency sign mismatches, and a frequency-branch Spearman coefficient
 near ``-0.986``.
 
 The authoritative executable input is
-``examples/linear/axisymmetric/runtime_tem.toml``. It uses the unified runtime
+``benchmarks/cases/tem_linear.toml``. It uses the unified runtime
 schema, including electron-only Gaussian moment initialization, and native
 fixed-step RK2 is the sole owner. The driver runs that file
 through the same runtime scan path exposed to users. A state/parameter/RHS

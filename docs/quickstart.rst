@@ -34,9 +34,9 @@ Executable demo
 .. code-block:: bash
 
    gkx
-   gkx examples/linear/axisymmetric/cyclone.toml
-   gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out cyclone_runtime
-   gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --steps 50 --out tools_out/cyclone_nonlinear.out.nc
+   gkx examples/01_linear_tokamak/case_full.toml
+   gkx run-runtime-linear --config examples/01_linear_tokamak/case_full.toml --out cyclone_runtime
+   gkx run-runtime-nonlinear --config examples/03_nonlinear_tokamak/case_full.toml --steps 50 --out tools_out/cyclone_nonlinear.out.nc
    gkx plot tools_out/cyclone_nonlinear.out.nc
    gkx plot gkx_default_linear.summary.json
 
@@ -122,9 +122,9 @@ files. Generate the needed equilibria locally, then run the TOMLs directly:
    vmex input.nfp3_QI_fixed_resolution_final
    cd ../..
 
-   gkx run --config examples/linear/axisymmetric/runtime_circular_vmec_linear.toml
-   gkx run --config examples/linear/non-axisymmetric/runtime_hsx_linear_quasilinear.toml
-   gkx run --config examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml
+   gkx run --config benchmarks/cases/circular_vmec_linear.toml
+   gkx run --config examples/02_linear_stellarator/case_full.toml
+   gkx run --config benchmarks/cases/w7x_linear_quasilinear_vmec.toml
 
 The bundled QHS/QI/QA decks are self-contained demonstrators. Exact
 machine-specific HSX or W7-X validation should use the same TOMLs with
@@ -142,7 +142,7 @@ VMEC-backed geometry model:
 .. code-block:: bash
 
    gkx run \
-     --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
+     --config examples/04_nonlinear_stellarator/case_full.toml \
      --vmec-file /absolute/or/relative/wout_machine_specific.nc \
      --out tools_out/hsx_vmec_run
 
@@ -169,7 +169,7 @@ Python demo
    from gkx import load_runtime_from_toml, run_runtime_linear
 
    config, _ = load_runtime_from_toml(
-       "examples/linear/axisymmetric/cyclone.toml"
+       "examples/01_linear_tokamak/case_full.toml"
    )
    result = run_runtime_linear(config, ky_target=0.3)
 
@@ -183,7 +183,8 @@ Run from TOML
 
 .. code-block:: bash
 
-   python examples/utilities/runtime_from_toml.py  # CONFIG defaults to cyclone.toml
+   gkx examples/01_linear_tokamak/case.toml
+   python examples/01_linear_tokamak/run.py   # the same case as a scripted k_y scan
 
 Figure generation
 -----------------

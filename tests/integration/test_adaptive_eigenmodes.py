@@ -44,14 +44,14 @@ pytestmark = [
 ]
 _ROOT = Path(__file__).resolve().parents[2]
 _PHYSICS_CASES = (
-    ("ITG-adiabatic-electron", "axisymmetric/runtime_cyclone_quasilinear.toml", False),
-    ("ETG-adiabatic-ion", "axisymmetric/runtime_etg.toml", False),
-    ("TEM-finite-electron-mass", "axisymmetric/runtime_tem.toml", False),
-    ("KBM-Apar", "axisymmetric/runtime_kbm.toml", False),
-    ("KBM-Apar-Bpar", "axisymmetric/runtime_kbm.toml", True),
-    ("Miller", "axisymmetric/runtime_cyclone_miller_quasilinear.toml", False),
-    ("QHS", "non-axisymmetric/runtime_hsx_linear_quasilinear.toml", False),
-    ("QI", "non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml", False),
+    ("ITG-adiabatic-electron", "examples/08_quasilinear/case_full.toml", False),
+    ("ETG-adiabatic-ion", "benchmarks/cases/etg_linear_scan.toml", False),
+    ("TEM-finite-electron-mass", "benchmarks/cases/tem_linear.toml", False),
+    ("KBM-Apar", "examples/06_electromagnetic/case_full.toml", False),
+    ("KBM-Apar-Bpar", "examples/06_electromagnetic/case_full.toml", True),
+    ("Miller", "benchmarks/cases/cyclone_miller_quasilinear.toml", False),
+    ("QHS", "examples/02_linear_stellarator/case_full.toml", False),
+    ("QI", "benchmarks/cases/w7x_linear_quasilinear_vmec.toml", False),
 )
 _FAST_CONFIG = AdaptiveLinearEigensolverConfig(
     krylov_dim=16,
@@ -96,7 +96,7 @@ def test_adaptive_observables_match_dense_across_physics(
 ) -> None:
     """Cover branch, field, species, boundary, and geometry dispatch."""
 
-    runtime, raw = load_runtime_from_toml(_ROOT / "examples/linear" / relative_path)
+    runtime, raw = load_runtime_from_toml(_ROOT / relative_path)
     runtime = replace(
         runtime,
         grid=replace(
@@ -182,10 +182,7 @@ def test_qi_sparse_full_frequency_ladder() -> None:
 
     from gkx.geometry import load_imported_geometry_netcdf
 
-    case = (
-        _ROOT
-        / "examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml"
-    )
+    case = _ROOT / "benchmarks/cases/w7x_linear_quasilinear_vmec.toml"
     runtime, raw = load_runtime_from_toml(case)
     runtime = _use_cached_vmec_eik(runtime, finest=True)
     geometry = load_imported_geometry_netcdf(runtime.geometry.geometry_file)
@@ -272,7 +269,7 @@ def test_linked_pilot_eigenpair_is_unchanged_on_linked_chain_modes(
     from gkx.workflows.linear import _prepare_linear_runtime_context
 
     runtime, _ = load_runtime_from_toml(
-        _ROOT / "examples/linear/axisymmetric/cyclone.toml"
+        _ROOT / "examples/01_linear_tokamak/case_full.toml"
     )
     runtime = replace(
         runtime,

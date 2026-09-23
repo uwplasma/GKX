@@ -337,7 +337,7 @@ and the diagnostic spectral state, which is ``complex64`` irrespective of
 ``7.45e-9`` maximum final-state absolute error.
 
 Two constraints bound what "production size" means here. The
-largest nonlinear grid shipped under ``examples/nonlinear/`` is the W7-X and
+largest nonlinear grid shipped under ``examples/`` and ``benchmarks/cases/`` is the W7-X and
 HSX stellarator case at ``(N_l,N_m,N_y,N_x,N_z)=(4,8,96,96,48)``; the Cyclone
 and KBM cases are smaller. The tracked ``(4,16,96,96,32)`` profiling grid is
 therefore already at production element count rather than below it. Above that,

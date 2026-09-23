@@ -167,7 +167,7 @@ It is **opt-in**.
 Certified eigensolver
 ~~~~~~~~~~~~~~~~~~~~~
 
-A 5-point ky scan of ``examples/linear/axisymmetric/cyclone.toml``
+A 5-point ky scan of ``examples/01_linear_tokamak/case_full.toml``
 (``solver = "krylov"``, ``Nl = 24``, ``Nm = 12``, laptop CPU, ``jax`` 0.9.2,
 float32, persistent compile cache already populated) agrees point by point:
 
@@ -294,7 +294,7 @@ maps to a concrete cache-construction phase.
 .. code-block:: bash
 
    python tools/profiling/profile_startup_and_cache.py linear-cache \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --Nl 4 --Nm 8 \
      --json-out tools_out/linear_cache_cyclone_gpu.json \
      --csv-out tools_out/linear_cache_cyclone_gpu.csv
@@ -537,7 +537,7 @@ full RHS kernels after compilation:
 .. code-block:: bash
 
    python tools/profiling/profile_runtime_kernels.py nonlinear-step-split \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml \
+     --config benchmarks/cases/cyclone_nonlinear_short.toml \
      --repeats 10 \
      --out docs/_static/nonlinear_rhs_profile_gpu.csv
 
@@ -593,7 +593,7 @@ short Cyclone case.
 .. code-block:: bash
 
    python tools/profiling/profile_runtime_kernels.py nonlinear-step-split \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
+     --config benchmarks/cases/cyclone_nonlinear_miller.toml \
      --repeats 5 \
      --out docs/_static/nonlinear_rhs_profile_miller_cpu.csv
 
@@ -616,7 +616,7 @@ The full fused nonlinear-RHS trace companion is generated with:
 .. code-block:: bash
 
    python tools/profiling/profile_runtime_kernels.py full-nonlinear-rhs \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
+     --config benchmarks/cases/cyclone_nonlinear_miller.toml \
      --ky 0.3 \
      --Nl 4 \
      --Nm 8 \
@@ -673,7 +673,7 @@ inside nonlinear runs:
 .. code-block:: bash
 
    python tools/profiling/profile_linear_rhs_terms.py \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --ky 0.3 \
      --Nl 4 \
      --Nm 8 \
@@ -729,7 +729,7 @@ The companion state-window gate is generated with:
 .. code-block:: bash
 
    python tools/artifacts/generate_linear_rhs_parallel_gates.py zero-norm-state-window \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --ky 0.3 \
      --Nl 4 \
      --Nm 8 \
@@ -754,7 +754,7 @@ helper:
 .. code-block:: bash
 
    python tools/profiling/profile_runtime_kernels.py full-linear-rhs \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
+     --config benchmarks/cases/cyclone_nonlinear_miller.toml \
      --ky 0.3 \
      --Nl 4 \
      --Nm 8 \
@@ -1726,7 +1726,7 @@ For cold-start deep dives, use the dedicated startup profiler:
 .. code-block:: bash
 
    python tools/profiling/profile_startup_and_cache.py runtime-startup \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --ky 0.3 --Nl 4 --Nm 8 --compile-steps 1 \
      --json-out tools_out/startup_cyclone_gpu.json \
      --csv-out tools_out/startup_cyclone_gpu.csv
@@ -1777,7 +1777,7 @@ To break the cache-construction lump down further, use:
 .. code-block:: bash
 
    python tools/profiling/profile_startup_and_cache.py linear-cache \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --Nl 4 --Nm 8 \
      --json-out tools_out/linear_cache_cyclone_gpu.json \
      --csv-out tools_out/linear_cache_cyclone_gpu.csv

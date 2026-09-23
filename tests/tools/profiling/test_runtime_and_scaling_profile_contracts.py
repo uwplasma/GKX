@@ -456,7 +456,7 @@ def test_eager_scan_route_still_lowers_scan_body_arrays_as_arguments() -> None:
 
 def test_full_linear_trace_summary_contains_metadata() -> None:
     payload = linear_trace._build_summary(
-        config="examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml",
+        config="benchmarks/cases/cyclone_nonlinear_miller.toml",
         backend="cpu",
         nl=4,
         nm=8,
@@ -509,7 +509,7 @@ def test_full_linear_trace_inject_z_wave_adds_parallel_variation() -> None:
 
 def test_full_nonlinear_trace_summary_contains_metadata() -> None:
     payload = nonlinear_trace._build_nonlinear_summary(
-        config="examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml",
+        config="benchmarks/cases/cyclone_nonlinear_miller.toml",
         backend="gpu",
         nl=4,
         nm=8,
@@ -794,7 +794,7 @@ def test_linear_rhs_terms_summary_reports_dominant_and_zero_norm_terms() -> None
             {"term": "linked_abs_kz", "seconds": 0.3, "norm": 1.0e-16},
             {"term": "full_linear_rhs", "seconds": 1.2, "norm": 3.0},
         ],
-        config="examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
+        config="examples/03_nonlinear_tokamak/case_full.toml",
         ky=0.3,
         kx=None,
         nl=4,

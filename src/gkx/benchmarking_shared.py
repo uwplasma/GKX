@@ -590,7 +590,7 @@ KINETIC_KRYLOV_REFERENCE_ALIGNED = replace(
 )
 
 # No generator uses this config: ledger row L-lin-etg is time-integrated. On
-# etg.toml (Nl=24, Nm=8, ky=10/20/30) its raw propagator returned wrong branches
+# benchmarks/cases/etg_linear.toml (Nl=24, Nm=8, ky=10/20/30) its raw propagator returned wrong branches
 # at residual 0.98-0.99 (Q12, 2026-09-13), so it now fails closed rather than
 # opting out of the certification gate.
 ETG_KRYLOV_DEFAULT = KrylovConfig(

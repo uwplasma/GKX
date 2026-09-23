@@ -178,7 +178,7 @@ the rewritten §5.1 adoption gate, which adopts a reproducible cost reduction
 that loses no accuracy even at 15--30%.  ``adaptive`` stays the default.
 
 Q26 recorded the shipped shift-invert route failing closed on the shipped
-Cyclone deck (``examples/linear/axisymmetric/cyclone.toml``) at ``Nl=4, Nm=8``:
+Cyclone deck (``examples/01_linear_tokamak/case_full.toml``) at ``Nl=4, Nm=8``:
 48 of 48 inner FGMRES solves unconverged, the outer pair rejected at residual
 0.99, and neither the budget nor the precision responsible.  Q28 separated that
 into three causes and fixed two of them:

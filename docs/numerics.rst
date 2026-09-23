@@ -170,7 +170,7 @@ and is rejected at outer residual 0.99 on the shipped Cyclone deck, in float32
 and float64 alike.
 
 **Precision.** ``complex64``, unchanged, and correct: on
-``examples/linear/axisymmetric/cyclone.toml`` at its own resolution the float32
+``examples/01_linear_tokamak/case_full.toml`` at its own resolution the float32
 run returns :math:`\gamma = 0.09309106`, :math:`\omega = 0.28203276` against the
 float64 :math:`0.09309117`, :math:`0.28203273` -- agreement to 1.2e-6 relative.
 What changed is that ``JAX_ENABLE_X64=true`` now reaches the run at all; see

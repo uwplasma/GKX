@@ -724,7 +724,7 @@ jobs:
           done
           cd "$GITHUB_WORKSPACE"
           /tmp/gkx-wheel-smoke/bin/gkx run-runtime-nonlinear \
-            --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+            --config examples/03_nonlinear_tokamak/case_full.toml \
             --steps 50 \
             --out /tmp/gkx-first-run/cyclone_nonlinear.out.nc
           test -s /tmp/gkx-first-run/cyclone_nonlinear.out.nc || {

@@ -136,7 +136,7 @@ def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
     """The canonical runtime case must preserve the established TEM operator."""
 
     runtime_cfg, raw = load_runtime_from_toml(
-        ROOT / "examples" / "linear" / "axisymmetric" / "runtime_tem.toml"
+        ROOT / "benchmarks" / "cases" / "tem_linear.toml"
     )
     legacy_model = SimpleNamespace(
         tprim_i=20.0,
@@ -236,7 +236,7 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
     """The canonical kinetic-electron case preserves the executed operator."""
 
     runtime_cfg, raw = load_runtime_from_toml(
-        ROOT / "examples" / "linear" / "axisymmetric" / "runtime_kinetic_electron.toml"
+        ROOT / "examples" / "05_kinetic_electrons" / "case_full.toml"
     )
     model = SimpleNamespace(
         tprim_i=2.49,
@@ -338,7 +338,7 @@ def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
     """The canonical runtime case preserves the established KBM operator."""
 
     runtime_cfg, _raw = load_runtime_from_toml(
-        ROOT / "examples" / "linear" / "axisymmetric" / "runtime_kbm.toml"
+        ROOT / "examples" / "06_electromagnetic" / "case_full.toml"
     )
     model = SimpleNamespace(
         tprim_i=2.49,

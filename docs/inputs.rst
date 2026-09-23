@@ -170,7 +170,7 @@ Equivalent executable flags are available for single-point runtime runs:
 .. code-block:: bash
 
    gkx run-runtime-linear \
-     --config examples/linear/axisymmetric/cyclone.toml \
+     --config examples/01_linear_tokamak/case_full.toml \
      --quasilinear \
      --ql-mode saturated \
      --ql-saturation-rule mixing_length \
@@ -367,12 +367,12 @@ Executable usage
 
 .. code-block:: bash
 
-  cd examples/linear/axisymmetric && gkx cyclone.toml
-  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --out tools_out/runtime_etg_scan
+  cd examples/01_linear_tokamak && gkx case_full.toml
+  gkx scan-runtime-linear --config benchmarks/cases/etg_linear_scan.toml --out tools_out/runtime_etg_scan
   gkx --plot tools_out/runtime_etg_scan.scan.csv
-  gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out tools_out/cyclone_runtime
-   gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --batch-ky
-   gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --sample-stride 5 --out tools_out/nonlinear_cyclone_diag.csv
+  gkx run-runtime-linear --config examples/01_linear_tokamak/case_full.toml --out tools_out/cyclone_runtime
+   gkx scan-runtime-linear --config benchmarks/cases/etg_linear_scan.toml --batch-ky
+   gkx run-runtime-nonlinear --config examples/03_nonlinear_tokamak/case_full.toml --sample-stride 5 --out tools_out/nonlinear_cyclone_diag.csv
 
 For ``run-runtime-nonlinear``, omit ``--steps`` when ``fixed_dt = false`` unless
 you explicitly want a capped step count. The executable now preserves ``steps = None``
@@ -435,8 +435,8 @@ Python driver
 
 .. code-block:: bash
 
-  # point CONFIG at the top of the script at examples/linear/axisymmetric/runtime_etg.toml
-  python examples/utilities/runtime_from_toml.py
+  # point CONFIG at the top of the script at benchmarks/cases/etg_linear_scan.toml
+  python examples/12_restart_and_analysis/run.py
 
 The canonical KBM TOML is currently a controlled comparison input rather than
 a promoted standalone solve: its experimental shift-invert branch raises when

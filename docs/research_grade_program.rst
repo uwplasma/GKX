@@ -96,7 +96,7 @@ uses :math:`A_\parallel` but omits :math:`\delta B_\parallel`.
 Reproduce that comparison before extending it; do not silently change its
 physical model and then call a different curve a repaired benchmark.
 
-GKX's current ``runtime_kbm.toml`` likewise disables ``use_bpar``.
+GKX's current ``examples/06_electromagnetic/case_full.toml`` likewise disables ``use_bpar``.
 The independent
 `stella EM test set <https://github.com/stellaGK/stella/tree/2b8e269f2addd0baa5991057eafa022135e04498/AUTOMATIC_TESTS/numerical_tests/test_7_electromagnetic>`_
 has term-isolation and three-field KBM inputs. Its ``EM_KBM.in`` differs from

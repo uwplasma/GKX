@@ -18,7 +18,7 @@ QA nonlinear transport
 
 The executable example targets quasi-axisymmetry [LandremanPaul22]_ and follows
 the nonlinear-transport optimization pattern of [Kim24]_. It is
-:download:`QA_optimization.py <../examples/optimization/QA_optimization.py>`.
+:download:`examples/10_vmex_optimization/run.py <../examples/10_vmex_optimization/run.py>` (formerly ``QA_optimization.py``).
 It follows VMEX's QA mode ladder and adds one objective tuple:
 
 .. code-block:: python
@@ -141,7 +141,7 @@ Run
 .. code-block:: bash
 
    pip install -e /path/to/VMEX
-   python examples/optimization/QA_optimization.py
+   python examples/10_vmex_optimization/run.py
 
 Use a GPU for the default saturation and 1024-step differentiated windows. A short
 ``VMEX_EXAMPLES_CI=1`` mode checks the complete solver/derivative path.
@@ -378,7 +378,7 @@ Reproduce
 
 The checked-in workflow has three owners:
 
-* :download:`QA_optimization.py <../examples/optimization/QA_optimization.py>`
+* :download:`examples/10_vmex_optimization/run.py <../examples/10_vmex_optimization/run.py>` (formerly ``QA_optimization.py``)
   computes the VMEX--GKX design step;
 * :download:`qa_transport_validation.py
   <../tools/campaigns/qa_transport_validation.py>` runs restartable matched
@@ -388,8 +388,8 @@ The checked-in workflow has three owners:
   :math:`\tau_{int}`, effective sample counts, intervals, CSV tables, and plots.
 
 The exact accepted boundaries are
-:download:`initial <../examples/optimization/input.qa_transport_baseline>` and
-:download:`optimized <../examples/optimization/input.qa_transport_candidate>`.
+:download:`initial <../examples/10_vmex_optimization/input.qa_transport_baseline>` and
+:download:`optimized <../examples/10_vmex_optimization/input.qa_transport_candidate>`.
 Use a fresh, source-SHA-specific output directory: the campaign skips existing
 filenames without checking source provenance. Never mix pre-correction and
 corrected-operator traces. For example,

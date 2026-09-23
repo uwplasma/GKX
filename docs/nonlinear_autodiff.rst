@@ -166,7 +166,7 @@ ladder below whose adjoint still tracks a centered difference on the shipped
 Cyclone case. It is a property of that trajectory's Lyapunov time, not a solver
 tolerance, so remeasure it for a new case and then pass
 ``divergence_knee_steps=<measured>`` (or ``None`` to silence the check).
-``examples/optimization/QA_optimization.py`` runs at exactly 1024, one rung
+``examples/10_vmex_optimization/run.py`` runs at exactly 1024, one rung
 below the departure.
 
 Regenerating the evidence

@@ -1944,7 +1944,7 @@ def test_full_operator_scan_relaxed() -> None:
         ntheta=32,
         nperiod=2,
     )
-    base_cfg, _ = load_runtime_from_toml("examples/linear/axisymmetric/cyclone.toml")
+    base_cfg, _ = load_runtime_from_toml("examples/01_linear_tokamak/case_full.toml")
     cfg = replace(base_cfg, grid=grid)
     ky_values = np.array([0.2, 0.3, 0.4])
 

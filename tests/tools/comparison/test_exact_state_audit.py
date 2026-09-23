@@ -64,13 +64,7 @@ def test_exact_state_office_manifest_w7x_config_resolves_to_real_example() -> No
     data = tomllib.loads(manifest.read_text(encoding="utf-8"))
     config = data["lane"]["w7x_vmec"]["config"]
     resolved = _resolve_manifest_path(config, manifest_dir=manifest.parent)
-    assert resolved == (
-        repo
-        / "examples"
-        / "nonlinear"
-        / "non-axisymmetric"
-        / "runtime_w7x_nonlinear_vmec_geometry.toml"
-    )
+    assert resolved == (repo / "benchmarks" / "cases/w7x_nonlinear_vmec_geometry.toml")
     assert resolved.is_file()
 
 
@@ -83,13 +77,7 @@ def test_exact_state_office_manifest_cyclone_miller_config_resolves_to_real_exam
     lane = data["lane"]["cyclone_miller"]
     config = lane["config"]
     resolved = _resolve_manifest_path(config, manifest_dir=manifest.parent)
-    assert resolved == (
-        repo
-        / "examples"
-        / "nonlinear"
-        / "axisymmetric"
-        / "runtime_cyclone_nonlinear_miller.toml"
-    )
+    assert resolved == (repo / "benchmarks" / "cases/cyclone_nonlinear_miller.toml")
     assert resolved.is_file()
     assert lane["env"]["JAX_PLATFORMS"] == "cpu"
 
@@ -108,13 +96,7 @@ def test_exact_state_office_manifest_kbm_config_resolves_to_real_example() -> No
     data = tomllib.loads(manifest.read_text(encoding="utf-8"))
     config = data["lane"]["kbm_salpha"]["config"]
     resolved = _resolve_manifest_path(config, manifest_dir=manifest.parent)
-    assert resolved == (
-        repo
-        / "examples"
-        / "nonlinear"
-        / "axisymmetric"
-        / "runtime_kbm_nonlinear_t100.toml"
-    )
+    assert resolved == (repo / "benchmarks" / "cases/kbm_nonlinear_t100.toml")
     assert resolved.is_file()
 
 

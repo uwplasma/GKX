@@ -17,8 +17,8 @@ from tools.campaigns.vmec_candidate_admission import (
 
 
 ROOT = REPO_ROOT
-EXAMPLES = ROOT / "examples" / "optimization"
-QA_SCRIPT = EXAMPLES / "QA_optimization.py"
+EXAMPLES = ROOT / "examples" / "10_vmex_optimization"
+QA_SCRIPT = EXAMPLES / "run.py"
 TRANSPORT_SUMMARY = ROOT / "docs" / "_static" / "qa_transport_summary.csv"
 TRANSPORT_TRACES = ROOT / "docs" / "_static" / "qa_transport_traces.csv"
 TRANSPORT_TIMESERIES = ROOT / "docs" / "_static" / "qa_transport_nominal_timeseries.csv"

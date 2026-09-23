@@ -193,7 +193,7 @@ growth-rate extraction pipeline:
 
 - Loading the reference CSV via :func:`gkx.benchmarking_shared.load_cyclone_reference`.
 - Running short linear scans from the canonical
-  ``examples/linear/axisymmetric/cyclone.toml`` input via
+  ``examples/01_linear_tokamak/case_full.toml`` input via
   :func:`gkx.runtime.run_runtime_scan`.
 - Requiring independent-mode and combined-:math:`k_y` execution to agree at
   machine precision before either path is used for performance measurements.
@@ -828,10 +828,10 @@ tests:
 - ``tests/unit/solvers/test_linear_krylov_core.py`` hardens matrix-free Krylov internals
   (mode-family targeting, shift-invert preconditioner selection, fallback
   policy, and dominant eigenpair wrappers).
-- ``tests/integration/examples/test_examples.py`` verifies shipped example workflows:
-  autodiff inverse/UQ demos, implicit quasilinear sensitivity checks,
-  independent-ky parallelization examples, the config-driven runner, and
-  short nonlinear scans through the assembled E×B nonlinear bracket.
+- ``tests/integration/examples/test_examples.py`` runs every gallery example in
+  ``examples/NN_*/`` at its smoke ``case.toml`` resolution and checks the JSON
+  summary and figure each one writes; groups that need ``vmex`` or an untracked
+  equilibrium skip with the stated reason.
 - ``tests/unit/nonlinear/test_nonlinear_exb.py`` exercises the nonlinear bracket sign,
   real-FFT path, flutter coupling, scalar/precomputed gyroaverage paths, and
   EM component accounting. The targeted nonlinear-term tranche covers the
@@ -1001,7 +1001,7 @@ Recent GX parity spot checks are tracked outside the automated test suite:
 - **Cyclone nonlinear short replay**: the GX `cyclone_salpha_short.in` replay
   (`dt=0.05`, `t_max=5`, collisions off, diagnostics stride 1) now uses the
   explicit short-reference runtime contract in
-  ``examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml``.
+  ``benchmarks/cases/cyclone_nonlinear_short.toml``.
   The main short-run drift turned out to be configuration-level: the replay
   needed ``p_hyper = 2`` and no end damping to match the public GX short input.
   With that contract restored, the tracked comparison improves to
@@ -1315,7 +1315,7 @@ artifacts, use:
 
 The current full-GK nonlinear ETG lane is now explicitly tracked as a pilot
 runtime contract via
-``examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml``. Reduced
+``benchmarks/cases/etg_nonlinear.toml``. Reduced
 collisional-ETG runtime paths have been retired from ``main``; future ETG
 parity work should use the maintained full-GK runtime.
 
@@ -1323,7 +1323,7 @@ For ETG nonlinear audit runs, use dense short-window overrides first:
 
 .. code-block:: bash
 
-   JAX_ENABLE_X64=1 gkx examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml \
+   JAX_ENABLE_X64=1 gkx benchmarks/cases/etg_nonlinear.toml \
      --steps 10 \
      --sample-stride 1 \
      --diagnostics-stride 1
