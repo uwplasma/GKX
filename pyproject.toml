@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gkx"
-version = "2.2.0"
+version = "2.3.0"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -30,7 +30,10 @@ dependencies = [
   "matplotlib",
   "scipy",
   "netCDF4",
-  "solvax>=0.12.0",
+  # The pr3-cm preconditioner's Schur elimination is
+  # solvax.block_thomas_factor_ops, first shipped in 0.22.0; every earlier
+  # release lacks it (checked wheel by wheel, see docs/numerics.rst).
+  "solvax>=0.22.0",
   # The VMEC geometry path hard-requires the booz_xform_jax bridge
   # (gkx.geometry.backend_discovery).
   "booz_xform_jax",

@@ -89,10 +89,92 @@ It uses two kinetic species with unequal temperatures/masses, finite FLR, and
 separate density/current/perpendicular-moment excitations; float32/64 values
 and normalized residuals must agree. Variable-:math:`B` cases test GKX's
 additional :math:`B^{-2}` perpendicular-Ampere convention only: its physical
-normalization remains unqualified by those paper equations. Prescribed FLR
-and spatial coefficients do not certify geometry normalization. These are
-algebra gates, not the still-required independent free-energy identity or EM
-transport benchmark. Zonal/gauge and AD tests remain separate.
+normalization remains unqualified by those paper equations alone.  The
+independent physical-energy identification below supplies the additional field
+normalization check.  Zonal/gauge tests remain separate.
+
+The companion geometry-to-field test checks the constant-:math:`B`, nonzonal quadratic implied by
+`GX (arXiv v3), (12), (16), and (32)--(34)
+<https://arxiv.org/html/2209.06731v3>`_.  For the retained basis it independently
+forms
+
+.. math::
+
+   S_\phi=\sum_{s\ell}n_sZ_sJ_\ell G_{s\ell0},\quad
+   S_A=\sum_{s\ell}n_sZ_sv_{th,s}J_\ell G_{s\ell1},\quad
+   S_B=\sum_{s\ell}n_sT_sJ_\ell^B G_{s\ell0},
+
+and
+
+.. math::
+
+   F_{\rm src}=\frac12\sum_{s\ell m}n_sT_s|G_{s\ell m}|^2
+   +\frac12\operatorname{Re}(\phi^*S_\phi-A_\parallel^*S_A+B_\parallel^*S_B).
+
+`Howes et al. (2006), (B19)--(B20)
+<https://arxiv.org/pdf/astro-ph/0511812>`_ identify the physical fluctuation
+energy as particle entropy plus magnetic energy.  Applying quasineutrality and
+the corrected local-:math:`B` field equations in `published GX, (2.12) and
+(4.22)--(4.25)
+<https://www.cambridge.org/core/journals/journal-of-plasma-physics/article/gx-a-gpunative-gyrokinetic-turbulence-code-for-tokamak-and-stellarator-design/2C4BB81955E7E749B95B8B8141E997FA>`_
+gives, mode by mode,
+
+.. math::
+
+   F_{\rm phys}=\frac12\sum_{s\ell m}n_sT_s|H_{s\ell m}|^2
+   -\frac12\sum_s\frac{n_sZ_s^2}{T_s}|\phi|^2
+   +\frac{k_{\perp,N}^2|A_\parallel|^2+B^2|\mathtt{bpar}|^2}
+          {\beta_{\rm ref}}.
+
+The fields here are dimensionless.  GX Appendix A, Tables 4--5 normalize
+:math:`k_\perp` by :math:`\rho_{\rm ref}^{-1}`, :math:`A_\parallel` by
+:math:`\rho_*\rho_{\rm ref}B_N`, and :math:`\delta B_\parallel` by
+:math:`\rho_*B_N`; GKX stores
+:math:`\mathtt{bpar}=\delta B_\parallel/(\rho_*B(z))`.  Hence
+:math:`\delta B_\perp/(\rho_*B_N)=k_{\perp,N}A_\parallel` and
+:math:`\delta B_\parallel/(\rho_*B_N)=B\,\mathtt{bpar}`.  Together with
+:math:`\beta_{\rm ref}=8\pi n_{\rm ref}T_{\rm ref}/B_N^2` and
+:math:`v_{th}=\sqrt{T/m}`, this gives the two :math:`1/\beta_{\rm ref}` magnetic
+terms above (and the :math:`\beta_{\rm ref}/2` in Ampere's law), with no hidden
+:math:`\sqrt{2}` factor.
+
+For the :math:`B^{-2}` cache convention tested at varying :math:`B`,
+:math:`k_{\perp,N}^2=\mathtt{kperp2}\,B^2`.  The test constructs this expression
+independently and checks :math:`F_{\rm src}=F_{\rm phys}` first at constant
+:math:`B=1`, then with the varying-:math:`B` volume measure; dropping either
+magnetic :math:`B^2` factor must fail.  The constant-:math:`B` check exercises
+both cache conventions but cannot distinguish them.  This is a per-mode
+finite-FLR, nonzonal, periodic identity; zonal/gauge and general multi-mode
+Hermitian weighting remain open.
+Within that envelope the componentwise JAX convention is
+:math:`\operatorname{conj}(\nabla_G F_{\rm src})=n_sT_sH_s`.
+The symmetric truncated Hermite ladder and skew-adjoint periodic derivative
+also give the tested streaming-only identity
+
+.. math::
+
+   \operatorname{Re}\sum_{s\ell mz}n_sT_sH_{s\ell m}^*
+   (\partial_tG_{s\ell m})_{\rm stream}=0.
+
+This excludes curved-geometry, drive, collision, boundary-damping and nonlinear
+terms. The runtime ``Wg + Wphi + Wapar`` diagnostic is a
+distinct monitoring quantity and contains no :math:`B_\parallel` contribution.
+
+For varying :math:`B`, the companion term-level gate follows `Mandell et al.
+(2018), (4.4)--(4.6)
+<https://doi.org/10.1017/S0022377818000041>`_: it contracts streaming plus
+mirror forcing with :math:`n_sT_sH_s^*` and the field-line volume weight
+:math:`J(z)\propto 1/(|\mathrm{gradpar}|B)`.  The periodic boundary contribution
+vanishes, and the finite-resolution defect converges once aliased products are
+resolved.  Differentiating the reduced source quadratic with its self-consistent
+fields gives the same weighted :math:`n_sT_sH_s^*` contraction.  With equilibrium
+gradients, collisions, hyper-dissipation, and end damping disabled, the gate
+also contracts the complete assembled linear right-hand side: streaming,
+mirror, curvature, and grad-:math:`B`.  Every retained term is nonzero, while
+wrong volume/sign and missing-imaginary-unit controls produce nonzero exchange.
+The physical identification and variational identity do not establish a full
+budget: nonlinear transfer, heat-flux normalization, sources, sinks, and
+time-discretization remain outside this instantaneous gate.
 
 Linear gyrokinetic operator
 ---------------------------

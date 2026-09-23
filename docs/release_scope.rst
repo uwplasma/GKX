@@ -3,13 +3,15 @@ Release Scope and Claim Boundaries
 
 .. warning::
 
-   Review snapshot: GKX 2.2.0, 2026-09-20. The 2.0.0 end-damping regression
+   Review snapshot: GKX 2.3.0, 2026-09-21. The 2.0.0 end-damping regression
    (`issue 192 <https://github.com/uwplasma/GKX/issues/192>`_) is closed by
    `PR 197 <https://github.com/uwplasma/GKX/pull/197>`_, which restores the
    per-step contract and reproduces the recorded artifact bit-identically. That
    is not a new physics certification: historical 2.0.0 time-integrated numbers
-   still require repaired-build evidence, and the Phase 0.1 rate migration is
-   not complete. The artifact-backed rows below describe their recorded
+   still require repaired-build evidence. Separately, the Phase 0.1 rate
+   migration and reference regeneration tracked by
+   `issue 194 <https://github.com/uwplasma/GKX/issues/194>`_ are not complete.
+   The artifact-backed rows below describe their recorded
    experiments, not a fresh verification of the current operator. Re-run
    affected cases before promoting current-release parity. See
    :doc:`research_grade_plan` and the :download:`roadmap <../plan.md>`.
@@ -40,12 +42,13 @@ score.
      - Status
      - Supported claim
    * - Linear and nonlinear benchmark atlas
-     - release-ready for named cases
+     - recorded artifact gates closed; current parity unpromoted
      - Linear growth/frequency/eigenfunction and nonlinear window statistics
-       are validated for the tracked release cases. The nonlinear window
-       statistics gate includes only Cyclone, Cyclone Miller, KBM, W7-X, and
-       HSX. ETG nonlinear pilots and KAW/TEM stress lanes are not part of the
-       release nonlinear parity claim unless a later gate index admits them.
+       passed the tracked gates for their recorded experiments. The nonlinear
+       window statistics gate includes only Cyclone, Cyclone Miller, KBM,
+       W7-X, and HSX. ETG nonlinear pilots and KAW/TEM stress lanes are not part
+       of the release nonlinear parity claim unless a later gate index admits
+       them.
    * - Runtime/refactor artifact contract
      - release-ready as infrastructure
      - The large runtime and diagnostics refactor is covered as a behavior

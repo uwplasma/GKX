@@ -91,16 +91,23 @@ These links are clickable in the HTML docs via the ``viewcode`` extension.
 Structured solver dependency contract
 -------------------------------------
 
-GKX requires ``solvax>=0.12.0``; ``pyproject.toml`` is the only place that
-floor is declared. Version 0.12.0 is the first release that exports every
-SOLVAX name GKX imports: the eigenpair, propagator, and sparse-operator
+GKX requires ``solvax>=0.22.0``; ``pyproject.toml`` is the only place that
+floor is declared. Version 0.22.0 is the first release that exports every
+SOLVAX name GKX imports. The binding one is ``block_thomas_factor_ops``, the
+operator-coupling Schur elimination behind the ``pr3-cm`` preconditioner's
+exact z-block solve, which first ships there together with
+``block_thomas_solve_ops``, the solve the tests pin GKX's unrolled
+substitution against. The eigenpair, propagator, and sparse-operator
 interfaces (``adaptive_eigenpair``, ``eigenpair_reverse``,
 ``estimate_rk4_timestep``, ``exponential_eigenpairs``,
 ``propagator_eigenpairs``, ``sparse_eigenpairs``, ``sparse_operator_matrix``)
-first ship there, while the Krylov and structured-solve interfaces (``gmres``,
-``linear_solve``, ``tridiagonal_solve``, ``chunked_jacfwd``,
-``SpluFactorization``) are older. CI installs the newest released SOLVAX, so
-it tests the latest release rather than the floor. Generic numerical
+are older, from 0.12.0, and the Krylov and structured-solve interfaces
+(``gmres``, ``linear_solve``, ``tridiagonal_solve``, ``chunked_jacfwd``,
+``SpluFactorization``) older still. The floor was checked against the released
+wheels rather than inferred: every PyPI release from 0.12.0 to 0.21.0 lacks
+``block_thomas_factor_ops``, and the ``pr3-cm`` unit tests fail on 0.21.0 and
+pass on 0.22.0. CI installs the newest released SOLVAX, so it tests the latest
+release rather than the floor. Generic numerical
 algebra lives in SOLVAX; gyrokinetic state layout, linked-boundary assembly,
 preconditioner coefficients, eigenbranch tracking, transport windows, and
 physics gates remain in GKX.

@@ -1,0 +1,8 @@
+ClosedJaxpr.__eq__   <slot wrapper '__eq__' of 'object' objects>
+ClosedJaxpr.__hash__ <slot wrapper '__hash__' of 'object' objects>
+closed-over array: call 0 compiled 2 module(s)
+closed-over array: call 1 compiled 1 module(s)
+closed-over array: call 2 compiled 1 module(s)
+python constant: call 0 compiled 1 module(s)
+python constant: call 1 compiled 1 module(s)
+python constant: call 2 compiled 1 module(s)
