@@ -184,6 +184,54 @@ def _nonlinear_explicit_update(
     )
 
 
+@dataclass(frozen=True)
+class _StateSplit:
+    """Where the nonlinear state is split and how far it is padded.
+
+    ``axis`` is the one state axis ``state_sharding`` splits over the mesh
+    axis ``mesh_axis`` into ``count`` equal blocks. ``extent`` is the
+    physical length of that axis, and ``padded`` is the length rounded up to
+    a multiple of ``count``, the length of the array the scan carries.
+    """
+
+    axis: int
+    mesh_axis: str
+    count: int
+    extent: int
+    padded: int
+
+
+def _resolve_state_split(shape: tuple[int, ...], sharding: Any) -> _StateSplit:
+    """Return the split ``sharding`` asks for on a state of ``shape``.
+
+    A JAX array is placed across devices only in equal shares, so an extent
+    the device count does not divide cannot be ``device_put`` as it is. That
+    is the normal case on the ``ky >= 0`` layout, whose ``Nyc = 1 + Ny//2``
+    is odd whenever ``Ny % 4 == 0``. Such an extent is zero-padded up to a
+    multiple of the device count. The padding is sliced off before every
+    RHS and projector evaluation, so it never enters the physics.
+    """
+
+    spec = tuple(sharding.spec) + (None,) * (len(shape) - len(sharding.spec))
+    split = [(axis, entry) for axis, entry in enumerate(spec[: len(shape)]) if entry]
+    if len(split) != 1 or not isinstance(split[0][1], str):
+        raise ValueError(
+            "the sharded nonlinear integrator splits exactly one state axis over "
+            f"one mesh axis; got the partition spec {sharding.spec} for a state "
+            f"of shape {shape}"
+        )
+    axis, mesh_axis = split[0]
+    count = int(sharding.mesh.shape[mesh_axis])
+    extent = int(shape[axis])
+    return _StateSplit(
+        axis=axis,
+        mesh_axis=mesh_axis,
+        count=count,
+        extent=extent,
+        padded=extent + (-extent % count),
+    )
+
+
 @lru_cache(maxsize=64)
 def _compiled_nonlinear_sharded_runner(
     *,
@@ -197,8 +245,14 @@ def _compiled_nonlinear_sharded_runner(
     laguerre_mode: str,
     return_fields: bool,
     projector: Callable[[jnp.ndarray], jnp.ndarray] | None,
+    split: _StateSplit | None = None,
 ) -> Callable[[jnp.ndarray, LinearCache, LinearParams, jnp.ndarray], Any]:
-    """Compile one reusable nonlinear runner without capturing large arrays."""
+    """Compile one reusable nonlinear runner without capturing large arrays.
+
+    With a ``state_sharding``, the scan carries the state split (and padded,
+    see :func:`_resolve_state_split`); the stage arithmetic runs on the
+    split blocks, and :func:`whole` evaluates the RHS and the projector.
+    """
 
     def run(
         G_init: jnp.ndarray,
@@ -213,12 +267,71 @@ def _compiled_nonlinear_sharded_runner(
                 return state
             return jax.lax.with_sharding_constraint(state, state_sharding)
 
+        def whole(
+            fn: Callable[..., tuple[jnp.ndarray, Any]], state: jnp.ndarray, *rest: Any
+        ) -> tuple[jnp.ndarray, Any]:
+            """Evaluate ``fn`` on the whole state, returning a split result.
+
+            Each device gathers the full state inside a manual region,
+            evaluates ``fn`` on the unpadded array, and keeps its own block
+            of the state-shaped result. The second output of ``fn`` comes
+            back whole.
+
+            The region exists to work around XLA. The SPMD partitioner
+            all-gathers the operand of every FFT, even when only batch axes
+            are split. On XLA:CPU an all-gather along a non-leading axis is
+            laid out with that axis most major, and that layout can reach an
+            FFT, whose thunk requires the default layout. The run then fails
+            with ``RET_CHECK ... IsMonotonicWithDim0Major``. Gathering here,
+            along a leading axis, keeps the gathered array in the default
+            layout. See the repro under plan/research/scripts/2026-09-22-ky-state-sharding.
+            """
+
+            if split is None or state_sharding is None:
+                return fn(state, *rest)
+
+            def local(block: jnp.ndarray, *rest_local: Any) -> tuple[jnp.ndarray, Any]:
+                gathered = jax.lax.all_gather(
+                    jnp.moveaxis(block, split.axis, 0),
+                    split.mesh_axis,
+                    axis=0,
+                    tiled=True,
+                )
+                full = jax.lax.slice_in_dim(
+                    jnp.moveaxis(gathered, 0, split.axis),
+                    0,
+                    split.extent,
+                    axis=split.axis,
+                )
+                result, extra = fn(full, *rest_local)
+                pad = [(0, 0)] * result.ndim
+                pad[split.axis] = (0, split.padded - split.extent)
+                width = block.shape[split.axis]
+                own = jax.lax.dynamic_slice_in_dim(
+                    jnp.pad(result, pad),
+                    jax.lax.axis_index(split.mesh_axis) * width,
+                    width,
+                    axis=split.axis,
+                )
+                return own, extra
+
+            replicated = jax.sharding.PartitionSpec()
+            return jax.shard_map(
+                local,
+                mesh=state_sharding.mesh,
+                in_specs=(state_sharding.spec,) + (replicated,) * len(rest),
+                out_specs=(state_sharding.spec, replicated),
+                check_vma=False,
+            )(state, *rest)
+
         def project_shard(state: jnp.ndarray) -> jnp.ndarray:
             if projector is not None:
-                state = projector(state)
+                state, _ = whole(lambda full: (projector(full), None), state)
             return maybe_shard(jnp.asarray(state, dtype=state_dtype))
 
-        def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
+        def rhs_whole(
+            state: jnp.ndarray, cache: LinearCache, params: LinearParams
+        ) -> tuple[jnp.ndarray, FieldState]:
             dG, fields = rhs_fn(
                 state,
                 cache,
@@ -228,6 +341,10 @@ def _compiled_nonlinear_sharded_runner(
                 laguerre_mode=laguerre_mode,
             )
             return jnp.asarray(dG, dtype=state_dtype), fields
+
+        def rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, FieldState]:
+            dG, fields = whole(rhs_whole, state, cache, params)
+            return maybe_shard(dG), fields
 
         def stage(
             state: jnp.ndarray, increment: jnp.ndarray, scale: float
@@ -286,12 +403,15 @@ def integrate_nonlinear_sharded(
     """Integrate the nonlinear system with an explicit pjit-sharded scan.
 
     The state array can be partitioned along a ``resolve_state_sharding`` axis
-    such as ``ky`` or ``kx``. This is a diagnostic whole-state sharding
-    primitive for identity gates and profiler localization. It is not a
-    production nonlinear domain decomposition or speedup claim until the exact
-    workload has communication-complete identity, conservation, transport, and
-    profiler gates. Domain-sharding identity reports are metadata gates only;
-    they do not authorize routing through this whole-state integrator.
+    such as ``ky`` or ``kx``; an extent the device count does not divide is
+    zero-padded while it is carried (:func:`_resolve_state_split`). The RHS
+    and the projector are evaluated whole on every device, so only the
+    carried state and the stage arithmetic are split: this spreads memory,
+    not RHS work. It is a diagnostic whole-state sharding primitive for
+    identity gates and profiler localization, not a production nonlinear
+    domain decomposition or speedup claim. Domain-sharding identity reports
+    are metadata gates only; they do not authorize routing through this
+    whole-state integrator.
     """
 
     _validate_steps(steps)
@@ -307,8 +427,12 @@ def integrate_nonlinear_sharded(
         if compressed_real_fft
         else None
     )
+    split = None
     if state_sharding is not None:
-        G_init = jax.device_put(G_init, state_sharding)
+        split = _resolve_state_split(G_init.shape, state_sharding)
+        pad = [(0, 0)] * G_init.ndim
+        pad[split.axis] = (0, split.padded - split.extent)
+        G_init = jax.device_put(jnp.pad(G_init, pad), state_sharding)
     runner = _compiled_nonlinear_sharded_runner(
         pjit_fn=pjit,
         rhs_fn=nonlinear_rhs_cached,
@@ -320,8 +444,17 @@ def integrate_nonlinear_sharded(
         laguerre_mode=laguerre_mode,
         return_fields=return_fields,
         projector=projector,
+        split=split,
     )
-    return runner(G_init, cache, params, _dt_array(dt, state_dtype))
+    out = runner(G_init, cache, params, _dt_array(dt, state_dtype))
+    if split is None or split.padded == split.extent:
+        return out
+    if return_fields:
+        G_final, fields = cast(tuple[jnp.ndarray, FieldState], out)
+        return jax.lax.slice_in_dim(G_final, 0, split.extent, axis=split.axis), fields
+    return jax.lax.slice_in_dim(
+        cast(jnp.ndarray, out), 0, split.extent, axis=split.axis
+    )
 
 
 # ---------------------------------------------------------------------------
