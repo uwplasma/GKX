@@ -19711,3 +19711,31 @@ Outcome:
   repeatedly (session scratch 25 GB); large runs move to the office host.
 - Next task: P0 — CLI-RES, then land #277 and the paused lanes in the G.5
   merge order.
+
+## 2026-09-22 - PERF-LAYOUT resumed: identity gates closed, SHARD-PAD opened - `perf/ky-layout-deck-key`, `perf/ky-shard-pad`
+
+Baseline:
+- GKX SHA: `main` `f9485f044` for the identity gate; #282 head `8ddf49301` tested (it differs from `2055c9649` only in tests, docstrings and the manifest), then merged with `main` `29362737f` (#277; `plan/log.md` conflict resolved by keeping both histories).
+- companion SHAs: none.
+- source/test/tool lines: #282 unchanged (93830 / 94358 / 78904); #287 src 93831, tests 94432 (measured).
+- relevant existing gates: `run_identity.sh` (pinned full) and `run_identity_default.sh` (no pin); `tests/unit/parallel/test_parallel_nonlinear_routing.py`.
+
+Scope:
+- intended change: finish #282's identity evidence; SHARD-PAD (plan F.6), so a sharded run accepts `Nyc`.
+- non-goals: real ky partitioning of nonlinear runs; flipping the default.
+- acceptance: 8/8 comparisons bitwise; half layout routed on 2 and 4 fake devices and matching serial.
+
+Changes:
+- #282: summarized comparison records in `plan/research/scripts/2026-09-22-ky-layout-split/records/{pinned,default}/` (raw npz deleted on the office host).
+- #287 (stacked on #282): `shard_nonlinear_state` places an extent the devices do not divide replicated on the mesh instead of refusing; docs say the ky route does not split the scan; routing test on both layouts; a test pins the replicated scan; probe `plan/research/scripts/2026-09-22-shard-pad/ky_partition_probe.py` + `.json`.
+
+Evidence:
+- identity (office CPU, jax 0.10.2, own venv, ref `f9485f044` vs `8ddf49301`): pinned-full RHS/VJP 58/58 and trajectory 65/65 bitwise in f32 and x64; unpinned default the same, 58/58 and 65/65 in f32 and x64, max_rel 0 everywhere.
+- SHARD-PAD probe (CPU, 2 and 4 fake devices, `Ny = 8`): runtime `axis="ky"` scan input is `P()` on both layouts (the initial-state projection `setup.project_state` drops the placement), so the divisible case never ran split; half (`Nyc = 5`) now runs and matches serial. `[time] state_sharding="ky"` fails on the two-sided axis in XLA:CPU's FFT thunk (`RET_CHECK ... IsMonotonicWithDim0Major`, after a partitioner all-gather on ky gives the z FFT layout {5,4,2,1,0,3}) and raises a raw `IndivisibleError` on the half axis. Forcing the split in the runtime jit gives the same FFT failure.
+- tests: routing file passes in float32 and x64 with 4 devices; release gates, parallel core, runners tests pass; ruff, mypy (changed module) and the architecture manifest check pass.
+- CPU/NVIDIA timing: none (no timing claim; both A4000s were in use by other processes).
+
+Outcome:
+- #282 identity: done, 8/8 bitwise. SHARD-PAD: done for the runtime route, whose ky split was never real; real ky partitioning is blocked on XLA:CPU and is a separate follow-up (repro, workaround, GPU check, explicit message for an uneven `[time] state_sharding`).
+- remaining blocker for the default flip: ADJ-HALF (plan F.5).
+- next task: merge `main` again after #278 and move `tools/release/*` invocations to `python scripts/check.py`; retarget #287 to `main` once #282 lands.
