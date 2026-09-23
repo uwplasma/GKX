@@ -20440,3 +20440,15 @@ Outcome:
 - accepted pending CI
 - remaining blocker: none known
 - next task: follow-up issue for the QHS adaptive-eigensolver certification on a generated wout
+
+## 2026-09-23 - EXAMPLES-GALLERY (G.3) — final pause
+
+Baseline:
+- GKX SHA: main 48536d159 (chain #293) merged into examples/gallery cleanly
+
+Evidence:
+- CI run 35851871202 on 6ce1aeed7: 37 checks passed, including every quick shard and all 24 wide-coverage shards. The `wide-coverage` aggregate and `ci-required` had not finished at the pause.
+
+Outcome:
+- partial: ready for review pending the final aggregate; nothing known failing
+- next task: confirm `ci-required` on the merged head. Open a follow-up for the QHS adaptive-eigensolver certification, which runs only where a generated wout exists.
