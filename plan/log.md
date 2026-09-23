@@ -19399,3 +19399,23 @@ Outcome:
 - complete pending CI and review
 - remaining blocker: none. After #278 merges, the README's `python tools/release/run_test_gates.py fast` becomes `python scripts/check.py test-gates fast`
 - next task: merge origin/main after #278, update that line, rerun the README gates
+
+## 2026-09-22 - README-SHOWCASE (G.3), paused again after merging main
+
+Baseline:
+- GKX SHA: 29362737f (main after #277); branch head 896631af4 before this entry
+
+Scope:
+- no content change since the resumed entry above; merge of origin/main (#277) into docs/readme-showcase
+
+Changes:
+- plan/log.md conflict resolved by keeping every line of both sides (main's new entries first, then this lane's)
+
+Evidence:
+- after the merge, test_release_gates.py + test_evidence_ledger.py + test_vmex_qa_transport_optimization.py pass locally (JAX 0.10.2, x64); architecture and size manifests pass; gitleaks clean
+- CI on 4d764e7bd (pre-merge) had 11 passes, 0 failures when it was superseded; CI on the merged head was still queued (runner backlog) at the pause, with no job failures
+
+Outcome:
+- paused by the maintainer; no process running locally or on the office host
+- office host keeps only the lane clone and its venv (lanes/readme-showcase under the home directory); no raw outputs beyond the two committed README figure files
+- next task: (1) wait for ci-required on the head; (2) when #278 is on main, merge origin/main and change the README's `python tools/release/run_test_gates.py fast` to `python scripts/check.py test-gates fast`; (3) rerun the three README test files; (4) push and leave for the supervisor to merge
