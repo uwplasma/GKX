@@ -45,7 +45,10 @@ The current matrix is anchored on these published baselines:
 Status Legend
 -------------
 
-- ``Closed``: benchmark lane is accepted for research claims.
+- ``Closed``: the row's recorded benchmark gate is complete. It does not by
+  itself promote current-release or manuscript parity; :doc:`release_scope`
+  governs promotion, including repaired-build and reference-regeneration
+  requirements.
 - ``Open``: lane is active and expected to close.
 - ``Exploratory``: useful for development, not yet a paper claim.
 - ``Deferred``: intentionally out of scope for the current paper/release.
@@ -97,7 +100,7 @@ Tokamak Linear
      - Open
      - residual and damping must match literature/code-backed references before publication use; signed ``Phi_zonal_mode_kxt`` is now available. The current artifact is ``docs/_static/miller_zonal_response_pilot.json`` from ``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel`` (the companion panel render is a regenerable figure written by the same command and is not tracked in git) using Merlo Case-III Table-III parameters, an initial density perturbation, a common pre-recurrence fit window ``t≈30``, separate positive/negative-extrema damping fits, and a Hilbert-phase frequency extraction on that same window. It gives ``residual≈0.192`` against a paper-scale target of about ``0.19``, ``ω_GAM R0 / v_i≈2.20`` against a figure read-off near ``2.24``, and ``γ_GAM R0 / v_i≈-0.176`` against a figure read-off near ``-0.17``. The remaining explicit follow-up item is the later finite-moment recurrence rather than the benchmark-scale Merlo gate
 
-Frozen machine-readable evidence for the currently closed tokamak linear
+Frozen machine-readable evidence for the artifact-closed tokamak linear
 lanes:
 
 - ``docs/_static/cyclone_mismatch_table.csv`` with the scan tables
@@ -509,7 +512,7 @@ Nonlinear Validation
      - Deferred
      - keep out of the paper until branch identity and runtime cost are closed
 
-Frozen machine-readable evidence for the currently closed nonlinear lanes is
+Frozen machine-readable evidence for the artifact-closed nonlinear lanes is
 the set of gate-summary JSON files listed below. The comparison renders that
 previously accompanied them (``nonlinear_cyclone_diag_compare_t400.png``,
 ``nonlinear_cyclone_miller_diag_compare_t122.png``,
