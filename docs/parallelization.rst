@@ -183,7 +183,7 @@ The companion gate
 artifact that may promote whole-state nonlinear sharding wording beyond
 diagnostic/profiler evidence, and only for the exact workload it gates. The fast
 checker
-``tools/release/check_parallel_scaling_artifacts.py`` now validates that gate, its CSV
+``scripts/check.py parallel-scaling`` now validates that gate, its CSV
 sidecar, its CPU/GPU source rows, its required-backend blockers, and the
 per-backend blocker report without rerunning long CPU or GPU profilers. The
 report keeps identity-evidence blockers separate from speedup/efficiency
@@ -1062,7 +1062,7 @@ Before editing scaling docs or manifests, run the checked-in artifact contract:
 
 .. code-block:: bash
 
-   python tools/release/check_parallel_scaling_artifacts.py
+   python scripts/check.py parallel-scaling
 
 This command does not rerun large profiles and does not enforce any minimum
 speedup. It validates that the tracked JSON/CSV/PNG/PDF sidecars exist, the

@@ -1633,7 +1633,7 @@ def test_geometry_inverse_design_report_defaults_to_all_observables_for_square_p
 
 import json
 
-from tools.release.check_vmec_boozer_gates import (
+from scripts.checks.check_vmec_boozer_gates import (
     build_vmec_boozer_differentiability_claim_guard,
 )
 

@@ -454,8 +454,8 @@ def test_tracked_quasilinear_train_holdout_reports_use_passed_nonlinear_gates() 
 
 import pytest
 
-from tools.release.check_release_readiness import TECHNICAL_COMPLETION_TARGET
-from tools.release.check_release_readiness import (
+from scripts.checks.check_release_readiness import TECHNICAL_COMPLETION_TARGET
+from scripts.checks.check_release_readiness import (
     ReleaseReadinessError,
     build_frozen_output_fingerprint,
     check_release_readiness,
@@ -492,14 +492,14 @@ gkx = "gkx.cli:main"
                 "--coverage-xml coverage-wide.xml",
                 "--enforce-package-coverage",
                 "codecov/codecov-action",
-                "tools/release/check_parallel_scaling_artifacts.py",
-                "tools/release/check_package_architecture_manifest.py",
-                "tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only",
-                "tools/release/check_quasilinear_promotion_guardrails.py",
-                "tools/release/check_vmec_boozer_gates.py differentiability-claim",
+                "scripts/check.py parallel-scaling",
+                "scripts/check.py architecture",
+                "scripts/check.py parallel-scaling --performance-manifest-only",
+                "scripts/check.py quasilinear",
+                "scripts/check.py vmec-boozer differentiability-claim",
                 "tools/artifacts/build_parallelization_completion_status.py",
-                "tools/release/check_release_readiness.py technical-status",
-                "tools/release/check_release_readiness.py",
+                "scripts/check.py readiness technical-status",
+                "scripts/check.py readiness",
                 "rm -rf build dist",
             ]
         ),
@@ -528,17 +528,17 @@ coverage:
     )
     (root / ".github" / "workflows" / "release.yml").write_text(
         "name: Release\n"
-        "tools/release/check_release_readiness.py version\n"
-        "tools/release/check_repository_size_manifest.py\n"
-        "tools/release/check_repository_size_manifest.py release-artifacts\n"
-        "tools/release/check_package_architecture_manifest.py\n"
-        "tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only\n"
-        "tools/release/check_parallel_scaling_artifacts.py\n"
-        "tools/release/check_quasilinear_promotion_guardrails.py\n"
-        "tools/release/check_vmec_boozer_gates.py differentiability-claim\n"
+        "scripts/check.py readiness version\n"
+        "scripts/check.py size\n"
+        "scripts/check.py size release-artifacts\n"
+        "scripts/check.py architecture\n"
+        "scripts/check.py parallel-scaling --performance-manifest-only\n"
+        "scripts/check.py parallel-scaling\n"
+        "scripts/check.py quasilinear\n"
+        "scripts/check.py vmec-boozer differentiability-claim\n"
         "tools/artifacts/build_parallelization_completion_status.py\n"
-        "tools/release/check_release_readiness.py technical-status\n"
-        "tools/release/check_release_readiness.py\n"
+        "scripts/check.py readiness technical-status\n"
+        "scripts/check.py readiness\n"
         "rm -rf build dist\n"
         "gh-action-pypi-publish\n",
         encoding="utf-8",
@@ -841,9 +841,7 @@ coverage:
 def test_release_readiness_rejects_missing_release_guardrails(tmp_path: Path) -> None:
     _write_release_ready_tree(tmp_path)
     (tmp_path / ".github" / "workflows" / "release.yml").write_text(
-        "name: Release\n"
-        "tools/release/check_release_readiness.py version\n"
-        "gh-action-pypi-publish\n",
+        "name: Release\nscripts/check.py readiness version\ngh-action-pypi-publish\n",
         encoding="utf-8",
     )
 
@@ -1046,7 +1044,7 @@ import textwrap
 
 import yaml
 
-from tools.release.check_release_readiness import (
+from scripts.checks.check_release_readiness import (
     LANES,
     ReleaseVersionError,
     build_technical_release_status,
@@ -1252,8 +1250,8 @@ def _release_artifact_manifest(
 def test_repository_hygiene_import_does_not_require_pillow() -> None:
     script = (
         Path(__file__).resolve().parents[2]
-        / "tools"
-        / "release"
+        / "scripts"
+        / "checks"
         / "check_repository_size_manifest.py"
     )
     code = """
@@ -1525,7 +1523,7 @@ import re
 from support.paths import REPO_ROOT
 
 import tomllib
-from tools.release.check_package_architecture_manifest import (
+from scripts.checks.check_package_architecture_manifest import (
     validate_architecture_policy,
 )
 
@@ -2514,7 +2512,7 @@ def test_core_source_avoids_comparison_code_terminology_outside_benchmarks() -> 
 
 from pathlib import Path
 
-from tools.release import run_test_gates
+from scripts.checks import run_test_gates
 
 
 def test_discover_test_files_returns_recursive_tests(tmp_path: Path) -> None:
@@ -2643,7 +2641,7 @@ def test_run_tests_marks_remaining_files_after_total_timeout(
 from pathlib import Path
 
 
-from tools.release.run_test_gates import (
+from scripts.checks.run_test_gates import (
     WIDE_COVERAGE_LOGICAL_CPU_DEVICES,
     WIDE_COVERAGE_NODE_BATCHES,
     build_coverage_shard_report,
@@ -2739,7 +2737,7 @@ def test_wide_coverage_logical_cpu_owners_run_whole_not_by_test_name() -> None:
 
 
 def test_wide_coverage_shard_batches_cover_every_target_once(monkeypatch) -> None:
-    from tools.release.run_test_gates import REPO_ROOT
+    from scripts.checks.run_test_gates import REPO_ROOT
 
     plain = [REPO_ROOT / "tests/test_a.py", REPO_ROOT / "tests/test_b.py"]
 
@@ -2750,7 +2748,7 @@ def test_wide_coverage_shard_batches_cover_every_target_once(monkeypatch) -> Non
     owner = REPO_ROOT / "tests/unit/nonlinear/test_nonlinear_helpers_extra.py"
     nodeids = [f"{owner}::test_{idx}" for idx in range(13)]
     monkeypatch.setattr(
-        "tools.release.run_test_gates.collect_pytest_nodeids",
+        "scripts.checks.run_test_gates.collect_pytest_nodeids",
         lambda path, pytest_args: nodeids,
     )
     batches = wide_coverage_shard_batches([owner], pytest_args=[])
@@ -3344,11 +3342,11 @@ from pathlib import Path
 FLOOR_REPO_ROOT = Path(__file__).resolve().parents[2]
 # Gates the repo-hygiene job runs before anything is pip-installed.
 UNINSTALLED_RELEASE_GATES = (
-    "tools/release/check_repository_size_manifest.py",
-    "tools/release/check_package_architecture_manifest.py",
-    "tools/release/check_parallel_scaling_artifacts.py",
-    "tools/release/check_release_readiness.py",
-    "tools/release/check_validation_coverage_manifest.py",
+    "scripts/check.py size",
+    "scripts/check.py architecture",
+    "scripts/check.py parallel-scaling",
+    "scripts/check.py readiness",
+    "scripts/check.py validation-coverage",
 )
 
 
@@ -3417,7 +3415,7 @@ def test_no_module_imports_the_tomli_backport() -> None:
 def test_repo_hygiene_gates_run_without_an_install(relative: str) -> None:
     """repo-hygiene runs these before any ``pip install``; keep that working."""
 
-    proc = _uninstalled_run([relative, "--help"])
+    proc = _uninstalled_run([*relative.split(), "--help"])
     assert proc.returncode == 0, proc.stderr
 
 

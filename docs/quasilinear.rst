@@ -588,7 +588,7 @@ point, at least one holdout point, finite passed nonlinear late-window
 convergence metadata for every holdout, and the holdout mean-relative-error
 gate passes. The window metadata comes from
 ``gkx.diagnostics.transport_windows`` or
-``tools/release/check_nonlinear_transport_gates.py convergence`` and records the transient
+``scripts/check.py nonlinear-transport convergence`` and records the transient
 cutoff, late-window mean/std, running-mean drift, block/bootstrap SEM, sample
 counts, and source-artifact provenance. Otherwise the claim is demoted to
 ``calibration_dataset`` or ``training_or_audit_only``. This keeps README, docs,
@@ -605,13 +605,13 @@ relative spread of late-window means plus the combined SEM across replicates.
 This is the lightweight metadata gate that lets the validation ladder state
 that several long nonlinear runs agree; it is not a substitute for actually
 running those long nonlinear simulations. The command-line artifact wrapper is
-``tools/release/check_nonlinear_transport_gates.py ensemble``; it reads multiple window JSON
+``scripts/check.py nonlinear-transport ensemble``; it reads multiple window JSON
 reports and writes a JSON report plus an optional PNG summary for documentation
 or manuscript audit trails.
 
 For a matched intervention such as equilibrium flow shear, first build one
 ``convergence`` report per trace and then run
-``tools/release/check_nonlinear_transport_gates.py matched-windows``. This final
+``scripts/check.py nonlinear-transport matched-windows``. This final
 gate requires both windows to pass before evaluating relative reduction and its
 quadrature-SEM separation; it therefore cannot promote a lower but still
 drifting treatment mean.
@@ -656,7 +656,7 @@ non-finite, or dimensionally ambiguous data.
 
 Train and holdout points must also be tied to a passed nonlinear validation
 gate before they can be used in calibration. The audit tool
-``tools/release/check_quasilinear_promotion_guardrails.py calibration-inputs`` enforces that rule by matching
+``scripts/check.py quasilinear calibration-inputs`` enforces that rule by matching
 each point's ``nonlinear_artifact`` to tracked nonlinear gate metadata. It
 passes for the current Cyclone, Cyclone Miller, HSX, W7-X, D-shaped
 external-VMEC, ITERModel, up-down asymmetric, circular, high-grid-admitted
@@ -666,7 +666,7 @@ matched through explicit high-grid admission gates rather than through failed
 coarse-grid pilots. The same audit would still fail if an exploratory or
 non-converged pilot such as the older CTH-like feasibility trace were inserted
 directly as a train/holdout point.
-The companion audit ``tools/release/check_quasilinear_promotion_guardrails.py`` is the
+The companion audit ``scripts/check.py quasilinear`` is the
 metadata promotion guard: it requires finite nonlinear window means and
 standard deviations, train/holdout artifact provenance, passed held-out gates
 before ``calibrated_absolute_flux`` promotion, and explicit documentation scope
@@ -1592,7 +1592,7 @@ around ``10.5``/``9.9``. The retained high-grid pair passes at ``t=250`` and
 ``0.018``/``0.019``; and the restart-continued ``n80`` seed/timestep ensemble
 passes on ``t=[350,700]`` with mean heat flux ``9.60``, mean-relative spread
 ``0.041``, and combined SEM/mean ``0.052``. The dedicated
-``tools/release/check_vmec_boozer_gates.py high-grid-admission`` gate therefore admits
+``scripts/check.py vmec-boozer high-grid-admission`` gate therefore admits
 CTH-like as a scoped high-grid holdout while explicitly excluding any full
 ``n48/n64/n80`` convergence claim. The shaped-tokamak-pressure repair uses the
 same admission policy: full-grid failure is retained as a coarse-grid warning,

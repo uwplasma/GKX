@@ -47,7 +47,7 @@ release gates is not.
 
 The refactor branch also carries a machine-readable validation/coverage
 manifest at ``tools/validation_coverage_manifest.toml``. It is checked by
-``tools/release/check_validation_coverage_manifest.py`` and maps each critical module
+``scripts/check.py validation-coverage`` and maps each critical module
 to reference anchors, physics contracts, numerical contracts, fast tests,
 tracked artifacts, and next tests. This is the working guardrail for reaching
 95% package-wide coverage without adding shallow tests that do not validate the
@@ -55,7 +55,7 @@ implemented physics or numerics.
 
 Source-layout hygiene is checked separately by
 ``tools/package_architecture_manifest.toml`` and
-``tools/release/check_package_architecture_manifest.py``. That guard enforces
+``scripts/check.py architecture``. That guard enforces
 that manifest and prevents new root-level prefix modules
 such as ``runtime_*``, ``nonlinear_*``, ``vmex_*``, ``quasilinear_*``, or
 ``benchmark_*`` from being added without an explicit migration entry. This keeps
@@ -112,7 +112,7 @@ Nonlinear matrix release gates
 
 Broad nonlinear turbulent-flux optimization claims use fail-closed matrix and
 portfolio tools rather than manual figure selection.
-``tools/release/check_nonlinear_transport_gates.py matrix-portfolio``
+``scripts/check.py nonlinear-transport matrix-portfolio``
 selects only a passing family before publication artifacts are indexed. The current
 tracked max-mode-5 campaign is negative
 evidence: accepted QA/ESS passed only ``9/18`` samples, projected weight
@@ -310,7 +310,7 @@ writes ``docs/_static/kbm_branch_gate_summary.json`` with the same strict gate
 schema. The current continuity-first selected branch passes the adjacent
 growth/frequency jump and successive-overlap gates.
 
-``tools/release/check_validation_coverage_manifest.py gate-index`` scans tracked JSON metadata and writes
+``scripts/check.py validation-coverage gate-index`` scans tracked JSON metadata and writes
 ``docs/_static/validation_gate_index.json``, ``.csv``, ``.png``, and ``.pdf`` so the docs
 always have one compact pass/open view of the currently materialized release
 validation gates. The current JSON index has ``17/18`` tracked reports passing,
@@ -350,7 +350,7 @@ horizons. The gate is deliberately necessary-only: even a passing
 time-horizon figure writes ``promotion_gate.passed = false`` until independent
 replicate, seed, timestep, and admission-policy evidence exists.
 
-``tools/release/check_vmec_boozer_gates.py high-grid-admission`` is the final scoped
+``scripts/check.py vmec-boozer high-grid-admission`` is the final scoped
 exception gate for the rare case where the full grid ladder fails only because
 the lowest grid is not converged. It requires the failed full-grid JSON sidecar
 to contain only common/least grid-difference failures, requires the retained
@@ -366,13 +366,13 @@ claim full ``n48/n64/n80`` convergence or promote an absolute quasilinear
 transport model.
 
 Every produced ``*.out.nc`` file is checked with
-``tools/release/check_nonlinear_transport_gates.py runtime-outputs``.
+``scripts/check.py nonlinear-transport runtime-outputs``.
 That gate verifies the grouped NetCDF contains ``Grids/time`` and the requested
 heat-flux diagnostic, checks finite monotone time samples, enforces optional
 ``tmin/tmax`` coverage, and fails closed for restart-only or metadata-only
 artifacts. It is the first campaign-level smoke check after a long office GPU
 batch exits with ``rc=0``.
-``tools/release/check_nonlinear_optimization_gates.py production-guard`` then consumes those
+``scripts/check.py nonlinear-optimization production-guard`` then consumes those
 replicated long-window ensembles together with the reduced optimization and
 startup finite-difference artifacts. It is the fail-closed check that allows
 release-safe scoped wording while blocking production nonlinear turbulent-flux
@@ -408,7 +408,7 @@ For future perturbation refreshes, keep each coefficient/amplitude in a
 distinct artifact slug such as
 ``docs/_static/qa_ess_zbs10_rel5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.*``.
 Do not promote new prose until
-``tools/release/check_nonlinear_optimization_gates.py gradient-evidence`` reports
+``scripts/check.py nonlinear-optimization gradient-evidence`` reports
 ``passed = true`` and the JSON sidecar sets
 ``nonlinear_turbulence_gradient_gate = true``. Until then, describe the result
 as a bounded production-candidate finite-difference audit, not as a nonlinear
@@ -432,7 +432,7 @@ worsens asymmetry. The completed overdetermined audit records full runtime
 coverage and zero promoted controls; it is evidence against weakening the
 locality or uncertainty criteria, not a missing workflow.
 
-``tools/release/check_nonlinear_transport_gates.py matrix-portfolio`` is the final selector
+``scripts/check.py nonlinear-transport matrix-portfolio`` is the final selector
 when several candidate families have been audited. It consumes one or more
 aggregate matrix reports, chooses only a passing broad matrix family, and
 records strict ``t=1500`` growth/QL/nonlinear-window matched comparisons as
@@ -453,7 +453,7 @@ growth threshold. A failed launch-growth subgate is a useful documented result,
 not a release failure, because it prevents QI feasibility scans from being
 misread as transport validation.
 
-``tools/release/check_quasilinear_promotion_guardrails.py calibration-inputs`` is the corresponding
+``scripts/check.py quasilinear calibration-inputs`` is the corresponding
 calibration-admission guard. It scans quasilinear train/holdout reports and
 requires every non-audit nonlinear artifact to match a passed nonlinear gate.
 This makes validation provenance executable: finite-but-unconverged pilots can
@@ -462,7 +462,7 @@ optimization data. The public CI runs this audit during the docs/packaging
 job, and the fast test suite checks the current tracked train/holdout reports
 against the same gate index.
 
-``tools/release/check_quasilinear_promotion_guardrails.py`` is the higher-level
+``scripts/check.py quasilinear`` is the higher-level
 absolute-flux promotion guard. It scans the tracked quasilinear reports plus
 the claim-scope docs, fails if a promoted report lacks train/holdout points,
 finite nonlinear window statistics, a passed holdout gate, or calibration
@@ -1164,7 +1164,7 @@ headroom**, so any net addition to the installable package fails
 
 .. code-block:: bash
 
-   python tools/release/check_package_architecture_manifest.py
+   python scripts/check.py architecture
    # current count, the same way the checker counts it:
    find src/gkx -name '*.py' -exec cat {} + | wc -l
 
@@ -1188,7 +1188,7 @@ is a CI failure, not a rounding error.
 
 .. code-block:: bash
 
-   python tools/release/check_package_architecture_manifest.py
+   python scripts/check.py architecture
    find src/gkx -name '*.py' -exec wc -l {} + | sort -rn | head -20
 
 Failure reads ``<path>: complexity regressed to N lines, above baseline M``.
@@ -1204,7 +1204,7 @@ an entry.
 
 .. code-block:: bash
 
-   python tools/release/check_validation_coverage_manifest.py
+   python scripts/check.py validation-coverage
    pytest tests/release/test_release_gates.py -k "manifest"
 
 **4. The** ``docs/api.rst`` **automodule requirement.** Every
@@ -1241,9 +1241,9 @@ The whole checklist, in the order CI runs it:
 
 .. code-block:: bash
 
-   python tools/release/check_repository_size_manifest.py
-   python tools/release/check_package_architecture_manifest.py
-   python tools/release/check_validation_coverage_manifest.py
+   python scripts/check.py size
+   python scripts/check.py architecture
+   python scripts/check.py validation-coverage
    mypy
    pytest -q --collect-only --disable-warnings > /dev/null
    pytest tests/release/test_release_gates.py
@@ -1447,7 +1447,7 @@ physics rigor:
 - **Wide coverage tier**: CI runs the 24 top-level coverage shards as a matrix,
   uploads the per-shard ``coverage.py`` data, then combines the artifacts in one
   final ``wide-coverage`` check that enforces the package-wide ``>=95%`` target.
-  The same helper, ``tools/release/run_test_gates.py wide-coverage``, is used locally and in
+  The same helper, ``scripts/check.py test-gates wide-coverage``, is used locally and in
   CI so the threshold is not weakened when the job is parallelized. Each shard
   has its own timeout so a single slow validation slice cannot become an
   unbounded release job. Files whose tests are gated on a device count run
@@ -1493,7 +1493,7 @@ For bounded local feedback, use the per-file runner:
 
 .. code-block:: bash
 
-   python tools/release/run_test_gates.py fast
+   python scripts/check.py test-gates fast
 
 It enforces both a per-file timeout and a whole-run timeout of 300 seconds by
 default, then reports any remaining files as ``not_run(total_timeout)`` instead
@@ -1504,7 +1504,7 @@ The same wide gate can be run locally in one process with:
 
 .. code-block:: bash
 
-   python tools/release/run_test_gates.py wide-coverage \
+   python scripts/check.py test-gates wide-coverage \
      --shards 48 \
      --timeout 300 \
      --fail-under 95 \
@@ -1528,7 +1528,7 @@ parallel and downloads the resulting coverage artifacts before the
 
    python -m coverage erase
    for shard in $(seq 1 48); do
-     python tools/release/run_test_gates.py wide-coverage \
+     python scripts/check.py test-gates wide-coverage \
        --shards 48 \
        --timeout 300 \
        --only-shard "${shard}" \
@@ -1539,7 +1539,7 @@ parallel and downloads the resulting coverage artifacts before the
        --pytest-arg=-m \
        --pytest-arg="not slow"
    done
-   python tools/release/run_test_gates.py wide-coverage \
+   python scripts/check.py test-gates wide-coverage \
      --shards 48 \
      --combine-only \
      --fail-under 95 \

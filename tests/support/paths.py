@@ -49,8 +49,6 @@ def load_tool_script(tool_folder: str, script_name: str) -> ModuleType:
     """Load a script from a ``tools`` subfolder by file stem."""
 
     tools_dir = TOOLS_ROOT / tool_folder
-    if str(tools_dir) not in sys.path:
-        sys.path.insert(0, str(tools_dir))
     return load_repo_script(tools_dir.relative_to(REPO_ROOT) / f"{script_name}.py")
 
 
@@ -61,9 +59,9 @@ def load_artifact_tool(script_name: str) -> ModuleType:
 
 
 def load_release_tool(script_name: str) -> ModuleType:
-    """Load a ``tools/release`` script directly from the checkout."""
+    """Load a ``scripts/checks`` checker directly from the checkout."""
 
-    return load_tool_script("release", script_name)
+    return load_repo_script(f"scripts/checks/{script_name}.py")
 
 
 def load_profiling_tool(script_name: str) -> ModuleType:

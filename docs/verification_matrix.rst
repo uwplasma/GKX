@@ -163,7 +163,7 @@ final-pair order above ``4.8``, and finest-grid relative growth-rate error
 about ``1.1e-3``.
 
 The current materialized gate reports are indexed by
-``tools/release/check_validation_coverage_manifest.py gate-index`` in
+``scripts/check.py validation-coverage gate-index`` in
 ``docs/_static/validation_gate_index.json`` and
 ``docs/_static/validation_gate_index.csv`` (the index panel render is
 regenerated on demand by the same command and is not tracked in git).
@@ -760,7 +760,7 @@ gate.
        ``docs/_static/vmec_boozer_aggregate_surface_holdout_gate.json``,
        ``docs/_static/vmec_boozer_second_equilibrium_aggregate_gate.json``,
        ``docs/_static/vmec_boozer_aggregate_holdout_promotion_gate.json``, and
-       ``tools/release/check_vmec_boozer_gates.py aggregate-holdout``
+       ``scripts/check.py vmec-boozer aggregate-holdout``
      - Closed for VMEC/Boozer held-out plumbing; open for broad production
        nonlinear optimization claims
      - aggregate finite-difference and line-search artifacts pass on the same

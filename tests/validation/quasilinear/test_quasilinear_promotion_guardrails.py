@@ -598,7 +598,8 @@ def test_guardrail_script_runs_before_editable_install(tmp_path: Path) -> None:
     completed = subprocess.run(
         [
             sys.executable,
-            "tools/release/check_quasilinear_promotion_guardrails.py",
+            "scripts/check.py",
+            "quasilinear",
             "--out-json",
             str(out),
         ],
