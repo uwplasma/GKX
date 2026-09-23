@@ -1137,7 +1137,10 @@ recursive = true
 # 93830 -> 93831: SHARD-PAD (plan F.6). The ky route places an extent its
 # devices do not divide replicated on the mesh instead of refusing it; the
 # refusal's message is gone and the reason is stated once. Measured.
-baseline = 93831
+# 93831 -> 93965: ky-state-sharding (#292). [time] state_sharding runs on
+# XLA:CPU (one leading-axis gather region per step) and pads an extent the
+# devices do not divide; _StateSplit/_resolve_state_split carry that. Measured.
+baseline = 93965
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1466,7 +1469,11 @@ recursive = true
 # both layouts (Nyc = 5 on two and four devices); the refusal test becomes the
 # two placement tests; and one test pins that the ky route's scan runs
 # replicated, the fact that makes an uneven placement lose nothing.
-baseline = 94432
+# 94432 -> 94567: ky-state-sharding (#292). A live deck (the routing deck
+# never evolves, so identities on it could not fail), five real multi-device
+# state_sharding identities read back to 1e-12, a real one-device sharding in
+# place of the string the mocked test passed, and _resolve_state_split tests.
+baseline = 94567
 target = 35000
 
 [[line_budget_policy.counts]]

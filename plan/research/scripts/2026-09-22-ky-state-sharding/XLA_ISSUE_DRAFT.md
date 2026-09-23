@@ -53,6 +53,9 @@ using the Shardy partitioner (the default). The failure needs:
 - two FFTs in sequence, so that the first FFT's result layout is free (a single FFT that is the
   entry ROOT gets a copy, and runs).
 
+**Not on GPU:** the same script runs correctly on 2 x RTX A4000 (jax 0.10.2, CUDA 12): XLA:GPU
+feeds both FFTs through a bitcast from the default layout.
+
 **Expected:** a copy to the default layout before the FFT, or an FFT thunk that accepts
 permuted layouts.
 
