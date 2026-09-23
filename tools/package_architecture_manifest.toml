@@ -1455,8 +1455,8 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 94057 -> 94107: single owner for the CLI/case Nl/Nm fallbacks plus its test.
 # 94107 -> 94628: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-# 94628 -> 87428 (ARCH-A contraction 1, 2026-09-23): tests of deleted report/gate modules deleted; E1-E3 tests kept.
-baseline = 87428
+# 94628 -> 87430 (ARCH-A contraction 1, 2026-09-23): tests of deleted report/gate modules deleted; E1-E3 tests kept.
+baseline = 87430
 target = 35000
 
 [[line_budget_policy.counts]]
