@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 import numpy as np
 
+from gkx.callbacks import _format_duration as format_duration
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.metadata import ResolvedDiagnostics
 from gkx.workflows.runtime.diagnostic_arrays import (
@@ -28,17 +29,6 @@ class RuntimeProgressSnapshot:
     eta_seconds: float
     chunk_wall_seconds: float
     elapsed_seconds: float
-
-
-def format_duration(seconds: float) -> str:
-    """Format elapsed seconds as ``MM:SS`` or ``H:MM:SS``."""
-
-    seconds_i = max(int(round(seconds)), 0)
-    minutes, secs = divmod(seconds_i, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours > 0:
-        return f"{hours:d}:{minutes:02d}:{secs:02d}"
-    return f"{minutes:02d}:{secs:02d}"
 
 
 def build_runtime_progress_message(

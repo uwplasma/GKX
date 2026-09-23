@@ -233,8 +233,6 @@ profiling_tools = [
   "scripts/checks/check_parallel_scaling_artifacts.py",
   "scripts/profiling/profile_linear_rhs_parallel_slices.py",
   "scripts/profiling/profile_nonlinear_sharding.py",
-  "scripts/profiling/profile_device_z_pencil_transport_window.py",
-  "scripts/profiling/profile_device_z_pencil_scaling_decomposition.py",
   "scripts/profiling/aggregate_device_z_pencil_granularity.py",
 ]
 metrics = [
@@ -370,7 +368,6 @@ optimization_actions = [
   "use scripts/profiling/profile_linear_rhs_parallel_slices.py as the engineering profile before making any Hermite-sharded RHS speedup claim",
   "gate CPU sharding locally and two-GPU sharding on office",
   "profile fixed-step nonlinear state sharding and keep local plus two-GPU identity artifacts attached to the manifest",
-  "profile the device-z fused pencil nonlinear RHS through scripts/profiling/profile_device_z_pencil_transport_window.py --mode rhs and keep it diagnostic until CPU/GPU speedup gates pass",
   "keep z-axis FFT sharding as exploratory until a dedicated communication/layout gate passes",
   "only publish strong-scaling plots when speedup is meaningful and numerically identical",
 ]

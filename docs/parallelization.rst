@@ -322,7 +322,7 @@ trajectory gate covers; the runtime lane does not yet call it. This is a
 Routing is fail-closed on numerical identity. With ``strict_identity = true``
 the run is also executed serially and the two answers must agree on the final
 state and on the ``Wg``, ``Wphi``, heat-flux, and particle-flux traces, with the
-same tolerance convention as the device-z gates (``atol = 5e-6``,
+same allclose-style tolerance convention (``atol = 5e-6``,
 ``rtol = 1e-4``). A violation raises ``NonlinearParallelIdentityError`` and the
 sharded result is discarded; it is never returned in place of the serial answer.
 Setting ``strict_identity = false`` skips the serial reference and is only
@@ -337,11 +337,12 @@ reasons:
 
 - the production parallel-streaming derivative is a spectral FFT along ``z``, so
   a whole-state ``z`` shard does not survive SPMD partitioning; and
-- ``gkx.operators.nonlinear.device_z`` evaluates a reduced diagnostic bracket
-  operator with a model field solve and no streaming, mirror, curvature,
-  collision, or species terms. Its serial-vs-sharded identity is real, but it is
-  identity for a different operator than the one a runtime nonlinear run
-  integrates, so it cannot stand in for the production RHS.
+- the retired device-z pencil route (``gkx.operators.nonlinear.device_z``,
+  removed in ARCH-A) evaluated a reduced diagnostic bracket operator with a
+  model field solve and no streaming, mirror, curvature, collision, or species
+  terms. Its serial-vs-sharded identity was real, but it was identity for a
+  different operator than the one a runtime nonlinear run integrates, so it
+  could not stand in for the production RHS.
 
 The independent-work strategies (``batch``, ``combined_ky``) are also rejected
 on this path: they orchestrate separate solver calls for ``k_y`` scans and
@@ -442,7 +443,12 @@ Diagnostic path: nonlinear domain and device-z decomposition
 
 These prototypes decompose the perpendicular spectral plane or the field-line
 axis. None of them runs the production nonlinear RHS, and none is a production
-nonlinear speedup claim.
+nonlinear speedup claim. Their source modules (``gkx.operators.nonlinear``
+``parallel``, ``spectral_core``, ``spectral_identity_*``,
+``domain_decomposition``, ``parallel_contracts_*`` and ``device_z``) and their
+profilers left the package in ARCH-A (2026-09-23) because no run, CLI command or
+solver path reached them; the JSON artifacts below are kept as frozen evidence
+of what was measured.
 
 - **Local state-domain gate.**
   ``docs/_static/nonlinear_domain_parallel_identity_gate.json`` checks a
@@ -458,14 +464,9 @@ nonlinear speedup claim.
   ``(N_l,N_m,N_y,N_x,N_z)`` spectral data, the split/reassemble and transpose
   operations a distributed FFT would need, a tile-reassembled nonlinear RHS
   ``-\{\phi,g\}``, a short fixed-step micro-integration, and a device-z pencil
-  fused-bracket route over a short transport window. Passing it is what makes
-  ``fft_axis_domain`` diagnostic rather than blocked. The facade
-  ``gkx.operators.nonlinear.parallel`` exposes
-  ``nonlinear_spectral_rhs_identity_gate``,
-  ``logical_decomposed_nonlinear_spectral_rhs`` and
-  ``nonlinear_spectral_integrator_identity_gate`` for focused tests; logical
-  tiles are reconstructed for identity validation, not executed as a
-  distributed FFT.
+  fused-bracket route over a short transport window. Passing it is what made
+  ``fft_axis_domain`` diagnostic rather than blocked; logical tiles were
+  reconstructed for identity validation, not executed as a distributed FFT.
 - **Routing work model.**
   ``docs/_static/nonlinear_spectral_domain_routing_profile.json`` on a
   ``(2,4,32,32,4)`` four-tile profile: the global-reconstruction route has a
@@ -479,8 +480,8 @@ nonlinear speedup claim.
   involves no collectives in the bracket. The current result is
   ``docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.json``:
   on two RTX A4000 GPUs, timed one grid per process with the
-  ``--isolate-shapes`` flag of
-  ``scripts/profiling/profile_device_z_pencil_scaling_decomposition.py``, the
+  ``--isolate-shapes`` flag of the device-z profiler (retired with the route in
+  ARCH-A; the JSON is frozen evidence), the
   single-device route overhead is ``0.988`` to ``1.005`` of the fused serial route,
   one-to-two-device scaling is ``1.92x`` to ``2.01x``, and the net speedup is
   ``1.95x`` to ``2.01x`` over five grids from ``(4,8,96,96,48)`` to

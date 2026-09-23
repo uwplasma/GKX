@@ -28,15 +28,9 @@ from gkx.solvers_linear_implicit import (
     ImplicitSolveStats,
     _build_implicit_solve_step,
     _empty_implicit_solve_stats,
+    _validate_implicit_sample_policy,
 )
 from gkx.solvers_time_explicit_steps import _linear_native_step
-
-
-def _validate_linear_sampling(*, steps: int, sample_stride: int) -> None:
-    if sample_stride < 1:
-        raise ValueError("sample_stride must be >= 1")
-    if steps % sample_stride != 0:
-        raise ValueError("steps must be divisible by sample_stride")
 
 
 def _linear_cache_or_build(
@@ -312,7 +306,7 @@ def integrate_linear_diagnostics(
     """
 
     terms_use = terms or LinearTerms()
-    _validate_linear_sampling(steps=steps, sample_stride=sample_stride)
+    _validate_implicit_sample_policy(steps=steps, sample_stride=sample_stride)
     cache_use = _linear_cache_or_build(
         G0, grid, geom, params, cache, cache_builder=build_linear_cache
     )

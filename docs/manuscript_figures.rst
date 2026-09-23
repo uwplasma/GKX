@@ -101,12 +101,13 @@ Differentiable-physics figures
      - ``docs/_static/quasilinear_implicit_sensitivity.json``: implicit
        eigenpair derivatives against nearest-branch central differences.
    * - Solver-objective and VMEC/Boozer gradient gates
-     - ``scripts/artifacts/build_solver_objective_gradient_gate.py``
+     - builder retired with its report modules (ARCH-A, 2026-09-23); the
+       tracked JSON is frozen evidence
      - ``docs/_static/solver_objective_gradient_gate.json`` and the
        ``docs/_static/vmec_boozer_*_gradient_gate.json`` family (QH and Li383).
    * - Nonlinear startup finite-difference audits
-     - ``scripts/artifacts/build_nonlinear_window_fd_audit.py``;
-       ``scripts/artifacts/build_vmec_boozer_nonlinear_window_fd_audit.py``
+     - ``scripts/artifacts/build_nonlinear_window_fd_audit.py`` (the
+       VMEC/Boozer variant was retired in ARCH-A; its JSON is frozen evidence)
      - ``docs/_static/nonlinear_window_fd_audit.json``,
        ``docs/_static/vmec_boozer_nonlinear_window_fd_audit.json``: startup
        plumbing only; ``transport_average_gate`` is false.

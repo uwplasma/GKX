@@ -84,7 +84,8 @@ recursive = true
 # 199 -> 195: removing Diffrax from the base product. The four
 # solvers/time/diffrax_*.py owner modules are deleted; the coupled implicit
 # owner (solvers/linear/implicit.py) is unaffected.
-baseline = 193
+# 193 -> 160 (ARCH-A contraction 1, 2026-09-23): 28 report/campaign/gate modules and three pass-through facades deleted, one restored (quasilinear_calibration).
+baseline = 160
 target = 45
 
 [[topology_policy.counts]]
@@ -259,7 +260,8 @@ recursive = true
 # Hermite hypercollisions without damping Hermite twice. The refusal is raised
 # at startup and the rate is carried through config and LinearParams, so the
 # contract spans four modules and is named after none of them.
-baseline = 81
+# 81 -> 75 (ARCH-A contraction 1, 2026-09-23): tests of the deleted report/gate modules and campaign scripts deleted.
+baseline = 75
 target = 30
 
 [[topology_policy.counts]]
@@ -310,7 +312,8 @@ recursive = true
 # change. The target of 12 is met by contracting these packages, not by
 # moving them again. Measured.
 # 104 -> 106: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 106
+# 106 -> 97 (ARCH-A contraction 1, 2026-09-23): campaign/report/profiler scripts that only drove the deleted modules deleted.
+baseline = 97
 target = 12
 
 
@@ -380,14 +383,22 @@ description = "Promote cohesion instead of capping file length. A per-file line 
 min_imported_names_for_split = 6
 single_consumer_baseline = 1
 single_consumer_target = 0
-low_cohesion_baseline = 8
+# 8 -> 6 (ARCH-A contraction 1): measured after the report-module deletions and dead-definition sweep.
+low_cohesion_baseline = 6
 low_cohesion_target = 0
 min_definitions_for_cohesion = 6
 min_internal_cohesion = 0.30
 # Modules that legitimately have one consumer today and are expected to gain
 # more, or that are deliberately separable, are listed here with a reason in a
 # comment above each entry. The list is empty until a merge pass needs it.
-single_consumer_exempt = []
+single_consumer_exempt = [
+  # One consumer since ARCH-A deleted the gkx.solvers_nonlinear pass-through
+  # facade that was its second importer. Folding its 962 lines into
+  # solvers_nonlinear_diagnostic_integration.py would cross the 1200-line
+  # tripwire; the merge is queued with the diagnostics-integrator contraction
+  # (plan/research/2026-09-23-arch-a/INVENTORY.md) rather than done here.
+  "solvers_nonlinear_diagnostics.py",
+]
 
 [complexity_policy]
 mode = "no_regression_until_target"
@@ -1124,7 +1135,8 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 93344 -> 93359: single owner for the CLI/case Nl/Nm fallbacks plus its test.
 # 93359 -> 93953: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 93953
+# 93953 -> 79222 (ARCH-A contraction 1, 2026-09-23): report/campaign/gate modules, pass-through facades, and the definitions they alone used deleted.
+baseline = 79222
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1443,7 +1455,8 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 94057 -> 94107: single owner for the CLI/case Nl/Nm fallbacks plus its test.
 # 94107 -> 94628: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 94628
+# 94628 -> 87428 (ARCH-A contraction 1, 2026-09-23): tests of deleted report/gate modules deleted; E1-E3 tests kept.
+baseline = 87428
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1554,5 +1567,6 @@ recursive = true
 # 1,348 from benchmarks/, plus about 200 lines of command dispatchers; tool lines
 # fell to 0 in the same change. Measured.
 # 77373 -> 78277: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 78277
+# 78277 -> 70247 (ARCH-A contraction 1, 2026-09-23): scripts driving deleted modules deleted; zonal objective-gate subcommand removed.
+baseline = 70247
 target = 18000

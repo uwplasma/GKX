@@ -16,9 +16,6 @@ excluded_modules = [
   "gkx.operators.__init__",
   "gkx.operators.linear.__init__",
   "gkx.operators.nonlinear.__init__",
-  "gkx.solvers_linear",
-  "gkx.solvers_nonlinear",
-  "gkx.solvers_time",
   "gkx.terms.__init__",
   "gkx.workflows.__init__",
   "gkx.workflows.runtime.__init__",
@@ -79,7 +76,6 @@ fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
   "tests/unit/objectives/test_vmec_transport_objectives.py",
   "tests/unit/parallel/test_parallel_core.py",
-  "tests/unit/parallel/test_parallel_nonlinear.py",
 ]
 artifact_paths = [
   "docs/code_structure.rst",
@@ -677,7 +673,6 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear_exb.py",
-  "tests/unit/parallel/test_parallel_nonlinear.py",
   "tests/unit/operators/test_terms_assembly.py",
 ]
 artifact_paths = [
@@ -876,123 +871,6 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.operators.nonlinear.parallel"
-path = "src/gkx/operators/nonlinear/parallel.py"
-owned_modules = [
-  "gkx.operators.nonlinear.parallel_contracts_domain",
-  "gkx.operators.nonlinear.parallel_contracts_spectral",
-  "gkx.operators.nonlinear.parallel_contracts_strategy",
-  "gkx.operators.nonlinear.domain_decomposition",
-]
-owner_lane = "communication-aware nonlinear domain decomposition and fail-closed parallel routing"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "communication-aware nonlinear FFT and bracket decomposition design",
-  "serial-vs-decomposed identity gates for nonlinear transport windows",
-]
-physics_contracts = [
-  "domain-decomposed nonlinear routes must reproduce serial nonlinear RHS and transport-window observables before any speedup claim",
-  "GPU and CPU artifacts remain fail-closed when host-gathered RHS identity or speedup gates fail",
-]
-numerics_contracts = [
-  "logical, pencil, and device-sharded spectral routes preserve shape, dtype, and serial RHS identity",
-  "profiler artifacts separate identity failures from speedup failures and record blocker reasons explicitly",
-]
-fast_tests = [
-  "tests/unit/parallel/test_parallel_nonlinear.py",
-  "tests/tools/profiling/test_nonlinear_sharding_profile_contracts.py",
-]
-artifact_paths = [
-  "docs/_static/nonlinear_domain_parallel_identity_gate.json",
-  "docs/_static/nonlinear_spectral_communication_identity_gate.json",
-  "docs/_static/nonlinear_device_z_pencil_rhs_cpu4_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_rhs_gpu2_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_transport_cpu4_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.csv",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png",
-]
-next_tests = [
-  "add a regression that direct device-backed resharding and host-staged z sharding are not silently conflated on CUDA",
-  "add physical solver-window identity and profiler gates before promoting full nonlinear domain speedup wording",
-]
-
-[[modules]]
-module = "gkx.operators.nonlinear.spectral_core"
-path = "src/gkx/operators/nonlinear/spectral_core.py"
-owned_modules = [
-  "gkx.operators.nonlinear.spectral_identity_reports",
-  "gkx.operators.nonlinear.spectral_identity_rhs",
-  "gkx.operators.nonlinear.spectral_identity_integrator",
-]
-owner_lane = "communication-aware nonlinear domain decomposition and fail-closed parallel routing"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "communication-aware pseudo-spectral nonlinear bracket decomposition",
-  "serial-vs-decomposed RHS identity gates for nonlinear transport windows",
-]
-physics_contracts = [
-  "local spectral-core routes are diagnostic primitives that must reproduce serial nonlinear RHS before any decomposed route is enabled",
-  "work models and batch-pressure estimates are preflight blockers, not standalone nonlinear speedup claims",
-]
-numerics_contracts = [
-  "deterministic spectral states, pencil FFT staging, and z-chunked bracket kernels preserve serial pseudo-spectral outputs within explicit tolerances",
-  "host-staged sharding and allclose-style tolerance helpers keep device-routing artifacts fail-closed and reproducible",
-]
-fast_tests = [
-  "tests/unit/parallel/test_parallel_nonlinear.py",
-]
-artifact_paths = [
-  "docs/_static/nonlinear_spectral_communication_identity_gate.json",
-  "docs/_static/nonlinear_device_z_pencil_rhs_cpu4_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.json",
-]
-next_tests = [
-  "add direct spectral identity submodule import-identity tests as report/RHS/integrator helpers leave the facade",
-  "promote only profiler-backed speedup claims after a physical transport-window identity artifact passes",
-]
-
-[[modules]]
-module = "gkx.operators.nonlinear.device_z"
-path = "src/gkx/operators/nonlinear/device_z.py"
-owner_lane = "communication-aware nonlinear domain decomposition and fail-closed parallel routing"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "device-z shard-map pseudo-spectral nonlinear RHS identity gates",
-  "serial-vs-device nonlinear transport-window observable gates",
-]
-physics_contracts = [
-  "device-z routes are enabled only when serial and sharded nonlinear RHS or transport-window observables match within explicit tolerances",
-  "device-z transport gates remain diagnostic and do not imply turbulent heat-flux or speedup promotion without separate profiler artifacts",
-]
-numerics_contracts = [
-  "z sharding preserves FFT-local ky/kx axes and fails closed when the z extent is not divisible by the active device count",
-  "observable reductions compare final state, free energy, field energy, physical-flux proxy, and bracket RMS before enabling decomposed routing",
-]
-fast_tests = [
-  "tests/unit/parallel/test_parallel_nonlinear.py",
-]
-artifact_paths = [
-  "docs/_static/nonlinear_device_z_pencil_rhs_cpu4_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_rhs_gpu2_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_granularity_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_profile.json",
-]
-next_tests = [
-  "add a direct multi-device fixture test when CI has more than one local device available",
-  "add a profiler-backed physical transport-window speedup gate before changing release wording",
-  "close the single-device pencil-bracket route overhead measured in the scaling decomposition artifact",
-]
-
-[[modules]]
 module = "gkx.operators.nonlinear.diagnostics"
 path = "src/gkx/operators/nonlinear/diagnostics.py"
 owner_lane = "resolved nonlinear diagnostic packing, sampled-scan routing, scan sampling, progress routing, and diagnostics construction"
@@ -1132,9 +1010,6 @@ next_tests = [
 [[modules]]
 module = "gkx.diagnostics.quasilinear_transport"
 path = "src/gkx/diagnostics/quasilinear_transport.py"
-owned_modules = [
-  "gkx.diagnostics.quasilinear_model_selection",
-]
 owner_lane = "linear-response quasilinear weights and saturation-model diagnostics"
 status = "active"
 coverage_priority = "high"
@@ -1154,7 +1029,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/quasilinear/test_quasilinear.py",
-  "tests/unit/quasilinear/test_quasilinear_model_selection.py",
   "tests/validation/stellarator/test_external_vmec_validation_policy.py",
 ]
 artifact_paths = [
@@ -1265,7 +1139,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/validation/quasilinear/test_quasilinear_window.py",
-  "tests/validation/quasilinear/test_quasilinear_calibration.py",
   "tests/validation/quasilinear/test_quasilinear_promotion_guardrails.py",
   "tests/validation/nonlinear/test_nonlinear_window_artifact_contracts.py",
 ]
@@ -1318,7 +1191,6 @@ module = "gkx.operators.moments"
 path = "src/gkx/operators/moments.py"
 owned_modules = [
   "gkx.diagnostics.metadata",
-  "gkx.diagnostics.transport",
   "gkx.diagnostics_contract",
   "gkx.operators.fluxes",
 ]
@@ -1415,39 +1287,6 @@ artifact_paths = [
 next_tests = [
   "promote the final W7-X recurrence/closure method into a release gate when it matches the literature trace",
   "rerun parallel W7-X recurrence sweeps after the VMEC/eik cache fix to verify the office workflow",
-]
-
-[[modules]]
-module = "gkx.objectives.zonal"
-path = "src/gkx/objectives/zonal.py"
-owner_lane = "reduced zonal-flow objective, AD/FD gates, and stellarator optimization bridge"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "Rosenbluth-Hinton residual zonal-flow and GAM response conventions",
-  "Sugama-Watanabe helical-system residual/damping interpretation",
-  "recent QH/QI stellarator studies connecting stronger residual zonal response to ITG suppression",
-]
-physics_contracts = [
-  "large residual zonal response lowers the minimization objective",
-  "damping, growth not screened by residuals, and recurrence amplitudes are explicit penalties",
-  "the reduced objective is not promoted to a nonlinear turbulence-suppression claim without long-window heat-flux holdouts",
-]
-numerics_contracts = [
-  "metric tensors use the shared surface/alpha/kx portfolio shape",
-  "AD/JVP finite-difference and conditioning gates are required before optimizer use",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/zonal_flow_objective_gate.json",
-  "docs/_static/zonal_flow_objective_gate.png",
-]
-next_tests = [
-  "replace the diagnostic W7-X row artifact with a promotion-ready QA/QH/Miller row set once damping and recurrence metrics are closed",
-  "add optimizer-history artifacts once the W7-X and QA/QH zonal-response physics gates pass",
 ]
 
 [[modules]]
@@ -1931,106 +1770,6 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.objectives.geometry"
-path = "src/gkx/objectives/geometry.py"
-owner_lane = "production solver-objective geometry-gradient validation"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "finite-difference validation for geometry-parameter transport objectives",
-  "solver-ready flux-tube geometry contract used by differentiable optimization gates",
-]
-physics_contracts = [
-  "tiny solver-ready objective gates validate geometry-observable AD/FD plumbing without claiming VMEC/Boozer or nonlinear transport promotion",
-  "objective-gate rows expose per-objective and per-parameter pass/fail metadata for downstream artifact promotion policies",
-]
-numerics_contracts = [
-  "solver-ready geometry design vectors are length checked before any traced computation",
-  "finite-difference and AD Jacobian rows are compared with explicit absolute and relative tolerances",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/solver_objective_gradient_gate.json",
-  "docs/_static/solver_objective_gradient_gate.png",
-]
-next_tests = [
-  "add direct regression rows for non-default tiny geometry parameter values",
-  "promote additional solver-ready objective gates only when each observable has an explicit physics scope",
-]
-
-[[modules]]
-module = "gkx.objectives.vmec_boozer_gradients"
-path = "src/gkx/objectives/vmec_boozer_gradients.py"
-owned_modules = [
-  "gkx.objectives.solver_vmec",
-  "gkx.geometry.vmec_boundary_chain",
-  "gkx.objectives.vmec_transport_optimization",
-]
-owner_lane = "production solver-objective geometry-gradient validation"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "mode-21 VMEC/Boozer state-to-solver frequency, quasilinear, and reduced nonlinear-window gradient gates",
-  "full vmex state coefficient to booz_xform_jax equal-arc geometry to solver-objective gradient reports",
-]
-physics_contracts = [
-  "mode-21 VMEC/Boozer gradient gates must keep frequency, quasilinear, and reduced nonlinear-window estimator claims distinct",
-  "reduced nonlinear-window estimator reports must remain separate from converged nonlinear transport heat-flux optimization claims",
-]
-numerics_contracts = [
-  "VMEC/Boozer state-gradient reports must record mode resolution, surface stencil, state size, and objective-specific gate rows",
-  "RK2 logistic reduced-window propagation rejects too-short windows and invalid tail fractions",
-  "context and feature hooks must be dependency-injected so tests can validate the gradient-gate math without optional geometry backends",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-  "tests/unit/solvers/test_runners_and_orchestration.py",
-]
-artifact_paths = [
-  "docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",
-  "docs/_static/vmec_boozer_quasilinear_gradient_gate.json",
-  "docs/_static/vmec_boozer_nonlinear_window_gradient_gate.json",
-]
-next_tests = [
-  "add multi-equilibrium mode-21 gradient fixtures before broad stellarator optimization claims",
-  "add direct negative tests for invalid radial and mode indices through a fake VMEC state context",
-]
-
-[[modules]]
-module = "gkx.objectives.vmec_boozer_context"
-path = "src/gkx/objectives/vmec_boozer_context.py"
-owner_lane = "production solver-objective geometry-gradient validation"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "mode-21 VMEC/Boozer state-to-solver context construction used by full-chain differentiability gates",
-  "quasilinear heat-flux feature extraction from isolated eigenpairs for solver-objective gradient validation",
-]
-physics_contracts = [
-  "context construction must preserve the VMEC state coefficient perturbation, Boozer equal-arc mapping, and solver geometry source scope",
-  "quasilinear feature extraction must keep growth, frequency, kperp, heat-flux weight, and mixing-length proxy observables explicit",
-]
-numerics_contracts = [
-  "context builders must keep grid shape, moment counts, Boozer mode resolution, and selected ky metadata stable for report builders",
-  "feature extraction must build the same linear cache and quadrature weights used by the promoted solver-objective reports",
-]
-fast_tests = [
-  "tests/unit/solvers/test_runners_and_orchestration.py",
-]
-artifact_paths = [
-  "docs/_static/vmec_boozer_quasilinear_gradient_gate.json",
-]
-next_tests = [
-  "add fake-backend index-error tests for radial and mode bounds without optional VMEC dependencies",
-  "add a direct low-dimensional quasilinear-feature contract test with finite heat-flux weight",
-]
-
-[[modules]]
 module = "gkx.objectives.vmec_boozer"
 path = "src/gkx/objectives/vmec_boozer.py"
 owner_lane = "production solver-objective geometry-gradient validation"
@@ -2061,107 +1800,6 @@ artifact_paths = [
 next_tests = [
   "add direct module-level tests for dependency-injected backend and objective callables",
   "extend aggregate-objective fixtures to multiple torflux samples and physical ky grids",
-]
-
-[[modules]]
-module = "gkx.objectives.vmec_boozer_fd"
-path = "src/gkx/objectives/vmec_boozer_fd.py"
-owner_lane = "production solver-objective geometry-gradient validation"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "finite-difference validation of VMEC/Boozer state perturbations before optimization promotion",
-  "multi-surface and multi-ky aggregate finite-difference reports for reduced stellarator objectives",
-]
-physics_contracts = [
-  "finite-difference reports must state that they are sensitivity gates, not full nonlinear transport or production AD claims",
-  "scalar and aggregate reports must record the perturbed VMEC family, radial index, mode index, and sampled objective vector rows",
-  "aggregate finite-difference reports must expose sample metadata for surface, field-line, and ky coverage",
-]
-numerics_contracts = [
-  "perturbation steps must be positive and curvature ratios must be bounded before a finite-difference report can pass",
-  "central-difference responses must be finite and resolved above response_atol",
-  "weighted aggregate reductions must use finite normalized positive-sum weights inherited from the sampling contract",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/vmec_boozer_aggregate_objective_gate.json",
-  "docs/_static/vmec_boozer_multi_point_objective_gate.json",
-]
-next_tests = [
-  "add direct tests for no-response finite-difference failures and invalid perturbation steps",
-  "add aggregate finite-difference fixtures with torflux and physical ky requests",
-]
-
-[[modules]]
-module = "gkx.objectives.vmec_boozer_line_search"
-path = "src/gkx/objectives/vmec_boozer_line_search.py"
-owner_lane = "production solver-objective geometry-gradient validation"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "curvature-gated one-parameter VMEC/Boozer line-search audits before optimizer promotion",
-  "held-out surface, field-line, and ky validation for aggregate reduced objectives",
-]
-physics_contracts = [
-  "line-search reports must remain one-coefficient audits, not multi-parameter stellarator optimization claims",
-  "aggregate line-search holdouts must keep training and held-out samples separate before promotion",
-  "held-out reports must expose both training and held-out objective reductions",
-]
-numerics_contracts = [
-  "update steps, max steps, and improvement tolerances must fail closed when invalid",
-  "candidate steps require a passing finite-difference curvature gate and an objective decrease",
-  "holdout audits must recompute initial and final held-out objectives at the accepted coefficient offset",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/vmec_boozer_aggregate_line_search_gate.json",
-  "docs/_static/vmec_boozer_aggregate_surface_holdout_gate.json",
-]
-next_tests = [
-  "add direct line-search tests for zero derivative, failed curvature gate, and rejected candidate paths",
-  "add held-out audit fixtures where training passes but held-out objective worsens",
-]
-
-[[modules]]
-module = "gkx.diagnostics.nonlinear_transport_optimization"
-path = "src/gkx/diagnostics/nonlinear_transport_optimization.py"
-owned_modules = [
-  "gkx.diagnostics.nonlinear_gradient_statistics",
-]
-owner_lane = "production nonlinear transport optimization claim diagnostics"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "long post-transient nonlinear heat-flux windows before turbulent-transport optimization claims",
-  "replicated seed and timestep audits for nonlinear turbulent-flux optimization evidence",
-]
-physics_contracts = [
-  "reduced and startup nonlinear-window artifacts cannot promote production turbulent-flux optimization claims",
-  "production nonlinear optimization requires long post-transient optimized-equilibrium transport windows and matched baseline-to-optimized audits",
-]
-numerics_contracts = [
-  "transport means must be finite and above the configured value floor before qualifying",
-  "matched optimized audits require positive relative reduction and uncertainty separation under explicit thresholds",
-]
-fast_tests = [
-  "tests/validation/nonlinear/test_nonlinear_transport_optimization.py",
-  "tests/validation/nonlinear/test_nonlinear_transport_release_gates.py",
-]
-artifact_paths = [
-  "docs/_static/production_nonlinear_optimization_guard.json",
-  "docs/_static/production_nonlinear_optimization_guard.png",
-]
-next_tests = [
-  "add a second negative matched-audit fixture where optimized and baseline windows pass but uncertainty separation fails",
-  "add a fixture for a promoted optimized-equilibrium audit once three independent long-window positive reductions exist",
 ]
 
 [[modules]]
@@ -2231,36 +1869,6 @@ artifact_paths = [
 next_tests = [
   "add direct ObjectiveTerm metadata fixtures for every transform and transport kind",
   "add real VMEC/Boozer fixture coverage for every supported transport objective kind",
-]
-
-[[modules]]
-module = "gkx.objectives.vmec_transport_branch"
-path = "src/gkx/objectives/vmec_transport_branch.py"
-owner_lane = "VMEC-JAX transport eigenbranch locality gates"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "dominant non-Hermitian eigenbranch locality before differentiating growth objectives",
-  "finite-difference branch tracking for geometry-parameter microstability objectives",
-]
-physics_contracts = [
-  "transport-gradient promotion requires the same dominant-growth branch at base and perturbation states",
-  "truncated branch-locality reports fail closed and remain diagnostic only",
-]
-numerics_contracts = [
-  "branch slope, gap floor, and locality classifications are recorded per surface, field line, and ky",
-  "evaluation errors are converted into explicit failed gate rows",
-]
-fast_tests = [
-  "tests/unit/objectives/test_vmec_transport_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",
-  "docs/_static/vmec_boozer_solver_frequency_gradient_gate.png",
-]
-next_tests = [
-  "add multi-sample branch-locality fixtures with one deliberately truncated sample set",
 ]
 
 [[modules]]

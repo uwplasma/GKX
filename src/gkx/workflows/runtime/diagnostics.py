@@ -38,6 +38,13 @@ __all__ = [
 _OVERFLOW_AMPLITUDE = 1.0e30
 
 
+def _fit_signal_key(fit_signal: str) -> str:
+    fit_key = fit_signal.strip().lower()
+    if fit_key not in {"phi", "density", "auto"}:
+        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
+    return fit_key
+
+
 def ensure_finite_linear_history(name: str, values: np.ndarray | None) -> None:
     """Reject non-finite or overflow-scale histories before any growth fit."""
 
