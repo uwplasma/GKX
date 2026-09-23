@@ -3966,7 +3966,7 @@ def test_run_runtime_scan_explicit_workers_override_parallel_config(
 
 # ---- which [parallel] strategies a per-ky worker may inherit ----
 # strategy="batch" once reached the worker's own solve and killed the shipped
-# examples/parallelization deck with NotImplementedError, because the sharded
+# examples/11_parallel_scan deck with NotImplementedError, because the sharded
 # linear RHS implements only strategy="velocity". device_batch, pmap, pjit and
 # combined_ky (on the axes where it does not route to the combined-ky solver)
 # were then measured failing in that worker with the identical error. These pin

@@ -19367,3 +19367,42 @@ Outcome:
 - partial: survey and map done, no files moved
 - remaining blocker: none technical; stellarator groups (02, 04, 10) need vmex, which CI does not install, so their smoke tests skip unless vmex is present
 - next task: execute the map in the PR Handoff
+
+## 2026-09-22 - EXAMPLES-GALLERY (G.3), branch examples/gallery — gallery landed on the branch, paused before tools/benchmarks path edits
+
+Baseline:
+- GKX SHA: f9485f044, merged with main 29362737f (#277)
+- source/test/tool files and lines: `examples/` 81 files, 36 Python files, 5,145 Python lines; `tests/integration/examples/test_examples.py` 820 lines
+
+Scope:
+- intended change: the §19.1 numbered gallery in §19.2 style, one parametrized smoke test, `examples/README.md` index, validation decks in `benchmarks/cases/`
+- non-goals: README.md (README lane); `benchmarks/*.py` and `tools/` path edits wait for #278
+- acceptance: every gallery script runs at tutorial resolution or skips with a stated reason; pinned QA sentences and constants unchanged; release gates green
+
+Changes:
+- `examples/` is now 45 files, 14 Python files, 1,782 lines. There are twelve groups `01_linear_tokamak` ... `12_restart_and_analysis`. `examples/vmec/` and `examples/common_input.toml` stay in place.
+- 22 decks moved to `benchmarks/cases/` with the `runtime_` prefix dropped.
+- 25 Python files deleted: superseded wrappers, debug demos, the untracked-data imported-geometry drivers, and the reduced stellarator-ITG suite (recoverable from f9485f044).
+- `test_examples.py`: 820 -> about 250 lines, one parametrized smoke test plus layout, style and import checks.
+- Tests of deleted example modules were removed. Release-gate registries were repathed. The tutorial nonlinear decks pin `run_to = "t_max"`, with measured CFL margins 0.35 (03) and 0.33 (04).
+
+Evidence:
+- Smoke runs (laptop CPU, JAX 0.10.2, x64; the host was contended, so user CPU is quoted):
+  - 01, 03, 05, 06, 07, 08, 08-sensitivity: pass, about 75 s user in total
+  - 09, 11, 12: pass, about 59 s user
+  - 02 and 04 skip without vmex. On the office CPU they pass: 02 took 84 s wall and 04 took 72 s wall once the wout exists. The vmex wout solve took about 13 min on the contended host.
+- `08_quasilinear/implicit_sensitivity.py` reproduces the pre-move script bit for bit (max difference 0.0). The tracked `docs/_static/quasilinear_implicit_sensitivity.json` differs by up to 0.03, so that artifact predates current operators.
+- 09 recovers the planted gradients (2.8, 0.8) in 9 Gauss-Newton steps. The AD vs FD Jacobian column errors are 1.5e-7 and 7.2e-6.
+- 12: the restarted final free energy matches an uninterrupted run to 4.4e-10.
+- Other checks:
+  - `tests/release/test_release_gates.py` green
+  - QA scope test and `test_vmec_example_inventory.py` green
+  - repo-hygiene commands clean with no `docs/_static` drift
+  - `ruff check`/`ruff format --check` clean
+
+Outcome:
+- partial: the gallery is complete on the branch
+- remaining blockers:
+  - `benchmarks/{cyclone,etg,kinetic,tem}_linear_benchmark.py`, `benchmarks/performance/benchmark_nonlinear_suite.py`, `benchmarks/runtime_w7x_zonal_response_vmec.toml` comment, and `tools/` path strings still name old example paths; they wait for #278
+  - a focused office test run was stopped at 11% by the pause, with one failure not yet identified
+- next task: see the PR #281 Handoff
