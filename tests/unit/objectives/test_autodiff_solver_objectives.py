@@ -2,16 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
 import json
-from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 from support.paired_solvax import requires_paired_solvax
-from support.paths import REPO_ROOT, load_repo_script
-from dataclasses import dataclass
-import inspect
-from support.paths import REPO_ROOT, load_artifact_tool
+from support.paths import REPO_ROOT
 
 # ---- test_autodiff_validation.py ----
 
