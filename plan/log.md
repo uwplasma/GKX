@@ -19401,3 +19401,21 @@ Outcome:
 - complete for the page audit; PR #283 ready for review after CI
 - remaining blocker: (Nl, Nm) fallback text is correct only once #286 merges; tools/release paths in docs move to scripts/check.py once #278 merges
 - next task: merge origin/main after #278 and rewrite tools/release paths; see the PR handoff for items found outside docs
+
+## 2026-09-22 - DOCS-CURRENT (G.3), branch docs/current-2.3 (paused again while CI runs)
+
+Baseline:
+- GKX SHA: 7426c267a (branch head after merging origin/main with #277)
+- companion SHAs: none
+- relevant existing gate: ci-required on PR #283
+
+Scope:
+- no new change; pause checkpoint only
+
+Evidence:
+- CI on 7426c267a at pause time: repo-hygiene, release-artifacts, adaptive-eigensolver, fast-coverage, python-floor passed; docs-and-packaging and the test shards still queued; no failure reported
+- locally on 7426c267a: sphinx -W 0 warnings; repo-hygiene step reproduced green; tests/release passed
+
+Outcome:
+- page audit complete; PR still draft
+- next task: confirm ci-required on #283, mark ready; after #278 merges, merge origin/main and rewrite tools/release paths in docs to scripts/check.py subcommands; land after #286
