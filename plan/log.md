@@ -20372,3 +20372,23 @@ Outcome:
 - accepted pending CI and review (PR against chain/p0)
 - remaining blocker: none. Merge overlap with SLIM-SCRIPTS #294 on the scripts both delete; take the delete
 - next task: INVENTORY §5 rank 1 (reduced stellarator model, after EXAMPLES-GALLERY), rank 3 (deprecated CLI commands), rank 4 (diagnostics timesteppers into their integrators) with the same fingerprint harness
+
+## 2026-09-23 - ARCH-A contraction 1, paused (credits)
+
+Baseline:
+- GKX SHA: origin/main 48536d159 (#293 merged) merged cleanly into arch/contract-1
+
+Scope:
+- no content change beyond the test-lines baseline fix below
+
+Changes:
+- tools/package_architecture_manifest.toml: test_python_lines baseline 87,428 -> 87,430, the measured value after the registry-size test comment (repo-hygiene failed on this in CI run 35855460396)
+
+Evidence:
+- CI run 35855460396 (head be7ebb219): 33 jobs passed, repo-hygiene failed only on that baseline; nonlinear-core, parallel-autodiff and wide-coverage shard 24 had not finished at the pause
+- local hygiene block (size, architecture, parallel-scaling, quasilinear, vmec-boozer, readiness) passes with the fix; ruff check/format clean
+- office host: fingerprint directory removed, no process left
+
+Outcome:
+- paused; PR #296 converted to draft
+- next task: let CI finish on the pushed head, confirm ci-required, then mark #296 ready; then INVENTORY §5 ranks 1, 3, 4
