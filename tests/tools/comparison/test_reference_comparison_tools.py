@@ -2038,7 +2038,7 @@ def _runtime_config_from_kbm_case(cfg: KBMBaseCase) -> RuntimeConfig:
 
     runtime_cfg, _raw = load_runtime_from_toml(
         Path(__file__).resolve().parents[3]
-        / "examples/linear/axisymmetric/runtime_kbm.toml"
+        / "examples/06_electromagnetic/case_full.toml"
     )
     ion, electron = runtime_cfg.species
     model = cfg.model

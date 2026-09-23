@@ -42,7 +42,8 @@ from gkx.benchmarking_shared import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-DECKS = ROOT / "examples" / "linear" / "axisymmetric"
+EXAMPLES = ROOT / "examples"
+CASES = ROOT / "benchmarks" / "cases"
 
 # Cyclone's asymptotic fit window is the last 30% of the deck's horizon, well
 # clear of the startup transient (the fitted gamma is still 24% high at t = 30
@@ -51,7 +52,7 @@ DECKS = ROOT / "examples" / "linear" / "axisymmetric"
 # test_cyclone_publication_driver_uses_asymptotic_fit_window.
 CASES: dict[str, dict[str, Any]] = {
     "cyclone": {
-        "config": DECKS / "cyclone.toml",
+        "config": EXAMPLES / "01_linear_tokamak" / "case_full.toml",
         "reference": load_cyclone_reference,
         "title": "Cyclone",
         "Nl": 16,
@@ -65,7 +66,7 @@ CASES: dict[str, dict[str, Any]] = {
         },
     },
     "etg": {
-        "config": DECKS / "etg.toml",
+        "config": CASES / "etg_linear.toml",
         "reference": load_etg_reference,
         "title": "ETG",
         "Nl": 24,
@@ -74,7 +75,7 @@ CASES: dict[str, dict[str, Any]] = {
         "window": {"auto_window": False, "tmin": 1.0, "tmax": None},
     },
     "kinetic": {
-        "config": DECKS / "runtime_kinetic_electron.toml",
+        "config": EXAMPLES / "05_kinetic_electrons" / "case_full.toml",
         "reference": load_cyclone_reference_kinetic,
         "title": "Kinetic-electron ITG",
         "x_label": r"$k_y \rho_i$",
@@ -87,7 +88,7 @@ CASES: dict[str, dict[str, Any]] = {
         "title": r"KBM linear scan ($\beta=0.015$)",
     },
     "tem": {
-        "config": DECKS / "runtime_tem.toml",
+        "config": CASES / "tem_linear.toml",
         "reference": load_tem_reference,
         "title": "TEM (s-alpha)",
         "x_label": r"$k_y \rho_s$",
