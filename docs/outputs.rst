@@ -12,10 +12,19 @@ Lightweight saved outputs
 When ``[output].path`` or ``--out`` is a plain prefix such as
 ``tools_out/runtime_case``, the runtime writes small sidecar files:
 
-- linear runtime: ``*.summary.json`` and, when available,
-  ``*.timeseries.csv``
+- linear point: ``*.summary.json`` and, when available,
+  ``*.timeseries.csv`` (``t,signal_real,signal_imag,signal_abs``),
+  ``*.eigenfunction.csv`` (``z,eigen_real,eigen_imag,eigen_abs``), and
+  ``*.state.npy`` when the final state is requested
+- linear ``ky`` scan: ``*.summary.json`` and ``*.scan.csv``
+- quasilinear diagnostics: ``*.quasilinear.summary.json``,
+  ``*.quasilinear_species.csv`` and, for serial scans,
+  ``*.quasilinear_spectrum.csv``
 - nonlinear runtime: ``*.summary.json``, ``*.diagnostics.csv``, and
-  ``*.state.bin`` when the final state is requested
+  ``*.state.npy`` when the final state is requested
+
+A target that already ends in ``.json`` or ``.csv`` is used as that file's
+exact name, and the other sidecars take its stem.
 
 The nonlinear diagnostics CSV contains the base columns
 ``t,dt,gamma,omega,Wg,Wphi,Wapar,energy,heat_flux,particle_flux`` plus any
@@ -36,30 +45,28 @@ When the nonlinear output target ends in ``.out.nc`` (recommended) or another
 - ``case.big.nc``
 - ``case.restart.nc``
 
-This is the release-facing format for nonlinear parity, restart, and external
-post-processing workflows.
+This is the format for nonlinear parity, restart, and external
+post-processing.
 
-Each new file carries the root attribute ``schema_version = 1``. Runtime
-readers also accept GKX 1.8.2 files with no such attribute as legacy schema 0;
-an unsupported future version fails with migration guidance. Version 1 adds
-only this metadata: the frozen groups, variables, dimensions, dtypes, complex
-``ri`` convention, dealiased axes, and restart transpose are unchanged, so
-older readers that ignore unknown root attributes continue to consume the
-payload.
+Each file carries the root attribute ``schema_version = 1``. Readers accept
+files without the attribute (as written by GKX 1.8.2) as legacy schema 0 and
+refuse any other version with an upgrade/migration error. Schema 0 and 1 share
+the same groups, variables, dimensions, dtypes, complex ``ri`` convention,
+dealiased axes, and restart transpose.
 
-It is also what the bare equilibrium shorthand writes: ``gkx wout_XXX.nc``
-groups its artifacts under ``./<wout-stem>/`` with ``[output] path`` set to
-``<wout-stem>/gkx.out.nc``. A plain prefix there would have produced CSV
-sidecars, and with them no spectra, no final fields, and no restart file --
-which is most of what the run's own figure set is drawn from. Naming
-``--out`` or an ``[output] path`` yourself overrides the default unchanged.
+The equilibrium shorthand ``gkx wout_XXX.nc`` writes this bundle by default:
+a nonlinear run groups its artifacts under ``./<wout-stem>/`` with
+``[output] path`` set to ``<wout-stem>/gkx.out.nc``, so the spectra, final
+fields and restart file exist for the figure set. A linear run keeps
+the plain prefix ``<wout-stem>/gkx``. An explicit ``--out`` or ``[output] path``
+is used as given.
 
 ``*.out.nc``
 ^^^^^^^^^^^^
 
 The main nonlinear history file contains:
 
-- ``Grids``: time history and active spectral ``kx/ky/theta`` coordinates
+- ``Grids``: coordinates ``time``, ``kx``, ``ky``, ``kz``, ``x``, ``y``, ``theta``
 - ``Geometry``: flux-tube metric arrays and geometry scalars
 - ``Inputs``: imported runtime metadata needed by the comparison tooling
 - ``Diagnostics``: scalar, species-resolved, and resolved nonlinear outputs
@@ -184,7 +191,7 @@ warning and leaves the saved simulation untouched.
 
 Alongside a NetCDF bundle the runtime also writes ``<base>.summary.json``,
 which is where the measured saturation window and ``<Q> +/- SEM`` are recorded
-in machine-readable form. ``gkx --plot`` reads it back, so a re-plot shades the
+in machine-readable form. ``gkx plot`` reads it back, so a re-plot shades the
 same window the run reported rather than falling back to the second half of
 the trace.
 
@@ -193,22 +200,16 @@ command:
 
 .. code-block:: bash
 
-   gkx --plot tools_out/cyclone_release.out.nc
-   gkx --plot gx_run.out.nc --out gx_run_panel.png
+   gkx plot tools_out/cyclone_release.out.nc
+   gkx plot gx_run.out.nc --out gx_run_panel.png
 
-``--plot`` recognizes GX output as well as GKX's own and draws whatever the
+``gkx --plot FILE`` is the legacy spelling of the same command.
+``gkx plot`` recognizes GX output as well as GKX's own and draws whatever the
 file carries -- ``Phi^2(t)``, the fluxes, and the ``ky`` spectrum when present
 -- with a title that names GX, so a panel lifted into a slide cannot be
 mistaken for GKX data. On GKX's own nonlinear bundle it rebuilds the whole
 figure set listed above, not only the single panel.
 
-Use the plotting helper to visualize nonlinear diagnostic histories from
-``*.out.nc`` files:
-
-.. code-block:: bash
-
-   # point RUN_PATH (and optionally OUT) at the top of the script at the bundle
-   python examples/utilities/plot_runtime_outputs.py
-
-The script reads ``Diagnostics/t`` together with ``Phi2_t``, ``Wg_st``,
-``Wphi_st``, and ``HeatFlux_st`` (when present) and produces a 2x2 panel.
+From Python, ``gkx.artifacts.plotting.plot_saved_output(path, out=None)`` draws
+the same overview figure; ``examples/utilities/plot_runtime_outputs.py`` is a
+two-line script around it (set ``RUN_PATH`` and optionally ``OUT`` at the top).

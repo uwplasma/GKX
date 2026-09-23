@@ -16,29 +16,12 @@ or install the development checkout:
    cd GKX
    pip install -e .
 
-Precision and nonlinear gradients
----------------------------------
-
-The compressed nonlinear bracket removes shared singleton batch axes during
-CPU compilation to avoid a JAX/jaxlib 0.10.2 Linux float32 reduction crash
-(`PR 196 <https://github.com/uwplasma/GKX/pull/196>`_). Output shapes and the
-discrete bracket are unchanged; GPU compilation retains its original layout.
-The periodic/linked heat-flux gradient tests must pass, including in float32;
-CPU isolation makes any renewed crash a test failure, not an exemption.
-Use ``JAX_ENABLE_X64=true`` before Python starts when float64 is needed, and
-check precision and resolution convergence for your observable.
-
-Executable demo
----------------
+First run
+---------
 
 .. code-block:: bash
 
    gkx
-   gkx examples/linear/axisymmetric/cyclone.toml
-   gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out cyclone_runtime
-   gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --steps 50 --out tools_out/cyclone_nonlinear.out.nc
-   gkx plot tools_out/cyclone_nonlinear.out.nc
-   gkx plot gkx_default_linear.summary.json
 
 Running ``gkx`` with no TOML launches a short Cyclone initial-value
 linear demo, prints live progress with elapsed time and ETA, and writes the
@@ -50,7 +33,10 @@ artifacts in the current directory:
 - ``gkx_default_linear.eigenfunction.csv``
 - ``gkx_default_linear.png``
 
-The plot is the standard two-panel linear quickstart view: the log-scale
+The demo is the Cyclone s-alpha ITG case at ``ky = 0.3`` with
+``Nl = 7`` Laguerre and ``Nm = 14`` Hermite moments, integrated with ``rk4`` at
+``dt = 0.02`` for 4000 steps (``t = 80``); it takes about ten seconds on a
+laptop CPU. The plot is the standard two-panel linear view: the log-scale
 ``|\phi|^2`` time history with fitted ``(\gamma, \omega)`` on the left, and
 the normalized real/imaginary eigenfunction on the right. To rerun the same
 numerical case explicitly:
@@ -59,18 +45,42 @@ numerical case explicitly:
 
    gkx gkx_default_linear.toml --progress
 
-When progress output is enabled (for example on a TTY or with the explicit
-progress flags), the executable prints live status lines with step/time
-progress, wall elapsed time, and an estimated wall-clock time remaining. Long
-adaptive nonlinear runs also report chunk-level elapsed/ETA updates at the
-runtime layer.
+A short nonlinear run (50 steps of the Cyclone nonlinear deck) and a re-plot
+of either output:
 
-When ``--out`` is provided for runtime-configured single-point runs, the
-executable writes a JSON summary plus sidecar time-series/state artifacts using
-the supplied path as a prefix.
+.. code-block:: bash
 
-If the nonlinear target ends in ``.out.nc`` or another ``.nc`` suffix, the
-runtime writes a restartable NetCDF bundle instead:
+   gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --steps 50 --out tools_out/cyclone_nonlinear.out.nc
+   gkx plot tools_out/cyclone_nonlinear.out.nc
+   gkx plot gkx_default_linear.summary.json
+
+The nonlinear command already draws its figures beside the output;
+``gkx plot`` redraws them from the saved files.
+
+Full Cyclone benchmark deck
+---------------------------
+
+``examples/linear/axisymmetric/cyclone.toml`` is a production-length linear
+run, not a demo: ``t_max = 150`` at ``dt = 0.004663`` (32168 ``rk4`` steps)
+with ``Nl = 16``, ``Nm = 48``. On a CI runner it takes about 16 minutes. Both
+commands below run that deck:
+
+.. code-block:: bash
+
+   gkx examples/linear/axisymmetric/cyclone.toml
+   gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out cyclone_runtime
+
+Progress and output files
+-------------------------
+
+When progress output is enabled (on a TTY, or with ``--progress``), the
+executable prints step/time progress, wall elapsed time, and an estimated
+wall-clock time remaining. Adaptive nonlinear runs also report chunk-level
+elapsed/ETA updates.
+
+When ``--out`` is a plain prefix, single-point runs write a JSON summary plus
+CSV sidecars under that prefix. If the nonlinear target ends in ``.out.nc`` or
+another ``.nc`` suffix, the runtime writes a restartable NetCDF bundle instead:
 
 - ``*.out.nc``: diagnostic history, geometry, and input metadata
 - ``*.big.nc``: final fields and moments in spectral and real-space layouts
@@ -98,13 +108,15 @@ To make the run restart-aware, add the restart controls directly to the TOML:
 
 Rerunning the same nonlinear command then resumes from the saved
 ``*.restart.nc`` checkpoint and appends the continued history to ``*.out.nc``.
+See :doc:`outputs` for the variables in each file.
 
-Plot diagnostics directly from the output:
+Precision
+---------
 
-.. code-block:: bash
-
-   gkx plot tools_out/cyclone_nonlinear.out.nc
-   gkx plot gkx_default_linear.summary.json
+Runs use JAX's default float32 (``complex64`` states). Set
+``JAX_ENABLE_X64=true`` before Python starts to run in float64, and check
+precision and resolution convergence for the observable you report. See
+:doc:`inputs` for what float64 changes in the eigensolver certification.
 
 Self-contained VMEC geometry
 ----------------------------
@@ -126,14 +138,18 @@ files. Generate the needed equilibria locally, then run the TOMLs directly:
    gkx run --config examples/linear/non-axisymmetric/runtime_hsx_linear_quasilinear.toml
    gkx run --config examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml
 
-The bundled QHS/QI/QA decks are self-contained demonstrators. Exact
-machine-specific HSX or W7-X validation should use the same TOMLs with
-``--vmec-file`` pointing to the corresponding benchmark ``wout_*.nc``.
+The bundled circular, QHS and QI equilibria are self-contained
+demonstrators. Exact machine-specific HSX or W7-X validation uses the same TOMLs
+with ``--vmec-file`` pointing to the corresponding benchmark ``wout_*.nc``.
+
+A ``wout`` file can also be run directly: ``gkx wout_XXX.nc`` resolves a default
+deck, writes the resolved input and all outputs under ``./<wout-stem>/``, and
+``gkx my_input.toml wout_XXX.nc`` runs an edited deck against that equilibrium.
 
 Geometry path overrides
 -----------------------
 
-The executable can still override geometry paths without editing the TOML.
+The executable can override geometry paths without editing the TOML.
 These command-line paths are resolved from the shell's current working
 directory, while paths written in the TOML remain resolved from the TOML
 location. Use ``--vmec-file`` when the runtime config already uses a
@@ -168,15 +184,19 @@ Python demo
 
    from gkx import load_runtime_from_toml, run_runtime_linear
 
-   config, _ = load_runtime_from_toml(
-       "examples/linear/axisymmetric/cyclone.toml"
+   # gkx_default_linear.toml is written by the no-argument ``gkx`` run above.
+   config, _ = load_runtime_from_toml("gkx_default_linear.toml")
+   result = run_runtime_linear(
+       config, ky_target=0.3, Nl=7, Nm=14, solver="time", fit_signal="phi"
    )
-   result = run_runtime_linear(config, ky_target=0.3)
 
-   print(result.gamma, result.omega)
+   print(result.gamma, result.omega)  # gamma about 0.103
 
-Tracked comparison tables are available through :mod:`gkx.benchmarking_shared`;
-all simulations use the unified runtime API above.
+``run_runtime_linear`` does not read the deck's ``[run]`` table; pass ``Nl``,
+``Nm`` and ``solver`` explicitly. With no ``Nl``/``Nm`` it falls back to
+``(Nl, Nm) = (12, 24)``.
+
+Tracked comparison tables are available through :mod:`gkx.benchmarking_shared`.
 
 Run from TOML
 -------------
@@ -185,9 +205,12 @@ Run from TOML
 
    python examples/utilities/runtime_from_toml.py  # CONFIG defaults to cyclone.toml
 
+The script solves every ``ky`` in the deck's ``[scan]`` table (five points for
+``cyclone.toml``), so on the default deck it is a long run.
+
 Figure generation
 -----------------
 
 .. code-block:: bash
 
-   PYTHONPATH=src python scripts/artifacts/make_benchmark_atlas.py
+   python scripts/artifacts/make_benchmark_atlas.py

@@ -1,17 +1,25 @@
 Linear Model And Derivations
 ============================
 
-This page records the exact linear model currently benchmarked in GKX.
-It is intended as the technical baseline for the nonlinear extension.
+This page records the linear model that GKX benchmarks. The nonlinear solver
+adds the :math:`E\times B` and flutter brackets to the same operator.
 
 Scope
 -----
 
-Current linear validation scope:
+The linear benchmark rows of the evidence ledger (``tools/evidence_ledger.toml``)
+cover:
 
-- Cyclone base case (adiabatic electrons)
-- ETG (two-species kinetic ions/electrons, electrostatic limit)
-- KBM beta scan (electromagnetic, :math:`A_\parallel` enabled, :math:`B_\parallel` disabled)
+- KAW: slab kinetic Alfven wave against the analytic dispersion relation
+- ETG: kinetic electrons with Boltzmann ions, electrostatic
+- W7-X and HSX: ITG on VMEC-derived stellarator geometry
+- Cyclone base case (adiabatic electrons), in s-alpha and in Miller geometry
+- KBM: kinetic ions and electrons, :math:`A_\parallel` on and
+  :math:`B_\parallel` off
+
+Each row is scanned in :math:`k_y`. Its status (passing or provisional),
+measured mismatch, reference and velocity-space regularization are listed in
+:doc:`verification_matrix`, which is generated from the ledger.
 
 Normalized equation
 -------------------
@@ -120,12 +128,13 @@ Electromagnetic linear closure:
 - coupled solve for :math:`(\phi, B_\parallel)` from quasineutrality and perpendicular Ampere
 - :math:`A_\parallel` from parallel Ampere
 
-The current KBM benchmark uses :math:`A_\parallel` on and :math:`B_\parallel` off.
+The KBM benchmark runs with :math:`A_\parallel` on and :math:`B_\parallel`
+off, because its reference omits :math:`\delta B_\parallel`.
 
 Growth-rate/frequency extraction
 --------------------------------
 
-Two production paths are used:
+Time-integrated runs extract the growth rate and frequency two ways:
 
 1. Log-linear fit on complex mode signal :math:`s(t)`:
 
@@ -147,7 +156,10 @@ Two production paths are used:
       \omega_n = -\frac{\arg(r_n)}{\Delta t}.
 
 Windows are selected from intervals with sustained log-linear behavior and
-finite amplitude support.
+finite amplitude support
+(:func:`gkx.diagnostics.growth_rates.fit_growth_rate_auto`). The eigensolver
+path returns the eigenvalue directly and certifies it by its residual; see
+:doc:`algorithms`.
 
 Numerical realization
 ---------------------
@@ -155,8 +167,11 @@ Numerical realization
 - perpendicular Fourier representation in :math:`(k_x, k_y)`
 - field-aligned :math:`z` grid with linked boundary support
 - JAX-fused RHS with cache-backed geometry/gyroaverage tensors
-- custom fixed-step integrators
-- matrix-free Krylov/shift-invert for eigenvalue-focused scans
+- explicit ``rk2``/``rk4`` time stepping, at a fixed step or under the CFL
+  controller (:class:`gkx.config.TimeConfig`)
+- the matrix-free ``adaptive`` Krylov eigensolver, the
+  :class:`gkx.solvers_linear_krylov.KrylovConfig` default, with shift-invert
+  selectable
 
 Benchmark contract
 ------------------
@@ -166,7 +181,5 @@ For all linear benchmark plots/tables:
 - report :math:`\gamma,\omega` with explicit normalization
 - publish mismatch tables by scan coordinate (:math:`k_y` or :math:`\beta_{ref}`)
 - include per-case parameter tables (geometry, gradients, species, toggles, grid, resolution)
-- use GX (s-alpha geometry) as the electromagnetic cross-code baseline for KBM
-
-The nonlinear roadmap builds directly on this operator decomposition and
-normalization contract.
+- give every published number a ledger row, so it appears in
+  :doc:`verification_matrix`

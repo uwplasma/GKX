@@ -20187,3 +20187,81 @@ Next steps, in order:
 2. After #278 merges, merge `main` into #282 and then into #287. Use `python scripts/check.py <subcommand>` in place of `tools/release/*`.
 3. Land #282, then retarget #287 to `main`.
 4. Flip the default only after ADJ-HALF closes.
+## 2026-09-22 - DOCS-CURRENT (G.3) and DOCS-LEDGER (F.6), branch docs/current-2.3 (paused, partial)
+
+Baseline:
+- GKX SHA: f9485f044 (release 2.3.0)
+- companion SHAs: none
+- source/test/tool files and lines: docs/*.rst 33 pages, 20,831 lines at baseline
+- relevant existing gate: tests/release/test_evidence_ledger.py; REQUIRED_PHRASES in tests/release/test_release_gates.py; tools/release checkers that read docs pages
+
+Scope:
+- intended change: docs current with 2.3.0; verification matrix generated from tools/evidence_ledger.toml; remove roadmap pages from public docs
+- non-goals: README, examples/, tools/, page renames or moves
+- prospective acceptance and rollback criteria: sphinx -W passes; pinned claim-scope phrases unchanged; regenerated release JSONs byte-identical
+
+Changes:
+- added scripts/validation_matrix.py (renders the ledger block of docs/verification_matrix.rst; --check); two tests in tests/release/test_evidence_ledger.py (block current; no ledger lane restated by hand)
+- rewrote docs/verification_matrix.rst (961 -> ~420 lines): Cyclone, KBM, HSX no longer "Closed"; KAW no longer "Deferred"; off-ledger lanes listed as non-claims
+- rewrote docs/release_scope.rst (591 -> ~200 lines); deleted docs/research_grade_plan.rst and docs/research_grade_program.rst; docs/manuscript_figures.rst made :orphan: and removed from nav
+- audited and edited: algorithms, theory, solvers, testing, manuscript_figures (see PR handoff for items)
+
+Evidence:
+- focused tests: tests/release/test_evidence_ledger.py 30 passed; test_release_gates.py -k claim_scope 2 passed
+- regenerated quasilinear_promotion_guardrails.json, release_readiness.json, technical_release_status.json byte-identical to tracked
+- sphinx -W build of the final tree NOT run (paused; baseline build passes, ~6 min)
+
+Outcome:
+- partial; paused by the maintainer
+- remaining blocker: 20 pages not yet edited; audit findings recorded in the PR handoff
+- next task: resume the page audit from the PR handoff list, then sphinx -W and the release checkers
+
+## 2026-09-22 - DOCS-CURRENT (G.3) and DOCS-LEDGER (F.6), branch docs/current-2.3 (resumed, complete)
+
+Baseline:
+- GKX SHA: f9485f044 (release 2.3.0); branch head before this entry ae72991c1
+- companion SHAs: none
+- source/test/tool files and lines: docs/*.rst 33 pages, 20,831 lines at baseline
+- relevant existing gate: sphinx -W (docs-and-packaging); repo-hygiene manifests; REQUIRED_PHRASES; tests/release/test_evidence_ledger.py
+
+Scope:
+- intended change: every docs page current with 2.3.0; verification matrix generated from the ledger; machine paths out of the tracked docs/_static JSONs named in the paused handoff; the four generator-less docs/_static JSONs decided
+- non-goals: README (the showcase lane owns it), src/, page renames or moves (after SLIM-TOOLS rewires checkers that read page paths)
+- prospective acceptance and rollback criteria: sphinx -W clean; linkcheck with no 404/410; repo-hygiene step reproduced green; pinned phrases kept; regenerated release JSONs match the commit
+
+Changes:
+- 23 remaining pages audited against src/, tests/, docs/_static and plan/log.md and rewritten; docs rst 20,831 -> 12,865 lines over 31 pages
+- [Lin99], [Dorland00], [Jenko00] cited again (the three sphinx -W failures on the paused head)
+- tools/artifacts/build_tem_validation_artifacts.py records checkout-relative paths; tem_branch_parity_audit.json and w7x_tem_extension_status.json regenerated (only path strings changed)
+- examples/theory_and_demos/differentiable_geometry_bridge.py records vmex/booz_xform_jax paths relative to their checkouts; its JSON and the generator-less vmec_boozer_parity_matrix.json scrubbed to match (numeric fingerprints unchanged; release_readiness.json content hash updated)
+- deleted eigensolver_cost_model.json, geometric_saturation_predictor.json, qa_transport_weight_scan.json, quasilinear_skill_audit.json: no page, test, manifest or ledger row references them and SLIM-TOOLS (#278) deletes their builders
+- test_python_lines 94057 -> 94082 and tool_python_lines 78901 -> 78908, measured
+
+Evidence:
+- sphinx -W -b html: 0 warnings (about 80 s on the laptop)
+- linkcheck: 18 broken, all 403 from AIP/SIAM/ACM/MDPI; 0 with 404/410
+- repo-hygiene step reproduced: ruff check/format, size, release-artifacts, version, architecture, parallel manifests, the four regenerated JSONs match the commit
+- pytest tests/release, benchmark contracts, QL guardrails, vmex QA scope, parallel artifacts, gradient evidence contracts: all passed; test_differentiable_geometry_objectives artifact subset: 18 passed
+
+Outcome:
+- complete for the page audit; PR #283 ready for review after CI
+- remaining blocker: (Nl, Nm) fallback text is correct only once #286 merges; tools/release paths in docs move to scripts/check.py once #278 merges
+- next task: merge origin/main after #278 and rewrite tools/release paths; see the PR handoff for items found outside docs
+
+## 2026-09-22 - DOCS-CURRENT (G.3), branch docs/current-2.3 (paused again while CI runs)
+
+Baseline:
+- GKX SHA: 7426c267a (branch head after merging origin/main with #277)
+- companion SHAs: none
+- relevant existing gate: ci-required on PR #283
+
+Scope:
+- no new change; pause checkpoint only
+
+Evidence:
+- CI on 7426c267a at pause time: repo-hygiene, release-artifacts, adaptive-eigensolver, fast-coverage, python-floor passed; docs-and-packaging and the test shards still queued; no failure reported
+- locally on 7426c267a: sphinx -W 0 warnings; repo-hygiene step reproduced green; tests/release passed
+
+Outcome:
+- page audit complete; PR still draft
+- next task: confirm ci-required on #283, mark ready; after #278 merges, merge origin/main and rewrite tools/release paths in docs to scripts/check.py subcommands; land after #286

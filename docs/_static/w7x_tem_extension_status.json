@@ -32,7 +32,7 @@
         "omega_branch_inversion": true,
         "omega_sign_mismatch_count": 3,
         "omega_spearman": -0.9856107606091623,
-        "source": "/Users/rogeriojorge/local/GKX/docs/_static/tem_branch_parity_audit.json"
+        "source": "docs/_static/tem_branch_parity_audit.json"
       },
       "lane": "TEM / kinetic-electron linear parity",
       "next_action": "Reconstruct the TEM case definition or obtain an independent reference dump, then fix the branch/frequency mismatch before using kinetic-electron W7-X scans for validation or optimization.",

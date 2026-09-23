@@ -8,9 +8,10 @@ comparisons.
 Canonical normalization contract
 --------------------------------
 
-GKX now centralizes benchmark-family normalization values in
-``gkx.diagnostics.normalization`` via :class:`gkx.diagnostics.normalization.NormalizationContract`.
-This is the single source of truth for case defaults:
+Benchmark-family normalization values live in
+``gkx.diagnostics.normalization`` as
+:class:`gkx.diagnostics.normalization.NormalizationContract` records, the single
+source of case defaults:
 
 .. list-table:: Canonical per-case normalization contracts
    :header-rows: 1
@@ -50,9 +51,9 @@ Every shipped case contract uses unit scale factors: no non-unity
 ``omega_d_scale`` or ``omega_star_scale`` calibration factors ship with GKX
 (see ``src/gkx/diagnostics/normalization.py``).
 
-These contracts are consumed by benchmark constants for the stable script API
-(``CYCLONE_OMEGA_D_SCALE``, etc.), so existing scripts keep working while all
-new calibration updates flow through one module.
+The benchmark constants of the script API (``CYCLONE_OMEGA_D_SCALE`` and the
+others in ``gkx.benchmarking_shared``) read these contracts, so a calibration
+lives in one module.
 
 Dimensionless units
 -------------------
@@ -127,9 +128,8 @@ carry the charge, mass, density, temperature, and gradient inputs:
 - ``tz``: :math:`Z_s / T_s` coupling used in the field terms.
 - ``tprim`` / ``fprim``: normalized gradients for each species,
   :math:`a/L_T` and :math:`a/L_n`. These are the only gradient units the
-  operator consumes; the fields were called ``R_over_LTi`` / ``R_over_Ln``
-  until the names were corrected, and the old names still work with a
-  ``DeprecationWarning``. Use the :math:`R/L = R_0 \, (a/L)` conversion above
+  operator consumes. The legacy names ``R_over_LTi`` / ``R_over_Ln`` are
+  accepted as aliases with a ``DeprecationWarning``. Use the :math:`R/L = R_0 \, (a/L)` conversion above
   when quoting a result against literature values.
 
 For adiabatic closures, ``tau_e`` provides the ratio between the kinetic
@@ -157,10 +157,10 @@ The reduced scan tables and regression tests use ``Nx=1, Ny=24, Nz=96`` on this
 grid to match the discrete ky set used in the reference CSV.
 
 Spectral grids
--------------------------
+--------------
 
-GKX’s explicit benchmark integrator uses the compressed Fourier conventions required by the tracked reference data.
-The perpendicular wave numbers are defined as
+The spectral grid uses the compressed Fourier conventions of the tracked
+reference data. The perpendicular wave numbers are defined as
 
 .. math::
 
@@ -182,16 +182,16 @@ The midplane index used by the reference growth-rate diagnostic corresponds to
 ``z_index = Nz//2 + 1``, matching the audited benchmark kernel logic when ``Nz > 1``.
 
 Perpendicular normalization
---------------------------------------
+---------------------------
 
-The reference diagnostic contract defines the perpendicular metric as :math:`k_\perp^2/B^2` before applying
-the Laguerre gyroaverage. To match that convention in GKX:
+The reference diagnostic contract defines the perpendicular metric as
+:math:`k_\perp^2/B^2` before the Laguerre gyroaverage. GKX matches it with:
 
 - ``kperp2_bmag = True`` (include the :math:`B^{-2}` factor in :math:`k_\perp^2`)
 - ``bessel_bmag_power = 0`` (no extra :math:`B` scaling inside the Bessel argument)
 
-The Cyclone base case defaults follow this benchmark setting, and the
-``compare_gx_rhs_terms.py compare`` assumes the same normalization.
+The Cyclone base case defaults use this setting, and
+``tools/comparison/compare_gx_rhs_terms.py compare`` assumes it.
 
 Sign conventions
 ----------------
@@ -243,19 +243,19 @@ out-of-the-box reports match the tracked benchmark normalization. Set
 solver outputs.
 
 Diagnostic scaling
------------------------------
+------------------
 
-The reference diagnostics apply fixed factors in a few places that depend on the storage
-convention (e.g. real-FFT nyquist handling or per-unit-time damping). The
-runtime schema therefore exposes light-weight diagnostic scale factors:
+The reference diagnostics apply fixed factors in a few places that depend on
+the storage convention (for example real-FFT Nyquist handling or per-unit-time
+damping). The runtime schema exposes two diagnostic scale factors:
 
 - ``flux_scale``: multiplicative factor applied to the reported heat/particle
   fluxes (default ``1.0`` for the tracked comparison convention).
 - ``wphi_scale``: multiplicative factor applied to ``Wphi`` (default ``1.0``;
   no shipped configuration overrides it).
 
-These are reporting-only knobs; they do not alter the RHS/operator. They are
-intended to document exact comparison settings used for benchmark plots.
+Both affect reporting only; they do not alter the RHS/operator. They record
+the exact comparison settings behind benchmark plots.
 
 The reference end-damping defaults are ``damp_ends_amp = 0.1`` and
 ``damp_ends_widthfrac = 0.125``. The damping kernel interprets
@@ -263,7 +263,8 @@ The reference end-damping defaults are ``damp_ends_amp = 0.1`` and
 timestep; otherwise it remains a rate, including on nonlinear routes.
 Only an isolated Euler damping update removes exactly that local fraction;
 other RK schemes apply their stability polynomial. See :doc:`operators` for
-the equations and the pending cross-route normalization migration.
+the equations and for why a linear timestep scan does not refine one fixed
+operator.
 
 Defaults (model parameters):
 
@@ -271,8 +272,8 @@ Defaults (model parameters):
 - ``omega_d_scale = 1.0`` (model default)
 - ``omega_star_scale = 1.0`` (model default)
 
-These parameters are surfaced in the regression tables so that future
-normalization refinements can be tracked in a reproducible way.
+The regression tables record all three, so every tabulated result carries
+the normalization it was computed with.
 
 Programmatic usage
 ------------------

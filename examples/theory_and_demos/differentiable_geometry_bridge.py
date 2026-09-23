@@ -408,9 +408,29 @@ payload: dict[str, Any] = {
     ),
 }
 
+
+def portable_paths(value: Any) -> Any:
+    """Record existing absolute paths relative to their checkout, not this machine."""
+
+    if isinstance(value, dict):
+        return {key: portable_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [portable_paths(item) for item in value]
+    if not (isinstance(value, str) and value.startswith("/") and Path(value).exists()):
+        return value
+    path = Path(value).resolve()
+    if path.is_relative_to(REPO_ROOT):
+        return str(path.relative_to(REPO_ROOT))
+    for name in ("vmex", "booz_xform_jax"):
+        if name in path.parts:
+            return "/".join(path.parts[path.parts.index(name) :])
+    return path.name
+
+
 OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
 OUT_JSON.write_text(
-    json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    json.dumps(portable_paths(payload), indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
 )
 make_figure(payload, OUT_PNG)
 print(f"Wrote {OUT_PNG}")

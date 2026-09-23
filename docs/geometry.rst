@@ -4,35 +4,47 @@ Geometry
 S-alpha flux-tube model
 -----------------------
 
-We start with a simple analytic geometry based on the s-alpha model, which is
-widely used for Cyclone base case benchmarks. The field-aligned perpendicular
-wave number is
+The analytic s-alpha model (``geometry.model = "s-alpha"``, the default) is
+the geometry of the Cyclone base case benchmarks. With the shear function
+:math:`\sigma(\theta) = \hat{s}\,\theta - \alpha \sin\theta`, the field-aligned
+radial wave number is
 
 .. math::
 
-   k_x(\theta) = k_{x0} - \left(\hat{s}\,\theta - \alpha \sin\theta \right) k_y,
+   k_x(\theta) = k_{x0} - \sigma(\theta)\, k_y,
 
 and the metric coefficients are
 
 .. math::
 
-   g_{ds2} = 1 + \left(\hat{s}\,\theta - \alpha \sin\theta\right)^2,\quad
-   g_{ds21} = -\hat{s}\left(\hat{s}\,\theta - \alpha \sin\theta\right),\quad
-   g_{ds22} = \hat{s}^2.
+   g_{ds2} = 1 + \sigma^2,\quad
+   g_{ds21} = -\hat{s}\,\sigma,\quad
+   g_{ds22} = \hat{s}^2 .
 
-The perpendicular wave number is then
+The solver writes the perpendicular wave number with the radial wave number
+divided by the shear, :math:`\hat{k}_x = k_{x0}/\hat{s}`:
 
 .. math::
 
    k_\perp^2(\theta) =
-   k_y \left(k_y g_{ds2} + 2 k_x g_{ds21} \right) + k_x^2 g_{ds22},
+   \left[k_y \left(k_y g_{ds2} + 2 \hat{k}_x g_{ds21} \right)
+   + \hat{k}_x^2 g_{ds22}\right] B^{-2}(\theta),
+   \qquad
+   B(\theta) = \frac{1}{1 + \epsilon \cos\theta},
 
-with an additional :math:`B^{-2}` factor from the s-alpha magnetic field
-strength,
+so the factors of :math:`\hat{s}` cancel at finite shear. The :math:`B^{-2}`
+factor is applied when ``kperp2_bmag = True`` (see :doc:`normalization`). At
+exactly zero shear the solver uses :math:`\hat{k}_x = k_{x0}` and
+:math:`g_{ds22} = 1`, so radial modes keep their finite-Larmor-radius
+dependence. The same zero-shear contract applies to ``SlabGeometry``
+(``gkx.geometry.analytic``).
 
-.. math::
-
-   B(\theta) = \frac{1}{1 + \epsilon \cos\theta}.
+The metric coefficients select the zero-shear branch with ``jnp.where`` on
+``s_hat``, so they stay traceable: at finite shear, ``jax.grad`` and
+``jax.jit(jax.grad(...))`` of the s-alpha and slab metric coefficients with
+respect to ``s_hat`` agree with central finite differences
+(``tests/unit/geometry/test_geometry.py``). Derivatives across the zero-shear
+switch are not claimed.
 
 Parameters
 ----------
@@ -44,6 +56,7 @@ The geometry is specified by:
 - ``epsilon``: inverse aspect ratio
 - ``R0``: reference major radius
 - ``B0``: reference magnetic field
+- ``alpha``: pressure-gradient parameter in :math:`\sigma(\theta)`
 - ``drift_scale``: drift normalization (``1.0`` is the tracked default; ``2.0`` selects the alternate doubled-drift convention)
 
 Field-aligned grid parameters
@@ -61,26 +74,24 @@ For direct comparison with published Cyclone base case benchmarks,
 Curvature and grad-B drift
 --------------------------
 
-The magnetic drift frequency used in the linear operator follows the standard
-s-alpha form
+The magnetic drift frequency used in the linear operator is
 
 .. math::
 
    \omega_d(\theta) = k_y \left(\mathcal{C}_v + \mathcal{C}_g\right)
-   + k_x \left(\mathcal{C}_v^0 + \mathcal{C}_g^0\right),
+   + \hat{k}_x \left(\mathcal{C}_v^0 + \mathcal{C}_g^0\right),
 
-with
+with the same :math:`\hat{k}_x` as above and
 
 .. math::
 
    \mathcal{C}_v = \mathcal{C}_g =
-   \frac{\cos\theta + (\hat{s}\,\theta - \alpha \sin\theta)\sin\theta}{R_0},
+   d\,\frac{\cos\theta + \sigma(\theta)\sin\theta}{R_0},
    \qquad
    \mathcal{C}_v^0 = \mathcal{C}_g^0 =
-   -\frac{\hat{s}\sin\theta}{R_0}.
+   -d\,\frac{\hat{s}\sin\theta}{R_0},
 
-These parameters will be extended to VMEC/DESC geometry once the linear solver
-is validated against Cyclone benchmarks.
+where :math:`d` is ``drift_scale``.
 
 Slab Model
 ----------
@@ -99,14 +110,12 @@ The slab overrides are:
 - with ``zero_shat = true``, the slab metric becomes ``gds2 = 1``,
   ``gds21 = 0``, ``gds22 = 1`` and the effective solver shear is zero
 
-That contract is now locked by unit tests so future secondary or slab
-full-GK work is built on stable geometry semantics. The retired reduced
-collisional-ETG path is no longer part of the maintained runtime.
+Unit tests lock this contract.
 
 Geometry Data Contract
 ----------------------
 
-The linear cache now accepts either:
+The linear cache accepts either:
 
 - the analytic ``SAlphaGeometry`` model, or
 - a sampled ``FluxTubeGeometryData`` contract.
@@ -118,118 +127,126 @@ The linear cache now accepts either:
 - ``gradpar``,
 - metric coefficients ``(gds2, gds21, gds22)``,
 - curvature / grad-B drift coefficients ``(cv, gb, cv0, gb0)``,
+- explicit ``jacobian`` and ``grho`` profiles when the source provides them,
 - geometry metadata such as ``q``, ``s_hat``, ``R0``, and the
   ``kperp2_bmag`` / ``bessel_bmag_power`` switches.
 
-This is the insertion point for future VMEC/DESC or imported field-line
-geometry. The helper ``sample_flux_tube_geometry`` converts the analytic
-s-alpha model into the same contract, and ``ensure_flux_tube_geometry_data``
-normalizes analytic and sampled inputs onto one solver-facing representation.
+``sample_flux_tube_geometry`` converts the analytic s-alpha model into the same
+contract, and ``ensure_flux_tube_geometry_data`` normalizes analytic and
+sampled inputs onto one solver-facing representation. The contract is a JAX
+pytree and is accepted by the linear cache, the runtime initial-condition
+builder, the RHS assembly entry points, the nonlinear config runner, and the
+reference-compatible volume-weight diagnostics.
 
-The sampled geometry contract is now a JAX pytree and is accepted by the
-linear cache, runtime initial-condition builder, RHS assembly entry points,
-nonlinear config runner, and reference-compatible volume-weight diagnostics.
-That means upcoming VMEC or imported field-line geometry can be threaded into
-more of the codebase without rebuilding solver-specific side paths.
+Imported field-line geometry
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The contract also preserves explicit ``jacobian`` and ``grho`` profiles when
-they are available from imported geometry. The helper
 ``load_imported_geometry_netcdf`` reads grouped NetCDF files with
 ``Geometry``/``Grids`` groups and root-level ``*.eik.nc`` field-line geometry
-files from VMEC/DESC-style workflows. That is the intended short path for
-imported stellarator examples: import the sampled field-line geometry first,
-prove solver/diagnostic parity on that contract, and only then add a native
-VMEC path that generates the same contract inside GKX.
+files. A runtime deck selects it with ``geometry.model = "imported-netcdf"``
+and ``geometry.geometry_file = "external_geometry.nc"``. The aliases
+``"imported-eik"``, ``"vmec-eik"``, and ``"desc-eik"`` use the same importer,
+so a deck can record the provenance of a ``*.eik.nc`` file without changing the
+solver-facing contract. An imported file can be a grouped diagnostic
+``*.out.nc`` file or a VMEC/DESC-generated ``*.eik.nc`` file.
 
-Runtime and executable paths can now construct that bridge directly from config with
-``geometry.model = "imported-netcdf"`` and
-``geometry.geometry_file = "external_geometry.nc"``. Analytic s-alpha remains
-the default with ``geometry.model = "s-alpha"``. For slab cases use
-``geometry.model = "slab"`` with optional ``geometry.z0`` and
-``geometry.zero_shat`` controls. In practice an imported geometry file
-can be either a grouped diagnostic ``*.out.nc`` file or a VMEC/DESC-generated
-``*.eik.nc`` file such as the W7-X examples used in benchmark comparisons.
-Root-level ``*.eik.nc``
-files are no longer assumed to be closed-interval grids: the importer now
-infers whether the terminal theta point is present from the periodic endpoint
-content of the geometry profiles, so both VMEC-style closed grids and
-already-open Miller ``*.eiknc.nc`` grids are mapped onto the correct solver
-contract. For imported geometry, the
-runtime now also adopts the file's ``theta`` extent, twist-shift
-``jtwist/x0`` defaults for both ``linked`` and ``fix aspect`` boundaries, and
-``kxfac`` metadata so the flux-tube grid is built from the same field-line
-domain encoded in the file.
-The same importer is also exposed under the aliases
-``geometry.model = "imported-eik"``, ``"vmec-eik"``, and ``"desc-eik"`` so configs
-can reflect the provenance of a root-level ``*.eik.nc`` file without changing
-the solver-facing geometry contract.
-The linear runtime uses the same geometry builder for KBM and ordinary cases.
-Regression coverage exercises imported sampled geometry explicitly for both
-``"vmec-eik"`` and ``"desc-eik"`` aliases, so imported W7-X-style geometry is
-checked through the promoted runtime entry point. The test suite locks both
-root-level contracts explicitly:
+The importer infers whether the terminal theta point is present from the
+periodic endpoint content of the profiles, so VMEC-style closed grids and
+already-open Miller ``*.eiknc.nc`` grids both map onto the solver's open grid.
+Tests lock both cases: closed-interval VMEC/DESC files preserve
+``theta_scale``/``nfp`` metadata and trim the terminal point, and GX Miller
+``*.eiknc.nc`` files keep their open grid with no trim.
 
-- imported VMEC/DESC closed-interval ``*.eik.nc`` files must preserve
-  ``theta_scale``/``nfp`` metadata and trim the terminal theta point
-  consistently when mapped onto the solver's open field-line grid, and
-- imported GX Miller ``*.eiknc.nc`` files must stay on their already-open theta
-  grid without a spurious terminal-point trim.
+Imported geometry is used as sampled. GKX does not rebuild the twist-shift from
+analytic formulas; the runtime takes the file's ``theta`` extent, its
+``jtwist``/``x0`` defaults for ``linked`` and ``fix aspect`` boundaries, and
+its ``kxfac`` metadata, so the flux-tube grid is built on the field-line domain
+the file encodes. The linear cache treats ``"fix aspect"`` and
+``"continuous drifts"`` as linked twist-and-shift boundaries.
 
-With the corrected imported-VMEC contract, that imported-geometry bridge now
-also reproduces the GX W7-X linear ITG ``t=2`` reference on the same sampled
-field line over the tracked ``ky`` range. The refreshed scan in
-``docs/_static/w7x_linear_t2_scan.csv`` shows mean relative ``gamma`` errors of
-about ``2.3%`` to ``3.5%`` and mean relative ``omega`` errors of about
-``0.02%`` to ``0.27%`` across ``ky = 0.1`` through ``0.8``.
-
-That same imported contract now has a first-class nonlinear runtime workflow:
+On the W7-X linear ITG case, the imported geometry reproduces the GX ``t=2``
+reference on the same sampled field line. The scan in
+``docs/_static/w7x_linear_t2_scan.csv`` gives mean relative ``gamma`` errors of
+2.3% to 3.4% and mean relative ``omega`` errors of 0.02% to 0.27% over
+``ky = 0.1`` to ``0.8``.
 ``examples/nonlinear/non-axisymmetric/w7x_nonlinear_imported_geometry.py`` and
-``examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_imported_geometry.toml`` mirror the
-GX nonlinear W7-X adiabatic-electron setup while keeping the geometry source
-explicitly tied to a VMEC/DESC ``*.eik.nc`` field-line file.
+``examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_imported_geometry.toml``
+run the GX nonlinear W7-X adiabatic-electron setup on a ``*.eik.nc`` file.
 
-GKX now also supports a direct VMEC runtime bridge with
-``geometry.model = "vmec"``. This path uses the VMEC field-line helper
-to produce an imported ``*.eik.nc`` file and then re-enters the same
-imported-geometry contract described above. The bridge is cached by input
-content and VMEC file timestamp when GKX chooses the output path itself.
-If the user supplies an explicit ``geometry_file`` target, the runtime now
-regenerates that file instead of silently reusing whatever stale ``*.eik.nc``
-may already be present there.
-That keeps the native JAX geometry contract centered on ``FluxTubeGeometryData``
-while preserving reproducible imported-geometry workflows.
-For VMEC ``fix aspect`` cases, the bridge now leaves ``x0`` unset when calling
-the geometry helper so it chooses the cut from ``y0`` and the geometry itself.
-GKX no longer back-solves ``x0 = Lx/(2 pi)`` into the helper input, which
-was generating the wrong HSX/W7-X ``*.eik.nc`` files.
+VMEC runtime bridge
+~~~~~~~~~~~~~~~~~~~
+
+With ``geometry.model = "vmec"``, the runtime generates a ``*.eik.nc`` file
+from a VMEC WOUT (``gkx.geometry.vmec_eik``) and then re-enters the imported
+contract above. When GKX chooses the output path, the file is cached by input
+content and VMEC file timestamp. An explicit ``geometry_file`` is treated as an
+output target and regenerated, never reused. For ``fix aspect`` cases the
+bridge leaves ``x0`` unset, so the flux-tube cut is chosen from ``y0`` and the
+geometry. ``geometry.vmec_file`` expands environment variables and ``~``.
+
+The shipped runtime decks point to relative ``wout_*.nc`` paths under
+``examples/vmec``. Generate them from the bundled ``vmex`` input decks with
+``examples/vmec/generate_wouts.sh`` or a single ``vmex input.<case>`` command;
+``--vmec-file`` overrides the path for a machine-specific equilibrium.
+
 When ``booz_xform_jax`` is not installed into the active environment, point
-GKX at it through ``BOOZ_XFORM_JAX_PATH`` or
-``GKX_BOOZ_XFORM_JAX_PATH``. The internal backend is preferred. A
-``booz_xform`` install is only needed as an automatic fallback reader for
-older helper environments.
-Differentiable VMEC/Boozer transport-gradient audits require a
+GKX at it through ``BOOZ_XFORM_JAX_PATH`` or ``GKX_BOOZ_XFORM_JAX_PATH``. The
+JAX backend is preferred; a ``booz_xform`` install is used only as an automatic
+fallback reader. Differentiable VMEC/Boozer transport-gradient audits require a
 ``booz_xform_jax`` checkout at or after upstream commit ``1d5e8c``. That
 revision replaces inactive zero-mode Fourier divisions by safe denominators in
 the JAX Boozer transform so reverse-mode cotangents through ``w`` spectrum
 reconstruction remain finite. Older checkouts can produce finite values but
 non-finite gradients and must not be used for promoted transport-gradient
 claims.
-The first differentiable-geometry bridge is now explicit in
-``gkx.geometry.differentiable``. Use
-``discover_differentiable_geometry_backends()`` to audit optional
-``vmex`` / ``booz_xform_jax`` availability and
-``flux_tube_geometry_from_mapping(...)`` to validate an in-memory,
-solver-ready field-line geometry bundle before passing it into the existing
-``FluxTubeGeometryData`` contract. This is a real contract boundary, not a
-proxy equilibrium: the upstream differentiable pipeline must still supply the
-sampled ``theta``, ``bmag``, ``gradpar``, metric, drift, Jacobian, and
-``grho`` arrays. The bridge is tracer-safe: finite-value checks are kept on
-host inputs, while JAX-traced arrays can flow through
-``flux_tube_geometry_from_mapping(..., validate_finite=False)`` so geometry
-observables, inverse-design objectives, and covariance estimates can be
-differentiated.
 
-For a solved VMEX state, use the canonical convenience adapter directly:
+The W7-X exact-state audit ``docs/_static/w7x_exact_state_audit.json`` checks
+the VMEC runtime path against GX on the same states: startup ``g_state`` and
+``phi``, and, on the dumped late nonlinear state, ``phi``, ``kperp2``,
+``fluxfac``, ``Wg``, ``Wphi``, and heat flux. Its maximum finite pointwise
+relative error is ``4.62e-5`` under a ``1e-4`` gate, and the late scalar
+diagnostics agree to better than ``1.8e-7``. The comparison reconstructs GX's
+compressed real-FFT positive-``ky`` dump grid from ``diag_state_ky_t*.bin``.
+
+Miller geometry
+~~~~~~~~~~~~~~~
+
+With ``geometry.model = "miller"``, the in-package backend constructs the
+Miller surface, the straight-field-line and equal-arc grids, and the metric and
+drift coefficients, writes a root-level ``*.eiknc.nc`` file, and re-enters the
+imported contract. An existing generated target is reused unless
+``gkx geometry miller --force`` is requested. The Cyclone Miller rows of
+:doc:`verification_matrix` exercise this backend.
+
+Command-line entry points:
+
+- ``gkx geometry vmec --config ...`` generates a compatible ``*.eik.nc`` file
+  from a GKX runtime TOML.
+- ``gkx geometry miller --config ...`` generates a compatible Miller
+  ``*.eiknc.nc`` file from a GKX runtime TOML, or reuses the existing target
+  when its path is already populated.
+- ``examples/nonlinear/non-axisymmetric/hsx_nonlinear_vmec_geometry.py`` and
+  ``examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml`` run a nonlinear
+  adiabatic-electron ITG case on the bundled QHS VMEC input deck after its
+  ``wout_NuhrenbergZille_1988_QHS.nc`` file is generated with ``vmex``.
+  They accept ``--vmec-file`` for exact HSX validation WOUTs while GKX
+  generates and reuses the field-line geometry.
+
+In-memory geometry adapters
+---------------------------
+
+``gkx.geometry.differentiable`` is the in-memory boundary.
+``discover_differentiable_geometry_backends()`` reports optional ``vmex`` /
+``booz_xform_jax`` availability, and ``flux_tube_geometry_from_mapping(...)``
+validates an in-memory, solver-ready field-line bundle before it enters
+``FluxTubeGeometryData``. The upstream code must supply the sampled ``theta``,
+``bmag``, ``gradpar``, metric, drift, Jacobian, and ``grho`` arrays; GKX invents
+none of them. Finite-value checks run on host inputs, and JAX-traced arrays
+pass through ``flux_tube_geometry_from_mapping(..., validate_finite=False)``,
+so geometry observables, inverse-design objectives, and covariance estimates
+can be differentiated.
+
+For a solved VMEX state:
 
 .. code-block:: python
 
@@ -238,24 +255,18 @@ For a solved VMEX state, use the canonical convenience adapter directly:
    )
 
 The adapter calls only ``vmex.core.turbulence.gk_fieldline_geometry`` and then
-the same generic mapping validator above. It contains no VMEC spectral or
-Boozer reconstruction and does not import VMEX until called.
-
-The former ``booz_xform_flux_tube_mapping_from_inputs`` route has been removed.
-It combined a real Boozer ``|B|`` spectrum with synthetic smooth metric and
-drift profiles, so its output was not an admissible solver geometry. Use
-``from_vmex`` for a solved state, ``from_vmex_wout`` for a standard WOUT, or
+the mapping validator above. It contains no VMEC spectral or Boozer
+reconstruction and does not import VMEX until called. Use ``from_vmex`` for a
+solved state, ``from_vmex_wout`` for a standard WOUT, and
 ``flux_tube_geometry_from_mapping`` when an upstream code already provides the
-complete physical array contract. ``booz_xform_jax`` remains the owner of
-Boozer transforms and spectra; GKX still exposes the bounded spectral
-derivative check and field-line ``|B|`` evaluator, but neither invents missing
-metric or drift coefficients.
+complete physical array contract. ``booz_xform_jax`` owns Boozer transforms and
+spectra; GKX exposes a bounded spectral derivative check and a field-line
+``|B|`` evaluator, and neither invents metric or drift coefficients.
 
 Closed VMEX mirror geometry
 ---------------------------
 
-Closed VMEX stellarator--mirror hybrids use the parallel adapter owned beside
-that route:
+Closed VMEX stellarator--mirror hybrids use the parallel adapter:
 
 .. code-block:: python
 
@@ -268,12 +279,12 @@ that route:
        ntheta=32,
    )
 
-``vmex.mirror.gk_closed_fieldline_geometry`` owns field-line closure, the
-Clebsch label, Cartesian metric and drift projections, normalization, and
-equal-arc remapping. GKX only validates the returned arrays. The first route
-accepts a line that closes after one periodic racetrack circuit and sets
-``s_hat=0`` so ``kx`` is the direct radial wavenumber. The emitted metric is
-still complete:
+``vmex.mirror.turbulence.gk_closed_fieldline_geometry`` owns field-line
+closure, the Clebsch label, Cartesian metric and drift projections,
+normalization, and equal-arc remapping. GKX only validates the returned arrays.
+The route accepts a line that closes after one periodic racetrack circuit and
+sets ``s_hat=0`` so ``kx`` is the direct radial wavenumber. The emitted metric
+is complete:
 
 .. math::
 
@@ -314,107 +325,61 @@ iterations to a normalized strong-form MHD force residual of
 :math:`4.84\times10^{-3}`, with ``variational.maximum``
 :math:`8.67\times10^{-17}`, ``staggered_weak_force.maximum``
 :math:`9.07\times10^{-17}` and ``normalized_divergence_rms``
-:math:`1.40\times10^{-14}`. The record carries all of these, together with
-``converged``, ``iterations`` and the resolution that achieved them, so the
-state can be checked rather than assumed. ``solve_lambda`` is not optional:
-with the default the solve reports converged after four iterations at a
-residual of 0.55 and leaves the field-strength ratio at 1.614.
+:math:`1.40\times10^{-14}`, against a seed residual of 0.61. The record carries
+all of these, together with ``converged``, ``iterations`` and the resolution
+that achieved them, so the state can be checked rather than assumed.
+``solve_lambda`` is not optional: with the default the solve reports converged
+after four iterations at a residual of 0.55 and leaves the field-strength ratio
+at 1.614.
 
-This page previously described this case on ``setup.initial_state``, the seeded
-minimum-energy stream function on the prescribed nested-ellipse surfaces, whose
-residual is 0.61. Every number below moved when the case was solved, several of
-them by more than a factor of four, and the paragraphs that follow describe the
-solved equilibrium only.
+The racetrack axis is planar: two straight legs of ``straight_length`` 4.0
+joined by return bends of ``return_radius`` 2.0. Along the sampled field line
+``bmag`` carries a maximum at each of the two return bends and a minimum on
+each straight leg, so one circuit closes two wells rather than one. The profile
+is smooth, with its second harmonic eight times its fundamental.
 
-The pictured racetrack is planar. Its axis lies in a single plane, with two
-straight legs at :math:`x=\pm2` and the two return bends at :math:`z=\pm3.797`.
-Along the sampled field line ``bmag`` carries a maximum at each of the two
-return bends and a minimum on each straight leg, so one circuit closes two
-wells rather than one. The profile is smooth rather than a two-level step: its
-second harmonic is eight times its fundamental, the two maxima agree to
-round-off at 1.03426, and the two minima differ by 0.14% (0.99639 and 0.99776).
-The mirror force follows it, with ``bgrad`` peaking at 0.0056. The two-level
-step this page used to report, nine samples flat on each of a low and a high
-leg with the transition confined to the bends, is a property of the seed and
-does not survive force balance.
-
-The recorded ``bmag_max_over_min`` is that modulation depth. It
-is not a mirror ratio in the usual sense of a well minimum over a localized
-throat maximum, and this page already uses :math:`R_m` with that standard
-meaning in the loss-cone boundary below, so the closed case does not reuse the
-symbol. Neither is it the rotating elliptical cross-section. On the seeded
-state the ratio equalled
-:math:`(\mathrm{semi\_major}/\mathrm{semi\_minor})^2` to five digits and was
-independent of every length in the configuration; that identity is a seed
-artifact. Sampling the same field line on solved equilibria:
-
-* it is 1.03801 where the elongation squared is 1.77778, and it is not a
-  function of the elongation alone: ``0.5/0.25`` and ``0.4/0.2`` share an
-  elongation squared of 4.00000 and give 1.11730 and 1.09976;
-* it still grows with elongation, but far more weakly --- ``0.4/0.3`` 1.03801,
-  ``0.45/0.3`` 1.05920, ``0.4/0.2`` 1.09976, ``0.5/0.25`` 1.11730;
-* a circular section (``semi_major == semi_minor``) gives 1.00743 rather than
-  the seed's exact 1.00000, so the solved configuration retains a small
-  parallel field-strength modulation that the seed had none of;
-* it now moves with ``return_radius`` --- one of the two lengths a mirror ratio
-  would be built from --- giving 1.07587, 1.03801 and 1.02031 at 1.0, 2.0 and
-  4.0. It stays nearly flat in ``straight_length``, spanning 1.03603 to 1.03801
-  as that runs from 2.0 to 16.0;
-* it ranges over 1.010 to 1.221 across the field lines of the sampled surface
-  and over 1.023 to 1.039 across its radial stations, so it labels one flux
-  tube rather than the device.
-
-The recorded value 1.03801 is therefore a flux-tube field-strength modulation
-depth, and the loss-cone formula below must not be applied to it.
+The recorded ``bmag_max_over_min`` is that modulation depth, 1.03801. It is
+not a mirror ratio in the usual sense of a well minimum over a localized
+throat maximum, and this page uses :math:`R_m` with that standard meaning in
+the loss-cone boundary below, so the closed case does not reuse the symbol.
+Nor does it track the rotating elliptical cross-section: the elongation
+squared is 1.77778, and the identity between the two (1.77849) held only on the
+seeded state. On solved equilibria the ratio moves with ``return_radius``, and
+it labels one flux tube rather than the device. The loss-cone formula below
+must not be applied to it.
 
 The ``bmag`` and metric panels are drawn with the parallel origin at the
 ``bmag`` minimum. The equal-arc grid otherwise lands ``z=0`` on a return bend,
 which draws a periodic circuit as a central barrier with half a well at each
 edge; centering on the field-strength minimum shows the same data as the well
-the periodicity implies. The convention changes no computed quantity. The
-parallel domain is periodic, and shifting the origin by 1, 8, 16, or -5 of the
-32 grid points moves every solver objective by at most :math:`9.8\times10^{-15}`
---- ``gamma``, ``omega``, and the mixing-length proxy are identical to
-round-off wherever ``z=0`` falls.
+the periodicity implies. The shift is display only: the record uses the
+unrolled geometry, and on the periodic parallel domain ``gamma``, ``omega``,
+and the mixing-length proxy do not depend on where ``z=0`` falls.
 
-Refining the axial basis converges the physics rather than moving it about:
-``coefficient_count`` 16 to 32 takes ``gamma`` from 0.07959 to 0.07425,
-``omega`` from -0.11279 to -0.09383, and the mixing-length proxy from 0.21721
-to 0.21158, while the residual stays at :math:`4.8\times10^{-3}`. That residual
-is the one quantity here that does not improve with resolution: on this
-racetrack the strong-form ``force.normalized_rms`` sits between
-:math:`4.6\times10^{-3}` and :math:`5.1\times10^{-3}` across every resolution
-measured, with no downward trend, while the weak-form measures and
-:math:`\nabla\cdot\mathbf{B}` reach machine precision. VMEX's closed lane
-asserts :math:`1.6\times10^{-4}` for its circular limit, which this
+The strong-form residual does not improve with resolution: on this racetrack
+``force.normalized_rms`` sits between :math:`4.6\times10^{-3}` and
+:math:`5.1\times10^{-3}` across ``ns`` 5--9, ``mpol`` 4--6 and
+``coefficient_count`` 16--64, with no downward trend, while the weak-form
+measures and :math:`\nabla\cdot\mathbf{B}` reach machine precision. VMEX's
+closed lane asserts :math:`1.6\times10^{-4}` for its circular limit, which this
 leg-and-bend axis does not reach. Whether that plateau is the curvature
 junction or something undriven is asked upstream in `uwplasma/vmex#211
-<https://github.com/uwplasma/vmex/issues/211>`__ and is not yet answered, so
-the residual is published as a measurement and the shipped case is gated only
-against being an unsolved state.
+<https://github.com/uwplasma/vmex/issues/211>`__, so the residual is published
+as a measurement and the shipped case is gated only against being an unsolved
+state.
 
-This page also tracks a 19 kB :download:`poster snapshot
-<_static/vmex_mirror_gkx_snapshot.webp>` and a 137 kB, 36-frame
-:download:`animated WebP loop <_static/vmex_mirror_gkx_loop.webp>`. The
-companion :download:`rotating field-line movie
-<_static/vmex_mirror_gkx_rotation.mp4>` follows the equal-arc marker around the
-same one-circuit-closing line at full frame rate. All media and their
-machine-readable :download:`run record
-<_static/vmex_mirror_gkx_showcase.json>` are regenerated with:
+The :download:`poster snapshot <_static/vmex_mirror_gkx_snapshot.webp>`, the
+:download:`animated WebP loop <_static/vmex_mirror_gkx_loop.webp>`, and the
+:download:`rotating field-line movie <_static/vmex_mirror_gkx_rotation.mp4>`
+show the same one-circuit-closing line. All media and their machine-readable
+:download:`run record <_static/vmex_mirror_gkx_showcase.json>`, which stamps the
+GKX and VMEX commits it was built with, are regenerated with:
 
 .. code-block:: bash
 
-   PYTHONPATH=/path/to/GKX/src:/path/to/VMEX \
-     python scripts/artifacts/build_vmex_mirror_gkx_artifacts.py
+   PYTHONPATH=src python scripts/artifacts/build_vmex_mirror_gkx_artifacts.py
 
-This page carried a second record, ``vmex_mirror_gkx_performance.json``, which
-reported CPU/GPU float64 parity, a centered-finite-difference derivative check,
-JIT timings, and device allocation for a smaller acceptance case. It has been
-deleted. No generator for it was ever committed on any branch, it stamped no
-commit, jax version, or date, and its parity quantities were evaluated on the
-seeded state rather than an equilibrium. GKX's CPU/GPU float64 parity evidence
-is the tracked ``nonlinear_window_device_parity.json`` record described in
-:doc:`nonlinear_autodiff`, which has a generator, a gate, and a stated case.
+with VMEX importable at the commit the record names.
 
 The closed-field-line construction follows the straight-field-line mirror
 coordinates of Ågren and Savenko and the paraxial rotating-ellipse fixtures in
@@ -433,8 +398,8 @@ missing open-boundary physics:
 * `Rosen et al., full-f kinetic mirror equilibria (2026)
   <https://arxiv.org/abs/2604.11684>`__.
 
-Open-ended mirrors: model-admission review
-------------------------------------------
+Open-ended mirrors are out of scope
+-----------------------------------
 
 An open mirror is not a different endpoint option for the periodic flux-tube
 solver. Particles cross physical end planes, the loss cone changes the
@@ -444,8 +409,8 @@ adjusts the electron and ion loss rates. These pieces form one kinetic model.
 Endpoint damping or a zero-incoming-value rule by itself is only a numerical
 outflow experiment.
 
-The minimum conservative one-dimensional reference problem evolves a full
-distribution ``f_s(z, v_parallel, mu, t)``:
+The minimum conservative one-dimensional model evolves a full distribution
+``f_s(z, v_parallel, mu, t)``:
 
 .. math::
 
@@ -462,67 +427,38 @@ distribution ``f_s(z, v_parallel, mu, t)``:
    \qquad
    \mathcal E_s=\frac{m_s v_\parallel^2}{2}+\mu B+q_s\phi.
 
-Here ``mathcal J`` is the gyrocentre phase-space Jacobian. In a static smooth
-field, the collisionless interior must preserve magnetic moment ``mu`` and
-energy ``mathcal E_s`` to the scheme's order. With midplane field ``B_0`` and
-throat field ``B_m``, the zero-potential loss-cone boundary is
+Here :math:`\mathcal J` is the gyrocentre phase-space Jacobian. In a static
+smooth field, the collisionless interior must preserve magnetic moment
+:math:`\mu` and energy :math:`\mathcal E_s` to the scheme's order. With
+midplane field :math:`B_0` and throat field :math:`B_m`, the zero-potential
+loss-cone boundary is
 
 .. math::
 
    \sin^2\vartheta_{lc}=\frac{B_0}{B_m}=\frac{1}{R_m}.
 
-An electrostatic barrier shifts this boundary through ``mathcal E_s``; it must
-not be represented by changing the geometric mirror ratio. At an end plane,
-outgoing characteristics leave the domain. Incoming characteristics require a
-declared absorbing, logical-sheath, or conducting-sheath rule. A kinetic sheath
-must derive its reflection cutoff from the end potential and field solve, not
-from a fixed velocity mask. Sources must state their particle and energy
-injection, and the collision operator must state which invariants it preserves
-and how it repopulates the loss cone.
+An electrostatic barrier shifts this boundary through :math:`\mathcal E_s`; it
+must not be represented by changing the geometric mirror ratio. At an end
+plane, outgoing characteristics leave the domain and incoming characteristics
+need a declared absorbing, logical-sheath, or conducting-sheath rule, with the
+reflection cutoff derived from the end potential and field solve. Sources must
+state their particle and energy injection, and the collision operator must
+state which invariants it preserves and how it repopulates the loss cone.
 
-The ownership boundary is therefore:
+VMEX owns the open equilibrium, axis/surface geometry, ``B(z)``, metric and
+drift arrays, physical end planes, and geometry differentiation. The
+conservative phase-space fluxes, velocity-space boundaries, positivity,
+sources, collisions, and field/sheath closure belong to an open-kinetic model,
+and GKX's local-Maxwellian delta-f core is not one. GX, GS2, stella, and
+gyaradax are periodic/twist-linked flux-tube references, and their endpoint
+machinery is not evidence for an open model. The primary references are the
+full-f conservative open-field-line formulation and sheath treatment of `Shi et
+al. (2017) <https://doi.org/10.1017/S002237781700037X>`__, the high-field-mirror
+study of `Francisquez et al. (2023) <https://arxiv.org/abs/2305.06372>`__, and
+the review of classical end-loss processes by `Baldwin (1977)
+<https://doi.org/10.1103/RevModPhys.49.317>`__.
 
-* VMEX owns the open equilibrium, axis/surface geometry, ``B(z)``, metric and
-  drift arrays, physical end planes, and geometry differentiation;
-* an admitted open-kinetic owner must own conservative phase-space fluxes,
-  velocity-space boundary treatment, positivity, sources, collisions, and the
-  electrostatic field/sheath closure;
-* GKX may consume that model only after its background ordering is compatible
-  with GKX's public claim. The present local-Maxwellian delta-f core is not
-  such an owner.
-
-GX, GS2, stella, and gyaradax remain valuable periodic/twist-linked
-flux-tube references, but their endpoint machinery is not evidence for this
-open model. The appropriate primary references are the full-f conservative
-open-field-line formulation and sheath treatment of `Shi et al. (2017)
-<https://doi.org/10.1017/S002237781700037X>`__ and the high-field-mirror study
-of `Francisquez et al. (2023) <https://arxiv.org/abs/2305.06372>`__. The
-classical end-loss processes and their collision dependence are reviewed by
-`Baldwin (1977) <https://doi.org/10.1103/RevModPhys.49.317>`__.
-
-Admission is prospective and ordered:
-
-1. **Interior invariants.** On an open grid with no end encounter, verify
-   manufactured streaming order, phase-space conservation, ``mu`` and
-   ``mathcal E_s``, mirror turning points, and bounce periods.
-2. **Characteristic boundaries.** In uniform ``B``, verify exact advection,
-   no incoming contamination, particle/energy flux accounting, positivity,
-   and velocity/grid convergence for each boundary rule.
-3. **Source--collision balance.** Demonstrate a stationary full-f state with
-   independently audited particle and energy balances and converged loss-cone
-   population. A local-Maxwellian delta-f source is not sufficient evidence.
-4. **Ambipolar potential.** Couple the field and sheath model, converge the
-   electron/ion end currents, and compare potential and confinement-time
-   trends with Pastukhov theory and published Gkeyll mirror inputs.
-5. **Multidimensional turbulence.** Only after the one-dimensional gates pass,
-   add perpendicular dynamics and compare growth, saturation, fluxes, and end
-   loads at increasing phase-space resolution.
-
-Strong mirror forces may be softened only as a controlled acceleration. Every
-softened production result needs an unsoftened resolution sequence showing
-convergence of potential, loss rate, energy balance, and the claimed
-observable. Until all gates above have an approved owner and evidence, GKX
-supports closed periodic mirror hybrids only and makes no open-mirror,
+GKX supports closed periodic mirror hybrids only and makes no open-mirror,
 Pastukhov, sheath, or confinement-time claim.
 
 VMEX WOUT geometry
@@ -540,70 +476,59 @@ reconstructing or re-solving an equilibrium:
 This route calls only
 ``vmex.core.turbulence.gk_fieldline_geometry_from_wout``; VMEX owns file
 reading, spectral evaluation, normalization, metrics, and drifts, while GKX
-continues to own only the generic contract and its consumption.
+owns only the generic contract and its consumption.
 
-The release validation artifact is generated by:
+Differentiable geometry bridge validation
+-----------------------------------------
+
+The validation record is generated by:
 
 .. code-block:: bash
 
    JAX_ENABLE_X64=1 PYTHONPATH=src \
      python examples/theory_and_demos/differentiable_geometry_bridge.py
 
-It writes ``docs/_static/differentiable_geometry_bridge.json`` together with a
-companion panel render (the render is regenerated on demand and is not
-tracked in git). The JSON records
-``vmex`` and ``booz_xform_jax`` API availability, autodiff-vs-finite
-difference sensitivity errors, inverse-design convergence, local UQ covariance
-diagnostics, and seven optional real-backend derivative gates: a ``vmex``
-boundary-aspect check, a ``vmex`` metric-tensor check through
-``vmex.geom.eval_geom``, a stellarator VMEC field-line tensor check through
-``vmex.geom`` plus ``vmex.vmec_bcovar``, a direct VMEC
-tensor-derived flux-tube mapping check, a tiny ``booz_xform_jax``
-Boozer-spectrum check, a bounded Boozer-spectrum-to-flux-tube mapping check, and a real
-``vmex`` ``VMECState`` to ``booz_xform_jax`` to GKX field-line
-geometry check. The metric-tensor gate currently has max absolute
-AD-vs-finite-difference error about ``5.9e-8`` and max relative error about
-``1.3e-7``. The field-line tensor gate uses the non-axisymmetric
-``nfp4_QH_warm_start`` fixture and checks ``|B|`` ripple plus sampled VMEC
-metric observables before any reduced GKX metric/drift closure is
-applied; its current max absolute AD-vs-finite-difference error is about
-``2.1e-3`` and max relative error is about ``2.4e-5``. The direct VMEC
-flux-tube gate inverts the sampled VMEC metric tensor, derives ``gds*``,
-``gradpar``, Jacobian, ``grho``, and a local grad-:math:`B` drift closure, and
-checks the resulting solver-ready geometry observables; the current max
-relative AD-vs-finite-difference error is about ``1.3e-4`` on the
-``nfp4_QH_warm_start`` fixture. The same artifact now also records a bounded
-VMEC/EIK array-parity audit for that direct tensor path. That audit currently
-keeps the full production gate open because the direct tensor path still uses
-a VMEC-coordinate/equal-theta sampling and local grad-:math:`B` closure.
-The same report now also runs a JAX-native ``vmex -> booz_xform_jax``
-Boozer equal-arc core audit. On the tracked ``nfp4_QH_warm_start`` fixture,
-that audit matches the imported convention for ``bmag``, the solver Jacobian,
-``gradpar``, ``q``, and ``s_hat`` with worst normalized/scalar errors
-``4.5e-3`` and ``2.4e-3``; the derivative-like ``bgrad`` check is recorded
-separately and is ``2.3e-2``. The same JAX-native path now reconstructs the
-zero-beta Boozer metric profiles ``gds2``, ``gds21``, ``gds22``, and ``grho``
-with worst normalized mismatch ``3.45e-2`` and the loaded-convention zero-beta
-drift profiles ``cvdrift``, ``gbdrift``, ``cvdrift0``, and ``gbdrift0`` with
-worst normalized mismatch ``3.50e-2``. The remaining promotion gap is
-finite-beta and broader production-runtime drift parity beyond the tracked
-zero-beta equal-arc fixtures, not the Boozer equal-arc field-line or zero-beta
-metric/drift normalization on the tracked fixture.
-The Boozer gates evaluate
-the JAX-native Boozer ``|B|``
-spectrum along a field line, build the ``FluxTubeGeometryData`` input mapping,
-and compare geometry-observable sensitivities against central finite
-differences. In the current artifact the VMEC-state path has max absolute
-AD-vs-finite-difference error about ``5.8e-7`` and max relative error about
-``1.4e-8`` for the tracked geometry observables.
+It writes ``docs/_static/differentiable_geometry_bridge.json`` (the companion
+panel is regenerated on demand and is not tracked). The JSON records ``vmex``
+and ``booz_xform_jax`` API availability, autodiff-vs-finite-difference
+sensitivity errors, inverse-design convergence, local UQ covariance
+diagnostics, and seven optional real-backend derivative gates:
+
+- a ``vmex`` boundary-aspect check;
+- a ``vmex`` metric-tensor check through ``vmex.geom.eval_geom``, with maximum
+  absolute and relative AD-vs-finite-difference errors of about ``5.9e-8`` and
+  ``1.3e-7``;
+- a stellarator VMEC field-line tensor check through ``vmex.geom`` plus
+  ``vmex.vmec_bcovar`` on the non-axisymmetric ``nfp4_QH_warm_start`` fixture,
+  which checks ``|B|`` ripple and sampled VMEC metric observables before any
+  reduced GKX metric/drift closure, at about ``2.1e-3`` absolute and ``2.4e-5``
+  relative;
+- a direct VMEC tensor-derived flux-tube mapping check, which inverts the
+  sampled metric tensor, derives ``gds*``, ``gradpar``, Jacobian, ``grho``, and
+  a local grad-:math:`B` drift closure, at a maximum relative error of about
+  ``1.1e-4`` on ``nfp4_QH_warm_start``;
+- a small ``booz_xform_jax`` Boozer-spectrum check;
+- a bounded Boozer-spectrum-to-flux-tube mapping check;
+- a real ``vmex`` state to ``booz_xform_jax`` to GKX field-line geometry check,
+  at about ``5.8e-7`` absolute and ``1.4e-8`` relative for the tracked geometry
+  observables.
+
+The same record carries a VMEC/EIK array-parity audit of the direct tensor
+path, which stays ``diagnostic_open``: that path uses a
+VMEC-coordinate/equal-theta sampling and a local grad-:math:`B` closure. The
+JAX-native ``vmex -> booz_xform_jax`` Boozer equal-arc core does match the
+imported convention on ``nfp4_QH_warm_start``: ``bmag``, the solver Jacobian,
+``gradpar``, ``q``, and ``s_hat`` to worst normalized/scalar errors ``4.5e-3``
+and ``2.4e-3``, the derivative-like ``bgrad`` to ``2.3e-2``, the zero-beta
+metric profiles ``gds2``, ``gds21``, ``gds22``, and ``grho`` to ``3.45e-2``, and
+the loaded-convention zero-beta drift profiles ``cvdrift``, ``gbdrift``,
+``cvdrift0``, and ``gbdrift0`` to ``3.50e-2``.
 
 The reusable API entry point for this workflow is
 ``geometry_inverse_design_report(mapping_fn, initial_params, target_observables, ...)``:
 it runs a bounded Gauss-Newton inverse design on selected solver-ready
 geometry observables, checks the final sensitivity Jacobian against central
-finite differences, and records local covariance diagnostics. High-fidelity
-``vmex`` / ``booz_xform_jax`` optimization examples should use the same
-contract once their in-memory field-line mapping is available.
+finite differences, and records local covariance diagnostics.
 
 The gradient-report API accepts ``jacobian_chunk_size``. ``None`` evaluates
 all forward directions in one ``vmap``; an integer bounds the simultaneous
@@ -614,31 +539,28 @@ agree before a report can support an optimization claim.
 
 ``jacobian_mode`` separately controls derivative direction. ``"forward"`` is
 appropriate for few design variables, ``"reverse"`` for few observables, and
-``"auto"`` selects between them from the input/output dimensions. Requesting
-chunking forces forward mode because the chunk size budgets simultaneous JVP
-directions. Reports record the resolved mode, and both explicit modes must
-agree with central finite differences before either is used in optimization.
+``"auto"`` selects between them from the input/output dimensions. A chunk size
+budgets simultaneous JVP directions, so ``"auto"`` resolves to forward mode
+when one is given and ``"reverse"`` with a chunk size is rejected. Reports
+record the resolved mode, and both explicit modes must agree with central
+finite differences before either is used in optimization.
 
 The bridge validates more than array shapes. Host-side mappings must contain
 finite scalar metadata such as ``q``, ``R0``, ``B0``, and ``theta_scale``,
 must provide at least one ``theta`` sample, and must use a positive integer
-``nfp``. JAX-traced mappings can still be passed with
-``validate_finite=False`` so autodiff transforms do not attempt host NumPy
-checks during tracing. The finite-difference utilities used by these gates
-also reject non-positive step sizes, and the inverse-design covariance block
-records rank and conditioning before any optimization result is promoted from
-local sensitivity evidence to a transport-design claim.
-Each geometry AD/finite-difference gate now also records a compact
-``conditioning`` block alongside the raw Jacobians. That block includes finite
-flags for the AD and finite-difference Jacobians, singular values, numerical
-rank, condition number, AD row/column norms, per-parameter finite-difference
-step scaling, and the observable/parameter location of the worst absolute and
-relative AD/FD mismatch. This metadata is intentionally separate from the pass
-tolerance: a derivative can agree with finite differences and still be a poor
-optimization direction if the sensitivity map is nearly rank deficient or if
-the finite-difference step is not well scaled to the chosen VMEC coefficient.
-Research artifacts should quote both the derivative error and this conditioning
-metadata before treating a VMEC/Boozer bridge row as optimization-ready.
+``nfp``. The finite-difference utilities reject non-positive step sizes, and
+the inverse-design covariance block records rank and conditioning. Each
+geometry AD/finite-difference gate also records a ``conditioning`` block
+alongside the raw Jacobians: finite flags for the AD and finite-difference
+Jacobians, singular values, numerical rank, condition number, AD row/column
+norms, per-parameter finite-difference step scaling, and the
+observable/parameter location of the worst absolute and relative mismatch.
+This metadata is separate from the pass tolerance: a derivative can agree with
+finite differences and still be a poor optimization direction if the
+sensitivity map is nearly rank deficient or the finite-difference step is
+poorly scaled to the chosen VMEC coefficient. Quote both the derivative error
+and the conditioning metadata before treating a VMEC/Boozer bridge row as
+optimization-ready.
 
 Growth-rate transport-gradient audits also need an eigenbranch-locality check.
 The public helper
@@ -651,15 +573,10 @@ the eigenvalue nearest to the base dominant eigenvalue for every configured
 surface, field line, and ``k_y`` sample. If the independently selected
 max-growth branch switches, or if the base branch is under-isolated, the report
 fails closed and labels the row before any transport-gradient optimization
-claim is admitted. Current VMEC-JAX exposes the equilibrium implicit derivative through its public
-optimization API. GKX growth campaigns select that policy with
-``--jacobian implicit`` and retain the branch-locality report as a package-level
-physics gate. Historical frozen-axis boundary-chain artifacts remain in
-``docs/_static`` as conditioning evidence, but their private-tape executable was
-removed when VMEC-JAX retired that optimizer generation. New derivative claims
-require the current VMEC-JAX turbulence tangent tests, GKX eigenbranch
-locality checks, and an independent finite-difference comparison on the exact
-objective used by the campaign.
+claim is admitted. A derivative claim requires VMEX's turbulence tangent tests,
+this locality check, and an independent finite-difference comparison on the
+exact objective. The ``vmex_boundary_chain_*.json`` records in
+``docs/_static`` are conditioning evidence only.
 
 The reusable low-level entry point is
 ``observable_gradient_validation_report(observable_fn, params, ...)``. It
@@ -671,77 +588,36 @@ diagnostic numbers are written as ``null`` while the corresponding finite flag
 and failure reason remain explicit. ``geometry_sensitivity_report`` is a thin
 ``FluxTubeGeometryData`` wrapper around the same helper.
 
-For ``vmex`` and ``booz_xform_jax`` this remains a bridge contract, not a
-claim that GKX has run a full optimization. The upstream JAX pipeline
-must first produce the sampled solver-ready field-line arrays accepted by
-``flux_tube_geometry_from_mapping``. Passing the reusable AD/finite-difference
-gate proves local differentiability and conditioning of the supplied
-observables; production stellarator optimization still requires the VMEC/Boozer
-array parity, solver-objective gradient, and nonlinear transport gates
-described below.
-
-**Generated figure.** Differentiable geometry bridge validation. The panel checks
-boundary-control
-sensitivities, geometry-observable Jacobians, a two-parameter inverse design,
-and local UQ covariance at the in-memory flux-tube contract boundary. When
-``vmex`` is available, the panel/JSON also includes a real VMEC
-boundary-aspect derivative check and sampled VMEC metric-tensor derivative
-check, plus a real VMEC field-line tensor check for a non-axisymmetric
-fixture, a direct VMEC tensor-derived flux-tube mapping check, and a
-Boozer equal-arc core/metric parity check against the imported VMEC/EIK
-geometry; when
-``booz_xform_jax`` is available, it runs a bounded JAX-native
-Boozer spectral transform, samples that spectrum onto a field-line
-flux-tube mapping, checks both autodiff derivative paths against central
-finite differences, and, when both optional backends are available, starts
-from a real ``vmex`` ``VMECState`` before converting through
-``booz_xform_jax`` into the GKX field-line contract.
-
+Passing these gates proves local differentiability and conditioning of the
+supplied observables. It is not a claim that GKX has run a full stellarator
+optimization, which also needs the VMEC/Boozer array parity, solver-objective
+gradient, and nonlinear transport gates below.
 
 Multi-Equilibrium Boozer Parity Matrix
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The single-fixture bridge artifact is complemented by a replayable
-multi-equilibrium matrix tracked at
-``docs/_static/vmec_boozer_parity_matrix.json``; the ``{png,pdf,csv}``
-companions are regenerated on demand by the builder and are not tracked in
-git.
-The builder enforces ``mboz,nboz >= 21`` before calling the real optional
-backend path, because the QI drift gate is under-resolved at lower Boozer mode
-counts. The JSON now includes a ``sample_set_provenance`` block and the
-regenerated CSV companion
-includes a ``sample_set_id`` column so each bounded row is identified by
-``case_name``, ``ntheta``, ``mboz``, and ``nboz``. That provenance block also
-records that the builder does not launch external VMEC solves; input-only QI
-variants remain explicitly artifact-limited until a bundled ``wout`` reference
-exists. The tracked matrix covers the ``nfp4_QH_warm_start``,
-``nfp3_QI_fixed_resolution_final``, and ``shaped_tokamak_pressure`` examples.
-At ``mboz=nboz=21`` the current regenerated artifact passes all matrix rows.
-The fixed-resolution QI case passes the loaded-convention drift subgate with
-mismatch about ``7.13e-2`` against an ``8e-2`` release tolerance after fixing
-the Boozer half-mesh radial-index convention. The evaluated QI robustness
-variants at ``ntheta=8`` and ``ntheta=16`` also pass. The broader QI seed
-campaign is still artifact-limited because three input-only QI seeds have no
-bundled ``wout`` references, and none of this is broad random-seed nonlinear
-QI transport validation or QI optimization. The release guard now requires the
-finite-beta/pressure ``shaped_tokamak_pressure`` equal-arc row, so the current
-claim cannot silently regress to zero-beta-only parity evidence. Finite-beta
-solver-objective geometry gradients, broader production-runtime
-pressure-correction drift audits, and nonlinear transport optimization remain
-explicitly scoped as follow-up work.
+The replayable multi-equilibrium matrix is tracked at
+``docs/_static/vmec_boozer_parity_matrix.json``; its ``{png,pdf,csv}``
+companions are regenerated on demand by the builder and are not tracked. Each
+cell of the figure reports the absolute mismatch for one subgate, coloured by
+mismatch over tolerance. The builder enforces ``mboz,nboz >= 21`` before
+calling the optional backend path, because the QI drift gate is under-resolved
+at lower Boozer mode counts. A ``sample_set_provenance`` block and a
+``sample_set_id`` CSV column identify each bounded row by ``case_name``,
+``ntheta``, ``mboz``, and ``nboz``, and record that the builder launches no
+external VMEC solves.
 
-**Generated figure.** VMEC/Boozer equal-arc parity matrix. Each cell reports the
-absolute
-mismatch for one subgate, while the color shows mismatch divided by the
-relevant tolerance. The matrix is generated from the actual optional
-``vmex`` and ``booz_xform_jax`` bridge path and rejects Boozer mode
-counts below 21.
-
-
-The next implementation step is to extend the same equal-arc path to
-finite-beta/production-runtime curvature and drift reconstruction, then replace
-the reduced estimator-gradient checks with converged transport-gradient and
-broader optimized-equilibrium audits beyond the selected QA candidate.
+The matrix covers ``nfp4_QH_warm_start``, ``nfp3_QI_fixed_resolution_final``,
+and the finite-beta ``shaped_tokamak_pressure`` example, and at
+``mboz=nboz=21`` every row passes its equal-arc gates. The fixed-resolution QI
+row passes the loaded-convention drift subgate at ``7.13e-2`` against an
+``8e-2`` tolerance. The evaluated QI robustness variants at ``ntheta=8`` and
+``ntheta=16`` also pass. Input-only QI seeds without a bundled ``wout``
+reference are rejected with an ``artifact_reason`` rather than solved, so the
+declared QI seed campaign is artifact-limited. None of this is broad
+random-seed nonlinear QI transport validation or QI optimization. The release
+guard requires the finite-beta ``shaped_tokamak_pressure`` row, so the claim
+cannot regress to zero-beta-only parity evidence.
 
 In-memory differentiable geometry API
 -------------------------------------
@@ -754,8 +630,8 @@ Differentiable stellarator optimization must stay on the in-memory path:
 
    geom = flux_tube_geometry_from_vmec_boozer_state(
        state,
-       static,
-       indata,
+       runtime,
+       inp,
        wout,
        surface_index=surface_index,
        alpha=0.0,
@@ -765,143 +641,58 @@ Differentiable stellarator optimization must stay on the in-memory path:
    )
 
 This public wrapper converts a solved ``vmex`` state through
-``booz_xform_jax`` and returns the existing GKX
-``FluxTubeGeometryData`` solver contract. The path is
-``VMECState -> BoozXformInputs -> Boozer coefficients -> FluxTubeGeometryData``
+``booz_xform_jax`` and returns the GKX ``FluxTubeGeometryData`` solver
+contract. The path is
+``SpectralState -> Boozer tables -> booz_xform_jax -> FluxTubeGeometryData``
 and does not write or reload ``*.eik.nc`` files. The file-backed VMEC/EIK route
-remains the right runtime import path for ordinary examples, but it is not the
-path to use for end-to-end differentiable optimization.
+is the runtime import path for ordinary examples, but not the path for
+end-to-end differentiable optimization.
 
-The current wrapper is a production API boundary, not a new physics claim. It
-inherits the same ``mboz,nboz >= 21`` and equal-arc parity requirements as the
-VMEC/Boozer gates. Full stellarator-optimization claims still require
-multi-surface/multi-field-line objective gates and nonlinear heat-flux audits
-of optimized equilibria.
+The wrapper is an API boundary, not a new physics claim. It inherits the
+``mboz,nboz >= 21`` and equal-arc parity requirements of the VMEC/Boozer
+gates. The parity-matrix tests reject ``mboz,nboz < 21`` and assert that a
+passed equal-arc matrix is still tagged as
+``not_full_transport_gradient_claim``. The gradient-holdout tests require the
+``mode21_vmec_boozer_state`` source scope, ``mboz,nboz >= 21``, and track the
+nonlinear-window estimator objectives as a reduced differentiability gate
+rather than a production nonlinear-optimization gate.
 
-The lightweight readiness tests mirror that claim boundary. The parity-matrix
-tests reject ``mboz,nboz < 21`` and assert that a passed equal-arc matrix is
-still tagged as ``not_full_transport_gradient_claim``. The gradient-holdout
-tests require the ``mode21_vmec_boozer_state`` source scope, ``mboz,nboz >= 21``,
-and explicitly track the nonlinear-window estimator objectives as a reduced
-differentiability gate rather than a production nonlinear-optimization gate.
 The release guard
-``docs/_static/vmec_boozer_differentiability_claim_guard.json`` now checks
-those contents directly: it requires the equal-arc parity matrix, the QH/Li383
+``docs/_static/vmec_boozer_differentiability_claim_guard.json`` checks those
+contents directly. It requires the equal-arc parity matrix, the QH/Li383
 mode-21 frequency/quasilinear/nonlinear-window gradient holdouts, explicit
 ``diagnostic_open`` status for the direct VMEC tensor-vs-imported-EIK
-convention gap, a passing finite-beta/pressure equal-arc parity row, and a
-startup-only label for the nonlinear finite-difference audit. It now also
-requires the shaped-pressure finite-beta eigenfrequency-gradient gate in
-``docs/_static/vmec_boozer_shaped_pressure_solver_frequency_gradient_gate.json``
-and the shaped-pressure finite-beta quasilinear-gradient gate in
-``docs/_static/vmec_boozer_shaped_pressure_quasilinear_gradient_gate.json``.
-It also requires the shaped-pressure finite-beta reduced nonlinear-window
-estimator-gradient gate in
-``docs/_static/vmec_boozer_shaped_pressure_nonlinear_window_gradient_gate.json``.
+convention gap, a passing finite-beta/pressure equal-arc parity row, a
+startup-only label for the nonlinear finite-difference audit, and three
+shaped-pressure finite-beta gates:
+
+- the eigenfrequency-gradient gate in
+  ``docs/_static/vmec_boozer_shaped_pressure_solver_frequency_gradient_gate.json``;
+- the quasilinear-gradient gate in
+  ``docs/_static/vmec_boozer_shaped_pressure_quasilinear_gradient_gate.json``;
+- the reduced nonlinear-window estimator-gradient gate in
+  ``docs/_static/vmec_boozer_shaped_pressure_nonlinear_window_gradient_gate.json``.
+
 A tagged release must fail if these artifacts try to promote a direct
 tensor-parity failure or a startup nonlinear-window response into a converged
-nonlinear transport-gradient claim.
-The same guard also checks the solver-objective content of each QH/Li383
-gradient row: frequency rows must carry ``gamma`` and ``omega``; quasilinear
-rows must additionally carry ``kperp_eff2``, ``linear_heat_flux_weight``, and
-``mixing_length_heat_flux_proxy``; nonlinear-window estimator rows must also
-carry the window mean, coefficient of variation, and trend metrics. The
-release thresholds are ``5e-2`` for frequency rows, ``2e-2`` for quasilinear
-rows, and ``7.5e-2`` for reduced nonlinear-window estimator rows. These are
-AD/finite-difference consistency gates, not nonlinear turbulence-gradient
-accuracy claims.
+nonlinear transport-gradient claim. The guard also checks the solver-objective
+content of each QH/Li383 gradient row: frequency rows must carry ``gamma`` and
+``omega``; quasilinear rows must additionally carry ``kperp_eff2``,
+``linear_heat_flux_weight``, and ``mixing_length_heat_flux_proxy``;
+nonlinear-window estimator rows must also carry the window mean, coefficient
+of variation, and trend metrics. The release thresholds are ``5e-2`` for
+frequency rows, ``2e-2`` for quasilinear rows, and ``7.5e-2`` for reduced
+nonlinear-window estimator rows. These are AD/finite-difference consistency
+gates, not nonlinear turbulence-gradient accuracy claims.
 
 For release claims, the differentiable-geometry lane is closed only for
 artifact-passing equal-arc parity rows, reduced QH/Li383
 AD/finite-difference objectives, and the shaped-pressure finite-beta
 eigenfrequency/quasilinear/reduced nonlinear-window estimator-gradient gates.
-The fixed-resolution QI row and evaluated QI ``ntheta`` variants now pass, but
-production nonlinear heat-flux optimization and finite-beta converged
-transport-gradient gates are still open.
-The active publication wording must keep these levels separate: the current
-bridge starts at real ``vmex`` state coefficients and reaches GKX
-solver observables, but it has not yet validated converged nonlinear
-turbulence gradients, broad QI transport behavior, or nonlinear audits of
-optimized equilibria.
-The VMEC bridge now also expands environment variables in ``geometry.vmec_file``.
-The shipped portable runtime TOMLs now point to relative ``wout_*.nc`` paths
-under ``examples/vmec``. Generate those WOUT files locally from the bundled
-``vmex`` input decks with ``examples/vmec/generate_wouts.sh`` or a single
-``vmex input.<case>`` command. Environment variables and ``--vmec-file``
-remain useful for machine-specific validation equilibria, but they are no
-longer required for the bundled demos.
-For future validation-lane selection, the external ``vmex`` example-data
-portfolio can be inventoried without copying those VMEC files into this
-repository. The inventory artifact
-``docs/_static/vmex_equilibrium_inventory.{png,pdf,json}`` was an
-equilibrium-selection aid only and is no longer tracked in git (it was
-removed with the other reproducible sidecars in the repository-slimming
-passes). It excluded VMEC files with
-degenerate reference-scale metadata from the recommended follow-up list, but it
-still does not validate quasilinear transport until each selected VMEC
-equilibrium also has matched linear and nonlinear GKX runs and physics
-gates. The first bounded smoke checks have finite stable linear branches for
-Li383, nfp4 QH, CTH-like, and shaped-tokamak fixtures from
-``vmex/examples/data``; those checks only validate the runtime geometry and
-quasilinear-feature plumbing, not nonlinear transport.
-The nonlinear W7-X and HSX startup audits now confirm that this VMEC runtime
-path reproduces GX startup ``g_state`` and ``phi`` to roundoff when the
-generated ``*.eik.nc`` is rebuilt from the same VMEC input.
-The late-time W7-X diagnostic-state audit now also matches GX on the exact
-dumped nonlinear state once the comparison tool reconstructs the compressed
-real-FFT positive-``ky`` dump grid directly from ``diag_state_ky_t*.bin``. The
-tracked exact-state audit ``docs/_static/w7x_exact_state_audit.json`` (its
-panel render is regenerated on demand and is not tracked in git) records a
-maximum finite pointwise relative error of ``4.62e-5`` under the explicit
-``1e-4`` convention gate, with late scalar diagnostics below ``1.8e-7``. That
-closes the remaining imported-geometry diagnostic-contract gap for nonlinear
-VMEC cases: startup, ``phi``, ``kperp2``, ``fluxfac``, ``Wg``, ``Wphi``, and
-heat flux all agree on the same GX state.
-The follow-on exact-state linear audit on that same W7-X dump now also matches
-GX to roundoff. The remaining operator-level fixes were:
-
-- treat ``boundary = "fix aspect"`` and ``"continuous drifts"`` as GX linked
-  twist-and-shift boundaries in the linear cache, and
-- include the GX collision-conservation correction on top of the
-  Lenard-Bernstein damping term.
-
-With those in place, the imported VMEC/eik bridge, the late-time linear RHS,
-and the late-time nonlinear E x B diagnostics all agree with GX on the same
-dumped stellarator state. The final nonlinear W7-X free-run mismatch then
-collapsed once the runtime de-alias mask matched GX exactly: the two-thirds
-cutoff must be strict (``< 1/3``), not inclusive. With that correction, the
-tracked stock-GX W7-X ``t = 200`` VMEC runtime rerun also passes the native
-late-window comparison, so the shipped nonlinear W7-X example is now closed at
-startup, exact-state, and long-horizon levels.
-
-Tokamak Miller geometry now follows the same imported-geometry bridge pattern.
-With ``geometry.model = "miller"``, the in-package geometry backend
-constructs the Miller surface, straight-field-line and equal-arc grids, metric
-and drift coefficients, writes a root-level ``*.eiknc.nc`` file, and then
-re-enters the same imported-geometry contract described above. An existing
-generated target is reused unless ``gkx geometry miller --force`` is
-requested; this makes repeated runs cheap while keeping explicit regeneration
-available after changing an input deck.
-On the tracked Cyclone Miller parameters, the generated ``*.eiknc.nc`` file
-matches the clean GX grouped ``Geometry`` arrays to roundoff in the main
-metric and drift profiles. With the root-level open/closed theta inference
-corrected, the clean-mainline Cyclone Miller late-state audit also now closes
-on the exact dumped GX state: ``kperp2``, ``fluxfac``, ``phi``, ``Wg``,
-``Wphi``, and heat flux all match to roundoff on the same nonlinear state.
-
-Two user-facing entry points now exercise that bridge:
-
-- ``gkx geometry vmec --config ...`` generates a compatible
-  ``*.eik.nc`` file from a GKX runtime TOML.
-- ``gkx geometry miller --config ...`` generates a compatible
-  Miller ``*.eiknc.nc`` file from a GKX runtime TOML, or reuses the
-  existing target when its path is already populated.
-- ``examples/nonlinear/non-axisymmetric/hsx_nonlinear_vmec_geometry.py`` and
-  ``examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml`` run a nonlinear
-  adiabatic-electron ITG case on the bundled QHS VMEC input deck after its
-  ``wout_NuhrenbergZille_1988_QHS.nc`` file is generated with ``vmex``.
-  They still accept ``--vmec-file`` for exact HSX validation WOUTs while
-  letting GKX generate and reuse the field-line geometry automatically.
+The bridge starts at real ``vmex`` state coefficients and reaches GKX solver
+observables. It has not validated converged nonlinear turbulence gradients,
+broad QI transport behavior, nonlinear heat-flux optimization, or nonlinear
+audits of optimized equilibria.
 
 VMEC and Miller runtime examples
 --------------------------------
@@ -913,7 +704,7 @@ VMEC-driven stellarator runs:
    cd examples/vmec
    vmex input.nfp3_QI_fixed_resolution_final
    cd ../..
-   gkx run-runtime-nonlinear \
+   gkx run \
      --config examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml \
      --steps 200 \
      --out tools_out/w7x_vmec.out.nc
@@ -921,7 +712,7 @@ VMEC-driven stellarator runs:
    cd examples/vmec
    vmex input.NuhrenbergZille_1988_QHS
    cd ../..
-   gkx run-runtime-nonlinear \
+   gkx run \
      --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
      --steps 200 \
      --out tools_out/hsx_vmec.out.nc
@@ -930,11 +721,7 @@ Miller geometry runs:
 
 .. code-block:: bash
 
-   gkx run-runtime-nonlinear \
+   gkx run \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
      --steps 200 \
      --out tools_out/cyclone_miller.out.nc
-
-Imported geometry currently bypasses analytic twist-shift reconstruction and
-uses the provided grid as-is. That keeps the GX-import bridge honest while the
-native VMEC path is still being generalized.

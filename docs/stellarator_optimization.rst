@@ -25,13 +25,14 @@ It follows VMEX's QA mode ladder and adds one objective tuple:
 
    objective_function_terms = [
        (qs, 0.0, QA_PRIORITY),
-       (opt.aspect_ratio, 6.0, ASPECT_PRIORITY),
-       (opt.mean_iota, 0.42, IOTA_PRIORITY),
+       (opt.aspect_ratio, ASPECT_TARGET, ASPECT_PRIORITY),
+       (opt.mean_iota, IOTA_TARGET, IOTA_PRIORITY),
        (turbulent_transport, 0.0, transport_weight),
    ]
 
-The VMEC equilibrium is vacuum (``AM=0`` and ``PRES_SCALE=0``). GKX retains
-finite ITG drive with :math:`a/L_T=3` and :math:`a/L_n=1`.
+Here ``ASPECT_TARGET = 6.0`` and ``IOTA_TARGET = 0.42``. The VMEC equilibrium
+is vacuum (``AM=0`` and ``PRES_SCALE=0``). GKX retains finite ITG drive with
+:math:`a/L_T=3` and :math:`a/L_n=1`.
 
 Mathematical model
 ------------------

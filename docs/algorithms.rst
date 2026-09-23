@@ -108,6 +108,22 @@ reflectionless closure (Kanekar et al., JPP **81**, 305810104 (2015)) needs no
 tuning and does not beat a well-tuned hypercollision. Tables:
 :doc:`numerics`.
 
+Which hypercollision runs by default depends on the entry point:
+
+- A runtime deck (``RuntimeCollisionConfig``) takes the :math:`|k_z|`-proportional
+  Hermite branch, ``hypercollisions_kz = 1.0``, ``hypercollisions_const = 0.0``,
+  ``nu_hyper_m = 1.0``, and, when ``p_hyper_m`` is unset,
+  :math:`p_m = \min(20, \max(\lfloor N_m/2 \rfloor, 1))`
+  (``gkx.workflows.runtime.startup._default_hermite_hypercollision_exponent``).
+- ``LinearParams`` built directly takes the constant-coefficient branch,
+  ``hypercollisions_const = 1.0``, with a fixed ``p_hyper_m = 20.0``.
+
+A Laguerre sink (``nu_hyper_l``, ``nu_hyper_lm``) acts only through the
+constant-coefficient branch, so a deck that declares one while
+``hypercollisions_const = 0.0`` is refused rather than run without it. Every
+linear row of ``tools/evidence_ledger.toml`` declares the velocity-space
+regularization its deck applies; see :ref:`velocity-regularization`.
+
 The Laguerre direction is the one that has not closed. On the Cyclone s-alpha
 ITG mode at :math:`k_y\rho = 0.55`, the collisionless growth rate is still
 falling at :math:`N_\ell = 48`, and the eigenvector says why.
@@ -175,8 +191,7 @@ reference rows at this :math:`k_y` are unconverged truncation values, not
 converged growth rates. The working rule extracted from these runs -- a ladder
 is converged once the spectrum has no interior maximum and the upper quarter
 holds :math:`\lesssim 2\times 10^{-3}` of the free energy -- is a rule for this
-deck, not a general tolerance. Evidence: ``plan/log.md``, rows Q8 and Q16;
-plan section 0.5.
+deck, not a general tolerance. Evidence: ``plan/log.md``, rows Q8 and Q16.
 
 An independent implementation reproduces the collisional half of this. At
 :math:`\nu = 10^{-2}` GX agrees with GKX to :math:`\le 5\times10^{-7}` relative
@@ -278,14 +293,13 @@ the same gate and a failing pair raises. ``certify=False`` is the explicit
 opt-out for those three raw routes only; the pair is returned and reported as
 uncertified, with its residual.
 
-Why the raw routes fail closed rather than warn: on the linked Cyclone deck a
-bare ``KrylovConfig()`` -- whose default used to be ``propagator`` -- returned
-the wrong branch at relative residual 0.98--1.00. On an ETG deck the raw default
-returned wrong branches at 0.982--0.990 on every row of a three-point scan. A
-number that far from an eigenpair is not a tolerance question. A related defect
-was fixed at the same time: an Arnoldi breakdown returning a zero vector scored
-:math:`0/10^{-30} = 0` and "certified" on every gate, so a zero or non-finite
-eigenvector now has infinite residual. Evidence:
+Why the raw routes fail closed rather than warn: on the linked Cyclone deck the
+raw ``propagator`` route returned the wrong branch at relative residual
+0.98--1.00, and on an ETG deck at 0.982--0.990 on every row of a three-point
+scan. A number that far from an eigenpair is not a tolerance question. A zero
+or non-finite eigenvector is assigned infinite residual, so an Arnoldi
+breakdown that returns a zero vector cannot score :math:`0/10^{-30} = 0` and
+pass. Evidence:
 ``plan/research/scripts/2026-09-13-certify-eigenpair/``; contract and the API
 change it forced: :doc:`solvers`.
 
@@ -314,15 +328,19 @@ The dense path is bounded by memory, not speed: at :math:`n = 494{,}592` a
 complex128 operator alone would be 3.6 TiB. The matrix-free routes store a
 Krylov basis instead, :math:`O(nm)`.
 
-The current state of the shift-invert route is recorded rather than advertised.
-Two tolerance-schedule and factorization levers make it 2.8x faster than the
-configuration measured before them (443930 to 160254 matvec-equivalents, 748.2 s
-to 261.0 s), which is the first configuration in which matrix-free shift-invert
-beats the default at production size at all. It is still 1.15--1.22x fewer
-matvec-equivalents than ``adaptive``, against an adoption gate of three times
-fewer, so ``adaptive`` stays the default and no solver change followed. The
-binding constraint is now the preconditioner apply: with a free apply the same
-iteration count would be 27x under the gate. Full arm table: plan section 5.1.
+Shift-invert is selectable but is not the default. With
+``KrylovConfig(shift_preconditioner="pr3-cm")`` every inner FGMRES solve
+converges where the ``hermite-line`` preconditioner leaves all of them
+unconverged, and the certified pair agrees with ``adaptive`` to eight
+significant figures in :math:`\gamma`. It costs more: at
+:math:`(N_z, N_\ell, N_m) = (96, 8, 24)`, :math:`n = 18432`, ``pr3-cm`` takes
+220000 matvec-equivalents against 96700 for ``adaptive``. The z-local
+:math:`(\ell, m)` blocks of ``pr3-cm`` are factored by SOLVAX block-Thomas
+elimination (``solvax.block_thomas_factor_ops``, ``solvax>=0.22.0``), which
+stores 1.43--2.61x less than the dense inverse over :math:`N_\ell N_m` = 36--768
+and agrees with it to :math:`\le 8.9\times10^{-16}` relative per apply. Evidence:
+``plan/log.md``, rows Q28 and "SOLVAX block-Thomas and float32 structural
+gates"; contract: :doc:`solvers`.
 
 The nonlinear bracket and dealiasing
 ------------------------------------
@@ -389,8 +407,7 @@ in 20 of the 24 blocks that timed it, and the standalone RHS is 22% slower at
 32x32x24. The reading: the change halves launch counts but adds per-class stack
 concatenates, and on an idle machine the launches it removed were cheap while
 the extra data movement is not. Under contention the sign reverses, which is why
-a loaded-host A/B is not evidence. Nothing was reverted on this measurement and
-the forward-path cost is an open queue row.
+a loaded-host A/B is not evidence. The shared transforms ship.
 
 One graph per nonlinear route
 -----------------------------
@@ -461,6 +478,11 @@ differentiating through an iteration.
   runtime. The exact discrete derivative and centered finite differences agree
   to 1e-11 through 512 steps and 2.7e-9 at 1024, inside the 1e-6 gate, and part
   at 2048 where chaotic trajectory separation sets the useful window length.
+  The differentiated window is one module-level ``jax.jit``
+  (``_nonlinear_heat_flux_window_total``), so it compiles once and the compile
+  is reused across calls and across geometries of equal shape: on the shipped
+  Cyclone deck, compilations per call fell from 13 to 0 (``plan/log.md``,
+  PERF-ADJOINT, 2026-09-20).
 - **Supplied states** are projected onto the linked chain cover before they are
   differentiated, so the cotangent is exactly zero on rows that carry no physics
   forward.
