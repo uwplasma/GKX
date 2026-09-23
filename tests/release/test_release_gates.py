@@ -454,8 +454,8 @@ def test_tracked_quasilinear_train_holdout_reports_use_passed_nonlinear_gates() 
 
 import pytest
 
-from tools.release.check_release_readiness import TECHNICAL_COMPLETION_TARGET
-from tools.release.check_release_readiness import (
+from scripts.checks.check_release_readiness import TECHNICAL_COMPLETION_TARGET
+from scripts.checks.check_release_readiness import (
     ReleaseReadinessError,
     build_frozen_output_fingerprint,
     check_release_readiness,
@@ -492,14 +492,14 @@ gkx = "gkx.cli:main"
                 "--coverage-xml coverage-wide.xml",
                 "--enforce-package-coverage",
                 "codecov/codecov-action",
-                "tools/release/check_parallel_scaling_artifacts.py",
-                "tools/release/check_package_architecture_manifest.py",
-                "tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only",
-                "tools/release/check_quasilinear_promotion_guardrails.py",
-                "tools/release/check_vmec_boozer_gates.py differentiability-claim",
-                "tools/artifacts/build_parallelization_completion_status.py",
-                "tools/release/check_release_readiness.py technical-status",
-                "tools/release/check_release_readiness.py",
+                "scripts/check.py parallel-scaling",
+                "scripts/check.py architecture",
+                "scripts/check.py parallel-scaling --performance-manifest-only",
+                "scripts/check.py quasilinear",
+                "scripts/check.py vmec-boozer differentiability-claim",
+                "scripts/artifacts/build_parallelization_completion_status.py",
+                "scripts/check.py readiness technical-status",
+                "scripts/check.py readiness",
                 "rm -rf build dist",
             ]
         ),
@@ -528,17 +528,17 @@ coverage:
     )
     (root / ".github" / "workflows" / "release.yml").write_text(
         "name: Release\n"
-        "tools/release/check_release_readiness.py version\n"
-        "tools/release/check_repository_size_manifest.py\n"
-        "tools/release/check_repository_size_manifest.py release-artifacts\n"
-        "tools/release/check_package_architecture_manifest.py\n"
-        "tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only\n"
-        "tools/release/check_parallel_scaling_artifacts.py\n"
-        "tools/release/check_quasilinear_promotion_guardrails.py\n"
-        "tools/release/check_vmec_boozer_gates.py differentiability-claim\n"
-        "tools/artifacts/build_parallelization_completion_status.py\n"
-        "tools/release/check_release_readiness.py technical-status\n"
-        "tools/release/check_release_readiness.py\n"
+        "scripts/check.py readiness version\n"
+        "scripts/check.py size\n"
+        "scripts/check.py size release-artifacts\n"
+        "scripts/check.py architecture\n"
+        "scripts/check.py parallel-scaling --performance-manifest-only\n"
+        "scripts/check.py parallel-scaling\n"
+        "scripts/check.py quasilinear\n"
+        "scripts/check.py vmec-boozer differentiability-claim\n"
+        "scripts/artifacts/build_parallelization_completion_status.py\n"
+        "scripts/check.py readiness technical-status\n"
+        "scripts/check.py readiness\n"
         "rm -rf build dist\n"
         "gh-action-pypi-publish\n",
         encoding="utf-8",
@@ -841,9 +841,7 @@ coverage:
 def test_release_readiness_rejects_missing_release_guardrails(tmp_path: Path) -> None:
     _write_release_ready_tree(tmp_path)
     (tmp_path / ".github" / "workflows" / "release.yml").write_text(
-        "name: Release\n"
-        "tools/release/check_release_readiness.py version\n"
-        "gh-action-pypi-publish\n",
+        "name: Release\nscripts/check.py readiness version\ngh-action-pypi-publish\n",
         encoding="utf-8",
     )
 
@@ -1046,7 +1044,7 @@ import textwrap
 
 import yaml
 
-from tools.release.check_release_readiness import (
+from scripts.checks.check_release_readiness import (
     LANES,
     ReleaseVersionError,
     build_technical_release_status,
@@ -1252,8 +1250,8 @@ def _release_artifact_manifest(
 def test_repository_hygiene_import_does_not_require_pillow() -> None:
     script = (
         Path(__file__).resolve().parents[2]
-        / "tools"
-        / "release"
+        / "scripts"
+        / "checks"
         / "check_repository_size_manifest.py"
     )
     code = """
@@ -1525,7 +1523,7 @@ import re
 from support.paths import REPO_ROOT
 
 import tomllib
-from tools.release.check_package_architecture_manifest import (
+from scripts.checks.check_package_architecture_manifest import (
     validate_architecture_policy,
 )
 
@@ -1971,7 +1969,7 @@ def test_package_architecture_inventory_classifies_repository_areas() -> None:
         Path("src/gkx/operators/nonlinear/rhs.py")
     )
     tool_role, tool_action, tool_notes = mod._role_and_action(
-        Path("tools/artifacts/build_linear_validation_artifacts.py")
+        Path("scripts/artifacts/build_linear_validation_artifacts.py")
     )
     summary = mod._summary(
         [
@@ -1986,8 +1984,8 @@ def test_package_architecture_inventory_classifies_repository_areas() -> None:
                 notes=notes,
             ),
             mod.InventoryRow(
-                path="tools/artifacts/build_linear_validation_artifacts.py",
-                area="tools/artifacts",
+                path="scripts/artifacts/build_linear_validation_artifacts.py",
+                area="scripts/artifacts",
                 role=tool_role,
                 action=tool_action,
                 suffix=".py",
@@ -2125,7 +2123,7 @@ def test_performance_manifest_accepts_benchmark_performance_driver(
     tmp_path: Path,
 ) -> None:
     mod = _load_performance_manifest_tool()
-    tool = tmp_path / "benchmarks" / "performance" / "benchmark_runtime_memory.py"
+    tool = tmp_path / "scripts" / "benchmarks" / "benchmark_runtime_memory.py"
     tool.parent.mkdir(parents=True)
     tool.write_text("# benchmark\n", encoding="utf-8")
     artifact = tmp_path / "docs" / "_static" / "runtime.png"
@@ -2134,7 +2132,7 @@ def test_performance_manifest_accepts_benchmark_performance_driver(
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
         _performance_manifest_text(
-            tool="benchmarks/performance/benchmark_runtime_memory.py",
+            tool="scripts/benchmarks/benchmark_runtime_memory.py",
             artifact="docs/_static/runtime.png",
         ),
         encoding="utf-8",
@@ -2153,13 +2151,13 @@ def test_performance_manifest_reports_missing_render_without_requiring_it(
     tmp_path: Path,
 ) -> None:
     mod = _load_performance_manifest_tool()
-    tool = tmp_path / "tools" / "profile.py"
+    tool = tmp_path / "scripts" / "profiling" / "profile.py"
     tool.parent.mkdir(parents=True)
     tool.write_text("# tool\n", encoding="utf-8")
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
         _performance_manifest_text(
-            tool="tools/profile.py", artifact="docs/_static/runtime.png"
+            tool="scripts/profiling/profile.py", artifact="docs/_static/runtime.png"
         ),
         encoding="utf-8",
     )
@@ -2179,13 +2177,14 @@ def test_performance_manifest_still_requires_machine_readable_evidence(
     tmp_path: Path,
 ) -> None:
     mod = _load_performance_manifest_tool()
-    tool = tmp_path / "tools" / "profile.py"
+    tool = tmp_path / "scripts" / "profiling" / "profile.py"
     tool.parent.mkdir(parents=True)
     tool.write_text("# tool\n", encoding="utf-8")
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
         _performance_manifest_text(
-            tool="tools/profile.py", artifact="benchmarks/results/runtime.json"
+            tool="scripts/profiling/profile.py",
+            artifact="benchmarks/results/runtime.json",
         ),
         encoding="utf-8",
     )
@@ -2218,7 +2217,7 @@ def test_performance_manifest_rejects_unowned_driver_path(tmp_path: Path) -> Non
         mod.REPO_ROOT = tmp_path
         with pytest.raises(
             ValueError,
-            match=r"tools/ or benchmarks/performance/",
+            match=r"must live in a scripts/ tool package",
         ):
             mod.validate_manifest(mod.load_manifest(manifest))
     finally:
@@ -2227,7 +2226,7 @@ def test_performance_manifest_rejects_unowned_driver_path(tmp_path: Path) -> Non
 
 def test_performance_manifest_rejects_invalid_status(tmp_path: Path) -> None:
     mod = _load_performance_manifest_tool()
-    tool = tmp_path / "tools" / "profile.py"
+    tool = tmp_path / "scripts" / "profiling" / "profile.py"
     tool.parent.mkdir(parents=True)
     tool.write_text("# tool\n", encoding="utf-8")
     artifact = tmp_path / "docs" / "_static" / "runtime.png"
@@ -2236,7 +2235,7 @@ def test_performance_manifest_rejects_invalid_status(tmp_path: Path) -> None:
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
         _performance_manifest_text(
-            tool="tools/profile.py",
+            tool="scripts/profiling/profile.py",
             artifact="docs/_static/runtime.png",
             status="halfway",
         ),
@@ -2514,7 +2513,7 @@ def test_core_source_avoids_comparison_code_terminology_outside_benchmarks() -> 
 
 from pathlib import Path
 
-from tools.release import run_test_gates
+from scripts.checks import run_test_gates
 
 
 def test_discover_test_files_returns_recursive_tests(tmp_path: Path) -> None:
@@ -2643,7 +2642,7 @@ def test_run_tests_marks_remaining_files_after_total_timeout(
 from pathlib import Path
 
 
-from tools.release.run_test_gates import (
+from scripts.checks.run_test_gates import (
     WIDE_COVERAGE_LOGICAL_CPU_DEVICES,
     WIDE_COVERAGE_NODE_BATCHES,
     build_coverage_shard_report,
@@ -2739,7 +2738,7 @@ def test_wide_coverage_logical_cpu_owners_run_whole_not_by_test_name() -> None:
 
 
 def test_wide_coverage_shard_batches_cover_every_target_once(monkeypatch) -> None:
-    from tools.release.run_test_gates import REPO_ROOT
+    from scripts.checks.run_test_gates import REPO_ROOT
 
     plain = [REPO_ROOT / "tests/test_a.py", REPO_ROOT / "tests/test_b.py"]
 
@@ -2750,7 +2749,7 @@ def test_wide_coverage_shard_batches_cover_every_target_once(monkeypatch) -> Non
     owner = REPO_ROOT / "tests/unit/nonlinear/test_nonlinear_helpers_extra.py"
     nodeids = [f"{owner}::test_{idx}" for idx in range(13)]
     monkeypatch.setattr(
-        "tools.release.run_test_gates.collect_pytest_nodeids",
+        "scripts.checks.run_test_gates.collect_pytest_nodeids",
         lambda path, pytest_args: nodeids,
     )
     batches = wide_coverage_shard_batches([owner], pytest_args=[])
@@ -3344,11 +3343,11 @@ from pathlib import Path
 FLOOR_REPO_ROOT = Path(__file__).resolve().parents[2]
 # Gates the repo-hygiene job runs before anything is pip-installed.
 UNINSTALLED_RELEASE_GATES = (
-    "tools/release/check_repository_size_manifest.py",
-    "tools/release/check_package_architecture_manifest.py",
-    "tools/release/check_parallel_scaling_artifacts.py",
-    "tools/release/check_release_readiness.py",
-    "tools/release/check_validation_coverage_manifest.py",
+    "scripts/check.py size",
+    "scripts/check.py architecture",
+    "scripts/check.py parallel-scaling",
+    "scripts/check.py readiness",
+    "scripts/check.py validation-coverage",
 )
 
 
@@ -3417,7 +3416,7 @@ def test_no_module_imports_the_tomli_backport() -> None:
 def test_repo_hygiene_gates_run_without_an_install(relative: str) -> None:
     """repo-hygiene runs these before any ``pip install``; keep that working."""
 
-    proc = _uninstalled_run([relative, "--help"])
+    proc = _uninstalled_run([*relative.split(), "--help"])
     assert proc.returncode == 0, proc.stderr
 
 
@@ -3549,9 +3548,9 @@ from support.paths import REPO_ROOT as RUN_TO_REPO_ROOT
 
 # Decks that must pin run_to themselves, and the value they must pin.
 _RUN_TO_REQUIRED = {
-    "benchmarks/runtime_miller_zonal_response.toml": "t_max",
-    "benchmarks/runtime_w7x_zonal_response_vmec.toml": "t_max",
-    "benchmarks/runtime_secondary_slab.toml": "t_max",
+    "benchmarks/cases/miller_zonal_response.toml": "t_max",
+    "benchmarks/cases/w7x_zonal_response_vmec.toml": "t_max",
+    "benchmarks/cases/secondary_slab.toml": "t_max",
     # Gallery tutorial decks: a fixed few-hundred-step window, never saturated.
     "examples/03_nonlinear_tokamak/case.toml": "t_max",
     "examples/04_nonlinear_stellarator/case.toml": "t_max",
@@ -3591,8 +3590,8 @@ _RUN_TO_AUDIT_PENDING = {
 # Decks that ship as linear but are promoted into the nonlinear runtime by a
 # shipped driver, so their [time] block still sets a nonlinear stop policy.
 _RUN_TO_PROMOTED = {
-    "benchmarks/runtime_secondary_slab.toml": (
-        "benchmarks/secondary_slab_workflow.py, via build_secondary_stage2_config"
+    "benchmarks/cases/secondary_slab.toml": (
+        "scripts/benchmarks/secondary_slab_workflow.py, via build_secondary_stage2_config"
     ),
 }
 
@@ -3751,13 +3750,13 @@ driver-promoted deck that is the promoted value, not the deck's own.
 
 # Measured dt / CFL-bound for each fixed_dt deck reaching the nonlinear runtime.
 _CFL_MARGIN_MEASURED: dict[str, float] = {
-    "benchmarks/runtime_miller_zonal_response.toml": 0.46,
-    "benchmarks/runtime_w7x_zonal_response_vmec.toml": 0.65,
+    "benchmarks/cases/miller_zonal_response.toml": 0.46,
+    "benchmarks/cases/w7x_zonal_response_vmec.toml": 0.65,
     # Promoted: build_secondary_stage2_config replaces the deck's dt = 1.0 with
     # dt = 0.01 before the nonlinear stage, so the deck's own dt is the linear
     # seed stage's and is not what this audit is about. The seed stage is 13.08x
     # over the linear bound and is covered by the linear runtime's own warning.
-    "benchmarks/runtime_secondary_slab.toml": 0.13,
+    "benchmarks/cases/secondary_slab.toml": 0.13,
     "benchmarks/cases/cyclone_nonlinear_short.toml": 1.33,
     "benchmarks/cases/kbm_nonlinear.toml": 0.18,
     "benchmarks/cases/kbm_nonlinear_seed.toml": 0.18,
@@ -3781,11 +3780,21 @@ _CFL_MARGIN_OVER_BOUND: dict[str, str] = {}
 # their configured dt is a starting guess and being over it means nothing.
 _CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = {
     "examples/common_input.toml": "fixed_dt = false: adaptive dt",
-    "benchmarks/cases/circular_vmec_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
-    "benchmarks/cases/etg_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
-    "examples/03_nonlinear_tokamak/case_full.toml": ("fixed_dt = false: adaptive dt"),
-    "benchmarks/cases/cyclone_nonlinear_miller.toml": ("fixed_dt = false: adaptive dt"),
-    "benchmarks/cases/cyclone_nonlinear_t400.toml": ("fixed_dt = false: adaptive dt"),
+    "benchmarks/cases/circular_vmec_nonlinear.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "benchmarks/cases/etg_nonlinear.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "examples/03_nonlinear_tokamak/case_full.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "benchmarks/cases/cyclone_nonlinear_miller.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
+    "benchmarks/cases/cyclone_nonlinear_t400.toml": (
+        "fixed_dt = false: adaptive dt"
+    ),
     "examples/04_nonlinear_stellarator/case_full.toml": (
         "fixed_dt = false: adaptive dt"
     ),
@@ -3884,13 +3893,13 @@ def test_run_to_audit_discovery_sees_a_deck_that_only_the_flags_reveal() -> None
 
     reaches, _ = _decks_reaching_the_nonlinear_runtime()
 
-    assert "benchmarks/runtime_miller_zonal_response.toml" in reaches
-    assert "benchmarks/runtime_w7x_zonal_response_vmec.toml" in reaches
+    assert "benchmarks/cases/miller_zonal_response.toml" in reaches
+    assert "benchmarks/cases/w7x_zonal_response_vmec.toml" in reaches
     # Promoted by a driver: nothing in the deck itself says nonlinear.
-    assert "benchmarks/runtime_secondary_slab.toml" in reaches
+    assert "benchmarks/cases/secondary_slab.toml" in reaches
     # A genuinely linear deck stays out, or the audit becomes noise.
     assert "examples/01_linear_tokamak/case_full.toml" not in reaches
-    assert "benchmarks/collisional_zonal_response.toml" not in reaches
+    assert "benchmarks/cases/collisional_zonal_response.toml" not in reaches
 
 
 # ---- GX parity: measured build-reproducibility floors ----
@@ -3914,7 +3923,7 @@ for cases where nothing was measured.
 
 _PARITY_MANIFEST = RUN_TO_REPO_ROOT / "tools" / "gx_parity_matrix_manifest.toml"
 _PARITY_BUILDER = (
-    RUN_TO_REPO_ROOT / "tools" / "comparison" / "build_gx_parity_matrix.py"
+    RUN_TO_REPO_ROOT / "scripts" / "comparison" / "build_gx_parity_matrix.py"
 )
 # Largest relative move measured between the two builds: 0.204% in omega at
 # ky = 0.2. A floor at or below that would not cover the measurement it exists
@@ -4102,7 +4111,7 @@ def test_parity_builder_reads_the_declared_floor() -> None:
 
 """The shipped closed VMEX mirror case must be an equilibrium, not a guess.
 
-``tools/artifacts/build_vmex_mirror_gkx_artifacts.py`` built its record on
+``scripts/artifacts/build_vmex_mirror_gkx_artifacts.py`` built its record on
 ``setup.discretization.evaluate_state(setup.initial_state)`` -- the seeded stream
 function on the prescribed nested-ellipse surfaces, at a normalized MHD force
 residual of 0.61 -- and published that state's growth rate, frequency,
@@ -4124,7 +4133,7 @@ _VMEX_MIRROR_RECORD = (
     _VMEX_MIRROR_ROOT / "docs" / "_static" / "vmex_mirror_gkx_showcase.json"
 )
 _VMEX_MIRROR_BUILDER = (
-    _VMEX_MIRROR_ROOT / "tools" / "artifacts" / "build_vmex_mirror_gkx_artifacts.py"
+    _VMEX_MIRROR_ROOT / "scripts" / "artifacts" / "build_vmex_mirror_gkx_artifacts.py"
 )
 
 # The bars the shipped record has to clear. The three weak-form ones are the

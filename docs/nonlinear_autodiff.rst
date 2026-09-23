@@ -61,10 +61,10 @@ leading Lyapunov exponent. The finite window gives a useful local design
 direction while leaving the long, replicated nonlinear run as an independent
 holdout.
 
-Shadowing prototypes were removed from the production API. On the tested GKX
-trajectory, multiple-shooting changed the gradient sign and NILSAS inherited a
-rapidly growing reduced-system condition number. Neither justified a second
-user-facing method.
+Shadowing methods are better matched to the derivative of the long-time
+average, but their cost scales with the unstable dimension and none has been
+demonstrated for nonlinear gyrokinetics. GKX ships no shadowing method; the
+windowed adjoint is its one nonlinear derivative.
 
 Memory
 ------
@@ -77,17 +77,16 @@ steps in blocks of length :math:`B` and retains block boundaries:
    M(B)=O(N/B+B),\qquad B=\lceil\sqrt N\rceil,
    \qquad M=O(\sqrt N).
 
-Measured on the same host, the same 16x16x16 Cyclone case and the same 1024-step
-window of ``nonlinear_heat_flux_window``, XLA temporary memory falls from
-7.82 GB to 187 MB on 36 CPU cores and from 7.80 GB to 148 MB on an RTX A4000 --
+Measured on one host, the same 16x16x16 Cyclone case and the same 1024-step
+float32 window of ``nonlinear_heat_flux_window``, XLA temporary memory falls
+from 7.82 GB to 187 MB on the CPU and from 7.80 GB to 148 MB on an RTX A4000 --
 42x and 53x. Runtime rises by 1.92x and 1.77x respectively: rematerialization is
 the trade. The blocked and plain values and gradients agree to single-precision
 round-off, which the profiler asserts before it reports anything.
 
-The step-checkpoint policy is what sets the ceiling. At 2048 steps it asks for
-about 15 GB, which does not fit on a 16 GB A4000 alongside anything else; the
-block policy at the same window is two orders of magnitude smaller and fits
-easily.
+The step-checkpoint policy is what sets the ceiling: its temporary memory grows
+linearly with the window and is already 7.8 GB at 1024 steps, while the block
+policy grows as :math:`\sqrt N`.
 
 Spectral zero mode
 ------------------
@@ -129,11 +128,9 @@ Run to saturation once, then differentiate the physical window:
 
 The differentiated scan reuses one ``jax.jit`` graph for matching shapes,
 dtypes, topology and static options. Geometry arrays are arguments, not captured
-constants; changes to static configuration can recompile. Through GKX 2.2.0
-the recorded workload recompiled thirteen XLA
-modules on every call, which was most of the wall time of an objective
-evaluation.  :doc:`solvers` has the measurements and the identity gate.
-This qualification covers complete nonlinear grids.  Mode-selected linear and
+constants; changes to static configuration can recompile. :doc:`solvers` has the
+compile counts, wall times and the identity gate. This qualification covers
+complete nonlinear grids. Mode-selected linear and
 reference grids carry array-valued ``ky_mode`` pytree metadata and are not
 qualified inputs to the compiled nonlinear window.
 
@@ -178,30 +175,30 @@ generators; the figure builder reads their JSON rather than carrying literals.
 .. code-block:: bash
 
    # (i) AD-vs-FD ladder and the divergence knee (right panel)
-   python tools/campaigns/nonlinear_saturated_state.py --nx 16 --ny 16 --nz 16 \
+   python scripts/campaigns/nonlinear_saturated_state.py --nx 16 --ny 16 --nz 16 \
        --state-out tools_out/cyclone16_saturated.npz
-   python tools/campaigns/nonlinear_gradient_window.py --nx 16 --ny 16 --nz 16 \
+   python scripts/campaigns/nonlinear_gradient_window.py --nx 16 --ny 16 --nz 16 \
        --saturated-state tools_out/cyclone16_saturated.npz \
        --min-window 64 --max-window 2048 --fd-step 1e-5 \
        --output docs/_static/nonlinear_heat_flux_gradient_window_rk3.json
 
    # (ii) checkpoint memory profile (left panel), once per device
-   python tools/profiling/profile_nonlinear_adjoint_checkpointing.py \
+   python scripts/profiling/profile_nonlinear_adjoint_checkpointing.py \
        --nx 16 --ny 16 --nz 16 --steps 1024 --precision 32 \
        --output docs/_static/nonlinear_adjoint_checkpointing_gpu32.json
 
    # (iii) CPU/GPU parity on one fixed case, once per device, then compare
-   python tools/profiling/profile_nonlinear_window_device_parity.py \
+   python scripts/profiling/profile_nonlinear_window_device_parity.py \
        --output tools_out/window_parity_cpu.json
-   python tools/profiling/profile_nonlinear_window_device_parity.py \
+   python scripts/profiling/profile_nonlinear_window_device_parity.py \
        --compare tools_out/window_parity_cpu.json tools_out/window_parity_gpu.json
 
-   python tools/artifacts/build_nonlinear_autodiff_figure.py
+   python scripts/artifacts/build_nonlinear_autodiff_figure.py
 
-Cost: the saturation run and the 2048-step ladder are ~40 min together on one
-RTX A4000; the 2048-step memory profile needs about 15 GB of device memory for
-the step-checkpoint policy, so run it on a card with a free 16 GB or drop to
-``--steps 1024``. The parity case is seconds anywhere.
+Cost scales linearly in the window: the ladder's longest rung and the
+step-checkpoint arm of the memory profile dominate, and the step-checkpoint arm
+needs device memory linear in ``--steps`` (7.8 GB at 1024). ``--steps 64`` is a
+smoke test of every path of the memory profiler. The parity case is small.
 
 Evidence and scope
 ------------------
@@ -210,9 +207,7 @@ The physical Cyclone heat-flux gradient passes the declared
 :math:`10^{-6}` centered-finite-difference gate through 1024 RK3 steps; the
 1024-step relative discrepancy is :math:`2.7\times10^{-9}`. At 2048 steps the
 discrepancy is :math:`2.5\times10^{-5}` and fails that gate, which brackets the
-trajectory-specific divergence knee. A VMEX--Boozer--GKX state-control test
-matches finite differences to :math:`5.7\times10^{-6}` and lowers the local
-heat flux by 1.25%.
+trajectory-specific divergence knee.
 
 These results establish a finite-window derivative and local descent. They do
 not establish an infinite-time turbulent derivative. The historical QA campaign

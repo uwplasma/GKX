@@ -207,15 +207,7 @@ def test_maintained_runtime_decks_carry_no_removed_time_keys() -> None:
 
 def test_maintained_runtime_decks_declare_schema_v1() -> None:
     paths = sorted((REPO_ROOT / "examples").rglob("*.toml"))
-    paths += [
-        REPO_ROOT / "benchmarks" / name
-        for name in (
-            "collisional_zonal_response.toml",
-            "runtime_miller_zonal_response.toml",
-            "runtime_secondary_slab.toml",
-            "runtime_w7x_zonal_response_vmec.toml",
-        )
-    ]
+    paths += sorted((REPO_ROOT / "benchmarks" / "cases").glob("*.toml"))
     assert paths
     for path in paths:
         assert load_toml(path).get("schema_version") == 1, path
@@ -740,7 +732,7 @@ restart_from_file = "../out/run.resume.nc"
 
 
 def test_secondary_slab_example_toml_loads() -> None:
-    path = REPO_ROOT / "benchmarks" / "runtime_secondary_slab.toml"
+    path = REPO_ROOT / "benchmarks" / "cases" / "secondary_slab.toml"
 
     cfg, data = load_runtime_from_toml(path)
 
@@ -852,7 +844,7 @@ def test_cyclone_nonlinear_gx_miller_example_toml_loads() -> None:
 
 
 def test_miller_zonal_response_example_uses_merlo_case_iii_contract() -> None:
-    path = REPO_ROOT / "benchmarks" / "runtime_miller_zonal_response.toml"
+    path = REPO_ROOT / "benchmarks" / "cases" / "miller_zonal_response.toml"
 
     cfg, data = load_runtime_from_toml(path)
 
@@ -886,7 +878,7 @@ def test_miller_zonal_response_example_uses_merlo_case_iii_contract() -> None:
 
 
 def test_w7x_zonal_response_vmec_example_uses_test4_contract() -> None:
-    path = REPO_ROOT / "benchmarks" / "runtime_w7x_zonal_response_vmec.toml"
+    path = REPO_ROOT / "benchmarks" / "cases" / "w7x_zonal_response_vmec.toml"
 
     cfg, data = load_runtime_from_toml(path)
 

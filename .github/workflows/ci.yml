@@ -48,20 +48,20 @@ jobs:
 
       - name: Repository size manifest
         run: |
-          python tools/release/check_repository_size_manifest.py
-          python tools/release/check_repository_size_manifest.py release-artifacts
-          python tools/release/check_release_readiness.py version
-          python tools/release/check_package_architecture_manifest.py
-          python tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only
-          python tools/release/check_parallel_scaling_artifacts.py
-          python tools/release/check_quasilinear_promotion_guardrails.py \
+          python scripts/check.py size
+          python scripts/check.py size release-artifacts
+          python scripts/check.py readiness version
+          python scripts/check.py architecture
+          python scripts/check.py parallel-scaling --performance-manifest-only
+          python scripts/check.py parallel-scaling
+          python scripts/check.py quasilinear \
             --out-json docs/_static/quasilinear_promotion_guardrails.json
-          python tools/release/check_vmec_boozer_gates.py differentiability-claim \
+          python scripts/check.py vmec-boozer differentiability-claim \
             --out-json docs/_static/vmec_boozer_differentiability_claim_guard.json
-          python tools/release/check_release_readiness.py technical-status \
+          python scripts/check.py readiness technical-status \
             --out-json docs/_static/technical_release_status.json \
             --fail-under 98
-          python tools/release/check_release_readiness.py \
+          python scripts/check.py readiness \
             --out-json docs/_static/release_readiness.json
 
       - name: Tracked release artifacts are up to date
@@ -506,7 +506,7 @@ jobs:
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
         run: |
-          python tools/release/run_test_gates.py wide-coverage \
+          python scripts/check.py test-gates wide-coverage \
             --shards 24 \
             --timeout 1800 \
             --only-shard "${{ matrix.shard }}" \
@@ -585,14 +585,14 @@ jobs:
           GKX_X64: "1"
         run: |
           find coverage-wide-artifacts -name '*.tgz' -print -exec tar -xzf {} \;
-          python tools/release/run_test_gates.py wide-coverage \
+          python scripts/check.py test-gates wide-coverage \
             --shards 24 \
             --combine-only \
             --require-shard-data \
             --shard-manifest coverage-wide-shard-manifest.json \
             --fail-under 95 \
             --xml coverage-wide.xml
-          python tools/release/check_validation_coverage_manifest.py \
+          python scripts/check.py validation-coverage \
             --coverage-xml coverage-wide.xml \
             --enforce-package-coverage \
             --out-json docs/_static/validation_coverage_manifest_summary.json
@@ -648,8 +648,8 @@ jobs:
 
       - name: Build docs
         run: |
-          python tools/release/check_validation_coverage_manifest.py --out-json docs/_static/validation_coverage_manifest_summary.json
-          python tools/release/check_quasilinear_promotion_guardrails.py calibration-inputs \
+          python scripts/check.py validation-coverage --out-json docs/_static/validation_coverage_manifest_summary.json
+          python scripts/check.py quasilinear calibration-inputs \
             --report docs/_static/quasilinear_cyclone_miller_train_holdout_report.json \
             --report docs/_static/quasilinear_hsx_train_holdout_report.json \
             --report docs/_static/quasilinear_w7x_train_holdout_report.json \

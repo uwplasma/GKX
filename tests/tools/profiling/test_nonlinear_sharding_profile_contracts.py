@@ -42,7 +42,7 @@ def test_profile_nonlinear_sharding_documented_script_entrypoint() -> None:
     result = subprocess.run(
         [
             sys.executable,
-            str(root / "tools/profiling/profile_nonlinear_sharding.py"),
+            str(root / "scripts/profiling/profile_nonlinear_sharding.py"),
             "--help",
         ],
         cwd=root,
@@ -118,7 +118,7 @@ def test_profile_nonlinear_sharding_source_contract_is_machine_readable(
     assert contract["allow_unsafe_cpu_state_sharding"] is False
     assert contract["profile_command_argv"][-len(argv) :] == argv
     assert (
-        "tools/profiling/profile_nonlinear_sharding.py" in contract["profile_command"]
+        "scripts/profiling/profile_nonlinear_sharding.py" in contract["profile_command"]
     )
     assert {"python", "gkx", "jax", "jaxlib", "numpy"} <= set(
         contract["software_versions"]
@@ -351,10 +351,10 @@ def test_nonlinear_sharding_sweep_subcommand_selects_fastest_identity_candidate(
         "device_count": 2,
         "default_backend": "gpu",
         "sharding_axis": "kx",
-        "profile_command": "python tools/profiling/profile_nonlinear_sharding.py --sharding kx",
+        "profile_command": "python scripts/profiling/profile_nonlinear_sharding.py --sharding kx",
         "profile_command_argv": [
             "python",
-            "tools/profiling/profile_nonlinear_sharding.py",
+            "scripts/profiling/profile_nonlinear_sharding.py",
             "--sharding",
             "kx",
         ],
@@ -399,7 +399,7 @@ def test_nonlinear_sharding_sweep_subcommand_selects_fastest_identity_candidate(
     assert row["identity_gate_pass"] is True
     assert row["source_contract_version"] == 1
     assert row["profile_command"].startswith(
-        "python tools/profiling/profile_nonlinear_sharding.py"
+        "python scripts/profiling/profile_nonlinear_sharding.py"
     )
     assert row["profile_command_argv"][-2:] == ["--sharding", "kx"]
     assert row["source_artifact"] == "/tmp/profile.json"

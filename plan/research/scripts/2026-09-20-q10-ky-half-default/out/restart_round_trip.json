@@ -1,0 +1,119 @@
+{
+  "gkx": "<branch tree>/src/gkx/__init__.py",
+  "grid": [
+    16,
+    16,
+    12
+  ],
+  "state_shape_full": [
+    1,
+    2,
+    4,
+    16,
+    16,
+    24
+  ],
+  "state_shape_half": [
+    1,
+    2,
+    4,
+    9,
+    16,
+    24
+  ],
+  "legacy_netcdf": {
+    "file": "full.restart.nc",
+    "full_rows": 16,
+    "half_rows": 9,
+    "half == to_half(full): max_abs": 0.0
+  },
+  "row_counts": [
+    {
+      "file": "full.restart.nc",
+      "source_layout": "full",
+      "target_layout": "full",
+      "rows": 16,
+      "rows_expected": 16,
+      "ok": true
+    },
+    {
+      "file": "full.restart.nc",
+      "source_layout": "full",
+      "target_layout": "half",
+      "rows": 9,
+      "rows_expected": 9,
+      "ok": true
+    },
+    {
+      "file": "full.seed.bin",
+      "source_layout": "full_bin",
+      "target_layout": "full",
+      "rows": 16,
+      "rows_expected": 16,
+      "ok": true
+    },
+    {
+      "file": "full.seed.bin",
+      "source_layout": "full_bin",
+      "target_layout": "half",
+      "rows": 9,
+      "rows_expected": 9,
+      "ok": true
+    },
+    {
+      "file": "half.restart.nc",
+      "source_layout": "half",
+      "target_layout": "full",
+      "rows": 16,
+      "rows_expected": 16,
+      "ok": true
+    },
+    {
+      "file": "half.restart.nc",
+      "source_layout": "half",
+      "target_layout": "half",
+      "rows": 9,
+      "rows_expected": 9,
+      "ok": true
+    },
+    {
+      "file": "half.seed.bin",
+      "source_layout": "half_bin",
+      "target_layout": "full",
+      "rows": 16,
+      "rows_expected": 16,
+      "ok": true
+    },
+    {
+      "file": "half.seed.bin",
+      "source_layout": "half_bin",
+      "target_layout": "half",
+      "rows": 9,
+      "rows_expected": 9,
+      "ok": true
+    }
+  ],
+  "layout_agreement": [
+    {
+      "file": "full.restart.nc",
+      "widen(half) == full: max_abs": 0.0,
+      "narrow(full) == half: max_abs": 0.0
+    },
+    {
+      "file": "full.seed.bin",
+      "widen(half) == full: max_abs": 0.0,
+      "narrow(full) == half: max_abs": 0.0
+    },
+    {
+      "file": "half.restart.nc",
+      "widen(half) == full: max_abs": 0.0,
+      "narrow(full) == half: max_abs": 0.0
+    },
+    {
+      "file": "half.seed.bin",
+      "widen(half) == full: max_abs": 0.0,
+      "narrow(full) == half: max_abs": 0.0
+    }
+  ],
+  "all_row_counts_ok": true
+}

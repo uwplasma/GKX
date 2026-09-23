@@ -7,7 +7,7 @@ import tomllib
 
 import pytest
 
-from tools.comparison.build_exact_state_audit import (
+from scripts.comparison.build_exact_state_audit import (
     COMPARISON_TOOL_DIR,
     REPO_ROOT,
     _comparison_tool_path,
@@ -20,7 +20,7 @@ from tools.comparison.build_exact_state_audit import (
 def test_exact_state_tool_layout_resolves_repository_commands() -> None:
     repo = Path(__file__).resolve().parents[3]
     assert REPO_ROOT == repo
-    assert COMPARISON_TOOL_DIR == repo / "tools" / "comparison"
+    assert COMPARISON_TOOL_DIR == repo / "scripts" / "comparison"
     name = "compare_runtime.py"
     assert _comparison_tool_path(name) == COMPARISON_TOOL_DIR / name
 

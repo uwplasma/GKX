@@ -1,0 +1,151 @@
+schema_version = 1
+
+# Gonzalez-Jerez et al., J. Plasma Phys. 88, 905880310 (2022), test 4:
+# collisionless W7-X bean-tube zonal-flow relaxation in the high-mirror
+# configuration at torflux = 0.64 with adiabatic electrons, zero gradients,
+# ky = 0, and a Gaussian electrostatic-potential initial perturbation. The
+# publication tool sweeps kx rho_i in [0.05, 0.07, 0.10, 0.30] and applies one
+# common extraction protocol to each trace.
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 0.0
+fprim = 0.0
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 6
+Ny = 4
+# Nz and nperiod below are inert for this deck and are kept only to record the
+# intent. model = "vmec" builds the parallel grid from ntheta and
+# [geometry] npol, and apply_geometry_grid_defaults then overwrites Nz, z_min,
+# z_max from the sampled theta and sets ntheta = nperiod = zp = None. The run is
+# therefore 64 parallel points over one poloidal turn, not 256 over four:
+# Nz = 64, 128, 256, 512 give bit-identical traces, as do nperiod = 1 and 4.
+# The reference the panel is compared against uses 512 points over nperiod = 4,
+# so closing that gap means raising ntheta and npol, not Nz.
+Nz = 256
+Lx = 125.66370614359172
+Ly = 62.8
+boundary = "linked"
+y0 = 10.0
+ntheta = 64
+nperiod = 4
+
+[time]
+# run_to must stay "t_max". This is a zero-gradient zonal-flow relaxation run:
+# tprim = fprim = 0, so the heat-flux moment is identically zero -- measured
+# 0.0 in every one of the first 512 samples, not merely small -- and there is
+# no saturated flux for the default run_to = "saturation" to find. The
+# observable this benchmark exists to produce is the zonal potential response
+# Phi_zonal(kx, t) out to t = 60, which a flux-based stop policy cannot see.
+run_to = "t_max"
+t_max = 60.0
+# dt must stay under the parallel-streaming CFL of the equilibrium this deck
+# loads. That limit is omega_streaming = |gradpar| * kz_max * 2*sqrt(Nm), and it
+# is the term that dominates here: at Nm = 32 the runtime's own bound
+# (gkx.solvers_time_explicit_cfl) reads omega = 75.0 of a total 81.5, giving a
+# stable dt of 0.0311 for rk4, near-constant across the four kx of the sweep.
+# The deck shipped dt = 0.05 -- 1.6x over -- and blew up: Wphi grew from 5.4e-16
+# to 3.2e+42 and went NaN at t = 5.65, then integrated NaN to t_max. Measured
+# at dt = 0.05: unstable; 0.025, 0.0125, 0.00625: stable. dt = 0.02 is 0.66x the
+# tightest bound in the sweep (kx rho_i = 0.30) and reaches t = 60 finite at
+# both ends of it; halving to 0.01 moves Wphi(t) by at most 0.3%.
+# fixed_dt = true means none of this is checked at run time, so re-derive the
+# bound before changing dt, Nm, ntheta, or vmec_file. Overriding the equilibrium
+# changes it directly: |gradpar| = 0.207 here, 0.113 for the QHS example wout,
+# whose bound is 0.058 and which is therefore stable at the old dt = 0.05.
+dt = 0.02
+method = "rk4"
+sample_stride = 4
+diagnostics_stride = 4
+fixed_dt = true
+diagnostics = true
+
+[geometry]
+model = "vmec"
+# Self-contained default: generate with
+#   cd examples/vmec && vmex input.nfp3_QI_fixed_resolution_final
+# For the paper-facing W7-X zonal benchmark, override this with the exact
+# W7-X high-mirror VMEC equilibrium before treating the result as validation.
+vmec_file = "../../examples/vmec/wout_nfp3_QI_fixed_resolution_final.nc"
+torflux = 0.64
+alpha = 0.0
+npol = 1.0
+R0 = 5.485
+
+[init]
+init_field = "phi"
+init_amp = 1.0e-6
+gaussian_init = true
+# Width of the Gaussian electrostatic-potential perturbation along theta.
+# The arXiv source for Gonzalez-Jerez et al. writes the test-4 initializer as
+# exp[-(z-z0)^2], so width=1 is the tracked paper-facing contract. Wider
+# profiles are useful audits but should not be treated as validation defaults.
+gaussian_width = 1.0
+init_single = true
+init_electrons_only = false
+
+[physics]
+linear = false
+nonlinear = false
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = true
+adiabatic_ions = false
+tau_e = 1.0
+beta = 0.0
+collisions = false
+hypercollisions = false
+
+[collisions]
+nu_hermite = 0.0
+nu_laguerre = 0.0
+nu_hyper = 0.0
+p_hyper = 4.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 0.0
+D_hyper = 0.0
+damp_ends_amp = 0.0
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "kinetic"
+diagnostic_norm = "rho_star"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 0.0
+hypercollisions = 0.0
+hyperdiffusion = 0.0
+end_damping = 0.0
+apar = 0.0
+bpar = 0.0
+nonlinear = 0.0
+
+[expert]
+source = "default"
+phi_ext = 0.0
+
+[run]
+ky = 0.0
+kx = 0.05
+Nl = 8
+Nm = 32
+# Mirrors [time] dt above; steps = t_max / dt. The publication tool reads these,
+# the CLI reads [time], and both have to stay under the same CFL bound.
+dt = 0.02
+steps = 3000
+sample_stride = 4
+diagnostics = true
+
+[output]
+path = "../../tools_out/w7x_zonal_response_vmec_runtime"

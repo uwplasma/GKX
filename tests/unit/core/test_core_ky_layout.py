@@ -1,14 +1,15 @@
-"""Contract tests for the ``ky`` axis layout (plan 5.3 N3, stage 1).
+"""Contract tests for the ``ky`` axis layout (plan 5.3 N3).
 
-GKX evolves a two-sided ``ky`` axis and rebuilds its negative half by the
-reality condition.  GX, stella and GS2 store only ``ky >= 0``.  Before the
-evolved state can move, the conversion between the two layouts has to be one
-rule with one owner instead of five hand-written copies, and the rule has to be
-pinned where it is easy to get wrong: at ``ky = 0``, at the Nyquist row, and on
-an odd ``Ny`` where ``Nyc`` does not determine ``Ny``.
+GKX evolves the two-sided axis by default -- rebuilding its negative half by the
+reality condition -- and evolves the ``ky >= 0`` rows, as GX, stella and GS2
+do, when a deck opts in with ``[grid] ky_layout = "half"``.  The conversion between the two layouts is one rule
+with one owner instead of five hand-written copies, and the rule is pinned here
+where it is easy to get wrong: at ``ky = 0``, at the Nyquist row, and on an odd
+``Ny`` where ``Nyc`` does not determine ``Ny``.
 
-These tests pin the contract itself.  They do not assert that the evolved state
-is half-spectrum -- it is not yet.
+Most tests here pin the contract itself and name the layout they build.
+``test_the_default_deck_builds_the_two_sided_axis`` is the exception: it builds
+its grid with no layout named, so it pins which axis a run takes by default.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ import numpy as np
 import pytest
 
 from gkx.core_ky_layout import (
+    FULL,
+    HALF,
     conjugate_kx_order,
     describe,
     half_dealias_mask,
@@ -30,7 +33,10 @@ from gkx.core_ky_layout import (
     nyquist_row,
     paired_row_limit,
     reality_residual,
+    rows_for_layout,
     self_conjugate_rows,
+    source_ky_layout,
+    source_ny_full,
     symmetrize_self_conjugate_rows,
     to_full,
     to_half,
@@ -395,8 +401,11 @@ def test_the_bracket_half_core_plus_the_widening_is_the_bracket(ny: int) -> None
         _spectral_bracket_real_fft_core,
     )
 
+    # The seam under test is the widening that turns the half core's output
+    # into the two-sided kernel's, so this grid has to carry both halves of the
+    # ky axis rather than whichever one the default hands out.
     grid = build_spectral_grid(
-        GridConfig(Nx=6, Ny=ny, Nz=3, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
+        GridConfig(Nx=6, Ny=ny, Nz=3, Lx=2.0 * np.pi, Ly=2.0 * np.pi, ky_layout="full")
     )
     nx, nz = int(grid.kx.size), int(grid.z.size)
     G = jnp.asarray(_batched(_real_field(ny, nx, nz, seed=ny + 23))[0])
@@ -500,8 +509,10 @@ def test_the_grid_reports_the_half_axis_through_the_contract() -> None:
     from gkx.config import GridConfig
     from gkx.core_grid import build_spectral_grid, real_fft_unique_ky
 
+    # ``real_fft_unique_ky`` is the reduction from the two-sided axis to the
+    # half one, so it has to be handed a grid that stores the negative rows.
     grid = build_spectral_grid(
-        GridConfig(Nx=6, Ny=10, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
+        GridConfig(Nx=6, Ny=10, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi, ky_layout="full")
     )
     np.testing.assert_allclose(
         np.asarray(real_fft_unique_ky(grid.ky)),
@@ -522,18 +533,24 @@ def test_prepared_simulation_reports_the_state_it_actually_allocates() -> None:
     case = RuntimeConfig()
     prepared = prepare_simulation(case, Nl=2, Nm=4)
     grid = build_spectral_grid(case.grid)
-    assert prepared.state_shape[-3] == int(grid.ky.size) == int(case.grid.Ny)
+    rows = rows_for_layout(case.grid.Ny, case.grid.ky_layout)
+    assert prepared.state_shape[-3] == int(grid.ky.size) == rows
     assert prepared.estimate_memory()["elements"] == int(np.prod(prepared.state_shape))
 
 
 def _grids(ny: int, nx: int = 4):
-    """Return the two-sided grid for ``ny`` and its ``ky >= 0`` view."""
+    """Return the two-sided grid for ``ny`` and its ``ky >= 0`` view.
+
+    Its callers weigh one layout against the other, and the half view is cut
+    from the two-sided one, so the parent grid names the two-sided axis instead
+    of taking whichever layout the configuration defaults to.
+    """
 
     from gkx.config import GridConfig
     from gkx.core_grid import build_spectral_grid, select_real_fft_ky_grid
 
     full_grid = build_spectral_grid(
-        GridConfig(Nx=nx, Ny=ny, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
+        GridConfig(Nx=nx, Ny=ny, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi, ky_layout="full")
     )
     return full_grid, select_real_fft_ky_grid(full_grid, half_ky_values(full_grid.ky))
 
@@ -587,6 +604,62 @@ def test_the_half_axis_weight_sums_a_non_zero_nyquist_row_correctly(ny: int) -> 
     assert over > got
     np.testing.assert_allclose(
         over - got, float(np.sum(np.abs(full[row]) ** 2)), rtol=1e-12
+    )
+
+
+def test_the_default_deck_builds_the_two_sided_axis() -> None:
+    """``[grid] ky_layout`` defaults to ``"full"``; ``"half"`` is an opt-in."""
+
+    from gkx.config import GridConfig
+    from gkx.core_grid import build_spectral_grid
+
+    assert GridConfig().ky_layout == FULL
+    grid = build_spectral_grid(GridConfig(Nx=4, Ny=8, Nz=2))
+    assert source_ky_layout(grid) == FULL
+    assert int(grid.ky.size) == 8
+
+
+@pytest.mark.parametrize("ny", (4, 8, 16, 32))
+def test_the_half_deck_grid_weights_its_nyquist_row_once(ny: int) -> None:
+    """The Nyquist rule, on the grid a deck builds when it names ``"half"``.
+
+    The tests above cut their half axis from a two-sided parent with
+    ``select_real_fft_ky_grid``, which is how the GX-comparison views are made.
+    A run does not build its grid that way: ``build_spectral_grid`` reads
+    ``GridConfig.ky_layout``. Whether the Nyquist row is found on it depends on
+    ``ny_full`` reaching the grid from the config, which is a different path
+    from the one above and the one a ``ky_layout = "half"`` deck takes. So this
+    pins the rule where such a deck runs it: weight 1 on the Nyquist row for
+    the Hermitian reductions, 0.5 for the flux representative, and a non-zero
+    Nyquist row summed exactly once.
+    """
+
+    from gkx.config import GridConfig
+    from gkx.core_grid import build_spectral_grid
+    from gkx.operators.moments import _hermitian_mode_weight, _transport_mode_weight
+
+    grid = build_spectral_grid(
+        GridConfig(Nx=4, Ny=ny, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi, ky_layout="half")
+    )
+    assert source_ky_layout(grid) == HALF
+    assert source_ny_full(grid) == ny
+    row = nyquist_row(ny)
+    assert row == nyc_from_ny(ny) - 1
+
+    hermitian = np.asarray(_hermitian_mode_weight(grid, use_dealias=False))
+    transport = np.asarray(_transport_mode_weight(grid, use_dealias=False))
+    np.testing.assert_array_equal(hermitian[:, 0], ky_row_weights(ny))
+    np.testing.assert_array_equal(hermitian[row], np.ones(4))
+    np.testing.assert_array_equal(transport[row], np.full(4, 0.5))
+    np.testing.assert_array_equal(transport[0], np.zeros(4))
+
+    full = _real_field(ny, 4, 3, seed=ny + 97)
+    assert float(np.max(np.abs(full[row]))) > 0.0
+    half = np.abs(full[: nyc_from_ny(ny)]) ** 2
+    np.testing.assert_allclose(
+        float(np.sum(hermitian[:, :, None] * half)),
+        float(np.sum(np.abs(full) ** 2)),
+        rtol=1e-12,
     )
 
 

@@ -33,7 +33,7 @@ nperiod = 2
 # and rk4, whose adaptive step averages ~0.0047. At gamma ~= 0.0930 this is
 # gamma*t_max ~= 14, well clear of the transient -- the fitted growth rate is
 # 24% high at t_max = 30 and only settles beyond t_max ~= 60. dt = 0.004663 is
-# the step already used by tools/artifacts/make_tables.py and by the tracked
+# the step already used by scripts/artifacts/make_tables.py and by the tracked
 # parity artifact, so t_max/dt = 32168 steps (divisible by sample_stride).
 t_max = 150.0
 dt = 0.004663

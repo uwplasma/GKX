@@ -353,7 +353,8 @@ def test_nonlinear_window_script_imports_before_editable_install() -> None:
     completed = subprocess.run(
         [
             sys.executable,
-            "tools/release/check_nonlinear_transport_gates.py",
+            "scripts/check.py",
+            "nonlinear-transport",
             "convergence",
             "--help",
         ],

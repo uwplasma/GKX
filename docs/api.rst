@@ -4,91 +4,125 @@ API Reference
 Public API Registry
 -------------------
 
-The top-level ``gkx`` package advertises only the current product contracts:
-``load``, ``solve``, ``scan``, ``plot``, ``prepare``, ``Case``, ``LinearResult``,
-``NonlinearResult``, and ``ScanResult``. Five integration names remain
-advertised for the maintained VMEX turbulence coupling:
-``flux_tube_geometry_from_mapping``, ``solver_objective_vector_from_geometry``,
-``solver_linear_operator_matrix_from_geometry``,
-``solver_scalar_objective_from_vector``, and
-``VMEXTransportObjectiveConfig``. Together with ``__version__``, this makes a
-15-name root surface.
+``gkx.__all__`` holds 16 names: ``__version__`` and the 15 names of
+``gkx.api.__all__``.
 
-Implementation ownership remains in the domain modules below. GKX 1.x root
-names outside this advertised set stay available by direct named import
-through GKX 2.x, but no longer appear in ``gkx.__all__``, ``dir(gkx)``, or
-wildcard imports. They may be removed no earlier than GKX 3.0; migrate to the
-owning subpackage shown in this reference before then. The complete legacy
-lazy registry is retained during that window, so this reduction does not
-eagerly import numerical dependencies or wrap the underlying objects.
+- Workflow: ``load``, ``solve``, ``scan``, ``plot``, ``prepare``.
+- Contracts: ``PreparedSimulation``, ``Case``, ``LinearResult``,
+  ``NonlinearResult``, ``ScanResult``.
+- VMEX turbulence coupling: ``flux_tube_geometry_from_mapping``,
+  ``solver_objective_vector_from_geometry``,
+  ``solver_linear_operator_matrix_from_geometry``,
+  ``solver_scalar_objective_from_vector``, ``VMEXTransportObjectiveConfig``.
 
-GKX 3 Product Contracts
------------------------
+Every name resolves lazily from ``gkx.api._EXPORT_TARGETS``, so ``import gkx``
+does not import the solver stack. The same table keeps the GKX 1.x root names:
+they still import by name (``from gkx import KrylovConfig``) but are not in
+``gkx.__all__``, ``dir(gkx)``, or wildcard imports. They may be removed no
+earlier than GKX 3.0; import them from the owning module listed on this page.
 
-The first GKX 3 product-surface names are immutable, zero-copy views of the
-established runtime contracts:
+Contract types
+--------------
 
-``Case``
-   The frozen runtime configuration, identical to ``RuntimeConfig``.
-``LinearResult``
-   A linear solve result, identical to ``RuntimeLinearResult``.
-``NonlinearResult``
-   A nonlinear solve result, identical to ``RuntimeNonlinearResult``.
-``ScanResult``
-   A linear scan result, identical to ``RuntimeLinearScanResult``.
+``Case``, ``LinearResult``, ``NonlinearResult``, and ``ScanResult`` are aliases,
+not wrappers, of ``RuntimeConfig``, ``RuntimeLinearResult``,
+``RuntimeNonlinearResult``, and ``RuntimeLinearScanResult``. Result arrays are
+never copied, and the ``Runtime*`` names remain valid imports.
 
-The identity relationship is intentional during migration: existing workflows
-already return the new contract types, result arrays are never wrapped or
-copied, and historical ``Runtime*`` imports remain valid. Later Phase 1 changes
-can therefore add high-level workflows without moving numerical kernels into
-this public facade.
+Workflow
+--------
 
-The first high-level workflow is deliberately small::
+::
 
    case = gkx.load("cyclone.toml")
    result = gkx.solve(case)
    figure, axes = gkx.plot(result)
    spectrum = gkx.scan(case, [0.1, 0.2, 0.3])
    simulation = gkx.prepare(case)
-   time, diagnostics, state, fields = simulation.run()
+   result = simulation.solve()
 
-``load`` resolves case-relative paths through the established TOML owner.
-``solve`` dispatches to the established nonlinear runner when nonlinear physics
-is enabled and otherwise to the linear runner. ``scan`` is the established
-runtime scan function itself, so these names add no numerical implementation or
-result conversion. ``plot`` dispatches those result containers to the existing
-linear, scan, and nonlinear figure builders; it returns ``(Figure, axes)`` and
-does not save or display implicitly.
+``load``
+   Reads a TOML deck through ``gkx.workflows.runtime.toml`` and resolves
+   case-relative paths.
+``solve``
+   ``gkx.runtime.solve``: runs the nonlinear runtime when
+   ``physics.nonlinear`` is set, otherwise the linear runtime.
+``scan``
+   ``gkx.runtime.run_runtime_scan``: a linear :math:`k_y` scan.
+``plot``
+   ``gkx.artifacts.plotting.plot``: returns ``(Figure, axes)`` for a linear,
+   scan, or nonlinear result, and neither saves nor shows the figure.
+``prepare``
+   ``gkx.api.prepared.prepare_simulation``: validates the case and returns a
+   frozen ``PreparedSimulation``.
 
-``prepare`` reuses the nonlinear runtime's established explicit diagnostic
-scan and fixes its grid, geometry layout, numerical method, and output schema.
-Repeated ``simulation.run(initial_state)`` calls reuse the compiled scan for
-matching shapes and dtypes; ``simulation.run_arrays`` is the differentiable
-array-only boundary. Prepared execution currently rejects linear, IMEX,
-parallel-sharded, and active run-to-saturation cases with explicit errors.
+When the deck has no ``[run]`` table and no ``Nl``/``Nm`` argument is given,
+``(Nl, Nm)`` defaults to (12, 24) for a linear case and (4, 8) for a nonlinear
+case, the same fallback the runtime and the CLI use.
 
-``prepare`` and ``integrate_nonlinear_explicit_diagnostics_state`` compile one
-graph and return bitwise identical arrays for the same inputs, so either may be
-used as the reference; see :doc:`solvers` for the contract, the state-dtype
-caveat, and what it costs. Prefer ``prepare`` when a case is run more than
-once, because it keeps the compiled graph while each call to the function entry
-point compiles its own.
+Prepared simulations
+--------------------
 
-On a linked (twist-shift) deck, every state these entry points are given --
-the one ``prepare`` is built with, and any ``initial_state`` passed to
-``simulation.run``, ``simulation.run_arrays`` or
-``PreparedSimulation.solve`` -- is projected onto the linked chain cover
-before it is integrated, exactly as the runtime projects a supplied
-``initial_state`` at intake. The rows outside the chains are decoupled, and the
-ExB bracket would alias whatever sits there back onto the chain rows. The
-projection is a mask fixed by the deck's topology, not a check on the state, so
-it holds under ``jit`` and under reverse-mode AD: the cotangent of a supplied
-state is exactly zero on those rows and unchanged elsewhere. Periodic decks and
-full-cover linked grids are untouched. The raw drivers underneath,
-``integrate_nonlinear`` and ``integrate_nonlinear_cached``, project a supplied
-state the same way, so the rule does not depend on which door a caller uses.
-:doc:`solvers` states the rule, its alternative and what it was measured to
-cost.
+``PreparedSimulation`` accepts linear and nonlinear cases and owns no numerics:
+every method delegates to the runtime path the case would take anyway.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Member
+     - Behavior
+   * - ``solve(parameters=None, initial_state=None)``
+     - Nonlinear: runs the compiled scan and returns
+       ``(time, diagnostics, state, fields)``. Linear: calls
+       ``gkx.runtime.solve``. ``parameters`` must be ``None``; a linear
+       ``initial_state`` raises ``NotImplementedError``.
+   * - ``scan(parameter, values, *, parallel="auto")``
+     - Only ``parameter="ky"``; delegates to ``run_runtime_scan``. An integer
+       ``parallel`` sets the worker count.
+   * - ``value_and_grad(objective, parameters)``
+     - ``jax.value_and_grad(objective)(parameters)``.
+   * - ``warmup()``
+     - Nonlinear: runs the scan once so XLA compiles it, and returns ``self``;
+       a second call does nothing. Linear: no-op, because the linear runtime
+       picks its solver per call.
+   * - ``estimate_memory()``
+     - Bytes for the complex state and the stage copies an explicit step keeps
+       live. A floor: diagnostic buffers are not counted.
+   * - ``summary()``, ``print_summary()``, ``compilation_metadata()``
+     - Kind, state shape, ``(Nl, Nm)``, geometry model, precision, devices,
+       working set, persistent-cache state, and whether it was warmed.
+       ``compiled_at_prepare`` is always ``False``: XLA compiles on first
+       execution.
+   * - ``precision``, ``devices``
+     - ``"float64"`` or ``"float32"`` from ``jax_enable_x64``; visible JAX
+       devices as ``platform:id``.
+
+Preparing a nonlinear case builds its explicit diagnostic scan through
+``gkx.runtime.prepare``. That route requires a serial ``[parallel]`` policy
+and an explicit time method (IMEX methods raise ``ValueError``). It compiles one
+scan of fixed length, so a deck with ``[time] run_to = "saturation"`` raises
+unless ``steps=N`` is passed or the deck sets ``run_to = "t_max"``.
+
+The prepared route and ``integrate_nonlinear_explicit_diagnostics_state``
+compile the same graph and return bitwise identical arrays
+(``tests/unit/nonlinear/test_nonlinear.py``). Prefer ``prepare`` when a case
+runs more than once: it keeps the compiled graph, while each call to the
+function entry point compiles its own. :doc:`solvers` gives the contract and
+the state-dtype caveat.
+
+On a linked (twist-shift) deck, every nonlinear state these entry points are
+given -- the one ``prepare`` is built with and any ``initial_state`` passed to
+``PreparedSimulation.solve`` -- is projected onto the linked chain cover before
+it is integrated, exactly as the runtime projects a supplied ``initial_state``
+at intake. The rows outside the chains are decoupled, and the ExB bracket would
+alias whatever sits there back onto the chain rows. The projection is a mask
+fixed by the deck's topology, not a check on the state, so it holds under
+``jit`` and under reverse-mode AD: the cotangent of a supplied state is exactly
+zero on those rows and unchanged elsewhere. Periodic decks and full-cover
+linked grids are untouched. The raw drivers underneath, ``integrate_nonlinear``
+and ``integrate_nonlinear_cached``, project a supplied state the same way.
+:doc:`solvers` states the rule and what it costs.
 
 .. automodule:: gkx.api
    :members:
@@ -373,8 +407,9 @@ Linear Eigenmode Solver Internals
 ---------------------------------
 
 ``gkx.solvers_linear_krylov`` owns ``KrylovConfig`` and the public
-status-reporting wrapper, while the focused helper modules below own operator
-application, branch selection, shift-invert preconditioning, and Arnoldi iterations.
+status-reporting wrapper; ``gkx.solvers_linear_krylov_algorithms`` owns operator
+application, branch selection, shift-invert preconditioning, and the Arnoldi
+iterations.
 
 .. automodule:: gkx.solvers_linear_krylov_algorithms
    :members:
@@ -510,7 +545,6 @@ Config-Driven Time Runners
 .. automodule:: gkx.solvers_time_runners
    :members:
    :private-members:
-
 
 Nonlinear Transport Optimization Diagnostics
 --------------------------------------------
@@ -995,9 +1029,6 @@ Stellarator ITG Objectives
 .. automodule:: gkx.objectives.stellarator
    :members:
    :no-index:
-
-
-
 
 Stellarator Objective Portfolios
 --------------------------------

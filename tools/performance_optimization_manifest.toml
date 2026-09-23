@@ -21,9 +21,9 @@ cases = [
   "hsx-nonlinear",
 ]
 profiling_tools = [
-  "benchmarks/performance/benchmark_runtime_memory.py",
-  "benchmarks/performance/benchmark_integrators.py",
-  "tools/profiling/profile_runtime_kernels.py",
+  "scripts/benchmarks/benchmark_runtime_memory.py",
+  "scripts/benchmarks/benchmark_integrators.py",
+  "scripts/profiling/profile_runtime_kernels.py",
 ]
 metrics = [
   "cold_runtime_s",
@@ -61,7 +61,7 @@ priority = "high"
 platforms = ["cpu", "gpu"]
 cases = ["cyclone-nonlinear", "kbm-nonlinear"]
 profiling_tools = [
-  "tools/profiling/profile_startup_and_cache.py",
+  "scripts/profiling/profile_startup_and_cache.py",
 ]
 metrics = [
   "startup_total_s",
@@ -71,7 +71,7 @@ metrics = [
 ]
 artifact_paths = [
   "docs/performance.rst",
-  "tools/profiling/profile_startup_and_cache.py",
+  "scripts/profiling/profile_startup_and_cache.py",
 ]
 bottleneck_hypotheses = [
   "compile_first_integrator_run is the largest remaining cold-start cost",
@@ -95,11 +95,11 @@ priority = "high"
 platforms = ["cpu", "gpu"]
 cases = ["cyclone-nonlinear", "kbm-nonlinear", "w7x-nonlinear", "hsx-nonlinear"]
 profiling_tools = [
-  "tools/profiling/profile_runtime_kernels.py",
-  "tools/profiling/profile_nonlinear_sharding.py",
-  "tools/profiling/profile_linear_rhs_terms.py",
-  "tools/artifacts/generate_linear_rhs_parallel_gates.py",
-  "tools/artifacts/gate_laguerre_nonlinear_modes.py",
+  "scripts/profiling/profile_runtime_kernels.py",
+  "scripts/profiling/profile_nonlinear_sharding.py",
+  "scripts/profiling/profile_linear_rhs_terms.py",
+  "scripts/artifacts/generate_linear_rhs_parallel_gates.py",
+  "scripts/artifacts/gate_laguerre_nonlinear_modes.py",
 ]
 metrics = [
   "field_solve_s",
@@ -182,9 +182,9 @@ priority = "high"
 platforms = ["cpu", "gpu"]
 cases = ["cyclone-nonlinear", "kbm-nonlinear", "w7x-nonlinear", "hsx-nonlinear"]
 profiling_tools = [
-  "benchmarks/performance/benchmark_runtime_memory.py",
-  "tools/profiling/profile_startup_and_cache.py",
-  "tools/profiling/profile_runtime_kernels.py",
+  "scripts/benchmarks/benchmark_runtime_memory.py",
+  "scripts/profiling/profile_startup_and_cache.py",
+  "scripts/profiling/profile_runtime_kernels.py",
 ]
 metrics = [
   "peak_rss_mb",
@@ -225,17 +225,17 @@ priority = "medium"
 platforms = ["multi_cpu", "multi_gpu"]
 cases = ["linear-scans", "ensemble-uq", "autodiff-sensitivities", "nonlinear-pilot"]
 profiling_tools = [
-  "tools/artifacts/plot_scaling_panels.py",
-  "tools/artifacts/generate_parallel_identity_gate.py",
-  "tools/artifacts/generate_velocity_parallel_gates.py",
-  "tools/artifacts/generate_electrostatic_parallel_gates.py",
-  "tools/artifacts/generate_linear_rhs_parallel_gates.py",
-  "tools/release/check_parallel_scaling_artifacts.py",
-  "tools/profiling/profile_linear_rhs_parallel_slices.py",
-  "tools/profiling/profile_nonlinear_sharding.py",
-  "tools/profiling/profile_device_z_pencil_transport_window.py",
-  "tools/profiling/profile_device_z_pencil_scaling_decomposition.py",
-  "tools/profiling/aggregate_device_z_pencil_granularity.py",
+  "scripts/artifacts/plot_scaling_panels.py",
+  "scripts/artifacts/generate_parallel_identity_gate.py",
+  "scripts/artifacts/generate_velocity_parallel_gates.py",
+  "scripts/artifacts/generate_electrostatic_parallel_gates.py",
+  "scripts/artifacts/generate_linear_rhs_parallel_gates.py",
+  "scripts/checks/check_parallel_scaling_artifacts.py",
+  "scripts/profiling/profile_linear_rhs_parallel_slices.py",
+  "scripts/profiling/profile_nonlinear_sharding.py",
+  "scripts/profiling/profile_device_z_pencil_transport_window.py",
+  "scripts/profiling/profile_device_z_pencil_scaling_decomposition.py",
+  "scripts/profiling/aggregate_device_z_pencil_granularity.py",
 ]
 metrics = [
   "strong_scaling_speedup",
@@ -354,23 +354,23 @@ bottleneck_hypotheses = [
 ]
 optimization_actions = [
   "prioritize sharded linear scans, UQ ensembles, and autodiff sensitivity batches",
-  "use tools/artifacts/generate_parallel_identity_gate.py ky-scan as the release identity gate for fixed-shape ky batching",
-  "use tools/artifacts/generate_parallel_identity_gate.py logical-cpu as the RuntimeParallelConfig/batch_map logical-CPU identity gate",
-  "use tools/artifacts/generate_velocity_parallel_gates.py hermite-exchange as the first shard_map Hermite ghost-exchange communication gate",
-  "use tools/artifacts/generate_velocity_parallel_gates.py field-reduce as the shard_map velocity field-reduction/broadcast gate",
-  "use tools/artifacts/generate_electrostatic_parallel_gates.py field-reduce as the electrostatic quasineutrality field-reduction gate",
-  "use tools/artifacts/generate_velocity_parallel_gates.py hermite-ladder as the shard_map Hermite streaming-ladder coefficient gate",
-  "use tools/artifacts/generate_electrostatic_parallel_gates.py drift as the electrostatic mirror/curvature/grad-B drift-slice identity gate",
-  "use tools/artifacts/generate_electrostatic_parallel_gates.py diamagnetic as the electrostatic diamagnetic-drive identity gate",
-  "use tools/artifacts/generate_velocity_parallel_gates.py periodic-streaming as the periodic linear streaming microkernel identity gate",
-  "use tools/artifacts/generate_linear_rhs_parallel_gates.py streaming as the streaming-only linear RHS call-graph identity gate",
-  "use tools/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic as the electrostatic field-solve-to-streaming call-graph identity gate",
-  "use tools/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices as the composed electrostatic linear-RHS identity gate",
-  "use tools/release/check_parallel_scaling_artifacts.py as the fast local contract check for tracked large-run scaling artifacts",
-  "use tools/profiling/profile_linear_rhs_parallel_slices.py as the engineering profile before making any Hermite-sharded RHS speedup claim",
+  "use scripts/artifacts/generate_parallel_identity_gate.py ky-scan as the release identity gate for fixed-shape ky batching",
+  "use scripts/artifacts/generate_parallel_identity_gate.py logical-cpu as the RuntimeParallelConfig/batch_map logical-CPU identity gate",
+  "use scripts/artifacts/generate_velocity_parallel_gates.py hermite-exchange as the first shard_map Hermite ghost-exchange communication gate",
+  "use scripts/artifacts/generate_velocity_parallel_gates.py field-reduce as the shard_map velocity field-reduction/broadcast gate",
+  "use scripts/artifacts/generate_electrostatic_parallel_gates.py field-reduce as the electrostatic quasineutrality field-reduction gate",
+  "use scripts/artifacts/generate_velocity_parallel_gates.py hermite-ladder as the shard_map Hermite streaming-ladder coefficient gate",
+  "use scripts/artifacts/generate_electrostatic_parallel_gates.py drift as the electrostatic mirror/curvature/grad-B drift-slice identity gate",
+  "use scripts/artifacts/generate_electrostatic_parallel_gates.py diamagnetic as the electrostatic diamagnetic-drive identity gate",
+  "use scripts/artifacts/generate_velocity_parallel_gates.py periodic-streaming as the periodic linear streaming microkernel identity gate",
+  "use scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming as the streaming-only linear RHS call-graph identity gate",
+  "use scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic as the electrostatic field-solve-to-streaming call-graph identity gate",
+  "use scripts/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices as the composed electrostatic linear-RHS identity gate",
+  "use scripts/checks/check_parallel_scaling_artifacts.py as the fast local contract check for tracked large-run scaling artifacts",
+  "use scripts/profiling/profile_linear_rhs_parallel_slices.py as the engineering profile before making any Hermite-sharded RHS speedup claim",
   "gate CPU sharding locally and two-GPU sharding on office",
   "profile fixed-step nonlinear state sharding and keep local plus two-GPU identity artifacts attached to the manifest",
-  "profile the device-z fused pencil nonlinear RHS through tools/profiling/profile_device_z_pencil_transport_window.py --mode rhs and keep it diagnostic until CPU/GPU speedup gates pass",
+  "profile the device-z fused pencil nonlinear RHS through scripts/profiling/profile_device_z_pencil_transport_window.py --mode rhs and keep it diagnostic until CPU/GPU speedup gates pass",
   "keep z-axis FFT sharding as exploratory until a dedicated communication/layout gate passes",
   "only publish strong-scaling plots when speedup is meaningful and numerically identical",
 ]

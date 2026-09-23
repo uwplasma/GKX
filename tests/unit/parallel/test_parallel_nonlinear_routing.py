@@ -45,11 +45,25 @@ _RUN_KWARGS: dict[str, object] = {
 }
 
 
-def _nonlinear_cfg(parallel: RuntimeParallelConfig | None = None) -> RuntimeConfig:
-    """Return a small periodic nonlinear case with a ky extent of eight."""
+def _nonlinear_cfg(
+    parallel: RuntimeParallelConfig | None = None, *, ky_layout: str = "full"
+) -> RuntimeConfig:
+    """Return a small periodic nonlinear case with ``Ny = 8``.
+
+    The stored ky extent is 8 on the two-sided axis and ``Nyc = 5`` on the
+    ``ky >= 0`` one, which no even device count divides.
+    """
 
     cfg = RuntimeConfig(
-        grid=GridConfig(Nx=1, Ny=8, Nz=16, Lx=6.28, Ly=6.28, boundary="periodic"),
+        grid=GridConfig(
+            Nx=1,
+            Ny=8,
+            Nz=16,
+            Lx=6.28,
+            Ly=6.28,
+            boundary="periodic",
+            ky_layout=ky_layout,
+        ),
         time=TimeConfig(t_max=0.2, dt=0.01, method="rk2", sample_stride=1),
         geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
         init=InitializationConfig(
@@ -221,10 +235,26 @@ def test_plan_honours_num_devices() -> None:
     assert "axis='ky'" in plan.describe()
 
 
-def test_indivisible_ky_extent_raises() -> None:
-    state = jnp.zeros((1, 1, 3, 1, 4), dtype=jnp.complex64)
-    with pytest.raises(NonlinearParallelRoutingError, match="not.*divisible"):
-        shard_nonlinear_state(state, _fake_plan(2))
+def test_indivisible_ky_extent_is_placed_replicated_on_the_mesh() -> None:
+    """JAX places arrays only in equal shares, so an uneven ky extent -- the
+    ``ky >= 0`` axis's odd ``Nyc`` -- enters replicated on the same mesh."""
+
+    _require_devices(2)
+    plan = replace(_fake_plan(2), devices=tuple(jax.devices()[:2]))
+    state = jnp.arange(12, dtype=jnp.complex64).reshape(1, 1, 3, 1, 4)
+    placed = shard_nonlinear_state(state, plan)
+    assert placed.sharding.is_fully_replicated
+    assert placed.sharding.device_set == set(plan.devices)
+    np.testing.assert_array_equal(np.asarray(placed), np.asarray(state))
+
+
+def test_divisible_ky_extent_is_split_across_the_mesh() -> None:
+    _require_devices(2)
+    plan = replace(_fake_plan(2), devices=tuple(jax.devices()[:2]))
+    state = jnp.zeros((1, 1, 4, 1, 4), dtype=jnp.complex64)
+    placed = shard_nonlinear_state(state, plan)
+    assert not placed.sharding.is_fully_replicated
+    assert {shard.data.shape[-3] for shard in placed.addressable_shards} == {2}
 
 
 # ---- fail-closed identity ----
@@ -280,21 +310,32 @@ def test_identity_gate_reports_a_shape_mismatch_as_a_failure() -> None:
 # ---- end-to-end runtime routing ----
 
 
+@pytest.mark.parametrize("ky_layout", ["full", "half"])
 @pytest.mark.parametrize("num_devices", [2, 4])
-def test_shard_map_nonlinear_run_matches_serial_diagnostics(num_devices: int) -> None:
-    """A sharded nonlinear run reproduces the serial run's diagnostics."""
+def test_shard_map_nonlinear_run_matches_serial_diagnostics(
+    num_devices: int, ky_layout: str
+) -> None:
+    """A sharded nonlinear run reproduces the serial run's diagnostics.
+
+    On ``"half"`` the stored extent is ``Nyc = 5``, which neither device count
+    divides; the run is accepted rather than refused (SHARD-PAD, plan F.6).
+    """
 
     _require_devices(num_devices)
-    serial = run_runtime_nonlinear(_nonlinear_cfg(), return_state=True, **_RUN_KWARGS)
+    serial = run_runtime_nonlinear(
+        _nonlinear_cfg(ky_layout=ky_layout), return_state=True, **_RUN_KWARGS
+    )
     sharded = run_runtime_nonlinear(
         _nonlinear_cfg(
             RuntimeParallelConfig(
                 strategy="shard_map", axis="ky", num_devices=num_devices
-            )
+            ),
+            ky_layout=ky_layout,
         ),
         return_state=True,
         **_RUN_KWARGS,
     )
+    assert np.asarray(sharded.state).shape[-3] == (8 if ky_layout == "full" else 5)
     assert serial.diagnostics is not None and sharded.diagnostics is not None
     np.testing.assert_allclose(
         np.asarray(sharded.state), np.asarray(serial.state), rtol=0.0, atol=5.0e-6
@@ -306,6 +347,39 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(num_devices: int) ->
             rtol=1.0e-4,
             atol=5.0e-6,
         )
+
+
+def test_ky_route_scan_runs_replicated(monkeypatch) -> None:
+    """Pin the documented limit of the ``ky`` route: its scan is not split.
+
+    ``docs/parallelization.rst`` says the scan's input is replicated on every
+    device even when the ky extent divides the device count. If a change makes
+    the route partition for real, this fails, and that paragraph -- and the
+    claim that an uneven extent loses nothing by entering replicated -- must be
+    rewritten with it.
+    """
+
+    import gkx.solvers_nonlinear_diagnostics as diagnostics
+
+    _require_devices(2)
+    seen: list[object] = []
+    original = diagnostics._run_explicit_diagnostic_scan_and_finalize
+
+    def spy(prepared, *args, **kwargs):
+        seen.append(prepared.G0.sharding)
+        return original(prepared, *args, **kwargs)
+
+    monkeypatch.setattr(diagnostics, "_run_explicit_diagnostic_scan_and_finalize", spy)
+    run_runtime_nonlinear(
+        _nonlinear_cfg(
+            RuntimeParallelConfig(
+                strategy="shard_map", axis="ky", num_devices=2, strict_identity=False
+            )
+        ),
+        **_RUN_KWARGS,
+    )
+    assert len(seen) == 1
+    assert seen[0].is_fully_replicated and len(seen[0].device_set) == 2
 
 
 def test_shard_map_nonlinear_run_reports_the_route() -> None:

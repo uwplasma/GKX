@@ -44,11 +44,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from tools.campaigns.vmec_flux_tube_reports import (  # noqa: E402
+from scripts.campaigns.vmec_flux_tube_reports import (  # noqa: E402
     vmex_flux_tube_array_parity_report,
     vmex_flux_tube_sensitivity_report,
 )
-from tools.campaigns.vmec_state_sensitivity import (  # noqa: E402
+from scripts.campaigns.vmec_state_sensitivity import (  # noqa: E402
     vmex_field_line_tensor_sensitivity_report,
     vmex_metric_tensor_sensitivity_report,
 )
@@ -408,9 +408,29 @@ payload: dict[str, Any] = {
     ),
 }
 
+
+def portable_paths(value: Any) -> Any:
+    """Record existing absolute paths relative to their checkout, not this machine."""
+
+    if isinstance(value, dict):
+        return {key: portable_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [portable_paths(item) for item in value]
+    if not (isinstance(value, str) and value.startswith("/") and Path(value).exists()):
+        return value
+    path = Path(value).resolve()
+    if path.is_relative_to(REPO_ROOT):
+        return str(path.relative_to(REPO_ROOT))
+    for name in ("vmex", "booz_xform_jax"):
+        if name in path.parts:
+            return "/".join(path.parts[path.parts.index(name) :])
+    return path.name
+
+
 OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
 OUT_JSON.write_text(
-    json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    json.dumps(portable_paths(payload), indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
 )
 make_figure(payload, OUT_PNG)
 print(f"Wrote {OUT_PNG}")

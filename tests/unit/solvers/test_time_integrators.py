@@ -17,6 +17,7 @@ from __future__ import annotations
 from gkx.diagnostics.analysis import estimate_observed_order
 from gkx.solvers_nonlinear_explicit import (
     _checkpoint_block_size,
+    block_checkpoint_plan,
     advance_explicit_nonlinear_state,
     checkpointed_explicit_scan,
     integrate_cached_explicit_scan,
@@ -1151,6 +1152,47 @@ def test_checkpointed_scan_matches_discrete_primal_and_reverse_with_tail() -> No
     assert _checkpoint_block_size(2048) == 46
 
 
+def test_block_only_schedule_matches_nested_and_respects_the_budget() -> None:
+    """Dropping the inner per-step remat must not move the value or gradient."""
+
+    steps = 23
+    indices = jnp.arange(steps, dtype=jnp.int32)
+
+    def objective(parameter: jnp.ndarray, budget: int | None) -> jnp.ndarray:
+        def step(carry: jnp.ndarray, index: jnp.ndarray):
+            weight = jnp.asarray(index + 1, dtype=carry.dtype) / steps
+            updated = jnp.tanh(carry + weight * parameter) * jnp.cos(carry)
+            return updated, updated * updated
+
+        final, squares = checkpointed_explicit_scan(
+            step,
+            jnp.asarray([0.2, -0.4, 0.1], dtype=jnp.float32),
+            indices,
+            checkpoint=True,
+            memory_budget_bytes=budget,
+        )
+        return jnp.sum(final) + 0.01 * jnp.sum(squares)
+
+    parameter = jnp.asarray(0.03, dtype=jnp.float32)
+    nested = jax.value_and_grad(lambda value: objective(value, None))(parameter)
+    block = jax.value_and_grad(lambda value: objective(value, 1 << 30))(parameter)
+    starved = jax.value_and_grad(lambda value: objective(value, 1))(parameter)
+
+    np.testing.assert_allclose(np.asarray(block), np.asarray(nested), rtol=1e-6)
+    np.testing.assert_array_equal(np.asarray(starved), np.asarray(nested))
+
+
+def test_block_checkpoint_plan_minimizes_storage_under_the_budget() -> None:
+    # 1024 steps, 1 MB carries, 16 MB residuals: B = sqrt(1024/16) = 8 blocks
+    # of residuals (128 MB) plus 128 boundaries (128 MB).
+    mib = 1 << 20
+    assert block_checkpoint_plan(1024, mib, 16 * mib, 256 * mib) == 8
+    assert block_checkpoint_plan(1024, mib, 16 * mib, 256 * mib - 1) is None
+    # Residuals no larger than the carry: one block holds the whole window.
+    assert block_checkpoint_plan(10, 16 * mib, mib, 1 << 40) == 10
+    assert block_checkpoint_plan(1, 1, 1, 2) == 1
+
+
 @pytest.mark.parametrize(
     ("method", "one_step_factor"),
     [
@@ -2175,7 +2217,7 @@ def _imex_diagnostics_deck():
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams()
-    state = jnp.zeros((1, 2, 3, 4, 4, 4), dtype=jnp.complex64)
+    state = jnp.zeros((1, 2, 3, grid.ky.size, 4, 4), dtype=jnp.complex64)
     state = state.at[0, 0, 0, 1, 0, :].set(1.0e-2 + 0.5e-2j)
     return grid, geom, params, state, TermConfig(nonlinear=1.0)
 

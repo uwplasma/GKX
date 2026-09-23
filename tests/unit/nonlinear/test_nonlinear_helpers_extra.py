@@ -76,7 +76,7 @@ from gkx.terms.config import FieldState, TermConfig
 from gkx.workflows.runtime import chunks as runtime_chunks
 from gkx.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
 from pathlib import Path
-from tools.campaigns.nonlinear_replicates import (
+from scripts.campaigns.nonlinear_replicates import (
     nonlinear_replicate_spread_report,
 )
 from types import SimpleNamespace
@@ -681,6 +681,9 @@ def test_shearing_coordinate_tangent_matches_finite_difference() -> None:
 
 
 def test_sheared_integrator_zero_shear_identity_and_full_step_remap() -> None:
+    # The comparison is between the compressed bracket and the full-complex one
+    # the sheared integrator uses by default, and the state is Hermitian-
+    # completed, so both sides need the two-sided ky axis.
     grid = build_spectral_grid(
         GridConfig(
             Nx=4,
@@ -689,6 +692,7 @@ def test_sheared_integrator_zero_shear_identity_and_full_step_remap() -> None:
             Lx=2.0 * np.pi,
             Ly=2.0 * np.pi,
             boundary="periodic",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
@@ -812,6 +816,8 @@ def test_sheared_integrator_zero_shear_identity_and_full_step_remap() -> None:
 def test_linked_sheared_integrator_has_exact_zero_shear_trajectory_identity(
     method: str,
 ) -> None:
+    # Both trajectories run with ``compressed_real_fft=False``, and that bracket
+    # is defined on the two-sided ky axis only.
     grid = build_spectral_grid(
         GridConfig(
             Nx=8,
@@ -820,6 +826,7 @@ def test_linked_sheared_integrator_has_exact_zero_shear_trajectory_identity(
             Lx=2.0 * np.pi,
             Ly=2.0 * np.pi,
             boundary="linked",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
@@ -920,6 +927,9 @@ def test_linked_sheared_cache_preserves_chains_and_has_correct_tangent() -> None
 
 
 def _small_sheared_transport_case():
+    # The sheared-transport routes evaluate the bracket with full complex
+    # transforms unless asked otherwise, and the state is built by completing
+    # the Hermitian partners, so this case lives on the two-sided ky axis.
     grid = build_spectral_grid(
         GridConfig(
             Nx=4,
@@ -928,6 +938,7 @@ def _small_sheared_transport_case():
             Lx=2.0 * np.pi,
             Ly=2.0 * np.pi,
             boundary="periodic",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
@@ -1279,6 +1290,9 @@ def test_sheared_runge_kutta_recovers_observed_order_on_physical_rhs(
     minimum_order: float,
 ) -> None:
     jax.clear_caches()
+    # ``integrate_nonlinear_sheared`` brackets with full complex transforms by
+    # default, and the initial state is Hermitian-completed, so the convergence
+    # study is run on the two-sided ky axis.
     grid = build_spectral_grid(
         GridConfig(
             Nx=4,
@@ -1287,6 +1301,7 @@ def test_sheared_runge_kutta_recovers_observed_order_on_physical_rhs(
             Lx=2.0 * np.pi,
             Ly=2.0 * np.pi,
             boundary="periodic",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
@@ -1348,6 +1363,9 @@ def test_sheared_runge_kutta_recovers_observed_order_on_physical_rhs(
 def test_strong_flow_shear_suppresses_linear_itg_amplitude_after_dt_refinement() -> (
     None
 ):
+    # ``integrate_nonlinear_sheared`` brackets with full complex transforms by
+    # default, and the seed is Hermitian-completed, so this deck asks for the
+    # two-sided ky axis.
     grid = build_spectral_grid(
         GridConfig(
             Nx=8,
@@ -1356,6 +1374,7 @@ def test_strong_flow_shear_suppresses_linear_itg_amplitude_after_dt_refinement()
             Lx=2.0 * np.pi / 0.2,
             Ly=2.0 * np.pi / 0.3,
             boundary="periodic",
+            ky_layout="full",
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18)
@@ -3521,7 +3540,7 @@ def test_shipped_optimization_example_stays_at_or_below_the_knee():
 # --- Q29: the sheared IMEX route carries the same solve status ----------------
 
 
-def _sheared_imex_deck():
+def _sheared_imex_deck(ky_layout):
     grid = build_spectral_grid(
         GridConfig(
             Nx=4,
@@ -3530,12 +3549,15 @@ def _sheared_imex_deck():
             Lx=2.0 * np.pi,
             Ly=2.0 * np.pi,
             boundary="periodic",
+            ky_layout=ky_layout,
         )
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
     params = LinearParams(rho_star=1.0, nu_hyper=0.0, nu_hyper_m=0.0)
     cache = build_linear_cache(grid, geom, params, Nl=1, Nm=2)
-    state = jnp.zeros((1, 1, 2, 4, 4, 4), dtype=jnp.complex64)
+    state = jnp.zeros(
+        (1, 1, 2, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64
+    )
     state = state.at[0, 0, 0, 1, 0, :].set(0.2 + 0.1j)
     return grid, geom, params, cache, state
 
@@ -3543,16 +3565,19 @@ def _sheared_imex_deck():
 _Q29_SHEARED = dict(dt=0.02, steps=3, shear_rate=0.5, terms=TermConfig(nonlinear=1.0))
 _Q29_STARVED_BUDGET = dict(implicit_tol=1.0e-14, implicit_maxiter=1, implicit_restart=1)
 _Q29_GENEROUS_BUDGET = dict(
-    implicit_tol=1.0e-8, implicit_maxiter=200, implicit_restart=20
+    implicit_tol=max(1.0e-8, 10 * float(jnp.finfo(jnp.asarray(0.0).dtype).eps)),
+    implicit_maxiter=200,
+    implicit_restart=20,
 )
 
 
-def test_sheared_imex_carries_unconverged_solves_to_the_host_gate() -> None:
+@pytest.mark.parametrize("ky_layout", ["full", "half"])
+def test_sheared_imex_carries_unconverged_solves_to_the_host_gate(ky_layout) -> None:
     """A starved inner budget is visible on the sheared IMEX route and refused."""
 
     from gkx.solvers_linear_implicit import require_converged_implicit_solves
 
-    grid, geom, params, cache, state = _sheared_imex_deck()
+    grid, geom, params, cache, state = _sheared_imex_deck(ky_layout)
 
     def run(budget):
         _final, _fields, stats = integrate_nonlinear_sheared(
@@ -3563,6 +3588,7 @@ def test_sheared_imex_carries_unconverged_solves_to_the_host_gate() -> None:
             method="imex",
             cache=cache,
             return_solve_stats=True,
+            compressed_real_fft=ky_layout == "half",
             **_Q29_SHEARED,
             **budget,
         )
@@ -3582,12 +3608,13 @@ def test_sheared_imex_carries_unconverged_solves_to_the_host_gate() -> None:
     assert summary.unconverged_solves == 0
 
 
-def test_sheared_transport_trace_carries_the_same_status() -> None:
+@pytest.mark.parametrize("ky_layout", ["full", "half"])
+def test_sheared_transport_trace_carries_the_same_status(ky_layout) -> None:
     """The transport door reports through the trace it already returns."""
 
     from gkx.solvers_linear_implicit import require_converged_implicit_solves
 
-    grid, geom, params, cache, state = _sheared_imex_deck()
+    grid, geom, params, cache, state = _sheared_imex_deck(ky_layout)
     trace = integrate_nonlinear_sheared_transport(
         state,
         grid,
@@ -3596,6 +3623,7 @@ def test_sheared_transport_trace_carries_the_same_status() -> None:
         method="imex",
         cache=cache,
         return_solve_stats=True,
+        compressed_real_fft=ky_layout == "half",
         **_Q29_SHEARED,
         **_Q29_STARVED_BUDGET,
     )
@@ -3610,6 +3638,7 @@ def test_sheared_transport_trace_carries_the_same_status() -> None:
         params,
         method="imex",
         cache=cache,
+        compressed_real_fft=ky_layout == "half",
         **_Q29_SHEARED,
         **_Q29_GENEROUS_BUDGET,
     )
@@ -3625,6 +3654,7 @@ def test_sheared_transport_trace_carries_the_same_status() -> None:
                 method="imex",
                 cache=cache,
                 return_solve_stats=True,
+                compressed_real_fft=ky_layout == "half",
                 **_Q29_SHEARED,
                 **_Q29_GENEROUS_BUDGET,
             ).final_state
@@ -3632,10 +3662,11 @@ def test_sheared_transport_trace_carries_the_same_status() -> None:
     )
 
 
-def test_an_explicit_sheared_method_reports_no_implicit_status() -> None:
+@pytest.mark.parametrize("ky_layout", ["full", "half"])
+def test_an_explicit_sheared_method_reports_no_implicit_status(ky_layout) -> None:
     """No implicit solve, no carry leaf, and a null status rather than a fake one."""
 
-    grid, geom, params, cache, state = _sheared_imex_deck()
+    grid, geom, params, cache, state = _sheared_imex_deck(ky_layout)
     final, _fields, stats = integrate_nonlinear_sheared(
         state,
         grid,
@@ -3644,11 +3675,19 @@ def test_an_explicit_sheared_method_reports_no_implicit_status() -> None:
         method="rk2",
         cache=cache,
         return_solve_stats=True,
+        compressed_real_fft=ky_layout == "half",
         **_Q29_SHEARED,
     )
     assert stats is None
     reference, _reference_fields = integrate_nonlinear_sheared(
-        state, grid, geom, params, method="rk2", cache=cache, **_Q29_SHEARED
+        state,
+        grid,
+        geom,
+        params,
+        method="rk2",
+        cache=cache,
+        compressed_real_fft=ky_layout == "half",
+        **_Q29_SHEARED,
     )
     np.testing.assert_array_equal(np.asarray(final), np.asarray(reference))
 
@@ -3661,6 +3700,7 @@ def test_an_explicit_sheared_method_reports_no_implicit_status() -> None:
         cache=cache,
         return_fields=False,
         return_solve_stats=True,
+        compressed_real_fft=ky_layout == "half",
         **_Q29_SHEARED,
     )
     assert only_stats is None
@@ -3676,6 +3716,7 @@ def test_an_explicit_sheared_method_reports_no_implicit_status() -> None:
         method="rk2",
         cache=cache,
         return_fields=False,
+        compressed_real_fft=ky_layout == "half",
         **_Q29_SHEARED,
     )
     np.testing.assert_array_equal(

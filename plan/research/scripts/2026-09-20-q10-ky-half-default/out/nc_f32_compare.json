@@ -1,0 +1,1388 @@
+{
+  "ref": "plan/research/scripts/2026-09-20-q10-ky-half-default/out/nc_f32_full.npz",
+  "new": "plan/research/scripts/2026-09-20-q10-ky-half-default/out/nc_f32_half.npz",
+  "variables": 225,
+  "bitwise": 186,
+  "max_rel": 0.0003572312399103973,
+  "rtol": 1e-05,
+  "over_rtol": [
+    {
+      "key": "out:Diagnostics/TurbulentHeating_kyst",
+      "max_rel": 0.0003572312399103973,
+      "max_abs": 1.8558488079634117e-12,
+      "ref_peak": 5.195091024035037e-09
+    },
+    {
+      "key": "out:Diagnostics/TurbulentHeating_kxkyst",
+      "max_rel": 0.00034479149744729484,
+      "max_abs": 8.511247262532606e-13,
+      "ref_peak": 2.468520055032286e-09
+    },
+    {
+      "key": "out:Diagnostics/TurbulentHeating_st",
+      "max_rel": 0.0002892184140624195,
+      "max_abs": 3.0402347306335287e-12,
+      "ref_peak": 1.0511898906884198e-08
+    },
+    {
+      "key": "out:Diagnostics/TurbulentHeating_kxst",
+      "max_rel": 0.00013452341798121182,
+      "max_abs": 9.832135106080386e-13,
+      "ref_peak": 7.308865068722525e-09
+    }
+  ],
+  "failures": [],
+  "rows": [
+    {
+      "key": "out:Diagnostics/TurbulentHeating_kyst",
+      "max_rel": 0.0003572312399103973,
+      "max_abs": 1.8558488079634117e-12,
+      "ref_peak": 5.195091024035037e-09
+    },
+    {
+      "key": "out:Diagnostics/TurbulentHeating_kxkyst",
+      "max_rel": 0.00034479149744729484,
+      "max_abs": 8.511247262532606e-13,
+      "ref_peak": 2.468520055032286e-09
+    },
+    {
+      "key": "out:Diagnostics/TurbulentHeating_st",
+      "max_rel": 0.0002892184140624195,
+      "max_abs": 3.0402347306335287e-12,
+      "ref_peak": 1.0511898906884198e-08
+    },
+    {
+      "key": "out:Diagnostics/TurbulentHeating_kxst",
+      "max_rel": 0.00013452341798121182,
+      "max_abs": 9.832135106080386e-13,
+      "ref_peak": 7.308865068722525e-09
+    },
+    {
+      "key": "out:Diagnostics/Wphi_zst",
+      "max_rel": 1.0520272007202302e-06,
+      "max_abs": 3.092281986027956e-11,
+      "ref_peak": 2.939355545095168e-05
+    },
+    {
+      "key": "out:Diagnostics/Wphi_kxkyst",
+      "max_rel": 8.867905837547751e-07,
+      "max_abs": 1.864464138634503e-11,
+      "ref_peak": 2.1024852685513906e-05
+    },
+    {
+      "key": "out:Diagnostics/Wphi_kxst",
+      "max_rel": 5.209431293331616e-07,
+      "max_abs": 4.3655745685100555e-11,
+      "ref_peak": 8.380136569030583e-05
+    },
+    {
+      "key": "out:Diagnostics/HeatFlux_st",
+      "max_rel": 3.4144615078364454e-07,
+      "max_abs": 2.9103830456733704e-11,
+      "ref_peak": 8.52369557833299e-05
+    },
+    {
+      "key": "out:Diagnostics/Phi2_zt",
+      "max_rel": 3.006191913608297e-07,
+      "max_abs": 5.820766091346741e-10,
+      "ref_peak": 0.0019362589810043573
+    },
+    {
+      "key": "out:Diagnostics/Wphi_kyst",
+      "max_rel": 2.924972552788808e-07,
+      "max_abs": 2.9103830456733704e-11,
+      "ref_peak": 9.95012087514624e-05
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxES_zst",
+      "max_rel": 2.2130740625595316e-07,
+      "max_abs": 1.1368683772161603e-12,
+      "ref_peak": 5.1370552682783455e-06
+    },
+    {
+      "key": "out:Diagnostics/HeatFlux_zst",
+      "max_rel": 2.2130740625595316e-07,
+      "max_abs": 1.1368683772161603e-12,
+      "ref_peak": 5.1370552682783455e-06
+    },
+    {
+      "key": "out:Diagnostics/TurbulentHeating_zst",
+      "max_rel": 2.1966020323840644e-07,
+      "max_abs": 8.881784197001252e-16,
+      "ref_peak": 4.043419821186944e-09
+    },
+    {
+      "key": "out:Diagnostics/Wg_zst",
+      "max_rel": 2.1928903643629878e-07,
+      "max_abs": 2.3283064365386963e-10,
+      "ref_peak": 0.0010617523221299052
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxES_kyst",
+      "max_rel": 2.1743245107579598e-07,
+      "max_abs": 7.275957614183426e-12,
+      "ref_peak": 3.346307130414061e-05
+    },
+    {
+      "key": "out:Diagnostics/HeatFlux_kyst",
+      "max_rel": 2.1743245107579598e-07,
+      "max_abs": 7.275957614183426e-12,
+      "ref_peak": 3.346307130414061e-05
+    },
+    {
+      "key": "out:Diagnostics/Phi2_zonal_zt",
+      "max_rel": 2.0427961712279922e-07,
+      "max_abs": 4.336808689942018e-19,
+      "ref_peak": 2.1229767076247352e-12
+    },
+    {
+      "key": "big:Diagnostics/PhiXY",
+      "max_rel": 2.016881499841826e-07,
+      "max_abs": 4.656612873077393e-10,
+      "ref_peak": 0.0023088182788342237
+    },
+    {
+      "key": "big:Diagnostics/ParticleDensityXY",
+      "max_rel": 1.9671822848153395e-07,
+      "max_abs": 4.656612873077393e-10,
+      "ref_peak": 0.0023671486414968967
+    },
+    {
+      "key": "big:Diagnostics/DensityXY",
+      "max_rel": 1.941748326892554e-07,
+      "max_abs": 4.656612873077393e-10,
+      "ref_peak": 0.0023981546983122826
+    },
+    {
+      "key": "big:Diagnostics/UparXY",
+      "max_rel": 1.5868930253195129e-07,
+      "max_abs": 1.1641532182693481e-10,
+      "ref_peak": 0.0007336053531616926
+    },
+    {
+      "key": "out:Diagnostics/Wg_kxst",
+      "max_rel": 1.5075393550686338e-07,
+      "max_abs": 4.656612873077393e-10,
+      "ref_peak": 0.003088883124291897
+    },
+    {
+      "key": "big:Diagnostics/TperpXY",
+      "max_rel": 1.4361224578747585e-07,
+      "max_abs": 1.4551915228366852e-11,
+      "ref_peak": 0.0001013278160826303
+    },
+    {
+      "key": "out:Diagnostics/Phi2_kxkyt",
+      "max_rel": 1.2983386912525274e-07,
+      "max_abs": 1.1641532182693481e-10,
+      "ref_peak": 0.0008966483292169869
+    },
+    {
+      "key": "big:Diagnostics/ParticleUperpXY",
+      "max_rel": 1.113791140103342e-07,
+      "max_abs": 5.820766091346741e-11,
+      "ref_peak": 0.0005226084031164646
+    },
+    {
+      "key": "out:Diagnostics/Wphi_st",
+      "max_rel": 8.753691431676738e-08,
+      "max_abs": 5.820766091346741e-11,
+      "ref_peak": 0.0006649498827755451
+    },
+    {
+      "key": "out:Diagnostics/Phi2_kxt",
+      "max_rel": 8.264536576028943e-08,
+      "max_abs": 2.3283064365386963e-10,
+      "ref_peak": 0.002817225642502308
+    },
+    {
+      "key": "big:Diagnostics/ParticleUparXY",
+      "max_rel": 7.982089468367299e-08,
+      "max_abs": 5.820766091346741e-11,
+      "ref_peak": 0.0007292283698916435
+    },
+    {
+      "key": "out:Diagnostics/Wg_kyst",
+      "max_rel": 7.142528076385052e-08,
+      "max_abs": 2.3283064365386963e-10,
+      "ref_peak": 0.0032597791869193316
+    },
+    {
+      "key": "big:Diagnostics/ParticleTempXY",
+      "max_rel": 6.978448875046127e-08,
+      "max_abs": 2.9103830456733704e-11,
+      "ref_peak": 0.00041705300100147724
+    },
+    {
+      "key": "big:Diagnostics/TparXY",
+      "max_rel": 6.864440345610843e-08,
+      "max_abs": 2.9103830456733704e-11,
+      "ref_peak": 0.00042397965444251895
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxES_kxst",
+      "max_rel": 6.67896397513769e-08,
+      "max_abs": 9.094947017729282e-13,
+      "ref_peak": 1.3617302101920359e-05
+    },
+    {
+      "key": "out:Diagnostics/HeatFlux_kxst",
+      "max_rel": 6.67896397513769e-08,
+      "max_abs": 9.094947017729282e-13,
+      "ref_peak": 1.3617302101920359e-05
+    },
+    {
+      "key": "out:Diagnostics/Wg_kxkyst",
+      "max_rel": 6.334500253855098e-08,
+      "max_abs": 2.9103830456733704e-11,
+      "ref_peak": 0.0004594495112542063
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxES_kxkyst",
+      "max_rel": 6.282863301858282e-08,
+      "max_abs": 4.547473508864641e-13,
+      "ref_peak": 7.237899808387738e-06
+    },
+    {
+      "key": "out:Diagnostics/HeatFlux_kxkyst",
+      "max_rel": 6.282863301858282e-08,
+      "max_abs": 4.547473508864641e-13,
+      "ref_peak": 7.237899808387738e-06
+    },
+    {
+      "key": "out:Diagnostics/Phi2_zonal_kxt",
+      "max_rel": 5.532360213301255e-08,
+      "max_abs": 4.336808689942018e-19,
+      "ref_peak": 7.838984669716886e-12
+    },
+    {
+      "key": "out:Diagnostics/Phi2_zonal_t",
+      "max_rel": 6.743614218136952e-10,
+      "max_abs": 2.710505431213761e-20,
+      "ref_peak": 4.019366089957899e-11
+    },
+    {
+      "key": "out:Diagnostics/Wg_lmst",
+      "max_rel": 1.6853661592540612e-10,
+      "max_abs": 3.637978807091713e-12,
+      "ref_peak": 0.02158568799495697
+    },
+    {
+      "key": "big:#dim:kx",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 11.0
+    },
+    {
+      "key": "big:#dim:ky",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 6.0
+    },
+    {
+      "key": "big:#dim:kz",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 24.0
+    },
+    {
+      "key": "big:#dim:l",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0
+    },
+    {
+      "key": "big:#dim:m",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 4.0
+    },
+    {
+      "key": "big:#dim:ri",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0
+    },
+    {
+      "key": "big:#dim:s",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:#dim:theta",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 24.0
+    },
+    {
+      "key": "big:#dim:time",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:#dim:x",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 16.0
+    },
+    {
+      "key": "big:#dim:y",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 16.0
+    },
+    {
+      "key": "big:Diagnostics/Apar",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "big:Diagnostics/AparXY",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "big:Diagnostics/Bpar",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "big:Diagnostics/BparXY",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "big:Diagnostics/Density",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.024689434096217155
+    },
+    {
+      "key": "big:Diagnostics/ParticleDensity",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.024647504091262817
+    },
+    {
+      "key": "big:Diagnostics/ParticleTemp",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.005124624818563461
+    },
+    {
+      "key": "big:Diagnostics/ParticleUpar",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.01065194234251976
+    },
+    {
+      "key": "big:Diagnostics/ParticleUperp",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.008673685602843761
+    },
+    {
+      "key": "big:Diagnostics/Phi",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.024564430117607117
+    },
+    {
+      "key": "big:Diagnostics/Tpar",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.00512732844799757
+    },
+    {
+      "key": "big:Diagnostics/Tperp",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.00179936399217695
+    },
+    {
+      "key": "big:Diagnostics/Upar",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.010656939819455147
+    },
+    {
+      "key": "big:Geometry/alpha",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "big:Geometry/aminor",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.5000004172325134
+    },
+    {
+      "key": "big:Geometry/bgrad",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0468931645154953
+    },
+    {
+      "key": "big:Geometry/bmag",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.2195122241973877
+    },
+    {
+      "key": "big:Geometry/cvdrift",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.457319974899292
+    },
+    {
+      "key": "big:Geometry/cvdrift0",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.2879997789859772
+    },
+    {
+      "key": "big:Geometry/drhodpsi",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:Geometry/gbdrift",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.457319974899292
+    },
+    {
+      "key": "big:Geometry/gbdrift0",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.2879997789859772
+    },
+    {
+      "key": "big:Geometry/gds2",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 7.316547393798828
+    },
+    {
+      "key": "big:Geometry/gds21",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0106194019317627
+    },
+    {
+      "key": "big:Geometry/gds22",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.64000004529953
+    },
+    {
+      "key": "big:Geometry/gradpar",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.25714266300201416
+    },
+    {
+      "key": "big:Geometry/grho",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:Geometry/jacobian",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 4.588892459869385
+    },
+    {
+      "key": "big:Geometry/kxfac",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:Geometry/nfp",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:Geometry/nperiod",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:Geometry/q",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.399999976158142
+    },
+    {
+      "key": "big:Geometry/rmaj",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.777780055999756
+    },
+    {
+      "key": "big:Geometry/shat",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.800000011920929
+    },
+    {
+      "key": "big:Geometry/shift",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "big:Geometry/theta_scale",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:Geometry/zeta_center",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "big:Grids/kx",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.1782463937997818
+    },
+    {
+      "key": "big:Grids/ky",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.1773049682378769
+    },
+    {
+      "key": "big:Grids/kz",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 3.1415927410125732
+    },
+    {
+      "key": "big:Grids/theta",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 3.1415927410125732
+    },
+    {
+      "key": "big:Grids/time",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.20000001788139343
+    },
+    {
+      "key": "big:Grids/x",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 165.234375
+    },
+    {
+      "key": "big:Grids/y",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 166.11170959472656
+    },
+    {
+      "key": "big:code_info",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:debug",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "big:nhermite",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 4.0
+    },
+    {
+      "key": "big:nlaguerre",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0
+    },
+    {
+      "key": "big:nperiod",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:nspecies",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "big:ntheta",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 24.0
+    },
+    {
+      "key": "big:nx",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 16.0
+    },
+    {
+      "key": "big:ny",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 16.0
+    },
+    {
+      "key": "out:#dim:kx",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 11.0
+    },
+    {
+      "key": "out:#dim:ky",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 6.0
+    },
+    {
+      "key": "out:#dim:kz",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 24.0
+    },
+    {
+      "key": "out:#dim:l",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0
+    },
+    {
+      "key": "out:#dim:m",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 4.0
+    },
+    {
+      "key": "out:#dim:ri",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0
+    },
+    {
+      "key": "out:#dim:s",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:#dim:theta",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 24.0
+    },
+    {
+      "key": "out:#dim:time",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 3.0
+    },
+    {
+      "key": "out:#dim:x",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 16.0
+    },
+    {
+      "key": "out:#dim:y",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 16.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxApar_kxkyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxApar_kxst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxApar_kyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxApar_st",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxApar_zst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxBpar_kxkyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxBpar_kxst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxBpar_kyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxBpar_st",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxBpar_zst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/HeatFluxES_st",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 8.52369557833299e-05
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxApar_kxkyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxApar_kxst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxApar_kyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxApar_st",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxApar_zst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxBpar_kxkyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxBpar_kxst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxBpar_kyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxBpar_st",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxBpar_zst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxES_kxkyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxES_kxst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxES_kyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxES_st",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFluxES_zst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFlux_kxkyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFlux_kxst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFlux_kyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFlux_st",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/ParticleFlux_zst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/Phi2_kyt",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0061668879352509975
+    },
+    {
+      "key": "out:Diagnostics/Phi2_t",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.01938677206635475
+    },
+    {
+      "key": "out:Diagnostics/Phi_zonal_line_kxt",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.733464953053044e-06
+    },
+    {
+      "key": "out:Diagnostics/Phi_zonal_mode_kxt",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.730737378442427e-06
+    },
+    {
+      "key": "out:Diagnostics/Wapar_kxkyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/Wapar_kxst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/Wapar_kyst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/Wapar_st",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/Wapar_zst",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Diagnostics/Wg_st",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.021586177870631218
+    },
+    {
+      "key": "out:Geometry/alpha",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Geometry/aminor",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.5000004172325134
+    },
+    {
+      "key": "out:Geometry/bgrad",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0468931645154953
+    },
+    {
+      "key": "out:Geometry/bmag",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.2195122241973877
+    },
+    {
+      "key": "out:Geometry/cvdrift",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.457319974899292
+    },
+    {
+      "key": "out:Geometry/cvdrift0",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.2879997789859772
+    },
+    {
+      "key": "out:Geometry/drhodpsi",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Geometry/gbdrift",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.457319974899292
+    },
+    {
+      "key": "out:Geometry/gbdrift0",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.2879997789859772
+    },
+    {
+      "key": "out:Geometry/gds2",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 7.316547393798828
+    },
+    {
+      "key": "out:Geometry/gds21",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0106194019317627
+    },
+    {
+      "key": "out:Geometry/gds22",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.64000004529953
+    },
+    {
+      "key": "out:Geometry/gradpar",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.25714266300201416
+    },
+    {
+      "key": "out:Geometry/grho",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Geometry/jacobian",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 4.588892459869385
+    },
+    {
+      "key": "out:Geometry/kxfac",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Geometry/nfp",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Geometry/nperiod",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Geometry/q",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.399999976158142
+    },
+    {
+      "key": "out:Geometry/rmaj",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.777780055999756
+    },
+    {
+      "key": "out:Geometry/shat",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.800000011920929
+    },
+    {
+      "key": "out:Geometry/shift",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Geometry/theta_scale",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Geometry/zeta_center",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Grids/kx",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.1782463937997818
+    },
+    {
+      "key": "out:Grids/ky",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.1773049682378769
+    },
+    {
+      "key": "out:Grids/kz",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 3.1415927410125732
+    },
+    {
+      "key": "out:Grids/theta",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 3.1415927410125732
+    },
+    {
+      "key": "out:Grids/time",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.20000001788139343
+    },
+    {
+      "key": "out:Grids/x",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 165.234375
+    },
+    {
+      "key": "out:Grids/y",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 166.11170959472656
+    },
+    {
+      "key": "out:Inputs/B_ref",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Inputs/Rmaj",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.777780055999756
+    },
+    {
+      "key": "out:Inputs/a_ref",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Inputs/beta",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Inputs/const_curv",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Inputs/drhodpsi",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Inputs/eps",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.18000000715255737
+    },
+    {
+      "key": "out:Inputs/geofile_dum",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Inputs/grhoavg",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Inputs/igeo",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Inputs/kappa",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Inputs/kappa_prime",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Inputs/kxfac",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:Inputs/q",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.399999976158142
+    },
+    {
+      "key": "out:Inputs/shat",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.800000011920929
+    },
+    {
+      "key": "out:Inputs/shift",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Inputs/slab",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Inputs/surfarea",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0,
+      "note": "non-finite in both arms"
+    },
+    {
+      "key": "out:Inputs/tri",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Inputs/tri_prime",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:Inputs/zero_shat",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:code_info",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:debug",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.0
+    },
+    {
+      "key": "out:nhermite",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 4.0
+    },
+    {
+      "key": "out:nlaguerre",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0
+    },
+    {
+      "key": "out:nperiod",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:nspecies",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "out:ntheta",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 24.0
+    },
+    {
+      "key": "out:nx",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 16.0
+    },
+    {
+      "key": "out:ny",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 16.0
+    },
+    {
+      "key": "restart:#dim:Nkx",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 11.0
+    },
+    {
+      "key": "restart:#dim:Nky",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 6.0
+    },
+    {
+      "key": "restart:#dim:Nl",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0
+    },
+    {
+      "key": "restart:#dim:Nm",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 4.0
+    },
+    {
+      "key": "restart:#dim:Nspecies",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 1.0
+    },
+    {
+      "key": "restart:#dim:Nz",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 24.0
+    },
+    {
+      "key": "restart:#dim:ri",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 2.0
+    },
+    {
+      "key": "restart:G",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.024689434096217155
+    },
+    {
+      "key": "restart:time",
+      "max_rel": 0.0,
+      "max_abs": 0.0,
+      "ref_peak": 0.20000001788139343
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 #
 # Run on office from the repo root:
 #   export HSX_VMEC_FILE="$HOME/gx_refs/main_clean_20260312/nonlinear/hsx/wout_HSX_QHS_vac.nc"
-#   python tools/comparison/build_exact_state_audit.py run \
+#   python scripts/comparison/build_exact_state_audit.py run \
 #     --manifest tools/exact_state_lanes.office.toml \
 #     --outdir tools_out/exact_state_audit_office
 #
@@ -18,7 +18,7 @@
 # dump artifacts exist.
 
 [lane.cyclone_miller]
-config = "../examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml"
+config = "../benchmarks/cases/cyclone_nonlinear_miller.toml"
 gx_out = "$HOME/gx_runs/cyclone_diag160/cyclone_diag160.out.nc"
 env.JAX_PLATFORMS = "cpu"
 
@@ -27,7 +27,7 @@ gx_dir = "$HOME/gx_runs/cyclone_diag160"
 time_index = 47
 
 [lane.cyclone_runtime_salpha]
-config = "../examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"
+config = "../examples/03_nonlinear_tokamak/case_full.toml"
 gx_out = "$HOME/gx_runs/cyclone_local_match/cyclone_local_match_dense.out.nc"
 env.JAX_PLATFORMS = "cpu"
 
@@ -41,7 +41,7 @@ gx_dir = "$HOME/gx_runs/cyclone_local_match_dense_diag_t47"
 time_index = 47
 
 [lane.kbm_salpha]
-config = "../examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml"
+config = "../benchmarks/cases/kbm_nonlinear_t100.toml"
 gx_out = "$HOME/gx_refs/main_clean_20260312/nonlinear/kbm/kbm_salpha_nonlinear.out.nc"
 env.JAX_PLATFORMS = "cpu"
 
@@ -55,7 +55,7 @@ gx_dir = "$HOME/gx_runs/kbm_diag_t130"
 time_index = 130
 
 [lane.w7x_vmec]
-config = "../examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml"
+config = "../benchmarks/cases/w7x_nonlinear_vmec_geometry.toml"
 gx_out = "$HOME/gx_refs/main_clean_20260312/nonlinear/w7x/w7x_adiabatic_electrons.out.nc"
 env.JAX_PLATFORMS = "cpu"
 env.W7X_VMEC_FILE = "$HOME/gx_refs/main_clean_20260312/nonlinear/w7x/wout_w7x.nc"
@@ -70,7 +70,7 @@ gx_dir = "$HOME/gx_runs/w7x/diag_t10_clean"
 time_index = 10
 
 [lane.hsx_vmec]
-config = "../examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml"
+config = "../examples/04_nonlinear_stellarator/case_full.toml"
 gx_out = "$HOME/gx_refs/main_clean_20260312/nonlinear/hsx/hsx_nonlinear.out.nc"
 env.JAX_PLATFORMS = "cpu"
 env.HSX_VMEC_FILE = "$HOME/gx_refs/main_clean_20260312/nonlinear/hsx/wout_HSX_QHS_vac.nc"
