@@ -791,7 +791,7 @@ def test_example_first_party_imports_resolve(relative: str) -> None:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name.split(".")[0] in {"gkx", "tools"}:
+                if alias.name.split(".")[0] in {"gkx", "scripts"}:
                     importlib.import_module(alias.name)
                     checked += 1
             continue
@@ -799,7 +799,7 @@ def test_example_first_party_imports_resolve(relative: str) -> None:
             continue
         owner = node.module or ""
         root = owner.split(".")[0]
-        if root not in {"gkx", "tools"} and not root.startswith("_stellarator_itg"):
+        if root not in {"gkx", "scripts"} and not root.startswith("_stellarator_itg"):
             continue
         module = importlib.import_module(owner)
         for alias in node.names:

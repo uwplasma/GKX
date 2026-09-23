@@ -203,7 +203,7 @@ def _imported_runtime_geometry(wout_path: Path, *, torflux: float, ntheta: int):
     from gkx.geometry import load_imported_geometry_netcdf
     from gkx.geometry.imported_vmec import generate_vmec_eik_internal
 
-    # The report builders moved to tools/campaigns; the default EIK request is
+    # The report builders moved to scripts/campaigns; the default EIK request is
     # a constant this parity check needs, not report machinery.
     from gkx.geometry.vmec_eik import _VMEC_EIK_DEFAULT_REQUEST
 

@@ -2761,7 +2761,7 @@ def test_runtime_linear_accepts_vmec_model_via_generated_eik(
 
 
 def test_runtime_linear_secondary_slab_example_runs() -> None:
-    cfg_path = REPO_ROOT / "benchmarks" / "runtime_secondary_slab.toml"
+    cfg_path = REPO_ROOT / "benchmarks" / "cases" / "secondary_slab.toml"
     cfg, _ = load_runtime_from_toml(cfg_path)
 
     out = run_runtime_linear(cfg, ky_target=0.1, Nl=3, Nm=8, solver="explicit_time")

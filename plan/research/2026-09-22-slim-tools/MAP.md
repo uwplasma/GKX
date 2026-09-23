@@ -168,3 +168,75 @@ that must change first, or the docs page that must drop the reference.
 | `tools/runtime_memory_manifest.toml` | 241 | tests: validation/benchmarks/test_benchmark_contracts.py; docs: performance.rst; docs/_static: 1; tools: performance_optimization_manifest.toml, release/check_release_readiness.py; benchmarks: performance/benchmark_runtime_memory.py, results/manifest.toml | keep (c): read by check.py readiness; benchmark_runtime_memory.py | — |
 | `tools/validation_coverage_manifest.toml` | 2505 | tests: unit/parallel/test_parallel_artifacts.py; docs: code_structure.rst, parallelization.rst, testing.rst, validation_strategy.rst; docs/_static: 1; tools: release/check_release_readiness.py, release/check_validation_coverage_manifest.py; plan/: 1 | keep (c): read by check.py validation-coverage, readiness | — |
 | `tools/vmec_roundtrip_lanes.office.toml` | 9 | none | **deleted** (a) zero references (office lane config) | `f9485f044ab7` |
+
+## Tranche 2 (branch `slim/tools-benchmarks-2`)
+
+Every row above marked "tranche 2" or "README lane" moved whole, keeping its
+file name. Nothing was deleted except the empty `benchmarks/performance/__init__.py`.
+
+| From | To | Command | Files | Lines |
+| --- | --- | --- | ---: | ---: |
+| `tools/artifacts/` | `scripts/artifacts/` | `python scripts/validate.py <module>` | 40 | 35,121 |
+| `tools/campaigns/` | `scripts/campaigns/` | `python scripts/validate.py <module>` | 15 | 9,461 |
+| `tools/comparison/*.py` | `scripts/comparison/` | `python scripts/compare.py <module>` | 9 | 10,710 |
+| `tools/profiling/` | `scripts/profiling/` | `python scripts/profile.py <module>` | 12 | 8,543 |
+| `benchmarks/*.py`, `benchmarks/performance/*.py` | `scripts/benchmarks/` | `python scripts/benchmark.py <module>` | 10 | 1,352 |
+| `benchmarks/runtime_{miller_zonal_response,secondary_slab,w7x_zonal_response_vmec}.toml`, `benchmarks/collisional_zonal_response.toml` | `benchmarks/cases/` (the `runtime_` prefix is dropped, as in EXAMPLES-GALLERY) | | 4 | |
+
+Each command runs one module with the remaining arguments, exactly as if the
+module had been executed directly. `--list` prints the modules. The shared
+runner is `scripts/_command.py`, and `scripts/check.py` uses it too. While a
+module runs, `sys.path[0]` is the module's own directory, the same as direct
+execution, so `scripts/profile.py` cannot shadow the standard-library
+`profile` module. `python scripts/<package>/<module>.py` still works, so path
+strings in docs stay runnable.
+
+These stay in `tools/`:
+- the `*.toml` manifests. The readiness JSONs embed their paths, so they move last.
+- `tools/comparison/fixtures/`. #272 edits a parity deck and #285's `scripts/figures.toml` reads `gx_goldens/README.md`.
+
+**Correction to tranche 1.** The users column above counts references to a
+file's path. It does not count consumers of the file's *outputs*. Two builders
+looked docs-only, and DOCS-CURRENT (#283) dropped their mentions:
+- `build_vmec_boozer_gradient_holdout_matrix.py` writes
+  `docs/_static/vmec_boozer_gradient_holdout_matrix.json`, which
+  `scripts/check.py vmec-boozer` reads in CI.
+- `plot_external_vmec_nonlinear_convergence_gate.py` writes the
+  `external_vmec_*_gate.json` family, which `check_vmec_boozer_gates.py` and
+  `validation_coverage_manifest.toml` read.
+
+Both builders were kept. A builder is deletable only if no tracked output it
+writes is read by a gate, a test or a manifest.
+
+**Rename recipe for other lanes.** Run this on a branch cut before this
+change: #281 examples, #283 docs, #285 README and figures, #266/#282
+`profile_runtime_kernels.py`. Git's rename detection carries edits to moved
+files. For path strings, run the same substitution over tracked text files,
+except `docs/_static/` and `plan/`:
+
+Save these lines as `slim2.sed` and run `sed -E -i '' -f slim2.sed <files>`
+(BSD sed; with GNU sed drop the `''`). Checked on this branch: it
+reproduces this change's edits to the docs, manifests and tests.
+
+```sed
+s#(^|[^/A-Za-z0-9_.-])tools/(profiling|campaigns|artifacts)([^A-Za-z0-9_]|$)#\1scripts/\2\3#g
+s#(^|[^/A-Za-z0-9_.-])tools/comparison/([A-Za-z0-9_]+\.py)#\1scripts/comparison/\2#g
+s#(^|[^A-Za-z0-9_.])tools\.(profiling|campaigns|artifacts|comparison)([^A-Za-z0-9_]|$)#\1scripts.\2\3#g
+s#(^|[^/A-Za-z0-9_.-])benchmarks/performance/#\1scripts/benchmarks/#g
+s#(^|[^A-Za-z0-9_.])benchmarks\.performance([^A-Za-z0-9_]|$)#\1scripts.benchmarks\2#g
+s#(^|[^/A-Za-z0-9_.-])benchmarks/(basis_orthonormality|cyclone_linear_benchmark|etg_linear_benchmark|kbm_linear_comparison|kinetic_linear_benchmark|secondary_slab_workflow|tem_linear_benchmark)\.py#\1scripts/benchmarks/\2.py#g
+s#benchmarks/runtime_(miller_zonal_response|secondary_slab|w7x_zonal_response_vmec)\.toml#benchmarks/cases/\1.toml#g
+s#(^|[^/])benchmarks/collisional_zonal_response\.toml#\1benchmarks/cases/collisional_zonal_response.toml#g
+```
+
+#285's `scripts/figures.py` imports two builders. The recipe turns
+`tools.artifacts.build_linear_validation_artifacts` and
+`tools.artifacts.build_landau_damping_figure` into their `scripts.artifacts.*`
+forms.
+
+**What is left.** `tools/` has no Python: 78 files and 63,832 lines went to
+zero. `scripts/` holds 104 files and 77,373 lines, against targets of 12 files
+and 18,000 lines. This tranche is a relocation, not a contraction. The next
+tranches contract by package. Artifacts are the largest, and
+`build_linear_validation_artifacts.py` alone is 7,565 lines. Each deletion must
+clear the output-consumer check above.

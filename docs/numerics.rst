@@ -1111,14 +1111,14 @@ the fixed equivalent-convergence gates.
 The panel is regenerated with the existing artifact owner after exact table
 archives are built with ``build_finite_wavelength_coulomb_pair_tables``::
 
-   python tools/artifacts/build_linear_validation_artifacts.py collision-itg \
+   python scripts/artifacts/build_linear_validation_artifacts.py collision-itg \
      --table finite_b_P7_J3.npz --table finite_b_P9_J4.npz \
      --table finite_b_P12_J5.npz --table finite_b_P15_J6.npz
 
 For a fixed-wavelength zonal-response audit, generate a compact endpoint
 archive instead of a full two-dimensional interpolation table::
 
-   python tools/artifacts/build_linear_validation_artifacts.py collision-endpoint \
+   python scripts/artifacts/build_linear_validation_artifacts.py collision-endpoint \
      --out finite_b_zonal_P24_J10_kx020.npz \
      --bessel-argument 0.282842712474619 --maximum-hermite-order 24 \
      --maximum-laguerre-order 10 --maximum-angular-bessel-order 4 \
@@ -1131,7 +1131,7 @@ one-species zonal problem, generate the required equal-target/source diagonal
 table by repeating ``--bessel-argument`` over a grid that covers the measured
 field-line interval::
 
-   python tools/artifacts/build_linear_validation_artifacts.py collision-diagonal-table \
+   python scripts/artifacts/build_linear_validation_artifacts.py collision-diagonal-table \
      --out finite_b_zonal_P24_J10_diagonal.npz \
      --bessel-argument 0.126 --bessel-argument 0.140 \
      --bessel-argument 0.155 --bessel-argument 0.254 \
@@ -1148,9 +1148,9 @@ convergence claim.
 
 Run one table through the common zonal integrator with::
 
-   python tools/artifacts/build_zonal_flow_artifacts.py \
+   python scripts/artifacts/build_zonal_flow_artifacts.py \
      simulate-collisional-zonal-finite-b \
-     --config benchmarks/collisional_zonal_response.toml \
+     --config benchmarks/cases/collisional_zonal_response.toml \
      --table-archive finite_b_zonal_P24_J10_diagonal.npz \
      --model coulomb \
      --kx 0.1 --out-csv finite_b_zonal_kx010.csv \
@@ -1209,7 +1209,7 @@ the tracked hierarchy shows monotone convergence but is not a substitute for
 the paper-required P24/J10 traces.
 Reproduce the report with::
 
-   python tools/artifacts/build_zonal_flow_artifacts.py \
+   python scripts/artifacts/build_zonal_flow_artifacts.py \
      collisional-zonal-moment-gate \
      --level 7 3 p7_kx010.csv p7_kx020.csv \
      --level 12 5 p12_kx010.csv p12_kx020.csv \
@@ -1224,7 +1224,7 @@ principal Hermite--Laguerre subspace in the runtime's Hermite-major ordering,
 projects every collision matrix and polarization vector with the same indices,
 and records the parent resolution and checksum::
 
-   python tools/artifacts/build_linear_validation_artifacts.py \
+   python scripts/artifacts/build_linear_validation_artifacts.py \
      collision-project-table \
      --source P24_J10_coulomb.npz \
      --out P21_J8_coulomb.npz \
@@ -1278,7 +1278,7 @@ command constructs the wavelength-independent speed coefficients once, forks
 all ``M=0,...,4`` writers from that copy-on-write cache, and combines the
 complete set in deterministic angular order::
 
-   python tools/artifacts/build_linear_validation_artifacts.py \
+   python scripts/artifacts/build_linear_validation_artifacts.py \
      collision-shared-angular-table \
      --out finite_b_zonal_P24_J10_diagonal.npz \
      --bessel-argument 0.12 --bessel-argument 0.16 \
@@ -1294,7 +1294,7 @@ matching finite shards, skips precomputation when all are complete, and
 redistributes the total worker budget across only the missing harmonics.
 Existing complete shards can also be recombined without regeneration using::
 
-   python tools/artifacts/build_linear_validation_artifacts.py \
+   python scripts/artifacts/build_linear_validation_artifacts.py \
      collision-combine-angular-shards \
      --shard finite_b_zonal_P24_J10_diagonal_m0.npz \
      --shard finite_b_zonal_P24_J10_diagonal_m1.npz \
@@ -1311,7 +1311,7 @@ one ``(B,m)`` equation block. Generate each block with a single
 with ``collision-combine-angular-shards``. Finally concatenate the complete
 single-wavelength tables without recomputing coefficients::
 
-   python tools/artifacts/build_linear_validation_artifacts.py \
+   python scripts/artifacts/build_linear_validation_artifacts.py \
      collision-combine-wavelength-tables \
      --table finite_b_zonal_P24_J10_B012.npz \
      --table finite_b_zonal_P24_J10_B016.npz \
@@ -1482,7 +1482,7 @@ The paper normalization is converted explicitly rather than fitted,
 
 so a trace through :math:`t\nu=30` evolves to solver time approximately 600.
 The canonical geometry and time contract is
-``benchmarks/collisional_zonal_response.toml``. Its Miller surface sets
+``benchmarks/cases/collisional_zonal_response.toml``. Its Miller surface sets
 ``rhoc/R0=0.1`` explicitly; changing only the analytic ``epsilon`` metadata
 would leave the generated surface at the wrong aspect ratio. The dense
 drift-kinetic matrix acts on evolved gyrocenter :math:`g` moments, following
@@ -1490,9 +1490,9 @@ Frei, Ernst & Ricci (2022), Eq. (73), rather than on the post-field
 Hamiltonian. One drift-kinetic model trace
 is reproduced from an offline P24/J10 matrix archive with::
 
-   python tools/artifacts/build_zonal_flow_artifacts.py \
+   python scripts/artifacts/build_zonal_flow_artifacts.py \
      simulate-collisional-zonal-dk \
-     --config benchmarks/collisional_zonal_response.toml \
+     --config benchmarks/cases/collisional_zonal_response.toml \
      --model-archive collisional_zonal_dk_p24j10.npz \
      --model coulomb --out-csv coulomb_zonal_trace.csv
 
@@ -1509,7 +1509,7 @@ rather than retained as a duplicate figure and trace bundle.
 
 The acceptance contract is implemented by the existing zonal-artifact owner::
 
-   python tools/artifacts/build_zonal_flow_artifacts.py collisional-zonal \
+   python scripts/artifacts/build_zonal_flow_artifacts.py collisional-zonal \
      --traces collisional_zonal_traces.csv \
      --sections collisional_zonal_velocity_sections.csv \
      --out-json collisional_zonal_gate.json \
@@ -1722,7 +1722,7 @@ dominates for roughly two decades, after which the ballistic part of the initial
 condition leaves a plateau, and the revival at
 :math:`t_{\mathrm{rec}} = 2\sqrt{N_m}` ends the useful window entirely.
 
-Regenerate with ``tools/artifacts/build_landau_damping_figure.py``.
+Regenerate with ``scripts/artifacts/build_landau_damping_figure.py``.
 
 Hermite closure and recurrence
 ------------------------------

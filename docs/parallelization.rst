@@ -259,7 +259,7 @@ collectives and profiler evidence, not a speedup claim from the local
 axis-staged diagnostic.
 
 The first real-device candidate is a ``z``-sharded fused pencil RHS, produced
-with ``tools/profiling/profile_device_z_pencil_transport_window.py --mode rhs``.
+with ``scripts/profiling/profile_device_z_pencil_transport_window.py --mode rhs``.
 This route
 keeps the FFT axes local on each device, shards the field-line dimension, and
 avoids global spectral tile reconstruction. The tracked logical-CPU artifact
@@ -291,7 +291,7 @@ all-to-all or collective-permute operations. That ``1.48x`` was originally
 read as a workload-granularity limit. The granularity re-measurement described
 below tested that reading directly and did not support it, so the sentence it
 used to justify has been replaced by the measured decomposition.
-For larger diagnostic grids, ``tools/profiling/profile_device_z_pencil_transport_window.py``
+For larger diagnostic grids, ``scripts/profiling/profile_device_z_pencil_transport_window.py``
 also accepts ``--z-chunk-size`` and ``--auto-z-chunk-size``. The automatic
 mode uses the device-z pencil FFT batch-pressure model to keep the largest
 axis-wise cuFFT batch below a configured cap before timing. Combined with
@@ -396,7 +396,7 @@ per-call dispatch overhead is not the limiter either.
 
 
 The reason is isolated by
-``tools/profiling/profile_device_z_pencil_scaling_decomposition.py``, which
+``scripts/profiling/profile_device_z_pencil_scaling_decomposition.py``, which
 times a third route the transport-window profiler never times: the same pencil
 ``shard_map`` route on a *single*-device mesh. That splits the reported speedup
 into two independent factors, exactly rather than by model, because

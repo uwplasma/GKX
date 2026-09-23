@@ -183,7 +183,7 @@ Then render the spectrum:
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_quasilinear_diagnostics.py spectrum \
+   python scripts/artifacts/plot_quasilinear_diagnostics.py spectrum \
      --spectrum tools_out/cyclone_quasilinear_scan.quasilinear_spectrum.csv \
      --out docs/_static/quasilinear_cyclone_spectrum.png
 
@@ -191,7 +191,7 @@ The shipped worker-identity gate for this path is generated with:
 
 .. code-block:: bash
 
-   JAX_ENABLE_X64=1 python tools/artifacts/generate_parallel_identity_gate.py quasilinear-runtime \
+   JAX_ENABLE_X64=1 python scripts/artifacts/generate_parallel_identity_gate.py quasilinear-runtime \
      --workers 2 \
      --ky 0.1 0.2 \
      --out-prefix docs/_static/quasilinear_runtime_parallel_gate
@@ -408,8 +408,8 @@ Implementation map
      - train/holdout/audit schemas, spectrum integration, nonlinear-window
        ingestion, scale fitting, and report scoring
    * - Plotting tools
-     - ``tools/artifacts/plot_quasilinear_diagnostics.py spectrum`` and
-       ``tools/artifacts/plot_quasilinear_calibration.py``
+     - ``scripts/artifacts/plot_quasilinear_diagnostics.py spectrum`` and
+       ``scripts/artifacts/plot_quasilinear_calibration.py``
      - publication-facing spectrum and calibration figures
    * - Differentiability gates
      - :mod:`gkx.objectives.autodiff_validation`
@@ -694,7 +694,7 @@ observable.
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_quasilinear_calibration.py report \
+   python scripts/artifacts/plot_quasilinear_calibration.py report \
      --points tools_out/quasilinear_calibration_points.json \
      --out tools_out/quasilinear_calibration_report.json \
      --saturation-rule mixing_length
@@ -715,7 +715,7 @@ a nonlinear gate summary:
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_quasilinear_calibration.py report \
+   python scripts/artifacts/plot_quasilinear_calibration.py report \
      --spectrum docs/_static/quasilinear_cyclone_spectrum_scan.quasilinear_spectrum.csv \
      --nonlinear-summary docs/_static/nonlinear_cyclone_gate_summary.json \
      --split audit \
@@ -725,7 +725,7 @@ a nonlinear gate summary:
      --saturation-rule mixing_length \
      --out docs/_static/quasilinear_cyclone_calibration_audit_report.json
 
-   python tools/artifacts/plot_quasilinear_calibration.py \
+   python scripts/artifacts/plot_quasilinear_calibration.py \
      --report docs/_static/quasilinear_cyclone_calibration_audit_report.json \
      --out docs/_static/quasilinear_cyclone_calibration_audit.png
 
@@ -768,12 +768,12 @@ The report is generated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_quasilinear_calibration.py report \
+   python scripts/artifacts/plot_quasilinear_calibration.py report \
      --points docs/_static/quasilinear_cyclone_miller_train_holdout_points.json \
      --fit-train-scale \
      --out docs/_static/quasilinear_cyclone_miller_train_holdout_report.json
 
-   python tools/artifacts/plot_quasilinear_calibration.py \
+   python scripts/artifacts/plot_quasilinear_calibration.py \
      --report docs/_static/quasilinear_cyclone_miller_train_holdout_report.json \
      --out docs/_static/quasilinear_cyclone_miller_train_holdout.png
 
@@ -813,7 +813,7 @@ generated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_quasilinear_calibration.py report \
+   python scripts/artifacts/plot_quasilinear_calibration.py report \
      --points docs/_static/quasilinear_cyclone_miller_train_holdout_points.json \
      --spectrum docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv \
      --nonlinear-summary docs/_static/nonlinear_hsx_gate_summary.json \
@@ -824,7 +824,7 @@ generated with:
      --fit-train-scale \
      --out docs/_static/quasilinear_hsx_train_holdout_report.json
 
-   python tools/artifacts/plot_quasilinear_calibration.py \
+   python scripts/artifacts/plot_quasilinear_calibration.py \
      --report docs/_static/quasilinear_hsx_train_holdout_report.json \
      --out docs/_static/quasilinear_hsx_train_holdout.png
 
@@ -873,7 +873,7 @@ window is added to the same train/holdout report with:
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_quasilinear_calibration.py report \
+   python scripts/artifacts/plot_quasilinear_calibration.py report \
      --points docs/_static/quasilinear_cyclone_miller_train_holdout_points.json \
      --spectrum docs/_static/quasilinear_w7x_spectrum_scan.quasilinear_spectrum.csv \
      --nonlinear-summary docs/_static/nonlinear_w7x_gate_summary.json \
@@ -1621,7 +1621,7 @@ heat-flux-weight distribution is compared with the resolved nonlinear
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_quasilinear_diagnostics.py shape-gate \
+   python scripts/artifacts/plot_quasilinear_diagnostics.py shape-gate \
      --spectrum docs/_static/quasilinear_w7x_spectrum_scan.quasilinear_spectrum.csv \
      --nonlinear tools_out/final_nonlinear_audit/w7x_gkx_current_adaptive_t200.out.nc \
      --out docs/_static/quasilinear_w7x_spectrum_shape_gate.png \
@@ -1645,7 +1645,7 @@ linear heat-flux-weight spectrum against the normalized nonlinear
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_quasilinear_diagnostics.py shape-gate \
+   python scripts/artifacts/plot_quasilinear_diagnostics.py shape-gate \
      --spectrum docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv \
      --nonlinear tools_out/final_nonlinear_audit/hsx_nonlinear_t50.out.nc \
      --out docs/_static/quasilinear_hsx_spectrum_shape_gate.png \

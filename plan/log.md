@@ -19551,3 +19551,61 @@ line removed.
 - #281 `1b69bf8a0`: 12 numbered groups; example Python 36 → 14 files, 5,145 →
   1,782 lines. Path edits in benchmarks/tools wait for #278; one unidentified
   failure in a stopped office run.
+
+## 2026-09-22 - SLIM-TOOLS tranche 1 (slim/tools-benchmarks-1)
+
+Baseline:
+- GKX SHA: f9485f044ab79d9d22b06162376ea11a640621b8 (main, 2.3.0)
+- companion SHAs: none
+- source/test/tool files and lines: tools/ 123 files, 96 Python / 78,901 lines; benchmarks/ 23 files; scripts/ 0 Python
+- relevant existing gate: ci.yml "Repository size manifest" step and "Tracked release artifacts are up to date"
+
+Scope:
+- intended change: map every tools/ and benchmarks/ file to its users; delete zero-reference and plan-only campaign files; move tools/release/* behind one `scripts/check.py` command
+- non-goals: moving manifests, profilers, comparison tools, campaign modules or benchmark decks (tranche 2); README.md and examples (other lanes)
+- prospective acceptance and rollback criteria: every deleted file has zero non-plan references; the four tracked docs/_static JSONs regenerate identically except for the renamed command/file strings; CI green
+
+Changes:
+- files/functions removed, merged, or added: 16 files deleted (3,757 lines; 8 Python in tools/, 1 in benchmarks/); tools/release/*.py (10) moved to scripts/checks/; scripts/check.py added (subcommands size, architecture, parallel-scaling, quasilinear, vmec-boozer, readiness, validation-coverage, test-gates, nonlinear-transport, nonlinear-optimization); map at plan/research/2026-09-22-slim-tools/MAP.md
+- public/schema behavior: none in the package; CI and release commands renamed; release_readiness.json and technical_release_status.json change only in those strings
+
+Evidence:
+- focused tests: tests/release, tests/tools, parallel/benchmark/nonlinear/quasilinear/stellarator gate tests, runtime config: 703 passed, 2 skipped after fixes (one earlier failure was ENOSPC on the host)
+- repo-hygiene step from ci.yml run with bare python3.11: exit 0; tracked-JSON diff gate clean on a second run
+- architecture: tool_python_files 96 -> 78, tool_python_lines 78,901 -> 63,832 (baselines lowered to measured); scripts 11 files / 11,992 lines before check.py; test lines unchanged
+- tracked files 2,107 -> 2,091 (+ check.py, MAP.md), tracked bytes 24,607,135 -> about 24.47 MB
+
+Outcome:
+- partial: tranche 1 done; paused before sphinx and CI
+- remaining blocker: none known; docs build and full CI not yet run
+- next task: CI on the PR, then tranche 2 from MAP.md
+
+## 2026-09-22 - SLIM-TOOLS tranche 2 (slim/tools-benchmarks-2)
+
+Baseline:
+- GKX SHA: 33d2dc0fc (tranche 1, #278, which is stacked on main f9485f044)
+- companion SHAs: none
+- source/test/tool files and lines: tools/ 78 Python files / 63,832 lines; scripts/ 11 / 11,992; benchmarks/ 11 Python files / 1,348 lines
+- relevant existing gate: ci.yml "Repository size manifest" (architecture topology and line budgets) and "Tracked release artifacts are up to date"
+
+Scope:
+- intended change: tools/ Python to zero. tools/{artifacts,campaigns,comparison,profiling} and the benchmarks/ drivers move to scripts/ packages behind validate.py, compare.py, profile.py and benchmark.py. The benchmark decks move to benchmarks/cases/ (the runtime_ prefix is dropped, as EXAMPLES-GALLERY does).
+- non-goals: contracting the moved code; moving tools/*.toml manifests or tools/comparison/fixtures (#272 and #285 touch them)
+- prospective acceptance and rollback criteria: no test weakened; tracked release JSONs byte-identical; each deletion clears the output-consumer check
+
+Changes:
+- files/functions removed, merged, or added: 88 Python files moved; benchmarks/performance/__init__.py deleted. Added scripts/_command.py (shared runner, also used by check.py) and four commands. Every path string rewritten outside docs/_static and plan/, with prose in benchmarks.rst, code_structure.rst, tools/README.md and benchmarks/README.md updated. The allowed profiling-tool roots in check_parallel_scaling_artifacts.py are now the scripts/ packages.
+- deletion reversed: build_vmec_boozer_gradient_holdout_matrix.py and plot_external_vmec_nonlinear_convergence_gate.py looked docs-only, and #283 dropped their mentions. They write JSONs that check_vmec_boozer_gates.py and validation_coverage_manifest.toml read, so they were kept. MAP.md now requires the output-consumer check before any deletion.
+- public/schema behavior: none in the package
+
+Evidence:
+- 26 test files that load moved code, plus test_examples, test_plotting, test_collision_physics, test_evidence_ledger, test_runtime_runner (JAX 0.10.2, x64, -m "not slow"): first run 1252 passed, 10 failed, 1 error, all from ROOT / "tools" / "<pkg>" path joins in tests; after the fix the affected files ran 581 passed, 16 skipped
+- import check: every moved module imports without running main. It fails only on 2 modules that need vmex, which this venv lacks, and on 2 campaign modules that import scripts.campaigns.* without the repo root on sys.path; the same behaviour existed before as tools.campaigns.*.
+- ci.yml repo-hygiene commands with bare python3.11: exit 0; the four tracked JSONs are byte-identical; ruff check and ruff format --check are clean
+- architecture: tool_python_files 78 -> 0 and tool_python_lines 63,832 -> 0 (both at target); developer_script_python_files 15 -> 104 and developer_script_python_lines 25,000 -> 77,373 (targets 12 / 18,000). Measured.
+
+Outcome:
+- done: tools/ has no Python; the layout matches §21.4 apart from figures.py (#285) and release.py
+- remaining blocker: none known. The move is not a contraction: scripts/ must fall by about 59k lines. Other lanes apply the rename recipe in MAP.md.
+- next task: contract scripts/ by package (artifacts first, 35,121 lines), with the output-consumer check applied to each deletion
+Addendum (paused 2026-09-22): PR #288. main (#277) was merged in, with a plan/log.md append conflict resolved by keeping both sides; the hygiene step reran with exit 0. CI run 35811214759 was still queued behind the organization's run backlog at the pause, so no CI result exists yet. Next: once #278 merges, merge origin/main, then let CI run and fix any real failure.

@@ -19,9 +19,10 @@ git.
 Figure generation
 -----------------
 
-Lightweight benchmark drivers, runtime TOML inputs, and result-index pointers
-live in the repository root under ``benchmarks/``. This is the canonical
-benchmark entry-point directory for users and developers. It is intentionally
+Benchmark input decks (``benchmarks/cases/``), reference contracts and
+result-index pointers live in the repository root under ``benchmarks/``; the
+drivers run through ``python scripts/benchmark.py <module>`` (source in
+``scripts/benchmarks/``, ``--list`` prints them). This is intentionally
 separated from ``examples/``: examples teach workflows, while benchmarks
 reproduce validation panels and paper-facing comparison traces. Generated
 outputs should go to ``tools_out/`` or another scratch directory; only reviewed,
@@ -29,7 +30,7 @@ compressed summary figures and small CSV/JSON metadata are tracked in
 ``docs/_static``.
 
 The repository-size contract for this directory is deliberately strict:
-``benchmarks/`` should stay at the scale of small scripts and manifests, not
+``benchmarks/`` should stay at the scale of small decks and manifests, not
 simulation products. The tracked result manifest under
 ``benchmarks/results/manifest.toml`` is the docs-facing index for promoted
 figures and tables, while NetCDF files, restart files, logs, profiler traces,
@@ -39,10 +40,10 @@ Quick driver examples:
 
 .. code-block:: bash
 
-   python benchmarks/cyclone_linear_benchmark.py --outdir tools_out/cyclone_benchmark
-   python benchmarks/kbm_linear_comparison.py
-   python -m gkx.cli run-runtime-linear --config benchmarks/runtime_secondary_slab.toml
-   python benchmarks/secondary_slab_workflow.py
+   python scripts/benchmarks/cyclone_linear_benchmark.py --outdir tools_out/cyclone_benchmark
+   python scripts/benchmarks/kbm_linear_comparison.py
+   python -m gkx.cli run-runtime-linear --config benchmarks/cases/secondary_slab.toml
+   python scripts/benchmarks/secondary_slab_workflow.py
 
 The Cyclone publication driver fits the terminal ``t=7--10`` interval. A
 fresh trajectory audit showed that the previous automatic window could select
@@ -51,7 +52,7 @@ growth rate by more than a factor of two, even though the late-time mode
 converged to the tracked branch.
 
 The KBM plotting driver reads the reviewed fixed-beta ``ky`` comparison table.
-Use ``tools/comparison/compare_gx_kbm.py`` with a matched external output to
+Use ``scripts/comparison/compare_gx_kbm.py`` with a matched external output to
 regenerate that table; branch selection remains a transitional time-history
 policy until the generic runtime reproduces the full scan. The generic runtime
 now provides the same CFL-controlled trajectory and can refit multiple branch
@@ -62,7 +63,7 @@ Regenerate the atlas figures with:
 
 .. code-block:: bash
 
-   python tools/artifacts/make_benchmark_atlas.py
+   python scripts/artifacts/make_benchmark_atlas.py
 
 The atlas builder now reads its inputs from
 ``tools/benchmark_atlas_manifest.toml`` and writes a machine-readable summary to
@@ -203,53 +204,53 @@ duplicating large run products. The current tracked result set is:
      - ``docs/_static/benchmark_core_linear_atlas.png`` (regenerable render;
        not tracked in git)
      - headline linear validation atlas
-     - ``python tools/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py``
    * - Core nonlinear benchmark atlas
      - ``docs/_static/benchmark_core_nonlinear_atlas.png`` (regenerable
        render; not tracked in git)
      - headline nonlinear validation atlas
-     - ``python tools/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py``
    * - README benchmark summary panel
      - ``docs/_static/benchmark_readme_panel.png`` (regenerable render; not
        tracked in git)
      - compact publication-facing benchmark summary
-     - ``python tools/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py``
    * - Extended linear stress matrix
      - ``docs/_static/benchmark_extended_linear_panel.png`` (regenerable
        render; not tracked in git)
      - stress and provisional lanes, not headline validation claims
-     - ``python tools/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py``
    * - Runtime and memory comparison
      - ``docs/_static/runtime_memory_benchmark.png``
      - tracked wall-time and memory comparison rows
-     - ``python benchmarks/performance/benchmark_runtime_memory.py --summary-glob ...``
+     - ``python scripts/benchmarks/benchmark_runtime_memory.py --summary-glob ...``
    * - Runtime and memory result rows
      - ``docs/_static/runtime_memory_results_ship_refresh.csv``
      - machine-readable runtime/memory rows used by the tracked panel
-     - ``python benchmarks/performance/benchmark_runtime_memory.py``
+     - ``python scripts/benchmarks/benchmark_runtime_memory.py``
    * - Runtime and memory summary
      - ``docs/_static/runtime_memory_summary_ship_refresh.json``
      - machine-readable summary for runtime/memory panel generation
-     - ``python benchmarks/performance/benchmark_runtime_memory.py``
+     - ``python scripts/benchmarks/benchmark_runtime_memory.py``
    * - Core linear atlas inputs
      - ``tools/benchmark_atlas_manifest.toml``
      - manifest of small tracked benchmark inputs
-     - ``python tools/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py``
    * - Reference-code linear parity matrix
      - ``docs/_static/gkx_gx_linear_parity_matrix.png`` (regenerable render;
        not tracked in git)
      - cross-code linear growth-rate and frequency parity across tokamak and stellarator cases
-     - ``python tools/comparison/build_gx_parity_matrix.py``
+     - ``python scripts/comparison/build_gx_parity_matrix.py``
    * - Reference-code linear parity rows
      - ``docs/_static/gkx_gx_linear_parity_matrix.csv``
      - machine-readable per-wavenumber parity rows with convergence flags
-     - ``python tools/comparison/build_gx_parity_matrix.py``
+     - ``python scripts/comparison/build_gx_parity_matrix.py``
    * - Reference-code linear parity summary
      - ``docs/_static/gkx_gx_linear_parity_matrix.json``
      - per-case resolution, provenance and cost metadata behind the parity rows
-     - ``python tools/comparison/build_gx_parity_matrix.py``
+     - ``python scripts/comparison/build_gx_parity_matrix.py``
 
-This keeps the repository light: ``benchmarks/`` stores only drivers and
+This keeps the repository light: ``benchmarks/`` stores only input decks and
 pointers, ``docs/_static`` stores reviewed compact figures/tables, and raw
 solver output directories remain untracked. The tracked ``benchmarks/`` payload
 is intentionally on the order of tens of kilobytes.
@@ -364,7 +365,7 @@ The broader scanned benchmark panels are coverage figures, not universal
 which branches and diagnostics are being tracked across the codebase.
 
 Benchmark-specific replay knobs used to regenerate these figures stay confined
-to the benchmark builders in ``tools/``. They are not promoted into generic
+to the benchmark builders in ``scripts/artifacts/``. They are not promoted into generic
 runtime defaults for the solver or the shipped example drivers.
 
 Benchmark runner internals
@@ -373,7 +374,7 @@ Benchmark runner internals
 Reusable reference loaders and comparison policies live in
 ``gkx.benchmarking_shared``; timestepping, scans, geometry, and physical
 operators use the same runtime and solver APIs as ordinary simulations.
-Case-level reproduction policy stays in root ``benchmarks/`` drivers rather
+Case-level reproduction policy stays in the ``scripts/benchmarks/`` drivers rather
 than creating a second installed solver stack.
 
 Generic pointwise scans and representative-mode extraction are owned by
@@ -426,7 +427,7 @@ removed from git. Current examples include:
   long-window nonlinear publication lanes (the
   ``nonlinear_w7x_diag_compare_t200``, ``hsx_nonlinear_compare_t50_true``,
   and ``nonlinear_kbm_diag_compare_t100_refresh`` figures are regenerable
-  renders from ``tools/comparison/make_reference_panels.py``).
+  renders from ``scripts/comparison/make_reference_panels.py``).
 - the closed short-window full-GK ETG nonlinear pilot that now appears in the
   regenerated summary/publication panels (its
   ``etg_fullgk_pilot_compare_dt1e4_gaussian_match`` comparison figure is a
@@ -434,7 +435,7 @@ removed from git. Current examples include:
 - the current eigenfunction-overlap summary on the tracked KBM GX candidate
   table (the ``kbm_eigenfunction_overlap_summary`` panel is a regenerable
   render from
-  ``tools/artifacts/generate_linear_reference_overlays.py overlap-summary``).
+  ``scripts/artifacts/generate_linear_reference_overlays.py overlap-summary``).
   This is the first compact overlap artifact in the manuscript-facing stack
   and should be read as a branch-identity diagnostic. The raw mode-shape
   overlay evidence is tracked as JSON gate reports and GKX traces under

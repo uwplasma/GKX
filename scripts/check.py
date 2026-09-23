@@ -16,8 +16,9 @@ dispatches to must import with the standard library alone (``python -S``).
 from __future__ import annotations
 
 from pathlib import Path
-import runpy
 import sys
+
+from _command import run_module
 
 CHECKS_DIR = Path(__file__).resolve().parent / "checks"
 
@@ -88,22 +89,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"unknown subcommand {name!r}\n\n{_usage()}", end="", file=sys.stderr)
         return 2
     module, _ = SUBCOMMANDS[name]
-    path = CHECKS_DIR / f"{module}.py"
-    saved_argv = sys.argv
-    sys.argv = [str(path), *rest]
-    try:
-        runpy.run_path(str(path), run_name="__main__")
-    except SystemExit as exc:
-        code = exc.code
-        if code is None:
-            return 0
-        if isinstance(code, int):
-            return code
-        print(code, file=sys.stderr)
-        return 1
-    finally:
-        sys.argv = saved_argv
-    return 0
+    return run_module(CHECKS_DIR / f"{module}.py", rest)
 
 
 if __name__ == "__main__":

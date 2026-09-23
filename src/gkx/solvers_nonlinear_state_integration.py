@@ -74,7 +74,7 @@ from gkx.terms.nonlinear import nonlinear_em_contribution
 
 #: Longest window whose discrete adjoint has been measured to still behave like
 #: a gradient on the shipped saturated Cyclone case: the AD/FD ladder in
-#: ``tools/campaigns/nonlinear_gradient_window.py`` tracks centered differences
+#: ``scripts/campaigns/nonlinear_gradient_window.py`` tracks centered differences
 #: through 1024 RK3 steps and departs between 1024 and 2048. It is a property of
 #: that trajectory's Lyapunov time, not a solver tolerance, so it is a default to
 #: warn against and remeasure -- not a hard limit. ``examples/optimization/
@@ -94,7 +94,7 @@ def _warn_if_window_exceeds_divergence_knee(
         f"knee of {knee} steps: past it the windowed adjoint grows with the "
         "leading Lyapunov exponent and is large, reproducible, and not a "
         "descent direction. Remeasure the knee for this case with "
-        "tools/campaigns/nonlinear_gradient_window.py, then pass "
+        "scripts/campaigns/nonlinear_gradient_window.py, then pass "
         "divergence_knee_steps=<measured> or None.",
         RuntimeWarning,
         stacklevel=2,
@@ -467,7 +467,7 @@ def nonlinear_heat_flux_window(
     windowed adjoint grows with the leading Lyapunov exponent and stops being a
     useful design direction; pass ``None`` to silence the check when the knee
     has been remeasured for the case at hand with
-    ``tools/campaigns/nonlinear_gradient_window.py``.
+    ``scripts/campaigns/nonlinear_gradient_window.py``.
 
     Host-side geometry/layout preparation stays here. The differentiated scan
     in :func:`_nonlinear_heat_flux_window_total` reuses its executable for

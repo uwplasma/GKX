@@ -25,7 +25,7 @@ artifact_type = "documentation_preview"
 release_asset_name = "benchmark_readme_panel.png"
 reason = "Optional README benchmark panel is reproducible and omitted from Git; generate it only when needed."
 preview_strategy = "regenerated locally when requested"
-replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+replay_command = "python scripts/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/benchmark_readme_panel.pdf"
@@ -38,7 +38,7 @@ release_tag = "v1.5.0"
 release_url = "https://github.com/uwplasma/GKX/releases/download/v1.5.0/benchmark_readme_panel.pdf"
 reason = "PDF companion belongs in release assets once docs link to the release artifact."
 preview_strategy = "release-only high-resolution PDF"
-replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+replay_command = "python scripts/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/benchmark_core_nonlinear_atlas.png"
@@ -49,7 +49,7 @@ artifact_type = "documentation_preview"
 release_asset_name = "benchmark_core_nonlinear_atlas.png"
 reason = "Optional nonlinear atlas is reproducible and omitted from Git; generate it only when needed."
 preview_strategy = "regenerated locally when requested"
-replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+replay_command = "python scripts/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/benchmark_core_nonlinear_atlas.pdf"
@@ -62,7 +62,7 @@ release_tag = "v1.5.0"
 release_url = "https://github.com/uwplasma/GKX/releases/download/v1.5.0/benchmark_core_nonlinear_atlas.pdf"
 reason = "High-resolution nonlinear atlas PDF should be release-hosted."
 preview_strategy = "release-only high-resolution PDF"
-replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+replay_command = "python scripts/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/benchmark_core_linear_atlas.png"
@@ -73,7 +73,7 @@ artifact_type = "documentation_preview"
 release_asset_name = "benchmark_core_linear_atlas.png"
 reason = "Optional linear atlas is reproducible and omitted from Git; generate it only when needed."
 preview_strategy = "regenerated locally when requested"
-replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+replay_command = "python scripts/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/comparison/reference_publication_panel.png"
@@ -84,7 +84,7 @@ artifact_type = "comparison_panel"
 release_asset_name = "reference_publication_panel.png"
 reason = "Optional publication panel is reproducible and omitted from Git; generate it only when needed."
 preview_strategy = "regenerated locally when requested"
-replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+replay_command = "python scripts/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/comparison/reference_publication_panel.pdf"
@@ -97,7 +97,7 @@ release_tag = "v1.5.0"
 release_url = "https://github.com/uwplasma/GKX/releases/download/v1.5.0/reference_publication_panel.pdf"
 reason = "PDF comparison panel should be release-hosted."
 preview_strategy = "release-only high-resolution PDF"
-replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+replay_command = "python scripts/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/comparison/reference_summary_panel.png"
@@ -108,7 +108,7 @@ artifact_type = "comparison_panel"
 release_asset_name = "reference_summary_panel.png"
 reason = "Optional comparison summary is reproducible and omitted from Git; generate it only when needed."
 preview_strategy = "regenerated locally when requested"
-replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+replay_command = "python scripts/artifacts/make_benchmark_atlas.py"
 
 [[artifacts]]
 path = "docs/_static/comparison/reference_cyclone_kbm_panel.png"
@@ -119,4 +119,4 @@ artifact_type = "comparison_panel"
 release_asset_name = "reference_cyclone_kbm_panel.png"
 reason = "Optional Cyclone KBM panel is reproducible and omitted from Git; generate it only when needed."
 preview_strategy = "regenerated locally when requested"
-replay_command = "python tools/artifacts/make_benchmark_atlas.py"
+replay_command = "python scripts/artifacts/make_benchmark_atlas.py"

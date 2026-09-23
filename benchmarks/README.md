@@ -1,12 +1,14 @@
 # Benchmarks
 
-This root-level directory contains the lightweight benchmark drivers, runtime
-TOML files, and result-index pointers used to reproduce the tracked validation
-panels in the documentation.
+This directory holds benchmark data: the validation input decks in `cases/`,
+the release reference contracts in `references/`, the result index in
+`results/`, and the feature contract `capability_matrix.toml`. The drivers that
+run the benchmarks are the modules of `python scripts/benchmark.py` (source in
+`scripts/benchmarks/`); `python scripts/benchmark.py --list` prints them.
 
 The drivers intentionally keep generated outputs out of git:
 
-- small scripts, TOML inputs, and result pointers live here,
+- TOML inputs and result pointers live here, and the drivers in `scripts/`,
 - generated plots, NetCDF files, restart files, and logs should be written to
   `tools_out/` or an explicit scratch directory,
 - publication-facing figures promoted to the docs are curated under
@@ -20,11 +22,11 @@ without copying large artifacts into this directory.
 Run from the repository root, for example:
 
 ```bash
-python benchmarks/cyclone_linear_benchmark.py --outdir tools_out/cyclone_benchmark
-python benchmarks/kbm_linear_comparison.py \
+python scripts/benchmark.py cyclone_linear_benchmark --outdir tools_out/cyclone_benchmark
+python scripts/benchmark.py kbm_linear_comparison \
   --output tools_out/kbm_linear_comparison.png
-python -m gkx.cli run-runtime-linear --config benchmarks/runtime_secondary_slab.toml
-python benchmarks/secondary_slab_workflow.py
+python -m gkx.cli run-runtime-linear --config benchmarks/cases/secondary_slab.toml
+python scripts/benchmark.py secondary_slab_workflow
 ```
 
 The machine-readable feature and comparison contract is
@@ -38,5 +40,5 @@ The full atlas is built from tracked CSV/JSON assets rather than large transient
 simulation directories:
 
 ```bash
-python tools/artifacts/make_benchmark_atlas.py
+python scripts/validate.py make_benchmark_atlas
 ```

@@ -76,7 +76,7 @@ from gkx.terms.config import FieldState, TermConfig
 from gkx.workflows.runtime import chunks as runtime_chunks
 from gkx.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
 from pathlib import Path
-from tools.campaigns.nonlinear_replicates import (
+from scripts.campaigns.nonlinear_replicates import (
     nonlinear_replicate_spread_report,
 )
 from types import SimpleNamespace

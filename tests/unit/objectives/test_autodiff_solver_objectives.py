@@ -778,8 +778,8 @@ def test_autodiff_finite_difference_report_rejects_bad_inputs() -> None:
 
 # ---- test_solver_objective_gradients.py ----
 
-import tools.campaigns.gradient_gates as gradient_gates
-from tools.campaigns.gradient_gates import (
+import scripts.campaigns.gradient_gates as gradient_gates
+from scripts.campaigns.gradient_gates import (
     linear_solver_geometry_gradient_report,
     solver_objective_branch_gradient_report,
 )
@@ -2320,7 +2320,7 @@ def test_write_solver_objective_gradient_artifacts(tmp_path: Path) -> None:
 # ---- test_stellarator_objective_portfolio.py ----
 
 
-from tools.campaigns.portfolio_guard import (
+from scripts.campaigns.portfolio_guard import (
     ReducedPortfolioArtifactGuardConfig,
     reduced_portfolio_artifact_guard_report,
 )
@@ -2608,7 +2608,7 @@ def test_objective_portfolio_helpers_are_exported_at_package_top_level() -> None
         is objective_portfolio_sensitivity_report
     )
     # The reduced-portfolio artifact guard is campaign promotion policy, not
-    # solver API: it ships in tools/campaigns/ and is deliberately absent from
+    # solver API: it ships in scripts/campaigns/ and is deliberately absent from
     # the installable package's top level.
     assert isinstance(
         ReducedPortfolioArtifactGuardConfig(), ReducedPortfolioArtifactGuardConfig

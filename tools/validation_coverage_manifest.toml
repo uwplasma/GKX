@@ -1829,7 +1829,7 @@ artifact_paths = [
   "docs/_static/parallelization_completion_status.png",
   ]
 next_tests = [
-  "promote tools/profiling/profile_nonlinear_sharding.py to a benchmark-size nonlinear identity/profile artifact once the bounded two-GPU gate is replaced by a matched runtime sweep",
+  "promote scripts/profiling/profile_nonlinear_sharding.py to a benchmark-size nonlinear identity/profile artifact once the bounded two-GPU gate is replaced by a matched runtime sweep",
   "design a dedicated z-axis FFT communication/layout gate before exposing z sharding through nonlinear TimeConfig",
   "add UQ ensemble parallelization gate using the same identity-policy format",
 ]

@@ -121,7 +121,7 @@ falling at :math:`N_\ell = 48`, and the eigenvector says why.
    initial-value growth rate against :math:`N_\ell` at four collisionalities;
    crosses mark rungs whose half-window fit probe did not settle. Panel (b) is
    the normalized Laguerre free-energy spectrum of the certified eigenvector at
-   :math:`N_\ell = 48`. Produced by ``tools/artifacts/build_methods_figures.py
+   :math:`N_\ell = 48`. Produced by ``scripts/artifacts/build_methods_figures.py
    velocity-truncation`` from
    ``plan/research/scripts/2026-09-13-collisional-convergence/summary.csv`` and
    ``plan/research/scripts/2026-09-18-eigen-laguerre-spectrum/results/``.
@@ -304,7 +304,7 @@ summary of the inner solves.
    peak resident memory labelled. Panel (b): the screening rung
    (:math:`n = 18432`), wall time against the residual each arm reached; colour
    is the recorded certification verdict, not the dashed line. Produced by
-   ``tools/artifacts/build_methods_figures.py eigen-cost`` from
+   ``scripts/artifacts/build_methods_figures.py eigen-cost`` from
    ``plan/research/scripts/2026-09-19-inner-solve-cost/summary.txt``. Single
    cold processes on a shared M3 Max whose load ran 1.8--12.8; the wall times
    are indicative, the operator-application counts behind them are not.
@@ -370,7 +370,7 @@ HLO *and* on a blocked A/B/A/B timing, because the two can disagree.
    idle 12-core Xeon W-2295; the tags are the campaign's own arm names, where
    ``pool``/``nopool`` is the XLA CPU FFT thread pool, ``dense`` and ``dscan``
    are the high-repetition blocks, and the trailing number is the grid.
-   Produced by ``tools/artifacts/build_methods_figures.py chain-ledger`` from
+   Produced by ``scripts/artifacts/build_methods_figures.py chain-ledger`` from
    ``plan/research/scripts/2026-09-14-q9-batched-chain-fft/ledgers/`` and
    ``plan/research/scripts/2026-09-18-q9-idle-host-timing/ab_tables.txt``.
    Op counts are one optimized graph for one jax version and backend: they
@@ -490,7 +490,7 @@ against other codes on one common case, which is less than a comparison.
    resolution ladder converged (:math:`<2\%` between two settled rungs); open
    markers are its last rung of an unconverged ladder. GKX points are certified
    eigenpairs at the single Laguerre resolution labelled, which is not a
-   resolution ladder. Produced by ``tools/artifacts/build_methods_figures.py
+   resolution ladder. Produced by ``scripts/artifacts/build_methods_figures.py
    cross-code`` from
    ``plan/research/scripts/2026-09-14-cross-code-cyclone/results/final_tables.txt``.
    The GX values are that code's shipped goldens at its own resolution, not

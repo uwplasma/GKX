@@ -754,7 +754,7 @@ def test_potential_real_space_round_trip():
 
 def _movie_tool(name):
     root = pathlib.Path(__file__).parents[3]
-    script = root / "tools" / "artifacts" / "build_turbulence_movie.py"
+    script = root / "scripts" / "artifacts" / "build_turbulence_movie.py"
     spec = importlib.util.spec_from_file_location(name, script)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -876,7 +876,7 @@ def test_movie_imported_geometry_requires_physical_profiles():
 
 def test_turbulence_hero_imports_promoted_geometry_helpers():
     root = pathlib.Path(__file__).parents[3]
-    runpy.run_path(str(root / "tools" / "artifacts" / "build_turbulence_hero.py"))
+    runpy.run_path(str(root / "scripts" / "artifacts" / "build_turbulence_hero.py"))
 
 
 def test_phi_xy_snapshot_figure_renders(tmp_path):
