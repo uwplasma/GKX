@@ -20365,3 +20365,10 @@ Evidence:
 Outcome:
 - accepted for review: SOLVAX #121 (CI green), GKX #295 (paired gate skips until a SOLVAX release carries #121)
 - next task: SOLVAX release; raise the GKX floor; cache the pattern in #295; GPU factor behind the primitive
+
+## 2026-09-23 - SOLVAX-DIRECT paused (final pause, out of credits)
+
+- State: #280 and #295 are merged with main 48536d159 and pushed; #295 is back to draft with base main. SOLVAX #121 CI is fully green.
+- CI at the pause, before the merges (runners backed up): #280 had 26 checks passed, 11 pending and none failed. #295 had 10 passed and 27 pending after its mypy fix (the type-ignored import, which follows the adaptive route). The merges restarted both runs.
+- Office: raw outputs and the GPU venv are deleted; the MUMPS conda env and the clones remain under `lanes/solvax-direct` (2.6 GB).
+- Next: CI green on #280 and #295; SOLVAX release with #121; raise the GKX floor; cache the pattern in #295.
