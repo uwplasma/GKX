@@ -12,7 +12,9 @@ Release Scope and Claim Boundaries
    `PR 197 <https://github.com/uwplasma/GKX/pull/197>`_, which restores the
    per-step contract and reproduces the recorded artifact bit-identically.
    Numbers recorded with 2.0.0 time integration still need repaired-build
-   evidence before they are cited.
+   evidence before they are cited, and the GX references behind the
+   provisional linear rows have not yet been regenerated with the per-unit-time
+   end-damping rate (`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_).
 
 Claim scope
 -----------
