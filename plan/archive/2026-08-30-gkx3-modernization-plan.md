@@ -1,0 +1,2157 @@
+# GKX 3.0 research-grade modernization plan
+
+**Status:** active ground truth and agent handoff  
+**Replaces:** the current root `plan.md` at GKX `main`  
+**Audited revision:** `e19336dc2202b721d12df4f27ab84835b1360de7`  
+**Audit date:** 2026-08-30  
+**Final merger to `main`:** `rogeriojorge`  
+**Minimum Python:** 3.11  
+**Required execution platforms:** CPU and NVIDIA GPU  
+
+This file states the accepted product scope, the current repository state, the work already completed, the remaining gaps, and the ordered implementation program. A new agent should be able to clone GKX and the named companion repositories, read this file, select the first unfinished task, implement it in a focused branch, and leave a complete handoff.
+
+Historical measurements, rejected experiments, and detailed run narratives belong in `plan/log.md` or `plan/archive/`. Do not append day-to-day logs to this file. Update this file only when the product contract, architecture, phase status, or ordered work queue changes.
+
+---
+
+## 1. How to use this handoff
+
+At the start of every work session:
+
+1. Read this file completely.
+2. Read the last two entries in `plan/log.md`.
+3. Run `git status --short --branch` and `git rev-parse HEAD`.
+4. Fetch `main`, inspect open pull requests, and confirm that no other branch owns the same task.
+5. Run the current architecture, repository-size, release, and focused scientific gates before editing.
+6. Work on one task from the **Immediate pull-request queue**. Do not combine unrelated cleanup, physics, performance, documentation, and generated artifacts.
+7. Record exact before/after file counts, line counts, public names, tests, coverage, runtime, memory, and numerical changes that are relevant to the task.
+8. Append a concise entry to `plan/log.md` using the template near the end of this file.
+9. Push a reviewable branch and pull request. Do not merge it. `rogeriojorge` is the final merger.
+
+When code and this plan disagree, inspect the Git history and tests. Correct the plan in the same pull request that deliberately changes the contract. Do not silently reinterpret a completed gate.
+
+---
+
+## 2. Accepted scope and decisions
+
+These decisions are closed unless `rogeriojorge` explicitly reopens them.
+
+### 2.1 Physical scope
+
+GKX 3.x is a **radially local, Maxwellian-background, delta-f, flux-tube gyrokinetic code** for tokamaks and stellarators.
+
+The stable scope includes:
+
+- linear, quasilinear, and nonlinear local gyrokinetics;
+- electrostatic and electromagnetic fluctuations;
+- adiabatic or kinetic electrons;
+- arbitrary kinetic ion and impurity species within the supported model;
+- analytic, Miller, imported standard-file, and differentiable VMEX geometry;
+- Hermite-Laguerre velocity space;
+- model, Sugama-family, and linearized Coulomb collisions;
+- automatic differentiation, sensitivities, uncertainty workflows, and optimization;
+- coupling to equilibrium, transport, and common gyrokinetic-analysis tools.
+
+The following are outside GKX 3.x:
+
+- global radial gyrokinetics;
+- full-f evolution;
+- magnetic-axis, separatrix, divertor, scrape-off-layer, wall, sheath, or open-end mirror physics;
+- particle-in-cell algorithms;
+- nonlinear full-f Coulomb evolution for distributions far from a Maxwellian;
+- AMD GPU, TPU, and production multi-node support as release requirements.
+
+A closed periodic VMEX mirror field line may supply a geometry contract to GKX. It is still a periodic local delta-f calculation. It is not an open-mirror confinement, end-loss, sheath, or Pastukhov-potential model.
+
+### 2.2 Collision scope
+
+For `f = F0 + delta f`, the Landau operator expands as
+
+`C[f,f] = C[F0,F0] + C[F0,delta f] + C[delta f,F0] + C[delta f,delta f]`.
+
+For a Maxwellian `F0`, the first term vanishes. Standard delta-f gyrokinetics retains the two cross terms as the linearized collision operator. The quadratic `C[delta f,delta f]` term is outside the small-perturbation ordering. Therefore:
+
+- GKX shall implement scalable arbitrary-order **linearized** original Sugama, improved Sugama, and Coulomb operators;
+- finite-perpendicular-wavelength and multispecies effects are required for the production collision program;
+- the nonlinear Jorge-Frei-Ricci full operator is a literature and algorithm reference, not a GKX 3.x milestone;
+- adding a nonlinear full-f collision operator requires an explicit scope change.
+
+### 2.3 Product decisions
+
+- Broad undocumented 1.x internal imports may be removed.
+- A short, documented migration layer may remain for promoted user workflows, then be deleted on schedule.
+- Equilibrium `E x B` shear is deferred to GKX 3.1 unless a later bounded readiness review reopens it.
+- Rotation, parallel-flow shear, momentum flux, and momentum transport are 3.x work, not 3.0 blockers.
+- The quasilinear model may be promoted within a clearly declared domain even when it is not uniformly accurate. It must publish limitations, uncertainty, and out-of-domain behavior.
+- High-dimensional, multi-surface nonlinear stellarator optimization is the first major end-to-end research target.
+- Native explicit integration is the current promoted time owner.
+- A stiff implicit or IMEX path is retained only if it improves time-to-accuracy or enables a required case. GKX 3.0 will not ship an inferior method merely to satisfy an IMEX checklist.
+- Duplicate native and Diffrax paths shall be removed after migration gates. Diffrax remains a temporary oracle until that decision is closed.
+- TOML is the human-authored input format.
+- NetCDF is the canonical result and restart format.
+- JSON is the compact summary and machine-interchange format.
+- External code comparisons are maintained locally. Raw outputs from GX, GENE, stella, GS2, CGYRO, or other projects are not committed or published by default.
+- Permanent GKX tests must be self-contained and future-proof. External comparisons should be converted into analytic, mathematical, literature-anchored, or independent-algorithm tests.
+
+### 2.4 Hard architecture targets
+
+GKX 3.0 does not release until all targets below pass:
+
+| Measure | Hard target |
+| --- | ---: |
+| Installable `src/gkx/**/*.py` files | at most 45 |
+| Installable Python source lines | at most 45,000 |
+| `tests/**/*.py` files | at most 30 |
+| Test Python lines | at most 35,000 |
+| Advertised top-level `gkx` names | at most 30 |
+| Package statement coverage | at least 95% |
+| Retained promoted-module branch coverage | at least 95%, unless a reviewed exception records why |
+| Python floor | 3.11 |
+| Required devices | CPU and NVIDIA GPU |
+| Maintained developer commands | at most 12; target 8 |
+| Python files under `tools/` | zero at final topology |
+
+File-count targets must not be met by creating giant modules. Public facades should remain below 400 lines, ordinary modules below 900 lines, and the median module should remain below 500 lines. Reviewed schema or I/O owners may exceed a soft ceiling only when splitting would duplicate state or violate one-owner design.
+
+---
+
+## 3. Current repository state
+
+### 3.1 Git and pull requests
+
+At the audited revision:
+
+- `main` is `e19336dc2202b721d12df4f27ab84835b1360de7`;
+- it is 79 commits ahead of release 1.8.2 (`e89c7fed31657f32b638e653c7b266e33cded805`);
+- the repository has one branch, `main`;
+- there are no open pull requests;
+- PR #162 is the latest merged change;
+- the PR-head CI for #162 passed;
+- the post-merge `main` workflow was cancelled, so the next housekeeping pull request must obtain a green post-merge `main` run before further architecture work is trusted.
+
+The historical PR audit in `plan/pr_audit.md` covers PRs through #81 and records several inherited mega-merges, red-head merges, and later repairs. It is useful history but not a complete current ledger. PRs #82-#128 are represented by the frozen 1.8.2 baseline and Git history. PRs #129-#162 are summarized below. The replacement plan requires a compact machine-readable ledger for all historical PRs before obsolete planning files are deleted.
+
+### 3.2 Current size and coverage
+
+The latest exact source count reported by PR #162 is 199 installable Python files and 90,857 lines. Phase-0 measurements and merged deltas place the test tree at approximately 87,000 Python lines in 101 files. The tools tree remains about 72,000 lines in 89 files. The next pull request must regenerate exact counts at the audited `main` revision and update the architecture manifest; approximate values must not become a new baseline.
+
+| Area | Current state | GKX 3 target | Gap |
+| --- | ---: | ---: | ---: |
+| Source files | 199 | <=45 | remove or merge at least 154 |
+| Source lines | 90,857 | <=45,000 | remove at least 45,857 |
+| Test files | 101 | <=30 | remove or merge at least 71 |
+| Test lines | about 87,000 | <=35,000 | remove about 52,000 |
+| Tool files | 89 | 0 under `tools/` | relocate/delete 89 |
+| Tool lines | about 72,000 | 0 under `tools/` | relocate/delete about 72,000 |
+| Advertised root API | 14 | <=30 | nominally passes |
+| Lazy compatibility registry | about 350 targets | no hidden broad API | must be removed |
+| Aggregate package coverage | 96.41% | >=95% | passes aggregate only |
+| Modules below their coverage target | 50 of 181 tracked | 0 retained promoted modules | open |
+
+The current architecture gate is a **no-regression gate against a legacy allowance**. A green result does not mean that the GKX 3 topology has been reached. The manifest itself still contains stale line targets and baselines, including a 55,000-line test target that conflicts with the approved 35,000-line limit. Correct this in the first pull request.
+
+The current coverage artifact measures all 199 package modules and reports 96.41% aggregate coverage. Fifty tracked modules remain below their declared target. The lowest include:
+
+- `gkx.objectives.vmec_boozer_context`: 34.92%;
+- `gkx.geometry.vmec_boozer_constants`: 55.56%;
+- `gkx.workflows.runtime.resolution`: 58.97%;
+- nonlinear device-z reporting and execution: 72.22% and 77.33%;
+- `gkx.api`: 80%;
+- several geometry, saturation, objective, Diffrax, orchestration, and parallel modules between 85% and 95%.
+
+This pattern is a deletion map as much as a testing map. Do not add tens of thousands of test lines to preserve low-value compatibility, report, or duplicated modules. Delete or merge an unnecessary module first; add concise behavioral coverage only for retained ownership.
+
+### 3.3 Historical comparison with the attached 1.7.0 source
+
+The attached older checkout had:
+
+| Area | Files | Lines |
+| --- | ---: | ---: |
+| Source | 190 | 86,260 |
+| Tests | 82 | 74,915 |
+| Tools | 54 | 57,378 |
+| Python examples | 38 | 4,931 |
+| Documentation files | 1,416 | 33.9 MB |
+
+The older source had docstrings on about 43.7% of function/class definitions. Its examples contained `argparse` in 28 files and a `__main__` guard in 33. The documentation tracked 301 PNG files, 790 JSON files, and 278 CSV files. Static generated evidence dominated the tree.
+
+The current code has better interfaces, diagnostics, claims discipline, tests, provenance, and packaging, but its installable source is larger than the older tree and its test/tool surface has grown substantially. Modernization has so far improved behavior more than architecture. The remaining program must deliver real deletion and ownership consolidation.
+
+### 3.4 Current product capabilities
+
+| Capability | Current status | Required disposition |
+| --- | --- | --- |
+| Linear electrostatic solve | mature named pathways with time and Krylov modes | retain one public workflow and one numerical owner per algorithm |
+| Nonlinear electrostatic solve | operational, restartable, diagnostics-rich | retain; simplify orchestration and prove statistical policies |
+| Electromagnetic fields | implemented on tested lanes | complete systematic linear/nonlinear and kinetic-electron validation |
+| Kinetic electrons | operational on selected cases | improve stiffness strategy only when it wins; broaden physics gates |
+| Stellarator geometry | WOUT/EIK plus exact VMEX live/WOUT adapters | delete duplicated VMEC/Boozer reconstruction |
+| Closed VMEX mirror geometry | adapter and bounded showcase | keep clearly scoped as periodic geometry only |
+| Quasilinear model | diagnostics and candidate calibration machinery | choose, version, document, and promote the best bounded-domain model |
+| Collisions | model operators and low-order/research linearized Sugama/Coulomb paths | build arbitrary-order matrix-free runtime operators |
+| Linear differentiation | strong JVP/VJP/eigenvalue machinery | simplify API and preserve branch/conditioning gates |
+| Nonlinear differentiation | finite-window checkpointed discrete adjoint | quantify statistical usefulness; do not call it an infinite-time gradient |
+| Stellarator optimization | substantial reduced and campaign machinery | remove campaign governance from package; rebuild through generic API |
+| Parallel execution | independent work and experimental state sharding | CPU/NVIDIA single-device first; keep only demonstrated useful routes |
+| Packaging | PyPI wheel/sdist, Python 3.11, optional validation extra | reduce dependencies and add clean minimum/latest environment gates |
+| Documentation | extensive but flat and internally focused | rewrite information architecture and user journey |
+| Examples | many TOMLs and scripts, inconsistent hierarchy | replace with a small canonical gallery |
+
+---
+
+## 4. Work completed since release 1.8.2
+
+### 4.1 Repairs and Phase-0 baseline
+
+PRs #129-#138 repaired shipped benchmark imports and optional dependency failures, froze architecture/API/dependency/schema/provenance baselines, corrected profiler evidence, and closed most Phase-0 inventory work.
+
+Important outcomes:
+
+- pandas is now an explicit validation extra rather than an undeclared import requirement;
+- the undeclared Rich branch in one progress path was removed;
+- wheel and sdist installation were rechecked;
+- numerical fingerprints, geometry ownership, integrator ownership, output schemas, external-comparison policy, and GX provenance were recorded;
+- CPU and NVIDIA measurements were added for selected paths;
+- the baseline established that the passing architecture gate was only a ratchet, not completion.
+
+### 4.2 Product-surface compatibility layer
+
+PRs #139-#147 added:
+
+- public `Case` and result aliases;
+- `gkx.load`, `gkx.solve`, `gkx.scan`, `gkx.plot`, and `gkx.prepare`;
+- shorter `scan` and `plot` CLI aliases;
+- version fields for TOML and NetCDF;
+- an advertised 14-name top-level surface;
+- dtype-aware tolerances.
+
+These changes improve discoverability and provide migration entry points. They do **not** complete the GKX 3 API:
+
+- `Case` and result types are aliases to existing runtime internals;
+- `solve` accepts broad `**options` rather than a stable typed contract;
+- `scan` is primarily a linear `k_y` scan, not a general parameter-scan API;
+- `prepare` supports a narrow nonlinear diagnostics route and returns a weakly typed object;
+- the lazy registry still maps roughly 350 historical names;
+- low-level VMEC and solver-objective functions remain in the advertised root list.
+
+Treat this wave as compatibility scaffolding. The next architecture phase must implement the actual types and delete the broad registry.
+
+### 4.3 Core numerical consolidation
+
+PRs #148-#155:
+
+- consolidated cached linear RHS assembly;
+- consolidated Hermitian projection;
+- corrected timestep-independent terminal damping;
+- made native linear integration the documented default;
+- made the native step kernel the single owner of explicit and diagonal-IMEX step algebra;
+- routed diagnostics-rich implicit sampling through the existing implicit owner;
+- tested and rejected two additional stiff-integration candidates that failed prospective performance gates.
+
+The rollback discipline was correct. ARS-style and Crank-Nicolson candidates did not beat the stable explicit route in representative kinetic-electron time-to-accuracy and memory. Their source was removed. Future stiff work must reuse and improve the existing coupled implicit machinery rather than add another solver family.
+
+### 4.4 Geometry ownership and deletion
+
+PRs #156-#162:
+
+- added canonical live-state `from_vmex` geometry;
+- added the closed periodic VMEX mirror adapter;
+- added and regression-tested the canonical VMEX WOUT adapter;
+- recorded that a true open mirror would require a separate full-f/open-boundary model;
+- removed the Boozer-spectrum route that invented smooth metric and drift arrays;
+- removed obsolete API exports and existence-only tests;
+- preserved exact VMEX live/WOUT geometry, generic mapping validation, and Boozer diagnostics.
+
+PR #159 was a stacked duplicate of the WOUT adapter and closed unmerged. PR #160 rebased the same work onto `main` and merged. PR #162 removed 648 installable source lines and 186 test lines. This was the strongest deletion in the current wave, but it leaves many duplicate VMEC/Boozer modules and campaign objectives.
+
+### 4.5 Provenance
+
+Root `PROVENANCE.md` and `plan/baseline/gkx_1_8_2_gx_provenance.md` now record the conservative descendant boundary of the original GX-derived geometry port, the comparison revision, source hashes, and license notice. This is a good foundation.
+
+Remaining provenance work:
+
+- add short provenance notes to directly derived public or nontrivial retained functions;
+- record exact upstream revision and path for every future translation;
+- remove stale provenance rows when descendant code is deleted;
+- distinguish software derivation from equations implemented from papers.
+
+---
+
+## 5. Review of source changed in the current wave
+
+The table below covers every installable source area changed between 1.8.2 and the audited head. “Keep” means preserve the behavior, not necessarily the file.
+
+| Changed path or family | Review | Required action |
+| --- | --- | --- |
+| `api/__init__.py` | advertised surface reduced, registry still broad | replace registry with a real small API; migration map outside runtime |
+| `artifacts/io.py` | stable behavior, oversized mixed serializer | split only by schema ownership; converge into `gkx.io` |
+| `artifacts/nonlinear_netcdf.py` | valuable canonical restart/output contract | retain one schema owner; remove duplicated serializers |
+| `artifacts/plotting.py` | `gkx.plot` improved access; global style and many plot modes remain | replace with result-oriented plotting and local style contexts |
+| `artifacts/spectral_layout.py` | useful shared spectral interpretation | merge with numerical spectral-layout owner |
+| `cli.py` | aliases added, still a large argparse switchboard | reduce to six user commands and delegate to typed API |
+| `diagnostics/zonal_validation.py` | optional dependency repaired | retain numerical metrics; move dataframe/report code out of core |
+| `geometry/__init__.py` | canonical VMEX adapters exposed | retain a compact geometry facade |
+| `geometry/booz_xform_bridge.py` | synthetic closure removed | delete the remaining bridge if only diagnostics remain; Boozer transform belongs upstream |
+| `geometry/differentiable.py` | obsolete exports removed | retain only generic mapping and sensitivity contracts |
+| `geometry/vmec_state_sensitivity.py` | large deletion, some compatibility remains | delete after exact VMEX adapter parity and downstream migration |
+| `geometry/vmec_tensor_mapping.py` | now delegates more exact VMEX ownership | reduce to a thin adapter or remove |
+| `operators/linear/moments.py` | duplicate moment logic reduced | merge into one velocity/field-moment owner |
+| `operators/linear/rhs.py` | duplicate dispatch reduced | keep a small composition owner, not a second physics implementation |
+| `operators/nonlinear/brackets.py` | fusion/performance cleanup | retain one mathematically specified bracket kernel |
+| `operators/nonlinear/projection.py` | Hermitian projection consolidated | move next to spectral-grid ownership |
+| `operators/nonlinear/rhs.py` | duplicate term assembly reduced | converge linear/nonlinear term ownership without copied field logic |
+| `parallel/integrators.py` | small compatibility changes | retain only demonstrated independent-work and supported sharding routes |
+| `parallel/velocity_drive.py` | duplicated drive logic reduced | merge global-index Hermite coefficients with the core term owner |
+| `runtime.py` | convenience API added; remains high-fan-out facade | replace patchable globals and `Any` with typed orchestration |
+| `solvers/linear/implicit.py` | small cleanup | retain one coupled implicit owner if useful |
+| `solvers/linear/integrator_diagnostics.py` | shared step ownership improved | diagnostics must observe a solver, not implement one |
+| `solvers/linear/integrators.py` | explicit algebra consolidated | keep as one public linear integration owner or merge into `solve/linear.py` |
+| `solvers/linear/krylov_algorithms.py` | tolerance and algorithm fixes | keep concise matrix-free algorithms and residual certificates |
+| `solvers/linear/parallel*.py` | duplicate calls reduced | merge supported slices; remove experimental variants without a product use |
+| `solvers/nonlinear/diagnostics.py` | duplicated diagnostics removed | complete separation of diagnostics from time stepping |
+| `solvers/time/explicit.py` | native owner retained | merge configuration and stepper policy into one explicit module |
+| `solvers/time/explicit_diagnostics.py` | Rich branch and duplicate steps removed | eventually delete as a separate integrator |
+| `solvers/time/explicit_steps.py` | now owns native step maps | retain as numerical kernel or merge into time module |
+| `terms/__init__.py` | broad exports reduced | delete compatibility facade after migration |
+| `terms/assembly.py` | centralization improved | define one immutable operator/cache assembly contract |
+| `terms/fields.py` | fields consolidated | retain one field-equation owner with exact normalization tests |
+| `workflows/linear.py` | small compatibility update | merge into typed `solve.linear` orchestration |
+| `workflows/nonlinear.py` | prepared execution improved | merge into typed `solve.nonlinear`; no workflow-specific physics |
+| `workflows/runtime/commands.py` | CLI aliases wired | delete after CLI delegates directly to public API |
+| `workflows/runtime/config.py` | schema fields added | replace aliases with immutable public case models |
+| `workflows/runtime/execution.py` | prepared route updates | merge with `PreparedSimulation` |
+| `workflows/runtime/results.py` | aliases/schema updates | replace with actual public result types |
+| `workflows/runtime/toml.py` | versioning and shorthand changes | retain one schema loader/migrator |
+| `workflows/runtime/wout.py` | canonical adapter wiring | reduce to public geometry integration, no duplicated VMEC physics |
+
+The current wave also added hundreds of test lines around compatibility aliases and retained tools. Future changes should prefer deletion plus one broader behavioral test over one test per wrapper.
+
+---
+
+## 6. Main gaps that still block GKX 3
+
+### 6.1 Architecture
+
+- 199 installable modules remain.
+- Import ownership is still layered as `runtime -> workflows -> solvers -> operators -> terms`, with parallel and artifacts crossing those layers.
+- The old checkout had at least three import cycles; the current tree must regenerate the graph and reduce it to zero.
+- Large facades and report modules hide duplicate policy.
+- Research-campaign admission and claim logic still appears in installable diagnostics/objective areas.
+- `tools/` remains a second software project larger than the intended final core.
+
+### 6.2 Public API
+
+- The small advertised API is backed by historical aliases rather than final types.
+- Root exports mix user actions with low-level solver-objective internals.
+- No stable generic scan protocol exists.
+- No typed prepared linear/nonlinear simulation object exists.
+- Result types do not yet own all save, plot, inspect, convergence, and dataset behavior.
+- Extension points for geometry, collisions, objectives, diagnostics, and transport coupling are not yet small and formal.
+
+### 6.3 Numerical ownership
+
+- Native explicit ownership is strong.
+- Diffrax remains installed and tested as a second route.
+- The useful role of the existing implicit route is not yet a clean product contract.
+- Diagnostics, sampling, progress, restart, and integration remain partially duplicated.
+- Experimental parallel pathways carry significant source and test cost without a production release requirement.
+
+### 6.4 Scientific validation
+
+- Aggregate coverage is high, but many retained modules miss their own target.
+- Artifact and report tests are still mixed with solver-backed scientific evidence.
+- Several physics lanes are validated only on named low-dimensional cases.
+- Kinetic-electron, electromagnetic, and stellarator combinations need a coherent matrix rather than isolated checks.
+- Nonlinear stopping and uncertainty policies require prospective, held-out validation.
+- Finite-window nonlinear derivatives need ensemble and directional-prediction evidence, not only same-trajectory AD/finite-difference agreement.
+
+### 6.5 User experience
+
+- README is too long and carries multiple showcases, detailed media provenance, runtime transcripts, benchmark tables, and internal caveats before a concise first workflow.
+- Documentation is a flat list that mixes tutorials, equations, API, internal architecture, release policy, manuscript figures, and research planning.
+- Examples use inconsistent directory names and many `runtime_` prefixes.
+- Python examples often depend on low-level internals and helper functions rather than the advertised API.
+- Plotting lacks one stable visual and data contract.
+
+### 6.6 Physics development
+
+- Arbitrary-order production collision operators are not complete.
+- The best quasilinear model has not been selected and made user-facing.
+- The flagship high-dimensional nonlinear optimization has not been closed with held-out multi-surface evidence.
+- Transport coupling and Pyrokinetics interoperability remain incomplete.
+- Momentum transport and equilibrium shear remain future 3.x work.
+
+
+---
+
+## 7. Target product design
+
+### 7.1 User model
+
+A user should learn one model:
+
+```python
+import gkx
+
+case = gkx.load("case.toml")
+result = gkx.solve(case)
+result.print_summary()
+result.save("outputs/case.nc")
+result.plot("outputs/figures")
+```
+
+A repeated or differentiated workflow should use one prepared object:
+
+```python
+simulation = gkx.prepare(case)
+result = simulation.solve()
+scan = simulation.scan("species[0].tprim", [2.0, 2.5, 3.0])
+value, gradient = simulation.value_and_grad(objective, parameters)
+```
+
+The API should not require users to know runtime command dependencies, cache builders, term-conversion functions, report builders, or solver-private arrays.
+
+### 7.2 Proposed top-level API
+
+The final root surface should contain approximately 18 names:
+
+```text
+Case
+Species
+Grid
+Geometry
+Physics
+Time
+Output
+LinearResult
+NonlinearResult
+ScanResult
+PreparedSimulation
+load
+solve
+scan
+prepare
+plot
+inspect
+validate
+```
+
+Advanced names belong in explicit subpackages:
+
+- `gkx.geometry`: analytic, Miller, imported file, VMEX state/WOUT adapters;
+- `gkx.physics`: collision and closure specifications;
+- `gkx.optimize`: objectives, derivative policies, portfolios;
+- `gkx.io`: schema and conversion functions;
+- `gkx.integrations`: Pyrokinetics and transport adapters.
+
+Do not top-level-export low-level RHS kernels, cache classes, validation reports, VMEX campaign functions, or private linear algebra.
+
+### 7.3 Public types
+
+#### `Case`
+
+`Case` should be an immutable, validated PyTree-compatible dataclass. It owns:
+
+- schema version;
+- species;
+- geometry request or in-memory geometry;
+- grid;
+- physics switches;
+- collision and closure selection;
+- time and solver policy;
+- initialization;
+- diagnostics;
+- output policy;
+- normalization.
+
+Required methods:
+
+```python
+case.replace(...)
+case.validate()
+case.to_toml(path)
+case.summary()
+```
+
+No case field may be interpreted differently by the CLI and Python API. Parsing aliases and migration belong in `gkx.io.config`, not in kernels.
+
+#### `PreparedSimulation`
+
+This is the compiled reusable execution object. It owns:
+
+- validated static topology and array shapes;
+- geometry arrays;
+- operator/cache assembly;
+- compiled value and gradient callables;
+- persistent-cache metadata;
+- device, precision, and sharding plan;
+- memory and compilation estimates.
+
+Required methods:
+
+```python
+solve(parameters=None, initial_state=None)
+scan(parameter, values, *, parallel="auto")
+value_and_grad(objective, parameters)
+warmup()
+estimate_memory()
+summary()
+```
+
+`prepare` must support promoted linear and nonlinear cases. A prepared object must not silently change physics because a diagnostic, collision model, or integrator is selected.
+
+#### Results
+
+`LinearResult`, `NonlinearResult`, and `ScanResult` should be real stable classes, not aliases. They own:
+
+- typed scalar diagnostics;
+- array data and coordinates;
+- convergence and resolution status;
+- warning records;
+- normalization;
+- complete provenance;
+- `save`, `plot`, `print_summary`, and `to_dataset` behavior.
+
+A result should never describe an unsaturated or unresolved value as accepted. Rejected windows remain available with an explicit status and reason.
+
+### 7.4 Extension protocols
+
+Keep extension points small and structural:
+
+```python
+class GeometryProvider(Protocol):
+    def build(self, request) -> FluxTubeGeometry: ...
+
+class CollisionOperator(Protocol):
+    def apply(self, state, context) -> Array: ...
+    def invariants(self) -> CollisionInvariants: ...
+
+class Objective(Protocol):
+    def __call__(self, result_or_state, context) -> Array: ...
+
+class Diagnostic(Protocol):
+    def sample(self, state, fields, time, context) -> dict[str, Array]: ...
+```
+
+Protocols must not expose repository-specific report schemas. The public contracts should allow new physics or coupling modules without editing central dispatch tables.
+
+---
+
+## 8. Target source architecture
+
+The following is a line and ownership budget, not a demand to create empty packages.
+
+```text
+src/gkx/
+  __init__.py
+  api.py
+  case.py
+  result.py
+  cli.py
+  _version.py
+
+  physics/
+    species.py
+    equations.py
+    fields.py
+    collisions.py
+    closures.py
+    transport.py
+
+  geometry/
+    core.py
+    analytic.py
+    miller.py
+    imported.py
+    vmex.py
+
+  numerics/
+    grid.py
+    velocity.py
+    spectral.py
+    operators.py
+    explicit.py
+    implicit.py
+    eigensolver.py
+    parallel.py
+
+  solve/
+    linear.py
+    nonlinear.py
+    prepared.py
+    diagnostics.py
+    convergence.py
+    objectives.py
+
+  optimize/
+    derivatives.py
+    stellarator.py
+    portfolio.py
+
+  io/
+    config.py
+    netcdf.py
+    plotting.py
+    provenance.py
+
+  integrations/
+    pyrokinetics.py
+    transport.py
+```
+
+This layout contains fewer than 45 files. It may be adjusted when measured ownership demands it, but all alternatives must satisfy:
+
+- zero import cycles;
+- one owner for each equation and numerical algorithm;
+- no `runtime`, `workflows`, `artifacts`, or `terms` package in the final topology;
+- no source modules whose main purpose is building manuscript, release, or campaign reports;
+- no private wrapper that forwards unchanged arguments to another module;
+- no duplicated linear/nonlinear field equations;
+- no separate “diagnostics integrator” implementing a second timestepper;
+- no tool or test imports required by the installed package.
+
+### 8.1 Deletion and merge map
+
+| Current area | Target owner | Disposition |
+| --- | --- | --- |
+| `gkx.api` registry | root `api.py` | replace; keep a versioned migration table outside `__all__` |
+| `gkx.artifacts` | `gkx.io` | merge schemas/plots; delete artifact governance |
+| `gkx.benchmarking` | `benchmarks/` or tests | remove from package unless a reusable analysis function exists |
+| `gkx.core` | `case`, `physics`, `numerics` | split by scientific ownership |
+| `gkx.diagnostics` | `solve/diagnostics.py`, `solve/convergence.py`, `physics/transport.py` | remove reports and campaign gates |
+| `gkx.geometry` | compact geometry package | retain generic contracts and adapters; delete duplicated equilibrium algebra |
+| `gkx.objectives` | `solve/objectives.py`, `optimize/` | retain reusable objectives; remove campaign admission/report modules |
+| `gkx.operators` + `gkx.terms` | `physics` + `numerics/operators.py` | one equation owner and one assembled operator owner |
+| `gkx.parallel` | `numerics/parallel.py` | keep only supported independent work or measured sharding |
+| `gkx.solvers` | `numerics` + `solve` | separate algorithms from orchestration |
+| `gkx.workflows` + `runtime.py` | `solve`, `io`, `cli` | remove after public API migration |
+| `tools/artifacts` | release workflow or external reproducibility package | delete most; retain at most one figure-regeneration command |
+| `tools/campaigns` | ignored local workspace or separate research repository | remove from installed repo |
+| `tools/comparison` | local-only scripts outside main or compact `scripts/compare.py` | no raw outputs in Git |
+| `tools/profiling` | `scripts/profile.py` | one configurable profiler |
+| `tools/release` | `scripts/check.py` plus CI | consolidate all release checks |
+
+### 8.2 Architecture proof gates
+
+Every architecture PR must report:
+
+- source/test/tool file and line deltas;
+- import graph and cycle count;
+- top-level API count;
+- largest ten modules and functions;
+- duplicate normalized AST/function groups;
+- package import time;
+- wheel and sdist size;
+- exact public behavior affected;
+- numerical fingerprints before and after.
+
+A file move without a net reduction in files, lines, cycles, public surface, or duplicated ownership does not count as progress.
+
+---
+
+## 9. Geometry ownership
+
+### 9.1 Final boundary
+
+VMEX owns:
+
+- equilibrium state and solve;
+- VMEC spectral geometry;
+- live-state and standard-WOUT field-line evaluation;
+- metric tensors, drifts, pressure/current contributions, and equal-arc mapping;
+- closed mirror field-line construction.
+
+`booz_xform_jax` owns:
+
+- VMEC-to-Boozer transformation;
+- Boozer Fourier spectra;
+- `boozmn` I/O;
+- Boozer-coordinate diagnostics.
+
+GKX owns:
+
+- the generic solver-ready flux-tube contract;
+- normalization and finite-value checks;
+- parallel-domain topology and twist/shift policy;
+- interpolation onto the GKX parallel grid when necessary;
+- consumption of geometry by gyrokinetic equations;
+- thin adapters to VMEX state, VMEX WOUT, imported EIK, Miller, and analytic models.
+
+Boozer coordinates are not required by the turbulence solver when a complete straight-field-line metric/drift mapping is already available. Optimization may use Boozer spectra as separate constraints.
+
+### 9.2 Required deletion sequence
+
+1. Freeze exact live-state versus WOUT versus retained imported-EIK parity on:
+   - axisymmetric vacuum;
+   - shaped finite-beta tokamak;
+   - QA/QH/QI stellarators;
+   - `LASYM=true` case;
+   - closed periodic mirror.
+2. Freeze AD/finite-difference geometry gradients for the live VMEX path.
+3. Search downstream imports in GKX, VMEX, examples, and local scripts.
+4. Redirect users to `from_vmex`, `from_vmex_wout`, or a generic complete mapping.
+5. Delete remaining in-package VMEC/Boozer reconstruction modules and tests.
+6. Retain the GX-derived imported-EIK/Miller path only if it provides a unique user capability. Otherwise delegate or reduce it to one compatibility adapter.
+7. Update provenance and documentation in the same PR.
+
+Candidate deletions include the remaining `vmec_boozer_*`, state-control, state-sensitivity, tensor/report, and duplicated field-line sampling modules. Do not delete solely by filename; inspect whether a unique standard-file or local-equilibrium capability remains.
+
+### 9.3 Geometry proof tests
+
+- analytic circular and Miller identities;
+- metric positivity and determinant identities;
+- `B . grad psi = 0` within discretization tolerance;
+- field-line straightness and periodic/twist endpoint conditions;
+- grad-B versus curvature drift pressure correction;
+- finite-beta and current-dependent terms;
+- equal-arc constant parallel derivative;
+- parity under stellarator symmetry and `LASYM` support;
+- live VMEX/WOUT equivalence;
+- AD/finite-difference Taylor tests;
+- resolution convergence of radial derivatives;
+- closed-mirror periodicity and mirror-force consistency.
+
+---
+
+## 10. Equations, fields, and operator ownership
+
+### 10.1 One model statement
+
+Write the normalized delta-f electromagnetic gyrokinetic system once in `physics/equations.py` and once in the documentation. Every implemented term must map to:
+
+- equation number;
+- code owner;
+- input switch;
+- normalization;
+- discrete representation;
+- conservation/free-energy role;
+- tests;
+- reference.
+
+The code should expose a term inventory generated from source metadata rather than manually maintained duplicate tables.
+
+### 10.2 Field equations
+
+`physics/fields.py` must be the only owner of quasineutrality, parallel Ampere, and perpendicular magnetic-field equations. Linear and nonlinear solvers call the same field owner. Required tests:
+
+- electrostatic and electromagnetic limiting cases;
+- adiabatic-electron `k_y=0` response;
+- gauge and Hermitian reality contracts;
+- species summation and normalization;
+- dense versus matrix-free parity on small systems;
+- residual certificates;
+- JVP/VJP duality;
+- float32 and float64 tolerances.
+
+### 10.3 Linear and nonlinear operators
+
+Use one immutable operator context assembled from `Case`, grid, geometry, species, and collision policy. The linear RHS and nonlinear RHS may be separate callables, but shared terms must not be copied.
+
+The nonlinear bracket owner must prove:
+
+- antisymmetry;
+- zero bracket for constant fields;
+- discrete particle conservation where applicable;
+- discrete free-energy exchange without artificial production in the dissipation-free limit;
+- exact Hermitian closure after dealiasing;
+- compressed-real and full-complex parity;
+- serial and supported sharded identity;
+- observed spectral convergence on smooth manufactured fields.
+
+---
+
+## 11. Time integration and solver strategy
+
+### 11.1 Promoted explicit path
+
+Retain native RK2/RK3/RK4 with one step owner and one diagnostics observer. Required product behavior:
+
+- fixed and adaptive timestep policies use the same RHS;
+- CFL attribution is diagnostic and clearly labeled when heuristic;
+- terminal times and saved states match exactly;
+- restart continuation is equivalent to an uninterrupted run;
+- diagnostics striding does not retain full device histories;
+- reverse-mode finite-window differentiation follows the executed discrete map.
+
+### 11.2 Stiff path decision
+
+Do not implement a third new IMEX family. Evaluate the existing coupled implicit owner against the explicit path on the cases that motivate stiffness:
+
+- kinetic-electron ITG/TEM;
+- long-wavelength electrostatic response;
+- electromagnetic kinetic-electron mode;
+- high collision frequency with the production collision operator.
+
+For each case compare:
+
+- physical time reached per wall second;
+- error relative to a converged reference;
+- peak device and host memory;
+- compile time and compiled executable count;
+- solver residual and failure rate;
+- gradient support and cost.
+
+Decision gate:
+
+- **promote** the coupled implicit path if it wins time-to-accuracy or enables a stable required case;
+- **retain as expert optional** if it is scientifically useful but not generally faster;
+- **remove from the base product** if it has no supported use after collision development;
+- **remove Diffrax** once its migration-oracle role is complete and no unique promoted capability remains.
+
+An IMEX label is not a goal. A smaller, faster explicit code is preferable when it solves the approved scope reliably.
+
+### 11.3 Linear eigensolvers
+
+Retain matrix-free dominant-branch methods with:
+
+- residual certificates;
+- dense parity on bounded cases;
+- branch-continuation metrics;
+- spectral-gap and near-degeneracy warnings;
+- precision-aware tolerances;
+- JVP/VJP and finite-difference agreement;
+- cost independent of design dimension for reverse sensitivities.
+
+Do not expose three synonymous eigensolver entry points.
+
+---
+
+## 12. Collision and closure program
+
+### 12.1 Unified collision API
+
+All collision models should share one selector, one normalization, one metadata record, and one operator protocol. A result must record:
+
+- operator family and version;
+- species-pair ordering;
+- retained moments;
+- finite-perpendicular-wavelength treatment;
+- collision frequencies and normalization;
+- implicit/explicit application;
+- conservation and dissipation status.
+
+### 12.2 Ordered milestones
+
+#### C0: semantics and preflight
+
+- unify `none`, model, original Sugama, improved Sugama, and Coulomb selection;
+- fail before compilation for unsupported species/order/wavelength/integrator combinations;
+- remove ambiguous “full Coulomb” language;
+- state “linearized,” species scope, and retained-order scope everywhere.
+
+#### C1: arbitrary-order drift-kinetic operators
+
+- generate original Sugama, improved Sugama, and linearized Coulomb at arbitrary retained `(N_l, N_m)`;
+- support general species pairs and mass/temperature ratios;
+- avoid checked-in order-specific dense tables except tiny independent fixtures;
+- cache static coefficient structures by physics signature.
+
+#### C2: finite-`k_perp`, like-species runtime
+
+- implement test-particle, field-particle, and polarization pieces;
+- avoid materializing a dense moment matrix at every spatial point;
+- use matrix-free, sparse, separable, or low-rank contractions;
+- preserve exact invariant corrections;
+- integrate through the selected stiff/explicit policy.
+
+#### C3: finite-`k_perp`, multispecies runtime
+
+- support ordered target/source pairs with distinct masses, temperatures, charges, and Larmor radii;
+- conserve total particle number per species and total momentum/energy across pairs;
+- validate electron-ion, ion-electron, impurity, and equal-species limits;
+- batch species pairs without recompilation growth.
+
+### 12.3 Collision proof matrix
+
+Mathematical:
+
+- density nullspace;
+- total momentum and energy conservation;
+- self-adjointness where the operator should have it;
+- negative semidefiniteness and discrete H theorem;
+- symmetry/reciprocity of species-pair coefficients;
+- exact drift-kinetic limit as `k_perp rho -> 0`;
+- expected gyro-diffusive finite-`k_perp` scaling;
+- original/improved Sugama limiting relations.
+
+Numerical and physical:
+
+- coefficient recurrence and transform conditioning;
+- arbitrary-order convergence;
+- Spitzer-Harm conductivity through the actual runtime operator;
+- multispecies temperature and momentum relaxation;
+- zonal-flow residual and collisional damping;
+- short-wavelength ITG stabilization by collisional FLR terms;
+- TEM comparison among original Sugama, improved Sugama, and Coulomb;
+- nonlinear heat-flux sensitivity to operator choice;
+- CPU/GPU runtime and memory versus moment count.
+
+### 12.4 Closures
+
+Compare hard truncation, hypercollisions, outgoing Hermite-flux/reflectionless closure, and collision-based asymptotic closure. Promotion requires:
+
+- reflected Hermite-flux measurement;
+- recurrence-time scaling;
+- linear dispersion error;
+- nonlinear transport convergence;
+- moment-tail decay;
+- conservation and free-energy behavior;
+- cost and robustness across collisionality.
+
+Learned closures remain experimental until they preserve invariants, report uncertainty, and pass untouched out-of-domain cases.
+
+---
+
+## 13. Quasilinear model
+
+### 13.1 Product tiers
+
+- **Q1 ranking:** predicts ordering and useful optimization directions.
+- **Q2 calibrated flux:** predicts quantitative flux within a declared domain and uncertainty band.
+- **Q3 transport-coupled:** remains stable and useful inside profile evolution or steady-state transport iteration.
+
+GKX should ship the highest tier that passes prospective gates. A model may be Q2 for electrostatic ion-scale ITG in specified tokamak and stellarator domains while remaining Q1 or unsupported for electromagnetic, electron-scale, pedestal, high-flow-shear, or other cases.
+
+### 13.2 Candidate ingredients
+
+Evaluate candidates built from:
+
+- physical linear heat and particle flux weights;
+- multi-`k_y` mode spectra and branch continuity;
+- geometry-aware effective `k_perp`;
+- growth rate and real frequency;
+- eigenfunction structure;
+- zonal-flow response or secondary-instability information;
+- collisionality and species features;
+- uncertainty and out-of-domain scores.
+
+Do not assume that one scalar mixing-length constant is universal.
+
+### 13.3 Model-selection protocol
+
+1. Define the physical domain before fitting.
+2. Split by equilibrium family, not random rows, so holdouts test transfer.
+3. Keep stress cases visible.
+4. Compare simple baselines before complex regression.
+5. Score:
+   - Spearman/rank performance;
+   - signed and absolute flux error;
+   - calibration and interval coverage;
+   - monotonicity/limit consistency;
+   - resolution robustness;
+   - optimization-direction agreement;
+   - transport-iteration stability;
+   - cost.
+6. Freeze a model card and coefficients with a versioned schema.
+7. Reject or lower confidence outside the trained domain.
+8. Expose the model through TOML, Python, NetCDF metadata, and result plotting.
+
+The user-facing result must state whether it is a ranking proxy, a calibrated flux, or an out-of-domain estimate.
+
+---
+
+## 14. Differentiation and optimization
+
+### 14.1 Linear derivatives
+
+Preserve:
+
+- implicit eigenvalue/eigenvector differentiation;
+- matrix-free reverse mode;
+- branch and conditioning diagnostics;
+- derivatives through VMEX geometry where supported;
+- parameter-count scaling measurements.
+
+Every promoted derivative requires Taylor-remainder tests, JVP/VJP duality, finite-difference step ladders, and near-degenerate failure behavior.
+
+### 14.2 Nonlinear finite-window derivative
+
+The current method computes the exact reverse derivative of a finite discrete trajectory at a detached saturated initial state. It is not the derivative of the infinite-time invariant turbulent measure.
+
+Required evidence before use as a production optimization direction:
+
+- finite-difference step ladders, not one step size;
+- multiple independently saturated initial states;
+- separated time windows;
+- gradient covariance and pairwise direction cosine;
+- dependence on window length and autocorrelation time;
+- held-out finite perturbations along predicted directions;
+- comparison with SPSA and ensemble finite differences at matched GPU cost;
+- successful line search or trust-region decrease;
+- final long replicated transport audit.
+
+Investigate shadowing, ensemble, or response methods only as bounded research branches with prospective rollback gates. Do not add a permanent algorithm family until it improves estimation of the stationary objective.
+
+### 14.3 Flagship stellarator workflow
+
+The target campaign must include:
+
+- 50-200 independent geometry controls;
+- multiple flux surfaces;
+- multiple field-line labels;
+- multiple `k_y` values;
+- aspect ratio, iota, equilibrium quality, and QA/QH/QI constraints as appropriate;
+- declared training and held-out surfaces/field lines;
+- uncertainty-aware short-window gradients;
+- comparison with SPSA and finite differences at matched compute budget;
+- long nonlinear baseline/candidate ensembles;
+- resolution, timestep, moment, spectral-tail, and stationarity gates;
+- one local independent-code audit where practical, converted into self-contained GKX regression/proof evidence.
+
+Campaign admission and report generation belong outside the installable core. The core should expose reusable objectives, sampling portfolios, statistics, and result schemas.
+
+---
+
+## 15. Coupling and interoperability
+
+### 15.1 VMEX
+
+- VMEX owns equilibrium and exact field-line geometry.
+- GKX consumes `from_vmex` and `from_vmex_wout` mappings.
+- Optimization composes both packages in memory.
+- Do not duplicate equilibrium, Boozer, or drift geometry in GKX.
+
+### 15.2 Pyrokinetics
+
+Add a maintained GKX plugin for:
+
+- reading/writing GKX TOML;
+- converting normalized species and local geometry;
+- reading linear and nonlinear NetCDF results;
+- exposing eigenvalues, eigenfunctions, fields, fluxes, spectra, and time coordinates;
+- round-trip tests without depending on another code executable.
+
+Pyrokinetics already standardizes several gyrokinetic input/output formats and normalizations. GKX adoption will be easier if users can compare and analyze it through that ecosystem.
+
+### 15.3 Transport coupling
+
+Define a small transport adapter that takes radial profiles and returns:
+
+- particle, heat, and momentum fluxes when supported;
+- uncertainty;
+- convergence and domain status;
+- gradients/Jacobians when trustworthy;
+- cache and warm-start metadata.
+
+Support independent radial batches before adding complicated coupling. Test a mock transport loop for stability and schema behavior. Real TGYRO/T3D/Trinity-style coupling remains an integration layer, not a dependency of the core package.
+
+### 15.4 Local external comparison policy
+
+A local comparator run must record:
+
+- repository and commit;
+- compiler/build flags;
+- hardware and precision;
+- complete input and normalization map;
+- resolution and timestep;
+- residual/convergence status;
+- postprocessing version;
+- quantitative comparison and uncertainty.
+
+Raw external output stays outside Git. The permanent GKX test should use an analytic result, a published scalar/curve with provenance, an independently implemented formula, a manufactured solution, or a compact derived fixture whose meaning does not depend on future external-code behavior.
+
+---
+
+## 16. JAX and performance contract
+
+### 16.1 Compilation and topology
+
+- JIT the outer simulation step/scan, not hundreds of tiny wrappers.
+- Keep array topology and shapes static inside compiled loops.
+- Build functions once; do not create new jitted callables inside iterations.
+- Use a persistent compilation cache for CLI and repeated design workflows.
+- Include JAX/jaxlib version, device type/count/topology, XLA flags, precision, and static signature in performance records.
+- Explain cache misses during development and gate unintended recompilation.
+
+### 16.2 Memory
+
+- Keep diagnostics strided and host-resident where possible.
+- Do not materialize complete state histories unless explicitly requested.
+- Use buffer donation only when lifetime tests show that the input is not reused.
+- Measure device peak memory separately from Python host allocations.
+- Track live memory after synchronization and retained cache memory.
+- Fail before execution when a predictable state/table allocation exceeds a configured device budget.
+
+### 16.3 Array layout and kernels
+
+- Choose layout from profiles, not aesthetic preferences.
+- Keep transform axes contiguous where practical.
+- Avoid degenerate general matrix products for single-digit moment contractions.
+- Fuse elementwise physics when it reduces memory traffic, but add explicit barriers when fusion creates strided rereads.
+- Pin precision on invariant-carrying contractions that must not lower to TF32.
+- Preserve bitwise or tolerance-bounded identities around every kernel rewrite.
+
+### 16.4 Parallel policy
+
+Production 3.0 requires:
+
+- serial CPU;
+- single NVIDIA GPU;
+- independent `k_y`, parameter, seed, surface, and field-line batches where useful.
+
+State sharding may remain experimental unless it demonstrates:
+
+- numerical identity;
+- lower time-to-solution or memory extension on realistic problems;
+- bounded communication;
+- differentiation support where claimed;
+- a simple user contract.
+
+Do not keep five parallel routes for possible future hardware.
+
+### 16.5 Benchmark method
+
+Every benchmark separates:
+
+- import and setup;
+- host-to-device transfer;
+- first compile plus execution;
+- warm execution after `block_until_ready()`;
+- output transfer and serialization;
+- end-to-end user time;
+- peak host and device memory.
+
+Comparisons use matched precision and matched scientific error. Record medians and spread after warmup. Microbenchmarks supplement, but do not replace, representative end-to-end cases.
+
+
+---
+
+## 17. Test and verification design
+
+### 17.1 Interpretation of “proof tests”
+
+A finite test suite cannot formally prove every physical claim. GKX shall use the strongest available evidence for each layer:
+
+- exact algebraic identities and invariants where a mathematical proof can be encoded;
+- analytic and manufactured solutions for code verification;
+- observed-order tests for discretizations;
+- independent implementations for delicate formulas;
+- literature-anchored benchmarks for model behavior;
+- statistically designed ensembles for turbulent quantities;
+- regression tests only after the underlying result is independently justified.
+
+A frozen output without a mathematical, physical, or numerical reason is weak evidence and should not dominate the suite.
+
+### 17.2 Evidence levels
+
+| Level | Evidence | Examples |
+| --- | --- | --- |
+| E0 | API/schema contract | types, shapes, errors, TOML and NetCDF round trips |
+| E1 | exact mathematics | recurrence identities, symmetry, nullspaces, conservation |
+| E2 | numerical verification | manufactured solutions, order, conditioning, restart equivalence |
+| E3 | analytic physics | Landau damping, dispersion relations, zonal residuals, conductivity |
+| E4 | literature benchmark | Cyclone, W7-X/HSX, TEM/ETG/KBM, published collision curves |
+| E5 | independent local code comparison | GX, GENE, stella, GS2, CGYRO; diagnostic only |
+| E6 | nonlinear statistical evidence | stationarity, autocorrelation, seeds, resolution and timestep |
+| E7 | performance evidence | synchronized runtime, memory, compilation, scaling at matched error |
+
+Every promoted feature must have at least one E1/E2 test and the appropriate E3-E7 tests. Code coverage alone is E0.
+
+### 17.3 Target test topology
+
+Target 24-28 Python files, never more than 30:
+
+```text
+tests/
+  conftest.py
+  test_api_schema.py
+  test_io_restart.py
+  test_geometry_analytic.py
+  test_geometry_vmex.py
+  test_velocity_basis.py
+  test_fields.py
+  test_linear_operator.py
+  test_nonlinear_operator.py
+  test_collisions.py
+  test_closures.py
+  test_integrators.py
+  test_eigensolvers.py
+  test_linear_solve.py
+  test_nonlinear_solve.py
+  test_diagnostics_statistics.py
+  test_autodiff.py
+  test_parallel.py
+  test_cli_examples.py
+
+  physics/
+    test_streaming_landau.py
+    test_zonal_gam.py
+    test_itg_tem_etg.py
+    test_electromagnetic.py
+    test_stellarator.py
+    test_collision_physics.py
+    test_nonlinear_transport.py
+    test_quasilinear.py
+    test_optimization.py
+
+  test_release.py
+```
+
+Combine related cases through parameterization and fixtures. Do not create one test file per script, report, artifact, or bug.
+
+### 17.4 Mathematical proof-oriented tests
+
+#### Basis and transforms
+
+- Hermite and Laguerre orthogonality under the implemented quadrature;
+- recurrence relations and normalization;
+- forward/inverse transform identity;
+- parity and reality conditions;
+- truncation-boundary terms;
+- Parseval/free-energy consistency;
+- condition numbers over promoted orders.
+
+#### Spectral grid and bracket
+
+- Fourier derivative on exact modes;
+- dealiasing support and zeroing policy;
+- Hermitian projection idempotence;
+- twist-and-shift index and continuous-phase identities;
+- bracket antisymmetry and constant-field nullspace;
+- discrete conservation/free-energy exchange;
+- compressed-real/full-complex parity.
+
+#### Fields and operators
+
+- quasineutrality and Ampere residuals;
+- species-sum and normalization identities;
+- electrostatic/electromagnetic limits;
+- collisionless and zero-drive limits;
+- term-by-term linear operator parity against independent small dense assembly;
+- adjoint identities `<u, Lv> = <L^*u, v>` where applicable.
+
+#### Collisions
+
+Use the matrix and physics tests listed in Section 12. These are release blockers, not optional slow checks.
+
+### 17.5 Numerical verification
+
+Use exact and manufactured solutions to verify:
+
+- temporal order of RK2/RK3/RK4 and any retained implicit method;
+- parallel streaming and mirror coupling;
+- drift and diamagnetic terms;
+- source/damping terms;
+- nonlinear bracket in multiple dimensions;
+- geometry interpolation and radial derivatives;
+- collision application and implicit solve;
+- diagnostic quadrature and flux moments.
+
+For each order test:
+
+- use at least three refinement levels;
+- fit observed order with uncertainty;
+- reject pre-asymptotic or roundoff-dominated points;
+- state the norm;
+- compare to the formal order with a prospective tolerance.
+
+### 17.6 Physics matrix
+
+The retained release matrix should include at minimum:
+
+| Physics | Core cases |
+| --- | --- |
+| Free streaming/phase mixing | slab Hermite cascade, recurrence, closure effect |
+| Electrostatic waves | Landau damping and simple dispersion roots |
+| Zonal response | Rosenbluth-Hinton tokamak, stellarator response/damping |
+| ITG | Cyclone adiabatic and kinetic electron, Miller shaping |
+| TEM/ETG | kinetic-electron trapped mode and electron-scale branch |
+| Electromagnetic | KAW and KBM; microtearing when model support is complete |
+| Geometry | circular, Miller, W7-X, HSX, QA/QH/QI, finite beta, `LASYM` |
+| Collisions | conductivity, relaxation, ZF damping, ITG/TEM operator comparisons |
+| Nonlinear | tokamak ITG and at least two stellarator configurations |
+| Quasilinear | training/holdout families and domain failures |
+| Optimization | derivative direction, constrained line search, held-out nonlinear audit |
+
+Each case records inputs, normalization, convergence ladder, accepted range, source, and claim boundary.
+
+### 17.7 Nonlinear statistical gates
+
+A nonlinear value is accepted only when:
+
+- spin-up is excluded by a prospective rule;
+- the averaging interval is long relative to the integrated autocorrelation time;
+- corrected relative SEM is below the case threshold;
+- adjacent batches agree within their uncertainty;
+- heat flux and relevant free-energy diagnostics show bounded trend;
+- spectral tails pass necessary resolution screens;
+- matched timestep, perpendicular, parallel, and velocity-space rungs agree;
+- replicate seeds are consistent or their spread is included in uncertainty.
+
+A causal stopping policy must be frozen on training traces and evaluated without retuning on held-out traces. A favorable post-hoc suffix is evidence about the final mean, not validation of a stopping algorithm.
+
+### 17.8 Coverage and mutation policy
+
+- Measure branch coverage.
+- Require 100% coverage of public error branches and schema migrations.
+- Require at least 95% branch coverage for every retained promoted module.
+- Remove dead or obsolete code before writing tests for it.
+- Apply mutation testing or targeted fault injection to high-risk kernels: field solve, bracket, collisions, twist/shift, restart, and derivatives.
+- A test must fail when the intended sign, normalization, neighbor index, invariant-restoring term, or timestep stage is perturbed.
+- Avoid snapshot tests of prose or large JSON reports unless the schema itself is the contract.
+
+### 17.9 Test tiers
+
+- **Tier 0, under 60 s CPU:** API, algebra, small manufactured systems.
+- **Tier 1, under 10 min CPU:** integration, examples, analytic physics, coverage.
+- **Tier 2, scheduled CPU/GPU:** representative linear/nonlinear, convergence, gradients.
+- **Tier 3, manual campaign:** long turbulence ensembles, external comparisons, optimization.
+
+Only Tier 0 and Tier 1 should block every ordinary PR. Tier 2 blocks release and relevant physics changes. Tier 3 produces reviewed evidence and compact self-contained gates.
+
+---
+
+## 18. Documentation redesign
+
+### 18.1 Information architecture
+
+Use Sphinx with MyST Markdown for narrative pages, MathJax, autodoc, BibTeX citations, copy buttons, and a modern accessible theme such as PyData Sphinx Theme. Keep dependencies deliberate; do not add notebooks or gallery frameworks unless they reduce maintenance.
+
+Organize by user need:
+
+```text
+docs/
+  index.md
+  getting_started/
+    install.md
+    first_linear_run.md
+    first_nonlinear_run.md
+    first_stellarator_run.md
+  tutorials/
+    kinetic_electrons.md
+    electromagnetic.md
+    collisions.md
+    quasilinear.md
+    autodiff.md
+    optimization.md
+  how_to/
+    choose_resolution.md
+    use_toml.md
+    restart.md
+    run_gpu.md
+    run_scans.md
+    diagnose_convergence.md
+    use_vmex.md
+    couple_transport.md
+  explanation/
+    gyrokinetic_model.md
+    normalization.md
+    hermite_laguerre.md
+    geometry.md
+    fields.md
+    collisions.md
+    closures.md
+    nonlinear_statistics.md
+    differentiability.md
+  reference/
+    inputs.md
+    outputs.md
+    api.md
+    cli.md
+    equations_to_code.md
+    validation_matrix.md
+    performance.md
+    limitations.md
+    provenance.md
+    citations.md
+```
+
+Internal release policy, roadmap, campaign logs, manuscript figures, and architecture migration do not belong in the public documentation navigation. Keep them under `plan/` or GitHub project metadata.
+
+### 18.2 Writing rules
+
+- Lead with the concrete user or physics point.
+- Use active voice and exact names, dates, commands, equations, and measured values.
+- Remove generic importance language, binary slogans, faux-insight setups, and repetitive summaries.
+- Do not claim universal support from one benchmark.
+- Define every symbol near first use.
+- Tie each equation to normalization, code owner, and test.
+- Keep docstrings concise; put derivations in documentation, not in 80-line source comments.
+- Verify all links and citations in CI, with an explicit allowlist for sites that block automated link checks.
+
+### 18.3 Documentation completeness gates
+
+A capability is not complete until docs contain:
+
+- purpose and scope;
+- equations and assumptions;
+- inputs and defaults;
+- outputs and units;
+- numerical method;
+- convergence guidance;
+- limitations and failure modes;
+- runnable TOML and Python examples;
+- plots from a validated case;
+- API reference;
+- primary sources.
+
+All code snippets used as tutorials should execute in CI or be imported from tested example files.
+
+### 18.4 README target
+
+Reduce README to roughly 150-220 lines:
+
+1. badges;
+2. one-sentence identity and scope;
+3. one strong image;
+4. installation;
+5. one CLI run;
+6. one Python run;
+7. supported capabilities and explicit limitations;
+8. links to examples, documentation, validation, citation, and contributing.
+
+Move detailed benchmark tables, movie encoding, machine profiles, claim inventories, and long transcripts into documentation. The README should help a new user run GKX before explaining the development history.
+
+---
+
+## 19. Example redesign
+
+### 19.1 Canonical gallery
+
+Keep 10-12 numbered example groups:
+
+```text
+examples/
+  01_linear_tokamak/
+    case.toml
+    run.py
+  02_linear_stellarator/
+    case.toml
+    run.py
+  03_nonlinear_tokamak/
+    case.toml
+    run.py
+  04_nonlinear_stellarator/
+    case.toml
+    run.py
+  05_kinetic_electrons/
+    case.toml
+    run.py
+  06_electromagnetic/
+    case.toml
+    run.py
+  07_collisions/
+    case.toml
+    run.py
+  08_quasilinear/
+    case.toml
+    run.py
+  09_autodiff/
+    case.toml
+    run.py
+  10_vmex_optimization/
+    run.py
+  11_parallel_scan/
+    case.toml
+    run.py
+  12_restart_and_analysis/
+    case.toml
+    run.py
+```
+
+Additional validation inputs belong under `benchmarks/cases/`, not the user gallery.
+
+### 19.2 Python style
+
+Every canonical Python example shall:
+
+- have no `argparse`;
+- have no `main()` function;
+- have no `if __name__ == "__main__"` guard;
+- define editable input parameters near the top;
+- import only public APIs;
+- construct or load geometry explicitly;
+- construct a case or solver;
+- run the calculation;
+- print a concise summary;
+- save machine-readable results;
+- make and save polished plots;
+- state expected runtime and device assumptions in the module docstring;
+- remain readable from top to bottom without helper indirection unless a helper explains a real repeated concept.
+
+Example template:
+
+```python
+"""Linear Cyclone ITG scan; seconds on CPU, faster after JAX compilation."""
+
+from pathlib import Path
+
+import gkx
+
+OUTPUT = Path("outputs/linear_tokamak")
+KY = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+case = gkx.load("case.toml")
+simulation = gkx.prepare(case)
+result = simulation.scan("ky", KY)
+
+result.print_summary()
+result.save(OUTPUT / "scan.nc")
+result.plot(OUTPUT / "figures")
+```
+
+Tests should execute every canonical example at a bounded smoke resolution and verify its outputs. Long production settings may be stored in a paired `case_full.toml` outside ordinary CI.
+
+### 19.3 TOML policy
+
+- Remove `runtime_` prefixes from canonical filenames.
+- Every key appears in the input reference with type, default, units, valid values, and physics meaning.
+- Keep short tutorial TOMLs; provide complete annotated reference TOMLs separately.
+- `gkx validate case.toml` checks schema, geometry availability, memory estimate, timestep policy, collision compatibility, and output path before compilation.
+- Schema migration errors name the old key, new key, and supported release window.
+
+---
+
+## 20. Plotting and visual evidence
+
+### 20.1 Public plotting contract
+
+All result classes support:
+
+```python
+result.plot(output_directory)
+gkx.plot("result.nc", output_directory)
+```
+
+A plotting function should accept an existing `Axes` or return a `Figure` without mutating global `matplotlib.rcParams`. Use `matplotlib.rc_context` and one documented style module.
+
+### 20.2 Standard figures
+
+Linear:
+
+- growth rate and frequency versus `k_y` with convergence/error markers;
+- eigenfunction amplitude and phase along the field line;
+- field-channel and species contributions;
+- fit interval and residual quality.
+
+Nonlinear:
+
+- flux time series with accepted/rejected averaging window and uncertainty;
+- heat/particle/momentum spectra;
+- field and free-energy spectra;
+- real-space perpendicular snapshot;
+- physical field-line/flux-tube view;
+- convergence and spectral-tail panel;
+- compact run summary with warnings.
+
+Collisions:
+
+- invariant residuals;
+- eigenvalue/dissipation spectrum;
+- moment convergence;
+- conductivity/relaxation/ITG/TEM/ZF comparison.
+
+Optimization:
+
+- objective and constraints versus iteration;
+- gradient uncertainty/direction agreement;
+- baseline and candidate geometry;
+- held-out transport comparison with error bars;
+- surface/field-line coverage map.
+
+### 20.3 Publication-quality rules
+
+- save vector PDF/SVG for line art and high-resolution PNG/WebP previews;
+- include units, normalization, legends, panel labels, and uncertainty;
+- use an accessible palette and distinguish series by line/marker as well as color;
+- avoid tiny fonts, cropped labels, excessive whitespace, and rasterized text;
+- make axes limits/data transforms explicit;
+- show failed or unresolved cases rather than dropping them;
+- store machine-readable data and a reproduction command beside each retained documentation figure;
+- keep tracked previews compact; place larger movies or campaign bundles in release assets.
+
+Add image-comparison tests only for stable layout-critical figures. Prefer structural tests of labels, series, scales, warnings, and saved formats over brittle pixel snapshots.
+
+---
+
+## 21. Packaging, dependencies, and repository hygiene
+
+### 21.1 Core dependency review
+
+Audit every base dependency by tracing imports from a normal linear and nonlinear run.
+
+Likely final base:
+
+- `jax`;
+- `numpy`;
+- `scipy` only for required host algorithms;
+- one NetCDF library;
+- `matplotlib`;
+- `rich` for CLI presentation if adopted;
+- `solvax` only for algorithms actually exercised by the stable product.
+
+Candidates for removal or relocation:
+
+- explicit `jaxlib` dependency when normal JAX packaging suffices;
+- Diffrax after integrator migration;
+- Equinox if only small PyTree helpers use it;
+- `booz_xform_jax` from base installation after VMEX/imported geometry ownership is clean;
+- `tqdm` if Rich owns progress;
+- pandas outside validation extras;
+- Pillow outside media-building extras.
+
+Use bare dependency names by default. Add a lower bound only when GKX requires an API or correctness fix absent in older versions. Avoid speculative upper bounds. Maintain exact CPU and NVIDIA constraints files for reproducibility, separate from package metadata.
+
+### 21.2 Environment matrix
+
+CI and release testing:
+
+- Python 3.11 minimum supported stack;
+- latest supported Python/JAX stack;
+- Linux CPU full Tier 0/1 suite;
+- scheduled NVIDIA GPU Tier 2 matrix;
+- wheel and sdist clean installs;
+- documentation build and link check;
+- optional integration environments for VMEX, Pyrokinetics, and validation tools.
+
+### 21.3 Repository size
+
+- keep a normal clone below 20 MB when practical;
+- no raw NetCDF campaign data in Git;
+- no profiler traces, logs, local environments, or generated full-resolution figures;
+- compact numerical fixtures must have provenance and a clear test owner;
+- use release assets for movies and bounded reproduction bundles;
+- run size gates on Git history additions, not only working-tree size.
+
+### 21.4 Developer commands
+
+Consolidate to at most eight commands under `scripts/`:
+
+```text
+check.py          lint, type, architecture, size, docs, release
+inventory.py      files, lines, imports, cycles, API, duplicates
+benchmark.py      representative CPU/GPU benchmark matrix
+profile.py        configurable JAX trace/profile runner
+validate.py       scientific validation matrix
+figures.py        reviewed documentation/README figures
+compare.py        local external-code comparison protocol
+release.py        build, smoke install, metadata, tag preflight
+```
+
+Each command must be configuration-driven. Delete one-off generators and report-specific scripts after migrating their useful behavior.
+
+---
+
+## 22. Source comments, docstrings, typing, and provenance
+
+### 22.1 Docstrings
+
+Require:
+
+- 100% docstrings for public modules, classes, methods, and functions;
+- concise docstrings for private functions that implement nontrivial physics, mathematics, numerics, normalization, or array layout;
+- parameters, returns, shapes, units/normalization, differentiability, and failure behavior where relevant;
+- equation and source references for scientific kernels.
+
+Do not enforce long docstrings on obvious one-line private helpers. The metric is whether a maintainer can understand the contract without reverse engineering call sites.
+
+### 22.2 Comments
+
+Comments should explain:
+
+- why an algorithm or layout is used;
+- a subtle sign, normalization, parity, or boundary convention;
+- why fusion is blocked or precision is pinned;
+- the invariant or equation preserved;
+- a known limitation and its gate.
+
+Delete comments that restate syntax, narrate history already in Git, or preserve obsolete campaign status.
+
+### 22.3 Typing
+
+- remove `Any` from public user contracts;
+- use PyTree-compatible immutable dataclasses;
+- type geometry, case, result, objective, and collision protocols;
+- keep array shape information in docstrings and optional typing helpers without adding a large runtime dependency;
+- make MyPy or Pyright pass on the full installable package with narrowly justified external-library ignores.
+
+### 22.4 Provenance
+
+For directly adapted GX code, use a short source note:
+
+```python
+"""Construct Miller metric coefficients.
+
+Adapted from GX `geometry_modules/miller/gx_geo.py` at revision `<sha>`.
+See `PROVENANCE.md` for the full mapping and license.
+"""
+```
+
+The root ledger owns full history, hashes, license, and original contributors. Do not insert a historical essay into every function. New ports without an exact upstream revision and source path are not accepted.
+
+---
+
+## 23. Phased execution program
+
+A phase closes only when every exit gate passes on `main` after merge.
+
+### Phase H0: current-head handoff and rebaseline
+
+**Purpose:** make this plan and the current audited revision the unambiguous ground truth.
+
+Tasks:
+
+- replace root `plan.md` with this file;
+- move the old static plan to `plan/archive/plan_pre_2026-08-30.md`;
+- keep `plan/log.md` as the historical append-only log;
+- regenerate exact source/test/tool/docs/example counts at `e19336dc...`;
+- update architecture targets to the approved 45/45k, 30/35k, <=30 API limits;
+- regenerate current import graph, cycles, API inventory, coverage deficits, largest modules, and duplicate groups;
+- add a compact PR ledger for #1-#162, linking the existing detailed audit rather than duplicating it;
+- obtain a green post-merge `main` CI run;
+- verify branch protection contexts.
+
+Exit gates:
+
+- exact current metrics committed;
+- no stale planning-branch instructions;
+- architecture manifest matches approved targets;
+- `main` green after merge;
+- this file identifies one active next PR.
+
+### Phase A: true architecture and API contraction
+
+#### A1: public data model
+
+- implement real immutable `Case`, `Species`, grid/geometry/physics/time/output types;
+- implement real result classes;
+- preserve TOML/NetCDF schema compatibility through explicit adapters;
+- remove aliases once migrated.
+
+#### A2: prepared simulation and orchestration
+
+- implement typed `PreparedSimulation` for linear and nonlinear solves;
+- move cache/compile/device policy into it;
+- make CLI, Python solve, scans, optimization, and examples call the same API;
+- eliminate patchable global dependency bundles.
+
+#### A3: root API contraction
+
+- move advanced functions into `gkx.geometry`, `gkx.physics`, `gkx.optimize`, and `gkx.integrations`;
+- replace the 350-target lazy registry with the final advertised surface;
+- provide one release of explicit import migration errors where justified.
+
+#### A4: source package consolidation
+
+- merge `runtime`, `workflows`, `artifacts`, `terms`, and solver wrappers into target owners;
+- delete campaign/release report builders from package;
+- reduce import cycles to zero;
+- reduce source to at most 70 files and 65,000 lines as an intermediate gate.
+
+Phase-A exit:
+
+- real public types and prepared object;
+- no hidden broad API;
+- no import cycles;
+- <=70 source files and <=65,000 lines;
+- all numerical fingerprints and user workflows preserved or deliberately migrated.
+
+### Phase B: geometry, integration, and dependency deletion
+
+Tasks:
+
+- complete VMEX live/WOUT/EIK parity and delete duplicated VMEC/Boozer code;
+- decide the unique retained role of imported GX-derived geometry;
+- close the stiff-path decision using time-to-accuracy evidence;
+- remove Diffrax if no unique promoted role remains;
+- remove unused Equinox/booz_xform_jax/tqdm/jaxlib dependencies as justified;
+- consolidate I/O and plotting;
+- reach <=55 source files and <=52,000 lines.
+
+Exit gates:
+
+- exact geometry ownership;
+- one explicit owner and at most one useful stiff owner;
+- dependency clean-install matrix;
+- no behavior change hidden by delegation;
+- CPU and NVIDIA performance no worse at matched error.
+
+### Phase C: test-suite consolidation and proof matrix
+
+Tasks:
+
+- implement the target 24-28 file structure;
+- convert wrapper/artifact tests into broad behavior tests;
+- add missing branch coverage for retained modules;
+- implement algebraic, manufactured-solution, order, and fault-injection gates;
+- keep local external comparisons outside CI;
+- delete tool-test mirrors.
+
+Exit gates:
+
+- <=30 files and <=35,000 lines;
+- >=95% package statement and retained-module branch coverage;
+- all public errors covered;
+- mutation/fault tests detect representative sign/index/normalization defects;
+- Tier 0 and Tier 1 runtime within budgets.
+
+### Phase D: user experience, documentation, examples, and plots
+
+Tasks:
+
+- rewrite README;
+- implement Diataxis-style docs;
+- rebuild inputs/outputs/API/equations/reference;
+- replace examples with the canonical gallery and paired TOMLs;
+- implement result-owned plots and publication formats;
+- remove old generated data and obsolete docs.
+
+Exit gates:
+
+- fresh Python 3.11 user completes install and first linear/nonlinear run from docs;
+- every canonical example executes in CI at smoke resolution;
+- no example imports private APIs or uses argparse/main guards;
+- strict docs build and link policy pass;
+- tracked repository remains below size target.
+
+### Phase E: core physics validation
+
+Tasks:
+
+- close systematic electrostatic/electromagnetic and adiabatic/kinetic-electron matrix;
+- close geometry family matrix;
+- close nonlinear statistical/convergence policy;
+- document unsupported combinations;
+- keep equilibrium `E x B` shear deferred unless reopened.
+
+Exit gates:
+
+- E1-E6 evidence for every promoted core feature;
+- no README capability claim lacks an indexed validation gate;
+- unresolved and negative results remain visible.
+
+### Phase F: scalable collisions and closures
+
+Implement C0-C3 and the closure program from Section 12.
+
+Exit gates:
+
+- arbitrary-order drift-kinetic and finite-`k_perp` runtime;
+- multispecies conservation and H-theorem gates;
+- conductivity, relaxation, ZF, ITG, TEM, and nonlinear comparisons;
+- practical memory/runtime scaling on NVIDIA;
+- documented TOML/Python selection.
+
+### Phase G: quasilinear model and transport interfaces
+
+Tasks:
+
+- freeze model domain and data split;
+- evaluate candidates;
+- promote best passing Q1/Q2/Q3 tier;
+- add model card, uncertainty, OOD behavior, and user API;
+- add Pyrokinetics and transport adapters.
+
+Exit gates:
+
+- prospective untouched holdouts;
+- explicit limitations;
+- stable transport mock/coupled loop;
+- round-trip interoperability tests.
+
+### Phase H: nonlinear derivatives and flagship optimization
+
+Tasks:
+
+- ensemble and directional validation of finite-window gradients;
+- matched-cost SPSA/finite-difference/AD comparison;
+- 50-200 controls, multiple surfaces/field lines/`k_y`;
+- constrained optimization;
+- long held-out nonlinear audit.
+
+Exit gates:
+
+- gradient usefulness quantified with uncertainty;
+- final candidate passes all physics and statistical gates;
+- campaign code remains outside installable core;
+- complete reproducibility manifest without committing large raw outputs.
+
+### Phase I: GKX 3.0 release
+
+Final gates:
+
+- <=45 source files and <=45,000 lines;
+- <=30 test files and <=35,000 lines;
+- <=30 root names;
+- zero import cycles;
+- >=95% aggregate and retained-module branch coverage;
+- clean Python 3.11 wheel/sdist and latest stack;
+- CPU/NVIDIA validation and performance matrices;
+- rewritten docs/examples/plots;
+- PyPI and conda-forge readiness;
+- citation, provenance, governance, changelog, and compatibility policy;
+- green post-merge `main`.
+
+---
+
+## 24. Immediate pull-request queue
+
+Work in this order unless a defect blocks users.
+
+### PR H0-1: replace plan and rebaseline current `main`
+
+Files limited to planning, architecture manifests, generated inventory summaries, and branch/CI policy. No solver change.
+
+Acceptance:
+
+- exact counts and current coverage deficits;
+- complete current PR ledger;
+- updated approved targets;
+- old plan archived;
+- green post-merge `main`.
+
+### PR A1-1: import graph and deletion map
+
+Generate and review:
+
+- module dependency graph and cycles;
+- public name downstream usage in GKX, VMEX, and canonical examples;
+- reachability from `gkx.solve`, CLI, examples, and tests;
+- dead modules and forwarding wrappers;
+- campaign/report modules still installed;
+- concrete file-by-file move/delete map to <=70 files.
+
+Delete only clearly dead wrappers in this PR. No large moves.
+
+### PR A1-2: real public case and result types
+
+- add immutable public types;
+- adapt current loaders/results internally;
+- preserve numerical values and schemas;
+- add concise API/schema tests;
+- begin removing aliases.
+
+### PR A1-3: real `PreparedSimulation`
+
+- linear and nonlinear support;
+- typed solve/scan/value-and-grad;
+- compilation and cache metadata;
+- public examples use it;
+- remove patchable runtime dependency bundles that become unnecessary.
+
+### PR A2-1: CLI and workflow consolidation
+
+- six clear commands: `run`, `scan`, `estimate`, `plot`, `inspect`, `validate`;
+- old commands emit migration messages for one release;
+- CLI delegates to public API;
+- remove duplicated flag and command orchestration.
+
+### PR B1-1: remaining geometry deletion
+
+- freeze parity;
+- remove obsolete VMEC/Boozer modules and objective/report consumers;
+- update provenance;
+- show substantial source/test deletion.
+
+### PR B2-1: integrator/dependency decision
+
+- finish matched explicit/existing-implicit evidence;
+- remove Diffrax and duplicate source if the gate selects native ownership;
+- otherwise document one precise retained stiff role;
+- update TOML, docs, examples, and constraints.
+
+### PR C1-1 onward: test consolidation by domain
+
+Merge one domain at a time, preserving detection power while reducing files and lines. Do not postpone all deletion to a final mega-PR.
+
+---
+
+## 25. Agent operating contract
+
+### 25.1 Branch and review
+
+- Branch from current `main`.
+- Use a descriptive branch name.
+- Keep commits small and reversible.
+- Never merge to `main`.
+- Do not rewrite shared history.
+- `rogeriojorge` reviews and merges.
+
+### 25.2 Change discipline
+
+A normal PR should change one of:
+
+- product/API contract;
+- one scientific owner;
+- one numerical owner;
+- one test domain;
+- one documentation/example domain;
+- one performance bottleneck;
+- one physics capability.
+
+Do not combine broad file movement, new physics, performance tuning, generated figures, and campaign results.
+
+### 25.3 Required pre-PR evidence
+
+Always run:
+
+```console
+python scripts/inventory.py
+python scripts/check.py
+python -m pytest <focused tests>
+sphinx-build -W -b html docs docs/_build/html
+python -m build
+```
+
+Until those scripts are consolidated, use the current equivalent release/architecture commands documented in the repository.
+
+For numerical changes, also record:
+
+- exact case and command;
+- precision and hardware;
+- before/after value and tolerance;
+- convergence or residual;
+- cold/warm runtime and memory if performance may change;
+- derivative check if the path is differentiable.
+
+### 25.4 Rollback rules
+
+Rollback or split the work when:
+
+- source/test lines grow without a measured capability;
+- a new owner duplicates an old path;
+- a method does not beat its prospective accuracy/performance gate;
+- a scientific result changes without a derivation and independent check;
+- a test passes only by weakening a literature or invariant tolerance;
+- a public API needs private objects to be useful;
+- a geometry adapter reconstructs equations owned by VMEX;
+- an external-code discrepancy is “fixed” by copying its number without resolving normalization and convergence;
+- documentation claims more than the indexed evidence supports.
+
+### 25.5 Work-log template
+
+Append to `plan/log.md`:
+
+```markdown
+## YYYY-MM-DD - <task and branch>
+
+Baseline:
+- GKX SHA:
+- companion SHAs:
+- source/test/tool files and lines:
+- relevant existing gate:
+
+Scope:
+- intended change:
+- non-goals:
+- prospective acceptance and rollback criteria:
+
+Changes:
+- files/functions removed, merged, or added:
+- public/schema behavior:
+
+Evidence:
+- focused tests:
+- physics/mathematics/numerics gates:
+- CPU/NVIDIA measurements:
+- values, tolerances, residuals, uncertainty:
+
+Outcome:
+- accepted, rejected, or partial:
+- remaining blocker:
+- next task:
+```
+
+Do not paste full logs, stack traces, or generated tables into the work log. Store them in ignored local output or bounded CI artifacts and record the command and digest.
+
+---
+
+## 26. Risk register
+
+| Risk | Consequence | Control |
+| --- | --- | --- |
+| File-count target creates giant modules | unreadable core | line ceilings, import graph, one-owner reviews |
+| Aggregate coverage hides weak modules | false confidence | per-module branch coverage and mutation tests |
+| Test consolidation loses detection power | silent regressions | fault injection and before/after mutation samples |
+| API aliases persist indefinitely | hidden 1.x architecture | dated removal schedule and downstream search |
+| External-code values become frozen truth | brittle or wrong tests | convert comparisons into independent/analytic evidence |
+| JAX recompilation dominates workflows | poor usability | prepared objects, static topology, cache-miss gates |
+| GPU tuning harms CPU or precision | device divergence | CPU/NVIDIA parity and matched-precision benchmarks |
+| New IMEX effort repeats rejected work | code growth and delay | existing-owner-first, prospective time-to-accuracy gate |
+| Geometry duplication returns | inconsistent drifts/gradients | VMEX ownership and adapter-only GKX policy |
+| Quasilinear model is oversold | misleading transport | model tiers, domain card, uncertainty, OOD refusal |
+| Nonlinear AD is treated as stationary sensitivity | invalid optimization claims | ensemble/directional/held-out gates |
+| Long campaign tools remain installed | repository bloat | separate local/research workflow from package |
+| Documentation becomes a research log | unusable user docs | Diataxis navigation; plans stay under `plan/` |
+| Publication-style plots lack reproducibility | attractive but unauditable results | machine-readable sidecar, command, SHA, case metadata |
+| Dependency floor becomes untrue | install failures | minimum/latest clean environments |
+| Main is merged with red/cancelled CI | uncertain release state | required post-merge green run and branch protection |
+
+---
+
+## 27. Local workspace for the next agent
+
+Recommended sibling repositories:
+
+```text
+workspace/
+  GKX/
+  VMEX/
+  SOLVAX/
+  booz_xform_jax/
+  GX/
+  stella/
+  GENE/          # when access/build permits
+  GS2/
+  Pyrokinetics/
+  SIMSOPT/
+```
+
+Record every revision before comparison. Use separate virtual environments when dependency stacks conflict. Do not edit companion repositories as part of a GKX refactor unless a specific missing upstream API blocks an approved GKX capability. When a companion change is required:
+
+1. make the smallest upstream change;
+2. add its own tests and documentation there;
+3. record the exact dependency in the GKX work log;
+4. avoid vendoring or copying the implementation into GKX.
+
+External simulations and large outputs remain in ignored workspace directories. Store compact hashes, commands, and derived acceptance values in GKX only after review.
+
+---
+
+## 28. Reference set for implementation
+
+Use primary sources and official documentation. Update `plan/references.md` when a source changes a model or acceptance gate.
+
+### Gyrokinetic model and codes
+
+1. Mandell et al., “GX: a GPU-native gyrokinetic turbulence code for tokamak and stellarator design,” *Journal of Plasma Physics* 90, 905900402 (2024), doi:10.1017/S0022377824000631.
+2. Barnes, Parra, and Landreman, “stella: An operator-split, implicit-explicit delta-f gyrokinetic code for general magnetic field configurations,” *Journal of Computational Physics* 391, 365-380 (2019), doi:10.1016/j.jcp.2019.01.025.
+3. Kim et al., “Optimization of nonlinear turbulence in stellarators,” *Journal of Plasma Physics* 90, 905900210 (2024), doi:10.1017/S0022377824000369.
+4. Acton et al., “Optimisation of gyrokinetic microstability using adjoint methods,” *Journal of Plasma Physics* 90, 905900406 (2024), doi:10.1017/S0022377824000709.
+5. Galletti, Volkmann, and Brandstetter, “gyaradax: Local Gyrokinetics JAX Code,” arXiv:2604.06085 (2026).
+6. Artigues, Merlo, and Jenko, “iGENE: A Differentiable Flux-Tube Gyrokinetic Code in TensorFlow,” arXiv:2605.03086 (2026).
+7. GENE-X official project and the 2026 stellarator extension, doi:10.1016/j.cpc.2026.110138.
+8. Pyrokinetics official documentation and current supported-code interface.
+
+### Collisions and closures
+
+9. Frei et al., “Development of Advanced Linearized Gyrokinetic Collision Operators Using a Moment Approach,” arXiv:2104.11480.
+10. Frei, Ernst, and Ricci, “Numerical Implementation of the Improved Sugama Collision Operator Using a Moment Approach,” arXiv:2202.06293.
+11. Frei, Hoffmann, and Ricci, “Local Gyrokinetic Collisional Theory of the Ion-Temperature Gradient Mode,” arXiv:2201.02860.
+12. Jorge, Frei, and Ricci, “Nonlinear Gyrokinetic Coulomb Collision Operator,” arXiv:1906.03252; use as a full-f/out-of-scope and algorithmic reference.
+13. Abel et al., “Linearized model Fokker-Planck collision operators for gyrokinetic simulations,” arXiv:0808.1300.
+
+### Verification and research software
+
+14. Salari and Knupp, *Code Verification by the Method of Manufactured Solutions*, Sandia report SAND2000-1444, doi:10.2172/759450.
+15. Oberkampf and Roy, *Verification, Validation, and Uncertainty Quantification in Scientific Computing*, 2nd ed., especially exact and manufactured solutions (2025).
+16. FAIR4RS Working Group, “FAIR Principles for Research Software,” doi:10.15497/RDA00068.
+17. Diataxis documentation framework, https://diataxis.fr/.
+18. SIMSOPT documentation and JOSS paper for modular objective/optimization design.
+19. Peter Yang, `no-ai-slop`, for concrete prose review patterns; apply as an editing checklist, not a scientific source.
+
+### JAX
+
+20. JAX official documentation: benchmarking, persistent compilation cache, buffer donation, explicit sharding, and `shard_map`.
+
+---
+
+## 29. Definition of success
+
+GKX 3 succeeds when a new tokamak or stellarator user can install it, understand its model limits, run a checked and visibly progressing linear or nonlinear case, inspect convergence and uncertainty, save/restart/plot the result, and couple the same typed objects to scans or optimization without learning the internal solver tree.
+
+For maintainers, success means that every physical term and numerical algorithm has one owner, one derivation, one public selection path, and proof-oriented tests; source, tests, and developer tools meet the hard budgets; and a failed experiment can be removed cleanly without leaving a permanent family of wrappers, reports, and compatibility tests.
+
+For scientific use, success means that supported claims are tied to equations, invariants, convergence, literature, independent checks, statistical uncertainty, and measured CPU/NVIDIA performance. Unsupported regimes are named directly.
+
+**Active next task:** Phase H0, PR H0-1 — replace the plan, regenerate exact current-head inventories, correct architecture targets, complete the PR ledger, and obtain a green post-merge `main` workflow. No solver or physics change belongs in that pull request.
