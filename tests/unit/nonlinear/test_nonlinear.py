@@ -619,7 +619,7 @@ def test_block_only_adjoint_schedule_keeps_the_window_gradient(ky_layout: str):
     (budget ``None``) for the value, ``d/d tprim`` and a geometry direction (the
     drift profiles), and both derivatives are checked against centered finite
     differences, on both ``ky`` layouts with the compressed real-FFT bracket
-    and rk3. The budget fallback is pinned on the scan itself in
+    and rk3, and vmapped over two tubes. The budget fallback is pinned in
     ``tests/unit/solvers/test_time_integrators.py``.
     """
 
@@ -687,6 +687,17 @@ def test_block_only_adjoint_schedule_keeps_the_window_gradient(ky_layout: str):
     ) / (2 * h)
     np.testing.assert_allclose(block[1], float(fd_tprim), rtol=5.0e-2)
     np.testing.assert_allclose(block[2], float(fd_geom), rtol=5.0e-2)
+
+    # Multi-tube objectives (plan F.5 step 2) are a vmap over tube geometry.
+    tubes = jax.vmap(
+        jax.value_and_grad(
+            lambda rlt, scale: window(rlt, scale, ADJOINT_MEMORY_BUDGET_BYTES), (0, 1)
+        ),
+        in_axes=(None, 0),
+    )(point[0], jnp.asarray([1.0, 1.02]))
+    np.testing.assert_allclose(
+        [tubes[0][0], tubes[1][0][0], tubes[1][1][0]], block, rtol=1.0e-5
+    )
 
 
 @pytest.mark.parametrize("checkpoint", [False, True])

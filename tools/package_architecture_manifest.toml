@@ -84,7 +84,8 @@ recursive = true
 # 199 -> 195: removing Diffrax from the base product. The four
 # solvers/time/diffrax_*.py owner modules are deleted; the coupled implicit
 # owner (solvers/linear/implicit.py) is unaffected.
-baseline = 193
+# 193 -> 187: measured on the P0 chain after PERF-ADJ.
+baseline = 187
 target = 45
 
 [[topology_policy.counts]]
@@ -1124,7 +1125,8 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 93344 -> 93359: single owner for the CLI/case Nl/Nm fallbacks plus its test.
 # 93359 -> 93953: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 93953
+# 93953 -> 93886: PERF-ADJ deletes integrate_cached_explicit_scan and checkpoint_explicit_step (measured).
+baseline = 93886
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1443,7 +1445,8 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 94057 -> 94107: single owner for the CLI/case Nl/Nm fallbacks plus its test.
 # 94107 -> 94628: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 94628
+# 94628 -> 94585: PERF-ADJ drops the pass-through scan wrapper test (measured).
+baseline = 94585
 target = 35000
 
 [[line_budget_policy.counts]]

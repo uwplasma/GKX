@@ -51,7 +51,6 @@ from gkx.operators.nonlinear.rhs import (
 from gkx.solvers_nonlinear_explicit import (
     advance_explicit_nonlinear_state,
     checkpointed_explicit_scan,
-    integrate_cached_explicit_scan,
     integrate_nonlinear_scan,
 )
 from gkx.solvers_nonlinear_imex import (
@@ -81,10 +80,10 @@ from gkx.terms.nonlinear import nonlinear_em_contribution
 #: QA_optimization.py`` runs at exactly 1024, one rung below the departure.
 DIVERGENCE_KNEE_STEPS = 1024
 
-#: Default storage the window's reverse pass may spend on checkpointed states
-#: and step residuals before it falls back to the nested (three-forward)
-#: schedule. See :func:`gkx.solvers_nonlinear_explicit.block_checkpoint_plan`.
-ADJOINT_MEMORY_BUDGET_BYTES = 2 * 1024**3
+#: Reverse-pass checkpoint storage allowed before the window falls back to the
+#: nested (three-forward) schedule. 4 GiB admits 32x32x24 Nl4/Nm8 at 1024 steps
+#: (3.0 GiB measured on an A4000, 1.27x faster than nested).
+ADJOINT_MEMORY_BUDGET_BYTES = 4 * 1024**3
 
 
 def _warn_if_window_exceeds_divergence_knee(
@@ -250,12 +249,12 @@ def integrate_nonlinear_cached(
             rows=int(cache.ky.size),
         )
 
-    result = integrate_cached_explicit_scan(
+    result = integrate_nonlinear_scan(
+        _nonlinear_rhs_scan,
         G0,
         dt,
         steps,
         method=method,
-        rhs_fn=_nonlinear_rhs_scan,
         rhs_args=(cache, params),
         rhs_static_args=(
             term_cfg,
@@ -263,7 +262,6 @@ def integrate_nonlinear_cached(
             laguerre_mode,
             collision_operator,
         ),
-        scan_fn=integrate_nonlinear_scan,
         checkpoint=checkpoint,
         project_state=project_state,
         show_progress=show_progress,

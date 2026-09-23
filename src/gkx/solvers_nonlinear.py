@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from gkx.solvers_nonlinear_explicit import (
     advance_explicit_nonlinear_state,
-    checkpoint_explicit_step,
-    integrate_cached_explicit_scan,
     make_explicit_diagnostic_step,
     run_explicit_diagnostic_scan,
 )
@@ -50,7 +48,6 @@ __all__ = [
     "DIVERGENCE_KNEE_STEPS",
     "advance_imex_nonlinear_state",
     "advance_imex_nonlinear_state_with_stats",
-    "checkpoint_explicit_step",
     "ExplicitNonlinearDiagnosticsDeps",
     "integrate_explicit_nonlinear_diagnostics_impl",
     "IMEXNonlinearDiagnosticsDeps",
@@ -63,7 +60,6 @@ __all__ = [
     "integrate_nonlinear_sheared",
     "integrate_nonlinear_sheared_transport",
     "integrate_nonlinear_imex_diagnostics",
-    "integrate_cached_explicit_scan",
     "imex_fixed_point_guess",
     "make_explicit_diagnostic_step",
     "nonlinear_heat_flux_window",

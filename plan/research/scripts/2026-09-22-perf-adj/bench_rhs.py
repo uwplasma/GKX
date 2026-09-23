@@ -35,7 +35,7 @@ from gkx.geometry import ensure_flux_tube_geometry_data  # noqa: E402
 from gkx.operators.linear.cache_builder import build_linear_cache  # noqa: E402
 
 sys.path.insert(0, os.getcwd())
-from tools.profiling.profile_runtime_kernels import (  # noqa: E402
+from scripts.profiling.profile_runtime_kernels import (  # noqa: E402
     _build_initial_condition,
     _select_nonlinear_mode_indices,
     apply_imported_geometry_grid_defaults,

@@ -53,14 +53,6 @@ def test_nonlinear_solver_package_reexports_implementations() -> None:
         is solver_explicit.advance_explicit_nonlinear_state
     )
     assert (
-        nonlinear_solvers.checkpoint_explicit_step
-        is solver_explicit.checkpoint_explicit_step
-    )
-    assert (
-        nonlinear_solvers.integrate_cached_explicit_scan
-        is solver_explicit.integrate_cached_explicit_scan
-    )
-    assert (
         nonlinear_solvers.make_explicit_diagnostic_step
         is solver_explicit.make_explicit_diagnostic_step
     )

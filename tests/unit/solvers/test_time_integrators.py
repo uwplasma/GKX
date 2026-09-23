@@ -20,7 +20,6 @@ from gkx.solvers_nonlinear_explicit import (
     block_checkpoint_plan,
     advance_explicit_nonlinear_state,
     checkpointed_explicit_scan,
-    integrate_cached_explicit_scan,
     integrate_nonlinear_scan,
     make_explicit_diagnostic_step,
     run_explicit_diagnostic_scan,
@@ -787,51 +786,6 @@ def test_advance_explicit_nonlinear_state_rejects_unknown_method() -> None:
             project_state=lambda state: state,
             state_dtype=jnp.float32,
         )
-
-
-def test_integrate_cached_explicit_scan_forwards_scan_policy() -> None:
-    captured: dict[str, object] = {}
-    G0 = jnp.asarray([1.0], dtype=jnp.float32)
-
-    def rhs_fn(G):
-        return jnp.ones_like(G), "fields"
-
-    def project_state(G):
-        return G + 2.0
-
-    def scan_fn(rhs, G, dt, steps, **kwargs):
-        captured["rhs"] = rhs
-        captured["G"] = G
-        captured["dt"] = dt
-        captured["steps"] = steps
-        captured.update(kwargs)
-        dG, fields = rhs(G)
-        return kwargs["project_state"](G + dt * steps * dG), fields
-
-    G_out, fields = integrate_cached_explicit_scan(
-        G0,
-        0.25,
-        4,
-        method="rk4",
-        rhs_fn=rhs_fn,
-        scan_fn=scan_fn,
-        checkpoint=True,
-        project_state=project_state,
-        show_progress=True,
-        return_fields=False,
-    )
-
-    np.testing.assert_allclose(np.asarray(G_out), [4.0], rtol=1e-6)
-    assert fields == "fields"
-    assert captured["rhs"] is rhs_fn
-    assert captured["G"] is G0
-    assert captured["dt"] == 0.25
-    assert captured["steps"] == 4
-    assert captured["method"] == "rk4"
-    assert captured["checkpoint"] is True
-    assert captured["project_state"] is project_state
-    assert captured["show_progress"] is True
-    assert captured["return_fields"] is False
 
 
 def test_make_explicit_diagnostic_step_forwards_runtime_policies() -> None:
