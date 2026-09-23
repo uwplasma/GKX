@@ -307,3 +307,28 @@ def test_rows_without_an_ell_space_sink_report_their_limit(row: dict) -> None:
         f"{row['id']}: velocity_limit = {limit!r} needs velocity_limit_evidence "
         "naming where it was measured, or why it is unmeasured."
     )
+
+
+def test_verification_matrix_page_is_generated_from_the_ledger() -> None:
+    """The page carries the ledger block verbatim and no hand copy of a ledger lane.
+
+    Before this check the page marked Cyclone, KBM and HSX "Closed" while their
+    ledger rows were provisional, and KAW "Deferred" while its row passed.
+    """
+
+    import importlib.util
+
+    path = RUN_TO_REPO_ROOT / "scripts" / "validation_matrix.py"
+    spec = importlib.util.spec_from_file_location("gkx_validation_matrix", path)
+    matrix = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(matrix)  # type: ignore[union-attr]
+    page = matrix.PAGE.read_text(encoding="utf-8")
+    assert matrix.splice(page, matrix.render()) == page, (
+        "run scripts/validation_matrix.py"
+    )
+    start, stop = page.index(matrix.BEGIN), page.index(matrix.END)
+    labels = {f"* - {row['readme_label']}" for row in _readme_parity_rows()}
+    by_hand = (page[:start] + page[stop:]).splitlines()
+    assert not labels & {line.strip() for line in by_hand}, (
+        "ledger lane restated by hand"
+    )

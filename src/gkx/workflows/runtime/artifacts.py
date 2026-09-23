@@ -16,6 +16,8 @@ from gkx.workflows.runtime.orchestration_artifacts import (
 )
 
 from gkx.artifacts.spectral_layout import (
+    KY_WEIGHTING_PAIR as KY_WEIGHTING_PAIR,
+    KY_WEIGHTING_PER_ROW as KY_WEIGHTING_PER_ROW,
     _complex_to_ri as _complex_to_ri,
     _condense_kx as _condense_kx,
     _condense_kx_for_output as _condense_kx_for_output,

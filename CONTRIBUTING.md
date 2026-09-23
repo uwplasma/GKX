@@ -100,7 +100,7 @@ should change, change the evidence first, then the sentence, then the gate.
 ruff check . && ruff format --check .
 python -m sphinx -W -b html docs docs/_build/html
 pytest tests/release
-for c in tools/release/check_*.py; do python "$c" || echo "FAILED $c"; done
+for c in size architecture parallel-scaling quasilinear vmec-boozer readiness validation-coverage nonlinear-transport nonlinear-optimization; do python scripts/check.py "$c" || echo "FAILED $c"; done
 ```
 
 ## Running things

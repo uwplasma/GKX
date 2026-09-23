@@ -1,5 +1,5 @@
 # Codecov should mirror the CI coverage contract:
-# package coverage is measured for src/gkx, while tools, docs,
+# package coverage is measured for src/gkx, while tools, scripts, docs,
 # examples, tests, and generated artifacts are validated by separate gates.
 # CI uploads a fast diagnostic report first and the package-wide release gate
 # second. Wait for both uploads and evaluate the project status only against
@@ -14,6 +14,7 @@ ignore:
   - "examples/**/*"
   - "tests/**/*"
   - "tools/**/*"
+  - "scripts/**/*"
   - "tools_out/**/*"
   - "outputs/**/*"
   - "README.md"

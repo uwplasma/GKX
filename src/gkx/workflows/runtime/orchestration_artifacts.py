@@ -258,9 +258,7 @@ class RuntimeArtifactHandoffDeps:
     resolve_restart_write_path: Callable[[str | Path, Any], Path]
     netcdf_bundle_base: Callable[[Path], Path]
     load_nonlinear_netcdf_diagnostics: Callable[[str | Path], SimulationDiagnostics]
-    condense_diagnostics_for_netcdf_output: Callable[
-        [SimulationDiagnostics], SimulationDiagnostics
-    ]
+    condense_diagnostics_for_netcdf_output: Callable[..., SimulationDiagnostics]
     concat_runtime_diagnostics: Callable[
         [list[SimulationDiagnostics]], SimulationDiagnostics
     ]
@@ -462,6 +460,7 @@ def _merge_chunk_diagnostics(
     cumulative_diag: SimulationDiagnostics | None,
     time_offset: float,
     history_from_file: bool,
+    ny_full: int | None = None,
     deps: RuntimeArtifactHandoffDeps,
 ) -> tuple[RuntimeNonlinearResult, SimulationDiagnostics | None, float]:
     """Merge one chunk's diagnostics with loaded/runtime history."""
@@ -471,7 +470,12 @@ def _merge_chunk_diagnostics(
 
     diag_chunk = result_chunk.diagnostics
     if history_from_file:
-        diag_chunk = deps.condense_diagnostics_for_netcdf_output(diag_chunk)
+        # ``ny_full`` is the deck's Ny, not the chunk's ky row count: the
+        # loaded history sits on the dealiased block of the two-sided axis,
+        # and a half-spectrum chunk has to be condensed onto the same block.
+        diag_chunk = deps.condense_diagnostics_for_netcdf_output(
+            diag_chunk, ny_full=ny_full
+        )
     if time_offset != 0.0:
         diag_chunk = replace(diag_chunk, t=np.asarray(diag_chunk.t) + time_offset)
     cumulative_diag = (
@@ -630,6 +634,7 @@ def _run_artifact_checkpoint_loop(
             cumulative_diag=cumulative_diag,
             time_offset=time_offset,
             history_from_file=history_from_file,
+            ny_full=int(cfg.grid.Ny),
             deps=deps,
         )
         result_effective = replace(result_effective, wall_seconds=wall_total)

@@ -38,14 +38,18 @@ References
    transport models and turbulence simulations," Physics of Plasmas 7, 969
    (2000). `DOI <https://doi.org/10.1063/1.873896>`__.
 
-.. [Lin99] Z. Lin et al., Phys. Rev. Lett. 83, 3645 (1999).
+.. [Lin99] Z. Lin, T. S. Hahm, W. W. Lee, W. M. Tang, and P. H. Diamond,
+   "Effects of collisional zonal flow damping on turbulent transport,"
+   Physical Review Letters 83, 3645 (1999).
    `DOI <https://doi.org/10.1103/PhysRevLett.83.3645>`__.
 
-.. [Dorland00] W. Dorland et al., Phys. Rev. Lett. 85, 5579 (2000).
-   `DOI <https://doi.org/10.1103/PhysRevLett.85.5579>`__.
+.. [Dorland00] W. Dorland, F. Jenko, M. Kotschenreuther, and B. N. Rogers,
+   "Electron temperature gradient turbulence," Physical Review Letters 85,
+   5579 (2000). `DOI <https://doi.org/10.1103/PhysRevLett.85.5579>`__.
 
-.. [Jenko00] F. Jenko et al., Physics of Plasmas 7, 1904 (2000).
-   `DOI <https://doi.org/10.1063/1.874014>`__.
+.. [Jenko00] F. Jenko, W. Dorland, M. Kotschenreuther, and B. N. Rogers,
+   "Electron temperature gradient driven turbulence," Physics of Plasmas 7,
+   1904 (2000). `DOI <https://doi.org/10.1063/1.874014>`__.
 
 .. [GX] N. R. Mandell et al., "GX: a GPU-native gyrokinetic turbulence code for
    tokamak and stellarator design," Journal of Plasma Physics (2022).

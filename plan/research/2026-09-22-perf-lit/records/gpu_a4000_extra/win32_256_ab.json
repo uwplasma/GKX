@@ -1,0 +1,175 @@
+{
+ "argv": [
+  "window",
+  "--nx",
+  "32",
+  "--ny",
+  "32",
+  "--nz",
+  "24",
+  "--steps",
+  "256",
+  "--checkpoint",
+  "block",
+  "block_noinner",
+  "--repeats",
+  "2",
+  "--interleave",
+  "7",
+  "--label",
+  "win32_256_ab",
+  "--out",
+  "~/perflit_gpu2/win32_256_ab.json"
+ ],
+ "arms": {
+  "value": {
+   "argument_bytes": 868,
+   "compile_s": 8.44745369598968,
+   "device_peak_bytes": 86739968,
+   "first_call_s": 1.085475908999797,
+   "generated_code_bytes": 6546020,
+   "host_peak_bytes": 1276899328,
+   "interleaved_median_s": 1.0408597259956878,
+   "interleaved_s": [
+    0.9824520149995806,
+    0.9829815850098385,
+    1.098121153001557,
+    1.102911383000901,
+    1.103879597998457,
+    0.9944499330013059,
+    1.0408597259956878
+   ],
+   "lower_s": 2.674989559003734,
+   "objective": 1.6842852346599102e-05,
+   "output_bytes": 4,
+   "temp_bytes": 49936504,
+   "warm_median_s": 0.9712232275051065,
+   "warm_s": [
+    0.9712048979999963,
+    0.9712415570102166
+   ]
+  },
+  "value_and_grad_block": {
+   "argument_bytes": 868,
+   "compile_s": 40.7406047770055,
+   "device_peak_bytes": 378898176,
+   "first_call_s": 6.19860319099098,
+   "generated_code_bytes": 6557088,
+   "grad_geometry_norm": 1.0726508662628476e-05,
+   "grad_tprim_scale": 3.2321320759365335e-05,
+   "host_peak_bytes": 1728573440,
+   "interleaved_median_s": 6.125201035989448,
+   "interleaved_s": [
+    5.71905812600744,
+    5.388169671990909,
+    5.6311515619891,
+    6.370180682002683,
+    6.162592037988361,
+    6.125201035989448,
+    6.731093134992989
+   ],
+   "lower_s": 27.091833632992348,
+   "objective": 1.6842852346599102e-05,
+   "output_bytes": 960,
+   "temp_bytes": 359261312,
+   "warm_median_s": 6.781305889504438,
+   "warm_s": [
+    6.451057262005634,
+    7.111554517003242
+   ]
+  },
+  "value_and_grad_block_noinner": {
+   "argument_bytes": 868,
+   "compared_to": "block",
+   "compile_s": 30.747473908995744,
+   "device_peak_bytes": 1817244672,
+   "first_call_s": 4.509489239993854,
+   "generated_code_bytes": 6673736,
+   "grad_geometry_norm": 1.0726508662628476e-05,
+   "grad_tprim_scale": 3.232131712138653e-05,
+   "host_peak_bytes": 1975324672,
+   "interleaved_median_s": 4.762368701005471,
+   "interleaved_s": [
+    4.278440826994483,
+    5.673663112000213,
+    4.553783207011293,
+    4.762368701005471,
+    5.072873924000305,
+    4.829486827002256,
+    4.696007202001056
+   ],
+   "lower_s": 31.280115743997158,
+   "max_abs_diff_vs_first_arm": 3.637978807091713e-12,
+   "max_rel_diff_vs_first_arm": 1.12556625831498e-07,
+   "objective": 1.6842852346599102e-05,
+   "output_bytes": 960,
+   "temp_bytes": 1797605120,
+   "warm_median_s": 4.572497596003814,
+   "warm_s": [
+    4.634461100009503,
+    4.5105340919981245
+   ]
+  }
+ },
+ "command": "window",
+ "derived": {
+  "value_and_grad_block_noinner_over_value": 4.707978008052502,
+  "value_and_grad_block_over_value": 6.982231991016486
+ },
+ "derived_interleaved": {
+  "value_and_grad_block_noinner_over_value": 4.575418360480595,
+  "value_and_grad_block_over_value": 5.884751694211315
+ },
+ "dt": 0.03890582546591759,
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   73.41015625,
+   67.451171875,
+   47.68017578125
+  ],
+  "loadavg_start": [
+   75.58740234375,
+   53.64111328125,
+   37.41748046875
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "geometry_fields": [
+  "bmag_profile",
+  "bgrad_profile",
+  "gds2_profile",
+  "cv_profile",
+  "gb_profile",
+  "cv0_profile",
+  "gb0_profile",
+  "jacobian_profile",
+  "grho_profile"
+ ],
+ "geometry_values": 216,
+ "host_peak_bytes": 1975324672,
+ "inner_remat": "on",
+ "label": "win32_256_ab",
+ "method": "rk3",
+ "precision": "32",
+ "process_s": 279.1843580509885,
+ "shape": [
+  1,
+  4,
+  8,
+  32,
+  32,
+  24
+ ],
+ "state_bytes": 6291456,
+ "steps": 256
+}

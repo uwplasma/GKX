@@ -8,11 +8,11 @@ from support.paths import load_release_tool
 import numpy as np
 import pytest
 
-import tools.campaigns.nonlinear_gradient_evidence as evidence
+import scripts.campaigns.nonlinear_gradient_evidence as evidence
 import gkx.diagnostics.metadata as evidence_metadata
-import tools.campaigns.nonlinear_replicates as evidence_replicates
+import scripts.campaigns.nonlinear_replicates as evidence_replicates
 import gkx.diagnostics.transport as evidence_transport
-from tools.campaigns.nonlinear_gradient_evidence import (
+from scripts.campaigns.nonlinear_gradient_evidence import (
     NonlinearTurbulenceGradientBracketSweepConfig,
     NonlinearTurbulenceGradientCandidateRankingConfig,
     NonlinearTurbulenceGradientFiniteDifferenceConfig,

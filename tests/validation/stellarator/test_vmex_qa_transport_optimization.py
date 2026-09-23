@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from tools.campaigns.vmec_candidate_admission import (
+from scripts.campaigns.vmec_candidate_admission import (
     build_solved_vmec_candidate_gate,
 )
 
@@ -122,8 +122,8 @@ def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
         assert (EXAMPLES / filename).is_file()
         assert filename in docs
     for script in (
-        ROOT / "tools" / "campaigns" / "qa_transport_validation.py",
-        ROOT / "tools" / "artifacts" / "build_qa_transport_figures.py",
+        ROOT / "scripts" / "campaigns" / "qa_transport_validation.py",
+        ROOT / "scripts" / "artifacts" / "build_qa_transport_figures.py",
     ):
         py_compile.compile(str(script), doraise=True)
         assert script.name in docs

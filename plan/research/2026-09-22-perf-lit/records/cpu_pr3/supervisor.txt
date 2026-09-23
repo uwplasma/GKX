@@ -1,0 +1,3 @@
+2026-09-22T23:10:18Z start A1_adaptive load 13.65 16.35 17.62
+2026-09-22T23:10:57Z end A1_adaptive load 16.54 16.53 17.61
+2026-09-22T23:10:57Z start B1_pr3_bt load 16.54 16.53 17.61

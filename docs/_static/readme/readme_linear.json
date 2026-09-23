@@ -1,0 +1,27 @@
+{
+  "cyclone_salpha": {
+    "gamma_percent": 6.828979898957337,
+    "omega_percent": 1.5943714261329647
+  },
+  "figure": "readme_linear.png",
+  "inputs": [
+    "docs/_static/cyclone_mismatch_table.csv",
+    "docs/_static/w7x_linear_t2_scan.csv",
+    "docs/_static/reference_modes/w7x_linear_gkx_ky0p3000.csv",
+    "docs/_static/comparison/reference_modes/w7x_linear_reference_ky0p3000.npz",
+    "docs/_static/reference_modes/w7x_eigenfunction_reference_overlay_ky0p3000.json",
+    "docs/_static/kbm_mismatch_table.csv"
+  ],
+  "kbm": {
+    "gamma_percent": 20.039802585265438,
+    "omega_percent": 11.124262558259584
+  },
+  "w7x": {
+    "gamma_percent": 0.26504125716885835,
+    "omega_percent": 0.29611543127388457
+  },
+  "w7x_eigenfunction": {
+    "overlap": 0.9999999994498655,
+    "relative_l2": 3.332895535477314e-05
+  }
+}

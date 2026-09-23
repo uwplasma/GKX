@@ -17,9 +17,9 @@ least 95% package-wide coverage and the physics/numerics gates used for release.
 - `validation/`: literature-anchored physics gates, convergence checks,
   benchmark comparisons, nonlinear transport windows, quasilinear calibration,
   and stellarator validation policy.
-- `tools/`: tests for repository-maintenance scripts in `tools/artifacts`,
-  `tools/campaigns`, `tools/comparison`, `tools/profiling`, and
-  `tools/release`.
+- `tools/`: tests for repository-maintenance scripts in `scripts/artifacts`,
+  `scripts/campaigns`, `scripts/comparison`, and `scripts/profiling`. The release
+  checkers now live in `scripts/checks/` and are tested from `release/`.
 - `release/`: bounded repository-policy gates used by CI or release readiness.
 - `support/`: shared test helpers that are not part of the package API.
 

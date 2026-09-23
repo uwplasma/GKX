@@ -34,7 +34,7 @@ from gkx.operators.linear.params import LinearParams
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.solvers_time_runners import _resolve_config_collision_operator
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "artifacts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "artifacts"))
 
 from build_linear_validation_artifacts import (  # noqa: E402
     build_finite_wavelength_coulomb_pair_tables,

@@ -3431,8 +3431,8 @@ def test_runtime_command_option_helpers_normalize_cli_and_toml_values() -> None:
 
     empty_args = SimpleNamespace(Nl=None, Nm=None, method=None, dt=None, steps=None)
     assert runtime_commands._resolve_grid_time_options(empty_args, {}, cfg) == (
-        24,
         12,
+        24,
         None,
         None,
         None,
@@ -5858,3 +5858,53 @@ def test_warm_start_geometry_signature_tracks_the_metric_profiles() -> None:
         warm_start.flux_tube_signature(SimpleNamespace(other=1.0))
     with pytest.raises(ValueError, match="at least one array"):
         warm_start.signature_from_arrays([])
+
+
+def test_cli_and_case_resolution_fallbacks_come_from_the_runtime_owner() -> None:
+    """Every entry point that fills in a missing Nl/Nm uses startup's pair.
+
+    Before this test the CLI commands and ``run_linear_case`` still carried the
+    pre-2.2.0 (24, 12) literal, so a deck without Nl/Nm ran Hermite-starved
+    through them while ``prepare`` and ``run_runtime_linear`` used (12, 24),
+    and a nonlinear CLI run silently used (24, 12) instead of (4, 8).
+    """
+
+    from types import SimpleNamespace
+
+    from gkx.api.prepared import _runtime_resolution_defaults
+    from gkx.workflows.runtime import commands
+    from gkx.workflows.runtime.startup import (
+        _RUNTIME_LINEAR_HL_FALLBACK,
+        _RUNTIME_NONLINEAR_HL_FALLBACK,
+    )
+
+    cfg = RuntimeConfig()
+    no_flags = SimpleNamespace(Nl=None, Nm=None, method=None, dt=None, steps=None)
+    for kind, fallback, resolve in (
+        (
+            "linear",
+            _RUNTIME_LINEAR_HL_FALLBACK,
+            commands._resolve_linear_command_options,
+        ),
+        (
+            "nonlinear",
+            _RUNTIME_NONLINEAR_HL_FALLBACK,
+            commands._resolve_nonlinear_command_options,
+        ),
+    ):
+        opts = resolve(no_flags, cfg, {})
+        assert (opts.Nl, opts.Nm) == fallback, kind
+        assert _runtime_resolution_defaults()[kind] == fallback, kind
+    assert (
+        commands._linear_case_run_kwargs({}, {})["Nl"] == _RUNTIME_LINEAR_HL_FALLBACK[0]
+    )
+    assert (
+        commands._linear_case_run_kwargs({}, {})["Nm"] == _RUNTIME_LINEAR_HL_FALLBACK[1]
+    )
+    assert (
+        commands._nonlinear_case_run_kwargs({}, {})["Nl"],
+        commands._nonlinear_case_run_kwargs({}, {})["Nm"],
+    ) == _RUNTIME_NONLINEAR_HL_FALLBACK
+    # A deck value still wins over the fallback.
+    opts = commands._resolve_linear_command_options(no_flags, cfg, {"Nl": 16, "Nm": 48})
+    assert (opts.Nl, opts.Nm) == (16, 48)

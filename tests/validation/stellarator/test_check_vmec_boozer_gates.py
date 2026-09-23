@@ -7,7 +7,7 @@ from support.paths import load_release_tool
 
 import pytest
 
-from tools.campaigns.portfolio_guard import (
+from scripts.campaigns.portfolio_guard import (
     ReducedPortfolioArtifactGuardConfig,
     reduced_portfolio_artifact_guard_report,
 )
@@ -313,7 +313,7 @@ def _row_artifact() -> dict[str, object]:
     return {
         "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
         "artifact_kind": "vmec_boozer_multi_point_objective_gate",
-        "builder": "tools/artifacts/build_vmec_boozer_aggregate_objective_gate.py multi-point",
+        "builder": "scripts/artifacts/build_vmec_boozer_aggregate_objective_gate.py multi-point",
         "passed": True,
         "source_scope": "mode21_vmec_boozer_state_multi_point",
         "claim_scope": "real VMEC/Boozer reduced QL rows; not a nonlinear turbulent transport claim",

@@ -26,29 +26,29 @@ jobs:
 
       - name: Verify release version
         run: |
-          python tools/release/check_release_readiness.py version \
+          python scripts/check.py readiness version \
             --tag "${GITHUB_REF_NAME}" \
             --require-tag \
             --check-pypi
 
       - name: Release readiness gates
         run: |
-          python tools/release/check_repository_size_manifest.py
-          python tools/release/check_repository_size_manifest.py release-artifacts
-          python tools/release/check_package_architecture_manifest.py
-          python tools/release/check_parallel_scaling_artifacts.py --performance-manifest-only
-          python tools/release/check_parallel_scaling_artifacts.py
-          python tools/release/check_quasilinear_promotion_guardrails.py \
+          python scripts/check.py size
+          python scripts/check.py size release-artifacts
+          python scripts/check.py architecture
+          python scripts/check.py parallel-scaling --performance-manifest-only
+          python scripts/check.py parallel-scaling
+          python scripts/check.py quasilinear \
             --out-json /tmp/quasilinear_promotion_guardrails.json
           # /tmp, not docs/_static: the release must validate the committed
           # guard, not a copy it just rewrote over it. ci.yml already proves
           # the committed copy is what these generators produce.
-          python tools/release/check_vmec_boozer_gates.py differentiability-claim \
+          python scripts/check.py vmec-boozer differentiability-claim \
             --out-json /tmp/vmec_boozer_differentiability_claim_guard.json
-          python tools/release/check_release_readiness.py technical-status \
+          python scripts/check.py readiness technical-status \
             --out-json /tmp/technical_release_status.json \
             --fail-under 98
-          python tools/release/check_release_readiness.py \
+          python scripts/check.py readiness \
             --out-json /tmp/release_readiness.json
 
       - name: Build artifacts (sdist + wheel)

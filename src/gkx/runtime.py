@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence, cast
 import sys
 
 import numpy as np
@@ -21,6 +21,7 @@ from gkx.diagnostics.modes import (
 )
 from gkx.geometry import apply_geometry_grid_defaults, FluxTubeGeometryLike
 from gkx.core_grid import build_spectral_grid, select_ky_grid
+from gkx.core_ky_layout import KyLayout
 from gkx.solvers_linear_integrators import integrate_linear_diagnostics
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
@@ -259,20 +260,36 @@ def _load_initial_state_from_file(
     ny: int,
     nx: int,
     nz: int,
+    ky_layout: str = "full",
 ) -> np.ndarray:
-    """Load an initial state while preserving the runtime module patch surface."""
+    """Load an initial state while preserving the runtime module patch surface.
 
-    shape_kwargs = {
-        "nspecies": nspecies,
-        "Nl": Nl,
-        "Nm": Nm,
-        "ny": ny,
-        "nx": nx,
-        "nz": nz,
-    }
+    ``ny`` is the two-sided axis length and ``ky_layout`` the axis the caller
+    wants the state on (:mod:`gkx.core_ky_layout`).
+    """
+
+    layout = cast(KyLayout, str(ky_layout).strip().lower())
     if path.suffix.lower() == ".nc":
-        return load_netcdf_restart_state(path, **shape_kwargs)
-    return runtime_startup._load_initial_state_from_file(path, **shape_kwargs)
+        return load_netcdf_restart_state(
+            path,
+            nspecies=nspecies,
+            Nl=Nl,
+            Nm=Nm,
+            ny=ny,
+            nx=nx,
+            nz=nz,
+            ky_layout=layout,
+        )
+    return runtime_startup._load_initial_state_from_file(
+        path,
+        nspecies=nspecies,
+        Nl=Nl,
+        Nm=Nm,
+        ny=ny,
+        nx=nx,
+        nz=nz,
+        ky_layout=layout,
+    )
 
 
 _slice_runtime_diagnostics = slice_runtime_diagnostics

@@ -19,7 +19,9 @@ from gkx.diagnostics.transport_windows import (
 from gkx.diagnostics.validation_gates import matched_nonlinear_transport_report
 
 ROOT = REPO_ROOT
-OUTPUT_TARGET_SCRIPT = ROOT / "tools" / "release" / "check_nonlinear_transport_gates.py"
+OUTPUT_TARGET_SCRIPT = (
+    ROOT / "scripts" / "checks" / "check_nonlinear_transport_gates.py"
+)
 output_target = load_release_tool("check_nonlinear_transport_gates")
 window_ensemble = load_release_tool("check_nonlinear_transport_gates")
 window_readiness = window_ensemble

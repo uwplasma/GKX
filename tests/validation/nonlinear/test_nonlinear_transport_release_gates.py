@@ -12,7 +12,7 @@ from support.paths import REPO_ROOT, load_release_tool
 
 
 ROOT = REPO_ROOT
-SCRIPT = ROOT / "tools" / "release" / "check_nonlinear_transport_gates.py"
+SCRIPT = ROOT / "scripts" / "checks" / "check_nonlinear_transport_gates.py"
 mod = load_release_tool("check_nonlinear_transport_gates")
 
 

@@ -1,0 +1,91 @@
+{
+ "Nl": 4,
+ "Nm": 8,
+ "Nz": 48,
+ "argv": [
+  "eigen",
+  "--nz",
+  "48",
+  "--nl",
+  "4",
+  "--nm",
+  "8",
+  "--repeats",
+  "3",
+  "--label",
+  "eig_l4m8z48",
+  "--out",
+  "~/perflit_gpu/eig_l4m8z48.json"
+ ],
+ "arms": {
+  "value": {
+   "argument_bytes": 1536,
+   "compile_s": 0.9817838089948054,
+   "device_peak_bytes": 153143296,
+   "first_call_s": 0.5938465959916357,
+   "gamma": 0.1051328256726265,
+   "generated_code_bytes": 3712,
+   "host_peak_bytes": 1063235584,
+   "lower_s": 0.5318111210071947,
+   "output_bytes": 4,
+   "temp_bytes": 75511848,
+   "warm_median_s": 0.4026574319868814,
+   "warm_s": [
+    0.4399538500001654,
+    0.4026574319868814,
+    0.38953365800261963
+   ]
+  },
+  "value_and_grad": {
+   "argument_bytes": 1536,
+   "compile_s": 1.7245387629955076,
+   "device_peak_bytes": 153148416,
+   "first_call_s": 1.1878929540107492,
+   "gamma": 0.1051328256726265,
+   "generated_code_bytes": 3712,
+   "grad_norm": 0.07277265191078186,
+   "host_peak_bytes": 1179648000,
+   "lower_s": 0.9444502190017374,
+   "output_bytes": 1812,
+   "temp_bytes": 96177208,
+   "warm_median_s": 0.9895001370023238,
+   "warm_s": [
+    1.3890450369945029,
+    0.8094508919893997,
+    0.9895001370023238
+   ]
+  }
+ },
+ "command": "eigen",
+ "derived": {
+  "grad_over_value": 2.4574242480008706
+ },
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   15.82373046875,
+   16.3349609375,
+   17.43896484375
+  ],
+  "loadavg_start": [
+   17.6630859375,
+   16.69580078125,
+   17.57177734375
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "host_peak_bytes": 1179648000,
+ "label": "eig_l4m8z48",
+ "operator_size_estimate": 1536,
+ "precision": "32",
+ "process_s": 14.04395981800917
+}

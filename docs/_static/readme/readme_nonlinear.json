@@ -1,0 +1,68 @@
+{
+  "figure": "readme_nonlinear.png",
+  "gx_windows": {
+    "Cyclone": {
+      "HeatFlux": 0.07564723781481682,
+      "Wg": 0.0955304396196123,
+      "Wphi": 0.08602029156980276
+    },
+    "Cyclone Miller": {
+      "HeatFlux": 0.0919106981841409,
+      "Wg": 0.06625960199393849,
+      "Wphi": 0.06835079481287083
+    },
+    "HSX": {
+      "HeatFlux": 0.03010640472255274,
+      "Wg": 0.02786339708527333,
+      "Wphi": 0.035790363972650306
+    },
+    "KBM": {
+      "HeatFlux": 0.009358802200184847,
+      "Wg": 0.009326088797890937,
+      "Wphi": 0.00934571077977974
+    },
+    "W7-X": {
+      "HeatFlux": 0.04528038649753451,
+      "Wg": 0.03204378942369863,
+      "Wphi": 0.030196842428410697
+    }
+  },
+  "inputs": [
+    "docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.json",
+    "docs/_static/nonlinear_cyclone_gate_summary.json",
+    "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+    "docs/_static/nonlinear_w7x_gate_summary.json",
+    "docs/_static/nonlinear_hsx_gate_summary.json",
+    "docs/_static/nonlinear_kbm_gate_summary.json"
+  ],
+  "replicate_spread": "mean_rel_spread=0.035473869975602645 gate=0.15",
+  "replicates": [
+    {
+      "late_mean": 18.655724579558157,
+      "sem": 0.8127758666777402,
+      "variant": "seed31",
+      "window": [
+        350.0,
+        700.0
+      ]
+    },
+    {
+      "late_mean": 19.328755087888652,
+      "sem": 0.45004464656813775,
+      "variant": "seed32",
+      "window": [
+        350.0,
+        700.0
+      ]
+    },
+    {
+      "late_mean": 18.93323261993898,
+      "sem": 0.5008526819408465,
+      "variant": "dt 0.04",
+      "window": [
+        350.0,
+        700.0
+      ]
+    }
+  ]
+}

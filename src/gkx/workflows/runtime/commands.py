@@ -9,6 +9,10 @@ from typing import Any, Callable, Mapping, Sequence, cast
 import numpy as np
 
 from gkx.config import RuntimeConfig
+from gkx.workflows.runtime.startup import (
+    _RUNTIME_LINEAR_HL_FALLBACK,
+    _RUNTIME_NONLINEAR_HL_FALLBACK,
+)
 from gkx.workflows.runtime.warm_start import resolve_scan_warm_start
 from gkx.workflows.runtime.results import (
     RuntimeLinearResult,
@@ -125,16 +129,19 @@ def _resolve_linear_fit_options(args: Any, section: dict[str, Any]) -> tuple[str
 
 
 def _resolve_grid_time_options(
-    args: Any, section: dict[str, Any], cfg: RuntimeConfig
+    args: Any,
+    section: dict[str, Any],
+    cfg: RuntimeConfig,
+    hl_fallback: tuple[int, int] = _RUNTIME_LINEAR_HL_FALLBACK,
 ) -> tuple[int, int, str | None, float | None, int | None, int]:
-    """Resolve resolution, optional time controls, and output cadence."""
+    """Resolve resolution (``hl_fallback`` from startup), time controls, cadence."""
 
     method = _arg_or_section(args, section, "method", None)
     dt = _arg_or_section(args, section, "dt", None)
     steps = _arg_or_section(args, section, "steps", None)
     return (
-        int(_arg_or_section(args, section, "Nl", 24)),
-        int(_arg_or_section(args, section, "Nm", 12)),
+        int(_arg_or_section(args, section, "Nl", hl_fallback[0])),
+        int(_arg_or_section(args, section, "Nm", hl_fallback[1])),
         None if method is None else str(method),
         None if dt is None else float(dt),
         None if steps is None else int(steps),
@@ -260,7 +267,7 @@ def _resolve_nonlinear_command_options(
     """Resolve nonlinear command options from flags, TOML, and config defaults."""
 
     Nl, Nm, method, dt, steps, sample_stride = _resolve_grid_time_options(
-        args, run_cfg, cfg
+        args, run_cfg, cfg, _RUNTIME_NONLINEAR_HL_FALLBACK
     )
     if steps is not None:
         nonlinear_steps: int | None = steps
@@ -784,8 +791,8 @@ RUNTIME_CASE_FIT_KEYS = {
 
 _CASE_LINEAR_SPECS = (
     ("ky_target", "run", "ky", 0.3, float),
-    ("Nl", "run", "Nl", 24, int),
-    ("Nm", "run", "Nm", 12, int),
+    ("Nl", "run", "Nl", _RUNTIME_LINEAR_HL_FALLBACK[0], int),
+    ("Nm", "run", "Nm", _RUNTIME_LINEAR_HL_FALLBACK[1], int),
     ("solver", "run", "solver", "auto", str),
     ("method", "run", "method", None, None),
     ("dt", "run", "dt", None, None),
@@ -794,8 +801,8 @@ _CASE_LINEAR_SPECS = (
 )
 _CASE_NONLINEAR_SPECS = (
     ("ky_target", "run", "ky", 0.3, float),
-    ("Nl", "run", "Nl", 4, int),
-    ("Nm", "run", "Nm", 8, int),
+    ("Nl", "run", "Nl", _RUNTIME_NONLINEAR_HL_FALLBACK[0], int),
+    ("Nm", "run", "Nm", _RUNTIME_NONLINEAR_HL_FALLBACK[1], int),
     ("method", "run", "method", None, None),
     ("dt", "time", "dt", None, None),
     ("steps", "run", "steps", None, None),

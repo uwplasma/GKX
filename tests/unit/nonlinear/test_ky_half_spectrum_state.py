@@ -93,7 +93,15 @@ def test_a_degenerate_axis_is_called_full_because_the_layouts_coincide(
 
 
 def _grid_cfg(ny: int, nx: int = 8, nz: int = 8) -> GridConfig:
-    return GridConfig(Nx=nx, Ny=ny, Nz=nz, Lx=62.8, Ly=62.8)
+    """A deck for the layout comparisons, with the two-sided axis named.
+
+    Every test below builds both layouts from one config and compares them, so
+    neither arm may come from a default: if the default ever changes, a
+    "full" arm that silently became half would turn each of these comparisons
+    into a tautology that passes.
+    """
+
+    return GridConfig(Nx=nx, Ny=ny, Nz=nz, Lx=62.8, Ly=62.8, ky_layout=FULL)
 
 
 @pytest.mark.parametrize("ny", EVEN_NY + ODD_NY)
@@ -647,7 +655,16 @@ def test_the_supplied_state_intake_reaches_the_same_modes_in_both_layouts(
 
     from gkx.operators.linear.cache_builder import linked_chain_cover_mask
 
-    cfg = GridConfig(Nx=8, Ny=ny, Nz=8, Lx=62.8, Ly=62.8, boundary="linked", jtwist=1)
+    cfg = GridConfig(
+        Nx=8,
+        Ny=ny,
+        Nz=8,
+        Lx=62.8,
+        Ly=62.8,
+        boundary="linked",
+        jtwist=1,
+        ky_layout=FULL,
+    )
     geom, params = _geometry(), _params()
     full_grid = build_spectral_grid(cfg)
     half_grid = build_spectral_grid(cfg, ky_layout=HALF)
@@ -675,7 +692,16 @@ def test_masking_a_supplied_half_state_keeps_the_chain_rows_untouched(
         mask_off_chain_rows,
     )
 
-    cfg = GridConfig(Nx=8, Ny=ny, Nz=8, Lx=62.8, Ly=62.8, boundary="linked", jtwist=1)
+    cfg = GridConfig(
+        Nx=8,
+        Ny=ny,
+        Nz=8,
+        Lx=62.8,
+        Ly=62.8,
+        boundary="linked",
+        jtwist=1,
+        ky_layout=FULL,
+    )
     geom, params = _geometry(), _params()
     half_grid = build_spectral_grid(cfg, ky_layout=HALF)
     linked = linked_chain_cover_mask(half_grid, geom, params)

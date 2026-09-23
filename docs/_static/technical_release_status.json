@@ -50,7 +50,7 @@
           "passed": true,
           "path": ".github/workflows/ci.yml",
           "required": true,
-          "snippet": "tools/release/check_release_readiness.py"
+          "snippet": "scripts/check.py readiness"
         }
       ],
       "completion_percent": 100.0,
@@ -184,7 +184,7 @@
           "exists": true,
           "name": "parallel artifact checker",
           "passed": true,
-          "path": "tools/release/check_parallel_scaling_artifacts.py",
+          "path": "scripts/checks/check_parallel_scaling_artifacts.py",
           "required": true,
           "snippet": "FAMILIES"
         }
@@ -264,7 +264,7 @@
           "exists": true,
           "name": "package architecture checker",
           "passed": true,
-          "path": "tools/release/check_package_architecture_manifest.py",
+          "path": "scripts/checks/check_package_architecture_manifest.py",
           "required": true,
           "snippet": "root-level prefix modules"
         },

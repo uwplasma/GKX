@@ -13,8 +13,10 @@ from gkx.artifacts.io import (
     _resolve_restart_path,
     _resolved_species_time,
 )
-from gkx.core_ky_layout import source_ny_full
+from gkx.core_ky_layout import HALF, half_ky_values, source_ky_layout, source_ny_full
 from gkx.artifacts.spectral_layout import (
+    KY_WEIGHTING_PAIR,
+    KY_WEIGHTING_PER_ROW,
     _complex_to_ri,
     _condense_kx_for_output,
     _condense_ky_for_output,
@@ -37,7 +39,6 @@ from gkx.artifacts.spectral_layout import (
 from gkx.core_grid import (
     build_spectral_grid,
     real_fft_ordered_kx,
-    real_fft_unique_ky,
 )
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.geometry import (
@@ -46,6 +47,23 @@ from gkx.geometry import (
 )
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.runtime import build_runtime_geometry, build_runtime_linear_params
+
+
+def _half_ky_values_of(grid: Any) -> np.ndarray:
+    """Return the ``ky >= 0`` magnitudes of a grid, from either layout.
+
+    :func:`gkx.core_ky_layout.half_ky_values` takes the two-sided axis and
+    keeps its first ``Nyc`` entries; handed a half axis it would keep the
+    first ``1 + Nyc // 2`` of those and silently publish a shorter ``ky``
+    axis, so a grid that already stores the half axis is passed through
+    instead.  Both branches stay on the host: these values go straight into a
+    NetCDF variable, and a device round trip would buy nothing.
+    """
+
+    ky = np.asarray(grid.ky)
+    if source_ky_layout(grid) == HALF:
+        return np.abs(ky)
+    return np.asarray(half_ky_values(ky))
 
 
 def _build_output_grid_and_geometry(cfg: Any) -> tuple[Any, Any]:
@@ -145,7 +163,10 @@ def _write_geometry_group(
     return (
         theta,
         np.asarray(real_fft_ordered_kx(grid.kx), dtype=np.float32),
-        np.asarray(real_fft_unique_ky(grid.ky), dtype=np.float32),
+        np.asarray(
+            _half_ky_values_of(grid),
+            dtype=np.float32,
+        ),
         geom,
     )
 
@@ -281,12 +302,13 @@ def _write_final_field_diagnostics(
     phi_full: np.ndarray,
     apar_full: np.ndarray,
     bpar_full: np.ndarray,
+    ny_full: int | None = None,
 ) -> None:
     """Write spectral and real-space final fields to Diagnostics."""
 
-    phi_active = _dealiased_spectral_field(phi_full)
-    apar_active = _dealiased_spectral_field(apar_full)
-    bpar_active = _dealiased_spectral_field(bpar_full)
+    phi_active = _dealiased_spectral_field(phi_full, ny_full=ny_full)
+    apar_active = _dealiased_spectral_field(apar_full, ny_full=ny_full)
+    bpar_active = _dealiased_spectral_field(bpar_full, ny_full=ny_full)
     diag_group.createVariable("Phi", "f4", ("time", "ky", "kx", "theta", "ri"))[
         0, ...
     ] = _spectral_to_ri(phi_active)
@@ -297,13 +319,13 @@ def _write_final_field_diagnostics(
         0, ...
     ] = _spectral_to_ri(bpar_active)
     diag_group.createVariable("PhiXY", "f4", ("time", "y", "x", "theta"))[0, ...] = (
-        _spectral_to_xy(phi_full)
+        _spectral_to_xy(phi_full, ny_full=ny_full)
     )
     diag_group.createVariable("AparXY", "f4", ("time", "y", "x", "theta"))[0, ...] = (
-        _spectral_to_xy(apar_full)
+        _spectral_to_xy(apar_full, ny_full=ny_full)
     )
     diag_group.createVariable("BparXY", "f4", ("time", "y", "x", "theta"))[0, ...] = (
-        _spectral_to_xy(bpar_full)
+        _spectral_to_xy(bpar_full, ny_full=ny_full)
     )
 
 
@@ -316,7 +338,9 @@ def _write_moment_diagnostics(
     """Write spectral and real-space species moments to Diagnostics."""
 
     for name, values in moments.items():
-        active = _dealiased_spectral_field(values, ky_axis=1, kx_axis=2)
+        active = _dealiased_spectral_field(
+            values, ky_axis=1, kx_axis=2, ny_full=ny_full
+        )
         diag_group.createVariable(name, "f4", ("time", "s", "ky", "kx", "theta", "ri"))[
             0, ...
         ] = _spectral_species_to_ri(active)
@@ -340,8 +364,15 @@ def _write_big_netcdf(
     nl: int,
     nm: int,
     time_vals: np.ndarray,
+    ny_full: int | None = None,
 ) -> str | None:
-    """Write final spectral/real-space fields and moments when fields exist."""
+    """Write final spectral/real-space fields and moments when fields exist.
+
+    ``ny_full`` is the length of the two-sided ``ky`` axis.  The final fields
+    and moments arrive on whatever axis the run evolved, and every count taken
+    from them here -- the dealiased block and the real-space ``y`` rows -- is
+    a property of ``Ny`` rather than of the stored rows.
+    """
 
     if result.fields is None:
         return None
@@ -379,10 +410,44 @@ def _write_big_netcdf(
             phi_full=phi_full,
             apar_full=apar_full,
             bpar_full=bpar_full,
+            ny_full=ny_full,
         )
-        _write_moment_diagnostics(diag_group, basis_moments)
-        _write_moment_diagnostics(diag_group, particle_moments)
+        _write_moment_diagnostics(diag_group, basis_moments, ny_full=ny_full)
+        _write_moment_diagnostics(diag_group, particle_moments, ny_full=ny_full)
     return str(path)
+
+
+#: Which reduction weight each published spectrum family carries, and
+#: therefore what a half-spectrum array's row has to be divided by before it
+#: is written (:mod:`gkx.artifacts.spectral_layout`).  The two families are
+#: not a style choice: ``Wg``/``Wphi``/``Wapar``/``Phi2``/``TurbulentHeating``
+#: are reduced with :func:`gkx.core_ky_layout.hermitian_mode_weights` and the
+#: flux channels with :func:`~gkx.core_ky_layout.transport_mode_weights`,
+#: which already sums the conjugate pair on both axes.  A prefix missing from
+#: this table is a new diagnostic whose family nobody has decided; the writer
+#: refuses it on a half axis rather than guessing, and the round-trip test
+#: over every published variable is what catches a wrong entry here.
+_KY_WEIGHTING_BY_PREFIX: dict[str, str] = {
+    "Phi2": KY_WEIGHTING_PER_ROW,
+    "Wg": KY_WEIGHTING_PER_ROW,
+    "Wphi": KY_WEIGHTING_PER_ROW,
+    "Wapar": KY_WEIGHTING_PER_ROW,
+    "TurbulentHeating": KY_WEIGHTING_PER_ROW,
+    "HeatFlux": KY_WEIGHTING_PAIR,
+    "HeatFluxES": KY_WEIGHTING_PAIR,
+    "HeatFluxApar": KY_WEIGHTING_PAIR,
+    "HeatFluxBpar": KY_WEIGHTING_PAIR,
+    "ParticleFlux": KY_WEIGHTING_PAIR,
+    "ParticleFluxES": KY_WEIGHTING_PAIR,
+    "ParticleFluxApar": KY_WEIGHTING_PAIR,
+    "ParticleFluxBpar": KY_WEIGHTING_PAIR,
+}
+
+
+def _ky_weighting_for(prefix: str) -> str | None:
+    """Return the published ``ky`` weighting of a diagnostic family."""
+
+    return _KY_WEIGHTING_BY_PREFIX.get(prefix)
 
 
 def _write_resolved_species_spectra(
@@ -400,6 +465,8 @@ def _write_resolved_species_spectra(
 ) -> None:
     """Write optional ``(time, species, spectral)`` resolved diagnostics."""
 
+    ky_weighting = _ky_weighting_for(prefix)
+
     if kx_arr is not None:
         diag_group.createVariable(f"{prefix}_kxst", "f4", ("time", "s", "kx"))[
             :, :, :
@@ -415,6 +482,7 @@ def _write_resolved_species_spectra(
             np.asarray(ky_arr, dtype=np.float32),
             full_ny=full_ny,
             active_ny=active_ny,
+            ky_weighting=ky_weighting,
         )
     if kykx_arr is not None:
         diag_group.createVariable(f"{prefix}_kxkyst", "f4", ("time", "s", "ky", "kx"))[
@@ -425,6 +493,7 @@ def _write_resolved_species_spectra(
             full_nx=full_nx,
             active_ny=active_ny,
             active_nx=active_nx,
+            ky_weighting=ky_weighting,
         )
     if z_arr is not None:
         diag_group.createVariable(f"{prefix}_zst", "f4", ("time", "s", "theta"))[
@@ -457,6 +526,7 @@ def _phi2_outputs_for_netcdf(
             full_nx=full_nx,
             active_ny=active_ny,
             active_nx=active_nx,
+            ky_weighting=_ky_weighting_for("Phi2"),
         )
         phi2_kx_out = np.sum(phi2_kykx_out, axis=1)
         phi2_ky_out = np.sum(phi2_kykx_out, axis=2)
@@ -466,6 +536,7 @@ def _phi2_outputs_for_netcdf(
             np.asarray(resolved.Phi2_kyt, dtype=np.float32),
             full_ny=full_ny,
             active_ny=active_ny,
+            ky_weighting=_ky_weighting_for("Phi2"),
         )
         phi2_t = np.sum(phi2_ky_out, axis=1)
     elif resolved is not None and resolved.Phi2_kxt is not None:
@@ -902,16 +973,22 @@ def _nonlinear_netcdf_layout(
     grid, geom_data = _build_output_grid_and_geometry(cfg)
     theta = np.asarray(grid.z, dtype=np.float32)
     kx_vals = _dealiased_kx_values(np.asarray(grid.kx))
-    ky_vals = _dealiased_ky_values(np.asarray(grid.ky))
+    # Every ``ny`` below is the length of the *two-sided* axis, which is the
+    # resolution of the run and the length of the real-space ``y`` axis.  On a
+    # half-spectrum grid ``grid.ky.size`` is ``Nyc`` instead, so reading these
+    # off the row count would publish a third of the ``ky`` band, an
+    # ``Nyc``-long ``y`` axis, and a ``full_ny`` against which no diagnostic
+    # would ever match.  ``source_ny_full`` is the grid's own record of it.
+    full_ny = source_ny_full(grid)
+    ky_vals = _dealiased_ky_values(np.asarray(grid.ky), ny_full=full_ny)
     full_nx = int(np.asarray(grid.kx).size)
-    full_ny = int(np.asarray(grid.ky).size)
     active_nx = int(kx_vals.size)
     active_ny = int(ky_vals.size)
     nspecies = _state_axis_size(result.state, 0, len(cfg.species))
     time_vals = np.asarray(diag.t, dtype=np.float64)
     x_vals = _real_space_axis(int(grid.kx.size), float(2.0 * np.pi * grid.x0))
     y_extent = float(2.0 * np.pi * grid.y0)
-    y_vals = _real_space_axis(int(grid.ky.size), y_extent)
+    y_vals = _real_space_axis(full_ny, y_extent)
     return _NonlinearNetCDFLayout(
         grid=grid,
         geom_data=geom_data,
@@ -1031,6 +1108,7 @@ def _write_optional_nonlinear_netcdf_artifacts(
         nl=layout.nl,
         nm=layout.nm,
         time_vals=layout.time_vals,
+        ny_full=layout.full_ny,
     )
     if big_written is not None:
         written["big"] = big_written

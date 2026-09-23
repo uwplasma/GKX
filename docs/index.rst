@@ -4,8 +4,8 @@ GKX
 JAX gyrokinetics with Hermite–Laguerre velocity moments and field-aligned
 flux tubes. Start with a runnable case, then its model and evidence.
 :doc:`algorithms` is the overview of the methods and the decisions behind them.
-Read :doc:`research_grade_plan` before using experimental physics or making
-transport-optimization claims.
+:doc:`release_scope` and :doc:`verification_matrix` state what is and is not
+claimed; read them before citing a result.
 
 .. toctree::
    :maxdepth: 1
@@ -42,15 +42,12 @@ transport-optimization claims.
    :maxdepth: 1
    :caption: Evidence and research status
 
-   research_grade_plan
-   research_grade_program
    benchmarks
    verification_matrix
    validation_strategy
    parallelization
    performance
    codes
-   manuscript_figures
    references
 
 .. toctree::

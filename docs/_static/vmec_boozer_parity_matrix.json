@@ -56,7 +56,7 @@
         "error": null,
         "failure_reason": null,
         "family": "quasi-isodynamic input variant",
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp1_QI",
+        "input_path": "vmex/examples/data/input.nfp1_QI",
         "label": "QI input nfp1",
         "mboz": 21,
         "mode_floor_passed": true,
@@ -101,7 +101,7 @@
         "error": null,
         "failure_reason": null,
         "family": "quasi-isodynamic input variant",
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp2_QI",
+        "input_path": "vmex/examples/data/input.nfp2_QI",
         "label": "QI input nfp2",
         "mboz": 21,
         "mode_floor_passed": true,
@@ -146,7 +146,7 @@
         "error": null,
         "failure_reason": null,
         "family": "quasi-isodynamic evaluated reference",
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
+        "input_path": "vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
         "label": "QI fixed resolution, ntheta=8",
         "mboz": 21,
         "mode_floor_passed": true,
@@ -167,7 +167,7 @@
         "validation_scope": "qi_seed_robustness",
         "worst_core_normalized_max_abs": 28741.624239481764,
         "worst_scalar_rel": 30.207985156453514,
-        "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
+        "wout_path": "vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
       },
       {
         "alpha": 0.0,
@@ -191,7 +191,7 @@
         "error": null,
         "failure_reason": null,
         "family": "quasi-isodynamic evaluated reference",
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
+        "input_path": "vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
         "label": "QI fixed resolution, ntheta=16",
         "mboz": 21,
         "mode_floor_passed": true,
@@ -212,7 +212,7 @@
         "validation_scope": "qi_seed_robustness",
         "worst_core_normalized_max_abs": 29890.95040296135,
         "worst_scalar_rel": 29.72370737982687,
-        "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
+        "wout_path": "vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
       },
       {
         "alpha": null,
@@ -236,7 +236,7 @@
         "error": null,
         "failure_reason": null,
         "family": "quasi-isodynamic input variant",
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QI_finite_beta",
+        "input_path": "vmex/examples/data/input.nfp4_QI_finite_beta",
         "label": "QI finite-beta input",
         "mboz": 21,
         "mode_floor_passed": true,
@@ -343,7 +343,7 @@
       "equal_arc_metric_worst_normalized_max_abs": 0.03450681072966357,
       "error": null,
       "family": "quasi-helical",
-      "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+      "input_path": "vmex/examples/data/input.nfp4_QH_warm_start",
       "label": "QH warm start",
       "mboz": 21,
       "mode_floor_passed": true,
@@ -359,7 +359,7 @@
       "validation_scope": "parity_matrix",
       "worst_core_normalized_max_abs": 5668.069765980051,
       "worst_scalar_rel": 99.39996711648354,
-      "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+      "wout_path": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
     },
     {
       "alpha": 0.0,
@@ -381,7 +381,7 @@
       "equal_arc_metric_worst_normalized_max_abs": 0.009115858765054436,
       "error": null,
       "family": "quasi-isodynamic",
-      "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
+      "input_path": "vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
       "label": "QI fixed resolution",
       "mboz": 21,
       "mode_floor_passed": true,
@@ -397,7 +397,7 @@
       "validation_scope": "parity_matrix",
       "worst_core_normalized_max_abs": 28741.624239481764,
       "worst_scalar_rel": 30.207985156453514,
-      "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
+      "wout_path": "vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
     },
     {
       "alpha": 0.0,
@@ -419,7 +419,7 @@
       "equal_arc_metric_worst_normalized_max_abs": 0.003861706553642569,
       "error": null,
       "family": "axisymmetric finite-beta",
-      "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.shaped_tokamak_pressure",
+      "input_path": "vmex/examples/data/input.shaped_tokamak_pressure",
       "label": "shaped tokamak",
       "mboz": 21,
       "mode_floor_passed": true,
@@ -435,7 +435,7 @@
       "validation_scope": "parity_matrix",
       "worst_core_normalized_max_abs": 2.166766758709233,
       "worst_scalar_rel": 0.619407976705941,
-      "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_shaped_tokamak_pressure_reference.nc"
+      "wout_path": "vmex/examples/data/wout_shaped_tokamak_pressure_reference.nc"
     }
   ],
   "sample_set_provenance": {
@@ -455,7 +455,7 @@
         "case_name": "nfp4_QH_warm_start",
         "family": "quasi-helical",
         "field_line_alpha": 0.0,
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+        "input_path": "vmex/examples/data/input.nfp4_QH_warm_start",
         "label": "QH warm start",
         "mboz": 21,
         "nboz": 21,
@@ -467,7 +467,7 @@
         "theta_grid": "uniform Boozer equal-arc theta samples on [-pi, pi)",
         "torflux": 0.5,
         "validation_scope": "parity_matrix",
-        "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+        "wout_path": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
       },
       {
         "artifact_reason": null,
@@ -475,7 +475,7 @@
         "case_name": "nfp3_QI_fixed_resolution_final",
         "family": "quasi-isodynamic",
         "field_line_alpha": 0.0,
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
+        "input_path": "vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
         "label": "QI fixed resolution",
         "mboz": 21,
         "nboz": 21,
@@ -487,7 +487,7 @@
         "theta_grid": "uniform Boozer equal-arc theta samples on [-pi, pi)",
         "torflux": 0.5,
         "validation_scope": "parity_matrix",
-        "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
+        "wout_path": "vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
       },
       {
         "artifact_reason": null,
@@ -495,7 +495,7 @@
         "case_name": "shaped_tokamak_pressure",
         "family": "axisymmetric finite-beta",
         "field_line_alpha": 0.0,
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.shaped_tokamak_pressure",
+        "input_path": "vmex/examples/data/input.shaped_tokamak_pressure",
         "label": "shaped tokamak",
         "mboz": 21,
         "nboz": 21,
@@ -507,7 +507,7 @@
         "theta_grid": "uniform Boozer equal-arc theta samples on [-pi, pi)",
         "torflux": 0.5,
         "validation_scope": "parity_matrix",
-        "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_shaped_tokamak_pressure_reference.nc"
+        "wout_path": "vmex/examples/data/wout_shaped_tokamak_pressure_reference.nc"
       }
     ],
     "minimum_boozer_mode_count": 21,
@@ -519,7 +519,7 @@
         "case_name": "nfp1_QI",
         "family": "quasi-isodynamic input variant",
         "field_line_alpha": null,
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp1_QI",
+        "input_path": "vmex/examples/data/input.nfp1_QI",
         "label": "QI input nfp1",
         "mboz": 21,
         "nboz": 21,
@@ -539,7 +539,7 @@
         "case_name": "nfp2_QI",
         "family": "quasi-isodynamic input variant",
         "field_line_alpha": null,
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp2_QI",
+        "input_path": "vmex/examples/data/input.nfp2_QI",
         "label": "QI input nfp2",
         "mboz": 21,
         "nboz": 21,
@@ -559,7 +559,7 @@
         "case_name": "nfp3_QI_fixed_resolution_final",
         "family": "quasi-isodynamic evaluated reference",
         "field_line_alpha": 0.0,
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
+        "input_path": "vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
         "label": "QI fixed resolution, ntheta=8",
         "mboz": 21,
         "nboz": 21,
@@ -571,7 +571,7 @@
         "theta_grid": "uniform Boozer equal-arc theta samples on [-pi, pi)",
         "torflux": 0.5,
         "validation_scope": "qi_seed_robustness",
-        "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
+        "wout_path": "vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
       },
       {
         "artifact_reason": "mode21_qi_tolerance_passed",
@@ -579,7 +579,7 @@
         "case_name": "nfp3_QI_fixed_resolution_final",
         "family": "quasi-isodynamic evaluated reference",
         "field_line_alpha": 0.0,
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
+        "input_path": "vmex/examples/data/input.nfp3_QI_fixed_resolution_final",
         "label": "QI fixed resolution, ntheta=16",
         "mboz": 21,
         "nboz": 21,
@@ -591,7 +591,7 @@
         "theta_grid": "uniform Boozer equal-arc theta samples on [-pi, pi)",
         "torflux": 0.5,
         "validation_scope": "qi_seed_robustness",
-        "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
+        "wout_path": "vmex/examples/data/wout_nfp3_QI_fixed_resolution_final.nc"
       },
       {
         "artifact_reason": "missing_bundled_wout_reference",
@@ -599,7 +599,7 @@
         "case_name": "nfp4_QI_finite_beta",
         "family": "quasi-isodynamic input variant",
         "field_line_alpha": null,
-        "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QI_finite_beta",
+        "input_path": "vmex/examples/data/input.nfp4_QI_finite_beta",
         "label": "QI finite-beta input",
         "mboz": 21,
         "nboz": 21,

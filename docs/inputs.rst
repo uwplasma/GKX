@@ -1,78 +1,61 @@
 Input Files and Executable
 ==========================
 
-GKX supports lightweight TOML inputs that map directly onto the
-``GridConfig``, ``TimeConfig``, ``GeometryConfig``, and ``ModelConfig`` dataclasses.
-You can use these inputs from the executable or from a Python driver.
+Every GKX input is one runtime TOML deck, loaded by
+``gkx.load_runtime_from_toml`` into a ``RuntimeConfig``. The ``[grid]``,
+``[time]``, ``[geometry]`` and ``[init]`` tables merge into ``GridConfig``,
+``TimeConfig``, ``GeometryConfig`` and ``InitializationConfig``; species,
+physics toggles, collisions, normalization, operator terms, output, quasilinear
+and parallel policy have their own tables (listed under `Runtime sections`_).
+The same deck drives the executable and the Python API, for Cyclone, ETG, KBM
+or any other case, through one solver path.
 
 Unified Runtime Schema
 ----------------------
 
-In addition to benchmark-case TOMLs, GKX supports a **case-agnostic**
-runtime schema (``RuntimeConfig``) with explicit species and physics toggles.
-This allows Cyclone/ETG/KBM to run through the same solver path without
-changing solver internals.
+Resolution and time-step defaults
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+- **Velocity resolution.** When neither the call nor the deck names
+  ``Nl`` (Laguerre) and ``Nm`` (Hermite), the fallback is
+  ``(Nl, Nm) = (12, 24)`` for linear runs and ``(4, 8)`` for nonlinear runs.
+  Set both explicitly for any result you report.
+- **Time stepping.** A deck that sets ``[time] dt`` runs ``rk2`` at that fixed
+  step unless it names another ``method``. A deck without ``dt`` gets
+  ``method = "rk4"`` with ``fixed_dt = false``: the CFL controller chooses the
+  step with ``cfl = 0.9``. An explicit ``method`` or ``fixed_dt`` in the deck
+  always wins.
 
 Runtime precision
 ^^^^^^^^^^^^^^^^^
 
-The default is **float32** (``complex64`` states), and it is the right default:
-on the shipped Cyclone deck at its own resolution the float32 run returns
-:math:`\gamma = 0.09309106`, :math:`\omega = 0.28203276` against the
-float64-certified :math:`0.0930912`, :math:`0.2820327` -- agreement to seven
-significant figures.
-
+The default is **float32** (``complex64`` states).
 ``JAX_ENABLE_X64=true``, set before JAX is imported, selects double precision.
 The runtime's own initial state is then built in ``complex128``, so the Krylov
 basis, the eigenvector and the certification gate are all float64. This is what
 the shipped decks mean when their header says to run them under
 ``JAX_ENABLE_X64`` for parity reproduction.
 
-What x64 buys is the **gate**, not the eigenvalue.
-``certifiable_residual_tolerance`` floors the residual gate at
+What x64 buys is the **gate**, not necessarily the eigenvalue.
+``certifiable_residual_tolerance`` floors the eigenpair residual gate at
 ``1e3 * eps(dtype)``, so a float32 run certifies against 1.19e-4 while a float64
-run certifies against 1e-9. On the Cyclone deck the same route reports residual
-5.55e-6 in float32 and 4.0e-15 in float64. Use float64 when the number you are
-quoting has to carry a float64-scale residual; the float32 default is faster and
-its answer, on this deck, is the same to seven figures.
+run certifies against 1e-9. Use float64 when the number you are quoting has to
+carry a float64-scale residual.
 
-.. note::
-
-   Before queue row Q26 (2026-09-19) the runtime assembled its seed in
-   ``complex64`` and handed it to the solver without widening, and ``jnp.asarray``
-   does not promote. A run launched with ``JAX_ENABLE_X64=true`` therefore stayed
-   in float32 end to end and applied the **float32** gate: on the Cyclone deck at
-   ``Nl=4, Nm=8`` it reported residual 1.76e-6 against a 1.19e-4 tolerance where
-   the same run now reports 4.04e-15 against 1e-9. Passing a ``complex128``
-   ``initial_state`` explicitly was the documented way around this; it still
-   works and still preserves the caller's dtype, but it is no longer needed for
-   the runtime's own seed.
-
-.. warning::
-
-   A float64 run now applies the float64 gate, which is a behaviour change. Because
-   an ``JAX_ENABLE_X64=true`` run previously stayed in float32, it applied the
-   **float32** gate of 1.19e-4 rather than the 1e-9 it had asked for, so a deck too
-   coarse to support a certifiable eigenpair could return a small number and report
-   it as certified. Such a run now raises instead. Measured on a deliberately
-   degenerate ``Nl=2, Nm=2`` deck: float64 previously returned
-   :math:`\gamma = 6.7\times10^{-8}` at residual 5.3e-5 against the 1.19e-4 float32
-   gate, and now fails closed at residual 1.06665 against 1e-9 -- the earlier number
-   was noise below a gate looser than the noise, not a converged eigenpair. Float32
-   runs are unaffected and are bitwise unchanged. If a float64 run of your deck
-   starts raising, raise its velocity resolution: every rung with ``Nm >= 4``
-   certifies on that deck.
+A float64 run on a deck too coarse to support a certifiable eigenpair raises
+instead of returning an uncertified number. If that happens, raise the
+velocity resolution (``Nl``, ``Nm``).
 
 ``GKX_X64`` is a **test-harness** variable, not a runtime switch: it only selects
 the precision banner in ``tests/conftest.py``. Setting it without
 ``JAX_ENABLE_X64`` does not change any run's precision.
 
-``run_runtime_linear(cfg, initial_state=G128, ...)`` still accepts an explicit
+``run_runtime_linear(cfg, initial_state=G128, ...)`` accepts an explicit
 seed and preserves its dtype. It requires shape
 ``(kinetic_species, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)`` on the
 selected-ky runtime grid. Record the seed dtype and hash; casting a rounded f32
-seed does not recover lost input precision. There is no TOML dtype option;
-prepared linear ``solve(initial_state=...)`` is not supported yet.
+seed does not recover lost input precision. There is no TOML dtype option, and
+prepared linear ``solve(initial_state=...)`` raises ``NotImplementedError``.
 
 Minimal runtime TOML example
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -118,10 +101,13 @@ Minimal runtime TOML example
 
    [run]
    ky = 0.3
-   Nl = 24
-   Nm = 12
+   Nl = 16
+   Nm = 48
    solver = "auto"
    fit_signal = "auto"
+
+``Nl = 16, Nm = 48`` is the velocity resolution of the shipped Cyclone deck
+``examples/linear/axisymmetric/cyclone.toml``.
 
 Schema compatibility
 ^^^^^^^^^^^^^^^^^^^^
@@ -131,7 +117,10 @@ Versionless GKX 1.8.2 decks remain readable as legacy schema 0 and are not
 rewritten in place. Resolved decks written by the equilibrium shorthand are
 schema 1. A non-integer or unsupported future version fails before numerical
 work and points to this migration contract; upgrade GKX before reading a newer
-schema.
+schema. The removed Diffrax keys (``use_diffrax``, ``diffrax_solver``,
+``diffrax_adaptive``, ``diffrax_rtol``, ``diffrax_atol``,
+``diffrax_max_steps``) in ``[time]`` are refused with the native replacement
+named in the error.
 
 Quasilinear diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -152,15 +141,13 @@ directly from the final linear state or Krylov eigenvector:
    include_stable_modes = false
    channels = ["es"]
 
-The current validated output level is **linear weights** plus optional
+The validated output level is **linear weights** plus optional
 uncalibrated electrostatic saturation rules. Electromagnetic quasilinear
-channels are intentionally rejected until their channel normalization and
-nonlinear calibration gates are added. The runtime writes
+channels are rejected. The runtime writes
 ``*.quasilinear.summary.json`` and ``*.quasilinear_species.csv`` when
 ``[output].path`` or ``--out`` is set. Serial ``scan-runtime-linear`` runs also
-write ``*.quasilinear_spectrum.csv``; batched scans are intentionally disabled
-for quasilinear output until per-ky state extraction has a numerical identity
-gate. In scan spectra, the ``ky`` column is the requested scan coordinate and
+write ``*.quasilinear_spectrum.csv``; combined-``ky`` batched scans refuse
+quasilinear output. In scan spectra, the ``ky`` column is the requested scan coordinate and
 ``mode_ky`` records the signed selected grid-mode coordinate; they can differ
 for linked-boundary grids, so publication plots should use ``ky`` while audits
 can inspect ``mode_ky``.
@@ -177,79 +164,38 @@ Equivalent executable flags are available for single-point runtime runs:
      --ql-csat 1.0 \
      --out tools_out/cyclone_quasilinear
 
-Minimal TOML example
---------------------
+Time-integration controls
+-------------------------
 
-.. code-block:: toml
+Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
 
-   case = "cyclone"
-   reference_alignment = true
-
-   [grid]
-   Nx = 1
-   Ny = 24
-   Nz = 96
-   Lx = 62.8
-   Ly = 62.8
-   boundary = "linked"
-   y0 = 20.0
-   ntheta = 32
-   nperiod = 2
-
-   [time]
-   t_max = 10.0
-   dt = 0.002
-   state_sharding = "auto"
-   compressed_real_fft = true
-
-   [run]
-   ky = 0.3
-   Nl = 24
-   Nm = 12
-   solver = "auto"
-   method = "imex2"
-
-   [fit]
-   auto_window = true
-   window_method = "loglinear"
-   fit_signal = "auto"
-
-The ``[time]`` section also accepts ``compressed_real_fft`` (default ``true``) to
-select the compressed real-FFT nonlinear bracket. Set ``compressed_real_fft = false`` to
-use a full complex FFT for the nonlinear term. Diagnostics output can be
-decimated with ``sample_stride`` (record every ``N`` steps) and
-``diagnostics_stride`` (compute streaming diagnostics every ``N`` steps). Set
-``diagnostics = false`` in ``[time]`` (or ``--no-diagnostics`` on the executable) to
-disable diagnostics entirely for speed. For CFL-controlled timestep control, use
-``fixed_dt = false`` along with ``cfl`` and optional ``cfl_fac`` /
-``dt_min`` / ``dt_max`` limits. When ``cfl_fac`` is omitted, GKX uses
-the benchmark-locked method default instead of a universal constant:
-``rk3``/``sspx3`` use ``1.73``, ``rk4`` uses ``2.82``, and other methods keep
-``1.0``. When adaptive timestepping is enabled, diagnostics include
-``dt_t`` (per-sample timestep history) and ``dt_mean`` (average effective dt)
-to quantify CFL-driven savings. In benchmark-locked nonlinear runs the adaptive
-``dt`` estimate combines the linear frequency cap with the instantaneous
-nonlinear cap, matching the tracked comparison CFL update instead of using the nonlinear
-bracket alone. To control the Laguerre handling in nonlinear
-brackets, set ``laguerre_nonlinear_mode = "grid"`` (reference quadrature,
-default) or ``laguerre_nonlinear_mode = "spectral"`` (use spectral ``Jl``
-without the quadrature transform).
-Use ``nonlinear_dealias = false`` to disable nonlinear dealias masking for
-reference/debug runs where you want to preserve all configured base modes.
-When ``nonlinear_dealias = true``, nonlinear runtime mode selection is
-dealias-aware: if the requested ``ky`` is filtered out by the 2/3 mask, the
-runner automatically picks the nearest retained ``ky``. The executable prints the
-effective ``ky_sel``/``kx_sel`` used by diagnostics.
-For benchmark-locked runs, leaving ``dt_max`` unset keeps ``dt_max = dt``.
-Set ``state_sharding = "auto"`` (or ``"ky"``) to enable distributed
-parallelization of the packed state array over multiple JAX devices. This is
-honored by the sharding-aware integration paths, including the fixed-step RK2
-nonlinear identity/profiler lane; unsupported solver paths or one-device runs
-fall back to single-device execution. Other valid values are ``"kx"``, ``"z"``,
-``"l"``, ``"m"``, and ``"species"``. Treat this as a correctness-gated
-parallelization option unless the run also has a matched scaling artifact.
-Increase ``dt_max`` explicitly only when you intentionally trade strict
-comparison matching for throughput.
+- ``compressed_real_fft`` (default ``true``): compressed real-FFT nonlinear
+  bracket; ``false`` uses a full complex FFT for the nonlinear term.
+- ``sample_stride`` (record every ``N`` steps) and ``diagnostics_stride``
+  (compute streaming diagnostics every ``N`` steps). ``diagnostics = false``
+  (or ``--no-diagnostics``) disables diagnostics entirely.
+- ``fixed_dt = false`` with ``cfl`` (default ``0.9``) and optional
+  ``cfl_fac`` / ``dt_min`` / ``dt_max``: CFL-controlled steps. When ``cfl_fac``
+  is omitted, ``rk3``/``sspx3`` use ``1.73``, ``rk4`` uses ``2.82``, and other
+  methods ``1.0``. Adaptive runs record ``dt_t`` (per-sample step history) and
+  ``dt_mean`` (average effective step). The nonlinear adaptive ``dt`` estimate
+  combines the linear frequency cap with the instantaneous nonlinear cap.
+  Leaving ``dt_max`` unset keeps ``dt_max = dt``; raise it explicitly only
+  when you trade strict comparison matching for throughput.
+- ``laguerre_nonlinear_mode``: ``"grid"`` (reference quadrature, default) or
+  ``"spectral"`` (spectral ``Jl`` without the quadrature transform) for the
+  Laguerre handling in nonlinear brackets.
+- ``nonlinear_dealias`` (default ``true``): 2/3 dealias masking. With masking
+  on, nonlinear mode selection is dealias-aware: a requested ``ky`` removed by
+  the mask is replaced by the nearest retained ``ky``, and the executable prints
+  the effective ``ky_sel``/``kx_sel``. ``false`` keeps all configured modes for
+  reference/debug runs.
+- ``state_sharding``: ``"auto"`` or ``"ky"`` shards the packed state over
+  multiple JAX devices along ``ky``; ``"kx"``, ``"z"``, ``"l"``, ``"m"`` and
+  ``"species"`` shard along that axis. Sharding-aware integration paths honor
+  it; unsupported solver paths and one-device runs fall back to single-device
+  execution. Treat it as a correctness-gated option unless the run also has a
+  matched scaling artifact.
 
 Diagonal nonlinear hypercollision splitting is enabled with
 ``collision_split = true``. The conserving collision operator remains in the
@@ -259,8 +205,11 @@ RHS because its field-particle correction is not diagonal. The
 ``sts``/``rkc`` aliases (treated as stabilized explicit/exponential updates for
 diagonal operators).
 
-The ``[geometry]`` section supports ``drift_scale`` to switch between benchmark-compatible
-(``drift_scale = 1.0``) and the alternate doubled-drift convention (``drift_scale = 2.0``). The default configuration in GKX uses the tracked benchmark value.
+Geometry controls
+-----------------
+
+``[geometry] drift_scale`` selects the benchmark-compatible drift convention
+(``1.0``, the default) or the alternate doubled-drift convention (``2.0``).
 The physical meaning of the runtime terms and geometry coefficients is detailed
 in :doc:`theory` and :doc:`operators`; the TOML layer here documents how those
 implemented models are selected and parameterized.
@@ -273,7 +222,7 @@ It also accepts ``model = "imported-netcdf"`` with
 field-line geometry instead of the analytic ``s-alpha`` model. The imported
 file can be a tracked benchmark ``*.out.nc`` or a root-level ``*.eik.nc`` geometry
 file produced by the VMEC workflow. When that imported geometry is used with a
-linked boundary, GKX now follows the file's own ``theta`` range,
+linked boundary, GKX follows the file's own ``theta`` range,
 ``jtwist/x0`` geometry factor, and ``kxfac`` metadata instead of forcing the
 analytic s-alpha grid defaults.
 For direct VMEC workflows, the runtime also accepts ``model = "vmec"``.
@@ -283,10 +232,10 @@ geometry path as the VMEC examples. Set ``vmec_file`` plus the flux-tube keys
 ``torflux``, ``npol`` and optionally ``alpha``. ``geometry_file`` can be used
 as an explicit output path for the generated ``*.eik.nc`` file, and
 ``geometry_helper_repo`` can point to a non-default helper checkout if needed.
-The preferred VMEC path is the internal ``booz_xform_jax`` backend, discovered from
-``BOOZ_XFORM_JAX_PATH`` or ``GKX_BOOZ_XFORM_JAX_PATH`` when it is not
-installed into the active Python environment. This is now the recommended
-imported-geometry route for new stellarator cases. The shipped VMEC TOMLs
+The VMEC path uses the ``booz_xform_jax`` backend, which is installed with
+GKX; ``GKX_BOOZ_XFORM_JAX_PATH`` or ``BOOZ_XFORM_JAX_PATH`` point to a source
+checkout instead. This is the recommended imported-geometry route for new
+stellarator cases. The shipped VMEC TOMLs
 point to locally generated files under ``examples/vmec``; generate those files
 with ``vmex input.<case>`` before running the examples.
 ``vmec_file`` supports ``$ENV_VAR`` expansion, and relative paths are resolved
@@ -302,7 +251,7 @@ does not inject ``x0`` from the runtime ``Lx``. That keeps the generated
 
 For Miller tokamak workflows, the runtime also accepts ``model = "miller"``.
 In that mode GKX uses its in-package Miller backend to generate a matching
-root-level ``*.eiknc.nc`` file, then immediately re-enters the same imported
+root-level ``*.eiknc.nc`` file, then re-enters the same imported
 geometry path used for VMEC ``eik.nc`` files.
 Set the Miller inputs directly in ``[geometry]``:
 ``rhoc``, ``q``, ``s_hat``, ``R0``, optional ``R_geo``, ``shift``,
@@ -319,8 +268,7 @@ helper discovery, not to this in-package Miller backend.
 Executable path overrides
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ``gkx`` and ``gkx`` executables accept path overrides for
-runtime-configured runs:
+The ``gkx`` executable accepts path overrides:
 
 .. code-block:: bash
 
@@ -345,7 +293,9 @@ The ``[run]`` and ``[scan]`` sections accept ``solver`` and ``fit_signal`` keys:
 * ``solver = "time"``: always use time integration
 * ``solver = "explicit_time"``: force the explicit single-mode time integrator
   used by controlled explicit-time comparisons
-* ``solver = "krylov"``: always use the matrix-free eigen solver
+* ``solver = "krylov"``: always use the matrix-free eigensolver. Its default
+  route is ``KrylovConfig(method="adaptive")``, which returns an eigenpair only
+  when its residual passes the certification gate (see `Runtime precision`_).
 
 * ``fit_signal = "auto"`` (default): pick ``phi`` vs density based on fit quality
 * ``fit_signal = "phi"``: use the electrostatic potential time trace
@@ -358,27 +308,31 @@ growth rates from the per-ky traces.
 For quasilinear spectra, use ``scan-runtime-linear --workers N`` instead of
 ``--batch-ky``. This runs independent per-``ky`` solves, computes the
 quasilinear state extraction for each mode, preserves serial spectrum ordering,
-and records the worker identity contract in the scan summary JSON. Combined
-``--batch-ky`` quasilinear artifacts remain disabled until the batched
-state-extraction identity gate is separately closed.
+and records the worker identity contract in the scan summary JSON.
+``--batch-ky`` with ``[quasilinear] enabled = true`` raises ``ValueError``;
+quasilinear scans require per-``ky`` evaluation.
 
 Executable usage
 ----------------
 
 .. code-block:: bash
 
-  cd examples/linear/axisymmetric && gkx cyclone.toml
-  gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --out tools_out/runtime_etg_scan
-  gkx --plot tools_out/runtime_etg_scan.scan.csv
-  gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out tools_out/cyclone_runtime
+   gkx examples/linear/axisymmetric/cyclone.toml    # same as: gkx run --config ...
+   gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --out tools_out/runtime_etg_scan
+   gkx plot tools_out/runtime_etg_scan.scan.csv
+   gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out tools_out/cyclone_runtime
    gkx scan-runtime-linear --config examples/linear/axisymmetric/runtime_etg.toml --batch-ky
    gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --sample-stride 5 --out tools_out/nonlinear_cyclone_diag.csv
 
-For ``run-runtime-nonlinear``, omit ``--steps`` when ``fixed_dt = false`` unless
-you explicitly want a capped step count. The executable now preserves ``steps = None``
-for adaptive nonlinear runs so the runtime can keep integrating in chunks until
-it reaches the requested ``t_max`` instead of silently reverting to the old
-``round(t_max / dt)`` ceiling.
+``cyclone.toml`` is a production-length run (32168 ``rk4`` steps at
+``Nl = 16``, ``Nm = 48``); see :doc:`quickstart` for a ten-second demo.
+``gkx CASE.toml`` dispatches to ``gkx run --config CASE.toml``, which picks the
+linear or nonlinear command from ``[physics]``.
+
+For ``run-runtime-nonlinear`` with ``fixed_dt = false``, omit ``--steps`` unless
+you want a capped step count: the runtime then integrates in chunks until it
+reaches ``t_max`` (or saturates, below). With ``fixed_dt = true`` and no
+``--steps``, the step count is ``round(t_max / dt)``.
 
 Diagnosed nonlinear runs stop at saturation by default (``[time] run_to =
 "saturation"``): the runtime integrates in chunks and, after each chunk, tests
@@ -391,8 +345,8 @@ twice their combined SEM. The same drift-consistency guard is applied to the
 electrostatic field energy ``Wphi`` and gyrokinetic free energy ``Wg``. These
 operational finite-sample safeguards provide neither a universal sequential-
 confidence guarantee nor qualification for irregular adaptive-time sampling.
-``t_max`` remains the hard cap, so a run that never saturates behaves exactly
-as before.
+``t_max`` remains the hard cap, so a run that never saturates integrates the
+full horizon.
 The chosen window and its ``mean +/- SEM`` are printed in the run summary and
 recorded under ``saturation`` in the summary JSON. Pass
 ``--no-until-saturated`` (or set ``run_to = "t_max"``) for a fixed horizon.
@@ -406,29 +360,10 @@ For single-point runtime commands, artifact output can be requested either with
    path = "tools_out/runtime_case"
 
 ``--out`` takes precedence over ``[output].path`` when both are provided.
-Linear runs write a JSON summary and, when a fitted signal is available, a
-``*.timeseries.csv`` sidecar with ``t,signal_real,signal_imag,signal_abs``.
-Nonlinear runs write a JSON summary plus a diagnostics CSV. When the requested
-path already ends in ``.csv``, that exact filename is used for the diagnostics
-table and the JSON summary is written next to it as ``*.summary.json``.
-
-If the nonlinear output path ends in ``.out.nc`` (recommended) or another
-``.nc`` suffix, the runtime switches to NetCDF restart/diagnostic artifacts
-instead of the lightweight JSON/CSV pair. In that mode GKX writes:
-
-* ``*.out.nc``: diagnostic history together with ``Grids``, ``Geometry``, and
-  ``Inputs`` groups.
-* ``*.big.nc``: final fields and moments in spectral and real-space layouts.
-* ``*.restart.nc``: restart state for continuation runs.
-
-See :doc:`outputs` for the detailed variable inventory.
-
-The nonlinear diagnostics CSV base columns are
-``t,dt,gamma,omega,Wg,Wphi,Wapar,energy,heat_flux,particle_flux`` and
-species-resolved columns are appended when available:
-``heat_flux_s{i}``, ``particle_flux_s{i}`` for species index ``i``.
-When turbulent-heating diagnostics are present, the CSV also includes
-``turbulent_heating`` and ``turbulent_heating_s{i}``.
+A plain prefix writes a JSON summary plus CSV sidecars; a nonlinear target
+ending in ``.out.nc`` (or another ``.nc`` suffix) writes the NetCDF bundle
+``*.out.nc`` / ``*.big.nc`` / ``*.restart.nc`` instead. See :doc:`outputs` for
+every file, CSV column and NetCDF variable.
 
 Python driver
 -------------
@@ -438,45 +373,41 @@ Python driver
   # point CONFIG at the top of the script at examples/linear/axisymmetric/runtime_etg.toml
   python examples/utilities/runtime_from_toml.py
 
-The canonical KBM TOML is currently a controlled comparison input rather than
+The canonical KBM TOML is a controlled comparison input rather than
 a promoted standalone solve: its experimental shift-invert branch raises when
 the physical eigenpair-residual gate is not met. Reproduce the reviewed result
-with ``python benchmarks/kbm_linear_comparison.py``.
-
-TOML sections
--------------
-
-Supported sections include:
-
-* ``[grid]`` (``GridConfig``)
-* ``[time]`` (``TimeConfig``)
-* ``[geometry]`` (``GeometryConfig``)
-* ``[model]`` (case-specific model config)
-* ``[init]`` (``InitializationConfig``)
-* ``[run]`` (single-ky run settings)
-* ``[scan]`` (ky scan settings)
-* ``[fit]`` (growth-rate windowing options)
-* ``reference_alignment`` (top-level flag or ``[reference_alignment] enabled = true`` to
-  enforce the tracked comparison defaults)
-* ``[terms]`` (toggle linear terms)
-* ``[krylov]`` (Krylov solver settings)
+with ``python scripts/benchmarks/kbm_linear_comparison.py``.
 
 Runtime sections
-^^^^^^^^^^^^^^^^
+----------------
 
-For runtime-configured inputs (``load_runtime_from_toml``), supported sections
-are:
+``load_runtime_from_toml`` reads these tables. Unknown keys in ``[grid]``,
+``[time]``, ``[geometry]`` and ``[init]`` are ignored (the removed Diffrax
+``[time]`` keys are refused). An unknown key in ``[[species]]``, ``[physics]``,
+``[collisions]``, ``[normalization]``, ``[terms]``, ``[expert]``, ``[output]``,
+``[quasilinear]`` or ``[parallel]`` raises ``TypeError``. ``[run]``, ``[scan]``
+and ``[fit]`` are read by the commands that use them.
 
+* ``schema_version`` (document root; see `Schema compatibility`_)
+* ``[grid]`` (``GridConfig``), ``[time]`` (``TimeConfig``),
+  ``[geometry]`` (``GeometryConfig``), ``[init]`` (``InitializationConfig``)
 * ``[[species]]`` (kinetic species definitions)
 * ``[physics]`` (electrostatic/electromagnetic, adiabatic/kinetic, linear/nonlinear)
 * ``[collisions]`` (collision and hypercollision controls)
 * ``[normalization]`` (contract key + optional overrides)
 * ``[terms]`` (term toggles used by modular RHS assembly)
 * ``[expert]`` (advanced fixed-mode controls for specialized workflows)
-* ``[output]`` (artifact path for single-point runtime commands)
-* ``[parallel]`` (parallelization policy for independent scans and future
-  sharded paths; defaults to serial)
-* ``[run]`` / ``[scan]`` / ``[fit]`` (driver controls)
+* ``[output]`` (artifact path and restart controls)
+* ``[quasilinear]`` (quasilinear transport diagnostics)
+* ``[parallel]`` (parallelization policy; defaults to serial)
+* ``[damping_reference]`` (provenance written by
+  ``migrate_end_damping_reference``; see `Explicit reference migration`_)
+* ``[run]`` / ``[scan]`` / ``[fit]`` (driver controls: ``ky``, ``Nl``, ``Nm``,
+  ``solver``, ``method``, ``dt``, ``steps``, the scan ``ky`` list, and the
+  growth-rate window options ``auto_window``, ``tmin``, ``tmax``,
+  ``window_fraction``, ``min_points``, ``start_fraction``, ``growth_weight``,
+  ``require_positive``, ``min_amp_fraction``, ``window_method``,
+  ``mode_method``, ``fit_signal``)
 
 Notable runtime-only keys:
 
@@ -504,7 +435,7 @@ Notable runtime-only keys:
   The maintained runtime supports full gyrokinetics via ``"gyrokinetic"``
   and its full-GK aliases. Non-promoted reduced-model values fail closed with
   ``NotImplementedError`` instead of silently routing through the wrong equations.
-* ``[collisions] damp_ends_scale_by_dt``: ``true`` now raises a migration error
+* ``[collisions] damp_ends_scale_by_dt``: ``true`` raises a migration error
   before geometry construction; omitted/``false`` retains legacy defaults.
   Remove the true flag and choose ``[time] damp_ends_rate`` explicitly.
   For an old true-flag deck, the linear rate was
@@ -519,11 +450,10 @@ Notable runtime-only keys:
   The parallel multiplier is spectral:
   :math:`|\partial_z|G=\mathcal{F}^{-1}(|k_z|\mathcal{F}G)`,
   on each periodic line or linked chain. It is not pointwise multiplication
-  of physical-z samples by the wavenumber array. The periodic implementation
-  was corrected in September 2026: rerun affected periodic transport results
-  with nonzero kz damping and Hermite orders above two, including the QA
-  optimization/validation examples. Linked parity runs are unaffected by this
-  particular RHS repair. See the spectral-contract entry in ``plan/log.md``.
+  of physical-z samples by the wavenumber array. GKX releases before 2.1.0
+  applied a pointwise multiplier on periodic lines: rerun periodic transport
+  results from those versions that used nonzero kz damping and Hermite orders
+  above two. Linked runs are unaffected.
 
 * ``[collisions] p_hyper_m``: when omitted, the runtime path uses the
   resolution-aware default ``min(20, Nm/2)`` instead of a fixed exponent across
@@ -542,8 +472,8 @@ Notable runtime-only keys:
   refuses either declaration when ``[physics] hypercollisions = false`` or
   ``[terms] hypercollisions = 0.0`` disables the whole operator.
 * ``[collisions] nu_hyper_m_const``: the constant branch's Hermite rate.
-  Omitted (the default) it reuses ``nu_hyper_m``, which is the historical
-  behaviour and damps Hermite in *both* branches when both are on. Set it to
+  Omitted (the default) it reuses ``nu_hyper_m``, which damps Hermite in
+  *both* branches when both are on. Set it to
   ``0.0`` alongside ``hypercollisions_const = 1.0`` to declare a pure Laguerre
   sink while the :math:`|k_z|` Hermite hypercollisions stay exactly as the
   reference code sets them. See :ref:`velocity-regularization`.
@@ -603,8 +533,7 @@ Notable runtime-only keys:
 * ``[time] run_to``: nonlinear stop policy. ``"saturation"`` (the default)
   ends a diagnosed nonlinear run as soon as the post-spin-up heat-flux window
   has converged, with ``t_max`` kept as the hard cap; ``"t_max"`` always
-  integrates the full horizon and reproduces the pre-auto-stop behavior
-  exactly. Linear runs and nonlinear runs with ``diagnostics = false`` ignore
+  integrates the full horizon. Linear runs and nonlinear runs with ``diagnostics = false`` ignore
   the key, because the stop test needs the streamed heat-flux trace. The
   executable overrides are ``--until-saturated`` and ``--no-until-saturated``.
   Set ``"t_max"`` explicitly on any deck whose heat flux is not the observable
@@ -615,13 +544,11 @@ Notable runtime-only keys:
   ``run_to`` audit in ``tests/release/test_release_gates.py``.
 * ``[time] saturation_rel_sem``: target relative standard error of the mean on
   the windowed heat flux (default ``0.05``, i.e. 5%). The SEM is corrected for
-  autocorrelation using the current first-negative-lag truncation estimate
-  (the historical function name is ``sokal_autocorrelation_time``). This is
-  not yet the plan's self-consistent Sokal window or a calibrated sequential
-  confidence guarantee. Independent fixed-horizon AR(1) coverage and a strong
-  drifting-prefix rejection control live in
-  ``tests/validation/quasilinear/test_quasilinear_window.py``; mild drift,
-  burn-in, repeated-look coverage and real turbulent traces remain open gates.
+  autocorrelation using a first-negative-lag truncation estimate (function
+  ``sokal_autocorrelation_time``). It is not a calibrated sequential
+  confidence guarantee. Fixed-horizon AR(1) coverage and a drifting-prefix
+  rejection control are tested in
+  ``tests/validation/quasilinear/test_quasilinear_window.py``.
 * ``[time] saturation_min_window``: minimum averaging-window span in time
   units before a run may stop. The effective requirement is the larger of this
   value and twenty integrated autocorrelation times; omitting it retains the
@@ -634,9 +561,11 @@ Notable runtime-only keys:
   the run. This is useful for long adaptive runs and batch jobs.
 * ``[time] method = "sspx3"``: use the SSPx3 explicit scheme directly. This is
   the relevant explicit method for ``secondary`` and collisional-ETG benchmark
-  families. Plain ``rk3`` now follows the three-stage Heun-style timestepper;
-  ``rk3_classic`` keeps the older classical RK3 update if you need it for
-  controlled comparisons, and ``rk3_heun`` remains as an explicit alias.
+  families. Plain ``rk3`` is the three-stage Heun-style scheme (alias
+  ``rk3_heun``); ``rk3_classic`` is the classical RK3 update for controlled
+  comparisons. Linear integration also accepts ``euler``, ``rk2``, ``rk4``,
+  and the diagonal IMEX schemes ``imex`` and ``imex2`` (ARS(2,2,2), second
+  order).
 * ``[terms]``: each key is a pure multiplicative operator weight:
   ``streaming``, ``mirror``, ``curvature``, ``gradb``, ``diamagnetic``,
   ``collisions``, ``hypercollisions``, ``hyperdiffusion``, ``end_damping``,
@@ -659,13 +588,13 @@ serial by default:
    profile = false
    backend = "auto"
 
-Current accepted strategies are ``"serial"``, ``"batch"``,
+Accepted strategies are ``"serial"``, ``"batch"``,
 ``"combined_ky"``, ``"device_batch"``, ``"pmap"``, ``"pjit"``,
-``"shard_map"``, ``"state"``, and ``"velocity"``. Strategy
-``"batch-ky"`` is accepted as an alias for ``"combined_ky"`` and selects the
-existing combined-``k_y`` time-integration scan path. Quasilinear scan
-artifacts still require serial per-``k_y`` evaluation until the per-mode state
-extraction has its own numerical-identity gate.
+``"shard_map"``, ``"state"``, and ``"velocity"``. ``"batch-ky"`` is an alias
+for ``"combined_ky"`` (the combined-``k_y`` time-integration scan path), and
+``"none"``/``"off"`` are aliases for ``"serial"``. Quasilinear scan artifacts
+require per-``k_y`` evaluation. ``auto = true`` resolves to
+``strategy = "shard_map"`` with ``axis = "species_hermite"``.
 
 For runtime ``k_y`` scans, ``strategy = "batch"`` with ``axis = "ky"`` selects
 the production independent-worker path. ``num_devices`` is interpreted as the
@@ -688,8 +617,7 @@ the solver's own terms. Only ``"velocity"`` has a linear RHS route today, so a
 ``k_y`` scan requesting ``"state"`` or ``"shard_map"`` raises rather than
 quietly running unsharded.
 
-The only velocity-space RHS route exposed at this stage is deliberately
-diagnostic: ``strategy = "velocity"``, ``axis = "hermite"``, and
+The velocity-space RHS route is diagnostic: ``strategy = "velocity"``, ``axis = "hermite"``, and
 ``backend = "streaming_only"``, ``backend = "streaming_electrostatic"``, or
 ``backend = "electrostatic_linear_slices"``. ``backend = "auto"`` selects the
 electrostatic-slices route when the active terms satisfy that gate; otherwise
@@ -698,14 +626,13 @@ These backends are accepted only by ``gkx.linear_rhs_parallel_cached``.
 The first two require all non-streaming linear terms disabled. The
 electrostatic-slices backend allows only streaming, mirror, curvature, grad-B,
 and diamagnetic-drive weights; collisions, linked boundaries, electromagnetic
-terms, and nonlinear terms remain disabled until their own identity gates are
-added. Current velocity RHS routes are limited to single-species periodic 5D
-electrostatic states.
+terms, and nonlinear terms are refused. Velocity RHS routes are limited to
+single-species periodic 5D electrostatic states.
 
 For full runtime TOML files this velocity-space route is exposed only through
 the fixed-step linear executable path with ``fit_signal = "phi"``.
-Density-assisted automatic fitting stays serial until it has its own identity
-gate, so requesting velocity parallelization there raises a clear error.
+Density-assisted automatic fitting is serial only, so requesting velocity
+parallelization there raises an error.
 
 For independent scan, sensitivity, and UQ workloads, use
 ``gkx.batch_map`` for JAX-array maps and ``gkx.independent_map``
