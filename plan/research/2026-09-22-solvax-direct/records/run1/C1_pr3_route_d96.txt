@@ -1,0 +1,35 @@
+[     7.2s rss<=0.00G] t_matvec 0.655 ms
+[     7.2s rss<=0.00G] krylov method=shift_invert dim=48 restarts=2
+[     7.2s rss<=0.00G] preparing shift-invert solve with dim=48 restarts=2 gmres_maxiter=600 restart=600 tol=1e-06
+[     7.2s rss<=0.00G] estimating shift from propagator seed
+[    10.4s rss<=0.00G] shift-invert sigma=-0.00251127-0.232066j
+[    10.4s rss<=0.00G] building pr3-cm factors
+[    19.6s rss<=0.00G] pr3-cm factors: block-thomas solve, alpha=-3.58242+0j (symbol-bounds), 0.8 MB; block is l-tridiagonal plus rank one
+[    19.6s rss<=0.00G] running shift-invert Arnoldi (pr3-cm)
+[   440.0s rss<=0.00G] shift-invert solve finished with eig=0.101287-0.245496j residual=3.77e-07; inner converged=True unconverged=0/96 max_relative_residual=9.98e-07 tol=1e-06 iterations=15844
+[   444.7s rss<=0.00G] cost {'t_matvec_s': 0.0006551660044351593, 't_precond_s': 0.0030218169995350763, 'c_precond': 4.612292119980014}; setup 3.49s
+RESULT {"arm": "si", "case": "d96", "certified": true, "certified_residual": 3.767006284973748e-07, "cost": {"c_precond": 4.612292119980014, "t_matvec_s": 0.0006551660044351593, "t_precond_s": 0.0030218169995350763}, "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/measure.py", "--arm", "si", "--case", "d96", "--krylov-dim", "48", "--restarts", "2", "--restart", "600", "--maxiter", "600", "--inner-rtol", "1e-6", "--preconditioner", "pr3-cm", "--block-solve", "block-thomas", "--label", "C1_pr3_route_d96"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "361a8cabaed0b6957564dc8f8a91c711617a18f7"}, "gkx": "~/lanes/solvax-direct/gkx/src/gkx/__init__.py", "jax": "0.10.2", "loadavg": [50.82861328125, 42.22705078125, 30.6953125], "x64": true}, "gamma_omega": [0.10128650000857536, 0.24549628267732246], "ky": 0.3, "label": "C1_pr3_route_d96", "lambda": [0.10128650000857536, -0.24549628267732246], "matvec_equivalents": {"inner": 88921.15634896336, "inner_iterations": 15844, "outer_applies": 3, "setup": 5328.78574951083, "total": 94252.94209847419}, "n": 3072, "options": {"krylov_dim": 48, "method": "shift_invert", "restarts": 2, "shift": null, "shift_maxiter": 600, "shift_precond_block_solve": "block-thomas", "shift_preconditioner": "pr3-cm", "shift_restart": 600, "shift_tol": 1e-06}, "peak_rss_gib": 0.0009444989264011383, "precond_setup": {"alpha": [-3.5824158810519493, 0.0], "alpha_source": "symbol-bounds", "block_size": 32, "block_solve": "block-thomas", "block_solve_reason": "block is l-tridiagonal plus rank one", "block_spectral_radius": 18.584626383789416, "blocks": 96, "factor_bytes": 788000, "hermite_ladder_radius": 4.144547186125893, "locality_defect": 1.5541476497913833e-16, "locality_tolerance": 1e-08, "s1": [3.5811602476846156, -0.11603314641911434], "seconds": 3.4912392679980258, "structure": {"block_norm_max": 13.034174089228848, "coupling_halfwidth": 1.0, "off_tridiagonal_max": 0.0, "rank_one_ratio_max": 5.957028441007623e-15, "rank_one_s0_max": 0.5385830985775594, "rank_one_s1_max": 8.720010623214212e-16}, "sweeps": 3, "symbol_s1": 0.6905548317079708, "symbol_s_max": 33.14663192198259}, "process_seconds": 445.18685254499724, "raised": null, "residual_gate": 1e-06, "route": "shift_invert", "route_s": 432.87881438400655, "status": {"certified": true, "inner": {"converged": true, "max_relative_residual": 9.981351603681551e-07, "preconditioner": "pr3-cm", "preconditioner_setup": {"alpha": [-3.5824158810519493, 0.0], "alpha_source": "symbol-bounds", "block_size": 32, "block_solve": "block-thomas", "block_solve_reason": "block is l-tridiagonal plus rank one", "block_spectral_radius": 18.584626383789416, "blocks": 96, "factor_bytes": 788000, "hermite_ladder_radius": 4.144547186125893, "locality_defect": 1.5541476497913833e-16, "locality_tolerance": 1e-08, "s1": [3.5811602476846156, -0.11603314641911434], "structure": {"block_norm_max": 13.034174089228848, "coupling_halfwidth": 1.0, "off_tridiagonal_max": 0.0, "rank_one_ratio_max": 5.957028441007623e-15, "rank_one_s0_max": 0.5385830985775594, "rank_one_s1_max": 8.720010623214212e-16}, "sweeps": 3, "symbol_s1": 0.6905548317079708, "symbol_s_max": 33.14663192198259}, "solves": 96, "tolerance": 1e-06, "total_iterations": 15844, "unconverged_solves": 0}, "method": "shift_invert", "residual": 3.767006284973748e-07, "route": "shift_invert", "tolerance": 1e-06}}
+	Command being timed: "~/lanes/solvax-direct/env/bin/python plan/research/scripts/2026-09-19-pr3cm-src/measure.py --arm si --case d96 --krylov-dim 48 --restarts 2 --restart 600 --maxiter 600 --inner-rtol 1e-6 --preconditioner pr3-cm --block-solve block-thomas --label C1_pr3_route_d96"
+	User time (seconds): 762.35
+	System time (seconds): 16.63
+	Percent of CPU this job got: 174%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 7:26.50
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1014148
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 6
+	Minor (reclaiming a frame) page faults: 242567
+	Voluntary context switches: 1268101
+	Involuntary context switches: 232479
+	Swaps: 0
+	File system inputs: 432
+	File system outputs: 24
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+exit 0

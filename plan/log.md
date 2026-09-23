@@ -19369,3 +19369,27 @@ Outcome:
 - accepted, rejected, or partial: partial (paused by the maintainer)
 - remaining blocker: none technical; laptop disk was full (56 MiB free) for part of the session
 - next task: steps 2-4 in the PR #280 handoff
+
+## 2026-09-22 - SOLVAX-DIRECT (plan G.2) resumed: benchmarks, SOLVAX#121 (paused again)
+
+Baseline:
+- GKX SHA: 29362737f (origin/main, merged in); SOLVAX 7b8ca55 (0.25.0)
+- source/test/tool files and lines: GKX `src/` unchanged; research harnesses and records under `plan/research/2026-09-22-solvax-direct/`
+
+Scope:
+- intended change: measure MUMPS/SuperLU against `pr3-cm` at matched residual, and a full shift-invert against `adaptive`; implement the winner of PERF-LIT items 5/6 in SOLVAX
+- non-goals: SOLVAX release; GKX consumer
+
+Changes:
+- SOLVAX PR #121 (draft): `solvax.sparse_direct` (traced `sparse_solve` with factor-reusing transpose solves, `sparse_eigenvalue` with a one-JVP derivative, `csr_data_from_products`) and multi-RHS MUMPS solves
+- GKX: `bench.py`, `gradient.py`, `run_*.sh`, `summarize.py`, `REPORT.md`, `records/`
+
+Evidence:
+- d96, n=3,072: direct eigenpair about 5 s against `adaptive` 31.6-36.3 s and the `pr3-cm` route 433 s; same eigenvalue to 7e-14
+- r96: MUMPS factorization 20 s against SuperLU 381 s; MUMPS solve 0.37 s against a `pr3-cm` solve of 72 s (1e-6)
+- prod: MUMPS estimate 7.3-8.3 GB, refused under a 5 GB budget; `pr3-cm` solve 322 s (1e-6)
+- host load 50-90 on 36 cores throughout; wall times are upper bounds
+
+Outcome:
+- partial: item 5 implemented (SOLVAX #121); item 6 not pursued (ceiling is parity with `adaptive`)
+- next task: steps in the PR #280 handoff
