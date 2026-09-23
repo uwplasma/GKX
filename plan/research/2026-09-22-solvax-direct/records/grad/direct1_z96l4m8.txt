@@ -1,0 +1,26 @@
+[    67.6s rss<=1.84G] direct: gamma=0.105151328147685 value_s=[10.889885358017636, 5.162584405974485, 5.067712002986809] vg_s=[14.282447399018565, 5.276669823011616, 4.768269041989697]
+RESULT {"arm": "direct", "Nz": 96, "Nl": 4, "Nm": 8, "environment": {"host": "pop-os", "loadavg": [35.1376953125, 42.25830078125, 36.81982421875], "sha": "361a8cabaed0b6957564dc8f8a91c711617a18f7", "jax": "0.10.2", "solvax": "0.25.0", "solvax_file": "solvax", "threads": {"OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}}, "n": 3072, "structure_s": 1.4520794970158022, "products": 1248, "nnz": 826848, "lambda": [0.10515132814768514, -0.4015697525291909], "residual": 2.4775269407034096e-13, "left_residual": 2.41957596523866e-13, "value_s": [10.889885358017636, 5.162584405974485, 5.067712002986809], "value_and_grad_s": [14.282447399018565, 5.276669823011616, 4.768269041989697], "factor_cache": {"size": 2, "entries": 1, "hits": 0, "misses": 1}, "gamma": 0.10515132814768514, "grad_norm": 0.051450263072616555, "peak_rss_gib": 1.8391571044921875}
+	Command being timed: "~/lanes/solvax-direct/env/bin/python plan/research/2026-09-22-solvax-direct/gradient.py --nz 96 --nl 4 --nm 8 --out ~/lanes/solvax-direct/out/grad/direct1_z96l4m8.json --arm direct --shift (0.11-0.4j)"
+	User time (seconds): 82.52
+	System time (seconds): 6.01
+	Percent of CPU this job got: 128%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:08.79
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1928496
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 969
+	Minor (reclaiming a frame) page faults: 2046242
+	Voluntary context switches: 16842
+	Involuntary context switches: 16915
+	Swaps: 0
+	File system inputs: 266072
+	File system outputs: 40
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+exit 0

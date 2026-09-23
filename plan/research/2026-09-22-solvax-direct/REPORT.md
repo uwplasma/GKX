@@ -1,4 +1,62 @@
-# SOLVAX-DIRECT report (plan G.2; PERF-LIT items 5 and 6): interim, paused
+# SOLVAX-DIRECT report (plan G.2; PERF-LIT items 5 and 6)
+
+## Final results (2026-09-23; supersede the interim notes below)
+
+Measured on the office host. CPU rows: single thread, x64. GPU rows: one idle RTX A4000, running cuDSS through nvmath-python 1.0 in complex128. Host load was 30-90 on 36 cores, so wall times are upper bounds. To print every table: `python summarize.py records`.
+
+**Verdict.**
+- Item 5 (sparse direct) wins at every size measured and is implemented:
+  - uwplasma/SOLVAX#121 adds `sparse_solve`, `sparse_eigenvalue` and `csr_data_from_products`, plus multi-RHS MUMPS solves.
+  - The GKX consumer is #295: `solver_growth_rate_from_geometry(eigensolver="sparse-direct")`.
+- Item 6 (device `pr3-cm` apply) was not built. Even a free preconditioner apply leaves 15.8k-27.8k inner iterations at d96. That is at best parity with `adaptive` (33.9k), and the direct route is already about 6x faster.
+
+**Growth-rate gradient, n = 3,072** (PERF-LIT geometry; nine profiles differentiated):
+
+| route | value+grad s (warm) | vs dense |
+|---|---|---|
+| dense | 154, 177, 193 | reference |
+| adaptive-propagator | 117, 183 | 1.9e-13 |
+| sparse direct, jitted (`gradient.py`, two processes) | 4.1-5.5 | 2.9e-13 |
+| GKX #295, eager | 19.2, 19.9 | 2.0e-13 |
+
+Both acceptance conditions hold:
+- The gradient matches dense to 1e-8; the measured difference is 3e-13.
+- It is faster than `adaptive`: 25-40x jitted, 6-9x through GKX eagerly. The eager call re-probes the pattern on every call.
+
+**Certified dominant eigenpair:**
+
+| case | n | direct (assembly + factor + Arnoldi) | adaptive | pr3-cm route |
+|---|---|---|---|---|
+| d96 | 3,072 | about 5 s (2.8-3.7 + 0.5-0.7 + 1.4-1.5) | 31.6-36.3 s | 433 s |
+| r96 | 18,432 | about 109 s (12.7 + 20.2 + 75.7) | 300 s | - |
+| prod | 73,728 | about 1,250 s (119 + 117 + 1,011) | - | - |
+
+- The direct and adaptive routes certify the same eigenvalues:
+  - d96: 0.1012864978-0.2454963203j, agreeing to 7e-14.
+  - r96: 0.0987757461-0.2769045684j.
+- prod gives 0.0930911733-0.2820327315j, residual 1.7e-13.
+- Left eigenvectors from the same factor have residuals of at most 5e-12. Use the B3/B4 rows for d96: B1/B2 predate the left-shift fix.
+- At prod, the 16 Arnoldi candidates cost 717 solves at 1.4 s each; that is where to cut.
+
+**One shifted solve:**
+
+| case | MUMPS factor, solve (CPU) | cuDSS factor, solve (A4000) | SuperLU factor | pr3-cm solve to 1e-6 / 1e-10 |
+|---|---|---|---|---|
+| d96 | 0.5-0.7 s, 0.017 s | - | 4.3 s | 2.6 s / 4.5 s |
+| r96 | 20.2 s, 0.37 s | 1.6-1.7 s, 0.0065 s | 381 s | 72 s / 121 s |
+| prod | 117 s, 1.0-1.7 s (6.3 GB) | 15.5 s, 0.026 s | not run | 322 s / 543 s |
+
+- Direct backward errors are at most 1e-15.
+- At prod, MUMPS needs 7.3-8.3 GB.
+- MUMPS orderings are within 1.5x of each other.
+
+**Remaining:**
+- A SOLVAX release with #121, then the GKX floor for #295.
+- A GPU host factor behind the same primitive. cuDSS is 7-8x faster to factor and 50x faster to solve here, but no JAX binding has a transposed solve on CUDA 12.
+- Caching the pattern in #295.
+- Fewer Arnoldi candidates at prod.
+
+## Interim notes (2026-09-22, paused)
 
 Office host, CPU, single thread, x64, JAX 0.10.2, MUMPS 5.8.2 (conda-forge) and
 PyMUMPS 0.4.0. The host load was 50-90 on 36 cores throughout, so wall times are
