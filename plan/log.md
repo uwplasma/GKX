@@ -19352,3 +19352,33 @@ open PR, the merge queue and order, the CI-saturation lesson (use one chain
 branch), unowned findings, and resource rules. Local disk cleanup freed about
 20 GB (session scratch outputs and ~50 merged, clean worktrees). No plan or log
 line removed.
+
+## 2026-09-22 — all lanes confirmed paused (final heads)
+
+- #279 PERF-ADJ `cea0619f6`: per-stage optimization barrier on the half
+  layout plus inner-remat drop under a 2 GiB budget. JAX 0.11.2 CPU: half RK3
+  step 755 → 24 ms; 256-step half window gradient 186.5 → 53.0 s, gradient
+  within 1.7e-16. No effect on JAX 0.10.2 CPU (CI's version). GPU A/B pending.
+- #284 PERF-LIT `6922f0f28`: ranked item 1 measured 1.19–1.40x faster on an
+  A4000, with 5–6x more temporary memory (loaded host; only the ratios hold).
+  complex128 changes the gradient by ~1e-7 at 4x cost.
+- #280 SOLVAX-DIRECT `180cc24a5`, and SOLVAX #121 (`feature/traced-sparse-direct`,
+  `8aa5cec`): a traced sparse-direct solve with eigenvalue gradient. At
+  n=3,072 it gets the same eigenvalue as `adaptive` in ~5 s against 32–36 s.
+  At production size MUMPS needs 7–8 GB and was refused. Item 6 was not built
+  (at best it matches `adaptive`).
+- #282 `dd6b619f5` (ready): all 8 identity comparisons bitwise equal to main.
+  #287 `085620a9f` (ready, stacked on #282): SHARD-PAD, odd `Nyc` accepted on
+  2 and 4 devices. Finding: the ky route never split its scan across devices;
+  `state_sharding="ky"` crashes in XLA:CPU FFT (separate task running).
+- #283 `7d32d7d46`: all 33 docs pages current (rst 20,831 → 12,865 lines);
+  `sphinx -W` 0 warnings; absolute paths removed from the three JSONs. Merge
+  after #286.
+- #285 `1c58e3b95` (ready): README 583 → 349 lines, pinned text intact, with
+  a proof-test figure.
+- #288 `988dbdf8d` (ready): `tools/` Python 78 → 0, moved into `scripts/`
+  (104 files / 77,373 lines against a 12 / 18,000 target; tranche 3 cuts,
+  starting with `artifacts`, 35k lines).
+- #281 `1b69bf8a0`: 12 numbered groups; example Python 36 → 14 files, 5,145 →
+  1,782 lines. Path edits in benchmarks/tools wait for #278; one unidentified
+  failure in a stopped office run.
