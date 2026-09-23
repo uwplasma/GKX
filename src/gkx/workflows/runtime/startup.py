@@ -184,6 +184,8 @@ def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
 # increase this fallback has no mandate to make on a deck's behalf; the docs
 # continue to say to set Nl and Nm.
 _RUNTIME_LINEAR_HL_FALLBACK = (12, 24)
+# A nonlinear run without Nl/Nm starts coarse; resolution is the deck's call.
+_RUNTIME_NONLINEAR_HL_FALLBACK = (4, 8)
 
 
 def _resolve_runtime_hl_dims(

@@ -490,7 +490,9 @@ path = "workflows/runtime/commands.py"
 # 1000 -> 1004: whitespace only, from the same sweep. Two reflowed call sites,
 # identical AST. The module sat exactly on the default budget, so the sweep is
 # what crossed it, not new behaviour.
-baseline_lines = 1004
+# 1004 -> 1011: the CLI and case-run Nl/Nm fallbacks now come from startup's
+# two constants instead of literals that had drifted to the pre-2.2.0 (24, 12).
+baseline_lines = 1011
 target_lines = 1000
 reason = "One command table keeps the CLI subcommands parsing and dispatching consistently; reduce the per-command duplication rather than splitting the table."
 
@@ -1106,7 +1108,8 @@ recursive = true
 # sizes it. Target unchanged.
 # 93054 -> 93344: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
-baseline = 93344
+# 93344 -> 93359: single owner for the CLI/case Nl/Nm fallbacks plus its test.
+baseline = 93359
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1423,7 +1426,8 @@ recursive = true
 # and checks dense fallback plus explicit refusal in float32 and float64.
 # 92979 -> 94057: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
-baseline = 94057
+# 94057 -> 94107: single owner for the CLI/case Nl/Nm fallbacks plus its test.
+baseline = 94107
 target = 35000
 
 [[line_budget_policy.counts]]
