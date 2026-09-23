@@ -19398,3 +19398,4 @@ Outcome:
 - done: tools/ has no Python; the layout matches §21.4 apart from figures.py (#285) and release.py
 - remaining blocker: none known. The move is not a contraction: scripts/ must fall by about 59k lines. Other lanes apply the rename recipe in MAP.md.
 - next task: contract scripts/ by package (artifacts first, 35,121 lines), with the output-consumer check applied to each deletion
+Addendum (paused 2026-09-22): PR #288. main (#277) was merged in, with a plan/log.md append conflict resolved by keeping both sides; the hygiene step reran with exit 0. CI run 35811214759 was still queued behind the organization's run backlog at the pause, so no CI result exists yet. Next: once #278 merges, merge origin/main, then let CI run and fix any real failure.
