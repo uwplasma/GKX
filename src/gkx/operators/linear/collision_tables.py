@@ -83,6 +83,27 @@ def finite_wavelength_coulomb_metadata(moments: int = 8) -> dict[str, Any]:
     return dict(_finite_wavelength_coulomb_bundle(moments)[1])
 
 
+def finite_wavelength_coulomb_moment_layout(moments: int = 8) -> tuple[int, int]:
+    """Return the ``(Nl, Nm) = (J+1, P+1)`` basis one shipped table acts on.
+
+    The tables are Hermite-major, index ``p*(J+1) + j``, so a run whose ``Nl*Nm``
+    matches but whose ``(Nl, Nm)`` is transposed would pair every coefficient
+    with the wrong moment.
+    """
+
+    metadata = _finite_wavelength_coulomb_bundle(moments)[1]
+    layout = (
+        int(metadata["maximum_laguerre_order"]) + 1,
+        int(metadata["maximum_hermite_order"]) + 1,
+    )
+    if layout[0] * layout[1] != moments:
+        raise ValueError(
+            f"finite-wavelength Coulomb table orders {layout} do not give "
+            f"{moments} moments"
+        )
+    return layout
+
+
 def build_finite_wavelength_coulomb_operator(
     density: jnp.ndarray,
     mass: jnp.ndarray,

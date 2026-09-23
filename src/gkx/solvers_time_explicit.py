@@ -600,6 +600,16 @@ def integrate_linear_explicit_from_config(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Integrate with CFL control using the common ``TimeConfig`` contract."""
 
+    if getattr(time_cfg, "collision_operator", None) is not None:
+        from gkx.solvers_time_runners import (
+            _reject_unsupported_config_collision_operator,
+        )
+
+        # The explicit diagnostics integrator has no collision_operator input,
+        # so a moment operator would silently run as Lenard-Bernstein.
+        _reject_unsupported_config_collision_operator(
+            time_cfg, "CFL-controlled explicit", remedy='set solver = "time"'
+        )
     explicit_cfg = ExplicitTimeConfig(
         dt=float(time_cfg.dt),
         t_max=float(time_cfg.t_max),

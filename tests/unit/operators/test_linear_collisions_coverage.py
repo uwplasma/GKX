@@ -69,13 +69,19 @@ def _fake_resource_files(payload: bytes, metadata_text: str):
 
 
 def test_collision_matrix_bundle_rejects_corrupt_provenance(monkeypatch) -> None:
-    """The cached bundle fails closed on checksum and shape mismatches."""
+    """The cached bundle fails closed on checksum, shape, and layout mismatches."""
 
     real_payload = (
         resources.files("gkx")
         .joinpath("data")
         .joinpath(collisions._COLLISION_MATRIX_DATA)
         .read_bytes()
+    )
+    real_metadata = json.loads(
+        resources.files("gkx")
+        .joinpath("data")
+        .joinpath(collisions._COLLISION_MATRIX_METADATA)
+        .read_text(encoding="utf-8")
     )
 
     # Checksum branch: genuine coefficients, metadata advertising a wrong hash.
@@ -107,6 +113,17 @@ def test_collision_matrix_bundle_rejects_corrupt_provenance(monkeypatch) -> None
     )
     collisions._collision_matrix_bundle.cache_clear()
     with pytest.raises(ValueError, match="shape does not match metadata"):
+        collisions._collision_matrix_bundle()
+
+    # Layout branch: genuine coefficients declaring the transposed (Nl, Nm).
+    transposed_metadata = json.dumps({**real_metadata, "Nl": 4, "Nm": 2})
+    monkeypatch.setattr(
+        collisions.resources,
+        "files",
+        _fake_resource_files(real_payload, transposed_metadata),
+    )
+    collisions._collision_matrix_bundle.cache_clear()
+    with pytest.raises(ValueError, match="moment layout does not match metadata"):
         collisions._collision_matrix_bundle()
 
     # Drop the poisoned (empty) cache so downstream tests reload real data.

@@ -262,6 +262,14 @@ def _run_krylov_linear(
     krylov_cfg: Any | None,
     status_callback: _StatusCallback,
 ) -> tuple[float, float, np.ndarray, Any]:
+    from gkx.solvers_time_runners import _reject_unsupported_config_collision_operator
+
+    # The eigen solve builds its operator from the cache alone, so a moment
+    # collision operator would be replaced by the built-in Lenard-Bernstein term
+    # while the run still reports the deck's collision_operator.
+    _reject_unsupported_config_collision_operator(
+        ctx.cfg.time, "Krylov eigenvalue", remedy='set solver = "time"'
+    )
     _status(status_callback, "starting Krylov solve")
     kcfg = krylov_cfg or deps.runtime_default_krylov_config(ctx.cfg)
     _status(status_callback, "building linear cache")

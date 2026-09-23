@@ -628,15 +628,16 @@ def test_spitzer_ratio_converges_with_moment_number() -> None:
 #
 # ===================  ==========  ==========================================
 # moments ``n``        grid        per-point matrix storage
+# ``(Nl, Nm)``
 # ===================  ==========  ==========================================
-# 8   ``(4, 2)``       32x64x32    0.07 GB
-# 18  ``(6, 3)``       32x64x32    0.34 GB
-# 128 ``(16, 8)``      32x64x32    17 GB, past a 16 GB card
-# 512 ``(32, 16)``     32x64x32    275 GB
+# 8   ``(2, 4)``       32x64x32    0.07 GB
+# 18  ``(3, 6)``       32x64x32    0.34 GB
+# 128 ``(8, 16)``      32x64x32    17 GB, past a 16 GB card
+# 512 ``(16, 32)``     32x64x32    275 GB
 # ===================  ==========  ==========================================
 #
-# Published convergence studies ask for ``(16, 8)`` for linear Cyclone-base-case
-# ITG and ``(32, 16)`` converged, so this is the mechanism that has to change
+# Published convergence studies ask for 16 Hermite by 8 Laguerre moments for
+# linear Cyclone-base-case ITG and 32 by 16 converged, so this is the mechanism that has to change
 # before those resolutions are reachable. It is comfortable at the resolutions
 # GKX ships today, which is why this file measures and bounds the cost rather
 # than asserting a target that the current implementation cannot meet.
@@ -649,18 +650,23 @@ def test_spitzer_ratio_converges_with_moment_number() -> None:
 GRID = GridConfig(Nx=8, Ny=16, Nz=32, Lx=62.8, Ly=62.8)
 
 
-def compiled_rhs_cost(collision_operator: str, hermite: int, laguerre: int):
-    """Return (flops, bytes, temp_bytes) for one compiled linear RHS."""
+def compiled_rhs_cost(collision_operator: str, nl: int, nm: int):
+    """Return (flops, bytes, temp_bytes) for one compiled linear RHS.
+
+    ``(nl, nm)`` is the state's ``(Nl, Nm)``. The moment operators are tabulated
+    on ``(J+1, P+1)``, so the shipped tables need ``(2, 4)`` and ``(3, 6)``; the
+    transposed layouts have the same moment count but are refused.
+    """
 
     config = CycloneBaseCase(grid=GRID)
     grid = build_spectral_grid(config.grid)
     geometry = SAlphaGeometry.from_config(config.geometry)
     parameters = LinearParams(nu=0.05)
     state = jnp.zeros(
-        (hermite, laguerre, grid.ky.size, grid.kx.size, grid.z.size),
+        (nl, nm, grid.ky.size, grid.kx.size, grid.z.size),
         dtype=jnp.complex128,
     )
-    cache = build_linear_cache(grid, geometry, parameters, hermite, laguerre)
+    cache = build_linear_cache(grid, geometry, parameters, nl, nm)
     time_config = dataclasses.replace(
         config.time, collision_operator=collision_operator
     )
@@ -681,27 +687,28 @@ def compiled_rhs_cost(collision_operator: str, hermite: int, laguerre: int):
 
 
 @pytest.mark.parametrize(
-    ("hermite", "laguerre", "temp_ratio_bound"),
-    [(4, 2, 12.0), (6, 3, 24.0)],
+    ("nl", "nm", "temp_ratio_bound"),
+    [(2, 4, 12.0), (3, 6, 24.0)],
 )
 def test_finite_larmor_overhead_stays_within_its_measured_envelope(
-    hermite: int, laguerre: int, temp_ratio_bound: float
+    nl: int, nm: int, temp_ratio_bound: float
 ) -> None:
     """The finite-Larmor operator's extra temporary storage must not blow up.
 
-    Measured on this grid: 5.9x the diagonal operator at 8 moments and 12.1x at
-    18. The bounds are set at roughly twice those so ordinary compiler drift
+    Measured on this grid (jax 0.10.2, CPU): 4.6x the diagonal operator at
+    (Nl, Nm) = (2, 4) and 9.6x at (3, 6). The bounds are set at roughly two and
+    a half times those so ordinary compiler drift
     passes while a structural regression, such as losing a fusion or
     materializing the tables for every species pair, fails.
     """
 
-    _, _, diagonal_temp = compiled_rhs_cost("lenard_bernstein", hermite, laguerre)
-    _, _, coulomb_temp = compiled_rhs_cost("coulomb_finite_kperp", hermite, laguerre)
+    _, _, diagonal_temp = compiled_rhs_cost("lenard_bernstein", nl, nm)
+    _, _, coulomb_temp = compiled_rhs_cost("coulomb_finite_kperp", nl, nm)
 
     assert diagonal_temp > 0.0
     ratio = coulomb_temp / diagonal_temp
     assert ratio < temp_ratio_bound, (
-        f"({hermite},{laguerre}): finite-Larmor temporaries are {ratio:.1f}x the "
+        f"({nl},{nm}): finite-Larmor temporaries are {ratio:.1f}x the "
         f"diagonal operator, above the {temp_ratio_bound}x envelope"
     )
 
@@ -714,8 +721,8 @@ def test_finite_larmor_cost_grows_no_faster_than_the_moment_count_squared() -> N
     instance interpolating per species pair or per Runge-Kutta stage.
     """
 
-    _, _, small = compiled_rhs_cost("coulomb_finite_kperp", 4, 2)
-    _, _, large = compiled_rhs_cost("coulomb_finite_kperp", 6, 3)
+    _, _, small = compiled_rhs_cost("coulomb_finite_kperp", 2, 4)
+    _, _, large = compiled_rhs_cost("coulomb_finite_kperp", 3, 6)
     moment_ratio = (18 / 8) ** 2
     growth = large / small
     assert growth < 1.5 * moment_ratio, (
@@ -730,8 +737,8 @@ def test_diagonal_operator_stays_cheap() -> None:
     regression here would be felt everywhere.
     """
 
-    _, _, small = compiled_rhs_cost("lenard_bernstein", 4, 2)
-    _, _, large = compiled_rhs_cost("lenard_bernstein", 6, 3)
+    _, _, small = compiled_rhs_cost("lenard_bernstein", 2, 4)
+    _, _, large = compiled_rhs_cost("lenard_bernstein", 3, 6)
     # Diagonal damping stores O(n) per point, so cost should track the state
     # size (2.25x from 8 to 18 moments), not n^2.
     assert large / small < 4.0, f"diagonal operator grew {large / small:.2f}x"

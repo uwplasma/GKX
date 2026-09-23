@@ -148,9 +148,9 @@ def test_integrate_linear_from_config_applies_selected_collision_operator():
 
     def evolve(name):
         time_cfg = dataclasses.replace(cfg.time, collision_operator=name)
-        # Nl * Nm must match the tabulated eight-moment drift-kinetic matrix.
+        # (Nl, Nm) must be the (J+1, P+1) basis of the drift-kinetic matrix.
         G = jnp.zeros(
-            (4, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
+            (2, 4, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
         )
         G = G.at[0, 0, 1, 0, :].set(1.0e-3)
         return integrate_linear_from_config(G, grid, geom, params, time_cfg)[0]
@@ -188,6 +188,91 @@ def test_integrate_linear_from_config_reports_moment_basis_mismatch():
 
     with pytest.raises(ValueError, match="8-moment"):
         integrate_linear_from_config(G, grid, geom, params, cfg.time)
+
+
+def test_integrate_linear_from_config_refuses_the_transposed_moment_basis():
+    """(Nl, Nm) = (4, 2) has the right moment count but the wrong pairing.
+
+    The drift-kinetic matrix is Hermite-major on (Nl, Nm) = (J+1, P+1) = (2, 4),
+    and the state is packed as m*Nl + l, so the transposed basis would apply
+    every coefficient to the wrong moment without any shape error.
+    """
+
+    grid_cfg = GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
+    cfg = CycloneBaseCase(
+        grid=grid_cfg,
+        time=TimeConfig(t_max=0.1, dt=0.05, method="rk2", collision_operator="sugama"),
+    )
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams(nu=0.05)
+
+    def state(nl, nm):
+        G = jnp.zeros((nl, nm, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), jnp.complex128)
+        return G.at[0, 0, 1, 0, :].set(1.0e-3)
+
+    with pytest.raises(ValueError, match=r"\(Nl, Nm\) = \(2, 4\).*\(4, 2\)") as info:
+        integrate_linear_from_config(state(4, 2), grid, geom, params, cfg.time)
+    # The hint must name the correct pair, not another transposed one.
+    assert "Set Nl=2, Nm=4" in str(info.value)
+
+    final, _ = integrate_linear_from_config(state(2, 4), grid, geom, params, cfg.time)
+    assert jnp.all(jnp.isfinite(final))
+
+
+def test_check_moment_basis_names_the_finite_wavelength_table_layout():
+    """Each shipped finite-Larmor table accepts only its own (J+1, P+1)."""
+
+    from gkx.operators.linear.collision_factory import collision_operator_from_config
+
+    species = {name: jnp.ones(1) for name in ("density", "mass", "temperature")}
+    for layout, transposed in (((2, 4), (4, 2)), ((3, 6), (6, 3))):
+        moments = layout[0] * layout[1]
+        operator = collision_operator_from_config(
+            "coulomb_finite_kperp", moments=moments, **species
+        )
+        runners._check_moment_basis_matches_operator(
+            operator, "coulomb_finite_kperp", jnp.zeros(layout + (1, 1, 1))
+        )
+        with pytest.raises(ValueError, match=f"Set Nl={layout[0]}, Nm={layout[1]}"):
+            runners._check_moment_basis_matches_operator(
+                operator, "coulomb_finite_kperp", jnp.zeros(transposed + (1, 1, 1))
+            )
+
+
+def test_krylov_and_explicit_runtime_refuse_a_moment_collision_operator():
+    """Paths that cannot carry the moment operator must not run.
+
+    The eigen solve and the CFL-controlled explicit integrator build their
+    operator from the linear cache alone; without the refusal a deck asking for
+    Sugama collisions got the built-in Lenard-Bernstein term.
+    """
+
+    from gkx.config import (
+        RuntimeConfig,
+        RuntimeNormalizationConfig,
+        RuntimeSpeciesConfig,
+    )
+    from gkx.runtime import run_runtime_linear
+
+    base = RuntimeConfig()
+    cfg = dataclasses.replace(
+        base,
+        grid=dataclasses.replace(
+            base.grid, Nx=1, Ny=4, Nz=8, Lx=62.8, Ly=62.8, boundary="periodic"
+        ),
+        time=dataclasses.replace(base.time, collision_operator="sugama"),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+        normalization=RuntimeNormalizationConfig(
+            contract="cyclone", diagnostic_norm="none"
+        ),
+    )
+
+    with pytest.raises(NotImplementedError, match="Krylov eigenvalue"):
+        run_runtime_linear(cfg, ky_target=0.2, Nl=2, Nm=4, solver="krylov")
+    # solver="explicit_time" has the same gap: its integrator takes no operator.
+    with pytest.raises(NotImplementedError, match="CFL-controlled explicit"):
+        run_runtime_linear(cfg, ky_target=0.2, Nl=2, Nm=4, solver="explicit_time")
 
 
 def test_config_collision_operator_rejects_unsupported_solver_paths(monkeypatch):

@@ -216,10 +216,14 @@ in this section. The four moment operators *replace* that term with a dense
 Hermite-Laguerre matrix; the solver disables the diagonal contribution exactly
 when a moment operator is active, so collisions are never counted twice.
 
-Two constraints follow from the tabulated coefficients. The run's moment count
-``Nl*Nm`` must match a shipped table (8 or 18), and the operators run on the
-fixed-step cached integrator. The sharded and Krylov eigenvalue paths raise
-rather than silently substituting the diagonal term. The Coulomb tables are generated at unit mass and temperature ratio, so a
+Two constraints follow from the tabulated coefficients. The run's basis must
+be a shipped table's ``(Nl, Nm) = (J+1, P+1)``: ``(2, 4)`` for the eight-moment
+tables, or ``(3, 6)`` for the 18-moment finite-Larmor table. Matching ``Nl*Nm``
+is not enough: the tables are Hermite-major, so the transposed ``(4, 2)`` would
+pair every coefficient with the wrong moment, and it is refused. The operators
+run on the fixed-step cached integrator. The sharded, Krylov eigenvalue, and
+CFL-controlled ``explicit_time`` paths raise rather than silently substituting
+the diagonal term. The Coulomb tables are generated at unit mass and temperature ratio, so a
 multispecies request is refused rather than extrapolated.
 
 Collision frequency
@@ -328,7 +332,8 @@ Finite-Larmor tables ship at 8 and 18 Hermite-Laguerre moments, generated in
 :math:`B = k_\perp v_{\mathrm{th}}/\Omega \in [0, 4]` and stored as
 checksummed float64. The runtime interpolates at :math:`B=\sqrt{2b}` from the
 cached :math:`b`, so one table covers every perpendicular wavenumber, and it
-selects the table matching the run's ``Nl*Nm`` automatically.
+selects the table matching the run's ``Nl*Nm`` automatically, then requires
+the run's ``(Nl, Nm)`` to be that table's ``(J+1, P+1)``.
 
 Cost and the resolution ceiling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -343,20 +348,20 @@ diagonal operator on a 16x8x32 grid:
    :header-rows: 1
    :widths: 30 35 35
 
-   * - moments
+   * - moments ``(Nl, Nm)``
      - diagonal operator
      - finite-Larmor Coulomb
-   * - 8 ``(4, 2)``
-     - 1.8 MB
-     - 10.6 MB (5.9x)
-   * - 18 ``(6, 3)``
-     - 3.9 MB
-     - 47.3 MB (12.1x)
+   * - 8 ``(2, 4)``
+     - 2.4 MB
+     - 11.1 MB (4.6x)
+   * - 18 ``(3, 6)``
+     - 5.1 MB
+     - 48.5 MB (9.6x)
 
 This is comfortable at the resolutions GKX ships, and it is the mechanism that
 bounds the reachable resolution. Extrapolating the per-point matrices to a
 32x64x32 grid gives 0.07 GB at 8 moments, 0.34 GB at 18, but **17 GB at**
-``(16, 8)`` and 275 GB at ``(32, 16)`` -- so the published convergence
+``(Nl, Nm) = (8, 16)`` and 275 GB at ``(16, 32)`` -- so the published convergence
 resolutions are not reachable in this form on a 16 GB card.
 
 A rank-:math:`R` separable factorization in the Bessel argument is the obvious
