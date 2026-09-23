@@ -18812,3 +18812,32 @@ Outcome:
 - partial; paused by the maintainer before the README rewrite
 - remaining blocker: none technical; the proof_tests builder takes ~4 CPU-minutes (Landau nu-scan)
 - next task: build proof_tests, rewrite README.md (~300 lines), run the README gates, open for review
+
+## 2026-09-22 - README-SHOWCASE (G.3), branch docs/readme-showcase (resumed, complete)
+
+Baseline:
+- GKX SHA: f9485f044 (2.3.0); branch head before this entry 56c58ebeb
+- companion SHAs: none
+- source/test/tool files and lines: unchanged; README.md, scripts/figures.py, docs/_static/readme/readme_proof_tests.{png,json}
+- relevant existing gate: tests/release/test_release_gates.py, tests/release/test_evidence_ledger.py, tests/validation/stellarator/test_vmex_qa_transport_optimization.py, tools/release/check_quasilinear_promotion_guardrails.py
+
+Scope:
+- intended change: finish G.1's README: proof-test figure, rewritten README with capability figures, a proof-test table and the GX-defect section
+- non-goals: docs/*.rst, examples/ (the gallery lane moves files; the README links only examples/), tools/
+- acceptance: pinned claim-scope sentences unchanged; every new number from a tracked artifact, a figure JSON or a cited log entry
+
+Changes:
+- README.md 583 -> 349 lines: pitch and five bullets, install, run an equilibrium, Python, linear physics (figure + the gated 7-row parity table), nonlinear (figure), collisions (prose), proof tests (figure + table), where GX gives the wrong answer (figure + two defects + scope table), derivatives and the pinned QA section, performance, claim scope, figure regeneration, development, license
+- dropped from the README (kept in docs): input reference tables, run-control table, velocity-basis table, the old per-figure generator table
+- scripts/figures.py: proof-test legend moved off the last row
+
+Evidence:
+- `JAX_ENABLE_X64=true python scripts/figures.py proof_tests` on the office host (CPU, JAX 0.10.2): 6 min 56 s wall, 0.79 GB peak RSS. Collision invariants 2.2e-16 (gate 1e-12), self-adjointness 3.4e-17 (1e-12), H-theorem 5.6e-17 (1e-12), Coulomb C9a-f 2.2e-16 (1e-10), collisionless max|Re lambda| 2.4e-14 (1e-11), Laguerre round trip 1.2e-12 (1e-10), Gauss-Laguerre moments 4.9e-14 (1e-10), Landau 0.246%/0.064% and 0.004%/0.004% (1%/0.5%), Spitzer-Harm 0.11-0.61% (1.5%)
+- every tolerance tick equals the threshold its named test asserts (test_collision_physics.py, test_hermite_hierarchy_physics.py, test_core_numerics.py)
+- nonlinear panel (b) metric checked in tools/comparison/compare_gx_nonlinear.py: time mean of the pointwise relative difference, not a window statistic; the caption says so
+- local (JAX 0.10.2): test_release_gates.py + test_evidence_ledger.py + test_vmex_qa_transport_optimization.py pass (31 s); quasilinear guardrails passed (0 failed gates); architecture and size manifests pass
+
+Outcome:
+- complete pending CI and review
+- remaining blocker: none. After #278 merges, the README's `python tools/release/run_test_gates.py fast` becomes `python scripts/check.py test-gates fast`
+- next task: merge origin/main after #278, update that line, rerun the README gates

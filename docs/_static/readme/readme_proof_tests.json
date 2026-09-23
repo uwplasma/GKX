@@ -1,0 +1,25 @@
+{
+  "exact_identities": {
+    "collisionless_real_part": 2.431388423922291e-14,
+    "conservation": 2.220446049250313e-16,
+    "gauss_laguerre_moments": 4.873879078104437e-14,
+    "h_theorem": 5.551115123125783e-17,
+    "laguerre_round_trip": 1.2046011687833815e-12,
+    "published_coefficients": 2.220446049250313e-16,
+    "self_adjointness": 3.442580402810268e-17
+  },
+  "figure": "readme_proof_tests.png",
+  "inputs": [],
+  "landau_percent": {
+    "Te/Ti=1 gamma": 0.24623467252564182,
+    "Te/Ti=1 omega": 0.06432007494745572,
+    "Te/Ti=10 gamma": 0.004080179844038667,
+    "Te/Ti=10 omega": 0.004265046463269929
+  },
+  "spitzer_harm_percent": {
+    "Z=1": 0.6083091968550988,
+    "Z=16": 0.10694970092192105,
+    "Z=2": 0.285317830863797,
+    "Z=4": 0.11473114832361127
+  }
+}

@@ -488,7 +488,7 @@ def build_proof_tests(spec: dict[str, Any], config: dict[str, Any]) -> dict[str,
             ax.set_title(title)
         axes[0].set_xlim(floor, 1e-8)
         axes[1].set_xlim(1e-4, 3.0)
-        axes[0].legend(loc="lower right", fontsize=8.5)
+        axes[0].legend(loc="upper right", fontsize=8.5)
         panel_label(axes[0], "a")
         panel_label(axes[1], "b")
         _save(fig, spec, config)
