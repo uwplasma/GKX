@@ -20343,3 +20343,34 @@ Outcome:
 - paused by the maintainer; no process running locally or on the office host
 - office host keeps only the lane clone and its venv (lanes/readme-showcase under the home directory); no raw outputs beyond the two committed README figure files
 - next task: (1) wait for ci-required on the head; (2) when #278 is on main, merge origin/main and change the README's `python tools/release/run_test_gates.py fast` to `python scripts/check.py test-gates fast`; (3) rerun the three README test files; (4) push and leave for the supervisor to merge
+
+## 2026-09-23 - SLIM-SCRIPTS tranche 3 (G.3/G.6 P4), branch slim/scripts-3
+
+Baseline:
+- GKX SHA: f005418bf (origin/chain/p0, #293)
+- companion SHAs: none
+- source/test/tool files and lines: scripts/ 106 Python files, 78,277 lines; tests/ 81 files, 94,628 lines; src/ unchanged
+- relevant existing gate: repo-hygiene step (four regenerated docs/_static JSONs diffed), scripts/check.py architecture, tests/release/test_evidence_ledger.py, tests/validation/benchmarks/test_benchmark_contracts.py
+
+Scope:
+- intended change: contract scripts/ by deleting every module that no CI step, gate, manifest, example, ledger row or library test needs; merge near-duplicate drivers; keep gate-read outputs as fixtures
+- non-goals: src/ behaviour, the scripts/checks/ gates, campaigns/ (tested policy), anything that writes package data
+- acceptance: hygiene JSONs byte-identical; every touched test file passes; merged/pruned paths fingerprinted old vs new
+
+Changes:
+- 41 modules deleted (artifacts 28, comparison 5, profiling 6, benchmarks 2); tests of those modules only removed (test_exact_state_audit.py and parts of four tests/tools files and test_plotting.py); tracked-artifact contracts in those files kept
+- four linear benchmark drivers + the KBM plotter merged into scripts/benchmarks/linear_benchmark.py <case>
+- build_linear_validation_artifacts.py 7,565 -> 5,155: docs-only subcommands and dead helpers removed
+- performance_optimization_manifest.toml profiling_tools pruned to kept tools; docs mark each retired generator and point to a new "Retired generators" section; MAP.md gains the tranche-3 table with recovery SHAs
+- architecture baselines lowered to measured: scripts files 106 -> 61, lines 78,277 -> 45,496; tests files 81 -> 80, lines 94,628 -> 91,877
+
+Evidence:
+- repo-hygiene step run locally (stdlib python 3.11): all gates pass; quasilinear_promotion_guardrails.json, vmec_boozer_differentiability_claim_guard.json, technical_release_status.json, release_readiness.json byte-identical
+- linear_benchmark fingerprint: every solver/figure call (args, deck hash, ky arrays, output paths) identical old vs new for cyclone, etg (with and without --ky), kinetic, tem; KBM PNG sha256 identical
+- build_linear_validation_artifacts: collision-verification JSON and PNG and collision-table .npy byte-identical old vs new; the .npy equals the shipped src/gkx/data/advanced_collision_six_moment.npy
+- pytest (JAX 0.10.2, x64): tests/tools, tests/release, tests/validation/{quasilinear,stellarator,benchmarks/test_benchmark_contracts.py}, tests/unit/objectives, the nonlinear evidence/window/campaign tests, collision and Hermite physics gates, test_plotting.py, test_parallel_artifacts.py all pass; sphinx -W html build passes; ruff check/format clean; validation-coverage gate passes
+
+Outcome:
+- complete pending CI and review; scripts/ is still 27,496 lines over the 18,000 target and 49 files over 12
+- remaining blocker: the rest is gates (scripts/checks/, 11,904 lines), ledger/refresh generators, campaigns imported by gates/examples/tests, and package-data generation; each needs a merge or a maintainer decision, not a reference sweep
+- next task: tranche 4 = merge scripts/checks/ into fewer modules behind check.py; decide whether campaign policy moves into src or its tests retire; move the collision-table generator next to the package data it writes

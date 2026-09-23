@@ -567,7 +567,8 @@ cutoff, which is within :math:`8.68\times10^{-7}` of the :math:`(9,4)`
 reference. The smaller cutoff :math:`(3,1)` differs from that reference by 29%
 and is rejected.
 
-**Driven parallel current.** ``collision-response`` builds
+**Driven parallel current.** The ``collision-response`` subcommand (retired;
+:ref:`retired-generators`) built
 ``docs/_static/collision_response_convergence.json`` from equations
 (3.53)--(3.56). With :math:`\widehat E=eE/(m_ev_{Te}\nu_{ee})`, the plotted
 response :math:`(u_e/v_{Te})/\widehat E` is

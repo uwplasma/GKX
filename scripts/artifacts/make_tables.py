@@ -250,7 +250,8 @@ def _write_kbm_public_mismatch_table(
     raise FileNotFoundError(
         "KBM publication tables require comparison/kbm_reference_candidates.csv "
         "or comparison/kbm_reference_mismatch.csv; "
-        "regenerate it with scripts/comparison/compare_gx_kbm.py"
+        "recover scripts/comparison/compare_gx_kbm.py from the SHA in "
+        "plan/research/2026-09-22-slim-tools/MAP.md to regenerate it"
     )
 
 

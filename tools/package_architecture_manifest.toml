@@ -259,7 +259,8 @@ recursive = true
 # Hermite hypercollisions without damping Hermite twice. The refusal is raised
 # at startup and the rate is carried through config and LinearParams, so the
 # contract spans four modules and is named after none of them.
-baseline = 81
+# 81 -> 80 (SLIM-SCRIPTS tranche 3): test_exact_state_audit.py tested only deleted comparators. Measured.
+baseline = 80
 target = 30
 
 [[topology_policy.counts]]
@@ -310,7 +311,10 @@ recursive = true
 # change. The target of 12 is met by contracting these packages, not by
 # moving them again. Measured.
 # 104 -> 106: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 106
+# 106 -> 61 (SLIM-SCRIPTS tranche 3): 41 builders, profilers and comparators that no CI
+# step, gate, manifest or test needed were deleted, and four linear benchmark
+# drivers and the KBM plotter merged into benchmarks/linear_benchmark.py. Measured; map in plan/research/2026-09-22-slim-tools/MAP.md.
+baseline = 61
 target = 12
 
 
@@ -1443,7 +1447,9 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 94057 -> 94107: single owner for the CLI/case Nl/Nm fallbacks plus its test.
 # 94107 -> 94628: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 94628
+# 94628 -> 91877 (SLIM-SCRIPTS tranche 3): tests of deleted scripts only; the tracked-artifact
+# contracts they carried were kept. Measured.
+baseline = 91877
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1554,5 +1560,7 @@ recursive = true
 # 1,348 from benchmarks/, plus about 200 lines of command dispatchers; tool lines
 # fell to 0 in the same change. Measured.
 # 77373 -> 78277: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 78277
+# 78277 -> 45496 (SLIM-SCRIPTS tranche 3): the deletions and merge above, plus the
+# retired subcommands and dead multiprecision helpers of build_linear_validation_artifacts.py. Measured.
+baseline = 45496
 target = 18000

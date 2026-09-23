@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from support.paths import REPO_ROOT, load_release_tool
-from scripts.benchmarks import cyclone_linear_benchmark
+from scripts.benchmarks import linear_benchmark
 from scripts.benchmarks import benchmark_integrators
 from scripts.benchmarks.benchmark_runtime_memory import (
     RuntimeBenchRun,
@@ -128,9 +128,10 @@ def test_benchmark_readme_references_existing_python_drivers() -> None:
 def test_cyclone_publication_driver_uses_asymptotic_fit_window() -> None:
     """Exclude the measured startup transient from the Cyclone growth fit."""
 
-    runtime_cfg, _ = load_runtime_from_toml(cyclone_linear_benchmark.CONFIG)
-    assert cyclone_linear_benchmark.FIT_TMIN >= 0.7 * runtime_cfg.time.t_max
-    assert cyclone_linear_benchmark.FIT_TMAX == pytest.approx(runtime_cfg.time.t_max)
+    cyclone = linear_benchmark.CASES["cyclone"]
+    runtime_cfg, _ = load_runtime_from_toml(cyclone["config"])
+    assert cyclone["window"]["tmin"] >= 0.7 * runtime_cfg.time.t_max
+    assert cyclone["window"]["tmax"] == pytest.approx(runtime_cfg.time.t_max)
 
 
 def test_benchmark_public_exports_resolve() -> None:
