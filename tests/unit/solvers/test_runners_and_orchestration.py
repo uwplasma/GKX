@@ -32,7 +32,9 @@ from types import SimpleNamespace
 from typing import Any
 import dataclasses
 import gkx.solvers_time_runners as runners
+import jax
 import jax.numpy as jnp
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
 import numpy as np
 import pytest
 
@@ -329,8 +331,15 @@ def test_integrate_nonlinear_sharded_rejects_bad_options() -> None:
         )
 
 
-def test_integrate_nonlinear_sharded_runs_with_mocked_pjit(monkeypatch) -> None:
-    calls = {"rhs": 0, "shard": 0, "put": 0}
+def _one_device_ky_sharding() -> NamedSharding:
+    """A real ky sharding on a one-device mesh, available on every host."""
+
+    mesh = Mesh(np.array(jax.devices()[:1]), ("d",))
+    return NamedSharding(mesh, PartitionSpec(None, None, "d", None, None))
+
+
+def test_integrate_nonlinear_sharded_runs_with_a_real_sharding(monkeypatch) -> None:
+    calls = {"rhs": 0}
 
     def fake_rhs(
         G,
@@ -346,33 +355,57 @@ def test_integrate_nonlinear_sharded_runs_with_mocked_pjit(monkeypatch) -> None:
         return jnp.ones_like(G), FieldState(phi=jnp.ones((1, 1, 1), dtype=G.dtype))
 
     monkeypatch.setattr("gkx.parallel.integrators.nonlinear_rhs_cached", fake_rhs)
-    monkeypatch.setattr("gkx.parallel.integrators.pjit", lambda fn, **kwargs: fn)
-    monkeypatch.setattr(
-        "gkx.parallel.integrators.jax.lax.with_sharding_constraint",
-        lambda state, sharding: calls.__setitem__("shard", calls["shard"] + 1) or state,
-    )
-    monkeypatch.setattr(
-        "gkx.parallel.integrators.jax.device_put",
-        lambda state, sharding: calls.__setitem__("put", calls["put"] + 1) or state,
-    )
+    integrator_module._compiled_nonlinear_sharded_runner.cache_clear()
+    sharding = _one_device_ky_sharding()
 
     G0 = jnp.zeros((1, 1, 1, 1, 1), dtype=jnp.complex64)
+    # The fake RHS ignores the cache and parameters; empty pytrees let them
+    # through the real jit and shard_map.
     G_final, fields_t = integrate_nonlinear_sharded(
         G0,
-        _cache_stub(),
-        SimpleNamespace(),
+        (),
+        (),
         dt=0.5,
         steps=2,
         method="rk2",
-        state_sharding="mesh",
+        state_sharding=sharding,
+        compressed_real_fft=False,
     )
 
     assert G_final.shape == G0.shape
+    assert G_final.sharding.spec == sharding.spec
     assert fields_t.phi.shape[0] == 2
-    assert jnp.allclose(G_final, 1.0)
+    assert np.allclose(np.asarray(G_final), 1.0)
     assert calls["rhs"] >= 2
-    assert calls["put"] == 1
-    assert calls["shard"] >= 3
+
+
+def _stub_sharding(spec: tuple, **mesh_shape: int) -> SimpleNamespace:
+    return SimpleNamespace(spec=spec, mesh=SimpleNamespace(shape=mesh_shape))
+
+
+def test_state_split_pads_an_extent_the_devices_do_not_divide() -> None:
+    """``Nyc = 5`` on the ``ky >= 0`` layout is padded to 6 for two devices."""
+
+    split = integrator_module._resolve_state_split(
+        (1, 3, 4, 5, 4, 16), _stub_sharding((None, None, None, "d"), d=2)
+    )
+    assert (split.axis, split.mesh_axis, split.count) == (3, "d", 2)
+    assert (split.extent, split.padded) == (5, 6)
+    divisible = integrator_module._resolve_state_split(
+        (1, 3, 4, 8, 4, 16), _stub_sharding((None, None, None, "d"), d=4)
+    )
+    assert divisible.padded == divisible.extent == 8
+
+
+@pytest.mark.parametrize(
+    "spec", [(None, None, None, "d", "e"), (None, None, None, ("d", "e")), ()]
+)
+def test_state_split_rejects_anything_but_one_axis_on_one_mesh_axis(spec) -> None:
+    with pytest.raises(ValueError, match="exactly one state axis") as excinfo:
+        integrator_module._resolve_state_split(
+            (1, 3, 4, 8, 4, 16), _stub_sharding(spec, d=2, e=2)
+        )
+    assert "(1, 3, 4, 8, 4, 16)" in str(excinfo.value)
 
 
 @pytest.mark.parametrize(
