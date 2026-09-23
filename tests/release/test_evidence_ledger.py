@@ -309,51 +309,26 @@ def test_rows_without_an_ell_space_sink_report_their_limit(row: dict) -> None:
     )
 
 
-# ------------------------------------------------------- generated verification page
-
-
-def _validation_matrix_module():
-    import importlib.util
-
-    path = RUN_TO_REPO_ROOT / "scripts" / "validation_matrix.py"
-    spec = importlib.util.spec_from_file_location("gkx_validation_matrix", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def test_verification_matrix_page_is_generated_from_the_ledger() -> None:
-    """``docs/verification_matrix.rst`` carries the ledger, not a hand copy of it.
+    """The page carries the ledger block verbatim and no hand copy of a ledger lane.
 
     Before this check the page marked Cyclone, KBM and HSX "Closed" while their
     ledger rows were provisional, and KAW "Deferred" while its row passed.
     """
 
-    matrix = _validation_matrix_module()
+    import importlib.util
+
+    path = RUN_TO_REPO_ROOT / "scripts" / "validation_matrix.py"
+    spec = importlib.util.spec_from_file_location("gkx_validation_matrix", path)
+    matrix = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(matrix)  # type: ignore[union-attr]
     page = matrix.PAGE.read_text(encoding="utf-8")
     assert matrix.splice(page, matrix.render()) == page, (
-        "docs/verification_matrix.rst is stale against tools/evidence_ledger.toml; "
-        "run python scripts/validation_matrix.py"
+        "run scripts/validation_matrix.py"
     )
-
-
-def test_verification_matrix_does_not_restate_ledger_lanes_by_hand() -> None:
-    """Outside the generated block, no table row may carry a ledger lane."""
-
-    matrix = _validation_matrix_module()
-    page = matrix.PAGE.read_text(encoding="utf-8")
-    start = page.index(matrix.BEGIN)
-    stop = page.index(matrix.END) + len(matrix.END)
-    by_hand = page[:start] + page[stop:]
-    labels = {row["readme_label"] for row in _readme_parity_rows()}
-    restated = sorted(
-        line.strip()
-        for line in by_hand.splitlines()
-        if line.strip().startswith("* - ")
-        and line.strip()[len("* - ") :].strip() in labels
-    )
-    assert not restated, (
-        "these ledger lanes are restated outside the generated block, where their "
-        f"status can drift from the ledger: {restated}"
+    start, stop = page.index(matrix.BEGIN), page.index(matrix.END)
+    labels = {f"* - {row['readme_label']}" for row in _readme_parity_rows()}
+    by_hand = (page[:start] + page[stop:]).splitlines()
+    assert not labels & {line.strip() for line in by_hand}, (
+        "ledger lane restated by hand"
     )

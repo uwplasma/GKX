@@ -1420,7 +1420,8 @@ recursive = true
 # and checks dense fallback plus explicit refusal in float32 and float64.
 # 92979 -> 94057: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
-baseline = 94057
+# 94057 -> 94082: DOCS-LEDGER test that docs/verification_matrix.rst is generated from the ledger.
+baseline = 94082
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1516,7 +1517,8 @@ recursive = true
 # parsed by computation rather than scanned as one string, and
 # `memory_analysis` is threaded beside it as the compiler's own check.
 # The evidence probe `gather_probe.py` is the rest of the count.
-baseline = 78901
+# 78901 -> 78908: build_tem_validation_artifacts.py records checkout-relative paths.
+baseline = 78908
 target = 0
 
 [[line_budget_policy.counts]]

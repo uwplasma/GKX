@@ -109,14 +109,21 @@ def _load_table(path: Path) -> list[dict[str, float]]:
     return sorted(rows, key=lambda row: row["ky"])
 
 
+def _repo_path(path: Path) -> str:
+    """Record a path relative to the checkout, so the artifact names no machine."""
+
+    full = Path(path).resolve()
+    return str(full.relative_to(ROOT)) if full.is_relative_to(ROOT) else full.name
+
+
 def _read_reference_metadata(path: Path) -> dict[str, Any]:
     if not path.exists():
-        return {"available": False, "path": str(path), "n_rows": 0}
+        return {"available": False, "path": _repo_path(path), "n_rows": 0}
     with path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     return {
         "available": True,
-        "path": str(path),
+        "path": _repo_path(path),
         "n_rows": len(rows),
         "columns": list(rows[0].keys()) if rows else [],
         "provenance": REFERENCE_PROVENANCE,
@@ -182,7 +189,7 @@ def build_branch_audit_payload(
         "kind": "tem_branch_parity_audit",
         "status": status,
         "claim_level": "provisional_literature_digitization_not_closed_parity",
-        "source_table": str(table),
+        "source_table": _repo_path(Path(table)),
         "reference": _read_reference_metadata(Path(reference)),
         "metrics": {
             "n_ky": int(ky.size),
@@ -380,7 +387,7 @@ def _tem_metrics(path: Path, *, audit_path: Path | None = None) -> dict[str, Any
             "omega_sign_mismatch_count": metrics.get("omega_sign_mismatch_count"),
             "omega_spearman": metrics.get("omega_spearman"),
             "omega_branch_inversion": metrics.get("omega_branch_inversion"),
-            "source": str(audit_path),
+            "source": _repo_path(audit_path),
         }
     if not path.exists():
         return {

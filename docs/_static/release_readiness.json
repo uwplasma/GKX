@@ -90,7 +90,7 @@
         {
           "array_count": 145,
           "array_sha256": "e8ccc2a36380e8dfedf78a412044d7b721732667c0343120c8a04374949fe702",
-          "content_sha256": "b53f172178d5334ecbfb66cabb29cf60cc45578eace4939bce3e5b8cbdc4511c",
+          "content_sha256": "1262b91d5d4bdd7d3e69c5d191b8de883a628ac465c1124923b4466fbca5d649",
           "label": "VMEC/Boozer geometry bridge",
           "passed": true,
           "path": "docs/_static/differentiable_geometry_bridge.json",
