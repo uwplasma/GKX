@@ -896,7 +896,12 @@ def solver_growth_rate_from_geometry(
 def _sparse_direct_eigenvalue(
     context: _SolverGeometryContext, shift: complex, candidates: int
 ) -> jnp.ndarray:
-    import solvax
+    from solvax import (  # type: ignore[attr-defined]
+        CsrPattern,
+        column_groups,
+        csr_data_from_products,
+        sparse_eigenvalue,
+    )
 
     shape = context.state_shape
     nz = int(shape[-1])
@@ -948,15 +953,15 @@ def _sparse_direct_eigenvalue(
         + sp.kron(sp.csr_matrix(chain), sp.csr_matrix(np.ones((nz, nz))))
     ).tocsr()
     mask.sort_indices()
-    pattern = solvax.CsrPattern(mask.indptr, mask.indices, mask.shape)
-    groups = solvax.column_groups(mask)
+    pattern = CsrPattern(mask.indptr, mask.indices, mask.shape)
+    groups = column_groups(mask)
     seeds = np.zeros((len(groups), n))
     for g, columns in enumerate(groups):
         seeds[g, columns] = 1.0
     dtype = jnp.result_type(context.cache.Jl.dtype, jnp.complex64)
     products = jax.vmap(lambda x: operator(params, x))(jnp.asarray(seeds, dtype))
-    values = solvax.csr_data_from_products(pattern, groups, products)
-    return solvax.sparse_eigenvalue(
+    values = csr_data_from_products(pattern, groups, products)
+    return sparse_eigenvalue(
         operator,
         params,
         pattern,
