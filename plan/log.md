@@ -20375,3 +20375,5 @@ Outcome:
 - accepted (pending CI)
 - remaining blocker: none for this PR
 - next task: F.5 step 4 saturation gate; ensemble windows (PERF-LIT item 7)
+
+2026-09-23 addendum (final pause): merged origin/main (#293 landed) into perf/adjoint-window-2 cleanly; PR #297 retargeted to main as a draft. CI on d1720ec33 had 25 passing and 12 still running when paused (mypy fixed in d1720ec33; nothing else had failed). Office outputs deleted; the jax 0.10.2 venv under the lane directory is kept.
