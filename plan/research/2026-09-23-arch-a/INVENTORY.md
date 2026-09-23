@@ -119,7 +119,7 @@ and `streaming.shift_axis`.
 | --- | ---: | ---: | --- | --- |
 | Nonlinear spectral-identity / device-z stack (10 modules); `workflows.runtime.parallel_nonlinear` now owns its allclose check (net 0 lines there) | −10 | −4,683 | low: unreachable from runs; the routing identity check keeps its tolerance convention | `test_parallel_nonlinear.py` deleted (55 tests, all identity gates of the deleted stack); 6 device-z profiler contract tests |
 | Diagnostics reports/gates (4 modules) | −4 | −3,029 | low: report builders only | `test_nonlinear_gradient_followup.py`, `test_nonlinear_transport_optimization.py`, `test_quasilinear_model_selection.py`, `test_nonlinear_gradient_evidence.py`, `test_check_overdetermined_nonlinear_gradient_campaign.py` deleted |
-| VMEC/Boozer objective gates and wrappers (10 modules) | −10 | −5,873 | low: gates and default-injecting wrappers; `objectives.vmec_boozer` keeps the implementations | 67 tests in `test_autodiff_solver_objectives.py`, `test_vmec_transport_objectives.py`, `test_runners_and_orchestration.py`; the two-parameter analytic geometry fixture moved into the test file |
+| VMEC/Boozer objective gates and wrappers (10 modules) | −10 | −5,873 | low: gates and default-injecting wrappers; `objectives.vmec_boozer` keeps the implementations | 72 tests in `test_autodiff_solver_objectives.py`, `test_vmec_transport_objectives.py`, `test_runners_and_orchestration.py`; the two-parameter analytic geometry fixture moved into the test file |
 | Pass-through facades `solvers_linear`, `solvers_nonlinear`, `solvers_time` | −3 | −171 | none: imports repointed to owners | one facade-identity test |
 | Dead definitions (fixed-point sweep) and the imports only they used | 0 | −864 | none: no reference anywhere | none |
 | Exact duplicates merged (4 groups) | 0 | −25 | none: identical bodies | none |
@@ -163,3 +163,23 @@ import the group today.
 Ranks 1–7 are about 6,600 lines at low or medium risk; with ranks 8–12 the
 tree reaches roughly 55,000 lines in about 90 files, and the §2.4 targets then
 need the one-owner merges inside `solvers_*` and `operators/`.
+
+## 6. Behaviour fingerprints (office host, JAX 0.10.2, float64)
+
+`fingerprint.py` in this directory, run on the base (f005418bf) and the
+contracted tree. The comparison is bitwise.
+
+| Fingerprint | XLA:CPU base | XLA:CPU head | CUDA (A4000) base | CUDA head |
+| --- | --- | --- | --- | --- |
+| Cyclone linear gamma | `0x1.7ed2ffdd9f835p-4` | identical | `0x1.7ed2ffdd9f834p-4` | identical |
+| Cyclone linear omega | `0x1.286b1286ae465p-2` | identical | `0x1.286b1286ae466p-2` | identical |
+| eigenfunction SHA-256[:16] | `a92b98619ab58211` | identical | `ee55ad0e31a50d42` | identical |
+| 100-step nonlinear heat-flux trace SHA | `f0c5711f6ad61c17` | identical | differs run to run (two base runs differ) | same class |
+| final heat flux | `0x1.e0af0faac1b00p-18` | identical | `0x1.e0af0faac1afdp-18` / `...aff` | `0x1.e0af0faac1afdp-18` |
+| window value | `0x1.6a3a9aa898351p-34` | identical | `0x1.6a3a9aa89833ep-34` | identical |
+| window gradient d<Q>/d(tprim) | `-0x1.22ee865d4c2b7p-40` | identical | `-0x1.22ee865d4c30dp-40` | identical |
+
+On XLA:CPU every fingerprint matches bitwise. On CUDA the linear eigenpair and
+the window value and gradient match bitwise. The nonlinear trace is not
+reproducible on CUDA even between two base runs; the head's final value equals
+the first base run's bit for bit.
