@@ -38,7 +38,7 @@ Drivers:
    python scripts/benchmarks/secondary_slab_workflow.py
 
 The Cyclone driver takes its integrator settings from
-``examples/linear/axisymmetric/cyclone.toml`` (``t_max = 150``) and fits the last
+``examples/01_linear_tokamak/case_full.toml`` (``t_max = 150``) and fits the last
 30% of the horizon, ``t = 105--150``, well clear of the startup transient. A
 contract test keeps the fit window tied to the deck's ``t_max``.
 
@@ -384,12 +384,12 @@ headline set:
 - KBM Miller exact late-growth window.
 
 The kinetic-electron scan is defined by
-``examples/linear/axisymmetric/runtime_kinetic_electron.toml`` and integrates
+``examples/05_kinetic_electrons/case_full.toml`` and integrates
 with fixed-step RK4 through the unified runtime API. Its reference seed,
 linked-boundary damping, species and electromagnetic toggles are explicit in
 that file.
 
-The TEM input is ``examples/linear/axisymmetric/runtime_tem.toml`` (fixed-step
+The TEM input is ``benchmarks/cases/tem_linear.toml`` (fixed-step
 RK2, electron-only Gaussian moment initialization), run through the same scan
 path users call. The shipped ``tem_reference.csv`` is digitized from the
 literature rather than taken from a GX benchmark output, and the exact case

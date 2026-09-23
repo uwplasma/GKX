@@ -240,7 +240,7 @@ def _combined_ky_scan_requested(
 # an independent worker pool. Each worker then runs an ordinary single-ky solve,
 # so forwarding the strategy sent that inner solve down the sharded linear-RHS
 # path, which implements only ``strategy="velocity"``. That is how the shipped
-# examples/parallelization deck died in the worker with NotImplementedError under
+# examples/11_parallel_scan deck died in the worker with NotImplementedError under
 # ``strategy="batch"``; ``device_batch``, ``pmap`` and ``pjit`` were measured
 # failing in the same worker with the same error, so they are neutralised the
 # same way. ``combined_ky`` belongs here too and is not merely defensive: it

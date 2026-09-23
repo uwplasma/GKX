@@ -20511,3 +20511,111 @@ Evidence:
 Outcome:
 - paused by the maintainer; nothing running locally or on the office host (no office runs were used)
 - next task: let CI finish on the merged head; if green, mark #294 ready; then tranche 4 (merge scripts/checks/ behind check.py)
+
+## 2026-09-22 - EXAMPLES-GALLERY (G.3), branch examples/gallery — paused before implementation
+
+Baseline:
+- GKX SHA: f9485f044 (main, 2.3.0 merge)
+- companion SHAs: none used
+- source/test/tool files and lines: `examples/` 81 tracked files, 36 Python files, 5,145 Python lines
+- relevant existing gate: `tests/integration/examples/test_examples.py` (820 lines, runtime-core CI shard); `tests/validation/stellarator/test_vmex_qa_transport_optimization.py` (pinned QA text/constants)
+
+Scope:
+- intended change: reorganize `examples/` into the numbered gallery of archived-plan §19.1 in the §19.2 style, one parametrized smoke test, `examples/README.md` index
+- non-goals: README.md edits (README-SHOWCASE lane), anything in `benchmarks/` except new files under `benchmarks/cases/`, regenerating tracked figures
+- prospective acceptance: every group runs at smoke resolution in CI or skips with a stated data reason; pinned QA sentences/constants unchanged; tests/release green
+
+Changes:
+- none committed yet; this entry records the completed survey and the proposed file map (see the draft PR Handoff)
+
+Evidence:
+- reference web: 59 non-example files name example paths (tests, tools/*.toml lanes, docs, ci.yml, release.yml, src docstrings, benchmarks/*.py); `src/gkx/data/common_input.toml` is a symlink to `examples/common_input.toml` and `src/gkx/geometry/vmec_boozer_core.py` resolves `examples/vmec/`, so both stay in place
+- smoke-cost probe (JAX 0.10.2, x64, laptop CPU): Cyclone linear Ny=8 Nz=16 Nl=2 Nm=4 — krylov 39.6 s first call (compile), 0.57 s second; explicit time solver 8.0 s / 6.4 s. Nz=32 Nl=4 Nm=8, 3-ky scan: krylov 88 s, time 63 s. Smoke decks must use the time solver at Nz<=16 to stay within seconds
+- the baseline timing of test_examples.py was interrupted by a full disk (ENOSPC), not measured
+
+Outcome:
+- partial: survey and map done, no files moved
+- remaining blocker: none technical; stellarator groups (02, 04, 10) need vmex, which CI does not install, so their smoke tests skip unless vmex is present
+- next task: execute the map in the PR Handoff
+
+## 2026-09-22 - EXAMPLES-GALLERY (G.3), branch examples/gallery — gallery landed on the branch, paused before tools/benchmarks path edits
+
+Baseline:
+- GKX SHA: f9485f044, merged with main 29362737f (#277)
+- source/test/tool files and lines: `examples/` 81 files, 36 Python files, 5,145 Python lines; `tests/integration/examples/test_examples.py` 820 lines
+
+Scope:
+- intended change: the §19.1 numbered gallery in §19.2 style, one parametrized smoke test, `examples/README.md` index, validation decks in `benchmarks/cases/`
+- non-goals: README.md (README lane); `benchmarks/*.py` and `tools/` path edits wait for #278
+- acceptance: every gallery script runs at tutorial resolution or skips with a stated reason; pinned QA sentences and constants unchanged; release gates green
+
+Changes:
+- `examples/` is now 45 files, 14 Python files, 1,782 lines. There are twelve groups `01_linear_tokamak` ... `12_restart_and_analysis`. `examples/vmec/` and `examples/common_input.toml` stay in place.
+- 22 decks moved to `benchmarks/cases/` with the `runtime_` prefix dropped.
+- 25 Python files deleted: superseded wrappers, debug demos, the untracked-data imported-geometry drivers, and the reduced stellarator-ITG suite (recoverable from f9485f044).
+- `test_examples.py`: 820 -> about 250 lines, one parametrized smoke test plus layout, style and import checks.
+- Tests of deleted example modules were removed. Release-gate registries were repathed. The tutorial nonlinear decks pin `run_to = "t_max"`, with measured CFL margins 0.35 (03) and 0.33 (04).
+
+Evidence:
+- Smoke runs (laptop CPU, JAX 0.10.2, x64; the host was contended, so user CPU is quoted):
+  - 01, 03, 05, 06, 07, 08, 08-sensitivity: pass, about 75 s user in total
+  - 09, 11, 12: pass, about 59 s user
+  - 02 and 04 skip without vmex. On the office CPU they pass: 02 took 84 s wall and 04 took 72 s wall once the wout exists. The vmex wout solve took about 13 min on the contended host.
+- `08_quasilinear/implicit_sensitivity.py` reproduces the pre-move script bit for bit (max difference 0.0). The tracked `docs/_static/quasilinear_implicit_sensitivity.json` differs by up to 0.03, so that artifact predates current operators.
+- 09 recovers the planted gradients (2.8, 0.8) in 9 Gauss-Newton steps. The AD vs FD Jacobian column errors are 1.5e-7 and 7.2e-6.
+- 12: the restarted final free energy matches an uninterrupted run to 4.4e-10.
+- Other checks:
+  - `tests/release/test_release_gates.py` green
+  - QA scope test and `test_vmec_example_inventory.py` green
+  - repo-hygiene commands clean with no `docs/_static` drift
+  - `ruff check`/`ruff format --check` clean
+
+Outcome:
+- partial: the gallery is complete on the branch
+- remaining blockers:
+  - `benchmarks/{cyclone,etg,kinetic,tem}_linear_benchmark.py`, `benchmarks/performance/benchmark_nonlinear_suite.py`, `benchmarks/runtime_w7x_zonal_response_vmec.toml` comment, and `tools/` path strings still name old example paths; they wait for #278
+  - a focused office test run was stopped at 11% by the pause, with one failure not yet identified
+- next task: see the PR #281 Handoff
+
+## 2026-09-23 - EXAMPLES-GALLERY (G.3), branch examples/gallery — rebased onto chain/p0, path edits in benchmarks/ and scripts/
+
+Baseline:
+- GKX SHA: origin/chain/p0 f005418bf merged into examples/gallery 1b69bf8a0
+- relevant existing gate: #281 CI run 35813199194 failed in model-artifacts, runtime-core, nonlinear-core, and wide-coverage 8/12/13/16
+
+Scope:
+- intended change: merge the P0 chain, apply the slim-tools rename recipe, and make the path-only edits in `scripts/`, `tools/*.toml` and docs that #278 deferred
+- non-goals: new physics; regenerating docs artifacts
+
+Changes:
+- `scripts/{artifacts,benchmarks,campaigns,comparison,profiling}` now name the gallery and `benchmarks/cases/` paths, including the directory-joined forms.
+- `tools/runtime_memory_manifest.toml`: its commands called example scripts with argparse flags that the scripts had already stopped accepting. They now use `python -m gkx.cli run-runtime-{linear,nonlinear} --config <deck>`.
+- The chain's rewritten docs pages received the gallery paths; references to deleted scripts were removed or point to f9485f044.
+- Profiler case labels now follow deck stems, e.g. `cyclone_nonlinear_miller`. Tracked-artifact label checks keep their historical values.
+
+Evidence:
+- Every failure in CI run 35813199194 was a stale path.
+- Office CPU run over the affected selection:
+  - selection: quick shards, tests/tools, tests/integration, tests/unit/{nonlinear,api,linear,operators,solvers}, tests/validation/{benchmarks,stellarator}, tests/release
+  - result: 2132 passed, 10 failed
+  - 4 failures need a `.git` checkout, which office lacks; they were rerun locally and pass
+  - 5 were real (stale labels and paths); they are fixed and pass locally
+  - 1 is `test_adaptive_observables_match_dense_across_physics[QHS]`: "did not certify, residual 7.6e-9". It runs only where the QHS wout exists, which CI lacks; the deck is unchanged apart from its relative vmec_file path.
+- `scripts/check.py`: size, architecture, readiness, parallel-scaling, quasilinear and vmec-boozer are clean, with no `docs/_static` drift.
+
+Outcome:
+- accepted pending CI
+- remaining blocker: none known
+- next task: follow-up issue for the QHS adaptive-eigensolver certification on a generated wout
+
+## 2026-09-23 - EXAMPLES-GALLERY (G.3) — final pause
+
+Baseline:
+- GKX SHA: main 48536d159 (chain #293) merged into examples/gallery cleanly
+
+Evidence:
+- CI run 35851871202 on 6ce1aeed7: 37 checks passed, including every quick shard and all 24 wide-coverage shards. The `wide-coverage` aggregate and `ci-required` had not finished at the pause.
+
+Outcome:
+- partial: ready for review pending the final aggregate; nothing known failing
+- next task: confirm `ci-required` on the merged head. Open a follow-up for the QHS adaptive-eigensolver certification, which runs only where a generated wout exists.

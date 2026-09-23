@@ -84,7 +84,7 @@ width) are floored at ``64 * eps`` of the probe precision: inert in float64,
 ``7.6e-6`` in float32.  A z-coupled block is refused, not sent to the dense
 fallback, because it is not the operator the splitting describes.
 
-Measured on the shipped Cyclone deck (``examples/linear/axisymmetric/cyclone.toml``)
+Measured on the shipped Cyclone deck (``examples/01_linear_tokamak/case_full.toml``)
 at ``Nz=96``:
 
 * ``pr3-cm`` reaches the ``1e-4`` inner tolerance in 252 unrestarted

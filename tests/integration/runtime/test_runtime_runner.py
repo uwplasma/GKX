@@ -671,7 +671,7 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     from gkx.diagnostics.modes import select_ky_index
 
     runtime, _raw = load_runtime_from_toml(
-        REPO_ROOT / "examples/linear/axisymmetric/cyclone.toml"
+        REPO_ROOT / "examples/01_linear_tokamak/case_full.toml"
     )
     runtime = replace(
         runtime,
@@ -2838,13 +2838,7 @@ def test_runtime_linear_accepts_miller_model_via_generated_eik(
 
 
 def test_runtime_etg_nonlinear_example_runs_small_smoke() -> None:
-    cfg_path = (
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "axisymmetric"
-        / "runtime_etg_nonlinear.toml"
-    )
+    cfg_path = REPO_ROOT / "benchmarks" / "cases/etg_nonlinear.toml"
     cfg, _ = load_runtime_from_toml(cfg_path)
 
     # Keep the shipped ETG pilot contract intact, but reduce the test problem to
@@ -3310,9 +3304,7 @@ def test_runtime_centered_glibc_random_pairs_match_glibc_reference() -> None:
 
 
 def test_runtime_periodic_zp_from_grid_uses_discrete_period_not_endpoint_span() -> None:
-    cfg, _data = load_runtime_from_toml(
-        "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml"
-    )
+    cfg, _data = load_runtime_from_toml("benchmarks/cases/cyclone_nonlinear_short.toml")
     geom = build_runtime_geometry(cfg)
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
     z = np.asarray(grid.z, dtype=float)
@@ -3999,7 +3991,7 @@ def test_run_runtime_scan_explicit_workers_override_parallel_config(
 
 # ---- which [parallel] strategies a per-ky worker may inherit ----
 # strategy="batch" once reached the worker's own solve and killed the shipped
-# examples/parallelization deck with NotImplementedError, because the sharded
+# examples/11_parallel_scan deck with NotImplementedError, because the sharded
 # linear RHS implements only strategy="velocity". device_batch, pmap, pjit and
 # combined_ky (on the axes where it does not route to the combined-ky solver)
 # were then measured failing in that worker with the identical error. These pin

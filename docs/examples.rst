@@ -1,10 +1,11 @@
 Examples
 ========
 
-The ``examples`` directory is organized around two layers:
-
-- case-backed runtime drivers that map directly onto the tracked runtime TOMLs,
-- focused demos and benchmark helpers for theory, operators, and scan workflows.
+The ``examples`` directory is a numbered gallery, one directory per workflow;
+``examples/README.md`` lists each group with its purpose and runtime. Each
+group has a ``run.py`` and, where deck-driven, a tutorial ``case.toml`` plus the
+literature-resolution ``case_full.toml``. Validation decks live in
+``benchmarks/cases/``.
 
 Config-backed runtime cases
 ---------------------------
@@ -18,13 +19,13 @@ Tokamak cases
 
 .. code-block:: bash
 
-   python examples/linear/axisymmetric/cyclone_runtime_linear.py
-   python examples/nonlinear/axisymmetric/cyclone_runtime_nonlinear.py
-   python examples/linear/axisymmetric/etg_runtime_linear.py
-   python examples/linear/axisymmetric/kaw_runtime_linear.py
-   python examples/linear/axisymmetric/kbm_runtime_linear.py
-   python examples/nonlinear/axisymmetric/kbm_runtime_nonlinear.py
-   python examples/nonlinear/axisymmetric/miller_nonlinear_runtime.py
+   python examples/01_linear_tokamak/run.py
+   python examples/03_nonlinear_tokamak/run.py
+   gkx benchmarks/cases/etg_linear_scan.toml
+   gkx benchmarks/cases/kaw_linear.toml
+   python examples/06_electromagnetic/run.py
+   gkx benchmarks/cases/kbm_nonlinear.toml
+   gkx benchmarks/cases/cyclone_nonlinear_miller.toml
 
 VMEC-backed tokamak and stellarator cases
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -36,19 +37,16 @@ VMEC-backed tokamak and stellarator cases
    ./generate_wouts.sh
    cd ../..
 
-   gkx run --config examples/linear/axisymmetric/runtime_circular_vmec_linear.toml
-   gkx run --config examples/nonlinear/axisymmetric/runtime_circular_vmec_nonlinear.toml
+   gkx run --config benchmarks/cases/circular_vmec_linear.toml
+   gkx run --config benchmarks/cases/circular_vmec_nonlinear.toml
 
-   gkx run --config examples/linear/non-axisymmetric/runtime_hsx_linear_quasilinear.toml
-   gkx run --config examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml
-   python examples/nonlinear/non-axisymmetric/w7x_nonlinear_vmec_geometry.py
-   python examples/nonlinear/non-axisymmetric/hsx_nonlinear_vmec_geometry.py
+   gkx run --config examples/02_linear_stellarator/case_full.toml
+   gkx run --config benchmarks/cases/w7x_linear_quasilinear_vmec.toml
+   gkx benchmarks/cases/w7x_nonlinear_vmec_geometry.toml
+   python examples/04_nonlinear_stellarator/run.py
 
-For the VMEC-backed stellarator examples, keep ``STEPS = None`` in the script
-when you want the default adaptive horizon. Set ``STEPS`` (e.g. ``STEPS = 200``)
-only when you intentionally want a short profiling or diagnostic window. For longer W7-X nonlinear runs, keep
-adaptive timesteps enabled (the default for the examples) or reduce ``dt`` if
-you need a fixed-step stability study.
+The stellarator tutorial decks run a fixed short window; for production
+runs use ``case_full.toml``, which keeps adaptive timesteps enabled.
 
 The bundled VMEC decks are self-contained examples. Exact HSX or W7-X
 validation should use the same TOMLs with ``--vmec-file`` pointing to the
@@ -80,21 +78,21 @@ lanes:
 
 .. code-block:: bash
 
-   # point CONFIG at the top of the script at cyclone.toml or runtime_etg.toml
-   python examples/utilities/runtime_from_toml.py
+   # CASE at the top of the script selects the deck
+   python examples/12_restart_and_analysis/run.py
    python scripts/benchmark.py linear_benchmark etg --outdir tools_out/etg
    python scripts/benchmark.py linear_benchmark kbm --outdir tools_out
 
    gkx run-runtime-linear \
-     --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
+     --config examples/08_quasilinear/case_full.toml \
      --out tools_out/cyclone_quasilinear
 
    gkx run-runtime-linear \
-     --config examples/linear/non-axisymmetric/runtime_w7x_linear_imported_geometry.toml
+     --config benchmarks/cases/w7x_linear_imported_geometry.toml
 
-   gkx examples/linear/axisymmetric/cyclone.toml
+   gkx examples/01_linear_tokamak/case_full.toml
 
-``runtime_kbm.toml`` is retained as the canonical operator input for controlled
+``examples/06_electromagnetic/case_full.toml`` is retained as the canonical operator input for controlled
 comparison studies. Its experimental shift-invert path fails closed while the
 full-resolution physical residual exceeds the documented acceptance gate; use
 the reviewed comparison driver above for the promoted KBM result.
@@ -105,10 +103,10 @@ layout, run:
 
 .. code-block:: bash
 
-   python examples/parallelization/independent_ky_runtime_batch_scan.py
+   python examples/11_parallel_scan/run.py
 
 The companion
-``examples/parallelization/runtime_batch_ky_scan.toml`` selects two thread
+``examples/11_parallel_scan/case.toml`` selects two thread
 workers through ``[parallel].num_devices``. The runtime still dispatches normal
 single-``k_y`` solver calls and gathers results in input order; it does not opt
 into the combined-``k_y`` solver path.
@@ -148,16 +146,8 @@ path on laptops. Multi-device runs should still be checked against the serial
 result before publication speedups are claimed.
 
 Autodiff validation reports also accept ``workers`` for thread-parallel
-central finite-difference columns. The development-only reduced diagnostic
-comparison exposes the same pattern through the ``WORKERS`` and
-``FINITE_DIFFERENCE_WORKERS`` constants at the top of the script:
-
-.. code-block:: bash
-
-   JAX_ENABLE_X64=1 python examples/theory_and_demos/reduced_stellarator_itg/compare_stellarator_itg_optimizations.py
-
-The generated JSON records both worker counts and keeps the acceptance
-criterion as numerical identity with the serial report.
+central finite-difference columns; acceptance is numerical identity with the
+serial report.
 
 Parallel identity gates
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -216,20 +206,6 @@ opt-in electrostatic linear-RHS identity artifact for the single-species
 periodic electrostatic RHS path; collisions, linked boundaries,
 electromagnetic terms, and nonlinear brackets are not covered.
 
-Use the strong-scaling sweep helper to collect parallelization timings for the
-distributed linear RK2 loop:
-
-.. code-block:: bash
-
-   python examples/utilities/strong_scaling_sweep.py
-
-The grid, step count, device list, backend label, and output CSV are the
-``NY``/``NZ``/``NL``/``NM``/``STEPS``/``DEVICES``/``BACKEND``/``OUT``
-constants at the top of the script. On multi-GPU systems, point ``DEVICES``
-at the available accelerators and update ``BACKEND`` accordingly (for example
-``cuda_parallel_large``). The backend labels are just sweep names for the
-output table; they do not change the runtime physics or solver path.
-
 For the opt-in Hermite-sharded electrostatic linear RHS path, use the
 engineering sweep helper:
 
@@ -253,8 +229,8 @@ To visualize nonlinear diagnostic histories from ``*.out.nc`` files:
 
 .. code-block:: bash
 
-   # point RUN_PATH (and optionally OUT) at the top of the script at the bundle
-   python examples/utilities/plot_runtime_outputs.py
+   gkx --plot <output_file>
+   python examples/12_restart_and_analysis/run.py
 
 Geometry examples
 -----------------
@@ -272,12 +248,12 @@ One-shot nonlinear bundle write:
 .. code-block:: bash
 
    gkx run-runtime-nonlinear \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --steps 200 \
      --out tools_out/cyclone_release.out.nc
 
 For the short Cyclone comparison replay (``t_max = 5``, no collisions), use
-``examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml``.
+``benchmarks/cases/cyclone_nonlinear_short.toml``.
 That file pins the short-run dissipation contract explicitly
 (``p_hyper = 2``, ``damp_ends_amp = 0``) instead of relying on the longer
 production defaults.
@@ -358,10 +334,10 @@ Miller uses the in-package backend:
    vmex input.NuhrenbergZille_1988_QHS
    cd ../..
    gkx geometry vmec \
-     --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml
+     --config examples/04_nonlinear_stellarator/case_full.toml
 
    gkx geometry miller \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml
+     --config benchmarks/cases/cyclone_nonlinear_miller.toml
 
 Benchmark and scan helpers
 --------------------------
@@ -382,14 +358,14 @@ matched rerun and branch-continuity analysis live in
 ``scripts/comparison/compare_gx_kbm.py`` (retired; :ref:`retired-generators`).
 
 The kinetic-electron script loads
-``examples/linear/axisymmetric/runtime_kinetic_electron.toml``. The same input
+``examples/05_kinetic_electrons/case_full.toml``. The same input
 can be run directly with
-``gkx examples/linear/axisymmetric/runtime_kinetic_electron.toml``.
+``gkx examples/05_kinetic_electrons/case_full.toml``.
 It runs on the native RK4 owner.
 
-The TEM script loads ``examples/linear/axisymmetric/runtime_tem.toml``; users
+The TEM script loads ``benchmarks/cases/tem_linear.toml``; users
 can run the same single-mode case directly with
-``gkx examples/linear/axisymmetric/runtime_tem.toml``.
+``gkx benchmarks/cases/tem_linear.toml``.
 It runs on the native RK2 owner.
 
 Foundational demos
@@ -402,13 +378,8 @@ blocks without running a full benchmark case:
 
    # retired generator; restore it first: git show f005418bf575:scripts/benchmarks/basis_orthonormality.py > scripts/benchmarks/basis_orthonormality.py
    python scripts/benchmarks/basis_orthonormality.py
-   python examples/theory_and_demos/cyclone_geometry.py
-   python examples/theory_and_demos/autodiff_inverse_growth.py
-   python examples/theory_and_demos/autodiff_inverse_twomode.py
-   python examples/theory_and_demos/example.py
-   python examples/theory_and_demos/gradB_coupling_hl_1d.py
-   python examples/theory_and_demos/linear_rhs_demo.py
-   python examples/theory_and_demos/two_stream_hermite_1d.py
+   python examples/09_autodiff/run.py
+   python examples/08_quasilinear/implicit_sensitivity.py
 
 Differentiable optimization examples
 ------------------------------------
@@ -418,9 +389,9 @@ physical GKX heat-flux tuple appended to the objective list:
 
 .. code-block:: bash
 
-   python examples/optimization/QA_optimization.py
+   python examples/10_vmex_optimization/run.py
 
-``QA_optimization.py`` mirrors VMEX's boundary-mode ladder, preserves its
+``run.py`` (formerly ``QA_optimization.py``) mirrors VMEX's boundary-mode ladder, preserves its
 ``A=6`` and mean-``iota=0.42`` targets, and adds the checkpointed nonlinear
 heat-flux derivative. The equilibrium is vacuum; finite ``a/L_T`` and ``a/L_n``
 drive GKX. Edit the top-level constants to set resolution and run length.
@@ -434,25 +405,9 @@ be regenerated before evaluating current-operator transport.
 See :doc:`stellarator_optimization` for the audit, resolution
 ladder, and CSV data.
 
-Reduced synthetic scripts are kept outside ``examples/optimization`` as
-development diagnostics only:
-
-.. code-block:: bash
-
-   python examples/theory_and_demos/reduced_stellarator_itg/stellarator_itg_growth_optimization.py
-   python examples/theory_and_demos/reduced_stellarator_itg/stellarator_itg_quasilinear_flux_optimization.py
-   python examples/theory_and_demos/reduced_stellarator_itg/stellarator_itg_nonlinear_heat_flux_optimization.py
-   python examples/theory_and_demos/reduced_stellarator_itg/compare_stellarator_itg_optimizations.py
-   python examples/theory_and_demos/reduced_stellarator_itg/stellarator_itg_portfolio_gate.py
-
-The portfolio gate writes JSON/PNG/PDF artifacts and checks scalar plus
-row-wise AD/finite-difference agreement for the same surface/alpha/``k_y``
-reduction that will be used by the production VMEC/Boozer objective rows. Its
-default table covers three surfaces, two field-line ``alpha`` values, and
-three ``k_y`` values with growth and quasilinear-flux columns. This is a
-reduced/model-development gate; it does not claim optimized nonlinear heat
-flux or calibrated saturated transport. Treat the JSON sidecar as the audit
-source; the PNG/PDF summarize the same sidecar for docs and review.
+The reduced synthetic stellarator-ITG diagnostic scripts were retired from
+``examples/`` after GKX 2.3.0 (recoverable from commit ``f9485f044``); their
+tracked JSON sidecars under ``docs/_static`` remain as historical records.
 
 The production bridge exposes the same portfolio layout for real
 ``vmex -> booz_xform_jax -> GKX`` rows:
@@ -464,17 +419,9 @@ surface/field-line artifacts and matched baseline/optimized long
 post-transient nonlinear windows, not startup traces or reduced-window
 estimators.
 
-The autodiff demos write summary JSON plus `a/L_Ti` and `a/L_n` sweep CSVs in
-the chosen output directory alongside the publication-ready plots. The
-single-mode figure is a local inverse/sensitivity example; the two-mode figure
-is the release-grade parameter-recovery validation.
-
-The single-mode inverse/sensitivity demo verifies the autodiff
-Jacobian and show what one measured mode constrains locally; the expected
-outcome is small observable and derivative error, not unique recovery of
-both gradients. The shipped result matches that expectation: `(gamma, omega)`
-are reproduced closely while the recovered `(a/L_Ti, a/L_n)` remains offset
-because the one-mode inverse is not globally identifiable.
+``examples/09_autodiff/run.py`` writes a summary JSON and sweep CSVs beside the
+figure. One observed mode does not identify both gradients; two modes do,
+which is why the gallery uses the two-mode construction.
 
 
 .. figure:: _static/autodiff_inverse_twomode.png
@@ -506,8 +453,7 @@ Full-GK ETG nonlinear pilot
 
 .. code-block:: bash
 
-   python examples/nonlinear/axisymmetric/etg_runtime_nonlinear.py  # set STEPS = 200 for the short window
-   JAX_ENABLE_X64=1 gkx examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml --steps 200
+   JAX_ENABLE_X64=1 gkx benchmarks/cases/etg_nonlinear.toml --steps 200
 
 This is the full-GK two-species ETG nonlinear pilot lane. The shipped deck
 uses the audited short-window startup contract: ``Lx = 1.25`` for the linked ETG box and

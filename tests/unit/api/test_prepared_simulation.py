@@ -124,7 +124,7 @@ def test_print_summary_writes_every_field(capsys) -> None:
 # resolution that solve will not build is worse than reporting none, because a
 # recorded result then carries a resolution it was not run at.
 
-_SHIPPED_LINEAR_DECK = "examples/linear/axisymmetric/cyclone.toml"
+_SHIPPED_LINEAR_DECK = "examples/01_linear_tokamak/case_full.toml"
 
 
 def _repo_root():

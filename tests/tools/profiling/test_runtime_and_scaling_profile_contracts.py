@@ -455,7 +455,7 @@ def test_eager_scan_route_still_lowers_scan_body_arrays_as_arguments() -> None:
 
 def test_full_linear_trace_summary_contains_metadata() -> None:
     payload = linear_trace._build_summary(
-        config="examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml",
+        config="benchmarks/cases/cyclone_nonlinear_miller.toml",
         backend="cpu",
         nl=4,
         nm=8,
@@ -475,7 +475,7 @@ def test_full_linear_trace_summary_contains_metadata() -> None:
     )
 
     assert payload["kind"] == "full_linear_rhs_trace_summary"
-    assert payload["case"] == "runtime_cyclone_nonlinear_miller"
+    assert payload["case"] == "cyclone_nonlinear_miller"
     assert payload["backend"] == "cpu"
     assert payload["warm_seconds"] == 0.1
     assert payload["hlo_token_counts"]["add"] >= 1
@@ -508,7 +508,7 @@ def test_full_linear_trace_inject_z_wave_adds_parallel_variation() -> None:
 
 def test_full_nonlinear_trace_summary_contains_metadata() -> None:
     payload = nonlinear_trace._build_nonlinear_summary(
-        config="examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml",
+        config="benchmarks/cases/cyclone_nonlinear_miller.toml",
         backend="gpu",
         nl=4,
         nm=8,
@@ -531,7 +531,7 @@ def test_full_nonlinear_trace_summary_contains_metadata() -> None:
     )
 
     assert payload["kind"] == "full_nonlinear_rhs_trace_summary"
-    assert payload["case"] == "runtime_cyclone_nonlinear_miller"
+    assert payload["case"] == "cyclone_nonlinear_miller"
     assert payload["backend"] == "gpu"
     assert payload["laguerre_mode"] == "grid"
     assert payload["compressed_real_fft"] is True

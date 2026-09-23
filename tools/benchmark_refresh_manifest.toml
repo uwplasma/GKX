@@ -25,7 +25,7 @@ name = "imported-linear-w7x"
 description = "Refresh the W7-X imported linear scan using internally generated VMEC geometry."
 cwd = "{root}"
 requires_env = ["W7X_IMPORTED_ARGS"]
-command = "JAX_PLATFORMS=cpu PYTHONPATH=src W7X_VMEC_FILE=${W7X_VMEC_FILE} python scripts/comparison/compare_gx_imported_linear.py fields ${W7X_IMPORTED_ARGS} --runtime-config examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml --out docs/_static/w7x_linear_t2_scan.csv && python scripts/artifacts/make_tables.py --lastvalue-scan docs/_static/w7x_linear_t2_scan.csv --lastvalue-out docs/_static/w7x_linear_t2_lastvalue.csv"
+command = "JAX_PLATFORMS=cpu PYTHONPATH=src W7X_VMEC_FILE=${W7X_VMEC_FILE} python scripts/comparison/compare_gx_imported_linear.py fields ${W7X_IMPORTED_ARGS} --runtime-config benchmarks/cases/w7x_nonlinear_vmec_geometry.toml --out docs/_static/w7x_linear_t2_scan.csv && python scripts/artifacts/make_tables.py --lastvalue-scan docs/_static/w7x_linear_t2_scan.csv --lastvalue-out docs/_static/w7x_linear_t2_lastvalue.csv"
 outputs = ["docs/_static/w7x_linear_t2_scan.csv", "docs/_static/w7x_linear_t2_lastvalue.csv"]
 
 [[job]]
@@ -33,7 +33,7 @@ name = "imported-linear-hsx"
 description = "Refresh the HSX imported linear scan using internally generated VMEC geometry."
 cwd = "{root}"
 requires_env = ["HSX_IMPORTED_ARGS"]
-command = "JAX_PLATFORMS=cpu PYTHONPATH=src python scripts/comparison/compare_gx_imported_linear.py fields ${HSX_IMPORTED_ARGS} --runtime-config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml --out docs/_static/hsx_linear_t2_scan.csv && python scripts/artifacts/make_tables.py --lastvalue-scan docs/_static/hsx_linear_t2_scan.csv --lastvalue-out docs/_static/hsx_linear_t2_lastvalue.csv"
+command = "JAX_PLATFORMS=cpu PYTHONPATH=src python scripts/comparison/compare_gx_imported_linear.py fields ${HSX_IMPORTED_ARGS} --runtime-config examples/04_nonlinear_stellarator/case_full.toml --out docs/_static/hsx_linear_t2_scan.csv && python scripts/artifacts/make_tables.py --lastvalue-scan docs/_static/hsx_linear_t2_scan.csv --lastvalue-out docs/_static/hsx_linear_t2_lastvalue.csv"
 outputs = ["docs/_static/hsx_linear_t2_scan.csv", "docs/_static/hsx_linear_t2_lastvalue.csv"]
 
 [[job]]
@@ -41,7 +41,7 @@ name = "imported-linear-cyclone-miller"
 description = "Refresh the Cyclone Miller imported linear scan using internally generated Miller geometry."
 cwd = "{root}"
 requires_env = ["CYCLONE_MILLER_IMPORTED_ARGS"]
-command = "PYTHONPATH=src python scripts/comparison/compare_gx_imported_linear.py fields ${CYCLONE_MILLER_IMPORTED_ARGS} --runtime-config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml --out docs/_static/cyclone_miller_linear_scan.csv && python scripts/artifacts/make_tables.py --lastvalue-scan docs/_static/cyclone_miller_linear_scan.csv --lastvalue-out docs/_static/cyclone_miller_linear_mismatch.csv"
+command = "PYTHONPATH=src python scripts/comparison/compare_gx_imported_linear.py fields ${CYCLONE_MILLER_IMPORTED_ARGS} --runtime-config benchmarks/cases/cyclone_nonlinear_miller.toml --out docs/_static/cyclone_miller_linear_scan.csv && python scripts/artifacts/make_tables.py --lastvalue-scan docs/_static/cyclone_miller_linear_scan.csv --lastvalue-out docs/_static/cyclone_miller_linear_mismatch.csv"
 outputs = ["docs/_static/cyclone_miller_linear_scan.csv", "docs/_static/cyclone_miller_linear_mismatch.csv"]
 
 [[job]]

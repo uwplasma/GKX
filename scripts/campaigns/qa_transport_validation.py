@@ -22,7 +22,7 @@ from vmex.core import turbulence
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_INPUTS = ROOT / "examples" / "optimization"
+DEFAULT_INPUTS = ROOT / "examples" / "10_vmex_optimization"
 
 
 @dataclass(frozen=True)

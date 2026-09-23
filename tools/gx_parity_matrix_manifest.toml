@@ -139,7 +139,7 @@ fit_start_fraction = 0.7
 # artifact's actual generator is the "imported-linear-hsx" job in
 # tools/benchmark_refresh_manifest.toml, which runs
 # scripts/comparison/compare_gx_imported_linear.py against
-# examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml
+# examples/04_nonlinear_stellarator/case_full.toml
 # (y0 = 21, Ny = 96, Nz = 48, Nl = 4, Nm = 8, torflux = 0.64, alpha = 0,
 # npol = 1) whose equilibrium is Nuhrenberg-Zille 1988 QHS -- regenerable from
 # the tracked examples/vmec/input.NuhrenbergZille_1988_QHS, and not literally

@@ -912,7 +912,7 @@ recursive = true
 # dispatched; it was forwarded verbatim into each worker's RuntimeConfig, so
 # the inner single-ky solve took the sharded linear-RHS path, which accepts
 # only strategy="velocity" and raised NotImplementedError. That made the
-# shipped examples/parallelization deck unrunnable -- invisible because the
+# shipped examples/11_parallel_scan deck unrunnable -- invisible because the
 # only test of it mocked the solver out. Three lines of guard, nine of comment.
 # 88852 -> 88908: turning that guard into a total classification. The blacklist
 # above asked one question, "is it batch?", and device_batch, pmap and pjit were

@@ -97,7 +97,7 @@ Differentiable-physics figures
      - Owning command
      - Tracked evidence and status
    * - Quasilinear implicit sensitivity
-     - ``examples/theory_and_demos/quasilinear_implicit_sensitivity.py``
+     - ``examples/08_quasilinear/implicit_sensitivity.py``
      - ``docs/_static/quasilinear_implicit_sensitivity.json``: implicit
        eigenpair derivatives against nearest-branch central differences.
    * - Solver-objective and VMEC/Boozer gradient gates
@@ -112,17 +112,18 @@ Differentiable-physics figures
        ``docs/_static/vmec_boozer_nonlinear_window_fd_audit.json``: startup
        plumbing only; ``transport_average_gate`` is false.
    * - Inverse and UQ
-     - ``examples/theory_and_demos/autodiff_inverse_growth.py``,
-       ``examples/theory_and_demos/autodiff_inverse_twomode.py``,
+     - ``examples/09_autodiff/run.py`` (the single-mode
+       ``autodiff_inverse_growth.py`` was retired after GKX 2.3.0; recoverable
+       from commit ``f9485f044``),
        ``scripts/artifacts/plot_stellarator_optimization_uq.py`` (retired; :ref:`retired-generators`)
      - ``docs/_static/autodiff_inverse_growth_summary.json``,
        ``docs/_static/stellarator_itg_optimization_uq.json``.
    * - Reduced stellarator ITG optimization
-     - ``examples/theory_and_demos/reduced_stellarator_itg/compare_stellarator_itg_optimizations.py``
+     - retired after GKX 2.3.0 (recoverable from commit ``f9485f044``)
      - ``docs/_static/stellarator_itg_optimization_comparison.json``; see the
        note below.
    * - Solved-boundary QA candidate guardrail
-     - ``examples/optimization``
+     - ``examples/10_vmex_optimization``
      - ``docs/_static/vmex_qa_transport_candidate_comparison.json``: fails
        closed on solved-WOUT iota and quasisymmetry margins; not a promoted
        optimization result.
@@ -131,7 +132,7 @@ The reduced comparison sidecar records objective histories on a synthetic
 max-mode-1 surface; its companion PNG
 is not a solved-geometry optimization figure.
 The production QA optimization examples are the VMEC-JAX-style scripts
-in ``examples/optimization``; transport-optimization claims from them still
+in ``examples/10_vmex_optimization``; transport-optimization claims from them still
 require solved-WOUT gates and converged nonlinear audits.
 
 Quasilinear model-selection figures

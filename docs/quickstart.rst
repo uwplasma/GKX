@@ -50,7 +50,7 @@ of either output:
 
 .. code-block:: bash
 
-   gkx run-runtime-nonlinear --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --steps 50 --out tools_out/cyclone_nonlinear.out.nc
+   gkx run-runtime-nonlinear --config examples/03_nonlinear_tokamak/case_full.toml --steps 50 --out tools_out/cyclone_nonlinear.out.nc
    gkx plot tools_out/cyclone_nonlinear.out.nc
    gkx plot gkx_default_linear.summary.json
 
@@ -60,15 +60,15 @@ The nonlinear command already draws its figures beside the output;
 Full Cyclone benchmark deck
 ---------------------------
 
-``examples/linear/axisymmetric/cyclone.toml`` is a production-length linear
+``examples/01_linear_tokamak/case_full.toml`` is a production-length linear
 run, not a demo: ``t_max = 150`` at ``dt = 0.004663`` (32168 ``rk4`` steps)
 with ``Nl = 16``, ``Nm = 48``. On a CI runner it takes about 16 minutes. Both
 commands below run that deck:
 
 .. code-block:: bash
 
-   gkx examples/linear/axisymmetric/cyclone.toml
-   gkx run-runtime-linear --config examples/linear/axisymmetric/cyclone.toml --out cyclone_runtime
+   gkx examples/01_linear_tokamak/case_full.toml
+   gkx run-runtime-linear --config examples/01_linear_tokamak/case_full.toml --out cyclone_runtime
 
 Progress and output files
 -------------------------
@@ -134,9 +134,9 @@ files. Generate the needed equilibria locally, then run the TOMLs directly:
    vmex input.nfp3_QI_fixed_resolution_final
    cd ../..
 
-   gkx run --config examples/linear/axisymmetric/runtime_circular_vmec_linear.toml
-   gkx run --config examples/linear/non-axisymmetric/runtime_hsx_linear_quasilinear.toml
-   gkx run --config examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml
+   gkx run --config benchmarks/cases/circular_vmec_linear.toml
+   gkx run --config examples/02_linear_stellarator/case_full.toml
+   gkx run --config benchmarks/cases/w7x_linear_quasilinear_vmec.toml
 
 The bundled circular, QHS and QI equilibria are self-contained
 demonstrators. Exact machine-specific HSX or W7-X validation uses the same TOMLs
@@ -158,7 +158,7 @@ VMEC-backed geometry model:
 .. code-block:: bash
 
    gkx run \
-     --config examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml \
+     --config examples/04_nonlinear_stellarator/case_full.toml \
      --vmec-file /absolute/or/relative/wout_machine_specific.nc \
      --out tools_out/hsx_vmec_run
 
@@ -203,10 +203,11 @@ Run from TOML
 
 .. code-block:: bash
 
-   python examples/utilities/runtime_from_toml.py  # CONFIG defaults to cyclone.toml
+   gkx examples/01_linear_tokamak/case.toml
+   python examples/01_linear_tokamak/run.py   # the same case as a scripted k_y scan
 
-The script solves every ``ky`` in the deck's ``[scan]`` table (five points for
-``cyclone.toml``), so on the default deck it is a long run.
+Both finish in seconds; ``case_full.toml`` beside them is the production-length
+literature deck.
 
 Figure generation
 -----------------

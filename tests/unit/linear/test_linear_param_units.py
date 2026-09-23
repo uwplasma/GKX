@@ -29,9 +29,7 @@ import numpy as np
 import pytest
 from support.paths import REPO_ROOT
 
-CYCLONE_TOML = (
-    REPO_ROOT / "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_t400.toml"
-)
+CYCLONE_TOML = REPO_ROOT / "benchmarks/cases/cyclone_nonlinear_t400.toml"
 
 # Cyclone base case, as the literature quotes it.
 LITERATURE_R_OVER_LT = 6.9

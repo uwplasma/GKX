@@ -4842,7 +4842,7 @@ def _run_etg_figures(*, outdir: Path, progress: bool) -> None:
         scan = _load_gkx_scan_from_mismatch(mismatch_csv)
     else:
         config, _ = load_runtime_from_toml(
-            REPO_ROOT / "examples/linear/axisymmetric/etg.toml"
+            REPO_ROOT / "benchmarks/cases/etg_linear.toml"
         )
         scan = run_runtime_scan(
             config,

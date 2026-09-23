@@ -7,9 +7,11 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-
 from support.paired_solvax import requires_paired_solvax
 from support.paths import REPO_ROOT, load_repo_script
+from dataclasses import dataclass
+import inspect
+from support.paths import REPO_ROOT, load_artifact_tool
 
 # ---- test_autodiff_validation.py ----
 
@@ -1727,62 +1729,19 @@ def _disable_optional_backend_discovery(monkeypatch) -> None:
     )
 
 
-def _load_stellarator_itg_plotting_module():
-    return load_repo_script(
-        Path(
-            "examples/theory_and_demos/reduced_stellarator_itg/_stellarator_itg_plotting.py"
-        ),
-        module_name="_stellarator_itg_plotting_for_test",
-    )
-
-
-def test_reduced_stellarator_itg_development_scripts_are_explicit_workflows() -> None:
-    examples = REPO_ROOT / "examples" / "theory_and_demos" / "reduced_stellarator_itg"
-    scripts = [
-        examples / "stellarator_itg_growth_optimization.py",
-        examples / "stellarator_itg_quasilinear_flux_optimization.py",
-        examples / "stellarator_itg_nonlinear_heat_flux_optimization.py",
-        examples / "compare_stellarator_itg_optimizations.py",
-    ]
-
-    for script in scripts:
-        text = script.read_text(encoding="utf-8")
-        assert (
-            "run_stellarator_itg_adam" in text
-            or "compare_scripted_stellarator_itg_objectives" in text
-        )
-        assert "optimize_stellarator_itg" not in text
-        assert "QA_optimization.py" in text
-
-
-def test_reduced_stellarator_itg_scripts_resolve_the_repository_root() -> None:
-    examples = REPO_ROOT / "examples" / "theory_and_demos" / "reduced_stellarator_itg"
-    scripts = [
-        examples / "stellarator_itg_growth_optimization.py",
-        examples / "stellarator_itg_quasilinear_flux_optimization.py",
-        examples / "stellarator_itg_nonlinear_heat_flux_optimization.py",
-        examples / "compare_stellarator_itg_optimizations.py",
-        examples / "stellarator_itg_portfolio_gate.py",
-    ]
-
-    for script in scripts:
-        text = script.read_text(encoding="utf-8")
-        assert "ROOT = Path(__file__).resolve().parents[3]" in text
-
-
 def test_public_optimization_examples_exclude_reduced_synthetic_workflows() -> None:
-    examples = REPO_ROOT / "examples" / "optimization"
+    examples = REPO_ROOT / "examples" / "10_vmex_optimization"
     names = {path.name for path in examples.iterdir() if path.is_file()}
 
-    assert "QA_optimization.py" in names
+    assert "run.py" in names
     assert not any(name.startswith("stellarator_itg_") for name in names)
     assert "_stellarator_itg_plotting.py" not in names
     assert "compare_stellarator_itg_optimizations.py" not in names
 
 
 def test_public_optimization_examples_keep_editable_constant_style() -> None:
-    examples = REPO_ROOT / "examples" / "optimization"
-    optimizer_scripts = {"QA_optimization.py"}
+    examples = REPO_ROOT / "examples" / "10_vmex_optimization"
+    optimizer_scripts = {"run.py"}
     for script in sorted(examples.glob("*.py")):
         text = script.read_text(encoding="utf-8")
         assert "argparse" not in text
@@ -1862,248 +1821,6 @@ def test_stellarator_itg_density_gradient_scan_rejects_invalid_axes(
             _fast_config(),
             density_gradients=density_gradients,
         )
-
-
-def test_stellarator_itg_plotting_artifact_compacts_reproducible_grids(
-    tmp_path: Path,
-) -> None:
-    plotting = _load_stellarator_itg_plotting_module()
-    cfg = _fast_config()
-    p0 = np.asarray(default_stellarator_initial_params(), dtype=float)
-    p1 = 0.55 * p0
-    obs0 = np.asarray(qa_observable_vector(p0, cfg), dtype=float)
-    obs1 = np.asarray(qa_observable_vector(p1, cfg), dtype=float)
-    payload = {
-        "objective_kind": "growth",
-        "parameter_names": list(PARAMETER_NAMES),
-        "observable_names": list(OBSERVABLE_NAMES),
-        "initial_params": p0.tolist(),
-        "final_params": p1.tolist(),
-        "initial_objective": 1.0,
-        "final_objective": 0.5,
-        "initial_observables": obs0.tolist(),
-        "final_observables": obs1.tolist(),
-        "history": [
-            {
-                "step": 0,
-                "objective": 1.0,
-                "gradient_norm": 1.0,
-                "params": p0.tolist(),
-                "observables": obs0.tolist(),
-            },
-            {
-                "step": 1,
-                "objective": 0.5,
-                "gradient_norm": 0.2,
-                "params": p1.tolist(),
-                "observables": obs1.tolist(),
-            },
-        ],
-        "gradient_gate": {"passed": True, "max_abs_error": 1.0e-8},
-        "covariance": {},
-        "nonlinear_trace": None,
-        "config": asdict(cfg),
-        "backend_info": {
-            "vmex_available": True,
-            "booz_xform_jax_available": True,
-            "vmex_paths": ["/Users/tester/local/vmex"],
-            "booz_xform_jax_paths": ["/Users/tester/local/booz_xform_jax"],
-        },
-        "claim_level": "reduced_linear_or_quasilinear_objective_optimization",
-    }
-    result = SimpleNamespace(to_dict=lambda: payload)
-    out = tmp_path / "stellarator_itg_panel"
-
-    initial_trace = plotting._trace_payload(p0.tolist(), cfg)
-    final_trace = plotting._trace_payload(p1.tolist(), cfg)
-    payload["nonlinear_trace"] = {
-        "times": initial_trace["times"],
-        "initial_heat_flux": initial_trace["heat_flux"],
-        "final_heat_flux": final_trace["heat_flux"],
-        "initial_window": {
-            key: initial_trace["window"][key]
-            for key in ("mean", "cv", "trend", "start_index")
-        },
-        "final_window": {
-            key: final_trace["window"][key]
-            for key in ("mean", "cv", "trend", "start_index")
-        },
-    }
-
-    plotting.write_result_artifacts(result, out, title="test panel")
-
-    written = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
-    assert "/Users/tester" not in out.with_suffix(".json").read_text(encoding="utf-8")
-    assert written["backend_info"] == {
-        "vmex_available": True,
-        "booz_xform_jax_available": True,
-    }
-    assert out.with_suffix(".history.csv").exists()
-    assert out.with_suffix(".png").exists()
-    assert out.with_suffix(".pdf").exists()
-    assert written["nonlinear_trace"] == {
-        "storage": "reduced_diagnostics.{initial,final}.fixed_gradient_trace",
-        "sample_count": cfg.nonlinear_steps + 1,
-        "time_min": 0.0,
-        "time_max": initial_trace["times"][-1],
-        "initial_window": payload["nonlinear_trace"]["initial_window"],
-        "final_window": payload["nonlinear_trace"]["final_window"],
-    }
-    diagnostics = written["reduced_diagnostics"]
-    assert (
-        diagnostics["claim_level"]
-        == "reduced_max_mode1_diagnostics_not_solved_vmec_or_full_nonlinear_scan"
-    )
-    assert diagnostics["final"]["density_gradient_scan"]["scope"].startswith(
-        "reduced_max_mode1"
-    )
-    assert diagnostics["final"]["fixed_gradient_trace"]["trace_kind"] == (
-        "smooth_reduced_nonlinear_envelope_not_full_turbulent_gk"
-    )
-    assert diagnostics["final"]["surface_summary"]["scope"].endswith(
-        "not_solved_vmec_equilibrium"
-    )
-    assert diagnostics["final"]["lcfs_bmag_summary"]["scope"].startswith(
-        "synthetic_reduced_lcfs_bmag"
-    )
-    assert diagnostics["final"]["surface_summary"]["theta_count"] == 72
-    assert diagnostics["final"]["lcfs_bmag_summary"]["theta_count"] == 72
-    assert "surface" not in diagnostics["final"]
-    assert "lcfs_bmag" not in diagnostics["final"]
-
-    mismatched_trace = dict(payload["nonlinear_trace"])
-    mismatched_flux = list(mismatched_trace["final_heat_flux"])
-    mismatched_flux[0] += 1.0
-    mismatched_trace["final_heat_flux"] = mismatched_flux
-    with pytest.raises(ValueError, match="not reproducible"):
-        plotting._compact_duplicate_nonlinear_trace(
-            mismatched_trace, payload["reduced_diagnostics"]
-        )
-
-
-def test_stellarator_itg_comparison_artifact_has_publication_lcfs_diagnostics(
-    tmp_path: Path,
-) -> None:
-    plotting = _load_stellarator_itg_plotting_module()
-    cfg = _fast_config()
-    p0 = np.asarray(default_stellarator_initial_params(), dtype=float)
-    names = list(OBSERVABLE_NAMES)
-
-    def row(kind: str, scale: float) -> dict[str, object]:
-        p1 = scale * p0
-        obs0 = np.asarray(qa_observable_vector(p0, cfg), dtype=float)
-        obs1 = np.asarray(qa_observable_vector(p1, cfg), dtype=float)
-        result: dict[str, object] = {
-            "objective_kind": kind,
-            "parameter_names": list(PARAMETER_NAMES),
-            "observable_names": names,
-            "initial_params": p0.tolist(),
-            "final_params": p1.tolist(),
-            "initial_objective": 1.0,
-            "final_objective": 0.5 * scale,
-            "initial_observables": obs0.tolist(),
-            "final_observables": obs1.tolist(),
-            "history": [
-                {
-                    "step": 0,
-                    "objective": 1.0,
-                    "gradient_norm": 1.0,
-                    "params": p0.tolist(),
-                    "observables": obs0.tolist(),
-                },
-                {
-                    "step": 1,
-                    "objective": 0.5 * scale,
-                    "gradient_norm": 0.2,
-                    "params": p1.tolist(),
-                    "observables": obs1.tolist(),
-                },
-            ],
-            "gradient_gate": {"passed": True, "max_abs_error": 1.0e-8},
-            "covariance": {},
-            "nonlinear_trace": None,
-            "config": asdict(cfg),
-            "backend_info": {},
-            "claim_level": "reduced_linear_or_quasilinear_objective_optimization",
-        }
-        if kind == "nonlinear_heat_flux":
-            initial_trace = plotting._trace_payload(p0.tolist(), cfg)
-            final_trace = plotting._trace_payload(p1.tolist(), cfg)
-            result["nonlinear_trace"] = {
-                "times": initial_trace["times"],
-                "initial_heat_flux": initial_trace["heat_flux"],
-                "final_heat_flux": final_trace["heat_flux"],
-                "initial_window": {
-                    key: initial_trace["window"][key]
-                    for key in ("mean", "cv", "trend", "start_index")
-                },
-                "final_window": {
-                    key: final_trace["window"][key]
-                    for key in ("mean", "cv", "trend", "start_index")
-                },
-            }
-        return result
-
-    payload = {
-        "claim_level": "reduced_objective_optimization_comparison_not_full_production_vmec_gk",
-        "production_nonlinear_optimization_claim": False,
-        "parameter_names": list(PARAMETER_NAMES),
-        "observable_names": names,
-        "results": [
-            row("growth", 0.70),
-            row("quasilinear_flux", 0.55),
-            row("nonlinear_heat_flux", 0.45),
-        ],
-        "backend_info": {},
-        "parallel": {"requested_workers": 1},
-    }
-    out = tmp_path / "stellarator_compare"
-
-    plotting.write_comparison_artifacts(payload, out)
-
-    written = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
-    assert written["figure_scope"]["surface_grid"] == {
-        "ntheta": 72,
-        "nzeta": 72,
-        "cmap": "jet",
-    }
-    assert "synthetic reduced" in written["figure_scope"]["surface_claim"]
-    assert "not a solved VMEC LCFS" in written["figure_scope"]["surface_claim"]
-    assert out.with_suffix(".png").exists()
-    assert out.with_suffix(".pdf").exists()
-    plotting_source = REPO_ROOT.joinpath(
-        "examples/theory_and_demos/reduced_stellarator_itg/_stellarator_itg_plotting.py"
-    ).read_text(encoding="utf-8")
-    assert (
-        "Reduced synthetic QA ITG optimization-plumbing comparison" in plotting_source
-    )
-    assert "Synthetic reduced LCFS" in plotting_source
-    assert "Synthetic reduced Boozer-LCFS" in plotting_source
-    for result in written["results"]:
-        diagnostics = result["reduced_diagnostics"]["final"]
-        assert diagnostics["surface_summary"]["theta_count"] == 72
-        assert diagnostics["surface_summary"]["zeta_count"] == 72
-        assert diagnostics["lcfs_bmag_summary"]["theta_count"] == 72
-        assert diagnostics["lcfs_bmag_summary"]["zeta_count"] == 72
-        assert diagnostics["lcfs_bmag_summary"]["cmap"] == "jet"
-        assert "surface" not in diagnostics
-        assert "lcfs_bmag" not in diagnostics
-        assert diagnostics["fixed_gradient_trace"]["trace_kind"].startswith(
-            "smooth_reduced"
-        )
-    nonlinear_result = next(
-        result
-        for result in written["results"]
-        if result["objective_kind"] == "nonlinear_heat_flux"
-    )
-    assert nonlinear_result["nonlinear_trace"]["storage"] == (
-        "reduced_diagnostics.{initial,final}.fixed_gradient_trace"
-    )
-    assert all(
-        "nonlinear_trace" not in result
-        for result in written["results"]
-        if result["objective_kind"] != "nonlinear_heat_flux"
-    )
 
 
 def test_stellarator_itg_objectives_have_fd_checked_gradients() -> None:

@@ -76,8 +76,8 @@ from gkx.terms.nonlinear import nonlinear_em_contribution
 #: ``scripts/campaigns/nonlinear_gradient_window.py`` tracks centered differences
 #: through 1024 RK3 steps and departs between 1024 and 2048. It is a property of
 #: that trajectory's Lyapunov time, not a solver tolerance, so it is a default to
-#: warn against and remeasure -- not a hard limit. ``examples/optimization/
-#: QA_optimization.py`` runs at exactly 1024, one rung below the departure.
+#: warn against and remeasure -- not a hard limit. ``examples/
+#: 10_vmex_optimization/run.py`` runs at exactly 1024, one rung below the departure.
 DIVERGENCE_KNEE_STEPS = 1024
 
 #: Reverse-pass checkpoint storage allowed before the window falls back to the

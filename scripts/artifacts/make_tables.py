@@ -1001,7 +1001,7 @@ def _etg_time_controls(
 
 
 def _etg_runtime_case():
-    cfg, _ = load_runtime_from_toml(ROOT / "examples/linear/axisymmetric/etg.toml")
+    cfg, _ = load_runtime_from_toml(ROOT / "benchmarks/cases/etg_linear.toml")
     return cfg
 
 
@@ -1064,7 +1064,7 @@ def _run_tem_tables(*, outdir: Path, verbose: bool, progress: bool) -> None:
     tem_tmin = 0.4 * tem_tmax
     tem_tmax = 0.85 * tem_tmax
     tem_cfg, _raw = load_runtime_from_toml(
-        ROOT / "examples" / "linear" / "axisymmetric" / "runtime_tem.toml"
+        ROOT / "benchmarks" / "cases" / "tem_linear.toml"
     )
     # This is the one table generator that pins a window without pinning a fit
     # signal, so it is the one whose tracked output predates the fix that made
@@ -1132,7 +1132,7 @@ def _run_kinetic_tables(
     kinetic_tmin = 0.6 * kinetic_ttotal
     kinetic_tmax = 0.95 * kinetic_ttotal
     kinetic_cfg, _raw = load_runtime_from_toml(
-        ROOT / "examples" / "linear" / "axisymmetric" / "runtime_kinetic_electron.toml"
+        ROOT / "examples" / "05_kinetic_electrons" / "case_full.toml"
     )
     kinetic_cfg = replace(
         kinetic_cfg,
@@ -1182,7 +1182,7 @@ def _run_kinetic_tables(
 def _write_cyclone_runtime_tables(
     *, outdir: Path, minimal: bool, verbose: bool, progress: bool
 ) -> None:
-    cfg, _ = load_runtime_from_toml(ROOT / "examples/linear/axisymmetric/cyclone.toml")
+    cfg, _ = load_runtime_from_toml(ROOT / "examples/01_linear_tokamak/case_full.toml")
     ref = _cyclone_refresh_reference(load_cyclone_reference())
     mismatch = _cyclone_reference_mismatch_scan(
         ref, cfg, verbose=verbose, progress=progress

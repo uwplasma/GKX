@@ -3540,10 +3540,7 @@ def test_shipped_optimization_example_stays_at_or_below_the_knee():
     from pathlib import Path
 
     source = (
-        Path(__file__).resolve().parents[3]
-        / "examples"
-        / "optimization"
-        / "QA_optimization.py"
+        Path(__file__).resolve().parents[3] / "examples" / "10_vmex_optimization/run.py"
     ).read_text()
     match = re.search(r"WINDOW_STEPS\s*=\s*([\d_]+)", source)
     assert match is not None

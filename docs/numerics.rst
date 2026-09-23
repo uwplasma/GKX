@@ -171,7 +171,7 @@ propagator eigensolve. See "Why ``adaptive`` is the default, and not
 shift-invert" in :doc:`solvers`.
 
 **Precision.** ``complex64`` by default. On
-``examples/linear/axisymmetric/cyclone.toml`` at its own resolution the float32
+``examples/01_linear_tokamak/case_full.toml`` at its own resolution the float32
 run returns :math:`\gamma = 0.09309106`, :math:`\omega = 0.28203276` against
 float64's :math:`0.09309117`, :math:`0.28203273`, agreement to 1.2e-6 relative.
 ``JAX_ENABLE_X64=true`` widens the initial state to ``complex128`` and so

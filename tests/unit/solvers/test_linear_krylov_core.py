@@ -2328,7 +2328,7 @@ def test_line_and_field_preconditioners_are_not_the_damping_diagonal() -> None:
     from gkx.workflows.runtime.toml import load_runtime_from_toml
 
     runtime, _raw = load_runtime_from_toml(
-        Path("examples/linear/axisymmetric/cyclone.toml")
+        Path("examples/01_linear_tokamak/case_full.toml")
     )
     analytic = build_runtime_geometry(runtime)
     ntheta = int(runtime.grid.ntheta)
