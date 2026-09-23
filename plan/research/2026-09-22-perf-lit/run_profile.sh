@@ -37,14 +37,28 @@ run eig_l4m8z96 eigen --nz 96 --nl 4 --nm 8 --repeats 3
 run win16_1024_nockpt window --nx 16 --ny 16 --nz 16 --steps 1024 --checkpoint none --repeats 2
 fi
 if [ "${PHASE:-base}" = extra ]; then
-# Window variants: per-step remat off inside blocks (one recompute, not two),
-# and complex128 for the precision comparison of the gradient.
-run win16_256_innerremat_off window --nx 16 --ny 16 --nz 16 --steps 256 --checkpoint block --inner-remat off --repeats 3
-run win16_1024_innerremat_off window --nx 16 --ny 16 --nz 16 --steps 1024 --checkpoint block --inner-remat off --repeats 3
-run win32_256_innerremat_off window --nx 32 --ny 32 --nz 24 --steps 256 --checkpoint block --inner-remat off --repeats 3
+# Window variants in one process each, so value and gradient are compared
+# arm-to-arm: block (shipped), block_noinner (block checkpoint, no per-step
+# remat inside the block: one forward recompute, not two), none (no remat).
+run win16_256_ab window --nx 16 --ny 16 --nz 16 --steps 256 --checkpoint block block_noinner none --repeats 2 --interleave 7
+run win16_1024_ab window --nx 16 --ny 16 --nz 16 --steps 1024 --checkpoint block block_noinner --repeats 2 --interleave 7
+run win32_256_ab window --nx 32 --ny 32 --nz 24 --steps 256 --checkpoint block block_noinner --repeats 2 --interleave 7
+run win32_1024_ab window --nx 32 --ny 32 --nz 24 --steps 1024 --checkpoint block block_noinner --repeats 2 --interleave 5
 run win16_256_x64 window --nx 16 --ny 16 --nz 16 --steps 256 --checkpoint block --precision 64 --repeats 3
 run fwd_32x32x24_l4m8_x64 forward --nx 32 --ny 32 --nz 24 --nl 4 --nm 8 --precision 64 --repeats 7
 run fwd_32x32x24_l4m8_src forward --nx 32 --ny 32 --nz 24 --nl 4 --nm 8 --repeats 3 --trace-dir "$OUT/trace_src32"
-run fwd_64x64x24_l8m16_src forward --nx 64 --ny 64 --nz 24 --nl 8 --nm 16 --repeats 3 --trace-dir "$OUT/trace_src64"
+fi
+if [ "${PHASE:-base}" = src ]; then
+# Kernel -> source-line mapping of the top device kernels (timings unused).
+run fwd_32x32x24_l4m8_srcmap forward --nx 32 --ny 32 --nz 24 --nl 4 --nm 8 --repeats 1 --trace-dir "$OUT/trace_srcmap32"
+fi
+if [ "${PHASE:-base}" = cpu ]; then
+# CPU rows (office host, all cores visible to XLA; host load is recorded).
+run cpu_smoke window --nx 8 --ny 8 --nz 8 --steps 16 --checkpoint block block_noinner none --repeats 1 --interleave 2
+run cpu_win16_256_ab window --nx 16 --ny 16 --nz 16 --steps 256 --checkpoint block block_noinner none --repeats 2 --interleave 7
+run cpu_win16_1024_ab window --nx 16 --ny 16 --nz 16 --steps 1024 --checkpoint block block_noinner --repeats 2 --interleave 5
+run cpu_fwd_32x32x24_l4m8 forward --nx 32 --ny 32 --nz 24 --nl 4 --nm 8 --repeats 5
+run cpu_eig_l2m3z24 eigen --nz 24 --nl 2 --nm 3 --repeats 5
+run cpu_eigadapt_l2m3z24_x64 eigen-adaptive --nz 24 --nl 2 --nm 3 --precision 64
 fi
 echo done >> "$OUT/supervisor.txt"

@@ -1,0 +1,515 @@
+{
+ "argv": [
+  "forward",
+  "--nx",
+  "32",
+  "--ny",
+  "32",
+  "--nz",
+  "24",
+  "--nl",
+  "4",
+  "--nm",
+  "8",
+  "--precision",
+  "64",
+  "--repeats",
+  "7",
+  "--label",
+  "fwd_32x32x24_l4m8_x64",
+  "--out",
+  "~/perflit_gpu2/fwd_32x32x24_l4m8_x64.json"
+ ],
+ "command": "forward",
+ "derived": {
+  "bracket_s_estimate": 0.0024430299818050116,
+  "step_over_rhs": 1.8862399935402
+ },
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   82.32763671875,
+   75.79052734375,
+   64.33642578125
+  ],
+  "loadavg_start": [
+   79.181640625,
+   74.42578125,
+   63.470703125
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": true,
+  "xla_flags": ""
+ },
+ "graphs": {
+  "fields": {
+   "argument_bytes": 17342628,
+   "compile_s": 0.7390750920021674,
+   "device_peak_bytes": 56288000,
+   "first_call_s": 0.02099339899723418,
+   "generated_code_bytes": 0,
+   "hlo": {
+    "concatenate": 0,
+    "constant_bytes": 176,
+    "copy": 0,
+    "fft": 0,
+    "fft_shapes": [],
+    "fused_interior_bytes": 0,
+    "gather": 0,
+    "materialized_bytes": 0,
+    "scatter": 0,
+    "transpose": 0
+   },
+   "host_peak_bytes": 1019437056,
+   "lower_s": 0.21462933399016038,
+   "output_bytes": 393216,
+   "temp_bytes": 1189168,
+   "warm_median_s": 0.005996738007524982,
+   "warm_s": [
+    0.006841301990789361,
+    0.044569017001776956,
+    0.003997391002485529,
+    0.0025130389985861257,
+    0.010483530990313739,
+    0.003999965003458783,
+    0.005996738007524982
+   ]
+  },
+  "hermitian_projector": {
+   "argument_bytes": 12582912,
+   "compile_s": 0.1067810759996064,
+   "device_peak_bytes": 140096000,
+   "first_call_s": 0.002044861001195386,
+   "generated_code_bytes": 1760,
+   "hlo": {
+    "concatenate": 1,
+    "constant_bytes": 128,
+    "copy": 0,
+    "fft": 0,
+    "fft_shapes": [],
+    "fused_interior_bytes": 0,
+    "gather": 1,
+    "materialized_bytes": 12582912,
+    "scatter": 0,
+    "transpose": 0
+   },
+   "host_peak_bytes": 1185255424,
+   "lower_s": 0.01865658099995926,
+   "output_bytes": 12582912,
+   "temp_bytes": 0,
+   "warm_median_s": 0.0009801330015761778,
+   "warm_s": [
+    0.0009801330015761778,
+    0.0008319769985973835,
+    0.0011854600015794858,
+    0.0008989329944597557,
+    0.0006154389993753284,
+    0.0010840180038940161,
+    0.0021593919955193996
+   ]
+  },
+  "linear_rhs": {
+   "argument_bytes": 14963748,
+   "compile_s": 2.6051640450023115,
+   "device_peak_bytes": 79859200,
+   "first_call_s": 0.08088808400498237,
+   "generated_code_bytes": 5728,
+   "hlo": {
+    "concatenate": 15,
+    "constant_bytes": 5056,
+    "copy": 0,
+    "fft": 10,
+    "fft_shapes": [
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "IFFT"
+     }
+    ],
+    "fused_interior_bytes": 51130524,
+    "gather": 14,
+    "materialized_bytes": 11354112,
+    "scatter": 0,
+    "transpose": 0
+   },
+   "host_peak_bytes": 1105018880,
+   "lower_s": 1.8116625440015923,
+   "output_bytes": 12582912,
+   "temp_bytes": 23190320,
+   "warm_median_s": 0.005525359010789543,
+   "warm_s": [
+    0.011003482999512926,
+    0.00602510200405959,
+    0.0042826689896173775,
+    0.005525359010789543,
+    0.004420785000547767,
+    0.004988496002624743,
+    0.02241165300074499
+   ]
+  },
+  "nonlinear_rhs": {
+   "argument_bytes": 15955308,
+   "compile_s": 3.664101475995267,
+   "device_peak_bytes": 140096000,
+   "first_call_s": 0.03874082300171722,
+   "generated_code_bytes": 5856,
+   "hlo": {
+    "concatenate": 22,
+    "constant_bytes": 5272,
+    "copy": 0,
+    "fft": 15,
+    "fft_shapes": [
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "c128",
+      "out_shape": "2,1,5,1,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "c128",
+      "out_shape": "2,1,5,8,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "f64",
+      "out_shape": "2,1,5,1,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "f64",
+      "out_shape": "2,1,5,8,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32,32",
+      "out_dtype": "c128",
+      "out_shape": "1,5,8,24,32,17",
+      "type": "RFFT"
+     }
+    ],
+    "fused_interior_bytes": 129773724,
+    "gather": 19,
+    "materialized_bytes": 30154752,
+    "scatter": 0,
+    "transpose": 18
+   },
+   "host_peak_bytes": 1185255424,
+   "lower_s": 0.8241001749993302,
+   "output_bytes": 12582912,
+   "temp_bytes": 41074224,
+   "warm_median_s": 0.007968388992594555,
+   "warm_s": [
+    0.009460405999561772,
+    0.011283907006145455,
+    0.007067742000799626,
+    0.0067777969961753115,
+    0.01248026400571689,
+    0.007968388992594555,
+    0.006915057994774543
+   ]
+  },
+  "rk3_step": {
+   "argument_bytes": 15955308,
+   "compile_s": 6.2612846120027825,
+   "device_peak_bytes": 219787776,
+   "first_call_s": 0.037037393005448394,
+   "generated_code_bytes": 5856,
+   "hlo": {
+    "concatenate": 102,
+    "constant_bytes": 6704,
+    "copy": 0,
+    "fft": 45,
+    "fft_shapes": [
+     {
+      "count": 3,
+      "fft_length": "120",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "72",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "48",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "24",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "96",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "120",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "72",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "48",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "24",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "96",
+      "out_dtype": "c128",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "c128",
+      "out_shape": "2,1,5,1,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "c128",
+      "out_shape": "2,1,5,8,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "f64",
+      "out_shape": "2,1,5,1,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "f64",
+      "out_shape": "2,1,5,8,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32,32",
+      "out_dtype": "c128",
+      "out_shape": "1,5,8,24,32,17",
+      "type": "RFFT"
+     }
+    ],
+    "fused_interior_bytes": 802982556,
+    "gather": 96,
+    "materialized_bytes": 203710464,
+    "scatter": 0,
+    "transpose": 52
+   },
+   "host_peak_bytes": 1311531008,
+   "lower_s": 1.0409528709860751,
+   "output_bytes": 12582912,
+   "temp_bytes": 90250288,
+   "warm_median_s": 0.015030294001917355,
+   "warm_s": [
+    0.014378335006767884,
+    0.015030294001917355,
+    0.014997548991232179,
+    0.01598891399044078,
+    0.013958779993117787,
+    0.015070592999109067,
+    0.01697132499248255
+   ]
+  }
+ },
+ "host_peak_bytes": 1311531008,
+ "label": "fwd_32x32x24_l4m8_x64",
+ "method": "rk3",
+ "precision": "64",
+ "process_s": 35.234918607995496,
+ "shape": [
+  1,
+  4,
+  8,
+  32,
+  32,
+  24
+ ],
+ "state_bytes": 12582912
+}

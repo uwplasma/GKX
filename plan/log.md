@@ -18812,3 +18812,21 @@ Evidence:
 
 Outcome:
 - partial (paused by the maintainer). Main finding: the window adjoint rematerializes every step inside each checkpoint block, costing a second forward recompute (measured 2.16x vs unchecked); on the GPU the step is traffic-bound (concatenate plus elementwise), not FFT-bound; re-saturation per evaluation, not the gradient, dominates the VMEX objective at 32x32x24 (derived). Not run: `PHASE=extra` (inner-remat-off variants, complex128 comparison, source-mapped traces), the `pr3-cm` `d96` arm, CPU forward/window rows, the adaptive-eigen row on an idle host. The ranked list and survey are in the PR body.
+
+## 2026-09-22 - PERF-LIT resumed run, paused again (research/perf-lit-20260922)
+
+Baseline:
+- GKX SHA: `f9485f044` measured (pinned office worktree); branch head before this entry `35f429256`.
+- relevant existing gate: repo-hygiene (ruff) fixed on the profiler scripts.
+
+Changes:
+- `profile_perf_lit.py`: per-arm `block_noinner` checkpoint experiment (clears JAX caches between arms), interleaved A/B timing, kernel-to-op_name mapping; `run_all_office.sh`, `wait_gpu_then_run.sh` (free-GPU only); records `gpu_a4000_extra/`, `cpu_office/`. No `src/` change.
+
+Evidence (one A4000, complex64, host load 46-106, interleaved):
+- window gradient, shipped block vs block without per-step remat: 16x16x16/256 1.110 vs 0.792 s; 16x16x16/1024 4.751 vs 3.931 s; 32x32x24/256 6.125 vs 4.762 s; 32x32x24/1024 24.60 vs 20.62 s (1.19-1.40x); temp 61/103/359/617 MB vs 301/580/1,798/3,475 MB; max rel diff 2.6e-8 to 1.7e-7. Unchecked 0.510 s at 16x16x16/256.
+- complex128 vs complex64 window gradient at 16x16x16/256: rel diffs 4.7e-7 (objective), 6.8e-8, 1.1e-7; 4.0x cost.
+- 32x32x24 forward at load 80 vs 23: field solve 4.42 vs 1.16 ms, RK3 step 17.8 vs 5.26 ms: host dispatch bound.
+- top kernel (22%) is an add fused with a masked `jnp.take` gather (linked-boundary gather, op_name attribution).
+
+Outcome:
+- partial. Item 1 confirmed exact but revised to 1.2-1.4x. Not done: CPU 1024-step A/B, CPU forward/eigen rows, `pr3-cm` re-run (stopped at the pause).

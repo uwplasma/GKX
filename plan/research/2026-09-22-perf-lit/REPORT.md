@@ -46,6 +46,59 @@ Minutes per stage (derived, not measured end to end): at 32x32x24 Nl4/Nm8 a 1024
 
 **Linear eigen derivative.** Dense route (`solver_growth_rate_from_geometry`) value+grad: 0.033 s at n=144 (VMEX default), 0.99 s at n=1,536, 2.83 s at n=3,072 (382 MB temp). Adaptive matrix-free route at n=144 on a laptop at load ~100 (indicative only, not recorded): 4.0 s value, 34 s value+grad warm. Shift-invert `pr3-cm` at Q28 `d96` (n=3,072, committed Q28 records): 13,996 inner iterations, preconditioner apply 3.1-4.4 matvecs, 57k-79k matvec-equivalents vs 33,916 for `adaptive`; 75-81% of inner time is the preconditioner apply (derived). Today's office-CPU `adaptive` control reproduces 33,915 operator applications (30.5 s single-thread, 1.29 GB RSS).
 
+## Update 2026-09-22 (resumed run, then paused again)
+
+All rows below are committed records. Host load on the shared office machine
+was 46–106 on 36 cores throughout (other lanes), so absolute times are
+inflated; the A/B rows were therefore timed **interleaved** (each round times
+every compiled arm once, rotating order; `--interleave`), and the ratios are
+the quantities to use.
+
+**Item 1 tested: window adjoint without the per-step remat inside checkpoint
+blocks** (`--checkpoint block_noinner`, experiment only, no `src/` change).
+`records/gpu_a4000_extra/win*_ab.json`, one A4000, complex64:
+
+| Grid, steps | Value s | Block (shipped) s | Block, no inner remat s | No checkpoint s | Speedup | Temp MB shipped / no-inner / none | Max rel. diff vs shipped |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 16x16x16, 256 | 0.173 | 1.110 | 0.792 | 0.510 | 1.40x (min-to-min 1.21x) | 61 / 301 / 4,425 | 9.2e-8 |
+| 16x16x16, 1024 | 1.007 | 4.751 | 3.931 | — | 1.21x (1.36x) | 103 / 580 / — | 1.7e-7 |
+| 32x32x24, 256 | 1.041 | 6.125 | 4.762 | — | 1.29x (1.26x) | 359 / 1,798 / — | 1.1e-7 |
+| 32x32x24, 1024 | 4.380 | 24.60 | 20.62 | — | 1.19x (1.19x) | 617 / 3,475 / — | 2.6e-8 |
+
+Office CPU (`records/cpu_office/cpu_win16_256_ab.json`, load 96): shipped
+84.7 s, no inner remat 73.3 s (1.16x), none 50.7 s; temp 95 / 435 / 5,865 MB.
+
+Conclusion: removing the inner remat is exact (f32 round-off only) and gives
+**1.2–1.4x, not the 1.5–2x estimated from the unchecked ratio**, at 5–6x the
+temp memory. Unchecked is still 2.2x faster than shipped, so about half of
+the gap is not the second recompute (scan residual stacking is the suspect,
+UNVERIFIED). Item 1 stays first but its expected gain is revised to 1.2–1.4x;
+a names-based policy that saves only the FFT outputs is the next variant.
+
+**Precision.** 16x16x16/256 window, complex128 vs complex64
+(`win16_256_x64.json` vs `win16_256_ab.json`): objective rel. diff 4.7e-7,
+d/dtprim 6.8e-8, geometry-gradient norm 1.1e-7. Inside a 256-step window
+complex64 is not the limiting error. complex128 costs 4.0x on the A4000
+(3.82 s vs 0.96 s, both measured under load).
+
+**Host dispatch dominates small GPU grids.** The same 32x32x24 Nl4/Nm8
+forward at load 80 (`fwd_32x32x24_l4m8_loaded.json`) vs load 23 (base
+record): field solve 4.42 vs 1.16 ms, RK3 step 17.8 vs 5.26 ms, with the
+device-time split unchanged. The ~1.2 ms "field-solve floor" is host launch
+latency, which strengthens item 4 (CUDA-graph command buffers, fewer and
+larger kernels, batching tubes).
+
+**Top device kernel identified** (`fwd_32x32x24_l4m8_srcmap.json`): the 22%
+`loop_add_fusion_3` (once per step, full state shape) is an add fused with a
+bounds-masked `jnp.take` gather and `where` — consistent with the linked
+twist-shift gather in `src/gkx/operators/linear/streaming.py` (attribution by
+op_name only, UNVERIFIED to the line). The 5–6% slice fusions carry
+`rev`/`concatenate`/`complex`: the two-sided ky completion (item 3).
+
+**Not done at this pause:** CPU 16x16x16/1024 A/B (skipped: contention), CPU
+forward, CPU dense and adaptive eigen rows, the `pr3-cm` `d96` re-run (all
+stopped at the pause; the scripts are ready).
+
 ## Bottlenecks, ranked by cost to the VMEX objective
 
 B1 re-saturation per evaluation (derived, largest); B2 double forward recompute in the window adjoint (measured 2.16x); B3 layout traffic (concatenate 10-25%, elementwise 35-48%, 21-42x state per step); B4 latency floor (field solve ~1.2 ms; 16x16x16 launch-bound); B5 preconditioner apply in shift-invert (75-81%); B6 chaotic divergence past ~1024 steps (quality); B7 compile 20-26 s per gradient graph. FFTs are 12-16% of GPU time: minor.
@@ -82,18 +135,15 @@ Where things belong: checkpoint policy, layout, field-solve fusion, FFT packing,
 - Literature survey complete in three sections (gyrokinetic codes/adjoints/preconditioners, 37 refs; sparse direct and implicit adjoints from JAX incl. a read-only SOLVAX 0.25.0 inventory, 32 refs; trajectory derivatives/precision/GPU mechanics, 61 refs). Condensed above.
 
 **Not done.**
-- `REPORT.md` and the three survey appendices are not committed in the folder yet (the write was blocked in this session); the text above is the report's content. Commit it as `plan/research/2026-09-22-perf-lit/REPORT.md`.
-- `PHASE=extra` of `run_profile.sh`: inner-remat-off window variants at 16x16x16/256, 16x16x16/1024, 32x32x24/256 (tests item 1 directly); complex128 window at 256 steps; complex128 forward; forward traces with kernel-to-source mapping (identifies the field-solve chain and the top elementwise fusions).
-- The `pr3-cm` `d96` arm (stopped at the pause; its partial output was not kept).
-- CPU forward/window rows on an idle host; the `eigen-adaptive` row on an idle host.
+- CPU rows on an idle host: 16x16x16/1024 window A/B, forward 32x32x24, dense and adaptive eigen (`PHASE=cpu` of `run_profile.sh`).
+- The `pr3-cm` `d96` re-run (`run_pr3.sh`).
+- A names-based checkpoint policy (save FFT outputs only) as the next item-1 variant.
 
-**Known failures / caveats.** The random state is not saturated turbulence: objective values are not physics. Office host load was 13-23 on 36 cores during GPU runs (device times are less sensitive than compile times). The laptop was at load 70-114, so no laptop timing is quoted as a record.
+**Known failures / caveats.** The random state is not saturated turbulence: objective values are not physics. The office host was at load 46–106 during the resumed runs; A/B rows are interleaved and ratios are the quantities to use.
 
-**Raw records.** In-repo: `plan/research/2026-09-22-perf-lit/records/`. Office host: GPU traces under `perflit_gpu/trace_*` in the home directory (not committed, large); a pinned detached worktree at `f9485f044` named `gkx-perf-lit` in the home directory, venv `venvs/gkx-nl` (JAX 0.10.2 CUDA 12, SOLVAX 0.22.0).
+**Raw records.** In-repo: `plan/research/2026-09-22-perf-lit/records/` (`gpu_a4000`, `gpu_a4000_extra`, `cpu_office`, `cpu_pr3`). Office host: traces under `perflit_gpu*/trace_*` in the home directory (not committed); pinned detached worktree `gkx-perf-lit` at `f9485f044`, venv `venvs/gkx-nl` (JAX 0.10.2 CUDA 12).
 
 **Next steps, in order.**
-1. On the office host, from the pinned worktree, check `nvidia-smi` and use only a free GPU: `CUDA_VISIBLE_DEVICES=<free> PHASE=extra bash plan/research/2026-09-22-perf-lit/run_profile.sh ~/perflit_gpu ~/venvs/gkx-nl/bin/python gpu` (copy the updated script from this branch first). Confirm the inner-remat-off rows give identical value/gradient to `win16_256.json`/`win16_1024.json`/`win32_256.json` and record the speedup and temp.
-2. `bash plan/research/2026-09-22-perf-lit/run_pr3.sh ~/perflit_pr3 ~/venvs/gkx-nl/bin/python` (single-threaded, ~15 min).
-3. CPU rows: `bash plan/research/2026-09-22-perf-lit/run_profile.sh ~/perflit_cpu ~/venvs/gkx-nl/bin/python cpu` on an idle host; `eigen-adaptive --nz 24 --nl 2 --nm 3 --precision 64`.
-4. Commit the new records, `REPORT.md` and survey appendices; update the tables above.
-5. Open implementation lanes from the ranked list, starting with item 1 (PERF-ADJ can absorb it) and item 2 (OPT-VMEX-NL).
+1. Copy this folder's scripts to the office worktree; when the host is quiet run `bash plan/research/2026-09-22-perf-lit/run_all_office.sh ~/venvs/gkx-nl/bin/python` minus the GPU phase already done (or `PHASE=cpu bash .../run_profile.sh ~/perflit_cpu <python> cpu`, then `bash .../run_pr3.sh ~/perflit_pr3 <python>`). GPU rows use `wait_gpu_then_run.sh`, which takes a free GPU only.
+2. Commit the records, update the tables above, and delete the raw office outputs.
+3. Open implementation lanes: item 1 (revised 1.2–1.4x; try a names policy), item 2 (warm re-saturation), item 4 (host dispatch).

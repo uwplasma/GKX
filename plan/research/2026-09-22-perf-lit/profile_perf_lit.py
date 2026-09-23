@@ -102,8 +102,13 @@ def _block(tree: Any) -> Any:
     return tree
 
 
-def _measure(fn, args: tuple, repeats: int, hlo: bool = True) -> dict[str, Any]:
-    """Compile once, run once (discarded), then time ``repeats`` warm calls."""
+def _measure(
+    fn, args: tuple, repeats: int, hlo: bool = True, keep: list | None = None
+) -> dict[str, Any]:
+    """Compile once, run once (discarded), then time ``repeats`` warm calls.
+
+    ``keep`` receives the compiled executable for later interleaved timing.
+    """
 
     from tools.profiling.profile_runtime_kernels import _hlo_op_counts
 
@@ -112,6 +117,8 @@ def _measure(fn, args: tuple, repeats: int, hlo: bool = True) -> dict[str, Any]:
     t1 = time.perf_counter()
     compiled = lowered.compile()
     t2 = time.perf_counter()
+    if keep is not None:
+        keep.append(compiled)
     mem = compiled.memory_analysis()
     record: dict[str, Any] = {
         "lower_s": t1 - t0,
@@ -218,19 +225,44 @@ def _fft_op(x, *, kind: str, length: tuple[int, ...]):
 
 
 def _hlo_source(text: str, name: str) -> str | None:
-    """op_name/source line of the HLO instruction a trace kernel is named after."""
+    """Source lines of the HLO instruction a trace kernel is named after.
 
-    m = re.search(r"%" + re.escape(name) + r" = [^\n]*", text)
-    if not m:
+    Kernel names spell the instruction's ``.N`` suffix as ``_N``. A fusion
+    usually carries no metadata itself, so the distinct ``source_file:line``
+    pairs of the instructions inside its fused computation are returned.
+    """
+
+    line = None
+    for cand in (name, re.sub(r"_(\d+)$", r".\1", name)):
+        m = re.search(r"%" + re.escape(cand) + r" = [^\n]*", text)
+        if m:
+            line = m.group(0)
+            break
+    if line is None:
         return None
-    line = m.group(0)
-    meta = re.search(
-        r'op_name="([^"]*)".*?source_file="([^"]*)" source_line=(\d+)', line
-    )
-    if meta:
-        return f"{meta.group(1)[-80:]} @ {meta.group(2).split('/src/')[-1]}:{meta.group(3)}"
-    calls = re.search(r"calls=(%[\w.\-]+)", line)
-    return f"{line[:160]}" if not calls else f"fusion {calls.group(1)}"
+    lines = [line]
+    calls = re.search(r"calls=%([\w.\-]+)", line)
+    if calls:
+        body = re.search(
+            r"\n%?" + re.escape(calls.group(1)) + r" [^\n]*\{\n(.*?)\n\}", text, re.S
+        )
+        if body:
+            lines += body.group(1).splitlines()
+    found: list[str] = []
+    for ln in lines:
+        for f, n in re.findall(r'source_file="([^"]*)" source_line=(\d+)', ln):
+            tag = f"{f.split('/src/')[-1].split('/site-packages/')[-1]}:{n}"
+            if tag not in found:
+                found.append(tag)
+    if not found:
+        # GPU executables often keep only op_name metadata: report the
+        # distinct innermost primitive paths instead (jit(...)/.../prim).
+        for ln in lines:
+            for op in re.findall(r'op_name="([^"]*)"', ln):
+                tag = "/".join(op.split("/")[-3:])
+                if tag not in found:
+                    found.append(tag)
+    return "; ".join(found[:8]) if found else line[:160]
 
 
 def _trace_top_ops(fn, args: tuple, trace_dir: Path, calls: int) -> dict[str, Any]:
@@ -516,13 +548,24 @@ def cmd_window(args) -> dict[str, Any]:
 
     from gkx.solvers_nonlinear_state_integration import nonlinear_heat_flux_window
 
-    if args.inner_remat == "off":
-        # Experiment, not shipped behaviour: keep the O(sqrt N) block checkpoint
-        # but store each block's per-step residuals instead of rematerializing
-        # every step inside the block (one forward recompute instead of two).
-        import gkx.solvers_nonlinear_explicit as explicit
+    import gkx.solvers_nonlinear_explicit as explicit
 
-        explicit.checkpoint_explicit_step = lambda step, checkpoint: step
+    shipped_step_checkpoint = explicit.checkpoint_explicit_step
+
+    def inner_remat(on: bool) -> None:
+        # ``block_noinner`` is an experiment, not shipped behaviour: keep the
+        # O(sqrt N) block checkpoint but store each block's per-step residuals
+        # instead of rematerializing every step inside the block (one forward
+        # recompute instead of two). ``checkpointed_explicit_scan`` looks the
+        # helper up in its module at trace time, so swapping it is enough.
+        explicit.checkpoint_explicit_step = (
+            shipped_step_checkpoint if on else (lambda step, checkpoint: step)
+        )
+        # The window total is itself a cached ``jax.jit``; drop its traces so
+        # the next arm is retraced under the swapped helper.
+        jax.clear_caches()
+
+    inner_remat(args.inner_remat == "on")
     case = build_case(args.nx, args.ny, args.nz, args.nl, args.nm)
     state, _ = _state(case, args.amplitude, args.seed)
     params, geometry = case["params"], case["geometry"]
@@ -561,21 +604,58 @@ def cmd_window(args) -> dict[str, Any]:
         "arms": {},
     }
     value_fn = jax.jit(lambda s, g: objective(s, g, True))
+    executables: list = []
     rec["arms"]["value"], v = _measure(
-        value_fn, (one, geo_vars), args.repeats, hlo=False
+        value_fn, (one, geo_vars), args.repeats, hlo=False, keep=executables
     )
     rec["arms"]["value"]["objective"] = float(v)
+    reference = None
     for ckpt in args.checkpoint:
-        flag = ckpt == "block"
+        flag = ckpt != "none"
+        inner_remat(ckpt != "block_noinner" and args.inner_remat == "on")
         vg = jax.jit(
-            jax.value_and_grad(lambda s, g: objective(s, g, flag), argnums=(0, 1))
+            jax.value_and_grad(lambda s, g, f=flag: objective(s, g, f), argnums=(0, 1))
         )
-        r, out = _measure(vg, (one, geo_vars), args.repeats, hlo=False)
+        r, out = _measure(
+            vg, (one, geo_vars), args.repeats, hlo=False, keep=executables
+        )
         val, (gs, gg) = out
         r["objective"] = float(val)
         r["grad_tprim_scale"] = float(gs)
         r["grad_geometry_norm"] = float(sum(jnp.linalg.norm(x) ** 2 for x in gg) ** 0.5)
+        flat = np.concatenate(
+            [np.atleast_1d(np.asarray(val)), np.atleast_1d(np.asarray(gs))]
+            + [np.ravel(np.asarray(x)) for x in gg]
+        )
+        if reference is None:
+            reference = (ckpt, flat)
+        else:
+            scale = max(float(np.max(np.abs(reference[1]))), 1e-300)
+            r["max_abs_diff_vs_first_arm"] = float(np.max(np.abs(flat - reference[1])))
+            r["max_rel_diff_vs_first_arm"] = r["max_abs_diff_vs_first_arm"] / scale
+            r["compared_to"] = reference[0]
         rec["arms"][f"value_and_grad_{ckpt}"] = r
+    inner_remat(True)
+    # A/B/A/B: every round times each compiled arm once, in rotating order, so
+    # host-load drift hits all arms alike. These medians are the ones to quote.
+    names = list(rec["arms"])
+    rounds: dict[str, list[float]] = {k: [] for k in names}
+    for i in range(args.interleave):
+        order = names[i % len(names) :] + names[: i % len(names)]
+        for k in order:
+            t = time.perf_counter()
+            _block(executables[names.index(k)](one, geo_vars))
+            rounds[k].append(time.perf_counter() - t)
+    if args.interleave:
+        for k in names:
+            rec["arms"][k]["interleaved_s"] = rounds[k]
+            rec["arms"][k]["interleaved_median_s"] = statistics.median(rounds[k])
+        rec["derived_interleaved"] = {
+            f"{k}_over_value": rec["arms"][k]["interleaved_median_s"]
+            / rec["arms"]["value"]["interleaved_median_s"]
+            for k in names
+            if k != "value"
+        }
     t_val = rec["arms"]["value"]["warm_median_s"]
     rec["derived"] = {
         f"{k}_over_value": a["warm_median_s"] / t_val
@@ -700,9 +780,13 @@ def main() -> int:
     ap.add_argument("--dt", type=float, default=0.03890582546591759)
     ap.add_argument("--steps", type=int, default=256)
     ap.add_argument(
-        "--checkpoint", nargs="+", default=["block"], choices=("block", "none")
+        "--checkpoint",
+        nargs="+",
+        default=["block"],
+        choices=("block", "block_noinner", "none"),
     )
     ap.add_argument("--inner-remat", choices=("on", "off"), default="on")
+    ap.add_argument("--interleave", type=int, default=0)
     ap.add_argument("--amplitude", type=float, default=1.0e-3)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--repeats", type=int, default=5)
