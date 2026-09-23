@@ -3,13 +3,13 @@
     "booz_xform_jax_api_available": true,
     "booz_xform_jax_available": true,
     "booz_xform_jax_paths": [
-      "/Users/rogeriojorge/local/booz_xform_jax",
-      "/Users/rogeriojorge/local/booz_xform_jax/src"
+      "booz_xform_jax",
+      "booz_xform_jax/src"
     ],
     "vmex_available": true,
     "vmex_boundary_api_available": true,
     "vmex_paths": [
-      "/Users/rogeriojorge/local/vmex"
+      "vmex"
     ]
   },
   "booz_xform_flux_tube": {
@@ -18,13 +18,13 @@
       "booz_xform_jax_api_available": true,
       "booz_xform_jax_available": true,
       "booz_xform_jax_paths": [
-        "/Users/rogeriojorge/local/booz_xform_jax",
-        "/Users/rogeriojorge/local/booz_xform_jax/src"
+        "booz_xform_jax",
+        "booz_xform_jax/src"
       ],
       "vmex_available": true,
       "vmex_boundary_api_available": true,
       "vmex_paths": [
-        "/Users/rogeriojorge/local/vmex"
+        "vmex"
       ]
     },
     "bmnc_b": [
@@ -143,13 +143,13 @@
       "booz_xform_jax_api_available": true,
       "booz_xform_jax_available": true,
       "booz_xform_jax_paths": [
-        "/Users/rogeriojorge/local/booz_xform_jax",
-        "/Users/rogeriojorge/local/booz_xform_jax/src"
+        "booz_xform_jax",
+        "booz_xform_jax/src"
       ],
       "vmex_available": true,
       "vmex_boundary_api_available": true,
       "vmex_paths": [
-        "/Users/rogeriojorge/local/vmex"
+        "vmex"
       ]
     },
     "bmnc_b": [
@@ -194,13 +194,13 @@
       "booz_xform_jax_api_available": true,
       "booz_xform_jax_available": true,
       "booz_xform_jax_paths": [
-        "/Users/rogeriojorge/local/booz_xform_jax",
-        "/Users/rogeriojorge/local/booz_xform_jax/src"
+        "booz_xform_jax",
+        "booz_xform_jax/src"
       ],
       "vmex_available": true,
       "vmex_boundary_api_available": true,
       "vmex_paths": [
-        "/Users/rogeriojorge/local/vmex"
+        "vmex"
       ]
     },
     "damping": 2e-06,
@@ -651,13 +651,13 @@
       "booz_xform_jax_api_available": true,
       "booz_xform_jax_available": true,
       "booz_xform_jax_paths": [
-        "/Users/rogeriojorge/local/booz_xform_jax",
-        "/Users/rogeriojorge/local/booz_xform_jax/src"
+        "booz_xform_jax",
+        "booz_xform_jax/src"
       ],
       "vmex_available": true,
       "vmex_boundary_api_available": true,
       "vmex_paths": [
-        "/Users/rogeriojorge/local/vmex"
+        "vmex"
       ]
     },
     "fd_step": 2e-05,
@@ -682,13 +682,13 @@
       "booz_xform_jax_api_available": true,
       "booz_xform_jax_available": true,
       "booz_xform_jax_paths": [
-        "/Users/rogeriojorge/local/booz_xform_jax",
-        "/Users/rogeriojorge/local/booz_xform_jax/src"
+        "booz_xform_jax",
+        "booz_xform_jax/src"
       ],
       "vmex_available": true,
       "vmex_boundary_api_available": true,
       "vmex_paths": [
-        "/Users/rogeriojorge/local/vmex"
+        "vmex"
       ]
     },
     "bmnc_b": [
@@ -697,7 +697,7 @@
     ],
     "case_name": "circular_tokamak",
     "fd_step": 1e-05,
-    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.circular_tokamak",
+    "input_path": "vmex/examples/data/input.circular_tokamak",
     "iota_b": 0.5953125,
     "ixm_b": [
       0,
@@ -803,7 +803,7 @@
       8
     ],
     "surface_index": 7,
-    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_circular_tokamak.nc"
+    "wout_path": "vmex/examples/data/wout_circular_tokamak.nc"
   },
   "vmex_field_line_tensor": {
     "alpha": 0.0,
@@ -813,19 +813,19 @@
       "booz_xform_jax_api_available": true,
       "booz_xform_jax_available": true,
       "booz_xform_jax_paths": [
-        "/Users/rogeriojorge/local/booz_xform_jax",
-        "/Users/rogeriojorge/local/booz_xform_jax/src"
+        "booz_xform_jax",
+        "booz_xform_jax/src"
       ],
       "vmex_available": true,
       "vmex_boundary_api_available": true,
       "vmex_paths": [
-        "/Users/rogeriojorge/local/vmex"
+        "vmex"
       ]
     },
     "case_name": "nfp4_QH_warm_start",
     "fd_step": 1e-06,
     "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
-    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "input_path": "vmex/examples/data/input.nfp4_QH_warm_start",
     "iota": -1.0562565727429847,
     "jacobian_ad": [
       [
@@ -930,7 +930,7 @@
       8
     ],
     "surface_index": 17,
-    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+    "wout_path": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
   },
   "vmex_flux_tube": {
     "alpha": 0.0,
@@ -939,19 +939,19 @@
       "booz_xform_jax_api_available": true,
       "booz_xform_jax_available": true,
       "booz_xform_jax_paths": [
-        "/Users/rogeriojorge/local/booz_xform_jax",
-        "/Users/rogeriojorge/local/booz_xform_jax/src"
+        "booz_xform_jax",
+        "booz_xform_jax/src"
       ],
       "vmex_available": true,
       "vmex_boundary_api_available": true,
       "vmex_paths": [
-        "/Users/rogeriojorge/local/vmex"
+        "vmex"
       ]
     },
     "case_name": "nfp4_QH_warm_start",
     "fd_step": 2e-06,
     "field_line_convention": "VMEC theta, zeta=(theta-alpha)/iota with periodic bilinear sampling",
-    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "input_path": "vmex/examples/data/input.nfp4_QH_warm_start",
     "iota": -1.0562565727429847,
     "mode_index": 1,
     "ntheta": 24,
@@ -1051,7 +1051,7 @@
       8
     ],
     "surface_index": 17,
-    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+    "wout_path": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
   },
   "vmex_flux_tube_array_parity": {
     "alpha": 0.0,
@@ -1290,13 +1290,13 @@
       "booz_xform_jax_api_available": true,
       "booz_xform_jax_available": true,
       "booz_xform_jax_paths": [
-        "/Users/rogeriojorge/local/booz_xform_jax",
-        "/Users/rogeriojorge/local/booz_xform_jax/src"
+        "booz_xform_jax",
+        "booz_xform_jax/src"
       ],
       "vmex_available": true,
       "vmex_boundary_api_available": true,
       "vmex_paths": [
-        "/Users/rogeriojorge/local/vmex"
+        "vmex"
       ]
     },
     "boundary": "none",
@@ -1572,7 +1572,7 @@
     "equal_arc_metric_worst_normalized_max_abs": 0.03450681072966357,
     "include_pressure_variation": true,
     "include_shear_variation": true,
-    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "input_path": "vmex/examples/data/input.nfp4_QH_warm_start",
     "interpretation": "The direct VMEC tensor path proves state-level differentiability. The Boozer equal-arc core audit narrows the production gap to the full imported VMEC/EIK metric and drift convention when it passes.",
     "mboz": 21,
     "nboz": 21,
@@ -1605,7 +1605,7 @@
     "torflux": 0.5,
     "worst_core_normalized_max_abs": 5668.069765980051,
     "worst_scalar_rel": 99.39996711648354,
-    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+    "wout_path": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
   },
   "vmex_metric_tensor": {
     "available": true,
@@ -1613,18 +1613,18 @@
       "booz_xform_jax_api_available": true,
       "booz_xform_jax_available": true,
       "booz_xform_jax_paths": [
-        "/Users/rogeriojorge/local/booz_xform_jax",
-        "/Users/rogeriojorge/local/booz_xform_jax/src"
+        "booz_xform_jax",
+        "booz_xform_jax/src"
       ],
       "vmex_available": true,
       "vmex_boundary_api_available": true,
       "vmex_paths": [
-        "/Users/rogeriojorge/local/vmex"
+        "vmex"
       ]
     },
     "case_name": "circular_tokamak",
     "fd_step": 1e-05,
-    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.circular_tokamak",
+    "input_path": "vmex/examples/data/input.circular_tokamak",
     "jacobian_ad": [
       [
         47.107653258623216,
@@ -1727,6 +1727,6 @@
       8
     ],
     "surface_index": 7,
-    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_circular_tokamak.nc"
+    "wout_path": "vmex/examples/data/wout_circular_tokamak.nc"
   }
 }

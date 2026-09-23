@@ -7,16 +7,18 @@ through this module.
 
 :data:`FULL` -- ``Nky == Ny``
     The two-sided FFT order ``[0, 1, ..., Ny//2 - 1, -Ny//2, ..., -1]`` that
-    ``jnp.fft.fftfreq`` produces.  This is the layout the evolved state uses
-    today.  Half of it is redundant: a real field satisfies the reality
-    condition ``F[-ky, -kx, z] = conj(F[ky, kx, z])``.
+    ``jnp.fft.fftfreq`` produces.  Half of it is redundant: a real field
+    satisfies the reality condition ``F[-ky, -kx, z] = conj(F[ky, kx, z])``.
+    This is the evolved state's default layout
+    (:attr:`gkx.config.GridConfig.ky_layout`).
 
 :data:`HALF` -- ``Nky == Nyc == 1 + Ny // 2``
     The non-negative rows ``ky_j = j * 2*pi/Ly`` for ``j = 0 .. Ny // 2``, in
     ``jnp.fft.rfftfreq`` order.  The reality condition holds by construction
-    because the negative rows are not stored.  GKX's restart files, NetCDF
-    output and real-space snapshots already use this layout, as do the
-    flux-tube codes the plan compares against (docs ``numerics``, plan 2.4).
+    because the negative rows are not stored.  The evolved state takes it on
+    request, ``[grid] ky_layout = "half"``.  GKX's restart files, NetCDF
+    output and real-space snapshots have always used it, as do the flux-tube
+    codes the plan compares against (docs ``numerics``, plan 2.4).
 
 Three facts about the contract are easy to get wrong and are therefore stated
 here rather than rederived at each call site.

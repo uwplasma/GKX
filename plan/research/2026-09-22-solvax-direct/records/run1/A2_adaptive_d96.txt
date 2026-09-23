@@ -1,0 +1,36 @@
+[     9.3s rss<=0.00G] t_matvec 0.573 ms
+[     9.3s rss<=0.00G] building runtime geometry
+[     9.3s rss<=0.00G] building spectral grid
+[     9.3s rss<=0.00G] building runtime linear parameters
+[     9.3s rss<=0.00G] selected ky index 6 at ky=0.3000
+[     9.3s rss<=0.00G] starting Krylov solve
+[     9.3s rss<=0.00G] building linear cache
+[     9.3s rss<=0.00G] krylov method=adaptive dim=24 restarts=2
+[     9.3s rss<=0.00G] running certified adaptive propagator with dim=24 max_restarts=4 tol=1e-09
+[    40.8s rss<=0.00G] adaptive solve finished with eig=0.101286-0.245496j residual=4.08e-15 converged=True stable=True
+[    40.9s rss<=0.00G] Krylov solve complete: gamma=0.101286 omega=0.245496
+RESULT {"adaptive": {"adaptive_residual": 4.081742868248939e-15, "operator_applications": 33915, "restarts": 1, "solver_s": 31.47246609600552}, "arm": "adaptive", "case": "d96", "certified": true, "certified_residual": 4.081742868248939e-15, "cost": {"t_matvec_s": 0.0005733560101361945}, "environment": {"argv": ["plan/research/scripts/2026-09-19-pr3cm-src/measure.py", "--arm", "adaptive", "--case", "d96", "--label", "A2_adaptive_d96"], "env": {"JAX_ENABLE_X64": "true", "JAX_PLATFORMS": "cpu", "OMP_NUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "git": {"dirty_src": false, "sha": "361a8cabaed0b6957564dc8f8a91c711617a18f7"}, "gkx": "~/lanes/solvax-direct/gkx/src/gkx/__init__.py", "jax": "0.10.2", "loadavg": [43.93310546875, 38.64208984375, 28.7578125], "x64": true}, "gamma_omega": [0.10128649783814775, 0.24549632032622987], "ky": 0.3, "label": "A2_adaptive_d96", "lambda": [0.10128649783814775, -0.24549632032622987], "matvec_equivalents": {"certification": 1, "route_operator_applications": 33915, "total": 33916}, "n": 3072, "peak_rss_gib": 0.0008722245693206787, "process_seconds": 42.32315437000943, "residual_gate": 1e-09, "route_s": 31.58302921500581}
+	Command being timed: "~/lanes/solvax-direct/env/bin/python plan/research/scripts/2026-09-19-pr3cm-src/measure.py --arm adaptive --case d96 --label A2_adaptive_d96"
+	User time (seconds): 51.43
+	System time (seconds): 1.25
+	Percent of CPU this job got: 120%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:43.56
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 936832
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1
+	Minor (reclaiming a frame) page faults: 202575
+	Voluntary context switches: 74481
+	Involuntary context switches: 16816
+	Swaps: 0
+	File system inputs: 160
+	File system outputs: 16
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+exit 0

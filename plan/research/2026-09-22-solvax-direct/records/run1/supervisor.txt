@@ -1,0 +1,13 @@
+2026-09-23T01:52:34Z start A1_adaptive_d96 load 52.77 35.99 26.72
+2026-09-23T01:53:20Z end A1_adaptive_d96 load 56.68 38.79 28.07
+2026-09-23T01:53:20Z start B1_direct_d96 load 56.68 38.79 28.07
+2026-09-23T01:54:19Z end B1_direct_d96 load 42.62 38.30 28.59
+2026-09-23T01:54:19Z start A2_adaptive_d96 load 42.62 38.30 28.59
+2026-09-23T01:55:03Z end A2_adaptive_d96 load 55.59 42.31 30.41
+2026-09-23T01:55:03Z start B2_direct_d96 load 55.59 42.31 30.41
+2026-09-23T01:55:27Z end B2_direct_d96 load 50.83 42.23 30.70
+2026-09-23T01:55:27Z start C1_pr3_route_d96 load 50.83 42.23 30.70
+2026-09-23T02:02:54Z end C1_pr3_route_d96 load 73.33 65.59 45.67
+2026-09-23T02:02:54Z start bench_r48 load 73.33 65.59 45.67
+2026-09-23T02:14:27Z end bench_r48 load 76.16 73.18 62.43
+2026-09-23T02:14:27Z start bench_r96 load 76.16 73.18 62.43

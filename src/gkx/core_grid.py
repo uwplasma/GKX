@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Sequence, cast
 
 import jax
 import jax.numpy as jnp
@@ -12,6 +12,7 @@ import numpy as np
 from gkx.config import GridConfig
 from gkx.core_ky_layout import (
     FULL,
+    HALF,
     KyLayout,
     half_ky_values,
     half_twothirds_mask,
@@ -164,7 +165,9 @@ def _gyrokinetic_moment_shape(
     )
 
 
-def build_spectral_grid(cfg: GridConfig, *, ky_layout: KyLayout = FULL) -> SpectralGrid:
+def build_spectral_grid(
+    cfg: GridConfig, *, ky_layout: KyLayout | None = None
+) -> SpectralGrid:
     """Return the spectral grid of ``cfg`` with its ``ky`` axis in ``ky_layout``.
 
     ``FULL`` is the two-sided ``fftfreq`` axis of length ``Ny``.  ``HALF``
@@ -172,7 +175,21 @@ def build_spectral_grid(cfg: GridConfig, *, ky_layout: KyLayout = FULL) -> Spect
     half-spectrum evolved state uses (plan 5.3 N3); the grid still records the
     full length in :attr:`SpectralGrid.ny_full`, because ``Nyc`` alone cannot
     supply it.
+
+    ``ky_layout=None`` -- the default -- reads
+    :attr:`gkx.config.GridConfig.ky_layout`, so the layout travels with the
+    configuration rather than with whichever call site happens to build the
+    grid.  That is what lets one deck key keep the solver, the diagnostics,
+    the restart file and the NetCDF writer on the same axis: they each build
+    their own grid from the same ``cfg``.  Passing the argument explicitly
+    overrides the config, which is what the profiling and evidence tools do to
+    lower one deck onto both layouts in one process.
     """
+
+    if ky_layout is None:
+        ky_layout = cast(KyLayout, str(getattr(cfg, "ky_layout", FULL)).lower())
+    if ky_layout not in (FULL, HALF):
+        raise ValueError(f"unknown ky_layout '{ky_layout}'; expected 'full' or 'half'")
 
     Lx = cfg.Lx
     Ly = 2.0 * jnp.pi * cfg.y0 if cfg.y0 is not None else cfg.Ly

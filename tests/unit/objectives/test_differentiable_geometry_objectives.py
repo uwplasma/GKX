@@ -27,14 +27,14 @@ import gkx.geometry.vmec_boozer_core as vmec_boozer_core
 import gkx.geometry.vmec_boozer_constants as vmec_boozer_constants
 import gkx.geometry.vmec_boozer_derivatives as vmec_boozer_derivatives
 import gkx.geometry.vmec_field_line_sampling as vmec_field_line_sampling
-import tools.campaigns.vmec_flux_tube_reports as vmec_flux_tube_reports
-from tools.campaigns.vmec_flux_tube_reports import (
+import scripts.campaigns.vmec_flux_tube_reports as vmec_flux_tube_reports
+from scripts.campaigns.vmec_flux_tube_reports import (
     vmex_flux_tube_array_parity_report,
     vmex_flux_tube_sensitivity_report,
 )
 import gkx.geometry.vmec_state_controls as vmec_state_controls
-import tools.campaigns.vmec_state_sensitivity as vmec_state_sensitivity
-from tools.campaigns.vmec_state_sensitivity import (
+import scripts.campaigns.vmec_state_sensitivity as vmec_state_sensitivity
+from scripts.campaigns.vmec_state_sensitivity import (
     vmex_field_line_tensor_sensitivity_report,
     vmex_metric_tensor_sensitivity_report,
 )
@@ -159,7 +159,7 @@ def test_differentiable_geometry_facade_preserves_split_symbol_identity() -> Non
         diff_geom.booz_xform_spectral_sensitivity_report
         is not booz_bridge.booz_xform_spectral_sensitivity_report
     )
-    # The sensitivity and parity REPORT builders moved to tools/campaigns; the
+    # The sensitivity and parity REPORT builders moved to scripts/campaigns; the
     # facade no longer wraps them, and the package no longer advertises them.
     for gone in (
         "vmex_metric_tensor_sensitivity_report",
@@ -1633,7 +1633,7 @@ def test_geometry_inverse_design_report_defaults_to_all_observables_for_square_p
 
 import json
 
-from tools.release.check_vmec_boozer_gates import (
+from scripts.checks.check_vmec_boozer_gates import (
     build_vmec_boozer_differentiability_claim_guard,
 )
 

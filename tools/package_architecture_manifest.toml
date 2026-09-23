@@ -289,7 +289,13 @@ recursive = true
 # Folding it into an existing builder would give that builder a second input
 # root; splitting it per figure would cost three more files against the same
 # target. It renders committed evidence and runs no solver.
-baseline = 96
+# 96 -> 78 (SLIM-TOOLS tranche 1): eight zero-reference or campaign-only files
+# deleted and the ten tools/release gates moved to scripts/checks/ behind
+# scripts/check.py. Measured; map in plan/research/2026-09-22-slim-tools/MAP.md.
+# 78 -> 0 (SLIM-TOOLS tranche 2): artifacts/, campaigns/, comparison/ and
+# profiling/ moved whole to scripts/ behind validate.py, compare.py and
+# profile.py. tools/ now holds manifests and parity fixtures only.
+baseline = 0
 target = 0
 
 [[topology_policy.counts]]
@@ -297,7 +303,14 @@ name = "developer_script_python_files"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 15
+# 15 -> 104 (SLIM-TOOLS tranche 2): a move, not growth. The 78 tools/ modules
+# and the 10 benchmark drivers from benchmarks/ now sit in scripts/ packages
+# behind five commands (check, benchmark, profile, validate, compare) plus
+# their shared runner _command.py; tools_python_files fell 78 -> 0 in the same
+# change. The target of 12 is met by contracting these packages, not by
+# moving them again. Measured.
+# 104 -> 106: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline = 106
 target = 12
 
 
@@ -414,7 +427,8 @@ reason = "Fused stellarator_tables and stellarator_reduced; reduce by deduplicat
 
 [[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
-baseline_lines = 1076
+# 1076 -> 1154: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline_lines = 1154
 target_lines = 1000
 reason = "One NetCDF schema owner keeps dimensions, geometry, diagnostics, restart, and final-field variables consistent; reduce helper repetition without splitting the schema again."
 
@@ -433,7 +447,8 @@ path = "artifacts/io.py"
 # subsumes the other, so the count is the sum rather than new surface.
 # 1096 -> 1099: recording which scan points were seeded from a neighbour.
 # A warm-started number that does not say so is not reproducible.
-baseline_lines = 1099
+# 1099 -> 1151: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline_lines = 1151
 target_lines = 1000
 reason = "One runtime I/O owner keeps summaries, tables, restart packing, and diagnostic reload consistent; reduce repeated serializers without restoring format-specific modules."
 
@@ -460,7 +475,8 @@ path = "runtime.py"
 # 513 -> 781: absorbs workflows/runtime/execution.py, which had exactly one consumer -- this
 # file -- and handed it most of its names. That is a split module, not an
 # interface, so the two rejoin. No definition changed and no export moved.
-baseline_lines = 781
+# 781 -> 798: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline_lines = 798
 target_lines = 500
 reason = "Public runtime facade; the overage is the exploded __all__ list, so shrink it by removing exports rather than by splitting the facade."
 
@@ -478,7 +494,8 @@ path = "workflows/nonlinear.py"
 # recording why refusing is still correct: quietly dropping the stop condition
 # would hand back a simulation that integrates past where the deck asked it to
 # stop. No branch was added; the dispatcher's shape is unchanged.
-baseline_lines = 1023
+# 1023 -> 1032: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline_lines = 1032
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -487,7 +504,9 @@ path = "workflows/runtime/commands.py"
 # 1000 -> 1004: whitespace only, from the same sweep. Two reflowed call sites,
 # identical AST. The module sat exactly on the default budget, so the sweep is
 # what crossed it, not new behaviour.
-baseline_lines = 1004
+# 1004 -> 1011: the CLI and case-run Nl/Nm fallbacks now come from startup's
+# two constants instead of literals that had drifted to the pre-2.2.0 (24, 12).
+baseline_lines = 1011
 target_lines = 1000
 reason = "One command table keeps the CLI subcommands parsing and dispatching consistently; reduce the per-command duplication rather than splitting the table."
 
@@ -1103,7 +1122,9 @@ recursive = true
 # sizes it. Target unchanged.
 # 93054 -> 93344: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
-baseline = 93344
+# 93344 -> 93359: single owner for the CLI/case Nl/Nm fallbacks plus its test.
+# 93359 -> 93953: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline = 93953
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1420,7 +1441,9 @@ recursive = true
 # and checks dense fallback plus explicit refusal in float32 and float64.
 # 92979 -> 94057: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
-baseline = 94057
+# 94057 -> 94107: single owner for the CLI/case Nl/Nm fallbacks plus its test.
+# 94107 -> 94628: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline = 94628
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1516,7 +1539,10 @@ recursive = true
 # parsed by computation rather than scanned as one string, and
 # `memory_analysis` is threaded beside it as the compiler's own check.
 # The evidence probe `gather_probe.py` is the rest of the count.
-baseline = 78901
+# 78901 -> 63832 (SLIM-TOOLS tranche 1): deletions plus the tools/release move
+# to scripts/checks/, same change as the file count above. Measured.
+# 63832 -> 0 (SLIM-TOOLS tranche 2): moved to scripts/, see the file count.
+baseline = 0
 target = 0
 
 [[line_budget_policy.counts]]
@@ -1524,5 +1550,9 @@ name = "developer_script_python_lines"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 25000
+# 25000 -> 77373 (SLIM-TOOLS tranche 2): 63,832 lines moved from tools/ and
+# 1,348 from benchmarks/, plus about 200 lines of command dispatchers; tool lines
+# fell to 0 in the same change. Measured.
+# 77373 -> 78277: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
+baseline = 78277
 target = 18000

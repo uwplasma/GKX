@@ -3,7 +3,7 @@
 GKX writes the grouped NetCDF layout GX writes, deliberately: the same
 ``Grids``/``Diagnostics`` groups, the same ``Phi2_t``, ``HeatFlux_st``,
 ``ParticleFlux_st``, ``Wphi_kyst`` names. The comparison tools under
-``tools/comparison`` have been reading both with one set of accessors for that
+``scripts/comparison`` have been reading both with one set of accessors for that
 reason. What was missing was the last step -- ``gkx --plot`` refused anything
 that was not GKX's own bundle, so eyeballing a GX run next to a GKX run meant
 writing a script. This module closes that gap.

@@ -73,7 +73,15 @@ def test_experimental_solvax_eigen_contract() -> None:
     assert callable(solvax.propagator_eigenpairs)
 
 
-def _tiny_krylov_setup(*, linked: bool = False):
+def _tiny_krylov_setup(*, linked: bool = False, ky_layout: str | None = None):
+    """Build a small linked or periodic cache and a state that fits its grid.
+
+    ``ky_layout`` is left unset by default, so the grid follows the configured
+    layout and these tests exercise whichever one ships.  A caller passes
+    ``"full"`` only when the negative ``ky`` rows are themselves under test.
+    """
+
+    layout = {} if ky_layout is None else {"ky_layout": ky_layout}
     grid_cfg = GridConfig(
         Nx=4 if linked else 2,
         Ny=4 if linked else 2,
@@ -83,6 +91,7 @@ def _tiny_krylov_setup(*, linked: bool = False):
         boundary="linked" if linked else "periodic",
         y0=20.0 if linked else None,
         jtwist=1 if linked else None,
+        **layout,
     )
     cfg = CycloneBaseCase(grid=grid_cfg)
     grid = build_spectral_grid(cfg.grid)
@@ -1977,7 +1986,11 @@ def test_linked_cover_mask_is_the_chain_modes_and_none_when_all_are() -> None:
 
     # Two-sided ky: chains visit rows {0, 1}; row -1 is rebuilt from the
     # conjugate (-ky, -kx) modes, so it is coupled; the Nyquist row is not.
-    _grid, two_sided, _p, _v, _t, _terms2 = _tiny_krylov_setup(linked=True)
+    # The negative row only exists on the full axis, which is what the mirror
+    # half of the cover mask is, so this grid asks for it by name.
+    _grid, two_sided, _p, _v, _t, _terms2 = _tiny_krylov_setup(
+        linked=True, ky_layout="full"
+    )
     chain = _chain_modes(two_sided)
     two_sided_mask = np.asarray(ka._linked_covered_mode_mask(two_sided))
     np.testing.assert_array_equal(two_sided_mask[:3], chain[:3])
@@ -1995,7 +2008,12 @@ def test_linked_cover_mask_is_the_chain_modes_and_none_when_all_are() -> None:
 @pytest.mark.parametrize("two_sided", [False, True])
 def test_modes_outside_linked_chains_are_decoupled_from_them(two_sided) -> None:
     if two_sided:
-        _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=True)
+        # The parameter names the layout under test: on the full axis the
+        # chains also cover the negative rows, so decoupling has to hold for
+        # modes the half axis never stores.
+        _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(
+            linked=True, ky_layout="full"
+        )
         state = jnp.asarray(np.random.default_rng(3).normal(size=v0.shape), v0.dtype)
     else:
         cache, params, state, terms = _selected_linked_case()

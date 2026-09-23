@@ -18524,6 +18524,75 @@ carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main`
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
 
+### 2026-09-21 — issue #194: first fixed-rate Cyclone timestep ladder
+
+Source: main `eeb3481c6` plus the 13-line change to
+`tools/comparison/fixtures/parity/cyclone_salpha_itg.toml`: explicit fixed steps,
+rate 50 and structured legacy provenance. This preserves the absorber at
+dt=.002 while allowing timestep refinement without changing its rate. The
+permanent eleven-mode atlas manifest is unchanged; this pilot selects one mode.
+This is partial progress on #194, not regeneration of the full affected atlas.
+
+The self-run GX reference uses upstream `3865a53778862e1686f414bf6f416339e24887c9`
+and the isolated linked-damping repair documented in
+[the reference-build record](https://github.com/uwplasma/GKX/blob/16d98efcc/plan/log.md).
+Patch SHA256: `bcc7113f69553351ebb46f30bd383d37396ad86eba0d455ba26bdf95f38c923d`.
+Use upstream `benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in`
+with fixed RK4 dt=.002, T=150, and diagnostic nwrite=100. The reference runs
+all eleven positive ky modes; it is not a published reference or velocity limit.
+Input SHA256: `ae98aebeb7f2a6c496dbbeb4036d0dab0a72232c518ac85f70ba7eb0916979f4`;
+binary: `1ffefc33a30259a89e381d952bb2d093e2cba24e0ff6f4ebd3a8ea508e1f7e33`;
+terminal NetCDF: `f7142ca447af34897fa81936d0c62c09896dd1fadb7b16d7ac7e0d3ae380b628`.
+All 131 numeric variables are finite. The 751 samples end at 150.0000071246177;
+the final diagnostic interval is .198, not the normal .2. The public extractor
+averages samples 375:751, giving gamma=.09306419716077916 and
+omega=.2820201554196946 at ky=.30000001192092896.
+
+GKX uses that NetCDF's geometry, Nl16/Nm48/Nz96, IMEX2, T=150, rate 50,
+Cyclone normalization without diagnostic rescaling, and JAX 0.10.2/CUDA/x64.
+The primary fit interval is [105,150]; the separate half-horizon probe fits
+[52.5,75]. All three pass the existing 5% half-horizon agreement criterion.
+
+| dt | steps | gamma | omega | primary wall (s) | full command wall (s) |
+|---:|---:|---:|---:|---:|---:|
+| .002 | 75000 | .09304484383977978 | .2820208078331837 | 50.5578 | 78.53 |
+| .001 | 150000 | .09304476623049032 | .2820208497961978 | 96.9467 | 148.09 |
+| .0005 | 300000 | .09304473023000857 | .28202087233897055 | 191.3673 | 289.42 |
+
+Middle-to-fine relative changes are 3.86916e-7 (gamma) and 7.99330e-8 (omega).
+Observed dyadic orders are 1.108 and .896: these tiny fitted-output changes do
+**not** establish second-order integration. Resolve fit/sampling and precision
+effects before claiming an asymptotic order. Fine-rung differences from GX are
+-0.020918% and +0.0002542%, respectively. No velocity convergence, nonlinear
+transport or speedup is inferred; GX ran eleven modes and GKX only one.
+
+Reproduction: stage the verified NetCDF as
+`tools_out/issue194/reference/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc`.
+Copy the first case in `tools/gx_parity_matrix_manifest.toml` into an ignored
+manifest three times, preserving its other fields, with distinct keys
+`cyclone_rate_dt002`, `cyclone_rate_dt001`, `cyclone_rate_dt0005`, the table's
+dt/steps, and `ky=[0.30000001192092896]`. Label geometry as imported GX and
+reference_provenance with the source/patch/NetCDF hashes above. Then run:
+
+```bash
+GX_PARITY_REF_DIR="$PWD/tools_out/issue194/reference" PYTHONPATH=src \
+JAX_ENABLE_X64=true GKX_X64=1 python tools/comparison/build_gx_parity_matrix.py \
+  --manifest tools_out/issue194/ladder.toml \
+  --reference-dir tools_out/issue194/reference \
+  --cases cyclone_rate_dt002 cyclone_rate_dt001 cyclone_rate_dt0005 \
+  --stem tools_out/issue194/results/ladder
+```
+
+The three original per-rung CSV hashes, in timestep order, are
+`14b4e28f2d6cef496f6fcb486713ba8a405ff9a0968c29e20c5b2b9c7937754b`,
+`158b0d3480342c86b1bff5895e865b90bc634b8721ad29a1ce6dd48a26c05d88`,
+`26a5fce1b6937dc661bb7b31dbe9dcb7330b51b0080ada2c3bbfb07688f61901`.
+Raw outputs are untracked; these identify measured originals, not expected
+byte-identical reruns with new timings. An initial launch missing the geometry
+environment variable failed before integration; its corrected attempt and both
+refinements exited zero. CPU verification passes 17 damping-reference tests.
+Next: fit/sampling audit, remaining modes and affected decks, then spatial and
+velocity convergence. Do not close #194 from this single-mode ladder.
 ### 2026-09-20 — independent integration review and current priorities
 
 Baseline `eeb3481c6` (2.2.0); this review does not promote new physics or a release.
@@ -18825,6 +18894,325 @@ the full module and float32 selection also pass in the implementation review.
 This is an instantaneous algebraic exchange gate, not physical free-energy
 identification or nonlinear/heat-flux/source/sink/time-integration validation.
 No runtime changes or new files; shared setup limits test growth to 45 lines.
+
+## 2026-09-20 — Q10: the ky >= 0 layout becomes the default (draft, handed off)
+
+**Outcome: the code flips the default; the recorded full-layout compatibility
+fixtures stay unchanged, and the opt-out identity, integration and stale-`Ny`
+test gates pass. Adoption is nevertheless blocked: after #264 removes recurrent
+compilation on an exact combined head, the measured half-layout window gradient
+is still 27.9% slower in steady calls.** Branch `perf/ky-half-default`,
+rebased onto `origin/main` `eeb3481c6`. `perf/ky-half-spectrum-switch` was
+examined and rejected as a base: it is fully merged (#258) and carries no
+commit `main` lacks.
+
+**What changed.** `[grid] ky_layout` (`GridConfig.ky_layout`) defaults to
+`"half"`; `"full"` is the opt-out. Every grid a run builds reads the key, so
+the solver, diagnostics, restart writer and NetCDF writer cannot disagree.
+Restart loaders take the target layout and the two-sided length `ny_full`;
+the binary restart writer widens a half state before writing, because a
+`Nyc`-row file is already the packed interchange order and the reader tells
+the two apart by size alone.
+
+**Wall clock** (benchmark host, tree `38d7c4277`, CPUs 12-17 with idle HT siblings,
+arm order rotated, 4 blocks x 7 reps; `timing_table.py` over `out/nopool_*`):
+
+| kernel | 32x32x24 half/full | 64x64x24 half/full |
+|---|---|---|
+| RK3 step, 5 steps jitted | 0.543 | 0.603 |
+| nonlinear RHS | 0.492 | 0.628 |
+| RHS VJP | 0.828 | 0.961 |
+| eager window VJP | 2.313 | not run |
+
+**Window-gradient regression.** The compile split completed on source
+`38d7c4277db1bf9a4fee2292d3aea2f3c00ca31d`, not on the current PR head. It
+used JAX 0.10.2, the 32x32x24, Nl4/Nm8 six-step window, four arm-rotated blocks,
+and one first call plus three repeats per arm and block. The 32 call-level rows
+are in `out/window_compile_split_calls.csv`; each row carries the source and
+script hashes, options, state shape, load, raw-input hash, wall time, backend
+compile count and durations. The measured script differs from the public
+`window_compile_split.py` only in sanitized provenance text and formatting;
+the measured kernel and event accounting are unchanged.
+
+`38d7c4277` is an ancestor of tested PR source `9c8614b10` and already contains
+the opt-in half-layout machinery, but it predates this PR's default and artifact
+changes. The result is therefore a blocking regression signal, not an exact
+performance measurement of `9c8614b10`.
+
+Median across the four blocks; repeated calls are first reduced to each
+block's median of three (seconds):
+
+| call | full wall / compile / remainder | half wall / compile / remainder | half/full wall / compile / remainder | backend compiles full / half |
+|---|---|---|---|---|
+| first | 31.080 / 21.086 / 9.967 | 57.164 / 27.109 / 29.966 | 1.839 / 1.286 / 3.007 | 444 / 405 |
+| repeated | 18.986 / 9.304 / 9.637 | 47.101 / 16.425 / 30.762 | 2.481 / 1.765 / 3.192 | 13 / 13 |
+
+Here `compile` is the sum of JAX monitoring's trace, lowering and backend
+compile durations. `remainder` is `wall - compile`: it is an estimate, not a
+true compilation-free kernel time. In particular every repeated call still
+compiled 13 backend modules. The 2.481x repeated wall regression is real, but
+monitoring phases may overlap and the 3.192x remainder ratio is not a clean
+attribution; it motivates measuring execution separately.
+
+The public driver invocation is:
+
+```
+D="$(pwd)/plan/research/scripts/2026-09-20-q10-ky-half-default"
+LOADMAX=10 BUSYMEAN=0.12 BUSYWORST=0.25 PY=python \
+  bash "$D/run_window_split.sh" "$D" <tree-at-38d7c4277> \
+  12-17 12-17,30-35 4
+```
+
+The raw JSON files remain private because their provenance field contains a
+machine-local path; their exact SHA256 values are retained in the compact CSV.
+The 32 legacy rows have `compile_scope=monitoring_trace_lowering_backend`; the
+five added resource-and-answer columns are empty because that campaign did not
+measure them.  The combined-head rows below use `backend_funnel`, the compiler
+entry point through which every lowered module passes.
+
+**Combined reusable-adjoint result.** The follow-up used local integration
+commit `944faacb2ad919838b3236839ed4bbb98ad970b4`, whose exact public parents are
+this PR at `07fdc57924da93c56055afb5dfae23dec00c0b73` and #264 at
+`d92f3100c984bba10ac5ec7ef5daea4a5a6611ba`. The runtime sources merged
+without conflict. The only integration resolutions were the measured package
+manifest counts (`src=93544`, `tests=92960`, `tools=78904`) and #264's
+full-complex sheared-bracket test fixture: it names `ky_layout="full"` and
+sizes its state from the merged grid. Thus the measured source can be rebuilt
+from two public commits without depending on the local merge object.
+
+The public #264 driver is
+`plan/research/scripts/2026-09-20-q30-window-compile-cache/bench_q30.py` at
+`d92f3100c`; its SHA256 is
+`ab80a3c54cc5ae05a7a3040b7fa606ab532bc4fac2b161e9dd937e164f65164d`.
+For each arm, from the repository root, the measured invocation was:
+
+```
+JAX_PLATFORMS=cpu JAX_ENABLE_X64=1 OMP_NUM_THREADS=6 \
+  taskset -c 6-11 nice -n 15 /usr/bin/time -v -o <resource.txt> \
+  timeout 900s python \
+  plan/research/scripts/2026-09-20-q30-window-compile-cache/bench_q30.py \
+  <result.json> --Nx 32 --Ny 32 --Nz 24 --Nl 4 --Nm 8 \
+  --window-steps 6 --reps 3 --ky-mode <full-or-half>
+```
+
+For these new rows `compile_total_s` is backend compile time and
+`execution_remainder_s` is wall minus that value. It is not a kernel timer;
+on the cold call it still includes tracing, lowering and other host work. On
+an admitted steady call the backend count and subtraction are both zero, so
+the recorded wall time is the quantity compared below.
+
+The model was the Cyclone nonlinear runtime deck, RK3, checkpointed,
+compressed-real FFT and grid Laguerre mode, on a 32x32x24 grid with Nl4/Nm8
+and a six-step window. JAX/JAXLIB 0.10.2 ran CPU-only and x64 on six logical
+CPUs of a 36-CPU host. Each arm was a fresh process with one cold call and
+three steady calls. Three blocks rotated full/half order as full-half,
+half-full, full-half. The initial load averages were 7.46/5.23/4.96 and
+unrelated work occupied about five CPU cores; this run was low priority and
+affinity-limited to six cores. It returned zero under a 2700 s campaign cap,
+took about five minutes, and every one of the 18 steady calls crossed the
+backend compiler funnel zero times.
+
+Median of each block's three steady calls, followed by the pooled median of all
+nine steady calls (seconds):
+
+| layout | block 1 | block 2 | block 3 | pooled |
+|---|---:|---:|---:|---:|
+| full | 6.869 | 7.796 | 7.460 | 7.460 |
+| half | 8.899 | 9.943 | 9.610 | 9.541 |
+
+The half/full pooled steady ratio is **1.279**: after #264 removes recurrent
+compilation, the half layout remains 27.9% slower on this objective. Cold wall
+medians were 22.833 s full and 21.742 s half; cold backend-compile medians were
+9.944 s and 8.212 s. Every call returned bitwise-identical value
+`2.2797168615764328e-05` and `tprim` gradient
+`[1.4574502715873373e-05]` across layouts and blocks.
+
+The process-level peak RSS median was 2102 MiB full (range 2050--2118) and
+1781 MiB half (1743--1787), a half/full ratio of 0.847. This is the maximum of
+the entire fresh process, including Python, cold compilation and all four
+calls; it is not steady-kernel memory. Shared-host load remains a timing
+limitation despite rotation and affinity, and this CPU result makes no GPU
+claim. The objective differentiates only the single `tprim` parameter through
+six steps from the driver's normalized seed; it is neither a saturated-state
+physics result nor a general performance result for other objectives. The 24
+new call rows in `out/window_compile_split_calls.csv` preserve
+logical arm IDs, exact raw-result and resource-record hashes, wall time,
+backend compile count and time, whole-process RSS, value and gradient without
+publishing machine-local raw artifact names.
+
+**Checkpoint discriminator.** A second combined-head campaign changed exactly one
+line in the public driver above:
+
+```diff
+-        checkpoint=True,
++        checkpoint=False,
+```
+
+The resulting measurement script has SHA256
+`a4fc215608362098c14c3401601d45c98873ea073f4707f4da2201968d174578`.
+It used the same source, runtime, model, grid, six-step window, affinity and
+invocation, changing `--reps` to 2. Two blocks rotated full/half order; each
+arm was a fresh process, so the CSV adds exactly 12 calls (four cold and eight
+steady). Initial load averages were 1.83/3.77/4.31. Every steady call crossed
+the backend compiler funnel zero times.
+
+| layout | block 1 steady median | block 2 steady median | pooled steady median | process RSS median |
+|---|---:|---:|---:|---:|
+| full | 4.002 s | 4.196 s | 4.141 s | 4093 MiB |
+| half | 4.322 s | 4.176 s | 4.251 s | 2626 MiB |
+
+The half/full pooled ratio falls from 1.279 with checkpointing to **1.027**
+without it. The layouts remain bitwise equal to each other: value
+`2.2797168615764328e-05`, gradient `[1.4574502715873375e-05]`. Relative to
+the checkpointed campaign, the value is exact and the gradient differs by one
+float64 ULP (`1.6940658945086007e-21`). Disabling checkpointing is not a
+default-policy repair: whole-process peak RSS rises to about 1.95x for full
+and 1.47x for half, and a six-step window does not bound long-window memory.
+
+**Endpoint discriminator.** To remove the heat-flux diagnostic while keeping
+the same six-step differentiated trajectory, make the following edits to the
+original public driver, retaining its compiler counter and report loop. The
+abbreviated diff shows edit locations, not a patch for `git apply`:
+
+```diff
+-from gkx.solvers_nonlinear_state_integration import nonlinear_heat_flux_window
++from gkx.operators.linear.cache_builder import build_linear_cache
++from gkx.solvers_nonlinear_state_integration import integrate_nonlinear
+@@
+ dt = float(cfg.time.dt)
++cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
++seed_mode = g0[..., ky_i, kx_i, :]
+@@
+ def objective(tprim):
+-    return nonlinear_heat_flux_window(
++    final_state = integrate_nonlinear(
+         g0,
+         grid,
+         geom,
+         replace(params, tprim=tprim),
+-        dt,
+-        args.window_steps,
++        dt=dt,
++        steps=args.window_steps,
+         terms=terms,
+         method="rk3",
+-        checkpoint=True,
++        cache=cache,
+         compressed_real_fft=True,
+         laguerre_mode="grid",
+-    )
++        return_fields=False,
++    )[0]
++    return jnp.real(jnp.vdot(seed_mode, final_state[..., ky_i, kx_i, :]))
+@@
+-fn = jax.value_and_grad(objective)
++fn = jax.jit(jax.value_and_grad(objective))
+```
+
+This measurement script has SHA256
+`1274beff88b5769d85f8b58203c67b40b95c5149797274074285e5bc2049ef14`.
+The same two-block, rotated, fresh-process cadence adds 12 more calls; all
+eight steady calls crossed the backend compiler funnel zero times. The
+campaign did not separately sample host load, so those CSV fields are empty.
+
+| layout | block 1 steady median | block 2 steady median | pooled steady median | process RSS median |
+|---|---:|---:|---:|---:|
+| full | 3.888 s | 3.906 s | 3.899 s | 2108 MiB |
+| half | 16.549 s | 17.999 s | 17.324 s | 1917 MiB |
+
+The endpoint half/full ratio is **4.444**. All 12 calls returned the same
+value `0.0002918839151225744` and `tprim` gradient
+`[1.3133016542317785e-08]` bitwise across layouts and blocks. This shows that
+the heat-flux reduction is not necessary for the observed half-layout reverse
+slowdown, but it does not localize the cause: selecting one endpoint mode can
+enable layout-specific XLA dead-code elimination and fusion, so this ratio is
+not transferable to the production heat-window objective. Both discriminator
+campaigns are short shared-host CPU measurements, make no GPU claim and do
+not justify flipping the default. Compiler profiling remains a separate
+follow-up.
+
+**What did not move.**
+
+* Cyclone parity generator (`run_runtime_scan` on the `cyclone_salpha_itg`
+  fixture, eight tracked ky, reduced `Nl=4, Nm=8`, 3000 steps) and the linear
+  example's certified Krylov eigenvalue at ky 0.3: every gamma and omega
+  bitwise equal to `main` (`cyclone_golden_identity.py`).
+* Nonlinear NetCDF bundle, 225 variables, no shape change in any arm. x64:
+  221 bitwise; the other four are `TurbulentHeating`, peak 3.1e-17 against a
+  field energy of 1.9e-2, a cancellation residue (`compare_nc.py` now prints
+  `max_abs` and `ref_peak` beside `max_rel`). float32: 186 bitwise, the rest
+  at float32 roundoff, `HeatFlux_st` 3.41e-7.
+* Restarts: NetCDF and binary files written on either axis load onto either,
+  `max|delta| = 0` in all four directions, including a two-sided file.
+* Eigen routes: 57 in-band ky targets pick the same row on both axes; only an
+  out-of-band Nyquist target lands on the opposite sign; the shipped linear
+  deck's eigenvalue at ky 0.55 is bitwise equal across layouts.
+
+**Found and fixed.** The identity harness's `sitecustomize.py` pinned the
+`GridConfig` class default but not the `GridConfig` instances that
+`RuntimeConfig`, `Case`, `CycloneBaseCase` and `KBMBaseCase` build at import,
+so the "full" arm ran on the half axis. It now rebuilds those instances and
+refuses to start if any stale one remains. The driver's half arm was removed:
+Q9's harness seeds a random state over the grid's own row count, so a half
+arm starts from a different, non-real state and cannot be compared
+element-wise.
+
+**Full opt-out identity gate.** `run_identity.sh` compared pinned `main`
+`eeb3481c6e5e1893cb71c97cc6da0af9a0ee5c76` with branch head
+`ea6b1464e228e4849666ef2d620a8e44cf78c7ce` under JAX/JAXLIB 0.10.2 on CPU.
+All eight generation arms returned zero and the complete run took 8m57s.
+The fixed 64x64x24 RHS/VJP matrix was bitwise for 58/58 arrays in each of f32
+and x64; the full 100-step trajectory matrix was bitwise for 65/65 arrays in
+each precision. Thus all 246/246 compared arrays are bitwise equal, with
+`max_rel = 0` in all four comparisons. The raw result pairs have matching
+SHA256 values:
+
+| comparison | arrays | ref and `new_full` SHA256 |
+|---|---:|---|
+| RHS/VJP f32 | 58/58 | `e70bdb749042384ea0c065732b68ec4c69e19b0907a424166cc4c607f4c28337` |
+| trajectory f32 | 65/65 | `bd9d66ee457ba24361d8f0702edf6bb71016ee1cb3455ab667f2bc0ff014d568` |
+| RHS/VJP x64 | 58/58 | `284f004eb89b7b867c87d0ee79bdd069ff8357472d61e287f48bc439eadd126d` |
+| trajectory x64 | 65/65 | `37ee524f990f86580c7a3476b141f24786cd9534373a6670d61be9c81801f406` |
+
+The raw execution logs are not published because they contain machine-local
+paths; the public driver below and the pinned commits reproduce the gate. The
+three stale-`Ny` fixture/example failures are fixed, and their containing test
+files pass 109 tests with 14 optional examples skipped.
+
+**Full integration gate.** On exact source
+`9c8614b105d9e29fb42a3f9c7d38ba0a0cf88f9d`, JAX/JAXLIB 0.10.2, x64 and
+CPU-only, `python -m pytest -x tests/integration` completed in 607.78 s:
+566 passed, 15 skipped, one deselected, 79 warnings. Fourteen skips are the
+explicit data-or-long-run cases in `test_examples.py`; the remaining skip is
+the QI adaptive-observable case whose optional cached VMEC geometry was not
+available. The deselected node is the suite's default `slow` case,
+`test_qi_sparse_full_frequency_ladder`. The run therefore covers every
+non-slow integration test available in the supported environment.
+
+**Evidence manifest.** `SHA256SUMS.txt` covers the tracked, reproducible
+scripts and result artifacts in this repository. Raw execution `.log` files
+are gitignored and are not part of that manifest; every listed entry therefore
+verifies from a clean checkout rather than naming a file that was never
+committed.
+
+**Decision.** The identity and integration gates are complete, and the exact
+combined-head retest confirms that compilation was not the whole regression.
+Half layout saves whole-process peak RSS here but remains slower on the steady
+window gradient, so adopting it as the runtime default stays blocked. This
+evidence update neither flips nor reverts the runtime default in the draft;
+that source decision follows review of the measured tradeoff.
+
+```
+export MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
+D=plan/research/scripts/2026-09-20-q10-ky-half-default
+python $D/timing_table.py
+python $D/restart_round_trip.py $D/out/restart_round_trip.json
+for L in full half; do python $D/netcdf_layout_ab.py $D/out/nc_$L.npz --ky-layout $L; done
+python $D/compare_nc.py $D/out/nc_full.npz $D/out/nc_half.npz $D/out/nc_compare.json
+GX_PARITY_REF_DIR=<gx refs> python $D/cyclone_golden_identity.py $D/out/cyclone_golden_branch.json
+python $D/eigen_branch.py $D/out/eigen_branch.json
+bash $D/run_identity.sh <main tree> <this tree> $D/out/identity
+```
 ## 2026-09-20 — Q31 rebased on 2.2.0, three manifest baselines re-measured
 
 **Why CI was red.** Run 35518660118 had exactly two red jobs out of 40, `repo-hygiene` and
@@ -18849,6 +19237,45 @@ queue-table row was reverted and no table acquired a second `baseline` key. The 
 allowlist in `tests/unit/solvers/test_linear_krylov_core.py` is keyed by `file:line` and
 survived the merge unshifted; it was re-run to confirm rather than assumed.
 
+### 2026-09-21 — corrected ARS timestep ladder (PR #273)
+
+Preserve the preceding pre-repair ladder. Integrate #273, source
+`2505c8273796ce303f54b63095257cc25161cda1`, into this draft: the only numerical
+difference from that source is the existing 13-line rate-50 fixture, SHA256
+`0e1d787b576507d2916158801638b295b4edb80f10c43aa60cae20517f33c1ac`.
+Reuse the exact GX NetCDF, geometry, ky, Nl16/Nm48/Nz96, T=150, fit intervals
+and public reproduction command above. JAX/jaxlib 0.10.2, CUDA, x64; sequential
+runs on an idle RTX A4000. All three commands exited zero.
+
+| dt | steps | gamma | omega | primary wall (s) | command wall (s) |
+|---:|---:|---:|---:|---:|---:|
+| .002 | 75000 | .09304471104548986 | .28202090533922286 | 52.6988 | 81.36 |
+| .001 | 150000 | .0930446997066841 | .2820208985577783 | 102.9454 | 156.81 |
+| .0005 | 300000 | .09304469693598345 | .2820208967220387 | 204.0838 | 308.13 |
+
+Successive-difference orders are **2.033 for gamma and 1.885 for omega**,
+supporting approximately second-order behavior of these fitted observables.
+Three-rung Richardson estimates are .09304469604001148 and
+.2820208960406516; fine-minus-estimate relative differences are 9.63e-9 and
+2.42e-9. These are conditional extrapolations, not rigorous error bounds.
+The separate half-horizon relative shifts remain about +3e-5 and -6.4e-5,
+much larger than timestep sensitivity. Against the unchanged GX extractor,
+fine-rung relative differences are -2.09535e-4 and +2.62854e-6. Diagnose fit
+interval/estimator and finite-horizon effects before attributing that gap to
+velocity truncation. This single mode does not close #194 or velocity convergence.
+
+Driver device peaks are 97.89 MiB on each rung; host peaks are 1047.19,
+1049.92 and 1050.48 MiB. Whole-command peak RSS is 1179464, 1183028 and
+1184376 KiB. These scoped measurements are not a speedup claim against GX,
+which evolved eleven modes. CPU verification on the integrated source passes
+25 end-damping tests plus the linked-domain end-damping physics gate.
+
+New per-rung CSV SHA256 values, in timestep order:
+`e9d1ddb0f10e74c0607d46c7ed5744022c8f6eee43f25280c77ced71948eca79`,
+`622ab0b7919fa727ff5b4d2b7b7928e6b6532bc27ddde0a9d15c15b3ad93be71`,
+`a4fb4a323ffb9252100c9369b882471b9c0be2a67c7f52bdc50b7601d89ee117`.
+Raw outputs remain untracked; hashes identify originals, not timing-invariant
+reruns. Required CI and #273 review remain prerequisites to merging this draft.
 ### 2026-09-21 — integrate the verified VEL-REG source contract
 
 #260 merged as `4605d0b49` only after all required checks completed green on
@@ -19282,6 +19709,84 @@ research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
 
+## 2026-09-22 - SLIM-TOOLS tranche 1 (slim/tools-benchmarks-1)
+
+Baseline:
+- GKX SHA: f9485f044ab79d9d22b06162376ea11a640621b8 (main, 2.3.0)
+- companion SHAs: none
+- source/test/tool files and lines: tools/ 123 files, 96 Python / 78,901 lines; benchmarks/ 23 files; scripts/ 0 Python
+- relevant existing gate: ci.yml "Repository size manifest" step and "Tracked release artifacts are up to date"
+
+Scope:
+- intended change: map every tools/ and benchmarks/ file to its users; delete zero-reference and plan-only campaign files; move tools/release/* behind one `scripts/check.py` command
+- non-goals: moving manifests, profilers, comparison tools, campaign modules or benchmark decks (tranche 2); README.md and examples (other lanes)
+- prospective acceptance and rollback criteria: every deleted file has zero non-plan references; the four tracked docs/_static JSONs regenerate identically except for the renamed command/file strings; CI green
+
+Changes:
+- files/functions removed, merged, or added: 16 files deleted (3,757 lines; 8 Python in tools/, 1 in benchmarks/); tools/release/*.py (10) moved to scripts/checks/; scripts/check.py added (subcommands size, architecture, parallel-scaling, quasilinear, vmec-boozer, readiness, validation-coverage, test-gates, nonlinear-transport, nonlinear-optimization); map at plan/research/2026-09-22-slim-tools/MAP.md
+- public/schema behavior: none in the package; CI and release commands renamed; release_readiness.json and technical_release_status.json change only in those strings
+
+Evidence:
+- focused tests: tests/release, tests/tools, parallel/benchmark/nonlinear/quasilinear/stellarator gate tests, runtime config: 703 passed, 2 skipped after fixes (one earlier failure was ENOSPC on the host)
+- repo-hygiene step from ci.yml run with bare python3.11: exit 0; tracked-JSON diff gate clean on a second run
+- architecture: tool_python_files 96 -> 78, tool_python_lines 78,901 -> 63,832 (baselines lowered to measured); scripts 11 files / 11,992 lines before check.py; test lines unchanged
+- tracked files 2,107 -> 2,091 (+ check.py, MAP.md), tracked bytes 24,607,135 -> about 24.47 MB
+
+Outcome:
+- partial: tranche 1 done; paused before sphinx and CI
+- remaining blocker: none known; docs build and full CI not yet run
+- next task: CI on the PR, then tranche 2 from MAP.md
+## 2026-09-21 — Q10 sheared-status fixture repair and main integration
+
+CI run `35567276915`, shard 3, exposed a fixture with four hard-coded ky rows
+on a three-row half-spectrum grid. Derive the state shape from the grid and
+run the existing three status tests for both supported combinations: full
+layout/full-complex FFT and half layout/compressed real FFT. The raw sheared
+API's full-complex default remains explicit; its half-spectrum refusal is
+not bypassed. All six cases pass on the supported CPU environment before
+integration. No production code changes are needed for this fixture defect.
+Integrate main `4605d0b49`, preserve both log histories, and remeasure source
+and test budgets. Half-layout default adoption remains blocked by the recorded
+adjoint slowdown and pending current-head CI, not promoted by these tests.
+The float32 replay exposed a separate fixture tolerance below round-off:
+the successful-budget control now uses `max(1e-8, 10*eps)`. The deliberately
+starved budget stays at `1e-14`; no production tolerance or refusal is changed.
+After integration, all six status cases pass in float32 and float64; 177
+release/ledger/sink tests, Ruff and the measured architecture gate also pass.
+
+## 2026-09-22 - PERF-LAYOUT: #266 split (deck key and interchange, default unchanged) - `perf/ky-layout-deck-key`
+
+Paused by the maintainer mid-lane; this entry is the handoff.
+
+Baseline:
+- GKX SHA: `f9485f044` (main, 2.3.0); #266 head `32fc4452d` merged in, conflicts only in `plan/log.md` (both histories kept) and the architecture manifest (remeasured).
+- companion SHAs: none.
+- source/test/tool files and lines: src 93830, tests 94358, tools 78904 (manifest baselines set to these measured counts).
+- relevant existing gate: #266's `run_identity.sh` (Q9 `rhs_identity.py`/`gate_traj.py`, `new_full` vs `main`, must be bitwise in f32 and x64).
+
+Scope:
+- intended change: land #266's `[grid] ky_layout` deck key, restart interchange, NetCDF pair-weight division and fixed-kx pair fold, and `PreparedSimulation.state_shape`, with `GridConfig.ky_layout` defaulting to `"full"` (plan F.2). Docs describe `"half"` as an opt-in: RK3 step 0.54x/0.60x, checkpointed window gradient 1.28x.
+- non-goals: flipping the default (waits for SHARD-PAD and ADJ-HALF); editing plan.md (the plan revision owns the Q10 row, so #266's plan.md edit is not carried).
+- acceptance: default runs bitwise equal to main in f32 and x64; #266's failing tests pass.
+
+Changes:
+- `src/gkx/config.py` default `"full"`; module/docs/README wording; `tools/profiling/profile_runtime_kernels.py` help text.
+- `tests/unit/core/test_core_ky_layout.py`: new `test_the_default_deck_builds_the_two_sided_axis`; the Nyquist-weight test names `ky_layout="half"`.
+- `tests/tools/profiling/test_nonlinear_gradient_evidence_contracts.py::test_gradient_window_nz_override_wins_over_shipped_ntheta` sizes ky from the grid's layout (failed on #266).
+- `plan/research/scripts/2026-09-22-ky-layout-split/run_identity_default.sh`: the same gate with no layout pin (proves the shipped default, not only the opt-out).
+
+Evidence:
+- focused tests: `tests/unit/core/test_core_ky_layout.py` + `tests/unit/solvers/test_linear_krylov_core.py`, x64, jax 0.10.2: 329 passed. Ruff check/format clean; architecture manifest checker passes.
+- identity (office host CPU, jax 0.10.2, pinned-full arm of `run_identity.sh`, ref `f9485f044` vs new `2055c9649`): RHS/VJP f32 58/58 bitwise, `max_rel = 0`. The f32 trajectory, both x64 arms and the whole unpinned `run_identity_default.sh` gate were stopped by the pause and are NOT verified. A first local attempt was void (disk full, truncated npz) and was deleted.
+- CPU/NVIDIA measurements: none new; numbers quoted in docs are #266's.
+
+Outcome:
+- partial. Draft PR open; CI not polled.
+- remaining blocker: identity gate completion (3 of 4 pinned comparisons, all 4 unpinned).
+- next task: finish the identity gates; then SHARD-PAD (below).
+
+SHARD-PAD (not started in code; branch `perf/ky-shard-pad` created at `2055c9649`, no commits). Findings: JAX 0.10.2 refuses an uneven `NamedSharding` on `device_put` and on `jit` in/out shardings (checked with 2 fake CPU devices, extent 5), but a slice or `with_sharding_constraint` to an uneven extent inside `jit` is accepted. The runtime ky route runs the whole explicit scan as `jax.jit(run_raw)(prepared.G0)` in `_run_explicit_diagnostic_scan_and_finalize` (`src/gkx/solvers_nonlinear_diagnostics.py`), so the proposed scheme is: pass a ky `NamedSharding` down as an explicit `state_sharding` option (`integrate_nonlinear_explicit_diagnostics_state` -> `_integrate_nonlinear_explicit_diagnostics_impl` -> `integrate_explicit_nonlinear_diagnostics_impl` -> `_run_explicit_scan_components`), zero-pad `prepared.G0` on ky to a multiple of the device count and `device_put` it evenly, and slice the pad off as the first op inside the jit (then `with_sharding_constraint` on the sliced state). Pad rows never reach an operator, weight or diagnostic, and a divisible extent keeps today's path. The final-state route (`integrate_nonlinear_from_config`) and IMEX need either the same hook or an explicit refusal. Rejected alternative: widening the half state to the two-sided axis for the sharded arm, because its resolved diagnostics and fields would come back with `Ny` rows, not `Nyc`.
+
 ## 2026-09-22 — final plan revision: validation matrix and VMEX turbulence example
 
 Added "Final revision and entry point (2026-09-22)" at the top of `plan.md`.
@@ -19341,3 +19846,500 @@ Outcome:
   repeatedly (session scratch 25 GB); large runs move to the office host.
 - Next task: P0 — CLI-RES, then land #277 and the paused lanes in the G.5
   merge order.
+## 2026-09-22 — CLI-RES: one owner for the Nl/Nm fallbacks (`fix/cli-resolution-fallback`)
+
+Baseline:
+- GKX SHA: `f9485f044` (2.3.0).
+
+Scope:
+- Found by DOCS-CURRENT (#283). 2.2.0 (#262) moved the linear velocity
+  fallback to (Nl, Nm) = (12, 24) in `startup._RUNTIME_LINEAR_HL_FALLBACK`,
+  but three other places kept literals: the CLI option resolver
+  (`_resolve_grid_time_options`, 24/12, used by `gkx run`, `gkx scan` **and**
+  the nonlinear command), and `_CASE_LINEAR_SPECS` (24/12, used by the public
+  `gkx.run_linear_case`). A deck without Nl/Nm therefore ran Hermite-starved
+  (the −4.4% Cyclone γ case) through the CLI and `run_linear_case`, and a
+  nonlinear CLI run used (24, 12) instead of the API's (4, 8).
+
+Changes:
+- `startup._RUNTIME_NONLINEAR_HL_FALLBACK = (4, 8)` added next to the linear
+  pair; the CLI resolver, both case spec tables and `prepared`'s summary read
+  the two constants. One stale test assertion that pinned (24, 12) now pins
+  (12, 24); a new test asserts every entry point matches the owner.
+- Every shipped GKX deck sets Nl/Nm, so no shipped example changes; the only
+  deck without `Nl` is a GX-format reference input.
+
+Evidence:
+- `tests/integration/runtime/test_cli.py`, `test_runtime_config.py`,
+  `tests/unit/api`, `tests/release/test_release_gates.py`: 407 passed, 1
+  skipped (JAX 0.10.2, x64). ruff, mypy, architecture manifest pass
+  (commands.py 1004 → 1011 lines, justified in the manifest).
+
+Outcome:
+- Accepted. Remaining from #283's list, for later PRs: `gkx run`/`gkx scan`
+  print a spurious deprecation warning (they call deprecated wrappers); the
+  Krylov eigen path ignores `collision_operator` silently; three tracked
+  `docs/_static` JSONs contain absolute local paths.
+
+## 2026-09-22 — second pause: supervisor handoff
+
+Baseline: `main` `29362737f` (#277 merged). Merged today: #277 (plan). Opened
+by the supervisor: #286 (CLI-RES). Merged `main` into #278 (`ac65b570d`) and
+#272 (`09ae6ca42`, marked ready). Lanes paused again at the maintainer's
+request; each lane PR carries its Handoff. Plan section G.7 records every
+open PR, the merge queue and order, the CI-saturation lesson (use one chain
+branch), unowned findings, and resource rules. Local disk cleanup freed about
+20 GB (session scratch outputs and ~50 merged, clean worktrees). No plan or log
+line removed.
+
+## 2026-09-22 — all lanes confirmed paused (final heads)
+
+- #279 PERF-ADJ `cea0619f6`: per-stage optimization barrier on the half
+  layout plus inner-remat drop under a 2 GiB budget. JAX 0.11.2 CPU: half RK3
+  step 755 → 24 ms; 256-step half window gradient 186.5 → 53.0 s, gradient
+  within 1.7e-16. No effect on JAX 0.10.2 CPU (CI's version). GPU A/B pending.
+- #284 PERF-LIT `6922f0f28`: ranked item 1 measured 1.19–1.40x faster on an
+  A4000, with 5–6x more temporary memory (loaded host; only the ratios hold).
+  complex128 changes the gradient by ~1e-7 at 4x cost.
+- #280 SOLVAX-DIRECT `180cc24a5`, and SOLVAX #121 (`feature/traced-sparse-direct`,
+  `8aa5cec`): a traced sparse-direct solve with eigenvalue gradient. At
+  n=3,072 it gets the same eigenvalue as `adaptive` in ~5 s against 32–36 s.
+  At production size MUMPS needs 7–8 GB and was refused. Item 6 was not built
+  (at best it matches `adaptive`).
+- #282 `dd6b619f5` (ready): all 8 identity comparisons bitwise equal to main.
+  #287 `085620a9f` (ready, stacked on #282): SHARD-PAD, odd `Nyc` accepted on
+  2 and 4 devices. Finding: the ky route never split its scan across devices;
+  `state_sharding="ky"` crashes in XLA:CPU FFT (separate task running).
+- #283 `7d32d7d46`: all 33 docs pages current (rst 20,831 → 12,865 lines);
+  `sphinx -W` 0 warnings; absolute paths removed from the three JSONs. Merge
+  after #286.
+- #285 `1c58e3b95` (ready): README 583 → 349 lines, pinned text intact, with
+  a proof-test figure.
+- #288 `988dbdf8d` (ready): `tools/` Python 78 → 0, moved into `scripts/`
+  (104 files / 77,373 lines against a 12 / 18,000 target; tranche 3 cuts,
+  starting with `artifacts`, 35k lines).
+- #281 `1b69bf8a0`: 12 numbered groups; example Python 36 → 14 files, 5,145 →
+  1,782 lines. Path edits in benchmarks/tools wait for #278; one unidentified
+  failure in a stopped office run.
+
+## 2026-09-22 - SLIM-TOOLS tranche 1 (slim/tools-benchmarks-1)
+
+Baseline:
+- GKX SHA: f9485f044ab79d9d22b06162376ea11a640621b8 (main, 2.3.0)
+- companion SHAs: none
+- source/test/tool files and lines: tools/ 123 files, 96 Python / 78,901 lines; benchmarks/ 23 files; scripts/ 0 Python
+- relevant existing gate: ci.yml "Repository size manifest" step and "Tracked release artifacts are up to date"
+
+Scope:
+- intended change: map every tools/ and benchmarks/ file to its users; delete zero-reference and plan-only campaign files; move tools/release/* behind one `scripts/check.py` command
+- non-goals: moving manifests, profilers, comparison tools, campaign modules or benchmark decks (tranche 2); README.md and examples (other lanes)
+- prospective acceptance and rollback criteria: every deleted file has zero non-plan references; the four tracked docs/_static JSONs regenerate identically except for the renamed command/file strings; CI green
+
+Changes:
+- files/functions removed, merged, or added: 16 files deleted (3,757 lines; 8 Python in tools/, 1 in benchmarks/); tools/release/*.py (10) moved to scripts/checks/; scripts/check.py added (subcommands size, architecture, parallel-scaling, quasilinear, vmec-boozer, readiness, validation-coverage, test-gates, nonlinear-transport, nonlinear-optimization); map at plan/research/2026-09-22-slim-tools/MAP.md
+- public/schema behavior: none in the package; CI and release commands renamed; release_readiness.json and technical_release_status.json change only in those strings
+
+Evidence:
+- focused tests: tests/release, tests/tools, parallel/benchmark/nonlinear/quasilinear/stellarator gate tests, runtime config: 703 passed, 2 skipped after fixes (one earlier failure was ENOSPC on the host)
+- repo-hygiene step from ci.yml run with bare python3.11: exit 0; tracked-JSON diff gate clean on a second run
+- architecture: tool_python_files 96 -> 78, tool_python_lines 78,901 -> 63,832 (baselines lowered to measured); scripts 11 files / 11,992 lines before check.py; test lines unchanged
+- tracked files 2,107 -> 2,091 (+ check.py, MAP.md), tracked bytes 24,607,135 -> about 24.47 MB
+
+Outcome:
+- partial: tranche 1 done; paused before sphinx and CI
+- remaining blocker: none known; docs build and full CI not yet run
+- next task: CI on the PR, then tranche 2 from MAP.md
+
+## 2026-09-22 - SLIM-TOOLS tranche 2 (slim/tools-benchmarks-2)
+
+Baseline:
+- GKX SHA: 33d2dc0fc (tranche 1, #278, which is stacked on main f9485f044)
+- companion SHAs: none
+- source/test/tool files and lines: tools/ 78 Python files / 63,832 lines; scripts/ 11 / 11,992; benchmarks/ 11 Python files / 1,348 lines
+- relevant existing gate: ci.yml "Repository size manifest" (architecture topology and line budgets) and "Tracked release artifacts are up to date"
+
+Scope:
+- intended change: tools/ Python to zero. tools/{artifacts,campaigns,comparison,profiling} and the benchmarks/ drivers move to scripts/ packages behind validate.py, compare.py, profile.py and benchmark.py. The benchmark decks move to benchmarks/cases/ (the runtime_ prefix is dropped, as EXAMPLES-GALLERY does).
+- non-goals: contracting the moved code; moving tools/*.toml manifests or tools/comparison/fixtures (#272 and #285 touch them)
+- prospective acceptance and rollback criteria: no test weakened; tracked release JSONs byte-identical; each deletion clears the output-consumer check
+
+Changes:
+- files/functions removed, merged, or added: 88 Python files moved; benchmarks/performance/__init__.py deleted. Added scripts/_command.py (shared runner, also used by check.py) and four commands. Every path string rewritten outside docs/_static and plan/, with prose in benchmarks.rst, code_structure.rst, tools/README.md and benchmarks/README.md updated. The allowed profiling-tool roots in check_parallel_scaling_artifacts.py are now the scripts/ packages.
+- deletion reversed: build_vmec_boozer_gradient_holdout_matrix.py and plot_external_vmec_nonlinear_convergence_gate.py looked docs-only, and #283 dropped their mentions. They write JSONs that check_vmec_boozer_gates.py and validation_coverage_manifest.toml read, so they were kept. MAP.md now requires the output-consumer check before any deletion.
+- public/schema behavior: none in the package
+
+Evidence:
+- 26 test files that load moved code, plus test_examples, test_plotting, test_collision_physics, test_evidence_ledger, test_runtime_runner (JAX 0.10.2, x64, -m "not slow"): first run 1252 passed, 10 failed, 1 error, all from ROOT / "tools" / "<pkg>" path joins in tests; after the fix the affected files ran 581 passed, 16 skipped
+- import check: every moved module imports without running main. It fails only on 2 modules that need vmex, which this venv lacks, and on 2 campaign modules that import scripts.campaigns.* without the repo root on sys.path; the same behaviour existed before as tools.campaigns.*.
+- ci.yml repo-hygiene commands with bare python3.11: exit 0; the four tracked JSONs are byte-identical; ruff check and ruff format --check are clean
+- architecture: tool_python_files 78 -> 0 and tool_python_lines 63,832 -> 0 (both at target); developer_script_python_files 15 -> 104 and developer_script_python_lines 25,000 -> 77,373 (targets 12 / 18,000). Measured.
+
+Outcome:
+- done: tools/ has no Python; the layout matches §21.4 apart from figures.py (#285) and release.py
+- remaining blocker: none known. The move is not a contraction: scripts/ must fall by about 59k lines. Other lanes apply the rename recipe in MAP.md.
+- next task: contract scripts/ by package (artifacts first, 35,121 lines), with the output-consumer check applied to each deletion
+Addendum (paused 2026-09-22): PR #288. main (#277) was merged in, with a plan/log.md append conflict resolved by keeping both sides; the hygiene step reran with exit 0. CI run 35811214759 was still queued behind the organization's run backlog at the pause, so no CI result exists yet. Next: once #278 merges, merge origin/main, then let CI run and fix any real failure.
+
+## 2026-09-22 - SOLVAX-DIRECT (plan G.2), step 1 and start of step 2; branch research/solvax-direct-20260922 (paused)
+
+Baseline:
+- GKX SHA: f9485f044 (origin/main, 2.3.0)
+- companion SHAs: SOLVAX 7b8ca55 (origin/main, 0.25.0), DKX 91e0582c (read-only)
+- source/test/tool files and lines: unchanged; one research script added
+- relevant existing gate: plan section 5.1 L4/L5 adoption gate (rewritten 2026-09-19)
+
+Scope:
+- intended change: inventory SOLVAX's direct/preconditioner routes; assemble the operators GKX solves (shift-invert `A - sigma I`, implicit/IMEX `I - dt A`, implicit streaming, collisions) as exact CSR; benchmark sparse direct (MUMPS, SuperLU, cuDSS if a GPU is free) against Krylov + `pr3-cm`; land a jit-compatible SOLVAX sparse-direct solve with a factor-reusing adjoint only if it wins
+- non-goals: no GKX `src/` change, no SOLVAX release
+- prospective acceptance and rollback criteria: section 5.1 gate (reproducible cost reduction at unchanged certification)
+
+Changes:
+- files/functions removed, merged, or added: `plan/research/2026-09-22-solvax-direct/operators.py` (assembly by moment-graph probing + Curtis-Powell-Reid compression, Kronecker column grouping, complex verification, structure stats)
+- public/schema behavior: none
+
+Evidence:
+- focused tests: none (research script only)
+- physics/mathematics/numerics gates: on the c24 case (Nz,Nl,Nm)=(24,8,16), n=3072, ky=0.3, the compressed `A` matches GKX's operator to 3.9e-16 (complex random probes) with 432 products against 3072 for column sampling; pattern probing must use a zero threshold, because the phi-to-streaming coupling reaches 1e-10 relative at high Laguerre index and a 1e-13 threshold dropped 12,216 entries (error 7.6e-12)
+- CPU/NVIDIA measurements: c24 structure, `A`: nnz 247,160 (80.5/row, max 221), RCM bandwidth 650; `A_S`: 170,496 (55.5/row); `A_C` (nu=0.01): 10,176 (3.3/row), z-local, RCM bandwidth 15. No factorization timings yet. office GPUs were both in use by other lanes (18:07), so no cuDSS run.
+- values, tolerances, residuals, uncertainty: PyMUMPS 0.4.0 builds on macOS arm64 against MacPorts MUMPS 5.6.2/MPICH with the classic linker; SOLVAX `SpluFactorization(backend="mumps")` then agrees with SuperLU on a test matrix
+
+Outcome:
+- accepted, rejected, or partial: partial (paused by the maintainer)
+- remaining blocker: none technical; laptop disk was full (56 MiB free) for part of the session
+- next task: steps 2-4 in the PR #280 handoff
+
+## 2026-09-22 - SOLVAX-DIRECT (plan G.2) resumed: benchmarks, SOLVAX#121 (paused again)
+
+Baseline:
+- GKX SHA: 29362737f (origin/main, merged in); SOLVAX 7b8ca55 (0.25.0)
+- source/test/tool files and lines: GKX `src/` unchanged; research harnesses and records under `plan/research/2026-09-22-solvax-direct/`
+
+Scope:
+- intended change: measure MUMPS/SuperLU against `pr3-cm` at matched residual, and a full shift-invert against `adaptive`; implement the winner of PERF-LIT items 5/6 in SOLVAX
+- non-goals: SOLVAX release; GKX consumer
+
+Changes:
+- SOLVAX PR #121 (draft): `solvax.sparse_direct` (traced `sparse_solve` with factor-reusing transpose solves, `sparse_eigenvalue` with a one-JVP derivative, `csr_data_from_products`) and multi-RHS MUMPS solves
+- GKX: `bench.py`, `gradient.py`, `run_*.sh`, `summarize.py`, `REPORT.md`, `records/`
+
+Evidence:
+- d96, n=3,072: direct eigenpair about 5 s against `adaptive` 31.6-36.3 s and the `pr3-cm` route 433 s; same eigenvalue to 7e-14
+- r96: MUMPS factorization 20 s against SuperLU 381 s; MUMPS solve 0.37 s against a `pr3-cm` solve of 72 s (1e-6)
+- prod: MUMPS estimate 7.3-8.3 GB, refused under a 5 GB budget; `pr3-cm` solve 322 s (1e-6)
+- host load 50-90 on 36 cores throughout; wall times are upper bounds
+
+Outcome:
+- partial: item 5 implemented (SOLVAX #121); item 6 not pursued (ceiling is parity with `adaptive`)
+- next task: steps in the PR #280 handoff
+## 2026-09-22 - PERF-LIT profile and literature survey (research/perf-lit-20260922), paused
+
+Baseline:
+- GKX SHA: `f9485f044` (2.3.0), clean `src/`.
+- companion SHAs: SOLVAX 0.22.0 on the office GPU venv, 0.24.0 locally; JAX/jaxlib 0.10.2.
+- source/test/tool files and lines: unchanged (docs/research only).
+- relevant existing gate: none; research lane (plan.md G.2 PERF-LIT).
+
+Scope:
+- intended change: measured profile of the forward step, the window adjoint and the linear eigen derivative; literature and software survey tied to the measured bottlenecks; ranked implementation list.
+- non-goals: any `src/` change.
+- prospective acceptance and rollback criteria: every number is a committed record or marked derived/UNVERIFIED.
+
+Changes:
+- added `plan/research/2026-09-22-perf-lit/` (`profile_perf_lit.py`, `run_profile.sh`, `run_pr3.sh`, `summarize.py`, `records/`).
+- public/schema behavior: none.
+
+Evidence:
+- focused tests: none (no code path changed).
+- CPU/NVIDIA measurements (one RTX A4000, complex64, shipped linked Cyclone nonlinear deck, random masked state, `records/gpu_a4000/`):
+  - RK3 step 5.26 / 18.0 / 15.6 / 69.4 ms at 32x32x24 Nl4/Nm8, 32x32x24 Nl8/Nm16, 64x64x24 Nl4/Nm8, 64x64x24 Nl8/Nm16; device time fft 12-16%, concatenate 10-25%, other elementwise fusions 35-48%, cuBLAS 8-9%; 21-42x the state materialized per step; field solve flat at 1.17-1.32 ms.
+  - `nonlinear_heat_flux_window` value+gradient (tprim scale and nine geometry arrays), 16x16x16 Nl4/Nm8 rk3: 256 steps 0.941 s with block checkpointing vs 0.435 s without (2.16x; temp 61 MB vs 4,425 MB), value 0.148 s; 1024 steps 3.72 s (7.0x value, temp 103 MB; unchecked runs out of memory at 16.5 GiB); 32x32x24 256 steps 5.21 s (5.4x value, temp 359 MB). Compile 20-26 s per gradient graph.
+  - dense growth-rate value+gradient: 0.033 s (n=144), 0.99 s (n=1,536), 2.83 s (n=3,072).
+  - office CPU single-thread x64 `adaptive` control at Q28 `d96`: 33,915 operator applications, 30.5 s, 1.29 GB max RSS (`records/cpu_pr3/A1_adaptive.txt`).
+- values, tolerances, residuals, uncertainty: checkpointed and unchecked gradients agree to the printed 6 digits at 256 steps. Host load 13-23 on 36 cores (office) during the GPU runs.
+
+Outcome:
+- partial (paused by the maintainer). Main finding: the window adjoint rematerializes every step inside each checkpoint block, costing a second forward recompute (measured 2.16x vs unchecked); on the GPU the step is traffic-bound (concatenate plus elementwise), not FFT-bound; re-saturation per evaluation, not the gradient, dominates the VMEX objective at 32x32x24 (derived). Not run: `PHASE=extra` (inner-remat-off variants, complex128 comparison, source-mapped traces), the `pr3-cm` `d96` arm, CPU forward/window rows, the adaptive-eigen row on an idle host. The ranked list and survey are in the PR body.
+
+## 2026-09-22 - PERF-LIT resumed run, paused again (research/perf-lit-20260922)
+
+Baseline:
+- GKX SHA: `f9485f044` measured (pinned office worktree); branch head before this entry `35f429256`.
+- relevant existing gate: repo-hygiene (ruff) fixed on the profiler scripts.
+
+Changes:
+- `profile_perf_lit.py`: per-arm `block_noinner` checkpoint experiment (clears JAX caches between arms), interleaved A/B timing, kernel-to-op_name mapping; `run_all_office.sh`, `wait_gpu_then_run.sh` (free-GPU only); records `gpu_a4000_extra/`, `cpu_office/`. No `src/` change.
+
+Evidence (one A4000, complex64, host load 46-106, interleaved):
+- window gradient, shipped block vs block without per-step remat: 16x16x16/256 1.110 vs 0.792 s; 16x16x16/1024 4.751 vs 3.931 s; 32x32x24/256 6.125 vs 4.762 s; 32x32x24/1024 24.60 vs 20.62 s (1.19-1.40x); temp 61/103/359/617 MB vs 301/580/1,798/3,475 MB; max rel diff 2.6e-8 to 1.7e-7. Unchecked 0.510 s at 16x16x16/256.
+- complex128 vs complex64 window gradient at 16x16x16/256: rel diffs 4.7e-7 (objective), 6.8e-8, 1.1e-7; 4.0x cost.
+- 32x32x24 forward at load 80 vs 23: field solve 4.42 vs 1.16 ms, RK3 step 17.8 vs 5.26 ms: host dispatch bound.
+- top kernel (22%) is an add fused with a masked `jnp.take` gather (linked-boundary gather, op_name attribution).
+
+Outcome:
+- partial. Item 1 confirmed exact but revised to 1.2-1.4x. Not done: CPU 1024-step A/B, CPU forward/eigen rows, `pr3-cm` re-run (stopped at the pause).
+## 2026-09-22 - PERF-ADJ / ADJ-HALF (G.2, F.6), branch perf/adjoint-window (paused)
+
+Baseline:
+- GKX SHA: f9485f044 (main at 2.3.0)
+- companion SHAs: none; JAX/JAXLIB 0.10.2, Python 3.11, x64, XLA:CPU, 14-core laptop
+- source/test/tool files and lines: no source change yet; harnesses in
+  `plan/research/scripts/2026-09-22-perf-adj/`
+- relevant existing gate: #264 window compile cache; #266 comment 5755930872 (half 1.28x slower)
+
+Scope:
+- intended change: find and remove the half-layout adjoint-window penalty; cut adjoint time/memory
+- non-goals: flipping the ky layout default (PERF-LAYOUT)
+- prospective acceptance and rollback criteria: A/B/A/B win at bitwise (or stated-tolerance) value and gradient
+
+Changes:
+- none to `src/`; two measurement scripts added
+
+Evidence (host load average 25-44 throughout: timings are indicative only; ratios repeated 2-4x):
+- Cyclone `runtime_cyclone_nonlinear.toml`, 16x16x(Nz 24, ntheta wins), Nl4/Nm8, rk3, 6-step window,
+  steady medians: e2e value_and_grad full 1.23 s, half 1.93 s; window VJP alone (cache fixed)
+  full 1.35 s / half 1.72 s; **window forward alone full 0.27 s / half 1.36 s (5x)**; host cache prep
+  under JVP 0.01-0.04 s (negligible). Temp bytes: VJP full 169 MB / half 119 MB; fwd 101 / 63 MB.
+  Values and gradients agree between layouts to the last digit printed.
+- Single differentiable RHS: half 6-9 ms vs full 9-13 ms (half faster, as expected). One RK3 step
+  (3 RHS): **half 110-890 ms vs full 29-64 ms**. So the loss is not in the RHS, the FFTs, or the
+  backward pass as such: composing RHS evaluations in one XLA module blows up on the half layout.
+- HLO of the half RK3 step: 3x the multiplies/broadcasts of full (2150 vs 480) with identical FFT
+  counts; the linear-RHS fusion appears 3-4 times with identical operands (fusion duplication,
+  recompute into several consumers). On full, the Hermitian projector `to_full(to_half(.))` is a
+  concatenate that forces each stage state to materialize; on half it is the identity, so nothing does.
+- `lax.optimization_barrier` on the projector and on the RHS output: bitwise-identical state,
+  helps (half step ~100-250 ms) but does not close the gap to full. Root cause inside the fused
+  RHS composition not yet pinned.
+- RHS VJP alone is ~10x its forward on both layouts (full 76-124 ms vs 9-13 ms): the general
+  adjoint-cost target after the half fix.
+
+Outcome:
+- partial (paused by maintainer). Diagnosis narrowed to XLA fusion duplication in the half-layout
+  multi-stage step; no fix landed.
+- remaining blocker: per-op profile of the half RK3 step (xprof installed in the scratch venv).
+- next task: see the PR Handoff.
+
+## 2026-09-22 - PERF-ADJ resumed (G.2, F.6 ADJ-HALF, PERF-LIT item 1), branch perf/adjoint-window (paused again)
+
+Baseline:
+- GKX SHA: f9485f044 (2.3.0); branch head carries the source change below
+- companion SHAs: none; office CPU (36 cores, load 16-94 during runs), jax/jaxlib 0.10.2 (py3.11) and 0.11.2 (py3.12); no GPU was free
+- source/test/tool files and lines: src/gkx/solvers_nonlinear_explicit.py, src/gkx/solvers_nonlinear_state_integration.py, two tests, harnesses in plan/research/scripts/2026-09-22-perf-adj/
+- relevant existing gate: #264 compile cache; PERF-LIT (#284) item 1
+
+Scope:
+- intended change: remove the half-layout step penalty; drop the per-step remat inside checkpoint blocks under a memory budget
+- non-goals: ky layout default (PERF-LAYOUT)
+- prospective acceptance and rollback criteria: values/gradients unchanged (f32 <=1e-6 rel, f64 <=1e-12); A/B/A/B win
+
+Changes:
+- advance_explicit_nonlinear_state: optimization barrier on every stage derivative and stage state
+- checkpointed_explicit_scan(memory_budget_bytes=None|int) + block_checkpoint_plan; nonlinear_heat_flux_window(adjoint_memory_budget_bytes=ADJOINT_MEMORY_BUDGET_BYTES=2 GiB)
+- tests: scan-level block-only vs nested and starved-budget fallback; window block vs nested (value, d/d tprim, drift-geometry direction) plus centered FD, both ky layouts, rk3
+
+Evidence:
+- root cause: on the half layout the projector is the identity, so XLA fused the whole linear RHS into the transpose that feeds the bracket's irfft2 (five Laguerre points x two derivatives: ~40 recomputes); the full layout's projector concatenate materialized each stage. Barriers fix it, but XLA:CPU in jaxlib 0.10.x drops barriers before fusion (openxla "Move opt barrier remover after cpu scheduler", Aug 2026); jaxlib 0.11.2 honors them. Python 3.11 CI (jax 0.10.2) therefore compiles bitwise-identical HLO.
+- one RK3 step, 16x16xNz24, Nl4/Nm8, x64, jax 0.11.2 CPU: half 755 -> 24 ms, full 78 -> 45 ms; jax 0.10.2: unchanged.
+- window VJP, A/B/A/B in one process, jax 0.11.2 CPU x64, random real state: 16x16x16/16 steps half main 6.90 s, barrier 2.62, block 1.73 (fwd 5.32 -> 0.43); full 5.19 / 3.91 / 3.01. 16x16x16/256 half: main 186.5 s, barrier 63.9, block 53.0 (fwd 82.9 -> 15.9), temp 104.8 / 75.3 / 202.1 MiB; value identical, gradient 1.7e-16 rel (record: plan/research/scripts/2026-09-22-perf-adj/records/cpu011_x64_16_256_half.json).
+- focused tests pass on office jax 0.10.2 in x64 and f32 (7 selected). An earlier f32 draft that also compared against checkpoint=False moved one gradient by 1.05e-6 rel (unchecked vs block), so that comparison was dropped; block vs nested stays within 1e-6.
+
+Outcome:
+- partial (paused). Remaining blocker: GPU A/B (barriers may cost on GPU: tests/unit/parallel/test_parallel_linear_velocity.py records a guarded-RHS barrier measuring slower on a sharded path), the rest of the CPU campaign, docs, CI.
+- next task: see PR #279 Handoff.
+
+## 2026-09-22 - PERF-LAYOUT resumed: identity gates closed, SHARD-PAD opened - `perf/ky-layout-deck-key`, `perf/ky-shard-pad`
+
+Baseline:
+- GKX SHA: `main` `f9485f044` for the identity gate; #282 head `8ddf49301` tested (it differs from `2055c9649` only in tests, docstrings and the manifest), then merged with `main` `29362737f` (#277; `plan/log.md` conflict resolved by keeping both histories).
+- companion SHAs: none.
+- source/test/tool lines: #282 unchanged (93830 / 94358 / 78904); #287 src 93831, tests 94432 (measured).
+- relevant existing gates: `run_identity.sh` (pinned full) and `run_identity_default.sh` (no pin); `tests/unit/parallel/test_parallel_nonlinear_routing.py`.
+
+Scope:
+- intended change: finish #282's identity evidence; SHARD-PAD (plan F.6), so a sharded run accepts `Nyc`.
+- non-goals: real ky partitioning of nonlinear runs; flipping the default.
+- acceptance: 8/8 comparisons bitwise; half layout routed on 2 and 4 fake devices and matching serial.
+
+Changes:
+- #282: summarized comparison records in `plan/research/scripts/2026-09-22-ky-layout-split/records/{pinned,default}/` (raw npz deleted on the office host).
+- #287 (stacked on #282): `shard_nonlinear_state` places an extent the devices do not divide replicated on the mesh instead of refusing; docs say the ky route does not split the scan; routing test on both layouts; a test pins the replicated scan; probe `plan/research/scripts/2026-09-22-shard-pad/ky_partition_probe.py` + `.json`.
+
+Evidence:
+- identity (office CPU, jax 0.10.2, own venv, ref `f9485f044` vs `8ddf49301`): pinned-full RHS/VJP 58/58 and trajectory 65/65 bitwise in f32 and x64; unpinned default the same, 58/58 and 65/65 in f32 and x64, max_rel 0 everywhere.
+- SHARD-PAD probe (CPU, 2 and 4 fake devices, `Ny = 8`): runtime `axis="ky"` scan input is `P()` on both layouts (the initial-state projection `setup.project_state` drops the placement), so the divisible case never ran split; half (`Nyc = 5`) now runs and matches serial. `[time] state_sharding="ky"` fails on the two-sided axis in XLA:CPU's FFT thunk (`RET_CHECK ... IsMonotonicWithDim0Major`, after a partitioner all-gather on ky gives the z FFT layout {5,4,2,1,0,3}) and raises a raw `IndivisibleError` on the half axis. Forcing the split in the runtime jit gives the same FFT failure.
+- tests: routing file passes in float32 and x64 with 4 devices; release gates, parallel core, runners tests pass; ruff, mypy (changed module) and the architecture manifest check pass.
+- CPU/NVIDIA timing: none (no timing claim; both A4000s were in use by other processes).
+
+Outcome:
+- #282 identity: done, 8/8 bitwise. SHARD-PAD: done for the runtime route, whose ky split was never real; real ky partitioning is blocked on XLA:CPU and is a separate follow-up (repro, workaround, GPU check, explicit message for an uneven `[time] state_sharding`).
+- remaining blocker for the default flip: ADJ-HALF (plan F.5).
+- next task: merge `main` again after #278 and move `tools/release/*` invocations to `python scripts/check.py`; retarget #287 to `main` once #282 lands.
+
+## 2026-09-22 - PERF-LAYOUT paused again - `perf/ky-layout-deck-key` (#282), `perf/ky-shard-pad` (#287)
+
+Paused by the maintainer while CI was queued. Nothing is running locally or on the office host.
+
+Baseline: #282 head `258e27b8c`, #287 head `085620a9f`; `main` `29362737f`.
+Evidence: unchanged from the entry above (identity 8/8 bitwise; SHARD-PAD probe recorded).
+Outcome: both PRs ready for review, CI not observed to completion. When paused, #282 had 4 checks passing and 33 still pending, and #287 had 3 passing and 34 pending. Neither had any failure. The earlier CI run at `8ddf49301` was fully green.
+Next steps, in order:
+1. Read `gh pr checks 282` and `gh pr checks 287` and fix any real failure.
+2. After #278 merges, merge `main` into #282 and then into #287. Use `python scripts/check.py <subcommand>` in place of `tools/release/*`.
+3. Land #282, then retarget #287 to `main`.
+4. Flip the default only after ADJ-HALF closes.
+## 2026-09-22 - DOCS-CURRENT (G.3) and DOCS-LEDGER (F.6), branch docs/current-2.3 (paused, partial)
+
+Baseline:
+- GKX SHA: f9485f044 (release 2.3.0)
+- companion SHAs: none
+- source/test/tool files and lines: docs/*.rst 33 pages, 20,831 lines at baseline
+- relevant existing gate: tests/release/test_evidence_ledger.py; REQUIRED_PHRASES in tests/release/test_release_gates.py; tools/release checkers that read docs pages
+
+Scope:
+- intended change: docs current with 2.3.0; verification matrix generated from tools/evidence_ledger.toml; remove roadmap pages from public docs
+- non-goals: README, examples/, tools/, page renames or moves
+- prospective acceptance and rollback criteria: sphinx -W passes; pinned claim-scope phrases unchanged; regenerated release JSONs byte-identical
+
+Changes:
+- added scripts/validation_matrix.py (renders the ledger block of docs/verification_matrix.rst; --check); two tests in tests/release/test_evidence_ledger.py (block current; no ledger lane restated by hand)
+- rewrote docs/verification_matrix.rst (961 -> ~420 lines): Cyclone, KBM, HSX no longer "Closed"; KAW no longer "Deferred"; off-ledger lanes listed as non-claims
+- rewrote docs/release_scope.rst (591 -> ~200 lines); deleted docs/research_grade_plan.rst and docs/research_grade_program.rst; docs/manuscript_figures.rst made :orphan: and removed from nav
+- audited and edited: algorithms, theory, solvers, testing, manuscript_figures (see PR handoff for items)
+
+Evidence:
+- focused tests: tests/release/test_evidence_ledger.py 30 passed; test_release_gates.py -k claim_scope 2 passed
+- regenerated quasilinear_promotion_guardrails.json, release_readiness.json, technical_release_status.json byte-identical to tracked
+- sphinx -W build of the final tree NOT run (paused; baseline build passes, ~6 min)
+
+Outcome:
+- partial; paused by the maintainer
+- remaining blocker: 20 pages not yet edited; audit findings recorded in the PR handoff
+- next task: resume the page audit from the PR handoff list, then sphinx -W and the release checkers
+
+## 2026-09-22 - DOCS-CURRENT (G.3) and DOCS-LEDGER (F.6), branch docs/current-2.3 (resumed, complete)
+
+Baseline:
+- GKX SHA: f9485f044 (release 2.3.0); branch head before this entry ae72991c1
+- companion SHAs: none
+- source/test/tool files and lines: docs/*.rst 33 pages, 20,831 lines at baseline
+- relevant existing gate: sphinx -W (docs-and-packaging); repo-hygiene manifests; REQUIRED_PHRASES; tests/release/test_evidence_ledger.py
+
+Scope:
+- intended change: every docs page current with 2.3.0; verification matrix generated from the ledger; machine paths out of the tracked docs/_static JSONs named in the paused handoff; the four generator-less docs/_static JSONs decided
+- non-goals: README (the showcase lane owns it), src/, page renames or moves (after SLIM-TOOLS rewires checkers that read page paths)
+- prospective acceptance and rollback criteria: sphinx -W clean; linkcheck with no 404/410; repo-hygiene step reproduced green; pinned phrases kept; regenerated release JSONs match the commit
+
+Changes:
+- 23 remaining pages audited against src/, tests/, docs/_static and plan/log.md and rewritten; docs rst 20,831 -> 12,865 lines over 31 pages
+- [Lin99], [Dorland00], [Jenko00] cited again (the three sphinx -W failures on the paused head)
+- tools/artifacts/build_tem_validation_artifacts.py records checkout-relative paths; tem_branch_parity_audit.json and w7x_tem_extension_status.json regenerated (only path strings changed)
+- examples/theory_and_demos/differentiable_geometry_bridge.py records vmex/booz_xform_jax paths relative to their checkouts; its JSON and the generator-less vmec_boozer_parity_matrix.json scrubbed to match (numeric fingerprints unchanged; release_readiness.json content hash updated)
+- deleted eigensolver_cost_model.json, geometric_saturation_predictor.json, qa_transport_weight_scan.json, quasilinear_skill_audit.json: no page, test, manifest or ledger row references them and SLIM-TOOLS (#278) deletes their builders
+- test_python_lines 94057 -> 94082 and tool_python_lines 78901 -> 78908, measured
+
+Evidence:
+- sphinx -W -b html: 0 warnings (about 80 s on the laptop)
+- linkcheck: 18 broken, all 403 from AIP/SIAM/ACM/MDPI; 0 with 404/410
+- repo-hygiene step reproduced: ruff check/format, size, release-artifacts, version, architecture, parallel manifests, the four regenerated JSONs match the commit
+- pytest tests/release, benchmark contracts, QL guardrails, vmex QA scope, parallel artifacts, gradient evidence contracts: all passed; test_differentiable_geometry_objectives artifact subset: 18 passed
+
+Outcome:
+- complete for the page audit; PR #283 ready for review after CI
+- remaining blocker: (Nl, Nm) fallback text is correct only once #286 merges; tools/release paths in docs move to scripts/check.py once #278 merges
+- next task: merge origin/main after #278 and rewrite tools/release paths; see the PR handoff for items found outside docs
+
+## 2026-09-22 - DOCS-CURRENT (G.3), branch docs/current-2.3 (paused again while CI runs)
+
+Baseline:
+- GKX SHA: 7426c267a (branch head after merging origin/main with #277)
+- companion SHAs: none
+- relevant existing gate: ci-required on PR #283
+
+Scope:
+- no new change; pause checkpoint only
+
+Evidence:
+- CI on 7426c267a at pause time: repo-hygiene, release-artifacts, adaptive-eigensolver, fast-coverage, python-floor passed; docs-and-packaging and the test shards still queued; no failure reported
+- locally on 7426c267a: sphinx -W 0 warnings; repo-hygiene step reproduced green; tests/release passed
+
+Outcome:
+- page audit complete; PR still draft
+- next task: confirm ci-required on #283, mark ready; after #278 merges, merge origin/main and rewrite tools/release paths in docs to scripts/check.py subcommands; land after #286
+
+## 2026-09-22 - README-SHOWCASE (G.3), branch docs/readme-showcase (paused, partial)
+
+Baseline:
+- GKX SHA: f9485f044 (2.3.0)
+- companion SHAs: none; GX source read at bc2fe552 for the defect claims
+- source/test/tool files and lines: unchanged; adds scripts/figures.py and scripts/figures.toml
+- relevant existing gate: tests/release/test_release_gates.py (README phrases, parity table), tests/release/test_evidence_ledger.py, tests/validation/stellarator/test_vmex_qa_transport_optimization.py
+
+Scope:
+- intended change: README per plan.md G.1 (VMEX-style sections, capability figures, proof-test table, evidence-backed GX comparison); one config-driven generator for every new README figure (archived plan section 21.4 `scripts/figures.py`)
+- non-goals: docs/*.rst, examples/, tools/, benchmarks/, the ledger
+- acceptance: pinned claim-scope sentences unchanged; figures regenerable by one command; README numbers recomputed from tracked artifacts
+
+Changes:
+- added scripts/figures.py, scripts/figures.toml; docs/_static/readme/readme_{linear,nonlinear,gx_defects}.{png,json} (243 KiB PNG total)
+- README.md not yet rewritten
+
+Evidence:
+- `JAX_ENABLE_X64=true PYTHONPATH=src:. python scripts/figures.py linear nonlinear gx_defects` (JAX 0.10.2) recomputes Cyclone 6.83%/1.59%, W7-X 0.265%/0.296%, KBM 20.0%/11.1% (same as the ledger rows), W7-X eigenfunction overlap 0.9999999994
+- GX end-damping clamp: Cyclone ky 0.55, Nl32/Nm96 (294,912 indices, 77.8% undamped): GKX - GX(shipped kernel) = +3.97% in gamma; GKX - GX(grid-stride loop) = -0.23%; values from the 2026-09-05 entries above
+- GX float32 kz-hypercollision coefficient at p = 20: finite to Nm 76, zero for Nm 77-85, NaN from Nm 86 (numpy float32, matches the logged Nm 96 NaN run)
+- proof-test numbers, measured but not yet plotted: collision conservation 2.2e-16 (max over sugama/improved_sugama/coulomb), self-adjointness 3.4e-17, H-theorem 4.0e-17, Coulomb Appendix C coefficients 2.2e-16, collisionless Hermite max|Re| 1.6e-14, Laguerre round trip (Nl <= 64) 2.1e-12, Gauss-Laguerre moments 4.7e-14, Spitzer-Harm gamma_E 0.11-0.61%, Landau 0.246%/0.064% (Te/Ti 1) and 0.004%/0.004% (Te/Ti 10)
+- not verified, so not to be claimed: "a freshly built GX does not reproduce its own KAW reference" (docs/verification_matrix.rst prose only; no log entry or artifact)
+
+Outcome:
+- partial; paused by the maintainer before the README rewrite
+- remaining blocker: none technical; the proof_tests builder takes ~4 CPU-minutes (Landau nu-scan)
+- next task: build proof_tests, rewrite README.md (~300 lines), run the README gates, open for review
+
+## 2026-09-22 - README-SHOWCASE (G.3), branch docs/readme-showcase (resumed, complete)
+
+Baseline:
+- GKX SHA: f9485f044 (2.3.0); branch head before this entry 56c58ebeb
+- companion SHAs: none
+- source/test/tool files and lines: unchanged; README.md, scripts/figures.py, docs/_static/readme/readme_proof_tests.{png,json}
+- relevant existing gate: tests/release/test_release_gates.py, tests/release/test_evidence_ledger.py, tests/validation/stellarator/test_vmex_qa_transport_optimization.py, tools/release/check_quasilinear_promotion_guardrails.py
+
+Scope:
+- intended change: finish G.1's README: proof-test figure, rewritten README with capability figures, a proof-test table and the GX-defect section
+- non-goals: docs/*.rst, examples/ (the gallery lane moves files; the README links only examples/), tools/
+- acceptance: pinned claim-scope sentences unchanged; every new number from a tracked artifact, a figure JSON or a cited log entry
+
+Changes:
+- README.md 583 -> 349 lines: pitch and five bullets, install, run an equilibrium, Python, linear physics (figure + the gated 7-row parity table), nonlinear (figure), collisions (prose), proof tests (figure + table), where GX gives the wrong answer (figure + two defects + scope table), derivatives and the pinned QA section, performance, claim scope, figure regeneration, development, license
+- dropped from the README (kept in docs): input reference tables, run-control table, velocity-basis table, the old per-figure generator table
+- scripts/figures.py: proof-test legend moved off the last row
+
+Evidence:
+- `JAX_ENABLE_X64=true python scripts/figures.py proof_tests` on the office host (CPU, JAX 0.10.2): 6 min 56 s wall, 0.79 GB peak RSS. Collision invariants 2.2e-16 (gate 1e-12), self-adjointness 3.4e-17 (1e-12), H-theorem 5.6e-17 (1e-12), Coulomb C9a-f 2.2e-16 (1e-10), collisionless max|Re lambda| 2.4e-14 (1e-11), Laguerre round trip 1.2e-12 (1e-10), Gauss-Laguerre moments 4.9e-14 (1e-10), Landau 0.246%/0.064% and 0.004%/0.004% (1%/0.5%), Spitzer-Harm 0.11-0.61% (1.5%)
+- every tolerance tick equals the threshold its named test asserts (test_collision_physics.py, test_hermite_hierarchy_physics.py, test_core_numerics.py)
+- nonlinear panel (b) metric checked in tools/comparison/compare_gx_nonlinear.py: time mean of the pointwise relative difference, not a window statistic; the caption says so
+- local (JAX 0.10.2): test_release_gates.py + test_evidence_ledger.py + test_vmex_qa_transport_optimization.py pass (31 s); quasilinear guardrails passed (0 failed gates); architecture and size manifests pass
+
+Outcome:
+- complete pending CI and review
+- remaining blocker: none. After #278 merges, the README's `python tools/release/run_test_gates.py fast` becomes `python scripts/check.py test-gates fast`
+- next task: merge origin/main after #278, update that line, rerun the README gates
+
+## 2026-09-22 - README-SHOWCASE (G.3), paused again after merging main
+
+Baseline:
+- GKX SHA: 29362737f (main after #277); branch head 896631af4 before this entry
+
+Scope:
+- no content change since the resumed entry above; merge of origin/main (#277) into docs/readme-showcase
+
+Changes:
+- plan/log.md conflict resolved by keeping every line of both sides (main's new entries first, then this lane's)
+
+Evidence:
+- after the merge, test_release_gates.py + test_evidence_ledger.py + test_vmex_qa_transport_optimization.py pass locally (JAX 0.10.2, x64); architecture and size manifests pass; gitleaks clean
+- CI on 4d764e7bd (pre-merge) had 11 passes, 0 failures when it was superseded; CI on the merged head was still queued (runner backlog) at the pause, with no job failures
+
+Outcome:
+- paused by the maintainer; no process running locally or on the office host
+- office host keeps only the lane clone and its venv (lanes/readme-showcase under the home directory); no raw outputs beyond the two committed README figure files
+- next task: (1) wait for ci-required on the head; (2) when #278 is on main, merge origin/main and change the README's `python tools/release/run_test_gates.py fast` to `python scripts/check.py test-gates fast`; (3) rerun the three README test files; (4) push and leave for the supervisor to merge

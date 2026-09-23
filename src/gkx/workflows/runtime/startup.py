@@ -34,11 +34,16 @@ from typing import cast
 import numpy as np
 from gkx.core_grid import SpectralGrid
 from gkx.core_ky_layout import (
+    FULL,
+    HALF,
+    KyLayout,
     negative_ky_block,
     nyc_from_ny,
     paired_row_limit,
+    source_ky_layout,
     source_ny_full,
     to_full,
+    to_half,
 )
 from gkx.operators.linear.cache_builder import build_linear_cache, mask_off_chain_rows
 from gkx.workflows.runtime.initial_phi import _density_moments_for_target_phi
@@ -184,6 +189,8 @@ def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
 # increase this fallback has no mandate to make on a deck's behalf; the docs
 # continue to say to set Nl and Nm.
 _RUNTIME_LINEAR_HL_FALLBACK = (12, 24)
+# A nonlinear run without Nl/Nm starts coarse; resolution is the deck's call.
+_RUNTIME_NONLINEAR_HL_FALLBACK = (4, 8)
 
 
 def _resolve_runtime_hl_dims(
@@ -541,7 +548,20 @@ def _load_initial_state_from_file(
     ny: int,
     nx: int,
     nz: int,
+    ky_layout: KyLayout = FULL,
 ) -> np.ndarray:
+    """Load a restart or seed file onto ``ky_layout``.
+
+    ``ny`` is the two-sided axis length in both layouts, which is what the
+    file's own contents are indexed by; ``ky_layout`` decides how many rows
+    come back.  Both file forms keep working on both axes: a binary file of
+    ``Nyc`` rows is the ``ky >= 0`` block and is widened only when the caller
+    asked for the two-sided axis, and a two-sided file is narrowed only when
+    the caller asked for the half one.  Neither conversion loses anything --
+    the discarded rows are the conjugates of the kept ones (plan 5.3 N3).
+    """
+
+    half = ky_layout == HALF
     if path.suffix.lower() == ".nc":
         return load_netcdf_restart_state(
             path,
@@ -551,6 +571,7 @@ def _load_initial_state_from_file(
             ny=ny,
             nx=nx,
             nz=nz,
+            ky_layout=ky_layout,
         )
     raw = np.fromfile(path, dtype=np.complex64)
     nyc = nyc_from_ny(ny)
@@ -560,9 +581,10 @@ def _load_initial_state_from_file(
         arr = _reshape_netcdf_state(
             raw, nspec=nspecies, nl=Nl, nm=Nm, nyc=nyc, nx=nx, nz=nz
         )
-        return _expand_ky(arr, ny_full=ny)
+        return arr if half else _expand_ky(arr, ny_full=ny)
     if raw.size == expected_full:
-        return raw.reshape((nspecies, Nl, Nm, ny, nx, nz))
+        full = raw.reshape((nspecies, Nl, Nm, ny, nx, nz))
+        return to_half(full, ny_full=ny) if half else full
     raise ValueError(
         f"init_file size {raw.size} does not match expected {expected_nyc} (nyc) or {expected_full} (full)"
     )
@@ -660,9 +682,10 @@ def _scaled_restart_state(
         nspecies=nspecies,
         Nl=Nl,
         Nm=Nm,
-        ny=grid.ky.size,
+        ny=source_ny_full(grid),
         nx=grid.kx.size,
         nz=grid.z.size,
+        ky_layout=source_ky_layout(grid),
     )
     return np.asarray(loaded_state, dtype=np.complex64) * np.complex64(
         float(cfg.init.init_file_scale)

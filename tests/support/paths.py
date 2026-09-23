@@ -46,33 +46,30 @@ def load_repo_script(
 
 
 def load_tool_script(tool_folder: str, script_name: str) -> ModuleType:
-    """Load a script from a ``tools`` subfolder by file stem."""
+    """Load a module from a ``scripts`` tool package by file stem."""
 
-    tools_dir = TOOLS_ROOT / tool_folder
-    if str(tools_dir) not in sys.path:
-        sys.path.insert(0, str(tools_dir))
-    return load_repo_script(tools_dir.relative_to(REPO_ROOT) / f"{script_name}.py")
+    return load_repo_script(Path("scripts") / tool_folder / f"{script_name}.py")
 
 
 def load_artifact_tool(script_name: str) -> ModuleType:
-    """Load a ``tools/artifacts`` script directly from the checkout."""
+    """Load a ``scripts/artifacts`` script directly from the checkout."""
 
     return load_tool_script("artifacts", script_name)
 
 
 def load_release_tool(script_name: str) -> ModuleType:
-    """Load a ``tools/release`` script directly from the checkout."""
+    """Load a ``scripts/checks`` checker directly from the checkout."""
 
-    return load_tool_script("release", script_name)
+    return load_repo_script(f"scripts/checks/{script_name}.py")
 
 
 def load_profiling_tool(script_name: str) -> ModuleType:
-    """Load a ``tools/profiling`` script directly from the checkout."""
+    """Load a ``scripts/profiling`` script directly from the checkout."""
 
     return load_tool_script("profiling", script_name)
 
 
 def load_comparison_tool(script_name: str) -> ModuleType:
-    """Load a ``tools/comparison`` script directly from the checkout."""
+    """Load a ``scripts/comparison`` script directly from the checkout."""
 
     return load_tool_script("comparison", script_name)

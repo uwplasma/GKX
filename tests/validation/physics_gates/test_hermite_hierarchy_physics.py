@@ -31,7 +31,7 @@ from gkx.terms.linear_terms import (
     hermite_closure_coefficient,
     linked_streaming_contribution,
 )
-from tools.artifacts.build_landau_damping_figure import (
+from scripts.artifacts.build_landau_damping_figure import (
     _NU_SCAN,
     evolve,
     exact_root,
@@ -181,7 +181,7 @@ def test_free_streaming_conserves_norm_so_g0_cannot_exceed_one() -> None:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-    from tools.artifacts.build_recurrence_closure_figure import free_streaming_revival
+    from scripts.artifacts.build_recurrence_closure_figure import free_streaming_revival
 
     for hermite in (16, 64):
         _, amplitude = free_streaming_revival(hermite, "truncation")
@@ -209,7 +209,7 @@ def test_absorbing_closures_beat_truncation_on_both_metrics() -> None:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-    from tools.artifacts.build_recurrence_closure_figure import (
+    from scripts.artifacts.build_recurrence_closure_figure import (
         measure_revival,
         resolved_window_error,
     )

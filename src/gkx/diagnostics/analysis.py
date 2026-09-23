@@ -302,7 +302,7 @@ def _correlated_sample_stats(
     reports ``n/2`` for independent samples -- validated against the empirical
     scatter of independent realizations, that overestimated the standard error
     by 22% at zero correlation
-    (``tools/artifacts/build_window_statistics_validation.py``).
+    (``scripts/artifacts/build_window_statistics_validation.py``).
     """
 
     dt = float(np.median(np.diff(t))) if t.size > 1 else 0.0

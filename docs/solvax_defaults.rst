@@ -2,144 +2,58 @@ Numerical defaults from SOLVAX
 ==============================
 
 GKX delegates physics-independent numerics to `SOLVAX
-<https://github.com/uwplasma/SOLVAX>`_. This page records which of its
-facilities GKX uses, which it does not, and what the open candidates are worth.
-
-What GKX consumes today
------------------------
+<https://github.com/uwplasma/SOLVAX>`_ (``solvax>=0.22.0``). This page lists the
+SOLVAX functions GKX calls and where it calls them. Physics, preconditioners,
+certification gates and branch selection stay in GKX.
 
 .. list-table::
    :header-rows: 1
+   :widths: 30 70
 
-   * - SOLVAX entry point
-     - Where GKX uses it
+   * - SOLVAX function
+     - where GKX calls it
    * - ``gmres``
-     - implicit linear time stepping (``solvers/linear/implicit.py``) and the
-       nonlinear IMEX field solve (``solvers/nonlinear/imex.py``)
+     - backward-Euler implicit linear stepping
+       (``gkx.solvers_linear_implicit``); the nonlinear IMEX field solve
+       (``gkx.solvers_nonlinear_imex``); every shifted inner solve of
+       shift-invert Arnoldi (``gkx.solvers_linear_krylov_algorithms``); the
+       propagator fixed-point solve of the adaptive eigenpair sensitivity
+       (``gkx.objectives.core``)
+   * - ``KrylovSolution``
+     - result type of the implicit and IMEX GMRES solves, read into
+       ``ImplicitSolveStats``
    * - ``linear_solve``
-     - implicit-function-theorem adjoint of the IMEX solve
+     - IMEX implicit solve and its implicit-function-theorem adjoint
+       (``gkx.solvers_nonlinear_imex``)
    * - ``tridiagonal_solve``
-     - batched Hermite-line inverse inside the shifted preconditioner
+     - batched Hermite-line inverse (``gkx.solvers_linear_implicit``), used by
+       the implicit time-step preconditioner and by the ``hermite-line`` and
+       ``field-corrected`` shift-invert preconditioners
+   * - ``block_thomas_factor_ops``
+     - Schur elimination of the z-local block in the ``pr3-cm`` preconditioner
+       (``gkx.solvers_linear_precond_pr3``); GKX's forward substitution is
+       pinned bitwise to ``block_thomas_solve_ops`` on the same factors
+   * - ``estimate_rk4_timestep``, ``adaptive_eigenpair``
+     - stable-step estimate and residual-certified propagator eigensolve behind
+       ``method="adaptive"`` (``gkx.solvers_linear_adaptive_propagator``)
+   * - ``exponential_eigenpairs``
+     - optional exponential-Krylov filter of the adaptive eigensolve and of the
+       differentiable eigenpair's adjoint candidates
+   * - ``propagator_eigenpairs``, ``eigenpair_reverse``
+     - candidate extraction and implicit reverse rule of the differentiable
+       eigenpair (``gkx.objectives.core``; see
+       :doc:`differentiable_eigensolver`)
+   * - ``sparse_operator_matrix``, ``SpluFactorization``,
+       ``sparse_eigenpairs``
+     - bounded-batch sparse assembly, shifted factorization and eigenpairs of
+       ``method="sparse_shift_invert"`` (``gkx.solvers_linear_krylov``)
    * - ``chunked_jacfwd``
-     - bounded-memory geometry Jacobians (``geometry/autodiff_checks.py``)
+     - bounded-memory geometry Jacobians (``gkx.geometry.autodiff_checks``)
 
-Four of SOLVAX's 113 public entry points. Most of SOLVAX targets problems GKX
-does not have. The one migration candidate that was measured, the shift-invert
-inner solve below, was rejected in favour of the unmigrated incumbent.
+The eigensolver and sparse functions are imported inside the function that
+uses them, so importing GKX does not load them.
 
-Shift-invert inner solve
-------------------------
-
-``solvers/linear/krylov_algorithms.py`` imports ``gmres`` from
-``jax.scipy.sparse.linalg``, not from SOLVAX. This is deliberate and recorded in
-:doc:`solvers`: the branch-continuity gate on that lane is open, so it was never
-promoted. The open question was whether migrating would buy anything.
-
-Shift-invert Arnoldi issues ``krylov_dim * restarts`` solves against the *same*
-shifted operator, varying only the right-hand side, and starts each one cold --
-the sequence-of-related-systems that Krylov recycling targets.
-The candidates were measured on the production operator with the physics-aware
-Hermite-line preconditioner active and a stated shift offset, counting
-matrix-vector products.
-
-.. list-table:: Cyclone s-alpha, 1% shift offset, error against the dense reference
-   :header-rows: 1
-
-   * - inner solver
-     - matvecs
-     - ``n=384`` (ratio 21)
-     - ``n=1536`` (ratio 48)
-   * - exact LU (harness control)
-     - --
-     - ``1.56e-15``
-     - ``5.48e-15``
-   * - **jax.scipy GMRES (incumbent)**
-     - **320**
-     - **9.12e-15**
-     - **4.39e-15**
-   * - ``solvax.gmres``
-     - 256
-     - ``1.06e-11``
-     - ``2.95e-11``
-   * - ``solvax.gcrot`` (FIFO recycling)
-     - 760
-     - ``3.12e-12``
-     - ``2.70e-12``
-   * - ``solvax.gcrot`` (harmonic / GCRO-DR)
-     - 760
-     - ``2.99e-13``
-     - ``7.99e-12``
-
-**Verdict: change nothing.** Every candidate converges. The incumbent matches an
-exact direct inner solve to within a few times machine epsilon, at the second
-lowest matrix-vector count. Recycling costs 2.4x the matrix-vector products and
-is one to three orders of magnitude less accurate: the recycle space buys nothing
-here because the preconditioned shifted system is already well conditioned, and
-its extra operator applications per restart are pure overhead.
-
-Wall-clock times are not reported: the variants share one process and the first
-JAX-backed rung absorbs compilation, which makes the ordering an artifact of the
-harness rather than a property of the solvers.
-
-Defects in the first measurement
---------------------------------
-
-An earlier version of this page reported the opposite conclusion -- that plain
-GMRES stalled near ``1e-2`` while recycling reached machine precision. Two
-defects produced it:
-
-1. The tool passed ``preconditioner="auto"``. That is a valid value for
-   ``dominant_eigenpair`` but not one of the names
-   ``_build_shift_invert_precond`` matches, and that function returns
-   ``(None, None)`` for an unrecognised name rather than raising. Every run was
-   **unpreconditioned** while the docs claimed otherwise.
-2. The shift was the exact dense rightmost eigenvalue, making
-   :math:`A - \sigma I` singular by construction. Unpreconditioned GMRES stalls
-   on that -- the stall *was* the reported finding -- while a working
-   preconditioner inverts the near-null direction and returns NaN, which is how
-   this finally surfaced.
-
-The tool carried an exact-LU control throughout, and it caught an unrelated
-branch-selection bug. It could not catch either of these, because it bypasses
-both the preconditioner and the conditioning of the shifted solve.
-
-A third attempt took the shift from a genuinely coarser rung, which is what
-production continuation does. That failed too: at sizes where a dense reference
-fits there is no room on the resolution ladder, and coarsening ``(2,4)`` to
-``(1,2)`` moved the eigenvalue 6.5 magnitudes, so every solver correctly
-converged to a different eigenvalue. Hence the stated offset, which makes shift
-quality an independent variable instead of an accident.
-
-Open candidates
----------------
-
-None of these is a plan of record.
-
-``mixed_precision`` + ``iterative_refinement``
-    Apply the preconditioner in single precision and compute residuals in
-    double. GPUs favour fp32 by a wide margin and the preconditioner does not
-    need to be accurate -- only useful. CI runs x64 throughout, so a precision
-    regression would surface rather than hide. Untested.
-
-``chunked_jacrev`` / ``auto_chunk_size``
-    GKX chunks forward-mode Jacobians only. Stellarator optimization
-    differentiates few outputs with respect to many boundary coefficients, which
-    is the reverse-mode case, and that is where peak memory binds. Untested.
-
-``p_multigrid``
-    Coarsen in polynomial degree: a coarse level is a lower ``(Nl, Nm)``
-    truncation, which GKX already constructs for its convergence ladder, and the
-    coarse space is exactly a subspace of the fine one, so restriction is
-    truncation and prolongation is zero-padding. That makes the transfer
-    operators exact by construction rather than approximations. Untested, and
-    the most promising of the three.
-
-Provenance
-----------
-
-The harness that produced the table, ``tools/campaigns/shift_invert_recycling.py``
-(380 lines), was removed once the migration question was answered; it is
-recoverable from commit ``3aa1591b`` if the question reopens.
-
-The exact-LU control reached machine precision on the same harness that produced
-the rest of the column.
+A shift-invert inner-solver comparison once published on this page is
+retired: it ran unpreconditioned, on a shifted system that was singular by
+construction, so its accuracy ranking of plain and recycled GMRES says nothing
+about the production solve.

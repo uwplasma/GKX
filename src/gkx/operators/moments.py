@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import jax.numpy as jnp
+import numpy as np
 
 from gkx.core_grid import SpectralGrid
-from gkx.core_ky_layout import hermitian_mode_weights, transport_mode_weights
+from gkx.core_ky_layout import (
+    HALF,
+    conjugate_kx_order,
+    hermitian_mode_weights,
+    ky_row_weights,
+    source_ky_layout,
+    source_ny_full,
+    transport_mode_weights,
+)
 from gkx.core_velocity import gamma0
 from gkx.diagnostics_contract import ArrayLike
 from gkx.geometry import (
@@ -533,13 +543,100 @@ def _turbulent_heating_contrib_species(
     return jnp.stack(species_contrib, axis=0)
 
 
-def _reduce_scalar_kykxz(
-    contrib: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Reduce a ``(ky, kx, z)`` contribution to spectral diagnostics views."""
+@dataclass(frozen=True)
+class _KyPairFold:
+    """How to sum a half-spectrum contribution over ``ky`` at fixed ``kx``.
 
+    Every other reduction of a Hermitian-weighted quantity survives the move
+    to a ``ky >= 0`` state untouched, because the pair weight
+    (:func:`gkx.core_ky_layout.ky_row_weights`) puts the conjugate partner's
+    share on the row that is stored.  **The reduction over ``ky`` at fixed
+    ``kx`` does not**, and the reason is the reality condition's shape: the
+    partner of ``(ky, kx)`` is ``(-ky, -kx)``, not ``(-ky, kx)``.  So a
+    weighted sum over the stored rows charges the partner's energy to the
+    wrong ``kx`` column -- the mirror one -- and returns the ``kx``-reflected
+    spectrum.  On an isotropic state the two are close, which is what makes
+    this worth a fold rather than a shrug: measured on one field at
+    ``16x16x24`` the error is 11 per cent on ``Phi2_kxt`` and 13 per cent on
+    ``Wphi_kxst``, large enough to matter and small enough to look plausible.
+
+    The fold restores the two-sided answer exactly.  Writing ``C`` for the
+    unweighted per-row contribution and ``m`` for the ``kx -> -kx``
+    permutation,
+
+        ``sum_{all ky} C(ky, kx) = sum_{ky >= 0} C(ky, kx)``
+                                 ``+ sum_{ky >= 0, paired} C(ky, m(kx))``
+
+    which is the stored sum plus the ``kx`` mirror of its paired-row part.
+    Totals and ``z``-resolved views are unaffected either way, because they
+    sum over ``kx`` as well and the mirror is a permutation of that sum.
+    """
+
+    inv_weight: jnp.ndarray
+    paired: jnp.ndarray
+    kx_order: np.ndarray
+
+
+def _ky_pair_fold(source: Any) -> _KyPairFold | None:
+    """Return the ``kx`` fold for a half-spectrum source, or ``None``.
+
+    ``None`` is the two-sided axis, where each row stands for itself and the
+    plain sum is already the right one.
+    """
+
+    if source_ky_layout(source) != HALF:
+        return None
+    ny_full = source_ny_full(source)
+    weights = ky_row_weights(ny_full)
+    return _KyPairFold(
+        inv_weight=jnp.asarray(1.0 / weights),
+        paired=jnp.asarray((weights > 1.0).astype(float)),
+        kx_order=conjugate_kx_order(int(np.asarray(source.kx).shape[0])),
+    )
+
+
+def _fold_ky_into_kx(
+    kykx: jnp.ndarray, fold: _KyPairFold | None, *, ky_axis: int
+) -> jnp.ndarray:
+    """Sum a ``(..., ky, kx, ...)`` view over ``ky`` as the two-sided axis would.
+
+    See :class:`_KyPairFold`.  With ``fold=None`` this is ``jnp.sum`` over
+    ``ky`` and nothing else, so the two-sided path keeps its exact arithmetic
+    and its exact operation count.
+    """
+
+    if fold is None:
+        return jnp.sum(kykx, axis=ky_axis)
+    shape = [1] * kykx.ndim
+    shape[ky_axis] = -1
+    inv = jnp.asarray(fold.inv_weight, dtype=kykx.dtype).reshape(shape)
+    paired = jnp.asarray(fold.paired, dtype=kykx.dtype).reshape(shape)
+    unweighted = kykx * inv
+    direct = jnp.sum(unweighted, axis=ky_axis)
+    partner = jnp.sum(unweighted * paired, axis=ky_axis)
+    # ``kx`` sat immediately after ``ky``; removing ``ky`` moves it into that slot.
+    return direct + jnp.take(partner, jnp.asarray(fold.kx_order), axis=ky_axis)
+
+
+def _reduce_scalar_kykxz(
+    contrib: jnp.ndarray, fold: _KyPairFold | None = None
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Reduce a ``(ky, kx, z)`` contribution to spectral diagnostics views.
+
+    The ``fold=None`` expressions are left exactly as they were, rather than
+    routed through the folded path with an identity fold: summing ``(ky, z)``
+    in one reduction and summing ``z`` then ``ky`` are the same number in
+    exact arithmetic and not always the same float, and the two-sided route is
+    gated bitwise.
+    """
+
+    kxt = (
+        jnp.sum(contrib, axis=(0, 2))
+        if fold is None
+        else _fold_ky_into_kx(jnp.sum(contrib, axis=2), fold, ky_axis=0)
+    )
     return (
-        jnp.sum(contrib, axis=(0, 2)),
+        kxt,
         jnp.sum(contrib, axis=(1, 2)),
         jnp.sum(contrib, axis=2),
         jnp.sum(contrib, axis=(0, 1)),
@@ -548,13 +645,18 @@ def _reduce_scalar_kykxz(
 
 
 def _reduce_species_kykxz(
-    contrib: jnp.ndarray,
+    contrib: jnp.ndarray, fold: _KyPairFold | None = None
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """Reduce a ``(species, ky, kx, z)`` contribution to spectral diagnostics views."""
 
+    kxst = (
+        jnp.sum(contrib, axis=(1, 3))
+        if fold is None
+        else _fold_ky_into_kx(jnp.sum(contrib, axis=3), fold, ky_axis=1)
+    )
     return (
         jnp.sum(contrib, axis=(1, 2, 3)),
-        jnp.sum(contrib, axis=(1, 3)),
+        kxst,
         jnp.sum(contrib, axis=(2, 3)),
         jnp.sum(contrib, axis=3),
         jnp.sum(contrib, axis=(1, 2)),
@@ -582,11 +684,14 @@ def phi2_resolved(
     fac = _hermitian_mode_weight(grid, use_dealias=use_dealias)
     active = fac[:, :, None] != 0.0
     contrib = _masked_abs2(phi, active) * fac[:, :, None] * vol_fac[None, None, :]
-    phi2_kxt, phi2_kyt, phi2_kxkyt, phi2_zt, phi2_t = _reduce_scalar_kykxz(contrib)
+    fold = _ky_pair_fold(grid)
+    phi2_kxt, phi2_kyt, phi2_kxkyt, phi2_zt, phi2_t = _reduce_scalar_kykxz(
+        contrib, fold
+    )
     zonal_mask = (jnp.asarray(grid.ky) == 0.0).astype(contrib.dtype)[:, None, None]
     zonal = contrib * zonal_mask
     phi2_zonal_kxt, _phi2_zonal_kyt, _phi2_zonal_kxkyt, phi2_zonal_zt, phi2_zonal_t = (
-        _reduce_scalar_kykxz(zonal)
+        _reduce_scalar_kykxz(zonal, fold)
     )
     return (
         phi2_t,
@@ -654,7 +759,12 @@ def distribution_free_energy_resolved(
     nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
     g2 = _masked_abs2(Gs, fac != 0.0)
     contrib = 0.5 * g2 * fac * vol * nt[:, None, None, None, None, None]
-    Wg_kxst = jnp.sum(contrib, axis=(1, 2, 3, 5))
+    fold = _ky_pair_fold(grid)
+    Wg_kxst = (
+        jnp.sum(contrib, axis=(1, 2, 3, 5))
+        if fold is None
+        else _fold_ky_into_kx(jnp.sum(contrib, axis=(1, 2, 5)), fold, ky_axis=1)
+    )
     Wg_kyst = jnp.sum(contrib, axis=(1, 2, 4, 5))
     Wg_kxkyst = jnp.sum(contrib, axis=(1, 2, 5))
     Wg_zst = jnp.sum(contrib, axis=(1, 2, 3, 4))
@@ -687,7 +797,7 @@ def electrostatic_field_energy_resolved(
         b = cache.kperp2 * rho2_s
         contrib_species.append(0.5 * phi2 * (1.0 - gamma0(b)) * weight * scale)
     contrib = jnp.stack(contrib_species, axis=0)
-    return _reduce_species_kykxz(contrib)
+    return _reduce_species_kykxz(contrib, _ky_pair_fold(cache))
 
 
 def magnetic_vector_potential_energy_resolved(
@@ -706,7 +816,7 @@ def magnetic_vector_potential_energy_resolved(
     total = 0.5 * _masked_abs2(apar, weight != 0.0) * cache.kperp2 * bmag2 * weight
     ns = max(int(nspecies), 1)
     contrib = jnp.broadcast_to(total[None, ...] / float(ns), (ns,) + total.shape)
-    return _reduce_species_kykxz(contrib)
+    return _reduce_species_kykxz(contrib, _ky_pair_fold(cache))
 
 
 def heat_flux_resolved_species(
@@ -880,7 +990,7 @@ def turbulent_heating_resolved_species(
         dt,
         use_dealias=use_dealias,
     )
-    return _reduce_species_kykxz(contrib)
+    return _reduce_species_kykxz(contrib, _ky_pair_fold(grid))
 
 
 __all__ = [
@@ -891,6 +1001,8 @@ __all__ = [
     "_jl_family",
     "_masked_abs2",
     "_particle_flux_channel_contrib_species",
+    "_fold_ky_into_kx",
+    "_ky_pair_fold",
     "_reduce_scalar_kykxz",
     "_reduce_species_kykxz",
     "_species_array",

@@ -1,0 +1,736 @@
+{
+ "argv": [
+  "forward",
+  "--nx",
+  "32",
+  "--ny",
+  "32",
+  "--nz",
+  "24",
+  "--nl",
+  "4",
+  "--nm",
+  "8",
+  "--repeats",
+  "1",
+  "--trace-dir",
+  "~/perflit_gpu3/trace_srcmap32",
+  "--label",
+  "fwd_32x32x24_l4m8_srcmap",
+  "--out",
+  "~/perflit_gpu3/fwd_32x32x24_l4m8_srcmap.json"
+ ],
+ "command": "forward",
+ "derived": {
+  "bracket_s_estimate": 0.0006762319972040132,
+  "step_over_rhs": 2.5706275186517606
+ },
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   50.28759765625,
+   62.146484375,
+   72.75048828125
+  ],
+  "loadavg_start": [
+   55.5,
+   63.87255859375,
+   73.5244140625
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "graphs": {
+  "fields": {
+   "argument_bytes": 8680500,
+   "compile_s": 0.29305469599785283,
+   "device_peak_bytes": 78392064,
+   "first_call_s": 0.00655516299593728,
+   "generated_code_bytes": 0,
+   "hlo": {
+    "concatenate": 0,
+    "constant_bytes": 92,
+    "copy": 0,
+    "fft": 0,
+    "fft_shapes": [],
+    "fused_interior_bytes": 0,
+    "gather": 0,
+    "materialized_bytes": 0,
+    "scatter": 0,
+    "transpose": 0
+   },
+   "host_peak_bytes": 1054343168,
+   "lower_s": 0.11785404400143307,
+   "output_bytes": 196608,
+   "temp_bytes": 504880,
+   "warm_median_s": 0.0013953290035715327,
+   "warm_s": [
+    0.0013953290035715327
+   ]
+  },
+  "hermitian_projector": {
+   "argument_bytes": 6291456,
+   "compile_s": 0.08873566200782079,
+   "device_peak_bytes": 78392064,
+   "first_call_s": 0.0016385399940190837,
+   "generated_code_bytes": 1760,
+   "hlo": {
+    "concatenate": 1,
+    "constant_bytes": 128,
+    "copy": 0,
+    "fft": 0,
+    "fft_shapes": [],
+    "fused_interior_bytes": 0,
+    "gather": 1,
+    "materialized_bytes": 6291456,
+    "scatter": 0,
+    "transpose": 0
+   },
+   "host_peak_bytes": 1214222336,
+   "lower_s": 0.023870413002441637,
+   "output_bytes": 6291456,
+   "temp_bytes": 0,
+   "warm_median_s": 0.00036419300886336714,
+   "warm_s": [
+    0.00036419300886336714
+   ]
+  },
+  "linear_rhs": {
+   "argument_bytes": 7485940,
+   "compile_s": 2.6596360630064737,
+   "device_peak_bytes": 78392064,
+   "first_call_s": 0.07636083700344898,
+   "generated_code_bytes": 5728,
+   "hlo": {
+    "concatenate": 15,
+    "constant_bytes": 4772,
+    "copy": 0,
+    "fft": 10,
+    "fft_shapes": [
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "IFFT"
+     }
+    ],
+    "fused_interior_bytes": 28404252,
+    "gather": 14,
+    "materialized_bytes": 2838528,
+    "scatter": 0,
+    "transpose": 0
+   },
+   "host_peak_bytes": 1142534144,
+   "lower_s": 0.489335131002008,
+   "output_bytes": 6291456,
+   "temp_bytes": 4615728,
+   "warm_median_s": 0.00190019300498534,
+   "warm_s": [
+    0.00190019300498534
+   ]
+  },
+  "nonlinear_rhs": {
+   "argument_bytes": 7981720,
+   "compile_s": 2.2846232110023266,
+   "device_peak_bytes": 78392064,
+   "first_call_s": 0.027954949997365475,
+   "generated_code_bytes": 5856,
+   "hlo": {
+    "concatenate": 20,
+    "constant_bytes": 4956,
+    "copy": 0,
+    "fft": 15,
+    "fft_shapes": [
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "FFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "c64",
+      "out_shape": "2,1,5,1,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "c64",
+      "out_shape": "2,1,5,8,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "f32",
+      "out_shape": "2,1,5,1,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32",
+      "out_dtype": "f32",
+      "out_shape": "2,1,5,8,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 1,
+      "fft_length": "32,32",
+      "out_dtype": "c64",
+      "out_shape": "1,5,8,24,32,17",
+      "type": "RFFT"
+     }
+    ],
+    "fused_interior_bytes": 36268572,
+    "gather": 17,
+    "materialized_bytes": 27967488,
+    "scatter": 0,
+    "transpose": 16
+   },
+   "host_peak_bytes": 1214222336,
+   "lower_s": 0.4997177329933038,
+   "output_bytes": 6291456,
+   "temp_bytes": 17892912,
+   "warm_median_s": 0.002576425002189353,
+   "warm_s": [
+    0.002576425002189353
+   ]
+  },
+  "rk3_step": {
+   "argument_bytes": 7981720,
+   "compile_s": 4.104797606007196,
+   "device_peak_bytes": 109811712,
+   "first_call_s": 0.03524246999586467,
+   "generated_code_bytes": 5856,
+   "hlo": {
+    "concatenate": 90,
+    "constant_bytes": 6108,
+    "copy": 0,
+    "fft": 45,
+    "fft_shapes": [
+     {
+      "count": 3,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "FFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "120",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,120",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "72",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,1,72",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "48",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,16,48",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "24",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,175,24",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "96",
+      "out_dtype": "c64",
+      "out_shape": "2,1,4,8,4,96",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "c64",
+      "out_shape": "2,1,5,1,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "c64",
+      "out_shape": "2,1,5,8,24,17,32",
+      "type": "IFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "f32",
+      "out_shape": "2,1,5,1,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32",
+      "out_dtype": "f32",
+      "out_shape": "2,1,5,8,24,32,32",
+      "type": "IRFFT"
+     },
+     {
+      "count": 3,
+      "fft_length": "32,32",
+      "out_dtype": "c64",
+      "out_shape": "1,5,8,24,32,17",
+      "type": "RFFT"
+     }
+    ],
+    "fused_interior_bytes": 288245532,
+    "gather": 81,
+    "materialized_bytes": 130166784,
+    "scatter": 0,
+    "transpose": 46
+   },
+   "host_peak_bytes": 1343209472,
+   "lower_s": 0.653262640000321,
+   "output_bytes": 6291456,
+   "temp_bytes": 40234288,
+   "warm_median_s": 0.006623029010370374,
+   "warm_s": [
+    0.006623029010370374
+   ]
+  }
+ },
+ "host_peak_bytes": 1357770752,
+ "label": "fwd_32x32x24_l4m8_srcmap",
+ "method": "rk3",
+ "precision": "32",
+ "process_s": 21.48612604298978,
+ "shape": [
+  1,
+  4,
+  8,
+  32,
+  32,
+  24
+ ],
+ "state_bytes": 6291456,
+ "trace_top_ops": {
+  "by_category": {
+   "concatenate": {
+    "frac": 0.10259208061605016,
+    "us": 1826.763
+   },
+   "dispatch_memcpy": {
+    "frac": 0.04270029757248113,
+    "us": 760.325
+   },
+   "fft": {
+    "frac": 0.15621179325131712,
+    "us": 2781.5199999999995
+   },
+   "gather_scatter": {
+    "frac": 0.0013335331152580334,
+    "us": 23.744999999999997
+   },
+   "matmul": {
+    "frac": 0.08746163249163968,
+    "us": 1557.3490000000006
+   },
+   "other_fusion": {
+    "frac": 0.48490105796435157,
+    "us": 8634.187999999998
+   },
+   "reduce": {
+    "frac": 0.0013389245315168156,
+    "us": 23.841000000000005
+   },
+   "transpose_copy": {
+    "frac": 0.12346068045738526,
+    "us": 2198.3509999999997
+   }
+  },
+  "calls": 5,
+  "scope": "device",
+  "top": [
+   {
+    "count": 5,
+    "frac": 0.22027282588050529,
+    "name": "loop_add_fusion_3",
+    "source": "jit(step)/add; jit(step)/jit(_where)/broadcast_in_dim; jit(step)/jit(_take)/and; jit(step)/jit(_take)/gather; jit(step)/jit(_take)/lt; jit(step)/jit(_take); jit(step)/jit(_take)/add; jit(_take)/jit(_where)/select_n",
+    "us": 3922.196
+   },
+   {
+    "count": 15,
+    "frac": 0.06992341156240883,
+    "name": "loop_add_fusion_2",
+    "source": "jit(step)/add; jit(step)/mul; jit(step)/convert_element_type; jit(step)/slice",
+    "us": 1245.062
+   },
+   {
+    "count": 5,
+    "frac": 0.06056565391533072,
+    "name": "loop_slice_fusion_1",
+    "source": "jit(step)/slice; jit(step)/complex; jit(step)/rev; jit(step)/gather; jit(step)/concatenate; jit(step)/convert_element_type; jit(step)/mul; jit(step)/jit(_where)/broadcast_in_dim",
+    "us": 1078.437
+   },
+   {
+    "count": 5,
+    "frac": 0.05419659417495662,
+    "name": "loop_slice_fusion_2",
+    "source": "jit(step)/slice; jit(step)/complex; jit(step)/rev; jit(step)/gather; jit(step)/concatenate; jit(step)/convert_element_type; jit(step)/mul; jit(step)/jit(_where)/broadcast_in_dim",
+    "us": 965.029
+   },
+   {
+    "count": 105,
+    "frac": 0.048984779470295614,
+    "name": "void scal_kernel_val<float2, float2>(cublasScalParamsVal<float2, float2>)",
+    "source": null,
+    "us": 872.2270000000003
+   },
+   {
+    "count": 30,
+    "frac": 0.04319990214579489,
+    "name": "void vector_fft_c2r<32u, EPT<32u>, 32u, 16u, (padding_t)14, (twiddle_t)0, (loadstore_modifier_t)3, (layout_t)0, unsigned",
+    "source": null,
+    "us": 769.2209999999998
+   },
+   {
+    "count": 5,
+    "frac": 0.04214857597533247,
+    "name": "input_concatenate_fusion_1",
+    "source": "jit(step)/concatenate; jit(step)/slice; jit(step)/complex; jit(step)/rev; jit(step)/gather; jit(step)/convert_element_type; jit(step)/mul; jit(step)/jit(_where)/broadcast_in_dim",
+    "us": 750.501
+   },
+   {
+    "count": 30,
+    "frac": 0.040540136791462594,
+    "name": "MemcpyD2D",
+    "source": null,
+    "us": 721.861
+   },
+   {
+    "count": 30,
+    "frac": 0.03999565990991167,
+    "name": "void vector_fft<32u, EPT<8u>, 32u, 10u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned int, ",
+    "source": null,
+    "us": 712.1659999999999
+   },
+   {
+    "count": 30,
+    "frac": 0.038476853021344064,
+    "name": "void scal_kernel_val<float, float>(cublasScalParamsVal<float, float>)",
+    "source": null,
+    "us": 685.1220000000002
+   },
+   {
+    "count": 15,
+    "frac": 0.037269231939962975,
+    "name": "wrapped_transpose",
+    "source": "jit(step)/jit(fft)/fft",
+    "us": 663.6189999999999
+   },
+   {
+    "count": 15,
+    "frac": 0.028536934739489567,
+    "name": "loop_subtract_fusion",
+    "source": "jit(step)/sub; jit(step)/mul; jit(step)/slice",
+    "us": 508.1309999999999
+   },
+   {
+    "count": 15,
+    "frac": 0.027960053199799925,
+    "name": "input_concatenate_fusion_16",
+    "source": "jit(step)/stack; jit(step)/slice; jit(step)/abs; jit(step)/scatter; jit(step)/convert_element_type; jit(step)/mul",
+    "us": 497.8589999999999
+   },
+   {
+    "count": 15,
+    "frac": 0.02028082314795585,
+    "name": "void vector_fft_r2c<32u, EPT<32u>, 32u, 16u, (padding_t)14, (twiddle_t)0, (loadstore_modifier_t)3, (layout_t)0, unsigned",
+    "source": null,
+    "us": 361.122
+   },
+   {
+    "count": 15,
+    "frac": 0.01996812100494651,
+    "name": "input_transpose_fusion_6",
+    "source": "jit(step)/mul; jit(step)/convert_element_type; jit(step)/slice; jit(step)/real; jit(step)/imag; jit(step)/neg; jit(step)/complex; jit(step)/rev",
+    "us": 355.55400000000003
+   },
+   {
+    "count": 15,
+    "frac": 0.017759549798771004,
+    "name": "input_transpose_fusion_7",
+    "source": "jit(step)/mul; jit(step)/convert_element_type; jit(step)/slice; jit(step)/real; jit(step)/imag; jit(step)/neg; jit(step)/complex; jit(step)/rev",
+    "us": 316.228
+   },
+   {
+    "count": 15,
+    "frac": 0.015133761598986233,
+    "name": "void regular_fft<32u, EPT<8u>, 32u, 16u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)1, unsigned int,",
+    "source": null,
+    "us": 269.473
+   },
+   {
+    "count": 5,
+    "frac": 0.013352853255421375,
+    "name": "input_transpose_fusion_11",
+    "source": "jit(step)/mul; jit(step)/slice; jit(step)/complex; jit(step)/rev; jit(step)/gather; jit(step)/concatenate",
+    "us": 237.76199999999997
+   },
+   {
+    "count": 15,
+    "frac": 0.013036556834906182,
+    "name": "loop_concatenate_fusion_2",
+    "source": "jit(step)/concatenate; jit(step)/jit(fft)/fft",
+    "us": 232.12999999999997
+   },
+   {
+    "count": 5,
+    "frac": 0.012847857265848826,
+    "name": "input_transpose_fusion_10",
+    "source": "jit(step)/mul; jit(step)/complex; jit(step)/rev; jit(step)/gather; jit(step)/concatenate; jit(step)/slice",
+    "us": 228.77000000000004
+   },
+   {
+    "count": 30,
+    "frac": 0.012112771355315561,
+    "name": "void regular_fft<24u, EPT<4u, 6u>, 16u, 21u, (padding_t)14, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned",
+    "source": null,
+    "us": 215.68100000000004
+   },
+   {
+    "count": 5,
+    "frac": 0.00962553132126427,
+    "name": "input_transpose_fusion_9",
+    "source": "jit(step)/mul; jit(step)/real; jit(step)/imag; jit(step)/neg; jit(step)/complex; jit(step)/rev; jit(step)/gather; jit(step)/concatenate",
+    "us": 171.39299999999997
+   },
+   {
+    "count": 5,
+    "frac": 0.007432965882107022,
+    "name": "loop_slice_fusion",
+    "source": "jit(step)/slice; jit(step)/complex; jit(step)/rev; jit(step)/gather; jit(step)/concatenate; jit(step)/convert_element_type; jit(step)/mul; jit(step)/add",
+    "us": 132.35199999999998
+   },
+   {
+    "count": 15,
+    "frac": 0.006755500732839486,
+    "name": "input_transpose_fusion_8",
+    "source": "jit(step)/mul; jit(step)/convert_element_type; jit(step)/slice; jit(step)/real; jit(step)/imag; jit(step)/neg; jit(step)/complex; jit(step)/rev",
+    "us": 120.289
+   },
+   {
+    "count": 30,
+    "frac": 0.006613470610772206,
+    "name": "void regular_fft<96u, EPT<4u, 6u>, 8u, 10u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned i",
+    "source": null,
+    "us": 117.75999999999999
+   },
+   {
+    "count": 30,
+    "frac": 0.0063618711853623945,
+    "name": "void regular_fft<72u, EPT<8u, 9u>, 16u, 12u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned ",
+    "source": null,
+    "us": 113.28000000000002
+   },
+   {
+    "count": 30,
+    "frac": 0.006338508381574341,
+    "name": "void regular_fft<48u, EPT<6u, 8u>, 16u, 12u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigned ",
+    "source": null,
+    "us": 112.86400000000002
+   },
+   {
+    "count": 30,
+    "frac": 0.0061750249156439915,
+    "name": "void regular_fft<120u, EPT<10u, 12u>, 8u, 16u, (padding_t)6, (twiddle_t)0, (loadstore_modifier_t)2, (layout_t)0, unsigne",
+    "source": null,
+    "us": 109.953
+   },
+   {
+    "count": 5,
+    "frac": 0.005661155553478861,
+    "name": "loop_negate_real_fusion_1",
+    "source": "jit(step)/neg; jit(step)/slice; jit(step)/complex; jit(step)/rev; jit(step)/gather; jit(step)/concatenate; jit(step)/convert_element_type; jit(step)/mul",
+    "us": 100.803
+   },
+   {
+    "count": 15,
+    "frac": 0.005360921060567956,
+    "name": "loop_multiply_fusion_8",
+    "source": "jit(step)/mul; jit(step)/convert_element_type; jit(step)/abs; jit(step)/stack",
+    "us": 95.45700000000001
+   }
+  ],
+  "total_us": 17806.082000000002
+ }
+}

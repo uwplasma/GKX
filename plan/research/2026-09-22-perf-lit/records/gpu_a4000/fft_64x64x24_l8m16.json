@@ -1,0 +1,199 @@
+{
+ "argv": [
+  "fftfloor",
+  "--forward-json",
+  "~/perflit_gpu/fwd_64x64x24_l8m16.json",
+  "--repeats",
+  "7",
+  "--label",
+  "fft_64x64x24_l8m16",
+  "--out",
+  "~/perflit_gpu/fft_64x64x24_l8m16.json"
+ ],
+ "command": "fftfloor",
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   16.42333984375,
+   17.59375,
+   18.095703125
+  ],
+  "loadavg_start": [
+   17.41796875,
+   17.806640625,
+   18.16650390625
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "fft_fraction_upper": 0.22864721425193163,
+ "fft_seconds_per_rhs": 0.00829535500088241,
+ "host_peak_bytes": 907726848,
+ "label": "fft_64x64x24_l8m16",
+ "precision": "32",
+ "process_s": 2.150178568001138,
+ "rhs_seconds": 0.036280148997320794,
+ "rows": [
+  {
+   "count": 1,
+   "fft_length": "72",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,16,72",
+   "type": "FFT",
+   "warm_median_s": 8.880600216798484e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "192",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,2,192",
+   "type": "FFT",
+   "warm_median_s": 9.284999396186322e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "120",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,3,120",
+   "type": "FFT",
+   "warm_median_s": 0.00014648599608335644
+  },
+  {
+   "count": 1,
+   "fft_length": "216",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,3,216",
+   "type": "FFT",
+   "warm_median_s": 0.00010789200314320624
+  },
+  {
+   "count": 1,
+   "fft_length": "48",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,61,48",
+   "type": "FFT",
+   "warm_median_s": 0.00015695899492129683
+  },
+  {
+   "count": 1,
+   "fft_length": "24",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,690,24",
+   "type": "FFT",
+   "warm_median_s": 0.0003814890078501776
+  },
+  {
+   "count": 1,
+   "fft_length": "96",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,7,96",
+   "type": "FFT",
+   "warm_median_s": 0.0001539289951324463
+  },
+  {
+   "count": 1,
+   "fft_length": "64",
+   "out_dtype": "c64",
+   "out_shape": "2,1,11,1,24,33,64",
+   "type": "IFFT",
+   "warm_median_s": 0.00022876300499774516
+  },
+  {
+   "count": 1,
+   "fft_length": "64",
+   "out_dtype": "c64",
+   "out_shape": "2,1,11,16,24,33,64",
+   "type": "IFFT",
+   "warm_median_s": 0.00172742000722792
+  },
+  {
+   "count": 1,
+   "fft_length": "72",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,16,72",
+   "type": "IFFT",
+   "warm_median_s": 9.175800369121134e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "192",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,2,192",
+   "type": "IFFT",
+   "warm_median_s": 9.391599451191723e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "120",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,3,120",
+   "type": "IFFT",
+   "warm_median_s": 9.898099233396351e-05
+  },
+  {
+   "count": 1,
+   "fft_length": "216",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,3,216",
+   "type": "IFFT",
+   "warm_median_s": 0.00010793899127747864
+  },
+  {
+   "count": 1,
+   "fft_length": "48",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,61,48",
+   "type": "IFFT",
+   "warm_median_s": 0.00016479399346280843
+  },
+  {
+   "count": 1,
+   "fft_length": "24",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,690,24",
+   "type": "IFFT",
+   "warm_median_s": 0.00046868300705682486
+  },
+  {
+   "count": 1,
+   "fft_length": "96",
+   "out_dtype": "c64",
+   "out_shape": "2,1,8,16,7,96",
+   "type": "IFFT",
+   "warm_median_s": 0.00015571399126201868
+  },
+  {
+   "count": 1,
+   "fft_length": "64",
+   "out_dtype": "f32",
+   "out_shape": "2,1,11,1,24,64,64",
+   "type": "IRFFT",
+   "warm_median_s": 0.0003185150126228109
+  },
+  {
+   "count": 1,
+   "fft_length": "64",
+   "out_dtype": "f32",
+   "out_shape": "2,1,11,16,24,64,64",
+   "type": "IRFFT",
+   "warm_median_s": 0.002625893001095392
+  },
+  {
+   "count": 1,
+   "fft_length": "64,64",
+   "out_dtype": "c64",
+   "out_shape": "1,11,16,24,64,33",
+   "type": "RFFT",
+   "warm_median_s": 0.0010845680080819875
+  }
+ ],
+ "source": "~/perflit_gpu/fwd_64x64x24_l8m16.json"
+}

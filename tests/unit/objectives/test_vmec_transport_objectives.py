@@ -469,7 +469,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from tools.campaigns.vmec_candidate_admission import (
+from scripts.campaigns.vmec_candidate_admission import (
     build_authoritative_wout_candidate_gate,
     build_solved_vmec_candidate_gate,
     build_wout_reproducibility_gate,
@@ -873,24 +873,24 @@ def test_authoritative_wout_candidate_gate_reports_wout_load_errors(
 # ---- test_vmex_transport_admission.py ----
 
 
-import tools.campaigns.stellarator_transport_reports as transport_reports
-from tools.campaigns.stellarator_transport_reports import (
+import scripts.campaigns.stellarator_transport_reports as transport_reports
+from scripts.campaigns.stellarator_transport_reports import (
     build_nonlinear_audit_redesign_report,
     build_nonlinear_campaign_admission_report,
     build_nonlinear_landscape_admission_report,
     build_reduced_nonlinear_audit_prelaunch_report,
 )
-from tools.campaigns.vmec_transport_admission import (
+from scripts.campaigns.vmec_transport_admission import (
     VMEXNonlinearAuditPolicy,
     VMEXNonlinearCampaignPolicy,
     VMEXReducedPrelaunchPolicy,
     VMEXTransportAdmissionPolicy,
 )
-from tools.campaigns.vmec_transport_admission import (
+from scripts.campaigns.vmec_transport_admission import (
     candidate_transport_metric,
     transport_objective_sample_summary,
 )
-from tools.campaigns.vmec_transport_admission import (
+from scripts.campaigns.vmec_transport_admission import (
     build_transport_admission_report,
     select_admitted_transport_candidate,
 )
@@ -1005,7 +1005,7 @@ def test_transport_admission_can_require_stronger_relative_improvement() -> None
 
 
 def test_transport_admission_is_not_installable_public_api() -> None:
-    """Campaign admission policy lives in tools/campaigns, not in the package."""
+    """Campaign admission policy lives in scripts/campaigns, not in the package."""
 
     for name in (
         "VMEXTransportAdmissionPolicy",
