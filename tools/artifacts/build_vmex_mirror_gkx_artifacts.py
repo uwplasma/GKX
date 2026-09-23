@@ -272,7 +272,7 @@ def build(output_dir: Path, *, movie: bool = True) -> dict:
     # Roll the plotted parallel profiles onto the |B| minimum so the panel reads as the well its
     # periodicity implies rather than as a barrier with half a well at each edge. Display only:
     # the record uses the unrolled geometry and the objectives are invariant under the shift.
-    # docs/geometry.rst carries that measurement.
+    # docs/geometry.rst states the invariance; the measured figure is not tracked.
     #
     # This used to take the fundamental's trough instead of argmin, because on the seeded state
     # the low-field leg was a flat plateau straddling the seam and argmin picked an arbitrary

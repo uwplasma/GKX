@@ -160,8 +160,8 @@ Supplied states below the runtime
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The same rule holds at the library entry points that accept a caller-built
-state: ``gkx.prepare`` and the prepared object's ``run`` / ``run_arrays``
-(including ``PreparedSimulation.solve(initial_state=...)``),
+state: ``PreparedSimulation.solve(initial_state=...)`` on the object
+``gkx.prepare`` returns,
 ``integrate_nonlinear_explicit_diagnostics_state``, the differentiable
 objective :func:`~gkx.solvers_nonlinear_state_integration.nonlinear_heat_flux_window`,
 and the raw drivers
@@ -322,7 +322,7 @@ static argument or compile key is added.
 One nonlinear diagnostics graph
 -------------------------------
 
-``gkx.prepare`` keeps a compiled scan and runs it through ``simulation.run``;
+``gkx.prepare`` keeps a compiled scan and runs it through ``simulation.solve()``;
 ``integrate_nonlinear_explicit_diagnostics_state`` is the function entry point,
 and the one ``run_runtime_nonlinear`` reaches on its fixed-window, chunked and
 sharded routes.  **Both compile the same jitted graph and return bitwise
