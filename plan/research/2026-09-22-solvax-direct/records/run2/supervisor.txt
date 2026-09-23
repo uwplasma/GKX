@@ -1,0 +1,5 @@
+2026-09-23T02:14:56Z start bench_r96 load 74.61 73.14 62.71
+2026-09-23T02:33:19Z end bench_r96 load 83.68 90.85 83.49
+2026-09-23T02:33:19Z start bench_prod load 83.68 90.85 83.49
+2026-09-23T03:08:11Z end bench_prod load 36.76 57.40 66.16
+2026-09-23T03:08:11Z start bench_c48 load 36.76 57.40 66.16

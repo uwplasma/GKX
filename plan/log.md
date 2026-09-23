@@ -19609,3 +19609,55 @@ Outcome:
 - remaining blocker: none known. The move is not a contraction: scripts/ must fall by about 59k lines. Other lanes apply the rename recipe in MAP.md.
 - next task: contract scripts/ by package (artifacts first, 35,121 lines), with the output-consumer check applied to each deletion
 Addendum (paused 2026-09-22): PR #288. main (#277) was merged in, with a plan/log.md append conflict resolved by keeping both sides; the hygiene step reran with exit 0. CI run 35811214759 was still queued behind the organization's run backlog at the pause, so no CI result exists yet. Next: once #278 merges, merge origin/main, then let CI run and fix any real failure.
+
+## 2026-09-22 - SOLVAX-DIRECT (plan G.2), step 1 and start of step 2; branch research/solvax-direct-20260922 (paused)
+
+Baseline:
+- GKX SHA: f9485f044 (origin/main, 2.3.0)
+- companion SHAs: SOLVAX 7b8ca55 (origin/main, 0.25.0), DKX 91e0582c (read-only)
+- source/test/tool files and lines: unchanged; one research script added
+- relevant existing gate: plan section 5.1 L4/L5 adoption gate (rewritten 2026-09-19)
+
+Scope:
+- intended change: inventory SOLVAX's direct/preconditioner routes; assemble the operators GKX solves (shift-invert `A - sigma I`, implicit/IMEX `I - dt A`, implicit streaming, collisions) as exact CSR; benchmark sparse direct (MUMPS, SuperLU, cuDSS if a GPU is free) against Krylov + `pr3-cm`; land a jit-compatible SOLVAX sparse-direct solve with a factor-reusing adjoint only if it wins
+- non-goals: no GKX `src/` change, no SOLVAX release
+- prospective acceptance and rollback criteria: section 5.1 gate (reproducible cost reduction at unchanged certification)
+
+Changes:
+- files/functions removed, merged, or added: `plan/research/2026-09-22-solvax-direct/operators.py` (assembly by moment-graph probing + Curtis-Powell-Reid compression, Kronecker column grouping, complex verification, structure stats)
+- public/schema behavior: none
+
+Evidence:
+- focused tests: none (research script only)
+- physics/mathematics/numerics gates: on the c24 case (Nz,Nl,Nm)=(24,8,16), n=3072, ky=0.3, the compressed `A` matches GKX's operator to 3.9e-16 (complex random probes) with 432 products against 3072 for column sampling; pattern probing must use a zero threshold, because the phi-to-streaming coupling reaches 1e-10 relative at high Laguerre index and a 1e-13 threshold dropped 12,216 entries (error 7.6e-12)
+- CPU/NVIDIA measurements: c24 structure, `A`: nnz 247,160 (80.5/row, max 221), RCM bandwidth 650; `A_S`: 170,496 (55.5/row); `A_C` (nu=0.01): 10,176 (3.3/row), z-local, RCM bandwidth 15. No factorization timings yet. office GPUs were both in use by other lanes (18:07), so no cuDSS run.
+- values, tolerances, residuals, uncertainty: PyMUMPS 0.4.0 builds on macOS arm64 against MacPorts MUMPS 5.6.2/MPICH with the classic linker; SOLVAX `SpluFactorization(backend="mumps")` then agrees with SuperLU on a test matrix
+
+Outcome:
+- accepted, rejected, or partial: partial (paused by the maintainer)
+- remaining blocker: none technical; laptop disk was full (56 MiB free) for part of the session
+- next task: steps 2-4 in the PR #280 handoff
+
+## 2026-09-22 - SOLVAX-DIRECT (plan G.2) resumed: benchmarks, SOLVAX#121 (paused again)
+
+Baseline:
+- GKX SHA: 29362737f (origin/main, merged in); SOLVAX 7b8ca55 (0.25.0)
+- source/test/tool files and lines: GKX `src/` unchanged; research harnesses and records under `plan/research/2026-09-22-solvax-direct/`
+
+Scope:
+- intended change: measure MUMPS/SuperLU against `pr3-cm` at matched residual, and a full shift-invert against `adaptive`; implement the winner of PERF-LIT items 5/6 in SOLVAX
+- non-goals: SOLVAX release; GKX consumer
+
+Changes:
+- SOLVAX PR #121 (draft): `solvax.sparse_direct` (traced `sparse_solve` with factor-reusing transpose solves, `sparse_eigenvalue` with a one-JVP derivative, `csr_data_from_products`) and multi-RHS MUMPS solves
+- GKX: `bench.py`, `gradient.py`, `run_*.sh`, `summarize.py`, `REPORT.md`, `records/`
+
+Evidence:
+- d96, n=3,072: direct eigenpair about 5 s against `adaptive` 31.6-36.3 s and the `pr3-cm` route 433 s; same eigenvalue to 7e-14
+- r96: MUMPS factorization 20 s against SuperLU 381 s; MUMPS solve 0.37 s against a `pr3-cm` solve of 72 s (1e-6)
+- prod: MUMPS estimate 7.3-8.3 GB, refused under a 5 GB budget; `pr3-cm` solve 322 s (1e-6)
+- host load 50-90 on 36 cores throughout; wall times are upper bounds
+
+Outcome:
+- partial: item 5 implemented (SOLVAX #121); item 6 not pursued (ceiling is parity with `adaptive`)
+- next task: steps in the PR #280 handoff
