@@ -1,0 +1,95 @@
+{
+ "Nl": 2,
+ "Nm": 3,
+ "Nz": 24,
+ "argv": [
+  "eigen",
+  "--nz",
+  "24",
+  "--nl",
+  "2",
+  "--nm",
+  "3",
+  "--repeats",
+  "5",
+  "--label",
+  "eig_l2m3z24",
+  "--out",
+  "~/perflit_gpu/eig_l2m3z24.json"
+ ],
+ "arms": {
+  "value": {
+   "argument_bytes": 768,
+   "compile_s": 0.8206626309984131,
+   "device_peak_bytes": 1250304,
+   "first_call_s": 0.1781856779998634,
+   "gamma": 0.04241262376308441,
+   "generated_code_bytes": 2972,
+   "host_peak_bytes": 989835264,
+   "lower_s": 0.6963795690098777,
+   "output_bytes": 4,
+   "temp_bytes": 665384,
+   "warm_median_s": 0.015907744003925472,
+   "warm_s": [
+    0.01775845700467471,
+    0.015897285993560217,
+    0.015448387013748288,
+    0.016220242003328167,
+    0.015907744003925472
+   ]
+  },
+  "value_and_grad": {
+   "argument_bytes": 768,
+   "compile_s": 1.5668373469961807,
+   "device_peak_bytes": 67116800,
+   "first_call_s": 0.053517064996412955,
+   "gamma": 0.04241262376308441,
+   "generated_code_bytes": 2972,
+   "grad_norm": 0.7443839907646179,
+   "host_peak_bytes": 1085865984,
+   "lower_s": 0.963724445013213,
+   "output_bytes": 948,
+   "temp_bytes": 1058600,
+   "warm_median_s": 0.032808482996188104,
+   "warm_s": [
+    0.032894140007556416,
+    0.032808482996188104,
+    0.032917823002208024,
+    0.032768659002613276,
+    0.03239268600009382
+   ]
+  }
+ },
+ "command": "eigen",
+ "derived": {
+  "grad_over_value": 2.06242211265734
+ },
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   17.6630859375,
+   16.69580078125,
+   17.57177734375
+  ],
+  "loadavg_start": [
+   19.33203125,
+   16.9755859375,
+   17.67041015625
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "host_peak_bytes": 1086574592,
+ "label": "eig_l2m3z24",
+ "operator_size_estimate": 144,
+ "precision": "32",
+ "process_s": 8.253123237009277
+}

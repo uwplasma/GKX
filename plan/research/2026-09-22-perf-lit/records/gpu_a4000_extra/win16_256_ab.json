@@ -1,0 +1,210 @@
+{
+ "argv": [
+  "window",
+  "--nx",
+  "16",
+  "--ny",
+  "16",
+  "--nz",
+  "16",
+  "--steps",
+  "256",
+  "--checkpoint",
+  "block",
+  "block_noinner",
+  "none",
+  "--repeats",
+  "2",
+  "--interleave",
+  "7",
+  "--label",
+  "win16_256_ab",
+  "--out",
+  "~/perflit_gpu2/win16_256_ab.json"
+ ],
+ "arms": {
+  "value": {
+   "argument_bytes": 580,
+   "compile_s": 3.80352787800075,
+   "device_peak_bytes": 68910336,
+   "first_call_s": 0.19182166698738,
+   "generated_code_bytes": 1102288,
+   "host_peak_bytes": 1191837696,
+   "interleaved_median_s": 0.17342448100680485,
+   "interleaved_s": [
+    0.15709600700938608,
+    0.17342448100680485,
+    0.27195445500547066,
+    0.2793168099888135,
+    0.16125169100996573,
+    0.16086445600376464,
+    0.19764539499010425
+   ],
+   "lower_s": 1.4496236849954585,
+   "objective": 3.0289161259133834e-06,
+   "output_bytes": 4,
+   "temp_bytes": 8443768,
+   "warm_median_s": 0.14697163849632489,
+   "warm_s": [
+    0.15263739399961196,
+    0.1413058829930378
+   ]
+  },
+  "value_and_grad_block": {
+   "argument_bytes": 580,
+   "compile_s": 19.90960924299725,
+   "device_peak_bytes": 152829184,
+   "first_call_s": 1.03361536799639,
+   "generated_code_bytes": 1111928,
+   "grad_geometry_norm": 2.5051415377674857e-06,
+   "grad_tprim_scale": 4.925711436953861e-06,
+   "host_peak_bytes": 1537339392,
+   "interleaved_median_s": 1.1098591090121772,
+   "interleaved_s": [
+    1.018665426003281,
+    0.9387441220023902,
+    1.4528169620025437,
+    1.1374391010031104,
+    0.9721196000027703,
+    1.2678588400012814,
+    1.1098591090121772
+   ],
+   "lower_s": 9.204410182996071,
+   "objective": 3.0289161259133834e-06,
+   "output_bytes": 672,
+   "temp_bytes": 60918368,
+   "warm_median_s": 0.9563835154986009,
+   "warm_s": [
+    0.960329156005173,
+    0.9524378749920288
+   ]
+  },
+  "value_and_grad_block_noinner": {
+   "argument_bytes": 580,
+   "compared_to": "block",
+   "compile_s": 14.538202919997275,
+   "device_peak_bytes": 303971328,
+   "first_call_s": 1.2537410869990708,
+   "generated_code_bytes": 1131232,
+   "grad_geometry_norm": 2.505141765141161e-06,
+   "grad_tprim_scale": 4.925711436953861e-06,
+   "host_peak_bytes": 1680433152,
+   "interleaved_median_s": 0.7918513329932466,
+   "interleaved_s": [
+    0.9260538990056375,
+    0.777003526003682,
+    0.8446578789880732,
+    0.7833928790059872,
+    0.7918513329932466,
+    0.9089846709975973,
+    0.7734703109890688
+   ],
+   "lower_s": 20.57331611099653,
+   "max_abs_diff_vs_first_arm": 4.547473508864641e-13,
+   "max_rel_diff_vs_first_arm": 9.232115131122808e-08,
+   "objective": 3.0289165806607343e-06,
+   "output_bytes": 672,
+   "temp_bytes": 300686816,
+   "warm_median_s": 1.117963584503741,
+   "warm_s": [
+    0.9039592960034497,
+    1.3319678730040323
+   ]
+  },
+  "value_and_grad_none": {
+   "argument_bytes": 580,
+   "compared_to": "block",
+   "compile_s": 11.834872373001417,
+   "device_peak_bytes": 4428702720,
+   "first_call_s": 0.6080993110081181,
+   "generated_code_bytes": 1742968,
+   "grad_geometry_norm": 2.5051415377674857e-06,
+   "grad_tprim_scale": 4.925711891701212e-06,
+   "host_peak_bytes": 1985961984,
+   "interleaved_median_s": 0.5097600430017337,
+   "interleaved_s": [
+    0.7124259360134602,
+    0.5097600430017337,
+    0.4921161329984898,
+    0.5300934289989527,
+    0.4665557889966294,
+    0.5289819350000471,
+    0.48858632300107274
+   ],
+   "lower_s": 8.873591772993677,
+   "max_abs_diff_vs_first_arm": 4.547473508864641e-13,
+   "max_rel_diff_vs_first_arm": 9.232115131122808e-08,
+   "objective": 3.0289165806607343e-06,
+   "output_bytes": 672,
+   "temp_bytes": 4425418032,
+   "warm_median_s": 0.443077315496339,
+   "warm_s": [
+    0.4494938559946604,
+    0.4366607749980176
+   ]
+  }
+ },
+ "command": "window",
+ "derived": {
+  "value_and_grad_block_noinner_over_value": 7.6066620467846,
+  "value_and_grad_block_over_value": 6.507265791437141,
+  "value_and_grad_none_over_value": 3.0147130427985154
+ },
+ "derived_interleaved": {
+  "value_and_grad_block_noinner_over_value": 4.565972049598787,
+  "value_and_grad_block_over_value": 6.399668043225272,
+  "value_and_grad_none_over_value": 2.9393776475060154
+ },
+ "dt": 0.03890582546591759,
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   46.43408203125,
+   42.05078125,
+   31.06103515625
+  ],
+  "loadavg_start": [
+   48.00537109375,
+   38.8310546875,
+   28.49560546875
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "geometry_fields": [
+  "bmag_profile",
+  "bgrad_profile",
+  "gds2_profile",
+  "cv_profile",
+  "gb_profile",
+  "cv0_profile",
+  "gb0_profile",
+  "jacobian_profile",
+  "grho_profile"
+ ],
+ "geometry_values": 144,
+ "host_peak_bytes": 1990385664,
+ "inner_remat": "on",
+ "label": "win16_256_ab",
+ "method": "rk3",
+ "precision": "32",
+ "process_s": 129.27858953300165,
+ "shape": [
+  1,
+  4,
+  8,
+  16,
+  16,
+  16
+ ],
+ "state_bytes": 1048576,
+ "steps": 256
+}

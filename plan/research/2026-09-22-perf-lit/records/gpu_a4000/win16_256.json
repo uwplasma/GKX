@@ -1,0 +1,138 @@
+{
+ "argv": [
+  "window",
+  "--nx",
+  "16",
+  "--ny",
+  "16",
+  "--nz",
+  "16",
+  "--steps",
+  "256",
+  "--checkpoint",
+  "block",
+  "none",
+  "--repeats",
+  "3",
+  "--label",
+  "win16_256",
+  "--out",
+  "~/perflit_gpu/win16_256.json"
+ ],
+ "arms": {
+  "value": {
+   "argument_bytes": 580,
+   "compile_s": 2.967109689998324,
+   "device_peak_bytes": 68910336,
+   "first_call_s": 0.18986357700487133,
+   "generated_code_bytes": 1102288,
+   "host_peak_bytes": 1192853504,
+   "lower_s": 0.9325804419931956,
+   "objective": 3.0289161259133834e-06,
+   "output_bytes": 4,
+   "temp_bytes": 8443768,
+   "warm_median_s": 0.1482362239912618,
+   "warm_s": [
+    0.14805392900598235,
+    0.16582983899570536,
+    0.1482362239912618
+   ]
+  },
+  "value_and_grad_block": {
+   "argument_bytes": 580,
+   "compile_s": 13.556878012997913,
+   "device_peak_bytes": 152829184,
+   "first_call_s": 1.0191032299917424,
+   "generated_code_bytes": 1111928,
+   "grad_geometry_norm": 2.5051415377674857e-06,
+   "grad_tprim_scale": 4.925711436953861e-06,
+   "host_peak_bytes": 1757179904,
+   "lower_s": 6.429916442008107,
+   "objective": 3.0289161259133834e-06,
+   "output_bytes": 672,
+   "temp_bytes": 60918368,
+   "warm_median_s": 0.9409586020046845,
+   "warm_s": [
+    0.9448858010000549,
+    0.9409586020046845,
+    0.9383863909897627
+   ]
+  },
+  "value_and_grad_none": {
+   "argument_bytes": 580,
+   "compile_s": 6.954166663999786,
+   "device_peak_bytes": 4428702720,
+   "first_call_s": 0.6047201320034219,
+   "generated_code_bytes": 1742968,
+   "grad_geometry_norm": 2.5051415377674857e-06,
+   "grad_tprim_scale": 4.925711891701212e-06,
+   "host_peak_bytes": 2072141824,
+   "lower_s": 4.675744803011185,
+   "objective": 3.0289165806607343e-06,
+   "output_bytes": 672,
+   "temp_bytes": 4425418032,
+   "warm_median_s": 0.43512038298649713,
+   "warm_s": [
+    0.44954502300242893,
+    0.43512038298649713,
+    0.43265577500278596
+   ]
+  }
+ },
+ "command": "window",
+ "derived": {
+  "value_and_grad_block_over_value": 6.347696781996768,
+  "value_and_grad_none_over_value": 2.935317503852139
+ },
+ "dt": 0.03890582546591759,
+ "environment": {
+  "devices": [
+   "cuda:0"
+  ],
+  "git_sha": "f9485f044ab79d9d22b06162376ea11a640621b8",
+  "jax": "0.10.2",
+  "jaxlib": "0.10.2",
+  "loadavg_end": [
+   14.12451171875,
+   16.57666015625,
+   17.7109375
+  ],
+  "loadavg_start": [
+   16.42333984375,
+   17.59375,
+   18.095703125
+  ],
+  "matmul_precision": "None",
+  "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+  "src_dirty": false,
+  "x64": false,
+  "xla_flags": ""
+ },
+ "geometry_fields": [
+  "bmag_profile",
+  "bgrad_profile",
+  "gds2_profile",
+  "cv_profile",
+  "gb_profile",
+  "cv0_profile",
+  "gb0_profile",
+  "jacobian_profile",
+  "grho_profile"
+ ],
+ "geometry_values": 144,
+ "host_peak_bytes": 2072141824,
+ "label": "win16_256",
+ "method": "rk3",
+ "precision": "32",
+ "process_s": 50.32945970298897,
+ "shape": [
+  1,
+  4,
+  8,
+  16,
+  16,
+  16
+ ],
+ "state_bytes": 1048576,
+ "steps": 256
+}

@@ -19661,3 +19661,49 @@ Evidence:
 Outcome:
 - partial: item 5 implemented (SOLVAX #121); item 6 not pursued (ceiling is parity with `adaptive`)
 - next task: steps in the PR #280 handoff
+## 2026-09-22 - PERF-LIT profile and literature survey (research/perf-lit-20260922), paused
+
+Baseline:
+- GKX SHA: `f9485f044` (2.3.0), clean `src/`.
+- companion SHAs: SOLVAX 0.22.0 on the office GPU venv, 0.24.0 locally; JAX/jaxlib 0.10.2.
+- source/test/tool files and lines: unchanged (docs/research only).
+- relevant existing gate: none; research lane (plan.md G.2 PERF-LIT).
+
+Scope:
+- intended change: measured profile of the forward step, the window adjoint and the linear eigen derivative; literature and software survey tied to the measured bottlenecks; ranked implementation list.
+- non-goals: any `src/` change.
+- prospective acceptance and rollback criteria: every number is a committed record or marked derived/UNVERIFIED.
+
+Changes:
+- added `plan/research/2026-09-22-perf-lit/` (`profile_perf_lit.py`, `run_profile.sh`, `run_pr3.sh`, `summarize.py`, `records/`).
+- public/schema behavior: none.
+
+Evidence:
+- focused tests: none (no code path changed).
+- CPU/NVIDIA measurements (one RTX A4000, complex64, shipped linked Cyclone nonlinear deck, random masked state, `records/gpu_a4000/`):
+  - RK3 step 5.26 / 18.0 / 15.6 / 69.4 ms at 32x32x24 Nl4/Nm8, 32x32x24 Nl8/Nm16, 64x64x24 Nl4/Nm8, 64x64x24 Nl8/Nm16; device time fft 12-16%, concatenate 10-25%, other elementwise fusions 35-48%, cuBLAS 8-9%; 21-42x the state materialized per step; field solve flat at 1.17-1.32 ms.
+  - `nonlinear_heat_flux_window` value+gradient (tprim scale and nine geometry arrays), 16x16x16 Nl4/Nm8 rk3: 256 steps 0.941 s with block checkpointing vs 0.435 s without (2.16x; temp 61 MB vs 4,425 MB), value 0.148 s; 1024 steps 3.72 s (7.0x value, temp 103 MB; unchecked runs out of memory at 16.5 GiB); 32x32x24 256 steps 5.21 s (5.4x value, temp 359 MB). Compile 20-26 s per gradient graph.
+  - dense growth-rate value+gradient: 0.033 s (n=144), 0.99 s (n=1,536), 2.83 s (n=3,072).
+  - office CPU single-thread x64 `adaptive` control at Q28 `d96`: 33,915 operator applications, 30.5 s, 1.29 GB max RSS (`records/cpu_pr3/A1_adaptive.txt`).
+- values, tolerances, residuals, uncertainty: checkpointed and unchecked gradients agree to the printed 6 digits at 256 steps. Host load 13-23 on 36 cores (office) during the GPU runs.
+
+Outcome:
+- partial (paused by the maintainer). Main finding: the window adjoint rematerializes every step inside each checkpoint block, costing a second forward recompute (measured 2.16x vs unchecked); on the GPU the step is traffic-bound (concatenate plus elementwise), not FFT-bound; re-saturation per evaluation, not the gradient, dominates the VMEX objective at 32x32x24 (derived). Not run: `PHASE=extra` (inner-remat-off variants, complex128 comparison, source-mapped traces), the `pr3-cm` `d96` arm, CPU forward/window rows, the adaptive-eigen row on an idle host. The ranked list and survey are in the PR body.
+
+## 2026-09-22 - PERF-LIT resumed run, paused again (research/perf-lit-20260922)
+
+Baseline:
+- GKX SHA: `f9485f044` measured (pinned office worktree); branch head before this entry `35f429256`.
+- relevant existing gate: repo-hygiene (ruff) fixed on the profiler scripts.
+
+Changes:
+- `profile_perf_lit.py`: per-arm `block_noinner` checkpoint experiment (clears JAX caches between arms), interleaved A/B timing, kernel-to-op_name mapping; `run_all_office.sh`, `wait_gpu_then_run.sh` (free-GPU only); records `gpu_a4000_extra/`, `cpu_office/`. No `src/` change.
+
+Evidence (one A4000, complex64, host load 46-106, interleaved):
+- window gradient, shipped block vs block without per-step remat: 16x16x16/256 1.110 vs 0.792 s; 16x16x16/1024 4.751 vs 3.931 s; 32x32x24/256 6.125 vs 4.762 s; 32x32x24/1024 24.60 vs 20.62 s (1.19-1.40x); temp 61/103/359/617 MB vs 301/580/1,798/3,475 MB; max rel diff 2.6e-8 to 1.7e-7. Unchecked 0.510 s at 16x16x16/256.
+- complex128 vs complex64 window gradient at 16x16x16/256: rel diffs 4.7e-7 (objective), 6.8e-8, 1.1e-7; 4.0x cost.
+- 32x32x24 forward at load 80 vs 23: field solve 4.42 vs 1.16 ms, RK3 step 17.8 vs 5.26 ms: host dispatch bound.
+- top kernel (22%) is an add fused with a masked `jnp.take` gather (linked-boundary gather, op_name attribution).
+
+Outcome:
+- partial. Item 1 confirmed exact but revised to 1.2-1.4x. Not done: CPU 1024-step A/B, CPU forward/eigen rows, `pr3-cm` re-run (stopped at the pause).
