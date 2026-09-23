@@ -19,10 +19,8 @@ if TYPE_CHECKING:
 
 _COLLISION_MATRIX_DATA = "advanced_collision_six_moment.npy"
 _COLLISION_MATRIX_METADATA = "advanced_collision_six_moment.json"
-# The drift-kinetic matrices are the P=3, J=1 truncation of Frei, Ernst & Ricci
-# (2022), Appendix C, as ``(Nl, Nm) = (J+1, P+1)``. The state is packed
-# Hermite-major, index ``m*Nl + l``, so the transposed ``(4, 2)`` basis has the
-# same moment count but pairs every coefficient with the wrong moment.
+# ``(Nl, Nm) = (J+1, P+1)`` of the P=3, J=1 Appendix C truncation (Frei, Ernst
+# & Ricci 2022); the transposed (4, 2) would pair coefficients with wrong moments.
 DRIFT_KINETIC_MOMENT_LAYOUT: tuple[int, int] = (2, 4)
 
 # Every moment contraction here goes through _exact_einsum. An unpinned dot may be

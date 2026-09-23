@@ -605,8 +605,7 @@ def integrate_linear_explicit_from_config(
             _reject_unsupported_config_collision_operator,
         )
 
-        # The explicit diagnostics integrator has no collision_operator input,
-        # so a moment operator would silently run as Lenard-Bernstein.
+        # This integrator cannot carry a moment operator; refuse, don't run as LB.
         _reject_unsupported_config_collision_operator(
             time_cfg, "CFL-controlled explicit", remedy='set solver = "time"'
         )

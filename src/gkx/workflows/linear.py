@@ -264,9 +264,7 @@ def _run_krylov_linear(
 ) -> tuple[float, float, np.ndarray, Any]:
     from gkx.solvers_time_runners import _reject_unsupported_config_collision_operator
 
-    # The eigen solve builds its operator from the cache alone, so a moment
-    # collision operator would be replaced by the built-in Lenard-Bernstein term
-    # while the run still reports the deck's collision_operator.
+    # The eigen solve cannot carry a moment operator; refuse, don't run as LB.
     _reject_unsupported_config_collision_operator(
         ctx.cfg.time, "Krylov eigenvalue", remedy='set solver = "time"'
     )

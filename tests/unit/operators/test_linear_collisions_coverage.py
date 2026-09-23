@@ -77,12 +77,12 @@ def test_collision_matrix_bundle_rejects_corrupt_provenance(monkeypatch) -> None
         .joinpath(collisions._COLLISION_MATRIX_DATA)
         .read_bytes()
     )
-    real_metadata = json.loads(
+    metadata_file = (
         resources.files("gkx")
         .joinpath("data")
         .joinpath(collisions._COLLISION_MATRIX_METADATA)
-        .read_text(encoding="utf-8")
     )
+    real_metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
 
     # Checksum branch: genuine coefficients, metadata advertising a wrong hash.
     corrupt_hash_metadata = json.dumps(

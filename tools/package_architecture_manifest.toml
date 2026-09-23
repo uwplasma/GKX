@@ -1103,7 +1103,11 @@ recursive = true
 # sizes it. Target unchanged.
 # 93054 -> 93344: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
-baseline = 93344
+# 93344 -> 93378: #290 checks the collision table's (Nl, Nm), not just Nl*Nm
+# (the shipped Coulomb deck ran the transposed basis, gamma 45% low), and makes
+# the Krylov and explicit_time paths refuse a moment operator instead of
+# silently running Lenard-Bernstein. Trimmed from +63 before raising.
+baseline = 93378
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1420,7 +1424,11 @@ recursive = true
 # and checks dense fallback plus explicit refusal in float32 and float64.
 # 92979 -> 94057: the 2.3.0 merge chain (#264, #265, #267, #269, #270, #271, #273),
 # measured on the merged tree; each PR carries its own justification.
-baseline = 94057
+# 94057 -> 94119: #290 regression tests: (4, 2) refused and (2, 4) accepted for
+# sugama, both finite-Larmor tables refuse their transposed basis, Krylov and
+# explicit_time refuse a moment operator, and the loader rejects a transposed
+# metadata layout. The old count-mismatch test was folded in; trimmed from +109.
+baseline = 94119
 target = 35000
 
 [[line_budget_policy.counts]]

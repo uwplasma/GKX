@@ -85,32 +85,29 @@ def _moment_count(G0) -> int:
 def _operator_moment_layout(operator) -> tuple[int, int] | None:
     """Return the ``(Nl, Nm) = (J+1, P+1)`` basis a tabulated operator acts on."""
 
+    from gkx.operators.linear.collision_tables import (
+        finite_wavelength_coulomb_metadata,
+    )
+    from gkx.operators.linear.collisions import DRIFT_KINETIC_MOMENT_LAYOUT
+
     # Drift-kinetic operators carry one dense matrix; the finite-wavelength
     # operators carry Bessel-argument-indexed test/field tables instead.
     if getattr(operator, "matrix", None) is not None:
-        from gkx.operators.linear.collisions import DRIFT_KINETIC_MOMENT_LAYOUT
-
         return DRIFT_KINETIC_MOMENT_LAYOUT
     table = getattr(operator, "test_table", None)
     if table is None:
         return None
-    from gkx.operators.linear.collision_tables import (
-        finite_wavelength_coulomb_moment_layout,
-    )
-
-    return finite_wavelength_coulomb_moment_layout(int(table.shape[-1]))
+    meta = finite_wavelength_coulomb_metadata(int(table.shape[-1]))
+    return meta["maximum_laguerre_order"] + 1, meta["maximum_hermite_order"] + 1
 
 
 def _check_moment_basis_matches_operator(operator, name: str, G0) -> None:
     """Reject a moment basis the tabulated collision matrix cannot act on.
 
     The drift-kinetic Sugama matrices are the fixed truncation of Frei, Ernst &
-    Ricci (2022), Appendix C, and the finite-wavelength Coulomb tables are
-    shipped at fixed orders, so they only apply to one ``(Nl, Nm)``. Matching
-    the moment count is not enough: the tables are Hermite-major, so the
-    transposed basis runs without error while pairing every coefficient with
-    the wrong moment. A count mismatch would otherwise surface deep in the RHS
-    as an opaque einsum shape error.
+    Ricci (2022), Appendix C, and the Coulomb tables ship at fixed orders, so
+    each applies to one ``(Nl, Nm)``. The tables are Hermite-major: a transposed
+    basis with the right moment count runs silently on the wrong moments.
     """
 
     if operator is None or G0 is None:

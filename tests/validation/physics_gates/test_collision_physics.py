@@ -651,12 +651,7 @@ GRID = GridConfig(Nx=8, Ny=16, Nz=32, Lx=62.8, Ly=62.8)
 
 
 def compiled_rhs_cost(collision_operator: str, nl: int, nm: int):
-    """Return (flops, bytes, temp_bytes) for one compiled linear RHS.
-
-    ``(nl, nm)`` is the state's ``(Nl, Nm)``. The moment operators are tabulated
-    on ``(J+1, P+1)``, so the shipped tables need ``(2, 4)`` and ``(3, 6)``; the
-    transposed layouts have the same moment count but are refused.
-    """
+    """Return (flops, bytes, temp_bytes) for one compiled RHS at ``(Nl, Nm)``."""
 
     config = CycloneBaseCase(grid=GRID)
     grid = build_spectral_grid(config.grid)
