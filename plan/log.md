@@ -20374,3 +20374,19 @@ Outcome:
 - complete pending CI and review; scripts/ is still 27,496 lines over the 18,000 target and 49 files over 12
 - remaining blocker: the rest is gates (scripts/checks/, 11,904 lines), ledger/refresh generators, campaigns imported by gates/examples/tests, and package-data generation; each needs a merge or a maintainer decision, not a reference sweep
 - next task: tranche 4 = merge scripts/checks/ into fewer modules behind check.py; decide whether campaign policy moves into src or its tests retire; move the collision-table generator next to the package data it writes
+
+## 2026-09-23 - SLIM-SCRIPTS tranche 3, paused (final pause)
+
+Baseline:
+- GKX SHA: 48536d159 (main after #293) merged cleanly into slim/scripts-3
+
+Scope:
+- no content change since the entry above; merge of origin/main and PR #294 retargeted to main as a draft
+
+Evidence:
+- CI on d33ca29ad (pre-merge head): 35 checks passed, 0 failed; wide-coverage and two quick-tests shards still pending at the pause, so ci-required had no conclusion
+- recovery SHA f005418bf is an ancestor of main, so the MAP.md recovery commands resolve on main
+
+Outcome:
+- paused by the maintainer; nothing running locally or on the office host (no office runs were used)
+- next task: let CI finish on the merged head; if green, mark #294 ready; then tranche 4 (merge scripts/checks/ behind check.py)
