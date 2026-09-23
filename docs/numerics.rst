@@ -85,9 +85,12 @@ These links are clickable in the HTML docs via the ``viewcode`` extension.
 Structured solver dependency contract
 -------------------------------------
 
-GKX requires ``solvax>=0.22.0``; ``pyproject.toml`` is the only place that
-floor is declared. Version 0.22.0 is the first release that exports every
-SOLVAX name GKX imports. The binding one is ``block_thomas_factor_ops``, the
+GKX requires ``solvax>=0.26.0``; ``pyproject.toml`` is the only place that
+floor is declared. Version 0.26.0 is the first release that exports every
+SOLVAX name GKX imports: the sparse-direct growth-rate eigensolver
+(``eigensolver="sparse-direct"``) uses ``sparse_eigenvalue``, ``CsrPattern``
+and ``csr_data_from_products``, which 0.25.0 lacks. Before that the binding
+name was ``block_thomas_factor_ops``, the
 operator-coupling Schur elimination behind the ``pr3-cm`` preconditioner's
 exact z-block solve, which first ships there together with
 ``block_thomas_solve_ops``, the solve the tests pin GKX's unrolled

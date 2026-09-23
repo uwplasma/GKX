@@ -336,7 +336,7 @@ significant figures in :math:`\gamma`. It costs more: at
 :math:`(N_z, N_\ell, N_m) = (96, 8, 24)`, :math:`n = 18432`, ``pr3-cm`` takes
 220000 matvec-equivalents against 96700 for ``adaptive``. The z-local
 :math:`(\ell, m)` blocks of ``pr3-cm`` are factored by SOLVAX block-Thomas
-elimination (``solvax.block_thomas_factor_ops``, ``solvax>=0.22.0``), which
+elimination (``solvax.block_thomas_factor_ops``, ``solvax>=0.26.0``), which
 stores 1.43--2.61x less than the dense inverse over :math:`N_\ell N_m` = 36--768
 and agrees with it to :math:`\le 8.9\times10^{-16}` relative per apply. Evidence:
 ``plan/log.md``, rows Q28 and "SOLVAX block-Thomas and float32 structural

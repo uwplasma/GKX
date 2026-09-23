@@ -20619,3 +20619,28 @@ Evidence:
 Outcome:
 - partial: ready for review pending the final aggregate; nothing known failing
 - next task: confirm `ci-required` on the merged head. Open a follow-up for the QHS adaptive-eigensolver certification, which runs only where a generated wout exists.
+
+## 2026-09-23 — 2.4.0 final integration and SOLVAX 0.26.0
+
+Baseline: `main` `48536d159`; release branch `release/2.4.0` (#298).
+
+Changes:
+- SOLVAX #121 (traced sparse-direct solves and eigenvalue derivatives) merged
+  and released as SOLVAX 0.26.0 (SOLVAX #122, tag `v0.26.0`).
+- Integrated into #298: #290, #296 (ARCH-A), #294 (scripts tranche 3), #297
+  (adjoint), #280, #291, #292, #281 (examples gallery), #295 (sparse-direct
+  growth rate). Where a slimming PR deleted a file that another lane had only
+  path-edited, the deletion won.
+- GKX requires `solvax>=0.26.0`. Checked against the tag exports: 0.25.0 lacks
+  `CsrPattern`, `csr_data_from_products` and `sparse_eigenvalue`, and 0.26.0
+  has all four names GKX imports for the sparse-direct path.
+- Architecture baselines lowered to measured values: src 193 → 160 files and
+  93,987 → 79,446 lines; tests 81 → 74 files and 94,690 → 84,139 lines;
+  scripts 106 → 57 files and 78,277 → 42,501 lines. The single-consumer
+  cohesion baseline went 1 → 2 (a helper left by ARCH-A deletions).
+
+Evidence:
+- Hygiene step, ruff and mypy pass (mypy before the floor change).
+- Local focused suite (release, api, cli, nonlinear): 649 passed.
+
+Outcome: ready for one CI run and release once solvax 0.26.0 is on PyPI.

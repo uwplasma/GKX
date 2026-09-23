@@ -2,7 +2,7 @@ Numerical defaults from SOLVAX
 ==============================
 
 GKX delegates physics-independent numerics to `SOLVAX
-<https://github.com/uwplasma/SOLVAX>`_ (``solvax>=0.22.0``). This page lists the
+<https://github.com/uwplasma/SOLVAX>`_ (``solvax>=0.26.0``). This page lists the
 SOLVAX functions GKX calls and where it calls them. Physics, preconditioners,
 certification gates and branch selection stay in GKX.
 

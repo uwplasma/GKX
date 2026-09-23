@@ -268,7 +268,7 @@ Numerical stack
 ---------------
 
 ``pyproject.toml`` requires ``jax>=0.10.1``, ``jaxlib>=0.10.1``, and
-``solvax>=0.22.0``. The JAX floor is hard: ``gkx.objectives.core`` calls
+``solvax>=0.26.0``. The JAX floor is hard: ``gkx.objectives.core`` calls
 ``lax_linalg.eig(..., enable_eigvec_derivs=True)``, which first shipped in JAX
 0.10.1; older JAX fails the solver-objective tests with ``TypeError: eig() got
 an unexpected keyword argument``. Every CI job prints the resolved ``jax``,

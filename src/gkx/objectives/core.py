@@ -896,7 +896,7 @@ def solver_growth_rate_from_geometry(
 def _sparse_direct_eigenvalue(
     context: _SolverGeometryContext, shift: complex, candidates: int
 ) -> jnp.ndarray:
-    from solvax import (  # type: ignore[attr-defined]
+    from solvax import (
         CsrPattern,
         column_groups,
         csr_data_from_products,
