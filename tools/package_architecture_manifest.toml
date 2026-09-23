@@ -1124,7 +1124,8 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 93344 -> 93359: single owner for the CLI/case Nl/Nm fallbacks plus its test.
 # 93359 -> 93953: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 93953
+# 93953 -> 93987: measured for 2.4.0 (#290 collision-basis layout).
+baseline = 93987
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1443,7 +1444,8 @@ recursive = true
 # measured on the merged tree; each PR carries its own justification.
 # 94057 -> 94107: single owner for the CLI/case Nl/Nm fallbacks plus its test.
 # 94107 -> 94628: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-baseline = 94628
+# 94628 -> 94690: measured for 2.4.0 (#290 collision-basis layout).
+baseline = 94690
 target = 35000
 
 [[line_budget_policy.counts]]

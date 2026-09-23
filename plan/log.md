@@ -20343,3 +20343,16 @@ Outcome:
 - paused by the maintainer; no process running locally or on the office host
 - office host keeps only the lane clone and its venv (lanes/readme-showcase under the home directory); no raw outputs beyond the two committed README figure files
 - next task: (1) wait for ci-required on the head; (2) when #278 is on main, merge origin/main and change the README's `python tools/release/run_test_gates.py fast` to `python scripts/check.py test-gates fast`; (3) rerun the three README test files; (4) push and leave for the supervisor to merge
+
+## 2026-09-23 — release 2.4.0
+
+Baseline: `main` `48536d159` (chain #293: #278 #286 #272 #289 #288 #283 #285
+#282 #287 #279 #284), plus #290 (collision tables require their exact
+`(Nl, Nm)`, not just `Nl*Nm`; Krylov eigen and CFL-controlled paths refuse a
+non-default collision operator instead of silently using the diagonal term).
+README: the GX comparison section and `readme_gx_defects` figure/builder were
+removed at the maintainer's request. The research-grade milestone is renamed
+2.5.0 (plan G.8). Left open for the next session, each with a Handoff: #294
+(scripts tranche 3), #296 (ARCH-A, −14,731 source lines), #297 (adjoint 2),
+#295 (sparse-direct growth-rate gradient), #281 (examples gallery), #280,
+#291, #292, #274, #275; SOLVAX #121.
