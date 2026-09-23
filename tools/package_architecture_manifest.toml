@@ -1564,5 +1564,6 @@ recursive = true
 # fell to 0 in the same change. Measured.
 # 77373 -> 78277: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 78277 -> 42501: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
-baseline = 42501
+# 42501 -> 42502: linear_benchmark.py names the gallery and benchmarks/cases roots.
+baseline = 42502
 target = 18000
