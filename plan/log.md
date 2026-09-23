@@ -4,6 +4,37 @@ Append-only record. The active plan is [plan.md](../plan.md); dated audits are i
 [baseline/](baseline/) and research reports in [research/](research/). Entries are
 observations at their stated revisions, not current validation claims.
 
+## 2026-09-21 — publication and handoff checkpoint
+
+The session's reviewed implementation is published in PRs #264–#273. Main is
+`4605d0b49`; an open PR is not integrated evidence. The following unfinished
+work is now recoverable without private machine state:
+
+- [#274](https://github.com/uwplasma/GKX/pull/274),
+  `draft/em-multimode-handoff` at `4f3bdfca5`: unfinished multimode EM energy
+  oracle, stacked on #269. Debug scaffolding remains; success and architecture
+  gates are unverified. Do not merge or promote its physical identity.
+- [#275](https://github.com/uwplasma/GKX/pull/275),
+  `draft/physical-cadence-handoff` at `fac721059`: adaptive-analysis prototype
+  and tests, stacked on #271. Negative uncertainty coverage blocks adoption.
+  Reconcile its historical base before resuming; no runtime default is promoted.
+- `3f62fe1d0` in #268 preserves the fixed-window covariance preregistration.
+  No new random paths or physical runs have been generated for it.
+
+An older staged release snapshot contained 226 changed files: every working
+blob is already reachable in published Git history. It was not recommitted.
+The earlier physical-energy source/test changes are likewise published in
+#269; its obsolete local architecture count is superseded by the integrated
+count. Two old Q28-to-Q29 log-label edits are superseded by #268's stable-ID
+queue and are not new implementation. Historical scratch/stash and rewritten
+commit identities are not candidates for blindly replaying onto current main.
+
+Resume from public PR branches, not old checkout names. Read each current-head
+handoff, `plan.md`, and the relevant dated evidence in this log. Preserve the
+distinction between exact-head CI, recorded local checks and physics acceptance.
+At this checkpoint required CI remains incomplete; no merge or release is
+authorized by this publication-only audit. No new numerical campaign was run.
+
 ## 2026-08-21 — repository and runtime audit
 
 - Audited `main` at `5f3ab32e`, GitHub PR metadata, branch protection,
@@ -18493,6 +18524,255 @@ carries: 11m40s on `254fcc7b7`, 14m29s on `38d7c4277`, over the cap here. `main`
 commit from the same failure. The cap moves to 25 minutes for the quick-test shards that
 had 15; splitting the lane is the follow-up.
 
+### 2026-09-20 — independent integration review and current priorities
+
+Baseline `eeb3481c6` (2.2.0); this review does not promote new physics or a release.
+The plan now uses stable semantic IDs for next work, preserves detailed phase
+requirements, and archives the contradictory opening checkpoints. README claims
+now distinguish a truncated model from a validated closure and finite-window,
+fixed-topology sensitivities from unrestricted transport derivatives.
+
+Independent reviews cover #260 and #264–#267. #264 needs conflict resolution;
+#265 needs an architecture-gate repair and semantic integration with #267.
+#260 must remove an unsupported sink-outcome claim, sanitize public reproduction
+metadata, and check higher-level switches that can disable a declared sink.
+No green test substitutes for the missing registered regularization experiment.
+The full EM0 three-field/energy → EM1 wave → EM2 ITG–KBM → EM3 transport ladder
+remains mandatory for the electromagnetic claim.
+
+Verification on the baseline: `python -m pytest -q -o addopts='' tests/release`
+passed 152 tests in 16.53s, with three expected fixed-step CFL warnings.
+CPU JAX 0.10.2, x64 enabled; this is a focused infrastructure check, not a
+new physics campaign. The earlier review additionally passed 56 selected
+ledger, preconditioner, collision and correlated-statistics checks.
+
+Removed 27 merged remote branch references and 40 unoccupied merged local
+references after ancestry/PR checks; expected-SHA remote leases protected
+against concurrent changes. All tips remain reachable from main; no worktree,
+unmerged change or commit history was deleted. Main's authors are human, but
+five historical commits contain AI co-author trailers; no history rewrite was
+performed. New commits contain no such trailers. Public handoffs must use
+repository-relative sources and generic execution examples; private operational
+details remain outside Git.
+
+An independent SOLVAX check reproduced the complex-to-real equilibration cast
+reported in #265. [SOLVAX #116](https://github.com/uwplasma/SOLVAX/pull/116)
+preserves complex phase with a one-line implementation change and four new
+parameterized cases; all ten equilibration tests pass. This does not change
+GKX's negative equilibration experiment or adopt that method.
+
+Follow-up review fixes: #260 at `cee4bf3f6` passes 132 contract/configuration/
+public-type tests with one skip on JAX 0.10.2; the below-floor environment used
+in the first agent check is excluded from numerical evidence. #266 at
+`65f2d5966` replaces two stale full-Ny allocations by `grid.ky.size`; all three
+reproduced failures pass without adding files or lines. Both await updated CI.
+The plan/README revision passes 152 release tests and a strict Sphinx HTML
+build. These checks do not certify the unexecuted regularization campaign.
+
+Latest verified branch state: #264 remains open at `57dac7fce`; that commit
+merges `main` into the feature branch and does not mean the PR merged. The local
+#265 integration `f8d20c6c1` combines the SOLVAX factors with #267's float32
+guards and passes 13 `pr3` tests, the float32 subprocess gate, typing and the
+architecture check. Those are correctness gates only: #265's recorded
+timing/factor experiment used JAX 0.9.2, below GKX's dependency floor, and its
+performance claims require a supported-environment rerun or withdrawal. #266
+now publishes its privacy follow-up at `1fb01fa1`; all 44 present manifest
+entries verify, while 29 referenced logs remain absent. #267's larger
+shipped-Cyclone control leaves only `2.04x` headroom below the float32 rank-one
+threshold, so the public review bounds the result to that measured case and
+makes no eigenpair-convergence claim. All five PRs remain open with current CI
+pending. Public records use repository-relative sources and generic execution
+labels; host aliases, process IDs, private directories and resumable job
+handles belong only in untracked private operational notes.
+
+### Follow-up: reviewed contracts, migration prerequisite, and SOLVAX merge
+
+- [SOLVAX #116](https://github.com/uwplasma/SOLVAX/pull/116) merged as
+  `d7aafe959` after all nine checks, including combined coverage, passed on
+  exact head `6a4084927`. Admin merge bypassed the review requirement, not a
+  failing check. Its remote and unoccupied local branch refs were removed with
+  expected-SHA protection; commits remain in main and checkouts were preserved.
+  This fixes complex equilibration, not GKX's unqualified Ruiz timing evidence.
+- GKX #269 now publishes `7c36fab05`: geometry-derived FLR coefficients connect
+  to an independently assembled three-field system under both magnetic-metric
+  policies and nonunit `rho_star`. Root CPU JAX 0.10.2 reruns pass 38 x64 and
+  20 float32 cases. Net +67 test lines reuse the existing oracle; no runtime
+  change or new file. This verifies declared algebra, not physical varying-B
+  normalization or the electromagnetic invariant.
+- GKX #266 publishes the line-neutral stale monkeypatch repair `9c8614b10`.
+  The earlier full integration attempt stopped at that test after 246 passes,
+  14 skips and one deselection; the repaired containing file passes 88 tests.
+  A fresh full integration run is active on that exact source. No full-suite
+  pass or half-layout adoption is claimed until its terminal result and CI.
+- [Issue #194 checkpoint](https://github.com/uwplasma/GKX/issues/194#issuecomment-5755570573)
+  distinguishes merged rate/provenance/refusal infrastructure (#212/#223/#224)
+  from outstanding case migration and reference regeneration. A fresh main CPU
+  selection passes 31 damping/migration tests. The current queue admits each
+  affected physics case only after its rate and reference qualification;
+  unrelated work may continue. Finite-shear analytic AD/JIT coverage is now an
+  explicit GEO-TOPO requirement, not a new research lane.
+
+### 2026-09-21 — first rate-qualified reference preflight
+
+Read-only inspection of the live GX source corrects the admission blocker. The
+primary checkout is clean in the relevant files at public upstream
+[GX commit `3865a5377`](https://bitbucket.org/gyrokinetics/gx/commits/3865a53778862e1686f414bf6f416339e24887c9): `dampEnds_linked` takes one
+`get_id3()` value while its launch caps `gridDim.z` at 65,535. Executable SHA-256
+`787eb0145937e653c08750fd7168029c20772ce3e6c2a2a3b58c70aab128dc9b` has no repaired-source build record.
+
+An uncommitted sibling has the grid-stride loop, but its binary also contains an
+unrelated kz-hypercollision normalization change and is inadmissible. Start from
+public commit `3865a5377`, change only `dampEnds_linked` to iterate
+`idzlm += blockDim.z * gridDim.z` as adjacent copy-back kernels do, record that
+isolated patch and its base in reproducible provenance, and hash patch and binary.
+
+The complete source change in `src/device_funcs.cu` is:
+
+```diff
+diff --git a/src/device_funcs.cu b/src/device_funcs.cu
+index 52b993b3..fdec6da5 100644
+--- a/src/device_funcs.cu
++++ b/src/device_funcs.cu
+@@ -2830,3 +2830,5 @@ __global__ void __launch_bounds__(512) dampEnds_linked(cuComplex* G,
+   // note: only damp ends of non-zonal (ky>0) modes, since ky=0 modes should be periodic
+-  if (unmasked(idx,idy) && idy > 0 && idzlm < nz*nMoms) {
++  if (unmasked(idx,idy) && idy > 0) {
++    // dG_all.z is capped: cover every z/moment index as in linkedCopyBackAll.
++    for (; idzlm < nz*nMoms; idzlm += blockDim.z * gridDim.z) {
+     unsigned int idz = idzlm % nz;
+@@ -2874,2 +2876,3 @@ __global__ void __launch_bounds__(512) dampEnds_linked(cuComplex* G,
+     GRhs[globalIdx] = GRhs[globalIdx] - nu*amp*H_;
++    }
+   }
+```
+
+The first case is only `cyclone_salpha_itg`. In its shipped GX deck set `[Time]`
+`dt = 0.002`, `fixed_dt = true`, retain RK4/`t_max = 150`, and set diagnostic
+`nwrite = 100`. Amplitude `0.1`, width `0.125` and reference step `0.002` give
+rate `50`. Require exit zero, a fixed-step trace, final time approximately 150,
+751 samples, eleven finite positive-ky rows, and input, executable and NetCDF
+hashes; the NetCDF hash is also the imported-geometry dependency.
+
+Then migrate the GKX fixture itself—a manifest-only `damp_ends_rate` is ignored
+by the comparison driver—to rate `50.0` with repository-relative provenance for
+legacy fixture SHA-256 `e828bd40f56d63de4c89e8be2a4f11268357ac466034c96087ab1186f93042e6`.
+Run `GX_PARITY_REF_DIR="$REF_DIR" JAX_ENABLE_X64=true PYTHONPATH=src "$PYTHON"`
+`tools/comparison/build_gx_parity_matrix.py --manifest "$MANIFEST" --cases`
+`cyclone_salpha_itg --stem "$OUT/baseline"` at `.002`/75,000, then exact
+`ky=.30000001192092896` at `.001`/150,000 and `.0005`/300,000. Require finite
+growth/frequency and both half-horizon shifts; three levels support convergence,
+two show sensitivity only. No simulation or result is claimed here.
+
+An isolated repair-only local build applied exactly the patch above to public
+[GX commit `3865a5377`](https://bitbucket.org/gyrokinetics/gx/commits/3865a53778862e1686f414bf6f416339e24887c9)
+at local human commit `d8a71e7879531a8520609d9b3351766ee966807a`; patch SHA-256 is
+`bcc7113f69553351ebb46f30bd383d37396ad86eba0d455ba26bdf95f38c923d`.
+Build configuration SHA-256 `adce5f6b950b447d16392b5713cddbd7aed1f4fd6a9e322e7855bea934597d54` used
+CUDA 11.5.119, GCC 10.4, sm_86, C++17, `-use_fast_math -fPIC -rdc=true -O3`.
+The two-job build exited zero in 72.91 s; binary SHA-256 is
+`1ffefc33a30259a89e381d952bb2d093e2cba24e0ff6f4ebd3a8ea508e1f7e33`.
+These hashes identify the inspected build; the private machine configuration is
+not a public binary-reproduction recipe. Tracked source is clean. Exact-once host coverage passed below, at and above the
+65,535 cap, including 73,728 and 294,912 indices; Euclidean quotient/remainder
+gives the general uniqueness argument. No GX simulation or reference result is
+claimed, and operational paths and logs remain private.
+
+Repository hygiene also removed six fully merged remote refs with atomic
+expected-SHA leases: `fix/r0-f32-bracket-rank`, four `phase0/*` maintenance
+refs, and `plan/synthesis-20260906`. Each tip is an ancestor of `main`; no open
+PR, occupied worktree, local file or commit history was removed.
+
+### Float32 rank-two refusal follow-up
+
+Independent review of #267 found that its negative controls exercised locality
+and off-band coupling, not the relaxed rank-one threshold. Head `c9d9aeef4`
+adds one shared `2e-5` second-singular-component control: `auto` selects dense
+factors and explicit block-Thomas refuses in x64 and the existing float32
+subprocess. Reusing assertions and shortening redundant prose limits growth to
+40 test lines, with no new files or executable source changes. All 12 PR3 tests
+pass on JAX 0.10.2; an independent two-test rerun passes in 19.97 s.
+
+Merge `d7afa47ba` integrates that exact head into #265 with both ancestries
+preserved. All 14 combined PR3 tests pass with SOLVAX 0.24, and the independent
+two-test rerun passes in 22.57 s. Architecture, formatting and diff checks pass;
+the unchanged SOLVAX 0.22 API gate is retained, not rerun. Both PRs still require
+fresh CI. The 64-epsilon threshold is not size-independent, and any increase
+requires renewed positive and negative controls, not an automatic adjustment.
+
+### STOP-CAL: replay the existing drift control at runtime cadence
+
+At exact main `eeb3481c6`, independent CPU review reproduced the existing
+predeclared AR(1) drift control at the runtime's 128-step look cadence. With
+128 paths, rho=.75, seed 20260913 and horizon 4096, ever-stops are 0 at the
+existing sparse checkpoints, 69 at runtime cadence, and 128 for the paired
+stationary control. This is a named synthetic counterexample to the existing
+5% drift-rejection target, not a universal turbulent false-stop rate or proof
+that a finite prefix can predict arbitrary future drift. No policy has changed.
+
+From the pinned repository with development dependencies:
+
+```bash
+PYTHONPATH=src:.:tests JAX_ENABLE_X64=true GKX_X64=1 python - <<'PY'
+import numpy as np
+from gkx.diagnostics.saturation import saturation_stop_decision
+from validation.quasilinear.test_quasilinear_window import _stationary_ar1
+t = np.arange(4096, dtype=float)
+noise = _stationary_ar1(0.75, seed=20260913, draws=128)
+for label, trend, looks in (
+    ('drift_sparse', t / 64, (512, 1024, 2048, 4096)),
+    ('drift_runtime', t / 64, range(128, 4097, 128)),
+    ('stationary_runtime', 0, range(128, 4097, 128)),
+):
+    count = sum(any(saturation_stop_decision(t[:n], row[:n])['saturated']
+                    for n in looks) for row in 10 + trend + noise)
+    print(label, count, '/ 128')
+PY
+```
+
+An isolated test-only extension retains the existing <=5% rejection bound and
+adds >=90% stationary stopping power; it produces one expected failure and two
+passes, so it is not yet published as a passing CI gate. Next: vary correlation,
+look cadence and held-out seeds before selecting a minimal policy correction.
+[Flegal–Gong, section 2](https://arxiv.org/html/1303.0238v1) motivates minimum
+variance-estimation effort and sequential calibration under stated asymptotic
+assumptions; it does not certify this nonstationary stopping heuristic.
+
+### 2026-09-21 — concise entry point and evidence-based admission
+
+Reviewed main `eeb3481c6` and open #260/#264–#271 without treating pending CI
+or draft experiments as merged evidence. The README shrinks from 575 to 243
+lines on the plan branch (main has 583), retaining CLI/Python/AD entry points,
+the principal figures and the ledger-checked parity table. Historical parity
+and QA figures now carry adjacent current-operator and failed-promotion limits;
+input/model details link to their existing documentation. No files or runtime
+features are added. The status-page baseline is refreshed, the README ceiling
+is stated as a target, and large EM AD admission now requires a measured
+memory/time/communication pilot rather than an arbitrary GPU count. The EM4
+reference gap is scoped to the selected case, not a claim of literature absence.
+
+Verification: supported JAX 0.10.2/x64 CPU checks on main pass all 134 selected
+diagnostics/field/geometry tests (two growth-fit warnings and two field-test
+scatter FutureWarnings). On this documentation branch, all 152 evidence-ledger
+and release tests pass with three existing CFL warnings; strict Sphinx passes.
+These checks establish documentation/contract consistency, not new physics.
+Pending work remains reference migration, physical-time stopping, weighted EM
+energy qualification, velocity convergence and independently validated transport
+optimization. No release or merge is justified by this documentation change.
+
+### 2026-09-21 — reconcile the active queue after independent review
+
+The plan now distinguishes completed #272 timestep measurements from their
+unresolved fitted order, and #269 weighted streaming/mirror exchange from the
+remaining absolute normalization and full energy budget. Removed the stale
+statement that this branch carries no README rewrite. Historical week labels
+are estimates; dependencies and scientific exits control execution.
+
+Verification: all 138 `tests/release/test_release_gates.py` tests pass on the
+supported CPU environment, with three existing CFL warnings. This is a
+documentation consistency result, not new physics certification. The next
+independent tasks are the reference fit/sampling audit, physical-cadence stopping
+calibration, and the compressional-field normalization oracle. No release.
+
 ### 2026-09-21 — varying-B streaming/mirror exchange (EM0)
 
 Extends #269 at `f4fda382f` without changing runtime source. The existing field
@@ -18569,6 +18849,224 @@ queue-table row was reverted and no table acquired a second `baseline` key. The 
 allowlist in `tests/unit/solvers/test_linear_krylov_core.py` is keyed by `file:line` and
 survived the merge unshifted; it was re-run to confirm rather than assumed.
 
+### 2026-09-21 — integrate the verified VEL-REG source contract
+
+#260 merged as `4605d0b49` only after all required checks completed green on
+reviewed head `cee4bf3f6`. The author is Rogerio Jorge; no scientific campaign
+outcome is implied. The plan branch preserves both log histories and now uses
+that main baseline. Combined release, ledger and sink-contract tests pass
+177/177 with three existing CFL warnings. Occupied worktree branches remain
+preserved; subsequent physics campaigns still require the integrator/reference
+and stopping-coverage gates recorded above.
+
+### 2026-09-21 — STOP-CAL two-stage and variance-oracle diagnostics
+
+These are previously unpublished, spent synthetic controls, not an independent new
+qualification. The preregistration fixed seeds 20261001/20261002, 128 paths per
+stratum, 8,192 bins, Gaussian AR(1) rho 0.60/0.90/0.975 and a rho 0.90
+intermittent control with 2% standardized positive bursts. Admission used 256
+complete bins, resolved Sokal IAT, a 20-IAT span and split-half stationarity,
+checked every 128 or 512 bins. After admission it discarded `ceil(5*tau)` bins
+and estimated over exactly 2,048 bins without peeking. The comparison was Sokal
+SEM versus 32 nonoverlapping 64-bin batch means.
+
+Every stationary stratum admitted and completed 128/128 paths; the largest
+drift admission count was 2/128 (Wilson 95% interval 0.43%--5.52%). Total cost
+ranged from a 2,325-bin median to a 3,726.9-bin worst-stratum 90th percentile.
+Sokal covered 1915/2048 means, 93.51% (Wilson 92.36%--94.49%); batch means
+covered 1871/2048, 91.36% (Wilson 90.06%--92.50%). Neither supports nominal
+95% uncertainty, and no parameter was changed after observing the result.
+
+The exact Gaussian diagnostic reused those same spent paths. For unit-variance
+edge AR(1) values and piecewise-linear bin means,
+
+```
+gamma_0 = (1 + rho)/2
+gamma_k = (1 + rho)^2 rho^(k-1)/4,  k >= 1
+Var(mean_n) = [n gamma_0 + 2 sum_{k=1}^{n-1}(n-k) gamma_k] / n^2.
+```
+
+At `n=2048`, exact variances are 0.001951217651367188, 0.009234309196472168
+and 0.03783023357391354 for rho 0.60, 0.90 and 0.975. Coverage separates as:
+
+| fixed Gaussian window | oracle normal | Sokal | 64-bin batch means |
+|---|---:|---:|---:|
+| predetermined, 768 unique paths | 730/768 | 727/768 | 698/768 |
+| admission-conditioned, 128-bin looks | 731/768 | 725/768 | 709/768 |
+| admission-conditioned, 512-bin looks | 729/768 | 719/768 | 698/768 |
+
+Thus oracle coverage remains about 95% after conditioning. At rho 0.975,
+median estimated-variance/exact-variance ratios are 0.81--0.91 for Sokal and
+0.48--0.50 for batch means; a 64-bin batch spans only 1.6 exact IATs. The next
+STOP-CAL experiment must preregister and qualify the covariance estimator on
+new seeds, intermittent controls and physical traces before revisiting stopping
+floors. This finite AR(1) diagnosis is not a guarantee for deterministic
+turbulence, unknown long memory or a runtime policy.
+
+Reproduction uses public commit `a76b492d3`, CPython 3.11.14, JAX/jaxlib
+0.10.2, NumPy 2.4.6 and SciPy 1.17.1. Independent stratum streams are
+`SeedSequence([seed, round(1000*rho), innovation_code])`; discard 8,192 edge
+draws from `x_t=rho*x_(t-1)+sqrt(1-rho^2)*epsilon_t`, then form bins as
+`(x[:-1] + x[1:])/2`. Gaussian controls use `epsilon=z`; the intermittent
+control uses
+`epsilon=[z+3(B-0.02)/sqrt(0.02*0.98)]/sqrt(10)`, with standard normal `z`
+and `B ~ Bernoulli(0.02)`. Apply the equations and fixed windows above. These
+declarations reproduce the inputs and analytic oracle; the controls remain
+review evidence rather than tracked runtime qualification.
+
+### 2026-09-21 — Integration handoff
+
+PR #273 (`2505c8273`, `fix/imex2-ars222-order`) contains the reviewed diagonal
+ARS repair: 284 x64 and 13 focused f32 tests pass; CI and the regenerated GPU
+ladder remain required. PR #266 (`32fc4452d`) incorporates main and repairs
+the layout-dependent sheared-status fixture, with six cases passing in each
+precision and 177 release/ledger/sink tests passing. Neither PR is merged.
+Six merged remote topic refs were removed after exact-tip ancestry checks:
+`docs/methods-and-features`, `evidence/eigen-laguerre-spectrum`,
+`evidence/inner-solve-cost`, `evidence/laguerre-sink`,
+`evidence/q9-idle-host-timing`, and `fix/status-and-projection-coverage`.
+All commits remain in main; occupied local branches and worktrees are preserved.
+
+### 2026-09-21 — EM identity, metric Jacobians and merged-branch cleanup
+
+PR #269 at `d8b1c01ed` integrates main and adds the bounded physical-energy
+identification described in its theory section: 46 field tests pass in x64,
+with three focused identity cases in both precisions. PR #270 at `138341c7c`
+integrates main and strengthens the existing metric regression to all nine
+components, preventing cancellation between derivative errors; 44 geometry
+tests pass per precision. Both await required CI and remain unmerged.
+Twenty additional remote refs whose exact tips are ancestors of main were
+removed atomically with expected-tip leases, excluding every open PR branch.
+All commits remain reachable from main; all occupied local branches/worktrees
+remain untouched. Unique unmerged history was not deleted.
+
+### 2026-09-21 — Corrected ladder and solver integration checkpoint
+
+PR #272 `7d4d3a57c` integrates #273 `2505c8273` and records three successful
+corrected GPU runs: fitted gamma/omega orders 2.033/1.885. Raw provenance,
+runtime/memory and limitations remain in that branch's log. On the existing
+GX output, averaging instantaneous diagnostics over approximately [105,150]
+instead of [75,150] changes gamma from .09306419716077916 to
+.09305750588532043 and omega from .2820201554196946 to .28202102775067356.
+Fine-rung GKX relative differences then become -1.37646e-4 and -4.64606e-7.
+This posthoc window audit explains part, not all, of the mismatch; it does not
+retune acceptance. GX lacks complex mode history, so identical complex-phi
+estimators cannot be reconstructed. No further GPU job remains from this ladder.
+
+Current reviewed integrations: #264 `bb63aeb81` (89 helper tests, four focused
+cases in both precisions, 42 test-prose lines removed); #267 `49e1a91d3`
+(12 supported PR3 tests); draft #265 `e6492c223` (14 supported PR3 tests,
+SOLVAX 0.24); draft #271 `108d39d79` (33 window and 180 runtime tests).
+The PR3 suites include isolated f32 refusal controls; two legacy x64-specific
+assertions fail in a globally-f32 parent and are not represented as portable.
+All integrations preserve ancestry and measured budgets; required CI and
+scientific promotion gates remain open. None of these PRs is merged.
+
+The statistics review tested literature-fixed lugsail batch means on spent
+controls, not fresh qualification: first-stop coverage changed from 1403/1536
+to 1373/1536 on selection seeds and 1434/1536 to 1419/1536 on audit seeds.
+Direct substitution is therefore withheld. Bias reduction at fixed windows
+does not establish stopped-time coverage. See [Vats--Flegal](https://arxiv.org/abs/1809.04541)
+and [Flegal--Jones](https://arxiv.org/abs/0811.1729) for covariance-estimation
+assumptions, not a guarantee for deterministic turbulence. The next experiment
+must freeze its estimator, sampling protocol and nominal-coverage tolerance
+before new seeds; fixed-window qualification precedes runtime-policy changes.
+
+#### Preregistered fixed-window covariance experiment (not yet run)
+
+This paragraph freezes one experiment before any variate from seed `20261003`
+is generated.
+Passing it qualifies one covariance estimator on the stated controls; it does
+not qualify repeated-look stopping or promote a runtime default. Failure rejects
+the candidate without changing its batch sizes, lugsail coefficients, window,
+seed, strata or gates. A different choice requires a new preregistration.
+
+After the existing admission rule first accepts, discard `ceil(5*tau_admit)`
+complete unit-time bins and take the next **4,032 bins**, without inspecting or
+extending them. Both 128- and 512-bin admission cadences use this rule. All three
+estimators have the identical arithmetic mean and identical 4,032-bin window:
+
+- current first-negative-lag autocovariance SEM, unchanged;
+- nonoverlapping batch means with `b=63`, 64 complete batches; and
+- positive-lugsail batch means with `r=3`, `c=1/2`,
+  `Sigma_L = 2 Sigma_63 - Sigma_21`, where the second term has 192 complete
+  batches. For size `s`,
+  `Sigma_s = s sum_k (mean_k - mean)^2 / (a_s - 1)` and
+  `SEM=sqrt(Sigma/4032)`.
+
+Thus no estimator drops a tail or recentres on different samples. Intervals are
+`mean +/- 1.959963984540054 SEM`. A nonfinite or nonpositive `Sigma_L` is an
+estimator refusal and fails that cell; it is never clipped to zero. The fixed
+sizes also permit two streaming batch sums and moment triples, rather than the
+full trace, although this experiment retains the trace for cross-checking.
+
+Generate 4,096 independent paths per stratum in bounded chunks from the single
+declared seed, with each stream rooted at
+`SeedSequence([20261003, stratum_code, path_index])`. The five stationary
+strata are Gaussian AR(1) at rho
+0.60/0.90/0.975; the already specified rho-0.90 standardized 2% burst process;
+and the unit-variance two-timescale Gaussian process
+`sqrt(1/2) X_0.60 + sqrt(1/2) X_0.99` from independent stationary components.
+Pair each with the existing `t/64` drift control. Use the run-start bin origin,
+at most 16,384 bins per path, and report admissions, completions and total bins.
+As in the spent control, form each complete bin as `(x_i+x_(i+1))/2`.
+The covariance oracle is known for every synthetic stratum: rho-to-the-lag for
+each standardized AR(1), the same covariance for its non-Gaussian innovations,
+and `0.5*0.60^k + 0.5*0.99^k` for the mixture. Apply the exact finite-`n`
+covariance sum to the same binned 4,032-point mean; do not substitute an
+asymptotic IAT oracle.
+
+The primary nominal-95% family has ten cells: five strata times two admission
+cadences. For each cell, the lugsail interval must have a one-sided exact
+Clopper--Pearson lower confidence bound of at least **0.93**. Use
+`alpha=0.05/30` for every bound below: coverage, admission/completion and drift
+make 30 simultaneous binomial claims, so Bonferroni controls their joint
+familywise confidence at 95%. The 0.93 threshold states the allowed two-
+percentage-point undercoverage. With 4,096 paths, coverage 0.95 has binomial
+standard error about 0.0034 and its expected multiplicity-adjusted lower bound
+is about 0.940, so the gate has resolution to distinguish 0.93 from 0.95.
+Coverage is evaluated among completed fixed windows; completion has its own
+simultaneous gate below, so missing intervals cannot make a never-accepting rule
+look accurate.
+The current and plain-batch estimators are frozen comparators, not alternatives
+selected after looking. Also require, in every cell:
+
+- a one-sided Bonferroni lower bound of at least 0.90 on admission and fixed-
+  window completion by the 16,384-bin cap;
+- a one-sided Bonferroni upper bound of at most 0.05 on ever admitting the paired
+  drift control; and
+- zero lugsail refusals. Report exact-variance ratio, median and 90th-percentile
+  effort, but do not add an unregistered gate after seeing them.
+
+Before analysis, name and hash the existing physical traces and their independent
+reference ensembles; this experiment launches no new physical simulation. A
+physical case is eligible only with at least 16 independent replica means and a
+reference-mean 95% half-width no larger than half the median candidate half-width.
+The reference replicas are disjoint from the candidate window; their SEM is the
+sample standard deviation of fixed-window means divided by `sqrt(R)`, and their
+eligibility half-width uses `t_(0.975,R-1)`.
+For the `K` eligible cases frozen before inspection, require
+`abs(mean-reference_mean) / sqrt(SEM^2 + reference_SEM^2)` not to exceed the
+two-sided normal cutoff at `1-0.05/(2K)`. These are held-out agreement,
+stationarity and cost checks, **not coverage**, because the reference mean is
+noisy; an ineligible or failed case leaves physical qualification open rather
+than being replaced after inspection.
+
+Generate and analyze synthetic paths in chunks of at most 64, using CPU only;
+the admission budget is ten CPU-minutes and 128 MiB peak working memory. An
+over-budget run stops and reports the breach rather than changing the design.
+
+[Sokal's window analysis](https://doi.org/10.1007/978-1-4899-0319-8_6),
+[Flyvbjerg--Petersen blocking](https://doi.org/10.1063/1.457480), and
+[Geyer's initial sequences](https://projecteuclid.org/journals/statistical-science/volume-7/issue-4/Practical-Markov-Chain-Monte-Carlo/10.1214/ss/1177011137.full)
+motivate the comparators, but the latter relies on reversible-chain structure
+not established for turbulent traces. The chosen lugsail estimator targets the
+known finite-sample negative bias of ordinary batch means; its consistency still
+requires stationarity, moment and mixing/strong-invariance conditions, with both
+batch size and batch count growing
+([Vats--Flegal](https://arxiv.org/abs/1809.04541),
+[Flegal--Jones](https://doi.org/10.1214/09-AOS735)). Neither those asymptotics nor
+this experiment supplies time-uniform coverage.
 ### 2026-09-21 — EM0 physical fluctuation-energy identification
 
 Integrate main `4605d0b49` into #269 and identify its source quadratic with
@@ -18811,3 +19309,62 @@ Outcome:
 - partial: tranche 1 done; paused before sphinx and CI
 - remaining blocker: none known; docs build and full CI not yet run
 - next task: CI on the PR, then tranche 2 from MAP.md
+## 2026-09-22 — final plan revision: validation matrix and VMEX turbulence example
+
+Added "Final revision and entry point (2026-09-22)" at the top of `plan.md`.
+It records 2.3.0, the SOLVAX 0.25.0 complex-equilibration fix, the #266 split
+(forward 0.54–0.60x, adjoint window 1.28x slower, sharded runs refused because
+`Nyc` is odd when `Ny` is a multiple of four), dispositions for #266, #268,
+#272, #274 and #275, the full validation and benchmark matrix audited on main
+at 2.3.0 (ES/EM, tokamak/stellarator, linear/nonlinear, each collision
+operator) with a closing action per cell, the build order for a VMEX
+QA-plus-turbulence example on several field lines and radii, sixteen new
+stable IDs and the order of work, with the citation DOI last.
+
+No plan line was deleted. The 2026-09-21 refresh (#268) had rewritten 135
+lines of the previous plan (115 removed outright, 20 edited); all of them are
+restored verbatim in Appendix R, grouped under their original headings, and a
+line-by-line check confirms every non-blank line of main's `plan.md` is
+present. #268's README rewrite was not carried because it removed pinned
+claim-scope sentences asserted by the stellarator scope tests.
+
+## 2026-09-22 — plan revision, second pass: GKX 3 contract re-adopted
+
+Baseline: GKX `main` `f9485f044` (2.3.0). Measured tracked inventory: src 187
+Python files / 93,344 lines; tests 81 / 94,057; tools 96 / 78,901; benchmarks
+23 files; examples 81 files; docs 824 PNG/JSON/CSV; plan 712 files; 2,107
+files, 24.6 MB. The 2026-08-30 plan (#163) targets were src ≤45 files and
+≤45,000 lines, tests ≤30 files and ≤35,000 lines, zero `tools/` Python.
+
+Added section G to `plan.md`: re-adopts the 2026-08-30 contract (archived
+verbatim at `plan/archive/2026-08-30-gkx3-modernization-plan.md`, the
+maintainer's copy; it differs from the #163 blob in 14 lines), revises the
+README target to a VMEX-style showcase with proof tests and GX-failure cases,
+and opens lanes PERF-LIT, PERF-ADJ, PERF-LAYOUT, SOLVAX-DIRECT,
+README-SHOWCASE, DOCS-CURRENT, SLIM-TOOLS, EXAMPLES-GALLERY, ARCH-A and
+TEST-CONSOLIDATE. No plan line removed.
+
+## 2026-09-22 — parallel lanes paused; plan updated with lane status and phases
+
+Baseline:
+- GKX SHA: `f9485f044` (2.3.0); plan branch `plan/final-revision-20260922` (#277).
+
+Scope:
+- Eight lanes ran in parallel (PERF-LIT #284, PERF-ADJ #279, PERF-LAYOUT #282,
+  SOLVAX-DIRECT #280, README-SHOWCASE #285, DOCS-CURRENT #283, SLIM-TOOLS #278,
+  EXAMPLES-GALLERY #281) and were paused by the maintainer. All are drafts
+  with a Handoff section and their own log entries; none merged.
+
+Changes to the plan:
+- Added G.5 (lane status table with branch heads and first next steps;
+  decisions: example dispositions, CLI-RES bug, merge order, disk policy;
+  PERF-LIT's ranked list) and G.6 (phases P0–P7 to GKX 3.0 mapped onto the
+  archived plan's H0/A–I, each with an exit). No line removed.
+- Committed PERF-LIT's REPORT.md and three literature surveys to #284; the
+  lane had paused before writing them into the tree.
+
+Outcome:
+- Partial by design (pause). Remaining blocker: the laptop disk filled
+  repeatedly (session scratch 25 GB); large runs move to the office host.
+- Next task: P0 — CLI-RES, then land #277 and the paused lanes in the G.5
+  merge order.
