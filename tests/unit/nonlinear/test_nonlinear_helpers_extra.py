@@ -418,8 +418,18 @@ def test_select_nonlinear_step_diagnostics_and_progress_noop() -> None:
         compute_diag_fn=lambda: computed,
     )
 
+    used_final = select_nonlinear_step_diagnostics(
+        jnp.asarray(3, dtype=jnp.int32),
+        diagnostics_stride=2,
+        diag_prev=previous,
+        compute_diag_fn=lambda: computed,
+        steps=4,
+    )
+
     np.testing.assert_allclose(np.asarray(used_compute[0]), 2.0)
     np.testing.assert_allclose(np.asarray(used_previous[0]), -1.0)
+    # The off-stride last step is kept as the final sample, so it is fresh.
+    np.testing.assert_allclose(np.asarray(used_final[0]), 2.0)
 
     state = jnp.asarray([7.0], dtype=jnp.float32)
     out = maybe_emit_nonlinear_progress(

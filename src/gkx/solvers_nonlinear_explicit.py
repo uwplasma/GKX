@@ -495,6 +495,7 @@ def _select_explicit_diagnostic(
     dt_local: jnp.ndarray,
     compute_diag_from_state: DiagnosticFn,
     select_diagnostics_fn: Callable[..., Any],
+    steps: int,
 ) -> Any:
     """Select or reuse the diagnostic payload for one explicit scan sample."""
 
@@ -508,6 +509,7 @@ def _select_explicit_diagnostic(
         diagnostics_stride=diagnostics_stride,
         diag_prev=diag_prev,
         compute_diag_fn=compute_diag,
+        steps=steps,
     )
 
 
@@ -576,6 +578,7 @@ def make_explicit_diagnostic_step(
                 dt_local=dt_local,
                 compute_diag_from_state=compute_diag_from_state,
                 select_diagnostics_fn=select_diagnostics_fn,
+                steps=steps,
             )
             t_new = jnp.asarray(t_prev + dt_local, dtype=real_dtype)
             G_new = emit_progress_fn(
