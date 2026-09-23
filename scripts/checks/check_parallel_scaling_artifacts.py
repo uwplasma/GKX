@@ -1171,6 +1171,15 @@ def validate_all(
     }
 
 
+# scripts/ packages that hold the modules behind the developer commands.
+TOOL_PACKAGES = (
+    "artifacts",
+    "benchmarks",
+    "campaigns",
+    "checks",
+    "comparison",
+    "profiling",
+)
 ALLOWED_STATUSES = {"closed", "active", "open", "planned"}
 ALLOWED_PRIORITIES = {"high", "medium", "low"}
 REQUIRED_STRING_FIELDS = ("name", "owner", "status", "priority")
@@ -1266,10 +1275,8 @@ def validate_manifest(
         if priority not in ALLOWED_PRIORITIES:
             raise ValueError(f"{name}: invalid priority {priority!r}")
 
-        allowed_tool_roots = (
-            REPO_ROOT / "tools",
-            REPO_ROOT / "scripts" / "checks",
-            REPO_ROOT / "benchmarks" / "performance",
+        allowed_tool_roots = tuple(
+            REPO_ROOT / "scripts" / package for package in TOOL_PACKAGES
         )
         for tool in lists["profiling_tools"]:
             resolved = _repo_path(tool)
@@ -1279,8 +1286,8 @@ def validate_manifest(
                 _is_relative_to(resolved, root.resolve()) for root in allowed_tool_roots
             ):
                 raise ValueError(
-                    f"{name}: profiling tool must live under tools/ or "
-                    f"benchmarks/performance/: {tool}"
+                    f"{name}: profiling tool must live in a scripts/ tool "
+                    f"package ({', '.join(TOOL_PACKAGES)}): {tool}"
                 )
 
         rendered = [

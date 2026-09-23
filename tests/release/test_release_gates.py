@@ -497,7 +497,7 @@ gkx = "gkx.cli:main"
                 "scripts/check.py parallel-scaling --performance-manifest-only",
                 "scripts/check.py quasilinear",
                 "scripts/check.py vmec-boozer differentiability-claim",
-                "tools/artifacts/build_parallelization_completion_status.py",
+                "scripts/artifacts/build_parallelization_completion_status.py",
                 "scripts/check.py readiness technical-status",
                 "scripts/check.py readiness",
                 "rm -rf build dist",
@@ -536,7 +536,7 @@ coverage:
         "scripts/check.py parallel-scaling\n"
         "scripts/check.py quasilinear\n"
         "scripts/check.py vmec-boozer differentiability-claim\n"
-        "tools/artifacts/build_parallelization_completion_status.py\n"
+        "scripts/artifacts/build_parallelization_completion_status.py\n"
         "scripts/check.py readiness technical-status\n"
         "scripts/check.py readiness\n"
         "rm -rf build dist\n"
@@ -1969,7 +1969,7 @@ def test_package_architecture_inventory_classifies_repository_areas() -> None:
         Path("src/gkx/operators/nonlinear/rhs.py")
     )
     tool_role, tool_action, tool_notes = mod._role_and_action(
-        Path("tools/artifacts/build_linear_validation_artifacts.py")
+        Path("scripts/artifacts/build_linear_validation_artifacts.py")
     )
     summary = mod._summary(
         [
@@ -1984,8 +1984,8 @@ def test_package_architecture_inventory_classifies_repository_areas() -> None:
                 notes=notes,
             ),
             mod.InventoryRow(
-                path="tools/artifacts/build_linear_validation_artifacts.py",
-                area="tools/artifacts",
+                path="scripts/artifacts/build_linear_validation_artifacts.py",
+                area="scripts/artifacts",
                 role=tool_role,
                 action=tool_action,
                 suffix=".py",
@@ -2123,7 +2123,7 @@ def test_performance_manifest_accepts_benchmark_performance_driver(
     tmp_path: Path,
 ) -> None:
     mod = _load_performance_manifest_tool()
-    tool = tmp_path / "benchmarks" / "performance" / "benchmark_runtime_memory.py"
+    tool = tmp_path / "scripts" / "benchmarks" / "benchmark_runtime_memory.py"
     tool.parent.mkdir(parents=True)
     tool.write_text("# benchmark\n", encoding="utf-8")
     artifact = tmp_path / "docs" / "_static" / "runtime.png"
@@ -2132,7 +2132,7 @@ def test_performance_manifest_accepts_benchmark_performance_driver(
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
         _performance_manifest_text(
-            tool="benchmarks/performance/benchmark_runtime_memory.py",
+            tool="scripts/benchmarks/benchmark_runtime_memory.py",
             artifact="docs/_static/runtime.png",
         ),
         encoding="utf-8",
@@ -2151,13 +2151,13 @@ def test_performance_manifest_reports_missing_render_without_requiring_it(
     tmp_path: Path,
 ) -> None:
     mod = _load_performance_manifest_tool()
-    tool = tmp_path / "tools" / "profile.py"
+    tool = tmp_path / "scripts" / "profiling" / "profile.py"
     tool.parent.mkdir(parents=True)
     tool.write_text("# tool\n", encoding="utf-8")
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
         _performance_manifest_text(
-            tool="tools/profile.py", artifact="docs/_static/runtime.png"
+            tool="scripts/profiling/profile.py", artifact="docs/_static/runtime.png"
         ),
         encoding="utf-8",
     )
@@ -2177,13 +2177,14 @@ def test_performance_manifest_still_requires_machine_readable_evidence(
     tmp_path: Path,
 ) -> None:
     mod = _load_performance_manifest_tool()
-    tool = tmp_path / "tools" / "profile.py"
+    tool = tmp_path / "scripts" / "profiling" / "profile.py"
     tool.parent.mkdir(parents=True)
     tool.write_text("# tool\n", encoding="utf-8")
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
         _performance_manifest_text(
-            tool="tools/profile.py", artifact="benchmarks/results/runtime.json"
+            tool="scripts/profiling/profile.py",
+            artifact="benchmarks/results/runtime.json",
         ),
         encoding="utf-8",
     )
@@ -2216,7 +2217,7 @@ def test_performance_manifest_rejects_unowned_driver_path(tmp_path: Path) -> Non
         mod.REPO_ROOT = tmp_path
         with pytest.raises(
             ValueError,
-            match=r"tools/ or benchmarks/performance/",
+            match=r"must live in a scripts/ tool package",
         ):
             mod.validate_manifest(mod.load_manifest(manifest))
     finally:
@@ -2225,7 +2226,7 @@ def test_performance_manifest_rejects_unowned_driver_path(tmp_path: Path) -> Non
 
 def test_performance_manifest_rejects_invalid_status(tmp_path: Path) -> None:
     mod = _load_performance_manifest_tool()
-    tool = tmp_path / "tools" / "profile.py"
+    tool = tmp_path / "scripts" / "profiling" / "profile.py"
     tool.parent.mkdir(parents=True)
     tool.write_text("# tool\n", encoding="utf-8")
     artifact = tmp_path / "docs" / "_static" / "runtime.png"
@@ -2234,7 +2235,7 @@ def test_performance_manifest_rejects_invalid_status(tmp_path: Path) -> None:
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
         _performance_manifest_text(
-            tool="tools/profile.py",
+            tool="scripts/profiling/profile.py",
             artifact="docs/_static/runtime.png",
             status="halfway",
         ),
@@ -3547,9 +3548,9 @@ from support.paths import REPO_ROOT as RUN_TO_REPO_ROOT
 
 # Decks that must pin run_to themselves, and the value they must pin.
 _RUN_TO_REQUIRED = {
-    "benchmarks/runtime_miller_zonal_response.toml": "t_max",
-    "benchmarks/runtime_w7x_zonal_response_vmec.toml": "t_max",
-    "benchmarks/runtime_secondary_slab.toml": "t_max",
+    "benchmarks/cases/miller_zonal_response.toml": "t_max",
+    "benchmarks/cases/w7x_zonal_response_vmec.toml": "t_max",
+    "benchmarks/cases/secondary_slab.toml": "t_max",
 }
 
 # Decks cleared to run under the default, with the measurement that cleared
@@ -3586,8 +3587,8 @@ _RUN_TO_AUDIT_PENDING = {
 # Decks that ship as linear but are promoted into the nonlinear runtime by a
 # shipped driver, so their [time] block still sets a nonlinear stop policy.
 _RUN_TO_PROMOTED = {
-    "benchmarks/runtime_secondary_slab.toml": (
-        "benchmarks/secondary_slab_workflow.py, via build_secondary_stage2_config"
+    "benchmarks/cases/secondary_slab.toml": (
+        "scripts/benchmarks/secondary_slab_workflow.py, via build_secondary_stage2_config"
     ),
 }
 
@@ -3746,13 +3747,13 @@ driver-promoted deck that is the promoted value, not the deck's own.
 
 # Measured dt / CFL-bound for each fixed_dt deck reaching the nonlinear runtime.
 _CFL_MARGIN_MEASURED: dict[str, float] = {
-    "benchmarks/runtime_miller_zonal_response.toml": 0.46,
-    "benchmarks/runtime_w7x_zonal_response_vmec.toml": 0.65,
+    "benchmarks/cases/miller_zonal_response.toml": 0.46,
+    "benchmarks/cases/w7x_zonal_response_vmec.toml": 0.65,
     # Promoted: build_secondary_stage2_config replaces the deck's dt = 1.0 with
     # dt = 0.01 before the nonlinear stage, so the deck's own dt is the linear
     # seed stage's and is not what this audit is about. The seed stage is 13.08x
     # over the linear bound and is covered by the linear runtime's own warning.
-    "benchmarks/runtime_secondary_slab.toml": 0.13,
+    "benchmarks/cases/secondary_slab.toml": 0.13,
     "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml": 1.33,
     "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear.toml": 0.18,
     "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_seed.toml": 0.18,
@@ -3886,13 +3887,13 @@ def test_run_to_audit_discovery_sees_a_deck_that_only_the_flags_reveal() -> None
 
     reaches, _ = _decks_reaching_the_nonlinear_runtime()
 
-    assert "benchmarks/runtime_miller_zonal_response.toml" in reaches
-    assert "benchmarks/runtime_w7x_zonal_response_vmec.toml" in reaches
+    assert "benchmarks/cases/miller_zonal_response.toml" in reaches
+    assert "benchmarks/cases/w7x_zonal_response_vmec.toml" in reaches
     # Promoted by a driver: nothing in the deck itself says nonlinear.
-    assert "benchmarks/runtime_secondary_slab.toml" in reaches
+    assert "benchmarks/cases/secondary_slab.toml" in reaches
     # A genuinely linear deck stays out, or the audit becomes noise.
     assert "examples/linear/axisymmetric/cyclone.toml" not in reaches
-    assert "benchmarks/collisional_zonal_response.toml" not in reaches
+    assert "benchmarks/cases/collisional_zonal_response.toml" not in reaches
 
 
 # ---- GX parity: measured build-reproducibility floors ----
@@ -3916,7 +3917,7 @@ for cases where nothing was measured.
 
 _PARITY_MANIFEST = RUN_TO_REPO_ROOT / "tools" / "gx_parity_matrix_manifest.toml"
 _PARITY_BUILDER = (
-    RUN_TO_REPO_ROOT / "tools" / "comparison" / "build_gx_parity_matrix.py"
+    RUN_TO_REPO_ROOT / "scripts" / "comparison" / "build_gx_parity_matrix.py"
 )
 # Largest relative move measured between the two builds: 0.204% in omega at
 # ky = 0.2. A floor at or below that would not cover the measurement it exists
@@ -4104,7 +4105,7 @@ def test_parity_builder_reads_the_declared_floor() -> None:
 
 """The shipped closed VMEX mirror case must be an equilibrium, not a guess.
 
-``tools/artifacts/build_vmex_mirror_gkx_artifacts.py`` built its record on
+``scripts/artifacts/build_vmex_mirror_gkx_artifacts.py`` built its record on
 ``setup.discretization.evaluate_state(setup.initial_state)`` -- the seeded stream
 function on the prescribed nested-ellipse surfaces, at a normalized MHD force
 residual of 0.61 -- and published that state's growth rate, frequency,
@@ -4126,7 +4127,7 @@ _VMEX_MIRROR_RECORD = (
     _VMEX_MIRROR_ROOT / "docs" / "_static" / "vmex_mirror_gkx_showcase.json"
 )
 _VMEX_MIRROR_BUILDER = (
-    _VMEX_MIRROR_ROOT / "tools" / "artifacts" / "build_vmex_mirror_gkx_artifacts.py"
+    _VMEX_MIRROR_ROOT / "scripts" / "artifacts" / "build_vmex_mirror_gkx_artifacts.py"
 )
 
 # The bars the shipped record has to clear. The three weak-form ones are the

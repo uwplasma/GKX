@@ -292,7 +292,10 @@ recursive = true
 # 96 -> 78 (SLIM-TOOLS tranche 1): eight zero-reference or campaign-only files
 # deleted and the ten tools/release gates moved to scripts/checks/ behind
 # scripts/check.py. Measured; map in plan/research/2026-09-22-slim-tools/MAP.md.
-baseline = 78
+# 78 -> 0 (SLIM-TOOLS tranche 2): artifacts/, campaigns/, comparison/ and
+# profiling/ moved whole to scripts/ behind validate.py, compare.py and
+# profile.py. tools/ now holds manifests and parity fixtures only.
+baseline = 0
 target = 0
 
 [[topology_policy.counts]]
@@ -300,7 +303,13 @@ name = "developer_script_python_files"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 15
+# 15 -> 104 (SLIM-TOOLS tranche 2): a move, not growth. The 78 tools/ modules
+# and the 10 benchmark drivers from benchmarks/ now sit in scripts/ packages
+# behind five commands (check, benchmark, profile, validate, compare) plus
+# their shared runner _command.py; tools_python_files fell 78 -> 0 in the same
+# change. The target of 12 is met by contracting these packages, not by
+# moving them again. Measured.
+baseline = 104
 target = 12
 
 
@@ -1521,7 +1530,8 @@ recursive = true
 # The evidence probe `gather_probe.py` is the rest of the count.
 # 78901 -> 63832 (SLIM-TOOLS tranche 1): deletions plus the tools/release move
 # to scripts/checks/, same change as the file count above. Measured.
-baseline = 63832
+# 63832 -> 0 (SLIM-TOOLS tranche 2): moved to scripts/, see the file count.
+baseline = 0
 target = 0
 
 [[line_budget_policy.counts]]
@@ -1529,5 +1539,8 @@ name = "developer_script_python_lines"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 25000
+# 25000 -> 77373 (SLIM-TOOLS tranche 2): 63,832 lines moved from tools/ and
+# 1,348 from benchmarks/, plus about 200 lines of command dispatchers; tool lines
+# fell to 0 in the same change. Measured.
+baseline = 77373
 target = 18000

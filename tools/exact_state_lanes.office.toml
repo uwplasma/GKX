@@ -2,7 +2,7 @@
 #
 # Run on office from the repo root:
 #   export HSX_VMEC_FILE="$HOME/gx_refs/main_clean_20260312/nonlinear/hsx/wout_HSX_QHS_vac.nc"
-#   python tools/comparison/build_exact_state_audit.py run \
+#   python scripts/comparison/build_exact_state_audit.py run \
 #     --manifest tools/exact_state_lanes.office.toml \
 #     --outdir tools_out/exact_state_audit_office
 #

@@ -28,10 +28,14 @@ Repository Roles
 The repository uses four non-source-code areas with distinct jobs:
 
 - ``examples/`` contains small, copyable user workflows.
-- ``benchmarks/`` contains reproducible benchmark drivers and compact benchmark
-  inputs that researchers can run directly.
-- ``tools/`` contains maintainer commands for artifacts, campaigns,
-  comparisons, profiling, and releases.
+- ``benchmarks/`` contains compact benchmark inputs (``benchmarks/cases/``),
+  release reference contracts and the result index.
+- ``scripts/`` contains the developer commands: ``check.py`` (repository
+  gates), ``benchmark.py`` (benchmark drivers), ``profile.py``, ``validate.py``
+  (validation campaigns and evidence builders) and ``compare.py`` (external-code
+  comparison). Each runs one module from its package under ``scripts/``.
+- ``tools/`` contains no code: the repository manifests and the GX parity
+  fixtures.
 - ``tests/`` contains automated gates that CI can run without relying on raw
   generated outputs. Consolidated test owners keep shared imports once at the
   file boundary; section markers describe the retained physics families but do
@@ -41,7 +45,7 @@ Files that do not fit one of those roles should be deleted from ``main`` or
 moved to a draft experiment branch. Benchmark or comparison references to other
 codes are allowed only in explicit benchmark/comparison contexts.
 
-Artifact builders under ``tools/artifacts`` should be organized by validation
+Artifact builders under ``scripts/artifacts`` should be organized by validation
 family rather than by one output file per script. For example, the VMEC/Boozer
 aggregate holdout evidence now uses one
 ``build_vmec_boozer_aggregate_holdout_gate.py`` command with ``alpha`` and
@@ -63,9 +67,8 @@ on:
 - ``gkx.artifacts.plotting``
 - ``gkx.parallel``
 - ``gkx.operators.nonlinear.parallel``
-- documented benchmark/example scripts under ``benchmarks/`` and ``examples/``
-- documented repository-maintenance entry points under purpose-specific
-  ``tools/`` subfolders
+- documented example scripts under ``examples/``
+- documented developer commands under ``scripts/``
 
 Internal modules that are free to move as long as the public behavior and tests
 remain unchanged:
@@ -125,8 +128,8 @@ The executable-facing runtime path is split conceptually into four layers:
    - ``cli.py``
 5. **benchmark and validation tooling**
    - ``gkx.benchmarking_shared``
-   - root ``benchmarks/`` drivers
-   - purpose-specific ``tools/`` commands
+   - ``benchmarks/cases/`` inputs and the ``scripts/benchmarks/`` drivers
+   - the ``scripts/`` developer commands
    - ``tests/validation`` physics and benchmark gates
 
 Physics / Numerics / IO Map
@@ -326,10 +329,9 @@ Completed extractions:
 - runtime TOML case workflows: ``workflows/cases.py`` owns the stable
   ``run_linear_case`` and ``run_nonlinear_case`` signatures and their default
   wiring; the package-level API exports them directly from that owner.
-- root benchmark drivers and result pointers:
-  ``benchmarks/``. This directory is the canonical lightweight benchmark
-  entry point at repository root. It stores drivers, TOML inputs, and
-  ``benchmarks/results/manifest.toml`` only; raw solver products stay in
+- benchmark inputs, drivers and result pointers: ``benchmarks/`` holds the
+  TOML inputs and ``benchmarks/results/manifest.toml``; the drivers run through
+  ``python scripts/benchmark.py``; raw solver products stay in
   scratch directories and promoted benchmark results are displayed from
   :doc:`benchmarks`.
 - full-GK executable linear runtime workflow:
@@ -443,7 +445,7 @@ Completed extractions:
   statistics, including a physical zero; zero uncertainty separation can
   therefore never be replaced by a stale positive fallback and accidentally
   promote an audit. Replicate-spread diagnostics live outside the
-  installable package in ``tools/campaigns/nonlinear_replicates.py`` and stage
+  installable package in ``scripts/campaigns/nonlinear_replicates.py`` and stage
   ensemble row normalization,
   high/low variant selection, state classification, replicate-row packing, and
   summary assembly. The same owner builds seed/timestep artifact-readiness
@@ -453,7 +455,7 @@ Completed extractions:
 - quasilinear nonlinear-window convergence metadata is consolidated in
   ``diagnostics/transport_windows.py`` for statistics, CSV/summary IO,
   promotion readiness, and ensemble uncertainty; replicate readiness belongs
-  to ``tools/campaigns/nonlinear_replicates.py``. The public API re-exports the
+  to ``scripts/campaigns/nonlinear_replicates.py``. The public API re-exports the
   documented transport-window helpers directly from the diagnostics owners.
   Persisted report, gate, and row pass flags must be explicit booleans; strings
   and numeric lookalikes fail closed. The statistics owner stages validated
@@ -588,15 +590,15 @@ Completed extractions:
   construction, uncertainty propagation, and independent control-mean gates
   live in ``diagnostics/nonlinear_gradient_statistics.py`` as pure reusable
   functions. Candidate selection and launch policy is campaign governance and
-  now lives in ``tools/campaigns/``; it never owned scientific uncertainty
+  now lives in ``scripts/campaigns/``; it never owned scientific uncertainty
   arithmetic.
 - nonlinear turbulence-gradient evidence scope markers, acceptance config
   dataclasses, JSON-safe parsing, finite-difference conditioning gates, and
   artifact classification live in ``diagnostics/metadata.py``. Replicated
-  window summaries live in ``tools/campaigns/nonlinear_replicates.py`` and
+  window summaries live in ``scripts/campaigns/nonlinear_replicates.py`` and
   central finite-difference transport response/uncertainty lives in
   ``diagnostics/transport.py``. The compact
-  ``tools/campaigns/nonlinear_gradient_evidence.py`` facade owns bracket and
+  ``scripts/campaigns/nonlinear_gradient_evidence.py`` facade owns bracket and
   candidate report orchestration plus production evidence-gap reports. It has
   one final export contract; ``diagnostics/metadata.py`` and
   ``diagnostics/transport.py`` likewise each have one complete owner contract
@@ -711,8 +713,8 @@ generic runtime orchestration. The former ``kbm_beta_scan.py`` was removed
 after audit showed that it incorrectly interpreted a ``k_y`` reference table
 as beta values. TEM and kinetic-electron execution also use canonical runtime
 inputs and scan paths. New examples must not add named-case execution APIs.
-External-code names and raw reference handling stay in root ``benchmarks/`` or
-``tools/comparison``; reusable source modules use physics and numerical names.
+External-code names and raw reference handling stay in ``scripts/benchmarks`` or
+``scripts/comparison``; reusable source modules use physics and numerical names.
 
 Ordered continuation scans use ``run_runtime_parameter_scan``. The caller
 supplies a named scalar axis and a pure ``RuntimeConfig`` update callback; the
@@ -747,15 +749,15 @@ claim guardrails in ``diagnostics/quasilinear_model_selection.py``.
 
 VMEC-JAX candidate and transport admission gates are campaign governance, not
 runtime physics, so they live outside the installable package in
-``tools/campaigns/``. ``tools/campaigns/vmec_candidate_admission.py`` owns
+``scripts/campaigns/``. ``scripts/campaigns/vmec_candidate_admission.py`` owns
 solved-equilibrium, authoritative-WOUT, and WOUT-reproducibility candidate
 gates. It keeps aspect, iota, iota-profile, quasisymmetry, and pass/fail
 helpers together so optimizer state and WOUT gates share one JSON schema and
-threshold semantics. ``tools/campaigns/vmec_transport_admission.py`` owns
+threshold semantics. ``scripts/campaigns/vmec_transport_admission.py`` owns
 transport-admission policy dataclasses, reduced transport metric selection,
 multi-surface/field-line/``k_y`` sample coverage, and promoted
 transport-candidate selection.
-``tools/campaigns/stellarator_transport_reports.py`` owns report-style
+``scripts/campaigns/stellarator_transport_reports.py`` owns report-style
 nonlinear transport diagnostics: landscape admission, reduced prelaunch gates,
 next-campaign admission, and matched nonlinear audit redesign. Persisted gate
 flags must be explicit booleans and replicate counts must be finite,
@@ -769,7 +771,7 @@ reductions, and the optimizer callback. Eigenbranch-locality gates remain in
 ``vmec_transport_branch`` because they evaluate a distinct three-state
 continuation contract. Because admission policy is no longer installed,
 ``gkx.api`` no longer re-exports admission helpers; campaign code imports
-them from ``tools.campaigns``.
+them from ``scripts.campaigns``.
 
 The first differentiable-geometry split keeps
 ``gkx.geometry.differentiable`` as the public facade while

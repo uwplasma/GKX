@@ -14,9 +14,9 @@ import numpy as np
 import pytest
 
 from support.paths import REPO_ROOT, load_release_tool
-from benchmarks import cyclone_linear_benchmark
-from benchmarks.performance import benchmark_integrators
-from benchmarks.performance.benchmark_runtime_memory import (
+from scripts.benchmarks import cyclone_linear_benchmark
+from scripts.benchmarks import benchmark_integrators
+from scripts.benchmarks.benchmark_runtime_memory import (
     RuntimeBenchRun,
     _load_manifest,
     _load_summary_rows,
@@ -111,10 +111,18 @@ def test_benchmark_readme_references_existing_python_drivers() -> None:
     """Keep researcher-facing reproduction commands synchronized with drivers."""
 
     readme = (ROOT / "benchmarks" / "README.md").read_text(encoding="utf-8")
-    drivers = re.findall(r"python (benchmarks/[^\s]+\.py)", readme)
+    drivers = re.findall(r"python scripts/benchmark\.py (\w+)", readme)
 
     assert drivers
-    assert all((ROOT / driver).is_file() for driver in drivers)
+    assert all(
+        (ROOT / "scripts" / "benchmarks" / f"{driver}.py").is_file()
+        for driver in drivers
+    )
+    for module in re.findall(r"python scripts/validate\.py (\w+)", readme):
+        assert any(
+            (ROOT / "scripts" / package / f"{module}.py").is_file()
+            for package in ("artifacts", "campaigns")
+        ), module
 
 
 def test_cyclone_publication_driver_uses_asymptotic_fit_window() -> None:
@@ -741,7 +749,7 @@ def test_remote_runtime_memory_runs_disable_x11_forwarding(monkeypatch) -> None:
         return Proc()
 
     monkeypatch.setattr(
-        "benchmarks.performance.benchmark_runtime_memory.subprocess.run", fake_run
+        "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
     )
     run = RuntimeBenchRun(
         case="c", label="C", backend="gx", command="echo hi", cwd="/tmp", host="office"
@@ -761,7 +769,7 @@ def test_runtime_memory_command_captures_profile_times(monkeypatch) -> None:
         return Proc()
 
     monkeypatch.setattr(
-        "benchmarks.performance.benchmark_runtime_memory.subprocess.run", fake_run
+        "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
     )
     run = RuntimeBenchRun(
         case="c",
@@ -794,7 +802,7 @@ def test_runtime_memory_command_runs_profile_subcommand(monkeypatch) -> None:
         return Proc()
 
     monkeypatch.setattr(
-        "benchmarks.performance.benchmark_runtime_memory.subprocess.run", fake_run
+        "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
     )
     run = RuntimeBenchRun(
         case="c",

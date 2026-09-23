@@ -2,7 +2,7 @@
 
 The critical gradient sets the window for the nonlinear Dimits scan, so an
 estimator that returns a confident wrong number costs GPU time on an
-uninterpretable run. Three earlier versions of ``tools/campaigns/dimits_shift.py``
+uninterpretable run. Three earlier versions of ``scripts/campaigns/dimits_shift.py``
 reduced over ``k_y`` before fitting, which mixes branches by construction: the
 argmax moves between modes as the drive changes, so the fitted curve is a
 different mode at each end.

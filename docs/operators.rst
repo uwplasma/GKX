@@ -374,7 +374,7 @@ Published convergence studies ask for considerably more than eight moments --
 resolution should be scanned rather than assumed. Generate further resolutions
 with::
 
-    python tools/artifacts/build_finite_wavelength_coulomb_data.py \
+    python scripts/artifacts/build_finite_wavelength_coulomb_data.py \
         --hermite 7 --laguerre 3 --digits 60 --workers 24 --check
 
 Claim boundary and extension plan
@@ -524,7 +524,7 @@ maintainer command
 
 .. code-block:: console
 
-   python tools/artifacts/build_linear_validation_artifacts.py collision-table
+   python scripts/artifacts/build_linear_validation_artifacts.py collision-table
 
 evaluates the analytic coefficients with 80-decimal-digit ``mpmath``
 arithmetic, writes a deterministic ``float64`` array, and records its SHA-256,
@@ -686,7 +686,7 @@ The reproducible algebra/convergence artifact is generated with
 
 .. code-block:: console
 
-   python tools/artifacts/build_linear_validation_artifacts.py collision-verification
+   python scripts/artifacts/build_linear_validation_artifacts.py collision-verification
 
 .. figure:: _static/collision_operator_verification.png
    :alt: Coulomb collision operator convergence, projection, entropy, and matrix gates
@@ -932,7 +932,7 @@ Regenerate all three formats with
 
 .. code-block:: bash
 
-   python tools/artifacts/build_linear_validation_artifacts.py collision-response
+   python scripts/artifacts/build_linear_validation_artifacts.py collision-response
 
 For the absolute normalization, define
 :math:`\widehat E=eE/(m_ev_{Te}\nu_{ee})`. The plotted response
@@ -992,7 +992,7 @@ The response vectors are projected directly with product velocity quadrature;
 they are not inferred by forcing finite-wavelength gyrocenter moments into the
 null space. The offline conversion reuses the expensive Coulomb test table::
 
-   python tools/artifacts/build_linear_validation_artifacts.py \
+   python scripts/artifacts/build_linear_validation_artifacts.py \
      collision-original-sugama-table \
      --coulomb-table finite_b_zonal_P24_J10_diagonal.npz \
      --out finite_b_zonal_P24_J10_original_sugama.npz \
@@ -1021,7 +1021,7 @@ independently with product Gauss--Hermite/Laguerre quadrature and accepts the
 higher-order result only when an additional 16 nodes change the correction by
 less than :math:`10^{-11}` relative or :math:`10^{-12}` absolute::
 
-   python tools/artifacts/build_linear_validation_artifacts.py \
+   python scripts/artifacts/build_linear_validation_artifacts.py \
      collision-improved-sugama-table \
      --coulomb-table finite_b_zonal_P24_J10_diagonal.npz \
      --out finite_b_zonal_P24_J10_improved_sugama.npz \

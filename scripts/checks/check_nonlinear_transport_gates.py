@@ -32,7 +32,7 @@ for _path in (ROOT / "src", ROOT):
         sys.path.insert(0, str(_path))
 
 from gkx.artifacts.plotting import set_plot_style  # noqa: E402
-from tools.campaigns.nonlinear_replicates import (  # noqa: E402
+from scripts.campaigns.nonlinear_replicates import (  # noqa: E402
     NonlinearWindowEnsembleManifestConfig,
     nonlinear_window_ensemble_artifact_manifest,
 )

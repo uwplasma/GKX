@@ -18811,3 +18811,32 @@ Outcome:
 - partial: tranche 1 done; paused before sphinx and CI
 - remaining blocker: none known; docs build and full CI not yet run
 - next task: CI on the PR, then tranche 2 from MAP.md
+
+## 2026-09-22 - SLIM-TOOLS tranche 2 (slim/tools-benchmarks-2)
+
+Baseline:
+- GKX SHA: 33d2dc0fc (tranche 1, #278, which is stacked on main f9485f044)
+- companion SHAs: none
+- source/test/tool files and lines: tools/ 78 Python files / 63,832 lines; scripts/ 11 / 11,992; benchmarks/ 11 Python files / 1,348 lines
+- relevant existing gate: ci.yml "Repository size manifest" (architecture topology and line budgets) and "Tracked release artifacts are up to date"
+
+Scope:
+- intended change: tools/ Python to zero. tools/{artifacts,campaigns,comparison,profiling} and the benchmarks/ drivers move to scripts/ packages behind validate.py, compare.py, profile.py and benchmark.py. The benchmark decks move to benchmarks/cases/ (the runtime_ prefix is dropped, as EXAMPLES-GALLERY does).
+- non-goals: contracting the moved code; moving tools/*.toml manifests or tools/comparison/fixtures (#272 and #285 touch them)
+- prospective acceptance and rollback criteria: no test weakened; tracked release JSONs byte-identical; each deletion clears the output-consumer check
+
+Changes:
+- files/functions removed, merged, or added: 88 Python files moved; benchmarks/performance/__init__.py deleted. Added scripts/_command.py (shared runner, also used by check.py) and four commands. Every path string rewritten outside docs/_static and plan/, with prose in benchmarks.rst, code_structure.rst, tools/README.md and benchmarks/README.md updated. The allowed profiling-tool roots in check_parallel_scaling_artifacts.py are now the scripts/ packages.
+- deletion reversed: build_vmec_boozer_gradient_holdout_matrix.py and plot_external_vmec_nonlinear_convergence_gate.py looked docs-only, and #283 dropped their mentions. They write JSONs that check_vmec_boozer_gates.py and validation_coverage_manifest.toml read, so they were kept. MAP.md now requires the output-consumer check before any deletion.
+- public/schema behavior: none in the package
+
+Evidence:
+- 26 test files that load moved code, plus test_examples, test_plotting, test_collision_physics, test_evidence_ledger, test_runtime_runner (JAX 0.10.2, x64, -m "not slow"): first run 1252 passed, 10 failed, 1 error, all from ROOT / "tools" / "<pkg>" path joins in tests; after the fix the affected files ran 581 passed, 16 skipped
+- import check: every moved module imports without running main. It fails only on 2 modules that need vmex, which this venv lacks, and on 2 campaign modules that import scripts.campaigns.* without the repo root on sys.path; the same behaviour existed before as tools.campaigns.*.
+- ci.yml repo-hygiene commands with bare python3.11: exit 0; the four tracked JSONs are byte-identical; ruff check and ruff format --check are clean
+- architecture: tool_python_files 78 -> 0 and tool_python_lines 63,832 -> 0 (both at target); developer_script_python_files 15 -> 104 and developer_script_python_lines 25,000 -> 77,373 (targets 12 / 18,000). Measured.
+
+Outcome:
+- done: tools/ has no Python; the layout matches §21.4 apart from figures.py (#285) and release.py
+- remaining blocker: none known. The move is not a contraction: scripts/ must fall by about 59k lines. Other lanes apply the rename recipe in MAP.md.
+- next task: contract scripts/ by package (artifacts first, 35,121 lines), with the output-consumer check applied to each deletion

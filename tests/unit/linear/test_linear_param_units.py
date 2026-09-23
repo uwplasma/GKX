@@ -8,7 +8,7 @@ and their defaults (``6.9``, ``2.2``) were the Cyclone case written in
 written in :math:`a/L` (``2.49``, ``0.8``). One name, two units, and a factor
 :math:`R/a = 2.78` between them.
 
-That mattered the moment a number had to be quoted: ``tools/campaigns/dimits_shift.py``
+That mattered the moment a number had to be quoted: ``scripts/campaigns/dimits_shift.py``
 reports the linear ITG threshold as a multiplier on the shipped drive, and
 turning it into the literature :math:`R/L_T` requires knowing which of the two
 the field holds.

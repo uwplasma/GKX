@@ -29,9 +29,9 @@ MEMORY = (
     STATIC / "nonlinear_adjoint_checkpointing_gpu32.json",
 )
 GENERATORS = (
-    "tools/campaigns/nonlinear_gradient_window.py",
-    "tools/profiling/profile_nonlinear_adjoint_checkpointing.py",
-    "tools/profiling/profile_nonlinear_window_device_parity.py",
+    "scripts/campaigns/nonlinear_gradient_window.py",
+    "scripts/profiling/profile_nonlinear_adjoint_checkpointing.py",
+    "scripts/profiling/profile_nonlinear_window_device_parity.py",
 )
 
 
@@ -78,12 +78,12 @@ def test_generator_scripts_are_present(relative: str) -> None:
 
 
 def test_gradient_window_imports_from_the_repository_package() -> None:
-    """The profiler imports the campaign through ``tools.campaigns``."""
+    """The profiler imports the campaign through ``scripts.campaigns``."""
 
     command = (
         "import sys; "
         f"sys.path.insert(0, {str(REPO_ROOT)!r}); "
-        "from tools.campaigns.nonlinear_gradient_window import build_window_case; "
+        "from scripts.campaigns.nonlinear_gradient_window import build_window_case; "
         "assert callable(build_window_case)"
     )
     subprocess.run([sys.executable, "-I", "-c", command], check=True)

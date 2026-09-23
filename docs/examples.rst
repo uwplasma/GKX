@@ -64,7 +64,7 @@ under ``tools_out/`` by default:
 - ``tools_out/w7x_nonlinear_imported_runtime.diagnostics.csv``
 
 Those diagnostics and their matching ``*.summary.json`` files are the intended
-inputs for the parity helpers under ``tools/``.
+inputs for the parity helpers under ``scripts/comparison/``.
 The direct Python runtime wrappers now route through the same artifact-aware
 nonlinear path as the executable, so long adaptive runs update that bundle as each
 chunk completes.
@@ -82,8 +82,8 @@ lanes:
 
    # point CONFIG at the top of the script at cyclone.toml or runtime_etg.toml
    python examples/utilities/runtime_from_toml.py
-   python benchmarks/etg_linear_benchmark.py --outdir tools_out/etg
-   python benchmarks/kbm_linear_comparison.py --output tools_out/kbm_linear_comparison.png
+   python scripts/benchmarks/etg_linear_benchmark.py --outdir tools_out/etg
+   python scripts/benchmarks/kbm_linear_comparison.py --output tools_out/kbm_linear_comparison.png
 
    gkx run-runtime-linear \
      --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
@@ -164,7 +164,7 @@ For a solver-backed identity gate, run the Cyclone ``k_y``-batch scan artifact:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_parallel_identity_gate.py ky-scan
+   python scripts/artifacts/generate_parallel_identity_gate.py ky-scan
 
 **Generated figure.** Real Cyclone linear solver comparison between serial and
 fixed-shape
@@ -177,7 +177,7 @@ outputs, run:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_parallel_identity_gate.py logical-cpu --logical-devices 2
+   python scripts/artifacts/generate_parallel_identity_gate.py logical-cpu --logical-devices 2
 
 **Generated figure.** Independent-scan interface gate for structured outputs. This
 validates the
@@ -190,7 +190,7 @@ the Hermite ghost exchange:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_velocity_parallel_gates.py hermite-exchange --logical-devices 2
+   python scripts/artifacts/generate_velocity_parallel_gates.py hermite-exchange --logical-devices 2
 
 **Generated figure.** ``shard_map`` nearest-neighbor exchange for Hermite moments. This
 validates
@@ -202,7 +202,7 @@ The paired field-reduction gate is:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_velocity_parallel_gates.py field-reduce --logical-devices 2
+   python scripts/artifacts/generate_velocity_parallel_gates.py field-reduce --logical-devices 2
 
 **Generated figure.** ``shard_map`` reduction/broadcast over a Hermite mesh. This
 establishes the
@@ -214,7 +214,7 @@ The first production-field-solve reduction gate is:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_electrostatic_parallel_gates.py field-reduce --logical-devices 2
+   python scripts/artifacts/generate_electrostatic_parallel_gates.py field-reduce --logical-devices 2
 
 **Generated figure.** Hermite-sharded ``m=0`` density reduction for the electrostatic
 quasineutrality solve, compared against the production field solve.
@@ -224,7 +224,7 @@ The Hermite streaming-ladder coefficient gate is:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_velocity_parallel_gates.py hermite-ladder --logical-devices 2
+   python scripts/artifacts/generate_velocity_parallel_gates.py hermite-ladder --logical-devices 2
 
 **Generated figure.** ``shard_map`` Hermite exchange plus the ``sqrt(m+1)`` /
 ``sqrt(m)``
@@ -237,7 +237,7 @@ The first electrostatic drift-slice gate is:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_electrostatic_parallel_gates.py drift --logical-devices 2
+   python scripts/artifacts/generate_electrostatic_parallel_gates.py drift --logical-devices 2
 
 **Generated figure.** Hermite-sharded mirror and curvature/grad-B drift slices,
 including
@@ -249,7 +249,7 @@ The matching electrostatic diamagnetic-drive gate is:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_electrostatic_parallel_gates.py diamagnetic --logical-devices 2
+   python scripts/artifacts/generate_electrostatic_parallel_gates.py diamagnetic --logical-devices 2
 
 **Generated figure.** Hermite-sharded electrostatic diamagnetic drive. The sharded route
 first
@@ -262,7 +262,7 @@ The periodic streaming microkernel gate adds that field-line derivative:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_velocity_parallel_gates.py periodic-streaming --logical-devices 2
+   python scripts/artifacts/generate_velocity_parallel_gates.py periodic-streaming --logical-devices 2
 
 **Generated figure.** Periodic spectral parallel derivative plus Hermite streaming
 ladder through
@@ -275,7 +275,7 @@ linear-RHS call graph with every non-streaming contribution disabled:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_linear_rhs_parallel_gates.py streaming --logical-devices 2
+   python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming --logical-devices 2
 
 **Generated figure.** Streaming-only ``linear_rhs_cached`` comparison against the
 velocity-sharded
@@ -288,7 +288,7 @@ With a nonzero electrostatic response, use:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic --logical-devices 2
+   python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic --logical-devices 2
 
 **Generated figure.** Streaming plus electrostatic ``phi`` call-graph comparison. The
 field solve
@@ -301,7 +301,7 @@ For the composed electrostatic linear-slices backend, use:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices --logical-devices 2
+   python scripts/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices --logical-devices 2
 
 **Generated figure.** Full opt-in electrostatic linear-slices call-graph comparison for
 streaming, mirror, curvature, grad-B, and diamagnetic drive. This is an
@@ -329,7 +329,7 @@ engineering sweep helper:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_linear_rhs_parallel_slices.py sweep \
+   python scripts/profiling/profile_linear_rhs_parallel_slices.py sweep \
      --platform cpu --devices 1,2,4,8 --nms 64,128 \
      --nl 4 --ny 32 --nz 128 --rtol 1e-5
 
@@ -402,7 +402,7 @@ First persist the production state and its saturation verdict:
 
 .. code-block:: bash
 
-   python tools/campaigns/nonlinear_saturated_state.py \
+   python scripts/campaigns/nonlinear_saturated_state.py \
      --toml CASE.toml --state-out saturated_state.npz \
      --output saturation.json
 
@@ -410,10 +410,10 @@ Then run a short production-policy continuation and render it off-device:
 
 .. code-block:: bash
 
-   python tools/artifacts/build_turbulence_movie.py CASE.toml \
+   python scripts/artifacts/build_turbulence_movie.py CASE.toml \
      --initial-state saturated_state.npz --frames 60 \
      --steps-per-frame 40 --snapshots movie_cuts.npz
-   python tools/artifacts/build_turbulence_movie.py \
+   python scripts/artifacts/build_turbulence_movie.py \
      --render-from movie_cuts.npz --output turbulence.mp4 --fps 10
 
 Each chunk uses the deck's explicit method and timestep policy,
@@ -466,15 +466,15 @@ discussion:
 
 .. code-block:: bash
 
-   python benchmarks/cyclone_linear_benchmark.py
-   python benchmarks/etg_linear_benchmark.py
-   python benchmarks/kbm_linear_comparison.py
-   python benchmarks/kinetic_linear_benchmark.py
-   python benchmarks/tem_linear_benchmark.py
+   python scripts/benchmarks/cyclone_linear_benchmark.py
+   python scripts/benchmarks/etg_linear_benchmark.py
+   python scripts/benchmarks/kbm_linear_comparison.py
+   python scripts/benchmarks/kinetic_linear_benchmark.py
+   python scripts/benchmarks/tem_linear_benchmark.py
 
 ``kbm_linear_comparison.py`` plots the reviewed fixed-beta ``ky`` table. The
 matched rerun and branch-continuity analysis live in
-``tools/comparison/compare_gx_kbm.py``.
+``scripts/comparison/compare_gx_kbm.py``.
 
 The kinetic-electron script loads
 ``examples/linear/axisymmetric/runtime_kinetic_electron.toml``. The same input
@@ -495,7 +495,7 @@ blocks without running a full benchmark case:
 
 .. code-block:: bash
 
-   python benchmarks/basis_orthonormality.py
+   python scripts/benchmarks/basis_orthonormality.py
    python examples/theory_and_demos/cyclone_geometry.py
    python examples/theory_and_demos/autodiff_inverse_growth.py
    python examples/theory_and_demos/autodiff_inverse_twomode.py
@@ -588,9 +588,9 @@ Secondary slab workflow
 .. code-block:: bash
 
    python -m gkx.cli run-runtime-linear \
-     --config benchmarks/runtime_secondary_slab.toml
+     --config benchmarks/cases/secondary_slab.toml
 
-   python benchmarks/secondary_slab_workflow.py
+   python scripts/benchmarks/secondary_slab_workflow.py
 
 The staged helper runs the linear seed, writes a restart state in the runtime
 binary layout, and then launches the nonlinear follow-up with the matching

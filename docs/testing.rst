@@ -238,13 +238,13 @@ The first reusable tooling for this lane now exists:
 - :func:`gkx.diagnostics.zonal_validation.reference_residual_table`
 - :func:`gkx.diagnostics.zonal_validation.tail_trace_metrics`
 - :func:`gkx.artifacts.plotting.zonal_flow_response_figure`
-- ``tools/artifacts/build_zonal_flow_artifacts.py`` with ``response-csv`` and ``response-output`` modes
-- ``tools/artifacts/build_zonal_flow_artifacts.py miller-panel``
-- ``tools/artifacts/build_w7x_zonal_validation_artifacts.py response-panel``
-- ``tools/artifacts/build_w7x_zonal_validation_artifacts.py contract``
-- ``tools/artifacts/build_w7x_zonal_validation_artifacts.py state-convention``
-- ``tools/artifacts/build_zonal_flow_artifacts.py objective-gate``
-- ``tools/artifacts/plot_w7x_fluctuation_spectrum_panel.py``
+- ``scripts/artifacts/build_zonal_flow_artifacts.py`` with ``response-csv`` and ``response-output`` modes
+- ``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel``
+- ``scripts/artifacts/build_w7x_zonal_validation_artifacts.py response-panel``
+- ``scripts/artifacts/build_w7x_zonal_validation_artifacts.py contract``
+- ``scripts/artifacts/build_w7x_zonal_validation_artifacts.py state-convention``
+- ``scripts/artifacts/build_zonal_flow_artifacts.py objective-gate``
+- ``scripts/artifacts/plot_w7x_fluctuation_spectrum_panel.py``
 
 The gate-report helpers are intentionally small and JSON-ready. They should be
 used by manuscript refresh scripts so every reported artifact has the same
@@ -253,7 +253,7 @@ The companion coverage manifest should be updated when a new gate helper,
 artifact script, or refactor extraction changes module ownership or test
 responsibility.
 
-``tools/artifacts/build_zonal_flow_artifacts.py miller-panel`` writes two such
+``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel`` writes two such
 reports into its JSON metadata. ``gate_report`` is the asserted one: the
 residual, GAM frequency, and signed GAM damping against **GKX's own converged
 Nm=144 values**, plus the recurrence, window, and trace-completeness conditions
@@ -262,12 +262,12 @@ holds the same three observables against the Merlo Case-III paper-scale
 read-off at the published tolerances, is reported rather than gated, and
 currently does not pass.
 
-``tools/artifacts/generate_linear_reference_overlays.py kbm`` writes the same gate structure for
+``scripts/artifacts/generate_linear_reference_overlays.py kbm`` writes the same gate structure for
 the raw KBM eigenfunction overlay, using a strict overlap/relative-L2 policy.
 The current refreshed KBM overlay passes that policy with overlap ``0.999985``
 and relative ``L^2`` mismatch ``0.00721`` against the frozen GX raw mode.
 
-``tools/artifacts/generate_linear_reference_overlays.py w7x`` applies the same raw-mode policy to
+``scripts/artifacts/generate_linear_reference_overlays.py w7x`` applies the same raw-mode policy to
 the imported W7-X linear benchmark at ``k_y rho_i = 0.3``. It refreshes the
 frozen finite GX raw-mode bundle when a matching ``.big.nc`` file is supplied
 and writes the ``w7x_eigenfunction_reference_overlay_ky0p3000`` overlay render
@@ -276,7 +276,7 @@ companions under ``docs/_static/reference_modes/``. The current artifact
 passes with overlap
 ``0.9999999994`` and relative ``L^2`` mismatch ``3.33e-5``.
 
-``tools/comparison/compare_gx_nonlinear.py diagnostics --summary-json`` now emits a
+``scripts/comparison/compare_gx_nonlinear.py diagnostics --summary-json`` now emits a
 matching gate report for nonlinear diagnostic comparison figures, using the
 window mean relative mismatch as the scalar acceptance metric. The summary
 writer now accepts case/source labels, explicit ``tmin/tmax`` windows, and
@@ -290,7 +290,7 @@ Observed-order and branch-continuity gate helpers are also available so
 velocity-space convergence panels and branch-followed scan tables can use the
 same JSON-ready acceptance convention.
 
-``tools/artifacts/build_linear_validation_artifacts.py observed-order`` is the generic no-rerun path for
+``scripts/artifacts/build_linear_validation_artifacts.py observed-order`` is the generic no-rerun path for
 CSV-backed convergence studies: it reads either an explicit step column or a
 resolution column, writes an observed-order JSON gate report, and can generate
 a log-log convergence figure. The tracked Cyclone velocity-space convergence
@@ -300,11 +300,11 @@ git. It uses an office/GPU
 ``ky=0.30`` time-path sweep through ``(Nl,Nm)=(4,8),(6,12),(12,24),(16,32)``
 with ``tmax=150`` and passes the strict pairwise-order and final-error gates.
 
-``tools/comparison/compare_gx_kbm.py --branch-summary-json`` wires that convention into
+``scripts/comparison/compare_gx_kbm.py --branch-summary-json`` wires that convention into
 the KBM branch-following workflow by summarizing adjacent ``gamma``/``omega``
 jumps and successive eigenfunction-overlap continuity for the selected branch.
 
-``tools/artifacts/build_linear_validation_artifacts.py kbm-branch`` provides the corresponding
+``scripts/artifacts/build_linear_validation_artifacts.py kbm-branch`` provides the corresponding
 no-rerun artifact path: it reads the existing selected KBM candidate table and
 writes ``docs/_static/kbm_branch_gate_summary.json`` with the same strict gate
 schema. The current continuity-first selected branch passes the adjacent
@@ -320,7 +320,7 @@ candidate passes the strict uncertainty and transport-error gates.
 Exploratory diagnostics can set ``gate_index_include=false``
 to remain documented without being treated as release blockers.
 
-``tools/artifacts/build_nonlinear_validation_panels.py window-statistics`` provides the companion
+``scripts/artifacts/build_nonlinear_validation_panels.py window-statistics`` provides the companion
 manuscript-facing statistics panel for the nonlinear GX comparison gates by
 plotting the per-diagnostic ``mean_rel_abs`` and ``max_rel_abs`` values from
 those same tracked JSON summaries.
@@ -332,7 +332,7 @@ with explicit ``claim_level`` and ``promotion_gate.passed = false`` metadata,
 so exploratory external-VMEC runs can be documented without being promoted to
 transport validation claims.
 
-``tools/artifacts/plot_external_vmec_nonlinear_convergence_gate.py`` is the promotion
+``scripts/artifacts/plot_external_vmec_nonlinear_convergence_gate.py`` is the promotion
 gate for those pilots once at least two grid levels exist. It replays the
 pilot JSON/CSV traces, compares common and least-trending late windows,
 requires enough samples, bounds relative heat-flux trend and coefficient of
@@ -341,7 +341,7 @@ tracked CTH-like external-VMEC artifact intentionally fails this gate and sets
 ``gate_index_include=false`` because it is a research-planning negative result,
 not a release-blocking validation gate.
 
-``tools/artifacts/plot_external_vmec_nonlinear_convergence_gate.py time-horizon`` is the companion
+``scripts/artifacts/plot_external_vmec_nonlinear_convergence_gate.py time-horizon`` is the companion
 time-horizon stability gate for modified-protocol holdout repairs. It consumes
 the JSON outputs from the high-grid convergence gate at several final times,
 requires every input grid gate to pass, and then checks that the high-grid
@@ -446,7 +446,7 @@ evidence and is no longer a tracked artifact. Stable and near-marginal branches
 remain useful linear evidence, but cannot enter nonlinear calibration without a
 separate converged transport audit.
 
-``tools/artifacts/build_qi_branch_refinement_gate.py`` is the focused companion for that
+``scripts/artifacts/build_qi_branch_refinement_gate.py`` is the focused companion for that
 near-marginal QI evidence. It checks finite low-``k_y`` branch rows, contiguous
 positive support, optional Krylov consistency, and the same nonlinear-launch
 growth threshold. A failed launch-growth subgate is a useful documented result,
@@ -484,8 +484,8 @@ zonal-energy proxy for intermediate checks, but it is no longer the target
 observable for the final paper lane.
 
 The case-specific shaped-Miller lane for this benchmark is reproducible
-through ``benchmarks/runtime_miller_zonal_response.toml`` and
-``tools/artifacts/build_zonal_flow_artifacts.py miller-panel``, and its frozen
+through ``benchmarks/cases/miller_zonal_response.toml`` and
+``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel``, and its frozen
 gate artifact lives in ``docs/_static/miller_zonal_response_pilot.json``; the
 companion panel render is regenerated on demand by the same command and is
 not tracked in git. The physics contract is Merlo et al. Case III:
@@ -598,8 +598,8 @@ which moves ``ω_GAM`` by ``0.24``, ``0.0015`` against ``0.018``. On the
 moves by ``0.00013``.
 
 The next literature lane now has a dedicated runtime contract as well:
-``benchmarks/runtime_w7x_zonal_response_vmec.toml`` and
-``tools/artifacts/build_w7x_zonal_validation_artifacts.py response-panel`` define the W7-X high-mirror
+``benchmarks/cases/w7x_zonal_response_vmec.toml`` and
+``scripts/artifacts/build_w7x_zonal_validation_artifacts.py response-panel`` define the W7-X high-mirror
 bean-tube zonal-flow relaxation benchmark from the stella/GENE paper. The
 tool sweeps ``k_x rho_i`` over ``[0.05, 0.07, 0.10, 0.30]``. The runtime
 contract seeds the published electrostatic-potential perturbation with
@@ -629,14 +629,14 @@ per-``k_x`` directories. It is a long-window run: ``k_x rho_i=0.05`` reaches
 paper-faithful line-first normalization, the late residuals are about
 ``0.0189``, ``0.137``, ``0.0938``, and ``0.526`` for ``k_x rho_i = 0.05``,
 ``0.07``, ``0.10``, and ``0.30``.
-``tools/artifacts/build_w7x_zonal_reference_artifacts.py digitize`` now extracts the stella/GENE Fig. 11
+``scripts/artifacts/build_w7x_zonal_reference_artifacts.py digitize`` now extracts the stella/GENE Fig. 11
 main traces and inset residual levels from the arXiv source ``figs/ZF.pdf``.
 The resulting reference artifacts are
 ``docs/_static/w7x_zonal_reference_digitized.csv``,
 ``docs/_static/w7x_zonal_reference_digitized_residuals.csv``, and
 ``docs/_static/w7x_zonal_reference_digitized.json`` (the digitization
 preview figure is a regenerable render). The comparison contract is
-implemented in ``tools/artifacts/build_w7x_zonal_reference_artifacts.py compare`` and materialized at
+implemented in ``scripts/artifacts/build_w7x_zonal_reference_artifacts.py compare`` and materialized at
 ``docs/_static/w7x_zonal_reference_compare.json`` with row-level data in
 ``docs/_static/w7x_zonal_reference_compare.csv``; the comparison figure is a
 regenerable render and is not tracked in git. The current long-window
@@ -681,7 +681,7 @@ therefore not restart diagnostic continuity; it is the W7-X zonal damping,
 closure, and velocity-space recurrence behavior under the paper-facing
 line-first normalization.
 
-``tools/artifacts/build_w7x_zonal_validation_artifacts.py contract`` turns the same tracked CSV/JSON
+``scripts/artifacts/build_w7x_zonal_validation_artifacts.py contract`` turns the same tracked CSV/JSON
 artifacts into the ``w7x_zonal_contract_audit`` panel (a regenerable render;
 the tracked record is ``docs/_static/w7x_zonal_contract_audit.json``). That
 panel is a
@@ -735,7 +735,7 @@ time-step limitation from the larger physical result: the current mixed
 closure does not converge toward the digitized W7-X trace in a way that can be
 promoted as validation.
 
-``tools/artifacts/build_w7x_zonal_validation_artifacts.py response-panel`` now exposes explicit
+``scripts/artifacts/build_w7x_zonal_validation_artifacts.py response-panel`` now exposes explicit
 ``--nu-hyper``, ``--nu-hyper-l``, ``--nu-hyper-m``, ``--nu-hyper-lm``,
 ``--p-hyper-*``, ``--hypercollisions-const``, ``--hypercollisions-kz``,
 ``--enable-hypercollisions``, and ``--gaussian-width`` overrides so future
@@ -906,71 +906,71 @@ performance claims:
   identity for independent ``k_y`` and quasilinear/UQ rows, checks that
   nonlinear whole-state sharding embeds per-device profiler/profile payloads,
   and fails if docs detach speedup wording from the current artifact set.
-- ``tools/artifacts/generate_parallel_identity_gate.py ky-scan`` runs the actual linear solver
+- ``scripts/artifacts/generate_parallel_identity_gate.py ky-scan`` runs the actual linear solver
   serially and with fixed-shape ``k_y`` batching, then writes
   ``docs/_static/parallel_ky_scan_gate.{png,pdf,csv,json}``. The JSON gate
   requires numerical identity for growth rate and frequency; the speedup value
   is reported separately for engineering tracking.
-- ``tools/artifacts/generate_parallel_identity_gate.py logical-cpu`` exercises
+- ``scripts/artifacts/generate_parallel_identity_gate.py logical-cpu`` exercises
   ``RuntimeParallelConfig`` and ``batch_map`` over logical CPU devices with a
   structured JAX-native scan output. Its artifact
   ``docs/_static/logical_cpu_parallel_scan_gate.{png,pdf,csv,json}`` is an API
   identity gate, not a gyrokinetic physics benchmark.
-- ``tools/artifacts/generate_velocity_parallel_gates.py hermite-exchange`` runs the first actual
+- ``scripts/artifacts/generate_velocity_parallel_gates.py hermite-exchange`` runs the first actual
   ``jax.shard_map`` communication-kernel gate for nearest-neighbor Hermite
   ghost exchange and writes
   ``docs/_static/hermite_exchange_gate.{png,pdf,csv,json}``. This is a
   prerequisite for production velocity-space decomposition, but it is not a
   nonlinear runtime speedup claim.
-- ``tools/artifacts/generate_velocity_parallel_gates.py field-reduce`` runs the matching
+- ``scripts/artifacts/generate_velocity_parallel_gates.py field-reduce`` runs the matching
   ``jax.shard_map`` field-reduction gate with ``lax.psum`` over the Hermite
   mesh and writes
   ``docs/_static/velocity_field_reduce_gate.{png,pdf,csv,json}``. Its
   tolerance is a float32 communication/reduction-tree tolerance, not a physics
   acceptance tolerance.
-- ``tools/artifacts/generate_electrostatic_parallel_gates.py field-reduce`` applies that reduction
+- ``scripts/artifacts/generate_electrostatic_parallel_gates.py field-reduce`` applies that reduction
   pattern to the production electrostatic quasineutrality density moment and
   writes ``docs/_static/electrostatic_field_reduce_gate.{png,pdf,csv,json}``.
   It is currently scoped to single-species periodic electrostatic cases.
-- ``tools/artifacts/generate_velocity_parallel_gates.py hermite-ladder`` combines the Hermite
+- ``scripts/artifacts/generate_velocity_parallel_gates.py hermite-ladder`` combines the Hermite
   exchange with the actual ``sqrt(m+1)`` / ``sqrt(m)`` streaming-ladder
   coefficients and writes
   ``docs/_static/hermite_streaming_ladder_gate.{png,pdf,csv,json}``. This is
   the last isolated communication/coefficient gate before a linear streaming
   microkernel can be wired.
-- ``tools/artifacts/generate_electrostatic_parallel_gates.py drift`` gates the single-species
+- ``scripts/artifacts/generate_electrostatic_parallel_gates.py drift`` gates the single-species
   periodic electrostatic mirror and curvature/grad-B drift slices against the
   production linear RHS. It uses offset-1 and offset-2 Hermite exchanges and
   writes ``docs/_static/electrostatic_drift_gate.{png,pdf,csv,json}``.
-- ``tools/artifacts/generate_electrostatic_parallel_gates.py diamagnetic`` gates the
+- ``scripts/artifacts/generate_electrostatic_parallel_gates.py diamagnetic`` gates the
   single-species periodic electrostatic diamagnetic drive against the
   production diamagnetic-only linear RHS. It uses the Hermite-sharded
   electrostatic field reduction plus local ``m=0`` and ``m=2`` drive masks and
   writes ``docs/_static/electrostatic_diamagnetic_gate.{png,pdf,csv,json}``.
-- ``tools/artifacts/generate_velocity_parallel_gates.py periodic-streaming`` adds the periodic
+- ``scripts/artifacts/generate_velocity_parallel_gates.py periodic-streaming`` adds the periodic
   spectral parallel derivative and compares the shard-map path directly
   against ``gkx.operators.linear.streaming.streaming_ladder_term``. Its artifact
   ``docs/_static/periodic_streaming_microkernel_gate.{png,pdf,csv,json}``
   gates the first opt-in linear streaming microkernel before full RHS wiring.
-- ``tools/artifacts/generate_linear_rhs_parallel_gates.py streaming`` routes the same sharded
+- ``scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming`` routes the same sharded
   periodic streaming kernel through production ``linear_rhs_cached`` with all
   non-streaming terms and electromagnetic channels disabled. Its artifact
   ``docs/_static/linear_rhs_streaming_gate.{png,pdf,csv,json}`` is the first
   full-call-graph linear-RHS identity gate for velocity-space streaming.
-- ``tools/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic`` repeats that
+- ``scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic`` repeats that
   gate with an ``m=0`` density perturbation and nonzero electrostatic ``phi``.
   Its artifact
   ``docs/_static/linear_rhs_streaming_electrostatic_gate.{png,pdf,csv,json}``
   gates the field-reduction-to-streaming call graph for the current
   single-species periodic electrostatic route.
-- ``tools/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices`` compares the
+- ``scripts/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices`` compares the
   composed opt-in ``backend="electrostatic_linear_slices"`` route against
   serial ``linear_rhs_cached`` with streaming, mirror, curvature, grad-B, and
   diamagnetic drive enabled. Its artifact
   ``docs/_static/linear_rhs_electrostatic_slices_gate.{png,pdf,csv,json}``
   is the current single-species periodic electrostatic linear-RHS identity
   gate for velocity-space parallelization.
-- ``tools/profiling/profile_linear_rhs_parallel_slices.py`` times that same composed
+- ``scripts/profiling/profile_linear_rhs_parallel_slices.py`` times that same composed
   route on a larger bounded CPU workload and writes
   ``docs/_static/linear_rhs_parallel_slices_profile.{png,pdf,csv,json}``.
   The tracked profile is explicitly an engineering artifact, not a publication
@@ -980,7 +980,7 @@ performance claims:
   ``docs/_static/linear_rhs_parallel_slices_profile_gpu.{png,pdf,csv,json}``
   is currently a negative performance baseline: it passes identity but is much
   slower than the single-GPU serial JIT path.
-- ``tools/profiling/profile_nonlinear_sharding.py`` runs a bounded fixed-step nonlinear
+- ``scripts/profiling/profile_nonlinear_sharding.py`` runs a bounded fixed-step nonlinear
   serial-vs-sharded final-state comparison and writes
   ``docs/_static/nonlinear_sharding_profile.json`` locally and
   ``docs/_static/nonlinear_sharding_profile_office_gpu.json`` for a tiny
@@ -1028,7 +1028,7 @@ Recent GX parity spot checks are tracked outside the automated test suite:
   ``mean_rel_abs(Wg) ~= 3.20e-2``,
   ``mean_rel_abs(Wphi) ~= 3.02e-2``,
   ``mean_rel_abs(HeatFlux) ~= 4.53e-2``.
-- **W7-X fluctuation spectrum**: ``tools/artifacts/plot_w7x_fluctuation_spectrum_panel.py``
+- **W7-X fluctuation spectrum**: ``scripts/artifacts/plot_w7x_fluctuation_spectrum_panel.py``
   reuses the same gated nonlinear NetCDF artifact and writes
   ``docs/_static/w7x_fluctuation_spectrum_panel.{png,pdf,json,csv}``. The JSON
   records the time window, dominant nonzonal ``k_y``, dominant heat-flux
@@ -1036,7 +1036,7 @@ Recent GX parity spot checks are tracked outside the automated test suite:
   simulation diagnostic and explicitly not a Doppler-reflectometry transfer-
   function validation.
 - **W7-X/TEM extension status**:
-  ``tools/artifacts/build_tem_validation_artifacts.py w7x-extension`` reads the W7-X fluctuation panel
+  ``scripts/artifacts/build_tem_validation_artifacts.py w7x-extension`` reads the W7-X fluctuation panel
   plus the current TEM branch audit and writes
   ``docs/_static/w7x_tem_extension_status.{png,pdf,json,csv}``. It closes only
   the simulation-spectrum estimator. Its ``axisymmetric-branch`` mode
@@ -1087,11 +1087,11 @@ published benchmarks and trend tests:
   rates and frequencies across a reduced ky scan. [Dimits00]_ [Lin99]_
 - **GX term-by-term audit**: use the term-dump tooling to compare GKX
   streaming and linear-kernel RHS components against GX for a single Cyclone
-  state (see ``tools/comparison/compare_gx_rhs_terms.py write`` and
-  ``tools/comparison/compare_gx_rhs_terms.py compare``).
+  state (see ``scripts/comparison/compare_gx_rhs_terms.py write`` and
+  ``scripts/comparison/compare_gx_rhs_terms.py compare``).
 - **GX nonlinear term audit (KBM/Cyclone)**: compare nonlinear
   derivative, bracket, electromagnetic split, and total RHS dumps using
-  ``tools/comparison/compare_gx_nonlinear.py terms``. The tool supports GX dump folders
+  ``scripts/comparison/compare_gx_nonlinear.py terms``. The tool supports GX dump folders
   with ``nl_apar.bin``/``nl_bpar.bin`` and can infer shape metadata when
   ``rhs_terms_shape.txt`` is absent.
 - **ETG linear instability**: verify that growth rates remain positive across
@@ -1308,10 +1308,10 @@ benchmark figures move):
 For developer workflows that require local reference benchmark NetCDFs or dump
 artifacts, use:
 
-- ``tools/comparison/compare_runtime.py stress-matrix`` (KAW, Cyclone kinetic electrons, KBM Miller)
-- ``tools/comparison/compare_gx_imported_linear.py window`` (exact imported-linear one-window replay against reference ``diag_state`` dumps)
-- ``tools/comparison/build_exact_state_audit.py run`` (manifest-driven wrapper around the exact-state audit tools)
-- ``tools/comparison/build_exact_state_audit.py report`` (no-rerun W7-X exact-state convention audit panel)
+- ``scripts/comparison/compare_runtime.py stress-matrix`` (KAW, Cyclone kinetic electrons, KBM Miller)
+- ``scripts/comparison/compare_gx_imported_linear.py window`` (exact imported-linear one-window replay against reference ``diag_state`` dumps)
+- ``scripts/comparison/build_exact_state_audit.py run`` (manifest-driven wrapper around the exact-state audit tools)
+- ``scripts/comparison/build_exact_state_audit.py report`` (no-rerun W7-X exact-state convention audit panel)
 
 The current full-GK nonlinear ETG lane is now explicitly tracked as a pilot
 runtime contract via
@@ -1390,7 +1390,7 @@ non-finite reverse-mode cotangents for inactive zero-mode Fourier branches.
    export GKX_OFFICE_ROOT=/path/to/GKX
    W7X_VMEC_FILE=/path/to/wout_w7x.nc \
    HSX_VMEC_FILE=/path/to/wout_HSX_QHS_vac.nc \
-   "$GKX_VENV_PYTHON" tools/comparison/build_exact_state_audit.py run \
+   "$GKX_VENV_PYTHON" scripts/comparison/build_exact_state_audit.py run \
      --manifest tools/exact_state_lanes.office.toml \
      --outdir tools_out/exact_state_audit_office
 
@@ -1405,7 +1405,7 @@ The current ``office`` exact-state manifest now includes:
 - late dumped-state audits for Cyclone Miller, Cyclone runtime, W7-X, and KBM
 
 The tracked W7-X exact-state convention panel is generated by
-``tools/comparison/build_exact_state_audit.py report`` from the ``office`` W7-X startup and
+``scripts/comparison/build_exact_state_audit.py report`` from the ``office`` W7-X startup and
 late diagnostic-state dumps. It closes the VMEC geometry, Fourier-grid,
 fieldsolve, and scalar-diagnostic convention layer against GX with a
 ``1e-4`` pointwise relative-error gate: startup ``g_state``/``phi`` are below

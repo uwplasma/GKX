@@ -293,7 +293,7 @@ maps to a concrete cache-construction phase.
 
 .. code-block:: bash
 
-   python tools/profiling/profile_startup_and_cache.py linear-cache \
+   python scripts/profiling/profile_startup_and_cache.py linear-cache \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
      --Nl 4 --Nm 8 \
      --json-out tools_out/linear_cache_cyclone_gpu.json \
@@ -307,7 +307,7 @@ it accepts explicit method, timestep, resolution, and JSON-output controls:
 
 .. code-block:: bash
 
-   python benchmarks/performance/benchmark_integrators.py \
+   python scripts/benchmarks/benchmark_integrators.py \
      --method sspx3 --steps 480 --dt 0.005 \
      --Nl 7 --Nm 14 --ky 0.3 --warmup 1 --repeat 5 \
      --out-json tools_out/linear_sspx3_profile.json
@@ -429,7 +429,7 @@ driver. It supports Perfetto traces, XLA HLO dumps, and memory snapshots.
 
 .. code-block:: bash
 
-   python tools/profiling/profile_runtime_kernels.py cyclone \
+   python scripts/profiling/profile_runtime_kernels.py cyclone \
      --trace-dir /tmp/gkx_nl_trace \
      --xla-dump-dir /tmp/gkx_nl_xla \
      --steps 400 --dt 0.0377 --Nl 4 --Nm 8
@@ -472,7 +472,7 @@ Reference run configuration (March 4, 2026):
 - ``ky=0.3``, ``Nl=4``, ``Nm=8``
 - ``dt=0.01``, ``steps=400``
 - ``sample_stride=10``, ``diagnostics_stride=10``
-- ``tools/profiling/profile_runtime_kernels.py cyclone`` with the tracked Cyclone runtime config
+- ``scripts/profiling/profile_runtime_kernels.py cyclone`` with the tracked Cyclone runtime config
 
 CPU profiling (Apple CPU, JAX CPU backend):
 
@@ -509,7 +509,7 @@ benchmark harness:
 
 .. code-block:: bash
 
-   python benchmarks/performance/benchmark_nonlinear_suite.py --steps 200 --dt 0.0377 \
+   python scripts/benchmarks/benchmark_nonlinear_suite.py --steps 200 --dt 0.0377 \
      --out /tmp/gkx_nl_bench.csv
 
 The harness records scalar diagnostics through the compact diagnostics path, so
@@ -520,13 +520,13 @@ To test the optional spectral nonlinear mode (no Laguerre quadrature grid):
 
 .. code-block:: bash
 
-   python benchmarks/performance/benchmark_nonlinear_suite.py --laguerre-mode spectral
+   python scripts/benchmarks/benchmark_nonlinear_suite.py --laguerre-mode spectral
 
 You can optionally pass a reference-code log file to compare runtime per step:
 
 .. code-block:: bash
 
-   python benchmarks/performance/benchmark_nonlinear_suite.py --gx-log /path/to/gx_run.out
+   python scripts/benchmarks/benchmark_nonlinear_suite.py --gx-log /path/to/gx_run.out
 
 RHS kernel profile (nonlinear Cyclone)
 --------------------------------------
@@ -536,7 +536,7 @@ full RHS kernels after compilation:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_runtime_kernels.py nonlinear-step-split \
+   python scripts/profiling/profile_runtime_kernels.py nonlinear-step-split \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml \
      --repeats 10 \
      --out docs/_static/nonlinear_rhs_profile_gpu.csv
@@ -556,7 +556,7 @@ grid-mode split is:
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_scaling_panels.py rhs-profile \
+   python scripts/artifacts/plot_scaling_panels.py rhs-profile \
      --out docs/_static/nonlinear_rhs_profile.png
 
 .. code-block:: text
@@ -592,7 +592,7 @@ short Cyclone case.
 
 .. code-block:: bash
 
-   python tools/profiling/profile_runtime_kernels.py nonlinear-step-split \
+   python scripts/profiling/profile_runtime_kernels.py nonlinear-step-split \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
      --repeats 5 \
      --out docs/_static/nonlinear_rhs_profile_miller_cpu.csv
@@ -615,7 +615,7 @@ The full fused nonlinear-RHS trace companion is generated with:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_runtime_kernels.py full-nonlinear-rhs \
+   python scripts/profiling/profile_runtime_kernels.py full-nonlinear-rhs \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
      --ky 0.3 \
      --Nl 4 \
@@ -672,7 +672,7 @@ inside nonlinear runs:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_linear_rhs_terms.py \
+   python scripts/profiling/profile_linear_rhs_terms.py \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
      --ky 0.3 \
      --Nl 4 \
@@ -728,7 +728,7 @@ The companion state-window gate is generated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_linear_rhs_parallel_gates.py zero-norm-state-window \
+   python scripts/artifacts/generate_linear_rhs_parallel_gates.py zero-norm-state-window \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
      --ky 0.3 \
      --Nl 4 \
@@ -753,7 +753,7 @@ helper:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_runtime_kernels.py full-linear-rhs \
+   python scripts/profiling/profile_runtime_kernels.py full-linear-rhs \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
      --ky 0.3 \
      --Nl 4 \
@@ -802,7 +802,7 @@ artifact, and can be replotted with:
 
 .. code-block:: bash
 
-   python tools/artifacts/plot_scaling_panels.py legacy-two-device
+   python scripts/artifacts/plot_scaling_panels.py legacy-two-device
 
 The exploratory distributed-RK2 strong-scaling data is still tracked for
 engineering work, but it is intentionally not presented as a headline
@@ -838,7 +838,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_parallel_identity_gate.py ky-scan
+   python scripts/artifacts/generate_parallel_identity_gate.py ky-scan
 
 This gate runs the same linear solver serially and with fixed-shape
 ``k_y`` batching, checks ``gamma`` and ``omega`` numerical identity, and
@@ -857,7 +857,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_parallel_identity_gate.py logical-cpu --logical-devices 2
+   python scripts/artifacts/generate_parallel_identity_gate.py logical-cpu --logical-devices 2
 
 The tracked artifact used two logical CPU devices and passed the identity gate:
 ``max_gamma_rel_error=6.7e-8``, ``max_ql_rel_error=1.1e-7``, and
@@ -879,19 +879,19 @@ It is regenerated with:
 
    KY=$(python -c "print(','.join(f'{0.04 + 0.0125*i:.3f}' for i in range(64)))")
 
-   python tools/profiling/profile_parallel_workloads.py independent-ky \
+   python scripts/profiling/profile_parallel_workloads.py independent-ky \
      --backend cpu --devices 1,2,4,8 \
      --ky "$KY" \
      --ny 128 --nz 96 --nl 4 --nm 8 --steps 240 \
      --out-prefix docs/_static/independent_ky_scan_scaling_cpu_large
 
-   python tools/profiling/profile_parallel_workloads.py independent-ky \
+   python scripts/profiling/profile_parallel_workloads.py independent-ky \
      --backend gpu --devices 1,2 \
      --ky "$KY" \
      --ny 128 --nz 96 --nl 4 --nm 8 --steps 240 \
      --out-prefix docs/_static/independent_ky_scan_scaling_gpu_large
 
-   python tools/artifacts/plot_scaling_panels.py independent-ky
+   python scripts/artifacts/plot_scaling_panels.py independent-ky
 
 The May 12, 2026 refresh passes the identity gate with zero reported
 ``gamma``/``omega`` mismatch. CPU process scaling reaches ``1.94x`` on two
@@ -946,15 +946,15 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_parallel_workloads.py quasilinear-uq \
+   python scripts/profiling/profile_parallel_workloads.py quasilinear-uq \
      --backend cpu --devices 1,2,4,8 \
      --out-prefix docs/_static/quasilinear_uq_ensemble_scaling_cpu_large
 
-   python tools/profiling/profile_parallel_workloads.py quasilinear-uq \
+   python scripts/profiling/profile_parallel_workloads.py quasilinear-uq \
      --backend gpu --devices 1,2 \
      --out-prefix docs/_static/quasilinear_uq_ensemble_scaling_gpu_large
 
-   python tools/artifacts/plot_quasilinear_diagnostics.py uq-ensemble-scaling
+   python scripts/artifacts/plot_quasilinear_diagnostics.py uq-ensemble-scaling
 
 The May 10, 2026 ``office`` sweep passes the serial identity gate for both the
 reduced quasilinear proxy and ``gamma``. The CPU run reaches ``1.70x`` on two
@@ -983,7 +983,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_velocity_parallel_gates.py hermite-exchange --logical-devices 2
+   python scripts/artifacts/generate_velocity_parallel_gates.py hermite-exchange --logical-devices 2
 
 The tracked artifact passes with zero reported lower/upper neighbor error. It
 only validates the communication primitive. Promoting nonlinear velocity-space
@@ -1000,7 +1000,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_velocity_parallel_gates.py field-reduce --logical-devices 2
+   python scripts/artifacts/generate_velocity_parallel_gates.py field-reduce --logical-devices 2
 
 The tracked artifact passes with ``max_abs_error=3.9e-6`` under an absolute
 tolerance of ``1e-5``. This tolerance reflects expected float32 roundoff from a
@@ -1017,7 +1017,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_electrostatic_parallel_gates.py field-reduce --logical-devices 2
+   python scripts/artifacts/generate_electrostatic_parallel_gates.py field-reduce --logical-devices 2
 
 The tracked artifact passes exactly on the current single-species periodic
 gate with ``phi_norm=1.68e-1`` and zero reported absolute/relative error. This
@@ -1035,7 +1035,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_velocity_parallel_gates.py hermite-ladder --logical-devices 2
+   python scripts/artifacts/generate_velocity_parallel_gates.py hermite-ladder --logical-devices 2
 
 The tracked artifact passes with zero ladder error and records an accompanying
 Hermite field-reduction error of ``1.9e-6``. This closes the communication and
@@ -1052,7 +1052,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_electrostatic_parallel_gates.py drift --logical-devices 2
+   python scripts/artifacts/generate_electrostatic_parallel_gates.py drift --logical-devices 2
 
 The tracked artifact passes with ``phi_norm=1.21e-1`` and zero reported
 absolute/relative error for the mirror, curvature/grad-B, and combined drift
@@ -1073,7 +1073,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_electrostatic_parallel_gates.py diamagnetic --logical-devices 2
+   python scripts/artifacts/generate_electrostatic_parallel_gates.py diamagnetic --logical-devices 2
 
 The tracked artifact passes with ``phi_norm=1.68e-1`` and zero reported
 absolute/relative error against the production diamagnetic-only linear RHS.
@@ -1092,7 +1092,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_velocity_parallel_gates.py periodic-streaming --logical-devices 2
+   python scripts/artifacts/generate_velocity_parallel_gates.py periodic-streaming --logical-devices 2
 
 The tracked artifact passes with zero reported absolute and relative error.
 This is still a linear streaming microkernel gate, not a full linear RHS or
@@ -1108,7 +1108,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_linear_rhs_parallel_gates.py streaming --logical-devices 2
+   python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming --logical-devices 2
 
 The tracked artifact passes with ``max_abs_error=9.7e-7``,
 ``max_rel_error=5.6e-7``, and ``phi_norm=0``. This closes a streaming-only
@@ -1134,7 +1134,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic --logical-devices 2
+   python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic --logical-devices 2
 
 The tracked artifact passes with ``phi_norm=1.34e-1``,
 ``max_phi_abs_error=1.9e-9``, ``max_abs_error=1.4e-7``, and
@@ -1152,7 +1152,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices --logical-devices 2
+   python scripts/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices --logical-devices 2
 
 The tracked artifact passes with ``phi_norm=1.68e-1``,
 ``max_abs_error=1.5e-7``, ``max_rel_error=3.7e-7``, and zero reported
@@ -1169,7 +1169,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_linear_rhs_parallel_slices.py \
+   python scripts/profiling/profile_linear_rhs_parallel_slices.py \
      --logical-devices 8 --nl 4 --nm 128 --ny 32 --nz 128 --rtol 1e-5
 
 The tracked CPU artifact uses a Hermite-heavy workload and keeps the sharded
@@ -1189,7 +1189,7 @@ It is regenerated with:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_linear_rhs_parallel_slices.py sweep \
+   python scripts/profiling/profile_linear_rhs_parallel_slices.py sweep \
      --platform cpu --devices 1,2,4,8 --nms 64,128 \
      --nl 4 --ny 32 --nz 128 --rtol 1e-5
 
@@ -1207,7 +1207,7 @@ The same profiler can target GPUs on the office node:
 .. code-block:: bash
 
    PYTHONPATH=/tmp/gkx-profile/src python3 \
-     tools/profiling/profile_linear_rhs_parallel_slices.py \
+     scripts/profiling/profile_linear_rhs_parallel_slices.py \
      --platform gpu --logical-devices 2 \
      --nl 4 --nm 64 --ny 32 --nz 128 --rtol 1e-5 \
      --out-prefix docs/_static/linear_rhs_parallel_slices_profile_gpu
@@ -1230,7 +1230,7 @@ regenerated with:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_linear_rhs_parallel_slices.py \
+   python scripts/profiling/profile_linear_rhs_parallel_slices.py \
      --axis species --platform gpu --logical-devices 2 \
      --nl 8 --nm 32 --ny 128 --nz 128 --warmups 2 --repeats 10 \
      --out-prefix /tmp/linear_rhs_species_profile_gpu
@@ -1247,7 +1247,7 @@ artifact, not an end-to-end speedup claim. It is stored in
 
 .. code-block:: bash
 
-   python tools/profiling/profile_linear_rhs_parallel_slices.py \
+   python scripts/profiling/profile_linear_rhs_parallel_slices.py \
      --axis species --platform cpu --logical-devices 2 \
      --nl 4 --nm 16 --ny 64 --nz 64 --warmups 2 --repeats 5 \
      --integration-steps 100 --integration-repeats 5 \
@@ -1272,7 +1272,7 @@ with:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_linear_rhs_parallel_slices.py \
+   python scripts/profiling/profile_linear_rhs_parallel_slices.py \
      --axis species_hermite --platform cpu --logical-devices 4 \
      --nl 4 --nm 16 --ny 64 --nz 64 --warmups 2 --repeats 7 \
      --integration-steps 100 --integration-repeats 5 \
@@ -1296,7 +1296,7 @@ The profiler/identity artifact is generated with:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_nonlinear_sharding.py \
+   python scripts/profiling/profile_nonlinear_sharding.py \
      --sharding auto --sharding-options auto,kx \
      --out-json docs/_static/nonlinear_sharding_profile.json
 
@@ -1462,22 +1462,22 @@ each device count gets a clean JAX runtime:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_nonlinear_sharding.py sweep \
+   python scripts/profiling/profile_nonlinear_sharding.py sweep \
      --backend cpu --devices 1,2,4,8 \
      --nx 24 --ny 48 --nz 96 --nl 4 --nm 8 --steps 8 \
      --out-prefix docs/_static/nonlinear_sharding_strong_scaling_cpu_large
 
-   python tools/profiling/profile_nonlinear_sharding.py sweep \
+   python scripts/profiling/profile_nonlinear_sharding.py sweep \
      --backend gpu --devices 1,2 \
      --nx 48 --ny 96 --nz 128 --nl 4 --nm 8 --steps 12 \
      --out-prefix docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge
 
    # Equivalent office two-GPU profile preset with JAX traces enabled.
-   python tools/profiling/profile_nonlinear_sharding.py sweep --office-gpu-xlarge
+   python scripts/profiling/profile_nonlinear_sharding.py sweep --office-gpu-xlarge
 
-   python tools/artifacts/plot_scaling_panels.py nonlinear-sharding
+   python scripts/artifacts/plot_scaling_panels.py nonlinear-sharding
 
-   python tools/artifacts/generate_nonlinear_sharding_production_gate.py
+   python scripts/artifacts/generate_nonlinear_sharding_production_gate.py
 
 
 The refreshed large sweep remains engineering evidence rather than a speedup
@@ -1523,7 +1523,7 @@ once with spectral brackets, then compares end-of-run scalar diagnostics.
 
 .. code-block:: bash
 
-   python tools/artifacts/gate_laguerre_nonlinear_modes.py \
+   python scripts/artifacts/gate_laguerre_nonlinear_modes.py \
      --case cyclone --case kbm --case w7x --case hsx \
      --out-json docs/_static/laguerre_mode_gate.json \
      --out-csv docs/_static/laguerre_mode_gate.csv \
@@ -1534,7 +1534,7 @@ GPU-specific output paths, for example:
 
 .. code-block:: bash
 
-   python tools/artifacts/gate_laguerre_nonlinear_modes.py \
+   python scripts/artifacts/gate_laguerre_nonlinear_modes.py \
      --case cyclone --case kbm --case w7x --case hsx \
      --out-json docs/_static/laguerre_mode_gate_gpu.json \
      --out-csv docs/_static/laguerre_mode_gate_gpu.csv \
@@ -1589,9 +1589,9 @@ For the publication runtime comparison pass, use the manifest-driven runner:
 
 .. code-block:: bash
 
-   python benchmarks/performance/benchmark_runtime_memory.py --list
-   python benchmarks/performance/benchmark_runtime_memory.py --dry-run --case cyclone-linear --backend gkx_cpu
-   python benchmarks/performance/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out/runtime_memory_logs
+   python scripts/benchmarks/benchmark_runtime_memory.py --list
+   python scripts/benchmarks/benchmark_runtime_memory.py --dry-run --case cyclone-linear --backend gkx_cpu
+   python scripts/benchmarks/benchmark_runtime_memory.py --continue-on-error --log-dir tools_out/runtime_memory_logs
 
 The runner reads ``tools/runtime_memory_manifest.toml`` and writes:
 
@@ -1658,7 +1658,7 @@ geometry cases. The memory subplot stays linear because the peak RSS spread is
 much narrower.
 
 The assembled figure is generated from the collected per-case summaries with
-``benchmarks/performance/benchmark_runtime_memory.py --summary-glob ...`` and written to:
+``scripts/benchmarks/benchmark_runtime_memory.py --summary-glob ...`` and written to:
 
 - ``docs/_static/runtime_memory_benchmark.png``
 - ``docs/_static/runtime_memory_benchmark.pdf`` (emitted for manuscript
@@ -1670,7 +1670,7 @@ rows:
 
 .. code-block:: bash
 
-   python benchmarks/performance/benchmark_runtime_memory.py \
+   python scripts/benchmarks/benchmark_runtime_memory.py \
      --summary-glob docs/_static/runtime_memory_summary_ship_refresh.json \
      --csv-out docs/_static/runtime_memory_results_ship_refresh.csv \
      --summary-out docs/_static/runtime_memory_summary_ship_refresh.json \
@@ -1725,7 +1725,7 @@ For cold-start deep dives, use the dedicated startup profiler:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_startup_and_cache.py runtime-startup \
+   python scripts/profiling/profile_startup_and_cache.py runtime-startup \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
      --ky 0.3 --Nl 4 --Nm 8 --compile-steps 1 \
      --json-out tools_out/startup_cyclone_gpu.json \
@@ -1776,7 +1776,7 @@ To break the cache-construction lump down further, use:
 
 .. code-block:: bash
 
-   python tools/profiling/profile_startup_and_cache.py linear-cache \
+   python scripts/profiling/profile_startup_and_cache.py linear-cache \
      --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
      --Nl 4 --Nm 8 \
      --json-out tools_out/linear_cache_cyclone_gpu.json \

@@ -137,7 +137,7 @@ None of these is a plan of record.
 Provenance
 ----------
 
-The harness that produced the table, ``tools/campaigns/shift_invert_recycling.py``
+The harness that produced the table, ``scripts/campaigns/shift_invert_recycling.py``
 (380 lines), was removed once the migration question was answered; it is
 recoverable from commit ``3aa1591b`` if the question reopens.
 

@@ -1,0 +1,1499 @@
+#!/usr/bin/env python3
+"""Profile runtime kernels and full RHS graphs from one command surface.
+
+Subcommands:
+- ``cyclone``: end-to-end nonlinear runtime warm/profile pass.
+- ``nonlinear-step-split``: field solve, nonlinear bracket, linear RHS, full RHS split.
+- ``full-linear-rhs``: HLO/Perfetto/memory triage for the fused linear RHS.
+- ``full-nonlinear-rhs``: HLO/Perfetto/memory triage for the fused nonlinear RHS.
+- ``nonlinear-step-hlo``: optimized-HLO op ledger per nonlinear RHS and RK step.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+from dataclasses import replace
+import json
+import os
+from pathlib import Path
+import platform
+import re
+import resource
+import sys
+import time
+from typing import Any, Callable
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+
+try:
+    from scripts.profiling._profiler_options import (
+        git_source_state,
+        make_profile_options,
+    )
+except ModuleNotFoundError:  # pragma: no cover - direct script execution fallback
+    from _profiler_options import (  # type: ignore[import-not-found,no-redef]
+        git_source_state,
+        make_profile_options,
+    )
+
+from gkx.core_grid import build_spectral_grid
+from gkx.geometry import apply_imported_geometry_grid_defaults
+from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.operators.linear.rhs import linear_rhs_cached
+from gkx.solvers_nonlinear_diagnostic_integration import (
+    prepare_nonlinear_explicit_diagnostics,
+)
+from gkx.solvers_nonlinear_state_integration import (
+    integrate_nonlinear,
+    nonlinear_rhs_cached,
+)
+from gkx.runtime import (
+    _build_initial_condition,
+    _runtime_external_phi,
+    _select_nonlinear_mode_indices,
+    build_runtime_nonlinear_diagnostics_kwargs,
+    build_runtime_geometry,
+    build_runtime_linear_params,
+    build_runtime_linear_terms,
+    build_runtime_term_config,
+)
+from gkx.terms.assembly import (
+    _is_static_zero,
+    assemble_rhs_cached_jit,
+    compute_fields_cached,
+)
+from gkx.terms.nonlinear import nonlinear_em_contribution
+from gkx.workflows.runtime.toml import load_runtime_from_toml
+
+HLO_TOKENS = (
+    "fusion",
+    "fft",
+    "reduce",
+    "gather",
+    "scatter",
+    "transpose",
+    "broadcast",
+    "reshape",
+    "slice",
+    "concatenate",
+    "convert",
+    "multiply",
+    "add",
+    "subtract",
+    "divide",
+    "select",
+)
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def _block_tree(tree: Any) -> None:
+    for leaf in jax.tree_util.tree_leaves(tree):
+        try:
+            jax.block_until_ready(leaf)
+        except TypeError:
+            continue
+
+
+def _time_call(fn: Callable[..., Any], *args: Any) -> tuple[float, Any]:
+    t0 = time.perf_counter()
+    out = fn(*args)
+    _block_tree(out)
+    return time.perf_counter() - t0, out
+
+
+def _time_callable(
+    fn: Callable[..., Any], *args: Any, repeats: int
+) -> tuple[float, Any]:
+    out = fn(*args)
+    _block_tree(out)
+    t0 = time.perf_counter()
+    last = out
+    for _ in range(repeats):
+        last = fn(*args)
+        _block_tree(last)
+    t1 = time.perf_counter()
+    return (t1 - t0) / float(repeats), last
+
+
+def _z_variation_norm(state: jnp.ndarray) -> float:
+    mean_z = jnp.mean(state, axis=-1, keepdims=True)
+    return float(np.asarray(jnp.linalg.norm(state - mean_z)))
+
+
+def _inject_z_wave(
+    state: jnp.ndarray,
+    *,
+    ky_index: int,
+    kx_index: int,
+    amplitude: float,
+    z_mode: int,
+) -> jnp.ndarray:
+    """Inject a deterministic parallel wave so linked-z paths are active."""
+
+    state = jnp.asarray(state)
+    nz = state.shape[-1]
+    nm = state.shape[-4]
+    m_index = min(max(1, nm - 1), 3)
+    z = jnp.arange(nz, dtype=jnp.float32)
+    phase = 2.0 * jnp.pi * float(z_mode) * z / float(nz)
+    wave = amplitude * jnp.exp(1j * phase).astype(state.dtype)
+    perturbation = jnp.zeros_like(state)
+    if state.ndim == 6:
+        perturbation = perturbation.at[:, 0, m_index, ky_index, kx_index, :].set(wave)
+    elif state.ndim == 5:
+        perturbation = perturbation.at[0, m_index, ky_index, kx_index, :].set(wave)
+    else:  # pragma: no cover - runtime state builder controls dimensionality.
+        raise ValueError("state must have 5 or 6 dimensions")
+    return state + perturbation
+
+
+def _hlo_token_counts(
+    hlo_text: str, tokens: tuple[str, ...] = HLO_TOKENS
+) -> dict[str, int]:
+    """Count coarse HLO tokens used for trace triage."""
+
+    lower = hlo_text.lower()
+    return {token: lower.count(token) for token in tokens}
+
+
+HLO_OPS = (
+    "fft",
+    "concatenate",
+    "gather",
+    "scatter",
+    "transpose",
+    "copy",
+    "dynamic-update-slice",
+    "reverse",
+)
+HLO_WRITE_OPS = ("concatenate", "copy")
+# Arrays a jit captures become literals of the compiled module, so the
+# executable holds its own copy of them. That is the memory the prepared
+# graph costs over one that takes the same arrays as operands.
+HLO_LITERAL_OPS = ("constant",)
+_HLO_INSTRUCTION = re.compile(
+    r"^\s*(?:ROOT\s+)?%[\w.\-]+ = "
+    r"(?:(?P<dtype>[a-z]+\d+)\[(?P<shape>[\d,]*)\](?:\{[\d,]*\})?|\(.*?\)) "
+    r"(?P<op>[a-z][\w\-]*)\(",
+    flags=re.MULTILINE,
+)
+RK_RHS_EVALUATIONS = {
+    "euler": 1,
+    "rk2": 2,
+    "rk3": 3,
+    "rk3_heun": 3,
+    "rk3_classic": 3,
+    "rk4": 4,
+    "sspx3": 3,
+    "k10": 10,
+}
+# A computation header: ``ENTRY %main (...) -> ... {`` or ``%fused_computation.3
+# (...) -> ... {``.  Instructions are attributed to the computation they are
+# written inside, which is what tells a materialized buffer from a fused index.
+_HLO_COMPUTATION = re.compile(r"^(?P<entry>ENTRY )?%(?P<name>[\w.\-]+) .*\{\s*$")
+# The callee of a fusion instruction. Only a *fusion* body is emitted as one
+# loop nest; a while body, a call body or a reduce body is an ordinary
+# computation whose instructions each own a buffer.
+_HLO_FUSION_CALL = re.compile(r"= \S+ fusion\([^()]*\)[^\n]*?calls=%([\w.\-]+)")
+
+
+def _hlo_fusion_bodies(hlo_text: str) -> set[str]:
+    """Names of the computations that appear as a fusion body."""
+
+    return set(_HLO_FUSION_CALL.findall(hlo_text))
+
+
+def _hlo_instruction_bytes(match: re.Match[str]) -> int:
+    """Byte size of one instruction's output shape, 0 for a tuple shape."""
+
+    if not match.group("dtype"):
+        return 0
+    bits = int(re.sub(r"\D", "", match.group("dtype")))
+    dims = [int(dim) for dim in match.group("shape").split(",") if dim]
+    return int(np.prod(dims, dtype=np.int64)) * max(1, bits // 8)
+
+
+def _hlo_op_counts(
+    hlo_text: str,
+    ops: tuple[str, ...] = HLO_OPS,
+    write_ops: tuple[str, ...] = HLO_WRITE_OPS,
+    literal_ops: tuple[str, ...] = HLO_LITERAL_OPS,
+) -> dict[str, int]:
+    """Count optimized-HLO instructions by op name and the bytes some write.
+
+    ``_hlo_token_counts`` counts substrings, metadata included. This matches
+    the op name of each instruction, so on a fixed jax/XLA version it is a
+    load-independent ledger of one compiled graph.
+
+    ``constant_bytes`` is the literal payload the module carries. A jit that
+    captures cache, parameter and policy arrays embeds them there, so the
+    executable keeps a second copy of them beside the ones the caller holds.
+
+    **Three byte totals, and only one of them is traffic.** ``bytes_written``
+    sums the output shape of every ``concatenate`` and ``copy`` *anywhere in
+    the module text*.  That is the historical number every committed ledger
+    records and it is kept unchanged so the archive stays comparable, but it is
+    not the cost it looks like: most such instructions sit **inside** a fusion
+    body, where XLA:CPU emits them as index arithmetic on the fused loop and no
+    buffer is allocated for them.  A copy that re-lays-out a fusion *parameter*
+    costs a strided read, not a write, and cloning that copy into a second
+    consumer fusion costs nothing at all -- yet ``bytes_written`` charges the
+    operand's full size each time.  Queue row Q27 found the linked-chain
+    gather's mask multiply cloned into 40 consumer fusions on one layout and 7
+    on another, which moved ``bytes_written`` by +43 per cent while the
+    materialized traffic *fell* by 73 per cent.
+
+    ``materialized_bytes`` is the total that means traffic: the same ops
+    restricted to instructions that own an output buffer -- everything in the
+    entry computation, in a while/call/reduce body, and the ROOT of each fusion
+    body, which is the value that fusion writes out.  ``fused_interior_bytes``
+    is the remainder, and is reported so the two are never silently summed.
+    Neither is a runtime claim; ``memory_analysis`` in the step ledger is the
+    compiler's own buffer assignment and is the independent check on both.
+    """
+
+    counts = dict.fromkeys(ops, 0)
+    written = 0
+    literals = 0
+    materialized = 0
+    interior = 0
+    fusion_bodies = _hlo_fusion_bodies(hlo_text)
+    computation: str | None = None
+    in_fusion_body = False
+    for line in hlo_text.splitlines():
+        header = _HLO_COMPUTATION.match(line)
+        if header is not None:
+            computation = header.group("name")
+            in_fusion_body = (
+                header.group("entry") is None and computation in fusion_bodies
+            )
+            continue
+        if line.startswith("}"):
+            computation = None
+            in_fusion_body = False
+            continue
+        match = _HLO_INSTRUCTION.match(line)
+        if match is None:
+            continue
+        op = match.group("op")
+        if op in counts:
+            counts[op] += 1
+        nbytes = _hlo_instruction_bytes(match)
+        if op in write_ops:
+            written += nbytes
+            is_root = line.lstrip().startswith("ROOT")
+            if in_fusion_body and not is_root:
+                interior += nbytes
+            else:
+                materialized += nbytes
+        if op in literal_ops:
+            literals += nbytes
+    counts["bytes_written"] = written
+    counts["materialized_bytes"] = materialized
+    counts["fused_interior_bytes"] = interior
+    counts["constant_bytes"] = literals
+    return counts
+
+
+def _write_summary_json(payload: dict[str, Any], path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _field_norm(value: jnp.ndarray | None) -> float:
+    if value is None:
+        return 0.0
+    return float(np.asarray(jnp.linalg.norm(value)))
+
+
+def _array_fingerprint(value: Any) -> dict[str, Any]:
+    """Return compact numerical identity metadata for one profiled array."""
+
+    array = np.asarray(value)
+    finite = np.isfinite(array)
+    finite_values = array[finite]
+    return {
+        "shape": list(array.shape),
+        "finite_fraction": float(np.mean(finite)) if array.size else 1.0,
+        "l2_norm": float(np.linalg.norm(finite_values)) if finite_values.size else 0.0,
+        "max_abs": float(np.max(np.abs(finite_values))) if finite_values.size else 0.0,
+        "sum_real": float(np.sum(np.real(finite_values), dtype=np.float64)),
+        "sum_imag": float(np.sum(np.imag(finite_values), dtype=np.float64)),
+    }
+
+
+def _prepared_result_summary(result: Any) -> dict[str, Any]:
+    """Fingerprint the state and diagnostics paired with prepared timings."""
+
+    time_points, diagnostics, final_state, fields = result
+    return {
+        "time": _array_fingerprint(time_points),
+        "final_state": _array_fingerprint(final_state),
+        "phi": _array_fingerprint(fields.phi),
+        "heat_flux": _array_fingerprint(diagnostics.heat_flux_t),
+        "dt": _array_fingerprint(diagnostics.dt_t),
+    }
+
+
+def _peak_rss_bytes(peak_rss: int, *, system: str | None = None) -> int:
+    """Normalize ``ru_maxrss`` to bytes across macOS and Linux."""
+
+    platform_name = platform.system() if system is None else system
+    return int(peak_rss) if platform_name == "Darwin" else int(peak_rss) * 1024
+
+
+def _runtime_memory_summary() -> dict[str, Any]:
+    """Return host peak RSS and available JAX device allocator metrics."""
+
+    device = jax.devices()[0]
+    raw_stats = device.memory_stats() or {}
+    device_stats = {
+        key: int(raw_stats[key])
+        for key in ("bytes_in_use", "peak_bytes_in_use", "bytes_limit")
+        if key in raw_stats
+    }
+    return {
+        "host_peak_rss_bytes": _peak_rss_bytes(
+            resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        ),
+        "device": str(device),
+        "device_stats": device_stats,
+    }
+
+
+def _configure_xla(args: argparse.Namespace) -> None:
+    if getattr(args, "xla_dump_dir", None) is None:
+        return
+    flags = os.environ.get("XLA_FLAGS", "")
+    dump_flags = [
+        f"--xla_dump_to={args.xla_dump_dir}",
+        "--xla_dump_hlo_as_text",
+        f"--xla_dump_hlo_pass_re={args.xla_hlo_pass_re}",
+    ]
+    os.environ["XLA_FLAGS"] = " ".join([flags] + dump_flags).strip()
+
+
+def build_cyclone_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Profile nonlinear Cyclone runtime.")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"),
+    )
+    parser.add_argument("--ky", type=float, default=0.3)
+    parser.add_argument("--Nl", type=int, default=4)
+    parser.add_argument("--Nm", type=int, default=8)
+    parser.add_argument("--dt", type=float, default=None)
+    parser.add_argument("--steps", type=int, default=None)
+    parser.add_argument("--method", type=str, default=None)
+    parser.add_argument("--sample-stride", type=int, default=None)
+    parser.add_argument("--diagnostics-stride", type=int, default=None)
+    parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument(
+        "--resolved-diagnostics",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
+        "--reuse-prepared-simulation",
+        action="store_true",
+        help="Prepare one explicit scan and reuse its compiled executable across repeats.",
+    )
+    parser.add_argument("--trace-dir", type=Path, default=None)
+    parser.add_argument("--memory-profile", type=Path, default=None)
+    parser.add_argument("--xla-dump-dir", type=Path, default=None)
+    parser.add_argument("--xla-hlo-pass-re", type=str, default=".*")
+    parser.add_argument("--python-tracer-level", type=int, default=0)
+    parser.add_argument("--host-tracer-level", type=int, default=0)
+    parser.add_argument("--warmup-only", action="store_true", default=False)
+    parser.add_argument("--out", type=Path, default=None)
+    return parser
+
+
+def main_cyclone(argv: list[str] | None = None) -> int:
+    args = build_cyclone_parser().parse_args(argv)
+    _configure_xla(args)
+    source_state = git_source_state(ROOT)
+
+    from jax import profiler
+
+    from gkx.solvers_nonlinear_diagnostic_integration import (
+        prepare_nonlinear_explicit_diagnostics,
+    )
+    from gkx.runtime import run_runtime_nonlinear
+
+    cfg, _data = load_runtime_from_toml(args.config)
+    dt_effective = float(cfg.time.dt if args.dt is None else args.dt)
+    method_effective = str(cfg.time.method if args.method is None else args.method)
+    sample_stride_effective = int(
+        cfg.time.sample_stride if args.sample_stride is None else args.sample_stride
+    )
+    diagnostics_stride_effective = int(
+        cfg.time.diagnostics_stride
+        if args.diagnostics_stride is None
+        else args.diagnostics_stride
+    )
+
+    if args.reuse_prepared_simulation:
+        if args.steps is None:
+            raise ValueError("--reuse-prepared-simulation requires --steps")
+        geom = build_runtime_geometry(cfg)
+        grid = build_spectral_grid(
+            apply_imported_geometry_grid_defaults(geom, cfg.grid)
+        )
+        params = build_runtime_linear_params(cfg, Nm=args.Nm, geom=geom)
+        terms = build_runtime_term_config(cfg)
+        ky_index, kx_index = _select_nonlinear_mode_indices(
+            grid,
+            ky_target=args.ky,
+            kx_target=None,
+            use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+        )
+        initial_state = _build_initial_condition(
+            grid,
+            geom,
+            cfg,
+            ky_index=ky_index,
+            kx_index=kx_index,
+            Nl=args.Nl,
+            Nm=args.Nm,
+            nspecies=len(cfg.species),
+        )
+        prepared_kwargs = build_runtime_nonlinear_diagnostics_kwargs(
+            cfg,
+            dt=dt_effective,
+            steps=int(args.steps),
+            method=method_effective,
+            term_config=terms,
+            sample_stride=sample_stride_effective,
+            diagnostics_stride=diagnostics_stride_effective,
+            laguerre_mode=str(cfg.time.laguerre_nonlinear_mode),
+            ky_index=ky_index,
+            kx_index=kx_index,
+            fixed_dt=bool(cfg.time.fixed_dt),
+            fixed_mode_ky_index=(
+                cfg.expert.iky_fixed if cfg.expert.fixed_mode else None
+            ),
+            fixed_mode_kx_index=(
+                cfg.expert.ikx_fixed if cfg.expert.fixed_mode else None
+            ),
+            external_phi=_runtime_external_phi(cfg),
+            resolved_diagnostics=bool(args.resolved_diagnostics),
+            show_progress=False,
+        )
+        prepared = prepare_nonlinear_explicit_diagnostics(
+            initial_state,
+            grid,
+            geom,
+            params,
+            **prepared_kwargs,
+        )
+
+        def _run():
+            result = prepared.run()
+            _block_tree(result)
+            return result
+
+    else:
+
+        def _run():
+            result = run_runtime_nonlinear(
+                cfg,
+                ky_target=args.ky,
+                Nl=args.Nl,
+                Nm=args.Nm,
+                dt=args.dt,
+                steps=args.steps,
+                method=args.method,
+                sample_stride=args.sample_stride,
+                diagnostics_stride=args.diagnostics_stride,
+                diagnostics=True,
+                resolved_diagnostics=args.resolved_diagnostics,
+            )
+            _block_tree(result)
+            return result
+
+    t0 = time.perf_counter()
+    with profiler.TraceAnnotation("gkx_warmup"):
+        last_result = _run()
+    t1 = time.perf_counter()
+
+    if args.warmup_only:
+        print(f"warmup_time_s={t1 - t0:.3f}")
+        return 0
+
+    if args.trace_dir is not None:
+        args.trace_dir.mkdir(parents=True, exist_ok=True)
+        profiler.start_trace(
+            str(args.trace_dir),
+            profiler_options=make_profile_options(
+                python_tracer_level=args.python_tracer_level,
+                host_tracer_level=args.host_tracer_level,
+            ),
+        )
+    if args.repeats < 1:
+        raise ValueError("repeats must be >= 1")
+    run_times: list[float] = []
+    try:
+        with profiler.TraceAnnotation("gkx_profiled_run"):
+            for _ in range(args.repeats):
+                elapsed, last_result = _time_call(_run)
+                run_times.append(elapsed)
+    finally:
+        if args.trace_dir is not None:
+            profiler.stop_trace()
+
+    if args.memory_profile is not None:
+        with profiler.TraceAnnotation("gkx_memory_snapshot"):
+            profiler.save_device_memory_profile(str(args.memory_profile))
+
+    run_median = float(np.median(np.asarray(run_times, dtype=float)))
+    print(
+        f"warmup_time_s={t1 - t0:.3f} run_time_s={run_median:.3f} "
+        f"run_times_s={','.join(f'{value:.6f}' for value in run_times)}"
+    )
+    if args.out is not None:
+        payload = {
+            **source_state,
+            "backend": jax.default_backend(),
+            "devices": [str(device) for device in jax.devices()],
+            "config": str(args.config),
+            "nl": int(args.Nl),
+            "nm": int(args.Nm),
+            "steps": args.steps,
+            "dt": dt_effective,
+            "method": method_effective,
+            "fixed_dt": bool(cfg.time.fixed_dt),
+            "sample_stride": sample_stride_effective,
+            "diagnostics_stride": diagnostics_stride_effective,
+            "resolved_diagnostics": bool(args.resolved_diagnostics),
+            "reuse_prepared_simulation": bool(args.reuse_prepared_simulation),
+            "software": {
+                "python": sys.version.split()[0],
+                "jax": str(getattr(jax, "__version__", "unknown")),
+                "numpy": str(np.__version__),
+            },
+            "warmup_time_s": float(t1 - t0),
+            "run_times_s": run_times,
+            "run_median_s": run_median,
+            "memory_summary": _runtime_memory_summary(),
+        }
+        if args.reuse_prepared_simulation:
+            payload["result_summary"] = _prepared_result_summary(last_result)
+        _write_summary_json(payload, args.out)
+    return 0
+
+
+def build_nonlinear_step_split_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Profile nonlinear field solve vs bracket vs full RHS."
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"),
+    )
+    parser.add_argument("--ky", type=float, default=0.3)
+    parser.add_argument("--kx", type=float, default=None)
+    parser.add_argument("--Nl", type=int, default=4)
+    parser.add_argument("--Nm", type=int, default=8)
+    parser.add_argument("--repeats", type=int, default=20)
+    parser.add_argument("--laguerre-mode", type=str, default=None)
+    parser.add_argument("--out", type=Path, default=None)
+    return parser
+
+
+def main_nonlinear_step_split(argv: list[str] | None = None) -> int:
+    args = build_nonlinear_step_split_parser().parse_args(argv)
+    cfg, _ = load_runtime_from_toml(args.config)
+    geom = build_runtime_geometry(cfg)
+    grid_cfg = apply_imported_geometry_grid_defaults(geom, cfg.grid)
+    grid = build_spectral_grid(grid_cfg)
+    params = build_runtime_linear_params(cfg, Nm=args.Nm, geom=geom)
+    term_cfg = build_runtime_term_config(cfg)
+    laguerre_mode = (
+        cfg.time.laguerre_nonlinear_mode
+        if args.laguerre_mode is None
+        else str(args.laguerre_mode)
+    )
+
+    ky_index, kx_index = _select_nonlinear_mode_indices(
+        grid,
+        ky_target=args.ky,
+        kx_target=args.kx,
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+    )
+    g0 = _build_initial_condition(
+        grid,
+        geom,
+        cfg,
+        ky_index=ky_index,
+        kx_index=kx_index,
+        Nl=args.Nl,
+        Nm=args.Nm,
+        nspecies=len(cfg.species),
+    )
+    cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
+    g0 = jnp.asarray(g0)
+
+    field_fn = jax.jit(
+        lambda state: compute_fields_cached(state, cache, params, terms=term_cfg)
+    )
+    fields = field_fn(g0)
+    _block_tree(fields)
+
+    nonlinear_fn = jax.jit(
+        lambda state, phi, apar, bpar: nonlinear_em_contribution(
+            state,
+            phi=phi,
+            apar=apar,
+            bpar=bpar,
+            Jl=cache.Jl,
+            JlB=cache.JlB,
+            tz=jnp.asarray(params.tz),
+            vth=jnp.asarray(params.vth),
+            sqrt_m=cache.sqrt_m,
+            sqrt_m_p1=cache.sqrt_m_p1,
+            kx_grid=cache.kx_grid,
+            ky_grid=cache.ky_grid,
+            dealias_mask=cache.dealias_mask,
+            kxfac=cache.kxfac,
+            weight=jnp.asarray(
+                term_cfg.nonlinear,
+                dtype=jnp.real(jnp.empty((), dtype=state.dtype)).dtype,
+            ),
+            apar_weight=float(term_cfg.apar),
+            bpar_weight=float(term_cfg.bpar),
+            laguerre_to_grid=cache.laguerre_to_grid,
+            laguerre_to_spectral=cache.laguerre_to_spectral,
+            laguerre_roots=cache.laguerre_roots,
+            laguerre_j0=cache.laguerre_j0,
+            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
+            b=cache.b,
+            compressed_real_fft=bool(cfg.time.compressed_real_fft),
+            laguerre_mode=laguerre_mode,
+        )
+    )
+    linear_terms = replace(term_cfg, nonlinear=0.0)
+    linear_rhs_fn = jax.jit(
+        lambda state: assemble_rhs_cached_jit(state, cache, params, linear_terms)
+    )
+    rhs_fn = jax.jit(
+        lambda state: nonlinear_rhs_cached(
+            state,
+            cache,
+            params,
+            term_cfg,
+            compressed_real_fft=bool(cfg.time.compressed_real_fft),
+            laguerre_mode=laguerre_mode,
+        )
+    )
+
+    field_time, fields = _time_callable(field_fn, g0, repeats=args.repeats)
+    nl_time, nl_out = _time_callable(
+        nonlinear_fn, g0, fields.phi, fields.apar, fields.bpar, repeats=args.repeats
+    )
+    linear_rhs_time, linear_rhs_out = _time_callable(
+        linear_rhs_fn, g0, repeats=args.repeats
+    )
+    rhs_time, rhs_out = _time_callable(rhs_fn, g0, repeats=args.repeats)
+    linear_rhs_state, _linear_rhs_fields = linear_rhs_out
+    rhs_state, rhs_fields = rhs_out
+
+    rows = [
+        {
+            "kernel": "field_solve",
+            "seconds": field_time,
+            "repeats": args.repeats,
+            "norm": float(np.asarray(jnp.linalg.norm(fields.phi))),
+        },
+        {
+            "kernel": "nonlinear_bracket",
+            "seconds": nl_time,
+            "repeats": args.repeats,
+            "norm": float(np.asarray(jnp.linalg.norm(nl_out))),
+        },
+        {
+            "kernel": "linear_rhs",
+            "seconds": linear_rhs_time,
+            "repeats": args.repeats,
+            "norm": float(np.asarray(jnp.linalg.norm(linear_rhs_state))),
+        },
+        {
+            "kernel": "full_rhs",
+            "seconds": rhs_time,
+            "repeats": args.repeats,
+            "norm": float(np.asarray(jnp.linalg.norm(rhs_state))),
+        },
+    ]
+
+    for row in rows:
+        print(f"{row['kernel']}: seconds={row['seconds']:.6f} norm={row['norm']:.6e}")
+    print(
+        "rhs_fields:",
+        f"phi_norm={float(np.asarray(jnp.linalg.norm(rhs_fields.phi))):.6e}",
+        f"apar_norm={_field_norm(rhs_fields.apar):.6e}",
+        f"bpar_norm={_field_norm(rhs_fields.bpar):.6e}",
+    )
+
+    if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        with args.out.open("w", newline="") as stream:
+            writer = csv.DictWriter(
+                stream,
+                fieldnames=["kernel", "seconds", "repeats", "norm"],
+                lineterminator="\n",
+            )
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"saved {args.out}")
+    return 0
+
+
+def _add_full_rhs_common_args(
+    parser: argparse.ArgumentParser, *, nonlinear: bool
+) -> None:
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path(
+            "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml"
+        ),
+    )
+    parser.add_argument("--ky", type=float, default=0.3)
+    parser.add_argument("--kx", type=float, default=None)
+    parser.add_argument("--Nl", type=int, default=4)
+    parser.add_argument("--Nm", type=int, default=8)
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--state", choices=("initial", "z_wave"), default="initial")
+    parser.add_argument("--z-mode", type=int, default=1)
+    parser.add_argument("--z-wave-amplitude", type=float, default=1.0e-3)
+    if nonlinear:
+        parser.add_argument("--laguerre-mode", type=str, default=None)
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        default=Path(
+            "docs/_static/full_nonlinear_rhs_trace_summary.json"
+            if nonlinear
+            else "docs/_static/full_linear_rhs_trace_summary.json"
+        ),
+    )
+    parser.add_argument("--hlo-out", type=Path, default=None)
+    parser.add_argument("--trace-dir", type=Path, default=None)
+    parser.add_argument("--memory-profile", type=Path, default=None)
+    parser.add_argument("--python-tracer-level", type=int, default=0)
+    parser.add_argument("--host-tracer-level", type=int, default=0)
+
+
+def build_full_linear_rhs_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Trace the fused full-linear-RHS graph."
+    )
+    _add_full_rhs_common_args(parser, nonlinear=False)
+    return parser
+
+
+def build_full_nonlinear_rhs_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Trace the fused full-nonlinear-RHS graph."
+    )
+    _add_full_rhs_common_args(parser, nonlinear=True)
+    return parser
+
+
+def _build_summary(
+    *,
+    config: str,
+    backend: str,
+    nl: int,
+    nm: int,
+    repeats: int,
+    state: str,
+    z_variation_norm: float,
+    compile_execute_seconds: float,
+    warm_seconds: float,
+    rhs_norm: float,
+    phi_norm: float,
+    hlo_text: str,
+    trace_dir: Path | None,
+    memory_profile: Path | None,
+    hlo_out: Path | None,
+    force_electrostatic_fields: bool,
+    source: str,
+) -> dict[str, Any]:
+    """Build a machine-readable full-linear-RHS trace summary."""
+
+    return {
+        "kind": "full_linear_rhs_trace_summary",
+        "case": Path(config).stem,
+        "config": config,
+        "backend": backend,
+        "Nl": int(nl),
+        "Nm": int(nm),
+        "repeats": int(repeats),
+        "state": state,
+        "z_variation_norm": float(z_variation_norm),
+        "compile_execute_seconds": float(compile_execute_seconds),
+        "warm_seconds": float(warm_seconds),
+        "rhs_norm": float(rhs_norm),
+        "phi_norm": float(phi_norm),
+        "hlo_line_count": len(hlo_text.splitlines()),
+        "hlo_bytes": len(hlo_text.encode("utf-8")),
+        "hlo_token_counts": _hlo_token_counts(hlo_text),
+        "trace_dir": None if trace_dir is None else str(trace_dir),
+        "memory_profile": None if memory_profile is None else str(memory_profile),
+        "hlo_out": None if hlo_out is None else str(hlo_out),
+        "force_electrostatic_fields": bool(force_electrostatic_fields),
+        "source": str(source),
+        "claim_scope": (
+            "Full fused linear-RHS graph triage for one runtime state. Use this to choose "
+            "kernel-level optimization targets; do not treat it as a standalone runtime claim."
+        ),
+    }
+
+
+def _build_nonlinear_summary(
+    *,
+    config: str,
+    backend: str,
+    nl: int,
+    nm: int,
+    repeats: int,
+    state: str,
+    laguerre_mode: str,
+    compressed_real_fft: bool,
+    z_variation_norm: float,
+    compile_execute_seconds: float,
+    warm_seconds: float,
+    rhs_norm: float,
+    phi_norm: float,
+    apar_norm: float,
+    bpar_norm: float,
+    hlo_text: str,
+    trace_dir: Path | None,
+    memory_profile: Path | None,
+    hlo_out: Path | None,
+    electrostatic_specialized: bool,
+) -> dict[str, Any]:
+    """Build a machine-readable full-nonlinear-RHS trace summary."""
+
+    return {
+        "kind": "full_nonlinear_rhs_trace_summary",
+        "case": Path(config).stem,
+        "config": config,
+        "backend": backend,
+        "Nl": int(nl),
+        "Nm": int(nm),
+        "repeats": int(repeats),
+        "state": state,
+        "laguerre_mode": laguerre_mode,
+        "compressed_real_fft": bool(compressed_real_fft),
+        "z_variation_norm": float(z_variation_norm),
+        "compile_execute_seconds": float(compile_execute_seconds),
+        "warm_seconds": float(warm_seconds),
+        "rhs_norm": float(rhs_norm),
+        "phi_norm": float(phi_norm),
+        "apar_norm": float(apar_norm),
+        "bpar_norm": float(bpar_norm),
+        "hlo_line_count": len(hlo_text.splitlines()),
+        "hlo_bytes": len(hlo_text.encode("utf-8")),
+        "hlo_token_counts": _hlo_token_counts(hlo_text),
+        "trace_dir": None if trace_dir is None else str(trace_dir),
+        "memory_profile": None if memory_profile is None else str(memory_profile),
+        "hlo_out": None if hlo_out is None else str(hlo_out),
+        "electrostatic_specialized": bool(electrostatic_specialized),
+        "claim_scope": (
+            "Full fused nonlinear-RHS graph triage for one runtime state. Use this to choose "
+            "kernel-level optimization targets; do not treat it as a standalone transport "
+            "runtime claim."
+        ),
+    }
+
+
+def main_full_linear_rhs(argv: list[str] | None = None) -> int:
+    args = build_full_linear_rhs_parser().parse_args(argv)
+    cfg, _ = load_runtime_from_toml(args.config)
+    geom = build_runtime_geometry(cfg)
+    grid_cfg = apply_imported_geometry_grid_defaults(geom, cfg.grid)
+    grid = build_spectral_grid(grid_cfg)
+    params = build_runtime_linear_params(cfg, Nm=args.Nm, geom=geom)
+    linear_terms = build_runtime_linear_terms(cfg)
+    ky_index, kx_index = _select_nonlinear_mode_indices(
+        grid,
+        ky_target=args.ky,
+        kx_target=args.kx,
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+    )
+    g0 = _build_initial_condition(
+        grid,
+        geom,
+        cfg,
+        ky_index=ky_index,
+        kx_index=kx_index,
+        Nl=args.Nl,
+        Nm=args.Nm,
+        nspecies=len(cfg.species),
+    )
+    cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
+    g0 = jnp.asarray(g0)
+    if args.state == "z_wave":
+        g0 = _inject_z_wave(
+            g0,
+            ky_index=int(ky_index),
+            kx_index=int(kx_index),
+            amplitude=float(args.z_wave_amplitude),
+            z_mode=int(args.z_mode),
+        )
+
+    force_electrostatic_fields = _is_static_zero(linear_terms.apar) and _is_static_zero(
+        linear_terms.bpar
+    )
+    rhs_fn = jax.jit(
+        lambda state: linear_rhs_cached(
+            state,
+            cache,
+            params,
+            terms=linear_terms,
+            force_electrostatic_fields=force_electrostatic_fields,
+        )
+    )
+    compile_execute_seconds, first_out = _time_call(rhs_fn, g0)
+    rhs, phi = first_out
+
+    if args.trace_dir is not None:
+        args.trace_dir.mkdir(parents=True, exist_ok=True)
+        jax.profiler.start_trace(
+            str(args.trace_dir),
+            profiler_options=make_profile_options(
+                python_tracer_level=int(args.python_tracer_level),
+                host_tracer_level=int(args.host_tracer_level),
+            ),
+        )
+    try:
+        warm_t0 = time.perf_counter()
+        for _ in range(int(args.repeats)):
+            rhs, phi = rhs_fn(g0)
+            _block_tree((rhs, phi))
+        warm_seconds = (time.perf_counter() - warm_t0) / float(args.repeats)
+    finally:
+        if args.trace_dir is not None:
+            jax.profiler.stop_trace()
+
+    if args.memory_profile is not None:
+        args.memory_profile.parent.mkdir(parents=True, exist_ok=True)
+        jax.profiler.save_device_memory_profile(str(args.memory_profile))
+
+    hlo_ir = rhs_fn.lower(g0).compiler_ir(dialect="hlo")
+    if hlo_ir is None:
+        raise RuntimeError("failed to lower full linear RHS to HLO")
+    hlo_text = hlo_ir.as_hlo_text()
+    if args.hlo_out is not None:
+        args.hlo_out.parent.mkdir(parents=True, exist_ok=True)
+        args.hlo_out.write_text(hlo_text, encoding="utf-8")
+
+    summary = _build_summary(
+        config=str(args.config),
+        backend=jax.default_backend(),
+        nl=int(args.Nl),
+        nm=int(args.Nm),
+        repeats=int(args.repeats),
+        state=str(args.state),
+        z_variation_norm=_z_variation_norm(g0),
+        compile_execute_seconds=float(compile_execute_seconds),
+        warm_seconds=float(warm_seconds),
+        rhs_norm=float(np.asarray(jnp.linalg.norm(rhs))),
+        phi_norm=float(np.asarray(jnp.linalg.norm(phi))),
+        hlo_text=hlo_text,
+        trace_dir=args.trace_dir,
+        memory_profile=args.memory_profile,
+        hlo_out=args.hlo_out,
+        force_electrostatic_fields=force_electrostatic_fields,
+        source="gkx.operators.linear.rhs.linear_rhs_cached",
+    )
+    _write_summary_json(summary, args.summary_json)
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def main_full_nonlinear_rhs(argv: list[str] | None = None) -> int:
+    args = build_full_nonlinear_rhs_parser().parse_args(argv)
+    cfg, _ = load_runtime_from_toml(args.config)
+    geom = build_runtime_geometry(cfg)
+    grid_cfg = apply_imported_geometry_grid_defaults(geom, cfg.grid)
+    grid = build_spectral_grid(grid_cfg)
+    params = build_runtime_linear_params(cfg, Nm=args.Nm, geom=geom)
+    term_cfg = build_runtime_term_config(cfg)
+    laguerre_mode = (
+        cfg.time.laguerre_nonlinear_mode
+        if args.laguerre_mode is None
+        else str(args.laguerre_mode)
+    )
+
+    ky_index, kx_index = _select_nonlinear_mode_indices(
+        grid,
+        ky_target=args.ky,
+        kx_target=args.kx,
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+    )
+    g0 = _build_initial_condition(
+        grid,
+        geom,
+        cfg,
+        ky_index=ky_index,
+        kx_index=kx_index,
+        Nl=args.Nl,
+        Nm=args.Nm,
+        nspecies=len(cfg.species),
+    )
+    cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
+    g0 = jnp.asarray(g0)
+    if args.state == "z_wave":
+        g0 = _inject_z_wave(
+            g0,
+            ky_index=int(ky_index),
+            kx_index=int(kx_index),
+            amplitude=float(args.z_wave_amplitude),
+            z_mode=int(args.z_mode),
+        )
+
+    rhs_fn = jax.jit(
+        lambda state: nonlinear_rhs_cached(
+            state,
+            cache,
+            params,
+            term_cfg,
+            compressed_real_fft=bool(cfg.time.compressed_real_fft),
+            laguerre_mode=laguerre_mode,
+        )
+    )
+    compile_execute_seconds, first_out = _time_call(rhs_fn, g0)
+    rhs, fields = first_out
+
+    if args.trace_dir is not None:
+        args.trace_dir.mkdir(parents=True, exist_ok=True)
+        jax.profiler.start_trace(
+            str(args.trace_dir),
+            profiler_options=make_profile_options(
+                python_tracer_level=int(args.python_tracer_level),
+                host_tracer_level=int(args.host_tracer_level),
+            ),
+        )
+    try:
+        warm_t0 = time.perf_counter()
+        for _ in range(int(args.repeats)):
+            rhs, fields = rhs_fn(g0)
+            _block_tree((rhs, fields))
+        warm_seconds = (time.perf_counter() - warm_t0) / float(args.repeats)
+    finally:
+        if args.trace_dir is not None:
+            jax.profiler.stop_trace()
+
+    if args.memory_profile is not None:
+        args.memory_profile.parent.mkdir(parents=True, exist_ok=True)
+        jax.profiler.save_device_memory_profile(str(args.memory_profile))
+
+    hlo_text = rhs_fn.lower(g0).compiler_ir(dialect="hlo").as_hlo_text()
+    if args.hlo_out is not None:
+        args.hlo_out.parent.mkdir(parents=True, exist_ok=True)
+        args.hlo_out.write_text(hlo_text, encoding="utf-8")
+
+    summary = _build_nonlinear_summary(
+        config=str(args.config),
+        backend=jax.default_backend(),
+        nl=int(args.Nl),
+        nm=int(args.Nm),
+        repeats=int(args.repeats),
+        state=str(args.state),
+        laguerre_mode=str(laguerre_mode),
+        compressed_real_fft=bool(cfg.time.compressed_real_fft),
+        z_variation_norm=_z_variation_norm(g0),
+        compile_execute_seconds=float(compile_execute_seconds),
+        warm_seconds=float(warm_seconds),
+        rhs_norm=float(np.asarray(jnp.linalg.norm(rhs))),
+        phi_norm=_field_norm(fields.phi),
+        apar_norm=_field_norm(fields.apar),
+        bpar_norm=_field_norm(fields.bpar),
+        hlo_text=hlo_text,
+        trace_dir=args.trace_dir,
+        memory_profile=args.memory_profile,
+        hlo_out=args.hlo_out,
+        electrostatic_specialized=_is_static_zero(term_cfg.apar)
+        and _is_static_zero(term_cfg.bpar),
+    )
+    _write_summary_json(summary, args.summary_json)
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def build_nonlinear_step_hlo_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Count optimized-HLO ops per nonlinear RHS and per RK step."
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"),
+    )
+    for name, default in (("--Nx", 32), ("--Ny", 32), ("--Nz", 24)):
+        parser.add_argument(name, type=int, default=default)
+    parser.add_argument("--Nl", type=int, default=2)
+    parser.add_argument("--Nm", type=int, default=4)
+    parser.add_argument("--ky", type=float, default=0.3)
+    parser.add_argument("--methods", type=str, default="rk3,rk4")
+    parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--hlo-dir", type=Path, default=None)
+    parser.add_argument(
+        "--ky-layout",
+        choices=("full", "half"),
+        default="full",
+        help="ky axis of the evolved state: 'full' is the two-sided fftfreq "
+        "axis of length Ny, 'half' the Nyc = 1 + Ny//2 non-negative rows on "
+        "which the reality condition holds by construction (plan 5.3 N3). The "
+        "ledger's point is the difference between them.",
+    )
+    parser.add_argument(
+        "--route",
+        choices=("scan", "diagnostics", "runtime", "eager-scan"),
+        default="scan",
+        help="scan: integrate_nonlinear with cache/params as graph arguments; "
+        "diagnostics and runtime: the one diagnostics graph gkx.prepare and "
+        "run_runtime_nonlinear both compile, whose jit captures cache/params "
+        "as constants (they are the same graph and must give the same counts); "
+        "eager-scan: the bare scan module with cache/params as operands, the "
+        "placement the Q18 reference-route contract retired",
+    )
+    return parser
+
+
+_MEMORY_STAT_FIELDS = (
+    "argument_size_in_bytes",
+    "output_size_in_bytes",
+    "temp_size_in_bytes",
+    "alias_size_in_bytes",
+    "generated_code_size_in_bytes",
+)
+
+
+def _compiled_memory_stats(compiled: Any) -> dict[str, int]:
+    """The compiler's own buffer assignment for one executable.
+
+    ``temp_size_in_bytes`` is the scratch arena XLA reserves for everything
+    that is neither an argument nor an output -- the materialized intermediate
+    buffers of the graph.  Unlike the HLO text counts it cannot be inflated by
+    an instruction that a fusion emits as index arithmetic, so it is the
+    independent check on ``materialized_bytes``.  It is a property of the
+    compiled module, not of the run, so it does not depend on machine load.
+    """
+
+    try:
+        stats = compiled.memory_analysis()
+    except Exception:  # pragma: no cover - backend without the analysis
+        return {}
+    if stats is None:  # pragma: no cover - backend without the analysis
+        return {}
+    return {field: int(getattr(stats, field, 0) or 0) for field in _MEMORY_STAT_FIELDS}
+
+
+def _compiled_hlo_text(
+    fn: Callable[..., Any],
+    *args: Any,
+    dump: Path | None = None,
+    stats: dict[str, int] | None = None,
+) -> str:
+    compiled = jax.jit(fn).lower(*args).compile()
+    text = compiled.as_text()
+    if stats is not None:
+        stats.update(_compiled_memory_stats(compiled))
+    if dump is not None:
+        dump.parent.mkdir(parents=True, exist_ok=True)
+        dump.write_text(text, encoding="utf-8")
+    return text
+
+
+def _prepared_diagnostics_for_hlo(
+    cfg: Any,
+    g0: jnp.ndarray,
+    grid: Any,
+    geom: Any,
+    params: Any,
+    cache: Any,
+    term_cfg: Any,
+    *,
+    method: str,
+    ky_index: int,
+    kx_index: int,
+) -> Any:
+    """Prepare a one-step diagnostics scan with the runtime's keyword policy."""
+
+    kwargs = dict(
+        build_runtime_nonlinear_diagnostics_kwargs(
+            cfg,
+            dt=float(cfg.time.dt),
+            steps=1,
+            method=method,
+            term_config=term_cfg,
+            sample_stride=1,
+            diagnostics_stride=1,
+            laguerre_mode=str(cfg.time.laguerre_nonlinear_mode),
+            ky_index=int(ky_index),
+            kx_index=int(kx_index),
+            fixed_dt=bool(cfg.time.fixed_dt),
+            fixed_mode_ky_index=None,
+            fixed_mode_kx_index=None,
+            external_phi=None,
+            resolved_diagnostics=True,
+            show_progress=False,
+        )
+    )
+    dt = kwargs.pop("dt", float(cfg.time.dt))
+    steps = kwargs.pop("steps", 1)
+    kwargs["cache"] = cache
+    return prepare_nonlinear_explicit_diagnostics(
+        g0, grid, geom, params, dt, steps, **kwargs
+    )
+
+
+def _diagnostics_scan_hlo(
+    prepared: Any, *, dump: Path | None, stats: dict[str, int] | None = None
+) -> str:
+    """Lower the one explicit nonlinear diagnostics graph both routes compile.
+
+    ``gkx.prepare`` jits this function, and since the reference-route contract
+    (plan §5.3, Q18) ``integrate_nonlinear_explicit_diagnostics_state`` -- the
+    function ``run_runtime_nonlinear`` calls on its fixed-window, chunked and
+    sharded routes -- jits the same one. The jit closes over cache, params and
+    policy arrays, so XLA sees them as constants on both routes.
+    """
+
+    return _compiled_hlo_text(
+        prepared._run_raw, prepared.initial_state, dump=dump, stats=stats
+    )
+
+
+def _scan_equation_hlo(
+    fn: Callable[..., Any],
+    *args: Any,
+    dump: Path | None = None,
+    stats: dict[str, int] | None = None,
+) -> str:
+    """Lower the one top-level ``lax.scan`` that ``fn`` stages, operands as arguments.
+
+    This is the graph the runtime compiled before the Q18 reference-route
+    contract: outside jit, JAX compiles a scan primitive on its own and passes
+    the arrays its body closes over as arguments (``dispatch.apply_primitive``).
+    It is kept so the ledger can still price constant placement against the
+    captured graph, and it is no longer a route any shipped caller runs.
+    """
+
+    closed = jax.make_jaxpr(fn)(*args)
+    scans = [eqn for eqn in closed.jaxpr.eqns if eqn.primitive.name == "scan"]
+    if len(scans) != 1:
+        raise ValueError(f"expected one top-level scan, found {len(scans)}")
+    eqn = scans[0]
+    operands = [jnp.zeros(var.aval.shape, var.aval.dtype) for var in eqn.invars]
+
+    def bind_scan(*values: Any) -> Any:
+        return eqn.primitive.bind(*values, **eqn.params)
+
+    return _compiled_hlo_text(bind_scan, *operands, dump=dump, stats=stats)
+
+
+def _eager_scan_hlo(
+    prepared: Any, *, dump: Path | None, stats: dict[str, int] | None = None
+) -> str:
+    """Lower the bare scan module, the route retired by the Q18 contract.
+
+    No shipped caller compiles this any more. It stays in the ledger as the
+    rejected placement: the same scan with cache, params and policy arrays as
+    operands instead of captured constants.
+    """
+
+    return _scan_equation_hlo(
+        prepared._run_raw.__wrapped__, prepared.initial_state, dump=dump, stats=stats
+    )
+
+
+def main_nonlinear_step_hlo(argv: list[str] | None = None) -> int:
+    """Ledger the ops one RHS issues and what each RK step adds beyond them."""
+
+    args = build_nonlinear_step_hlo_parser().parse_args(argv)
+    cfg, _ = load_runtime_from_toml(args.config)
+    cfg = replace(cfg, grid=replace(cfg.grid, Nx=args.Nx, Ny=args.Ny, Nz=args.Nz))
+    geom = build_runtime_geometry(cfg)
+    grid = build_spectral_grid(
+        apply_imported_geometry_grid_defaults(geom, cfg.grid),
+        ky_layout=args.ky_layout,
+    )
+    params = build_runtime_linear_params(cfg, Nm=args.Nm, geom=geom)
+    term_cfg = build_runtime_term_config(cfg)
+    ky_index, kx_index = _select_nonlinear_mode_indices(
+        grid,
+        ky_target=args.ky,
+        kx_target=None,
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+    )
+    g0 = jnp.asarray(
+        _build_initial_condition(
+            grid,
+            geom,
+            cfg,
+            ky_index=ky_index,
+            kx_index=kx_index,
+            Nl=args.Nl,
+            Nm=args.Nm,
+            nspecies=len(cfg.species),
+        )
+    )
+    cache = build_linear_cache(grid, geom, params, args.Nl, args.Nm)
+    compressed = bool(cfg.time.compressed_real_fft)
+    laguerre_mode = str(cfg.time.laguerre_nonlinear_mode)
+
+    # Cache and parameters stay graph arguments, as in the runtime scan, so the
+    # ledger does not count a constant-folded graph.
+    def rhs(state: jnp.ndarray, run_cache: Any, run_params: Any) -> jnp.ndarray:
+        return nonlinear_rhs_cached(
+            state,
+            run_cache,
+            run_params,
+            term_cfg,
+            compressed_real_fft=compressed,
+            laguerre_mode=laguerre_mode,
+        )[0]
+
+    def dump(name: str) -> Path | None:
+        return None if args.hlo_dir is None else args.hlo_dir / f"{name}.hlo.txt"
+
+    rhs_memory: dict[str, int] = {}
+    rhs_counts = _hlo_op_counts(
+        _compiled_hlo_text(rhs, g0, cache, params, dump=dump("rhs"), stats=rhs_memory)
+    )
+    steps: dict[str, Any] = {}
+    for method in (m.strip() for m in args.methods.split(",") if m.strip()):
+
+        def step(
+            state: jnp.ndarray, run_cache: Any, run_params: Any, method: str = method
+        ) -> Any:
+            return integrate_nonlinear(
+                state,
+                grid,
+                geom,
+                run_params,
+                dt=float(cfg.time.dt),
+                steps=1,
+                method=method,
+                cache=run_cache,
+                terms=term_cfg,
+                compressed_real_fft=compressed,
+                laguerre_mode=laguerre_mode,
+                return_fields=False,
+            )
+
+        step_memory: dict[str, int] = {}
+        if args.route == "scan":
+            text = _compiled_hlo_text(
+                step, g0, cache, params, dump=dump(f"step_{method}"), stats=step_memory
+            )
+        else:
+            prepared = _prepared_diagnostics_for_hlo(
+                cfg,
+                g0,
+                grid,
+                geom,
+                params,
+                cache,
+                term_cfg,
+                method=method,
+                ky_index=ky_index,
+                kx_index=kx_index,
+            )
+            route_hlo = (
+                _eager_scan_hlo if args.route == "eager-scan" else _diagnostics_scan_hlo
+            )
+            text = route_hlo(
+                prepared, dump=dump(f"{args.route}_{method}"), stats=step_memory
+            )
+        counts = _hlo_op_counts(text)
+        evaluations = RK_RHS_EVALUATIONS[method]
+        # The diagnostics graphs also hold the field solve and diagnostics.
+        beyond = (
+            None
+            if args.route != "scan"
+            else {
+                key: value - evaluations * rhs_counts[key]
+                for key, value in counts.items()
+            }
+        )
+        steps[method] = {
+            "rhs_evaluations": evaluations,
+            "counts": counts,
+            "memory_analysis": step_memory,
+            "beyond_rhs_evaluations": beyond,
+        }
+    summary = {
+        "kind": "nonlinear_step_hlo_ledger",
+        "config": str(args.config),
+        "grid": {key: getattr(args, key) for key in ("Nx", "Ny", "Nz", "Nl", "Nm")},
+        "state_shape": list(g0.shape),
+        "state_dtype": str(g0.dtype),
+        "state_bytes": int(g0.size * g0.dtype.itemsize),
+        "compressed_real_fft": compressed,
+        "laguerre_mode": laguerre_mode,
+        "route": args.route,
+        "jax": jax.__version__,
+        "backend": jax.default_backend(),
+        "rhs": rhs_counts,
+        "rhs_memory_analysis": rhs_memory,
+        "steps": steps,
+        "claim_scope": (
+            "Op counts of one optimized XLA graph for one jax version and backend. "
+            "They locate materialized work; they are not a runtime claim. "
+            "bytes_written sums every concatenate and copy in the module text, "
+            "fusion interiors included, where XLA:CPU emits them as index "
+            "arithmetic and allocates nothing; materialized_bytes is the subset "
+            "that owns an output buffer and memory_analysis is the compiler's "
+            "own buffer assignment for the same executable."
+        ),
+    }
+    if args.out is not None:
+        _write_summary_json(summary, args.out)
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+SUBCOMMANDS: dict[str, Callable[[list[str] | None], int]] = {
+    "cyclone": main_cyclone,
+    "full-linear-rhs": main_full_linear_rhs,
+    "full-nonlinear-rhs": main_full_nonlinear_rhs,
+    "nonlinear-step-hlo": main_nonlinear_step_hlo,
+    "nonlinear-step-split": main_nonlinear_step_split,
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=sorted(SUBCOMMANDS))
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    tokens = list(sys.argv[1:] if argv is None else argv)
+    if not tokens or tokens[0] in {"-h", "--help"}:
+        build_parser().parse_args(tokens)
+        return 0
+    command, rest = tokens[0], tokens[1:]
+    try:
+        handler = SUBCOMMANDS[command]
+    except KeyError:
+        build_parser().parse_args([command])
+        return 2
+    return handler(rest)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

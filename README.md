@@ -535,19 +535,19 @@ machine-readable companion, that companion is the artifact of record.
 
 | Figure | Command |
 | --- | --- |
-| `turbulence_loop.webp` | `tools/artifacts/build_turbulence_movie.py` (two-stage; recipe in its docstring) |
+| `turbulence_loop.webp` | `scripts/artifacts/build_turbulence_movie.py` (two-stage; recipe in its docstring) |
 | `collision_operator_comparison.png` | `examples/theory_and_demos/collision_operator_comparison.py` with `NU_SCAN = True` |
-| `collision_operator_verification.png` | `tools/artifacts/build_linear_validation_artifacts.py collision-verification` |
-| `landau_damping_validation.png` | `tools/artifacts/build_landau_damping_figure.py` |
-| `benchmark_linear_parity.png` | `tools/artifacts/build_benchmark_parity_figure.py` |
-| `eigensolver_reach.png` | `tools/artifacts/build_eigensolver_reach_figure.py` |
+| `collision_operator_verification.png` | `scripts/artifacts/build_linear_validation_artifacts.py collision-verification` |
+| `landau_damping_validation.png` | `scripts/artifacts/build_landau_damping_figure.py` |
+| `benchmark_linear_parity.png` | `scripts/artifacts/build_benchmark_parity_figure.py` |
+| `eigensolver_reach.png` | `scripts/artifacts/build_eigensolver_reach_figure.py` |
 | `autodiff_inverse_twomode.png` | `examples/theory_and_demos/autodiff_inverse_twomode.py` |
-| `nonlinear_autodiff_validation.png` | `tools/artifacts/build_nonlinear_autodiff_figure.py` |
-| `qa_transport_equilibria.png`, `qa_transport_reduction.svg` | `tools/artifacts/build_qa_transport_figures.py` |
+| `nonlinear_autodiff_validation.png` | `scripts/artifacts/build_nonlinear_autodiff_figure.py` |
+| `qa_transport_equilibria.png`, `qa_transport_reduction.svg` | `scripts/artifacts/build_qa_transport_figures.py` |
 | `quasilinear_stellarator_usefulness.png` | generator retired — not regenerable; JSON companion is the record |
-| `saturation_examples.png` | `tools/artifacts/build_saturation_figure.py` |
-| `methods_velocity_truncation.png`, `methods_chain_transform_ledger.png`, `methods_eigen_route_cost.png`, `methods_cross_code_ky_scan.png` | `tools/artifacts/build_methods_figures.py all` (re-renders from the tracked evidence under `plan/research/scripts/`) |
-| `runtime_memory_benchmark.png` | `tools/artifacts/build_runtime_memory_figure.py` (re-renders from the tracked CSV); `benchmarks/performance/benchmark_runtime_memory.py` re-measures it |
+| `saturation_examples.png` | `scripts/artifacts/build_saturation_figure.py` |
+| `methods_velocity_truncation.png`, `methods_chain_transform_ledger.png`, `methods_eigen_route_cost.png`, `methods_cross_code_ky_scan.png` | `scripts/artifacts/build_methods_figures.py all` (re-renders from the tracked evidence under `plan/research/scripts/`) |
+| `runtime_memory_benchmark.png` | `scripts/artifacts/build_runtime_memory_figure.py` (re-renders from the tracked CSV); `scripts/benchmarks/benchmark_runtime_memory.py` re-measures it |
 
 ## Documentation and development
 
@@ -562,7 +562,7 @@ and [input reference](https://gkx.readthedocs.io/en/latest/inputs.html), then
 
 ```bash
 pytest
-python tools/release/run_test_gates.py fast
+python scripts/check.py test-gates fast
 ruff check .
 python -m sphinx -W -b html docs docs/_build/html
 ```

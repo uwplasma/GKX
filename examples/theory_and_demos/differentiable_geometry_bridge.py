@@ -44,11 +44,11 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from tools.campaigns.vmec_flux_tube_reports import (  # noqa: E402
+from scripts.campaigns.vmec_flux_tube_reports import (  # noqa: E402
     vmex_flux_tube_array_parity_report,
     vmex_flux_tube_sensitivity_report,
 )
-from tools.campaigns.vmec_state_sensitivity import (  # noqa: E402
+from scripts.campaigns.vmec_state_sensitivity import (  # noqa: E402
     vmex_field_line_tensor_sensitivity_report,
     vmex_metric_tensor_sensitivity_report,
 )

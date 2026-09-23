@@ -178,25 +178,25 @@ generators; the figure builder reads their JSON rather than carrying literals.
 .. code-block:: bash
 
    # (i) AD-vs-FD ladder and the divergence knee (right panel)
-   python tools/campaigns/nonlinear_saturated_state.py --nx 16 --ny 16 --nz 16 \
+   python scripts/campaigns/nonlinear_saturated_state.py --nx 16 --ny 16 --nz 16 \
        --state-out tools_out/cyclone16_saturated.npz
-   python tools/campaigns/nonlinear_gradient_window.py --nx 16 --ny 16 --nz 16 \
+   python scripts/campaigns/nonlinear_gradient_window.py --nx 16 --ny 16 --nz 16 \
        --saturated-state tools_out/cyclone16_saturated.npz \
        --min-window 64 --max-window 2048 --fd-step 1e-5 \
        --output docs/_static/nonlinear_heat_flux_gradient_window_rk3.json
 
    # (ii) checkpoint memory profile (left panel), once per device
-   python tools/profiling/profile_nonlinear_adjoint_checkpointing.py \
+   python scripts/profiling/profile_nonlinear_adjoint_checkpointing.py \
        --nx 16 --ny 16 --nz 16 --steps 1024 --precision 32 \
        --output docs/_static/nonlinear_adjoint_checkpointing_gpu32.json
 
    # (iii) CPU/GPU parity on one fixed case, once per device, then compare
-   python tools/profiling/profile_nonlinear_window_device_parity.py \
+   python scripts/profiling/profile_nonlinear_window_device_parity.py \
        --output tools_out/window_parity_cpu.json
-   python tools/profiling/profile_nonlinear_window_device_parity.py \
+   python scripts/profiling/profile_nonlinear_window_device_parity.py \
        --compare tools_out/window_parity_cpu.json tools_out/window_parity_gpu.json
 
-   python tools/artifacts/build_nonlinear_autodiff_figure.py
+   python scripts/artifacts/build_nonlinear_autodiff_figure.py
 
 Cost: the saturation run and the 2048-step ladder are ~40 min together on one
 RTX A4000; the 2048-step memory profile needs about 15 GB of device memory for

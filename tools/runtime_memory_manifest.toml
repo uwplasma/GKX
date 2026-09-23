@@ -36,7 +36,7 @@ label = "Cyclone ITG Nonlinear"
 backend = "gkx_gpu"
 host = "office"
 command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/nonlinear/axisymmetric/cyclone_runtime_nonlinear.py --ky 0.3 --Nl 4 --Nm 8 --steps 200 --dt 0.0377"
-profile_command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python tools/profiling/profile_runtime_kernels.py cyclone --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --ky 0.3 --Nl 4 --Nm 8 --steps 200 --dt 0.0377"
+profile_command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python scripts/profiling/profile_runtime_kernels.py cyclone --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml --ky 0.3 --Nl 4 --Nm 8 --steps 200 --dt 0.0377"
 cwd = "${GKX_BENCH_ROOT}"
 
 [[run]]
@@ -109,7 +109,7 @@ label = "KBM Nonlinear"
 backend = "gkx_gpu"
 host = "office"
 command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python examples/nonlinear/axisymmetric/kbm_runtime_nonlinear.py --ky 0.3 --Nl 4 --Nm 8 --steps 267 --dt 0.0003"
-profile_command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python tools/profiling/profile_runtime_kernels.py cyclone --config examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml --ky 0.3 --Nl 4 --Nm 8 --steps 267 --dt 0.0003"
+profile_command = "PATH=${GKX_VENV_BIN}:$PATH PYTHONPATH=src CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE} JAX_PLATFORM_NAME=gpu python scripts/profiling/profile_runtime_kernels.py cyclone --config examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml --ky 0.3 --Nl 4 --Nm 8 --steps 267 --dt 0.0003"
 cwd = "${GKX_BENCH_ROOT}"
 
 [[run]]

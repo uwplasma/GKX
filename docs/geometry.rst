@@ -405,7 +405,7 @@ machine-readable :download:`run record
 .. code-block:: bash
 
    PYTHONPATH=/path/to/GKX/src:/path/to/VMEX \
-     python tools/artifacts/build_vmex_mirror_gkx_artifacts.py
+     python scripts/artifacts/build_vmex_mirror_gkx_artifacts.py
 
 This page carried a second record, ``vmex_mirror_gkx_performance.json``, which
 reported CPU/GPU float64 parity, a centered-finite-difference derivative check,

@@ -381,10 +381,10 @@ The checked-in workflow has three owners:
 * :download:`QA_optimization.py <../examples/optimization/QA_optimization.py>`
   computes the VMEX--GKX design step;
 * :download:`qa_transport_validation.py
-  <../tools/campaigns/qa_transport_validation.py>` runs restartable matched
+  <../scripts/campaigns/qa_transport_validation.py>` runs restartable matched
   saturation pairs;
 * :download:`build_qa_transport_figures.py
-  <../tools/artifacts/build_qa_transport_figures.py>` computes
+  <../scripts/artifacts/build_qa_transport_figures.py>` computes
   :math:`\tau_{int}`, effective sample counts, intervals, CSV tables, and plots.
 
 The exact accepted boundaries are
@@ -397,13 +397,13 @@ corrected-operator traces. For example,
 .. code-block:: bash
 
    campaign_dir="campaign/transport-$(git rev-parse --short=12 HEAD)"
-   python tools/campaigns/qa_transport_validation.py nominal \
+   python scripts/campaigns/qa_transport_validation.py nominal \
      --seed-stop 24 --output-dir "$campaign_dir"
-   python tools/campaigns/qa_transport_validation.py perp24long \
+   python scripts/campaigns/qa_transport_validation.py perp24long \
      --seed-stop 16 --output-dir "$campaign_dir"
-   python tools/campaigns/qa_transport_validation.py v612 \
+   python scripts/campaigns/qa_transport_validation.py v612 \
      --seed-stop 16 --output-dir "$campaign_dir"
-   python tools/artifacts/build_qa_transport_figures.py \
+   python scripts/artifacts/build_qa_transport_figures.py \
      --raw-dir "$campaign_dir" --output-dir docs/_static
 
 Use the case names and pair counts in the table for the timestep, perpendicular,

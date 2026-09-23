@@ -775,7 +775,7 @@ def _area(rel: Path) -> str:
         return "root"
     if rel.parts[0] == "src" and len(rel.parts) > 2 and rel.parts[1] == "gkx":
         return "src/gkx" if len(rel.parts) == 3 else f"src/gkx/{rel.parts[2]}"
-    if rel.parts[0] in {"tests", "tools", "examples", "benchmarks", "docs"}:
+    if rel.parts[0] in {"tests", "tools", "scripts", "examples", "benchmarks", "docs"}:
         return rel.parts[0] if len(rel.parts) == 1 else f"{rel.parts[0]}/{rel.parts[1]}"
     return rel.parts[0]
 
@@ -836,13 +836,13 @@ def _role_and_action(rel: Path) -> tuple[str, str, str]:
                 return (
                     "comparison utility",
                     "move",
-                    "belongs under tools/comparison if still current",
+                    "belongs under scripts/comparison if still current",
                 )
             if stem.startswith(("profile_", "benchmark_")):
                 return (
                     "profiling/performance tool",
                     "move",
-                    "belongs under tools/profiling or benchmarks",
+                    "belongs under scripts/profiling or benchmarks",
                 )
             if stem.startswith(
                 ("build_", "plot_", "make_", "digitize_", "derive_", "compress_")
@@ -850,7 +850,7 @@ def _role_and_action(rel: Path) -> tuple[str, str, str]:
                 return (
                     "artifact builder",
                     "move-or-merge",
-                    "belongs under tools/artifacts if output is referenced",
+                    "belongs under scripts/artifacts if output is referenced",
                 )
             if stem.startswith(("check_", "audit_", "run_tests", "run_wide_coverage")):
                 return "release gate", "move", "belongs under scripts/checks"
@@ -885,8 +885,17 @@ def _role_and_action(rel: Path) -> tuple[str, str, str]:
         return "tool support file", "keep-or-review", "non-python tool asset"
 
     if parts[0] == "scripts":
-        if len(parts) > 2 and parts[1] == "checks":
-            return "release gate", "keep-or-merge", "dispatched by scripts/check.py"
+        if len(parts) > 2:
+            role, command = {
+                "checks": ("release gate", "check"),
+                "benchmarks": ("benchmark driver", "benchmark"),
+                "profiling": ("profiling/performance tool", "profile"),
+                "comparison": ("comparison utility", "compare"),
+                "campaigns": ("campaign helper", "validate"),
+                "artifacts": ("artifact builder", "validate"),
+            }.get(parts[1], ("developer module", ""))
+            where = f"scripts/{command}.py" if command else "no command"
+            return role, "keep-or-merge", f"dispatched by {where}"
         return "developer command", "keep", "at most eight scripts/ commands"
 
     if parts[0] == "examples":
@@ -899,7 +908,13 @@ def _role_and_action(rel: Path) -> tuple[str, str, str]:
     if parts[0] == "benchmarks":
         if parts[1:2] == ("results",):
             return "benchmark result index", "keep-small", "no raw solver outputs"
-        return "benchmark driver", "keep-small", "root benchmark layer is canonical"
+        if parts[1:2] == ("cases",):
+            return (
+                "validation input deck",
+                "keep",
+                "run by scripts/benchmark.py and tests",
+            )
+        return "benchmark data", "keep-small", "references, capability matrix, README"
 
     if parts[0] == "docs":
         if len(parts) > 1 and parts[1] == "_static":
