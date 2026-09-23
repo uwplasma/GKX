@@ -873,6 +873,58 @@ def test_solver_objective_vector_from_geometry_is_finite_and_exported() -> None:
         solver_objective_vector_from_geometry(geom, n_laguerre=0)
 
 
+def _sparse_direct_geometry(parameter: jnp.ndarray):
+    theta = jnp.linspace(-jnp.pi, jnp.pi, 16, endpoint=False)
+    return gkx.flux_tube_geometry_from_mapping(
+        solver_ready_geometry_mapping(parameter, theta), validate_finite=False
+    )
+
+
+_SPARSE_DIRECT_GRID = dict(n_laguerre=2, n_hermite=3, ny=4, selected_ky_index=1)
+
+
+def _sparse_direct_growth(parameter: jnp.ndarray, **kwargs) -> jnp.ndarray:
+    return solver_growth_rate_from_geometry(
+        _sparse_direct_geometry(parameter), **_SPARSE_DIRECT_GRID, **kwargs
+    )
+
+
+def test_sparse_direct_growth_rate_rejects_bad_selection() -> None:
+    base = jnp.asarray([0.05, 0.20])
+    with pytest.raises(ValueError, match="requires a shift"):
+        _sparse_direct_growth(base, eigensolver="sparse-direct")
+    with pytest.raises(ValueError, match="eigensolver must be"):
+        _sparse_direct_growth(base, eigensolver="arnoldi")
+
+
+@requires_paired_solvax("sparse_eigenvalue", "csr_data_from_products")
+def test_sparse_direct_growth_rate_matches_dense_value_and_gradient() -> None:
+    """One shifted host factor gives the dense growth rate and its gradient."""
+
+    if not bool(jax.config.read("jax_enable_x64")):
+        pytest.skip("the 1e-8 agreement gate is a float64 gate")
+    base = jnp.asarray([0.05, 0.20])
+    dense_value, dense_grad = jax.value_and_grad(_sparse_direct_growth)(base)
+    spectrum = np.linalg.eigvals(
+        np.asarray(
+            solver_linear_operator_matrix_from_geometry(
+                _sparse_direct_geometry(base), **_SPARSE_DIRECT_GRID
+            )
+        )
+    )
+    top = spectrum[np.argmax(spectrum.real)]
+    shift = complex(round(top.real, 2), round(top.imag, 2))
+
+    def sparse(parameter):
+        return _sparse_direct_growth(
+            parameter, eigensolver="sparse-direct", shift=shift
+        )
+
+    value, grad = jax.value_and_grad(sparse)(base)
+    np.testing.assert_allclose(value, dense_value, rtol=1e-10)
+    np.testing.assert_allclose(grad, dense_grad, rtol=1e-8, atol=1e-12)
+
+
 @requires_solvax_reverse_eigenpair
 def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None:
     """The matrix-free primal and bordered tangent must preserve QL observables."""
