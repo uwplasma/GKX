@@ -18825,3 +18825,31 @@ Outcome:
   multi-stage step; no fix landed.
 - remaining blocker: per-op profile of the half RK3 step (xprof installed in the scratch venv).
 - next task: see the PR Handoff.
+
+## 2026-09-22 - PERF-ADJ resumed (G.2, F.6 ADJ-HALF, PERF-LIT item 1), branch perf/adjoint-window (paused again)
+
+Baseline:
+- GKX SHA: f9485f044 (2.3.0); branch head carries the source change below
+- companion SHAs: none; office CPU (36 cores, load 16-94 during runs), jax/jaxlib 0.10.2 (py3.11) and 0.11.2 (py3.12); no GPU was free
+- source/test/tool files and lines: src/gkx/solvers_nonlinear_explicit.py, src/gkx/solvers_nonlinear_state_integration.py, two tests, harnesses in plan/research/scripts/2026-09-22-perf-adj/
+- relevant existing gate: #264 compile cache; PERF-LIT (#284) item 1
+
+Scope:
+- intended change: remove the half-layout step penalty; drop the per-step remat inside checkpoint blocks under a memory budget
+- non-goals: ky layout default (PERF-LAYOUT)
+- prospective acceptance and rollback criteria: values/gradients unchanged (f32 <=1e-6 rel, f64 <=1e-12); A/B/A/B win
+
+Changes:
+- advance_explicit_nonlinear_state: optimization barrier on every stage derivative and stage state
+- checkpointed_explicit_scan(memory_budget_bytes=None|int) + block_checkpoint_plan; nonlinear_heat_flux_window(adjoint_memory_budget_bytes=ADJOINT_MEMORY_BUDGET_BYTES=2 GiB)
+- tests: scan-level block-only vs nested and starved-budget fallback; window block vs nested (value, d/d tprim, drift-geometry direction) plus centered FD, both ky layouts, rk3
+
+Evidence:
+- root cause: on the half layout the projector is the identity, so XLA fused the whole linear RHS into the transpose that feeds the bracket's irfft2 (five Laguerre points x two derivatives: ~40 recomputes); the full layout's projector concatenate materialized each stage. Barriers fix it, but XLA:CPU in jaxlib 0.10.x drops barriers before fusion (openxla "Move opt barrier remover after cpu scheduler", Aug 2026); jaxlib 0.11.2 honors them. Python 3.11 CI (jax 0.10.2) therefore compiles bitwise-identical HLO.
+- one RK3 step, 16x16xNz24, Nl4/Nm8, x64, jax 0.11.2 CPU: half 755 -> 24 ms, full 78 -> 45 ms; jax 0.10.2: unchanged.
+- window VJP, A/B/A/B in one process, jax 0.11.2 CPU x64, random real state: 16x16x16/16 steps half main 6.90 s, barrier 2.62, block 1.73 (fwd 5.32 -> 0.43); full 5.19 / 3.91 / 3.01. 16x16x16/256 half: main 186.5 s, barrier 63.9, block 53.0 (fwd 82.9 -> 15.9), temp 104.8 / 75.3 / 202.1 MiB; value identical, gradient 1.7e-16 rel (record: plan/research/scripts/2026-09-22-perf-adj/records/cpu011_x64_16_256_half.json).
+- focused tests pass on office jax 0.10.2 in x64 and f32 (7 selected). An earlier f32 draft that also compared against checkpoint=False moved one gradient by 1.05e-6 rel (unchecked vs block), so that comparison was dropped; block vs nested stays within 1e-6.
+
+Outcome:
+- partial (paused). Remaining blocker: GPU A/B (barriers may cost on GPU: tests/unit/parallel/test_parallel_linear_velocity.py records a guarded-RHS barrier measuring slower on a sharded path), the rest of the CPU campaign, docs, CI.
+- next task: see PR #279 Handoff.
