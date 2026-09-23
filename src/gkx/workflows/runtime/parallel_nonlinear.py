@@ -8,7 +8,14 @@ narrow about what it will accept.
 Supported today: ``strategy = "shard_map"`` with ``axis = "species_hermite"``
 (the production decomposition -- a ``(species, hermite)`` mesh with the
 perpendicular plane, Laguerre and ``z`` replicated) or ``axis = "ky"`` (kept as
-a routing diagnostic). ``auto = true`` picks the species x Hermite mesh from the
+a routing diagnostic). The ``ky`` route does not partition the work: the
+diagnostic integrator's initial-state projection (``setup.project_state`` in
+:mod:`gkx.solvers_nonlinear_diagnostics`) returns the state replicated, so the
+compiled scan's input is ``{replicated}`` on every device (read from the
+optimized HLO on JAX 0.10.2), and forcing the ``ky`` split inside the jit
+instead fails on XLA:CPU, whose FFT rejects the layout the partitioner's
+all-gather leaves it. Any device count is therefore accepted on ``ky``,
+including one that does not divide ``Nyc``. ``auto = true`` picks the species x Hermite mesh from the
 visible devices and reports which one it chose. In both cases the whole
 nonlinear state is placed on the mesh and the ordinary production integrator
 runs on it, so the operator is the production nonlinear RHS rather than a
@@ -41,6 +48,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+from jax.sharding import NamedSharding, PartitionSpec
 
 from gkx.operators.nonlinear.spectral_core import (
     _host_max_abs_rel_error,
@@ -285,24 +293,6 @@ def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
             ),
         )
 
-    # ky is the third-from-last axis in both the (Nl, Nm, Nky, Nkx, Nz) and
-    # (Ns, Nl, Nm, Nky, Nkx, Nz) layouts.  The extent is what the state
-    # actually stores, which is ``Ny`` on a two-sided axis and
-    # ``Nyc = 1 + Ny // 2`` on a half-spectrum one (gkx.core_ky_layout): the
-    # divisibility rule is the same, but the number it is applied to is not,
-    # and ``Nyc`` is odd whenever ``Ny`` is a multiple of four.  The message
-    # says which layout produced the extent so that a device count chosen
-    # against ``Ny`` does not look like an unexplained refusal.
-    extent = int(state.shape[-3])
-    if extent % plan.device_count:
-        layout = "half-spectrum (Nyc = 1 + Ny//2)" if extent % 2 else "two-sided"
-        raise NonlinearParallelRoutingError(
-            f"[parallel] axis='{plan.axis}' has extent {extent}, which is not "
-            f"divisible by the requested {plan.device_count} devices. The ky "
-            f"axis of this state is {layout}. Choose a device count that "
-            "divides that extent, shard axis='species_hermite' instead, or "
-            "set strategy='serial'."
-        )
     sharding = resolve_state_sharding(
         state,
         plan.axis,
@@ -314,6 +304,17 @@ def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
             f"could not build a '{plan.axis}' sharding for a nonlinear state with "
             f"shape {tuple(state.shape)} on {plan.device_count} devices."
         )
+    # ky is the third-from-last axis of both packed layouts. Its extent is
+    # ``Ny`` on a two-sided axis and ``Nyc = 1 + Ny//2`` on a ``ky >= 0`` one
+    # (gkx.core_ky_layout), and ``Nyc`` is odd whenever ``Ny`` is a multiple
+    # of four. JAX places an array only in equal shares, so an extent the
+    # devices do not divide enters replicated on the same mesh (SHARD-PAD,
+    # plan F.6). That is not a weaker run than the divisible case: the
+    # integrator's initial-state projection hands the scan a replicated state
+    # either way, so this route integrates the whole state on every device
+    # whatever the extent (see the module docstring).
+    if int(state.shape[-3]) % plan.device_count:
+        return jax.device_put(state, NamedSharding(sharding.mesh, PartitionSpec()))
     return jax.device_put(state, sharding)
 
 

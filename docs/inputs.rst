@@ -482,10 +482,10 @@ same wavenumbers either way.
   does not share the gain: the checkpointed heat-flux window gradient takes
   1.28x as long as on the two-sided axis (:doc:`performance`). A forward
   nonlinear run is the case the opt-in is for; a gradient run should stay on
-  ``"full"``. A run that shards the ``ky`` axis across devices needs ``Nyc``
-  divisible by the device count, and ``Nyc`` is odd whenever ``Ny`` is a
-  multiple of four, so such a run is refused on this layout; shard
-  ``species_hermite`` instead.
+  ``"full"``. ``[parallel] axis = "ky"`` accepts ``Nyc`` on any device count,
+  although ``Nyc`` is odd whenever ``Ny`` is a multiple of four; that route is
+  a routing diagnostic that does not partition the scan
+  (:doc:`parallelization`), so shard ``species_hermite`` for a real split.
 
 The published NetCDF bundle does not depend on the choice, and a restart file
 written under either loads under either, including files written by 2.2.0

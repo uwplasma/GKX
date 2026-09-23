@@ -843,8 +843,16 @@ diagnostic contract is not done yet.
 
 The whole nonlinear state is placed on a ``ky`` device mesh and the ordinary
 production integrator runs on it, so the operator is the production nonlinear
-RHS and not a reduced stand-in. ``num_devices`` sizes the mesh and must divide
-the ``k_y`` extent. This is a *routing* claim only. No speedup is claimed here:
+RHS and not a reduced stand-in. This is a *routing* claim only, and a narrow
+one: the scan does not run partitioned. The integrator's initial-state
+projection returns the state replicated, so the compiled scan's input sharding
+is ``{replicated}`` and every device integrates the whole state (read from the
+optimized HLO on JAX 0.10.2). Forcing the ``ky`` split inside the jit fails on
+XLA:CPU, whose FFT thunk rejects the layout the partitioner's all-gather gives
+its operand. ``num_devices`` sizes the mesh and need not divide the ``k_y``
+extent: a count that does not -- ``Nyc = 1 + Ny//2`` is odd whenever ``Ny`` is
+a multiple of four -- places the state replicated on the mesh, which is what
+the divisible case runs anyway. No speedup is claimed here:
 the tracked two-GPU device-z transport-window profile still reaches ``1.48x``,
 below the ``1.5x`` promotion gate, and no matched profiler artifact exists for
 the routed ``ky`` path at all.
