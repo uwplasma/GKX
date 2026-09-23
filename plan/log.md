@@ -19341,3 +19341,14 @@ Outcome:
   repeatedly (session scratch 25 GB); large runs move to the office host.
 - Next task: P0 — CLI-RES, then land #277 and the paused lanes in the G.5
   merge order.
+
+## 2026-09-22 — second pause: supervisor handoff
+
+Baseline: `main` `29362737f` (#277 merged). Merged today: #277 (plan). Opened
+by the supervisor: #286 (CLI-RES). Merged `main` into #278 (`ac65b570d`) and
+#272 (`09ae6ca42`, marked ready). Lanes paused again at the maintainer's
+request; each lane PR carries its Handoff. Plan section G.7 records every
+open PR, the merge queue and order, the CI-saturation lesson (use one chain
+branch), unowned findings, and resource rules. Local disk cleanup freed about
+20 GB (session scratch outputs and ~50 merged, clean worktrees). No plan or log
+line removed.
