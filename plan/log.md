@@ -19739,3 +19739,16 @@ Outcome:
 - #282 identity: done, 8/8 bitwise. SHARD-PAD: done for the runtime route, whose ky split was never real; real ky partitioning is blocked on XLA:CPU and is a separate follow-up (repro, workaround, GPU check, explicit message for an uneven `[time] state_sharding`).
 - remaining blocker for the default flip: ADJ-HALF (plan F.5).
 - next task: merge `main` again after #278 and move `tools/release/*` invocations to `python scripts/check.py`; retarget #287 to `main` once #282 lands.
+
+## 2026-09-22 - PERF-LAYOUT paused again - `perf/ky-layout-deck-key` (#282), `perf/ky-shard-pad` (#287)
+
+Paused by the maintainer while CI was queued. Nothing is running locally or on the office host.
+
+Baseline: #282 head `258e27b8c`, #287 head `085620a9f`; `main` `29362737f`.
+Evidence: unchanged from the entry above (identity 8/8 bitwise; SHARD-PAD probe recorded).
+Outcome: both PRs ready for review, CI not observed to completion. When paused, #282 had 4 checks passing and 33 still pending, and #287 had 3 passing and 34 pending. Neither had any failure. The earlier CI run at `8ddf49301` was fully green.
+Next steps, in order:
+1. Read `gh pr checks 282` and `gh pr checks 287` and fix any real failure.
+2. After #278 merges, merge `main` into #282 and then into #287. Use `python scripts/check.py <subcommand>` in place of `tools/release/*`.
+3. Land #282, then retarget #287 to `main`.
+4. Flip the default only after ADJ-HALF closes.
