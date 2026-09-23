@@ -104,6 +104,27 @@ count = args.steps
 tprim0 = jnp.asarray(params.tprim)
 
 original_advance = sne.advance_explicit_nonlinear_state
+original_plan = sne.block_checkpoint_plan
+plans = {}
+
+
+def recording_plan(steps, carry_bytes, residual_bytes, budget):
+    block = original_plan(steps, carry_bytes, residual_bytes, budget)
+    storage = (
+        None
+        if block is None
+        else block * residual_bytes + -(-steps // block) * carry_bytes
+    )
+    plans.update(
+        carry_bytes=carry_bytes,
+        residual_bytes=residual_bytes,
+        block=block,
+        estimated_storage_bytes=storage,
+    )
+    return block
+
+
+sne.block_checkpoint_plan = recording_plan
 
 
 def unbarriered_advance(G, dG, dt_local, *, method, rhs_fn, project_state, state_dtype):
@@ -161,6 +182,8 @@ def compile_variant(name):
     compile_s = time.perf_counter() - t0
     fwd = jax.jit(objective).lower(tprim0).compile()
     sni.advance_explicit_nonlinear_state = original_advance
+    if name in ("block", "mainblock"):
+        print(name, "plan", plans, flush=True)
     return compiled, fwd, compile_s, int(compiled.memory_analysis().temp_size_in_bytes)
 
 

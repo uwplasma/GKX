@@ -20432,3 +20432,36 @@ Outcome:
 - CI at the pause, before the merges (runners backed up): #280 had 26 checks passed, 11 pending and none failed. #295 had 10 passed and 27 pending after its mypy fix (the type-ignored import, which follows the adaptive route). The merges restarted both runs.
 - Office: raw outputs and the GPU venv are deleted; the MUMPS conda env and the clones remain under `lanes/solvax-direct` (2.6 GB).
 - Next: CI green on #280 and #295; SOLVAX release with #121; raise the GKX floor; cache the pattern in #295.
+## 2026-09-23 - PERF-ADJ wave 2 (G.2, ADJ-HALF, PERF-LIT items 1, 2, 4), branch perf/adjoint-window-2
+
+Baseline:
+- GKX SHA: f005418bf (origin/chain/p0, #293, includes #279)
+- companion SHAs: none; office A4000 (complex64) and CPU; jax/jaxlib 0.10.2 (py3.11), CPU cross-check with 0.11.2 (py3.12)
+- source/test/tool files and lines: src/gkx/solvers_nonlinear_explicit.py, solvers_nonlinear_state_integration.py, solvers_nonlinear.py; three test files; docs/nonlinear_autodiff.rst
+- relevant existing gate: PERF-LIT REPORT items 1, 2, 4
+
+Scope:
+- intended change: GPU A/B of the stage barrier and block-only schedule; backend-conditional barrier; budget default from measured memory; field-solve floor; warm start and vmapped tubes
+- non-goals: ky default, the saturation gate (F.5 step 4)
+- prospective acceptance and rollback criteria: gradients within f32 1e-6 / f64 1e-12, net-negative source lines
+
+Changes:
+- barrier is CPU-only (jax.lax.platform_dependent); identity on GPU, where it cost ~20% forward at 32x32x24 (fwd 1.36 vs 1.09 s)
+- ADJOINT_MEMORY_BUDGET_BYTES 2 -> 4 GiB (32x32x24/1024 block schedule measures 3.00 GiB, estimate 2.92 GiB)
+- deleted integrate_cached_explicit_scan and checkpoint_explicit_step (pass-throughs) and the residual helper; test for vmapped tubes added to the window test
+- net: src -67 lines, tests -43 lines; manifest baselines lowered to measured
+
+Evidence (records: plan/research/scripts/2026-09-22-perf-adj/records/gpu_a4000/):
+- A4000 f32, value + d/d tprim, nested -> block: 16x16x16/1024 half 3.23 -> 2.20 s; 32x32x24/256 half 3.62 -> 2.80 s; 32x32x24/1024 full 20.6 -> 16.2 s; 32x32x24/64 full 1.226 -> 0.882 s with value/grad bitwise equal. Temp 55 -> 288 MiB, 170 -> 816 MiB, 583 MiB -> 3.00 GiB.
+- half vs full gradient at 32x32x24/256 on A4000 (block): 2.80 vs 4.8 s: ADJ-HALF closed on GPU.
+- jax 0.10.2 CPU: no barrier gain because XLA:CPU in jaxlib 0.10.x removes optimization barriers before fusion (openxla "Move opt barrier remover after cpu scheduler", Aug 2026, in jaxlib 0.11.x); 0.11.2 CPU keeps it: half RK3 step 755 -> 28 ms. Making it effective on 0.10.2 would need a non-barrier fusion hack; not done.
+- field-solve "1.2 ms floor": standalone-dispatch latency, not present inside the scan (RK3 step 0.71 ms at 16x16x16, 5.26 ms at 32x32x24 in-scan). scan unroll 2/4: -10..14% at 32x32x24, slower forward at 16x16x16, compile +35..110%: rejected (records/gpu_a4000/unroll.txt).
+- tubes (8x8x16 Nl4/Nm8, 1024-step window): jax.vmap over states and geometry, one compile per batch size: 1 tube 2.1 s, 4 tubes 0.73 s/tube, 8 tubes 0.63 s/tube (loop 1.92); values bitwise equal to the loop. No new API needed.
+- warm start: cold spin-up 8000 steps 3.5 s, warm 2000 steps 1.0 s (8x8x16). The example's 8000-step cold spin-up is NOT saturated at 8x8x16 (window flux 0.14 vs 37-101 later); at 16x16x12 warm-started window values (112, 120) lie inside the along-trajectory spread (107-121) but d/d(drift) changes sign across samples (-498..+303): single-window gradients need the saturation gate and ensembles (F.5 step 4, PERF-LIT item 7).
+
+Outcome:
+- accepted (pending CI)
+- remaining blocker: none for this PR
+- next task: F.5 step 4 saturation gate; ensemble windows (PERF-LIT item 7)
+
+2026-09-23 addendum (final pause): merged origin/main (#293 landed) into perf/adjoint-window-2 cleanly; PR #297 retargeted to main as a draft. CI on d1720ec33 had 25 passing and 12 still running when paused (mypy fixed in d1720ec33; nothing else had failed). Office outputs deleted; the jax 0.10.2 venv under the lane directory is kept.

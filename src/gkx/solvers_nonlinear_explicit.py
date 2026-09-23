@@ -173,6 +173,14 @@ def _explicit_stage_update(
     )
 
 
+def _materialize(value: jnp.ndarray) -> jnp.ndarray:
+    """Materialize ``value`` on CPU; identity elsewhere (it cost ~20% on GPU)."""
+
+    return jax.lax.platform_dependent(
+        value, cpu=jax.lax.optimization_barrier, default=lambda x: x
+    )
+
+
 def advance_explicit_nonlinear_state(
     G: jnp.ndarray,
     dG: jnp.ndarray,
@@ -185,28 +193,23 @@ def advance_explicit_nonlinear_state(
 ) -> jnp.ndarray:
     """Advance one explicit nonlinear step with a static method string.
 
-    Every stage derivative and every stage state passes through an
-    optimization barrier, so XLA materializes each once. Without it the stage
-    expression -- the whole linear RHS -- is fused into the transpose that
-    feeds the bracket's ``irfft2``, which reads each element once per Laguerre
-    point and derivative, and recomputes the RHS about forty times. The
-    two-sided layout escaped this only because its projector's concatenate
-    materialized the stage; on the ``ky >= 0`` layout the projector is the
-    identity and a half-layout RK3 step was 10-30x slower than the full one.
-    XLA:CPU honors the barrier from jaxlib 0.11 (earlier CPU builds drop it
-    before fusion, so nothing changes there); XLA:GPU honors it.
+    Barriers materialize every stage and stage derivative once. Unbarriered,
+    XLA:CPU fuses the whole linear RHS into the transpose feeding the
+    bracket's ``irfft2`` and recomputes it ~40 times per stage whenever the
+    projector is the identity (``ky >= 0`` layout): 30x on an RK3 step.
+    jaxlib < 0.11 drops the barrier before CPU fusion.
     """
 
     def materialized_rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, object]:
         derivative, fields = rhs_fn(state)
-        return jax.lax.optimization_barrier(derivative), fields
+        return _materialize(derivative), fields
 
     def materialized_projection(state: jnp.ndarray) -> jnp.ndarray:
-        return jax.lax.optimization_barrier(project_state(state))
+        return _materialize(project_state(state))
 
     G_new = _explicit_stage_update(
         G,
-        jax.lax.optimization_barrier(dG),
+        _materialize(dG),
         dt_local,
         method=method,
         rhs_fn=materialized_rhs,
@@ -214,12 +217,6 @@ def advance_explicit_nonlinear_state(
     )
     G_new = project_state(G_new)
     return jnp.asarray(G_new, dtype=state_dtype)
-
-
-def checkpoint_explicit_step(step: Callable[..., object], checkpoint: bool):
-    """Apply JAX checkpointing to an explicit scan step when requested."""
-
-    return jax.checkpoint(step) if checkpoint else step
 
 
 def _checkpoint_block_size(steps: int) -> int:
@@ -241,42 +238,18 @@ def _concatenate_scan_outputs(blocks: Any, tail: Any) -> Any:
 
 
 def _tree_bytes(tree: Any) -> int:
-    """Return the storage of every array (or shape struct) leaf of ``tree``."""
+    """Bytes of every array or shape-struct leaf of ``tree``."""
 
-    return sum(
-        math.prod(leaf.shape) * jnp.dtype(leaf.dtype).itemsize
-        for leaf in jax.tree.leaves(tree)
-        if hasattr(leaf, "shape") and hasattr(leaf, "dtype")
-    )
-
-
-def _step_residual_bytes(
-    step: Callable[..., object], carry: Any, index: jnp.ndarray
-) -> int:
-    """Return the reverse-mode residual storage of one scan step, from shapes.
-
-    The residuals are read off the pullback of the step with respect to its
-    carry, traced abstractly (nothing runs). Arrays the step closes over and
-    feeds to the pullback are counted too, so the estimate errs high.
-    """
-
-    def pullback(state: Any) -> Any:
-        return jax.vjp(lambda value: step(value, index), state)[1]
-
-    return _tree_bytes(jax.eval_shape(pullback, carry))
+    return sum(math.prod(x.shape) * x.dtype.itemsize for x in jax.tree.leaves(tree))
 
 
 def block_checkpoint_plan(
     steps: int, carry_bytes: int, residual_bytes: int, memory_budget_bytes: int
 ) -> int | None:
-    """Return the block length of the block-only schedule, or ``None``.
+    """Block length of the block-only schedule, or ``None`` if over budget.
 
-    The block-only schedule rematerializes each block once in reverse and keeps
-    that block's per-step residuals, so the forward runs twice in total instead
-    of three times under the nested schedule. It stores ``steps/B`` carries
-    and ``B`` step residuals; ``B = sqrt(steps * carry / residual)`` minimizes
-    that sum. ``None`` means the minimum still exceeds the budget and the
-    caller must fall back to the nested schedule.
+    It stores ``steps/B`` carries plus ``B`` step residuals, minimized by
+    ``B = sqrt(steps * carry / residual)``.
     """
 
     count = max(int(steps), 1)
@@ -289,7 +262,7 @@ def block_checkpoint_plan(
 
 
 def checkpointed_explicit_scan(
-    step: Callable[..., object],
+    step: Callable[..., Any],
     initial_carry: Any,
     indices: jnp.ndarray,
     *,
@@ -306,26 +279,26 @@ def checkpointed_explicit_scan(
     discrete time integrator. Requested scan outputs retain their inherent
     ``O(steps)`` result storage.
 
-    That nested schedule runs every step's forward three times: once going
-    forward, once when its block is rematerialized, and once more when the
-    step itself is. With ``memory_budget_bytes`` the inner per-step
-    rematerialization is dropped whenever :func:`block_checkpoint_plan` fits
-    the block-only schedule into the budget, so the forward runs twice; the
-    residual estimate comes from :func:`_step_residual_bytes`. ``None`` keeps
-    the nested schedule. Both schedules differentiate the same discrete map.
+    That nested schedule runs each forward step three times. Under
+    ``memory_budget_bytes`` the per-step remat is dropped when the block-only
+    schedule fits (:func:`block_checkpoint_plan`, residuals sized from the
+    abstract pullback, which errs high), so it runs twice. Same discrete map.
     """
 
     steps = int(indices.shape[0])
-    scan_step = checkpoint_explicit_step(step, checkpoint)
+    scan_step = jax.checkpoint(step) if checkpoint else step
     if not checkpoint or steps <= 1:
         return jax.lax.scan(scan_step, initial_carry, indices, length=steps)
 
     block_size = _checkpoint_block_size(steps)
     if memory_budget_bytes is not None:
+        pullback = jax.eval_shape(
+            lambda c: jax.vjp(lambda v: step(v, indices[0]), c)[1], initial_carry
+        )
         block_only = block_checkpoint_plan(
             steps,
             _tree_bytes(initial_carry),
-            _step_residual_bytes(step, initial_carry, indices[0]),
+            _tree_bytes(pullback),
             memory_budget_bytes,
         )
         if block_only is not None:
@@ -462,38 +435,6 @@ def integrate_nonlinear_scan(
     if return_fields:
         return G_final, fields_t
     return G_final
-
-
-def integrate_cached_explicit_scan(
-    G0: jnp.ndarray,
-    dt: float,
-    steps: int,
-    *,
-    method: str,
-    rhs_fn: RhsFn,
-    scan_fn: ScanFn,
-    checkpoint: bool = False,
-    project_state: ProjectFn | None = None,
-    show_progress: bool = False,
-    return_fields: bool = True,
-    rhs_args: tuple[Any, ...] = (),
-    rhs_static_args: tuple[Any, ...] = (),
-) -> tuple[jnp.ndarray, Any] | jnp.ndarray:
-    """Run a cached explicit nonlinear scan with injected RHS and projection."""
-
-    return scan_fn(
-        rhs_fn,
-        G0,
-        dt,
-        steps,
-        method=method,
-        checkpoint=checkpoint,
-        project_state=project_state,
-        show_progress=show_progress,
-        return_fields=return_fields,
-        rhs_args=rhs_args,
-        rhs_static_args=rhs_static_args,
-    )
 
 
 def _apply_explicit_collision_split(
@@ -744,8 +685,6 @@ __all__ = [
     "advance_explicit_nonlinear_state",
     "block_checkpoint_plan",
     "checkpointed_explicit_scan",
-    "checkpoint_explicit_step",
-    "integrate_cached_explicit_scan",
     "integrate_nonlinear_scan",
     "make_explicit_diagnostic_step",
     "run_explicit_diagnostic_scan",
