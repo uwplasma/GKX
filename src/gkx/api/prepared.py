@@ -253,9 +253,15 @@ def _runtime_resolution_defaults() -> dict[str, tuple[int, int]]:
     that disagrees with the runtime describes a calculation that will not run.
     """
 
-    from gkx.workflows.runtime.startup import _RUNTIME_LINEAR_HL_FALLBACK
+    from gkx.workflows.runtime.startup import (
+        _RUNTIME_LINEAR_HL_FALLBACK,
+        _RUNTIME_NONLINEAR_HL_FALLBACK,
+    )
 
-    return {"linear": _RUNTIME_LINEAR_HL_FALLBACK, "nonlinear": (4, 8)}
+    return {
+        "linear": _RUNTIME_LINEAR_HL_FALLBACK,
+        "nonlinear": _RUNTIME_NONLINEAR_HL_FALLBACK,
+    }
 
 
 def _resolve_velocity_resolution(

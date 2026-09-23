@@ -18783,3 +18783,38 @@ rises to `solvax>=0.22.0` (#265: `block_thomas_factor_ops` first appears in
 research-grade milestone moves to 2.4.0; its exits were not required for this
 release. Left open: #266 (ky >= 0 default: opt-out identity check unfinished,
 red shards), #272 (draft Cyclone reference migration), #268, #274, #275.
+
+## 2026-09-22 — CLI-RES: one owner for the Nl/Nm fallbacks (`fix/cli-resolution-fallback`)
+
+Baseline:
+- GKX SHA: `f9485f044` (2.3.0).
+
+Scope:
+- Found by DOCS-CURRENT (#283). 2.2.0 (#262) moved the linear velocity
+  fallback to (Nl, Nm) = (12, 24) in `startup._RUNTIME_LINEAR_HL_FALLBACK`,
+  but three other places kept literals: the CLI option resolver
+  (`_resolve_grid_time_options`, 24/12, used by `gkx run`, `gkx scan` **and**
+  the nonlinear command), and `_CASE_LINEAR_SPECS` (24/12, used by the public
+  `gkx.run_linear_case`). A deck without Nl/Nm therefore ran Hermite-starved
+  (the −4.4% Cyclone γ case) through the CLI and `run_linear_case`, and a
+  nonlinear CLI run used (24, 12) instead of the API's (4, 8).
+
+Changes:
+- `startup._RUNTIME_NONLINEAR_HL_FALLBACK = (4, 8)` added next to the linear
+  pair; the CLI resolver, both case spec tables and `prepared`'s summary read
+  the two constants. One stale test assertion that pinned (24, 12) now pins
+  (12, 24); a new test asserts every entry point matches the owner.
+- Every shipped GKX deck sets Nl/Nm, so no shipped example changes; the only
+  deck without `Nl` is a GX-format reference input.
+
+Evidence:
+- `tests/integration/runtime/test_cli.py`, `test_runtime_config.py`,
+  `tests/unit/api`, `tests/release/test_release_gates.py`: 407 passed, 1
+  skipped (JAX 0.10.2, x64). ruff, mypy, architecture manifest pass
+  (commands.py 1004 → 1011 lines, justified in the manifest).
+
+Outcome:
+- Accepted. Remaining from #283's list, for later PRs: `gkx run`/`gkx scan`
+  print a spurious deprecation warning (they call deprecated wrappers); the
+  Krylov eigen path ignores `collision_operator` silently; three tracked
+  `docs/_static` JSONs contain absolute local paths.
