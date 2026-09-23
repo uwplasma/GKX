@@ -9,9 +9,7 @@ from gkx.workflows.runtime.toml import load_runtime_from_toml
 
 
 ROOT = Path(__file__).resolve().parents[2]
-KINETIC_CONFIG = (
-    ROOT / "examples" / "05_kinetic_electrons" / "case_full.toml"
-)
+KINETIC_CONFIG = ROOT / "examples" / "05_kinetic_electrons" / "case_full.toml"
 
 
 def main() -> None:

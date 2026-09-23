@@ -3780,21 +3780,11 @@ _CFL_MARGIN_OVER_BOUND: dict[str, str] = {}
 # their configured dt is a starting guess and being over it means nothing.
 _CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = {
     "examples/common_input.toml": "fixed_dt = false: adaptive dt",
-    "benchmarks/cases/circular_vmec_nonlinear.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "benchmarks/cases/etg_nonlinear.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "examples/03_nonlinear_tokamak/case_full.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "benchmarks/cases/cyclone_nonlinear_miller.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "benchmarks/cases/cyclone_nonlinear_t400.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
+    "benchmarks/cases/circular_vmec_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
+    "benchmarks/cases/etg_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
+    "examples/03_nonlinear_tokamak/case_full.toml": ("fixed_dt = false: adaptive dt"),
+    "benchmarks/cases/cyclone_nonlinear_miller.toml": ("fixed_dt = false: adaptive dt"),
+    "benchmarks/cases/cyclone_nonlinear_t400.toml": ("fixed_dt = false: adaptive dt"),
     "examples/04_nonlinear_stellarator/case_full.toml": (
         "fixed_dt = false: adaptive dt"
     ),

@@ -476,7 +476,7 @@ def test_full_linear_trace_summary_contains_metadata() -> None:
     )
 
     assert payload["kind"] == "full_linear_rhs_trace_summary"
-    assert payload["case"] == "runtime_cyclone_nonlinear_miller"
+    assert payload["case"] == "cyclone_nonlinear_miller"
     assert payload["backend"] == "cpu"
     assert payload["warm_seconds"] == 0.1
     assert payload["hlo_token_counts"]["add"] >= 1
@@ -532,7 +532,7 @@ def test_full_nonlinear_trace_summary_contains_metadata() -> None:
     )
 
     assert payload["kind"] == "full_nonlinear_rhs_trace_summary"
-    assert payload["case"] == "runtime_cyclone_nonlinear_miller"
+    assert payload["case"] == "cyclone_nonlinear_miller"
     assert payload["backend"] == "gpu"
     assert payload["laguerre_mode"] == "grid"
     assert payload["compressed_real_fft"] is True
@@ -806,7 +806,7 @@ def test_linear_rhs_terms_summary_reports_dominant_and_zero_norm_terms() -> None
     )
 
     assert payload["kind"] == "linear_rhs_terms_profile_summary"
-    assert payload["case"] == "runtime_cyclone_nonlinear"
+    assert payload["case"] == "case_full"
     assert payload["state"] == "z_wave"
     assert payload["z_variation_norm"] == 0.25
     assert payload["dominant_measured_term"] == "collisions"

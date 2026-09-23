@@ -879,8 +879,7 @@ def _case_config(name: str, args) -> tuple[object, object, int, float, float, fl
         )
     if case == "etg":
         cfg, _ = load_runtime_from_toml(
-            Path(__file__).resolve().parents[2]
-            / "benchmarks/cases/etg_linear.toml"
+            Path(__file__).resolve().parents[2] / "benchmarks/cases/etg_linear.toml"
         )
         cfg = replace(
             cfg,
@@ -913,9 +912,7 @@ def _case_config(name: str, args) -> tuple[object, object, int, float, float, fl
         cfg, _raw = load_runtime_from_toml(
             Path(__file__).resolve().parents[2]
             / "examples"
-            / "linear"
-            / "axisymmetric"
-            / "runtime_kinetic_electron.toml"
+            / "05_kinetic_electrons/case_full.toml"
         )
         cfg = replace(
             cfg,
@@ -944,11 +941,7 @@ def _case_config(name: str, args) -> tuple[object, object, int, float, float, fl
         )
     if case == "tem":
         cfg, _raw = load_runtime_from_toml(
-            Path(__file__).resolve().parents[2]
-            / "examples"
-            / "linear"
-            / "axisymmetric"
-            / "runtime_tem.toml"
+            Path(__file__).resolve().parents[2] / "benchmarks" / "cases/tem_linear.toml"
         )
         cfg = replace(
             cfg,

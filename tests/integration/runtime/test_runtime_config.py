@@ -544,7 +544,7 @@ def test_etg_nonlinear_pilot_example_keeps_two_species_full_gk_contract() -> Non
     assert cfg.collisions.hypercollisions_kz == pytest.approx(1.0)
     assert data["run"]["ky"] == pytest.approx(5.0)
     assert cfg.output.path == str(
-        (path.parents[3] / "tools_out" / "etg_nonlinear_runtime").resolve()
+        (path.parents[2] / "tools_out" / "etg_nonlinear_runtime").resolve()
     )
 
 

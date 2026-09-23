@@ -49,9 +49,7 @@ def main() -> int:
     parser.add_argument(
         "--toml",
         type=Path,
-        default=Path(
-            "benchmarks/cases/cyclone_nonlinear_t400.toml"
-        ),
+        default=Path("benchmarks/cases/cyclone_nonlinear_t400.toml"),
     )
     parser.add_argument("--nx", type=int, default=16)
     parser.add_argument("--ny", type=int, default=16)

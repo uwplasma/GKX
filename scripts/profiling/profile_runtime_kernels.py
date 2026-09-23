@@ -761,9 +761,7 @@ def _add_full_rhs_common_args(
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path(
-            "benchmarks/cases/cyclone_nonlinear_miller.toml"
-        ),
+        default=Path("benchmarks/cases/cyclone_nonlinear_miller.toml"),
     )
     parser.add_argument("--ky", type=float, default=0.3)
     parser.add_argument("--kx", type=float, default=None)

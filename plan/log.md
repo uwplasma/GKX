@@ -20409,3 +20409,34 @@ Outcome:
   - `benchmarks/{cyclone,etg,kinetic,tem}_linear_benchmark.py`, `benchmarks/performance/benchmark_nonlinear_suite.py`, `benchmarks/runtime_w7x_zonal_response_vmec.toml` comment, and `tools/` path strings still name old example paths; they wait for #278
   - a focused office test run was stopped at 11% by the pause, with one failure not yet identified
 - next task: see the PR #281 Handoff
+
+## 2026-09-23 - EXAMPLES-GALLERY (G.3), branch examples/gallery — rebased onto chain/p0, path edits in benchmarks/ and scripts/
+
+Baseline:
+- GKX SHA: origin/chain/p0 f005418bf merged into examples/gallery 1b69bf8a0
+- relevant existing gate: #281 CI run 35813199194 failed in model-artifacts, runtime-core, nonlinear-core, and wide-coverage 8/12/13/16
+
+Scope:
+- intended change: merge the P0 chain, apply the slim-tools rename recipe, and make the path-only edits in `scripts/`, `tools/*.toml` and docs that #278 deferred
+- non-goals: new physics; regenerating docs artifacts
+
+Changes:
+- `scripts/{artifacts,benchmarks,campaigns,comparison,profiling}` now name the gallery and `benchmarks/cases/` paths, including the directory-joined forms.
+- `tools/runtime_memory_manifest.toml`: its commands called example scripts with argparse flags that the scripts had already stopped accepting. They now use `python -m gkx.cli run-runtime-{linear,nonlinear} --config <deck>`.
+- The chain's rewritten docs pages received the gallery paths; references to deleted scripts were removed or point to f9485f044.
+- Profiler case labels now follow deck stems, e.g. `cyclone_nonlinear_miller`. Tracked-artifact label checks keep their historical values.
+
+Evidence:
+- Every failure in CI run 35813199194 was a stale path.
+- Office CPU run over the affected selection:
+  - selection: quick shards, tests/tools, tests/integration, tests/unit/{nonlinear,api,linear,operators,solvers}, tests/validation/{benchmarks,stellarator}, tests/release
+  - result: 2132 passed, 10 failed
+  - 4 failures need a `.git` checkout, which office lacks; they were rerun locally and pass
+  - 5 were real (stale labels and paths); they are fixed and pass locally
+  - 1 is `test_adaptive_observables_match_dense_across_physics[QHS]`: "did not certify, residual 7.6e-9". It runs only where the QHS wout exists, which CI lacks; the deck is unchanged apart from its relative vmec_file path.
+- `scripts/check.py`: size, architecture, readiness, parallel-scaling, quasilinear and vmec-boozer are clean, with no `docs/_static` drift.
+
+Outcome:
+- accepted pending CI
+- remaining blocker: none known
+- next task: follow-up issue for the QHS adaptive-eigensolver certification on a generated wout

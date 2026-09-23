@@ -40,9 +40,7 @@ class CaseSpec:
 DEFAULT_CASES: dict[str, CaseSpec] = {
     "cyclone": CaseSpec(
         name="cyclone",
-        config=Path(
-            "benchmarks/cases/cyclone_nonlinear_short.toml"
-        ),
+        config=Path("benchmarks/cases/cyclone_nonlinear_short.toml"),
         ky=0.3,
         nl=4,
         nm=8,
@@ -60,9 +58,7 @@ DEFAULT_CASES: dict[str, CaseSpec] = {
     ),
     "w7x": CaseSpec(
         name="w7x",
-        config=Path(
-            "benchmarks/cases/w7x_nonlinear_imported_geometry.toml"
-        ),
+        config=Path("benchmarks/cases/w7x_nonlinear_imported_geometry.toml"),
         ky=1.0 / 21.0,
         nl=3,
         nm=4,
@@ -73,9 +69,7 @@ DEFAULT_CASES: dict[str, CaseSpec] = {
     ),
     "hsx": CaseSpec(
         name="hsx",
-        config=Path(
-            "examples/04_nonlinear_stellarator/case_full.toml"
-        ),
+        config=Path("examples/04_nonlinear_stellarator/case_full.toml"),
         ky=1.0 / 21.0,
         nl=3,
         nm=4,

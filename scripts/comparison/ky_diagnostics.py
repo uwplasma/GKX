@@ -215,11 +215,7 @@ def _build_problem(case: str, ky: float, beta: float | None, Nl: int, Nm: int):
         terms = LinearTerms()
     elif case == "kinetic":
         cfg, _raw = load_runtime_from_toml(
-            ROOT
-            / "examples"
-            / "linear"
-            / "axisymmetric"
-            / "runtime_kinetic_electron.toml"
+            ROOT / "examples" / "05_kinetic_electrons/case_full.toml"
         )
         grid_full = build_spectral_grid(cfg.grid)
         geom = build_runtime_geometry(cfg)
