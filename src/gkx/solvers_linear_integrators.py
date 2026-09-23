@@ -24,10 +24,12 @@ from gkx.operators.linear.params import (
     _x64_enabled,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers_linear_implicit import _integrate_linear_implicit_cached
+from gkx.solvers_linear_implicit import (
+    _integrate_linear_implicit_cached,
+    _validate_implicit_sample_policy,
+)
 from gkx.solvers_linear_integrator_diagnostics import (
     _linear_cache_or_build,
-    _validate_linear_sampling,
     integrate_linear_diagnostics,
 )
 from gkx.solvers_linear_parallel import (
@@ -649,7 +651,7 @@ def integrate_linear(
     if return_solve_stats and method != "implicit":
         return (*integrate_linear(**{**locals(), "return_solve_stats": False}), None)
     terms = LinearTerms() if terms is None else terms
-    _validate_linear_sampling(steps=steps, sample_stride=sample_stride)
+    _validate_implicit_sample_policy(steps=steps, sample_stride=sample_stride)
     cache = _linear_cache_or_build(
         G0, grid, geom, params, cache, cache_builder=build_linear_cache
     )

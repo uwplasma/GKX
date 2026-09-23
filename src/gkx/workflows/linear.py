@@ -18,7 +18,10 @@ from gkx.diagnostics.modes import (
 )
 from gkx.config import RuntimeConfig
 from gkx.operators.linear.cache_builder import mask_off_chain_rows
-from gkx.workflows.runtime.diagnostics import RuntimeQuasilinearFinalizationDeps
+from gkx.workflows.runtime.diagnostics import (
+    RuntimeQuasilinearFinalizationDeps,
+    _fit_signal_key,
+)
 from gkx.workflows.runtime.results import RuntimeLinearResult
 from gkx.workflows.runtime.solver_status import (
     checked_solve_summary,
@@ -124,13 +127,6 @@ class _LinearTrajectory:
 def _status(callback: _StatusCallback, message: str) -> None:
     if callback is not None:
         callback(message)
-
-
-def _fit_signal_key(fit_signal: str) -> str:
-    fit_key = fit_signal.strip().lower()
-    if fit_key not in {"phi", "density", "auto"}:
-        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-    return fit_key
 
 
 def _prepare_linear_runtime_context(

@@ -566,14 +566,13 @@ Growth-rate transport-gradient audits also need an eigenbranch-locality check.
 The public helper
 ``solver_linear_operator_matrix_from_geometry(geometry, ...)`` materializes the
 same GKX linear operator used by
-``solver_growth_rate_from_geometry(...)``. The report
-``vmex_transport_growth_branch_locality_report_from_states(base, plus, minus, ...)``
-then compares the dominant-growth finite-difference slope against the slope of
-the eigenvalue nearest to the base dominant eigenvalue for every configured
-surface, field line, and ``k_y`` sample. If the independently selected
-max-growth branch switches, or if the base branch is under-isolated, the report
-fails closed and labels the row before any transport-gradient optimization
-claim is admitted. A derivative claim requires VMEX's turbulence tangent tests,
+``solver_growth_rate_from_geometry(...)``, and
+``dominant_eigenvalue_branch_locality_report`` compares the dominant-growth
+finite-difference slope against the slope of the eigenvalue nearest to the base
+dominant eigenvalue. If the independently selected max-growth branch switches,
+or if the base branch is under-isolated, the report fails closed. (The
+per-surface VMEX wrapper that looped this over surfaces, field lines and
+``k_y`` samples was a campaign report and left the package in ARCH-A.) A derivative claim requires VMEX's turbulence tangent tests,
 this locality check, and an independent finite-difference comparison on the
 exact objective. The ``vmex_boundary_chain_*.json`` records in
 ``docs/_static`` are conditioning evidence only.

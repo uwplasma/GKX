@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, fields, replace
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from importlib import resources
-from typing import Any, Sequence, TypeVar, cast
+from typing import Any, Sequence, TypeVar
 
 import jax.numpy as jnp
 import numpy as np
@@ -29,17 +29,6 @@ from gkx.solvers_linear_krylov import KrylovConfig
 
 VALID_FIT_SIGNALS = frozenset({"phi", "density", "auto"})
 _Record = TypeVar("_Record")
-
-
-def _pack_dataclass_fields(
-    record_type: type[_Record], values: Mapping[str, Any]
-) -> _Record:
-    """Build an internal request record from a public function's locals."""
-
-    constructor = cast(Any, record_type)
-    return constructor(
-        **{field.name: values[field.name] for field in fields(cast(Any, record_type))}
-    )
 
 
 def _is_array_like(value: Any) -> bool:
@@ -869,7 +858,6 @@ __all__ = [
     "resources",
     "VALID_FIT_SIGNALS",
     "_is_array_like",
-    "_pack_dataclass_fields",
     "_iter_ky_batches",
     "_resolve_streaming_window",
     "normalize_solver_key",

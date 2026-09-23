@@ -20356,3 +20356,51 @@ removed at the maintainer's request. The research-grade milestone is renamed
 (scripts tranche 3), #296 (ARCH-A, −14,731 source lines), #297 (adjoint 2),
 #295 (sparse-direct growth-rate gradient), #281 (examples gallery), #280,
 #291, #292, #274, #275; SOLVAX #121.
+## 2026-09-23 - ARCH-A contraction 1 (G.3/G.6 P4), branch arch/contract-1
+
+Baseline:
+- GKX SHA: f005418bf (chain/p0, #293)
+- companion SHAs: none
+- source/test/tool files and lines: src/gkx 187 / 93,953; tests 81 / 94,628; scripts 106 / 78,277; tools 0
+- relevant existing gate: scripts/check.py architecture (topology, line-budget, cohesion), validation-coverage, readiness technical-status
+
+Scope:
+- intended change: inventory the source tree (import graph, product reachability, dead definitions, duplicates, registry, deprecated aliases) and delete what no run, CLI command, public name or example reaches
+- non-goals: moving code between packages, breaking import cycles, the deprecated reduced stellarator model (examples depend on it), scripts/ beyond what imports the deleted modules
+- prospective acceptance: at least -10,000 source lines; bitwise-identical fingerprints on XLA:CPU; no E1-E3 test removed; rollback = revert the two commits
+
+Changes:
+- files/functions removed, merged, or added: 27 src modules deleted (13,756 lines: 10 nonlinear spectral-identity/device-z prototypes, 4 diagnostics reports, 10 VMEC/Boozer objective gates and wrappers, 3 pass-through facades); 864 lines of definitions and imports that only they used; 4 exact-duplicate helpers merged into one owner; 86 lazy-registry rows; 10 scripts and 6 test files (215 test functions, all E0 report/gate/facade/profiler contracts or identity gates of the reduced operator); plan/research/2026-09-23-arch-a/{INVENTORY.md,fingerprint.py} added
+- kept on purpose: diagnostics.quasilinear_calibration (documented user workflow in docs/quasilinear.rst); parallel.batch (CI wheel smoke test)
+- public/schema behavior: 86 compatibility names no longer resolve as gkx.<name>; gkx.solvers_linear/_nonlinear/_time no longer import; numerics unchanged
+
+Evidence:
+- focused tests: local JAX 0.10.2 x64 CPU, tests/unit + tests/integration 2,366 passed; the only failures are two pre-existing ones (VMEX tensor-sensitivity, which fails on the base tree here too; a compile-reuse test that fails under xdist and passes alone). tests/validation + tests/tools + tests/release 709 passed. mypy clean (160 files), ruff check/format clean, sphinx -W clean, CI repo-hygiene block passes with regenerated artifacts
+- physics/mathematics/numerics gates: fingerprints with plan/research/2026-09-23-arch-a/fingerprint.py on the office host, float64. XLA:CPU base vs head bitwise identical: Cyclone gamma 0x1.7ed2ffdd9f835p-4, omega 0x1.286b1286ae465p-2, eigenfunction sha a92b98619ab58211; 100-step nonlinear heat-flux trace sha f0c5711f6ad61c17 (last 0x1.e0af0faac1b00p-18); window value 0x1.6a3a9aa898351p-34 and d<Q>/d(tprim) -0x1.22ee865d4c2b7p-40. CUDA (one A4000): linear and window fingerprints bitwise identical; the nonlinear trace differs between two base runs, so it is not a bitwise CUDA fingerprint (head final value equals base run 1)
+- CPU/NVIDIA measurements: wheel 868,489 -> 759,982 B, sdist 769,614 -> 676,663 B; import gkx.runtime median 1.06 -> 0.95 s on the laptop (5 alternating runs, noisy)
+- values: src/gkx 187 / 93,953 -> 160 / 79,222; tests 81 / 94,628 -> 75 / 87,428; scripts 106 / 78,277 -> 97 / 70,247; registry 346 -> 260; exact/near duplicate groups 11/25 -> 4/15; cycles 7 -> 7; low-cohesion 8 -> 6
+
+Outcome:
+- accepted pending CI and review (PR against chain/p0)
+- remaining blocker: none. Merge overlap with SLIM-SCRIPTS #294 on the scripts both delete; take the delete
+- next task: INVENTORY §5 rank 1 (reduced stellarator model, after EXAMPLES-GALLERY), rank 3 (deprecated CLI commands), rank 4 (diagnostics timesteppers into their integrators) with the same fingerprint harness
+
+## 2026-09-23 - ARCH-A contraction 1, paused (credits)
+
+Baseline:
+- GKX SHA: origin/main 48536d159 (#293 merged) merged cleanly into arch/contract-1
+
+Scope:
+- no content change beyond the test-lines baseline fix below
+
+Changes:
+- tools/package_architecture_manifest.toml: test_python_lines baseline 87,428 -> 87,430, the measured value after the registry-size test comment (repo-hygiene failed on this in CI run 35855460396)
+
+Evidence:
+- CI run 35855460396 (head be7ebb219): 33 jobs passed, repo-hygiene failed only on that baseline; nonlinear-core, parallel-autodiff and wide-coverage shard 24 had not finished at the pause
+- local hygiene block (size, architecture, parallel-scaling, quasilinear, vmec-boozer, readiness) passes with the fix; ruff check/format clean
+- office host: fingerprint directory removed, no process left
+
+Outcome:
+- paused; PR #296 converted to draft
+- next task: let CI finish on the pushed head, confirm ci-required, then mark #296 ready; then INVENTORY §5 ranks 1, 3, 4

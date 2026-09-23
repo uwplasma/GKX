@@ -12,6 +12,7 @@ from gkx.diagnostics.modes import ModeSelection
 from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.diagnostics import (
     _RuntimeLinearFitOptions,
+    _fit_signal_key,
     ensure_finite_linear_history,
 )
 from gkx.workflows.runtime.results import (
@@ -563,13 +564,6 @@ def _run_batch_diagnostics(
         * (np.arange(phi_t_np.shape[0], dtype=float) + 1.0)
     )
     return _BatchDiagnostics(phi_t=phi_t_np, density_t=dens_t_np, time=t_arr)
-
-
-def _fit_signal_key(fit_signal: str) -> str:
-    fit_key = fit_signal.strip().lower()
-    if fit_key not in {"phi", "density", "auto"}:
-        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-    return fit_key
 
 
 def _auto_fit_scan_candidate(

@@ -29,16 +29,16 @@ stack rather than assumed:
 * the production parallel-streaming derivative is a spectral FFT along ``z``
   (:func:`gkx.operators.linear.streaming.grad_z_periodic`), so a whole-state
   ``z`` shard does not survive SPMD partitioning;
-* :mod:`gkx.operators.nonlinear.device_z` is a reduced diagnostic operator --
-  the ``-{phi,g}`` bracket with a model field solve, no streaming, mirror,
-  curvature, collisions, or species axis -- so routing a production run through
-  it would answer a different physics question.
+* the former ``gkx.operators.nonlinear.device_z`` route was a reduced
+  diagnostic operator -- the ``-{phi,g}`` bracket with a model field solve, no
+  streaming, mirror, curvature, collisions, or species axis -- so routing a
+  production run through it would have answered a different physics question.
 
 Routing is fail-closed on numerical identity. With ``strict_identity = true``
 the same run is also executed serially and the two answers must agree, or
-:class:`NonlinearParallelIdentityError` is raised. The comparison reuses the
-identity primitives already used by the device-z gates rather than introducing
-a second tolerance convention.
+:class:`NonlinearParallelIdentityError` is raised. Agreement is allclose-style:
+the maximum absolute error is within ``atol`` or the maximum relative error
+(scaled by ``max(|reference|, atol)``) is within ``rtol``.
 """
 
 from __future__ import annotations
@@ -48,12 +48,9 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax.sharding import NamedSharding, PartitionSpec
 
-from gkx.operators.nonlinear.spectral_core import (
-    _host_max_abs_rel_error,
-    _within_abs_or_rel_tolerance,
-)
 from gkx.parallel.state import resolve_state_sharding
 from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
 
@@ -90,10 +87,10 @@ _SUPPORT_SUMMARY = (
 _Z_AXIS_REASON = (
     "[parallel] axis='z' has no nonlinear runtime route. The production "
     "parallel-streaming derivative is a spectral FFT along z, so a whole-state z "
-    "shard does not survive SPMD partitioning, and the device-z pencil route in "
-    "gkx.operators.nonlinear.device_z evaluates a reduced diagnostic bracket "
-    "operator with no streaming, mirror, curvature, collision, or species terms "
-    "rather than the production nonlinear RHS. See docs/parallelization.rst. "
+    "shard does not survive SPMD partitioning, and the retired device_z pencil "
+    "route evaluated a reduced diagnostic bracket operator with no streaming, "
+    "mirror, curvature, collision, or species terms rather than the production "
+    "nonlinear RHS. See docs/parallelization.rst. "
     + _SUPPORT_SUMMARY.capitalize()
     + "."
 )
@@ -357,14 +354,17 @@ def assert_nonlinear_parallel_identity(
         serial_diagnostics=serial_diagnostics,
         sharded_diagnostics=sharded_diagnostics,
     ):
-        abs_error, rel_error = _host_max_abs_rel_error(
-            jnp.asarray(serial_value),
-            jnp.asarray(sharded_value),
-            atol=plan.atol,
-        )
-        if not _within_abs_or_rel_tolerance(
-            abs_error, rel_error, atol=plan.atol, rtol=plan.rtol
-        ):
+        reference = np.asarray(jax.device_get(jnp.asarray(serial_value)))
+        candidate = np.asarray(jax.device_get(jnp.asarray(sharded_value)))
+        if reference.shape != candidate.shape:
+            abs_error = rel_error = float("inf")
+        else:
+            error = np.abs(candidate - reference)
+            abs_error = float(np.max(error))
+            rel_error = float(
+                np.max(error / np.maximum(np.abs(reference), float(plan.atol)))
+            )
+        if not (abs_error <= float(plan.atol) or rel_error <= float(plan.rtol)):
             failures.append(
                 f"{name} (max_abs={abs_error:.6e}, max_rel={rel_error:.6e})"
             )

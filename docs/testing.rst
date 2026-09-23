@@ -329,12 +329,6 @@ gates.
      - Checks every ``*.out.nc`` for ``Grids/time``, the requested heat-flux
        diagnostic, finite monotone samples, and optional ``tmin/tmax``
        coverage; fails closed on restart-only output.
-   * - ``scripts/checks/check_nonlinear_optimization_gates.py production-guard``
-     - Blocks production nonlinear turbulent-flux optimization claims until
-       optimized equilibria have replicated post-transient window audits.
-       Reference negative case:
-       ``docs/_static/strict_qa_top12_edge_matched_nonlinear_transport.json``
-       (0.58% reduction, uncertainty z-score 0.20; matched gate fails).
    * - ``scripts/checks/check_nonlinear_transport_gates.py matrix-portfolio``
      - Selects only a passing broad matrix family; current negative ledger:
        ``docs/_static/broad_nonlinear_transport_matrix_negative_evidence.json``.

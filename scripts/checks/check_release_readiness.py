@@ -283,7 +283,7 @@ LANES: dict[str, tuple[EvidenceCheck, ...]] = {
         ),
         EvidenceCheck(
             "linear solver package",
-            "src/gkx/solvers_linear.py",
+            "src/gkx/solvers_linear_krylov.py",
             "KrylovConfig",
         ),
         EvidenceCheck(
@@ -293,7 +293,7 @@ LANES: dict[str, tuple[EvidenceCheck, ...]] = {
         ),
         EvidenceCheck(
             "nonlinear solver package",
-            "src/gkx/solvers_nonlinear.py",
+            "src/gkx/solvers_nonlinear_imex.py",
             "solve_imex_step",
         ),
         EvidenceCheck(
