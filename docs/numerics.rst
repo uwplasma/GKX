@@ -85,9 +85,12 @@ These links are clickable in the HTML docs via the ``viewcode`` extension.
 Structured solver dependency contract
 -------------------------------------
 
-GKX requires ``solvax>=0.22.0``; ``pyproject.toml`` is the only place that
-floor is declared. Version 0.22.0 is the first release that exports every
-SOLVAX name GKX imports. The binding one is ``block_thomas_factor_ops``, the
+GKX requires ``solvax>=0.26.0``; ``pyproject.toml`` is the only place that
+floor is declared. Version 0.26.0 is the first release that exports every
+SOLVAX name GKX imports: the sparse-direct growth-rate eigensolver
+(``eigensolver="sparse-direct"``) uses ``sparse_eigenvalue``, ``CsrPattern``
+and ``csr_data_from_products``, which 0.25.0 lacks. Before that the binding
+name was ``block_thomas_factor_ops``, the
 operator-coupling Schur elimination behind the ``pr3-cm`` preconditioner's
 exact z-block solve, which first ships there together with
 ``block_thomas_solve_ops``, the solve the tests pin GKX's unrolled
@@ -171,7 +174,7 @@ propagator eigensolve. See "Why ``adaptive`` is the default, and not
 shift-invert" in :doc:`solvers`.
 
 **Precision.** ``complex64`` by default. On
-``examples/linear/axisymmetric/cyclone.toml`` at its own resolution the float32
+``examples/01_linear_tokamak/case_full.toml`` at its own resolution the float32
 run returns :math:`\gamma = 0.09309106`, :math:`\omega = 0.28203276` against
 float64's :math:`0.09309117`, :math:`0.28203273`, agreement to 1.2e-6 relative.
 ``JAX_ENABLE_X64=true`` widens the initial state to ``complex128`` and so
@@ -832,7 +835,7 @@ paper normalization converts as
 :math:`\nu = \nu_i^*\epsilon^{3/2}/(\sqrt{2}q) = 0.0499921`, so
 :math:`t\nu=30` is solver time of about 600. The geometry and time contract is
 ``benchmarks/cases/collisional_zonal_response.toml``, and
-``scripts/artifacts/build_zonal_flow_artifacts.py`` owns the traces and the gate.
+``scripts/artifacts/build_zonal_flow_artifacts.py`` (retired; :ref:`retired-generators`) owns the traces and the gate.
 
 Landau damping against the exact kinetic roots
 ----------------------------------------------

@@ -453,7 +453,7 @@
     "scripts": [
       "gkx"
     ],
-    "version": "2.3.0"
+    "version": "2.4.0"
   },
   "release_target": {
     "status_source": "benchmarks/references/gkx_1_7_release_contract.json:release_lanes",
@@ -537,9 +537,9 @@
     "checked_pypi": false,
     "duplicate_on_pypi": false,
     "package": "gkx",
-    "project_version": "2.3.0",
+    "project_version": "2.4.0",
     "require_tag": false,
-    "source_version": "2.3.0",
+    "source_version": "2.4.0",
     "tag": null
   }
 }

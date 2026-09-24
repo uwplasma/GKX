@@ -88,6 +88,27 @@ The step-checkpoint policy is what sets the ceiling: its temporary memory grows
 linearly with the window and is already 7.8 GB at 1024 steps, while the block
 policy grows as :math:`\sqrt N`.
 
+That nested schedule runs every forward step three times. When
+``adjoint_memory_budget_bytes`` (default 4 GiB) admits it, the window keeps one
+block's step residuals instead of rematerializing each step, so the forward
+runs twice; the block length :math:`B=\sqrt{N S/R}` minimizes
+:math:`(N/B)S+BR` for carry size :math:`S` and step-residual size :math:`R`,
+read from the abstract pullback before compiling. Measured on an RTX A4000,
+float32, value plus ``d/d tprim``, interleaved A/B:
+
+========================  ==========  =========  ==============  ============
+grid, steps, ``ky``       nested (s)  block (s)  temp nested     temp block
+========================  ==========  =========  ==============  ============
+16x16x16, 1024, half      3.23        2.20       55 MiB          288 MiB
+32x32x24, 256, half       3.62        2.80       170 MiB         816 MiB
+32x32x24, 1024, full      20.6        16.2       583 MiB         3.00 GiB
+========================  ==========  =========  ==============  ============
+
+Gradients agree to 1e-7 (float32) and 1e-16 (float64). The estimate is within
+3% of XLA's temporary size (2.92 vs 3.00 GiB). Tubes that share a grid are one
+``jax.vmap`` over their states and geometry: eight 8x8x16 tubes cost 0.63 s
+each for a 1024-step value and gradient, against 1.92 s one at a time.
+
 Spectral zero mode
 ------------------
 
@@ -163,7 +184,7 @@ ladder below whose adjoint still tracks a centered difference on the shipped
 Cyclone case. It is a property of that trajectory's Lyapunov time, not a solver
 tolerance, so remeasure it for a new case and then pass
 ``divergence_knee_steps=<measured>`` (or ``None`` to silence the check).
-``examples/optimization/QA_optimization.py`` runs at exactly 1024, one rung
+``examples/10_vmex_optimization/run.py`` runs at exactly 1024, one rung
 below the departure.
 
 Regenerating the evidence

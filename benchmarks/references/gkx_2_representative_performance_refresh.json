@@ -123,7 +123,7 @@
       "parameters": {
         "Nl": 4,
         "Nm": 8,
-        "config": "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
+        "config": "examples/03_nonlinear_tokamak/case_full.toml",
         "dt": 0.01,
         "method": "rk3",
         "resolved_diagnostics": false,

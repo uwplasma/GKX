@@ -4,7 +4,8 @@ schema_version = 1
 # The CLI fills in [geometry].vmec_file from the wout argument and writes the
 # fully-resolved copy next to the run outputs (<wout-stem>/gkx.toml).
 # Numerics follow the validated nonlinear VMEC examples in
-# examples/nonlinear/non-axisymmetric/ (HSX and W7-X adiabatic-electron ITG).
+# examples/04_nonlinear_stellarator/case_full.toml and benchmarks/cases/ (HSX and
+# W7-X adiabatic-electron ITG).
 # This file is single-sourced: src/gkx/data/common_input.toml is a symlink here
 # so the packaged copy can never diverge.
 

@@ -32,19 +32,19 @@ Drivers:
 
 .. code-block:: bash
 
-   python scripts/benchmarks/cyclone_linear_benchmark.py --outdir tools_out/cyclone_benchmark
-   python scripts/benchmarks/kbm_linear_comparison.py
+   python scripts/benchmark.py linear_benchmark cyclone --outdir tools_out/cyclone_benchmark
+   python scripts/benchmark.py linear_benchmark kbm
    gkx run --config benchmarks/cases/secondary_slab.toml
    python scripts/benchmarks/secondary_slab_workflow.py
 
 The Cyclone driver takes its integrator settings from
-``examples/linear/axisymmetric/cyclone.toml`` (``t_max = 150``) and fits the last
+``examples/01_linear_tokamak/case_full.toml`` (``t_max = 150``) and fits the last
 30% of the horizon, ``t = 105--150``, well clear of the startup transient. A
 contract test keeps the fit window tied to the deck's ``t_max``.
 
 The KBM driver plots the reviewed fixed-beta ``ky`` comparison table
 ``docs/_static/comparison/kbm_reference_candidates.csv``. Regenerate that table
-from a matched external output with ``scripts/comparison/compare_gx_kbm.py``.
+from a matched external output with ``scripts/comparison/compare_gx_kbm.py`` (retired; :ref:`retired-generators`).
 
 Regenerate the atlas figures with:
 
@@ -365,10 +365,10 @@ tiles. Their comparison figures are regenerable renders.
 - ``docs/_static/nonlinear_w7x_gate_summary.json``,
   ``docs/_static/nonlinear_hsx_gate_summary.json`` and
   ``docs/_static/nonlinear_kbm_gate_summary.json``: long-window nonlinear
-  lanes. Figures: ``scripts/comparison/make_reference_panels.py``.
+  lanes. Figures: ``scripts/comparison/make_reference_panels.py`` (retired; :ref:`retired-generators`).
 - KBM eigenfunction overlap on the tracked KBM candidate table, a
   branch-identity diagnostic. Figure:
-  ``scripts/artifacts/generate_linear_reference_overlays.py overlap-summary``.
+  ``scripts/artifacts/generate_linear_reference_overlays.py overlap-summary`` (retired; :ref:`retired-generators`).
   The raw mode-shape evidence is tracked as JSON gate reports and GKX traces
   under ``docs/_static/reference_modes/``, with frozen GX raw-mode bundles under
   ``docs/_static/comparison/reference_modes/``.
@@ -384,12 +384,12 @@ headline set:
 - KBM Miller exact late-growth window.
 
 The kinetic-electron scan is defined by
-``examples/linear/axisymmetric/runtime_kinetic_electron.toml`` and integrates
+``examples/05_kinetic_electrons/case_full.toml`` and integrates
 with fixed-step RK4 through the unified runtime API. Its reference seed,
 linked-boundary damping, species and electromagnetic toggles are explicit in
 that file.
 
-The TEM input is ``examples/linear/axisymmetric/runtime_tem.toml`` (fixed-step
+The TEM input is ``benchmarks/cases/tem_linear.toml`` (fixed-step
 RK2, electron-only Gaussian moment initialization), run through the same scan
 path users call. The shipped ``tem_reference.csv`` is digitized from the
 literature rather than taken from a GX benchmark output, and the exact case

@@ -12,6 +12,7 @@ from gkx.diagnostics.modes import ModeSelection
 from gkx.config import RuntimeConfig
 from gkx.workflows.runtime.diagnostics import (
     _RuntimeLinearFitOptions,
+    _fit_signal_key,
     ensure_finite_linear_history,
 )
 from gkx.workflows.runtime.results import (
@@ -239,7 +240,7 @@ def _combined_ky_scan_requested(
 # an independent worker pool. Each worker then runs an ordinary single-ky solve,
 # so forwarding the strategy sent that inner solve down the sharded linear-RHS
 # path, which implements only ``strategy="velocity"``. That is how the shipped
-# examples/parallelization deck died in the worker with NotImplementedError under
+# examples/11_parallel_scan deck died in the worker with NotImplementedError under
 # ``strategy="batch"``; ``device_batch``, ``pmap`` and ``pjit`` were measured
 # failing in the same worker with the same error, so they are neutralised the
 # same way. ``combined_ky`` belongs here too and is not merely defensive: it
@@ -563,13 +564,6 @@ def _run_batch_diagnostics(
         * (np.arange(phi_t_np.shape[0], dtype=float) + 1.0)
     )
     return _BatchDiagnostics(phi_t=phi_t_np, density_t=dens_t_np, time=t_arr)
-
-
-def _fit_signal_key(fit_signal: str) -> str:
-    fit_key = fit_signal.strip().lower()
-    if fit_key not in {"phi", "density", "auto"}:
-        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-    return fit_key
 
 
 def _auto_fit_scan_candidate(

@@ -288,7 +288,7 @@
           "exists": true,
           "name": "linear solver package",
           "passed": true,
-          "path": "src/gkx/solvers_linear.py",
+          "path": "src/gkx/solvers_linear_krylov.py",
           "required": true,
           "snippet": "KrylovConfig"
         },
@@ -304,7 +304,7 @@
           "exists": true,
           "name": "nonlinear solver package",
           "passed": true,
-          "path": "src/gkx/solvers_nonlinear.py",
+          "path": "src/gkx/solvers_nonlinear_imex.py",
           "required": true,
           "snippet": "solve_imex_step"
         },

@@ -184,44 +184,6 @@ extrapolating its own linear operator to zero collisionality: a collisionless
 truncated Hermite system has a real spectrum, so the damping there is a
 transient that ends at recurrence, not an eigenvalue.
 
-## Where GX gives the wrong answer
-
-GKX shares its Hermite-Laguerre velocity representation with
-[GX](https://bitbucket.org/gyrokinetics/gx), which makes GX the closest
-reference. Reading GX's source (commit `bc2fe552`) against GKX turned up two
-defects that change results:
-
-![GX end-damping launch cap and float32 hypercollision overflow](docs/_static/readme/readme_gx_defects.png)
-
-- **Moments without end damping (a, b).** GX launches `dampEnds_linked` on at
-  most 65,535 `(z, l, m)` indices and, unlike its sibling kernels, has no
-  grid-stride loop. Above that size the highest Hermite moments (from `m = 42`
-  of 48 in the shipped goldens) get no parallel end damping. That is 11.1% of
-  the indices in the four shipped linked goldens (Cyclone s-alpha, both Cyclone
-  Miller decks, KBM) and 77.8% at `Nl = 32`, `Nm = 96`. At Cyclone
-  `ky rho_i = 0.55` GKX differs from stock GX by 3.97% in `gamma`, and by
-  0.23% once the loop is added to GX. Derivation and kernel harness:
-  [GX goldens](tools/comparison/fixtures/gx_goldens/README.md).
-- **Hypercollisions that switch off, then fail (c).** GX forms the
-  kz-hypercollision coefficient from `M^(p+1/2)` and `m^p` separately in
-  single precision, with default `p = min(20, Nm/2)`. The coefficient is
-  finite up to `Nm = 76`, underflows to zero for `Nm = 77-85` (hypercollisions
-  silently off), and is NaN from `Nm = 86`; an `Nm = 96` GX run wrote NaN
-  fluxes from `t = 0.202`. GKX forms the power as the bounded ratio `(m/M)^p`.
-  Record: [work log](plan/log.md).
-
-The remaining differences are of scope, not correctness:
-
-| | GKX | GX | GENE |
-| --- | --- | --- | --- |
-| Velocity space | Hermite-Laguerre moments | Hermite-Laguerre moments | grid in `(v_par, mu)` |
-| Hardware | CPU and GPU through JAX | NVIDIA GPU (CUDA) | CPU and GPU |
-| Collision models | 5, up to gyrokinetic Coulomb | Dougherty + hypercollisions | Landau and model operators |
-| Derivatives | JAX autodiff end to end | not a design goal | not a design goal |
-
-Both codes are mature and each is stronger than GKX in areas GKX does not
-attempt. See [related codes](docs/codes.rst).
-
 ## Differentiate the solver
 
 Eigenvalue derivatives use `dλ/dp = wᴴ(dA/dp)v / (wᴴv)` plus a bordered solve
@@ -314,7 +276,7 @@ The four README figures under `docs/_static/readme/` regenerate with one
 command, configured by [`scripts/figures.toml`](scripts/figures.toml):
 
 ```bash
-JAX_ENABLE_X64=true python scripts/figures.py          # or name one: linear, nonlinear, proof_tests, gx_defects
+JAX_ENABLE_X64=true python scripts/figures.py          # or name one: linear, nonlinear, proof_tests
 ```
 
 Each PNG has a JSON companion holding every plotted number. The proof-test

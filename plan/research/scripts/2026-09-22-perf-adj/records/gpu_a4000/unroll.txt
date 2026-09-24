@@ -1,0 +1,9 @@
+bench_unroll.py, A4000, complex64, jax 0.10.2, full ky, block schedule; ran while GPU0 carried run_gpu.sh (shared host)
+16x16x16, 256 steps:
+unroll 1: fwd 0.1813s (0.708 ms/step) vjp 0.7933s (3.099 ms/step) compile 23.7s temp 256MiB
+unroll 2: fwd 0.2637s (1.030 ms/step) vjp 0.7411s (2.895 ms/step) compile 44.0s temp 257MiB
+unroll 4: fwd 0.2520s (0.984 ms/step) vjp 0.6929s (2.707 ms/step) compile 94.5s temp 257MiB
+32x32x24, 256 steps:
+unroll 1: fwd 1.3472s (5.262 ms/step) vjp 4.7693s (18.630 ms/step) compile 44.4s temp 1536MiB
+unroll 2: fwd 1.2015s (4.694 ms/step) vjp 4.0939s (15.992 ms/step) compile 59.1s temp 1542MiB
+unroll 4: fwd 1.2081s (4.719 ms/step) vjp 4.1285s (16.127 ms/step) compile 84.8s temp 1542MiB

@@ -619,7 +619,7 @@ def test_block_only_adjoint_schedule_keeps_the_window_gradient(ky_layout: str):
     (budget ``None``) for the value, ``d/d tprim`` and a geometry direction (the
     drift profiles), and both derivatives are checked against centered finite
     differences, on both ``ky`` layouts with the compressed real-FFT bracket
-    and rk3. The budget fallback is pinned on the scan itself in
+    and rk3, and vmapped over two tubes. The budget fallback is pinned in
     ``tests/unit/solvers/test_time_integrators.py``.
     """
 
@@ -687,6 +687,17 @@ def test_block_only_adjoint_schedule_keeps_the_window_gradient(ky_layout: str):
     ) / (2 * h)
     np.testing.assert_allclose(block[1], float(fd_tprim), rtol=5.0e-2)
     np.testing.assert_allclose(block[2], float(fd_geom), rtol=5.0e-2)
+
+    # Multi-tube objectives (plan F.5 step 2) are a vmap over tube geometry.
+    tubes = jax.vmap(
+        jax.value_and_grad(
+            lambda rlt, scale: window(rlt, scale, ADJOINT_MEMORY_BUDGET_BYTES), (0, 1)
+        ),
+        in_axes=(None, 0),
+    )(point[0], jnp.asarray([1.0, 1.02]))
+    np.testing.assert_allclose(
+        [tubes[0][0], tubes[1][0][0], tubes[1][1][0]], block, rtol=1.0e-5
+    )
 
 
 @pytest.mark.parametrize("checkpoint", [False, True])
@@ -1009,30 +1020,76 @@ def test_nonlinear_gamma_omega_use_previous_step_not_previous_diagnostic(method:
     gamma_sparse = np.asarray(diag_sparse.gamma_t)
     omega_sparse = np.asarray(diag_sparse.omega_t)
 
-    stride_indices = list(range(0, len(t_dense_arr), 2))
-    forced_final = bool(
-        t_sparse_arr[-1] == pytest.approx(t_dense_arr[-1])
-        and stride_indices[-1] != len(t_dense_arr) - 1
+    # Stride 2 over 4 steps retains steps 0 and 2 plus the off-stride final
+    # step 3, which must carry the diagnostics of the final state.
+    sample_indices = [0, 2, 3]
+    np.testing.assert_allclose(t_sparse_arr, t_dense_arr[sample_indices])
+    np.testing.assert_allclose(
+        gamma_sparse,
+        gamma_dense[sample_indices],
+        rtol=ratio_rtol,
+        atol=1.0e-8,
     )
-    compared_sparse = slice(None, -1 if forced_final else None)
-    compared_indices = stride_indices[: len(t_sparse_arr[compared_sparse])]
+    np.testing.assert_allclose(
+        omega_sparse,
+        omega_dense[sample_indices],
+        rtol=ratio_rtol,
+        atol=1.0e-8,
+    )
 
-    assert np.allclose(t_dense_arr[compared_indices], t_sparse_arr[compared_sparse])
-    np.testing.assert_allclose(
-        gamma_sparse[compared_sparse],
-        gamma_dense[compared_indices],
-        rtol=ratio_rtol,
-        atol=1.0e-8,
+
+@pytest.mark.parametrize("method", ["rk3", "imex"])
+@pytest.mark.parametrize(
+    ("sample_stride", "diagnostics_stride"), [(1, 3), (3, 1), (3, 2)]
+)
+def test_nonlinear_off_stride_final_sample_is_the_final_state(
+    method: str, sample_stride: int, diagnostics_stride: int
+):
+    """Every retained row, including the forced final one, is the state at its time.
+
+    Eight steps at retained stride 3 keep steps 0, 3 and 6 plus the off-stride
+    final step 7. That row used to reuse the scan carry from step 6, so the
+    last two rows had different times but bit-identical diagnostics. With
+    ``sample_stride=3, diagnostics_stride=2`` the row at step 3 also used to
+    carry step 2's diagnostics.
+    """
+
+    grid_cfg = GridConfig(Nx=2, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    params = LinearParams()
+
+    shape = (2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz)
+    base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
+    G = jnp.asarray(base + 1.0j * (base + 1.0), dtype=jnp.complex64)
+    options = {"dt": 0.02, "steps": 8, "method": method, "terms": TermConfig()}
+
+    _t_dense, diag_dense = integrate_nonlinear_explicit_diagnostics(
+        G, grid, geom, params, sample_stride=1, diagnostics_stride=1, **options
     )
-    np.testing.assert_allclose(
-        omega_sparse[compared_sparse],
-        omega_dense[compared_indices],
-        rtol=ratio_rtol,
-        atol=1.0e-8,
+    t_sparse, diag_sparse = integrate_nonlinear_explicit_diagnostics(
+        G,
+        grid,
+        geom,
+        params,
+        sample_stride=sample_stride,
+        diagnostics_stride=diagnostics_stride,
+        **options,
     )
-    if forced_final:
-        assert gamma_sparse[-1] == pytest.approx(gamma_sparse[-2])
-        assert omega_sparse[-1] == pytest.approx(omega_sparse[-2])
+
+    sample_indices = [0, 3, 6, 7]
+    np.testing.assert_allclose(
+        np.asarray(t_sparse), np.asarray(diag_dense.t)[sample_indices]
+    )
+    rtol = 1.0e-10 if bool(jax.config.read("jax_enable_x64")) else 1.0e-3
+    for name in ("gamma_t", "omega_t", "Wg_t", "Wphi_t", "heat_flux_t"):
+        sparse = np.asarray(getattr(diag_sparse, name))
+        dense = np.asarray(getattr(diag_dense, name))
+        assert not np.array_equal(sparse[-1], sparse[-2]), name
+        np.testing.assert_allclose(
+            sparse, dense[sample_indices], rtol=rtol, atol=1.0e-12, err_msg=name
+        )
 
 
 def test_nonlinear_imex_diagnostics_match_operator_dtype_under_x64():

@@ -82,13 +82,32 @@ def _moment_count(G0) -> int:
     return int(shape[offset]) * int(shape[offset + 1])
 
 
+def _operator_moment_layout(operator) -> tuple[int, int] | None:
+    """Return the ``(Nl, Nm) = (J+1, P+1)`` basis a tabulated operator acts on."""
+
+    from gkx.operators.linear.collision_tables import (
+        finite_wavelength_coulomb_metadata,
+    )
+    from gkx.operators.linear.collisions import DRIFT_KINETIC_MOMENT_LAYOUT
+
+    # Drift-kinetic operators carry one dense matrix; the finite-wavelength
+    # operators carry Bessel-argument-indexed test/field tables instead.
+    if getattr(operator, "matrix", None) is not None:
+        return DRIFT_KINETIC_MOMENT_LAYOUT
+    table = getattr(operator, "test_table", None)
+    if table is None:
+        return None
+    meta = finite_wavelength_coulomb_metadata(int(table.shape[-1]))
+    return meta["maximum_laguerre_order"] + 1, meta["maximum_hermite_order"] + 1
+
+
 def _check_moment_basis_matches_operator(operator, name: str, G0) -> None:
     """Reject a moment basis the tabulated collision matrix cannot act on.
 
     The drift-kinetic Sugama matrices are the fixed truncation of Frei, Ernst &
-    Ricci (2022), Appendix C, so they only apply when the run's Hermite-Laguerre
-    moment count matches. Without this check the mismatch surfaces deep in the
-    RHS as an opaque einsum shape error.
+    Ricci (2022), Appendix C, and the Coulomb tables ship at fixed orders, so
+    each applies to one ``(Nl, Nm)``. The tables are Hermite-major: a transposed
+    basis with the right moment count runs silently on the wrong moments.
     """
 
     if operator is None or G0 is None:
@@ -98,26 +117,21 @@ def _check_moment_basis_matches_operator(operator, name: str, G0) -> None:
         return
     offset = 0 if len(shape) == 5 else 1
     nl, nm = int(shape[offset]), int(shape[offset + 1])
-    # Drift-kinetic operators carry one dense matrix; the finite-wavelength
-    # operators carry Bessel-argument-indexed test/field tables instead.
-    table = getattr(operator, "matrix", None)
-    if table is None:
-        table = getattr(operator, "test_table", None)
-    if table is None:
+    layout = _operator_moment_layout(operator)
+    if layout is None or (nl, nm) == layout:
         return
-    expected = int(table.shape[-1])
-    if nl * nm == expected:
-        return
+    expected_nl, expected_nm = layout
     raise ValueError(
-        f"collision_operator={name!r} provides a {expected}-moment drift-kinetic "
-        f"matrix, but the run uses Nl*Nm = {nl}*{nm} = {nl * nm} moments. "
-        f"Choose Nl and Nm with Nl*Nm = {expected} (for example Nl={expected // 2}, "
-        'Nm=2), or select collision_operator = "lenard_bernstein".'
+        f"collision_operator={name!r} is tabulated on the "
+        f"{expected_nl * expected_nm}-moment basis (Nl, Nm) = "
+        f"({expected_nl}, {expected_nm}), but the run uses (Nl, Nm) = ({nl}, {nm}). "
+        f"Set Nl={expected_nl}, Nm={expected_nm}, "
+        'or select collision_operator = "lenard_bernstein".'
     )
 
 
 def _reject_unsupported_config_collision_operator(
-    time_cfg: TimeConfig, path: str
+    time_cfg: TimeConfig, path: str, remedy: str = "leave state_sharding unset"
 ) -> None:
     """Fail loudly when a solver path cannot honour the selected operator.
 
@@ -132,7 +146,7 @@ def _reject_unsupported_config_collision_operator(
     raise NotImplementedError(
         f"collision_operator={name!r} is not supported by the {path} path; "
         "it is currently available on the fixed-step cached integrator "
-        "(leave state_sharding unset)."
+        f"({remedy})."
     )
 
 

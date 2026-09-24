@@ -17,7 +17,6 @@ from __future__ import annotations
 from gkx.config import CycloneBaseCase, GridConfig, TimeConfig
 from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
-from gkx.objectives.core import solver_scalar_objective_from_vector
 from gkx.operators.linear.params import LinearParams
 from gkx.parallel import integrators as integrator_module
 from gkx.parallel.integrators import (
@@ -32,12 +31,10 @@ from gkx.terms.config import FieldState
 from types import SimpleNamespace
 from typing import Any
 import dataclasses
-import gkx.objectives.vmec_boozer_context as vmec_gradient_context
-import gkx.objectives.vmec_boozer_fd as fd_gates
-import gkx.objectives.vmec_boozer_gradients as vmec_gradient_gates
-import gkx.objectives.vmec_boozer_line_search as line_search_gates
 import gkx.solvers_time_runners as runners
+import jax
 import jax.numpy as jnp
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
 import numpy as np
 import pytest
 
@@ -148,9 +145,9 @@ def test_integrate_linear_from_config_applies_selected_collision_operator():
 
     def evolve(name):
         time_cfg = dataclasses.replace(cfg.time, collision_operator=name)
-        # Nl * Nm must match the tabulated eight-moment drift-kinetic matrix.
+        # (Nl, Nm) must be the (J+1, P+1) basis of the drift-kinetic matrix.
         G = jnp.zeros(
-            (4, 2, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
+            (2, 4, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
         )
         G = G.at[0, 0, 1, 0, :].set(1.0e-3)
         return integrate_linear_from_config(G, grid, geom, params, time_cfg)[0]
@@ -168,26 +165,69 @@ def test_integrate_linear_from_config_applies_selected_collision_operator():
     assert jnp.all(jnp.isfinite(sugama)) and jnp.all(jnp.isfinite(improved))
 
 
-def test_integrate_linear_from_config_reports_moment_basis_mismatch():
-    """A basis the tabulated matrix cannot act on must fail with guidance."""
+def test_integrate_linear_from_config_requires_the_table_moment_basis():
+    """Only the table's (Nl, Nm) = (J+1, P+1) = (2, 4) may run.
 
-    grid_cfg = GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
+    The transposed (4, 2) has the right moment count, so without the check it
+    ran silently on the wrong moments (the state is packed m*Nl + l).
+    """
+
     cfg = CycloneBaseCase(
-        grid=grid_cfg,
-        time=TimeConfig(
-            t_max=0.2,
-            dt=0.1,
-            method="rk2",
-            collision_operator="sugama",
-        ),
+        grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0),
+        time=TimeConfig(t_max=0.1, dt=0.05, method="rk2", collision_operator="sugama"),
     )
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams(nu=0.05)
-    G = jnp.zeros((3, 3, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128)
 
-    with pytest.raises(ValueError, match="8-moment"):
-        integrate_linear_from_config(G, grid, geom, params, cfg.time)
+    def run(nl, nm):
+        G = jnp.zeros((nl, nm, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), jnp.complex128)
+        G = G.at[0, 0, 1, 0, :].set(1.0e-3)
+        return integrate_linear_from_config(G, grid, geom, params, cfg.time)[0]
+
+    for nl, nm in ((3, 3), (4, 2)):
+        with pytest.raises(ValueError, match=r"8-moment basis \(Nl, Nm\) = \(2, 4\)"):
+            run(nl, nm)
+    with pytest.raises(ValueError, match="Set Nl=2, Nm=4"):
+        run(4, 2)
+    assert jnp.all(jnp.isfinite(run(2, 4)))
+
+
+def test_check_moment_basis_names_the_finite_wavelength_table_layout():
+    """Each shipped finite-Larmor table accepts only its own (J+1, P+1)."""
+
+    from gkx.operators.linear.collision_factory import collision_operator_from_config
+
+    species = {name: jnp.ones(1) for name in ("density", "mass", "temperature")}
+    check = runners._check_moment_basis_matches_operator
+    for (nl, nm), bad in (((2, 4), (4, 2)), ((3, 6), (6, 3))):
+        op = collision_operator_from_config(
+            "coulomb_finite_kperp", moments=nl * nm, **species
+        )
+        check(op, "coulomb_finite_kperp", jnp.zeros((nl, nm, 1, 1, 1)))
+        with pytest.raises(ValueError, match=f"Set Nl={nl}, Nm={nm}"):
+            check(op, "coulomb_finite_kperp", jnp.zeros(bad + (1, 1, 1)))
+
+
+def test_krylov_and_explicit_runtime_refuse_a_moment_collision_operator():
+    """Paths that cannot carry the operator must refuse, not run as LB."""
+
+    from gkx.config import RuntimeConfig, RuntimeSpeciesConfig
+    from gkx.runtime import run_runtime_linear
+
+    base = RuntimeConfig()
+    cfg = dataclasses.replace(
+        base,
+        grid=dataclasses.replace(base.grid, Nx=1, Ny=4, Nz=8, boundary="periodic"),
+        time=dataclasses.replace(base.time, collision_operator="sugama"),
+        species=(RuntimeSpeciesConfig(name="ion"),),
+    )
+    for solver, path in (
+        ("krylov", "Krylov eigenvalue"),
+        ("explicit_time", "explicit"),
+    ):
+        with pytest.raises(NotImplementedError, match=path):
+            run_runtime_linear(cfg, ky_target=0.2, Nl=2, Nm=4, solver=solver)
 
 
 def test_config_collision_operator_rejects_unsupported_solver_paths(monkeypatch):
@@ -291,8 +331,15 @@ def test_integrate_nonlinear_sharded_rejects_bad_options() -> None:
         )
 
 
-def test_integrate_nonlinear_sharded_runs_with_mocked_pjit(monkeypatch) -> None:
-    calls = {"rhs": 0, "shard": 0, "put": 0}
+def _one_device_ky_sharding() -> NamedSharding:
+    """A real ky sharding on a one-device mesh, available on every host."""
+
+    mesh = Mesh(np.array(jax.devices()[:1]), ("d",))
+    return NamedSharding(mesh, PartitionSpec(None, None, "d", None, None))
+
+
+def test_integrate_nonlinear_sharded_runs_with_a_real_sharding(monkeypatch) -> None:
+    calls = {"rhs": 0}
 
     def fake_rhs(
         G,
@@ -308,33 +355,57 @@ def test_integrate_nonlinear_sharded_runs_with_mocked_pjit(monkeypatch) -> None:
         return jnp.ones_like(G), FieldState(phi=jnp.ones((1, 1, 1), dtype=G.dtype))
 
     monkeypatch.setattr("gkx.parallel.integrators.nonlinear_rhs_cached", fake_rhs)
-    monkeypatch.setattr("gkx.parallel.integrators.pjit", lambda fn, **kwargs: fn)
-    monkeypatch.setattr(
-        "gkx.parallel.integrators.jax.lax.with_sharding_constraint",
-        lambda state, sharding: calls.__setitem__("shard", calls["shard"] + 1) or state,
-    )
-    monkeypatch.setattr(
-        "gkx.parallel.integrators.jax.device_put",
-        lambda state, sharding: calls.__setitem__("put", calls["put"] + 1) or state,
-    )
+    integrator_module._compiled_nonlinear_sharded_runner.cache_clear()
+    sharding = _one_device_ky_sharding()
 
     G0 = jnp.zeros((1, 1, 1, 1, 1), dtype=jnp.complex64)
+    # The fake RHS ignores the cache and parameters; empty pytrees let them
+    # through the real jit and shard_map.
     G_final, fields_t = integrate_nonlinear_sharded(
         G0,
-        _cache_stub(),
-        SimpleNamespace(),
+        (),
+        (),
         dt=0.5,
         steps=2,
         method="rk2",
-        state_sharding="mesh",
+        state_sharding=sharding,
+        compressed_real_fft=False,
     )
 
     assert G_final.shape == G0.shape
+    assert G_final.sharding.spec == sharding.spec
     assert fields_t.phi.shape[0] == 2
-    assert jnp.allclose(G_final, 1.0)
+    assert np.allclose(np.asarray(G_final), 1.0)
     assert calls["rhs"] >= 2
-    assert calls["put"] == 1
-    assert calls["shard"] >= 3
+
+
+def _stub_sharding(spec: tuple, **mesh_shape: int) -> SimpleNamespace:
+    return SimpleNamespace(spec=spec, mesh=SimpleNamespace(shape=mesh_shape))
+
+
+def test_state_split_pads_an_extent_the_devices_do_not_divide() -> None:
+    """``Nyc = 5`` on the ``ky >= 0`` layout is padded to 6 for two devices."""
+
+    split = integrator_module._resolve_state_split(
+        (1, 3, 4, 5, 4, 16), _stub_sharding((None, None, None, "d"), d=2)
+    )
+    assert (split.axis, split.mesh_axis, split.count) == (3, "d", 2)
+    assert (split.extent, split.padded) == (5, 6)
+    divisible = integrator_module._resolve_state_split(
+        (1, 3, 4, 8, 4, 16), _stub_sharding((None, None, None, "d"), d=4)
+    )
+    assert divisible.padded == divisible.extent == 8
+
+
+@pytest.mark.parametrize(
+    "spec", [(None, None, None, "d", "e"), (None, None, None, ("d", "e")), ()]
+)
+def test_state_split_rejects_anything_but_one_axis_on_one_mesh_axis(spec) -> None:
+    with pytest.raises(ValueError, match="exactly one state axis") as excinfo:
+        integrator_module._resolve_state_split(
+            (1, 3, 4, 8, 4, 16), _stub_sharding(spec, d=2, e=2)
+        )
+    assert "(1, 3, 4, 8, 4, 16)" in str(excinfo.value)
 
 
 @pytest.mark.parametrize(
@@ -513,34 +584,6 @@ def _fake_objective_vector(
     return np.asarray([1.0 + 3.0 * x + x * x, 0.1 + x, 2.0, 3.0, 4.0, 5.0 + x])
 
 
-def test_vmec_boozer_scalar_fd_gate_uses_injected_value_path() -> None:
-    report = fd_gates.vmec_boozer_scalar_objective_finite_difference_report(
-        objective="growth",
-        perturbation_step=1.0e-2,
-        response_atol=1.0e-4,
-        max_curvature_ratio=1.0,
-        _load_state_bundle_fn=_fake_state_bundle,
-        _state_array_fn=_fake_state_array,
-        _replace_state_coefficient_fn=_fake_replace_state_coefficient,
-        _parameter_name_fn=_fake_parameter_name,
-        _vector_fn=_fake_objective_vector,
-        _scalar_selector_fn=solver_scalar_objective_from_vector,
-    )
-
-    assert report["passed"] is True
-    assert report["source_scope"] == "mode21_vmec_boozer_state"
-    assert report["parameter_name"] == "Rcos_mid_m1"
-    assert report["central_derivative"] == pytest.approx(3.0)
-    assert report["finite_difference_consistent"] is True
-    assert np.asarray(report["base_objective_vector"]).shape == (6,)
-
-    with pytest.raises(ValueError, match="perturbation_step"):
-        fd_gates.vmec_boozer_scalar_objective_finite_difference_report(
-            perturbation_step=0.0,
-            _load_state_bundle_fn=_fake_state_bundle,
-        )
-
-
 def _fake_objective_table(
     traced_state: dict[str, object],
     *_args: Any,
@@ -561,36 +604,6 @@ def _fake_objective_table(
     return table, metadata
 
 
-def test_vmec_boozer_aggregate_fd_gate_tracks_weighted_samples() -> None:
-    report = fd_gates.vmec_boozer_aggregate_scalar_objective_finite_difference_report(
-        objective="growth",
-        reduction="weighted_mean",
-        weights=[0.25, 0.75],
-        surface_indices=(None, 2),
-        perturbation_step=1.0e-2,
-        response_atol=1.0e-4,
-        max_curvature_ratio=1.0,
-        _load_state_bundle_fn=_fake_state_bundle,
-        _state_array_fn=_fake_state_array,
-        _replace_state_coefficient_fn=_fake_replace_state_coefficient,
-        _parameter_name_fn=_fake_parameter_name,
-        _table_with_metadata_fn=_fake_objective_table,
-        _scalar_selector_fn=solver_scalar_objective_from_vector,
-    )
-
-    assert report["passed"] is True
-    assert report["source_scope"] == "mode21_vmec_boozer_state_multi_point"
-    assert report["n_samples"] == 2
-    assert report["central_derivative"] == pytest.approx(3.5)
-    assert [row["weight"] for row in report["samples"]] == pytest.approx([0.25, 0.75])
-
-    with pytest.raises(ValueError, match="max_curvature_ratio"):
-        fd_gates.vmec_boozer_aggregate_scalar_objective_finite_difference_report(
-            max_curvature_ratio=-1.0,
-            _load_state_bundle_fn=_fake_state_bundle,
-        )
-
-
 def _parabola_fd_report(**kwargs: Any) -> dict[str, object]:
     delta = float(kwargs.get("base_delta", 0.0))
     value = 1.0 + (delta - 0.03) ** 2
@@ -603,71 +616,6 @@ def _parabola_fd_report(**kwargs: Any) -> dict[str, object]:
         "n_samples": 1,
         "samples": [{"surface_index": None, "alpha": 0.0, "selected_ky_index": 1}],
     }
-
-
-def test_line_search_gates_accept_downhill_injected_candidates() -> None:
-    scalar = line_search_gates.vmec_boozer_scalar_objective_line_search_report(
-        initial_delta=0.0,
-        perturbation_step=1.0e-2,
-        update_step=1.0e-2,
-        max_steps=2,
-        _finite_difference_report_fn=_parabola_fd_report,
-    )
-    aggregate = (
-        line_search_gates.vmec_boozer_aggregate_scalar_objective_line_search_report(
-            initial_delta=0.0,
-            perturbation_step=1.0e-2,
-            update_step=1.0e-2,
-            max_steps=2,
-            _finite_difference_report_fn=_parabola_fd_report,
-        )
-    )
-
-    assert scalar["passed"] is True
-    assert scalar["accepted_steps"] == 2
-    assert scalar["final_delta"] == pytest.approx(0.02)
-    assert aggregate["passed"] is True
-    assert aggregate["source_scope"] == "mode21_vmec_boozer_state_multi_point"
-
-    with pytest.raises(ValueError, match="update_step"):
-        line_search_gates.vmec_boozer_scalar_objective_line_search_report(
-            update_step=0.0,
-            _finite_difference_report_fn=_parabola_fd_report,
-        )
-
-
-def test_aggregate_holdout_gate_reuses_training_delta() -> None:
-    calls: list[float] = []
-
-    def fake_line_search(**_kwargs: Any) -> dict[str, object]:
-        return {
-            "passed": True,
-            "final_delta": 0.1,
-            "initial_objective": 4.0,
-            "final_objective": 3.0,
-            "relative_reduction": 0.25,
-            "samples": [],
-        }
-
-    def fake_fd(**kwargs: Any) -> dict[str, object]:
-        delta = float(kwargs.get("base_delta", 0.0))
-        calls.append(delta)
-        return {
-            "passed": True,
-            "base_value": 2.0 - delta,
-            "samples": [{"selected_ky_index": 2}],
-        }
-
-    report = line_search_gates.vmec_boozer_aggregate_line_search_holdout_report(
-        initial_delta=0.0,
-        _line_search_report_fn=fake_line_search,
-        _finite_difference_report_fn=fake_fd,
-    )
-
-    assert report["passed"] is True
-    assert report["heldout_passed"] is True
-    assert report["final_delta"] == pytest.approx(0.1)
-    assert calls == pytest.approx([0.0, 0.1])
 
 
 def _one_mode_context(**kwargs: Any) -> dict[str, object]:
@@ -717,44 +665,3 @@ def _fake_window_metrics(
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     scale = jnp.asarray(float(dt) * int(steps) * float(tail_fraction))
     return gamma * heat * scale, heat / kperp, gamma - kperp
-
-
-def test_split_gradient_gate_modules_run_injected_reports() -> None:
-    frequency = vmec_gradient_gates.mode21_vmec_boozer_linear_frequency_gradient_report(
-        case_name="fake",
-        fd_step=1.0e-3,
-        rtol=2.0e-4,
-        atol=2.0e-4,
-        _linear_context_fn=_one_mode_context,
-    )
-    quasilinear = vmec_gradient_gates.mode21_vmec_boozer_quasilinear_gradient_report(
-        case_name="fake",
-        fd_step=1.0e-3,
-        rtol=2.0e-4,
-        atol=2.0e-4,
-        _linear_context_fn=_one_mode_context,
-        _quasilinear_features_fn=_fake_ql_features,
-    )
-    nonlinear = vmec_gradient_gates.mode21_vmec_boozer_nonlinear_window_gradient_report(
-        case_name="fake",
-        fd_step=1.0e-3,
-        rtol=2.0e-4,
-        atol=2.0e-4,
-        _linear_context_fn=_one_mode_context,
-        _quasilinear_features_fn=_fake_ql_features,
-        _window_metrics_fn=_fake_window_metrics,
-    )
-
-    assert frequency["passed"] is True
-    assert frequency["source_scope"] == "mode21_vmec_boozer_state"
-    assert quasilinear["quasilinear_weight_gradient_gate"] is True
-    assert nonlinear["nonlinear_window_gradient_gate"] is True
-
-
-def test_vmec_boozer_gradient_facade_reexports_context_helpers() -> None:
-    assert vmec_gradient_gates._mode21_vmec_boozer_linear_context is (
-        vmec_gradient_context._mode21_vmec_boozer_linear_context
-    )
-    assert vmec_gradient_gates._mode21_vmec_boozer_quasilinear_features is (
-        vmec_gradient_context._mode21_vmec_boozer_quasilinear_features
-    )

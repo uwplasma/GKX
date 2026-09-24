@@ -2910,7 +2910,6 @@ def test_repository_validation_manifest_is_well_formed() -> None:
     assert rows["gkx.runtime"]["n_owned_modules"] >= 5
     assert rows["gkx.diagnostics.validation_gates"]["n_physics_contracts"] >= 2
     assert rows["gkx.objectives.autodiff_validation"]["coverage_target_percent"] == 98.0
-    assert rows["gkx.objectives.vmec_boozer_gradients"]["n_numerics_contracts"] >= 2
 
     assert rows["gkx.operators.linear.cache_builder"]["coverage_target_percent"] == 95.0
     assert rows["gkx.operators.linear.cache_builder"]["n_owned_modules"] == 2
@@ -2925,14 +2924,6 @@ def test_repository_validation_manifest_is_well_formed() -> None:
         == 95.0
     )
     assert rows["gkx.operators.nonlinear.diagnostic_state"]["n_physics_contracts"] >= 2
-    spectral_core = rows["gkx.operators.nonlinear.spectral_core"]
-    assert spectral_core["coverage_target_percent"] == 95.0
-    # 4 -> 3 owned modules: spectral_layout was absorbed INTO spectral_core, so
-    # it is no longer a separate module to own. Its code and coverage did not
-    # move out of the package, they moved inside this row's own file.
-    assert spectral_core["n_owned_modules"] >= 3
-    assert spectral_core["n_numerics_contracts"] >= 2
-    assert spectral_core["n_physics_contracts"] >= 2
     assert rows["gkx.solvers_nonlinear_explicit"]["coverage_target_percent"] == 95.0
     assert rows["gkx.solvers_nonlinear_explicit"]["n_numerics_contracts"] >= 2
     assert rows["gkx.solvers_nonlinear_imex"]["coverage_target_percent"] == 95.0
@@ -3551,6 +3542,9 @@ _RUN_TO_REQUIRED = {
     "benchmarks/cases/miller_zonal_response.toml": "t_max",
     "benchmarks/cases/w7x_zonal_response_vmec.toml": "t_max",
     "benchmarks/cases/secondary_slab.toml": "t_max",
+    # Gallery tutorial decks: a fixed few-hundred-step window, never saturated.
+    "examples/03_nonlinear_tokamak/case.toml": "t_max",
+    "examples/04_nonlinear_stellarator/case.toml": "t_max",
 }
 
 # Decks cleared to run under the default, with the measurement that cleared
@@ -3567,21 +3561,21 @@ _RUN_TO_DEFAULT_CLEARED: dict[str, str] = {}
 # _RUN_TO_DEFAULT_CLEARED with its first-chunk stop decision.
 _RUN_TO_AUDIT_PENDING = {
     "examples/common_input.toml",
-    "examples/nonlinear/axisymmetric/runtime_circular_vmec_nonlinear.toml",
-    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml",
-    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml",
-    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml",
-    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_t400.toml",
-    "examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml",
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear.toml",
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_seed.toml",
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short.toml",
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short_lockin.toml",
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml",
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100_nx4ny8_dt9e4.toml",
-    "examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml",
-    "examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_imported_geometry.toml",
-    "examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml",
+    "benchmarks/cases/circular_vmec_nonlinear.toml",
+    "examples/03_nonlinear_tokamak/case_full.toml",
+    "benchmarks/cases/cyclone_nonlinear_miller.toml",
+    "benchmarks/cases/cyclone_nonlinear_short.toml",
+    "benchmarks/cases/cyclone_nonlinear_t400.toml",
+    "benchmarks/cases/etg_nonlinear.toml",
+    "benchmarks/cases/kbm_nonlinear.toml",
+    "benchmarks/cases/kbm_nonlinear_seed.toml",
+    "benchmarks/cases/kbm_nonlinear_short.toml",
+    "benchmarks/cases/kbm_nonlinear_short_lockin.toml",
+    "benchmarks/cases/kbm_nonlinear_t100.toml",
+    "benchmarks/cases/kbm_nonlinear_t100_nx4ny8_dt9e4.toml",
+    "examples/04_nonlinear_stellarator/case_full.toml",
+    "benchmarks/cases/w7x_nonlinear_imported_geometry.toml",
+    "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml",
 }
 
 # Decks that ship as linear but are promoted into the nonlinear runtime by a
@@ -3596,7 +3590,7 @@ _RUN_TO_PROMOTED = {
 # rather than skipped: a deck that stops parsing would otherwise leave the
 # audit silently by the same door.
 _NOT_A_GKX_RUNTIME_DECK = {
-    "examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml": (
+    "benchmarks/cases/reference_hsx_nonlinear_adiabatic_electrons.toml": (
         "reference-code input deck, [Dimensions]/[Physics] schema, not a GKX runtime TOML"
     ),
 }
@@ -3754,13 +3748,16 @@ _CFL_MARGIN_MEASURED: dict[str, float] = {
     # seed stage's and is not what this audit is about. The seed stage is 13.08x
     # over the linear bound and is covered by the linear runtime's own warning.
     "benchmarks/cases/secondary_slab.toml": 0.13,
-    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml": 1.33,
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear.toml": 0.18,
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_seed.toml": 0.18,
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short.toml": 0.18,
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short_lockin.toml": 0.18,
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100.toml": 0.90,
-    "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_t100_nx4ny8_dt9e4.toml": 0.65,
+    "benchmarks/cases/cyclone_nonlinear_short.toml": 1.33,
+    "benchmarks/cases/kbm_nonlinear.toml": 0.18,
+    "benchmarks/cases/kbm_nonlinear_seed.toml": 0.18,
+    "benchmarks/cases/kbm_nonlinear_short.toml": 0.18,
+    "benchmarks/cases/kbm_nonlinear_short_lockin.toml": 0.18,
+    "benchmarks/cases/kbm_nonlinear_t100.toml": 0.90,
+    "benchmarks/cases/kbm_nonlinear_t100_nx4ny8_dt9e4.toml": 0.65,
+    # Gallery tutorial decks, measured at their [run] (Nl, Nm) = (2, 4).
+    "examples/03_nonlinear_tokamak/case.toml": 0.35,
+    "examples/04_nonlinear_stellarator/case.toml": 0.33,
 }
 
 # Decks over FIXED_DT_CFL_WARN_RATIO that ship anyway, and the failure each one
@@ -3774,28 +3771,18 @@ _CFL_MARGIN_OVER_BOUND: dict[str, str] = {}
 # their configured dt is a starting guess and being over it means nothing.
 _CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = {
     "examples/common_input.toml": "fixed_dt = false: adaptive dt",
-    "examples/nonlinear/axisymmetric/runtime_circular_vmec_nonlinear.toml": (
+    "benchmarks/cases/circular_vmec_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
+    "benchmarks/cases/etg_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
+    "examples/03_nonlinear_tokamak/case_full.toml": ("fixed_dt = false: adaptive dt"),
+    "benchmarks/cases/cyclone_nonlinear_miller.toml": ("fixed_dt = false: adaptive dt"),
+    "benchmarks/cases/cyclone_nonlinear_t400.toml": ("fixed_dt = false: adaptive dt"),
+    "examples/04_nonlinear_stellarator/case_full.toml": (
         "fixed_dt = false: adaptive dt"
     ),
-    "examples/nonlinear/axisymmetric/runtime_etg_nonlinear.toml": (
+    "benchmarks/cases/w7x_nonlinear_imported_geometry.toml": (
         "fixed_dt = false: adaptive dt"
     ),
-    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_t400.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "examples/nonlinear/non-axisymmetric/runtime_hsx_nonlinear_vmec_geometry.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_imported_geometry.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "examples/nonlinear/non-axisymmetric/runtime_w7x_nonlinear_vmec_geometry.toml": (
+    "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml": (
         "fixed_dt = false: adaptive dt"
     ),
 }
@@ -3892,7 +3879,7 @@ def test_run_to_audit_discovery_sees_a_deck_that_only_the_flags_reveal() -> None
     # Promoted by a driver: nothing in the deck itself says nonlinear.
     assert "benchmarks/cases/secondary_slab.toml" in reaches
     # A genuinely linear deck stays out, or the audit becomes noise.
-    assert "examples/linear/axisymmetric/cyclone.toml" not in reaches
+    assert "examples/01_linear_tokamak/case_full.toml" not in reaches
     assert "benchmarks/cases/collisional_zonal_response.toml" not in reaches
 
 
@@ -4303,7 +4290,7 @@ _DECKS_NOT_LOADABLE_AS_CASES: dict[str, str] = {
         "is 'vmec' and the file's own comment says vmec_file is injected by the "
         "CLI from the wout positional, so it cannot validate standalone"
     ),
-    "examples/nonlinear/non-axisymmetric/reference_hsx_nonlinear_adiabatic_electrons.toml": (
+    "benchmarks/cases/reference_hsx_nonlinear_adiabatic_electrons.toml": (
         "a GX input file, not a GKX deck: it carries GX's [Dimensions], "
         "[Domain] and nonlinear_mode keys and GX's array-style [species] "
         "table. It is kept for provenance of the HSX comparison and is not "
@@ -4382,7 +4369,7 @@ def test_a_saturation_deck_can_still_be_prepared_with_an_explicit_length() -> No
 
     import gkx
 
-    relative = "examples/nonlinear/axisymmetric/runtime_kbm_nonlinear_short.toml"
+    relative = "benchmarks/cases/kbm_nonlinear_short.toml"
     case = gkx.load(RUN_TO_REPO_ROOT / relative)
     assert str(case.time.run_to).strip().lower() == "saturation", (
         "this fixture is chosen because it stops at saturation"

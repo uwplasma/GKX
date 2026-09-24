@@ -219,23 +219,15 @@ this section. The four moment operators *replace* that term with a dense
 Hermite-Laguerre matrix. The solver switches the diagonal contribution off
 exactly when a moment operator is active, so collisions are never counted twice.
 
-Constraints that follow from the tabulated coefficients:
-
-- **Moment count.** The run's ``Nl*Nm`` must match the table. The three
-  drift-kinetic models are the fixed eight-moment truncation of Frei, Ernst &
-  Ricci (2022), Appendix C. ``coulomb_finite_kperp`` ships tables at 8 and 18
-  moments and picks the one that matches the run. The tables are Hermite-major,
-  index :math:`p(J+1)+j`, so 8 moments means ``(Nl, Nm) = (2, 4)`` and 18 means
-  ``(3, 6)``. The runtime checks only the product ``Nl*Nm``.
-- **Species.** ``sugama`` and ``improved_sugama`` accept several species.
-  ``coulomb`` and ``coulomb_finite_kperp`` are generated at unit mass and
-  temperature ratio, so they refuse a multispecies request instead of
-  extrapolating.
-- **Solver paths.** The linear and nonlinear time integrators apply the selected
-  operator, including the linear scan and density-diagnostic paths. Only the
-  sharded nonlinear path (``state_sharding`` set) refuses a non-default
-  ``collision_operator``; the Krylov eigenvalue path does not read the key, so
-  it keeps the built-in diagonal term.
+Two constraints follow from the tabulated coefficients. The run's basis must
+be a shipped table's ``(Nl, Nm) = (J+1, P+1)``: ``(2, 4)`` for the eight-moment
+tables, or ``(3, 6)`` for the 18-moment finite-Larmor table. Matching ``Nl*Nm``
+is not enough: the tables are Hermite-major, so the transposed ``(4, 2)`` would
+pair every coefficient with the wrong moment, and it is refused. The operators
+run on the fixed-step cached integrator. The sharded, Krylov eigenvalue, and
+CFL-controlled ``explicit_time`` paths raise rather than silently substituting
+the diagonal term. The Coulomb tables are generated at unit mass and temperature ratio, so a
+multispecies request is refused rather than extrapolated.
 
 Collision frequency
 ^^^^^^^^^^^^^^^^^^^
@@ -364,9 +356,10 @@ Tabulated resolutions
 Finite-Larmor tables ship at 8 and 18 Hermite-Laguerre moments. They are
 generated in 60-digit arithmetic on a 14-point Bessel-argument grid
 :math:`B = k_\perp v_{\mathrm{th}}/\Omega \in [0, 4]` and stored as
-checksummed float64 (``src/gkx/data/finite_wavelength_coulomb*.json``). The
-runtime interpolates at :math:`B=\sqrt{2b}` from the cached :math:`b`, so one
-table covers every perpendicular wavenumber.
+checksummed float64. The runtime interpolates at :math:`B=\sqrt{2b}` from the
+cached :math:`b`, so one table covers every perpendicular wavenumber, and it
+selects the table matching the run's ``Nl*Nm`` automatically, then requires
+the run's ``(Nl, Nm)`` to be that table's ``(J+1, P+1)``.
 
 Cost and the resolution ceiling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -567,7 +560,8 @@ cutoff, which is within :math:`8.68\times10^{-7}` of the :math:`(9,4)`
 reference. The smaller cutoff :math:`(3,1)` differs from that reference by 29%
 and is rejected.
 
-**Driven parallel current.** ``collision-response`` builds
+**Driven parallel current.** The ``collision-response`` subcommand (retired;
+:ref:`retired-generators`) built
 ``docs/_static/collision_response_convergence.json`` from equations
 (3.53)--(3.56). With :math:`\widehat E=eE/(m_ev_{Te}\nu_{ee})`, the plotted
 response :math:`(u_e/v_{Te})/\widehat E` is

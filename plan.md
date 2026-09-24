@@ -179,6 +179,16 @@ P1, P3's VMEX-side step, P4 and the CPU lanes of P5 can run in parallel; P2
 feeds P1's eigen-derivative path and P3's linear objectives. The DOI waits for
 P7.
 
+### G.8 Release 2.4.0 and milestone renumbering (2026-09-23)
+
+2.4.0 was cut on 2026-09-23 as an intermediate release (P0 landed through
+chain #293, plus #290). **Wherever this plan names 2.4.0 as the research-grade
+release, read 2.5.0**; the exits are unchanged and were not required for 2.4.0.
+The README's GX comparison section and its figure were removed at the
+maintainer's request (not informative, and the framing was unfair to GX); the
+GX findings themselves stay recorded in `plan/log.md` and
+`tools/comparison/fixtures/gx_goldens/README.md`.
+
 ### G.7 Handoff at the second pause (2026-09-22, evening)
 
 State of `main`: `29362737f` (#277 merged: this plan). Nothing else merged

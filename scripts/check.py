@@ -60,10 +60,6 @@ SUBCOMMANDS: dict[str, tuple[str, str]] = {
         "check_nonlinear_transport_gates",
         "nonlinear transport completion, convergence and ensemble gates",
     ),
-    "nonlinear-optimization": (
-        "check_nonlinear_optimization_gates",
-        "nonlinear optimization production-guard and gradient-evidence gates",
-    ),
 }
 
 

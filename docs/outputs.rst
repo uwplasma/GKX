@@ -211,5 +211,5 @@ mistaken for GKX data. On GKX's own nonlinear bundle it rebuilds the whole
 figure set listed above, not only the single panel.
 
 From Python, ``gkx.artifacts.plotting.plot_saved_output(path, out=None)`` draws
-the same overview figure; ``examples/utilities/plot_runtime_outputs.py`` is a
-two-line script around it (set ``RUN_PATH`` and optionally ``OUT`` at the top).
+the same overview figure; ``examples/12_restart_and_analysis/run.py`` shows a
+saved run being reloaded and analysed.

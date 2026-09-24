@@ -129,6 +129,7 @@ regenerated with:
 
    KY=$(python -c "print(','.join(f'{0.04 + 0.0125*i:.3f}' for i in range(64)))")
 
+   # retired generator; restore it first: git show f005418bf575:scripts/profiling/profile_parallel_workloads.py > scripts/profiling/profile_parallel_workloads.py
    python scripts/profiling/profile_parallel_workloads.py independent-ky \
      --backend cpu --devices 1,2,4,8 --ky "$KY" \
      --ny 128 --nz 96 --nl 4 --nm 8 --steps 240 \
@@ -137,14 +138,17 @@ regenerated with:
      --backend gpu --devices 1,2 --ky "$KY" \
      --ny 128 --nz 96 --nl 4 --nm 8 --steps 240 \
      --out-prefix docs/_static/independent_ky_scan_scaling_gpu_large
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_scaling_panels.py > scripts/artifacts/plot_scaling_panels.py
    python scripts/artifacts/plot_scaling_panels.py independent-ky
 
+   # retired generator; restore it first: git show f005418bf575:scripts/profiling/profile_parallel_workloads.py > scripts/profiling/profile_parallel_workloads.py
    python scripts/profiling/profile_parallel_workloads.py quasilinear-uq \
      --backend cpu --devices 1,2,4,8 \
      --out-prefix docs/_static/quasilinear_uq_ensemble_scaling_cpu_large
    python scripts/profiling/profile_parallel_workloads.py quasilinear-uq \
      --backend gpu --devices 1,2 \
      --out-prefix docs/_static/quasilinear_uq_ensemble_scaling_gpu_large
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_quasilinear_diagnostics.py > scripts/artifacts/plot_quasilinear_diagnostics.py
    python scripts/artifacts/plot_quasilinear_diagnostics.py uq-ensemble-scaling
 
 Two smaller identity gates cover the same policy. The solver-backed Cyclone
@@ -159,6 +163,7 @@ engineering metadata only.
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/generate_parallel_identity_gate.py > scripts/artifacts/generate_parallel_identity_gate.py
    python scripts/artifacts/generate_parallel_identity_gate.py ky-scan
    python scripts/artifacts/generate_parallel_identity_gate.py logical-cpu --logical-devices 2
 
@@ -322,7 +327,7 @@ trajectory gate covers; the runtime lane does not yet call it. This is a
 Routing is fail-closed on numerical identity. With ``strict_identity = true``
 the run is also executed serially and the two answers must agree on the final
 state and on the ``Wg``, ``Wphi``, heat-flux, and particle-flux traces, with the
-same tolerance convention as the device-z gates (``atol = 5e-6``,
+same allclose-style tolerance convention (``atol = 5e-6``,
 ``rtol = 1e-4``). A violation raises ``NonlinearParallelIdentityError`` and the
 sharded result is discarded; it is never returned in place of the serial answer.
 Setting ``strict_identity = false`` skips the serial reference and is only
@@ -337,11 +342,12 @@ reasons:
 
 - the production parallel-streaming derivative is a spectral FFT along ``z``, so
   a whole-state ``z`` shard does not survive SPMD partitioning; and
-- ``gkx.operators.nonlinear.device_z`` evaluates a reduced diagnostic bracket
-  operator with a model field solve and no streaming, mirror, curvature,
-  collision, or species terms. Its serial-vs-sharded identity is real, but it is
-  identity for a different operator than the one a runtime nonlinear run
-  integrates, so it cannot stand in for the production RHS.
+- the retired device-z pencil route (``gkx.operators.nonlinear.device_z``,
+  removed in ARCH-A) evaluated a reduced diagnostic bracket operator with a
+  model field solve and no streaming, mirror, curvature, collision, or species
+  terms. Its serial-vs-sharded identity was real, but it was identity for a
+  different operator than the one a runtime nonlinear run integrates, so it
+  could not stand in for the production RHS.
 
 The independent-work strategies (``batch``, ``combined_ky``) are also rejected
 on this path: they orchestrate separate solver calls for ``k_y`` scans and
@@ -420,7 +426,9 @@ so each device count gets a clean JAX runtime:
    # Equivalent two-GPU preset with JAX traces enabled.
    python scripts/profiling/profile_nonlinear_sharding.py sweep --office-gpu-xlarge
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_scaling_panels.py > scripts/artifacts/plot_scaling_panels.py
    python scripts/artifacts/plot_scaling_panels.py nonlinear-sharding
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/generate_nonlinear_sharding_production_gate.py > scripts/artifacts/generate_nonlinear_sharding_production_gate.py
    python scripts/artifacts/generate_nonlinear_sharding_production_gate.py
 
 The profiler JSON records device count, requested sharding axis, warm
@@ -442,7 +450,12 @@ Diagnostic path: nonlinear domain and device-z decomposition
 
 These prototypes decompose the perpendicular spectral plane or the field-line
 axis. None of them runs the production nonlinear RHS, and none is a production
-nonlinear speedup claim.
+nonlinear speedup claim. Their source modules (``gkx.operators.nonlinear``
+``parallel``, ``spectral_core``, ``spectral_identity_*``,
+``domain_decomposition``, ``parallel_contracts_*`` and ``device_z``) and their
+profilers left the package in ARCH-A (2026-09-23) because no run, CLI command or
+solver path reached them; the JSON artifacts below are kept as frozen evidence
+of what was measured.
 
 - **Local state-domain gate.**
   ``docs/_static/nonlinear_domain_parallel_identity_gate.json`` checks a
@@ -458,14 +471,9 @@ nonlinear speedup claim.
   ``(N_l,N_m,N_y,N_x,N_z)`` spectral data, the split/reassemble and transpose
   operations a distributed FFT would need, a tile-reassembled nonlinear RHS
   ``-\{\phi,g\}``, a short fixed-step micro-integration, and a device-z pencil
-  fused-bracket route over a short transport window. Passing it is what makes
-  ``fft_axis_domain`` diagnostic rather than blocked. The facade
-  ``gkx.operators.nonlinear.parallel`` exposes
-  ``nonlinear_spectral_rhs_identity_gate``,
-  ``logical_decomposed_nonlinear_spectral_rhs`` and
-  ``nonlinear_spectral_integrator_identity_gate`` for focused tests; logical
-  tiles are reconstructed for identity validation, not executed as a
-  distributed FFT.
+  fused-bracket route over a short transport window. Passing it is what made
+  ``fft_axis_domain`` diagnostic rather than blocked; logical tiles were
+  reconstructed for identity validation, not executed as a distributed FFT.
 - **Routing work model.**
   ``docs/_static/nonlinear_spectral_domain_routing_profile.json`` on a
   ``(2,4,32,32,4)`` four-tile profile: the global-reconstruction route has a
@@ -480,7 +488,7 @@ nonlinear speedup claim.
   ``docs/_static/nonlinear_device_z_pencil_scaling_decomposition_gpu2_fused_profile.json``:
   on two RTX A4000 GPUs, timed one grid per process with the
   ``--isolate-shapes`` flag of
-  ``scripts/profiling/profile_device_z_pencil_scaling_decomposition.py``, the
+  ``scripts/profiling/profile_device_z_pencil_scaling_decomposition.py`` (retired; :ref:`retired-generators`), the
   single-device route overhead is ``0.988`` to ``1.005`` of the fused serial route,
   one-to-two-device scaling is ``1.92x`` to ``2.01x``, and the net speedup is
   ``1.95x`` to ``2.01x`` over five grids from ``(4,8,96,96,48)`` to
@@ -586,11 +594,11 @@ The communication and call-graph layers, each with its own identity artifact
      - ``linear_rhs_electrostatic_slices_gate.json``
      - ``3.7e-7`` relative; ``phi`` ``4.2e-9``
 
-They are regenerated by ``scripts/artifacts/generate_velocity_parallel_gates.py``
+They are regenerated by ``scripts/artifacts/generate_velocity_parallel_gates.py`` (retired; :ref:`retired-generators`)
 (``hermite-exchange``, ``field-reduce``, ``hermite-ladder``,
-``periodic-streaming``), ``scripts/artifacts/generate_electrostatic_parallel_gates.py``
+``periodic-streaming``), ``scripts/artifacts/generate_electrostatic_parallel_gates.py`` (retired; :ref:`retired-generators`)
 (``field-reduce``, ``drift``, ``diamagnetic``) and
-``scripts/artifacts/generate_linear_rhs_parallel_gates.py`` (``streaming``,
+``scripts/artifacts/generate_linear_rhs_parallel_gates.py`` (retired; :ref:`retired-generators`) (``streaming``,
 ``streaming-electrostatic``, ``electrostatic-slices``), each with
 ``--logical-devices 2``.
 
@@ -650,17 +658,19 @@ Tracked engineering profiles for these routes (``docs/_static``):
      - Mixed ``(2, 2)`` mesh, four logical CPU devices: ``3.11x`` warm RHS,
        exact 100-step state/field histories, ``0.97x`` end to end.
 
-They are produced by ``scripts/profiling/profile_linear_rhs_parallel_slices.py``
+They are produced by ``scripts/profiling/profile_linear_rhs_parallel_slices.py`` (retired; :ref:`retired-generators`)
 (``--axis species`` or ``--axis species_hermite`` for the species routes,
 ``--integration-steps`` for the trajectory rows, ``sweep`` for the regime map),
 for example:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/profiling/profile_linear_rhs_parallel_slices.py > scripts/profiling/profile_linear_rhs_parallel_slices.py
    python scripts/profiling/profile_linear_rhs_parallel_slices.py sweep \
      --platform cpu --devices 1,2,4,8 --nms 64,128 \
      --nl 4 --ny 32 --nz 128 --rtol 1e-5
 
+   # retired generator; restore it first: git show f005418bf575:scripts/profiling/profile_linear_rhs_parallel_slices.py > scripts/profiling/profile_linear_rhs_parallel_slices.py
    python scripts/profiling/profile_linear_rhs_parallel_slices.py \
      --axis species_hermite --platform cpu --logical-devices 4 \
      --nl 4 --nm 16 --ny 64 --nz 64 --warmups 2 --repeats 7 \

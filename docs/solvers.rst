@@ -71,7 +71,7 @@ jitted solve as an operand.
    the dense batched inverse.
 
 The Schur elimination is SOLVAX ``block_thomas_factor_ops`` (hence
-``solvax>=0.22.0``).  GKX keeps the Hermite-banded coupling action, an
+``solvax>=0.26.0``).  GKX keeps the Hermite-banded coupling action, an
 unrolled forward substitution pinned bitwise to SOLVAX
 ``block_thomas_solve_ops`` on the same factors, and the Sherman--Morrison
 correction.  Against the previous in-tree factors, full applies agree to
@@ -84,7 +84,7 @@ width) are floored at ``64 * eps`` of the probe precision: inert in float64,
 ``7.6e-6`` in float32.  A z-coupled block is refused, not sent to the dense
 fallback, because it is not the operator the splitting describes.
 
-Measured on the shipped Cyclone deck (``examples/linear/axisymmetric/cyclone.toml``)
+Measured on the shipped Cyclone deck (``examples/01_linear_tokamak/case_full.toml``)
 at ``Nz=96``:
 
 * ``pr3-cm`` reaches the ``1e-4`` inner tolerance in 252 unrestarted

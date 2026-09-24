@@ -77,6 +77,26 @@ def _nonlinear_cfg(
     return cfg if parallel is None else replace(cfg, parallel=parallel)
 
 
+def _live_cfg(
+    parallel: RuntimeParallelConfig | None = None, *, ky_layout: str = "full"
+) -> RuntimeConfig:
+    """Return a deck of the same size whose state and fields actually evolve.
+
+    :func:`_nonlinear_cfg` seeds a single mode that stays put (``phi`` is
+    identically zero and the state does not change over the run), so an
+    identity on it cannot fail. This one has ``Nx = 4``, a larger box and a
+    multimode start at ``1e-2``; over 20 rk2 steps the state moves by about
+    ``5e-4`` and ``max |phi|`` is about ``4e-3``.
+    """
+
+    cfg = _nonlinear_cfg(parallel, ky_layout=ky_layout)
+    return replace(
+        cfg,
+        grid=replace(cfg.grid, Nx=4, Lx=31.4, Ly=31.4),
+        init=replace(cfg.init, init_amp=1.0e-2, init_single=False),
+    )
+
+
 def _fake_plan(
     count: int = 2, *, strict_identity: bool = True
 ) -> NonlinearParallelPlan:
@@ -323,10 +343,10 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
 
     _require_devices(num_devices)
     serial = run_runtime_nonlinear(
-        _nonlinear_cfg(ky_layout=ky_layout), return_state=True, **_RUN_KWARGS
+        _live_cfg(ky_layout=ky_layout), return_state=True, **_RUN_KWARGS
     )
     sharded = run_runtime_nonlinear(
-        _nonlinear_cfg(
+        _live_cfg(
             RuntimeParallelConfig(
                 strategy="shard_map", axis="ky", num_devices=num_devices
             ),
@@ -337,6 +357,8 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     )
     assert np.asarray(sharded.state).shape[-3] == (8 if ky_layout == "full" else 5)
     assert serial.diagnostics is not None and sharded.diagnostics is not None
+    # The live deck's field energy is nonzero, so the comparison can fail.
+    assert np.max(np.abs(np.asarray(serial.diagnostics.Wphi_t))) > 0.0
     np.testing.assert_allclose(
         np.asarray(sharded.state), np.asarray(serial.state), rtol=0.0, atol=5.0e-6
     )
@@ -455,3 +477,83 @@ def test_unsupported_strategy_fails_the_runtime_run_before_any_work() -> None:
             _nonlinear_cfg(RuntimeParallelConfig(strategy="batch", axis="ky")),
             **_RUN_KWARGS,
         )
+
+
+# ---- [time] state_sharding: real placement, results read back ----
+
+
+def _live_context(monkeypatch, ky_layout: str):
+    """Return the runtime context (initial state, grid, geometry, ...) of the live deck."""
+
+    captured: dict = {}
+    original = nonlinear_workflow._run_once
+
+    def spy(cfg, ctx, *args, **kwargs):
+        captured["ctx"] = ctx
+        return original(cfg, ctx, *args, **kwargs)
+
+    monkeypatch.setattr(nonlinear_workflow, "_run_once", spy)
+    cfg = _live_cfg(ky_layout=ky_layout)
+    run_runtime_nonlinear(cfg, **{**_RUN_KWARGS, "steps": 1})
+    monkeypatch.setattr(nonlinear_workflow, "_run_once", original)
+    return cfg, captured["ctx"]
+
+
+@pytest.mark.parametrize(
+    ("ky_layout", "spec", "num_devices"),
+    [
+        ("full", "ky", 2),
+        ("full", "ky", 4),
+        ("half", "ky", 2),
+        ("half", "ky", 4),
+        ("full", "kx", 4),
+    ],
+)
+def test_time_state_sharding_matches_serial(
+    monkeypatch, ky_layout: str, spec: str, num_devices: int
+) -> None:
+    """``[time] state_sharding`` runs on real devices and reproduces the serial run.
+
+    Before the fix, the two-sided ky split failed on XLA:CPU with the FFT
+    thunk's layout RET_CHECK, and the half layout (``Nyc = 5``) raised
+    ``IndivisibleError`` from ``device_put``. The failure only surfaced when
+    the result was read, so the test reads both outputs back.
+    """
+
+    import gkx.solvers_time_runners as runners
+    from gkx.parallel.state import resolve_state_sharding
+
+    _require_devices(num_devices)
+    cfg, ctx = _live_context(monkeypatch, ky_layout)
+    devices = jax.devices()[:num_devices]
+    monkeypatch.setattr(
+        runners,
+        "resolve_state_sharding",
+        lambda G0, name: resolve_state_sharding(G0, name, devices=devices),
+    )
+
+    def run(sharding: str | None):
+        time_cfg = replace(
+            cfg.time, dt=ctx.dt, t_max=20 * ctx.dt, state_sharding=sharding
+        )
+        return runners.integrate_nonlinear_from_config(
+            jnp.array(ctx.G0, copy=True),
+            ctx.grid,
+            ctx.geom,
+            ctx.params,
+            time_cfg,
+            terms=ctx.terms,
+        )
+
+    serial_state, serial_fields = run(None)
+    state, fields = run(spec)
+    serial_state = np.asarray(serial_state)
+    assert np.asarray(state).shape == serial_state.shape
+    assert serial_state.shape[-3] == (8 if ky_layout == "full" else 5)
+    # The deck must be live, or the comparison below proves nothing.
+    assert np.max(np.abs(serial_state - np.asarray(ctx.G0))) > 1.0e-5
+    assert np.max(np.abs(np.asarray(serial_fields.phi))) > 1.0e-4
+    np.testing.assert_allclose(np.asarray(state), serial_state, rtol=0.0, atol=1.0e-12)
+    np.testing.assert_allclose(
+        np.asarray(fields.phi), np.asarray(serial_fields.phi), rtol=0.0, atol=1.0e-12
+    )

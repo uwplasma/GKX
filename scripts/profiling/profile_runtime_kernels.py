@@ -383,7 +383,7 @@ def build_cyclone_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"),
+        default=Path("examples/03_nonlinear_tokamak/case_full.toml"),
     )
     parser.add_argument("--ky", type=float, default=0.3)
     parser.add_argument("--Nl", type=int, default=4)
@@ -596,7 +596,7 @@ def build_nonlinear_step_split_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"),
+        default=Path("examples/03_nonlinear_tokamak/case_full.toml"),
     )
     parser.add_argument("--ky", type=float, default=0.3)
     parser.add_argument("--kx", type=float, default=None)
@@ -761,9 +761,7 @@ def _add_full_rhs_common_args(
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path(
-            "examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml"
-        ),
+        default=Path("benchmarks/cases/cyclone_nonlinear_miller.toml"),
     )
     parser.add_argument("--ky", type=float, default=0.3)
     parser.add_argument("--kx", type=float, default=None)
@@ -1138,7 +1136,7 @@ def build_nonlinear_step_hlo_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"),
+        default=Path("examples/03_nonlinear_tokamak/case_full.toml"),
     )
     for name, default in (("--Nx", 32), ("--Ny", 32), ("--Nz", 24)):
         parser.add_argument(name, type=int, default=default)

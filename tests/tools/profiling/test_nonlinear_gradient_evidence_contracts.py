@@ -92,11 +92,7 @@ def test_gradient_window_imports_from_the_repository_package() -> None:
 
 def test_gradient_window_nz_override_wins_over_shipped_ntheta() -> None:
     case = _ladder_tool().build_window_case(
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "axisymmetric"
-        / "runtime_cyclone_nonlinear_t400.toml",
+        REPO_ROOT / "benchmarks" / "cases/cyclone_nonlinear_t400.toml",
         {"Nx": 6, "Ny": 4, "Nz": 10},
     )
 

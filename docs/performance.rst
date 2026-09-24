@@ -191,6 +191,7 @@ mode-resolved histories:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/benchmarks/benchmark_nonlinear_suite.py > scripts/benchmarks/benchmark_nonlinear_suite.py
    python scripts/benchmarks/benchmark_nonlinear_suite.py --steps 200 --dt 0.0377 \
      --out tools_out/gkx_nl_bench.csv
    python scripts/benchmarks/benchmark_nonlinear_suite.py --laguerre-mode spectral
@@ -209,13 +210,13 @@ the linear and full RHS, and the nonlinear integrator:
 .. code-block:: bash
 
    python scripts/profiling/profile_startup_and_cache.py runtime-startup \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --ky 0.3 --Nl 4 --Nm 8 --compile-steps 1 \
      --json-out tools_out/startup_cyclone.json \
      --csv-out tools_out/startup_cyclone.csv
 
    python scripts/profiling/profile_startup_and_cache.py linear-cache \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --Nl 4 --Nm 8 \
      --json-out tools_out/linear_cache_cyclone.json \
      --csv-out tools_out/linear_cache_cyclone.csv
@@ -259,9 +260,10 @@ Nonlinear RHS split (Cyclone)
 .. code-block:: bash
 
    python scripts/profiling/profile_runtime_kernels.py nonlinear-step-split \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_short.toml \
+     --config benchmarks/cases/cyclone_nonlinear_short.toml \
      --repeats 10 \
      --out docs/_static/nonlinear_rhs_profile_gpu.csv
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_scaling_panels.py > scripts/artifacts/plot_scaling_panels.py
    python scripts/artifacts/plot_scaling_panels.py rhs-profile \
      --out docs/_static/nonlinear_rhs_profile.png
 
@@ -312,7 +314,7 @@ The shipped nonlinear Miller input at ``Nx=192``, ``Ny=64``, ``Nz=24``,
 .. code-block:: bash
 
    python scripts/profiling/profile_runtime_kernels.py nonlinear-step-split \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
+     --config benchmarks/cases/cyclone_nonlinear_miller.toml \
      --repeats 5 \
      --out docs/_static/nonlinear_rhs_profile_miller_cpu.csv
 
@@ -328,7 +330,7 @@ The fused full nonlinear-RHS trace on the same input is generated with:
 .. code-block:: bash
 
    python scripts/profiling/profile_runtime_kernels.py full-nonlinear-rhs \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
+     --config benchmarks/cases/cyclone_nonlinear_miller.toml \
      --ky 0.3 --Nl 4 --Nm 8 --repeats 5 \
      --summary-json docs/_static/full_nonlinear_rhs_trace_summary.json
 
@@ -359,8 +361,9 @@ nonlinear runs:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/profiling/profile_linear_rhs_terms.py > scripts/profiling/profile_linear_rhs_terms.py
    python scripts/profiling/profile_linear_rhs_terms.py \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --ky 0.3 --Nl 4 --Nm 8 --repeats 8 \
      --out docs/_static/linear_rhs_terms_profile_cpu.csv \
      --summary-json docs/_static/linear_rhs_terms_profile.json
@@ -408,8 +411,9 @@ zero-collision fast path:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/generate_linear_rhs_parallel_gates.py > scripts/artifacts/generate_linear_rhs_parallel_gates.py
    python scripts/artifacts/generate_linear_rhs_parallel_gates.py zero-norm-state-window \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml \
+     --config examples/03_nonlinear_tokamak/case_full.toml \
      --ky 0.3 --Nl 4 --Nm 8 \
      --out-json docs/_static/linear_rhs_zero_norm_state_window_gate.json
 
@@ -426,7 +430,7 @@ The companion full-graph profiler lowers and times the production
 .. code-block:: bash
 
    python scripts/profiling/profile_runtime_kernels.py full-linear-rhs \
-     --config examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear_miller.toml \
+     --config benchmarks/cases/cyclone_nonlinear_miller.toml \
      --ky 0.3 --Nl 4 --Nm 8 --repeats 3 \
      --summary-json docs/_static/full_linear_rhs_trace_summary.json
 
@@ -448,7 +452,7 @@ it for every objective or ensemble evaluation:
 
    import gkx
 
-   case = gkx.load("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml")
+   case = gkx.load("examples/03_nonlinear_tokamak/case_full.toml")
    simulation = gkx.prepare(case).warmup()
    time, diagnostics, state, fields = simulation.solve()
    # Same shape and dtype: the compiled scan is reused, not rebuilt.
@@ -465,7 +469,7 @@ The controlled prepared profiles
 ``docs/_static/prepared_nonlinear_runtime_cpu_profile.json`` and
 ``docs/_static/prepared_nonlinear_runtime_gpu_profile.json`` run the same
 200-step adaptive RK3 trajectory of
-``examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml`` (diagnostic
+``examples/03_nonlinear_tokamak/case_full.toml`` (diagnostic
 stride 10, compact scalar diagnostics) at commit ``b150705c`` with Python
 3.12.13, JAX 0.10.2 and NumPy 2.5.2, on a laptop CPU and on one RTX A4000:
 
@@ -515,6 +519,7 @@ end-of-run scalar diagnostics:
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/gate_laguerre_nonlinear_modes.py > scripts/artifacts/gate_laguerre_nonlinear_modes.py
    python scripts/artifacts/gate_laguerre_nonlinear_modes.py \
      --case cyclone --case kbm --case w7x --case hsx \
      --out-json docs/_static/laguerre_mode_gate.json \
@@ -653,7 +658,7 @@ velocity-space linear-slice regime map is
 ``linear_rhs_parallel_slices_sweep.json``. The earlier two-device linear scaling
 data in ``docs/_static/scaling_speedup_data.csv`` was measured on a Diffrax
 linear route GKX no longer ships; it is a historical record, replotted with
-``python scripts/artifacts/plot_scaling_panels.py legacy-two-device``, not a
+``python scripts/artifacts/plot_scaling_panels.py legacy-two-device`` (retired; :ref:`retired-generators`), not a
 reproducible artifact.
 
 Communication-aware nonlinear domain decomposition remains diagnostic until the

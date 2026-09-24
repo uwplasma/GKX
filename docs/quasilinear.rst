@@ -87,7 +87,7 @@ Running it
 .. code-block:: bash
 
    gkx run \
-     --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
+     --config examples/08_quasilinear/case_full.toml \
      --out tools_out/cyclone_quasilinear
 
 or enable the diagnostic for another linear TOML from the command line:
@@ -95,7 +95,7 @@ or enable the diagnostic for another linear TOML from the command line:
 .. code-block:: bash
 
    gkx run \
-     --config examples/linear/axisymmetric/cyclone.toml \
+     --config examples/01_linear_tokamak/case_full.toml \
      --quasilinear \
      --ql-mode saturated \
      --ql-saturation-rule mixing_length \
@@ -109,12 +109,13 @@ solves in parallel and keeps the serial ordering of the spectrum:
 .. code-block:: bash
 
    gkx scan \
-     --config examples/linear/axisymmetric/runtime_cyclone_quasilinear.toml \
+     --config examples/08_quasilinear/case_full.toml \
      --ky-values 0.1,0.2,0.3,0.4 \
      --quasilinear \
      --workers 2 \
      --out tools_out/cyclone_quasilinear_scan
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_quasilinear_diagnostics.py > scripts/artifacts/plot_quasilinear_diagnostics.py
    python scripts/artifacts/plot_quasilinear_diagnostics.py spectrum \
      --spectrum tools_out/cyclone_quasilinear_scan.quasilinear_spectrum.csv \
      --out tools_out/quasilinear_cyclone_spectrum.png
@@ -136,7 +137,7 @@ run's ``Ny = 64`` grid:
 .. code-block:: bash
 
    gkx scan \
-     --config examples/linear/axisymmetric/runtime_cyclone_miller_quasilinear.toml \
+     --config benchmarks/cases/cyclone_miller_quasilinear.toml \
      --ky-values 0.1,0.2,0.3,0.4,0.5 \
      --quasilinear \
      --out docs/_static/quasilinear_cyclone_miller_spectrum_scan
@@ -302,7 +303,7 @@ Implementation map
      - train/holdout/audit schemas, spectrum integration, nonlinear-window
        ingestion, scale fitting and scoring
    * - Plotting tools
-     - ``scripts/artifacts/plot_quasilinear_diagnostics.py``,
+     - ``scripts/artifacts/plot_quasilinear_diagnostics.py`` (retired; :ref:`retired-generators`),
        ``scripts/artifacts/plot_quasilinear_calibration.py``
      - spectrum, shape-gate and calibration figures
    * - Differentiability gates
@@ -382,7 +383,7 @@ non-Hermitian eigenvectors unless the caller opts in through
 ``lax_linalg.eig(..., enable_eigvec_derivs=True)`` (``jax >= 0.10.1``); the
 implicit left/right path is the validation route for quasilinear observables.
 
-``examples/theory_and_demos/quasilinear_implicit_sensitivity.py`` applies it to
+``examples/08_quasilinear/implicit_sensitivity.py`` applies it to
 a small Cyclone linear-RHS fixture. The differentiated observable is
 :math:`[\gamma, \omega, k_{\perp,\mathrm{eff}}^2, \widehat{Q}_i,
 Q_i^{(\mathrm{ML})}]`, where :math:`Q_i^{(\mathrm{ML})}` is the uncalibrated
@@ -393,7 +394,7 @@ relative derivative error 1.2e-2 at eigenvalue gap 0.24.
 
 .. code-block:: bash
 
-   python examples/theory_and_demos/quasilinear_implicit_sensitivity.py
+   python examples/08_quasilinear/implicit_sensitivity.py
 
 Tests
 -----
@@ -590,7 +591,7 @@ They include:
 
 The QI seed equilibrium (``quasilinear_vmec_qi_seed_linear_spectrum_scan``)
 peaks at :math:`\gamma \approx 3.8\times10^{-3}` near ``ky = 0.143``, below the
-0.02 nonlinear-launch threshold of ``scripts/artifacts/build_qi_branch_refinement_gate.py``,
+0.02 nonlinear-launch threshold of ``scripts/artifacts/build_qi_branch_refinement_gate.py`` (retired; :ref:`retired-generators`),
 so no nonlinear window exists for it.
 
 Results
@@ -679,14 +680,14 @@ command uses the shipped QI deck. For the benchmark equilibria, point
    vmex input.nfp3_QI_fixed_resolution_final
    cd ../..
    gkx scan \
-     --config examples/linear/non-axisymmetric/runtime_hsx_linear_quasilinear.toml \
+     --config examples/02_linear_stellarator/case_full.toml \
      --ky-values 0.047619047619047616,0.09523809523809523,0.14285714285714285,0.19047619047619047,0.23809523809523808,0.2857142857142857 \
      --Nl 4 --Nm 8 --solver time --dt 0.005 --steps 400 \
      --quasilinear \
      --out docs/_static/quasilinear_hsx_spectrum_scan \
      --no-progress
    gkx scan \
-     --config examples/linear/non-axisymmetric/runtime_w7x_linear_quasilinear_vmec.toml \
+     --config benchmarks/cases/w7x_linear_quasilinear_vmec.toml \
      --ky-values 0.047619047619047616,0.09523809523809523,0.14285714285714285,0.19047619047619047,0.23809523809523808,0.2857142857142857 \
      --Nl 4 --Nm 8 --solver time --dt 0.005 --steps 400 \
      --quasilinear \
@@ -745,6 +746,7 @@ KBM has no shape gate because its nonlinear lane is electromagnetic.
 
 .. code-block:: bash
 
+   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_quasilinear_diagnostics.py > scripts/artifacts/plot_quasilinear_diagnostics.py
    python scripts/artifacts/plot_quasilinear_diagnostics.py shape-gate \
      --spectrum docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv \
      --nonlinear tools_out/final_nonlinear_audit/hsx_nonlinear_t50.out.nc \

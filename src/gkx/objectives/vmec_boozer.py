@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import jax.numpy as jnp
-import numpy as np
 
 from gkx.geometry.vmec_boozer_core import flux_tube_geometry_from_vmec_boozer_state
 from gkx.objectives.core import (
-    SolverScalarObjective,
     solver_objective_vector_from_geometry,
-    solver_scalar_objective_from_vector,
 )
 from gkx.objectives.sampling import (
-    _aggregate_weights,
     _float_tuple,
     _ky_sample_axis,
     _surface_sample_axis,
@@ -65,68 +61,6 @@ def _split_vmec_boozer_objective_kwargs(
         key: kwargs[key] for key in _SOLVER_OBJECTIVE_OPTION_KEYS if key in kwargs
     }
     return geometry_kwargs, objective_kwargs
-
-
-def vmec_boozer_solver_objective_vector_from_state(  # pragma: no cover
-    state: Any,
-    static: Any,
-    indata: Any,
-    wout: Any,
-    *,
-    geometry_fn: Callable[..., Any] | None = None,
-    objective_vector_fn: Callable[..., jnp.ndarray] | None = None,
-    **kwargs: Any,
-) -> jnp.ndarray:
-    """Evaluate solver objectives from the in-memory VMEC/Boozer bridge."""
-
-    geometry_kwargs, objective_kwargs = _split_vmec_boozer_objective_kwargs(kwargs)
-    geom = (geometry_fn or flux_tube_geometry_from_vmec_boozer_state)(
-        state,
-        static,
-        indata,
-        wout,
-        **geometry_kwargs,
-    )
-    evaluator = objective_vector_fn or solver_objective_vector_from_geometry
-    return evaluator(geom, **objective_kwargs)
-
-
-def vmec_boozer_solver_objective_table_from_state(  # pragma: no cover
-    state: Any,
-    static: Any,
-    indata: Any,
-    wout: Any,
-    *,
-    surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
-    torflux_values: float | tuple[float, ...] | list[float] | None = None,
-    alphas: float | tuple[float, ...] | list[float] = (0.0,),
-    selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
-    ky_values: float | tuple[float, ...] | list[float] | None = None,
-    ky_base: float | None = None,
-    table_with_metadata_fn: Callable[..., tuple[jnp.ndarray, list[dict[str, object]]]]
-    | None = None,
-    **kwargs: Any,
-) -> jnp.ndarray:
-    """Evaluate solver objectives over a surface/field-line/``k_y`` table."""
-
-    table_builder = (
-        table_with_metadata_fn
-        or vmec_boozer_solver_objective_table_with_metadata_from_state
-    )
-    table, _metadata = table_builder(
-        state,
-        static,
-        indata,
-        wout,
-        surface_indices=surface_indices,
-        torflux_values=torflux_values,
-        alphas=alphas,
-        selected_ky_indices=selected_ky_indices,
-        ky_values=ky_values,
-        ky_base=ky_base,
-        **kwargs,
-    )
-    return table
 
 
 def _surface_geometry_kwargs(
@@ -270,75 +204,7 @@ def vmec_boozer_solver_objective_table_with_metadata_from_state(  # pragma: no c
     return jnp.stack(rows), metadata
 
 
-def vmec_boozer_aggregate_scalar_objective_from_state(  # pragma: no cover
-    state: Any,
-    static: Any,
-    indata: Any,
-    wout: Any,
-    *,
-    objective: SolverScalarObjective = "growth",
-    reduction: Literal["mean", "weighted_mean", "max"] = "mean",
-    weights: tuple[float, ...] | list[float] | np.ndarray | None = None,
-    surface_indices: int | None | tuple[int | None, ...] | list[int | None] = (None,),
-    alphas: float | tuple[float, ...] | list[float] = (0.0,),
-    selected_ky_indices: int | tuple[int, ...] | list[int] = (1,),
-    table_fn: Callable[..., jnp.ndarray] | None = None,
-    **kwargs: Any,
-) -> jnp.ndarray:
-    """Reduce a VMEC/Boozer multi-point objective table to one scalar."""
-
-    table_builder = table_fn or vmec_boozer_solver_objective_table_from_state
-    table = table_builder(
-        state,
-        static,
-        indata,
-        wout,
-        surface_indices=surface_indices,
-        alphas=alphas,
-        selected_ky_indices=selected_ky_indices,
-        **kwargs,
-    )
-    values = jnp.asarray(
-        [solver_scalar_objective_from_vector(row, objective) for row in table]
-    )
-    if str(reduction) == "mean":
-        return jnp.mean(values)
-    if str(reduction) == "weighted_mean":
-        normalized = _aggregate_weights(weights, int(values.size))
-        return jnp.sum(values * jnp.asarray(normalized, dtype=values.dtype))
-    if str(reduction) == "max":
-        return jnp.max(values)
-    raise ValueError("reduction must be one of 'mean', 'weighted_mean', or 'max'")
-
-
-def vmec_boozer_scalar_objective_from_state(  # pragma: no cover
-    state: Any,
-    static: Any,
-    indata: Any,
-    wout: Any,
-    *,
-    objective: SolverScalarObjective = "growth",
-    vector_fn: Callable[..., jnp.ndarray] | None = None,
-    **kwargs: Any,
-) -> jnp.ndarray:
-    """Evaluate one scalar optimization objective on the VMEC/Boozer path."""
-
-    vector_builder = vector_fn or vmec_boozer_solver_objective_vector_from_state
-    vector = vector_builder(
-        state,
-        static,
-        indata,
-        wout,
-        **kwargs,
-    )
-    return solver_scalar_objective_from_vector(vector, objective)
-
-
 __all__ = [
     "_split_vmec_boozer_objective_kwargs",
-    "vmec_boozer_aggregate_scalar_objective_from_state",
-    "vmec_boozer_scalar_objective_from_state",
-    "vmec_boozer_solver_objective_table_from_state",
     "vmec_boozer_solver_objective_table_with_metadata_from_state",
-    "vmec_boozer_solver_objective_vector_from_state",
 ]

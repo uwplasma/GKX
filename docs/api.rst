@@ -546,20 +546,6 @@ Config-Driven Time Runners
    :members:
    :private-members:
 
-Nonlinear Transport Optimization Diagnostics
---------------------------------------------
-
-.. automodule:: gkx.diagnostics.nonlinear_transport_optimization
-   :members:
-   :private-members:
-
-Nonlinear Gradient Statistics
------------------------------
-
-.. automodule:: gkx.diagnostics.nonlinear_gradient_statistics
-   :members:
-   :private-members:
-
 Benchmarks
 ----------
 
@@ -606,27 +592,6 @@ Parallel Independent Tasks
    :members:
    :private-members:
 
-Nonlinear Parallel Spectral Core
---------------------------------
-
-.. automodule:: gkx.operators.nonlinear.spectral_core
-   :members:
-   :private-members:
-
-Nonlinear Domain Decomposition
-------------------------------
-
-.. automodule:: gkx.operators.nonlinear.domain_decomposition
-   :members:
-   :private-members:
-
-Nonlinear Parallel Device-Z Core
---------------------------------
-
-.. automodule:: gkx.operators.nonlinear.device_z
-   :members:
-   :private-members:
-
 Velocity Sharding Plans
 -----------------------
 
@@ -665,12 +630,6 @@ Zonal Validation
 ----------------
 
 .. automodule:: gkx.diagnostics.zonal_validation
-   :members:
-
-Zonal Flow Objectives
----------------------
-
-.. automodule:: gkx.objectives.zonal
    :members:
 
 Analysis
@@ -777,13 +736,6 @@ Moment And Energy Diagnostics
 -----------------------------
 
 .. automodule:: gkx.operators.moments
-   :members:
-   :private-members:
-
-Transport Diagnostics
----------------------
-
-.. automodule:: gkx.diagnostics.transport
    :members:
    :private-members:
 
@@ -933,12 +885,6 @@ Run-to-Saturation Stop Policy
    :members:
    :private-members:
 
-Quasilinear Model Selection
----------------------------
-
-.. automodule:: gkx.diagnostics.quasilinear_model_selection
-   :members:
-
 Solver Eigen Objectives
 -----------------------
 
@@ -957,38 +903,10 @@ Solver Objective Sampling
 .. automodule:: gkx.objectives.sampling
    :members:
 
-Solver Geometry Objectives
---------------------------
-
-.. automodule:: gkx.objectives.geometry
-   :members:
-   :private-members:
-
-Solver VMEC/Boozer Gradient Gates
----------------------------------
-
-.. automodule:: gkx.objectives.vmec_boozer_gradients
-   :members:
-   :private-members:
-
 Solver VMEC/Boozer Objectives
 -----------------------------
 
 .. automodule:: gkx.objectives.vmec_boozer
-   :members:
-   :private-members:
-
-Solver VMEC/Boozer Finite-Difference Gates
-------------------------------------------
-
-.. automodule:: gkx.objectives.vmec_boozer_fd
-   :members:
-   :private-members:
-
-Solver VMEC/Boozer Line-Search Gates
-------------------------------------
-
-.. automodule:: gkx.objectives.vmec_boozer_line_search
    :members:
    :private-members:
 
@@ -1004,24 +922,6 @@ VMEC-JAX Transport Objective
 .. automodule:: gkx.objectives.vmec_transport
    :members:
    :private-members:
-
-VMEC-JAX Transport Branch Gates
--------------------------------
-
-.. automodule:: gkx.objectives.vmec_transport_branch
-   :members:
-
-VMEC-JAX Transport Optimization
--------------------------------
-
-.. automodule:: gkx.objectives.vmec_transport_optimization
-   :members:
-
-VMEC-JAX Boundary Chain
------------------------
-
-.. automodule:: gkx.geometry.vmec_boundary_chain
-   :members:
 
 Stellarator ITG Objectives
 --------------------------

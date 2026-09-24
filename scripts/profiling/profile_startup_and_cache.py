@@ -33,7 +33,7 @@ def build_runtime_startup_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"),
+        default=Path("examples/03_nonlinear_tokamak/case_full.toml"),
     )
     parser.add_argument("--ky", type=float, default=0.3)
     parser.add_argument("--kx", type=float, default=None)
@@ -410,7 +410,7 @@ def build_linear_cache_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("examples/nonlinear/axisymmetric/runtime_cyclone_nonlinear.toml"),
+        default=Path("examples/03_nonlinear_tokamak/case_full.toml"),
     )
     parser.add_argument("--Nl", type=int, default=4)
     parser.add_argument("--Nm", type=int, default=8)

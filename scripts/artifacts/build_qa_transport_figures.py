@@ -22,7 +22,7 @@ from gkx.diagnostics.analysis import integrated_autocorrelation_time
 
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = ROOT / "docs" / "_static"
-INPUTS = ROOT / "examples" / "optimization"
+INPUTS = ROOT / "examples" / "10_vmex_optimization"
 PATTERN = re.compile(r"(.+)_(baseline|candidate)_seed(\d+)\.npz")
 ORDER = (
     "nominal",

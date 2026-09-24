@@ -852,8 +852,22 @@ def solver_growth_rate_from_geometry(
     ly: float = 12.0,
     params_linear: LinearParams | None = None,
     terms: LinearTerms | None = None,
+    eigensolver: Literal["dense", "sparse-direct"] = "dense",
+    shift: complex | None = None,
+    candidates: int = 12,
 ) -> jnp.ndarray:
-    """Evaluate the dominant linear growth rate without eigenvector AD."""
+    """Evaluate the dominant linear growth rate without eigenvector AD.
+
+    ``eigensolver="sparse-direct"`` assembles the operator's exact sparse matrix
+    from compressed products, factors ``A - shift I`` once on the host
+    (``solvax.sparse_eigenvalue``) and returns the largest growth rate among the
+    ``candidates`` eigenvalues nearest ``shift`` (a warm start such as the
+    previous optimizer step's eigenvalue). Its gradient is one operator VJP at
+    the right eigenvector, weighted by the left eigenvector from the same
+    factorization. It needs a SOLVAX with ``sparse_eigenvalue``, returns NaN if
+    either eigenpair misses a 1e-9 residual, and finds only eigenvalues near
+    ``shift``: the dense default searches the whole spectrum.
+    """
 
     context = _solver_geometry_context(
         geom,
@@ -868,7 +882,94 @@ def solver_growth_rate_from_geometry(
         params_linear=params_linear,
         terms=terms,
     )
-    return dominant_real_eigenvalue(_solver_operator_matrix(context))
+    if eigensolver == "dense":
+        return dominant_real_eigenvalue(_solver_operator_matrix(context))
+    if eigensolver != "sparse-direct":
+        raise ValueError(
+            f"eigensolver must be 'dense' or 'sparse-direct', got {eigensolver!r}"
+        )
+    if shift is None:
+        raise ValueError("eigensolver='sparse-direct' requires a shift")
+    return jnp.real(_sparse_direct_eigenvalue(context, complex(shift), candidates))
+
+
+def _sparse_direct_eigenvalue(
+    context: _SolverGeometryContext, shift: complex, candidates: int
+) -> jnp.ndarray:
+    from solvax import (
+        CsrPattern,
+        column_groups,
+        csr_data_from_products,
+        sparse_eigenvalue,
+    )
+
+    shape = context.state_shape
+    nz = int(shape[-1])
+    n = int(np.prod(shape))
+    blocks = n // nz
+
+    def operator(p: Any, x: jnp.ndarray) -> jnp.ndarray:
+        image, _phi = linear_rhs_cached(
+            x.reshape(shape),
+            p[0],
+            p[1],
+            terms=context.linear_terms,
+            use_jit=False,
+            use_custom_vjp=False,
+        )
+        return image.reshape(-1)
+
+    params = (context.cache, context.linear_params)
+    # The sparsity pattern is structural, so it is probed on a concrete
+    # stand-in: traced leaves (under jit/grad) are replaced by generic values.
+    rng = np.random.default_rng(0)
+    probe_params = jax.tree.map(
+        lambda leaf: (
+            jnp.asarray(rng.uniform(0.5, 1.5, leaf.shape), leaf.dtype)
+            if isinstance(leaf, jax.core.Tracer)
+            else leaf
+        ),
+        params,
+    )
+    with jax.ensure_compile_time_eval():
+        probe = jax.jit(jax.vmap(lambda x: operator(probe_params, x)))
+        # Moment graph: a unit at two z of each (moment) block shows which blocks it
+        # reaches, and whether only at its own z (z-local) or along the whole chain.
+        local = np.zeros((blocks, blocks), bool)
+        chain = np.zeros((blocks, blocks), bool)
+        for z0 in {nz // 3, (2 * nz) // 3}:
+            seeds = np.zeros((blocks, blocks, nz))
+            seeds[np.arange(blocks), np.arange(blocks), z0] = 1.0
+            hit = np.abs(np.asarray(probe(jnp.asarray(seeds.reshape(blocks, n)))))
+            hit = hit.reshape(blocks, blocks, nz) > 0
+            away = np.delete(hit, z0, axis=2).any(axis=2)
+            chain |= away.T
+            local |= (hit[:, :, z0] & ~away).T
+    local = (local | np.eye(blocks, dtype=bool)) & ~chain
+    import scipy.sparse as sp
+
+    mask = (
+        sp.kron(sp.csr_matrix(local), sp.identity(nz))
+        + sp.kron(sp.csr_matrix(chain), sp.csr_matrix(np.ones((nz, nz))))
+    ).tocsr()
+    mask.sort_indices()
+    pattern = CsrPattern(mask.indptr, mask.indices, mask.shape)
+    groups = column_groups(mask)
+    seeds = np.zeros((len(groups), n))
+    for g, columns in enumerate(groups):
+        seeds[g, columns] = 1.0
+    dtype = jnp.result_type(context.cache.Jl.dtype, jnp.complex64)
+    products = jax.vmap(lambda x: operator(params, x))(jnp.asarray(seeds, dtype))
+    values = csr_data_from_products(pattern, groups, products)
+    return sparse_eigenvalue(
+        operator,
+        params,
+        pattern,
+        values,
+        shift,
+        candidates=min(candidates, n - 2),
+        residual_tolerance=1.0e-9,
+    ).value
 
 
 __all__ = [

@@ -20343,3 +20343,304 @@ Outcome:
 - paused by the maintainer; no process running locally or on the office host
 - office host keeps only the lane clone and its venv (lanes/readme-showcase under the home directory); no raw outputs beyond the two committed README figure files
 - next task: (1) wait for ci-required on the head; (2) when #278 is on main, merge origin/main and change the README's `python tools/release/run_test_gates.py fast` to `python scripts/check.py test-gates fast`; (3) rerun the three README test files; (4) push and leave for the supervisor to merge
+
+## 2026-09-23 — release 2.4.0
+
+Baseline: `main` `48536d159` (chain #293: #278 #286 #272 #289 #288 #283 #285
+#282 #287 #279 #284), plus #290 (collision tables require their exact
+`(Nl, Nm)`, not just `Nl*Nm`; Krylov eigen and CFL-controlled paths refuse a
+non-default collision operator instead of silently using the diagonal term).
+README: the GX comparison section and `readme_gx_defects` figure/builder were
+removed at the maintainer's request. The research-grade milestone is renamed
+2.5.0 (plan G.8). Left open for the next session, each with a Handoff: #294
+(scripts tranche 3), #296 (ARCH-A, −14,731 source lines), #297 (adjoint 2),
+#295 (sparse-direct growth-rate gradient), #281 (examples gallery), #280,
+#291, #292, #274, #275; SOLVAX #121.
+## 2026-09-23 - ARCH-A contraction 1 (G.3/G.6 P4), branch arch/contract-1
+
+Baseline:
+- GKX SHA: f005418bf (chain/p0, #293)
+- companion SHAs: none
+- source/test/tool files and lines: src/gkx 187 / 93,953; tests 81 / 94,628; scripts 106 / 78,277; tools 0
+- relevant existing gate: scripts/check.py architecture (topology, line-budget, cohesion), validation-coverage, readiness technical-status
+
+Scope:
+- intended change: inventory the source tree (import graph, product reachability, dead definitions, duplicates, registry, deprecated aliases) and delete what no run, CLI command, public name or example reaches
+- non-goals: moving code between packages, breaking import cycles, the deprecated reduced stellarator model (examples depend on it), scripts/ beyond what imports the deleted modules
+- prospective acceptance: at least -10,000 source lines; bitwise-identical fingerprints on XLA:CPU; no E1-E3 test removed; rollback = revert the two commits
+
+Changes:
+- files/functions removed, merged, or added: 27 src modules deleted (13,756 lines: 10 nonlinear spectral-identity/device-z prototypes, 4 diagnostics reports, 10 VMEC/Boozer objective gates and wrappers, 3 pass-through facades); 864 lines of definitions and imports that only they used; 4 exact-duplicate helpers merged into one owner; 86 lazy-registry rows; 10 scripts and 6 test files (215 test functions, all E0 report/gate/facade/profiler contracts or identity gates of the reduced operator); plan/research/2026-09-23-arch-a/{INVENTORY.md,fingerprint.py} added
+- kept on purpose: diagnostics.quasilinear_calibration (documented user workflow in docs/quasilinear.rst); parallel.batch (CI wheel smoke test)
+- public/schema behavior: 86 compatibility names no longer resolve as gkx.<name>; gkx.solvers_linear/_nonlinear/_time no longer import; numerics unchanged
+
+Evidence:
+- focused tests: local JAX 0.10.2 x64 CPU, tests/unit + tests/integration 2,366 passed; the only failures are two pre-existing ones (VMEX tensor-sensitivity, which fails on the base tree here too; a compile-reuse test that fails under xdist and passes alone). tests/validation + tests/tools + tests/release 709 passed. mypy clean (160 files), ruff check/format clean, sphinx -W clean, CI repo-hygiene block passes with regenerated artifacts
+- physics/mathematics/numerics gates: fingerprints with plan/research/2026-09-23-arch-a/fingerprint.py on the office host, float64. XLA:CPU base vs head bitwise identical: Cyclone gamma 0x1.7ed2ffdd9f835p-4, omega 0x1.286b1286ae465p-2, eigenfunction sha a92b98619ab58211; 100-step nonlinear heat-flux trace sha f0c5711f6ad61c17 (last 0x1.e0af0faac1b00p-18); window value 0x1.6a3a9aa898351p-34 and d<Q>/d(tprim) -0x1.22ee865d4c2b7p-40. CUDA (one A4000): linear and window fingerprints bitwise identical; the nonlinear trace differs between two base runs, so it is not a bitwise CUDA fingerprint (head final value equals base run 1)
+- CPU/NVIDIA measurements: wheel 868,489 -> 759,982 B, sdist 769,614 -> 676,663 B; import gkx.runtime median 1.06 -> 0.95 s on the laptop (5 alternating runs, noisy)
+- values: src/gkx 187 / 93,953 -> 160 / 79,222; tests 81 / 94,628 -> 75 / 87,428; scripts 106 / 78,277 -> 97 / 70,247; registry 346 -> 260; exact/near duplicate groups 11/25 -> 4/15; cycles 7 -> 7; low-cohesion 8 -> 6
+
+Outcome:
+- accepted pending CI and review (PR against chain/p0)
+- remaining blocker: none. Merge overlap with SLIM-SCRIPTS #294 on the scripts both delete; take the delete
+- next task: INVENTORY §5 rank 1 (reduced stellarator model, after EXAMPLES-GALLERY), rank 3 (deprecated CLI commands), rank 4 (diagnostics timesteppers into their integrators) with the same fingerprint harness
+
+## 2026-09-23 - ARCH-A contraction 1, paused (credits)
+
+Baseline:
+- GKX SHA: origin/main 48536d159 (#293 merged) merged cleanly into arch/contract-1
+
+Scope:
+- no content change beyond the test-lines baseline fix below
+
+Changes:
+- tools/package_architecture_manifest.toml: test_python_lines baseline 87,428 -> 87,430, the measured value after the registry-size test comment (repo-hygiene failed on this in CI run 35855460396)
+
+Evidence:
+- CI run 35855460396 (head be7ebb219): 33 jobs passed, repo-hygiene failed only on that baseline; nonlinear-core, parallel-autodiff and wide-coverage shard 24 had not finished at the pause
+- local hygiene block (size, architecture, parallel-scaling, quasilinear, vmec-boozer, readiness) passes with the fix; ruff check/format clean
+- office host: fingerprint directory removed, no process left
+
+Outcome:
+- paused; PR #296 converted to draft
+- next task: let CI finish on the pushed head, confirm ci-required, then mark #296 ready; then INVENTORY §5 ranks 1, 3, 4
+
+## 2026-09-23 - SOLVAX-DIRECT (plan G.2) complete: gradient rows, prod, cuDSS; GKX #295 consumer
+
+Baseline:
+- GKX: #280 on main at 29362737f; consumer #295 based on origin/chain/p0 f005418bf. SOLVAX #121 on 7b8ca55.
+
+Scope:
+- finish the #280 handoff: gradient against dense and `adaptive`, clean d96 rows, prod, cuDSS; consumer PR
+
+Changes:
+- #280: final records (`run3`, `grad`, `extra`, `cudss`), `cudss.py`, `gradient.py --arm gkx`, `bench.py --save-matrix`, REPORT.md final section
+- #295: `solver_growth_rate_from_geometry(eigensolver="sparse-direct")`; source +96 lines (baseline 93953 -> 94049), tests +52 (94628 -> 94680)
+
+Evidence:
+- n=3,072 growth-rate value+grad: dense 154-193 s, adaptive 117-183 s, direct jitted 4.1-5.5 s, GKX #295 eager 19.2-19.9 s; gradient vs dense 2.0e-13 to 2.9e-13
+- eigenpair: r96 direct about 109 s against adaptive 300 s (same eigenvalue); prod direct 0.0930911733-0.2820327315j, residual 1.7e-13, about 1,250 s (Arnoldi 1,011 s)
+- prod solve: MUMPS 117 s factor / 1.0-1.7 s solve (6.3 GB); cuDSS on A4000 15.5 s / 0.026 s; pr3-cm 322 s (1e-6)
+
+Outcome:
+- accepted for review: SOLVAX #121 (CI green), GKX #295 (paired gate skips until a SOLVAX release carries #121)
+- next task: SOLVAX release; raise the GKX floor; cache the pattern in #295; GPU factor behind the primitive
+
+## 2026-09-23 - SOLVAX-DIRECT paused (final pause, out of credits)
+
+- State: #280 and #295 are merged with main 48536d159 and pushed; #295 is back to draft with base main. SOLVAX #121 CI is fully green.
+- CI at the pause, before the merges (runners backed up): #280 had 26 checks passed, 11 pending and none failed. #295 had 10 passed and 27 pending after its mypy fix (the type-ignored import, which follows the adaptive route). The merges restarted both runs.
+- Office: raw outputs and the GPU venv are deleted; the MUMPS conda env and the clones remain under `lanes/solvax-direct` (2.6 GB).
+- Next: CI green on #280 and #295; SOLVAX release with #121; raise the GKX floor; cache the pattern in #295.
+## 2026-09-23 - PERF-ADJ wave 2 (G.2, ADJ-HALF, PERF-LIT items 1, 2, 4), branch perf/adjoint-window-2
+
+Baseline:
+- GKX SHA: f005418bf (origin/chain/p0, #293, includes #279)
+- companion SHAs: none; office A4000 (complex64) and CPU; jax/jaxlib 0.10.2 (py3.11), CPU cross-check with 0.11.2 (py3.12)
+- source/test/tool files and lines: src/gkx/solvers_nonlinear_explicit.py, solvers_nonlinear_state_integration.py, solvers_nonlinear.py; three test files; docs/nonlinear_autodiff.rst
+- relevant existing gate: PERF-LIT REPORT items 1, 2, 4
+
+Scope:
+- intended change: GPU A/B of the stage barrier and block-only schedule; backend-conditional barrier; budget default from measured memory; field-solve floor; warm start and vmapped tubes
+- non-goals: ky default, the saturation gate (F.5 step 4)
+- prospective acceptance and rollback criteria: gradients within f32 1e-6 / f64 1e-12, net-negative source lines
+
+Changes:
+- barrier is CPU-only (jax.lax.platform_dependent); identity on GPU, where it cost ~20% forward at 32x32x24 (fwd 1.36 vs 1.09 s)
+- ADJOINT_MEMORY_BUDGET_BYTES 2 -> 4 GiB (32x32x24/1024 block schedule measures 3.00 GiB, estimate 2.92 GiB)
+- deleted integrate_cached_explicit_scan and checkpoint_explicit_step (pass-throughs) and the residual helper; test for vmapped tubes added to the window test
+- net: src -67 lines, tests -43 lines; manifest baselines lowered to measured
+
+Evidence (records: plan/research/scripts/2026-09-22-perf-adj/records/gpu_a4000/):
+- A4000 f32, value + d/d tprim, nested -> block: 16x16x16/1024 half 3.23 -> 2.20 s; 32x32x24/256 half 3.62 -> 2.80 s; 32x32x24/1024 full 20.6 -> 16.2 s; 32x32x24/64 full 1.226 -> 0.882 s with value/grad bitwise equal. Temp 55 -> 288 MiB, 170 -> 816 MiB, 583 MiB -> 3.00 GiB.
+- half vs full gradient at 32x32x24/256 on A4000 (block): 2.80 vs 4.8 s: ADJ-HALF closed on GPU.
+- jax 0.10.2 CPU: no barrier gain because XLA:CPU in jaxlib 0.10.x removes optimization barriers before fusion (openxla "Move opt barrier remover after cpu scheduler", Aug 2026, in jaxlib 0.11.x); 0.11.2 CPU keeps it: half RK3 step 755 -> 28 ms. Making it effective on 0.10.2 would need a non-barrier fusion hack; not done.
+- field-solve "1.2 ms floor": standalone-dispatch latency, not present inside the scan (RK3 step 0.71 ms at 16x16x16, 5.26 ms at 32x32x24 in-scan). scan unroll 2/4: -10..14% at 32x32x24, slower forward at 16x16x16, compile +35..110%: rejected (records/gpu_a4000/unroll.txt).
+- tubes (8x8x16 Nl4/Nm8, 1024-step window): jax.vmap over states and geometry, one compile per batch size: 1 tube 2.1 s, 4 tubes 0.73 s/tube, 8 tubes 0.63 s/tube (loop 1.92); values bitwise equal to the loop. No new API needed.
+- warm start: cold spin-up 8000 steps 3.5 s, warm 2000 steps 1.0 s (8x8x16). The example's 8000-step cold spin-up is NOT saturated at 8x8x16 (window flux 0.14 vs 37-101 later); at 16x16x12 warm-started window values (112, 120) lie inside the along-trajectory spread (107-121) but d/d(drift) changes sign across samples (-498..+303): single-window gradients need the saturation gate and ensembles (F.5 step 4, PERF-LIT item 7).
+
+Outcome:
+- accepted (pending CI)
+- remaining blocker: none for this PR
+- next task: F.5 step 4 saturation gate; ensemble windows (PERF-LIT item 7)
+
+2026-09-23 addendum (final pause): merged origin/main (#293 landed) into perf/adjoint-window-2 cleanly; PR #297 retargeted to main as a draft. CI on d1720ec33 had 25 passing and 12 still running when paused (mypy fixed in d1720ec33; nothing else had failed). Office outputs deleted; the jax 0.10.2 venv under the lane directory is kept.
+## 2026-09-23 - SLIM-SCRIPTS tranche 3 (G.3/G.6 P4), branch slim/scripts-3
+
+Baseline:
+- GKX SHA: f005418bf (origin/chain/p0, #293)
+- companion SHAs: none
+- source/test/tool files and lines: scripts/ 106 Python files, 78,277 lines; tests/ 81 files, 94,628 lines; src/ unchanged
+- relevant existing gate: repo-hygiene step (four regenerated docs/_static JSONs diffed), scripts/check.py architecture, tests/release/test_evidence_ledger.py, tests/validation/benchmarks/test_benchmark_contracts.py
+
+Scope:
+- intended change: contract scripts/ by deleting every module that no CI step, gate, manifest, example, ledger row or library test needs; merge near-duplicate drivers; keep gate-read outputs as fixtures
+- non-goals: src/ behaviour, the scripts/checks/ gates, campaigns/ (tested policy), anything that writes package data
+- acceptance: hygiene JSONs byte-identical; every touched test file passes; merged/pruned paths fingerprinted old vs new
+
+Changes:
+- 41 modules deleted (artifacts 28, comparison 5, profiling 6, benchmarks 2); tests of those modules only removed (test_exact_state_audit.py and parts of four tests/tools files and test_plotting.py); tracked-artifact contracts in those files kept
+- four linear benchmark drivers + the KBM plotter merged into scripts/benchmarks/linear_benchmark.py <case>
+- build_linear_validation_artifacts.py 7,565 -> 5,155: docs-only subcommands and dead helpers removed
+- performance_optimization_manifest.toml profiling_tools pruned to kept tools; docs mark each retired generator and point to a new "Retired generators" section; MAP.md gains the tranche-3 table with recovery SHAs
+- architecture baselines lowered to measured: scripts files 106 -> 61, lines 78,277 -> 45,496; tests files 81 -> 80, lines 94,628 -> 91,877
+
+Evidence:
+- repo-hygiene step run locally (stdlib python 3.11): all gates pass; quasilinear_promotion_guardrails.json, vmec_boozer_differentiability_claim_guard.json, technical_release_status.json, release_readiness.json byte-identical
+- linear_benchmark fingerprint: every solver/figure call (args, deck hash, ky arrays, output paths) identical old vs new for cyclone, etg (with and without --ky), kinetic, tem; KBM PNG sha256 identical
+- build_linear_validation_artifacts: collision-verification JSON and PNG and collision-table .npy byte-identical old vs new; the .npy equals the shipped src/gkx/data/advanced_collision_six_moment.npy
+- pytest (JAX 0.10.2, x64): tests/tools, tests/release, tests/validation/{quasilinear,stellarator,benchmarks/test_benchmark_contracts.py}, tests/unit/objectives, the nonlinear evidence/window/campaign tests, collision and Hermite physics gates, test_plotting.py, test_parallel_artifacts.py all pass; sphinx -W html build passes; ruff check/format clean; validation-coverage gate passes
+
+Outcome:
+- complete pending CI and review; scripts/ is still 27,496 lines over the 18,000 target and 49 files over 12
+- remaining blocker: the rest is gates (scripts/checks/, 11,904 lines), ledger/refresh generators, campaigns imported by gates/examples/tests, and package-data generation; each needs a merge or a maintainer decision, not a reference sweep
+- next task: tranche 4 = merge scripts/checks/ into fewer modules behind check.py; decide whether campaign policy moves into src or its tests retire; move the collision-table generator next to the package data it writes
+
+## 2026-09-23 - SLIM-SCRIPTS tranche 3, paused (final pause)
+
+Baseline:
+- GKX SHA: 48536d159 (main after #293) merged cleanly into slim/scripts-3
+
+Scope:
+- no content change since the entry above; merge of origin/main and PR #294 retargeted to main as a draft
+
+Evidence:
+- CI on d33ca29ad (pre-merge head): 35 checks passed, 0 failed; wide-coverage and two quick-tests shards still pending at the pause, so ci-required had no conclusion
+- recovery SHA f005418bf is an ancestor of main, so the MAP.md recovery commands resolve on main
+
+Outcome:
+- paused by the maintainer; nothing running locally or on the office host (no office runs were used)
+- next task: let CI finish on the merged head; if green, mark #294 ready; then tranche 4 (merge scripts/checks/ behind check.py)
+
+## 2026-09-22 - EXAMPLES-GALLERY (G.3), branch examples/gallery — paused before implementation
+
+Baseline:
+- GKX SHA: f9485f044 (main, 2.3.0 merge)
+- companion SHAs: none used
+- source/test/tool files and lines: `examples/` 81 tracked files, 36 Python files, 5,145 Python lines
+- relevant existing gate: `tests/integration/examples/test_examples.py` (820 lines, runtime-core CI shard); `tests/validation/stellarator/test_vmex_qa_transport_optimization.py` (pinned QA text/constants)
+
+Scope:
+- intended change: reorganize `examples/` into the numbered gallery of archived-plan §19.1 in the §19.2 style, one parametrized smoke test, `examples/README.md` index
+- non-goals: README.md edits (README-SHOWCASE lane), anything in `benchmarks/` except new files under `benchmarks/cases/`, regenerating tracked figures
+- prospective acceptance: every group runs at smoke resolution in CI or skips with a stated data reason; pinned QA sentences/constants unchanged; tests/release green
+
+Changes:
+- none committed yet; this entry records the completed survey and the proposed file map (see the draft PR Handoff)
+
+Evidence:
+- reference web: 59 non-example files name example paths (tests, tools/*.toml lanes, docs, ci.yml, release.yml, src docstrings, benchmarks/*.py); `src/gkx/data/common_input.toml` is a symlink to `examples/common_input.toml` and `src/gkx/geometry/vmec_boozer_core.py` resolves `examples/vmec/`, so both stay in place
+- smoke-cost probe (JAX 0.10.2, x64, laptop CPU): Cyclone linear Ny=8 Nz=16 Nl=2 Nm=4 — krylov 39.6 s first call (compile), 0.57 s second; explicit time solver 8.0 s / 6.4 s. Nz=32 Nl=4 Nm=8, 3-ky scan: krylov 88 s, time 63 s. Smoke decks must use the time solver at Nz<=16 to stay within seconds
+- the baseline timing of test_examples.py was interrupted by a full disk (ENOSPC), not measured
+
+Outcome:
+- partial: survey and map done, no files moved
+- remaining blocker: none technical; stellarator groups (02, 04, 10) need vmex, which CI does not install, so their smoke tests skip unless vmex is present
+- next task: execute the map in the PR Handoff
+
+## 2026-09-22 - EXAMPLES-GALLERY (G.3), branch examples/gallery — gallery landed on the branch, paused before tools/benchmarks path edits
+
+Baseline:
+- GKX SHA: f9485f044, merged with main 29362737f (#277)
+- source/test/tool files and lines: `examples/` 81 files, 36 Python files, 5,145 Python lines; `tests/integration/examples/test_examples.py` 820 lines
+
+Scope:
+- intended change: the §19.1 numbered gallery in §19.2 style, one parametrized smoke test, `examples/README.md` index, validation decks in `benchmarks/cases/`
+- non-goals: README.md (README lane); `benchmarks/*.py` and `tools/` path edits wait for #278
+- acceptance: every gallery script runs at tutorial resolution or skips with a stated reason; pinned QA sentences and constants unchanged; release gates green
+
+Changes:
+- `examples/` is now 45 files, 14 Python files, 1,782 lines. There are twelve groups `01_linear_tokamak` ... `12_restart_and_analysis`. `examples/vmec/` and `examples/common_input.toml` stay in place.
+- 22 decks moved to `benchmarks/cases/` with the `runtime_` prefix dropped.
+- 25 Python files deleted: superseded wrappers, debug demos, the untracked-data imported-geometry drivers, and the reduced stellarator-ITG suite (recoverable from f9485f044).
+- `test_examples.py`: 820 -> about 250 lines, one parametrized smoke test plus layout, style and import checks.
+- Tests of deleted example modules were removed. Release-gate registries were repathed. The tutorial nonlinear decks pin `run_to = "t_max"`, with measured CFL margins 0.35 (03) and 0.33 (04).
+
+Evidence:
+- Smoke runs (laptop CPU, JAX 0.10.2, x64; the host was contended, so user CPU is quoted):
+  - 01, 03, 05, 06, 07, 08, 08-sensitivity: pass, about 75 s user in total
+  - 09, 11, 12: pass, about 59 s user
+  - 02 and 04 skip without vmex. On the office CPU they pass: 02 took 84 s wall and 04 took 72 s wall once the wout exists. The vmex wout solve took about 13 min on the contended host.
+- `08_quasilinear/implicit_sensitivity.py` reproduces the pre-move script bit for bit (max difference 0.0). The tracked `docs/_static/quasilinear_implicit_sensitivity.json` differs by up to 0.03, so that artifact predates current operators.
+- 09 recovers the planted gradients (2.8, 0.8) in 9 Gauss-Newton steps. The AD vs FD Jacobian column errors are 1.5e-7 and 7.2e-6.
+- 12: the restarted final free energy matches an uninterrupted run to 4.4e-10.
+- Other checks:
+  - `tests/release/test_release_gates.py` green
+  - QA scope test and `test_vmec_example_inventory.py` green
+  - repo-hygiene commands clean with no `docs/_static` drift
+  - `ruff check`/`ruff format --check` clean
+
+Outcome:
+- partial: the gallery is complete on the branch
+- remaining blockers:
+  - `benchmarks/{cyclone,etg,kinetic,tem}_linear_benchmark.py`, `benchmarks/performance/benchmark_nonlinear_suite.py`, `benchmarks/runtime_w7x_zonal_response_vmec.toml` comment, and `tools/` path strings still name old example paths; they wait for #278
+  - a focused office test run was stopped at 11% by the pause, with one failure not yet identified
+- next task: see the PR #281 Handoff
+
+## 2026-09-23 - EXAMPLES-GALLERY (G.3), branch examples/gallery — rebased onto chain/p0, path edits in benchmarks/ and scripts/
+
+Baseline:
+- GKX SHA: origin/chain/p0 f005418bf merged into examples/gallery 1b69bf8a0
+- relevant existing gate: #281 CI run 35813199194 failed in model-artifacts, runtime-core, nonlinear-core, and wide-coverage 8/12/13/16
+
+Scope:
+- intended change: merge the P0 chain, apply the slim-tools rename recipe, and make the path-only edits in `scripts/`, `tools/*.toml` and docs that #278 deferred
+- non-goals: new physics; regenerating docs artifacts
+
+Changes:
+- `scripts/{artifacts,benchmarks,campaigns,comparison,profiling}` now name the gallery and `benchmarks/cases/` paths, including the directory-joined forms.
+- `tools/runtime_memory_manifest.toml`: its commands called example scripts with argparse flags that the scripts had already stopped accepting. They now use `python -m gkx.cli run-runtime-{linear,nonlinear} --config <deck>`.
+- The chain's rewritten docs pages received the gallery paths; references to deleted scripts were removed or point to f9485f044.
+- Profiler case labels now follow deck stems, e.g. `cyclone_nonlinear_miller`. Tracked-artifact label checks keep their historical values.
+
+Evidence:
+- Every failure in CI run 35813199194 was a stale path.
+- Office CPU run over the affected selection:
+  - selection: quick shards, tests/tools, tests/integration, tests/unit/{nonlinear,api,linear,operators,solvers}, tests/validation/{benchmarks,stellarator}, tests/release
+  - result: 2132 passed, 10 failed
+  - 4 failures need a `.git` checkout, which office lacks; they were rerun locally and pass
+  - 5 were real (stale labels and paths); they are fixed and pass locally
+  - 1 is `test_adaptive_observables_match_dense_across_physics[QHS]`: "did not certify, residual 7.6e-9". It runs only where the QHS wout exists, which CI lacks; the deck is unchanged apart from its relative vmec_file path.
+- `scripts/check.py`: size, architecture, readiness, parallel-scaling, quasilinear and vmec-boozer are clean, with no `docs/_static` drift.
+
+Outcome:
+- accepted pending CI
+- remaining blocker: none known
+- next task: follow-up issue for the QHS adaptive-eigensolver certification on a generated wout
+
+## 2026-09-23 - EXAMPLES-GALLERY (G.3) — final pause
+
+Baseline:
+- GKX SHA: main 48536d159 (chain #293) merged into examples/gallery cleanly
+
+Evidence:
+- CI run 35851871202 on 6ce1aeed7: 37 checks passed, including every quick shard and all 24 wide-coverage shards. The `wide-coverage` aggregate and `ci-required` had not finished at the pause.
+
+Outcome:
+- partial: ready for review pending the final aggregate; nothing known failing
+- next task: confirm `ci-required` on the merged head. Open a follow-up for the QHS adaptive-eigensolver certification, which runs only where a generated wout exists.
+
+## 2026-09-23 — 2.4.0 final integration and SOLVAX 0.26.0
+
+Baseline: `main` `48536d159`; release branch `release/2.4.0` (#298).
+
+Changes:
+- SOLVAX #121 (traced sparse-direct solves and eigenvalue derivatives) merged
+  and released as SOLVAX 0.26.0 (SOLVAX #122, tag `v0.26.0`).
+- Integrated into #298: #290, #296 (ARCH-A), #294 (scripts tranche 3), #297
+  (adjoint), #280, #291, #292, #281 (examples gallery), #295 (sparse-direct
+  growth rate). Where a slimming PR deleted a file that another lane had only
+  path-edited, the deletion won.
+- GKX requires `solvax>=0.26.0`. Checked against the tag exports: 0.25.0 lacks
+  `CsrPattern`, `csr_data_from_products` and `sparse_eigenvalue`, and 0.26.0
+  has all four names GKX imports for the sparse-direct path.
+- Architecture baselines lowered to measured values: src 193 → 160 files and
+  93,987 → 79,446 lines; tests 81 → 74 files and 94,690 → 84,139 lines;
+  scripts 106 → 57 files and 78,277 → 42,501 lines. The single-consumer
+  cohesion baseline went 1 → 2 (a helper left by ARCH-A deletions).
+
+Evidence:
+- Hygiene step, ruff and mypy pass (mypy before the floor change).
+- Local focused suite (release, api, cli, nonlinear): 649 passed.
+
+Outcome: ready for one CI run and release once solvax 0.26.0 is on PyPI.

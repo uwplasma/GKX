@@ -305,11 +305,20 @@ def select_nonlinear_step_diagnostics(
     diagnostics_stride: int,
     diag_prev: Any,
     compute_diag_fn: Any,
+    steps: int | None = None,
 ) -> Any:
-    """Return a fresh or reused nonlinear step diagnostic tuple."""
+    """Return a fresh or reused nonlinear step diagnostic tuple.
+
+    Off-stride steps reuse ``diag_prev``. The last step of a ``steps``-long
+    scan is always computed fresh, because the output sampling keeps it as the
+    final row even when it falls off-stride; reusing the carry there would
+    report the previous stride sample's diagnostics at the final time.
+    """
 
     diag_stride = int(max(diagnostics_stride, 1))
     do_diag = (idx % diag_stride) == 0
+    if steps is not None:
+        do_diag = do_diag | (idx == int(steps) - 1)
     return jax.lax.cond(
         do_diag,
         lambda _operand: compute_diag_fn(),

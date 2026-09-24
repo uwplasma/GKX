@@ -13,6 +13,7 @@ from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_arrays import (
     hypercollision_damping,
 )
+from gkx.operators.linear.dissipation import _species_vector
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.config import TermConfig
 
@@ -29,15 +30,6 @@ class FullFDoughertyCrossMoments(NamedTuple):
 
     parallel_flow: jnp.ndarray
     thermal_speed_sq: jnp.ndarray
-
-
-def _species_vector(
-    value: jnp.ndarray, name: str, *, ns: int, dtype: jnp.dtype
-) -> jnp.ndarray:
-    vector = jnp.asarray(value, dtype=dtype).reshape(-1)
-    if int(vector.size) != ns:
-        raise ValueError(f"{name} must have length {ns} (got {vector.size})")
-    return vector
 
 
 def _validate_static_physical_array(

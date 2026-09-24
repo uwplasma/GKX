@@ -1,7 +1,7 @@
 """Regenerate the README figures from tracked inputs or bounded runs.
 
     python scripts/figures.py                 # every figure in scripts/figures.toml
-    python scripts/figures.py gx_defects      # one figure by name
+    python scripts/figures.py proof_tests     # one figure by name
     python scripts/figures.py --list          # names, outputs and inputs
 
 Run from the repository root with ``PYTHONPATH=src:.`` (the ``proof_tests``
@@ -499,144 +499,10 @@ def build_proof_tests(spec: dict[str, Any], config: dict[str, Any]) -> dict[str,
     }
 
 
-# ----------------------------------------------------------------- GX defects
-
-
-def build_gx_defects(spec: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
-    measured = config["measured"]
-    clamp = measured["gx_clamp"]
-    growth = measured["gx_clamp_growth"]
-    hyper = measured["gx_hyper_overflow"]
-    cap = int(clamp["launch_cap"])
-
-    record: dict[str, Any] = {
-        "sources": {
-            "clamp": clamp["source"],
-            "growth": [growth["gx_clamped_source"], growth["gx_repaired_source"]],
-            "kernel": measured["gx_clamp_kernel"]["source"],
-            "hyper": hyper["source"],
-        }
-    }
-    with figure_style():
-        fig, axes = plt.subplots(1, 3, figsize=(15.5, 3.9), constrained_layout=True)
-
-        # (a) share of the (z, l, m) index space dampEnds_linked never visits.
-        ax = axes[0]
-        count = np.logspace(4, 6, 400)
-        ax.plot(count, 100.0 * np.clip(1.0 - cap / count, 0.0, None), color=REFERENCE)
-        ax.axvline(cap, color=MUTED, ls=":", lw=1.0)
-        record["undamped_percent"] = {}
-        for marker, entry in zip(("o", "s", "D"), clamp["goldens"]):
-            n = int(entry["count"])
-            share = 100.0 * max(0.0, 1.0 - cap / n)
-            ax.plot(
-                n,
-                share,
-                marker,
-                color=ALT,
-                ms=7,
-                label=f"{entry['label']}: {share:.1f}%",
-            )
-            record["undamped_percent"][entry["label"]] = share
-        ax.set_xscale("log")
-        ax.set_xlabel(r"$N_z N_l N_m$")
-        ax.set_ylabel("indices without end damping [%]")
-        ax.set_title("GX linked end damping: launch cap 65,535")
-        ax.legend(loc="upper left", fontsize=8)
-
-        # (b) the growth rate that clamp produces, before and after the repair.
-        ax = axes[1]
-        labels = ["GX, shipped\ndampEnds_linked", "GX, grid-stride\nloop added", "GKX"]
-        gammas = [
-            growth["gx_clamped_gamma"],
-            growth["gx_repaired_gamma"],
-            growth["gkx_gamma"],
-        ]
-        ax.bar(labels, gammas, color=[MUTED, REFERENCE, GKX], width=0.6)
-        for index, value in enumerate(gammas):
-            diff = 100.0 * (growth["gkx_gamma"] - value) / value
-            text = f"{value:.5f}" + ("" if index == 2 else f"\nGKX {diff:+.2f}%")
-            ax.text(index, value * 1.002, text, ha="center", va="bottom", fontsize=8.5)
-        ax.set_ylim(0.0225, 0.0258)
-        ax.set_ylabel(r"$\gamma$  [$v_{ti}/a$]")
-        ax.set_title(r"Cyclone $k_y\rho_i=0.55$, $N_l=32$, $N_m=96$")
-        record["cyclone_ky055"] = {
-            "gamma": dict(zip(("gx_clamped", "gx_repaired", "gkx"), gammas)),
-            "gkx_minus_gx_percent": {
-                "clamped": 100.0 * (gammas[2] - gammas[0]) / gammas[0],
-                "repaired": 100.0 * (gammas[2] - gammas[1]) / gammas[1],
-            },
-        }
-
-        # (c) GX's float32 kz-hypercollision coefficient at the top moment.
-        ax = axes[2]
-        p = np.float32(hyper["p_hyper_m"])
-        nm = np.arange(int(hyper["nm_range"][0]), int(hyper["nm_range"][1]) + 1)
-        gx_values, gkx_values = [], []
-        with np.errstate(over="ignore", invalid="ignore"):
-            for n in nm:
-                big_m = np.float32(n - 1)
-                prefactor = np.float32(p + 0.5) / np.power(big_m, np.float32(p + 0.5))
-                gx_values.append(float(prefactor * np.power(big_m, p)))
-                gkx_values.append(float((p + 0.5) / np.sqrt(np.float64(big_m))))
-        gx_values_arr = np.asarray(gx_values)
-        gkx_values_arr = np.asarray(gkx_values)
-        finite = np.isfinite(gx_values_arr) & (gx_values_arr > 0)
-        zero = gx_values_arr == 0.0
-        nan = ~np.isfinite(gx_values_arr)
-        ax.plot(nm, gkx_values_arr, color=GKX, label=r"GKX: $(p+1/2)\,M^{-1/2}(m/M)^p$")
-        ax.plot(
-            nm[finite],
-            gx_values_arr[finite],
-            "o",
-            color=REFERENCE,
-            ms=4,
-            mfc="none",
-            mew=1.0,
-            label="GX float32, finite",
-        )
-        ax.plot(
-            nm[zero],
-            np.full(zero.sum(), 0.0),
-            "v",
-            color=ALT,
-            ms=6,
-            clip_on=False,
-            label="GX = 0: hypercollisions off",
-        )
-        ax.plot(
-            nm[nan],
-            np.full(nan.sum(), 0.5),
-            "x",
-            color=ALT,
-            ms=6,
-            mew=1.5,
-            label="GX = NaN: run fails",
-        )
-        ax.set_xlabel(r"$N_m$  ($p = 20$, top moment $m = M = N_m - 1$)")
-        ax.set_ylabel("coefficient / (ν 2.3 v_t |∇∥|)")
-        ax.set_title("GX kz hypercollisions in float32")
-        ax.set_ylim(0.0, 3.6)
-        ax.legend(loc="upper right", fontsize=8)
-        record["hyper_overflow"] = {
-            "p_hyper_m": int(p),
-            "last_finite_nm": int(nm[finite].max()),
-            "zero_nm": [int(nm[zero].min()), int(nm[zero].max())] if zero.any() else [],
-            "first_nan_nm": int(nm[nan].min()) if nan.any() else None,
-        }
-        for index, ax in enumerate(axes):
-            panel_label(ax, "abc"[index])
-        _save(fig, spec, config)
-    return record
-
-
-# ---------------------------------------------------------------------- driver
-
 BUILDERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
     "linear": build_linear,
     "nonlinear": build_nonlinear,
     "proof_tests": build_proof_tests,
-    "gx_defects": build_gx_defects,
 }
 
 

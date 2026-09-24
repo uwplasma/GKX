@@ -95,7 +95,7 @@ Every path ends in one solver-ready object: ``SAlphaGeometry``,
        ``vmec_boozer_constants``) or directly from VMEX tensors
        (``vmec_tensor_mapping``: ``from_vmex``, ``from_vmex_wout``,
        ``from_vmex_mirror``). ``autodiff_checks``, ``sensitivity``,
-       ``booz_xform_bridge``, ``numerics``, and ``vmec_boundary_chain`` hold the
+       ``booz_xform_bridge``, and ``numerics`` hold the
        AD/finite-difference checks and their helpers.
 
 ``gkx.geometry.core`` also owns twist-shift parameters and the grid defaults a

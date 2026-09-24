@@ -39,16 +39,12 @@ from gkx.workflows.runtime.toml import (
     toml_shorthand_command,
 )
 from pathlib import Path
-from support.paths import REPO_ROOT, load_repo_script
+from support.paths import REPO_ROOT
 from types import SimpleNamespace
 import json
 import numpy as np
 import os
 import pytest
-
-
-def _load_module_from_path(name: str, path: Path):
-    return load_repo_script(path.relative_to(REPO_ROOT), module_name=name)
 
 
 def test_runtime_config_to_dict_contains_sections() -> None:
@@ -470,14 +466,14 @@ def test_runtime_parallel_config_validates_values() -> None:
 
 
 def test_gx_aligned_kbm_runtime_examples_keep_end_damping_enabled() -> None:
-    cfg_dir = REPO_ROOT / "examples" / "nonlinear" / "axisymmetric"
+    cfg_dir = REPO_ROOT / "benchmarks" / "cases"
     paths = [
-        cfg_dir / "runtime_kbm_nonlinear.toml",
-        cfg_dir / "runtime_kbm_nonlinear_seed.toml",
-        cfg_dir / "runtime_kbm_nonlinear_short.toml",
-        cfg_dir / "runtime_kbm_nonlinear_short_lockin.toml",
-        cfg_dir / "runtime_kbm_nonlinear_t100.toml",
-        cfg_dir / "runtime_kbm_nonlinear_t100_nx4ny8_dt9e4.toml",
+        cfg_dir / "kbm_nonlinear.toml",
+        cfg_dir / "kbm_nonlinear_seed.toml",
+        cfg_dir / "kbm_nonlinear_short.toml",
+        cfg_dir / "kbm_nonlinear_short_lockin.toml",
+        cfg_dir / "kbm_nonlinear_t100.toml",
+        cfg_dir / "kbm_nonlinear_t100_nx4ny8_dt9e4.toml",
     ]
     for path in paths:
         cfg, _ = load_runtime_from_toml(path)
@@ -485,25 +481,27 @@ def test_gx_aligned_kbm_runtime_examples_keep_end_damping_enabled() -> None:
 
 
 def test_linear_axisymmetric_runtime_examples_keep_parity_collision_contract() -> None:
-    cfg_dir = REPO_ROOT / "examples" / "linear" / "axisymmetric"
+    cfg_dir = REPO_ROOT / "benchmarks" / "cases"
+    cyclone = REPO_ROOT / "examples" / "01_linear_tokamak" / "case_full.toml"
+    kbm = REPO_ROOT / "examples" / "06_electromagnetic" / "case_full.toml"
     expected = {
-        "cyclone.toml": (1.0, 2.0, 0.0, 1.0),
-        "etg.toml": (1.0, 2.0, 0.0, 1.0),
-        "runtime_etg.toml": (1.0, 2.0, 0.0, 1.0),
-        "runtime_kaw.toml": (1.0, 2.0, 0.0, 1.0),
-        "runtime_kbm.toml": (1.0, 2.0, 0.0, 1.0),
+        cyclone: (1.0, 2.0, 0.0, 1.0),
+        cfg_dir / "etg_linear.toml": (1.0, 2.0, 0.0, 1.0),
+        cfg_dir / "etg_linear_scan.toml": (1.0, 2.0, 0.0, 1.0),
+        cfg_dir / "kaw_linear.toml": (1.0, 2.0, 0.0, 1.0),
+        kbm: (1.0, 2.0, 0.0, 1.0),
     }
     for name, (nu_h, nu_l, hyper_const, hyper_kz) in expected.items():
-        cfg, _ = load_runtime_from_toml(cfg_dir / name)
+        cfg, _ = load_runtime_from_toml(name)
         assert cfg.collisions.nu_hermite == pytest.approx(nu_h), name
         assert cfg.collisions.nu_laguerre == pytest.approx(nu_l), name
         assert cfg.collisions.hypercollisions_const == pytest.approx(hyper_const), name
         assert cfg.collisions.hypercollisions_kz == pytest.approx(hyper_kz), name
 
-    _cfg, cyclone_raw = load_runtime_from_toml(cfg_dir / "cyclone.toml")
+    _cfg, cyclone_raw = load_runtime_from_toml(cyclone)
     assert cyclone_raw["fit"]["mode_method"] == "z_index"
 
-    for name in ("etg.toml", "runtime_etg.toml"):
+    for name in ("etg_linear.toml", "etg_linear_scan.toml"):
         cfg, raw = load_runtime_from_toml(cfg_dir / name)
         assert cfg.time.method == "rk4", name
         assert cfg.time.dt == pytest.approx(1.6e-4), name
@@ -513,12 +511,11 @@ def test_linear_axisymmetric_runtime_examples_keep_parity_collision_contract() -
 
 
 def test_nonaxisymmetric_quasilinear_examples_keep_electrostatic_contract() -> None:
-    cfg_dir = REPO_ROOT / "examples" / "linear" / "non-axisymmetric"
     for name in (
-        "runtime_hsx_linear_quasilinear.toml",
-        "runtime_w7x_linear_quasilinear_vmec.toml",
+        REPO_ROOT / "examples" / "02_linear_stellarator" / "case_full.toml",
+        REPO_ROOT / "benchmarks" / "cases" / "w7x_linear_quasilinear_vmec.toml",
     ):
-        cfg, _ = load_runtime_from_toml(cfg_dir / name)
+        cfg, _ = load_runtime_from_toml(name)
         assert cfg.quasilinear.enabled is True, name
         assert cfg.quasilinear.channels == ("es",), name
         assert cfg.physics.electrostatic is True, name
@@ -528,13 +525,7 @@ def test_nonaxisymmetric_quasilinear_examples_keep_electrostatic_contract() -> N
 
 
 def test_etg_nonlinear_pilot_example_keeps_two_species_full_gk_contract() -> None:
-    path = (
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "axisymmetric"
-        / "runtime_etg_nonlinear.toml"
-    )
+    path = REPO_ROOT / "benchmarks" / "cases/etg_nonlinear.toml"
 
     cfg, data = load_runtime_from_toml(path)
 
@@ -553,7 +544,7 @@ def test_etg_nonlinear_pilot_example_keeps_two_species_full_gk_contract() -> Non
     assert cfg.collisions.hypercollisions_kz == pytest.approx(1.0)
     assert data["run"]["ky"] == pytest.approx(5.0)
     assert cfg.output.path == str(
-        (path.parents[3] / "tools_out" / "etg_nonlinear_runtime").resolve()
+        (path.parents[2] / "tools_out" / "etg_nonlinear_runtime").resolve()
     )
 
 
@@ -600,13 +591,7 @@ solver = "explicit_time"
 
 
 def test_w7x_imported_geometry_example_toml_loads() -> None:
-    path = (
-        REPO_ROOT
-        / "examples"
-        / "linear"
-        / "non-axisymmetric"
-        / "runtime_w7x_linear_imported_geometry.toml"
-    )
+    path = REPO_ROOT / "benchmarks" / "cases/w7x_linear_imported_geometry.toml"
 
     cfg, data = load_runtime_from_toml(path)
 
@@ -614,7 +599,12 @@ def test_w7x_imported_geometry_example_toml_loads() -> None:
     assert cfg.geometry.model == "vmec"
     assert cfg.geometry.geometry_file is None
     assert cfg.geometry.vmec_file == str(
-        (path.parents[2] / "vmec" / "wout_nfp3_QI_fixed_resolution_final.nc").resolve()
+        (
+            path.parents[2]
+            / "examples"
+            / "vmec"
+            / "wout_nfp3_QI_fixed_resolution_final.nc"
+        ).resolve()
     )
     assert cfg.geometry.torflux == pytest.approx(0.64)
     assert cfg.init.init_field == "density"
@@ -623,13 +613,7 @@ def test_w7x_imported_geometry_example_toml_loads() -> None:
 
 
 def test_w7x_nonlinear_imported_geometry_example_toml_loads() -> None:
-    path = (
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "non-axisymmetric"
-        / "runtime_w7x_nonlinear_imported_geometry.toml"
-    )
+    path = REPO_ROOT / "benchmarks" / "cases/w7x_nonlinear_imported_geometry.toml"
 
     cfg, data = load_runtime_from_toml(path)
 
@@ -637,7 +621,12 @@ def test_w7x_nonlinear_imported_geometry_example_toml_loads() -> None:
     assert cfg.geometry.model == "vmec"
     assert cfg.geometry.geometry_file is None
     assert cfg.geometry.vmec_file == str(
-        (path.parents[2] / "vmec" / "wout_nfp3_QI_fixed_resolution_final.nc").resolve()
+        (
+            path.parents[2]
+            / "examples"
+            / "vmec"
+            / "wout_nfp3_QI_fixed_resolution_final.nc"
+        ).resolve()
     )
     assert cfg.geometry.torflux == pytest.approx(0.64)
     assert cfg.physics.nonlinear is True
@@ -647,34 +636,12 @@ def test_w7x_nonlinear_imported_geometry_example_toml_loads() -> None:
     assert cfg.terms.nonlinear == pytest.approx(1.0)
     assert "steps" not in data.get("run", {})
     assert cfg.output.path == str(
-        (path.parents[3] / "tools_out" / "w7x_nonlinear_imported_runtime").resolve()
+        (path.parents[2] / "tools_out" / "w7x_nonlinear_imported_runtime").resolve()
     )
-
-
-def test_w7x_nonlinear_imported_geometry_builder_keeps_collision_contract() -> None:
-    path = (
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "non-axisymmetric"
-        / "w7x_nonlinear_imported_geometry.py"
-    )
-    mod = _load_module_from_path("w7x_nonlinear_imported_geometry", path)
-    cfg = mod.build_w7x_nonlinear_cfg("/tmp/w7x.eik.nc", dt=0.1, t_max=200.0)
-    assert cfg.physics.collisions is True
-    assert cfg.terms.collisions == pytest.approx(1.0)
-    assert cfg.terms.hypercollisions == pytest.approx(1.0)
-    assert cfg.collisions.D_hyper == pytest.approx(0.05)
 
 
 def test_hsx_nonlinear_vmec_geometry_example_toml_loads() -> None:
-    path = (
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "non-axisymmetric"
-        / "runtime_hsx_nonlinear_vmec_geometry.toml"
-    )
+    path = REPO_ROOT / "examples" / "04_nonlinear_stellarator/case_full.toml"
 
     cfg, data = load_runtime_from_toml(path)
 
@@ -682,7 +649,7 @@ def test_hsx_nonlinear_vmec_geometry_example_toml_loads() -> None:
     assert cfg.geometry.model == "vmec"
     assert cfg.geometry.vmec_file is not None
     assert cfg.geometry.vmec_file == str(
-        (path.parents[2] / "vmec" / "wout_NuhrenbergZille_1988_QHS.nc").resolve()
+        (path.parents[1] / "vmec" / "wout_NuhrenbergZille_1988_QHS.nc").resolve()
     )
     assert cfg.geometry.geometry_helper_python is None
     assert cfg.geometry.torflux == pytest.approx(0.64)
@@ -693,73 +660,12 @@ def test_hsx_nonlinear_vmec_geometry_example_toml_loads() -> None:
     assert cfg.terms.nonlinear == pytest.approx(1.0)
     assert "steps" not in data.get("run", {})
     assert cfg.output.path == str(
-        (path.parents[3] / "tools_out" / "hsx_nonlinear_vmec_runtime").resolve()
+        (path.parents[2] / "tools_out" / "hsx_nonlinear_vmec_runtime").resolve()
     )
-
-
-def test_hsx_nonlinear_vmec_geometry_builder_keeps_collision_contract() -> None:
-    path = (
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "non-axisymmetric"
-        / "hsx_nonlinear_vmec_geometry.py"
-    )
-    mod = _load_module_from_path("hsx_nonlinear_vmec_geometry", path)
-    cfg = mod.build_hsx_nonlinear_cfg(
-        "/tmp/hsx.nc",
-        geometry_file=None,
-        geometry_helper_repo=None,
-        geometry_helper_python=None,
-        torflux=0.64,
-        alpha=0.0,
-        npol=1.0,
-        dt=0.1,
-        t_max=200.0,
-    )
-    assert cfg.physics.collisions is True
-    assert cfg.terms.collisions == pytest.approx(1.0)
-    assert cfg.terms.hypercollisions == pytest.approx(1.0)
-    assert cfg.collisions.D_hyper == pytest.approx(0.05)
-
-
-def test_hsx_nonlinear_vmec_wrapper_defaults_to_config_path(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    path = (
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "non-axisymmetric"
-        / "hsx_nonlinear_vmec_geometry.py"
-    )
-    mod = _load_module_from_path("hsx_nonlinear_vmec_geometry_main", path)
-
-    captured: dict[str, object] = {}
-
-    def fake_run_nonlinear_case(config_path, **kwargs):
-        captured["config_path"] = Path(config_path)
-        captured["kwargs"] = kwargs
-        return 0
-
-    monkeypatch.setattr(mod, "run_nonlinear_case", fake_run_nonlinear_case)
-    monkeypatch.setattr(mod, "STEPS", 200)
-
-    rc = mod.main()
-
-    assert rc == 0
-    assert captured["config_path"] == mod.CONFIG
-    assert captured["kwargs"]["steps"] == 200
 
 
 def test_w7x_nonlinear_vmec_geometry_example_toml_loads() -> None:
-    path = (
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "non-axisymmetric"
-        / "runtime_w7x_nonlinear_vmec_geometry.toml"
-    )
+    path = REPO_ROOT / "benchmarks" / "cases/w7x_nonlinear_vmec_geometry.toml"
 
     cfg, data = load_runtime_from_toml(path)
 
@@ -767,7 +673,12 @@ def test_w7x_nonlinear_vmec_geometry_example_toml_loads() -> None:
     assert cfg.geometry.model == "vmec"
     assert cfg.geometry.vmec_file is not None
     assert cfg.geometry.vmec_file == str(
-        (path.parents[2] / "vmec" / "wout_nfp3_QI_fixed_resolution_final.nc").resolve()
+        (
+            path.parents[2]
+            / "examples"
+            / "vmec"
+            / "wout_nfp3_QI_fixed_resolution_final.nc"
+        ).resolve()
     )
     assert cfg.geometry.geometry_helper_python is None
     assert cfg.geometry.torflux == pytest.approx(0.64)
@@ -777,7 +688,7 @@ def test_w7x_nonlinear_vmec_geometry_example_toml_loads() -> None:
     assert cfg.terms.collisions == pytest.approx(1.0)
     assert "steps" not in data.get("run", {})
     assert cfg.output.path == str(
-        (path.parents[3] / "tools_out" / "w7x_nonlinear_vmec_runtime").resolve()
+        (path.parents[2] / "tools_out" / "w7x_nonlinear_vmec_runtime").resolve()
     )
 
 
@@ -919,13 +830,7 @@ geometry_helper_python = "python3"
 
 
 def test_cyclone_nonlinear_gx_miller_example_toml_loads() -> None:
-    path = (
-        REPO_ROOT
-        / "examples"
-        / "nonlinear"
-        / "axisymmetric"
-        / "runtime_cyclone_nonlinear_miller.toml"
-    )
+    path = REPO_ROOT / "benchmarks" / "cases/cyclone_nonlinear_miller.toml"
 
     cfg, data = load_runtime_from_toml(path)
 

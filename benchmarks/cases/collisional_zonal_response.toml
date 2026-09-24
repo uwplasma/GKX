@@ -1,8 +1,9 @@
 schema_version = 1
 
 # Frei, Ernst & Ricci, Phys. Plasmas 29, 093902 (2022), Figure 12.
-# Run through scripts/artifacts/build_zonal_flow_artifacts.py
-# simulate-collisional-zonal-dk with a generated P24/J10 collision archive.
+# Run through build_zonal_flow_artifacts.py simulate-collisional-zonal-dk (retired
+# in SLIM-SCRIPTS tranche 3; recovery SHA in plan/research/2026-09-22-slim-tools/MAP.md)
+# with a generated P24/J10 collision archive.
 # The command injects the selected Coulomb/Sugama matrix; this input fixes the
 # common geometry, initial perturbation, and time-discretization contract.
 

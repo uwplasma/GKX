@@ -226,6 +226,7 @@ def make_imex_diagnostic_step(
             diagnostics_stride=diagnostics_stride,
             diag_prev=diag_prev,
             compute_diag_fn=_compute_diag,
+            steps=steps,
         )
         G_new = emit_progress_fn(
             G_new,
@@ -735,7 +736,9 @@ def _build_imex_scan_context(
         params,
         deps=deps,
         method=scan.method,
-        diagnostics_stride=scan.diagnostics_stride,
+        # Refresh diagnostics on the rows the output keeps (see the explicit
+        # scan builder).
+        diagnostics_stride=max(scan.sample_stride, scan.diagnostics_stride, 1),
         show_progress=scan.show_progress,
         steps=scan.steps,
         external_phi=scan.external_phi,
