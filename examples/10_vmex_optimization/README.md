@@ -17,10 +17,15 @@ evaluated on flux tubes chosen by physical radius `s` and field-line label
 pip install "vmex[turbulence]"   # gkx>=2.4.0
 ```
 
-VMEX assembles least-squares Jacobians in forward mode, so a reverse-only
-GKX objective (the checkpointed nonlinear window, or
-`solver_growth_rate_from_geometry`'s `dominant_real_eigenvalue`) must go
-through VMEX's scalar `from_loss` route, as the nonlinear script does.
+VMEX assembles least-squares Jacobians in forward mode. A reverse-only GKX
+objective, such as `solver_growth_rate_from_geometry` (its
+`dominant_real_eigenvalue` is a `custom_vjp`, and so is the `sparse-direct`
+route), fails there with "can't apply forward-mode autodiff (jvp) to a
+custom_vjp function"; use VMEX's `turbulent_growth_rate` (dense `eigvals`) for
+least squares, or VMEX's scalar `from_loss` route. The nonlinear window is
+differentiable in both modes; the nonlinear script takes the scalar route
+because one reverse sweep through the window is cheaper than one forward
+tangent per boundary coefficient.
 [run.py](run.py) below stays as the pinned record of the earlier
 single-tube campaign.
 
