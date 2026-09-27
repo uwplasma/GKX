@@ -173,7 +173,7 @@ named tests assert in CI.
 | H-theorem: largest eigenvalue of the symmetric part | 5.6e-17 | 1e-12 | same |
 | Coulomb matrix against published Eqs. (C9a)-(C9f) | 2.2e-16 | 1e-10 | same |
 | Spitzer-Härm `gamma_E(Z)`, Z = 1, 2, 4, 16 | 0.11-0.61% | 1.5% | same |
-| Collisionless Hermite spectrum is real: max `|Re lambda|` | 2.4e-14 | 1e-11 | [`test_hermite_hierarchy_physics.py`](tests/validation/physics_gates/test_collision_physics.py) |
+| Collisionless Hermite spectrum is real: max `|Re lambda|` | 2.4e-14 | 1e-11 | [`test_collision_physics.py`](tests/validation/physics_gates/test_collision_physics.py) |
 | Landau root, `T_e/T_i = 1`: `gamma`, `omega` | 0.246%, 0.064% | 1%, 0.5% | same |
 | Landau root, `T_e/T_i = 10`: `gamma`, `omega` | 0.004%, 0.004% | 1%, 0.5% | same |
 | Laguerre transform round trip, `Nl <= 64` | 1.2e-12 | 1e-10 | [`test_core_numerics.py`](tests/unit/core/test_core_numerics.py) |
