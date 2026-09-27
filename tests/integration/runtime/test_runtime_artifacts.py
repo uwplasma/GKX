@@ -3754,6 +3754,56 @@ def test_turbulent_heating_total_resolved_sums_to_species_total() -> None:
     assert np.max(np.abs(np.asarray(heat_species))) > 0.0
 
 
+def test_turbulent_heating_is_weighted_by_density_times_charge() -> None:
+    """GX weights the heating kernel by ``n_s Z_s`` (``sp.nz``), not ``n_s``.
+
+    ``Q_s = Z_s n_s <h_s dchi/dt>`` is invariant under ``(Z, h) -> (-Z, -h)``,
+    so a charge-mirrored copy of the ion carrying ``-G`` under the same fields
+    must report the same heating (``bpar = 0``: its drive is not odd in ``Z``).
+    """
+
+    cfg = CycloneBaseCase()
+    grid = build_spectral_grid(
+        replace(cfg.grid, Nx=4, Ny=8, Nz=8, ntheta=None, nperiod=None)
+    )
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    ion = dict(mass=1.0, density=0.7, temperature=1.3, tprim=1.0, fprim=1.0)
+    params = build_linear_params(
+        [Species(charge=1.0, **ion), Species(charge=-1.0, **ion)],
+        kpar_scale=float(geom.gradpar()),
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 4)
+    vol_fac, _flux_fac = fieldline_quadrature_weights(geom, grid)
+    rng = np.random.default_rng(5)
+    shape = (3, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    G_ion = rng.normal(size=shape) + 1.0j * rng.normal(size=shape)
+    G_ion_old = G_ion + 0.1 * (rng.normal(size=shape) + 1.0j * rng.normal(size=shape))
+    phi = jnp.asarray(rng.normal(size=shape[2:]) + 1.0j * rng.normal(size=shape[2:]))
+    apar = 0.3 * phi
+    zero = jnp.zeros_like(phi)
+
+    heat = np.asarray(
+        turbulent_heating_species(
+            jnp.asarray(np.stack([G_ion, -G_ion])),
+            jnp.asarray(np.stack([G_ion_old, -G_ion_old])),
+            phi,
+            apar,
+            zero,
+            0.8 * phi,
+            0.8 * apar,
+            zero,
+            cache,
+            grid,
+            params,
+            vol_fac,
+            0.05,
+        )
+    )
+
+    assert abs(heat[0]) > 1.0e-3
+    np.testing.assert_allclose(heat[1], heat[0], rtol=1.0e-10)
+
+
 def test_turbulent_heating_total_helper_zero_dt_guard_returns_zero_for_changed_state() -> (
     None
 ):
