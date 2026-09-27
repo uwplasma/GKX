@@ -109,9 +109,7 @@ def _cfl_wavenumber_arrays(
     # one-mode CFL estimate used by linear benchmark runs.
     if ky_full.size == 0:
         ky = np.zeros(0, dtype=float)
-    elif grid.ky_mode is not None or source_ky_layout(grid) == HALF:
-        # A half-layout axis already holds the ky >= 0 rows; slicing it again
-        # would keep only half of them.
+    elif grid.ky_mode is not None or source_ky_layout(grid) == HALF:  # ky >= 0 rows
         ky = np.abs(ky_full)
     else:
         ky = half_ky_values(ky_full)
@@ -261,9 +259,7 @@ def _grid_frequency_bounds(grid: SpectralGrid) -> _CFLGridBounds:
     kx, ky, kz = _cfl_wavenumber_arrays(grid)
     nz = kz.size
     nx = kx.size
-    # The 2/3 cutoff is an index into the two-sided axis, which a half-layout
-    # grid does not store; its ky >= 0 rows hold the same leading entries.
-    ny = source_ny_full(grid)
+    ny = source_ny_full(grid)  # the 2/3 index is into the two-sided axis
     kx_max = float(abs(kx[(nx - 1) // 3])) if nx > 1 else 0.0
     ky_max = float(abs(ky[(ny - 1) // 3])) if ky.size > 0 else 0.0
     kz_max = float(abs(kz[nz // 2])) if nz > 0 else 0.0

@@ -9,12 +9,7 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
-from gkx.core_grid import (
-    SpectralGrid,
-    _gyrokinetic_moment_shape,
-    real_fft_mesh,
-    real_fft_ordered_kx,
-)
+from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape, real_fft_mesh
 from gkx.core_ky_layout import HALF, source_ky_layout, source_ny_full
 from gkx.solvers_linear_implicit import _build_implicit_operator
 from gkx.operators.linear.cache_model import LinearCache
@@ -523,19 +518,11 @@ def _nonlinear_cfl_frequency_components(
     ifft_scale = jnp.asarray(fft_norm, dtype=real_dtype)
     use_batched_fft = jax.default_backend() != "cpu"
 
-    if compressed_real_fft and source_ky_layout(grid) == HALF:
-        # Already the ky >= 0 rows: only kx needs the real-FFT ordering, and
-        # real_fft_mesh would slice this axis a second time.
-        ky_nyc, kx_nyc = jnp.meshgrid(
-            jnp.asarray(cache.ky_grid)[:, 0],
-            real_fft_ordered_kx(cache.kx_grid),
-            indexing="ij",
-        )
-        kx_b = _broadcast_grid(kx_nyc, phi[:nyc, :, :].ndim)
-        ky_b = _broadcast_grid(ky_nyc, phi[:nyc, :, :].ndim)
-    elif compressed_real_fft:
-        _, ky_vals, kx_nyc, ky_nyc = real_fft_mesh(cache.kx_grid, cache.ky_grid)
-        nyc = int(ky_vals.shape[0])
+    if compressed_real_fft:
+        kx_r, _, kx_nyc, ky_nyc = real_fft_mesh(cache.kx_grid, cache.ky_grid)
+        if source_ky_layout(grid) == HALF:  # real_fft_mesh re-sliced a half axis
+            ky_nyc, kx_nyc = jnp.meshgrid(cache.ky_grid[:, 0], kx_r, indexing="ij")
+        nyc = int(ky_nyc.shape[0])
         kx_b = _broadcast_grid(kx_nyc, phi[:nyc, :, :].ndim)
         ky_b = _broadcast_grid(ky_nyc, phi[:nyc, :, :].ndim)
     else:
