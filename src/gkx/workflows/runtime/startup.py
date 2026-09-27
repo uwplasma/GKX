@@ -252,29 +252,6 @@ def _density_moments_for_target_phi(
     )
 
 
-__all__ = [
-    "_build_gaussian_profile",
-    "_build_initial_condition",
-    "_build_single_phi_gaussian_profile",
-    "_as_runtime_species_array",
-    "_centered_glibc_random_pairs",
-    "_dealiased_initial_mode_pairs",
-    "_density_moments_for_target_phi",
-    "_enforce_full_ky_hermitian",
-    "_expand_ky",
-    "_load_initial_state_from_file",
-    "_periodic_zp_from_grid",
-    "_reshape_netcdf_state",
-    "build_runtime_geometry",
-    "build_runtime_linear_params",
-    "build_runtime_linear_terms",
-    "build_runtime_term_config",
-    "load_netcdf_restart_state",
-    "runtime_geometry_config_for_builder",
-    "runtime_state_dtype",
-]
-
-
 def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Species]:
     kinetic = [s for s in species_cfg if bool(s.kinetic)]
     if not kinetic:
@@ -1168,3 +1145,26 @@ def _build_initial_condition_impl(
         loaded_state=loaded_state,
         init_file_mode=init_file_mode,
     )
+
+
+__all__ = [
+    "_build_gaussian_profile",
+    "_build_initial_condition",
+    "_build_single_phi_gaussian_profile",
+    "_as_runtime_species_array",
+    "_centered_glibc_random_pairs",
+    "_dealiased_initial_mode_pairs",
+    "_density_moments_for_target_phi",
+    "_enforce_full_ky_hermitian",
+    "_expand_ky",
+    "_load_initial_state_from_file",
+    "_periodic_zp_from_grid",
+    "_reshape_netcdf_state",
+    "build_runtime_geometry",
+    "build_runtime_linear_params",
+    "build_runtime_linear_terms",
+    "build_runtime_term_config",
+    "load_netcdf_restart_state",
+    "runtime_geometry_config_for_builder",
+    "runtime_state_dtype",
+]

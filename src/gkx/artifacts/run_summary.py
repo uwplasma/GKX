@@ -928,4 +928,11 @@ __all__ = [
     "phi_xy_figure",
     "run_label",
     "summary_metadata_lines",
+    "PHI_LABEL",
+    "draw_flux_tube_3d",
+    "draw_phi_xy_cut",
+    "flux_tube_3d_figure",
+    "label_amplitude_colorbar",
+    "phi_xy_snapshot_figure",
+    "potential_real_space",
 ]

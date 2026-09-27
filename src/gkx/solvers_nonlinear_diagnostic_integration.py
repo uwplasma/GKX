@@ -870,4 +870,13 @@ __all__ = [
     "integrate_nonlinear_explicit_diagnostics_state",
     "integrate_nonlinear_imex_diagnostics",
     "prepare_nonlinear_explicit_diagnostics",
+    "_pack_resolved_diagnostics",
+    "_sample_axis0",
+    "_sample_indices_with_final",
+    "build_nonlinear_simulation_diagnostics",
+    "finalize_nonlinear_scan_diagnostics",
+    "maybe_emit_nonlinear_progress",
+    "run_sampled_explicit_diagnostic_scan",
+    "sampled_scan_intervals",
+    "select_nonlinear_step_diagnostics",
 ]

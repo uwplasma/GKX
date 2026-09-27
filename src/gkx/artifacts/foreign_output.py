@@ -248,3 +248,12 @@ def foreign_output_plotter(path: str | Path) -> Callable[..., Any] | None:
     """Return a plotter for ``path`` when another code (GX) wrote it, else ``None``."""
 
     return plot_gx_output if is_gx_output(Path(path)) else None
+
+
+__all__ = [
+    "foreign_output_plotter",
+    "gx_summary_figure",
+    "is_gx_output",
+    "plot_gx_output",
+    "read_gx_output",
+]

@@ -45,15 +45,6 @@ from gkx.solvers_time_explicit_steps import (
 )
 
 
-__all__ = [
-    "_integrate_linear_cached",
-    "_integrate_linear_cached_donate",
-    "_integrate_linear_cached_impl",
-    "integrate_linear",
-    "integrate_linear_diagnostics",
-]
-
-
 _LINEAR_METHODS = {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}
 
 
@@ -1118,4 +1109,10 @@ def integrate_linear_diagnostics(
     return (*result, solve_stats) if return_solve_stats else result
 
 
-__all__ = ["integrate_linear_diagnostics"]
+__all__ = [
+    "_integrate_linear_cached",
+    "_integrate_linear_cached_donate",
+    "_integrate_linear_cached_impl",
+    "integrate_linear",
+    "integrate_linear_diagnostics",
+]

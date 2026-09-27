@@ -658,3 +658,17 @@ def evaluate_boozer_bmag_on_field_line(
     bmag = jnp.sum(coeffs[None, :] * jnp.cos(phase), axis=1)
     dbmag_dtheta = jnp.sum(-coeffs[None, :] * dphase_dtheta * jnp.sin(phase), axis=1)
     return bmag, dbmag_dtheta
+
+
+__all__ = [
+    "booz_xform_spectral_sensitivity_report",
+    "discover_differentiable_geometry_backends",
+    "evaluate_boozer_bmag_on_field_line",
+    "finite_difference_jacobian",
+    "flux_tube_geometry_from_mapping",
+    "flux_tube_geometry_observables",
+    "geometry_inverse_design_report",
+    "geometry_sensitivity_report",
+    "observable_gradient_validation_report",
+    "vmec_boundary_aspect_sensitivity_report",
+]

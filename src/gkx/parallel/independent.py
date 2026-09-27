@@ -435,9 +435,6 @@ def parallel_identity_report(
     )
 
 
-__all__ = ["ParallelIdentityReport", "parallel_identity_report"]
-
-
 @dataclass(frozen=True)
 class IndependentWorkerMetadata:
     """Resolved worker metadata for ordered independent Python tasks."""
@@ -1031,17 +1028,6 @@ def independent_map_identity_report(
     )
 
 
-__all__ = [
-    "IndependentEnsembleProvenanceReport",
-    "IndependentMapExecutionError",
-    "IndependentWorkerMetadata",
-    "independent_ensemble_provenance_gate",
-    "independent_map",
-    "independent_map_identity_report",
-    "independent_worker_metadata",
-]
-
-
 def split_evenly(values: np.ndarray, n_parts: int) -> list[np.ndarray]:
     """Split an array into nonempty, nearly equal chunks along axis zero."""
 
@@ -1175,3 +1161,32 @@ def ky_scan_batches(ky_values: np.ndarray, *, n_batches: int) -> list[np.ndarray
     if ky.ndim != 1:
         raise ValueError("ky_values must be one-dimensional")
     return split_evenly(ky, n_batches)
+
+
+__all__ = [
+    "IndependentEnsembleProvenanceReport",
+    "IndependentMapExecutionError",
+    "IndependentWorkerMetadata",
+    "independent_ensemble_provenance_gate",
+    "independent_map",
+    "independent_map_identity_report",
+    "independent_worker_metadata",
+    "ParallelIdentityReport",
+    "parallel_identity_report",
+    "batch_map",
+    "batch_map_identity_report",
+    "ky_scan_batches",
+    "pad_to_multiple",
+    "split_evenly",
+    "ClaimLevel",
+    "DecompositionContract",
+    "DecompositionWorkload",
+    "DiagnosticWorkload",
+    "IndependentWorkload",
+    "ReconstructionIdentityReport",
+    "ShardAssignment",
+    "build_independent_portfolio_decomposition",
+    "reconstruct_serial",
+    "serial_reconstruction_identity_report",
+    "shard_sequence",
+]

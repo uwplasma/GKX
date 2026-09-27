@@ -123,9 +123,6 @@ def dominant_eigenpairs_propagator_cached(
     return values, vectors, residuals
 
 
-__all__ = ["dominant_eigenpairs_propagator_cached"]
-
-
 _RESIDUAL_NOISE_EPS = 1.0e3
 
 
@@ -555,4 +552,5 @@ __all__ = [
     "AdaptivePropagatorSolution",
     "adaptive_propagator_eigenpair",
     "certifiable_residual_tolerance",
+    "dominant_eigenpairs_propagator_cached",
 ]

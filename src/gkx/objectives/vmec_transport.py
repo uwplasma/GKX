@@ -1012,4 +1012,10 @@ __all__ = [
     "VMEXTransportObjectiveKind",
     "VMEXTransportObjectiveTransform",
     "vmex_transport_objective_from_state",
+    "PortfolioReduction",
+    "StellaratorObjectivePortfolioContract",
+    "aggregate_objective_portfolio",
+    "portfolio_objective_weight_vector",
+    "portfolio_sample_weight_tensor",
+    "validate_objective_portfolio_contract",
 ]

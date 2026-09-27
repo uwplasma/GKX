@@ -432,8 +432,6 @@ next_tests = [
 [[modules]]
 module = "gkx.solvers_linear_integrators"
 path = "src/gkx/solvers_linear_integrators.py"
-owned_modules = [
-]
 owner_lane = "linear fixed-step integration, implicit dispatch, and diagnostic sampling"
 status = "active"
 coverage_priority = "high"

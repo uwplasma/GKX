@@ -840,16 +840,6 @@ def _assemble_fieldline_struct(
     )
 
 
-__all__ = [
-    "BoozerCartesianDerivatives",
-    "BoozerCoordinateGradients",
-    "BoozerFieldLineDerivatives",
-    "boozer_cartesian_derivatives",
-    "boozer_coordinate_gradients",
-    "evaluate_boozer_field_line_derivatives",
-]
-
-
 @dataclass(frozen=True)
 class RawDriftProfiles:
     """Drift coefficients on the Boozer theta grid, before the equal-arc remap."""
@@ -1013,3 +1003,16 @@ def raw_drift_profiles(
         gbdrift=gbdrift,
         gbdrift0=cvdrift0,
     )
+
+
+__all__ = [
+    "BoozerCartesianDerivatives",
+    "BoozerCoordinateGradients",
+    "BoozerFieldLineDerivatives",
+    "boozer_cartesian_derivatives",
+    "boozer_coordinate_gradients",
+    "evaluate_boozer_field_line_derivatives",
+    "RawDriftProfiles",
+    "boozer_pressure_gradient",
+    "raw_drift_profiles",
+]

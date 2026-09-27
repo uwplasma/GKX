@@ -993,4 +993,6 @@ __all__ = [
     "load_solved_vmex_case",
     "resolve_vmex_case_input_path",
     "vmex_boozer_equal_arc_core_profiles_from_state",
+    "_VMEC_BOOZER_PARITY_MIN_MODE_COUNT",
+    "_cached_booz_xform_constants",
 ]

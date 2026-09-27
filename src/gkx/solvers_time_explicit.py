@@ -58,36 +58,6 @@ from gkx.operators.moments import (
 )
 
 
-__all__ = [
-    "ExplicitTimeConfig",
-    "_SSPX3_ADT",
-    "_SSPX3_W1",
-    "_SSPX3_W2",
-    "_SSPX3_W3",
-    "_apply_completed_step_state_mask",
-    "_cfl_wavenumber_arrays",
-    "_completed_step_state_mask",
-    "_diagnostic_midplane_index",
-    "_emit_time_progress",
-    "_format_wall_time",
-    "_geometry_frequency_maxima",
-    "_gradient_ratio_max",
-    "_growth_rate_mode_mask",
-    "_instantaneous_growth_rate_step",
-    "_laguerre_velocity_max",
-    "_linear_explicit_step",
-    "_linear_frequency_bound",
-    "_linear_term_config",
-    "_non_twist_shift_frequency_max",
-    "_parallel_periods_from_grid",
-    "_rk3_heun_step",
-    "_rk4_step",
-    "integrate_linear_explicit",
-    "integrate_linear_explicit_from_config",
-    "integrate_linear_explicit_diagnostics",
-]
-
-
 @dataclass(frozen=True)
 class ExplicitTimeConfig:
     """Explicit time integration configuration.
@@ -633,8 +603,6 @@ def integrate_linear_explicit_from_config(
     return t, phi
 
 
-__all__ = ["ExplicitTimeConfigLike", "integrate_linear_explicit_diagnostics"]
-
 _ALLOWED_METHODS = {
     "euler",
     "rk2",
@@ -1014,3 +982,34 @@ def integrate_linear_explicit_diagnostics(
         np.asarray(buffers.omega),
         diag,
     )
+
+
+__all__ = [
+    "ExplicitTimeConfig",
+    "_SSPX3_ADT",
+    "_SSPX3_W1",
+    "_SSPX3_W2",
+    "_SSPX3_W3",
+    "_apply_completed_step_state_mask",
+    "_cfl_wavenumber_arrays",
+    "_completed_step_state_mask",
+    "_diagnostic_midplane_index",
+    "_emit_time_progress",
+    "_format_wall_time",
+    "_geometry_frequency_maxima",
+    "_gradient_ratio_max",
+    "_growth_rate_mode_mask",
+    "_instantaneous_growth_rate_step",
+    "_laguerre_velocity_max",
+    "_linear_explicit_step",
+    "_linear_frequency_bound",
+    "_linear_term_config",
+    "_non_twist_shift_frequency_max",
+    "_parallel_periods_from_grid",
+    "_rk3_heun_step",
+    "_rk4_step",
+    "integrate_linear_explicit",
+    "integrate_linear_explicit_from_config",
+    "integrate_linear_explicit_diagnostics",
+    "ExplicitTimeConfigLike",
+]

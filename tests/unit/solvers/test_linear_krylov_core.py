@@ -1206,7 +1206,10 @@ def test_certified_candidate_lift_requests_exact_dot_precision() -> None:
         found = []
         for eqn in walk(jaxpr):
             frames = getattr(eqn.source_info.traceback, "frames", []) or []
-            if any("krylov_propagator" in getattr(f, "file_name", "") for f in frames):
+            if any(
+                "solvers_linear_adaptive_propagator" in getattr(f, "file_name", "")
+                for f in frames
+            ):
                 found.append(eqn.params["precision"])
         return found
 
@@ -2424,7 +2427,7 @@ ALLOWED_UNPINNED_MATRIX_DOTS = {
     # recording why the shifted FGMRES starts from zero, all above it; same
     # code, still the `lifted = jnp.tensordot(eigvecs.T, V[:krylov_dim],
     # axes=1)` of `_propagator_arnoldi_restart_step`, verified at the new line.
-    "solvers_linear_krylov_algorithms.py:834": "overlap ranking only; argmax provably unmoved",
+    "solvers_linear_krylov_algorithms.py:818": "overlap ranking only; argmax provably unmoved",
 }
 
 
@@ -2572,10 +2575,10 @@ def test_propagator_candidate_lift_pins_exact_dot_precision(candidates: int) -> 
     lifts = [
         precision
         for origin, precision in found
-        # Flat-layout rename: the module is solvers_linear_krylov_propagator.py.
+        # The propagator lift lives in solvers_linear_adaptive_propagator.py.
         # This filter selects which contractions the precision guard inspects,
         # so a stale prefix makes the guard silently vacuous rather than failing.
-        if origin.startswith("solvers_linear_krylov_propagator")
+        if origin.startswith("solvers_linear_adaptive_propagator")
     ]
     assert lifts, "the candidate lift lowered to no matrix dot; the guard is vacuous"
     assert all(precision == EXACT for precision in lifts), (

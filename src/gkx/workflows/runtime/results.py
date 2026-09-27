@@ -47,9 +47,6 @@ def checked_solve_summary(
     return require_converged_implicit_solves(outputs[-1], label=label)
 
 
-__all__ = ["checked_solve_summary", "solve_stats_request"]
-
-
 if TYPE_CHECKING:
     from gkx.solvers_linear_implicit import ImplicitSolveSummary
     from gkx.solvers_linear_krylov import EigenSolveStatus
