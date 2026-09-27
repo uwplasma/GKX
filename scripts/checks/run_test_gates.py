@@ -38,12 +38,13 @@ WIDE_COVERAGE_LOGICAL_CPU_DEVICES = {
     "test_parallel_linear_velocity.py": 4,
     # Routes [parallel] into the nonlinear path and gates the sharded answer
     # against the serial one; without real devices every case skips.
-    "test_parallel_nonlinear_routing.py": 4,
     # Batch-map, runner and sharding-profile routes that take a multi-device
     # branch when more than one device is visible.
     "test_parallel_core.py": 4,
-    "test_runners_and_orchestration.py": 4,
-    "test_nonlinear_sharding_profile_contracts.py": 4,
+    # Merged by ARCH-B (#300): the runner and sharding-profile tests now live
+    # in these files and still need the multi-device branch.
+    "test_time_integrators.py": 4,
+    "test_reference_comparison_tools.py": 4,
 }
 
 #: Files split into this many contiguous node-ID chunks, each scheduled as its
