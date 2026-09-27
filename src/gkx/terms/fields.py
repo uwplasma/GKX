@@ -142,8 +142,9 @@ def _reduce_electrostatic_moments(
 def _boltzmann_electrons(charge, axis_name: str | None = None) -> jnp.ndarray:
     """True when the Boltzmann species is electrons, i.e. a kinetic ion exists.
 
-    GX ``qneutAdiab`` subtracts ``<phi>`` at ``ky = 0`` only for Boltzmann
-    electrons (``iphi00 = 2``); Boltzmann ions respond to the full ``phi``.
+    The flux-surface average ``<phi>`` is subtracted at ``ky = 0`` only for
+    Boltzmann electrons (``iphi00 = 2``); Boltzmann ions respond to the full
+    ``phi``.
     """
 
     ion = jnp.any(jnp.asarray(charge) > 0.0).astype(jnp.int32)
