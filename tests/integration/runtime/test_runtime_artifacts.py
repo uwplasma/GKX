@@ -3804,6 +3804,51 @@ def test_turbulent_heating_is_weighted_by_density_times_charge() -> None:
     np.testing.assert_allclose(heat[1], heat[0], rtol=1.0e-10)
 
 
+@pytest.mark.parametrize("ky_layout", ["full", "half"])
+def test_netcdf_phi2_total_and_kx_spectrum_match_in_memory(ky_layout: str) -> None:
+    """Published ``Phi2_t`` and ``Phi2_kxt`` carry the ``-ky`` partners.
+
+    The per-row ``ky`` spectrum stores one row of each conjugate pair, so a
+    plain sum of it is not the total: the published total and ``kx`` spectrum
+    must agree with the in-memory reduction on either layout.
+    """
+
+    nx, ny, nz = 10, 12, 4
+    grid = build_spectral_grid(
+        GridConfig(Nx=nx, Ny=ny, Nz=nz, Lx=1.0, Ly=1.0, ky_layout=ky_layout)
+    )
+    rng = np.random.default_rng(11)
+    real = rng.normal(size=(ny, nx, nz))
+    phi_full = np.fft.fft2(real, axes=(0, 1)) / (nx * ny)
+    phi = jnp.asarray(phi_full[: grid.ky.size])
+    vol_fac = jnp.full((nz,), 1.0 / nz)
+    phi2_t, phi2_kxt, phi2_kyt, phi2_kxkyt, *_rest = diagnostics_moments.phi2_resolved(
+        phi, grid, vol_fac
+    )
+    resolved = SimpleNamespace(
+        Phi2_kxkyt=np.asarray(phi2_kxkyt)[None],
+        Phi2_kxt=np.asarray(phi2_kxt)[None],
+        Phi2_kyt=np.asarray(phi2_kyt)[None],
+    )
+    out_t, out_kx, _out_ky, _out_kykx = nonlinear_netcdf._phi2_outputs_for_netcdf(
+        resolved,
+        SimpleNamespace(Wphi_t=np.zeros(1)),
+        full_nx=nx,
+        full_ny=ny,
+        active_nx=_dealiased_kx_count(nx),
+        active_ny=_dealiased_ky_count(ny),
+    )
+
+    np.testing.assert_allclose(out_t, [float(phi2_t)], rtol=1.0e-5)
+    np.testing.assert_allclose(
+        out_kx,
+        np.asarray(phi2_kxt)[None][:, _dealiased_kx_indices(nx)],
+        rtol=1.0e-5,
+        atol=1.0e-12,
+    )
+    np.testing.assert_allclose(np.sum(out_kx), float(phi2_t), rtol=1.0e-5)
+
+
 def test_turbulent_heating_total_helper_zero_dt_guard_returns_zero_for_changed_state() -> (
     None
 ):
