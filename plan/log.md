@@ -20686,8 +20686,9 @@ Findings:
   central differences with h = 1e-4 x ESS scale, s = 0.5, alpha = 0): growth
   rate relative error 1.5e-6 to 1.2e-3 on 5 columns; quasilinear flux 7e-6 to
   8e-3 on 8 columns; nonlinear window (8x8x16, Nl2/Nm4, 64 steps from a
-  400-step state, complex64) 5e-5 to 1.3e-2 on the 5 largest columns and
-  9-19 % on two columns 20x below the gradient norm (0.5 % of the norm).
+  400-step state, complex64) 5e-5 to 1.3e-2 on six columns and 9-19 % on
+  two columns 11-20x below the largest component (absolute error 0.4 % of
+  the gradient norm).
 - Office, CPU only (12 cores of a shared host), default settings, one tube:
   linear growth 0.196 -> 0.097, 28 min, 84-113 s per least-squares
   iteration; quasilinear flux 2.57 -> 0.94, 29 min, 111-115 s per
