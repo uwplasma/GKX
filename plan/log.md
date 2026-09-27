@@ -20730,3 +20730,20 @@ Outcome: ready for review. Not done: GPU timings (F.5 step 3's "minutes per
 stage on one A4000"); batched multi-tube window (`vmap`, step 2); held-out
 tubes, cold-start holdouts and an SPSA control (step 6); the saturation gate
 lives in the example, not in a GKX Python helper.
+## 2026-09-27 — BUG-XCODE lane (F.4, F.6 VAL-REF/VAL-XCODE/VAL-KE, G.6 P5)
+
+Baseline: `main` `cf1d40828` (2.4.0).
+
+Bug review (four reviewers over fields/fluxes, linear operator, nonlinear/diagnostics, collisions/eigen). Fixed, one PR per bug class, each with a test that fails on `main`:
+- #302 deck keys dropped silently (`shat` ran as `s_hat = 0.8`, `nz` as `Nz = 64`, `[collision]` ignored, `[fit] fit_signal` filtered by `gkx run`, `[run] kx` ignored so the Merlo zonal deck fitted the identically-zero (0,0) mode); spurious deprecation warning on `gkx run`/`gkx scan`.
+- #303 hyperdiffusion normalised by the selected ky instead of the parent grid's k_perp corner (every runtime linear run and ky scan; `Dfac = D_hyper` at every ky when Nx = 1).
+- #304 turbulent heating weighted by n_s instead of n_s Z_s (electron sign, impurity Z); NetCDF `Phi2_t`/`Phi2_kxt` dropped the -ky partners.
+- #306 adaptive CFL on `ky_layout = "half"` read Nyc as Ny (linear dt 65% over the bound).
+- #308 Boltzmann ions given the electron zonal <phi> correction; sharded linear routes dropped the ky = 0 correction.
+
+Found, not fixed here (recorded for owners): NTFT parallel derivative along fixed-index chains (GX holds idx + m0 fixed); fractional flow-shear phase ignored by the compressed bracket (opt-in path); per-species `nu` breaks Sugama multispecies conservation; improved Sugama not self-adjoint at T_a != T_b; loglinear window search collapses on a constant phase; GX `ei_colls` absent; Krylov collision refusal already on `main` (G.7's item is closed).
+
+Cross-code record: `plan/research/2026-09-27-xcode/REPORT.md`. Repaired GX build reproduces the adiabatic Cyclone goldens to 0.06% (clamp immaterial); GKX certified eigenpairs (eight ky, both geometries) agree with it to ≤ 0.3% except Miller ky .15 (+1.45%); the 6–8% headline is the fitted parity table. stella's gamma ignores its mirror term (+0.3% when removed; GKX −14%). GS2 and GX agree on Miller kinetic electrons to 1.2%/0.2% at ky .3/.5. GS2 KBM unconverged at e3 (B∥ raises γ 36–87%). GS2 s-α ky .55 is not energy-grid converged (negrid 32/48: 0.0231/0.0184); its finest rung matches GKX Nl48 (0.01835) to 0.3%, so no converged reference exists there.
+
+Outcome: PRs open, CI running; nothing promoted into ledger rows.
+Next: GKX two-species eigenpairs for VAL-KE; stella knockout with the semi-Lagrange mirror off; GS2 KBM e4; nonlinear Cyclone vs GX (GPU) not started.

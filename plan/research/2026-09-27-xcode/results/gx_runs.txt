@@ -1,0 +1,19 @@
+kbm === 2026-09-27T11:32:20-05:00 binary <gx-repaired>/gx sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+kbm === 2026-09-27T11:33:22-05:00 selected CUDA_VISIBLE_DEVICES=1
+kbm === 2026-09-27T11:49:06-05:00 exit rc=0 wall_s=944 gpu=1
+kbm f1891eb6c0e75078317ccbb9c91a4b4a3caf61aa23c76fbb84552fafa6a709cb  kbm_miller.in
+kbm 84a23c10ee11372717ec3e8aab74727a041e32ca48e953f481916dfad7825517  kbm_miller.eik.out
+miller === 2026-09-27T11:23:00-05:00 binary <gx-repaired>/gx sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+miller === 2026-09-27T11:24:01-05:00 selected CUDA_VISIBLE_DEVICES=1
+miller === 2026-09-27T11:32:18-05:00 exit rc=0 wall_s=497 gpu=1
+miller f2e631f4ba6f36c1c821a1dfc038f041c5e0167be2a725dba77eedde454b2cfa  itg_miller_adiabatic_electrons.in
+miller 84a23c10ee11372717ec3e8aab74727a041e32ca48e953f481916dfad7825517  itg_miller_adiabatic_electrons.eik.out
+miller_ke === 2026-09-27T11:49:07-05:00 binary <gx-repaired>/gx sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+miller_ke === 2026-09-27T11:50:08-05:00 selected CUDA_VISIBLE_DEVICES=1
+miller_ke === 2026-09-27T12:09:06-05:00 exit rc=0 wall_s=1138 gpu=1
+miller_ke 9c5d97f35669cfa1706eacac697c2adfd4ef75eab3909203a0a8fa740590f6b1  itg_miller_kinetic_electrons.in
+miller_ke 84a23c10ee11372717ec3e8aab74727a041e32ca48e953f481916dfad7825517  itg_miller_kinetic_electrons.eik.out
+salpha === 2026-09-27T11:11:25-05:00 binary <gx-repaired>/gx sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
+salpha === 2026-09-27T11:12:27-05:00 selected CUDA_VISIBLE_DEVICES=1
+salpha === 2026-09-27T11:19:09-05:00 exit rc=0 wall_s=402 gpu=1
+salpha 0acc1370dab951d7c86f4da86aba4dd974cb3db770bf2d2d05347a7605bb44d4  itg_salpha_adiabatic_electrons.in

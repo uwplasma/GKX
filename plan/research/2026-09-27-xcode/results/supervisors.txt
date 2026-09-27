@@ -1,0 +1,80 @@
+lane=emA pid=566004 start=2026-09-27T10:49:06-05:00 np=4 cpus=28-31 queue=<bench>/q_emA.txt
+gs2 KE_gs2_M_ky0.10_e2 start=2026-09-27T10:49:06-05:00
+gs2 KE_gs2_M_ky0.10_e2 rc=0 wall=234.74 end=2026-09-27T10:53:01-05:00
+gs2 KE_gs2_M_ky0.30_e2 start=2026-09-27T10:53:01-05:00
+gs2 KE_gs2_M_ky0.30_e2 rc=0 wall=110.55 end=2026-09-27T10:54:52-05:00
+gs2 KE_gs2_M_ky0.50_e2 start=2026-09-27T10:54:52-05:00
+gs2 KE_gs2_M_ky0.50_e2 rc=0 wall=51.21 end=2026-09-27T10:55:43-05:00
+gs2 KBM_gs2_M_ky0.10_e2 start=2026-09-27T10:55:43-05:00
+gs2 KBM_gs2_M_ky0.10_e2 rc=0 wall=210.61 end=2026-09-27T10:59:13-05:00
+gs2 KBM_gs2_M_ky0.30_e2 start=2026-09-27T10:59:13-05:00
+gs2 KBM_gs2_M_ky0.30_e2 rc=0 wall=219.31 end=2026-09-27T11:02:53-05:00
+gs2 KBM_gs2_M_ky0.50_e2 start=2026-09-27T11:02:53-05:00
+gs2 KBM_gs2_M_ky0.50_e2 rc=0 wall=232.83 end=2026-09-27T11:06:46-05:00
+gs2 KBMB_gs2_M_ky0.10_e2 start=2026-09-27T11:06:46-05:00
+gs2 KBMB_gs2_M_ky0.10_e2 rc=0 wall=403.06 end=2026-09-27T11:13:29-05:00
+gs2 KBMB_gs2_M_ky0.30_e2 start=2026-09-27T11:13:29-05:00
+gs2 KBMB_gs2_M_ky0.30_e2 rc=0 wall=188.91 end=2026-09-27T11:16:38-05:00
+gs2 KBMB_gs2_M_ky0.50_e2 start=2026-09-27T11:16:38-05:00
+gs2 KBMB_gs2_M_ky0.50_e2 rc=0 wall=93.49 end=2026-09-27T11:18:11-05:00
+gs2 gs2_S_ky0.55_r5 start=2026-09-27T11:18:11-05:00
+gs2 gs2_S_ky0.55_r5 rc=0 wall=5677.73 end=2026-09-27T12:52:49-05:00
+lane=emA ALL DONE 2026-09-27T12:52:49-05:00
+lane=emB pid=566006 start=2026-09-27T10:49:06-05:00 np=4 cpus=32-35 queue=<bench>/q_emB.txt
+gs2 KE_gs2_M_ky0.10_e3 start=2026-09-27T10:49:06-05:00
+gs2 KE_gs2_M_ky0.10_e3 rc=0 wall=1311.08 end=2026-09-27T11:10:57-05:00
+gs2 KE_gs2_M_ky0.30_e3 start=2026-09-27T11:10:57-05:00
+gs2 KE_gs2_M_ky0.30_e3 rc=0 wall=1076.26 end=2026-09-27T11:28:54-05:00
+gs2 KE_gs2_M_ky0.50_e3 start=2026-09-27T11:28:54-05:00
+gs2 KE_gs2_M_ky0.50_e3 rc=0 wall=682.84 end=2026-09-27T11:40:17-05:00
+gs2 KBM_gs2_M_ky0.10_e3 start=2026-09-27T11:40:17-05:00
+gs2 KBM_gs2_M_ky0.10_e3 rc=0 wall=711.05 end=2026-09-27T11:52:08-05:00
+gs2 KBM_gs2_M_ky0.30_e3 start=2026-09-27T11:52:08-05:00
+gs2 KBM_gs2_M_ky0.30_e3 rc=0 wall=1019.08 end=2026-09-27T12:09:07-05:00
+gs2 KBM_gs2_M_ky0.50_e3 start=2026-09-27T12:09:07-05:00
+gs2 KBM_gs2_M_ky0.50_e3 rc=0 wall=838.22 end=2026-09-27T12:23:05-05:00
+gs2 KBMB_gs2_M_ky0.10_e3 start=2026-09-27T12:23:05-05:00
+gs2 KBMB_gs2_M_ky0.10_e3 rc=0 wall=960.69 end=2026-09-27T12:39:06-05:00
+gs2 KBMB_gs2_M_ky0.30_e3 start=2026-09-27T12:39:06-05:00
+gs2 KBMB_gs2_M_ky0.30_e3 rc=0 wall=639.38 end=2026-09-27T12:49:45-05:00
+gs2 KBMB_gs2_M_ky0.50_e3 start=2026-09-27T12:49:45-05:00
+gs2 KBMB_gs2_M_ky0.50_e3 rc=0 wall=588.00 end=2026-09-27T12:59:33-05:00
+gs2 gs2_S_ky0.55_r6 start=2026-09-27T12:59:33-05:00
+gs2 gs2_S_ky0.55_r6 rc=0 wall=7768.97 end=2026-09-27T15:09:02-05:00
+lane=emB ALL DONE 2026-09-27T15:09:02-05:00
+lane=gapgs2 pid=482030 start=2026-09-27T09:55:39-05:00 np=4 cpus=32-35 queue=<bench>/q_gap_gs2.txt
+gs2 gap_gs2_M_ky0.30_r3_base start=2026-09-27T09:55:39-05:00
+gs2 gap_gs2_M_ky0.30_r3_base rc=0 wall=949.30 end=2026-09-27T10:11:29-05:00
+gs2 gap_gs2_M_ky0.30_r3_nodrift start=2026-09-27T10:11:29-05:00
+gs2 gap_gs2_M_ky0.30_r3_nodrift rc=0 wall=584.72 end=2026-09-27T10:21:14-05:00
+lane=gapgs2 ALL DONE 2026-09-27T10:21:14-05:00
+lane=gapstella2 pid=506099 start=2026-09-27T10:10:28-05:00 np=4 cpus=20-23 queue=<bench>/q_gap_stella2.txt
+stella gap_stella_M_ky0.30_r1_mirrorexpl start=2026-09-27T10:10:28-05:00
+stella gap_stella_M_ky0.30_r1_mirrorexpl rc=2 wall=74.83 end=2026-09-27T10:11:43-05:00
+stella gap_stella_M_ky0.30_r1_streamexpl start=2026-09-27T10:11:43-05:00
+stella gap_stella_M_ky0.30_r1_streamexpl rc=0 wall=556.90 end=2026-09-27T10:21:00-05:00
+stella gap_stella_M_ky0.30_r1_allexpl start=2026-09-27T10:21:00-05:00
+stella gap_stella_M_ky0.30_r1_allexpl rc=0 wall=1025.62 end=2026-09-27T10:38:06-05:00
+lane=gapstella2 ALL DONE 2026-09-27T10:38:06-05:00
+lane=gapstella3 pid=770219 start=2026-09-27T12:26:36-05:00 np=4 cpus=12-15 queue=<bench>/q_gap_stella3.txt
+stella gap_stella_M_ky0.30_r1_nosemilag start=2026-09-27T12:26:36-05:00
+stella gap_stella_M_ky0.30_r1_nosemilag rc=2 wall=40.26 end=2026-09-27T12:27:16-05:00
+stella gap_stella_M_ky0.30_r1_vpamax4 start=2026-09-27T12:27:16-05:00
+stella gap_stella_M_ky0.30_r1_vpamax4 rc=2 wall=28.11 end=2026-09-27T12:27:44-05:00
+lane=gapstella3 ALL DONE 2026-09-27T12:27:44-05:00
+lane=gapstella pid=482036 start=2026-09-27T09:55:39-05:00 np=4 cpus=28-31 queue=<bench>/q_gap_stella.txt
+stella gap_stella_M_ky0.30_r1_base start=2026-09-27T09:55:39-05:00
+stella gap_stella_M_ky0.30_r1_base rc=0 wall=626.12 end=2026-09-27T10:06:06-05:00
+stella gap_stella_M_ky0.30_r1_nodrift start=2026-09-27T10:06:06-05:00
+stella gap_stella_M_ky0.30_r1_nodrift rc=2 wall=75.26 end=2026-09-27T10:07:21-05:00
+stella gap_stella_M_ky0.30_r1_nomirror start=2026-09-27T10:07:21-05:00
+stella gap_stella_M_ky0.30_r1_nomirror rc=2 wall=66.37 end=2026-09-27T10:08:27-05:00
+stella gap_stella_M_ky0.30_r1_nodrift_nomirror start=2026-09-27T10:08:27-05:00
+stella gap_stella_M_ky0.30_r1_nodrift_nomirror rc=2 wall=129.97 end=2026-09-27T10:10:37-05:00
+lane=gapstella ALL DONE 2026-09-27T10:10:37-05:00
+lane=long pid=741763 start=2026-09-27T12:11:15-05:00 np=4 cpus=24-27 queue=<bench>/q_long.txt
+gs2 gap_gs2_M_ky0.30_r3_nodrift_t1500 start=2026-09-27T12:11:15-05:00
+gs2 gap_gs2_M_ky0.30_r3_nodrift_t1500 rc=0 wall=1811.04 end=2026-09-27T12:41:26-05:00
+stella gap_stella_M_ky0.30_r1_nodrift_t1500 start=2026-09-27T12:41:26-05:00
+stella gap_stella_M_ky0.30_r1_nodrift_t1500 rc=2 wall=94.94 end=2026-09-27T12:43:01-05:00
+lane=long ALL DONE 2026-09-27T12:43:01-05:00
