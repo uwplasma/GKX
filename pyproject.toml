@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gkx"
-version = "2.4.0"
+version = "2.4.1"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,11 +32,14 @@ dependencies = [
   "netCDF4",
   # The sparse-direct growth-rate eigensolver needs solvax.sparse_eigenvalue,
   # CsrPattern and csr_data_from_products, first shipped in 0.26.0 (checked
-  # against the 0.25.0 and 0.26.0 exports, see docs/numerics.rst).
-  "solvax>=0.26.0",
+  # against the 0.25.0 and 0.26.0 exports, see docs/numerics.rst). The floor
+  # is 0.27.0, the first to declare equinox>=0.13.3: with 0.26.0's bare
+  # requirement pip kept an installed equinox 0.11.x, which fails on import
+  # under jax >= 0.10.
+  "solvax>=0.27.0",
   # The VMEC geometry path hard-requires the booz_xform_jax bridge
-  # (gkx.geometry.backend_discovery).
-  "booz_xform_jax",
+  # (gkx.geometry.backend_discovery); 0.4.1 is the first with a jax floor.
+  "booz_xform_jax>=0.4.1",
   "tqdm",
 ]
 
