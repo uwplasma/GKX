@@ -1503,12 +1503,14 @@ def test_write_runtime_nonlinear_artifacts_writes_nonlinear_netcdf_bundle(
         assert root.dimensions["ky"].size == 3
         assert "Phi2_t" in root.groups["Diagnostics"].variables
         assert "Phi2_kxt" in root.groups["Diagnostics"].variables
+        # Phi2_t weights the two paired rows (ky > 0) by 2: 5 * (1 + 2 + 2);
+        # Phi2_kxt is the in-memory kx reduction, condensed.
         np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["Phi2_t"][:], np.full(2, 15.0)
+            root.groups["Diagnostics"].variables["Phi2_t"][:], np.full(2, 25.0)
         )
         np.testing.assert_allclose(
             root.groups["Diagnostics"].variables["Phi2_kxt"][:],
-            np.full((2, 5), 3.0),
+            np.full((2, 5), 1.0),
         )
         np.testing.assert_allclose(
             root.groups["Diagnostics"].variables["Phi2_kyt"][:],
