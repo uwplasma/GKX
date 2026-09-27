@@ -337,6 +337,7 @@ def electrostatic_phi_reference(
         mask0=None if mask0 is None else jnp.asarray(mask0),
         jacobian=None if jacobian is None else jnp.asarray(jacobian),
         ky=None if ky is None else jnp.asarray(ky),
+        charge=charge_s,
     )
 
 
@@ -390,6 +391,8 @@ def electrostatic_phi_shard_map(
                 density=density,
                 tz=tz,
                 mask0=mask0,
+                jacobian=jacobian,
+                ky=ky,
             )
         species = int(arr.shape[0])
         jl = _normalise_species_jl(Jl, species=species)
@@ -446,7 +449,12 @@ def electrostatic_phi_shard_map(
             jax.device_put(zt, vector_sharding),
         )
         denominator = jnp.asarray(tau_e, dtype=real_dtype) + qneut
-        phi = nbar / jnp.where(denominator == 0.0, jnp.inf, denominator)
+        phi_avg = _zonal_adiabatic_correction(
+            nbar, qneut, tau_e, jacobian=jacobian, ky=ky, charge=charge_s
+        )
+        phi = (nbar + jnp.asarray(tau_e, dtype=real_dtype) * phi_avg[..., None]) / (
+            jnp.where(denominator == 0.0, jnp.inf, denominator)
+        )
         return phi if mask0 is None else jnp.where(jnp.asarray(mask0), 0.0, phi)
 
     arr, m_axis, m_chunks = _single_species_state_and_plan(
@@ -464,6 +472,8 @@ def electrostatic_phi_shard_map(
             density=density,
             tz=tz,
             mask0=mask0,
+            jacobian=jacobian,
+            ky=ky,
         )
 
     jl = _normalise_single_species_jl(Jl)
@@ -506,7 +516,9 @@ def electrostatic_phi_shard_map(
         axis_names={axis_name},
     )
     nbar = hermite_mapped(jax.device_put(arr, shard_ctx.sharding))
-    phi_avg = _zonal_adiabatic_correction(nbar, qneut, tau_e, jacobian=jacobian, ky=ky)
+    phi_avg = _zonal_adiabatic_correction(
+        nbar, qneut, tau_e, jacobian=jacobian, ky=ky, charge=charge_s
+    )
     phi = (nbar + jnp.asarray(tau_e, dtype=real_dtype) * phi_avg[..., None]) / den_safe
     if mask0 is not None:
         phi = jnp.where(jnp.asarray(mask0), 0.0, phi)

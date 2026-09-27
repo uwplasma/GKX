@@ -100,7 +100,8 @@ def _fused_electrostatic_constants(
     tz_s = jnp.asarray(params.tz, dtype=real_dtype).reshape(-1)[0]
     zt = jnp.where(tz_s == 0.0, 0.0, 1.0 / tz_s)
     g0 = jnp.sum(jl * jl, axis=0)
-    denominator = tau + density_s * charge_s * zt * (1.0 - g0)
+    qneut = density_s * charge_s * zt * (1.0 - g0)
+    denominator = tau + qneut
     ell = jnp.arange(arr.shape[0], dtype=real_dtype).reshape((arr.shape[0], 1, 1, 1, 1))
     return SimpleNamespace(
         real_dtype=real_dtype,
@@ -112,6 +113,9 @@ def _fused_electrostatic_constants(
         zt=zt,
         vth_s=jnp.asarray(params.vth, dtype=real_dtype).reshape(-1)[0],
         den_safe=jnp.where(denominator == 0.0, jnp.inf, denominator),
+        qneut=qneut,
+        jacobian=getattr(cache, "jacobian", None),
+        ky=getattr(cache, "ky", None),
         mask0=None if cache.mask0 is None else jnp.asarray(cache.mask0),
         ell=ell,
         ell_p1=ell + 1.0,
@@ -190,9 +194,20 @@ def _fused_electrostatic_phi(
     m0: jnp.ndarray,
     axis_name: str,
 ) -> jnp.ndarray:
+    from gkx.terms.fields import _zonal_adiabatic_correction
+
     local_gm0 = jnp.sum(local * m0, axis=1)
     local_nbar = data.density_s * data.charge_s * jnp.sum(data.jl * local_gm0, axis=0)
-    phi = jax.lax.psum(local_nbar, axis_name) / data.den_safe
+    nbar = jax.lax.psum(local_nbar, axis_name)
+    phi_avg = _zonal_adiabatic_correction(
+        nbar,
+        data.qneut,
+        data.tau,
+        jacobian=data.jacobian,
+        ky=data.ky,
+        charge=data.charge_s,
+    )
+    phi = (nbar + data.tau * phi_avg[..., None]) / data.den_safe
     return phi if data.mask0 is None else jnp.where(data.mask0, 0.0, phi)
 
 
@@ -502,6 +517,8 @@ def _serial_electrostatic_phi(
         tz=params.tz,
         mask0=cache.mask0,
         devices=device_list,
+        jacobian=getattr(cache, "jacobian", None),
+        ky=getattr(cache, "ky", None),
     )
 
 
@@ -810,6 +827,8 @@ def linear_rhs_electrostatic_species_sharded(
         mask0=cache.mask0,
         devices=device_list,
         axis_name="species",
+        jacobian=getattr(cache, "jacobian", None),
+        ky=getattr(cache, "ky", None),
     )
 
     mesh = Mesh(np.asarray(device_list), ("species",))

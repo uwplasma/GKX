@@ -139,6 +139,18 @@ def _reduce_electrostatic_moments(
     )
 
 
+def _boltzmann_electrons(charge, axis_name: str | None = None) -> jnp.ndarray:
+    """True when the Boltzmann species is electrons, i.e. a kinetic ion exists.
+
+    The flux-surface average ``<phi>`` is subtracted at ``ky = 0`` only for
+    Boltzmann electrons (``iphi00 = 2``); Boltzmann ions respond to the full
+    ``phi``.
+    """
+
+    ion = jnp.any(jnp.asarray(charge) > 0.0).astype(jnp.int32)
+    return (ion if axis_name is None else jax.lax.psum(ion, axis_name)) > 0
+
+
 def _zonal_adiabatic_correction(
     nbar: jnp.ndarray,
     qneut: jnp.ndarray,
@@ -146,8 +158,12 @@ def _zonal_adiabatic_correction(
     *,
     jacobian: jnp.ndarray | None = None,
     ky: jnp.ndarray | None = None,
+    charge: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
-    """Return the exact zonal ``<phi>`` correction for adiabatic species."""
+    """Return the zonal ``<phi>`` correction for Boltzmann electrons.
+
+    Pass the kinetic ``charge`` to zero it for Boltzmann ions.
+    """
 
     if jacobian is None or ky is None:
         return jnp.zeros_like(nbar[..., 0])
@@ -160,6 +176,8 @@ def _zonal_adiabatic_correction(
     weight_safe = jnp.where(weight == 0.0, jnp.inf, weight)
     ky0_mask = (jnp.asarray(ky) == 0.0)[:, None]
     kx_mask = (jnp.arange(numerator.shape[-1]) > 0)[None, :]
+    if charge is not None:
+        ky0_mask = ky0_mask & _boltzmann_electrons(charge)
     return jnp.where(ky0_mask & kx_mask, numerator / weight_safe, 0.0)
 
 
@@ -170,6 +188,7 @@ def _solve_electrostatic_from_moments(
     mask0: jnp.ndarray | None = None,
     jacobian: jnp.ndarray | None = None,
     ky: jnp.ndarray | None = None,
+    charge: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Solve quasineutrality from canonical reduced field moments."""
 
@@ -179,7 +198,7 @@ def _solve_electrostatic_from_moments(
     else:
         tau = jnp.asarray(tau_e, dtype=jnp.real(moments.nbar).dtype)
         phi_avg = _zonal_adiabatic_correction(
-            moments.nbar, moments.qneut, tau, jacobian=jacobian, ky=ky
+            moments.nbar, moments.qneut, tau, jacobian=jacobian, ky=ky, charge=charge
         )
         phi = (moments.nbar + tau * phi_avg[..., None]) / denom_safe
     return phi if mask0 is None else jnp.where(mask0, 0.0, phi)
@@ -189,10 +208,11 @@ def _electrostatic_phi(
     cache,
     coeffs: _FieldSolveCoefficients,
     moments: _FieldMoments,
+    axis_name: str | None = None,
 ) -> jnp.ndarray:
     denom_safe = jnp.where(moments.qphi == 0.0, jnp.inf, moments.qphi)
     phi_es = jax.lax.cond(
-        jnp.any(coeffs.tau_e > 0.0),
+        jnp.any(coeffs.tau_e > 0.0) & _boltzmann_electrons(coeffs.charge, axis_name),
         lambda _: _solve_electrostatic_from_moments(
             moments,
             coeffs.tau_e,
@@ -256,7 +276,8 @@ def _solve_phi_bpar(
         denom = moments.qphi * ab - qb * aphi
         denom_safe = jnp.where(denom == 0.0, jnp.inf, denom)
 
-        # The adiabatic species responds to phi - <phi>, so the quasineutrality
+        # Boltzmann electrons respond to phi - <phi> (tau_z = 0 for Boltzmann
+        # ions, which see the full phi), so the quasineutrality
         # source carries tau_e<phi> at ky = 0 exactly as in the electrostatic
         # branch. Solving phi = (ab (nbar + tau_e<phi>) - qb jperpbar)/denom
         # together with its own flux-surface average gives
@@ -267,13 +288,16 @@ def _solve_phi_bpar(
         # which reduces to the electrostatic expression as beta -> 0 (ab -> 1,
         # qb -> 0), since qphi - tau_e = qneut. Without this the solve is
         # discontinuous in beta and the zonal potential is over-screened.
+        tau_z = jnp.where(
+            _boltzmann_electrons(coeffs.charge, axis_name), coeffs.tau_e, 0.0
+        )
         jacobian = jnp.asarray(cache.jacobian, dtype=coeffs.tau_e.dtype)
         jac = jacobian[None, None, :]
         source = ab * moments.nbar - qb * jperpbar
         numerator = jnp.sum(
             jnp.where(jac == 0.0, 0.0, source / denom_safe * jac), axis=-1
         )
-        weight = jnp.sum(jac * ab * coeffs.tau_e / denom_safe, axis=-1)
+        weight = jnp.sum(jac * ab * tau_z / denom_safe, axis=-1)
         total = jnp.sum(jacobian)
         avg_denom = total - weight
         avg_denom_safe = jnp.where(avg_denom == 0.0, jnp.inf, avg_denom)
@@ -282,7 +306,7 @@ def _solve_phi_bpar(
         kx_mask = (jnp.arange(numerator.shape[-1]) > 0)[None, :]
         phi_avg = jnp.where(ky0_mask & kx_mask, ratio, 0.0)
 
-        corrected = moments.nbar + coeffs.tau_e * phi_avg[..., None]
+        corrected = moments.nbar + tau_z * phi_avg[..., None]
         phi_em = (ab * corrected - qb * jperpbar) / denom_safe
         bpar_em = (-aphi * corrected + moments.qphi * jperpbar) / denom_safe
         return jnp.where(cache.mask0, 0.0, phi_em), jnp.where(
@@ -376,7 +400,7 @@ def _solve_fields_impl(
         w_bpar=w_bpar,
     )
     moments = _field_moments(G, coeffs, axis_name=axis_name)
-    phi_es = _electrostatic_phi(cache, coeffs, moments)
+    phi_es = _electrostatic_phi(cache, coeffs, moments, axis_name)
     phi, bpar = _solve_phi_bpar(cache, coeffs, moments, phi_es, axis_name=axis_name)
     apar = _solve_apar(G, cache, coeffs, moments, phi, axis_name=axis_name)
     return FieldState(phi=phi, apar=apar, bpar=bpar)
@@ -443,7 +467,7 @@ def solve_electrostatic_phi_species_shard(
         w_bpar=zeros,
     )
     moments = _field_moments(G, coeffs, axis_name=axis_name)
-    return _electrostatic_phi(cache, coeffs, moments)
+    return _electrostatic_phi(cache, coeffs, moments, axis_name)
 
 
 @jax.custom_vjp

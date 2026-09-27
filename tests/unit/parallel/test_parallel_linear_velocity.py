@@ -3625,3 +3625,126 @@ def test_species_hermite_route_builds_its_projector_inside_a_trace():
     # Same trajectory, compiled or not -- the fix is a layout read, not a
     # different projection.
     assert abs(traced - eager) <= 1.0e-5 * abs(eager)
+
+
+def _zonal_boltzmann_problem(*, boltzmann: str, nspecies: int):
+    from gkx.config import CycloneBaseCase, GridConfig
+    from gkx.core_grid import build_spectral_grid
+    from gkx.geometry import SAlphaGeometry
+    from gkx.operators.linear.cache_builder import build_linear_cache
+
+    cfg = CycloneBaseCase(
+        grid=GridConfig(Nx=4, Ny=4, Nz=8, Lx=62.8, Ly=62.8, boundary="periodic")
+    )
+    grid = build_spectral_grid(cfg.grid)
+    sign = 1.0 if boltzmann == "electrons" else -1.0  # kinetic-species charge
+
+    def value(first, last):  # scalars for one species, as the 5D routes expect
+        return first if nspecies == 1 else jnp.linspace(first, last, nspecies)
+
+    params = LinearParams(
+        charge_sign=value(sign, sign),
+        tz=value(sign, sign),
+        density=value(1.0, 0.7),
+        mass=value(1.0, 1.0),
+        temp=value(1.0, 1.0),
+        vth=value(1.0, 1.0),
+        rho=value(1.0, 0.6),
+        fprim=value(2.2, 2.2),
+        tprim=value(6.9, 6.9),
+        tau_e=1.0,
+        beta=0.0,
+        fapar=0.0,
+    )
+    cache = build_linear_cache(
+        grid, SAlphaGeometry.from_config(cfg.geometry), params, Nl=2, Nm=6
+    )
+    shape = (nspecies, 2, 6, grid.ky.size, grid.kx.size, grid.z.size)
+    rng = np.random.default_rng(20260927)
+    state = jnp.asarray(
+        1.0e-3 * (rng.standard_normal(shape) + 1j * rng.standard_normal(shape)),
+        dtype=jnp.complex128,
+    )
+    return (state[0] if nspecies == 1 else state), cache, params
+
+
+@pytest.mark.parametrize("boltzmann", ["electrons", "ions"])
+def test_sharded_electrostatic_routes_keep_the_serial_zonal_boltzmann_response(
+    boltzmann,
+) -> None:
+    """Every sharded phi route matches the serial solve at ky = 0 too.
+
+    Boltzmann electrons carry the flux-surface-average term at ky = 0 (GX
+    ``iphi00 = 2``); Boltzmann ions do not. Random states populate ky = 0.
+    """
+
+    from gkx.operators.linear.rhs import linear_rhs_cached
+
+    devices = jax.devices()
+    counts = [n for n in (1, 2) if n <= len(devices)]
+    terms = _electrostatic_slice_terms()
+
+    def close(observed, expected):
+        scale = float(jnp.max(jnp.abs(expected)))
+        np.testing.assert_allclose(
+            np.asarray(observed), np.asarray(expected), rtol=0.0, atol=1e-12 * scale
+        )
+
+    for nspecies in (1, 2):
+        state, cache, params = _zonal_boltzmann_problem(
+            boltzmann=boltzmann, nspecies=nspecies
+        )
+        axis, axis_name = ("hermite", "m") if nspecies == 1 else ("species", "species")
+        rhs, phi = linear_rhs_cached(
+            state, cache, params, terms=terms, use_jit=False, use_custom_vjp=False
+        )
+        kw = dict(
+            Jl=cache.Jl,
+            tau_e=params.tau_e,
+            charge=params.charge_sign,
+            density=params.density,
+            tz=params.tz,
+            mask0=cache.mask0,
+        )
+        zonal = dict(jacobian=cache.jacobian, ky=cache.ky)
+        close(electrostatic_phi_reference(state, **kw, **zonal), phi)
+        uncorrected = electrostatic_phi_reference(state, **kw)
+        gap = float(jnp.max(jnp.abs(uncorrected[0] - phi[0])))
+        assert gap > 1e-3 * float(jnp.max(jnp.abs(phi[0]))) or boltzmann == "ions"
+        close(uncorrected[1:], phi[1:])
+        for n in counts:
+            plan = build_velocity_sharding_plan(
+                state.shape, num_devices=n, axes=(axis,)
+            )
+            close(
+                electrostatic_phi_shard_map(
+                    state, plan, devices=devices[:n], axis_name=axis_name, **kw, **zonal
+                ),
+                phi,
+            )
+            if nspecies == 1:
+                routes = (
+                    linear_parallel_electrostatic.linear_rhs_electrostatic_slices_velocity_sharded(
+                        state, cache, params, terms=terms, devices=devices[:n]
+                    ),
+                    linear_parallel_streaming.linear_rhs_streaming_electrostatic_velocity_sharded(
+                        state, cache, params, devices=devices[:n]
+                    ),
+                )
+                close(routes[0][1], phi)
+                close(routes[1][1], phi)
+                close(routes[0][0], rhs)
+        if nspecies == 2 and len(devices) >= 2:
+            close(
+                linear_parallel_electrostatic.linear_rhs_electrostatic_species_sharded(
+                    state, cache, params, terms=terms, devices=devices[:2]
+                )[1],
+                phi,
+            )
+        if nspecies == 2 and len(devices) >= 4:
+            close(
+                linear_parallel_streaming.linear_rhs_electrostatic_species_hermite_sharded(
+                    state, cache, params, terms=terms, devices=devices[:4]
+                )[1],
+                phi,
+            )

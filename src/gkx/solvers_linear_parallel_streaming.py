@@ -85,6 +85,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
 
     from gkx.core_velocity import laguerre_gyroaverage_neighbors
     from gkx.operators.linear.params import _as_species_array
+    from gkx.terms.fields import _boltzmann_electrons
     from gkx.operators.linear.streaming import (
         abs_z_linked_fft,
         abs_z_periodic,
@@ -195,7 +196,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             0.0,
         )
         phi = jax.lax.cond(
-            jnp.any(tau_e > 0.0),
+            jnp.any(tau_e > 0.0) & _boltzmann_electrons(charge_s, "species"),
             lambda _: (nbar + tau_e * phi_average[..., None]) / denominator_safe,
             lambda _: nbar / denominator_safe,
             operand=None,
@@ -646,6 +647,8 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
         tz=params.tz,
         mask0=cache.mask0,
         devices=device_list,
+        jacobian=getattr(cache, "jacobian", None),
+        ky=getattr(cache, "ky", None),
     )
     return _streaming_electrostatic_from_phi_velocity_sharded(
         arr, cache, params, phi=phi, plan=plan, devices=device_list
