@@ -395,7 +395,9 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         # The dealias cutoff row is a property of the two-sided ky axis; see
         # gkx.operators.linear.dissipation.hyperdiffusion_contribution.
         ky_index = min(max((ny_full - 1) // 3, 0), ny_rows - 1)
-        kperp2_max = cache.kx[kx_index] ** 2 + cache.ky[ky_index] ** 2
+        ky_cut = getattr(cache, "ky_cut", None)
+        ky2_max = cache.ky[ky_index] ** 2 if ky_cut is None else ky_cut * ky_cut
+        kperp2_max = cache.kx[kx_index] ** 2 + ky2_max
         kperp2_max = jnp.where(kperp2_max > 0.0, kperp2_max, 1.0)
         hyperdiffusion_rate = jnp.asarray(params.D_hyper, dtype=real_dtype) * (
             kperp2 / kperp2_max

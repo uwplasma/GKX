@@ -907,6 +907,7 @@ def hyperdiffusion_contribution(
     p_hyper_kperp: jnp.ndarray,
     weight: jnp.ndarray,
     ny_full: int | None = None,
+    ky_cut: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Hyperdiffusion in k_perp following Laguerre-Hermite conventions.
 
@@ -915,6 +916,9 @@ def hyperdiffusion_contribution(
     row is at index ``(Ny - 1) // 3`` in both layouts, and deriving it from the
     stored row count would halve the cutoff on a half-spectrum grid and inflate
     ``Dfac`` by ``4 ** p_hyper_kperp`` with no shape error to show for it.
+    A row selection does not contain that row at all, so it passes the
+    parent's ``|ky|`` there as ``ky_cut``; normalizing by the selected row's
+    own ``ky`` would hand every scanned mode the full ``D_hyper``.
     """
 
     real_dtype = jnp.real(G).dtype
@@ -935,7 +939,8 @@ def hyperdiffusion_contribution(
     kx_idx = max((nx - 1) // 3, 0)
     ky_idx = min(max(((ny if ny_full is None else int(ny_full)) - 1) // 3, 0), ny - 1)
     kx2_max = kx2[kx_idx] if kx2.ndim == 1 else kx2[ky_idx, kx_idx]
-    kperp2_max = kx2_max + ky2[ky_idx]
+    ky2_max = ky2[ky_idx] if ky_cut is None else ky_cut * ky_cut
+    kperp2_max = kx2_max + ky2_max
     kperp2_max = jnp.where(kperp2_max > 0.0, kperp2_max, 1.0)
 
     Dfac = D_hyper * (kperp2 / kperp2_max) ** p_hyper_kperp
