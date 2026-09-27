@@ -152,7 +152,8 @@ def _density_average_for_target_phi(
 ) -> np.ndarray:
     nbar = algebra.denom.astype(np.complex64) * phi
     ky_is_zonal = np.isclose(float(np.asarray(cache.ky)[int(ky_i)]), 0.0)
-    if algebra.tau_e <= 0.0 or not ky_is_zonal or int(kx_i) <= 0:
+    boltzmann_ions = not np.any(algebra.charge > 0.0)
+    if algebra.tau_e <= 0.0 or boltzmann_ions or not ky_is_zonal or int(kx_i) <= 0:
         return nbar
 
     jac_sum = float(np.sum(algebra.jacobian))

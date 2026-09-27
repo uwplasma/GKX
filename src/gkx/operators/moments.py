@@ -427,7 +427,7 @@ def _turbulent_heating_species_term(
     dt_safe: jnp.ndarray,
     Jl_s: jnp.ndarray,
     JlB_s: jnp.ndarray,
-    dens_s: jnp.ndarray,
+    nz_s: jnp.ndarray,
     vth_s: jnp.ndarray,
     tz_s: jnp.ndarray,
     zt_s: jnp.ndarray,
@@ -469,7 +469,8 @@ def _turbulent_heating_species_term(
         - vth_s * jnp.conj(apar_old) * du_bardt
         + tz_s * jnp.conj(bpar_old) * duB_bardt
     )
-    return 0.5 * (h_dchidt.real - chi_dhdt.real) * dens_s * fac * vol
+    # Weighted by ``n_s Z_s``: Q_s = Z_s n_s <h_s dchi/dt>.
+    return 0.5 * (h_dchidt.real - chi_dhdt.real) * nz_s * fac * vol
 
 
 def _turbulent_heating_contrib_species(
@@ -496,7 +497,7 @@ def _turbulent_heating_contrib_species(
     active = fac != 0.0
     vol = vol_fac[None, None, :]
     Jl, JlB, _ = _jl_family(cache)
-    dens = _species_array(params.density, ns)
+    nz = _species_array(params.density, ns) * _species_array(params.charge_sign, ns)
     vth = _species_array(params.vth, ns)
     tz = _species_array(params.tz, ns)
     zt = jnp.where(tz == 0.0, 0.0, 1.0 / tz)
@@ -531,7 +532,7 @@ def _turbulent_heating_contrib_species(
                 dt_safe=dt_safe,
                 Jl_s=Jl[s],
                 JlB_s=JlB[s],
-                dens_s=dens[s],
+                nz_s=nz[s],
                 vth_s=vth[s],
                 tz_s=tz[s],
                 zt_s=zt[s],

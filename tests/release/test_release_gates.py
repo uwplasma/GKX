@@ -3592,6 +3592,12 @@ _NOT_A_GKX_RUNTIME_DECK = {
     "benchmarks/cases/reference_hsx_nonlinear_adiabatic_electrons.toml": (
         "reference-code input deck, [Dimensions]/[Physics] schema, not a GKX runtime TOML"
     ),
+    "benchmarks/capability_matrix.toml": (
+        "capability registry ([metadata]/[capabilities] tables), not a runtime deck"
+    ),
+    "benchmarks/results/manifest.toml": (
+        "results manifest ([table]/[figure]/[policy] tables), not a runtime deck"
+    ),
 }
 
 
@@ -4294,6 +4300,12 @@ _DECKS_NOT_LOADABLE_AS_CASES: dict[str, str] = {
         "[Domain] and nonlinear_mode keys and GX's array-style [species] "
         "table. It is kept for provenance of the HSX comparison and is not "
         "loadable by gkx.load; see plan.md 0.3.4 on the HSX row"
+    ),
+    "benchmarks/capability_matrix.toml": (
+        "capability registry ([metadata]/[capabilities] tables), which the loader now refuses as unknown sections instead of reading as an empty deck"
+    ),
+    "benchmarks/results/manifest.toml": (
+        "results manifest ([table]/[figure]/[policy] tables), which the loader now refuses as unknown sections instead of reading as an empty deck"
     ),
 }
 

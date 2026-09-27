@@ -137,6 +137,7 @@ def _prepare_linear_runtime_context(
     return_state: bool,
     initial_state: Any | None,
     status_callback: _StatusCallback,
+    kx_target: float | None = None,
 ) -> _LinearRuntimeContext:
     ql_enabled = bool(getattr(cfg.quasilinear, "enabled", False))
     return_state_requested = bool(return_state)
@@ -152,14 +153,17 @@ def _prepare_linear_runtime_context(
 
     ky_index = deps.select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = deps.select_ky_grid(grid_full, ky_index)
+    kx = np.asarray(grid.kx, dtype=float)
+    kx_index = 0 if kx_target is None else int(np.argmin(np.abs(kx - kx_target)))
     selection = ModeSelection(
         ky_index=0,
-        kx_index=0,
+        kx_index=kx_index,
         z_index=deps.midplane_index(grid),
     )
     _status(
         status_callback,
-        f"selected ky index {ky_index} at ky={float(grid.ky[selection.ky_index]):.4f}",
+        f"selected ky index {ky_index} at ky={float(grid.ky[selection.ky_index]):.4f}"
+        + ("" if kx_target is None else f", kx={kx[kx_index]:.4f}"),
     )
     kinetic_species = max(len([s for s in cfg.species if s.kinetic]), 1)
     expected_shape = (
@@ -735,6 +739,7 @@ def run_full_linear_runtime(
     window_method: str = "stationary",
     initial_state: Any | None = None,
     status_callback: Callable[[str], None] | None = None,
+    kx_target: float | None = None,
 ) -> RuntimeLinearResult:
     """Run one full-GK linear point from a runtime config."""
 
@@ -742,6 +747,7 @@ def run_full_linear_runtime(
         cfg,
         deps=deps,
         ky_target=ky_target,
+        kx_target=kx_target,
         n_laguerre=Nl,
         n_hermite=Nm,
         solver=solver,

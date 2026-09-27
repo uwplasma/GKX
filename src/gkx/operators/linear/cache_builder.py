@@ -1024,6 +1024,11 @@ def _pack_linear_cache(
         use_twist_shift=twist.use_twist_shift,
         jtwist=int(linked_cache["jtwist"]),
         ny_full=getattr(grid, "ny_full", None),
+        ky_cut=(
+            None
+            if (ky_cut := getattr(grid, "ky_cut", None)) is None
+            else (grid_arrays.rho_star * float(ky_cut)).astype(real_dtype)
+        ),
     )
 
 

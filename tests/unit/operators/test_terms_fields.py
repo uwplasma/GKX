@@ -2166,3 +2166,49 @@ def test_stacked_linked_fft_validates_operands() -> None:
         _linked_fft_apply((f, f[..., :2]), idx, kz, operator=("grad", "abs"))
     with pytest.raises(ValueError, match="unsupported linked FFT operator"):
         _linked_fft_apply((f, f), idx, kz, operator=("grad", "curl"))
+
+
+@pytest.mark.parametrize("beta", [0.0, 0.05])
+def test_adiabatic_ion_zonal_field_solve_has_no_flux_surface_average(beta) -> None:
+    """Boltzmann ions (kinetic electrons only) take GX ``qneutAdiab`` at ky = 0.
+
+    Only adiabatic electrons respond to ``phi - <phi>`` (GX ``iphi00 = 2``);
+    adiabatic ions respond to the full ``phi``, so the zonal solve is the local
+    ``nbar / (tau + qneut)`` and cannot depend on the field-line Jacobian.
+    """
+
+    cache, params, G, _charge, density, temp, mass, _tz, vth = _build_case(
+        beta=beta, fapar=0.0
+    )
+    charge = tz = jnp.asarray([-1.0], dtype=jnp.float32)
+    G = G.at[0, :, 0, 0, 1, :].set(jnp.asarray(0.2 + 0.05j * cache.bmag, G.dtype))
+    w_bpar = jnp.asarray(1.0 if beta else 0.0, dtype=jnp.float32)
+
+    def phi(jacobian):
+        return _solve_fields_impl(
+            G,
+            replace(cache, jacobian=jacobian),
+            params,
+            charge=charge,
+            density=density,
+            temp=temp,
+            mass=mass,
+            tz=tz,
+            vth=vth,
+            fapar=jnp.asarray(0.0, dtype=jnp.float32),
+            w_bpar=w_bpar,
+        ).phi
+
+    varied = jnp.linspace(1.0, 3.0, cache.jacobian.size, dtype=cache.jacobian.dtype)
+    base = phi(cache.jacobian)
+    assert jnp.abs(base[0, 1, :]).max() > 0.0
+    np.testing.assert_array_equal(np.asarray(phi(varied)), np.asarray(base))
+    if beta == 0.0:
+        jl = cache.Jl[0, :, 0, 1, :]
+        nbar = -jnp.sum(jl * G[0, :, 0, 0, 1, :], axis=0)
+        qneut = 1.0 - jnp.sum(jl * jl, axis=0)
+        np.testing.assert_allclose(
+            np.asarray(base[0, 1, :]),
+            np.asarray(nbar / (params.tau_e + qneut)),
+            rtol=1.0e-6,
+        )

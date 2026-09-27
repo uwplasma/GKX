@@ -659,6 +659,7 @@ def _dissipation_contributions(
         kx=cache.kx_grid,
         ky=cache.ky,
         ny_full=getattr(cache, "ny_full", None),
+        ky_cut=getattr(cache, "ky_cut", None),
         dealias_mask=cache.dealias_mask,
         D_hyper=scalars.D_hyper,
         p_hyper_kperp=scalars.p_hyper_kperp,

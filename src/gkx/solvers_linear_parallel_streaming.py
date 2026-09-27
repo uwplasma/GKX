@@ -85,6 +85,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
 
     from gkx.core_velocity import laguerre_gyroaverage_neighbors
     from gkx.operators.linear.params import _as_species_array
+    from gkx.terms.fields import _boltzmann_electrons
     from gkx.operators.linear.streaming import (
         abs_z_linked_fft,
         abs_z_periodic,
@@ -195,7 +196,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             0.0,
         )
         phi = jax.lax.cond(
-            jnp.any(tau_e > 0.0),
+            jnp.any(tau_e > 0.0) & _boltzmann_electrons(charge_s, "species"),
             lambda _: (nbar + tau_e * phi_average[..., None]) / denominator_safe,
             lambda _: nbar / denominator_safe,
             operand=None,
@@ -395,7 +396,9 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         # The dealias cutoff row is a property of the two-sided ky axis; see
         # gkx.operators.linear.dissipation.hyperdiffusion_contribution.
         ky_index = min(max((ny_full - 1) // 3, 0), ny_rows - 1)
-        kperp2_max = cache.kx[kx_index] ** 2 + cache.ky[ky_index] ** 2
+        ky_cut = getattr(cache, "ky_cut", None)
+        ky2_max = cache.ky[ky_index] ** 2 if ky_cut is None else ky_cut * ky_cut
+        kperp2_max = cache.kx[kx_index] ** 2 + ky2_max
         kperp2_max = jnp.where(kperp2_max > 0.0, kperp2_max, 1.0)
         hyperdiffusion_rate = jnp.asarray(params.D_hyper, dtype=real_dtype) * (
             kperp2 / kperp2_max
@@ -644,6 +647,8 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
         tz=params.tz,
         mask0=cache.mask0,
         devices=device_list,
+        jacobian=getattr(cache, "jacobian", None),
+        ky=getattr(cache, "ky", None),
     )
     return _streaming_electrostatic_from_phi_velocity_sharded(
         arr, cache, params, phi=phi, plan=plan, devices=device_list

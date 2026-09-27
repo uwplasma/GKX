@@ -10,6 +10,7 @@ import jax
 import numpy as np
 
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape, real_fft_mesh
+from gkx.core_ky_layout import HALF, source_ky_layout, source_ny_full
 from gkx.solvers_linear_implicit import _build_implicit_operator
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
@@ -189,7 +190,7 @@ def _build_nonlinear_cfl_bounds(
     laguerre_velocity_max_fn: Callable[[int], float],
 ) -> _NonlinearCFLBounds:
     nx = int(grid.kx.size)
-    ny = int(grid.ky.size)
+    ny = source_ny_full(grid)
     kx = jnp.asarray(cache.kx, dtype=real_dtype)
     ky = jnp.asarray(cache.ky, dtype=real_dtype)
     nl = int(cache.l.shape[0])
@@ -371,18 +372,18 @@ def _compressed_real_cfl_gradient(
     if use_batched_fft:
         grad = jnp.stack([imag * kx_b * field_nyc, imag * ky_b * field_nyc], axis=0)
         grad = (
-            jnp.fft.irfft2(grad, s=(grid.kx.size, grid.ky.size), axes=(-2, -3))
+            jnp.fft.irfft2(grad, s=(grid.kx.size, source_ny_full(grid)), axes=(-2, -3))
             * ifft_scale
         )
         return grad[0], grad[1]
     dfdx = jnp.fft.irfft2(
         imag * kx_b * field_nyc,
-        s=(grid.kx.size, grid.ky.size),
+        s=(grid.kx.size, source_ny_full(grid)),
         axes=(-2, -3),
     )
     dfdy = jnp.fft.irfft2(
         imag * ky_b * field_nyc,
-        s=(grid.kx.size, grid.ky.size),
+        s=(grid.kx.size, source_ny_full(grid)),
         axes=(-2, -3),
     )
     return dfdx * ifft_scale, dfdy * ifft_scale
@@ -506,20 +507,22 @@ def _nonlinear_cfl_frequency_components(
 
     phi = fields.phi
 
-    ny = int(grid.ky.size)
+    ny = source_ny_full(grid)
     nyc = 1 + ny // 2
 
     real_dtype = jnp.real(jnp.empty((), dtype=phi.dtype)).dtype
     kxfac_val = jnp.asarray(kxfac, dtype=real_dtype)
     imag = jnp.asarray(1j, dtype=phi.dtype)
 
-    fft_norm = float(grid.ky.size * grid.kx.size)
+    fft_norm = float(ny * grid.kx.size)
     ifft_scale = jnp.asarray(fft_norm, dtype=real_dtype)
     use_batched_fft = jax.default_backend() != "cpu"
 
     if compressed_real_fft:
-        _, ky_vals, kx_nyc, ky_nyc = real_fft_mesh(cache.kx_grid, cache.ky_grid)
-        nyc = int(ky_vals.shape[0])
+        kx_r, _, kx_nyc, ky_nyc = real_fft_mesh(cache.kx_grid, cache.ky_grid)
+        if source_ky_layout(grid) == HALF:  # real_fft_mesh re-sliced a half axis
+            ky_nyc, kx_nyc = jnp.meshgrid(cache.ky_grid[:, 0], kx_r, indexing="ij")
+        nyc = int(ky_nyc.shape[0])
         kx_b = _broadcast_grid(kx_nyc, phi[:nyc, :, :].ndim)
         ky_b = _broadcast_grid(ky_nyc, phi[:nyc, :, :].ndim)
     else:

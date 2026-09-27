@@ -1290,6 +1290,102 @@ def test_build_linear_cache_keeps_linked_end_damping_on_selected_positive_ky_gri
     assert int(np.asarray(grid.ky_mode)[0]) > 0
 
 
+@pytest.mark.parametrize("ky_layout", ["full", "half"])
+@pytest.mark.parametrize("nx", [1, 4])
+def test_selected_ky_hyperdiffusion_keeps_the_parent_grid_cutoff(
+    only_term_config, spectral_grid, nx, ky_layout
+):
+    """GX normalizes ``Dfac`` by the full grid's dealiased ``k_perp^2`` corner.
+
+    A ky scan runs every mode on a one-row :func:`select_ky_grid` slice; the
+    slice has to damp each mode exactly as the full grid does, not normalize
+    by its own ``ky`` and hand every mode the full ``D_hyper``.
+    """
+
+    grid_full = spectral_grid(
+        Nx=nx,
+        Ny=24,
+        Nz=8,
+        Lx=62.8,
+        y0=10.0,
+        boundary="periodic",
+        ky_layout=ky_layout,
+    )
+    geom = SAlphaGeometry.from_config(GeometryConfig(s_hat=0.8))
+    params = LinearParams(D_hyper=0.05, p_hyper_kperp=2.0)
+    term_cfg = only_term_config(hyperdiffusion=1.0)
+    G_full = jnp.ones((1, 1, int(grid_full.ky.size), nx, 8), dtype=jnp.complex128)
+    cache_full = build_linear_cache(grid_full, geom, params, Nl=1, Nm=1)
+    _rhs, _fields, contrib_full = assemble_rhs_terms_cached(
+        G_full, cache_full, params, terms=term_cfg
+    )
+    hyper_full = np.asarray(contrib_full["hyperdiffusion"])
+    # A linear slice unmasks every kx column (select_ky_grid); only the
+    # columns the parent grid keeps exist in GX, so only those are compared.
+    kept_kx = np.asarray(grid_full.dealias_mask)[0]
+    for iky in (1, 3, 7):
+        grid = select_ky_grid(grid_full, iky)
+        cache = build_linear_cache(grid, geom, params, Nl=1, Nm=1)
+        _rhs, _fields, contrib = assemble_rhs_terms_cached(
+            G_full[:, :, iky : iky + 1], cache, params, terms=term_cfg
+        )
+        np.testing.assert_allclose(
+            np.asarray(contrib["hyperdiffusion"])[..., kept_kx, :],
+            hyper_full[..., iky : iky + 1, kept_kx, :],
+            rtol=1.0e-12,
+            atol=0.0,
+        )
+    # A mode well inside the cutoff is damped by (k_perp^2 / k_perp,max^2)^p,
+    # a small fraction of D_hyper.
+    rate = -np.real(hyper_full[0, 0, 1, 0, 0])
+    assert 0.0 < rate < 0.05
+
+
+def test_single_ky_linear_run_with_hyperdiffusion_matches_the_full_grid_row(
+    only_terms, spectral_grid
+):
+    """One Euler step of the linked linear system: ky slice vs full grid row."""
+
+    grid_full = spectral_grid(
+        Nx=1,
+        Ny=24,
+        Nz=16,
+        Lx=62.8,
+        y0=10.0,
+        boundary="linked",
+    )
+    geom = SAlphaGeometry.from_config(GeometryConfig(s_hat=0.8))
+    params = LinearParams(D_hyper=0.05, p_hyper_kperp=2.0)
+    terms = replace(LinearTerms(), hyperdiffusion=1.0)
+    rng = np.random.default_rng(7)
+    shape = (2, 3, int(grid_full.ky.size), 1, 16)
+    G_full = jnp.asarray(
+        rng.standard_normal(shape) + 1j * rng.standard_normal(shape),
+        dtype=jnp.complex128,
+    )
+    out_full, _phi = integrate_linear(
+        G_full, grid_full, geom, params, dt=0.05, steps=1, method="euler", terms=terms
+    )
+    for iky in (1, 4):
+        grid = select_ky_grid(grid_full, iky)
+        out, _phi = integrate_linear(
+            G_full[:, :, iky : iky + 1],
+            grid,
+            geom,
+            params,
+            dt=0.05,
+            steps=1,
+            method="euler",
+            terms=terms,
+        )
+        np.testing.assert_allclose(
+            np.asarray(out),
+            np.asarray(out_full)[:, :, iky : iky + 1],
+            rtol=1.0e-10,
+            atol=1.0e-12,
+        )
+
+
 @pytest.mark.parametrize("rate", [None, 0.5])
 def test_linear_integrator_applies_linked_end_damping_per_step(
     only_term_config, only_terms, spectral_grid, rate
