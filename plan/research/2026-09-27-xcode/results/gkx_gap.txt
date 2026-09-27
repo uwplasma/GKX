@@ -1,0 +1,5 @@
+RESULT {"variant": "base", "Nl": 8, "Nm": 24, "ky": 0.3, "gamma": 0.1286501828301438, "omega": 0.2129599440490723, "wall_s": 809.5}
+RESULT {"variant": "nodrift", "Nl": 16, "Nm": 48, "ky": 0.3, "gamma": 0.027912685228548634, "omega": 0.1300186877538743, "wall_s": 2434.8}
+RESULT {"variant": "nodrift", "Nl": 8, "Nm": 24, "ky": 0.3, "gamma": 0.029373070120818124, "omega": 0.12959157274325858, "wall_s": 494.8}
+RESULT {"variant": "nodrift_nomirror", "Nl": 8, "Nm": 24, "ky": 0.3, "gamma": 0.01392405485209126, "omega": 0.05032585549713489, "wall_s": 249.3}
+RESULT {"variant": "nomirror", "Nl": 8, "Nm": 24, "ky": 0.3, "gamma": 0.11114711733474855, "omega": 0.2134893980039048, "wall_s": 733.8}

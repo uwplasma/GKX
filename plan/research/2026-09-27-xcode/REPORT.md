@@ -1,0 +1,117 @@
+# Cross-code benchmark record, 2026-09-27 (BUG-XCODE lane: VAL-REF, VAL-XCODE, VAL-KE, EM-B-PAR)
+
+This record covers runs on the office host: 2x RTX A4000 and 36 cores, shared with other users. The load average was 40–100 while the runs were going, so wall times are not benchmark timings and are not cited as such.
+
+Software:
+- GKX at `main` `cf1d40828` (2.4.0), JAX 0.10.2, SOLVAX 0.26.0.
+- GS2 8.2.1 and stella v1.0 (`058d98db`), the builds from the 2026-09-14 Q20 campaign (`plan/research/scripts/2026-09-14-cross-code-cyclone/`). That campaign's case generator `cases.py` and fitter `fit.py` are reused unchanged.
+
+Units: every number is in GX/GKX units (Lref = a, vt = sqrt(T/m)). GS2 and stella values are converted with gamma_gx = sqrt(2) gamma_code and ky_gs2 = sqrt(2) ky_gx (Q20 manifest `[normalization]`).
+
+Files:
+- `scripts/`: case generators and run queues. They run from a bench directory given by `$BENCH`.
+- `results/`: raw fits and extracts. `supervisors.txt` holds the start, end, rc and wall time of every grid-code run.
+
+## 1. VAL-REF: GX goldens regenerated with the repaired end-damping build
+
+Plan §3.7 voids four GX goldens because `dampEnds_linked` does not loop past the launch cap: `Nz*Nl*Nm = 73,728` exceeds 65,535.
+
+The four decks were rerun with the labelled repaired build (`gx` sha256 `96a53403…`). It is GX `3865a537` with two changes:
+- a grid-stride loop in `dampEnds_linked`;
+- a rearrangement of the kz-hypercollision coefficient that avoids float32 overflow but is algebraically identical.
+
+The inputs are the upstream decks, unchanged except for geometry. The Miller cases read the geometry file that the Miller module had already written for the originals (`geo_option = "eik"`), because the run harness has no Python for the geometry module. File hashes are in `results/gx_runs.txt`; upstream golden hashes are in `results/gx_golden_sha256.txt`.
+
+Final-sample gamma of the repaired build against the upstream golden (`results/gx_repaired_96a53403.txt`, `results/gx_upstream_goldens.txt`):
+
+| Golden | ky points | max \|Δγ\|/γ | at ky | excluding ky ≤ 0.1 | max \|Δω\|/ω |
+|---|---:|---:|---:|---:|---:|
+| Cyclone s-α adiabatic | 11 | 0.46% | 0.05 | 0.06% | 1.05% (ky .05) |
+| Cyclone Miller adiabatic | 15 | 0.27% | 0.10 | 0.04% | 1.04% (ky .05) |
+| Miller kinetic electrons (t = 40) | 7 | 43.5% | 0.10 | 4.7% (ky .7); 1.0% at ky .3; 0.00% at ky .5 | 0.69% |
+| KBM Miller, A∥ only (t = 40) | 5 | 5.0% | 0.10 | 0.28% | 0.35% |
+
+**Finding: the clamp does not explain the published disagreements.**
+- For both adiabatic Cyclone goldens the clamp is immaterial: ≤ 0.06% above ky = 0.1, inside the 0.3% build floor recorded in §3.7's reproduction.
+- The large low-ky differences in the two t = 40 decks come from the final sample of a mode that has not yet separated from the transient by t = 40. The two builds differ in float32 summation order, and this shows up only at the lowest ky, where the growth rate is smallest. It is not an end-damping effect.
+- So the disagreements published against these goldens (6.83% s-α, 5.51% Miller, 20.0% KBM) cannot be attributed to the clamp.
+
+**GKX against the repaired goldens.**
+- The certified adaptive eigenpairs (Q20, Nl16/Nm48, residual ≤ 1e-13) agree with the repaired build to 0.05% at s-α ky .30 (0.093091 vs 0.093049) and at Miller ky .55 (0.125975 vs 0.125906).
+- The shipped parity table `docs/_static/cyclone_mismatch_table.csv` is a time-trace fit. Against the same golden it is 8.3% high at ky .15 and 8.5% low at ky .20.
+- The headline disagreement is therefore a property of that fitted table, not of the GKX eigenvalue. Section 5 lists the certified eigenpairs at the other ky.
+
+## 2. VAL-XCODE: stella's 1.4x on Cyclone, term by term (circular Miller, ky = 0.30)
+
+Every code runs the same physics (Q20 case M): stella on the r1 grid (converged to 0.1% against r3 in Q20), GS2 on r3, and GKX as a certified eigenpair.
+
+| Variant | GS2 γ | stella γ | GKX γ (Nl8/Nm24) | GKX γ (Nl16/Nm48) |
+|---|---:|---:|---:|---:|
+| base | 0.12546 | 0.17481 | 0.12865 | section 5 |
+| mirror off | — (no knob) | 0.17536 (+0.3%) | 0.11115 (−13.6%) | — |
+| both drifts off | decays, unsettled at t = 300 | decays, unsettled | 0.02937 | 0.02791 |
+| drifts and mirror off | — | φ vanishes | 0.01392 | — |
+| stella mirror explicit | — | 0.17481 (identical) | — | — |
+
+**Finding 1: stella's growth rate does not respond to its mirror term.**
+- Removing the mirror term moves stella's γ by +0.3%. Switching the mirror to the explicit scheme reproduces the implicit result to every printed digit.
+- In GKX the mirror force is worth 14% of γ at this ky.
+- A term the stella build does not respond to is the first concrete lead on the 1.40–1.47x excess.
+- The excess is not a normalization. stella's ω is only 1.17x high, and a pure time or ky rescaling would move γ and ω together.
+
+**Finding 2: the no-drift limit differs between codes.**
+- With both drifts off, GKX keeps a weakly unstable slab branch: γ = 0.028, converged to 5% between Nl8/Nm24 and Nl16/Nm48.
+- GS2 and stella decay over t = 300 code units without settling.
+- Longer runs (t = 1500 code units, `gap_*_nodrift_t1500`) will show whether the grid codes have the same branch at a smaller rate, or none.
+- Until those finish, this is an open cross-code difference, not a GKX bug.
+
+**Next step for the stella excess.** Repeat the knockout with stella's `mirror_semi_lagrange = .false.` and with `vpa_max = 4`. Add a GS2 run on stella r1's ntheta and velocity resolution. Together these separate a velocity-grid effect from a mirror-term defect in the v1.0 build.
+
+## 3. VAL-KE: Cyclone Miller with kinetic electrons (m_e/m_i = 2.7e-4, β = 1e-5 with A∥)
+
+GS2 rungs, each run to 100 code-time units:
+- e2: ntheta 32, nperiod 2, negrid 12, ngauss 6, Δt .02.
+- e3: ntheta 48, nperiod 3, negrid 16, ngauss 8, Δt .01.
+
+| ky | GS2 e2 | GS2 e3 | e2→e3 | GX upstream (t = 40) | GX repaired (t = 40) | GS2 e3 vs GX repaired |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0.10 | 0.07741 | 0.08396 (unsettled) | +8.5% | 0.07091 | 0.10176 | — (neither settled) |
+| 0.30 | 0.23482 | 0.23484 | 0.01% | 0.23443 | 0.23209 | +1.2% |
+| 0.50 | 0.25533 | 0.25354 | −0.7% | 0.25409 | 0.25410 | −0.2% |
+
+ω at ky .30 / .50: GS2 e3 gives 0.2210 / 0.4571; GX repaired gives 0.2365 / 0.4677.
+
+**Finding: first independent kinetic-electron reference.**
+- GS2 and GX agree on the kinetic-electron growth rate to 1.2% at ky .30 and 0.2% at ky .50. The GS2 value is converged to 0.7% over two rungs.
+- This is the first independent reference for the Miller kinetic-electron cell: rank 5, two external codes.
+- The GKX side is the remaining step (VAL-KE): a certified two-species eigenpair at Nl16/Nm48, about 1 h per ky on office CPU.
+
+## 4. EM: KBM at β = 1.5%, A∥ only and with B∥ (EM-B-PAR)
+
+| ky | GS2 A∥ e2 | GS2 A∥ e3 | GS2 A∥+B∥ e2 | GX A∥ upstream (t = 40) | GX A∥ repaired |
+|---:|---:|---:|---:|---:|---:|
+| 0.10 | 0.07807 | 0.13463 | 0.19364 | 0.20305 | 0.21323 |
+| 0.30 | 0.26185 | `results/fit_grid_codes.csv` | 0.35765 | 0.31411 | 0.31392 |
+| 0.50 | 0.14093 | `results/fit_grid_codes.csv` | 0.18867 | 0.17432 | 0.17418 |
+
+**Finding: no GS2 KBM number is cited yet.**
+- GS2's two-field KBM is not converged at e2/e3: γ changes 72% between rungs at ky .10.
+- The GX KBM golden can be called independently confirmed only after the e3 rung at the remaining ky and a finer e4 rung.
+- At e2, adding B∥ raises GS2's γ by 25–150%. That is the size of effect EM-B-PAR has to resolve.
+
+## 5. GKX certified eigenpairs against the repaired goldens
+
+`results/gkx_cert.txt` has one line per (geometry, ky) from `run_runtime_linear(solver="krylov")` at Nl16/Nm48. Lines are added as the office queue finishes.
+
+## 6. GS2 at s-α ky = 0.55 (energy-grid limit)
+
+The Q20 ladder r1–r4 did not converge: r3 → r4 moved γ by +20.9%. Two further rungs at ntheta 64 / nperiod 4 are queued, and their results go into `results/fit_grid_codes.csv`:
+- r5: negrid 32, ngauss 12.
+- r6: negrid 48, ngauss 16.
+
+## What is promoted, and what is not
+
+Nothing in this record is promoted into ledger rows or fixtures:
+- The repaired goldens reproduce the upstream ones to 0.06% for the two adiabatic cases, so they change no fixture value.
+- The GS2–GX kinetic-electron agreement is two external codes against each other. It becomes a GKX ledger row only with the GKX eigenpair next to it.
+- Wall times were taken on a host at load 40–100, so they are not time-to-solution evidence under §5.1.
