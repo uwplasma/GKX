@@ -20673,3 +20673,4 @@ Outcome:
 - accepted pending CI
 - remaining blocker: the `runtime` <-> `workflows` cycle
 - next task: inventory rank 1 (`workflows` + `runtime` + `*Deps` records -> `solve/`), then rank 2 (diagnostics timesteppers)
+- CI (#300, head `1de9db021`): `ci-required` green, all 41 checks pass. linear-core exceeded its 25-minute limit once it carried the merged physics gates; the collision/Hermite gates moved to release-artifacts and the Krylov suite to model-artifacts. nonlinear-core now takes 26.6 of its 30 minutes.
