@@ -2858,3 +2858,77 @@ def test_masking_a_supplied_half_state_keeps_the_chain_rows_untouched(
     mask = np.asarray(linked)
     kept = np.where(mask[None, None, None, :, :, None], np.asarray(state), 0.0)
     np.testing.assert_array_equal(out, kept)
+
+
+# ---- from fix/half-layout-cfl (#306) ----
+
+
+@pytest.mark.parametrize("ny", (12, 16, 15))
+def test_the_explicit_cfl_bound_is_the_same_in_both_layouts(ny: int) -> None:
+    """The CFL reads the two-sided extent, not the stored row count.
+
+    Slicing an already-half axis again, or indexing it at ``(Nyc-1)//3``,
+    halves ``ky_max`` and lets the adaptive step run past the true CFL.
+    """
+
+    from gkx.operators.nonlinear.policies import (
+        _build_nonlinear_cfl_bounds,
+        _nonlinear_cfl_frequency_components,
+    )
+    from gkx.solvers_time_explicit_cfl import (
+        _grid_frequency_bounds,
+        _laguerre_velocity_max,
+        _linear_frequency_bound,
+    )
+    from gkx.terms.config import FieldState
+
+    nx, nz, nl, nm = 8, 4, 2, 2
+    full_grid, half_grid, full_cache, half_cache, params = _caches(ny, nx, nz, nl, nm)
+    geom = _geometry()
+    bf, bh = _grid_frequency_bounds(full_grid), _grid_frequency_bounds(half_grid)
+    np.testing.assert_array_equal(bh.ky, bf.ky)
+    assert bh.ky_max == bf.ky_max
+    np.testing.assert_array_equal(
+        _linear_frequency_bound(half_grid, geom, params, nl, nm),
+        _linear_frequency_bound(full_grid, geom, params, nl, nm),
+    )
+
+    bounds = [
+        _build_nonlinear_cfl_bounds(
+            grid,
+            geom,
+            params,
+            cache,
+            real_dtype=jnp.float64,
+            linear_frequency_bound_fn=_linear_frequency_bound,
+            laguerre_velocity_max_fn=_laguerre_velocity_max,
+        )
+        for grid, cache in ((full_grid, full_cache), (half_grid, half_cache))
+    ]
+    assert float(bounds[1].ky_max) == float(bounds[0].ky_max)
+    np.testing.assert_array_equal(bounds[1].linear_omega, bounds[0].linear_omega)
+
+    half, full = _states(ny, nx, nz, 1, 1, seed=7)
+    kwargs = dict(
+        compressed_real_fft=True,
+        kx_max=bounds[0].kx_max,
+        ky_max=bounds[0].ky_max,
+        kxfac=1.0,
+        vpar_max=1.0,
+        muB_max=1.0,
+    )
+    omega_full = _nonlinear_cfl_frequency_components(
+        FieldState(phi=full[0, 0, 0], apar=None, bpar=None),
+        full_grid,
+        full_cache,
+        **kwargs,
+    )
+    omega_half = _nonlinear_cfl_frequency_components(
+        FieldState(phi=half[0, 0, 0], apar=None, bpar=None),
+        half_grid,
+        half_cache,
+        **kwargs,
+    )
+    np.testing.assert_allclose(
+        np.asarray(omega_half), np.asarray(omega_full), rtol=1e-12, atol=0.0
+    )

@@ -1051,7 +1051,6 @@ def test_serial_reference_matches_canonical_zonal_value_and_gradient() -> None:
     assert jnp.allclose(observed_grad, expected_grad, rtol=1.0e-5, atol=1.0e-5)
 
 
-<<<<<<< HEAD
 # ---- from test_terms_assembly.py ----
 
 
@@ -2167,7 +2166,8 @@ def test_stacked_linked_fft_validates_operands() -> None:
         _linked_fft_apply((f, f[..., :2]), idx, kz, operator=("grad", "abs"))
     with pytest.raises(ValueError, match="unsupported linked FFT operator"):
         _linked_fft_apply((f, f), idx, kz, operator=("grad", "curl"))
-=======
+
+
 @pytest.mark.parametrize("beta", [0.0, 0.05])
 def test_adiabatic_ion_zonal_field_solve_has_no_flux_surface_average(beta) -> None:
     """Boltzmann ions (kinetic electrons only) take GX ``qneutAdiab`` at ky = 0.
@@ -2212,4 +2212,3 @@ def test_adiabatic_ion_zonal_field_solve_has_no_flux_surface_average(beta) -> No
             np.asarray(nbar / (params.tau_e + qneut)),
             rtol=1.0e-6,
         )
->>>>>>> 9ca00aa121a215c2ba68305d36ce7ad016c32ac7
