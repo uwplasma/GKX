@@ -1738,71 +1738,6 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.objectives.sampling"
-path = "src/gkx/objectives/sampling.py"
-owner_lane = "production solver-objective geometry-gradient validation"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "physical wavenumber scan definitions for gyrokinetic optimization studies",
-  "weighted multi-point objective aggregation for stellarator optimization gates",
-]
-physics_contracts = [
-  "optimization and validation studies specify physical ky rho_i values rather than implementation-specific FFT row numbers",
-  "multi-surface, multi-field-line, and multi-ky aggregate objectives record normalized sample weights",
-]
-numerics_contracts = [
-  "requested ky values must be positive integer multiples of the base spectral spacing",
-  "generated Ly, Ny, and FFT row indices must reproduce requested physical ky values within tolerance",
-  "aggregate weights must be finite, positive-sum, and normalized before objective reduction",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/vmec_boozer_multi_point_objective_gate.json",
-  "docs/_static/vmec_boozer_multi_point_objective_gate.png",
-]
-next_tests = [
-  "add physical-ky duplicate/roundoff tests for denser stellarator scan grids",
-  "extend aggregate-weight tests to multi-surface optimizer portfolio artifacts",
-]
-
-[[modules]]
-module = "gkx.objectives.vmec_boozer"
-path = "src/gkx/objectives/vmec_boozer.py"
-owner_lane = "production solver-objective geometry-gradient validation"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "VMEC/Boozer in-memory geometry bridge used by differentiable stellarator objectives",
-  "multi-surface, multi-field-line, and multi-ky objective aggregation for optimization gates",
-]
-physics_contracts = [
-  "VMEC/Boozer objective plumbing must separate geometry-bridge options from linear solver-objective options before expensive backend calls",
-  "sample metadata must record surface, toroidal flux, field-line alpha, and physical ky mappings used by aggregate optimization objectives",
-  "scalar reductions must keep smooth mean and weighted-mean paths distinct from nonsmooth max diagnostics",
-]
-numerics_contracts = [
-  "unknown VMEC/Boozer objective options fail closed before backend execution",
-  "physical ky table rows reuse the validated spectral-grid mapping and record resolved ky errors",
-  "weighted reductions normalize finite positive-sum weights before multiplying solver objective rows",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/vmec_boozer_multi_point_objective_gate.json",
-  "docs/_static/vmec_boozer_multi_point_objective_gate.png",
-]
-next_tests = [
-  "add direct module-level tests for dependency-injected backend and objective callables",
-  "extend aggregate-objective fixtures to multiple torflux samples and physical ky grids",
-]
-
-[[modules]]
 module = "gkx.objectives.portfolio"
 path = "src/gkx/objectives/portfolio.py"
 owner_lane = "objective portfolio reduction, sensitivity, conditioning, and covariance"
@@ -1869,41 +1804,6 @@ artifact_paths = [
 next_tests = [
   "add direct ObjectiveTerm metadata fixtures for every transform and transport kind",
   "add real VMEC/Boozer fixture coverage for every supported transport objective kind",
-]
-
-[[modules]]
-# stellarator_tables was fused into stellarator: it had one consumer that
-# imported five of its names, and the seam between them (_sync_table_dependencies)
-# rebound an attribute the two modules already shared, so it was a no-op kept for
-# monkeypatching that no test performs. The row now owns the surviving module.
-module = "gkx.objectives.stellarator"
-path = "src/gkx/objectives/stellarator.py"
-owner_lane = "reduced and VMEC/Boozer stellarator ITG objective table and portfolio gates"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "multi-surface and multi-field-line stellarator ITG objective reduction",
-  "VMEC/Boozer row-producer parity before differentiable geometry optimization claims",
-]
-physics_contracts = [
-  "surface, field-line, ky, and objective axes must stay explicit in table artifacts",
-  "reduced portfolio gates are not nonlinear turbulent-flux optimization claims",
-]
-numerics_contracts = [
-  "sample and objective weights are finite, non-negative, shape checked, and normalized",
-  "portfolio scalar reductions pass AD/FD, conditioning, and covariance gates before promotion",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/stellarator_itg_portfolio_gate.json",
-  "docs/_static/stellarator_itg_portfolio_gate.png",
-  "docs/_static/vmec_boozer_multi_point_objective_gate.json",
-]
-next_tests = [
-  "add direct VMEC/Boozer table fixtures that cover objective selection and sample-axis reshaping",
 ]
 
 [[modules]]

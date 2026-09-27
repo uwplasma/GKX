@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Literal, cast
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -20,8 +21,7 @@ from gkx.objectives.core import (
     SOLVER_OBJECTIVE_NAMES,
     solver_growth_rate_from_geometry,
 )
-from gkx.objectives.portfolio import aggregate_objective_portfolio
-from gkx.objectives.stellarator import StellaratorITGSampleSet, smooth_positive
+from gkx.objectives.portfolio import PortfolioReduction, aggregate_objective_portfolio
 
 
 VMEXTransportObjectiveKind = Literal[
@@ -30,6 +30,77 @@ VMEXTransportObjectiveKind = Literal[
     "nonlinear_window_heat_flux",
 ]
 VMEXTransportObjectiveTransform = Literal["raw", "scaled", "log1p"]
+
+
+def _smooth_positive(x: jnp.ndarray | float, *, beta: float = 18.0) -> jnp.ndarray:
+    """Smooth positive part used to keep objectives differentiable near marginality."""
+
+    arr = jnp.asarray(x)
+    beta_arr = jnp.asarray(beta, dtype=arr.dtype)
+    return jax.nn.softplus(beta_arr * arr) / beta_arr
+
+
+@dataclass(frozen=True)
+class StellaratorITGSampleSet:
+    """Reduced multi-surface/multi-alpha/multi-``k_y`` ITG portfolio contract."""
+
+    surfaces: tuple[float, ...] = (0.50, 0.64, 0.78)
+    alphas: tuple[float, ...] = (0.0, 1.0471975511965976)
+    ky_values: tuple[float, ...] = (0.10, 0.30, 0.50)
+    surface_weights: tuple[float, ...] | None = None
+    alpha_weights: tuple[float, ...] | None = None
+    ky_weights: tuple[float, ...] | None = None
+    reduction: PortfolioReduction = "weighted_mean"
+
+    def __post_init__(self) -> None:
+        for name, values in (
+            ("surfaces", self.surfaces),
+            ("alphas", self.alphas),
+            ("ky_values", self.ky_values),
+        ):
+            arr = np.asarray(values, dtype=float)
+            if arr.ndim != 1 or arr.size < 1 or not np.all(np.isfinite(arr)):
+                raise ValueError(f"{name} must be a non-empty finite vector")
+        if np.any(np.asarray(self.ky_values, dtype=float) <= 0.0):
+            raise ValueError("ky_values must be positive")
+        for name, weights, expected in (
+            ("surface_weights", self.surface_weights, len(self.surfaces)),
+            ("alpha_weights", self.alpha_weights, len(self.alphas)),
+            ("ky_weights", self.ky_weights, len(self.ky_values)),
+        ):
+            if weights is None:
+                continue
+            arr = np.asarray(weights, dtype=float)
+            if arr.ndim != 1 or arr.size != expected or not np.all(np.isfinite(arr)):
+                raise ValueError(f"{name} must be a finite length-{expected} vector")
+            if np.any(arr < 0.0) or float(np.sum(arr)) <= 0.0:
+                raise ValueError(f"{name} must be non-negative with positive sum")
+        if self.reduction not in ("weighted_mean", "mean", "max"):
+            raise ValueError("reduction must be weighted_mean, mean, or max")
+
+    @property
+    def n_samples(self) -> int:
+        """Number of surface/alpha/ky samples in the rectangular portfolio."""
+
+        return len(self.surfaces) * len(self.alphas) * len(self.ky_values)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation."""
+
+        return {
+            "surfaces": list(self.surfaces),
+            "alphas": list(self.alphas),
+            "ky_values": list(self.ky_values),
+            "surface_weights": None
+            if self.surface_weights is None
+            else list(self.surface_weights),
+            "alpha_weights": None
+            if self.alpha_weights is None
+            else list(self.alpha_weights),
+            "ky_weights": None if self.ky_weights is None else list(self.ky_weights),
+            "reduction": self.reduction,
+            "n_samples": self.n_samples,
+        }
 
 
 def _module_search_root(module_name: str) -> Path | None:
@@ -188,7 +259,7 @@ def _solver_table_to_nonlinear_window_proxy(
     gamma = jnp.asarray(table[..., idx["gamma"]])
     kperp_eff2 = jnp.asarray(table[..., idx["kperp_eff2"]])
     heat_weight = jnp.asarray(table[..., idx["linear_heat_flux_weight"]])
-    gamma_plus = smooth_positive(gamma, beta=18.0)
+    gamma_plus = _smooth_positive(gamma, beta=18.0)
     saturation = 1.0 + 2.2 * jnp.maximum(kperp_eff2, 0.0) + 0.15 * gamma_plus
     mean_energy = (
         2.0

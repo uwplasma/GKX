@@ -897,19 +897,6 @@ Solver Objective Core
 .. automodule:: gkx.objectives.core
    :members:
 
-Solver Objective Sampling
--------------------------
-
-.. automodule:: gkx.objectives.sampling
-   :members:
-
-Solver VMEC/Boozer Objectives
------------------------------
-
-.. automodule:: gkx.objectives.vmec_boozer
-   :members:
-   :private-members:
-
 Parallel Decomposition Contracts
 --------------------------------
 
@@ -922,13 +909,6 @@ VMEC-JAX Transport Objective
 .. automodule:: gkx.objectives.vmec_transport
    :members:
    :private-members:
-
-Stellarator ITG Objectives
---------------------------
-
-.. automodule:: gkx.objectives.stellarator
-   :members:
-   :no-index:
 
 Stellarator Objective Portfolios
 --------------------------------
