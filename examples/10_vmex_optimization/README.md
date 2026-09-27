@@ -18,9 +18,9 @@ pip install "vmex[turbulence]"   # gkx>=2.4.0
 ```
 
 VMEX assembles least-squares Jacobians in forward mode. A reverse-only GKX
-objective, such as `solver_growth_rate_from_geometry` (its
-`dominant_real_eigenvalue` is a `custom_vjp`, and so is the `sparse-direct`
-route), fails there with "can't apply forward-mode autodiff (jvp) to a
+objective, such as `solver_growth_rate_from_geometry` with the default
+`eigensolver="dense"` (its `dominant_real_eigenvalue` is a `custom_vjp`),
+fails there with "can't apply forward-mode autodiff (jvp) to a
 custom_vjp function"; use VMEX's `turbulent_growth_rate` (dense `eigvals`) for
 least squares, or VMEX's scalar `from_loss` route. The nonlinear window is
 differentiable in both modes; the nonlinear script takes the scalar route
