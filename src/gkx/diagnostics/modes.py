@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
-from pathlib import Path
 
 import numpy as np
 
@@ -287,50 +285,6 @@ def compare_eigenfunctions(
     )
 
 
-def save_eigenfunction_reference_bundle(
-    path: str | Path,
-    *,
-    theta: np.ndarray,
-    mode: np.ndarray,
-    source: str,
-    case: str,
-    metadata: dict[str, object] | None = None,
-) -> Path:
-    """Write a frozen reference eigenfunction bundle as ``.npz``."""
-
-    out = Path(path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(
-        out,
-        theta=np.asarray(theta, dtype=float),
-        mode=np.asarray(mode, dtype=np.complex128),
-        source=np.asarray(str(source)),
-        case=np.asarray(str(case)),
-        metadata_json=np.asarray(json.dumps(metadata or {}, sort_keys=True)),
-    )
-    return out
-
-
-def load_eigenfunction_reference_bundle(
-    path: str | Path,
-) -> EigenfunctionReferenceBundle:
-    """Load a frozen reference eigenfunction bundle."""
-
-    data = np.load(Path(path), allow_pickle=False)
-    metadata_json = (
-        str(np.asarray(data["metadata_json"]).item())
-        if "metadata_json" in data
-        else "{}"
-    )
-    return EigenfunctionReferenceBundle(
-        theta=np.asarray(data["theta"], dtype=float),
-        mode=np.asarray(data["mode"], dtype=np.complex128),
-        source=str(np.asarray(data["source"]).item()),
-        case=str(np.asarray(data["case"]).item()),
-        metadata=json.loads(metadata_json),
-    )
-
-
 __all__ = [
     "EigenfunctionReferenceBundle",
     "EigenfunctionComparisonMetrics",
@@ -341,9 +295,7 @@ __all__ = [
     "extract_eigenfunction",
     "extract_mode",
     "extract_mode_time_series",
-    "load_eigenfunction_reference_bundle",
     "normalize_eigenfunction",
     "phase_align_eigenfunction",
-    "save_eigenfunction_reference_bundle",
     "select_ky_index",
 ]

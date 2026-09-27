@@ -5,29 +5,22 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from gkx.diagnostics.analysis import ModeSelection
 from gkx.benchmarking_shared import (
-    LinearRunResult,
     LinearScanResult,
 )
-from gkx.workflows.linear import run_linear_scan, run_scan_and_mode
+from gkx.workflows.linear import run_linear_scan
 from gkx.diagnostics.modes import (
     compare_eigenfunctions,
-    load_eigenfunction_reference_bundle,
     normalize_eigenfunction,
     phase_align_eigenfunction,
-    save_eigenfunction_reference_bundle,
 )
 from gkx.artifacts.io import load_diagnostic_time_series
 from gkx.artifacts.spectral_layout import infer_triple_dealiased_ny
 from gkx.diagnostics.analysis import (
-    BranchContinuationMetrics,
     LateTimeLinearMetrics,
     NonlinearHeatFluxConvergenceMetrics,
     NonlinearWindowMetrics,
-    branch_continuity_metrics,
     estimate_observed_order,
-    late_time_linear_metrics,
     nonlinear_heat_flux_convergence_metrics,
     windowed_nonlinear_metrics,
 )
@@ -35,13 +28,11 @@ from gkx.diagnostics.growth_windows import (
     _analytic_signal,
     _explicit_time_window,
     _leading_window,
-    late_time_window,
 )
 from gkx.diagnostics.validation_gates import (
     GateReport,
     ScalarGateResult,
     ZonalFlowResponseMetrics,
-    branch_continuity_gate_report,
     eigenfunction_gate_report,
     evaluate_scalar_gate,
     gate_report,
@@ -55,7 +46,7 @@ from gkx.diagnostics.validation_gates import (
 from gkx.diagnostics.modes import EigenfunctionComparisonMetrics
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.zonal_validation import zonal_flow_response_metrics
-from gkx.runtime import RuntimeLinearResult, RuntimeNonlinearResult
+from gkx.runtime import RuntimeNonlinearResult
 
 
 def test_normalize_eigenfunction_uses_nearest_zero() -> None:
@@ -109,38 +100,6 @@ def test_compare_eigenfunctions_handles_shape_and_zero_norm() -> None:
     )
     assert np.isnan(metrics.overlap)
     assert np.isnan(metrics.relative_l2)
-
-
-def test_eigenfunction_reference_bundle_roundtrip(tmp_path) -> None:
-    theta = np.linspace(-2.0, 2.0, 7)
-    mode = np.exp(1j * theta)
-    path = tmp_path / "reference_mode.npz"
-
-    out = save_eigenfunction_reference_bundle(
-        path,
-        theta=theta,
-        mode=mode,
-        source="GX",
-        case="kbm_linear",
-        metadata={"ky": 0.2, "note": "frozen"},
-    )
-    bundle = load_eigenfunction_reference_bundle(out)
-
-    assert out == path
-    np.testing.assert_allclose(bundle.theta, theta)
-    np.testing.assert_allclose(bundle.mode, mode)
-    assert bundle.source == "GX"
-    assert bundle.case == "kbm_linear"
-    assert bundle.metadata == {"ky": 0.2, "note": "frozen"}
-
-
-def test_late_time_window_returns_tail_bounds() -> None:
-    t = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
-
-    tmin, tmax = late_time_window(t, tail_fraction=0.4)
-
-    assert tmin == pytest.approx(3.0)
-    assert tmax == pytest.approx(4.0)
 
 
 def test_benchmarking_window_helpers_respect_bounds_and_validation() -> None:
@@ -775,166 +734,6 @@ def test_run_linear_scan_accepts_an_empty_scan() -> None:
     assert result.omega.shape == (0,)
 
 
-def test_run_scan_and_mode_uses_selected_ky_and_fit_window(monkeypatch) -> None:
-    selection = ModeSelection(ky_index=0, kx_index=0, z_index=1)
-    run = LinearRunResult(
-        t=np.array([0.0, 1.0, 2.0]),
-        phi_t=np.ones((3, 1, 1, 3), dtype=np.complex128),
-        gamma=0.4,
-        omega=-0.2,
-        ky=0.3,
-        selection=selection,
-    )
-    calls: list[dict[str, object]] = []
-
-    def fake_linear_fn(**kwargs):
-        calls.append(kwargs)
-        return run
-
-    monkeypatch.setattr(
-        "gkx.workflows.linear.extract_mode_time_series",
-        lambda phi_t, sel, method: np.array([1.0 + 0.0j, 2.0 + 0.0j, 4.0 + 0.0j]),
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.linear.fit_growth_rate_auto",
-        lambda t, signal, **kwargs: (0.5, -0.1, 0.25, 1.75),
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.linear.extract_eigenfunction",
-        lambda phi_t, t, selection, z, method, tmin, tmax: np.array([1.0, 2.0, 3.0]),
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.linear.build_spectral_grid",
-        lambda _grid: SimpleNamespace(z=np.array([-1.0, 0.0, 1.0])),
-    )
-    cfg = SimpleNamespace(grid=object())
-
-    result = run_scan_and_mode(
-        ky_values=np.array([0.1, 0.3]),
-        linear_fn=fake_linear_fn,
-        cfg=cfg,
-        Nl=2,
-        Nm=2,
-        dt=np.array([0.1, 0.2]),
-        steps=np.array([5, 6]),
-        method="rk2",
-        solver="time",
-        mode_solver="krylov",
-        krylov_cfg="kcfg",
-        window_kw={"window_fraction": 0.5},
-        resolution_policy=lambda ky: (3, 4) if ky < 0.2 else (5, 6),
-    )
-
-    assert result.ky_selected == 0.3
-    np.testing.assert_allclose(result.scan.gamma, [0.4, 0.4])
-    np.testing.assert_allclose(result.eigenfunction, [1.0, 2.0, 3.0])
-    assert result.tmin == 0.25
-    assert result.tmax == 1.75
-    assert calls[0]["solver"] == "time"
-    assert calls[1]["solver"] == "time"
-    assert calls[2]["solver"] == "krylov"
-    assert calls[2]["Nl"] == 5
-    assert calls[2]["Nm"] == 6
-    assert calls[2]["ky_target"] == 0.3
-
-
-def test_run_scan_and_mode_short_trace_skips_fit(monkeypatch) -> None:
-    run = LinearRunResult(
-        t=np.array([0.0]),
-        phi_t=np.ones((1, 1, 1, 2), dtype=np.complex128),
-        gamma=0.2,
-        omega=0.1,
-        ky=0.2,
-        selection=ModeSelection(ky_index=0, kx_index=0),
-    )
-
-    monkeypatch.setattr(
-        "gkx.workflows.linear.build_spectral_grid",
-        lambda _grid: SimpleNamespace(z=np.array([-1.0, 1.0])),
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.linear.extract_eigenfunction",
-        lambda *args, **kwargs: np.array([1.0, -1.0]),
-    )
-
-    result = run_scan_and_mode(
-        ky_values=np.array([0.2]),
-        linear_fn=lambda **kwargs: run,
-        cfg=SimpleNamespace(grid=object()),
-        Nl=1,
-        Nm=1,
-        dt=0.1,
-        steps=2,
-        method="rk2",
-        solver="time",
-        mode_solver="time",
-        krylov_cfg=None,
-        window_kw={"window_fraction": 0.5},
-        select_ky=lambda scan: float(scan.ky[0]),
-    )
-
-    assert result.tmin is None
-    assert result.tmax is None
-    np.testing.assert_allclose(result.eigenfunction, [1.0, -1.0])
-
-
-def test_late_time_linear_metrics_from_linear_run_result() -> None:
-    gamma = 0.35
-    omega = -0.18
-    t = np.linspace(0.0, 4.0, 9)
-    z_profile = np.array([1.0, 0.5 - 0.25j])
-    signal = np.exp((gamma - 1j * omega) * t)
-    phi_t = signal[:, None, None, None] * z_profile[None, None, None, :]
-    run = LinearRunResult(
-        t=t,
-        phi_t=phi_t,
-        gamma=gamma,
-        omega=omega,
-        ky=0.3,
-        selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
-        gamma_t=np.full_like(t, gamma, dtype=float),
-        omega_t=np.full_like(t, omega, dtype=float),
-    )
-
-    metrics = late_time_linear_metrics(run, tail_fraction=0.5)
-
-    assert metrics.signal_source == "phi_t:project"
-    assert metrics.nsamples == 5
-    assert metrics.gamma_fit == pytest.approx(gamma, rel=1.0e-3)
-    assert metrics.omega_fit == pytest.approx(omega, rel=1.0e-3)
-    assert metrics.gamma_tail_mean == pytest.approx(gamma)
-    assert metrics.omega_tail_mean == pytest.approx(omega)
-    assert metrics.tmin == pytest.approx(2.0)
-    assert metrics.tmax == pytest.approx(4.0)
-
-
-def test_late_time_linear_metrics_runtime_signal_and_scalar_fallback() -> None:
-    gamma = 0.22
-    omega = -0.07
-    t = np.linspace(0.0, 2.0, 5)
-    signal = np.exp((gamma - 1j * omega) * t)
-    runtime = RuntimeLinearResult(
-        ky=0.2,
-        gamma=gamma,
-        omega=omega,
-        selection=ModeSelection(ky_index=0, kx_index=0),
-        t=t,
-        signal=signal,
-    )
-
-    metrics = late_time_linear_metrics(runtime, tail_fraction=0.4)
-    assert metrics.signal_source == "signal"
-    assert metrics.gamma_fit == pytest.approx(gamma, rel=1.0e-3)
-    assert metrics.omega_fit == pytest.approx(omega, rel=1.0e-3)
-    assert metrics.nsamples == 2
-
-    scalar_only = late_time_linear_metrics(SimpleNamespace(gamma=0.1, omega=-0.2))
-    assert scalar_only.signal_source == "scalar"
-    assert scalar_only.gamma_fit == pytest.approx(0.1)
-    assert scalar_only.omega_fit == pytest.approx(-0.2)
-    assert scalar_only.nsamples == 1
-
-
 def test_windowed_nonlinear_metrics_from_runtime_result() -> None:
     diagnostics = SimulationDiagnostics(
         t=np.array([0.0, 1.0, 2.0, 3.0, 4.0]),
@@ -986,76 +785,6 @@ def test_windowed_nonlinear_metrics_rejects_missing_or_empty_diagnostics() -> No
     )
     with pytest.raises(ValueError):
         windowed_nonlinear_metrics(bad)
-
-
-def test_late_time_linear_metrics_without_signal_uses_tail_stats() -> None:
-    t = np.linspace(0.0, 4.0, 5)
-    result = SimpleNamespace(
-        t=t,
-        gamma=0.2,
-        omega=-0.1,
-        gamma_t=np.array([np.nan, 0.1, 0.2, 0.3, 0.4]),
-        omega_t=np.array([np.nan, -0.2, -0.3, -0.4, -0.5]),
-    )
-
-    metrics = late_time_linear_metrics(result, tail_fraction=0.4)
-
-    assert metrics.signal_source == "scalar"
-    assert metrics.gamma_fit == pytest.approx(0.2)
-    assert metrics.omega_fit == pytest.approx(-0.1)
-    assert metrics.gamma_tail_mean == pytest.approx(0.35)
-    assert metrics.omega_tail_mean == pytest.approx(-0.45)
-    assert metrics.gamma_tail_std == pytest.approx(0.05)
-    assert metrics.omega_tail_std == pytest.approx(0.05)
-
-
-def test_late_time_linear_and_windowed_nonlinear_metrics_validate_inputs() -> None:
-    with pytest.raises(ValueError):
-        late_time_linear_metrics(
-            SimpleNamespace(t=np.array([0.0, 1.0]), gamma=0.1, omega=0.2),
-            tail_fraction=0.0,
-        )
-    with pytest.raises(ValueError):
-        late_time_linear_metrics(
-            SimpleNamespace(t=np.array([[0.0, 1.0]]), gamma=0.1, omega=0.2)
-        )
-    with pytest.raises(ValueError):
-        late_time_linear_metrics(SimpleNamespace(t=np.array([]), gamma=0.1, omega=0.2))
-
-    bad_t = SimulationDiagnostics(
-        t=np.array([[0.0, 1.0]]),
-        dt_t=np.full(2, 0.1),
-        dt_mean=np.full(2, 0.1),
-        gamma_t=np.zeros(2),
-        omega_t=np.zeros(2),
-        Wg_t=np.ones(2),
-        Wphi_t=np.ones(2),
-        Wapar_t=np.zeros(2),
-        heat_flux_t=np.ones(2),
-        particle_flux_t=np.zeros(2),
-        energy_t=np.zeros(2),
-    )
-    with pytest.raises(ValueError):
-        windowed_nonlinear_metrics(bad_t)
-    with pytest.raises(ValueError):
-        windowed_nonlinear_metrics(
-            SimpleNamespace(
-                diagnostics=SimulationDiagnostics(
-                    t=np.array([0.0, 1.0]),
-                    dt_t=np.full(2, 0.1),
-                    dt_mean=np.full(2, 0.1),
-                    gamma_t=np.zeros(2),
-                    omega_t=np.zeros(2),
-                    Wg_t=np.ones(2),
-                    Wphi_t=np.ones(2),
-                    Wapar_t=np.zeros(2),
-                    heat_flux_t=np.ones(2),
-                    particle_flux_t=np.zeros(2),
-                    energy_t=np.zeros(2),
-                )
-            ),
-            start_fraction=1.0,
-        )
 
 
 def test_windowed_nonlinear_metrics_ignores_nonfinite_phi_envelope_and_keeps_window_stats() -> (
@@ -1259,88 +988,4 @@ def test_observed_order_gate_report_tracks_rate_and_final_error() -> None:
             source="closed-form",
             min_asymptotic_order=1.0,
             min_pairwise_order=-1.0,
-        )
-
-
-def test_branch_continuity_metrics_and_gate_report() -> None:
-    metrics = branch_continuity_metrics(
-        ky=np.array([0.1, 0.2, 0.3]),
-        gamma=np.array([0.10, 0.105, 0.110]),
-        omega=np.array([-0.30, -0.31, -0.32]),
-        successive_overlap=np.array([0.98, 0.97]),
-    )
-
-    assert isinstance(metrics, BranchContinuationMetrics)
-    assert metrics.max_rel_gamma_jump < 0.06
-    assert metrics.max_rel_omega_jump < 0.04
-    assert metrics.min_successive_overlap == pytest.approx(0.97)
-
-    report = branch_continuity_gate_report(
-        metrics,
-        case="kbm_branch",
-        source="candidate table",
-        max_rel_gamma_jump=0.1,
-        max_rel_omega_jump=0.1,
-        min_successive_overlap=0.95,
-    )
-    assert report.passed is True
-
-    jump = branch_continuity_metrics(
-        ky=np.array([0.1, 0.2, 0.3]),
-        gamma=np.array([0.10, 0.40, 0.11]),
-        omega=np.array([-0.30, 0.80, -0.32]),
-        successive_overlap=np.array([0.7, 0.6]),
-    )
-    failed = branch_continuity_gate_report(
-        jump,
-        case="kbm_branch",
-        source="candidate table",
-        max_rel_gamma_jump=0.1,
-        max_rel_omega_jump=0.1,
-        min_successive_overlap=0.95,
-    )
-    assert failed.passed is False
-
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(np.array([0.1]), np.array([0.1]), np.array([0.2]))
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([[0.1, 0.2]]), np.array([0.1, 0.2]), np.array([0.2, 0.3])
-        )
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]), np.array([0.1]), np.array([0.2, 0.3])
-        )
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]), np.array([0.1, np.nan]), np.array([0.2, 0.3])
-        )
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]),
-            np.array([0.1, 0.2]),
-            np.array([0.2, 0.3]),
-            floor_fraction=-1.0e-3,
-        )
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]),
-            np.array([0.1, 0.2]),
-            np.array([0.2, 0.3]),
-            successive_overlap=np.array([0.9, 0.8]),
-        )
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]),
-            np.array([0.1, 0.2]),
-            np.array([0.2, 0.3]),
-            successive_overlap=np.array([np.nan]),
-        )
-    with pytest.raises(ValueError):
-        branch_continuity_gate_report(
-            metrics,
-            case="bad",
-            source="candidate table",
-            max_rel_gamma_jump=-1.0,
-            max_rel_omega_jump=0.1,
         )

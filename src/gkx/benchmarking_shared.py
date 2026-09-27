@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from importlib import resources
-from typing import Any, Sequence, TypeVar
+from typing import Sequence, TypeVar
 
 import jax.numpy as jnp
 import numpy as np
@@ -26,51 +26,6 @@ from gkx.solvers_linear_krylov import KrylovConfig
 
 VALID_FIT_SIGNALS = frozenset({"phi", "density", "auto"})
 _Record = TypeVar("_Record")
-
-
-def _is_array_like(value: Any) -> bool:
-    """Return whether a scan option is an indexed per-ky value."""
-
-    return isinstance(value, (list, tuple, np.ndarray))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def indexed_float_value(value: Any, idx: int) -> float | None:
-    """Return a scalar or indexed scan value as ``float`` for window policies."""
-
-    if value is None:
-        return None
-    if isinstance(value, (list, tuple, np.ndarray)):
-        return float(value[idx])
-    return float(value)
-
-
-
-
-def scan_window_valid(
-    t: np.ndarray, tmin: float | None, tmax: float | None, *, min_points: int = 2
-) -> bool:
-    """Return whether an explicit fit window contains enough sampled points."""
-
-    if tmin is None or tmax is None:
-        return False
-    mask = (t >= tmin) & (t <= tmax)
-    return int(np.count_nonzero(mask)) >= int(min_points)
-
-
-
-
 
 
 CYCLONE_OMEGA_D_SCALE = CYCLONE_NORMALIZATION.omega_d_scale
@@ -135,8 +90,6 @@ def _apply_reference_hypercollisions(
         hypercollisions_const=0.0,
         hypercollisions_kz=1.0,
     )
-
-
 
 
 def _two_species_params(
@@ -215,8 +168,6 @@ def _two_species_params(
     return params
 
 
-
-
 KBM_EXPLICIT_SOLVER_LOCK: tuple[tuple[float, str], ...] = (
     (0.10, "explicit_time"),
     (0.30, "explicit_time"),
@@ -233,10 +184,6 @@ def _midplane_index(grid: SpectralGrid) -> int:
         return 0
     idx = int(grid.z.size // 2 + 1)
     return min(idx, int(grid.z.size) - 1)
-
-
-
-
 
 
 CYCLONE_KRYLOV_DEFAULT = KrylovConfig(
@@ -350,31 +297,10 @@ class CycloneReference:
 
 
 @dataclass(frozen=True)
-class CycloneRunResult:
-    t: np.ndarray
-    phi_t: np.ndarray
-    gamma: float
-    omega: float
-    ky: float
-    selection: ModeSelection
-
-
-@dataclass(frozen=True)
 class CycloneScanResult:
     ky: np.ndarray
     gamma: np.ndarray
     omega: np.ndarray
-
-
-@dataclass(frozen=True)
-class CycloneComparison:
-    ky: float
-    gamma: float
-    omega: float
-    gamma_ref: float
-    omega_ref: float
-    rel_gamma: float
-    rel_omega: float
 
 
 @dataclass(frozen=True)
@@ -411,8 +337,6 @@ def load_cyclone_reference() -> CycloneReference:
     return _load_csv_reference("cyclone_reference_adiabatic.csv")
 
 
-
-
 def load_cyclone_reference_kinetic() -> CycloneReference:
     """Load Cyclone base case reference data (kinetic electrons)."""
 
@@ -439,8 +363,6 @@ def load_tem_reference() -> CycloneReference:
     """
 
     return _load_csv_reference("tem_reference.csv")
-
-
 
 
 def _build_gaussian_profile(
@@ -529,9 +451,6 @@ def _build_initial_condition(
 __all__ = [
     "resources",
     "VALID_FIT_SIGNALS",
-    "_is_array_like",
-    "indexed_float_value",
-    "scan_window_valid",
     "CYCLONE_OMEGA_D_SCALE",
     "CYCLONE_OMEGA_STAR_SCALE",
     "CYCLONE_RHO_STAR",
@@ -566,9 +485,7 @@ __all__ = [
     "KBM_KRYLOV_DEFAULT",
     "TEM_KRYLOV_DEFAULT",
     "CycloneReference",
-    "CycloneRunResult",
     "CycloneScanResult",
-    "CycloneComparison",
     "LinearRunResult",
     "LinearScanResult",
     "_load_csv_reference",

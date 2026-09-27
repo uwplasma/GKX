@@ -9,12 +9,9 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.benchmarking_shared import LinearRunResult, LinearScanResult
-from gkx.core_grid import SpectralGrid, build_spectral_grid
-from gkx.diagnostics.analysis import fit_growth_rate_auto
+from gkx.core_grid import SpectralGrid
 from gkx.diagnostics.modes import (
     ModeSelection,
-    extract_eigenfunction,
-    extract_mode_time_series,
 )
 from gkx.config import RuntimeConfig
 from gkx.operators.linear.cache_builder import mask_off_chain_rows
@@ -884,95 +881,4 @@ def _representative_run(
         solver=mode_solver,
         **window_kw,
         **(mode_kwargs or {}),
-    )
-
-
-def run_scan_and_mode(
-    *,
-    ky_values: np.ndarray,
-    linear_fn: Callable[..., LinearRunResult],
-    cfg: Any,
-    Nl: int,
-    Nm: int,
-    dt: float | np.ndarray,
-    steps: int | np.ndarray,
-    method: str,
-    solver: str,
-    mode_solver: str,
-    krylov_cfg: Any,
-    window_kw: dict[str, Any],
-    tmin: float | np.ndarray | None = None,
-    tmax: float | np.ndarray | None = None,
-    auto_window: bool = True,
-    run_kwargs: dict[str, Any] | None = None,
-    mode_kwargs: dict[str, Any] | None = None,
-    resolution_policy: Callable[[float], tuple[int, int]] | None = None,
-    krylov_policy: Callable[[float], object] | None = None,
-    select_ky: Callable[[LinearScanResult], float] | None = None,
-) -> ScanAndModeResult:
-    """Run a pointwise scan and extract the fastest or selected eigenmode."""
-
-    scan = run_linear_scan(
-        ky_values=ky_values,
-        run_linear_fn=linear_fn,
-        cfg=cfg,
-        Nl=Nl,
-        Nm=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        solver=solver,
-        krylov_cfg=krylov_cfg,
-        window_kw=window_kw,
-        tmin=tmin,
-        tmax=tmax,
-        auto_window=auto_window,
-        run_kwargs=run_kwargs,
-        resolution_policy=resolution_policy,
-        krylov_policy=krylov_policy,
-    )
-    ky_selected = (
-        float(select_ky(scan))
-        if select_ky is not None
-        else float(scan.ky[int(np.nanargmax(scan.gamma))])
-    )
-    run = _representative_run(
-        scan,
-        ky_selected,
-        linear_fn=linear_fn,
-        cfg=cfg,
-        Nl=Nl,
-        Nm=Nm,
-        dt=dt,
-        steps=steps,
-        method=method,
-        mode_solver=mode_solver,
-        window_kw=window_kw,
-        mode_kwargs=mode_kwargs,
-        resolution_policy=resolution_policy,
-    )
-    grid = build_spectral_grid(cfg.grid)
-    tmin_fit: float | None = None
-    tmax_fit: float | None = None
-    if run.t.size >= 2:
-        signal = extract_mode_time_series(run.phi_t, run.selection, method="project")
-        _gamma, _omega, tmin_fit, tmax_fit = fit_growth_rate_auto(
-            run.t, signal, **window_kw
-        )
-    eigenfunction = extract_eigenfunction(
-        run.phi_t,
-        run.t,
-        run.selection,
-        z=np.asarray(grid.z),
-        method="snapshot",
-        tmin=tmin_fit,
-        tmax=tmax_fit,
-    )
-    return ScanAndModeResult(
-        scan=scan,
-        eigenfunction=eigenfunction,
-        grid=grid,
-        ky_selected=ky_selected,
-        tmin=tmin_fit,
-        tmax=tmax_fit,
     )

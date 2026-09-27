@@ -146,8 +146,6 @@ def scan_comparison_figure(
     return fig, axes
 
 
-
-
 @dataclass(frozen=True)
 class LinearValidationPanel:
     name: str
@@ -173,19 +171,6 @@ class ReferenceSeries:
     color: str
     marker: str = "o"
     linestyle: str = "--"
-
-
-@dataclass(frozen=True)
-class MultiReferenceValidationPanel:
-    name: str
-    z: np.ndarray
-    eigenfunction: np.ndarray
-    x: np.ndarray
-    gamma: np.ndarray
-    omega: np.ndarray
-    x_label: str
-    references: list[ReferenceSeries]
-    log_x: bool = False
 
 
 def linear_validation_figure(
@@ -257,12 +242,6 @@ def linear_validation_figure(
     return fig, axes
 
 
-
-
-
-
-
-
 def growth_fit_figure(
     t: np.ndarray,
     signal: np.ndarray,
@@ -300,10 +279,6 @@ def growth_fit_figure(
     ax1.legend(loc="best", fontsize=9)
     fig.tight_layout()
     return fig, axes
-
-
-
-
 
 
 def _normalize_by_real_max(eigenfunction: np.ndarray) -> np.ndarray:
@@ -703,7 +678,6 @@ def zonal_flow_response_figure(*args: Any, **kwargs: Any) -> tuple[Any, Any]:
 
 __all__ = [
     "LinearValidationPanel",
-    "MultiReferenceValidationPanel",
     "ReferenceSeries",
     "cyclone_comparison_figure",
     "cyclone_reference_figure",

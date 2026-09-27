@@ -386,7 +386,6 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     assert gkx.prepare is public_api.prepare
     assert gkx.ExplicitTimeConfig.__name__ == "ExplicitTimeConfig"
     assert callable(gkx.integrate_nonlinear_explicit_diagnostics)
-    assert callable(gkx.branch_continuity_metrics)
     for legacy in (
         "GridConfig",
         "LinearParams",

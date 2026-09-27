@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import Callable
 
 from gkx.workflows.runtime import (
-    toml as runtime_toml,
     wout as runtime_wout,
 )
 from gkx.workflows.runtime.toml import (
@@ -288,18 +287,6 @@ _PATCHABLE_RUNTIME_COMMAND_GLOBALS = (
     write_runtime_linear_scan_artifacts,
     write_quasilinear_artifacts,
 )
-
-
-def _is_runtime_toml(data: dict[str, Any]) -> bool:
-    """Return whether TOML data should use the runtime executable path."""
-
-    return runtime_toml.is_runtime_toml(data)
-
-
-def _toml_shorthand_command(data: dict[str, Any]) -> str:
-    """Return the executable command used for direct TOML path shorthand."""
-
-    return runtime_toml.toml_shorthand_command(data)
 
 
 def _direct_config_shorthand_args(argv: Sequence[str]) -> list[str] | None:

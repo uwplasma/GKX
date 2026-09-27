@@ -210,53 +210,6 @@ def _tail_series_or_fit(
     return float(mean), float(std)
 
 
-def late_time_linear_metrics(
-    result: object,
-    *,
-    tail_fraction: float = 0.5,
-    mode_method: str = "project",
-) -> LateTimeLinearMetrics:
-    """Return late-time growth/frequency metrics from a linear benchmark/runtime result."""
-
-    t = getattr(result, "t", None)
-    if t is None:
-        return _scalar_late_time_linear_metrics(result)
-
-    t_arr = np.asarray(t, dtype=float)
-    mask, tmin, tmax = _tail_window(t_arr, tail_fraction)
-
-    gamma_fit = float(getattr(result, "gamma"))
-    omega_fit = float(getattr(result, "omega"))
-    signal_arr, signal_source = _linear_signal_series(result, mode_method=mode_method)
-    gamma_fit, omega_fit = _fit_tail_signal(
-        t_arr,
-        mask,
-        signal_arr,
-        gamma_fallback=gamma_fit,
-        omega_fallback=omega_fit,
-    )
-    gamma_mean, gamma_std = _tail_series_or_fit(
-        getattr(result, "gamma_t", None), mask, gamma_fit
-    )
-    omega_mean, omega_std = _tail_series_or_fit(
-        getattr(result, "omega_t", None), mask, omega_fit
-    )
-
-    nsamples = int(np.count_nonzero(mask))
-    return LateTimeLinearMetrics(
-        gamma_fit=float(gamma_fit),
-        omega_fit=float(omega_fit),
-        gamma_tail_mean=float(gamma_mean),
-        omega_tail_mean=float(omega_mean),
-        gamma_tail_std=float(gamma_std),
-        omega_tail_std=float(omega_std),
-        tmin=tmin,
-        tmax=tmax,
-        nsamples=nsamples,
-        signal_source=signal_source,
-    )
-
-
 def sokal_autocorrelation_time(
     signal: np.ndarray, dt: float
 ) -> tuple[float, int, np.ndarray]:
@@ -591,71 +544,6 @@ def estimate_observed_order(
     )
 
 
-def branch_continuity_metrics(
-    ky: np.ndarray,
-    gamma: np.ndarray,
-    omega: np.ndarray,
-    *,
-    successive_overlap: np.ndarray | None = None,
-    floor_fraction: float = 1.0e-8,
-) -> BranchContinuationMetrics:
-    """Compute branch-continuity diagnostics for a linear scan.
-
-    The relative jump normalization uses a local scale from adjacent values,
-    with a floor tied to the largest value in the scan. This avoids false
-    blow-ups near marginal points while still flagging branch jumps.
-    """
-
-    ky_arr = np.asarray(ky, dtype=float)
-    gamma_arr = np.asarray(gamma, dtype=float)
-    omega_arr = np.asarray(omega, dtype=float)
-    if ky_arr.ndim != 1 or gamma_arr.ndim != 1 or omega_arr.ndim != 1:
-        raise ValueError("ky, gamma, and omega must be one-dimensional arrays")
-    if not (ky_arr.size == gamma_arr.size == omega_arr.size):
-        raise ValueError("ky, gamma, and omega must have equal length")
-    if ky_arr.size < 2:
-        raise ValueError("branch continuity requires at least two ky samples")
-    if (
-        np.any(~np.isfinite(ky_arr))
-        or np.any(~np.isfinite(gamma_arr))
-        or np.any(~np.isfinite(omega_arr))
-    ):
-        raise ValueError("ky, gamma, and omega must be finite")
-    floor = float(floor_fraction)
-    if floor < 0.0:
-        raise ValueError("floor_fraction must be non-negative")
-
-    def _relative_jumps(values: np.ndarray) -> np.ndarray:
-        jumps = np.abs(np.diff(values))
-        global_floor = max(float(np.nanmax(np.abs(values))) * floor, 1.0e-30)
-        local_scale = np.maximum(
-            np.maximum(np.abs(values[:-1]), np.abs(values[1:])), global_floor
-        )
-        return jumps / local_scale
-
-    overlap_min: float | None = None
-    if successive_overlap is not None:
-        overlap = np.asarray(successive_overlap, dtype=float)
-        if overlap.ndim != 1 or overlap.size != ky_arr.size - 1:
-            raise ValueError("successive_overlap must have length len(ky) - 1")
-        if np.any(~np.isfinite(overlap)):
-            raise ValueError("successive_overlap must be finite")
-        overlap_min = float(np.min(overlap))
-
-    gamma_jumps = _relative_jumps(gamma_arr)
-    omega_jumps = _relative_jumps(omega_arr)
-    return BranchContinuationMetrics(
-        ky=ky_arr,
-        gamma=gamma_arr,
-        omega=omega_arr,
-        rel_gamma_jumps=gamma_jumps,
-        rel_omega_jumps=omega_jumps,
-        max_rel_gamma_jump=float(np.max(gamma_jumps)),
-        max_rel_omega_jump=float(np.max(omega_jumps)),
-        min_successive_overlap=overlap_min,
-    )
-
-
 __all__ = [
     "BranchContinuationMetrics",
     "CFLLimiterReport",
@@ -666,13 +554,11 @@ __all__ = [
     "NonlinearHeatFluxConvergenceMetrics",
     "NonlinearWindowMetrics",
     "ObservedOrderMetrics",
-    "branch_continuity_metrics",
     "cfl_limiter_report",
     "cfl_limiting_term",
     "cfl_scales_from_array",
     "cfl_term_contributions",
     "estimate_observed_order",
-    "late_time_linear_metrics",
     "nonlinear_heat_flux_convergence_metrics",
     "windowed_nonlinear_metrics",
     "ModeSelection",

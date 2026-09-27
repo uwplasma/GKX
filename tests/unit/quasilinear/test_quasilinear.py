@@ -8,7 +8,6 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-import gkx
 import gkx as public_quasilinear
 from gkx.diagnostics import quasilinear_transport
 from gkx.geometry import SAlphaGeometry, apply_geometry_grid_defaults
@@ -24,7 +23,6 @@ from gkx.diagnostics.quasilinear_transport import (
     quasilinear_feature_objective,
     saturation_amplitude2,
     saturated_flux_from_linear_weight,
-    shape_aware_power_law_objective,
     spectral_phi_weights,
 )
 from gkx.runtime import (
@@ -91,7 +89,6 @@ def test_top_level_api_preserves_named_quasilinear_diagnostics() -> None:
         "quasilinear_feature_objective",
         "saturation_amplitude2",
         "saturated_flux_from_linear_weight",
-        "shape_aware_power_law_objective",
     }
     assert legacy_exports <= domain_exports
     for name in legacy_exports:
@@ -218,37 +215,6 @@ def test_quasilinear_feature_objective_vectorizes_and_applies_stability_floor() 
     np.testing.assert_allclose(
         np.asarray(signed), np.asarray([0.4, 0.16, -2.4]), rtol=1.0e-6
     )
-
-
-def test_shape_aware_power_law_objective_uses_geometric_ky_reference() -> None:
-    features = jnp.asarray([[0.1, 0.5, 2.0], [0.2, 0.7, 3.0]])
-    ky = jnp.asarray([0.1, 0.4])
-    out = shape_aware_power_law_objective(features, ky, exponent=0.5, csat=2.0)
-    ky_ref = float(np.exp(np.mean(np.log(np.asarray(ky)))))
-    expected = 2.0 * np.asarray([2.0, 3.0]) * (np.asarray(ky) / ky_ref) ** 0.5
-    np.testing.assert_allclose(np.asarray(out), expected, rtol=1.0e-6)
-    explicit_ref = shape_aware_power_law_objective(
-        features, ky, exponent=1.0, csat=1.0, ky_ref=0.2
-    )
-    np.testing.assert_allclose(
-        np.asarray(explicit_ref), np.asarray([1.0, 6.0]), rtol=1.0e-6
-    )
-    with pytest.raises(ValueError, match="features"):
-        shape_aware_power_law_objective(jnp.asarray([0.1, 0.2]), ky, exponent=1.0)
-    assert gkx.shape_aware_power_law_objective is shape_aware_power_law_objective
-
-
-def test_shape_aware_power_law_objective_clips_nonpositive_ky_reference() -> None:
-    features = jnp.asarray([[0.1, 0.5, 2.0], [0.2, 0.7, 3.0]])
-    ky = jnp.asarray([0.0, -0.4])
-    out = shape_aware_power_law_objective(
-        features,
-        ky,
-        exponent=0.0,
-        csat=0.5,
-        ky_ref=-1.0,
-    )
-    np.testing.assert_allclose(np.asarray(out), np.asarray([1.0, 1.5]), rtol=1.0e-6)
 
 
 def test_quasilinear_channel_validation_rejects_unvalidated_em_channels() -> None:

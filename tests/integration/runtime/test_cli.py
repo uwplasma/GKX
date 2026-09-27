@@ -11,8 +11,6 @@ from gkx.cli import (
     _cmd_run_runtime_nonlinear,
     _cmd_scan_runtime_linear,
     _direct_config_shorthand_args,
-    _is_runtime_toml,
-    _toml_shorthand_command,
     main,
 )
 from gkx.config import (
@@ -98,6 +96,7 @@ from support.paths import REPO_ROOT
 from types import SimpleNamespace
 import argparse
 import gkx.cli as cli
+import gkx.workflows.runtime.toml as runtime_toml
 import gkx.runtime as runtime
 import gkx.workflows.runtime.commands as runtime_cases
 import gkx.workflows.runtime.commands as runtime_commands
@@ -296,11 +295,11 @@ def test_runtime_command_deps_are_built_from_patchable_cli_scope(
 
 
 def test_cli_runtime_toml_dispatch_is_uniform() -> None:
-    assert _is_runtime_toml({"physics": {}}) is True
-    assert _is_runtime_toml({"case": "cyclone"}) is True
-    assert _is_runtime_toml({}) is True
-    assert _toml_shorthand_command({"physics": {}}) == "run"
-    assert _toml_shorthand_command({"case": "cyclone"}) == "run"
+    assert runtime_toml.is_runtime_toml({"physics": {}}) is True
+    assert runtime_toml.is_runtime_toml({"case": "cyclone"}) is True
+    assert runtime_toml.is_runtime_toml({}) is True
+    assert runtime_toml.toml_shorthand_command({"physics": {}}) == "run"
+    assert runtime_toml.toml_shorthand_command({"case": "cyclone"}) == "run"
 
     parser = cli.build_parser()
     promoted = parser.parse_args(["scan", "--config", "case.toml"])

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import importlib
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -20,47 +19,6 @@ from gkx.diagnostics.growth_windows import (
     _tail_window,
 )
 from gkx.diagnostics.validation_gates import ZonalFlowResponseMetrics
-
-
-def _require_pandas() -> Any:
-    """Import pandas for dataframe/CSV helpers with an actionable failure."""
-    try:
-        return importlib.import_module("pandas")
-    except ModuleNotFoundError as exc:
-        if exc.name != "pandas":
-            raise
-        raise ModuleNotFoundError(
-            "pandas is required for GKX zonal CSV/dataframe helpers; "
-            "install it with `pip install 'gkx[validation]'`"
-        ) from exc
-
-
-def _float_groupby_key(value: object) -> float:
-    """Convert a scalar pandas groupby key to a float for validation tables."""
-
-    return float(np.asarray(value, dtype=float).item())
-
-
-def kx_token(kx: float) -> str:
-    """Return the canonical three-digit token for ``kx rho_i`` values."""
-
-    return f"{int(round(1000.0 * float(kx))):03d}"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # Zonal-response metrics used by benchmark and manuscript validation gates.
