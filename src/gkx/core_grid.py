@@ -44,8 +44,8 @@ class SpectralGrid:
     #: Nyquist row depend on the answer, so the grid carries it.
     ny_full: int | None = None
     #: ``|ky|`` of the parent grid's last dealiased row, ``(Ny - 1) // 3``,
-    #: carried by a row selection that no longer contains it.  GX normalizes
-    #: hyperdiffusion by the full grid's ``k_perp`` corner, so a one-row ky
+    #: carried by a row selection that no longer contains it.  Hyperdiffusion
+    #: is normalized by the full grid's ``k_perp`` corner, so a one-row ky
     #: scan has to keep the parent's extent rather than its own ``ky``.
     ky_cut: float | None = None
 
