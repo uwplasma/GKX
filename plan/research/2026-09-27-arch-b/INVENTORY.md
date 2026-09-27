@@ -13,14 +13,14 @@ components, single-consumer modules) and
 
 | Measure | Base `cf1d40828` | This branch |
 | --- | ---: | ---: |
-| `src/gkx` Python files / lines | 160 / 79,446 | 136 / 74,759 |
+| `src/gkx` Python files / lines | 160 / 79,446 | 136 / 74,748 |
 | `tests` Python files / lines | 74 / 84,139 | 29 / 81,598 |
 | Import cycles (SCCs, function-local imports counted) | 7 | 1 |
 | Single-consumer split modules (cohesion gate, >= 6 names) | 2 | 1 |
 | Low-cohesion modules (cohesion gate) | 8 (baseline) | 5 |
 | Upward layer imports | 5 (baseline) | 4 |
 | Lazy registry rows (`gkx.<name>`) | 260 | 217 |
-| Tests collected (`-o addopts=`) | 3,028 | 2,950 |
+| Tests collected (`-o addopts=`) | 3,028 | 2,953 |
 
 The remaining cycle is `runtime` <-> `workflows.{nonlinear,runtime.*}` <->
 `artifacts.nonlinear_netcdf`: the orchestration layers call back into the
