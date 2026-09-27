@@ -84,6 +84,12 @@ The diagnostic group includes the main history series:
 It also carries resolved reductions used by the parity tooling, including
 ``*_kxst``, ``*_kyst``, ``*_kxkyst``, ``*_zst``, and ``Wg_lmst``.
 
+The ``ky``-resolved ``Phi2``, ``Wg``, ``Wphi``, ``Wapar`` and
+``TurbulentHeating`` spectra hold one row of each ``(ky, -ky)`` pair (GX
+publishes the pair sum, twice these values for ``ky > 0``), so their totals
+are the sum with weight 2 on every ``ky > 0`` row; the ``kx`` spectra, the
+flux spectra and every ``*_t``/``*_st`` total already include both partners.
+
 ``Wg + Wphi`` (plus ``Wapar`` when electromagnetic) is not a discretely
 conserved functional of the dissipation-free discretization: the
 curvature/grad-B measure weights drive bounded transient excursions of order
