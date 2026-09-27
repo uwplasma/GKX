@@ -522,7 +522,10 @@ def test_the_explicit_cfl_bound_is_the_same_in_both_layouts(ny: int) -> None:
 
     bounds = [
         _build_nonlinear_cfl_bounds(
-            grid, geom, params, cache,
+            grid,
+            geom,
+            params,
+            cache,
             real_dtype=jnp.float64,
             linear_frequency_bound_fn=_linear_frequency_bound,
             laguerre_velocity_max_fn=_laguerre_velocity_max,
@@ -534,14 +537,24 @@ def test_the_explicit_cfl_bound_is_the_same_in_both_layouts(ny: int) -> None:
 
     half, full = _states(ny, nx, nz, 1, 1, seed=7)
     kwargs = dict(
-        compressed_real_fft=True, kx_max=bounds[0].kx_max, ky_max=bounds[0].ky_max,
-        kxfac=1.0, vpar_max=1.0, muB_max=1.0,
+        compressed_real_fft=True,
+        kx_max=bounds[0].kx_max,
+        ky_max=bounds[0].ky_max,
+        kxfac=1.0,
+        vpar_max=1.0,
+        muB_max=1.0,
     )
     omega_full = _nonlinear_cfl_frequency_components(
-        FieldState(phi=full[0, 0, 0], apar=None, bpar=None), full_grid, full_cache, **kwargs
+        FieldState(phi=full[0, 0, 0], apar=None, bpar=None),
+        full_grid,
+        full_cache,
+        **kwargs,
     )
     omega_half = _nonlinear_cfl_frequency_components(
-        FieldState(phi=half[0, 0, 0], apar=None, bpar=None), half_grid, half_cache, **kwargs
+        FieldState(phi=half[0, 0, 0], apar=None, bpar=None),
+        half_grid,
+        half_cache,
+        **kwargs,
     )
     np.testing.assert_allclose(
         np.asarray(omega_half), np.asarray(omega_full), rtol=1e-12, atol=0.0
