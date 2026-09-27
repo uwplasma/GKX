@@ -13,7 +13,13 @@ from gkx.artifacts.io import (
     _resolve_restart_path,
     _resolved_species_time,
 )
-from gkx.core_ky_layout import HALF, half_ky_values, source_ky_layout, source_ny_full
+from gkx.core_ky_layout import (
+    HALF,
+    half_ky_values,
+    ky_row_weights,
+    source_ky_layout,
+    source_ny_full,
+)
 from gkx.artifacts.spectral_layout import (
     KY_WEIGHTING_PAIR,
     KY_WEIGHTING_PER_ROW,
@@ -22,6 +28,7 @@ from gkx.artifacts.spectral_layout import (
     _condense_ky_for_output,
     _condense_kykx_for_output,
     _dealiased_kx_values,
+    _dealiased_ky_indices,
     _dealiased_ky_values,
     _dealiased_spectral_field,
     _real_space_axis,
@@ -510,8 +517,14 @@ def _phi2_outputs_for_netcdf(
     active_nx: int,
     active_ny: int,
 ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None, np.ndarray | None]:
-    """Return mutually consistent Phi2 spectra for the NetCDF schema."""
+    """Return mutually consistent Phi2 spectra for the NetCDF schema.
 
+    The published ``ky`` spectra are per row, so ``Phi2_t`` is their
+    pair-weighted sum, and ``Phi2_kxt`` is the in-memory ``kx`` reduction,
+    which already counts each ``(-ky, kx)`` partner in its own column.
+    """
+
+    pair = ky_row_weights(int(full_ny))[_dealiased_ky_indices(int(full_ny))]
     phi2_kx_out = None
     phi2_ky_out = None
     phi2_kykx_out = None
@@ -528,9 +541,16 @@ def _phi2_outputs_for_netcdf(
             active_nx=active_nx,
             ky_weighting=_ky_weighting_for("Phi2"),
         )
-        phi2_kx_out = np.sum(phi2_kykx_out, axis=1)
         phi2_ky_out = np.sum(phi2_kykx_out, axis=2)
-        phi2_t = np.sum(phi2_kykx_out, axis=(1, 2))
+        phi2_t = np.sum(phi2_ky_out * pair.astype(np.float32), axis=1)
+        if resolved.Phi2_kxt is not None:
+            phi2_kx_out = _condense_kx_for_output(
+                np.asarray(resolved.Phi2_kxt, dtype=np.float32),
+                full_nx=full_nx,
+                active_nx=active_nx,
+            )
+        else:
+            phi2_kx_out = np.sum(phi2_kykx_out, axis=1)
     elif resolved is not None and resolved.Phi2_kyt is not None:
         phi2_ky_out = _condense_ky_for_output(
             np.asarray(resolved.Phi2_kyt, dtype=np.float32),
@@ -538,7 +558,7 @@ def _phi2_outputs_for_netcdf(
             active_ny=active_ny,
             ky_weighting=_ky_weighting_for("Phi2"),
         )
-        phi2_t = np.sum(phi2_ky_out, axis=1)
+        phi2_t = np.sum(phi2_ky_out * pair.astype(np.float32), axis=1)
     elif resolved is not None and resolved.Phi2_kxt is not None:
         phi2_kx_out = _condense_kx_for_output(
             np.asarray(resolved.Phi2_kxt, dtype=np.float32),

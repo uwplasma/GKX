@@ -1503,12 +1503,14 @@ def test_write_runtime_nonlinear_artifacts_writes_nonlinear_netcdf_bundle(
         assert root.dimensions["ky"].size == 3
         assert "Phi2_t" in root.groups["Diagnostics"].variables
         assert "Phi2_kxt" in root.groups["Diagnostics"].variables
+        # Phi2_t weights the two paired rows (ky > 0) by 2: 5 * (1 + 2 + 2);
+        # Phi2_kxt is the in-memory kx reduction, condensed.
         np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["Phi2_t"][:], np.full(2, 15.0)
+            root.groups["Diagnostics"].variables["Phi2_t"][:], np.full(2, 25.0)
         )
         np.testing.assert_allclose(
             root.groups["Diagnostics"].variables["Phi2_kxt"][:],
-            np.full((2, 5), 3.0),
+            np.full((2, 5), 1.0),
         )
         np.testing.assert_allclose(
             root.groups["Diagnostics"].variables["Phi2_kyt"][:],
@@ -3752,6 +3754,101 @@ def test_turbulent_heating_total_resolved_sums_to_species_total() -> None:
         atol=1.0e-6,
     )
     assert np.max(np.abs(np.asarray(heat_species))) > 0.0
+
+
+def test_turbulent_heating_is_weighted_by_density_times_charge() -> None:
+    """GX weights the heating kernel by ``n_s Z_s`` (``sp.nz``), not ``n_s``.
+
+    ``Q_s = Z_s n_s <h_s dchi/dt>`` is invariant under ``(Z, h) -> (-Z, -h)``,
+    so a charge-mirrored copy of the ion carrying ``-G`` under the same fields
+    must report the same heating (``bpar = 0``: its drive is not odd in ``Z``).
+    """
+
+    cfg = CycloneBaseCase()
+    grid = build_spectral_grid(
+        replace(cfg.grid, Nx=4, Ny=8, Nz=8, ntheta=None, nperiod=None)
+    )
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    ion = dict(mass=1.0, density=0.7, temperature=1.3, tprim=1.0, fprim=1.0)
+    params = build_linear_params(
+        [Species(charge=1.0, **ion), Species(charge=-1.0, **ion)],
+        kpar_scale=float(geom.gradpar()),
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 4)
+    vol_fac, _flux_fac = fieldline_quadrature_weights(geom, grid)
+    rng = np.random.default_rng(5)
+    shape = (3, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    G_ion = rng.normal(size=shape) + 1.0j * rng.normal(size=shape)
+    G_ion_old = G_ion + 0.1 * (rng.normal(size=shape) + 1.0j * rng.normal(size=shape))
+    phi = jnp.asarray(rng.normal(size=shape[2:]) + 1.0j * rng.normal(size=shape[2:]))
+    apar = 0.3 * phi
+    zero = jnp.zeros_like(phi)
+
+    heat = np.asarray(
+        turbulent_heating_species(
+            jnp.asarray(np.stack([G_ion, -G_ion])),
+            jnp.asarray(np.stack([G_ion_old, -G_ion_old])),
+            phi,
+            apar,
+            zero,
+            0.8 * phi,
+            0.8 * apar,
+            zero,
+            cache,
+            grid,
+            params,
+            vol_fac,
+            0.05,
+        )
+    )
+
+    assert abs(heat[0]) > 1.0e-3
+    np.testing.assert_allclose(heat[1], heat[0], rtol=1.0e-10)
+
+
+@pytest.mark.parametrize("ky_layout", ["full", "half"])
+def test_netcdf_phi2_total_and_kx_spectrum_match_in_memory(ky_layout: str) -> None:
+    """Published ``Phi2_t`` and ``Phi2_kxt`` carry the ``-ky`` partners.
+
+    The per-row ``ky`` spectrum stores one row of each conjugate pair, so a
+    plain sum of it is not the total: the published total and ``kx`` spectrum
+    must agree with the in-memory reduction on either layout.
+    """
+
+    nx, ny, nz = 10, 12, 4
+    grid = build_spectral_grid(
+        GridConfig(Nx=nx, Ny=ny, Nz=nz, Lx=1.0, Ly=1.0, ky_layout=ky_layout)
+    )
+    rng = np.random.default_rng(11)
+    real = rng.normal(size=(ny, nx, nz))
+    phi_full = np.fft.fft2(real, axes=(0, 1)) / (nx * ny)
+    phi = jnp.asarray(phi_full[: grid.ky.size])
+    vol_fac = jnp.full((nz,), 1.0 / nz)
+    phi2_t, phi2_kxt, phi2_kyt, phi2_kxkyt, *_rest = diagnostics_moments.phi2_resolved(
+        phi, grid, vol_fac
+    )
+    resolved = SimpleNamespace(
+        Phi2_kxkyt=np.asarray(phi2_kxkyt)[None],
+        Phi2_kxt=np.asarray(phi2_kxt)[None],
+        Phi2_kyt=np.asarray(phi2_kyt)[None],
+    )
+    out_t, out_kx, _out_ky, _out_kykx = nonlinear_netcdf._phi2_outputs_for_netcdf(
+        resolved,
+        SimpleNamespace(Wphi_t=np.zeros(1)),
+        full_nx=nx,
+        full_ny=ny,
+        active_nx=_dealiased_kx_count(nx),
+        active_ny=_dealiased_ky_count(ny),
+    )
+
+    np.testing.assert_allclose(out_t, [float(phi2_t)], rtol=1.0e-5)
+    np.testing.assert_allclose(
+        out_kx,
+        np.asarray(phi2_kxt)[None][:, _dealiased_kx_indices(nx)],
+        rtol=1.0e-5,
+        atol=1.0e-12,
+    )
+    np.testing.assert_allclose(np.sum(out_kx), float(phi2_t), rtol=1.0e-5)
 
 
 def test_turbulent_heating_total_helper_zero_dt_guard_returns_zero_for_changed_state() -> (
