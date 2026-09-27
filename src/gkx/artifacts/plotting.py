@@ -10,27 +10,9 @@ from typing import Any, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
+from gkx.artifacts.figure_style import _artifact_base, set_plot_style
 from gkx.benchmarking_shared import CycloneReference, CycloneScanResult
 from gkx.diagnostics.growth_rates import fit_growth_rate
-
-
-def set_plot_style() -> None:
-    """Apply the shared publication style used by generated figures."""
-
-    plt.rcParams.update(
-        {
-            "font.size": 12,
-            "axes.labelsize": 12,
-            "axes.titlesize": 12,
-            "legend.fontsize": 10,
-            "xtick.labelsize": 11,
-            "ytick.labelsize": 11,
-            "axes.grid": True,
-            "grid.alpha": 0.3,
-            "grid.linestyle": "--",
-            "figure.dpi": 120,
-        }
-    )
 
 
 def cyclone_reference_figure(ref: CycloneReference) -> Tuple[plt.Figure, np.ndarray]:
@@ -164,32 +146,6 @@ def scan_comparison_figure(
     return fig, axes
 
 
-def etg_trend_figure(
-    tprim_e: np.ndarray,
-    gamma: np.ndarray,
-    omega: np.ndarray,
-    ky_target: float,
-) -> Tuple[plt.Figure, np.ndarray]:
-    """Create a two-panel ETG trend plot versus the electron drive ``a/L_Te``.
-
-    The scanned quantity is the electron species' ``tprim``, which is
-    :math:`a/L_{Te}`; the axis used to be labelled :math:`R/L_{Te}`.
-    """
-
-    set_plot_style()
-    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.0, 5.0))
-    ax0, ax1 = axes
-
-    ax0.plot(tprim_e, gamma, marker="o", color="#1f77b4")
-    ax0.set_ylabel(r"$\gamma a / v_{ti}$")
-    ax0.set_title(rf"ETG trend at $k_y={ky_target:.2f}$")
-
-    ax1.plot(tprim_e, omega, marker="o", color="#ff7f0e")
-    ax1.set_xlabel(r"$a/L_{Te}$")
-    ax1.set_ylabel(r"$\omega a / v_{ti}$")
-
-    fig.tight_layout()
-    return fig, axes
 
 
 @dataclass(frozen=True)
@@ -301,141 +257,10 @@ def linear_validation_figure(
     return fig, axes
 
 
-def linear_validation_multi_reference_figure(
-    panels: list[MultiReferenceValidationPanel],
-) -> Tuple[plt.Figure, np.ndarray]:
-    """Create summary panels with multiple external reference curves."""
-
-    if len(panels) == 0:
-        raise ValueError("panels must be non-empty")
-    set_plot_style()
-    nrows = len(panels)
-    # Keep each row on its own x-range so Cyclone- and ETG-scale ky scans
-    # remain readable in the combined summary figure.
-    fig, axes = plt.subplots(nrows, 3, figsize=(12.0, 3.0 * nrows), sharex=False)
-    if nrows == 1:
-        axes = np.asarray([axes])
-
-    for i, panel in enumerate(panels):
-        ax0, ax1, ax2 = axes[i]
-        ax0.plot(panel.z, panel.eigenfunction.real, color="#1f77b4", label="Re")
-        ax0.plot(
-            panel.z,
-            panel.eigenfunction.imag,
-            color="#ff7f0e",
-            linestyle="--",
-            label="Im",
-        )
-        ax0.set_ylabel(panel.name)
-        ax0.set_xlabel(r"$\theta$")
-        if i == 0:
-            ax0.set_title("Eigenfunction")
-            ax1.set_title("Growth rate")
-            ax2.set_title("Frequency")
-            ax0.legend(loc="best", fontsize=9)
-
-        ax1.plot(panel.x, panel.gamma, marker="o", color="#2ca02c", label="GKX")
-        ax2.plot(panel.x, panel.omega, marker="o", color="#d62728", label="GKX")
-        for ref in panel.references:
-            ax1.plot(
-                ref.x,
-                ref.gamma,
-                marker=ref.marker,
-                linestyle=ref.linestyle,
-                color=ref.color,
-                label=ref.label,
-            )
-            ax2.plot(
-                ref.x,
-                ref.omega,
-                marker=ref.marker,
-                linestyle=ref.linestyle,
-                color=ref.color,
-                label=ref.label,
-            )
-        ax1.set_xlabel(panel.x_label)
-        ax1.set_ylabel(r"$\gamma a / v_{ti}$")
-        ax2.set_xlabel(panel.x_label)
-        ax2.set_ylabel(r"$\omega a / v_{ti}$")
-        if panel.log_x:
-            ax1.set_xscale("log")
-            ax2.set_xscale("log")
-        if i == 0:
-            ax1.legend(loc="best", fontsize=9)
-            ax2.legend(loc="best", fontsize=9)
-
-    fig.tight_layout()
-    return fig, axes
 
 
-def scan_multi_reference_figure(
-    x: np.ndarray,
-    gamma: np.ndarray,
-    omega: np.ndarray,
-    x_label: str,
-    title: str,
-    references: list[ReferenceSeries],
-    *,
-    log_x: bool = False,
-) -> Tuple[plt.Figure, np.ndarray]:
-    """Create a two-panel comparison figure against multiple reference curves."""
-
-    set_plot_style()
-    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.5, 5.0))
-    ax0, ax1 = axes
-    ax0.plot(x, gamma, marker="o", color="#2ca02c", label="GKX")
-    ax1.plot(x, omega, marker="o", color="#d62728", label="GKX")
-    for ref in references:
-        ax0.plot(
-            ref.x,
-            ref.gamma,
-            marker=ref.marker,
-            linestyle=ref.linestyle,
-            color=ref.color,
-            label=ref.label,
-        )
-        ax1.plot(
-            ref.x,
-            ref.omega,
-            marker=ref.marker,
-            linestyle=ref.linestyle,
-            color=ref.color,
-            label=ref.label,
-        )
-    ax0.set_title(title)
-    ax0.set_ylabel(r"$\gamma a / v_{ti}$")
-    ax1.set_ylabel(r"$\omega a / v_{ti}$")
-    ax1.set_xlabel(x_label)
-    if log_x:
-        ax0.set_xscale("log")
-        ax1.set_xscale("log")
-    ax0.legend(loc="best")
-    ax1.legend(loc="best")
-    fig.tight_layout()
-    return fig, axes
 
 
-def growth_rate_heatmap(
-    x: np.ndarray,
-    y: np.ndarray,
-    gamma: np.ndarray,
-    title: str,
-    x_label: str,
-    y_label: str,
-    cmap: str = "jet",
-) -> Tuple[plt.Figure, plt.Axes]:
-    """Render a growth-rate heatmap versus two gradient axes."""
-
-    set_plot_style()
-    fig, ax = plt.subplots(1, 1, figsize=(5.5, 4.5))
-    extent = (float(x[0]), float(x[-1]), float(y[0]), float(y[-1]))
-    im = ax.imshow(gamma, origin="lower", aspect="auto", extent=extent, cmap=cmap)
-    ax.set_title(title)
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    fig.colorbar(im, ax=ax, label=r"$\gamma a / v_{ti}$")
-    fig.tight_layout()
-    return fig, ax
 
 
 def growth_fit_figure(
@@ -477,171 +302,8 @@ def growth_fit_figure(
     return fig, axes
 
 
-def eigenfunction_overlap_summary_figure(
-    ky: np.ndarray,
-    overlap: np.ndarray,
-    relative_l2: np.ndarray,
-    *,
-    title: str = "Eigenfunction overlap summary",
-    x_label: str = r"$k_y \rho_i$",
-    overlap_label: str = "Normalized overlap",
-    rel_l2_label: str = "Relative $L^2$ error",
-    log_x: bool = True,
-) -> Tuple[plt.Figure, np.ndarray]:
-    """Render a compact two-panel eigenfunction-overlap summary."""
-
-    set_plot_style()
-    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(5.6, 5.2))
-    ax0, ax1 = axes
-    ky_arr = np.asarray(ky, dtype=float)
-    overlap_arr = np.asarray(overlap, dtype=float)
-    rel_l2_arr = np.asarray(relative_l2, dtype=float)
-
-    ax0.plot(
-        ky_arr,
-        overlap_arr,
-        color="#0f4c81",
-        marker="o",
-        linewidth=2.2,
-        label=overlap_label,
-    )
-    ax0.set_ylabel("overlap")
-    ax0.set_ylim(0.0, min(1.02, max(1.0, float(np.nanmax(overlap_arr)) + 0.02)))
-    ax0.set_title(title)
-    ax0.legend(loc="best", frameon=False)
-
-    ax1.plot(
-        ky_arr,
-        rel_l2_arr,
-        color="#c44e52",
-        marker="s",
-        linewidth=2.2,
-        label=rel_l2_label,
-    )
-    ax1.set_xlabel(x_label)
-    ax1.set_ylabel(r"relative $L^2$")
-    ax1.legend(loc="best", frameon=False)
-
-    if log_x:
-        ax0.set_xscale("log")
-        ax1.set_xscale("log")
-
-    for axis in axes:
-        axis.grid(True, alpha=0.25)
-
-    fig.tight_layout()
-    return fig, axes
 
 
-def eigenfunction_reference_overlay_figure(
-    theta: np.ndarray,
-    eigenfunction: np.ndarray,
-    theta_ref: np.ndarray,
-    reference: np.ndarray,
-    *,
-    title: str = "Eigenfunction overlay",
-) -> Tuple[plt.Figure, np.ndarray]:
-    """Render a phase-aligned raw overlay against a frozen reference mode."""
-
-    from gkx.diagnostics.modes import (
-        compare_eigenfunctions,
-        phase_align_eigenfunction,
-    )
-
-    set_plot_style()
-    theta_arr = np.asarray(theta, dtype=float)
-    eig = np.asarray(eigenfunction, dtype=np.complex128)
-    theta_ref_arr = np.asarray(theta_ref, dtype=float)
-    ref = np.asarray(reference, dtype=np.complex128)
-    if eig.shape != ref.shape:
-        raise ValueError("eigenfunction and reference must have the same shape")
-
-    eig_aligned, _phase = phase_align_eigenfunction(eig, ref)
-    metrics = compare_eigenfunctions(eig, ref)
-
-    fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.9))
-    ax0, ax1, ax2 = axes
-
-    ax0.plot(
-        theta_ref_arr,
-        np.real(ref),
-        color="#0f4c81",
-        linewidth=2.4,
-        label="Reference Re",
-    )
-    ax0.plot(
-        theta_arr,
-        np.real(eig_aligned),
-        color="#c44e52",
-        linewidth=2.0,
-        linestyle="--",
-        label="GKX Re",
-    )
-    ax0.set_xlabel(r"$\theta$")
-    ax0.set_ylabel("real")
-    ax0.set_title("Real part")
-    ax0.legend(loc="best", frameon=False)
-
-    ax1.plot(
-        theta_ref_arr,
-        np.imag(ref),
-        color="#0f4c81",
-        linewidth=2.4,
-        label="Reference Im",
-    )
-    ax1.plot(
-        theta_arr,
-        np.imag(eig_aligned),
-        color="#c44e52",
-        linewidth=2.0,
-        linestyle="--",
-        label="GKX Im",
-    )
-    ax1.set_xlabel(r"$\theta$")
-    ax1.set_ylabel("imag")
-    ax1.set_title("Imaginary part")
-    ax1.legend(loc="best", frameon=False)
-
-    ax2.plot(
-        theta_ref_arr,
-        np.abs(ref),
-        color="#0f4c81",
-        linewidth=2.4,
-        label="Reference $|\\phi|$",
-    )
-    ax2.plot(
-        theta_arr,
-        np.abs(eig_aligned),
-        color="#c44e52",
-        linewidth=2.0,
-        linestyle="--",
-        label="GKX $|\\phi|$",
-    )
-    ax2.set_xlabel(r"$\theta$")
-    ax2.set_ylabel(r"$|\phi|$")
-    ax2.set_title("Amplitude")
-    ax2.legend(loc="upper right", frameon=False)
-    ax2.text(
-        0.03,
-        0.04,
-        f"overlap = {metrics.overlap:.4f}\nrel $L^2$ = {metrics.relative_l2:.4f}",
-        transform=ax2.transAxes,
-        va="bottom",
-        ha="left",
-        bbox={
-            "boxstyle": "round,pad=0.3",
-            "facecolor": "white",
-            "alpha": 0.9,
-            "edgecolor": "#cccccc",
-        },
-    )
-
-    for axis in axes:
-        axis.grid(True, alpha=0.25)
-
-    fig.suptitle(title, y=1.02)
-    fig.tight_layout()
-    return fig, axes
 
 
 def _normalize_by_real_max(eigenfunction: np.ndarray) -> np.ndarray:
@@ -799,69 +461,53 @@ def nonlinear_runtime_panel_figure(
     return fig, axes
 
 
-def plot(result: Any) -> Tuple[plt.Figure, np.ndarray]:
-    """Create the standard in-memory figure for a promoted runtime result."""
+def scan_result_figure(result: Any) -> Tuple[plt.Figure, np.ndarray]:
+    """Standard figure for a linear ``k_y`` scan result."""
 
-    from gkx.workflows.runtime import results as runtime_results
+    return scan_comparison_figure(
+        result.ky, result.gamma, result.omega, r"$k_y \rho_i$", "GKX linear scan"
+    )
 
-    if isinstance(result, runtime_results.RuntimeLinearScanResult):
-        return scan_comparison_figure(
-            result.ky, result.gamma, result.omega, r"$k_y \rho_i$", "GKX linear scan"
-        )
-    if isinstance(result, runtime_results.RuntimeLinearResult):
-        if result.z is None or result.eigenfunction is None:
-            raise ValueError("linear plotting requires z and eigenfunction arrays")
-        if result.t is not None and result.signal is not None:
-            return linear_runtime_panel_figure(
-                t=result.t,
-                signal=result.signal,
-                z=result.z,
-                eigenfunction=result.eigenfunction,
-                gamma=result.gamma,
-                omega=result.omega,
-            )
-        panel = LinearValidationPanel(
-            name="GKX",
+
+def linear_result_figure(result: Any) -> Tuple[plt.Figure, np.ndarray]:
+    """Standard figure for a single linear runtime result."""
+
+    if result.z is None or result.eigenfunction is None:
+        raise ValueError("linear plotting requires z and eigenfunction arrays")
+    if result.t is not None and result.signal is not None:
+        return linear_runtime_panel_figure(
+            t=result.t,
+            signal=result.signal,
             z=result.z,
             eigenfunction=result.eigenfunction,
-            x=np.asarray([result.ky]),
-            gamma=np.asarray([result.gamma]),
-            omega=np.asarray([result.omega]),
-            x_label=r"$k_y \rho_i$",
+            gamma=result.gamma,
+            omega=result.omega,
         )
-        return linear_validation_figure([panel])
-    if (
-        isinstance(result, runtime_results.RuntimeNonlinearResult)
-        and result.diagnostics is not None
-    ):
-        diagnostics = result.diagnostics
-        return nonlinear_runtime_panel_figure(
-            t=np.asarray(diagnostics.t),
-            wphi=np.asarray(diagnostics.Wphi_t),
-            heat_flux=np.asarray(diagnostics.heat_flux_t),
-            gamma=np.asarray(diagnostics.gamma_t),
-            omega=np.asarray(diagnostics.omega_t),
-        )
-    if isinstance(result, runtime_results.RuntimeNonlinearResult):
+    panel = LinearValidationPanel(
+        name="GKX",
+        z=result.z,
+        eigenfunction=result.eigenfunction,
+        x=np.asarray([result.ky]),
+        gamma=np.asarray([result.gamma]),
+        omega=np.asarray([result.omega]),
+        x_label=r"$k_y \rho_i$",
+    )
+    return linear_validation_figure([panel])
+
+
+def nonlinear_result_figure(result: Any) -> Tuple[plt.Figure, np.ndarray]:
+    """Standard figure for a nonlinear runtime result with time diagnostics."""
+
+    diagnostics = result.diagnostics
+    if diagnostics is None:
         raise ValueError("nonlinear plotting requires retained time diagnostics")
-    raise TypeError("plot expects a LinearResult, NonlinearResult, or ScanResult")
-
-
-def _artifact_base(path: Path) -> Path:
-    name = path.name
-    for suffix in (
-        ".summary.json",
-        ".timeseries.csv",
-        ".eigenfunction.csv",
-        ".diagnostics.csv",
-        ".scan.csv",
-        ".out.nc",
-    ):
-        if name.lower().endswith(suffix):
-            return path.with_name(name[: -len(suffix)])
-    if path.suffix.lower() in {".json", ".csv", ".nc"}:
-        return path.with_suffix("")
-    return path
+    return nonlinear_runtime_panel_figure(
+        t=np.asarray(diagnostics.t),
+        wphi=np.asarray(diagnostics.Wphi_t),
+        heat_flux=np.asarray(diagnostics.heat_flux_t),
+        gamma=np.asarray(diagnostics.gamma_t),
+        omega=np.asarray(diagnostics.omega_t),
+    )
 
 
 def _sidecar(base: Path, suffix: str) -> Path:
@@ -1061,18 +707,12 @@ __all__ = [
     "ReferenceSeries",
     "cyclone_comparison_figure",
     "cyclone_reference_figure",
-    "eigenfunction_overlap_summary_figure",
-    "eigenfunction_reference_overlay_figure",
-    "etg_trend_figure",
     "growth_fit_figure",
-    "growth_rate_heatmap",
     "linear_runtime_panel_figure",
     "linear_validation_figure",
-    "linear_validation_multi_reference_figure",
     "nonlinear_runtime_panel_figure",
     "plot_saved_output",
     "scan_comparison_figure",
-    "scan_multi_reference_figure",
     "set_plot_style",
     "zonal_flow_response_figure",
 ]

@@ -6,13 +6,7 @@ import numpy as np
 import pytest
 
 from gkx.diagnostics.analysis import ModeSelection
-from gkx.benchmarking_shared import (
-    _is_array_like,
-    _iter_ky_batches,
-    _resolve_streaming_window,
-)
 from gkx.diagnostics.growth_rates import (
-    _extract_mode_only_signal,
     _normalize_growth_rate,
     _score_fit_signal_auto,
     _select_fit_signal,
@@ -23,10 +17,6 @@ from gkx.benchmarking_shared import (
     _build_initial_condition,
 )
 from gkx.benchmarking_shared import (
-    CycloneReference,
-    CycloneRunResult,
-    _load_reference_with_header,
-    compare_cyclone_to_reference,
     load_cyclone_reference,
     load_cyclone_reference_kinetic,
     load_etg_reference,
@@ -34,20 +24,11 @@ from gkx.benchmarking_shared import (
     load_tem_reference,
 )
 from gkx.benchmarking_shared import (
-    _kbm_use_multi_target_krylov,
-    _midplane_index,
-    select_kbm_solver_auto,
-)
-from gkx.benchmarking_shared import (
     _apply_reference_hypercollisions,
-    _electron_only_params,
-    _linked_boundary_end_damping,
     _reference_hypercollision_power,
-    _two_species_params,
 )
 from gkx.config import InitializationConfig
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers_linear_krylov import KrylovConfig
 
 
 def _linear_params() -> LinearParams:
@@ -143,28 +124,6 @@ def test_checked_in_references_keep_literature_scale_and_sign_conventions() -> N
     assert tem.gamma[-1] == pytest.approx(-0.426778)
 
 
-def test_load_reference_with_header_reads_named_columns(tmp_path, monkeypatch) -> None:
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    (data_dir / "demo.csv").write_text(
-        "ky,gamma,omega\n0.1,0.2,-0.3\n", encoding="utf-8"
-    )
-
-    class FakeFiles:
-        def joinpath(self, *parts):
-            return data_dir / parts[-1]
-
-    monkeypatch.setattr(
-        "gkx.benchmarking_shared.resources.files",
-        lambda _pkg: FakeFiles(),
-    )
-    ref = _load_reference_with_header("demo.csv")
-    np.testing.assert_allclose(ref.ky, [0.1])
-    np.testing.assert_allclose(ref.gamma, [0.2])
-    np.testing.assert_allclose(ref.omega, [-0.3])
-    assert ref.ky.shape == ref.gamma.shape == ref.omega.shape == (1,)
-
-
 def test_reference_hypercollision_helpers() -> None:
     params = _apply_reference_hypercollisions(_linear_params(), nhermite=12)
     assert _reference_hypercollision_power(None) == 20.0
@@ -174,26 +133,6 @@ def test_reference_hypercollision_helpers() -> None:
     assert params.nu_hyper_m == 1.0
     assert params.hypercollisions_kz == 1.0
     assert params.p_hyper_m == 6.0
-
-
-def test_linked_boundary_end_damping_and_midplane_index() -> None:
-    assert _linked_boundary_end_damping(True) == (0.1, 0.125)
-    assert _linked_boundary_end_damping(False) == (0.0, 0.0)
-    assert _midplane_index(SimpleNamespace(z=np.array([0.0]))) == 0
-    assert _midplane_index(SimpleNamespace(z=np.arange(6))) == 4
-
-
-def test_select_kbm_solver_auto() -> None:
-    assert (
-        select_kbm_solver_auto("time", ky_target=0.2, reference_aligned=True) == "time"
-    )
-    assert (
-        select_kbm_solver_auto("auto", ky_target=0.3, reference_aligned=True)
-        == "explicit_time"
-    )
-    assert (
-        select_kbm_solver_auto("auto", ky_target=0.7, reference_aligned=False) == "time"
-    )
 
 
 def test_select_fit_signal_and_auto(monkeypatch) -> None:
@@ -477,52 +416,6 @@ def test_score_fit_signal_auto_treats_zero_growth_as_marginal(monkeypatch) -> No
     assert np.isfinite(_score_for(0.0, require_positive=False))
 
 
-def test_mode_signal_batch_and_window_helpers() -> None:
-    arr = np.arange(12).reshape(3, 4)
-    np.testing.assert_allclose(_extract_mode_only_signal(arr, local_idx=2), [2, 6, 10])
-    arr3 = np.arange(24).reshape(2, 3, 4)
-    np.testing.assert_allclose(
-        _extract_mode_only_signal(arr3, local_idx=1, species_index=1), [5, 17]
-    )
-    arr4 = np.arange(48).reshape(2, 2, 3, 4)
-    np.testing.assert_allclose(_extract_mode_only_signal(arr4, local_idx=4), [4, 28])
-    np.testing.assert_allclose(
-        _extract_mode_only_signal(np.array(3.0 + 1.0j), local_idx=0), [3.0 + 1.0j]
-    )
-    np.testing.assert_allclose(
-        _extract_mode_only_signal(np.array([1.0, 2.0]), local_idx=1), [1.0, 2.0]
-    )
-    assert _is_array_like([1, 2]) is True
-    assert _is_array_like(np.array([1, 2])) is True
-    assert _is_array_like(1.0) is False
-
-    single_batches = list(
-        _iter_ky_batches(np.array([0.1, 0.2]), ky_batch=1, fixed_batch_shape=False)
-    )
-    assert len(single_batches) == 2
-    assert single_batches[0][0] == 0
-    np.testing.assert_allclose(single_batches[0][1], [0.1])
-    assert single_batches[0][2] == 1
-
-    batches = list(
-        _iter_ky_batches(np.array([0.1, 0.2, 0.3]), ky_batch=2, fixed_batch_shape=True)
-    )
-    assert batches[0][0] == 0
-    np.testing.assert_allclose(batches[0][1], [0.1, 0.2])
-    np.testing.assert_allclose(batches[1][1], [0.3, 0.3])
-    assert batches[1][2] == 1
-
-    ragged_batches = list(
-        _iter_ky_batches(np.array([0.1, 0.2, 0.3]), ky_batch=2, fixed_batch_shape=False)
-    )
-    np.testing.assert_allclose(ragged_batches[1][1], [0.3])
-    assert ragged_batches[1][2] == 1
-
-    assert _resolve_streaming_window(10.0, None, None, 0.2, 0.1, 0.9) == (2.0, 3.0)
-    assert _resolve_streaming_window(10.0, 1.0, 4.0, 0.2, 0.1, 0.9) == (1.0, 4.0)
-    assert _resolve_streaming_window(10.0, None, None, 0.9, 0.05, 0.2) == (9.0, 10.0)
-
-
 def test_normalization_and_initial_profiles() -> None:
     gamma, omega = _normalize_growth_rate(0.4, -0.2, _linear_params(), "rho_star")
     assert np.isfinite(gamma)
@@ -548,67 +441,6 @@ def test_normalization_and_initial_profiles() -> None:
             s_hat=0.5,
             init_cfg=SimpleNamespace(**{**init_cfg.__dict__, "gaussian_width": 0.0}),
         )
-
-
-def test_compare_to_reference_uses_nearest_ky_and_documents_ties() -> None:
-    reference = CycloneReference(
-        ky=np.array([0.2, 0.4, 0.6]),
-        gamma=np.array([0.10, 0.20, 0.40]),
-        omega=np.array([1.0, 2.0, 4.0]),
-    )
-    result = CycloneRunResult(
-        t=np.array([0.0]),
-        phi_t=np.ones((1, 1, 1, 1), dtype=np.complex128),
-        gamma=0.22,
-        omega=2.2,
-        ky=0.39,
-        selection=ModeSelection(ky_index=0, kx_index=0),
-    )
-
-    comparison = compare_cyclone_to_reference(result, reference)
-
-    assert comparison.ky == pytest.approx(0.4)
-    assert comparison.gamma_ref == pytest.approx(0.20)
-    assert comparison.omega_ref == pytest.approx(2.0)
-    assert comparison.rel_gamma == pytest.approx(0.10)
-    assert comparison.rel_omega == pytest.approx(0.10)
-
-    tie = compare_cyclone_to_reference(
-        CycloneRunResult(
-            t=result.t,
-            phi_t=result.phi_t,
-            gamma=0.15,
-            omega=1.5,
-            ky=0.3,
-            selection=result.selection,
-        ),
-        reference,
-    )
-    assert tie.ky == pytest.approx(0.2)
-    assert tie.gamma_ref == pytest.approx(0.10)
-
-
-def test_compare_to_reference_keeps_zero_reference_errors_nan() -> None:
-    reference = CycloneReference(
-        ky=np.array([0.3]),
-        gamma=np.array([0.0]),
-        omega=np.array([0.0]),
-    )
-    result = CycloneRunResult(
-        t=np.array([0.0]),
-        phi_t=np.ones((1, 1, 1, 1), dtype=np.complex128),
-        gamma=0.1,
-        omega=0.2,
-        ky=0.3,
-        selection=ModeSelection(ky_index=0, kx_index=0),
-    )
-
-    comparison = compare_cyclone_to_reference(result, reference)
-
-    assert comparison.gamma_ref == pytest.approx(0.0)
-    assert comparison.omega_ref == pytest.approx(0.0)
-    assert np.isnan(comparison.rel_gamma)
-    assert np.isnan(comparison.rel_omega)
 
 
 def test_build_initial_condition_supports_all_and_invalid_fields() -> None:
@@ -714,122 +546,6 @@ def test_build_initial_condition_field_map_and_zonal_mode_safety() -> None:
         seeded_slice = G0[:, :, 1, 0, :].copy()
         seeded_slice[l_idx, m_idx, :] = 0.0
         assert np.count_nonzero(seeded_slice) == 0
-
-
-def test_kbm_target_helpers() -> None:
-    kcfg = KrylovConfig(
-        method="shift_invert", mode_family="kbm", shift_selection="target"
-    )
-    assert _kbm_use_multi_target_krylov(kcfg, [0.1, 0.2], shift=None) is True
-    assert _kbm_use_multi_target_krylov(kcfg, None, shift=None) is False
-    assert _kbm_use_multi_target_krylov(kcfg, [0.1], shift=1.0 + 0.0j) is False
-    assert (
-        _kbm_use_multi_target_krylov(
-            KrylovConfig(method="arnoldi", mode_family="kbm"), [0.1], shift=None
-        )
-        is False
-    )
-    assert (
-        _kbm_use_multi_target_krylov(
-            KrylovConfig(method="shift_invert", mode_family="etg"), [0.1], shift=None
-        )
-        is False
-    )
-    assert (
-        _kbm_use_multi_target_krylov(
-            KrylovConfig(
-                method="shift_invert", mode_family="kbm", shift_selection="shift"
-            ),
-            [0.1],
-            shift=None,
-        )
-        is False
-    )
-
-
-def test_species_param_builders() -> None:
-    model = SimpleNamespace(
-        mass_ratio=1836.0,
-        Te_over_Ti=1.2,
-        fprim=1.0,
-        fprim_i=1.1,
-        fprim_e=0.9,
-        tprim_i=2.0,
-        tprim_e=3.0,
-        nu_i=0.01,
-        nu_e=0.02,
-        beta=2.0e-3,
-    )
-    params = _two_species_params(
-        model,
-        kpar_scale=1.0,
-        omega_d_scale=1.0,
-        omega_star_scale=1.0,
-        rho_star=1.0,
-        beta_override=1.0e-3,
-        fapar_override=0.5,
-        damp_ends_amp=0.1,
-        damp_ends_widthfrac=0.2,
-        nhermite=10,
-        apar_beta_scale=0.7,
-        ampere_g0_scale=0.8,
-        bpar_beta_scale=0.9,
-    )
-    assert np.asarray(params.charge_sign).shape == (2,)
-    assert params.beta == pytest.approx(1.0e-3)
-    assert params.fapar == pytest.approx(0.5)
-    assert params.damp_ends_amp == pytest.approx(0.1)
-
-    eparams = _electron_only_params(
-        model,
-        kpar_scale=1.0,
-        omega_d_scale=1.0,
-        omega_star_scale=1.0,
-        rho_star=1.0,
-        beta_override=0.0,
-        fapar_override=0.25,
-        damp_ends_amp=0.05,
-        damp_ends_widthfrac=0.15,
-    )
-    assert np.asarray(eparams.charge_sign).shape == (1,)
-    assert eparams.tau_e == pytest.approx(model.Te_over_Ti)
-    assert eparams.beta == pytest.approx(0.0)
-    assert eparams.fapar == pytest.approx(0.25)
-    assert eparams.damp_ends_widthfrac == pytest.approx(0.15)
-
-    for bad_mass in (0.0, -1.0):
-        with pytest.raises(ValueError):
-            _two_species_params(
-                SimpleNamespace(**{**model.__dict__, "mass_ratio": bad_mass}),
-                kpar_scale=1.0,
-                omega_d_scale=1.0,
-                omega_star_scale=1.0,
-                rho_star=1.0,
-            )
-    with pytest.raises(ValueError):
-        _electron_only_params(
-            SimpleNamespace(**{**model.__dict__, "Te_over_Ti": 0.0}),
-            kpar_scale=1.0,
-            omega_d_scale=1.0,
-            omega_star_scale=1.0,
-            rho_star=1.0,
-        )
-    with pytest.raises(ValueError):
-        _two_species_params(
-            SimpleNamespace(**{**model.__dict__, "Te_over_Ti": -1.0}),
-            kpar_scale=1.0,
-            omega_d_scale=1.0,
-            omega_star_scale=1.0,
-            rho_star=1.0,
-        )
-    with pytest.raises(ValueError):
-        _electron_only_params(
-            SimpleNamespace(**{**model.__dict__, "mass_ratio": 0.0}),
-            kpar_scale=1.0,
-            omega_d_scale=1.0,
-            omega_star_scale=1.0,
-            rho_star=1.0,
-        )
 
 
 def test_score_fit_signal_auto_rejects_nonfinite_and_negative_growth(

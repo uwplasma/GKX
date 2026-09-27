@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Any, Tuple
 
 import matplotlib.pyplot as plt
-from matplotlib.ticker import FuncFormatter, LogLocator
 import numpy as np
 
 from gkx.artifacts.figure_style import (
+    _artifact_base,
+    _label_log_ky_axis,
     GKX_COLORS,
     SERIES,
     annotate_reference,
@@ -20,7 +21,6 @@ from gkx.artifacts.figure_style import (
     panel_label,
     save_figure,
 )
-from gkx.artifacts.plotting import _artifact_base
 
 _TIME_LABEL = r"$t \, c_s/a$"
 _HEAT_FLUX_LABEL = r"$Q/Q_{\mathrm{gB}}$"
@@ -439,17 +439,6 @@ def _annotate_with_headroom(
             else:
                 ax.set_ylim(lo - fraction * span, hi)
     annotate_reference(ax, text, loc=loc)
-
-
-def _label_log_ky_axis(ax: plt.Axes) -> None:
-    """Label major/minor ticks on a narrow log-``ky`` interval."""
-
-    if ax.get_xscale() != "log":
-        return
-    ax.xaxis.set_minor_locator(LogLocator(base=10.0, subs=(2.0, 5.0), numticks=12))
-    plain = FuncFormatter(lambda value, _pos: f"{value:g}")
-    ax.xaxis.set_major_formatter(plain)
-    ax.xaxis.set_minor_formatter(plain)
 
 
 def _plot_ky_spectrum(

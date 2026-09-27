@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter, LogLocator
 from cycler import cycler
 
 __all__ = [
@@ -191,3 +192,50 @@ def save_figure(
     if close:
         plt.close(fig)
     return target
+
+
+def set_plot_style() -> None:
+    """Apply the shared publication style used by generated figures."""
+
+    plt.rcParams.update(
+        {
+            "font.size": 12,
+            "axes.labelsize": 12,
+            "axes.titlesize": 12,
+            "legend.fontsize": 10,
+            "xtick.labelsize": 11,
+            "ytick.labelsize": 11,
+            "axes.grid": True,
+            "grid.alpha": 0.3,
+            "grid.linestyle": "--",
+            "figure.dpi": 120,
+        }
+    )
+
+
+def _artifact_base(path: Path) -> Path:
+    name = path.name
+    for suffix in (
+        ".summary.json",
+        ".timeseries.csv",
+        ".eigenfunction.csv",
+        ".diagnostics.csv",
+        ".scan.csv",
+        ".out.nc",
+    ):
+        if name.lower().endswith(suffix):
+            return path.with_name(name[: -len(suffix)])
+    if path.suffix.lower() in {".json", ".csv", ".nc"}:
+        return path.with_suffix("")
+    return path
+
+
+def _label_log_ky_axis(ax: plt.Axes) -> None:
+    """Label major/minor ticks on a narrow log-``ky`` interval."""
+
+    if ax.get_xscale() != "log":
+        return
+    ax.xaxis.set_minor_locator(LogLocator(base=10.0, subs=(2.0, 5.0), numticks=12))
+    plain = FuncFormatter(lambda value, _pos: f"{value:g}")
+    ax.xaxis.set_major_formatter(plain)
+    ax.xaxis.set_minor_formatter(plain)

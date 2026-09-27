@@ -15,25 +15,17 @@ from gkx.benchmarking_shared import CycloneReference, CycloneScanResult
 import matplotlib.pyplot as plt
 import pytest
 import gkx.artifacts.plotting as plotting
+from gkx.workflows.runtime.results import plot
 from gkx.artifacts.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,
-    eigenfunction_reference_overlay_figure,
-    eigenfunction_overlap_summary_figure,
-    etg_trend_figure,
-    growth_rate_heatmap,
     growth_fit_figure,
     linear_validation_figure,
-    linear_validation_multi_reference_figure,
     LinearValidationPanel,
-    MultiReferenceValidationPanel,
-    ReferenceSeries,
     linear_runtime_panel_figure,
     nonlinear_runtime_panel_figure,
-    plot,
     plot_saved_output,
     scan_comparison_figure,
-    scan_multi_reference_figure,
     zonal_flow_response_figure,
 )
 
@@ -75,30 +67,6 @@ def test_cyclone_comparison_figure(tmp_path):
     )
     fig, _axes = cyclone_comparison_figure(ref, scan)
     out = tmp_path / "comparison.png"
-    fig.savefig(out)
-    plt.close(fig)
-    assert out.exists()
-
-
-def test_etg_trend_figure(tmp_path):
-    """ETG trend plot should render and save."""
-    R = np.array([4.0, 6.0, 8.0])
-    gamma = np.array([0.1, 0.2, 0.3])
-    omega = np.array([-0.4, -0.5, -0.6])
-    fig, _axes = etg_trend_figure(R, gamma, omega, ky_target=3.0)
-    out = tmp_path / "etg_trend.png"
-    fig.savefig(out)
-    plt.close(fig)
-    assert out.exists()
-
-
-def test_growth_rate_heatmap(tmp_path):
-    """Heatmap plot should render and save."""
-    x = np.array([0.0, 1.0, 2.0])
-    y = np.array([1.0, 2.0, 3.0])
-    gamma = np.random.random((y.size, x.size))
-    fig, _ax = growth_rate_heatmap(x, y, gamma, "Test", r"$R/L_n$", r"$R/L_T$")
-    out = tmp_path / "heatmap.png"
     fig.savefig(out)
     plt.close(fig)
     assert out.exists()
@@ -265,35 +233,6 @@ def test_plot_dispatches_promoted_runtime_results_without_side_effects():
         plot(object())
 
 
-def test_eigenfunction_reference_overlay_figure(tmp_path):
-    theta = np.linspace(-np.pi, np.pi, 32)
-    reference = np.cos(theta) + 1j * 0.25 * np.sin(theta)
-    trial = reference * np.exp(1j * 0.41)
-
-    fig, _axes = eigenfunction_reference_overlay_figure(
-        theta,
-        trial,
-        theta,
-        reference,
-        title="KBM overlay",
-    )
-    out = tmp_path / "eigenfunction_overlay.png"
-    fig.savefig(out)
-    plt.close(fig)
-    assert out.exists()
-
-
-def test_eigenfunction_reference_overlay_figure_rejects_shape_mismatch():
-    theta = np.linspace(-1.0, 1.0, 8)
-    with pytest.raises(ValueError):
-        eigenfunction_reference_overlay_figure(
-            theta,
-            np.ones(8, dtype=np.complex128),
-            theta[:-1],
-            np.ones(7, dtype=np.complex128),
-        )
-
-
 def test_zonal_flow_response_figure(tmp_path):
     t = np.linspace(0.0, 20.0, 2001)
     response = 0.15 + np.exp(-0.08 * t) * np.cos(1.5 * t)
@@ -364,67 +303,6 @@ def test_scan_comparison_figure_with_reference_and_log_scale(tmp_path):
     assert axes[0].get_xscale() == "log"
 
 
-def test_linear_validation_multi_reference_figure(tmp_path):
-    z = np.linspace(-1.0, 1.0, 8)
-    panel = MultiReferenceValidationPanel(
-        name="Cyclone",
-        z=z,
-        eigenfunction=np.exp(1j * z),
-        x=np.array([0.2, 0.3]),
-        gamma=np.array([0.1, 0.2]),
-        omega=np.array([0.3, 0.4]),
-        x_label=r"$k_y$",
-        references=[
-            ReferenceSeries(
-                label="RefA",
-                x=np.array([0.2, 0.3]),
-                gamma=np.array([0.11, 0.21]),
-                omega=np.array([0.31, 0.41]),
-                color="#1f77b4",
-            )
-        ],
-        log_x=True,
-    )
-    fig, axes = linear_validation_multi_reference_figure([panel])
-    out = tmp_path / "linear_validation_multi.png"
-    fig.savefig(out)
-    plt.close(fig)
-    assert out.exists()
-    assert axes[0, 1].get_xscale() == "log"
-
-
-def test_linear_validation_multi_reference_figure_empty():
-    with np.testing.assert_raises(ValueError):
-        linear_validation_multi_reference_figure([])
-
-
-def test_scan_multi_reference_figure(tmp_path):
-    x = np.array([0.1, 0.2, 0.4])
-    refs = [
-        ReferenceSeries(
-            label="GX",
-            x=x,
-            gamma=np.array([0.21, 0.31, 0.41]),
-            omega=np.array([-0.11, -0.21, -0.31]),
-            color="#1f77b4",
-        )
-    ]
-    fig, axes = scan_multi_reference_figure(
-        x,
-        np.array([0.2, 0.3, 0.4]),
-        np.array([-0.1, -0.2, -0.3]),
-        r"$k_y$",
-        "Multi-ref",
-        refs,
-        log_x=True,
-    )
-    out = tmp_path / "scan_multi_reference.png"
-    fig.savefig(out)
-    plt.close(fig)
-    assert out.exists()
-    assert axes[0].get_xscale() == "log"
-
-
 def test_growth_fit_figure_with_window(tmp_path):
     t = np.linspace(0.0, 4.0, 32)
     signal = np.exp((0.2 - 0.1j) * t)
@@ -436,21 +314,6 @@ def test_growth_fit_figure_with_window(tmp_path):
     fig.savefig(out)
     plt.close(fig)
     assert out.exists()
-
-
-def test_eigenfunction_overlap_summary_figure(tmp_path):
-    ky = np.array([0.1, 0.2, 0.4])
-    fig, axes = eigenfunction_overlap_summary_figure(
-        ky,
-        np.array([0.98, 0.95, 0.93]),
-        np.array([0.05, 0.08, 0.10]),
-        title="KBM overlap audit",
-    )
-    out = tmp_path / "eig_overlap.png"
-    fig.savefig(out)
-    plt.close(fig)
-    assert out.exists()
-    assert axes[0].get_xscale() == "log"
 
 
 def test_plot_saved_output_missing_summary_and_bad_kind(tmp_path):

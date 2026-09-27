@@ -380,7 +380,7 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     wildcard: dict[str, object] = {}
     exec("from gkx import *", wildcard)
     assert set(wildcard) - {"__builtins__"} == set(gkx.__all__)
-    from gkx.artifacts.plotting import plot as plot_owner
+    from gkx.workflows.runtime.results import plot as plot_owner
 
     assert gkx.plot is public_api.plot is plot_owner
     assert gkx.prepare is public_api.prepare

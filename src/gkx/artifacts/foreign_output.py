@@ -174,7 +174,7 @@ def gx_summary_figure(
                 ax.set_yscale("log")
             ax.set_xlabel(_TIME_LABEL)
         if spectrum is not None:
-            from gkx.artifacts.transport_figures import _label_log_ky_axis
+            from gkx.artifacts.figure_style import _label_log_ky_axis
 
             axis, values, label = spectrum
             ax = axes[-1]
@@ -244,22 +244,7 @@ def plot_gx_output(path: str | Path, *, out: str | Path | None = None) -> Path:
     return out_path
 
 
-__all__ = ["foreign_output_plotter"]
-
-
-def _readers() -> list[tuple[Callable[[Path], bool], Callable[..., Any]]]:
-    """Return the (recognizer, plotter) pairs, imported on demand."""
-
-    from gkx.artifacts import gx_output
-
-    return [(gx_output.is_gx_output, gx_output.plot_gx_output)]
-
-
 def foreign_output_plotter(path: str | Path) -> Callable[..., Any] | None:
-    """Return a plotter for ``path`` when another code wrote it, else ``None``."""
+    """Return a plotter for ``path`` when another code (GX) wrote it, else ``None``."""
 
-    candidate = Path(path)
-    for recognizes, plot in _readers():
-        if recognizes(candidate):
-            return plot
-    return None
+    return plot_gx_output if is_gx_output(Path(path)) else None

@@ -103,12 +103,14 @@ class _ResultArtifacts:
         writer = self._artifact_writer(artifacts_io)
         return writer(path, self)
 
+    _figure = ""
+
     def plot(self) -> Any:
         """Return the standard figure for this result."""
 
-        from gkx.artifacts.plotting import plot as _plot
+        from gkx.artifacts import plotting
 
-        return _plot(self)
+        return getattr(plotting, self._figure)(self)
 
     def print_summary(self, *, stream: Any = None) -> None:
         """Print the same scalar summary that ``save`` records."""
@@ -124,6 +126,8 @@ class _ResultArtifacts:
 @dataclass(frozen=True)
 class RuntimeLinearResult(_ResultArtifacts):
     """Result container for runtime linear runs."""
+
+    _figure = "linear_result_figure"
 
     ky: float
     gamma: float
@@ -194,6 +198,8 @@ class RuntimeLinearResult(_ResultArtifacts):
 class RuntimeLinearScanResult(_ResultArtifacts):
     """Result container for runtime linear ky scans."""
 
+    _figure = "scan_result_figure"
+
     ky: np.ndarray
     gamma: np.ndarray
     omega: np.ndarray
@@ -249,6 +255,8 @@ class RuntimeParameterScanResult:
 @dataclass(frozen=True)
 class RuntimeNonlinearResult(_ResultArtifacts):
     """Result container for runtime nonlinear runs."""
+
+    _figure = "nonlinear_result_figure"
 
     t: np.ndarray
     diagnostics: SimulationDiagnostics | None
@@ -351,3 +359,11 @@ def build_runtime_nonlinear_result(
         kx_selected=kx_selected,
         saturation=saturation,
     )
+
+
+def plot(result: Any) -> Any:
+    """Create the standard in-memory figure for a runtime result."""
+
+    if not isinstance(result, _ResultArtifacts) or not result._figure:
+        raise TypeError("plot expects a LinearResult, NonlinearResult, or ScanResult")
+    return result.plot()
