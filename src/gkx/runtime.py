@@ -632,12 +632,17 @@ def run_runtime_linear(
     initial_state: Any | None = None,
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
+    kx_target: float | None = None,
 ) -> RuntimeLinearResult:
-    """Run one linear point from a case-agnostic runtime config."""
+    """Run one linear point from a case-agnostic runtime config.
+
+    ``kx_target`` picks the fitted kx (nearest grid value; default kx = 0).
+    """
 
     return run_runtime_linear_impl(
         cfg,
         ky_target=ky_target,
+        kx_target=kx_target,
         Nl=Nl,
         Nm=Nm,
         solver=solver,
@@ -823,6 +828,7 @@ class _RuntimeLinearRequest(_RuntimeLinearFitOptions):
     show_progress: bool
     status_callback: Callable[[str], None] | None
     deps: RuntimeLinearDispatchDeps
+    kx_target: float | None = None
 
 
 def build_runtime_linear_dispatch_deps(scope: Any) -> RuntimeLinearDispatchDeps:
@@ -885,6 +891,7 @@ def _run_full_linear_request(
         request.cfg,
         deps=request.deps.full_deps,
         ky_target=request.ky_target,
+        kx_target=request.kx_target,
         Nl=Nl_use,
         Nm=Nm_use,
         solver=request.solver,
@@ -941,6 +948,7 @@ def run_runtime_linear_impl(
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
     deps: RuntimeLinearDispatchDeps,
+    kx_target: float | None = None,
 ) -> RuntimeLinearResult:
     """Run one linear point from a case-agnostic runtime config."""
 
@@ -948,6 +956,7 @@ def run_runtime_linear_impl(
         _RuntimeLinearRequest(
             cfg=cfg,
             ky_target=ky_target,
+            kx_target=kx_target,
             Nl=Nl,
             Nm=Nm,
             solver=solver,

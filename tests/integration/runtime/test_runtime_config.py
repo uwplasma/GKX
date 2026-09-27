@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from gkx.workflows.runtime import wout as runtime_wout
 from gkx.config import (
     RuntimeConfig,
@@ -191,6 +193,73 @@ def test_runtime_toml_rejects_removed_diffrax_time_keys(tmp_path: Path) -> None:
     )
     cfg, _raw = load_runtime_from_toml(path)
     assert cfg.time.method == "rk4"
+
+
+def test_runtime_toml_rejects_misspelled_keys_and_sections(tmp_path: Path) -> None:
+    """A misspelled deck key must fail, not silently run the default physics.
+
+    Before this check ``[geometry] shat = 0.3`` loaded as ``s_hat = 0.8``,
+    ``[grid] nz = 32`` as ``Nz = 64`` and a ``[collision]`` table vanished.
+    """
+
+    path = tmp_path / "case.toml"
+    cases = (
+        ("[geometry]\nshat = 0.3\n", "geometry.*'shat'.*s_hat"),
+        ("[grid]\nnz = 32\n", "grid.*'nz'.*Nz"),
+        ("[time]\ntmax = 5.0\n", "time.*'tmax'.*t_max"),
+        ("[init]\ninit_amplitude = 1.0\n", "init.*'init_amplitude'.*init_amp"),
+        ("[collision]\nnu_hyper = 5.0\n", "'collision'.*'collisions'"),
+    )
+    for body, pattern in cases:
+        path.write_text("schema_version = 1\n" + body, encoding="utf-8")
+        with pytest.raises(ValueError, match=pattern):
+            load_runtime_from_toml(path)
+
+    for body, pattern in (
+        ("[run]\nnl = 8\n", r"\[run\].*'nl'.*'Nl'"),
+        ("[scan]\nky_values = [0.1]\n", r"\[scan\].*'ky_values'"),
+    ):
+        path.write_text("schema_version = 1\n" + body, encoding="utf-8")
+        with pytest.raises(ValueError, match=pattern):
+            load_runtime_from_toml(path)
+
+    path.write_text(
+        "schema_version = 1\n[geometry]\ns_hat = 0.3\n[grid]\nNz = 32\n",
+        encoding="utf-8",
+    )
+    cfg, _raw = load_runtime_from_toml(path)
+    assert (cfg.geometry.s_hat, cfg.grid.Nz) == (0.3, 32)
+
+
+def test_zonal_deck_kx_selects_the_fitted_mode() -> None:
+    """``[run] kx`` picks the fitted kx; it used to be ignored for kx = 0.
+
+    On the Merlo Case III deck (ky = 0, kx = 0.05) the ignored key left the
+    run fitting the (kx, ky) = (0, 0) mode, whose potential is identically zero
+    with Boltzmann electrons.
+    """
+
+    from gkx.runtime import run_runtime_linear
+
+    path = REPO_ROOT / "benchmarks" / "cases" / "miller_zonal_response.toml"
+    cfg, data = load_runtime_from_toml(path)
+    cfg = replace(cfg, grid=replace(cfg.grid, Nz=16))
+    res = run_runtime_linear(
+        cfg,
+        ky_target=0.0,
+        kx_target=data["run"]["kx"],
+        Nl=2,
+        Nm=4,
+        solver="time",
+        dt=0.01,
+        steps=40,
+        sample_stride=4,
+        fit_signal="phi",
+        require_positive=False,
+        min_points=4,
+    )
+    assert res.selection.kx_index != 0
+    assert np.max(np.abs(res.signal)) > 0.0
 
 
 def test_maintained_runtime_decks_carry_no_removed_time_keys() -> None:

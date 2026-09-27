@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import difflib
 import hashlib
 from dataclasses import is_dataclass, replace
 from typing import Any, Callable, cast
@@ -164,13 +165,97 @@ def resolve_runtime_path(value: str | None, *, base_dir: Path) -> str | None:
     return str(path)
 
 
-def _merge_dataclass(base: Any, overrides: dict | None) -> Any:
+# Top-level tables and keys a runtime deck may carry. Anything else is a typo
+# (``[collision]``) that would otherwise be dropped without a word.
+RUNTIME_TOML_SECTIONS = frozenset(
+    {
+        "schema_version",
+        "species",
+        "grid",
+        "time",
+        "geometry",
+        "init",
+        "physics",
+        "collisions",
+        "normalization",
+        "terms",
+        "expert",
+        "output",
+        "quasilinear",
+        "parallel",
+        "damping_reference",
+        "run",
+        "scan",
+        "fit",
+    }
+)
+
+
+# Keys the command and case owners read from ``[run]`` and ``[scan]``.
+RUNTIME_RUN_KEYS = frozenset(
+    {
+        "ky",
+        "kx",
+        "Nl",
+        "Nm",
+        "solver",
+        "method",
+        "dt",
+        "steps",
+        "sample_stride",
+        "fit_signal",
+        "diagnostics",
+        "laguerre_mode",
+    }
+)
+RUNTIME_SCAN_KEYS = frozenset(
+    {
+        "ky",
+        "Nl",
+        "Nm",
+        "solver",
+        "method",
+        "dt",
+        "steps",
+        "sample_stride",
+        "fit_signal",
+        "warm_start",
+    }
+)
+
+
+def reject_unknown_keys(section: str, keys: Any, allowed: Any) -> None:
+    """Raise on deck keys no owner reads, naming the closest valid spelling."""
+
+    unknown = sorted(set(keys) - set(allowed))
+    if not unknown:
+        return
+    hints = []
+    for key in unknown:
+        match = difflib.get_close_matches(key, allowed, n=1, cutoff=0.5)
+        if not match:
+            folded = {name.lower(): name for name in allowed}
+            match = [folded[key.lower()]] if key.lower() in folded else []
+        hints.append(f"{key!r}" + (f" (did you mean {match[0]!r}?)" if match else ""))
+    raise ValueError(
+        f"{section}: unknown key(s) {', '.join(hints)}; a misspelled key would "
+        "otherwise run with the default value. Valid keys: "
+        + ", ".join(sorted(allowed))
+    )
+
+
+def _merge_dataclass(base: Any, overrides: dict | None, section: str = "[deck]") -> Any:
     """Recursively merge a dict into a dataclass, returning a new instance."""
 
     if overrides is None:
         return base
     if not is_dataclass(base) or isinstance(base, type):
         raise TypeError("base must be a dataclass instance")
+    reject_unknown_keys(
+        section,
+        overrides,
+        base.__dataclass_fields__,  # type: ignore[attr-defined]
+    )
     updates = {}
     for field in base.__dataclass_fields__.values():  # type: ignore[attr-defined]
         name = field.name
@@ -181,7 +266,7 @@ def _merge_dataclass(base: Any, overrides: dict | None) -> Any:
             continue
         current = getattr(base, name)
         if is_dataclass(current) and isinstance(value, dict):
-            updates[name] = _merge_dataclass(current, value)
+            updates[name] = _merge_dataclass(current, value, f"{section}.{name}")
         else:
             updates[name] = value
     return cast(Any, replace(base, **updates))
@@ -248,18 +333,18 @@ def _normalize_time_overrides(overrides: Any) -> dict[str, Any] | None:
 def _runtime_base_config(data: dict[str, Any]) -> RuntimeConfig:
     """Return a runtime config after applying common dataclass sections."""
 
-    return cast(
-        RuntimeConfig,
-        _merge_dataclass(
-            RuntimeConfig(),
-            {
-                "grid": data.get("grid"),
-                "time": _normalize_time_overrides(data.get("time")),
-                "geometry": _normalize_geometry_overrides(data.get("geometry")),
-                "init": data.get("init"),
-            },
-        ),
-    )
+    cfg = RuntimeConfig()
+    sections = {
+        "grid": data.get("grid"),
+        "time": _normalize_time_overrides(data.get("time")),
+        "geometry": _normalize_geometry_overrides(data.get("geometry")),
+        "init": data.get("init"),
+    }
+    for name, overrides in sections.items():
+        cfg = replace(
+            cfg, **{name: _merge_dataclass(getattr(cfg, name), overrides, f"[{name}]")}
+        )
+    return cfg
 
 
 def _replace_runtime_section(
@@ -363,6 +448,10 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     data = load_toml(path)
     _validate_runtime_schema_version(data)
     _validate_removed_time_keys(data)
+    reject_unknown_keys(str(path), data, RUNTIME_TOML_SECTIONS)
+    for name, allowed in (("run", RUNTIME_RUN_KEYS), ("scan", RUNTIME_SCAN_KEYS)):
+        if isinstance(data.get(name), dict):
+            reject_unknown_keys(f"[{name}]", data[name], allowed)
     base_dir = path.resolve().parent
     cfg = _apply_runtime_section_overrides(_runtime_base_config(data), data)
     species = _runtime_species_from_toml(data.get("species"))
