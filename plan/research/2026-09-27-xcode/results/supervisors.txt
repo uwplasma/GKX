@@ -30,6 +30,8 @@ gs2 KBM_gs2_M_ky0.10_e3 rc=0 wall=711.05 end=2026-09-27T11:52:08-05:00
 gs2 KBM_gs2_M_ky0.30_e3 start=2026-09-27T11:52:08-05:00
 gs2 KBM_gs2_M_ky0.30_e3 rc=0 wall=1019.08 end=2026-09-27T12:09:07-05:00
 gs2 KBM_gs2_M_ky0.50_e3 start=2026-09-27T12:09:07-05:00
+gs2 KBM_gs2_M_ky0.50_e3 rc=0 wall=838.22 end=2026-09-27T12:23:05-05:00
+gs2 KBMB_gs2_M_ky0.10_e3 start=2026-09-27T12:23:05-05:00
 lane=gapgs2 pid=482030 start=2026-09-27T09:55:39-05:00 np=4 cpus=32-35 queue=<bench>/q_gap_gs2.txt
 gs2 gap_gs2_M_ky0.30_r3_base start=2026-09-27T09:55:39-05:00
 gs2 gap_gs2_M_ky0.30_r3_base rc=0 wall=949.30 end=2026-09-27T10:11:29-05:00
@@ -44,6 +46,12 @@ stella gap_stella_M_ky0.30_r1_streamexpl rc=0 wall=556.90 end=2026-09-27T10:21:0
 stella gap_stella_M_ky0.30_r1_allexpl start=2026-09-27T10:21:00-05:00
 stella gap_stella_M_ky0.30_r1_allexpl rc=0 wall=1025.62 end=2026-09-27T10:38:06-05:00
 lane=gapstella2 ALL DONE 2026-09-27T10:38:06-05:00
+lane=gapstella3 pid=770219 start=2026-09-27T12:26:36-05:00 np=4 cpus=12-15 queue=<bench>/q_gap_stella3.txt
+stella gap_stella_M_ky0.30_r1_nosemilag start=2026-09-27T12:26:36-05:00
+stella gap_stella_M_ky0.30_r1_nosemilag rc=2 wall=40.26 end=2026-09-27T12:27:16-05:00
+stella gap_stella_M_ky0.30_r1_vpamax4 start=2026-09-27T12:27:16-05:00
+stella gap_stella_M_ky0.30_r1_vpamax4 rc=2 wall=28.11 end=2026-09-27T12:27:44-05:00
+lane=gapstella3 ALL DONE 2026-09-27T12:27:44-05:00
 lane=gapstella pid=482036 start=2026-09-27T09:55:39-05:00 np=4 cpus=28-31 queue=<bench>/q_gap_stella.txt
 stella gap_stella_M_ky0.30_r1_base start=2026-09-27T09:55:39-05:00
 stella gap_stella_M_ky0.30_r1_base rc=0 wall=626.12 end=2026-09-27T10:06:06-05:00
@@ -54,3 +62,5 @@ stella gap_stella_M_ky0.30_r1_nomirror rc=2 wall=66.37 end=2026-09-27T10:08:27-0
 stella gap_stella_M_ky0.30_r1_nodrift_nomirror start=2026-09-27T10:08:27-05:00
 stella gap_stella_M_ky0.30_r1_nodrift_nomirror rc=2 wall=129.97 end=2026-09-27T10:10:37-05:00
 lane=gapstella ALL DONE 2026-09-27T10:10:37-05:00
+lane=long pid=741763 start=2026-09-27T12:11:15-05:00 np=4 cpus=24-27 queue=<bench>/q_long.txt
+gs2 gap_gs2_M_ky0.30_r3_nodrift_t1500 start=2026-09-27T12:11:15-05:00

@@ -48,13 +48,15 @@ Every code runs the same physics (Q20 case M): stella on the r1 grid (converged 
 | Variant | GS2 γ | stella γ | GKX γ (Nl8/Nm24) | GKX γ (Nl16/Nm48) |
 |---|---:|---:|---:|---:|
 | base | 0.12546 | 0.17481 | 0.12865 | section 5 |
-| mirror off | — (no knob) | 0.17536 (+0.3%) | 0.11115 (−13.6%) | — |
+| mirror off | — (no knob) | 0.17536 (+0.3%) | 0.11115 (−13.6%) | 0.10977 |
 | both drifts off | decays, unsettled at t = 300 | decays, unsettled | 0.02937 | 0.02791 |
 | drifts and mirror off | — | φ vanishes | 0.01392 | — |
 | stella mirror explicit | — | 0.17481 (identical) | — | — |
+| stella mirror implicit, semi-Lagrange off | — | 0.17483 (+0.01%) | — | — |
+| stella `vpa_max = vperp_max = 4` | — | 0.17661 (+1.0%) | — | — |
 
 **Finding 1: stella's growth rate does not respond to its mirror term.**
-- Removing the mirror term moves stella's γ by +0.3%. Switching the mirror to the explicit scheme reproduces the implicit result to every printed digit.
+- Removing the mirror term moves stella's γ by +0.3%. Switching the mirror to the explicit scheme reproduces the implicit result to every printed digit, and turning off the semi-Lagrange mirror moves it by 0.01%. Widening the velocity box to 4 moves it by 1.0%, so the velocity grid is not the cause.
 - In GKX the mirror force is worth 14% of γ at this ky.
 - A term the stella build does not respond to is the first concrete lead on the 1.40–1.47x excess.
 - The excess is not a normalization. stella's ω is only 1.17x high, and a pure time or ky rescaling would move γ and ω together.
@@ -65,7 +67,7 @@ Every code runs the same physics (Q20 case M): stella on the r1 grid (converged 
 - Longer runs (t = 1500 code units, `gap_*_nodrift_t1500`) will show whether the grid codes have the same branch at a smaller rate, or none.
 - Until those finish, this is an open cross-code difference, not a GKX bug.
 
-**Next step for the stella excess.** Repeat the knockout with stella's `mirror_semi_lagrange = .false.` and with `vpa_max = 4`. Add a GS2 run on stella r1's ntheta and velocity resolution. Together these separate a velocity-grid effect from a mirror-term defect in the v1.0 build.
+**Next step for the stella excess.** The mirror scheme and the velocity box are ruled out (table above). What remains is to compare stella's mirror coefficient array (`mirror` in `gk_mirror.f90`, built from `dbdzed` and `gradpar`) against GS2's and GKX's `bgrad` on this surface, and to run a stella case whose mirror is known to matter (a trapped-particle mode) to check whether the term acts at all in this build.
 
 ## 3. VAL-KE: Cyclone Miller with kinetic electrons (m_e/m_i = 2.7e-4, β = 1e-5 with A∥)
 
