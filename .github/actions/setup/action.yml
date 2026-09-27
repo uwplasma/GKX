@@ -1,0 +1,55 @@
+name: Set up GKX
+description: >-
+  Python 3.11, the package with its dev extra installed by uv from a cached
+  wheel store, and optionally a restored JAX persistent compilation cache.
+inputs:
+  jax-cache:
+    description: >-
+      Cache name for JAX compiled executables (one per job or shard); empty
+      disables the compilation cache.
+    default: ""
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    # uv resolves and installs the same requirement set as pip in ~10 s from a
+    # warm cache; pip took ~35 s per job with its own cache warm.
+    - uses: astral-sh/setup-uv@v10.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: pyproject.toml
+
+    - name: Install GKX with the dev extra
+      shell: bash
+      run: |
+        uv pip install --system -e ".[dev]"
+        python -c "import jax, jaxlib, numpy; print('jax', jax.__version__, 'jaxlib', jaxlib.__version__, 'numpy', numpy.__version__)"
+
+    # XLA keys every entry on the lowered module, compile options and backend,
+    # so a source change is a miss, never a stale hit; the jax version is in
+    # the cache key because the executables are compiler output. The restore
+    # prefix takes the newest cache of the same lane, and the source and test hash in
+    # the key saves a fresh one whenever either changes.
+    - name: Point JAX at a persistent compilation cache
+      if: inputs.jax-cache != ''
+      shell: bash
+      run: |
+        dir="$HOME/.cache/gkx-ci-jax"
+        mkdir -p "$dir"
+        {
+          echo "JAX_COMPILATION_CACHE_DIR=$dir"
+          echo "GKX_JAX_CACHE_DIR=$dir"
+          echo "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0"
+          echo "JAX_VERSION=$(python -c 'import jax; print(jax.__version__)')"
+        } >> "$GITHUB_ENV"
+
+    - if: inputs.jax-cache != ''
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/gkx-ci-jax
+        key: jax-${{ env.JAX_VERSION }}-${{ inputs.jax-cache }}-${{ hashFiles('src/**/*.py', 'tests/**/*.py') }}
+        restore-keys: |
+          jax-${{ env.JAX_VERSION }}-${{ inputs.jax-cache }}-

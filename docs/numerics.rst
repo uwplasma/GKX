@@ -85,8 +85,11 @@ These links are clickable in the HTML docs via the ``viewcode`` extension.
 Structured solver dependency contract
 -------------------------------------
 
-GKX requires ``solvax>=0.26.0``; ``pyproject.toml`` is the only place that
-floor is declared. Version 0.26.0 is the first release that exports every
+GKX requires ``solvax>=0.27.0``; ``pyproject.toml`` is the only place that
+floor is declared. Version 0.27.0 is the first release that declares
+``equinox>=0.13.3``, so an older equinox already installed is upgraded rather
+than kept (equinox 0.11-0.13.0 fails on import under JAX >= 0.10). Version
+0.26.0 is the first release that exports every
 SOLVAX name GKX imports: the sparse-direct growth-rate eigensolver
 (``eigensolver="sparse-direct"``) uses ``sparse_eigenvalue``, ``CsrPattern``
 and ``csr_data_from_products``, which 0.25.0 lacks. Before that the binding
