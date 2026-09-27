@@ -124,9 +124,14 @@ At the same points, GS2 (converged ladder, Q20) gives Miller 0.05783 / 0.12546 /
 
 The Q20 ladder r1–r4 did not converge: r3 → r4 moved γ by +20.9%. Two further rungs run at ntheta 64 / nperiod 4:
 - r5 (negrid 32, ngauss 12): γ = 0.02313, ω = 0.49995, settled.
-- r6 (negrid 48, ngauss 16): still running when this record was written; `results/fit_grid_codes.csv` shows its state.
+- r6 (negrid 48, ngauss 16): γ = 0.01841, ω = 0.49061, settled.
 
-With the energy grid doubled, GS2 lands 7% below gyaradax's converged 0.02485 (Q20) and 34% below the GX golden (0.035189). It moves toward the Hermite–Laguerre values at Nl 32 (0.02485) and away from Nl 16 (0.0339). That supports the Q16 reading that this ky has no converged Hermite–Laguerre reference at Nl ≤ 24, and that the GX golden is truncation-limited there. The r6 rung decides whether GS2 has converged.
+GS2 is still not converged in the energy grid. Across negrid 16 / 24 / 32 / 48 its γ reads 0.0220 / 0.0278 / 0.0231 / 0.0184 (r5 → r6 is −20%). GKX's certified eigenpairs follow a similar path in Laguerre resolution: Nl 24 / 32 / 48 give 0.03301 / 0.02485 / 0.01835 (Q16). At the finest rung of each, the two codes agree to 0.3% (0.01841 vs 0.01835), but neither ladder has converged.
+
+So there is still no converged cross-code reference at s-α ky = 0.55:
+- The GX golden (0.035189, Nl 16) is a truncation value.
+- The ledger's `truncation-limited` label for this ky stands.
+- gyaradax's apparently converged 0.02485 (Q20) is not confirmed by either ladder.
 
 ## What is promoted, and what is not
 

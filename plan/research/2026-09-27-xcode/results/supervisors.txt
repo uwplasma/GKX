@@ -40,6 +40,8 @@ gs2 KBMB_gs2_M_ky0.30_e3 rc=0 wall=639.38 end=2026-09-27T12:49:45-05:00
 gs2 KBMB_gs2_M_ky0.50_e3 start=2026-09-27T12:49:45-05:00
 gs2 KBMB_gs2_M_ky0.50_e3 rc=0 wall=588.00 end=2026-09-27T12:59:33-05:00
 gs2 gs2_S_ky0.55_r6 start=2026-09-27T12:59:33-05:00
+gs2 gs2_S_ky0.55_r6 rc=0 wall=7768.97 end=2026-09-27T15:09:02-05:00
+lane=emB ALL DONE 2026-09-27T15:09:02-05:00
 lane=gapgs2 pid=482030 start=2026-09-27T09:55:39-05:00 np=4 cpus=32-35 queue=<bench>/q_gap_gs2.txt
 gs2 gap_gs2_M_ky0.30_r3_base start=2026-09-27T09:55:39-05:00
 gs2 gap_gs2_M_ky0.30_r3_base rc=0 wall=949.30 end=2026-09-27T10:11:29-05:00
