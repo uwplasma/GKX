@@ -458,10 +458,10 @@ path = "runtime.py"
 # file -- and handed it most of its names. That is a split module, not an
 # interface, so the two rejoin. No definition changed and no export moved.
 # 781 -> 798: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
-# 798 -> 1108 (ARCH-B): absorbs workflows/runtime/policies.py, whose only
+# 798 -> 1111 (ARCH-B): absorbs workflows/runtime/policies.py, whose only
 # consumer was this file and which handed it ten names -- the one remaining
 # split module the cohesion gate counted. Same trade as execution.py above.
-baseline_lines = 1108
+baseline_lines = 1111
 target_lines = 500
 reason = "Public runtime facade; the overage is the exploded __all__ list, so shrink it by removing exports rather than by splitting the facade."
 
@@ -1111,8 +1111,8 @@ recursive = true
 # 93359 -> 93953: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 93953 -> 93987: measured for 2.4.0 (#290 collision-basis layout).
 # 93987 -> 79446: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
-# 79446 -> 74700 (ARCH-B): measured after the contraction.
-baseline = 74700
+# 79446 -> 74759 (ARCH-B): measured after the contraction.
+baseline = 74759
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1433,8 +1433,8 @@ recursive = true
 # 94107 -> 94628: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 94628 -> 94690: measured for 2.4.0 (#290 collision-basis layout).
 # 94690 -> 84139: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
-# 84139 -> 81599 (ARCH-B): tests of deleted code removed; files merged.
-baseline = 81599
+# 84139 -> 81598 (ARCH-B): tests of deleted code removed; files merged.
+baseline = 81598
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -13,8 +13,8 @@ components, single-consumer modules) and
 
 | Measure | Base `cf1d40828` | This branch |
 | --- | ---: | ---: |
-| `src/gkx` Python files / lines | 160 / 79,446 | 136 / 74,700 |
-| `tests` Python files / lines | 74 / 84,139 | 29 / 81,599 |
+| `src/gkx` Python files / lines | 160 / 79,446 | 136 / 74,759 |
+| `tests` Python files / lines | 74 / 84,139 | 29 / 81,598 |
 | Import cycles (SCCs, function-local imports counted) | 7 | 1 |
 | Single-consumer split modules (cohesion gate, >= 6 names) | 2 | 1 |
 | Low-cohesion modules (cohesion gate) | 8 (baseline) | 5 |
