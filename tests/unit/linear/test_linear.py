@@ -1274,8 +1274,9 @@ def test_selected_ky_hyperdiffusion_keeps_the_parent_grid_cutoff(
             rtol=1.0e-12,
             atol=0.0,
         )
-    # The two ky values below the cutoff are damped by (ky/ky_cut)^4, not D_hyper.
-    rate = -np.real(hyper_full[0, 0, 0, 1, 0, 0])
+    # A mode well inside the cutoff is damped by (k_perp^2 / k_perp,max^2)^p,
+    # a small fraction of D_hyper.
+    rate = -np.real(hyper_full[0, 0, 1, 0, 0])
     assert 0.0 < rate < 0.05
 
 
