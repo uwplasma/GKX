@@ -1,5 +1,31 @@
 # QA nonlinear transport
 
+## Maintained turbulence-optimization examples (VMEX)
+
+The runnable QA turbulence optimizations now live in VMEX, next to
+`QA_optimization.py`, and each adds one GKX objective tuple to its list,
+evaluated on flux tubes chosen by physical radius `s` and field-line label
+`alpha` (mean or softmax over tubes):
+
+| VMEX script | GKX objective | Derivative route |
+| --- | --- | --- |
+| [`QA_optimization_turbulence_linear.py`](https://github.com/uwplasma/vmex/blob/main/examples/optimization/QA_optimization_turbulence_linear.py) | dominant linear growth rate | forward-mode implicit Jacobian, least squares |
+| [`QA_optimization_turbulence_quasilinear.py`](https://github.com/uwplasma/vmex/blob/main/examples/optimization/QA_optimization_turbulence_quasilinear.py) | mixing-length quasilinear heat flux | forward-mode implicit Jacobian (eigenvector derivatives), least squares |
+| [`QA_optimization_turbulence_nonlinear.py`](https://github.com/uwplasma/vmex/blob/main/examples/optimization/QA_optimization_turbulence_nonlinear.py) | post-saturation window heat flux, saturation-gated | one reverse equilibrium adjoint per gradient, L-BFGS-B |
+
+```bash
+pip install "vmex[turbulence]"   # gkx>=2.4.0
+```
+
+VMEX assembles least-squares Jacobians in forward mode, so a reverse-only
+GKX objective (the checkpointed nonlinear window, or
+`solver_growth_rate_from_geometry`'s `dominant_real_eigenvalue`) must go
+through VMEX's scalar `from_loss` route, as the nonlinear script does.
+[run.py](run.py) below stays as the pinned record of the earlier
+single-tube campaign.
+
+## The pinned campaign script
+
 [run.py](run.py) (formerly `QA_optimization.py`) follows VMEX's boundary-mode ladder and
 adds physical GKX heat flux to its objective tuples:
 
