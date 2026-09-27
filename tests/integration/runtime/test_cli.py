@@ -3299,7 +3299,6 @@ def test_deprecated_commands_name_their_replacement(capsys, monkeypatch) -> None
         assert name in err and f"gkx {replacement}" in err
 
 
-
 def test_only_the_deprecated_spellings_warn(capsys, monkeypatch) -> None:
     """``gkx run``/``gkx scan`` (and the deck shorthand) print no deprecation."""
 
@@ -3313,7 +3312,8 @@ def test_only_the_deprecated_spellings_warn(capsys, monkeypatch) -> None:
         monkeypatch.setattr(f"gkx.cli.{target}", lambda _args, deps: 0)
     for nonlinear in (False, True):
         cfg = replace(
-            RuntimeConfig(), physics=replace(RuntimeConfig().physics, nonlinear=nonlinear)
+            RuntimeConfig(),
+            physics=replace(RuntimeConfig().physics, nonlinear=nonlinear),
         )
         monkeypatch.setattr("gkx.cli.load_runtime_from_toml", lambda _p: (cfg, {}))
         for argv, warned in (
@@ -3327,6 +3327,7 @@ def test_only_the_deprecated_spellings_warn(capsys, monkeypatch) -> None:
             assert args.func(args) == 0
             err = capsys.readouterr().err
             assert ("deprecated" in err) is warned, (argv, err)
+
 
 # ---- from test_runtime_helpers.py ----
 

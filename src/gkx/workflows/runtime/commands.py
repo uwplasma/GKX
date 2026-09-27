@@ -28,6 +28,7 @@ from gkx.workflows.runtime.orchestration_artifacts import (
     write_scan_runtime_command_outputs,
 )
 
+
 @dataclass(frozen=True)
 class RuntimeLinearCommandOptions:
     """Resolved executable options for one linear runtime command."""
@@ -143,7 +144,9 @@ def _runtime_fit_config(data: dict[str, Any]) -> dict[str, Any]:
     return fit
 
 
-def _with_fit_signal(section: dict[str, Any], fit_cfg: dict[str, Any]) -> dict[str, Any]:
+def _with_fit_signal(
+    section: dict[str, Any], fit_cfg: dict[str, Any]
+) -> dict[str, Any]:
     """Move ``[fit] fit_signal`` into the command section that resolves it.
 
     ``fit_signal`` may be declared under ``[fit]`` (as the case helpers read

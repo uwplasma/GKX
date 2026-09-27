@@ -284,9 +284,7 @@ def reject_unknown_keys(section: str, keys: Any, allowed: Any) -> None:
     )
 
 
-def _merge_dataclass(
-    base: Any, overrides: dict | None, section: str = "[deck]"
-) -> Any:
+def _merge_dataclass(base: Any, overrides: dict | None, section: str = "[deck]") -> Any:
     """Recursively merge a dict into a dataclass, returning a new instance."""
 
     if overrides is None:
