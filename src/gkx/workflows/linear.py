@@ -134,7 +134,6 @@ def _prepare_linear_runtime_context(
     *,
     deps: FullLinearRuntimeDeps,
     ky_target: float,
-    kx_target: float | None,
     n_laguerre: int,
     n_hermite: int,
     solver: str,
@@ -142,6 +141,7 @@ def _prepare_linear_runtime_context(
     return_state: bool,
     initial_state: Any | None,
     status_callback: _StatusCallback,
+    kx_target: float | None = None,
 ) -> _LinearRuntimeContext:
     ql_enabled = bool(getattr(cfg.quasilinear, "enabled", False))
     return_state_requested = bool(return_state)
