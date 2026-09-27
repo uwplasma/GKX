@@ -49,7 +49,7 @@ import gkx.solvers_linear_krylov_algorithms as krylov_algorithms
 import gkx.solvers_nonlinear_imex as imex_module
 import gkx.solvers_nonlinear_imex_diagnostics as imex_diagnostics
 import gkx.solvers_time_explicit as eti
-import gkx.solvers_time_explicit_diagnostics as explicit_diagnostics
+import gkx.solvers_time_explicit as explicit_diagnostics
 import jax
 import jax.numpy as jnp
 import numpy as np

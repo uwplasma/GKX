@@ -16,12 +16,17 @@ from gkx.core_grid import build_spectral_grid
 from gkx.core_velocity import _gyro_bessel_factors, J_l_all
 import gkx.operators.linear as linear_cache
 import gkx.solvers_linear_integrators as linear_integrators
-import gkx.solvers_linear_integrator_diagnostics as linear_diagnostics
+import gkx.solvers_linear_integrators as linear_diagnostics
 import gkx.solvers_linear_implicit as linear_implicit
 import gkx.solvers_linear_krylov_algorithms as krylov_algorithms
 import gkx.operators.linear.dissipation as linear_dissipation
 import gkx.terms.linear_terms as linear_terms
-from gkx.operators.linear.cache_arrays import hypercollision_damping
+from gkx.operators.linear.cache_arrays import (
+    hypercollision_damping,
+    _build_end_damping_profile_array,
+    _build_gyroaverage_cache_arrays,
+    _build_low_rank_moment_cache_arrays,
+)
 from gkx.operators.linear.cache_builder import (
     build_linear_cache,
     linked_chain_cover_mask,
@@ -30,6 +35,9 @@ from gkx.operators.linear.cache_builder import (
 from gkx.operators.linear.linked import (
     linked_cover_mask_from_cache,
     mask_supplied_state,
+    _build_linked_end_damping_profile,
+    _build_linked_fft_maps,
+    _signed_to_index,
 )
 from gkx.operators.linear.moments import build_H, lenard_bernstein_eigenvalues
 from gkx.solvers_linear_krylov_algorithms import _linked_covered_mode_mask
@@ -38,24 +46,6 @@ from gkx.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
     term_config_to_linear_terms,
-)
-from gkx.operators.linear.rhs import linear_rhs, linear_rhs_cached
-from gkx.solvers_linear_integrators import (
-    integrate_linear,
-    integrate_linear_diagnostics,
-)
-from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-from gkx.operators.linear.cache_arrays import (
-    _build_end_damping_profile_array,
-    _build_gyroaverage_cache_arrays,
-    _build_low_rank_moment_cache_arrays,
-)
-from gkx.operators.linear.linked import (
-    _build_linked_end_damping_profile,
-    _build_linked_fft_maps,
-    _signed_to_index,
-)
-from gkx.operators.linear.params import (
     _SPECIES_PARAM_NAMES,
     _as_species_array,
     _check_nonnegative,
@@ -63,16 +53,22 @@ from gkx.operators.linear.params import (
     _is_tracer,
     _resolve_implicit_preconditioner,
 )
-from gkx.solvers_linear_implicit import (
-    _build_implicit_operator,
-    _integrate_linear_implicit_cached,
+from gkx.operators.linear.rhs import linear_rhs, linear_rhs_cached
+from gkx.solvers_linear_integrators import (
+    integrate_linear,
+    integrate_linear_diagnostics,
+    _integrate_linear_cached_impl,
 )
-from gkx.solvers_linear_integrators import _integrate_linear_cached_impl
 from gkx.solvers_linear_parallel import (
+    linear_rhs_parallel_cached,
     _is_electrostatic_field_terms,
     _is_electrostatic_slice_terms,
     _is_streaming_only_terms,
     _resolve_parallel_devices,
+)
+from gkx.solvers_linear_implicit import (
+    _build_implicit_operator,
+    _integrate_linear_implicit_cached,
 )
 from gkx.terms.config import FieldState, TermConfig
 
@@ -1695,7 +1691,7 @@ def test_integrate_linear_diagnostics_builds_cache_and_uses_imex2(
     build_calls: list[tuple[int, int]] = []
 
     monkeypatch.setattr(
-        "gkx.solvers_linear_integrator_diagnostics.build_linear_cache",
+        "gkx.solvers_linear_integrators.build_linear_cache",
         lambda grid, geom, params, Nl, Nm: build_calls.append((Nl, Nm)) or cache,
     )
     patch_diagnostics_kernels()

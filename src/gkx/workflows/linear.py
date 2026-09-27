@@ -22,8 +22,8 @@ from gkx.workflows.runtime.diagnostics import (
     RuntimeQuasilinearFinalizationDeps,
     _fit_signal_key,
 )
-from gkx.workflows.runtime.results import RuntimeLinearResult
-from gkx.workflows.runtime.solver_status import (
+from gkx.workflows.runtime.results import (
+    RuntimeLinearResult,
     checked_solve_summary,
     solve_stats_request,
 )

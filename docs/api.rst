@@ -210,20 +210,6 @@ Differentiable Geometry AD Checks
    :members:
    :private-members:
 
-Differentiable Geometry Sensitivity
------------------------------------
-
-.. automodule:: gkx.geometry.sensitivity
-   :members:
-   :private-members:
-
-Differentiable Boozer Bridge
-----------------------------
-
-.. automodule:: gkx.geometry.booz_xform_bridge
-   :members:
-   :private-members:
-
 Differentiable VMEC Boozer Core
 -------------------------------
 
@@ -234,14 +220,7 @@ Differentiable VMEC Boozer Core
 Differentiable VMEC Boozer Drifts
 ---------------------------------
 
-.. automodule:: gkx.geometry.vmec_boozer_drifts
-   :members:
-   :private-members:
-
-Differentiable VMEC Boozer Constants
-------------------------------------
-
-.. automodule:: gkx.geometry.vmec_boozer_constants
+.. automodule:: gkx.geometry.vmec_boozer_derivatives
    :members:
    :private-members:
 
@@ -361,13 +340,6 @@ Linear Integrators
    :members:
    :private-members:
 
-Linear Diagnostic Integration
------------------------------
-
-.. automodule:: gkx.solvers_linear_integrator_diagnostics
-   :members:
-   :private-members:
-
 Linear Parallel RHS
 -------------------
 
@@ -412,14 +384,6 @@ application, branch selection, shift-invert preconditioning, and the Arnoldi
 iterations.
 
 .. automodule:: gkx.solvers_linear_krylov_algorithms
-   :members:
-   :private-members:
-   :no-index:
-
-Nonlinear Diagnostics
----------------------
-
-.. automodule:: gkx.operators.nonlinear.diagnostics
    :members:
    :private-members:
    :no-index:
@@ -525,13 +489,6 @@ Explicit Step Kernels
    :members:
    :private-members:
 
-Explicit Diagnostic Integrators
--------------------------------
-
-.. automodule:: gkx.solvers_time_explicit_diagnostics
-   :members:
-   :private-members:
-
 Explicit CFL Policy
 -------------------
 
@@ -606,10 +563,6 @@ Velocity Sharding Plans
    :members:
    :private-members:
 
-.. automodule:: gkx.parallel.velocity_streaming
-   :members:
-   :private-members:
-
 .. automodule:: gkx.parallel.velocity_drive
    :members:
    :private-members:
@@ -678,13 +631,6 @@ Transport Figures
    :members:
    :no-index:
 
-Real-Space Snapshots
---------------------
-
-.. automodule:: gkx.artifacts.snapshots
-   :members:
-   :no-index:
-
 Automatic Run Figures
 ---------------------
 
@@ -703,13 +649,6 @@ Foreign Output Dispatch
 -----------------------
 
 .. automodule:: gkx.artifacts.foreign_output
-   :members:
-   :no-index:
-
-GX Output Plotting
-------------------
-
-.. automodule:: gkx.artifacts.gx_output
    :members:
    :no-index:
 
@@ -771,13 +710,6 @@ Runtime Diagnostic Arrays
 -------------------------
 
 .. automodule:: gkx.workflows.runtime.diagnostic_arrays
-   :members:
-   :private-members:
-
-Runtime Phi Initializer
------------------------
-
-.. automodule:: gkx.workflows.runtime.initial_phi
    :members:
    :private-members:
 

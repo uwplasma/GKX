@@ -917,7 +917,7 @@ def test_period_rms_damping_ignores_a_slowly_drifting_offset() -> None:
 def _demo_case(tmp_path):
     """Write and load the demo's deck exactly as the demo itself does."""
 
-    from gkx.workflows.demo import default_demo_toml_text
+    from gkx.cli import default_demo_toml_text
 
     deck = tmp_path / "demo.toml"
     deck.write_text(default_demo_toml_text(), encoding="utf-8")
@@ -925,7 +925,7 @@ def _demo_case(tmp_path):
 
 
 def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None:
-    from gkx.workflows.demo import DEFAULT_DEMO_SETTINGS
+    from gkx.cli import DEFAULT_DEMO_SETTINGS
     from gkx.runtime import run_runtime_linear
     from gkx.workflows.runtime.toml import load_runtime_from_toml
 

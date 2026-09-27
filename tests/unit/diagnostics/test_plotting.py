@@ -491,7 +491,7 @@ def test_plot_saved_output_nonlinear_netcdf_bundle(tmp_path):
 
 from types import SimpleNamespace
 
-import gkx.artifacts.snapshots as snapshots
+import gkx.artifacts.run_summary as snapshots
 from gkx.artifacts.transport_figures import (
     flux_spectra_figure,
     heat_flux_time_figure,

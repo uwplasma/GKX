@@ -21,7 +21,7 @@ from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import LinearTerms, linear_params_for_geometry
-from gkx.solvers_linear_integrator_diagnostics import integrate_linear_diagnostics
+from gkx.solvers_linear_integrators import integrate_linear_diagnostics
 
 # One Cyclone-like linked flux tube at the tokamak parity decks' step size. The
 # ky is the top of the s-alpha deck's scan, which is where the campaign traced

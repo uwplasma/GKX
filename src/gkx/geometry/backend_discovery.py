@@ -139,7 +139,7 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
 
     # The boundary bridge still targets the retired vmex boundary helpers;
     # vmex does not expose them, so this reports False until that route is
-    # ported (gkx.geometry.booz_xform_bridge).
+    # ported (gkx.geometry.differentiable).
     vmec_boundary_api = vmec is not None and all(
         hasattr(vmec, name)
         for name in (

@@ -14,7 +14,7 @@ from dataclasses import replace
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
-from gkx.geometry.sensitivity import _damped_gauss_newton_step
+from gkx.geometry.differentiable import _damped_gauss_newton_step
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
     LinearParams,
@@ -31,7 +31,7 @@ import re
 import gkx.solvers_linear_adaptive_propagator as ap
 import gkx.solvers_linear_krylov as lk
 import gkx.solvers_linear_krylov_algorithms as ka
-import gkx.solvers_linear_krylov_propagator as kp
+import gkx.solvers_linear_adaptive_propagator as kp
 import gkx.solvers_linear_precond_pr3 as pr3
 import jax
 import jax.numpy as jnp

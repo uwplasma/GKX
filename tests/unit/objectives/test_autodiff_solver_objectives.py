@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 from support.paired_solvax import requires_paired_solvax
 from support.paths import REPO_ROOT
@@ -1312,8 +1311,6 @@ from gkx.objectives.portfolio import (
     portfolio_objective_weight_vector,
     portfolio_sample_weight_tensor,
     validate_objective_portfolio_contract,
-)
-from gkx.objectives.portfolio import (
     objective_portfolio_sensitivity_report,
 )
 
@@ -1602,6 +1599,7 @@ def test_objective_portfolio_helpers_are_exported_at_package_top_level() -> None
 
 
 # ---- test_stellarator_optimization.py ----
+
 
 def test_public_optimization_examples_exclude_reduced_synthetic_workflows() -> None:
     examples = REPO_ROOT / "examples" / "10_vmex_optimization"

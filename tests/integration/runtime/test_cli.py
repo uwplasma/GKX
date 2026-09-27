@@ -20,6 +20,14 @@ from gkx.config import (
     GridConfig,
     InitializationConfig,
     TimeConfig,
+    RuntimeConfig,
+    RuntimeExpertConfig,
+    RuntimeNormalizationConfig,
+    RuntimeOutputConfig,
+    RuntimeParallelConfig,
+    RuntimePhysicsConfig,
+    RuntimeQuasilinearConfig,
+    RuntimeSpeciesConfig,
 )
 from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics import ResolvedDiagnostics, SimulationDiagnostics
@@ -63,33 +71,22 @@ from gkx.runtime import (
     build_runtime_term_config,
     run_runtime_nonlinear,
     run_runtime_scan,
+    RuntimeLinearResult,
+    RuntimeNonlinearResult,
 )
-from gkx.runtime import RuntimeLinearResult, RuntimeNonlinearResult
 from gkx.terms.config import FieldState
 from gkx.workflows.runtime.chunks import (
     build_runtime_progress_message,
     format_duration,
 )
-from gkx.config import (
-    RuntimeConfig,
-    RuntimeExpertConfig,
-    RuntimeNormalizationConfig,
-    RuntimeOutputConfig,
-    RuntimeParallelConfig,
-    RuntimePhysicsConfig,
-    RuntimeQuasilinearConfig,
-    RuntimeSpeciesConfig,
-)
 from gkx.workflows.runtime.diagnostics import (
     RuntimeQuasilinearFinalizationDeps,
     finalize_runtime_linear_quasilinear,
-)
-from gkx.workflows.runtime.diagnostics import (
     half_horizon_settled_probe,
     warn_if_growth_unresolved,
+    _prepare_runtime_linear_fit_inputs,
+    fit_runtime_linear_diagnostics,
 )
-from gkx.workflows.runtime.diagnostics import _prepare_runtime_linear_fit_inputs
-from gkx.workflows.runtime.diagnostics import fit_runtime_linear_diagnostics
 from gkx.workflows.runtime.orchestration_scan import (
     _BatchDiagnostics,
     _fit_batch_scan_point,
@@ -2525,7 +2522,7 @@ def test_cli_global_plot_renders_a_gx_netcdf_bundle(
 ) -> None:
     """--plot accepts GX output so a cross-code check is one command."""
 
-    from gkx.artifacts.gx_output import is_gx_output
+    from gkx.artifacts.foreign_output import is_gx_output
 
     gx_bundle = _write_grouped_out_nc(tmp_path / "gx_case.out.nc", code="gx")
     gkx_bundle = _write_grouped_out_nc(tmp_path / "gkx_case.out.nc", code="gkx")
@@ -2545,7 +2542,7 @@ def test_cli_global_plot_titles_gx_data_as_gx(tmp_path: Path) -> None:
 
     import matplotlib.pyplot as plt
 
-    from gkx.artifacts.gx_output import gx_summary_figure
+    from gkx.artifacts.foreign_output import gx_summary_figure
 
     gx_bundle = _write_grouped_out_nc(tmp_path / "gx_titled.out.nc", code="gx")
     fig, axes = gx_summary_figure(gx_bundle)

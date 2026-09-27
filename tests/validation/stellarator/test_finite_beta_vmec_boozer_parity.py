@@ -22,7 +22,7 @@ import numpy as np
 import pytest
 
 from gkx.geometry.numerics import _array_parity_metrics
-from gkx.geometry.vmec_boozer_drifts import (
+from gkx.geometry.vmec_boozer_derivatives import (
     _MU_0,
     boozer_pressure_gradient,
     raw_drift_profiles,

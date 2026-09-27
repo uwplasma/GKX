@@ -2449,7 +2449,7 @@ COMPARISON_CODE_PATTERN = re.compile(
 # anywhere else is still a violation.
 COMPARISON_ALLOWED_SOURCE_PREFIXES: tuple[Path, ...] = (
     Path("src/gkx/artifacts/foreign_output.py"),
-    Path("src/gkx/artifacts/gx_output.py"),
+    Path("src/gkx/artifacts/foreign_output.py"),
 )
 
 

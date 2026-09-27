@@ -17,14 +17,8 @@ import pytest
 
 import gkx
 import gkx.geometry.autodiff_checks as diff_autodiff
-import gkx.geometry.backend_discovery as backend_discovery
-import gkx.geometry.booz_xform_bridge as booz_bridge
 import gkx.geometry.differentiable as diff_geom
-import gkx.geometry.flux_tube_contract as geom_contract
-import gkx.geometry.numerics as geom_numerics
-import gkx.geometry.sensitivity as geom_sensitivity
 import gkx.geometry.vmec_boozer_core as vmec_boozer_core
-import gkx.geometry.vmec_boozer_constants as vmec_boozer_constants
 import gkx.geometry.vmec_boozer_derivatives as vmec_boozer_derivatives
 import gkx.geometry.vmec_field_line_sampling as vmec_field_line_sampling
 import scripts.campaigns.vmec_flux_tube_reports as vmec_flux_tube_reports
@@ -39,32 +33,40 @@ from scripts.campaigns.vmec_state_sensitivity import (
     vmex_metric_tensor_sensitivity_report,
 )
 import gkx.geometry.vmec_tensor_mapping as vmec_tensor_mapping
+from gkx.geometry.backend_discovery import (
+    _candidate_paths,
+    _find_importable_module,
+    _is_traced,
+    discover_differentiable_geometry_backends,
+)
+from gkx.geometry.autodiff_checks import finite_difference_jacobian
 from gkx.geometry.differentiable import (
+    booz_xform_spectral_sensitivity_report,
+    geometry_inverse_design_report,
+    geometry_sensitivity_report,
+    vmec_boundary_aspect_sensitivity_report,
+)
+from gkx.geometry.flux_tube_contract import (
+    flux_tube_geometry_from_mapping,
+    flux_tube_geometry_observables,
+    geometry_observable_names,
+    vmec_field_line_tensor_observable_names,
+    vmec_metric_tensor_observable_names,
+)
+from gkx.geometry.numerics import (
     _array_parity_metrics,
     _boozer_half_mesh_s_grid,
-    _candidate_paths,
     _cumulative_trapezoid,
-    _find_importable_module,
     _interp_equal_arc_profile,
     _interp_radial,
-    _is_traced,
     _periodic_bilinear_sample_2d,
     _radial_derivative_array,
     _radial_derivative_profile,
     _scalar_parity_metrics,
-    booz_xform_spectral_sensitivity_report,
-    discover_differentiable_geometry_backends,
-    finite_difference_jacobian,
-    flux_tube_geometry_from_mapping,
+)
+from gkx.geometry.vmec_boozer_core import (
     flux_tube_geometry_from_vmec_boozer_state,
-    flux_tube_geometry_observables,
-    geometry_inverse_design_report,
-    geometry_observable_names,
-    geometry_sensitivity_report,
     vmex_boozer_equal_arc_core_profiles_from_state,
-    vmec_boundary_aspect_sensitivity_report,
-    vmec_field_line_tensor_observable_names,
-    vmec_metric_tensor_observable_names,
 )
 
 
@@ -91,138 +93,6 @@ def _sample_mapping() -> dict[str, object]:
         "R0": 1.5,
         "nfp": 5,
     }
-
-
-def test_differentiable_geometry_facade_preserves_split_symbol_identity() -> None:
-    """The public geometry bridge remains a stable facade."""
-
-    assert diff_geom._candidate_paths is backend_discovery._candidate_paths
-    assert (
-        diff_geom._find_importable_module is backend_discovery._find_importable_module
-    )
-    assert diff_geom._is_traced is backend_discovery._is_traced
-    assert (
-        diff_geom.discover_differentiable_geometry_backends
-        is backend_discovery.discover_differentiable_geometry_backends
-    )
-    assert (
-        diff_geom.finite_difference_jacobian is diff_autodiff.finite_difference_jacobian
-    )
-    assert (
-        diff_geom.observable_gradient_validation_report
-        is diff_autodiff.observable_gradient_validation_report
-    )
-    assert diff_geom._array_parity_metrics is geom_numerics._array_parity_metrics
-    assert diff_geom._scalar_parity_metrics is geom_numerics._scalar_parity_metrics
-    assert diff_geom._interp_radial is geom_numerics._interp_radial
-    assert (
-        diff_geom._interp_equal_arc_profile is geom_numerics._interp_equal_arc_profile
-    )
-    assert diff_geom._boozer_half_mesh_s_grid is geom_numerics._boozer_half_mesh_s_grid
-    assert (
-        diff_geom._radial_derivative_profile is geom_numerics._radial_derivative_profile
-    )
-    assert diff_geom._radial_derivative_array is geom_numerics._radial_derivative_array
-    assert diff_geom._cumulative_trapezoid is geom_numerics._cumulative_trapezoid
-    assert (
-        diff_geom._periodic_bilinear_sample_2d
-        is geom_numerics._periodic_bilinear_sample_2d
-    )
-    assert diff_geom._array is geom_contract._array
-    assert diff_geom._scalar is geom_contract._scalar
-    assert (
-        diff_geom.flux_tube_geometry_from_mapping
-        is geom_contract.flux_tube_geometry_from_mapping
-    )
-    assert (
-        diff_geom.flux_tube_geometry_observables
-        is geom_contract.flux_tube_geometry_observables
-    )
-    assert (
-        diff_geom.geometry_observable_names is geom_contract.geometry_observable_names
-    )
-    assert (
-        diff_geom.vmec_metric_tensor_observable_names
-        is geom_contract.vmec_metric_tensor_observable_names
-    )
-    assert callable(diff_geom.vmec_boundary_aspect_sensitivity_report)
-    assert callable(diff_geom.booz_xform_spectral_sensitivity_report)
-    assert (
-        diff_geom.evaluate_boozer_bmag_on_field_line
-        is booz_bridge.evaluate_boozer_bmag_on_field_line
-    )
-    assert (
-        diff_geom.vmec_boundary_aspect_sensitivity_report
-        is not booz_bridge.vmec_boundary_aspect_sensitivity_report
-    )
-    assert (
-        diff_geom.booz_xform_spectral_sensitivity_report
-        is not booz_bridge.booz_xform_spectral_sensitivity_report
-    )
-    # The sensitivity and parity REPORT builders moved to scripts/campaigns; the
-    # facade no longer wraps them, and the package no longer advertises them.
-    for gone in (
-        "vmex_metric_tensor_sensitivity_report",
-        "vmex_field_line_tensor_sensitivity_report",
-        "vmex_flux_tube_sensitivity_report",
-        "vmex_flux_tube_array_parity_report",
-    ):
-        assert not hasattr(diff_geom, gone)
-        assert not hasattr(gkx, gone)
-    assert callable(diff_geom.vmex_flux_tube_mapping_from_state)
-    assert (
-        diff_geom.vmex_flux_tube_mapping_from_state
-        is not vmec_tensor_mapping.vmex_flux_tube_mapping_from_state
-    )
-    assert callable(diff_geom.prewarm_vmec_boozer_equal_arc_cache)
-    assert callable(diff_geom.vmex_boozer_equal_arc_core_profiles_from_state)
-    assert (
-        diff_geom.prewarm_vmec_boozer_equal_arc_cache
-        is not vmec_boozer_core.prewarm_vmec_boozer_equal_arc_cache
-    )
-    assert vmec_boozer_core.prewarm_vmec_boozer_equal_arc_cache is (
-        vmec_boozer_constants.prewarm_vmec_boozer_equal_arc_cache
-    )
-    assert vmec_boozer_core._cached_booz_xform_constants is (
-        vmec_boozer_constants._cached_booz_xform_constants
-    )
-    assert (
-        diff_geom.vmex_boozer_equal_arc_core_profiles_from_state
-        is not vmec_boozer_core.vmex_boozer_equal_arc_core_profiles_from_state
-    )
-    assert (
-        diff_geom.vmec_field_line_tensor_observable_names
-        is geom_contract.vmec_field_line_tensor_observable_names
-    )
-    assert (
-        diff_geom.geometry_sensitivity_report
-        is geom_sensitivity.geometry_sensitivity_report
-    )
-    assert (
-        diff_geom.geometry_inverse_design_report
-        is geom_sensitivity.geometry_inverse_design_report
-    )
-
-
-def test_differentiable_geometry_patch_context_restores_module_attrs() -> None:
-    module = types.SimpleNamespace(first="original-first", second="original-second")
-
-    with diff_geom._patched_module_attrs(
-        module, {"first": "patched-first", "second": "patched-second"}
-    ):
-        assert module.first == "patched-first"
-        assert module.second == "patched-second"
-
-    assert module.first == "original-first"
-    assert module.second == "original-second"
-
-    with pytest.raises(RuntimeError, match="forced"):
-        with diff_geom._patched_module_attrs(module, {"first": "patched-again"}):
-            assert module.first == "patched-again"
-            raise RuntimeError("forced")
-
-    assert module.first == "original-first"
-    assert module.second == "original-second"
 
 
 def test_flux_tube_geometry_from_mapping_builds_solver_contract() -> None:
@@ -356,7 +226,7 @@ def test_flux_tube_geometry_from_vmec_boozer_state_wraps_in_memory_bridge(
         return _sample_mapping()
 
     monkeypatch.setattr(
-        diff_geom,
+        vmec_boozer_core,
         "vmex_boozer_equal_arc_core_profiles_from_state",
         fake_core_profiles,
     )

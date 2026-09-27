@@ -196,7 +196,7 @@ def test_integrate_linear_from_config_requires_the_table_moment_basis():
 def test_check_moment_basis_names_the_finite_wavelength_table_layout():
     """Each shipped finite-Larmor table accepts only its own (J+1, P+1)."""
 
-    from gkx.operators.linear.collision_factory import collision_operator_from_config
+    from gkx.operators.linear.collision_tables import collision_operator_from_config
 
     species = {name: jnp.ones(1) for name in ("density", "mass", "temperature")}
     check = runners._check_moment_basis_matches_operator

@@ -188,7 +188,7 @@ Collisions
 
 GKX ships five collision models. The ``collision_operator`` key in the
 ``[time]`` section of a TOML input selects one, and
-:func:`gkx.operators.linear.collision_factory.collision_operator_from_config`
+:func:`gkx.operators.linear.collision_tables.collision_operator_from_config`
 builds the same operator from Python:
 
 .. list-table::
@@ -834,7 +834,7 @@ Source Mapping
 - collision models:
   ``src/gkx/operators/linear/collisions.py``,
   ``src/gkx/operators/linear/collision_tables.py``,
-  ``src/gkx/operators/linear/collision_factory.py``
+  ``src/gkx/operators/linear/collision_tables.py``
 - nonlinear term kernels:
   ``src/gkx/terms/nonlinear.py`` and ``src/gkx/operators/nonlinear/``
 - assembly:

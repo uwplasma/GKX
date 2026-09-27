@@ -34,8 +34,8 @@ from gkx.workflows.runtime.parallel_nonlinear import (
     resolve_species_hermite_mesh,
     shard_nonlinear_state,
 )
-from gkx.workflows.runtime.results import RuntimeNonlinearResult
-from gkx.workflows.runtime.solver_status import (
+from gkx.workflows.runtime.results import (
+    RuntimeNonlinearResult,
     checked_solve_summary,
     solve_stats_request,
 )
