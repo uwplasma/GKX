@@ -9,6 +9,7 @@ from typing import Any, Callable, Mapping, Sequence, cast
 import numpy as np
 
 from gkx.config import RuntimeConfig
+from gkx.workflows.runtime.toml import reject_unknown_keys
 from gkx.workflows.runtime.startup import (
     _RUNTIME_LINEAR_HL_FALLBACK,
     _RUNTIME_NONLINEAR_HL_FALLBACK,
@@ -26,21 +27,6 @@ from gkx.workflows.runtime.orchestration_artifacts import (
     write_linear_runtime_command_outputs,
     write_scan_runtime_command_outputs,
 )
-
-RUNTIME_COMMAND_FIT_KEYS = {
-    "auto_window",
-    "tmin",
-    "tmax",
-    "window_fraction",
-    "min_points",
-    "start_fraction",
-    "growth_weight",
-    "require_positive",
-    "min_amp_fraction",
-    "window_method",
-    "mode_method",
-}
-
 
 @dataclass(frozen=True)
 class RuntimeLinearCommandOptions:
@@ -150,11 +136,29 @@ def _resolve_grid_time_options(
 
 
 def _runtime_fit_config(data: dict[str, Any]) -> dict[str, Any]:
-    """Return fit options supported by runtime executable commands."""
+    """Return the deck's ``[fit]`` options, refusing keys no fit owner reads."""
 
-    return {
-        k: v for k, v in data.get("fit", {}).items() if k in RUNTIME_COMMAND_FIT_KEYS
-    }
+    fit = dict(data.get("fit", {}))
+    reject_unknown_keys("[fit]", fit, RUNTIME_CASE_FIT_KEYS)
+    return fit
+
+
+def _with_fit_signal(section: dict[str, Any], fit_cfg: dict[str, Any]) -> dict[str, Any]:
+    """Move ``[fit] fit_signal`` into the command section that resolves it.
+
+    ``fit_signal`` may be declared under ``[fit]`` (as the case helpers read
+    it) or under ``[run]``/``[scan]``; two different values are a conflict.
+    """
+
+    if "fit_signal" not in fit_cfg:
+        return section
+    signal = fit_cfg.pop("fit_signal")
+    if section.get("fit_signal", signal) != signal:
+        raise ValueError(
+            f"fit_signal is {section['fit_signal']!r} in the command section but "
+            f"{signal!r} in [fit]; declare it once"
+        )
+    return {**section, "fit_signal": signal}
 
 
 def _validate_linear_sampling(solver: str, steps: int, sample_stride: int) -> None:
@@ -587,8 +591,8 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
         path_overrides=True,
         quasilinear_overrides=True,
     )
-    run_cfg = data.get("run", {})
     fit_cfg = _runtime_fit_config(data)
+    run_cfg = _with_fit_signal(data.get("run", {}), fit_cfg)
     opts = _resolve_linear_command_options(args, cfg, run_cfg)
 
     print_linear_run_header(
@@ -609,9 +613,11 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
         ),
     )
 
+    kx = run_cfg.get("kx")
     res = deps.run_runtime_linear(
         cfg,
         ky_target=opts.ky,
+        kx_target=None if kx is None else float(kx),
         Nl=opts.Nl,
         Nm=opts.Nm,
         solver=opts.solver,
@@ -645,8 +651,8 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
         path_overrides=False,
         quasilinear_overrides=True,
     )
-    scan_cfg = data.get("scan", {})
     fit_cfg = _runtime_fit_config(data)
+    scan_cfg = _with_fit_signal(data.get("scan", {}), fit_cfg)
     opts = _resolve_scan_command_options(args, cfg, scan_cfg)
 
     scan = deps.run_runtime_scan(
@@ -707,10 +713,12 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
     )
 
     out_path = runtime_output_path(args, cfg)
+    kx = run_cfg.get("kx")
     result, paths = deps.run_runtime_nonlinear_with_artifacts(
         cfg,
         out=out_path,
         ky_target=opts.ky,
+        kx_target=None if kx is None else float(kx),
         Nl=opts.Nl,
         Nm=opts.Nm,
         dt=opts.dt,
@@ -736,7 +744,6 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
 
 __all__ = [
     "RUNTIME_CASE_FIT_KEYS",
-    "RUNTIME_COMMAND_FIT_KEYS",
     "RuntimeCommandDeps",
     "RuntimeCaseDeps",
     "RuntimeLinearCommandOptions",
@@ -791,6 +798,7 @@ RUNTIME_CASE_FIT_KEYS = {
 
 _CASE_LINEAR_SPECS = (
     ("ky_target", "run", "ky", 0.3, float),
+    ("kx_target", "run", "kx", None, None),
     ("Nl", "run", "Nl", _RUNTIME_LINEAR_HL_FALLBACK[0], int),
     ("Nm", "run", "Nm", _RUNTIME_LINEAR_HL_FALLBACK[1], int),
     ("solver", "run", "solver", "auto", str),
@@ -801,6 +809,7 @@ _CASE_LINEAR_SPECS = (
 )
 _CASE_NONLINEAR_SPECS = (
     ("ky_target", "run", "ky", 0.3, float),
+    ("kx_target", "run", "kx", None, None),
     ("Nl", "run", "Nl", _RUNTIME_NONLINEAR_HL_FALLBACK[0], int),
     ("Nm", "run", "Nm", _RUNTIME_NONLINEAR_HL_FALLBACK[1], int),
     ("method", "run", "method", None, None),
@@ -846,7 +855,7 @@ def default_runtime_case_deps() -> RuntimeCaseDeps:
 def _runtime_case_fit_config(raw: dict[str, Any]) -> dict[str, Any]:
     """Return fit options accepted by programmatic runtime-case helpers."""
 
-    return {k: v for k, v in raw.get("fit", {}).items() if k in RUNTIME_CASE_FIT_KEYS}
+    return _runtime_fit_config(raw)
 
 
 def _case_run_kwargs(

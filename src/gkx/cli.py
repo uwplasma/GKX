@@ -532,18 +532,24 @@ def _runtime_command_deps() -> RuntimeCommandDeps:
     return build_runtime_command_deps(sys.modules[__name__])
 
 
+def _warn_if_invoked_deprecated(args: argparse.Namespace) -> None:
+    # ``gkx run`` and ``gkx scan`` dispatch here too; only the old spellings warn.
+    if getattr(args, "cmd", None) in _DEPRECATED_COMMANDS:
+        _warn_deprecated_command(args.cmd)
+
+
 def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
-    _warn_deprecated_command("run-runtime-linear")
+    _warn_if_invoked_deprecated(args)
     return run_runtime_linear_command(args, deps=_runtime_command_deps())
 
 
 def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
-    _warn_deprecated_command("scan-runtime-linear")
+    _warn_if_invoked_deprecated(args)
     return scan_runtime_linear_command(args, deps=_runtime_command_deps())
 
 
 def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
-    _warn_deprecated_command("run-runtime-nonlinear")
+    _warn_if_invoked_deprecated(args)
     return run_runtime_nonlinear_command(args, deps=_runtime_command_deps())
 
 

@@ -494,6 +494,77 @@ def test_cmd_run_reuses_loaded_runtime_config_for_linear_dispatch(
     assert captured["kwargs"]["ky_target"] == pytest.approx(0.2)
 
 
+def test_cmd_run_honours_fit_signal_from_the_fit_table(monkeypatch) -> None:
+    """``[fit] fit_signal`` is honoured by ``gkx run``, as by the case helpers.
+
+    The command path used to filter it out and fit ``auto`` instead, while
+    ``run_runtime_case`` read the same deck key; unknown ``[fit]`` keys were
+    dropped the same silent way.
+    """
+
+    captured: dict[str, object] = {}
+    decks: list[dict[str, object]] = []
+
+    def _load_runtime(_path):
+        return RuntimeConfig(), decks[-1]
+
+    def _run_runtime_linear(_cfg, **kwargs):
+        captured.update(kwargs)
+        return RuntimeLinearResult(
+            ky=0.2,
+            gamma=0.3,
+            omega=-0.4,
+            selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+            t=np.asarray([0.0, 1.0]),
+            signal=np.asarray([1.0, 1.2]),
+        )
+
+    monkeypatch.setattr("gkx.cli.load_runtime_from_toml", _load_runtime)
+    monkeypatch.setattr("gkx.cli.run_runtime_linear", _run_runtime_linear)
+    args = argparse.Namespace(
+        config="case.toml",
+        ky=None,
+        Nl=None,
+        Nm=None,
+        solver=None,
+        fit_signal=None,
+        method=None,
+        dt=None,
+        steps=None,
+        sample_stride=None,
+        progress=False,
+        no_progress=True,
+        out=None,
+        vmec_file=None,
+        geometry_file=None,
+        quasilinear=False,
+        ql_mode=None,
+        ql_saturation_rule=None,
+        ql_csat=None,
+        ql_normalization=None,
+        ql_output=None,
+    )
+
+    decks.append({"run": {"ky": 0.2}, "fit": {"fit_signal": "phi", "tmin": 1.0}})
+    assert _cmd_run(args) == 0
+    assert captured["fit_signal"] == "phi"
+    assert captured["tmin"] == pytest.approx(1.0)
+
+    decks.append({"run": {"ky": 0.2, "fit_signal": "density"}, "fit": {}})
+    assert _cmd_run(args) == 0
+    assert captured["fit_signal"] == "density"
+
+    decks.append(
+        {"run": {"ky": 0.2, "fit_signal": "density"}, "fit": {"fit_signal": "phi"}}
+    )
+    with pytest.raises(ValueError, match="fit_signal"):
+        _cmd_run(args)
+
+    decks.append({"run": {"ky": 0.2}, "fit": {"window": 0.3}})
+    with pytest.raises(ValueError, match=r"\[fit\].*'window'"):
+        _cmd_run(args)
+
+
 def test_main_shorthand_dispatches_all_toml_through_runtime(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -3228,6 +3299,35 @@ def test_deprecated_commands_name_their_replacement(capsys, monkeypatch) -> None
         assert name in err and f"gkx {replacement}" in err
 
 
+
+def test_only_the_deprecated_spellings_warn(capsys, monkeypatch) -> None:
+    """``gkx run``/``gkx scan`` (and the deck shorthand) print no deprecation."""
+
+    from gkx.cli import build_parser
+
+    for target in (
+        "run_runtime_linear_command",
+        "scan_runtime_linear_command",
+        "run_runtime_nonlinear_command",
+    ):
+        monkeypatch.setattr(f"gkx.cli.{target}", lambda _args, deps: 0)
+    for nonlinear in (False, True):
+        cfg = replace(
+            RuntimeConfig(), physics=replace(RuntimeConfig().physics, nonlinear=nonlinear)
+        )
+        monkeypatch.setattr("gkx.cli.load_runtime_from_toml", lambda _p: (cfg, {}))
+        for argv, warned in (
+            (["run", "--config", "case.toml"], False),
+            (["scan", "--config", "case.toml"], False),
+            (["scan-runtime-linear", "--config", "case.toml"], True),
+            (["run-runtime-linear", "--config", "case.toml"], True),
+            (["run-runtime-nonlinear", "--config", "case.toml"], True),
+        ):
+            args = build_parser().parse_args(argv)
+            assert args.func(args) == 0
+            err = capsys.readouterr().err
+            assert ("deprecated" in err) is warned, (argv, err)
+
 # ---- from test_runtime_helpers.py ----
 
 
@@ -3471,10 +3571,12 @@ def test_runtime_case_option_helpers_resolve_python_overrides() -> None:
             "steps": "12",
         },
         "time": {"sample_stride": "3", "diagnostics_stride": "5"},
-        "fit": {"fit_signal": "phi", "ignored": "value"},
+        "fit": {"fit_signal": "phi"},
     }
 
     assert runtime_cases._runtime_case_fit_config(raw) == {"fit_signal": "phi"}
+    with pytest.raises(ValueError, match=r"\[fit\].*'ignored'"):
+        runtime_cases._runtime_case_fit_config({"fit": {"ignored": "value"}})
     assert runtime_cases._linear_case_run_kwargs(
         raw,
         {
@@ -3489,6 +3591,7 @@ def test_runtime_case_option_helpers_resolve_python_overrides() -> None:
         },
     ) == {
         "ky_target": 0.4,
+        "kx_target": None,
         "Nl": 4,
         "Nm": 7,
         "solver": "time",
@@ -3511,6 +3614,7 @@ def test_runtime_case_option_helpers_resolve_python_overrides() -> None:
         },
     ) == {
         "ky_target": 0.2,
+        "kx_target": None,
         "Nl": 8,
         "Nm": 6,
         "method": "rk2",
