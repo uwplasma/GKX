@@ -48,7 +48,7 @@ CASES = ROOT / "benchmarks" / "cases"
 # Cyclone's asymptotic fit window is the last 30% of the deck's horizon, well
 # clear of the startup transient (the fitted gamma is still 24% high at t = 30
 # and does not settle until t ~= 60). It tracks [time].t_max in the deck; the
-# coupling is enforced by tests/validation/benchmarks/test_benchmark_contracts.py::
+# coupling is enforced by tests/validation/benchmarks/test_benchmarking.py::
 # test_cyclone_publication_driver_uses_asymptotic_fit_window.
 CASES: dict[str, dict[str, Any]] = {
     "cyclone": {

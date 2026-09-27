@@ -81,16 +81,16 @@ Equations to code
    * - Flux-tube geometry coefficients
      - ``geometry/`` (paths in :doc:`architecture`)
      - ``tests/unit/geometry/``,
-       ``tests/validation/physics_gates/test_geometry_physics_contracts.py``
+       ``tests/unit/geometry/test_geometry.py``
    * - Field equations: quasineutrality, Ampère, perpendicular pressure balance
      - ``terms/fields.py`` (``solve_fields``); ``operators/linear/moments.py``
        (``quasineutrality_phi``, ``build_H``)
      - ``tests/unit/operators/test_terms_fields.py``,
-       ``tests/unit/linear/test_linear_moments_invariants.py``
+       ``tests/unit/linear/test_linear.py``
    * - Parallel streaming, Hermite closure, mirror force
      - ``terms/linear_terms.py``, ``operators/linear/streaming.py``
-     - ``tests/unit/operators/test_linear_streaming.py``,
-       ``tests/validation/physics_gates/test_hermite_hierarchy_physics.py``
+     - ``tests/unit/operators/test_terms_fields.py``,
+       ``tests/validation/physics_gates/test_collision_physics.py``
    * - Curvature and grad-B drifts, diamagnetic drive
      - ``terms/linear_terms.py``
      - ``tests/unit/linear/test_linear.py``
@@ -100,10 +100,10 @@ Equations to code
        ``operators/linear/collision_tables.py``,
        ``operators/linear/collision_factory.py``, ``operators/collision.py``
      - ``tests/validation/physics_gates/test_collision_physics.py``,
-       ``tests/unit/operators/test_linear_collisions_coverage.py``
+       ``tests/unit/operators/test_operator_kernels.py``
    * - Hypercollisions, hyperdiffusion, end damping
      - ``operators/linear/dissipation.py``
-     - ``tests/validation/physics_gates/test_end_damping_physics.py``
+     - ``tests/validation/physics_gates/test_collision_physics.py``
    * - Linked (twist-shift) boundary
      - ``operators/linear/linked.py``, ``geometry/core.py``
        (``twist_shift_params``)
@@ -111,7 +111,7 @@ Equations to code
    * - Linear RHS assembly
      - ``terms/assembly.py`` (``assemble_rhs_cached``),
        ``operators/linear/rhs.py``, ``operators/linear/cache_builder.py``
-     - ``tests/unit/operators/test_terms_assembly.py``
+     - ``tests/unit/operators/test_terms_fields.py``
    * - ExB and electromagnetic (flutter) nonlinearity
      - ``terms/nonlinear.py``, ``operators/nonlinear/brackets.py``,
        ``operators/nonlinear/rhs.py``
@@ -144,7 +144,7 @@ Equations to code
      - ``tests/unit/quasilinear/``
    * - Zonal-flow residual and GAM metrics
      - ``diagnostics/zonal_validation.py``
-     - ``tests/validation/physics_gates/test_validation_gates.py``
+     - ``tests/validation/physics_gates/test_collision_physics.py``
    * - Implicit eigenvalue derivatives
      - ``objectives/eigen.py``, ``objectives/autodiff_validation.py``
      - ``tests/unit/objectives/test_autodiff_solver_objectives.py``

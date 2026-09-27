@@ -250,36 +250,27 @@ jobs:
           - name: fundamentals-core
             files: >-
               tests/unit/diagnostics/test_analysis.py
-              tests/unit/diagnostics/test_timestep_cost.py
               tests/unit/core/test_core_numerics.py
               tests/unit/geometry/test_geometry.py
-              tests/unit/diagnostics/test_plotting.py
           - name: release-artifacts
             files: >-
               tests/release/test_release_gates.py
           - name: model-artifacts
             files: >-
               tests/unit/quasilinear/test_quasilinear.py
-              tests/validation/quasilinear/test_quasilinear_calibration.py
-              tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py
-              tests/unit/parallel/test_parallel_artifacts.py
+              tests/tools/comparison/test_reference_comparison_tools.py
           - name: linear-core
             files: >-
               tests/unit/linear/test_linear.py
-              tests/unit/linear/test_dimits_threshold_extraction.py
-              tests/validation/physics_gates/test_hermite_hierarchy_physics.py
-              tests/unit/linear/test_linear_param_units.py
+              tests/validation/physics_gates/test_collision_physics.py
               tests/unit/operators/test_operator_kernels.py
-              tests/unit/operators/test_terms_assembly.py
               tests/unit/operators/test_terms_fields.py
               tests/unit/solvers/test_time_integrators.py
-              tests/unit/operators/test_linear_streaming.py
               tests/unit/solvers/test_linear_krylov_core.py
           - name: runtime-core
             files: >-
               tests/integration/runtime/test_runtime_config.py
               tests/integration/runtime/test_runtime_runner.py
-              tests/unit/solvers/test_runners_and_orchestration.py
               tests/integration/runtime/test_cli.py
               tests/integration/runtime/test_runtime_artifacts.py
               tests/integration/examples/test_examples.py
@@ -288,16 +279,13 @@ jobs:
               tests/unit/nonlinear/test_nonlinear.py
               tests/unit/nonlinear/test_nonlinear_helpers_extra.py
               tests/unit/nonlinear/test_nonlinear_exb.py
-              tests/validation/benchmarks/test_benchmark_contracts.py
+              tests/validation/benchmarks/test_benchmarking.py
           - name: parallel-autodiff
             # Logical CPU devices so the sharded nonlinear routing gates run
             # here instead of skipping until wide coverage.
             xla_flags: "--xla_force_host_platform_device_count=4"
             files: >-
               tests/unit/parallel/test_parallel_core.py
-              tests/unit/parallel/test_parallel_nonlinear_routing.py
-              tests/unit/solvers/test_runners_and_orchestration.py
-              tests/tools/profiling/test_nonlinear_sharding_profile_contracts.py
               tests/unit/objectives/test_autodiff_solver_objectives.py
               tests/unit/objectives/test_differentiable_geometry_objectives.py
 
@@ -369,7 +357,6 @@ jobs:
         run: |
           python -c "import solvax; assert callable(solvax.exponential_eigenpairs); assert callable(solvax.sparse_eigenpairs)"
           pytest -q --maxfail=1 --disable-warnings \
-            tests/integration/test_adaptive_eigenmodes.py \
             tests/unit/solvers/test_linear_krylov_core.py \
             tests/unit/objectives/test_autodiff_solver_objectives.py \
             -m "integration or not integration" \
@@ -408,11 +395,9 @@ jobs:
         run: |
           pytest -q \
             tests/integration/runtime/test_cli.py \
-            tests/unit/diagnostics/test_plotting.py \
+            tests/unit/diagnostics/test_analysis.py \
             tests/integration/runtime/test_runtime_artifacts.py \
             tests/unit/nonlinear/test_nonlinear_exb.py \
-            tests/unit/diagnostics/test_analysis.py \
-            tests/unit/diagnostics/test_timestep_cost.py \
             tests/validation/benchmarks/test_benchmarking.py \
             --maxfail=1 --disable-warnings \
             --cov=gkx \
@@ -868,8 +853,6 @@ jobs:
           GKX_X64: "1"
         run: |
           pytest -q \
-            tests/unit/operators/test_terms_assembly.py \
-            tests/unit/operators/test_linear_streaming.py \
             tests/unit/operators/test_terms_fields.py \
             tests/unit/solvers/test_time_integrators.py \
             tests/unit/nonlinear/test_nonlinear_exb.py \

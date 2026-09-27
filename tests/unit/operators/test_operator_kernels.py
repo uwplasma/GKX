@@ -65,6 +65,24 @@ from gkx.terms.linear_terms import (
 )
 from gkx.runtime import run_runtime_scan
 from gkx.workflows.runtime.toml import load_runtime_from_toml
+from gkx.config import (
+    RuntimeCollisionConfig,
+    RuntimeConfig,
+    RuntimePhysicsConfig,
+    RuntimeTermsConfig,
+)
+from gkx.operators.linear.dissipation import hypercollisions_contribution
+import hashlib
+import io
+import json
+from importlib import resources
+from gkx.operators.linear import collisions
+import gkx.operators as operators
+import gkx.operators.linear as linear_operators
+import gkx.operators.nonlinear as nonlinear_operators
+import gkx.operators.nonlinear.diagnostic_state as operator_diagnostics
+import gkx.operators.nonlinear.rhs as operator_rhs
+from gkx.terms.assembly import linear_rhs_jit_for_terms
 
 
 def test_streaming_zero_kpar() -> None:
@@ -1972,3 +1990,574 @@ def test_full_operator_scan_relaxed() -> None:
         assert np.isfinite(omega)
         assert abs(gamma) < 50.0
         assert abs(omega) < 100.0
+
+
+# ---- from test_laguerre_sink_contract.py ----
+# Contract: a declared velocity-space regularization must act, or be refused.
+#
+# ``nu_hyper_l`` and ``nu_hyper_lm`` reach the distribution only through the
+# constant-coefficient hypercollision branch -- ``_hypercollision_kz_source``
+# carries no Laguerre index at all.  With the shipped runtime defaults
+# (``hypercollisions_const = 0``, ``hypercollisions_kz = 1``) a deck that declared
+
+
+NL = 6
+NM = 8
+SHAPE = (1, NL, NM, 2, 3, 4)
+P_HYPER_L = 6.0
+P_HYPER_M = 4.0
+
+
+def _state() -> jnp.ndarray:
+    rng = np.random.default_rng(20260920)
+    return jnp.asarray(rng.normal(size=SHAPE) + 1j * rng.normal(size=SHAPE))
+
+
+def _ell() -> np.ndarray:
+    return np.arange(NL, dtype=float).reshape(NL, 1, 1, 1, 1)
+
+
+def _m() -> np.ndarray:
+    return np.arange(NM, dtype=float).reshape(1, NM, 1, 1, 1)
+
+
+def _common() -> dict:
+    ell, m = _ell(), _m()
+    return {
+        "vth": jnp.asarray([1.0]),
+        "nu_hyper": jnp.asarray(0.0),
+        "nu_hyper_lm": jnp.asarray(0.0),
+        "hyper_ratio": jnp.zeros((NL, NM, 1, 1, 1)),
+        "ratio_l": jnp.asarray((ell / NL) ** P_HYPER_L),
+        "ratio_m": jnp.asarray((m / NM) ** P_HYPER_M),
+        "ratio_lm": jnp.asarray(((2 * ell + m) / (2 * NL + NM)) ** 6.0),
+        "mask_const": jnp.asarray((ell + m) > 0),
+        "mask_kz": jnp.asarray(m > 2),
+        "m_pow": jnp.asarray((m / max(NM - 1, 1)) ** P_HYPER_M),
+        "m_norm_kz_factor": jnp.asarray(1.0),
+        "kz": jnp.asarray(np.fft.fftfreq(SHAPE[-1]) * 2.0 * np.pi),
+        "kpar_scale": jnp.asarray(1.0),
+        "weight": jnp.asarray(1.0),
+    }
+
+
+def _contribution(**overrides) -> jnp.ndarray:
+    kwargs = dict(_common())
+    kwargs.update(overrides)
+    return hypercollisions_contribution(_state(), **kwargs)
+
+
+def test_kz_branch_carries_no_laguerre_index() -> None:
+    """The shipped default branch ignores ``nu_hyper_l`` entirely."""
+
+    kz_only = {
+        "nu_hyper_m": jnp.asarray(1.0),
+        "hypercollisions_const": jnp.asarray(0.0),
+        "hypercollisions_kz": jnp.asarray(1.0),
+    }
+    without = _contribution(nu_hyper_l=jnp.asarray(0.0), **kz_only)
+    with_sink = _contribution(nu_hyper_l=jnp.asarray(0.5), **kz_only)
+    assert jnp.array_equal(without, with_sink)
+
+
+def test_declared_laguerre_sink_without_its_branch_is_refused() -> None:
+    """A deck may not declare a sink the selected branch cannot apply."""
+
+    for channel in ("nu_hyper_l", "nu_hyper_lm"):
+        with pytest.raises(ValueError, match="silently inert"):
+            RuntimeCollisionConfig(**{channel: 0.1})
+
+
+def test_declared_laguerre_sink_with_its_branch_is_accepted() -> None:
+    cfg = RuntimeCollisionConfig(
+        nu_hyper_l=0.1,
+        hypercollisions_const=1.0,
+        hypercollisions_kz=1.0,
+        nu_hyper_m_const=0.0,
+    )
+    assert cfg.nu_hyper_l == 0.1
+    assert cfg.nu_hyper_m_const == 0.0
+    # The shipped default stays a legal, sink-free configuration.
+    assert RuntimeCollisionConfig().nu_hyper_l == 0.0
+
+
+@pytest.mark.parametrize(
+    "disabled_section",
+    [
+        {"physics": RuntimePhysicsConfig(hypercollisions=False)},
+        {"terms": RuntimeTermsConfig(hypercollisions=0.0)},
+    ],
+)
+def test_declared_laguerre_sink_disabled_above_its_branch_is_refused(
+    disabled_section: dict,
+) -> None:
+    """Cross-section validation refuses either higher-level off switch."""
+
+    cfg = RuntimeConfig(
+        collisions=RuntimeCollisionConfig(
+            nu_hyper_l=0.1,
+            hypercollisions_const=1.0,
+            nu_hyper_m_const=0.0,
+        ),
+        **disabled_section,
+    )
+    with pytest.raises(ValueError, match="declared Laguerre hypercollision sink"):
+        cfg.validate()
+
+
+def test_const_branch_hermite_rate_defaults_to_the_shared_one() -> None:
+    params = LinearParams()
+    assert params.nu_hyper_m_const is None
+    assert params.const_branch_nu_hyper_m() == params.nu_hyper_m
+    assert replace(params, nu_hyper_m_const=0.0).const_branch_nu_hyper_m() == 0.0
+
+
+def test_pure_laguerre_sink_is_exactly_the_declared_rate() -> None:
+    """With the const-branch Hermite rate zeroed the sink is ``-Nl nu_l r_l G``."""
+
+    sink = _contribution(
+        nu_hyper_l=jnp.asarray(0.1),
+        nu_hyper_m=jnp.asarray(1.0),
+        nu_hyper_m_const=jnp.asarray(0.0),
+        hypercollisions_const=jnp.asarray(1.0),
+        hypercollisions_kz=jnp.asarray(0.0),
+    )
+    common = _common()
+    expected = (
+        -(NL * 0.1 * common["ratio_l"])
+        * jnp.where(common["mask_const"], 1.0, 0.0)
+        * _state()
+    )
+    assert jnp.allclose(sink, expected, atol=0.0, rtol=0.0)
+
+
+def test_sink_adds_to_the_kz_branch_without_touching_it() -> None:
+    """The declared sink is additive: the ``|k_z|`` Hermite model is unchanged."""
+
+    baseline = _contribution(
+        nu_hyper_l=jnp.asarray(0.0),
+        nu_hyper_m=jnp.asarray(1.0),
+        hypercollisions_const=jnp.asarray(0.0),
+        hypercollisions_kz=jnp.asarray(1.0),
+    )
+    sink = _contribution(
+        nu_hyper_l=jnp.asarray(0.1),
+        nu_hyper_m=jnp.asarray(1.0),
+        nu_hyper_m_const=jnp.asarray(0.0),
+        hypercollisions_const=jnp.asarray(1.0),
+        hypercollisions_kz=jnp.asarray(0.0),
+    )
+    both = _contribution(
+        nu_hyper_l=jnp.asarray(0.1),
+        nu_hyper_m=jnp.asarray(1.0),
+        nu_hyper_m_const=jnp.asarray(0.0),
+        hypercollisions_const=jnp.asarray(1.0),
+        hypercollisions_kz=jnp.asarray(1.0),
+    )
+    assert jnp.allclose(both, baseline + sink, atol=0.0, rtol=0.0)
+
+
+def test_omitting_the_const_hermite_rate_reproduces_the_shared_coefficient() -> None:
+    """Back-compatibility: ``None`` keeps ``nu_hyper_m`` driving both branches."""
+
+    shared = _contribution(
+        nu_hyper_l=jnp.asarray(0.1),
+        nu_hyper_m=jnp.asarray(1.0),
+        hypercollisions_const=jnp.asarray(1.0),
+        hypercollisions_kz=jnp.asarray(1.0),
+    )
+    explicit = _contribution(
+        nu_hyper_l=jnp.asarray(0.1),
+        nu_hyper_m=jnp.asarray(1.0),
+        nu_hyper_m_const=jnp.asarray(1.0),
+        hypercollisions_const=jnp.asarray(1.0),
+        hypercollisions_kz=jnp.asarray(1.0),
+    )
+    assert jnp.allclose(shared, explicit, atol=0.0, rtol=0.0)
+
+
+def test_sink_damps_the_laguerre_cutoff_hardest() -> None:
+    """``r_l = (l/Nl)^p`` makes the rate monotone in ``l`` and zero at ``l=0``."""
+
+    sink = np.asarray(
+        _contribution(
+            nu_hyper_l=jnp.asarray(0.5),
+            nu_hyper_m=jnp.asarray(1.0),
+            nu_hyper_m_const=jnp.asarray(0.0),
+            hypercollisions_const=jnp.asarray(1.0),
+            hypercollisions_kz=jnp.asarray(0.0),
+        )
+    )
+    state = np.asarray(_state())
+    rate = np.abs(sink / state).reshape(NL, -1).max(axis=1)
+    assert rate[0] == 0.0
+    assert np.all(np.diff(rate) > 0.0)
+    assert rate[-1] == pytest.approx(NL * 0.5 * ((NL - 1) / NL) ** P_HYPER_L)
+
+
+def test_linear_params_roundtrips_the_new_rate_through_the_pytree() -> None:
+    import jax
+
+    params = replace(LinearParams(), nu_hyper_m_const=0.0)
+    leaves, treedef = jax.tree_util.tree_flatten(params)
+    assert jax.tree_util.tree_unflatten(treedef, leaves) == params
+
+
+# ---- from test_linear_collisions_coverage.py ----
+# Validation-branch and pytree coverage for linear collision kernels.
+#
+# These tests exercise the provenance checks, operator-variant guards, and
+# edge-case validation in :mod:`gkx.operators.linear.collisions` that the
+# main kernel regression suite does not reach. Every check pins the exact
+# contract (checksum/shape provenance, moment-axis shapes, species axes, grid
+
+
+def _fake_resource_files(payload: bytes, metadata_text: str):
+    """Return a stand-in for ``importlib.resources.files`` over fixed bytes."""
+
+    class _Leaf:
+        def __init__(self, *, data: bytes | None = None, text: str | None = None):
+            self._data = data
+            self._text = text
+
+        def read_bytes(self) -> bytes:
+            assert self._data is not None
+            return self._data
+
+        def read_text(self, encoding: str = "utf-8") -> str:
+            assert self._text is not None
+            return self._text
+
+    class _DataRoot:
+        def joinpath(self, name: str) -> _Leaf:
+            if name.endswith(".npy"):
+                return _Leaf(data=payload)
+            return _Leaf(text=metadata_text)
+
+    class _Package:
+        def joinpath(self, name: str) -> _DataRoot:
+            return _DataRoot()
+
+    def _files(package: str) -> _Package:
+        return _Package()
+
+    return _files
+
+
+def test_collision_matrix_bundle_rejects_corrupt_provenance(monkeypatch) -> None:
+    """The cached bundle fails closed on checksum, shape, and layout mismatches."""
+
+    real_payload = (
+        resources.files("gkx")
+        .joinpath("data")
+        .joinpath(collisions._COLLISION_MATRIX_DATA)
+        .read_bytes()
+    )
+    metadata_file = (
+        resources.files("gkx")
+        .joinpath("data")
+        .joinpath(collisions._COLLISION_MATRIX_METADATA)
+    )
+    real_metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+
+    # Checksum branch: genuine coefficients, metadata advertising a wrong hash.
+    corrupt_hash_metadata = json.dumps(
+        {"sha256": "0" * 64, "shape": [3, 8, 8], "models": ["sugama"]}
+    )
+    monkeypatch.setattr(
+        collisions.resources,
+        "files",
+        _fake_resource_files(real_payload, corrupt_hash_metadata),
+    )
+    collisions._collision_matrix_bundle.cache_clear()
+    with pytest.raises(ValueError, match="checksum does not match metadata"):
+        collisions._collision_matrix_bundle()
+
+    # Shape branch: matching checksum but a payload whose array shape disagrees
+    # with the declared (3, 8, 8) provenance.
+    buffer = io.BytesIO()
+    np.save(buffer, np.zeros((2, 2), dtype=np.float64))
+    mismatched_payload = buffer.getvalue()
+    honest_hash = hashlib.sha256(mismatched_payload).hexdigest()
+    wrong_shape_metadata = json.dumps(
+        {"sha256": honest_hash, "shape": [3, 8, 8], "models": ["sugama"]}
+    )
+    monkeypatch.setattr(
+        collisions.resources,
+        "files",
+        _fake_resource_files(mismatched_payload, wrong_shape_metadata),
+    )
+    collisions._collision_matrix_bundle.cache_clear()
+    with pytest.raises(ValueError, match="shape does not match metadata"):
+        collisions._collision_matrix_bundle()
+
+    # Layout branch: genuine coefficients declaring the transposed (Nl, Nm).
+    transposed_metadata = json.dumps({**real_metadata, "Nl": 4, "Nm": 2})
+    monkeypatch.setattr(
+        collisions.resources,
+        "files",
+        _fake_resource_files(real_payload, transposed_metadata),
+    )
+    collisions._collision_matrix_bundle.cache_clear()
+    with pytest.raises(ValueError, match="moment layout does not match metadata"):
+        collisions._collision_matrix_bundle()
+
+    # Drop the poisoned (empty) cache so downstream tests reload real data.
+    collisions._collision_matrix_bundle.cache_clear()
+
+
+def test_sugama_pair_matrices_reject_nonpositive_temperature_ratio() -> None:
+    """A positive mass ratio still requires a positive temperature ratio."""
+
+    # A valid pair returns finite, correctly shaped (8, 8) test/field blocks.
+    test_matrix, field_matrix = drift_kinetic_sugama_pair_matrices(
+        jnp.asarray(1.0), jnp.asarray(1.0)
+    )
+    assert test_matrix.shape == (8, 8)
+    assert field_matrix.shape == (8, 8)
+    assert bool(jnp.all(jnp.isfinite(test_matrix)))
+
+    with pytest.raises(ValueError, match="temperature_ratio must be positive"):
+        drift_kinetic_sugama_pair_matrices(jnp.asarray(1.0), jnp.asarray(0.0))
+    with pytest.raises(ValueError, match="temperature_ratio must be positive"):
+        drift_kinetic_sugama_pair_matrices(jnp.asarray(2.0), jnp.asarray(-0.5))
+
+
+def _diagonal_coulomb_operator() -> EqualSpeciesFiniteWavelengthCoulombOperator:
+    grid = jnp.asarray([0.0, 1.0, 2.0])
+    matrix = (1.0 + 0.3 * grid)[:, None, None]
+    vector = (0.2 - 0.04 * grid)[:, None]
+    zero_matrix = jnp.zeros_like(matrix)
+    zero_vector = jnp.zeros_like(vector)
+    return EqualSpeciesFiniteWavelengthCoulombOperator(
+        grid,
+        jnp.asarray([[0.7]]),
+        matrix,
+        zero_matrix,
+        vector,
+        zero_vector,
+        zero_vector,
+        zero_vector,
+    )
+
+
+def test_collision_operators_round_trip_through_pytree() -> None:
+    """Registered collision operators flatten and unflatten without data loss."""
+
+    dense = DriftKineticMomentCollisionOperator(
+        jnp.asarray(collisions.load_collision_moment_matrix("sugama"))
+    )
+    dense_leaves, dense_treedef = jax.tree_util.tree_flatten(dense)
+    assert len(dense_leaves) == 1
+    dense_rebuilt = jax.tree_util.tree_unflatten(dense_treedef, dense_leaves)
+    assert isinstance(dense_rebuilt, DriftKineticMomentCollisionOperator)
+    assert bool(jnp.array_equal(dense_rebuilt.matrix, dense.matrix))
+
+    grid = jnp.asarray([0.0, 1.0, 2.0])
+    finite = FiniteWavelengthCoulombOperator(
+        grid,
+        jnp.ones((1, 1)),
+        jnp.zeros((1, 1, 3, 3, 1, 1)),
+        jnp.zeros((1, 1, 3, 3, 1, 1)),
+        jnp.zeros((1, 1, 3, 3, 1)),
+        jnp.zeros((1, 1, 3, 3, 1)),
+        jnp.zeros((1, 1, 3, 3, 1)),
+        jnp.zeros((1, 1, 3, 3, 1)),
+    )
+    finite_leaves, finite_treedef = jax.tree_util.tree_flatten(finite)
+    finite_rebuilt = jax.tree_util.tree_unflatten(finite_treedef, finite_leaves)
+    assert isinstance(finite_rebuilt, FiniteWavelengthCoulombOperator)
+    assert bool(
+        jnp.array_equal(
+            finite_rebuilt.bessel_argument_grid, finite.bessel_argument_grid
+        )
+    )
+    assert bool(jnp.array_equal(finite_rebuilt.test_table, finite.test_table))
+
+    diagonal = _diagonal_coulomb_operator()
+    diag_leaves, diag_treedef = jax.tree_util.tree_flatten(diagonal)
+    diag_rebuilt = jax.tree_util.tree_unflatten(diag_treedef, diag_leaves)
+    assert isinstance(diag_rebuilt, EqualSpeciesFiniteWavelengthCoulombOperator)
+    assert bool(jnp.array_equal(diag_rebuilt.test_table, diagonal.test_table))
+    assert bool(jnp.array_equal(diag_rebuilt.pair_frequency, diagonal.pair_frequency))
+
+
+def test_equal_species_coulomb_apply_requires_single_species_bessel_axis() -> None:
+    """The compact like-species path rejects a multi-species Bessel argument."""
+
+    diagonal = _diagonal_coulomb_operator()
+    single_species_state = jnp.ones((1, 1, 1, 1, 1), dtype=jnp.complex128)
+    context = CollisionContext(
+        distribution=single_species_state,
+        hamiltonian=single_species_state,
+        fields=FieldState(phi=jnp.zeros((1, 1, 1)), apar=None, bpar=None),
+        cache=SimpleNamespace(b=jnp.zeros((2, 1, 1, 1))),
+        parameters=SimpleNamespace(tz=jnp.ones(1)),
+    )
+    with pytest.raises(ValueError, match="Bessel argument must have one species"):
+        diagonal.apply(context)
+
+
+def test_interpolate_collision_diagonal_table_validates_grid_and_table() -> None:
+    """The diagonal interpolator guards grid rank, table rank, and monotonicity."""
+
+    target = jnp.asarray(0.5)
+    with pytest.raises(ValueError, match="at least two points"):
+        interpolate_collision_diagonal_table(
+            jnp.asarray([0.0]), jnp.ones((1, 3)), target
+        )
+    with pytest.raises(ValueError, match="one vector or two matrix axes"):
+        interpolate_collision_diagonal_table(
+            jnp.asarray([0.0, 1.0]), jnp.ones(4), target
+        )
+    with pytest.raises(ValueError, match="axis must match the grid"):
+        interpolate_collision_diagonal_table(
+            jnp.asarray([0.0, 1.0]), jnp.ones((3, 4)), target
+        )
+    with pytest.raises(ValueError, match="matrices must be square"):
+        interpolate_collision_diagonal_table(
+            jnp.asarray([0.0, 1.0]), jnp.ones((2, 3, 4)), target
+        )
+    with pytest.raises(ValueError, match="finite and strictly increasing"):
+        interpolate_collision_diagonal_table(
+            jnp.asarray([1.0, 0.0]), jnp.ones((2, 3)), target
+        )
+
+
+def test_interpolate_collision_pair_table_validates_grid_and_table() -> None:
+    """The bilinear pair interpolator guards grid, table rank, and squareness."""
+
+    species_target = jnp.ones((2, 1))
+    with pytest.raises(ValueError, match="at least two points"):
+        interpolate_collision_pair_table(
+            jnp.asarray([0.0]), jnp.ones((1, 1, 1, 1, 2)), jnp.ones((1,))
+        )
+    with pytest.raises(ValueError, match="one vector or two matrix coefficient"):
+        interpolate_collision_pair_table(
+            jnp.asarray([0.0, 1.0]), jnp.ones((2, 2, 2, 2)), species_target
+        )
+    with pytest.raises(ValueError, match="kperp axes must match the grid"):
+        interpolate_collision_pair_table(
+            jnp.asarray([0.0, 1.0]), jnp.ones((2, 2, 3, 3, 2)), species_target
+        )
+    with pytest.raises(ValueError, match="pair matrices must be square"):
+        interpolate_collision_pair_table(
+            jnp.asarray([0.0, 1.0]),
+            jnp.ones((2, 2, 2, 2, 3, 4)),
+            species_target,
+        )
+    with pytest.raises(ValueError, match="finite and strictly increasing"):
+        interpolate_collision_pair_table(
+            jnp.asarray([1.0, 0.0]), jnp.ones((2, 2, 2, 2, 2)), species_target
+        )
+
+
+def test_dense_collision_apply_requires_five_or_six_dimensions() -> None:
+    """Both dense apply kernels reject states outside the (5, 6)-rank contract."""
+
+    rank_four_state = jnp.ones((2, 4, 1, 1))
+    with pytest.raises(ValueError, match="five or six dimensions"):
+        apply_collision_moment_matrix(rank_four_state, jnp.eye(4), nu=jnp.asarray(1.0))
+    with pytest.raises(ValueError, match="five or six dimensions"):
+        apply_multispecies_collision_moment_matrix(
+            rank_four_state, jnp.zeros((2, 2, 4, 4))
+        )
+
+
+def _valid_coulomb_arguments() -> dict:
+    ns, nl, nm = 1, 1, 2
+    mode_count = nl * nm
+    spatial_shape = (1, 1, 2)
+    state = (
+        jnp.arange(ns * nl * nm * 2, dtype=jnp.float64).reshape(
+            (ns, nl, nm) + spatial_shape
+        )
+        + 0.2j
+    )
+    matrix = 0.01 * jnp.ones((ns, ns, mode_count, mode_count))
+    vector = 0.01 * jnp.ones((ns, ns, mode_count))
+    return {
+        "distribution": state,
+        "test_matrix": matrix,
+        "field_matrix": -0.6 * matrix,
+        "test_phi1": vector,
+        "field_phi1": -0.5 * vector,
+        "test_phi2": 0.2 * vector,
+        "field_phi2": -0.3 * vector,
+        "phi": jnp.asarray([[[0.3, -0.2]]]),
+        "pair_frequency": jnp.asarray([[0.7]]),
+        "charge_over_temperature": jnp.asarray([1.3]),
+    }
+
+
+def _call_coulomb(arguments: dict) -> jnp.ndarray:
+    return apply_finite_wavelength_coulomb_moment_operator(
+        arguments["distribution"],
+        arguments["test_matrix"],
+        arguments["field_matrix"],
+        arguments["test_phi1"],
+        arguments["field_phi1"],
+        arguments["test_phi2"],
+        arguments["field_phi2"],
+        phi=arguments["phi"],
+        pair_frequency=arguments["pair_frequency"],
+        charge_over_temperature=arguments["charge_over_temperature"],
+    )
+
+
+def test_finite_wavelength_coulomb_operator_validates_shapes() -> None:
+    """The runtime Coulomb apply enforces every state, matrix, and field shape."""
+
+    baseline = _valid_coulomb_arguments()
+    result = _call_coulomb(baseline)
+    assert result.shape == baseline["distribution"].shape
+    assert bool(jnp.all(jnp.isfinite(result)))
+
+    with pytest.raises(ValueError, match="five or six dimensions"):
+        _call_coulomb({**baseline, "distribution": jnp.ones((1, 2, 1, 1))})
+    with pytest.raises(ValueError, match="test/field matrices must have"):
+        _call_coulomb({**baseline, "test_matrix": jnp.zeros((1, 1, 3, 3))})
+    with pytest.raises(ValueError, match="polarization vectors must have"):
+        _call_coulomb({**baseline, "test_phi1": jnp.zeros((1, 1, 3))})
+    with pytest.raises(ValueError, match="charge_over_temperature must have length"):
+        _call_coulomb({**baseline, "charge_over_temperature": jnp.ones(2)})
+    with pytest.raises(ValueError, match="phi must have spatial shape"):
+        _call_coulomb({**baseline, "phi": jnp.zeros((1, 1, 3))})
+
+
+# ---- from test_nonlinear_operator_packages.py ----
+
+
+def test_operator_package_preserves_public_linear_export_identity() -> None:
+    assert operators.hermite_streaming is linear_operators.hermite_streaming
+
+
+def test_nonlinear_operator_package_reexports_rhs_implementation() -> None:
+    assert nonlinear_operators.RhsCallable is operator_rhs.RhsCallable
+    assert (
+        nonlinear_operators.linear_rhs_jit_for_terms_impl
+        is operator_rhs.linear_rhs_jit_for_terms_impl
+        is linear_rhs_jit_for_terms
+    )
+    assert (
+        nonlinear_operators.nonlinear_rhs_cached_impl
+        is operator_rhs.nonlinear_rhs_cached_impl
+    )
+    assert (
+        nonlinear_operators.nonlinear_em_term_cached_impl
+        is operator_rhs.nonlinear_em_term_cached_impl
+    )
+
+
+def test_nonlinear_operator_package_reexports_diagnostic_implementation() -> None:
+    assert nonlinear_operators.NonlinearDiagnosticKernels is (
+        operator_diagnostics.NonlinearDiagnosticKernels
+    )
+    assert (
+        nonlinear_operators.compute_nonlinear_diagnostic_tuple
+        is operator_diagnostics.compute_nonlinear_diagnostic_tuple
+    )
+    assert (
+        nonlinear_operators.make_nonlinear_diagnostic_tuple_fn
+        is operator_diagnostics.make_nonlinear_diagnostic_tuple_fn
+    )

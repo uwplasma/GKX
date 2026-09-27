@@ -743,7 +743,7 @@ for reference-code parity rows, whose decks must reproduce the reference
 exactly; it commits the row to being reported as resolution-limited, not as a
 converged growth rate. The declaration is a required field of every linear row
 of ``tools/evidence_ledger.toml`` and is checked by
-``tests/release/test_evidence_ledger.py``.
+``tests/release/test_release_gates.py``.
 
 Hyperdiffusion And End Damping
 ------------------------------

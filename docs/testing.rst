@@ -54,11 +54,11 @@ Representative contracts and where they live:
 
 - Hermite/Laguerre ladder identities, quasineutrality, and streaming
   (``gkx.operators.linear.moments``): ``tests/unit/linear/test_linear.py``,
-  ``tests/unit/linear/test_linear_moments_invariants.py``,
-  ``tests/unit/operators/test_linear_streaming.py``.
+  ``tests/unit/linear/test_linear.py``,
+  ``tests/unit/operators/test_terms_fields.py``.
 - Term-wise RHS equivalence (``gkx.terms.assemble_rhs_cached`` against
   ``gkx.operators.linear.rhs.linear_rhs_cached``):
-  ``tests/unit/operators/test_terms_assembly.py``.
+  ``tests/unit/operators/test_terms_fields.py``.
 - Term toggles, drift activation, diamagnetic drive vanishing at
   :math:`k_y=0`, ``rho_star`` scaling of cached :math:`k_y`, and the end-damping
   taper: ``tests/unit/linear/test_linear.py``.
@@ -73,7 +73,7 @@ Representative contracts and where they live:
   variants, collision splitting, IMEX, flow-shear remap and window-gradient
   checks: ``tests/unit/nonlinear/test_nonlinear_helpers_extra.py``.
 - Serial-vs-parallel numerical identity: ``tests/unit/parallel/``; the tracked
-  large-run scaling artifacts: ``tests/unit/parallel/test_parallel_artifacts.py``.
+  large-run scaling artifacts: ``tests/unit/parallel/test_parallel_core.py``.
 
 Running tests
 -------------
@@ -113,7 +113,7 @@ Opt-in parity gates skip unless their environment variable is set:
    # CPU vs GPU short nonlinear trajectory
    GKX_DEVICE_PARITY=1 pytest -q tests/unit/parallel/test_parallel_core.py -k cpu_gpu
    # VMEC -> *.eik.nc regenerated twice, arrays bitwise identical
-   GKX_VMEC_FILE=/path/to/wout.nc pytest -q tests/unit/geometry/test_vmec_eik.py -k roundtrip
+   GKX_VMEC_FILE=/path/to/wout.nc pytest -q tests/unit/geometry/test_geometry.py -k roundtrip
 
 CI jobs
 -------
@@ -180,8 +180,8 @@ Core coverage gates in ``nightly-full``:
 .. code-block:: bash
 
    # gkx.terms >= 90%
-   pytest -q tests/unit/operators/test_terms_assembly.py \
-          tests/unit/operators/test_linear_streaming.py \
+   pytest -q tests/unit/operators/test_terms_fields.py \
+          tests/unit/operators/test_terms_fields.py \
           tests/unit/operators/test_terms_fields.py \
           tests/unit/solvers/test_time_integrators.py \
           tests/unit/nonlinear/test_nonlinear_exb.py \

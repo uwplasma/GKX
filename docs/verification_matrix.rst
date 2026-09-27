@@ -4,7 +4,7 @@ Verification Matrix
 Every public number in GKX has one row in the evidence ledger,
 ``tools/evidence_ledger.toml``. The first part of this page is generated from
 that ledger by ``python scripts/validation_matrix.py``, and
-``tests/release/test_evidence_ledger.py`` fails when the page and the ledger
+``tests/release/test_release_gates.py`` fails when the page and the ledger
 disagree. A row's status is one of ``passing``, ``provisional``, ``open``,
 ``failing`` or ``superseded``; a ``provisional`` row always states what is
 unresolved. The second part lists lanes that have artifacts but no ledger row.
@@ -354,7 +354,7 @@ Linear
    * - Stellarator electromagnetic
      - not started
      - Finite-beta geometry tests only
-       (``tests/validation/stellarator/test_finite_beta_vmec_boozer_parity.py``).
+       (``tests/unit/geometry/test_geometry.py``).
 
 Nonlinear
 ~~~~~~~~~

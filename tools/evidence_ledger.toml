@@ -1,6 +1,6 @@
 # GKX evidence ledger
 #
-# One [[row]] per public number or claim. `tests/release/test_evidence_ledger.py`
+# One [[row]] per public number or claim. `tests/release/test_release_gates.py`
 # checks that every artifact and generator exists, that every row is
 # well formed, and that each README number recomputes from its artifact.
 #

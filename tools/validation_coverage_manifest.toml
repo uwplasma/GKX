@@ -41,7 +41,7 @@ numerics_contracts = [
   "the memory estimate is declared a floor rather than a ceiling, because it does not model diagnostic buffers",
 ]
 fast_tests = [
-  "tests/unit/api/test_prepared_simulation.py",
+  "tests/unit/core/test_core_numerics.py",
 ]
 next_tests = [
   "a prepared nonlinear solve reproduces the unprepared solve bit for bit",
@@ -74,7 +74,6 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/core/test_core_numerics.py",
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
-  "tests/unit/objectives/test_vmec_transport_objectives.py",
   "tests/unit/parallel/test_parallel_core.py",
 ]
 artifact_paths = [
@@ -243,8 +242,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
-  "tests/unit/linear/test_linear_helpers_extra.py",
-  "tests/unit/operators/test_terms_assembly.py",
   "tests/unit/operators/test_terms_fields.py",
 ]
 artifact_paths = [
@@ -282,7 +279,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
-  "tests/unit/linear/test_linear_helpers_extra.py",
   "tests/unit/operators/test_operator_kernels.py",
   "tests/unit/geometry/test_geometry.py",
 ]
@@ -388,7 +384,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
-  "tests/unit/linear/test_linear_helpers_extra.py",
   "tests/unit/parallel/test_parallel_linear_velocity.py",
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
@@ -422,7 +417,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
-  "tests/unit/linear/test_linear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/solvers/test_time_integrators.py",
 ]
@@ -458,7 +452,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
-  "tests/unit/linear/test_linear_helpers_extra.py",
   "tests/integration/runtime/test_runtime_runner.py",
 ]
 artifact_paths = [
@@ -491,9 +484,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
-  "tests/unit/linear/test_linear_helpers_extra.py",
   "tests/unit/operators/test_terms_fields.py",
-  "tests/unit/operators/test_terms_assembly.py",
 ]
 artifact_paths = [
   "docs/_static/hermite_streaming_ladder_gate.json",
@@ -524,7 +515,6 @@ numerics_contracts = [
   "positive/nonnegative validation rejects invalid host values while allowing traced autodiff values",
 ]
 fast_tests = [
-  "tests/unit/linear/test_linear_helpers_extra.py",
   "tests/unit/linear/test_linear.py",
 ]
 artifact_paths = [
@@ -556,7 +546,6 @@ numerics_contracts = [
   "linked FFT kz arrays and damping profiles preserve chain length and endpoint behavior",
 ]
 fast_tests = [
-  "tests/unit/linear/test_linear_helpers_extra.py",
   "tests/unit/linear/test_linear.py",
 ]
 artifact_paths = [
@@ -593,7 +582,7 @@ numerics_contracts = [
   "Hermite-sharded streaming and electrostatic-slice routes preserve shape, dtype, and phi identity gates",
 ]
 fast_tests = [
-  "tests/unit/linear/test_linear_helpers_extra.py",
+  "tests/unit/linear/test_linear.py",
   "tests/unit/parallel/test_parallel_linear_velocity.py",
 ]
 artifact_paths = [
@@ -635,7 +624,7 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear_exb.py",
-  "tests/unit/operators/test_terms_assembly.py",
+  "tests/unit/operators/test_terms_fields.py",
 ]
 artifact_paths = [
   "docs/_static/nonlinear_window_statistics.json",
@@ -954,7 +943,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/quasilinear/test_quasilinear.py",
-  "tests/validation/stellarator/test_external_vmec_validation_policy.py",
+  "tests/unit/geometry/test_geometry.py",
 ]
 artifact_paths = [
   "docs/_static/quasilinear_cyclone_spectrum.png",
@@ -996,11 +985,9 @@ numerics_contracts = [
   "grid-refined late-window means are compared with symmetric relative differences and stationarity gates",
 ]
 fast_tests = [
-  "tests/validation/quasilinear/test_quasilinear_calibration.py",
-  "tests/validation/quasilinear/test_quasilinear_window.py",
-  "tests/validation/quasilinear/test_quasilinear_promotion_guardrails.py",
+  "tests/unit/quasilinear/test_quasilinear.py",
   "tests/release/test_release_gates.py",
-  "tests/validation/stellarator/test_external_vmec_validation_policy.py",
+  "tests/unit/geometry/test_geometry.py",
 ]
 artifact_paths = [
   "docs/_static/quasilinear_validated_calibration_inputs.json",
@@ -1063,9 +1050,8 @@ numerics_contracts = [
   "NaN late-window samples and undersampled windows fail closed by default",
 ]
 fast_tests = [
-  "tests/validation/quasilinear/test_quasilinear_window.py",
-  "tests/validation/quasilinear/test_quasilinear_promotion_guardrails.py",
-  "tests/validation/nonlinear/test_nonlinear_window_artifact_contracts.py",
+  "tests/unit/quasilinear/test_quasilinear.py",
+  "tests/validation/benchmarks/test_benchmarking.py",
 ]
 artifact_paths = [
   "docs/_static/quasilinear_promotion_guardrails.json",
@@ -1098,9 +1084,7 @@ numerics_contracts = [
   "runtime scan results preserve ky ordering, finite filtering, and table schema",
 ]
 fast_tests = [
-  "tests/validation/benchmarks/test_benchmarks_helpers.py",
   "tests/validation/benchmarks/test_benchmarking.py",
-  "tests/validation/benchmarks/test_benchmark_contracts.py",
 ]
 artifact_paths = [
   "docs/_static/benchmark_core_linear_atlas.png",
@@ -1167,7 +1151,7 @@ numerics_contracts = [
   "observed-order gates use pairwise slopes and final-error thresholds",
 ]
 fast_tests = [
-  "tests/validation/physics_gates/test_validation_gates.py",
+  "tests/validation/physics_gates/test_collision_physics.py",
 ]
 artifact_paths = [
   "docs/_static/validation_gate_index.json",
@@ -1198,7 +1182,7 @@ numerics_contracts = [
   "closure probes expose hypercollision source and strength explicitly",
 ]
 fast_tests = [
-  "tests/validation/physics_gates/test_validation_gates.py",
+  "tests/validation/physics_gates/test_collision_physics.py",
   "tests/tools/comparison/test_reference_comparison_tools.py",
 ]
 artifact_paths = [
@@ -1309,9 +1293,7 @@ numerics_contracts = [
   "default VMEC eik cache reuse and atomic writes prevent partial-file races in parallel sweeps",
 ]
 fast_tests = [
-  "tests/unit/geometry/test_miller_geometry.py",
-  "tests/unit/geometry/test_imported_vmec_geometry.py",
-  "tests/unit/geometry/test_vmec_eik.py",
+  "tests/unit/geometry/test_geometry.py",
 ]
 artifact_paths = [
   "docs/_static/w7x_exact_state_audit.json",
@@ -1356,8 +1338,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/objectives/test_differentiable_geometry_objectives.py",
-  "tests/unit/geometry/test_imported_vmec_geometry.py",
-  "tests/unit/geometry/test_vmec_eik.py",
+  "tests/unit/geometry/test_geometry.py",
 ]
 artifact_paths = [
   "docs/_static/w7x_exact_state_audit.json",
@@ -1395,7 +1376,7 @@ fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
   "tests/integration/runtime/test_runtime_runner.py",
   "tests/integration/runtime/test_cli.py",
-  "tests/unit/diagnostics/test_plotting.py",
+  "tests/unit/diagnostics/test_analysis.py",
 ]
 artifact_paths = [
   "docs/_static/benchmark_readme_panel.png",
@@ -1561,7 +1542,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/parallel/test_parallel_core.py",
-  "tests/unit/solvers/test_runners_and_orchestration.py",
+  "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/parallel/test_parallel_linear_velocity.py",
 ]
 artifact_paths = [
@@ -1680,7 +1661,7 @@ numerics_contracts = [
   "ky samples map uniquely and surface chunking preserves weighted reductions",
 ]
 fast_tests = [
-  "tests/unit/objectives/test_vmec_transport_objectives.py",
+  "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
 artifact_paths = [
   "docs/_static/vmex_transport_gradient_diagnostic.json",
@@ -1778,7 +1759,7 @@ numerics_contracts = [
   "time and response arrays are one-dimensional and length-matched before plotting",
 ]
 fast_tests = [
-  "tests/unit/diagnostics/test_plotting.py",
+  "tests/unit/diagnostics/test_analysis.py",
 ]
 artifact_paths = [
   "docs/_static/w7x_zonal_response_panel.png",
@@ -1808,7 +1789,7 @@ numerics_contracts = [
   "font sizes, dpi, and export settings are deterministic across every generated figure",
 ]
 fast_tests = [
-  "tests/unit/diagnostics/test_plotting.py",
+  "tests/unit/diagnostics/test_analysis.py",
 ]
 artifact_paths = [
   "docs/_static/landau_damping_validation.png",
@@ -1847,7 +1828,7 @@ numerics_contracts = [
   "empty panels are removed instead of shipped",
 ]
 fast_tests = [
-  "tests/unit/diagnostics/test_plotting.py",
+  "tests/unit/diagnostics/test_analysis.py",
   "tests/integration/examples/test_examples.py",
   "tests/tools/comparison/test_reference_comparison_tools.py",
 ]

@@ -868,7 +868,7 @@ Measurement pitfalls
 ^^^^^^^^^^^^^^^^^^^^
 
 Four traps produce plausible but wrong numbers here. Each is gated in
-``tests/validation/physics_gates/test_hermite_hierarchy_physics.py``.
+``tests/validation/physics_gates/test_collision_physics.py``.
 
 **1. A collisionless truncated Hermite system cannot Landau damp.** Free
 streaming is anti-Hermitian, so the truncated matrix has a purely real

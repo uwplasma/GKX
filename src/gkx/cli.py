@@ -52,7 +52,7 @@ from gkx.workflows.runtime.commands import (
 # under the CFL bound, and 4000 steps reach t = 80, which is past the
 # gamma * t_max >= 7 the fitter asks for. The run costs about 7 s instead of
 # 3 s and lands within 0.02 percent of the eigenvalue with no warnings.
-# tests/validation/physics_gates/test_validation_gates.py pins that agreement.
+# tests/validation/physics_gates/test_collision_physics.py pins that agreement.
 DEFAULT_DEMO_SETTINGS: dict[str, float | int | str] = {
     "ky": 0.3,
     "Nl": 7,

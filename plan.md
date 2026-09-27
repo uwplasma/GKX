@@ -337,7 +337,7 @@ which voids four GX goldens.
 | Nonlinear EM | KBM window 0.93% to t ≤ 100 against self-run GX | `docs/_static/nonlinear_kbm_gate_summary.json` | GX Table 2 with kinetic electrons (EM3) |
 | Stellarator EM (EM4) | Not started; finite-β geometry tests only | `tests/validation/stellarator/test_finite_beta_vmec_boozer_parity.py` | Linear W7-X finite-β against stella (EM4) |
 
-**Collision operators** (`src/gkx/operators/linear/collision_tables.py`)
+**Collision operators** (`src/gkx/operators/linear/collision_factory.py`)
 
 | Operator | Status at 2.3.0 | Closing action (ID) |
 |---|---|---|

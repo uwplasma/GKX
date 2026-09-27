@@ -2109,7 +2109,7 @@ def test_runtime_startup_phi_density_seed_validation_paths() -> None:
     )
     # _expand_ky takes the grid's own Ny rather than inferring it from Nyc.
     # Inferring the even branch expanded a Nyc=5 block to 8 rows on a 9-row
-    # grid; tests/unit/core/test_core_ky_layout.py owns the general statement.
+    # grid; tests/unit/core/test_core_numerics.py owns the general statement.
     for ny_full in (8, 9):
         assert (
             startup._expand_ky(
