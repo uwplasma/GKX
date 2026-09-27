@@ -113,6 +113,10 @@ class LinearCache:
     #: reduction weight of an even grid's Nyquist row depends on the answer
     #: (:mod:`gkx.core_ky_layout`).
     ny_full: int | None = None
+    #: The parent grid's hyperdiffusion ``ky`` cutoff in cache units, or
+    #: ``None`` when ``ky`` holds that row itself (see
+    #: :attr:`gkx.core_grid.SpectralGrid.ky_cut`).
+    ky_cut: jnp.ndarray | None = None
 
     def tree_flatten(self):
         children = (
@@ -169,7 +173,7 @@ class LinearCache:
         )
         linked_idx = self.linked_indices or ()
         linked_kz = self.linked_kz or ()
-        children = children + tuple(linked_idx) + tuple(linked_kz)
+        children = children + tuple(linked_idx) + tuple(linked_kz) + (self.ky_cut,)
         aux_data = (
             self.kperp2_bmag,
             self.use_twist_shift,
@@ -212,4 +216,5 @@ class LinearCache:
             linked_full_cover=linked_full_cover,
             linked_use_gather=linked_use_gather,
             ny_full=ny_full,
+            ky_cut=children[-1],
         )

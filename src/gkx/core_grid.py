@@ -43,6 +43,11 @@ class SpectralGrid:
     #: (:mod:`gkx.core_ky_layout`), and the reduction weights of an even grid's
     #: Nyquist row depend on the answer, so the grid carries it.
     ny_full: int | None = None
+    #: ``|ky|`` of the parent grid's last dealiased row, ``(Ny - 1) // 3``,
+    #: carried by a row selection that no longer contains it.  GX normalizes
+    #: hyperdiffusion by the full grid's ``k_perp`` corner, so a one-row ky
+    #: scan has to keep the parent's extent rather than its own ``ky``.
+    ky_cut: float | None = None
 
     def tree_flatten(self):
         children = (
@@ -62,12 +67,13 @@ class SpectralGrid:
             self.kxfac,
             self.ky_mode,
             self.ny_full,
+            self.ky_cut,
         )
         return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        y0, x0, boundary, jtwist, non_twist, kxfac, ky_mode, ny_full = aux_data
+        y0, x0, boundary, jtwist, non_twist, kxfac, ky_mode, ny_full, ky_cut = aux_data
         return cls(
             *children,
             y0=y0,
@@ -78,6 +84,7 @@ class SpectralGrid:
             kxfac=kxfac,
             ky_mode=ky_mode,
             ny_full=ny_full,
+            ky_cut=ky_cut,
         )
 
     @property
@@ -269,6 +276,25 @@ def _selected_ny_full(grid: SpectralGrid, ky_vals: jnp.ndarray) -> int | None:
     return parent if np.array_equal(selected, expected) else None
 
 
+def _parent_ky_cut(grid: SpectralGrid) -> float | None:
+    """Return ``|ky|`` of `grid`'s last dealiased row, ``(Ny - 1) // 3``."""
+
+    if grid.ky_cut is not None:
+        return float(grid.ky_cut)
+    rows = int(grid.ky.shape[0])
+    row = min(max((_parent_ny_full(grid) - 1) // 3, 0), rows - 1)
+    try:
+        return float(abs(np.asarray(grid.ky, dtype=float)[row]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _selected_ky_cut(grid: SpectralGrid, ny_full: int | None) -> float | None:
+    """Return the parent's ``ky`` cutoff for a subset, ``None`` for a full axis."""
+
+    return None if ny_full is not None else _parent_ky_cut(grid)
+
+
 def select_ky_grid(
     grid: SpectralGrid,
     ky_index: int | jnp.ndarray | np.ndarray | Sequence[int],
@@ -289,6 +315,7 @@ def select_ky_grid(
     kx_grid = jnp.take(grid.kx_grid, ky_idx, axis=0)
     mask = jnp.ones_like(jnp.take(grid.dealias_mask, ky_idx, axis=0), dtype=bool)
     ky_mode = jnp.rint(ky * grid.y0).astype(jnp.int32)
+    ny_full = _selected_ny_full(grid, ky)
     return SpectralGrid(
         kx=grid.kx,
         ky=ky,
@@ -303,7 +330,8 @@ def select_ky_grid(
         non_twist=grid.non_twist,
         kxfac=grid.kxfac,
         ky_mode=ky_mode,
-        ny_full=_selected_ny_full(grid, ky),
+        ny_full=ny_full,
+        ky_cut=_selected_ky_cut(grid, ny_full),
     )
 
 
@@ -324,6 +352,7 @@ def select_real_fft_ky_grid(
     kx_grid = jnp.broadcast_to(kx_vals[None, :], (nky, kx_vals.shape[0]))
     ky_grid = jnp.broadcast_to(ky_vals[:, None], (nky, kx_vals.shape[0]))
     ky_mode = jnp.rint(ky_vals * grid.y0).astype(jnp.int32)
+    ny_full = _selected_ny_full(grid, ky_vals)
     return SpectralGrid(
         kx=kx_vals,
         ky=ky_vals,
@@ -338,5 +367,6 @@ def select_real_fft_ky_grid(
         non_twist=grid.non_twist,
         kxfac=grid.kxfac,
         ky_mode=ky_mode,
-        ny_full=_selected_ny_full(grid, ky_vals),
+        ny_full=ny_full,
+        ky_cut=_selected_ky_cut(grid, ny_full),
     )
