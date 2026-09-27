@@ -20645,6 +20645,62 @@ Evidence:
 
 Outcome: ready for one CI run and release once solvax 0.26.0 is on PyPI.
 
+## 2026-09-27 — OPT-VMEX: QA linear, quasilinear and nonlinear examples in VMEX
+
+Baseline: GKX `main` `cf1d40828` (2.4.0); VMEX `main` `8616129d3`. Plan F.5
+steps 1, 3 (partly), 4 and 5; G.6 P3. GKX PR #305, VMEX PR uwplasma/vmex#471.
+
+Changes (VMEX):
+- `gk_fieldline_geometry` and the turbulence objectives take `s`
+  (normalized toroidal flux). Surface data are blended linearly between the
+  two bracketing full-mesh surfaces; on a grid surface the result is bitwise
+  the `s_index` one. Evaluating one surface's radial parabola off-centre was
+  tried first and rejected: it moved `gbdrift` by 20-40 % at fixed `s`
+  (VMEC odd-even radial noise through the second difference). Blended, the
+  shaped-tokamak error against ns = 97 is 3.6e-2 / 8.2e-3 / 2.0e-3 at
+  ns = 13 / 25 / 49 (gbdrift, worst field): second order.
+- Defect fixed: the default GKX closure used `kpar_scale = 1.0` (GKX's
+  no-geometry default) instead of the tube's `gradpar`. On the QA seed
+  (`gradpar` 0.035) that overdamped the Hermite closure 30-fold and reported
+  a marginal mode (gamma 2e-4, omega 8e-4) instead of the resolved ITG mode
+  (gamma 0.196 at ky 0.52, 0.29 at ky 1.05, a/LT = 3; Nl/Nm 4/8 -> 6/12
+  changes it by 1-2 %).
+- `a_over_lt`/`a_over_ln` drive arguments (GKX units) beside `r_over_*`.
+- Three examples in VMEX's flat template:
+  `QA_optimization_turbulence_{linear,quasilinear,nonlinear}.py`.
+- `turbulence` extra and the minimum-version nightly lane: `gkx>=2.4.0`
+  (`gkx==2.4.0`, `solvax==0.26.0`, which gkx 2.4.0 requires).
+
+Findings:
+- VMEX's least-squares implicit Jacobian differentiates objective rows in
+  forward mode. `gkx.solver_growth_rate_from_geometry(eigensolver="dense")`
+  goes through `dominant_real_eigenvalue`, a `custom_vjp`, and fails there
+  ("can't apply forward-mode autodiff (jvp) to a custom_vjp function"). VMEX's
+  `turbulent_growth_rate` (dense `eigvals`) works; so does the quasilinear
+  vector (eig with `enable_eigvec_derivs`). SOLVAX's `sparse_eigenvalue` is a
+  `custom_jvp`, so the sparse-direct route should also work in forward mode
+  (not exercised here). The nonlinear window is differentiable in both
+  modes; `examples/10_vmex_optimization/run.py` completes its CI smoke with
+  `implicit_jacobian_method="auto"`.
+- Gradient checks at the QA seed (max_mode 1, 8 boundary coefficients,
+  central differences with h = 1e-4 x ESS scale, s = 0.5, alpha = 0): growth
+  rate relative error 1.5e-6 to 1.2e-3 on 5 columns; quasilinear flux 7e-6 to
+  8e-3 on 8 columns; nonlinear window (8x8x16, Nl2/Nm4, 64 steps from a
+  400-step state, complex64) 5e-5 to 1.3e-2 on six columns and 9-19 % on
+  two columns 11-20x below the largest component (absolute error 0.4 % of
+  the gradient norm).
+- Office, CPU only (12 cores of a shared host), default settings, one tube:
+  linear growth 0.196 -> 0.097, 28 min, 84-113 s per least-squares
+  iteration; quasilinear flux 2.57 -> 0.94, 29 min, 111-115 s per
+  iteration; nonlinear gated saturated heat flux 53.0 +- 2.6 -> 36.3 +- 1.8
+  (stage 1) -> 42.6 +- 2.1 (stage 2), 70 min, 60-69 s per value and
+  gradient, cold saturation 35,696 steps (1,083 s), warm restarts 2,480 and
+  6,296 steps. Both A4000s were busy with other users' jobs throughout.
+
+Outcome: ready for review. Not done: GPU timings (F.5 step 3's "minutes per
+stage on one A4000"); batched multi-tube window (`vmap`, step 2); held-out
+tubes, cold-start holdouts and an SPSA control (step 6); the saturation gate
+lives in the example, not in a GKX Python helper.
 ## 2026-09-27 — BUG-XCODE lane (F.4, F.6 VAL-REF/VAL-XCODE/VAL-KE, G.6 P5)
 
 Baseline: `main` `cf1d40828` (2.4.0).
