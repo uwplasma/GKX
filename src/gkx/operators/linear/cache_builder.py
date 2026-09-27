@@ -1026,8 +1026,8 @@ def _pack_linear_cache(
         ny_full=getattr(grid, "ny_full", None),
         ky_cut=(
             None
-            if getattr(grid, "ky_cut", None) is None
-            else (grid_arrays.rho_star * float(grid.ky_cut)).astype(real_dtype)
+            if (ky_cut := getattr(grid, "ky_cut", None)) is None
+            else (grid_arrays.rho_star * float(ky_cut)).astype(real_dtype)
         ),
     )
 
