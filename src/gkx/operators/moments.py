@@ -469,7 +469,7 @@ def _turbulent_heating_species_term(
         - vth_s * jnp.conj(apar_old) * du_bardt
         + tz_s * jnp.conj(bpar_old) * duB_bardt
     )
-    # GX weights by ``nz = n_s Z_s``: Q_s = Z_s n_s <h_s dchi/dt>.
+    # Weighted by ``n_s Z_s``: Q_s = Z_s n_s <h_s dchi/dt>.
     return 0.5 * (h_dchidt.real - chi_dhdt.real) * nz_s * fac * vol
 
 
