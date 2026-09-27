@@ -303,7 +303,7 @@ LANES: dict[str, tuple[EvidenceCheck, ...]] = {
         ),
         EvidenceCheck(
             "runtime policy module",
-            "src/gkx/workflows/runtime/policies.py",
+            "src/gkx/runtime.py",
             "RuntimeIndependentParallelPlan",
         ),
         EvidenceCheck(

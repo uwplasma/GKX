@@ -678,13 +678,6 @@ Runtime Startup
    :members:
    :private-members:
 
-Runtime Policies
-----------------
-
-.. automodule:: gkx.workflows.runtime.policies
-   :members:
-   :private-members:
-
 Runtime Diagnostics
 -------------------
 
@@ -819,13 +812,6 @@ VMEC-JAX Transport Objective
 ----------------------------
 
 .. automodule:: gkx.objectives.vmec_transport
-   :members:
-   :private-members:
-
-Stellarator Objective Portfolios
---------------------------------
-
-.. automodule:: gkx.objectives.portfolio
    :members:
    :private-members:
 

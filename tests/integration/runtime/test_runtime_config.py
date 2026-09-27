@@ -8,7 +8,7 @@ from gkx.config import (
     RuntimeParallelConfig,
     RuntimeQuasilinearConfig,
 )
-from gkx.workflows.runtime.policies import (
+from gkx.runtime import (
     RuntimeIndependentParallelPlan,
     _active_kx_indices,
     _active_ky_indices,
@@ -30,8 +30,8 @@ from gkx.workflows.runtime.wout import (
     ky_max_target,
     perp_points_for,
     resolution_from_features,
+    direct_config_shorthand_args,
 )
-from gkx.workflows.runtime.wout import direct_config_shorthand_args
 from gkx.workflows.runtime.toml import (
     is_runtime_toml,
     load_toml,

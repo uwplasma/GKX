@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from gkx.objectives.portfolio import (
+from gkx.objectives.vmec_transport import (
     PortfolioReduction,
     aggregate_objective_portfolio,
     validate_objective_portfolio_contract,

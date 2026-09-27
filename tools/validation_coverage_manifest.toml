@@ -167,36 +167,6 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.workflows.runtime.policies"
-path = "src/gkx/workflows/runtime/policies.py"
-owner_lane = "pure runtime selection policies split from runtime orchestration"
-status = "active"
-coverage_priority = "medium"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "runtime monitored-mode and external-field conventions",
-  "Cyclone/W7-X runtime scan and nonlinear artifact replay contracts",
-]
-physics_contracts = [
-  "runtime policy helpers select the intended monitored mode and external potential source",
-  "step-count inference follows the same fixed/adaptive semantics used by nonlinear diagnostics",
-]
-numerics_contracts = [
-  "dealias-mask mode selection is deterministic when the requested mode is filtered",
-  "adaptive step-count ceilings remain finite and reject zero-length runs",
-]
-fast_tests = [
-  "tests/integration/runtime/test_cli.py",
-]
-artifact_paths = [
-  "docs/_static/validation_gate_index.json",
-  "docs/_static/w7x_exact_state_audit.json",
-]
-next_tests = [
-  "keep gkx.runtime compatibility exports object-identical until the next major API cleanup",
-]
-
-[[modules]]
 module = "gkx.workflows.runtime.orchestration_scan"
 path = "src/gkx/workflows/runtime/orchestration_scan.py"
 owned_modules = [
@@ -1685,41 +1655,6 @@ artifact_paths = [
 next_tests = [
   "add objective-vector regression rows for additional ky and moment resolutions",
   "add branch-audited quasilinear objective-vector checks before broad optimizer promotion",
-]
-
-[[modules]]
-module = "gkx.objectives.portfolio"
-path = "src/gkx/objectives/portfolio.py"
-owner_lane = "objective portfolio reduction, sensitivity, conditioning, and covariance"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "multi-field-line and multi-surface stellarator microstability optimization",
-  "weighted portfolio reductions used by differentiable geometry objectives",
-  "AD/JVP/finite-difference validation before coupling expensive VMEC/Boozer row producers",
-]
-physics_contracts = [
-  "fixed surface/alpha/ky sample tables are reduced explicitly before any geometry-wide optimization claim",
-  "sample and objective weights remain visible, normalized, and independent of backend-specific row production",
-  "a scalar-gradient pass cannot hide rank-deficient sample-row sensitivities",
-]
-numerics_contracts = [
-  "objective rows are real finite four-dimensional tensors with positive sample axes",
-  "sample and objective weights are finite, non-negative, normalized, and shape checked",
-  "aggregate objectives pass reverse-mode and central finite-difference parity",
-  "row-Jacobian conditioning and covariance gates are explicit",
-]
-fast_tests = [
-  "tests/unit/objectives/test_autodiff_solver_objectives.py",
-]
-artifact_paths = [
-  "docs/_static/vmec_boozer_aggregate_objective_gate.json",
-  "docs/_static/vmec_boozer_aggregate_objective_gate.png",
-]
-next_tests = [
-  "extend aggregate-weight tests to sparse held-out surface/alpha/ky portfolio slices",
-  "add local-gradient conditioning diagnostics for real reduced stellarator objective portfolios",
 ]
 
 [[modules]]

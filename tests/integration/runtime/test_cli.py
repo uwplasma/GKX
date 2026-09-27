@@ -101,7 +101,7 @@ import gkx.runtime as runtime
 import gkx.workflows.runtime.commands as runtime_cases
 import gkx.workflows.runtime.commands as runtime_commands
 import gkx.workflows.runtime.orchestration_artifacts as runtime_artifacts
-import gkx.workflows.runtime.policies as runtime_policies
+import gkx.runtime as runtime_policies
 import gkx.workflows.runtime.warm_start as warm_start
 import json
 import numpy as np
