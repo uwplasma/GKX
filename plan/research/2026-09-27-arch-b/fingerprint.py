@@ -33,7 +33,9 @@ import gkx.geometry
 
 
 def digest(array: object) -> str:
-    return hashlib.sha256(np.ascontiguousarray(np.asarray(array)).tobytes()).hexdigest()[:16]
+    return hashlib.sha256(
+        np.ascontiguousarray(np.asarray(array)).tobytes()
+    ).hexdigest()[:16]
 
 
 def linear(root: Path) -> dict[str, object]:
@@ -54,13 +56,21 @@ def nonlinear(root: Path) -> dict[str, object]:
     path = Path(tempfile.mkdtemp()) / "case.toml"
     path.write_text(deck)
     trace = np.asarray(gkx.solve(gkx.load(path)).diagnostics.heat_flux_t)
-    return {"heat_flux_sha": digest(trace), "n": int(trace.size), "last": float(trace.ravel()[-1]).hex()}
+    return {
+        "heat_flux_sha": digest(trace),
+        "n": int(trace.size),
+        "last": float(trace.ravel()[-1]).hex(),
+    }
 
 
 def window_gradient() -> dict[str, object]:
-    cfg = gkx.CycloneBaseCase(grid=gkx.GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0, ky_layout="full"))
+    cfg = gkx.CycloneBaseCase(
+        grid=gkx.GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.0, Ly=6.0, ky_layout="full")
+    )
     grid = gkx.build_spectral_grid(cfg.grid)
-    geom = gkx.geometry.ensure_flux_tube_geometry_data(gkx.SAlphaGeometry.from_config(cfg.geometry), grid.z)
+    geom = gkx.geometry.ensure_flux_tube_geometry_data(
+        gkx.SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
     base = gkx.LinearParams()
     profile = 1.0e-4 * (1.0 + 0.2 * jnp.cos(grid.z))
     state = jnp.zeros((2, 2, 4, 4, 8), dtype=jnp.complex128)
@@ -70,8 +80,16 @@ def window_gradient() -> dict[str, object]:
 
     def mean_heat_flux(rlt: jax.Array) -> jax.Array:
         return gkx.nonlinear_heat_flux_window(
-            state, grid, geom, replace(base, tprim=rlt), dt=0.01, steps=11, method="rk2",
-            tail_steps=7, terms=gkx.TermConfig(nonlinear=1.0), compressed_real_fft=False,
+            state,
+            grid,
+            geom,
+            replace(base, tprim=rlt),
+            dt=0.01,
+            steps=11,
+            method="rk2",
+            tail_steps=7,
+            terms=gkx.TermConfig(nonlinear=1.0),
+            compressed_real_fft=False,
         )
 
     value, gradient = jax.value_and_grad(mean_heat_flux)(jnp.asarray(6.9))
@@ -80,10 +98,20 @@ def window_gradient() -> dict[str, object]:
 
 def quasilinear(root: Path) -> dict[str, object]:
     case = gkx.load(root / "examples/08_quasilinear/case.toml")
-    scan = gkx.scan(case, [0.2, 0.3], Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver)
-    flux = np.array([p["saturated_heat_flux_total"] for p in scan.quasilinear], dtype=float)
-    weight = np.array([p["heat_flux_weight_total"] for p in scan.quasilinear], dtype=float)
-    return {"gamma_sha": digest(np.asarray(scan.gamma, dtype=float)), "flux": [v.hex() for v in flux], "weight_sha": digest(weight)}
+    scan = gkx.scan(
+        case, [0.2, 0.3], Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
+    )
+    flux = np.array(
+        [p["saturated_heat_flux_total"] for p in scan.quasilinear], dtype=float
+    )
+    weight = np.array(
+        [p["heat_flux_weight_total"] for p in scan.quasilinear], dtype=float
+    )
+    return {
+        "gamma_sha": digest(np.asarray(scan.gamma, dtype=float)),
+        "flux": [v.hex() for v in flux],
+        "weight_sha": digest(weight),
+    }
 
 
 def main() -> None:

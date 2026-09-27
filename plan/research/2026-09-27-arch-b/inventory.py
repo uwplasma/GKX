@@ -54,10 +54,18 @@ def edges() -> dict[str, set[str]]:
                         graph[me].add(target)
             elif isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name.startswith("gkx") and alias.name in MODULES and alias.name != me:
+                    if (
+                        alias.name.startswith("gkx")
+                        and alias.name in MODULES
+                        and alias.name != me
+                    ):
                         graph[me].add(alias.name)
             elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-                if re.fullmatch(r"gkx(\.\w+)+", node.value) and node.value in MODULES and node.value != me:
+                if (
+                    re.fullmatch(r"gkx(\.\w+)+", node.value)
+                    and node.value in MODULES
+                    and node.value != me
+                ):
                     graph[me].add(node.value)
     return graph
 
@@ -112,9 +120,12 @@ def main() -> None:
         if len(consumers[m]) == 1 and not MODULES[m].name == "__init__.py"
     )
     zero = sorted(m for m in MODULES if not consumers[m])
-    files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+    files = subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True
+    ).stdout.split()
     corpus_files = [
-        f for f in files
+        f
+        for f in files
         if f.endswith((".py", ".toml", ".rst", ".md", ".yml", ".yaml", ".cfg", ".ini"))
         and not f.startswith("plan/")
     ]
@@ -138,14 +149,19 @@ def main() -> None:
                 own = len(re.findall(rf"\b{re.escape(name)}\b", body))
                 if words[name] - own <= 0:
                     dead.append((m, name, node.end_lineno - node.lineno + 1))
-    print(json.dumps({
-        "files": len(MODULES),
-        "lines": sum(lines.values()),
-        "cycles": sccs(graph),
-        "single_consumer": single,
-        "no_consumer": zero,
-        "dead_definitions": sorted(dead),
-    }, indent=1))
+    print(
+        json.dumps(
+            {
+                "files": len(MODULES),
+                "lines": sum(lines.values()),
+                "cycles": sccs(graph),
+                "single_consumer": single,
+                "no_consumer": zero,
+                "dead_definitions": sorted(dead),
+            },
+            indent=1,
+        )
+    )
 
 
 if __name__ == "__main__":
