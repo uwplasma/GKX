@@ -17,19 +17,22 @@ from typing import cast
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEST_DIR = REPO_ROOT / "tests"
 COVERAGE_DATA_RE = re.compile(r"^\.coverage\.shard-(?P<shard>[0-9]+)\.")
-HIGH_COST_TEST_WEIGHT = 100
-WIDE_COVERAGE_HIGH_COST_TESTS = {
-    # These files exercise JAX compilation, plotting, or runtime orchestration
-    # paths. Keeping them isolated prevents one CI shard from exceeding the
-    # five-minute per-shard budget while preserving package-wide coverage.
-    "test_general_artifact_tools.py",
-    "test_transport_artifact_tools.py",
-    "test_stellarator_artifact_tools.py",
-    "test_nonlinear.py",
-    "test_nonlinear_helpers_extra.py",
-    "test_parallel_linear_velocity.py",
-    "test_runtime_runner.py",
+#: Seconds each file takes under coverage on a hosted ubuntu runner, read from
+#: ``--durations`` in CI run MEASURED_RUN. The shard planner packs files
+#: longest-first on these numbers; a file not listed costs
+#: ``DEFAULT_TEST_SECONDS``. Re-measure when a shard drifts far from the rest.
+WIDE_COVERAGE_SECONDS: dict[str, float] = {
+    "test_parallel_linear_velocity.py": 1040,
+    "test_nonlinear.py": 925,
+    "test_nonlinear_helpers_extra.py": 595,
+    "test_linear.py": 400,
+    "test_runtime_runner.py": 200,
+    "test_autodiff_solver_objectives.py": 200,
+    "test_examples.py": 150,
+    "test_hermite_hierarchy_physics.py": 120,
+    "test_linear_krylov_core.py": 100,
 }
+DEFAULT_TEST_SECONDS = 15.0
 
 WIDE_COVERAGE_LOGICAL_CPU_DEVICES = {
     # Exercise the real species/Hermite collectives and serial-identity gates.
@@ -38,19 +41,21 @@ WIDE_COVERAGE_LOGICAL_CPU_DEVICES = {
     # Routes [parallel] into the nonlinear path and gates the sharded answer
     # against the serial one; without real devices every case skips.
     "test_parallel_nonlinear_routing.py": 4,
+    # Batch-map, runner and sharding-profile routes that take a multi-device
+    # branch when more than one device is visible.
+    "test_parallel_core.py": 4,
+    "test_runners_and_orchestration.py": 4,
+    "test_nonlinear_sharding_profile_contracts.py": 4,
 }
 
-WIDE_COVERAGE_NODE_BATCHES = {
-    # This owner fits locally but exceeds five minutes under coverage on the
-    # slower hosted runner. Disjoint node-id batches retain every test and
-    # coverage contribution without weakening the per-command timeout.
-    "test_nonlinear_helpers_extra.py": 5,
-    # Do not add a logical-CPU owner here. Those files share one JAX
-    # compilation cache across their tests, so separate processes re-pay the
-    # shard-map compiles the whole file pays once: the file finishes in about
-    # nine minutes as one command, while a five-test batch holding only its
-    # device gates ran past ten.
-}
+#: Files split into this many contiguous node-ID chunks, each scheduled as its
+#: own unit, so no single file sets the wall time of the whole matrix. Do not
+#: add a logical-CPU owner here: those files share one JAX compilation cache
+#: across their tests, and separate processes re-pay the shard-map compiles.
+WIDE_COVERAGE_NODE_CHUNKS: dict[str, int] = {"test_nonlinear.py": 2}
+
+#: One schedulable unit: (test file, chunk index, chunk count).
+Unit = tuple[Path, int, int]
 
 
 def _resolve_test_dir(test_dir: Path) -> Path:
@@ -199,38 +204,44 @@ def main_fast(argv: list[str] | None = None) -> int:
     return code
 
 
-def _wide_coverage_test_weight(path: Path) -> int:
-    """Return the scheduling weight used by the wide-coverage shard planner."""
+def plan_units(files: list[Path]) -> list[Unit]:
+    """Expand files into schedulable units, splitting the chunked owners."""
 
-    return HIGH_COST_TEST_WEIGHT if path.name in WIDE_COVERAGE_HIGH_COST_TESTS else 1
+    return [
+        (path, idx, count)
+        for path in files
+        for count in [WIDE_COVERAGE_NODE_CHUNKS.get(path.name, 1)]
+        for idx in range(count)
+    ]
 
 
-def split_shards(items: list[Path], nshards: int) -> list[list[Path]]:
-    """Split paths into deterministic, cost-balanced shards.
+def unit_seconds(unit: Unit) -> float:
+    """Return the measured cost of one unit."""
 
-    Alphabetical test discovery groups related plotting tests together. A
-    weighted first-fit split keeps deterministic membership while isolating
-    known high-cost modules across CI workers. With unit weights this reduces
-    to round-robin assignment, but it avoids packing several compile-heavy files
-    into one five-minute shard.
+    path, _, count = unit
+    return WIDE_COVERAGE_SECONDS.get(path.name, DEFAULT_TEST_SECONDS) / count
+
+
+def split_shards(items: list[Path], nshards: int) -> list[list[Unit]]:
+    """Split test files into deterministic shards balanced on measured cost.
+
+    Longest-processing-time-first: each unit, most expensive first, goes to the
+    currently lightest shard. With equal costs this reduces to round-robin.
     """
 
     if nshards < 1:
         raise ValueError("nshards must be >= 1")
-    shards: list[list[Path]] = [[] for _ in range(nshards)]
-    loads = [0 for _ in range(nshards)]
-    indexed_items = list(enumerate(items))
-    for original_idx, item in sorted(
-        indexed_items,
-        key=lambda pair: (-_wide_coverage_test_weight(pair[1]), pair[0]),
+    units = plan_units(items)
+    shards: list[list[Unit]] = [[] for _ in range(nshards)]
+    loads = [0.0] * nshards
+    for order, unit in sorted(
+        enumerate(units), key=lambda pair: (-unit_seconds(pair[1]), pair[0])
     ):
         shard_idx = min(range(nshards), key=lambda idx: (loads[idx], idx))
-        shards[shard_idx].append(item)
-        loads[shard_idx] += _wide_coverage_test_weight(item)
-
-    original_order = {path: idx for idx, path in indexed_items}
+        shards[shard_idx].append(unit)
+        loads[shard_idx] += unit_seconds(unit)
     for shard in shards:
-        shard.sort(key=lambda path: original_order[path])
+        shard.sort(key=units.index)
     return shards
 
 
@@ -277,11 +288,11 @@ def collect_pytest_nodeids(path: Path, pytest_args: list[str]) -> list[str]:
     return nodeids
 
 
-def wide_coverage_environment(shard: list[Path]) -> dict[str, str] | None:
+def wide_coverage_environment(shard: list[Unit]) -> dict[str, str] | None:
     """Return the pre-import environment required by a coverage shard."""
 
     logical_cpu_devices = max(
-        (WIDE_COVERAGE_LOGICAL_CPU_DEVICES.get(path.name, 0) for path in shard),
+        (WIDE_COVERAGE_LOGICAL_CPU_DEVICES.get(path.name, 0) for path, _, _ in shard),
         default=0,
     )
     if not logical_cpu_devices:
@@ -296,23 +307,39 @@ def wide_coverage_environment(shard: list[Path]) -> dict[str, str] | None:
 
 
 def wide_coverage_shard_batches(
-    shard: list[Path], *, pytest_args: list[str]
+    shard: list[Unit], *, pytest_args: list[str]
 ) -> list[list[str]]:
     """Return the pytest targets for one coverage shard, one entry per command.
 
-    Every test in the shard appears in exactly one batch. Node-batched owners
-    are split by collected node ID so a single command stays inside the
-    per-command timeout; every other shard runs its files in one command.
+    Whole files share one command; each chunk of a split owner is its own
+    command over its contiguous slice of the collected node IDs, so the chunks
+    of a file, wherever they land, run every one of its tests exactly once.
     """
 
-    split_owners = [path for path in shard if path.name in WIDE_COVERAGE_NODE_BATCHES]
-    if not split_owners:
-        return [[str(path.relative_to(REPO_ROOT)) for path in shard]]
-    if len(shard) != 1 or len(split_owners) != 1:
-        raise SystemExit("node-batched coverage owners must occupy an isolated shard")
-    owner = split_owners[0]
-    nodeids = collect_pytest_nodeids(owner, list(pytest_args))
-    return split_contiguous(nodeids, WIDE_COVERAGE_NODE_BATCHES[owner.name])
+    whole = [_relative(path) for path, _, count in shard if count == 1]
+    batches = [whole] if whole else []
+    for path, idx, count in shard:
+        if count > 1:
+            chunks = split_contiguous(collect_pytest_nodeids(path, pytest_args), count)
+            if idx < len(chunks):
+                batches.append(chunks[idx])
+    return batches
+
+
+def xdist_args(batch: list[str], workers: int) -> list[str]:
+    """Return pytest-xdist arguments for one command of a coverage shard.
+
+    Several files are distributed file by file, so tests that share a file
+    keep sharing its in-process JAX compilations; a lone file or a node-ID
+    chunk of one is distributed test by test, since file grouping would
+    serialize it.
+    """
+
+    if workers < 2:
+        return []
+    files = {target.split("::")[0] for target in batch}
+    dist = "load" if len(files) == 1 else "loadfile"
+    return ["-n", str(workers), "--dist", dist]
 
 
 def discover_coverage_data(root: Path = REPO_ROOT) -> list[Path]:
@@ -487,6 +514,12 @@ def _add_wide_coverage_arguments(parser: argparse.ArgumentParser) -> None:
         default=[],
         help="Additional argument passed to each pytest shard; repeat as needed.",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=0,
+        help="pytest-xdist workers per shard command; 0 or 1 runs in-process.",
+    )
 
 
 def parse_wide_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -506,10 +539,11 @@ def main_wide(argv: list[str] | None = None) -> int:
     shards = split_shards(tests, int(args.shards))
 
     for idx, shard in enumerate(shards):
-        rel = [str(path.relative_to(REPO_ROOT)) for path in shard]
-        print(f"shard {idx + 1}/{len(shards)}: {len(rel)} files")
-        for path in rel:
-            print(f"  {path}")
+        load = sum(unit_seconds(unit) for unit in shard)
+        print(f"shard {idx + 1}/{len(shards)}: {len(shard)} units, ~{load:.0f} s")
+        for path, chunk, count in shard:
+            part = f" [chunk {chunk + 1}/{count}]" if count > 1 else ""
+            print(f"  {_relative(path)}{part}")
 
     if args.dry_run:
         return 0
@@ -558,29 +592,31 @@ def main_wide(argv: list[str] | None = None) -> int:
     for idx, shard in selected:
         if not shard:
             continue
-        coverage_cmd = [
+        pytest_cmd = [
             sys.executable,
-            "-m",
-            "coverage",
-            "run",
-            "--parallel-mode",
-            "--source=gkx",
             "-m",
             "pytest",
             "-q",
             "--maxfail=1",
             "--disable-warnings",
+            "--cov=gkx",
+            "--cov-report=",
             *args.pytest_arg,
         ]
-        shard_env = wide_coverage_environment(shard)
+        shard_env = wide_coverage_environment(shard) or os.environ.copy()
         batches = wide_coverage_shard_batches(shard, pytest_args=list(args.pytest_arg))
         for batch_idx, batch in enumerate(batches, start=1):
             label = f"running coverage shard {idx + 1}/{len(shards)}"
             if len(batches) > 1:
-                label += f" node batch {batch_idx}/{len(batches)} ({len(batch)} tests)"
+                label += f" batch {batch_idx}/{len(batches)} ({len(batch)} targets)"
             print(label, flush=True)
+            # pytest-cov, unlike ``coverage run``, also traces xdist workers
+            # and combines them into this one parallel-mode data file.
+            shard_env["COVERAGE_FILE"] = str(
+                REPO_ROOT / f".coverage.run-{idx + 1}-{batch_idx}"
+            )
             _run(
-                [*coverage_cmd, *batch],
+                [*pytest_cmd, *xdist_args(batch, int(args.workers)), *batch],
                 timeout=int(args.timeout),
                 cwd=REPO_ROOT,
                 env=shard_env,

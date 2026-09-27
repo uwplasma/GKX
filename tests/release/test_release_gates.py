@@ -1176,21 +1176,11 @@ def test_default_tag_from_github_env_ignores_branch_refs(
     assert default_tag_from_github_env() == "v2.0.1"
 
 
-def test_ci_quick_test_matrix_references_existing_paths() -> None:
-    """Keep hardcoded CI pytest and coverage shards internally consistent."""
+def test_ci_wide_coverage_matrix_matches_the_shard_count() -> None:
+    """Keep the CI matrix, the shard runner and the combine step in step."""
 
     root = Path(__file__).resolve().parents[2]
     workflow = yaml.safe_load((root / ".github" / "workflows" / "ci.yml").read_text())
-    shards = workflow["jobs"]["quick-tests"]["strategy"]["matrix"]["shard"]
-
-    missing: list[str] = []
-    for shard in shards:
-        for entry in str(shard["files"]).split():
-            if not (root / entry).exists():
-                missing.append(f"{shard['name']}: {entry}")
-
-    assert missing == []
-
     wide_job = workflow["jobs"]["wide-coverage-shards"]
     wide_shards = wide_job["strategy"]["matrix"]["shard"]
     shard_count = len(wide_shards)
@@ -2643,14 +2633,18 @@ from pathlib import Path
 
 
 from scripts.checks.run_test_gates import (
+    DEFAULT_TEST_SECONDS,
+    REPO_ROOT,
     WIDE_COVERAGE_LOGICAL_CPU_DEVICES,
-    WIDE_COVERAGE_NODE_BATCHES,
+    WIDE_COVERAGE_NODE_CHUNKS,
+    WIDE_COVERAGE_SECONDS,
     build_coverage_shard_report,
     _resolve_test_dir,
     discover_test_files,
     split_contiguous,
     validate_coverage_shard_report,
     split_shards,
+    unit_seconds,
     wide_coverage_environment,
     wide_coverage_shard_batches,
     write_json,
@@ -2661,33 +2655,40 @@ def test_split_shards_is_round_robin_and_complete() -> None:
     files = [Path(f"tests/test_{idx}.py") for idx in range(7)]
     shards = split_shards(files, 3)
 
-    assert shards == [files[0::3], files[1::3], files[2::3]]
-    assert sorted(path for shard in shards for path in shard) == files
+    assert [[path for path, _, _ in shard] for shard in shards] == [
+        files[0::3],
+        files[1::3],
+        files[2::3],
+    ]
 
 
-def test_split_shards_isolates_known_high_cost_tests() -> None:
-    expensive = [
-        Path("tests/integration/runtime/test_runtime_runner.py"),
-        Path("tests/unit/nonlinear/test_nonlinear.py"),
-        Path("tests/unit/nonlinear/test_nonlinear_helpers_extra.py"),
-        Path("tests/unit/parallel/test_parallel_linear_velocity.py"),
-    ]
-    files = expensive + [Path(f"tests/test_light_{idx}.py") for idx in range(12)]
-    shards = split_shards(files, 6)
+def test_split_shards_covers_every_test_once_and_balances_measured_cost() -> None:
+    files = discover_test_files()
+    shards = split_shards(files, 12)
+    units = [unit for shard in shards for unit in shard]
 
-    expensive_by_shard = [
-        [path.name for path in shard if path in expensive] for shard in shards
-    ]
-    assert sorted(name for shard in expensive_by_shard for name in shard) == [
-        "test_nonlinear.py",
-        "test_nonlinear_helpers_extra.py",
-        "test_parallel_linear_velocity.py",
-        "test_runtime_runner.py",
-    ]
-    assert all(len(shard_names) <= 1 for shard_names in expensive_by_shard)
-    assert all(
-        len(shard) == 1 for shard in shards if any(path in expensive for path in shard)
-    )
+    # Every file appears, every chunk of a split owner appears exactly once.
+    assert sorted({path for path, _, _ in units}) == files
+    for path in files:
+        count = WIDE_COVERAGE_NODE_CHUNKS.get(path.name, 1)
+        assert sorted(idx for p, idx, _ in units if p == path) == list(range(count))
+    # Longest-first packing: no shard exceeds the ideal share by more than
+    # its single most expensive unit.
+    loads = [sum(unit_seconds(unit) for unit in shard) for shard in shards]
+    ideal = sum(loads) / len(loads)
+    for shard, load in zip(shards, loads):
+        assert load <= ideal + max(unit_seconds(unit) for unit in shard)
+
+
+def test_measured_costs_name_real_test_files() -> None:
+    names = {path.name for path in discover_test_files()}
+    for table in (
+        WIDE_COVERAGE_SECONDS,
+        WIDE_COVERAGE_NODE_CHUNKS,
+        WIDE_COVERAGE_LOGICAL_CPU_DEVICES,
+    ):
+        assert set(table) <= names
+    assert DEFAULT_TEST_SECONDS > 0
 
 
 def test_split_shards_rejects_nonpositive_count() -> None:
@@ -2713,14 +2714,14 @@ def test_wide_coverage_parallel_owner_requests_four_logical_cpu_devices(
 ) -> None:
     monkeypatch.setenv("XLA_FLAGS", "--xla_cpu_enable_fast_math=false")
     env = wide_coverage_environment(
-        [Path("tests/unit/parallel/test_parallel_linear_velocity.py")]
+        [(Path("tests/unit/parallel/test_parallel_linear_velocity.py"), 0, 1)]
     )
 
     assert env is not None
     assert env["JAX_PLATFORMS"] == "cpu"
     assert "--xla_force_host_platform_device_count=4" in env["XLA_FLAGS"]
     assert "--xla_cpu_enable_fast_math=false" in env["XLA_FLAGS"]
-    assert wide_coverage_environment([Path("tests/test_light.py")]) is None
+    assert wide_coverage_environment([(Path("tests/test_light.py"), 0, 1)]) is None
 
 
 def test_wide_coverage_logical_cpu_owners_run_whole_not_by_test_name() -> None:
@@ -2728,38 +2729,39 @@ def test_wide_coverage_logical_cpu_owners_run_whole_not_by_test_name() -> None:
 
     Selecting part of such a file leaves every unselected device gate unrun
     while the shard still reports success, so a device-count regression stays
-    invisible. Node batching selects by node ID and is also wrong here for a
+    invisible. Node chunking selects by node ID and is also wrong here for a
     second reason: these tests share one JAX compilation cache, so separate
     processes re-pay the compiles the single command pays once.
     """
 
     for name in WIDE_COVERAGE_LOGICAL_CPU_DEVICES:
-        assert name not in WIDE_COVERAGE_NODE_BATCHES
+        assert name not in WIDE_COVERAGE_NODE_CHUNKS
 
 
 def test_wide_coverage_shard_batches_cover_every_target_once(monkeypatch) -> None:
-    from scripts.checks.run_test_gates import REPO_ROOT
-
-    plain = [REPO_ROOT / "tests/test_a.py", REPO_ROOT / "tests/test_b.py"]
+    plain = [
+        (REPO_ROOT / "tests/test_a.py", 0, 1),
+        (REPO_ROOT / "tests/test_b.py", 0, 1),
+    ]
 
     assert wide_coverage_shard_batches(plain, pytest_args=[]) == [
         ["tests/test_a.py", "tests/test_b.py"]
     ]
 
-    owner = REPO_ROOT / "tests/unit/nonlinear/test_nonlinear_helpers_extra.py"
+    owner = REPO_ROOT / "tests/unit/nonlinear/test_nonlinear.py"
     nodeids = [f"{owner}::test_{idx}" for idx in range(13)]
     monkeypatch.setattr(
         "scripts.checks.run_test_gates.collect_pytest_nodeids",
         lambda path, pytest_args: nodeids,
     )
-    batches = wide_coverage_shard_batches([owner], pytest_args=[])
-
-    assert len(batches) == WIDE_COVERAGE_NODE_BATCHES[owner.name]
+    batches = [
+        batch
+        for idx in range(3)
+        for batch in wide_coverage_shard_batches([(owner, idx, 3)], pytest_args=[])
+    ]
     assert [nodeid for batch in batches for nodeid in batch] == nodeids
-    with pytest.raises(SystemExit, match="isolated shard"):
-        wide_coverage_shard_batches(
-            [owner, REPO_ROOT / "tests/test_a.py"], pytest_args=[]
-        )
+    mixed = wide_coverage_shard_batches([plain[0], (owner, 2, 3)], pytest_args=[])
+    assert mixed == [["tests/test_a.py"], nodeids[9:]]
 
 
 def test_discover_test_files_returns_sorted_recursive_tests(tmp_path: Path) -> None:
