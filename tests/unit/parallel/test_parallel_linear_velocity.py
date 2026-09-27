@@ -3637,18 +3637,21 @@ def _zonal_boltzmann_problem(*, boltzmann: str, nspecies: int):
         grid=GridConfig(Nx=4, Ny=4, Nz=8, Lx=62.8, Ly=62.8, boundary="periodic")
     )
     grid = build_spectral_grid(cfg.grid)
-    ones = jnp.ones((nspecies,))
     sign = 1.0 if boltzmann == "electrons" else -1.0  # kinetic-species charge
+
+    def value(first, last):  # scalars for one species, as the 5D routes expect
+        return first if nspecies == 1 else jnp.linspace(first, last, nspecies)
+
     params = LinearParams(
-        charge_sign=sign * ones,
-        tz=sign * ones,
-        density=jnp.linspace(1.0, 0.7, nspecies),
-        mass=ones,
-        temp=ones,
-        vth=ones,
-        rho=jnp.linspace(1.0, 0.6, nspecies),
-        fprim=2.2 * ones,
-        tprim=6.9 * ones,
+        charge_sign=value(sign, sign),
+        tz=value(sign, sign),
+        density=value(1.0, 0.7),
+        mass=value(1.0, 1.0),
+        temp=value(1.0, 1.0),
+        vth=value(1.0, 1.0),
+        rho=value(1.0, 0.6),
+        fprim=value(2.2, 2.2),
+        tprim=value(6.9, 6.9),
         tau_e=1.0,
         beta=0.0,
         fapar=0.0,
