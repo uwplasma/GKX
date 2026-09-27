@@ -255,18 +255,18 @@ jobs:
           - name: release-artifacts
             files: >-
               tests/release/test_release_gates.py
+              tests/validation/physics_gates/test_collision_physics.py
           - name: model-artifacts
             files: >-
               tests/unit/quasilinear/test_quasilinear.py
               tests/tools/comparison/test_reference_comparison_tools.py
+              tests/unit/solvers/test_linear_krylov_core.py
           - name: linear-core
             files: >-
               tests/unit/linear/test_linear.py
-              tests/validation/physics_gates/test_collision_physics.py
               tests/unit/operators/test_operator_kernels.py
               tests/unit/operators/test_terms_fields.py
               tests/unit/solvers/test_time_integrators.py
-              tests/unit/solvers/test_linear_krylov_core.py
           - name: runtime-core
             files: >-
               tests/integration/runtime/test_runtime_config.py
