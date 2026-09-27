@@ -1259,6 +1259,9 @@ def test_selected_ky_hyperdiffusion_keeps_the_parent_grid_cutoff(
         G_full, cache_full, params, terms=term_cfg
     )
     hyper_full = np.asarray(contrib_full["hyperdiffusion"])
+    # A linear slice unmasks every kx column (select_ky_grid); only the
+    # columns the parent grid keeps exist in GX, so only those are compared.
+    kept_kx = np.asarray(grid_full.dealias_mask)[0]
     for iky in (1, 3, 7):
         grid = select_ky_grid(grid_full, iky)
         cache = build_linear_cache(grid, geom, params, Nl=1, Nm=1)
@@ -1266,8 +1269,8 @@ def test_selected_ky_hyperdiffusion_keeps_the_parent_grid_cutoff(
             G_full[:, :, iky : iky + 1], cache, params, terms=term_cfg
         )
         np.testing.assert_allclose(
-            np.asarray(contrib["hyperdiffusion"]),
-            hyper_full[..., iky : iky + 1, :, :],
+            np.asarray(contrib["hyperdiffusion"])[..., kept_kx, :],
+            hyper_full[..., iky : iky + 1, kept_kx, :],
             rtol=1.0e-12,
             atol=0.0,
         )
