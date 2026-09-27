@@ -7,7 +7,7 @@ from typing import Tuple
 
 import numpy as np
 
-from gkx.diagnostics.growth_windows import _tail_stats, _tail_window
+from gkx.diagnostics.growth_windows import _tail_window
 from gkx.diagnostics.metadata import CFL_SCALE_LABELS
 from gkx.diagnostics.growth_rates import (
     GrowthRateFitStats,
@@ -143,71 +143,6 @@ class _HeatFluxConvergenceSummary:
     terminal_mean: float
     mean_rel_delta: float
     trend: float
-
-
-def _scalar_late_time_linear_metrics(result: object) -> LateTimeLinearMetrics:
-    gamma = float(getattr(result, "gamma"))
-    omega = float(getattr(result, "omega"))
-    return LateTimeLinearMetrics(
-        gamma_fit=gamma,
-        omega_fit=omega,
-        gamma_tail_mean=gamma,
-        omega_tail_mean=omega,
-        gamma_tail_std=0.0,
-        omega_tail_std=0.0,
-        tmin=None,
-        tmax=None,
-        nsamples=1,
-        signal_source="scalar",
-    )
-
-
-def _linear_signal_series(
-    result: object,
-    *,
-    mode_method: str,
-) -> tuple[np.ndarray | None, str]:
-    signal = getattr(result, "signal", None)
-    if signal is not None:
-        return np.asarray(signal, dtype=np.complex128), "signal"
-    if hasattr(result, "phi_t") and hasattr(result, "selection"):
-        series = extract_mode_time_series(
-            np.asarray(getattr(result, "phi_t")),
-            getattr(result, "selection"),
-            method=mode_method,
-        )
-        return np.asarray(series, dtype=np.complex128), f"phi_t:{mode_method}"
-    return None, "scalar"
-
-
-def _fit_tail_signal(
-    t_arr: np.ndarray,
-    mask: np.ndarray,
-    signal_arr: np.ndarray | None,
-    *,
-    gamma_fallback: float,
-    omega_fallback: float,
-) -> tuple[float, float]:
-    if signal_arr is None:
-        return gamma_fallback, omega_fallback
-    finite = np.isfinite(signal_arr)
-    signal_tail = signal_arr[mask & finite]
-    t_tail = t_arr[mask & finite]
-    if t_tail.size < 2:
-        return gamma_fallback, omega_fallback
-    gamma_fit, omega_fit = fit_growth_rate(t_tail, signal_tail)
-    return float(gamma_fit), float(omega_fit)
-
-
-def _tail_series_or_fit(
-    series: object | None,
-    mask: np.ndarray,
-    fit_value: float,
-) -> tuple[float, float]:
-    if series is None:
-        return float(fit_value), 0.0
-    mean, std = _tail_stats(np.asarray(series), mask)
-    return float(mean), float(std)
 
 
 def sokal_autocorrelation_time(

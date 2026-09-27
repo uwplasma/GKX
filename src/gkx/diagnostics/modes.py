@@ -17,17 +17,6 @@ class EigenfunctionComparisonMetrics:
 
 
 @dataclass(frozen=True)
-class EigenfunctionReferenceBundle:
-    """Frozen reference eigenfunction bundle for manuscript-grade overlays."""
-
-    theta: np.ndarray
-    mode: np.ndarray
-    source: str
-    case: str
-    metadata: dict[str, object]
-
-
-@dataclass(frozen=True)
 class ModeSelection:
     ky_index: int
     kx_index: int
@@ -286,7 +275,6 @@ def compare_eigenfunctions(
 
 
 __all__ = [
-    "EigenfunctionReferenceBundle",
     "EigenfunctionComparisonMetrics",
     "ModeSelection",
     "ModeSelectionBatch",

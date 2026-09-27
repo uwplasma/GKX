@@ -162,17 +162,6 @@ class LinearValidationPanel:
     log_x: bool = False
 
 
-@dataclass(frozen=True)
-class ReferenceSeries:
-    label: str
-    x: np.ndarray
-    gamma: np.ndarray
-    omega: np.ndarray
-    color: str
-    marker: str = "o"
-    linestyle: str = "--"
-
-
 def linear_validation_figure(
     panels: list[LinearValidationPanel],
 ) -> Tuple[plt.Figure, np.ndarray]:
@@ -678,7 +667,6 @@ def zonal_flow_response_figure(*args: Any, **kwargs: Any) -> tuple[Any, Any]:
 
 __all__ = [
     "LinearValidationPanel",
-    "ReferenceSeries",
     "cyclone_comparison_figure",
     "cyclone_reference_figure",
     "growth_fit_figure",

@@ -547,14 +547,6 @@ def _tail_window(
     return mask, float(tt[0]) if tt.size else None, float(tt[-1]) if tt.size else None
 
 
-def _tail_stats(arr: np.ndarray, mask: np.ndarray) -> tuple[float, float]:
-    vals = np.asarray(arr, dtype=float)[mask]
-    vals = vals[np.isfinite(vals)]
-    if vals.size == 0:
-        return float("nan"), float("nan")
-    return float(np.mean(vals)), float(np.std(vals))
-
-
 def _leading_window(
     t: np.ndarray,
     lead_fraction: float,

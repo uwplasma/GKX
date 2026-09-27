@@ -144,7 +144,6 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'instantaneous_growth_rate_from_phi': ('gkx.diagnostics.analysis', 'instantaneous_growth_rate_from_phi'),
     'growth_rate_from_phi': ('gkx.diagnostics.analysis', 'instantaneous_growth_rate_from_phi'),
     'select_fit_window': ('gkx.diagnostics.analysis', 'select_fit_window'),
-    'ScanAndModeResult': ('gkx.workflows.linear', 'ScanAndModeResult'),
     'BranchContinuationMetrics': ('gkx.diagnostics.analysis', 'BranchContinuationMetrics'),
     'ScalarGateResult': ('gkx.diagnostics.validation_gates', 'ScalarGateResult'),
     'GateReport': ('gkx.diagnostics.validation_gates', 'GateReport'),
@@ -233,7 +232,6 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'growth_fit_figure': ('gkx.artifacts.plotting', 'growth_fit_figure'),
     'linear_validation_figure': ('gkx.artifacts.plotting', 'linear_validation_figure'),
     'LinearValidationPanel': ('gkx.artifacts.plotting', 'LinearValidationPanel'),
-    'ReferenceSeries': ('gkx.artifacts.plotting', 'ReferenceSeries'),
     'scan_comparison_figure': ('gkx.artifacts.plotting', 'scan_comparison_figure'),
     'set_plot_style': ('gkx.artifacts.plotting', 'set_plot_style'),
 }

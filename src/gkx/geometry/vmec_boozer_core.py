@@ -83,31 +83,6 @@ def _cached_booz_xform_constants(
     )
 
 
-def prewarm_vmec_boozer_equal_arc_cache(
-    runtime: Any,
-    wout: Any,
-    *,
-    mboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
-    nboz: int = _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
-    asym: bool | None = None,
-) -> None:  # pragma: no cover - exercised by optional vmex optimizer smoke tests.
-    """Precompute Boozer constants before vmex jits residual callbacks."""
-
-    resolution = runtime.resolution
-    nfp_raw = getattr(wout, "nfp", None)
-    if nfp_raw is None:
-        nfp_raw = getattr(resolution, "nfp", 1)
-    nfp_int = 1 if nfp_raw is None else int(nfp_raw)
-    _cached_booz_xform_constants(
-        nfp=nfp_int,
-        ntheta1=int(resolution.ntheta1),
-        nzeta=int(resolution.nzeta),
-        mboz=int(mboz),
-        nboz=int(nboz),
-        asym=bool(getattr(resolution, "lasym", False) if asym is None else asym),
-    )
-
-
 def _import_vmex_boozer_modules() -> tuple[Any, Any]:
     """Import the vmex Boozer-tables seam and the booz_xform_jax API."""
 
@@ -1016,7 +991,6 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
 __all__ = [
     "flux_tube_geometry_from_vmec_boozer_state",
     "load_solved_vmex_case",
-    "prewarm_vmec_boozer_equal_arc_cache",
     "resolve_vmex_case_input_path",
     "vmex_boozer_equal_arc_core_profiles_from_state",
 ]

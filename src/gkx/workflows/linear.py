@@ -9,7 +9,6 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.benchmarking_shared import LinearRunResult, LinearScanResult
-from gkx.core_grid import SpectralGrid
 from gkx.diagnostics.modes import (
     ModeSelection,
 )
@@ -779,18 +778,6 @@ def run_full_linear_runtime(
     )
 
 
-@dataclass(frozen=True)
-class ScanAndModeResult:
-    """Linear scan plus a representative fitted eigenfunction."""
-
-    scan: LinearScanResult
-    eigenfunction: np.ndarray
-    grid: SpectralGrid
-    ky_selected: float
-    tmin: float | None
-    tmax: float | None
-
-
 def _indexed_control(value: float | int | np.ndarray | None, index: int, cast):
     if isinstance(value, np.ndarray):
         return cast(value[index])
@@ -848,37 +835,3 @@ def run_linear_scan(
         return LinearScanResult(ky=empty, gamma=empty.copy(), omega=empty.copy())
     values = np.asarray(rows, dtype=float)
     return LinearScanResult(ky=values[:, 0], gamma=values[:, 1], omega=values[:, 2])
-
-
-def _representative_run(
-    scan: LinearScanResult,
-    ky_selected: float,
-    *,
-    linear_fn: Callable[..., LinearRunResult],
-    cfg: Any,
-    Nl: int,
-    Nm: int,
-    dt: float | np.ndarray,
-    steps: int | np.ndarray,
-    method: str,
-    mode_solver: str,
-    window_kw: dict[str, Any],
-    mode_kwargs: dict[str, Any] | None,
-    resolution_policy: Callable[[float], tuple[int, int]] | None,
-) -> LinearRunResult:
-    n_l, n_m = (
-        resolution_policy(ky_selected) if resolution_policy is not None else (Nl, Nm)
-    )
-    index = int(np.argmin(np.abs(scan.ky - ky_selected)))
-    return linear_fn(
-        cfg=cfg,
-        ky_target=ky_selected,
-        Nl=int(n_l),
-        Nm=int(n_m),
-        dt=_indexed_control(dt, index, float),
-        steps=_indexed_control(steps, index, int),
-        method=method,
-        solver=mode_solver,
-        **window_kw,
-        **(mode_kwargs or {}),
-    )

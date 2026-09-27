@@ -91,17 +91,6 @@ def _objective_rows(objective_rows: Any) -> jnp.ndarray:
     return rows
 
 
-def _parameter_vector(params: Any) -> jnp.ndarray:
-    p = jnp.asarray(params)
-    if int(p.ndim) != 1:
-        raise ValueError("params must be a one-dimensional vector")
-    if int(p.shape[0]) < 1:
-        raise ValueError("params must contain at least one parameter")
-    if not _is_real_numeric_dtype(p.dtype):
-        raise TypeError("params must be a real numeric vector")
-    return jnp.asarray(p, dtype=_floating_dtype(p))
-
-
 def _concrete_numpy_array(value: jnp.ndarray | Any) -> np.ndarray | None:
     try:
         return np.asarray(value, dtype=float)

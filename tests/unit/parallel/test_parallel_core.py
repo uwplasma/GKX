@@ -787,6 +787,218 @@ def test_mesh_from_devices_uses_visible_devices_and_returns_none_for_one_device(
     assert sharding_mod._mesh_from_devices([object()], "d") is None
 
 
+# ---- test_parallel_decomposition.py ----
+
+from gkx.parallel.independent import (
+    DecompositionContract,
+    ReconstructionIdentityReport,
+    ShardAssignment,
+    build_independent_portfolio_decomposition,
+    reconstruct_serial,
+    serial_reconstruction_identity_report,
+    shard_sequence,
+)
+
+
+ROOT = REPO_ROOT
+
+
+def test_independent_ky_decomposition_is_deterministic_balanced_and_ordered() -> None:
+    first = build_independent_portfolio_decomposition(
+        7,
+        requested_shards=3,
+        workload="independent_ky_scan",
+    )
+    second = build_independent_portfolio_decomposition(
+        7,
+        requested_shards=3,
+        workload="independent_ky_scan",
+    )
+
+    assert first == second
+    assert first.production_independent_batching is True
+    assert first.diagnostic_nonlinear_partition is False
+    assert first.independent_work is True
+    assert first.changes_solver_layout is False
+    assert first.actual_shards == 3
+    assert [shard.indices for shard in first.shards] == [
+        (0, 1, 2),
+        (3, 4),
+        (5, 6),
+    ]
+    assert [shard.size for shard in first.shards] == [3, 2, 2]
+    assert [shard.start for shard in first.shards] == [0, 3, 5]
+    assert [shard.stop for shard in first.shards] == [3, 5, 7]
+    assert "production independent batching" in first.claim_label
+    assert (
+        "not a nonlinear state-domain decomposition speedup claim" in first.claim_label
+    )
+    assert first.to_dict()["workload"] == "independent_ky_scan"
+    assert (
+        first.shards[0].to_dict()["label"].startswith("independent_ky_scan:shard_000")
+    )
+
+
+def test_uq_decomposition_reconstructs_serial_identity() -> None:
+    values = tuple(f"member-{idx}" for idx in range(8))
+    contract = build_independent_portfolio_decomposition(
+        len(values),
+        requested_shards=4,
+        workload="uq_ensemble",
+    )
+
+    shards = shard_sequence(values, contract)
+    reconstructed = reconstruct_serial(contract, shards)
+    report = serial_reconstruction_identity_report(values, contract)
+
+    assert shards == (
+        ("member-0", "member-1"),
+        ("member-2", "member-3"),
+        ("member-4", "member-5"),
+        ("member-6", "member-7"),
+    )
+    assert reconstructed == values
+    assert report == ReconstructionIdentityReport(
+        workload="uq_ensemble",
+        claim_level="production_independent_batching",
+        claim_label=contract.claim_label,
+        n_items=8,
+        requested_shards=4,
+        actual_shards=4,
+        identity_passed=True,
+        expected_indices=tuple(range(8)),
+        reconstructed_indices=tuple(range(8)),
+        missing_indices=(),
+        duplicate_indices=(),
+        out_of_range_indices=(),
+        out_of_order=False,
+    )
+    assert report.to_dict()["identity_passed"] is True
+
+
+def test_optimization_ensemble_decomposition_uses_production_independent_contract() -> (
+    None
+):
+    values = tuple({"candidate": idx, "objective": idx * idx} for idx in range(5))
+    contract = build_independent_portfolio_decomposition(
+        len(values),
+        requested_shards=8,
+        workload="optimization_ensemble",
+    )
+    report = serial_reconstruction_identity_report(values, contract)
+
+    assert contract.workload == "optimization_ensemble"
+    assert contract.claim_level == "production_independent_batching"
+    assert contract.actual_shards == 5
+    assert contract.independent_work is True
+    assert contract.changes_solver_layout is False
+    assert "independent optimization ensemble" in contract.claim_label
+    assert "not a nonlinear state-domain decomposition" in contract.claim_label
+    assert report.identity_passed is True
+    assert reconstruct_serial(contract, shard_sequence(values, contract)) == values
+
+
+def test_decomposition_handles_empty_and_oversharded_portfolios_without_empty_shards() -> (
+    None
+):
+    empty = build_independent_portfolio_decomposition(
+        0,
+        requested_shards=4,
+        workload="uq_ensemble",
+    )
+    oversharded = build_independent_portfolio_decomposition(
+        3,
+        requested_shards=8,
+        workload="independent_ky_scan",
+    )
+
+    assert empty.actual_shards == 0
+    assert empty.shards == ()
+    assert serial_reconstruction_identity_report((), empty).identity_passed is True
+    assert oversharded.actual_shards == 3
+    assert [shard.indices for shard in oversharded.shards] == [(0,), (1,), (2,)]
+    assert all(shard.size == 1 for shard in oversharded.shards)
+    assert reconstruct_serial(
+        oversharded, shard_sequence(("a", "b", "c"), oversharded)
+    ) == (
+        "a",
+        "b",
+        "c",
+    )
+
+
+def test_decomposition_rejects_invalid_counts_workloads_and_mismatched_values() -> None:
+    with pytest.raises(ValueError, match="requested_shards"):
+        build_independent_portfolio_decomposition(
+            3,
+            requested_shards=0,
+            workload="independent_ky_scan",
+        )
+    with pytest.raises(ValueError, match="n_items"):
+        build_independent_portfolio_decomposition(
+            -1,
+            requested_shards=1,
+            workload="uq_ensemble",
+        )
+    with pytest.raises(ValueError, match="workload"):
+        build_independent_portfolio_decomposition(
+            3,
+            requested_shards=1,
+            workload="diagnostic_nonlinear_domain",  # type: ignore[arg-type]
+        )
+
+    contract = build_independent_portfolio_decomposition(
+        3,
+        requested_shards=2,
+        workload="uq_ensemble",
+    )
+    with pytest.raises(ValueError, match="values length"):
+        shard_sequence(("only-one",), contract)
+    with pytest.raises(ValueError, match="actual_shards"):
+        reconstruct_serial(contract, (("a", "b"),))
+    with pytest.raises(ValueError, match="assignment size"):
+        reconstruct_serial(contract, (("a",), ("b",)))
+
+
+def test_manual_bad_assignment_report_can_expose_claim_scoped_identity_failure() -> (
+    None
+):
+    bad_contract = DecompositionContract(
+        workload="diagnostic_nonlinear_domain",
+        claim_level="diagnostic_nonlinear_domain_partition",
+        claim_label="diagnostic nonlinear state-domain partition contract",
+        n_items=3,
+        requested_shards=2,
+        actual_shards=2,
+        shards=(
+            ShardAssignment(
+                shard_id=0,
+                start=0,
+                stop=2,
+                indices=(0, 2),
+                label="bad:0",
+            ),
+            ShardAssignment(
+                shard_id=1,
+                start=2,
+                stop=3,
+                indices=(1,),
+                label="bad:1",
+            ),
+        ),
+        independent_work=False,
+        changes_solver_layout=True,
+    )
+    report = serial_reconstruction_identity_report(("a", "b", "c"), bad_contract)
+
+    assert report.identity_passed is False
+    assert report.missing_indices == ()
+    assert report.duplicate_indices == ()
+    assert report.out_of_range_indices == ()
+    assert report.out_of_order is True
+    assert report.reconstructed_indices == (0, 2, 1)
+
+
 # ---- from test_parallel_nonlinear_routing.py ----
 # Unit contracts: routing ``[parallel]`` into the nonlinear solver path.
 #
