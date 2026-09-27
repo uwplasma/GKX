@@ -258,7 +258,7 @@ def _run_krylov_linear(
     krylov_cfg: Any | None,
     status_callback: _StatusCallback,
 ) -> tuple[float, float, np.ndarray, Any]:
-    from gkx.solvers_time_runners import _reject_unsupported_config_collision_operator
+    from gkx.solvers_time_explicit import _reject_unsupported_config_collision_operator
 
     # The eigen solve cannot carry a moment operator; refuse, don't run as LB.
     _reject_unsupported_config_collision_operator(

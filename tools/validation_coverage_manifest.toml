@@ -126,7 +126,6 @@ owned_modules = [
   "gkx.solvers_time_explicit_steps",
   "gkx.workflows.runtime.toml",
   "gkx.workflows.runtime.wout",
-  "gkx.workflows.runtime.resolution",
   "gkx.compilation_cache",
   "gkx.solvers_time_runners",
   "gkx.workflows.runtime.diagnostic_arrays",
@@ -1761,8 +1760,6 @@ next_tests = [
 module = "gkx.parallel.__init__"
 path = "src/gkx/parallel/__init__.py"
 owned_modules = [
-  "gkx.parallel.batch",
-  "gkx.parallel.identity",
   "gkx.parallel.independent",
 ]
 owner_lane = "production ky/batch scan and UQ ensemble parallelization"
@@ -1827,37 +1824,6 @@ artifact_paths = [
   ]
 next_tests = [
   "add office two-GPU identity and speedup gates for UQ ensembles",
-]
-
-[[modules]]
-module = "gkx.parallel.decomposition"
-path = "src/gkx/parallel/decomposition.py"
-owner_lane = "deterministic decomposition contracts for production independent work and diagnostic nonlinear partitions"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "JAX independent work batching and deterministic reconstruction identity gates",
-  "nonlinear domain-decomposition claim separation before runtime speedup claims",
-]
-physics_contracts = [
-  "independent ky and UQ portfolio decomposition preserves serial observable ordering",
-  "nonlinear state-domain partition metadata remains diagnostic until real RHS/FFT/field-solve routing passes identity and transport gates",
-]
-numerics_contracts = [
-  "shard assignments are deterministic, balanced, contiguous, and contain no empty shards",
-  "serial reconstruction identity fails closed on missing, duplicate, out-of-range, or out-of-order indices",
-]
-fast_tests = [
-  "tests/unit/parallel/test_parallel_core.py",
-]
-artifact_paths = [
-  "docs/_static/parallel_decomposition_status.json",
-  "docs/_static/parallel_decomposition_status.png",
-]
-next_tests = [
-  "replace diagnostic nonlinear state-domain metadata with real runtime communication routes before any nonlinear speedup claim",
-  "add conservation and transport-window identity gates once nonlinear domain routing is implemented",
 ]
 
 [[modules]]

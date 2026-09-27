@@ -565,6 +565,26 @@ def integrate_linear_explicit(
     )
 
 
+def _reject_unsupported_config_collision_operator(
+    time_cfg: Any, path: str, remedy: str = "leave state_sharding unset"
+) -> None:
+    """Fail loudly when a solver path cannot honour the selected operator.
+
+    Silently ignoring ``collision_operator`` would report Lenard-Bernstein
+    results under an advanced-operator label, so the unsupported combinations
+    raise instead.
+    """
+
+    name = str(time_cfg.collision_operator).strip().lower()
+    if name in ("none", "lenard_bernstein"):
+        return
+    raise NotImplementedError(
+        f"collision_operator={name!r} is not supported by the {path} path; "
+        "it is currently available on the fixed-step cached integrator "
+        f"({remedy})."
+    )
+
+
 def integrate_linear_explicit_from_config(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -581,10 +601,6 @@ def integrate_linear_explicit_from_config(
     """Integrate with CFL control using the common ``TimeConfig`` contract."""
 
     if getattr(time_cfg, "collision_operator", None) is not None:
-        from gkx.solvers_time_runners import (
-            _reject_unsupported_config_collision_operator,
-        )
-
         # This integrator cannot carry a moment operator; refuse, don't run as LB.
         _reject_unsupported_config_collision_operator(
             time_cfg, "CFL-controlled explicit", remedy='set solver = "time"'

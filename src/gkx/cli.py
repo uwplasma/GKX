@@ -9,7 +9,10 @@ from typing import Any, Sequence
 from dataclasses import dataclass
 from typing import Callable
 
-from gkx.workflows.runtime import toml as runtime_toml
+from gkx.workflows.runtime import (
+    toml as runtime_toml,
+    wout as runtime_wout,
+)
 from gkx.workflows.runtime.toml import (
     load_runtime_from_toml,
     load_toml,
@@ -302,7 +305,7 @@ def _toml_shorthand_command(data: dict[str, Any]) -> str:
 def _direct_config_shorthand_args(argv: Sequence[str]) -> list[str] | None:
     """Return parser arguments for ``gkx case.toml`` shorthand."""
 
-    return runtime_toml.direct_config_shorthand_args(argv, load_toml_func=load_toml)
+    return runtime_wout.direct_config_shorthand_args(argv, load_toml_func=load_toml)
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -526,8 +529,10 @@ def _warn_deprecated_command(name: str) -> None:
 def _cmd_estimate(args: argparse.Namespace) -> int:
     """Print the deterministic minimum-grid estimate for an equilibrium."""
 
-    from gkx.workflows.runtime.resolution import estimate_resolution
-    from gkx.workflows.runtime.wout import format_estimate_table
+    from gkx.workflows.runtime.wout import (
+        estimate_resolution,
+        format_estimate_table,
+    )
 
     estimate = estimate_resolution(
         args.equilibrium, torflux=args.torflux, target_error=args.tier

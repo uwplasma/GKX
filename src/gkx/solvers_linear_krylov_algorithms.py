@@ -20,9 +20,13 @@ from gkx.operators.linear.linked import (
     project_to_linked_cover,
 )
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers_linear_precond_pr3 import PR3_PRECOND_NAMES, Pr3Factors
+from gkx.solvers_linear_precond_pr3 import (
+    PR3_PRECOND_NAMES,
+    Pr3Factors,
+    _apply_operator,
+    _assemble_rhs_cached_novjp,
+)
 from gkx.solvers_time_explicit_steps import _linear_native_step
-from gkx.terms.assembly import assemble_rhs_cached
 from gkx.terms.config import TermConfig
 
 
@@ -75,26 +79,6 @@ def _require_linked_cover_seed(v: jnp.ndarray) -> None:
             "the eigen seed has no component on the linked-chain modes; only "
             "those modes carry an eigenvector of the linked operator"
         )
-
-
-@jax.jit
-def _assemble_rhs_cached_novjp(
-    G: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    term_cfg: TermConfig,
-) -> tuple[jnp.ndarray, object]:
-    return assemble_rhs_cached(G, cache, params, terms=term_cfg, use_custom_vjp=False)
-
-
-def _apply_operator(
-    v: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    term_cfg: TermConfig,
-) -> jnp.ndarray:
-    dG, _fields = _assemble_rhs_cached_novjp(v, cache, params, term_cfg)
-    return dG
 
 
 def _compute_damping(

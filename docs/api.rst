@@ -528,20 +528,6 @@ Parallelization
 .. automodule:: gkx.parallel
    :members:
 
-Parallel Identity Reports
--------------------------
-
-.. automodule:: gkx.parallel.identity
-   :members:
-   :private-members:
-
-Parallel Batch Mapping
-----------------------
-
-.. automodule:: gkx.parallel.batch
-   :members:
-   :private-members:
-
 Parallel Independent Tasks
 --------------------------
 
@@ -716,7 +702,7 @@ Runtime Diagnostic Arrays
 Runtime Resolution Estimator
 ----------------------------
 
-.. automodule:: gkx.workflows.runtime.resolution
+.. automodule:: gkx.workflows.runtime.wout
    :members:
    :private-members:
 
@@ -827,12 +813,6 @@ Solver Objective Core
 ---------------------
 
 .. automodule:: gkx.objectives.core
-   :members:
-
-Parallel Decomposition Contracts
---------------------------------
-
-.. automodule:: gkx.parallel.decomposition
    :members:
 
 VMEC-JAX Transport Objective

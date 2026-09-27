@@ -850,8 +850,6 @@ __all__ = [
 ]
 
 
-
-
 @dataclass(frozen=True)
 class RawDriftProfiles:
     """Drift coefficients on the Boozer theta grid, before the equal-arc remap."""

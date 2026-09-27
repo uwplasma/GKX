@@ -74,7 +74,7 @@ jobs:
 
           assert "--plot" in build_parser().format_help()
           assert "batch_map" in gkx.parallel.__all__
-          assert gkx.parallel.batch_map.__module__ == "gkx.parallel.batch"
+          assert gkx.parallel.batch_map.__module__ == "gkx.parallel.independent"
           assert find_spec("gkx.objectives.qa_low_turbulence_contracts") is None
           assert find_spec("gkx.objectives.qa_low_turbulence_residuals") is None
           assert find_spec("gkx.objectives.stellarator_residuals") is None

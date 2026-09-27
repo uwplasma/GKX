@@ -411,13 +411,6 @@ assert len(gkx.__all__) == 16
 assert set(gkx.__all__) == {{'__version__', 'Case', 'LinearResult', 'NonlinearResult', 'ScanResult', 'load', 'solve', 'scan', 'plot', 'prepare', 'PreparedSimulation', 'flux_tube_geometry_from_mapping', 'solver_objective_vector_from_geometry', 'solver_linear_operator_matrix_from_geometry', 'solver_scalar_objective_from_vector', 'VMEXTransportObjectiveConfig'}}
 assert "numpy" not in sys.modules
 assert "jax" not in sys.modules
-from gkx.parallel.decomposition import build_independent_portfolio_decomposition
-contract = build_independent_portfolio_decomposition(
-    4, requested_shards=2, workload="independent_ky_scan"
-)
-assert contract.actual_shards == 2
-assert "numpy" not in sys.modules
-assert "jax" not in sys.modules
 """
     subprocess.run([sys.executable, "-S", "-c", root_script], check=True)
 
