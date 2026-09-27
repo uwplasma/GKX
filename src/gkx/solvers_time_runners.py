@@ -14,6 +14,7 @@ from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.solvers_nonlinear_state_integration import integrate_nonlinear
 from gkx.parallel.state import resolve_state_sharding
 from gkx.parallel.integrators import integrate_nonlinear_sharded
+from gkx.solvers_time_explicit import _reject_unsupported_config_collision_operator
 from gkx.terms.config import TermConfig
 
 
@@ -39,7 +40,7 @@ def _resolve_config_collision_operator(
 
     import jax.numpy as jnp
 
-    from gkx.operators.linear.collision_factory import collision_operator_from_config
+    from gkx.operators.linear.collision_tables import collision_operator_from_config
 
     name = str(time_cfg.collision_operator).strip().lower()
     if name in ("none", "lenard_bernstein"):
@@ -127,26 +128,6 @@ def _check_moment_basis_matches_operator(operator, name: str, G0) -> None:
         f"({expected_nl}, {expected_nm}), but the run uses (Nl, Nm) = ({nl}, {nm}). "
         f"Set Nl={expected_nl}, Nm={expected_nm}, "
         'or select collision_operator = "lenard_bernstein".'
-    )
-
-
-def _reject_unsupported_config_collision_operator(
-    time_cfg: TimeConfig, path: str, remedy: str = "leave state_sharding unset"
-) -> None:
-    """Fail loudly when a solver path cannot honour the selected operator.
-
-    Silently ignoring ``collision_operator`` would report Lenard-Bernstein
-    results under an advanced-operator label, so the unsupported combinations
-    raise instead.
-    """
-
-    name = str(time_cfg.collision_operator).strip().lower()
-    if name in ("none", "lenard_bernstein"):
-        return
-    raise NotImplementedError(
-        f"collision_operator={name!r} is not supported by the {path} path; "
-        "it is currently available on the fixed-step cached integrator "
-        f"({remedy})."
     )
 
 

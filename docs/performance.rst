@@ -615,7 +615,7 @@ Preconditioner policies
 
 Preconditioner choices, with shape, finite-value, linked-boundary and
 shift-invert contracts covered by ``tests/unit/linear/test_linear.py`` and
-``tests/unit/linear/test_linear_helpers_extra.py``:
+``tests/unit/linear/test_linear.py``:
 
 - the implicit (backward-Euler GMRES) time integrator accepts ``diag``
   (damping plus the curvature/grad-B diagonal), ``damping``, ``pas`` (the PAS

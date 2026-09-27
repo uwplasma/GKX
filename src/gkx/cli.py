@@ -6,8 +6,12 @@ import argparse
 import sys
 from pathlib import Path
 from typing import Any, Sequence
+from dataclasses import dataclass
+from typing import Callable
 
-from gkx.workflows.runtime import toml as runtime_toml
+from gkx.workflows.runtime import (
+    wout as runtime_wout,
+)
 from gkx.workflows.runtime.toml import (
     load_runtime_from_toml,
     load_toml,
@@ -26,10 +30,6 @@ from gkx.workflows.runtime.artifacts import (
     write_runtime_linear_artifacts,
     write_runtime_linear_scan_artifacts,
 )
-from gkx.workflows.demo import (
-    DefaultDemoDeps,
-    run_default_linear_demo,
-)
 from gkx.runtime import run_runtime_linear, run_runtime_scan
 from gkx.compilation_cache import enable_persistent_compilation_cache
 from gkx.workflows.runtime.commands import (
@@ -41,6 +41,238 @@ from gkx.workflows.runtime.commands import (
     run_runtime_nonlinear_command,
     scan_runtime_linear_command,
 )
+
+
+# The demo is the first thing most people run, so it reports a number that can
+# be checked rather than a fast one that cannot. At dt = 0.03 over 500 steps it
+# printed gamma = 0.089982 against a certified Krylov eigenvalue of 0.103263 at
+# these same settings -- 12.9 percent low -- and emitted four warnings saying so:
+# the step exceeded the estimated CFL bound of 0.02197, and 15 time units gave
+# only 1.34 e-foldings to fit. Both are fixed by construction here. dt sits
+# under the CFL bound, and 4000 steps reach t = 80, which is past the
+# gamma * t_max >= 7 the fitter asks for. The run costs about 7 s instead of
+# 3 s and lands within 0.02 percent of the eigenvalue with no warnings.
+# tests/validation/physics_gates/test_collision_physics.py pins that agreement.
+DEFAULT_DEMO_SETTINGS: dict[str, float | int | str] = {
+    "ky": 0.3,
+    "Nl": 7,
+    "Nm": 14,
+    "solver": "time",
+    "method": "rk4",
+    "dt": 0.02,
+    "steps": 4000,
+    "sample_stride": 5,
+    "fit_signal": "phi",
+}
+
+
+@dataclass(frozen=True)
+class DefaultDemoDeps:
+    """Patchable runtime and output dependencies for the default demo."""
+
+    load_runtime_from_toml: Callable[..., tuple[Any, dict[str, Any]]]
+    run_runtime_linear: Callable[..., Any]
+    linear_runtime_panel_figure: Callable[..., tuple[Any, Any]]
+    write_runtime_linear_artifacts: Callable[[str | Path, Any], dict[str, str]]
+
+
+def default_demo_plot_path() -> Path:
+    """Return the figure path produced by the no-input executable."""
+
+    return Path("gkx_default_linear.png")
+
+
+def default_demo_artifact_base() -> Path:
+    """Return the artifact stem produced by the no-input executable."""
+
+    return Path("gkx_default_linear")
+
+
+def default_demo_toml_path() -> Path:
+    """Return the reproducer path produced by the no-input executable."""
+
+    return Path("gkx_default_linear.toml")
+
+
+def default_demo_toml_text() -> str:
+    """Build the complete runtime TOML used by the educational demo."""
+
+    settings = DEFAULT_DEMO_SETTINGS
+    return f"""# Reproducer for the no-input `gkx` demo.
+# Run with: gkx gkx_default_linear.toml --progress
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 0.8
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 1
+Ny = 24
+Nz = 96
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 20.0
+ntheta = 32
+nperiod = 2
+
+[time]
+t_max = {float(settings["dt"]) * int(settings["steps"]):.6g}
+dt = {settings["dt"]}
+method = "{settings["method"]}"
+sample_stride = {settings["sample_stride"]}
+progress_bar = true
+
+[geometry]
+model = "s-alpha"
+q = 1.4
+s_hat = 0.8
+epsilon = 0.18
+R0 = 2.77778
+
+[init]
+init_field = "density"
+init_amp = 1.0e-10
+gaussian_init = true
+gaussian_width = 0.5
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = true
+tau_e = 1.0
+collisions = true
+hypercollisions = true
+
+[collisions]
+nu_hermite = 1.0
+nu_laguerre = 2.0
+nu_hyper = 0.0
+p_hyper = 4.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 1.0
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "cyclone"
+diagnostic_norm = "none"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 1.0
+hypercollisions = 1.0
+end_damping = 1.0
+apar = 1.0
+bpar = 0.0
+nonlinear = 0.0
+
+[run]
+ky = {settings["ky"]}
+Nl = {settings["Nl"]}
+Nm = {settings["Nm"]}
+solver = "{settings["solver"]}"
+method = "{settings["method"]}"
+dt = {settings["dt"]}
+steps = {settings["steps"]}
+sample_stride = {settings["sample_stride"]}
+
+[fit]
+fit_signal = "{settings["fit_signal"]}"
+auto_window = true
+window_fraction = 0.4
+start_fraction = 0.2
+min_points = 25
+"""
+
+
+def _status(message: str) -> None:
+    print(f"demo: {message}", flush=True)
+
+
+def _print_intro(toml_path: Path) -> None:
+    settings = DEFAULT_DEMO_SETTINGS
+    print(
+        "No input specified; running the default Cyclone initial-value demo.",
+        flush=True,
+    )
+    print(
+        "The first run includes JAX compilation; progress reports elapsed time and ETA.",
+        flush=True,
+    )
+    print(
+        f"ky={settings['ky']} Nl={settings['Nl']} Nm={settings['Nm']} "
+        f"method={settings['method']} dt={settings['dt']} steps={settings['steps']}",
+        flush=True,
+    )
+    print(f"wrote reproducible input: {toml_path}", flush=True)
+
+
+def _write_plot(deps: DefaultDemoDeps, result: Any) -> Path:
+    path = default_demo_plot_path()
+    fig, _axes = deps.linear_runtime_panel_figure(
+        t=result.t,
+        signal=result.signal,
+        z=result.z,
+        eigenfunction=result.eigenfunction,
+        gamma=float(result.gamma),
+        omega=float(result.omega),
+        title="GKX default Cyclone initial-value demo",
+    )
+    fig.savefig(path, dpi=220, bbox_inches="tight")
+    import matplotlib.pyplot as plt
+
+    plt.close(fig)
+    return path
+
+
+def run_default_linear_demo(*, deps: DefaultDemoDeps) -> int:
+    """Run one small runtime case and write its TOML, data, and figure locally."""
+
+    settings = DEFAULT_DEMO_SETTINGS
+    toml_path = default_demo_toml_path()
+    toml_path.write_text(default_demo_toml_text(), encoding="utf-8")
+    _print_intro(toml_path)
+    cfg, raw = deps.load_runtime_from_toml(toml_path)
+    fit = dict(raw.get("fit", {}))
+    result = deps.run_runtime_linear(
+        cfg,
+        ky_target=float(settings["ky"]),
+        Nl=int(settings["Nl"]),
+        Nm=int(settings["Nm"]),
+        solver=str(settings["solver"]),
+        method=str(settings["method"]),
+        dt=float(settings["dt"]),
+        steps=int(settings["steps"]),
+        sample_stride=int(settings["sample_stride"]),
+        fit_signal=str(fit.pop("fit_signal", settings["fit_signal"])),
+        show_progress=True,
+        status_callback=_status,
+        **fit,
+    )
+    paths = deps.write_runtime_linear_artifacts(default_demo_artifact_base(), result)
+    plot_path = _write_plot(deps, result)
+    print(
+        f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}", flush=True
+    )
+    for path in paths.values():
+        print(f"saved {path}", flush=True)
+    print(f"saved {plot_path}", flush=True)
+    print(f"rerun with: gkx {toml_path} --progress", flush=True)
+    return 0
 
 
 # These imports remain on the executable facade so tests and downstream callers
@@ -57,22 +289,10 @@ _PATCHABLE_RUNTIME_COMMAND_GLOBALS = (
 )
 
 
-def _is_runtime_toml(data: dict[str, Any]) -> bool:
-    """Return whether TOML data should use the runtime executable path."""
-
-    return runtime_toml.is_runtime_toml(data)
-
-
-def _toml_shorthand_command(data: dict[str, Any]) -> str:
-    """Return the executable command used for direct TOML path shorthand."""
-
-    return runtime_toml.toml_shorthand_command(data)
-
-
 def _direct_config_shorthand_args(argv: Sequence[str]) -> list[str] | None:
     """Return parser arguments for ``gkx case.toml`` shorthand."""
 
-    return runtime_toml.direct_config_shorthand_args(argv, load_toml_func=load_toml)
+    return runtime_wout.direct_config_shorthand_args(argv, load_toml_func=load_toml)
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -296,8 +516,10 @@ def _warn_deprecated_command(name: str) -> None:
 def _cmd_estimate(args: argparse.Namespace) -> int:
     """Print the deterministic minimum-grid estimate for an equilibrium."""
 
-    from gkx.workflows.runtime.resolution import estimate_resolution
-    from gkx.workflows.runtime.wout import format_estimate_table
+    from gkx.workflows.runtime.wout import (
+        estimate_resolution,
+        format_estimate_table,
+    )
 
     estimate = estimate_resolution(
         args.equilibrium, torflux=args.torflux, target_error=args.tier

@@ -24,6 +24,28 @@ from gkx.terms.assembly import assemble_rhs_terms_cached
 from gkx.terms.config import TermConfig
 from gkx.terms.fields import _solve_fields_impl, solve_fields
 from gkx.terms.linear_terms import linked_streaming_contribution, mirror_contribution
+from gkx.core_grid import select_ky_grid
+from gkx.terms import assembly as assembly_mod
+from gkx.terms.assembly import (
+    assemble_rhs_cached,
+    assemble_rhs_cached_electrostatic_jit,
+    assemble_rhs_cached_jit,
+    compute_fields_cached,
+)
+from gkx.terms.config import FieldState
+import gkx.terms as term_pkg
+from gkx.core_velocity import hermite_ladder_coeffs
+from gkx.operators.linear.streaming import (
+    _check_positive,
+    abs_z_linked_fft,
+    apply_hermite_v,
+    apply_hermite_v2,
+    apply_laguerre_x,
+    grad_z_linked_fft,
+    grad_z_periodic,
+    shift_axis,
+    streaming_ladder_term,
+)
 
 
 def _analytic_gyro_coefficients(b):
@@ -1027,3 +1049,1120 @@ def test_serial_reference_matches_canonical_zonal_value_and_gradient() -> None:
     expected_grad = jax.grad(lambda state: loss(production_phi, state))(G)
     observed_grad = jax.grad(lambda state: loss(reference_phi, state))(G)
     assert jnp.allclose(observed_grad, expected_grad, rtol=1.0e-5, atol=1.0e-5)
+
+
+# ---- from test_terms_assembly.py ----
+
+
+def test_assemble_rhs_terms_sum_matches_total() -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+        D_hyper=0.07,
+    )
+    Nl, Nm = 4, 4
+    cache = build_linear_cache(grid, geom, params, Nl, Nm)
+    rng = np.random.default_rng(0)
+    G0 = rng.normal(
+        size=(Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
+    ) + 1j * rng.normal(size=(Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size))
+    G0 = jnp.asarray(G0)
+    term_cfg = TermConfig(hyperdiffusion=1.0)
+    rhs_total, _fields = assemble_rhs_cached(G0, cache, params, terms=term_cfg)
+    rhs_terms, _fields_terms, contrib = assemble_rhs_terms_cached(
+        G0, cache, params, terms=term_cfg
+    )
+    rhs_sum = (
+        contrib["streaming"]
+        + contrib["mirror"]
+        + contrib["curvature"]
+        + contrib["gradb"]
+        + contrib["diamagnetic"]
+        + contrib["collisions"]
+        + contrib["hypercollisions"]
+        + contrib["hyperdiffusion"]
+        + contrib["end_damping"]
+    )
+    assert np.allclose(
+        np.asarray(rhs_terms), np.asarray(rhs_total), rtol=1.0e-6, atol=1.0e-8
+    )
+    assert np.allclose(
+        np.asarray(rhs_sum), np.asarray(rhs_total), rtol=1.0e-6, atol=1.0e-8
+    )
+
+
+def test_assemble_rhs_cached_validates_state_shape_and_species_match() -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 3)
+
+    with pytest.raises(ValueError):
+        assemble_rhs_cached(jnp.ones((2, 3, 4, 5), dtype=jnp.complex64), cache, params)
+
+    G_species = jnp.ones(
+        (2, 3, 3, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64
+    )
+    with pytest.raises(ValueError):
+        assemble_rhs_cached(G_species, cache, params)
+
+
+def test_compute_fields_cached_matches_rhs_fields_and_validation() -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 3)
+    rng = np.random.default_rng(2)
+    G0 = rng.normal(
+        size=(3, 3, grid.ky.size, grid.kx.size, grid.z.size)
+    ) + 1j * rng.normal(size=(3, 3, grid.ky.size, grid.kx.size, grid.z.size))
+    G0 = jnp.asarray(G0)
+
+    rhs, fields_rhs = assemble_rhs_cached(G0, cache, params, use_custom_vjp=False)
+    fields_only = compute_fields_cached(G0, cache, params, use_custom_vjp=False)
+    assert rhs.shape == G0.shape
+    assert np.allclose(
+        np.asarray(fields_only.phi),
+        np.asarray(fields_rhs.phi),
+        rtol=1.0e-6,
+        atol=1.0e-6,
+    )
+
+    with pytest.raises(ValueError):
+        compute_fields_cached(
+            jnp.ones((2, 3, 4, 5), dtype=jnp.complex64), cache, params
+        )
+
+
+def test_disabled_em_fields_skip_hamiltonian_branches(monkeypatch) -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+        beta=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 3)
+    G0 = jnp.ones((3, 3, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
+    terms = TermConfig(apar=0.0, bpar=0.0)
+    fields = FieldState(
+        phi=jnp.ones((grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64),
+        apar=jnp.zeros((grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64),
+        bpar=jnp.zeros((grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64),
+    )
+    apar, bpar, h_apar, h_bpar = assembly_mod._rhs_field_views(fields, terms)
+    assert apar.shape == fields.phi.shape
+    assert bpar.shape == fields.phi.shape
+    assert h_apar is None
+    assert h_bpar is None
+
+    seen: dict[str, bool] = {}
+    original_build_h = assembly_mod.build_H
+
+    def _record_build_h(*args, **kwargs):
+        seen["apar_is_none"] = kwargs.get("apar") is None
+        seen["bpar_is_none"] = kwargs.get("bpar") is None
+        return original_build_h(*args, **kwargs)
+
+    monkeypatch.setattr(assembly_mod, "build_H", _record_build_h)
+    assemble_rhs_cached(G0, cache, params, terms=terms, use_custom_vjp=False)
+    assert seen == {"apar_is_none": True, "bpar_is_none": True}
+
+
+def test_assemble_rhs_cached_jit_accepts_term_config() -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+        beta=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 3)
+    G0 = jnp.ones((3, 3, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
+    rhs, fields = assemble_rhs_cached_jit(
+        G0, cache, params, TermConfig(apar=0.0, bpar=0.0)
+    )
+    assert rhs.shape == G0.shape
+    assert fields.phi.shape == (grid.ky.size, grid.kx.size, grid.z.size)
+
+
+def test_electrostatic_rhs_jit_matches_generic_zero_em_fields() -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.8,
+        tprim=2.49,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+        beta=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 4)
+    rng = np.random.default_rng(8)
+    G0 = rng.normal(
+        size=(3, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    ) + 1j * rng.normal(size=(3, 4, grid.ky.size, grid.kx.size, grid.z.size))
+    G0 = jnp.asarray(G0, dtype=jnp.complex64)
+    terms = TermConfig(apar=0.0, bpar=0.0)
+
+    rhs_generic, fields_generic = assemble_rhs_cached_jit(G0, cache, params, terms)
+    rhs_electrostatic, fields_electrostatic = assemble_rhs_cached_electrostatic_jit(
+        G0, cache, params, terms
+    )
+
+    np.testing.assert_allclose(
+        np.asarray(rhs_electrostatic), np.asarray(rhs_generic), rtol=1.0e-6, atol=1.0e-6
+    )
+    np.testing.assert_allclose(
+        np.asarray(fields_electrostatic.phi),
+        np.asarray(fields_generic.phi),
+        rtol=1.0e-6,
+        atol=1.0e-6,
+    )
+
+
+def test_external_phi_source_shifts_fields_and_rhs() -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.0,
+        tprim=0.0,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 2, 2)
+    G0 = jnp.zeros((2, 2, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
+
+    fields0 = compute_fields_cached(G0, cache, params, use_custom_vjp=False)
+    fields_src = compute_fields_cached(
+        G0, cache, params, use_custom_vjp=False, external_phi=0.25
+    )
+    np.testing.assert_allclose(
+        np.asarray(fields_src.phi - fields0.phi), 0.25, atol=1.0e-7
+    )
+
+    rhs0, _ = assemble_rhs_cached(G0, cache, params, use_custom_vjp=False)
+    rhs_src, _ = assemble_rhs_cached(
+        G0, cache, params, use_custom_vjp=False, external_phi=0.25
+    )
+    assert not np.allclose(np.asarray(rhs_src), np.asarray(rhs0))
+
+
+def test_collision_zero_guard_uses_current_nu_not_cache_build_nu() -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.0,
+        tprim=0.0,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 3)
+    rng = np.random.default_rng(3)
+    G0 = rng.normal(
+        size=(3, 3, grid.ky.size, grid.kx.size, grid.z.size)
+    ) + 1j * rng.normal(size=(3, 3, grid.ky.size, grid.kx.size, grid.z.size))
+    G0 = jnp.asarray(G0, dtype=jnp.complex64)
+    terms = TermConfig(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=1.0,
+        hypercollisions=0.0,
+        hyperdiffusion=0.0,
+        end_damping=0.0,
+        apar=0.0,
+        bpar=0.0,
+    )
+
+    rhs_zero, _fields_zero, contrib_zero = assemble_rhs_terms_cached(
+        G0,
+        cache,
+        params,
+        terms=terms,
+        use_custom_vjp=False,
+    )
+    np.testing.assert_allclose(np.asarray(rhs_zero), 0.0, atol=1.0e-7)
+    np.testing.assert_allclose(np.asarray(contrib_zero["collisions"]), 0.0, atol=1.0e-7)
+
+    rhs_nonzero, _fields_nonzero, contrib_nonzero = assemble_rhs_terms_cached(
+        G0,
+        cache,
+        replace(params, nu=0.2),
+        terms=terms,
+        use_custom_vjp=False,
+    )
+    assert np.linalg.norm(np.asarray(rhs_nonzero)) > 1.0e-5
+    assert np.linalg.norm(np.asarray(contrib_nonzero["collisions"])) > 1.0e-5
+
+
+def test_collision_zero_guard_preserves_preexpanded_collision_operator() -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.0,
+        tprim=0.0,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 3)
+    rng = np.random.default_rng(4)
+    G0 = rng.normal(
+        size=(3, 3, grid.ky.size, grid.kx.size, grid.z.size)
+    ) + 1j * rng.normal(size=(3, 3, grid.ky.size, grid.kx.size, grid.z.size))
+    G0 = jnp.asarray(G0, dtype=jnp.complex64)
+    cache_with_collision_matrix = replace(
+        cache,
+        collision_lam=jnp.ones_like(G0[None, ...], dtype=jnp.float32) * 0.2,
+    )
+    terms = TermConfig(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=1.0,
+        hypercollisions=0.0,
+        hyperdiffusion=0.0,
+        end_damping=0.0,
+        apar=0.0,
+        bpar=0.0,
+    )
+
+    rhs, _fields, contrib = assemble_rhs_terms_cached(
+        G0,
+        cache_with_collision_matrix,
+        params,
+        terms=terms,
+        use_custom_vjp=False,
+    )
+    assert np.linalg.norm(np.asarray(rhs)) > 1.0e-5
+    assert np.linalg.norm(np.asarray(contrib["collisions"])) > 1.0e-5
+
+
+def test_collision_zero_weight_skips_invalid_preexpanded_operator_shape() -> None:
+    grid_full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+    grid = select_ky_grid(grid_full, 1)
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, drift_scale=1.0)
+    params = LinearParams(
+        fprim=0.0,
+        tprim=0.0,
+        tprim_e=0.0,
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 3, 3)
+    cache_with_unused_bad_collision_matrix = replace(
+        cache,
+        collision_lam=jnp.ones_like(cache.lb_lam, dtype=jnp.float32),
+    )
+    rng = np.random.default_rng(5)
+    G0 = rng.normal(
+        size=(3, 3, grid.ky.size, grid.kx.size, grid.z.size)
+    ) + 1j * rng.normal(size=(3, 3, grid.ky.size, grid.kx.size, grid.z.size))
+    G0 = jnp.asarray(G0, dtype=jnp.complex64)
+    terms = TermConfig(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        hyperdiffusion=0.0,
+        end_damping=0.0,
+        apar=0.0,
+        bpar=0.0,
+    )
+
+    rhs, _fields, contrib = assemble_rhs_terms_cached(
+        G0,
+        cache_with_unused_bad_collision_matrix,
+        params,
+        terms=terms,
+        use_custom_vjp=False,
+    )
+    np.testing.assert_allclose(np.asarray(rhs), 0.0, atol=1.0e-7)
+    np.testing.assert_allclose(np.asarray(contrib["collisions"]), 0.0, atol=1.0e-7)
+
+
+def test_static_zero_switches_stay_static_inside_a_trace() -> None:
+    """A term switch the host can see is off stays off under ``jit``.
+
+    ``_is_static_zero`` used to ask whether a ``jnp`` copy of its argument was
+    traced. Inside a trace that copy always is, so every switch of every jitted
+    run answered "not statically zero" and every fast path this predicate
+    selects was silently abandoned -- including the electrostatic RHS for a
+    ``TermConfig`` with ``apar = bpar = 0``, which is what the linear
+    benchmarks and every electrostatic nonlinear run are.
+    """
+
+    import jax
+
+    from gkx.operators.nonlinear.rhs import linear_rhs_jit_for_terms_impl
+
+    seen: dict[str, object] = {}
+
+    def probe(x: jnp.ndarray) -> jnp.ndarray:
+        seen["python_zero"] = assembly_mod._is_static_zero(0.0)
+        seen["python_one"] = assembly_mod._is_static_zero(1.0)
+        seen["host_array"] = assembly_mod._is_static_zero(np.zeros(3))
+        seen["underflows"] = assembly_mod._is_static_zero(1.0e-50, jnp.float32)
+        seen["traced"] = assembly_mod._is_static_zero(x)
+        seen["route"] = linear_rhs_jit_for_terms_impl(TermConfig(apar=0.0, bpar=0.0))
+        return x * 2.0
+
+    jax.jit(probe)(jnp.asarray(3.0))
+    assert seen["python_zero"] is True
+    assert seen["python_one"] is False
+    assert seen["host_array"] is True
+    # ``dtype`` still reproduces the operator's own cast.
+    assert seen["underflows"] is True
+    # A value that really is traced stays unknowable, which is the only case
+    # the predicate was ever entitled to give up on.
+    assert seen["traced"] is False
+    assert seen["route"] is assemble_rhs_cached_electrostatic_jit
+    assert (
+        linear_rhs_jit_for_terms_impl(TermConfig(apar=1.0, bpar=0.0))
+        is assemble_rhs_cached_jit
+    )
+
+
+def _linked_pilot_rhs_case(**param_overrides):
+    """Nx=8/Ny=16 linked Cyclone case with four chain lengths and |kz| hypercollisions."""
+
+    from gkx.config import CycloneBaseCase
+    from gkx.geometry import ensure_flux_tube_geometry_data
+
+    grid_cfg = GridConfig(
+        Nx=8, Ny=16, Nz=8, Lx=6.28, Ly=6.28, boundary="linked", jtwist=1
+    )
+    cfg = CycloneBaseCase(grid=grid_cfg)
+    grid = build_spectral_grid(cfg.grid)
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
+    options = dict(
+        fprim=0.8,
+        tprim=2.49,
+        kpar_scale=float(geom.gradpar()),
+        nu=0.0,
+        nu_hyper_m=1.0,
+        hypercollisions_kz=1.0,
+    )
+    options.update(param_overrides)
+    params = LinearParams(**options)
+    Nl, Nm = 2, 4
+    cache = build_linear_cache(grid, geom, params, Nl, Nm)
+    rng = np.random.default_rng(9)
+    shape = (Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
+    G0 = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    return cache, params, G0
+
+
+def _shared_route_calls(monkeypatch):
+    calls: list[bool] = []
+    shared = assembly_mod._shared_linked_streaming_hypercollisions
+
+    def counting(*args, **kwargs):
+        result = shared(*args, **kwargs)
+        calls.append(result is not None)
+        return result
+
+    monkeypatch.setattr(
+        assembly_mod, "_shared_linked_streaming_hypercollisions", counting
+    )
+    return calls
+
+
+def test_linked_streaming_and_hypercollisions_share_the_chain_transform(
+    monkeypatch,
+) -> None:
+    """Q9: one stacked transform per chain class gives the separate terms.
+
+    Every named term, the total and the state VJP match the separate
+    streaming and hypercollision transforms (measured bitwise for the primal
+    terms on XLA:CPU; the tolerance leaves room for FFT batch-layout roundoff).
+    """
+
+    import jax
+
+    cache, params, G0 = _linked_pilot_rhs_case()
+    assert len(cache.linked_indices) >= 3
+    term_cfg = TermConfig(hypercollisions=1.0)
+    cotangent = jnp.conj(G0[::-1])
+
+    def run():
+        total, _fields, contrib = assemble_rhs_terms_cached(
+            G0, cache, params, terms=term_cfg
+        )
+        grad = jax.grad(
+            lambda g: jnp.real(
+                jnp.vdot(
+                    cotangent, assemble_rhs_cached(g, cache, params, terms=term_cfg)[0]
+                )
+            )
+        )(G0)
+        return total, contrib, grad
+
+    calls = _shared_route_calls(monkeypatch)
+    total, contrib, grad = run()
+    assert calls and all(calls)
+    monkeypatch.setattr(
+        assembly_mod,
+        "_shared_linked_streaming_hypercollisions",
+        lambda *args, **kwargs: None,
+    )
+    total_ref, contrib_ref, grad_ref = run()
+    assert float(jnp.linalg.norm(contrib_ref["hypercollisions"])) > 0.0
+    for key in contrib_ref:
+        np.testing.assert_allclose(
+            np.asarray(contrib[key]), np.asarray(contrib_ref[key]), rtol=1e-6, atol=1e-6
+        )
+    np.testing.assert_allclose(
+        np.asarray(total), np.asarray(total_ref), rtol=1e-6, atol=1e-6
+    )
+    np.testing.assert_allclose(
+        np.asarray(grad), np.asarray(grad_ref), rtol=1e-6, atol=1e-5
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["hypercollision_weight_zero", "kz_branch_off", "streaming_off", "periodic"],
+)
+def test_shared_linked_transform_falls_back_when_a_term_is_static_off(
+    monkeypatch, case
+) -> None:
+    if case == "periodic":
+        grid = build_spectral_grid(GridConfig(Nx=4, Ny=4, Nz=8, Lx=6.28, Ly=6.28))
+        geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
+        params = LinearParams(hypercollisions_kz=1.0, kpar_scale=float(geom.gradpar()))
+        cache = build_linear_cache(grid, geom, params, 2, 4)
+        shape = (2, 4, grid.ky.size, grid.kx.size, grid.z.size)
+        G0 = jnp.ones(shape, dtype=jnp.complex64)
+    else:
+        overrides = {"kz_branch_off": dict(hypercollisions_kz=0.0)}.get(case, {})
+        cache, params, G0 = _linked_pilot_rhs_case(**overrides)
+    term_cfg = {
+        "hypercollision_weight_zero": TermConfig(hypercollisions=0.0),
+        "streaming_off": TermConfig(hypercollisions=1.0, streaming=0.0),
+    }.get(case, TermConfig(hypercollisions=1.0))
+    calls = _shared_route_calls(monkeypatch)
+    assemble_rhs_terms_cached(G0, cache, params, terms=term_cfg)
+    assert calls == [False]
+
+
+# ---- from test_linear_streaming.py ----
+# Unit tests for low-level term operators.
+
+
+def test_fft_z_operators_preserve_complex64_with_float64_wavenumbers() -> None:
+    """FFT multipliers must not promote complex64 states under x64/sharding."""
+
+    nz = 8
+    z = jnp.linspace(0.0, 2.0 * jnp.pi, nz, endpoint=False)
+    dz = z[1] - z[0]
+    f = jnp.exp(1j * z).astype(jnp.complex64)
+    kz = jnp.asarray(2.0 * jnp.pi * jnp.fft.fftfreq(nz, d=dz), dtype=jnp.float64)
+
+    out_periodic = grad_z_periodic(f, kz=kz)
+
+    linked_f = jnp.stack([f, 0.5j * f], axis=0)[None, ...]
+    idx_map = jnp.asarray([[0, 1]], dtype=jnp.int32)
+    kz_link = jnp.asarray(
+        2.0 * jnp.pi * jnp.fft.fftfreq(2 * nz, d=dz), dtype=jnp.float64
+    )
+    out_linked = grad_z_linked_fft(
+        linked_f, dz=dz, linked_indices=(idx_map,), linked_kz=(kz_link,)
+    )
+    out_abs = abs_z_linked_fft(
+        linked_f, linked_indices=(idx_map,), linked_kz=(kz_link,)
+    )
+
+    assert out_periodic.dtype == jnp.complex64
+    assert out_linked.dtype == jnp.complex64
+    assert out_abs.dtype == jnp.complex64
+
+
+def test_grad_z_periodic_requires_dz_or_kz() -> None:
+    with pytest.raises(ValueError):
+        grad_z_periodic(jnp.ones((8,)))
+
+
+@pytest.mark.parametrize("nlinks,nz", [(1, 7), (1, 8), (3, 3), (2, 4)])
+@pytest.mark.parametrize("linked", [False, True])
+def test_fft_highest_modes_and_ad_contract(nlinks, nz, linked) -> None:
+    """Analytic DFT eigenvalues and AD; even Nyquist uses -N/2, unlike GX."""
+    n = nlinks * nz
+    dz = 0.3
+    modes = (-(n // 2), (n - 1) // 2)
+    kz = 2 * jnp.pi * jnp.fft.fftfreq(n, d=dz)
+    order = jnp.arange(nlinks - 1, -1, -1)
+
+    def derivative(value):
+        if linked:
+            return grad_z_linked_fft(
+                value, dz=dz, linked_indices=(order[None, :],), linked_kz=(kz,)
+            )
+        return grad_z_periodic(value, dz=dz)
+
+    for mode in modes:
+        wave = jnp.exp(2j * jnp.pi * mode * jnp.arange(n) / n)
+        if linked:
+            wave = wave.reshape(nlinks, nz)[order][None, ...]
+        expected = (2j * jnp.pi * mode / (n * dz)) * wave
+        actual, tangent = jax.jvp(jax.jit(derivative), (wave,), (wave,))
+        if not linked:
+            assert jnp.allclose(grad_z_periodic(wave, kz=kz), actual, atol=3e-5)
+        assert jnp.allclose(actual, expected, rtol=3e-5, atol=3e-5)
+        assert jnp.allclose(tangent, expected, rtol=3e-5, atol=3e-5)
+        # Real parameter pullback avoids ambiguous complex-gradient conventions.
+        gradient = jax.grad(
+            lambda amplitude: jnp.real(jnp.vdot(expected, derivative(amplitude * wave)))
+        )(1.0)
+        assert jnp.allclose(gradient, jnp.real(jnp.vdot(expected, expected)), rtol=3e-5)
+
+
+def test_grad_z_linked_fft_with_inverse_permutation_matches_scatter_path() -> None:
+    ny, nx, nz = 1, 2, 8
+    z = jnp.linspace(0.0, 2.0 * jnp.pi, nz, endpoint=False)
+    dz = z[1] - z[0]
+    f = jnp.zeros((ny, nx, nz), dtype=jnp.complex64)
+    f = f.at[0, 0, :].set(jnp.exp(1j * z))
+    f = f.at[0, 1, :].set(2.0 * jnp.exp(1j * 2.0 * z))
+
+    idx_map = jnp.asarray([[1, 0]], dtype=jnp.int32)
+    kz_link = 2.0 * jnp.pi * jnp.fft.fftfreq(2 * nz, d=dz)
+    inv = jnp.asarray([1, 0], dtype=jnp.int32)
+
+    out_scatter = grad_z_linked_fft(
+        f,
+        dz=dz,
+        linked_indices=(idx_map,),
+        linked_kz=(kz_link,),
+    )
+    out_perm = grad_z_linked_fft(
+        f,
+        dz=dz,
+        linked_indices=(idx_map,),
+        linked_kz=(kz_link,),
+        linked_inverse_permutation=inv,
+        linked_full_cover=True,
+    )
+    assert jnp.allclose(out_perm, out_scatter, atol=1.0e-5)
+
+
+def test_linked_fft_gather_paths_match_scatter_for_derivative_and_abs() -> None:
+    ny, nx, nz = 1, 2, 8
+    z = jnp.linspace(0.0, 2.0 * jnp.pi, nz, endpoint=False)
+    dz = z[1] - z[0]
+    f = jnp.zeros((ny, nx, nz), dtype=jnp.complex64)
+    f = f.at[0, 0, :].set(jnp.exp(1j * z))
+    f = f.at[0, 1, :].set((0.5 + 0.25j) * jnp.exp(1j * 2.0 * z))
+    idx_map = jnp.asarray([[0, 1]], dtype=jnp.int32)
+    kz_link = 2.0 * jnp.pi * jnp.fft.fftfreq(2 * nz, d=dz)
+    gather_map = jnp.asarray([0, 1], dtype=jnp.int32)
+    gather_mask = jnp.asarray([True, True])
+
+    grad_scatter = grad_z_linked_fft(
+        f, dz=dz, linked_indices=(idx_map,), linked_kz=(kz_link,)
+    )
+    grad_gather = grad_z_linked_fft(
+        f,
+        dz=dz,
+        linked_indices=(idx_map,),
+        linked_kz=(kz_link,),
+        linked_gather_map=gather_map,
+        linked_gather_mask=gather_mask,
+        linked_use_gather=True,
+    )
+    abs_scatter = abs_z_linked_fft(f, linked_indices=(idx_map,), linked_kz=(kz_link,))
+    abs_gather = abs_z_linked_fft(
+        f,
+        linked_indices=(idx_map,),
+        linked_kz=(kz_link,),
+        linked_gather_map=gather_map,
+        linked_gather_mask=gather_mask,
+        linked_use_gather=True,
+    )
+
+    assert jnp.allclose(grad_gather, grad_scatter, atol=1.0e-5)
+    assert jnp.allclose(abs_gather, abs_scatter, atol=1.0e-5)
+
+
+def test_grad_z_linked_fft_restores_negative_ky_rows_by_conjugate_symmetry() -> None:
+    ny, nx, nz = 8, 4, 8
+    z = jnp.linspace(0.0, 2.0 * jnp.pi, nz, endpoint=False)
+    dz = z[1] - z[0]
+    f = jnp.zeros((ny, nx, nz), dtype=jnp.complex64)
+    f = f.at[1, 0, :].set(jnp.exp(1j * z))
+    f = f.at[1, 1, :].set((1.0 - 0.5j) * jnp.exp(1j * 2.0 * z))
+    kx_neg = jnp.asarray([0, 3, 2, 1], dtype=jnp.int32)
+    f = f.at[7, :, :].set(jnp.conj(jnp.take(f[1], kx_neg, axis=0)))
+
+    idx_map = jnp.asarray([[1, 1 + ny]], dtype=jnp.int32)
+    kz_link = 2.0 * jnp.pi * jnp.fft.fftfreq(2 * nz, d=dz)
+    out = grad_z_linked_fft(
+        f,
+        dz=dz,
+        linked_indices=(idx_map,),
+        linked_kz=(kz_link,),
+    )
+
+    assert jnp.max(jnp.abs(out[7])) > 0.0
+    assert jnp.allclose(out[7], jnp.conj(jnp.take(out[1], kx_neg, axis=0)), atol=1.0e-5)
+
+
+def test_abs_z_linked_fft_restores_negative_ky_rows_by_conjugate_symmetry() -> None:
+    ny, nx, nz = 8, 4, 8
+    z = jnp.linspace(0.0, 2.0 * jnp.pi, nz, endpoint=False)
+    f = jnp.zeros((ny, nx, nz), dtype=jnp.complex64)
+    f = f.at[1, 0, :].set(jnp.exp(1j * z))
+    f = f.at[1, 1, :].set((1.0 + 0.25j) * jnp.exp(1j * 2.0 * z))
+    kx_neg = jnp.asarray([0, 3, 2, 1], dtype=jnp.int32)
+    f = f.at[7, :, :].set(jnp.conj(jnp.take(f[1], kx_neg, axis=0)))
+
+    idx_map = jnp.asarray([[1, 1 + ny]], dtype=jnp.int32)
+    kz_link = 2.0 * jnp.pi * jnp.fft.fftfreq(2 * nz, d=z[1] - z[0])
+    out = abs_z_linked_fft(
+        f,
+        linked_indices=(idx_map,),
+        linked_kz=(kz_link,),
+    )
+
+    assert jnp.max(jnp.abs(out[7])) > 0.0
+    assert jnp.allclose(out[7], jnp.conj(jnp.take(out[1], kx_neg, axis=0)), atol=1.0e-5)
+
+
+def test_linked_fft_validates_inputs() -> None:
+    f = jnp.ones((1, 2, 8), dtype=jnp.complex64)
+    dz = jnp.asarray(0.1)
+    kz = 2.0 * jnp.pi * jnp.fft.fftfreq(16, d=dz)
+    with pytest.raises(ValueError):
+        grad_z_linked_fft(f, dz=dz, linked_indices=(), linked_kz=())
+    with pytest.raises(ValueError):
+        grad_z_linked_fft(
+            f,
+            dz=dz,
+            linked_indices=(jnp.asarray([[0, 1]], dtype=jnp.int32),),
+            linked_kz=(),
+        )
+    with pytest.raises(ValueError):
+        grad_z_linked_fft(
+            f,
+            dz=dz,
+            linked_indices=(jnp.asarray([0, 1], dtype=jnp.int32),),
+            linked_kz=(kz,),
+        )
+    with pytest.raises(ValueError):
+        grad_z_linked_fft(
+            f,
+            dz=dz,
+            linked_indices=(jnp.asarray([[0, 1]], dtype=jnp.int32),),
+            linked_kz=(kz,),
+            linked_full_cover=True,
+        )
+    with pytest.raises(ValueError):
+        abs_z_linked_fft(f, linked_indices=(), linked_kz=())
+    with pytest.raises(ValueError):
+        abs_z_linked_fft(
+            f,
+            linked_indices=(jnp.asarray([[0, 1]], dtype=jnp.int32),),
+            linked_kz=(),
+        )
+    with pytest.raises(ValueError):
+        abs_z_linked_fft(
+            f,
+            linked_indices=(jnp.asarray([0, 1], dtype=jnp.int32),),
+            linked_kz=(kz,),
+        )
+    with pytest.raises(ValueError):
+        abs_z_linked_fft(
+            f,
+            linked_indices=(jnp.asarray([[0, 1]], dtype=jnp.int32),),
+            linked_kz=(kz,),
+            linked_full_cover=True,
+        )
+
+
+def test_shift_axis_edge_cases() -> None:
+    arr = jnp.asarray([1.0, 2.0, 3.0, 4.0])
+    assert jnp.allclose(shift_axis(arr, 0, axis=0), arr)
+    assert jnp.allclose(shift_axis(arr, 1, axis=0), jnp.asarray([2.0, 3.0, 4.0, 0.0]))
+    assert jnp.allclose(shift_axis(arr, -1, axis=0), jnp.asarray([0.0, 1.0, 2.0, 3.0]))
+    assert jnp.allclose(shift_axis(arr, 10, axis=0), jnp.zeros_like(arr))
+    assert jnp.allclose(shift_axis(arr, -10, axis=0), jnp.zeros_like(arr))
+
+
+def test_hermite_laguerre_operators_shapes_and_values() -> None:
+    G = jnp.zeros((2, 3, 4, 1, 1, 1))
+    G = G.at[0, 1, 2, 0, 0, 0].set(1.0)
+    hv = apply_hermite_v(G)
+    hv2 = apply_hermite_v2(G)
+    lx = apply_laguerre_x(G)
+    assert hv.shape == G.shape
+    assert hv2.shape == G.shape
+    assert lx.shape == G.shape
+    assert jnp.isfinite(hv).all()
+    assert jnp.isfinite(hv2).all()
+    assert jnp.isfinite(lx).all()
+
+
+def test_streaming_term_periodic_and_linked_paths() -> None:
+    ns, nl, nm, ny, nx, nz = 1, 2, 3, 1, 2, 8
+    z = jnp.linspace(0.0, 2.0 * jnp.pi, nz, endpoint=False)
+    dz = z[1] - z[0]
+    kz = 2.0 * jnp.pi * jnp.fft.fftfreq(nz, d=dz)
+    H = jnp.zeros((ns, nl, nm, ny, nx, nz), dtype=jnp.complex64)
+    H = H.at[0, 0, 0, 0, 0, :].set(jnp.exp(1j * z))
+    sqrt_p, sqrt_m = hermite_ladder_coeffs(nm - 1)
+    sqrt_p = sqrt_p[:nm].reshape((1, 1, nm, 1, 1, 1))
+    sqrt_m = sqrt_m[:nm].reshape((1, 1, nm, 1, 1, 1))
+    vth = jnp.ones((1, 1, 1, 1, 1, 1), dtype=jnp.float32)
+
+    out_periodic = streaming_ladder_term(
+        H, kz=kz, vth=vth, sqrt_p=sqrt_p, sqrt_m=sqrt_m
+    )
+    assert out_periodic.shape == H.shape
+    assert jnp.isfinite(out_periodic).all()
+
+    idx_map = jnp.asarray([[0, 1]], dtype=jnp.int32)
+    kz_link = 2.0 * jnp.pi * jnp.fft.fftfreq(2 * nz, d=dz)
+    out_linked = streaming_ladder_term(
+        H,
+        kz=kz,
+        vth=vth,
+        sqrt_p=sqrt_p,
+        sqrt_m=sqrt_m,
+        dz=dz,
+        use_twist_shift=True,
+        linked_indices=(idx_map,),
+        linked_kz=(kz_link,),
+    )
+    assert out_linked.shape == H.shape
+    assert jnp.isfinite(out_linked).all()
+
+
+def test_streaming_term_linked_fd_and_errors() -> None:
+    ns, nl, nm, ny, nx, nz = 1, 1, 3, 1, 2, 8
+    H = jnp.ones((ns, nl, nm, ny, nx, nz), dtype=jnp.complex64)
+    dz = jnp.asarray(0.2)
+    kz = 2.0 * jnp.pi * jnp.fft.fftfreq(nz, d=dz)
+    sqrt_p, sqrt_m = hermite_ladder_coeffs(nm - 1)
+    sqrt_p = sqrt_p[:nm].reshape((1, 1, nm, 1, 1, 1))
+    sqrt_m = sqrt_m[:nm].reshape((1, 1, nm, 1, 1, 1))
+    vth = jnp.ones((1, 1, 1, 1, 1, 1), dtype=jnp.float32)
+    kx_link_plus = jnp.asarray([[1, 0]], dtype=jnp.int32)
+    kx_link_minus = jnp.asarray([[1, 0]], dtype=jnp.int32)
+    kx_mask = jnp.asarray([[True, True]])
+    out = streaming_ladder_term(
+        H,
+        kz=kz,
+        vth=vth,
+        sqrt_p=sqrt_p,
+        sqrt_m=sqrt_m,
+        dz=dz,
+        use_twist_shift=True,
+        kx_link_plus=kx_link_plus,
+        kx_link_minus=kx_link_minus,
+        kx_mask_plus=kx_mask,
+        kx_mask_minus=kx_mask,
+    )
+    assert out.shape == H.shape
+    assert jnp.isfinite(out).all()
+
+    with pytest.raises(ValueError):
+        streaming_ladder_term(
+            H, kz=kz, vth=vth, sqrt_p=sqrt_p, sqrt_m=sqrt_m, use_twist_shift=True
+        )
+    with pytest.raises(ValueError):
+        streaming_ladder_term(
+            H,
+            kz=kz,
+            vth=vth,
+            sqrt_p=sqrt_p,
+            sqrt_m=sqrt_m,
+            dz=dz,
+            use_twist_shift=True,
+        )
+    with pytest.raises(ValueError):
+        streaming_ladder_term(
+            H,
+            kz=kz,
+            vth=vth,
+            sqrt_p=sqrt_p,
+            sqrt_m=sqrt_m,
+            dz=dz,
+            use_twist_shift=True,
+            kx_link_plus=kx_link_plus,
+            kx_link_minus=kx_link_minus,
+        )
+
+
+def test_terms_positive_validation_checks() -> None:
+    _check_positive(1.0, "x")
+    _check_positive(jnp.asarray([1.0, 2.0]), "arr")
+    with pytest.raises(ValueError):
+        _check_positive(0.0, "x")
+    with pytest.raises(ValueError):
+        _check_positive(jnp.asarray([1.0, 0.0]), "arr")
+
+
+def test_terms_positive_validation_skips_tracer_runtime_checks() -> None:
+    @jax.jit
+    def f(x: jnp.ndarray) -> jnp.ndarray:
+        _check_positive(x, "x")
+        return x + 1.0
+
+    out = f(jnp.asarray(0.0))
+    assert float(out) == 1.0
+
+
+def test_streaming_positive_validation_is_the_shared_guard() -> None:
+    """Streaming validates a concrete ``dz`` under ``jit`` like everything else.
+
+    The streaming kernels carried their own copy of the guard, and that copy
+    asked whether a ``jnp`` round trip of its argument was traced -- true of
+    every argument inside a trace -- so ``dz`` and ``vth`` went unchecked in
+    every jitted run. One guard now answers for the whole linear operator.
+    """
+
+    from gkx.operators.linear import params as linear_params
+    from gkx.operators.linear import streaming as streaming_mod
+
+    assert streaming_mod._check_positive is linear_params._check_positive
+
+    seen: dict[str, str | None] = {}
+
+    def probe(x: jnp.ndarray) -> jnp.ndarray:
+        try:
+            _check_positive(0.0, "dz")
+            seen["dz"] = None
+        except ValueError as exc:
+            seen["dz"] = str(exc)
+        return x
+
+    jax.jit(probe)(jnp.asarray(1.0))
+    assert seen["dz"] == "dz must be > 0"
+
+
+def test_terms_package_lazy_exports() -> None:
+    assert callable(term_pkg.assemble_rhs_cached)
+    assert callable(term_pkg.assemble_rhs_cached_jit)
+    with pytest.raises(AttributeError):
+        _ = term_pkg.not_a_real_symbol
+
+
+def test_terms_config_pytrees_roundtrip() -> None:
+    cfg = TermConfig(streaming=0.5, nonlinear=0.25, bpar=0.0)
+    leaves, treedef = jax.tree_util.tree_flatten(cfg)
+    cfg_rt = jax.tree_util.tree_unflatten(treedef, leaves)
+    assert cfg_rt == cfg
+
+    state = FieldState(phi=jnp.ones((2, 2)), apar=jnp.zeros((2, 2)), bpar=None)
+    leaves_s, tree_s = jax.tree_util.tree_flatten(state)
+    state_rt = jax.tree_util.tree_unflatten(tree_s, leaves_s)
+    assert jnp.allclose(state_rt.phi, state.phi)
+    assert jnp.allclose(state_rt.apar, state.apar)
+    assert state_rt.bpar is None
+
+
+# --- Q9 (plan 5.3 N2): stacked operands share one transform per chain class ---
+
+_CHAIN_MIXES = (
+    ((3, 1),),
+    ((2, 1), (1, 2)),
+    ((4, 1), (2, 2), (1, 3), (1, 5)),
+)
+
+
+def _chain_mix_maps(classes, *, ny: int, nx: int, nz: int, dz: float):
+    """Chain maps ``ky + ny * kx`` over distinct modes, one class per length."""
+
+    import numpy as np
+
+    modes = iter(ky + ny * kx for kx in range(nx) for ky in range(ny))
+    indices = tuple(
+        np.asarray(
+            [[next(modes) for _ in range(nlinks)] for _ in range(nchains)], np.int32
+        )
+        for nchains, nlinks in classes
+    )
+    kz = tuple(2.0 * np.pi * np.fft.fftfreq(nlinks * nz, d=dz) for _, nlinks in classes)
+    return indices, kz
+
+
+def _per_chain_reference(f, indices, *, nz: int, dz: float, operator: str):
+    """One numpy FFT per chain, of that chain's own length ``nLinks * nz``."""
+
+    import numpy as np
+
+    f = np.asarray(f)
+    ny = f.shape[-3]
+    out = np.zeros_like(f)
+    for idx in indices:
+        for chain in idx:
+            rows = [(int(m) % ny, int(m) // ny) for m in chain]
+            signal = np.concatenate([f[..., y, x, :] for y, x in rows], axis=-1)
+            k = 2.0 * np.pi * np.fft.fftfreq(signal.shape[-1], d=dz)
+            multiplier = 1j * k if operator == "grad" else np.abs(k)
+            result = np.fft.ifft(multiplier * np.fft.fft(signal, axis=-1), axis=-1)
+            for link, (y, x) in enumerate(rows):
+                out[..., y, x, :] = result[..., link * nz : (link + 1) * nz]
+    return out
+
+
+@pytest.mark.parametrize("classes", _CHAIN_MIXES)
+@pytest.mark.parametrize("route", ["gather", "full_cover", "scatter"])
+def test_stacked_linked_fft_matches_per_class_operators(classes, route) -> None:
+    """Slot i of the stacked call is the per-class operator i on operand i.
+
+    Ny=2 keeps the conjugate restore out of the reference (row 1 is its own
+    partner); the full-cover route needs every mode in a chain, the others
+    leave three modes outside all chains, which must come back zero.
+    """
+
+    import numpy as np
+
+    from gkx.operators.linear.cache_builder import _linked_fft_gather_metadata
+    from gkx.operators.linear.streaming import _linked_fft_apply
+
+    ny, nz, dz = 2, 4, 0.3
+    n_chain_modes = sum(nchains * nlinks for nchains, nlinks in classes)
+    nx = -(-n_chain_modes // ny) if route == "full_cover" else n_chain_modes // ny + 2
+    if route == "full_cover" and n_chain_modes % ny:
+        pytest.skip("full cover needs an even mode count on Ny=2")
+    indices, kz = _chain_mix_maps(classes, ny=ny, nx=nx, nz=nz, dz=dz)
+    inverse, full_cover, gather_map, gather_mask, use_gather = (
+        _linked_fft_gather_metadata(indices, n_modes=ny * nx)
+    )
+    options = {
+        "gather": dict(
+            linked_gather_map=gather_map,
+            linked_gather_mask=gather_mask,
+            linked_use_gather=use_gather,
+        ),
+        "full_cover": dict(
+            linked_inverse_permutation=inverse, linked_full_cover=full_cover
+        ),
+        "scatter": {},
+    }[route]
+    if route == "full_cover":
+        assert full_cover
+    rng = np.random.default_rng(len(classes))
+    shape = (1, 2, 3, ny, nx, nz)
+    f = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    g = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    kz_dev = tuple(jnp.asarray(k, dtype=jnp.real(f).dtype) for k in kz)
+
+    stacked = _linked_fft_apply(
+        (f, g), indices, kz_dev, operator=("grad", "abs"), **options
+    )
+    swapped = _linked_fft_apply(
+        (g, f), indices, kz_dev, operator=("abs", "grad"), **options
+    )
+    assert stacked.shape == (2, *shape)
+    for slot, (operand, operator) in enumerate(((f, "grad"), (g, "abs"))):
+        single = _linked_fft_apply(
+            operand, indices, kz_dev, operator=operator, **options
+        )
+        reference = _per_chain_reference(
+            operand, indices, nz=nz, dz=dz, operator=operator
+        )
+        scale = float(np.max(np.abs(reference)))
+        np.testing.assert_allclose(
+            np.asarray(stacked[slot]), np.asarray(single), rtol=1e-6, atol=1e-6 * scale
+        )
+        np.testing.assert_allclose(
+            np.asarray(swapped[1 - slot]),
+            np.asarray(single),
+            rtol=1e-6,
+            atol=1e-6 * scale,
+        )
+        np.testing.assert_allclose(
+            np.asarray(single), reference, rtol=1e-5, atol=1e-5 * scale
+        )
+
+
+def test_stacked_linked_fft_validates_operands() -> None:
+    from gkx.operators.linear.streaming import _linked_fft_apply
+
+    idx = (jnp.asarray([[0, 1]], dtype=jnp.int32),)
+    kz = (2.0 * jnp.pi * jnp.fft.fftfreq(8, d=0.3),)
+    f = jnp.zeros((1, 2, 4), dtype=jnp.complex64)
+    with pytest.raises(ValueError, match="one operator each"):
+        _linked_fft_apply((f, f), idx, kz, operator="grad")
+    with pytest.raises(ValueError, match="one operator each"):
+        _linked_fft_apply((f, f), idx, kz, operator=("grad",))
+    with pytest.raises(ValueError, match="share shape and dtype"):
+        _linked_fft_apply((f, f[..., :2]), idx, kz, operator=("grad", "abs"))
+    with pytest.raises(ValueError, match="unsupported linked FFT operator"):
+        _linked_fft_apply((f, f), idx, kz, operator=("grad", "curl"))

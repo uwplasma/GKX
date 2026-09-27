@@ -6,13 +6,433 @@ from collections.abc import Callable, Iterable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from typing import Any
-
 import jax
+import numpy as np
+import jax.numpy as jnp
+from collections import Counter
+from collections.abc import Sequence
+from typing import Literal, TypeVar
 
-from gkx.parallel.identity import (
-    ParallelIdentityReport,
-    parallel_identity_report,
+
+IndependentWorkload = Literal[
+    "independent_ky_scan",
+    "uq_ensemble",
+    "optimization_ensemble",
+]
+DiagnosticWorkload = Literal["diagnostic_nonlinear_domain"]
+DecompositionWorkload = IndependentWorkload | DiagnosticWorkload
+ClaimLevel = Literal[
+    "production_independent_batching",
+    "diagnostic_nonlinear_domain_partition",
+]
+
+_INDEPENDENT_WORKLOADS: frozenset[str] = frozenset(
+    {"independent_ky_scan", "uq_ensemble", "optimization_ensemble"}
 )
+
+T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class ShardAssignment:
+    """A deterministic contiguous assignment of serial indices to one shard."""
+
+    shard_id: int
+    start: int
+    stop: int
+    indices: tuple[int, ...]
+    label: str
+
+    @property
+    def size(self) -> int:
+        """Number of serial items assigned to this shard."""
+
+        return len(self.indices)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the assignment."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class DecompositionContract:
+    """Claim-scoped shard assignment contract for a parallelization path."""
+
+    workload: DecompositionWorkload
+    claim_level: ClaimLevel
+    claim_label: str
+    n_items: int
+    requested_shards: int
+    actual_shards: int
+    shards: tuple[ShardAssignment, ...]
+    independent_work: bool
+    changes_solver_layout: bool
+    state_shape: tuple[int, ...] | None = None
+    axis: int | None = None
+
+    @property
+    def production_independent_batching(self) -> bool:
+        """Whether this contract is for production independent-work batching."""
+
+        return self.claim_level == "production_independent_batching"
+
+    @property
+    def diagnostic_nonlinear_partition(self) -> bool:
+        """Whether this contract is diagnostic nonlinear-domain metadata."""
+
+        return self.claim_level == "diagnostic_nonlinear_domain_partition"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the contract."""
+
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ReconstructionIdentityReport:
+    """Serial reconstruction identity report for a decomposition contract."""
+
+    workload: DecompositionWorkload
+    claim_level: ClaimLevel
+    claim_label: str
+    n_items: int
+    requested_shards: int
+    actual_shards: int
+    identity_passed: bool
+    expected_indices: tuple[int, ...]
+    reconstructed_indices: tuple[int, ...]
+    missing_indices: tuple[int, ...]
+    duplicate_indices: tuple[int, ...]
+    out_of_range_indices: tuple[int, ...]
+    out_of_order: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly representation of the report."""
+
+        return asdict(self)
+
+
+def _validate_count(name: str, value: int, *, allow_zero: bool) -> int:
+    count = int(value)
+    minimum = 0 if allow_zero else 1
+    if count < minimum:
+        qualifier = "non-negative" if allow_zero else ">= 1"
+        raise ValueError(f"{name} must be {qualifier}")
+    return count
+
+
+def _balanced_assignments(
+    *,
+    workload: DecompositionWorkload,
+    n_items: int,
+    requested_shards: int,
+    label_prefix: str,
+) -> tuple[ShardAssignment, ...]:
+    n = _validate_count("n_items", n_items, allow_zero=True)
+    requested = _validate_count("requested_shards", requested_shards, allow_zero=False)
+    if n == 0:
+        return ()
+
+    actual = min(requested, n)
+    base, remainder = divmod(n, actual)
+    assignments: list[ShardAssignment] = []
+    start = 0
+    for shard_id in range(actual):
+        size = base + (1 if shard_id < remainder else 0)
+        stop = start + size
+        indices = tuple(range(start, stop))
+        label = f"{label_prefix}:shard_{shard_id:03d}:items_{start:06d}_{stop:06d}"
+        assignments.append(
+            ShardAssignment(
+                shard_id=shard_id,
+                start=start,
+                stop=stop,
+                indices=indices,
+                label=label,
+            )
+        )
+        start = stop
+    if start != n:  # pragma: no cover - defensive invariant check
+        raise AssertionError(f"{workload} assignments did not cover all items")
+    return tuple(assignments)
+
+
+def _independent_claim_label(workload: IndependentWorkload) -> str:
+    if workload == "independent_ky_scan":
+        portfolio = "independent ky scan"
+    elif workload == "uq_ensemble":
+        portfolio = "independent UQ ensemble"
+    elif workload == "optimization_ensemble":
+        portfolio = "independent optimization ensemble"
+    else:  # pragma: no cover - protected by caller validation
+        raise ValueError(f"unknown independent workload: {workload}")
+    return (
+        f"production independent batching contract for {portfolio}; "
+        "serial ordering and reconstruction identity only; "
+        "not a nonlinear state-domain decomposition speedup claim"
+    )
+
+
+def build_independent_portfolio_decomposition(
+    n_items: int,
+    *,
+    requested_shards: int,
+    workload: IndependentWorkload,
+) -> DecompositionContract:
+    """Build a production independent-work decomposition contract.
+
+    The assignment is deterministic, balanced, contiguous, and contains no
+    empty shards. It covers release-ready independent portfolios only:
+    ``independent_ky_scan``, ``uq_ensemble``, and
+    ``optimization_ensemble``.
+    """
+
+    if workload not in _INDEPENDENT_WORKLOADS:
+        raise ValueError(
+            "workload must be 'independent_ky_scan', 'uq_ensemble', "
+            "or 'optimization_ensemble'"
+        )
+    n = _validate_count("n_items", n_items, allow_zero=True)
+    requested = _validate_count(
+        "requested_shards",
+        requested_shards,
+        allow_zero=False,
+    )
+    shards = _balanced_assignments(
+        workload=workload,
+        n_items=n,
+        requested_shards=requested,
+        label_prefix=workload,
+    )
+    return DecompositionContract(
+        workload=workload,
+        claim_level="production_independent_batching",
+        claim_label=_independent_claim_label(workload),
+        n_items=n,
+        requested_shards=requested,
+        actual_shards=len(shards),
+        shards=shards,
+        independent_work=True,
+        changes_solver_layout=False,
+    )
+
+
+def shard_sequence(
+    values: Sequence[T],
+    contract: DecompositionContract,
+) -> tuple[tuple[T, ...], ...]:
+    """Return values grouped according to a decomposition contract."""
+
+    items = tuple(values)
+    if len(items) != contract.n_items:
+        raise ValueError("values length must match contract.n_items")
+    return tuple(
+        tuple(items[index] for index in shard.indices) for shard in contract.shards
+    )
+
+
+def reconstruct_serial(
+    contract: DecompositionContract,
+    shard_values: Sequence[Sequence[T]],
+) -> tuple[T, ...]:
+    """Reassemble shard values into serial index order."""
+
+    if len(shard_values) != contract.actual_shards:
+        raise ValueError("shard_values length must match contract.actual_shards")
+
+    reconstructed: list[Any] = [None] * contract.n_items
+    filled = [False] * contract.n_items
+    for shard, values in zip(contract.shards, shard_values, strict=True):
+        shard_tuple = tuple(values)
+        if len(shard_tuple) != shard.size:
+            raise ValueError("each shard value group must match its assignment size")
+        for index, value in zip(shard.indices, shard_tuple, strict=True):
+            if index < 0 or index >= contract.n_items:
+                raise ValueError("shard assignment index out of range")
+            if filled[index]:
+                raise ValueError("shard assignments contain duplicate indices")
+            reconstructed[index] = value
+            filled[index] = True
+
+    if not all(filled):
+        raise ValueError("shard assignments do not cover all serial indices")
+    return tuple(reconstructed)
+
+
+def _coverage(
+    contract: DecompositionContract,
+) -> tuple[
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    tuple[int, ...],
+    bool,
+]:
+    expected = tuple(range(contract.n_items))
+    reconstructed = tuple(index for shard in contract.shards for index in shard.indices)
+    counts = Counter(reconstructed)
+    missing = tuple(index for index in expected if counts[index] == 0)
+    duplicates = tuple(index for index, count in sorted(counts.items()) if count > 1)
+    out_of_range = tuple(
+        index for index in reconstructed if index < 0 or index >= contract.n_items
+    )
+    out_of_order = reconstructed != expected
+    return expected, reconstructed, missing, duplicates, out_of_range, out_of_order
+
+
+def _default_equal(left: T, right: T) -> bool:
+    if left is right:
+        return True
+    try:
+        return bool(left == right)
+    except (TypeError, ValueError):
+        return False
+
+
+def serial_reconstruction_identity_report(
+    values: Sequence[T],
+    contract: DecompositionContract,
+    *,
+    equal: Callable[[T, T], bool] | None = None,
+) -> ReconstructionIdentityReport:
+    """Check that contract sharding reassembles exactly to serial order."""
+
+    items = tuple(values)
+    shards = shard_sequence(items, contract)
+    reconstructed_values = reconstruct_serial(contract, shards)
+    (
+        expected_indices,
+        reconstructed_indices,
+        missing,
+        duplicates,
+        out_of_range,
+        out_of_order,
+    ) = _coverage(contract)
+    comparator = equal or _default_equal
+    values_match = len(reconstructed_values) == len(items) and all(
+        comparator(left, right)
+        for left, right in zip(reconstructed_values, items, strict=True)
+    )
+    identity_passed = bool(
+        values_match
+        and not missing
+        and not duplicates
+        and not out_of_range
+        and not out_of_order
+    )
+    return ReconstructionIdentityReport(
+        workload=contract.workload,
+        claim_level=contract.claim_level,
+        claim_label=contract.claim_label,
+        n_items=contract.n_items,
+        requested_shards=contract.requested_shards,
+        actual_shards=contract.actual_shards,
+        identity_passed=identity_passed,
+        expected_indices=expected_indices,
+        reconstructed_indices=reconstructed_indices,
+        missing_indices=missing,
+        duplicate_indices=duplicates,
+        out_of_range_indices=out_of_range,
+        out_of_order=out_of_order,
+    )
+
+
+@dataclass(frozen=True)
+class ParallelIdentityReport:
+    """Numerical-identity report for an independent parallel execution path."""
+
+    kind: str
+    backend: str
+    requested_workers: int
+    actual_workers: int
+    problem_size: int
+    identity_passed: bool
+    max_abs_error: float
+    max_rel_error: float
+    atol: float
+    rtol: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable report for artifacts and CI gates."""
+
+        return asdict(self)
+
+
+def _tree_error_stats(reference: Any, observed: Any) -> tuple[float, float]:
+    """Return max absolute and relative errors for matching pytrees."""
+
+    ref_leaves, ref_tree = jax.tree_util.tree_flatten(reference)
+    obs_leaves, obs_tree = jax.tree_util.tree_flatten(observed)
+    if repr(ref_tree) != repr(obs_tree):
+        raise ValueError("reference and observed pytrees have different structures")
+    if not ref_leaves:
+        return 0.0, 0.0
+
+    max_abs = 0.0
+    max_rel = 0.0
+    for ref_leaf, obs_leaf in zip(ref_leaves, obs_leaves, strict=True):
+        ref = np.asarray(ref_leaf)
+        obs = np.asarray(obs_leaf)
+        if ref.shape != obs.shape:
+            raise ValueError(
+                f"reference and observed leaf shapes differ: {ref.shape} != {obs.shape}"
+            )
+        delta = np.abs(obs - ref)
+        abs_err = float(np.max(delta)) if delta.size else 0.0
+        scale = float(np.max(np.abs(ref))) if ref.size else 0.0
+        rel_err = abs_err / max(scale, np.finfo(float).tiny)
+        max_abs = max(max_abs, abs_err)
+        max_rel = max(max_rel, rel_err)
+    return max_abs, max_rel
+
+
+def parallel_identity_report(
+    reference: Any,
+    observed: Any,
+    *,
+    kind: str,
+    problem_size: int,
+    requested_workers: int,
+    actual_workers: int | None = None,
+    backend: str | None = None,
+    atol: float = 1e-12,
+    rtol: float = 1e-10,
+    metadata: dict[str, Any] | None = None,
+) -> ParallelIdentityReport:
+    """Build a numerical-identity report for serial-vs-parallel outputs."""
+
+    requested = int(requested_workers)
+    actual = int(requested if actual_workers is None else actual_workers)
+    size = int(problem_size)
+    tolerance_atol = float(atol)
+    tolerance_rtol = float(rtol)
+    if requested < 1:
+        raise ValueError("requested_workers must be >= 1")
+    if actual < 1 or actual > requested:
+        raise ValueError("actual_workers must be in [1, requested_workers]")
+    if size < 1:
+        raise ValueError("problem_size must be >= 1")
+    if tolerance_atol < 0.0 or tolerance_rtol < 0.0:
+        raise ValueError("atol and rtol must be non-negative")
+
+    max_abs, max_rel = _tree_error_stats(reference, observed)
+    passed = bool(max_abs <= tolerance_atol or max_rel <= tolerance_rtol)
+    return ParallelIdentityReport(
+        kind=str(kind),
+        backend=str(backend or jax.default_backend()),
+        requested_workers=requested,
+        actual_workers=actual,
+        problem_size=size,
+        identity_passed=passed,
+        max_abs_error=max_abs,
+        max_rel_error=max_rel,
+        atol=tolerance_atol,
+        rtol=tolerance_rtol,
+        metadata=dict(metadata or {}),
+    )
 
 
 @dataclass(frozen=True)
@@ -276,12 +696,6 @@ def _ensemble_reconstruction(
     *,
     workload: str,
 ) -> _EnsembleReconstruction:
-    from gkx.parallel.decomposition import (
-        build_independent_portfolio_decomposition,
-        reconstruct_serial,
-        serial_reconstruction_identity_report,
-        shard_sequence,
-    )
 
     contract = build_independent_portfolio_decomposition(
         worker_metadata.problem_size,
@@ -614,7 +1028,149 @@ def independent_map_identity_report(
     )
 
 
+def split_evenly(values: np.ndarray, n_parts: int) -> list[np.ndarray]:
+    """Split an array into nonempty, nearly equal chunks along axis zero."""
+
+    arr = np.asarray(values)
+    parts = int(n_parts)
+    if parts < 1:
+        raise ValueError("n_parts must be >= 1")
+    if arr.shape[0] == 0:
+        return []
+    return [
+        chunk
+        for chunk in np.array_split(arr, min(parts, arr.shape[0]), axis=0)
+        if chunk.shape[0] > 0
+    ]
+
+
+def pad_to_multiple(values: jnp.ndarray, multiple: int) -> tuple[jnp.ndarray, int]:
+    """Pad axis zero by edge repetition so its length is divisible by ``multiple``."""
+
+    arr = jnp.asarray(values)
+    n = int(arr.shape[0])
+    m = int(multiple)
+    if m < 1:
+        raise ValueError("multiple must be >= 1")
+    if n == 0:
+        raise ValueError("cannot pad an empty batch")
+    remainder = n % m
+    if remainder == 0:
+        return arr, n
+    pad = m - remainder
+    tail = jnp.repeat(arr[-1:], pad, axis=0)
+    return jnp.concatenate([arr, tail], axis=0), n
+
+
+def _concat_batch_outputs(outputs: list[Any]) -> Any:
+    """Concatenate a sequence of batched array or pytree outputs."""
+
+    if not outputs:
+        raise ValueError("cannot concatenate an empty batch output list")
+    return jax.tree_util.tree_map(
+        lambda *parts: jnp.concatenate(parts, axis=0), *outputs
+    )
+
+
+def batch_map(
+    fn: Callable[[jnp.ndarray], Any],
+    values: jnp.ndarray | np.ndarray,
+    *,
+    batch_size: int | None = None,
+    devices: Iterable[jax.Device] | None = None,
+) -> Any:
+    """Map ``fn`` over independent inputs with optional multi-device batching.
+
+    This helper is intended for embarrassingly parallel physics workloads such
+    as linear ``k_y`` scans, parameter sweeps, and UQ ensembles. It preserves
+    numerical identity with ``jax.vmap(fn)(values)`` while allowing the leading
+    batch axis to be distributed over available devices when more than one
+    device is supplied.
+    """
+
+    arr = jnp.asarray(values)
+    if arr.shape[0] == 0:
+        raise ValueError("values must contain at least one item")
+    chunk_size = int(arr.shape[0] if batch_size is None else batch_size)
+    if chunk_size < 1:
+        raise ValueError("batch_size must be >= 1")
+
+    device_list = list(devices) if devices is not None else list(jax.devices())
+    chunks = jnp.array_split(arr, int(np.ceil(arr.shape[0] / chunk_size)), axis=0)
+    if len(device_list) < 2:
+        return _concat_batch_outputs([jax.vmap(fn)(chunk) for chunk in chunks])
+
+    ndev = len(device_list)
+    per_device = max(1, int(np.ceil(chunk_size / ndev)))
+    pmapped = jax.pmap(lambda shard: jax.vmap(fn)(shard), devices=device_list)
+    outputs = []
+    for chunk in chunks:
+        padded, original_n = pad_to_multiple(chunk, ndev * per_device)
+        sharded = padded.reshape((ndev, per_device) + tuple(padded.shape[1:]))
+        mapped = pmapped(sharded)
+        outputs.append(
+            jax.tree_util.tree_map(
+                lambda leaf: jnp.asarray(leaf).reshape(
+                    (ndev * per_device,) + tuple(jnp.asarray(leaf).shape[2:])
+                )[:original_n],
+                mapped,
+            )
+        )
+    return _concat_batch_outputs(outputs)
+
+
+def batch_map_identity_report(
+    fn: Callable[[jnp.ndarray], Any],
+    values: jnp.ndarray | np.ndarray,
+    *,
+    batch_size: int | None = None,
+    devices: Iterable[jax.Device] | None = None,
+    atol: float = 1e-12,
+    rtol: float = 1e-10,
+) -> ParallelIdentityReport:
+    """Compare ``batch_map`` against ``vmap`` and return a CI-ready gate report."""
+
+    arr = jnp.asarray(values)
+    if arr.shape[0] == 0:
+        raise ValueError("values must contain at least one item")
+    device_list = list(devices) if devices is not None else list(jax.devices())
+    requested = max(1, len(device_list))
+    observed = batch_map(fn, arr, batch_size=batch_size, devices=device_list)
+    reference = jax.vmap(fn)(arr)
+    return parallel_identity_report(
+        reference,
+        observed,
+        kind="batch_map_serial_identity",
+        problem_size=int(arr.shape[0]),
+        requested_workers=requested,
+        actual_workers=min(requested, int(arr.shape[0])),
+        backend=jax.default_backend(),
+        atol=atol,
+        rtol=rtol,
+        metadata={
+            "batch_size": None if batch_size is None else int(batch_size),
+            "tree": str(jax.tree_util.tree_structure(reference)),
+        },
+    )
+
+
+def ky_scan_batches(ky_values: np.ndarray, *, n_batches: int) -> list[np.ndarray]:
+    """Return balanced ``k_y`` chunks for independent linear-scan execution."""
+
+    ky = np.asarray(ky_values, dtype=float)
+    if ky.ndim != 1:
+        raise ValueError("ky_values must be one-dimensional")
+    return split_evenly(ky, n_batches)
+
+
 __all__ = [
+    "ParallelIdentityReport",
+    "parallel_identity_report",
+    "batch_map",
+    "batch_map_identity_report",
+    "ky_scan_batches",
+    "pad_to_multiple",
+    "split_evenly",
     "IndependentEnsembleProvenanceReport",
     "IndependentMapExecutionError",
     "IndependentWorkerMetadata",

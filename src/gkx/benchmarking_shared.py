@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, replace
 from importlib import resources
-from typing import Any, Sequence, TypeVar
+from typing import Sequence, TypeVar
 
 import jax.numpy as jnp
 import numpy as np
@@ -13,8 +12,6 @@ import numpy as np
 from gkx.config import InitializationConfig
 from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.params import Species, build_linear_params
-from gkx.diagnostics.analysis import fit_growth_rate, fit_growth_rate_auto
-from gkx.diagnostics.growth_rates import _normalize_growth_rate
 from gkx.diagnostics.modes import ModeSelection
 from gkx.diagnostics.normalization import (
     CYCLONE_NORMALIZATION,
@@ -29,247 +26,6 @@ from gkx.solvers_linear_krylov import KrylovConfig
 
 VALID_FIT_SIGNALS = frozenset({"phi", "density", "auto"})
 _Record = TypeVar("_Record")
-
-
-def _is_array_like(value: Any) -> bool:
-    """Return whether a scan option is an indexed per-ky value."""
-
-    return isinstance(value, (list, tuple, np.ndarray))
-
-
-def _iter_ky_batches(
-    ky_values: np.ndarray,
-    *,
-    ky_batch: int,
-    fixed_batch_shape: bool,
-):
-    """Yield ky batches with optional edge padding for fixed-shape compilation."""
-
-    n = int(len(ky_values))
-    if ky_batch <= 1:
-        for idx in range(n):
-            ky = float(ky_values[idx])
-            yield idx, np.asarray([ky], dtype=float), 1
-        return
-    for start in range(0, n, ky_batch):
-        raw = np.asarray(ky_values[start : start + ky_batch], dtype=float)
-        valid = int(raw.size)
-        if valid == 0:
-            continue
-        if fixed_batch_shape and valid < ky_batch:
-            pad = np.full((ky_batch - valid,), raw[-1], dtype=float)
-            batch = np.concatenate([raw, pad], axis=0)
-        else:
-            batch = raw
-        yield start, batch, valid
-
-
-def _resolve_streaming_window(
-    t_total: float,
-    tmin: float | None,
-    tmax: float | None,
-    start_fraction: float,
-    window_fraction: float,
-    end_fraction: float,
-) -> tuple[float, float]:
-    """Resolve the sampled time window used for streaming linear fits."""
-
-    if tmin is not None and tmax is not None:
-        return float(tmin), float(tmax)
-    t_start = float(start_fraction) * t_total
-    t_end = float(end_fraction) * t_total
-    t_end = min(t_end, t_start + float(window_fraction) * t_total)
-    if t_end <= t_start:
-        t_end = t_total
-    return t_start, t_end
-
-
-def normalize_solver_key(solver: str) -> str:
-    """Normalize a benchmark solver selector to canonical GKX keys."""
-
-    return solver.strip().lower().replace("-", "_")
-
-
-def normalize_fit_signal(fit_signal: str) -> str:
-    """Normalize and validate benchmark fit-signal selectors."""
-
-    fit_key = fit_signal.strip().lower()
-    if fit_key not in VALID_FIT_SIGNALS:
-        raise ValueError("fit_signal must be 'phi', 'density', or 'auto'")
-    return fit_key
-
-
-def apply_auto_fit_scan_policy(
-    fit_key: str, *, streaming_fit: bool, mode_only: bool
-) -> tuple[bool, bool]:
-    """Disable streaming and mode-only saves when auto signal selection needs both fields."""
-
-    if fit_key == "auto":
-        return False, False
-    return streaming_fit, mode_only
-
-
-def resolve_scan_mode_method(mode_method: str, *, mode_only: bool) -> str:
-    """Use direct mode extraction when a runner saved only a mode time series."""
-
-    if mode_only and mode_method not in {"z_index", "max"}:
-        return "z_index"
-    return mode_method
-
-
-def indexed_float_value(value: Any, idx: int) -> float | None:
-    """Return a scalar or indexed scan value as ``float`` for window policies."""
-
-    if value is None:
-        return None
-    if isinstance(value, (list, tuple, np.ndarray)):
-        return float(value[idx])
-    return float(value)
-
-
-def indexed_scan_value(value: Any, idx: int) -> Any:
-    """Return a scalar or indexed scan value while preserving non-float types."""
-
-    if value is None:
-        return None
-    if isinstance(value, np.ndarray):
-        return value[idx].item()
-    if isinstance(value, (list, tuple)):
-        return value[idx]
-    return value
-
-
-def scan_window_valid(
-    t: np.ndarray, tmin: float | None, tmax: float | None, *, min_points: int = 2
-) -> bool:
-    """Return whether an explicit fit window contains enough sampled points."""
-
-    if tmin is None or tmax is None:
-        return False
-    mask = (t >= tmin) & (t <= tmax)
-    return int(np.count_nonzero(mask)) >= int(min_points)
-
-
-def should_use_ky_batch(
-    *,
-    ky_batch: int,
-    solver_key: str,
-    dt: Any,
-    steps: Any,
-    tmin: Any,
-    tmax: Any,
-) -> bool:
-    """Return whether a ky scan can use a fixed-shape batch path."""
-
-    if ky_batch < 1:
-        raise ValueError("ky_batch must be >= 1")
-    return (
-        ky_batch > 1
-        and solver_key != "krylov"
-        and not _is_array_like(dt)
-        and not _is_array_like(steps)
-        and not _is_array_like(tmin)
-        and not _is_array_like(tmax)
-    )
-
-
-@dataclass(frozen=True)
-class ScanFitWindowPolicy:
-    """Window-selection and normalization policy shared by benchmark scans."""
-
-    tmin: Any = None
-    tmax: Any = None
-    auto_window: bool = True
-    window_fraction: float = 0.3
-    min_points: int = 20
-    start_fraction: float = 0.0
-    growth_weight: float = 0.0
-    require_positive: bool = False
-    min_amp_fraction: float = 0.0
-    max_fraction: float = 0.8
-    end_fraction: float = 0.9
-    max_amp_fraction: float = 0.9
-    phase_weight: float = 0.2
-    length_weight: float = 0.05
-    min_r2: float = 0.0
-    late_penalty: float = 0.1
-    min_slope: float | None = None
-    min_slope_frac: float = 0.0
-    slope_var_weight: float = 0.0
-    window_method: str = "loglinear"
-    fit_growth_rate_fn: Callable[..., tuple[float, float]] = fit_growth_rate
-    fit_growth_rate_auto_fn: Callable[..., tuple[float, float, float, float]] = (
-        fit_growth_rate_auto
-    )
-    normalize_growth_rate_fn: Callable[
-        [float, float, LinearParams, str], tuple[float, float]
-    ] = _normalize_growth_rate
-
-    def window_at(self, idx: int) -> tuple[float | None, float | None]:
-        return indexed_float_value(self.tmin, idx), indexed_float_value(self.tmax, idx)
-
-    def use_auto_window(
-        self, t: np.ndarray, idx: int
-    ) -> tuple[bool, float | None, float | None]:
-        tmin_i, tmax_i = self.window_at(idx)
-        use_auto = self.auto_window and tmin_i is None and tmax_i is None
-        if not use_auto and not scan_window_valid(t, tmin_i, tmax_i):
-            use_auto = True
-        return use_auto, tmin_i, tmax_i
-
-    def auto_kwargs(self) -> dict[str, Any]:
-        return {
-            "window_fraction": self.window_fraction,
-            "min_points": self.min_points,
-            "start_fraction": self.start_fraction,
-            "growth_weight": self.growth_weight,
-            "require_positive": self.require_positive,
-            "min_amp_fraction": self.min_amp_fraction,
-            "max_fraction": self.max_fraction,
-            "end_fraction": self.end_fraction,
-            "max_amp_fraction": self.max_amp_fraction,
-            "phase_weight": self.phase_weight,
-            "length_weight": self.length_weight,
-            "min_r2": self.min_r2,
-            "late_penalty": self.late_penalty,
-            "min_slope": self.min_slope,
-            "min_slope_frac": self.min_slope_frac,
-            "slope_var_weight": self.slope_var_weight,
-            "window_method": self.window_method,
-        }
-
-    def fit_signal(
-        self,
-        signal: np.ndarray,
-        *,
-        idx: int,
-        dt: float,
-        stride: int,
-        params: LinearParams,
-        diagnostic_norm: str,
-    ) -> tuple[float, float]:
-        """Fit one scan signal and apply the configured diagnostic normalization."""
-
-        t = np.arange(signal.shape[0]) * float(dt) * int(stride)
-        use_auto, tmin_i, tmax_i = self.use_auto_window(t, idx)
-        if use_auto:
-            gamma, omega, _tmin, _tmax = self.fit_growth_rate_auto_fn(
-                t,
-                signal,
-                **self.auto_kwargs(),
-            )
-        else:
-            try:
-                gamma, omega = self.fit_growth_rate_fn(
-                    t, signal, tmin=tmin_i, tmax=tmax_i
-                )
-            except ValueError:
-                gamma, omega, _tmin, _tmax = self.fit_growth_rate_auto_fn(
-                    t,
-                    signal,
-                    **self.auto_kwargs(),
-                )
-        return self.normalize_growth_rate_fn(gamma, omega, params, diagnostic_norm)
 
 
 CYCLONE_OMEGA_D_SCALE = CYCLONE_NORMALIZATION.omega_d_scale
@@ -334,12 +90,6 @@ def _apply_reference_hypercollisions(
         hypercollisions_const=0.0,
         hypercollisions_kz=1.0,
     )
-
-
-def _linked_boundary_end_damping(reference_aligned: bool) -> tuple[float, float]:
-    if reference_aligned:
-        return REFERENCE_DAMP_ENDS_AMP, REFERENCE_DAMP_ENDS_WIDTHFRAC
-    return 0.0, 0.0
 
 
 def _two_species_params(
@@ -418,68 +168,6 @@ def _two_species_params(
     return params
 
 
-def _electron_only_params(
-    model,
-    *,
-    kpar_scale: float,
-    omega_d_scale: float,
-    omega_star_scale: float,
-    rho_star: float,
-    beta_override: float | None = None,
-    fapar_override: float | None = None,
-    apar_beta_scale: float | None = None,
-    ampere_g0_scale: float | None = None,
-    bpar_beta_scale: float | None = None,
-    damp_ends_amp: float | None = None,
-    damp_ends_widthfrac: float | None = None,
-    nhermite: int | None = None,
-) -> LinearParams:
-    """Build ``LinearParams`` for kinetic electrons with Boltzmann ions."""
-
-    mass_ratio = float(model.mass_ratio)
-    if mass_ratio <= 0.0:
-        raise ValueError("mass_ratio must be > 0")
-    Te_over_Ti = float(model.Te_over_Ti)
-    if Te_over_Ti <= 0.0:
-        raise ValueError("Te_over_Ti must be > 0")
-
-    nu_e = float(getattr(model, "nu_e", 0.0))
-    beta = float(getattr(model, "beta", 1.0e-5))
-    if beta_override is not None:
-        beta = float(beta_override)
-
-    electron = Species(
-        charge=-1.0,
-        mass=1.0 / mass_ratio,
-        density=1.0,
-        temperature=Te_over_Ti,
-        tprim=float(model.tprim_e),
-        fprim=float(model.fprim),
-        nu=nu_e,
-    )
-    params = build_linear_params(
-        [electron],
-        tau_e=Te_over_Ti,
-        kpar_scale=kpar_scale,
-        omega_d_scale=omega_d_scale,
-        omega_star_scale=omega_star_scale,
-        rho_star=rho_star,
-        beta=beta,
-        fapar=1.0 if beta > 0.0 else 0.0,
-        apar_beta_scale=0.5 if apar_beta_scale is None else float(apar_beta_scale),
-        ampere_g0_scale=0.5 if ampere_g0_scale is None else float(ampere_g0_scale),
-        bpar_beta_scale=0.5 if bpar_beta_scale is None else float(bpar_beta_scale),
-    )
-    params = _apply_reference_hypercollisions(params, nhermite=nhermite)
-    if fapar_override is not None:
-        params = replace(params, fapar=float(fapar_override))
-    if damp_ends_amp is not None:
-        params = replace(params, damp_ends_amp=float(damp_ends_amp))
-    if damp_ends_widthfrac is not None:
-        params = replace(params, damp_ends_widthfrac=float(damp_ends_widthfrac))
-    return params
-
-
 KBM_EXPLICIT_SOLVER_LOCK: tuple[tuple[float, str], ...] = (
     (0.10, "explicit_time"),
     (0.30, "explicit_time"),
@@ -496,47 +184,6 @@ def _midplane_index(grid: SpectralGrid) -> int:
         return 0
     idx = int(grid.z.size // 2 + 1)
     return min(idx, int(grid.z.size) - 1)
-
-
-def select_kbm_solver_auto(
-    solver: str,
-    *,
-    ky_target: float,
-    reference_aligned: bool | None = None,
-) -> str:
-    """Return deterministic KBM solver choice for auto mode."""
-
-    solver_key = solver.strip().lower()
-    if solver_key != "auto":
-        return solver_key
-    if not bool(True if reference_aligned is None else reference_aligned):
-        return "time"
-    ky_abs = abs(float(ky_target))
-    for ky_ref, solver_ref in KBM_EXPLICIT_SOLVER_LOCK:
-        if abs(ky_abs - ky_ref) <= KBM_EXPLICIT_SOLVER_LOCK_TOL:
-            return solver_ref
-    return "explicit_time"
-
-
-def _kbm_use_multi_target_krylov(
-    kcfg: KrylovConfig,
-    targets: Sequence[float] | None,
-    *,
-    shift: complex | None,
-) -> bool:
-    """Return whether KBM benchmark helpers should sweep target factors."""
-
-    if targets is None:
-        return False
-    if kcfg.mode_family.strip().lower() != "kbm":
-        return False
-    if kcfg.method.strip().lower() != "shift_invert":
-        return False
-    if shift is not None:
-        return False
-    if kcfg.shift_selection.strip().lower() == "shift":
-        return False
-    return True
 
 
 CYCLONE_KRYLOV_DEFAULT = KrylovConfig(
@@ -650,31 +297,10 @@ class CycloneReference:
 
 
 @dataclass(frozen=True)
-class CycloneRunResult:
-    t: np.ndarray
-    phi_t: np.ndarray
-    gamma: float
-    omega: float
-    ky: float
-    selection: ModeSelection
-
-
-@dataclass(frozen=True)
 class CycloneScanResult:
     ky: np.ndarray
     gamma: np.ndarray
     omega: np.ndarray
-
-
-@dataclass(frozen=True)
-class CycloneComparison:
-    ky: float
-    gamma: float
-    omega: float
-    gamma_ref: float
-    omega_ref: float
-    rel_gamma: float
-    rel_omega: float
 
 
 @dataclass(frozen=True)
@@ -711,17 +337,6 @@ def load_cyclone_reference() -> CycloneReference:
     return _load_csv_reference("cyclone_reference_adiabatic.csv")
 
 
-def _load_reference_with_header(filename: str) -> CycloneReference:
-    """Load reference CSVs with columns ky,gamma,omega."""
-
-    data_path = resources.files("gkx").joinpath("data", filename)
-    arr = np.genfromtxt(str(data_path), delimiter=",", names=True, dtype=float)
-    ky = np.atleast_1d(np.asarray(arr["ky"], dtype=float))
-    gamma = np.atleast_1d(np.asarray(arr["gamma"], dtype=float))
-    omega = np.atleast_1d(np.asarray(arr["omega"], dtype=float))
-    return CycloneReference(ky=ky, omega=omega, gamma=gamma)
-
-
 def load_cyclone_reference_kinetic() -> CycloneReference:
     """Load Cyclone base case reference data (kinetic electrons)."""
 
@@ -748,27 +363,6 @@ def load_tem_reference() -> CycloneReference:
     """
 
     return _load_csv_reference("tem_reference.csv")
-
-
-def compare_cyclone_to_reference(
-    result: CycloneRunResult, reference: CycloneReference
-) -> CycloneComparison:
-    """Compare a Cyclone run result against the reference data set."""
-
-    idx = int(np.argmin(np.abs(reference.ky - result.ky)))
-    gamma_ref = float(reference.gamma[idx])
-    omega_ref = float(reference.omega[idx])
-    rel_gamma = (result.gamma - gamma_ref) / gamma_ref if gamma_ref != 0.0 else np.nan
-    rel_omega = (result.omega - omega_ref) / omega_ref if omega_ref != 0.0 else np.nan
-    return CycloneComparison(
-        ky=float(reference.ky[idx]),
-        gamma=result.gamma,
-        omega=result.omega,
-        gamma_ref=gamma_ref,
-        omega_ref=omega_ref,
-        rel_gamma=rel_gamma,
-        rel_omega=rel_omega,
-    )
 
 
 def _build_gaussian_profile(
@@ -857,18 +451,6 @@ def _build_initial_condition(
 __all__ = [
     "resources",
     "VALID_FIT_SIGNALS",
-    "_is_array_like",
-    "_iter_ky_batches",
-    "_resolve_streaming_window",
-    "normalize_solver_key",
-    "normalize_fit_signal",
-    "apply_auto_fit_scan_policy",
-    "resolve_scan_mode_method",
-    "indexed_float_value",
-    "indexed_scan_value",
-    "scan_window_valid",
-    "should_use_ky_batch",
-    "ScanFitWindowPolicy",
     "CYCLONE_OMEGA_D_SCALE",
     "CYCLONE_OMEGA_STAR_SCALE",
     "CYCLONE_RHO_STAR",
@@ -892,14 +474,10 @@ __all__ = [
     "REFERENCE_DAMP_ENDS_WIDTHFRAC",
     "_reference_hypercollision_power",
     "_apply_reference_hypercollisions",
-    "_linked_boundary_end_damping",
     "_two_species_params",
-    "_electron_only_params",
     "KBM_EXPLICIT_SOLVER_LOCK",
     "KBM_EXPLICIT_SOLVER_LOCK_TOL",
     "_midplane_index",
-    "select_kbm_solver_auto",
-    "_kbm_use_multi_target_krylov",
     "CYCLONE_KRYLOV_DEFAULT",
     "KINETIC_KRYLOV_DEFAULT",
     "KINETIC_KRYLOV_REFERENCE_ALIGNED",
@@ -907,19 +485,15 @@ __all__ = [
     "KBM_KRYLOV_DEFAULT",
     "TEM_KRYLOV_DEFAULT",
     "CycloneReference",
-    "CycloneRunResult",
     "CycloneScanResult",
-    "CycloneComparison",
     "LinearRunResult",
     "LinearScanResult",
     "_load_csv_reference",
     "load_cyclone_reference",
-    "_load_reference_with_header",
     "load_cyclone_reference_kinetic",
     "load_kbm_reference",
     "load_etg_reference",
     "load_tem_reference",
-    "compare_cyclone_to_reference",
     "_build_gaussian_profile",
     "_build_initial_condition",
 ]

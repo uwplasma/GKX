@@ -9,7 +9,7 @@ declarations into the block of ``docs/verification_matrix.rst`` between the
     python scripts/validation_matrix.py --check   # exit 1 if the block is stale
 
 Parity percentages are recomputed from each row's artifact with the formula
-``tests/release/test_evidence_ledger.py`` uses for the README table:
+``tests/release/test_release_gates.py`` uses for the README table:
 ``100 * max|gkx - ref| / max|ref|`` over the tracked scan.
 """
 

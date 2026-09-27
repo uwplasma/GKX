@@ -19,7 +19,7 @@ Running against an older jax does not fail with a version message. It fails
 with a `TypeError` deep inside the objective vector and four Hermite-hierarchy
 physics gates going red, which reads as "the physics is broken". A measurement
 was recorded in the project plan on that basis and had to be withdrawn.
-`tests/unit/api/test_public_types.py` now checks the floor and says what to do.
+`tests/unit/core/test_core_numerics.py` now checks the floor and says what to do.
 
 Run tests the way the nightly job does:
 

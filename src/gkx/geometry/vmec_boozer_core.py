@@ -8,7 +8,6 @@ import importlib
 from importlib import resources as importlib_resources
 from pathlib import Path
 from typing import Any
-
 import jax.numpy as jnp
 import numpy as np
 
@@ -23,22 +22,65 @@ from gkx.geometry.numerics import (
     _radial_derivative_array,
     _radial_derivative_profile,
 )
-from gkx.geometry.vmec_boozer_constants import (
-    _VMEC_BOOZER_PARITY_MIN_MODE_COUNT,
-    _cached_booz_xform_constants,
-    _grid_mode_limits,
-    prewarm_vmec_boozer_equal_arc_cache,
-)
 from gkx.geometry.vmec_boozer_derivatives import (
     boozer_cartesian_derivatives,
     boozer_coordinate_gradients,
     evaluate_boozer_field_line_derivatives,
-)
-from gkx.geometry.vmec_boozer_drifts import (
     RawDriftProfiles,
     boozer_pressure_gradient,
     raw_drift_profiles,
 )
+
+
+_VMEC_BOOZER_PARITY_MIN_MODE_COUNT = 21
+
+
+def _grid_mode_limits(ntheta1: int, nzeta: int) -> tuple[int, int]:
+    """Return the ``(m_max, n_max)`` grid-representable Fourier cutoffs.
+
+    ``vmex.core.boozer_tables.boozer_input_tables`` projects every surface on
+    the grid-representable modes ``m = 0..ntheta1//2 - 1`` and
+    ``n = -(nzeta//2 - 1)..nzeta//2 - 1`` (single mode set, wout ordering).
+    The cached constants below must reproduce exactly that mode table.
+    """
+
+    return max(int(ntheta1) // 2 - 1, 0), max(int(nzeta) // 2 - 1, 0)
+
+
+@lru_cache(maxsize=32)
+def _cached_booz_xform_constants(
+    *,
+    nfp: int,
+    ntheta1: int,
+    nzeta: int,
+    mboz: int,
+    nboz: int,
+    asym: bool,
+) -> tuple[Any, Any]:
+    """Prepare Boozer constants outside traced vmex residual callbacks.
+
+    The mode table matches the single grid-representable mode set emitted by
+    ``vmex.core.boozer_tables.boozer_input_tables`` (``xn`` carries ``nfp``;
+    ``xm_nyq``/``xn_nyq`` equal ``xm``/``xn`` because the traceable tables
+    project ``|B|`` and R/Z/lambda on one mode set).
+    """
+
+    fourier_mod = importlib.import_module("vmex.core.fourier")
+    bx = importlib.import_module("booz_xform_jax.jax_api")
+    m_max, n_max = _grid_mode_limits(int(ntheta1), int(nzeta))
+    modes = fourier_mod.mode_table(m_max + 1, n_max)
+    xm = np.asarray(modes.m, dtype=np.int32)
+    xn = np.asarray(modes.n * int(nfp), dtype=np.int32)
+    return bx.prepare_booz_xform_constants(
+        nfp=int(nfp),
+        mboz=int(mboz),
+        nboz=int(nboz),
+        asym=bool(asym),
+        xm=xm,
+        xn=xn,
+        xm_nyq=xm,
+        xn_nyq=xn,
+    )
 
 
 def _import_vmex_boozer_modules() -> tuple[Any, Any]:
@@ -949,7 +991,8 @@ def flux_tube_geometry_from_vmec_boozer_state(  # pragma: no cover
 __all__ = [
     "flux_tube_geometry_from_vmec_boozer_state",
     "load_solved_vmex_case",
-    "prewarm_vmec_boozer_equal_arc_cache",
     "resolve_vmex_case_input_path",
     "vmex_boozer_equal_arc_core_profiles_from_state",
+    "_VMEC_BOOZER_PARITY_MIN_MODE_COUNT",
+    "_cached_booz_xform_constants",
 ]

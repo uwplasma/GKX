@@ -149,7 +149,7 @@ evidence = "requires field-particle terms, conservation, conductivity, zonal dam
 id = "independent_scan_and_ensemble_parallelism"
 group = "required_core"
 status = "validated"
-gkx_owner = "gkx.parallel.independent and gkx.parallel.batch"
+gkx_owner = "gkx.parallel.independent and gkx.parallel.independent"
 comparison_owner = "MPI/CUDA run decomposition"
 evidence = "CPU/GPU numerical-identity and strong-scaling gates for ky scans and UQ ensembles"
 

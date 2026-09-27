@@ -5,6 +5,21 @@ This page says where each equation and each public surface lives, and the rules
 that keep the tree that way. :doc:`architecture` is the module map, and
 :doc:`api` documents every module.
 
+Code map
+--------
+
+Start at ``gkx.load``/``gkx.solve`` (``api/``, ``runtime.py``) and follow the call down:
+
+- ``config.py``, ``workflows/runtime/{toml,wout,startup}.py``: decks, defaults, geometry and initial state.
+- ``runtime.py`` dispatches to ``workflows/linear.py`` or ``workflows/nonlinear.py``; ``cli.py`` wraps both.
+- ``terms/`` and ``operators/``: the gyrokinetic equation (fields, streaming, drifts, collisions, E x B).
+- ``solvers_*.py``: time integrators, Krylov/shift-invert eigensolvers, nonlinear explicit/IMEX steps.
+- ``geometry/``: s-alpha, Miller, VMEC/VMEX flux tubes and the differentiable geometry bridge.
+- ``core_grid.py``, ``core_velocity.py``, ``core_ky_layout.py``: spectral grid and Hermite-Laguerre basis.
+- ``diagnostics/``: growth fits, quasilinear weights, saturation windows; ``objectives/``: differentiable objectives.
+- ``parallel/``: independent maps and velocity/state sharding; ``artifacts/``: NetCDF, summaries, figures.
+- ``tests/`` has one file per domain (``unit/``, ``integration/``, ``validation/``, ``release/``).
+
 Package policy
 --------------
 
@@ -46,7 +61,7 @@ Examples, scripts, and external users may rely on:
 - ``gkx.config``, ``gkx.runtime``, ``gkx.geometry``, ``gkx.cli``;
 - ``gkx.artifacts``, ``gkx.artifacts.plotting``,
   ``gkx.workflows.runtime.artifacts``;
-- ``gkx.parallel`` and ``gkx.operators.nonlinear.parallel``;
+- ``gkx.parallel``;
 - documented scripts under ``benchmarks/``, ``examples/``, and ``tools/``.
 
 These may move as long as public behavior and tests are unchanged:
@@ -59,8 +74,7 @@ Package facades (``gkx.geometry``, ``gkx.parallel``, ``gkx.operators.linear``,
 ``gkx.operators.nonlinear``, ``gkx.diagnostics.analysis``) re-export from the
 owning modules; ``gkx``, ``gkx.api``, ``gkx.parallel``, and the two
 ``gkx.operators`` packages resolve names lazily from static tables.
-Dependency-light contracts such as ``gkx.parallel.decomposition`` must not
-import JAX-heavy solver stacks through a package initializer.
+Package initializers must not import JAX-heavy solver stacks.
 
 Equations to code
 -----------------
@@ -77,33 +91,31 @@ Equations to code
      - ``tests/unit/core/test_core_numerics.py``
    * - Spectral grid, :math:`k_y` layout, dealiasing
      - ``core_grid.py``, ``core_ky_layout.py``
-     - ``tests/unit/core/``
+     - ``tests/unit/core/test_core_numerics.py``
    * - Flux-tube geometry coefficients
      - ``geometry/`` (paths in :doc:`architecture`)
-     - ``tests/unit/geometry/``,
-       ``tests/validation/physics_gates/test_geometry_physics_contracts.py``
+     - ``tests/unit/geometry/test_geometry.py``
    * - Field equations: quasineutrality, Ampère, perpendicular pressure balance
      - ``terms/fields.py`` (``solve_fields``); ``operators/linear/moments.py``
        (``quasineutrality_phi``, ``build_H``)
      - ``tests/unit/operators/test_terms_fields.py``,
-       ``tests/unit/linear/test_linear_moments_invariants.py``
+       ``tests/unit/linear/test_linear.py``
    * - Parallel streaming, Hermite closure, mirror force
      - ``terms/linear_terms.py``, ``operators/linear/streaming.py``
-     - ``tests/unit/operators/test_linear_streaming.py``,
-       ``tests/validation/physics_gates/test_hermite_hierarchy_physics.py``
+     - ``tests/unit/operators/test_terms_fields.py``,
+       ``tests/validation/physics_gates/test_collision_physics.py``
    * - Curvature and grad-B drifts, diamagnetic drive
      - ``terms/linear_terms.py``
      - ``tests/unit/linear/test_linear.py``
    * - Collision operators (Dougherty, Sugama and Coulomb six-moment,
        tabulated linearized matrices)
      - ``operators/linear/dissipation.py``, ``operators/linear/collisions.py``,
-       ``operators/linear/collision_tables.py``,
-       ``operators/linear/collision_factory.py``, ``operators/collision.py``
+       ``operators/linear/collision_tables.py``, ``operators/collision.py``
      - ``tests/validation/physics_gates/test_collision_physics.py``,
-       ``tests/unit/operators/test_linear_collisions_coverage.py``
+       ``tests/unit/operators/test_operator_kernels.py``
    * - Hypercollisions, hyperdiffusion, end damping
      - ``operators/linear/dissipation.py``
-     - ``tests/validation/physics_gates/test_end_damping_physics.py``
+     - ``tests/validation/physics_gates/test_collision_physics.py``
    * - Linked (twist-shift) boundary
      - ``operators/linear/linked.py``, ``geometry/core.py``
        (``twist_shift_params``)
@@ -111,7 +123,7 @@ Equations to code
    * - Linear RHS assembly
      - ``terms/assembly.py`` (``assemble_rhs_cached``),
        ``operators/linear/rhs.py``, ``operators/linear/cache_builder.py``
-     - ``tests/unit/operators/test_terms_assembly.py``
+     - ``tests/unit/operators/test_terms_fields.py``
    * - ExB and electromagnetic (flutter) nonlinearity
      - ``terms/nonlinear.py``, ``operators/nonlinear/brackets.py``,
        ``operators/nonlinear/rhs.py``
@@ -144,7 +156,7 @@ Equations to code
      - ``tests/unit/quasilinear/``
    * - Zonal-flow residual and GAM metrics
      - ``diagnostics/zonal_validation.py``
-     - ``tests/validation/physics_gates/test_validation_gates.py``
+     - ``tests/validation/physics_gates/test_collision_physics.py``
    * - Implicit eigenvalue derivatives
      - ``objectives/eigen.py``, ``objectives/autodiff_validation.py``
      - ``tests/unit/objectives/test_autodiff_solver_objectives.py``
@@ -155,8 +167,8 @@ Runtime layers
 --------------
 
 1. Configuration and startup: ``config.py``, ``workflows/runtime/toml.py``,
-   ``workflows/runtime/startup.py``, ``workflows/runtime/policies.py``,
-   ``workflows/runtime/initial_phi.py``, ``workflows/runtime/resolution.py``.
+   ``workflows/runtime/startup.py``, ``workflows/runtime/wout.py``,
+   ``workflows/runtime/resolution.py``.
 2. Execution: ``runtime.py``, ``workflows/linear.py``,
    ``workflows/nonlinear.py``, ``workflows/runtime/chunks.py``,
    ``workflows/runtime/orchestration_scan.py``,
@@ -200,9 +212,8 @@ physics and numerics contracts, fast tests, artifacts, and next tests.
   numerics contract, separate artifact traceability, or high change risk.
 - List a module in an owner row's ``owned_modules`` when it is a narrow helper
   whose contract the owner's tests fully exercise.
-- ``coverage_inventory.excluded_modules`` holds package ``__init__`` files,
-  version metadata, and the small ``solvers_linear``, ``solvers_nonlinear``,
-  and ``solvers_time`` policy facades.
+- ``coverage_inventory.excluded_modules`` holds package ``__init__`` files and
+  version metadata.
 - Record new coverage debt in the owner row's ``next_tests``.
 
 ``tests/release/test_release_gates.py`` cross-checks the manifest: every

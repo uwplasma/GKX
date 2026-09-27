@@ -802,35 +802,6 @@ def _select_fit_signal_auto(
     return best.signal, best.name, best.gamma, best.omega
 
 
-def _extract_mode_only_signal(
-    source: np.ndarray,
-    *,
-    local_idx: int,
-    species_index: int | None = None,
-) -> np.ndarray:
-    """Extract a 1D time trace from reduced mode-only outputs."""
-
-    arr = np.asarray(source)
-    if arr.ndim == 0:
-        return np.asarray([arr], dtype=np.complex128)
-    if arr.ndim == 1:
-        return arr
-
-    # Some save modes return (t, species, ky). Select requested species first.
-    if species_index is not None and arr.ndim >= 3 and arr.shape[1] > 0:
-        idx = min(max(int(species_index), 0), arr.shape[1] - 1)
-        arr = arr[:, idx, ...]
-
-    if arr.ndim == 2:
-        idx = min(max(int(local_idx), 0), arr.shape[1] - 1)
-        return arr[:, idx]
-
-    # Final fallback: flatten non-time axes and select one column.
-    arr2 = arr.reshape(arr.shape[0], -1)
-    idx = min(max(int(local_idx), 0), arr2.shape[1] - 1)
-    return arr2[:, idx]
-
-
 def _normalize_growth_rate(
     gamma: float,
     omega: float,

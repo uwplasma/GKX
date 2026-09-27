@@ -58,10 +58,10 @@ from gkx.geometry.differentiable import (  # noqa: E402
     flux_tube_geometry_from_mapping,
     flux_tube_geometry_observables,
     geometry_inverse_design_report,
-    geometry_observable_names,
     geometry_sensitivity_report,
     vmec_boundary_aspect_sensitivity_report,
 )
+from gkx.geometry.flux_tube_contract import geometry_observable_names  # noqa: E402
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

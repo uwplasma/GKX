@@ -20,6 +20,8 @@ from gkx.geometry.vmec_boozer_core import (
     resolve_vmex_case_input_path,
 )
 from gkx.geometry.vmec_boozer_derivatives import (
+    _BoozerFieldlineSamples,
+    _VMECFieldlineScalars,
     _axisym_flip_required,
     _fieldline_boozer_coordinates,
     _input_iota_shear,
@@ -240,52 +242,6 @@ def _length_two_params(params: jnp.ndarray | None, default: float) -> jnp.ndarra
     if p.ndim != 1 or int(p.shape[0]) != 2:
         raise ValueError("params must be a length-2 vector")
     return p
-
-
-@dataclass(frozen=True)
-class _VMECFieldlineScalars:
-    s: np.ndarray
-    ns: int
-    alpha_arr: np.ndarray
-    d_pressure_d_s: np.ndarray
-    iota: np.ndarray
-    d_iota_d_s: np.ndarray
-    shat: np.ndarray
-    nfp: int
-    edge_toroidal_flux_over_2pi: float
-    toroidal_flux_sign: float
-    L_reference: float
-    B_reference: float
-    R_mag_ax: float
-    zeta_center: float
-    iota_input_val: float
-    s_hat_input_val: float
-    G: np.ndarray
-    boozer_i: np.ndarray
-
-
-@dataclass(frozen=True)
-class _BoozerFieldlineSamples:
-    xm_b: np.ndarray
-    xn_b: np.ndarray
-    rmnc_b: np.ndarray
-    zmns_b: np.ndarray
-    numns_b: np.ndarray
-    d_rmnc_b_d_s: np.ndarray
-    d_zmns_b_d_s: np.ndarray
-    d_numns_b_d_s: np.ndarray
-    gmnc_b: np.ndarray
-    bmnc_b: np.ndarray
-    d_bmnc_b_d_s: np.ndarray
-    theta_b: np.ndarray
-    phi_b: np.ndarray
-    flipit: bool
-    tensors: Any
-    R_b: np.ndarray
-    Z_b: np.ndarray
-    nu_b: np.ndarray
-    Vprime: np.ndarray
-    mnmax_b: int
 
 
 @dataclass(frozen=True)

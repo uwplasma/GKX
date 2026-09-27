@@ -548,7 +548,7 @@ Notable runtime-only keys:
   ``sokal_autocorrelation_time``). It is not a calibrated sequential
   confidence guarantee. Fixed-horizon AR(1) coverage and a drifting-prefix
   rejection control are tested in
-  ``tests/validation/quasilinear/test_quasilinear_window.py``.
+  ``tests/unit/quasilinear/test_quasilinear.py``.
 * ``[time] saturation_min_window``: minimum averaging-window span in time
   units before a run may stop. The effective requirement is the larger of this
   value and twenty integrated autocorrelation times; omitting it retains the

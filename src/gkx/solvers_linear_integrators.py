@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from dataclasses import replace
 from typing import Any, Callable
-
 import jax
 import jax.numpy as jnp
 
 from gkx.operators.collision import CollisionOperator
 from gkx.geometry import FluxTubeGeometryLike
-from gkx.core_grid import SpectralGrid
+from gkx.core_grid import (
+    SpectralGrid,
+    _gyrokinetic_moment_shape,
+)
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.cache_arrays import (
@@ -27,10 +29,11 @@ from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.solvers_linear_implicit import (
     _integrate_linear_implicit_cached,
     _validate_implicit_sample_policy,
-)
-from gkx.solvers_linear_integrator_diagnostics import (
-    _linear_cache_or_build,
-    integrate_linear_diagnostics,
+    _ImplicitSolveOptions,
+    _build_implicit_operator,
+    ImplicitSolveStats,
+    _build_implicit_solve_step,
+    _empty_implicit_solve_stats,
 )
 from gkx.solvers_linear_parallel import (
     _is_electrostatic_field_terms,
@@ -40,14 +43,6 @@ from gkx.solvers_time_explicit_steps import (
     _linear_explicit_stage_update,
     _linear_native_step,
 )
-
-__all__ = [
-    "_integrate_linear_cached",
-    "_integrate_linear_cached_donate",
-    "_integrate_linear_cached_impl",
-    "integrate_linear",
-    "integrate_linear_diagnostics",
-]
 
 
 _LINEAR_METHODS = {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}
@@ -737,3 +732,387 @@ def integrate_linear(
         show_progress=show_progress,
         force_electrostatic_fields=force_electrostatic_fields,
     )
+
+
+def _linear_cache_or_build(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    cache: LinearCache | None,
+    *,
+    cache_builder: Callable[..., LinearCache],
+) -> LinearCache:
+    if cache is not None:
+        return cache
+    Nl, Nm = _gyrokinetic_moment_shape(G0)
+    return cache_builder(grid, geom, params, Nl, Nm)
+
+
+def _initial_state(G0: jnp.ndarray) -> tuple[jnp.ndarray, Any]:
+    base_dtype = jnp.complex128 if _x64_enabled() else jnp.complex64
+    state_dtype = jnp.result_type(G0, base_dtype)
+    G = jnp.asarray(G0, dtype=state_dtype)
+    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
+    return G, real_dtype
+
+
+def _linear_damping(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    real_dtype: Any,
+    *,
+    include_collisions: bool = True,
+    terms: LinearTerms | None = None,
+) -> jnp.ndarray:
+    terms = LinearTerms() if terms is None else terms
+    hyper_damp = terms.hypercollisions * hypercollision_damping(
+        cache, params, real_dtype
+    )
+    if G.ndim == 5 and hyper_damp.ndim == 6:
+        hyper_damp = hyper_damp[0]
+    damping = hyper_damp
+    if include_collisions:
+        damping = damping + terms.collisions * collision_damping(
+            cache, params, real_dtype, squeeze_species=G.ndim == 5
+        )
+    return damping.astype(real_dtype)
+
+
+def _rhs(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    dt_val: jnp.ndarray,
+    collision_operator: Any | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    return linear_rhs_cached(
+        G,
+        cache,
+        params,
+        terms=terms,
+        use_jit=False,
+        dt=dt_val,
+        collision_operator=collision_operator,
+    )
+
+
+def _density_from_state(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    species_index: int | None,
+) -> jnp.ndarray:
+    Jl = cache.Jl
+    if G.ndim == 5:
+        Jl_s = Jl[0] if Jl.ndim == 5 else Jl
+        return jnp.sum(Jl_s * G[:, 0, ...], axis=0)
+    if Jl.ndim == 5:
+        if species_index is None:
+            return jnp.sum(jnp.sum(Jl * G[:, :, 0, ...], axis=1), axis=0)
+        Jl_s = Jl[int(species_index)]
+        return jnp.sum(Jl_s * G[int(species_index), :, 0, ...], axis=0)
+    if species_index is None:
+        return jnp.sum(jnp.sum(Jl[None, ...] * G[:, :, 0, ...], axis=1), axis=0)
+    return jnp.sum(Jl * G[int(species_index), :, 0, ...], axis=0)
+
+
+def _hl_energy_from_state(G: jnp.ndarray) -> jnp.ndarray:
+    if G.ndim == 5:
+        return jnp.sum(jnp.abs(G) ** 2, axis=(2, 3, 4))
+    return jnp.sum(jnp.abs(G) ** 2, axis=(0, 3, 4, 5))
+
+
+def _maybe_emit_progress(
+    G: jnp.ndarray,
+    idx: jnp.ndarray,
+    steps: int,
+    dt_val: jnp.ndarray,
+    phi: jnp.ndarray,
+    density: jnp.ndarray,
+    *,
+    show_progress: bool,
+    step_multiplier: int = 1,
+) -> jnp.ndarray:
+    if not show_progress:
+        return G
+    from gkx.callbacks import print_callback, should_emit_progress
+
+    completed_step = jnp.minimum((idx + 1) * step_multiplier, steps) - 1
+    sim_time = jnp.minimum((idx + 1) * step_multiplier, steps) * dt_val
+    sim_total = jnp.asarray(steps, dtype=dt_val.dtype) * dt_val
+    phi_max = jnp.max(jnp.abs(phi))
+    density_max = jnp.max(jnp.abs(density))
+    return jax.lax.cond(
+        should_emit_progress(completed_step, steps),
+        lambda state: print_callback(
+            state,
+            completed_step,
+            steps,
+            0.0,
+            0.0,
+            phi_max,
+            density_max,
+            sim_time,
+            sim_total,
+            metric_labels=("|phi|_max", "|n|_max"),
+        ),
+        lambda state: state,
+        G,
+    )
+
+
+def _diagnostic_sample(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    dt_val: jnp.ndarray,
+    species_index: int | None,
+    *,
+    record_hl_energy: bool,
+    collision_operator: Any | None = None,
+) -> tuple[jnp.ndarray, ...]:
+    _dG, phi = _rhs(G, cache, params, terms, dt_val, collision_operator)
+    density = _density_from_state(G, cache, species_index)
+    if record_hl_energy:
+        return phi, density, _hl_energy_from_state(G)
+    return phi, density
+
+
+# One step maps (state, carried solve status) to the same pair. Explicit
+# methods carry None; the implicit route folds ImplicitSolveStats.
+AdvanceFn = Callable[[jnp.ndarray, Any], tuple[jnp.ndarray, Any]]
+
+
+def _every_step_scan(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    *,
+    dt_val: jnp.ndarray,
+    steps: int,
+    advance: AdvanceFn,
+    species_index: int | None,
+    record_hl_energy: bool,
+    show_progress: bool,
+    collision_operator: Any | None = None,
+    initial_stats: ImplicitSolveStats | None = None,
+) -> tuple[tuple[jnp.ndarray, Any], tuple[jnp.ndarray, ...]]:
+    def step(carry: tuple[jnp.ndarray, Any], idx: jnp.ndarray):
+        G_out, stats = advance(*carry)
+        outputs = _diagnostic_sample(
+            G_out,
+            cache,
+            params,
+            terms,
+            dt_val,
+            species_index,
+            record_hl_energy=record_hl_energy,
+            collision_operator=collision_operator,
+        )
+        G_out = _maybe_emit_progress(
+            G_out,
+            idx,
+            steps,
+            dt_val,
+            outputs[0],
+            outputs[1],
+            show_progress=show_progress,
+        )
+        return (G_out, stats), outputs
+
+    return jax.lax.scan(step, (G0, initial_stats), jnp.arange(steps))
+
+
+def _strided_sample_scan(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    terms: LinearTerms,
+    *,
+    dt_val: jnp.ndarray,
+    steps: int,
+    sample_stride: int,
+    advance: AdvanceFn,
+    species_index: int | None,
+    record_hl_energy: bool,
+    show_progress: bool,
+    collision_operator: Any | None = None,
+    initial_stats: ImplicitSolveStats | None = None,
+) -> tuple[tuple[jnp.ndarray, Any], tuple[jnp.ndarray, ...]]:
+    def sample_step(carry: tuple[jnp.ndarray, Any], idx: jnp.ndarray):
+        def inner_step(_i: jnp.ndarray, inner: tuple[jnp.ndarray, Any]):
+            return advance(*inner)
+
+        G_out, stats = jax.lax.fori_loop(0, sample_stride, inner_step, carry)
+        outputs = _diagnostic_sample(
+            G_out,
+            cache,
+            params,
+            terms,
+            dt_val,
+            species_index,
+            record_hl_energy=record_hl_energy,
+            collision_operator=collision_operator,
+        )
+        G_out = _maybe_emit_progress(
+            G_out,
+            idx,
+            steps,
+            dt_val,
+            outputs[0],
+            outputs[1],
+            show_progress=show_progress,
+            step_multiplier=sample_stride,
+        )
+        return (G_out, stats), outputs
+
+    num_samples = steps // sample_stride
+    return jax.lax.scan(sample_step, (G0, initial_stats), jnp.arange(num_samples))
+
+
+def integrate_linear_diagnostics(
+    G0: jnp.ndarray,
+    grid: SpectralGrid,
+    geom: FluxTubeGeometryLike,
+    params: LinearParams,
+    dt: float,
+    steps: int,
+    *,
+    method: str = "rk4",
+    cache: LinearCache | None = None,
+    terms: LinearTerms | None = None,
+    sample_stride: int = 1,
+    species_index: int | None = 0,
+    record_hl_energy: bool = False,
+    show_progress: bool = False,
+    collision_operator: Any | None = None,
+    implicit_tol: float = 1.0e-6,
+    implicit_maxiter: int = 200,
+    implicit_iters: int = 3,
+    implicit_relax: float = 0.7,
+    implicit_restart: int = 20,
+    implicit_preconditioner: PreconditionerSpec = None,
+    return_solve_stats: bool = False,
+) -> tuple[Any, ...]:
+    """Integrate and return (G_out, phi_t, density_t) for diagnostics.
+
+    ``record_hl_energy`` appends ``hl_t``. ``return_solve_stats=True`` appends
+    the implicit GMRES convergence summary as the last element
+    (:class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`, or ``None`` for
+    methods without an implicit solve).
+    """
+
+    terms_use = terms or LinearTerms()
+    _validate_implicit_sample_policy(steps=steps, sample_stride=sample_stride)
+    cache_use = _linear_cache_or_build(
+        G0, grid, geom, params, cache, cache_builder=build_linear_cache
+    )
+    G, real_dtype = _initial_state(G0)
+    dt_val = jnp.asarray(dt, dtype=real_dtype)
+    squeeze_species = False
+    if method == "implicit":
+        if collision_operator is not None:
+            raise NotImplementedError(
+                "implicit integration does not support custom collision operators"
+            )
+        G, shape, size, dt_val, precond, matvec, squeeze_species = (
+            _build_implicit_operator(
+                G,
+                cache_use,
+                params,
+                dt,
+                terms_use,
+                implicit_preconditioner,
+            )
+        )
+        advance = _build_implicit_solve_step(
+            cache=cache_use,
+            params=params,
+            terms=terms_use,
+            dt_val=dt_val,
+            size=size,
+            shape=shape,
+            matvec=matvec,
+            precond_op=precond,
+            options=_ImplicitSolveOptions(
+                tol=implicit_tol,
+                maxiter=implicit_maxiter,
+                iters=implicit_iters,
+                relax=implicit_relax,
+                restart=implicit_restart,
+            ),
+        )
+    else:
+        damping = _linear_damping(
+            G,
+            cache_use,
+            params,
+            real_dtype,
+            include_collisions=collision_operator is None,
+            terms=terms_use,
+        )
+
+        def advance(state: jnp.ndarray, stats: Any) -> tuple[jnp.ndarray, Any]:
+            next_state = _linear_native_step(
+                state,
+                damping,
+                dt_val,
+                method_key=method,
+                rhs=lambda value: _rhs(
+                    value, cache_use, params, terms_use, dt_val, collision_operator
+                )[0],
+            )
+            return next_state, stats
+
+    # Explicit methods carry None, which adds no leaves to the scan carry.
+    initial_stats = (
+        _empty_implicit_solve_stats(G.dtype) if method == "implicit" else None
+    )
+    if sample_stride <= 1:
+        (G_out, solve_stats), outputs = _every_step_scan(
+            G,
+            cache_use,
+            params,
+            terms_use,
+            dt_val=dt_val,
+            steps=steps,
+            advance=advance,
+            species_index=species_index,
+            record_hl_energy=record_hl_energy,
+            show_progress=show_progress,
+            collision_operator=collision_operator,
+            initial_stats=initial_stats,
+        )
+    else:
+        (G_out, solve_stats), outputs = _strided_sample_scan(
+            G,
+            cache_use,
+            params,
+            terms_use,
+            dt_val=dt_val,
+            steps=steps,
+            sample_stride=sample_stride,
+            advance=advance,
+            species_index=species_index,
+            record_hl_energy=record_hl_energy,
+            show_progress=show_progress,
+            collision_operator=collision_operator,
+            initial_stats=initial_stats,
+        )
+    if squeeze_species:
+        G_out = G_out[0]
+    result = (G_out, *outputs)
+    return (*result, solve_stats) if return_solve_stats else result
+
+
+__all__ = [
+    "_integrate_linear_cached",
+    "_integrate_linear_cached_donate",
+    "_integrate_linear_cached_impl",
+    "integrate_linear",
+    "integrate_linear_diagnostics",
+]

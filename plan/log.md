@@ -20645,6 +20645,35 @@ Evidence:
 
 Outcome: ready for one CI run and release once solvax 0.26.0 is on PyPI.
 
+## 2026-09-27 - ARCH-B second contraction (`arch/contract-2`, #300)
+
+Baseline:
+- GKX SHA: `main` `cf1d40828` (2.4.0); SOLVAX 0.26.0; JAX 0.10.2
+- source/test files and lines: src 160 / 79,446; tests 74 / 84,139
+- relevant existing gate: `python scripts/check.py architecture` (cohesion 2, low cohesion 8, upward imports 5); 7 import cycles
+
+Scope:
+- intended change: merge single-consumer helpers, break import cycles, delete dead and deprecated code, merge tests by domain (plan G.6 P4; archived §8, §8.1, §17.3)
+- non-goals: moving `workflows`/`runtime` into `solve/` (needs the monkeypatch audit, rank 1 in the inventory); report-module eviction (other lanes' scripts)
+- acceptance: bitwise CPU fingerprints unchanged; suite green apart from failures present on the base
+
+Changes:
+- removed: reduced stellarator ITG model (3 modules), decomposition diagnostic builder, portfolio sensitivity report, 48 test-only definitions and ten helpers they orphaned, with their tests; 43 lazy registry rows
+- merged: 18 single-consumer helper modules into their consumers; `geometry.differentiable` facade hooks and velocity sync wrappers removed
+- tests: 74 -> 29 files (bodies unchanged; one module `pytestmark` became per-test marks; `parents[N]` depths adjusted; CI shard lists updated)
+- public/schema behavior: `gkx.__all__` unchanged; `gkx.plot` resolves to `workflows.runtime.results.plot`; `batch_map` owned by `gkx.parallel.independent`
+
+Evidence:
+- counts: src 136 / 74,748; tests 29 / 81,598; cycles 7 -> 1; single-consumer 2 -> 1; low cohesion 8 -> 5; upward imports 5 -> 4
+- fingerprints (office, XLA:CPU, float64; `plan/research/2026-09-27-arch-b/fingerprint.py`): Cyclone linear eigenpair, 100-step nonlinear heat-flux trace, window value and gradient, quasilinear flux at two k_y all bitwise identical to base
+- office suite (`-m "not slow"`, `-n 3`): 2,896 passed, 56 skipped, 1 failed (`test_window_adjoint_compiles_one_graph_and_reuses_it`, a compile counter that also sees other tests' compiles in the same xdist worker; passes alone on head and base); mypy clean; registry resolves
+- a first office run was invalid (base `src` on `PYTHONPATH`); a laptop run crashed the host and was abandoned
+
+Outcome:
+- accepted pending CI
+- remaining blocker: the `runtime` <-> `workflows` cycle
+- next task: inventory rank 1 (`workflows` + `runtime` + `*Deps` records -> `solve/`), then rank 2 (diagnostics timesteppers)
+- CI (#300, head `1de9db021`): `ci-required` green, all 41 checks pass. linear-core exceeded its 25-minute limit once it carried the merged physics gates; the collision/Hermite gates moved to release-artifacts and the Krylov suite to model-artifacts. nonlinear-core now takes 26.6 of its 30 minutes.
 ## 2026-09-27 — OPT-VMEX: QA linear, quasilinear and nonlinear examples in VMEX
 
 Baseline: GKX `main` `cf1d40828` (2.4.0); VMEX `main` `8616129d3`. Plan F.5

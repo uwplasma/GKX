@@ -6,15 +6,14 @@ from importlib import import_module
 from typing import Any
 
 _MODULE_EXPORTS: dict[str, tuple[str, ...]] = {
-    "identity": ("ParallelIdentityReport", "parallel_identity_report"),
-    "batch": (
+    "independent": (
+        "ParallelIdentityReport",
+        "parallel_identity_report",
         "batch_map",
         "batch_map_identity_report",
         "ky_scan_batches",
         "pad_to_multiple",
         "split_evenly",
-    ),
-    "independent": (
         "IndependentEnsembleProvenanceReport",
         "IndependentMapExecutionError",
         "IndependentWorkerMetadata",
@@ -22,20 +21,6 @@ _MODULE_EXPORTS: dict[str, tuple[str, ...]] = {
         "independent_map",
         "independent_map_identity_report",
         "independent_worker_metadata",
-    ),
-    "decomposition": (
-        "ClaimLevel",
-        "DecompositionContract",
-        "DecompositionWorkload",
-        "DiagnosticWorkload",
-        "IndependentWorkload",
-        "ReconstructionIdentityReport",
-        "ShardAssignment",
-        "build_diagnostic_nonlinear_domain_decomposition",
-        "build_independent_portfolio_decomposition",
-        "reconstruct_serial",
-        "serial_reconstruction_identity_report",
-        "shard_sequence",
     ),
     "state": (
         "HERMITE_MESH_AXIS",

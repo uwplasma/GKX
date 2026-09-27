@@ -320,7 +320,7 @@
           "exists": true,
           "name": "runtime policy module",
           "passed": true,
-          "path": "src/gkx/workflows/runtime/policies.py",
+          "path": "src/gkx/runtime.py",
           "required": true,
           "snippet": "RuntimeIndependentParallelPlan"
         },

@@ -191,7 +191,6 @@ jobs:
         run: |
           python -c "import solvax; assert callable(solvax.exponential_eigenpairs); assert callable(solvax.sparse_eigenpairs)"
           pytest -q --maxfail=1 --disable-warnings \
-            tests/integration/test_adaptive_eigenmodes.py \
             tests/unit/solvers/test_linear_krylov_core.py \
             tests/unit/objectives/test_autodiff_solver_objectives.py \
             -m "integration or not integration" \
@@ -216,11 +215,9 @@ jobs:
         run: |
           pytest -q \
             tests/integration/runtime/test_cli.py \
-            tests/unit/diagnostics/test_plotting.py \
             tests/integration/runtime/test_runtime_artifacts.py \
             tests/unit/nonlinear/test_nonlinear_exb.py \
             tests/unit/diagnostics/test_analysis.py \
-            tests/unit/diagnostics/test_timestep_cost.py \
             tests/validation/benchmarks/test_benchmarking.py \
             --maxfail=1 --disable-warnings \
             --cov=gkx \
@@ -444,7 +441,7 @@ jobs:
 
           assert "--plot" in build_parser().format_help()
           assert "batch_map" in gkx.parallel.__all__
-          assert gkx.parallel.batch_map.__module__ == "gkx.parallel.batch"
+          assert gkx.parallel.batch_map.__module__ == "gkx.parallel.independent"
           assert find_spec("gkx.objectives.qa_low_turbulence_contracts") is None
           assert find_spec("gkx.objectives.qa_low_turbulence_residuals") is None
           assert find_spec("gkx.objectives.stellarator_residuals") is None
@@ -606,8 +603,6 @@ jobs:
           GKX_X64: "1"
         run: |
           pytest -q \
-            tests/unit/operators/test_terms_assembly.py \
-            tests/unit/operators/test_linear_streaming.py \
             tests/unit/operators/test_terms_fields.py \
             tests/unit/solvers/test_time_integrators.py \
             tests/unit/nonlinear/test_nonlinear_exb.py \

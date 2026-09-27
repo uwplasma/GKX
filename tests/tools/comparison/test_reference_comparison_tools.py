@@ -13,6 +13,36 @@ from typing import Any
 import numpy as np
 import pytest
 from support.paths import load_tool_script
+import subprocess
+from support.paths import REPO_ROOT, load_artifact_tool
+from gkx.core_ky_layout import rows_for_layout, source_ky_layout
+from gkx.solvers_nonlinear_state_integration import DIVERGENCE_KNEE_STEPS
+from support.paths import load_profiling_tool
+import math
+import jax.numpy as jnp
+from gkx.terms.config import FieldState
+from gkx.terms.config import TermConfig
+import ast
+import inspect
+import re
+import textwrap
+import jax
+from scripts.profiling._profiler_options import make_profile_options
+from scripts.profiling.profile_startup_and_cache import (
+    PhaseTiming,
+    _write_phase_csv,
+    _write_phase_json,
+    build_low_rank_moment_cache,
+    main_runtime_startup,
+)
+from gkx.solvers_nonlinear_diagnostic_integration import (
+    integrate_nonlinear_explicit_diagnostics_state,
+)
+from support.paths import load_release_tool
+from scripts.campaigns.portfolio_guard import (
+    ReducedPortfolioArtifactGuardConfig,
+    reduced_portfolio_artifact_guard_report,
+)
 
 
 @pytest.mark.parametrize(
@@ -156,7 +186,6 @@ def test_expand_gx_restart_state_to_full_positive_ky_embeds_dealiased_kx() -> No
 
 # ---- test_compare_gx_imported_linear.py ----
 
-import jax.numpy as jnp
 
 import compare_gx_imported_linear as imported_linear
 
@@ -1823,7 +1852,6 @@ from gkx.config import KBMBaseCase
 from gkx.core_grid import select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.terms.assembly import assemble_rhs_terms_cached, compute_fields_cached
-from gkx.terms.config import TermConfig
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 
 
@@ -2235,3 +2263,2040 @@ def test_imported_window_parser_accepts_required_args() -> None:
     assert args.geometry_file == Path("/tmp/run.eik.nc")
     assert args.time_index_start == 0
     assert args.time_index_stop == 1
+
+
+# ---- from test_nonlinear_gradient_evidence_contracts.py ----
+# The nonlinear-autodiff claims must stay attached to their generators.
+#
+# Commits 612e1311 and a7b41968 removed the tools and the JSON that produced the
+# headline adjoint numbers, leaving the docs page and the figure resting on
+# literals typed into the plotting script. These tests pin the other direction:
+# the tracked measurements exist, the figure reads them, the generators that write
+
+
+STATIC = REPO_ROOT / "docs" / "_static"
+LADDER = STATIC / "nonlinear_heat_flux_gradient_window_rk3.json"
+PARITY = STATIC / "nonlinear_window_device_parity.json"
+MEMORY = (
+    STATIC / "nonlinear_adjoint_checkpointing_cpu32.json",
+    STATIC / "nonlinear_adjoint_checkpointing_gpu32.json",
+)
+GENERATORS = (
+    "scripts/campaigns/nonlinear_gradient_window.py",
+    "scripts/profiling/profile_nonlinear_adjoint_checkpointing.py",
+    "scripts/profiling/profile_nonlinear_window_device_parity.py",
+)
+
+
+def _ladder_tool():
+    return load_tool_script("campaigns", "nonlinear_gradient_window")
+
+
+def test_gradient_ladder_requires_compatible_clean_state_source(
+    monkeypatch,
+) -> None:
+    tool = _ladder_tool()
+    provenance = {
+        "repository_root": str(REPO_ROOT),
+        "git_commit": "current",
+        "git_dirty": False,
+    }
+
+    assert (
+        tool._require_compatible_state_source(
+            {
+                "gkx_git_commit": np.asarray("current"),
+                "gkx_git_dirty": np.asarray(0),
+            },
+            provenance,
+        )
+        == "current"
+    )
+    with pytest.raises(SystemExit, match="no GKX source provenance"):
+        tool._require_compatible_state_source({}, provenance)
+    monkeypatch.setattr(tool, "_gkx_source_tree_matches", lambda *_args: False)
+    with pytest.raises(SystemExit, match="differs from current source"):
+        tool._require_compatible_state_source(
+            {
+                "gkx_git_commit": np.asarray("old"),
+                "gkx_git_dirty": np.asarray(0),
+            },
+            provenance,
+        )
+
+
+@pytest.mark.parametrize("relative", GENERATORS)
+def test_generator_scripts_are_present(relative: str) -> None:
+    assert (REPO_ROOT / relative).is_file()
+
+
+def test_gradient_window_imports_from_the_repository_package() -> None:
+    """The profiler imports the campaign through ``scripts.campaigns``."""
+
+    command = (
+        "import sys; "
+        f"sys.path.insert(0, {str(REPO_ROOT)!r}); "
+        "from scripts.campaigns.nonlinear_gradient_window import build_window_case; "
+        "assert callable(build_window_case)"
+    )
+    subprocess.run([sys.executable, "-I", "-c", command], check=True)
+
+
+def test_gradient_window_nz_override_wins_over_shipped_ntheta() -> None:
+    case = _ladder_tool().build_window_case(
+        REPO_ROOT / "benchmarks" / "cases/cyclone_nonlinear_t400.toml",
+        {"Nx": 6, "Ny": 4, "Nz": 10},
+    )
+
+    # The ky extent is the stored row count of the deck's own layout: Ny = 4
+    # rows on the two-sided axis, Nyc = 3 on the half one. Either way it is
+    # the Ny override, not the shipped deck's Ny, that sets it.
+    grid = case["grid"]
+    ky_rows = rows_for_layout(4, source_ky_layout(grid))
+    assert int(grid.ky.size) == ky_rows
+    assert case["shape"][-3:] == (ky_rows, 6, 10)
+    assert grid.z.size == 10
+
+
+def test_docs_page_names_every_generator() -> None:
+    page = (REPO_ROOT / "docs" / "nonlinear_autodiff.rst").read_text()
+    for relative in GENERATORS:
+        assert relative in page, f"{relative} is not documented as regenerable"
+
+
+def test_figure_builder_reads_measurements_rather_than_literals() -> None:
+    module = load_artifact_tool("build_nonlinear_autodiff_figure")
+    assert module.LADDER == LADDER
+    assert {path for _label, path in module.MEMORY_PROFILES} == set(MEMORY)
+    for path in (module.LADDER, *(p for _l, p in module.MEMORY_PROFILES)):
+        assert path.is_file(), f"missing tracked measurement {path}"
+    # The knee shading on the figure and the knee the ladder reports have to be
+    # the same threshold, or the picture and the number disagree.
+    assert module.TOLERANCE == _ladder_defaults()["tolerance"]
+
+
+def _ladder_defaults() -> dict:
+    parser = _ladder_tool().build_parser()
+    return {action.dest: action.default for action in parser._actions}
+
+
+def test_tracked_ladder_shows_the_knee_the_runtime_guard_uses() -> None:
+    ladder = json.loads(LADDER.read_text())
+    tolerance = _ladder_defaults()["tolerance"]
+    rows = [
+        dict(row, agrees=row["ad_fd_relative_error"] <= tolerance)
+        for row in ladder["rows"]
+    ]
+    knee = _ladder_tool().locate_knee(rows)
+    assert knee["divergence_knee_steps"] == DIVERGENCE_KNEE_STEPS
+    assert knee["knee_bracket"] == [DIVERGENCE_KNEE_STEPS, 2 * DIVERGENCE_KNEE_STEPS]
+
+
+def test_tracked_ladder_agrees_with_finite_differences_below_the_knee() -> None:
+    ladder = json.loads(LADDER.read_text())
+    below = [r for r in ladder["rows"] if r["window"] <= DIVERGENCE_KNEE_STEPS]
+    above = [r for r in ladder["rows"] if r["window"] > DIVERGENCE_KNEE_STEPS]
+    assert below and above
+    assert max(r["ad_fd_relative_error"] for r in below) < 1.0e-8
+    assert min(r["ad_fd_relative_error"] for r in above) > 1.0e-6
+    # A ladder that never diverges would satisfy the two bounds above only by
+    # accident; require the gradient itself to take off past the knee.
+    assert above[0]["abs_gradient"] > 10.0 * below[-1]["abs_gradient"]
+
+
+@pytest.mark.parametrize("path", MEMORY)
+def test_checkpoint_memory_profiles_show_a_real_reduction(path: Path) -> None:
+    profile = json.loads(path.read_text())
+    policies = {row["checkpoint"]: row for row in profile["rows"]}
+    assert set(policies) == {"step", "block"}
+    assert policies["block"]["temp_bytes"] < policies["step"]["temp_bytes"]
+    assert profile["temp_reduction"] > 10.0
+    # Rematerialization is the trade; a profile claiming free memory would mean
+    # the two policies did not compile to different programs.
+    assert profile["runtime_ratio"] > 1.0
+
+
+def test_device_parity_artifact_compares_one_identical_case() -> None:
+    parity = json.loads(PARITY.read_text())
+    assert len(parity["runs"]) >= 2
+    backends = {run["default_backend"] for run in parity["runs"].values()}
+    assert {"cpu", "gpu"} <= backends
+    comparisons = {(row["left"], row["right"]): row for row in parity["comparisons"]}
+    assert comparisons
+    for row in comparisons.values():
+        assert row["gradient_relative_difference"] < 1.0e-12
+        assert row["value_relative_difference"] < 1.0e-12
+
+
+# ---- from test_nonlinear_sharding_profile_contracts.py ----
+
+
+def _load_sharding_tool_module():
+    return load_profiling_tool("profile_nonlinear_sharding")
+
+
+def test_profile_nonlinear_sharding_parser_defaults_to_tracked_artifact() -> None:
+    mod = _load_sharding_tool_module()
+    args = mod.build_parser().parse_args([])
+
+    assert args.out_json == mod.DEFAULT_OUT
+    assert args.sharding == "auto"
+    assert args.sharding_options is None
+    assert args.method == "rk2"
+    assert args.warmups == 1
+    assert args.repeats == 3
+    assert args.allow_unsafe_cpu_state_sharding is False
+    assert (
+        mod._artifact_path_for_contract(args.out_json)
+        == "docs/_static/nonlinear_sharding_profile.json"
+    )
+
+
+def test_profile_nonlinear_sharding_documented_script_entrypoint() -> None:
+    root = Path(__file__).resolve().parents[3]
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts/profiling/profile_nonlinear_sharding.py"),
+            "--help",
+        ],
+        cwd=root,
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "numerical identity gate" in result.stdout
+
+
+def test_profile_nonlinear_sharding_problem_excites_nonlinear_bracket() -> None:
+    mod = _load_sharding_tool_module()
+    args = SimpleNamespace(nx=8, ny=8, nz=12, nl=2, nm=3, amplitude=1.0e-4)
+    state, cache, params = mod._build_problem(args)
+    nonlinear_terms = TermConfig(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+        apar=0.0,
+        bpar=0.0,
+        nonlinear=1.0,
+    )
+    rhs, _fields = mod.nonlinear_rhs_cached(
+        state,
+        cache,
+        params,
+        nonlinear_terms,
+        compressed_real_fft=True,
+        laguerre_mode="grid",
+    )
+
+    assert int(jnp.count_nonzero(jnp.abs(state) > 0.0)) > int(args.nz)
+    assert float(jnp.max(jnp.abs(rhs))) > 0.0
+    assert (
+        mod._initial_nonlinear_activity(state, cache, params, laguerre_mode="grid")
+        > 0.0
+    )
+
+
+def test_profile_nonlinear_sharding_source_contract_is_machine_readable(
+    tmp_path: Path,
+) -> None:
+    mod = _load_sharding_tool_module()
+    out_json = tmp_path / "profile.json"
+    argv = [
+        "--out-json",
+        str(out_json),
+        "--sharding",
+        "kx",
+        "--warmups",
+        "0",
+        "--repeats",
+        "2",
+    ]
+    args = mod.build_parser().parse_args(argv)
+
+    contract = mod._source_contract(args, argv, backend="gpu", device_count=2)
+
+    assert contract["backend"] == "gpu"
+    assert contract["source_contract_version"] == 1
+    assert contract["device_count"] == 2
+    assert contract["sharding_axis"] == "kx"
+    assert contract["source_artifact"] == str(out_json.resolve())
+    assert contract["timing_warmup_repeat"] == {"warmups": 0, "repeats": 2}
+    assert contract["allow_unsafe_cpu_state_sharding"] is False
+    assert contract["profile_command_argv"][-len(argv) :] == argv
+    assert (
+        "scripts/profiling/profile_nonlinear_sharding.py" in contract["profile_command"]
+    )
+    assert {"python", "gkx", "jax", "jaxlib", "numpy"} <= set(
+        contract["software_versions"]
+    )
+    assert all(contract["software_versions"].values())
+    assert contract["git_revision"]
+    assert isinstance(contract["git_dirty"], bool)
+
+
+def test_profile_nonlinear_sharding_helpers_report_stats_and_unique_specs() -> None:
+    mod = _load_sharding_tool_module()
+
+    stats = mod._time_stats([3.0, 1.0, 2.0])
+
+    assert stats["min"] == 1.0
+    assert stats["median"] == 2.0
+    assert stats["mean"] == 2.0
+    assert stats["max"] == 3.0
+    assert mod._sharding_specs("auto", "ky,kx,ky,z") == ["auto", "ky", "kx", "z"]
+    assert mod._sharding_specs("auto,kx", None) == ["auto", "kx"]
+
+
+def test_profile_nonlinear_sharding_reports_best_identity_candidate() -> None:
+    mod = _load_sharding_tool_module()
+
+    best = mod._best_identity_preserving_candidate(
+        {
+            "auto": {
+                "identity_gate_pass": True,
+                "engineering_speedup_median": 0.8,
+                "state_sharding_active": True,
+            },
+            "kx": {
+                "identity_gate_pass": True,
+                "engineering_speedup_median": 1.2,
+                "state_sharding_active": True,
+            },
+            "z": {
+                "identity_gate_pass": False,
+                "engineering_speedup_median": 3.0,
+                "state_sharding_active": True,
+            },
+        }
+    )
+
+    assert best == {
+        "spec": "kx",
+        "engineering_speedup_median": 1.2,
+        "state_sharding_active": True,
+        "identity_gate_pass": True,
+    }
+
+
+def test_profile_nonlinear_sharding_excludes_inactive_speedup_candidates() -> None:
+    mod = _load_sharding_tool_module()
+
+    best = mod._best_identity_preserving_candidate(
+        {
+            "auto": {
+                "identity_gate_pass": True,
+                "engineering_speedup_median": 4.0,
+                "state_sharding_active": False,
+            },
+            "kx": {
+                "identity_gate_pass": True,
+                "engineering_speedup_median": 1.1,
+                "state_sharding_active": True,
+            },
+        }
+    )
+
+    assert best["spec"] == "kx"
+    assert best["engineering_speedup_median"] == 1.1
+
+
+def test_profile_nonlinear_sharding_skips_unsafe_cpu_state_sharding() -> None:
+    mod = _load_sharding_tool_module()
+
+    assert (
+        mod._skip_unsafe_cpu_state_sharding(
+            backend="cpu",
+            device_count=4,
+            state_sharding_active=True,
+            allow_unsafe_cpu_state_sharding=False,
+        )
+        is True
+    )
+    assert (
+        mod._skip_unsafe_cpu_state_sharding(
+            backend="cpu",
+            device_count=4,
+            state_sharding_active=True,
+            allow_unsafe_cpu_state_sharding=True,
+        )
+        is False
+    )
+    assert (
+        mod._skip_unsafe_cpu_state_sharding(
+            backend="gpu",
+            device_count=2,
+            state_sharding_active=True,
+            allow_unsafe_cpu_state_sharding=False,
+        )
+        is False
+    )
+
+    row = mod._candidate_failure(
+        state_sharding_active=True,
+        error=mod.CPU_WHOLE_STATE_SHARDING_SKIP_REASON,
+        skip_reason="cpu_whole_state_pjit_sharding_unsafe_for_fft_layout",
+    )
+
+    assert row["identity_gate_pass"] is False
+    assert row["state_sharding_active"] is True
+    assert row["skip_reason"] == "cpu_whole_state_pjit_sharding_unsafe_for_fft_layout"
+    assert "unsafe_for_fft_layout" in row["error"]
+
+
+def test_profile_nonlinear_sharding_diagnostic_metrics_compare_rhs_and_phi(
+    monkeypatch,
+) -> None:
+    mod = _load_sharding_tool_module()
+
+    def fake_rhs(
+        state, cache, params, terms, *, compressed_real_fft=True, laguerre_mode="grid"
+    ):
+        del cache, params, terms, compressed_real_fft, laguerre_mode
+        arr = jnp.asarray(state)
+        return 2.0 * arr, FieldState(
+            phi=jnp.sum(arr, axis=(0, 1)), apar=None, bpar=None
+        )
+
+    monkeypatch.setattr(mod, "nonlinear_rhs_cached", fake_rhs)
+
+    reference = jnp.ones((2, 2, 1, 1, 3), dtype=jnp.complex64)
+    candidate = reference.at[0, 0, 0, 0, 0].add(1.0e-3)
+
+    metrics = mod._nonlinear_diagnostic_identity_metrics(
+        reference,
+        candidate,
+        cache=object(),
+        params=object(),
+        terms=object(),
+        compressed_real_fft=True,
+        laguerre_mode="grid",
+    )
+
+    assert metrics["max_abs_rhs_error"] == pytest.approx(2.0e-3, rel=1.0e-4)
+    assert metrics["max_abs_phi_error"] == pytest.approx(1.0e-3, rel=1.0e-4)
+    assert metrics["max_rel_rhs_error"] > 0.0
+    assert metrics["max_rel_phi_error"] > 0.0
+
+
+# Sweep-driver contracts for the same nonlinear sharding profiling lane.
+def _load_sweep_tool_module():
+    return load_profiling_tool("profile_nonlinear_sharding")
+
+
+def test_nonlinear_sharding_sweep_subcommand_parser_defaults_to_bounded_artifact() -> (
+    None
+):
+    mod = _load_sweep_tool_module()
+
+    args = mod.build_sweep_parser().parse_args([])
+
+    assert args.out_prefix == mod.DEFAULT_SWEEP_PREFIX
+    assert args.backend == "cpu"
+    assert args.devices == [1, 2]
+    assert args.sharding_options == "auto,kx"
+    assert args.timeout_s == 300.0
+    assert args.office_gpu_xlarge is False
+
+
+def test_nonlinear_sharding_sweep_subcommand_office_gpu_preset_is_canonical() -> None:
+    mod = _load_sweep_tool_module()
+
+    args = mod.apply_sweep_preset(
+        mod.build_sweep_parser().parse_args(["--office-gpu-xlarge"])
+    )
+
+    assert args.backend == "gpu"
+    assert args.devices == [1, 2]
+    assert (args.nx, args.ny, args.nz, args.nl, args.nm, args.steps) == (
+        48,
+        96,
+        128,
+        4,
+        8,
+        12,
+    )
+    assert args.sharding_options == "auto,kx"
+    assert args.out_prefix == mod.OFFICE_GPU_XLARGE_PREFIX
+    assert args.trace is True
+
+
+def test_nonlinear_sharding_sweep_subcommand_device_env_is_backend_specific() -> None:
+    mod = _load_sweep_tool_module()
+
+    cpu_env = mod._device_env({"XLA_FLAGS": "--foo=bar"}, backend="cpu", devices=4)
+    replaced_cpu_env = mod._device_env(
+        {"XLA_FLAGS": "--foo=bar --xla_force_host_platform_device_count=8"},
+        backend="cpu",
+        devices=2,
+    )
+    gpu_env = mod._device_env({}, backend="gpu", devices=2)
+
+    assert cpu_env["JAX_PLATFORMS"] == "cpu"
+    assert "--xla_force_host_platform_device_count=4" in cpu_env["XLA_FLAGS"]
+    assert (
+        "--xla_force_host_platform_device_count=8" not in replaced_cpu_env["XLA_FLAGS"]
+    )
+    assert "--xla_force_host_platform_device_count=2" in replaced_cpu_env["XLA_FLAGS"]
+    assert "--foo=bar" in replaced_cpu_env["XLA_FLAGS"]
+    assert gpu_env["JAX_PLATFORMS"] == "cuda"
+    assert gpu_env["CUDA_VISIBLE_DEVICES"] == "0,1"
+    assert gpu_env["XLA_PYTHON_CLIENT_PREALLOCATE"] == "false"
+
+
+def test_nonlinear_sharding_sweep_subcommand_selects_fastest_identity_candidate() -> (
+    None
+):
+    mod = _load_sweep_tool_module()
+    payload = {
+        "source_contract_version": 1,
+        "backend": "gpu",
+        "device_count": 2,
+        "default_backend": "gpu",
+        "sharding_axis": "kx",
+        "profile_command": "python scripts/profiling/profile_nonlinear_sharding.py --sharding kx",
+        "profile_command_argv": [
+            "python",
+            "scripts/profiling/profile_nonlinear_sharding.py",
+            "--sharding",
+            "kx",
+        ],
+        "source_artifact": "/tmp/profile.json",
+        "software_versions": {
+            "python": "3.11.0",
+            "gkx": "test",
+            "jax": "0.test",
+            "jaxlib": "0.test",
+            "numpy": "2.test",
+        },
+        "timing_warmup_repeat": {"warmups": 1, "repeats": 3},
+        "state_shape": [4, 8, 17, 32, 64],
+        "state_sharding_requested": "auto",
+        "serial_stats_s": {"median": 10.0},
+        "best_identity_preserving_candidate": {"spec": "kx"},
+        "sharded_results": {
+            "auto": {
+                "state_sharding_active": True,
+                "stats_s": {"median": 8.0},
+                "identity_gate_pass": True,
+                "max_abs_state_error": 0.0,
+                "max_rel_state_error": 0.0,
+                "error": None,
+            },
+            "kx": {
+                "state_sharding_active": True,
+                "stats_s": {"median": 5.0},
+                "identity_gate_pass": True,
+                "max_abs_state_error": 0.0,
+                "max_rel_state_error": 0.0,
+                "error": None,
+            },
+        },
+    }
+
+    row = mod._row_from_payload(payload, requested_devices=2)
+
+    assert row["best_spec"] == "kx"
+    assert row["parallel_median_s"] == 5.0
+    assert row["same_process_speedup"] == 2.0
+    assert row["identity_gate_pass"] is True
+    assert row["source_contract_version"] == 1
+    assert row["profile_command"].startswith(
+        "python scripts/profiling/profile_nonlinear_sharding.py"
+    )
+    assert row["profile_command_argv"][-2:] == ["--sharding", "kx"]
+    assert row["source_artifact"] == "/tmp/profile.json"
+    assert row["software_versions"]["gkx"] == "test"
+    assert row["timing_warmup_repeat"] == {"warmups": 1, "repeats": 3}
+    assert row["profile_backend"] == "gpu"
+    assert row["profile_device_count"] == 2
+    assert row["profile_sharding_axis"] == "kx"
+
+
+def test_nonlinear_sharding_sweep_subcommand_json_clean_replaces_nonfinite() -> None:
+    mod = _load_sweep_tool_module()
+
+    cleaned = mod._json_clean({"bad": math.inf, "ok": 1.0})
+
+    assert cleaned == {"bad": None, "ok": 1.0}
+
+
+def test_nonlinear_sharding_sweep_subcommand_records_timeout_rows(monkeypatch) -> None:
+    mod = _load_sweep_tool_module()
+
+    def _raise_timeout(*_args, **kwargs):
+        raise subprocess.TimeoutExpired(
+            cmd="profile",
+            timeout=float(kwargs["timeout"]),
+            output="stdout tail",
+            stderr="stderr tail",
+        )
+
+    monkeypatch.setattr(mod.subprocess, "run", _raise_timeout)
+
+    summary = mod.run_sweep(
+        backend="cpu",
+        devices=[2],
+        nx=4,
+        ny=4,
+        nz=4,
+        nl=1,
+        nm=1,
+        dt=0.02,
+        steps=1,
+        method="rk2",
+        sharding="auto",
+        sharding_options="auto,kx",
+        laguerre_mode="grid",
+        warmups=0,
+        repeats=1,
+        timeout_s=0.5,
+        trace=False,
+    )
+
+    assert summary["identity_passed"] is False
+    assert summary["speedup_passed"] is False
+    assert summary["status"] == "diagnostic_identity_only"
+    assert summary["rows"][0]["parallel_median_s"] is None
+    assert "timed out" in summary["rows"][0]["error"]
+    assert "stderr tail" in summary["rows"][0]["error"]
+    assert summary["speedup_blockers"] == ["cpu_2devices_identity_failed"]
+
+
+def test_nonlinear_sharding_sweep_subcommand_marks_identity_only_slowdown(
+    monkeypatch,
+) -> None:
+    mod = _load_sweep_tool_module()
+
+    def _fake_run(cmd, **_kwargs):
+        out_json = Path(cmd[cmd.index("--out-json") + 1])
+        device_count = 2 if "2devices" in out_json.name else 1
+        spec = "kx" if device_count == 2 else "auto"
+        median = 20.0 if device_count == 2 else 10.0
+        payload = {
+            "device_count": device_count,
+            "default_backend": "gpu",
+            "state_shape": [1],
+            "state_sharding_requested": "auto",
+            "serial_stats_s": {"median": 10.0},
+            "best_identity_preserving_candidate": {"spec": spec},
+            "sharded_results": {
+                spec: {
+                    "state_sharding_active": device_count > 1,
+                    "stats_s": {"median": median},
+                    "identity_gate_pass": True,
+                    "max_abs_state_error": 0.0,
+                    "max_rel_state_error": 0.0,
+                    "error": None,
+                }
+            },
+        }
+        out_json.write_text(json.dumps(payload), encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(mod.subprocess, "run", _fake_run)
+
+    summary = mod.run_sweep(
+        backend="gpu",
+        devices=[1, 2],
+        nx=4,
+        ny=4,
+        nz=4,
+        nl=1,
+        nm=1,
+        dt=0.02,
+        steps=1,
+        method="rk2",
+        sharding="auto",
+        sharding_options="auto,kx",
+        laguerre_mode="grid",
+        warmups=0,
+        repeats=1,
+        timeout_s=1.0,
+        trace=False,
+    )
+
+    assert summary["identity_passed"] is True
+    assert summary["speedup_passed"] is False
+    assert summary["status"] == "diagnostic_identity_only"
+    assert summary["rows"][1]["strong_speedup_vs_1_device"] == 0.5
+    assert summary["speedup_blockers"] == ["gpu_2devices_speedup_0.5_below_1"]
+
+
+def test_nonlinear_sharding_sweep_subcommand_preserves_failed_profile_json(
+    monkeypatch,
+) -> None:
+    mod = _load_sweep_tool_module()
+
+    def _fake_run(cmd, **_kwargs):
+        out_json = Path(cmd[cmd.index("--out-json") + 1])
+        payload = {
+            "device_count": 4,
+            "default_backend": "cpu",
+            "state_shape": [4, 8, 17, 32, 64],
+            "state_sharding_requested": "auto",
+            "serial_stats_s": {"median": 10.0},
+            "best_identity_preserving_candidate": {
+                "spec": None,
+                "identity_gate_pass": False,
+                "state_sharding_active": False,
+                "engineering_speedup_median": None,
+            },
+            "sharded_results": {
+                "auto": {
+                    "state_sharding_active": True,
+                    "stats_s": None,
+                    "identity_gate_pass": False,
+                    "max_abs_state_error": None,
+                    "max_rel_state_error": None,
+                    "error": "skipped: cpu_whole_state_pjit_sharding_unsafe_for_fft_layout",
+                    "skip_reason": "cpu_whole_state_pjit_sharding_unsafe_for_fft_layout",
+                }
+            },
+        }
+        out_json.write_text(json.dumps(payload), encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 2, "profile json written", "")
+
+    monkeypatch.setattr(mod.subprocess, "run", _fake_run)
+
+    summary = mod.run_sweep(
+        backend="cpu",
+        devices=[4],
+        nx=4,
+        ny=4,
+        nz=4,
+        nl=1,
+        nm=1,
+        dt=0.02,
+        steps=1,
+        method="rk2",
+        sharding="auto",
+        sharding_options="auto",
+        laguerre_mode="grid",
+        warmups=0,
+        repeats=1,
+        timeout_s=1.0,
+        trace=False,
+    )
+
+    assert summary["identity_passed"] is False
+    assert summary["rows"][0]["profile_returncode"] == 2
+    assert summary["rows"][0]["state_sharding_active"] is True
+    assert "unsafe_for_fft_layout" in summary["rows"][0]["error"]
+    assert summary["profiles"]["4"]["profile_returncode"] == 2
+
+
+# ---- from test_runtime_and_scaling_profile_contracts.py ----
+
+
+runtime_kernels = load_profiling_tool("profile_runtime_kernels")
+linear_trace = runtime_kernels
+nonlinear_trace = runtime_kernels
+
+
+def test_cyclone_runtime_profiler_default_config_exists() -> None:
+    args = runtime_kernels.build_cyclone_parser().parse_args([])
+
+    assert (REPO_ROOT / args.config).is_file()
+    assert args.repeats == 1
+    assert args.resolved_diagnostics is True
+    assert args.reuse_prepared_simulation is False
+    assert args.out is None
+
+
+def test_prepared_profile_summary_fingerprints_numerical_outputs() -> None:
+    result = (
+        jnp.asarray([0.0, 0.5]),
+        SimpleNamespace(
+            heat_flux_t=jnp.asarray([2.0, 4.0]),
+            dt_t=jnp.asarray([0.1, 0.2]),
+        ),
+        jnp.arange(6, dtype=jnp.float32).reshape(1, 2, 3).astype(jnp.complex64),
+        SimpleNamespace(phi=jnp.asarray([3.0j, 4.0])),
+    )
+
+    summary = runtime_kernels._prepared_result_summary(result)
+
+    assert summary["time"]["shape"] == [2]
+    assert summary["time"]["max_abs"] == 0.5
+    assert summary["final_state"]["shape"] == [1, 2, 3]
+    assert summary["final_state"]["finite_fraction"] == 1.0
+    np.testing.assert_allclose(summary["phi"]["l2_norm"], 5.0)
+    np.testing.assert_allclose(summary["heat_flux"]["sum_real"], 6.0)
+    np.testing.assert_allclose(summary["dt"]["max_abs"], 0.2)
+
+
+def test_runtime_profile_normalizes_peak_rss_units() -> None:
+    assert runtime_kernels._peak_rss_bytes(123, system="Darwin") == 123
+    assert runtime_kernels._peak_rss_bytes(123, system="Linux") == 123 * 1024
+
+
+def test_runtime_startup_profiler_keywords_match_integration_contract() -> None:
+    tree = ast.parse(textwrap.dedent(inspect.getsource(main_runtime_startup)))
+    integration_calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "integrate_nonlinear_explicit_diagnostics_state"
+    ]
+
+    assert len(integration_calls) == 1
+    passed_keywords = {
+        keyword.arg for keyword in integration_calls[0].keywords if keyword.arg
+    }
+    accepted_keywords = set(
+        inspect.signature(integrate_nonlinear_explicit_diagnostics_state).parameters
+    )
+    assert passed_keywords <= accepted_keywords, passed_keywords - accepted_keywords
+
+
+def test_sspx3_stage_profile_preserves_identity_without_speedup_claim() -> None:
+    profile = json.loads(
+        (REPO_ROOT / "docs/_static/linear_sspx3_stage_profile.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert profile["identity_gate"]["passed"] is True
+    assert profile["before"]["finite"] is True
+    assert profile["after"]["finite"] is True
+    assert profile["performance_gate"]["measurable_speedup"] is False
+    assert profile["performance_gate"]["passed"] is False
+    assert abs(profile["performance_gate"]["relative_median_time_change"]) < 0.03
+
+
+def test_prepared_nonlinear_cpu_gpu_profiles_are_matched_and_clean() -> None:
+    cpu = json.loads(
+        (
+            REPO_ROOT / "docs/_static/prepared_nonlinear_runtime_cpu_profile.json"
+        ).read_text(encoding="utf-8")
+    )
+    gpu = json.loads(
+        (
+            REPO_ROOT / "docs/_static/prepared_nonlinear_runtime_gpu_profile.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    for profile in (cpu, gpu):
+        assert profile["git_revision"] == cpu["git_revision"]
+        assert profile["git_dirty"] is False
+        assert profile["reuse_prepared_simulation"] is True
+        assert profile["resolved_diagnostics"] is False
+        assert profile["steps"] == 200
+        assert profile["method"] == "rk3"
+        assert profile["fixed_dt"] is False
+        assert profile["sample_stride"] == 10
+        assert profile["diagnostics_stride"] == 10
+        assert profile["software"] == cpu["software"]
+        assert "result_summary" in profile
+        assert profile["memory_summary"]["host_peak_rss_bytes"] > 0
+    assert cpu["backend"] == "cpu"
+    assert gpu["backend"] == "gpu"
+    assert cpu["run_median_s"] / gpu["run_median_s"] >= 5.0
+    expected_shapes = {
+        "time": [21],
+        "final_state": [1, 4, 8, 64, 64, 24],
+        "phi": [64, 64, 24],
+        "heat_flux": [21],
+        "dt": [21],
+    }
+    for name, expected_shape in expected_shapes.items():
+        assert (
+            cpu["result_summary"][name]["shape"] == gpu["result_summary"][name]["shape"]
+        )
+        assert cpu["result_summary"][name]["shape"] == expected_shape
+        assert cpu["result_summary"][name]["finite_fraction"] == 1.0
+        assert gpu["result_summary"][name]["finite_fraction"] == 1.0
+        # The full nonlinear state is a more sensitive accumulated trajectory
+        # than the scalar diagnostics after 200 adaptive steps.  Keep its
+        # observed CPU/GPU norm drift explicit instead of letting the old
+        # mislabeled time vector provide a falsely exact state gate.
+        rtol = 1.0e-3 if name == "final_state" else 1.0e-5
+        np.testing.assert_allclose(
+            cpu["result_summary"][name]["l2_norm"],
+            gpu["result_summary"][name]["l2_norm"],
+            rtol=rtol,
+            atol=1.0e-12,
+        )
+
+
+def test_resolved_diagnostic_profiles_are_identity_gated_and_bounded() -> None:
+    for backend in ("cpu", "gpu"):
+        compact = json.loads(
+            (
+                REPO_ROOT
+                / f"docs/_static/prepared_nonlinear_runtime_{backend}_profile.json"
+            ).read_text(encoding="utf-8")
+        )
+        resolved = json.loads(
+            (
+                REPO_ROOT
+                / f"docs/_static/prepared_nonlinear_runtime_{backend}_resolved_profile.json"
+            ).read_text(encoding="utf-8")
+        )
+        assert compact["git_revision"] == resolved["git_revision"]
+        assert compact["software"] == resolved["software"]
+        assert compact["resolved_diagnostics"] is False
+        assert resolved["resolved_diagnostics"] is True
+        assert compact["steps"] == resolved["steps"] == 200
+        assert resolved["run_median_s"] / compact["run_median_s"] <= 1.25
+        assert (
+            resolved["memory_summary"]["host_peak_rss_bytes"]
+            / compact["memory_summary"]["host_peak_rss_bytes"]
+            <= 1.10
+        )
+        for name in ("time", "final_state", "phi", "heat_flux", "dt"):
+            np.testing.assert_allclose(
+                compact["result_summary"][name]["l2_norm"],
+                resolved["result_summary"][name]["l2_norm"],
+                rtol=1.0e-7,
+                atol=1.0e-12,
+            )
+        if backend == "gpu":
+            compact_peak = compact["memory_summary"]["device_stats"][
+                "peak_bytes_in_use"
+            ]
+            resolved_peak = resolved["memory_summary"]["device_stats"][
+                "peak_bytes_in_use"
+            ]
+            assert resolved_peak / compact_peak <= 1.10
+
+
+def test_make_profile_options_defaults_disable_python_and_host_tracers() -> None:
+    opts = make_profile_options()
+    assert opts.python_tracer_level == 0
+    assert opts.host_tracer_level == 0
+
+
+def test_make_profile_options_accepts_explicit_levels() -> None:
+    opts = make_profile_options(python_tracer_level=1, host_tracer_level=2)
+    assert opts.python_tracer_level == 1
+    assert opts.host_tracer_level == 2
+
+
+def test_profile_linear_cache_uses_low_rank_moment_factors() -> None:
+    params = SimpleNamespace(
+        nu_hermite=0.5,
+        nu_laguerre=0.25,
+        p_hyper=4,
+        p_hyper_l=3,
+        p_hyper_m=5,
+        p_hyper_lm=2,
+    )
+
+    cache = build_low_rank_moment_cache(
+        nl=3, nm=4, params=params, real_dtype=jnp.float32
+    )
+
+    assert cache["lb_lam"].shape == (3, 4)
+    assert cache["collision_lam"].shape == (0,)
+    assert cache["hyper_ratio"].shape == (3, 4, 1, 1, 1)
+    assert cache["sqrt_p"].shape == (1, 1, 4, 1, 1, 1)
+    assert cache["mask_const"].dtype == jnp.bool_
+
+
+def test_profile_runtime_startup_writes_csv_and_json(tmp_path: Path) -> None:
+    phases = [
+        PhaseTiming(phase="a", seconds=1.25, note="first"),
+        PhaseTiming(phase="b", seconds=2.75, note="second"),
+    ]
+    csv_path = tmp_path / "startup.csv"
+    json_path = tmp_path / "startup.json"
+
+    _write_phase_csv(csv_path, phases)
+    _write_phase_json(json_path, phases, {"config": "case.toml", "device_count": 1})
+
+    csv_text = csv_path.read_text(encoding="utf-8")
+    assert "phase,seconds,note" in csv_text
+    assert "a,1.25,first" in csv_text
+
+    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert payload["metadata"]["config"] == "case.toml"
+    assert payload["startup_total_s"] == 4.0
+    assert payload["phases"][1]["phase"] == "b"
+
+
+def test_full_linear_trace_hlo_token_counts_are_coarse_but_stable() -> None:
+    hlo = """
+    ROOT fusion.1 = f32[2] fusion(arg), kind=kLoop
+    fft.2 = c64[2] fft(arg), fft_type=FFT
+    scatter.3 = f32[2] scatter(arg)
+    """
+    counts = linear_trace._hlo_token_counts(hlo)
+
+    assert counts["fusion"] >= 1
+    assert counts["fft"] >= 2
+    assert counts["scatter"] >= 1
+    assert counts["gather"] == 0
+
+
+def test_hlo_op_counts_read_op_names_not_metadata() -> None:
+    hlo = """
+  %copy.6 = c64[2,4]{1,0} copy(%t), metadata={op_name="jit(f)/concatenate"}
+  %concatenate.0 = c64[2,8]{1,0} concatenate(%copy.6, %c), dimensions={1}
+  %gather.2 = f32[3] gather(%concatenate.0, %i), metadata={op_name="jit(f)/fft"}
+  ROOT %copy.4 = f64[5] copy(%x)
+  %while.1 = (c64[2], s32[]) while(%tuple), condition=%cond, body=%body
+"""
+    counts = runtime_kernels._hlo_op_counts(hlo)
+
+    assert (counts["copy"], counts["concatenate"], counts["gather"]) == (2, 1, 1)
+    assert counts["fft"] == 0
+    assert counts["bytes_written"] == 8 * 8 + 16 * 8 + 5 * 8
+
+
+def test_hlo_op_counts_price_captured_arrays_as_module_literals() -> None:
+    """The ledger must price what a captured array costs the executable.
+
+    The reference-route contract (queue row Q18) puts both nonlinear routes on
+    the captured graph, so the module carries its cache, parameter and policy
+    arrays as literals. ``constant_bytes`` is that payload and is counted apart
+    from ``bytes_written``, which prices materialized copies.
+    """
+
+    hlo = """
+  %constant.1 = f32[64]{0} constant({...})
+  %constant.2 = s32[8]{0} constant({...})
+  %copy.3 = f32[64]{0} copy(%constant.1)
+"""
+    counts = runtime_kernels._hlo_op_counts(hlo)
+
+    assert counts["constant_bytes"] == 64 * 4 + 8 * 4
+    assert counts["bytes_written"] == 64 * 4
+    assert counts["copy"] == 1
+
+
+def test_hlo_op_counts_charge_only_buffers_that_are_written() -> None:
+    """A copy inside a fusion body is an index, not a buffer (queue row Q27).
+
+    XLA:CPU emits a fusion body as one loop nest, so a ``copy`` written inside
+    one -- typically re-laying-out a fusion *parameter* so the consumer can
+    read it in the order it wants -- allocates nothing; only the fusion's ROOT
+    owns an output buffer.  ``bytes_written`` charges every such instruction
+    the full size of its shape, which is why cloning one producer into more
+    consumer fusions moved it by tens of per cent with no traffic behind it.
+    ``materialized_bytes`` is the subset that owns a buffer, and the two
+    partition ``bytes_written`` exactly.
+    """
+
+    hlo = """
+%fused_computation.1 (param_0: f32[4]) -> f32[4] {
+  %param_0.1 = f32[4]{0} parameter(0)
+  %copy.1 = f32[4]{0} copy(%param_0.1)
+  ROOT %copy.2 = f32[4]{0} copy(%copy.1)
+}
+
+%body.7 (arg: f32[8]) -> f32[8] {
+  %arg.1 = f32[8]{0} parameter(0)
+  ROOT %copy.3 = f32[8]{0} copy(%arg.1)
+}
+
+ENTRY %main (x: f32[4]) -> f32[4] {
+  %x.1 = f32[4]{0} parameter(0)
+  %fusion.1 = f32[4]{0} fusion(%x.1), kind=kLoop, calls=%fused_computation.1
+  %while.1 = f32[8]{0} while(%w), condition=%cond.6, body=%body.7
+  ROOT %copy.4 = f32[4]{0} copy(%fusion.1)
+}
+"""
+
+    counts = runtime_kernels._hlo_op_counts(hlo)
+
+    assert counts["copy"] == 4
+    # every copy, fusion interiors included -- the historical total
+    assert counts["bytes_written"] == 4 * 4 + 4 * 4 + 8 * 4 + 4 * 4
+    # the fusion ROOT, the while body's copy and the entry copy own buffers
+    assert counts["materialized_bytes"] == 4 * 4 + 8 * 4 + 4 * 4
+    # only %copy.1, written inside the fusion body and not its root
+    assert counts["fused_interior_bytes"] == 4 * 4
+    assert (
+        counts["materialized_bytes"] + counts["fused_interior_bytes"]
+        == counts["bytes_written"]
+    )
+
+
+def test_hlo_op_counts_without_computation_headers_are_all_materialized() -> None:
+    """A bare instruction list has no fusion bodies, so nothing is interior.
+
+    The older ledger snippets in this file are written that way, and their
+    ``bytes_written`` must keep its value.
+    """
+
+    hlo = """
+  %copy.6 = c64[2,4]{1,0} copy(%t)
+  %concatenate.0 = c64[2,8]{1,0} concatenate(%copy.6, %c), dimensions={1}
+"""
+
+    counts = runtime_kernels._hlo_op_counts(hlo)
+
+    assert counts["fused_interior_bytes"] == 0
+    assert counts["materialized_bytes"] == counts["bytes_written"] == 8 * 8 + 16 * 8
+
+
+def test_compiled_memory_stats_report_the_compilers_buffer_assignment() -> None:
+    """``memory_analysis`` is the independent check on the text counts.
+
+    It comes from XLA's buffer assignment rather than from the printed module,
+    so an instruction a fusion emits as index arithmetic cannot inflate it. The
+    step ledger records it beside the op counts for that reason.
+    """
+
+    stats: dict[str, int] = {}
+    # An explicit dtype: the CI shards run with JAX_ENABLE_X64, under which an
+    # unannotated zeros() is float64 and the argument is twice this size.
+    runtime_kernels._compiled_hlo_text(
+        lambda x: jnp.sum(x * 2.0),
+        jnp.zeros((8, 8), dtype=jnp.float32),
+        stats=stats,
+    )
+
+    assert set(stats) >= {
+        "argument_size_in_bytes",
+        "output_size_in_bytes",
+        "temp_size_in_bytes",
+    }
+    assert stats["argument_size_in_bytes"] == 8 * 8 * 4
+    assert all(value >= 0 for value in stats.values())
+
+
+def test_nonlinear_step_hlo_routes_name_one_reference_graph() -> None:
+    """``--route runtime`` and ``--route diagnostics`` are the same graph.
+
+    Queue row Q18 gave ``integrate_nonlinear_explicit_diagnostics_state`` the
+    prepared route's jit, so the ledger must not keep lowering a separate
+    module for the runtime. ``--route eager-scan`` keeps the retired operand
+    placement so the rejected option stays priceable.
+    """
+
+    parser = runtime_kernels.build_nonlinear_step_hlo_parser()
+    choices = parser.parse_known_args(["--route", "eager-scan"])[0]
+    assert choices.route == "eager-scan"
+
+    source = textwrap.dedent(inspect.getsource(runtime_kernels.main_nonlinear_step_hlo))
+    tree = ast.parse(source)
+    selectors = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.IfExp)
+        and isinstance(node.body, ast.Name)
+        and node.body.id == "_eager_scan_hlo"
+    ]
+    assert len(selectors) == 1
+    assert isinstance(selectors[0].orelse, ast.Name)
+    assert selectors[0].orelse.id == "_diagnostics_scan_hlo"
+
+
+def test_eager_scan_route_still_lowers_scan_body_arrays_as_arguments() -> None:
+    """The retired placement must stay measurable, and stay the rejected one.
+
+    A jit of the same function embeds the closed-over array as a constant.
+    That captured graph is what both shipped routes now compile; the bound
+    module below is the eager scan the contract retired.
+    """
+
+    weights = jnp.linspace(0.5, 1.5, 64, dtype=jnp.float32)
+
+    def run(state: jnp.ndarray) -> jnp.ndarray:
+        def step(carry: jnp.ndarray, _unused: None) -> tuple[jnp.ndarray, None]:
+            return carry * weights, None
+
+        return jax.lax.scan(step, state, None, length=3)[0]
+
+    state = jnp.ones(64, dtype=jnp.float32)
+    constant = re.compile(r"= f32\[64\]\S* constant\(")
+    entry = re.compile(r"entry_computation_layout=\{\((?P<arguments>[^)]*)\)->")
+    captured = runtime_kernels._compiled_hlo_text(run, state)
+    bound = runtime_kernels._scan_equation_hlo(run, state)
+
+    def entry_arguments(text: str) -> int:
+        match = entry.search(text)
+        assert match is not None
+        return match.group("arguments").count("f32[64]")
+
+    assert constant.search(captured) and entry_arguments(captured) == 1
+    assert not constant.search(bound) and entry_arguments(bound) == 2
+
+
+def test_full_linear_trace_summary_contains_metadata() -> None:
+    payload = linear_trace._build_summary(
+        config="benchmarks/cases/cyclone_nonlinear_miller.toml",
+        backend="cpu",
+        nl=4,
+        nm=8,
+        repeats=3,
+        state="z_wave",
+        z_variation_norm=0.2,
+        compile_execute_seconds=1.5,
+        warm_seconds=0.1,
+        rhs_norm=2.0,
+        phi_norm=3.0,
+        hlo_text="ROOT add.1 = f32[] add(a, b)\n",
+        trace_dir=Path("tools_out/trace"),
+        memory_profile=Path("tools_out/memory.prof"),
+        hlo_out=Path("tools_out/hlo.txt"),
+        force_electrostatic_fields=True,
+        source="gkx.operators.linear.rhs.linear_rhs_cached",
+    )
+
+    assert payload["kind"] == "full_linear_rhs_trace_summary"
+    assert payload["case"] == "cyclone_nonlinear_miller"
+    assert payload["backend"] == "cpu"
+    assert payload["warm_seconds"] == 0.1
+    assert payload["hlo_token_counts"]["add"] >= 1
+    assert payload["force_electrostatic_fields"] is True
+    assert payload["source"] == "gkx.operators.linear.rhs.linear_rhs_cached"
+    assert payload["trace_dir"] == "tools_out/trace"
+    assert "kernel-level optimization targets" in payload["claim_scope"]
+
+
+def test_full_linear_trace_summary_json_roundtrips(tmp_path: Path) -> None:
+    path = tmp_path / "summary.json"
+    linear_trace._write_summary_json({"kind": "full", "value": 2.0}, path)
+
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "kind": "full",
+        "value": 2.0,
+    }
+
+
+def test_full_linear_trace_inject_z_wave_adds_parallel_variation() -> None:
+    state = jnp.zeros((1, 4, 3, 2, 1, 5), dtype=jnp.complex64)
+
+    out = linear_trace._inject_z_wave(
+        state, ky_index=1, kx_index=0, amplitude=0.2, z_mode=1
+    )
+
+    assert linear_trace._z_variation_norm(out) > 0.0
+    assert jnp.linalg.norm(out[0, 0, 2, 1, 0]) > 0.0
+
+
+def test_full_nonlinear_trace_summary_contains_metadata() -> None:
+    payload = nonlinear_trace._build_nonlinear_summary(
+        config="benchmarks/cases/cyclone_nonlinear_miller.toml",
+        backend="gpu",
+        nl=4,
+        nm=8,
+        repeats=5,
+        state="initial",
+        laguerre_mode="grid",
+        compressed_real_fft=True,
+        z_variation_norm=0.0,
+        compile_execute_seconds=2.0,
+        warm_seconds=0.01,
+        rhs_norm=1.0,
+        phi_norm=0.1,
+        apar_norm=0.0,
+        bpar_norm=0.0,
+        hlo_text="ROOT multiply.1 = f32[] multiply(a, b)\nfft.2 = c64[] fft(c)\n",
+        trace_dir=Path("tools_out/nonlinear_trace"),
+        memory_profile=Path("tools_out/nonlinear.prof"),
+        hlo_out=Path("tools_out/nonlinear.hlo.txt"),
+        electrostatic_specialized=True,
+    )
+
+    assert payload["kind"] == "full_nonlinear_rhs_trace_summary"
+    assert payload["case"] == "cyclone_nonlinear_miller"
+    assert payload["backend"] == "gpu"
+    assert payload["laguerre_mode"] == "grid"
+    assert payload["compressed_real_fft"] is True
+    assert payload["hlo_token_counts"]["multiply"] >= 1
+    assert payload["hlo_token_counts"]["fft"] >= 1
+    assert payload["electrostatic_specialized"] is True
+    assert payload["trace_dir"] == "tools_out/nonlinear_trace"
+    assert "transport runtime claim" in payload["claim_scope"]
+
+
+def test_full_nonlinear_trace_field_norm_handles_missing_em_fields() -> None:
+    assert nonlinear_trace._field_norm(None) == 0.0
+
+
+# Tracked parallel and RHS-term profile artifacts. Their profilers were retired
+# in SLIM-SCRIPTS tranche 3 (recovery SHA in plan/research/2026-09-22-slim-tools/MAP.md);
+# the committed JSONs stay as fixtures and keep these contracts.
+
+
+def test_tracked_mixed_species_hermite_profile_is_scoped_and_identity_gated() -> None:
+    artifact = (
+        REPO_ROOT / "docs" / "_static" / "linear_rhs_species_hermite_profile_cpu.json"
+    )
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+
+    assert payload["decomposition_axis"] == "species_hermite"
+    assert payload["requested_devices"] == 4
+    assert payload["actual_devices"] == 4
+    assert payload["identity_passed"] is True
+    integration = payload["integration"]
+    assert integration["identity_passed"] is True
+    assert integration["speedup_passed"] is (integration["speedup"] > 1.0)
+    assert integration["state_identity"]["max_abs_error"] <= payload["atol"]
+    assert integration["field_history_identity"]["max_abs_error"] <= payload["atol"]
+    assert (
+        "mixed species-Hermite collision-free integration" in integration["claim_scope"]
+    )
+    assert payload["max_rel_error"] <= payload["rtol"]
+    assert payload["max_abs_error"] <= payload["atol"]
+    assert payload["max_phi_abs_error"] <= payload["atol"]
+    assert payload["speedup"] > 1.0
+    assert "not a GPU or general scaling claim" in payload["claim_scope"]
+    assert len(payload["git_revision"]) == 40
+
+
+def test_linear_rhs_terms_tracked_miller_profile_is_active_artifact() -> None:
+    path = REPO_ROOT / "docs" / "_static" / "linear_rhs_terms_profile_miller_cpu.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+
+    assert payload["kind"] == "linear_rhs_terms_profile_summary"
+    assert payload["case"] == "runtime_cyclone_nonlinear_miller"
+    assert payload["state"] == "z_wave_linear_kick"
+    assert payload["full_linear_rhs_seconds"] > 0.0
+    assert payload["rows"]["streaming"]["norm"] > 0.0
+    assert payload["dominant_nonzero_norm_term"] == "streaming"
+
+
+# ---- from test_check_vmec_boozer_gates.py ----
+
+
+holdout_mod = load_release_tool("check_vmec_boozer_gates")
+
+
+def _write_json(path: Path, payload: dict[str, object]) -> Path:
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _aggregate_payload() -> dict[str, object]:
+    return {
+        "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
+        "passed": True,
+        "claim_scope": "reduced aggregate objective plumbing",
+        "samples": [
+            {
+                "surface_index": None,
+                "alpha": 0.0,
+                "selected_ky_index": 1,
+                "weight": 0.5,
+            },
+            {
+                "surface_index": None,
+                "alpha": 0.0,
+                "selected_ky_index": 2,
+                "weight": 0.5,
+            },
+        ],
+    }
+
+
+def _line_search_payload() -> dict[str, object]:
+    return {
+        "kind": "vmec_boozer_aggregate_scalar_objective_line_search_report",
+        "passed": True,
+        "samples": [
+            {
+                "surface_index": None,
+                "alpha": 0.0,
+                "selected_ky_index": 1,
+                "weight": 0.5,
+            },
+            {
+                "surface_index": None,
+                "alpha": 0.0,
+                "selected_ky_index": 2,
+                "weight": 0.5,
+            },
+        ],
+    }
+
+
+def _ensemble_payload(*, passed: bool = True) -> dict[str, object]:
+    return {
+        "kind": "nonlinear_window_ensemble_report",
+        "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+        "passed": passed,
+        "gate_report": {"passed": passed},
+    }
+
+
+def test_aggregate_holdout_gate_blocks_without_surface_or_field_line_holdout(
+    tmp_path: Path,
+) -> None:
+    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
+    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+
+    report = holdout_mod.check_vmec_boozer_aggregate_holdout_gate(
+        aggregate_artifact=aggregate,
+        line_search_artifact=line_search,
+    )
+
+    assert report["passed"] is False
+    assert report["promotion_gate"]["blockers"] == [
+        "passed_holdout_surface_or_field_line_artifact",
+        "passed_replicated_nonlinear_window_ensemble",
+    ]
+    assert report["training_sample_summary"]["alphas"] == ["0"]
+
+
+def test_aggregate_holdout_gate_rejects_ky_only_holdout(tmp_path: Path) -> None:
+    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
+    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    ky_only = _write_json(
+        tmp_path / "ky_only.json",
+        {
+            "passed": True,
+            "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
+            "samples": [
+                {"surface_index": None, "alpha": 0.0, "selected_ky_index": 7},
+            ],
+        },
+    )
+
+    report = holdout_mod.check_vmec_boozer_aggregate_holdout_gate(
+        aggregate_artifact=aggregate,
+        line_search_artifact=line_search,
+        holdout_artifacts=(ky_only,),
+    )
+
+    assert report["passed"] is False
+    assert report["holdout_artifacts"][0]["passed"] is True
+    assert report["holdout_artifacts"][0]["heldout_surface_or_field_line"] is False
+    assert "k_y-only" in report["promotion_gate"]["requirements"][4]
+
+
+def test_aggregate_holdout_gate_accepts_passed_field_line_holdout(
+    tmp_path: Path,
+) -> None:
+    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
+    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    ensemble = _write_json(tmp_path / "ensemble.json", _ensemble_payload())
+    holdout = _write_json(
+        tmp_path / "alpha_holdout.json",
+        {
+            "promotion_gate": {"passed": True},
+            "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
+            "samples": [
+                {"surface_index": None, "alpha": 0.75, "selected_ky_index": 1},
+            ],
+        },
+    )
+
+    report = holdout_mod.check_vmec_boozer_aggregate_holdout_gate(
+        aggregate_artifact=aggregate,
+        line_search_artifact=line_search,
+        holdout_artifacts=(holdout,),
+        nonlinear_ensemble_artifacts=(ensemble,),
+    )
+
+    assert report["passed"] is True
+    assert report["promotion_gate"]["blockers"] == []
+    assert report["holdout_artifacts"][0]["qualifies_for_promotion"] is True
+    assert (
+        report["nonlinear_ensemble_artifacts"][0][
+            "qualifies_for_production_nonlinear_promotion"
+        ]
+        is True
+    )
+    assert report["gates"][-2]["detail"].endswith("held-out field-line alpha=0.75")
+
+
+def test_aggregate_holdout_gate_rejects_non_ensemble_nonlinear_artifact(
+    tmp_path: Path,
+) -> None:
+    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
+    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    holdout = _write_json(
+        tmp_path / "alpha_holdout.json",
+        {
+            "promotion_gate": {"passed": True},
+            "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
+            "samples": [{"surface_index": None, "alpha": 0.75, "selected_ky_index": 1}],
+        },
+    )
+    single_window = _write_json(
+        tmp_path / "single_window.json",
+        {
+            "kind": "nonlinear_window_convergence_report",
+            "passed": True,
+            "gate_report": {"passed": True},
+        },
+    )
+
+    report = holdout_mod.check_vmec_boozer_aggregate_holdout_gate(
+        aggregate_artifact=aggregate,
+        line_search_artifact=line_search,
+        holdout_artifacts=(holdout,),
+        nonlinear_ensemble_artifacts=(single_window,),
+    )
+
+    assert report["passed"] is False
+    assert report["promotion_gate"]["blockers"] == [
+        "passed_replicated_nonlinear_window_ensemble"
+    ]
+    assert (
+        report["nonlinear_ensemble_artifacts"][0]["is_nonlinear_window_ensemble"]
+        is False
+    )
+
+
+def test_aggregate_holdout_gate_records_readiness_manifest_blockers(
+    tmp_path: Path,
+) -> None:
+    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
+    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    holdout = _write_json(
+        tmp_path / "alpha_holdout.json",
+        {
+            "promotion_gate": {"passed": True},
+            "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
+            "samples": [{"surface_index": None, "alpha": 0.75, "selected_ky_index": 1}],
+        },
+    )
+    manifest = _write_json(
+        tmp_path / "manifest.json",
+        {
+            "kind": "nonlinear_window_ensemble_readiness_manifest",
+            "passed": False,
+            "promotion_gate": {
+                "passed": False,
+                "blockers": ["seed_and_timestep_replicates_present"],
+            },
+            "missing_artifacts": [
+                {
+                    "case": "case_a",
+                    "variant_axis": "seed",
+                    "missing_count": 2,
+                }
+            ],
+        },
+    )
+
+    report = holdout_mod.check_vmec_boozer_aggregate_holdout_gate(
+        aggregate_artifact=aggregate,
+        line_search_artifact=line_search,
+        holdout_artifacts=(holdout,),
+        nonlinear_ensemble_artifacts=(manifest,),
+    )
+
+    row = report["nonlinear_ensemble_artifacts"][0]
+    assert report["passed"] is False
+    assert row["is_nonlinear_window_readiness_manifest"] is True
+    assert row["readiness_blockers"] == ["seed_and_timestep_replicates_present"]
+    assert row["missing_artifacts"][0]["variant_axis"] == "seed"
+    assert row["qualifies_for_production_nonlinear_promotion"] is False
+
+
+def test_aggregate_holdout_gate_rejects_non_promotable_holdout_scope(
+    tmp_path: Path,
+) -> None:
+    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
+    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    startup_holdout = _write_json(
+        tmp_path / "startup_holdout.json",
+        {
+            "passed": True,
+            "claim_level": "startup_transient_nonlinear_plumbing_fd_audit_not_transport_average",
+            "transport_average_gate": False,
+            "heldout_samples": [
+                {"surface_index": 3, "alpha": 0.0, "selected_ky_index": 1},
+            ],
+        },
+    )
+
+    report = holdout_mod.check_vmec_boozer_aggregate_holdout_gate(
+        aggregate_artifact=aggregate,
+        line_search_artifact=line_search,
+        holdout_artifacts=(startup_holdout,),
+    )
+
+    assert report["passed"] is False
+    assert report["holdout_artifacts"][0]["n_samples"] == 1
+    assert report["holdout_artifacts"][0]["heldout_surface_or_field_line"] is True
+    assert report["holdout_artifacts"][0]["qualifies_for_promotion"] is False
+    assert (
+        "transport_average_gate_false"
+        in report["holdout_artifacts"][0]["claim_scope_blockers"]
+    )
+    assert (
+        "passed_replicated_nonlinear_window_ensemble"
+        in report["promotion_gate"]["blockers"]
+    )
+
+
+def test_aggregate_holdout_gate_main_writes_json(tmp_path: Path) -> None:
+    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
+    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    out = tmp_path / "report.json"
+
+    result = holdout_mod.main_aggregate_holdout(
+        [
+            "--aggregate-artifact",
+            str(aggregate),
+            "--line-search-artifact",
+            str(line_search),
+            "--json-out",
+            str(out),
+        ]
+    )
+
+    assert result == 0
+    saved = json.loads(out.read_text(encoding="utf-8"))
+    assert saved["kind"] == "vmec_boozer_aggregate_holdout_promotion_gate"
+    assert saved["passed"] is False
+
+
+# VMEC/Boozer reduced portfolio guard assertions
+portfolio_mod = holdout_mod
+
+
+def _row_artifact() -> dict[str, object]:
+    samples = [
+        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 1, "weight": 0.25},
+        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 2, "weight": 0.25},
+        {"surface_index": None, "alpha": 0.5, "selected_ky_index": 1, "weight": 0.25},
+        {"surface_index": None, "alpha": 0.5, "selected_ky_index": 2, "weight": 0.25},
+    ]
+    return {
+        "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
+        "artifact_kind": "vmec_boozer_multi_point_objective_gate",
+        "builder": "scripts/artifacts/build_vmec_boozer_aggregate_objective_gate.py multi-point",
+        "passed": True,
+        "source_scope": "mode21_vmec_boozer_state_multi_point",
+        "claim_scope": "real VMEC/Boozer reduced QL rows; not a nonlinear turbulent transport claim",
+        "next_action": "Nonlinear transport optimization still requires separate long-window gates.",
+        "objective": "quasilinear_flux",
+        "reduction": "mean",
+        "input_path": "/tmp/input.nfp4_QH_warm_start",
+        "wout_path": "/tmp/wout_nfp4_QH_warm_start.nc",
+        "options": {"mboz": 21, "nboz": 21},
+        "n_samples": 4,
+        "samples": samples,
+        "objective_names": [
+            "gamma",
+            "omega",
+            "kperp_eff2",
+            "mixing_length_heat_flux_proxy",
+        ],
+        "minus_sample_values": [0.7, 0.9, 0.8, 1.0],
+        "base_sample_values": [0.8, 1.0, 0.9, 1.1],
+        "plus_sample_values": [0.9, 1.1, 1.0, 1.2],
+        "minus_objective_table": [
+            [0.10, -0.2, 0.5, 0.7],
+            [0.12, -0.3, 0.6, 0.9],
+            [0.11, -0.1, 0.4, 0.8],
+            [0.13, -0.4, 0.7, 1.0],
+        ],
+        "base_objective_table": [
+            [0.11, -0.2, 0.5, 0.8],
+            [0.13, -0.3, 0.6, 1.0],
+            [0.12, -0.1, 0.4, 0.9],
+            [0.14, -0.4, 0.7, 1.1],
+        ],
+        "plus_objective_table": [
+            [0.12, -0.2, 0.5, 0.9],
+            [0.14, -0.3, 0.6, 1.1],
+            [0.13, -0.1, 0.4, 1.0],
+            [0.15, -0.4, 0.7, 1.2],
+        ],
+        "base_value": 0.95,
+        "minus_value": 0.85,
+        "plus_value": 1.05,
+        "central_derivative": 1.0,
+        "response_abs": 0.2,
+        "curvature_ratio": 0.01,
+        "finite_values": True,
+        "finite_difference_consistent": True,
+        "response_resolved": True,
+    }
+
+
+def _gradient_artifact() -> dict[str, object]:
+    return {
+        "kind": "mode21_vmec_boozer_quasilinear_gradient_gate",
+        "passed": True,
+        "objective_gates": [
+            {
+                "objective": "gamma",
+                "parameter": "Rcos_mid_surface_m1",
+                "passed": True,
+                "implicit": 10.0,
+                "finite_difference": 10.01,
+                "abs_error": 0.01,
+                "rel_error": 0.001,
+            },
+            {
+                "objective": "mixing_length_heat_flux_proxy",
+                "parameter": "Rcos_mid_surface_m1",
+                "passed": True,
+                "implicit": 20.0,
+                "finite_difference": 20.02,
+                "abs_error": 0.02,
+                "rel_error": 0.001,
+            },
+        ],
+    }
+
+
+def test_reduced_portfolio_guard_passes_real_metadata_contract() -> None:
+    report = reduced_portfolio_artifact_guard_report(
+        _row_artifact(),
+        gradient_artifacts=[_gradient_artifact()],
+    )
+
+    assert report["passed"] is True
+    assert report["provenance_gate"]["passed"] is True
+    assert report["coverage_gate"]["n_alphas"] == 2
+    assert report["coverage_gate"]["n_ky"] == 2
+    assert report["portfolio_reducer_gate"]["contract"]["row_shape"] == [1, 2, 2, 1]
+    assert report["ad_fd_gradient_gate"]["has_growth_ad_fd_gate"] is True
+    assert report["ad_fd_gradient_gate"]["has_quasilinear_ad_fd_gate"] is True
+    assert report["claim_scope_gate"]["passed"] is True
+
+
+@pytest.mark.parametrize(
+    ("reduction", "base_value", "expected_shape"),
+    [
+        ("weighted_mean", 0.95, [1, 2, 2, 1]),
+        ("max", 1.0, [1, 2, 2, 1]),
+    ],
+)
+def test_reduced_portfolio_guard_accepts_declared_reducer_semantics(
+    reduction: str,
+    base_value: float,
+    expected_shape: list[int],
+) -> None:
+    artifact = _row_artifact()
+    artifact["reduction"] = reduction
+    if reduction == "max":
+        artifact["base_sample_values"] = [0.5, 0.75, 0.875, 1.0]
+    artifact["base_value"] = base_value
+
+    report = reduced_portfolio_artifact_guard_report(
+        artifact,
+        gradient_artifacts=[_gradient_artifact()],
+    )
+
+    assert report["passed"] is True
+    assert report["portfolio_reducer_gate"]["reduction"] == reduction
+    assert report["portfolio_reducer_gate"]["contract"]["row_shape"] == expected_shape
+
+
+def test_reduced_portfolio_guard_distinguishes_physical_torflux_surfaces() -> None:
+    artifact = _row_artifact()
+    artifact["samples"] = [
+        {
+            "surface_index": None,
+            "torflux": 0.5,
+            "surface": 0.5,
+            "alpha": 0.0,
+            "ky": 0.1,
+            "selected_ky_index": 1,
+            "weight": 0.25,
+        },
+        {
+            "surface_index": None,
+            "torflux": 0.5,
+            "surface": 0.5,
+            "alpha": 0.0,
+            "ky": 0.2,
+            "selected_ky_index": 2,
+            "weight": 0.25,
+        },
+        {
+            "surface_index": None,
+            "torflux": 0.7,
+            "surface": 0.7,
+            "alpha": 0.0,
+            "ky": 0.1,
+            "selected_ky_index": 1,
+            "weight": 0.25,
+        },
+        {
+            "surface_index": None,
+            "torflux": 0.7,
+            "surface": 0.7,
+            "alpha": 0.0,
+            "ky": 0.2,
+            "selected_ky_index": 2,
+            "weight": 0.25,
+        },
+    ]
+    report = reduced_portfolio_artifact_guard_report(
+        artifact,
+        gradient_artifacts=[_gradient_artifact()],
+        config=ReducedPortfolioArtifactGuardConfig(min_alphas=1),
+    )
+
+    assert report["passed"] is True
+    assert report["coverage_gate"]["n_surfaces"] == 2
+    assert report["coverage_gate"]["n_alphas"] == 1
+    assert report["coverage_gate"]["n_ky"] == 2
+    assert report["portfolio_reducer_gate"]["contract"]["row_shape"] == [2, 1, 2, 1]
+
+
+def test_reduced_portfolio_guard_rejects_duplicate_or_incomplete_sample_grids() -> None:
+    duplicate = _row_artifact()
+    duplicate["samples"] = [
+        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 1, "weight": 0.25},
+        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 1, "weight": 0.25},
+        {"surface_index": None, "alpha": 0.5, "selected_ky_index": 1, "weight": 0.25},
+        {"surface_index": None, "alpha": 0.5, "selected_ky_index": 2, "weight": 0.25},
+    ]
+    with pytest.raises(ValueError, match="duplicate"):
+        reduced_portfolio_artifact_guard_report(
+            duplicate,
+            gradient_artifacts=[_gradient_artifact()],
+        )
+
+    incomplete = _row_artifact()
+    incomplete["samples"] = incomplete["samples"][:-1]  # type: ignore[index]
+    incomplete["base_sample_values"] = incomplete["base_sample_values"][:-1]  # type: ignore[index]
+    incomplete["minus_sample_values"] = incomplete["minus_sample_values"][:-1]  # type: ignore[index]
+    incomplete["plus_sample_values"] = incomplete["plus_sample_values"][:-1]  # type: ignore[index]
+    incomplete["base_objective_table"] = incomplete["base_objective_table"][:-1]  # type: ignore[index]
+    incomplete["minus_objective_table"] = incomplete["minus_objective_table"][:-1]  # type: ignore[index]
+    incomplete["plus_objective_table"] = incomplete["plus_objective_table"][:-1]  # type: ignore[index]
+    with pytest.raises(ValueError, match="complete rectangular"):
+        reduced_portfolio_artifact_guard_report(
+            incomplete,
+            gradient_artifacts=[_gradient_artifact()],
+        )
+
+
+def test_reduced_portfolio_guard_marks_bad_gradient_gate_without_crashing() -> None:
+    bad_gradient = {
+        "kind": "mode21_vmec_boozer_quasilinear_gradient_gate",
+        "passed": False,
+        "objective_gates": [
+            {
+                "objective": "gamma",
+                "passed": True,
+                "implicit": 1.0,
+                "finite_difference": float("nan"),
+                "abs_error": 0.0,
+                "rel_error": 0.0,
+            },
+            "not-a-dict",
+        ],
+    }
+
+    report = reduced_portfolio_artifact_guard_report(
+        _row_artifact(),
+        gradient_artifacts=[bad_gradient],  # type: ignore[list-item]
+    )
+
+    assert report["passed"] is False
+    assert report["ad_fd_gradient_gate"]["passed"] is False
+    assert report["ad_fd_gradient_gate"]["finite_ad_fd_values"] is False
+
+
+@pytest.mark.parametrize(
+    ("mutator", "message"),
+    [
+        (
+            lambda artifact: artifact.update({"reduction": "median"}),
+            "artifact reduction",
+        ),
+        (
+            lambda artifact: artifact.update({"base_sample_values": [0.8, 1.0]}),
+            "base_sample_values",
+        ),
+        (
+            lambda artifact: artifact.update(
+                {"base_objective_table": [0.8, 1.0, 0.9, 1.1]}
+            ),
+            "two-dimensional",
+        ),
+        (
+            lambda artifact: artifact.update(
+                {"samples": [*artifact["samples"][:-1], "bad-sample"]}
+            ),
+            "all samples",
+        ),
+    ],
+)
+def test_reduced_portfolio_guard_rejects_malformed_artifact_shapes(
+    mutator,
+    message: str,
+) -> None:
+    artifact = _row_artifact()
+    mutator(artifact)
+
+    with pytest.raises(ValueError, match=message):
+        reduced_portfolio_artifact_guard_report(
+            artifact,
+            gradient_artifacts=[_gradient_artifact()],
+        )
+
+
+def test_reduced_portfolio_guard_reports_objective_and_provenance_blockers() -> None:
+    artifact = _row_artifact()
+    artifact["objective_names"] = ["omega", "kperp_eff2"]
+    artifact["options"] = {"mboz": 8, "nboz": 8}
+    artifact["input_path"] = ""
+    artifact["wout_path"] = ""
+
+    report = reduced_portfolio_artifact_guard_report(
+        artifact,
+        gradient_artifacts=[_gradient_artifact()],
+    )
+
+    assert report["passed"] is False
+    assert report["objective_name_gate"]["passed"] is False
+    assert report["objective_name_gate"]["has_growth_objective"] is False
+    assert report["objective_name_gate"]["has_quasilinear_objective"] is False
+    assert report["provenance_gate"]["passed"] is False
+    assert report["provenance_gate"]["mboz"] == 8
+    assert report["provenance_gate"]["has_input_and_wout_paths"] is False
+
+
+def test_reduced_portfolio_guard_reports_unresolved_finite_difference_diagnostics() -> (
+    None
+):
+    artifact = _row_artifact()
+    artifact["response_resolved"] = False
+    artifact["finite_difference_consistent"] = False
+    artifact["plus_value"] = float("inf")
+
+    report = reduced_portfolio_artifact_guard_report(
+        artifact,
+        gradient_artifacts=[_gradient_artifact()],
+    )
+
+    assert report["passed"] is False
+    assert report["finite_difference_gate"]["passed"] is False
+    assert report["finite_difference_gate"]["response_resolved"] is False
+    assert report["finite_difference_gate"]["finite_difference_consistent"] is False
+    assert (
+        report["finite_difference_gate"]["finite_scalar_fields"]["plus_value"] is False
+    )
+
+
+def test_reduced_portfolio_guard_fails_single_alpha_or_missing_gradient_gate() -> None:
+    artifact = _row_artifact()
+    artifact["samples"] = [
+        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 1, "weight": 0.5},
+        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 2, "weight": 0.5},
+    ]
+    artifact["base_sample_values"] = [0.8, 1.0]
+    artifact["minus_sample_values"] = [0.7, 0.9]
+    artifact["plus_sample_values"] = [0.9, 1.1]
+    artifact["base_objective_table"] = [[0.11, -0.2, 0.5, 0.8], [0.13, -0.3, 0.6, 1.0]]
+    artifact["minus_objective_table"] = [[0.10, -0.2, 0.5, 0.7], [0.12, -0.3, 0.6, 0.9]]
+    artifact["plus_objective_table"] = [[0.12, -0.2, 0.5, 0.9], [0.14, -0.3, 0.6, 1.1]]
+    artifact["base_value"] = 0.9
+    artifact["minus_value"] = 0.8
+    artifact["plus_value"] = 1.0
+
+    report = reduced_portfolio_artifact_guard_report(artifact, gradient_artifacts=[])
+
+    assert report["passed"] is False
+    assert report["coverage_gate"]["passed"] is False
+    assert report["ad_fd_gradient_gate"]["passed"] is False
+
+
+def test_reduced_portfolio_guard_fails_production_nonlinear_claim() -> None:
+    artifact = _row_artifact()
+    artifact["objective"] = "nonlinear_heat_flux"
+    artifact["claim_scope"] = (
+        "production nonlinear turbulent transport optimization claim"
+    )
+
+    report = reduced_portfolio_artifact_guard_report(
+        artifact,
+        gradient_artifacts=[_gradient_artifact()],
+    )
+
+    assert report["passed"] is False
+    assert report["claim_scope_gate"]["passed"] is False
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"min_alphas": 0}, "min_alphas"),
+        ({"min_ky": 0}, "min_ky"),
+        ({"min_objectives": 0}, "min_objectives"),
+        ({"min_boozer_mode": 0}, "min_boozer_mode"),
+        ({"value_rtol": -1.0e-8}, "tolerances"),
+        ({"value_atol": -1.0e-8}, "tolerances"),
+    ],
+)
+def test_reduced_portfolio_guard_validates_config(
+    kwargs: dict[str, float], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        ReducedPortfolioArtifactGuardConfig(**kwargs)
+
+
+def test_tool_writes_guard_artifact(tmp_path: Path) -> None:
+    row_path = tmp_path / "row.json"
+    gradient_path = tmp_path / "gradient.json"
+    out_path = tmp_path / "guard.json"
+    row_path.write_text(json.dumps(_row_artifact()), encoding="utf-8")
+    gradient_path.write_text(json.dumps(_gradient_artifact()), encoding="utf-8")
+
+    payload = portfolio_mod.build_vmec_boozer_reduced_portfolio_guard_payload(
+        row_artifact=row_path,
+        gradient_artifacts=[gradient_path],
+    )
+    written = portfolio_mod.write_vmec_boozer_reduced_portfolio_guard_artifact(
+        payload, out=out_path
+    )
+
+    assert Path(written) == out_path
+    data = json.loads(out_path.read_text(encoding="utf-8"))
+    assert data["passed"] is True
+    assert data["row_artifact"] == str(row_path)
+
+
+def test_tool_exposes_reducer_value_tolerances(tmp_path: Path) -> None:
+    row = _row_artifact()
+    row["base_value"] = 0.95000004
+    row_path = tmp_path / "row.json"
+    gradient_path = tmp_path / "gradient.json"
+    row_path.write_text(json.dumps(row), encoding="utf-8")
+    gradient_path.write_text(json.dumps(_gradient_artifact()), encoding="utf-8")
+
+    strict_payload = portfolio_mod.build_vmec_boozer_reduced_portfolio_guard_payload(
+        row_artifact=row_path,
+        gradient_artifacts=[gradient_path],
+    )
+    loose_payload = portfolio_mod.build_vmec_boozer_reduced_portfolio_guard_payload(
+        row_artifact=row_path,
+        gradient_artifacts=[gradient_path],
+        value_rtol=1.0e-6,
+        value_atol=1.0e-6,
+    )
+
+    assert strict_payload["portfolio_reducer_gate"]["passed"] is False
+    assert strict_payload["passed"] is False
+    assert loose_payload["portfolio_reducer_gate"]["passed"] is True
+    assert loose_payload["passed"] is True
+
+
+def test_tool_main_returns_nonzero_for_failed_guard(tmp_path: Path) -> None:
+    row = _row_artifact()
+    row["options"] = {"mboz": 8, "nboz": 8}
+    row_path = tmp_path / "row.json"
+    gradient_path = tmp_path / "gradient.json"
+    row_path.write_text(json.dumps(row), encoding="utf-8")
+    gradient_path.write_text(json.dumps(_gradient_artifact()), encoding="utf-8")
+
+    result = portfolio_mod.main_reduced_portfolio_guard(
+        [
+            "--row-artifact",
+            str(row_path),
+            "--gradient-artifact",
+            str(gradient_path),
+            "--out",
+            str(tmp_path / "guard.json"),
+        ]
+    )
+
+    assert result == 1

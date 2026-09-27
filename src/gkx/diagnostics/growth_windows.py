@@ -547,30 +547,6 @@ def _tail_window(
     return mask, float(tt[0]) if tt.size else None, float(tt[-1]) if tt.size else None
 
 
-def late_time_window(
-    t: np.ndarray, *, tail_fraction: float = 0.4
-) -> tuple[float, float]:
-    """Return the start/end of a late-time tail window.
-
-    This is the windowing convention used for manuscript-facing eigenfunction
-    extraction when the growth-rate fit window is not the same object as the
-    late-time mode-shape window.
-    """
-
-    _mask, tmin, tmax = _tail_window(np.asarray(t, dtype=float), float(tail_fraction))
-    if tmin is None or tmax is None:
-        raise ValueError("late-time window requires a non-empty time axis")
-    return float(tmin), float(tmax)
-
-
-def _tail_stats(arr: np.ndarray, mask: np.ndarray) -> tuple[float, float]:
-    vals = np.asarray(arr, dtype=float)[mask]
-    vals = vals[np.isfinite(vals)]
-    if vals.size == 0:
-        return float("nan"), float("nan")
-    return float(np.mean(vals)), float(np.std(vals))
-
-
 def _leading_window(
     t: np.ndarray,
     lead_fraction: float,

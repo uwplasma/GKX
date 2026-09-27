@@ -8,7 +8,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
-from gkx.artifacts.plotting import set_plot_style
+from gkx.artifacts.figure_style import set_plot_style
 
 
 @dataclass(frozen=True)

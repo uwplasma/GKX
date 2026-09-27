@@ -188,7 +188,7 @@ Collisions
 
 GKX ships five collision models. The ``collision_operator`` key in the
 ``[time]`` section of a TOML input selects one, and
-:func:`gkx.operators.linear.collision_factory.collision_operator_from_config`
+:func:`gkx.operators.linear.collision_tables.collision_operator_from_config`
 builds the same operator from Python:
 
 .. list-table::
@@ -743,7 +743,7 @@ for reference-code parity rows, whose decks must reproduce the reference
 exactly; it commits the row to being reported as resolution-limited, not as a
 converged growth rate. The declaration is a required field of every linear row
 of ``tools/evidence_ledger.toml`` and is checked by
-``tests/release/test_evidence_ledger.py``.
+``tests/release/test_release_gates.py``.
 
 Hyperdiffusion And End Damping
 ------------------------------
@@ -834,7 +834,7 @@ Source Mapping
 - collision models:
   ``src/gkx/operators/linear/collisions.py``,
   ``src/gkx/operators/linear/collision_tables.py``,
-  ``src/gkx/operators/linear/collision_factory.py``
+  ``src/gkx/operators/linear/collision_tables.py``
 - nonlinear term kernels:
   ``src/gkx/terms/nonlinear.py`` and ``src/gkx/operators/nonlinear/``
 - assembly:

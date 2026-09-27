@@ -8,7 +8,7 @@ from gkx.config import (
     RuntimeParallelConfig,
     RuntimeQuasilinearConfig,
 )
-from gkx.workflows.runtime.policies import (
+from gkx.runtime import (
     RuntimeIndependentParallelPlan,
     _active_kx_indices,
     _active_ky_indices,
@@ -23,16 +23,16 @@ from gkx.workflows.runtime.policies import (
     _validate_dealias_mask_shape,
     _zero_kx_index,
 )
-from gkx.workflows.runtime.resolution import (
+from gkx.workflows.runtime.wout import (
     PERP_LADDER,
     GeometryFeatures,
     geometry_class,
     ky_max_target,
     perp_points_for,
     resolution_from_features,
+    direct_config_shorthand_args,
 )
 from gkx.workflows.runtime.toml import (
-    direct_config_shorthand_args,
     is_runtime_toml,
     load_toml,
     load_runtime_from_toml,
@@ -1134,7 +1134,7 @@ def test_estimator_end_to_end_on_scan_equilibria() -> None:
     wouts = _scan_wouts_dir()
     if wouts is None:
         pytest.skip("resolution-scan wout files not present on this machine")
-    from gkx.workflows.runtime.resolution import estimate_resolution
+    from gkx.workflows.runtime.wout import estimate_resolution
 
     checked = 0
     for _case, (fname, anisotropy, wells, klass) in SCAN_CASES.items():

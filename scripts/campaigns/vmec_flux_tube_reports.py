@@ -21,7 +21,7 @@ from gkx.geometry.numerics import (
     _array_parity_metrics,
     _scalar_parity_metrics,
 )
-from gkx.geometry.sensitivity import geometry_sensitivity_report
+from gkx.geometry.differentiable import geometry_sensitivity_report
 from gkx.geometry.vmec_boozer_core import (
     vmex_boozer_equal_arc_core_profiles_from_state,
 )

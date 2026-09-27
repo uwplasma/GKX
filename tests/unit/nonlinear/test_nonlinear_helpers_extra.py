@@ -11,36 +11,41 @@ from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics.metadata import ResolvedDiagnostics, SimulationDiagnostics
 from gkx.operators.fluxes import heat_flux_species
 from gkx.operators.moments import fieldline_quadrature_weights
-from gkx.geometry import SAlphaGeometry
-from gkx.geometry import ensure_flux_tube_geometry_data
+from gkx.geometry import (
+    SAlphaGeometry,
+    ensure_flux_tube_geometry_data,
+)
 from gkx.operators.linear.cache_builder import (
     update_linear_cache_for_sheared_kx,
+    build_linear_cache,
 )
-from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.operators.linear.params import LinearParams
-from gkx.operators.linear.params import Species, build_linear_params
+from gkx.operators.linear.params import (
+    LinearParams,
+    Species,
+    build_linear_params,
+)
 from gkx.operators.nonlinear import projection as nonlinear_projection
 from gkx.operators.nonlinear.collisions import (
     _apply_collision_split,
     _collision_damping,
 )
-from gkx.operators.nonlinear.diagnostics import (
+from gkx.solvers_nonlinear_diagnostic_integration import (
     _pack_resolved_diagnostics,
     _sample_indices_with_final,
-)
-from gkx.operators.nonlinear.diagnostics import (
     build_nonlinear_simulation_diagnostics,
     finalize_nonlinear_scan_diagnostics,
     maybe_emit_nonlinear_progress,
     run_sampled_explicit_diagnostic_scan,
     sampled_scan_intervals,
     select_nonlinear_step_diagnostics,
+    _integrate_nonlinear_explicit_diagnostics_impl,
+    integrate_nonlinear_explicit_diagnostics,
+    integrate_nonlinear_explicit_diagnostics_state,
+    integrate_nonlinear_imex_diagnostics,
 )
 from gkx.operators.nonlinear.policies import (
     _diagnostic_omega_mode_mask,
     _nonlinear_cfl_frequency_components,
-)
-from gkx.operators.nonlinear.policies import (
     build_nonlinear_collision_split_policy,
     build_nonlinear_diagnostic_setup,
     build_nonlinear_imex_operator,
@@ -52,19 +57,9 @@ from gkx.operators.nonlinear.projection import (
     _make_nonlinear_state_projector,
 )
 import gkx.solvers_nonlinear_state_integration as nonlinear_state_integration_mod
-from gkx.solvers_nonlinear_diagnostic_integration import (
-    _integrate_nonlinear_explicit_diagnostics_impl,
-)
-from gkx.solvers_nonlinear_diagnostic_integration import (
-    integrate_nonlinear_explicit_diagnostics,
-    integrate_nonlinear_explicit_diagnostics_state,
-    integrate_nonlinear_imex_diagnostics,
-)
 from gkx.solvers_nonlinear_state_integration import (
     DIVERGENCE_KNEE_STEPS,
     nonlinear_heat_flux_window,
-)
-from gkx.solvers_nonlinear_state_integration import (
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,

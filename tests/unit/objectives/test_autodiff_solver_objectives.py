@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 from support.paired_solvax import requires_paired_solvax
 from support.paths import REPO_ROOT
@@ -42,8 +41,21 @@ from gkx.diagnostics import fieldline_quadrature_weights
 from gkx.diagnostics.quasilinear_transport import (
     effective_kperp2,
     quasilinear_feature_objective,
-    shape_aware_power_law_objective,
 )
+import json
+import sys
+from types import SimpleNamespace
+from scripts.campaigns.vmec_candidate_admission import (
+    build_authoritative_wout_candidate_gate,
+    build_solved_vmec_candidate_gate,
+    build_wout_reproducibility_gate,
+    final_iota_profiles_from_vmec_result,
+)
+import csv
+from pathlib import Path
+from support.paths import load_artifact_tool
+import py_compile
+import re
 
 
 requires_solvax_reverse_eigenpair = requires_paired_solvax(
@@ -341,30 +353,6 @@ def test_quasilinear_sweep_rule_objectives_have_fd_checked_derivatives() -> None
             atol=1.0e-5,
         )
         assert report["passed"] is True
-
-
-def test_shape_aware_power_law_objective_has_fd_checked_derivatives() -> None:
-    ky = jnp.asarray([0.1, 0.2, 0.4])
-
-    def objective(x):
-        features = jnp.stack(
-            [
-                jnp.asarray([0.1, 0.2, 0.3]),
-                jnp.asarray([0.5, 0.6, 0.7]),
-                x[:3],
-            ],
-            axis=-1,
-        )
-        return jnp.sum(
-            shape_aware_power_law_objective(features, ky, exponent=x[3], csat=0.8)
-        )
-
-    x0 = jnp.asarray([1.0, 1.5, 2.0, -0.3])
-    report = autodiff_finite_difference_report(
-        objective, x0, step=1.0e-3, rtol=2.0e-4, atol=1.0e-5
-    )
-
-    assert report["passed"] is True
 
 
 def test_isolated_eigenvalue_sensitivity_report_tracks_branch_derivatives() -> None:
@@ -774,7 +762,6 @@ def test_autodiff_finite_difference_report_rejects_bad_inputs() -> None:
 
 # ---- test_solver_objective_gradients.py ----
 
-import gkx.objectives.sampling as sampling
 from gkx import (
     AdaptiveLinearEigensolverConfig,
     SOLVER_OBJECTIVE_NAMES,
@@ -784,7 +771,6 @@ from gkx import (
     solver_linear_operator_matrix_from_geometry,
     solver_growth_rate_from_geometry,
     solver_objective_vector_from_geometry,
-    solver_grid_options_from_ky_values,
     solver_scalar_objective_from_vector,
 )
 from gkx.geometry.vmec_state_controls import _vmec_boozer_state_parameter_name
@@ -1302,69 +1288,6 @@ def test_solver_growth_rate_from_geometry_validates_small_grid_contracts() -> No
         solver_growth_rate_from_geometry(EmptyThetaGeometry())
 
 
-def test_solver_grid_options_from_ky_values_maps_physical_scan_to_fft_rows() -> None:
-    options = solver_grid_options_from_ky_values((0.1, 0.3, 0.5))
-
-    assert gkx.solver_grid_options_from_ky_values is solver_grid_options_from_ky_values
-    assert options["selected_ky_indices"] == (1, 3, 5)
-    assert options["ny"] == 12
-    assert float(options["ly"]) == pytest.approx(2.0 * np.pi / 0.1)
-    np.testing.assert_allclose(
-        options["resolved_ky_values"], (0.1, 0.3, 0.5), rtol=5.0e-6, atol=5.0e-8
-    )
-
-    shifted = solver_grid_options_from_ky_values((0.15, 0.35), ky_base=0.05)
-    assert shifted["selected_ky_indices"] == (3, 7)
-    assert shifted["ny"] == 16
-    np.testing.assert_allclose(
-        shifted["resolved_ky_values"], (0.15, 0.35), rtol=5.0e-6, atol=5.0e-8
-    )
-    with pytest.raises(ValueError, match="integer multiples"):
-        solver_grid_options_from_ky_values((0.15, 0.35))
-    with pytest.raises(ValueError, match="duplicate"):
-        solver_grid_options_from_ky_values((0.1, 0.1))
-    with pytest.raises(ValueError, match="ky_base"):
-        solver_grid_options_from_ky_values((0.1, 0.2), ky_base=0.0)
-    with pytest.raises(ValueError, match="positive"):
-        solver_grid_options_from_ky_values((0.0, 0.1))
-
-
-def test_solver_objective_sampling_helpers_validate_contracts() -> None:
-    assert sampling._surface_index_tuple(None) == (None,)
-    assert sampling._surface_index_tuple(3) == (3,)
-    with pytest.raises(ValueError, match="surface_indices"):
-        sampling._surface_index_tuple([])
-
-    assert sampling._int_tuple(2, name="selected_ky_indices") == (2,)
-    with pytest.raises(ValueError, match="selected_ky_indices"):
-        sampling._int_tuple([], name="selected_ky_indices")
-
-    assert sampling._float_tuple(0.3, name="ky_values") == (0.3,)
-    with pytest.raises(ValueError, match="ky_values"):
-        sampling._float_tuple([], name="ky_values")
-    with pytest.raises(ValueError, match="finite"):
-        sampling._float_tuple([0.1, float("nan")], name="ky_values")
-
-    np.testing.assert_allclose(
-        sampling._aggregate_weights(None, 3), np.full(3, 1.0 / 3.0)
-    )
-    np.testing.assert_allclose(sampling._aggregate_weights([1.0, 3.0], 2), [0.25, 0.75])
-    with pytest.raises(ValueError, match="positive"):
-        sampling._aggregate_weights([0.0, 0.0], 2)
-    with pytest.raises(ValueError, match="finite"):
-        sampling._aggregate_weights([1.0, float("nan")], 2)
-
-    rows = sampling._aggregate_sample_metadata(
-        (None, 4), (0.0,), (1, 2), np.asarray([0.1, 0.2, 0.3, 0.4])
-    )
-    assert rows == [
-        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 1, "weight": 0.1},
-        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 2, "weight": 0.2},
-        {"surface_index": 4, "alpha": 0.0, "selected_ky_index": 1, "weight": 0.3},
-        {"surface_index": 4, "alpha": 0.0, "selected_ky_index": 2, "weight": 0.4},
-    ]
-
-
 # ---- test_stellarator_objective_portfolio.py ----
 
 
@@ -1372,14 +1295,11 @@ from scripts.campaigns.portfolio_guard import (
     ReducedPortfolioArtifactGuardConfig,
     reduced_portfolio_artifact_guard_report,
 )
-from gkx.objectives.portfolio import (
+from gkx.objectives.vmec_transport import (
     aggregate_objective_portfolio,
     portfolio_objective_weight_vector,
     portfolio_sample_weight_tensor,
     validate_objective_portfolio_contract,
-)
-from gkx.objectives.portfolio import (
-    objective_portfolio_sensitivity_report,
 )
 
 
@@ -1484,90 +1404,6 @@ def test_objective_portfolio_gradient_jvp_and_finite_difference_parity() -> None
     )
 
 
-def test_objective_portfolio_sensitivity_report_checks_fd_and_conditioning() -> None:
-    surface = jnp.asarray([-0.4, 0.7])[:, None, None]
-    alpha = jnp.asarray([-0.5, 0.3])[None, :, None]
-    ky = jnp.asarray([0.2, 0.6, 1.0])[None, None, :]
-
-    def row_fn(params: jnp.ndarray) -> jnp.ndarray:
-        gamma = 0.15 + 0.08 * params[0] + 0.04 * alpha + 0.03 * ky
-        kperp = 0.45 + 0.05 * params[1] ** 2 + 0.08 * ky + 0.02 * surface
-        flux = (
-            0.30
-            + 0.09 * params[2]
-            + 0.04 * jnp.sin(params[1] + alpha)
-            + 0.02 * surface * ky
-        )
-        ql_flux = gamma * flux / kperp
-        return jnp.stack(
-            [
-                gamma + jnp.zeros_like(ql_flux),
-                kperp + jnp.zeros_like(ql_flux),
-                ql_flux,
-            ],
-            axis=-1,
-        )
-
-    params = jnp.asarray([0.12, -0.20, 0.35])
-    step = 1.0e-4 if bool(jax.config.jax_enable_x64) else 2.0e-3
-    rtol = 5.0e-4 if bool(jax.config.jax_enable_x64) else 2.0e-2
-    atol = 1.0e-5 if bool(jax.config.jax_enable_x64) else 2.0e-4
-
-    report = objective_portfolio_sensitivity_report(
-        row_fn,
-        params,
-        surface_weights=jnp.asarray([1.0, 2.0]),
-        alpha_weights=jnp.asarray([2.0, 1.0]),
-        ky_weights=jnp.asarray([1.0, 2.0, 3.0]),
-        objective_weights=jnp.asarray([0.2, 0.2, 1.0]),
-        step=step,
-        rtol=rtol,
-        atol=atol,
-        min_rank=3,
-        condition_number_limit=1.0e4,
-        workers=2,
-    )
-
-    assert report["passed"] is True
-    assert report["portfolio_contract"]["row_shape"] == [2, 2, 3, 3]
-    assert report["scalar_gradient_gate"]["passed"] is True
-    assert report["row_jacobian_gate"]["passed"] is True
-    assert report["conditioning_gate"]["passed"] is True
-    assert report["conditioning_gate"]["sensitivity_map_rank"] == 3
-    assert (
-        report["scalar_gradient_gate"]["finite_difference_parallel"][
-            "requested_workers"
-        ]
-        == 2
-    )
-    assert report["covariance"]["source"] == "objective_portfolio_rows"
-
-
-def test_objective_portfolio_sensitivity_report_fails_rank_deficient_rows() -> None:
-    sample_axis = jnp.arange(4.0).reshape((1, 1, 4))
-
-    def rank_deficient_row_fn(params: jnp.ndarray) -> jnp.ndarray:
-        row = 0.2 + params[0] * (1.0 + sample_axis)
-        return row[..., None]
-
-    report = objective_portfolio_sensitivity_report(
-        rank_deficient_row_fn,
-        jnp.asarray([0.1, -0.2]),
-        reduction="mean",
-        step=1.0e-3,
-        rtol=2.0e-2,
-        atol=2.0e-4,
-        min_rank=2,
-        condition_number_limit=1.0e4,
-    )
-
-    assert report["passed"] is False
-    assert report["scalar_gradient_gate"]["passed"] is True
-    assert report["row_jacobian_gate"]["passed"] is True
-    assert report["conditioning_gate"]["passed"] is False
-    assert report["conditioning_gate"]["rank_deficiency"] == 1
-
-
 def test_objective_portfolio_rejects_invalid_shape_and_weights() -> None:
     rows = jnp.ones((2, 2, 2, 2))
 
@@ -1606,9 +1442,6 @@ def test_objective_portfolio_rejects_invalid_shape_and_weights() -> None:
 
     with pytest.raises(TypeError, match="real numeric"):
         aggregate_objective_portfolio(jnp.ones((1, 1, 1, 1), dtype=jnp.complex64))
-
-    with pytest.raises(ValueError, match="params"):
-        objective_portfolio_sensitivity_report(lambda _p: rows, jnp.ones((1, 1)))
 
 
 def test_objective_portfolio_mean_and_max_reductions_are_explicit() -> None:
@@ -1651,10 +1484,6 @@ def test_objective_portfolio_helpers_are_exported_at_package_top_level() -> None
 
     assert isinstance(contract, sgk.StellaratorObjectivePortfolioContract)
     np.testing.assert_allclose(float(sgk.aggregate_objective_portfolio(rows)), 1.0)
-    assert (
-        sgk.objective_portfolio_sensitivity_report
-        is objective_portfolio_sensitivity_report
-    )
     # The reduced-portfolio artifact guard is campaign promotion policy, not
     # solver API: it ships in scripts/campaigns/ and is deliberately absent from
     # the installable package's top level.
@@ -1667,60 +1496,6 @@ def test_objective_portfolio_helpers_are_exported_at_package_top_level() -> None
 
 
 # ---- test_stellarator_optimization.py ----
-
-import gkx.objectives.stellarator as so
-from gkx.objectives.stellarator import (
-    OBSERVABLE_NAMES,
-    PARAMETER_NAMES,
-    StellaratorITGOptimizationConfig,
-    StellaratorITGOptimizationResult,
-    StellaratorITGSampleSet,
-    compare_stellarator_itg_objectives,
-    default_stellarator_initial_params,
-    nonlinear_heat_flux_trace,
-    nonlinear_heat_flux_window_metrics,
-    optimize_stellarator_itg,
-    qa_observable_vector,
-    stellarator_itg_density_gradient_scan,
-    stellarator_itg_objective,
-    stellarator_itg_objective_residual_names,
-    stellarator_itg_objective_residual_vector,
-    stellarator_itg_portfolio_gate_payload,
-    stellarator_itg_portfolio_sensitivity_report,
-    stellarator_itg_reduced_portfolio_objective,
-    stellarator_itg_residual_sensitivity_report,
-    stellarator_itg_sample_objective_table,
-    stellarator_itg_vmec_boozer_portfolio_objective_from_state,
-    stellarator_itg_vmec_boozer_sample_objective_table_from_state,
-)
-
-
-def _fast_config() -> StellaratorITGOptimizationConfig:
-    return StellaratorITGOptimizationConfig(
-        nonlinear_dt=0.18,
-        nonlinear_steps=96,
-        nonlinear_tail_fraction=0.30,
-        fd_step=1.0e-4 if bool(jax.config.jax_enable_x64) else 5.0e-3,
-    )
-
-
-def _fd_tolerances() -> tuple[float, float]:
-    if bool(jax.config.jax_enable_x64):
-        return 5.0e-3, 6.0e-4
-    return 5.0e-2, 6.0e-3
-
-
-def _disable_optional_backend_discovery(monkeypatch) -> None:
-    monkeypatch.setattr(
-        so,
-        "discover_differentiable_geometry_backends",
-        lambda: {
-            "vmex_available": False,
-            "vmex_boundary_api_available": False,
-            "booz_xform_jax_available": False,
-            "booz_xform_jax_api_available": False,
-        },
-    )
 
 
 def test_public_optimization_examples_exclude_reduced_synthetic_workflows() -> None:
@@ -1751,493 +1526,1891 @@ def test_public_optimization_examples_keep_editable_constant_style() -> None:
             raise AssertionError(f"unexpected optimization example {script.name}")
 
 
-def test_stellarator_itg_observable_contract_is_finite_and_exported() -> None:
-    assert gkx.STELLARATOR_ITG_PARAMETER_NAMES == PARAMETER_NAMES
-    assert gkx.STELLARATOR_ITG_OBSERVABLE_NAMES == OBSERVABLE_NAMES
-    assert gkx.optimize_stellarator_itg is optimize_stellarator_itg
-    assert (
-        gkx.stellarator_itg_density_gradient_scan
-        is stellarator_itg_density_gradient_scan
-    )
-    assert (
-        gkx.stellarator_itg_residual_sensitivity_report
-        is stellarator_itg_residual_sensitivity_report
-    )
-
-    cfg = _fast_config()
-    params = default_stellarator_initial_params()
-    observables = np.asarray(qa_observable_vector(params, cfg))
-
-    assert observables.shape == (len(OBSERVABLE_NAMES),)
-    assert np.all(np.isfinite(observables))
-    obs = dict(zip(OBSERVABLE_NAMES, observables, strict=True))
-    assert obs["aspect"] > 0.0
-    assert obs["kperp_eff2"] > 0.0
-    assert obs["growth_rate"] > 0.0
-    assert obs["linear_heat_flux_weight"] > 0.0
-    assert obs["quasilinear_heat_flux"] > 0.0
-    assert obs["nonlinear_heat_flux_mean"] > 0.0
+# ---- from test_vmec_transport_objectives.py ----
+# Unit contracts: vmec transport objectives.
 
 
-def test_stellarator_itg_density_gradient_scan_is_monotone_and_scoped() -> None:
-    cfg = _fast_config()
-    params = default_stellarator_initial_params()
-    scan = stellarator_itg_density_gradient_scan(
-        params,
-        cfg,
-        density_gradients=(0.8, cfg.reference_density_gradient, 4.8),
-    )
-    default_obs = dict(
-        zip(OBSERVABLE_NAMES, qa_observable_vector(params, cfg), strict=True)
+POLICY = {
+    "target_aspect": 6.0,
+    "aspect_atol": 5.0e-2,
+    "min_abs_mean_iota": 0.41,
+    "qs_residual_max": 5.0e-2,
+    "iota_profile_floor": 0.41,
+}
+
+
+def test_candidate_gate_rejects_bad_history_without_nonfinite_json() -> None:
+    report = build_solved_vmec_candidate_gate(
+        {"aspect_final": "bad", "iota_final": np.inf, "qs_final": np.nan},
+        **POLICY,
+        iota_profiles=(np.asarray([0.0, 0.412]), np.asarray([0.413])),
     )
 
-    assert (
-        scan["scope"]
-        == "reduced_max_mode1_density_gradient_response_not_full_nonlinear_scan"
+    assert report["passed"] is False
+    assert report["checks"]["aspect"]["value"] is None
+    assert report["checks"]["aspect"]["passed"] is False
+    assert report["checks"]["mean_iota"]["value"] is None
+    assert report["checks"]["quasisymmetry"]["value"] is None
+    json.dumps(report, allow_nan=False)
+
+
+def test_candidate_gate_requires_iota_profiles_when_floor_is_enabled() -> None:
+    report = build_solved_vmec_candidate_gate(
+        {"aspect_final": 6.0, "iota_final": 0.42, "qs_final": 0.02},
+        **POLICY,
     )
-    assert scan["fixed_temperature_gradient"] == cfg.reference_temperature_gradient
-    assert scan["density_gradient_axis"] == [0.8, cfg.reference_density_gradient, 4.8]
-    assert np.all(np.diff(scan["heat_flux_mean"]) > 0.0)
-    assert np.all(np.diff(scan["growth_rate"]) > 0.0)
-    assert scan["linear_slope_dQ_d_a_over_Ln"] > 0.0
-    assert scan["heat_flux_mean"][1] == pytest.approx(
-        default_obs["nonlinear_heat_flux_mean"]
-    )
+
+    assert report["passed"] is False
+    assert report["checks"]["iota_profile"]["source"] == "missing"
+    assert report["checks"]["iota_profile"]["passed"] is False
 
 
-@pytest.mark.parametrize("density_gradients", [(), (0.8, np.nan), (-0.1, 1.0)])
-def test_stellarator_itg_density_gradient_scan_rejects_invalid_axes(
-    density_gradients: tuple[float, ...],
-) -> None:
-    with pytest.raises(ValueError, match="density_gradients"):
-        stellarator_itg_density_gradient_scan(
-            default_stellarator_initial_params(),
-            _fast_config(),
-            density_gradients=density_gradients,
-        )
-
-
-def test_stellarator_itg_objectives_have_fd_checked_gradients() -> None:
-    cfg = _fast_config()
-    params = jnp.asarray([0.18, 0.25, 0.22, -0.16])
-    rtol, atol = _fd_tolerances()
-
-    for kind in ("growth", "quasilinear_flux", "nonlinear_heat_flux"):
-        value = stellarator_itg_objective(params, kind, cfg)
-        residual = stellarator_itg_objective_residual_vector(params, kind, cfg)
-        assert float(value) > 0.0
-        assert residual.shape == (3 + len(PARAMETER_NAMES) + 1,)
-        assert len(stellarator_itg_objective_residual_names(kind)) == residual.size
-        np.testing.assert_allclose(
-            float(value), float(jnp.dot(residual, residual)), rtol=1.0e-6
-        )
-        report = autodiff_finite_difference_report(
-            lambda x, kind=kind: stellarator_itg_objective(x, kind, cfg),
-            params,
-            step=cfg.fd_step,
-            rtol=rtol,
-            atol=atol,
-            workers=2,
-        )
-        assert report["passed"] is True
-        assert report["finite_difference_parallel"]["requested_workers"] == 2
-
-
-def test_quasilinear_residual_sensitivity_report_checks_fd_and_conditioning() -> None:
-    cfg = _fast_config()
-    params = jnp.asarray([0.16, 0.21, 0.24, -0.18])
-
-    report = stellarator_itg_residual_sensitivity_report(
-        params,
-        "quasilinear_flux",
-        cfg,
-        finite_difference_workers=2,
+def test_candidate_gate_can_disable_profile_floor_for_fast_diagnostic_use() -> None:
+    report = build_solved_vmec_candidate_gate(
+        {"aspect_final": 6.0, "iota_final": 0.42, "qs_final": 0.02},
+        target_aspect=6.0,
+        aspect_atol=5.0e-2,
+        min_abs_mean_iota=0.41,
+        qs_residual_max=5.0e-2,
+        iota_profile_floor=None,
     )
 
     assert report["passed"] is True
-    assert report["objective_kind"] == "quasilinear_flux"
-    assert report["finite_difference_gate"]["passed"] is True
-    assert report["finite_difference_gate"]["step"] <= cfg.fd_step
-    assert (
-        report["finite_difference_gate"]["finite_difference_parallel"][
-            "requested_workers"
-        ]
-        == 2
-    )
-    assert report["conditioning_gate"]["passed"] is True
-    assert report["conditioning_gate"]["sensitivity_map_rank"] == len(PARAMETER_NAMES)
-    assert report["covariance"]["source"] == "weighted_objective_residual"
-    assert report["covariance"]["conditioning_gate"]["passed"] is True
-    assert report["residual_names"] == list(
-        stellarator_itg_objective_residual_names("quasilinear_flux")
-    )
+    assert report["checks"]["iota_profile"]["floor"] is None
+    assert report["checks"]["iota_profile"]["passed"] is True
 
 
-def test_stellarator_itg_sample_portfolio_is_rectangular_and_exported() -> None:
-    assert gkx.StellaratorITGSampleSet is StellaratorITGSampleSet
-    assert (
-        gkx.stellarator_itg_sample_objective_table
-        is stellarator_itg_sample_objective_table
-    )
-    assert (
-        gkx.stellarator_itg_reduced_portfolio_objective
-        is stellarator_itg_reduced_portfolio_objective
-    )
-    assert (
-        gkx.stellarator_itg_portfolio_sensitivity_report
-        is stellarator_itg_portfolio_sensitivity_report
-    )
-    assert (
-        gkx.stellarator_itg_portfolio_gate_payload
-        is stellarator_itg_portfolio_gate_payload
-    )
-
-    cfg = _fast_config()
-    samples = StellaratorITGSampleSet(
-        surfaces=(0.55, 0.64),
-        alphas=(0.0, 0.7),
-        ky_values=(0.1, 0.3, 0.5),
-        surface_weights=(1.0, 2.0),
-        ky_weights=(1.0, 2.0, 1.0),
-    )
-    params = jnp.asarray([0.18, 0.25, 0.22, -0.16])
-    table = stellarator_itg_sample_objective_table(
-        params,
-        ("growth", "quasilinear_flux", "nonlinear_heat_flux"),
-        cfg,
-        samples,
-    )
-    reduced = stellarator_itg_reduced_portfolio_objective(
-        params,
-        ("growth", "quasilinear_flux"),
-        cfg,
-        samples,
-        objective_weights=(2.0, 1.0),
-    )
-
-    assert samples.n_samples == 12
-    assert table.shape == (2, 2, 3, 3)
-    assert float(jnp.min(table)) > 0.0
-    assert float(reduced) > 0.0
-    assert samples.to_dict()["reduction"] == "weighted_mean"
+def test_final_iota_profiles_from_vmec_result_returns_none_without_solved_state() -> (
+    None
+):
+    assert final_iota_profiles_from_vmec_result(SimpleNamespace(history={})) is None
 
 
-def test_stellarator_itg_portfolio_sensitivity_report_checks_rows_and_scalar() -> None:
-    cfg = _fast_config()
-    samples = StellaratorITGSampleSet(
-        surfaces=(0.55, 0.64),
-        alphas=(0.0, 0.7),
-        ky_values=(0.15, 0.35),
+def test_candidate_gate_extracts_iota_profiles_from_vmex_state(monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "vmex", SimpleNamespace())
+    wout = SimpleNamespace(
+        iotas=np.asarray([0.0, 0.411, 0.415]),
+        iotaf=np.asarray([0.412, 0.416]),
     )
-    params = jnp.asarray([0.16, 0.21, 0.24, -0.18])
+    result = SimpleNamespace(
+        history={"aspect_final": 6.0, "iota_final": -0.42, "qs_final": 0.02},
+        final_equilibrium=SimpleNamespace(wout=wout),
+    )
 
-    report = stellarator_itg_portfolio_sensitivity_report(
-        params,
-        ("growth", "quasilinear_flux"),
-        cfg,
-        samples,
-        workers=2,
-    )
-    inner = report["portfolio_report"]
+    report = build_solved_vmec_candidate_gate(result, **POLICY)
 
     assert report["passed"] is True
-    assert report["objective_names"] == ["growth", "quasilinear_flux"]
-    assert report["sample_set"]["n_samples"] == 8
-    assert inner["portfolio_contract"]["row_shape"] == [2, 2, 2, 2]
-    assert inner["scalar_gradient_gate"]["passed"] is True
-    assert inner["row_jacobian_gate"]["passed"] is True
-    assert inner["conditioning_gate"]["sensitivity_map_rank"] == len(PARAMETER_NAMES)
-    assert (
-        inner["scalar_gradient_gate"]["finite_difference_parallel"]["requested_workers"]
-        == 2
+    assert report["checks"]["mean_iota"]["value"] == 0.42
+    assert report["checks"]["iota_profile"]["source"] == "vmex_state"
+    assert report["checks"]["iota_profile"]["minimum_iotas_excluding_axis"] == 0.411
+
+
+def test_candidate_gate_prefers_independent_state_qs_over_history(monkeypatch) -> None:
+    class FakeQS:
+        def __init__(self, surfaces, *, helicity_m=1, helicity_n=0, **_kwargs):
+            assert np.asarray(surfaces).shape[0] == 11
+            assert (helicity_m, helicity_n) == (1, 0)
+
+        def total_state(self, state, runtime):
+            assert state == "state"
+            assert runtime == "runtime"
+            return 0.013
+
+    fake_vmex = SimpleNamespace(
+        optimize=SimpleNamespace(QuasisymmetryRatioResidual=FakeQS)
+    )
+    monkeypatch.setitem(sys.modules, "vmex", fake_vmex)
+    result = SimpleNamespace(
+        history={"aspect_final": 6.0, "iota_final": 0.428, "qs_final": 99.0},
+        final_state="state",
+        final_runtime="runtime",
+        final_wout=SimpleNamespace(
+            iotas=np.asarray([0.0, 0.411, 0.415]),
+            iotaf=np.asarray([0.412, 0.416]),
+        ),
     )
 
+    report = build_solved_vmec_candidate_gate(result, **POLICY)
 
-def test_stellarator_itg_portfolio_gate_payload_is_json_ready() -> None:
-    cfg = _fast_config()
-    samples = StellaratorITGSampleSet(
-        surfaces=(0.55, 0.64),
-        alphas=(0.0, 0.7),
-        ky_values=(0.15, 0.35),
-    )
-    params = jnp.asarray([0.16, 0.21, 0.24, -0.18])
-
-    payload = stellarator_itg_portfolio_gate_payload(
-        params,
-        ("growth", "quasilinear_flux"),
-        cfg,
-        samples,
-        objective_weights=(2.0, 1.0),
-        finite_difference_workers=2,
-    )
-
-    assert payload["kind"] == "stellarator_itg_portfolio_gate"
-    assert payload["passed"] is True
-    assert payload["production_nonlinear_optimization_claim"] is False
-    assert payload["sample_set"]["n_samples"] == 8
-    assert len(payload["samples"]) == 8
-    assert len(payload["base_sample_values"]) == 8
-    json.dumps(payload, allow_nan=False)
-    objective_table = np.asarray(payload["base_objective_table"], dtype=float)
-    objective_tensor = np.asarray(payload["base_objective_tensor"], dtype=float)
-    objective_weights = np.asarray(payload["objective_weights"], dtype=float)
-    sample_values = np.asarray(payload["base_sample_values"], dtype=float)
-    sample_rows = payload["samples"]
-
-    assert objective_table.shape == (8, 2)
-    assert objective_tensor.shape == (2, 2, 2, 2)
-    np.testing.assert_allclose(objective_table, objective_tensor.reshape((8, 2)))
-    np.testing.assert_allclose(sample_values, objective_table @ objective_weights)
-    assert [(row["surface"], row["alpha"], row["ky"]) for row in sample_rows] == [
-        (surface, alpha, ky)
-        for surface in samples.surfaces
-        for alpha in samples.alphas
-        for ky in samples.ky_values
-    ]
-    np.testing.assert_allclose(sum(payload["objective_weights"]), 1.0)
-    np.testing.assert_allclose(sum(row["weight"] for row in payload["samples"]), 1.0)
-    np.testing.assert_allclose(
-        payload["base_value"],
-        float(np.dot(sample_values, [row["weight"] for row in sample_rows])),
-        rtol=1.0e-6,
-        atol=1.0e-8,
-    )
-    assert payload["portfolio_report"]["scalar_gradient_gate"]["passed"] is True
-    assert payload["portfolio_report"]["row_jacobian_gate"]["passed"] is True
-    assert "real vmex" in payload["next_action"]
+    assert report["passed"] is True
+    assert report["checks"]["quasisymmetry"]["value"] == 0.013
+    assert report["checks"]["quasisymmetry"]["source"] == "vmex_state"
 
 
-def test_stellarator_itg_vmec_boozer_portfolio_wraps_real_table_contract(
+def test_candidate_gate_uses_standalone_qs_not_assembled_transport_block(
     monkeypatch,
 ) -> None:
-    calls: dict[str, object] = {}
+    class FakeQS:
+        def __init__(self, surfaces, *, helicity_m=1, helicity_n=0, **_kwargs):
+            assert np.asarray(surfaces).shape[0] == 11
+            assert (helicity_m, helicity_n) == (1, 0)
 
-    def fake_table(_state, _static, _indata, _wout, **kwargs):  # noqa: ANN001, ANN202
-        calls.update(kwargs)
-        rows = []
-        for index in range(8):
-            value = float(index + 1)
-            rows.append([value, 0.0, 1.0, 2.0, 0.0, 10.0 * value])
-        metadata = [{"sample": index} for index in range(8)]
-        return jnp.asarray(rows), metadata
+        def total_state(self, state, runtime):
+            assert state == "state"
+            assert runtime == "runtime"
+            return 0.009
+
+    fake_vmex = SimpleNamespace(
+        optimize=SimpleNamespace(QuasisymmetryRatioResidual=FakeQS)
+    )
+    monkeypatch.setitem(sys.modules, "vmex", fake_vmex)
+
+    class FakeOptimizer:
+        def quasisymmetry_objective(self, _params):
+            raise AssertionError("assembled optimizer objective must not be used")
+
+    result = SimpleNamespace(
+        history={"aspect_final": 6.0, "iota_final": 0.428, "qs_final": 99.0},
+        final_state="state",
+        final_runtime="runtime",
+        final_params=(1.0, 2.0),
+        final_optimizer=FakeOptimizer(),
+        final_wout=SimpleNamespace(
+            iotas=np.asarray([0.0, 0.411, 0.415]),
+            iotaf=np.asarray([0.412, 0.416]),
+        ),
+    )
+
+    report = build_solved_vmec_candidate_gate(result, **POLICY)
+
+    assert report["passed"] is True
+    assert report["checks"]["quasisymmetry"]["value"] == 0.009
+    assert report["checks"]["quasisymmetry"]["source"] == "vmex_state"
+
+
+def test_candidate_gate_state_qs_falls_back_to_optimizer_method(monkeypatch) -> None:
+    class FailingQS:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("qs residual unavailable")
+
+    fake_vmex = SimpleNamespace(
+        optimize=SimpleNamespace(QuasisymmetryRatioResidual=FailingQS)
+    )
+    monkeypatch.setitem(sys.modules, "vmex", fake_vmex)
+
+    class FakeOptimizer:
+        def quasisymmetry_objective(self, params):
+            assert params == (1.0, 2.0)
+            return 0.017
+
+    result = SimpleNamespace(
+        history={"aspect_final": 6.0, "iota_final": 0.428, "qs_final": 99.0},
+        final_state="state",
+        final_runtime="runtime",
+        final_params=(1.0, 2.0),
+        final_optimizer=FakeOptimizer(),
+        final_wout=SimpleNamespace(
+            iotas=np.asarray([0.0, 0.411, 0.415]),
+            iotaf=np.asarray([0.412, 0.416]),
+        ),
+    )
+
+    report = build_solved_vmec_candidate_gate(result, **POLICY)
+
+    assert report["passed"] is True
+    assert report["checks"]["quasisymmetry"]["value"] == 0.017
+
+
+def test_final_iota_profiles_from_vmec_result_handles_vmex_failure() -> None:
+    class BrokenEquilibrium:
+        @property
+        def wout(self):
+            raise RuntimeError("not converged")
+
+    result = SimpleNamespace(final_equilibrium=BrokenEquilibrium())
+
+    assert final_iota_profiles_from_vmec_result(result) is None
+
+
+def test_wout_reproducibility_gate_rejects_iota_drift() -> None:
+    report = build_wout_reproducibility_gate(
+        {
+            "source": "optimizer_state_wout",
+            "aspect": 5.000154,
+            "mean_iota": 0.41020,
+            "min_iotas_excluding_axis": 0.40567,
+            "min_iotaf": 0.40550,
+        },
+        {
+            "source": "input_final_rerun_wout",
+            "aspect": 5.000154,
+            "mean_iota": 0.40851,
+            "min_iotas_excluding_axis": 0.39598,
+            "min_iotaf": 0.39581,
+        },
+        target_aspect=5.0,
+        aspect_atol=5.0e-2,
+        min_abs_mean_iota=0.41,
+        iota_profile_floor=None,
+        mean_iota_repro_atol=5.0e-4,
+    )
+
+    assert report["passed"] is False
+    assert report["checks"]["rerun_mean_iota_admission"]["passed"] is False
+    assert report["checks"]["mean_iota_reproducibility"]["passed"] is False
+    assert report["checks"]["mean_iota_reproducibility"][
+        "absolute_drift"
+    ] == pytest.approx(0.00169)
+    json.dumps(report, allow_nan=False)
+
+
+def test_wout_reproducibility_gate_accepts_matching_rerun() -> None:
+    report = build_wout_reproducibility_gate(
+        {
+            "source": "optimizer_state_wout",
+            "aspect": 5.000154,
+            "mean_iota": 0.41020,
+            "min_iotas_excluding_axis": 0.40567,
+            "min_iotaf": 0.40550,
+        },
+        {
+            "source": "input_final_rerun_wout",
+            "aspect": 5.0001542,
+            "mean_iota": 0.41010,
+            "min_iotas_excluding_axis": 0.40561,
+            "min_iotaf": 0.40545,
+        },
+        target_aspect=5.0,
+        aspect_atol=5.0e-2,
+        min_abs_mean_iota=0.41,
+        iota_profile_floor=None,
+        mean_iota_repro_atol=5.0e-4,
+        aspect_repro_atol=5.0e-7,
+        profile_repro_atol=5.0e-4,
+    )
+
+    assert report["passed"] is True
+    assert report["checks"]["rerun_mean_iota_admission"]["passed"] is True
+
+
+def test_authoritative_wout_candidate_gate_accepts_mapping_with_qs() -> None:
+    report = build_authoritative_wout_candidate_gate(
+        {
+            "source": "deterministic_rerun_wout",
+            "aspect": 5.0001,
+            "mean_iota": -0.411,
+            "min_iotas_excluding_axis": 0.405,
+            "min_iotaf": 0.404,
+            "qs_residual": 2.0e-3,
+        },
+        target_aspect=5.0,
+        aspect_atol=5.0e-2,
+        min_abs_mean_iota=0.41,
+        qs_residual_max=5.0e-2,
+        iota_profile_floor=None,
+    )
+
+    assert report["passed"] is True
+    assert report["checks"]["aspect"]["passed"] is True
+    assert report["checks"]["mean_iota"]["value"] == pytest.approx(0.411)
+    assert report["checks"]["quasisymmetry"]["source"] == "mapping"
+    json.dumps(report, allow_nan=False)
+
+
+def test_authoritative_wout_candidate_gate_rejects_missing_qs() -> None:
+    report = build_authoritative_wout_candidate_gate(
+        {
+            "source": "deterministic_rerun_wout",
+            "aspect": 5.0001,
+            "mean_iota": 0.411,
+            "min_iotas_excluding_axis": 0.405,
+            "min_iotaf": 0.404,
+        },
+        target_aspect=5.0,
+        aspect_atol=5.0e-2,
+        min_abs_mean_iota=0.41,
+        qs_residual_max=5.0e-2,
+        iota_profile_floor=None,
+    )
+
+    assert report["passed"] is False
+    assert report["checks"]["quasisymmetry"]["passed"] is False
+    assert report["checks"]["quasisymmetry"]["error"] == "missing_qs_residual"
+
+
+def test_authoritative_wout_candidate_gate_reads_wout_file_with_profile_floor(
+    tmp_path, monkeypatch
+) -> None:
+    class FakeVar:
+        def __init__(self, value):
+            self.value = value
+
+        def __getitem__(self, _key):
+            return np.asarray(self.value)
+
+    class FakeDataset:
+        def __init__(self, path):
+            assert path == tmp_path / "wout_final_rerun.nc"
+            self.variables = {
+                "aspect": FakeVar(5.0002),
+                "iotas": FakeVar([0.0, 0.412, 0.418]),
+                "iotaf": FakeVar([0.413, 0.419]),
+            }
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    def fake_read_wout(path):
+        assert path == tmp_path / "wout_final_rerun.nc"
+        return "loaded-wout"
+
+    class FakeQS:
+        def __init__(self, surfaces, *, helicity_m, helicity_n, ntheta, nphi):
+            assert tuple(np.asarray(surfaces, dtype=float)) == (0.0, 0.5, 1.0)
+            assert (helicity_m, helicity_n, ntheta, nphi) == (1, 0, 31, 32)
+
+        def total(self, wout):
+            assert wout == "loaded-wout"
+            return 0.003
+
+    monkeypatch.setitem(sys.modules, "netCDF4", SimpleNamespace(Dataset=FakeDataset))
+    monkeypatch.setitem(
+        sys.modules,
+        "vmex",
+        SimpleNamespace(
+            read_wout=fake_read_wout,
+            optimize=SimpleNamespace(QuasisymmetryRatioResidual=FakeQS),
+        ),
+    )
+
+    report = build_authoritative_wout_candidate_gate(
+        tmp_path / "wout_final_rerun.nc",
+        target_aspect=5.0,
+        aspect_atol=5.0e-2,
+        min_abs_mean_iota=0.41,
+        qs_residual_max=5.0e-2,
+        iota_profile_floor=0.411,
+        qs_surfaces=(0.0, 0.5, 1.0),
+        qs_ntheta=31,
+        qs_nphi=32,
+    )
+
+    assert report["passed"] is True
+    assert report["authoritative_wout"]["mean_iota"] == pytest.approx(0.415)
+    assert report["checks"]["iota_profile"]["passed"] is True
+    assert report["checks"]["quasisymmetry"]["source"] == "vmex_wout"
+
+
+def test_authoritative_wout_candidate_gate_reports_wout_load_errors(
+    tmp_path, monkeypatch
+) -> None:
+    def broken_dataset(_path):
+        raise OSError("missing variable")
+
+    def broken_read_wout(_path):
+        raise RuntimeError("bad wout")
+
+    monkeypatch.setitem(sys.modules, "netCDF4", SimpleNamespace(Dataset=broken_dataset))
+    monkeypatch.setitem(
+        sys.modules, "vmex", SimpleNamespace(read_wout=broken_read_wout)
+    )
+
+    report = build_authoritative_wout_candidate_gate(
+        tmp_path / "bad_wout.nc",
+        target_aspect=5.0,
+        aspect_atol=5.0e-2,
+        min_abs_mean_iota=0.41,
+        qs_residual_max=5.0e-2,
+        iota_profile_floor=0.41,
+    )
+
+    assert report["passed"] is False
+    assert report["authoritative_wout"]["aspect"] is None
+    assert report["checks"]["iota_profile"]["passed"] is False
+    assert report["checks"]["quasisymmetry"]["source"] == "vmex_wout_error"
+
+
+# ---- test_vmex_transport_admission.py ----
+
+
+import scripts.campaigns.stellarator_transport_reports as transport_reports
+from scripts.campaigns.stellarator_transport_reports import (
+    build_nonlinear_audit_redesign_report,
+    build_nonlinear_campaign_admission_report,
+    build_nonlinear_landscape_admission_report,
+    build_reduced_nonlinear_audit_prelaunch_report,
+)
+from scripts.campaigns.vmec_transport_admission import (
+    VMEXNonlinearAuditPolicy,
+    VMEXNonlinearCampaignPolicy,
+    VMEXReducedPrelaunchPolicy,
+    VMEXTransportAdmissionPolicy,
+)
+from scripts.campaigns.vmec_transport_admission import (
+    candidate_transport_metric,
+    transport_objective_sample_summary,
+)
+from scripts.campaigns.vmec_transport_admission import (
+    build_transport_admission_report,
+    select_admitted_transport_candidate,
+)
+
+
+def _candidate(
+    label: str,
+    *,
+    objective: float,
+    weight: float | None = None,
+    passed: bool = True,
+    authoritative: bool = True,
+    baseline: bool = False,
+) -> dict[str, object]:
+    return {
+        "label": label,
+        "baseline": baseline,
+        "transport_weight": weight,
+        "passed": passed and authoritative,
+        "gate_reported_passed": passed,
+        "gate_is_authoritative": authoritative,
+        "gate_checks": {
+            "aspect": passed,
+            "mean_iota": True,
+            "quasisymmetry": passed,
+            "iota_profile": passed,
+        },
+        "objective_final": objective,
+    }
+
+
+def test_transport_metric_prefers_explicit_transport_metric_over_total_objective() -> (
+    None
+):
+    metric = candidate_transport_metric(
+        {
+            "objective_final": 4.0,
+            "gkx_objective_final": 2.0,
+            "transport_objective_final": 1.0,
+        }
+    )
+
+    assert metric["available"] is True
+    assert metric["source"] == "transport_objective_final"
+    assert metric["value"] == 1.0
+    assert metric["uses_total_objective_proxy"] is False
+
+
+def test_transport_admission_selects_largest_physical_improving_weight() -> None:
+    summaries = [
+        _candidate("baseline", objective=1.0, baseline=True),
+        _candidate("low", objective=0.8, weight=0.001),
+        _candidate("high", objective=0.7, weight=0.005),
+        _candidate("failed", objective=0.1, weight=0.01, passed=False),
+    ]
+
+    report = build_transport_admission_report(summaries)
+
+    assert report["transport_candidate_admitted"] is True
+    assert report["promoted_candidate"]["label"] == "high"
+    assert report["promoted_candidate"]["transport_weight"] == 0.005
+    assert report["admitted_transport_candidates"] == ["low", "high"]
+
+
+def test_transport_admission_blocks_worse_transport_metric_even_if_gate_passes() -> (
+    None
+):
+    summaries = [
+        _candidate("baseline", objective=1.0, baseline=True),
+        _candidate("worse", objective=1.1, weight=0.001),
+    ]
+
+    report = build_transport_admission_report(summaries)
+    worse = report["candidates"][1]
+
+    assert report["transport_candidate_admitted"] is False
+    assert report["promoted_candidate"]["label"] == "baseline"
+    assert worse["relative_transport_improvement"] < 0.0
+    assert "insufficient_transport_improvement" in worse["admission_blockers"]
+
+
+def test_transport_admission_blocks_non_authoritative_gate() -> None:
+    summaries = [
+        _candidate("baseline", objective=1.0, baseline=True),
+        _candidate("legacy", objective=0.5, weight=0.001, authoritative=False),
+    ]
+
+    report = build_transport_admission_report(summaries)
+    legacy = report["candidates"][1]
+
+    assert report["transport_candidate_admitted"] is False
+    assert "non_authoritative_gate" in legacy["admission_blockers"]
+    assert report["promoted_candidate"]["label"] == "baseline"
+
+
+def test_transport_admission_can_require_stronger_relative_improvement() -> None:
+    policy = VMEXTransportAdmissionPolicy(minimum_relative_improvement=0.25)
+    summaries = [
+        _candidate("baseline", objective=1.0, baseline=True),
+        _candidate("small", objective=0.9, weight=0.001),
+        _candidate("large", objective=0.7, weight=0.002),
+    ]
+
+    report = build_transport_admission_report(summaries, policy=policy)
+
+    assert report["admitted_transport_candidates"] == ["large"]
+    assert report["promoted_candidate"]["label"] == "large"
+    assert (
+        select_admitted_transport_candidate(summaries, policy=policy)
+        == report["promoted_candidate"]
+    )
+
+
+def test_transport_admission_is_not_installable_public_api() -> None:
+    """Campaign admission policy lives in scripts/campaigns, not in the package."""
+
+    for name in (
+        "VMEXTransportAdmissionPolicy",
+        "build_transport_admission_report",
+        "candidate_transport_metric",
+        "select_admitted_transport_candidate",
+    ):
+        assert not hasattr(gkx, name)
+
+
+def _matched_comparison(
+    *,
+    relative_reduction: float,
+    z_score: float,
+    passed: bool,
+) -> dict[str, object]:
+    return {
+        "kind": "matched_nonlinear_transport_comparison",
+        "case": "qa_projected_transport_step1e3",
+        "passed": passed,
+        "baseline": {"passed": True, "ensemble_mean": 9.833},
+        "candidate": {"passed": True, "ensemble_mean": 9.891},
+        "statistics": {
+            "relative_reduction": relative_reduction,
+            "uncertainty_z_score": z_score,
+        },
+    }
+
+
+def _ensemble(
+    mean: float, sem: float, *, passed: bool = True, n_reports: int = 3
+) -> dict[str, object]:
+    return {
+        "case": f"ensemble_mean_{mean}",
+        "passed": passed,
+        "statistics": {
+            "ensemble_mean": mean,
+            "combined_sem": sem,
+            "combined_sem_rel": sem / abs(mean),
+            "n_reports": n_reports,
+        },
+    }
+
+
+def test_nonlinear_landscape_admission_selects_uncertainty_resolved_candidate() -> None:
+    report = build_nonlinear_landscape_admission_report(
+        _ensemble(8.554362366164424, 0.11951503416978174),
+        [
+            _ensemble(6.274543846475065, 0.04213243251063571),
+            _ensemble(6.42653555490751, 0.04399590111876854),
+        ],
+        candidate_labels=("+3%", "+6%"),
+        policy=VMEXNonlinearAuditPolicy(
+            minimum_relative_reduction=0.02,
+            minimum_uncertainty_z_score=2.0,
+            maximum_combined_sem_rel=0.05,
+            minimum_replicate_count=3,
+        ),
+    )
+
+    assert report["passed"] is True
+    assert report["selected_candidate"]["label"] == "+3%"
+    assert report["selected_candidate"]["relative_reduction"] > 0.26
+    assert report["selected_candidate"]["uncertainty_z_score"] > 17.0
+    assert all(row["admitted"] for row in report["candidates"])
+    assert (
+        build_nonlinear_landscape_admission_report
+        is transport_reports.build_nonlinear_landscape_admission_report
+    )
+    json.dumps(report, allow_nan=False)
+
+
+def test_nonlinear_landscape_admission_fails_closed_for_noisy_or_unresolved_candidates() -> (
+    None
+):
+    report = build_nonlinear_landscape_admission_report(
+        _ensemble(8.0, 0.5),
+        [
+            _ensemble(7.95, 0.5),
+            _ensemble(6.0, 2.0, n_reports=2),
+            _ensemble(5.0, 0.1, passed=False),
+        ],
+        policy=VMEXNonlinearAuditPolicy(
+            minimum_relative_reduction=0.02,
+            minimum_uncertainty_z_score=2.0,
+            maximum_combined_sem_rel=0.2,
+            minimum_replicate_count=3,
+        ),
+    )
+
+    assert report["passed"] is False
+    assert report["selected_candidate"] is None
+    blockers = [set(row["admission_blockers"]) for row in report["candidates"]]
+    assert "insufficient_relative_reduction" in blockers[0]
+    assert "insufficient_uncertainty_separation" in blockers[0]
+    assert "candidate_combined_sem_rel_too_large" in blockers[1]
+    assert "candidate_insufficient_replicates" in blockers[1]
+    assert "candidate_ensemble_failed" in blockers[2]
+
+
+@pytest.mark.parametrize("invalid", ["false", "true", 1, None])
+def test_nonlinear_landscape_admission_rejects_nonboolean_pass_flags(invalid) -> None:
+    baseline = _ensemble(8.0, 0.1)
+    candidate = _ensemble(6.0, 0.1)
+    baseline["passed"] = invalid
+
+    report = build_nonlinear_landscape_admission_report(baseline, [candidate])
+
+    assert report["passed"] is False
+    assert "baseline_ensemble_failed" in report["candidates"][0]["admission_blockers"]
+
+
+@pytest.mark.parametrize("invalid", ["three", 2.5, -3, float("nan")])
+def test_nonlinear_landscape_admission_rejects_invalid_replicate_counts(
+    invalid,
+) -> None:
+    candidate = _ensemble(6.0, 0.1)
+    candidate["statistics"]["n_reports"] = invalid
+
+    report = build_nonlinear_landscape_admission_report(
+        _ensemble(8.0, 0.1), [candidate]
+    )
+
+    assert report["passed"] is False
+    assert (
+        "candidate_insufficient_replicates"
+        in report["candidates"][0]["admission_blockers"]
+    )
+
+
+def test_nonlinear_landscape_admission_validates_candidate_labels() -> None:
+    try:
+        build_nonlinear_landscape_admission_report(
+            _ensemble(8.0, 0.1),
+            [_ensemble(7.0, 0.1)],
+            candidate_labels=("one", "two"),
+        )
+    except ValueError as exc:
+        assert "same length" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("mismatched candidate labels were accepted")
+
+
+def test_reduced_nonlinear_audit_prelaunch_passes_calibrated_landscape_margin() -> None:
+    baseline = 0.06558065223919245
+    candidate = 0.06251277500404685
+
+    report = build_reduced_nonlinear_audit_prelaunch_report(
+        baseline_metric=baseline,
+        candidate_metric=candidate,
+        objective_sample_set={
+            "surfaces": [0.45, 0.64, 0.78],
+            "alphas": [0.0, 0.7853981633974483],
+            "ky_values": [0.1, 0.3, 0.5],
+        },
+        baseline_sample_statistics={
+            "weighted_mean": 0.06777885259618041,
+            "weighted_standard_error": 0.015344998342625694,
+        },
+        candidate_sample_statistics={
+            "weighted_mean": 0.06450805792574345,
+            "weighted_standard_error": 0.014457225619392737,
+        },
+        failed_reference_relative_reduction=0.022876,
+        policy=VMEXReducedPrelaunchPolicy(minimum_relative_reduction=0.04),
+    )
+
+    assert report["passed"] is True
+    assert report["relative_reduced_reduction"] > 0.046
+    assert report["required_relative_reduced_reduction"] == 0.04
+    assert report["blockers"] == []
+    assert report["gates"][0]["passed"] is True
+    assert report["reduced_cross_sample_statistics"]["passed"] is True
+    assert report["gates"][2]["metric"] == "reduced_cross_sample_dispersion"
+    assert (
+        build_reduced_nonlinear_audit_prelaunch_report
+        is transport_reports.build_reduced_nonlinear_audit_prelaunch_report
+    )
+
+
+def test_reduced_nonlinear_audit_prelaunch_blocks_weak_failed_transfer_margin() -> None:
+    report = build_reduced_nonlinear_audit_prelaunch_report(
+        baseline_metric=0.08010670290,
+        candidate_metric=0.07827418221,
+        objective_sample_set={
+            "surfaces": [0.45, 0.64, 0.78],
+            "alphas": [0.0, 0.7853981633974483],
+            "ky_values": [0.1, 0.3, 0.5],
+        },
+        failed_reference_relative_reduction=0.022876,
+        policy=VMEXReducedPrelaunchPolicy(
+            minimum_relative_reduction=0.04,
+            failed_reference_safety_factor=1.5,
+        ),
+    )
+
+    assert report["passed"] is False
+    assert "insufficient_reduced_margin_for_nonlinear_audit" in report["blockers"]
+    assert (
+        report["relative_reduced_reduction"]
+        < report["required_relative_reduced_reduction"]
+    )
+
+
+def test_reduced_prelaunch_blocks_excessive_reduced_cross_sample_spread() -> None:
+    report = build_reduced_nonlinear_audit_prelaunch_report(
+        baseline_metric=0.06558065223919245,
+        candidate_metric=0.06251277500404685,
+        objective_sample_set={
+            "surfaces": [0.45, 0.64, 0.78],
+            "alphas": [0.0, 0.7853981633974483],
+            "ky_values": [0.1, 0.3, 0.5],
+        },
+        baseline_sample_statistics={
+            "weighted_mean": 0.067,
+            "weighted_standard_error": 0.03,
+        },
+        candidate_sample_statistics={
+            "weighted_mean": 0.064,
+            "weighted_standard_error": 0.04,
+        },
+        policy=VMEXReducedPrelaunchPolicy(
+            minimum_relative_reduction=0.04,
+            maximum_cross_sample_sem_rel=0.35,
+        ),
+    )
+
+    assert report["passed"] is False
+    assert "candidate_cross_sample_sem_rel_too_large" in report["blockers"]
+    assert report["gates"][2]["passed"] is False
+
+
+def test_campaign_admission_combines_reduced_and_replicated_landscape_gates() -> None:
+    prelaunch = build_reduced_nonlinear_audit_prelaunch_report(
+        baseline_metric=0.06558065223919245,
+        candidate_metric=0.06251277500404685,
+        objective_sample_set={
+            "surfaces": [0.45, 0.64, 0.78],
+            "alphas": [0.0, 0.7853981633974483],
+            "ky_values": [0.1, 0.3, 0.5],
+        },
+        baseline_sample_statistics={
+            "weighted_mean": 0.06777885259618041,
+            "weighted_standard_error": 0.015344998342625694,
+        },
+        candidate_sample_statistics={
+            "weighted_mean": 0.06450805792574345,
+            "weighted_standard_error": 0.014457225619392737,
+        },
+        policy=VMEXReducedPrelaunchPolicy(minimum_relative_reduction=0.04),
+    )
+    landscape = build_nonlinear_landscape_admission_report(
+        _ensemble(8.554362366164424, 0.11951503416978174),
+        [_ensemble(6.274543846475065, 0.04213243251063571)],
+        candidate_labels=("+3% RBC(0,1)",),
+        policy=VMEXNonlinearAuditPolicy(
+            minimum_relative_reduction=0.02,
+            minimum_uncertainty_z_score=2.0,
+            maximum_combined_sem_rel=0.05,
+            minimum_replicate_count=3,
+        ),
+    )
+
+    report = build_nonlinear_campaign_admission_report(
+        reduced_prelaunch_report=prelaunch,
+        landscape_admission_report=landscape,
+    )
+
+    assert report["campaign_admitted"] is True
+    assert report["blockers"] == []
+    assert report["selected_landscape_candidate"]["label"] == "+3% RBC(0,1)"
+    assert report["claim_scope"].startswith(
+        "next nonlinear optimizer-campaign admission"
+    )
+    assert (
+        build_nonlinear_campaign_admission_report
+        is transport_reports.build_nonlinear_campaign_admission_report
+    )
+    json.dumps(report, allow_nan=False)
+
+
+def test_campaign_admission_fails_closed_without_cross_sample_gate_or_landscape_margin() -> (
+    None
+):
+    prelaunch = build_reduced_nonlinear_audit_prelaunch_report(
+        baseline_metric=1.0,
+        candidate_metric=0.95,
+        objective_sample_set={
+            "surfaces": [0.45, 0.64, 0.78],
+            "alphas": [0.0, 0.7853981633974483],
+            "ky_values": [0.1, 0.3, 0.5],
+        },
+        policy=VMEXReducedPrelaunchPolicy(minimum_relative_reduction=0.04),
+    )
+    landscape = build_nonlinear_landscape_admission_report(
+        _ensemble(8.0, 0.3),
+        [_ensemble(7.4, 0.3)],
+        candidate_labels=("weak",),
+        policy=VMEXNonlinearAuditPolicy(minimum_relative_reduction=0.02),
+    )
+
+    report = build_nonlinear_campaign_admission_report(
+        reduced_prelaunch_report=prelaunch,
+        landscape_admission_report=landscape,
+        policy=VMEXNonlinearCampaignPolicy(
+            minimum_landscape_relative_reduction=0.10,
+            minimum_landscape_uncertainty_z_score=3.0,
+        ),
+    )
+
+    assert report["campaign_admitted"] is False
+    assert "reduced_cross_sample_statistics_missing" in report["blockers"]
+    assert "selected_landscape_reduction_too_small" in report["blockers"]
+    assert "selected_landscape_uncertainty_separation_too_small" in report["blockers"]
+
+
+def test_campaign_admission_rejects_corrupt_persisted_gate_fields() -> None:
+    prelaunch = {
+        "passed": "true",
+        "objective_sample_summary": {"passed": "true", "sample_count": 18},
+        "reduced_cross_sample_statistics": {
+            "available": "true",
+            "passed": "true",
+            "rows": [],
+        },
+    }
+    landscape = {
+        "passed": "true",
+        "selected_candidate": {
+            "relative_reduction": 0.2,
+            "uncertainty_z_score": 4.0,
+            "combined_sem_rel": 0.01,
+            "n_reports": "three",
+        },
+    }
+
+    report = build_nonlinear_campaign_admission_report(
+        reduced_prelaunch_report=prelaunch,
+        landscape_admission_report=landscape,
+    )
+
+    assert report["campaign_admitted"] is False
+    assert "reduced_prelaunch_gate_failed" in report["blockers"]
+    assert "reduced_objective_sample_coverage_failed" in report["blockers"]
+    assert "reduced_cross_sample_statistics_missing" in report["blockers"]
+    assert "replicated_landscape_admission_failed" in report["blockers"]
+    assert "selected_landscape_insufficient_replicates" in report["blockers"]
+
+
+def test_transport_sample_summary_requires_surface_alpha_and_ky_coverage() -> None:
+    summary = transport_objective_sample_summary(
+        {"surfaces": [0.5], "alphas": [0.0], "ky_values": [0.3]}
+    )
+
+    assert summary["passed"] is False
+    assert summary["sample_count"] == 1
+    assert "insufficient_surface_coverage" in summary["blockers"]
+    assert "insufficient_field_line_coverage" in summary["blockers"]
+    assert "insufficient_ky_coverage" in summary["blockers"]
+
+
+def test_nonlinear_audit_redesign_blocks_negative_transfer_and_recommends_multisample_design() -> (
+    None
+):
+    report = build_nonlinear_audit_redesign_report(
+        _matched_comparison(relative_reduction=-0.00585, z_score=-0.20, passed=False),
+        objective_sample_set={"surfaces": [0.64], "alphas": [0.0], "ky_values": [0.3]},
+    )
+
+    assert report["nonlinear_audit_promoted"] is False
+    assert report["requires_objective_redesign"] is True
+    assert "insufficient_matched_reduction" in report["blockers"]
+    assert "insufficient_uncertainty_separation" in report["blockers"]
+    assert "insufficient_total_sample_count" in report["blockers"]
+    assert report["recommended_sample_set"]["sample_count"] == 18
+    assert report["gates"][0]["passed"] is False
+    json.dumps(report, allow_nan=False)
+
+
+def test_nonlinear_audit_redesign_promotes_only_when_audit_and_sample_coverage_pass() -> (
+    None
+):
+    policy = VMEXNonlinearAuditPolicy(
+        minimum_relative_reduction=0.02,
+        minimum_uncertainty_z_score=1.0,
+        minimum_surface_count=3,
+        minimum_alpha_count=2,
+        minimum_ky_count=3,
+        minimum_sample_count=12,
+    )
+    sample_set = {
+        "surfaces": [0.45, 0.64, 0.78],
+        "alphas": [0.0, 0.7853981633974483],
+        "ky_values": [0.1, 0.3, 0.5],
+    }
+
+    report = build_nonlinear_audit_redesign_report(
+        _matched_comparison(relative_reduction=0.08, z_score=2.5, passed=True),
+        objective_sample_set=sample_set,
+        policy=policy,
+    )
+
+    assert report["nonlinear_audit_promoted"] is True
+    assert report["requires_objective_redesign"] is False
+    assert report["blockers"] == []
+    assert report["objective_sample_summary"]["sample_count"] == 18
+    assert all(gate["passed"] for gate in report["gates"])
+    assert (
+        build_nonlinear_audit_redesign_report
+        is transport_reports.build_nonlinear_audit_redesign_report
+    )
+
+
+def test_nonlinear_audit_redesign_rejects_nonboolean_persisted_pass_flags() -> None:
+    comparison = _matched_comparison(
+        relative_reduction=0.08,
+        z_score=2.5,
+        passed=True,
+    )
+    comparison["passed"] = "true"
+    comparison["baseline"]["passed"] = "true"
+
+    report = build_nonlinear_audit_redesign_report(
+        comparison,
+        objective_sample_set={
+            "surfaces": [0.45, 0.64, 0.78],
+            "alphas": [0.0, np.pi / 4.0],
+            "ky_values": [0.1, 0.3, 0.5],
+        },
+    )
+
+    assert report["nonlinear_audit_promoted"] is False
+    assert "baseline_ensemble_failed" in report["blockers"]
+    assert "matched_comparison_not_passed" in report["blockers"]
+
+
+def test_transport_sample_summary_rejects_ky_values_not_supported_by_single_solver_grid() -> (
+    None
+):
+    summary = transport_objective_sample_summary(
+        {
+            "surfaces": [0.45, 0.64, 0.78],
+            "alphas": [0.0, 0.7853981633974483],
+            "ky_values": [0.19, 0.3, 0.476],
+        }
+    )
+
+    assert summary["passed"] is False
+    assert "ky_values_not_single_grid_compatible" in summary["blockers"]
+
+
+# ---- test_vmex_transport_gradient.py ----
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class FakeSpec:
+    name: str
+    kind: str
+    index: int
+    m: int
+    n: int
+
+
+class FakeOptimizer:
+    _specs = (
+        FakeSpec("rc01", "rc", 0, 0, 1),
+        FakeSpec("zs10", "zs", 1, 1, 0),
+        FakeSpec("rc11", "rc", 2, 1, 1),
+    )
+
+    def residual_fun(self, params):
+        params = np.asarray(params, dtype=float)
+        return np.asarray([0.4 + params[0] - 2.0 * params[1]])
+
+    def objective_and_gradient_fun(self, params):
+        residual = self.residual_fun(params)[0]
+        jac = np.asarray([1.0, -2.0, 0.0])
+        return 0.5 * residual**2, residual * jac
+
+    def jacobian_fun(self, params):
+        return np.asarray([[1.0, -2.0, 0.0]])
+
+
+# ---- test_vmex_transport_line_search.py ----
+
+
+def _gradient_report() -> dict[str, object]:
+    return {
+        "parameter_count": 4,
+        "top_gradient_components": [
+            {"parameter_index": 1, "gradient": -3.0, "name": "zs10"},
+            {"parameter_index": 3, "gradient": 4.0, "name": "rc11"},
+            {"parameter_index": 0, "gradient": 12.0, "name": "rc01"},
+        ],
+    }
+
+
+def _boundary_chain_collection() -> dict[str, object]:
+    return {
+        "kind": "vmex_boundary_chain_collection_summary",
+        "classification": "mixed_exact_fd_consistency_with_branch_sensitive_modes",
+        "rows": [
+            {
+                "index": 1,
+                "name": "zs10",
+                "finite": True,
+                "frozen_axis_jvp_vjp_consistent": True,
+                "frozen_axis_matches_exact_fd": True,
+                "frozen_axis_convention_verified": False,
+                "growth_branch_locality_checked": True,
+                "growth_branch_locality_passed": True,
+            },
+            {
+                "index": 3,
+                "name": "rc11",
+                "finite": True,
+                "frozen_axis_jvp_vjp_consistent": True,
+                "frozen_axis_matches_exact_fd": False,
+                "frozen_axis_convention_verified": True,
+                "growth_branch_locality_checked": True,
+                "growth_branch_locality_passed": False,
+            },
+            {
+                "index": 0,
+                "name": "rc01",
+                "finite": True,
+                "frozen_axis_jvp_vjp_consistent": False,
+                "frozen_axis_matches_exact_fd": True,
+                "frozen_axis_convention_verified": False,
+                "growth_branch_locality_checked": False,
+                "growth_branch_locality_passed": False,
+            },
+        ],
+    }
+
+
+# ---- test_vmex_transport_objective.py ----
+
+"""Tests for VMEC-JAX to GKX transport objective plumbing."""
+
+
+from types import ModuleType
+
+
+from gkx import (
+    StellaratorITGSampleSet,
+    VMEXGKXTransportObjective,
+    VMEXTransportObjectiveConfig,
+    vmex_transport_objective_from_state,
+)
+import gkx.objectives.vmec_transport as transport_config
+import gkx.objectives.vmec_transport as transport_tables
+
+
+def _fake_geometry() -> SimpleNamespace:
+    theta = jnp.linspace(-jnp.pi, jnp.pi, 8, endpoint=False)
+    return SimpleNamespace(
+        theta=theta,
+        bmag_profile=1.0 + 0.05 * jnp.cos(theta),
+        jacobian_profile=jnp.ones_like(theta),
+        gds2_profile=1.2 + 0.1 * jnp.cos(theta),
+        gds21_profile=0.05 * jnp.sin(theta),
+        gds22_profile=1.0 + 0.08 * jnp.cos(2.0 * theta),
+        cv_profile=0.03 * jnp.sin(theta),
+        gb_profile=0.04 * jnp.cos(theta),
+        cv0_profile=0.02 * jnp.sin(2.0 * theta),
+        gb0_profile=0.02 * jnp.cos(2.0 * theta),
+    )
+
+
+def _fake_solver_rows(scale: float = 1.0) -> jnp.ndarray:
+    rows = []
+    idx = {name: i for i, name in enumerate(SOLVER_OBJECTIVE_NAMES)}
+    for gamma in (0.08, 0.10, 0.12, 0.14):
+        row = np.zeros(len(SOLVER_OBJECTIVE_NAMES), dtype=float)
+        row[idx["gamma"]] = scale * gamma
+        row[idx["omega"]] = -0.2
+        row[idx["kperp_eff2"]] = 0.42
+        row[idx["linear_heat_flux_weight"]] = 1.5
+        row[idx["linear_particle_flux_weight"]] = 0.3
+        row[idx["mixing_length_heat_flux_proxy"]] = scale * 0.04
+        rows.append(row)
+    return jnp.asarray(rows)
+
+
+def test_vmex_transport_objective_reduces_fake_solver_rows(monkeypatch) -> None:
+
+    calls: list[dict[str, object]] = []
+    growth_calls: list[dict[str, object]] = []
+    rows = _fake_solver_rows()
+    row_counter = {"i": 0}
+
+    def fake_geom(state, static, indata, wout, **kwargs):
+        calls.append(
+            {"state": state, "static": static, "indata": indata, "wout": wout, **kwargs}
+        )
+        return _fake_geometry()
+
+    def fake_growth(_geom, **kwargs):
+        growth_calls.append(kwargs)
+        value = rows[row_counter["i"], SOLVER_OBJECTIVE_NAMES.index("gamma")]
+        row_counter["i"] += 1
+        return value
 
     monkeypatch.setattr(
-        so, "vmec_boozer_solver_objective_table_with_metadata_from_state", fake_table
+        transport_tables, "flux_tube_geometry_from_vmec_boozer_state", fake_geom
+    )
+    monkeypatch.setattr(
+        transport_tables, "solver_growth_rate_from_geometry", fake_growth
     )
     samples = StellaratorITGSampleSet(
-        surfaces=(0.50, 0.70),
-        alphas=(0.0, 0.6),
-        ky_values=(0.1, 0.3),
+        surfaces=(0.5, 0.7), alphas=(0.0,), ky_values=(0.2, 0.4)
+    )
+    cfg = VMEXTransportObjectiveConfig(kind="growth", sample_set=samples, ny=4)
+
+    value = vmex_transport_objective_from_state(
+        object(),
+        object(),
+        object(),
+        SimpleNamespace(signgs=1, nfp=2, Aminor_p=1.0, phi=np.asarray([0.0, -np.pi])),
+        cfg,
     )
 
-    table = stellarator_itg_vmec_boozer_sample_objective_table_from_state(
-        "state",
-        "static",
-        "indata",
-        "wout",
-        ("growth", "quasilinear_flux"),
-        samples,
-        ntheta=8,
-    )
-    reduced = stellarator_itg_vmec_boozer_portfolio_objective_from_state(
-        "state",
-        "static",
-        "indata",
-        "wout",
-        ("growth", "quasilinear_flux"),
-        samples,
-        objective_weights=(1.0, 0.0),
-        ntheta=8,
-    )
-
-    assert gkx.stellarator_itg_vmec_boozer_sample_objective_table_from_state is (
-        stellarator_itg_vmec_boozer_sample_objective_table_from_state
-    )
-    assert gkx.stellarator_itg_vmec_boozer_portfolio_objective_from_state is (
-        stellarator_itg_vmec_boozer_portfolio_objective_from_state
-    )
-    assert table.shape == (2, 2, 2, 2)
-    np.testing.assert_allclose(np.asarray(table)[0, 0, 0], (1.0, 10.0))
-    assert float(reduced) == pytest.approx(4.5)
-    assert calls["torflux_values"] == samples.surfaces
-    assert calls["alphas"] == samples.alphas
-    assert calls["ky_values"] == samples.ky_values
-    assert calls["ntheta"] == 8
+    assert np.isclose(float(value), np.mean([0.08, 0.10, 0.12, 0.14]))
+    assert calls[0]["mboz"] == 21
+    assert calls[0]["nboz"] == 21
+    assert [call["torflux"] for call in calls] == list(samples.surfaces)
+    assert [call["selected_ky_index"] for call in growth_calls] == [1, 2, 1, 2]
+    assert np.isclose(growth_calls[0]["ly"], 2.0 * np.pi / min(samples.ky_values))
+    assert int(growth_calls[0]["ny"]) >= 6
 
 
-def test_nonlinear_heat_flux_window_metrics_use_late_stable_samples() -> None:
-    cfg = _fast_config()
-    times, heat_flux = nonlinear_heat_flux_trace(
-        default_stellarator_initial_params(), cfg
-    )
-    metrics = nonlinear_heat_flux_window_metrics(
-        times,
-        heat_flux,
-        tail_fraction=cfg.nonlinear_tail_fraction,
-    )
-
-    assert times.shape == heat_flux.shape == (cfg.nonlinear_steps + 1,)
-    assert int(metrics["start_index"]) < cfg.nonlinear_steps - 1
-    assert float(metrics["mean"]) > 0.0
-    assert float(metrics["cv"]) < 0.15
-    assert float(metrics["trend"]) < 0.35
-
-
-def test_optimize_stellarator_itg_reduces_nonlinear_window_objective(
+def test_vmex_transport_surface_chunking_matches_unchunked_weighted_mean(
     monkeypatch,
 ) -> None:
-    _disable_optional_backend_discovery(monkeypatch)
-    cfg = _fast_config()
 
-    result = optimize_stellarator_itg("nonlinear_heat_flux", config=cfg)
+    def fake_geom(*_args, **_kwargs):
+        return _fake_geometry()
 
-    assert result.objective_kind == "nonlinear_heat_flux"
-    assert result.final_objective < 0.20 * result.initial_objective
-    assert result.gradient_gate["passed"] is True
-    assert result.covariance["source"] == "weighted_objective_residual"
-    assert result.covariance["residual_sensitivity_passed"] is True
-    assert result.covariance["residual_jacobian_gate"]["passed"] is True
-    assert result.covariance["conditioning_gate"]["passed"] is True
-    assert len(result.covariance["residual_names"]) == 3 + len(PARAMETER_NAMES) + 1
-    assert result.covariance["sensitivity_map_rank"] == len(PARAMETER_NAMES)
-    assert result.nonlinear_trace is not None
-    assert result.nonlinear_trace["final_window"]["cv"] < 0.05
-    assert result.nonlinear_trace["final_window"]["trend"] < 0.15
-    serialized = result.to_dict()
-    assert (
-        serialized["claim_level"]
-        == "reduced_nonlinear_window_estimator_optimization_not_transport_average"
-    )
-    assert serialized["nonlinear_transport_scope"]["transport_average_gate"] is False
-    assert (
-        serialized["nonlinear_transport_scope"][
-            "production_nonlinear_optimization_claim"
-        ]
-        is False
-    )
+    rows = _fake_solver_rows()
 
-    initial = dict(zip(OBSERVABLE_NAMES, result.initial_observables, strict=True))
-    final = dict(zip(OBSERVABLE_NAMES, result.final_observables, strict=True))
-    assert final["growth_rate"] < initial["growth_rate"]
-    assert final["quasilinear_heat_flux"] < initial["quasilinear_heat_flux"]
-    assert final["nonlinear_heat_flux_mean"] < initial["nonlinear_heat_flux_mean"]
+    def evaluate(*, chunk_size: int) -> float:
+        row_counter = {"i": 0}
 
+        def fake_growth(_geom, **_kwargs):
+            value = rows[row_counter["i"], SOLVER_OBJECTIVE_NAMES.index("gamma")]
+            row_counter["i"] += 1
+            return value
 
-def test_compare_stellarator_itg_objectives_payload_is_json_ready(monkeypatch) -> None:
-    _disable_optional_backend_discovery(monkeypatch)
-    cfg = _fast_config()
+        monkeypatch.setattr(
+            transport_tables, "solver_growth_rate_from_geometry", fake_growth
+        )
+        samples = StellaratorITGSampleSet(
+            surfaces=(0.5, 0.7),
+            alphas=(0.0,),
+            ky_values=(0.2, 0.4),
+            surface_weights=(3.0, 1.0),
+        )
+        cfg = VMEXTransportObjectiveConfig(
+            kind="growth",
+            sample_set=samples,
+            ny=4,
+            objective_transform="log1p",
+            surface_chunk_size=chunk_size,
+        )
+        value = vmex_transport_objective_from_state(
+            object(),
+            object(),
+            object(),
+            SimpleNamespace(
+                signgs=1, nfp=2, Aminor_p=1.0, phi=np.asarray([0.0, -np.pi])
+            ),
+            cfg,
+        )
+        assert row_counter["i"] == 4
+        return float(value)
 
-    payload = compare_stellarator_itg_objectives(
-        ("growth",), config=cfg, workers=2, finite_difference_workers=2
-    )
-
-    assert (
-        payload["claim_level"]
-        == "reduced_objective_optimization_comparison_not_full_production_vmec_gk"
-    )
-    assert payload["production_nonlinear_optimization_claim"] is False
-    assert payload["parameter_names"] == list(PARAMETER_NAMES)
-    assert payload["observable_names"] == list(OBSERVABLE_NAMES)
-    assert payload["parallel"]["requested_workers"] == 2
-    assert payload["parallel"]["finite_difference_workers"] == 2
-    assert len(payload["results"]) == 1
-    result = payload["results"][0]
-    assert result["objective_kind"] == "growth"
-    assert result["final_objective"] < result["initial_objective"]
-    assert result["gradient_gate"]["passed"] is True
-    assert (
-        result["gradient_gate"]["finite_difference_parallel"]["requested_workers"] == 2
+    monkeypatch.setattr(
+        transport_tables, "flux_tube_geometry_from_vmec_boozer_state", fake_geom
     )
 
+    assert evaluate(chunk_size=1) == pytest.approx(evaluate(chunk_size=0))
 
-def test_compare_stellarator_itg_objectives_parallel_preserves_order(
+
+def test_vmex_transport_objective_nonlinear_proxy_is_positive_and_exported(
     monkeypatch,
 ) -> None:
-    _disable_optional_backend_discovery(monkeypatch)
 
-    def fake_optimize(kind, initial_params=None, config=None, **kwargs):  # noqa: ANN001, ANN202
-        idx = {"growth": 1.0, "quasilinear_flux": 2.0, "nonlinear_heat_flux": 3.0}[kind]
-        return StellaratorITGOptimizationResult(
-            objective_kind=kind,
-            parameter_names=PARAMETER_NAMES,
-            observable_names=OBSERVABLE_NAMES,
-            initial_params=(0.0, 0.0, 0.0, 0.0),
-            final_params=(idx, idx, idx, idx),
-            initial_objective=idx + 1.0,
-            final_objective=idx,
-            initial_observables=tuple(0.0 for _ in OBSERVABLE_NAMES),
-            final_observables=tuple(idx for _ in OBSERVABLE_NAMES),
-            history=(),
-            gradient_gate={
-                "passed": True,
-                "finite_difference_parallel": {
-                    "requested_workers": kwargs["finite_difference_workers"],
-                    "executor": kwargs["finite_difference_executor"],
-                },
+    scale = {"value": 1.0}
+
+    def fake_geom(*_args, **_kwargs):
+        return _fake_geometry()
+
+    def fake_growth(_geom, **_kwargs):
+        return jnp.asarray(0.1 * scale["value"])
+
+    monkeypatch.setattr(
+        transport_tables, "flux_tube_geometry_from_vmec_boozer_state", fake_geom
+    )
+    monkeypatch.setattr(
+        transport_tables, "solver_growth_rate_from_geometry", fake_growth
+    )
+    samples = StellaratorITGSampleSet(
+        surfaces=(0.5, 0.7), alphas=(0.0,), ky_values=(0.2, 0.4)
+    )
+    cfg = VMEXTransportObjectiveConfig(
+        kind="nonlinear_window_heat_flux", sample_set=samples
+    )
+
+    low = vmex_transport_objective_from_state(
+        "state", "static", "indata", object(), cfg
+    )
+    scale["value"] = 2.0
+    high = vmex_transport_objective_from_state(
+        "state", "static", "indata", object(), cfg
+    )
+
+    assert gkx.VMEXTransportObjectiveConfig is VMEXTransportObjectiveConfig
+    assert gkx.VMEXGKXTransportObjective is VMEXGKXTransportObjective
+    assert float(low) > 0.0
+    assert float(high) > float(low)
+
+
+def test_vmex_transport_objective_transform_scales_large_residuals(
+    monkeypatch,
+) -> None:
+
+    def fake_geom(*_args, **_kwargs):
+        return _fake_geometry()
+
+    def fake_growth(_geom, **_kwargs):
+        return jnp.asarray(20.0)
+
+    monkeypatch.setattr(
+        transport_tables, "flux_tube_geometry_from_vmec_boozer_state", fake_geom
+    )
+    monkeypatch.setattr(
+        transport_tables, "solver_growth_rate_from_geometry", fake_growth
+    )
+    samples = StellaratorITGSampleSet(surfaces=(0.5,), alphas=(0.0,), ky_values=(0.2,))
+    raw_cfg = VMEXTransportObjectiveConfig(
+        kind="nonlinear_window_heat_flux",
+        sample_set=samples,
+        objective_transform="raw",
+    )
+    scaled_cfg = VMEXTransportObjectiveConfig(
+        kind="nonlinear_window_heat_flux",
+        sample_set=samples,
+        objective_transform="scaled",
+        objective_scale=10.0,
+    )
+    log_cfg = VMEXTransportObjectiveConfig(
+        kind="nonlinear_window_heat_flux",
+        sample_set=samples,
+        objective_transform="log1p",
+        objective_scale=10.0,
+    )
+
+    raw = vmex_transport_objective_from_state(
+        "state", "static", "indata", object(), raw_cfg
+    )
+    scaled = vmex_transport_objective_from_state(
+        "state", "static", "indata", object(), scaled_cfg
+    )
+    logged = vmex_transport_objective_from_state(
+        "state", "static", "indata", object(), log_cfg
+    )
+
+    assert float(raw) > 1.0
+    assert float(scaled) == pytest.approx(float(raw) / 10.0)
+    assert float(logged) == pytest.approx(float(jnp.log1p(jnp.abs(scaled))))
+    assert float(logged) < float(scaled)
+
+
+def test_vmex_transport_objective_vmec_callback_builds_reference_wout(
+    monkeypatch,
+) -> None:
+    import gkx.objectives.vmec_transport as mod
+
+    captured: dict[str, object] = {}
+
+    def fake_eval(state, static, indata, wout_reference, config):
+        captured["state"] = state
+        captured["static"] = static
+        captured["indata"] = indata
+        captured["wout"] = wout_reference
+        captured["config"] = config
+        return jnp.asarray(0.125)
+
+    monkeypatch.setattr(mod, "vmex_transport_objective_from_state", fake_eval)
+    objective = VMEXGKXTransportObjective()
+    ctx = SimpleNamespace(
+        static=SimpleNamespace(cfg=SimpleNamespace(nfp=3)), indata="indata", signgs=-1
+    )
+
+    value = objective.J(ctx, "state")
+
+    assert float(value) == 0.125
+    assert captured["state"] == "state"
+    assert captured["indata"] == "indata"
+    assert captured["wout"].nfp == 3
+    assert captured["wout"].signgs == -1
+
+
+def test_vmex_transport_config_rejects_underresolved_boozer_modes() -> None:
+    assert (
+        VMEXTransportObjectiveConfig(kind="growth").gradient_scope
+        == "eigenvalue_growth_ad"
+    )
+    assert (
+        VMEXTransportObjectiveConfig(kind="quasilinear_flux").gradient_scope
+        == "eigenvalue_growth_ad_with_geometry_transport_weights"
+    )
+    try:
+        VMEXTransportObjectiveConfig(mboz=12, nboz=21)
+    except ValueError as exc:
+        assert "at least 21" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("underresolved Boozer mode count should fail")
+    with pytest.raises(ValueError, match="objective_scale"):
+        VMEXTransportObjectiveConfig(objective_scale=0.0)
+    with pytest.raises(ValueError, match="objective transform"):
+        VMEXTransportObjectiveConfig(objective_transform="bad")  # type: ignore[arg-type]
+
+
+def test_vmex_transport_objective_pins_imported_backend_paths(
+    monkeypatch, tmp_path
+) -> None:
+
+    vmec_root = tmp_path / "vmex_repo"
+    vmec_pkg = vmec_root / "vmex"
+    vmec_pkg.mkdir(parents=True)
+    vmec_file = vmec_pkg / "__init__.py"
+    vmec_file.write_text("", encoding="utf-8")
+
+    booz_root = tmp_path / "booz_xform_jax_repo" / "src"
+    booz_pkg = booz_root / "booz_xform_jax"
+    booz_pkg.mkdir(parents=True)
+    booz_file = booz_pkg / "__init__.py"
+    booz_file.write_text("", encoding="utf-8")
+
+    vmec_module = ModuleType("vmex")
+    vmec_module.__file__ = str(vmec_file)
+    booz_module = ModuleType("booz_xform_jax")
+    booz_module.__file__ = str(booz_file)
+    monkeypatch.setitem(sys.modules, "vmex", vmec_module)
+    monkeypatch.setitem(sys.modules, "booz_xform_jax", booz_module)
+    monkeypatch.delenv("GKX_VMEX_PATH", raising=False)
+    monkeypatch.delenv("VMEX_PATH", raising=False)
+    monkeypatch.delenv("GKX_BOOZ_XFORM_JAX_PATH", raising=False)
+    monkeypatch.delenv("BOOZ_XFORM_JAX_PATH", raising=False)
+
+    transport_config._pin_current_optional_backend_paths()
+
+    assert str(vmec_root) == transport_config.os.environ["GKX_VMEX_PATH"]
+    assert str(booz_root) == transport_config.os.environ["GKX_BOOZ_XFORM_JAX_PATH"]
+
+
+def test_module_search_root_handles_paths_and_missing_modules(
+    monkeypatch, tmp_path
+) -> None:
+
+    namespace_root = tmp_path / "namespace_backend"
+    namespace_root.mkdir()
+    namespace_module = ModuleType("namespace_backend")
+    namespace_module.__path__ = [str(namespace_root)]
+
+    missing_path_module = ModuleType("missing_path_backend")
+    missing_path_module.__path__ = [str(tmp_path / "does_not_exist")]
+
+    no_path_module = ModuleType("no_path_backend")
+
+    monkeypatch.setitem(sys.modules, "namespace_backend", namespace_module)
+    monkeypatch.setitem(sys.modules, "missing_path_backend", missing_path_module)
+    monkeypatch.setitem(sys.modules, "no_path_backend", no_path_module)
+
+    assert transport_config._module_search_root(
+        "namespace_backend"
+    ) == namespace_root.resolve(strict=False)
+    assert transport_config._module_search_root("missing_path_backend") is None
+    assert transport_config._module_search_root("no_path_backend") is None
+    assert transport_config._module_search_root("gkx_missing_backend_for_test") is None
+
+
+def test_pin_current_optional_backend_paths_respects_explicit_environment(
+    monkeypatch,
+) -> None:
+
+    def unexpected_search(module_name: str):
+        raise AssertionError(f"backend search should be skipped for {module_name}")
+
+    monkeypatch.setattr(transport_config, "_module_search_root", unexpected_search)
+    monkeypatch.delenv("GKX_VMEX_PATH", raising=False)
+    monkeypatch.setenv("VMEX_PATH", "/explicit/vmec-jax")
+    monkeypatch.setenv("GKX_BOOZ_XFORM_JAX_PATH", "/explicit/booz-xform-jax")
+    monkeypatch.delenv("BOOZ_XFORM_JAX_PATH", raising=False)
+
+    transport_config._pin_current_optional_backend_paths()
+
+    assert "GKX_VMEX_PATH" not in transport_config.os.environ
+    assert transport_config.os.environ["VMEX_PATH"] == "/explicit/vmec-jax"
+    assert (
+        transport_config.os.environ["GKX_BOOZ_XFORM_JAX_PATH"]
+        == "/explicit/booz-xform-jax"
+    )
+
+
+def test_static_grid_options_maps_integer_ky_multiples_to_solver_grid() -> None:
+
+    options = transport_tables._static_grid_options_from_ky_values(
+        (0.15, 0.45), min_ny=12
+    )
+
+    assert options["ky_base"] == pytest.approx(0.15)
+    assert options["ly"] == pytest.approx(2.0 * np.pi / 0.15)
+    assert options["ny"] == 12
+    assert options["selected_ky_indices"] == (1, 3)
+
+
+@pytest.mark.parametrize(
+    ("ky_values", "message"),
+    (
+        ((), "finite non-empty vector"),
+        ((0.2, np.nan), "finite non-empty vector"),
+        ((0.0,), "positive"),
+        ((0.2, 0.31), "integer multiples"),
+        ((0.2, 0.2), "duplicate selected ky indices"),
+    ),
+)
+def test_static_grid_options_rejects_invalid_ky_values(
+    ky_values: tuple[float, ...],
+    message: str,
+) -> None:
+
+    with pytest.raises(ValueError, match=message):
+        transport_tables._static_grid_options_from_ky_values(ky_values, min_ny=3)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    (
+        ({"kind": "invalid"}, "unknown VMEC-JAX transport objective kind"),
+        ({"ntheta": 3}, "ntheta must be >= 4"),
+        ({"n_laguerre": 0}, "n_laguerre and n_hermite must be positive"),
+        ({"ny": 2}, "nx must be positive and ny must be at least 3"),
+        ({"nonlinear_csat": 0.0}, "nonlinear_csat must be positive"),
+        ({"surface_chunk_size": -1}, "surface_chunk_size must be non-negative"),
+        (
+            {
+                "sample_set": StellaratorITGSampleSet(reduction="max"),
+                "surface_chunk_size": 1,
             },
-            covariance={"source": "test"},
-            nonlinear_trace=None,
-            config={},
-            backend_info={},
+            "surface_chunk_size currently supports only mean or weighted_mean reductions",
+        ),
+    ),
+)
+def test_vmex_transport_config_rejects_invalid_edges(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        VMEXTransportObjectiveConfig(**kwargs)
+
+
+def test_vmex_transport_config_objective_options_filter_none_values() -> None:
+    default_options = VMEXTransportObjectiveConfig().objective_options()
+    configured_options = VMEXTransportObjectiveConfig(
+        reference_length=2.5,
+        reference_b=0.7,
+        validate_finite=False,
+    ).objective_options()
+
+    assert "reference_length" not in default_options
+    assert "reference_b" not in default_options
+    assert configured_options["reference_length"] == 2.5
+    assert configured_options["reference_b"] == 0.7
+    assert configured_options["validate_finite"] is False
+
+
+def test_geometry_transport_weights_use_safe_defaults_for_minimal_geometry() -> None:
+
+    theta = jnp.linspace(-jnp.pi, jnp.pi, 6, endpoint=False)
+    kperp, heat_weight, particle_weight = transport_tables._geometry_transport_weights(
+        SimpleNamespace(theta=theta),
+        selected_ky_index=2,
+        ly=5.0,
+    )
+
+    assert np.isfinite(float(kperp))
+    assert np.isfinite(float(heat_weight))
+    assert np.isfinite(float(particle_weight))
+    assert float(kperp) > 0.0
+    assert float(heat_weight) > 0.0
+    assert float(particle_weight) == pytest.approx(0.25 * float(heat_weight))
+
+
+def test_transport_feature_table_rejects_empty_sample_rows() -> None:
+
+    config = SimpleNamespace(
+        sample_set=SimpleNamespace(surfaces=(), alphas=(0.0,), ky_values=(0.2,)),
+        kind="growth",
+    )
+
+    with pytest.raises(RuntimeError, match="produced no sample rows"):
+        transport_tables._transport_feature_table_from_state(
+            "state",
+            "static",
+            "indata",
+            object(),
+            config,
+            {"selected_ky_indices": (1,), "ny": 4, "ly": 2.0 * np.pi / 0.2},
         )
 
-    monkeypatch.setattr(so, "optimize_stellarator_itg", fake_optimize)
-    payload = compare_stellarator_itg_objectives(
-        ("growth", "quasilinear_flux", "nonlinear_heat_flux"),
-        workers=3,
-        finite_difference_workers=2,
+
+def test_quasilinear_flux_uses_geometry_transport_weights(monkeypatch) -> None:
+
+    def fake_geom(*_args, **_kwargs):
+        return _fake_geometry()
+
+    def fake_growth(_geom, **_kwargs):
+        return jnp.asarray(0.2)
+
+    monkeypatch.setattr(
+        transport_tables, "flux_tube_geometry_from_vmec_boozer_state", fake_geom
+    )
+    monkeypatch.setattr(
+        transport_tables, "solver_growth_rate_from_geometry", fake_growth
+    )
+    samples = StellaratorITGSampleSet(surfaces=(0.5,), alphas=(0.0,), ky_values=(0.2,))
+    cfg = VMEXTransportObjectiveConfig(kind="quasilinear_flux", sample_set=samples)
+
+    value = vmex_transport_objective_from_state(
+        "state", "static", "indata", object(), cfg
     )
 
-    assert [row["objective_kind"] for row in payload["results"]] == [
-        "growth",
-        "quasilinear_flux",
-        "nonlinear_heat_flux",
+    assert float(value) > 0.0
+
+
+# ---- from test_vmex_qa_transport_optimization.py ----
+
+
+ROOT = REPO_ROOT
+EXAMPLES = ROOT / "examples" / "10_vmex_optimization"
+QA_SCRIPT = EXAMPLES / "run.py"
+TRANSPORT_SUMMARY = ROOT / "docs" / "_static" / "qa_transport_summary.csv"
+TRANSPORT_TRACES = ROOT / "docs" / "_static" / "qa_transport_traces.csv"
+TRANSPORT_TIMESERIES = ROOT / "docs" / "_static" / "qa_transport_nominal_timeseries.csv"
+
+
+def _transport_summary() -> dict[str, dict[str, float]]:
+    with TRANSPORT_SUMMARY.open(encoding="utf-8", newline="") as stream:
+        return {
+            row["case"]: {
+                key: float(value) for key, value in row.items() if key != "case"
+            }
+            for row in csv.DictReader(stream)
+        }
+
+
+def test_qa_transport_stationarity_gate_is_per_trace(tmp_path: Path) -> None:
+    mod = load_artifact_tool("build_qa_transport_figures")
+    time = np.linspace(1100.0, 1500.0, 401)
+    drift = 10.0 + 3.0 * (time - time[0]) / (time[-1] - time[0])
+    path = tmp_path / "nominal_baseline_seed000.npz"
+    np.savez(path, time=time, heat_flux=drift, elapsed_seconds=1.0)
+
+    report = mod.trace_stats(path)
+
+    assert abs(float(report["trend_percent"])) > mod.MAX_FINAL_DRIFT_PERCENT
+    assert report["stationary"] == 0
+
+
+def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
+    text = QA_SCRIPT.read_text(encoding="utf-8")
+
+    py_compile.compile(str(QA_SCRIPT), doraise=True)
+    assert "argparse" not in text
+    assert "MAX_MODES, MAX_NFEV = [1, 2, 3, 4, 5]" in text
+    assert "SEED_PERTURBATION = 0.01" in text
+    assert "ASPECT_TARGET, IOTA_TARGET = 6.0, 0.42" in text
+    assert "am=np.zeros_like(inp.am), pres_scale=0.0" in text
+    assert "A_OVER_LT, A_OVER_LN = 3.0, 1.0" in text
+    assert "kpar_scale=local_geometry.gradpar_value" in text
+    assert "p_hyper_m=float(min(20, max(NM // 2, 1)))" in text
+    assert "gkx.integrate_nonlinear(" in text
+    assert "gkx.nonlinear_heat_flux_window(" in text
+    assert 'implicit_jacobian_method="auto"' in text
+    assert "objective_function_terms = [" in text
+    assert "(qs, 0.0, QA_PRIORITY)," in text
+    assert "(opt.aspect_ratio, ASPECT_TARGET, ASPECT_PRIORITY)," in text
+    assert "(opt.mean_iota, IOTA_TARGET, IOTA_PRIORITY)," in text
+    assert "(turbulent_transport, 0.0, transport_weight)," in text
+    assert "result = least_squares(" in text
+    assert "def report(label, local_equilibrium):" in text
+
+
+def test_docs_name_the_single_qa_autodiff_script() -> None:
+    docs = [
+        ROOT / "README.md",
+        ROOT / "docs" / "stellarator_optimization.rst",
+        EXAMPLES / "README.md",
     ]
-    assert [row["final_objective"] for row in payload["results"]] == [1.0, 2.0, 3.0]
-    assert payload["parallel"]["effective_workers"] == 3
+    for path in docs:
+        text = path.read_text(encoding="utf-8")
+        assert "QA_optimization.py" in text, path
+
+    examples_readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
+    assert "exact discrete differentiation" in re.sub(r"\s+", " ", examples_readme)
 
 
-# ---- test_zonal_objective.py ----
+def test_docs_scope_vmex_transport_optimizer_claims() -> None:
+    docs = [
+        ROOT / "README.md",
+        ROOT / "docs" / "stellarator_optimization.rst",
+        EXAMPLES / "README.md",
+    ]
+    for path in docs:
+        text = path.read_text(encoding="utf-8")
+        normalized = re.sub(r"\s+", " ", text)
+        assert "transport" in text, path
+        assert "nonlinear" in text, path
+        assert "post-saturation" in normalized, path
 
 
-def test_reduced_stellarator_model_stays_deprecated_and_shallowly_depended_on() -> None:
-    """The reduced model must stay marked, and must not grow production consumers.
+def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
+    figures = (
+        "nonlinear_autodiff_validation.png",
+        "qa_transport_equilibria.png",
+        "qa_transport_reduction.svg",
+    )
+    for filename in figures:
+        path = ROOT / "docs" / "_static" / filename
+        assert f"docs/_static/{filename}" in readme
+        assert path.stat().st_size > 0
+    equilibria = ROOT / "docs" / "_static" / "qa_transport_equilibria.png"
+    assert equilibria.stat().st_size < 100_000
+    assert equilibria.read_bytes()[25] == 3  # indexed-color PNG
 
-    ``objectives.stellarator_reduced`` is a fitted feature map whose "nonlinear"
-    trace is an ODE envelope, not gyrokinetics. It is slated for removal now that
-    ``solver_objective_vector_from_geometry`` evaluates the production linear RHS
-    differentiably. Two things can silently undo that: the deprecation notice
-    being dropped in a refactor, and the real VMEC path acquiring a deeper
-    dependency on the reduced physics than the two generic helpers it uses today.
+    for filename in (
+        "input.qa_transport_baseline",
+        "input.qa_transport_candidate",
+    ):
+        assert (EXAMPLES / filename).is_file()
+        assert filename in docs
+    for script in (
+        ROOT / "scripts" / "campaigns" / "qa_transport_validation.py",
+        ROOT / "scripts" / "artifacts" / "build_qa_transport_figures.py",
+    ):
+        py_compile.compile(str(script), doraise=True)
+        assert script.name in docs
 
-    This asserts both. It fails if someone removes the marker, and it fails if
-    ``vmec_transport`` starts importing reduced *physics* rather than
-    ``smooth_positive`` and the sampling contract.
-    """
+    with TRANSPORT_TIMESERIES.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    time = np.asarray([float(row["time"]) for row in rows])
+    values = np.asarray(
+        [
+            [
+                float(row["baseline_mean"]),
+                float(row["baseline_sem"]),
+                float(row["candidate_mean"]),
+                float(row["candidate_sem"]),
+            ]
+            for row in rows
+        ]
+    )
+    assert len(rows) == 301
+    assert np.all(np.diff(time) > 0.0)
+    assert time[0] < 1.0 and time[-1] > 1499.0
+    assert np.all(np.isfinite(values))
+    assert np.all(values[:, (1, 3)] >= 0.0)
 
-    import ast
-    import gkx.objectives.stellarator as reduced  # fused: stellarator_reduced now lives here
 
-    assert "deprecated" in (reduced.__doc__ or "").lower(), (
-        "the reduced-model deprecation notice was removed; it is a fitted "
-        "feature map, not gyrokinetics, and must stay marked until deleted"
+def test_optimization_examples_document_user_customization_knobs() -> None:
+    examples_readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
+
+    assert "QA nonlinear transport" in examples_readme
+    assert "A_OVER_LT" in examples_readme
+    assert "A_OVER_LN" in examples_readme
+    assert "SATURATION_STEPS" in examples_readme
+    assert "WINDOW_STEPS" in examples_readme
+    assert "objective_function_terms" in examples_readme
+    assert "least_squares" in examples_readme
+
+
+def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
+    manuscript = (ROOT / "docs" / "manuscript_figures.rst").read_text(encoding="utf-8")
+    normalized_readme = re.sub(r"\s+", " ", readme)
+
+    # The README presents the production method, not a reduced proxy panel.
+    assert "docs/_static/qa_itg_optimization_summary_panel.png" not in readme
+    assert "docs/_static/vmex_qa_solved_boundary_boozer_panel.png" not in readme
+    assert "docs/_static/stellarator_itg_optimization_comparison.png" not in readme
+    assert "docs/_static/stellarator_itg_optimization_uq.png" not in readme
+    assert "independent matched runs validate" not in normalized_readme.lower()
+    assert "preliminary 12.26% reduction" in normalized_readme.lower()
+    assert "not statistically resolved" in normalized_readme.lower()
+    assert "replicated" in normalized_readme.lower()
+    assert "post-saturation" in normalized_readme.lower()
+
+    assert "QA_optimization.py" in docs
+    assert (
+        "nonlinear_heat_flux_window" not in docs or "physical heat-flux window" in docs
+    )
+    assert ".. figure:: _static/stellarator_itg_optimization_comparison.png" not in docs
+    assert "screening diagnostics" in docs
+    assert (
+        "current artifact bases: ``docs/_static/stellarator_itg_optimization_comparison.png``"
+        not in manuscript
+    )
+    assert "is not a solved-geometry optimization figure" in manuscript
+    assert (
+        "production QA optimization examples are the VMEC-JAX-style scripts"
+        in manuscript
     )
 
-    source = (
-        REPO_ROOT / "src" / "gkx" / "objectives" / "vmec_transport.py"
-    ).read_text()
-    imported: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
-        if (
-            isinstance(node, ast.ImportFrom)
-            and node.module
-            and "stellarator" in node.module
-        ):
-            imported.update(alias.name for alias in node.names)
 
-    # Generic helpers only: a softplus and a portfolio-shape contract. Anything
-    # else means the production VMEC path has taken a dependency on reduced
-    # physics, which is what removal has to avoid.
-    assert imported <= {"StellaratorITGSampleSet", "smooth_positive"}, (
-        f"vmec_transport imports reduced-model physics: {sorted(imported)}"
+def test_reduced_surface_comparison_is_not_current_primary_optimization_figure() -> (
+    None
+):
+    release_contract = (
+        ROOT / "benchmarks" / "references" / "gkx_1_7_release_contract.json"
+    ).read_text(encoding="utf-8")
+    examples_readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
+    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
+
+    reduced_png = '"docs/_static/stellarator_itg_optimization_comparison.png"'
+    assert reduced_png not in release_contract
+    assert "stellarator_itg_growth_optimization.py" not in examples_readme
+    assert "reduced_stellarator_itg" not in examples_readme
+    assert "screening diagnostics" in re.sub(r"\s+", " ", docs)
+
+
+def test_matched_qa_transport_evidence_fails_closed() -> None:
+    """Keep the preliminary campaign reproducible without promoting it."""
+    rows = _transport_summary()
+    assert set(rows) == {
+        "nominal",
+        "dt04",
+        "dt025",
+        "perp12",
+        "perp20",
+        "perp24",
+        "perp24long",
+        "z16",
+        "z32",
+        "v36",
+        "v612",
+    }
+    assert all(np.isfinite(value) for row in rows.values() for value in row.values())
+    with TRANSPORT_TRACES.open(encoding="utf-8", newline="") as stream:
+        traces = list(csv.DictReader(stream))
+    for row in rows.values():
+        assert row["p_hyper_m"] == min(20, max(int(row["nm"]) // 2, 1))
+    for case, row in rows.items():
+        case_traces = [trace for trace in traces if trace["case"] == case]
+        pairs = int(row["pairs"])
+        assert len(case_traces) == 2 * pairs
+        for design in ("baseline", "candidate"):
+            seeds = {
+                int(trace["seed"]) for trace in case_traces if trace["design"] == design
+            }
+            assert seeds == set(range(pairs))
+        assert all(float(trace["tau"]) > 0.0 for trace in case_traces)
+        assert all(float(trace["neff"]) > 0.0 for trace in case_traces)
+        assert all(
+            int(trace["stationary"]) == int(abs(float(trace["trend_percent"])) <= 20.0)
+            for trace in case_traces
+        )
+        assert row["stationary_traces"] == sum(
+            int(trace["stationary"]) for trace in case_traces
+        )
+        assert (
+            row["nonstationary_traces"] == len(case_traces) - row["stationary_traces"]
+        )
+        assert row["resolved_spectra_available"] == 0.0
+        assert row["promotion_ready"] == 0.0
+
+    nominal = rows["nominal"]
+    assert nominal["pairs"] == 24
+    assert nominal["positive_pairs"] == nominal["pairs"]
+    assert nominal["ci95_low_percent"] > 0.0
+    assert nominal["minimum_window_in_tau"] > 10.0
+    assert nominal["stationary_traces"] == 44
+    assert nominal["nonstationary_traces"] == 4
+    assert nominal["all_traces_stationary"] == 0.0
+    assert rows["z32"]["all_traces_stationary"] == 1.0
+
+
+def test_solved_wout_candidate_gate_passes_valid_qa_branch() -> None:
+    result = SimpleNamespace(
+        history={
+            "aspect_final": 5.999233,
+            "iota_final": 0.427011,
+            "qs_final": 2.604013e-2,
+        },
     )
+
+    report = build_solved_vmec_candidate_gate(
+        result,
+        target_aspect=6.0,
+        aspect_atol=5.0e-2,
+        min_abs_mean_iota=0.41,
+        qs_residual_max=5.0e-2,
+        iota_profile_floor=0.41,
+        iota_profiles=(
+            np.asarray([0.0, 0.410131, 0.414]),
+            np.asarray([0.410706, 0.414]),
+        ),
+    )
+
+    assert report["passed"] is True
+    assert report["checks"]["aspect"]["passed"] is True
+    assert report["checks"]["mean_iota"]["passed"] is True
+    assert report["checks"]["quasisymmetry"]["passed"] is True
+    assert report["checks"]["iota_profile"]["passed"] is True
+    json.dumps(report, allow_nan=False)
+
+
+def test_solved_wout_candidate_gate_rejects_transport_branch_that_breaks_constraints() -> (
+    None
+):
+    result = SimpleNamespace(
+        history={
+            "aspect_final": 5.996817,
+            "iota_final": 0.425028,
+            "qs_final": 1.091236e-1,
+        },
+    )
+
+    report = build_solved_vmec_candidate_gate(
+        result,
+        target_aspect=6.0,
+        aspect_atol=5.0e-2,
+        min_abs_mean_iota=0.41,
+        qs_residual_max=5.0e-2,
+        iota_profile_floor=0.41,
+        iota_profiles=(
+            np.asarray([0.0, 0.402043, 0.414]),
+            np.asarray([0.402493, 0.414]),
+        ),
+    )
+
+    assert report["passed"] is False
+    assert report["checks"]["aspect"]["passed"] is True
+    assert report["checks"]["mean_iota"]["passed"] is True
+    assert report["checks"]["quasisymmetry"]["passed"] is False
+    assert report["checks"]["iota_profile"]["passed"] is False
+    assert "do not promote" in report["next_action"]
+    json.dumps(report, allow_nan=False)

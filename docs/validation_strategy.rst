@@ -32,7 +32,7 @@ Each row carries ``id``, ``claim``, ``observable``, ``artifact``,
 A claim cites the highest-ranked reference available. A self-run reference is
 rank 5 and is never described as published.
 
-``tests/release/test_evidence_ledger.py`` enforces the contract:
+``tests/release/test_release_gates.py`` enforces the contract:
 
 - every row has the required keys and valid rank, tier, and status;
 - every artifact and generator exists;

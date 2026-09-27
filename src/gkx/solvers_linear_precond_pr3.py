@@ -90,6 +90,7 @@ import solvax
 
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
+from gkx.terms.assembly import assemble_rhs_cached
 from gkx.terms.config import TermConfig
 
 __all__ = [
@@ -141,6 +142,26 @@ _COUPLING_BAND_TOL: float = 1.0e-13
 # inert in float64 (1.4e-14), 7.6e-6 in float32. For the off-band check that is
 # 20x below the measured 1.5e-4 Laguerre coupling at nu = 0.01.
 _ROUNDOFF_EPS_MULTIPLE: float = 64.0
+
+
+@jax.jit
+def _assemble_rhs_cached_novjp(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+) -> tuple[jnp.ndarray, object]:
+    return assemble_rhs_cached(G, cache, params, terms=term_cfg, use_custom_vjp=False)
+
+
+def _apply_operator(
+    v: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg: TermConfig,
+) -> jnp.ndarray:
+    dG, _fields = _assemble_rhs_cached_novjp(v, cache, params, term_cfg)
+    return dG
 
 
 def _refusal_tolerance(float64_value: float) -> float:
@@ -646,8 +667,6 @@ def build_pr3_factors(
             "state, or the same without the species axis; got shape "
             f"{tuple(v0.shape)}"
         )
-    from gkx.solvers_linear_krylov_algorithms import _apply_operator
-
     state_shape = tuple(int(s) for s in v0.shape)
     shape = _block_shape(state_shape)
     ns, nl, nm, ny, nx, nz = shape

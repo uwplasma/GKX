@@ -50,7 +50,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from gkx.artifacts import snapshots  # noqa: E402
+from gkx.artifacts import run_summary as snapshots  # noqa: E402
 from gkx.artifacts.figure_style import figure_style, save_figure  # noqa: E402
 from gkx.geometry import (  # noqa: E402
     apply_geometry_grid_defaults,
@@ -59,7 +59,7 @@ from gkx.geometry import (  # noqa: E402
 from gkx.solvers_nonlinear_diagnostic_integration import (  # noqa: E402
     prepare_nonlinear_explicit_diagnostics,
 )
-from gkx.workflows.runtime.policies import (  # noqa: E402
+from gkx.runtime import (  # noqa: E402
     _runtime_external_phi,
     _select_nonlinear_mode_indices,
     build_runtime_nonlinear_diagnostics_kwargs,

@@ -5,15 +5,47 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
 import jax.numpy as jnp
 import numpy as np
+from collections.abc import Sequence
 
 from gkx.diagnostics.modes import ModeSelection
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.terms.config import FieldState
-from gkx.solvers_linear_implicit import implicit_solve_payload
+from gkx.solvers_linear_implicit import (
+    implicit_solve_payload,
+    ImplicitSolveSummary,
+    require_converged_implicit_solves,
+)
 from gkx.solvers_linear_krylov import eigen_status_payload
+
+
+_IMPLICIT_SOLVE_METHODS = {
+    "linear": frozenset({"implicit"}),
+    "nonlinear": frozenset({"imex", "semi-implicit"}),
+}
+
+
+def solve_stats_request(method: Any, *, kind: str) -> dict[str, Any]:
+    """Return ``return_solve_stats=True`` when ``method`` takes implicit solves."""
+
+    key = str(method).strip().lower()
+    return {"return_solve_stats": True} if key in _IMPLICIT_SOLVE_METHODS[kind] else {}
+
+
+def checked_solve_summary(
+    outputs: Sequence[Any], request: dict[str, Any], *, label: str
+) -> ImplicitSolveSummary | None:
+    """Fail closed on the stats a requested integrator appended last.
+
+    Returns ``None`` when no stats were requested, so explicit runs keep a null
+    status rather than a fabricated converged one.
+    """
+
+    if not request:
+        return None
+    return require_converged_implicit_solves(outputs[-1], label=label)
+
 
 if TYPE_CHECKING:
     from gkx.solvers_linear_implicit import ImplicitSolveSummary
@@ -68,12 +100,14 @@ class _ResultArtifacts:
         writer = self._artifact_writer(artifacts_io)
         return writer(path, self)
 
+    _figure = ""
+
     def plot(self) -> Any:
         """Return the standard figure for this result."""
 
-        from gkx.artifacts.plotting import plot as _plot
+        from gkx.artifacts import plotting
 
-        return _plot(self)
+        return getattr(plotting, self._figure)(self)
 
     def print_summary(self, *, stream: Any = None) -> None:
         """Print the same scalar summary that ``save`` records."""
@@ -89,6 +123,8 @@ class _ResultArtifacts:
 @dataclass(frozen=True)
 class RuntimeLinearResult(_ResultArtifacts):
     """Result container for runtime linear runs."""
+
+    _figure = "linear_result_figure"
 
     ky: float
     gamma: float
@@ -159,6 +195,8 @@ class RuntimeLinearResult(_ResultArtifacts):
 class RuntimeLinearScanResult(_ResultArtifacts):
     """Result container for runtime linear ky scans."""
 
+    _figure = "scan_result_figure"
+
     ky: np.ndarray
     gamma: np.ndarray
     omega: np.ndarray
@@ -214,6 +252,8 @@ class RuntimeParameterScanResult:
 @dataclass(frozen=True)
 class RuntimeNonlinearResult(_ResultArtifacts):
     """Result container for runtime nonlinear runs."""
+
+    _figure = "nonlinear_result_figure"
 
     t: np.ndarray
     diagnostics: SimulationDiagnostics | None
@@ -316,3 +356,11 @@ def build_runtime_nonlinear_result(
         kx_selected=kx_selected,
         saturation=saturation,
     )
+
+
+def plot(result: Any) -> Any:
+    """Create the standard in-memory figure for a runtime result."""
+
+    if not isinstance(result, _ResultArtifacts) or not result._figure:
+        raise TypeError("plot expects a LinearResult, NonlinearResult, or ScanResult")
+    return result.plot()

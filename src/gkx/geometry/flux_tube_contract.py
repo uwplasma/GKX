@@ -8,7 +8,7 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.geometry import FluxTubeGeometryData
+from gkx.geometry.core import FluxTubeGeometryData
 from gkx.geometry.backend_discovery import _is_traced
 
 _ARRAY_FIELDS = (

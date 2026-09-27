@@ -11,8 +11,6 @@ from gkx.cli import (
     _cmd_run_runtime_nonlinear,
     _cmd_scan_runtime_linear,
     _direct_config_shorthand_args,
-    _is_runtime_toml,
-    _toml_shorthand_command,
     main,
 )
 from gkx.config import (
@@ -20,6 +18,14 @@ from gkx.config import (
     GridConfig,
     InitializationConfig,
     TimeConfig,
+    RuntimeConfig,
+    RuntimeExpertConfig,
+    RuntimeNormalizationConfig,
+    RuntimeOutputConfig,
+    RuntimeParallelConfig,
+    RuntimePhysicsConfig,
+    RuntimeQuasilinearConfig,
+    RuntimeSpeciesConfig,
 )
 from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics import ResolvedDiagnostics, SimulationDiagnostics
@@ -63,33 +69,22 @@ from gkx.runtime import (
     build_runtime_term_config,
     run_runtime_nonlinear,
     run_runtime_scan,
+    RuntimeLinearResult,
+    RuntimeNonlinearResult,
 )
-from gkx.runtime import RuntimeLinearResult, RuntimeNonlinearResult
 from gkx.terms.config import FieldState
 from gkx.workflows.runtime.chunks import (
     build_runtime_progress_message,
     format_duration,
 )
-from gkx.config import (
-    RuntimeConfig,
-    RuntimeExpertConfig,
-    RuntimeNormalizationConfig,
-    RuntimeOutputConfig,
-    RuntimeParallelConfig,
-    RuntimePhysicsConfig,
-    RuntimeQuasilinearConfig,
-    RuntimeSpeciesConfig,
-)
 from gkx.workflows.runtime.diagnostics import (
     RuntimeQuasilinearFinalizationDeps,
     finalize_runtime_linear_quasilinear,
-)
-from gkx.workflows.runtime.diagnostics import (
     half_horizon_settled_probe,
     warn_if_growth_unresolved,
+    _prepare_runtime_linear_fit_inputs,
+    fit_runtime_linear_diagnostics,
 )
-from gkx.workflows.runtime.diagnostics import _prepare_runtime_linear_fit_inputs
-from gkx.workflows.runtime.diagnostics import fit_runtime_linear_diagnostics
 from gkx.workflows.runtime.orchestration_scan import (
     _BatchDiagnostics,
     _fit_batch_scan_point,
@@ -101,11 +96,12 @@ from support.paths import REPO_ROOT
 from types import SimpleNamespace
 import argparse
 import gkx.cli as cli
+import gkx.workflows.runtime.toml as runtime_toml
 import gkx.runtime as runtime
 import gkx.workflows.runtime.commands as runtime_cases
 import gkx.workflows.runtime.commands as runtime_commands
 import gkx.workflows.runtime.orchestration_artifacts as runtime_artifacts
-import gkx.workflows.runtime.policies as runtime_policies
+import gkx.runtime as runtime_policies
 import gkx.workflows.runtime.warm_start as warm_start
 import json
 import numpy as np
@@ -299,11 +295,11 @@ def test_runtime_command_deps_are_built_from_patchable_cli_scope(
 
 
 def test_cli_runtime_toml_dispatch_is_uniform() -> None:
-    assert _is_runtime_toml({"physics": {}}) is True
-    assert _is_runtime_toml({"case": "cyclone"}) is True
-    assert _is_runtime_toml({}) is True
-    assert _toml_shorthand_command({"physics": {}}) == "run"
-    assert _toml_shorthand_command({"case": "cyclone"}) == "run"
+    assert runtime_toml.is_runtime_toml({"physics": {}}) is True
+    assert runtime_toml.is_runtime_toml({"case": "cyclone"}) is True
+    assert runtime_toml.is_runtime_toml({}) is True
+    assert runtime_toml.toml_shorthand_command({"physics": {}}) == "run"
+    assert runtime_toml.toml_shorthand_command({"case": "cyclone"}) == "run"
 
     parser = cli.build_parser()
     promoted = parser.parse_args(["scan", "--config", "case.toml"])
@@ -2525,7 +2521,7 @@ def test_cli_global_plot_renders_a_gx_netcdf_bundle(
 ) -> None:
     """--plot accepts GX output so a cross-code check is one command."""
 
-    from gkx.artifacts.gx_output import is_gx_output
+    from gkx.artifacts.foreign_output import is_gx_output
 
     gx_bundle = _write_grouped_out_nc(tmp_path / "gx_case.out.nc", code="gx")
     gkx_bundle = _write_grouped_out_nc(tmp_path / "gkx_case.out.nc", code="gkx")
@@ -2545,7 +2541,7 @@ def test_cli_global_plot_titles_gx_data_as_gx(tmp_path: Path) -> None:
 
     import matplotlib.pyplot as plt
 
-    from gkx.artifacts.gx_output import gx_summary_figure
+    from gkx.artifacts.foreign_output import gx_summary_figure
 
     gx_bundle = _write_grouped_out_nc(tmp_path / "gx_titled.out.nc", code="gx")
     fig, axes = gx_summary_figure(gx_bundle)

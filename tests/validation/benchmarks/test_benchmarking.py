@@ -5,29 +5,22 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from gkx.diagnostics.analysis import ModeSelection
 from gkx.benchmarking_shared import (
-    LinearRunResult,
     LinearScanResult,
 )
-from gkx.workflows.linear import run_linear_scan, run_scan_and_mode
+from gkx.workflows.linear import run_linear_scan
 from gkx.diagnostics.modes import (
     compare_eigenfunctions,
-    load_eigenfunction_reference_bundle,
     normalize_eigenfunction,
     phase_align_eigenfunction,
-    save_eigenfunction_reference_bundle,
 )
 from gkx.artifacts.io import load_diagnostic_time_series
 from gkx.artifacts.spectral_layout import infer_triple_dealiased_ny
 from gkx.diagnostics.analysis import (
-    BranchContinuationMetrics,
     LateTimeLinearMetrics,
     NonlinearHeatFluxConvergenceMetrics,
     NonlinearWindowMetrics,
-    branch_continuity_metrics,
     estimate_observed_order,
-    late_time_linear_metrics,
     nonlinear_heat_flux_convergence_metrics,
     windowed_nonlinear_metrics,
 )
@@ -35,13 +28,11 @@ from gkx.diagnostics.growth_windows import (
     _analytic_signal,
     _explicit_time_window,
     _leading_window,
-    late_time_window,
 )
 from gkx.diagnostics.validation_gates import (
     GateReport,
     ScalarGateResult,
     ZonalFlowResponseMetrics,
-    branch_continuity_gate_report,
     eigenfunction_gate_report,
     evaluate_scalar_gate,
     gate_report,
@@ -55,7 +46,99 @@ from gkx.diagnostics.validation_gates import (
 from gkx.diagnostics.modes import EigenfunctionComparisonMetrics
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.zonal_validation import zonal_flow_response_metrics
-from gkx.runtime import RuntimeLinearResult, RuntimeNonlinearResult
+from gkx.runtime import RuntimeNonlinearResult
+from dataclasses import fields
+import math
+from pathlib import Path
+import re
+import subprocess
+import tomllib
+import jax
+import jax.numpy as jnp
+from support.paths import REPO_ROOT, load_release_tool
+from scripts.benchmarks import linear_benchmark
+from scripts.benchmarks import benchmark_integrators
+from scripts.benchmarks.benchmark_runtime_memory import (
+    RuntimeBenchRun,
+    _load_manifest,
+    _load_summary_rows,
+    _parse_profile_times,
+    _parse_peak_rss_mb,
+    _plot_results,
+    _render,
+    _run_command,
+    _select_runs,
+    _summary_row,
+    _write_row_logs,
+    _write_summary,
+)
+from gkx.core_velocity import J_l_all, single_precision_factorial
+from gkx.config import resolve_cfl_fac
+from gkx.geometry import SAlphaGeometry
+from gkx.operators.linear.params import LinearParams, LinearTerms
+from gkx.operators.linear import dissipation as linear_dissipation_module
+from gkx.terms import linear_terms as linear_terms_module
+from gkx.terms.linear_terms import (
+    diamagnetic_contribution,
+    end_damping_contribution,
+    hypercollisions_contribution,
+    hyperdiffusion_contribution,
+    linked_streaming_contribution,
+    streaming_contribution,
+)
+from gkx.benchmarking_shared import (
+    KBM_OMEGA_D_SCALE,
+    KBM_OMEGA_STAR_SCALE,
+    KBM_RHO_STAR,
+    TEM_OMEGA_D_SCALE,
+    TEM_OMEGA_STAR_SCALE,
+    TEM_RHO_STAR,
+    _build_initial_condition as build_benchmark_initial_condition,
+    _two_species_params,
+)
+from gkx.core_grid import build_spectral_grid, select_ky_grid
+from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.operators.linear.rhs import linear_rhs_cached
+from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
+from gkx.runtime import (
+    _build_initial_condition as build_runtime_initial_condition,
+    build_runtime_geometry,
+    build_runtime_linear_params,
+    build_runtime_linear_terms,
+)
+from gkx.workflows.runtime.toml import load_runtime_from_toml
+from gkx.diagnostics.analysis import ModeSelection
+from gkx.diagnostics.growth_rates import (
+    _normalize_growth_rate,
+    _score_fit_signal_auto,
+    _select_fit_signal,
+    _select_fit_signal_auto,
+)
+from gkx.benchmarking_shared import (
+    _build_gaussian_profile,
+    _build_initial_condition,
+)
+from gkx.benchmarking_shared import (
+    load_cyclone_reference,
+    load_cyclone_reference_kinetic,
+    load_etg_reference,
+    load_kbm_reference,
+    load_tem_reference,
+)
+from gkx.benchmarking_shared import (
+    _apply_reference_hypercollisions,
+    _reference_hypercollision_power,
+)
+from gkx.config import InitializationConfig
+import json
+import hashlib
+import sys
+from support.paths import load_tool_script
+from gkx.diagnostics.transport_windows import (
+    NonlinearWindowConvergenceConfig,
+    nonlinear_window_convergence_report,
+)
+from gkx.diagnostics.validation_gates import matched_nonlinear_transport_report
 
 
 def test_normalize_eigenfunction_uses_nearest_zero() -> None:
@@ -109,38 +192,6 @@ def test_compare_eigenfunctions_handles_shape_and_zero_norm() -> None:
     )
     assert np.isnan(metrics.overlap)
     assert np.isnan(metrics.relative_l2)
-
-
-def test_eigenfunction_reference_bundle_roundtrip(tmp_path) -> None:
-    theta = np.linspace(-2.0, 2.0, 7)
-    mode = np.exp(1j * theta)
-    path = tmp_path / "reference_mode.npz"
-
-    out = save_eigenfunction_reference_bundle(
-        path,
-        theta=theta,
-        mode=mode,
-        source="GX",
-        case="kbm_linear",
-        metadata={"ky": 0.2, "note": "frozen"},
-    )
-    bundle = load_eigenfunction_reference_bundle(out)
-
-    assert out == path
-    np.testing.assert_allclose(bundle.theta, theta)
-    np.testing.assert_allclose(bundle.mode, mode)
-    assert bundle.source == "GX"
-    assert bundle.case == "kbm_linear"
-    assert bundle.metadata == {"ky": 0.2, "note": "frozen"}
-
-
-def test_late_time_window_returns_tail_bounds() -> None:
-    t = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
-
-    tmin, tmax = late_time_window(t, tail_fraction=0.4)
-
-    assert tmin == pytest.approx(3.0)
-    assert tmax == pytest.approx(4.0)
 
 
 def test_benchmarking_window_helpers_respect_bounds_and_validation() -> None:
@@ -775,166 +826,6 @@ def test_run_linear_scan_accepts_an_empty_scan() -> None:
     assert result.omega.shape == (0,)
 
 
-def test_run_scan_and_mode_uses_selected_ky_and_fit_window(monkeypatch) -> None:
-    selection = ModeSelection(ky_index=0, kx_index=0, z_index=1)
-    run = LinearRunResult(
-        t=np.array([0.0, 1.0, 2.0]),
-        phi_t=np.ones((3, 1, 1, 3), dtype=np.complex128),
-        gamma=0.4,
-        omega=-0.2,
-        ky=0.3,
-        selection=selection,
-    )
-    calls: list[dict[str, object]] = []
-
-    def fake_linear_fn(**kwargs):
-        calls.append(kwargs)
-        return run
-
-    monkeypatch.setattr(
-        "gkx.workflows.linear.extract_mode_time_series",
-        lambda phi_t, sel, method: np.array([1.0 + 0.0j, 2.0 + 0.0j, 4.0 + 0.0j]),
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.linear.fit_growth_rate_auto",
-        lambda t, signal, **kwargs: (0.5, -0.1, 0.25, 1.75),
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.linear.extract_eigenfunction",
-        lambda phi_t, t, selection, z, method, tmin, tmax: np.array([1.0, 2.0, 3.0]),
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.linear.build_spectral_grid",
-        lambda _grid: SimpleNamespace(z=np.array([-1.0, 0.0, 1.0])),
-    )
-    cfg = SimpleNamespace(grid=object())
-
-    result = run_scan_and_mode(
-        ky_values=np.array([0.1, 0.3]),
-        linear_fn=fake_linear_fn,
-        cfg=cfg,
-        Nl=2,
-        Nm=2,
-        dt=np.array([0.1, 0.2]),
-        steps=np.array([5, 6]),
-        method="rk2",
-        solver="time",
-        mode_solver="krylov",
-        krylov_cfg="kcfg",
-        window_kw={"window_fraction": 0.5},
-        resolution_policy=lambda ky: (3, 4) if ky < 0.2 else (5, 6),
-    )
-
-    assert result.ky_selected == 0.3
-    np.testing.assert_allclose(result.scan.gamma, [0.4, 0.4])
-    np.testing.assert_allclose(result.eigenfunction, [1.0, 2.0, 3.0])
-    assert result.tmin == 0.25
-    assert result.tmax == 1.75
-    assert calls[0]["solver"] == "time"
-    assert calls[1]["solver"] == "time"
-    assert calls[2]["solver"] == "krylov"
-    assert calls[2]["Nl"] == 5
-    assert calls[2]["Nm"] == 6
-    assert calls[2]["ky_target"] == 0.3
-
-
-def test_run_scan_and_mode_short_trace_skips_fit(monkeypatch) -> None:
-    run = LinearRunResult(
-        t=np.array([0.0]),
-        phi_t=np.ones((1, 1, 1, 2), dtype=np.complex128),
-        gamma=0.2,
-        omega=0.1,
-        ky=0.2,
-        selection=ModeSelection(ky_index=0, kx_index=0),
-    )
-
-    monkeypatch.setattr(
-        "gkx.workflows.linear.build_spectral_grid",
-        lambda _grid: SimpleNamespace(z=np.array([-1.0, 1.0])),
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.linear.extract_eigenfunction",
-        lambda *args, **kwargs: np.array([1.0, -1.0]),
-    )
-
-    result = run_scan_and_mode(
-        ky_values=np.array([0.2]),
-        linear_fn=lambda **kwargs: run,
-        cfg=SimpleNamespace(grid=object()),
-        Nl=1,
-        Nm=1,
-        dt=0.1,
-        steps=2,
-        method="rk2",
-        solver="time",
-        mode_solver="time",
-        krylov_cfg=None,
-        window_kw={"window_fraction": 0.5},
-        select_ky=lambda scan: float(scan.ky[0]),
-    )
-
-    assert result.tmin is None
-    assert result.tmax is None
-    np.testing.assert_allclose(result.eigenfunction, [1.0, -1.0])
-
-
-def test_late_time_linear_metrics_from_linear_run_result() -> None:
-    gamma = 0.35
-    omega = -0.18
-    t = np.linspace(0.0, 4.0, 9)
-    z_profile = np.array([1.0, 0.5 - 0.25j])
-    signal = np.exp((gamma - 1j * omega) * t)
-    phi_t = signal[:, None, None, None] * z_profile[None, None, None, :]
-    run = LinearRunResult(
-        t=t,
-        phi_t=phi_t,
-        gamma=gamma,
-        omega=omega,
-        ky=0.3,
-        selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
-        gamma_t=np.full_like(t, gamma, dtype=float),
-        omega_t=np.full_like(t, omega, dtype=float),
-    )
-
-    metrics = late_time_linear_metrics(run, tail_fraction=0.5)
-
-    assert metrics.signal_source == "phi_t:project"
-    assert metrics.nsamples == 5
-    assert metrics.gamma_fit == pytest.approx(gamma, rel=1.0e-3)
-    assert metrics.omega_fit == pytest.approx(omega, rel=1.0e-3)
-    assert metrics.gamma_tail_mean == pytest.approx(gamma)
-    assert metrics.omega_tail_mean == pytest.approx(omega)
-    assert metrics.tmin == pytest.approx(2.0)
-    assert metrics.tmax == pytest.approx(4.0)
-
-
-def test_late_time_linear_metrics_runtime_signal_and_scalar_fallback() -> None:
-    gamma = 0.22
-    omega = -0.07
-    t = np.linspace(0.0, 2.0, 5)
-    signal = np.exp((gamma - 1j * omega) * t)
-    runtime = RuntimeLinearResult(
-        ky=0.2,
-        gamma=gamma,
-        omega=omega,
-        selection=ModeSelection(ky_index=0, kx_index=0),
-        t=t,
-        signal=signal,
-    )
-
-    metrics = late_time_linear_metrics(runtime, tail_fraction=0.4)
-    assert metrics.signal_source == "signal"
-    assert metrics.gamma_fit == pytest.approx(gamma, rel=1.0e-3)
-    assert metrics.omega_fit == pytest.approx(omega, rel=1.0e-3)
-    assert metrics.nsamples == 2
-
-    scalar_only = late_time_linear_metrics(SimpleNamespace(gamma=0.1, omega=-0.2))
-    assert scalar_only.signal_source == "scalar"
-    assert scalar_only.gamma_fit == pytest.approx(0.1)
-    assert scalar_only.omega_fit == pytest.approx(-0.2)
-    assert scalar_only.nsamples == 1
-
-
 def test_windowed_nonlinear_metrics_from_runtime_result() -> None:
     diagnostics = SimulationDiagnostics(
         t=np.array([0.0, 1.0, 2.0, 3.0, 4.0]),
@@ -988,72 +879,27 @@ def test_windowed_nonlinear_metrics_rejects_missing_or_empty_diagnostics() -> No
         windowed_nonlinear_metrics(bad)
 
 
-def test_late_time_linear_metrics_without_signal_uses_tail_stats() -> None:
-    t = np.linspace(0.0, 4.0, 5)
-    result = SimpleNamespace(
-        t=t,
-        gamma=0.2,
-        omega=-0.1,
-        gamma_t=np.array([np.nan, 0.1, 0.2, 0.3, 0.4]),
-        omega_t=np.array([np.nan, -0.2, -0.3, -0.4, -0.5]),
-    )
-
-    metrics = late_time_linear_metrics(result, tail_fraction=0.4)
-
-    assert metrics.signal_source == "scalar"
-    assert metrics.gamma_fit == pytest.approx(0.2)
-    assert metrics.omega_fit == pytest.approx(-0.1)
-    assert metrics.gamma_tail_mean == pytest.approx(0.35)
-    assert metrics.omega_tail_mean == pytest.approx(-0.45)
-    assert metrics.gamma_tail_std == pytest.approx(0.05)
-    assert metrics.omega_tail_std == pytest.approx(0.05)
-
-
-def test_late_time_linear_and_windowed_nonlinear_metrics_validate_inputs() -> None:
-    with pytest.raises(ValueError):
-        late_time_linear_metrics(
-            SimpleNamespace(t=np.array([0.0, 1.0]), gamma=0.1, omega=0.2),
-            tail_fraction=0.0,
+def test_windowed_nonlinear_metrics_validate_time_axis_and_window() -> None:
+    def diagnostics(t: np.ndarray) -> SimulationDiagnostics:
+        return SimulationDiagnostics(
+            t=t,
+            dt_t=np.full(2, 0.1),
+            dt_mean=np.full(2, 0.1),
+            gamma_t=np.zeros(2),
+            omega_t=np.zeros(2),
+            Wg_t=np.ones(2),
+            Wphi_t=np.ones(2),
+            Wapar_t=np.zeros(2),
+            heat_flux_t=np.ones(2),
+            particle_flux_t=np.zeros(2),
+            energy_t=np.zeros(2),
         )
-    with pytest.raises(ValueError):
-        late_time_linear_metrics(
-            SimpleNamespace(t=np.array([[0.0, 1.0]]), gamma=0.1, omega=0.2)
-        )
-    with pytest.raises(ValueError):
-        late_time_linear_metrics(SimpleNamespace(t=np.array([]), gamma=0.1, omega=0.2))
 
-    bad_t = SimulationDiagnostics(
-        t=np.array([[0.0, 1.0]]),
-        dt_t=np.full(2, 0.1),
-        dt_mean=np.full(2, 0.1),
-        gamma_t=np.zeros(2),
-        omega_t=np.zeros(2),
-        Wg_t=np.ones(2),
-        Wphi_t=np.ones(2),
-        Wapar_t=np.zeros(2),
-        heat_flux_t=np.ones(2),
-        particle_flux_t=np.zeros(2),
-        energy_t=np.zeros(2),
-    )
     with pytest.raises(ValueError):
-        windowed_nonlinear_metrics(bad_t)
+        windowed_nonlinear_metrics(diagnostics(np.array([[0.0, 1.0]])))
     with pytest.raises(ValueError):
         windowed_nonlinear_metrics(
-            SimpleNamespace(
-                diagnostics=SimulationDiagnostics(
-                    t=np.array([0.0, 1.0]),
-                    dt_t=np.full(2, 0.1),
-                    dt_mean=np.full(2, 0.1),
-                    gamma_t=np.zeros(2),
-                    omega_t=np.zeros(2),
-                    Wg_t=np.ones(2),
-                    Wphi_t=np.ones(2),
-                    Wapar_t=np.zeros(2),
-                    heat_flux_t=np.ones(2),
-                    particle_flux_t=np.zeros(2),
-                    energy_t=np.zeros(2),
-                )
-            ),
+            SimpleNamespace(diagnostics=diagnostics(np.array([0.0, 1.0]))),
             start_fraction=1.0,
         )
 
@@ -1262,85 +1108,2920 @@ def test_observed_order_gate_report_tracks_rate_and_final_error() -> None:
         )
 
 
-def test_branch_continuity_metrics_and_gate_report() -> None:
-    metrics = branch_continuity_metrics(
-        ky=np.array([0.1, 0.2, 0.3]),
-        gamma=np.array([0.10, 0.105, 0.110]),
-        omega=np.array([-0.30, -0.31, -0.32]),
-        successive_overlap=np.array([0.98, 0.97]),
+# ---- from test_benchmark_contracts.py ----
+
+
+ROOT = REPO_ROOT
+MANIFEST = ROOT / "benchmarks" / "results" / "manifest.toml"
+MAX_TRACKED_RESULT_BYTES = 1_000_000
+MAX_ROOT_BENCHMARK_PAYLOAD_BYTES = 200_000
+
+
+def _assert_same_parameters(actual, expected):
+    for field in fields(actual):
+        left, right = getattr(actual, field.name), getattr(expected, field.name)
+        if left is None or right is None:
+            assert left is right, field.name
+        else:
+            np.testing.assert_allclose(
+                left, right, rtol=1.0e-7, atol=1.0e-9, err_msg=field.name
+            )
+
+
+@pytest.mark.parametrize("rates", [(None, 0.0), (0.0, None), (0.1, 0.2)])
+def test_parameter_contract_rejects_optional_and_numeric_mismatches(rates):
+    with pytest.raises(AssertionError, match="damp_ends_rate"):
+        _assert_same_parameters(*(LinearParams(damp_ends_rate=r) for r in rates))
+
+
+def test_integrator_benchmark_uses_canonical_linear_owners() -> None:
+    assert benchmark_integrators.LinearParams is LinearParams
+    assert benchmark_integrators.build_linear_cache is build_linear_cache
+    assert benchmark_integrators.integrate_linear.__module__ == (
+        "gkx.solvers_linear_integrators"
     )
 
-    assert isinstance(metrics, BranchContinuationMetrics)
-    assert metrics.max_rel_gamma_jump < 0.06
-    assert metrics.max_rel_omega_jump < 0.04
-    assert metrics.min_successive_overlap == pytest.approx(0.97)
 
-    report = branch_continuity_gate_report(
-        metrics,
-        case="kbm_branch",
-        source="candidate table",
-        max_rel_gamma_jump=0.1,
-        max_rel_omega_jump=0.1,
-        min_successive_overlap=0.95,
-    )
-    assert report.passed is True
+def test_benchmark_readme_references_existing_python_drivers() -> None:
+    """Keep researcher-facing reproduction commands synchronized with drivers."""
 
-    jump = branch_continuity_metrics(
-        ky=np.array([0.1, 0.2, 0.3]),
-        gamma=np.array([0.10, 0.40, 0.11]),
-        omega=np.array([-0.30, 0.80, -0.32]),
-        successive_overlap=np.array([0.7, 0.6]),
-    )
-    failed = branch_continuity_gate_report(
-        jump,
-        case="kbm_branch",
-        source="candidate table",
-        max_rel_gamma_jump=0.1,
-        max_rel_omega_jump=0.1,
-        min_successive_overlap=0.95,
-    )
-    assert failed.passed is False
+    readme = (ROOT / "benchmarks" / "README.md").read_text(encoding="utf-8")
+    drivers = re.findall(r"python scripts/benchmark\.py (\w+)", readme)
 
+    assert drivers
+    assert all(
+        (ROOT / "scripts" / "benchmarks" / f"{driver}.py").is_file()
+        for driver in drivers
+    )
+    for module in re.findall(r"python scripts/validate\.py (\w+)", readme):
+        assert any(
+            (ROOT / "scripts" / package / f"{module}.py").is_file()
+            for package in ("artifacts", "campaigns")
+        ), module
+
+
+def test_cyclone_publication_driver_uses_asymptotic_fit_window() -> None:
+    """Exclude the measured startup transient from the Cyclone growth fit."""
+
+    cyclone = linear_benchmark.CASES["cyclone"]
+    runtime_cfg, _ = load_runtime_from_toml(cyclone["config"])
+    assert cyclone["window"]["tmin"] >= 0.7 * runtime_cfg.time.t_max
+    assert cyclone["window"]["tmax"] == pytest.approx(runtime_cfg.time.t_max)
+
+
+def test_benchmark_public_exports_resolve() -> None:
+    import gkx.benchmarking_shared as benchmark_api
+
+    for name in benchmark_api.__all__:
+        assert hasattr(benchmark_api, name), name
+
+
+def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
+    """The canonical runtime case must preserve the established TEM operator."""
+
+    runtime_cfg, raw = load_runtime_from_toml(
+        ROOT / "benchmarks" / "cases" / "tem_linear.toml"
+    )
+    legacy_model = SimpleNamespace(
+        tprim_i=20.0,
+        tprim_e=20.0,
+        fprim=20.0,
+        Te_over_Ti=1.0,
+        mass_ratio=370.0,
+        nu_i=0.0,
+        nu_e=0.0,
+        beta=1.0e-4,
+    )
+    n_laguerre, n_hermite = 2, 4
+
+    geometry = build_runtime_geometry(runtime_cfg)
+    grid_full = build_spectral_grid(runtime_cfg.grid)
+    ky_index = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
+    grid = select_ky_grid(grid_full, ky_index)
+
+    assert not [key for key in raw["time"] if "diffrax" in key]
+    assert runtime_cfg.time.fixed_dt is True
+    assert runtime_cfg.time.method == "rk2"
+    assert runtime_cfg.time.sample_stride == 20
+    assert raw["run"]["solver"] == "auto"
+    tem_steps = round(runtime_cfg.time.t_max / runtime_cfg.time.dt)
+    assert tem_steps * runtime_cfg.time.dt == pytest.approx(runtime_cfg.time.t_max)
+    assert tem_steps % runtime_cfg.time.sample_stride == 0
+
+    runtime_params = build_runtime_linear_params(
+        runtime_cfg,
+        Nm=n_hermite,
+        geom=geometry,
+    )
+    cfl_params = build_runtime_linear_params(runtime_cfg, Nm=32, geom=geometry)
+    omega_bound = _linear_frequency_bound(grid, geometry, cfl_params, 12, 32)
+    cfl_numerator = resolve_cfl_fac(
+        runtime_cfg.time.method, runtime_cfg.time.cfl_fac
+    ) * float(runtime_cfg.time.cfl)
+    assert runtime_cfg.time.dt * float(np.sum(omega_bound)) <= cfl_numerator
+    legacy_params = _two_species_params(
+        legacy_model,
+        kpar_scale=float(geometry.gradpar()),
+        omega_d_scale=TEM_OMEGA_D_SCALE,
+        omega_star_scale=TEM_OMEGA_STAR_SCALE,
+        rho_star=TEM_RHO_STAR,
+        damp_ends_amp=0.0,
+        damp_ends_widthfrac=0.0,
+        nhermite=n_hermite,
+    )
+    _assert_same_parameters(runtime_params, legacy_params)
+
+    runtime_state = build_runtime_initial_condition(
+        grid,
+        geometry,
+        runtime_cfg,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        nspecies=2,
+    )
+    legacy_single = build_benchmark_initial_condition(
+        grid,
+        geometry,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        init_cfg=runtime_cfg.init,
+    )
+    legacy_state = np.zeros_like(np.asarray(runtime_state))
+    legacy_state[1] = np.asarray(legacy_single)
+    np.testing.assert_allclose(runtime_state, legacy_state, rtol=0.0, atol=1.0e-19)
+
+    cache = build_linear_cache(
+        grid,
+        geometry,
+        runtime_params,
+        n_laguerre,
+        n_hermite,
+    )
+    runtime_rhs, _ = linear_rhs_cached(
+        runtime_state,
+        cache,
+        runtime_params,
+        terms=build_runtime_linear_terms(runtime_cfg),
+    )
+    legacy_rhs, _ = linear_rhs_cached(
+        runtime_state,
+        cache,
+        legacy_params,
+        terms=LinearTerms(bpar=0.0),
+    )
+    np.testing.assert_allclose(runtime_rhs, legacy_rhs, rtol=1.0e-6, atol=1.0e-18)
+
+
+def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
+    """The canonical kinetic-electron case preserves the executed operator."""
+
+    runtime_cfg, raw = load_runtime_from_toml(
+        ROOT / "examples" / "05_kinetic_electrons" / "case_full.toml"
+    )
+    model = SimpleNamespace(
+        tprim_i=2.49,
+        tprim_e=2.49,
+        fprim=0.8,
+        Te_over_Ti=1.0,
+        mass_ratio=1.0 / 0.00027,
+        nu_i=0.0,
+        nu_e=0.0,
+        beta=1.0e-5,
+    )
+    n_laguerre, n_hermite = 2, 4
+    geometry = build_runtime_geometry(runtime_cfg)
+    grid_full = build_spectral_grid(runtime_cfg.grid)
+    ky_index = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
+    grid = select_ky_grid(grid_full, ky_index)
+
+    assert not [key for key in raw["time"] if "diffrax" in key]
+    assert runtime_cfg.time.fixed_dt is True
+    assert runtime_cfg.time.method == "rk4"
+    assert runtime_cfg.time.sample_stride == 10
+    assert raw["run"]["solver"] == "auto"
+    kinetic_steps = round(runtime_cfg.time.t_max / runtime_cfg.time.dt)
+    assert kinetic_steps * runtime_cfg.time.dt == pytest.approx(runtime_cfg.time.t_max)
+    assert kinetic_steps % runtime_cfg.time.sample_stride == 0
+
+    runtime_params = build_runtime_linear_params(
+        runtime_cfg, Nm=n_hermite, geom=geometry
+    )
+    cfl_params = build_runtime_linear_params(runtime_cfg, Nm=32, geom=geometry)
+    omega_bound = _linear_frequency_bound(grid, geometry, cfl_params, 12, 32)
+    cfl_numerator = resolve_cfl_fac(
+        runtime_cfg.time.method, runtime_cfg.time.cfl_fac
+    ) * float(runtime_cfg.time.cfl)
+    assert runtime_cfg.time.dt * float(np.sum(omega_bound)) <= cfl_numerator
+    legacy_params = _two_species_params(
+        model,
+        kpar_scale=float(geometry.gradpar()),
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        rho_star=1.0,
+        damp_ends_amp=0.1,
+        damp_ends_widthfrac=0.125,
+        nhermite=n_hermite,
+    )
+    _assert_same_parameters(runtime_params, legacy_params)
+
+    runtime_state = build_runtime_initial_condition(
+        grid,
+        geometry,
+        runtime_cfg,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        nspecies=2,
+    )
+    legacy_single = build_benchmark_initial_condition(
+        grid,
+        geometry,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        init_cfg=runtime_cfg.init,
+    )
+    legacy_state = np.zeros_like(np.asarray(runtime_state))
+    legacy_state[1] = np.asarray(legacy_single)
+    phase_scale = np.vdot(legacy_state, runtime_state) / np.vdot(
+        legacy_state, legacy_state
+    )
+    np.testing.assert_allclose(
+        runtime_state,
+        phase_scale * legacy_state,
+        rtol=1.0e-7,
+        atol=1.0e-12,
+    )
+
+    cache = build_linear_cache(grid, geometry, runtime_params, n_laguerre, n_hermite)
+    runtime_rhs, _ = linear_rhs_cached(
+        runtime_state,
+        cache,
+        runtime_params,
+        terms=build_runtime_linear_terms(runtime_cfg),
+    )
+    legacy_rhs, _ = linear_rhs_cached(
+        legacy_state,
+        cache,
+        legacy_params,
+        terms=LinearTerms(bpar=0.0),
+    )
+    rhs_error = np.linalg.norm(
+        np.asarray(runtime_rhs) - phase_scale * np.asarray(legacy_rhs)
+    ) / np.linalg.norm(np.asarray(runtime_rhs))
+    assert rhs_error < 2.0e-6
+
+
+def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
+    """The canonical runtime case preserves the established KBM operator."""
+
+    runtime_cfg, _raw = load_runtime_from_toml(
+        ROOT / "examples" / "06_electromagnetic" / "case_full.toml"
+    )
+    model = SimpleNamespace(
+        tprim_i=2.49,
+        tprim_e=2.49,
+        fprim=0.8,
+        Te_over_Ti=1.0,
+        mass_ratio=1.0 / 0.00027,
+        nu_i=0.0,
+        nu_e=0.0,
+        beta=runtime_cfg.physics.beta,
+    )
+    n_laguerre, n_hermite = 2, 4
+    geometry = build_runtime_geometry(runtime_cfg)
+    grid_full = build_spectral_grid(runtime_cfg.grid)
+    grid = select_ky_grid(
+        grid_full, int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
+    )
+    runtime_params = build_runtime_linear_params(
+        runtime_cfg, Nm=n_hermite, geom=geometry
+    )
+    legacy_params = _two_species_params(
+        model,
+        kpar_scale=float(geometry.gradpar()),
+        omega_d_scale=KBM_OMEGA_D_SCALE,
+        omega_star_scale=KBM_OMEGA_STAR_SCALE,
+        rho_star=KBM_RHO_STAR,
+        damp_ends_amp=0.1,
+        damp_ends_widthfrac=0.125,
+        nhermite=n_hermite,
+    )
+    _assert_same_parameters(runtime_params, legacy_params)
+    assert build_runtime_linear_terms(runtime_cfg).hypercollisions == 1.0
+
+    runtime_state = build_runtime_initial_condition(
+        grid,
+        geometry,
+        runtime_cfg,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        nspecies=2,
+    )
+    legacy_single = build_benchmark_initial_condition(
+        grid,
+        geometry,
+        ky_index=0,
+        kx_index=0,
+        Nl=n_laguerre,
+        Nm=n_hermite,
+        init_cfg=runtime_cfg.init,
+    )
+    legacy_state = np.zeros_like(np.asarray(runtime_state))
+    legacy_state[1] = np.asarray(legacy_single)
+    np.testing.assert_allclose(runtime_state, legacy_state, rtol=2.0e-7, atol=1.0e-17)
+
+    cache = build_linear_cache(grid, geometry, runtime_params, n_laguerre, n_hermite)
+    runtime_rhs, _ = linear_rhs_cached(
+        runtime_state,
+        cache,
+        runtime_params,
+        terms=build_runtime_linear_terms(runtime_cfg),
+    )
+    legacy_rhs, _ = linear_rhs_cached(
+        legacy_state,
+        cache,
+        legacy_params,
+        terms=LinearTerms(bpar=0.0),
+    )
+    np.testing.assert_allclose(runtime_rhs, legacy_rhs, rtol=1.0e-6, atol=2.0e-16)
+
+
+def _load_results_manifest() -> dict:
+    with MANIFEST.open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def test_benchmark_results_manifest_is_root_level_and_small() -> None:
+    assert MANIFEST.exists()
+    assert MANIFEST.relative_to(ROOT).parts[:2] == ("benchmarks", "results")
+    assert MANIFEST.stat().st_size < 20_000
+
+    readme = MANIFEST.parent / "README.md"
+    assert readme.exists()
+    assert readme.stat().st_size < 20_000
+
+
+def test_benchmark_results_manifest_points_to_tracked_or_regenerable_outputs() -> None:
+    manifest = _load_results_manifest()
+    rendered_suffixes = load_release_tool(
+        "check_validation_coverage_manifest"
+    ).RENDERED_ARTIFACT_SUFFIXES
+    entries = [*manifest.get("figure", []), *manifest.get("table", [])]
+    assert {entry["name"] for entry in entries} >= {
+        "Core linear benchmark atlas",
+        "Core nonlinear benchmark atlas",
+        "Runtime and memory comparison",
+        "Runtime and memory result rows",
+    }
+
+    for entry in entries:
+        path = ROOT / entry["path"]
+        action = entry.get("action", "keep_in_repo")
+        rendered = path.suffix.lower() in rendered_suffixes
+        assert action in {"keep_in_repo", "regenerate_on_demand"}
+        assert ROOT / "tools_out" not in path.parents
+        assert ROOT / "docs" / "_build" not in path.parents
+        if path.exists():
+            assert path.is_file(), entry["path"]
+            assert path.stat().st_size <= MAX_TRACKED_RESULT_BYTES, entry["path"]
+        else:
+            assert action == "regenerate_on_demand", entry["path"]
+            assert rendered, entry["path"]
+
+        source_manifest = ROOT / entry["source_manifest"]
+        assert source_manifest.exists(), entry["source_manifest"]
+        assert source_manifest.suffix == ".toml"
+        assert entry["regenerate"].startswith("python ")
+        assert entry["docs_page"].endswith((".rst", ".md"))
+        assert entry["claim_scope"].strip()
+
+
+def test_benchmark_results_manifest_documents_artifact_hygiene_policy() -> None:
+    policy = _load_results_manifest()["policy"]
+    assert policy["tracked_payload"] == "small pointers only"
+    assert "tools_out" in policy["raw_outputs"]
+    assert "docs/_static" in policy["docs_payload"]
+
+
+def test_root_benchmark_manifest_is_reflected_in_docs() -> None:
+    manifest = _load_results_manifest()
+    docs_text = (ROOT / "docs" / "benchmarks.rst").read_text(encoding="utf-8")
+    entries = [*manifest.get("figure", []), *manifest.get("table", [])]
+
+    for entry in entries:
+        assert entry["name"] in docs_text
+        assert entry["path"] in docs_text
+        assert entry["claim_scope"] in docs_text
+
+
+def test_root_benchmark_payload_stays_lightweight() -> None:
+    tracked_benchmark_files = [
+        ROOT / path
+        for path in subprocess.check_output(
+            ["git", "ls-files", "benchmarks"],
+            cwd=ROOT,
+            text=True,
+        ).splitlines()
+    ]
+    assert tracked_benchmark_files
+    total_bytes = sum(path.stat().st_size for path in tracked_benchmark_files)
+    assert total_bytes <= MAX_ROOT_BENCHMARK_PAYLOAD_BYTES
+
+
+def test_runtime_memory_manifest_loads_runs() -> None:
+    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
+    assert any(
+        run.case == "cyclone-linear" and run.backend == "gkx_cpu" for run in runs
+    )
+    assert any(run.backend == "gx" for run in runs)
+
+
+def test_runtime_memory_selection_filters_case_and_backend(tmp_path: Path) -> None:
+    manifest = tmp_path / "mini.toml"
+    manifest.write_text(
+        """
+[[run]]
+case = "a"
+label = "A"
+backend = "gkx_cpu"
+command = "echo a"
+
+[[run]]
+case = "b"
+label = "B"
+backend = "gx"
+command = "echo b"
+profile_command = "echo profile"
+host = "office"
+enabled = false
+""",
+        encoding="utf-8",
+    )
+    runs = _load_manifest(manifest)
+    assert runs[1].host == "office"
+    assert runs[1].profile_command == "echo profile"
+    selected = _select_runs(runs, {"a"}, {"gkx_cpu"})
+    assert len(selected) == 1
+    assert selected[0].case == "a"
+    assert selected[0].backend == "gkx_cpu"
+
+
+def test_parse_peak_rss_mb_supports_macos_and_linux_formats() -> None:
+    assert _parse_peak_rss_mb("peak memory footprint: 1048576") == 1.0
+    assert _parse_peak_rss_mb("Maximum resident set size (kbytes): 2048") == 2.0
+
+
+def test_parse_profile_times_extracts_warmup_and_run_fields() -> None:
+    parsed = _parse_profile_times("warmup_time_s=30.776 run_time_s=14.081")
+    assert parsed == {"warmup_time_s": 30.776, "run_time_s": 14.081}
+
+
+def test_load_summary_rows_merges_matching_json_files(tmp_path: Path) -> None:
+    first = tmp_path / "a.json"
+    first.write_text(
+        '{"rows":[{"case":"a","backend":"gkx_cpu","status":"success"}]}\n',
+        encoding="utf-8",
+    )
+    second = tmp_path / "b.json"
+    second.write_text(
+        '{"rows":[{"case":"a","backend":"gx","status":"success"}]}\n', encoding="utf-8"
+    )
+    rows = _load_summary_rows([str(tmp_path / "*.json")])
+    assert len(rows) == 2
+    assert {row["backend"] for row in rows} == {"gkx_cpu", "gx"}
+
+
+def test_render_expands_root_and_env(monkeypatch) -> None:
+    monkeypatch.setenv("GKX_BENCH_ROOT", "/tmp/bench")
+    rendered = _render("{root}:${GKX_BENCH_ROOT}")
+    assert str(ROOT) in rendered
+    assert "/tmp/bench" in rendered
+
+
+def test_gx_runtime_memory_manifest_runs_in_isolated_tempdir() -> None:
+    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
+    gx_runs = [run for run in runs if run.backend == "gx"]
+    assert gx_runs
+    for run in gx_runs:
+        assert "mktemp -d" in run.command
+        assert "env " in run.command
+        assert "-u DISPLAY" in run.command
+        assert "HDF5_DISABLE_VERSION_CHECK=1" in run.command
+        assert "CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE}" in run.command
+
+
+def test_gx_stellarator_runtime_manifest_uses_pregenerated_nc_geometry() -> None:
+    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
+    stellarator = [
+        run
+        for run in runs
+        if run.backend == "gx"
+        and run.case in {"w7x-linear", "w7x-nonlinear", "hsx-linear", "hsx-nonlinear"}
+    ]
+    assert len(stellarator) == 4
+    for run in stellarator:
+        assert 'geo_option = "nc"' in run.command
+        assert "vmec_file" in run.command
+        assert 'geo_file = "' in run.command
+        assert "REFERENCE_GK_NETCDF_LIBDIR" in run.command
+        assert "REFERENCE_GK_PYTHON_BIN" in run.command
+
+
+def test_gpu_runtime_memory_manifest_pins_configured_cuda_device() -> None:
+    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
+    gpu_runs = [run for run in runs if run.backend == "gkx_gpu"]
+    assert gpu_runs
+    for run in gpu_runs:
+        assert "CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE}" in run.command
+
+
+def test_short_nonlinear_gpu_rows_request_warm_profile_pass() -> None:
+    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
+    selected = {
+        (run.case, run.backend): run.profile_command
+        for run in runs
+        if run.backend == "gkx_gpu"
+        and run.case in {"cyclone-nonlinear", "kbm-nonlinear"}
+    }
+    assert "profile_runtime_kernels.py cyclone" in str(
+        selected[("cyclone-nonlinear", "gkx_gpu")]
+    )
+    assert "profile_runtime_kernels.py cyclone" in str(
+        selected[("kbm-nonlinear", "gkx_gpu")]
+    )
+
+
+def test_remote_runtime_memory_runs_disable_x11_forwarding(monkeypatch) -> None:
+    captured = {}
+
+    def fake_run(cmd, capture_output, text):  # type: ignore[no-untyped-def]
+        captured["cmd"] = cmd
+
+        class Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Proc()
+
+    monkeypatch.setattr(
+        "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
+    )
+    run = RuntimeBenchRun(
+        case="c", label="C", backend="gx", command="echo hi", cwd="/tmp", host="office"
+    )
+    row = _run_command(run)
+    assert row["status"] == "success"
+    assert captured["cmd"][:2] == ["ssh", "-x"]
+
+
+def test_runtime_memory_command_captures_profile_times(monkeypatch) -> None:
+    def fake_run(cmd, shell, cwd, capture_output, text):  # type: ignore[no-untyped-def]
+        class Proc:
+            returncode = 0
+            stdout = "warmup_time_s=12.5 run_time_s=3.25\n"
+            stderr = "Maximum resident set size (kbytes): 2048\n"
+
+        return Proc()
+
+    monkeypatch.setattr(
+        "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
+    )
+    run = RuntimeBenchRun(
+        case="c",
+        label="C",
+        backend="gkx_cpu",
+        command="echo hi",
+        cwd="/tmp",
+        wrap_time=False,
+    )
+    row = _run_command(run)
+    assert row["runtime_s"] >= 0.0
+    assert row["peak_rss_mb"] == 2.0
+    assert row["warmup_time_s"] == 12.5
+    assert row["run_time_s"] == 3.25
+
+
+def test_runtime_memory_command_runs_profile_subcommand(monkeypatch) -> None:
+    calls = []
+
+    def fake_run(cmd, shell, cwd, capture_output, text):  # type: ignore[no-untyped-def]
+        calls.append(cmd)
+
+        class Proc:
+            returncode = 0
+            stdout = "main\n" if len(calls) == 1 else "warmup_time_s=20 run_time_s=7\n"
+            stderr = (
+                "Maximum resident set size (kbytes): 2048\n" if len(calls) == 1 else ""
+            )
+
+        return Proc()
+
+    monkeypatch.setattr(
+        "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
+    )
+    run = RuntimeBenchRun(
+        case="c",
+        label="C",
+        backend="gkx_gpu",
+        command="echo cold",
+        profile_command="echo warm",
+        cwd="/tmp",
+        wrap_time=False,
+    )
+    row = _run_command(run)
+    assert len(calls) == 2
+    assert row["status"] == "success"
+    assert row["warmup_time_s"] == 20.0
+    assert row["run_time_s"] == 7.0
+    assert "--- profile stdout ---" in row["stdout"]
+
+
+def test_runtime_memory_row_logs_are_written(tmp_path: Path) -> None:
+    row = {
+        "case": "cyclone-linear",
+        "backend": "gx",
+        "stdout": "ok",
+        "stderr": "warn",
+    }
+    logs = _write_row_logs(tmp_path, row)
+    assert Path(logs["stdout_log"]).read_text(encoding="utf-8") == "ok"
+    assert Path(logs["stderr_log"]).read_text(encoding="utf-8") == "warn"
+
+
+def test_runtime_memory_summary_is_written(tmp_path: Path) -> None:
+    rows = [
+        {
+            "case": "a",
+            "backend": "gkx_cpu",
+            "status": "success",
+            "stdout": "long runtime log",
+            "stderr": "warning log",
+        }
+    ]
+    out = tmp_path / "summary.json"
+    _write_summary(out, rows)
+    text = out.read_text(encoding="utf-8")
+    assert '"case": "a"' in text
+    assert "long runtime log" not in text
+    assert "warning log" not in text
+    assert '"stdout_bytes": 16' in text
+    assert '"stderr_bytes": 11' in text
+    assert '"stdout_sha256"' in text
+
+
+def test_runtime_memory_summary_row_prunes_existing_logs() -> None:
+    row = {
+        "case": "a",
+        "backend": "gkx_cpu",
+        "stdout": "ok",
+        "stderr": "",
+    }
+    summary = _summary_row(row)
+    assert "stdout" not in summary
+    assert "stderr" not in summary
+    assert summary["stdout_bytes"] == 2
+    assert summary["stderr_bytes"] == 0
+    assert summary["stdout_sha256"]
+    assert summary["stderr_sha256"] == ""
+
+
+def test_runtime_memory_plot_supports_warm_runtime_markers(tmp_path: Path) -> None:
+    csv_path = tmp_path / "runtime.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "case,label,backend,status,returncode,runtime_s,warmup_time_s,run_time_s,peak_rss_mb,host,cwd,command,stdout_log,stderr_log",
+                "cyclone-nonlinear,Cyclone ITG Nonlinear,gkx_gpu,success,0,35.3,33.2,14.4,1878.4,office,/tmp,cmd,out,err",
+                "cyclone-nonlinear,Cyclone ITG Nonlinear,gx,success,0,21.1,,,1900.0,office,/tmp,cmd,out,err",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    png_path = tmp_path / "runtime.png"
+    pdf_path = tmp_path / "runtime.pdf"
+
+    _plot_results(csv_path, png_path, pdf_path)
+
+    assert png_path.exists()
+    assert pdf_path.exists()
+
+
+def _gx_jflr(ell: int, b: jnp.ndarray) -> jnp.ndarray:
+    """GX Jflr: exp(-b/2) * (-b/2)^ell / ell!."""
+
+    return (
+        jnp.exp(-0.5 * b)
+        * ((-0.5 * b) ** ell)
+        / jnp.asarray(math.factorial(ell), dtype=b.dtype)
+    )
+
+
+def test_gyroaverage_matches_gx_jflr():
+    b = jnp.asarray([0.0, 0.3, 1.0], dtype=jnp.float32)
+    Jl = J_l_all(b, l_max=4)
+    for ell in range(5):
+        expected = _gx_jflr(ell, b)
+        assert jnp.allclose(Jl[ell], expected, rtol=1.0e-6, atol=1.0e-7)
+
+
+def test_single_precision_factorial_matches_stirling_branch():
+    m = jnp.asarray([7.0, 8.0, 12.0], dtype=jnp.float32)
+    expected = jnp.asarray(
+        [
+            math.sqrt(2.0 * math.pi * x)
+            * (x**x)
+            * math.exp(-x)
+            * (1.0 + 1.0 / (12.0 * x) + 1.0 / (288.0 * x * x))
+            for x in (7.0, 8.0, 12.0)
+        ],
+        dtype=jnp.float32,
+    )
+    assert jnp.allclose(
+        single_precision_factorial(m), expected, rtol=1.0e-7, atol=1.0e-7
+    )
+
+
+def test_gyroaverage_matches_gx_jflr_stirling_branch():
+    b = jnp.asarray([0.3, 1.0, 2.5], dtype=jnp.float32)
+    ell = 7
+    expected = (
+        jnp.exp(-0.5 * b)
+        * ((-0.5 * b) ** ell)
+        / single_precision_factorial(jnp.asarray(float(ell), dtype=b.dtype))
+    )
+    Jl = J_l_all(b, l_max=ell)
+    assert jnp.allclose(Jl[ell], expected, rtol=1.0e-7, atol=1.0e-8)
+
+
+def test_salpha_geometry_matches_gx_formulas():
+    geom = SAlphaGeometry(
+        q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, B0=1.0, alpha=0.0, drift_scale=1.0
+    )
+    theta = jnp.linspace(-jnp.pi, jnp.pi, 8, endpoint=False)
+    shear = geom.s_hat * theta - geom.alpha * jnp.sin(theta)
+
+    bmag = 1.0 / (1.0 + geom.epsilon * jnp.cos(theta))
+    bgrad = geom.gradpar() * geom.epsilon * jnp.sin(theta) * bmag
+    gds2 = 1.0 + shear * shear
+    gds21 = -geom.s_hat * shear
+    gds22 = jnp.asarray(geom.s_hat * geom.s_hat, dtype=jnp.float32)
+    cv = (jnp.cos(theta) + shear * jnp.sin(theta)) / geom.R0
+    gb = cv
+    cv0 = (-geom.s_hat * jnp.sin(theta)) / geom.R0
+    gb0 = cv0
+
+    bmag_gx = geom.bmag(theta)
+    bgrad_gx = geom.bgrad(theta)
+    gds2_gx, gds21_gx, gds22_gx = geom.metric_coeffs(theta)
+    cv_d, gb_d = geom.drift_components(jnp.asarray([0.1]), jnp.asarray([0.2]), theta)
+    cv_d = cv_d[0, 0]
+    gb_d = gb_d[0, 0]
+
+    assert jnp.allclose(bmag_gx, bmag, rtol=1.0e-10, atol=1.0e-12)
+    assert jnp.allclose(bgrad_gx, bgrad, rtol=1.0e-10, atol=1.0e-12)
+    assert jnp.allclose(gds2_gx, gds2, rtol=1.0e-10, atol=1.0e-12)
+    assert jnp.allclose(gds21_gx, gds21, rtol=1.0e-10, atol=1.0e-12)
+    assert jnp.allclose(gds22_gx, gds22, rtol=1.0e-6, atol=1.0e-8)
+
+    kx0 = jnp.asarray([0.1])
+    ky0 = jnp.asarray([0.2])
+    kx_hat = kx0 / geom.s_hat
+    cv_d_expected = ky0[:, None] * cv + kx_hat[:, None] * cv0
+    gb_d_expected = ky0[:, None] * gb + kx_hat[:, None] * gb0
+    assert jnp.allclose(cv_d, cv_d_expected[0], rtol=1.0e-10, atol=1.0e-12)
+    assert jnp.allclose(gb_d, gb_d_expected[0], rtol=1.0e-10, atol=1.0e-12)
+
+    kperp2 = geom.k_perp2(kx0, ky0, theta)
+    bmag_inv = 1.0 / bmag
+    shat_inv = 1.0 / geom.s_hat
+    gds22_match = jnp.asarray(gds22_gx, dtype=gds2.dtype)
+    kperp2_expected = (
+        ky0[:, None] * (ky0[:, None] * gds2 + 2.0 * kx0[:, None] * shat_inv * gds21)
+        + (kx0[:, None] * shat_inv) ** 2 * gds22_match
+    ) * (bmag_inv * bmag_inv)
+    # Allow one-ulp level differences from mixed float32/float64 intermediates.
+    assert jnp.allclose(kperp2, kperp2_expected[0], rtol=1.0e-8, atol=5.0e-10)
+
+
+def test_salpha_geometry_kperp2_matches_alternate_formula():
+    """Alternate kperp2 convention omits the bmag^{-2} factor."""
+    geom = SAlphaGeometry(
+        q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, B0=1.0, alpha=0.0, kperp2_bmag=False
+    )
+    theta = jnp.linspace(-jnp.pi, jnp.pi, 8, endpoint=False)
+    shear = geom.s_hat * theta - geom.alpha * jnp.sin(theta)
+    gds2 = 1.0 + shear * shear
+    gds21 = -geom.s_hat * shear
+    gds22 = jnp.asarray(geom.s_hat * geom.s_hat, dtype=jnp.float32)
+
+    kx0 = jnp.asarray([0.1])
+    ky0 = jnp.asarray([0.2])
+    kx_hat = kx0 / geom.s_hat
+    kperp2 = geom.k_perp2(kx0, ky0, theta)
+    kperp2_expected = (
+        ky0[:, None] * (ky0[:, None] * gds2 + 2.0 * kx_hat[:, None] * gds21)
+        + (kx_hat[:, None] ** 2) * gds22
+    )
+    # Allow one-ulp level differences from mixed float32/float64 intermediates.
+    assert jnp.allclose(kperp2, kperp2_expected[0], rtol=1.0e-8, atol=5.0e-10)
+
+
+def test_hypercollisions_matches_gx_formula():
+    Nl, Nm = 6, 12
+    G = jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=jnp.complex64)
+    ell = jnp.arange(Nl, dtype=jnp.float32)[:, None, None, None, None]
+    m = jnp.arange(Nm, dtype=jnp.float32)[None, :, None, None, None]
+    vth = jnp.asarray([1.0], dtype=jnp.float32)
+    nu_hyper_l = jnp.asarray(0.5, dtype=jnp.float32)
+    nu_hyper_m = jnp.asarray(0.5, dtype=jnp.float32)
+    nu_hyper_lm = jnp.asarray(0.0, dtype=jnp.float32)
+    p_hyper_l = jnp.asarray(6.0, dtype=jnp.float32)
+    p_hyper_m = jnp.asarray(6.0, dtype=jnp.float32)
+    p_hyper_lm = jnp.asarray(6.0, dtype=jnp.float32)
+    nu_hyper = jnp.asarray(0.0, dtype=jnp.float32)
+    hyper_ratio = jnp.zeros((Nl, Nm, 1, 1, 1), dtype=jnp.float32)
+    ratio_l = (ell / float(Nl)) ** p_hyper_l
+    ratio_m = (m / float(Nm)) ** p_hyper_m
+    ratio_lm = ((2.0 * ell + m) / (2.0 * float(Nl) + float(Nm))) ** p_hyper_lm
+    mask_const = (m > 2.0) | (ell > 1.0)
+    mask_kz = jnp.zeros_like(mask_const)
+    m_pow = m**p_hyper_m
+    m_norm_kz = float(max(Nm - 1, 1))
+    m_norm_kz_factor = (p_hyper_m + 0.5) / (m_norm_kz ** (p_hyper_m + 0.5))
+    kz = jnp.asarray([0.0], dtype=jnp.float32)
+    kpar_scale = jnp.asarray(1.0, dtype=jnp.float32)
+
+    out = hypercollisions_contribution(
+        G,
+        vth=vth,
+        nu_hyper=nu_hyper,
+        nu_hyper_l=nu_hyper_l,
+        nu_hyper_m=nu_hyper_m,
+        nu_hyper_lm=nu_hyper_lm,
+        hyper_ratio=hyper_ratio,
+        ratio_l=ratio_l,
+        ratio_m=ratio_m,
+        ratio_lm=ratio_lm,
+        mask_const=mask_const,
+        mask_kz=mask_kz,
+        m_pow=m_pow,
+        m_norm_kz_factor=m_norm_kz_factor,
+        kz=kz,
+        kpar_scale=kpar_scale,
+        hypercollisions_const=jnp.asarray(1.0, dtype=jnp.float32),
+        hypercollisions_kz=jnp.asarray(0.0, dtype=jnp.float32),
+        weight=jnp.asarray(1.0, dtype=jnp.float32),
+    )
+
+    l_norm = float(Nl)
+    m_norm = float(Nm)
+    scaled_nu_l = l_norm * nu_hyper_l
+    scaled_nu_m = m_norm * nu_hyper_m
+    hyper_term = (
+        -vth[:, None, None, None, None, None]
+        * (scaled_nu_l * ratio_l + scaled_nu_m * ratio_m)
+        - nu_hyper_lm * ratio_lm
+    )
+    expected = jnp.where(mask_const, hyper_term, 0.0) * G
+
+    assert jnp.allclose(out, expected, rtol=1.0e-6, atol=1.0e-7)
+
+
+def test_hypercollisions_skips_linked_abs_kz_when_kz_weight_is_zero(monkeypatch):
+    def _fail(*args, **kwargs):
+        raise AssertionError(
+            "abs_z_linked_fft should not run when hypercollisions_kz is zero"
+        )
+
+    monkeypatch.setattr(linear_dissipation_module, "abs_z_linked_fft", _fail)
+
+    Nl, Nm = 2, 4
+    G = jnp.ones((1, Nl, Nm, 1, 1, 2), dtype=jnp.complex64)
+    zeros_lm = jnp.zeros((Nl, Nm, 1, 1, 1), dtype=jnp.float32)
+    mask_const = jnp.zeros((1, Nl, Nm, 1, 1, 1), dtype=bool)
+    mask_kz = jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=bool)
+
+    out = hypercollisions_contribution(
+        G,
+        vth=jnp.asarray([1.0], dtype=jnp.float32),
+        nu_hyper=jnp.asarray([0.0], dtype=jnp.float32),
+        nu_hyper_l=jnp.asarray(0.0, dtype=jnp.float32),
+        nu_hyper_m=jnp.asarray(1.0, dtype=jnp.float32),
+        nu_hyper_lm=jnp.asarray(0.0, dtype=jnp.float32),
+        hyper_ratio=zeros_lm,
+        ratio_l=zeros_lm,
+        ratio_m=zeros_lm,
+        ratio_lm=zeros_lm,
+        mask_const=mask_const,
+        mask_kz=mask_kz,
+        m_pow=jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=jnp.float32),
+        m_norm_kz_factor=jnp.asarray(1.0, dtype=jnp.float32),
+        kz=jnp.asarray([0.0, 1.0], dtype=jnp.float32),
+        kpar_scale=jnp.asarray(1.0, dtype=jnp.float32),
+        hypercollisions_const=jnp.asarray(1.0, dtype=jnp.float32),
+        hypercollisions_kz=jnp.asarray(0.0, dtype=jnp.float32),
+        weight=jnp.asarray(1.0, dtype=jnp.float32),
+        linked_indices=(jnp.asarray([[0]], dtype=jnp.int32),),
+        linked_kz=(jnp.asarray([0.0, 1.0], dtype=jnp.float32),),
+        linked_inverse_permutation=jnp.asarray([0], dtype=jnp.int32),
+        linked_full_cover=True,
+        linked_gather_map=jnp.asarray([0], dtype=jnp.int32),
+        linked_gather_mask=jnp.asarray([True], dtype=bool),
+        linked_use_gather=True,
+    )
+
+    assert jnp.allclose(out, jnp.zeros_like(G))
+
+
+def test_hypercollisions_static_zero_operator_skips_linked_abs_kz(monkeypatch):
+    def _fail(*args, **kwargs):
+        raise AssertionError(
+            "abs_z_linked_fft should not run for an exactly zero hypercollision operator"
+        )
+
+    monkeypatch.setattr(linear_dissipation_module, "abs_z_linked_fft", _fail)
+
+    Nl, Nm = 2, 4
+    G = jnp.ones((1, Nl, Nm, 1, 1, 2), dtype=jnp.complex64)
+    zeros_lm = jnp.zeros((Nl, Nm, 1, 1, 1), dtype=jnp.float32)
+    mask = jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=bool)
+
+    out = hypercollisions_contribution(
+        G,
+        vth=jnp.asarray([1.0], dtype=jnp.float32),
+        nu_hyper=jnp.asarray(0.0, dtype=jnp.float32),
+        nu_hyper_l=jnp.asarray(0.0, dtype=jnp.float32),
+        nu_hyper_m=jnp.asarray(0.0, dtype=jnp.float32),
+        nu_hyper_lm=jnp.asarray(0.0, dtype=jnp.float32),
+        hyper_ratio=zeros_lm,
+        ratio_l=zeros_lm,
+        ratio_m=zeros_lm,
+        ratio_lm=zeros_lm,
+        mask_const=mask,
+        mask_kz=mask,
+        m_pow=jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=jnp.float32),
+        m_norm_kz_factor=jnp.asarray(1.0, dtype=jnp.float32),
+        kz=jnp.asarray([0.0, 1.0], dtype=jnp.float32),
+        kpar_scale=jnp.asarray(1.0, dtype=jnp.float32),
+        hypercollisions_const=jnp.asarray(1.0, dtype=jnp.float32),
+        hypercollisions_kz=jnp.asarray(1.0, dtype=jnp.float32),
+        weight=jnp.asarray(1.0, dtype=jnp.float32),
+        linked_indices=(jnp.asarray([[0]], dtype=jnp.int32),),
+        linked_kz=(jnp.asarray([0.0, 1.0], dtype=jnp.float32),),
+        linked_inverse_permutation=jnp.asarray([0], dtype=jnp.int32),
+        linked_full_cover=True,
+        linked_gather_map=jnp.asarray([0], dtype=jnp.int32),
+        linked_gather_mask=jnp.asarray([True], dtype=bool),
+        linked_use_gather=True,
+    )
+
+    assert jnp.allclose(out, jnp.zeros_like(G))
+
+
+@pytest.mark.parametrize("linked", [False, True])
+def test_kz_hypercollisions_preserve_periodic_fourier_modes(linked):
+    Nl, Nm, Nz = 2, 4, 4
+    zeros_lm = jnp.zeros((Nl, Nm, 1, 1, 1), dtype=jnp.float32)
+    mask_const = jnp.zeros((1, Nl, Nm, 1, 1, 1), dtype=bool)
+    mask_kz = jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=bool)
+    kwargs = dict(
+        vth=jnp.asarray([1.0], dtype=jnp.float32),
+        nu_hyper=jnp.asarray([0.0], dtype=jnp.float32),
+        nu_hyper_l=jnp.asarray(0.0, dtype=jnp.float32),
+        nu_hyper_m=jnp.asarray(1.0, dtype=jnp.float32),
+        nu_hyper_lm=jnp.asarray(0.0, dtype=jnp.float32),
+        hyper_ratio=zeros_lm,
+        ratio_l=zeros_lm,
+        ratio_m=zeros_lm,
+        ratio_lm=zeros_lm,
+        mask_const=mask_const,
+        mask_kz=mask_kz,
+        m_pow=jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=jnp.float32),
+        m_norm_kz_factor=jnp.asarray(1.0, dtype=jnp.float32),
+        kz=jnp.asarray([0.0, 1.0, -2.0, -1.0], dtype=jnp.float32),
+        kpar_scale=jnp.asarray(1.0, dtype=jnp.float32),
+        hypercollisions_const=jnp.asarray(0.0, dtype=jnp.float32),
+        hypercollisions_kz=jnp.asarray(1.0, dtype=jnp.float32),
+        weight=jnp.asarray(1.0, dtype=jnp.float32),
+        linked_indices=(jnp.asarray([[0]], dtype=jnp.int32),),
+        linked_kz=(jnp.asarray([0.0, 1.0, -2.0, -1.0], dtype=jnp.float32),),
+        linked_inverse_permutation=jnp.asarray([0], dtype=jnp.int32),
+        linked_full_cover=True,
+    )
+    if not linked:
+        kwargs.update(linked_indices=(), linked_kz=())
+
+    constant = jnp.ones((1, Nl, Nm, 1, 1, Nz), dtype=jnp.complex64)
+    z_varying = constant * jnp.asarray([0.0, 1.0, 0.0, -1.0], dtype=jnp.complex64)
+
+    constant_out = hypercollisions_contribution(constant, **kwargs)
+    varying_out = hypercollisions_contribution(z_varying, **kwargs)
+
+    assert jnp.linalg.norm(constant_out) < 1.0e-6
+    # |d/dz| exp(i*k*z) = |k| exp(i*k*z), independent of the origin.
+    np.testing.assert_allclose(varying_out, -2.3 * z_varying, atol=1e-6)
+    shifted_out = hypercollisions_contribution(jnp.roll(z_varying, 1, -1), **kwargs)
+    np.testing.assert_allclose(shifted_out, jnp.roll(varying_out, 1, -1), atol=1e-6)
+    # Real quadratic loss: JAX's complex cotangent is the conjugate of 2 L G
+    # for this self-adjoint Fourier multiplier (constant coefficients here).
+    state = z_varying * (1.0 + 0.3j)
+
+    def loss(value):
+        return jnp.real(jnp.vdot(value, hypercollisions_contribution(value, **kwargs)))
+
+    np.testing.assert_allclose(
+        jax.grad(loss)(state), 2 * jnp.conj(-2.3 * state), rtol=2e-6, atol=1e-6
+    )
+
+
+def test_static_zero_linear_term_guards_skip_expensive_operators(monkeypatch):
+    def _fail_streaming(*args, **kwargs):
+        raise AssertionError(
+            "streaming_ladder_term should not run when streaming weight is zero"
+        )
+
+    def _fail_grad(*args, **kwargs):
+        raise AssertionError(
+            "grad_z_periodic should not run when linked streaming weight is zero"
+        )
+
+    monkeypatch.setattr(linear_terms_module, "streaming_ladder_term", _fail_streaming)
+    monkeypatch.setattr(linear_terms_module, "grad_z_periodic", _fail_grad)
+
+    G = jnp.ones((1, 2, 3, 1, 1, 4), dtype=jnp.complex64)
+    out = streaming_contribution(
+        G,
+        kz=jnp.ones((4,), dtype=jnp.float32),
+        dz=jnp.asarray(1.0, dtype=jnp.float32),
+        vth=jnp.asarray([1.0], dtype=jnp.float32),
+        sqrt_p=jnp.ones((2, 3, 1, 1, 1), dtype=jnp.float32),
+        sqrt_m=jnp.ones((2, 3, 1, 1, 1), dtype=jnp.float32),
+        kpar_scale=jnp.asarray(1.0, dtype=jnp.float32),
+        weight=jnp.asarray(0.0, dtype=jnp.float32),
+    )
+    assert jnp.allclose(out, jnp.zeros_like(G))
+
+    field = jnp.zeros((1, 1, 4), dtype=jnp.complex64)
+    out_linked = linked_streaming_contribution(
+        G,
+        phi=field,
+        apar=field,
+        bpar=field,
+        Jl=jnp.ones((1, 2, 1, 1, 4), dtype=jnp.float32),
+        JlB=jnp.ones((1, 2, 1, 1, 4), dtype=jnp.float32),
+        tz=jnp.asarray([1.0], dtype=jnp.float32),
+        vth=jnp.asarray([1.0], dtype=jnp.float32),
+        sqrt_p=jnp.ones((2, 3, 1, 1, 1), dtype=jnp.float32),
+        sqrt_m=jnp.ones((2, 3, 1, 1, 1), dtype=jnp.float32),
+        kpar_scale=jnp.asarray(1.0, dtype=jnp.float32),
+        weight=jnp.asarray(0.0, dtype=jnp.float32),
+        kz=jnp.ones((4,), dtype=jnp.float32),
+        dz=jnp.asarray(1.0, dtype=jnp.float32),
+    )
+    assert jnp.allclose(out_linked, jnp.zeros_like(G))
+
+
+def test_disabled_em_fields_match_explicit_zero_arrays_in_streaming_and_diamagnetic():
+    G = jnp.arange(1 * 2 * 4 * 2 * 1 * 3, dtype=jnp.float32).reshape(1, 2, 4, 2, 1, 3)
+    G = (G + 1j * (G + 1.0)).astype(jnp.complex64) * 1.0e-3
+    phi = jnp.ones((2, 1, 3), dtype=jnp.complex64) * (0.2 + 0.1j)
+    zero_field = jnp.zeros_like(phi)
+    Jl = jnp.ones((1, 2, 2, 1, 3), dtype=jnp.float32)
+    JlB = 0.5 * Jl
+    tz = jnp.asarray([1.0], dtype=jnp.float32)
+    vth = jnp.asarray([1.2], dtype=jnp.float32)
+    sqrt_p = jnp.ones((2, 4, 1, 1, 1), dtype=jnp.float32)
+    sqrt_m = 0.75 * sqrt_p
+    common_streaming = dict(
+        G=G,
+        phi=phi,
+        Jl=Jl,
+        JlB=JlB,
+        tz=tz,
+        vth=vth,
+        sqrt_p=sqrt_p,
+        sqrt_m=sqrt_m,
+        kpar_scale=jnp.asarray(1.0, dtype=jnp.float32),
+        weight=jnp.asarray(1.0, dtype=jnp.float32),
+        kz=jnp.asarray([0.0, 1.0, -1.0], dtype=jnp.float32),
+        dz=jnp.asarray(1.0, dtype=jnp.float32),
+    )
+    explicit_streaming = linked_streaming_contribution(
+        apar=zero_field, bpar=zero_field, **common_streaming
+    )
+    pruned_streaming = linked_streaming_contribution(
+        apar=None, bpar=None, **common_streaming
+    )
+    assert jnp.allclose(pruned_streaming, explicit_streaming, rtol=1.0e-6, atol=1.0e-7)
+
+    l4 = jnp.arange(2, dtype=jnp.float32)[:, None, None, None]
+    common_diamagnetic = dict(
+        dG=jnp.zeros_like(G),
+        phi=phi,
+        Jl=Jl,
+        b=jnp.zeros((1, 1, 1, 1), dtype=jnp.float32),
+        JlB=JlB,
+        l4=l4,
+        tprim=jnp.asarray([2.0], dtype=jnp.float32),
+        fprim=jnp.asarray([0.8], dtype=jnp.float32),
+        tz=tz,
+        vth=vth,
+        omega_star_scale=jnp.asarray(1.0, dtype=jnp.float32),
+        ky=jnp.asarray([0.0, 0.3], dtype=jnp.float32),
+        imag=jnp.asarray(1j, dtype=jnp.complex64),
+        weight=jnp.asarray(1.0, dtype=jnp.float32),
+    )
+    explicit_diamagnetic = diamagnetic_contribution(
+        apar=zero_field, bpar=zero_field, **common_diamagnetic
+    )
+    pruned_diamagnetic = diamagnetic_contribution(
+        apar=None, bpar=None, **common_diamagnetic
+    )
+    assert jnp.allclose(
+        pruned_diamagnetic, explicit_diamagnetic, rtol=1.0e-6, atol=1.0e-7
+    )
+
+
+def test_diamagnetic_drive_populates_only_expected_hermite_modes():
+    dG = jnp.zeros((1, 2, 4, 1, 1, 1), dtype=jnp.complex64)
+    phi = jnp.ones((1, 1, 1), dtype=jnp.complex64)
+    Jl = jnp.ones((1, 2, 1, 1, 1), dtype=jnp.float32)
+    JlB = jnp.ones_like(Jl)
+    out = diamagnetic_contribution(
+        dG,
+        phi=phi,
+        apar=None,
+        bpar=None,
+        Jl=Jl,
+        b=jnp.zeros((1, 1, 1, 1), dtype=jnp.float32),
+        JlB=JlB,
+        l4=jnp.arange(2, dtype=jnp.float32)[:, None, None, None],
+        tprim=jnp.asarray([2.0], dtype=jnp.float32),
+        fprim=jnp.asarray([0.8], dtype=jnp.float32),
+        tz=jnp.asarray([1.0], dtype=jnp.float32),
+        vth=jnp.asarray([1.0], dtype=jnp.float32),
+        omega_star_scale=jnp.asarray(1.0, dtype=jnp.float32),
+        ky=jnp.asarray([0.3], dtype=jnp.float32),
+        imag=jnp.asarray(1j, dtype=jnp.complex64),
+        weight=jnp.asarray(1.0, dtype=jnp.float32),
+    )
+
+    mode_norm = jnp.sum(jnp.abs(out), axis=(0, 1, 3, 4, 5))
+    assert mode_norm[0] > 0.0
+    assert mode_norm[2] > 0.0
+    assert jnp.allclose(mode_norm[jnp.asarray([1, 3])], 0.0)
+
+
+def test_static_zero_damping_guards_return_zero_without_profiles():
+    G = jnp.ones((1, 2, 3, 2, 2, 4), dtype=jnp.complex64)
+
+    hyperdiff = hyperdiffusion_contribution(
+        G,
+        kx=jnp.asarray([], dtype=jnp.float32),
+        ky=jnp.asarray([], dtype=jnp.float32),
+        dealias_mask=jnp.zeros((0, 0), dtype=bool),
+        D_hyper=jnp.asarray(0.0, dtype=jnp.float32),
+        p_hyper_kperp=jnp.asarray(2.0, dtype=jnp.float32),
+        weight=jnp.asarray(1.0, dtype=jnp.float32),
+    )
+    assert jnp.allclose(hyperdiff, jnp.zeros_like(G))
+
+    damp = end_damping_contribution(
+        G,
+        ky=jnp.asarray([0.0, 1.0], dtype=jnp.float32),
+        damp_profile=jnp.ones((4,), dtype=jnp.float32),
+        linked_damp_profile=jnp.ones((3, 5), dtype=jnp.float32),
+        damp_amp=jnp.asarray(0.0, dtype=jnp.float32),
+        weight=jnp.asarray(1.0, dtype=jnp.float32),
+    )
+    assert jnp.allclose(damp, jnp.zeros_like(G))
+
+
+# ---- from test_benchmarks_helpers.py ----
+
+
+def _linear_params() -> LinearParams:
+    return LinearParams(
+        charge_sign=np.array([1.0]),
+        mass=np.array([1.0]),
+        density=np.array([1.0]),
+        temp=np.array([1.0]),
+        nu=np.array([0.0]),
+        tau_e=1.0,
+        vth=np.array([1.0]),
+        rho=np.array([1.0]),
+        kpar_scale=1.0,
+        fprim=np.array([1.0]),
+        tprim=np.array([1.0]),
+        tprim_e=np.array([1.0]),
+        omega_d_scale=1.0,
+        omega_star_scale=1.0,
+        energy_const=1.0,
+        energy_par_coef=1.0,
+        energy_perp_coef=1.0,
+        nu_hermite=0.0,
+        nu_laguerre=0.0,
+        rho_star=1.0,
+        beta=0.0,
+        fapar=0.0,
+        apar_beta_scale=0.5,
+        ampere_g0_scale=0.5,
+        bpar_beta_scale=0.5,
+        nu_hyper=1.0,
+        nu_hyper_l=0.0,
+        nu_hyper_m=0.0,
+        nu_hyper_lm=0.0,
+        p_hyper=2.0,
+        p_hyper_l=2.0,
+        p_hyper_m=2.0,
+        p_hyper_lm=2.0,
+        hypercollisions_const=1.0,
+        hypercollisions_kz=0.0,
+        D_hyper=0.0,
+        p_hyper_kperp=2.0,
+        damp_ends_amp=0.0,
+        damp_ends_widthfrac=0.0,
+        tz=np.array([1.0]),
+    )
+
+
+def test_reference_loaders_return_data() -> None:
+    for loader in (
+        load_cyclone_reference,
+        load_cyclone_reference_kinetic,
+        load_kbm_reference,
+        load_etg_reference,
+        load_tem_reference,
+    ):
+        ref = loader()
+        assert ref.ky.size > 0
+        assert ref.gamma.shape == ref.omega.shape == ref.ky.shape
+
+
+def test_checked_in_references_keep_literature_scale_and_sign_conventions() -> None:
+    cyclone = load_cyclone_reference()
+    kinetic = load_cyclone_reference_kinetic()
+    kbm = load_kbm_reference()
+    etg = load_etg_reference()
+    tem = load_tem_reference()
+
+    for ref in (cyclone, kinetic, kbm, etg, tem):
+        assert np.all(np.diff(ref.ky) > 0.0)
+        assert np.all(np.isfinite(ref.gamma))
+        assert np.all(np.isfinite(ref.omega))
+
+    cyclone_peak = int(np.argmax(cyclone.gamma))
+    assert cyclone.ky[cyclone_peak] == pytest.approx(0.30000001)
+    assert cyclone.gamma[cyclone_peak] == pytest.approx(0.09302951)
+    assert np.all(cyclone.gamma > 0.0)
+    assert np.all(cyclone.omega > 0.0)
+
+    assert kinetic.ky[0] == pytest.approx(0.1)
+    assert np.all(kinetic.gamma > 0.0)
+    assert np.all(kinetic.omega > 0.0)
+
+    assert kbm.gamma[np.argmin(np.abs(kbm.ky - 0.2))] == pytest.approx(0.33845928)
+    assert np.all(kbm.gamma > 0.0)
+    assert np.all(kbm.omega > 0.0)
+
+    assert etg.ky.tolist() == [10.0, 20.0, 30.0]
+    assert np.all(etg.gamma > 0.0)
+    assert np.all(etg.omega < 0.0)
+
+    assert np.any(tem.gamma > 0.0)
+    assert np.any(tem.gamma < 0.0)
+    assert tem.gamma[-1] == pytest.approx(-0.426778)
+
+
+def test_reference_hypercollision_helpers() -> None:
+    params = _apply_reference_hypercollisions(_linear_params(), nhermite=12)
+    assert _reference_hypercollision_power(None) == 20.0
+    assert _reference_hypercollision_power(1) == 1.0
+    assert _reference_hypercollision_power(12) == 6.0
+    assert params.nu_hyper == 0.0
+    assert params.nu_hyper_m == 1.0
+    assert params.hypercollisions_kz == 1.0
+    assert params.p_hyper_m == 6.0
+
+
+def test_select_fit_signal_and_auto(monkeypatch) -> None:
+    phi_t = np.ones((4, 1, 1, 1), dtype=np.complex128)
+    density_t = 2.0 * phi_t
+    sel = ModeSelection(ky_index=0, kx_index=0)
+
+    queue = [
+        np.array([np.nan, np.nan, np.nan, np.nan], dtype=np.complex128),
+        np.array([1.0, 2.0, 3.0, 4.0], dtype=np.complex128),
+        np.array([1.0, 2.0, 3.0, 4.0], dtype=np.complex128),
+        np.array([4.0, 3.0, 2.0, 1.0], dtype=np.complex128),
+    ]
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.extract_mode_time_series",
+        lambda *args, **kwargs: queue.pop(0),
+    )
+    signal = _select_fit_signal(
+        phi_t, density_t, sel, fit_signal="phi", mode_method="project"
+    )
+    np.testing.assert_allclose(signal, [1.0, 2.0, 3.0, 4.0])
+
+    queue = [
+        np.array([np.nan, np.nan, np.nan, np.nan], dtype=np.complex128),
+        np.array([1.0, 2.0, 3.0, 4.0], dtype=np.complex128),
+    ]
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.extract_mode_time_series",
+        lambda *args, **kwargs: queue.pop(0),
+    )
+    signal = _select_fit_signal(
+        density_t, phi_t, sel, fit_signal="density", mode_method="project"
+    )
+    np.testing.assert_allclose(signal, [1.0, 2.0, 3.0, 4.0])
+
+    queue = [np.array([np.nan, np.nan, np.nan, np.nan], dtype=np.complex128)]
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.extract_mode_time_series",
+        lambda *args, **kwargs: queue.pop(0),
+    )
+    with pytest.warns(RuntimeWarning, match="insufficient finite"):
+        signal = _select_fit_signal(
+            phi_t, None, sel, fit_signal="phi", mode_method="project"
+        )
+    np.testing.assert_allclose(signal, np.zeros(4))
+
+    queue = [np.array([np.nan, np.nan, np.nan, np.nan], dtype=np.complex128)]
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.extract_mode_time_series",
+        lambda *args, **kwargs: queue.pop(0),
+    )
+    with pytest.warns(RuntimeWarning, match="insufficient finite"):
+        signal = _select_fit_signal(
+            phi_t,
+            density_t,
+            sel,
+            fit_signal="density",
+            mode_method="project",
+            fallback=False,
+        )
+    np.testing.assert_allclose(signal, np.zeros(4))
+
+    queue = [np.array([1.0, 2.0], dtype=np.complex128)]
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.extract_mode_time_series",
+        lambda *args, **kwargs: queue.pop(0),
+    )
     with pytest.raises(ValueError):
-        branch_continuity_metrics(np.array([0.1]), np.array([0.1]), np.array([0.2]))
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([[0.1, 0.2]]), np.array([0.1, 0.2]), np.array([0.2, 0.3])
+        _select_fit_signal(
+            phi_t, None, sel, fit_signal="density", mode_method="project"
         )
     with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]), np.array([0.1]), np.array([0.2, 0.3])
+        _select_fit_signal(
+            phi_t, density_t, sel, fit_signal="bad", mode_method="project"
         )
+
+    signals = {
+        "phi": np.array([1.0, 2.0, 3.0], dtype=np.complex128),
+        "density": np.array([3.0, 2.0, 1.0], dtype=np.complex128),
+    }
+
+    def fake_extract(arr, _sel, method):
+        return signals["density" if arr is density_t else "phi"]
+
+    def fake_score(t, signal, **kwargs):
+        assert kwargs["num_windows"] == 4
+        if np.allclose(signal, signals["phi"]):
+            return 0.1, 0.2, 0.3
+        return 0.4, 0.5, 0.8
+
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.extract_mode_time_series",
+        fake_extract,
+    )
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates._score_fit_signal_auto",
+        fake_score,
+    )
+    signal, name, gamma, omega = _select_fit_signal_auto(
+        np.array([0.0, 1.0, 2.0]),
+        phi_t,
+        density_t,
+        sel,
+        mode_method="project",
+        tmin=None,
+        tmax=None,
+        window_fraction=0.5,
+        min_points=2,
+        start_fraction=0.2,
+        growth_weight=1.0,
+        require_positive=True,
+        min_amp_fraction=0.0,
+        max_amp_fraction=1.0,
+        window_method="rolling",
+        max_fraction=1.0,
+        end_fraction=1.0,
+        num_windows=4,
+        phase_weight=0.5,
+        length_weight=0.5,
+        min_r2=0.0,
+        late_penalty=0.0,
+        min_slope=None,
+        min_slope_frac=0.0,
+        slope_var_weight=0.0,
+    )
+    assert name == "density"
+    np.testing.assert_allclose(signal, signals["density"])
+    assert gamma == 0.4
+    assert omega == 0.5
+
+
+def test_score_fit_signal_auto_filters_invalid(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def _fake_fit(*args, **kwargs):
+        captured["num_windows"] = kwargs["num_windows"]
+        return (0.3, -0.2, 0.0, 1.0, 0.95, 0.9)
+
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.fit_growth_rate_auto_with_stats",
+        _fake_fit,
+    )
+    gamma, omega, score = _score_fit_signal_auto(
+        np.array([0.0, 1.0, 2.0]),
+        np.array([1.0, 2.0, 4.0], dtype=np.complex128),
+        tmin=None,
+        tmax=None,
+        window_fraction=0.5,
+        min_points=2,
+        start_fraction=0.2,
+        growth_weight=1.0,
+        require_positive=True,
+        min_amp_fraction=0.0,
+        max_amp_fraction=1.0,
+        window_method="rolling",
+        max_fraction=1.0,
+        end_fraction=1.0,
+        num_windows=6,
+        phase_weight=0.5,
+        length_weight=0.5,
+        min_r2=0.8,
+        late_penalty=0.0,
+        min_slope=None,
+        min_slope_frac=0.0,
+        slope_var_weight=0.0,
+    )
+    assert gamma == 0.3
+    assert omega == -0.2
+    assert score > 0.0
+    assert captured["num_windows"] == 6
+
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.fit_growth_rate_auto_with_stats",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("bad")),
+    )
+    gamma, omega, score = _score_fit_signal_auto(
+        np.array([0.0, 1.0]),
+        np.array([1.0, 2.0], dtype=np.complex128),
+        tmin=None,
+        tmax=None,
+        window_fraction=0.5,
+        min_points=2,
+        start_fraction=0.2,
+        growth_weight=1.0,
+        require_positive=True,
+        min_amp_fraction=0.0,
+        max_amp_fraction=1.0,
+        window_method="rolling",
+        max_fraction=1.0,
+        end_fraction=1.0,
+        num_windows=6,
+        phase_weight=0.5,
+        length_weight=0.5,
+        min_r2=0.8,
+        late_penalty=0.0,
+        min_slope=None,
+        min_slope_frac=0.0,
+        slope_var_weight=0.0,
+    )
+    assert score == -np.inf
+
+
+def test_score_fit_signal_auto_rejects_low_r2_and_nonfinite_frequency(
+    monkeypatch,
+) -> None:
+    def _score_with_fit_output(output) -> tuple[float, float, float]:
+        monkeypatch.setattr(
+            "gkx.diagnostics.growth_rates.fit_growth_rate_auto_with_stats",
+            lambda *args, **kwargs: output,
+        )
+        return _score_fit_signal_auto(
+            np.array([0.0, 1.0, 2.0]),
+            np.array([1.0, 2.0, 4.0], dtype=np.complex128),
+            tmin=None,
+            tmax=None,
+            window_fraction=0.5,
+            min_points=2,
+            start_fraction=0.2,
+            growth_weight=1.0,
+            require_positive=True,
+            min_amp_fraction=0.0,
+            max_amp_fraction=1.0,
+            window_method="rolling",
+            max_fraction=1.0,
+            end_fraction=1.0,
+            num_windows=4,
+            phase_weight=0.5,
+            length_weight=0.5,
+            min_r2=0.9,
+            late_penalty=0.0,
+            min_slope=None,
+            min_slope_frac=0.0,
+            slope_var_weight=0.0,
+        )
+
+    gamma, omega, score = _score_with_fit_output((0.2, -0.3, 0.0, 1.0, 0.5, 0.99))
+    assert gamma == pytest.approx(0.2)
+    assert omega == pytest.approx(-0.3)
+    assert score == -np.inf
+
+    gamma, omega, score = _score_with_fit_output((0.2, np.inf, 0.0, 1.0, 0.99, 0.99))
+    assert gamma == pytest.approx(0.2)
+    assert np.isinf(omega)
+    assert score == -np.inf
+
+
+def test_score_fit_signal_auto_treats_zero_growth_as_marginal(monkeypatch) -> None:
+    def _score_for(gamma_value: float, *, require_positive: bool = True) -> float:
+        monkeypatch.setattr(
+            "gkx.diagnostics.growth_rates.fit_growth_rate_auto_with_stats",
+            lambda *args, **kwargs: (gamma_value, -0.2, 0.0, 1.0, 0.99, 0.9),
+        )
+        _gamma, _omega, score = _score_fit_signal_auto(
+            np.array([0.0, 1.0, 2.0]),
+            np.array([1.0, 1.0, 1.0], dtype=np.complex128),
+            tmin=None,
+            tmax=None,
+            window_fraction=0.5,
+            min_points=2,
+            start_fraction=0.2,
+            growth_weight=1.0,
+            require_positive=require_positive,
+            min_amp_fraction=0.0,
+            max_amp_fraction=1.0,
+            window_method="rolling",
+            max_fraction=1.0,
+            end_fraction=1.0,
+            num_windows=4,
+            phase_weight=0.2,
+            length_weight=0.05,
+            min_r2=0.8,
+            late_penalty=0.0,
+            min_slope=None,
+            min_slope_frac=0.0,
+            slope_var_weight=0.0,
+        )
+        return score
+
+    assert _score_for(0.0) == -np.inf
+    assert np.isfinite(_score_for(1.0e-12))
+    assert np.isfinite(_score_for(0.0, require_positive=False))
+
+
+def test_normalization_and_initial_profiles() -> None:
+    gamma, omega = _normalize_growth_rate(0.4, -0.2, _linear_params(), "rho_star")
+    assert np.isfinite(gamma)
+    assert np.isfinite(omega)
+
+    init_cfg = InitializationConfig(
+        init_field="density",
+        init_amp=1.5,
+        gaussian_init=True,
+        gaussian_width=0.3,
+        gaussian_envelope_constant=1.0,
+        gaussian_envelope_sine=0.1,
+    )
+    z = np.linspace(-1.0, 1.0, 5)
+    profile = _build_gaussian_profile(z, kx=0.2, ky=0.4, s_hat=0.5, init_cfg=init_cfg)
+    assert profile.shape == z.shape
+    assert np.max(np.abs(profile)) > 0.0
     with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]), np.array([0.1, np.nan]), np.array([0.2, 0.3])
+        _build_gaussian_profile(
+            z,
+            kx=0.2,
+            ky=0.4,
+            s_hat=0.5,
+            init_cfg=SimpleNamespace(**{**init_cfg.__dict__, "gaussian_width": 0.0}),
         )
+
+
+def test_build_initial_condition_supports_all_and_invalid_fields() -> None:
+    grid = SimpleNamespace(
+        kx=np.array([0.0, 0.5]),
+        ky=np.array([0.0, 0.4]),
+        z=np.linspace(-1.0, 1.0, 5),
+    )
+    geom = SimpleNamespace(s_hat=0.8)
+    init_cfg = InitializationConfig(init_field="all", init_amp=2.0, gaussian_init=False)
+    G0 = _build_initial_condition(
+        grid, geom, ky_index=[0, 1], kx_index=1, Nl=2, Nm=4, init_cfg=init_cfg
+    )
+    assert G0.shape == (2, 4, 2, 2, 5)
+    assert np.count_nonzero(np.asarray(G0)[:, :, 0, 1, :]) == 0
+    assert np.count_nonzero(np.asarray(G0)[:, :, 1, 1, :]) > 0
+
+    too_small = InitializationConfig(
+        init_field="qpar", init_amp=1.0, gaussian_init=False
+    )
+    with pytest.raises(ValueError, match="moment exceeds"):
+        _build_initial_condition(
+            grid, geom, ky_index=1, kx_index=1, Nl=1, Nm=1, init_cfg=too_small
+        )
+
+    bad = InitializationConfig(init_field="banana")
     with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]),
-            np.array([0.1, 0.2]),
-            np.array([0.2, 0.3]),
-            floor_fraction=-1.0e-3,
+        _build_initial_condition(
+            grid, geom, ky_index=1, kx_index=1, Nl=2, Nm=4, init_cfg=bad
         )
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]),
-            np.array([0.1, 0.2]),
-            np.array([0.2, 0.3]),
-            successive_overlap=np.array([0.9, 0.8]),
+
+
+def test_build_initial_condition_all_uses_gx_moment_normalization() -> None:
+    grid = SimpleNamespace(
+        kx=np.array([0.0]),
+        ky=np.array([0.0, 0.4]),
+        z=np.array([0.0, 1.0]),
+    )
+    geom = SimpleNamespace(s_hat=0.8)
+    base = 2.0 * (1.0 + 1.0j)
+
+    G0 = np.asarray(
+        _build_initial_condition(
+            grid,
+            geom,
+            ky_index=[0, 1],
+            kx_index=0,
+            Nl=2,
+            Nm=4,
+            init_cfg=InitializationConfig(
+                init_field="all",
+                init_amp=2.0,
+                gaussian_init=False,
+            ),
         )
-    with pytest.raises(ValueError):
-        branch_continuity_metrics(
-            np.array([0.1, 0.2]),
-            np.array([0.1, 0.2]),
-            np.array([0.2, 0.3]),
-            successive_overlap=np.array([np.nan]),
+    )
+
+    np.testing.assert_allclose(G0[:, :, 0, 0, :], 0.0)
+    np.testing.assert_allclose(G0[0, 0, 1, 0, :], base)
+    np.testing.assert_allclose(G0[0, 1, 1, 0, :], base)
+    np.testing.assert_allclose(G0[0, 2, 1, 0, :], base / np.sqrt(2.0))
+    np.testing.assert_allclose(G0[1, 0, 1, 0, :], base)
+    np.testing.assert_allclose(G0[0, 3, 1, 0, :], base / np.sqrt(6.0))
+    np.testing.assert_allclose(G0[1, 1, 1, 0, :], base)
+    np.testing.assert_allclose(G0[1, 2:, 1, 0, :], 0.0)
+
+
+def test_build_initial_condition_field_map_and_zonal_mode_safety() -> None:
+    grid = SimpleNamespace(
+        kx=np.array([0.0]),
+        ky=np.array([0.0, 0.4]),
+        z=np.linspace(-1.0, 1.0, 3),
+    )
+    geom = SimpleNamespace(s_hat=0.8)
+    expected_moments = {
+        "density": (0, 0),
+        "upar": (0, 1),
+        "tpar": (0, 2),
+        "tperp": (1, 0),
+        "qpar": (0, 3),
+        "qperp": (1, 1),
+    }
+
+    for field_name, (l_idx, m_idx) in expected_moments.items():
+        G0 = np.asarray(
+            _build_initial_condition(
+                grid,
+                geom,
+                ky_index=[0, 1],
+                kx_index=0,
+                Nl=2,
+                Nm=4,
+                init_cfg=InitializationConfig(
+                    init_field=field_name,
+                    init_amp=2.0,
+                    gaussian_init=False,
+                ),
+            )
         )
-    with pytest.raises(ValueError):
-        branch_continuity_gate_report(
-            metrics,
-            case="bad",
-            source="candidate table",
-            max_rel_gamma_jump=-1.0,
-            max_rel_omega_jump=0.1,
+        assert np.count_nonzero(G0[:, :, 0, 0, :]) == 0
+        assert np.count_nonzero(G0[:, :, 1, 0, :]) == grid.z.size
+        assert np.count_nonzero(G0[l_idx, m_idx, 1, 0, :]) == grid.z.size
+        seeded_slice = G0[:, :, 1, 0, :].copy()
+        seeded_slice[l_idx, m_idx, :] = 0.0
+        assert np.count_nonzero(seeded_slice) == 0
+
+
+def test_score_fit_signal_auto_rejects_nonfinite_and_negative_growth(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.fit_growth_rate_auto_with_stats",
+        lambda *args, **kwargs: (np.nan, -0.2, 0.0, 1.0, 0.95, 0.9),
+    )
+    gamma, omega, score = _score_fit_signal_auto(
+        np.array([0.0, 1.0]),
+        np.array([1.0, 2.0], dtype=np.complex128),
+        tmin=None,
+        tmax=None,
+        window_fraction=0.5,
+        min_points=2,
+        start_fraction=0.2,
+        growth_weight=1.0,
+        require_positive=True,
+        min_amp_fraction=0.0,
+        max_amp_fraction=1.0,
+        window_method="rolling",
+        max_fraction=1.0,
+        end_fraction=1.0,
+        num_windows=4,
+        phase_weight=0.5,
+        length_weight=0.5,
+        min_r2=0.8,
+        late_penalty=0.0,
+        min_slope=None,
+        min_slope_frac=0.0,
+        slope_var_weight=0.0,
+    )
+    assert np.isnan(gamma)
+    assert omega == pytest.approx(-0.2)
+    assert score == -np.inf
+
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.fit_growth_rate_auto_with_stats",
+        lambda *args, **kwargs: (-0.1, -0.2, 0.0, 1.0, 0.95, 0.9),
+    )
+    gamma, omega, score = _score_fit_signal_auto(
+        np.array([0.0, 1.0]),
+        np.array([1.0, 2.0], dtype=np.complex128),
+        tmin=None,
+        tmax=None,
+        window_fraction=0.5,
+        min_points=2,
+        start_fraction=0.2,
+        growth_weight=1.0,
+        require_positive=True,
+        min_amp_fraction=0.0,
+        max_amp_fraction=1.0,
+        window_method="rolling",
+        max_fraction=1.0,
+        end_fraction=1.0,
+        num_windows=4,
+        phase_weight=0.5,
+        length_weight=0.5,
+        min_r2=0.8,
+        late_penalty=0.0,
+        min_slope=None,
+        min_slope_frac=0.0,
+        slope_var_weight=0.0,
+    )
+    assert gamma == pytest.approx(-0.1)
+    assert omega == pytest.approx(-0.2)
+    assert score == -np.inf
+
+
+# ---- from test_nonlinear_transport_release_gates.py ----
+# Contracts for grouped nonlinear transport release gates.
+
+
+SCRIPT = ROOT / "scripts" / "checks" / "check_nonlinear_transport_gates.py"
+mod = load_release_tool("check_nonlinear_transport_gates")
+
+
+def _write_manifest(
+    tmp_path: Path, outputs: list[Path], *, include_dt: bool = False
+) -> Path:
+    config = {"window": {"tmin": 10.0, "tmax": 20.0}}
+    if include_dt:
+        config.update({"dt": 0.05, "dt_variants": [0.04]})
+    manifest = {
+        "kind": "matched_nonlinear_transport_matrix_campaign",
+        "config": config,
+        "samples": [
+            {
+                "sample_id": "s0p45_a0_ky0p1",
+                "surface_torflux": 0.45,
+                "alpha": 0.0,
+                "ky": 0.1,
+                "states": {
+                    "baseline": {"label": "base", "final_outputs": [str(outputs[0])]},
+                    "candidate": {"label": "cand", "final_outputs": [str(outputs[1])]},
+                },
+            }
+        ],
+    }
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    return path
+
+
+def _touch_bundle(output: Path) -> None:
+    stem = (
+        output.name[: -len(".out.nc")]
+        if output.name.endswith(".out.nc")
+        else output.stem
+    )
+    base = output.with_name(stem)
+    for suffix in ("out.nc", "restart.nc", "big.nc"):
+        Path(f"{base}.{suffix}").write_text("stub\n", encoding="utf-8")
+
+
+def test_progress_requires_target_time_even_when_bundle_exists(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base = tmp_path / "base.out.nc"
+    cand = tmp_path / "cand.out.nc"
+    _touch_bundle(base)
+    _touch_bundle(cand)
+    manifest = _write_manifest(tmp_path, [base, cand])
+    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 19.0)
+
+    report = mod.build_matrix_progress_report(matrix_manifest=manifest)
+
+    assert report["summary"]["expected_outputs"] == 2
+    assert report["summary"]["complete_bundles"] == 2
+    assert report["summary"]["target_time_confirmed"] == 0
+    assert report["summary"]["ready_for_postprocess"] is False
+
+
+def test_progress_passes_when_all_bundles_reach_target_time(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base = tmp_path / "base.out.nc"
+    cand = tmp_path / "cand.out.nc"
+    _touch_bundle(base)
+    _touch_bundle(cand)
+    manifest = _write_manifest(tmp_path, [base, cand])
+    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 20.0)
+
+    report = mod.build_matrix_progress_report(matrix_manifest=manifest)
+
+    assert report["summary"]["complete_bundles"] == 2
+    assert report["summary"]["target_time_confirmed"] == 2
+    assert report["summary"]["ready_for_postprocess"] is True
+    assert all(row["bundle_complete"] for row in report["rows"])
+    assert all(row["target_time_confirmed"] for row in report["rows"])
+
+
+def test_progress_accepts_fixed_step_output_within_manifest_dt_tolerance(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base = tmp_path / "base.out.nc"
+    cand = tmp_path / "cand.out.nc"
+    _touch_bundle(base)
+    _touch_bundle(cand)
+    manifest = _write_manifest(tmp_path, [base, cand], include_dt=True)
+    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 19.927)
+
+    report = mod.build_matrix_progress_report(matrix_manifest=manifest)
+
+    assert report["time_tolerance"] == 0.1
+    assert report["summary"]["target_time_confirmed"] == 2
+    assert report["summary"]["ready_for_postprocess"] is True
+
+
+def test_progress_keeps_checkpoint_below_dt_tolerance_incomplete(
+    tmp_path: Path, monkeypatch
+) -> None:
+    base = tmp_path / "base.out.nc"
+    cand = tmp_path / "cand.out.nc"
+    _touch_bundle(base)
+    _touch_bundle(cand)
+    manifest = _write_manifest(tmp_path, [base, cand], include_dt=True)
+    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 19.85)
+
+    report = mod.build_matrix_progress_report(matrix_manifest=manifest)
+
+    assert report["time_tolerance"] == 0.1
+    assert report["summary"]["target_time_confirmed"] == 0
+    assert report["summary"]["ready_for_postprocess"] is False
+
+
+def test_progress_cli_uses_manifest_dt_tolerance_by_default(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    base = tmp_path / "base.out.nc"
+    cand = tmp_path / "cand.out.nc"
+    _touch_bundle(base)
+    _touch_bundle(cand)
+    manifest = _write_manifest(tmp_path, [base, cand], include_dt=True)
+    out_json = tmp_path / "progress.json"
+    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 19.927)
+
+    rc = mod.main(
+        [
+            "matrix-progress",
+            "--matrix-manifest",
+            str(manifest),
+            "--out-json",
+            str(out_json),
+        ]
+    )
+    stdout = capsys.readouterr().out
+    report = json.loads(out_json.read_text(encoding="utf-8"))
+
+    assert rc == 0
+    assert '"ready_for_postprocess": true' in stdout.lower()
+    assert report["time_tolerance"] == 0.1
+    assert report["summary"]["target_time_confirmed"] == 2
+
+
+def test_skip_time_check_does_not_read_output_time(tmp_path: Path, monkeypatch) -> None:
+    base = tmp_path / "base.out.nc"
+    cand = tmp_path / "cand.out.nc"
+    _touch_bundle(base)
+    _touch_bundle(cand)
+    manifest = _write_manifest(tmp_path, [base, cand], include_dt=True)
+
+    def fail_if_called(_path):
+        raise AssertionError("skip_time_check should not read NetCDF times")
+
+    monkeypatch.setattr(mod, "_read_output_tmax", fail_if_called)
+    report = mod.build_matrix_progress_report(
+        matrix_manifest=manifest, skip_time_check=True
+    )
+
+    assert report["skip_time_check"] is True
+    assert report["summary"]["complete_bundles"] == 2
+    assert report["summary"]["target_time_confirmed"] == 0
+    assert report["summary"]["ready_for_postprocess"] is False
+    assert report["summary"]["time_check_skipped"] is True
+    assert all(not row["target_time_confirmed"] for row in report["rows"])
+    assert all(row["output_tmax"] is None for row in report["rows"])
+
+
+def _write_nonlinear_output(
+    path: Path,
+    *,
+    time: np.ndarray | None = None,
+    heat: np.ndarray | None = None,
+    include_heat: bool = True,
+) -> None:
+    netcdf4 = pytest.importorskip("netCDF4")
+    t = np.asarray([0.0, 5.0, 10.0] if time is None else time, dtype=float)
+    q = np.asarray([1.0, 2.0, 3.0] if heat is None else heat, dtype=float)
+    with netcdf4.Dataset(path, "w") as root:
+        root.createDimension("time", t.size)
+        root.createDimension("s", 1)
+        grids = root.createGroup("Grids")
+        grids.createVariable("time", "f8", ("time",))[:] = t
+        diagnostics = root.createGroup("Diagnostics")
+        if include_heat:
+            diagnostics.createVariable("HeatFlux_st", "f8", ("time", "s"))[:, :] = q[
+                :, None
+            ]
+
+
+def test_validate_output_accepts_grouped_runtime_netcdf(tmp_path: Path) -> None:
+    out = tmp_path / "run.out.nc"
+    _write_nonlinear_output(out)
+
+    row = mod.validate_output(
+        out, min_samples=3, tmin=5.0, tmax=10.0, min_window_samples=2
+    )
+
+    assert row["passed"] is True
+    assert row["samples"] == 3
+    assert row["window"]["mean_heat_flux"] == pytest.approx(2.5)
+
+
+def test_validate_output_fails_closed_for_missing_diagnostics(tmp_path: Path) -> None:
+    out = tmp_path / "restart_like.out.nc"
+    _write_nonlinear_output(out, include_heat=False)
+
+    row = mod.validate_output(out, min_samples=2)
+
+    assert row["passed"] is False
+    assert any("HeatFlux_st" in failure for failure in row["failures"])
+
+
+def test_check_outputs_reports_required_window_failures(tmp_path: Path) -> None:
+    out = tmp_path / "short.out.nc"
+    _write_nonlinear_output(out, time=np.asarray([0.0, 5.0, 10.0]), heat=np.ones(3))
+
+    payload = mod.check_outputs(
+        [out],
+        heat_flux_variable=mod.DEFAULT_HEAT_FLUX_VARIABLE,
+        min_samples=2,
+        tmin=20.0,
+        tmax=30.0,
+        tmax_atol=None,
+        min_window_samples=2,
+        min_abs_window_mean=None,
+    )
+
+    assert payload["passed"] is False
+    assert payload["summary"] == {"outputs": 1, "passed": 0, "failed": 1}
+    assert {
+        "does_not_reach_required_tmax",
+        "too_few_window_samples",
+    }.issubset(set(payload["rows"][0]["failures"]))
+
+
+def test_validate_output_tolerates_fixed_step_time_roundoff(tmp_path: Path) -> None:
+    out = tmp_path / "rounded.out.nc"
+    _write_nonlinear_output(
+        out,
+        time=np.asarray([896.0, 898.0, 899.99]),
+        heat=np.asarray([2.0, 2.1, 2.2]),
+    )
+
+    row = mod.validate_output(out, min_samples=3, tmin=896.0, tmax=900.0)
+
+    assert row["passed"] is True
+    assert row["tmax_atol"] == pytest.approx(0.25 * np.median([2.0, 1.99]))
+
+
+def test_validate_output_can_enforce_strict_tmax_tolerance(tmp_path: Path) -> None:
+    out = tmp_path / "rounded.out.nc"
+    _write_nonlinear_output(out, time=np.asarray([0.0, 2.0, 899.99]), heat=np.ones(3))
+
+    row = mod.validate_output(out, min_samples=3, tmax=900.0, tmax_atol=1.0e-4)
+
+    assert row["passed"] is False
+    assert "does_not_reach_required_tmax" in row["failures"]
+
+
+def test_main_writes_json_and_exit_code(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "run.out.nc"
+    report = tmp_path / "report.json"
+    _write_nonlinear_output(out)
+
+    rc = mod.main(
+        ["runtime-outputs", str(out), "--json-out", str(report), "--min-samples", "3"]
+    )
+
+    assert rc == 0
+    assert report.exists()
+    assert '"failed": 0' in capsys.readouterr().out
+
+
+def _matrix_report(
+    path: Path,
+    *,
+    passed: bool,
+    total: int = 18,
+    completed: int = 18,
+    passed_samples: int = 18,
+    mean_reduction: float = 0.03,
+) -> Path:
+    pass_fraction = passed_samples / total if total else 0.0
+    payload = {
+        "kind": "matched_nonlinear_transport_matrix_report",
+        "passed": passed,
+        "summary": {
+            "total_samples": total,
+            "completed_samples": completed,
+            "passed_samples": passed_samples,
+            "pass_fraction": pass_fraction,
+            "mean_relative_reduction": mean_reduction,
+            "surfaces": [0.45, 0.64, 0.78],
+            "alphas": [0.0, 0.7853981633974483],
+            "ky_values": [0.1, 0.3, 0.5],
+        },
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _excluded_comparison(path: Path) -> Path:
+    path.write_text(
+        json.dumps(
+            {
+                "kind": "matched_nonlinear_transport_comparison",
+                "passed": False,
+                "statistics": {
+                    "relative_reduction": -0.004,
+                    "uncertainty_z_score": -0.2,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_portfolio_selects_best_passing_broad_matrix(tmp_path: Path) -> None:
+    accepted = _matrix_report(
+        tmp_path / "accepted.json", passed=True, mean_reduction=0.025
+    )
+    projected = _matrix_report(
+        tmp_path / "projected.json", passed=True, mean_reduction=0.04
+    )
+    strict = _excluded_comparison(tmp_path / "strict_growth.json")
+
+    report = mod.build_transport_matrix_portfolio_report(
+        matrix_reports={"accepted_qa_ess": accepted, "projected_0p001": projected},
+        excluded_comparisons={"strict_growth": strict},
+    )
+
+    assert report["passed"] is True
+    assert report["selected_family"] == "projected_0p001"
+    assert report["selected_report"]["summary"]["mean_relative_reduction"] == 0.04
+    assert report["excluded_comparisons"][0]["label"] == "strict_growth"
+    assert "excluded" in report["excluded_comparisons"][0]["note"]
+
+
+def test_portfolio_blocks_missing_or_failed_broad_matrices(tmp_path: Path) -> None:
+    failed = _matrix_report(
+        tmp_path / "failed.json",
+        passed=False,
+        passed_samples=12,
+        mean_reduction=0.01,
+    )
+
+    report = mod.build_transport_matrix_portfolio_report(
+        matrix_reports={
+            "accepted_qa_ess": failed,
+            "projected_0p001": tmp_path / "missing.json",
+        },
+        excluded_comparisons={},
+    )
+
+    assert report["passed"] is False
+    assert report["selected_family"] is None
+    assert "no candidate family passed" in report["blockers"][0]
+    rows = {row["label"]: row for row in report["matrix_reports"]}
+    assert rows["accepted_qa_ess"]["qualifies_for_broad_promotion"] is False
+    assert rows["projected_0p001"]["exists"] is False
+
+
+def test_portfolio_cli_writes_report_and_figure(tmp_path: Path) -> None:
+    accepted = _matrix_report(
+        tmp_path / "accepted.json", passed=True, mean_reduction=0.025
+    )
+    out_json = tmp_path / "portfolio.json"
+    out_png = tmp_path / "portfolio.png"
+
+    rc = mod.main(
+        [
+            "matrix-portfolio",
+            "--matrix-report",
+            f"accepted_qa_ess={accepted}",
+            "--out-json",
+            str(out_json),
+            "--out-figure",
+            str(out_png),
+            "--fail-on-blocked",
+        ]
+    )
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+
+    assert rc == 0
+    assert payload["passed"] is True
+    assert payload["selected_family"] == "accepted_qa_ess"
+    assert out_png.exists()
+
+
+# ---- from test_nonlinear_window_artifact_contracts.py ----
+# Contracts for nonlinear transport-window artifact and gate utilities.
+
+
+OUTPUT_TARGET_SCRIPT = (
+    ROOT / "scripts" / "checks" / "check_nonlinear_transport_gates.py"
+)
+output_target = load_release_tool("check_nonlinear_transport_gates")
+window_ensemble = load_release_tool("check_nonlinear_transport_gates")
+window_readiness = window_ensemble
+FLOW_SHEAR_GATE = ROOT / "docs" / "_static" / "flow_shear_fixed_step_response_gate.json"
+
+
+def test_saturation_campaign_prints_cumulative_runtime_progress(capsys) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+
+    campaign._campaign_progress(
+        "completed nonlinear chunk 2: t=25/100 progress= 25.0% elapsed=01:00"
+    )
+
+    assert capsys.readouterr().out == (
+        "[gkx] completed nonlinear chunk 2: t=25/100 progress= 25.0% elapsed=01:00\n"
+    )
+
+
+def test_saturation_campaign_trace_omits_dealiased_zero_modes() -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    full_kx = np.arange(12, dtype=float)
+    full_ky = np.arange(12, dtype=float)
+    resolved = type(
+        "Resolved",
+        (),
+        {
+            "Phi2_kxt": np.arange(24).reshape(2, 12),
+            "HeatFlux_kxst": np.arange(48).reshape(2, 2, 12),
+            "Phi2_kyt": np.arange(24).reshape(2, 12),
+            "HeatFlux_kyst": np.arange(48).reshape(2, 2, 12),
+        },
+    )()
+
+    payload = campaign._trace_spectral_payload(
+        resolved, kx_full=full_kx, ky_full=full_ky
+    )
+
+    assert payload["kx"].shape == (7,)
+    assert payload["ky"].shape == (4,)
+    assert payload["Phi2_kxt"].shape == (2, 7)
+    assert payload["HeatFlux_kxst"].shape == (2, 2, 7)
+    assert payload["Phi2_kyt"].shape == (2, 4)
+    assert payload["HeatFlux_kyst"].shape == (2, 2, 4)
+
+
+def test_saturation_campaign_requires_and_records_its_checkout_source(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    provenance = campaign._campaign_source_provenance(
+        ROOT / "src" / "gkx" / "__init__.py"
+    )
+    encoded = campaign._npz_source_provenance(provenance)
+
+    assert provenance["repository_root"] == str(ROOT)
+    assert provenance["git_commit"]
+    assert campaign._gkx_source_tree_matches(
+        ROOT, provenance["git_commit"], provenance["git_commit"]
+    )
+    assert encoded["gkx_git_commit"].dtype.kind == "U"
+    assert encoded["gkx_git_dirty"].dtype.kind in "iu"
+    with pytest.raises(SystemExit, match="PYTHONPATH=src"):
+        campaign._campaign_source_provenance(tmp_path / "gkx" / "__init__.py")
+
+
+def test_saturation_campaign_does_not_duplicate_requested_npz_trace(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    values = np.arange(3, dtype=float)
+    trace = tmp_path / "trace.npz"
+    np.savez_compressed(trace, time=values)
+
+    addressed = campaign._summary_trace_payload(
+        values, values + 1, values + 2, values + 3, trace_path=trace
+    )
+    inline = campaign._summary_trace_payload(
+        values, values + 1, values + 2, values + 3, trace_path=None
+    )
+
+    assert "trace" not in addressed
+    assert addressed["trace_artifact"]["bytes"] == trace.stat().st_size
+    assert (
+        addressed["trace_artifact"]["sha256"]
+        == hashlib.sha256(trace.read_bytes()).hexdigest()
+    )
+    assert len(inline["trace"]) == 3
+
+
+def test_saturation_campaign_locks_output_paths_between_processes(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    target = tmp_path / "campaign.npz"
+
+    first = campaign._campaign_output_locks((target, None, target))
+    try:
+        assert len(first) == 1
+        assert "pid=" in (tmp_path / "campaign.npz.lock").read_text()
+        with pytest.raises(SystemExit, match="campaign output is locked"):
+            campaign._campaign_output_locks((target,))
+    finally:
+        for handle in first:
+            handle.close()
+
+    second = campaign._campaign_output_locks((target,))
+    for handle in second:
+        handle.close()
+
+
+def test_saturation_campaign_cannot_promote_a_continuation_segment() -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    report = {"saturated": True, "reasons": []}
+
+    full = campaign._scope_saturation_report(report, continuation=False)
+    segment = campaign._scope_saturation_report(report, continuation=True)
+
+    assert full == {**report, "history_scope": "full_run"}
+    assert segment["history_scope"] == "continuation_segment"
+    assert segment["segment_saturated"] is True
+    assert segment["saturated"] is False
+    assert segment["reasons"] == ["prior_history_not_in_report"]
+    assert report == {"saturated": True, "reasons": []}
+
+
+def test_saturation_campaign_records_resolved_timestep_policy() -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    time_cfg = type(
+        "TimeConfig",
+        (),
+        {
+            "fixed_dt": False,
+            "dt": 0.1,
+            "dt_max": None,
+            "cfl": 0.5,
+            "method": "rk3",
+        },
+    )()
+
+    policy = campaign._resolved_timestep_policy(time_cfg)
+    encoded = campaign._npz_timestep_identity(policy)
+
+    assert policy == {
+        "fixed_dt": False,
+        "dt": 0.1,
+        "dt_max": None,
+        "cfl": 0.5,
+        "method": "rk3",
+    }
+    assert encoded["time_dt_max"].item() == "None"
+    assert encoded["time_cfl"].item() == pytest.approx(0.5)
+
+
+def test_saturation_policy_replay_requires_a_persistent_fixed_window() -> None:
+    replay = load_tool_script("campaigns", "nonlinear_saturated_state")
+    time = np.arange(0.0, 201.0, 0.5)
+    phase = 2.0 * np.pi * time / 10.0
+    report = replay.replay_policy(
+        time,
+        10.0 + 0.15 * np.sin(phase),
+        2.0 + 0.03 * np.sin(phase + 0.3),
+        100.0 + np.sin(phase + 0.7),
+        policy=replay.ReplayPolicy(window=50.0, persistence=20.0),
+    )
+
+    assert report["stopped"] is True
+    assert report["first_stop"]["persistence_start"] == pytest.approx(50.0)
+    assert report["first_stop"]["checkpoint_time"] == pytest.approx(70.0)
+    assert report["first_stop"]["decision"]["window_tmin"] == pytest.approx(20.0)
+    assert report["first_stop"]["decision"]["statistics"]["heat_flux"]["stationary"]
+
+
+def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
+    tmp_path: Path,
+) -> None:
+    replay = load_tool_script("campaigns", "nonlinear_saturated_state")
+
+    def write_trace(
+        path: Path,
+        time: np.ndarray,
+        *,
+        previous_t_end: float,
+        case: str = "qa",
+        dirty: int = 0,
+    ) -> None:
+        np.savez_compressed(
+            path,
+            time=time,
+            heat_flux=np.ones(time.size),
+            Wphi=np.ones(time.size),
+            Wg=np.ones(time.size),
+            gkx_git_commit=np.asarray("abc123"),
+            gkx_git_dirty=np.asarray(dirty),
+            previous_t_end=np.asarray(previous_t_end),
+            campaign_identity_schema=np.asarray("gkx_nonlinear_campaign_v1"),
+            case=np.asarray(case),
         )
+
+    first = tmp_path / "first.npz"
+    second = tmp_path / "second.npz"
+    write_trace(first, np.arange(0.0, 10.0), previous_t_end=0.0)
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0)
+
+    arrays, sources = replay._load_replay_traces([first, second])
+    assert arrays[0].tolist() == list(np.arange(20.0))
+    assert len(sources) == 2
+    assert sources[0]["sha256"] == hashlib.sha256(first.read_bytes()).hexdigest()
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0, case="qi")
+    with pytest.raises(ValueError, match="campaign identity differs"):
+        replay._load_replay_traces([first, second])
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=8.0)
+    with pytest.raises(ValueError, match="not a contiguous continuation"):
+        replay._load_replay_traces([first, second])
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0, dirty=1)
+    with pytest.raises(ValueError, match="not pinned to a clean GKX commit"):
+        replay._load_replay_traces([first, second])
+
+    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0)
+    for path in (first, second):
+        with np.load(path, allow_pickle=False) as archive:
+            legacy = {name: archive[name] for name in archive.files}
+        legacy.pop("campaign_identity_schema")
+        np.savez_compressed(path, **legacy)
+    with pytest.raises(ValueError, match="legacy continuation replay requires"):
+        replay._load_replay_traces([first, second])
+
+    def write_summary(path: Path, trace_path: Path, *, case: str = "qa") -> None:
+        with np.load(trace_path, allow_pickle=False) as archive:
+            samples = [
+                {"t": t, "heat_flux": q, "Wphi": wphi, "Wg": wg}
+                for t, q, wphi, wg in zip(
+                    archive["time"],
+                    archive["heat_flux"],
+                    archive["Wphi"],
+                    archive["Wg"],
+                )
+            ]
+            previous_t_end = float(archive["previous_t_end"])
+        path.write_text(
+            json.dumps(
+                {
+                    "source_provenance": {
+                        "git_commit": "abc123",
+                        "git_dirty": False,
+                    },
+                    "previous_t_end": previous_t_end,
+                    "case": case,
+                    "grid": {"Nx": 2, "Ny": 2, "Nz": 2},
+                    "geometry_override": {"vmec_file": "equilibrium.nc"},
+                    "random_seed": 31,
+                    "alpha": 0.0,
+                    "npol": 1.0,
+                    "trace": samples,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    first_summary = tmp_path / "first.json"
+    second_summary = tmp_path / "second.json"
+    write_summary(first_summary, first)
+    write_summary(second_summary, second)
+    replay._load_replay_traces([first, second], [first_summary, second_summary])
+
+    write_summary(second_summary, second, case="qi")
+    with pytest.raises(ValueError, match="campaign identity differs"):
+        replay._load_replay_traces([first, second], [first_summary, second_summary])
+
+
+def test_saturation_campaign_rejects_a_mixed_continuation_state(tmp_path: Path) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    provenance = campaign._campaign_source_provenance(
+        ROOT / "src" / "gkx" / "__init__.py"
+    )
+    provenance["git_dirty"] = False
+    identity = {
+        name: np.asarray(value)
+        for name, value in {
+            "campaign_identity_schema": "gkx_nonlinear_campaign_v1",
+            "case": "qa.toml",
+            "input_sha256": "deck",
+            "vmec_sha256": "equilibrium",
+            "Nx": 2,
+            "Ny": 2,
+            "Nz": 2,
+            "Nl": 1,
+            "Nm": 1,
+            "random_seed": 31,
+            "alpha": "0.0",
+            "npol": "1.0",
+        }.items()
+    }
+    state = tmp_path / "state.npz"
+    np.savez_compressed(
+        state,
+        state=np.zeros((1, 1, 1, 2, 2, 2)),
+        t_end=10.0,
+        **identity,
+        **campaign._npz_source_provenance(provenance),
+    )
+
+    loaded, t_end = campaign._load_continuation_state(
+        state,
+        expected_shape=(1, 1, 1, 2, 2, 2),
+        expected_identity=identity,
+        source_provenance=provenance,
+    )
+    assert loaded.shape == (1, 1, 1, 2, 2, 2)
+    assert t_end == 10.0
+
+    v2_expected = dict(identity)
+    v2_expected.update(
+        campaign_identity_schema=np.asarray("gkx_nonlinear_campaign_v2"),
+        time_fixed_dt=np.asarray(False),
+        time_dt=np.asarray(0.1),
+        time_dt_max=np.asarray("None"),
+        time_cfl=np.asarray(1.0),
+        time_method=np.asarray("rk3"),
+    )
+    campaign._load_continuation_state(
+        state,
+        expected_shape=(1, 1, 1, 2, 2, 2),
+        expected_identity=v2_expected,
+        source_provenance=provenance,
+    )
+
+    identity["case"] = np.asarray("qi.toml")
+    with pytest.raises(SystemExit, match="campaign identity does not match"):
+        campaign._load_continuation_state(
+            state,
+            expected_shape=(1, 1, 1, 2, 2, 2),
+            expected_identity=identity,
+            source_provenance=provenance,
+        )
+
+
+def test_saturation_campaign_rejects_a_timestep_mismatched_state(
+    tmp_path: Path,
+) -> None:
+    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
+    provenance = campaign._campaign_source_provenance(
+        ROOT / "src" / "gkx" / "__init__.py"
+    )
+    provenance["git_dirty"] = False
+    identity = {
+        name: np.asarray(value)
+        for name, value in {
+            "campaign_identity_schema": "gkx_nonlinear_campaign_v2",
+            "case": "qa.toml",
+            "input_sha256": "deck",
+            "vmec_sha256": "equilibrium",
+            "Nx": 2,
+            "Ny": 2,
+            "Nz": 2,
+            "Nl": 1,
+            "Nm": 1,
+            "random_seed": 31,
+            "alpha": "0.0",
+            "npol": "1.0",
+            "time_fixed_dt": False,
+            "time_dt": 0.1,
+            "time_dt_max": "None",
+            "time_cfl": 1.0,
+            "time_method": "rk3",
+        }.items()
+    }
+    state = tmp_path / "state.npz"
+    np.savez_compressed(
+        state,
+        state=np.zeros((1, 1, 1, 2, 2, 2)),
+        t_end=10.0,
+        **identity,
+        **campaign._npz_source_provenance(provenance),
+    )
+
+    expected = dict(identity)
+    expected["time_cfl"] = np.asarray(0.5)
+    with pytest.raises(SystemExit, match="campaign identity does not match"):
+        campaign._load_continuation_state(
+            state,
+            expected_shape=(1, 1, 1, 2, 2, 2),
+            expected_identity=expected,
+            source_provenance=provenance,
+        )
+
+
+def test_output_target_checker_accepts_near_horizon_and_rejects_partial_bundle(
+    tmp_path: Path, monkeypatch
+) -> None:
+    output = tmp_path / "run.out.nc"
+    _touch_bundle(output)
+
+    monkeypatch.setattr(output_target, "_read_output_tmax", lambda _path: 1499.927)
+    accepted = output_target.build_target_time_report(
+        output=output, target_time=1500.0, time_tolerance=0.1
+    )
+    assert accepted["bundle_complete"] is True
+    assert accepted["target_time_confirmed"] is True
+
+    monkeypatch.setattr(output_target, "_read_output_tmax", lambda _path: 400.0)
+    rejected = output_target.build_target_time_report(
+        output=output, target_time=1500.0, time_tolerance=0.1
+    )
+    assert rejected["bundle_complete"] is True
+    assert rejected["target_time_confirmed"] is False
+
+
+def test_output_target_checker_cli_and_direct_help_contracts(
+    tmp_path: Path, monkeypatch
+) -> None:
+    output = tmp_path / "run.out.nc"
+    _touch_bundle(output)
+    monkeypatch.setattr(output_target, "_read_output_tmax", lambda _path: 19.95)
+
+    assert (
+        output_target.main(
+            [
+                "target-time",
+                "--output",
+                str(output),
+                "--target-time",
+                "20",
+                "--time-tolerance",
+                "0.1",
+                "--quiet",
+            ]
+        )
+        == 0
+    )
+    assert (
+        output_target.main(
+            [
+                "target-time",
+                "--output",
+                str(output),
+                "--target-time",
+                "20",
+                "--time-tolerance",
+                "0.01",
+                "--quiet",
+            ]
+        )
+        == 1
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(OUTPUT_TARGET_SCRIPT), "target-time", "--help"],
+        cwd=ROOT,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0
+    assert "--target-time" in result.stdout
+
+
+def _window_report(offset: float, *, case: str) -> dict[str, object]:
+    t = np.linspace(0.0, 200.0, 201)
+    heat = 4.0 + offset + 0.04 * np.sin(2.0 * np.pi * t / 10.0)
+    return nonlinear_window_convergence_report(
+        t,
+        heat,
+        case=case,
+        source_artifact=f"{case}.csv",
+        config=NonlinearWindowConvergenceConfig(
+            transient_fraction=0.5,
+            min_samples=64,
+            min_blocks=4,
+            max_running_mean_rel_drift=0.02,
+            max_sem_rel=0.02,
+        ),
+    )
+
+
+def test_matched_transport_requires_converged_windows_and_resolved_reduction() -> None:
+    baseline = _window_report(0.5, case="baseline")
+    treatment = _window_report(0.0, case="flow_shear")
+    report = matched_nonlinear_transport_report(
+        baseline,
+        treatment,
+        case="flow_shear_transport",
+        treatment_name="gamma_e_0p01",
+        min_relative_reduction=0.05,
+        min_uncertainty_z_score=2.0,
+    )
+    assert report["passed"] is True
+    assert report["statistics"]["relative_reduction"] > 0.1
+    assert report["statistics"]["uncertainty_z_score"] > 2.0
+
+    drifting_t = np.linspace(0.0, 200.0, 201)
+    drifting_heat = 4.0 + 0.01 * drifting_t
+    drifting = nonlinear_window_convergence_report(
+        drifting_t,
+        drifting_heat,
+        case="drifting_treatment",
+        source_artifact="drifting_treatment.csv",
+        config=NonlinearWindowConvergenceConfig(
+            transient_fraction=0.5,
+            min_samples=64,
+            min_blocks=4,
+            max_running_mean_rel_drift=0.02,
+            max_terminal_mean_rel_delta=0.02,
+        ),
+    )
+    rejected = matched_nonlinear_transport_report(baseline, drifting)
+    assert rejected["passed"] is False
+    assert rejected["windows_ready"] is False
+    failed = {gate["metric"] for gate in rejected["gates"] if not gate["passed"]}
+    assert "treatment_window_passed" in failed
+
+
+def test_matched_transport_cli_writes_fail_closed_report(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline.json"
+    treatment = tmp_path / "treatment.json"
+    baseline.write_text(
+        json.dumps(_window_report(0.5, case="baseline")), encoding="utf-8"
+    )
+    treatment.write_text(
+        json.dumps(_window_report(0.0, case="flow_shear")), encoding="utf-8"
+    )
+    output = tmp_path / "matched.json"
+
+    rc = window_ensemble.main(
+        [
+            "matched-windows",
+            "--baseline",
+            str(baseline),
+            "--treatment",
+            str(treatment),
+            "--out-json",
+            str(output),
+            "--min-relative-reduction",
+            "0.05",
+            "--min-uncertainty-z-score",
+            "2.0",
+        ]
+    )
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert rc == 0
+    assert payload["kind"] == "matched_nonlinear_transport_comparison"
+    assert payload["passed"] is True
+
+
+def test_fixed_step_flow_shear_artifact_preserves_negative_evidence() -> None:
+    payload = json.loads(FLOW_SHEAR_GATE.read_text(encoding="utf-8"))
+
+    assert payload["passed"] is False
+    assert payload["conclusion"]["input_file_exposure_allowed"] is False
+    assert payload["configuration"]["time"]["analysis_window"] == [240.0, 300.0]
+
+    internal = payload["gkx_gk"]
+    comparison = payload["comparison"]
+    assert internal["baseline_window"]["passed"] is False
+    assert internal["treatment_window"]["passed"] is False
+    assert internal["matched"]["statistics"]["relative_reduction"] < 0.0
+    assert comparison["baseline_window"]["passed"] is True
+    assert comparison["treatment_window"]["passed"] is True
+    assert comparison["matched"]["statistics"]["relative_reduction"] < -0.20
+    assert comparison["matched"]["statistics"]["uncertainty_z_score"] < -2.0
+
+
+def test_nonlinear_window_ensemble_tool_writes_json_png_and_fails_closed(
+    tmp_path: Path,
+) -> None:
+    reports = []
+    for idx, offset in enumerate((-0.02, 0.0, 0.02)):
+        path = tmp_path / f"seed_{idx}.json"
+        path.write_text(
+            json.dumps(_window_report(offset, case=f"seed_{idx}")), encoding="utf-8"
+        )
+        reports.append(path)
+
+    out_json = tmp_path / "ensemble.json"
+    out_png = tmp_path / "ensemble.png"
+    rc = window_ensemble.main(
+        [
+            "ensemble",
+            *[str(path) for path in reports],
+            "--out-json",
+            str(out_json),
+            "--out-png",
+            str(out_png),
+            "--case",
+            "seed_replicates",
+            "--comparison",
+            "random_seed_replicates",
+            "--min-reports",
+            "3",
+            "--max-mean-rel-spread",
+            "0.02",
+            "--max-combined-sem-rel",
+            "0.02",
+        ]
+    )
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert rc == 0
+    assert out_png.exists()
+    assert payload["passed"] is True
+    assert payload["comparison"] == "random_seed_replicates"
+    assert payload["statistics"]["n_reports"] == 3
+
+    paths = []
+    for idx, offset in enumerate((0.0, 2.0)):
+        path = tmp_path / f"dt_{idx}.json"
+        path.write_text(
+            json.dumps(_window_report(offset, case=f"dt_{idx}")), encoding="utf-8"
+        )
+        paths.append(path)
+
+    failed_json = tmp_path / "ensemble_failed.json"
+    rc = window_ensemble.main(
+        [
+            "ensemble",
+            *[str(path) for path in paths],
+            "--out-json",
+            str(failed_json),
+            "--max-mean-rel-spread",
+            "0.05",
+        ]
+    )
+    failed_payload = json.loads(failed_json.read_text(encoding="utf-8"))
+    failed = {gate["metric"] for gate in failed_payload["gates"] if not gate["passed"]}
+    assert rc == 1
+    assert "mean_relative_spread" in failed
+
+
+def _write_trace(path: Path, offset: float = 0.0) -> None:
+    t = np.linspace(0.0, 100.0, 101)
+    heat = 5.0 + offset + 0.02 * np.sin(2.0 * np.pi * t / 10.0)
+    lines = ["t,heat_flux"]
+    lines.extend(f"{time:.12g},{value:.12g}" for time, value in zip(t, heat))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_window_summary(
+    path: Path,
+    trace: Path,
+    *,
+    case: str = "case_a",
+    seed: int | None = None,
+    timestep: float | None = None,
+) -> Path:
+    payload: dict[str, object] = {
+        "kind": "nonlinear_window_summary",
+        "case": case,
+        "gkx": trace.name,
+        "tmin": 50.0,
+        "tmax": 100.0,
+        "promotion_gate": {"passed": True},
+    }
+    if seed is not None:
+        payload["seed"] = seed
+    if timestep is not None:
+        payload["dt"] = timestep
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_readiness_tool_writes_reports_and_requires_seed_timestep_replicates(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "trace.csv"
+    _write_trace(trace)
+    summary = _write_window_summary(tmp_path / "summary.json", trace)
+    out_json = tmp_path / "manifest.json"
+    reports_dir = tmp_path / "reports"
+
+    rc = window_readiness.main(
+        [
+            "readiness",
+            str(summary),
+            "--out-json",
+            str(out_json),
+            "--reports-dir",
+            str(reports_dir),
+        ]
+    )
+    payload = json.loads(out_json.read_text(encoding="utf-8"))
+    assert rc == 1
+    assert payload["passed"] is False
+    assert (reports_dir / "summary.convergence.json").exists()
+    assert payload["observed_artifacts"][0]["promotion_ready"] is True
+    missing_axes = {item["variant_axis"] for item in payload["missing_artifacts"]}
+    assert missing_axes == {"seed", "timestep"}
+    assert all(item["missing_count"] == 2 for item in payload["missing_artifacts"])
+
+    summaries = []
+    for idx, (seed, timestep, offset) in enumerate(
+        ((11, 0.02, -0.01), (22, 0.01, 0.01))
+    ):
+        trace = tmp_path / f"trace_{idx}.csv"
+        _write_trace(trace, offset=offset)
+        summaries.append(
+            _write_window_summary(
+                tmp_path / f"summary_{idx}.json",
+                trace,
+                seed=seed,
+                timestep=timestep,
+            )
+        )
+    passed_json = tmp_path / "manifest_passed.json"
+    rc = window_readiness.main(
+        [
+            "readiness",
+            *[str(path) for path in summaries],
+            "--out-json",
+            str(passed_json),
+        ]
+    )
+    passed_payload = json.loads(passed_json.read_text(encoding="utf-8"))
+    assert rc == 0
+    assert passed_payload["passed"] is True
+    assert passed_payload["missing_artifacts"] == []
+    assert (
+        passed_payload["cases"][0]["variant_axes"]["seed"]["observed_distinct_count"]
+        == 2
+    )
+    assert (
+        passed_payload["cases"][0]["variant_axes"]["timestep"][
+            "observed_distinct_count"
+        ]
+        == 2
+    )
