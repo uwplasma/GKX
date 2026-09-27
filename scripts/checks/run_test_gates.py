@@ -17,9 +17,8 @@ from typing import cast
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEST_DIR = REPO_ROOT / "tests"
 COVERAGE_DATA_RE = re.compile(r"^\.coverage\.shard-(?P<shard>[0-9]+)\.")
-#: Seconds each file takes under coverage on a hosted ubuntu runner, read from
-#: ``--durations`` in CI run MEASURED_RUN. The shard planner packs files
-#: longest-first on these numbers; a file not listed costs
+#: Seconds per file under coverage on a hosted ubuntu runner (pytest ``--durations``).
+#: The planner packs files longest-first on these; an unlisted file costs
 #: ``DEFAULT_TEST_SECONDS``. Re-measure when a shard drifts far from the rest.
 WIDE_COVERAGE_SECONDS: dict[str, float] = {
     "test_parallel_linear_velocity.py": 1040,
@@ -530,6 +529,17 @@ def parse_wide_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _combine(args: argparse.Namespace) -> int:
+    """Combine shard coverage data, write the XML and enforce the floor."""
+
+    coverage = [sys.executable, "-m", "coverage"]
+    _run([*coverage, "combine"], timeout=120, cwd=REPO_ROOT)
+    _run([*coverage, "xml", "-o", str(args.xml)], timeout=120, cwd=REPO_ROOT)
+    floor = f"--fail-under={float(args.fail_under):.6g}"
+    _run([*coverage, "report", floor], timeout=120, cwd=REPO_ROOT)
+    return 0
+
+
 def main_wide(argv: list[str] | None = None) -> int:
     args = parse_wide_args(argv)
     test_dir = _resolve_test_dir(args.test_dir)
@@ -560,24 +570,7 @@ def main_wide(argv: list[str] | None = None) -> int:
             raise SystemExit(
                 "wide coverage shard validation failed: " + "; ".join(failures)
             )
-        _run([sys.executable, "-m", "coverage", "combine"], timeout=120, cwd=REPO_ROOT)
-        _run(
-            [sys.executable, "-m", "coverage", "xml", "-o", str(args.xml)],
-            timeout=120,
-            cwd=REPO_ROOT,
-        )
-        _run(
-            [
-                sys.executable,
-                "-m",
-                "coverage",
-                "report",
-                f"--fail-under={float(args.fail_under):.6g}",
-            ],
-            timeout=120,
-            cwd=REPO_ROOT,
-        )
-        return 0
+        return _combine(args)
 
     if args.only_shard is not None and not (1 <= int(args.only_shard) <= len(shards)):
         raise SystemExit(f"--only-shard must be in [1, {len(shards)}]")
@@ -592,17 +585,8 @@ def main_wide(argv: list[str] | None = None) -> int:
     for idx, shard in selected:
         if not shard:
             continue
-        pytest_cmd = [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-q",
-            "--maxfail=1",
-            "--disable-warnings",
-            "--cov=gkx",
-            "--cov-report=",
-            *args.pytest_arg,
-        ]
+        flags = "-q --maxfail=1 --disable-warnings --cov=gkx --cov-report="
+        pytest_cmd = [sys.executable, "-m", "pytest", *flags.split(), *args.pytest_arg]
         shard_env = wide_coverage_environment(shard) or os.environ.copy()
         batches = wide_coverage_shard_batches(shard, pytest_args=list(args.pytest_arg))
         for batch_idx, batch in enumerate(batches, start=1):
@@ -622,27 +606,7 @@ def main_wide(argv: list[str] | None = None) -> int:
                 env=shard_env,
             )
 
-    if args.skip_combine:
-        return 0
-
-    _run([sys.executable, "-m", "coverage", "combine"], timeout=120, cwd=REPO_ROOT)
-    _run(
-        [sys.executable, "-m", "coverage", "xml", "-o", str(args.xml)],
-        timeout=120,
-        cwd=REPO_ROOT,
-    )
-    _run(
-        [
-            sys.executable,
-            "-m",
-            "coverage",
-            "report",
-            f"--fail-under={float(args.fail_under):.6g}",
-        ],
-        timeout=120,
-        cwd=REPO_ROOT,
-    )
-    return 0
+    return 0 if args.skip_combine else _combine(args)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

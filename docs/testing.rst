@@ -119,8 +119,11 @@ CI jobs
 -------
 
 ``.github/workflows/ci.yml`` runs these jobs on every push and pull request.
-All Python jobs use 3.11. Each job installs for itself; the only ``needs:``
-edge is ``wide-coverage`` on ``wide-coverage-shards``.
+All Python jobs use 3.11 and install through ``.github/actions/setup``: uv
+with a cached wheel store, and, for the test jobs, a JAX persistent
+compilation cache restored per job and saved whenever ``src/`` or ``tests/``
+change. Each job installs for itself; the only ``needs:`` edge is
+``wide-coverage`` on ``wide-coverage-shards``.
 
 .. list-table::
    :header-rows: 1
@@ -142,11 +145,6 @@ edge is ``wide-coverage`` on ``wide-coverage-shards``.
        and the ``tomllib`` portability gates.
    * - ``mypy``
      - ``mypy``.
-   * - ``quick-tests``
-     - Seven named shards: ``fundamentals-core``, ``release-artifacts``,
-       ``model-artifacts``, ``linear-core``, ``runtime-core``,
-       ``nonlinear-core``, ``parallel-autodiff`` (the last with four logical
-       CPU devices).
    * - ``adaptive-eigensolver``
      - Paired eigenmode and implicit-AD gates against the released SOLVAX
        (``GKX_REQUIRE_PAIRED_SOLVAX=1`` turns a missing API into an error).
@@ -155,8 +153,12 @@ edge is ``wide-coverage`` on ``wide-coverage-shards``.
        ``plotting.py``, ``workflows/runtime/artifacts.py``, and
        ``analysis.py``.
    * - ``wide-coverage-shards``
-     - 24 shards of ``scripts/checks/run_test_gates.py wide-coverage`` with
-       ``-o addopts= -m "not slow"``.
+     - The test lane: 8 shards of ``scripts/checks/run_test_gates.py
+       wide-coverage --workers 4`` with ``-o addopts= -m "not slow"``. Every
+       non-``slow`` test runs once, at float64, under coverage, across four
+       pytest-xdist workers. Shards are packed on the measured per-file seconds
+       in ``WIDE_COVERAGE_SECONDS``; files that need logical CPU devices get
+       four.
    * - ``wide-coverage``
      - Combines the shard data (every shard must report), enforces >= 95%
        package-wide, and writes
@@ -196,7 +198,7 @@ The wide gate runs locally with the same helper. One process:
 .. code-block:: bash
 
    python scripts/checks/run_test_gates.py wide-coverage \
-     --shards 24 --timeout 1800 --fail-under 95 \
+     --shards 8 --workers 4 --timeout 1800 --fail-under 95 \
      --pytest-arg=-o --pytest-arg=addopts= \
      --pytest-arg=-m --pytest-arg="not slow"
 
@@ -205,18 +207,19 @@ Or shard by shard, then combine, as CI does:
 .. code-block:: bash
 
    python -m coverage erase
-   for shard in $(seq 1 24); do
+   for shard in $(seq 1 8); do
      python scripts/checks/run_test_gates.py wide-coverage \
-       --shards 24 --timeout 1800 --only-shard "${shard}" \
+       --shards 8 --workers 4 --timeout 1800 --only-shard "${shard}" \
        --keep-existing-coverage --skip-combine \
        --pytest-arg=-o --pytest-arg=addopts= \
        --pytest-arg=-m --pytest-arg="not slow"
    done
    python scripts/checks/run_test_gates.py wide-coverage \
-     --shards 24 --combine-only --fail-under 95
+     --shards 8 --combine-only --fail-under 95
 
-The shard that owns the logical-CPU file runs all of its device gates at four
-devices in one command, which is why CI uses ``--timeout 1800``.
+A shard that owns a logical-CPU file runs all of its device gates at four
+devices; a lone file in a command is spread test by test over the workers,
+several files are spread file by file so each keeps its in-process compiles.
 
 Contracts a local ``pytest`` cannot catch
 -----------------------------------------
