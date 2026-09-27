@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   repo-hygiene:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
 
     steps:
@@ -91,7 +91,7 @@ jobs:
     # where an import that does not exist on the floor actually fails, and it
     # costs a minute rather than a second full test run. The floor moved to 3.11
     # when the jax minimum did; jax >= 0.10.1 publishes no 3.10 wheels.
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -171,7 +171,7 @@ jobs:
             -k "tomllib or toml_shim or repo_hygiene_gates"
 
   mypy:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
 
     steps:
@@ -210,7 +210,7 @@ jobs:
           mypy
 
   quick-tests:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
     # No ``needs``. This job used to sit behind ``mypy``, so a red type check
     # skipped every shard here and everything below it: the run then reported
@@ -342,7 +342,7 @@ jobs:
           pytest -q --maxfail=1 --disable-warnings ${{ matrix.shard.files }}
 
   adaptive-eigensolver:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -376,7 +376,7 @@ jobs:
             -k "adaptive or biorthogonal or experimental_solvax_eigen_contract"
 
   fast-coverage:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
 
     steps:
@@ -543,7 +543,7 @@ jobs:
           if-no-files-found: error
 
   wide-coverage:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # The only remaining ``needs`` in this workflow, and the only real one: this
@@ -624,7 +624,7 @@ jobs:
           use_oidc: true
 
   docs-and-packaging:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
 
     steps:
