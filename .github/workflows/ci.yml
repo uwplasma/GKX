@@ -31,8 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -98,23 +97,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python at the declared requires-python floor
-        uses: actions/setup-python@v6
+      - uses: ./.github/actions/setup
         with:
-          python-version: "3.11"
-
-      - name: Cache pip
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-3.11-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-3.11-
-
-      - name: Install build + runtime deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          jax-cache: python-floor
 
       - name: Confirm the floor really is the floor
         run: |
@@ -177,169 +162,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
-      - name: Cache pip
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install build + runtime deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Print benchmark stack
-        run: |
-          python - <<'PY'
-          import jax, jaxlib, numpy
-          print("jax", jax.__version__)
-          print("jaxlib", jaxlib.__version__)
-          print("numpy", numpy.__version__)
-          PY
+      - uses: ./.github/actions/setup
 
       - name: MyPy (types)
         run: |
           mypy --version
           mypy
-
-  quick-tests:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    # No ``needs``. This job used to sit behind ``mypy``, so a red type check
-    # skipped every shard here and everything below it: the run then reported
-    # no test signal instead of a failing one, and #62 merged to main with
-    # seven genuine NameErrors in src/gkx/parallel/integrators.py. Types and
-    # tests are independent signals; both are required by the ci-required gate
-    # at the bottom of this file, and neither may stand in for the other.
-    #
-    # Most shards retain a 15-minute budget. nonlinear-core has completed all
-    # assertions after 14 minutes on hosted runners, so reserve five minutes
-    # of setup and cleanup margin for that shard without relaxing the others.
-    # Consolidation made these lanes coarser: a lane names files, and merged
-    # files carry more tests than the ones they absorbed. nonlinear-core hit its
-    # 20-minute ceiling at 20.2 minutes once test_runtime_artifacts.py grew from
-    # 1,919 to 4,212 lines, so that file moved to runtime-core, where it belongs
-    # and which had headroom at 8.5 minutes. Both lanes now get 20 so a further
-    # absorption does not silently reintroduce a timeout.
-    # Shedding the runtime file was not enough on its own: the rebalanced lane
-    # still measured 18.4 minutes against a 20-minute ceiling in run
-    # 33398917781, because the nonlinear tests are the slow part and the move
-    # bought only about 1.8 minutes. Eight per cent headroom flakes on a slow
-    # runner, so nonlinear-core gets 30: the lane does roughly 18 minutes of
-    # genuine work and the cap should sit above that, not just above it.
-    # linear-core crossed the 15-minute cap on this chain and was one commit
-    # from crossing it on main: the same shard measured 11m40s on 254fcc7b7
-    # (19 Sep), 14m29s on 38d7c4277 (20 Sep) and timed out here, which
-    # GitHub reports as a cancelled job rather than a failure. The lane grew
-    # with the tests it carries, so the cap moves to 25 and the shard split
-    # is the follow-up; 25 sits above the 14-15 minutes of genuine work
-    # rather than just above it.
-    timeout-minutes: ${{ matrix.shard.name == 'nonlinear-core' && 30 || (matrix.shard.name == 'runtime-core' && 20 || 25) }}
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        shard:
-          - name: fundamentals-core
-            files: >-
-              tests/unit/diagnostics/test_analysis.py
-              tests/unit/diagnostics/test_timestep_cost.py
-              tests/unit/core/test_core_numerics.py
-              tests/unit/geometry/test_geometry.py
-              tests/unit/diagnostics/test_plotting.py
-          - name: release-artifacts
-            files: >-
-              tests/release/test_release_gates.py
-          - name: model-artifacts
-            files: >-
-              tests/unit/quasilinear/test_quasilinear.py
-              tests/validation/quasilinear/test_quasilinear_calibration.py
-              tests/tools/profiling/test_runtime_and_scaling_profile_contracts.py
-              tests/unit/parallel/test_parallel_artifacts.py
-          - name: linear-core
-            files: >-
-              tests/unit/linear/test_linear.py
-              tests/unit/linear/test_dimits_threshold_extraction.py
-              tests/validation/physics_gates/test_hermite_hierarchy_physics.py
-              tests/unit/linear/test_linear_param_units.py
-              tests/unit/operators/test_operator_kernels.py
-              tests/unit/operators/test_terms_assembly.py
-              tests/unit/operators/test_terms_fields.py
-              tests/unit/solvers/test_time_integrators.py
-              tests/unit/operators/test_linear_streaming.py
-              tests/unit/solvers/test_linear_krylov_core.py
-          - name: runtime-core
-            files: >-
-              tests/integration/runtime/test_runtime_config.py
-              tests/integration/runtime/test_runtime_runner.py
-              tests/unit/solvers/test_runners_and_orchestration.py
-              tests/integration/runtime/test_cli.py
-              tests/integration/runtime/test_runtime_artifacts.py
-              tests/integration/examples/test_examples.py
-          - name: nonlinear-core
-            files: >-
-              tests/unit/nonlinear/test_nonlinear.py
-              tests/unit/nonlinear/test_nonlinear_helpers_extra.py
-              tests/unit/nonlinear/test_nonlinear_exb.py
-              tests/validation/benchmarks/test_benchmark_contracts.py
-          - name: parallel-autodiff
-            # Logical CPU devices so the sharded nonlinear routing gates run
-            # here instead of skipping until wide coverage.
-            xla_flags: "--xla_force_host_platform_device_count=4"
-            files: >-
-              tests/unit/parallel/test_parallel_core.py
-              tests/unit/parallel/test_parallel_nonlinear_routing.py
-              tests/unit/solvers/test_runners_and_orchestration.py
-              tests/tools/profiling/test_nonlinear_sharding_profile_contracts.py
-              tests/unit/objectives/test_autodiff_solver_objectives.py
-              tests/unit/objectives/test_differentiable_geometry_objectives.py
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
-      - name: Cache pip
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install build + runtime deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Print benchmark stack
-        run: |
-          python - <<'PY'
-          import jax, jaxlib, numpy
-          print("jax", jax.__version__)
-          print("jaxlib", jaxlib.__version__)
-          print("numpy", numpy.__version__)
-          PY
-
-      - name: Pytest shard (${{ matrix.shard.name }})
-        env:
-          MPLBACKEND: Agg
-          JAX_ENABLE_X64: "true"
-          GKX_X64: "1"
-          # Empty for every shard that does not opt in to logical CPU devices.
-          XLA_FLAGS: ${{ matrix.shard.xla_flags }}
-        run: |
-          pytest -q --maxfail=1 --disable-warnings ${{ matrix.shard.files }}
 
   adaptive-eigensolver:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -349,15 +177,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: ./.github/actions/setup
         with:
-          python-version: "3.11"
-
-      - name: Install GKX with released SOLVAX
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          jax-cache: adaptive-eigensolver
 
       - name: Paired eigenmode and implicit-AD gates
         env:
@@ -382,23 +204,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: ./.github/actions/setup
         with:
-          python-version: "3.11"
-
-      - name: Cache pip
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install build + runtime deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          jax-cache: fast-coverage
 
       - name: Release-surface coverage (>=95%)
         env:
@@ -464,51 +272,37 @@ jobs:
           use_oidc: true
 
   wide-coverage-shards:
+    # The test lane. Every test not marked ``slow`` runs here exactly once, at
+    # float64, under coverage; the shards are packed on measured per-file cost
+    # by scripts/checks/run_test_gates.py and each runs its files across four
+    # pytest-xdist workers, one per runner core. The files that need logical
+    # CPU devices get four of them from the same planner. There is no separate
+    # uncovered test lane: it ran the same tests a second time.
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # The logical-CPU owner now runs whole at four devices, so its shard costs
-    # roughly fifteen times the single-device run it replaces: nine to sixteen
-    # minutes measured locally, with or without coverage tracing. Its tests
-    # share one JAX compilation cache, so it must stay a single command, and
-    # the per-command timeout is sized for that rather than for a file of
-    # ordinary unit tests.
-    timeout-minutes: 45
+    timeout-minutes: 30
     strategy:
       fail-fast: false
-      max-parallel: 8
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: ./.github/actions/setup
         with:
-          python-version: "3.11"
+          jax-cache: wide-${{ matrix.shard }}-of-8
 
-      - name: Cache pip
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install build + runtime deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Wide package coverage shard ${{ matrix.shard }}/24
+      - name: Wide package coverage shard ${{ matrix.shard }}/8
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
         run: |
           python scripts/check.py test-gates wide-coverage \
-            --shards 24 \
-            --timeout 1800 \
+            --shards 8 \
+            --workers 4 \
+            --timeout 1500 \
             --only-shard "${{ matrix.shard }}" \
             --skip-combine \
             --pytest-arg=-o \
@@ -553,23 +347,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
-      - name: Cache pip
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install coverage deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+      - uses: ./.github/actions/setup
 
       - name: Download wide coverage shard data
         uses: actions/download-artifact@v8
@@ -586,7 +364,7 @@ jobs:
         run: |
           find coverage-wide-artifacts -name '*.tgz' -print -exec tar -xzf {} \;
           python scripts/check.py test-gates wide-coverage \
-            --shards 24 \
+            --shards 8 \
             --combine-only \
             --require-shard-data \
             --shard-manifest coverage-wide-shard-manifest.json \
@@ -628,23 +406,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: ./.github/actions/setup
         with:
-          python-version: "3.11"
-
-      - name: Cache pip
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install docs + release deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          jax-cache: docs-and-packaging
 
       - name: Build docs
         run: |
@@ -748,7 +512,6 @@ jobs:
       - repo-hygiene
       - python-floor
       - mypy
-      - quick-tests
       - adaptive-eigensolver
       - fast-coverage
       - wide-coverage-shards
@@ -771,32 +534,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
-      - name: Cache pip
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install build + runtime deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Print benchmark stack
-        run: |
-          python - <<'PY'
-          import jax, jaxlib, numpy
-          print("jax", jax.__version__)
-          print("jaxlib", jaxlib.__version__)
-          print("numpy", numpy.__version__)
-          PY
+      - uses: ./.github/actions/setup
 
       - name: MyPy (types)
         run: |

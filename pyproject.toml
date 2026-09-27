@@ -62,6 +62,7 @@ release = [
 dev = [
   "pytest",
   "pytest-cov",
+  "pytest-xdist",
   # Pinned: ruff's default rule set is not stable across releases, so an
   # unpinned dev install lints this tree against whatever rules the newest
   # ruff happens to default to. See [tool.ruff.lint] below.
