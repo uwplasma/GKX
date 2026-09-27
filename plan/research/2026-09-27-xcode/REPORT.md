@@ -39,7 +39,7 @@ Final-sample gamma of the repaired build against the upstream golden (`results/g
 **GKX against the repaired goldens.**
 - The certified adaptive eigenpairs (Q20, Nl16/Nm48, residual ≤ 1e-13) agree with the repaired build to 0.05% at s-α ky .30 (0.093091 vs 0.093049) and at Miller ky .55 (0.125975 vs 0.125906).
 - The shipped parity table `docs/_static/cyclone_mismatch_table.csv` is a time-trace fit. Against the same golden it is 8.3% high at ky .15 and 8.5% low at ky .20.
-- The headline disagreement is therefore a property of that fitted table, not of the GKX eigenvalue. Section 5 lists the certified eigenpairs at the other ky.
+- The headline disagreement is therefore a property of that fitted table, not of the GKX eigenvalue. Section 5 confirms this at six more points: the certified eigenpairs are within 0.3% of the repaired build everywhere except Miller ky .15 (+1.45%).
 
 ## 2. VAL-XCODE: stella's 1.4x on Cyclone, term by term (circular Miller, ky = 0.30)
 
@@ -47,9 +47,9 @@ Every code runs the same physics (Q20 case M): stella on the r1 grid (converged 
 
 | Variant | GS2 γ | stella γ | GKX γ (Nl8/Nm24) | GKX γ (Nl16/Nm48) |
 |---|---:|---:|---:|---:|
-| base | 0.12546 | 0.17481 | 0.12865 | section 5 |
+| base | 0.12546 | 0.17481 | 0.12865 | 0.12585 |
 | mirror off | — (no knob) | 0.17536 (+0.3%) | 0.11115 (−13.6%) | 0.10977 |
-| both drifts off | decays, unsettled at t = 300 | decays, unsettled | 0.02937 | 0.02791 |
+| both drifts off | 0.0124 at t = 1500 (growing, unsettled) | decays to t = 1500 | 0.02937 | 0.02791 |
 | drifts and mirror off | — | φ vanishes | 0.01392 | — |
 | stella mirror explicit | — | 0.17481 (identical) | — | — |
 | stella mirror implicit, semi-Lagrange off | — | 0.17483 (+0.01%) | — | — |
@@ -63,9 +63,8 @@ Every code runs the same physics (Q20 case M): stella on the r1 grid (converged 
 
 **Finding 2: the no-drift limit differs between codes.**
 - With both drifts off, GKX keeps a weakly unstable slab branch: γ = 0.028, converged to 5% between Nl8/Nm24 and Nl16/Nm48.
-- GS2 and stella decay over t = 300 code units without settling.
-- Longer runs (t = 1500 code units, `gap_*_nodrift_t1500`) will show whether the grid codes have the same branch at a smaller rate, or none.
-- Until those finish, this is an open cross-code difference, not a GKX bug.
+- Run to t = 1500 code units, GS2 shows a growing branch too: γ ≈ 0.012, still drifting 9% over the last window, ω 0.053 against GKX's 0.130. stella's field decays through t = 1500.
+- So two of the three codes have the slab branch. The GS2–GKX rate difference in this weakly driven limit is open, and stella's absence of the branch matches its insensitivity to the mirror term.
 
 **Next step for the stella excess.** The mirror scheme and the velocity box are ruled out (table above). What remains is to compare stella's mirror coefficient array (`mirror` in `gk_mirror.f90`, built from `dbdzed` and `gradpar`) against GS2's and GKX's `bgrad` on this surface, and to run a stella case whose mirror is known to matter (a trapped-particle mode) to check whether the term acts at all in this build.
 
@@ -92,24 +91,42 @@ GS2 rungs, each run to 100 code-time units:
 
 | ky | GS2 A∥ e2 | GS2 A∥ e3 | GS2 A∥+B∥ e2 | GX A∥ upstream (t = 40) | GX A∥ repaired |
 |---:|---:|---:|---:|---:|---:|
-| 0.10 | 0.07807 | 0.13463 | 0.19364 | 0.20305 | 0.21323 |
-| 0.30 | 0.26185 | `results/fit_grid_codes.csv` | 0.35765 | 0.31411 | 0.31392 |
-| 0.50 | 0.14093 | `results/fit_grid_codes.csv` | 0.18867 | 0.17432 | 0.17418 |
+| 0.10 | 0.07807 | 0.13463 | 0.19364 (e3 0.25216) | 0.20305 | 0.21323 |
+| 0.30 | 0.26185 | 0.29322 | 0.35765 (e3 0.38548) | 0.31411 | 0.31392 |
+| 0.50 | 0.14093 | 0.14398 | 0.18867 (e3 0.19562) | 0.17432 | 0.17418 |
 
 **Finding: no GS2 KBM number is cited yet.**
-- GS2's two-field KBM is not converged at e2/e3: γ changes 72% between rungs at ky .10.
-- The GX KBM golden can be called independently confirmed only after the e3 rung at the remaining ky and a finer e4 rung.
-- At e2, adding B∥ raises GS2's γ by 25–150%. That is the size of effect EM-B-PAR has to resolve.
+- GS2's two-field KBM is not converged over e2 → e3: +72% at ky .10, +12% at ky .30, +2% at ky .50.
+- At ky .50 GS2 e3 is 17% below GX. At ky .30 it is 7% below GX and rising toward it.
+- The GX KBM golden can be called independently confirmed only with an e4 rung (ntheta 64, negrid 24).
+- At e3, adding B∥ raises GS2's γ by 36% at ky .30 and 87% at ky .10. That is the size of effect EM-B-PAR has to resolve, and the GX golden (fbpar = 0) cannot speak to it.
 
 ## 5. GKX certified eigenpairs against the repaired goldens
 
-`results/gkx_cert.txt` has one line per (geometry, ky) from `run_runtime_linear(solver="krylov")` at Nl16/Nm48. Lines are added as the office queue finishes.
+`results/gkx_cert.txt` has one line per (geometry, ky) from `run_runtime_linear(solver="krylov")` (the certified adaptive route) at Nl16/Nm48, on the shipped GX-matched decks.
+
+| Geometry | ky | GKX γ | GX repaired γ | Δγ | GKX ω | GX repaired ω | Δω |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| s-α | 0.15 | 0.054824 | 0.054946 | −0.22% | 0.127005 | 0.126858 | +0.12% |
+| s-α | 0.20 | 0.075159 | 0.075035 | +0.17% | 0.177909 | 0.177842 | +0.04% |
+| s-α | 0.30 (Q20) | 0.093091 | 0.093049 | +0.05% | 0.28203 | 0.281983 | +0.02% |
+| s-α | 0.40 | 0.080646 | 0.080885 | −0.30% | 0.375066 | 0.374934 | +0.04% |
+| Miller | 0.15 | 0.059215 | 0.058369 | +1.45% | 0.091971 | 0.091850 | +0.13% |
+| Miller | 0.30 | 0.125854 | 0.125874 | −0.02% | 0.215476 | 0.215461 | +0.01% |
+| Miller | 0.40 | 0.143122 | 0.143138 | −0.01% | 0.306690 | 0.306705 | −0.00% |
+| Miller | 0.55 (Q20) | 0.125975 | 0.125906 | +0.05% | 0.43362 | 0.433638 | −0.00% |
+
+At the same points, GS2 (converged ladder, Q20) gives Miller 0.05783 / 0.12546 / 0.14297 at ky .15 / .30 / .40 and s-α 0.09219 at ky .30. That puts GKX within 0.3% of GS2 at Miller ky .30 and .40, and within 1.0% at s-α ky .30. At Miller ky .15 GKX is 2.4% above GS2 and 1.45% above GX, the one point where the three codes spread by more than 1%.
+
+**Ready to promote, but not promoted here.** For the adiabatic Cyclone cells, the certified eigenpair against the repaired build is ≤ 0.3% at seven of eight points. The ledger rows `L-lin-cyclone-salpha` and `L-lin-cyclone-miller` cite the time-fitted tables, not these eigenpairs. Moving them to the eigenpairs and the repaired reference is a ledger change for the owner of `tools/evidence_ledger.toml`.
 
 ## 6. GS2 at s-α ky = 0.55 (energy-grid limit)
 
-The Q20 ladder r1–r4 did not converge: r3 → r4 moved γ by +20.9%. Two further rungs at ntheta 64 / nperiod 4 are queued, and their results go into `results/fit_grid_codes.csv`:
-- r5: negrid 32, ngauss 12.
-- r6: negrid 48, ngauss 16.
+The Q20 ladder r1–r4 did not converge: r3 → r4 moved γ by +20.9%. Two further rungs run at ntheta 64 / nperiod 4:
+- r5 (negrid 32, ngauss 12): γ = 0.02313, ω = 0.49995, settled.
+- r6 (negrid 48, ngauss 16): still running when this record was written; `results/fit_grid_codes.csv` shows its state.
+
+With the energy grid doubled, GS2 lands 7% below gyaradax's converged 0.02485 (Q20) and 34% below the GX golden (0.035189). It moves toward the Hermite–Laguerre values at Nl 32 (0.02485) and away from Nl 16 (0.0339). That supports the Q16 reading that this ky has no converged Hermite–Laguerre reference at Nl ≤ 24, and that the GX golden is truncation-limited there. The r6 rung decides whether GS2 has converged.
 
 ## What is promoted, and what is not
 

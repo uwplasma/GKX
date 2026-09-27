@@ -1,0 +1,6 @@
+RESULT {"geometry": "M", "deck": "cyclone_miller_linear.toml", "Nl": 16, "Nm": 48, "ky": 0.15, "gamma": 0.059214796795108424, "omega": 0.0919708271269749, "wall_s": 1258.0}
+RESULT {"geometry": "M", "deck": "cyclone_miller_linear.toml", "Nl": 16, "Nm": 48, "ky": 0.3, "gamma": 0.12585373736619834, "omega": 0.21547633197672786, "wall_s": 3156.5}
+RESULT {"geometry": "M", "deck": "cyclone_miller_linear.toml", "Nl": 16, "Nm": 48, "ky": 0.39999999999999997, "gamma": 0.1431215509765847, "omega": 0.30669017205490817, "wall_s": 2721.1}
+RESULT {"geometry": "S", "deck": "case_full.toml", "Nl": 16, "Nm": 48, "ky": 0.15, "gamma": 0.054823964994948966, "omega": 0.12700478988653152, "wall_s": 2331.4}
+RESULT {"geometry": "S", "deck": "case_full.toml", "Nl": 16, "Nm": 48, "ky": 0.19999999999999998, "gamma": 0.0751589185200101, "omega": 0.17790864284217126, "wall_s": 2379.7}
+RESULT {"geometry": "S", "deck": "case_full.toml", "Nl": 16, "Nm": 48, "ky": 0.39999999999999997, "gamma": 0.08064558562027148, "omega": 0.37506573544988797, "wall_s": 3531.5}
