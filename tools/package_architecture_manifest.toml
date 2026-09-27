@@ -1131,11 +1131,11 @@ recursive = true
 # 93359 -> 93953: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 93953 -> 93987: measured for 2.4.0 (#290 collision-basis layout).
 # 93987 -> 79446: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
-# 79446 -> 79504: the ky = 0 Boltzmann response. The flux-surface average is
+# 79446 -> 79505: the ky = 0 Boltzmann response. The flux-surface average is
 # gated to Boltzmann electrons (GX iphi00 = 2) in the serial, bpar, mixed and
 # init_field='phi' solves, and the sharded electrostatic routes that dropped it
 # now pass jacobian/ky or apply it (fused Hermite kernel, species reduction).
-baseline = 79504
+baseline = 79505
 target = 45000
 
 [[line_budget_policy.counts]]
