@@ -879,6 +879,31 @@ def test_windowed_nonlinear_metrics_rejects_missing_or_empty_diagnostics() -> No
         windowed_nonlinear_metrics(bad)
 
 
+def test_windowed_nonlinear_metrics_validate_time_axis_and_window() -> None:
+    def diagnostics(t: np.ndarray) -> SimulationDiagnostics:
+        return SimulationDiagnostics(
+            t=t,
+            dt_t=np.full(2, 0.1),
+            dt_mean=np.full(2, 0.1),
+            gamma_t=np.zeros(2),
+            omega_t=np.zeros(2),
+            Wg_t=np.ones(2),
+            Wphi_t=np.ones(2),
+            Wapar_t=np.zeros(2),
+            heat_flux_t=np.ones(2),
+            particle_flux_t=np.zeros(2),
+            energy_t=np.zeros(2),
+        )
+
+    with pytest.raises(ValueError):
+        windowed_nonlinear_metrics(diagnostics(np.array([[0.0, 1.0]])))
+    with pytest.raises(ValueError):
+        windowed_nonlinear_metrics(
+            SimpleNamespace(diagnostics=diagnostics(np.array([0.0, 1.0]))),
+            start_fraction=1.0,
+        )
+
+
 def test_windowed_nonlinear_metrics_ignores_nonfinite_phi_envelope_and_keeps_window_stats() -> (
     None
 ):
