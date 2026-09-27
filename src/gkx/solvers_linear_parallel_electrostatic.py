@@ -114,8 +114,8 @@ def _fused_electrostatic_constants(
         vth_s=jnp.asarray(params.vth, dtype=real_dtype).reshape(-1)[0],
         den_safe=jnp.where(denominator == 0.0, jnp.inf, denominator),
         qneut=qneut,
-        jacobian=jnp.asarray(cache.jacobian, dtype=real_dtype),
-        ky=jnp.asarray(cache.ky),
+        jacobian=getattr(cache, "jacobian", None),
+        ky=getattr(cache, "ky", None),
         mask0=None if cache.mask0 is None else jnp.asarray(cache.mask0),
         ell=ell,
         ell_p1=ell + 1.0,
@@ -517,8 +517,8 @@ def _serial_electrostatic_phi(
         tz=params.tz,
         mask0=cache.mask0,
         devices=device_list,
-        jacobian=cache.jacobian,
-        ky=cache.ky,
+        jacobian=getattr(cache, "jacobian", None),
+        ky=getattr(cache, "ky", None),
     )
 
 
@@ -827,8 +827,8 @@ def linear_rhs_electrostatic_species_sharded(
         mask0=cache.mask0,
         devices=device_list,
         axis_name="species",
-        jacobian=cache.jacobian,
-        ky=cache.ky,
+        jacobian=getattr(cache, "jacobian", None),
+        ky=getattr(cache, "ky", None),
     )
 
     mesh = Mesh(np.asarray(device_list), ("species",))

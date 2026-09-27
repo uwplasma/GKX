@@ -645,8 +645,8 @@ def linear_rhs_streaming_electrostatic_velocity_sharded(
         tz=params.tz,
         mask0=cache.mask0,
         devices=device_list,
-        jacobian=cache.jacobian,
-        ky=cache.ky,
+        jacobian=getattr(cache, "jacobian", None),
+        ky=getattr(cache, "ky", None),
     )
     return _streaming_electrostatic_from_phi_velocity_sharded(
         arr, cache, params, phi=phi, plan=plan, devices=device_list
