@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import math
 
+import jax
 import jax.numpy as jnp
 
 from gkx.core_velocity import laguerre_gyroaverage_neighbors
@@ -448,6 +449,9 @@ def curvature_gradb_contribution(
     weight_gradb: jnp.ndarray,
 ) -> jnp.ndarray:
     axis_m = -4
+    # Hermite indices are structural: an instantiated zero tangent through
+    # sqrt(m (m - 1)) at m = 0 is 0 * inf = NaN in forward mode.
+    m = jax.lax.stop_gradient(m)
     H_m_p2 = shift_axis(H, 2, axis=axis_m)
     H_m_m2 = shift_axis(H, -2, axis=axis_m)
     curv_term = (

@@ -907,6 +907,53 @@ def test_sparse_direct_growth_rate_matches_dense_value_and_gradient() -> None:
     np.testing.assert_allclose(grad, dense_grad, rtol=1e-8, atol=1e-12)
 
 
+def _central_difference_jacobian(function, base: jnp.ndarray, step: float):
+    eye = jnp.eye(int(base.size), dtype=base.dtype)
+    columns = [
+        (function(base + step * row) - function(base - step * row)) / (2.0 * step)
+        for row in eye
+    ]
+    return np.stack([np.asarray(column) for column in columns], axis=-1)
+
+
+def test_dense_objectives_have_forward_mode_matching_reverse_and_fd() -> None:
+    """VMEX's least-squares Jacobian is forward mode: jacfwd must work and agree."""
+
+    x64 = bool(jax.config.read("jax_enable_x64"))
+    base = jnp.asarray([0.05, 0.20], dtype=jnp.float64 if x64 else jnp.float32)
+
+    def vector(parameter: jnp.ndarray) -> jnp.ndarray:
+        return solver_objective_vector_from_geometry(
+            _sparse_direct_geometry(parameter), **_SPARSE_DIRECT_GRID
+        )
+
+    for function in (_sparse_direct_growth, vector):
+        forward = np.asarray(jax.jacfwd(function)(base))
+        np.testing.assert_allclose(
+            forward, np.asarray(jax.jacrev(function)(base)), rtol=1e-4, atol=1e-6
+        )
+        fd = _central_difference_jacobian(function, base, 1e-5 if x64 else 2e-3)
+        np.testing.assert_allclose(
+            forward, fd, rtol=1e-4 if x64 else 5e-2, atol=1e-6 if x64 else 5e-3
+        )
+
+
+@requires_paired_solvax("sparse_eigenvalue", "csr_data_from_products")
+def test_sparse_direct_growth_rate_has_forward_mode() -> None:
+    if not bool(jax.config.read("jax_enable_x64")):
+        pytest.skip("the 1e-8 agreement gate is a float64 gate")
+    base = jnp.asarray([0.05, 0.20])
+    dense = jax.jacfwd(_sparse_direct_growth)(base)
+    gamma, omega = solver_objective_vector_from_geometry(
+        _sparse_direct_geometry(base), **_SPARSE_DIRECT_GRID
+    )[:2]
+    shift = complex(round(float(gamma), 2), round(float(omega), 2))
+    sparse = jax.jacfwd(
+        lambda p: _sparse_direct_growth(p, eigensolver="sparse-direct", shift=shift)
+    )(base)
+    np.testing.assert_allclose(sparse, dense, rtol=1e-8, atol=1e-12)
+
+
 @requires_solvax_reverse_eigenpair
 def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None:
     """The matrix-free primal and bordered tangent must preserve QL observables."""
@@ -1096,7 +1143,7 @@ def test_solver_scalar_objective_selector_aliases_and_errors() -> None:
         solver_scalar_objective_from_vector(jnp.ones(2), "growth")
 
 
-def test_dominant_real_eigenvalue_custom_vjp_matches_finite_difference() -> None:
+def test_dominant_real_eigenvalue_both_modes_match_finite_difference() -> None:
     x64_enabled = bool(jax.config.read("jax_enable_x64"))
     dtype = jnp.float64 if x64_enabled else jnp.float32
     step = 1.0e-5 if x64_enabled else 2.0e-3
@@ -1118,14 +1165,10 @@ def test_dominant_real_eigenvalue_custom_vjp_matches_finite_difference() -> None
         return dominant_real_eigenvalue(matrix_from_params(x))
 
     grad_ad = np.asarray(jax.grad(objective)(params), dtype=float)
-    eye = jnp.eye(int(params.size), dtype=params.dtype)
-    grad_fd = []
-    for index in range(int(params.size)):
-        plus = objective(params + step * eye[index])
-        minus = objective(params - step * eye[index])
-        grad_fd.append(float((plus - minus) / (2.0 * step)))
+    grad_fd = _central_difference_jacobian(objective, params, step)
 
     assert gkx.dominant_real_eigenvalue is dominant_real_eigenvalue
+    np.testing.assert_allclose(jax.jacfwd(objective)(params), grad_ad, rtol=rtol)
     assert np.all(np.isfinite(grad_ad))
     np.testing.assert_allclose(grad_ad, np.asarray(grad_fd), rtol=rtol, atol=atol)
 

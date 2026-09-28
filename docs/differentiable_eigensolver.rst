@@ -102,6 +102,28 @@ compute the left mode; that cost is paid only when reverse mode requests the
 custom VJP.  The sensitivity solve fails closed: a solve that misses its
 acceptance returns NaN rather than an inaccurate gradient.
 
+Dense rule for forward-mode Jacobians
+-------------------------------------
+
+The dense objectives (``solver_growth_rate_from_geometry``,
+``solver_objective_vector_from_geometry`` with ``eigensolver="dense"``)
+differentiate through ``gkx.objectives.eigen.dominant_eigenpair``, a
+``custom_jvp``.  The right eigenvector is scaled so its largest entry
+``v_k`` is one, and the tangent solves Nelson's bordered system
+
+.. math::
+
+   \begin{pmatrix} A-\lambda I & -v \\ e_k^T & 0 \end{pmatrix}
+   \begin{pmatrix} dv \\ d\lambda \end{pmatrix}
+   = \begin{pmatrix} -(dA)\,v \\ 0 \end{pmatrix}.
+
+The right-hand side is one JVP of the operator at ``v``, so ``dA`` is never
+materialized, and the bordered matrix depends on primals only: a batch of
+tangents (``jacfwd``, VMEX's forward implicit Jacobian) shares one ``eig`` and
+one LU.  The tangent is linear, so JAX transposes it for reverse mode.  Under
+an outer ``jax.linearize`` the ``eig`` and the LU are computed once and every
+column applies only the operator JVP and one LU solve.
+
 Sparse shift-invert
 -------------------
 
