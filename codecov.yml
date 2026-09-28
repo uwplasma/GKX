@@ -30,3 +30,9 @@ coverage:
     patch:
       default:
         informational: true
+
+# No PR comments or check annotations: coverage is enforced by CI's own
+# fail-under gates, and Codecov comments only generated notification email.
+comment: false
+github_checks:
+  annotations: false
