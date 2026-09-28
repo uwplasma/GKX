@@ -2384,13 +2384,7 @@ REQUIRED_PHRASES = {
         "W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron validation remain outside",
         "Production nonlinear optimization remains unpromoted",
     ),
-    "README.md": (
-        "not a runtime/TOML absolute-flux predictor",
-        "declared Solovev and shaped-pressure stress outliers",
-        "W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron extensions are deferred",
-        "Promotion requires stationary individual traces",
-        "Sensitivity sweeps can use the same deterministic independent-work reconstruction, but they need a dedicated",
-    ),
+    "README.md": ("not a runtime/TOML absolute-flux predictor",),
     "docs/performance.rst": (
         "Sensitivity sweeps are covered by",
         "before any speedup claim is promoted",

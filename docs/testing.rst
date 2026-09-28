@@ -36,7 +36,7 @@ prefer one parametrized module per physical or workflow contract.
    * - ``integration/``
      - Executable behavior: runtime TOML loading and runs
        (``runtime/test_runtime_config.py``, ``runtime/test_runtime_runner.py``),
-       CLI, saved artifacts, shipped examples (``examples/test_examples.py``),
+       CLI, saved artifacts, shipped examples (``examples/test_examples.py``, which runs every gallery ``run.py``),
        adaptive eigenmodes.
    * - ``validation/``
      - Literature-anchored physics gates (``physics_gates/``), benchmark

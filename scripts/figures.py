@@ -499,10 +499,73 @@ def build_proof_tests(spec: dict[str, Any], config: dict[str, Any]) -> dict[str,
     }
 
 
+# ------------------------------------------------------------------ crosscode
+
+
+def build_crosscode(spec: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    rows = config["crosscode"]["eigenpairs"]
+    gx = {(g, ky): gamma for g, ky, _, gamma, _, _ in rows}
+    gk = {(g, ky): gamma for g, ky, gamma, _, _, _ in rows}
+    labels = [f"{'s-α' if g == 's-alpha' else g} {ky:.2f}" for g, ky, *_ in rows]
+    d_gamma = [100.0 * (a - b) / b for _, _, a, b, _, _ in rows]
+    d_omega = [100.0 * (a - b) / b for _, _, _, _, a, b in rows]
+    gs2 = config["crosscode"]["gs2"]
+    with figure_style():
+        fig, axes = plt.subplots(
+            1,
+            2,
+            figsize=(12.5, 3.9),
+            constrained_layout=True,
+            gridspec_kw={"width_ratios": [1.5, 1.0]},
+        )
+        ax = axes[0]
+        x = np.arange(len(rows))
+        ax.bar(x - 0.18, d_gamma, 0.36, color=GKX, label=r"$\gamma$")
+        ax.bar(x + 0.18, d_omega, 0.36, color=ALT, label=r"$\omega$")
+        ax.axhline(0.0, color=REFERENCE, lw=0.8)
+        ax.set_xticks(x, labels, fontsize=9, rotation=30)
+        ax.set_ylabel("(GKX − GX) / GX  [%]")
+        ax.set_title(r"Cyclone ITG: certified GKX eigenpairs vs GX, $k_y\rho_i$")
+        ax.legend(loc="upper left", fontsize=8.5)
+
+        ax = axes[1]
+        x = np.arange(len(gs2))
+        for offset, name, color, table in (
+            (-0.26, "GKX", GKX, gk),
+            (0.0, "GX", REFERENCE, gx),
+        ):
+            ax.bar(
+                x + offset,
+                [table[(g, ky)] for g, ky, _ in gs2],
+                0.26,
+                color=color,
+                label=name,
+            )
+        ax.bar(x + 0.26, [v for *_, v in gs2], 0.26, color=MUTED, label="GS2")
+        ax.set_xticks(
+            x,
+            [f"{'s-α' if g == 's-alpha' else g} {ky:.2f}" for g, ky, _ in gs2],
+            fontsize=9,
+        )
+        ax.set_ylabel(r"$\gamma\ a/v_{ti}$")
+        ax.set_title("Growth rate, three codes")
+        ax.legend(loc="upper left", fontsize=8.5, ncols=3)
+        panel_label(axes[0], "a")
+        panel_label(axes[1], "b")
+        _save(fig, spec, config)
+    return {
+        "labels": labels,
+        "gamma_percent": d_gamma,
+        "omega_percent": d_omega,
+        "gs2": gs2,
+    }
+
+
 BUILDERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
     "linear": build_linear,
     "nonlinear": build_nonlinear,
     "proof_tests": build_proof_tests,
+    "crosscode": build_crosscode,
 }
 
 

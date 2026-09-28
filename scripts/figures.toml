@@ -44,3 +44,32 @@ output = "readme_proof_tests.png"
 # collisionless Hermite spectrum take seconds; the Landau nu-scan is 2 x 8
 # slab initial-value runs through GKX's production linear operator.
 inputs = []
+
+[[figure]]
+name = "crosscode"
+builder = "crosscode"
+output = "readme_crosscode.png"
+# Values are the certified GKX eigenpairs (Nl16/Nm48) and the repaired-build GX
+# and converged GS2 growth rates of plan/research/2026-09-27-xcode/REPORT.md,
+# section 5; results/gkx_cert.txt holds the raw GKX lines.
+inputs = ["plan/research/2026-09-27-xcode/REPORT.md"]
+
+# (geometry, ky, GKX gamma, GX gamma, GKX omega, GX omega); REPORT.md section 5.
+[crosscode]
+eigenpairs = [
+  ["s-alpha", 0.15, 0.054824, 0.054946, 0.127005, 0.126858],
+  ["s-alpha", 0.20, 0.075159, 0.075035, 0.177909, 0.177842],
+  ["s-alpha", 0.30, 0.093091, 0.093049, 0.28203, 0.281983],
+  ["s-alpha", 0.40, 0.080646, 0.080885, 0.375066, 0.374934],
+  ["Miller", 0.15, 0.059215, 0.058369, 0.091971, 0.091850],
+  ["Miller", 0.30, 0.125854, 0.125874, 0.215476, 0.215461],
+  ["Miller", 0.40, 0.143122, 0.143138, 0.306690, 0.306705],
+  ["Miller", 0.55, 0.125975, 0.125906, 0.43362, 0.433638],
+]
+# (geometry, ky, GS2 gamma) from the converged Q20 GS2 ladder, same section.
+gs2 = [
+  ["Miller", 0.15, 0.05783],
+  ["Miller", 0.30, 0.12546],
+  ["Miller", 0.40, 0.14297],
+  ["s-alpha", 0.30, 0.09219],
+]

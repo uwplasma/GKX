@@ -374,6 +374,36 @@ on one RTX A4000 describe the historical run only.
    conditional summaries. Regeneration with the corrected periodic operator,
    per-trace stationarity and spectral gates remain open.
 
+VMEX turbulence examples
+------------------------
+
+VMEX ships three QA boundary optimizations that call GKX, in
+``examples/optimization/`` of the VMEX repository (``pip install
+'vmex[turbulence]'``). Each adds one GKX objective to VMEX's
+``QA_optimization.py`` on flux tubes chosen by ``s`` and ``alpha``.
+
+- ``QA_optimization_turbulence_linear.py``: growth rate of the dominant linear
+  ITG eigenmode, with VMEX's implicit Jacobian through ``jnp.linalg.eigvals``.
+  At ``s = 0.5`` the growth rate went 0.196 to 0.097 (:math:`v_{ti}/a`), the
+  aspect ratio 11.5 to 6.4, and the quasisymmetry error rose 0.039 to 0.20.
+  28 min, 6.5 GB peak.
+- ``QA_optimization_turbulence_quasilinear.py``: mixing-length heat flux
+  :math:`\gamma W_Q/\langle k_\perp^2\rangle`, which needs eigenvector
+  derivatives. The flux went 2.57 to 0.94, aspect ratio 11.5 to 7.7,
+  quasisymmetry error unchanged at 0.04; mean :math:`|\iota|` fell to 0.12,
+  below the 0.42 floor these weights do not enforce. 29 min, 6.9 GB peak.
+- ``QA_optimization_turbulence_nonlinear.py``: gated saturated heat flux over
+  a finite window, differentiated with the checkpointed discrete adjoint from a
+  fixed saturated start and passed to L-BFGS-B as one scalar. The flux went
+  53.0 +- 2.6 to 36.3 +- 1.8 after stage 1 and 42.6 +- 2.1 after stage 2, which
+  traded flux for quasisymmetry (error 2.29 to 0.75); aspect ratio 11.5 to 6.0.
+  70 min, 5.5 GB peak.
+
+Each number is a single run with default settings on a shared 36-core CPU host
+(12 cores, JAX 0.10.2, GKX 2.4.0, other jobs running). The nonlinear result is
+one tube and one seed with no held-out check: it shows the pipeline works, not
+a certified transport reduction.
+
 Reproduce
 ---------
 
