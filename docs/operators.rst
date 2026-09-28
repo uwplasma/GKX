@@ -757,7 +757,10 @@ The perpendicular hyperdiffusion term is
    -w_{hyperdiff}\,D_{hyper}
    \left(\frac{k_\perp^2}{k_{\perp,\max}^2}\right)^{p_{hyper,k_\perp}} G,
 
-masked by the dealias region. ``D_hyper`` defaults to 0 and the
+masked by the dealias region. :math:`k_{\perp,\max}^2` is the dealiased corner
+of the full grid: when a linear run selects a subset of ``ky`` rows, the parent
+grid's :math:`|k_y|` at row ``(Ny - 1) // 3`` is carried as
+``SpectralGrid.ky_cut`` and used in place of the missing row. ``D_hyper`` defaults to 0 and the
 ``hyperdiffusion`` term weight to 0, so it is off unless a deck enables it.
 
 The field-line end damping is :math:`\mathcal{R}_{end} = -w_{end}\,\nu_{end}\,d(z)\,H`,

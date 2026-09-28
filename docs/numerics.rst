@@ -506,8 +506,13 @@ or above :math:`N_y/3`.
 Below the runtime the ``half`` layout works end to end:
 :func:`gkx.core_grid.build_spectral_grid` takes a ``ky_layout``, the bracket
 computes on the stored rows without widening, and the per-stage projector is
-the identity. The runtime does not select it; :doc:`performance` records what
-it saves.
+the identity. Decks opt in with ``[grid] ky_layout = "half"``
+(:class:`gkx.config.GridConfig`); the default stays ``"full"`` because the
+checkpointed heat-flux window gradient is slower on the half axis, and
+:doc:`performance` records what each layout costs. On a half-layout grid the
+explicit CFL reads the two-sided ``ky`` extent from
+:func:`gkx.core_ky_layout.source_ny_full`, so the adaptive step matches the
+full-layout run.
 
 Equilibrium-flow shearing coordinates
 -------------------------------------
@@ -606,7 +611,8 @@ Nonlinear brackets use the standard ``2/3`` de-alias mask, stored on the
 spectral grid and applied inside the bracket. Perpendicular hyperdiffusion
 (``D_hyper``, ``p_hyper_kperp`` and the ``hyperdiffusion`` term weight; see
 :doc:`operators`) is available as scale-selective damping and is off by
-default.
+default. :math:`k_{\perp,\max}` is taken from the full grid's dealiased corner,
+also when a linear run keeps only a subset of ``ky`` rows.
 
 Linear solver options
 ---------------------
@@ -1018,7 +1024,8 @@ operator applications, and nonlinear IMEX linear solves.
   coefficients come from
   :func:`gkx.operators.linear.moments.diamagnetic_drive_coeffs`.
 - **Field solve.** Electrostatic runs solve quasineutrality for :math:`\phi`
-  with an optional Boltzmann response (``tau_e``). Electromagnetic runs solve
+  with an optional Boltzmann response (``tau_e``; flux-surface average removed
+  at :math:`k_y = 0` for Boltzmann electrons only). Electromagnetic runs solve
   the coupled quasineutrality/perpendicular-Ampère system for
   :math:`(\phi, B_\parallel)` and then :math:`A_\parallel` from parallel
   Ampère's law, in :mod:`gkx.terms.fields`.
