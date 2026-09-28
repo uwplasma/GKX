@@ -40,6 +40,7 @@ state what is and is not claimed.
 
    theory
    normalization
+   conventions
    geometry
    linear_model
    operators

@@ -20893,3 +20893,6 @@ Record: `plan/research/2026-09-analytic-benchmarks/REPORT.md`, with appendices `
   - The GX ω sign: the in-repo ITG/KBM goldens have ω>0, which contradicts the notes' assumption. Settle it with a GKX run before encoding any sign.
   - Whether the s-α drift carries ω_κ≠ω_∇B. This gates the AZ and HH benchmarks.
 Outcome: research PR only; nothing promoted.
+## 2026-09-28 — conventions page (GKX vs GX, GS2, stella)
+
+Adds `docs/conventions.rst` and a README "Conventions" table. GKX = GX units (`L_ref = a` in shipped decks, `v_t = sqrt(T/m)`); GS2 8.2.1 and stella v1.0 use `sqrt(2T/m)`. Conversion factors: `ky/sqrt(2)`, rates and `vnewk` times `sqrt(2)`, fluxes times `2 sqrt(2)`. The ky and rate factors and the sign of `omega` (positive for Cyclone ITG in all four codes) were checked against the 2026-09-27 cross-code runs; the flux, collision, time and field factors are derived, not run. Not verified: GS2 s-alpha `shift` sign vs alpha, GS2/stella `A_par`/`B_par` normalizations, direction of the `tau_e`/`tau_fac`/`tite` ratio.
