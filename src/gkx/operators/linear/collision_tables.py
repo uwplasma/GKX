@@ -421,7 +421,12 @@ def collision_operator_from_config(
     every model on one collisionality axis.
     """
 
-    from gkx.operators.linear.collisions import DriftKineticMomentCollisionOperator
+    from gkx.operators.linear.collisions import (
+        DriftKineticMomentCollisionOperator,
+        _assemble_drift_kinetic_sugama_matrix,
+        drift_kinetic_improved_sugama_pair_matrices,
+        drift_kinetic_sugama_pair_matrices,
+    )
 
     key = name.strip().lower()
     if key in ("none", "lenard_bernstein"):
@@ -430,8 +435,27 @@ def collision_operator_from_config(
     collisionality = jnp.asarray(nu)
     if collisionality.ndim > 1:
         raise ValueError("nu must be a scalar or a per-species vector")
+    if collisionality.ndim == 1 and key in ("sugama", "improved_sugama"):
+        # The test part of C_ab sits in the diagonal block, so the prefactor
+        # must enter each ordered pair before that sum. Species prefactors
+        # nu_a ~ Z_a^4 give the pair prefactor Z_a^2 Z_b^2 = sqrt(nu_a nu_b),
+        # symmetric, so (a, b) and (b, a) still exchange momentum and energy.
+        pairs = (
+            drift_kinetic_sugama_pair_matrices
+            if key == "sugama"
+            else drift_kinetic_improved_sugama_pair_matrices
+        )
+        return DriftKineticMomentCollisionOperator(
+            _assemble_drift_kinetic_sugama_matrix(
+                density,
+                mass,
+                temperature,
+                pairs,
+                pair_scale=jnp.sqrt(collisionality[:, None] * collisionality),
+            )
+        )
     if collisionality.ndim == 1:
-        # A per-species vector scales each target species' row block.
+        # Single-species models: the vector is that species' prefactor.
         collisionality = collisionality.reshape((-1, 1, 1, 1))
 
     if key == "sugama":

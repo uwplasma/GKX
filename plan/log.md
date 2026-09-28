@@ -20768,3 +20768,19 @@ Baseline: `main` `b3f9457b2`.
   Staleness pass: `ky_layout` opt-in and #306 CFL, #303 hyperdiffusion ky_cut,
   #308 zonal response, sparse-direct eigensolver rows, cross-code subsection in
   benchmarks, VMEX turbulence scripts in stellarator optimization.
+## 2026-09-27 — BUGS2 lane: the five #307 suspects
+
+Baseline: `main` `54956e0ae`. Each suspect judged against the equations, not another code.
+
+Fixed (one commit each, test fails on `main`):
+- NTFT linked chains ignored `m0`. Row `kx` at `z` holds ballooning mode `kx + m0(ky, z)` (k_perp and drifts already use it), so the parallel derivative must hold `kx + m0` fixed. Probe: Gaussian bump on one ballooning mode, s-alpha q 1.4, shat 0.8, Nx 16, Ny 8, Nz 64, jtwist 1, ky index 2 (m0 in {-1, 0, 1}): fixed-index derivative error 0.206 (peak |d| 1.07), ballooning frame 1.7e-6. The cache now carries `ntft_m0`; the linked FFT shifts to that frame and back. Periodic NTFT (no linked chains) still differentiates at fixed index; not touched. The implicit preconditioner's linked lines ignore `m0` (approximate by design).
+- Per-species `nu` broke multispecies conservation: row-block scaling gave C_ab and C_ba different prefactors. Now `sqrt(nu_a nu_b)` (species prefactor ~ Z^4 gives Z_a^2 Z_b^2); like-species blocks and a uniform vector unchanged. On `main`, nu = [1, 3], unequal n, m, T: first invariant-rate residuals 0.105 and 2.19 (atol 1e-5).
+- Log-linear window search on a constant phase: phase R^2 was -inf, every candidate scored -inf, the default shortest window came back (t in [0, 1.9] vs [0, 16.0] for the same envelope rotating at omega 0.7). Phase R^2 of a constant phase is now 1 (`_r2_score` keeps -inf for a flat log-amplitude, which fit stats rely on).
+
+Not bugs (evidence):
+- Compressed bracket and the flow-shear phase: the residual is linear in ky up to whole-cell remaps, and a phase linear in ky is a shearing-coordinate change that leaves the Poisson bracket invariant. `test_compressed_real_fft_toggle_matches_full_fft_for_hermitian` already asserts compressed (canonical kx, no phase) equals full (phase applied) at t = 0.23 with |phase - 1| > 0.1.
+- Improved Sugama not self-adjoint at T_a != T_b: by construction. Sugama et al., Phys. Plasmas 26, 102108 (2019), abstract: adjointness and H-theorem are exact except for unlike species at unequal temperatures, where they hold approximately through the mass ratio. Measured (n T weighted asymmetry): equal T 1e-18; m ratio 2, tau 1.5: 8.5e-2; ion-electron (1/1836), T_e/T_i 2 or 0.5: 2.8e-4 / 5.5e-4; original Sugama 1e-16 throughout.
+
+Pre-existing on `main`, unrelated: `test_three_field_dense_system_independent_moments[*float64*]` fail without x64; `test_linear_integrator_applies_linked_end_damping_per_step[0.5]` fails at rtol 1e-6 when run alone.
+
+Manifest: source 75001 -> 75124, tests 82219 -> 82312, measured. Per-species nu enters each ordered pair before the diagonal test-part sum (a row-block scale cannot reach the unlike test parts). coulomb is single-species only, so not in the nu test.

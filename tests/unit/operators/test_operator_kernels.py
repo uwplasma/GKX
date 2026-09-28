@@ -2561,3 +2561,31 @@ def test_nonlinear_operator_package_reexports_diagnostic_implementation() -> Non
         nonlinear_operators.make_nonlinear_diagnostic_tuple_fn
         is operator_diagnostics.make_nonlinear_diagnostic_tuple_fn
     )
+
+
+@pytest.mark.parametrize("model", ["sugama", "improved_sugama"])
+def test_per_species_nu_keeps_multispecies_conservation(model: str) -> None:
+    """Unequal species prefactors must not unbalance the (a,b)/(b,a) exchange.
+
+    Momentum and energy leave species a through C_ab and arrive in b through
+    C_ba; that balance holds only if both ordered pairs carry one prefactor.
+    """
+
+    density = jnp.asarray([1.3, 0.7])
+    mass = jnp.asarray([2.0, 1.0])
+    temperature = jnp.asarray([1.2, 0.8])
+    operator = collision_operator_from_config(
+        model,
+        density=density,
+        mass=mass,
+        temperature=temperature,
+        nu=jnp.asarray([1.0, 3.0]),
+    )
+    state = (jnp.arange(16.0).reshape(2, 2, 4, 1, 1, 1) + 0.13j).astype(jnp.complex64)
+    contribution = apply_multispecies_collision_moment_matrix(state, operator.matrix)
+    rates = multispecies_collision_invariant_rates(
+        contribution, density=density, mass=mass, temperature=temperature
+    )
+    np.testing.assert_allclose(rates.particle_density, 0.0, atol=1.0e-5)
+    np.testing.assert_allclose(rates.total_parallel_momentum, 0.0, atol=1.0e-5)
+    np.testing.assert_allclose(rates.total_thermal_energy, 0.0, atol=1.0e-4)

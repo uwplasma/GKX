@@ -389,6 +389,25 @@ def _resolve_twist_shift_policy(
     )
 
 
+def _ntft_m0(grid: SpectralGrid, ftwist: Any, ky_raw: Any, x0_eff: float) -> Any:
+    """Return the non-twisting radial index shift ``m0(ky, z)``."""
+
+    xp = _array_namespace(ftwist, ky_raw)
+    delta = xp.asarray(0.01313, dtype=ftwist.dtype)
+    ftwist_next = xp.roll(ftwist, -1)
+    mid_idx = int(grid.z.size // 2)
+    mid_next = (mid_idx + 1) % grid.z.size
+    return -xp.rint(
+        float(x0_eff)
+        * ky_raw[:, None]
+        * ((1.0 - delta) * ftwist[None, :] + delta * ftwist_next[None, :])
+    ) + xp.rint(
+        float(x0_eff)
+        * ky_raw[:, None]
+        * ((1.0 - delta) * ftwist[mid_idx] + delta * ftwist[mid_next])
+    )
+
+
 def _build_ntft_kperp_and_drift_arrays(
     grid: SpectralGrid,
     geom_data: Any,
@@ -409,23 +428,8 @@ def _build_ntft_kperp_and_drift_arrays(
     x0_eff: float,
     kperp2_bmag: bool,
 ) -> tuple[Any, Any, Any, Any]:
-    xp = _array_namespace(kx_eff, ky_eff, gds2, gds21, gds22_arr, shat_arr)
     ftwist = (geom_data.s_hat * gds21 / gds22_arr).astype(kx_eff.dtype)
-    delta = xp.asarray(0.01313, dtype=kx_eff.dtype)
-    ftwist_next = xp.roll(ftwist, -1)
-    mid_idx = int(grid.z.size // 2)
-    mid_next = (mid_idx + 1) % grid.z.size
-    ftwist_mid = ftwist[mid_idx]
-    ftwist_mid_next = ftwist[mid_next]
-    m0 = -xp.rint(
-        float(x0_eff)
-        * ky_raw[:, None]
-        * ((1.0 - delta) * ftwist[None, :] + delta * ftwist_next[None, :])
-    ) + xp.rint(
-        float(x0_eff)
-        * ky_raw[:, None]
-        * ((1.0 - delta) * ftwist_mid + delta * ftwist_mid_next)
-    )
+    m0 = _ntft_m0(grid, ftwist, ky_raw, x0_eff)
     m0 = m0.astype(kx_eff.dtype)
     shat_inv = 1.0 / shat_arr
     delta_kx = ky_eff[:, None] * ftwist[None, :] + (rho_star * m0 / float(x0_eff))
@@ -1023,6 +1027,7 @@ def _pack_linear_cache(
         linked_kz=linked_cache["linked_kz"],
         use_twist_shift=twist.use_twist_shift,
         jtwist=int(linked_cache["jtwist"]),
+        ntft_m0=linked_cache.get("ntft_m0"),
         ny_full=getattr(grid, "ny_full", None),
         ky_cut=(
             None
@@ -1084,6 +1089,14 @@ def build_linear_cache(
         jtwist=twist.jtwist,
         real_dtype=grid_arrays.real_dtype,
     )
+    if twist.use_ntft and twist.use_twist_shift:
+        ftwist = geom_arrays.geom_data.s_hat * geom_arrays.gds21 / geom_arrays.gds22_arr
+        m0 = _ntft_m0(
+            grid, ftwist.astype(twist.kx_eff.dtype), grid_arrays.ky_raw, twist.x0_eff
+        )
+        if isinstance(m0, jax.core.Tracer):
+            m0 = jax.lax.stop_gradient(m0)
+        linked_cache["ntft_m0"] = m0.astype(np.int32)
     return _to_device_cache(
         _pack_linear_cache(
             grid,

@@ -2330,3 +2330,18 @@ def test_summary_does_not_call_an_unsaturated_window_a_measurement() -> None:
     assert measured_window_is_saturated({"saturation": {"saturated": False}}) is False
     assert measured_window_is_saturated({"saturation": {"saturated": True}}) is True
     assert measured_window_is_saturated({}) is None
+
+
+def test_loglinear_window_does_not_depend_on_a_constant_phase() -> None:
+    """A purely growing mode (constant phase) and the same mode rotating at a
+    fixed real frequency have identical log-amplitudes and exactly linear
+    phases, so the log-linear search must pick the same window for both."""
+
+    from gkx.diagnostics.analysis import select_fit_window_loglinear
+
+    t = np.linspace(0.0, 20.0, 200)
+    envelope = np.exp(0.3 * t) * (1.0 + 0.5 * np.exp(-t))
+    rotating = select_fit_window_loglinear(t, envelope * np.exp(-0.7j * t))
+    growing = select_fit_window_loglinear(t, envelope.astype(complex))
+    assert growing == rotating
+    assert growing[1] - growing[0] > 5.0

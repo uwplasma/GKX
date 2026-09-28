@@ -52,6 +52,14 @@ def _r2_score(y: np.ndarray, yfit: np.ndarray) -> float:
     return 1.0 - ss_res / ss_tot
 
 
+def _phase_r2_score(phase: np.ndarray, fit: np.ndarray) -> float:
+    """R^2 of a phase fit; a constant phase (zero frequency) is a perfect fit."""
+
+    if np.ptp(phase) == 0.0:
+        return 1.0
+    return _r2_score(phase, fit)
+
+
 def _least_squares_coefficients(tt: np.ndarray, y: np.ndarray) -> np.ndarray:
     A = np.vstack([tt, np.ones_like(tt)]).T
     return np.linalg.lstsq(A, y, rcond=None)[0]
@@ -151,7 +159,7 @@ def select_fit_window(
             continue
         if require_positive:
             found_positive = True
-        score = _r2_score(log_amp[start:end], amp_fit) + _r2_score(
+        score = _r2_score(log_amp[start:end], amp_fit) + _phase_r2_score(
             phase[start:end], phase_fit
         )
         if growth_weight > 0.0:
@@ -305,7 +313,7 @@ def _score_loglinear_candidate(
     gamma, _offset, log_fit = _least_squares_line(tt, log_amp[start:end])
     _phase_slope, _phase_off, phase_fit = _least_squares_line(tt, phase[start:end])
     r2_log = _r2_score(log_amp[start:end], log_fit)
-    r2_phase = _r2_score(phase[start:end], phase_fit)
+    r2_phase = _phase_r2_score(phase[start:end], phase_fit)
     if r2_log < min_r2:
         return None, False
     if require_positive and gamma <= 0.0:
@@ -415,9 +423,9 @@ def _fallback_loglinear_slice(
             _phase_slope, _phase_off, phase_fit = _least_squares_line(
                 tt, phase[start:end]
             )
-            score = _r2_score(log_amp[start:end], log_fit) + phase_weight * _r2_score(
-                phase[start:end], phase_fit
-            )
+            score = _r2_score(
+                log_amp[start:end], log_fit
+            ) + phase_weight * _phase_r2_score(phase[start:end], phase_fit)
             if score > best_score:
                 best_score = score
                 best_slice = (start, end)

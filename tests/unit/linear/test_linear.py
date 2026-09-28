@@ -4537,3 +4537,53 @@ def test_a_root_outside_its_sign_change_bracket_is_refused():
     assert not result["resolved"]
     assert result["per_ky"]["4"]["in_bracket"] is False
     assert result["per_ky"]["4"]["sign_change_bracket"] == pytest.approx([0.28, 0.30])
+
+
+def test_ntft_linked_derivative_follows_the_ballooning_mode() -> None:
+    """On a non-twisting flux tube row ``kx`` at ``z`` holds the ballooning
+    mode ``kx + m0(ky, z)``, so the parallel derivative runs along
+    ``kx + m0 = const``. A smooth bump carried by one ballooning mode must
+    differentiate to the bump's derivative on that path; holding the row
+    index fixed instead cuts the bump wherever ``m0`` jumps (20% error)."""
+
+    grid = build_spectral_grid(
+        GridConfig(
+            Nx=16,
+            Ny=8,
+            Nz=64,
+            Lx=2.0 * np.pi,
+            Ly=2.0 * np.pi,
+            y0=10.0,
+            boundary="linked",
+            jtwist=1,
+            non_twist=True,
+            ky_layout="full",
+        )
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
+    cache = build_linear_cache(
+        grid, geom, LinearParams(nu_hyper=0.0, nu_hyper_m=0.0), Nl=1, Nm=1
+    )
+    ky, z = 2, np.asarray(grid.z)
+    rows = np.mod(-np.asarray(cache.ntft_m0)[ky], grid.kx.size)
+    assert np.ptp(rows) > 0
+    bump = np.exp(-((z / 0.8) ** 2))
+    G = np.zeros((grid.ky.size, grid.kx.size, z.size), dtype=complex)
+    G[ky, rows, np.arange(z.size)] = bump
+    dG = grad_z_linked_fft(
+        jnp.asarray(G),
+        dz=cache.dz,
+        linked_indices=cache.linked_indices,
+        linked_kz=cache.linked_kz,
+        linked_inverse_permutation=cache.linked_inverse_permutation,
+        linked_full_cover=cache.linked_full_cover,
+        linked_gather_map=cache.linked_gather_map,
+        linked_gather_mask=cache.linked_gather_mask,
+        linked_use_gather=cache.linked_use_gather,
+        ntft_m0=cache.ntft_m0,
+    )
+    np.testing.assert_allclose(
+        np.asarray(dG)[ky, rows, np.arange(z.size)],
+        -2.0 * z / 0.64 * bump,
+        atol=1.0e-4,
+    )
