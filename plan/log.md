@@ -20783,4 +20783,4 @@ Not bugs (evidence):
 
 Pre-existing on `main`, unrelated: `test_three_field_dense_system_independent_moments[*float64*]` fail without x64; `test_linear_integrator_applies_linked_end_damping_per_step[0.5]` fails at rtol 1e-6 when run alone.
 
-Manifest: source 75001 -> 75100, tests 82219 -> 82312, measured.
+Manifest: source 75001 -> 75124, tests 82219 -> 82312, measured. Per-species nu enters each ordered pair before the diagonal test-part sum (a row-block scale cannot reach the unlike test parts). coulomb is single-species only, so not in the nu test.

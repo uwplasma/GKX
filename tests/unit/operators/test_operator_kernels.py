@@ -2563,7 +2563,7 @@ def test_nonlinear_operator_package_reexports_diagnostic_implementation() -> Non
     )
 
 
-@pytest.mark.parametrize("model", ["sugama", "improved_sugama", "coulomb"])
+@pytest.mark.parametrize("model", ["sugama", "improved_sugama"])
 def test_per_species_nu_keeps_multispecies_conservation(model: str) -> None:
     """Unequal species prefactors must not unbalance the (a,b)/(b,a) exchange.
 

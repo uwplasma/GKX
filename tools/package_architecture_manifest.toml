@@ -1116,8 +1116,8 @@ recursive = true
 # 93987 -> 79446: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
 # 79446 -> 74748 (ARCH-B): measured after the contraction.
 # 74748 -> 75001: bug-fix chain (#302 #303 #304 #306 #308), measured.
-# 75001 -> 75100: xcode suspects (NTFT m0 chain frame, per-species nu pairs, phase R^2), measured.
-baseline = 75100
+# 75001 -> 75124: xcode suspects (NTFT m0 chain frame, per-species nu pairs, phase R^2), measured.
+baseline = 75124
 target = 45000
 
 [[line_budget_policy.counts]]

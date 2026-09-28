@@ -421,6 +421,7 @@ def _assemble_drift_kinetic_sugama_matrix(
     pair_matrices: Callable[
         [jnp.ndarray, jnp.ndarray], tuple[jnp.ndarray, jnp.ndarray]
     ],
+    pair_scale: jnp.ndarray | float = 1.0,
 ) -> jnp.ndarray:
     density_s = jnp.asarray(density)
     mass_s = jnp.asarray(mass, dtype=jnp.result_type(density_s, float))
@@ -446,8 +447,10 @@ def _assemble_drift_kinetic_sugama_matrix(
     test, field = pair_function(mass_ratio.reshape(-1), temperature_ratio.reshape(-1))
     test = test.reshape(ns, ns, 8, 8)
     field = field.reshape(ns, ns, 8, 8)
-    frequency = density_s[None, :] / (
-        jnp.sqrt(mass_s[:, None]) * temperature_s[:, None] ** 1.5
+    frequency = (
+        pair_scale
+        * density_s[None, :]
+        / (jnp.sqrt(mass_s[:, None]) * temperature_s[:, None] ** 1.5)
     )
     matrix = frequency[..., None, None] * field
     diagonal = jnp.arange(ns)
