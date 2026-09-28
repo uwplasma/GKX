@@ -146,6 +146,18 @@ GX's s-alpha branch (``geometry.cu``) has the same expressions, with
 rates). The sign of GS2's s-alpha ``shift`` relative to :math:`\alpha` was not
 checked (**unverified**).
 
+What :math:`\alpha` does and does not do in GKX's s-alpha model (**code**,
+``gkx/geometry/analytic.py``): it enters the local shear
+:math:`\hat s\theta - \alpha\sin\theta` in :math:`k_x(\theta)` (line 242),
+in the metric ``gds2``/``gds21`` that build :math:`k_\perp^2` (line 266), and
+in the drift numerator (line 284). The curvature and :math:`\nabla B` drifts
+are set equal, ``gb = cv`` (line 288), exactly as in GX's s-alpha branch
+(``gbdrift = cvdrift``). There is no separate :math:`\beta'` correction that
+would make the curvature drift differ from the :math:`\nabla B` drift, as in
+Hastie-Hesketh-type or Aleynikova-Zocco analytic models. A benchmark that
+needs that difference must use Miller geometry with ``betaprim``, or supply
+the drift arrays through an imported geometry file.
+
 The Miller keys follow GX: ``rhoc``, ``R0`` (GX ``Rmaj``), ``R_geo``,
 ``shift``, ``akappa``, ``akappri``, ``tri``, ``tripri``, ``betaprim``. stella
 spells two of them ``kappa`` and ``kapprim``, and ``triprim``; GS2 uses
@@ -189,8 +201,15 @@ fitted to :math:`\hat\phi \propto e^{(\gamma - i\omega)t}`
 has :math:`\omega > 0` in all four codes: GKX and GX (tracked reference CSV),
 GS2 (:math:`\hat\omega = 0.153` at ``aky = 0.4243``, Miller) and stella
 (:math:`\hat\omega = 0.178`) (**run**). Positive :math:`\omega` is the
-ion-diamagnetic direction in these runs. Electron modes (TEM, ETG) have
-:math:`\omega < 0`. No sign flip is needed between the codes for ``omega``.
+ion-diamagnetic direction for :math:`k_y > 0`: the tracked goldens that GKX
+reproduces have :math:`\omega > 0` for ITG
+(``src/gkx/data/cyclone_reference_adiabatic.csv``) and KBM, and
+:math:`\omega < 0` for ETG (``src/gkx/data/etg_reference.csv``, e.g.
+:math:`\omega = -8.73` at :math:`k_y = 10`). The drive enters as
+:math:`i\,k_y` times the species factor ``tz`` :math:`= Z_s/T_s`
+(``_diamagnetic_scalar_factors`` in ``gkx.terms.linear_terms``), so the
+charge sign fixes the direction. No sign flip is needed between the codes for
+``omega``; compare signed frequencies, not :math:`|\omega|`.
 
 Fields
 ------
