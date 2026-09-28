@@ -390,7 +390,7 @@ def _resolve_twist_shift_policy(
 
 
 def _ntft_m0(grid: SpectralGrid, ftwist: Any, ky_raw: Any, x0_eff: float) -> Any:
-    """Return the non-twisting radial index shift ``m0(ky, z)`` (GX convention)."""
+    """Return the non-twisting radial index shift ``m0(ky, z)``."""
 
     xp = _array_namespace(ftwist, ky_raw)
     delta = xp.asarray(0.01313, dtype=ftwist.dtype)
