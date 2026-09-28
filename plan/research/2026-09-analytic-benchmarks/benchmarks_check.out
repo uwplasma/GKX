@@ -1,0 +1,11 @@
+CHT s-alpha first-stability alpha_crit(s):
+  s= 0.2  alpha_crit=0.3265
+  s= 0.4  alpha_crit=0.3600
+  s= 0.6  alpha_crit=0.4294
+  s= 0.8  alpha_crit=0.5164
+  s= 1.0  alpha_crit=0.6135
+  s= 1.5  alpha_crit=0.8830
+Z(0) = 1.7724538509055159j  (expect i*sqrt(pi)=1.7725i)
+RH residual q=1.4, eps=0.18: 0.11916646083654786
+GAM omega R/v_ti tau=1, q=1.4: 1.8023896732734628
+diamag-MHD root omega = (0.25+0.31224989991991997j)  residual 0j

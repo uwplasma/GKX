@@ -20867,3 +20867,11 @@ Users suggested that GX/GKX KBM rates are wrong because of collisions or because
 
 Outcome: research PR only; nothing promoted.
 Next: GS2 ntheta 96 and bakdif 0 at ky 0.1/0.5 and with B∥; KBM decks with an explicit `damp_ends_rate` and nperiod 3; a GX nperiod 3 geometry file; a Krylov preconditioner for EM.
+
+## 2026-09-28 — analytic benchmark survey (KBM and beyond)
+
+Record: `plan/research/2026-09-analytic-benchmarks/REPORT.md` (+ `benchmarks_check.py`).
+- Top precision candidates: CHT s-alpha ideal ballooning boundary (1-D ODE, alpha_c(1)=0.61), diamagnetic-MHD KBM (omega_r = omega_*pi/2), Rosenbluth-Hinton residual, Sugama-Watanabe GAM, ETG/ITG isomorphism.
+- Recommended reference solver: the 1-D resonant KBM eigenproblem of arXiv 2505.10153 on GKX geometry arrays.
+- 14 paywalled papers listed for the maintainer to download.
+Outcome: research PR only; nothing promoted.
