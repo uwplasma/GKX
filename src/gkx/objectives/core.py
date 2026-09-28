@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import jax
-import jax.lax.linalg as lax_linalg
 import jax.numpy as jnp
 import numpy as np
 
@@ -19,7 +18,7 @@ from gkx.diagnostics import (
 from gkx.diagnostics.quasilinear_transport import effective_kperp2, phi_norm2
 from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.objectives.autodiff_validation import explicit_complex_operator_matrix
-from gkx.objectives.eigen import dominant_real_eigenvalue
+from gkx.objectives.eigen import dominant_eigenpair
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
     LinearParams,
@@ -338,22 +337,32 @@ def _solver_operator_matrix(context: _SolverGeometryContext) -> jnp.ndarray:
     )
 
 
+def _flat_operator(context: _SolverGeometryContext) -> Any:
+    """``operator((cache, linear_params), x)``: the linear RHS on flat vectors."""
+
+    shape, terms = context.state_shape, context.linear_terms
+
+    def operator(params: Any, vector: jnp.ndarray) -> jnp.ndarray:
+        image, _phi = linear_rhs_cached(
+            vector.reshape(shape),
+            params[0],
+            params[1],
+            terms=terms,
+            use_jit=False,
+            use_custom_vjp=False,
+        )
+        return image.reshape(-1)
+
+    return operator
+
+
 def _dominant_linear_branch(context: _SolverGeometryContext) -> _DominantLinearBranch:
-    matrix = _solver_operator_matrix(context)
-    # jnp.linalg.eig refuses to differentiate non-symmetric eigenvectors unless
-    # the caller opts in (jax >= 0.10.1). The dominant ITG branch is a simple,
-    # well-separated eigenvalue here, which is exactly the condition under which
-    # the eigenvector derivative is well defined, so opt in explicitly -- without
-    # it the whole objective vector is forward-only.
-    eigenvalues, eigenvectors = lax_linalg.eig(
-        matrix,
-        compute_left_eigenvectors=False,
-        compute_right_eigenvectors=True,
-        enable_eigvec_derivs=True,
+    dtype = jnp.result_type(context.cache.Jl.dtype, jnp.complex64)
+    size = int(np.prod(context.state_shape))
+    params = (context.cache, context.linear_params)
+    eigenvalue, eigenvector = dominant_eigenpair(
+        _flat_operator(context), size, dtype, params
     )
-    branch_index = jnp.argmax(jnp.real(eigenvalues))
-    eigenvalue = eigenvalues[branch_index]
-    eigenvector = eigenvectors[:, branch_index]
     state_arr = jnp.reshape(eigenvector, context.state_shape)
     _rhs, phi = _linear_rhs_phi(state_arr, context)
     return _DominantLinearBranch(eigenvalue=eigenvalue, state=state_arr, phi=phi)
@@ -856,7 +865,10 @@ def solver_growth_rate_from_geometry(
     shift: complex | None = None,
     candidates: int = 12,
 ) -> jnp.ndarray:
-    """Evaluate the dominant linear growth rate without eigenvector AD.
+    """Evaluate the dominant linear growth rate, differentiable in both AD modes.
+
+    The dense default differentiates in both modes through
+    :func:`gkx.objectives.eigen.dominant_eigenpair`.
 
     ``eigensolver="sparse-direct"`` assembles the operator's exact sparse matrix
     from compressed products, factors ``A - shift I`` once on the host
@@ -883,7 +895,7 @@ def solver_growth_rate_from_geometry(
         terms=terms,
     )
     if eigensolver == "dense":
-        return dominant_real_eigenvalue(_solver_operator_matrix(context))
+        return jnp.real(_dominant_linear_branch(context).eigenvalue)
     if eigensolver != "sparse-direct":
         raise ValueError(
             f"eigensolver must be 'dense' or 'sparse-direct', got {eigensolver!r}"
@@ -908,17 +920,7 @@ def _sparse_direct_eigenvalue(
     n = int(np.prod(shape))
     blocks = n // nz
 
-    def operator(p: Any, x: jnp.ndarray) -> jnp.ndarray:
-        image, _phi = linear_rhs_cached(
-            x.reshape(shape),
-            p[0],
-            p[1],
-            terms=context.linear_terms,
-            use_jit=False,
-            use_custom_vjp=False,
-        )
-        return image.reshape(-1)
-
+    operator = _flat_operator(context)
     params = (context.cache, context.linear_params)
     # The sparsity pattern is structural, so it is probed on a concrete
     # stand-in: traced leaves (under jit/grad) are replaced by generic values.

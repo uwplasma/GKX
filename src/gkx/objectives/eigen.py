@@ -1,7 +1,7 @@
 """Implicit eigenvalue objectives and branch-continuity diagnostics.
 
 The routines in this module are intentionally small and JAX-native: they expose
-an implicit left/right eigenpair VJP for locally isolated dominant-growth
+an implicit eigenpair derivative (forward and reverse) for locally isolated dominant-growth
 branches, plus finite-difference diagnostics that verify the selected branch is
 consistent before using the derivative in optimization gates.
 """
@@ -9,6 +9,7 @@ consistent before using the derivative in optimization gates.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, cast
 
 import jax
@@ -16,73 +17,84 @@ import jax.numpy as jnp
 import numpy as np
 
 
-def _select_dominant_eigen_triplet(
-    matrix: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return the max-real eigenvalue and biorthogonal right/left vectors."""
+def _dominant_pair(
+    operator: Any, size: int, dtype: Any, params: Any
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Max-real eigenpair of ``A(params)``, with ``v`` scaled to ``v[k] = 1``."""
 
-    eigvals, eigvecs = jnp.linalg.eig(matrix)
-    index = jnp.argmax(jnp.real(eigvals))
-    eigenvalue = eigvals[index]
-    right = eigvecs[:, index]
-    left_vals, left_vecs = jnp.linalg.eig(jnp.conj(jnp.swapaxes(matrix, 0, 1)))
-    left_index = jnp.argmin(jnp.abs(left_vals - jnp.conj(eigenvalue)))
-    left = left_vecs[:, left_index]
-    overlap = jnp.vdot(left, right)
-    tiny = jnp.asarray(1.0e-30, dtype=jnp.real(overlap).dtype)
-    safe_overlap = jnp.where(jnp.abs(overlap) > tiny, overlap, tiny + 0.0j)
-    left = left / jnp.conj(safe_overlap)
-    return eigenvalue, right, left
-
-
-@jax.custom_vjp
-def _dominant_real_eigenvalue_complex(matrix: jnp.ndarray) -> jnp.ndarray:
-    eigenvalue, _right, _left = _select_dominant_eigen_triplet(matrix)
-    return jnp.real(eigenvalue)
+    columns = jax.vmap(lambda e: operator(params, e))(jnp.eye(size, dtype=dtype))
+    matrix = jnp.swapaxes(columns, 0, 1)
+    eigvals = jnp.linalg.eigvals(matrix)
+    eigenvalue = eigvals[jnp.argmax(jnp.real(eigvals))]
+    # Two inverse-iteration steps at a slightly offset shift give the right
+    # vector; eigvals plus one LU costs about 60 % of a full ``eig``.
+    offset = jnp.finfo(dtype).eps ** 0.75 * jnp.max(jnp.abs(matrix))
+    eye = jnp.eye(size, dtype=dtype)
+    factor = jax.scipy.linalg.lu_factor(matrix - (eigenvalue + offset) * eye)
+    right = jax.scipy.linalg.lu_solve(factor, jnp.ones(size, dtype))
+    right = jax.scipy.linalg.lu_solve(factor, right / jnp.linalg.norm(right))
+    pivot = jnp.argmax(jnp.abs(right))
+    return eigenvalue, right / right[pivot], pivot, matrix
 
 
-def _dominant_real_eigenvalue_complex_fwd(
-    matrix: jnp.ndarray,
-) -> tuple[jnp.ndarray, tuple[jnp.ndarray, jnp.ndarray]]:
-    eigenvalue, right, left = _select_dominant_eigen_triplet(matrix)
-    return jnp.real(eigenvalue), (right, left)
+@partial(jax.custom_jvp, nondiff_argnums=(0, 1, 2))
+def dominant_eigenpair(
+    operator: Any, size: int, dtype: Any, params: Any
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Max-real eigenpair of ``A(params)``, forward- and reverse-differentiable.
+
+    ``operator(params, x)`` applies ``A(params)`` to a flat vector of length
+    ``size``. The primal materializes ``A``, takes its ``eigvals`` and the
+    right eigenvector by inverse iteration, scaled so its largest entry is one
+    (the tangent gauge). The tangent solves Nelson's bordered system
+
+    ``[[A - lambda I, -v], [e_k^T, 0]] [dv; dlambda] = [-(dA) v; 0]``
+
+    whose right-hand side is one ``jax.jvp`` of ``operator`` at ``v``, so the
+    tangent never materializes ``dA``. The bordered matrix depends on primals
+    only: a batch of tangents (``jacfwd``, a vmapped ``jvp``) shares one ``eig``
+    and one LU factorization. The tangent is linear in ``d params``, so JAX
+    transposes it for reverse mode. Valid for a simple dominant eigenvalue; see
+    :func:`dominant_eigenvalue_branch_locality_report`.
+    """
+
+    eigenvalue, right, _pivot, _matrix = _dominant_pair(operator, size, dtype, params)
+    return eigenvalue, right
 
 
-def _dominant_real_eigenvalue_complex_bwd(
-    residual: tuple[jnp.ndarray, jnp.ndarray],
-    cotangent: jnp.ndarray,
-) -> tuple[jnp.ndarray]:
-    right, left = residual
-    matrix_cotangent = jnp.asarray(cotangent) * jnp.outer(jnp.conj(left), right)
-    return (matrix_cotangent,)
-
-
-_dominant_real_eigenvalue_complex.defvjp(
-    _dominant_real_eigenvalue_complex_fwd,
-    _dominant_real_eigenvalue_complex_bwd,
-)
+@dominant_eigenpair.defjvp
+def _dominant_eigenpair_jvp(
+    operator: Any, size: int, dtype: Any, primals: Any, tangents: Any
+) -> tuple[Any, Any]:
+    (params,), (params_dot,) = primals, tangents
+    eigenvalue, right, pivot, matrix = _dominant_pair(operator, size, dtype, params)
+    bordered = jnp.zeros((size + 1, size + 1), dtype)
+    shifted = matrix - eigenvalue * jnp.eye(size, dtype=dtype)
+    bordered = bordered.at[:size, :size].set(shifted).at[:size, size].set(-right)
+    factor = jax.scipy.linalg.lu_factor(bordered.at[size, pivot].set(1.0))
+    image = jax.jvp(lambda p: operator(p, right), (params,), (params_dot,))[1]
+    rhs = jnp.concatenate([-image, jnp.zeros((1,), dtype)])
+    solution = jax.scipy.linalg.lu_solve(factor, rhs)
+    return (eigenvalue, right), (solution[size], solution[:size])
 
 
 def dominant_real_eigenvalue(matrix: jnp.ndarray) -> jnp.ndarray:
-    """Return the dominant growth rate with an implicit left/right VJP.
+    """Return the dominant growth rate with an implicit eigenpair derivative.
 
-    This helper treats the max-real eigenvalue branch selected at the primal
-    point as locally isolated. Its reverse rule uses
-    ``d lambda = w^H dA v`` with ``w^H v = 1`` instead of differentiating
-    through non-Hermitian eigenvectors. Branch isolation is still a physics
-    gate: callers that use this in optimization should keep finite-difference
-    or branch-continuity checks enabled near accepted candidates.
+    The derivative is ``Re(dlambda)`` of :func:`dominant_eigenpair`: it works
+    in forward mode (``jvp``, ``jacfwd``, VMEX's implicit Jacobian) and in
+    reverse mode. It treats the max-real branch selected at the primal point
+    as locally isolated; callers that use it in optimization should keep
+    finite-difference or branch-continuity checks near accepted candidates.
     """
 
     matrix_arr = jnp.asarray(matrix)
     if matrix_arr.ndim != 2 or matrix_arr.shape[0] != matrix_arr.shape[1]:
         raise ValueError("matrix must be square")
-    if not jnp.iscomplexobj(matrix_arr):
-        complex_dtype = (
-            jnp.complex128 if matrix_arr.dtype == jnp.float64 else jnp.complex64
-        )
-        matrix_arr = matrix_arr.astype(complex_dtype)
-    return _dominant_real_eigenvalue_complex(matrix_arr)
+    dtype = jnp.result_type(matrix_arr.dtype, jnp.complex64)
+    size = int(matrix_arr.shape[0])
+    pair = dominant_eigenpair(jnp.matmul, size, dtype, matrix_arr.astype(dtype))
+    return jnp.real(pair[0])
 
 
 def _eigenvalues_for_branch_report(matrix: Any, *, name: str) -> np.ndarray:
@@ -400,6 +412,7 @@ def dominant_eigenvalue_branch_locality_report(
 
 
 __all__ = [
+    "dominant_eigenpair",
     "dominant_eigenvalue_branch_locality_report",
     "dominant_real_eigenvalue",
 ]

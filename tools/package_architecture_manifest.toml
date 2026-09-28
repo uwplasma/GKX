@@ -1117,7 +1117,8 @@ recursive = true
 # 79446 -> 74748 (ARCH-B): measured after the contraction.
 # 74748 -> 75001: bug-fix chain (#302 #303 #304 #306 #308), measured.
 # 75001 -> 75124: xcode suspects (NTFT m0 chain frame, per-species nu pairs, phase R^2), measured.
-baseline = 75124
+# 75124 -> 75143: forward-mode dense eigenpair rule for VMEX's Jacobian, measured.
+baseline = 75143
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1441,7 +1442,8 @@ recursive = true
 # 84139 -> 81598 (ARCH-B): tests of deleted code removed; files merged.
 # 81598 -> 82219: bug-fix chain (#302 #303 #304 #306 #308), measured.
 # 82219 -> 82312: xcode suspects, one failing-on-main test per fix, measured.
-baseline = 82312
+# 82312 -> 82349: forward-mode gates for the dense and sparse-direct eigenpairs.
+baseline = 82349
 target = 35000
 
 [[line_budget_policy.counts]]

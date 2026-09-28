@@ -20784,3 +20784,56 @@ Not bugs (evidence):
 Pre-existing on `main`, unrelated: `test_three_field_dense_system_independent_moments[*float64*]` fail without x64; `test_linear_integrator_applies_linked_end_damping_per_step[0.5]` fails at rtol 1e-6 when run alone.
 
 Manifest: source 75001 -> 75124, tests 82219 -> 82312, measured. Per-species nu enters each ordered pair before the diagonal test-part sum (a row-block scale cannot reach the unlike test parts). coulomb is single-species only, so not in the nu test.
+
+## 2026-09-28 — VMEX-DERIV lane (F.5; forward-mode eigen-objectives)
+
+Changes:
+- `gkx.objectives.eigen.dominant_eigenpair`: a `custom_jvp` for the max-real
+  eigenpair of `A(params)` given `operator(params, x)`. Primal: materialize
+  `A`, `eigvals`, right vector by two inverse-iteration steps (one LU),
+  scaled to `v[k] = 1`. Tangent: Nelson's bordered system
+  `[[A - lambda I, -v], [e_k^T, 0]] [dv; dlambda] = [-(dA) v; 0]`, whose
+  right-hand side is one operator JVP at `v` (never `dA`); JAX transposes it
+  for reverse mode. Replaces the reverse-only `custom_vjp` of
+  `dominant_real_eigenvalue` and the `enable_eigvec_derivs` eig of the
+  objective vector. `solver_growth_rate_from_geometry(eigensolver="dense")`,
+  `solver_objective_vector_from_geometry` (all six entries) and the
+  nonlinear-window proxy built on them now work under `jvp`/`jacfwd`.
+- Bug fixed: `curvature_gradb_contribution` took `sqrt(m (m - 1))` of the
+  Hermite index cache leaf; an instantiated zero tangent at `m = 0` is
+  `0 * inf = NaN`, so every forward derivative that differentiated the cache
+  was NaN (sparse-direct `jacfwd` returned NaN while `grad` was finite).
+  The index is now `stop_gradient`. Test fails on `main`.
+- Sparse-direct growth: SOLVAX's `sparse_eigenvalue` is a `custom_jvp`; with
+  the fix above its forward derivative agrees with the dense one to 1e-8.
+
+Measured (office CPU, shared host at load 50-80, 12 cores,
+`OPENBLAS_NUM_THREADS=1`, n = Nl4 Nm8 Nz32 = 1024, x64):
+- GKX alone, 8 batched tangents of the growth rate / QL flux: 2.6 s / 3.5 s
+  against 4.3 s / 5.3 s for the `eigvals` / `enable_eigvec_derivs` route
+  (before the eigvals + inverse-iteration primal, which cuts the primal
+  from a 5.9 s `eig` to a 3.5 s `eigvals` plus 0.2 s LU); values agree to
+  6e-14 / 1.3e-12.
+- VMEX QA problem (max_mode 1, 8 dofs), warm residual Jacobian with the
+  growth row: 22.6-42.2 s new against 24.4-43.8 s old (two alternating runs
+  each, noise-limited); QL row 21.0-34.7 s against 29.7-39.8 s; VMEX without
+  a turbulence row 11.5-14.6 s. First Jacobian (compile) 290-320 s, of which
+  about 250 s is VMEX's own.
+- The dominant cost on this host was threaded LAPACK: a 1024 complex
+  `eigvals` took 67 s with 12 OpenBLAS threads under the external load and
+  5 s on one thread (Hessenberg 86 s against 2.6 s). With one thread VMEX's
+  linear example ran 22 min (53/32 s per Jacobian in stages 1/2) and the QL
+  example 19 min (45/53 s), against 28/29 min and 84-115 s published.
+- Linearizing the residual rows once in VMEX's column map (so chunked
+  columns share one eig) measured slower (38-45 s against 27-34 s), and
+  full-width Jacobian batches changed nothing (22-31 s against 25-33 s);
+  neither is in the VMEX PR.
+- AD against central FD inside VMEX: growth row 3e-8 to 4e-6 relative, QL
+  row 1e-6 to 2e-4, three columns each.
+
+Not done: A4000 timings (both GPUs at 97-100 % utilisation by other users
+throughout); `eigensolver="adaptive-propagator"` stays reverse-only (SOLVAX
+`eigenpair_reverse`; it also differentiates only the cache, not
+`linear_params`); the nonlinear VMEX example keeps the scalar L-BFGS-B route
+(a forward Jacobian pushes one tangent per boundary coefficient through the
+512-step window).
