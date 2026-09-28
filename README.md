@@ -167,6 +167,26 @@ These are agreements on shared test cases, not a ranking of codes, which
 differ in models and options. Detail: [benchmarks](docs/benchmarks.rst),
 [verification matrix](docs/verification_matrix.rst).
 
+## Conventions
+
+GKX uses GX's units: lengths in the minor radius `a` in the shipped decks,
+`v_t = sqrt(T/m)`, `rho = v_t/Omega`, time in `a/v_t`, and
+`phi ~ exp(-i omega t)` with `omega > 0` for Cyclone ITG. GS2 and stella use
+`v_t = sqrt(2T/m)`, which puts a `sqrt(2)` in most comparisons:
+
+| Quantity | GKX / GX | GS2 / stella | Convert to GKX |
+| --- | --- | --- | --- |
+| Reference speed | `sqrt(T/m)` | `sqrt(2T/m)` | |
+| `ky rho_i` | `ky` | `aky` | `ky = aky / sqrt(2)` |
+| `omega`, `gamma` | `v_t/a` | `v_t/a` (own `v_t`) | multiply by `sqrt(2)` |
+| Collision frequency | `nu` (GX `vnewk`) | `vnewk` | multiply by `sqrt(2)` |
+| Heat/particle flux | gyro-Bohm | gyro-Bohm (own `v_t`) | multiply by `2 sqrt(2)` |
+| `tprim`, `fprim`, `q`, `shat`, `beta`, `theta0` | same | same | none |
+
+Cyclone at `ky = 0.3` in GKX is `aky = 0.4243` in GS2 and stella. The
+[conventions page](docs/conventions.rst) gives the derivations, the sign
+conventions, the input keys of all four codes and the Cyclone deck in each.
+
 ## Nonlinear turbulence
 
 ![Replicated nonlinear heat flux and trajectory agreement with GX](docs/_static/readme/readme_nonlinear.png)

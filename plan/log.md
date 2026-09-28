@@ -20867,3 +20867,7 @@ Users suggested that GX/GKX KBM rates are wrong because of collisions or because
 
 Outcome: research PR only; nothing promoted.
 Next: GS2 ntheta 96 and bakdif 0 at ky 0.1/0.5 and with B∥; KBM decks with an explicit `damp_ends_rate` and nperiod 3; a GX nperiod 3 geometry file; a Krylov preconditioner for EM.
+
+## 2026-09-28 — conventions page (GKX vs GX, GS2, stella)
+
+Adds `docs/conventions.rst` and a README "Conventions" table. GKX = GX units (`L_ref = a` in shipped decks, `v_t = sqrt(T/m)`); GS2 8.2.1 and stella v1.0 use `sqrt(2T/m)`. Conversion factors: `ky/sqrt(2)`, rates and `vnewk` times `sqrt(2)`, fluxes times `2 sqrt(2)`. The ky and rate factors and the sign of `omega` (positive for Cyclone ITG in all four codes) were checked against the 2026-09-27 cross-code runs; the flux, collision, time and field factors are derived, not run. Not verified: GS2 s-alpha `shift` sign vs alpha, GS2/stella `A_par`/`B_par` normalizations, direction of the `tau_e`/`tau_fac`/`tite` ratio.
