@@ -20837,3 +20837,13 @@ throughout); `eigensolver="adaptive-propagator"` stays reverse-only (SOLVAX
 `linear_params`); the nonlinear VMEX example keeps the scalar L-BFGS-B route
 (a forward Jacobian pushes one tangent per boundary coefficient through the
 512-step window).
+
+## 2026-09-28 — release 2.4.2
+
+Adds, since 2.4.1: forward-mode derivatives for the dense growth rate,
+objective vector and window proxy (#313, one eigensolve and LU shared by a
+batch of JVP columns; fixes a NaN in forward derivatives through the cache);
+NTFT linked m0, per-species Sugama conservation and constant-phase fit fixes
+(#311); README/docs restructure with the cross-code benchmark section (#310);
+Codecov comments off (#312). Requires solvax>=0.27.0. VMEX #480 pins
+gkx>=2.4.2.
