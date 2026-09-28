@@ -1,0 +1,35 @@
+# ops/A_nh_4_64.npz shape=(2, 4, 64, 1, 1, 96) shift=(0.31-1.07j)
+a=1.00 N=  8 gamma=0.34616 omega=1.05069 lost=1.5e-08
+a=1.00 N= 12 gamma=0.32547 omega=1.05878 lost=2.1e-08
+a=1.00 N= 16 gamma=0.32343 omega=1.06589 lost=2.1e-08
+a=1.00 N= 24 gamma=0.32193 omega=1.06606 lost=2.6e-08
+a=0.90 N=  8 gamma=0.22053 omega=1.07886 lost=3.1e-08
+a=0.90 N= 12 gamma=0.32126 omega=1.06348 lost=3.1e-08
+# ops/A_nh_4_64.npz shape=(2, 4, 64, 1, 1, 96) shift=(0.31-1.07j)
+a=0.80 N=  8 gamma=-0.00325 omega=0.95837 lost=2.4e-08
+a=0.80 N= 12 gamma=0.26522 omega=1.05652 lost=5.9e-08
+a=0.80 N= 16 gamma=0.31414 omega=1.06703 lost=3.3e-06
+# ops/A_nh_4_64.npz shape=(2, 4, 64, 1, 1, 96) shift=(0.31-1.07j)
+a=1.00 N=  4 gamma=0.46760 omega=1.03801 lost=1.5e-08
+a=1.00 N=  6 gamma=0.41340 omega=1.07422 lost=1.5e-08
+a=1.00 N=  8 gamma=0.41219 omega=1.06734 lost=1.5e-08
+a=1.00 N= 12 gamma=0.39668 omega=1.06778 lost=2.1e-08
+a=1.00 N= 16 gamma=0.38694 omega=1.06225 lost=2.1e-08
+a=0.90 N=  4 gamma=-0.00243 omega=1.10629 lost=3.0e-08
+a=0.90 N=  6 gamma=0.44875 omega=1.04149 lost=3.0e-08
+a=0.90 N=  8 gamma=0.38557 omega=1.06953 lost=3.1e-08
+a=0.90 N= 12 gamma=0.38047 omega=1.04912 lost=3.1e-08
+a=0.90 N= 16 gamma=0.36461 omega=1.05475 lost=3.2e-08
+a=0.80 N=  4 gamma=-0.00521 omega=1.04168 lost=2.4e-08
+a=0.80 N=  6 gamma=0.25755 omega=0.89407 lost=2.4e-08
+a=0.80 N=  8 gamma=0.26822 omega=1.15678 lost=2.4e-08
+a=0.80 N= 12 gamma=0.35699 omega=1.06912 lost=5.9e-08
+a=0.80 N= 16 gamma=0.35857 omega=1.06000 lost=3.3e-06
+a=0.70 N=  4 gamma=-0.00221 omega=1.01824 lost=3.6e-08
+a=0.70 N=  6 gamma=-0.00136 omega=1.06519 lost=5.2e-07
+a=0.70 N=  8 gamma=-0.00114 omega=1.05618 lost=5.1e-06
+a=0.70 N= 12 gamma=0.25496 omega=1.07916 lost=2.0e-04
+a=0.70 N= 16 gamma=0.34287 omega=1.04037 lost=3.2e-03
+a=0.60 N=  4 gamma=-0.00061 omega=1.00750 lost=2.7e-05
+a=0.60 N=  6 gamma=-0.00057 omega=1.10979 lost=2.5e-04
+a=0.60 N=  8 gamma=-0.00039 omega=1.06297 lost=1.4e-03

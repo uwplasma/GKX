@@ -20847,3 +20847,23 @@ NTFT linked m0, per-species Sugama conservation and constant-phase fit fixes
 (#311); README/docs restructure with the cross-code benchmark section (#310);
 Codecov comments off (#312). Requires solvax>=0.27.0. VMEX #480 pins
 gkx>=2.4.2.
+
+## 2026-09-28 — KBM-VEL lane (EM2 item 2, EM-B-PAR, velocity basis)
+
+Baseline: `main` `ec830472`.
+
+Users suggested that GX/GKX KBM rates are wrong because of collisions or because the Hermite-Laguerre basis spans all of velocity space, and proposed a truncated or rescaled basis. Record: `plan/research/2026-10-kbm-velocity/REPORT.md`.
+- Basis is not the problem. On the circular-Miller GX KBM case (ky 0.3, A∥), the GKX Hermite ladder with GX hypercollisions is flat to 0.7% from Nm 32 to 128 (0.3157 → 0.3140). Laguerre is converged at Nl 4. GKX agrees with repaired GX to 1.0% (A∥, Nm 128) and 0.5% (A∥ + B∥). Without hypercollisions the ladder converges from above toward the same value (0.412 → 0.330 at Nm 128).
+- The parallel domain and end damping move KBM γ.
+  - nperiod 2 → 3 gives +7.5% at ky 0.3 and +21% at ky 0.1.
+  - On legacy decks (no `damp_ends_rate`), the timestep-free eigen/Krylov routes damp at `damp_ends_amp` (0.1), while the time route damps at amp/dt (100). Result: γ 0.208 against 0.346 at Nl 4 / Nm 8.
+- A velocity-scaled Hermite basis (Galerkin projection of the exact operator, equal N) does not beat production α = 1 plus hypercollisions. α ≤ 0.8 loses the KBM at N ≤ 8. Negative result; no code.
+- GS2 is velocity-converged but moves +7.5% with `bakdif` 0.05 → 0 (0.315). It stays 7% below GKX at nperiod 3. B∥ effect: +31% in GS2, +27% in GKX.
+- stella v1.0 returns γ ≈ 1.44, insensitive to β, B∥, dt and v-grid; not usable. `include_electromagnetic = .true.` is required for `&electromagnetic` to be read.
+- For owners:
+  - `solver = "krylov"` fails on the EM KBM deck (inner FGMRES residual 0.97–0.99).
+  - A time fit returned γ 0.85 with `fit_settled = true` alongside a "0.01 growth times" warning.
+  - `kbm_mismatch_table.csv` gamma_ref does not match `kbm_reference.csv`.
+
+Outcome: research PR only; nothing promoted.
+Next: GS2 ntheta 96 and bakdif 0 at ky 0.1/0.5 and with B∥; KBM decks with an explicit `damp_ends_rate` and nperiod 3; a GX nperiod 3 geometry file; a Krylov preconditioner for EM.
