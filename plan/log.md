@@ -20875,3 +20875,21 @@ Record: `plan/research/2026-09-analytic-benchmarks/REPORT.md` (+ `benchmarks_che
 - Recommended reference solver: the 1-D resonant KBM eigenproblem of arXiv 2505.10153 on GKX geometry arrays.
 - 14 paywalled papers listed for the maintainer to download.
 Outcome: research PR only; nothing promoted.
+
+## 2026-09-28 — analytic benchmark specification (rewrite of the survey)
+
+Record: `plan/research/2026-09-analytic-benchmarks/REPORT.md`, with appendices `notes_A.md` and `notes_B.md` (per-paper transcriptions of 13 papers) and `benchmarks_check.py` (numpy/scipy).
+- Eight benchmarks, ranked, each with equation, GX normalization map, GKX deck, comparison quantity and tolerance:
+  1. RH 0.1192 / Xiao-Catto 0.1018.
+  2. SW GAM 2.738 v_ti/R0 (root of Eq. 2.7: 2.837, γ −0.041).
+  3. PKJ CBC β_crit 1.14/1.26/1.32%.
+  4. ω_r = ω_*pi/2 (Aleynikova-Zocco 2017, now read).
+  5. Hastie-Hesketh γ/ω_A 0.33, reproduced as 0.3328 from Eq. (2.6) at ka_i→0.
+  6. CHT α_crit(ŝ) converged to 1e-4 (θ_max up to 12800).
+  7. Romanelli/BDR thresholds.
+  8. KHD β_ic 0.0109.
+- The earlier GAM value (1.802) was wrong. CHT values at θ_max=60 were up to 0.012 high. Three DOIs were wrong.
+- Open items:
+  - The GX ω sign: the in-repo ITG/KBM goldens have ω>0, which contradicts the notes' assumption. Settle it with a GKX run before encoding any sign.
+  - Whether the s-α drift carries ω_κ≠ω_∇B. This gates the AZ and HH benchmarks.
+Outcome: research PR only; nothing promoted.

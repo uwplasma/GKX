@@ -1,11 +1,43 @@
-CHT s-alpha first-stability alpha_crit(s):
-  s= 0.2  alpha_crit=0.3265
-  s= 0.4  alpha_crit=0.3600
-  s= 0.6  alpha_crit=0.4294
-  s= 0.8  alpha_crit=0.5164
-  s= 1.0  alpha_crit=0.6135
-  s= 1.5  alpha_crit=0.8830
-Z(0) = 1.7724538509055159j  (expect i*sqrt(pi)=1.7725i)
-RH residual q=1.4, eps=0.18: 0.11916646083654786
-GAM omega R/v_ti tau=1, q=1.4: 1.8023896732734628
-diamag-MHD root omega = (0.25+0.31224989991991997j)  residual 0j
+2. Hastie-Hesketh ka_i->0 growth, q=sqrt2, tau=1 (Fig. 2 / Fig. 4)
+   S=0.6, alpha=0.8, beta_i=0.01: Eq.(2.1) 0.4102; Eq.(2.6) omega_*->0 0.3328
+   S=0.4, alpha=0.54, beta_i=0.00675: Eq.(2.1) 0.2340; Eq.(2.6) omega_*->0 0.1338
+   GX beta_ref=0.01, fprim=tprim=10 (R units), 2 species: alpha = 0.800; omega_A = 10.000 v_ti/R
+3. Pueschel-Kammerer-Jenko 2008 CBC closed form
+   beta_MHD = 0.6 s/[q^2(2wn+wTi+wTe)] = 1.3206 %
+   alpha_MHD(beta=1.14%) = 0.4071
+   alpha_MHD(beta=1.26%) = 0.4500
+4. Strongly driven KBM, omega(omega - w_pi) = -g_MHD^2 (Tang 1980 / AZ 2017 Eq. 9)
+   root 0.25000+0.31225j, residual 0.0e+00; Re(w)/w_pi = 0.5
+   AZ Fig.2 R/LT=35: w_r = ky*(a/Ln + a/LT)/2 = ky*6.700 v_ti/a;  consistent alpha = 2.189
+   AZ Fig.2 R/LT=40: w_r = ky*(a/Ln + a/LT)/2 = ky*7.600 v_ti/a;  consistent alpha = 2.483
+   AZ Fig.2 R/LT=45: w_r = ky*(a/Ln + a/LT)/2 = ky*8.500 v_ti/a;  consistent alpha = 2.777
+5. Rosenbluth-Hinton / Xiao-Catto residuals
+   RH  q=1.4 eps=0.18: 0.1192
+   XC  q=1.4 eps=0.18 circular: 0.1018
+   RH  q=1.5 eps=0.1: 0.0807
+   XC Fig.1 q=2 eps=0.2 Delta=0.04 kappa=1.0: 0.0640
+   XC Fig.1 q=2 eps=0.2 Delta=0.04 kappa=1.8: 0.1240
+   XC Fig.1 q=2 eps=0.2 Delta=0.04 kappa=3.0: 0.2396
+   XC Fig.2 kappa=1.8 delta=0.4: 0.1461
+   XC Fig.3 kappa=1.8 Delta=0 / 0.1: 0.1075 / 0.1613
+6. Sugama-Watanabe GAM (v_Ti=sqrt(2T/m); x sqrt2 -> GX v_ti=sqrt(T/m))
+   q=1.4 k_r a_i=0.0: (2.9)-(2.10) wG=1.9358 g=-0.0447 v_Ti/R0 = 2.7376, -0.0632 v_ti/R0 | root of (2.7): 2.8367, -0.0409 v_ti/R0
+   q=1.5 k_r a_i=0.131: (2.9)-(2.10) wG=1.9023 g=-0.0986 v_Ti/R0 = 2.6902, -0.1394 v_ti/R0 | root of (2.7): 2.7738, -0.1316 v_ti/R0
+   q=1.5 k_r a_i=0.0: (2.9)-(2.10) wG=1.9023 g=-0.0267 v_Ti/R0 = 2.6902, -0.0377 v_ti/R0 | root of (2.7): 2.7695, -0.0247 v_ti/R0
+7. ITG thresholds
+   Romanelli eps_n=0.1: fit (27) eta_ic=1.000; fluid (22) eta_ic=0.200
+   Romanelli eps_n=0.25: fit (27) eta_ic=1.125; fluid (22) eta_ic=0.125
+   Romanelli eps_n=0.5: fit (27) eta_ic=1.750; fluid (22) eta_ic=1.000
+   Romanelli eps_n=1.0: fit (27) eta_ic=3.000; fluid (22) eta_ic=3.125
+   Romanelli (26) flat density: R/LT_c = 2(1+1/tau) = 4; with 2/3 average = 2.667
+   BDR (32) fluid flat density: L_T/R > 4/(7+tau) -> R/LT_c = 2.000; resonant Fig. 2 read L_T/R ~ 0.35 -> 2.86
+   KHD (24) local beta_ic (k_par L_n=0.1, eps_n=0.2, eta_i=2.5, eta_e=2, ky=0.5): 0.0109; long-wavelength form 0.0077
+8. CHT s-alpha first-stability alpha_crit(s), theta cut-off doubled to |d|<1e-4
+   s=0.200  alpha_crit=0.3151  Richardson=0.3151  (theta_max= 12800, last change 5.1e-05)
+   s=0.400  alpha_crit=0.3545  Richardson=0.3545  (theta_max=  6400, last change 5.1e-05)
+   s=0.600  alpha_crit=0.4246  Richardson=0.4246  (theta_max=  3200, last change 8.8e-05)
+   s=0.786  alpha_crit=0.5052  Richardson=0.5051  (theta_max=  3200, last change 8.8e-05)
+   s=0.800  alpha_crit=0.5117  Richardson=0.5116  (theta_max=  3200, last change 8.8e-05)
+   s=1.000  alpha_crit=0.6087  Richardson=0.6086  (theta_max=  3200, last change 9.1e-05)
+   s=1.500  alpha_crit=0.8776  Richardson=0.8775  (theta_max=  6400, last change 5.1e-05)
+   Z(0) = 1.7724538509055159j  (i sqrt(pi) = 1.7725i)
