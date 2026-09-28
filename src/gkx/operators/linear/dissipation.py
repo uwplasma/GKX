@@ -57,6 +57,7 @@ class _HypercollisionLinkedRoute:
     linked_gather_mask: jnp.ndarray | None
     linked_use_gather: bool
     ny_full: int | None = None
+    ntft_m0: jnp.ndarray | None = None
 
 
 class CollisionInvariantRates(NamedTuple):
@@ -676,6 +677,7 @@ def _apply_parallel_hypercollision(
     linked_gather_mask: jnp.ndarray | None,
     linked_use_gather: bool,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     if linked_indices and linked_kz:
         return abs_z_linked_fft(
@@ -688,6 +690,7 @@ def _apply_parallel_hypercollision(
             linked_gather_mask=linked_gather_mask,
             linked_use_gather=linked_use_gather,
             ny_full=ny_full,
+            ntft_m0=ntft_m0,
         )
     return abs_z_periodic(kz_source, kz=kz)
 
@@ -752,6 +755,7 @@ def _parallel_hypercollision_contribution(
     linked_gather_mask: jnp.ndarray | None,
     linked_use_gather: bool,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Compute the ``|k_z|`` hypercollision branch, including linked tubes."""
 
@@ -777,6 +781,7 @@ def _parallel_hypercollision_contribution(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
         ny_full=ny_full,
+        ntft_m0=ntft_m0,
     )
 
 
@@ -810,6 +815,7 @@ def hypercollisions_contribution(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
     hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     coeffs = _HypercollisionCoefficients(
@@ -839,6 +845,7 @@ def hypercollisions_contribution(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
         ny_full=ny_full,
+        ntft_m0=ntft_m0,
     )
     real_dtype = jnp.real(G).dtype
     inactive_result = _inactive_hypercollision_result(
@@ -894,6 +901,7 @@ def hypercollisions_contribution(
         linked_gather_mask=route.linked_gather_mask,
         linked_use_gather=route.linked_use_gather,
         ny_full=route.ny_full,
+        ntft_m0=route.ntft_m0,
     )
 
 

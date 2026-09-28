@@ -117,6 +117,9 @@ class LinearCache:
     #: ``None`` when ``ky`` holds that row itself (see
     #: :attr:`gkx.core_grid.SpectralGrid.ky_cut`).
     ky_cut: jnp.ndarray | None = None
+    #: Non-twisting flux tube radial index shift ``m0(ky, z)``: row ``kx`` at
+    #: ``z`` holds ballooning mode ``kx + m0``. ``None`` off that geometry.
+    ntft_m0: jnp.ndarray | None = None
 
     def tree_flatten(self):
         children = (
@@ -173,7 +176,12 @@ class LinearCache:
         )
         linked_idx = self.linked_indices or ()
         linked_kz = self.linked_kz or ()
-        children = children + tuple(linked_idx) + tuple(linked_kz) + (self.ky_cut,)
+        children = (
+            children
+            + tuple(linked_idx)
+            + tuple(linked_kz)
+            + (self.ky_cut, self.ntft_m0)
+        )
         aux_data = (
             self.kperp2_bmag,
             self.use_twist_shift,
@@ -216,5 +224,6 @@ class LinearCache:
             linked_full_cover=linked_full_cover,
             linked_use_gather=linked_use_gather,
             ny_full=ny_full,
-            ky_cut=children[-1],
+            ky_cut=children[-2],
+            ntft_m0=children[-1],
         )

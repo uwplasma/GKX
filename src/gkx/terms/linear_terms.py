@@ -95,6 +95,7 @@ def streaming_contribution(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     if _is_static_zero(weight, jnp.real(H).dtype):
@@ -122,6 +123,7 @@ def streaming_contribution(
             linked_gather_mask=linked_gather_mask,
             linked_use_gather=linked_use_gather,
             ny_full=ny_full,
+            ntft_m0=ntft_m0,
             use_twist_shift=use_twist_shift,
         )
     )
@@ -196,6 +198,7 @@ def _streaming_parallel_derivative(
     linked_gather_mask: jnp.ndarray | None,
     linked_use_gather: bool,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     if not use_twist_shift:
         return grad_z_periodic(rhs, kz=kz)
@@ -214,6 +217,7 @@ def _streaming_parallel_derivative(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
         ny_full=ny_full,
+        ntft_m0=ntft_m0,
     )
 
 
@@ -274,6 +278,7 @@ def linked_streaming_contribution(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
     hermite_closure: str = "truncation",
     hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
@@ -316,6 +321,7 @@ def linked_streaming_contribution(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
         ny_full=ny_full,
+        ntft_m0=ntft_m0,
     )
     if str(hermite_closure).strip().lower() != "reflectionless":
         return streamed
@@ -334,6 +340,7 @@ def linked_streaming_contribution(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
         ny_full=ny_full,
+        ntft_m0=ntft_m0,
         hermite_window=hermite_window,
     )
 
@@ -354,6 +361,7 @@ def _reflectionless_closure(
     linked_gather_mask: jnp.ndarray | None,
     linked_use_gather: bool,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
     hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     """Return ``-R sqrt(M+1) v_th |k_par| G`` on the last Hermite moment only."""
@@ -391,6 +399,7 @@ def _reflectionless_closure(
             linked_gather_mask=linked_gather_mask,
             linked_use_gather=linked_use_gather,
             ny_full=ny_full,
+            ntft_m0=ntft_m0,
         )
     else:
         abs_tail = abs_z_periodic(tail, kz=kz)

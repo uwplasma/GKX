@@ -236,6 +236,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
                 linked_gather_mask=cache.linked_gather_mask,
                 linked_use_gather=cache.linked_use_gather,
                 ny_full=getattr(cache, "ny_full", None),
+                ntft_m0=getattr(cache, "ntft_m0", None),
             )
         else:
             parallel_derivative = grad_z_periodic(pre_derivative, kz=cache.kz)
@@ -384,6 +385,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
                 linked_gather_mask=cache.linked_gather_mask,
                 linked_use_gather=cache.linked_use_gather,
                 ny_full=getattr(cache, "ny_full", None),
+                ntft_m0=getattr(cache, "ntft_m0", None),
             )
         else:
             parallel_hypercollision = abs_z_periodic(kz_source, kz=cache.kz)

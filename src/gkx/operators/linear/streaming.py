@@ -385,6 +385,22 @@ def _linked_fft_scatter_output(
     return df_flat.reshape(*lead_shape, Ny, Nx, Nz)
 
 
+def _shift_kx_modes(f: jnp.ndarray, shift: jnp.ndarray) -> jnp.ndarray:
+    """Return ``out[ky, kx, z] = f[ky, kx + shift[ky, z], z]`` in signed modes.
+
+    Radial mode numbers follow the FFT order; a source outside the resolved
+    band ``|n| <= (Nx - 1) // 2`` contributes zero.
+    """
+
+    nx = f.shape[-2]
+    modes = np.fft.fftfreq(nx, d=1.0 / nx).astype(np.int32)
+    source = modes[None, :, None] + jnp.asarray(shift, jnp.int32)[:, None, :]
+    valid = jnp.abs(source) <= (nx - 1) // 2
+    index = jnp.broadcast_to(jnp.mod(source, nx), f.shape)
+    out = jnp.take_along_axis(f, index, axis=-2)
+    return jnp.where(valid, out, jnp.zeros((), dtype=f.dtype))
+
+
 def _linked_fft_apply(
     f: jnp.ndarray | tuple[jnp.ndarray, ...],
     linked_indices: tuple[jnp.ndarray, ...],
@@ -397,8 +413,14 @@ def _linked_fft_apply(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Apply linked-chain spectral operators; a tuple ``f`` returns them stacked.
+
+    On a non-twisting flux tube the state row ``kx`` at ``z`` holds the
+    ballooning mode ``kx + m0(ky, z)``, so a parallel chain keeps
+    ``kx + m0`` fixed (not ``kx``): the operand is moved to that frame before
+    the chain transform and the result moved back.
 
     With a tuple of equally shaped operands and one operator per operand, the
     result carries a new leading axis whose slot ``i`` equals
@@ -407,6 +429,22 @@ def _linked_fft_apply(
     """
 
     _validate_linked_fft_inputs(linked_indices, linked_kz, operator=operator)
+    if ntft_m0 is not None:
+        shifted = _linked_fft_apply(
+            tuple(_shift_kx_modes(part, -ntft_m0) for part in f)
+            if isinstance(f, tuple)
+            else _shift_kx_modes(f, -ntft_m0),
+            linked_indices,
+            linked_kz,
+            operator=operator,
+            linked_inverse_permutation=linked_inverse_permutation,
+            linked_full_cover=linked_full_cover,
+            linked_gather_map=linked_gather_map,
+            linked_gather_mask=linked_gather_mask,
+            linked_use_gather=linked_use_gather,
+            ny_full=ny_full,
+        )
+        return _shift_kx_modes(shifted, ntft_m0)
     if isinstance(f, tuple):
         if isinstance(operator, str) or len(operator) != len(f):
             raise ValueError("stacked linked FFT operands need one operator each")
@@ -497,6 +535,7 @@ def grad_z_linked_fft(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Spectral z-derivative using linked-chain FFT modes."""
 
@@ -512,6 +551,7 @@ def grad_z_linked_fft(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
         ny_full=ny_full,
+        ntft_m0=ntft_m0,
     )
 
 
@@ -525,6 +565,7 @@ def abs_z_linked_fft(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Apply |kz| in linked-FFT space."""
 
@@ -539,6 +580,7 @@ def abs_z_linked_fft(
         linked_gather_mask=linked_gather_mask,
         linked_use_gather=linked_use_gather,
         ny_full=ny_full,
+        ntft_m0=ntft_m0,
     )
 
 
@@ -637,6 +679,7 @@ def streaming_ladder_term(
     linked_gather_mask: jnp.ndarray | None = None,
     linked_use_gather: bool = False,
     ny_full: int | None = None,
+    ntft_m0: jnp.ndarray | None = None,
     use_twist_shift: bool = False,
 ) -> jnp.ndarray:
     """Apply streaming with precomputed Hermite-ladder coefficients."""
@@ -657,6 +700,7 @@ def streaming_ladder_term(
                 linked_gather_mask=linked_gather_mask,
                 linked_use_gather=linked_use_gather,
                 ny_full=ny_full,
+                ntft_m0=ntft_m0,
             )
         else:
             if kx_link_plus is None or kx_link_minus is None:
