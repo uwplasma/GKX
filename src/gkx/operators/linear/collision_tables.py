@@ -431,8 +431,11 @@ def collision_operator_from_config(
     if collisionality.ndim > 1:
         raise ValueError("nu must be a scalar or a per-species vector")
     if collisionality.ndim == 1:
-        # A per-species vector scales each target species' row block.
-        collisionality = collisionality.reshape((-1, 1, 1, 1))
+        # Species prefactors nu_a ~ Z_a^4 give the pair prefactor
+        # Z_a^2 Z_b^2 = sqrt(nu_a nu_b): symmetric, so the ordered pairs (a, b)
+        # and (b, a) still exchange momentum and energy exactly.
+        collisionality = jnp.sqrt(collisionality[:, None] * collisionality[None, :])
+        collisionality = collisionality[..., None, None]
 
     if key == "sugama":
         operator = DriftKineticMomentCollisionOperator.from_species(
