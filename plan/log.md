@@ -20747,3 +20747,24 @@ Cross-code record: `plan/research/2026-09-27-xcode/REPORT.md`. Repaired GX build
 
 Outcome: PRs open, CI running; nothing promoted into ledger rows.
 Next: GKX two-species eigenpairs for VAL-KE; stella knockout with the semi-Lagrange mirror off; GS2 KBM e4; nonlinear Cyclone vs GX (GPU) not started.
+
+## 2026-09-27 — DOCS2 lane (README and docs restructure)
+
+Baseline: `main` `b3f9457b2`.
+
+- README reorganized into focused sections (install, run, Python, examples,
+  linear, benchmarks and cross-code comparison, nonlinear, collisions and
+  proof tests, derivatives, VMEX optimization, performance). The "Claim scope"
+  section is removed at the maintainer's request; the quasilinear non-promotion
+  sentence stays in the VMEX section, and `REQUIRED_PHRASES["README.md"]` keeps
+  only that phrase. Scope sentences remain pinned in `docs/release_scope.rst`
+  and `docs/verification_matrix.rst`.
+- New README figure `readme_crosscode.png` (`scripts/figures.py crosscode`),
+  values copied into `scripts/figures.toml` from the 2026-09-27 xcode record,
+  section 5.
+- Docs: new `tutorials`, `features`, `design_decisions` pages; index grouped as
+  getting started, inputs/outputs, examples, physics and models, numerics and
+  algorithms, how the code works, benchmarks and validation, development.
+  Staleness pass: `ky_layout` opt-in and #306 CFL, #303 hyperdiffusion ky_cut,
+  #308 zonal response, sparse-direct eigensolver rows, cross-code subsection in
+  benchmarks, VMEX turbulence scripts in stellarator optimization.

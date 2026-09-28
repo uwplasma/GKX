@@ -3,7 +3,7 @@ Release Scope and Claim Boundaries
 
 .. note::
 
-   Snapshot: GKX 2.3.0, 2026-09-21. The status of every public number is its
+   Snapshot: GKX 2.3.0, 2026-09-21, reviewed against 2.4.1 on 2026-09-27. The status of every public number is its
    row in the evidence ledger, shown on :doc:`verification_matrix`. A claim
    that is neither in the ledger nor on this page is not made.
 
@@ -15,6 +15,9 @@ Release Scope and Claim Boundaries
    evidence before they are cited, and the GX references behind the
    provisional linear rows have not yet been regenerated with the per-unit-time
    end-damping rate (`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_).
+   The adiabatic Cyclone GX goldens were rerun with a repaired GX build in
+   September 2026 and moved by at most 0.06% above :math:`k_y=0.1`
+   (:doc:`benchmarks`); the ledger rows have not been updated.
 
 Claim scope
 -----------

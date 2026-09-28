@@ -20,6 +20,11 @@ Resolution and time-step defaults
   ``Nl`` (Laguerre) and ``Nm`` (Hermite), the fallback is
   ``(Nl, Nm) = (12, 24)`` for linear runs and ``(4, 8)`` for nonlinear runs.
   Set both explicitly for any result you report.
+- **ky layout.** ``[grid] ky_layout = "full"`` (default) stores the two-sided
+  ``ky`` axis of length ``Ny``; ``"half"`` stores the ``1 + Ny // 2``
+  non-negative rows (``gkx.core_ky_layout``). Results do not depend on the
+  choice. ``"half"`` makes a nonlinear step cheaper but the heat-flux window
+  gradient slower.
 - **Time stepping.** A deck that sets ``[time] dt`` runs ``rk2`` at that fixed
   step unless it names another ``method``. A deck without ``dt`` gets
   ``method = "rk4"`` with ``fixed_dt = false``: the CFL controller chooses the
@@ -272,7 +277,7 @@ The ``gkx`` executable accepts path overrides:
 
 .. code-block:: bash
 
-   gkx run --config case.toml --vmec-file examples/vmec/wout_circular_tokamak.nc
+   gkx run --config case.toml --vmec-file examples/vmec/wout_circular_tokamak.nc  # built by generate_wouts.sh
    gkx run --config case.toml --geometry-file external_geometry.eik.nc
    gkx run-runtime-nonlinear --config case.toml --init-file ~/restart.nc
 
@@ -296,6 +301,10 @@ The ``[run]`` and ``[scan]`` sections accept ``solver`` and ``fit_signal`` keys:
 * ``solver = "krylov"``: always use the matrix-free eigensolver. Its default
   route is ``KrylovConfig(method="adaptive")``, which returns an eigenpair only
   when its residual passes the certification gate (see `Runtime precision`_).
+  Other ``KrylovConfig.method`` values are ``power``, ``propagator``,
+  ``arnoldi``, ``shift_invert`` (matrix-free GMRES inner solves) and
+  ``sparse_shift_invert`` (assembles the sparse operator and factors it once
+  on the host).
 
 * ``fit_signal = "auto"`` (default): pick ``phi`` vs density based on fit quality
 * ``fit_signal = "phi"``: use the electrostatic potential time trace

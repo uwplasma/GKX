@@ -47,6 +47,10 @@ certification gates and branch selection stay in GKX.
        ``sparse_eigenpairs``
      - bounded-batch sparse assembly, shifted factorization and eigenpairs of
        ``method="sparse_shift_invert"`` (``gkx.solvers_linear_krylov``)
+   * - ``sparse_eigenvalue``
+     - host-factored sparse eigenvalues near a shift for
+       ``solver_growth_rate_from_geometry(eigensolver="sparse-direct")``
+       (``gkx.objectives.core``)
    * - ``chunked_jacfwd``
      - bounded-memory geometry Jacobians (``gkx.geometry.autodiff_checks``)
 

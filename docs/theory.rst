@@ -71,6 +71,12 @@ electrostatic runs, quasineutrality is solved in Fourier space for
    \left(\tau_e + \sum_s \frac{Z_s^2 n_s}{T_s}\left[1-\sum_{\ell} J_{\ell}^2\right]\right) \phi
    = \sum_s Z_s n_s \sum_{\ell} J_{\ell} G_{\ell, m=0}.
 
+For Boltzmann electrons the :math:`k_y = 0` response is
+:math:`\tau_e(\phi - \langle\phi\rangle)`, with :math:`\langle\cdot\rangle` the
+flux-surface average, so zonal potential carries no electron response. Boltzmann
+ions (ETG runs) respond to the full :math:`\phi`. Every field-solve route,
+serial and sharded, applies the same rule.
+
 Electromagnetic runs solve the coupled quasineutrality/perpendicular-Ampere
 system for :math:`(\phi, B_\parallel)` and then obtain :math:`A_\parallel` from
 parallel Ampere’s law. The gyrokinetic variable is

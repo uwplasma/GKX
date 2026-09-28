@@ -1,62 +1,85 @@
 GKX
 ===
 
-JAX gyrokinetics with Hermite–Laguerre velocity moments and field-aligned
-flux tubes. Start with a runnable case, then its model and evidence.
-:doc:`algorithms` is the overview of the methods and the decisions behind them.
-:doc:`release_scope` and :doc:`verification_matrix` state what is and is not
-claimed; read them before citing a result.
+JAX gyrokinetics for tokamak and stellarator flux tubes, with a
+Hermite--Laguerre velocity basis, certified eigenvalues, nonlinear turbulence
+and exact derivatives. Start with :doc:`quickstart` and :doc:`tutorials`;
+:doc:`features` lists what the code can do and :doc:`design_decisions` explains
+why it is built this way. :doc:`release_scope` and :doc:`verification_matrix`
+state what is and is not claimed.
+
+.. figure:: _static/readme/readme_linear.png
+   :alt: Linear growth rates, frequencies and an eigenfunction against GX
+   :width: 100%
 
 .. toctree::
    :maxdepth: 1
-   :caption: Start and run
+   :caption: Getting started
 
    quickstart
-   examples
+   tutorials
+   features
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Inputs and outputs
+
    inputs
    outputs
 
 .. toctree::
    :maxdepth: 1
-   :caption: Physics and numerical contracts
+   :caption: Examples
 
-   algorithms
+   examples
+   stellarator_optimization
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Physics and models
+
    theory
    normalization
    geometry
    linear_model
    operators
+   quasilinear
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Numerics and algorithms
+
    numerics
    solvers
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Sensitivities and optimization
-
+   algorithms
    differentiable_eigensolver
    nonlinear_autodiff
-   quasilinear
-   stellarator_optimization
+   parallelization
 
 .. toctree::
    :maxdepth: 1
-   :caption: Evidence and research status
+   :caption: How the code works
+
+   design_decisions
+   architecture
+   code_structure
+   solvax_defaults
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Benchmarks and validation
 
    benchmarks
    verification_matrix
    validation_strategy
-   parallelization
    performance
    codes
-   references
+   release_scope
 
 .. toctree::
    :maxdepth: 1
-   :caption: Development and API
+   :caption: Development
 
-   architecture
-   code_structure
    testing
-   solvax_defaults
-   release_scope
    api
+   references

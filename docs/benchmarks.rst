@@ -209,6 +209,48 @@ give a 24.82% increase. It is therefore a Python research API with no
 input-file option. The negative-evidence record is
 ``docs/_static/flow_shear_fixed_step_response_gate.json``.
 
+Cross-code comparison, 2026-09
+------------------------------
+
+The September 2026 cross-code record (``plan/research/2026-09-27-xcode/REPORT.md``)
+compares GKX with GX, GS2 and stella on the Cyclone cases. All numbers are in
+GX/GKX units. The runs used a shared host, so wall times are not cited.
+
+.. figure:: _static/readme/readme_crosscode.png
+   :alt: Cyclone growth rates from GKX, GX, GS2 and stella
+   :width: 90%
+
+   Cyclone growth rates from the four codes.
+
+- **GKX against GX.** GX was rebuilt with the ``dampEnds_linked`` loop repaired
+  (the original stopped at the kernel launch cap). Certified GKX eigenpairs at
+  ``Nl=16``, ``Nm=48`` agree with that build to within 0.3% in
+  :math:`\gamma` at 7 of 8 s-alpha and Miller :math:`k_y` points, and to within
+  0.13% in :math:`\omega` at all 8. The exception is Miller :math:`k_y=0.15`,
+  at +1.45% in :math:`\gamma`. For the adiabatic Cyclone goldens the repair
+  changes GX's own growth rates by at most 0.06% above :math:`k_y=0.1`.
+- **GKX against GS2.** Against converged GS2 ladders GKX is within 0.3% at
+  Miller :math:`k_y=0.30` and 0.40, and within 1.0% at s-alpha
+  :math:`k_y=0.30`.
+- **Kinetic electrons.** GS2 and the repaired GX agree to 1.2% at
+  :math:`k_y=0.30` and 0.2% at :math:`k_y=0.50` on Cyclone Miller with kinetic
+  electrons. A certified GKX eigenpair for this case is still to be run.
+- **stella.** stella's Cyclone growth rate is about 1.4 times the others. In the
+  build tested, its growth rate barely moves (+0.3%) when its mirror term is
+  switched off, while in GKX the mirror term accounts for 14% of
+  :math:`\gamma` at :math:`k_y=0.30`. This is a lead on the difference, not a
+  diagnosis of stella in general.
+- **s-alpha** :math:`k_y=0.55`. Neither the GS2 energy-grid ladder nor the GKX
+  Laguerre ladder is converged. Their finest rungs agree to 0.3%, but there is
+  still no converged reference at this point.
+
+The parity percentages in the README table (6.83% Cyclone s-alpha, 5.51%
+Miller) come from time-trace fitted tables such as
+``docs/_static/cyclone_mismatch_table.csv``, not from the eigenvalue. They
+measure the fit, not the disagreement between the codes' eigenvalues. The
+ledger rows still cite the fitted tables; nothing from this record has been
+promoted.
+
 Tracked results index
 ---------------------
 
