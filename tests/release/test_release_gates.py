@@ -3538,6 +3538,8 @@ _RUN_TO_REQUIRED = {
     # Gallery tutorial decks: a fixed few-hundred-step window, never saturated.
     "examples/03_nonlinear_tokamak/case.toml": "t_max",
     "examples/04_nonlinear_stellarator/case.toml": "t_max",
+    "examples/05_kinetic_electrons/case.toml": "t_max",
+    "examples/05_kinetic_electrons/case_stellarator.toml": "t_max",
 }
 
 # Decks cleared to run under the default, with the measurement that cleared

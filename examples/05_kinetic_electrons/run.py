@@ -54,12 +54,8 @@ for label, path in CASES.items():
     d = result.diagnostics
     t, dt = np.asarray(d.t), np.asarray(d.dt_t)
     q = np.asarray(d.heat_flux_species_t)  # (time, species): ion, electron
-    cfl = dict(
-        zip(
-            ("drift_x", "drift_y", "streaming"),
-            np.asarray(d.cfl_scales)[:3].tolist(),
-        )
-    )
+    scales = np.asarray(d.cfl_scales)[:3].tolist()
+    cfl = dict(zip(("drift_x", "drift_y", "streaming"), scales))
     print(
         f"{label}: t_final = {t[-1]:.3f}, mean dt = {dt.mean():.2e}, "
         f"omega_stream = {cfl['streaming']:.0f} vs omega_drift = {max(cfl['drift_x'], cfl['drift_y']):.2f}, "
