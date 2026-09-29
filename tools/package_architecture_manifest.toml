@@ -1559,5 +1559,6 @@ recursive = true
 # 78277 -> 42501: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
 # 42501 -> 42502: linear_benchmark.py names the gallery and benchmarks/cases roots.
 # 42502 -> 42565: scripts/figures.py crosscode builder (README cross-code figure).
-baseline = 42565
+# 42565 -> 43022: scripts/campaigns/nonlinear_flux_jacobian.py, measured.
+baseline = 43022
 target = 18000
