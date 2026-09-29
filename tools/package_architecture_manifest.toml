@@ -318,7 +318,8 @@ recursive = true
 # 104 -> 106: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 106 -> 57: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
 # 57 -> 58: scripts/campaigns/nonlinear_flux_jacobian.py (Jacobian benchmark). Measured.
-baseline = 58
+# 58 -> 59: scripts/artifacts/build_analytic_benchmarks.py (analytic benchmarks). Measured.
+baseline = 59
 target = 12
 
 
@@ -1445,8 +1446,9 @@ recursive = true
 # 82219 -> 82312: xcode suspects, one failing-on-main test per fix, measured.
 # 82312 -> 82349: forward-mode gates for the dense and sparse-direct eigenpairs.
 # 82349 -> 82402: nonlinear flux Jacobian AD-vs-FD test, measured.
-# 82402 -> 82407: audit rows and smoke knob for the kinetic-electron decks.
-baseline = 82407
+# 82402 -> 82601: analytic benchmark gates in test_benchmarking.py. Measured.
+# 82601 -> 82606: audit rows and smoke knob for the kinetic-electron decks.
+baseline = 82606
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1561,5 +1563,6 @@ recursive = true
 # 42501 -> 42502: linear_benchmark.py names the gallery and benchmarks/cases roots.
 # 42502 -> 42565: scripts/figures.py crosscode builder (README cross-code figure).
 # 42565 -> 43022: scripts/campaigns/nonlinear_flux_jacobian.py, measured.
-baseline = 43022
+# 43022 -> 43611: build_analytic_benchmarks.py and the figures.py analytic builder. Measured.
+baseline = 43611
 target = 18000
