@@ -20927,3 +20927,10 @@ This encodes REPORT.md (#316) as gates. The references live in `scripts.artifact
 - In float32, Miller at nperiod ≥ 5 raises "theta does not match the sampled geometry grid".
 - Concurrent processes race on the Miller eik cache file (`.cache/gkx/miller_eik`) and read a truncated NetCDF.
 - At y0 = 20, Ny = 12, a `ky_target` beyond the grid silently resolves to a negative-ω alias.
+
+## 2026-09-29 — benchmark defects fixed (branch fix/benchmark-defects)
+
+Fixes the three defects listed in the analytic-benchmarks entry. Each has a test that fails on main.
+- **ky alias:** `select_ky_index` raises when |ky_target| exceeds the largest grid row of the same sign. It used to return the opposite-sign Nyquist row (reversed ω). Test: `test_select_ky_index_refuses_target_beyond_grid`.
+- **float32 Miller theta:** the theta check compared with atol 1e-6, below float32 rounding at |θ| ≈ 9π. The tolerance is now 16 eps·max|θ| (floor 1e-6). Test: `test_miller_float32_accepts_its_own_theta_grid_at_nperiod_5`, pinned to float32 because CI runs x64.
+- **Miller cache race:** `generate_miller_eik_internal` writes a per-PID temp file and publishes it with `os.replace`, so readers never see a partial file. Test: `test_generate_miller_eik_internal_publishes_atomically`.
