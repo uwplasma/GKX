@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from scripts.artifacts.analytic_references import (
+from scripts.artifacts.build_analytic_benchmarks import (
     cht_alpha_crit,
     fit_zonal_response,
     pkj_beta_mhd,

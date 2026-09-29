@@ -318,7 +318,8 @@ recursive = true
 # 104 -> 106: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 106 -> 57: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
 # 57 -> 58: scripts/campaigns/nonlinear_flux_jacobian.py (Jacobian benchmark). Measured.
-baseline = 58
+# 58 -> 59: scripts/artifacts/build_analytic_benchmarks.py (analytic benchmarks). Measured.
+baseline = 59
 target = 12
 
 
