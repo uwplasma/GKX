@@ -317,7 +317,8 @@ recursive = true
 # moving them again. Measured.
 # 104 -> 106: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 106 -> 57: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
-baseline = 57
+# 57 -> 58: scripts/campaigns/nonlinear_flux_jacobian.py (Jacobian benchmark). Measured.
+baseline = 58
 target = 12
 
 
@@ -1443,7 +1444,8 @@ recursive = true
 # 81598 -> 82219: bug-fix chain (#302 #303 #304 #306 #308), measured.
 # 82219 -> 82312: xcode suspects, one failing-on-main test per fix, measured.
 # 82312 -> 82349: forward-mode gates for the dense and sparse-direct eigenpairs.
-baseline = 82349
+# 82349 -> 82402: nonlinear flux Jacobian AD-vs-FD test, measured.
+baseline = 82402
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1557,5 +1559,6 @@ recursive = true
 # 78277 -> 42501: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
 # 42501 -> 42502: linear_benchmark.py names the gallery and benchmarks/cases roots.
 # 42502 -> 42565: scripts/figures.py crosscode builder (README cross-code figure).
-baseline = 42565
+# 42565 -> 43022: scripts/campaigns/nonlinear_flux_jacobian.py, measured.
+baseline = 43022
 target = 18000
