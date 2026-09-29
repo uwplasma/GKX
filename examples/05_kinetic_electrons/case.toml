@@ -1,9 +1,33 @@
 schema_version = 1
 
-# Cyclone ITG with kinetic electrons (m_e/m_i = 2.7e-4, beta = 1e-5), tutorial
-# resolution. Kinetic electrons stream about 60 times faster than ions, so the
-# explicit step is 0.001 and the short horizon only resolves the early growth.
-# case_full.toml is the reference-aligned deck (Nz = 96, Nl = 12, Nm = 32).
+# Nonlinear Cyclone ITG with kinetic electrons (m_e/m_i = 2.7e-4, beta = 1e-4),
+# tutorial resolution: 16x16x16, (Nl, Nm) = (2, 4). Seconds to a minute on a
+# CPU; the horizon covers the start of the linear phase only.
+#
+# Choosing dt. The step is set by the CFL controller (fixed_dt = false), and
+# with kinetic electrons the controller is bound by electron parallel
+# streaming, ~ v_te k_z,max = sqrt(m_i/m_e) ~ 60 times the ion rate: on this
+# grid omega_stream = 500 against omega_drift = 1.6. Two measured rules:
+#   * keep a small finite beta with A_parallel. At beta = 0 the electrostatic
+#     omega_H mode (k_par v_te / k_perp rho_s at the smallest k_perp) sets
+#     omega_stream = 4300 and dt = 3.6e-4; beta = 1e-4 gives dt = 1.5e-3, four
+#     times fewer steps, with the linear growth rate at k_y rho_i = 0.3
+#     unchanged to 2e-4 (0.62492 at beta = 1e-4 against 0.62478 at 1e-6).
+#   * cfl = 0.45, not the 0.9 default. At beta <= 1e-4 the controller's step
+#     at cfl = 0.9 (and at 0.6 for beta = 1e-5) grows W_g by 1e8-1e10 within
+#     t = 0.3 even with the nonlinear term off; 0.45 is stable at beta = 1e-5,
+#     1e-4 and 1e-3 on this grid.
+#
+# Choosing t_max (in a/v_ti): the linear phase lasts ~ 10/gamma ~ 20-40, the
+# first nonlinear burst and saturation follow by t ~ 60-100, and fluxes are
+# averaged over a window of at least 100-200 after saturation (run_to =
+# "saturation" stops once the heat-flux mean is converged). The tutorial
+# horizon below is 0.3.
+#
+# Production (GPU, hours): Nx = Ny = 64 (or 96), Nz = 24-32, Nl = 4, Nm = 8-16,
+# t_max = 400, run_to = "saturation", same beta and cfl. Nm = 8 raises the
+# streaming bound by 1.4 (2 sqrt(Nm)); check the flux against Nm = 16 before
+# quoting it.
 
 [[species]]
 name = "ion"
@@ -13,7 +37,6 @@ density = 1.0
 temperature = 1.0
 tprim = 2.49
 fprim = 0.8
-nu = 0.0
 kinetic = true
 
 [[species]]
@@ -24,26 +47,31 @@ density = 1.0
 temperature = 1.0
 tprim = 2.49
 fprim = 0.8
-nu = 0.0
 kinetic = true
 
 [grid]
-Nx = 1
-Ny = 12
+Nx = 16
+Ny = 16
 Nz = 16
-Lx = 62.8
+Lx = 176.25000339052914
 Ly = 62.8
 boundary = "linked"
-y0 = 10.0
+y0 = 28.2
 ntheta = 16
 nperiod = 1
 
 [time]
-t_max = 10.0
-dt = 0.001
-method = "rk4"
+t_max = 0.3
+dt = 0.05
+dt_max = 0.05
+method = "rk3"
+fixed_dt = false
+cfl = 0.45
 sample_stride = 10
-fixed_dt = true
+diagnostics_stride = 10
+run_to = "t_max"
+compressed_real_fft = true
+laguerre_nonlinear_mode = "grid"
 
 [geometry]
 q = 1.4
@@ -54,64 +82,44 @@ R0 = 2.77778
 [init]
 init_field = "density"
 init_amp = 1.0e-3
-init_single = true
+init_single = false
+random_seed = 22
 gaussian_init = false
-init_electrons_only = true
+kpar_init = 0.0
 
 [physics]
-linear = true
-nonlinear = false
+linear = false
+nonlinear = true
 electrostatic = false
 electromagnetic = true
 use_apar = true
 use_bpar = false
 adiabatic_electrons = false
-adiabatic_ions = false
-beta = 1.0e-5
-collisions = true
-hypercollisions = true
+beta = 1.0e-4
 
 [collisions]
-nu_hermite = 1.0
-nu_laguerre = 2.0
-nu_hyper = 0.0
-nu_hyper_l = 0.0
-nu_hyper_m = 1.0
-p_hyper_l = 6.0
-hypercollisions_const = 0.0
-hypercollisions_kz = 1.0
+D_hyper = 0.05
+p_hyper_kperp = 2.0
+hypercollisions_const = false
+hypercollisions_kz = true
+p_hyper = 2
+p_hyper_m = 4
 damp_ends_amp = 0.1
 damp_ends_widthfrac = 0.125
 
-[normalization]
-contract = "kinetic"
-diagnostic_norm = "rho_star"
-
 [terms]
-streaming = 1.0
-mirror = 1.0
-curvature = 1.0
-gradb = 1.0
-diamagnetic = 1.0
-collisions = 1.0
+nonlinear = 1.0
+hyperdiffusion = 1.0
 hypercollisions = 1.0
 end_damping = 1.0
 apar = 1.0
 bpar = 0.0
-nonlinear = 0.0
+
+[normalization]
+contract = "cyclone"
+diagnostic_norm = "rho_star"
 
 [run]
 ky = 0.3
 Nl = 2
 Nm = 4
-solver = "time"
-
-[fit]
-fit_signal = "density"
-auto_window = true
-window_fraction = 0.4
-min_points = 40
-start_fraction = 0.2
-growth_weight = 1.0
-require_positive = true
-mode_method = "project"

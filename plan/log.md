@@ -20927,3 +20927,13 @@ This encodes REPORT.md (#316) as gates. The references live in `scripts.artifact
 - In float32, Miller at nperiod ≥ 5 raises "theta does not match the sampled geometry grid".
 - Concurrent processes race on the Miller eik cache file (`.cache/gkx/miller_eik`) and read a truncated NetCDF.
 - At y0 = 20, Ny = 12, a `ky_target` beyond the grid silently resolves to a negative-ω alias.
+## 2026-09-28 — kinetic-electron performance and examples (perf/kinetic-electrons)
+
+Profiled nonlinear Cyclone with kinetic electrons (16x16x16, (Nl,Nm)=(2,4), m_e/m_i=2.7e-4) and a precise-QA VMEC flux tube, office CPU (GPUs occupied, host load 5-70, so throughput numbers are indicative; step counts are not load-dependent).
+- Where the time goes: the CFL controller is bound by electron streaming, omega_stream 500 against drift 1.6 (Cyclone) and 264 against 0.55 (QA). Every step is an ordinary explicit RHS; there is no field-solve or hypercollision outlier to remove.
+- beta = 0 electrostatic: omega_H at the smallest k_perp sets omega_stream = 4305, dt 3.6e-4. beta = 1e-4 with A_par: dt 1.5e-3 (cfl 0.45), 4.3x fewer steps. Linear check: dominant eigenvalue at ky 0.3 on the tutorial linear deck 0.62478 (beta 1e-6) against 0.62492 (1e-4).
+- **Defect, open**: at cfl 0.9 the controller's step is unstable at beta 1e-4 (W_g x1e8 by t = 0.2) and at cfl 0.6 for beta 1e-5, also with the nonlinear term off. The dense spectrum of the single-ky operator (ky 0.1, 0.2, 0.3, 1.0; Nm 4, 8, 16; beta 1e-6..1e-2) stays at 0.13-0.76 of the estimate, so the mode that breaks it lives only in the full linked box (small ky on long chains or the zonal row). cfl 0.45 is stable at beta 1e-5, 1e-4, 1e-3. Not fixed here because the estimate is GX's and moving it changes every adaptive run; next step is the dense spectrum of one linked chain of the nonlinear box.
+- Nonlinear `imex` (full linear operator in FGMRES) at dt 0.01: 0.4 steps/s with all 100 solves at the 200-iteration cap, 12x slower per unit time than the stable explicit step and unconverged. Not a remedy; §5.4 (response-matrix implicit streaming) remains the route and its entry trigger is now met for this workload. The runtime does not dispatch `imex` for nonlinear decks (integrate_nonlinear_explicit_diagnostics_state refuses it); the probe patched the dispatch.
+- Nm 8: dt 1.1e-3 (bound scales 2 sqrt(Nm)); m_e/m_i = 1/400: dt 2.7e-3 (a different model, documented only).
+- Linear: the Krylov eigen solve returns the dense operator's gamma_max (0.62479 vs 0.62479) with no time step.
+Outcome: examples/05_kinetic_electrons rewritten as nonlinear tokamak + QA stellarator decks with dt/t_max/resolution guidance; README "Kinetic electrons" section; docs/examples.rst section. No solver change.

@@ -3538,6 +3538,8 @@ _RUN_TO_REQUIRED = {
     # Gallery tutorial decks: a fixed few-hundred-step window, never saturated.
     "examples/03_nonlinear_tokamak/case.toml": "t_max",
     "examples/04_nonlinear_stellarator/case.toml": "t_max",
+    "examples/05_kinetic_electrons/case.toml": "t_max",
+    "examples/05_kinetic_electrons/case_stellarator.toml": "t_max",
 }
 
 # Decks cleared to run under the default, with the measurement that cleared
@@ -3770,6 +3772,8 @@ _CFL_MARGIN_OVER_BOUND: dict[str, str] = {}
 # their configured dt is a starting guess and being over it means nothing.
 _CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = {
     "examples/common_input.toml": "fixed_dt = false: adaptive dt",
+    "examples/05_kinetic_electrons/case.toml": "fixed_dt = false: adaptive dt",
+    "examples/05_kinetic_electrons/case_stellarator.toml": "fixed_dt = false: adaptive dt",
     "benchmarks/cases/circular_vmec_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
     "benchmarks/cases/etg_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
     "examples/03_nonlinear_tokamak/case_full.toml": ("fixed_dt = false: adaptive dt"),

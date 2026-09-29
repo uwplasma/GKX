@@ -1,0 +1,117 @@
+schema_version = 1
+
+# Nonlinear ITG with kinetic electrons in the Landreman-Paul (2021) precise
+# quasi-axisymmetric stellarator, flux tube at s = 0.64, tutorial resolution
+# (16x16x32, (Nl, Nm) = (2, 4)). run.py solves the wout once with vmex when it
+# is missing. dt and t_max follow the same rules as case.toml: the CFL
+# controller is bound by electron streaming, beta = 1e-4 with A_parallel
+# removes the electrostatic omega_H limit, and cfl = 0.45 keeps the adaptive
+# step stable. The tutorial horizon (t = 0.3) covers the start of the linear
+# phase only.
+#
+# Production (GPU, hours): Nx = Ny = 96, Nz = 48-64, Nl = 4, Nm = 8-16,
+# t_max = 400, run_to = "saturation".
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 3.0
+fprim = 1.0
+nu = 0.01
+kinetic = true
+
+[[species]]
+name = "electron"
+charge = -1.0
+mass = 0.00027
+density = 1.0
+temperature = 1.0
+tprim = 3.0
+fprim = 1.0
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 16
+Ny = 16
+Nz = 32
+Lx = 62.8
+Ly = 62.8
+boundary = "fix aspect"
+y0 = 21.0
+ntheta = 32
+nperiod = 1
+
+[time]
+t_max = 0.3
+dt = 0.05
+dt_max = 0.05
+method = "rk3"
+fixed_dt = false
+cfl = 0.45
+sample_stride = 10
+diagnostics_stride = 10
+run_to = "t_max"
+
+[geometry]
+model = "vmec"
+vmec_file = "../vmec/wout_LandremanPaul2021_QA_lowres.nc"
+torflux = 0.64
+alpha = 0.0
+npol = 1.0
+
+[init]
+init_field = "density"
+init_amp = 1e-3
+gaussian_init = false
+init_single = false
+
+[physics]
+linear = false
+nonlinear = true
+electrostatic = false
+electromagnetic = true
+use_apar = true
+use_bpar = false
+adiabatic_electrons = false
+adiabatic_ions = false
+beta = 1.0e-4
+collisions = true
+hypercollisions = true
+
+[collisions]
+nu_hermite = 1.0
+nu_laguerre = 2.0
+nu_hyper = 0.0
+p_hyper = 4.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 1.0
+D_hyper = 0.05
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "kinetic"
+diagnostic_norm = "rho_star"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 1.0
+hypercollisions = 1.0
+hyperdiffusion = 1.0
+end_damping = 1.0
+apar = 1.0
+bpar = 0.0
+nonlinear = 1.0
+
+[run]
+ky = 0.047619047619047616
+Nl = 2
+Nm = 4
