@@ -173,7 +173,7 @@ differ in models and options. Detail: [benchmarks](docs/benchmarks.rst),
 
 The runs are in `docs/_static/analytic_benchmarks.json`, built by
 `scripts/artifacts/build_analytic_benchmarks.py`. The gates are in
-`tests/validation/physics_gates/test_analytic_benchmarks.py`, and the
+`tests/validation/benchmarks/test_benchmarking.py`, and the
 specification is in [the research record](plan/research/2026-09-analytic-benchmarks/REPORT.md).
 Units are `v_ti = sqrt(T_i/m_i)`.
 
