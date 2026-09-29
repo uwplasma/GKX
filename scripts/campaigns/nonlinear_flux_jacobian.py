@@ -426,7 +426,7 @@ def plot(record: dict[str, Any], path: Path) -> None:
     )
     ax.set_xlabel(r"$R/L_T$")
     ax.set_ylabel(r"heat flux $Q$ [gyroBohm]")
-    ax.set_title(r"(c) $\\partial Q/\\partial(R/L_T)$: window vs long-time")
+    ax.set_title(r"(c) $\partial Q/\partial(R/L_T)$: window vs long-time")
     ax.legend(frameon=False, fontsize=8, loc="lower right")
     ax.grid(alpha=0.3)
     fig.tight_layout()
