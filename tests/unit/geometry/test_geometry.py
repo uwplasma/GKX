@@ -1567,8 +1567,15 @@ def test_miller_float32_accepts_its_own_theta_grid_at_nperiod_5(
     )
     with jax.enable_x64(False):  # the defect is float32-only; CI runs x64
         res = run_runtime_linear(
-            cfg, ky_target=0.3, Nl=1, Nm=2, solver="time", dt=1.0e-3, steps=2,
-            sample_stride=1, require_positive=False,
+            cfg,
+            ky_target=0.3,
+            Nl=1,
+            Nm=2,
+            solver="time",
+            dt=1.0e-3,
+            steps=2,
+            sample_stride=1,
+            require_positive=False,
         )
     assert float(res.ky) == pytest.approx(0.3, rel=1.0e-6)
 
