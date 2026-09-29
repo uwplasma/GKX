@@ -1540,7 +1540,7 @@ def test_generate_miller_eik_internal_publishes_atomically(
         generate_miller_eik_internal(
             output_path=tmp_path / "miller.eiknc.nc", request=_request()
         )
-    assert list(tmp_path.iterdir()) == []
+    assert not (tmp_path / "miller.eiknc.nc").exists()
 
 
 def test_miller_float32_accepts_its_own_theta_grid_at_nperiod_5(

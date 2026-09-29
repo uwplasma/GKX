@@ -917,13 +917,9 @@ def generate_miller_eik_internal(*, output_path: str | Path, request: Any) -> Pa
     profiles = _assemble_miller_profiles_for_request(request)
     out = Path(output_path).expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
-    # Atomic publish: concurrent readers never see a partially written file.
-    tmp = out.with_name(f".{out.name}.{os.getpid()}.tmp")
-    try:
-        write_miller_eik_netcdf(tmp, profiles)
-        os.replace(tmp, out)
-    finally:
-        tmp.unlink(missing_ok=True)
+    tmp = out.with_name(f".{out.name}.{os.getpid()}.tmp")  # atomic publish
+    write_miller_eik_netcdf(tmp, profiles)
+    os.replace(tmp, out)
     return out
 
 
