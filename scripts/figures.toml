@@ -73,3 +73,28 @@ gs2 = [
   ["Miller", 0.40, 0.14297],
   ["s-alpha", 0.30, 0.09219],
 ]
+
+[[figure]]
+name = "analytic"
+builder = "analytic"
+output = "readme_analytic.png"
+# Runs: scripts/artifacts/build_analytic_benchmarks.py (CPU hours, float64);
+# specification: plan/research/2026-09-analytic-benchmarks/REPORT.md.
+inputs = ["docs/_static/analytic_benchmarks.json"]
+
+[analytic]
+r_over_a = 2.77778
+# (artifact record, label) rows of panel (b)
+residual_rows = [
+  ["rh_q1.0", "s-α q=1.0"],
+  ["rh_q1.4", "s-α q=1.4"],
+  ["rh_q1.4_kx0.025", "s-α q=1.4, kx=0.025"],
+  ["rh_q2.0", "s-α q=2.0"],
+  ["rh_miller_q1.4", "Miller q=1.4"],
+  ["sw_fig1", "s-α q=1.5, ε=0.1, kx=0.131"],
+  ["xc_kappa1", "Miller κ=1, q=2, ε=0.2"],
+  ["xc_kappa3", "Miller κ=3, q=2, ε=0.2"],
+]
+# GENE KBM growth rate, Pueschel, Kammerer & Jenko, PoP 15, 102310 (2008),
+# Fig. 1, read by eye (±0.03): (beta %, gamma R/c_s).
+pkj_gamma = [[1.3, 0.2], [1.4, 0.5], [1.5, 0.71], [1.6, 0.87], [1.7, 1.0]]

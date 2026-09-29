@@ -167,6 +167,50 @@ These are agreements on shared test cases, not a ranking of codes, which
 differ in models and options. Detail: [benchmarks](docs/benchmarks.rst),
 [verification matrix](docs/verification_matrix.rst).
 
+## Analytic benchmarks
+
+![GKX against closed-form theory](docs/_static/readme/readme_analytic.png)
+
+The runs are in `docs/_static/analytic_benchmarks.json`, built by
+`scripts/artifacts/build_analytic_benchmarks.py`. The gates are in
+`tests/validation/physics_gates/test_analytic_benchmarks.py`, and the
+specification is in [the research record](plan/research/2026-09-analytic-benchmarks/REPORT.md).
+Units are `v_ti = sqrt(T_i/m_i)`.
+
+- **Zonal-flow residual** (Rosenbluth-Hinton 1998; Xiao-Catto 2006). A `ky = 0`
+  potential with Boltzmann electrons relaxes to
+  `phi(inf)/phi(0) = 1/(1 + S q^2/sqrt(eps))`, where `S = 1.6` (RH) or
+  `S(eps, kappa, delta)` (XC). At Nm = 128 the fitted residual matches XC
+  within 2.4% on every circular case (q = 1, 1.4 and 2, eps = 0.1 and 0.18,
+  s-alpha and Miller). At q = 1.4 it is 0.1013 against 0.1018. RH, which
+  drops O(eps) terms, is 15% high. Elongation kappa = 3 raises the residual
+  4.09x, against 3.89x from XC.
+- **GAM** (Sugama-Watanabe 2006). `omega_G` is compared with the root of
+  their Eq. (2.7) at the run's `k_x`. It agrees within 1.9% at q ≤ 2 and
+  within 3.5% on their Fig. 1 case (`k_x rho_i = 0.131`). The damping rate
+  misses the 15% target: GKX damps 11–25% faster than the root at q ≤ 1.4
+  and 19% slower at `k_x rho_i = 0.131`. The gate is therefore 30%.
+- **Cyclone KBM β scan** (Pueschel, Kammerer & Jenko 2008). This is `ky = 0.2`
+  with `alpha = 0` and kinetic hydrogen electrons. GENE's onset is 1.14% and
+  the MHD estimate is `0.6 s/(q^2 sum R/L) = 1.32%`. GKX's A∥ onset is 1.04%,
+  8% low: it misses the 3% target and is gated at 10% (Nm 16, nperiod 3;
+  Nm 32 gives 1.07%). The frequency matches GENE within 3%, and γ at
+  β = 1.6% within 9%. With B∥ on, the onset drops to 0.99%.
+- **Strongly driven KBM** (Tang-Connor-Hastie 1980; Aleynikova-Zocco 2017).
+  At β = 1.5%, `omega_r -> omega_*pi/2 = ky (fprim + tprim)/2`. GKX's s-alpha
+  model gives 1.06–1.10 of that at R/L_T = 35, which misses the 5% target.
+  s-alpha sets the curvature drift equal to the ∇B drift, and AZ show that
+  this lowers γ; GKX's γ is about 25% below their GENE values. At
+  R/L_T = 15 the ratio is 1.06–1.08, and 1.24–1.30 in circular Miller with
+  consistent `betaprim`. At R/L_T = 35 (alpha = 2.2), that Miller surface
+  has no KBM branch below `ky = 0.2`.
+- **Not yet compared:**
+  - the ky→0 KBM onset against the Connor-Hastie-Taylor ideal boundary
+    `alpha_crit(s)` (0.506 at s = 0.786; the references and the ODE solver
+    are in `gkx.diagnostics.analytic_references`);
+  - Hastie-Hesketh;
+  - the Romanelli, BDR and KHD trend checks.
+
 ## Conventions
 
 GKX uses GX's units: lengths in the minor radius `a` in the shipped decks,

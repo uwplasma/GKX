@@ -561,11 +561,185 @@ def build_crosscode(spec: dict[str, Any], config: dict[str, Any]) -> dict[str, A
     }
 
 
+# ------------------------------------------------------------------ analytic
+
+
+def _onset(beta: np.ndarray, gamma: np.ndarray, npts: int = 3) -> float:
+    """Zero of the linear fit of gamma(beta) through the lowest unstable points."""
+    order = np.argsort(beta)
+    b, g = beta[order], gamma[order]
+    b, g = b[g > 0][:npts], g[g > 0][:npts]
+    slope, intercept = np.polyfit(b, g, 1)
+    return float(-intercept / slope)
+
+
+def build_analytic(spec: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    from gkx.diagnostics.analytic_references import (
+        fit_zonal_response,
+        pkj_beta_mhd,
+        rosenbluth_hinton,
+        sw_gam_root,
+        xiao_catto,
+    )
+
+    data = _read_json(str(ROOT / spec["inputs"][0]))
+    ref = config["analytic"]
+    r_over_a = float(ref["r_over_a"])
+    zonal = data["zonal"]
+    fits = {n: fit_zonal_response(r["t"], r["phi"]) for n, r in zonal.items()}
+    record: dict[str, Any] = {"zonal_fit": fits}
+    dashed = {"color": REFERENCE, "ls": (0, (6, 3)), "lw": 1.3}
+    with figure_style():
+        fig, axes = plt.subplots(2, 2, figsize=(12.5, 8.4), constrained_layout=True)
+
+        ax = axes[0, 0]
+        for name, color in (("rh_q1.0", GKX), ("rh_q1.4", ALT), ("rh_q2.0", MUTED)):
+            q, eps, _ = zonal[name]["args"]
+            ax.plot(
+                zonal[name]["t"],
+                zonal[name]["phi"],
+                color=color,
+                lw=1.2,
+                label=f"GKX $q={q:g}$",
+            )
+            ax.axhline(xiao_catto(q, eps), color=color, ls=(0, (6, 3)), lw=1.4)
+            ax.axhline(rosenbluth_hinton(q, eps), color=color, ls=":", lw=1.4)
+        ax.plot([], [], color=REFERENCE, ls=(0, (6, 3)), label="Xiao-Catto")
+        ax.plot([], [], color=REFERENCE, ls=":", label="Rosenbluth-Hinton")
+        ax.set_xlim(0, 22)
+        ax.set_ylim(-0.45, 1.02)
+        ax.set_xlabel(r"$t\ v_{ti}/R_0$")
+        ax.set_ylabel(r"$\langle\phi\rangle(t)\,/\,\langle\phi\rangle(0)$")
+        ax.set_title(r"Zonal response, s-α, $\epsilon=0.18$, $k_x\rho_i=0.05$")
+        ax.legend(loc="upper right", fontsize=8.5, ncols=2)
+
+        ax = axes[0, 1]
+        rows = []
+        for name, label in ref["residual_rows"]:
+            q, eps, kx = zonal[name]["args"]
+            om, gam = sw_gam_root(q, krai=kx)
+            circular = not name.startswith("xc_")
+            rows.append(
+                (
+                    label,
+                    fits[name][0]
+                    / xiao_catto(q, eps, kappa=zonal[name].get("kappa", 1.0)),
+                    fits[name][1] / om if circular else np.nan,
+                    fits[name][2] / gam if circular else np.nan,
+                )
+            )
+        y = np.arange(len(rows))[::-1]
+        series = (
+            ("residual / Xiao-Catto", GKX, "7%"),
+            (r"$\omega_G$ / SW root", ALT, "5%"),
+            (r"$\gamma_G$ / SW root", MUTED, "30%"),
+        )
+        for k, (lab, color, tol) in enumerate(series):
+            ax.scatter(
+                [r[k + 1] for r in rows],
+                y + 0.18 * (1 - k),
+                color=color,
+                s=34,
+                zorder=3,
+                label=f"{lab} (gate {tol})",
+            )
+        ax.axvline(1.0, **dashed)
+        ax.axvspan(0.93, 1.07, color=GKX, alpha=0.08)
+        ax.set_yticks(y, [r[0] for r in rows], fontsize=9)
+        ax.set_xlim(0.6, 1.45)
+        ax.set_xlabel("GKX / theory")
+        ax.set_title("Residual and GAM against theory")
+        ax.legend(loc="lower right", fontsize=8.5)
+        record["zonal_ratios"] = rows
+
+        ax = axes[1, 0]
+        onsets = {}
+        for bpar, color, lab in (
+            (False, GKX, r"GKX $A_\parallel$"),
+            (True, ALT, r"GKX $A_\parallel+B_\parallel$"),
+        ):
+            pts = sorted(
+                (r["beta"], r["gamma"])
+                for r in data["pkj"]
+                if r["bpar"] == bpar and r["settled"]
+            )
+            b, g = np.array(pts).T
+            onsets[lab] = _onset(b, g)
+            ax.plot(
+                100 * b,
+                r_over_a * g,
+                "o-",
+                color=color,
+                label=f"{lab}, onset {100 * onsets[lab]:.2f}%",
+            )
+        pb, pg = np.array(ref["pkj_gamma"]).T
+        ax.plot(
+            pb,
+            pg,
+            "s",
+            color=REFERENCE,
+            mfc="none",
+            mew=1.3,
+            label="GENE (PKJ08 Fig. 1)",
+        )
+        beta_mhd = 100 * pkj_beta_mhd(0.786, 1.4, 2.22, 6.89, 6.89)
+        for beta, lab in (
+            (1.14, "GENE onset 1.14%"),
+            (beta_mhd, f"MHD {beta_mhd:.2f}%"),
+        ):
+            ax.axvline(beta, **dashed)
+            ax.text(beta + 0.01, 1.33, lab, fontsize=8.5, ha="left")
+        ax.set_ylim(0, 1.4)
+        ax.set_xlim(1.08, 1.85)
+        ax.set_xlabel(r"$\beta$ [%]")
+        ax.set_ylabel(r"$\gamma\ R/c_s$")
+        ax.set_title(r"Cyclone KBM, $k_y\rho_i=0.2$, $\alpha=0$ (Pueschel et al. 2008)")
+        ax.legend(loc="lower right", fontsize=8.5)
+        record["pkj_onset"] = onsets
+
+        ax = axes[1, 1]
+        for geom, name, filled in (
+            ("miller", "Miller", True),
+            ("s-alpha", "s-α", False),
+        ):
+            for rlt, color in ((35.0, GKX), (15.0, ALT)):
+                if geom == "miller" and rlt == 35.0:
+                    continue  # no KBM branch (alpha = 2.2); see the test docstring
+                pts = sorted(
+                    (r["ky"], r["omega"] / (r["ky"] * (r["tprim"] + r["fprim"]) / 2))
+                    for r in data.get("az", [])
+                    if r["geom"] == geom
+                    and r["settled"]
+                    and abs(r["tprim"] * r_over_a - rlt) < 0.1
+                )
+                if pts:
+                    k, ratio = np.array(pts).T
+                    ax.plot(
+                        k,
+                        ratio,
+                        "o-" if filled else "^--",
+                        color=color,
+                        mfc=color if filled else "white",
+                        label=f"{name}, $R/L_T={rlt:g}$",
+                    )
+        ax.axhline(1.0, **dashed)
+        ax.axhspan(0.95, 1.05, color=GKX, alpha=0.08)
+        ax.set_xlabel(r"$k_y\rho_i$")
+        ax.set_ylabel(r"$\omega_r\,/\,(\omega_{*pi}/2)$")
+        ax.set_title(r"Strongly driven KBM, $\beta=1.5\%$ (Aleynikova-Zocco 2017)")
+        ax.legend(loc="upper right", fontsize=8.5)
+        for a, lab in zip(axes.flat, "abcd"):
+            panel_label(a, lab)
+        _save(fig, spec, config)
+    return record
+
+
 BUILDERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
     "linear": build_linear,
     "nonlinear": build_nonlinear,
     "proof_tests": build_proof_tests,
     "crosscode": build_crosscode,
+    "analytic": build_analytic,
 }
 
 

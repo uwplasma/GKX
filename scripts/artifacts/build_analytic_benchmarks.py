@@ -1,6 +1,9 @@
 """Run the analytic-benchmark cases and write docs/_static/analytic_benchmarks.json.
 
-    python scripts/artifacts/build_analytic_benchmarks.py <case> [<case> ...]
+    JAX_ENABLE_X64=true python scripts/artifacts/build_analytic_benchmarks.py <case> ...
+
+Float64 is required: in float32 the Miller geometry rejects its own theta grid
+at nperiod >= 5 ("theta does not match the sampled geometry grid").
 
 Cases: zonal (Rosenbluth-Hinton / Xiao-Catto residual and Sugama-Watanabe GAM),
 pkj (Pueschel-Kammerer-Jenko CBC KBM beta scan, ky = 0.2), az (strongly driven
@@ -216,11 +219,13 @@ def em_cases(case: str) -> list[dict]:
                 "consistent": True,
                 "bpar": True,
                 "t_max": 20.0,
-                "dt": 5e-4,
+                "dt": 2.5e-4,
+                "nperiod": 6,
+                "Nm": 32,
             }
             for geom in ("miller", "s-alpha")
             for rlt in (35.0, 15.0)
-            for ky in (0.05, 0.1, 0.2, 0.3)
+            for ky in (0.05, 0.1, 0.2)
         ]
     if case == "cht":
         return [
@@ -231,10 +236,10 @@ def em_cases(case: str) -> list[dict]:
                 "geom": "miller",
                 "consistent": True,
                 "bpar": True,
-                "t_max": 150.0,
-                "nperiod": 5,
+                "t_max": 100.0,
+                "nperiod": 6,
             }
-            for b in (0.006, 0.008, 0.010, 0.012, 0.014)
+            for b in (0.008, 0.010, 0.012, 0.014, 0.016)
         ]
     raise SystemExit(f"unknown case {case!r}")
 
