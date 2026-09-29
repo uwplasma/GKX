@@ -47,6 +47,13 @@ def select_ky_index(ky: np.ndarray, ky_target: float) -> int:
         return int(np.argmin(np.abs(ky_arr)))
 
     abs_target = abs(float(ky_target))
+    same_sign = ky_arr[(ky_arr != 0.0) & (np.signbit(ky_arr) == np.signbit(ky_target))]
+    if same_sign.size and abs_target > np.max(np.abs(same_sign)) * (1.0 + 1.0e-6):
+        # Beyond the grid the nearest |ky| is the opposite-sign alias (reversed omega).
+        raise ValueError(
+            f"ky={ky_target:g} is beyond the grid (max |ky| of that sign is "
+            f"{np.max(np.abs(same_sign)):g}); increase Ny or reduce ky"
+        )
     magnitude_error = np.abs(np.abs(ky_arr) - abs_target)
     nonzero_penalty = np.isclose(ky_arr, 0.0).astype(int)
     sign_penalty = np.where(np.signbit(ky_arr) == np.signbit(ky_target), 0, 1)

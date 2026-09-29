@@ -117,9 +117,11 @@ class FluxTubeGeometryData(_SpectralGeometryMixin):
         )
         if isinstance(theta_line, jax.core.Tracer):
             return theta_arr
-        if not np.allclose(
-            np.asarray(theta_line), np.asarray(self.theta), rtol=1.0e-6, atol=1.0e-6
-        ):
+        ref = np.asarray(self.theta)
+        # Scale by the grid's own rounding: float32 at |theta| ~ 9 pi exceeds 1e-6.
+        eps = np.finfo(np.result_type(ref.dtype, np.float32)).eps
+        tol = max(1.0e-6, 16.0 * float(eps) * float(np.max(np.abs(ref), initial=1.0)))
+        if not np.allclose(np.asarray(theta_line), ref, rtol=0.0, atol=tol):
             raise ValueError("theta does not match the sampled geometry grid")
         return theta_arr
 
