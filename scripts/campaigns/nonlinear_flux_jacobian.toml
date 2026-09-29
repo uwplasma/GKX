@@ -28,4 +28,4 @@ tprim_multipliers = [0.8, 0.9, 1.0, 1.1, 1.2]
 deck_dir = "tools_out/nl_jacobian/scan"
 traces = "tools_out/nl_jacobian/scan/tprim_x{multiplier}.trace.npz"
 # Discard the transient: average only t >= this.
-t_start = 150.0
+t_start = 200.0
