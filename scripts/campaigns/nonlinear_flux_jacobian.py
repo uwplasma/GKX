@@ -394,33 +394,40 @@ def plot(record: dict[str, Any], path: Path) -> None:
     x0 = record["windows"][0]["theta"][0] * r0
     slope = s["dQ_dRLT_mean"]
     err = s["jacobian_std_over_windows"][0] / r0
+    base = [p for p in pts if p["multiplier"] == 1.0]
+    q0 = base[0]["Q_mean"] if base else s["Q_mean"]
     dx = np.linspace(-0.9, 0.9, 3)
     ax.plot(
         x0 + dx,
-        s["Q_mean"] + slope * dx,
+        q0 + slope * dx,
         color=colors[0],
-        label=rf"window adjoint $\partial Q/\partial(R/L_T)$ = {slope:.1f}±{err:.1f}",
+        lw=2,
+        label=rf"window adjoint: {slope:.1f} $\pm$ {err:.1f}",
     )
     if "secant_dQ_dRLT_at_base" in scan:
+        sec = scan["secant_dQ_dRLT_at_base"]
         ax.plot(
-            [],
-            [],
-            " ",
-            label=f"long-time secant = {scan['secant_dQ_dRLT_at_base']:.1f}",
+            x0 + dx,
+            q0 + sec * dx,
+            "--",
+            color="k",
+            label=f"long-time secant: {sec:.1f}",
         )
     ax.axvline(6.0, color="0.5", ls=":", lw=1)
-    ax.text(
-        6.02,
-        ax.get_ylim()[1] * 0.95,
-        "Dimits\nthreshold",
+    ax.annotate(
+        "CBC Dimits\nthreshold",
+        (6.0, 0.97),
+        xycoords=("data", "axes fraction"),
+        xytext=(3, 0),
+        textcoords="offset points",
         fontsize=8,
         va="top",
         color="0.4",
     )
     ax.set_xlabel(r"$R/L_T$")
     ax.set_ylabel(r"heat flux $Q$ [gyroBohm]")
-    ax.set_title("(c) window derivative vs stiffness")
-    ax.legend(frameon=False, fontsize=8, loc="upper left")
+    ax.set_title(r"(c) $\\partial Q/\\partial(R/L_T)$: window vs long-time")
+    ax.legend(frameon=False, fontsize=8, loc="lower right")
     ax.grid(alpha=0.3)
     fig.tight_layout()
     fig.savefig(path, dpi=150)
