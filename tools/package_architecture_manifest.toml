@@ -1444,7 +1444,8 @@ recursive = true
 # 81598 -> 82219: bug-fix chain (#302 #303 #304 #306 #308), measured.
 # 82219 -> 82312: xcode suspects, one failing-on-main test per fix, measured.
 # 82312 -> 82349: forward-mode gates for the dense and sparse-direct eigenpairs.
-baseline = 82349
+# 82349 -> 82402: nonlinear flux Jacobian AD-vs-FD test, measured.
+baseline = 82402
 target = 35000
 
 [[line_budget_policy.counts]]
