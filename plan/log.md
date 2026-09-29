@@ -20897,6 +20897,15 @@ Outcome: research PR only; nothing promoted.
 
 Adds `docs/conventions.rst` and a README "Conventions" table. GKX = GX units (`L_ref = a` in shipped decks, `v_t = sqrt(T/m)`); GS2 8.2.1 and stella v1.0 use `sqrt(2T/m)`. Conversion factors: `ky/sqrt(2)`, rates and `vnewk` times `sqrt(2)`, fluxes times `2 sqrt(2)`. The ky and rate factors and the sign of `omega` (positive for Cyclone ITG in all four codes) were checked against the 2026-09-27 cross-code runs; the flux, collision, time and field factors are derived, not run. Not verified: GS2 s-alpha `shift` sign vs alpha, GS2/stella `A_par`/`B_par` normalizations, direction of the `tau_e`/`tau_fac`/`tite` ratio.
 
+## 2026-09-28 — nonlinear heat-flux Jacobian (validation/nonlinear-flux-jacobian)
+
+Adds `scripts/campaigns/nonlinear_flux_jacobian.{py,toml}` with the committed record `docs/_static/nonlinear_flux_jacobian.{json,png}`, the README section "Nonlinear derivatives" and a CI test (`tests/unit/nonlinear/test_nonlinear_flux_jacobian.py`: 4x4x8, 6 steps, reverse = forward, AD = FD to 1e-6).
+- Case: Cyclone with adiabatic electrons, 16x16x16, rk3, 512-step windows, 3 seeds x 3 windows. Parameters: a/L_T and a/L_n.
+- AD vs FD: 1e-9 to 1e-10 at h=1e-5, with h^2 convergence above that. Forward vs reverse: 3e-14.
+- Cost on an A4000: one Q takes 2.2 s. Reverse mode takes 8.8 s and 682 MB of temporaries, forward mode 6.2 s and 39 MB, and central FD with 2 parameters 8.9 s.
+- Window dQ/d(R/L_T) = 29.6 +- 4.2. The long-time secant from the 5-point R/L_T scan is 48.6, so the window derivative runs about 40% low. No Dimits upshift is visible at 16^3.
+- Caveats: seeds 7 and 101 stopped at t of about 300 without a passing offline saturation report, although their windows sit at Q of about 100, the same as seed 22. The a/L_n derivative is not resolved from zero. Kinetic electrons, q, s_hat and beta are not done: geometry is sampled outside the trace, and linked decks refuse a traced s_hat.
+Outcome: benchmark only; no solver change.
 ## 2026-09-28 — kinetic-electron performance and examples (perf/kinetic-electrons)
 
 Profiled nonlinear Cyclone with kinetic electrons (16x16x16, (Nl,Nm)=(2,4), m_e/m_i=2.7e-4) and a precise-QA VMEC flux tube, office CPU (GPUs occupied, host load 5-70, so throughput numbers are indicative; step counts are not load-dependent).

@@ -268,6 +268,35 @@ steps; beyond about 2000 steps chaotic separation limits any window
 derivative. [Nonlinear autodiff](docs/nonlinear_autodiff.rst) ·
 [eigensolver](docs/differentiable_eigensolver.rst).
 
+## Nonlinear derivatives
+
+![Jacobian of the nonlinear Cyclone heat flux: AD vs finite differences, cost, and window vs long-time sensitivity](docs/_static/nonlinear_flux_jacobian.png)
+
+```bash
+python scripts/campaigns/nonlinear_flux_jacobian.py   # config: nonlinear_flux_jacobian.toml
+```
+
+The Jacobian of the mean heat flux `Q` over a 512-step post-saturation window
+(`gkx.nonlinear_heat_flux_window`, adiabatic-electron Cyclone, 16x16x16,
+`Nl,Nm = 4,8`) with respect to `a/L_T` and `a/L_n`, on 3 seeds x 3 consecutive
+windows. (a) Reverse and forward mode agree to 3e-14. Both match central
+differences of the same window objective to 1e-9 to 1e-10 at `h = 1e-5`. The
+error falls as `h^2` down to that roundoff floor. (b) On one RTX A4000,
+reverse mode costs 3.9 flux evaluations and 682 MB of compiled temporaries.
+Forward mode costs 2.8 evaluations and 39 MB. With two parameters, central FD
+costs the same 4 evaluations as reverse mode, which only wins when there are
+more parameters. (c) The window derivative is `dQ/d(R/L_T) = 29.6 +- 4.2`
+(window scatter; seed SEM 1.8), a normalized stiffness
+`d ln Q / d ln(R/L_T) = 2.0`. The secant of long-time means from five
+separate saturated runs is 48.6 (stiffness 3.5). A finite window captures
+only part of the turbulence's response to a changed drive, so it
+underestimates the long-time stiffness by about 40% here. The window
+derivative is exact for its own objective. It is not the derivative of the
+long-time average. At this resolution the scan shows no Dimits upshift: `Q`
+is still 45 at `R/L_T = 5.5`, below the CBC threshold of about 6. The
+`a/L_n` derivative (15.8 +- 17.6) is not resolved from zero. Kinetic
+electrons, `q`, `s_hat` and `beta` were not measured.
+
 ## Stellarator optimization with VMEX
 
 [VMEX](https://github.com/uwplasma/vmex) composes its implicit equilibrium
