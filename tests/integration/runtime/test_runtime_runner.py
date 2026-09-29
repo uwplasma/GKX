@@ -670,7 +670,7 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     from gkx.core_grid import select_ky_grid
     from gkx.diagnostics.modes import select_ky_index
 
-    # ky=0.15 is the largest positive row at Ny=8; 0.3 used to alias to -0.2.
+    # ky=0.15 is the largest positive row at Ny=8; 0.3 used to alias to a negative-ky row.
     runtime, _raw = load_runtime_from_toml(
         REPO_ROOT / "examples/01_linear_tokamak/case_full.toml"
     )
