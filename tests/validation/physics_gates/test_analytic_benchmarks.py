@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from gkx.diagnostics.analytic_references import (
+from scripts.artifacts.analytic_references import (
     cht_alpha_crit,
     fit_zonal_response,
     pkj_beta_mhd,

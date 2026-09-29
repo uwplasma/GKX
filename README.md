@@ -207,7 +207,7 @@ Units are `v_ti = sqrt(T_i/m_i)`.
 - **Not yet compared:**
   - the ky→0 KBM onset against the Connor-Hastie-Taylor ideal boundary
     `alpha_crit(s)` (0.506 at s = 0.786; the references and the ODE solver
-    are in `gkx.diagnostics.analytic_references`);
+    are in `scripts.artifacts.analytic_references`);
   - Hastie-Hesketh;
   - the Romanelli, BDR and KHD trend checks.
 

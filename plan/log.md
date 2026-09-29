@@ -20908,7 +20908,7 @@ Adds `scripts/campaigns/nonlinear_flux_jacobian.{py,toml}` with the committed re
 Outcome: benchmark only; no solver change.
 ## 2026-09-29 — analytic benchmarks encoded (branch validation/analytic-benchmarks)
 
-This encodes REPORT.md (#316) as gates. The references live in `gkx.diagnostics.analytic_references`, the runs in `scripts/artifacts/build_analytic_benchmarks.py` → `docs/_static/analytic_benchmarks.json` (float64, office CPU), and the tests in `tests/validation/physics_gates/test_analytic_benchmarks.py` (about 30 s in CI). The README gets an "Analytic benchmarks" section, and there are four ledger rows (A-*).
+This encodes REPORT.md (#316) as gates. The references live in `scripts.artifacts.analytic_references`, the runs in `scripts/artifacts/build_analytic_benchmarks.py` → `docs/_static/analytic_benchmarks.json` (float64, office CPU), and the tests in `tests/validation/physics_gates/test_analytic_benchmarks.py` (about 30 s in CI). The README gets an "Analytic benchmarks" section, and there are four ledger rows (A-*).
 
 **Results**
 - **Residual:** XC within 2.4% on every circular case; RH is 15% high. Elongation κ = 3 raises the residual 4.09×, against XC's 3.89×.

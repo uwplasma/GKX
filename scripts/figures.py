@@ -574,7 +574,7 @@ def _onset(beta: np.ndarray, gamma: np.ndarray, npts: int = 3) -> float:
 
 
 def build_analytic(spec: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
-    from gkx.diagnostics.analytic_references import (
+    from scripts.artifacts.analytic_references import (
         fit_zonal_response,
         pkj_beta_mhd,
         rosenbluth_hinton,
