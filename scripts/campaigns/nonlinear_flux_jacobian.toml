@@ -1,0 +1,31 @@
+# Configuration for scripts/campaigns/nonlinear_flux_jacobian.py.
+#
+# Paths are relative to the repository root. States come from
+# scripts/campaigns/nonlinear_saturated_state.py run on the same deck and grid;
+# the scan traces come from the same tool with --trace-out on the decks this
+# script writes with --write-scan-decks.
+
+deck = "benchmarks/cases/cyclone_nonlinear_t400.toml"
+grid = { Nx = 16, Ny = 16, Nz = 16 }
+# Differentiated inputs, per kinetic species: a/L_T and a/L_n.
+parameters = ["tprim", "fprim"]
+states = [
+  "tools_out/nl_jacobian/seed22.npz",
+  "tools_out/nl_jacobian/seed7.npz",
+  "tools_out/nl_jacobian/seed101.npz",
+]
+window_steps = 512
+windows_per_state = 3
+# Relative central-difference steps for the FD convergence study.
+fd_steps = [1.0e-1, 1.0e-2, 1.0e-3, 1.0e-4, 1.0e-5, 1.0e-6]
+output = "docs/_static/nonlinear_flux_jacobian.json"
+figure = "docs/_static/nonlinear_flux_jacobian.png"
+
+[scan]
+# Long-time mean flux against a/L_T: the stiffness curve the window
+# derivative is compared with. One saturated run per multiplier.
+tprim_multipliers = [0.8, 0.9, 1.0, 1.1, 1.2]
+deck_dir = "tools_out/nl_jacobian/scan"
+traces = "tools_out/nl_jacobian/scan/tprim_x{multiplier}.trace.npz"
+# Discard the transient: average only t >= this.
+t_start = 150.0
