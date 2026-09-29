@@ -201,6 +201,28 @@ seeds and a second time step: window means 18.7, 19.3 and 18.9 over
 from GX runs of the same decks in heat flux, free energy `Wg` and field energy
 `Wphi`, for Cyclone, Cyclone Miller, W7-X, HSX and KBM, all below 10%.
 
+## Kinetic electrons
+
+![Ion and electron heat flux with kinetic electrons, Cyclone and a QA stellarator](docs/_static/readme/readme_kinetic_electrons.png)
+
+```bash
+python examples/05_kinetic_electrons/run.py   # Cyclone + precise-QA stellarator
+gkx examples/05_kinetic_electrons/case.toml   # the tokamak deck alone
+```
+
+Kinetic electrons stream about `sqrt(m_i/m_e) ~ 60` times faster than ions,
+so the explicit step is set by electron parallel streaming, not by the
+turbulence. Leave `fixed_dt = false` and let the CFL controller pick dt; the
+bound it used is in `diagnostics.cfl_scales`. Keep a small finite beta
+(`beta = 1e-4` with `use_apar = true`): at beta = 0 the electrostatic
+`omega_H` mode cuts dt a further 4.3 times. Use `cfl = 0.45`, which the
+shipped decks set; the default 0.9 went unstable at beta <= 1e-4 on the
+tutorial grid. For `t_max` (units of `a/v_ti`), allow ~`10/gamma` for the
+linear phase, saturation by `t ~ 60-100`, and an averaging window of 100-200
+after it, or `run_to = "saturation"`. The figure is the tutorial grid run to
+`t = 150` (`T_MAX = 150` in `run.py`); production resolution is in the decks.
+For linear growth rates, `solver = "krylov"` needs no time step at all.
+
 ## Collisions and proof tests
 
 ![Exact identities and analytic limits, measured against their test tolerances](docs/_static/readme/readme_proof_tests.png)

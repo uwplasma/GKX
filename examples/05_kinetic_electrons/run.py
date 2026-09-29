@@ -1,14 +1,20 @@
-"""Linear Cyclone ITG with kinetic electrons.
+"""Nonlinear turbulence with kinetic electrons: a tokamak and a stellarator.
 
-Loads ``case.toml`` (two kinetic species, low beta), solves one linear
-initial-value problem at ``k_y rho_i = 0.3``, and compares it with the same
-case with adiabatic electrons. Prints both growth rates, saves a JSON
-summary, and plots the potential traces and eigenfunctions. About ten seconds
-on a laptop CPU. At the tutorial horizon (t = 10) both fits still carry the
-start-up transient, so the two rates are qualitative; compare them at
-``case_full.toml`` resolution (the reference-aligned deck, minutes on a GPU).
+Runs ``case.toml`` (Cyclone base case, s-alpha) and ``case_stellarator.toml``
+(Landreman-Paul precise QA, VMEC flux tube at s = 0.64) with kinetic ions and
+electrons at the physical mass ratio and beta = 1e-4. Both decks let the CFL
+controller choose dt; with kinetic electrons it is set by electron parallel
+streaming, and the script prints that bound next to the ion drift rate. It
+saves the per-species heat-flux traces and the step history and plots them.
+The stellarator needs a wout, solved once with vmex when it is missing
+(``pip install vmex``; minutes on a CPU) and skipped when neither exists.
+About a minute per case on a laptop CPU at the tutorial horizon (t = 0.3, the
+start of the linear phase). Set ``T_MAX`` to 150 or more to reach the
+saturated state shown in the README figure; see the decks for production
+resolution and for how dt and t_max were chosen.
 """
 
+import importlib.util
 import json
 from dataclasses import replace
 from pathlib import Path
@@ -18,59 +24,64 @@ import numpy as np
 
 import gkx
 
-CASE = Path(__file__).with_name("case.toml")
+HERE = Path(__file__).parent
+CASES = {"tokamak": HERE / "case.toml", "stellarator": HERE / "case_stellarator.toml"}
+VMEC_INPUT = HERE.parent / "vmec" / "input.LandremanPaul2021_QA_lowres"
 OUTPUT = Path("outputs/05_kinetic_electrons")
-KY = 0.3  # k_y rho_i
-
-kinetic = gkx.load(CASE)
-ion = kinetic.species[0]
-adiabatic = kinetic.replace(
-    species=(ion,),
-    physics=replace(
-        kinetic.physics,
-        adiabatic_electrons=True,
-        electromagnetic=False,
-        electrostatic=True,
-        use_apar=False,
-    ),
-    init=replace(kinetic.init, init_electrons_only=False),
-)
-
-results = {}
-for label, case in (("kinetic electrons", kinetic), ("adiabatic electrons", adiabatic)):
-    results[label] = gkx.solve(
-        case,
-        ky_target=KY,
-        Nl=case.run.Nl,
-        Nm=case.run.Nm,
-        solver=case.run.solver,
-        fit_signal="phi",
-    )
-    print(
-        f"{label:>20}: gamma = {results[label].gamma:+.4f}, omega = {results[label].omega:+.4f}"
-    )
+T_MAX = None  # None keeps each deck's t_max
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
-summary = {label: result.summary() for label, result in results.items()}
-(OUTPUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+summary, traces = {}, {}
+for label, path in CASES.items():
+    case = gkx.load(path)
+    if T_MAX is not None:
+        case = case.replace(time=replace(case.time, t_max=T_MAX))
+    if case.geometry.model == "vmec":
+        wout = Path(case.geometry.vmec_file)
+        if not wout.exists():
+            if importlib.util.find_spec("vmex") is None:
+                print(f"{label}: skipped, needs {wout.name} or vmex to solve it")
+                continue
+            import vmex
+            from vmex import optimize
 
-fig, (ax_trace, ax_mode) = plt.subplots(1, 2, figsize=(10.0, 3.8))
-for label, result in results.items():
-    signal = np.abs(np.asarray(result.signal))
-    ax_trace.semilogy(
-        result.t, signal / signal[0], label=f"{label}, $\\gamma$={result.gamma:.3f}"
+            print(f"solving {VMEC_INPUT.name} with vmex to create {wout.name}")
+            equilibrium = optimize.solve_equilibrium(
+                vmex.VmecInput.from_file(VMEC_INPUT)
+            )
+            vmex.write_wout(str(wout), equilibrium.wout)
+    result = gkx.solve(case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm)
+    d = result.diagnostics
+    t, dt = np.asarray(d.t), np.asarray(d.dt_t)
+    q = np.asarray(d.heat_flux_species_t)  # (time, species): ion, electron
+    cfl = dict(
+        zip(
+            ("drift_x", "drift_y", "streaming"),
+            np.asarray(d.cfl_scales)[:3].tolist(),
+        )
     )
-    mode = np.asarray(result.eigenfunction)
-    ax_mode.plot(result.z, np.abs(mode) / np.abs(mode).max(), label=label)
-ax_trace.set(
-    xlabel=r"$t\,v_{ti}/a$",
-    ylabel=r"$|\phi|/|\phi(0)|$",
-    title=f"Growth at $k_y\\rho_i$={KY}",
-)
-ax_mode.set(
-    xlabel=r"$\theta$", ylabel=r"$|\phi|/|\phi|_{\max}$", title="Eigenfunction envelope"
-)
-for ax in (ax_trace, ax_mode):
+    print(
+        f"{label}: t_final = {t[-1]:.3f}, mean dt = {dt.mean():.2e}, "
+        f"omega_stream = {cfl['streaming']:.0f} vs omega_drift = {max(cfl['drift_x'], cfl['drift_y']):.2f}, "
+        f"Q_i = {q[-1, 0]:.3e}, Q_e = {q[-1, 1]:.3e}"
+    )
+    traces[label] = (t, q, dt)
+    summary[label] = {
+        **result.summary(),
+        "dt_mean": float(dt.mean()),
+        "cfl_omega": cfl,
+        "heat_flux_final": q[-1].tolist(),
+    }
+
+(OUTPUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+fig, (ax_q, ax_dt) = plt.subplots(1, 2, figsize=(10.0, 3.8))
+for label, (t, q, dt) in traces.items():
+    ax_q.plot(t, q[:, 0], label=f"{label}, ions")
+    ax_q.plot(t, q[:, 1], "--", label=f"{label}, electrons")
+    ax_dt.plot(t, dt, label=label)
+ax_q.set(xlabel=r"$t\,v_{ti}/a$", ylabel=r"$Q_s/Q_{GB}$", title="Heat flux")
+ax_dt.set(xlabel=r"$t\,v_{ti}/a$", ylabel=r"$\Delta t$", title="CFL-controlled step")
+for ax in (ax_q, ax_dt):
     ax.legend(frameon=False, fontsize="small")
     ax.grid(alpha=0.3)
 fig.tight_layout()
