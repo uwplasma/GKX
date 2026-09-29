@@ -38,7 +38,7 @@
 # resolution-limited rather than converged.
 
 schema_version = 1
-updated = "2026-09-20"
+updated = "2026-09-29"
 
 # ---------------------------------------------------------------- README parity
 
@@ -260,3 +260,50 @@ reference = "VMEX equilibria solved for this campaign"
 reference_rank = 5
 tier = 3
 status = "passing"
+
+[[row]]
+id = "A-zonal-residual"
+claim = "README Analytic benchmarks: zonal residual against Xiao-Catto within 2.4% on circular cases"
+observable = "fitted phi_inf / Xiao-Catto closed form"
+artifact = "docs/_static/analytic_benchmarks.json"
+generator = "scripts/artifacts/build_analytic_benchmarks.py zonal"
+reference = "Rosenbluth & Hinton PRL 80 724 (1998); Xiao & Catto PoP 13 082307 (2006)"
+reference_rank = 1
+tier = 1
+status = "passing"
+
+[[row]]
+id = "A-gam"
+claim = "README Analytic benchmarks: GAM frequency within 3.5% of the Sugama-Watanabe root"
+observable = "fitted omega_G and gamma_G / root of SW Eq. (2.7) at the run's k_x"
+artifact = "docs/_static/analytic_benchmarks.json"
+generator = "scripts/artifacts/build_analytic_benchmarks.py zonal"
+reference = "Sugama & Watanabe JPP 72 825 (2006)"
+reference_rank = 1
+tier = 1
+status = "provisional"
+notes = "Damping is off by 11-25% against the root, not the 15% of the specification; gated at 30%. Open question: Hermite recurrence at Nm 128 versus physics that SW Eq. (2.7) omits."
+
+[[row]]
+id = "A-kbm-pkj"
+claim = "README Analytic benchmarks: Cyclone KBM onset 1.04% against GENE 1.14%"
+observable = "zero of the linear gamma(beta) fit through the three lowest unstable betas, ky 0.2"
+artifact = "docs/_static/analytic_benchmarks.json"
+generator = "scripts/artifacts/build_analytic_benchmarks.py pkj"
+reference = "Pueschel, Kammerer & Jenko PoP 15 102310 (2008)"
+reference_rank = 2
+tier = 1
+status = "provisional"
+notes = "8% below GENE, which misses the 3% specification (gated at 10%). Nm 16 and nperiod 3; Nm 32 gives 1.07%. Closing it needs an nperiod and Nm ladder and the subdominant-branch eigen route."
+
+[[row]]
+id = "A-kbm-strong-drive"
+claim = "README Analytic benchmarks: strongly driven KBM omega_r / (omega_*pi/2) = 1.06-1.10 (s-alpha)"
+observable = "omega / (ky (fprim + tprim)/2) at beta 1.5%, R/L_T 35 and 15"
+artifact = "docs/_static/analytic_benchmarks.json"
+generator = "scripts/artifacts/build_analytic_benchmarks.py az"
+reference = "Tang, Connor & Hastie NF 20 1439 (1980); Aleynikova & Zocco PoP 24 092106 (2017)"
+reference_rank = 1
+tier = 1
+status = "provisional"
+notes = "s-alpha sets omega_kappa = omega_gradB, so this is not AZ's equation; 5% missed, gated at 12%. Closing it needs an s-alpha option with a beta-prime drift split."

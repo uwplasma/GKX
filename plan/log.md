@@ -20906,3 +20906,24 @@ Adds `scripts/campaigns/nonlinear_flux_jacobian.{py,toml}` with the committed re
 - Window dQ/d(R/L_T) = 29.6 +- 4.2. The long-time secant from the 5-point R/L_T scan is 48.6, so the window derivative runs about 40% low. No Dimits upshift is visible at 16^3.
 - Caveats: seeds 7 and 101 stopped at t of about 300 without a passing offline saturation report, although their windows sit at Q of about 100, the same as seed 22. The a/L_n derivative is not resolved from zero. Kinetic electrons, q, s_hat and beta are not done: geometry is sampled outside the trace, and linked decks refuse a traced s_hat.
 Outcome: benchmark only; no solver change.
+## 2026-09-29 — analytic benchmarks encoded (branch validation/analytic-benchmarks)
+
+This encodes REPORT.md (#316) as gates. The references live in `scripts.artifacts.build_analytic_benchmarks`, the runs in `scripts/artifacts/build_analytic_benchmarks.py` → `docs/_static/analytic_benchmarks.json` (float64, office CPU), and the tests in `tests/validation/benchmarks/test_benchmarking.py` (about 30 s in CI). The README gets an "Analytic benchmarks" section, and there are four ledger rows (A-*).
+
+**Results**
+- **Residual:** XC within 2.4% on every circular case; RH is 15% high. Elongation κ = 3 raises the residual 4.09×, against XC's 3.89×.
+- **GAM:**
+  - ω_G is within 3.5% of the SW (2.7) root.
+  - γ is off by 11–25%, gated at 30% (provisional).
+- **PKJ KBM onset:** 1.04% against GENE's 1.14%, gated at 10% (provisional). ω is within 3%.
+- **Strongly driven KBM, ω/(ω*pi/2):**
+  - s-α: 1.06–1.10.
+  - Miller with consistent betaprim, R/L_T = 15: 1.24–1.30.
+  - Miller, R/L_T = 35: no KBM branch.
+
+**Not done:** CHT ky→0 onset (runs started, unfinished), Hastie-Hesketh, Romanelli, BDR, KHD.
+
+**Defects found**
+- In float32, Miller at nperiod ≥ 5 raises "theta does not match the sampled geometry grid".
+- Concurrent processes race on the Miller eik cache file (`.cache/gkx/miller_eik`) and read a truncated NetCDF.
+- At y0 = 20, Ny = 12, a `ky_target` beyond the grid silently resolves to a negative-ω alias.
