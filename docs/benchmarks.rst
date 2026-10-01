@@ -162,7 +162,7 @@ Comparison-code provenance
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The comparison contract names GX revision ``bc2fe552`` with aggregate source
-fingerprint ``sha256:bfaaadfa...20b``. The instrumented office source tree is
+fingerprint ``sha256:bfaaadfa...20b``. The instrumented benchmark source tree is
 not a Git checkout and has a different fingerprint, ``sha256:436e403e...a004``;
 the two provenances must not be interchanged. The comparison binary is a clean
 rebuild of that revision against one OpenMPI 4.1.6, parallel netCDF 4.9.2 and

@@ -1572,13 +1572,13 @@ label = "B"
 backend = "gx"
 command = "echo b"
 profile_command = "echo profile"
-host = "office"
+host = "benchmark"
 enabled = false
 """,
         encoding="utf-8",
     )
     runs = _load_manifest(manifest)
-    assert runs[1].host == "office"
+    assert runs[1].host == "benchmark"
     assert runs[1].profile_command == "echo profile"
     selected = _select_runs(runs, {"a"}, {"gkx_cpu"})
     assert len(selected) == 1
@@ -1688,7 +1688,7 @@ def test_remote_runtime_memory_runs_disable_x11_forwarding(monkeypatch) -> None:
         "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
     )
     run = RuntimeBenchRun(
-        case="c", label="C", backend="gx", command="echo hi", cwd="/tmp", host="office"
+        case="c", label="C", backend="gx", command="echo hi", cwd="/tmp", host="benchmark"
     )
     row = _run_command(run)
     assert row["status"] == "success"
@@ -1812,8 +1812,8 @@ def test_runtime_memory_plot_supports_warm_runtime_markers(tmp_path: Path) -> No
         "\n".join(
             [
                 "case,label,backend,status,returncode,runtime_s,warmup_time_s,run_time_s,peak_rss_mb,host,cwd,command,stdout_log,stderr_log",
-                "cyclone-nonlinear,Cyclone ITG Nonlinear,gkx_gpu,success,0,35.3,33.2,14.4,1878.4,office,/tmp,cmd,out,err",
-                "cyclone-nonlinear,Cyclone ITG Nonlinear,gx,success,0,21.1,,,1900.0,office,/tmp,cmd,out,err",
+                "cyclone-nonlinear,Cyclone ITG Nonlinear,gkx_gpu,success,0,35.3,33.2,14.4,1878.4,benchmark,/tmp,cmd,out,err",
+                "cyclone-nonlinear,Cyclone ITG Nonlinear,gx,success,0,21.1,,,1900.0,benchmark,/tmp,cmd,out,err",
             ]
         )
         + "\n",

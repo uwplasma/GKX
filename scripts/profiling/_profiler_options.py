@@ -36,7 +36,7 @@ def make_profile_options(*, python_tracer_level: int = 0, host_tracer_level: int
     """Return JAX profile options with explicit tracer levels.
 
     The default levels avoid the optional TensorFlow Python-trace hook, which is
-    not present on the lightweight `office` profiling environment.
+    not present on the lightweight `benchmark` profiling environment.
     """
 
     import jax.profiler as jprof

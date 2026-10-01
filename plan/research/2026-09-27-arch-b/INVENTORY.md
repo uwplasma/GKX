@@ -55,7 +55,7 @@ facade. It dissolves with rank 1 below, not with a local edit.
   shift-invert fallback and CFL-term tests were kept by keeping their
   functions).
 
-## 3. Fingerprints (office host, XLA:CPU, JAX 0.10.2, float64)
+## 3. Fingerprints (benchmark host, XLA:CPU, JAX 0.10.2, float64)
 
 `fingerprint.py` on base and on the branch; compared bitwise (`float.hex`,
 SHA-256 prefixes). Linear Cyclone eigenpair, 100-step nonlinear heat-flux

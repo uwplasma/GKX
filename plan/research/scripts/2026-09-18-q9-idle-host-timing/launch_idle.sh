@@ -1,8 +1,8 @@
 #!/bin/bash
-# Q9 idle-host campaign driver (office, cores 2-17 only).
+# Q9 idle-host campaign driver (benchmark, cores 2-17 only).
 cd "$(dirname "$0")"
 DIR=$PWD
-export PY=${PY:-/home/rjorge/venvs/gkx-nl/bin/python}
+export PY=${PY:-python}
 # This lane owns cores 2-17. At 19:02 another lane's DKX bench took cores
 # 8-11 (`taskset -pc` confirmed an affinity of 8-11) and held them, so the
 # campaign runs on the free subset 2-7,12-17: 12 cores, still inside this

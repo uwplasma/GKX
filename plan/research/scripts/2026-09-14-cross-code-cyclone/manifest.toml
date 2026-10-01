@@ -90,5 +90,5 @@ P4 = "ky = 0.55 s-alpha: GS2 converges (<2% over its ladder) to a gamma more tha
 P5 = "Cost: a grid code reaches a converged gamma per ky in under 10 min wall on 8 cores; GKX's adaptive eigenpair at (96,16,48) takes 10-20 min per ky on 10-12 threads."
 
 [resources]
-office_cpu = "GS2/stella one lane, mpirun -np 8 --bind-to none, OMP_NUM_THREADS=1; GKX up to 2 lanes of 10 threads, nice 10"
+cpu = "GS2/stella one lane, mpirun -np 8 --bind-to none, OMP_NUM_THREADS=1; GKX up to 2 lanes of 10 threads, nice 10"
 gpu = "GX and gyaradax only if nvidia-smi --query-compute-apps lists no process on the GPU; otherwise not run"

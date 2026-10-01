@@ -891,10 +891,10 @@ def write_sweep_artifacts(summary: dict[str, Any], out_prefix: Path) -> dict[str
 def build_sweep_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--office-gpu-xlarge",
-        action="store_true",
+        "--gpu-xlarge", "--office-gpu-xlarge",
+        dest="gpu_xlarge", action="store_true",
         help=(
-            "Use the canonical office two-GPU nonlinear sharding profile: "
+            "Use the canonical benchmark two-GPU nonlinear sharding profile: "
             "gpu backend, devices 1,2, Nx=48, Ny=96, Nz=128, Nl=4, Nm=8, steps=12, trace enabled."
         ),
     )
@@ -922,7 +922,7 @@ def build_sweep_parser() -> argparse.ArgumentParser:
 def apply_sweep_preset(args: argparse.Namespace) -> argparse.Namespace:
     """Apply named profiling presets after argparse has filled defaults."""
 
-    if not bool(getattr(args, "office_gpu_xlarge", False)):
+    if not bool(getattr(args, "gpu_xlarge", False)):
         return args
     args.backend = "gpu"
     args.devices = [1, 2]

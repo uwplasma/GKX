@@ -1,7 +1,7 @@
 {
   "gkx": "tonly/src/gkx/__init__.py",
   "jax": "0.10.2",
-  "host": "pop-os",
+  "host": "benchmark",
   "xla_flags": "",
   "affinity": [
     2,

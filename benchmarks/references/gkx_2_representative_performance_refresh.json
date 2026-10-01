@@ -1,5 +1,5 @@
 {
-  "claim_scope": "bounded current-branch performance audit; local CPU rows are admitted, office GPU timings are retained but rejected because both devices were at 100% utilization from pre-existing processes",
+  "claim_scope": "bounded current-branch performance audit; local CPU rows are admitted, benchmark GPU timings are retained but rejected because both devices were at 100% utilization from pre-existing processes",
   "git_revision": "9a0c44f86b0ebfbb291e9cb2602128b06088b517",
   "kind": "gkx_representative_performance_refresh",
   "local_host": {
@@ -11,7 +11,7 @@
     "cpu_rows_admitted": 2,
     "gpu_rows_admitted": 0,
     "gpu_rows_blocked": 2,
-    "next_action": "repeat the same commands when one office A4000 is idle",
+    "next_action": "repeat the same commands when one benchmark A4000 is idle",
     "performance_claim_updated": false
   },
   "workloads": [
@@ -42,7 +42,7 @@
       "gpu": {
         "admitted": false,
         "backend": "gpu",
-        "blocker": "both office GPUs sampled at 100% utilization",
+        "blocker": "both benchmark GPUs sampled at 100% utilization",
         "cold_first_run_s": 49.135347324074246,
         "device": "NVIDIA RTX A4000",
         "python_tracemalloc_peak_mb": 12.766805,
@@ -100,7 +100,7 @@
       "gpu": {
         "admitted": false,
         "backend": "gpu",
-        "blocker": "both office GPUs sampled at 100% utilization",
+        "blocker": "both benchmark GPUs sampled at 100% utilization",
         "cold_compile_and_run_s": 21.60944071901031,
         "device": "NVIDIA RTX A4000",
         "device_peak_bytes_in_use": 417609728,

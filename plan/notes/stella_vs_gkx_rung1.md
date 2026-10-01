@@ -2,8 +2,8 @@
 
 Plan item **2.4-r1**. Date 2026-08-18. macOS arm64, CPU JAX 0.9.2.
 stella `build_cmake/stella` @ 4cdc5fcd via `/opt/local/bin/mpirun -np 4`.
-GKX `/Users/rogeriojorge/local/GKX` (read-only) for the time-solver scans;
-`/Users/rogeriojorge/local/GKX-worktrees/krylov` (uncommitted krylov fix) for the
+GKX `../GKX` (read-only) for the time-solver scans;
+`../GKX-worktrees/krylov` (uncommitted krylov fix) for the
 certified eigensolver point.
 
 Run inventory, configs and geometry cross-check are in `RUNS.md` /
@@ -198,7 +198,7 @@ and may tighten further.
 
 ## 4. Tracked GX/GKX cyclone table — why it is NOT compared here
 
-`/Users/rogeriojorge/local/GKX/docs/_static/cyclone_mismatch_table.csv` is a
+`../GKX/docs/_static/cyclone_mismatch_table.csv` is a
 **different physical lane** and is reported for context only:
 
 | | this rung (r1) | tracked cyclone table |
@@ -232,7 +232,7 @@ stella to 0.1–3%. Both cannot be universal. One certified point decides it.
 `cbc_miller_scan_sqrt2.toml`, fixed krylov path:
 
 ```
-JAX_ENABLE_X64=1 PYTHONPATH=/Users/rogeriojorge/local/GKX-worktrees/krylov/src \
+JAX_ENABLE_X64=1 PYTHONPATH=../GKX-worktrees/krylov/src \
   python3 -m gkx.cli run-runtime-linear --config cbc_miller_scan_sqrt2.toml \
           --ky 0.35355339 --solver krylov
 ```
@@ -305,7 +305,7 @@ the normalization, not of the time-integration path.
 
 Both endpoints already exist; the gap is a geometry match, not new capability.
 
-**stella side** — `/Users/rogeriojorge/local/stella/tests/regression/linear/RH/RH.in`
+**stella side** — `../stella/tests/regression/linear/RH/RH.in`
 (shipped regression, with reference `RH.final_fields_compare`). It uses
 **exactly the rung-1 CBC Miller geometry** (`rhoc=0.5, shat=0.796, qinp=1.4,
 rmaj=rgeo=2.77778, kappa=1, tri=0`), `tprim=fprim=0`, adiabatic electrons,

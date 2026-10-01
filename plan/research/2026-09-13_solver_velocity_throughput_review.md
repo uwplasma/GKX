@@ -9,7 +9,7 @@ them or from a cited source. Environment: fresh venv Python 3.11.14, JAX/jaxlib
 one XLA thread, `nice 10`. The machine carried load 8–60 from unrelated jobs,
 so **wall-clock times are indicative only**; iteration counts, residuals,
 sparsity, factor fill, HLO op counts and spectra are load-independent. Office
-GPUs were not used; one read-only NetCDF re-read ran on the office CPU.
+GPUs were not used; one read-only NetCDF re-read ran on the benchmark CPU.
 
 ## 1. Verdicts
 
@@ -224,7 +224,7 @@ passes `implicit_maxiter` (200) as `max_restarts` × restart 20. Pins disagree:
 
 ### 4.1 Gyroaverage truncation refuted for the GX control (`d3_bmap.py`)
 
-GX deck (office `full96.in`, read-only): s-α, ε=.18, q=1.4, ŝ=.8, ntheta32,
+GX deck (benchmark `full96.in`, read-only): s-α, ε=.18, q=1.4, ŝ=.8, ntheta32,
 nperiod2, **nkx=1**, y0=1.81818 (ky=.55), Nm96, vnewk=0, `hypercollisions=true`,
 absorber .1/widthfrac .125. GKX's cache for the same geometry: b(θ)=0.42 at 0,
 11.1 at 2π, **b_max=12.73** at θ=−2.31π. 1−Σ_{ℓ<N}J_ℓ²/Γ0 along the chain:
@@ -235,7 +235,7 @@ the kz branch uses `nu_hyper_m` only; both branches read the same
 `nu_hyper_m`, so a matched Laguerre-sink test must zero the const branch's
 Hermite coefficient. GKX mirrors this (`cache_arrays.py:154–169`).
 
-### 4.2 Re-read of the existing GX outputs (`v1_reread.py`, office CPU, no new run)
+### 4.2 Re-read of the existing GX outputs (`v1_reread.py`, benchmark CPU, no new run)
 
 | | Nl24 | Nl32 | Nl32, Nz192 |
 |---|---:|---:|---:|
@@ -491,7 +491,7 @@ measured here.
 
 From a checkout at `3fb7d5c35` with the environment above:
 `env PYTHONPATH=$PWD/src:$PWD MPLBACKEND=Agg JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1 python plan/research/scripts/2026-09-13/<script>.py`
-(`d7_hlo.py` without x64; `v1_reread.py` on the office host with the NetCDF
+(`d7_hlo.py` without x64; `v1_reread.py` on the benchmark host with the NetCDF
 paths in the file). Logs of the runs used here sit beside the scripts as `*.txt` (the repository ignores `*.log`).
 
 ## 9. Position relative to other codes, and what would make GKX better

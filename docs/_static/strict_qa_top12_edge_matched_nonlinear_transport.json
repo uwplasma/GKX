@@ -1,7 +1,7 @@
 {
   "artifacts": {
-    "baseline": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_rerun_baseline_ensemble_gate.json",
-    "candidate": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_top12_step1p25em3_candidate_ensemble_gate.json"
+    "baseline": "artifacts/strict_qa_rerun_baseline_ensemble_gate.json",
+    "candidate": "artifacts/strict_qa_top12_step1p25em3_candidate_ensemble_gate.json"
   },
   "baseline": {
     "combined_sem": 0.2700580365668494,

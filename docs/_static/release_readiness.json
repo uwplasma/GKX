@@ -332,7 +332,7 @@
             "lane": "Profiler-backed nonlinear performance claims",
             "next_action": "Release performance evidence is closed for scoped CPU/GPU profiler artifacts; keep broad production nonlinear speedup and domain-decomposition claims for the next manuscript/science lane.",
             "primary_artifacts": [
-              "docs/_static/nonlinear_sharding_profile_office_gpu_benchmark_grid.json",
+              "docs/_static/nonlinear_sharding_profile_gpu_benchmark_grid.json",
               "docs/_static/nonlinear_rhs_profile.json",
               "docs/_static/nonlinear_rhs_profile_miller.json",
               "docs/_static/nonlinear_rhs_profile_stellarator_runtime.json",

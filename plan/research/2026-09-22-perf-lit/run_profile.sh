@@ -53,7 +53,7 @@ if [ "${PHASE:-base}" = src ]; then
 run fwd_32x32x24_l4m8_srcmap forward --nx 32 --ny 32 --nz 24 --nl 4 --nm 8 --repeats 1 --trace-dir "$OUT/trace_srcmap32"
 fi
 if [ "${PHASE:-base}" = cpu ]; then
-# CPU rows (office host, all cores visible to XLA; host load is recorded).
+# CPU rows (benchmark host, all cores visible to XLA; host load is recorded).
 run cpu_smoke window --nx 8 --ny 8 --nz 8 --steps 16 --checkpoint block block_noinner none --repeats 1 --interleave 2
 run cpu_win16_256_ab window --nx 16 --ny 16 --nz 16 --steps 256 --checkpoint block block_noinner none --repeats 2 --interleave 7
 run cpu_win16_1024_ab window --nx 16 --ny 16 --nz 16 --steps 1024 --checkpoint block block_noinner --repeats 2 --interleave 5

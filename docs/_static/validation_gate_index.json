@@ -92,7 +92,7 @@
       "n_failed": 0,
       "n_gates": 3,
       "passed": true,
-      "source": "office GPU Cyclone ky=0.30 time-path velocity-space sweep"
+      "source": "benchmark GPU Cyclone ky=0.30 time-path velocity-space sweep"
     },
     {
       "artifact": "docs/_static/nonlinear_hsx_gate_summary.json",

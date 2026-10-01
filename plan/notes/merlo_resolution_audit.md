@@ -4,7 +4,7 @@
 **Target:** `docs/_static/miller_zonal_response_pilot.json` — a currently-PASSING row of the
 GKX validation gate index.
 **Question:** does that row pass only because it is under-resolved?
-**Repo:** `/Users/rogeriojorge/local/GKX` @ `7cf5e6d1` (read-only; nothing was written there).
+**Repo:** `../GKX` @ `7cf5e6d1` (read-only; nothing was written there).
 **Scratch:** `/private/tmp/claude-501/-Users-rogeriojorge-local/1e858e4f-6438-4dbd-8d3c-60502cd814ab/scratchpad/merlo/`
 
 ---
@@ -501,8 +501,8 @@ zonal lane, which is transcribed from stella-family work and is already failing.
 ## Appendix: reproduction
 
 ```
-export PYTHONPATH=/Users/rogeriojorge/local/GKX/src JAX_ENABLE_X64=1
-python3 /Users/rogeriojorge/local/GKX/tools/artifacts/build_zonal_flow_artifacts.py \
+export PYTHONPATH=../GKX/src JAX_ENABLE_X64=1
+python3 ../GKX/tools/artifacts/build_zonal_flow_artifacts.py \
     miller-panel --config <scratch>/cfg/merlo_Nm<N>[_dthalf].toml \
     --out-bundle <scratch>/out/merlo_Nm<N>.out.nc \
     --out-png <scratch>/out/merlo_Nm<N>.png

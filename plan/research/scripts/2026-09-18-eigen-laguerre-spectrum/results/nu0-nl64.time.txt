@@ -1,5 +1,5 @@
 Command exited with non-zero status 124
-	Command being timed: "timeout --signal=TERM --kill-after=10s 2700 /home/rjorge/venvs/gkx-nl/bin/python /home/rjorge/gkx-q16-eigen-spectrum-20260918.JlXxHY/src_stage/plan/research/scripts/2026-09-18-eigen-laguerre-spectrum/eigen_spectrum.py --key nu0-nl64 --nu 0.0 --nl 64 --nm 96 --repo /home/rjorge/gkx-q16-eigen-spectrum-20260918.JlXxHY/src_stage --deck-dir /home/rjorge/gkx-q16-eigen-spectrum-20260918.JlXxHY/src_stage/plan/research/scripts/2026-09-18-eigen-laguerre-spectrum --out /home/rjorge/gkx-q16-eigen-spectrum-20260918.JlXxHY/vectors --save-vector"
+	Command being timed: "timeout --signal=TERM --kill-after=10s 2700 python artifacts/eigen_spectrum.py --key nu0-nl64 --nu 0.0 --nl 64 --nm 96 --repo artifacts/src_stage --deck-dir artifacts/2026-09-18-eigen-laguerre-spectrum --out artifacts/vectors --save-vector"
 	User time (seconds): 1438.79
 	System time (seconds): 1279.02
 	Percent of CPU this job got: 100%

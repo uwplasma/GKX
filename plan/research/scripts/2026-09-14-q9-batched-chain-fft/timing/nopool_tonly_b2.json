@@ -1,7 +1,7 @@
 {
   "gkx": "tonly/src/gkx/__init__.py",
   "jax": "0.10.2",
-  "host": "pop-os",
+  "host": "benchmark",
   "xla_flags": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1",
   "affinity": [
     2,

@@ -18,7 +18,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-REPO = Path("/Users/rogeriojorge/local/GKX-worktrees/perf-review")
+REPO = Path("../GKX-worktrees/perf-review")
 sys.path.insert(0, str(REPO))
 from gkx.core_grid import build_spectral_grid  # noqa: E402
 from gkx.geometry import apply_imported_geometry_grid_defaults  # noqa: E402

@@ -1,6 +1,6 @@
-# GKX on the office GPU box — setup, CPU/GPU parity gate, timings
+# GKX on the benchmark GPU box — setup, CPU/GPU parity gate, timings
 
-Date: 2026-08-18. Host: `ssh office` (pop-os, 36 cores, 2× RTX A4000 16 GB, driver 580.119.02).
+Date: 2026-08-18. Host: `ssh ${BENCHMARK_HOST}` (pop-os, 36 cores, 2× RTX A4000 16 GB, driver 580.119.02).
 Code under test: `origin/main` @ **fb559974**, plus `fix/krylov-certified-default` @ **9385069e** (PR #52).
 
 ---
@@ -9,11 +9,11 @@ Code under test: `origin/main` @ **fb559974**, plus `fix/krylov-certified-defaul
 
 - **GPUs idle** before and after all work; only the user's own `stellarator_venv` webapp
   (~700–775 MiB per GPU, 0 % util) present. Left in that state.
-- **Existing GKX checkouts on office**:
-  - `/home/rjorge/GKX` — on `feat/bounded-memory-nonlinear-adjoint` @ 8b59d806,
+- **Existing GKX checkouts on benchmark**:
+  - `../GKX` — on `feat/bounded-memory-nonlinear-adjoint` @ 8b59d806,
     **DIRTY**: 275 modified/deleted paths (mostly `docs/_static/*.json` deletions) + 4 untracked.
     *Not touched* — no reset, no checkout, no stash.
-  - `/home/rjorge/local/scratch_gkx_cpugpu_char/GKX` — separate clean clone on `main` @ fb55997.
+  - `../GKX` — separate clean clone on `main` @ fb55997.
 - **Pre-existing env**: system `python3` 3.10.12 with jax **0.6.2** (CUDA, 2 devices).
   Only venv was `~/venvs/vmex`. No jax ≥ 0.10 anywhere.
 - System nvcc 11.5; nvidia-smi reports CUDA 13.0 capability from the driver.
@@ -94,7 +94,7 @@ Note: JAX preallocates ~75 % of GPU memory by default; use
 
 Three-way, all default (f32) precision:
 
-| quantity | laptop CPU (jax 0.10.2) | office CPU (jax 0.11.1) | **office GPU** | GPU vs laptop CPU (rel) |
+| quantity | laptop CPU (jax 0.10.2) | benchmark CPU (jax 0.11.1) | **benchmark GPU** | GPU vs laptop CPU (rel) |
 |---|---|---|---|---|
 | Wg | 4.066938126925379e-4 | 4.066938126925379e-4 | 4.066947731189430e-4 | **2.4e-6** |
 | Wphi | 8.416007403866388e-6 | 8.416006494371686e-6 | 8.416030141233932e-6 | **2.7e-6** |
@@ -112,8 +112,8 @@ its absolute error is 2.4e-6, i.e. the same f32 noise as everything else.
 The plan's reference `Wg=0.000406441` disagrees with the GPU value by **6.2e-4** relative
 — far above f32 noise. Root-caused as **code version, not hardware**:
 
-- office GPU  → 0.000406695
-- office CPU (same jax) → 0.000406694
+- benchmark GPU  → 0.000406695
+- benchmark CPU (same jax) → 0.000406694
 - **laptop CPU, main's nonlinear code (via `GKX-worktrees/krylovpr`, jax 0.10.2) → 0.000406694**
 
 All three agree. The 0.000406441 reference must come from the laptop's
@@ -127,7 +127,7 @@ nonlinear path is byte-identical to main — that is what made this isolation po
 
 ### 4c. ky scan — `scan-runtime-linear --config .../cyclone.toml --solver time`
 
-| ky | plan reference γ | **office GPU** γ | office CPU γ | GPU vs CPU rel |
+| ky | plan reference γ | **benchmark GPU** γ | benchmark CPU γ | GPU vs CPU rel |
 |---|---|---|---|---|
 | 0.1 | 0.0168 | 0.016811420 | 0.016810950 | 2.8e-5 |
 | 0.2 | 0.0362 | 0.036193841 | 0.036193881 | 1.1e-6 |
@@ -137,7 +137,7 @@ nonlinear path is byte-identical to main — that is what made this isolation po
 
 GPU ω = [0.079899, 0.197997, 0.300885, 0.392742, 0.472466].
 Every GPU γ rounds to the reference at the reference's 4-decimal precision. **PASS.**
-Wall: GPU **25.0 s**, office CPU 103.5 s (**4.1×**).
+Wall: GPU **25.0 s**, benchmark CPU 103.5 s (**4.1×**).
 
 ## 5. PR #52 `fix/krylov-certified-default` on GPU — **BLOCKER FOUND**
 
@@ -147,8 +147,8 @@ Wall: GPU **25.0 s**, office CPU 103.5 s (**4.1×**).
 |---|---|---|
 | laptop CPU (reference in task) | γ=0.088930, ω=0.280209 | — |
 | laptop CPU, today, jax 0.10.2 | γ=0.088931955, ω=0.280219764 | 77.5 s |
-| **office GPU, default matmul precision** | **RuntimeError — hard fail** | **1148 s (19 min)** |
-| **office GPU, `JAX_DEFAULT_MATMUL_PRECISION=highest`** | **γ=0.088932239, ω=0.280219972** | **28.7 s** |
+| **benchmark GPU, default matmul precision** | **RuntimeError — hard fail** | **1148 s (19 min)** |
+| **benchmark GPU, `JAX_DEFAULT_MATMUL_PRECISION=highest`** | **γ=0.088932239, ω=0.280219972** | **28.7 s** |
 
 Failure text:
 ```
@@ -181,9 +181,9 @@ Same command on `main` @ fb559974 (cyclone.toml's own `solver = "krylov"` defaul
 
 | | γ | ω | wall |
 |---|---|---|---|
-| office GPU, default precision | **−0.126120** | 0.227927 | 12.3 s |
-| office GPU, `highest` precision | **−0.126120** | 0.227927 | 12.6 s |
-| office CPU | **−0.115960** | 0.272345 | 9.1 s |
+| benchmark GPU, default precision | **−0.126120** | 0.227927 | 12.3 s |
+| benchmark GPU, `highest` precision | **−0.126120** | 0.227927 | 12.6 s |
+| benchmark CPU | **−0.115960** | 0.272345 | 9.1 s |
 | correct (certified / time-solver) | **+0.08893** | 0.28022 | — |
 
 main silently returns a **stable** mode (wrong sign) for a genuinely unstable ITG case,
@@ -197,19 +197,19 @@ Warm step cost from the 400-step minus 100-step integrator wall, /300:
 
 | host | 100 steps | 400 steps | **warm ms/step** | cold compile | speedup vs GPU |
 |---|---|---|---|---|---|
-| **office GPU** (1× A4000) | 24.96 s | 31.04 s | **20.3** | ~22.9 s | 1× |
-| office CPU (36 cores) | 57.39 s | 178.31 s | **403.1** | ~17.1 s | 19.9× slower |
+| **benchmark GPU** (1× A4000) | 24.96 s | 31.04 s | **20.3** | ~22.9 s | 1× |
+| benchmark CPU (36 cores) | 57.39 s | 178.31 s | **403.1** | ~17.1 s | 19.9× slower |
 | laptop CPU (arm64, jax 0.10.2) | 48.49 s | 151.04 s | **341.8** | ~14.3 s | 16.9× slower |
 
 - End-to-end 100-step wall: **GPU 33.8 s** (first run, incl. import+compile) /
-  **27.6 s** on a warmer FS cache, vs laptop CPU 52.6 s and office CPU 59.7 s.
+  **27.6 s** on a warmer FS cache, vs laptop CPU 52.6 s and benchmark CPU 59.7 s.
   The plan's "65 s laptop CPU" figure is a bit pessimistic vs today's 52.6 s.
 - **Compile dominates short runs on GPU**: 22.9 s of the 25 s integrator wall for 100
   steps is XLA compilation. GPU only wins end-to-end past ~70 steps. Enabling JAX's
   persistent compilation cache would be the single biggest UX win for the one-command
   goal in the plan.
 - Module import is only 1.12 s.
-- Linear ky scan (5 points, time solver): GPU 25.0 s vs office CPU 103.5 s = **4.1×**.
+- Linear ky scan (5 points, time solver): GPU 25.0 s vs benchmark CPU 103.5 s = **4.1×**.
 - Only **one GPU** is used; nothing in these paths shards across the two A4000s.
 
 ## 7. Blockers / notes for the plan
@@ -219,14 +219,14 @@ Warm step cost from the 400-step minus 100-step integrator wall, /300:
 2. **main's krylov returns a wrong-sign growth rate** on cyclone.toml on both CPU and GPU
    (§5 bonus) — the certified branch is not just hygiene, it is fixing a real wrong answer.
 3. **Plan's `Wg=0.000406441` reference is stale** vs main; re-baseline to 0.00040669 (§4b).
-4. **Python 3.10 on office cannot reach the jax floor.** Any office recipe must bootstrap
+4. **Python 3.10 on benchmark cannot reach the jax floor.** Any benchmark recipe must bootstrap
    a newer interpreter; the uv route in §3 does it without root or system changes.
 5. **GPU compile time (~23 s) dominates short jobs**; persistent compilation cache is the
    obvious follow-up.
-6. Not benchmarked (out of scope, fetched and available on office): `fix/phase0-robustness`
+6. Not benchmarked (out of scope, fetched and available on benchmark): `fix/phase0-robustness`
    (#50), `feat/wout-cli` (#51).
 
-## 8. Artifacts left on office
+## 8. Artifacts left on benchmark
 
 - `~/.venvs/{bootstrap,gkx-gpu,gkx-gpu-krylov}` — new, mine.
 - `~/gkx-wt/{main,krylov}` — new worktrees off `~/GKX`, clean.

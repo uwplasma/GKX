@@ -1,4 +1,4 @@
-	Command being timed: "/home/rjorge/venvs/gkx-nl/bin/python tools/comparison/build_gx_parity_matrix.py --manifest plan/research/scripts/2026-09-13-collisional-convergence/manifest.toml --cases nu0-nl64 --stem /home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z/results/nu0-nl64"
+	Command being timed: "python tools/comparison/build_gx_parity_matrix.py --manifest plan/research/scripts/2026-09-13-collisional-convergence/manifest.toml --cases nu0-nl64 --stem artifacts/nu0-nl64"
 	User time (seconds): 420.89
 	System time (seconds): 451.30
 	Percent of CPU this job got: 100%

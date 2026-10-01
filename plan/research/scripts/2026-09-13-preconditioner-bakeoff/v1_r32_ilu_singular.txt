@@ -1,4 +1,4 @@
-ENV {"python": "3.11.14", "platform": "macOS-14.4.1-arm64-arm-64bit", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "solvax": "0.20.0", "gkx_file": "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py", "x64": true, "devices": "[CpuDevice(id=0)]", "threads": {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "loadavg": [18.19482421875, 20.810546875, 19.2548828125], "script_sha256": "9ffbf1595d2a6067fbd8c2184bd54a9a53a02e2b6869020a4293ac0305a8d9a6", "sha": "578b970742b4e0dec19f0cfbb177139b9c65cc73", "dirty_src": false}
+ENV {"python": "3.11.14", "platform": "macOS-14.4.1-arm64-arm-64bit", "jax": "0.10.2", "numpy": "2.4.6", "scipy": "1.17.1", "solvax": "0.20.0", "gkx_file": "../GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py", "x64": true, "devices": "[CpuDevice(id=0)]", "threads": {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "VECLIB_MAXIMUM_THREADS": "1", "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"}, "loadavg": [18.19482421875, 20.810546875, 19.2548828125], "script_sha256": "9ffbf1595d2a6067fbd8c2184bd54a9a53a02e2b6869020a4293ac0305a8d9a6", "sha": "578b970742b4e0dec19f0cfbb177139b9c65cc73", "dirty_src": false}
 [     2.6s rss<=0.40G] case r32 dims={'Nx': 1, 'Ny': 24, 'Nz': 32, 'ntheta': 32, 'nperiod': 1, 'Nl': 8, 'Nm': 16} shape=(1, 8, 16, 1, 1, 32) n=4096 ky=+0.300 dead_rows=0.000
 [     2.9s rss<=0.43G] matrix-free matvec 0.203 ms (jit, warm median)
 [     6.8s rss<=0.66G] assembly 0.8s nnz={'A': 428213, 'S': 346336, 'Db': 18432, 'Dc': 36603} |A-S-Dc|/|A|=1.363e-02 csr matvec 0.358 ms
@@ -55,15 +55,15 @@ ENV {"python": "3.11.14", "platform": "macOS-14.4.1-arm64-arm-64bit", "jax": "0.
 [    80.5s rss<=1.31G] pr2-cm       its 1e-5/1e-8=66/99 (last 9.1e-10, true 9.1e-10) GMRES(20)=95 apply/matvec=5.10 setup=0.044s mem=8.39MB
 [    81.1s rss<=1.32G] pr3-cm       its 1e-5/1e-8=45/72 (last 8.3e-10, true 8.3e-10) GMRES(20)=56 apply/matvec=8.19 setup=0.044s mem=8.39MB
 Traceback (most recent call last):
-  File "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/plan/research/scripts/2026-09-13-preconditioner-bakeoff/bakeoff.py", line 1068, in <module>
+  File "../GKX-worktrees/preconditioner-bakeoff/plan/research/scripts/2026-09-13-preconditioner-bakeoff/bakeoff.py", line 1068, in <module>
     main()
-  File "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/plan/research/scripts/2026-09-13-preconditioner-bakeoff/bakeoff.py", line 1053, in main
+  File "../GKX-worktrees/preconditioner-bakeoff/plan/research/scripts/2026-09-13-preconditioner-bakeoff/bakeoff.py", line 1053, in main
     rec = run_production_timing(args) if args.case == "prod" else run_case(args)
                                                                   ^^^^^^^^^^^^^^
-  File "/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/plan/research/scripts/2026-09-13-preconditioner-bakeoff/bakeoff.py", line 773, in run_case
+  File "../GKX-worktrees/preconditioner-bakeoff/plan/research/scripts/2026-09-13-preconditioner-bakeoff/bakeoff.py", line 773, in run_case
     ilu = spla.spilu(Sc, drop_tol=1e-2, fill_factor=3)
           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/rogeriojorge/local/venvs/gkx-review-20260913/lib/python3.11/site-packages/scipy/sparse/linalg/_dsolve/linsolve.py", line 535, in spilu
+  File "../venvs/gkx-review-20260913/lib/python3.11/site-packages/scipy/sparse/linalg/_dsolve/linsolve.py", line 535, in spilu
     return _superlu.gstrf(N, A.nnz, A.data, indices, indptr,
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 RuntimeError: Factor is exactly singular

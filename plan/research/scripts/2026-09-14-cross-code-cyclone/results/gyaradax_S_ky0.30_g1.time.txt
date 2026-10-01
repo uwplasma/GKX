@@ -1,4 +1,4 @@
-	Command being timed: "timeout 1800 /home/rjorge/venvs/gyaradax/bin/python -u /home/rjorge/gkx-q20-cross-code-20260914.FavgA4/gyaradax_salpha.py --ky-gx 0.30 --rung g1"
+	Command being timed: "timeout 1800 python -u artifacts/gyaradax_salpha.py --ky-gx 0.30 --rung g1"
 	User time (seconds): 32.78
 	System time (seconds): 4.16
 	Percent of CPU this job got: 95%

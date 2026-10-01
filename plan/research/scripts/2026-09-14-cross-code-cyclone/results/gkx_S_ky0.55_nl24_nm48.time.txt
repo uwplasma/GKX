@@ -1,4 +1,4 @@
-	Command being timed: "taskset -c 18-22 /home/rjorge/venvs/gkx-nl/bin/python /home/rjorge/gkx-q20-cross-code-20260914.FavgA4/gkx_eigen.py --geometry S --ky 0.55 --Nl 24 --Nm 48 --repo /home/rjorge/gkx-q20-cross-code-20260914.FavgA4"
+	Command being timed: "taskset -c 18-22 python artifacts/gkx_eigen.py --geometry S --ky 0.55 --Nl 24 --Nm 48 --repo artifacts/gkx-q20-cross-code-20260914.FavgA4"
 	User time (seconds): 12123.46
 	System time (seconds): 50.98
 	Percent of CPU this job got: 253%

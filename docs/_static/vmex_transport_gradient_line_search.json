@@ -201,7 +201,7 @@
     {
       "label": "step_2p5em04",
       "step": 0.00025,
-      "input": "/home/rjorge/tmp/gkx-transport-gradient-linesearch-90f266a/step_2p5em04/input.gradient_step",
+      "input": "artifacts/input.gradient_step",
       "direction_norm": 0.3094165962549754,
       "returncode": 0,
       "aspect_final": 6.000546570853119,
@@ -243,7 +243,7 @@
     {
       "label": "step_5p0em04",
       "step": 0.0005,
-      "input": "/home/rjorge/tmp/gkx-transport-gradient-linesearch-90f266a/step_5p0em04/input.gradient_step",
+      "input": "artifacts/input.gradient_step",
       "direction_norm": 0.3094165962549754,
       "returncode": 0,
       "aspect_final": 6.000909373144475,
@@ -285,7 +285,7 @@
     {
       "label": "step_1p0em03",
       "step": 0.001,
-      "input": "/home/rjorge/tmp/gkx-transport-gradient-linesearch-90f266a/step_1p0em03/input.gradient_step",
+      "input": "artifacts/input.gradient_step",
       "direction_norm": 0.3094165962549754,
       "returncode": 0,
       "aspect_final": 6.0016345018323625,
@@ -327,7 +327,7 @@
     {
       "label": "step_2p0em03",
       "step": 0.002,
-      "input": "/home/rjorge/tmp/gkx-transport-gradient-linesearch-90f266a/step_2p0em03/input.gradient_step",
+      "input": "artifacts/input.gradient_step",
       "direction_norm": 0.3094165962549754,
       "returncode": 0,
       "aspect_final": 6.003082856937745,

@@ -7,7 +7,7 @@
 # One fresh single-threaded process each, cold, wall cap CAP_S (2700 s = 45 min).
 set -u
 D=plan/research/scripts/2026-09-13-preconditioner-bakeoff
-PY=${PY:-/Users/rogeriojorge/local/venvs/gkx-review-20260913/bin/python}
+PY=${PY:-python}
 CAP_S=${CAP_S:-2700}
 WAIT_FOR=${WAIT_FOR:-}
 PR232=7c8a76194121acbd0611f3d43814b5173e00dbd7

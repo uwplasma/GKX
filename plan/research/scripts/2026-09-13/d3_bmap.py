@@ -1,7 +1,7 @@
 # ruff: noqa: E402
 """D3: Laguerre gyroaverage capture along the GX Nl24/32 discriminator chain (read-only review).
 
-GX deck (office full96.in): s-alpha, eps .18, q 1.4, shat .8, shift 0, ntheta32,
+GX deck (benchmark full96.in): s-alpha, eps .18, q 1.4, shat .8, shift 0, ntheta32,
 nperiod2 (Nz96, three 2pi segments), nkx=1, y0=1.8181817787737895 (ky=.55).
 Uses GKX's own cache b and J_l_all; no simulation.
 """
@@ -13,7 +13,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import numpy as np
 
-REPO = Path("/Users/rogeriojorge/local/GKX-worktrees/perf-review")
+REPO = Path("../GKX-worktrees/perf-review")
 sys.path.insert(0, str(REPO))
 from gkx.runtime import _runtime_linear_dispatch_deps  # noqa: E402
 from gkx.workflows.linear import _prepare_linear_runtime_context  # noqa: E402

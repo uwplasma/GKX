@@ -88,7 +88,7 @@
       "passed": true,
       "promotion_ready": true,
       "sem": 0.19120539615813775,
-      "source_artifact": "office:/home/rjorge/gkx_strict_qa_t1500_20260609/GKX/tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_quasilinear_from_strict_baseline/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed32.out.nc",
+      "source_artifact": "GKX/tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_quasilinear_from_strict_baseline/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed32.out.nc",
       "summary_artifact": "docs/_static/vmec_qa_t1500_quasilinear_output_gate.json#rows[0]"
     },
     {
@@ -100,7 +100,7 @@
       "passed": true,
       "promotion_ready": true,
       "sem": 0.18366442952836695,
-      "source_artifact": "office:/home/rjorge/gkx_strict_qa_t1500_20260609/GKX/tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_quasilinear_from_strict_baseline/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed33.out.nc",
+      "source_artifact": "GKX/tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_quasilinear_from_strict_baseline/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_seed33.out.nc",
       "summary_artifact": "docs/_static/vmec_qa_t1500_quasilinear_output_gate.json#rows[1]"
     },
     {
@@ -112,7 +112,7 @@
       "passed": true,
       "promotion_ready": true,
       "sem": 0.13393441683536725,
-      "source_artifact": "office:/home/rjorge/gkx_strict_qa_t1500_20260609/GKX/tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_quasilinear_from_strict_baseline/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_dt0p04.out.nc",
+      "source_artifact": "GKX/tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_quasilinear_from_strict_baseline/vmec_qa_full_sweep_quasilinear_from_strict_baseline_nonlinear_t1500_n64_dt0p04.out.nc",
       "summary_artifact": "docs/_static/vmec_qa_t1500_quasilinear_output_gate.json#rows[2]"
     }
   ],

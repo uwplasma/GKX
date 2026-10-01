@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sequential GX supervisor for Q8 (office GPU), run only after the GKX runs.
+# Sequential GX supervisor for Q8 (benchmark GPU), run only after the GKX runs.
 # Usage: run_gx.sh RUN_DIR GPU_INDEX KEY [KEY ...]
 # Each KEY has RUN_DIR/gx/KEY.in. The repaired GX binary is used in place and
 # its SHA-256 is checked first. Before each run the chosen GPU must have no
@@ -12,10 +12,10 @@ set -u
 RUN_DIR=$1
 GPU_INDEX=$2
 shift 2
-GXDIR=/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD
+GXDIR=artifacts/gkx-nl24-discriminator-20260912.vvmgDD
 GXBIN=$GXDIR/gx
 GXSHA=96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
-PY=/home/rjorge/venvs/gkx-nl/bin/python
+PY=python
 FIT=$RUN_DIR/src_stage/plan/research/scripts/2026-09-13-collisional-convergence/gx_fit.py
 STATUS="$RUN_DIR/logs/gx_supervisor.txt"
 cd "$RUN_DIR/gx" || exit 2

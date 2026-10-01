@@ -377,12 +377,12 @@ blocker; ``--allow-unsafe-cpu-state-sharding`` is for bounded debugging only.
 
 The artifacts that control the conclusion:
 
-- ``docs/_static/nonlinear_sharding_profile_office_gpu_physical.json``: three
+- ``docs/_static/nonlinear_sharding_profile_gpu_physical.json``: three
   interacting spectral perturbations on a ``(4,8,32,32,64)`` state for 100 RK2
   steps with a nonzero initial nonlinear RHS. On two RTX A4000 GPUs serial
   execution takes 3.77 s, while ``ky`` and ``kx`` whole-state placement take
   9.19 s and 7.22 s, and both fail final-state and RHS identity.
-- ``docs/_static/nonlinear_sharding_profile_office_gpu_benchmark_grid.json``:
+- ``docs/_static/nonlinear_sharding_profile_gpu_benchmark_grid.json``:
   ``(4,8,64,192,24)``, 20 RK2 steps. Active ``kx`` sharding runs at ``0.21x``
   of serial (0.893 s serial against 4.22 s sharded) and fails trajectory
   identity (``max_abs_state_error=20.0``, ``max_abs_rhs_error=1279``) with a
@@ -424,7 +424,7 @@ so each device count gets a clean JAX runtime:
      --nx 48 --ny 96 --nz 128 --nl 4 --nm 8 --steps 12 \
      --out-prefix docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge
    # Equivalent two-GPU preset with JAX traces enabled.
-   python scripts/profiling/profile_nonlinear_sharding.py sweep --office-gpu-xlarge
+   python scripts/profiling/profile_nonlinear_sharding.py sweep --gpu-xlarge
 
    # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_scaling_panels.py > scripts/artifacts/plot_scaling_panels.py
    python scripts/artifacts/plot_scaling_panels.py nonlinear-sharding
@@ -436,7 +436,7 @@ serial/sharded timings, profiler-trace status, final-state and final-field/RHS
 errors, the fastest identity-preserving candidate, and a versioned source
 contract (command, argv, backend, device count, warmup/repeat policy and
 software versions). The small checked-in ``nonlinear_sharding_profile.json`` and
-``nonlinear_sharding_profile_office_gpu.json`` are control-flow smoke tests on
+``nonlinear_sharding_profile_gpu.json`` are control-flow smoke tests on
 states with a zero or tiny nonlinear bracket and are superseded for physical
 identity decisions. The fast checker
 ``scripts/checks/check_parallel_scaling_artifacts.py`` validates the gate, its
@@ -626,7 +626,7 @@ Laguerre sum with the analytic truncation coefficient
 production chain FFT on each shard because ``ky``, ``kx`` and ``z`` stay local,
 and a nontrivial linked case with conserving collisions passes state/field
 identity on four logical CPU devices. Mixed-mesh electromagnetic fields, other
-integrators and all GPU claims remain fail-closed; the two-GPU office host
+integrators and all GPU claims remain fail-closed; the two-GPU benchmark host
 cannot test a four-device mixed mesh.
 
 Tracked engineering profiles for these routes (``docs/_static``):

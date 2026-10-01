@@ -1,40 +1,40 @@
 # stella source study and build report (GKX plan item 2.3, first half)
 
 Date: 2026-08-18. Machine: macOS arm64 (Darwin 23.4), MacPorts at /opt/local.
-Repo: /Users/rogeriojorge/local/stella (upstream https://github.com/stellaGK/stella.git)
+Repo: ../stella (upstream https://github.com/stellaGK/stella.git)
 
 ## 1. Repository state and version
 
-- The repo was **already cloned** at /Users/rogeriojorge/local/stella (not re-cloned; existing state preserved).
+- The repo was **already cloned** at ../stella (not re-cloned; existing state preserved).
 - Checked-out commit: **4cdc5fcd34a6bd9252873e2542fcd1c8c4636dff** ("Fix stellarator symmetric BC (#127)", 2023-10-02), `git describe` = **v0.5.1-240-g4cdc5fcd**.
 - Submodules (initialized): externals/git_version @ b3794a1 (v0.6.0-4), externals/neasyf @ afb2b2f (v0.4.2-1), externals/pFUnit @ bc4de1f.
 - Upstream master (fetched, NOT merged): **2b8e269f2addd0baa5991057eafa022135e04498** (2026-08-12); local checkout is 185 commits behind.
 - Local working-tree modification (pre-existing, left untouched): Makefiles/Makefile.macosx-homebrew adapted for a previous homebrew/MacPorts build. The tree also contains many previous run outputs (cyclone `cyc_*`, `stella_cyclone_*`, `tune_*` cases) from earlier work — evidence this machine has run stella production scans before.
 
-**Version gap that matters for GKX:** the pinned v0.5.1-era code is **electrostatic only** (`fapar`, `fbpar` are accepted in the input but documented "currently has no effect"). Current master (2026) has a fully restructured input system (new namelists: `&geometry_options`, `&gyrokinetic_terms`, `&electromagnetic` with `include_apar`, `include_bpar`, `beta`), electromagnetic capability, and a converter script `AUTOMATIC_TESTS/convert_input_files/convert_inputFile.py` for old inputs. A default new-format input lives at `STELLA_CODE/read_namelists_from_input_file/default_input_file.in` on master. If GKX cross-validation needs EM runs with stella, the office Linux host should build **master**; for electrostatic ITG (linear + nonlinear, kinetic electrons) the pinned local version is sufficient and already validated here.
+**Version gap that matters for GKX:** the pinned v0.5.1-era code is **electrostatic only** (`fapar`, `fbpar` are accepted in the input but documented "currently has no effect"). Current master (2026) has a fully restructured input system (new namelists: `&geometry_options`, `&gyrokinetic_terms`, `&electromagnetic` with `include_apar`, `include_bpar`, `beta`), electromagnetic capability, and a converter script `AUTOMATIC_TESTS/convert_input_files/convert_inputFile.py` for old inputs. A default new-format input lives at `STELLA_CODE/read_namelists_from_input_file/default_input_file.in` on master. If GKX cross-validation needs EM runs with stella, the benchmark Linux host should build **master**; for electrostatic ITG (linear + nonlinear, kinetic electrons) the pinned local version is sufficient and already validated here.
 
 ## 2. Build on macOS: SUCCESS
 
 Toolchain found (no `sudo port install` needed — nothing was missing):
 - gfortran = MacPorts gcc13 (13.4.0); `mpif90` = mpich-clang16 wrapper driving gfortran-mp-13 (`port select mpi` = mpich-clang16-fortran)
 - FFTW3 at /opt/local; LAPACK found; netCDF-C at /opt/local (nc-config)
-- netCDF-Fortran 4.6.1: **user's local build** at /Users/rogeriojorge/local/netcdf-fortran/build (MacPorts does not have libnetcdff installed)
+- netCDF-Fortran 4.6.1: **user's local build** at ../netcdf-fortran/build (MacPorts does not have libnetcdff installed)
 
 The pre-existing `stella` binary in the repo (built Feb 2025) **no longer runs**: it was linked against an older MacPorts MPICH whose `libmpifort.12.dylib` exported `_mpi_win_allocate_shared_cptr_`; the current mpich ports do not — a MacPorts MPI upgrade broke it. Backed it up to scratchpad (`stella_binary_backup_feb2025`) and rebuilt.
 
 Working build recipe (out-of-tree CMake; the repo's Makefile-based `GK_SYSTEM` path also exists, incl. a `Makefile.macports`):
 
 ```sh
-cd /Users/rogeriojorge/local/stella
+cd ../stella
 make -I Makefiles clean GK_SYSTEM=macports   # REQUIRED: stale in-tree .o/.mod from old make build break CMake (documented in README)
 FC=mpif90 cmake . -B build_cmake \
-  -DnetCDFFortran_ROOT=/Users/rogeriojorge/local/netcdf-fortran/build \
+  -DnetCDFFortran_ROOT=../netcdf-fortran/build \
   -DFFTW_ROOT=/opt/local
 cmake --build build_cmake -j 8
-# binary: /Users/rogeriojorge/local/stella/build_cmake/stella
+# binary: ../stella/build_cmake/stella
 ```
 
-macOS-specific gotchas (relevant when redoing this, less so on the Linux office host):
+macOS-specific gotchas (relevant when redoing this, less so on the Linux benchmark host):
 1. The in-tree artifacts from any previous plain-`make` build MUST be cleaned first, or CMake linking fails with `___spfunc_MOD_j0` undefined (stale `spfunc.mod` compiled with the `_SPLOCAL_` variant shadows the F200X-intrinsics variant). This is the exact failure documented in the README.
 2. Do NOT set `-DSTELLA_ENABLE_LOCAL_SPFUNC=ON` — it is declared incompatible with the default `STELLA_ENABLE_F200X=ON`, and is unnecessary (gfortran's F2008 `bessel_j0/j1` intrinsics are used).
 3. Run with the matching launcher: `/opt/local/bin/mpirun` (mpich-clang16). No DYLD path tricks needed for the fresh binary.
@@ -42,7 +42,7 @@ macOS-specific gotchas (relevant when redoing this, less so on the Linux office 
 
 **Verification:** `mpirun -np 4 build_cmake/stella example_linear.in` (CBC-like linear ITG, ky=0.5) reproduces the user's archived run in the repo **bit-for-bit**: final `omega = 0.18702523 + 0.09703135 i` (units v_th,ref/a) — identical to `example_linear.omega` from the Feb 2025 binary. The nonlinear box example (`example_nonlinear.in`, 32x32, Dougherty collisions, hyper-dissipation) also runs cleanly on 4 ranks. Test artifacts are in the scratchpad `stella_test/` dir, not in the repo.
 
-On Linux (office ssh host) the equivalent is trivial: gcc + openmpi + netcdf-fortran + fftw3 + lapack, then the same CMake line (or `make -I Makefiles GK_SYSTEM=gnu_ubuntu`).
+On Linux (benchmark ssh host) the equivalent is trivial: gcc + openmpi + netcdf-fortran + fftw3 + lapack, then the same CMake line (or `make -I Makefiles GK_SYSTEM=gnu_ubuntu`).
 
 ## 3. Evolved equations and normalizations
 
@@ -93,7 +93,7 @@ Per-case settings:
 
 **(c) Kinetic electrons** — set `nspec=2` in `&species_knobs` and add `&species_parameters_2` with `z=-1.0, mass=2.7e-4` (m_e/m_D; use 5.44e-4 for hydrogen-normalized), `type='electron'`, its own tprim/fprim. The implicit parallel-streaming solve (stream_implicit=.true., default) is what makes kinetic electrons affordable — no electron-CFL-limited timestep. `zeff` available. (The `species_parameters_2` block present in `example_linear.in` is ignored there because nspec=1.)
 
-**(d) Electromagnetic** — NOT available in this checkout (fapar/fbpar inert; beta "currently has no effect" except through Miller betaprim in geometry). On current master: `&electromagnetic` namelist with `include_apar`, `include_bpar`, `beta`. Plan: use master on the office Linux box for any EM cross-validation; keep the pinned version for electrostatic anchors.
+**(d) Electromagnetic** — NOT available in this checkout (fapar/fbpar inert; beta "currently has no effect" except through Miller betaprim in geometry). On current master: `&electromagnetic` namelist with `include_apar`, `include_bpar`, `beta`. Plan: use master on the benchmark Linux box for any EM cross-validation; keep the pinned version for electrostatic anchors.
 
 **W7-X-like example (old format, runs with local build after replacing `twist_shift_option='stellarator'` by `boundary_option='stellarator'`):** `AUTOMATIC_TESTS/convert_input_files/example_VMEC_nonlinear_W7X_v0.5.in` on master — geo_option='vmec', wout_w7xr003.nc, torflux=0.0625, nfield_periods=7.60868, zed_equal_arc=T, box 6x6 y0=10 (toy resolution), kinetic electrons, adiabatic_option="iphi00=2", flux_norm=F, hyper_dissipation. A new-format linear W7-X single-mode example (H. Thienpondt) is at `POST_PROCESSING/stellapy/examples/LINEAR_W7X_SINGLEMODE/input.in` on master (wout_w7x_standardConfig.nc — the same file shipped in this repo's `geo/vmec_interface/equilibria/` — torflux=0.49, nfield_periods=17, +/-3 poloidal turns).
 
@@ -122,4 +122,4 @@ NetCDF `<run>.out.nc` (via neasyf), verified by ncdump of an actual run:
 - Clone: pre-existing, preserved; commit recorded; submodules present.
 - Build: SUCCESS on macOS arm64/MacPorts (CMake out-of-tree, `build_cmake/stella`); no system packages needed; documented gotchas above. Old broken binary backed up.
 - Validation: linear CBC ITG reproduces the machine's own archived stella results exactly (omega = 0.18703 + 0.09703i at ky=0.5); nonlinear box smoke test passes on 4 MPI ranks.
-- Deliverable next (second half of 2.3): pick the concrete GKX<->stella comparison cases (suggest: (i) RH residual, (ii) CBC linear ky scan with adiabatic + kinetic electrons, (iii) W7-X linear ky scan at s=0.49 with wout_w7x_standardConfig.nc, (iv) nonlinear CBC heat flux), and decide pinned-v0.5.1 vs master on the office Linux host (master required only for EM).
+- Deliverable next (second half of 2.3): pick the concrete GKX<->stella comparison cases (suggest: (i) RH residual, (ii) CBC linear ky scan with adiabatic + kinetic electrons, (iii) W7-X linear ky scan at s=0.49 with wout_w7x_standardConfig.nc, (iv) nonlinear CBC heat flux), and decide pinned-v0.5.1 vs master on the benchmark Linux host (master required only for EM).

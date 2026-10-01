@@ -532,10 +532,10 @@ authorized by this publication-only audit. No new numerical campaign was run.
   bytes, and the compressed tree archive is 5,363,108 bytes. Strict `fsck`,
   30 recent stable patch-ID comparisons, and the AI-attribution scan pass. No
   public ref moved.
-- Auditing the live office processes exposed an editable-install leak: the PR
-  #91 campaign scripts imported GKX from `/home/rjorge/gkx-wt/main` at
+- Auditing the live benchmark processes exposed an editable-install leak: the PR
+  #91 campaign scripts imported GKX from `artifacts/main` at
   `c749abfa`, not their own checkout. The intended branch changes exact-horizon
-  plumbing in three nonlinear solver modules, so all preceding office traces
+  plumbing in three nonlinear solver modules, so all preceding benchmark traces
   are retained as sizing/negative-design evidence but removed from acceptance
   status. Partial continuation/QI jobs were stopped without deleting their
   logs. PR #91 commit `f7da8c49` now fails closed on a mismatched source and
@@ -758,7 +758,7 @@ authorized by this publication-only audit. No new numerical campaign was run.
   `fsck` and the AI-attribution scan pass. This is a rehearsal, not permission
   to force-push before review, recovery publication, and a real network clone.
 - The source-pinned QHS `t=500--750` and QI `t=250--500` continuations remain
-  active on separate office GPUs. Their queued Ny=160 QA and Ny=128 QI rungs
+  active on separate benchmark GPUs. Their queued Ny=160 QA and Ny=128 QI rungs
   have not started, and no partial output has been interpreted.
 - Ranked reachable blobs by compressed pack cost rather than working-tree size.
   The largest retained object was the 371,750-byte Landau PNG, costing 360,267
@@ -1384,8 +1384,8 @@ authorized by this publication-only audit. No new numerical campaign was run.
   removes ten installed-source lines and 34 test lines. All 102 owned
   diagnostic/runtime tests, 117 release tests, Ruff, changed-module mypy,
   architecture, size, and diff gates pass. Two broader float32-only failures
-  reproduce identically on the untouched base under local JAX 0.9.2 and office
-  JAX 0.11.1. Both pass on office under the actual CI
+  reproduce identically on the untouched base under local JAX 0.9.2 and benchmark
+  JAX 0.11.1. Both pass on benchmark under the actual CI
   `JAX_ENABLE_X64=true` contract, together with the three direct diagnostic
   state tests. CI is active, and the GPU benchmark waits for a free device.
 - Replayed #108 privately as `8f2444d8`. Its exact public/private stable patch
@@ -1467,8 +1467,8 @@ authorized by this publication-only audit. No new numerical campaign was run.
   defaults, table/report schemas, thresholds, and policy outputs are unchanged;
   float32/x64 base/head parity digests match. The patch removes 14 installed
   lines (`96,465 -> 96,451`) and adds no file. All 122 owning tests pass locally
-  and on office JAX 0.11.1; 117 release tests, Ruff, architecture, size, and
-  diff gates pass locally. CI is active. The office runtime environment lacks
+  and on benchmark JAX 0.11.1; 117 release tests, Ruff, architecture, size, and
+  diff gates pass locally. CI is active. The benchmark runtime environment lacks
   PyYAML, Ruff, and mypy, so their authoritative rerun remains GitHub CI.
 - Replayed #110 privately as `9c0626f6`; stable patch ID `0f6549b3` and both
   changed blobs match. A fresh no-local clone has 32 remote refs, 28 tags,
@@ -1694,7 +1694,7 @@ authorized by this publication-only audit. No new numerical campaign was run.
   (`test_objective_reports_stability.py` needs `enable_eigvec_derivs`); a
   rerun is capturing the full failure list to confirm the remaining 12 are the
   same environment class and not merge regressions.
-- Box-size scan (office, 2x A4000): the y0=14 ladder is 7/12 complete with the
+- Box-size scan (benchmark, 2x A4000): the y0=14 ladder is 7/12 complete with the
   remaining runs and both y0=21 192^2 references in flight or gated on GPU
   memory. Interim reading: at y0=14 (delta-ky rho = 0.071, the published
   stella/GENE W7-X band), QA-vacuum fell 6.73 -> 5.61 (64^2 -> 96^2), QHS
@@ -1740,7 +1740,7 @@ authorized by this publication-only audit. No new numerical campaign was run.
   (<= 3e-17), and s-alpha drift signs (bad-curvature drive collapses gamma
   8x when flipped). CBC growth pinned to the comparison GPU code at +0.02%.
   Production CLI runs completed end-to-end on Mac CPU (48^2x32, ~3 min) and
-  office GPU (64^2x48, 5:46, peak 2.0 GB) with full artifact sets, exact
+  benchmark GPU (64^2x48, 5:46, peak 2.0 GB) with full artifact sets, exact
   ambipolarity, and honest not-saturated labeling. Findings were doc-integrity
   only (missing frozen-figure references in verification_matrix.rst, a stale
   normalization table, a basis-convention trap in unused exported helpers,
@@ -1978,7 +1978,7 @@ media that costs the clone nothing.
 - Four tracks opened in parallel, one agent each:
   PHYSICS -- the decisive 192^2 stellarator rung at y0=14 for qhs, qa_vac and
   qa_b0p5, to settle whether the shipped stellarator fluxes are converged or
-  still falling. Both office GPUs came free, which had blocked this for days.
+  still falling. Both benchmark GPUs came free, which had blocked this for days.
   CODE/DOC-1 -- README reorganized on the VMEX model (evidence, reproduction
   commands, pinned revisions, honest scoping), plus pinning `ruff` and
   declaring an explicit lint selection so a fresh checkout is clean.
@@ -2035,7 +2035,7 @@ media that costs the clone nothing.
 
 ## 2026-08-24 — the 192^2 rung: QHS converges, and the box choice is validated
 
-The decisive stellarator rung finally ran once both office GPUs came free.
+The decisive stellarator rung finally ran once both benchmark GPUs came free.
 QHS at y0 = 14, Nx = Ny in {64, 96, 128, 192}, flux +/- SEM:
 
   64^2   5.905 +/- 0.591
@@ -2131,7 +2131,7 @@ decorating a converged answer.
 
 The user-supplied research-grade roadmap was adopted as the charter on the
 open planning branch; historical entries in this file remain evidence, not
-instructions. A fresh workspace at `/Users/rogerio/local/GKX_project` now
+instructions. A fresh workspace at `../GKX_project` now
 contains GKX, SOLVAX, VMEX, BOOZ_XFORM_JAX, GX, stella, and GS2 plus a shared
 Python 3.11 environment. The frozen GKX 1.8.2 baseline is recorded in
 `plan/baseline/gkx_1_8_2.md`: 199 source files / 91,507 lines, 101 test files /
@@ -2770,7 +2770,7 @@ parallel-sharded requests fail explicitly until those modes have measured
 prepared owners. Acceptance: prepared/direct fixed-step parity, one trace for
 same-shape repeated calls, finite reverse-mode gradients, lazy root identity,
 actionable unsupported-mode errors, CPU cold/warm/host-memory measurements,
-an office-GPU smoke and reuse measurement, wheel smoke, nonlinear/API/release
+an benchmark-GPU smoke and reuse measurement, wheel smoke, nonlinear/API/release
 tests, Ruff, full typing, frozen architecture/size ceilings, warning-as-error
 docs, and diff checks. Roll back if preparation changes the direct solver,
 duplicates runtime setup, recompiles unchanged signatures, loses array-only
@@ -2785,7 +2785,7 @@ five prebuilt same-signature initial states. On the local Apple M4 CPU with
 JAX 0.10.2, runtime setup/preparation took 4.930 s, first compiled execution
 1.159 s, and the warm median 0.419 ms. Python-traced cold peak was 61,576,665
 bytes; the warm series added a 16,954-byte peak and 618 retained bytes; peak
-process RSS grew by 558,645,248 bytes. On one office RTX A4000 with JAX 0.10.2
+process RSS grew by 558,645,248 bytes. On one benchmark RTX A4000 with JAX 0.10.2
 and driver 580.173.02, the matched measurements were 14.919 s preparation,
 3.375 s first execution, and 2.343 ms warm median. Python-traced cold peak was
 62,763,804 bytes; the warm series added a 16,822-byte peak and 598 retained
@@ -2840,7 +2840,7 @@ trace-cache difference is bounded and negligible beside compiled runtime
 allocation; the measured path has no material cold, warm, or repeated-memory
 regression.
 
-The matched office RTX A4000 smoke on CUDA device 0 with JAX 0.6.2 reported
+The matched benchmark RTX A4000 smoke on CUDA device 0 with JAX 0.6.2 reported
 baseline/consolidated cold execution of 1.888/1.746 s, warm medians of
 2.403/2.451 ms, identical norm 2139.070800781, and peak device allocation of
 617,728/617,216 bytes. Traced cold Python peaks were 3,840,792/4,059,724 bytes;
@@ -2888,7 +2888,7 @@ peaks were 125,508/126,257 bytes; 51 warm calls added 2,000 peak bytes and
 retained 1,352 bytes in both routes. The shared reconstruction therefore has
 no material CPU compile, warm-runtime, or repeated-memory regression.
 
-The matched office RTX A4000 smoke on CUDA device 0 with JAX 0.6.2 reported
+The matched benchmark RTX A4000 smoke on CUDA device 0 with JAX 0.6.2 reported
 baseline/consolidated cold execution of 95.923/86.313 ms, warm medians of
 147.591/152.598 microseconds, identical norm 887.384338379, and identical
 9,437,184-byte peak device allocation. Traced cold Python peaks were
@@ -2948,7 +2948,7 @@ operator to the configured per-unit-time rate. Traced cold Python peaks were
 routes and retained no incremental growth. The repair therefore changes the
 declared physics without a material CPU compile, warm-runtime, or memory cost.
 
-The matched office RTX A4000 profile with JAX 0.6.2 reported paired
+The matched benchmark RTX A4000 profile with JAX 0.6.2 reported paired
 baseline/repaired cold samples of 2.670--2.686/2.626--2.633 seconds and warm
 medians of 8.690--9.191/8.929--8.951 ms. Peak device allocation was exactly
 3,035,904 bytes in both routes. Traced cold Python peaks were
@@ -2988,7 +2988,7 @@ growth or frequency misses its migration tolerance, the shipped step exceeds
 the measured bound, saved histories grow unnecessarily, or the oracle ceases
 to be independently runnable.
 
-Initial full-resolution office RTX A4000 evidence with x64 enabled found a TEM
+Initial full-resolution benchmark RTX A4000 evidence with x64 enabled found a TEM
 RK2 CFL bound of `0.00060293`; native `dt=0.0005`, stride 20 produced
 `gamma=3.75703186`, `omega=1.53976427` in 18.95 seconds cold, versus adaptive
 Tsit5 `gamma=3.75703314`, `omega=1.53976652` in 17.85 seconds. The
@@ -3006,7 +3006,7 @@ the fixed fit window `1.85 <= t <= 2.15`, native RK4 returned
 `gamma=0.84504824`, `omega=0.02056741`, while the adaptive Tsit5 oracle
 returned `gamma=0.84518270`, `omega=0.02049774`: relative differences of about
 `1.6e-4` and `3.4e-3`, respectively, with both fit R-squared values above
-`0.99978`. Isolated two-GPU profiling on the office A4000s reported native
+`0.99978`. Isolated two-GPU profiling on the benchmark A4000s reported native
 cold/warm end-to-end times of 25.16/14.59 seconds and a 17,461,248-byte device
 peak, versus Diffrax 47.85/37.87 seconds and a 69,052,672-byte device peak.
 Python-traced cold peaks were 15,052,678/16,693,106 bytes and second-run peaks
@@ -3017,7 +3017,7 @@ accuracy, the native owner is therefore about 2.6 times faster warm and uses
 about one quarter of the peak device memory in this maintained stress case.
 
 Finally, the exact proposed kinetic-electron deck (`solver="auto"`, `t=40`,
-`dt=0.0008`, stride 10, `(Nl, Nm)=(12, 32)`) completed on the office A4000 in
+`dt=0.0008`, stride 10, `(Nl, Nm)=(12, 32)`) completed on the benchmark A4000 in
 80.35 seconds with 5,000 finite saved samples, a 28,911,616-byte peak device
 allocation, and a 32,436,910-byte Python-traced peak. The automatic fit
 returned finite `gamma=1.24264955`, `omega=1.13347366`, and
@@ -3072,7 +3072,7 @@ Traced cold host peaks were 8,742,376/8,744,216 bytes for the standard path and
 matched within measurement noise. These provisional CPU measurements show no
 material runtime or memory regression; NVIDIA parity remains to be recorded.
 
-On one office RTX A4000 with JAX 0.10.2, the same matched smoke reported
+On one benchmark RTX A4000 with JAX 0.10.2, the same matched smoke reported
 baseline/consolidated standard cold times of 7.793/7.017 seconds and warm
 medians of 52.873/44.616 milliseconds. The diagnostics path reported
 2.851/2.732 seconds cold and 1.674/1.751 seconds warm, with warm minima of
@@ -3164,7 +3164,7 @@ Hermitian coverage, changes the unsplit RHS, fails second order, or does not
 improve time-to-accuracy or memory on a representative stiff case.
 
 The representative full-resolution kinetic-electron gate rejected this
-candidate. On one office RTX A4000, the field-free split overflowed at
+candidate. On one benchmark RTX A4000, the field-free split overflowed at
 `dt=0.004` because the still-explicit electromagnetic field drive retained an
 estimated `0.0004454` stability bound. Adding a matrix-free field correction
 with the exact Hermite solve as a GMRES preconditioner did not rescue the
@@ -3308,7 +3308,7 @@ architecture/size, warning-as-error docs, and diff gates pass. Roll back if
 GKX interprets a WOUT coefficient, duplicates a geometry calculation, or the
 file route requires equilibrium reconstruction or convergence.
 
-The coupled office RTX A4000 gate kept both routes on `cuda:0`. On the shaped
+The coupled benchmark RTX A4000 gate kept both routes on `cuda:0`. On the shaped
 13-surface, 32-point equal-arc case, live-state geometry took 23.35 seconds on
 its first synchronized call and 0.421 seconds warm median; the WOUT route,
 after shared kernels had compiled, took 6.41 seconds on its first call and
@@ -3679,7 +3679,7 @@ Scope:
   any shipped deck or example loses its integrator, if a removed field turns
   out to have a live user, or if a native path changes a reported number.
 
-The decision rests on the office RTX A4000 evidence already recorded on
+The decision rests on the benchmark RTX A4000 evidence already recorded on
 2026-08-29 in this log, not on new measurements. At matched fitted-mode
 accuracy on the maintained kinetic-electron stress case, the native explicit
 owner ran 25.16/14.59 seconds cold/warm against Diffrax 47.85/37.87 — about
@@ -3738,7 +3738,7 @@ Evidence:
   `tools/release/check_*.py` exit 0; `sphinx -b html -W docs` builds with zero
   warnings; `import gkx` and `gkx --help` work with `diffrax` blocked from
   `sys.meta_path`
-- CPU/NVIDIA measurements: none taken. The gate rests on the 2026-08-29 office
+- CPU/NVIDIA measurements: none taken. The gate rests on the 2026-08-29 benchmark
   A4000 record quoted above.
 
 Outcome:
@@ -4128,7 +4128,7 @@ Evidence:
   passed on that for six days. Examples are not in CI, which is why nothing
   caught it.
 - the repaired example runs end to end and writes both artifacts. Verified on
-  the office box (`~/venvs/vmex-gpu`, Python 3.12, jax 0.9.2, RTX A4000):
+  the benchmark box (`~/venvs/vmex-gpu`, Python 3.12, jax 0.9.2, RTX A4000):
   `max AD/FD relative error: 0.000e+00`, `final residual norm: 0.000e+00`.
 - the gate change is verified not to weaken anything real: with the tracked
   artifact restored it still exits 0, so the change removes only a requirement
@@ -4148,7 +4148,7 @@ Outcome:
 - accepted, with one open item that belongs to the maintainer: the bridge
   artifact still describes two deleted capabilities and cannot be honestly
   regenerated until the parity report runs in the regeneration environment.
-- an example audit on the office box ran every cheap example: of 21 runnable,
+- an example audit on the benchmark box ran every cheap example: of 21 runnable,
   10 passed and 11 failed, but only this one was genuinely broken. Five failed
   on `tomllib` because `~/stellarator_venv` is Python 3.10 and GKX needs 3.11,
   four need data files or two devices as a precondition, and one is a plotting
@@ -4405,7 +4405,7 @@ Scope:
   that a profile justifies.
 
 Evidence gathered:
-- an XLA profile on the office box (36-core CPU, RTX A4000, jax 0.9.2) at
+- an XLA profile on the benchmark box (36-core CPU, RTX A4000, jax 0.9.2) at
   32x32x16, 64x64x24 and 96x96x48 measured **196 ns per element per step**, flat
   across the two larger grids and so converged. The documented 72--80 ns did not
   survive re-measurement and is corrected in `docs/performance.rst` and README.
@@ -4524,7 +4524,7 @@ Evidence:
 - 2,738 tests collected; 12 selected analytic collision tests passed.
 - all 346 lazy root API names resolve in a fresh interpreter.
 - species/Hermite bounded trajectory and traced-projector tests: 2 passed on
-  local logical CPUs, 2 passed on office GPUs; no distributed gradient claim.
+  local logical CPUs, 2 passed on benchmark GPUs; no distributed gradient claim.
 - whole-state large probe: one GPU 0.495 s; two GPUs auto 2.538 s / kx 1.799 s;
   identity passes, no speedup. Four-logical-CPU whole-state route safely skips.
 - tiny f64 finite-window compiler-memory check: block/plain value/gradient
@@ -4556,7 +4556,7 @@ Changes and evidence:
   equilibrium residual, finite-beta plasma-current and topology-event contracts.
 - Added collision/Er/island student/research presets, concrete EM benchmark
   sources, experimental-validation criteria and publication-scope boundaries.
-- Confirmed office GX equals upstream HEAD `3865a537`; preserved its local
+- Confirmed benchmark GX equals upstream HEAD `3865a537`; preserved its local
   Makefiles. Found the explicit m-split conserving-collision rejection and
   recorded historical species-route speedup separately from whole-state timings.
 - Broadened primary-source references. Direct GENE-X publisher access blocked;
@@ -4585,12 +4585,12 @@ Approved plan; execution active. Code PR **#199** (`b5dca15a`) is stacked on
 open; no merge, reference regeneration or numerical implementation change.
 
 Resume locations:
-- `/Users/rogeriojorge/local/GKX-worktrees/r0-damping-path-consistency`, branch
+- `../GKX-worktrees/r0-damping-path-consistency`, branch
   `fix/r0-damping-path-consistency`; clean/pushed at b5dca15a.
-- `/Users/rogeriojorge/local/GKX-worktrees/research-plan-20260904`, branch
+- `../GKX-worktrees/research-plan-20260904`, branch
   `plan/research-publication-20260904`; authoritative plan/log.
-- Office snapshot `/home/rjorge/gkx-r0-damping-20260904.S0ny7R`, created by
-  `git archive origin/fix/end-damping-per-step | ssh office 'tar -x -C ...'`;
+- Office snapshot `artifacts/gkx-r0-damping-20260904.S0ny7R`, created by
+  `git archive origin/fix/end-damping-per-step | ssh ${BENCHMARK_HOST} 'tar -x -C ...'`;
   exact source SHA 9074dd87. No background solver job remains from this slice.
 
 Independent findings:
@@ -4610,8 +4610,8 @@ Commands/results (run from the code worktree unless qualified):
 1. `PYTHONPATH=src JAX_ENABLE_X64=true python -m pytest -q
    tests/validation/physics_gates/test_end_damping_physics.py`: **1 passed**;
    local `/opt/local/bin/python`, JAX 0.9.2. 20,000 steps at dt=0.002.
-2. Same sentinel on office, `CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true
-   PYTHONPATH=src /home/rjorge/venvs/gkx-nl/bin/python -m pytest -q
+2. Same sentinel on benchmark, `CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true
+   PYTHONPATH=src python -m pytest -q
    tests/validation/physics_gates/test_end_damping_physics.py
    --junitxml=sentinel-gpu.xml`: **1 passed**, Python 3.11.15/JAX 0.10.2.
    XML SHA256 `0239dfcdcd6d7bbeca04a61d112e2e1efc3c24b15d67d7a63261b116cf36f7af`.
@@ -4639,13 +4639,13 @@ physics, all-PR independent validation or completed R0.
 ## 2026-09-05 — R0 default-f32 application coverage
 
 PR **#200**, `test/r0-f32-backend-probe`, e36e5bd8, stacked on #196 fdfb1a13.
-Worktree `/Users/rogeriojorge/local/GKX-worktrees/r0-f32-backend-probe` is pushed;
+Worktree `../GKX-worktrees/r0-f32-backend-probe` is pushed;
 no numerical implementation changed. PRs #196–#200 remain unmerged.
 
 Evidence changed the action: #196 skipped all CPU versions >=0.10.2, but the
 actual compressed periodic/linked gradient tests pass on Mac ARM64 0.10.2 and
 0.11.1. Office Linux x86-64 0.10.2 actually SIGSEGVs on both. The tiny JAX-only
-rank-7 multiply/reduce reproducer crashes on office (-11), not on the Mac;
+rank-7 multiply/reduce reproducer crashes on benchmark (-11), not on the Mac;
 using a passing proxy as proof of application safety would be insufficient.
 
 Implemented bounded subprocess execution for actual f32 CPU tests, disabling
@@ -4663,9 +4663,9 @@ Reproduction:
   were not modified. This is workload evidence, not a clean-install certification.
 - Local `/tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python`: clean Python 3.12
   venv, jax/jaxlib 0.11.1, `pip install -e '.[dev]'` from the code worktree.
-- Office `/home/rjorge/gkx-r0-f32-20260905.qIKcGz`: archive fdfb1a13 plus the
+- Office `artifacts/gkx-r0-f32-20260905.qIKcGz`: archive fdfb1a13 plus the
   edited test file copied from e36e5bd8. Interpreter
-  `/home/rjorge/venvs/gkx-nl/bin/python`, Python 3.11.15/JAX 0.10.2.
+  `python`, Python 3.11.15/JAX 0.10.2.
 - Run `PYTHONPATH=src JAX_ENABLE_X64=false <python> -m pytest -q -rx
   tests/unit/nonlinear/test_nonlinear.py -k
   'compressed_real_fft_heat_flux_window_gradient_matches_finite_difference or
@@ -4673,11 +4673,11 @@ Reproduction:
   `JAX_PLATFORMS=cpu`. Repeat with `JAX_ENABLE_X64=true` for f64.
 
 Results: Mac 0.10.2 f32 **2 passed**; Mac 0.11.1 f32 and f64 each **5 passed**
-(2 gradients + 3 classification checks); office 0.10.2 f32 **3 passed, 2 xfailed**
-(observed native crashes), f64 **2 passed**. The latter office test copy predated
+(2 gradients + 3 classification checks); benchmark 0.10.2 f32 **3 passed, 2 xfailed**
+(observed native crashes), f64 **2 passed**. The latter benchmark test copy predated
 only classification/core-dump additions; physics checks are identical.
 
-XML provenance (local reports under the scratch root; remote under office root):
+XML provenance (local reports under the scratch root; remote under benchmark root):
 | File | SHA256 |
 |---|---|
 | mac0102.xml | 21053dc63af6d453f07cf9df0169093a6d216dc242e870c2f685628ec0b5d2c4 |
@@ -4703,7 +4703,7 @@ precision workflows, a production nonlinear gradient horizon, or Linux 0.11.1 sa
 
 PR **#201**, `fix/r0-f32-bracket-rank`, commit
 `53d86f01e40fb5acb81eff9b1fd3af7205eeec06`, stacked on #200 e36e5bd8.
-Worktree `/Users/rogeriojorge/local/GKX-worktrees/r0-f32-bracket-rank`.
+Worktree `../GKX-worktrees/r0-f32-bracket-rank`.
 Author/committer Rogerio Jorge; no merge. Five edited files, no new files;
 source +15 and test net +28 lines, explicit budget updates.
 
@@ -4754,15 +4754,15 @@ Reproduction/provenance:
   `jax0102/bin/python` and `jax0111/bin/python` as previous entry. Always use
   `PYTHONPATH=src` from this worktree: the editable 0.11.1 install still points
   at parent #200, so omitting it tests the wrong source.
-- Office snapshot `/home/rjorge/gkx-r0-f32-20260905.qIKcGz` now has #201
+- Office snapshot `artifacts/gkx-r0-f32-20260905.qIKcGz` now has #201
   `brackets.py` and `test_nonlinear.py` copied over the earlier snapshot.
   Bracket SHA256 `0ea48ced187f40b7867aa6138bd6a08561fdf8a2ba258420f64a689a98aae0c9`.
-  All reported office application tests use `/home/rjorge/venvs/gkx-nl/bin/python`.
+  All reported benchmark application tests use `python`.
 - `JAX_ENABLE_X64=false PYTHONPATH=src <python> -m pytest -q
   tests/unit/nonlinear/test_nonlinear.py -k
   'compressed_real_fft_heat_flux_window_gradient or isolation_does_not_hide'`:
-  **5 passed each** on Mac0.10.2, office CPU0.10.2 (`JAX_PLATFORMS=cpu`),
-  office GPU0.10.2 (`CUDA_VISIBLE_DEVICES=0`). No xfails.
+  **5 passed each** on Mac0.10.2, benchmark CPU0.10.2 (`JAX_PLATFORMS=cpu`),
+  benchmark GPU0.10.2 (`CUDA_VISIBLE_DEVICES=0`). No xfails.
   An earlier selector matched only the three guards; that run is not used as
   gradient evidence. `cpu-lowering-f32-actual.xml` is the corrected five-test run.
 - Mac0.11.1 `JAX_ENABLE_X64=true ... pytest -q
@@ -4777,11 +4777,11 @@ Reproduction/provenance:
 - Profilers in both scratch roots: `rank_profile.py 32 1 4 8` and
   `window_rank_profile.py`, invoked with the same PYTHONPATH/precision/device
   selection as above. CSVs retain compile time, all timing extrema and memory.
-- Separate clean office `jax0111/bin/python` (Python3.12/JAX0.11.1) passes the
+- Separate clean benchmark `jax0111/bin/python` (Python3.12/JAX0.11.1) passes the
   tiny rank7 multiply/reduce proxy; application deps not installed there.
   Do not infer application safety or change supported versions from this proxy.
 
-Selected raw evidence SHA256 (local L / office O scratch roots above):
+Selected raw evidence SHA256 (local L / benchmark O scratch roots above):
 
 | File | SHA256 |
 |---|---|
@@ -4814,7 +4814,7 @@ replaced by this targeted backend repair. Keep all PRs unmerged.
 
 Previous turn: progress (#201 repair and pushed log). Current source audited:
 #199 `b5dca15a`, clean worktree
-`/Users/rogeriojorge/local/GKX-worktrees/r0-damping-path-consistency`.
+`../GKX-worktrees/r0-damping-path-consistency`.
 No solver or deck edited in this slice. #194 is an **issue**, not a PR.
 Checked its full body against source and executable probes; its proposed blanket
 deck rescale would change nonlinear rates and must be corrected before coding.
@@ -4825,7 +4825,7 @@ linked grid8^3, Nl=2,Nm=6, two kinetic species from the existing
 `_small_kinetic_electron_problem(linked=True)` fixture. Every term except end
 damping is zero. Compare each effective RHS with `r=-A*d*G` on cells with
 nonzero r. This is an algebraic contract probe, not a gyrokinetic instability
-benchmark. Results agree on Mac JAX0.11.1/two logical CPUs and office
+benchmark. Results agree on Mac JAX0.11.1/two logical CPUs and benchmark
 JAX0.10.2/two RTX A4000 GPUs, f64:
 
 | Route | Effective RHS / r at dt=.1 | at dt=.2 | Meaning |
@@ -4906,10 +4906,10 @@ PYTHONPATH=src /tmp/gkx-f32-20260905.alM6Fy/jax0111/bin/python
 `decks.py` parses `git ls-files '*.toml'` using tomllib, lists positive explicit
 collisions.damp_ends_amp and joins config paths to gx_parity_matrix_manifest dt.
 
-Office scratch `/home/rjorge/gkx-r0-damping-route-20260905.8mUFOv` is a fresh
+Office scratch `artifacts/gkx-r0-damping-route-20260905.8mUFOv` is a fresh
 `git archive b5dca15a` plus `probe.py` (not the f32 repair snapshot).
 Run `CUDA_VISIBLE_DEVICES=0,1 JAX_ENABLE_X64=true PYTHONPATH=src
-/home/rjorge/venvs/gkx-nl/bin/python probe.py > gpu.log`. Both commands exit0.
+python probe.py > gpu.log`. Both commands exit0.
 
 | Evidence | SHA256 |
 |---|---|
@@ -4929,7 +4929,7 @@ and validate same-rate parity before any expensive reference regeneration.
 
 Previous turn was progress: independent CPU/GPU route evidence corrected the
 migration. Created a clean worktree from #199 b5dca15a:
-`/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, branch
+`../GKX-worktrees/r0-end-damping-rate`, branch
 `fix/r0-end-damping-rate`. Commits `3f0a0e70` (migration) and `3e3e31d8`
 (explicit tool-line budget) pushed; **draft PR #202**, stacked on #199.
 No merge. Source net -15 lines; no new files. Draft is not release readiness.
@@ -4971,12 +4971,12 @@ Verification (local interpreter JAX0.11.1 from
    **21 passed**. Includes four RK schemes' stage values/tangents, fixed-T
    value/gradient convergence through 4/8/16 steps, and seven damp-only route
    comparisons at dt=.1/.2 with nonzero profile. A=rate held fixed.
-2. Office snapshot `/home/rjorge/gkx-r0-damping-route-20260905.8mUFOv` was
-   updated with `git diff --binary | ssh office 'cd <snapshot> && git apply'`
+2. Office snapshot `artifacts/gkx-r0-damping-route-20260905.8mUFOv` was
+   updated with `git diff --binary | ssh ${BENCHMARK_HOST} 'cd <snapshot> && git apply'`
    before docs and parity-wiring-test additions. Solver, route tests and
    sentinel match 3f0a0e70; initial archive b5dca15a. With
    `CUDA_VISIBLE_DEVICES=0,1 JAX_ENABLE_X64=true PYTHONPATH=src
-   /home/rjorge/venvs/gkx-nl/bin/python -m pytest -q
+   python -m pytest -q
    tests/unit/parallel/test_parallel_linear_velocity.py -k end_damping_rate`:
    **2 passed**, JAX0.10.2 on two A4000s.
 3. CPU and GPU `tests/validation/physics_gates/test_end_damping_physics.py`:
@@ -4997,7 +4997,7 @@ Verification (local interpreter JAX0.11.1 from
    are not claimed from these focused commands.
 
 All local reports under `/tmp/gkx-damping-route-20260905.Xk4sat`; remote reports
-under the office snapshot above. Hashes:
+under the benchmark snapshot above. Hashes:
 
 | Report | SHA256 |
 |---|---|
@@ -5018,7 +5018,7 @@ Next, keep #202 draft and unmerged:
    independent eigenoperator/implicit answers with nontrivial field coupling;
    test distributed gradients, not just primal pmap parity.
 4. Locate and verify current GX reference bundles; sync a fresh committed #202
-   office snapshot, run the complete six-case parity matrix with resolved-rate
+   benchmark snapshot, run the complete six-case parity matrix with resolved-rate
    provenance and unsettled/failed modes retained, plus relevant nonlinear
    unchanged-rate checks. Only then regenerate downstream artifacts and assess
    adaptive deck/reference changes. Do not weaken gates to hide changed physics.
@@ -5029,11 +5029,11 @@ No local/SSH process remains active; both worktrees are clean after commits.
 Previous turn: progress (fixed-rate implementation). Read clean #202 head
 3e3e31d8 and queried CI: no failed checks reported, not a full-CI certification.
 Audited comparison callers before dispatching long runs. Confirmed reference
-implementation in office `/home/rjorge/GX`, commit
+implementation in benchmark `artifacts/GX`, commit
 `3865a53778862e1686f414bf6f416339e24887c9`: `src/grad_parallel_linked.cu:382`
 and `src/grad_parallel_NTFT.cu:308` pass `pars_->damp_ends_amp/dt` to end damping;
 `src/device_funcs.cu:2852` documents the same normalization. `rg` is unavailable
-on office, so used grep for these read-only source checks. GX was not modified.
+on benchmark, so used grep for these read-only source checks. GX was not modified.
 
 Found four adapter sites copying raw GX amplitude: three imported-linear
 trajectory variants and the RHS-term comparison constructor. With GKX now using
@@ -5068,15 +5068,15 @@ pass. Intermediate budget overages were inspected and set to actual measured
 
 Remaining: audit ky_diagnostics and other benchmark-default constructors;
 review CI; locate exact GX parity reference bundles and record their provenance;
-sync a fresh committed #202 office snapshot before complete external matrix and
-same-rate refinement. Do not reuse the older office patch snapshot as head.
+sync a fresh committed #202 benchmark snapshot before complete external matrix and
+same-rate refinement. Do not reuse the older benchmark patch snapshot as head.
 No local/SSH jobs active. #202 remains draft/unmerged; plan/log checkpoint pushed.
 
 ## 2026-09-05 — matched-rate external campaign started
 
 Previous turn was progress (adapter conversion). Rechecked #202 clean at
 3565ecdc; CI jobs queued, no failure reported, no completion claim.
-Located `/home/rjorge/gx_refs_lin`: five of the six manifest outputs exist
+Located `artifacts/gx_refs_lin`: five of the six manifest outputs exist
 (three Cyclone, KBM, W7-X), plus unrelated KAW. HSX output not found within
 the inspected home depth6. Preserve this bundle; do not synthesize missing rows.
 
@@ -5089,7 +5089,7 @@ diagnostic cadence cannot establish that every internal adaptive timestep stayed
 fixed. These are Sep2 campaign-generated outputs, not immutable upstream blobs.
 
 Started a new **GX** s-alpha reference (not yet a result):
-- Fresh #202 snapshot `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`
+- Fresh #202 snapshot `artifacts/gkx-r0-rate-parity-20260905.GtHbRz`
   from `git archive 3565ecdc`, no edits to tracked GKX source there.
 - Under `matched_refs/ITG_cyclone`, copied the existing s-alpha input and added
   `[Time] dt=.002`; diagnostic nwrite100 (was1000), unchanged t_max150,
@@ -5100,11 +5100,11 @@ Started a new **GX** s-alpha reference (not yet a result):
   `/tmp/gkx-damping-route-20260905.Xk4sat/matched_salpha.in`, remote basename
   `itg_salpha_adiabatic_electrons.in`; SHA256
   `2aa2793daca6b19f03ccecd00f6ba97b570563b3147cac05feac9f80229a094a`.
-- Executable `/home/rjorge/GX/gx`, source reports3865a537, SHA256
+- Executable `artifacts/gx`, source reports3865a537, SHA256
   `787eb0145937e653c08750fd7168029c20772ce3e6c2a2a3b58c70aab128dc9b`.
   This pins the binary; it does not certify a fresh reproducible rebuild.
 - Run from that input directory:
-  `CUDA_VISIBLE_DEVICES=0 /usr/bin/time -v /home/rjorge/GX/gx
+  `CUDA_VISIBLE_DEVICES=0 /usr/bin/time -v artifacts/gx
   itg_salpha_adiabatic_electrons.in > gx.stdout.log 2> gx.time.log`.
   SSH execution session **26100**, remote GX PID **1713851**, parent time PID
   1713850. Process verified live and first log step confirms dt=.002.
@@ -5116,7 +5116,7 @@ to explicitly identify this new fixed-dt run. No public matrix/artifact changed.
 Next once GX exits successfully: hash output, verify final physical time and
 finite spectra, then run from the fresh GKX snapshot with
 `GX_PARITY_REF_DIR=<snapshot>/matched_refs CUDA_VISIBLE_DEVICES=0
-JAX_ENABLE_X64=true PYTHONPATH=src /home/rjorge/venvs/gkx-nl/bin/python
+JAX_ENABLE_X64=true PYTHONPATH=src python
 tools/comparison/build_gx_parity_matrix.py --manifest matched_manifest.toml
 --cases cyclone_salpha_itg --stem results/salpha_rate50`.
 This uses a full and half-horizon GKX solve, not a shortened smoke. Do not use
@@ -5165,7 +5165,7 @@ Verification:
   --junitxml=/tmp/gkx-coupled-rate-20260905.shBvlR/test.xml`: **1 passed**.
 - Office JAX0.10.2/SciPy1.17.1, same test copied into the 3565ecdc source
   snapshot, `CUDA_VISIBLE_DEVICES=1 JAX_ENABLE_X64=true PYTHONPATH=src
-  /home/rjorge/venvs/gkx-nl/bin/python -m pytest -q ...
+  python -m pytest -q ...
   --junitxml=coupled-rate-gpu.xml`: **1 passed**. Production source unchanged
   from snapshot; test is the one in 6bf824b5. GPU0 still runs GX. Do not publish
   the concurrent GX wall time as an isolated-machine performance benchmark.
@@ -5177,7 +5177,7 @@ Verification:
 |---|---|
 | test.xml (local) | 78500bac8da533a143ba88759c391eb30fac01de21fb319e49e433f635f18a6f |
 | results-refined.log (local) | 1c82cf3d8a60a0365f490a69921f14ca8bfb0ab2b78fa50c88ce7525fec53a6a |
-| coupled-rate-gpu.xml (office snapshot) | abfb40a625264b7235d709828435356b8c3e8279c046419ccda17db37ab59f6a |
+| coupled-rate-gpu.xml (benchmark snapshot) | abfb40a625264b7235d709828435356b8c3e8279c046419ccda17db37ab59f6a |
 
 Only GX session26100/PID1713851 remains active. Next: finish/verify that reference,
 then run the full+half-horizon GKX comparison using the previous entry's command.
@@ -5216,7 +5216,7 @@ is50 and its `terms/assembly.py` hash equals committed3565ecdc:
 Production source remains equivalent at head6bf824b5 (test/doc additions only).
 
 **Live resume handle:** SSH session **32453**, Python PID **1716124**, time
-parent1716123. Snapshot `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`;
+parent1716123. Snapshot `artifacts/gkx-r0-rate-parity-20260905.GtHbRz`;
 logs `gkx-salpha.stdout.log`, `gkx-salpha.stderr.log`; stem
 `results/salpha_rate50`. Command uses `--manifest matched_manifest.toml --cases
 cyclone_salpha_itg`, no --merge and no public artifact overwrite. Verify process
@@ -5297,7 +5297,7 @@ reusing performance claims.
 
 **GKX s-alpha session32453 completed exit0**, wall13:08.07 (not an isolated
 performance benchmark), host RSS1638948 KiB. Original snapshot3565 reporting
-retained under `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/results/`.
+retained under `artifacts/`.
 CSV SHA256 `d957bba357ff01ece8f5eaf0bea2aabb5ff7fbcde77c08b693363c911b9208de`;
 local copy `/tmp/gkx-damping-route-20260905.Xk4sat/salpha_rate50.csv`.
 Independent Python csv/math audit (not rewriting solver output): require finite
@@ -5313,13 +5313,13 @@ extend the slow mode and refine fixed-rate dt/resolution before promotion.
 Started the next **GX Miller adiabatic reference**, GPU1, session **97329**,
 PID **1717513** (time parent1717512), same owned snapshot directory
 `matched_refs/ITG_cyclone`. Copied original input from
-`/home/rjorge/gx_refs_lin/ITG_cyclone/itg_miller_adiabatic_electrons.in`, added
+`artifacts/itg_miller_adiabatic_electrons.in`, added
 only Time.dt=.002 via apply_patch; nwrite100, tmax150 unchanged. Input SHA256
 `317358524c40a91298841ba336332831c0375e8b9d75273d19976331ef342ce5`.
 Local input `/tmp/gkx-damping-route-20260905.Xk4sat/matched_miller.in`.
 Command from the owned reference directory:
-`CUDA_VISIBLE_DEVICES=1 PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH
-/usr/bin/time -v /home/rjorge/GX/gx itg_miller_adiabatic_electrons.in
+`CUDA_VISIBLE_DEVICES=1 PATH=artifacts/bin:$PATH
+/usr/bin/time -v artifacts/gx itg_miller_adiabatic_electrons.in
 > miller-gx.stdout.log 2> miller-gx.time.log`.
 Geometry generator succeeded and mode diagnostics are advancing; not complete.
 GX source/binary unchanged from preceding provenance record. PATH scoped to
@@ -5341,15 +5341,15 @@ so still no full-CI assertion. Plan started clean at768dcada.
 
 Inspected reference loader: it averages the last half of the GX diagnostic
 trace but calls the result "converged" without testing reference settling.
-Read-only independent audit script in owned office snapshot
-`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/audit_reference.py` (local
+Read-only independent audit script in owned benchmark snapshot
+`artifacts/audit_reference.py` (local
 copy `/tmp/gkx-damping-route-20260905.Xk4sat/audit_reference.py`) compares GX
 mean instantaneous complex frequency over [T/4,T/2] and [T/2,T], float64
 accumulation, preserving all positive ky. This probes the existing estimator;
 it is not a new GX run or a statistical confidence interval. Existing output
 has uniform fixed-dt diagnostic sampling; do not generalize sample means to
 arbitrarily sampled adaptive traces. Command:
-`/home/rjorge/venvs/gkx-nl/bin/python audit_reference.py
+`python audit_reference.py
 matched_refs/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc
 > results/salpha_reference_temporal.csv` (metadata line precedes CSV header).
 Script SHA256 `e5840d49d118959a8fa06ab1881f000aa2f00c1ecfce7d38c8ed8eb86fe56a4e`;
@@ -5371,9 +5371,9 @@ selects ky=.15/.30/.55, dt=.001, 150000 steps (T150), Nl16/Nm48, explicit
 rate50, IMEX2, original matched GX reference. Original baseline retained.
 Manifest SHA256 `aee947066f77edb46688e0f3d5935c0a79281dd0d392d46cc7dd5ba27e2e7b3a`.
 Command from snapshot:
-`GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs
+`GX_PARITY_REF_DIR=artifacts/matched_refs
 CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEND=Agg
-/usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python
+/usr/bin/time -v python
 tools/comparison/build_gx_parity_matrix.py --manifest salpha_dt_refinement.toml
 --cases cyclone_salpha_itg_dt_half --stem results/salpha_rate50_dt_half
 > gkx-salpha-dt-half.stdout.log 2> gkx-salpha-dt-half.stderr.log`.
@@ -5421,7 +5421,7 @@ test+43/tool+42 lines; no new repository files. No full-CI assertion.
 Real-output check initially returned unknown because GX's final interval is
 .1980000094, versus regular .2000000095; this was not an adaptive run. Added
 explicit shortened-terminal handling/test instead of loosening interior-grid
-tolerance. Read-only loader copy `postprocess_parity.py` in the office snapshot
+tolerance. Read-only loader copy `postprocess_parity.py` in the benchmark snapshot
 now returns reference false for ky=.05/.10 and true for the other nine, matching
 the independent audit. This copy is only postprocessing; neither running solver
 nor its old3565 reporter was replaced. All original reference estimates retained.
@@ -5449,7 +5449,7 @@ No need to repeat that earlier correction. PR202 confirmed open/draft at0acbd221
 no failed CI checks at query, many pending. No full-CI claim.
 
 **GKX dt refinement session57878 completed exit0**, PID1717879 terminal.
-Original result retained at office snapshot `results/salpha_rate50_dt_half.csv`,
+Original result retained at benchmark snapshot `results/salpha_rate50_dt_half.csv`,
 SHA256 `03744b68b05e42c937fde865760ee59b65781cabe511340f07a7730be7dffb2f`;
 local copy in `/tmp/gkx-damping-route-20260905.Xk4sat/`. Against dt=.002 rows,
 relative gamma changes at ky=.15/.30/.55 are
@@ -5466,7 +5466,7 @@ Comparison computed from preserved CSV rows using nearest ky, relative change
 
 Started **Hermite-only refinement**, GPU0, session **92932**, Python
 **PID1719126** (time parent1719125), verified live/no stderr. Owned snapshot
-`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`; manifest
+`artifacts/gkx-r0-rate-parity-20260905.GtHbRz`; manifest
 `salpha_hermite_refinement.toml`, SHA256
 `dc3101e90553ebf101a55794ed7606e1b5745312ee1955bbf69cb3839630f14c`.
 Nm64 vs baseline48; Nl16, dt=.002, T150, rate50 unchanged. Exact ky
@@ -5500,8 +5500,8 @@ This turn verified #200/#201 open at e36e5bd8/53d86f01, with no failed or pendin
 checks. This does not certify #202 CI. Code worktree clean at0acbd221.
 
 **GX Miller session97329 completed exit0**, old PID1717513 terminal. Output
-`matched_refs/ITG_cyclone/itg_miller_adiabatic_electrons.out.nc` in owned office
-snapshot `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`, SHA256
+`matched_refs/ITG_cyclone/itg_miller_adiabatic_electrons.out.nc` in owned benchmark
+snapshot `artifacts/gkx-r0-rate-parity-20260905.GtHbRz`, SHA256
 `da6b8cd7bf0cba3ac2da815f83dfacc98ce3fc4bc57d70304d4e1a167e29d61c`.
 751 samples, t_end150.0000071246177, 15 positive ky, zero nonfinite diagnostics.
 Independent audit_reference.py output `results/miller_reference_temporal.csv`,
@@ -5514,7 +5514,7 @@ Launched **GKX Miller**, GPU1, session **31885**, Python **PID1719945**
 (time parent1719944), verified live/no stderr. Same owned snapshot and previous
 matched manifest/reporter hashes. Command uses GX_PARITY_REF_DIR=<snapshot>/matched_refs,
 CUDA_VISIBLE_DEVICES=1, JAX_ENABLE_X64=true, PYTHONPATH=src, MPLBACKEND=Agg:
-`/usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python
+`/usr/bin/time -v python
 tools/comparison/build_gx_parity_matrix_current.py --manifest
 matched_miller_manifest.toml --cases cyclone_miller_itg --stem
 results/miller_rate50 > gkx-miller.stdout.log 2> gkx-miller.stderr.log`.
@@ -5551,7 +5551,7 @@ continue remaining matrix/refinements. No PR merged, no public artifact updated.
 
 Previous turn progressed (Miller reference/comparison and wheel findings).
 **Nm64 session92932 completed exit0**, old PID1719126 terminal. CSV at owned
-office snapshot `results/salpha_rate50_nm64.csv`, SHA256
+benchmark snapshot `results/salpha_rate50_nm64.csv`, SHA256
 `aaff5040d4ae52c1bb654c981dffad1cc41b7fdbdd30325187e443ce7917cba2`.
 All three modes pass both temporal screens, but at ky=.550000011920929 gamma
 changes from .034520991134793955 (Nm48) to .03731586113112525 (Nm64),
@@ -5608,8 +5608,8 @@ is a hypothesis, not established causality. If needed control single-vs-batched
 ky too (Nm64 used three modes, Nm96 one), rather than assuming only Nm matters.
 
 Started separate **session42644/PID1721120** (parent1721119), GPU0, verified
-live/no stderr. Manifest salpha_nm96_dt_half.toml in owned office snapshot
-/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz, SHA256
+live/no stderr. Manifest salpha_nm96_dt_half.toml in owned benchmark snapshot
+artifacts/gkx-r0-rate-parity-20260905.GtHbRz, SHA256
 `7ff60a790094063d9ec0b9fcd2769170196f768b18bef7392251f7d60b95957b`.
 dt=.001/150000 steps, same Nm96,Nl16,rate50,T150,exact high ky. Command uses
 same previous env and current0acbd221 reporter with --manifest
@@ -5620,7 +5620,7 @@ session31885/PID1719945 remains live at7m50s check.
 
 Read cache_arrays.py:_build_low_rank_moment_cache_arrays,
 dissipation.py:_hypercollision_kz_source/_apply_parallel_hypercollision, and
-startup.py:_default_hermite_hypercollision_exponent. Matched against office GX
+startup.py:_default_hermite_hypercollision_exponent. Matched against benchmark GX
 3865a537 src/linear.cu:226–232 and parameters.cu:185. With M=Nm-1, coefficient
 is 2.3 nu_m (p+.5)/sqrt(M) (m/M)^p vth|gradpar|, masked m>2, followed by the
 parallel absolute-derivative operator. Geometry multiplication stays inside
@@ -5699,7 +5699,7 @@ check was lint only. **02536eef** formats it; full `ruff check .` and
 `ruff format --check .` pass (406 files), architecture and whitespace gates pass.
 Fix pushed; do not claim the remote rerun is complete.
 
-Prepared next reference from /home/rjorge/gx_refs_lin/ITG_cyclone/
+Prepared next reference from artifacts/
 itg_miller_kinetic_electrons.in. Added only Time.dt=.0002, preserving T40,
 nwrite100,Nl16,Nm48,7positiveky,two species,beta1e-5. Default A.1 implies rate500.
 Input copied to owned snapshot matched_refs/ITG_cyclone with original basename;
@@ -5746,7 +5746,7 @@ Old PIDs1722017/1719945 terminal; no restart.
 Started **GX kinetic reference GPU0 session6455/PID1722824** (time1722823),
 verified geometry generation and advancing diagnostic rows. From owned snapshot
 matched_refs/ITG_cyclone, CUDA_VISIBLE_DEVICES=0 and scoped
-PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH, /usr/bin/time -v /home/rjorge/GX/gx
+PATH=artifacts/bin:$PATH, /usr/bin/time -v artifacts/gx
 itg_miller_kinetic_electrons.in > kinetic-gx.stdout.log 2> kinetic-gx.time.log.
 Prepared input/hash unchanged (1fee7d65...), T40 dt.0002 rate500. Not complete.
 
@@ -5757,7 +5757,7 @@ Only Nm96→128, otherwise exact high ky,Nl16,rate50,dt.002,T150 unchanged.
 Same current reporter/env as preceding RK4; --manifest salpha_nm128_rk4.toml
 --cases cyclone_salpha_itg_nm128_rk4 --stem results/salpha_rate50_nm128_rk4,
 logs gkx-salpha-nm128-rk4.stdout.log/stderr.log. Both jobs in owned snapshot
-/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz. No isolated timing claims.
+artifacts/gkx-r0-rate-parity-20260905.GtHbRz. No isolated timing claims.
 
 Targeted literature refresh (primary sources, accessed today):
 - [GX §7](https://arxiv.org/html/2209.06731v3#S7) explicitly couples moment
@@ -5782,7 +5782,7 @@ Previous turn progressed (completed Miller/RK4, two new jobs). This turn verifie
 both current PIDs live; no restarts. #202 clean at8ce22e33; latest CI query has
 no failed checks, several pending. Do not call CI complete.
 
-Prepared matched_kinetic_manifest.toml in owned office snapshot, SHA256
+Prepared matched_kinetic_manifest.toml in owned benchmark snapshot, SHA256
 `876e06cd367b32f85d3be7f4f6f8a0d9c405f6f943730fa194289d1f4f8dfbd9`:
 RK4,dt.0002,200000 steps/T40,Nl16,Nm48,rate500,corrected kinetic fixture.
 Campaign-generated provenance explicit. **Not launched** until completed GX
@@ -5908,7 +5908,7 @@ Kinetic GX session6455/PID1722824 remains live at17m38s last check.
 CPU profiling progress using existing tool, no source edits: first attempt
 failed before computation because GX_PARITY_REF_DIR was unset. Copied completed
 11MiB s-alpha reference to local scratch matched_refs/ITG_cyclone; verified
-SHA256633742b0... matches recorded office source. Then ran (local JAX0.11.1):
+SHA256633742b0... matches recorded benchmark source. Then ran (local JAX0.11.1):
 GX_PARITY_REF_DIR=/tmp/gkx-coupled-rate-20260905.shBvlR/matched_refs
 PYTHONPATH=src JAX_ENABLE_X64=false JAX_PLATFORMS=cpu <python>
 tools/profiling/profile_runtime_kernels.py full-linear-rhs --config
@@ -5955,7 +5955,7 @@ SHA256 `4383c2bac5ee9074e9c6d62bc691a3c734422f4e642300c0b8e4ea23ca6543c2`.
 This and f32's17.8ms are single artificial-state kernel profiles, not isolated
 repeat distributions, end-to-end timings or an accuracy-based precision choice.
 
-Both office jobs reverified live: GX session6455/PID1722824 at25m01s; GKX
+Both benchmark jobs reverified live: GX session6455/PID1722824 at25m01s; GKX
 Nm96T300 session86753/PID1724990 at7m32s. No restart or modification of either
 running snapshot. Resume by checking these exact processes and exits; then
 compare matched-horizon Nm96/128 estimates and audit complete kinetic reference
@@ -6024,7 +6024,7 @@ Ruff lint/format406files, architecture and whitespace gates pass. Explicit
 budget +11 test/+10 tool lines; no added files or solver changes.
 Sessions87533(test),6765(check/commit/push) terminal exit0.
 
-Running office reporter remains0acbd221; do not overwrite during jobs or imply
+Running benchmark reporter remains0acbd221; do not overwrite during jobs or imply
 its existing JSON already has these new summary fields. GX kinetic
 session6455/PID1722824 verified RNl at29m05s; Laguerre-control
 session67452/PID1725909 RNl at2m23s. Resume those handles before restarting
@@ -6086,7 +6086,7 @@ scratch=/tmp/gkx-coupled-rate-20260905.shBvlR. XML SHA256
 Ruff lint/format406files, architecture and whitespace pass; checks/commit/push
 session59460 exit0. Explicit budget+10test/+9tool lines. No full-CI claim.
 
-Both office jobs reverified RNl: kinetic session6455/PID1722824 at32m57s;
+Both benchmark jobs reverified RNl: kinetic session6455/PID1722824 at32m57s;
 Laguerre session67452/PID1725909 at6m15s. Reporter in running snapshot remains
 0acbd221; do not overwrite it or attribute new metadata to its outputs. Continue
 these handles; finer same-domain GX geometry generation remains next spatial
@@ -6106,7 +6106,7 @@ XML /tmp/gkx-coupled-rate-20260905.shBvlR/release-current.xml SHA256
 stdout release-current.log in same scratch. This does not replace full CI.
 
 Prepared **salpha_ntheta64_geometry.in** locally in that scratch and copied to
-office campaign root. SHA256
+benchmark campaign root. SHA256
 `8a33469f5b30beb45392cd397416268435288642d282f04a40339b81fb504405`.
 Copied completed GX s-alpha input, changed ntheta32→64, retained nperiod2,
 dt.002/rate50 and all physics, shortened t_max150→.002 to export geometry only.
@@ -6151,7 +6151,7 @@ and scoped venv PATH in campaign root. **Session33533 exit0**, time log exit0.
 Logs salpha-ntheta64-geometry.stdout.log/time.log. Geometry-only output
 salpha_ntheta64_geometry.out.nc SHA256
 `b139b1fbb908eb95cf6f50ac32a7ec64de5b50ae75c9100b318fdd022324f23b`.
-Loaded both GX files with GKX load_imported_geometry_netcdf on office CPU:
+Loaded both GX files with GKX load_imported_geometry_netcdf on benchmark CPU:
 baseline96/fine192 points, effective Nz96/192, identical bounds
 [-9.42477798461914,9.42477798461914]. Fine profiles finite; exact shared-point
 agreement at fine[::2] for theta,bmag,bgrad,gds2,gds21,gds22,cv,gb,cv0,gb0,
@@ -6193,14 +6193,14 @@ Strict Sphinx -W build and git diff --check pass. Command PYTHONPATH=src
 /tmp/gkx-coupled-rate-20260905.shBvlR/docs-parity-scope.log. Session74242
 (build/commit/push) terminal exit0. Documentation-only commit, no solver changes.
 
-Reverified both office jobs RNl: kinetic session6455/PID1722824 at41m12s;
+Reverified both benchmark jobs RNl: kinetic session6455/PID1722824 at41m12s;
 Nl32 session26034/PID1727418 at2m45s. Running reporter remains0acbd221.
 Resume these handles; no restart or snapshot changes. No merge; full scope active.
 
 ## 2026-09-05 — Memory/timing scope audit for publication evidence
 
 Previous turn progressed with corrected historical public parity claims.
-Read completed JSON cost records in office campaign results: Nm96T300 primary
+Read completed JSON cost records in benchmark campaign results: Nm96T300 primary
 scan306.378781s, RSS1496.933594MiB, allocator peak68.673828MiB; Nm128T300
 392.785458s/1490.796875MiB/70.188477MiB; Nl24Nm96T300
 422.990467s/1498.718750MiB/71.000977MiB. These are triage records, not isolated
@@ -6331,7 +6331,7 @@ Both current jobs reverified live; no CI202 failures in the current query and
 clean code worktree, without claiming full CI completion. Nl32 original
 session26034 polled, still running.
 
-Executed independent host preflight on office CPU in owned campaign snapshot,
+Executed independent host preflight on benchmark CPU in owned campaign snapshot,
 JAX_PLATFORMS=cpu JAX_ENABLE_X64=true PYTHONPATH=src and current matched reference
 environment. Loaded original s-alpha fixture, then substituted only the completed
 192-point geometry file. Used build_runtime_geometry, apply_geometry_grid_defaults,
@@ -6378,7 +6378,7 @@ other defect) is established solely by these growth-rate shifts.
 **Session73383/PID1729118** (time1729117), GPU1, RNl verified21s. Manifest
 salpha_nl32_nm96_t300_dt_half.toml SHA256
 `483dfe63c3ffa5ab080d7b6baccd249f678a965a090c86e069cd2e6a8ec767ad`.
-Local /tmp/gkx-coupled-rate-20260905.shBvlR copy, scp to owned office campaign.
+Local /tmp/gkx-coupled-rate-20260905.shBvlR copy, scp to owned benchmark campaign.
 Same JAX0.10.2/x64/environment/reporter0acbd221; --cases
 cyclone_salpha_itg_nl32_nm96_t300_dt_half --stem
 results/salpha_rate50_nl32_nm96_t300_dt_half. Logs
@@ -6646,13 +6646,13 @@ Previous turn progressed with timestep-control evidence and compiled endpoint
 tests. Rechecked GPU0:3784MiB free beside kinetic PID1729837; GPU1:15872MiB free.
 Rather than wait for both devices to empty, ran the small correctness test with
 XLA_PYTHON_CLIENT_MEM_FRACTION=.08 in a fresh git archive of1571a9e6 at
-/home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo. No changes to the kinetic snapshot.
+artifacts/gkx-r0-two-gpu-ad-20260905.41fHEo. No changes to the kinetic snapshot.
 Observed test PID1732271 using1452MiB GPU0/162MiB GPU1 during setup; kinetic stayed
 live. This resource-sharing choice is not an isolated performance experiment.
 
 Command in that archive: CUDA_VISIBLE_DEVICES=0,1 JAX_ENABLE_X64=true
 JAX_PLATFORMS=cuda XLA_PYTHON_CLIENT_MEM_FRACTION=.08 PYTHONPATH=src
-/home/rjorge/venvs/gkx-nl/bin/python -m pytest -q
+python -m pytest -q
 tests/unit/parallel/test_parallel_linear_velocity.py
 -k end_damping_rate_matches_nonlinear_eigen_implicit_and_species_routes
 --junitxml=two-gpu-rate-ad.xml >two-gpu-rate-ad.log 2>&1.
@@ -6665,12 +6665,12 @@ Euler polynomial at dt=.1,.2, rtol1e-9/atol1e-12, explicitly nonzero gradients.
 Not nonlinear transport or general electromagnetic sharded AD validation.
 
 Started prepared spatial control **77271/PID1733704**, GPU1, in campaign
-/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz. Same source snapshot; copied latest
+artifacts/gkx-r0-rate-parity-20260905.GtHbRz. Same source snapshot; copied latest
 reporter to separate tools/comparison/build_gx_parity_matrix_grid_verified.py
 SHA256 `ecd7d5fd174f18b75cf968ac4b80f6f5279665f404da7b22af98902ac03987ed`.
 Do not replace the running kinetic reporter. Command: GX_PARITY_REF_DIR=<campaign>/matched_refs
 CUDA_VISIBLE_DEVICES=1 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEND=Agg
-/usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python <new reporter>
+/usr/bin/time -v python <new reporter>
 --manifest salpha_nl32_nm96_nz192_t300.toml
 --cases cyclone_salpha_itg_nl32_nm96_nz192_t300
 --stem results/salpha_rate50_nl32_nm96_nz192_t300
@@ -6709,7 +6709,7 @@ Targeted test command: pytest -q tests/unit/parallel/test_parallel_linear_veloci
 CPU XLA_FLAGS=--xla_force_host_platform_device_count=2 JAX_PLATFORMS=cpu,
 JAX_ENABLE_X64=true PYTHONPATH=src; JAX0.11.1. GPU CUDA_VISIBLE_DEVICES=0,1
 JAX_PLATFORMS=cuda JAX_ENABLE_X64=true XLA_PYTHON_CLIENT_MEM_FRACTION=.08,
-JAX0.10.2 in /home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo (1571 archive plus
+JAX0.10.2 in artifacts/gkx-r0-two-gpu-ad-20260905.41fHEo (1571 archive plus
 the two changed source/test files, copied only after earlier test had exited).
 
 | Gate | Result / terminal session | XML SHA256 |
@@ -6762,7 +6762,7 @@ and matched GX refinement; full R0–R9 scope active.
 ## 2026-09-05 — GX adaptive-default ambiguity closed in rate conversion
 
 Previous turn progressed with19 broader species tests and GX input preparation.
-Read office GX/src/parameters.cu: Time.fixed_dt defaults false, dt_max defaults
+Read benchmark GX/src/parameters.cu: Time.fixed_dt defaults false, dt_max defaults
 dt; ts_rk4.cu sets dt=min(max(cfl_fac*cfl/wmax,dt_min),dt_max) unless fixed_dt.
 Thus positive input dt alone is not proof of a fixed A/dt end-damping rate.
 The old GKX helper's error/doc claimed adaptive rejection but only checked dt.
@@ -6824,7 +6824,7 @@ requires explicit fixed_dt=true rather than silently assuming this audit applies
 to arbitrary inputs. Future prepared GX reference is already explicitfixed.
 
 Reproducer: /tmp/gkx-coupled-rate-20260905.shBvlR/audit-gx-reference-dt.py,
-also copied to campaign; run with office venv Python, no JAX/GPU required.
+also copied to campaign; run with benchmark venv Python, no JAX/GPU required.
 Script SHA256 `f94cb4b4f24bb5743c0be5417b125ac02eebeb9b49ce7974a5809f48c0fe7aa5`;
 local output audit-gx-reference-dt.log SHA256
 `c5a7ea03b892eabd21e0d900bcc996d0b65452b448498206163d406d9ad58bbd`.
@@ -6919,8 +6919,8 @@ Nl32/Nm96/Nz96, all11 positive ky, rate50 remain. Input SHA256
 Ran beside GKX spatial control on GPU1 after checking3696MiB free; GX process
 1737950 used1360MiB. No timing/speedup claim from shared resources.
 
-Command in campaign: PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH
-CUDA_VISIBLE_DEVICES=1 /usr/bin/time -v /home/rjorge/GX/gx
+Command in campaign: PATH=artifacts/bin:$PATH
+CUDA_VISIBLE_DEVICES=1 /usr/bin/time -v artifacts/gx
 salpha_nl32_nm96_startup.in >gx-salpha-nl32-nm96-startup.stdout.log
 2>gx-salpha-nl32-nm96-startup.stderr.log. **60372 terminal exit0 but invalid**:
 first outputt=.002 finite, t=.202 onward Phi2/flux/frequencies NaN. NetCDF has
@@ -6965,16 +6965,16 @@ out further spatial error. JSON confirms effectiveNz192/requestedNz96, windows
 [210,300]/[105,150]. CSV results/salpha_rate50_nl32_nm96_nz192_t300.csv SHA256
 `94592ebea869f2096cff94bbeec58426eb8a4b7ebdf4c989e0dab537e37f2bc1`, copied locally.
 
-Created isolated copy /home/rjorge/gx-normalized-hyper-20260905.JZDbbo from the
+Created isolated copy artifacts/gx-normalized-hyper-20260905.JZDbbo from the
 431MiB GX tree (including build objects/config), never editing original GX.
-Original status before/after only untracked Makefiles/Makefile.office and its
+Original status before/after only untracked Makefiles/Makefile.benchmark and its
 .nofastsqrt.bak. Scratch modifies src/linear.cu coefficient denominator from
 powf(M,p+.5) to sqrtf(max(M,1)), paired with device_funcs.cu kernel power
 powf(m/max(nm_glob−1,1),p). Same coefficient2.3, physical factors and model.
 Source hashes linear.cu `976ef802f6a9f5ca6a1eaf3ebd3082944e3fc5dac974c3f8bdc325146603f7c6`,
 device_funcs.cu `20c1f85e19cc7c066bcdd50680c44bdcd2692923af3662513195643ad84ef480`.
 Local copies in recent scratch named gx-linear.cu/gx-device_funcs.cu. Build:
-make -j2 GK_SYSTEM=office gx, same CUDA11.5/gcc10/fast-math settings,30675exit0;
+make -j2 GK_SYSTEM=benchmark gx, same CUDA11.5/gcc10/fast-math settings,30675exit0;
 normalized-build.log retained. Scratch binary SHA256
 `d30403b495e14900235bc0ee55de34b009920c3bf3eaa4bb75b58ae718bb55c9`;
 original remains `787eb0145937e653c08750fd7168029c20772ce3e6c2a2a3b58c70aab128dc9b`.
@@ -7000,7 +7000,7 @@ nonfinite frequency entries. Output hashes:
 | normalized-high big.nc | fb898b3c7611fa35b41560a6a7d617c6faf7e0f4d9084b005fe04dd239fa037b |
 
 Started long patched-GX reference **95001/PID1738946** in
-<scratchGX>/r0_validation/refined. Command PATH=/home/rjorge/venvs/gkx-nl/bin:$PATH
+<scratchGX>/r0_validation/refined. Command PATH=artifacts/bin:$PATH
 CUDA_VISIBLE_DEVICES=1 /usr/bin/time -v <scratchGX>/gx salpha_nl32_nm96_t300.in
 >run.log 2>time.log. Input hash remainsfb3e49f6 (explicitfixed,rate50,Nl32/Nm96/Nz96,
 all11positiveky,T300). Confirmed RNl11s, stderr empty. Inspect completed finite
@@ -7014,10 +7014,10 @@ of spatial77271. GKX local9fc6e42d remains ahead1; CI b734 last26success/11pendi
 Previous turn progressed with spatial result and scratch GX repair/controls.
 Saved exact git diff of the two GX source files as gx-normalized-hyper.patch
 in both /tmp/gkx-coupled-rate-20260905.shBvlR and the isolated GX root
-/home/rjorge/gx-normalized-hyper-20260905.JZDbbo. `git apply --reverse --check`
+artifacts/gx-normalized-hyper-20260905.JZDbbo. `git apply --reverse --check`
 passes against the built scratch source, without applying anything. Patch SHA256
 `02f39ab57967b68c5e490d2f51a00a8db103a624923f9d3c2c56a3b4454585a0`.
-Build provenance: CUDA11.5.119, g++10.4.0, Makefiles/Makefile.office SHA256
+Build provenance: CUDA11.5.119, g++10.4.0, Makefiles/Makefile.benchmark SHA256
 `adce5f6b950b447d16392b5713cddbd7aed1f4fd6a9e322e7855bea934597d54`,
 normalized-build.log SHA256
 `d7835ea8ef6ddb67c08a2ffa42161c0b388bd55525277675144af229b59f6b44`.
@@ -7026,7 +7026,7 @@ masquerading as the original binary. Binary/source/output hashes in prior entry.
 
 Added a read-only rerunnable audit in both scratch roots: audit-normalized-gx.py
 SHA256 `1adfb7d48208036eba96354afa0279ac05f6f38503aacc21633dedcfc630c34d`.
-Run office venv Python <script> <isolatedGX>/r0_validation. It asserts all numeric
+Run benchmark venv Python <script> <isolatedGX>/r0_validation. It asserts all numeric
 arrays finite and matching original/normalized low-order schemas/shapes, hashes
 outputs, and reports the largest physical diagnostic/grid relativeL2 differences.
 It deliberately does not convert the observed difference into a post-hoc
@@ -7103,7 +7103,7 @@ this scratch result is not a broad precision or nonlinear transport AD claim.
 After kinetic exit, launched the prepared Nl32/Nm128 control on GPU0:
 session68484/PID1740480 (time1740479), campaign cwd; GX_PARITY_REF_DIR=campaign/
 matched_refs CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src MPLBACKEND=Agg
-/usr/bin/time -v office-venv-python tools/comparison/build_gx_parity_matrix_grid_verified.py
+/usr/bin/time -v benchmark-venv-python tools/comparison/build_gx_parity_matrix_grid_verified.py
 --manifest salpha_nl32_nm128_t300.toml --cases cyclone_salpha_itg_nl32_nm128_t300
 --stem results/salpha_rate50_nl32_nm128_t300. Output gkx-salpha-nl32-nm128-t300.
 {stdout,stderr}.log; process verified, initial stderr empty. Input/reporter hashes
@@ -7126,7 +7126,7 @@ JAX_ENABLE_X64=true 7.136s (23746 exit0), false7.358s (29209 exit0).
 Two RTX A4000: 2passed/0skipped29.861s (31522 exit0), JAX0.10.2/x64-enabled,
 CUDA_VISIBLE_DEVICES=0,1, XLA_PYTHON_CLIENT_MEM_FRACTION=.08; ran beside physics
 jobs after checking free memory. This is correctness evidence, not performance.
-Same office scratch /home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo;
+Same benchmark scratch artifacts/gkx-r0-two-gpu-ad-20260905.41fHEo;
 only updated test file copied after confirming no active test there. Local
 artifacts /tmp/gkx-coupled-rate-20260905.shBvlR/em-outer-jit-{f64,f32,gpu}.xml:
 f64 SHA256 abe92be426ef18440b9fdc15492428072b17c9bfc1b8b00a5f6192d87f20d3ba;
@@ -7566,7 +7566,7 @@ collision-squared-legacy-probe.py. CPU selection is tests/unit/operators/
 test_operator_kernels.py plus test_linear_collisions_coverage.py with
 `-k 'collision or finite_wavelength or interpolate'`. GPU uses the first file
 with `-k quadratic_limit`, CUDA_VISIBLE_DEVICES=1, memory fraction .08 in
-the dedicated `/home/rjorge/gkx-r0-two-gpu-ad-20260905.41fHEo` archive.
+the dedicated `artifacts/gkx-r0-two-gpu-ad-20260905.41fHEo` archive.
 CPU f32 preceded restoration of the generic test's interior coordinates;
 final CPU x64 retains that coverage. Production code was identical.
 Ruff, format, architecture, diff checks passed; strict Sphinx session86153
@@ -7671,7 +7671,7 @@ GX95001/PID1738946 completed exit0 in1:44:10 (RSS1691008kB, concurrent hardware:
 not an isolated performance benchmark). Original GX remains untouched; this is
 the explicitly normalized-power scratch binary whose provenance is above.
 `audit-refined-gx.py` copied to the existing refined directory with the matched
-GKX dt-half CSV, then executed with office venv Python. Initial43874exit0;
+GKX dt-half CSV, then executed with benchmark venv Python. Initial43874exit0;
 repeat36476exit0 saved log, copied locally. This repeat is a read-only audit,
 not a solver restart. All numeric arrays finite:264 out,42 big,2 restart.
 Grid ky12/kz96;1501 samples,150000 steps, float32 dt=.0020000000949949026,
@@ -7728,8 +7728,8 @@ fit. The small difference between GX estimators cannot explain the observed
 GKX/GX discrepancy. GKX uses a selected-z complex-phi fit, whereas this GX
 energy fit integrates z; stationarity makes the comparison useful but does not
 prove identical finite-time estimators. No operator or precision cause assigned.
-Local scratch audit-gx-growth-estimators.py was copied into the existing office
-refined directory and run with office Python, exit0. Full11-mode log copied
+Local scratch audit-gx-growth-estimators.py was copied into the existing benchmark
+refined directory and run with benchmark Python, exit0. Full11-mode log copied
 back. Script SHA256865dddd175e98d957835ec6dab01435c5691075c077069ac7ae5c27815824e7b;
 log f2958cc8af4ca72a90181bbe8ce5d1289813fb90e5a1d9cacc041393a8e998cc.
 
@@ -7742,7 +7742,7 @@ Only numerical precision intentionally changes; historical-reference columns
 still refer to Nm48 and MUST NOT be used for same-resolution parity. Compare
 raw GKX results against saved Nm96 x64 and separately audited patched GX Nm96.
 
-Command in `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`:
+Command in `artifacts/gkx-r0-rate-parity-20260905.GtHbRz`:
 GX_PARITY_REF_DIR=campaign/matched_refs CUDA_VISIBLE_DEVICES=1 JAX_ENABLE_X64=false
 PYTHONPATH=src MPLBACKEND=Agg /usr/bin/time -v officevenv-python
 tools/comparison/build_gx_parity_matrix_grid_verified.py
@@ -7899,7 +7899,7 @@ ky=.550000011920929, and transposed documented GX (s,m,l,z,kx,ky,ri) to GKX
 also checked by the resulting field. Normalize G by its Euclidean norm
 4.2528513894334103e-7, build actual imported geometry and matched runtime
 params/term config, and JIT assemble all GKX RHS terms on GPU1. No integration.
-Script audit-gx-final-state-rhs.py in local recent scratch and office refined
+Script audit-gx-final-state-rhs.py in local recent scratch and benchmark refined
 directory; campaign cwd, usual GX_PARITY_REF_DIR/PYTHONPATH=src,
 CUDA_VISIBLE_DEVICES=1,JAX_ENABLE_X64=true, officevenv Python.
 Initial63632, field-extension68046 and coverage-extension95262 all exit0.
@@ -7954,9 +7954,9 @@ No live research processes now; both GPUs free. Full R0–R9 goal remains active
 
 Previous turn: progress (same-state evidence and coverage defect identification).
 Verified old jobs absent/terminal and code worktree clean before acting. Created
-`/home/rjorge/gx-damping-coverage-20260905.8w5DhH` with mktemp and git clone
+`artifacts/gx-damping-coverage-20260905.8w5DhH` with mktemp and git clone
 --shared from the normalized-hyper scratch repo. HEAD3865a53778862e1686f414bf6f416339e24887c9;
-copied only its two modified source files and office Makefile. Neither original
+copied only its two modified source files and benchmark Makefile. Neither original
 GX nor prior scratch binary/results changed (old normalized binary still SHA
 d30403b495e14900235bc0ee55de34b009920c3bf3eaa4bb75b58ae718bb55c9).
 
@@ -7988,14 +7988,14 @@ physics. Original compile33901exit0; new full make build80927/PID1752428exit0;
 repaired harness34035exit0. No timing speedup claim.
 
 Harness compilation, cwd new scratch root:
-`/usr/bin/nvcc -ccbin /home/rjorge/local/install/gcc-10.4.0/bin/g++ -std=c++17
+`/usr/bin/nvcc -ccbin ../install/gcc-10.4.0/bin/g++ -std=c++17
 -arch=sm_86 -rdc=true -use_fast_math -Iinclude
--I/home/rjorge/local/install/libcutensor-1.7.0.1/include
--I/home/rjorge/local/install/nccl-2.18.1/include gx-damping-coverage-test.cu
+-I../install/libcutensor-1.7.0.1/include
+-I../install/nccl-2.18.1/include gx-damping-coverage-test.cu
 OBJECT -o EXECUTABLE`. Original OBJECT=old-scratch/obj/device_funcs.o,
 EXECUTABLE=damping-coverage-original; repaired OBJECT=obj/device_funcs.o,
 EXECUTABLE=damping-coverage-repaired. Run with CUDA_VISIBLE_DEVICES=0.
-Full solver: `make -j2 GK_SYSTEM=office >build.log 2>&1`; same recorded
+Full solver: `make -j2 GK_SYSTEM=benchmark >build.log 2>&1`; same recorded
 CUDA11.5/gcc10.4/fast-math build settings. Harness build logs retained separately.
 
 | Artifact | SHA256 |
@@ -8075,14 +8075,14 @@ unfinished time log, and checks restart and big-field final timestamps exactly
 against the diagnostic timestamp. It remains the specific Nm96/Nl32/Nz96/ky.55
 probe, not a general-purpose solver. Run the full file/hash audit first.
 Old copies inside the prior scratch still have historical hard-coded paths;
-the UPDATED scripts are in new-root `/home/rjorge/gx-damping-coverage-20260905.8w5DhH`.
+the UPDATED scripts are in new-root `artifacts/gx-damping-coverage-20260905.8w5DhH`.
 
 After7690 finishes, use officevenv-python new-root/audit-refined-gx.py with
 --root new-root/r0_validation/refined --stem salpha_nl32_nm96_t300
 --binary new-root/gx
 --binary-sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
 --input-sha256 fb3e49f617bca69565e24c04bef764361c40158bb3457ce24e17e7e4a87f13df
---gkx-csv /home/rjorge/gx-normalized-hyper-20260905.JZDbbo/r0_validation/refined/salpha_rate50_nl32_nm96_t300_dt_half.csv.
+--gkx-csv artifacts/salpha_rate50_nl32_nm96_t300_dt_half.csv.
 That last path is the archived matched GKX CSV, not a selection of old GX data.
 Then run the new-root RHS script from campaign cwd with usual PYTHONPATH=src,
 GX_PARITY_REF_DIR=campaign/matched_refs,JAX_ENABLE_X64=true and an available GPU,
@@ -8499,14 +8499,14 @@ test_particle or field_particle_fourier`; NumPy oracle computations remain f64.
 replay-legacy-tables.py reads old binary blobs via git show ad47d3be, injects
 them only into the test loader and verifies both fail. It changes no repo files.
 
-**GPU control completed.** Fresh office scratch
-`/home/rjorge/gkx-collision-coefficients-20260905.yLNpmZ`, populated by
-`git archive b05b3949 pyproject.toml src tests tools | ssh office 'tar -x -C <root>'`.
+**GPU control completed.** Fresh benchmark scratch
+`artifacts/gkx-collision-coefficients-20260905.yLNpmZ`, populated by
+`git archive b05b3949 pyproject.toml src tests tools | ssh ${BENCHMARK_HOST} 'tar -x -C <root>'`.
 No existing campaign files overwritten. Preflight3195exit0 explicitly confirms
 JAX0.10.2 CudaDevice0/default_backend gpu, CUDA_VISIBLE_DEVICES=0. From that root:
 
 ```
-CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src /usr/bin/time -v /home/rjorge/venvs/gkx-nl/bin/python -m pytest tests/unit/operators/test_operator_kernels.py -q -k 'coulomb or collision' --junitxml=gpu-x64.xml >gpu-x64.log 2>gpu-x64-time.log
+CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true PYTHONPATH=src /usr/bin/time -v python -m pytest tests/unit/operators/test_operator_kernels.py -q -k 'coulomb or collision' --junitxml=gpu-x64.xml >gpu-x64.log 2>gpu-x64-time.log
 ```
 
 40475/PID1757924 terminalexit0,33 pass/0 skip in78.662s. Both remote NPZ hashes
@@ -8538,7 +8538,7 @@ No tolerance was relaxed. Docs retain this explicit limit.
 | replay-legacy-tables.log | f12f4e85880d1135395855ea89560ae92f2e59ba81b3ea5be3bba95c9f81db08 |
 | audit-interpolation.py (final slope assertion included) | 2706ff2e93b003b3717476f56153e293ab7ff9190b90ec3e89176cb9a1a62208 |
 | audit-interpolation-final.log | a1fe098fc9fd5c2eac9e7bc9cb389cdc8d3ce68d5da5e8d2c388cd1dfe0c5847 |
-| office-root/gpu-x64.xml | bbb24f6a6c4e1488371b981f3ca39e5abd50aba5e85e99dbe20da2d13f9272c9 |
+| benchmark-root/gpu-x64.xml | bbb24f6a6c4e1488371b981f3ca39e5abd50aba5e85e99dbe20da2d13f9272c9 |
 
 Next: after current CI finishes, push heldb05b3949; investigate failures if any.
 Measure grid refinement and off-midpoint/endpoint derivative holdouts, retaining
@@ -8647,7 +8647,7 @@ audits after success; this observation is not terminal. Full R0–R9 goal active
 Code remains17ff384a, no production interpolation change. CI33967886511 is
 in_progress with two pending jobs (parallel-autodiff and nonlinear-core), no
 failures at this checkpoint. No merges. All research processes below are terminal;
-both office GPUs are free. Do not restart the completed reference.
+both benchmark GPUs are free. Do not restart the completed reference.
 
 **Collision prototype.** Local scratch root
 `/tmp/gkx-collision-candidates-20260905.XqBQZb`;
@@ -8700,7 +8700,7 @@ limits and basis contracts, off-midpoint/endpoint errors, then cost comparison.
 Do not promote linear interpolation as globally accurate or repair C00 alone.
 
 **GX completion.** GX7690/PID1753613 exited0 in1:44:56, maxRSS1692920KiB.
-Root `/home/rjorge/gx-damping-coverage-20260905.8w5DhH/r0_validation/refined`,
+Root `artifacts/refined`,
 stem salpha_nl32_nm96_t300. Binary96a53403... and inputfb3e49f... match the
 full expected hashes in the preceding checkpoint. Explicit artifact audit72318
 exited0: 264/42/2 numeric arrays finite in out/big/restart;1501 diagnostic
@@ -8724,7 +8724,7 @@ Window dependence is not a statistical confidence interval or convergence proof.
 
 Same-state GPU0 x64 audit92620 exited0, diagnostic/restart/field timestamps
 match. Run updated audit-gx-final-state-rhs.py with explicit --root/--stem,
-cwd `/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`, PYTHONPATH=src,
+cwd `artifacts/gkx-r0-rate-parity-20260905.GtHbRz`, PYTHONPATH=src,
 GX_PARITY_REF_DIR=<cwd>/matched_refs, JAX_ENABLE_X64=true, CUDA_VISIBLE_DEVICES=0.
 GX last eigenvalue=.024950768798589706−.5049121379852295i;
 GKX Rayleigh=.024866607716735115−.5048557653340449i.
@@ -8746,7 +8746,7 @@ Previous turn classified progress: completed repaired GX reference and committed
 analytic collision limits. This turn leaves code17ff384a unchanged and all probes
 terminal. CI33967886511 last observed two pending/no failed jobs. No merges.
 
-Remote scratch `/home/rjorge/gx-own-rhs-20260905.0Qzs0L`, local mirror
+Remote scratch `artifacts/gx-own-rhs-20260905.0Qzs0L`, local mirror
 `/tmp/gkx-gx-own-rhs-20260905.wbfjWQ`. The unchanged repaired binary96a53403...
 restarts the completed T300 distribution for exactly one RK4 step in separate
 output stems probe/probe-half. nstep=1, t_max=301, restart_with_perturb=false,
@@ -8790,7 +8790,7 @@ scale; an exact instrumented GX RHS is required for a stronger bound. No
 whole-operator equivalence or resolution-convergence claim is made.
 
 Reproduction: use audit-own-rhs.py --root with the completed repaired reference
-directory and --stem salpha_nl32_nm96_t300. Same office venv/cwd/PYTHONPATH/
+directory and --stem salpha_nl32_nm96_t300. Same benchmark venv/cwd/PYTHONPATH/
 GX_PARITY_REF_DIR/JAX_ENABLE_X64/CUDA_VISIBLE_DEVICES=0 as previous checkpoint.
 Audit74588, localization7219 and final sign-control69657 all exit0; final output
 audit-nyquist.log retained separately from earlier diagnostic logs.
@@ -8827,9 +8827,9 @@ including a linked-vs-periodic implementation comparison; no budget increase.
 Validation: full streaming CPU x64 module24 passed (4297); selected CPU
 f32-mode8 passed (59994). Final GPU x64 selected8 passed/16 deselected in15.82s
 (1111), backend independently confirmed CudaDevice0. GPU snapshot source
-b05b3949 in `/home/rjorge/gkx-collision-coefficients-20260905.yLNpmZ` has unchanged
+b05b3949 in `artifacts/gkx-collision-coefficients-20260905.yLNpmZ` has unchanged
 streaming code; final test copied to
-`/home/rjorge/gx-own-rhs-20260905.0Qzs0L/test_nyquist_contract.py`.
+`artifacts/test_nyquist_contract.py`.
 Initial pre-consolidation checks also passed but are superseded by these results.
 Strict Sphinx91772 exit0, Ruff check/format pass, diff-check pass.
 
@@ -8853,7 +8853,7 @@ operator unchanged. No merges, no live research process.
 GPU0 x64 sensitivity audit41724 completed exit0, using unchanged previous
 restart controls and snapshot. Script/local mirror:
 `/tmp/gkx-gx-own-rhs-20260905.wbfjWQ/audit-nyquist-sensitivity.py`;
-remote root `/home/rjorge/gx-own-rhs-20260905.0Qzs0L` contains script and
+remote root `artifacts/gx-own-rhs-20260905.0Qzs0L` contains script and
 audit-sensitivity.log. Invocation/environment/reference paths identical to the
 previous own-RHS audit. Additional diagnostics Fourier-project the original
 distribution before recomputing the full GKX RHS and its sign-matched variant.
@@ -8898,7 +8898,7 @@ committed cache-frequency checks. Current local447d724f/pushedf4d5d1b5 unchanged
 CI33969411628 still queued/incomplete with no failed jobs; do not supersede it.
 Prioritized actual spatial controls over further test-only work this turn.
 
-New office root `/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`;
+New benchmark root `artifacts/gx-nyquist-resolution-20260905.Ut2U6L`;
 local decks `/tmp/gkx-gx-own-rhs-20260905.wbfjWQ/{single96,full96,full192}.in`.
 Same corrected GX binary96a53403... in gx-damping-coverage-20260905.8w5DhH.
 Compared with the full reference: nky12→2, y0=1.8181817787737895 so sole positive
@@ -9054,7 +9054,7 @@ Do not merge PRs or modify the user's original checkout.
 Active code: draft [PR202](https://github.com/uwplasma/GKX/pull/202),
 `fix/r0-end-damping-rate`, pushed **f4d5d1b5**, local **48b90099**
 (CI33967886511 at17ff384a completed success; new HEAD CI not certified), worktree
-`/Users/rogeriojorge/local/GKX-worktrees/r0-end-damping-rate`, based on PR199.
+`../GKX-worktrees/r0-end-damping-rate`, based on PR199.
 PR199 (b5dca15a, based on PR197) records the legacy damping inconsistency;
 PR200 (e36e5bd8, based on PR196) isolates the f32 crash; PR201 (53d86f01)
 repairs CPU singleton-rank lowering without changing the GPU layout.
@@ -9092,7 +9092,7 @@ convergence and experimental validation are distinct claims.
 
 **Live resolution controls:** GX single-mode ky=.550000011920929,
 Nl32/Nm96/dt.002/rate50/T300 at Nz96 and192 in
-`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`.
+`artifacts/gx-nyquist-resolution-20260905.Ut2U6L`.
 GPU0 full96: session85194/PID1767040; GPU1 full192:42690/PID1767078.
 Both verified running; do not restart. Logs `<stem>.log`, `<stem>.time`.
 Accept reduced-mode layout only after full96 reproduces the earlier multi-mode
@@ -9100,7 +9100,7 @@ reference; then compare full192 to the existing GKX spatial control. No results 
 
 **Completed reference:** corrected GX Nm96/Nl32/Nz96 dt.002/T300 reference,
 GPU1, **7690/PID1753613** (time1753612), in
-`/home/rjorge/gx-damping-coverage-20260905.8w5DhH/r0_validation/refined`.
+`artifacts/refined`.
 Input `salpha_nl32_nm96_t300.in`; logs `run.log`, `time.log`. Binary in the parent
 scratch root includes normalized hypercollision powers AND damping stride repair.
 Nm16011457, field12758, RHS probes63632/68046/95262, build80927 and startup50025
@@ -9118,12 +9118,12 @@ matching reduces RHS disagreement from32.018% to.02206%, and the minimum
 eigenmode residual to.0001143. Neither production solver was changed.
 
 Office campaign directory:
-`/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz`.
+`artifacts/gkx-r0-rate-parity-20260905.GtHbRz`.
 Production snapshot3565 remains solver-equivalent for these scans; kinetic reporter
 copy is0acbd221, and its fixture includes8ce22e33's seed correction. Spatial run
 uses a separate grid-verified reporter from1571a9e6; no running copy overwritten.
 Existing reference bundle
-`/home/rjorge/gx_refs_lin` was not overwritten; HSX reference remains missing.
+`artifacts/gx_refs_lin` was not overwritten; HSX reference remains missing.
 
 Manufactured even/odd periodic and reordered-linked mode/JVP/pullback tests
 now pass CPU x64/f32 and GPU x64 in f4d5d1b5; runtime convention unchanged.
@@ -9300,7 +9300,7 @@ data**, exactly matching all four candidate files. Legacy arrays remain in
 ad47d3be history. New coefficient symmetry/entropy/reference gates reject both
 old archives. CPU:90 full physics and33 selected operator tests pass in x64;
 124 selected tests pass in f32 mode. GPU:33 selected operator tests pass at
-exact b05b3949 in isolated office root documented below. No runtime formulation
+exact b05b3949 in isolated benchmark root documented below. No runtime formulation
 or interpolation change; README/operator error tables now label legacy results.
 
 **Next:** refine the table-grid accuracy before optimization claims. Runtime
@@ -9353,7 +9353,7 @@ commands, failures and hashes are in the logbook.
 
 Baseline: main `a99dac898334414d31733f6d286bd4c36983702e`.
 Branch: `plan/focused-research-20260906`; worktree:
-`/Users/rogeriojorge/local/GKX-worktrees/focused-plan-20260906`.
+`../GKX-worktrees/focused-plan-20260906`.
 Review PR: [#204](https://github.com/uwplasma/GKX/pull/204), draft, do not merge.
 Main review commit: `8be376d4`. README: 503 → 239 lines; active plan:
 2,881 → 294 lines. Eight documentation files changed; no added JSON.
@@ -9396,7 +9396,7 @@ Resume safely:
 2. Original checkout is untouched. Local `fix/r0-end-damping-rate` retains two
    unpushed commits beyond #202; interrupted uncommitted basis guard is absent.
 3. Office SSH timed out. Prior GX job terminal state is unknown; check
-   `/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L` and previously recorded
+   `artifacts/gx-nyquist-resolution-20260905.Ut2U6L` and previously recorded
    PIDs 1767040/1767078 before launching anything else.
 4. Freeze the smallest discriminating test and cost cap before long runs.
    No fresh GPU, saturated parity or VMEX optimization result is claimed.
@@ -9453,7 +9453,7 @@ protocol, phases 0–7 with steps and exits, a parked list with triggers, and a
 compute budget; README additions and `CITATION.cff`.
 
 Verified: 134 release gates, eleven checkers, strict Sphinx, ruff. No solver,
-test, data or release change; no GPU job; office unreachable.
+test, data or release change; no GPU job; benchmark unreachable.
 
 Next: an independent collaborator writes the authoritative plan from the four
 inputs; then Phase 0 (merge #197, #199, the f32 stack; split #202; API
@@ -9482,7 +9482,7 @@ Authority: #206 at `c893b93a`; checked all 200 PRs via
 `gh pr list --repo uwplasma/GKX --state all --limit 1000`. Seven open,
 including this plan; superseded planning PRs are closed. No new roadmap.
 
-Implementation worktree: `/Users/rogeriojorge/local/GKX-worktrees/phase0-pr197`,
+Implementation worktree: `../GKX-worktrees/phase0-pr197`,
 local branch `review/phase0-pr197`, based on published #197 `9074dd87`.
 Merged main `a99dac89` with `git merge --no-commit --no-ff origin/main`.
 Only conflict: `tools/package_architecture_manifest.toml`. Retained both
@@ -9503,10 +9503,10 @@ and `JAX_ENABLE_X64=true` (pytest invoked with `-o addopts='' -q`):
 | `-m pytest tests/release/test_release_gates.py` | 134 passed | 4.44 s |
 | `tools/release/check_package_architecture_manifest.py` | passed; long-term slimming targets still unmet | not recorded |
 
-Negative control: from `/Users/rogeriojorge/local/GKX-worktrees/planreview`,
+Negative control: from `../GKX-worktrees/planreview`,
 set `PYTHONPATH=$PWD/src JAX_ENABLE_X64=true` and run the same interpreter with
 `-m pytest --noconftest -o addopts='' -q
-/Users/rogeriojorge/local/GKX-worktrees/phase0-pr197/tests/validation/physics_gates/test_end_damping_physics.py`.
+../GKX-worktrees/phase0-pr197/tests/validation/physics_gates/test_end_damping_physics.py`.
 This uses unchanged main solver source (authority branch has documentation
 changes only); `--noconftest` prevents the test worktree overriding imports.
 Expected failure in 16.10 s: peak |phi| =1.1249725794901433e163, above 1e-4.
@@ -9531,7 +9531,7 @@ remain untouched.
 ## 2026-09-06 — Phase 0.1 replay preflight
 
 Question: does #197 at `73a8a8c4` reproduce all eleven Cyclone s-alpha
-gamma/omega rows in the tracked artifact on office GPU, including the
+gamma/omega rows in the tracked artifact on benchmark GPU, including the
 half-time settling diagnostic? This is compatibility evidence, not new
 resolution-converged physics validation. Ledger target: Cyclone pre-197
 replay provenance; do not relabel other cases.
@@ -9539,9 +9539,9 @@ replay provenance; do not relabel other cases.
 Office is reachable; both RTX A4000s idle at preflight. Old GX Nyquist job
 PIDs 1767040/1767078 are absent; their files remain, completion not inferred.
 65 GB disk free; no cleanup performed. Fresh immutable git-archive snapshot:
-`/home/rjorge/gkx-phase0-pr197-20260906.ME6JGZ`.
-Python `/home/rjorge/venvs/dkx-gpu/bin/python`, 3.11.15, JAX 0.10.2.
-Reference `/home/rjorge/gx_refs_lin/ITG_cyclone/itg_salpha_adiabatic_electrons.out.nc`,
+`artifacts/gkx-phase0-pr197-20260906.ME6JGZ`.
+Python `python`, 3.11.15, JAX 0.10.2.
+Reference `artifacts/itg_salpha_adiabatic_electrons.out.nc`,
 SHA256 `5134216ca3cc475357e1c2acf25533061411da264950f026fc38028647ce9e27`.
 Use the tracked manifest/deck unchanged, float64, GPU 0, 75000 +37500 steps.
 Hard cap: 3600 s wall time, one GPU; stop on timeout, error or nonfinite
@@ -9557,10 +9557,10 @@ environment variable set; no input changes. Exact remote command, cwd above:
 
 ```sh
 CUDA_VISIBLE_DEVICES=0 JAX_ENABLE_X64=true XLA_PYTHON_CLIENT_PREALLOCATE=false \
-GX_PARITY_REF_DIR=/home/rjorge/gx_refs_lin PYTHONPATH=src timeout 3600 \
-/usr/bin/time -v /home/rjorge/venvs/dkx-gpu/bin/python -u \
+GX_PARITY_REF_DIR=artifacts/gx_refs_lin PYTHONPATH=src timeout 3600 \
+/usr/bin/time -v python -u \
 tools/comparison/build_gx_parity_matrix.py --cases cyclone_salpha_itg \
---reference-dir /home/rjorge/gx_refs_lin --stem replay/cyclone
+--reference-dir artifacts/gx_refs_lin --stem replay/cyclone
 ```
 
 PID 2965025 (timeout parent 2965023), terminal session 77153. Live at 6m29s,
@@ -9569,7 +9569,7 @@ is a follow-up usability issue; setting the environment is the current workaroun
 
 #199 updated by a history-preserving merge of #197, commit `4e78e7bb`, pushed
 to `fix/r0-damping-path-consistency`. No solver algebra change. In
-`/Users/rogeriojorge/local/GKX-worktrees/phase0-pr199`, interpreter as above,
+`../GKX-worktrees/phase0-pr199`, interpreter as above,
 `PYTHONPATH=$PWD/src JAX_ENABLE_X64=true`, pytest `-o addopts='' -q`:
 
 - `tests/unit/linear/test_linear.py tests/unit/linear/test_linear_helpers_extra.py tests/validation/physics_gates/test_end_damping_physics.py -k damping`:
@@ -9578,8 +9578,8 @@ to `fix/r0-damping-path-consistency`. No solver algebra change. In
 - Architecture checker passes; no budget increases. #199 remains open.
 
 #201 independently rechecked at `53d86f01`, local worktree
-`/Users/rogeriojorge/local/GKX-worktrees/phase0-pr201`; immutable office
-archive `/home/rjorge/gkx-phase0-pr201-20260906.9RIQDR`:
+`../GKX-worktrees/phase0-pr201`; immutable benchmark
+archive `artifacts/gkx-phase0-pr201-20260906.9RIQDR`:
 
 | Backend | Selection | Result |
 |---|---|---|
@@ -9591,7 +9591,7 @@ archive `/home/rjorge/gkx-phase0-pr201-20260906.9RIQDR`:
 
 Office command prefix: `PYTHONPATH=src JAX_ENABLE_X64=false`, either
 `JAX_PLATFORMS=cpu` or `CUDA_VISIBLE_DEVICES=1 JAX_PLATFORMS=cuda
-XLA_PYTHON_CLIENT_PREALLOCATE=false`; `timeout 600` and the office interpreter,
+XLA_PYTHON_CLIENT_PREALLOCATE=false`; `timeout 600` and the benchmark interpreter,
 `-m pytest -o addopts= -q tests/unit/nonlinear/test_nonlinear.py -k
 'compressed_real_fft_heat_flux_window_gradient or compressed_gradient_isolation'`
 with `--junitxml=cpu-f32.xml` or `gpu-f32.xml`. Hashes respectively:
@@ -9612,7 +9612,7 @@ three frequency/map/DFT tests from `f4d5d1b5`, `447d724f`, `48b90099`;
 documents the NumPy DFT contract without republishing historical GX residuals.
 No new files, no source changes, net zero test lines, no manifest increases.
 
-In `/Users/rogeriojorge/local/GKX-worktrees/phase0-fourier-contract`, same
+In `../GKX-worktrees/phase0-fourier-contract`, same
 local interpreter, `PYTHONPATH=$PWD/src`, separate `JAX_ENABLE_X64=false/true`:
 `-m pytest -o addopts='' -q tests/unit/operators/test_linear_streaming.py
 tests/unit/linear/test_linear.py tests/unit/linear/test_linear_helpers_extra.py
@@ -9623,7 +9623,7 @@ cases pass (3.28 s); no production-file mutation. This independently checks
 the oracle's ability to detect the convention defect.
 
 Ruff 0.16.4 lint/format, strict Sphinx HTML and architecture pass. The isolated
-venv lacks ruff; used `/Users/rogeriojorge/Library/Python/3.11/bin/ruff` after
+venv lacks ruff; used `artifacts/ruff` after
 checking its version. Docs output `/tmp/gkx-phase0-fourier-docs`.
 No reference spectrum or release artifact changed. PR #202 stays open until
 the remaining independent repairs and fixed-rate migration are dispositioned.
@@ -9632,7 +9632,7 @@ merge exit. Explicit merge approval requested; none received at this entry.
 
 ### Completed eleven-mode replay and endpoint extraction
 
-#197 `73a8a8c4`: office replay session 77153 exited 0, 18:34.50 whole-command
+#197 `73a8a8c4`: benchmark replay session 77153 exited 0, 18:34.50 whole-command
 wall time, peak host RSS 1280184 KiB. Primary-scan timer 770.1413 s excludes
 the half-time scan; concurrent CPU/other-GPU checks mean this is not an
 isolated speed benchmark. All eleven ky, gamma, omega, reference values, both
@@ -9643,7 +9643,7 @@ whole-file byte identity. The driver's 177.505 MiB JAX allocator peak is not
 total device memory: nvidia-smi observed about 15 GiB during execution.
 Keep those measurements separately scoped.
 
-SHA256 in `/home/rjorge/gkx-phase0-pr197-20260906.ME6JGZ`:
+SHA256 in `artifacts/gkx-phase0-pr197-20260906.ME6JGZ`:
 
 | File | SHA256 |
 |---|---|
@@ -9663,7 +9663,7 @@ supersedes #197's old recommendation to issue 2.0.1.
 stacked on #199. Both explicit linear facades now shorten the actual final
 step to t_max, even below dt_min; no damping-rate redesign. Three files,
 net +3 lines; no manifest increase. In worktree
-`/Users/rogeriojorge/local/GKX-worktrees/phase0-linear-endpoint`, local Python
+`../GKX-worktrees/phase0-linear-endpoint`, local Python
 as above, `PYTHONPATH=$PWD/src JAX_ENABLE_X64=true`:
 
 - `-m pytest -o addopts='' -q tests/unit/solvers/test_time_integrators.py -k stops_at_requested_time`:
@@ -9676,7 +9676,7 @@ as above, `PYTHONPATH=$PWD/src JAX_ENABLE_X64=true`:
 ### Recover terminal GX spatial controls; no new GX solve
 
 Both original jobs completed successfully on September 5. Source directory
-`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L`, stems `full96`, `full192`.
+`artifacts/gx-nyquist-resolution-20260905.Ut2U6L`, stems `full96`, `full192`.
 GNU time logs certify exit 0, 35:07.34 / 1:06:52 whole-command wall time
 (GX internal runtimes 35.082804 / 66.828008 min); use the retained `.time`
 files for exact external timing rather than the internal timer. No speed claim.
@@ -9684,7 +9684,7 @@ Binary hash matches `96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d
 both input hashes match the launch record above.
 
 Reused the unchanged `gx-damping-coverage-20260905.8w5DhH/audit-refined-gx.py`.
-Read-only symlink views at `/home/rjorge/gx-nyquist-audit-20260906.kMqkuF/{full96,full192}`
+Read-only symlink views at `artifacts/{full96,full192}`
 map each stem's `.log/.time` to `run.log/time.log`, as that script requires.
 Run with `--root <view> --stem <stem> --binary <corrected-root>/gx
 --binary-sha256 <hash above> --input-sha256 <launch hash>
@@ -9725,12 +9725,12 @@ main, velocity convergence, a corrected full atlas, or nonlinear transport.
 
 ### Combined-stack validation (local integration only)
 
-Worktree `/Users/rogeriojorge/local/GKX-worktrees/phase0-integration`, local
+Worktree `../GKX-worktrees/phase0-integration`, local
 branch `review/phase0-integration`, commit `1c7c7472`: combines #196/#200/#201,
 #197/#199, #207 and #208 without merging any PR or modifying main. The only
 integration conflict was the architecture manifest. Measured combined counts:
 88981 source lines, 86651 test lines; no dropped assertions. Remote immutable
-archive `/home/rjorge/gkx-phase0-integration-20260906.o4aD19`.
+archive `artifacts/gkx-phase0-integration-20260906.o4aD19`.
 
 - CPU f64: 397 passed in 215.24 s over the full linear, linear-helper,
   streaming, time-integrator, end-damping-physics and release-gate files;
@@ -9763,7 +9763,7 @@ GPU contract invocation uses the same paths except linear-helper/release,
 `-k 'damping or stops_at_requested_time or fft_highest or linked_fft_maps'`,
 `--junitxml=gpu-contracts.xml`, CUDA_VISIBLE_DEVICES=1, JAX_PLATFORMS=cuda,
 JAX_ENABLE_X64=true, XLA_PYTHON_CLIENT_PREALLOCATE=false, PYTHONPATH=src,
-and `timeout 900` with the office interpreter. The two-GPU selection/command
+and `timeout 900` with the benchmark interpreter. The two-GPU selection/command
 is the earlier two-logical-CPU selection with CUDA_VISIBLE_DEVICES=0,1,
 JAX_PLATFORMS=cuda, timeout 600 and `--junitxml=two-gpu.xml`.
 
@@ -9776,7 +9776,7 @@ Latest checks: #197 has 32 success, 5 pending, 1 skipped; #199 has 8 success,
 29 pending, 1 skipped. Do not infer final CI success from the local tests.
 Final authoritative-document checks: 134 release gates pass (2.40 s), strict
 Sphinx passes (`/tmp/gkx-phase0-authority-docs`), whitespace clean. All runs
-launched in this execution are terminal; office now has other users' workloads,
+launched in this execution are terminal; benchmark now has other users' workloads,
 which were neither interrupted nor treated as ours. Recheck before using GPUs.
 
 ## 2026-09-07 — approved merges and recoverable branch cleanup
@@ -9788,7 +9788,7 @@ checks and one skipped nightly check. #199 required admin override for stale
 base status. No force-push to main or protection-setting change.
 
 Branch-deletion preflight: verified self-contained bundle of all 209 refs at
-`/Users/rogeriojorge/local/GKX-branch-backup-20260907.p7LZPA/all-refs.bundle`.
+`../GKX-branch-backup-20260907.p7LZPA/all-refs.bundle`.
 Each candidate below exactly matches the head SHA of a merged PR and is
 neither the head nor base of an open PR. Squash-merged heads need this PR-tip
 check: ancestry alone would retain them. Unmerged/divergent work, authoritative
@@ -9829,7 +9829,7 @@ Every tip matched a merged PR. Excluded open PR heads/bases, checked-out
 branches, detached worktree HEADs and divergent/unpublished work. No worktree,
 source file or history object was deleted; no garbage collection performed.
 Full 103-ref recovery inventory (names, original SHAs, merged PRs):
-`/Users/rogeriojorge/local/GKX-branch-backup-20260907.p7LZPA/branch-deletions.md`.
+`../GKX-branch-backup-20260907.p7LZPA/branch-deletions.md`.
 Restore a local ref with `git fetch <bundle> refs/heads/<name>:refs/heads/<name>`.
 
 #207 merged as `99963b45` from `3b60d61e` after 41 successful checks. #196 and
@@ -9842,7 +9842,7 @@ compressed-gradient x64 selection passes (2 tests, 26.08 s).
 
 Opened integration [#209](https://github.com/uwplasma/GKX/pull/209), branch
 `merge/phase0-approved-repairs`, head `237104718309d32fcf8e21b03a4aca0d7d5c4e0c`,
-from `/Users/rogeriojorge/local/GKX-worktrees/phase0-approved`. It preserves
+from `../GKX-worktrees/phase0-approved`. It preserves
 #196/#200/#201/#208 heads and current main. Its **entire tree**, not merely
 source/tests, equals tested integration `1c7c7472`:
 `7b551fd765410b7154f0128ce771c000259607d3`. Existing evidence therefore applies:
@@ -9861,7 +9861,7 @@ resolve those scientific or interface gates.
 While integration CI waits, extracted one further Phase 0 numerical guard in
 [#210](https://github.com/uwplasma/GKX/pull/210), head `19515c2e`, branch
 `fix/phase0-laguerre-finite`, based on main `99963b45`. Worktree:
-`/Users/rogeriojorge/local/GKX-worktrees/phase0-laguerre-guard`.
+`../GKX-worktrees/phase0-laguerre-guard`.
 Reimplements #202 commit `93062763` concisely: reject nonfinite Laguerre
 round-trip errors and make the error message accurate. Existing test is
 parameterized over 1.01, NaN and infinity; two files, net four lines, no new
@@ -9895,7 +9895,7 @@ has not passed. No merge, protection change or branch deletion this step.
 
 Next bounded #202 extraction is [#211](https://github.com/uwplasma/GKX/pull/211),
 `fix/phase0-species-state-ad` at `24eca522`, based on main `99963b45`. Worktree:
-`/Users/rogeriojorge/local/GKX-worktrees/phase0-state-ad`. It independently
+`../GKX-worktrees/phase0-state-ad`. It independently
 extracts `19e066dd`/`0441e4d8`: remove the unconditional tracer rejection in
 `prepare_electrostatic_species_inputs`. Its existing `from_host` helper already
 preserves tracers. Concrete device placement, equations and kernels unchanged.
@@ -9957,7 +9957,7 @@ described above after #209 merges. #210/#211 are not merged or GPU-certified.
 
 Opened [#212](https://github.com/uwplasma/GKX/pull/212), branch
 `fix/phase0-fixed-rate-optin`, head `37a9c0be`, based on main `99963b45`.
-Worktree: `/Users/rogeriojorge/local/GKX-worktrees/phase0-rate-optin`.
+Worktree: `../GKX-worktrees/phase0-rate-optin`.
 
 Contract: optional `[time] damp_ends_rate = nu` becomes a differentiable
 `LinearParams.damp_ends_rate` pytree leaf. Explicit `nu >= 0`, including zero,
@@ -9994,7 +9994,7 @@ against combined main after #209 rather than overwriting other repairs' counts.
 
 Broader linear/runtime/config/end-damping tests and the mixed species/Hermite
 four-logical-CPU selection are running; final results follow below. No new
-GPU result or coupled-EM physical validation claimed. Both office GPUs retain
+GPU result or coupled-EM physical validation claimed. Both benchmark GPUs retain
 ~12 GiB allocated to other workloads, which were left untouched.
 
 This is an additive stage, not completion of Phase 0.1: no reference deck was
@@ -10029,7 +10029,7 @@ merge gate, then complete the reference-conversion/migration stage above.
 
 Branch `phase0/evidence-ledger` at `b7fab7ed`, based on main `99963b45`;
 [#213](https://github.com/uwplasma/GKX/pull/213). Worktree
-`/Users/rogeriojorge/local/GKX-worktrees/phase04-ledger`. Planning-independent:
+`../GKX-worktrees/phase04-ledger`. Planning-independent:
 no solver or scientific change, no published number moved.
 
 Delivered plan.md 0.4.1, 0.4.2 and 0.4.3, and drafted 0.4.4:
@@ -10236,7 +10236,7 @@ Housekeeping: the experiment had left
 #213 and its tree is again source-clean. `/tmp` was cleared by the reboot, so
 the venv was rebuilt.
 
-Environment note for whoever resumes: office
+Environment note for whoever resumes: benchmark
 (`plasmaworkstation.physics.wisc.edu:3281`) has now been unreachable on
 2026-09-05, 06 and 07. Local load hit 117 on 14 cores after the reboot; check
 `uptime` before starting a sweep.
@@ -10245,7 +10245,7 @@ Environment note for whoever resumes: office
 
 Branch `phase0/api-contracts` at `ce360d0d`, based on main `99963b45`;
 [#214](https://github.com/uwplasma/GKX/pull/214). Worktree
-`/Users/rogeriojorge/local/GKX-worktrees/phase02-api`.
+`../GKX-worktrees/phase02-api`.
 
 Closes plan.md 0.2.1 and part of 0.2.4.
 
@@ -10421,15 +10421,15 @@ is **reference rank 5** on plan.md 3.1: self-run, never published.
    holds only `ITG_cyclone`, `ITG_w7x`, `KAW`, `KBM`.
 
 So the row cannot be regenerated from anything in either repository. It needs a
-fresh GX run, which needs a GPU, and the office box has now been unreachable on
+fresh GX run, which needs a GPU, and the benchmark box has now been unreachable on
 2026-09-05, 06 and 07.
 
 **What is recoverable.** HSX equilibria are on this machine, so the chain is not
 lost, only the GX half:
 
-- `/Users/rogeriojorge/local/vmec_equilibria/HSX/QHS_vac_ns201_fixed/wout_HSX_QHS_vacuum_ns201.nc`
-- `/Users/rogeriojorge/local/GX_stellarator_zenodo/data_generation_and_analysis/20240415-01-database_of_configurations/wout_HSX_QHS_vacuum_ns201_aScaling.nc`
-- `/Users/rogeriojorge/local/GSS2024_PPPL_Simons_SummerSchool_GK/equilibria/wout_HSX.nc`
+- `../vmec_equilibria/HSX/QHS_vac_ns201_fixed/wout_HSX_QHS_vacuum_ns201.nc`
+- `../GX_stellarator_zenodo/data_generation_and_analysis/20240415-01-database_of_configurations/wout_HSX_QHS_vacuum_ns201_aScaling.nc`
+- `../GSS2024_PPPL_Simons_SummerSchool_GK/equilibria/wout_HSX.nc`
 - plus copies under `senac/`, `STELLOPT*/`, `ESSOS_main/`, `spectrax_gk_test/`
 
 Which of these the original run used is **not recorded anywhere**, which is the
@@ -10467,7 +10467,7 @@ becomes `passing` or disappears.
 
 Branch `phase0/contributing` at `f15fe869`, based on main `99963b45`;
 [#215](https://github.com/uwplasma/GKX/pull/215). Worktree
-`/Users/rogeriojorge/local/GKX-worktrees/phase03-contrib`.
+`../GKX-worktrees/phase03-contrib`.
 
 A JOSS review-checklist item the repository did not satisfy: community
 guidelines for contributing, reporting issues and seeking support.
@@ -10502,7 +10502,7 @@ Phase 0 status after this step:
 | 0.3.4 HSX decision | investigated; needs a GPU or the row goes |
 | 0.4 ledger and GX goldens | done, #213 |
 | 0.5 velocity convergence | opened; two hypotheses refuted, blast radius unmeasured |
-| 0.6 remote state | office unreachable three days running |
+| 0.6 remote state | benchmark unreachable three days running |
 
 Open PRs in this lane: #213, #214, #215, and #206 for the plan itself.
 
@@ -10603,7 +10603,7 @@ Open in this lane: #206 (plan), #213 (ledger), #214, #215 (CONTRIBUTING), #216,
 
 Still open overall: 0.3.4 HSX (needs a GPU or the row goes), 0.5 velocity
 convergence (blast radius unmeasured, `--maxfail=1` truncated the run), 0.6
-office unreachable four days.
+benchmark unreachable four days.
 
 ## 2026-09-07 — Phase 0.5.6 closed: the hypercollision blast radius is two tests
 
@@ -10647,11 +10647,11 @@ The scratch worktree was deleted; nothing was committed to `src/`.
 
 ## 2026-09-07 — Phase 0.6 resolved, and 0.3.4 decided: the HSX row cannot stand
 
-**0.6, office is reachable again.** `plasmaworkstation` answers after three days
+**0.6, benchmark is reachable again.** `plasmaworkstation` answers after three days
 down. Two idle RTX A4000s, load 1.00, 62 G free on `/home` (94% used). The two
 GX jobs from 2026-09-05 whose state was unknown both **completed cleanly**:
 neither PID 1767040 nor 1767078 is alive, and
-`/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L` holds `full96` (35.1 min)
+`artifacts/gx-nyquist-resolution-20260905.Ut2U6L` holds `full96` (35.1 min)
 and `full192` (66.8 min), each `Exit status: 0`. Nothing is at risk of being
 duplicated; the directory is 92 M and can stay. GX is built there at
 `3865a537`, upstream HEAD.
@@ -10678,10 +10678,10 @@ suggestive of where the numbers came from, not proof.
 Everything else was already against the row:
 
 - GX ships **no HSX benchmark**. `benchmarks/linear/` at `bc2fe552` locally and
-  `3865a537` on office both hold only `ITG_cyclone`, `ITG_w7x`, `KAW`, `KBM`.
+  `3865a537` on benchmark both hold only `ITG_cyclone`, `ITG_w7x`, `KAW`, `KBM`.
 - The reference output the manifest names,
   `HSX/itg_hsx_adiabatic_electrons.out.nc`, is **not on this machine and not on
-  office**. `/home/rjorge/gx_refs_lin` has no HSX subdirectory, and
+  benchmark**. `artifacts/gx_refs_lin` has no HSX subdirectory, and
   `gx_lin_refs_setup.sh` copies only those same four cases.
 - The wout was never recorded. Eight HSX equilibria exist locally; which one was
   used is unknown.
@@ -10692,7 +10692,7 @@ modes** than the published row, on an equilibrium nobody can name. The number
 CSV is attributable to nothing.
 
 Regeneration remains possible and worth doing later as a **new**, declared case:
-office has the GPUs and GX, the W7-X deck is an exact template (its physics
+benchmark has the GPUs and GX, the W7-X deck is an exact template (its physics
 already matches the HSX parity config: `ntheta=256, nperiod=1, nhermite=16,
 nlaguerre=8, y0=10, t_max=200, tprim=3, fprim=1`), and a canonical equilibrium is
 at `vmec_equilibria/HSX/QHS_vac_ns201_fixed/wout_HSX_QHS_vacuum_ns201.nc`
@@ -10963,7 +10963,7 @@ NumPy 2.4.6, with explicit PYTHONPATH, JAX_ENABLE_X64=true, GKX_X64=1,
 MPLBACKEND=Agg. This venv inherits system packages; unrelated installed packages
 declare older JAX constraints, so this is not a clean-install certification.
 Global packages were not changed. Remote validation independently uses
-`/home/rjorge/venvs/dkx-gpu/bin/python`, JAX 0.10.2 on RTX A4000s.
+`python`, JAX 0.10.2 on RTX A4000s.
 
 CPU results at final helper revision:
 
@@ -10984,7 +10984,7 @@ PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 \
   --pytest-arg=-m --pytest-arg='not slow'
 ```
 
-GPU snapshot `/home/rjorge/gkx-rate-resume-20260912.JdX89a` is a git archive of
+GPU snapshot `artifacts/gkx-rate-resume-20260912.JdX89a` is a git archive of
 `9c29dd83c`. Its source and the GPU-selected tests are unchanged at `ce5ffe657`
 (verified empty diff). Both foreground SSH commands finished with exit 0:
 
@@ -10997,7 +10997,7 @@ GPU snapshot `/home/rjorge/gkx-rate-resume-20260912.JdX89a` is a git archive of
   `ffc006c35ed6c69ad41ba13a252b28d971b04ce572e1ab214022f294639d2101`.
 
 Both use PYTHONPATH=$PWD/src, JAX_ENABLE_X64=true, GKX_X64=1,
-JAX_PLATFORMS=cuda, XLA_PYTHON_CLIENT_PREALLOCATE=false, the office interpreter,
+JAX_PLATFORMS=cuda, XLA_PYTHON_CLIENT_PREALLOCATE=false, the benchmark interpreter,
 `pytest -o addopts= -q --tb=short --junitxml=<file>`. Remote PIDs were not
 captured; completion is verified by SSH exit status and XML artifacts. Existing
 GPU allocations were not interrupted. These are algebra/AD/routing checks,
@@ -11035,7 +11035,7 @@ check of that owner, not a claim that the complete suite ran in the clean venv.
 
 Plan branch release/evidence checks: **152 passed**, 9.82 s, three existing
 CFL-warning cases (not suppressed), selecting `tests/release/test_release_gates.py`
-and `tests/release/test_evidence_ledger.py`. All local and office jobs launched
+and `tests/release/test_evidence_ledger.py`. All local and benchmark jobs launched
 by this execution have completed or been explicitly interrupted as recorded.
 At the last check #212 CI has 29 successful, eight unfinished and one skipped
 check. Required CI remains the merge condition; the approved size-budget
@@ -11056,10 +11056,10 @@ conflicts; no second authoritative roadmap was created.
 
 Resume locations:
 
-- Plan/handoff #222: `/Users/rogeriojorge/local/GKX-worktrees/planreview`,
+- Plan/handoff #222: `../GKX-worktrees/planreview`,
   branch `plan/resume-20260912`; only plan.md, this log and pr_ledger.md differ
   from merged main. This branch retains the investigation and merge history.
-- Completed source #212: `/Users/rogeriojorge/local/GKX-worktrees/phase0-rate-optin`,
+- Completed source #212: `../GKX-worktrees/phase0-rate-optin`,
   branch `fix/phase0-fixed-rate-optin`, head `ce5ffe657`; no uncommitted repair.
 - Original checkout and unrelated worktrees/jobs were not moved or cleaned.
 - All CPU/GPU scientific jobs started for this repair have terminal results
@@ -11072,7 +11072,7 @@ Reproduction detail for the 225-test CPU result (the 50 benchmark tests are a
 subset, not 50 additional independent cases):
 
 ```sh
-cd /Users/rogeriojorge/local/GKX-worktrees/phase0-rate-optin
+cd ../GKX-worktrees/phase0-rate-optin
 PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 \
 /tmp/gkx-resume-20260912/bin/python -m pytest \
   -q --maxfail=1 --disable-warnings -o addopts='' \
@@ -11083,7 +11083,7 @@ PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 \
   --junitxml=/tmp/gkx-resume-nonlinear-core.xml
 ```
 
-Artifacts and environment paths above are local/office working artifacts,
+Artifacts and environment paths above are local/benchmark working artifacts,
 **not permanent archival deposits**; /tmp can expire. CI is the durable online
 test record. Recreate the pinned clean environment if a path disappears; do
 not substitute the known below-floor JAX 0.9.2 environment. No transport traces
@@ -11099,7 +11099,7 @@ Next decision sequence:
    docs/inputs.rst on merged main; do not silently rescale adaptive references.
 3. Regenerate only the first eligible reference after its build, absorber,
    geometry and timestep are pinned. Register a question, time cap and stop
-   condition before any expensive run. Prefer office for heavy work and keep
+   condition before any expensive run. Prefer benchmark for heavy work and keep
    local CPU verification small. Leave provisional ledger rows provisional.
 4. Keep electromagnetic verification core: algebraic state/AD identity here
    does not close Phase 3's independent three-field energy, linear-reference
@@ -11142,15 +11142,15 @@ tests fail on the parent (DID NOT RAISE), 9.15 s. Final controls additionally
 cover rate None/0/0.5 and fail if geometry is built before rejection.
 
 CPU environment: persistent
-`/Users/rogeriojorge/local/venvs/gkx-rate-migration`, Python 3.11, JAX/jaxlib
+`../venvs/gkx-rate-migration`, Python 3.11, JAX/jaxlib
 0.10.2 installed in a system-site-packages venv; global packages unchanged.
 Inherited DESC/interpax/quadax and other unrelated packages declare incompatible
 JAX ceilings: this is supported-JAX focused validation, not clean-install proof.
 
 ```sh
-cd /Users/rogeriojorge/local/GKX-worktrees/planreview
+cd ../GKX-worktrees/planreview
 PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1 \
-/Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python -m pytest \
+python -m pytest \
   -q -o addopts='' tests/integration/runtime/test_runtime_runner.py \
   tests/unit/linear/test_linear.py -k end_damping --tb=short
 ```
@@ -11162,8 +11162,8 @@ message while preserving full guidance in docs, not the budget. No solver
 physics, integrator or tolerance changed.
 
 Office snapshot is `git archive 1a0889925` at
-`/home/rjorge/gkx-scale-migration.0xvBXZ`. Same pytest selection using
-`/home/rjorge/venvs/dkx-gpu/bin/python`, PYTHONPATH=$PWD/src,
+`artifacts/gkx-scale-migration.0xvBXZ`. Same pytest selection using
+`python`, PYTHONPATH=$PWD/src,
 JAX_ENABLE_X64=true GKX_X64=1 JAX_PLATFORMS=cuda CUDA_VISIBLE_DEVICES=0
 XLA_PYTHON_CLIENT_PREALLOCATE=false and `--junitxml=checks.xml`:
 **39 passed / 207 deselected, 14.59 s**, SSH exit 0. Local SSH PID 46566;
@@ -11214,7 +11214,7 @@ Validation on the persistent JAX 0.10.2 CPU environment from the preceding entry
   `-k end_damping --junitxml=/tmp/gkx-provenance-cpu.xml`.
 - Ruff check/format, whitespace and architecture checks pass.
 - CI-equivalent docs command `PYTHONPATH=$PWD/src MPLBACKEND=Agg
-  /Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python -m sphinx -E -W
+  python -m sphinx -E -W
   -b html docs /tmp/gkx-provenance-docs` exits 0; log
   `/tmp/gkx-provenance-docs.log`. An exploratory stricter `-n` build failed with
   2685 warnings, including a newly introduced short heading underline (fixed).
@@ -11222,10 +11222,10 @@ Validation on the persistent JAX 0.10.2 CPU environment from the preceding entry
   the actual CI mode, not warning-free nitpicky coverage.
 
 Office archive `c170d0f92` at
-`/home/rjorge/gkx-reference-provenance.ambg4j`, shell PID 3868895. GPU0 was busy;
+`artifacts/gkx-reference-provenance.ambg4j`, shell PID 3868895. GPU0 was busy;
 used GPU1 after observing 0% utilization / 1168 MiB allocation, retaining others'
 allocations. Same two-owner `-k end_damping` selection with
-`/home/rjorge/venvs/dkx-gpu/bin/python`, PYTHONPATH=$PWD/src,
+`python`, PYTHONPATH=$PWD/src,
 JAX_ENABLE_X64=true GKX_X64=1 JAX_PLATFORMS=cuda CUDA_VISIBLE_DEVICES=1
 XLA_PYTHON_CLIENT_PREALLOCATE=false, `-q -o addopts= --tb=short
 --junitxml=checks.xml`: **56 passed / 207 deselected**, 15.33 s, SSH exit 0.
@@ -11266,7 +11266,7 @@ parent nor the child may be merged on the basis of these local subsets alone.
 
 Independent lanes and cross-review on branch
 `fix/spectral-hypercollision-contracts`, worktree
-`/Users/rogeriojorge/local/GKX-worktrees/spectral-contracts`. Base is #224
+`../GKX-worktrees/spectral-contracts`. Base is #224
 `c0004e9f3`; require fresh CI before merge. This is a correctness change, not
 a performance claim or a completed physics benchmark.
 
@@ -11320,7 +11320,7 @@ Context: [GX](https://arxiv.org/html/2209.06731v3),
 **Reproduce.** CPU environment is the persistent Python3.11.14/JAX0.10.2/
 SOLVAX0.20.0 venv documented above, not clean-install proof. Prefix
 `PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1`, then
-`/Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python -m pytest -q
+`python -m pytest -q
 -o addopts='' -o junit_family=legacy tests/validation/benchmarks/test_benchmark_contracts.py
 tests/unit/solvers/test_linear_krylov_core.py tests/unit/linear/test_linear_helpers_extra.py
 tests/unit/linear/test_linear.py -k 'preconditioner or inverts_additive or
@@ -11342,8 +11342,8 @@ results by operator revision; do not silently combine old/new QA outputs.
 
 Final CPU XML SHA-256:
 `d911f93d4e95d48592403181508ac6638fe7603ac263349a25f082c6fcbd3794`.
-Office archive `4a4adef60`, `/home/rjorge/gkx-spectral-contracts.KZ4pqN`,
-same selection on GPU0 with `/home/rjorge/venvs/dkx-gpu/bin/python`,
+Office archive `4a4adef60`, `artifacts/gkx-spectral-contracts.KZ4pqN`,
+same selection on GPU0 with `python`,
 JAX_PLATFORMS=cuda CUDA_VISIBLE_DEVICES=0 XLA_PYTHON_CLIENT_PREALLOCATE=false:
 **54 passed / 236 deselected**, 150.19 s, exit0; one existing invalid-escape
 docstring warning. `checks.xml` SHA-256
@@ -11373,7 +11373,7 @@ history-preserving refresh `c0004e9f3`; its new CI must pass before merging.
 No protection bypass, forced shared-history update or release.
 
 Branch `validation/independent-gates-20260912`, worktree
-`/Users/rogeriojorge/local/GKX-worktrees/em0-field-system`, carries three small
+`../GKX-worktrees/em0-field-system`, carries three small
 independent gates, not three completed physics lanes:
 
 | Gate / commits | Evidence | Explicit remaining limit |
@@ -11390,7 +11390,7 @@ test/documentation now distinguish the paper-normalized and implementation
 contracts. No gyrokinetic production operator or default is changed here.
 
 Reproduction environment: existing
-`/Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python`, Python 3.11.14,
+`python`, Python 3.11.14,
 JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0. This venv uses
 system site packages: passing subsets are not a clean-install claim. Prefix
 commands with `PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1`.
@@ -11400,9 +11400,9 @@ commands with `PYTHONPATH=$PWD/src MPLBACKEND=Agg JAX_ENABLE_X64=true GKX_X64=1`
   record_property/xunit2 warnings; use `-o junit_family=legacy` when rerunning.
 - Initial EM source: same pytest flags on
   `tests/unit/operators/test_terms_fields.py`: **24 passed**, CPU 14.65 s,
-  office GPU0 26.62 s. Two existing complex-cast warnings. Office archive
-  `ba03e6286`, `/home/rjorge/gkx-em0-oracle.65HUTi`, completed shell 4054142,
-  `/home/rjorge/venvs/dkx-gpu/bin/python`, CUDA_VISIBLE_DEVICES=0,
+  benchmark GPU0 26.62 s. Two existing complex-cast warnings. Office archive
+  `ba03e6286`, `artifacts/gkx-em0-oracle.65HUTi`, completed shell 4054142,
+  `python`, CUDA_VISIBLE_DEVICES=0,
   JAX_PLATFORMS=cuda, XLA_PYTHON_CLIENT_PREALLOCATE=false. XML SHA-256
   `3d6fb2c0aa0f8c16b4cf1cb052d546cbab0106ecd349542fb2570aa3b65a4b06`.
   This precedes the B=1/variable-B test split; timings are not scaling evidence.
@@ -11415,13 +11415,13 @@ Question: does repaired GX share GKX's large Nl=24 versus32 sensitivity? Exactly
 one run changes only Nl32→24, retaining Nm96/Nz96, ky≈.55, dt=.002, T=300,
 absorber rate50. GPU1, 3600-s wall cap; stop on errors/nonfinite results, no
 automatic follow-on. Office directory
-`/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD`, supervisor 4053460,
+`artifacts/gkx-nl24-discriminator-20260912.vvmgDD`, supervisor 4053460,
 process group 4053462, GX 4053463. Monitor `terminal.txt`, `run.log`, `run.time`
 and terminal NetCDF, not only finite progress prints. Last pre-PR checkpoint:
 10m38s wall, t=97.602/300, finite printed diagnostics; **still running**.
 
 - New input SHA-256: `2dd1c42bf275f3784bc84f269c7763377d72e6055d4b07ee14b8025ae82e2146`.
-- Source deck: `/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L/full96.in`,
+- Source deck: `artifacts/full96.in`,
   SHA `a2653c8d619ae67e49b7b4ac92a437bb2eadcf0dfa6f1b8b29280f0110f5de05`.
 - Repaired GX binary SHA: `96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536`;
   base source `3865a53778862e1686f414bf6f416339e24887c9`, saved source diff
@@ -11479,7 +11479,7 @@ closure/truncation and residual-qualified mode identity before another rung.
 No atlas or QA transport row is promoted.
 
 All artifacts below are in
-`/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD`:
+`artifacts/gkx-nl24-discriminator-20260912.vvmgDD`:
 
 | Artifact | SHA-256 |
 | --- | --- |
@@ -11493,10 +11493,10 @@ All artifacts below are in
 | completion.md | faddbaeae73ec795757d9777dc102366da4c009fee48a0a76b1e2d662e866b02 |
 
 Repeat the read-only audit in that directory with
-`/home/rjorge/venvs/dkx-gpu/bin/python audit.py --root . --stem nl24 --binary ./gx
+`python audit.py --root . --stem nl24 --binary ./gx
 --binary-sha256 96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
 --input-sha256 2dd1c42bf275f3784bc84f269c7763377d72e6055d4b07ee14b8025ae82e2146
---gkx-csv /home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/results/salpha_rate50_nl24_nm96_t300.csv`,
+--gkx-csv artifacts/salpha_rate50_nl24_nm96_t300.csv`,
 then `python spectral-audit-v2.py` in the same environment. Initial supplemental
 audit failed because the old-GX path was mistyped; the failed script/log are
 preserved. Only that path was corrected, not simulation inputs/outputs.
@@ -11542,7 +11542,7 @@ rate: **2 passed**, 384.26 s, two existing complex-cast warnings. Exact command:
 
 `PYTHONPATH=$PWD/src MPLBACKEND=Agg XLA_FLAGS=--xla_force_host_platform_device_count=4
 JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1
-/Users/rogeriojorge/local/venvs/gkx-rate-migration/bin/python -m pytest -q
+python -m pytest -q
 -o addopts='' -o junit_family=legacy tests/unit/parallel/test_parallel_linear_velocity.py
 -k mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
 --tb=short --junitxml=/tmp/gkx-sharded-periodic-fix.xml`.
@@ -11585,13 +11585,13 @@ arrays. Runtime startup explicitly allocates complex64. Next diagnostic must
 declare actual seed precision; do not silently extend iterations to get a time.
 Actual total process wall35.23s; no timeout or further solve.
 
-Remote `/home/rjorge/gkx-conditioning-pilot-20260912.4OfYd2`, local logs
+Remote `artifacts/gkx-conditioning-pilot-20260912.4OfYd2`, local logs
 `/tmp/gkx-conditioning-pilot-20260912/`. Python3.11.15/JAX0.10.2/NumPy2.4.6/
-SOLVAX0.20.0, RTX A4000, `/home/rjorge/venvs/dkx-gpu/bin/python`,
+SOLVAX0.20.0, RTX A4000, `python`,
 CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda JAX_ENABLE_X64=true GKX_X64=1
 XLA_PYTHON_CLIENT_PREALLOCATE=false PYTHONPATH=$PWD/src:$PWD.
 Command: `timeout --signal=TERM --kill-after=10s 120s /usr/bin/time -v
-/home/rjorge/venvs/dkx-gpu/bin/python pilot.py MODE`. Script SHA
+python pilot.py MODE`. Script SHA
 `2e41291c04e54d278059d54aac6148d5a579c583323cf25f05fb29299de123e9`;
 logs damping/hermite-line/field-corrected respectively:
 `fe2f304a17ea4832d2288354ee07c153e88888087c829d5ad0aa14f1e6556dbf`,
@@ -11634,7 +11634,7 @@ production source, tests, solver default, tolerance or iteration budget.
 
 **Registered matched precision control:** same §5.1 case and three modes,
 one fresh process per mode per host, 120-s cap plus10-s owned-process cleanup,
-no fallback/retry. CPU and office GPU0 construct the same original complex64
+no fallback/retry. CPU and benchmark GPU0 construct the same original complex64
 seed, then widen it without changing its values. Shape(1,4,8,1,8,16), final
 dtype complex128; old/new byte hashes respectively
 `22f9570989dad9b6df827674c005270ace7f100dc3a4e2e9a2cd63ac9c17eb72` /
@@ -11660,7 +11660,7 @@ The previous float32 threshold .000119209 is the configured1000*epsilon floor,
 not a measured hardware precision limit.
 
 Reproduction script `/tmp/gkx-conditioning-f64-pilot.py`, identical remote
-`/home/rjorge/gkx-conditioning-f64-20260913.GA7A8d/pilot.py`, SHA
+`artifacts/pilot.py`, SHA
 `e2b7983f5e8633b4c691b6c67dc45ac5774ce5930e457835ad5411c377b85cd4`.
 It prints exact configuration, dtype, hashes, timings and allocator statistics.
 CPU wrapper `/tmp/gkx-conditioning-f64-cpu.BYgQiE/run.py` SHA
@@ -11774,7 +11774,7 @@ NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0; M3 Max CPU, complex128, one XLA
 thread. The machine carried load 8–60 from unrelated jobs: **times are
 indicative only**; iteration counts, residuals, fill, HLO counts and spectra
 are load-independent. Office GPUs untouched; one read-only NetCDF re-read on
-the office CPU.
+the benchmark CPU.
 
 **Decision.** Reorder, not replace: §5.1 gains L1–L6 (instrument inner
 solves; exact sparse ladder; restrict to linked-covered rows; preconditioner
@@ -11789,8 +11789,8 @@ sharding last).
 `env PYTHONPATH=$PWD/src:$PWD MPLBACKEND=Agg JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1 XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1" nice -n 10 python plan/research/scripts/2026-09-13/<script>.py`
 for `d1_preconditioner_defect.py` (89 s, 1.04 GB peak), `d1b_neutral_modes.py`
 (21 s), `d3_bmap.py`, `d5_bakeoff.py` (37 s, 1.13 GB), `d6_ladder.py`,
-`d7_hlo.py 32 32 16 2 4` (no x64; the deck resolves Nz=24); `v1_reread.py` on office with
-`/home/rjorge/venvs/dkx-gpu/bin/python`, reading
+`d7_hlo.py 32 32 16 2 4` (no x64; the deck resolves Nz=24); `v1_reread.py` on benchmark with
+`python`, reading
 `gkx-nl24-discriminator-20260912.vvmgDD/nl24.{out,big}.nc` and
 `gx-nyquist-resolution-20260905.Ut2U6L/full96.{out,big}.nc`, `full192.out.nc`.
 
@@ -11994,7 +11994,7 @@ value and d/dtprim, rk3/rk4.
 
 **Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
 jax/jaxlib 0.10.2, numpy 2.4.6, solvax 0.20.0,
-`/Users/rogeriojorge/local/venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src`,
+`../venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src`,
 `JAX_PLATFORMS=cpu`, `XLA_FLAGS="--xla_cpu_multi_thread_eigen=false
 intra_op_parallelism_threads=1"`, `nice -n 10`, one heavy process at a time,
 each step held until the 1-min load was below 20. Main side: `git archive
@@ -12075,12 +12075,12 @@ same rungs? Measurement only; no source, test, default or reference change.
 **Source and setup.** `origin/main` `06606e404771b4c5217f07c284a9003e12d9c982`, staged
 by `git archive` (tarball SHA
 `a7fe0365d2d2ccc5e553704bda94971f33982e4c07c98c187b57c10e141bfea0`, removed after the
-run) to office `pop-os:/home/rjorge/gkx-q2-exact-ladder-20260913.zXGFAw`. Xeon W-2295,
+run) to benchmark `pop-os:artifacts/gkx-q2-exact-ladder-20260913.zXGFAw`. Xeon W-2295,
 18 cores / 36 threads, 62 GB (≈43 GB available), shared with a DKX `cpu_lu.py`
 benchmark pinned to CPUs 24–28,30–32, an LMX `gpu_bench` run, a VMEX
 `validate_refinement.py` run and another user's GPU0 job; GPUs untouched. Python
 3.11.15, JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, SOLVAX 0.20.0
-(`/home/rjorge/venvs/gkx-nl/bin/python`; SOLVAX resolves through that venv's
+(`python`; SOLVAX resolves through that venv's
 `zz_dkx_gpu.pth`); `gkx.__file__` verified inside the staging `src`. Env
 `JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES= JAX_ENABLE_X64=true GKX_X64=1
 PYTHONPATH=$PWD/src:$PWD OMP_NUM_THREADS=12 OPENBLAS_NUM_THREADS=12
@@ -12165,7 +12165,7 @@ under load 16–41, with its OpenBLAS threads spinning during SuperLU on cores s
 the DKX benchmark. It was stopped for the coordinator's resource correction during rung
 3's factor (n=18432, nnz 4,760,571, assembly 21.5 s). Its eigenvalues equal the final
 run's; its rung-2 sparse time (87 s against 18 s process elapsed) was contention. Its
-outputs stay on office in `out_v1_superseded/`; its supervisor log is committed as
+outputs stay on benchmark in `out_v1_superseded/`; its supervisor log is committed as
 `v1_superseded_supervisor.txt`.
 
 **plan.md.** The crossover is two sentences at the end of §5.1. Main does not yet carry
@@ -12202,8 +12202,8 @@ the rung-4 sparse wall guard). Launcher/Python PIDs 165434/165437, 165587/165590
 208756/208759, 220834/220837, 220967/220970, 221103/221106, 221240/221243, plus the
 first launch's 160692, 160703/160706, 161207/161210, 161623/161626, 162566/162569,
 163424/163427 and pin watcher 163032, were all verified absent at 15:31; no `gkx-q2-*`
-systemd units remain. Staging tarballs were removed on office and locally. The 27 MB
-staging directory stays for provenance; office disk had 66 GB free.
+systemd units remain. Staging tarballs were removed on benchmark and locally. The 27 MB
+staging directory stays for provenance; benchmark disk had 66 GB free.
 
 ## 2026-09-13 — Q12 certify every returned eigenpair; KrylovConfig defaults to adaptive
 
@@ -12374,14 +12374,14 @@ such.
 **Source and environment.** `origin/main` `06606e404771b4c5217f07c284a9003e12d9c982`
 (#226 merged); `git archive` tarball SHA-256
 `a7fe0365d2d2ccc5e553704bda94971f33982e4c07c98c187b57c10e141bfea0`, staged at
-office `pop-os:/home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq/src_stage`.
-`/home/rjorge/venvs/gkx-nl/bin/python` (Python 3.11.15, JAX 0.10.2, SOLVAX
+benchmark `pop-os:artifacts/src_stage`.
+`python` (Python 3.11.15, JAX 0.10.2, SOLVAX
 0.20.0), `gkx.__file__` in the stage, `jax.devices()` = `[CudaDevice(id=0)]`,
 x64 on (f64, as in the 2026-09-05 control, whose f32 variant was the marked
 exception). RTX A4000 **GPU0** (see occupancy). Env per run:
 `CUDA_VISIBLE_DEVICES=0 JAX_PLATFORMS=cuda XLA_PYTHON_CLIENT_PREALLOCATE=false
 JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg PYTHONPATH=$PWD/src:$PWD
-GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs`.
+GX_PARITY_REF_DIR=artifacts/matched_refs`.
 
 **Protocol.** In-repo runner `tools/comparison/build_gx_parity_matrix.py`,
 unchanged; manifest `plan/research/scripts/2026-09-13-drift-ablation/manifest.toml`
@@ -12433,11 +12433,11 @@ nonzero species ν. The conservation properties of the correction were not
 tested here.
 
 **Preflights (not evidence).**
-- Drift CPU RHS check (`preflight.py`, office CPU, 10.5 s): term weights as
+- Drift CPU RHS check (`preflight.py`, benchmark CPU, 10.5 s): term weights as
   intended, absorber 50; on one fixed random state at ky .55/Nl24/Nm96 the
   relative RHS change versus full is .207 (`gradb=0`) and .834
   (`curvature=0`); the two ablations differ by .750.
-- Collision CPU RHS check (`preflight_collisions.py`, office CPU, 9.3 s):
+- Collision CPU RHS check (`preflight_collisions.py`, benchmark CPU, 9.3 s):
   collision weight 0/1/1 for ν 0/1e-3/1e-2, `params.nu` matches, built-in LB
   path, absorber 50; relative RHS change 8.412427e-4 (ν=1e-3) and 8.412427e-3
   (ν=1e-2), ratio 10.000000.
@@ -12514,14 +12514,14 @@ the other GPU busy; not benchmark-grade.
 **Artifacts** (`plan/research/scripts/2026-09-13-drift-ablation/`, 49 text
 files, 82 KB before `SHA256SUMS.txt`): `SHA256SUMS.txt` lists SHA-256 for every
 other file; its own SHA-256 is `74e7f834dd6ca2260161c6a42f22a2b9718207966280f0ec75d96178c9432ba0`. Key hashes: `manifest.toml`
-`c483306abe264eca78fe86c56fffaf7ce85646f0087ce55bcaffb3dad1438527` (as executed on office: `00e8d3ab18c2523ae5aefd55623e5377ee6f31d168285414ad8aa9e2736fb94d`),
+`c483306abe264eca78fe86c56fffaf7ce85646f0087ce55bcaffb3dad1438527` (as executed on benchmark: `00e8d3ab18c2523ae5aefd55623e5377ee6f31d168285414ad8aa9e2736fb94d`),
 `summary.csv` `d2a9b50546a56b6df5ef8be20bae0a835bb6105a95571d349d0c103c4d9899d2`,
 `logs/supervisor.txt` `921e9b4f0b0dbb7ce0794456bb3855320ea4afb4ee8605ad50a864f79dd1ad3f`,
 `run_ablation.sh` `f6b0f219bc7ee40ed3ce5da077d01ce04c3b6ccae9137d3caba2397ad1e2a4b1`,
 `preflight.py` `bca22f5681610824aef437638f6c340aa133e41e1228369a376d887b6b736d83`,
 `preflight_collisions.py` `af2c3ddf063283eaaa6b5160510ea59b7a7379caf8bf19c6fca1984184dcdbe9`,
 `summarize.py` `bd658b45795b46adb80abf58a6d99062083833cbfa3fcbbda66f15992c185100`.
-PNGs written by the runner stay on office only.
+PNGs written by the runner stay on benchmark only.
 **Secret-scan note:** gitleaks 8.30.1 reported two `generic-api-key` false
 positives on the manifest `key` fields of the two never-started curvature=0
 cases. Rather than suppress the scanner, those two case blocks were removed
@@ -12542,7 +12542,7 @@ nonfinite value. At 16:54:06 every listed PID was verified gone and no
 `build_gx_parity_matrix`/`run_ablation`/preflight process remained. Office
 cleanup: the source tarball and `src_stage/` were removed; `logs/` and
 `results/` (780 KB) are kept at
-`/home/rjorge/gkx-q3-drift-ablation-20260913.pxiLNq`. Local tarball removed.
+`artifacts/gkx-q3-drift-ablation-20260913.pxiLNq`. Local tarball removed.
 
 ## 2026-09-14 — queue results recorded, merge chain, corrections
 
@@ -12770,7 +12770,7 @@ Recycling does not flatten the inner cost: with a fixed preconditioner, the righ
 of later steps are no cheaper to solve. Against the adaptive route, shift-invert is 2.2× slower
 in wall time to the 1e-6 gate, 3.1× slower to 1e-9, and 6.0× in CPU time. The machine load was
 6–30 during the adaptive run and 18–143 during the shift-invert run, but the CPU ratio is not
-explained by contention. On office (#232, 12 threads) the adaptive route took 761 s.
+explained by contention. On benchmark (#232, 12 threads) the adaptive route took 761 s.
 
 **Extrapolation (labelled estimate, rejected).** A power law in n over the ladder
 (`bakeoff.py --extrapolate`) is unusable: from (64,8,32) to (96,8,24) n grows 1.13× while
@@ -12933,13 +12933,13 @@ only for `method == "implicit"`, not on this rk4 route.
   √b(J_ℓ+J_{ℓ−1})) was not compared term by term. Same structure by reading,
   not a numerical check.
 
-**Host and environment.** office (`pop-os`), RTX A4000 GPU1 for every GPU
-run, `/home/rjorge/venvs/gkx-nl` (Python 3.11.15, JAX 0.10.2, SOLVAX 0.20.0).
-Run directory `/home/rjorge/gkx-q8-collisional-convergence-20260913.H01e3Z`.
+**Host and environment.** benchmark (`pop-os`), RTX A4000 GPU1 for every GPU
+run, `artifacts/gkx-nl` (Python 3.11.15, JAX 0.10.2, SOLVAX 0.20.0).
+Run directory `artifacts/gkx-q8-collisional-convergence-20260913.H01e3Z`.
 Env: `PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cuda
 XLA_PYTHON_CLIENT_PREALLOCATE=false JAX_ENABLE_X64=true GKX_X64=1
 MPLBACKEND=Agg CUDA_VISIBLE_DEVICES=1
-GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs`.
+GX_PARITY_REF_DIR=artifacts/matched_refs`.
 Runs go through `run_convergence.sh` (one `build_gx_parity_matrix.py` process
 per key, `timeout --signal=TERM --kill-after=10s 2700s`, `/usr/bin/time -v`,
 stop on nonzero exit or nonfinite γ/ω, refuse to start a key if the GPU has
@@ -13013,8 +13013,8 @@ lower Nl of the same ν):
   restricted to its 2×4 basis by `solvers_time_runners.py:85-115`, and both
   preflights show the rejection at Nl32×Nm96.
 - **P4 not run.** The GX binary's `RUNPATH`
-  (`/home/rjorge/local/install/{libcutensor-1.7.0.1/lib/11,nccl-2.18.1/lib,openmpi-4.1.6/lib,netcdf-c-4.9.2/lib,hdf5-1.14.5/lib,gsl-2.7.1/lib}`)
-  no longer exists on office; `ldd` reports `libcutensor.so.1`,
+  (`../install/{libcutensor-1.7.0.1/lib/11,nccl-2.18.1/lib,openmpi-4.1.6/lib,netcdf-c-4.9.2/lib,hdf5-1.14.5/lib,gsl-2.7.1/lib}`)
+  no longer exists on benchmark; `ldd` reports `libcutensor.so.1`,
   `libnccl.so.2`, `libmpi.so.40`, `libhdf5.so.310`, `libgsl.so.27` and
   `libgslcblas.so.0` not found, and `gx-nu1e-2-nl24` exited 127 after 5 s
   (`logs/gx-nu1e-2-nl24.run.txt`). A host-wide search found no GSL 2.7 and
@@ -13046,7 +13046,7 @@ ran on `06606e404` (identical physics source).
 Nl48 11:34–12:04, Nl64 14:27, Nl64 T=300 27:52.3); peak host RSS
 1.23–1.26 GB; peak device 93–173 MB. GX: 5 s (failed launch).
 
-**Terminal job state.** All verified absent at 2026-09-14T08:38:05-05:00 (no gate, supervisor, runner or GX process; no compute process on either GPU). Gates 310799, 370388, 443420 (310799 killed at the 2026-09-13 pause before launching; 370388 aborted after the GX exit 127; 443420 logged ALL DONE 08:37:22). Supervisors 260994, 374915, 447062 (260994 stopped on the busy-GPU guard; the others DONE). GX supervisor 441963 (STOP) and its timeout 441977. Runner timeout/python PIDs: preflight-nu3e-3-nl24 261215/261218; nu3e-3-nl24 261922/261925; nu3e-3-nl32 272886/272889; nu1e-3-nl48 289413/289416; nu3e-3-nl48 375281/375284; nu1e-2-nl48 394790/394793; nu0-nl64 405595/405598; nu1e-3-nl16 415490/415493; nu3e-3-nl16 418619/418622; nu1e-2-nl16 429629/429632; nu0-nl64-t300 447256/447259. The office run directory is kept at 296 KB (logs, results, GX decks, validation); its `src_stage/` and `src.tgz` and the local staging tarball were deleted.
+**Terminal job state.** All verified absent at 2026-09-14T08:38:05-05:00 (no gate, supervisor, runner or GX process; no compute process on either GPU). Gates 310799, 370388, 443420 (310799 killed at the 2026-09-13 pause before launching; 370388 aborted after the GX exit 127; 443420 logged ALL DONE 08:37:22). Supervisors 260994, 374915, 447062 (260994 stopped on the busy-GPU guard; the others DONE). GX supervisor 441963 (STOP) and its timeout 441977. Runner timeout/python PIDs: preflight-nu3e-3-nl24 261215/261218; nu3e-3-nl24 261922/261925; nu3e-3-nl32 272886/272889; nu1e-3-nl48 289413/289416; nu3e-3-nl48 375281/375284; nu1e-2-nl48 394790/394793; nu0-nl64 405595/405598; nu1e-3-nl16 415490/415493; nu3e-3-nl16 418619/418622; nu1e-2-nl16 429629/429632; nu0-nl64-t300 447256/447259. The benchmark run directory is kept at 296 KB (logs, results, GX decks, validation); its `src_stage/` and `src.tgz` and the local staging tarball were deleted.
 
 ## 2026-09-14 — eigen routes solve on the linked-chain modes (Q6, plan §5.1 L3)
 
@@ -13301,7 +13301,7 @@ once. Which part of the rebuild changes XLA:CPU's layout choice is unresolved.
 - Architecture manifest: tools +50 (78115→78165), tests +32 (88145→88177), source +0.
 
 **Environment.** Apple M3 Max, 14 logical CPUs, macOS 14.4.1, Python 3.11.14,
-jax/jaxlib 0.10.2, `/Users/rogeriojorge/local/venvs/gkx-review-20260913`,
+jax/jaxlib 0.10.2, `../venvs/gkx-review-20260913`,
 `PYTHONPATH=<tree>/src:<tree>`, `JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at
 a time behind a 1-minute load gate below 20. Load was 11–23 during the session, so
 **no timing is reported**. HLO counts are XLA:CPU compile-only and load-independent.
@@ -13345,20 +13345,20 @@ comparison. New rows:
 - Q20: cross-code linear Cyclone controls.
 - Q21: L5 inner-solve cost.
 
-**GX toolchain (office).** The runtime libraries every GX binary on office links against
-(`/home/rjorge/local/install/{gsl-2.7.1, openmpi-4.1.6, hdf5-1.14.5, netcdf-c-4.9.2,
+**GX toolchain (benchmark).** The runtime libraries every GX binary on benchmark links against
+(`../install/{gsl-2.7.1, openmpi-4.1.6, hdf5-1.14.5, netcdf-c-4.9.2,
 libcutensor-1.7.0.1, nccl-2.18.1}`, plus gcc-10.4.0 as the nvcc 11.5 host compiler) had been
 deleted, which is why Q8's GX control exited 127. They were rebuilt into the same prefixes
 from upstream releases (archives with verified checksums or signatures; NCCL from its
 `v2.18.1-1` tag). Provenance and a do-not-delete
 notice are in that directory's `README.txt`. A pristine upstream GX (`gx` branch
-`3865a537`) was also built at `/home/rjorge/gx-upstream-3865a537/gx`. `ldd` resolves every
+`3865a537`) was also built at `artifacts/gx`. `ldd` resolves every
 library for the 787eb014, 96a53403 and upstream binaries.
 
-**Physics check on the rebuilt toolchain** (office GPU 0 once idle, 2026-09-14 12:27–13:05 CDT;
-run directories under `/home/rjorge/gx-toolchain-rebuild-20260914/`):
+**Physics check on the rebuilt toolchain** (benchmark GPU 0 once idle, 2026-09-14 12:27–13:05 CDT;
+run directories under `artifacts/`):
 - Shipped Cyclone s-alpha adiabatic deck (inputs checked by SHA-256). The 787eb014 output is
-  **bitwise identical, 264 of 264 netCDF variables**, to office runs of the same binary
+  **bitwise identical, 264 of 264 netCDF variables**, to benchmark runs of the same binary
   made before the deletion (`gx_rebaseline_20260818`, `gx_refs_lin` of 2026-09-02). The
   pristine upstream 3865a537 build is bitwise identical to 787eb014 in `omega_kxkyt`. At
   ky=.55: γ=.034483, ω=.498361.
@@ -13376,18 +13376,18 @@ run directories under `/home/rjorge/gx-toolchain-rebuild-20260914/`):
 Q17 can proceed.
 
 **Comparison codes** (upstream sources, unpatched; inventory with commands in
-`~/local/gk-codes/README.txt` and `/home/rjorge/gk-codes/README.txt` on office):
-- GS2 8.2.1 (`4d8c94bc`), office. Built with a user-space conda-forge toolchain (gfortran 13.4,
+`~/local/gk-codes/README.txt` and `artifacts/README.txt` on benchmark):
+- GS2 8.2.1 (`4d8c94bc`), benchmark. Built with a user-space conda-forge toolchain (gfortran 13.4,
   OpenMPI 5, netCDF-Fortran, FFTW 3). `linear_tests` cyclone_itg passes 8/8. The shipped
   low-resolution Cyclone case gives γ=.1703, ω=.6534 at ky=.5 (Lref=R), 2.4 s on 4 ranks.
   This is an install check, not a converged value.
-- stella v1.0 (`058d98db`), office. Built with CMake; numerical-tests-1 passes 3/3. v1.0 has a
+- stella v1.0 (`058d98db`), benchmark. Built with CMake; numerical-tests-1 passes 3/3. v1.0 has a
   missing comma in a format string (`init_stella.f90:1084`), so every run exits with
   status 2 after its outputs are written; upstream master no longer has the line. It is not
   patched here. A kinetic-electron Miller CBC ky scan is resolution-stable to <4% (not
   benchmarked). On GS2's parameters on a circular Miller surface, stella gives γ=.3688
   against GS2's .1703. The cases are not like-for-like and the gap is uninvestigated (Q20).
-- gyaradax (`8d9dc2d2`, JAX), office CUDA-12 venv and a Mac CPU venv. 27 CPU unit tests pass;
+- gyaradax (`8d9dc2d2`, JAX), benchmark CUDA-12 venv and a Mac CPU venv. 27 CPU unit tests pass;
   170 skip for GKW reference data absent from the public repository. No GPU run was possible
   (both GPUs busy). The shipped linear example costs ≈100 s per RK4 step on 16 CPU cores
   and needs a GPU.
@@ -13395,7 +13395,7 @@ Q17 can proceed.
   `b4933975` (CGYRO), GX upstream `3865a537`. GENE is not openly distributed and is not
   included.
 
-**Terminal state.** The office GX queue (`queue_long.sh`) ended at 13:05 CDT with all three
+**Terminal state.** The benchmark GX queue (`queue_long.sh`) ended at 13:05 CDT with all three
 runs at rc=0. It had invoked `check.py` without its stem argument; the checks above were
 re-run by hand with `check.py itg_salpha_adiabatic_electrons`. No process owned by this
 entry is running.
@@ -13731,7 +13731,7 @@ byte for byte. So S+T writes 2.4–2.9% more than T alone, and 43–48% less tha
 **VJP gate.** Linear RHS VJP: as in the identity table. Checkpointed window
 (20 steps, rk3/rk4): value and d/dtprim bitwise in both precisions.
 
-**Timing** (office, Xeon W-2295, 18 cores/36 threads, `taskset -c 2-17`, jax 0.10.2,
+**Timing** (benchmark, Xeon W-2295, 18 cores/36 threads, `taskset -c 2-17`, jax 0.10.2,
 `bench_q9.py`, Cyclone nonlinear deck 64×64×24 Nl4/Nm8, complex64). Arms per block ran in
 the order base → S+T → T, each in a fresh process from `git archive` trees: base
 `ccdd4bf12`, S+T `a86c435b2`, T = S+T with the shared route disabled. Kernels: jit
@@ -13825,7 +13825,7 @@ Within the no-pool blocks (median ms; ratio to base in the same block):
 
 **Environment.** HLO counts, identity and trajectories: Apple M3 Max, 14 logical CPUs,
 macOS 14.4.1, Python 3.11.14, jax/jaxlib 0.10.2, numpy 2.4.6,
-`/Users/rogeriojorge/local/venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src:<tree>`,
+`../venvs/gkx-review-20260913`, `PYTHONPATH=<tree>/src:<tree>`,
 `JAX_PLATFORMS=cpu`, `nice -n 10`, one heavy process at a time behind a 1-minute load
 gate below 20. Every tree was pinned: base `git archive ccdd4bf12`, S+T `a86c435b2`,
 T = S+T with the shared route disabled (one-line patch `tonly.patch` daad1b480980…fe29).
@@ -13885,7 +13885,7 @@ one-to-one.
 **Decks.**
 - Q8's GX decks are unchanged (`cmp` identical). The Nl48 deck differs from the Nl32 deck in
   `nlaguerre` only.
-- Relative to the matched collisionless deck (office
+- Relative to the matched collisionless deck (benchmark
   `gkx-nl24-discriminator-20260912.vvmgDD/nl24.in`, SHA-256 `2dd1c42b…`), the physics changes
   are `vnewk = [1.0e-2, 0.0]` and, for Nl32/48, `nlaguerre`.
 - Every deck also sets `t_max` 300→150, `save_for_restart`→false and `fields`/`moments`→false.
@@ -13927,7 +13927,7 @@ one-to-one.
     effect on this mode.
 
 **Runs.**
-- **Host:** office (`pop-os`), RTX A4000 GPU0 for both runs. GX host process pinned to core 1
+- **Host:** benchmark (`pop-os`), RTX A4000 GPU0 for both runs. GX host process pinned to core 1
   (`taskset -c 1`; cores 2–17 reserved for Q9, 18–35 for Q20). Supervisor `run_q17.sh`
   (SHA-256 `76db0358…`, the version executed).
 - **Supervisor guards:**
@@ -13981,12 +13981,12 @@ The Nl24→32 γ change is −1.5602% in both codes. GKX's Nl32→48 change is +
   slower than the 10.5 ms/step smoke run and not benchmark-grade.
 
 **Environment.**
-- GX binary `/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/gx` (SHA-256
+- GX binary `artifacts/gx` (SHA-256
   `96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536`), on the rebuilt
   toolchain.
-- Fit: `/home/rjorge/local/micromamba/envs/gk-fortran/bin/python` (netCDF4 1.7.4, NumPy
+- Fit: `python` (netCDF4 1.7.4, NumPy
   2.5.3).
-- Run directory: `/home/rjorge/gkx-q17-gx-vnewk-20260914` (31 MB, kept).
+- Run directory: `artifacts/gkx-q17-gx-vnewk-20260914` (31 MB, kept).
 
 **Commands.**
 - Launch, from the run directory after `sha256sum -c q17.sha`:
@@ -14005,12 +14005,12 @@ The Nl24→32 γ change is −1.5602% in both codes. GKX's Nl32→48 change is +
   - `results/gx-nu1e-2-nl24.json` `b3fd4be1ab852a8f3e13fd7bcfbd44506704c10e28fb01f9917a93f01ecc12cc`
   - `results/gx-nu1e-2-nl32.json` `a2532847bdd0707b345e8116aa776f127487442767643ae0123b88549ff0e423`
   - `run_q17.sh` `76db0358f72c95dbe24599f2d59a6e0bd4ff50ddd3726e3eaffd159de3a97879`
-- netCDF outputs, not committed (on office):
+- netCDF outputs, not committed (on benchmark):
   - `gx-nu1e-2-nl24.out.nc` `2739ca80c19f1f798e959e38e7845dcf9ab79a15efeda990d2be6c4880213255`
   - `gx-nu1e-2-nl32.out.nc` `6f679e747549dc601b41671a69543988fbb8dee48dc44ef416ea5b63dcb3abab`
 
 **Terminal process state.** At 2026-09-14T23:15:10-05:00 every process this row started on
-office was verified absent, and `nvidia-smi --query-compute-apps` listed no process on either
+benchmark was verified absent, and `nvidia-smi --query-compute-apps` listed no process on either
 GPU. The PIDs checked:
 - launch shell wrappers 1115036 and 1115037;
 - supervisor 1115042 (SIGTERM 23:13:52);
@@ -14119,7 +14119,7 @@ The cause of the stella excess is **not found**:
 - **Plan:** the plan.md Q20 row is unchanged.
 
 **Environment.**
-- **Host:** office, pop-os.
+- **Host:** benchmark, pop-os.
 - **GS2 and stella:** GS2 8.2.1 `4d8c94bc` and stella v1.0 `058d98db` in micromamba `gk-fortran`;
   `mpirun -np 8 --bind-to none taskset -c <cpus>`, `nice -n 10`, `OMP_NUM_THREADS=1`.
 - **GKX:** staged by `git archive 2c38fa970`, venv `gkx-nl` (Python 3.11.15, JAX 0.10.2, SOLVAX 0.20.0),
@@ -14143,10 +14143,10 @@ The first GS2 lane stopped after one case because `mpirun` read the rest of the 
 runners now take the child's stdin from `/dev/null`.
 
 **Resume steps.**
-1. The office run directory `/home/rjorge/gkx-q20-cross-code-20260914.FavgA4` (140 MB) keeps the
+1. The benchmark run directory `artifacts/gkx-q20-cross-code-20260914.FavgA4` (140 MB) keeps the
    inputs, outputs, `DONE` markers and the queue files `q_gs2.txt`, `q_stella.txt`, `q_gkx_A.txt` and
    `q_gkx_B.txt`. Its staged GKX source was deleted. Re-stage it with
-   `git archive 2c38fa970 src examples pyproject.toml | ssh office tar -x -C $R`, then rsync this
+   `git archive 2c38fa970 src examples pyproject.toml | ssh ${BENCHMARK_HOST} tar -x -C $R`, then rsync this
    directory's scripts to `$R`.
 2. Remove the partial outputs of the cases without `DONE`: the `*.out.nc` in `gs2/gs2_S_ky0.15_r3` and
    `stella/stella_M_ky0.55_r1`. Remove the GKX outputs without a `RESULT` line:
@@ -14177,7 +14177,7 @@ runners now take the child's stdin from `/dev/null`.
   5202f73042576b5e, 14af25ea1515b3cf, d405734125745057, 33c46d32bbfd7cf4, 2fe291d2d7222d0e,
   9b95e9e40b3d9c78.
 
-**Terminal process state.** At 2026-09-14T13:17:17-05:00 all 33 processes this row owned on office
+**Terminal process state.** At 2026-09-14T13:17:17-05:00 all 33 processes this row owned on benchmark
 were sent TERM:
 - GKX lanes 938592 and 938593, with python 938616 and 951985 and wrappers 938612, 938614, 951983 and 951984;
 - stella lane 939675, with wrappers 951261–951263 and ranks 951272–951279;
@@ -14302,7 +14302,7 @@ coefficients agree to ≈1%. The cause is **open**.
 - **P5:** see the cost table. The grid codes meet it for Miller and s-alpha ky .30, and gyaradax reaches its converged γ in under 5 min on one GPU; GKX's adaptive route
   takes 21–80 min per point on 5–10 threads under load 25–40, above the predicted 10–20 min.
 
-**Cost to a converged γ** (office, wall).
+**Cost to a converged γ** (benchmark, wall).
 
 | code, point | first converged rung | that rung alone | cumulative ladder | cores |
 |---|---|---:|---:|---:|
@@ -14331,7 +14331,7 @@ contention; stella was 16× slower then (r1 376 s against the quiet re-timing's 
 - stella r3 at ky .15, .40 and .50.
 
 **Environment.**
-- **Host:** office, pop-os.
+- **Host:** benchmark, pop-os.
 - **Finalize session:** only cores 18–35 (outer `taskset` on every lane; 2–17 reserved for Q9, 1 for Q17).
 - **GS2 and stella:** GS2 8.2.1 `4d8c94bc` and stella v1.0 `058d98db` in micromamba `gk-fortran`, `mpirun
   --bind-to none` with 5–8 ranks, `OMP_NUM_THREADS=1`.
@@ -14409,8 +14409,8 @@ The discriminator inputs are the r1 inputs with `&scale_gyrokinetic_terms` or `b
 **Terminal process state.**
 - **Lanes that ended by themselves** (CDT): gs2 21:46:56, gs2b 22:28:09, gs2c 22:21:27, gs2x 23:20:36, gs2y 23:35:16; stella2 21:38:11, stella3 21:38:58, stella5 21:57:41; gkx 22:07:07, gkx2 23:18:35, gkx3 23:14:51; gyaradax 23:42:26.
 - **Killed lanes:** the first gs2/stella/gkx lanes of 21:18 were killed at 21:19, after stella had finished three cases, and relaunched under an outer `taskset` (verified absent). stella4 was killed at 21:57 after oversubscribing cores 23–27 (verified absent); its case was re-run alone as stella5.
-- **Final check:** at 2026-09-14T23:42:56-05:00 no process owned by this row remained on office and neither GPU listed a compute process. No local process runs.
-- **Kept:** the office run directory `/home/rjorge/gkx-q20-cross-code-20260914.FavgA4` (207 MB of inputs, outputs and logs); its staged GKX source copy was deleted.
+- **Final check:** at 2026-09-14T23:42:56-05:00 no process owned by this row remained on benchmark and neither GPU listed a compute process. No local process runs.
+- **Kept:** the benchmark run directory `artifacts/gkx-q20-cross-code-20260914.FavgA4` (207 MB of inputs, outputs and logs); its staged GKX source copy was deleted.
 
 **Formatting note (2026-09-15, release integration).** The repository's `ruff format --check` gate rejected seven scripts in this directory: `artifact_hashes.py`, `cases.py`, `fit.py`, `geometry_compare.py`, `gkx_eigen.py`, `gyaradax_salpha.py` and `summarize.py`. They were reformatted with ruff 0.16.4 after they ran. Six have an identical Python AST before and after. In `artifact_hashes.py` only the module docstring changed (its usage line lost its indentation). The recorded SHA-256 values above now match the formatted files.
 
@@ -15045,7 +15045,7 @@ A process note on the same point: the first gate run exported
 caller's environment, so the "f32" arm silently ran in x64 (bytes exactly
 doubled, 24,991,260 → 49,981,596). The recorded run unsets both first.
 
-**Timing.** None. The Mac is shared and the office host is unreachable, so
+**Timing.** None. The Mac is shared and the benchmark host is unreachable, so
 wall-clock was treated as unavailable, and this stage changes no arithmetic and
 no graph, so there is nothing to time. **No speed-up is claimed by this entry.**
 
@@ -15104,7 +15104,7 @@ Source: `src/gkx/core_ky_layout.py` `40003bd13558e9c3`,
 
 Queue row Q9's open follow-up. Measurement only: no source, test, default, deck, reference
 or release change. The 2026-09-14 Q9 entry adopted S+T on load-independent evidence and
-recorded that "timings on a loaded office host were inconclusive, so no speed claim; an
+recorded that "timings on a loaded benchmark host were inconclusive, so no speed claim; an
 idle-host A/B/A/B rerun is a follow-up". This is that rerun, on a quiet host, with the arm
 order rotated between blocks. Scripts and outputs are in
 `plan/research/scripts/2026-09-18-q9-idle-host-timing/`.
@@ -15140,7 +15140,7 @@ blocks."
 Between them `src/` differs only in `operators/linear/streaming.py`, `terms/assembly.py`,
 `terms/linear_terms.py` (Q9's change) and a `_version.py` bump; `examples/` is unchanged,
 so both arms run the identical Cyclone nonlinear deck. Each arm was staged by
-`git archive <sha>` from a clean checkout into its own fresh directory on the office host —
+`git archive <sha>` from a clean checkout into its own fresh directory on the benchmark host —
 no shared checkout was benchmarked, and neither tree has a `.git` to be written into.
 Whole-tree manifest SHA-256 (`find . -type f | LC_ALL=C sort | xargs sha256sum | sha256sum`),
 computed on both machines and equal:
@@ -15151,7 +15151,7 @@ arm while this campaign ran (#247, Q19, touching the linked cache and the runtim
 intake); this branch merges it, and the A/B above remains pinned to `e0cd294b8` against
 `4c6c9ac8b`, which is where both arms were archived from.
 
-**Cores, and a lane that was not honoured.** This lane owns office cores 2–17. The first
+**Cores, and a lane that was not honoured.** This lane owns benchmark cores 2–17. The first
 launch was discarded after four minutes: at 19:02 another lane's DKX bench appeared with an
 affinity of 8–11 (`taskset -pc 3674751`), squarely inside 2–17, and held it for the rest of
 the session. Rather than benchmark against it or step outside the allocation, the campaign
@@ -15290,7 +15290,7 @@ and with or without the FFT thread pool, by 2.6–3.5%; and its standalone RHS a
 removes the conjugate restore that is now the largest write in the chain transform and will
 change these ratios:
 
-> | Q22 | `perf/shared-chain-forward-cost` | §5.3 N2 follow-up — the idle-host A/B/A/B (2026-09-18) measures the adopted shared transform 3% slower on the rk3 scan at both grids and 22% slower on the standalone RHS at 32×32×24, while the RHS gradient is 12% faster and the window gradient 5%: attribute the forward cost to the per-class stack concatenates against the halved launch count, and decide between (a) applying the shared route only when the class count or chain length makes it pay, (b) keeping it only on the adjoint, or (c) accepting it, with the numbers stated. Must be re-measured after N3 lands | Q9 merged, N3 (Q10) landed | CPU, idle office cores |
+> | Q22 | `perf/shared-chain-forward-cost` | §5.3 N2 follow-up — the idle-host A/B/A/B (2026-09-18) measures the adopted shared transform 3% slower on the rk3 scan at both grids and 22% slower on the standalone RHS at 32×32×24, while the RHS gradient is 12% faster and the window gradient 5%: attribute the forward cost to the per-class stack concatenates against the halved launch count, and decide between (a) applying the shared route only when the class count or chain length makes it pay, (b) keeping it only on the adjoint, or (c) accepting it, with the numbers stated. Must be re-measured after N3 lands | Q9 merged, N3 (Q10) landed | CPU, idle benchmark cores |
 
 **Limitations.**
 - XLA:CPU only, one host, 12 cores. GPU fusion and cuFFT plans differ; nothing here transfers
@@ -15344,14 +15344,14 @@ forcing to host are identical to the loaded campaign.
 - `threadpool.txt` `bba255b19337b937b833158fff0c4035307dbe19d1fa620f0fd27f991a3956e8`
 - `env.txt` `74c2b82a7fd2c1e70ffc822f62061407a3731b00ac6d197b9c38ceb82525ca62`
 
-**Terminal process state.** Every process this row started on the office host was launched
+**Terminal process state.** Every process this row started on the benchmark host was launched
 with `(setsid nohup ... &)` and verified gone at 20:50 with `kill -0`: driver PIDs 3644624,
 3644628, 3644631 (the discarded first launch, stopped at 19:06 when the core conflict was
 found), 3653963, 3653967, 3654113 (`launch_idle.sh` and its runners), 3714300
 (`launch_dense.sh`) and 3731776 (`launch_dscan.sh`) — all absent. `pgrep -af` for
 `bench_q9|run_ab_rot|launch_idle|launch_dense|launch_dscan` returns nothing. No GPU was used
 at any point. The staging directory `~/q9-idle-20260918` was removed after its artifacts were
-copied here, leaving no files on the office host.
+copied here, leaving no files on the benchmark host.
 
 ## 2026-09-19 — queue follow-ups after the post-2.1.0 batch
 
@@ -15445,10 +15445,10 @@ on the distribution eigenvectors restricted to the common Laguerre block
 block. Eigenvectors are phase-fixed at their largest component and normalized
 to unit 2-norm before either measure.
 
-**Host and environment.** office (`pop-os`), one RTX A4000, GPU 0, used only
+**Host and environment.** benchmark (`pop-os`), one RTX A4000, GPU 0, used only
 while `nvidia-smi --query-compute-apps` showed no process on it (the supervisor
 re-checks before every key and stops rather than share). Host process pinned to
-cores 18–35; cores 2–17 were left to another lane. `/home/rjorge/venvs/gkx-nl`
+cores 18–35; cores 2–17 were left to another lane. `artifacts/gkx-nl`
 (Python 3.11.15, JAX/jaxlib 0.10.2, NumPy 2.4.6, SciPy 1.17.1, **SOLVAX
 0.22.0** — Q8 and Q6 ran on 0.20.0; the repository floor is `solvax>=0.12.0`).
 Env: `PYTHONPATH=$SRC/src:$SRC JAX_PLATFORMS=cuda CUDA_VISIBLE_DEVICES=0
@@ -15662,7 +15662,7 @@ group 3646256/3646259/3646273, launched 18:57:23 and gone after it aborted on
 the Nl64 exit 124 at 22:58:23 (`supervisor.txt` records START/END/ABORT for
 every key and no ALL DONE). The Nl64 runner's python process 3737824 was the
 last compute process observed on GPU 0. All four PIDs were checked individually
-with `kill -0` at that timestamp and every one is absent. The office run directory
+with `kill -0` at that timestamp and every one is absent. The benchmark run directory
 `gkx-q16-eigen-spectrum-20260918.<suffix>` is kept at 476 KB (logs, results,
 overlaps, supervisor trace); its `src_stage/`, its `vectors/` and the local
 staging tarball were deleted.
@@ -16049,7 +16049,7 @@ restart. Certification is unchanged — `_eigenpair_relative_residual` of the pa
 the original matrix-free operator, 1e-6 at the shift-invert outer gate and 1e-9 for the
 adaptive base gate.
 
-**Host, and why not office.** This row was scheduled for office cores. Office was not
+**Host, and why not benchmark.** This row was scheduled for benchmark cores. Office was not
 idle when the session started and did not become idle during it: a 3-second `/proc/stat`
 sample at 2026-09-19T00:47 gave **every one of the 36 logical cores 34–100% busy**
 (1-minute load 23.1; another user's four `python` jobs at 763/384/328/210% CPU). No core
@@ -16057,7 +16057,7 @@ set could be verified idle, so `taskset` would have pinned this lane onto conten
 cores, and the repository's benchmarking rule forbids that. Every measurement below was
 therefore taken on the same M3 Max (14 cores, 36 GB) that Q7 used for its production
 comparison — the host its "same host, same session" clause refers back to. No GPU was
-used, and nothing was staged on office.
+used, and nothing was staged on benchmark.
 
 **Source and process conditions.** `origin/main`
 `cf89dcc707ba20cbd6fe56b98e8455810976252c` in a fresh worktree; every run's `ENV` line
@@ -16284,7 +16284,7 @@ probes), 89148 and 2486 (the `r32` and `r16` verification batches), and 92515 wi
 `perl`, `nice` and `/usr/bin/time` children are gone with them:
 `pgrep -f "q21.py|blockthomas.py|run_arms.sh|run_final.sh"` matches nothing (rc=1). No
 wall cap was reached and no arm exited non-zero. No GPU was used, and no process, staging
-directory or file was left on the office host, where nothing was ever staged.
+directory or file was left on the benchmark host, where nothing was ever staged.
 
 **Re-checked on the merged source, twice.** `origin/main` moved twice while this row was
 being written, each time into code the linear route touches: `ea487a637` (#254, one owner
@@ -18367,7 +18367,7 @@ Three things the ladder says that a single comparison would not:
 - The ladder **reproduces** what was already recorded. `(24, 12)` returns
   0.08893196 and `(16, 48)` returns 0.09309106 at residual 5.55e-06, matching
   Q26's independent runs at a different SHA in a different worktree digit for
-  digit, and `(12, 24)`'s 0.09340143 sits 0.05% from the office-GPU time-path
+  digit, and `(12, 24)`'s 0.09340143 sits 0.05% from the benchmark-GPU time-path
   0.09345269 in `docs/_static/cyclone_resolution_subset.csv` — a certified
   eigensolve and an initial-value fit agreeing on a rung neither had measured
   before.
@@ -19777,7 +19777,7 @@ Changes:
 
 Evidence:
 - focused tests: `tests/unit/core/test_core_ky_layout.py` + `tests/unit/solvers/test_linear_krylov_core.py`, x64, jax 0.10.2: 329 passed. Ruff check/format clean; architecture manifest checker passes.
-- identity (office host CPU, jax 0.10.2, pinned-full arm of `run_identity.sh`, ref `f9485f044` vs new `2055c9649`): RHS/VJP f32 58/58 bitwise, `max_rel = 0`. The f32 trajectory, both x64 arms and the whole unpinned `run_identity_default.sh` gate were stopped by the pause and are NOT verified. A first local attempt was void (disk full, truncated npz) and was deleted.
+- identity (benchmark host CPU, jax 0.10.2, pinned-full arm of `run_identity.sh`, ref `f9485f044` vs new `2055c9649`): RHS/VJP f32 58/58 bitwise, `max_rel = 0`. The f32 trajectory, both x64 arms and the whole unpinned `run_identity_default.sh` gate were stopped by the pause and are NOT verified. A first local attempt was void (disk full, truncated npz) and was deleted.
 - CPU/NVIDIA measurements: none new; numbers quoted in docs are #266's.
 
 Outcome:
@@ -19843,7 +19843,7 @@ Changes to the plan:
 
 Outcome:
 - Partial by design (pause). Remaining blocker: the laptop disk filled
-  repeatedly (session scratch 25 GB); large runs move to the office host.
+  repeatedly (session scratch 25 GB); large runs move to the benchmark host.
 - Next task: P0 — CLI-RES, then land #277 and the paused lanes in the G.5
   merge order.
 ## 2026-09-22 — CLI-RES: one owner for the Nl/Nm fallbacks (`fix/cli-resolution-fallback`)
@@ -19920,7 +19920,7 @@ line removed.
   starting with `artifacts`, 35k lines).
 - #281 `1b69bf8a0`: 12 numbered groups; example Python 36 → 14 files, 5,145 →
   1,782 lines. Path edits in benchmarks/tools wait for #278; one unidentified
-  failure in a stopped office run.
+  failure in a stopped benchmark run.
 
 ## 2026-09-22 - SLIM-TOOLS tranche 1 (slim/tools-benchmarks-1)
 
@@ -20000,7 +20000,7 @@ Changes:
 Evidence:
 - focused tests: none (research script only)
 - physics/mathematics/numerics gates: on the c24 case (Nz,Nl,Nm)=(24,8,16), n=3072, ky=0.3, the compressed `A` matches GKX's operator to 3.9e-16 (complex random probes) with 432 products against 3072 for column sampling; pattern probing must use a zero threshold, because the phi-to-streaming coupling reaches 1e-10 relative at high Laguerre index and a 1e-13 threshold dropped 12,216 entries (error 7.6e-12)
-- CPU/NVIDIA measurements: c24 structure, `A`: nnz 247,160 (80.5/row, max 221), RCM bandwidth 650; `A_S`: 170,496 (55.5/row); `A_C` (nu=0.01): 10,176 (3.3/row), z-local, RCM bandwidth 15. No factorization timings yet. office GPUs were both in use by other lanes (18:07), so no cuDSS run.
+- CPU/NVIDIA measurements: c24 structure, `A`: nnz 247,160 (80.5/row, max 221), RCM bandwidth 650; `A_S`: 170,496 (55.5/row); `A_C` (nu=0.01): 10,176 (3.3/row), z-local, RCM bandwidth 15. No factorization timings yet. benchmark GPUs were both in use by other lanes (18:07), so no cuDSS run.
 - values, tolerances, residuals, uncertainty: PyMUMPS 0.4.0 builds on macOS arm64 against MacPorts MUMPS 5.6.2/MPICH with the classic linker; SOLVAX `SpluFactorization(backend="mumps")` then agrees with SuperLU on a test matrix
 
 Outcome:
@@ -20035,7 +20035,7 @@ Outcome:
 
 Baseline:
 - GKX SHA: `f9485f044` (2.3.0), clean `src/`.
-- companion SHAs: SOLVAX 0.22.0 on the office GPU venv, 0.24.0 locally; JAX/jaxlib 0.10.2.
+- companion SHAs: SOLVAX 0.22.0 on the benchmark GPU venv, 0.24.0 locally; JAX/jaxlib 0.10.2.
 - source/test/tool files and lines: unchanged (docs/research only).
 - relevant existing gate: none; research lane (plan.md G.2 PERF-LIT).
 
@@ -20054,8 +20054,8 @@ Evidence:
   - RK3 step 5.26 / 18.0 / 15.6 / 69.4 ms at 32x32x24 Nl4/Nm8, 32x32x24 Nl8/Nm16, 64x64x24 Nl4/Nm8, 64x64x24 Nl8/Nm16; device time fft 12-16%, concatenate 10-25%, other elementwise fusions 35-48%, cuBLAS 8-9%; 21-42x the state materialized per step; field solve flat at 1.17-1.32 ms.
   - `nonlinear_heat_flux_window` value+gradient (tprim scale and nine geometry arrays), 16x16x16 Nl4/Nm8 rk3: 256 steps 0.941 s with block checkpointing vs 0.435 s without (2.16x; temp 61 MB vs 4,425 MB), value 0.148 s; 1024 steps 3.72 s (7.0x value, temp 103 MB; unchecked runs out of memory at 16.5 GiB); 32x32x24 256 steps 5.21 s (5.4x value, temp 359 MB). Compile 20-26 s per gradient graph.
   - dense growth-rate value+gradient: 0.033 s (n=144), 0.99 s (n=1,536), 2.83 s (n=3,072).
-  - office CPU single-thread x64 `adaptive` control at Q28 `d96`: 33,915 operator applications, 30.5 s, 1.29 GB max RSS (`records/cpu_pr3/A1_adaptive.txt`).
-- values, tolerances, residuals, uncertainty: checkpointed and unchecked gradients agree to the printed 6 digits at 256 steps. Host load 13-23 on 36 cores (office) during the GPU runs.
+  - benchmark CPU single-thread x64 `adaptive` control at Q28 `d96`: 33,915 operator applications, 30.5 s, 1.29 GB max RSS (`records/cpu_pr3/A1_adaptive.txt`).
+- values, tolerances, residuals, uncertainty: checkpointed and unchecked gradients agree to the printed 6 digits at 256 steps. Host load 13-23 on 36 cores (benchmark) during the GPU runs.
 
 Outcome:
 - partial (paused by the maintainer). Main finding: the window adjoint rematerializes every step inside each checkpoint block, costing a second forward recompute (measured 2.16x vs unchecked); on the GPU the step is traffic-bound (concatenate plus elementwise), not FFT-bound; re-saturation per evaluation, not the gradient, dominates the VMEX objective at 32x32x24 (derived). Not run: `PHASE=extra` (inner-remat-off variants, complex128 comparison, source-mapped traces), the `pr3-cm` `d96` arm, CPU forward/window rows, the adaptive-eigen row on an idle host. The ranked list and survey are in the PR body.
@@ -20063,11 +20063,11 @@ Outcome:
 ## 2026-09-22 - PERF-LIT resumed run, paused again (research/perf-lit-20260922)
 
 Baseline:
-- GKX SHA: `f9485f044` measured (pinned office worktree); branch head before this entry `35f429256`.
+- GKX SHA: `f9485f044` measured (pinned benchmark worktree); branch head before this entry `35f429256`.
 - relevant existing gate: repo-hygiene (ruff) fixed on the profiler scripts.
 
 Changes:
-- `profile_perf_lit.py`: per-arm `block_noinner` checkpoint experiment (clears JAX caches between arms), interleaved A/B timing, kernel-to-op_name mapping; `run_all_office.sh`, `wait_gpu_then_run.sh` (free-GPU only); records `gpu_a4000_extra/`, `cpu_office/`. No `src/` change.
+- `profile_perf_lit.py`: per-arm `block_noinner` checkpoint experiment (clears JAX caches between arms), interleaved A/B timing, kernel-to-op_name mapping; `run_all_office.sh`, `wait_gpu_then_run.sh` (free-GPU only); records `gpu_a4000_extra/`, `cpu/`. No `src/` change.
 
 Evidence (one A4000, complex64, host load 46-106, interleaved):
 - window gradient, shipped block vs block without per-step remat: 16x16x16/256 1.110 vs 0.792 s; 16x16x16/1024 4.751 vs 3.931 s; 32x32x24/256 6.125 vs 4.762 s; 32x32x24/1024 24.60 vs 20.62 s (1.19-1.40x); temp 61/103/359/617 MB vs 301/580/1,798/3,475 MB; max rel diff 2.6e-8 to 1.7e-7. Unchecked 0.510 s at 16x16x16/256.
@@ -20123,7 +20123,7 @@ Outcome:
 
 Baseline:
 - GKX SHA: f9485f044 (2.3.0); branch head carries the source change below
-- companion SHAs: none; office CPU (36 cores, load 16-94 during runs), jax/jaxlib 0.10.2 (py3.11) and 0.11.2 (py3.12); no GPU was free
+- companion SHAs: none; benchmark CPU (36 cores, load 16-94 during runs), jax/jaxlib 0.10.2 (py3.11) and 0.11.2 (py3.12); no GPU was free
 - source/test/tool files and lines: src/gkx/solvers_nonlinear_explicit.py, src/gkx/solvers_nonlinear_state_integration.py, two tests, harnesses in plan/research/scripts/2026-09-22-perf-adj/
 - relevant existing gate: #264 compile cache; PERF-LIT (#284) item 1
 
@@ -20141,7 +20141,7 @@ Evidence:
 - root cause: on the half layout the projector is the identity, so XLA fused the whole linear RHS into the transpose that feeds the bracket's irfft2 (five Laguerre points x two derivatives: ~40 recomputes); the full layout's projector concatenate materialized each stage. Barriers fix it, but XLA:CPU in jaxlib 0.10.x drops barriers before fusion (openxla "Move opt barrier remover after cpu scheduler", Aug 2026); jaxlib 0.11.2 honors them. Python 3.11 CI (jax 0.10.2) therefore compiles bitwise-identical HLO.
 - one RK3 step, 16x16xNz24, Nl4/Nm8, x64, jax 0.11.2 CPU: half 755 -> 24 ms, full 78 -> 45 ms; jax 0.10.2: unchanged.
 - window VJP, A/B/A/B in one process, jax 0.11.2 CPU x64, random real state: 16x16x16/16 steps half main 6.90 s, barrier 2.62, block 1.73 (fwd 5.32 -> 0.43); full 5.19 / 3.91 / 3.01. 16x16x16/256 half: main 186.5 s, barrier 63.9, block 53.0 (fwd 82.9 -> 15.9), temp 104.8 / 75.3 / 202.1 MiB; value identical, gradient 1.7e-16 rel (record: plan/research/scripts/2026-09-22-perf-adj/records/cpu011_x64_16_256_half.json).
-- focused tests pass on office jax 0.10.2 in x64 and f32 (7 selected). An earlier f32 draft that also compared against checkpoint=False moved one gradient by 1.05e-6 rel (unchecked vs block), so that comparison was dropped; block vs nested stays within 1e-6.
+- focused tests pass on benchmark jax 0.10.2 in x64 and f32 (7 selected). An earlier f32 draft that also compared against checkpoint=False moved one gradient by 1.05e-6 rel (unchecked vs block), so that comparison was dropped; block vs nested stays within 1e-6.
 
 Outcome:
 - partial (paused). Remaining blocker: GPU A/B (barriers may cost on GPU: tests/unit/parallel/test_parallel_linear_velocity.py records a guarded-RHS barrier measuring slower on a sharded path), the rest of the CPU campaign, docs, CI.
@@ -20161,11 +20161,11 @@ Scope:
 - acceptance: 8/8 comparisons bitwise; half layout routed on 2 and 4 fake devices and matching serial.
 
 Changes:
-- #282: summarized comparison records in `plan/research/scripts/2026-09-22-ky-layout-split/records/{pinned,default}/` (raw npz deleted on the office host).
+- #282: summarized comparison records in `plan/research/scripts/2026-09-22-ky-layout-split/records/{pinned,default}/` (raw npz deleted on the benchmark host).
 - #287 (stacked on #282): `shard_nonlinear_state` places an extent the devices do not divide replicated on the mesh instead of refusing; docs say the ky route does not split the scan; routing test on both layouts; a test pins the replicated scan; probe `plan/research/scripts/2026-09-22-shard-pad/ky_partition_probe.py` + `.json`.
 
 Evidence:
-- identity (office CPU, jax 0.10.2, own venv, ref `f9485f044` vs `8ddf49301`): pinned-full RHS/VJP 58/58 and trajectory 65/65 bitwise in f32 and x64; unpinned default the same, 58/58 and 65/65 in f32 and x64, max_rel 0 everywhere.
+- identity (benchmark CPU, jax 0.10.2, own venv, ref `f9485f044` vs `8ddf49301`): pinned-full RHS/VJP 58/58 and trajectory 65/65 bitwise in f32 and x64; unpinned default the same, 58/58 and 65/65 in f32 and x64, max_rel 0 everywhere.
 - SHARD-PAD probe (CPU, 2 and 4 fake devices, `Ny = 8`): runtime `axis="ky"` scan input is `P()` on both layouts (the initial-state projection `setup.project_state` drops the placement), so the divisible case never ran split; half (`Nyc = 5`) now runs and matches serial. `[time] state_sharding="ky"` fails on the two-sided axis in XLA:CPU's FFT thunk (`RET_CHECK ... IsMonotonicWithDim0Major`, after a partitioner all-gather on ky gives the z FFT layout {5,4,2,1,0,3}) and raises a raw `IndivisibleError` on the half axis. Forcing the split in the runtime jit gives the same FFT failure.
 - tests: routing file passes in float32 and x64 with 4 devices; release gates, parallel core, runners tests pass; ruff, mypy (changed module) and the architecture manifest check pass.
 - CPU/NVIDIA timing: none (no timing claim; both A4000s were in use by other processes).
@@ -20177,7 +20177,7 @@ Outcome:
 
 ## 2026-09-22 - PERF-LAYOUT paused again - `perf/ky-layout-deck-key` (#282), `perf/ky-shard-pad` (#287)
 
-Paused by the maintainer while CI was queued. Nothing is running locally or on the office host.
+Paused by the maintainer while CI was queued. Nothing is running locally or on the benchmark host.
 
 Baseline: #282 head `258e27b8c`, #287 head `085620a9f`; `main` `29362737f`.
 Evidence: unchanged from the entry above (identity 8/8 bitwise; SHARD-PAD probe recorded).
@@ -20314,7 +20314,7 @@ Changes:
 - scripts/figures.py: proof-test legend moved off the last row
 
 Evidence:
-- `JAX_ENABLE_X64=true python scripts/figures.py proof_tests` on the office host (CPU, JAX 0.10.2): 6 min 56 s wall, 0.79 GB peak RSS. Collision invariants 2.2e-16 (gate 1e-12), self-adjointness 3.4e-17 (1e-12), H-theorem 5.6e-17 (1e-12), Coulomb C9a-f 2.2e-16 (1e-10), collisionless max|Re lambda| 2.4e-14 (1e-11), Laguerre round trip 1.2e-12 (1e-10), Gauss-Laguerre moments 4.9e-14 (1e-10), Landau 0.246%/0.064% and 0.004%/0.004% (1%/0.5%), Spitzer-Harm 0.11-0.61% (1.5%)
+- `JAX_ENABLE_X64=true python scripts/figures.py proof_tests` on the benchmark host (CPU, JAX 0.10.2): 6 min 56 s wall, 0.79 GB peak RSS. Collision invariants 2.2e-16 (gate 1e-12), self-adjointness 3.4e-17 (1e-12), H-theorem 5.6e-17 (1e-12), Coulomb C9a-f 2.2e-16 (1e-10), collisionless max|Re lambda| 2.4e-14 (1e-11), Laguerre round trip 1.2e-12 (1e-10), Gauss-Laguerre moments 4.9e-14 (1e-10), Landau 0.246%/0.064% and 0.004%/0.004% (1%/0.5%), Spitzer-Harm 0.11-0.61% (1.5%)
 - every tolerance tick equals the threshold its named test asserts (test_collision_physics.py, test_hermite_hierarchy_physics.py, test_core_numerics.py)
 - nonlinear panel (b) metric checked in tools/comparison/compare_gx_nonlinear.py: time mean of the pointwise relative difference, not a window statistic; the caption says so
 - local (JAX 0.10.2): test_release_gates.py + test_evidence_ledger.py + test_vmex_qa_transport_optimization.py pass (31 s); quasilinear guardrails passed (0 failed gates); architecture and size manifests pass
@@ -20340,8 +20340,8 @@ Evidence:
 - CI on 4d764e7bd (pre-merge) had 11 passes, 0 failures when it was superseded; CI on the merged head was still queued (runner backlog) at the pause, with no job failures
 
 Outcome:
-- paused by the maintainer; no process running locally or on the office host
-- office host keeps only the lane clone and its venv (lanes/readme-showcase under the home directory); no raw outputs beyond the two committed README figure files
+- paused by the maintainer; no process running locally or on the benchmark host
+- benchmark host keeps only the lane clone and its venv (lanes/readme-showcase under the home directory); no raw outputs beyond the two committed README figure files
 - next task: (1) wait for ci-required on the head; (2) when #278 is on main, merge origin/main and change the README's `python tools/release/run_test_gates.py fast` to `python scripts/check.py test-gates fast`; (3) rerun the three README test files; (4) push and leave for the supervisor to merge
 
 ## 2026-09-23 — release 2.4.0
@@ -20376,7 +20376,7 @@ Changes:
 
 Evidence:
 - focused tests: local JAX 0.10.2 x64 CPU, tests/unit + tests/integration 2,366 passed; the only failures are two pre-existing ones (VMEX tensor-sensitivity, which fails on the base tree here too; a compile-reuse test that fails under xdist and passes alone). tests/validation + tests/tools + tests/release 709 passed. mypy clean (160 files), ruff check/format clean, sphinx -W clean, CI repo-hygiene block passes with regenerated artifacts
-- physics/mathematics/numerics gates: fingerprints with plan/research/2026-09-23-arch-a/fingerprint.py on the office host, float64. XLA:CPU base vs head bitwise identical: Cyclone gamma 0x1.7ed2ffdd9f835p-4, omega 0x1.286b1286ae465p-2, eigenfunction sha a92b98619ab58211; 100-step nonlinear heat-flux trace sha f0c5711f6ad61c17 (last 0x1.e0af0faac1b00p-18); window value 0x1.6a3a9aa898351p-34 and d<Q>/d(tprim) -0x1.22ee865d4c2b7p-40. CUDA (one A4000): linear and window fingerprints bitwise identical; the nonlinear trace differs between two base runs, so it is not a bitwise CUDA fingerprint (head final value equals base run 1)
+- physics/mathematics/numerics gates: fingerprints with plan/research/2026-09-23-arch-a/fingerprint.py on the benchmark host, float64. XLA:CPU base vs head bitwise identical: Cyclone gamma 0x1.7ed2ffdd9f835p-4, omega 0x1.286b1286ae465p-2, eigenfunction sha a92b98619ab58211; 100-step nonlinear heat-flux trace sha f0c5711f6ad61c17 (last 0x1.e0af0faac1b00p-18); window value 0x1.6a3a9aa898351p-34 and d<Q>/d(tprim) -0x1.22ee865d4c2b7p-40. CUDA (one A4000): linear and window fingerprints bitwise identical; the nonlinear trace differs between two base runs, so it is not a bitwise CUDA fingerprint (head final value equals base run 1)
 - CPU/NVIDIA measurements: wheel 868,489 -> 759,982 B, sdist 769,614 -> 676,663 B; import gkx.runtime median 1.06 -> 0.95 s on the laptop (5 alternating runs, noisy)
 - values: src/gkx 187 / 93,953 -> 160 / 79,222; tests 81 / 94,628 -> 75 / 87,428; scripts 106 / 78,277 -> 97 / 70,247; registry 346 -> 260; exact/near duplicate groups 11/25 -> 4/15; cycles 7 -> 7; low-cohesion 8 -> 6
 
@@ -20399,7 +20399,7 @@ Changes:
 Evidence:
 - CI run 35855460396 (head be7ebb219): 33 jobs passed, repo-hygiene failed only on that baseline; nonlinear-core, parallel-autodiff and wide-coverage shard 24 had not finished at the pause
 - local hygiene block (size, architecture, parallel-scaling, quasilinear, vmec-boozer, readiness) passes with the fix; ruff check/format clean
-- office host: fingerprint directory removed, no process left
+- benchmark host: fingerprint directory removed, no process left
 
 Outcome:
 - paused; PR #296 converted to draft
@@ -20436,7 +20436,7 @@ Outcome:
 
 Baseline:
 - GKX SHA: f005418bf (origin/chain/p0, #293, includes #279)
-- companion SHAs: none; office A4000 (complex64) and CPU; jax/jaxlib 0.10.2 (py3.11), CPU cross-check with 0.11.2 (py3.12)
+- companion SHAs: none; benchmark A4000 (complex64) and CPU; jax/jaxlib 0.10.2 (py3.11), CPU cross-check with 0.11.2 (py3.12)
 - source/test/tool files and lines: src/gkx/solvers_nonlinear_explicit.py, solvers_nonlinear_state_integration.py, solvers_nonlinear.py; three test files; docs/nonlinear_autodiff.rst
 - relevant existing gate: PERF-LIT REPORT items 1, 2, 4
 
@@ -20509,7 +20509,7 @@ Evidence:
 - recovery SHA f005418bf is an ancestor of main, so the MAP.md recovery commands resolve on main
 
 Outcome:
-- paused by the maintainer; nothing running locally or on the office host (no office runs were used)
+- paused by the maintainer; nothing running locally or on the benchmark host (no benchmark runs were used)
 - next task: let CI finish on the merged head; if green, mark #294 ready; then tranche 4 (merge scripts/checks/ behind check.py)
 
 ## 2026-09-22 - EXAMPLES-GALLERY (G.3), branch examples/gallery — paused before implementation
@@ -20560,7 +20560,7 @@ Evidence:
 - Smoke runs (laptop CPU, JAX 0.10.2, x64; the host was contended, so user CPU is quoted):
   - 01, 03, 05, 06, 07, 08, 08-sensitivity: pass, about 75 s user in total
   - 09, 11, 12: pass, about 59 s user
-  - 02 and 04 skip without vmex. On the office CPU they pass: 02 took 84 s wall and 04 took 72 s wall once the wout exists. The vmex wout solve took about 13 min on the contended host.
+  - 02 and 04 skip without vmex. On the benchmark CPU they pass: 02 took 84 s wall and 04 took 72 s wall once the wout exists. The vmex wout solve took about 13 min on the contended host.
 - `08_quasilinear/implicit_sensitivity.py` reproduces the pre-move script bit for bit (max difference 0.0). The tracked `docs/_static/quasilinear_implicit_sensitivity.json` differs by up to 0.03, so that artifact predates current operators.
 - 09 recovers the planted gradients (2.8, 0.8) in 9 Gauss-Newton steps. The AD vs FD Jacobian column errors are 1.5e-7 and 7.2e-6.
 - 12: the restarted final free energy matches an uninterrupted run to 4.4e-10.
@@ -20574,7 +20574,7 @@ Outcome:
 - partial: the gallery is complete on the branch
 - remaining blockers:
   - `benchmarks/{cyclone,etg,kinetic,tem}_linear_benchmark.py`, `benchmarks/performance/benchmark_nonlinear_suite.py`, `benchmarks/runtime_w7x_zonal_response_vmec.toml` comment, and `tools/` path strings still name old example paths; they wait for #278
-  - a focused office test run was stopped at 11% by the pause, with one failure not yet identified
+  - a focused benchmark test run was stopped at 11% by the pause, with one failure not yet identified
 - next task: see the PR #281 Handoff
 
 ## 2026-09-23 - EXAMPLES-GALLERY (G.3), branch examples/gallery — rebased onto chain/p0, path edits in benchmarks/ and scripts/
@@ -20598,7 +20598,7 @@ Evidence:
 - Office CPU run over the affected selection:
   - selection: quick shards, tests/tools, tests/integration, tests/unit/{nonlinear,api,linear,operators,solvers}, tests/validation/{benchmarks,stellarator}, tests/release
   - result: 2132 passed, 10 failed
-  - 4 failures need a `.git` checkout, which office lacks; they were rerun locally and pass
+  - 4 failures need a `.git` checkout, which benchmark lacks; they were rerun locally and pass
   - 5 were real (stale labels and paths); they are fixed and pass locally
   - 1 is `test_adaptive_observables_match_dense_across_physics[QHS]`: "did not certify, residual 7.6e-9". It runs only where the QHS wout exists, which CI lacks; the deck is unchanged apart from its relative vmec_file path.
 - `scripts/check.py`: size, architecture, readiness, parallel-scaling, quasilinear and vmec-boozer are clean, with no `docs/_static` drift.
@@ -20665,9 +20665,9 @@ Changes:
 
 Evidence:
 - counts: src 136 / 74,748; tests 29 / 81,598; cycles 7 -> 1; single-consumer 2 -> 1; low cohesion 8 -> 5; upward imports 5 -> 4
-- fingerprints (office, XLA:CPU, float64; `plan/research/2026-09-27-arch-b/fingerprint.py`): Cyclone linear eigenpair, 100-step nonlinear heat-flux trace, window value and gradient, quasilinear flux at two k_y all bitwise identical to base
-- office suite (`-m "not slow"`, `-n 3`): 2,896 passed, 56 skipped, 1 failed (`test_window_adjoint_compiles_one_graph_and_reuses_it`, a compile counter that also sees other tests' compiles in the same xdist worker; passes alone on head and base); mypy clean; registry resolves
-- a first office run was invalid (base `src` on `PYTHONPATH`); a laptop run crashed the host and was abandoned
+- fingerprints (benchmark, XLA:CPU, float64; `plan/research/2026-09-27-arch-b/fingerprint.py`): Cyclone linear eigenpair, 100-step nonlinear heat-flux trace, window value and gradient, quasilinear flux at two k_y all bitwise identical to base
+- benchmark suite (`-m "not slow"`, `-n 3`): 2,896 passed, 56 skipped, 1 failed (`test_window_adjoint_compiles_one_graph_and_reuses_it`, a compile counter that also sees other tests' compiles in the same xdist worker; passes alone on head and base); mypy clean; registry resolves
+- a first benchmark run was invalid (base `src` on `PYTHONPATH`); a laptop run crashed the host and was abandoned
 
 Outcome:
 - accepted pending CI
@@ -20807,7 +20807,7 @@ Changes:
 - Sparse-direct growth: SOLVAX's `sparse_eigenvalue` is a `custom_jvp`; with
   the fix above its forward derivative agrees with the dense one to 1e-8.
 
-Measured (office CPU, shared host at load 50-80, 12 cores,
+Measured (benchmark CPU, shared host at load 50-80, 12 cores,
 `OPENBLAS_NUM_THREADS=1`, n = Nl4 Nm8 Nz32 = 1024, x64):
 - GKX alone, 8 batched tangents of the growth rate / QL flux: 2.6 s / 3.5 s
   against 4.3 s / 5.3 s for the `eigvals` / `enable_eigvec_derivs` route
@@ -20908,7 +20908,7 @@ Adds `scripts/campaigns/nonlinear_flux_jacobian.{py,toml}` with the committed re
 Outcome: benchmark only; no solver change.
 ## 2026-09-29 — analytic benchmarks encoded (branch validation/analytic-benchmarks)
 
-This encodes REPORT.md (#316) as gates. The references live in `scripts.artifacts.build_analytic_benchmarks`, the runs in `scripts/artifacts/build_analytic_benchmarks.py` → `docs/_static/analytic_benchmarks.json` (float64, office CPU), and the tests in `tests/validation/benchmarks/test_benchmarking.py` (about 30 s in CI). The README gets an "Analytic benchmarks" section, and there are four ledger rows (A-*).
+This encodes REPORT.md (#316) as gates. The references live in `scripts.artifacts.build_analytic_benchmarks`, the runs in `scripts/artifacts/build_analytic_benchmarks.py` → `docs/_static/analytic_benchmarks.json` (float64, benchmark CPU), and the tests in `tests/validation/benchmarks/test_benchmarking.py` (about 30 s in CI). The README gets an "Analytic benchmarks" section, and there are four ledger rows (A-*).
 
 **Results**
 - **Residual:** XC within 2.4% on every circular case; RH is 15% high. Elongation κ = 3 raises the residual 4.09×, against XC's 3.89×.
@@ -20929,7 +20929,7 @@ This encodes REPORT.md (#316) as gates. The references live in `scripts.artifact
 - At y0 = 20, Ny = 12, a `ky_target` beyond the grid silently resolves to a negative-ω alias.
 ## 2026-09-28 — kinetic-electron performance and examples (perf/kinetic-electrons)
 
-Profiled nonlinear Cyclone with kinetic electrons (16x16x16, (Nl,Nm)=(2,4), m_e/m_i=2.7e-4) and a precise-QA VMEC flux tube, office CPU (GPUs occupied, host load 5-70, so throughput numbers are indicative; step counts are not load-dependent).
+Profiled nonlinear Cyclone with kinetic electrons (16x16x16, (Nl,Nm)=(2,4), m_e/m_i=2.7e-4) and a precise-QA VMEC flux tube, benchmark CPU (GPUs occupied, host load 5-70, so throughput numbers are indicative; step counts are not load-dependent).
 - Where the time goes: the CFL controller is bound by electron streaming, omega_stream 500 against drift 1.6 (Cyclone) and 264 against 0.55 (QA). Every step is an ordinary explicit RHS; there is no field-solve or hypercollision outlier to remove.
 - beta = 0 electrostatic: omega_H at the smallest k_perp sets omega_stream = 4305, dt 3.6e-4. beta = 1e-4 with A_par: dt 1.5e-3 (cfl 0.45), 4.3x fewer steps. Linear check: dominant eigenvalue at ky 0.3 on the tutorial linear deck 0.62478 (beta 1e-6) against 0.62492 (1e-4).
 - **Defect, open**: at cfl 0.9 the controller's step is unstable at beta 1e-4 (W_g x1e8 by t = 0.2) and at cfl 0.6 for beta 1e-5, also with the nonlinear term off. The dense spectrum of the single-ky operator (ky 0.1, 0.2, 0.3, 1.0; Nm 4, 8, 16; beta 1e-6..1e-2) stays at 0.13-0.76 of the estimate, so the mode that breaks it lives only in the full linked box (small ky on long chains or the zonal row). cfl 0.45 is stable at beta 1e-5, 1e-4, 1e-3. Not fixed here because the estimate is GX's and moving it changes every adaptive run; next step is the dense spectrum of one linked chain of the nonlinear box.

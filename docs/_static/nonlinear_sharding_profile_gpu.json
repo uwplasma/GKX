@@ -22,7 +22,7 @@
   "method": "rk2",
   "profiler_trace": {
     "error": null,
-    "path": "tools_out/profiles/office_gpu_nonlinear_sharding_trace_20260511",
+    "path": "tools_out/profiles/gpu_nonlinear_sharding_trace_20260511",
     "requested": true
   },
   "repeats": 3,

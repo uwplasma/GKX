@@ -1,6 +1,6 @@
 {
   "compact_bundle_policy": {
-    "reason": "raw NetCDF outputs remain on office or are regenerated locally; release git tracks compact diagnostics only",
+    "reason": "raw NetCDF outputs remain on benchmark or are regenerated locally; release git tracks compact diagnostics only",
     "tracked_bundle": "output-gate JSON only"
   },
   "config": {
@@ -26,7 +26,7 @@
         1
       ],
       "passed": true,
-      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04.out.nc",
+      "path": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04.out.nc",
       "samples": 327,
       "time_max": 650.012939453125,
       "time_min": 0.03999999910593033,
@@ -51,7 +51,7 @@
         1
       ],
       "passed": true,
-      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04.out.nc",
+      "path": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04.out.nc",
       "samples": 326,
       "time_max": 649.9598999023438,
       "time_min": 0.03999999910593033,
@@ -76,7 +76,7 @@
         1
       ],
       "passed": true,
-      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04.out.nc",
+      "path": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04.out.nc",
       "samples": 326,
       "time_max": 649.9598999023438,
       "time_min": 0.03999999910593033,
@@ -101,7 +101,7 @@
         1
       ],
       "passed": true,
-      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04.out.nc",
+      "path": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04.out.nc",
       "samples": 326,
       "time_max": 649.9598999023438,
       "time_min": 0.03999999910593033,
@@ -126,7 +126,7 @@
         1
       ],
       "passed": true,
-      "path": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035.out.nc",
+      "path": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035.out.nc",
       "samples": 373,
       "time_max": 649.960693359375,
       "time_min": 0.03500000014901161,

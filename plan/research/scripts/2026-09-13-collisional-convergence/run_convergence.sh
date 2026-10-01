@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sequential supervisor for Q8 (office GPU). Adapted from the Q3 supervisor.
+# Sequential supervisor for Q8 (benchmark GPU). Adapted from the Q3 supervisor.
 # Usage: run_convergence.sh RUN_DIR GPU_INDEX KEY [KEY ...]
 # RUN_DIR holds src_stage/ (git archive of the pinned SHA including this
 # directory). GPU_INDEX is the physical GPU chosen by the occupancy policy (no
@@ -15,8 +15,8 @@ cd "$RUN_DIR/src_stage" || exit 2
 mkdir -p "$RUN_DIR/logs" "$RUN_DIR/results"
 export XLA_PYTHON_CLIENT_PREALLOCATE=false JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg
 export PYTHONPATH="$PWD/src:$PWD"
-export GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs
-PY=/home/rjorge/venvs/gkx-nl/bin/python
+export GX_PARITY_REF_DIR=artifacts/matched_refs
+PY=python
 MANIFEST=plan/research/scripts/2026-09-13-collisional-convergence/manifest.toml
 STATUS="$RUN_DIR/logs/supervisor.txt"
 echo "supervisor pid $$ host $(hostname) gpu $GPU_INDEX start $(date -Is) keys: $*" >> "$STATUS"

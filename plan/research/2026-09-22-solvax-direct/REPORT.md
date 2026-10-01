@@ -2,7 +2,7 @@
 
 ## Final results (2026-09-23; supersede the interim notes below)
 
-Measured on the office host. CPU rows: single thread, x64. GPU rows: one idle RTX A4000, running cuDSS through nvmath-python 1.0 in complex128. Host load was 30-90 on 36 cores, so wall times are upper bounds. To print every table: `python summarize.py records`.
+Measured on the benchmark host. CPU rows: single thread, x64. GPU rows: one idle RTX A4000, running cuDSS through nvmath-python 1.0 in complex128. Host load was 30-90 on 36 cores, so wall times are upper bounds. To print every table: `python summarize.py records`.
 
 **Verdict.**
 - Item 5 (sparse direct) wins at every size measured and is implemented:

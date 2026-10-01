@@ -1,4 +1,4 @@
-[     0.84s] env ok gkx=/Users/rogeriojorge/local/GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
+[     0.84s] env ok gkx=../GKX-worktrees/preconditioner-bakeoff/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
 [     1.18s] ky {'grid_Ny': 24, 'grid_size': 24, 'selected_index': 6, 'selected_ky': 0.3, 'signed_match': True, 'max_abs_ky': 0.6, 'nyquist': False, 'opposite_sign_partner': True, 'grid_Nz': 96}
 [     1.37s] n=73728 shape=(1, 16, 48, 1, 1, 96) seed native dtype=complex64
 [     1.37s] status: building runtime geometry

@@ -1,7 +1,7 @@
 {
   "artifacts": {
-    "baseline": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0_ky0p1/qa_projected_weight_0p0005_matrix_qa_onepoint_baseline_s0p45_a0_ky0p1_ensemble_gate.json",
-    "candidate": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p0005_matrix_artifacts/s0p45_a0_ky0p1/qa_projected_weight_0p0005_matrix_projected_weight_0p0005_s0p45_a0_ky0p1_ensemble_gate.json"
+    "baseline": "artifacts/qa_projected_weight_0p0005_matrix_qa_onepoint_baseline_s0p45_a0_ky0p1_ensemble_gate.json",
+    "candidate": "artifacts/qa_projected_weight_0p0005_matrix_projected_weight_0p0005_s0p45_a0_ky0p1_ensemble_gate.json"
   },
   "baseline": {
     "combined_sem": 0.16702395919209495,

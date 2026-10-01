@@ -1,4 +1,4 @@
-	Command being timed: "/home/rjorge/venvs/gkx-nl/bin/python plan/research/scripts/2026-09-13-collisional-convergence/preflight_collisions.py"
+	Command being timed: "python plan/research/scripts/2026-09-13-collisional-convergence/preflight_collisions.py"
 	User time (seconds): 38.11
 	System time (seconds): 1.10
 	Percent of CPU this job got: 210%

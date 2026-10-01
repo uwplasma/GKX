@@ -178,7 +178,7 @@
         "wphi_std": 0.3013515610201056
       },
       "n_trace_samples": 327,
-      "source_artifact": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n64_dt0p04.out.nc",
+      "source_artifact": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n64_dt0p04.out.nc",
       "source_label": "Shaped tokamak VMEC, Nx=Ny=64, dt=0.04, t=650",
       "tmax": 650.012939453125,
       "tmin": 0.03999999910593033
@@ -212,7 +212,7 @@
         "wphi_std": 0.3224181658641627
       },
       "n_trace_samples": 327,
-      "source_artifact": "office:/home/rjorge/gkx_ql_shaped_holdout_20260611_063247/GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04.out.nc",
+      "source_artifact": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04.out.nc",
       "source_label": "Shaped tokamak VMEC, Nx=Ny=80, dt=0.04, t=650",
       "tmax": 650.012939453125,
       "tmin": 0.03999999910593033

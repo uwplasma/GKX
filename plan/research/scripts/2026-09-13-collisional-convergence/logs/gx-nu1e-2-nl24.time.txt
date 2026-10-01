@@ -1,5 +1,5 @@
 Command exited with non-zero status 127
-	Command being timed: "/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/gx gx-nu1e-2-nl24.in"
+	Command being timed: "artifacts/gx gx-nu1e-2-nl24.in"
 	User time (seconds): 0.00
 	System time (seconds): 0.00
 	Percent of CPU this job got: 54%

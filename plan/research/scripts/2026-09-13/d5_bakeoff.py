@@ -19,7 +19,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-REPO = Path("/Users/rogeriojorge/local/GKX-worktrees/perf-review")
+REPO = Path("../GKX-worktrees/perf-review")
 sys.path.insert(0, str(REPO))
 from gkx.runtime import _runtime_linear_dispatch_deps  # noqa: E402
 from gkx.workflows.linear import _prepare_linear_runtime_context  # noqa: E402

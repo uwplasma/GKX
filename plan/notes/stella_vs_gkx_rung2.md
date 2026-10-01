@@ -2,8 +2,8 @@
 
 Plan item **2.4-r2**. Date 2026-08-18. macOS arm64 (14 cores, shared).
 stella `build_cmake/stella` via `/opt/local/bin/mpirun -np 4`.
-GKX read-only checkout `/Users/rogeriojorge/local/GKX`, run with
-`PYTHONPATH=/Users/rogeriojorge/local/GKX/src`. **Neither repo was modified.**
+GKX read-only checkout `../GKX`, run with
+`PYTHONPATH=../GKX/src`. **Neither repo was modified.**
 
 Run inventory and exact commands: `RUNS.md` in the work dir.
 Regenerate every number: `python3 final_table.py`, `python3 hermite_extrap.py`,

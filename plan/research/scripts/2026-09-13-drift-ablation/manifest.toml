@@ -6,8 +6,8 @@
 # Prediction: with gradb=0 the Nl24->32 gamma change is < 1%; with curvature=0
 # it persists. Both persisting, or both vanishing, are reported as such.
 #
-# Settings are the 2026-09-05 office control
-# (/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/salpha_nl24_nm96_t300.toml)
+# Settings are the 2026-09-05 benchmark control
+# (artifacts/salpha_nl24_nm96_t300.toml)
 # except for the term weights and one declared deviation: T=150 (steps=75000)
 # instead of T=300, so the fit window is [105,150] instead of [210,300] and the
 # runner's half-time probe is [52.5,75]. The 2026-09-13 re-read of the GX

@@ -71,7 +71,7 @@
     "gkx_commit": "225605b",
     "vmex_commit": "f14787b",
     "booz_xform_jax_commit": "1d5e8c8",
-    "python_env": "/Users/rogeriojorge/local/venvs/gkx_vmec_latest_20260603",
+    "python_env": "../venvs/gkx_vmec_latest_20260603",
     "input": "tools_out/latest_vmec_stack/authoritative_qa_baseline/input.final",
     "mboz": 21,
     "nboz": 21,
@@ -102,9 +102,9 @@
       "raw_initial_vs_exact_fd_rel": 1.1809553425614323
     }
   ],
-  "office_gpu_probe_status": {
+  "gpu_probe_status": {
     "status": "failed_oom",
-    "path": "/home/rjorge/tmp/gkx_latest_stack_20260603/boundary_chain_multicomponent_async",
+    "path": "artifacts/boundary_chain_multicomponent_async",
     "failure": "RESOURCE_EXHAUSTED during final-state cotangent through mode-21 Boozer transform on A4000",
     "next_action": "use CPU for this diagnostic or implement a memory-slim cotangent path before rerunning on GPU"
   }

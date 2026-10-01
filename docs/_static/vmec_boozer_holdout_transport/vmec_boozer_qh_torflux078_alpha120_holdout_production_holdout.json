@@ -10,7 +10,7 @@
       "surface": 0.78,
       "surface_index": null,
       "torflux": 0.78,
-      "vmec_file": "/home/rjorge/src/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+      "vmec_file": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
     }
   ],
   "kind": "vmec_boozer_production_scope_heldout_nonlinear_transport_artifact",
@@ -31,7 +31,7 @@
       "surface": 0.78,
       "surface_index": null,
       "torflux": 0.78,
-      "vmec_file": "/home/rjorge/src/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+      "vmec_file": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
     }
   ],
   "source_manifest": "tools_out/vmec_boozer_holdout_transport/qh_torflux078_alpha120/run_manifest.json",

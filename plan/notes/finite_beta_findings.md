@@ -1,7 +1,7 @@
 # Finite-beta QA equilibria + GKX geometry smoke test (plan item 2.2 start)
 
 Date: 2026-08-18. Machine: macOS arm64, CPU JAX 0.9.2, vmex 0.5.0.
-GKX: /Users/rogeriojorge/local/GKX @ feat/bounded-memory-nonlinear-adjoint (read-only).
+GKX: ../GKX @ feat/bounded-memory-nonlinear-adjoint (read-only).
 All artifacts in this directory.
 
 ## 1. Input decks

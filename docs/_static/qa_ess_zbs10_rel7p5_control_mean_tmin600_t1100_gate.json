@@ -10,7 +10,7 @@
     "value_floor": 1e-12
   },
   "kind": "nonlinear_turbulence_gradient_control_mean_gate",
-  "minus_path": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_t1100_ensemble_gate.json",
+  "minus_path": "artifacts/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_minus_delta_t1100_ensemble_gate.json",
   "pair_rows": [
     {
       "control_mean_sample": 15.615992266555663,
@@ -161,7 +161,7 @@
     }
   ],
   "passed": true,
-  "plus_path": "/home/rjorge/tmp/gkx-cv-23767e0/tools_out/control_variate_zbs10_rel7p5_t1100_extension/window_sensitivity_tmin600_t1100/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_plus_delta_replicates/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_plus_delta_t1100_ensemble_gate.json",
+  "plus_path": "artifacts/qa_ess_zbs10_rel7p5_control_mean_tmin600_t1100_plus_delta_t1100_ensemble_gate.json",
   "source_variance_report_case": "qa_ess_zbs10_rel7p5_variance_reduction_plan",
   "summary": {
     "combined_response_sem": 0.16188405672347786,

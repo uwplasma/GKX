@@ -141,13 +141,13 @@
   "provenance_gate": {
     "has_input_and_wout_paths": true,
     "has_vmec_boozer_scope": true,
-    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "input_path": "vmex/examples/data/input.nfp4_QH_warm_start",
     "mboz": 21,
     "min_boozer_mode": 21,
     "nboz": 21,
     "passed": true,
     "requires_vmec_paths": true,
-    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+    "wout_path": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
   },
   "row_artifact": "docs/_static/vmec_boozer_aggregate_objective_gate.json"
 }

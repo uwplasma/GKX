@@ -1,7 +1,7 @@
 {
   "claim_level": "calibration_inputs_validated_by_passed_nonlinear_gates",
   "gate_patterns": [
-    "/Users/rogeriojorge/local/GKX/docs/_static/**/*.json"
+    "GKX/docs/_static/**/*.json"
   ],
   "kind": "quasilinear_calibration_input_audit",
   "n_gate_artifact_matches": 724,

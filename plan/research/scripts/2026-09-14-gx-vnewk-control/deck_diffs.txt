@@ -1,4 +1,4 @@
-matched collisionless deck: office gkx-nl24-discriminator-20260912.vvmgDD/nl24.in sha256 2dd1c42bf275f3784bc84f269c7763377d72e6055d4b07ee14b8025ae82e2146
+matched collisionless deck: benchmark gkx-nl24-discriminator-20260912.vvmgDD/nl24.in sha256 2dd1c42bf275f3784bc84f269c7763377d72e6055d4b07ee14b8025ae82e2146
 === diff nl24.in gx-nu1e-2-nl24.in (sha256 b3ea3f4e474a85b0b6eb939f2e3f2293701bbb8297b9a1e91c7671e76d46b281)
 28c28
 <  t_max = 300.0          # matched nonlinear-free linear control

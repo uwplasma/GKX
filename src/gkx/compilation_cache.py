@@ -1,7 +1,7 @@
 """Persistent JAX compilation cache for the GKX executable.
 
 A GKX run is compile-dominated at the sizes people actually iterate on. On an
-office GPU a 100-step nonlinear case spends ~22.9 s of a ~25 s integrator wall
+benchmark GPU a 100-step nonlinear case spends ~22.9 s of a ~25 s integrator wall
 inside XLA compilation, so the accelerator only wins end to end past roughly
 seventy steps; on a laptop CPU the same compile costs ~14 s. That cost is paid
 again on every fresh process even when nothing about the problem changed, which

@@ -229,7 +229,7 @@
       "cpu_rows_admitted": 2,
       "gpu_rows_admitted": 0,
       "gpu_rows_blocked": 2,
-      "next_action": "repeat the same commands when one office A4000 is idle",
+      "next_action": "repeat the same commands when one benchmark A4000 is idle",
       "path": "benchmarks/references/gkx_2_representative_performance_refresh.json",
       "performance_claim_updated": false
     },
@@ -238,7 +238,7 @@
       {
         "backend": "gkx_cpu",
         "case": "cyclone-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "Cyclone ITG Linear",
         "peak_rss_mb": 1146.94921875,
         "runtime_s": 39.57508916700317,
@@ -249,7 +249,7 @@
       {
         "backend": "gkx_gpu",
         "case": "cyclone-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "Cyclone ITG Linear",
         "peak_rss_mb": 1532.51171875,
         "runtime_s": 24.22220475001086,
@@ -260,7 +260,7 @@
       {
         "backend": "gx",
         "case": "cyclone-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "Cyclone ITG Linear",
         "peak_rss_mb": 1974.44921875,
         "runtime_s": 981.7013250420132,
@@ -271,7 +271,7 @@
       {
         "backend": "gkx_cpu",
         "case": "cyclone-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "Cyclone ITG Nonlinear",
         "peak_rss_mb": 4164.22265625,
         "runtime_s": 125.40905087499414,
@@ -282,7 +282,7 @@
       {
         "backend": "gkx_gpu",
         "case": "cyclone-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "Cyclone ITG Nonlinear",
         "peak_rss_mb": 1878.44921875,
         "runtime_s": 35.32924887500121,
@@ -293,7 +293,7 @@
       {
         "backend": "gx",
         "case": "cyclone-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "Cyclone ITG Nonlinear",
         "peak_rss_mb": 1990.48046875,
         "runtime_s": 21.14968758399482,
@@ -304,7 +304,7 @@
       {
         "backend": "gkx_cpu",
         "case": "etg-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "ETG Linear",
         "peak_rss_mb": 1215.24609375,
         "runtime_s": 59.107651541009545,
@@ -315,7 +315,7 @@
       {
         "backend": "gkx_gpu",
         "case": "etg-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "ETG Linear",
         "peak_rss_mb": 1574.12109375,
         "runtime_s": 19.58458608300134,
@@ -326,7 +326,7 @@
       {
         "backend": "gx",
         "case": "etg-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "ETG Linear",
         "peak_rss_mb": 1951.48046875,
         "runtime_s": 22.16217208300077,
@@ -337,7 +337,7 @@
       {
         "backend": "gkx_cpu",
         "case": "kbm-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "KBM Linear",
         "peak_rss_mb": 1171.4921875,
         "runtime_s": 12.059763874989585,
@@ -348,7 +348,7 @@
       {
         "backend": "gkx_gpu",
         "case": "kbm-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "KBM Linear",
         "peak_rss_mb": 1528.56640625,
         "runtime_s": 17.21881800000847,
@@ -359,7 +359,7 @@
       {
         "backend": "gx",
         "case": "kbm-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "KBM Linear",
         "peak_rss_mb": 1951.1484375,
         "runtime_s": 2441.6904462920065,
@@ -370,7 +370,7 @@
       {
         "backend": "gkx_cpu",
         "case": "kbm-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "KBM Nonlinear",
         "peak_rss_mb": 4822.18359375,
         "runtime_s": 540.320017082995,
@@ -381,7 +381,7 @@
       {
         "backend": "gkx_gpu",
         "case": "kbm-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "KBM Nonlinear",
         "peak_rss_mb": 1847.66015625,
         "runtime_s": 43.73934062500484,
@@ -392,7 +392,7 @@
       {
         "backend": "gx",
         "case": "kbm-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "KBM Nonlinear",
         "peak_rss_mb": 1965.32421875,
         "runtime_s": 8.684286040996085,
@@ -403,7 +403,7 @@
       {
         "backend": "gkx_cpu",
         "case": "w7x-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "W7-X Linear",
         "peak_rss_mb": 1309.51171875,
         "runtime_s": 27.73842241600505,
@@ -414,7 +414,7 @@
       {
         "backend": "gkx_gpu",
         "case": "w7x-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "W7-X Linear",
         "peak_rss_mb": 1554.921875,
         "runtime_s": 17.08670370800246,
@@ -425,7 +425,7 @@
       {
         "backend": "gx",
         "case": "w7x-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "W7-X Linear",
         "peak_rss_mb": 1969.3671875,
         "runtime_s": 34.42638329100737,
@@ -436,7 +436,7 @@
       {
         "backend": "gkx_cpu",
         "case": "w7x-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "W7-X Nonlinear",
         "peak_rss_mb": 6336.46484375,
         "runtime_s": 473.98539683299896,
@@ -447,7 +447,7 @@
       {
         "backend": "gkx_gpu",
         "case": "w7x-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "W7-X Nonlinear",
         "peak_rss_mb": 1964.80078125,
         "runtime_s": 50.79343708399392,
@@ -458,7 +458,7 @@
       {
         "backend": "gx",
         "case": "w7x-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "W7-X Nonlinear",
         "peak_rss_mb": 2186.76171875,
         "runtime_s": 110.96869337499083,
@@ -469,7 +469,7 @@
       {
         "backend": "gkx_cpu",
         "case": "hsx-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "HSX Linear",
         "peak_rss_mb": 1227.2265625,
         "runtime_s": 56.14784554101061,
@@ -480,7 +480,7 @@
       {
         "backend": "gkx_gpu",
         "case": "hsx-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "HSX Linear",
         "peak_rss_mb": 1559.28515625,
         "runtime_s": 18.297465542011196,
@@ -491,7 +491,7 @@
       {
         "backend": "gx",
         "case": "hsx-linear",
-        "host": "office",
+        "host": "benchmark",
         "label": "HSX Linear",
         "peak_rss_mb": 2117.12109375,
         "runtime_s": 124.48299050000787,
@@ -502,7 +502,7 @@
       {
         "backend": "gkx_cpu",
         "case": "hsx-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "HSX Nonlinear",
         "peak_rss_mb": 6368.1640625,
         "runtime_s": 646.5386474999978,
@@ -513,7 +513,7 @@
       {
         "backend": "gkx_gpu",
         "case": "hsx-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "HSX Nonlinear",
         "peak_rss_mb": 2128.44140625,
         "runtime_s": 49.25256616600382,
@@ -524,7 +524,7 @@
       {
         "backend": "gx",
         "case": "hsx-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "HSX Nonlinear",
         "peak_rss_mb": 2186.6953125,
         "runtime_s": 135.7474037919892,
@@ -535,7 +535,7 @@
       {
         "backend": "gkx_cpu",
         "case": "miller-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "Cyclone Miller Nonlinear",
         "peak_rss_mb": 4928.51171875,
         "runtime_s": 339.1943350000074,
@@ -546,7 +546,7 @@
       {
         "backend": "gkx_gpu",
         "case": "miller-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "Cyclone Miller Nonlinear",
         "peak_rss_mb": 2068.2578125,
         "runtime_s": 47.05542787499144,
@@ -557,7 +557,7 @@
       {
         "backend": "gx",
         "case": "miller-nonlinear",
-        "host": "office",
+        "host": "benchmark",
         "label": "Cyclone Miller Nonlinear",
         "peak_rss_mb": 2109.1640625,
         "runtime_s": 77.75913912500255,
@@ -2573,7 +2573,7 @@
       "lane": "Profiler-backed nonlinear performance claims",
       "next_action": "Release performance evidence is closed for scoped CPU/GPU profiler artifacts; keep broad production nonlinear speedup and domain-decomposition claims for the next manuscript/science lane.",
       "primary_artifacts": [
-        "docs/_static/nonlinear_sharding_profile_office_gpu_benchmark_grid.json",
+        "docs/_static/nonlinear_sharding_profile_gpu_benchmark_grid.json",
         "docs/_static/nonlinear_rhs_profile.json",
         "docs/_static/nonlinear_rhs_profile_miller.json",
         "docs/_static/nonlinear_rhs_profile_stellarator_runtime.json",
