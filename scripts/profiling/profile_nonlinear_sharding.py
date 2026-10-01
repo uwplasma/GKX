@@ -891,8 +891,10 @@ def write_sweep_artifacts(summary: dict[str, Any], out_prefix: Path) -> dict[str
 def build_sweep_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--gpu-xlarge", "--office-gpu-xlarge",
-        dest="gpu_xlarge", action="store_true",
+        "--gpu-xlarge",
+        "--office-gpu-xlarge",
+        dest="gpu_xlarge",
+        action="store_true",
         help=(
             "Use the canonical benchmark two-GPU nonlinear sharding profile: "
             "gpu backend, devices 1,2, Nx=48, Ny=96, Nz=128, Nl=4, Nm=8, steps=12, trace enabled."

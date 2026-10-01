@@ -2595,9 +2595,7 @@ def _assert_nonlinear_sharding_identity_artifact(payload: dict) -> None:
 def test_nonlinear_sharding_profiles_are_identity_gated_and_scoped() -> None:
     local = _load_json("nonlinear_sharding_profile.json")
     gpu = _load_json("nonlinear_sharding_profile_gpu.json")
-    benchmark_gpu = _load_json(
-        "nonlinear_sharding_profile_gpu_benchmark_grid.json"
-    )
+    benchmark_gpu = _load_json("nonlinear_sharding_profile_gpu_benchmark_grid.json")
 
     _assert_nonlinear_sharding_identity_artifact(local)
     assert local["default_backend"] == "cpu"

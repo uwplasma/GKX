@@ -2710,9 +2710,7 @@ def test_nonlinear_sharding_sweep_subcommand_parser_defaults_to_bounded_artifact
 def test_nonlinear_sharding_sweep_subcommand_gpu_preset_is_canonical() -> None:
     mod = _load_sweep_tool_module()
 
-    args = mod.apply_sweep_preset(
-        mod.build_sweep_parser().parse_args(["--gpu-xlarge"])
-    )
+    args = mod.apply_sweep_preset(mod.build_sweep_parser().parse_args(["--gpu-xlarge"]))
 
     assert args.backend == "gpu"
     assert args.devices == [1, 2]
