@@ -39,7 +39,7 @@ dependencies = [
   "solvax>=0.27.0",
   # The VMEC geometry path hard-requires the booz_xform_jax bridge
   # (gkx.geometry.backend_discovery); 0.4.1 is the first with a jax floor.
-  "booz_xform_jax>=0.4.1",
+  "booz_xform_jax>=0.4.2",
   "tqdm",
 ]
 
@@ -140,7 +140,7 @@ exclude = ["legacy_archive", "examples", "docs"]
 [[tool.mypy.overrides]]
 module = [
   "booz_xform",
-  "booz_xform_jax",
+  "booz_xform_jax>=0.4.2",
   "netCDF4",
   "pandas",
   "scipy",
