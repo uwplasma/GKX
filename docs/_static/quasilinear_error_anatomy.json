@@ -417,9 +417,9 @@
     }
   ],
   "source_artifacts": {
-    "candidate_uncertainty": "GKX/docs/_static/quasilinear_candidate_uncertainty.json",
-    "saturation_sweep": "GKX/docs/_static/quasilinear_saturation_rule_sweep.json",
-    "screening_skill": "GKX/docs/_static/quasilinear_screening_skill.json"
+    "candidate_uncertainty": "docs/_static/quasilinear_candidate_uncertainty.json",
+    "saturation_sweep": "docs/_static/quasilinear_saturation_rule_sweep.json",
+    "screening_skill": "docs/_static/quasilinear_screening_skill.json"
   },
   "transport_gate": 0.35
 }

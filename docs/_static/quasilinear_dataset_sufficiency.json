@@ -42,120 +42,120 @@
       "case": "cyclone_long_window",
       "gate_case": "cyclone_nonlinear_long_window",
       "geometry": "cyclone",
-      "nonlinear_summary": "GKX/docs/_static/nonlinear_cyclone_gate_summary.json",
-      "shape_gate": "GKX/docs/_static/quasilinear_cyclone_spectrum_shape_gate.json",
+      "nonlinear_summary": "docs/_static/nonlinear_cyclone_gate_summary.json",
+      "shape_gate": "docs/_static/quasilinear_cyclone_spectrum_shape_gate.json",
       "shape_gate_passed": false,
-      "spectrum": "GKX/docs/_static/quasilinear_cyclone_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_cyclone_spectrum_scan.quasilinear_spectrum.csv",
       "split": "train"
     },
     {
       "case": "cyclone_miller_long_window",
       "gate_case": "cyclone_miller_nonlinear_window",
       "geometry": "cyclone_miller",
-      "nonlinear_summary": "GKX/docs/_static/nonlinear_cyclone_miller_gate_summary.json",
-      "shape_gate": "GKX/docs/_static/quasilinear_cyclone_miller_spectrum_shape_gate.json",
+      "nonlinear_summary": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+      "shape_gate": "docs/_static/quasilinear_cyclone_miller_spectrum_shape_gate.json",
       "shape_gate_passed": true,
-      "spectrum": "GKX/docs/_static/quasilinear_cyclone_miller_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_cyclone_miller_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     },
     {
       "case": "hsx_nonlinear_window",
       "gate_case": "hsx_nonlinear_window",
       "geometry": "hsx",
-      "nonlinear_summary": "GKX/docs/_static/nonlinear_hsx_gate_summary.json",
-      "shape_gate": "GKX/docs/_static/quasilinear_hsx_spectrum_shape_gate.json",
+      "nonlinear_summary": "docs/_static/nonlinear_hsx_gate_summary.json",
+      "shape_gate": "docs/_static/quasilinear_hsx_spectrum_shape_gate.json",
       "shape_gate_passed": true,
-      "spectrum": "GKX/docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     },
     {
       "case": "w7x_nonlinear_window",
       "gate_case": "w7x_nonlinear_window",
       "geometry": "w7x",
-      "nonlinear_summary": "GKX/docs/_static/nonlinear_w7x_gate_summary.json",
-      "shape_gate": "GKX/docs/_static/quasilinear_w7x_spectrum_shape_gate.json",
+      "nonlinear_summary": "docs/_static/nonlinear_w7x_gate_summary.json",
+      "shape_gate": "docs/_static/quasilinear_w7x_spectrum_shape_gate.json",
       "shape_gate_passed": true,
-      "spectrum": "GKX/docs/_static/quasilinear_w7x_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_w7x_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     },
     {
       "case": "dshape_external_vmec_t250_window",
       "gate_case": "D-shaped tokamak external VMEC nonlinear t250 high-grid convergence",
       "geometry": "dshape_external_vmec",
-      "nonlinear_summary": "GKX/docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
+      "nonlinear_summary": "docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
       "shape_gate": null,
       "shape_gate_passed": null,
-      "spectrum": "GKX/docs/_static/quasilinear_vmec_dshape_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_vmec_dshape_linear_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     },
     {
       "case": "itermodel_external_vmec_t350_window",
       "gate_case": "ITERModel external VMEC nonlinear t350 high-grid convergence",
       "geometry": "itermodel_external_vmec",
-      "nonlinear_summary": "GKX/docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
+      "nonlinear_summary": "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
       "shape_gate": null,
       "shape_gate_passed": null,
-      "spectrum": "GKX/docs/_static/quasilinear_vmec_itermodel_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_vmec_itermodel_linear_spectrum_scan.quasilinear_spectrum.csv",
       "split": "train"
     },
     {
       "case": "updown_asym_external_vmec_t450_window",
       "gate_case": "updown_asym_external_vmec_t450",
       "geometry": "updown_asym_external_vmec",
-      "nonlinear_summary": "GKX/docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
+      "nonlinear_summary": "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
       "shape_gate": null,
       "shape_gate_passed": null,
-      "spectrum": "GKX/docs/_static/quasilinear_vmec_updown_asym_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_vmec_updown_asym_linear_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     },
     {
       "case": "circular_external_vmec_t450_window",
       "gate_case": "circular_external_vmec_t450",
       "geometry": "circular_external_vmec",
-      "nonlinear_summary": "GKX/docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+      "nonlinear_summary": "docs/_static/external_vmec_circular_t450_n64_transport_window.json",
       "shape_gate": null,
       "shape_gate_passed": null,
-      "spectrum": "GKX/docs/_static/quasilinear_vmec_circular_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_vmec_circular_linear_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     },
     {
       "case": "cth_like_external_vmec_t700_high_grid_ensemble",
       "gate_case": "cth_like_modified_n80_t700_seed_timestep_ensemble_gate",
       "geometry": "cth_like_external_vmec",
-      "nonlinear_summary": "GKX/docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.json",
+      "nonlinear_summary": "docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.json",
       "shape_gate": null,
       "shape_gate_passed": null,
-      "spectrum": "GKX/docs/_static/quasilinear_vmex_cth_like_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_vmex_cth_like_linear_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     },
     {
       "case": "shaped_tokamak_pressure_external_vmec_t650_high_grid_window",
       "gate_case": "shaped_tokamak_pressure_n80_t650_seed_timestep_ensemble_gate",
       "geometry": "shaped_tokamak_external_vmec",
-      "nonlinear_summary": "GKX/docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/replicate_ensemble_gate.json",
+      "nonlinear_summary": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/replicate_ensemble_gate.json",
       "shape_gate": null,
       "shape_gate_passed": null,
-      "spectrum": "GKX/docs/_static/quasilinear_vmex_shaped_tokamak_pressure_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_vmex_shaped_tokamak_pressure_linear_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     },
     {
       "case": "qp_diag_nfp2_m4_final_t250",
       "gate_case": "qp_diag_nfp2_m4_final_t250_n64_seed_timestep_ensemble_gate",
       "geometry": "qp_diag_nfp2_m4",
-      "nonlinear_summary": "GKX/docs/_static/qp_diag_nfp2_m4_t250_replicate_ensemble_gate.json",
+      "nonlinear_summary": "docs/_static/qp_diag_nfp2_m4_t250_replicate_ensemble_gate.json",
       "shape_gate": null,
       "shape_gate_passed": null,
-      "spectrum": "GKX/docs/_static/quasilinear_vmec_qp_diag_nfp2_m4_final_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_vmec_qp_diag_nfp2_m4_final_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     },
     {
       "case": "solovev_reference_repair_dt002_amp1em5_n48_t250",
       "gate_case": "solovev_reference_repair_dt002_amp1em5_n48_t250_ensemble_gate",
       "geometry": "solovev_external_vmec",
-      "nonlinear_summary": "GKX/docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_ensemble_gate.json",
+      "nonlinear_summary": "docs/_static/external_vmec_holdouts/solovev_reference_repair_dt002_amp1em5_n48_t250/solovev_n48_t250_ensemble_gate.json",
       "shape_gate": null,
       "shape_gate_passed": null,
-      "spectrum": "GKX/docs/_static/quasilinear_vmec_solovev_linear_spectrum_scan.quasilinear_spectrum.csv",
+      "spectrum": "docs/_static/quasilinear_vmec_solovev_linear_spectrum_scan.quasilinear_spectrum.csv",
       "split": "holdout"
     }
   ],
@@ -165,13 +165,13 @@
       "accepted": [],
       "kind": "quasilinear_candidate_uncertainty_report",
       "passed": false,
-      "path": "GKX/docs/_static/quasilinear_candidate_uncertainty.json"
+      "path": "docs/_static/quasilinear_candidate_uncertainty.json"
     },
     "saturation_rule_sweep": {
       "accepted": [],
       "kind": "quasilinear_saturation_rule_sweep",
       "passed": false,
-      "path": "GKX/docs/_static/quasilinear_saturation_rule_sweep.json"
+      "path": "docs/_static/quasilinear_saturation_rule_sweep.json"
     }
   },
   "excluded_validated_nonlinear_cases": [

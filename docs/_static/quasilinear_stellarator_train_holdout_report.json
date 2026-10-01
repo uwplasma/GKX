@@ -122,7 +122,7 @@
           "max_abs_error": 0.0,
           "max_rel_error": 0.0,
           "passed": true,
-          "source": "GKX/tools_out/cyclone_long_audit/cyclone_nonlinear_diag_t400.csv"
+          "source": "tools_out/cyclone_long_audit/cyclone_nonlinear_diag_t400.csv"
         },
         "gates": [
           {
@@ -156,8 +156,8 @@
         "passed": true,
         "provenance": {
           "observable_column": "heat_flux",
-          "source_artifact": "GKX/tools_out/cyclone_long_audit/cyclone_nonlinear_diag_t400.csv",
-          "summary_artifact": "GKX/docs/_static/nonlinear_cyclone_gate_summary.json",
+          "source_artifact": "tools_out/cyclone_long_audit/cyclone_nonlinear_diag_t400.csv",
+          "summary_artifact": "docs/_static/nonlinear_cyclone_gate_summary.json",
           "time_column": "t"
         },
         "statistics": {
@@ -208,7 +208,7 @@
       "electron_model": "adiabatic",
       "geometry": "cyclone_miller",
       "ky": null,
-      "nonlinear_artifact": "tools_out/office_refresh_cyclone_miller_t122.csv",
+      "nonlinear_artifact": "tools_out/refresh_cyclone_miller_t122.csv",
       "nonlinear_window_stats": {
         "case": "cyclone_miller_long_window",
         "claim_level": "nonlinear_holdout_window_metadata_not_simulation_claim",
@@ -258,7 +258,7 @@
           "max_abs_error": 1.0,
           "max_rel_error": 1.0,
           "passed": false,
-          "source": "GKX/tools_out/office_refresh_cyclone_miller_t122.csv"
+          "source": "tools_out/refresh_cyclone_miller_t122.csv"
         },
         "gates": [
           {
@@ -292,8 +292,8 @@
         "passed": false,
         "provenance": {
           "observable_column": "heat_flux",
-          "source_artifact": "GKX/tools_out/office_refresh_cyclone_miller_t122.csv",
-          "summary_artifact": "GKX/docs/_static/nonlinear_cyclone_miller_gate_summary.json",
+          "source_artifact": "tools_out/refresh_cyclone_miller_t122.csv",
+          "summary_artifact": "docs/_static/nonlinear_cyclone_miller_gate_summary.json",
           "time_column": "t"
         },
         "statistics": {
@@ -394,7 +394,7 @@
           "max_abs_error": 1.0,
           "max_rel_error": 1.0,
           "passed": false,
-          "source": "GKX/tools_out/final_nonlinear_audit/hsx_gkx_true_t50.csv"
+          "source": "tools_out/final_nonlinear_audit/hsx_gkx_true_t50.csv"
         },
         "gates": [
           {
@@ -428,8 +428,8 @@
         "passed": false,
         "provenance": {
           "observable_column": "heat_flux",
-          "source_artifact": "GKX/tools_out/final_nonlinear_audit/hsx_gkx_true_t50.csv",
-          "summary_artifact": "GKX/docs/_static/nonlinear_hsx_gate_summary.json",
+          "source_artifact": "tools_out/final_nonlinear_audit/hsx_gkx_true_t50.csv",
+          "summary_artifact": "docs/_static/nonlinear_hsx_gate_summary.json",
           "time_column": "t"
         },
         "statistics": {
@@ -530,7 +530,7 @@
           "max_abs_error": 1.0,
           "max_rel_error": 1.0,
           "passed": false,
-          "source": "GKX/tools_out/final_nonlinear_audit/w7x_gkx_current_adaptive_t200.out.nc"
+          "source": "tools_out/final_nonlinear_audit/w7x_gkx_current_adaptive_t200.out.nc"
         },
         "gates": [
           {
@@ -564,8 +564,8 @@
         "passed": false,
         "provenance": {
           "observable_column": "Diagnostics/HeatFlux_st",
-          "source_artifact": "GKX/tools_out/final_nonlinear_audit/w7x_gkx_current_adaptive_t200.out.nc",
-          "summary_artifact": "GKX/docs/_static/nonlinear_w7x_gate_summary.json",
+          "source_artifact": "tools_out/final_nonlinear_audit/w7x_gkx_current_adaptive_t200.out.nc",
+          "summary_artifact": "docs/_static/nonlinear_w7x_gate_summary.json",
           "time_column": "t"
         },
         "statistics": {
@@ -666,7 +666,7 @@
           "max_abs_error": 0.0,
           "max_rel_error": 0.0,
           "passed": true,
-          "source": "GKX/docs/_static/external_vmec_dshape_nonlinear_t250_n64_pilot.traces.csv"
+          "source": "docs/_static/external_vmec_dshape_nonlinear_t250_n64_pilot.traces.csv"
         },
         "gates": [
           {
@@ -700,8 +700,8 @@
         "passed": true,
         "provenance": {
           "observable_column": "heat_flux",
-          "source_artifact": "GKX/docs/_static/external_vmec_dshape_nonlinear_t250_n64_pilot.traces.csv",
-          "summary_artifact": "GKX/docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
+          "source_artifact": "docs/_static/external_vmec_dshape_nonlinear_t250_n64_pilot.traces.csv",
+          "summary_artifact": "docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
           "time_column": "t"
         },
         "statistics": {
@@ -802,7 +802,7 @@
           "max_abs_error": 0.0,
           "max_rel_error": 0.0,
           "passed": true,
-          "source": "GKX/docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv"
+          "source": "docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv"
         },
         "gates": [
           {
@@ -836,8 +836,8 @@
         "passed": true,
         "provenance": {
           "observable_column": "heat_flux",
-          "source_artifact": "GKX/docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv",
-          "summary_artifact": "GKX/docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
+          "source_artifact": "docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv",
+          "summary_artifact": "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
           "time_column": "t"
         },
         "statistics": {
@@ -938,7 +938,7 @@
           "max_abs_error": 0.0,
           "max_rel_error": 0.0,
           "passed": true,
-          "source": "GKX/docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv"
+          "source": "docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv"
         },
         "gates": [
           {
@@ -972,8 +972,8 @@
         "passed": true,
         "provenance": {
           "observable_column": "heat_flux",
-          "source_artifact": "GKX/docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv",
-          "summary_artifact": "GKX/docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
+          "source_artifact": "docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv",
+          "summary_artifact": "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
           "time_column": "t"
         },
         "statistics": {
@@ -1074,7 +1074,7 @@
           "max_abs_error": 0.0,
           "max_rel_error": 0.0,
           "passed": true,
-          "source": "GKX/docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv"
+          "source": "docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv"
         },
         "gates": [
           {
@@ -1108,8 +1108,8 @@
         "passed": true,
         "provenance": {
           "observable_column": "heat_flux",
-          "source_artifact": "GKX/docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv",
-          "summary_artifact": "GKX/docs/_static/external_vmec_circular_t450_n64_transport_window.json",
+          "source_artifact": "docs/_static/external_vmec_circular_holdout_nonlinear_t450_n64_pilot.traces.csv",
+          "summary_artifact": "docs/_static/external_vmec_circular_t450_n64_transport_window.json",
           "time_column": "t"
         },
         "statistics": {
@@ -1724,7 +1724,7 @@
             "passed": true,
             "promotion_ready": true,
             "sem": 0.25224160866973594,
-            "source_artifact": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04.out.nc",
+            "source_artifact": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p04.out.nc",
             "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_t650_n80_seed_timestep_output_gate.json#rows[0]"
           },
           {
@@ -1736,7 +1736,7 @@
             "passed": true,
             "promotion_ready": true,
             "sem": 0.22528239686172133,
-            "source_artifact": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04.out.nc",
+            "source_artifact": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed31_dt0p04.out.nc",
             "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_t650_n80_seed_timestep_output_gate.json#rows[1]"
           },
           {
@@ -1748,7 +1748,7 @@
             "passed": true,
             "promotion_ready": true,
             "sem": 0.17983304058313385,
-            "source_artifact": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04.out.nc",
+            "source_artifact": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed32_dt0p04.out.nc",
             "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_t650_n80_seed_timestep_output_gate.json#rows[2]"
           },
           {
@@ -1760,7 +1760,7 @@
             "passed": true,
             "promotion_ready": true,
             "sem": 0.1850038260823919,
-            "source_artifact": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04.out.nc",
+            "source_artifact": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_seed33_dt0p04.out.nc",
             "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_t650_n80_seed_timestep_output_gate.json#rows[3]"
           },
           {
@@ -1772,7 +1772,7 @@
             "passed": true,
             "promotion_ready": true,
             "sem": 0.33116969837810245,
-            "source_artifact": "GKX/tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035.out.nc",
+            "source_artifact": "tools_out/external_vmec_holdouts/shaped_tokamak_pressure_reference/shaped_tokamak_pressure_reference_holdout_nonlinear_t650_n80_dt0p035.out.nc",
             "summary_artifact": "docs/_static/external_vmec_shaped_tokamak_pressure_replicates_t650/shaped_tokamak_pressure_reference_t650_n80_seed_timestep_output_gate.json#rows[4]"
           }
         ],

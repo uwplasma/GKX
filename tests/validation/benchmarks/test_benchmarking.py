@@ -1687,14 +1687,7 @@ def test_remote_runtime_memory_runs_disable_x11_forwarding(monkeypatch) -> None:
     monkeypatch.setattr(
         "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
     )
-    run = RuntimeBenchRun(
-        case="c",
-        label="C",
-        backend="gx",
-        command="echo hi",
-        cwd="/tmp",
-        host="benchmark",
-    )
+    run = RuntimeBenchRun("c", "C", "gx", "echo hi", "/tmp", host="benchmark")
     row = _run_command(run)
     assert row["status"] == "success"
     assert captured["cmd"][:2] == ["ssh", "-x"]

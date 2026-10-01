@@ -1,7 +1,7 @@
 {
   "claim_level": "calibration_inputs_validated_by_passed_nonlinear_gates",
   "gate_patterns": [
-    "GKX/docs/_static/**/*.json"
+    "docs/_static/**/*.json"
   ],
   "kind": "quasilinear_calibration_input_audit",
   "n_gate_artifact_matches": 724,
@@ -1563,7 +1563,7 @@
             "promotion_gate_passed": true,
             "raw_gate_passed": true
           },
-          "nonlinear_artifact": "tools_out/office_refresh_cyclone_miller_t122.csv",
+          "nonlinear_artifact": "tools_out/refresh_cyclone_miller_t122.csv",
           "passed": true,
           "reason": "matched passed nonlinear gate",
           "required": true,

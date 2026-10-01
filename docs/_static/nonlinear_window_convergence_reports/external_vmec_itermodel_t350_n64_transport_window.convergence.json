@@ -60,7 +60,7 @@
     "max_abs_error": 1.0,
     "max_rel_error": 1.0,
     "passed": false,
-    "source": "GKX/docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv"
+    "source": "docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv"
   },
   "gates": [
     {
@@ -104,7 +104,7 @@
   "passed": false,
   "provenance": {
     "observable_column": "heat_flux",
-    "source_artifact": "GKX/docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv",
+    "source_artifact": "docs/_static/external_vmec_itermodel_nonlinear_t350_n64_pilot.traces.csv",
     "summary_artifact": "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
     "time_column": "t"
   },

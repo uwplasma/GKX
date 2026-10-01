@@ -13,7 +13,7 @@
         "Nz": 96
       },
       "identity_passed": true,
-      "path": "GKX/docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "path": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
       "speedup_blockers": [],
       "speedup_passed": true,
       "status": "identity_and_speedup"
@@ -29,7 +29,7 @@
         "Nz": 128
       },
       "identity_passed": true,
-      "path": "GKX/docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
+      "path": "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
       "speedup_blockers": [
         "gpu_2devices_speedup_0.586_below_1"
       ],
@@ -53,7 +53,7 @@
       "requested_devices": 1,
       "same_process_speedup": 1.0781218405371065,
       "serial_median_s": 5.881879603723064,
-      "source": "GKX/docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
       "state_shape": [
         4,
         8,
@@ -78,7 +78,7 @@
       "requested_devices": 2,
       "same_process_speedup": 1.3998524510741943,
       "serial_median_s": 5.752688911976293,
-      "source": "GKX/docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
       "state_shape": [
         4,
         8,
@@ -103,7 +103,7 @@
       "requested_devices": 4,
       "same_process_speedup": 1.4849340947619287,
       "serial_median_s": 5.818151093553752,
-      "source": "GKX/docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
       "state_shape": [
         4,
         8,
@@ -128,7 +128,7 @@
       "requested_devices": 8,
       "same_process_speedup": 1.4566639590910255,
       "serial_median_s": 5.799778563901782,
-      "source": "GKX/docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
       "state_shape": [
         4,
         8,
@@ -199,7 +199,7 @@
         "python": "3.10.12",
         "gkx": "1.6.9"
       },
-      "source": "GKX/docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
       "source_artifact": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_1devices.json",
       "source_contract_version": 1,
       "state_shape": [
@@ -276,7 +276,7 @@
         "python": "3.10.12",
         "gkx": "1.6.9"
       },
-      "source": "GKX/docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
+      "source": "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
       "source_artifact": "/tmp/gkx-nonlinear-scaling-ox56a4zs/gpu_2devices.json",
       "source_contract_version": 1,
       "state_shape": [
