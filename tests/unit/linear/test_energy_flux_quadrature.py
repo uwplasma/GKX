@@ -96,3 +96,47 @@ def _check_velocity_integral(dtype, nl, b, channel):
             atol=tolerance,
             rtol=tolerance,
         )
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("nl", [1, 2, 4])
+def test_bpar_energy_flux_is_invariant_to_zero_moment_extension(dtype, nl):
+    with jax.enable_x64(dtype == jnp.float64):
+        b = jnp.full((1, 1, 1, 1), 0.27053411424286467, dtype=dtype)
+        grid = SimpleNamespace(
+            ky=jnp.array([0.3], dtype=dtype), kx=jnp.zeros(1), z=jnp.zeros(1)
+        )
+        params = SimpleNamespace(
+            density=jnp.ones(1), temp=jnp.ones(1), vth=jnp.ones(1), tz=jnp.ones(1)
+        )
+        field = jnp.ones(
+            (1, 1, 1), dtype=jnp.complex64 if dtype == jnp.float32 else jnp.complex128
+        )
+        zero = jnp.zeros_like(field)
+        fluxes = []
+        for size in (nl, nl + 1):
+            jl = jnp.moveaxis(J_l_all(b, size - 1), 0, 1)
+            lower = jnp.concatenate([jnp.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+            cache = SimpleNamespace(Jl=jl, JlB=jl + lower, b=b)
+            state = (
+                jnp.zeros((1, size, 4, 1, 1, 1), dtype=field.dtype)
+                .at[:, nl - 1, 0]
+                .set(1j)
+            )
+            fluxes.append(
+                heat_flux_channel_species(
+                    state,
+                    zero,
+                    zero,
+                    field,
+                    cache,
+                    grid,
+                    params,
+                    jnp.ones(1),
+                    use_dealias=False,
+                )[2]
+            )
+        tolerance = 2e-6 if dtype == jnp.float32 else 2e-13
+        np.testing.assert_allclose(
+            np.asarray(fluxes[0]), np.asarray(fluxes[1]), atol=tolerance, rtol=tolerance
+        )
