@@ -19,7 +19,7 @@ from gkx.config import CycloneBaseCase
 from gkx.config import GridConfig, TimeConfig
 from gkx.config import InitializationConfig
 from gkx.core_grid import build_spectral_grid, select_ky_grid
-from gkx.core_velocity import gamma0
+from gkx.core_velocity import J_l_all, gamma0
 from gkx.diagnostics import (
     ResolvedDiagnostics,
     SimulationDiagnostics,
@@ -2341,9 +2341,11 @@ def test_diagnostics_refactor_preserves_runtime_import_identities() -> None:
 
 
 def test_jl_family_accepts_four_dimensional_arrays_and_rejects_bad_ranks() -> None:
+    b = jnp.full((2, 1, 3), 0.4, dtype=jnp.float32)
     cache_4d = SimpleNamespace(
-        Jl=jnp.ones((2, 2, 1, 3), dtype=jnp.float32),
+        Jl=J_l_all(b, 1),
         JlB=2.0 * jnp.ones((2, 2, 1, 3), dtype=jnp.float32),
+        b=b,
     )
 
     jl, jlb, jfac = _jl_family(cache_4d)
@@ -2351,6 +2353,13 @@ def test_jl_family_accepts_four_dimensional_arrays_and_rejects_bad_ranks() -> No
     assert jl.shape == (1, 2, 2, 1, 3)
     assert jlb.shape == (1, 2, 2, 1, 3)
     assert jfac.shape == jl.shape
+    np.testing.assert_allclose(jfac[0, 0], 1.3 * np.exp(-0.2), rtol=2e-6)
+    np.testing.assert_allclose(jfac[0, 1], 0.34 * np.exp(-0.2), rtol=2e-6)
+    cache_5d = SimpleNamespace(Jl=jl, JlB=jlb, b=b[None, ...])
+    for four_dimensional, five_dimensional in zip(
+        (jl, jlb, jfac), _jl_family(cache_5d), strict=True
+    ):
+        np.testing.assert_array_equal(four_dimensional, five_dimensional)
 
     with pytest.raises(ValueError, match="unexpected Jl rank"):
         _jl_family(SimpleNamespace(Jl=jnp.ones((2, 3, 4)), JlB=cache_4d.JlB))
