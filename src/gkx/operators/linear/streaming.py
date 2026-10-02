@@ -41,10 +41,8 @@ def grad_z_periodic(
 ) -> jnp.ndarray:
     """Spectral periodic derivative along the last axis.
 
-    ``ny_full`` identifies a complete real-FFT ky layout. Its self-conjugate
-    rows then retain real-field symmetry, including the even-z Nyquist cosine.
-    Generic complex arrays and selected positive-ky modes keep their signed
-    complex derivative.
+    ``ny_full`` preserves real-field rows, including the Nyquist cosine, on
+    complete layouts. Generic complex arrays retain their signed derivative.
     """
 
     if kz is None:
@@ -121,13 +119,7 @@ def _grad_z_linked_fd(
 def _reverse_from_one(x: jnp.ndarray, axis: int) -> jnp.ndarray:
     """Return ``x`` reindexed as ``[0, n-1, n-2, ..., 1]`` along ``axis``.
 
-    This is the conjugate partner index for a real-FFT half spectrum. Written as
-    ``jnp.take`` with that index vector, XLA lowers it as a general gather and
-    materialises the result: profiling on 2026-09-01 attributed a transpose, a
-    full-array copy, the gather and a transpose back to each such call. Written
-    as a slice, a reverse and a concatenate the same permutation fuses, and
-    measures 9.6 ms against 13.0 ms on a ``(2,4,8,96,96,48)`` complex64 state
-    with byte-identical output.
+    Slice/reverse/concatenate fuses; a general index gather materializes copies.
     """
 
     head = jax.lax.slice_in_dim(x, 0, 1, axis=axis)
@@ -143,17 +135,8 @@ def _restore_linked_real_fft_conjugates(
 ) -> jnp.ndarray:
     """Restore the conjugate ``-ky`` rows on a full real-FFT spectral grid.
 
-    The linked-FFT chains are built on the unique dealiased positive-``ky``
-    block. When the runtime carries the full real-FFT-expanded ``ky`` layout, the
-    untouched negative rows must be reconstructed by real-FFT conjugate
-    symmetry so the linked derivative acts on the physical Hermitian state.
-
-    On a half-spectrum state (plan 5.3 N3) there are no negative rows and this
-    is the identity, returning the *same object* so the graph is unchanged. The
-    fill must not merely be skipped but recognized as inapplicable: ``(-j) % Nyc``
-    is a different positive row, not a partner, so running the two-sided rule on
-    a half axis would conjugate-mirror one physical mode onto another. Telling
-    the two apart needs ``ny_full``; see :mod:`gkx.core_ky_layout`.
+    Half spectra return the same object: ``(-j) % Nyc`` would identify another
+    positive row. ``ny_full`` distinguishes the layouts without reading data.
     """
 
     Ny = out.shape[-3]
@@ -413,11 +396,7 @@ def _linked_fft_scatter_output(
 
 
 def _shift_kx_modes(f: jnp.ndarray, shift: jnp.ndarray) -> jnp.ndarray:
-    """Return ``out[ky, kx, z] = f[ky, kx + shift[ky, z], z]`` in signed modes.
-
-    Radial mode numbers follow the FFT order; a source outside the resolved
-    band ``|n| <= (Nx - 1) // 2`` contributes zero.
-    """
+    """Shift signed kx modes; sources outside ``|n| <= (Nx-1)//2`` give zero."""
 
     nx = f.shape[-2]
     modes = np.fft.fftfreq(nx, d=1.0 / nx).astype(np.int32)
@@ -444,15 +423,11 @@ def _linked_fft_apply(
 ) -> jnp.ndarray:
     """Apply linked-chain spectral operators; a tuple ``f`` returns them stacked.
 
-    On a non-twisting flux tube the state row ``kx`` at ``z`` holds the
-    ballooning mode ``kx + m0(ky, z)``, so a parallel chain keeps
-    ``kx + m0`` fixed (not ``kx``): the operand is moved to that frame before
-    the chain transform and the result moved back.
+    Non-twisting tubes hold ballooning modes ``kx+m0(ky,z)`` fixed: move into
+    that frame before the chain transform and back after it.
 
-    With a tuple of equally shaped operands and one operator per operand, the
-    result carries a new leading axis whose slot ``i`` equals
-    ``_linked_fft_apply(f[i], ..., operator=operator[i])``: every chain class
-    then issues one gather-stack, FFT, IFFT and output write for all operands.
+    Tuple operands share a gather/FFT/IFFT; each leading output slot applies
+    its corresponding operator to the equally shaped input slot.
     """
 
     _validate_linked_fft_inputs(linked_indices, linked_kz, operator=operator)
