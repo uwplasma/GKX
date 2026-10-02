@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -16,6 +17,11 @@ from gkx.operators.fluxes import heat_flux_channel_species, particle_flux_specie
 @pytest.mark.parametrize("b", [0.0, 0.27053411424286467, 1.2])
 @pytest.mark.parametrize("channel", ["es", "apar"])
 def test_energy_flux_matches_velocity_integral(dtype, nl, b, channel):
+    with jax.enable_x64(dtype == jnp.float64):
+        _check_velocity_integral(dtype, nl, b, channel)
+
+
+def _check_velocity_integral(dtype, nl, b, channel):
     s, ws = roots_hermite(32)
     x, wx = roots_laguerre(64)
     ws /= np.sqrt(np.pi)
