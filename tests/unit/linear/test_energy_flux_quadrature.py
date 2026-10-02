@@ -31,13 +31,18 @@ def test_energy_flux_matches_velocity_integral(dtype, nl, b, channel):
     energy_moment = float(ws @ integrand @ wx)
 
     grid = SimpleNamespace(
-        ky=jnp.array([0.3], dtype=dtype), kx=jnp.zeros(1), z=jnp.zeros(1)
+        ky=jnp.array([0.3], dtype=dtype),
+        kx=jnp.zeros(1, dtype=dtype),
+        z=jnp.zeros(1, dtype=dtype),
     )
     b_array = jnp.full((2, 1, 1, 1), b, dtype=dtype)
     jl = jnp.moveaxis(J_l_all(b_array, nl - 1), 0, 1)
     cache = SimpleNamespace(Jl=jl, JlB=jnp.zeros_like(jl), b=b_array)
     params = SimpleNamespace(
-        density=jnp.ones(2), temp=jnp.ones(2), vth=jnp.ones(2), tz=jnp.ones(2)
+        density=jnp.ones(2, dtype=dtype),
+        temp=jnp.ones(2, dtype=dtype),
+        vth=jnp.ones(2, dtype=dtype),
+        tz=jnp.ones(2, dtype=dtype),
     )
     complex_dtype = jnp.complex64 if dtype == jnp.float32 else jnp.complex128
     state = jnp.zeros((2, nl, 4, 1, 1, 1), dtype=complex_dtype)
@@ -47,8 +52,17 @@ def test_energy_flux_matches_velocity_integral(dtype, nl, b, channel):
     zero = jnp.zeros_like(field)
     phi, apar = (field, zero) if channel == "es" else (zero, field)
     flux = heat_flux_channel_species(
-        state, phi, apar, zero, cache, grid, params, jnp.ones(1), use_dealias=False
+        state,
+        phi,
+        apar,
+        zero,
+        cache,
+        grid,
+        params,
+        jnp.ones(1, dtype=dtype),
+        use_dealias=False,
     )
+    assert flux[0 if channel == "es" else 1].dtype == dtype
     expected = 0.6 * energy_moment * (1 if channel == "es" else -1)
     tolerance = 2e-6 if dtype == jnp.float32 else 2e-13
     np.testing.assert_allclose(
@@ -60,7 +74,15 @@ def test_energy_flux_matches_velocity_integral(dtype, nl, b, channel):
     if channel == "es":
         density_moment = float(ws @ (distribution * j0(np.sqrt(2 * b * x))) @ wx)
         particle_flux = particle_flux_species(
-            state, phi, zero, zero, cache, grid, params, jnp.ones(1), use_dealias=False
+            state,
+            phi,
+            zero,
+            zero,
+            cache,
+            grid,
+            params,
+            jnp.ones(1, dtype=dtype),
+            use_dealias=False,
         )
         np.testing.assert_allclose(
             np.asarray(particle_flux),
