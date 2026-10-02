@@ -150,7 +150,7 @@ def _fused_electrostatic_constants(
             (1, local_m, 1, 1, 1)
         ),
         grad_z=lambda value, **kw: operator_grad_z_periodic(
-            value, ny_full=cache.ny_full, **kw
+            value, ny_full=getattr(cache, "ny_full", None), **kw
         ),
         shift_axis=operator_shift_axis,
         kz=cache.kz,

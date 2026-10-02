@@ -240,7 +240,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             )
         else:
             parallel_derivative = grad_z_periodic(
-                pre_derivative, kz=cache.kz, ny_full=cache.ny_full
+                pre_derivative, kz=cache.kz, ny_full=getattr(cache, "ny_full", None)
             )
         streaming = (
             jnp.asarray(term_cfg.streaming, dtype=real_dtype)
@@ -568,8 +568,11 @@ def _streaming_electrostatic_from_phi_velocity_sharded(
         grad_z_periodic as operator_grad_z_periodic,
     )
 
+    layout = (
+        {} if getattr(cache, "ny_full", None) is None else dict(ny_full=cache.ny_full)
+    )
     particle_streaming = -periodic_streaming_shard_map(
-        arr, plan, kz=cache.kz, vth=params.vth, devices=devices, ny_full=cache.ny_full
+        arr, plan, kz=cache.kz, vth=params.vth, devices=devices, **layout
     )
     real_dtype = jnp.real(arr).dtype
     G6 = arr[None, ...]
@@ -580,7 +583,7 @@ def _streaming_electrostatic_from_phi_velocity_sharded(
     )
     field_streaming = jnp.asarray(
         params.kpar_scale, dtype=real_dtype
-    ) * operator_grad_z_periodic(field_rhs, kz=cache.kz, ny_full=cache.ny_full)
+    ) * operator_grad_z_periodic(field_rhs, kz=cache.kz, **layout)
     return particle_streaming + field_streaming[0]
 
 

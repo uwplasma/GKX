@@ -56,10 +56,7 @@ def grad_z_periodic(
 
 
 def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.ndarray:
-    """Remove only the ambiguous z-Nyquist derivative on physical ky rows.
-
-    Complex amplitudes/resolved frequencies, linear solves and |kz| remain valid.
-    """
+    """Remove only the ambiguous real-field z-Nyquist derivative, complex-linearly."""
     if (
         ny_full is None
         or out.ndim < 3
