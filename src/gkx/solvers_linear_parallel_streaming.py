@@ -568,7 +568,7 @@ def _streaming_electrostatic_from_phi_velocity_sharded(
         grad_z_periodic as operator_grad_z_periodic,
     )
 
-    layout = (
+    layout: dict[str, Any] = (
         {} if getattr(cache, "ny_full", None) is None else dict(ny_full=cache.ny_full)
     )
     particle_streaming = -periodic_streaming_shard_map(
