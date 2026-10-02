@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core_ky_layout import is_half
+from gkx.core_ky_layout import is_half, nyc_from_ny, symmetrize_self_conjugate_rows
 from gkx.core_velocity import hermite_ladder_coeffs
 
 # One positivity guard for the whole linear operator. The local copy asked
@@ -33,9 +33,19 @@ def _fft_abs_multiplier(kz: jnp.ndarray, like: jnp.ndarray) -> jnp.ndarray:
 
 
 def grad_z_periodic(
-    f: jnp.ndarray, dz: float | jnp.ndarray | None = None, kz: jnp.ndarray | None = None
+    f: jnp.ndarray,
+    dz: float | jnp.ndarray | None = None,
+    kz: jnp.ndarray | None = None,
+    *,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
-    """Spectral periodic derivative along the last axis."""
+    """Spectral periodic derivative along the last axis.
+
+    ``ny_full`` identifies a complete real-FFT ky layout. Its self-conjugate
+    rows then retain real-field symmetry, including the even-z Nyquist cosine.
+    Generic complex arrays and selected positive-ky modes keep their signed
+    complex derivative.
+    """
 
     if kz is None:
         if dz is None:
@@ -47,7 +57,24 @@ def grad_z_periodic(
         kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
     f_hat = jnp.fft.fft(f, axis=-1)
     df_hat = _fft_ik_multiplier(kz, f_hat) * f_hat
-    return jnp.fft.ifft(df_hat, axis=-1)
+    out = jnp.fft.ifft(df_hat, axis=-1)
+    if ny_full is not None and out.ndim >= 3:
+        covered = jnp.arange(out.shape[-3]) <= int(ny_full) // 2
+        out = _restore_linked_real_fft_conjugates(
+            out, covered_rows=covered, ny_full=ny_full
+        )
+    return _symmetrize_physical_rows(out, ny_full)
+
+
+def _symmetrize_physical_rows(out: jnp.ndarray, ny_full: int | None) -> jnp.ndarray:
+    """Keep generic complex arrays and selected ky slices unchanged."""
+    if (
+        ny_full is None
+        or out.ndim < 3
+        or out.shape[-3] not in (int(ny_full), nyc_from_ny(ny_full))
+    ):
+        return out
+    return symmetrize_self_conjugate_rows(out, ny_full=ny_full)
 
 
 def _shift_kx_linked(
@@ -496,9 +523,10 @@ def _linked_fft_apply(
             Ny=Ny,
             Nz=Nz,
         )
-    return _restore_linked_real_fft_conjugates(
+    out = _restore_linked_real_fft_conjugates(
         out, covered_rows=covered_rows, ny_full=ny_full
     )
+    return _symmetrize_physical_rows(out, ny_full)
 
 
 def abs_z_periodic(
@@ -720,7 +748,7 @@ def streaming_ladder_term(
                 kx_mask_minus=kx_mask_minus,
             )
     else:
-        dH_dz = grad_z_periodic(H, kz=kz)
+        dH_dz = grad_z_periodic(H, kz=kz, ny_full=ny_full)
     axis_m = -4
     pad = [(0, 0)] * H.ndim
     pad[axis_m] = (1, 1)
