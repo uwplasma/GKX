@@ -10,10 +10,18 @@ import jax.numpy as jnp
 import jax.scipy.linalg
 import numpy as np
 import pytest
-from scipy.special import eval_genlaguerre, eval_laguerre, j0, jv
+from scipy.special import (
+    eval_genlaguerre,
+    eval_laguerre,
+    j0,
+    jv,
+    roots_hermite,
+    roots_laguerre,
+)
 
 from gkx.config import GridConfig
 from gkx.operators.collision import CollisionContext
+from gkx.operators.fluxes import heat_flux_channel_species, particle_flux_species
 from gkx.core_grid import build_spectral_grid
 from gkx.core_velocity import (
     J_l_all,
@@ -2589,3 +2597,159 @@ def test_per_species_nu_keeps_multispecies_conservation(model: str) -> None:
     np.testing.assert_allclose(rates.particle_density, 0.0, atol=1.0e-5)
     np.testing.assert_allclose(rates.total_parallel_momentum, 0.0, atol=1.0e-5)
     np.testing.assert_allclose(rates.total_thermal_energy, 0.0, atol=1.0e-4)
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("nl", [1, 2, 4, 8])
+# Catalog traces: s=.25, alpha=0, one turn, Boozer32, ky=.3/kx=0.
+# Mandell et al. JPP84(2018)905840108 App.H defines raw energy and particle flux.
+@pytest.mark.parametrize(
+    "b",
+    [
+        0.0,
+        1e-8,
+        0.27053411424286467,
+        1.2,
+        8.0,
+        pytest.param(0.08278908111694472, id="ITER-min"),
+        pytest.param(0.21628593763762102, id="ITER-max"),
+        pytest.param(0.021298201499680095, id="NCSX-min"),
+        pytest.param(0.45221081688812287, id="NCSX-max"),
+        pytest.param(0.02850942069886667, id="QHS46-min"),
+        pytest.param(0.2604491919024259, id="QHS46-max"),
+        pytest.param(0.03387495986963757, id="TJII-min"),
+        pytest.param(0.18805641329460868, id="TJII-max"),
+        pytest.param(14.856649669530817, id="NCSX-full-grid-max"),
+    ],
+)
+@pytest.mark.parametrize("channel", ["es", "apar"])
+@pytest.mark.parametrize("phase", [0.0, 1.7])
+def test_energy_flux_matches_velocity_integral(dtype, nl, b, channel, phase):
+    with jax.enable_x64(dtype == jnp.float64):
+        _check_velocity_integral(dtype, nl, b, channel, phase)
+
+
+def _check_velocity_integral(dtype, nl, b, channel, phase):
+    s, ws = roots_hermite(32)
+    x, wx = roots_laguerre(96)
+    ws /= np.sqrt(np.pi)
+    laguerre = (-1) ** (nl - 1) * eval_laguerre(nl - 1, x)
+    h2 = (4 * s**2 - 2) / np.sqrt(8)
+    h3 = (8 * s**3 - 12 * s) / np.sqrt(48)
+    if channel == "es":
+        distribution = laguerre[None, :] + 0.3 * h2[:, None]
+    else:
+        distribution = np.sqrt(2) * s[:, None] * laguerre + 0.3 * h3[:, None]
+        distribution *= np.sqrt(2) * s[:, None]
+    integrand = distribution * (s[:, None] ** 2 + x) * j0(np.sqrt(2 * b * x))
+    energy_moment = float(ws @ integrand @ wx)
+
+    grid = SimpleNamespace(
+        ky=jnp.array([0.3], dtype=dtype),
+        kx=jnp.zeros(1, dtype=dtype),
+        z=jnp.zeros(1, dtype=dtype),
+    )
+    b_array = jnp.full((2, 1, 1, 1), b, dtype=dtype)
+    jl = jnp.moveaxis(J_l_all(b_array, nl - 1), 0, 1)
+    cache = SimpleNamespace(Jl=jl, JlB=jnp.zeros_like(jl), b=b_array)
+    params = SimpleNamespace(
+        density=jnp.ones(2, dtype=dtype),
+        temp=jnp.ones(2, dtype=dtype),
+        vth=jnp.ones(2, dtype=dtype),
+        tz=jnp.ones(2, dtype=dtype),
+    )
+    complex_dtype = jnp.complex64 if dtype == jnp.float32 else jnp.complex128
+    state = jnp.zeros((2, nl, 4, 1, 1, 1), dtype=complex_dtype)
+    p0, p2 = (0, 2) if channel == "es" else (1, 3)
+    state = state.at[:, nl - 1, p0].set(1j).at[:, 0, p2].set(0.3j)
+    phase_factor = jnp.asarray(np.exp(1j * phase), dtype=complex_dtype)
+    state *= phase_factor
+    field = jnp.full((1, 1, 1), phase_factor, dtype=complex_dtype)
+    zero = jnp.zeros_like(field)
+    phi, apar = (field, zero) if channel == "es" else (zero, field)
+    flux = heat_flux_channel_species(
+        state,
+        phi,
+        apar,
+        zero,
+        cache,
+        grid,
+        params,
+        jnp.ones(1, dtype=dtype),
+        use_dealias=False,
+    )
+    assert flux[0 if channel == "es" else 1].dtype == dtype
+    expected = 0.6 * energy_moment * (1 if channel == "es" else -1)
+    tolerance = 2e-6 if dtype == jnp.float32 else 2e-13
+    np.testing.assert_allclose(
+        np.asarray(flux[0 if channel == "es" else 1]),
+        expected,
+        atol=tolerance,
+        rtol=tolerance,
+    )
+    if channel == "es":
+        density_moment = float(ws @ (distribution * j0(np.sqrt(2 * b * x))) @ wx)
+        particle_flux = particle_flux_species(
+            state,
+            phi,
+            zero,
+            zero,
+            cache,
+            grid,
+            params,
+            jnp.ones(1, dtype=dtype),
+            use_dealias=False,
+        )
+        np.testing.assert_allclose(
+            np.asarray(particle_flux),
+            0.6 * density_moment,
+            atol=tolerance,
+            rtol=tolerance,
+        )
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("nl", [1, 2, 4, 8])
+@pytest.mark.parametrize(
+    "b_value", [0.0, 1e-8, 0.27053411424286467, 1.2, 14.856649669530817]
+)
+def test_bpar_energy_flux_is_invariant_to_zero_moment_extension(dtype, nl, b_value):
+    with jax.enable_x64(dtype == jnp.float64):
+        b = jnp.full((1, 1, 1, 1), b_value, dtype=dtype)
+        grid = SimpleNamespace(
+            ky=jnp.array([0.3], dtype=dtype), kx=jnp.zeros(1), z=jnp.zeros(1)
+        )
+        params = SimpleNamespace(
+            density=jnp.ones(1), temp=jnp.ones(1), vth=jnp.ones(1), tz=jnp.ones(1)
+        )
+        field = jnp.ones(
+            (1, 1, 1), dtype=jnp.complex64 if dtype == jnp.float32 else jnp.complex128
+        )
+        zero = jnp.zeros_like(field)
+        fluxes = []
+        for size in (nl, nl + 1):
+            jl = jnp.moveaxis(J_l_all(b, size - 1), 0, 1)
+            lower = jnp.concatenate([jnp.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+            cache = SimpleNamespace(Jl=jl, JlB=jl + lower, b=b)
+            state = (
+                jnp.zeros((1, size, 4, 1, 1, 1), dtype=field.dtype)
+                .at[:, nl - 1, 0]
+                .set(1j)
+            )
+            fluxes.append(
+                heat_flux_channel_species(
+                    state,
+                    zero,
+                    zero,
+                    field,
+                    cache,
+                    grid,
+                    params,
+                    jnp.ones(1),
+                    use_dealias=False,
+                )[2]
+            )
+        tolerance = 2e-6 if dtype == jnp.float32 else 2e-13
+        np.testing.assert_allclose(
+            np.asarray(fluxes[0]), np.asarray(fluxes[1]), atol=tolerance, rtol=tolerance
+        )
