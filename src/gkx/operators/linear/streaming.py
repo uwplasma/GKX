@@ -6,14 +6,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core_ky_layout import is_half
+from gkx.core_ky_layout import is_half, nyc_from_ny
 from gkx.core_velocity import hermite_ladder_coeffs
 
-# One positivity guard for the whole linear operator. The local copy asked
-# whether a ``jnp`` round trip of its argument was traced, which is true of every
-# argument inside a trace, so the streaming kernels stopped checking ``dz`` and
-# ``vth`` under ``jit`` at all. Sharing the guard keeps one answer to the
-# question rather than two that can drift apart again.
+# Shared positivity/tracing guard for all streaming kernels.
 from gkx.operators.linear.params import _check_positive, _is_tracer  # noqa: F401
 
 
@@ -33,9 +29,17 @@ def _fft_abs_multiplier(kz: jnp.ndarray, like: jnp.ndarray) -> jnp.ndarray:
 
 
 def grad_z_periodic(
-    f: jnp.ndarray, dz: float | jnp.ndarray | None = None, kz: jnp.ndarray | None = None
+    f: jnp.ndarray,
+    dz: float | jnp.ndarray | None = None,
+    kz: jnp.ndarray | None = None,
+    *,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
-    """Spectral periodic derivative along the last axis."""
+    """Spectral periodic derivative along the last axis.
+
+    ``ny_full`` preserves real-field rows, including the Nyquist cosine, on
+    complete layouts. Generic complex arrays retain their signed derivative.
+    """
 
     if kz is None:
         if dz is None:
@@ -47,7 +51,24 @@ def grad_z_periodic(
         kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
     f_hat = jnp.fft.fft(f, axis=-1)
     df_hat = _fft_ik_multiplier(kz, f_hat) * f_hat
-    return jnp.fft.ifft(df_hat, axis=-1)
+    out = jnp.fft.ifft(df_hat, axis=-1)
+    return _real_fft_nyquist_derivative(out, ny_full)
+
+
+def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.ndarray:
+    """Remove only the ambiguous real-field z-Nyquist derivative, complex-linearly."""
+    if (
+        ny_full is None
+        or out.ndim < 3
+        or out.shape[-1] % 2
+        or out.shape[-3] not in (int(ny_full), nyc_from_ny(ny_full))
+    ):
+        return out
+    row = jnp.arange(out.shape[-3])
+    self_row = (row == 0) | ((int(ny_full) % 2 == 0) & (row == int(ny_full) // 2))
+    alternating = jnp.asarray((-1.0) ** np.arange(out.shape[-1]), jnp.real(out).dtype)
+    component = jnp.mean(out * alternating, axis=-1, keepdims=True) * alternating
+    return out - self_row.reshape((1,) * (out.ndim - 3) + (-1, 1, 1)) * component
 
 
 def _shift_kx_linked(
@@ -94,13 +115,7 @@ def _grad_z_linked_fd(
 def _reverse_from_one(x: jnp.ndarray, axis: int) -> jnp.ndarray:
     """Return ``x`` reindexed as ``[0, n-1, n-2, ..., 1]`` along ``axis``.
 
-    This is the conjugate partner index for a real-FFT half spectrum. Written as
-    ``jnp.take`` with that index vector, XLA lowers it as a general gather and
-    materialises the result: profiling on 2026-09-01 attributed a transpose, a
-    full-array copy, the gather and a transpose back to each such call. Written
-    as a slice, a reverse and a concatenate the same permutation fuses, and
-    measures 9.6 ms against 13.0 ms on a ``(2,4,8,96,96,48)`` complex64 state
-    with byte-identical output.
+    Slice/reverse/concatenate fuses; a general index gather materializes copies.
     """
 
     head = jax.lax.slice_in_dim(x, 0, 1, axis=axis)
@@ -116,17 +131,8 @@ def _restore_linked_real_fft_conjugates(
 ) -> jnp.ndarray:
     """Restore the conjugate ``-ky`` rows on a full real-FFT spectral grid.
 
-    The linked-FFT chains are built on the unique dealiased positive-``ky``
-    block. When the runtime carries the full real-FFT-expanded ``ky`` layout, the
-    untouched negative rows must be reconstructed by real-FFT conjugate
-    symmetry so the linked derivative acts on the physical Hermitian state.
-
-    On a half-spectrum state (plan 5.3 N3) there are no negative rows and this
-    is the identity, returning the *same object* so the graph is unchanged. The
-    fill must not merely be skipped but recognized as inapplicable: ``(-j) % Nyc``
-    is a different positive row, not a partner, so running the two-sided rule on
-    a half axis would conjugate-mirror one physical mode onto another. Telling
-    the two apart needs ``ny_full``; see :mod:`gkx.core_ky_layout`.
+    Half spectra return the same object: ``(-j) % Nyc`` would identify another
+    positive row. ``ny_full`` distinguishes the layouts without reading data.
     """
 
     Ny = out.shape[-3]
@@ -165,14 +171,7 @@ def _validate_linked_fft_inputs(
 def _flatten_linked_fft_state(
     f: jnp.ndarray,
 ) -> tuple[jnp.ndarray, tuple[int, ...], int, int, int]:
-    """Flatten ``(ky, kx)`` into one mode axis in the state's own row order.
-
-    Row ``p`` is mode ``(ky, kx) = (p // Nx, p % Nx)``. A reshape keeps the
-    state buffer where it is; swapping ``kx`` in front of ``ky`` first, as the
-    chain index convention ``ky + Ny * kx`` would suggest, made XLA copy the
-    whole state before every gather and again after every scatter. The chain
-    maps are translated to row order by :func:`_state_mode_rows` instead.
-    """
+    """Flatten state rows as ``ky * Nx + kx`` without a buffer transpose."""
 
     Ny = f.shape[-3]
     Nx = f.shape[-2]
@@ -226,12 +225,7 @@ def _linked_fft_multiplier(
     f_hat: jnp.ndarray,
     operator: str | tuple[str, ...],
 ) -> jnp.ndarray:
-    """Return the spectral multiplier of one chain class.
-
-    A tuple names one operator per slot of the leading axis of ``f_hat``, so
-    stacked operands share the class's gather, transforms and scatter while
-    each slot keeps its own ``i k_z`` or ``|k_z|``.
-    """
+    """Return per-slot gradient/absolute multipliers for shared chain FFTs."""
 
     def single(op: str) -> jnp.ndarray:
         if op == "grad":
@@ -386,11 +380,7 @@ def _linked_fft_scatter_output(
 
 
 def _shift_kx_modes(f: jnp.ndarray, shift: jnp.ndarray) -> jnp.ndarray:
-    """Return ``out[ky, kx, z] = f[ky, kx + shift[ky, z], z]`` in signed modes.
-
-    Radial mode numbers follow the FFT order; a source outside the resolved
-    band ``|n| <= (Nx - 1) // 2`` contributes zero.
-    """
+    """Shift signed kx modes; sources outside ``|n| <= (Nx-1)//2`` give zero."""
 
     nx = f.shape[-2]
     modes = np.fft.fftfreq(nx, d=1.0 / nx).astype(np.int32)
@@ -417,15 +407,11 @@ def _linked_fft_apply(
 ) -> jnp.ndarray:
     """Apply linked-chain spectral operators; a tuple ``f`` returns them stacked.
 
-    On a non-twisting flux tube the state row ``kx`` at ``z`` holds the
-    ballooning mode ``kx + m0(ky, z)``, so a parallel chain keeps
-    ``kx + m0`` fixed (not ``kx``): the operand is moved to that frame before
-    the chain transform and the result moved back.
+    Non-twisting tubes hold ballooning modes ``kx+m0(ky,z)`` fixed: move into
+    that frame before the chain transform and back after it.
 
-    With a tuple of equally shaped operands and one operator per operand, the
-    result carries a new leading axis whose slot ``i`` equals
-    ``_linked_fft_apply(f[i], ..., operator=operator[i])``: every chain class
-    then issues one gather-stack, FFT, IFFT and output write for all operands.
+    Tuple operands share a gather/FFT/IFFT; each leading output slot applies
+    its corresponding operator to the equally shaped input slot.
     """
 
     _validate_linked_fft_inputs(linked_indices, linked_kz, operator=operator)
@@ -496,8 +482,16 @@ def _linked_fft_apply(
             Ny=Ny,
             Nz=Nz,
         )
-    return _restore_linked_real_fft_conjugates(
+    out = _restore_linked_real_fft_conjugates(
         out, covered_rows=covered_rows, ny_full=ny_full
+    )
+    if isinstance(operator, str):
+        return _real_fft_nyquist_derivative(out, ny_full) if operator == "grad" else out
+    return jnp.stack(
+        [
+            _real_fft_nyquist_derivative(part, ny_full) if op == "grad" else part
+            for part, op in zip(out, operator)
+        ]
     )
 
 
@@ -720,7 +714,7 @@ def streaming_ladder_term(
                 kx_mask_minus=kx_mask_minus,
             )
     else:
-        dH_dz = grad_z_periodic(H, kz=kz)
+        dH_dz = grad_z_periodic(H, kz=kz, ny_full=ny_full)
     axis_m = -4
     pad = [(0, 0)] * H.ndim
     pad[axis_m] = (1, 1)

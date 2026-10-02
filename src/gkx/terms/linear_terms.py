@@ -202,7 +202,7 @@ def _streaming_parallel_derivative(
     ntft_m0: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     if not use_twist_shift:
-        return grad_z_periodic(rhs, kz=kz)
+        return grad_z_periodic(rhs, kz=kz, ny_full=ny_full)
     if linked_indices is None or linked_kz is None:
         raise ValueError(
             "linked_indices and linked_kz must be provided for linked streaming"

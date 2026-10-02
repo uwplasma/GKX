@@ -149,7 +149,9 @@ def _fused_electrostatic_constants(
         local_m_index=jnp.arange(local_m, dtype=jnp.int32).reshape(
             (1, local_m, 1, 1, 1)
         ),
-        grad_z=operator_grad_z_periodic,
+        grad_z=lambda value, **kw: operator_grad_z_periodic(
+            value, ny_full=getattr(cache, "ny_full", None), **kw
+        ),
         shift_axis=operator_shift_axis,
         kz=cache.kz,
     )
