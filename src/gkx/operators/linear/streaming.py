@@ -6,14 +6,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core_ky_layout import is_half, nyc_from_ny, symmetrize_self_conjugate_rows
+from gkx.core_ky_layout import is_half, nyc_from_ny
 from gkx.core_velocity import hermite_ladder_coeffs
 
-# One positivity guard for the whole linear operator. The local copy asked
-# whether a ``jnp`` round trip of its argument was traced, which is true of every
-# argument inside a trace, so the streaming kernels stopped checking ``dz`` and
-# ``vth`` under ``jit`` at all. Sharing the guard keeps one answer to the
-# question rather than two that can drift apart again.
+# Shared positivity/tracing guard for all streaming kernels.
 from gkx.operators.linear.params import _check_positive, _is_tracer  # noqa: F401
 
 
@@ -56,23 +52,26 @@ def grad_z_periodic(
     f_hat = jnp.fft.fft(f, axis=-1)
     df_hat = _fft_ik_multiplier(kz, f_hat) * f_hat
     out = jnp.fft.ifft(df_hat, axis=-1)
-    if ny_full is not None and out.ndim >= 3:
-        covered = jnp.arange(out.shape[-3]) <= int(ny_full) // 2
-        out = _restore_linked_real_fft_conjugates(
-            out, covered_rows=covered, ny_full=ny_full
-        )
-    return _symmetrize_physical_rows(out, ny_full)
+    return _real_fft_nyquist_derivative(out, ny_full)
 
 
-def _symmetrize_physical_rows(out: jnp.ndarray, ny_full: int | None) -> jnp.ndarray:
-    """Keep generic complex arrays and selected ky slices unchanged."""
+def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.ndarray:
+    """Remove only the ambiguous z-Nyquist derivative on physical ky rows.
+
+    Complex amplitudes/resolved frequencies, linear solves and |kz| remain valid.
+    """
     if (
         ny_full is None
         or out.ndim < 3
+        or out.shape[-1] % 2
         or out.shape[-3] not in (int(ny_full), nyc_from_ny(ny_full))
     ):
         return out
-    return symmetrize_self_conjugate_rows(out, ny_full=ny_full)
+    row = jnp.arange(out.shape[-3])
+    self_row = (row == 0) | ((int(ny_full) % 2 == 0) & (row == int(ny_full) // 2))
+    alternating = jnp.asarray((-1.0) ** np.arange(out.shape[-1]), jnp.real(out).dtype)
+    component = jnp.mean(out * alternating, axis=-1, keepdims=True) * alternating
+    return out - self_row.reshape((1,) * (out.ndim - 3) + (-1, 1, 1)) * component
 
 
 def _shift_kx_linked(
@@ -175,14 +174,7 @@ def _validate_linked_fft_inputs(
 def _flatten_linked_fft_state(
     f: jnp.ndarray,
 ) -> tuple[jnp.ndarray, tuple[int, ...], int, int, int]:
-    """Flatten ``(ky, kx)`` into one mode axis in the state's own row order.
-
-    Row ``p`` is mode ``(ky, kx) = (p // Nx, p % Nx)``. A reshape keeps the
-    state buffer where it is; swapping ``kx`` in front of ``ky`` first, as the
-    chain index convention ``ky + Ny * kx`` would suggest, made XLA copy the
-    whole state before every gather and again after every scatter. The chain
-    maps are translated to row order by :func:`_state_mode_rows` instead.
-    """
+    """Flatten state rows as ``ky * Nx + kx`` without a buffer transpose."""
 
     Ny = f.shape[-3]
     Nx = f.shape[-2]
@@ -236,12 +228,7 @@ def _linked_fft_multiplier(
     f_hat: jnp.ndarray,
     operator: str | tuple[str, ...],
 ) -> jnp.ndarray:
-    """Return the spectral multiplier of one chain class.
-
-    A tuple names one operator per slot of the leading axis of ``f_hat``, so
-    stacked operands share the class's gather, transforms and scatter while
-    each slot keeps its own ``i k_z`` or ``|k_z|``.
-    """
+    """Return per-slot gradient/absolute multipliers for shared chain FFTs."""
 
     def single(op: str) -> jnp.ndarray:
         if op == "grad":
@@ -501,7 +488,14 @@ def _linked_fft_apply(
     out = _restore_linked_real_fft_conjugates(
         out, covered_rows=covered_rows, ny_full=ny_full
     )
-    return _symmetrize_physical_rows(out, ny_full)
+    if isinstance(operator, str):
+        return _real_fft_nyquist_derivative(out, ny_full) if operator == "grad" else out
+    return jnp.stack(
+        [
+            _real_fft_nyquist_derivative(part, ny_full) if op == "grad" else part
+            for part, op in zip(out, operator)
+        ]
+    )
 
 
 def abs_z_periodic(

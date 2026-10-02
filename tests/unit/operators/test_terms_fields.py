@@ -2275,3 +2275,32 @@ def test_selected_complex_mode_keeps_signed_nyquist_derivative():
     # One selected positive ky is not a complete real-FFT layout.
     np.testing.assert_allclose(grad_z_periodic(wave, kz=kz, ny_full=24), expected)
     np.testing.assert_allclose(grad_z_periodic(wave, kz=kz), expected)
+
+
+@pytest.mark.parametrize("dtype", [jnp.complex64, jnp.complex128])
+def test_physical_layout_gradient_remains_complex_linear_and_abs_is_unchanged(dtype):
+    if dtype == jnp.complex128 and not jax.config.x64_enabled:
+        pytest.skip("complex128 requires x64")
+    from gkx.operators.linear.streaming import abs_z_linked_fft
+
+    ny, nx, nz = 8, 3, 8
+    rng = np.random.default_rng(328)
+    value = rng.normal(size=(ny, nx, nz)) + 1j * rng.normal(size=(ny, nx, nz))
+    kz = np.fft.fftfreq(nz, d=1 / nz)
+    symbol = np.broadcast_to(1j * kz, value.shape).copy()
+    symbol[[0, ny // 2], :, nz // 2] = 0
+    expected = np.fft.ifft(symbol * np.fft.fft(value, axis=-1), axis=-1)
+    f = jnp.asarray(value, dtype)
+    observed = grad_z_periodic(f, kz=jnp.asarray(kz), ny_full=ny)
+    tol = 4e-6 if dtype == jnp.complex64 else 2e-13
+    np.testing.assert_allclose(observed, expected, atol=tol, rtol=tol)
+    np.testing.assert_allclose(
+        grad_z_periodic(1j * f, kz=jnp.asarray(kz), ny_full=ny),
+        1j * observed,
+        atol=tol,
+        rtol=tol,
+    )
+    indices = (jnp.asarray(np.arange(nx)[:, None] * ny),)
+    result = abs_z_linked_fft(f, indices, (jnp.asarray(kz),), ny_full=ny)
+    oracle = np.fft.ifft(abs(kz) * np.fft.fft(value[0], axis=-1), axis=-1)
+    np.testing.assert_allclose(result[0], oracle, atol=tol, rtol=tol)

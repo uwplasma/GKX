@@ -1451,10 +1451,10 @@ recursive = true
 # 82606 -> 82799: independent ES/Apar velocity integrals, Bpar boundary
 # invariance, complete 4D/5D cache fixture and optional-backend test isolation.
 # Cases stay in existing files; the 30-file topology cap is unchanged.
-# 82799 -> 82862: analytic real-FFT parallel-streaming sine/cosine/Nyquist
+# 82799 -> 82891: analytic real-FFT parallel-streaming and complex-linearity
 # and conjugate-pair gates in the existing operator suite (18 cases).
 # Source-line and 30-test-file caps remain unchanged.
-baseline = 82862
+baseline = 82891
 target = 35000
 
 [[line_budget_policy.counts]]

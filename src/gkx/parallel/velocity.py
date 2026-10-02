@@ -117,6 +117,7 @@ def periodic_streaming_shard_map(
     *,
     kz: Any,
     vth: Any = 1.0,
+    ny_full: int | None = None,
     devices: Sequence[Any] | None = None,
     axis_name: str = "m",
 ) -> Any:
@@ -127,7 +128,7 @@ def periodic_streaming_shard_map(
     from gkx.operators.linear.streaming import grad_z_periodic
 
     arr = jnp.asarray(state)
-    dstate_dz = grad_z_periodic(arr, kz=kz)
+    dstate_dz = grad_z_periodic(arr, kz=kz, ny_full=ny_full)
     return hermite_streaming_ladder_shard_map(
         dstate_dz, plan, vth=vth, devices=devices, axis_name=axis_name
     )
