@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GPU occupancy gate for Q8 (office). Written after GPU1 was taken by another
+# GPU occupancy gate for Q8 (benchmark). Written after GPU1 was taken by another
 # session's process at 19:05 CDT and run_convergence.sh stopped (exit 4).
 # Usage: gate.sh RUN_DIR WAIT_CAP_SECONDS [PHASES]
 # PHASES is a space-separated subset of "gkx gx t300" (default all three); it
@@ -19,7 +19,7 @@ WAIT_CAP=$2
 PHASES=${3:-gkx gx t300}
 D=plan/research/scripts/2026-09-13-collisional-convergence
 S="$RUN_DIR/src_stage/$D"
-PY=/home/rjorge/venvs/gkx-nl/bin/python
+PY=python
 LOG="$RUN_DIR/logs/gate.txt"
 BASE="nu3e-3-nl24 nu3e-3-nl32 nu1e-3-nl48 nu3e-3-nl48 nu1e-2-nl48 nu0-nl64 nu1e-3-nl16 nu3e-3-nl16 nu1e-2-nl16"
 GX="gx-nu1e-2-nl24 gx-nu1e-2-nl32 gx-nu1e-2-nl32-nohyper"

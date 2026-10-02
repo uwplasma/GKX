@@ -1,6 +1,6 @@
 {
   "jax": "0.11.2",
-  "host": "pop-os",
+  "host": "benchmark",
   "devices": [
     "cpu:0"
   ],

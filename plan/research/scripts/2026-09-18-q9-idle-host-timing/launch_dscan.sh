@@ -3,7 +3,7 @@
 # throughput), same rotation and same registered gate rule.
 cd "$(dirname "$0")"
 DIR=$PWD
-export PY=/home/rjorge/venvs/gkx-nl/bin/python
+export PY=python
 CORES=2-7,12-17
 export CHECK_CORES=$CORES SIB_CORES=20-25,30-35
 export LOADMAX=1000 BUSYMEAN=0.10 BUSYWORST=0.50

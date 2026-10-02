@@ -1,6 +1,6 @@
 # Cross-code benchmark record, 2026-09-27 (BUG-XCODE lane: VAL-REF, VAL-XCODE, VAL-KE, EM-B-PAR)
 
-This record covers runs on the office host: 2x RTX A4000 and 36 cores, shared with other users. The load average was 40–100 while the runs were going, so wall times are not benchmark timings and are not cited as such.
+This record covers runs on the benchmark host: 2x RTX A4000 and 36 cores, shared with other users. The load average was 40–100 while the runs were going, so wall times are not benchmark timings and are not cited as such.
 
 Software:
 - GKX at `main` `cf1d40828` (2.4.0), JAX 0.10.2, SOLVAX 0.26.0.
@@ -85,7 +85,7 @@ GS2 rungs, each run to 100 code-time units:
 **Finding: first independent kinetic-electron reference.**
 - GS2 and GX agree on the kinetic-electron growth rate to 1.2% at ky .30 and 0.2% at ky .50. The GS2 value is converged to 0.7% over two rungs.
 - This is the first independent reference for the Miller kinetic-electron cell: rank 5, two external codes.
-- The GKX side is the remaining step (VAL-KE): a certified two-species eigenpair at Nl16/Nm48, about 1 h per ky on office CPU.
+- The GKX side is the remaining step (VAL-KE): a certified two-species eigenpair at Nl16/Nm48, about 1 h per ky on benchmark CPU.
 
 ## 4. EM: KBM at β = 1.5%, A∥ only and with B∥ (EM-B-PAR)
 

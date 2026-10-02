@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Q20 gyaradax lane (office GPU0 only while idle). Usage: run_gyaradax_queue.sh <queue-file>
+# Q20 gyaradax lane (benchmark GPU0 only while idle). Usage: run_gyaradax_queue.sh <queue-file>
 # Queue lines: "<ky_gx> <rung> <timeout_s>". Before every run the lane requires that
 # nvidia-smi --query-compute-apps lists no process on GPU0 (UUID c64146c9...); if any other
 # process is there it stops (never shares or waits on a GPU another session uses).
@@ -7,7 +7,7 @@ set -u
 Q=$1
 ROOT=$(cd "$(dirname "$0")" && pwd)
 GPU_UUID=GPU-c64146c9-227c-496f-974a-d1a66ec55673
-PY=/home/rjorge/venvs/gyaradax/bin/python
+PY=python
 export CUDA_VISIBLE_DEVICES=0 XLA_PYTHON_CLIENT_PREALLOCATE=false
 SUP=$ROOT/logs/supervisor_gyaradax.txt
 mkdir -p "$ROOT/logs" "$ROOT/gyaradax"

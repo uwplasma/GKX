@@ -1,5 +1,5 @@
 # Q8 collisional Laguerre convergence of the Cyclone ky=.55 growth rate
-# (registered 2026-09-13 before any run; executed 2026-09-13/14 on office, see
+# (registered 2026-09-13 before any run; executed 2026-09-13/14 on benchmark, see
 # plan/log.md. The T=300 variants at the end were added at 19:07 CDT.)
 #
 # Question: is the Nl-converged linear growth rate of this mode ~.017 once a

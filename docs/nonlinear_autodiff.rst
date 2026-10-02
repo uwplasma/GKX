@@ -253,13 +253,13 @@ differentiated on three environments. The recorded values are in
    * - compared
      - isolates
      - relative gradient difference
-   * - office CPU vs RTX A4000, both jax 0.11.1
+   * - benchmark CPU vs RTX A4000, both jax 0.11.1
      - device only
      - :math:`1.5\times10^{-15}`
    * - laptop CPU (jax 0.9.2) vs RTX A4000 (jax 0.11.1)
      - device, architecture and jax version
      - :math:`7.7\times10^{-16}`
-   * - laptop CPU (jax 0.9.2) vs office CPU (jax 0.11.1)
+   * - laptop CPU (jax 0.9.2) vs benchmark CPU (jax 0.11.1)
      - architecture and jax version, device fixed
      - :math:`2.3\times10^{-15}`
 

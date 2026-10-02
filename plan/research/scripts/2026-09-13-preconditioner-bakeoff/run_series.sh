@@ -4,7 +4,7 @@
 # Each entry is one quoted string "TAG::script.py --arg value ...". Wall cap per run: CAP_S (2400 s).
 set -u
 D=plan/research/scripts/2026-09-13-preconditioner-bakeoff
-PY=${PY:-/Users/rogeriojorge/local/venvs/gkx-review-20260913/bin/python}
+PY=${PY:-python}
 CAP_S=${CAP_S:-2400}
 export PYTHONPATH=$PWD/src:$PWD JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg
 export XLA_FLAGS="--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1"

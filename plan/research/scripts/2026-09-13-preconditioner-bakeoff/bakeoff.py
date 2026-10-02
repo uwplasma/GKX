@@ -1017,7 +1017,7 @@ def extrapolate(directory: Path, candidates: str) -> None:
                     f"    {label}: its ~ n^{p:.2f} -> {its:.0f} at n={PRODUCTION_N}; "
                     f"{steps} RHS x {its:.0f} its x ({t_iter * 1e3:.1f} ms apply+matvec + "
                     f"{t_orth * 1e3:.1f} ms mean orth) + setup {setup:.0f} s = {total:.0f} s "
-                    f"(adaptive route, #232 office 12 threads: {ADAPTIVE_SECONDS:.0f} s)"
+                    f"(adaptive route, #232 benchmark 12 threads: {ADAPTIVE_SECONDS:.0f} s)"
                 )
 
 

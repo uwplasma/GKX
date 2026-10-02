@@ -1,6 +1,6 @@
-# GKX plan item 2.1e — office GX rebuild with `-prec-sqrt=true`
+# GKX plan item 2.1e — benchmark GX rebuild with `-prec-sqrt=true`
 
-Date: 2026-08-19 · Machine: `office` (pop-os, 36 cores, 2× RTX A4000 sm_86)
+Date: 2026-08-19 · Machine: `benchmark` (pop-os, 36 cores, 2× RTX A4000 sm_86)
 GX revision: **3865a537** (unchanged, clean) · nvcc 11.5.119, gcc-10.4.0 host compiler
 
 **Bottom line:** `-prec-sqrt=true` is *not* a no-op — it changes the generated device code and
@@ -39,14 +39,14 @@ This matters because GX is a predominantly single-precision code (≈503 `float`
 ### Decision: add **only** `-prec-sqrt=true`, keep `-use_fast_math`
 
 That is exactly how upstream `Makefiles/Makefile.ubuntu` spells it, and nothing else in that file
-differs numerically from `Makefile.office` (the rest is package paths, `CUDAARCH=75` vs our `86`,
+differs numerically from `Makefile.benchmark` (the rest is package paths, `CUDAARCH=75` vs our `86`,
 and no `--std=c++17`). `-use_fast_math` was kept because **no upstream makefile drops it** —
 removing it would be a larger deviation from upstream than upstream itself ever takes.
 
 Worth recording: **upstream is not uniform on this flag.** Of the 20 shipped makefiles, only four
 carry `-prec-sqrt=true` (`ubuntu`, `gx`, `getafix`, `psfcgpu`); the large HPC ones
 (`perlmutter`, `summit`, `stellar`, `daint`, `polaris`, `raven`, `traverse`, `m100`, …) use bare
-`-use_fast_math`, i.e. the old office setting. So "upstream's current numerics flag" really means
+`-use_fast_math`, i.e. the old benchmark setting. So "upstream's current numerics flag" really means
 "`Makefile.ubuntu`'s" — which is the right analogue for a desktop workstation, and is the
 maintained one (maintainer `iabel@umd.edu`).
 
@@ -58,36 +58,36 @@ Side-by-side, both runnable:
 
 | build | tree | binary | NVCCFLAGS numerics |
 |---|---|---|---|
-| **A (old)** | `/home/rjorge/GX` | `/home/rjorge/GX/gx`, archived `~/gx_builds/gx.nofastsqrt` | `-use_fast_math` |
-| **B (new)** | `/home/rjorge/GX_precsqrt` | `/home/rjorge/GX_precsqrt/gx`, archived `~/gx_builds/gx.precsqrt` | `-use_fast_math -prec-sqrt=true` |
+| **A (old)** | `artifacts/GX` | `artifacts/gx`, archived `~/gx_builds/gx.nofastsqrt` | `-use_fast_math` |
+| **B (new)** | `artifacts/GX_precsqrt` | `artifacts/gx`, archived `~/gx_builds/gx.precsqrt` | `-use_fast_math -prec-sqrt=true` |
 
-- Backup of the original flags: `/home/rjorge/GX/Makefiles/Makefile.office.nofastsqrt.bak`.
-- Both trees are at **3865a537**; `git status` in each shows only untracked `Makefiles/Makefile.office`
+- Backup of the original flags: `artifacts/Makefile.benchmark.nofastsqrt.bak`.
+- Both trees are at **3865a537**; `git status` in each shows only untracked `Makefiles/Makefile.benchmark`
   (plus the `.bak` in the original tree). Nothing tracked was modified, nothing committed or pushed.
   A stale cosmetic edit left in `benchmarks/linear/ITG_cyclone/itg_salpha_adiabatic_electrons.in`
   by the previous session (a dropped trailing comment; `t_max = 150.0` value unchanged) was
   reverted, so the checkout is now genuinely clean.
-- Build: `make -j36 GK_SYSTEM=office`, exit 0, no errors (only the usual benign
+- Build: `make -j36 GK_SYSTEM=benchmark`, exit 0, no errors (only the usual benign
   `nvlink warning : Skipping incompatible libpthread.a/libdl.a`).
 - Binaries differ (167 147 984 vs 167 143 888 bytes). SASS confirms the flag bit:
   `obj/device_funcs.o` grows from 75 331 to 76 504 disassembled lines — the multi-instruction IEEE
   sqrt sequences replacing single `MUFU.RSQ` approximations.
 
-Exact compile line used (from `make -n GK_SYSTEM=office obj/linear.o`):
+Exact compile line used (from `make -n GK_SYSTEM=benchmark obj/linear.o`):
 
 ```
 /usr/bin/nvcc -Wall -Wno-unused-local-typedefs -Wno-deprecated-declarations -Wno-parentheses \
   -Wno-unused-result -c -o obj/linear.o src/linear.cu \
-  -ccbin /home/rjorge/local/install/gcc-10.4.0/bin/g++ --std=c++17 \
+  -ccbin ../install/gcc-10.4.0/bin/g++ --std=c++17 \
   --forward-unknown-to-host-compiler -arch=compute_86 -code=sm_86 \
   -use_fast_math -prec-sqrt=true -fPIC -rdc=true -O3 \
   -I. -I include -I geometry_modules/vmec/include \
-  -I /home/rjorge/local/install/libcutensor-1.7.0.1/include \
-  -I /home/rjorge/local/install/nccl-2.18.1/include \
-  -I /home/rjorge/local/install/openmpi-4.1.6/include \
-  -I /home/rjorge/local/install/netcdf-c-4.9.2/include \
-  -I /home/rjorge/local/install/gsl-2.7.1/include \
-  -DGX_PATH=\"/home/rjorge/GX_precsqrt\"
+  -I ../install/libcutensor-1.7.0.1/include \
+  -I ../install/nccl-2.18.1/include \
+  -I ../install/openmpi-4.1.6/include \
+  -I ../install/netcdf-c-4.9.2/include \
+  -I ../install/gsl-2.7.1/include \
+  -DGX_PATH=\"artifacts/GX_precsqrt\"
 ```
 
 ---
@@ -234,7 +234,7 @@ within ±0.04%.
 
 ## 6. Recommendations
 
-**1. Make build B (`-use_fast_math -prec-sqrt=true`) canonical for future office references.**
+**1. Make build B (`-use_fast_math -prec-sqrt=true`) canonical for future benchmark references.**
 Reasons, in order of weight:
 - It matches upstream's maintained desktop makefile (`Makefile.ubuntu`), so parity numbers are
   taken under the arithmetic that upstream's own reference platform uses — which was the point of
@@ -246,13 +246,13 @@ Reasons, in order of weight:
 - No downside found: no converged eigenvalue degrades by more than 0.05%, and the most-converged
   ones do not move at all.
 
-To adopt: promote `/home/rjorge/GX_precsqrt/Makefiles/Makefile.office` into `/home/rjorge/GX`
+To adopt: promote `artifacts/Makefile.benchmark` into `artifacts/GX`
 (the `.nofastsqrt.bak` preserves the old flags for reproducing build A) and rebuild in place, or
 just keep using the `GX_precsqrt` tree. Both binaries are archived in `~/gx_builds/`. Note the
-`-DGX_PATH` bake-in: `gx.precsqrt` resolves its geometry python modules to `/home/rjorge/GX_precsqrt`,
+`-DGX_PATH` bake-in: `gx.precsqrt` resolves its geometry python modules to `artifacts/GX_precsqrt`,
 so that tree must stay in place.
 
-If GKX tracks the build environment (e.g. `benchmarks/capability_matrix.toml`), the office entry
+If GKX tracks the build environment (e.g. `benchmarks/capability_matrix.toml`), the benchmark entry
 should record `-use_fast_math -prec-sqrt=true` and note that this now matches `Makefile.ubuntu`.
 
 **2. GKX's tracked parity numbers do NOT need regenerating.** Every `converged=True` row still
@@ -276,15 +276,15 @@ and keep the tight gate — but do not leave a tight gate on a number that moves
 
 ---
 
-## 7. Artifacts left on `office`
+## 7. Artifacts left on `benchmark`
 
 - `~/gx_rebaseline_precsqrt_20260819/` — new reference outputs, five cases + `repeat/`
   (determinism check), shipped `*_correct.out.nc` alongside, analysis scripts
   (`report.py`, `checkpf.py`, `vs_tracked.py`, `extract.py`), `driver.log`, `repeat.log`.
 - `~/gx_rebaseline_20260818/` — previous build-A references, untouched.
-- `/home/rjorge/GX_precsqrt/` — build-B tree @3865a537, `build.log` with the full build transcript.
+- `artifacts/` — build-B tree @3865a537, `build.log` with the full build transcript.
 - `~/gx_builds/gx.nofastsqrt`, `~/gx_builds/gx.precsqrt` — both binaries archived.
-- `/home/rjorge/GX/Makefiles/Makefile.office.nofastsqrt.bak` — original office flags.
+- `artifacts/Makefile.benchmark.nofastsqrt.bak` — original benchmark flags.
 - `~/nvcc_precsqrt_test/` — the PTX flag-interaction probe (`t.cu` + five `.ptx`).
 
 No commits, no pushes, no system or other-user changes.

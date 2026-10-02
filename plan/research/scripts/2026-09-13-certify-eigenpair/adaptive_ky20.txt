@@ -1,4 +1,4 @@
-[     0.70s] env ok gkx=/Users/rogeriojorge/local/GKX-worktrees/certify-baseline-0cce177/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
+[     0.70s] env ok gkx=../GKX-worktrees/certify-baseline-0cce177/src/gkx/__init__.py jax=0.10.2 solvax=0.20.0
 [     1.25s] status: building runtime geometry
 [     1.25s] status: building spectral grid
 [     1.25s] status: building runtime linear parameters

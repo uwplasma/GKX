@@ -164,7 +164,7 @@ Ranks 1–7 are about 6,600 lines at low or medium risk; with ranks 8–12 the
 tree reaches roughly 55,000 lines in about 90 files, and the §2.4 targets then
 need the one-owner merges inside `solvers_*` and `operators/`.
 
-## 6. Behaviour fingerprints (office host, JAX 0.10.2, float64)
+## 6. Behaviour fingerprints (benchmark host, JAX 0.10.2, float64)
 
 `fingerprint.py` in this directory, run on the base (f005418bf) and the
 contracted tree. The comparison is bitwise.

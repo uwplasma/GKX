@@ -33,11 +33,7 @@ def git_source_state(root: Path) -> dict[str, Any]:
 
 
 def make_profile_options(*, python_tracer_level: int = 0, host_tracer_level: int = 0):
-    """Return JAX profile options with explicit tracer levels.
-
-    The default levels avoid the optional TensorFlow Python-trace hook, which is
-    not present on the lightweight `office` profiling environment.
-    """
+    """Return JAX tracer levels; disable the optional TensorFlow hook by default."""
 
     import jax.profiler as jprof
 

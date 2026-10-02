@@ -16,7 +16,7 @@
 set -u
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$REPO"
-PY="${GKX_PY:-/Users/rogeriojorge/local/venvs/gkx-review-20260913/bin/python}"
+PY="${GKX_PY:-python}"
 S=plan/research/scripts/2026-09-20-default-resolution-and-integrator/measure.py
 O=plan/research/scripts/2026-09-20-default-resolution-and-integrator/out
 DECK=examples/linear/axisymmetric/cyclone.toml

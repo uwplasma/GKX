@@ -51,7 +51,7 @@ if 0.2828 in gkx_horizon and gkx_horizon[0.2828] == 120:
 
 # --- tracked GX/GKX mismatch table (s-alpha + hypercollisional lane) ---
 gxtab = {}
-with open("/Users/rogeriojorge/local/GKX/docs/_static/cyclone_mismatch_table.csv") as f:
+with open("../GKX/docs/_static/cyclone_mismatch_table.csv") as f:
     next(f)
     for line in f:
         v = list(map(float, line.split(",")))

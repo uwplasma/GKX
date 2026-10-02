@@ -1,7 +1,7 @@
 # ruff: noqa: E402
 """V1: re-read existing GX Nl24 / Nl32 outputs (read-only; no simulation).
 
-Inputs (office): nl24.out.nc (Nl24, this deck) and full96.out.nc (Nl32), plus big.nc Phi snapshots.
+Inputs (benchmark): nl24.out.nc (Nl24, this deck) and full96.out.nc (Nl32), plus big.nc Phi snapshots.
 Prints W(l), W(m) time evolution, tail fractions, P(Nl-1, m<=2), gamma(t) windows, |phi|^2(theta),
 and the complex overlap of the final phi(theta) between the two runs.
 """
@@ -11,15 +11,15 @@ import numpy as np
 
 runs = {
     "Nl24": (
-        "/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/nl24.out.nc",
-        "/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/nl24.big.nc",
+        "artifacts/nl24.out.nc",
+        "artifacts/nl24.big.nc",
     ),
     "Nl32": (
-        "/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L/full96.out.nc",
-        "/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L/full96.big.nc",
+        "artifacts/full96.out.nc",
+        "artifacts/full96.big.nc",
     ),
     "Nl32_Nz192": (
-        "/home/rjorge/gx-nyquist-resolution-20260905.Ut2U6L/full192.out.nc",
+        "artifacts/full192.out.nc",
         None,
     ),
 }

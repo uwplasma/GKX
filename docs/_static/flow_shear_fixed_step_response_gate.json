@@ -733,7 +733,7 @@
   "kind": "equilibrium_exb_flow_shear_fixed_step_response_gate",
   "passed": false,
   "provenance_policy": {
-    "raw_outputs": "not tracked; retained only on the office campaign host during analysis",
+    "raw_outputs": "not tracked; retained only on the benchmark campaign host during analysis",
     "reason": "The compact gate statistics and checksums are sufficient for release scope; 50--63 MB state/NetCDF outputs do not belong in Git.",
     "tracked_evidence": [
       "docs/_static/flow_shear_fixed_step_response_gate.json",

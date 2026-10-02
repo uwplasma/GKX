@@ -2704,15 +2704,13 @@ def test_nonlinear_sharding_sweep_subcommand_parser_defaults_to_bounded_artifact
     assert args.devices == [1, 2]
     assert args.sharding_options == "auto,kx"
     assert args.timeout_s == 300.0
-    assert args.office_gpu_xlarge is False
+    assert args.gpu_xlarge is False
 
 
-def test_nonlinear_sharding_sweep_subcommand_office_gpu_preset_is_canonical() -> None:
+def test_nonlinear_sharding_sweep_subcommand_gpu_preset_is_canonical() -> None:
     mod = _load_sweep_tool_module()
 
-    args = mod.apply_sweep_preset(
-        mod.build_sweep_parser().parse_args(["--office-gpu-xlarge"])
-    )
+    args = mod.apply_sweep_preset(mod.build_sweep_parser().parse_args(["--gpu-xlarge"]))
 
     assert args.backend == "gpu"
     assert args.devices == [1, 2]

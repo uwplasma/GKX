@@ -1,10 +1,10 @@
 # GX Rebaseline on Office GPU — GKX plan item 2.1b
 
-Date: 2026-08-18. Machine: `office` (pop-os, 2x RTX A4000).
-GX build: `/home/rjorge/GX/gx` @ commit **3865a537** (`Merged in next (PR #76)`), built `GK_SYSTEM=office`.
+Date: 2026-08-18. Machine: `benchmark` (pop-os, 2x RTX A4000).
+GX build: `artifacts/gx` @ commit **3865a537** (`Merged in next (PR #76)`), built `GK_SYSTEM=benchmark`.
 Reference revision in GKX docs: **bc2fe552** (56 commits behind).
 
-Output directory (all artifacts preserved): **`~/gx_rebaseline_20260818/`** on office.
+Output directory (all artifacts preserved): **`~/gx_rebaseline_20260818/`** on benchmark.
 
 ---
 
@@ -79,7 +79,7 @@ label it explicitly as a fixed-step smoke-probe. As-is, anyone comparing GKX aga
 
 ## 1. Decks found
 
-### GX's own benchmark decks (`/home/rjorge/GX/benchmarks/linear/`) — the real source
+### GX's own benchmark decks (`artifacts/`) — the real source
 | case | deck | shipped reference |
 |---|---|---|
 | Cyclone s-alpha ITG, adiabatic e | `ITG_cyclone/itg_salpha_adiabatic_electrons.in` | `itg_salpha_adiabatic_electrons_correct.out.nc` |
@@ -181,7 +181,7 @@ The premise "GX and stella both use vth=sqrt(2T/m)" is **false for GX**. GX is i
 Both original observations were correct; only the assumption that GX sits with stella was wrong.
 (Independently reached here from source, and confirmed by the PR#45 assessment agent.)
 
-### Evidence — GX side (`/home/rjorge/GX` @3865a537)
+### Evidence — GX side (`artifacts/GX` @3865a537)
 
 **`src/parameters.cu:1062-1065`** (in `Parameters::init_species`):
 ```c
@@ -228,7 +228,7 @@ evidence is the *equations*:
   coordinator's point 2** (their line numbers 537/795 are approximately right; the exact block is
   532-544).
 
-### Evidence — GKX side (`/Users/rogeriojorge/local/GKX-worktrees/planpr`)
+### Evidence — GKX side (`../GKX-worktrees/planpr`)
 
 - **`src/gkx/operators/linear/params.py:264-266`**:
   ```python
@@ -315,7 +315,7 @@ order for a Miller CBC ITG mode near the spectrum peak (cf. new-GX Miller at ky=
 
 ---
 
-## 5. Saved outputs (office)
+## 5. Saved outputs (benchmark)
 
 Root: **`~/gx_rebaseline_20260818/`**
 

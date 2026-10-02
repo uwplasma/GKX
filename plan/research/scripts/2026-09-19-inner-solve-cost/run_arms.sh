@@ -12,7 +12,7 @@
 # exit status and end time.
 set -u
 D=plan/research/scripts/2026-09-19-inner-solve-cost
-PY=${PY:-/Users/rogeriojorge/local/venvs/gkx-review-20260913/bin/python}
+PY=${PY:-python}
 SCRIPT=${SCRIPT:-q21.py}
 CAP_S=${CAP_S:-2700}
 OUT=$1

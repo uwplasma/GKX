@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wait until one office GPU has no compute process other than the persistent
+# Wait until one benchmark GPU has no compute process other than the persistent
 # web-app workers (each well under 300 MiB) and is idle, then run PHASE=extra
 # on that GPU only. Never shares or preempts a GPU in use.
 # Usage (repository root): wait_gpu_then_run.sh <outdir> <python>

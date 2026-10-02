@@ -20,10 +20,10 @@
   "max_abs_state_error": 0.0,
   "max_rel_state_error": 0.0,
   "method": "rk2",
-  "profile_command": "/opt/local/bin/python3 /Users/rogeriojorge/local/GKX/tools/profiling/profile_nonlinear_sharding.py --out-json docs/_static/nonlinear_sharding_profile.json --nx 16 --ny 16 --nz 24 --nl 2 --nm 4 --steps 8 --method rk2 --sharding auto --sharding-options auto,kx --warmups 1 --repeats 2",
+  "profile_command": "/opt/local/bin/python3 GKX/tools/profiling/profile_nonlinear_sharding.py --out-json docs/_static/nonlinear_sharding_profile.json --nx 16 --ny 16 --nz 24 --nl 2 --nm 4 --steps 8 --method rk2 --sharding auto --sharding-options auto,kx --warmups 1 --repeats 2",
   "profile_command_argv": [
     "/opt/local/bin/python3",
-    "/Users/rogeriojorge/local/GKX/tools/profiling/profile_nonlinear_sharding.py",
+    "GKX/tools/profiling/profile_nonlinear_sharding.py",
     "--out-json",
     "docs/_static/nonlinear_sharding_profile.json",
     "--nx",

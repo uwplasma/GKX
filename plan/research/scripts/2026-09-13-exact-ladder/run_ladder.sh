@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Q2 ladder supervisor (office CPU, shared host). Serial fresh processes, each in a
+# Q2 ladder supervisor (benchmark CPU, shared host). Serial fresh processes, each in a
 # systemd user scope with MemoryMax=20G, pinned to logical CPUs 0-11 with 12 BLAS/OMP
 # threads, nice 10. A 5-s poll records process-group RSS and the scope's cgroup
 # memory; it sends TERM then KILL above 20 GiB group RSS or 30 min wall (2 h total
@@ -9,7 +9,7 @@
 # with a larger cap, and stops the ladder after that rung's remaining arm.
 set -u
 DIR=$(cd "$(dirname "$0")" && pwd)
-PY=/home/rjorge/venvs/gkx-nl/bin/python
+PY=python
 OUT=$DIR/out
 mkdir -p "$OUT"
 export JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES= JAX_ENABLE_X64=true GKX_X64=1

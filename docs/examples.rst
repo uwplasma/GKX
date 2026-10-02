@@ -332,7 +332,7 @@ for :math:`k_y\rho_i` from 0.1 to 1). The fully implicit ``imex`` route is
 not a remedy at this size: at dt = 0.01 it ran 0.4 steps/s with every
 FGMRES solve at its 200-iteration cap (so not converged either), against
 31 steps/s at dt = 1.5e-3 for the stable explicit step: 0.004 against 0.047
-time units per second, 12 times slower (office CPU, shared host).
+time units per second, 12 times slower (benchmark CPU, shared host).
 
 **Choosing t_max** (units of :math:`a/v_{ti}`): the linear phase lasts about
 :math:`10/\gamma`, 20-40 here; saturation follows by :math:`t\approx60`-100;

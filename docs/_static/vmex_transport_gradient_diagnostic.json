@@ -160,7 +160,7 @@
   ],
   "next_action": "use a constraint-preserving projected update or constrained line search along the leading transport-gradient components",
   "setup": {
-    "input": "/home/rjorge/tmp/gkx-authoritative-qa-baseline-direct-metric-20260602151201/input.final",
+    "input": "artifacts/input.final",
     "max_mode": 5,
     "min_vmec_mode": 7,
     "transport_kind": "nonlinear_window_heat_flux",

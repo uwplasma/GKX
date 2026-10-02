@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sequential supervisor for the Q3 drift ablation (office GPU).
+# Sequential supervisor for the Q3 drift ablation (benchmark GPU).
 # Usage: run_ablation.sh RUN_DIR GPU_INDEX KEY [KEY ...]
 # RUN_DIR holds src_stage/ (git archive of the pinned SHA plus this directory
 # copied to the same relative path). GPU_INDEX is the physical GPU chosen by the
@@ -15,8 +15,8 @@ mkdir -p "$RUN_DIR/logs" "$RUN_DIR/results"
 export CUDA_VISIBLE_DEVICES="$GPU_INDEX" JAX_PLATFORMS=cuda XLA_PYTHON_CLIENT_PREALLOCATE=false
 export JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg
 export PYTHONPATH="$PWD/src:$PWD"
-export GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs
-PY=/home/rjorge/venvs/gkx-nl/bin/python
+export GX_PARITY_REF_DIR=artifacts/matched_refs
+PY=python
 MANIFEST=plan/research/scripts/2026-09-13-drift-ablation/manifest.toml
 STATUS="$RUN_DIR/logs/supervisor.txt"
 echo "supervisor pid $$ host $(hostname) gpu $GPU_INDEX start $(date -Is) keys: $*" >> "$STATUS"

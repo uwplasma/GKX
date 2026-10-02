@@ -10,7 +10,7 @@
     "min_pass_fraction": 1.0
   },
   "kind": "matched_nonlinear_transport_matrix_report",
-  "matrix_manifest": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix/matched_transport_matrix_manifest.json",
+  "matrix_manifest": "artifacts/matched_transport_matrix_manifest.json",
   "notes": [
     "This gate promotes only the selected matched baseline-vs-candidate matrix.",
     "It does not by itself validate universal nonlinear transport optimization across all stellarator classes."
@@ -21,7 +21,7 @@
       "alpha": 0.0,
       "baseline_mean": 10.347004495200766,
       "candidate_mean": 10.638882458046531,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0_ky0p1/qa_projected_weight_0p001_matrix_s0p45_a0_ky0p1_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p45_a0_ky0p1_matched_comparison.json",
       "ky": 0.1,
       "missing_comparison": false,
       "passed": false,
@@ -34,7 +34,7 @@
       "alpha": 0.0,
       "baseline_mean": 10.355527771023894,
       "candidate_mean": 10.608789141368012,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0_ky0p3/qa_projected_weight_0p001_matrix_s0p45_a0_ky0p3_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p45_a0_ky0p3_matched_comparison.json",
       "ky": 0.3,
       "missing_comparison": false,
       "passed": false,
@@ -47,7 +47,7 @@
       "alpha": 0.0,
       "baseline_mean": 10.355527771023894,
       "candidate_mean": 10.608789141368012,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0_ky0p5/qa_projected_weight_0p001_matrix_s0p45_a0_ky0p5_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p45_a0_ky0p5_matched_comparison.json",
       "ky": 0.5,
       "missing_comparison": false,
       "passed": false,
@@ -60,7 +60,7 @@
       "alpha": 0.7853981633974483,
       "baseline_mean": 11.530556368877091,
       "candidate_mean": 10.296091531595634,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0p785398_ky0p1/qa_projected_weight_0p001_matrix_s0p45_a0p785398_ky0p1_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p45_a0p785398_ky0p1_matched_comparison.json",
       "ky": 0.1,
       "missing_comparison": false,
       "passed": true,
@@ -71,7 +71,7 @@
     },
     {
       "alpha": 0.7853981633974483,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0p785398_ky0p3/qa_projected_weight_0p001_matrix_s0p45_a0p785398_ky0p3_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p45_a0p785398_ky0p3_matched_comparison.json",
       "ky": 0.3,
       "missing_comparison": true,
       "passed": false,
@@ -80,7 +80,7 @@
     },
     {
       "alpha": 0.7853981633974483,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p45_a0p785398_ky0p5/qa_projected_weight_0p001_matrix_s0p45_a0p785398_ky0p5_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p45_a0p785398_ky0p5_matched_comparison.json",
       "ky": 0.5,
       "missing_comparison": true,
       "passed": false,
@@ -89,7 +89,7 @@
     },
     {
       "alpha": 0.0,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0_ky0p1/qa_projected_weight_0p001_matrix_s0p64_a0_ky0p1_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p64_a0_ky0p1_matched_comparison.json",
       "ky": 0.1,
       "missing_comparison": true,
       "passed": false,
@@ -98,7 +98,7 @@
     },
     {
       "alpha": 0.0,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0_ky0p3/qa_projected_weight_0p001_matrix_s0p64_a0_ky0p3_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p64_a0_ky0p3_matched_comparison.json",
       "ky": 0.3,
       "missing_comparison": true,
       "passed": false,
@@ -107,7 +107,7 @@
     },
     {
       "alpha": 0.0,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0_ky0p5/qa_projected_weight_0p001_matrix_s0p64_a0_ky0p5_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p64_a0_ky0p5_matched_comparison.json",
       "ky": 0.5,
       "missing_comparison": true,
       "passed": false,
@@ -116,7 +116,7 @@
     },
     {
       "alpha": 0.7853981633974483,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0p785398_ky0p1/qa_projected_weight_0p001_matrix_s0p64_a0p785398_ky0p1_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p64_a0p785398_ky0p1_matched_comparison.json",
       "ky": 0.1,
       "missing_comparison": true,
       "passed": false,
@@ -125,7 +125,7 @@
     },
     {
       "alpha": 0.7853981633974483,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0p785398_ky0p3/qa_projected_weight_0p001_matrix_s0p64_a0p785398_ky0p3_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p64_a0p785398_ky0p3_matched_comparison.json",
       "ky": 0.3,
       "missing_comparison": true,
       "passed": false,
@@ -134,7 +134,7 @@
     },
     {
       "alpha": 0.7853981633974483,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p64_a0p785398_ky0p5/qa_projected_weight_0p001_matrix_s0p64_a0p785398_ky0p5_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p64_a0p785398_ky0p5_matched_comparison.json",
       "ky": 0.5,
       "missing_comparison": true,
       "passed": false,
@@ -143,7 +143,7 @@
     },
     {
       "alpha": 0.0,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0_ky0p1/qa_projected_weight_0p001_matrix_s0p78_a0_ky0p1_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p78_a0_ky0p1_matched_comparison.json",
       "ky": 0.1,
       "missing_comparison": true,
       "passed": false,
@@ -152,7 +152,7 @@
     },
     {
       "alpha": 0.0,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0_ky0p3/qa_projected_weight_0p001_matrix_s0p78_a0_ky0p3_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p78_a0_ky0p3_matched_comparison.json",
       "ky": 0.3,
       "missing_comparison": true,
       "passed": false,
@@ -161,7 +161,7 @@
     },
     {
       "alpha": 0.0,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0_ky0p5/qa_projected_weight_0p001_matrix_s0p78_a0_ky0p5_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p78_a0_ky0p5_matched_comparison.json",
       "ky": 0.5,
       "missing_comparison": true,
       "passed": false,
@@ -170,7 +170,7 @@
     },
     {
       "alpha": 0.7853981633974483,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0p785398_ky0p1/qa_projected_weight_0p001_matrix_s0p78_a0p785398_ky0p1_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p78_a0p785398_ky0p1_matched_comparison.json",
       "ky": 0.1,
       "missing_comparison": true,
       "passed": false,
@@ -179,7 +179,7 @@
     },
     {
       "alpha": 0.7853981633974483,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0p785398_ky0p3/qa_projected_weight_0p001_matrix_s0p78_a0p785398_ky0p3_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p78_a0p785398_ky0p3_matched_comparison.json",
       "ky": 0.3,
       "missing_comparison": true,
       "passed": false,
@@ -188,7 +188,7 @@
     },
     {
       "alpha": 0.7853981633974483,
-      "comparison_json": "/home/rjorge/gkx_nonlinear_matrix_20260622/projected_0p001_matrix_artifacts/s0p78_a0p785398_ky0p5/qa_projected_weight_0p001_matrix_s0p78_a0p785398_ky0p5_matched_comparison.json",
+      "comparison_json": "artifacts/qa_projected_weight_0p001_matrix_s0p78_a0p785398_ky0p5_matched_comparison.json",
       "ky": 0.5,
       "missing_comparison": true,
       "passed": false,

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Serialized office chain for the PERF-LIT remainder: GPU extra phase alone on
+# Serialized benchmark chain for the PERF-LIT remainder: GPU extra phase alone on
 # a free GPU (host-launch-bound rows are sensitive to host load, so no CPU job
 # of this lane runs beside it), then the CPU phase, then the pr3-cm re-run.
 # Usage (repository root): run_all_office.sh <python>

@@ -39,7 +39,7 @@
     "curvature_ratio": 0.0024839882221967553,
     "finite_difference_consistent": true,
     "finite_values": true,
-    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "input_path": "vmex/examples/data/input.nfp4_QH_warm_start",
     "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
     "max_curvature_ratio": 5.0,
     "minus_objective_table": [
@@ -137,7 +137,7 @@
       }
     ],
     "source_scope": "mode21_vmec_boozer_state_multi_point",
-    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+    "wout_path": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
   },
   "heldout_initial_objective": 0.720557454021897,
   "heldout_initial_report": {
@@ -172,7 +172,7 @@
     "curvature_ratio": 0.0024807814349433696,
     "finite_difference_consistent": true,
     "finite_values": true,
-    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.nfp4_QH_warm_start",
+    "input_path": "vmex/examples/data/input.nfp4_QH_warm_start",
     "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
     "max_curvature_ratio": 5.0,
     "minus_objective_table": [
@@ -270,7 +270,7 @@
       }
     ],
     "source_scope": "mode21_vmec_boozer_state_multi_point",
-    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_nfp4_QH_warm_start.nc"
+    "wout_path": "vmex/examples/data/wout_nfp4_QH_warm_start.nc"
   },
   "heldout_passed": true,
   "heldout_relative_reduction": 0.0004588662099816408,

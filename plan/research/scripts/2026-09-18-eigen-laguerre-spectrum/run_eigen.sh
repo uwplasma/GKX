@@ -13,7 +13,7 @@ set -u
 RUN_DIR="$1"; shift
 SRC="$RUN_DIR/src_stage"
 DECKS="$SRC/plan/research/scripts/2026-09-18-eigen-laguerre-spectrum"
-VENV=/home/rjorge/venvs/gkx-nl/bin
+VENV=artifacts/bin
 GPU="${GPU:-0}"
 CORES="${CORES:-18-35}"
 TIMEOUT="${TIMEOUT:-5400}"
@@ -53,7 +53,7 @@ for KEY in "$@"; do
         CUDA_VISIBLE_DEVICES="$GPU" \
         XLA_PYTHON_CLIENT_PREALLOCATE=false \
         JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg \
-        GX_PARITY_REF_DIR=/home/rjorge/gkx-r0-rate-parity-20260905.GtHbRz/matched_refs \
+        GX_PARITY_REF_DIR=artifacts/matched_refs \
     taskset -c "$CORES" \
     /usr/bin/time -v -o "$RUN_DIR/results/$KEY.time.txt" \
     timeout --signal=TERM --kill-after=10s "$TIMEOUT" \

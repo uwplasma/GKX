@@ -1,8 +1,8 @@
 # GKX Nonlinear Multi-Device Parallelization Design (Plan item 4.1)
 
 Date: 2026-08-18. Author: design agent for feat/bounded-memory-nonlinear-adjoint.
-Repo state read: /Users/rogeriojorge/local/GKX @ feat/bounded-memory-nonlinear-adjoint (read-only).
-GX intel: office source dive 2026-08-18, GX @ 3865a537.
+Repo state read: ../GKX @ feat/bounded-memory-nonlinear-adjoint (read-only).
+GX intel: benchmark source dive 2026-08-18, GX @ 3865a537.
 
 ## 0. Decision
 
@@ -27,7 +27,7 @@ identity gates on every required primitive.
 
 ## 1. Evidence base
 
-### 1.1 GX (office dive, verified)
+### 1.1 GX (benchmark dive, verified)
 - 1 rank = 1 GPU (`cudaSetDevice(iproc%nGPUs)`, `src/main.cu:23`).
 - Decomposed axes: SPECIES first, then HERMITE only; local `Nm = Nm/nprocs_m`
   must divide evenly; x, y, z, Laguerre always replicated (`src/grids.cu:47-83`).
@@ -133,7 +133,7 @@ Already in-repo and gated for this pattern (identity-passing):
   ((4,16,192,192,64) already OOMs one A4000).
 - Cost: when the Hermite axis is actually split, the width-2 halo moves
   4/Nm_loc of the shard per RHS (§4.3). With species-first factoring the
-  office 2-GPU box gets a **pure species mesh with zero halo**.
+  benchmark 2-GPU box gets a **pure species mesh with zero halo**.
 
 ### (b) ky-shard (and kx-shard). **REJECTED for production**
 The bracket consumes full (x,y) planes: `irfft2`/`fft2` over axes (ky,kx).
@@ -210,7 +210,7 @@ bracket-fusion reference implementation.
   `Nm % nm_chunks == 0` exactly** (GX parity: local Nm must divide evenly —
   no ceil-padding; fail closed with a routing error naming the divisible
   device counts).
-- Consequences: office 2×A4000 + Ns=2 → mesh (2,1), **no halo, one field
+- Consequences: benchmark 2×A4000 + Ns=2 → mesh (2,1), **no halo, one field
   psum** — the minimal-communication production configuration. Ns=1
   (adiabatic electrons) on 2 devices → mesh (1,2), halo lane active. 4+
   devices → (2,2), (2,4), ...
@@ -304,7 +304,7 @@ Every collective in §4.3 is linear: `psum` transposes to broadcast/identity,
 guidance), and the sanity check (§7) confirms `jax.grad` through the
 halo+psum kernel is **bitwise-identical** to the serial gradient on jax
 0.9.2. The checkpointed-scan adjoint (`checkpointed_explicit_scan`) composes
-outside the shard_map unchanged. One known pin: the office JAX 0.6.2 note
+outside the shard_map unchanged. One known pin: the benchmark JAX 0.6.2 note
 about collision VMA annotations failing under standalone shard_map — retest
 on 0.9.2/0.10.2 in the 4.2 trial (expected fixed; the VMA machinery is the
 piece that matured).
@@ -364,7 +364,7 @@ strict_identity = true
   `VelocityShardingPlan` dict) is recorded in the run artifacts, matching the
   scan-orchestration precedent.
 - Host-stage the initial state and species caches once before `device_put`
-  with the mesh sharding (the office resharding defect and the device-z gate
+  with the mesh sharding (the benchmark resharding defect and the device-z gate
   both showed staging-from-host is the reliable path), then enter the jitted
   scan.
 
@@ -374,7 +374,7 @@ strict_identity = true
   matching instead of silently resharding — treat any reshard-on-entry as a
   bug, which suits the fail-closed design.
 - **jax 0.10.0 removed the C++ pmap infrastructure and `PmapSharding`.** The
-  measured species route on the office stack is an enclosing `pmap`
+  measured species route on the benchmark stack is an enclosing `pmap`
   (`docs/parallelization.rst:713-733`); this design deliberately re-bases it
   on `shard_map` so the production lane is not standing on pmap when the pin
   moves. Nothing else in 0.10.0-0.10.2 (LAPACK batch-parallel CPU, scipy
@@ -399,7 +399,7 @@ elements = 268,435,456.
 | Quantity | complex64 | complex128 |
 |---|---|---|
 | Full state | 2.147 GB | 4.295 GB |
-| Shard, mesh (2,1) — office 2×A4000 | 1.074 GB | 2.147 GB |
+| Shard, mesh (2,1) — benchmark 2×A4000 | 1.074 GB | 2.147 GB |
 | Shard, mesh (2,2) | 0.537 GB | 1.074 GB |
 | Field (per field, replicated) | 8.4 MB | 16.8 MB |
 | Jl/JlB cache (f32/f64, s-sharded on (2,·)) | 33.6 MB each | 67 MB each |
@@ -451,7 +451,7 @@ for identity sweeps.
   from the streamed-diagnostics end-to-end row (both reported).
 - GPUs: `XLA_PYTHON_CLIENT_PREALLOCATE=false`, CUDA 12, record driver/JAX
   versions; **do not time while the second A4000 carries other users' work**
-  (the standing office caveat) — record `nvidia-smi` occupancy in the
+  (the standing benchmark caveat) — record `nvidia-smi` occupancy in the
   artifact.
 - CPU: `XLA_FLAGS=--xla_force_host_platform_device_count={2,4,8}`,
   `PYTHONPATH=src`.

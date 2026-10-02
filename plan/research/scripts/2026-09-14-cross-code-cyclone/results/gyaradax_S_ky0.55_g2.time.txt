@@ -1,4 +1,4 @@
-	Command being timed: "/home/rjorge/venvs/gyaradax/bin/python -u /home/rjorge/gkx-q20-cross-code-20260914.FavgA4/gyaradax_salpha.py --ky-gx 0.55 --rung g2"
+	Command being timed: "python -u artifacts/gyaradax_salpha.py --ky-gx 0.55 --rung g2"
 	User time (seconds): 29.35
 	System time (seconds): 3.46
 	Percent of CPU this job got: 14%

@@ -81,8 +81,8 @@
       "passed": true,
       "promotion_ready": true,
       "sem": 0.2700580365668494,
-      "source_artifact": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_rerun_baseline_nonlinear_t700_n64_seed31_heat_flux_trace.csv",
-      "summary_artifact": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_rerun_baseline_nonlinear_t700_n64_seed31_transport_window.json"
+      "source_artifact": "artifacts/strict_qa_rerun_baseline_nonlinear_t700_n64_seed31_heat_flux_trace.csv",
+      "summary_artifact": "artifacts/strict_qa_rerun_baseline_nonlinear_t700_n64_seed31_transport_window.json"
     },
     {
       "case": "strict_qa_rerun_baseline_replicated_nonlinear_window",
@@ -92,8 +92,8 @@
       "passed": true,
       "promotion_ready": true,
       "sem": 0.23947464773085603,
-      "source_artifact": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_rerun_baseline_nonlinear_t700_n64_seed32_heat_flux_trace.csv",
-      "summary_artifact": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_rerun_baseline_nonlinear_t700_n64_seed32_transport_window.json"
+      "source_artifact": "artifacts/strict_qa_rerun_baseline_nonlinear_t700_n64_seed32_heat_flux_trace.csv",
+      "summary_artifact": "artifacts/strict_qa_rerun_baseline_nonlinear_t700_n64_seed32_transport_window.json"
     },
     {
       "case": "strict_qa_rerun_baseline_replicated_nonlinear_window",
@@ -103,8 +103,8 @@
       "passed": true,
       "promotion_ready": true,
       "sem": 0.1816143351629827,
-      "source_artifact": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_rerun_baseline_nonlinear_t700_n64_dt0p04_heat_flux_trace.csv",
-      "summary_artifact": "/home/rjorge/tmp/gkx_strict_matched_nonlinear_audit_top12_edge_0d887d3/postprocess/strict_qa_rerun_baseline_nonlinear_t700_n64_dt0p04_transport_window.json"
+      "source_artifact": "artifacts/strict_qa_rerun_baseline_nonlinear_t700_n64_dt0p04_heat_flux_trace.csv",
+      "summary_artifact": "artifacts/strict_qa_rerun_baseline_nonlinear_t700_n64_dt0p04_transport_window.json"
     }
   ],
   "statistics": {

@@ -55,7 +55,7 @@
     "max_abs_error": 0.0011368721705758,
     "max_rel_error": 0.0,
     "passed": true,
-    "source": "office GPU Cyclone ky=0.30 time-path velocity-space sweep"
+    "source": "benchmark GPU Cyclone ky=0.30 time-path velocity-space sweep"
   },
   "min_pairwise_order": 1.641076283548698,
   "pairwise_orders": [
@@ -67,7 +67,7 @@
     {
       "Nl": 4,
       "Nm": 8,
-      "backend": "office-gpu",
+      "backend": "gpu",
       "effective_step": 0.125,
       "elapsed_s": 24.21481704711914,
       "error_for_gate": 0.0885702955548184,
@@ -84,7 +84,7 @@
     {
       "Nl": 6,
       "Nm": 12,
-      "backend": "office-gpu",
+      "backend": "gpu",
       "effective_step": 0.08333333333333333,
       "elapsed_s": 20.044712781906128,
       "error_for_gate": 0.045531179912011,
@@ -101,7 +101,7 @@
     {
       "Nl": 12,
       "Nm": 24,
-      "backend": "office-gpu",
+      "backend": "gpu",
       "effective_step": 0.041666666666666664,
       "elapsed_s": 26.064921617507935,
       "error_for_gate": 0.004548903571268,
@@ -118,7 +118,7 @@
     {
       "Nl": 16,
       "Nm": 32,
-      "backend": "office-gpu",
+      "backend": "gpu",
       "effective_step": 0.03125,
       "elapsed_s": 20.643428325653076,
       "error_for_gate": 0.0011368721705758,
@@ -133,7 +133,7 @@
       "step_source": "1/Nm"
     }
   ],
-  "source": "office GPU Cyclone ky=0.30 time-path velocity-space sweep",
+  "source": "benchmark GPU Cyclone ky=0.30 time-path velocity-space sweep",
   "step_sizes": [
     0.125,
     0.08333333333333333,

@@ -15,28 +15,28 @@
   "accepted_candidates": [],
   "calibration_reports": [
     {
-      "artifact": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_cyclone_miller_train_holdout_report.json",
+      "artifact": "docs/_static/quasilinear_cyclone_miller_train_holdout_report.json",
       "claim_level": "calibration_dataset",
       "holdout_mean_abs_relative_error": 612.8992915144586,
       "kind": "quasilinear_calibration_report",
       "passed": false
     },
     {
-      "artifact": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_hsx_train_holdout_report.json",
+      "artifact": "docs/_static/quasilinear_hsx_train_holdout_report.json",
       "claim_level": "calibration_dataset",
       "holdout_mean_abs_relative_error": 306.9496457572293,
       "kind": "quasilinear_calibration_report",
       "passed": false
     },
     {
-      "artifact": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_stellarator_train_holdout_report.json",
+      "artifact": "docs/_static/quasilinear_stellarator_train_holdout_report.json",
       "claim_level": "calibration_dataset",
       "holdout_mean_abs_relative_error": 6.491149442266367,
       "kind": "quasilinear_calibration_report",
       "passed": false
     },
     {
-      "artifact": "/Users/rogeriojorge/local/GKX/docs/_static/quasilinear_w7x_train_holdout_report.json",
+      "artifact": "docs/_static/quasilinear_w7x_train_holdout_report.json",
       "claim_level": "calibration_dataset",
       "holdout_mean_abs_relative_error": 306.9496457572293,
       "kind": "quasilinear_calibration_report",

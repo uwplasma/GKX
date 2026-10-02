@@ -23,7 +23,7 @@
         "omega": true
       },
       "passed": true,
-      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",
+      "path": "docs/_static/vmec_boozer_solver_frequency_gradient_gate.json",
       "source_scope": "mode21_vmec_boozer_state",
       "surface_stencil_width": null
     },
@@ -52,7 +52,7 @@
         "omega": true
       },
       "passed": true,
-      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_quasilinear_gradient_gate.json",
+      "path": "docs/_static/vmec_boozer_quasilinear_gradient_gate.json",
       "source_scope": "mode21_vmec_boozer_state",
       "surface_stencil_width": null
     },
@@ -87,7 +87,7 @@
         "omega": true
       },
       "passed": true,
-      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_nonlinear_window_gradient_gate.json",
+      "path": "docs/_static/vmec_boozer_nonlinear_window_gradient_gate.json",
       "source_scope": "mode21_vmec_boozer_state",
       "surface_stencil_width": 3
     },
@@ -110,7 +110,7 @@
         "omega": true
       },
       "passed": true,
-      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_li383_solver_frequency_gradient_gate.json",
+      "path": "docs/_static/vmec_boozer_li383_solver_frequency_gradient_gate.json",
       "source_scope": "mode21_vmec_boozer_state",
       "surface_stencil_width": null
     },
@@ -139,7 +139,7 @@
         "omega": true
       },
       "passed": true,
-      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_li383_quasilinear_gradient_gate.json",
+      "path": "docs/_static/vmec_boozer_li383_quasilinear_gradient_gate.json",
       "source_scope": "mode21_vmec_boozer_state",
       "surface_stencil_width": null
     },
@@ -174,7 +174,7 @@
         "omega": true
       },
       "passed": true,
-      "path": "/Users/rogeriojorge/local/GKX/docs/_static/vmec_boozer_li383_nonlinear_window_gradient_gate.json",
+      "path": "docs/_static/vmec_boozer_li383_nonlinear_window_gradient_gate.json",
       "source_scope": "mode21_vmec_boozer_state",
       "surface_stencil_width": null
     }

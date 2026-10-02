@@ -15,7 +15,7 @@ Short answer:
   the time route and return γ = 0.208 against 0.346 at the same resolution (section 2).
 - A velocity-scaled Hermite basis gives no gain at equal cost (section 5). No code was added.
 
-All runs are on office CPU (2x A4000 busy with other users; GX got GPU 1 for two runs). Load was
+All runs are on benchmark CPU (2x A4000 busy with other users; GX got GPU 1 for two runs). Load was
 50–80 on 36 cores, so wall times are not timings. Units are GX/GKX (Lref = a, vt = sqrt(T/m));
 GS2/stella are converted as in the 2026-09-27 xcode record.
 

@@ -537,6 +537,6 @@ Independent :math:`k_y` and ensemble parallelism is accepted only with a
 serial identity gate: ``docs/_static/parallel_ky_scan_gate.json`` requires
 ``max_gamma_rel_error <= 1e-8`` and ``max_omega_abs_error <= 1e-8`` against a
 ``ky_batch=1`` scan. Whole-state nonlinear sharding fails physical identity and
-is slower than serial on the office GPUs
-(``docs/_static/nonlinear_sharding_profile_office_gpu_physical.json``); see
+is slower than serial on the benchmark GPUs
+(``docs/_static/nonlinear_sharding_profile_gpu_physical.json``); see
 :doc:`parallelization`.

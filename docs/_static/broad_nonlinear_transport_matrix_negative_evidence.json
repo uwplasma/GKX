@@ -6,7 +6,7 @@
       ],
       "label": "accepted_qa_ess",
       "passed": false,
-      "source": "office:/home/rjorge/gkx_nonlinear_matrix_20260622/matrix_artifacts/qa_mode5_ess_matrix_matrix_report.json",
+      "source": "artifacts/qa_mode5_ess_matrix_matrix_report.json",
       "summary": {
         "mean_relative_reduction": 0.0918,
         "pass_fraction": 0.5,

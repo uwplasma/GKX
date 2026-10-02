@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Q20 GKX lane (office CPU). Usage: run_gkx_queue.sh <queue-file> <lane> <cpu-list> <threads>
+# Q20 GKX lane (benchmark CPU). Usage: run_gkx_queue.sh <queue-file> <lane> <cpu-list> <threads>
 # Queue lines: "<S|M> <ky> <Nl> <Nm> <timeout_s>". Serial fresh processes pinned with taskset,
 # nice 10, JAX on CPU in float64; output gkx/<geom>_ky<ky>_nl<Nl>_nm<Nm>.txt (last line RESULT json).
 # A case whose .txt already holds a RESULT line is skipped.
 set -u
 Q=$1; LANE=$2; CPUS=$3; NT=$4
 ROOT=$(cd "$(dirname "$0")" && pwd)
-PY=/home/rjorge/venvs/gkx-nl/bin/python
+PY=python
 export JAX_PLATFORMS=cpu CUDA_VISIBLE_DEVICES= JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg
 export PYTHONPATH=$ROOT/src:$ROOT
 export OMP_NUM_THREADS=$NT OPENBLAS_NUM_THREADS=$NT XLA_FLAGS=--xla_cpu_multi_thread_eigen=true

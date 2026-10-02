@@ -44,11 +44,11 @@ On the GPU the step is memory-traffic bound (two-sided ky concatenates plus elem
 
 Minutes per stage (derived, not measured end to end): at 32x32x24 Nl4/Nm8 a 1024-step window gradient ≈ 21 s warm + one ≈ 26 s compile, while re-saturating a tube for the example's fixed 8,000 steps ≈ 42 s per evaluation. Re-saturation dominates each objective evaluation.
 
-**Linear eigen derivative.** Dense route (`solver_growth_rate_from_geometry`) value+grad: 0.033 s at n=144 (VMEX default), 0.99 s at n=1,536, 2.83 s at n=3,072 (382 MB temp). Adaptive matrix-free route at n=144 on a laptop at load ~100 (indicative only, not recorded): 4.0 s value, 34 s value+grad warm. Shift-invert `pr3-cm` at Q28 `d96` (n=3,072, committed Q28 records): 13,996 inner iterations, preconditioner apply 3.1-4.4 matvecs, 57k-79k matvec-equivalents vs 33,916 for `adaptive`; 75-81% of inner time is the preconditioner apply (derived). Today's office-CPU `adaptive` control reproduces 33,915 operator applications (30.5 s single-thread, 1.29 GB RSS).
+**Linear eigen derivative.** Dense route (`solver_growth_rate_from_geometry`) value+grad: 0.033 s at n=144 (VMEX default), 0.99 s at n=1,536, 2.83 s at n=3,072 (382 MB temp). Adaptive matrix-free route at n=144 on a laptop at load ~100 (indicative only, not recorded): 4.0 s value, 34 s value+grad warm. Shift-invert `pr3-cm` at Q28 `d96` (n=3,072, committed Q28 records): 13,996 inner iterations, preconditioner apply 3.1-4.4 matvecs, 57k-79k matvec-equivalents vs 33,916 for `adaptive`; 75-81% of inner time is the preconditioner apply (derived). Today's benchmark-CPU `adaptive` control reproduces 33,915 operator applications (30.5 s single-thread, 1.29 GB RSS).
 
 ## Update 2026-09-22 (resumed run, then paused again)
 
-All rows below are committed records. Host load on the shared office machine
+All rows below are committed records. Host load on the shared benchmark machine
 was 46–106 on 36 cores throughout (other lanes), so absolute times are
 inflated; the A/B rows were therefore timed **interleaved** (each round times
 every compiled arm once, rotating order; `--interleave`), and the ratios are
@@ -65,7 +65,7 @@ blocks** (`--checkpoint block_noinner`, experiment only, no `src/` change).
 | 32x32x24, 256 | 1.041 | 6.125 | 4.762 | — | 1.29x (1.26x) | 359 / 1,798 / — | 1.1e-7 |
 | 32x32x24, 1024 | 4.380 | 24.60 | 20.62 | — | 1.19x (1.19x) | 617 / 3,475 / — | 2.6e-8 |
 
-Office CPU (`records/cpu_office/cpu_win16_256_ab.json`, load 96): shipped
+Office CPU (`records/cpu/cpu_win16_256_ab.json`, load 96): shipped
 84.7 s, no inner remat 73.3 s (1.16x), none 50.7 s; temp 95 / 435 / 5,865 MB.
 
 Conclusion: removing the inner remat is exact (f32 round-off only) and gives
@@ -139,11 +139,11 @@ Where things belong: checkpoint policy, layout, field-solve fusion, FFT packing,
 - The `pr3-cm` `d96` re-run (`run_pr3.sh`).
 - A names-based checkpoint policy (save FFT outputs only) as the next item-1 variant.
 
-**Known failures / caveats.** The random state is not saturated turbulence: objective values are not physics. The office host was at load 46–106 during the resumed runs; A/B rows are interleaved and ratios are the quantities to use.
+**Known failures / caveats.** The random state is not saturated turbulence: objective values are not physics. The benchmark host was at load 46–106 during the resumed runs; A/B rows are interleaved and ratios are the quantities to use.
 
-**Raw records.** In-repo: `plan/research/2026-09-22-perf-lit/records/` (`gpu_a4000`, `gpu_a4000_extra`, `cpu_office`, `cpu_pr3`). Office host: traces under `perflit_gpu*/trace_*` in the home directory (not committed); pinned detached worktree `gkx-perf-lit` at `f9485f044`, venv `venvs/gkx-nl` (JAX 0.10.2 CUDA 12).
+**Raw records.** In-repo: `plan/research/2026-09-22-perf-lit/records/` (`gpu_a4000`, `gpu_a4000_extra`, `cpu`, `cpu_pr3`). Office host: traces under `perflit_gpu*/trace_*` in the home directory (not committed); pinned detached worktree `gkx-perf-lit` at `f9485f044`, venv `venvs/gkx-nl` (JAX 0.10.2 CUDA 12).
 
 **Next steps, in order.**
-1. Copy this folder's scripts to the office worktree; when the host is quiet run `bash plan/research/2026-09-22-perf-lit/run_all_office.sh ~/venvs/gkx-nl/bin/python` minus the GPU phase already done (or `PHASE=cpu bash .../run_profile.sh ~/perflit_cpu <python> cpu`, then `bash .../run_pr3.sh ~/perflit_pr3 <python>`). GPU rows use `wait_gpu_then_run.sh`, which takes a free GPU only.
-2. Commit the records, update the tables above, and delete the raw office outputs.
+1. Copy this folder's scripts to the benchmark worktree; when the host is quiet run `bash plan/research/2026-09-22-perf-lit/run_all.sh ~/venvs/gkx-nl/bin/python` minus the GPU phase already done (or `PHASE=cpu bash .../run_profile.sh ~/perflit_cpu <python> cpu`, then `bash .../run_pr3.sh ~/perflit_pr3 <python>`). GPU rows use `wait_gpu_then_run.sh`, which takes a free GPU only.
+2. Commit the records, update the tables above, and delete the raw benchmark outputs.
 3. Open implementation lanes: item 1 (revised 1.2–1.4x; try a names policy), item 2 (warm re-saturation), item 4 (host dispatch).

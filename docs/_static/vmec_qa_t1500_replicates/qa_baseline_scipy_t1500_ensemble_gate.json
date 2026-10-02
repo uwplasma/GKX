@@ -4,7 +4,7 @@
   "compact_bundle_policy": {
     "output_gate_json": "docs/_static/vmec_qa_t1500_baseline_output_gate.json",
     "reason": "avoid committing regenerable per-trace CSV and convergence intermediates under repository-size policy",
-    "regeneration": "run tools/artifacts/build_external_vmec_replicate_ensemble.py against the office NetCDF outputs listed in rows[].source_artifact",
+    "regeneration": "run tools/artifacts/build_external_vmec_replicate_ensemble.py against the benchmark NetCDF outputs listed in rows[].source_artifact",
     "tracked_bundle": "ensemble JSON, output-gate JSON, and PNG only"
   },
   "comparison": "vmec_qa_full_sweep_qa_baseline_scipy_t1500_replicated_nonlinear_window_seed_timestep_replicates",
@@ -88,7 +88,7 @@
       "passed": true,
       "promotion_ready": true,
       "sem": 0.2057351355594576,
-      "source_artifact": "office:/home/rjorge/gkx_strict_qa_t1500_20260609/GKX/tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_qa_baseline_scipy/vmec_qa_full_sweep_qa_baseline_scipy_nonlinear_t1500_n64_seed32.out.nc",
+      "source_artifact": "tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_qa_baseline_scipy/vmec_qa_full_sweep_qa_baseline_scipy_nonlinear_t1500_n64_seed32.out.nc",
       "summary_artifact": "docs/_static/vmec_qa_t1500_baseline_output_gate.json#rows[0]"
     },
     {
@@ -100,7 +100,7 @@
       "passed": true,
       "promotion_ready": true,
       "sem": 0.22534238020960815,
-      "source_artifact": "office:/home/rjorge/gkx_strict_qa_t1500_20260609/GKX/tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_qa_baseline_scipy/vmec_qa_full_sweep_qa_baseline_scipy_nonlinear_t1500_n64_seed33.out.nc",
+      "source_artifact": "tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_qa_baseline_scipy/vmec_qa_full_sweep_qa_baseline_scipy_nonlinear_t1500_n64_seed33.out.nc",
       "summary_artifact": "docs/_static/vmec_qa_t1500_baseline_output_gate.json#rows[1]"
     },
     {
@@ -112,7 +112,7 @@
       "passed": true,
       "promotion_ready": true,
       "sem": 0.1761997780044953,
-      "source_artifact": "office:/home/rjorge/gkx_strict_qa_t1500_20260609/GKX/tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_qa_baseline_scipy/vmec_qa_full_sweep_qa_baseline_scipy_nonlinear_t1500_n64_dt0p04.out.nc",
+      "source_artifact": "tools_out/vmec_qa_full_sweep_nonlinear_audits/vmec_qa_full_sweep_qa_baseline_scipy/vmec_qa_full_sweep_qa_baseline_scipy_nonlinear_t1500_n64_dt0p04.out.nc",
       "summary_artifact": "docs/_static/vmec_qa_t1500_baseline_output_gate.json#rows[2]"
     }
   ],

@@ -14,7 +14,7 @@
 # the log entry says so rather than quoting its wall time.
 set -u
 D=plan/research/scripts/2026-09-19-pr3cm-src
-PY=${PY:-/Users/rogeriojorge/local/venvs/gkx-review-20260913/bin/python}
+PY=${PY:-python}
 SCRIPT=${SCRIPT:-measure.py}
 CAP_S=${CAP_S:-3600}
 OUT=$1

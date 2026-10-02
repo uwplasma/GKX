@@ -6,7 +6,7 @@ set -u
 REPO=$1
 OUT=$2
 SCRIPT=${0:A:h}/etg_residuals.py
-PY=/Users/rogeriojorge/local/venvs/gkx-review-20260913/bin/python
+PY=python
 mkdir -p "$OUT"
 export PYTHONPATH=$REPO/src:$REPO JAX_ENABLE_X64=true GKX_X64=1 MPLBACKEND=Agg JAX_PLATFORMS=cpu
 cd "$REPO" || exit 1

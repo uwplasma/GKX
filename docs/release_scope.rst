@@ -152,7 +152,7 @@ Negative and blocking evidence
        ``ZBS(1,1)`` is nonlocal
    * - ``broad_nonlinear_transport_matrix_negative_evidence.json``
      - every candidate family of the broad matrix campaign fails
-   * - ``nonlinear_sharding_profile_office_gpu_benchmark_grid.json``
+   * - ``nonlinear_sharding_profile_gpu_benchmark_grid.json``
      - whole-state sharding fails final-state identity and is slower than
        serial
 

@@ -1,4 +1,4 @@
-	Command being timed: "taskset -c 1 /home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/gx gx-nu1e-2-nl32.in"
+	Command being timed: "taskset -c 1 artifacts/gx gx-nu1e-2-nl32.in"
 	User time (seconds): 791.98
 	System time (seconds): 543.92
 	Percent of CPU this job got: 71%

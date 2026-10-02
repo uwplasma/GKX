@@ -105,7 +105,7 @@ so that the disagreements can be adjudicated on evidence.
 - The GPU cost factor (10–15× over the M3 Max) is assumed; the pilot measures it.
 - EM4 nonlinear has no matched reference; the plan reports it without a parity
   claim, which reviewers may still question.
-- The office box has been unreachable for two days; Phases 2–5 cannot start
+- The benchmark box has been unreachable for two days; Phases 2–5 cannot start
   without it or an alternative allocation.
 - The ledger is a new mechanism; if it is not adopted, the plan degrades to
   #204's.

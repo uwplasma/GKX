@@ -2594,20 +2594,18 @@ def _assert_nonlinear_sharding_identity_artifact(payload: dict) -> None:
 
 def test_nonlinear_sharding_profiles_are_identity_gated_and_scoped() -> None:
     local = _load_json("nonlinear_sharding_profile.json")
-    office_gpu = _load_json("nonlinear_sharding_profile_office_gpu.json")
-    benchmark_gpu = _load_json(
-        "nonlinear_sharding_profile_office_gpu_benchmark_grid.json"
-    )
+    gpu = _load_json("nonlinear_sharding_profile_gpu.json")
+    benchmark_gpu = _load_json("nonlinear_sharding_profile_gpu_benchmark_grid.json")
 
     _assert_nonlinear_sharding_identity_artifact(local)
     assert local["default_backend"] == "cpu"
     assert local["state_sharding_active"] is False
 
-    _assert_nonlinear_sharding_identity_artifact(office_gpu)
-    assert office_gpu["default_backend"] == "gpu"
-    assert office_gpu["device_count"] >= 2
-    assert office_gpu["state_sharding_active"] is True
-    assert office_gpu["profiler_trace"]["requested"] is True
+    _assert_nonlinear_sharding_identity_artifact(gpu)
+    assert gpu["default_backend"] == "gpu"
+    assert gpu["device_count"] >= 2
+    assert gpu["state_sharding_active"] is True
+    assert gpu["profiler_trace"]["requested"] is True
 
     # The old profile is a tiny control-flow smoke. The matched benchmark grid
     # is the production-candidate gate and must fail closed on trajectory drift.

@@ -60,7 +60,7 @@
     "max_abs_error": 0.0,
     "max_rel_error": 0.0,
     "passed": true,
-    "source": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv"
+    "source": "docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv"
   },
   "gates": [
     {
@@ -104,7 +104,7 @@
   "passed": true,
   "provenance": {
     "observable_column": "heat_flux",
-    "source_artifact": "/Users/rogeriojorge/local/GKX/docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv",
+    "source_artifact": "docs/_static/external_vmec_updown_asym_nonlinear_t450_n64_pilot.traces.csv",
     "summary_artifact": "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
     "time_column": "t"
   },

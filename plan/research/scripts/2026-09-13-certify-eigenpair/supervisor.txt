@@ -1,4 +1,4 @@
-repo=/Users/rogeriojorge/local/GKX-worktrees/certify-baseline-0cce177 sha=0cce177f6031b9b2a7f0d8a2f7bf68f729161821 dirty=0
+repo=../GKX-worktrees/certify-baseline-0cce177 sha=0cce177f6031b9b2a7f0d8a2f7bf68f729161821 dirty=0
 script_sha256=4dab8c6e9871d9854eeb3eab5d6bdaeda3d1568804c285113ee6c784b006652c host=Rogerios-MacBook-Pro.local pid=6389
 START etg_default_ky10 2026-09-13T21:02:29Z load={ 7.35 14.50 18.13 }
 END etg_default_ky10 rc=0 2026-09-13T21:02:33Z

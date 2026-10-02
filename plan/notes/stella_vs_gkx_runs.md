@@ -1,8 +1,8 @@
 # stella vs GKX — CBC linear ITG cross-validation (rung 1)
 
 Date: 2026-08-18. Machine: macOS arm64, CPU JAX 0.9.2 (x64 enabled), stella via
-/opt/local/bin/mpirun -np 4, binary /Users/rogeriojorge/local/stella/build_cmake/stella.
-GKX at /Users/rogeriojorge/local/GKX (READ-ONLY), PYTHONPATH=/Users/rogeriojorge/local/GKX/src.
+/opt/local/bin/mpirun -np 4, binary ../stella/build_cmake/stella.
+GKX at ../GKX (READ-ONLY), PYTHONPATH=../GKX/src.
 
 ## Case
 CBC in a-units: Miller rhoc=0.5, shat=0.796, q=1.4, rmaj=rgeo=2.77778, kappa=1,

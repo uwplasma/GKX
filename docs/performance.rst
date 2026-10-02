@@ -31,7 +31,7 @@ electrostatic compiled linear-RHS route whenever ``apar = bpar = 0``.
 
 ``benchmarks/references/gkx_2_representative_performance_refresh.json`` is the
 compact representative refresh. It admits two bounded local-CPU rows after
-finite CPU/GPU numerical checks; its office-GPU timings are kept as rejected
+finite CPU/GPU numerical checks; its benchmark-GPU timings are kept as rejected
 provenance because both A4000s were already fully loaded, so they do not update
 the published speed claim.
 
@@ -44,7 +44,7 @@ per cent of that is time stepping. Geometry construction, compilation,
 plotting, and I/O are seconds each and are not worth optimizing against the
 stepping cost.
 
-An XLA profile on a 36-core office CPU (``jax`` 0.9.2) at ``32x32x16``,
+An XLA profile on a 36-core benchmark CPU (``jax`` 0.9.2) at ``32x32x16``,
 ``64x64x24`` and ``96x96x48`` measured **196 ns per** ``Nx*Ny*Nz*Nl*Nm``
 **element per step**, flat across the two larger grids and so converged rather
 than a small-grid artifact. The same profile splits the step as follows:
@@ -91,7 +91,7 @@ sharded routes in :doc:`parallelization`, not for speed.
 Persistent compilation cache
 ----------------------------
 
-A GKX run is compile-dominated at the sizes people iterate on: on one office
+A GKX run is compile-dominated at the sizes people iterate on: on one benchmark
 GPU a 100-step nonlinear case spends about 22.9 s of a 25 s integrator wall in
 XLA compilation, and on a laptop CPU the same compile costs about 14 s. The
 executable therefore enables JAX's persistent compilation cache by default, in

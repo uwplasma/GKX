@@ -1,4 +1,4 @@
-	Command being timed: "/home/rjorge/venvs/gkx-nl/bin/python /home/rjorge/gkx-q2-exact-ladder-20260913.zXGFAw/exact_ladder.py --repo /home/rjorge/gkx-q2-exact-ladder-20260913.zXGFAw --rung 4 --arm propagator --shift 0.09302951-0.28199404j"
+	Command being timed: "python artifacts/exact_ladder.py --repo artifacts/gkx-q2-exact-ladder-20260913.zXGFAw --rung 4 --arm propagator --shift 0.09302951-0.28199404j"
 	User time (seconds): 11.55
 	System time (seconds): 0.45
 	Percent of CPU this job got: 188%

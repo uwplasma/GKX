@@ -189,7 +189,7 @@
       "holdout_mean_abs_relative_error": 6.491149442266367,
       "holdout_mean_rel_gate": 0.35,
       "next_best_score": null,
-      "nonlinear_artifact": "tools_out/office_refresh_cyclone_miller_t122.csv",
+      "nonlinear_artifact": "tools_out/refresh_cyclone_miller_t122.csv",
       "observed_heat_flux": 4.259822065746515,
       "predicted_heat_flux": 38.66542554443455,
       "quasilinear_artifact": "docs/_static/quasilinear_cyclone_miller_spectrum_scan.quasilinear_spectrum.csv",

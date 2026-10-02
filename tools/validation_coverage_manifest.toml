@@ -1193,7 +1193,7 @@ artifact_paths = [
 ]
 next_tests = [
   "promote the final W7-X recurrence/closure method into a release gate when it matches the literature trace",
-  "rerun parallel W7-X recurrence sweeps after the VMEC/eik cache fix to verify the office workflow",
+  "rerun parallel W7-X recurrence sweeps after the VMEC/eik cache fix to verify the benchmark workflow",
 ]
 
 [[modules]]
@@ -1527,7 +1527,7 @@ coverage_priority = "medium"
 coverage_target_percent = 90.0
 reference_anchors = [
   "JAX pmap/pjit/sharding documentation and production scan/ensemble workflows",
-  "multi-CPU local and multi-GPU office scaling sweeps",
+  "multi-CPU local and multi-GPU benchmark scaling sweeps",
 ]
 physics_contracts = [
   "parallel execution is numerically identical to serial execution for independent cases",
@@ -1549,9 +1549,9 @@ artifact_paths = [
   "docs/_static/parallel_ky_scan_gate.json",
   "docs/_static/parallel_ky_scan_gate.png",
   "docs/_static/nonlinear_sharding_profile.json",
-  "docs/_static/nonlinear_sharding_profile_office_gpu.json",
-  "docs/_static/nonlinear_sharding_profile_office_gpu_benchmark_grid.json",
-  "docs/_static/nonlinear_sharding_profile_office_gpu_physical.json",
+  "docs/_static/nonlinear_sharding_profile_gpu.json",
+  "docs/_static/nonlinear_sharding_profile_gpu_benchmark_grid.json",
+  "docs/_static/nonlinear_sharding_profile_gpu_physical.json",
   "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
   "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.csv",
   "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png",
@@ -1737,7 +1737,7 @@ artifact_paths = [
   "docs/_static/linear_rhs_parallel_slices_sweep.png",
   ]
 next_tests = [
-  "add office two-GPU identity and speedup gates for UQ ensembles",
+  "add benchmark two-GPU identity and speedup gates for UQ ensembles",
 ]
 
 [[modules]]

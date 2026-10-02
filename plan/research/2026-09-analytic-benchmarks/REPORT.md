@@ -302,7 +302,7 @@ Precision gates (≤5%): #1 (XC form), #2 (ω_G), #3 (β_crit) and #4 (ω_r rati
 
 1. Settle the ω sign (§0) with one ITG run and one TEM or ETG run against the goldens.
 2. Check whether GKX's s-α drift includes the β′ term (ω_κ≠ω_∇B). §2.4 and §2.5 depend on it.
-3. Encode §2.1 and §2.2 as one ky=0 test (office GPU), then run the §2.3 β scan.
+3. Encode §2.1 and §2.2 as one ky=0 test (benchmark GPU), then run the §2.3 β scan.
 
 ## 6. Corrections to the earlier survey and the notes
 

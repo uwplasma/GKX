@@ -1,5 +1,5 @@
 #!/bin/bash
-# Q17 sequential GX supervisor (office).
+# Q17 sequential GX supervisor (benchmark).
 # Usage: run_q17.sh KEY [KEY ...]   (each KEY.in in the run directory R)
 # Modeled on gx-toolchain-rebuild-20260914/gpu_run_long.sh. For every key:
 # binary SHA-256 and ldd checked; a GPU is chosen only if it has no compute
@@ -14,10 +14,10 @@
 # run; stop on the first nonzero exit, nonfinite token or failed fit.
 set -uo pipefail
 export PATH=/usr/local/bin:/usr/bin:/bin
-R=/home/rjorge/gkx-q17-gx-vnewk-20260914
-BIN=/home/rjorge/gkx-nl24-discriminator-20260912.vvmgDD/gx
+R=artifacts/gkx-q17-gx-vnewk-20260914
+BIN=artifacts/gx
 BINSHA=96a53403a803e40fe3f9f6d1734779158d8be84d22e13155eb952a9035d70536
-PY=/home/rjorge/local/micromamba/envs/gk-fortran/bin/python
+PY=python
 CAP=${RUN_CAP_S:-2700}
 POLL_DEADLINE=$(( $(date +%s) + ${GPU_WAIT_S:-7200} ))
 BUDGET_END=${BUDGET_END:-0}

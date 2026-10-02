@@ -54,7 +54,7 @@
     "curvature_ratio": 0.0034110957961531064,
     "finite_difference_consistent": true,
     "finite_values": true,
-    "input_path": "/Users/rogeriojorge/local/vmex/examples/data/input.li383_low_res",
+    "input_path": "vmex/examples/data/input.li383_low_res",
     "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
     "max_curvature_ratio": 5.0,
     "minus_objective_table": [
@@ -152,7 +152,7 @@
       }
     ],
     "source_scope": "mode21_vmec_boozer_state_multi_point",
-    "wout_path": "/Users/rogeriojorge/local/vmex/examples/data/wout_li383_low_res.nc"
+    "wout_path": "vmex/examples/data/wout_li383_low_res.nc"
   },
   "finite_difference_summary": {
     "base_value": 9.788411723486012,

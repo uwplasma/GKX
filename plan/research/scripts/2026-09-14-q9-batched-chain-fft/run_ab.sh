@@ -1,5 +1,5 @@
 #!/bin/bash
-# Q9 A/B/A/B timing on office. usage: run_ab.sh DIR CORES BLOCKS "GRID ARGS" FLAGSET
+# Q9 A/B/A/B timing on benchmark. usage: run_ab.sh DIR CORES BLOCKS "GRID ARGS" FLAGSET
 #   DIR      staged dir holding base/ p2t/ tonly/ trees and bench_q9.py
 #   CORES    taskset list, e.g. 20-27
 #   BLOCKS   number of alternating blocks

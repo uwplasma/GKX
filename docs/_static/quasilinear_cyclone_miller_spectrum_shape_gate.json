@@ -30,7 +30,7 @@
     0.39007091522216797,
     0.4964539110660553
   ],
-  "nonlinear_netcdf": "tools_out/office_refresh_cyclone_miller.out.nc",
+  "nonlinear_netcdf": "tools_out/refresh_cyclone_miller.out.nc",
   "nonlinear_raw": [
     0.06905755310611321,
     0.184744150523119,

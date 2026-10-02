@@ -1,6 +1,6 @@
 {
   "kind": "vmex_qa_strict_baseline_summary",
-  "source": "office gpu strict exact SciPy run from clean GKX/vmex staging directory",
+  "source": "benchmark gpu strict exact SciPy run from clean GKX/vmex staging directory",
   "method": "scipy",
   "scipy_tr_solver": "exact",
   "max_nfev": 40,

@@ -43,7 +43,7 @@ None of this changes the destination. All of it changes the next ten PRs.
 | GX precision | same, §7 | "exclusive use of single-precision arithmetic". |
 | GX resolutions | same, Appendix G and Tables 1–2 | Linear CBC: 3×2π, Nz=24, Nm=48, Nl=16, ν=1e-2, **no hypercollisions**. Kinetic-electron linear: Nm=128. Nonlinear CBC: converged at **(Nl,Nm)≥(4,6) with hypercollisions**, ≥(6,12) without; Nx=192, Ny=64, Nz=24, D=0.05, n=4, f_hyp=1, p=Nm/2. W7-X linear: 6×2π, Nz=256, Nm=16, Nl=8 — identical to GKX's `w7x_itg` fixture. |
 | GX multi-GPU design | same, §7.1 | Species×Hermite only, halo m±2, field all-reduce; ≥75% strong-scaling efficiency to 4 GPUs. |
-| GX provenance | `git rev-parse HEAD` and `git ls-remote origin HEAD` on office | both `3865a53778862e1686f414bf6f416339e24887c9`; two untracked Makefiles preserved. |
+| GX provenance | `git rev-parse HEAD` and `git ls-remote origin HEAD` on benchmark | both `3865a53778862e1686f414bf6f416339e24887c9`; two untracked Makefiles preserved. |
 | Audit line counts | `find`/`wc` on `main` | src 184 files / 88,910 lines; tests 76 / 86,377 — exact. |
 | Gyromoment convergence | Hoffmann, Frei & Ricci 2023 (arXiv 2308.01016), read from the PDF | Linear CBC γ converges for **(P,J) ≳ (16,8)**, optimum near P≈2J; nonlinear flux needs ~16 gyromoments at η_v=1e-3; Dimits threshold recovered for **(P,J) ≳ (12,6)**, κ_T≈4; GENE needs ≥100 velocity points. |
 | Kinetic-electron convergence | Frei et al. 2023 (arXiv 2210.05799), abstract | Trapped-particle and drift-driven modes need more gyromoments than pressure-driven ones. Consistent with GX needing Nm=128 for TEM. |
@@ -148,7 +148,7 @@ short windows, 15–50% of finite-difference magnitude — sets the bar for what
 
 ### F8 (P1) — `hsx_itg` is unreproducible
 
-No HSX reference, GX deck or wout exists on the office box or upstream. The
+No HSX reference, GX deck or wout exists on the benchmark box or upstream. The
 README's HSX parity row (0.577%/0.273%) rests on a tracked CSV nothing can
 regenerate. This is #178's category. R2 needs the same decision: regenerate
 with provenance, or delete the row and the claim.
