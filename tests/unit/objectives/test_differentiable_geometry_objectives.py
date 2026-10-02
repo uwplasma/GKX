@@ -69,6 +69,26 @@ from gkx.geometry.vmec_boozer_core import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _restore_optional_backend_imports():
+    """Fake backend discovery must not change later tests' optional imports."""
+    roots = ("vmex", "booz_xform_jax")
+
+    def optional(name):
+        return any(name == root or name.startswith(root + ".") for root in roots)
+
+    previous_modules = {
+        name: module for name, module in sys.modules.items() if optional(name)
+    }
+    previous_path = sys.path[:]
+    yield
+    for name in list(sys.modules):
+        if optional(name):
+            del sys.modules[name]
+    sys.modules.update(previous_modules)
+    sys.path[:] = previous_path
+
+
 def _sample_mapping() -> dict[str, object]:
     theta = np.linspace(-np.pi, np.pi, 8, endpoint=False)
     ones = np.ones_like(theta)
