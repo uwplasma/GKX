@@ -755,8 +755,6 @@ def _fieldline_metric_coefficients(
     res_theta: int,
     res_phi: int,
 ) -> Any:
-    """Assemble local shear, HNGC corrections, and metric/drift coefficients."""
-
     geometry = _fieldline_metric_geometry(scalars, samples)
     factors = _fieldline_shear_factors(
         scalars,
@@ -765,6 +763,7 @@ def _fieldline_metric_coefficients(
         include_shear_variation=include_shear_variation,
         include_pressure_variation=include_pressure_variation,
     )
+    integrals = _FieldlineHNGCIntegrals(1.0, 0.0, np.array(0.0), np.array(0.0))
     if include_shear_variation or include_pressure_variation:
         integrals = _fieldline_hngc_integrals(
             samples,
@@ -772,13 +771,6 @@ def _fieldline_metric_coefficients(
             geometry.alpha_gradients,
             res_theta=res_theta,
             res_phi=res_phi,
-        )
-    else:
-        # Both correction derivatives are zero, so every integral term in
-        # D_HNGC vanishes. Keep D1 finite and preserve the native shear/drifts.
-        zeros = np.zeros_like(samples.phi_b)
-        integrals = _FieldlineHNGCIntegrals(
-            D1=1.0, D2=0.0, intinv_g=zeros, int_lam_div_g=zeros
         )
     shear = _fieldline_shear(scalars, samples, geometry, integrals, factors)
     return _fieldline_metric_drifts(

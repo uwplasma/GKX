@@ -1448,7 +1448,12 @@ recursive = true
 # 82349 -> 82402: nonlinear flux Jacobian AD-vs-FD test, measured.
 # 82402 -> 82601: analytic benchmark gates in test_benchmarking.py. Measured.
 # 82601 -> 82606: audit rows and smoke knob for the kinetic-electron decks.
-baseline = 82606
+# 82606 -> 82733: 48 independent HNGC local-shear/pressure regression cases
+# in existing test_geometry.py: all four switches, both flux signs, zero/nonzero
+# native pressure and zero/near-zero shear. They pin disabled-call avoidance
+# while independently checking D_HNGC/L0/L1 and preserved native pressure.
+# Production source and test-file budgets are unchanged.
+baseline = 82733
 target = 35000
 
 [[line_budget_policy.counts]]
