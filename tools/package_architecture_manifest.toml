@@ -1448,7 +1448,11 @@ recursive = true
 # 82349 -> 82402: nonlinear flux Jacobian AD-vs-FD test, measured.
 # 82402 -> 82601: analytic benchmark gates in test_benchmarking.py. Measured.
 # 82601 -> 82606: audit rows and smoke knob for the kinetic-electron decks.
-baseline = 82606
+# 82606 -> 82673: existing differentiable-geometry tests restore discovered
+# optional-backend namespaces and sys.path, with four present/absent namespace
+# edge cases. This catches the fake-checkout leak that breaks a later gallery
+# import; production source and test-file budgets are unchanged.
+baseline = 82673
 target = 35000
 
 [[line_budget_policy.counts]]
