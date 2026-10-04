@@ -8,6 +8,7 @@ and diagnostic IMEX paths.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import Any, Callable
 
 import jax
@@ -867,7 +868,8 @@ def _mv(a: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
     return jnp.einsum("...ij,...j->...i", a, x, precision=_HI)
 
 
-def _thomas_factor(lower, diag, upper, gdt: float) -> tuple[jnp.ndarray, ...]:
+@jax.jit
+def _thomas_factor(lower, diag, upper, gdt) -> tuple[tuple[jnp.ndarray, ...], Any]:
     """Block Thomas over Hermite for ``I - gdt S``; ``S`` blocks on axis 3.
 
     Blocks are ``N x N`` (``N = links * Nz``), batched over ``(chains, s,
@@ -889,18 +891,13 @@ def _thomas_factor(lower, diag, upper, gdt: float) -> tuple[jnp.ndarray, ...]:
         return a / safe
 
     a_lo, a_up = scalars(lower), scalars(upper)
-    err = max(
-        float(
+    err = jnp.maximum(
+        *(
             jnp.linalg.norm(blk - a[..., None, None] * d[:, :, None, None])
             / jnp.maximum(jnp.linalg.norm(blk), 1e-30)
+            for blk, a in ((lower, a_lo), (upper, a_up))
         )
-        for blk, a in ((lower, a_lo), (upper, a_up))
     )
-    if not err < 1e-4:
-        raise ValueError(
-            f"Hermite off-diagonal blocks are not multiples of one parallel-"
-            f"gradient matrix (defect {err:.1e}); the structured factor needs it"
-        )
     eye = jnp.eye(diag.shape[-1], dtype=diag.dtype)
     dinv = []
     for m in range(nm):
@@ -914,7 +911,7 @@ def _thomas_factor(lower, diag, upper, gdt: float) -> tuple[jnp.ndarray, ...]:
             coef = gdt**2 * a_lo[:, :, :, m] * a_up[:, :, :, m - 1]
             blk = blk - coef[..., None, None] * ddd
         dinv.append(jnp.linalg.inv(blk))
-    return jnp.stack(dinv), d, -gdt * a_lo, -gdt * a_up
+    return (jnp.stack(dinv), d, -gdt * a_lo, -gdt * a_up), err
 
 
 def _thomas_solve(factors: tuple[jnp.ndarray, ...], x: jnp.ndarray) -> jnp.ndarray:
@@ -1002,8 +999,14 @@ def _factor_chain_group(
                 diag = diag.at[:, :, :, rows[ok]].set(col)
             else:
                 upper = upper.at[:, :, :, rows[ok]].set(col)
-    factors = _thomas_factor(lower, diag, upper, gdt)
+    factors, err = _thomas_factor(lower, diag, upper, gdt)
     del lower, diag, upper
+    if not float(err) < 1e-4:
+        raise ValueError(
+            f"Hermite off-diagonal blocks are not multiples of one parallel-"
+            f"gradient matrix (defect {float(err):.1e}); the structured factor "
+            "needs it"
+        )
 
     def take_u(out):
         return _gather(k, x, out)[:, :, :, list(rows_m)]
@@ -1026,24 +1029,29 @@ def _factor_chain_group(
     wq = jnp.transpose(wq, (4, 3, 0, 1, 2, 5, 6)).reshape(
         c, len(act), ns, nl, len(cols_m), n
     )
-    g = _ChainGroup(k, x, factors, u, wq, *(jnp.zeros((c, 0, 0), dtype),) * 3)
-    op = ChainImplicitLinear((g,), zero.shape, float(dt), scheme, rows_m, cols_m, lin)
+    cap, dr, dc = _capacitance(factors, u, wq, gdt, rows_m, cols_m, nm)
+    return _ChainGroup(k, x, factors, u, wq, cap, dr, dc)
 
-    def cap_column(i):
+
+@partial(jax.jit, static_argnames=("rows_m", "cols_m", "nm"))
+def _capacitance(factors, u, wq, gdt, rows_m, cols_m, nm):
+    """Equilibrated ``(I - gdt Q B^-1 U)^-1`` and its row/column scalings."""
+    c, ns, nl, _rows, n, k = u.shape
+    dtype = u.dtype
+
+    def column(i):
         ui = (
             jnp.zeros((c, ns, nl, nm, n), dtype)
             .at[:, :, :, list(rows_m)]
-            .set(g.u[..., i])
+            .set(u[..., i])
         )
-        y = op._bsolve(g, ui)[:, :, :, list(cols_m)]
-        return jnp.einsum("cfslmn,cslmn->cfn", g.w, y, precision=_HI).reshape(c, -1)
+        y = _thomas_solve(factors, ui)[:, :, :, list(cols_m)]
+        return jnp.einsum("cfslmn,cslmn->cfn", wq, y, precision=_HI).reshape(c, -1)
 
     qbu = jnp.moveaxis(
-        jax.lax.map(cap_column, jnp.arange(len(act) * n), batch_size=_PROBE_BATCH),
-        0,
-        -1,
+        jax.lax.map(column, jnp.arange(k), batch_size=_PROBE_BATCH), 0, -1
     )
-    cap = jnp.eye(qbu.shape[-1], dtype=dtype) - gdt * qbu
+    cap = jnp.eye(k, dtype=dtype) - gdt * qbu
     # Equilibrate before inverting: near-zonal chains carry field blocks four
     # orders apart (A_par against phi), cond 2e8 raw and ~1e3 balanced.
     dr = jnp.ones(cap.shape[:2], jnp.real(cap).dtype)
@@ -1052,7 +1060,7 @@ def _factor_chain_group(
         dr = dr / jnp.sqrt(jnp.abs(dr[:, :, None] * cap * dc[:, None]).max(2))
         dc = dc / jnp.sqrt(jnp.abs(dr[:, :, None] * cap * dc[:, None]).max(1))
     cap = jnp.linalg.inv(dr[:, :, None] * cap * dc[:, None])
-    return _ChainGroup(k, x, factors, u, wq, cap, dr.astype(dtype), dc.astype(dtype))
+    return cap, dr.astype(dtype), dc.astype(dtype)
 
 
 def stiff_linear_split(
