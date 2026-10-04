@@ -3930,10 +3930,7 @@ def test_chain_solve_inverts_the_stiff_linear_operator():
     )
     gamma = ARS_TABLEAUX["imex-ars3"][1][1][1]
     x = op.solve(G - gamma * dt * op.linear(G))
-    # complex64 on an operator of cond ~1e5 (zonal electron A_par): the
-    # forward error concentrates on ky = 0, electron m = 1.
     assert float(jnp.linalg.norm(x - G) / jnp.linalg.norm(G)) < 2e-3
-    # Block Thomas + Woodbury, not the dense per-chain inverse.
     block = int(np.prod(shape[:3])) * shape[-1]
     dense = sum(g.ky.shape[0] * (g.ky.shape[1] * block) ** 2 * 8 for g in op.groups)
     assert op.nbytes < dense
