@@ -401,7 +401,7 @@ def test_runtime_linear_quasilinear_krylov_smoke() -> None:
             csat=0.3,
         ),
     )
-    out = run_runtime_linear(cfg, ky_target=0.2, Nl=2, Nm=4, solver="krylov")
+    out = run_runtime_linear(cfg, ky_target=0.1, Nl=2, Nm=4, solver="krylov")
     assert out.quasilinear is not None
     assert out.state is None
     assert out.quasilinear["mode"] == "saturated"
