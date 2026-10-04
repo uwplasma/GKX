@@ -15,8 +15,9 @@ from gkx.solvers_nonlinear_imex import (
     ARS_TABLEAUX,
     build_chain_implicit_linear,
 )
+from gkx.solvers_nonlinear_diagnostics import stiff_linear_split
 from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
-from gkx.terms.assembly import assemble_rhs_cached
+from gkx.terms.assembly import assemble_rhs_cached, compute_fields_cached
 from gkx.terms.config import TermConfig
 from gkx.workflows.runtime.toml import load
 from support.paths import REPO_ROOT
@@ -3915,22 +3916,21 @@ def test_measured_streaming_frequency_skips_adiabatic_like_decks():
     assert measured_streaming_frequency(heavy, cache, nl=KE_NL, nm=KE_NM) == 0.0
 
 
-def test_chain_solve_inverts_the_implicit_linear_rhs():
+def test_chain_solve_inverts_the_stiff_linear_operator():
     cfg, params, cache, shape = _tiny_kinetic_electron_box()
     terms = rt.build_runtime_term_config(cfg)
-
-    def rhs(G):
-        return nonlinear_rhs_cached(G, cache, params, terms)[0]
-
+    split, fields = stiff_linear_split(cache, params, terms, compute_fields_cached)
     dt = 0.05
     op = build_chain_implicit_linear(
-        rhs, shape, dt, modes=np.ones(shape[3:5], bool), scheme="imex-ars3"
+        split, fields, shape, dt, modes=np.ones(shape[3:5], bool), scheme="imex-ars3"
     )
     key = jax.random.PRNGKey(3)
     G = (jax.random.normal(key, shape) + 1j * jax.random.normal(key + 1, shape)).astype(
         jnp.complex64
     )
-    lin = 0.5 * (rhs(G) - rhs(-G))
     gamma = ARS_TABLEAUX["imex-ars3"][1][1][1]
-    x = op.solve(G - gamma * dt * lin)
-    np.testing.assert_allclose(x, G, atol=1e-3 * float(jnp.max(jnp.abs(G))))
+    x = op.solve(G - gamma * dt * op.linear(G))
+    assert float(jnp.linalg.norm(x - G) / jnp.linalg.norm(G)) < 2e-3
+    block = int(np.prod(shape[:3])) * shape[-1]
+    dense = sum(g.ky.shape[0] * (g.ky.shape[1] * block) ** 2 * 8 for g in op.groups)
+    assert op.nbytes < dense

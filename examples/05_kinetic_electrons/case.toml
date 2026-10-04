@@ -19,10 +19,14 @@ schema_version = 1
 #     that the estimate misses, which made cfl 0.9 grow W_g by 1e8 by t = 0.2
 #     before), so 0.9 is stable at beta = 1e-5, 1e-4 and 1e-3: dt = 2.2e-3.
 #   * or skip the streaming limit: time.method = "imex-ars3" with
-#     fixed_dt = true, dt = 0.05 solves every linear term implicitly per
-#     twist-shift chain (run.py runs it). 0.05 reproduces the explicit
-#     saturated heat flux on this grid and at Nx = Ny = 32; 0.1 runs but reads
-#     7% high. Opt-in, fixed dt, memory sum over chains of (2 Nl Nm Nz L)^2.
+#     fixed_dt = true, dt = 0.05 solves parallel streaming and the field
+#     response implicitly per twist-shift chain (block Thomas + Woodbury;
+#     drifts, mirror and the bracket stay explicit, and set dt). run.py runs
+#     it. 0.05 reproduces the explicit saturated heat flux here and at
+#     Nx = Ny = 32, (Nl, Nm) = (4, 8); at 64x64x24 use 0.035 (0.05 goes
+#     non-finite at t = 15), 10x faster to t = 150 than fixed-dt RK3 with a
+#     1.5 GB factor. Opt-in, fixed dt; set XLA_PYTHON_CLIENT_PREALLOCATE=false
+#     on GPU at production size.
 #
 # Choosing t_max (in a/v_ti): the linear phase lasts ~ 10/gamma ~ 20-40, the
 # first nonlinear burst and saturation follow by t ~ 60-100, and fluxes are

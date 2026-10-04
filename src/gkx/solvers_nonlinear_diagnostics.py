@@ -8,6 +8,9 @@ keeping the large implementation body inline.
 
 from __future__ import annotations
 
+import dataclasses
+
+
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, Callable
@@ -606,10 +609,55 @@ def _run_explicit_diagnostic_scan_raw(
     return G_final, scan_diag_out, fields_final
 
 
+def stiff_linear_split(
+    cache: Any, params: Any, terms: Any, compute_fields_fn: Callable[..., Any]
+) -> tuple[Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], Callable]:
+    """Return ``(split_rhs, fields)`` for :func:`build_chain_implicit_linear`.
+
+    Implicit: streaming with its dissipation and the field response. Drifts,
+    mirror, drive and collisions stay explicit with the bracket; they couple
+    Laguerre moments and would break the per-``(s, l)`` Hermite block
+    structure that keeps the factor ``O(N^2)`` per moment row.
+    """
+    from gkx.terms.assembly import assemble_rhs_cached_with_fields
+    from gkx.terms.config import FieldState
+
+    implicit_terms = dataclasses.replace(
+        terms,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        nonlinear=0.0,
+    )
+
+    def fields(state: jnp.ndarray) -> jnp.ndarray:
+        f = compute_fields_fn(state, cache, params, terms=terms)
+        zero = jnp.zeros_like(f.phi)
+        return jnp.stack(
+            [f.phi]
+            + [
+                zero if a is None else jnp.asarray(a, f.phi.dtype)
+                for a in (f.apar, f.bpar)
+            ]
+        )
+
+    def split_rhs(state: jnp.ndarray, F: jnp.ndarray) -> jnp.ndarray:
+        return assemble_rhs_cached_with_fields(
+            state, cache, params, FieldState(F[0], F[1], F[2]), terms=implicit_terms
+        )
+
+    return split_rhs, fields
+
+
 def _attach_chain_implicit_linear(
     rhs_fn: Callable[..., Any],
     prepared: _ExplicitPreparedState,
     *,
+    params: LinearParams,
+    terms: Any,
+    compute_fields_fn: Callable[..., Any],
     fixed_dt: bool,
     dt: float,
     scheme: str,
@@ -628,8 +676,12 @@ def _attach_chain_implicit_linear(
         raise ValueError(
             f"method '{scheme}' needs a (species, Nl, Nm, ky, kx, z) state"
         )
+    split_rhs, fields = stiff_linear_split(
+        prepared.cache, params, terms, compute_fields_fn
+    )
     chain_linear = build_chain_implicit_linear(
-        lambda state: rhs_fn(state)[0],
+        split_rhs,
+        fields,
         tuple(G0.shape),
         float(dt),
         modes=np.broadcast_to(
@@ -670,6 +722,9 @@ def _build_explicit_scan_closures(
         rhs_fn = _attach_chain_implicit_linear(
             rhs_fn,
             prepared,
+            params=params,
+            terms=policies.collision_policy.rhs_terms,
+            compute_fields_fn=deps.compute_fields_fn,
             fixed_dt=options.fixed_dt,
             dt=options.dt,
             scheme=options.method,
