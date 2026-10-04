@@ -601,7 +601,7 @@ def _attach_chain_implicit_linear(
 ) -> Callable[..., Any]:
     """Return ``rhs_fn`` carrying the per-chain implicit operator of imex-ars*."""
 
-    from gkx.solvers_nonlinear_imex_chain import build_chain_implicit_linear
+    from gkx.solvers_nonlinear_imex import build_chain_implicit_linear
 
     if not fixed_dt:
         raise ValueError(

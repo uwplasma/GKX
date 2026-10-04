@@ -784,7 +784,6 @@ next_tests = [
 module = "gkx.solvers_nonlinear_imex"
 path = "src/gkx/solvers_nonlinear_imex.py"
 owned_modules = [
-  "gkx.solvers_nonlinear_imex_chain",
   "gkx.solvers_nonlinear_imex_diagnostics",
 ]
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"

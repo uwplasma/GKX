@@ -13,7 +13,7 @@ from gkx.core_grid import build_spectral_grid
 from gkx.geometry.core import apply_geometry_grid_defaults
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.nonlinear.policies import measured_streaming_frequency
-from gkx.solvers_nonlinear_imex_chain import (
+from gkx.solvers_nonlinear_imex import (
     ARS_TABLEAUX,
     build_chain_implicit_linear,
 )
