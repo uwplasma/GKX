@@ -257,9 +257,13 @@ so the explicit step is set by electron parallel streaming, not by the
 turbulence. Leave `fixed_dt = false` and let the CFL controller pick dt; the
 bound it used is in `diagnostics.cfl_scales`. Keep a small finite beta
 (`beta = 1e-4` with `use_apar = true`): at beta = 0 the electrostatic
-`omega_H` mode cuts dt a further 4.3 times. Use `cfl = 0.45`, which the
-shipped decks set; the default 0.9 went unstable at beta <= 1e-4 on the
-tutorial grid. For `t_max` (units of `a/v_ti`), allow ~`10/gamma` for the
+`omega_H` mode cuts dt a further 6 times. The default `cfl = 0.9` is
+stable: the controller measures the streaming + field-solve frequency by
+Arnoldi at startup. To leave the streaming limit behind, `method =
+"imex-ars3"` with `fixed_dt = true` and `dt = 0.05` solves every linear term
+implicitly per twist-shift chain (opt-in; 4-5x faster per unit time on the
+decks at the same heat flux, memory-bound at production resolution; see
+`docs/examples.rst`). For `t_max` (units of `a/v_ti`), allow ~`10/gamma` for the
 linear phase, saturation by `t ~ 60-100`, and an averaging window of 100-200
 after it, or `run_to = "saturation"`. `run.py` plots the ion and
 electron heat flux and the step; set `T_MAX = 150` to run the tutorial grid
