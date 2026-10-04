@@ -15,8 +15,6 @@ import jax.numpy as jnp
 import numpy as np
 from solvax import (
     KrylovSolution,
-    block_thomas_factor,
-    block_thomas_solve,
     gmres,
     linear_solve,
 )
@@ -724,7 +722,7 @@ IMEX_CHAIN_METHODS = frozenset(ARS_TABLEAUX)
 class _ChainGroup:
     ky: np.ndarray  # (chains, L) row indices
     kx: np.ndarray  # (chains, L) column indices
-    factors: Any  # block-Thomas factors of I - gamma dt S, batch (chains*s*l)
+    factors: Any  # block-Thomas factors (p, dinv, q) of I - gamma dt S
     u: jnp.ndarray  # (chains, s, l, rows_m, N, nf*N): fields -> RHS rows
     w: jnp.ndarray  # (chains, nf, s, l, cols_m, N): moments -> fields (z-local)
     cap: jnp.ndarray  # (chains, nf*N, nf*N): (Dr (I - gamma dt Q B^-1 U) Dc)^-1
@@ -764,9 +762,7 @@ class ChainImplicitLinear:
         return ARS_TABLEAUX[self.scheme][1][1][1] * self.dt
 
     def _bsolve(self, g: _ChainGroup, x: jnp.ndarray) -> jnp.ndarray:
-        batch = int(np.prod(x.shape[:3]))
-        y = jax.vmap(block_thomas_solve)(g.factors, x.reshape(batch, *x.shape[3:]))
-        return y.reshape(x.shape)
+        return _thomas_solve(g.factors, x)
 
     def _apply_inverse(self, g: _ChainGroup, x: jnp.ndarray) -> jnp.ndarray:
         x0 = self._bsolve(g, x)
@@ -852,6 +848,45 @@ def _chains(lin: Callable, shape: tuple[int, ...], modes: np.ndarray, dtype) -> 
     return [sorted(c) for c in sets.values()]
 
 
+def _mv(a: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
+    return jnp.einsum("...ij,...j->...i", a, x)
+
+
+def _thomas_factor(lower, diag, upper) -> tuple[jnp.ndarray, ...]:
+    """Block Thomas over Hermite (axis 3) with explicit block inverses.
+
+    Blocks are ``N x N`` with ``N = links * Nz`` (16-120), batched over
+    ``(chains, s, l)``: batched triangular solves of blocks that small are
+    launch-bound on GPU (4.5 ms against 0.6 ms for the same sweep as
+    matmuls at 32x32x16, (4, 8)), so the sweeps use stored inverses.
+    ``lower[m]`` couples row ``m`` to ``m - 1``, ``upper[m]`` to ``m + 1``.
+    """
+    nm = diag.shape[3]
+    p, dinv = [jnp.zeros_like(diag[:, :, :, 0])], []
+    for m in range(nm):
+        d = diag[:, :, :, m]
+        if m:
+            p.append(lower[:, :, :, m] @ dinv[-1])
+            d = d - p[-1] @ upper[:, :, :, m - 1]
+        dinv.append(jnp.linalg.inv(d))
+    q = [dinv[m] @ upper[:, :, :, m] for m in range(nm)]
+    return jnp.stack(p, 3), jnp.stack(dinv, 3), jnp.stack(q, 3)
+
+
+def _thomas_solve(factors: tuple[jnp.ndarray, ...], x: jnp.ndarray) -> jnp.ndarray:
+    p, dinv, q = factors
+    nm = x.shape[3]
+    w, z = [], x[:, :, :, 0]
+    for m in range(nm):
+        if m:
+            z = x[:, :, :, m] - _mv(p[:, :, :, m], z)
+        w.append(_mv(dinv[:, :, :, m], z))
+    out = [w[-1]]
+    for m in range(nm - 2, -1, -1):
+        out.append(w[m] - _mv(q[:, :, :, m], out[-1]))
+    return jnp.stack(out[::-1], 3)
+
+
 def _unit(n: int, j: jnp.ndarray, dtype) -> jnp.ndarray:
     return jnp.where(jnp.arange(n) == j, 1.0, 0.0).astype(dtype)
 
@@ -891,11 +926,7 @@ def _factor_chain_group(
             else:
                 upper = upper.at[:, :, :, rows[ok]].set(col)
     eye = jnp.eye(n, dtype=dtype)
-    factors = jax.vmap(block_thomas_factor)(
-        (-gdt * lower).reshape(c * ns * nl, nm, n, n),
-        (eye - gdt * diag).reshape(c * ns * nl, nm, n, n),
-        (-gdt * upper).reshape(c * ns * nl, nm, n, n),
-    )
+    factors = _thomas_factor(-gdt * lower, eye - gdt * diag, -gdt * upper)
     del lower, diag, upper
 
     def u_column(j):
