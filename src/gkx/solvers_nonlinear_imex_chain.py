@@ -74,7 +74,6 @@ IMEX_CHAIN_METHODS = frozenset(ARS_TABLEAUX)
 class _ChainGroup:
     ky: np.ndarray  # (chains, L) row indices
     kx: np.ndarray  # (chains, L) column indices
-    lmat: jnp.ndarray  # (chains, n, n) linear operator
     inv: jnp.ndarray  # (chains, n, n) inverse of I - gamma dt L
 
 
@@ -89,7 +88,7 @@ class ChainImplicitLinear:
 
     @property
     def nbytes(self) -> int:
-        return sum(int(g.lmat.nbytes + g.inv.nbytes) for g in self.groups)
+        return sum(int(g.inv.nbytes) for g in self.groups)
 
     def _gather(self, g: _ChainGroup, G: jnp.ndarray) -> jnp.ndarray:
         x = G[:, :, :, g.ky, g.kx, :]  # (s, l, m, chains, L, z)
@@ -99,21 +98,13 @@ class ChainImplicitLinear:
         x = X.reshape(g.ky.shape[0], g.ky.shape[1], *self.shape[:3], self.shape[-1])
         return out.at[:, :, :, g.ky, g.kx, :].set(jnp.moveaxis(x, (0, 1), (3, 4)))
 
-    def _apply(self, G: jnp.ndarray, which: str) -> jnp.ndarray:
-        out = G if which == "inv" else jnp.zeros_like(G)
-        for g in self.groups:
-            mat = g.inv if which == "inv" else g.lmat
-            y = jnp.einsum("cij,cj->ci", mat, self._gather(g, G).astype(mat.dtype))
-            out = self._scatter(g, y.astype(G.dtype), out)
-        return out
-
-    def matvec(self, G: jnp.ndarray) -> jnp.ndarray:
-        """``L G`` on the chains (zero on rows no chain owns)."""
-        return self._apply(G, "lmat")
-
     def solve(self, R: jnp.ndarray) -> jnp.ndarray:
         """``(I - gamma dt L)^{-1} R`` on the chains (identity elsewhere)."""
-        return self._apply(R, "inv")
+        out = R
+        for g in self.groups:
+            y = jnp.einsum("cij,cj->ci", g.inv, self._gather(g, R).astype(g.inv.dtype))
+            out = self._scatter(g, y.astype(R.dtype), out)
+        return out
 
     def ars_step(
         self,
@@ -125,17 +116,19 @@ class ChainImplicitLinear:
         """One ARS step; ``dG = rhs(G)`` is the full (linear + bracket) RHS."""
         a_exp, a_imp, b_exp, b_imp = ARS_TABLEAUX[self.scheme]
         dt, gam = self.dt, a_imp[1][1]
-        lin = [self.matvec(G)]
-        non = [dG - lin[0]]
+        # Stage 1 needs only the bracket at G (ARS implicit weights on it are
+        # zero): the even part of the RHS, which costs one RHS and no stored L.
+        lin = [None]
+        non = [0.5 * (dG + rhs(-G))]
         for i in range(1, len(b_exp)):
-            r = G + dt * sum(
-                a_exp[i][j] * non[j] + a_imp[i][j] * lin[j] for j in range(i)
-            )
+            r = G + dt * sum(a_exp[i][j] * non[j] for j in range(i))
+            r = r + dt * sum(a_imp[i][j] * lin[j] for j in range(1, i))
             y = project(self.solve(r))
             lin.append((y - r) / (gam * dt))  # y = r + gamma dt L y
             non.append(rhs(y) - lin[i] if b_exp[i] or i + 1 < len(b_exp) else 0.0)
         return G + dt * sum(
-            b_exp[j] * non[j] + b_imp[j] * lin[j] for j in range(len(b_exp))
+            b_exp[j] * non[j] + (b_imp[j] * lin[j] if j else 0.0)
+            for j in range(len(b_exp))
         )
 
 
@@ -202,7 +195,7 @@ def build_chain_implicit_linear(
         (np.array(c)[..., 0], np.array(c)[..., 1]) for _, c in sorted(by_len.items())
     ]
     probe = ChainImplicitLinear(
-        tuple(_ChainGroup(k, x, None, None) for k, x in idx), tuple(shape), dt, scheme
+        tuple(_ChainGroup(k, x, None) for k, x in idx), tuple(shape), dt, scheme
     )
     n_max = max(k.shape[1] for k, _ in idx) * blk
 
@@ -226,8 +219,7 @@ def build_chain_implicit_linear(
     for g, c in zip(probe.groups, cols):
         n = g.ky.shape[1] * blk
         lmat = jnp.moveaxis(c[:n], 0, 2)  # (chains, out, in)
-        inv = jnp.linalg.inv(
-            jnp.eye(n, dtype=dtype) - ARS_TABLEAUX[scheme][1][1][1] * dt * lmat
-        )
-        groups.append(_ChainGroup(g.ky, g.kx, lmat, inv))
+        gamma = ARS_TABLEAUX[scheme][1][1][1]
+        inv = jnp.linalg.inv(jnp.eye(n, dtype=dtype) - gamma * dt * lmat)
+        groups.append(_ChainGroup(g.ky, g.kx, inv))
     return ChainImplicitLinear(tuple(groups), tuple(shape), float(dt), scheme)

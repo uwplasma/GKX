@@ -73,7 +73,7 @@ def test_measured_streaming_frequency_skips_adiabatic_like_decks():
     assert measured_streaming_frequency(heavy, cache, nl=NL, nm=NM) == 0.0
 
 
-def test_chain_operator_reproduces_and_inverts_the_linear_rhs():
+def test_chain_solve_inverts_the_implicit_linear_rhs():
     cfg, params, cache, shape = _tiny_kinetic_electron_box()
     terms = rt.build_runtime_term_config(cfg)
 
@@ -89,8 +89,6 @@ def test_chain_operator_reproduces_and_inverts_the_linear_rhs():
         jnp.complex64
     )
     lin = 0.5 * (rhs(G) - rhs(-G))
-    scale = float(jnp.max(jnp.abs(lin)))
-    np.testing.assert_allclose(op.matvec(G), lin, atol=2e-4 * scale)
     gamma = ARS_TABLEAUX["imex-ars3"][1][1][1]
-    x = op.solve(G - gamma * dt * op.matvec(G))
+    x = op.solve(G - gamma * dt * lin)
     np.testing.assert_allclose(x, G, atol=1e-3 * float(jnp.max(jnp.abs(G))))
