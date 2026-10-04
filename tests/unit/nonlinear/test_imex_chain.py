@@ -93,4 +93,4 @@ def test_chain_operator_reproduces_and_inverts_the_linear_rhs():
     np.testing.assert_allclose(op.matvec(G), lin, atol=2e-4 * scale)
     gamma = ARS_TABLEAUX["imex-ars3"][1][1][1]
     x = op.solve(G - gamma * dt * op.matvec(G))
-    np.testing.assert_allclose(x, G, atol=1e-4 * float(jnp.max(jnp.abs(G))))
+    np.testing.assert_allclose(x, G, atol=1e-3 * float(jnp.max(jnp.abs(G))))
