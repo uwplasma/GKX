@@ -179,6 +179,87 @@ def _build_time_step_limits(
     )
 
 
+# Krylov dimension of the streaming-frequency measurement: 30 Arnoldi steps
+# reproduce ARPACK's largest |lambda| to 1e-4 on the kinetic-electron Cyclone
+# box (702.15 against 702.15; 20 steps give 701.2, 10 give 666).
+_STREAMING_ARNOLDI_STEPS = 30
+
+
+def measured_streaming_frequency(
+    params: LinearParams, cache: LinearCache, *, nl: int, nm: int
+) -> float:
+    """Largest |eigenvalue| of parallel streaming plus the field solve.
+
+    The analytic estimate ``v_t k_z,max max(2 sqrt(Nm), omega_H guard)``
+    misses the electromagnetic electron mode of a linked kinetic-electron box:
+    on the Cyclone tutorial deck (beta 1e-4, 16^3, Nl 2, Nm 4) the operator has
+    |lambda| = 702 against the estimate's 500 (1.38x; 1.76x at beta 1e-5, 1.56x
+    with Ny 32), an almost pure electron m = 1 oscillation, so the controller's
+    step at cfl 0.9 sits at |lambda| dt = 2.15 > sqrt(3), outside RK3's
+    imaginary-axis interval. Measured here by Arnoldi on the operator the run
+    applies, restricted to ky >= 0 (the two-sided layout rebuilds ky < 0 from
+    them). Only for decks with a light kinetic species (v_t ratio > 4), where
+    streaming sets the step; returns 0 otherwise or when the cache is traced.
+    """
+
+    vth = np.abs(np.atleast_1d(np.asarray(params.vth, dtype=float)))
+    if vth.size < 2 or nm < 2 or float(vth.max()) <= 4.0 * float(vth.min()):
+        return 0.0
+    if any(
+        isinstance(leaf, jax.core.Tracer) for leaf in jax.tree_util.tree_leaves(cache)
+    ):
+        return 0.0
+    from gkx.terms.assembly import assemble_rhs_cached
+
+    terms = TermConfig(
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+    )
+    ky = np.asarray(cache.ky)
+    keep = jnp.asarray((ky >= 0.0)[:, None, None], dtype=jnp.result_type(float))
+    shape = (
+        vth.size,
+        nl,
+        nm,
+        ky.size,
+        int(np.asarray(cache.kx).size),
+        int(np.asarray(cache.kz).size),
+    )
+    dtype = jnp.result_type(1j * jnp.zeros((), jnp.result_type(float)))
+    op = jax.jit(
+        lambda G: (
+            keep
+            * assemble_rhs_cached(keep * G, cache, params, terms=terms)[0].reshape(
+                shape
+            )
+        )
+    )
+    k = _STREAMING_ARNOLDI_STEPS
+    v = jax.random.normal(jax.random.PRNGKey(0), shape).astype(dtype) * keep
+    basis = [v / jnp.linalg.norm(v)]
+    hess = np.zeros((k + 1, k), dtype=complex)
+    for j in range(k):
+        w = op(basis[j])
+        for _ in range(2):  # classical Gram-Schmidt with one reorthogonalization
+            for i in range(j + 1):
+                c = complex(jnp.vdot(basis[i], w))
+                hess[i, j] += c
+                w = w - c * basis[i]
+        hess[j + 1, j] = float(jnp.linalg.norm(w))
+        if hess[j + 1, j].real <= 1e-12 * max(
+            float(np.abs(hess[: j + 1, j]).max()), 1e-300
+        ):
+            k = j + 1
+            break
+        basis.append(w / hess[j + 1, j])
+    return float(np.max(np.abs(np.linalg.eigvals(hess[:k, :k]))))
+
+
 def _build_nonlinear_cfl_bounds(
     grid: SpectralGrid,
     geom: Any,
@@ -197,23 +278,22 @@ def _build_nonlinear_cfl_bounds(
     nm = int(cache.m.shape[1])
     vtmax = jnp.max(jnp.abs(jnp.asarray(params.vth, dtype=real_dtype)))
     tzmax = jnp.max(jnp.abs(jnp.asarray(params.tz, dtype=real_dtype)))
+    linear_omega = np.array(
+        linear_frequency_bound_fn(
+            grid, geom, params, nl, nm, include_diamagnetic_drive=False
+        ),
+        dtype=float,
+    )
+    linear_omega[2] = max(
+        linear_omega[2], measured_streaming_frequency(params, cache, nl=nl, nm=nm)
+    )
     return _NonlinearCFLBounds(
         kx_max=jnp.abs(kx[(nx - 1) // 3]) if nx > 1 else jnp.zeros((), real_dtype),
         ky_max=jnp.abs(ky[(ny - 1) // 3]) if ny > 1 else jnp.zeros((), real_dtype),
         vpar_max=2.0 * jnp.sqrt(jnp.asarray(max(nm, 1), real_dtype)) * vtmax,
         muB_max=jnp.asarray(laguerre_velocity_max_fn(nl), real_dtype) * tzmax,
         kxfac=jnp.asarray(cache.kxfac, dtype=real_dtype),
-        linear_omega=jnp.asarray(
-            linear_frequency_bound_fn(
-                grid,
-                geom,
-                params,
-                nl,
-                nm,
-                include_diamagnetic_drive=False,
-            ),
-            dtype=real_dtype,
-        ),
+        linear_omega=jnp.asarray(linear_omega, dtype=real_dtype),
     )
 
 

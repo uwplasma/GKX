@@ -7,16 +7,22 @@ schema_version = 1
 # Choosing dt. The step is set by the CFL controller (fixed_dt = false), and
 # with kinetic electrons the controller is bound by electron parallel
 # streaming, ~ v_te k_z,max = sqrt(m_i/m_e) ~ 60 times the ion rate: on this
-# grid omega_stream = 500 against omega_drift = 1.6. Two measured rules:
+# grid omega_stream = 702 against omega_drift = 1.6. Measured rules:
 #   * keep a small finite beta with A_parallel. At beta = 0 the electrostatic
 #     omega_H mode (k_par v_te / k_perp rho_s at the smallest k_perp) sets
-#     omega_stream = 4300 and dt = 3.6e-4; beta = 1e-4 gives dt = 1.5e-3, four
+#     omega_stream = 4300 and dt = 3.6e-4; beta = 1e-4 gives dt = 2.2e-3, six
 #     times fewer steps, with the linear growth rate at k_y rho_i = 0.3
 #     unchanged to 2e-4 (0.62492 at beta = 1e-4 against 0.62478 at 1e-6).
-#   * cfl = 0.45, not the 0.9 default. At beta <= 1e-4 the controller's step
-#     at cfl = 0.9 (and at 0.6 for beta = 1e-5) grows W_g by 1e8-1e10 within
-#     t = 0.3 even with the nonlinear term off; 0.45 is stable at beta = 1e-5,
-#     1e-4 and 1e-3 on this grid.
+#   * the default cfl = 0.9. The controller measures the largest streaming +
+#     field-solve frequency by Arnoldi at startup (702 here, not the GX
+#     estimate's 500: an electromagnetic electron m = 1 mode of the linked box
+#     that the estimate misses, which made cfl 0.9 grow W_g by 1e8 by t = 0.2
+#     before), so 0.9 is stable at beta = 1e-5, 1e-4 and 1e-3: dt = 2.2e-3.
+#   * or skip the streaming limit: time.method = "imex-ars3" with
+#     fixed_dt = true, dt = 0.05 solves every linear term implicitly per
+#     twist-shift chain (run.py runs it). 0.05 reproduces the explicit
+#     saturated heat flux on this grid and at Nx = Ny = 32; 0.1 runs but reads
+#     7% high. Opt-in, fixed dt, memory sum over chains of (2 Nl Nm Nz L)^2.
 #
 # Choosing t_max (in a/v_ti): the linear phase lasts ~ 10/gamma ~ 20-40, the
 # first nonlinear burst and saturation follow by t ~ 60-100, and fluxes are
@@ -25,7 +31,7 @@ schema_version = 1
 # horizon below is 0.3.
 #
 # Production (GPU, hours): Nx = Ny = 64 (or 96), Nz = 24-32, Nl = 4, Nm = 8-16,
-# t_max = 400, run_to = "saturation", same beta and cfl. Nm = 8 raises the
+# t_max = 400, run_to = "saturation", same beta. Nm = 8 raises the
 # streaming bound by 1.4 (2 sqrt(Nm)); check the flux against Nm = 16 before
 # quoting it.
 
@@ -66,7 +72,6 @@ dt = 0.05
 dt_max = 0.05
 method = "rk3"
 fixed_dt = false
-cfl = 0.45
 sample_stride = 10
 diagnostics_stride = 10
 run_to = "t_max"

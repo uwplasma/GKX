@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from gkx.diagnostics_contract import SimulationDiagnostics
 from gkx.geometry import FluxTubeGeometryLike
@@ -590,6 +591,46 @@ def _run_explicit_diagnostic_scan_raw(
     return G_final, scan_diag_out, fields_final
 
 
+def _attach_chain_implicit_linear(
+    rhs_fn: Callable[..., Any],
+    prepared: _ExplicitPreparedState,
+    *,
+    fixed_dt: bool,
+    dt: float,
+    scheme: str,
+) -> Callable[..., Any]:
+    """Return ``rhs_fn`` carrying the per-chain implicit operator of imex-ars*."""
+
+    from gkx.solvers_nonlinear_imex import build_chain_implicit_linear
+
+    if not fixed_dt:
+        raise ValueError(
+            f"method '{scheme}' factors I - gamma dt L once: set fixed_dt = true "
+            "and choose dt from the nonlinear rate (examples/05_kinetic_electrons)"
+        )
+    G0 = jnp.asarray(prepared.G0)
+    if G0.ndim != 6:
+        raise ValueError(
+            f"method '{scheme}' needs a (species, Nl, Nm, ky, kx, z) state"
+        )
+    chain_linear = build_chain_implicit_linear(
+        lambda state: rhs_fn(state)[0],
+        tuple(G0.shape),
+        float(dt),
+        modes=np.broadcast_to(
+            (np.asarray(prepared.cache.ky) >= 0.0)[:, None], G0.shape[3:5]
+        ),
+        scheme=scheme,
+        dtype=G0.dtype,
+    )
+
+    def rhs_with_chain_linear(state: jnp.ndarray) -> Any:
+        return rhs_fn(state)
+
+    rhs_with_chain_linear.chain_implicit_linear = chain_linear  # type: ignore[attr-defined]
+    return rhs_with_chain_linear
+
+
 def _build_explicit_scan_closures(
     prepared: _ExplicitPreparedState,
     policies: _ExplicitRuntimePolicies,
@@ -610,6 +651,14 @@ def _build_explicit_scan_closures(
         laguerre_mode=options.laguerre_mode,
         external_phi=options.external_phi,
     )
+    if options.method in {"imex-ars2", "imex-ars3"}:
+        rhs_fn = _attach_chain_implicit_linear(
+            rhs_fn,
+            prepared,
+            fixed_dt=options.fixed_dt,
+            dt=options.dt,
+            scheme=options.method,
+        )
     compute_diag_from_state = _make_explicit_diagnostic_callable(
         prepared,
         grid,
