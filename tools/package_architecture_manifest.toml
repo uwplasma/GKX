@@ -1126,7 +1126,9 @@ recursive = true
 # opt-in per-chain implicit linear step imex-ars3, measured on the merged tree.
 # 75512 -> 75552: adaptive chunks reuse one compiled scan with the horizon as a
 # traced operand (was one XLA compile per chunk, 22x wall on the KE deck), measured.
-baseline = 75552
+# 75552 -> 75904: structured imex-ars3 factor (plan 5.4, block Thomas over
+# Hermite + Woodbury fields; 53 GB -> 1.5 GB at 64x64x24 (4,8)), measured.
+baseline = 75904
 target = 45000
 
 [[line_budget_policy.counts]]
