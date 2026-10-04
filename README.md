@@ -260,9 +260,10 @@ bound it used is in `diagnostics.cfl_scales`. Keep a small finite beta
 `omega_H` mode cuts dt a further 6 times. The default `cfl = 0.9` is
 stable: the controller measures the streaming + field-solve frequency by
 Arnoldi at startup. To leave the streaming limit behind, `method =
-"imex-ars3"` with `fixed_dt = true` and `dt = 0.05` solves every linear term
-implicitly per twist-shift chain (opt-in; 4-5x faster per unit time on the
-decks at the same heat flux, memory-bound at production resolution; see
+"imex-ars3"` with `fixed_dt = true` solves parallel streaming and the field
+response implicitly per twist-shift chain (opt-in; block-Thomas + Woodbury
+factor, 1.5 GB at 64x64x24 with (Nl, Nm) = (4, 8); 10x shorter
+time-to-solution than fixed-dt RK3 there at the same heat flux, dt 0.035; see
 `docs/examples.rst`). For `t_max` (units of `a/v_ti`), allow ~`10/gamma` for the
 linear phase, saturation by `t ~ 60-100`, and an averaging window of 100-200
 after it, or `run_to = "saturation"`. `run.py` plots the ion and

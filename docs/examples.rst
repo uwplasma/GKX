@@ -332,14 +332,26 @@ dominant linear eigenvalue of the tutorial linear deck moves by
 (0.62478 and 0.62492).
 
 **Implicit linear step (opt-in).** ``method = "imex-ars3"`` with
-``fixed_dt = true`` removes the streaming limit: the linear operator couples
-modes only along one twist-shift chain, so GKX probes the run's own linear RHS
-once per chain, inverts :math:`I-\gamma\Delta t L` (dense, per chain) and
-steps with the Ascher-Ruuth-Spiteri ARS(3,4,3) IMEX scheme -- every linear
-term implicit, the bracket explicit, five RHS evaluations and three block
-solves per step. dt is then set by the nonlinear rate. Measured on an A4000
-(``ky_layout = "full"``; ``"half"`` also works), heat flux averaged over
-:math:`t=75`-150 with 10-unit block errors:
+``fixed_dt = true`` removes the streaming limit. Only the stiff terms are
+implicit -- parallel streaming with its dissipation (end damping,
+hypercollisions, hyperdiffusion) and the field response; drifts, mirror,
+drive and collisions stay explicit with the bracket. These couple modes only
+along one twist-shift chain, and per chain the operator is :math:`S+UQ`:
+:math:`S` block-tridiagonal in Hermite with one :math:`N\times N` block per
+row (:math:`N` = links :math:`\times N_z`; the off-diagonal blocks are the
+chain's parallel-gradient matrix times a ladder scalar) and no species or
+Laguerre coupling, and :math:`Q` the z-local field solve. GKX probes every
+block from the run's own RHS assembly, factors :math:`I-\gamma\Delta t S` by
+block Thomas, adds the fields by Woodbury (an equilibrated
+:math:`2N\times2N` capacitance per chain) and certifies the factor by one
+solve's residual. The step is Ascher-Ruuth-Spiteri ARS(3,4,3): four RHS
+evaluations and three solves. Memory is about :math:`(N_m+6)\,n_sN_lN^2`
+complex entries per chain against the dense :math:`(n_sN_lN_mN)^2`: 0.15 GB
+at 32x32x16 and 1.5 GB at 64x64x24, both (Nl, Nm) = (4, 8), against 5.5 and
+53 GB. Measured on an A4000, against RK3 at its CFL-bound fixed dt (the
+adaptive explicit route is ~10x slower per step on GPU), heat flux averaged
+over :math:`t=75`-150 with 10-unit block errors, both runs sampled every
+0.5:
 
 .. list-table::
    :header-rows: 1
@@ -348,44 +360,54 @@ solves per step. dt is then set by the nonlinear rate. Measured on an A4000
      - step
      - :math:`Q_i`
      - :math:`Q_e`
-     - s per unit time
-   * - Cyclone 32x32x16
-     - RK3, dt 1.6e-3
-     - 526 ± 15
-     - 586 ± 16
-     - 0.92
+     - wall to t = 150
+   * - Cyclone 64x64x24 (4,8)
+     - RK3, dt 1.04e-3
+     - 247 ± 22
+     - 288 ± 20
+     - 6883 s
+   * -
+     - imex-ars3, dt 0.035
+     - 270 ± 14
+     - 310 ± 13
+     - 678 s (10.1x)
+   * - Cyclone 32x32x16 (4,8)
+     - RK3, dt 1.7e-3
+     - 538 ± 18
+     - 674 ± 18
+     - 491 s
    * -
      - imex-ars3, dt 0.05
-     - 535 ± 14
-     - 610 ± 13
-     - 0.17 (5.4x)
-   * -
-     - imex-ars3, dt 0.1
-     - 563 ± 14
-     - 633 ± 16
-     - 0.11 (8.8x)
-   * - QA 16x16x32
+     - 533 ± 14
+     - 672 ± 16
+     - 113 s (4.4x)
+   * - QA 16x16x32 (2,4)
      - RK3, dt 3e-3
-     - 255 ± 14
-     - 256 ± 12
-     - 0.27
+     - 250 ± 17
+     - 251 ± 16
+     - 50 s
    * -
      - imex-ars3, dt 0.05
-     - 234 ± 10
-     - 234 ± 10
-     - 0.07 (4.0x)
+     - 229 ± 16
+     - 230 ± 15
+     - 65 s (0.8x)
 
-Linear growth agrees with the explicit run to :math:`5\times10^{-4}`
-(Cyclone, 0.66327 against 0.66293) and :math:`2\times10^{-3}` (QA, 0.17184
-against 0.17146) at dt 0.05, 23 and 15 times the explicit step. Use dt 0.05
-on these decks; 0.1 runs but reads 7% high. Limits: fixed dt only (the
-factorization is per dt); about 25 s of probing and factoring at startup; the
-factors take :math:`\sum_{\rm chains}(2N_lN_mN_zL)^2` complex entries
-(0.08 GB at 16x16x16 (2,4), 0.34 GB at 32x32x16 (2,4), 5.5 GB at 32x32x16
-(4,8), 53 GB at 64x64x24 (4,8)), so production resolution needs the banded
-response-matrix solve of plan 5.4; derivatives do not flow through the
-factors. ``imex-ars2`` (two-stage) is cheaper per step but its explicit part
-has no imaginary-axis interval and went non-finite at :math:`t=25.5`.
+The imex walls include building the factor (64 s, 31 s and 30 s). Per step,
+an imex step costs 2.7 RK3 steps at 64x64x24 and 2.9 at 32x32x16, so the
+stepping alone is 12.5x and 10x faster; on the small decks the build and
+compilation dominate, and on the QA tutorial grid RK3 is faster outright.
+Linear growth (dominant mode, nonlinear term off, fit over :math:`t=15`-20)
+agrees with RK3 to :math:`1.4\times10^{-4}`, :math:`3.7\times10^{-4}` and
+:math:`4.1\times10^{-4}`. dt is set by the explicit terms, mostly the
+bracket: 0.05 went non-finite at :math:`t=15` at 64x64x24 (0.035 and 0.025
+are stable) and 0.1 at :math:`t=1.9` at 32x32x16. Limits: fixed dt only (one
+factor per dt); derivatives flow through the solve with respect to the state
+but not through the factors with respect to parameters; production grids
+need ``XLA_PYTHON_CLIENT_PREALLOCATE=false`` (the factors are captured as
+constants of the compiled scan, and with the default 75% preallocation the
+64x64x24 executable fails to load). ``imex-ars2`` (two-stage) has no
+imaginary-axis interval in its explicit part and went non-finite at
+:math:`t=25.5`.
 
 **Choosing t_max** (units of :math:`a/v_{ti}`): the linear phase lasts about
 :math:`10/\gamma`, 20-40 here; saturation follows by :math:`t\approx60`-100;

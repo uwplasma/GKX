@@ -2172,6 +2172,16 @@ Exit: C0–C2 rows passing; the envelope published; C3 scoped or parked.
 
 ## 11. Phase 7 — package, docs, examples, papers, release (weeks 14–20)
 
+
+Status 2026-10-04 (KE-BANDED, plan/log.md): implemented as streaming +
+field response implicit, drifts/mirror/collisions explicit (stella's split);
+spectral streaming is kept exact inside the implicit operator (no banded
+surrogate needed: the per-chain factor is block Thomas over Hermite with one
+N×N block per row, fields by Woodbury). 1.5 GB at 64×64×24 (4,8); 10.1×
+time-to-solution against fixed-dt RK3 there at matched heat flux and
+growth rate (4e-4). Open: dt adaptivity, parameter derivatives through the
+factors, mirror inside the implicit block.
+
 ### 7.1 Slimming without removing science
 
 Measure tracked bytes, fresh-clone pack, wheel, physical lines, files,

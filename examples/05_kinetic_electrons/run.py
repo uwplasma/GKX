@@ -32,11 +32,11 @@ CASES = {
     "tokamak, imex-ars3": HERE / "case.toml",
     "stellarator": HERE / "case_stellarator.toml",
 }
-# Implicit linear step (opt-in): parallel streaming, the field solve and every
-# other linear term are solved per twist-shift chain, so dt is set by the
-# nonlinear rate instead of the electron streaming CFL. Fixed dt only; 0.05
-# reproduced the explicit run's saturated heat flux on this deck (Nx = Ny = 16
-# and 32), 0.1 ran stable but 7% high.
+# Implicit linear step (opt-in): parallel streaming and the field response are
+# solved per twist-shift chain (drifts, mirror and the bracket stay explicit),
+# so dt is set by the explicit terms instead of the electron streaming CFL.
+# Fixed dt only; 0.05 reproduced the explicit run's saturated heat flux on
+# this deck at Nx = Ny = 16 and 32.
 IMEX_TIME = {"method": "imex-ars3", "fixed_dt": True, "dt": 0.05, "dt_max": 0.05}
 VMEC_INPUT = HERE.parent / "vmec" / "input.LandremanPaul2021_QA_lowres"
 OUTPUT = Path("outputs/05_kinetic_electrons")
