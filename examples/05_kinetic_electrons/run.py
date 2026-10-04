@@ -68,13 +68,18 @@ for label, path in CASES.items():
     d = result.diagnostics
     t, dt = np.asarray(d.t), np.asarray(d.dt_t)
     q = np.asarray(d.heat_flux_species_t)  # (time, species): ion, electron
-    scales = np.asarray(
-        d.cfl_scales if d.cfl_scales is not None else [np.nan] * 3, dtype=float
-    )[:3].tolist()  # a fixed-dt (imex) run has no CFL controller
-    cfl = dict(zip(("drift_x", "drift_y", "streaming"), scales))
+    scales = np.asarray(d.cfl_scales if d.cfl_scales is not None else [], float)[:3]
+    # A fixed-dt (imex) run has no CFL controller and reports no bound.
+    cfl = dict(zip(("drift_x", "drift_y", "streaming"), scales.tolist()))
+    cfl = {k: v for k, v in cfl.items() if np.isfinite(v)}
+    bound = (
+        f"omega_stream = {cfl['streaming']:.0f} vs omega_drift = "
+        f"{max(cfl['drift_x'], cfl['drift_y']):.2f}"
+        if len(cfl) == 3
+        else "fixed dt, implicit linear step"
+    )
     print(
-        f"{label}: t_final = {t[-1]:.3f}, mean dt = {dt.mean():.2e}, "
-        f"omega_stream = {cfl['streaming']:.0f} vs omega_drift = {max(cfl['drift_x'], cfl['drift_y']):.2f}, "
+        f"{label}: t_final = {t[-1]:.3f}, mean dt = {dt.mean():.2e}, {bound}, "
         f"Q_i = {q[-1, 0]:.3e}, Q_e = {q[-1, 1]:.3e}"
     )
     traces[label] = (t, q, dt)
