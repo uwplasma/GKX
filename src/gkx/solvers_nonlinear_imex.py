@@ -766,9 +766,13 @@ class ChainImplicitLinear:
 
     def _apply_inverse(self, g: _ChainGroup, x: jnp.ndarray) -> jnp.ndarray:
         x0 = self._bsolve(g, x)
-        f = jnp.einsum("cfslmn,cslmn->cfn", g.w, x0[:, :, :, list(self.cols_m)])
-        y = g.dc * jnp.einsum("cij,cj->ci", g.cap, g.dr * f.reshape(f.shape[0], -1))
-        uy = jnp.einsum("cslmni,ci->cslmn", g.u, y)
+        f = jnp.einsum(
+            "cfslmn,cslmn->cfn", g.w, x0[:, :, :, list(self.cols_m)], precision=_HI
+        )
+        y = g.dc * jnp.einsum(
+            "cij,cj->ci", g.cap, g.dr * f.reshape(f.shape[0], -1), precision=_HI
+        )
+        uy = jnp.einsum("cslmni,ci->cslmn", g.u, y, precision=_HI)
         full = jnp.zeros_like(x0).at[:, :, :, list(self.rows_m)].set(uy)
         return x0 + self.gamma_dt * self._bsolve(g, full)
 
@@ -848,13 +852,18 @@ def _chains(lin: Callable, shape: tuple[int, ...], modes: np.ndarray, dtype) -> 
     return [sorted(c) for c in sets.values()]
 
 
+# Full fp32 products: XLA otherwise lowers batched complex64 matmuls to TF32
+# on Ampere, a 1e-3 error that the zonal A_par block (cond ~1e5) turns into
+# an O(1) solve residual.
+_HI = jax.lax.Precision.HIGHEST
+
 # Probes evaluated per vmapped batch while building the factor: one probe is
 # one RHS assembly, too small to fill a GPU alone.
 _PROBE_BATCH = 8
 
 
 def _mv(a: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
-    return jnp.einsum("...ij,...j->...i", a, x)
+    return jnp.einsum("...ij,...j->...i", a, x, precision=_HI)
 
 
 def _thomas_factor(lower, diag, upper) -> tuple[jnp.ndarray, ...]:
@@ -871,10 +880,10 @@ def _thomas_factor(lower, diag, upper) -> tuple[jnp.ndarray, ...]:
     for m in range(nm):
         d = diag[:, :, :, m]
         if m:
-            p.append(lower[:, :, :, m] @ dinv[-1])
-            d = d - p[-1] @ upper[:, :, :, m - 1]
+            p.append(jnp.matmul(lower[:, :, :, m], dinv[-1], precision=_HI))
+            d = d - jnp.matmul(p[-1], upper[:, :, :, m - 1], precision=_HI)
         dinv.append(jnp.linalg.inv(d))
-    q = [dinv[m] @ upper[:, :, :, m] for m in range(nm)]
+    q = [jnp.matmul(dinv[m], upper[:, :, :, m], precision=_HI) for m in range(nm)]
     return jnp.stack(p, 3), jnp.stack(dinv, 3), jnp.stack(q, 3)
 
 
@@ -964,7 +973,7 @@ def _factor_chain_group(
             .set(g.u[..., i])
         )
         y = op._bsolve(g, ui)[:, :, :, list(cols_m)]
-        return jnp.einsum("cfslmn,cslmn->cfn", g.w, y).reshape(c, -1)
+        return jnp.einsum("cfslmn,cslmn->cfn", g.w, y, precision=_HI).reshape(c, -1)
 
     qbu = jnp.moveaxis(
         jax.lax.map(cap_column, jnp.arange(len(act) * n), batch_size=_PROBE_BATCH),
