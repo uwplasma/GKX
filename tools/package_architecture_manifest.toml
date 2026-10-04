@@ -1120,7 +1120,9 @@ recursive = true
 # 74748 -> 75001: bug-fix chain (#302 #303 #304 #306 #308), measured.
 # 75001 -> 75124: xcode suspects (NTFT m0 chain frame, per-species nu pairs, phase R^2), measured.
 # 75124 -> 75143: forward-mode dense eigenpair rule for VMEX's Jacobian, measured.
-baseline = 75143
+# 75143 -> 75506: kinetic-electron step (plan 5.4): measured streaming bound and the
+# opt-in per-chain implicit linear step imex-ars3, measured.
+baseline = 75506
 target = 45000
 
 [[line_budget_policy.counts]]

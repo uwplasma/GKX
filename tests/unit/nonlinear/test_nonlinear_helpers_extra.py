@@ -3881,7 +3881,7 @@ def _tiny_kinetic_electron_box(layout: str = "half"):
     return cfg, params, cache, shape
 
 
-def _ke_ke_dense(op, shape, dtype):
+def _ke_dense(op, shape, dtype):
     n = int(np.prod(shape))
     eye = jnp.eye(n, dtype=dtype).reshape((n, *shape))
     return np.asarray(jax.lax.map(op, eye)).reshape(n, n).T
