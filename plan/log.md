@@ -20973,3 +20973,16 @@ Baseline `main` `fbc0236f` (#337). Office A4000s, jax 0.11.2; GPUs were shared w
 - **Linear** (nonlinear term off, T = 20, dominant growth from the Q_i fit over 15–20): Cyclone 32² 0.69938 vs 0.69948 (1.4e-4), 64² 0.70541 vs 0.70566 (3.7e-4), QA 0.29657 vs 0.29645 (4.1e-4). Tracked-mode γ 0.63939 vs 0.63942 (32²), 0.64605 vs 0.64598 (64²).
 - **Tried and dropped:** `imex-ars232` (ARS(2,3,2), 3 RHS + 2 solves): non-finite at t = 4 (32², dt 0.05) and t = 16 (64², dt 0.025).
 Outcome: production-size implicit kinetic electrons fit (1.5 GB at 64²×24 (4,8)); ≥10× time-to-solution reached at 64²×24 (10.1×) at matched Q and γ, **not** at 32²×16 (4.4×; stepping 10×, build/compile dominate) nor on the QA tutorial grid (0.8×). Not done: dt ladder / adaptive dt (dt is now bounded by the explicit bracket and drifts, 0.035 at 64²), derivatives with respect to parameters through the factors (state derivatives flow through the solve), a cheaper split apply for stage 1, mirror inside the implicit block.
+
+## 2026-10-04 — release 2.5.0
+
+Since 2.4.2: analytic benchmarks (#320), nonlinear flux Jacobian benchmark
+(#318), conventions page (#317), analytic-benchmark spec (#316), KBM velocity
+study (#315), kinetic-electron examples and guidance (#319), refusal of
+off-grid ky plus float32 Miller and atomic cache fixes (#321), measured
+streaming CFL bound and opt-in `imex-ars3` implicit streaming (#337), the
+structured banded factor for it (#339: 1.5 GB instead of 53 GB at 64²x24 (4,8);
+10.1x time-to-solution there), adaptive explicit route without per-chunk
+recompiles (#338: 22x on kinetic electrons on GPU). Minor bump because ky
+outside the grid now raises. The research-grade milestone previously called
+2.5.0 is now 2.6.0; its exits are unchanged.
