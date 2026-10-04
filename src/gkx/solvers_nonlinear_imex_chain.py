@@ -1,4 +1,4 @@
-"""Implicit linear operator per linked chain, for the ``imex-ars2`` method.
+"""Implicit linear operator per linked chain, for the ``imex-ars*`` methods.
 
 Kinetic-electron runs are step-limited by electron parallel streaming and the
 electromagnetic electron mode (|lambda| ~ 500-700 against drift rates ~ 1 on
@@ -10,9 +10,9 @@ RHS (its odd part, so every linear term -- streaming, fields, mirror,
 drifts, dissipation, end damping -- enters exactly as the explicit route
 applies it), and inverts ``I - gamma dt L`` per chain.
 
-The time step is ARS(2,2,2) (Ascher-Ruuth-Spiteri 1997): L-stable SDIRK for
-the linear part, explicit for the nonlinear bracket, second order, one
-factorization per dt. It is the plan's section 5.4 route with dense per-chain
+The time step is an Ascher-Ruuth-Spiteri IMEX Runge-Kutta scheme: L-stable
+SDIRK with one diagonal coefficient for the linear part (one factorization per
+dt), explicit for the nonlinear bracket. It is the plan's section 5.4 route with dense per-chain
 factors in place of the banded response-matrix solve: memory is
 ``sum over chains of (ns Nl Nm Nz L)^2`` complex entries, which fits the
 tutorial and moderate decks and not production resolution.
@@ -27,10 +27,47 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-__all__ = ["ARS2_GAMMA", "ChainImplicitLinear", "build_chain_implicit_linear"]
+__all__ = [
+    "ARS_TABLEAUX",
+    "IMEX_CHAIN_METHODS",
+    "ChainImplicitLinear",
+    "build_chain_implicit_linear",
+]
 
-ARS2_GAMMA = 1.0 - 1.0 / 2.0**0.5
-ARS2_DELTA = 1.0 - 1.0 / (2.0 * ARS2_GAMMA)
+_G2 = 1.0 - 1.0 / 2.0**0.5
+_D2 = 1.0 - 1.0 / (2.0 * _G2)
+_G3 = 0.4358665215
+_B1 = -1.5 * _G3**2 + 4.0 * _G3 - 0.25
+_B2 = 1.5 * _G3**2 - 5.0 * _G3 + 1.25
+# (explicit A, implicit A, explicit b, implicit b), Ascher-Ruuth-Spiteri 1997.
+# ARS(2,2,2): two-stage explicit part, whose RK2 has no imaginary-axis interval
+# (bracket advection is weakly unstable at any dt). ARS(3,4,3): third order,
+# four explicit stages with an imaginary-axis interval, three RHS per step.
+ARS_TABLEAUX = {
+    "imex-ars2": (
+        ((0, 0, 0), (_G2, 0, 0), (_D2, 1 - _D2, 0)),
+        ((0, 0, 0), (0, _G2, 0), (0, 1 - _G2, _G2)),
+        (_D2, 1 - _D2, 0),
+        (0, 1 - _G2, _G2),
+    ),
+    "imex-ars3": (
+        (
+            (0, 0, 0, 0),
+            (_G3, 0, 0, 0),
+            (0.3212788860, 0.3966543747, 0, 0),
+            (-0.105858296, 0.5529291479, 0.5529291479, 0),
+        ),
+        (
+            (0, 0, 0, 0),
+            (0, _G3, 0, 0),
+            (0, (1 - _G3) / 2, _G3, 0),
+            (0, _B1, _B2, _G3),
+        ),
+        (0, _B1, _B2, _G3),
+        (0, _B1, _B2, _G3),
+    ),
+}
+IMEX_CHAIN_METHODS = frozenset(ARS_TABLEAUX)
 
 
 @dataclass(frozen=True)
@@ -48,6 +85,7 @@ class ChainImplicitLinear:
     groups: tuple[_ChainGroup, ...]
     shape: tuple[int, ...]
     dt: float
+    scheme: str
 
     @property
     def nbytes(self) -> int:
@@ -77,21 +115,27 @@ class ChainImplicitLinear:
         """``(I - gamma dt L)^{-1} R`` on the chains (identity elsewhere)."""
         return self._apply(R, "inv")
 
-    def ars2_step(
+    def ars_step(
         self,
         G: jnp.ndarray,
         dG: jnp.ndarray,
         rhs: Callable[[jnp.ndarray], jnp.ndarray],
         project: Callable[[jnp.ndarray], jnp.ndarray],
     ) -> jnp.ndarray:
-        """One ARS(2,2,2) step; ``dG = rhs(G)`` is the full (linear+bracket) RHS."""
-        dt, gam, dlt = self.dt, ARS2_GAMMA, ARS2_DELTA
-        n1 = dG - self.matvec(G)
-        y2 = project(self.solve(G + gam * dt * n1))
-        ly2 = self.matvec(y2)
-        n2 = rhs(y2) - ly2
-        return self.solve(
-            G + dt * (dlt * n1 + (1.0 - dlt) * n2) + dt * (1.0 - gam) * ly2
+        """One ARS step; ``dG = rhs(G)`` is the full (linear + bracket) RHS."""
+        a_exp, a_imp, b_exp, b_imp = ARS_TABLEAUX[self.scheme]
+        dt, gam = self.dt, a_imp[1][1]
+        lin = [self.matvec(G)]
+        non = [dG - lin[0]]
+        for i in range(1, len(b_exp)):
+            r = G + dt * sum(
+                a_exp[i][j] * non[j] + a_imp[i][j] * lin[j] for j in range(i)
+            )
+            y = project(self.solve(r))
+            lin.append((y - r) / (gam * dt))  # y = r + gamma dt L y
+            non.append(rhs(y) - lin[i] if b_exp[i] or i + 1 < len(b_exp) else 0.0)
+        return G + dt * sum(
+            b_exp[j] * non[j] + b_imp[j] * lin[j] for j in range(len(b_exp))
         )
 
 
@@ -132,6 +176,7 @@ def build_chain_implicit_linear(
     dt: float,
     *,
     ky: np.ndarray,
+    scheme: str = "imex-ars3",
     dtype=jnp.complex64,
 ) -> ChainImplicitLinear:
     """Probe the linear part of ``rhs`` per chain and factor ``I - gamma dt L``.
@@ -154,7 +199,7 @@ def build_chain_implicit_linear(
         (np.array(c)[..., 0], np.array(c)[..., 1]) for _, c in sorted(by_len.items())
     ]
     probe = ChainImplicitLinear(
-        tuple(_ChainGroup(k, x, None, None) for k, x in idx), tuple(shape), dt
+        tuple(_ChainGroup(k, x, None, None) for k, x in idx), tuple(shape), dt, scheme
     )
     n_max = max(k.shape[1] for k, _ in idx) * blk
 
@@ -178,6 +223,8 @@ def build_chain_implicit_linear(
     for g, c in zip(probe.groups, cols):
         n = g.ky.shape[1] * blk
         lmat = jnp.moveaxis(c[:n], 0, 2)  # (chains, out, in)
-        inv = jnp.linalg.inv(jnp.eye(n, dtype=dtype) - ARS2_GAMMA * dt * lmat)
+        inv = jnp.linalg.inv(
+            jnp.eye(n, dtype=dtype) - ARS_TABLEAUX[scheme][1][1][1] * dt * lmat
+        )
         groups.append(_ChainGroup(g.ky, g.kx, lmat, inv))
-    return ChainImplicitLinear(tuple(groups), tuple(shape), float(dt))
+    return ChainImplicitLinear(tuple(groups), tuple(shape), float(dt), scheme)

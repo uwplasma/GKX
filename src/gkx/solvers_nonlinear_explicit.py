@@ -144,13 +144,13 @@ def _explicit_stage_update(
 
     if method == "euler":
         return G + dt_local * dG
-    if method == "imex-ars2":
+    if method in {"imex-ars2", "imex-ars3"}:
         chain_linear = getattr(rhs_fn, "chain_implicit_linear", None)
         if chain_linear is None:
             raise ValueError(
-                "method 'imex-ars2' needs a chain implicit linear operator"
+                f"method '{method}' needs a chain implicit linear operator"
             )
-        return chain_linear.ars2_step(
+        return chain_linear.ars_step(
             G, dG, lambda state: _rhs_value(rhs_fn, state), project_state
         )
     if method == "rk2":
@@ -178,7 +178,7 @@ def _explicit_stage_update(
         )
     raise ValueError(
         "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', "
-        "'rk3_heun', 'rk4', 'k10', 'sspx3', 'imex-ars2'}"
+        "'rk3_heun', 'rk4', 'k10', 'sspx3', 'imex-ars2', 'imex-ars3'}"
     )
 
 
