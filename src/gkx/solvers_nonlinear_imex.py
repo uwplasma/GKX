@@ -7,7 +7,7 @@ and diagnostic IMEX paths.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 import jax
@@ -973,6 +973,48 @@ def _factor_chain_group(
     return _ChainGroup(k, x, factors, u, wq, cap, dr.astype(dtype), dc.astype(dtype))
 
 
+def stiff_linear_split(
+    cache: Any, params: Any, terms: Any, compute_fields_fn: FieldSolveFn
+) -> tuple[Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], Callable]:
+    """Return ``(split_rhs, fields)`` for :func:`build_chain_implicit_linear`.
+
+    Implicit: streaming with its dissipation and the field response. Drifts,
+    mirror, drive and collisions stay explicit with the bracket; they couple
+    Laguerre moments and would break the per-``(s, l)`` Hermite block
+    structure that keeps the factor ``O(N^2)`` per moment row.
+    """
+    from gkx.terms.assembly import assemble_rhs_cached_with_fields
+    from gkx.terms.config import FieldState
+
+    implicit_terms = replace(
+        terms,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        nonlinear=0.0,
+    )
+
+    def fields(state: jnp.ndarray) -> jnp.ndarray:
+        f = compute_fields_fn(state, cache, params, terms=terms)
+        zero = jnp.zeros_like(f.phi)
+        return jnp.stack(
+            [f.phi]
+            + [
+                zero if a is None else jnp.asarray(a, f.phi.dtype)
+                for a in (f.apar, f.bpar)
+            ]
+        )
+
+    def split_rhs(state: jnp.ndarray, F: jnp.ndarray) -> jnp.ndarray:
+        return assemble_rhs_cached_with_fields(
+            state, cache, params, FieldState(F[0], F[1], F[2]), terms=implicit_terms
+        )
+
+    return split_rhs, fields
+
+
 def build_chain_implicit_linear(
     split_rhs: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
     fields: Callable[[jnp.ndarray], jnp.ndarray],
@@ -1080,6 +1122,7 @@ __all__ = [
     "make_imex_solve_step",
     "make_imex_solve_step_with_stats",
     "run_imex_diagnostic_scan",
+    "stiff_linear_split",
     "solve_imex_step",
     "solve_imex_step_with_stats",
 ]

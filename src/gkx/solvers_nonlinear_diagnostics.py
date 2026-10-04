@@ -8,7 +8,6 @@ keeping the large implementation body inline.
 
 from __future__ import annotations
 
-import dataclasses
 
 from dataclasses import dataclass, replace
 from functools import partial
@@ -621,7 +620,10 @@ def _attach_chain_implicit_linear(
 ) -> Callable[..., Any]:
     """Return ``rhs_fn`` carrying the per-chain implicit operator of imex-ars*."""
 
-    from gkx.solvers_nonlinear_imex import build_chain_implicit_linear
+    from gkx.solvers_nonlinear_imex import (
+        build_chain_implicit_linear,
+        stiff_linear_split,
+    )
 
     if not fixed_dt:
         raise ValueError(
@@ -633,43 +635,9 @@ def _attach_chain_implicit_linear(
         raise ValueError(
             f"method '{scheme}' needs a (species, Nl, Nm, ky, kx, z) state"
         )
-    from gkx.terms.assembly import assemble_rhs_cached_with_fields
-    from gkx.terms.config import FieldState
-
-    # Stiff and implicit: streaming with its dissipation and the field
-    # response. Drifts, mirror, drive and collisions stay explicit with the
-    # bracket; they couple Laguerre moments and would break the per-(s, l)
-    # block structure that keeps the factor O(N) in velocity space.
-    implicit_terms = dataclasses.replace(
-        terms,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        nonlinear=0.0,
+    split_rhs, fields = stiff_linear_split(
+        prepared.cache, params, terms, compute_fields_fn
     )
-
-    def fields(state: jnp.ndarray) -> jnp.ndarray:
-        f = compute_fields_fn(state, prepared.cache, params, terms=terms)
-        zero = jnp.zeros_like(f.phi)
-        return jnp.stack(
-            [f.phi]
-            + [
-                zero if a is None else jnp.asarray(a, f.phi.dtype)
-                for a in (f.apar, f.bpar)
-            ]
-        )
-
-    def split_rhs(state: jnp.ndarray, F: jnp.ndarray) -> jnp.ndarray:
-        return assemble_rhs_cached_with_fields(
-            state,
-            prepared.cache,
-            params,
-            FieldState(F[0], F[1], F[2]),
-            terms=implicit_terms,
-        )
-
     chain_linear = build_chain_implicit_linear(
         split_rhs,
         fields,
