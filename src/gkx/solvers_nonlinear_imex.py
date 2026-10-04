@@ -665,26 +665,26 @@ def integrate_cached_imex_scan(
 # Implicit linear operator per linked chain, for the ``imex-ars*`` methods.
 #
 # Kinetic-electron runs are step-limited by electron parallel streaming and the
-# electromagnetic electron mode (|lambda| ~ 500-700 against drift rates ~ 1 on
-# the Cyclone tutorial box), not by accuracy. The linear operator couples modes
-# only along one ``(ky, kx)`` twist-shift chain, so its restriction to a chain is
-# a dense matrix of size ``ns Nl Nm Nz L`` (``L`` chain links). This module
-# materializes those matrices once, by probing the linear part of the run's own
-# RHS (its odd part, so every linear term -- streaming, fields, mirror,
-# drifts, dissipation, end damping -- enters exactly as the explicit route
-# applies it), and inverts ``I - gamma dt L`` per chain.
+# electromagnetic electron mode (|lambda| ~ 500-1500 against drift rates ~ 10),
+# not by accuracy. Only the stiff part is implicit: parallel streaming with
+# its dissipation (end damping, hypercollisions, hyperdiffusion) and the field
+# response, L = S + U Q. It couples modes only along one (ky, kx) twist-shift
+# chain; per chain, S is block-tridiagonal in Hermite with N x N blocks
+# (N = links * Nz) and no species or Laguerre coupling, and Q is z-local
+# (rank nf N). I - gamma dt S is factored by block Thomas, the fields enter
+# by Woodbury. Every block is probed from the run's own RHS assembly, and one
+# solve's residual certifies the structure. Drifts, mirror, drive and
+# collisions stay explicit with the bracket.
 #
 # The time step is an Ascher-Ruuth-Spiteri IMEX Runge-Kutta scheme: L-stable
-# SDIRK with one diagonal coefficient for the linear part (one factorization per
-# dt), explicit for the nonlinear bracket. It is the plan's section 5.4 route with dense per-chain
-# factors in place of the banded response-matrix solve: memory is
-# ``sum over chains of (ns Nl Nm Nz L)^2`` complex entries, which fits the
-# tutorial and moderate decks and not production resolution.
+# SDIRK with one diagonal coefficient for the linear part (one factorization
+# per dt). Memory per chain is ~(Nm + 6) ns Nl N^2 complex entries against
+# the dense (ns Nl Nm N)^2: 1.5 GB against 53 GB at 64x64x24, (Nl, Nm) =
+# (4, 8).
 
 
 _G2 = 1.0 - 1.0 / 2.0**0.5
 _D2 = 1.0 - 1.0 / (2.0 * _G2)
-_D232 = -2.0 * 2.0**0.5 / 3.0
 _G3 = 0.4358665215
 _B1 = -1.5 * _G3**2 + 4.0 * _G3 - 0.25
 _B2 = 1.5 * _G3**2 - 5.0 * _G3 + 1.25
@@ -697,16 +697,6 @@ ARS_TABLEAUX: dict[str, Any] = {
         ((0, 0, 0), (_G2, 0, 0), (_D2, 1 - _D2, 0)),
         ((0, 0, 0), (0, _G2, 0), (0, 1 - _G2, _G2)),
         (_D2, 1 - _D2, 0),
-        (0, 1 - _G2, _G2),
-    ),
-    # ARS(2,3,2): second order, two implicit stages, three explicit stages
-    # whose stability polynomial is RK3's on the imaginary axis (b A^2 c =
-    # 1/6), so three RHS and two solves per step against ARS(3,4,3)'s four
-    # and three.
-    "imex-ars232": (
-        ((0, 0, 0), (_G2, 0, 0), (_D232, 1 - _D232, 0)),
-        ((0, 0, 0), (0, _G2, 0), (0, 1 - _G2, _G2)),
-        (0, 1 - _G2, _G2),
         (0, 1 - _G2, _G2),
     ),
     "imex-ars3": (
