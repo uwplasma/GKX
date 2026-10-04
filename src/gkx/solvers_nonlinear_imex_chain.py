@@ -21,7 +21,7 @@ tutorial and moderate decks and not production resolution.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
@@ -43,7 +43,7 @@ _B2 = 1.5 * _G3**2 - 5.0 * _G3 + 1.25
 # ARS(2,2,2): two-stage explicit part, whose RK2 has no imaginary-axis interval
 # (bracket advection is weakly unstable at any dt). ARS(3,4,3): third order,
 # four explicit stages with an imaginary-axis interval, three RHS per step.
-ARS_TABLEAUX = {
+ARS_TABLEAUX: dict[str, Any] = {
     "imex-ars2": (
         ((0, 0, 0), (_G2, 0, 0), (_D2, 1 - _D2, 0)),
         ((0, 0, 0), (0, _G2, 0), (0, 1 - _G2, _G2)),
@@ -118,8 +118,8 @@ class ChainImplicitLinear:
         dt, gam = self.dt, a_imp[1][1]
         # Stage 1 needs only the bracket at G (ARS implicit weights on it are
         # zero): the even part of the RHS, which costs one RHS and no stored L.
-        lin = [None]
-        non = [0.5 * (dG + rhs(-G))]
+        lin: list[Any] = [None]
+        non: list[Any] = [0.5 * (dG + rhs(-G))]
         for i in range(1, len(b_exp)):
             r = G + dt * sum(a_exp[i][j] * non[j] for j in range(i))
             r = r + dt * sum(a_imp[i][j] * lin[j] for j in range(1, i))
@@ -195,7 +195,10 @@ def build_chain_implicit_linear(
         (np.array(c)[..., 0], np.array(c)[..., 1]) for _, c in sorted(by_len.items())
     ]
     probe = ChainImplicitLinear(
-        tuple(_ChainGroup(k, x, None) for k, x in idx), tuple(shape), dt, scheme
+        tuple(_ChainGroup(k, x, jnp.zeros(())) for k, x in idx),
+        tuple(shape),
+        dt,
+        scheme,
     )
     n_max = max(k.shape[1] for k, _ in idx) * blk
 

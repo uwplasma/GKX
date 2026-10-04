@@ -251,7 +251,9 @@ def measured_streaming_frequency(
                 hess[i, j] += c
                 w = w - c * basis[i]
         hess[j + 1, j] = float(jnp.linalg.norm(w))
-        if hess[j + 1, j] <= 1e-12 * max(abs(hess[: j + 1, j]).max(), 1e-300):
+        if hess[j + 1, j].real <= 1e-12 * max(
+            float(np.abs(hess[: j + 1, j]).max()), 1e-300
+        ):
             k = j + 1
             break
         basis.append(w / hess[j + 1, j])
