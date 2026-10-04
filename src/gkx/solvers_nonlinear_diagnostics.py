@@ -868,7 +868,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     ) -> tuple[Any, Any, Any]:
         step = components.step
         if time_horizon is not None:
-            step = step.with_horizon(time_horizon=time_horizon)
+            step = step.with_horizon(time_horizon=time_horizon)  # type: ignore[attr-defined]
         return _run_explicit_diagnostic_scan_raw(
             components.prepared,
             components.policies,
