@@ -410,8 +410,11 @@ def test_runtime_linear_quasilinear_krylov_smoke() -> None:
 
 
 def test_runtime_scan_collects_quasilinear_payloads_and_rejects_batch() -> None:
+    base = _tiny_runtime_config()
+    # Ny=12 puts ky 0.2 and 0.3 on the grid; the tiny Ny=4 grid stops at 0.1.
     cfg = replace(
-        _tiny_runtime_config(),
+        base,
+        grid=replace(base.grid, Ny=12),
         quasilinear=RuntimeQuasilinearConfig(enabled=True),
     )
     out = run_runtime_scan(cfg, ky_values=[0.2, 0.3], Nl=2, Nm=4, solver="krylov")
