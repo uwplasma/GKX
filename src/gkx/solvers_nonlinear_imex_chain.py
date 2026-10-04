@@ -183,10 +183,11 @@ def build_chain_implicit_linear(
 
     ``rhs`` maps a state of ``shape = (ns, Nl, Nm, Nky, Nkx, Nz)`` to its full
     RHS; its odd part ``(rhs(v) - rhs(-v)) / 2`` is the linear operator.
-    ``modes`` (``Nky x Nkx`` bool) selects what is solved: the dealiased
-    ``ky >= 0`` modes the run keeps. Everything else passes through the solve
-    unchanged; a two-sided layout's projector rebuilds the ``ky < 0`` rows and
-    the step mask zeroes the rest.
+    ``modes`` (``Nky x Nkx`` bool) selects what is solved: every ``ky >= 0``
+    mode, dealiased or not -- the explicit route evolves the dealiased-out
+    modes linearly too, and leaving them out of the solve makes their stiff
+    linear terms explicit (non-finite at the first sample). The ``ky < 0`` rows
+    of a two-sided layout pass through unchanged; the projector rebuilds them.
     """
     zero = jnp.zeros(shape, dtype)
     # The bracket is quadratic in G (fields are linear in G) and any source is
