@@ -6,7 +6,7 @@ the Cyclone tutorial box), not by accuracy. The linear operator couples modes
 only along one ``(ky, kx)`` twist-shift chain, so its restriction to a chain is
 a dense matrix of size ``ns Nl Nm Nz L`` (``L`` chain links). This module
 materializes those matrices once, by probing the linear part of the run's own
-RHS (its JVP at zero, so every linear term -- streaming, fields, mirror,
+RHS (its odd part, so every linear term -- streaming, fields, mirror,
 drifts, dissipation, end damping -- enters exactly as the explicit route
 applies it), and inverts ``I - gamma dt L`` per chain.
 
@@ -137,11 +137,14 @@ def build_chain_implicit_linear(
     """Probe the linear part of ``rhs`` per chain and factor ``I - gamma dt L``.
 
     ``rhs`` maps a state of ``shape = (ns, Nl, Nm, Nky, Nkx, Nz)`` to its full
-    RHS; its JVP at zero is the linear operator. Only rows with ``ky >= 0`` are
+    RHS; its odd part ``(rhs(v) - rhs(-v)) / 2`` is the linear operator. Only rows with ``ky >= 0`` are
     solved: on a two-sided layout the projector rebuilds the others.
     """
     zero = jnp.zeros(shape, dtype)
-    lin = jax.jit(lambda v: jax.jvp(rhs, (zero,), (v,))[1])
+    # The bracket is quadratic in G (fields are linear in G) and any source is
+    # constant, so the odd part (rhs(v) - rhs(-v)) / 2 is the linear operator
+    # exactly. Not a JVP: the field solve is a custom_vjp, which has no JVP rule.
+    lin = jax.jit(lambda v: 0.5 * (rhs(v) - rhs(-v)))
     rows = np.nonzero(np.asarray(ky) >= 0.0)[0]
     by_len: dict[int, list] = {}
     for chain in _chains(lin, shape, rows, dtype):
