@@ -848,6 +848,11 @@ def _chains(lin: Callable, shape: tuple[int, ...], modes: np.ndarray, dtype) -> 
     return [sorted(c) for c in sets.values()]
 
 
+# Probes evaluated per vmapped batch while building the factor: one probe is
+# one RHS assembly, too small to fill a GPU alone.
+_PROBE_BATCH = 8
+
+
 def _mv(a: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
     return jnp.einsum("...ij,...j->...i", a, x)
 
@@ -914,7 +919,7 @@ def _factor_chain_group(
             pad = jnp.pad(o, ((0, 0),) * 3 + ((1, 1), (0, 0)))
             return tuple(pad[:, :, :, src + 1 + d] for d in (1, 0, -1))
 
-        got = jax.lax.map(s_column, jnp.arange(n))
+        got = jax.lax.map(s_column, jnp.arange(n), batch_size=_PROBE_BATCH)
         for shift, part in zip((1, 0, -1), got):
             rows = src + shift
             ok = (rows >= 0) & (rows < nm)
@@ -941,7 +946,9 @@ def _factor_chain_group(
             -1,
         )  # (c, s, l, rows_m, N, nf)
 
-    u = jnp.moveaxis(jax.lax.map(u_column, jnp.arange(n)), 0, -1)
+    u = jnp.moveaxis(
+        jax.lax.map(u_column, jnp.arange(n), batch_size=_PROBE_BATCH), 0, -1
+    )
     u = u.reshape(c, ns, nl, len(rows_m), n, -1)  # last axis (f, N)
     wq = w_all[:, :, list(cols_m)][:, :, :, act][:, :, :, :, k, x, :]
     wq = jnp.transpose(wq, (4, 3, 0, 1, 2, 5, 6)).reshape(
@@ -959,7 +966,11 @@ def _factor_chain_group(
         y = op._bsolve(g, ui)[:, :, :, list(cols_m)]
         return jnp.einsum("cfslmn,cslmn->cfn", g.w, y).reshape(c, -1)
 
-    qbu = jnp.moveaxis(jax.lax.map(cap_column, jnp.arange(len(act) * n)), 0, -1)
+    qbu = jnp.moveaxis(
+        jax.lax.map(cap_column, jnp.arange(len(act) * n), batch_size=_PROBE_BATCH),
+        0,
+        -1,
+    )
     cap = jnp.eye(qbu.shape[-1], dtype=dtype) - gdt * qbu
     # Equilibrate before inverting: near-zonal chains carry field blocks four
     # orders apart (A_par against phi), cond 2e8 raw and ~1e3 balanced, which
