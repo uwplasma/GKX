@@ -1006,9 +1006,11 @@ def build_chain_implicit_linear(
     mask = np.zeros(shape[3:5], bool)
     for k, x in idx:
         mask[k, x] = True
-    r = r * jnp.asarray(mask, dtype)[None, None, None, :, :, None]
+    on = jnp.asarray(mask, dtype)[None, None, None, :, :, None]
+    r = r * on
     y = op.solve(r)
-    err = float(jnp.linalg.norm(y - gdt * lin(y) - r) / jnp.linalg.norm(r))
+    # Only the solved rows: the RHS rebuilds ky < 0 rows from their partners.
+    err = float(jnp.linalg.norm(on * (y - gdt * lin(y) - r)) / jnp.linalg.norm(r))
     if not err < check_tol:
         raise ValueError(
             f"structured implicit factor residual {err:.2e} > {check_tol:.0e}: the "
