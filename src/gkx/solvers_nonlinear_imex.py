@@ -934,61 +934,86 @@ def _unit(n: int, j: jnp.ndarray, dtype) -> jnp.ndarray:
     return jnp.where(jnp.arange(n) == j, 1.0, 0.0).astype(dtype)
 
 
-def _probe_columns(n: int, make: Callable, probe: Callable, take: Callable) -> Any:
-    """Columns ``j < n`` of a probed operator, ``_PROBE_BATCH`` per call.
+def _probe_columns(idx, nz: int, make: Callable, probe: Callable, take: Callable):
+    """Columns ``j < N_g`` of a probed operator for every chain group at once.
 
-    ``probe`` is one compiled, vmapped RHS shared by every chain group and
-    every probe family (compiling a ``lax.map`` per group and family took
-    ~60 s of a 32x32x16 build); ``make`` and ``take`` are the cheap per-group
-    scatter and gather. Indices ``j >= n`` make zero impulses.
+    Groups hold disjoint modes and their chains do not couple, so one probe
+    state carries local impulse ``j`` in every group with ``N_g > j``:
+    ``max N_g`` probes instead of ``sum N_g`` (3.5x fewer at 64x64x24).
+    ``probe`` is one compiled, vmapped RHS, ``_PROBE_BATCH`` states per call;
+    ``make(k, x, n, j)`` scatters a group's impulse into a state and
+    ``take(k, x, out)`` gathers its response. Indices ``j >= n`` make zero
+    impulses.
     """
-    cols = []
-    for j0 in range(0, n, _PROBE_BATCH):
-        cols.append(take(probe(make(jnp.arange(j0, j0 + _PROBE_BATCH)))))
-    return jax.tree.map(lambda *a: jnp.concatenate(a)[:n], *cols)
+    ns = [k.shape[1] * nz for k, _ in idx]
+
+    def make_all(j):
+        v = None
+        for (k, x), n in zip(idx, ns):
+            v = make(k, x, n, j, v)
+        return v
+
+    make_all = jax.jit(jax.vmap(make_all))
+    takes = [jax.jit(jax.vmap(partial(take, k, x))) for k, x in idx]
+    cols: list[list] = [[] for _ in idx]
+    for j0 in range(0, max(ns), _PROBE_BATCH):
+        out = probe(make_all(jnp.arange(j0, j0 + _PROBE_BATCH)))
+        for g, n in enumerate(ns):
+            if j0 < n:
+                cols[g].append(takes[g](out))
+    return [
+        jax.tree.map(lambda *a, n=n: jnp.concatenate(a)[:n], *c)
+        for c, n in zip(cols, ns)
+    ]
 
 
-def _factor_chain_group(
-    k,
-    x,
-    probe_s,
-    probe_u,
-    zero,
-    zero_f,
-    w_all,
-    act,
-    rows_m,
-    cols_m,
-    gdt,
-    lin,
-    dt,
-    scheme,
-) -> _ChainGroup:
-    """Probe ``S``, ``U`` and ``Q`` on one group of equal-length chains."""
+def _probe_stiff_blocks(idx, probe_s, probe_u, zero, zero_f, act, rows_m):
+    """Per group: ``S``'s three Hermite diagonals and ``U``'s columns."""
     ns, nl, nm, *_r, nz = zero.shape
     dtype = zero.dtype
-    c, n = k.shape[0], k.shape[1] * nz
+    s_parts = []
     # S is block-tridiagonal in m: sources three apart never share an output
-    # row, so three probe families (m mod 3) give every block, N probes each.
-    lower, diag, upper = (jnp.zeros((c, ns, nl, nm, n, n), dtype) for _ in range(3))
+    # row, so three probe families (m mod 3) give every block.
     for res in range(3):
         src = np.arange(res, nm, 3)
 
-        def make(j, src=src):
-            e = (
-                jnp.zeros((c, ns, nl, nm, n), dtype)
-                .at[:, :, :, src]
-                .set(_unit(n, j, dtype))
-            )
-            return _scatter(k, x, e, zero)
+        def make(k, x, n, j, v, src=src):
+            e = jnp.zeros((k.shape[0], ns, nl, nm, n), dtype)
+            e = e.at[:, :, :, src].set(_unit(n, j, dtype))
+            return _scatter(k, x, e, zero if v is None else v)
 
-        def take(out, src=src):
+        def take(k, x, out, src=src):
             pad = jnp.pad(_gather(k, x, out), ((0, 0),) * 3 + ((1, 1), (0, 0)))
             return tuple(pad[:, :, :, src + 1 + d] for d in (1, 0, -1))
 
-        got = _probe_columns(
-            n, jax.jit(jax.vmap(make)), probe_s, jax.jit(jax.vmap(take))
-        )
+        s_parts.append(_probe_columns(idx, nz, make, probe_s, take))
+    u_parts = []
+    for f in act:
+
+        def make_u(k, x, n, j, v, f=f):
+            fg = jnp.broadcast_to(_unit(n, j, dtype), (k.shape[0], n))
+            v = zero_f if v is None else v
+            return v.at[f, k, x, :].set(fg.reshape(k.shape[0], -1, nz))
+
+        def take_u(k, x, out):
+            return _gather(k, x, out)[:, :, :, list(rows_m)]
+
+        u_parts.append(_probe_columns(idx, nz, make_u, probe_u, take_u))
+    return [
+        (tuple(p[g] for p in s_parts), [u[g] for u in u_parts]) for g in range(len(idx))
+    ]
+
+
+def _factor_chain_group(
+    k, x, s_parts, u_cols, zero, w_all, act, rows_m, cols_m, gdt
+) -> _ChainGroup:
+    """Assemble, factor and couple the probed blocks of one chain group."""
+    ns, nl, nm, *_r, nz = zero.shape
+    dtype = zero.dtype
+    c, n = k.shape[0], k.shape[1] * nz
+    lower, diag, upper = (jnp.zeros((c, ns, nl, nm, n, n), dtype) for _ in range(3))
+    for res, got in enumerate(s_parts):
+        src = np.arange(res, nm, 3)
         for shift, part in zip((1, 0, -1), got):
             rows = src + shift
             ok = (rows >= 0) & (rows < nm)
@@ -1008,21 +1033,6 @@ def _factor_chain_group(
             "needs it"
         )
 
-    def take_u(out):
-        return _gather(k, x, out)[:, :, :, list(rows_m)]
-
-    u_cols = []
-    for f in act:
-
-        def make_u(j, f=f):
-            fg = jnp.broadcast_to(_unit(n, j, dtype), (c, n)).reshape(c, -1, nz)
-            return zero_f.at[f, k, x, :].set(fg)
-
-        u_cols.append(
-            _probe_columns(
-                n, jax.jit(jax.vmap(make_u)), probe_u, jax.jit(jax.vmap(take_u))
-            )
-        )  # (N, c, s, l, rows_m, N)
     u = jnp.moveaxis(jnp.stack(u_cols, -1), 0, -1)
     u = u.reshape(c, ns, nl, len(rows_m), n, -1)  # last axis (f, N)
     wq = w_all[:, :, list(cols_m)][:, :, :, act][:, :, :, :, k, x, :]
@@ -1167,24 +1177,12 @@ def build_chain_implicit_linear(
 
     probe_s = jax.jit(jax.vmap(lambda v: split(v, zero_f)))
     probe_u = jax.jit(jax.vmap(lambda F: split(zero, F)))
+    probed = _probe_stiff_blocks(idx, probe_s, probe_u, zero, zero_f, act, rows_m)
     groups = [
         _factor_chain_group(
-            k,
-            x,
-            probe_s,
-            probe_u,
-            zero,
-            zero_f,
-            w_all,
-            act,
-            rows_m,
-            cols_m,
-            gdt,
-            lin,
-            dt,
-            scheme,
+            k, x, s_parts, u_cols, zero, w_all, act, rows_m, cols_m, gdt
         )
-        for k, x in idx
+        for (k, x), (s_parts, u_cols) in zip(idx, probed)
     ]
     op = ChainImplicitLinear(
         tuple(groups), tuple(shape), float(dt), scheme, rows_m, cols_m, lin
