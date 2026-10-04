@@ -733,7 +733,7 @@ IMEX_CHAIN_METHODS = frozenset(ARS_TABLEAUX)
 class _ChainGroup:
     ky: np.ndarray  # (chains, L) row indices
     kx: np.ndarray  # (chains, L) column indices
-    factors: Any  # block-Thomas factors (p, dinv, q) of I - gamma dt S
+    factors: Any  # (dinv, D, lower, upper scalars) of I - gamma dt S
     u: jnp.ndarray  # (chains, s, l, rows_m, N, nf*N): fields -> RHS rows
     w: jnp.ndarray  # (chains, nf, s, l, cols_m, N): moments -> fields (z-local)
     cap: jnp.ndarray  # (chains, nf*N, nf*N): (Dr (I - gamma dt Q B^-1 U) Dc)^-1
@@ -877,38 +877,69 @@ def _mv(a: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
     return jnp.einsum("...ij,...j->...i", a, x, precision=_HI)
 
 
-def _thomas_factor(lower, diag, upper) -> tuple[jnp.ndarray, ...]:
-    """Block Thomas over Hermite (axis 3) with explicit block inverses.
+def _thomas_factor(lower, diag, upper, gdt: float) -> tuple[jnp.ndarray, ...]:
+    """Block Thomas over Hermite for ``I - gdt S``; ``S`` blocks on axis 3.
 
-    Blocks are ``N x N`` with ``N = links * Nz`` (16-120), batched over
-    ``(chains, s, l)``: batched triangular solves of blocks that small are
-    launch-bound on GPU (4.5 ms against 0.6 ms for the same sweep as
-    matmuls at 32x32x16, (4, 8)), so the sweeps use stored inverses.
-    ``lower[m]`` couples row ``m`` to ``m - 1``, ``upper[m]`` to ``m + 1``.
+    Blocks are ``N x N`` (``N = links * Nz``), batched over ``(chains, s,
+    l)``. Every off-diagonal block of ``S`` is the chain's parallel-gradient
+    matrix ``D`` (per species) times a Hermite-ladder scalar, so only ``D``,
+    the scalars and the Schur-complement inverses are stored: one ``N x N``
+    block per ``(s, l, m)`` instead of three, and two matvecs per block in a
+    solve. Inverses, not LU: batched triangular solves of blocks this small
+    are launch-bound on GPU. Inverses are stored ``m``-major so each sweep
+    step reads contiguous memory.
     """
     nm = diag.shape[3]
-    p, dinv = [jnp.zeros_like(diag[:, :, :, 0])], []
+    d = upper[:, :, 0, 0]  # (c, s, N, N): m = 0 -> 1, l = 0
+    dd = jnp.sum(jnp.abs(d) ** 2, axis=(-2, -1))
+    safe = jnp.where(dd > 0, dd, 1.0)[:, :, None, None]
+
+    def scalars(blocks):
+        a = jnp.einsum("csij,cslmij->cslm", jnp.conj(d), blocks, precision=_HI)
+        return a / safe
+
+    a_lo, a_up = scalars(lower), scalars(upper)
+    err = max(
+        float(
+            jnp.linalg.norm(blk - a[..., None, None] * d[:, :, None, None])
+            / jnp.maximum(jnp.linalg.norm(blk), 1e-30)
+        )
+        for blk, a in ((lower, a_lo), (upper, a_up))
+    )
+    if not err < 1e-4:
+        raise ValueError(
+            f"Hermite off-diagonal blocks are not multiples of one parallel-"
+            f"gradient matrix (defect {err:.1e}); the structured factor needs it"
+        )
+    eye = jnp.eye(diag.shape[-1], dtype=diag.dtype)
+    dinv = []
     for m in range(nm):
-        d = diag[:, :, :, m]
+        blk = eye - gdt * diag[:, :, :, m]
         if m:
-            p.append(jnp.matmul(lower[:, :, :, m], dinv[-1], precision=_HI))
-            d = d - jnp.matmul(p[-1], upper[:, :, :, m - 1], precision=_HI)
-        dinv.append(jnp.linalg.inv(d))
-    q = [jnp.matmul(dinv[m], upper[:, :, :, m], precision=_HI) for m in range(nm)]
-    return jnp.stack(p, 3), jnp.stack(dinv, 3), jnp.stack(q, 3)
+            ddd = jnp.matmul(
+                jnp.matmul(d[:, :, None], dinv[-1], precision=_HI),
+                d[:, :, None],
+                precision=_HI,
+            )
+            coef = gdt**2 * a_lo[:, :, :, m] * a_up[:, :, :, m - 1]
+            blk = blk - coef[..., None, None] * ddd
+        dinv.append(jnp.linalg.inv(blk))
+    return jnp.stack(dinv), d, -gdt * a_lo, -gdt * a_up
 
 
 def _thomas_solve(factors: tuple[jnp.ndarray, ...], x: jnp.ndarray) -> jnp.ndarray:
-    p, dinv, q = factors
+    dinv, d, lo, up = factors
     nm = x.shape[3]
-    w, z = [], x[:, :, :, 0]
-    for m in range(nm):
-        if m:
-            z = x[:, :, :, m] - _mv(p[:, :, :, m], z)
-        w.append(_mv(dinv[:, :, :, m], z))
+
+    def dmv(v):  # D v, D shared over Laguerre
+        return jnp.einsum("csij,cslj->csli", d, v, precision=_HI)
+
+    w = [_mv(dinv[0], x[:, :, :, 0])]
+    for m in range(1, nm):
+        w.append(_mv(dinv[m], x[:, :, :, m] - lo[:, :, :, m, None] * dmv(w[-1])))
     out = [w[-1]]
     for m in range(nm - 2, -1, -1):
-        out.append(w[m] - _mv(q[:, :, :, m], out[-1]))
+        out.append(w[m] - _mv(dinv[m], up[:, :, :, m, None] * dmv(out[-1])))
     return jnp.stack(out[::-1], 3)
 
 
@@ -981,8 +1012,7 @@ def _factor_chain_group(
                 diag = diag.at[:, :, :, rows[ok]].set(col)
             else:
                 upper = upper.at[:, :, :, rows[ok]].set(col)
-    eye = jnp.eye(n, dtype=dtype)
-    factors = _thomas_factor(-gdt * lower, eye - gdt * diag, -gdt * upper)
+    factors = _thomas_factor(lower, diag, upper, gdt)
     del lower, diag, upper
 
     def take_u(out):
