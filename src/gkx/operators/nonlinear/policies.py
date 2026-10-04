@@ -190,7 +190,7 @@ def measured_streaming_frequency(
 ) -> float:
     """Largest |eigenvalue| of parallel streaming plus the field solve.
 
-    The GX-parity estimate ``v_t k_z,max max(2 sqrt(Nm), omega_H guard)``
+    The analytic estimate ``v_t k_z,max max(2 sqrt(Nm), omega_H guard)``
     misses the electromagnetic electron mode of a linked kinetic-electron box:
     on the Cyclone tutorial deck (beta 1e-4, 16^3, Nl 2, Nm 4) the operator has
     |lambda| = 702 against the estimate's 500 (1.38x; 1.76x at beta 1e-5, 1.56x
