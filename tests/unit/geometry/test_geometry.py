@@ -1524,6 +1524,62 @@ def test_generate_miller_eik_internal_writes_netcdf(tmp_path: Path) -> None:
         assert float(ds.variables["shat"].getValue()) == pytest.approx(0.8)
 
 
+def test_generate_miller_eik_internal_publishes_atomically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A writer that dies mid-file must not leave a truncated cache entry."""
+
+    def _partial(path, profiles):
+        Path(path).write_bytes(b"CDF\x01partial")
+        raise OSError("killed mid-write")
+
+    monkeypatch.setattr(
+        "gkx.geometry.imported_miller.write_miller_eik_netcdf", _partial
+    )
+    with pytest.raises(OSError):
+        generate_miller_eik_internal(
+            output_path=tmp_path / "miller.eiknc.nc", request=_request()
+        )
+    assert not (tmp_path / "miller.eiknc.nc").exists()
+
+
+def test_miller_float32_accepts_its_own_theta_grid_at_nperiod_5(
+    tmp_path: Path,
+) -> None:
+    from gkx.runtime import run_runtime_linear
+    from gkx.workflows.runtime.toml import load_runtime_from_toml
+
+    cfg, _ = load_runtime_from_toml(
+        REPO_ROOT / "examples/06_electromagnetic/case_full.toml"
+    )
+    cfg = replace(
+        cfg,
+        geometry=replace(
+            cfg.geometry,
+            model="miller",
+            q=1.4,
+            s_hat=0.786,
+            R0=2.78,
+            R_geo=2.78,
+            geometry_file=str(tmp_path / "g.eiknc.nc"),
+        ),
+        grid=replace(cfg.grid, nperiod=5, ntheta=32, Nz=32 * 9, y0=1.0 / 0.3),
+    )
+    with jax.enable_x64(False):  # the defect is float32-only; CI runs x64
+        res = run_runtime_linear(
+            cfg,
+            ky_target=0.3,
+            Nl=1,
+            Nm=2,
+            solver="time",
+            dt=1.0e-3,
+            steps=2,
+            sample_stride=1,
+            require_positive=False,
+        )
+    assert float(res.ky) == pytest.approx(0.3, rel=1.0e-6)
+
+
 # Runtime Miller eik request and generation contracts.
 
 
