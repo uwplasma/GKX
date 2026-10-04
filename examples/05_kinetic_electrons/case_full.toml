@@ -2,6 +2,9 @@ schema_version = 1
 
 # Reference-aligned kinetic-electron Cyclone linear case. The effective seed
 # and linked-boundary damping are explicit; no benchmark wrapper overrides it.
+# This is the linear benchmark deck (scripts/benchmarks, test_benchmarking);
+# run.py does not load it. For linear growth rates prefer solver = "krylov",
+# which needs no time step and so no electron-streaming CFL.
 
 [[species]]
 name = "ion"

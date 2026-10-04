@@ -277,6 +277,75 @@ With that configuration, rerunning the same nonlinear command resumes from
 continued history to ``tools_out/cyclone_release.out.nc``. This is the
 recommended user-facing workflow for long nonlinear turbulence jobs.
 
+Nonlinear kinetic electrons
+---------------------------
+
+``examples/05_kinetic_electrons/run.py`` runs nonlinear turbulence with kinetic
+ions and electrons (:math:`m_e/m_i = 2.7\times10^{-4}`, :math:`\beta=10^{-4}`)
+in the Cyclone base case (``case.toml``) and in the Landreman-Paul precise QA
+stellarator (``case_stellarator.toml``, a VMEC flux tube at :math:`s=0.64`).
+
+.. code-block:: bash
+
+   python examples/05_kinetic_electrons/run.py
+   gkx examples/05_kinetic_electrons/case.toml
+
+**Choosing dt.** Leave ``fixed_dt = false``: the CFL controller takes the
+largest linear frequency on the grid. With kinetic electrons that is electron
+parallel streaming, :math:`\sim v_{te}k_{z,\max}`, about
+:math:`\sqrt{m_i/m_e}\approx 60` times the ion rate. On the 16x16x16 tutorial
+grid the controller reports :math:`\omega_\parallel = 500` against a drift
+rate of 1.6 (the numbers are in ``diagnostics.cfl_scales``). Measured on that
+grid:
+
+.. list-table::
+   :header-rows: 1
+
+   * - setting
+     - controller dt
+     - outcome
+   * - :math:`\beta=0` (electrostatic), cfl 0.9
+     - :math:`3.6\times10^{-4}`
+     - stable; the :math:`\omega_H` mode at the smallest :math:`k_\perp` sets the step
+   * - :math:`\beta=10^{-4}` with :math:`A_\parallel`, cfl 0.9
+     - :math:`2.6\times10^{-3}`
+     - unstable: :math:`W_g` grows :math:`10^{8}` by :math:`t=0.2`, also with the nonlinear term off
+   * - :math:`\beta=10^{-4}` with :math:`A_\parallel`, cfl 0.45
+     - :math:`1.5\times10^{-3}`
+     - stable (also at :math:`\beta=10^{-5}` and :math:`10^{-3}`); 4.3 times fewer steps than electrostatic
+   * - :math:`\beta=10^{-4}`, cfl 0.45, :math:`N_m=8`
+     - :math:`1.1\times10^{-3}`
+     - stable; the streaming bound grows as :math:`2\sqrt{N_m}`
+   * - :math:`\beta=10^{-4}`, cfl 0.45, :math:`m_e/m_i=1/400`
+     - :math:`2.7\times10^{-3}`
+     - reduced mass ratio: faster, but a different physical model
+
+A small finite :math:`\beta` with :math:`A_\parallel` is the usual way to
+remove the electrostatic :math:`\omega_H` limit; at :math:`k_y\rho_i=0.3` the
+dominant linear eigenvalue of the tutorial linear deck moves by
+:math:`2\times10^{-4}` between :math:`\beta=10^{-6}` and :math:`10^{-4}`
+(0.62478 and 0.62492). The shipped decks set ``cfl = 0.45``: at
+:math:`\beta\le10^{-4}` the default 0.9 overshoots a linear mode of the full
+box that the controller's streaming estimate does not bound (the single
+:math:`k_y` operator's largest eigenvalue stays at 0.6-0.75 of the estimate
+for :math:`k_y\rho_i` from 0.1 to 1). The fully implicit ``imex`` route is
+not a remedy at this size: at dt = 0.01 it ran 0.4 steps/s with every
+FGMRES solve at its 200-iteration cap (so not converged either), against
+31 steps/s at dt = 1.5e-3 for the stable explicit step: 0.004 against 0.047
+time units per second, 12 times slower (office CPU, shared host).
+
+**Choosing t_max** (units of :math:`a/v_{ti}`): the linear phase lasts about
+:math:`10/\gamma`, 20-40 here; saturation follows by :math:`t\approx60`-100;
+then average the flux over at least 100-200 more, or set
+``run_to = "saturation"`` to stop once the mean has converged.
+
+**Resolution.** The tutorial decks use (Nl, Nm) = (2, 4) and 16x16 in the
+plane. Production runs use 64-96 points in x and y, Nz = 24-64, Nl = 4 and
+Nm = 8-16 on a GPU; check the heat flux against the next Nm before quoting it.
+
+For linear growth rates use ``solver = "krylov"``: the eigen solve has no time
+step, so the electron-streaming CFL does not apply.
+
 Lightweight turbulence movies
 -----------------------------
 

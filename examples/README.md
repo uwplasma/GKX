@@ -15,7 +15,7 @@ not run in CI.
 | [`02_linear_stellarator/`](02_linear_stellarator) | ITG scan in an HSX-like quasi-helically symmetric VMEC equilibrium (needs `vmex` once to build the wout) | ~1 min CPU |
 | [`03_nonlinear_tokamak/`](03_nonlinear_tokamak) | Nonlinear Cyclone ITG with streamed energy and heat-flux diagnostics | ~10 s CPU |
 | [`04_nonlinear_stellarator/`](04_nonlinear_stellarator) | Nonlinear ITG in the same VMEC stellarator flux tube (needs `vmex` once) | ~1 min CPU |
-| [`05_kinetic_electrons/`](05_kinetic_electrons) | Cyclone ITG with kinetic electrons against adiabatic electrons | ~10 s CPU |
+| [`05_kinetic_electrons/`](05_kinetic_electrons) | Nonlinear kinetic-electron turbulence in Cyclone and a QA stellarator, with dt and t_max guidance in the decks (stellarator needs `vmex` once) | ~1 min CPU per case |
 | [`06_electromagnetic/`](06_electromagnetic) | Kinetic ballooning mode with A_parallel; the tutorial deck exercises the path, `case_full.toml` resolves the mode | ~10 s CPU |
 | [`07_collisions/`](07_collisions) | Every shipped collision operator on one ITG case; optional collisionality scan | <1 min CPU |
 | [`08_quasilinear/`](08_quasilinear) | Quasilinear heat-flux spectrum (`run.py`) and its implicit eigenpair sensitivities (`implicit_sensitivity.py`) | ~10 s + <1 min CPU |
