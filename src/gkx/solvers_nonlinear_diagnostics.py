@@ -677,7 +677,7 @@ def _build_explicit_scan_closures(
         laguerre_mode=options.laguerre_mode,
         external_phi=options.external_phi,
     )
-    if options.method in {"imex-ars2", "imex-ars3"}:
+    if options.method in {"imex-ars2", "imex-ars232", "imex-ars3"}:
         rhs_fn = _attach_chain_implicit_linear(
             rhs_fn,
             prepared,

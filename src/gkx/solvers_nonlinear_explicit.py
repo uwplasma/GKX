@@ -144,7 +144,7 @@ def _explicit_stage_update(
 
     if method == "euler":
         return G + dt_local * dG
-    if method in {"imex-ars2", "imex-ars3"}:
+    if method in {"imex-ars2", "imex-ars232", "imex-ars3"}:
         chain_linear = getattr(rhs_fn, "chain_implicit_linear", None)
         if chain_linear is None:
             raise ValueError(
@@ -178,7 +178,7 @@ def _explicit_stage_update(
         )
     raise ValueError(
         "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', "
-        "'rk3_heun', 'rk4', 'k10', 'sspx3', 'imex-ars2', 'imex-ars3'}"
+        "'rk3_heun', 'rk4', 'k10', 'sspx3', 'imex-ars2', 'imex-ars232', 'imex-ars3'}"
     )
 
 

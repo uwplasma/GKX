@@ -684,6 +684,7 @@ def integrate_cached_imex_scan(
 
 _G2 = 1.0 - 1.0 / 2.0**0.5
 _D2 = 1.0 - 1.0 / (2.0 * _G2)
+_D232 = -2.0 * 2.0**0.5 / 3.0
 _G3 = 0.4358665215
 _B1 = -1.5 * _G3**2 + 4.0 * _G3 - 0.25
 _B2 = 1.5 * _G3**2 - 5.0 * _G3 + 1.25
@@ -696,6 +697,16 @@ ARS_TABLEAUX: dict[str, Any] = {
         ((0, 0, 0), (_G2, 0, 0), (_D2, 1 - _D2, 0)),
         ((0, 0, 0), (0, _G2, 0), (0, 1 - _G2, _G2)),
         (_D2, 1 - _D2, 0),
+        (0, 1 - _G2, _G2),
+    ),
+    # ARS(2,3,2): second order, two implicit stages, three explicit stages
+    # whose stability polynomial is RK3's on the imaginary axis (b A^2 c =
+    # 1/6), so three RHS and two solves per step against ARS(3,4,3)'s four
+    # and three.
+    "imex-ars232": (
+        ((0, 0, 0), (_G2, 0, 0), (_D232, 1 - _D232, 0)),
+        ((0, 0, 0), (0, _G2, 0), (0, 1 - _G2, _G2)),
+        (0, 1 - _G2, _G2),
         (0, 1 - _G2, _G2),
     ),
     "imex-ars3": (
