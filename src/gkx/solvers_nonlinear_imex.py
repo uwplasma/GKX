@@ -13,7 +13,13 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
-from solvax import KrylovSolution, gmres, linear_solve
+from solvax import (
+    KrylovSolution,
+    block_thomas_factor,
+    block_thomas_solve,
+    gmres,
+    linear_solve,
+)
 
 from gkx.solvers_linear_implicit import (
     ImplicitSolveStats,
@@ -718,36 +724,62 @@ IMEX_CHAIN_METHODS = frozenset(ARS_TABLEAUX)
 class _ChainGroup:
     ky: np.ndarray  # (chains, L) row indices
     kx: np.ndarray  # (chains, L) column indices
-    inv: jnp.ndarray  # (chains, n, n) inverse of I - gamma dt L
+    factors: Any  # block-Thomas factors of I - gamma dt S, batch (chains*s*l)
+    u: jnp.ndarray  # (chains, s, l, rows_m, N, nf*N): fields -> RHS rows
+    w: jnp.ndarray  # (chains, nf, s, l, cols_m, N): moments -> fields (z-local)
+    cap: jnp.ndarray  # (chains, nf*N, nf*N): (I - gamma dt Q B^-1 U)^-1
 
 
 @dataclass(frozen=True)
 class ChainImplicitLinear:
-    """Per-chain linear operator and the inverse of ``I - gamma dt L``."""
+    """Structured ``(I - gamma dt L)^{-1}`` for the stiff linear terms.
+
+    ``L = S + U Q`` per twist-shift chain: ``S`` is streaming with its
+    dissipation (block-tridiagonal in Hermite, an ``N x N`` block per
+    ``(species, Laguerre)``, ``N = links * Nz``) and ``U Q`` the field
+    response (``Q`` z-local, rank ``nf N``). ``I - gamma dt S`` is factored by
+    block Thomas and the fields enter by Woodbury, so memory is
+    ``O(ns Nl Nm N^2)`` per chain instead of ``O((ns Nl Nm N)^2)``.
+    """
 
     groups: tuple[_ChainGroup, ...]
     shape: tuple[int, ...]
     dt: float
     scheme: str
+    rows_m: tuple[int, ...]
+    cols_m: tuple[int, ...]
+    linear: Callable[[jnp.ndarray], jnp.ndarray]  # L G (stiff terms only)
 
     @property
     def nbytes(self) -> int:
-        return sum(int(g.inv.nbytes) for g in self.groups)
+        leaves = jax.tree_util.tree_leaves(
+            [(g.factors, g.u, g.w, g.cap) for g in self.groups]
+        )
+        return sum(int(x.nbytes) for x in leaves)
 
-    def _gather(self, g: _ChainGroup, G: jnp.ndarray) -> jnp.ndarray:
-        x = G[:, :, :, g.ky, g.kx, :]  # (s, l, m, chains, L, z)
-        return jnp.moveaxis(x, (3, 4), (0, 1)).reshape(g.ky.shape[0], -1)
+    @property
+    def gamma_dt(self) -> float:
+        return ARS_TABLEAUX[self.scheme][1][1][1] * self.dt
 
-    def _scatter(self, g: _ChainGroup, X: jnp.ndarray, out: jnp.ndarray) -> jnp.ndarray:
-        x = X.reshape(g.ky.shape[0], g.ky.shape[1], *self.shape[:3], self.shape[-1])
-        return out.at[:, :, :, g.ky, g.kx, :].set(jnp.moveaxis(x, (0, 1), (3, 4)))
+    def _bsolve(self, g: _ChainGroup, x: jnp.ndarray) -> jnp.ndarray:
+        batch = int(np.prod(x.shape[:3]))
+        y = jax.vmap(block_thomas_solve)(g.factors, x.reshape(batch, *x.shape[3:]))
+        return y.reshape(x.shape)
+
+    def _apply_inverse(self, g: _ChainGroup, x: jnp.ndarray) -> jnp.ndarray:
+        x0 = self._bsolve(g, x)
+        f = jnp.einsum("cfslmn,cslmn->cfn", g.w, x0[:, :, :, list(self.cols_m)])
+        y = jnp.einsum("cij,cj->ci", g.cap, f.reshape(f.shape[0], -1))
+        uy = jnp.einsum("cslmni,ci->cslmn", g.u, y)
+        full = jnp.zeros_like(x0).at[:, :, :, list(self.rows_m)].set(uy)
+        return x0 + self.gamma_dt * self._bsolve(g, full)
 
     def solve(self, R: jnp.ndarray) -> jnp.ndarray:
         """``(I - gamma dt L)^{-1} R`` on the chains (identity elsewhere)."""
         out = R
         for g in self.groups:
-            y = jnp.einsum("cij,cj->ci", g.inv, self._gather(g, R).astype(g.inv.dtype))
-            out = self._scatter(g, y.astype(R.dtype), out)
+            x = _gather(g.ky, g.kx, R).astype(g.cap.dtype)
+            out = _scatter(g.ky, g.kx, self._apply_inverse(g, x).astype(R.dtype), out)
         return out
 
     def ars_step(
@@ -760,10 +792,10 @@ class ChainImplicitLinear:
         """One ARS step; ``dG = rhs(G)`` is the full (linear + bracket) RHS."""
         a_exp, a_imp, b_exp, b_imp = ARS_TABLEAUX[self.scheme]
         dt, gam = self.dt, a_imp[1][1]
-        # Stage 1 needs only the bracket at G (ARS implicit weights on it are
-        # zero): the even part of the RHS, which costs one RHS and no stored L.
+        # Stage 1 needs only the explicit part at G (ARS implicit weights on it
+        # are zero): dG minus the stiff linear terms, no further RHS.
         lin: list[Any] = [None]
-        non: list[Any] = [0.5 * (dG + rhs(-G))]
+        non: list[Any] = [dG - self.linear(G)]
         for i in range(1, len(b_exp)):
             r = G + dt * sum(a_exp[i][j] * non[j] for j in range(i))
             r = r + dt * sum(a_imp[i][j] * lin[j] for j in range(1, i))
@@ -774,6 +806,17 @@ class ChainImplicitLinear:
             b_exp[j] * non[j] + (b_imp[j] * lin[j] if j else 0.0)
             for j in range(len(b_exp))
         )
+
+
+def _gather(ky: np.ndarray, kx: np.ndarray, G: jnp.ndarray) -> jnp.ndarray:
+    """``(s, l, m, ky, kx, z)`` -> ``(chains, s, l, m, links * z)``."""
+    x = jnp.moveaxis(G[:, :, :, ky, kx, :], 3, 0)  # (c, s, l, m, L, z)
+    return x.reshape(*x.shape[:4], -1)
+
+
+def _scatter(ky, kx, X: jnp.ndarray, out: jnp.ndarray) -> jnp.ndarray:
+    x = X.reshape(*X.shape[:4], ky.shape[1], out.shape[-1])
+    return out.at[:, :, :, ky, kx, :].set(jnp.moveaxis(x, 0, 3))
 
 
 def _chains(lin: Callable, shape: tuple[int, ...], modes: np.ndarray, dtype) -> list:
@@ -807,69 +850,171 @@ def _chains(lin: Callable, shape: tuple[int, ...], modes: np.ndarray, dtype) -> 
     return [sorted(c) for c in sets.values()]
 
 
+def _unit(n: int, j: jnp.ndarray, dtype) -> jnp.ndarray:
+    return jnp.where(jnp.arange(n) == j, 1.0, 0.0).astype(dtype)
+
+
+def _factor_chain_group(
+    k, x, split, zero, zero_f, w_all, act, rows_m, cols_m, gdt, lin, dt, scheme
+) -> _ChainGroup:
+    """Probe ``S``, ``U`` and ``Q`` on one group of equal-length chains."""
+    ns, nl, nm, *_r, nz = zero.shape
+    dtype = zero.dtype
+    c, n = k.shape[0], k.shape[1] * nz
+    # S is block-tridiagonal in m: sources three apart never share an output
+    # row, so three probe families (m mod 3) give every block, N probes each.
+    lower, diag, upper = (jnp.zeros((c, ns, nl, nm, n, n), dtype) for _ in range(3))
+    for res in range(3):
+        src = np.arange(res, nm, 3)
+
+        def s_column(j, src=src):
+            e = (
+                jnp.zeros((c, ns, nl, nm, n), dtype)
+                .at[:, :, :, src]
+                .set(_unit(n, j, dtype))
+            )
+            o = _gather(k, x, split(_scatter(k, x, e, zero), zero_f))
+            pad = jnp.pad(o, ((0, 0),) * 3 + ((1, 1), (0, 0)))
+            return tuple(pad[:, :, :, src + 1 + d] for d in (1, 0, -1))
+
+        got = jax.lax.map(s_column, jnp.arange(n))
+        for shift, part in zip((1, 0, -1), got):
+            rows = src + shift
+            ok = (rows >= 0) & (rows < nm)
+            col = jnp.moveaxis(part, 0, -1)[:, :, :, ok]  # (c, s, l, src, N, N)
+            if shift == 1:
+                lower = lower.at[:, :, :, rows[ok]].set(col)
+            elif shift == 0:
+                diag = diag.at[:, :, :, rows[ok]].set(col)
+            else:
+                upper = upper.at[:, :, :, rows[ok]].set(col)
+    eye = jnp.eye(n, dtype=dtype)
+    factors = jax.vmap(block_thomas_factor)(
+        (-gdt * lower).reshape(c * ns * nl, nm, n, n),
+        (eye - gdt * diag).reshape(c * ns * nl, nm, n, n),
+        (-gdt * upper).reshape(c * ns * nl, nm, n, n),
+    )
+    del lower, diag, upper
+
+    def u_column(j):
+        fg = jnp.broadcast_to(_unit(n, j, dtype), (c, n)).reshape(c, -1, nz)
+        return jnp.stack(
+            [
+                _gather(k, x, split(zero, zero_f.at[f, k, x, :].set(fg)))[
+                    :, :, :, list(rows_m)
+                ]
+                for f in act
+            ],
+            -1,
+        )  # (c, s, l, rows_m, N, nf)
+
+    u = jnp.moveaxis(jax.lax.map(u_column, jnp.arange(n)), 0, -1)
+    u = u.reshape(c, ns, nl, len(rows_m), n, -1)  # last axis (f, N)
+    wq = w_all[:, :, list(cols_m)][:, :, :, act][:, :, :, :, k, x, :]
+    wq = jnp.transpose(wq, (4, 3, 0, 1, 2, 5, 6)).reshape(
+        c, len(act), ns, nl, len(cols_m), n
+    )
+    g = _ChainGroup(k, x, factors, u, wq, jnp.zeros((c, 0, 0), dtype))
+    op = ChainImplicitLinear((g,), zero.shape, float(dt), scheme, rows_m, cols_m, lin)
+
+    def cap_column(i):
+        ui = (
+            jnp.zeros((c, ns, nl, nm, n), dtype)
+            .at[:, :, :, list(rows_m)]
+            .set(g.u[..., i])
+        )
+        y = op._bsolve(g, ui)[:, :, :, list(cols_m)]
+        return jnp.einsum("cfslmn,cslmn->cfn", g.w, y).reshape(c, -1)
+
+    qbu = jnp.moveaxis(jax.lax.map(cap_column, jnp.arange(len(act) * n)), 0, -1)
+    cap = jnp.linalg.inv(jnp.eye(qbu.shape[-1], dtype=dtype) - gdt * qbu)
+    return _ChainGroup(k, x, factors, u, wq, cap)
+
+
 def build_chain_implicit_linear(
-    rhs: Callable[[jnp.ndarray], jnp.ndarray],
+    split_rhs: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray],
+    fields: Callable[[jnp.ndarray], jnp.ndarray],
     shape: tuple[int, ...],
     dt: float,
     *,
     modes: np.ndarray,
     scheme: str = "imex-ars3",
     dtype=jnp.complex64,
+    check_tol: float = 1.0e-3,
 ) -> ChainImplicitLinear:
-    """Probe the linear part of ``rhs`` per chain and factor ``I - gamma dt L``.
+    """Probe the stiff linear terms per chain and factor ``I - gamma dt L``.
 
-    ``rhs`` maps a state of ``shape = (ns, Nl, Nm, Nky, Nkx, Nz)`` to its full
-    RHS; its odd part ``(rhs(v) - rhs(-v)) / 2`` is the linear operator.
+    ``fields(G)`` is the linear field solve, stacked ``(nf, Nky, Nkx, Nz)``;
+    ``split_rhs(G, F)`` the implicit terms' RHS of ``G`` with the fields ``F``
+    imposed. ``L G = split_rhs(G, fields(G))``; ``S = split_rhs(., 0)`` and
+    ``U = split_rhs(0, .)`` are probed separately, ``Q`` from unit moments.
     ``modes`` (``Nky x Nkx`` bool) selects what is solved: every ``ky >= 0``
-    mode, dealiased or not -- the explicit route evolves the dealiased-out
-    modes linearly too, and leaving them out of the solve makes their stiff
-    linear terms explicit (non-finite at the first sample). The ``ky < 0`` rows
-    of a two-sided layout pass through unchanged; the projector rebuilds them.
+    mode, dealiased or not (leaving dealiased-out modes explicit makes their
+    stiff terms explicit). ``ky < 0`` rows pass through; the projector
+    rebuilds them. The factorization is checked by the residual of one solve.
     """
+    ns, nl, nm, _nky, _nkx, nz = shape
+    split, fld = jax.jit(split_rhs), jax.jit(fields)
     zero = jnp.zeros(shape, dtype)
-    # The bracket is quadratic in G (fields are linear in G) and any source is
-    # constant, so the odd part (rhs(v) - rhs(-v)) / 2 is the linear operator
-    # exactly. Not a JVP: the field solve is a custom_vjp, which has no JVP rule.
-    lin = jax.jit(lambda v: 0.5 * (rhs(v) - rhs(-v)))
+    zero_f = jnp.zeros_like(fld(zero))
+
+    def lin(v):
+        return split(v, fld(v))
+
+    # Q: the field solve is local in (ky, kx, z), so one unit moment per
+    # (s, l, m) slot over every mode gives all of its weights.
+    w_all = jax.lax.map(
+        lambda i: fld(
+            jnp.broadcast_to(
+                jnp.zeros(ns * nl * nm, dtype)
+                .at[i]
+                .set(1)
+                .reshape(ns, nl, nm, 1, 1, 1),
+                shape,
+            )
+        ),
+        jnp.arange(ns * nl * nm),
+    ).reshape(ns, nl, nm, *zero_f.shape)  # (s, l, m, nf, ky, kx, z)
+    w_np = np.abs(np.asarray(w_all))
+    act = np.nonzero(w_np.max(axis=(0, 1, 2, 4, 5, 6)) > 0)[0]
+    cols_m = tuple(int(m) for m in np.nonzero(w_np.max(axis=(0, 1, 3, 4, 5, 6)) > 0)[0])
+    rng = np.random.default_rng(0)
+    probe_f = jnp.asarray(rng.normal(size=zero_f.shape), dtype)
+    resp = np.abs(np.asarray(split(zero, probe_f))).max(axis=(0, 1, 3, 4, 5))
+    rows_m = tuple(int(m) for m in np.nonzero(resp > 1e-9 * max(resp.max(), 1e-300))[0])
+
     by_len: dict[int, list] = {}
-    for chain in _chains(lin, shape, np.asarray(modes, dtype=bool), dtype):
+    for chain in _chains(jax.jit(lin), shape, np.asarray(modes, dtype=bool), dtype):
         by_len.setdefault(len(chain), []).append(chain)
-    blk = int(np.prod(shape[:3])) * shape[-1]
     idx = [
         (np.array(c)[..., 0], np.array(c)[..., 1]) for _, c in sorted(by_len.items())
     ]
-    probe = ChainImplicitLinear(
-        tuple(_ChainGroup(k, x, jnp.zeros(())) for k, x in idx),
-        tuple(shape),
-        dt,
-        scheme,
+    gdt = ARS_TABLEAUX[scheme][1][1][1] * float(dt)
+
+    groups = [
+        _factor_chain_group(
+            k, x, split, zero, zero_f, w_all, act, rows_m, cols_m, gdt, lin, dt, scheme
+        )
+        for k, x in idx
+    ]
+    op = ChainImplicitLinear(
+        tuple(groups), tuple(shape), float(dt), scheme, rows_m, cols_m, lin
     )
-    n_max = max(k.shape[1] for k, _ in idx) * blk
-
-    def column(j):
-        # Unit impulse at local index j of every chain of every group at once:
-        # chains are disjoint and do not couple, so one RHS gives all columns.
-        v = zero
-        for g in probe.groups:
-            n = g.ky.shape[1] * blk
-            e = (
-                jnp.zeros((g.ky.shape[0], n), dtype)
-                .at[:, jnp.minimum(j, n - 1)]
-                .set(jnp.where(j < n, 1.0, 0.0).astype(dtype))
-            )
-            v = probe._scatter(g, e, v)
-        out = lin(v)
-        return tuple(probe._gather(g, out) for g in probe.groups)
-
-    cols = jax.lax.map(column, jnp.arange(n_max))  # per group: (n_max, chains, n)
-    groups = []
-    for g, c in zip(probe.groups, cols):
-        n = g.ky.shape[1] * blk
-        lmat = jnp.moveaxis(c[:n], 0, 2)  # (chains, out, in)
-        gamma = ARS_TABLEAUX[scheme][1][1][1]
-        inv = jnp.linalg.inv(jnp.eye(n, dtype=dtype) - gamma * dt * lmat)
-        groups.append(_ChainGroup(g.ky, g.kx, inv))
-    return ChainImplicitLinear(tuple(groups), tuple(shape), float(dt), scheme)
+    # One solve's residual certifies every structural assumption at once
+    # (Hermite tridiagonality, z-local fields, the chain partition).
+    r = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape), dtype)
+    mask = np.zeros(shape[3:5], bool)
+    for k, x in idx:
+        mask[k, x] = True
+    r = r * jnp.asarray(mask, dtype)[None, None, None, :, :, None]
+    y = op.solve(r)
+    err = float(jnp.linalg.norm(y - gdt * lin(y) - r) / jnp.linalg.norm(r))
+    if not err < check_tol:
+        raise ValueError(
+            f"structured implicit factor residual {err:.2e} > {check_tol:.0e}: the "
+            "stiff operator is not block-tridiagonal in Hermite with z-local fields"
+        )
+    return op
 
 
 __all__ = [
