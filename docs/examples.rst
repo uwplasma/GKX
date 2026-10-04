@@ -293,10 +293,18 @@ stellarator (``case_stellarator.toml``, a VMEC flux tube at :math:`s=0.64`).
 **Choosing dt.** Leave ``fixed_dt = false``: the CFL controller takes the
 largest linear frequency on the grid. With kinetic electrons that is electron
 parallel streaming, :math:`\sim v_{te}k_{z,\max}`, about
-:math:`\sqrt{m_i/m_e}\approx 60` times the ion rate. On the 16x16x16 tutorial
-grid the controller reports :math:`\omega_\parallel = 500` against a drift
-rate of 1.6 (the numbers are in ``diagnostics.cfl_scales``). Measured on that
-grid:
+:math:`\sqrt{m_i/m_e}\approx 60` times the ion rate. For decks with a light
+kinetic species the controller measures the largest eigenvalue of streaming
+plus the field solve by a 30-step Arnoldi at startup and takes it when it
+exceeds the GX-parity estimate :math:`v_t k_{z,\max}\max(2\sqrt{N_m},
+\omega_H)`. The estimate misses an electromagnetic electron :math:`m=1` mode
+of the linked box: 702 against 500 on the 16x16x16 tutorial grid at
+:math:`\beta=10^{-4}` (1604 against 900 at :math:`10^{-5}`; 454 against 264
+on the QA deck), which made the default cfl 0.9 overshoot RK3's
+imaginary-axis interval (:math:`|\lambda|\Delta t=2.15>\sqrt3`; :math:`W_g`
+grew :math:`10^8` by :math:`t=0.2`). The numbers are in
+``diagnostics.cfl_scales``. Measured on the tutorial grid with the default
+cfl 0.9:
 
 .. list-table::
    :header-rows: 1
@@ -304,35 +312,80 @@ grid:
    * - setting
      - controller dt
      - outcome
-   * - :math:`\beta=0` (electrostatic), cfl 0.9
+   * - :math:`\beta=0` (electrostatic)
      - :math:`3.6\times10^{-4}`
      - stable; the :math:`\omega_H` mode at the smallest :math:`k_\perp` sets the step
-   * - :math:`\beta=10^{-4}` with :math:`A_\parallel`, cfl 0.9
-     - :math:`2.6\times10^{-3}`
-     - unstable: :math:`W_g` grows :math:`10^{8}` by :math:`t=0.2`, also with the nonlinear term off
-   * - :math:`\beta=10^{-4}` with :math:`A_\parallel`, cfl 0.45
-     - :math:`1.5\times10^{-3}`
-     - stable (also at :math:`\beta=10^{-5}` and :math:`10^{-3}`); 4.3 times fewer steps than electrostatic
-   * - :math:`\beta=10^{-4}`, cfl 0.45, :math:`N_m=8`
-     - :math:`1.1\times10^{-3}`
-     - stable; the streaming bound grows as :math:`2\sqrt{N_m}`
-   * - :math:`\beta=10^{-4}`, cfl 0.45, :math:`m_e/m_i=1/400`
-     - :math:`2.7\times10^{-3}`
-     - reduced mass ratio: faster, but a different physical model
+   * - :math:`\beta=10^{-5}` with :math:`A_\parallel`
+     - :math:`9.6\times10^{-4}`
+     - stable to :math:`t=1`, nonlinear
+   * - :math:`\beta=10^{-4}` with :math:`A_\parallel`
+     - :math:`2.2\times10^{-3}`
+     - stable to :math:`t=1`; six times fewer steps than electrostatic
+   * - :math:`\beta=10^{-3}` with :math:`A_\parallel`
+     - :math:`3.0\times10^{-3}`
+     - stable to :math:`t=1`
 
 A small finite :math:`\beta` with :math:`A_\parallel` is the usual way to
 remove the electrostatic :math:`\omega_H` limit; at :math:`k_y\rho_i=0.3` the
 dominant linear eigenvalue of the tutorial linear deck moves by
 :math:`2\times10^{-4}` between :math:`\beta=10^{-6}` and :math:`10^{-4}`
-(0.62478 and 0.62492). The shipped decks set ``cfl = 0.45``: at
-:math:`\beta\le10^{-4}` the default 0.9 overshoots a linear mode of the full
-box that the controller's streaming estimate does not bound (the single
-:math:`k_y` operator's largest eigenvalue stays at 0.6-0.75 of the estimate
-for :math:`k_y\rho_i` from 0.1 to 1). The fully implicit ``imex`` route is
-not a remedy at this size: at dt = 0.01 it ran 0.4 steps/s with every
-FGMRES solve at its 200-iteration cap (so not converged either), against
-31 steps/s at dt = 1.5e-3 for the stable explicit step: 0.004 against 0.047
-time units per second, 12 times slower (office CPU, shared host).
+(0.62478 and 0.62492).
+
+**Implicit linear step (opt-in).** ``method = "imex-ars3"`` with
+``fixed_dt = true`` removes the streaming limit: the linear operator couples
+modes only along one twist-shift chain, so GKX probes the run's own linear RHS
+once per chain, inverts :math:`I-\gamma\Delta t L` (dense, per chain) and
+steps with the Ascher-Ruuth-Spiteri ARS(3,4,3) IMEX scheme -- every linear
+term implicit, the bracket explicit, five RHS evaluations and three block
+solves per step. dt is then set by the nonlinear rate. Measured on an A4000
+(``ky_layout = "full"``; ``"half"`` also works), heat flux averaged over
+:math:`t=75`-150 with 10-unit block errors:
+
+.. list-table::
+   :header-rows: 1
+
+   * - deck
+     - step
+     - :math:`Q_i`
+     - :math:`Q_e`
+     - s per unit time
+   * - Cyclone 32x32x16
+     - RK3, dt 1.6e-3
+     - 526 ± 15
+     - 586 ± 16
+     - 0.92
+   * -
+     - imex-ars3, dt 0.05
+     - 535 ± 14
+     - 610 ± 13
+     - 0.17 (5.4x)
+   * -
+     - imex-ars3, dt 0.1
+     - 563 ± 14
+     - 633 ± 16
+     - 0.11 (8.8x)
+   * - QA 16x16x32
+     - RK3, dt 3e-3
+     - 255 ± 14
+     - 256 ± 12
+     - 0.27
+   * -
+     - imex-ars3, dt 0.05
+     - 234 ± 10
+     - 234 ± 10
+     - 0.07 (4.0x)
+
+Linear growth agrees with the explicit run to :math:`5\times10^{-4}`
+(Cyclone, 0.66327 against 0.66293) and :math:`2\times10^{-3}` (QA, 0.17184
+against 0.17146) at dt 0.05, 23 and 15 times the explicit step. Use dt 0.05
+on these decks; 0.1 runs but reads 7% high. Limits: fixed dt only (the
+factorization is per dt); about 25 s of probing and factoring at startup; the
+factors take :math:`\sum_{\rm chains}(2N_lN_mN_zL)^2` complex entries
+(0.08 GB at 16x16x16 (2,4), 0.34 GB at 32x32x16 (2,4), 5.5 GB at 32x32x16
+(4,8), 53 GB at 64x64x24 (4,8)), so production resolution needs the banded
+response-matrix solve of plan 5.4; derivatives do not flow through the
+factors. ``imex-ars2`` (two-stage) is cheaper per step but its explicit part
+has no imaginary-axis interval and went non-finite at :math:`t=25.5`.
 
 **Choosing t_max** (units of :math:`a/v_{ti}`): the linear phase lasts about
 :math:`10/\gamma`, 20-40 here; saturation follows by :math:`t\approx60`-100;
