@@ -916,8 +916,35 @@ def _unit(n: int, j: jnp.ndarray, dtype) -> jnp.ndarray:
     return jnp.where(jnp.arange(n) == j, 1.0, 0.0).astype(dtype)
 
 
+def _probe_columns(n: int, make: Callable, probe: Callable, take: Callable) -> Any:
+    """Columns ``j < n`` of a probed operator, ``_PROBE_BATCH`` per call.
+
+    ``probe`` is one compiled, vmapped RHS shared by every chain group and
+    every probe family (compiling a ``lax.map`` per group and family took
+    ~60 s of a 32x32x16 build); ``make`` and ``take`` are the cheap per-group
+    scatter and gather. Indices ``j >= n`` make zero impulses.
+    """
+    cols = []
+    for j0 in range(0, n, _PROBE_BATCH):
+        cols.append(take(probe(make(jnp.arange(j0, j0 + _PROBE_BATCH)))))
+    return jax.tree.map(lambda *a: jnp.concatenate(a)[:n], *cols)
+
+
 def _factor_chain_group(
-    k, x, split, zero, zero_f, w_all, act, rows_m, cols_m, gdt, lin, dt, scheme
+    k,
+    x,
+    probe_s,
+    probe_u,
+    zero,
+    zero_f,
+    w_all,
+    act,
+    rows_m,
+    cols_m,
+    gdt,
+    lin,
+    dt,
+    scheme,
 ) -> _ChainGroup:
     """Probe ``S``, ``U`` and ``Q`` on one group of equal-length chains."""
     ns, nl, nm, *_r, nz = zero.shape
@@ -929,17 +956,21 @@ def _factor_chain_group(
     for res in range(3):
         src = np.arange(res, nm, 3)
 
-        def s_column(j, src=src):
+        def make(j, src=src):
             e = (
                 jnp.zeros((c, ns, nl, nm, n), dtype)
                 .at[:, :, :, src]
                 .set(_unit(n, j, dtype))
             )
-            o = _gather(k, x, split(_scatter(k, x, e, zero), zero_f))
-            pad = jnp.pad(o, ((0, 0),) * 3 + ((1, 1), (0, 0)))
+            return _scatter(k, x, e, zero)
+
+        def take(out, src=src):
+            pad = jnp.pad(_gather(k, x, out), ((0, 0),) * 3 + ((1, 1), (0, 0)))
             return tuple(pad[:, :, :, src + 1 + d] for d in (1, 0, -1))
 
-        got = jax.lax.map(s_column, jnp.arange(n), batch_size=_PROBE_BATCH)
+        got = _probe_columns(
+            n, jax.jit(jax.vmap(make)), probe_s, jax.jit(jax.vmap(take))
+        )
         for shift, part in zip((1, 0, -1), got):
             rows = src + shift
             ok = (rows >= 0) & (rows < nm)
@@ -954,21 +985,22 @@ def _factor_chain_group(
     factors = _thomas_factor(-gdt * lower, eye - gdt * diag, -gdt * upper)
     del lower, diag, upper
 
-    def u_column(j):
-        fg = jnp.broadcast_to(_unit(n, j, dtype), (c, n)).reshape(c, -1, nz)
-        return jnp.stack(
-            [
-                _gather(k, x, split(zero, zero_f.at[f, k, x, :].set(fg)))[
-                    :, :, :, list(rows_m)
-                ]
-                for f in act
-            ],
-            -1,
-        )  # (c, s, l, rows_m, N, nf)
+    def take_u(out):
+        return _gather(k, x, out)[:, :, :, list(rows_m)]
 
-    u = jnp.moveaxis(
-        jax.lax.map(u_column, jnp.arange(n), batch_size=_PROBE_BATCH), 0, -1
-    )
+    u_cols = []
+    for f in act:
+
+        def make_u(j, f=f):
+            fg = jnp.broadcast_to(_unit(n, j, dtype), (c, n)).reshape(c, -1, nz)
+            return zero_f.at[f, k, x, :].set(fg)
+
+        u_cols.append(
+            _probe_columns(
+                n, jax.jit(jax.vmap(make_u)), probe_u, jax.jit(jax.vmap(take_u))
+            )
+        )  # (N, c, s, l, rows_m, N)
+    u = jnp.moveaxis(jnp.stack(u_cols, -1), 0, -1)
     u = u.reshape(c, ns, nl, len(rows_m), n, -1)  # last axis (f, N)
     wq = w_all[:, :, list(cols_m)][:, :, :, act][:, :, :, :, k, x, :]
     wq = jnp.transpose(wq, (4, 3, 0, 1, 2, 5, 6)).reshape(
@@ -993,8 +1025,7 @@ def _factor_chain_group(
     )
     cap = jnp.eye(qbu.shape[-1], dtype=dtype) - gdt * qbu
     # Equilibrate before inverting: near-zonal chains carry field blocks four
-    # orders apart (A_par against phi), cond 2e8 raw and ~1e3 balanced, which
-    # is the difference between a 6e-3 and a roundoff complex64 solve.
+    # orders apart (A_par against phi), cond 2e8 raw and ~1e3 balanced.
     dr = jnp.ones(cap.shape[:2], jnp.real(cap).dtype)
     dc = jnp.ones_like(dr)
     for _ in range(8):
@@ -1106,9 +1137,24 @@ def build_chain_implicit_linear(
     ]
     gdt = ARS_TABLEAUX[scheme][1][1][1] * float(dt)
 
+    probe_s = jax.jit(jax.vmap(lambda v: split(v, zero_f)))
+    probe_u = jax.jit(jax.vmap(lambda F: split(zero, F)))
     groups = [
         _factor_chain_group(
-            k, x, split, zero, zero_f, w_all, act, rows_m, cols_m, gdt, lin, dt, scheme
+            k,
+            x,
+            probe_s,
+            probe_u,
+            zero,
+            zero_f,
+            w_all,
+            act,
+            rows_m,
+            cols_m,
+            gdt,
+            lin,
+            dt,
+            scheme,
         )
         for k, x in idx
     ]
