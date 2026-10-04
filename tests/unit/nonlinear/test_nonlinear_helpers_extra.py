@@ -14,8 +14,8 @@ from gkx.operators.nonlinear.policies import measured_streaming_frequency
 from gkx.solvers_nonlinear_imex import (
     ARS_TABLEAUX,
     build_chain_implicit_linear,
-    stiff_linear_split,
 )
+from gkx.solvers_nonlinear_diagnostics import stiff_linear_split
 from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
 from gkx.terms.assembly import assemble_rhs_cached, compute_fields_cached
 from gkx.terms.config import TermConfig

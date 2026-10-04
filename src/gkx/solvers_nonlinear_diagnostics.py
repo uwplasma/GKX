@@ -8,6 +8,8 @@ keeping the large implementation body inline.
 
 from __future__ import annotations
 
+import dataclasses
+
 
 from dataclasses import dataclass, replace
 from functools import partial
@@ -607,6 +609,48 @@ def _run_explicit_diagnostic_scan_raw(
     return G_final, scan_diag_out, fields_final
 
 
+def stiff_linear_split(
+    cache: Any, params: Any, terms: Any, compute_fields_fn: Callable[..., Any]
+) -> tuple[Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], Callable]:
+    """Return ``(split_rhs, fields)`` for :func:`build_chain_implicit_linear`.
+
+    Implicit: streaming with its dissipation and the field response. Drifts,
+    mirror, drive and collisions stay explicit with the bracket; they couple
+    Laguerre moments and would break the per-``(s, l)`` Hermite block
+    structure that keeps the factor ``O(N^2)`` per moment row.
+    """
+    from gkx.terms.assembly import assemble_rhs_cached_with_fields
+    from gkx.terms.config import FieldState
+
+    implicit_terms = dataclasses.replace(
+        terms,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        nonlinear=0.0,
+    )
+
+    def fields(state: jnp.ndarray) -> jnp.ndarray:
+        f = compute_fields_fn(state, cache, params, terms=terms)
+        zero = jnp.zeros_like(f.phi)
+        return jnp.stack(
+            [f.phi]
+            + [
+                zero if a is None else jnp.asarray(a, f.phi.dtype)
+                for a in (f.apar, f.bpar)
+            ]
+        )
+
+    def split_rhs(state: jnp.ndarray, F: jnp.ndarray) -> jnp.ndarray:
+        return assemble_rhs_cached_with_fields(
+            state, cache, params, FieldState(F[0], F[1], F[2]), terms=implicit_terms
+        )
+
+    return split_rhs, fields
+
+
 def _attach_chain_implicit_linear(
     rhs_fn: Callable[..., Any],
     prepared: _ExplicitPreparedState,
@@ -620,10 +664,7 @@ def _attach_chain_implicit_linear(
 ) -> Callable[..., Any]:
     """Return ``rhs_fn`` carrying the per-chain implicit operator of imex-ars*."""
 
-    from gkx.solvers_nonlinear_imex import (
-        build_chain_implicit_linear,
-        stiff_linear_split,
-    )
+    from gkx.solvers_nonlinear_imex import build_chain_implicit_linear
 
     if not fixed_dt:
         raise ValueError(
