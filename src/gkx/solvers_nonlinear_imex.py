@@ -727,7 +727,9 @@ class _ChainGroup:
     factors: Any  # block-Thomas factors of I - gamma dt S, batch (chains*s*l)
     u: jnp.ndarray  # (chains, s, l, rows_m, N, nf*N): fields -> RHS rows
     w: jnp.ndarray  # (chains, nf, s, l, cols_m, N): moments -> fields (z-local)
-    cap: jnp.ndarray  # (chains, nf*N, nf*N): (I - gamma dt Q B^-1 U)^-1
+    cap: jnp.ndarray  # (chains, nf*N, nf*N): (Dr (I - gamma dt Q B^-1 U) Dc)^-1
+    dr: jnp.ndarray  # (chains, nf*N) row equilibration
+    dc: jnp.ndarray  # (chains, nf*N) column equilibration
 
 
 @dataclass(frozen=True)
@@ -753,7 +755,7 @@ class ChainImplicitLinear:
     @property
     def nbytes(self) -> int:
         leaves = jax.tree_util.tree_leaves(
-            [(g.factors, g.u, g.w, g.cap) for g in self.groups]
+            [(g.factors, g.u, g.w, g.cap, g.dr, g.dc) for g in self.groups]
         )
         return sum(int(x.nbytes) for x in leaves)
 
@@ -769,7 +771,7 @@ class ChainImplicitLinear:
     def _apply_inverse(self, g: _ChainGroup, x: jnp.ndarray) -> jnp.ndarray:
         x0 = self._bsolve(g, x)
         f = jnp.einsum("cfslmn,cslmn->cfn", g.w, x0[:, :, :, list(self.cols_m)])
-        y = jnp.einsum("cij,cj->ci", g.cap, f.reshape(f.shape[0], -1))
+        y = g.dc * jnp.einsum("cij,cj->ci", g.cap, g.dr * f.reshape(f.shape[0], -1))
         uy = jnp.einsum("cslmni,ci->cslmn", g.u, y)
         full = jnp.zeros_like(x0).at[:, :, :, list(self.rows_m)].set(uy)
         return x0 + self.gamma_dt * self._bsolve(g, full)
@@ -914,7 +916,7 @@ def _factor_chain_group(
     wq = jnp.transpose(wq, (4, 3, 0, 1, 2, 5, 6)).reshape(
         c, len(act), ns, nl, len(cols_m), n
     )
-    g = _ChainGroup(k, x, factors, u, wq, jnp.zeros((c, 0, 0), dtype))
+    g = _ChainGroup(k, x, factors, u, wq, *(jnp.zeros((c, 0, 0), dtype),) * 3)
     op = ChainImplicitLinear((g,), zero.shape, float(dt), scheme, rows_m, cols_m, lin)
 
     def cap_column(i):
@@ -927,8 +929,17 @@ def _factor_chain_group(
         return jnp.einsum("cfslmn,cslmn->cfn", g.w, y).reshape(c, -1)
 
     qbu = jnp.moveaxis(jax.lax.map(cap_column, jnp.arange(len(act) * n)), 0, -1)
-    cap = jnp.linalg.inv(jnp.eye(qbu.shape[-1], dtype=dtype) - gdt * qbu)
-    return _ChainGroup(k, x, factors, u, wq, cap)
+    cap = jnp.eye(qbu.shape[-1], dtype=dtype) - gdt * qbu
+    # Equilibrate before inverting: near-zonal chains carry field blocks four
+    # orders apart (A_par against phi), cond 2e8 raw and ~1e3 balanced, which
+    # is the difference between a 6e-3 and a roundoff complex64 solve.
+    dr = jnp.ones(cap.shape[:2], jnp.real(cap).dtype)
+    dc = jnp.ones_like(dr)
+    for _ in range(8):
+        dr = dr / jnp.sqrt(jnp.abs(dr[:, :, None] * cap * dc[:, None]).max(2))
+        dc = dc / jnp.sqrt(jnp.abs(dr[:, :, None] * cap * dc[:, None]).max(1))
+    cap = jnp.linalg.inv(dr[:, :, None] * cap * dc[:, None])
+    return _ChainGroup(k, x, factors, u, wq, cap, dr.astype(dtype), dc.astype(dtype))
 
 
 def build_chain_implicit_linear(
