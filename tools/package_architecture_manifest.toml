@@ -1120,9 +1120,10 @@ recursive = true
 # 74748 -> 75001: bug-fix chain (#302 #303 #304 #306 #308), measured.
 # 75001 -> 75124: xcode suspects (NTFT m0 chain frame, per-species nu pairs, phase R^2), measured.
 # 75124 -> 75143: forward-mode dense eigenpair rule for VMEX's Jacobian, measured.
-# 75143 -> 75506: kinetic-electron step (plan 5.4): measured streaming bound and the
-# opt-in per-chain implicit linear step imex-ars3, measured.
-baseline = 75506
+# 75143 -> 75149: ky alias refusal, float32 theta tolerance, atomic Miller cache (#321), measured.
+# 75149 -> 75512: kinetic-electron step (plan 5.4): measured streaming bound and the
+# opt-in per-chain implicit linear step imex-ars3, measured on the merged tree.
+baseline = 75512
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1450,8 +1451,9 @@ recursive = true
 # 82349 -> 82402: nonlinear flux Jacobian AD-vs-FD test, measured.
 # 82402 -> 82601: analytic benchmark gates in test_benchmarking.py. Measured.
 # 82601 -> 82606: audit rows and smoke knob for the kinetic-electron decks.
-# 82606 -> 82691: kinetic-electron step tests (measured bound, chain solve).
-baseline = 82691
+# 82606 -> 82675: tests for the ky-alias, float32 Miller and cache fixes (#321).
+# 82675 -> 82760: kinetic-electron step tests (measured bound, chain solve), merged tree.
+baseline = 82760
 target = 35000
 
 [[line_budget_policy.counts]]

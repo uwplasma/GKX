@@ -277,6 +277,15 @@ def test_select_ky_index_keeps_zonal_when_request_is_closer_to_zero() -> None:
     assert select_ky_index(ky, 1.0e-4) == 0
 
 
+def test_select_ky_index_refuses_target_beyond_grid() -> None:
+    # Full FFT grid: +1.5 is the largest positive row, -1.8 the Nyquist row.
+    ky = np.fft.fftfreq(12, d=1.0 / (0.3 * 12))
+    assert select_ky_index(ky, 1.5) == int(np.argmin(np.abs(ky - 1.5)))
+    for target in (1.6, 5.0):
+        with pytest.raises(ValueError, match="beyond the grid"):
+            select_ky_index(ky, target)
+
+
 def test_select_ky_index_validates_shape() -> None:
     with pytest.raises(ValueError):
         select_ky_index(np.array([]), 0.1)

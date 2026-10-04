@@ -2470,7 +2470,7 @@ def test_krylov_and_explicit_runtime_refuse_a_moment_collision_operator():
         ("explicit_time", "explicit"),
     ):
         with pytest.raises(NotImplementedError, match=path):
-            run_runtime_linear(cfg, ky_target=0.2, Nl=2, Nm=4, solver=solver)
+            run_runtime_linear(cfg, ky_target=0.1, Nl=2, Nm=4, solver=solver)
 
 
 def test_config_collision_operator_rejects_unsupported_solver_paths(monkeypatch):

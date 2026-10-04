@@ -670,6 +670,7 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     from gkx.core_grid import select_ky_grid
     from gkx.diagnostics.modes import select_ky_index
 
+    # ky=0.15 is the largest positive row at Ny=8; 0.3 used to alias to a negative-ky row.
     runtime, _raw = load_runtime_from_toml(
         REPO_ROOT / "examples/01_linear_tokamak/case_full.toml"
     )
@@ -678,16 +679,16 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
         grid=replace(runtime.grid, Ny=8, ntheta=16, nperiod=1, Nz=16),
     )
     reference = run_runtime_linear(
-        runtime, ky_target=0.3, Nl=8, Nm=8, solver="time", steps=20_000
+        runtime, ky_target=0.15, Nl=8, Nm=8, solver="time", steps=20_000
     )
-    krylov = run_runtime_linear(runtime, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
+    krylov = run_runtime_linear(runtime, ky_target=0.15, Nl=8, Nm=8, solver="krylov")
     assert reference.ky == pytest.approx(krylov.ky)
 
     # Operator ground truth: the certified pair must be the exact dominant
     # eigenvalue of the discretized linear operator at this resolution.
     geom = build_runtime_geometry(runtime)
     grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, runtime.grid))
-    grid = select_ky_grid(grid_full, select_ky_index(np.asarray(grid_full.ky), 0.3))
+    grid = select_ky_grid(grid_full, select_ky_index(np.asarray(grid_full.ky), 0.15))
     params = build_runtime_linear_params(runtime, Nm=8, geom=geom)
     term_cfg = linear_terms_to_term_config(build_runtime_linear_terms(runtime))
     cache = build_linear_cache(grid, geom, params, 8, 8)
