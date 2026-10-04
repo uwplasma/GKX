@@ -638,7 +638,9 @@ def make_explicit_diagnostic_step(
 
         if time_horizon is None:
             return advance(None)
-        remaining = jnp.maximum(jnp.asarray(time_horizon) - t_prev, 0.0)
+        remaining = jnp.maximum(
+            jnp.asarray(time_horizon, dtype=t_prev.dtype) - t_prev, 0.0
+        )
         return jax.lax.cond(
             remaining > 0.0,
             advance,

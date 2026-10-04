@@ -9,6 +9,7 @@ keeping the large implementation body inline.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import Any, Callable
 
 import jax
@@ -154,7 +155,7 @@ class PreparedExplicitNonlinearDiagnostics:
     geometry: Any
     cache: LinearCache
     params: LinearParams
-    _run_raw: Callable[[jnp.ndarray], tuple[Any, Any, Any]]
+    _run_raw: Callable[..., tuple[Any, Any, Any]]
     _run_dynamic_raw: Callable[
         [jnp.ndarray, Any, LinearCache, LinearParams], tuple[Any, Any, Any]
     ]
@@ -173,6 +174,7 @@ class PreparedExplicitNonlinearDiagnostics:
         geometry: Any | None = None,
         cache: LinearCache | None = None,
         params: LinearParams | None = None,
+        time_horizon: float | None = None,
     ) -> tuple[jnp.ndarray, tuple[Any, Any, Any], FieldState]:
         """Run the compiled scan without host conversion or artifact assembly.
 
@@ -187,6 +189,10 @@ class PreparedExplicitNonlinearDiagnostics:
         first, as the class docstring describes. The prepared state was
         projected once at preparation, so passing ``None`` runs exactly the
         graph it ran before.
+
+        ``time_horizon`` (adaptive runs) stops stepping once the run time
+        reaches it. It is a traced operand, so changing it between calls
+        reuses the compiled scan; it overrides any prepared horizon.
         """
 
         if (cache is None) != (params is None):
@@ -209,7 +215,11 @@ class PreparedExplicitNonlinearDiagnostics:
                 )
             )
         if geometry is None and cache is None:
-            return self._run_raw(jnp.asarray(state))
+            if time_horizon is None:
+                return self._run_raw(jnp.asarray(state))
+            return self._run_raw(jnp.asarray(state), jnp.asarray(time_horizon))
+        if time_horizon is not None:
+            raise ValueError("time_horizon cannot be combined with dynamic inputs")
         if not self.fixed_dt:
             raise ValueError("dynamic geometry, cache, or params require fixed_dt=True")
         geometry_use = self.geometry if geometry is None else geometry
@@ -226,11 +236,16 @@ class PreparedExplicitNonlinearDiagnostics:
         geometry: Any | None = None,
         cache: LinearCache | None = None,
         params: LinearParams | None = None,
+        time_horizon: float | None = None,
     ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
         """Advance one state through the prepared compiled simulation."""
 
         G_final, scan_diag_out, fields_final = self.run_arrays(
-            initial_state, geometry=geometry, cache=cache, params=params
+            initial_state,
+            geometry=geometry,
+            cache=cache,
+            params=params,
+            time_horizon=time_horizon,
         )
         diag, t, dt_series = scan_diag_out
         diag_out = self._finalize(
@@ -670,7 +685,8 @@ def _build_explicit_scan_closures(
         wphi_scale=options.wphi_scale,
         resolved_diagnostics=options.resolved_diagnostics,
     )
-    step = _make_explicit_scan_step(
+    make_step = partial(
+        _make_explicit_scan_step,
         prepared,
         policies,
         rhs_fn,
@@ -686,8 +702,11 @@ def _build_explicit_scan_closures(
         steps=options.steps,
         external_phi=options.external_phi,
         collision_scheme=options.collision_scheme,
-        time_horizon=options.time_horizon,
     )
+    step = make_step(time_horizon=options.time_horizon)
+    # The adaptive chunk loop changes only the horizon between chunks; this
+    # lets a prepared run take it as a traced operand instead of recompiling.
+    step.with_horizon = make_step  # type: ignore[attr-defined]
     return step, compute_diag_from_state
 
 
@@ -844,11 +863,16 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
 
-    def run_raw(initial_state: jnp.ndarray) -> tuple[Any, Any, Any]:
+    def run_raw(
+        initial_state: jnp.ndarray, time_horizon: jnp.ndarray | None = None
+    ) -> tuple[Any, Any, Any]:
+        step = components.step
+        if time_horizon is not None:
+            step = step.with_horizon(time_horizon=time_horizon)  # type: ignore[attr-defined]
         return _run_explicit_diagnostic_scan_raw(
             components.prepared,
             components.policies,
-            components.step,
+            step,
             components.compute_diag_from_state,
             params,
             deps=deps,

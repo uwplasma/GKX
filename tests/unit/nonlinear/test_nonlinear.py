@@ -350,6 +350,49 @@ def test_integrate_nonlinear_explicit_diagnostics_shapes():
     assert np.isfinite(np.asarray(diag.dt_t)).all()
 
 
+def test_adaptive_chunk_compile_cache_matches_fresh_compile_bitwise():
+    """Chunked adaptive runs reuse one graph; the horizon is an operand."""
+
+    cfg = CycloneBaseCase(grid=GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0))
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    state = jnp.full((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), 1.0e-3 + 0j)
+    kwargs = dict(
+        dt=0.1,
+        steps=3,
+        method="rk3",
+        fixed_dt=False,
+        dt_max=0.1,
+        terms=TermConfig(nonlinear=0.0),
+        resolved_diagnostics=False,
+    )
+    cache: dict = {}
+    for horizon in (None, 0.25, 0.15):
+        fresh = integrate_nonlinear_explicit_diagnostics_state(
+            state, grid, geom, LinearParams(), time_horizon=horizon, **kwargs
+        )
+        cached = integrate_nonlinear_explicit_diagnostics_state(
+            state,
+            grid,
+            geom,
+            LinearParams(),
+            time_horizon=horizon,
+            compile_cache=cache,
+            **kwargs,
+        )
+        t_a, diag_a, g_a, f_a = fresh
+        t_b, diag_b, g_b, f_b = cached
+        pairs = [(t_a, t_b), (g_a, g_b), (f_a.phi, f_b.phi)]
+        pairs += [
+            (getattr(diag_a, k), getattr(diag_b, k))
+            for k in ("t", "dt_t", "Wg_t", "heat_flux_t")
+        ]
+        for a, b in pairs:
+            np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+    # One entry without a horizon, one shared by both horizons.
+    assert len(cache) == 2
+
+
 def test_prepared_nonlinear_diagnostics_reuses_compiled_scan():
     """A prepared diagnostic simulation should compile once per state signature."""
 
