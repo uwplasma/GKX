@@ -6,8 +6,9 @@ schema_version = 1
 # is missing. dt and t_max follow the same rules as case.toml: the CFL
 # controller is bound by electron streaming, beta = 1e-4 with A_parallel
 # removes the electrostatic omega_H limit, and the default cfl = 0.9 is stable
-# (omega_stream = 454 measured, against the GX estimate 264; imex-ars3 at dt = 0.05 gives the same saturated
-# heat flux within its error bar, 4x faster per unit time). The tutorial horizon (t = 0.3) covers the start of the linear
+# (omega_stream = 454 measured, against the GX estimate 264). imex-ars3 at
+# dt = 0.05 gives the same saturated heat flux within its error bar, 4x faster
+# per unit time. The tutorial horizon (t = 0.3) covers the start of the linear
 # phase only.
 #
 # Production (GPU, hours): Nx = Ny = 96, Nz = 48-64, Nl = 4, Nm = 8-16,
