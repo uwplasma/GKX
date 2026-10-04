@@ -951,7 +951,7 @@ def build_chain_implicit_linear(
     modes: np.ndarray,
     scheme: str = "imex-ars3",
     dtype=jnp.complex64,
-    check_tol: float = 1.0e-3,
+    check_tol: float | None = None,
 ) -> ChainImplicitLinear:
     """Probe the stiff linear terms per chain and factor ``I - gamma dt L``.
 
@@ -1022,6 +1022,11 @@ def build_chain_implicit_linear(
     y = op.solve(r)
     # Only the solved rows: the RHS rebuilds ky < 0 rows from their partners.
     err = float(jnp.linalg.norm(on * (y - gdt * lin(y) - r)) / jnp.linalg.norm(r))
+    # I - gamma dt L reaches cond 4e5 on the Cyclone tutorial box (A_par at
+    # small k_perp), so a complex64 solve, dense or structured, leaves a
+    # ~5e-3 residual; a broken structural assumption leaves O(1).
+    if check_tol is None:
+        check_tol = 5.0e-2 if jnp.finfo(dtype).bits <= 32 else 1.0e-6
     if not err < check_tol:
         raise ValueError(
             f"structured implicit factor residual {err:.2e} > {check_tol:.0e}: the "
