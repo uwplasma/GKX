@@ -82,7 +82,7 @@ def test_chain_operator_reproduces_and_inverts_the_linear_rhs():
 
     dt = 0.05
     op = build_chain_implicit_linear(
-        rhs, shape, dt, ky=np.asarray(cache.ky), scheme="imex-ars3"
+        rhs, shape, dt, modes=np.ones(shape[3:5], bool), scheme="imex-ars3"
     )
     key = jax.random.PRNGKey(3)
     G = (jax.random.normal(key, shape) + 1j * jax.random.normal(key + 1, shape)).astype(

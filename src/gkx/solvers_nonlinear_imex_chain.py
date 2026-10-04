@@ -139,11 +139,10 @@ class ChainImplicitLinear:
         )
 
 
-def _chains(lin: Callable, shape: tuple[int, ...], rows: np.ndarray, dtype) -> list:
-    """Connected (ky, kx) sets of the linear operator on the stored ``rows``."""
-    ny, nx = shape[3], shape[4]
+def _chains(lin: Callable, shape: tuple[int, ...], modes: np.ndarray, dtype) -> list:
+    """Connected sets of the linear operator among the ``(ky, kx)`` ``modes``."""
     rng = np.random.default_rng(0)
-    parent = {(int(r), j): (int(r), j) for r in rows for j in range(nx)}
+    parent = {(int(r), int(c)): (int(r), int(c)) for r, c in np.argwhere(modes)}
 
     def find(a):
         while parent[a] != a:
@@ -153,7 +152,8 @@ def _chains(lin: Callable, shape: tuple[int, ...], rows: np.ndarray, dtype) -> l
 
     # Modes at different ky never couple, so one probe per kx column finds the
     # kx links of every row at once.
-    for j in range(nx):
+    for j in np.nonzero(modes.any(axis=0))[0]:
+        rows = np.nonzero(modes[:, j])[0]
         v = np.zeros(shape, dtype=complex)
         v[:, :, :, rows, j, :] = rng.normal(size=v[:, :, :, rows, j, :].shape)
         out = np.abs(np.asarray(lin(jnp.asarray(v, dtype=dtype)))).max(
@@ -162,8 +162,8 @@ def _chains(lin: Callable, shape: tuple[int, ...], rows: np.ndarray, dtype) -> l
         tol = 1e-9 * max(float(out.max()), 1e-300)
         for r in rows:
             for q in np.nonzero(out[r] > tol)[0]:
-                parent[find((int(r), int(q)))] = find((int(r), j))
-    del ny
+                if (int(r), int(q)) in parent:
+                    parent[find((int(r), int(q)))] = find((int(r), int(j)))
     sets: dict = {}
     for mode in parent:
         sets.setdefault(find(mode), []).append(mode)
@@ -175,24 +175,26 @@ def build_chain_implicit_linear(
     shape: tuple[int, ...],
     dt: float,
     *,
-    ky: np.ndarray,
+    modes: np.ndarray,
     scheme: str = "imex-ars3",
     dtype=jnp.complex64,
 ) -> ChainImplicitLinear:
     """Probe the linear part of ``rhs`` per chain and factor ``I - gamma dt L``.
 
     ``rhs`` maps a state of ``shape = (ns, Nl, Nm, Nky, Nkx, Nz)`` to its full
-    RHS; its odd part ``(rhs(v) - rhs(-v)) / 2`` is the linear operator. Only rows with ``ky >= 0`` are
-    solved: on a two-sided layout the projector rebuilds the others.
+    RHS; its odd part ``(rhs(v) - rhs(-v)) / 2`` is the linear operator.
+    ``modes`` (``Nky x Nkx`` bool) selects what is solved: the dealiased
+    ``ky >= 0`` modes the run keeps. Everything else passes through the solve
+    unchanged; a two-sided layout's projector rebuilds the ``ky < 0`` rows and
+    the step mask zeroes the rest.
     """
     zero = jnp.zeros(shape, dtype)
     # The bracket is quadratic in G (fields are linear in G) and any source is
     # constant, so the odd part (rhs(v) - rhs(-v)) / 2 is the linear operator
     # exactly. Not a JVP: the field solve is a custom_vjp, which has no JVP rule.
     lin = jax.jit(lambda v: 0.5 * (rhs(v) - rhs(-v)))
-    rows = np.nonzero(np.asarray(ky) >= 0.0)[0]
     by_len: dict[int, list] = {}
-    for chain in _chains(lin, shape, rows, dtype):
+    for chain in _chains(lin, shape, np.asarray(modes, dtype=bool), dtype):
         by_len.setdefault(len(chain), []).append(chain)
     blk = int(np.prod(shape[:3])) * shape[-1]
     idx = [

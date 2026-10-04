@@ -602,6 +602,7 @@ def _attach_chain_implicit_linear(
     """Return ``rhs_fn`` carrying the per-chain implicit operator of imex-ars*."""
 
     from gkx.solvers_nonlinear_imex_chain import build_chain_implicit_linear
+    from gkx.solvers_time_explicit_steps import _completed_step_state_mask
 
     if not fixed_dt:
         raise ValueError(
@@ -617,7 +618,8 @@ def _attach_chain_implicit_linear(
         lambda state: rhs_fn(state)[0],
         tuple(G0.shape),
         float(dt),
-        ky=np.asarray(prepared.cache.ky),
+        modes=np.asarray(_completed_step_state_mask(prepared.cache))
+        & (np.asarray(prepared.cache.ky) >= 0.0)[:, None],
         scheme=scheme,
         dtype=G0.dtype,
     )
