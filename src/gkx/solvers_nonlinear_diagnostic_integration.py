@@ -722,6 +722,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
     external_phi: jnp.ndarray | float | None = None,
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
+    compile_cache: dict[Any, Any] | None = None,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate nonlinear system and return runtime diagnostics plus the final state.
 
@@ -738,15 +739,25 @@ def integrate_nonlinear_explicit_diagnostics_state(
             "integrate_nonlinear_explicit_diagnostics_state only supports explicit methods"
         )
 
-    return _integrate_nonlinear_explicit_diagnostics_impl(
-        G0,
-        grid,
-        geom,
-        params,
-        dt,
-        steps,
-        **_options_from_scope(locals(), _EXPLICIT_DIAGNOSTIC_OPTION_KEYS),
-    )
+    options = _options_from_scope(locals(), _EXPLICIT_DIAGNOSTIC_OPTION_KEYS)
+    if compile_cache is None:
+        return _integrate_nonlinear_explicit_diagnostics_impl(
+            G0, grid, geom, params, dt, steps, **options
+        )
+    # Chunked runs call this once per chunk with only the state, the horizon
+    # and (on the last capped chunk) the step count changing. Keep one
+    # prepared graph per static shape and pass the horizon as an operand:
+    # rebuilding and re-jitting the closure every chunk cost a full XLA
+    # compile per chunk. The caller owns the cache, one per run, so every
+    # other option is fixed for its lifetime.
+    key = (int(steps), time_horizon is None, bool(show_progress))
+    prepared = compile_cache.get(key)
+    if prepared is None:
+        prepared = prepare_nonlinear_explicit_diagnostics(
+            G0, grid, geom, params, dt, steps, **{**options, "time_horizon": None}
+        )
+        compile_cache[key] = prepared
+    return prepared.run(G0, time_horizon=time_horizon)
 
 
 def prepare_nonlinear_explicit_diagnostics(
