@@ -144,6 +144,15 @@ def _explicit_stage_update(
 
     if method == "euler":
         return G + dt_local * dG
+    if method == "imex-ars2":
+        chain_linear = getattr(rhs_fn, "chain_implicit_linear", None)
+        if chain_linear is None:
+            raise ValueError(
+                "method 'imex-ars2' needs a chain implicit linear operator"
+            )
+        return chain_linear.ars2_step(
+            G, dG, lambda state: _rhs_value(rhs_fn, state), project_state
+        )
     if method == "rk2":
         G_half = project_state(G + 0.5 * dt_local * dG)
         return G + dt_local * _rhs_value(rhs_fn, G_half)
@@ -169,7 +178,7 @@ def _explicit_stage_update(
         )
     raise ValueError(
         "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', "
-        "'rk3_heun', 'rk4', 'k10', 'sspx3'}"
+        "'rk3_heun', 'rk4', 'k10', 'sspx3', 'imex-ars2'}"
     )
 
 
@@ -206,6 +215,10 @@ def advance_explicit_nonlinear_state(
 
     def materialized_projection(state: jnp.ndarray) -> jnp.ndarray:
         return _materialize(project_state(state))
+
+    materialized_rhs.chain_implicit_linear = getattr(  # type: ignore[attr-defined]
+        rhs_fn, "chain_implicit_linear", None
+    )
 
     G_new = _explicit_stage_update(
         G,
