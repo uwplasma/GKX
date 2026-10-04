@@ -1,6 +1,8 @@
 """Nonlinear turbulence with kinetic electrons: a tokamak and a stellarator.
 
-Runs ``case.toml`` (Cyclone base case, s-alpha) and ``case_stellarator.toml``
+Runs ``case.toml`` (Cyclone base case, s-alpha) -- once with the explicit
+CFL-controlled step and once with the opt-in implicit linear step
+``imex-ars3`` -- and ``case_stellarator.toml``
 (Landreman-Paul precise QA, VMEC flux tube at s = 0.64) with kinetic ions and
 electrons at the physical mass ratio and beta = 1e-4. Both decks let the CFL
 controller choose dt; with kinetic electrons it is set by electron parallel
@@ -25,7 +27,17 @@ import numpy as np
 import gkx
 
 HERE = Path(__file__).parent
-CASES = {"tokamak": HERE / "case.toml", "stellarator": HERE / "case_stellarator.toml"}
+CASES = {
+    "tokamak": HERE / "case.toml",
+    "tokamak, imex-ars3": HERE / "case.toml",
+    "stellarator": HERE / "case_stellarator.toml",
+}
+# Implicit linear step (opt-in): parallel streaming, the field solve and every
+# other linear term are solved per twist-shift chain, so dt is set by the
+# nonlinear rate instead of the electron streaming CFL. Fixed dt only; 0.05
+# reproduced the explicit run's saturated heat flux on this deck (Nx = Ny = 16
+# and 32), 0.1 ran stable but 7% high.
+IMEX_TIME = {"method": "imex-ars3", "fixed_dt": True, "dt": 0.05, "dt_max": 0.05}
 VMEC_INPUT = HERE.parent / "vmec" / "input.LandremanPaul2021_QA_lowres"
 OUTPUT = Path("outputs/05_kinetic_electrons")
 T_MAX = None  # None keeps each deck's t_max
@@ -34,6 +46,8 @@ OUTPUT.mkdir(parents=True, exist_ok=True)
 summary, traces = {}, {}
 for label, path in CASES.items():
     case = gkx.load(path)
+    if "imex" in label:
+        case = case.replace(time=replace(case.time, **IMEX_TIME))
     if T_MAX is not None:
         case = case.replace(time=replace(case.time, t_max=T_MAX))
     if case.geometry.model == "vmec":
@@ -54,7 +68,9 @@ for label, path in CASES.items():
     d = result.diagnostics
     t, dt = np.asarray(d.t), np.asarray(d.dt_t)
     q = np.asarray(d.heat_flux_species_t)  # (time, species): ion, electron
-    scales = np.asarray(d.cfl_scales)[:3].tolist()
+    scales = np.asarray(
+        d.cfl_scales if d.cfl_scales is not None else [np.nan] * 3, dtype=float
+    )[:3].tolist()  # a fixed-dt (imex) run has no CFL controller
     cfl = dict(zip(("drift_x", "drift_y", "streaming"), scales))
     print(
         f"{label}: t_final = {t[-1]:.3f}, mean dt = {dt.mean():.2e}, "
