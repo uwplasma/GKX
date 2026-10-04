@@ -348,10 +348,9 @@ solve's residual. The step is Ascher-Ruuth-Spiteri ARS(3,4,3): four RHS
 evaluations and three solves. Memory is about :math:`(N_m+6)\,n_sN_lN^2`
 complex entries per chain against the dense :math:`(n_sN_lN_mN)^2`: 0.15 GB
 at 32x32x16 and 1.5 GB at 64x64x24, both (Nl, Nm) = (4, 8), against 5.5 and
-53 GB. Measured on an A4000, against RK3 at its CFL-bound fixed dt (the
-adaptive explicit route is ~10x slower per step on GPU), heat flux averaged
-over :math:`t=75`-150 with 10-unit block errors, both runs sampled every
-0.5:
+53 GB. Measured on an A4000, against RK3 at its CFL-bound fixed dt, heat
+flux averaged over :math:`t=75`-150 with 10-unit block errors, both runs
+sampled every 0.5:
 
 .. list-table::
    :header-rows: 1
