@@ -23,7 +23,6 @@ from gkx.solvers_linear_integrators import integrate_linear_diagnostics
 from gkx.solvers_linear_krylov import KrylovConfig, dominant_eigenpair
 from gkx.solvers_time_runners import integrate_linear_from_config
 from gkx.workflows.runtime.diagnostics import (
-    _RuntimeLinearFitOptions,
     _fit_signal_key,
     finalize_runtime_linear_quasilinear,
     fit_runtime_linear_diagnostics,
@@ -57,21 +56,6 @@ def _normalize_linear_solver_name(solver: str) -> str:
 def _zero_kx_index(grid: SpectralGrid) -> int:
     kx = np.asarray(grid.kx, dtype=float)
     return int(np.argmin(np.abs(kx)))
-
-
-_RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS = (
-    "method",
-    "dt",
-    "steps",
-    "sample_stride",
-    *_RuntimeLinearFitOptions.__annotations__,
-    "fit_signal",
-)
-
-
-def _runtime_linear_time_fit_options(values: Any) -> dict[str, Any]:
-    """Return shared runtime linear time-integration and fit options."""
-    return {name: values[name] for name in _RUNTIME_LINEAR_TIME_FIT_OPTION_KEYS}
 
 
 @dataclass(frozen=True)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from support.runtime_patch import patch_runtime
+
 from dataclasses import dataclass
 from dataclasses import replace
 from gkx import __version__
@@ -30,47 +32,48 @@ from gkx.config import (
 from gkx.core_grid import build_spectral_grid
 from gkx.diagnostics import ResolvedDiagnostics, SimulationDiagnostics
 from gkx.diagnostics.analysis import ModeSelection
-from gkx.diagnostics.growth_rates import (
-    fit_growth_rate,
-    fit_growth_rate_auto,
-    fit_growth_rate_auto_with_stats,
-    fit_growth_rate_with_stats,
-)
-from gkx.diagnostics.modes import extract_mode_time_series
 from gkx.runtime import (
     _build_initial_condition,
+    _load_initial_state_from_file,
+    _runtime_external_phi,
+    _select_nonlinear_mode_indices,
+    build_runtime_geometry,
+    build_runtime_linear_terms,
+    run_runtime_nonlinear,
+    run_runtime_scan,
+    RuntimeLinearResult,
+    RuntimeNonlinearResult,
+)
+from gkx.workflows.runtime.startup import (
     _build_gaussian_profile,
-    _concat_runtime_diagnostics,
     _enforce_full_ky_hermitian,
     _expand_ky,
     _centered_glibc_random_pairs,
     _default_hermite_hypercollision_exponent,
     _dealiased_initial_mode_pairs,
     _periodic_zp_from_grid,
-    _infer_runtime_nonlinear_steps,
-    _load_initial_state_from_file,
-    _midplane_index,
-    _normalize_linear_solver_name,
     _require_full_gk_runtime_model,
     _resolve_runtime_hl_dims,
     _reshape_netcdf_state,
-    _runtime_external_phi,
     _runtime_default_krylov_config,
     _runtime_model_key,
-    _select_nonlinear_mode_indices,
-    _slice_runtime_diagnostics,
     _species_to_linear,
-    _stride_runtime_diagnostics,
+)
+from gkx.workflows.runtime.diagnostic_arrays import (
+    concat_runtime_diagnostics as _concat_runtime_diagnostics,
+    slice_runtime_diagnostics as _slice_runtime_diagnostics,
+    stride_runtime_diagnostics as _stride_runtime_diagnostics,
+)
+from gkx.workflows.nonlinear import (
+    _infer_runtime_nonlinear_steps,
+)
+from gkx.workflows.linear import (
+    _midplane_index,
+    _normalize_linear_solver_name,
     _zero_kx_index,
-    _run_runtime_scan_batch,
-    build_runtime_geometry,
-    build_runtime_linear_params,
-    build_runtime_linear_terms,
-    build_runtime_term_config,
-    run_runtime_nonlinear,
-    run_runtime_scan,
-    RuntimeLinearResult,
-    RuntimeNonlinearResult,
+)
+from gkx.workflows.runtime.orchestration_scan import (
+    run_runtime_scan_batch as _run_runtime_scan_batch,
 )
 from gkx.terms.config import FieldState
 from gkx.workflows.runtime.chunks import (
@@ -78,7 +81,6 @@ from gkx.workflows.runtime.chunks import (
     format_duration,
 )
 from gkx.workflows.runtime.diagnostics import (
-    RuntimeQuasilinearFinalizationDeps,
     finalize_runtime_linear_quasilinear,
     half_horizon_settled_probe,
     warn_if_growth_unresolved,
@@ -96,12 +98,12 @@ from support.paths import REPO_ROOT
 from types import SimpleNamespace
 import argparse
 import gkx.cli as cli
-import gkx.workflows.runtime.toml as runtime_toml
 import gkx.runtime as runtime
+import gkx.workflows.runtime.toml as runtime_toml
 import gkx.workflows.runtime.commands as runtime_cases
 import gkx.workflows.runtime.commands as runtime_commands
-import gkx.workflows.runtime.orchestration_artifacts as runtime_artifacts
-import gkx.runtime as runtime_policies
+import gkx.workflows.runtime.artifacts as runtime_artifacts
+import gkx.workflows.runtime.orchestration_scan as runtime_policies
 import gkx.workflows.runtime.warm_start as warm_start
 import json
 import numpy as np
@@ -167,8 +169,9 @@ def test_cli_without_args_runs_default_demo(
     monkeypatch.chdir(tmp_path)
     run_kwargs: dict[str, object] = {}
 
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         lambda _path: (RuntimeConfig(), {"fit": {"fit_signal": "phi"}}),
     )
 
@@ -176,9 +179,10 @@ def test_cli_without_args_runs_default_demo(
         run_kwargs.update(kwargs)
         return fake_result
 
-    monkeypatch.setattr("gkx.cli.run_runtime_linear", _fake_run)
-    monkeypatch.setattr(
-        "gkx.cli.linear_runtime_panel_figure",
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run)
+    patch_runtime(
+        monkeypatch,
+        "linear_runtime_panel_figure",
         lambda **_kwargs: (_FakeFigure(), None),
     )
     monkeypatch.setattr("matplotlib.pyplot.close", lambda *_args, **_kwargs: None)
@@ -210,7 +214,7 @@ def test_cli_global_plot_uses_saved_output_renderer(
     capsys, monkeypatch, tmp_path: Path, plot_command: str
 ) -> None:
     rendered = tmp_path / "rendered.png"
-    monkeypatch.setattr("gkx.cli.plot_saved_output", lambda path, out=None: rendered)
+    patch_runtime(monkeypatch, "plot_saved_output", lambda path, out=None: rendered)
     monkeypatch.setattr(
         sys, "argv", ["gkx", plot_command, "tools_out/linear_case.summary.json"]
     )
@@ -231,7 +235,7 @@ def test_cli_global_plot_accepts_out_argument(
         captured["out"] = out
         return rendered
 
-    monkeypatch.setattr("gkx.cli.plot_saved_output", _plot)
+    patch_runtime(monkeypatch, "plot_saved_output", _plot)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -258,7 +262,9 @@ def test_cli_global_plot_renders_linear_scan_bundle(
             "omega": np.array([0.25, 0.31]),
         },
     )()
-    paths = cli.write_runtime_linear_scan_artifacts(tmp_path / "scan", scan)
+    paths = runtime_artifacts.write_runtime_linear_scan_artifacts(
+        tmp_path / "scan", scan
+    )
     assert (tmp_path / "scan.scan.csv").exists()
 
     monkeypatch.setattr(sys, "argv", ["gkx", "--plot", paths["scan"]])
@@ -277,21 +283,6 @@ def test_cli_plot_usage_errors(capsys, monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["gkx", "--plot", "a", "--bad"])
     assert main() == 1
     assert "usage: gkx plot" in capsys.readouterr().out
-
-
-def test_runtime_command_deps_are_built_from_patchable_cli_scope(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    runner = object()
-    writer = object()
-
-    monkeypatch.setattr(cli, "run_runtime_scan", runner)
-    monkeypatch.setattr(cli, "write_runtime_linear_artifacts", writer)
-
-    deps = cli._runtime_command_deps()
-
-    assert deps.run_runtime_scan is runner
-    assert deps.write_runtime_linear_artifacts is writer
 
 
 def test_cli_runtime_toml_dispatch_is_uniform() -> None:
@@ -335,9 +326,9 @@ def test_cli_geometry_routes_vmec_and_miller_backends(
         calls.append(("miller", runtime_cfg, output_path, force))
         return tmp_path / "miller.eiknc.nc"
 
-    monkeypatch.setattr(cli, "load_runtime_from_toml", _load_runtime)
-    monkeypatch.setattr(cli, "generate_runtime_vmec_eik", _vmec)
-    monkeypatch.setattr(cli, "generate_runtime_miller_eik", _miller)
+    patch_runtime(monkeypatch, "load_runtime_from_toml", _load_runtime)
+    patch_runtime(monkeypatch, "generate_runtime_vmec_eik", _vmec)
+    patch_runtime(monkeypatch, "generate_runtime_miller_eik", _miller)
 
     monkeypatch.setattr(
         sys,
@@ -385,7 +376,7 @@ def test_direct_config_shorthand_args_resolve_command_and_guards(
     cfg_path = tmp_path / "case.toml"
     cfg_path.write_text("[physics]\n", encoding="utf-8")
 
-    monkeypatch.setattr("gkx.cli.load_toml", lambda _path: {"physics": {}})
+    patch_runtime(monkeypatch, "load_toml", lambda _path: {"physics": {}})
     assert _direct_config_shorthand_args([str(cfg_path), "--no-progress"]) == [
         "run",
         "--config",
@@ -393,7 +384,7 @@ def test_direct_config_shorthand_args_resolve_command_and_guards(
         "--no-progress",
     ]
 
-    monkeypatch.setattr("gkx.cli.load_toml", lambda _path: {"case": "cyclone"})
+    patch_runtime(monkeypatch, "load_toml", lambda _path: {"case": "cyclone"})
     assert _direct_config_shorthand_args([str(cfg_path), "--plot"]) == [
         "run",
         "--config",
@@ -413,7 +404,7 @@ def test_cmd_run_handles_load_error_and_dispatches(monkeypatch, capsys) -> None:
     def _boom(_path):
         raise RuntimeError("forced")
 
-    monkeypatch.setattr("gkx.cli.load_runtime_from_toml", _boom)
+    patch_runtime(monkeypatch, "load_runtime_from_toml", _boom)
     assert _cmd_run(args) == 1
     assert "Error loading bad.toml" in capsys.readouterr().out
 
@@ -423,16 +414,14 @@ def test_cmd_run_handles_load_error_and_dispatches(monkeypatch, capsys) -> None:
     linear_cfg = type(
         "Cfg", (), {"physics": type("Phys", (), {"nonlinear": False})()}
     )()
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml", lambda _path: (nonlinear_cfg, {})
+    patch_runtime(
+        monkeypatch, "load_runtime_from_toml", lambda _path: (nonlinear_cfg, {})
     )
-    monkeypatch.setattr("gkx.cli._cmd_run_runtime_nonlinear", lambda _args: 7)
+    patch_runtime(monkeypatch, "_cmd_run_runtime_nonlinear", lambda _args: 7)
     assert _cmd_run(args) == 7
 
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml", lambda _path: (linear_cfg, {})
-    )
-    monkeypatch.setattr("gkx.cli._cmd_run_runtime_linear", lambda _args: 9)
+    patch_runtime(monkeypatch, "load_runtime_from_toml", lambda _path: (linear_cfg, {}))
+    patch_runtime(monkeypatch, "_cmd_run_runtime_linear", lambda _args: 9)
     assert _cmd_run(args) == 9
 
 
@@ -459,8 +448,8 @@ def test_cmd_run_reuses_loaded_runtime_config_for_linear_dispatch(
             signal=np.asarray([1.0, 1.2]),
         )
 
-    monkeypatch.setattr("gkx.cli.load_runtime_from_toml", _load_runtime)
-    monkeypatch.setattr("gkx.cli.run_runtime_linear", _run_runtime_linear)
+    patch_runtime(monkeypatch, "load_runtime_from_toml", _load_runtime)
+    patch_runtime(monkeypatch, "run_runtime_linear", _run_runtime_linear)
     args = argparse.Namespace(
         config="case.toml",
         ky=None,
@@ -515,8 +504,8 @@ def test_cmd_run_honours_fit_signal_from_the_fit_table(monkeypatch) -> None:
             signal=np.asarray([1.0, 1.2]),
         )
 
-    monkeypatch.setattr("gkx.cli.load_runtime_from_toml", _load_runtime)
-    monkeypatch.setattr("gkx.cli.run_runtime_linear", _run_runtime_linear)
+    patch_runtime(monkeypatch, "load_runtime_from_toml", _load_runtime)
+    patch_runtime(monkeypatch, "run_runtime_linear", _run_runtime_linear)
     args = argparse.Namespace(
         config="case.toml",
         ky=None,
@@ -573,13 +562,13 @@ def test_main_shorthand_dispatches_all_toml_through_runtime(
             captured.append(list(argv))
             return argparse.Namespace(func=lambda _args: 11)
 
-    monkeypatch.setattr("gkx.cli.load_toml", lambda _path: {"physics": {}})
-    monkeypatch.setattr("gkx.cli.build_parser", lambda: _Parser())
+    patch_runtime(monkeypatch, "load_toml", lambda _path: {"physics": {}})
+    patch_runtime(monkeypatch, "build_parser", lambda: _Parser())
     monkeypatch.setattr(sys, "argv", ["gkx", str(cfg_path)])
     assert main() == 11
     assert captured[-1][:2] == ["run", "--config"]
 
-    monkeypatch.setattr("gkx.cli.load_toml", lambda _path: {"case": "cyclone"})
+    patch_runtime(monkeypatch, "load_toml", lambda _path: {"case": "cyclone"})
     monkeypatch.setattr(sys, "argv", ["gkx", str(cfg_path)])
     assert main() == 11
     assert captured[-1][:2] == ["run", "--config"]
@@ -704,8 +693,10 @@ diagnostic_norm = "none"
     path.write_text(cfg, encoding="utf-8")
     out_base = tmp_path / "linear_bundle"
 
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_linear", lambda _cfg, **_kwargs: _runtime_linear_result()
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_linear",
+        lambda _cfg, **_kwargs: _runtime_linear_result(),
     )
     monkeypatch.setattr(
         sys,
@@ -738,11 +729,12 @@ def test_cmd_scan_runtime_linear_branches(monkeypatch, capsys) -> None:
             "omega": np.array([-0.3]),
         },
     )()
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         lambda _path: (cfg, {"scan": {"ky": [0.1]}, "fit": {}}),
     )
-    monkeypatch.setattr("gkx.cli.run_runtime_scan", lambda *args, **kwargs: scan)
+    patch_runtime(monkeypatch, "run_runtime_scan", lambda *args, **kwargs: scan)
     args = argparse.Namespace(
         config="case.toml",
         ky_values="0.1",
@@ -762,8 +754,9 @@ def test_cmd_scan_runtime_linear_branches(monkeypatch, capsys) -> None:
     assert "ky=0.1000 gamma=0.200000 omega=-0.300000" in capsys.readouterr().out
 
     args.ky_values = None
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         lambda _path: (cfg, {"scan": {}, "fit": {}}),
     )
     with pytest.raises(ValueError):
@@ -791,13 +784,15 @@ def test_cmd_scan_runtime_linear_writes_quasilinear_spectrum(
         captured["kwargs"] = kwargs
         return scan
 
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         lambda _path: (cfg, {"scan": {"ky": [0.1]}, "fit": {}}),
     )
-    monkeypatch.setattr("gkx.cli.run_runtime_scan", _fake_run_runtime_scan)
-    monkeypatch.setattr(
-        "gkx.cli.write_runtime_linear_scan_artifacts",
+    patch_runtime(monkeypatch, "run_runtime_scan", _fake_run_runtime_scan)
+    patch_runtime(
+        monkeypatch,
+        "write_runtime_linear_scan_artifacts",
         lambda *_args, **_kwargs: {
             "summary": "scan.summary.json",
             "scan": "scan.csv",
@@ -867,12 +862,14 @@ def test_cmd_run_runtime_nonlinear_branches(
         "big": "e",
         "restart": "f",
     }
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         lambda _path: (cfg, {"run": {"steps": 5}}),
     )
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_nonlinear_with_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear_with_artifacts",
         lambda *args, **kwargs: (result, paths),
     )
     args = argparse.Namespace(
@@ -901,8 +898,9 @@ def test_cmd_run_runtime_nonlinear_branches(
     no_diag_result = RuntimeNonlinearResult(
         t=np.asarray([0.1]), diagnostics=None, ky_selected=0.2, kx_selected=0.0
     )
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_nonlinear_with_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear_with_artifacts",
         lambda *args, **kwargs: (no_diag_result, {}),
     )
     args.no_diagnostics = True
@@ -914,11 +912,12 @@ def test_cmd_run_runtime_linear_prints_optional_artifact_paths(
     monkeypatch, capsys
 ) -> None:
     cfg = RuntimeConfig()
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml", lambda _path: (cfg, {"run": {}})
+    patch_runtime(
+        monkeypatch, "load_runtime_from_toml", lambda _path: (cfg, {"run": {}})
     )
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_linear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_linear",
         lambda *_args, **_kwargs: RuntimeLinearResult(
             ky=0.2,
             gamma=0.3,
@@ -928,8 +927,9 @@ def test_cmd_run_runtime_linear_prints_optional_artifact_paths(
             signal=np.asarray([1.0, 2.0]),
         ),
     )
-    monkeypatch.setattr(
-        "gkx.cli.write_runtime_linear_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "write_runtime_linear_artifacts",
         lambda *_args, **_kwargs: {
             "summary": "sum.json",
             "timeseries": "diag.csv",
@@ -977,12 +977,13 @@ def test_cmd_run_runtime_linear_applies_quasilinear_flags(monkeypatch, capsys) -
             },
         )
 
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml", lambda _path: (cfg, {"run": {}})
+    patch_runtime(
+        monkeypatch, "load_runtime_from_toml", lambda _path: (cfg, {"run": {}})
     )
-    monkeypatch.setattr("gkx.cli.run_runtime_linear", _fake_run_runtime_linear)
-    monkeypatch.setattr(
-        "gkx.cli.write_quasilinear_artifacts",
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(
+        monkeypatch,
+        "write_quasilinear_artifacts",
         lambda *_args, **_kwargs: {
             "quasilinear_summary": "ql.json",
             "quasilinear_species": "ql.csv",
@@ -1040,10 +1041,10 @@ def test_cmd_run_runtime_nonlinear_fixed_dt_and_explicit_diagnostics(
         captured.update(kwargs)
         return result, {}
 
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml", lambda _path: (cfg, {"run": {}})
+    patch_runtime(
+        monkeypatch, "load_runtime_from_toml", lambda _path: (cfg, {"run": {}})
     )
-    monkeypatch.setattr("gkx.cli.run_runtime_nonlinear_with_artifacts", _runner)
+    patch_runtime(monkeypatch, "run_runtime_nonlinear_with_artifacts", _runner)
     args = argparse.Namespace(
         config="case.toml",
         init_file=None,
@@ -1121,8 +1122,10 @@ path = "artifacts/from_toml"
     path = tmp_path / "runtime_cli_linear_toml_out.toml"
     path.write_text(cfg, encoding="utf-8")
 
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_linear", lambda _cfg, **_kwargs: _runtime_linear_result()
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_linear",
+        lambda _cfg, **_kwargs: _runtime_linear_result(),
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
@@ -1193,8 +1196,10 @@ path = "artifacts/from_toml"
     path.write_text(cfg, encoding="utf-8")
     out_base = tmp_path / "cli_override"
 
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_linear", lambda _cfg, **_kwargs: _runtime_linear_result()
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_linear",
+        lambda _cfg, **_kwargs: _runtime_linear_result(),
     )
     monkeypatch.setattr(
         sys,
@@ -1270,8 +1275,10 @@ path = "artifacts/direct_shorthand"
     path = tmp_path / "runtime_cli_direct.toml"
     path.write_text(cfg, encoding="utf-8")
 
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_linear", lambda _cfg, **_kwargs: _runtime_linear_result()
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_linear",
+        lambda _cfg, **_kwargs: _runtime_linear_result(),
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
@@ -1499,8 +1506,9 @@ nonlinear = 1.0
             {},
         )
 
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_nonlinear_with_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear_with_artifacts",
         _fake_run_runtime_nonlinear_with_artifacts,
     )
     monkeypatch.setattr(
@@ -1684,8 +1692,9 @@ Nm = 4
             {},
         )
 
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_nonlinear_with_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear_with_artifacts",
         _fake_run_runtime_nonlinear_with_artifacts,
     )
     monkeypatch.setattr(
@@ -1926,7 +1935,7 @@ def test_cli_run_runtime_linear_cli_vmec_file_resolves_against_cwd(
             signal=np.asarray([1.0, 2.0]),
         )
 
-    monkeypatch.setattr("gkx.cli.run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -1980,8 +1989,9 @@ def test_cli_run_runtime_nonlinear_init_file_expands_home(
             {},
         )
 
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_nonlinear_with_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear_with_artifacts",
         _fake_run_runtime_nonlinear_with_artifacts,
     )
     monkeypatch.setattr(
@@ -2034,7 +2044,7 @@ def test_cli_run_runtime_linear_cli_geometry_file_resolves_against_cwd_for_impor
             signal=np.asarray([1.0, 2.0]),
         )
 
-    monkeypatch.setattr("gkx.cli.run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -2084,7 +2094,7 @@ def test_cli_run_runtime_linear_cli_geometry_file_does_not_change_vmec_model(
             signal=np.asarray([1.0, 2.0]),
         )
 
-    monkeypatch.setattr("gkx.cli.run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -2187,27 +2197,31 @@ def _stub_nonlinear_run(monkeypatch, paths: dict[str, str], cfg=None) -> None:
         ky_selected=0.2,
         kx_selected=0.0,
     )
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         lambda _path: (cfg if cfg is not None else RuntimeConfig(), {"run": {}}),
     )
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_nonlinear_with_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear_with_artifacts",
         lambda *_args, **_kwargs: (result, paths),
     )
 
 
 def _stub_linear_run(monkeypatch, paths: dict[str, str], cfg=None) -> None:
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         lambda _path: (cfg if cfg is not None else RuntimeConfig(), {"run": {}}),
     )
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_linear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_linear",
         lambda *_args, **_kwargs: _runtime_linear_result(),
     )
-    monkeypatch.setattr(
-        "gkx.cli.write_runtime_linear_artifacts", lambda *_a, **_k: paths
+    patch_runtime(
+        monkeypatch, "write_runtime_linear_artifacts", lambda *_a, **_k: paths
     )
 
 
@@ -2247,12 +2261,14 @@ def test_cli_linear_scan_auto_plots_its_saved_scan(monkeypatch, capsys) -> None:
             "omega": np.array([0.25, 0.31]),
         },
     )()
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml", lambda _path: (RuntimeConfig(), {"scan": {}})
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
+        lambda _path: (RuntimeConfig(), {"scan": {}}),
     )
-    monkeypatch.setattr("gkx.cli.run_runtime_scan", lambda *_a, **_k: scan)
-    monkeypatch.setattr(
-        "gkx.cli.write_runtime_linear_scan_artifacts", lambda *_a, **_k: paths
+    patch_runtime(monkeypatch, "run_runtime_scan", lambda *_a, **_k: scan)
+    patch_runtime(
+        monkeypatch, "write_runtime_linear_scan_artifacts", lambda *_a, **_k: paths
     )
     args = argparse.Namespace(
         config="case.toml",
@@ -2674,11 +2690,13 @@ def test_compilation_cache_is_namespaced_by_jax_version(tmp_path: Path) -> None:
 
 def test_cli_main_installs_the_compilation_cache(monkeypatch, tmp_path: Path) -> None:
     installed: list[object] = []
-    monkeypatch.setattr(
-        cli, "enable_persistent_compilation_cache", lambda: installed.append(True)
+    patch_runtime(
+        monkeypatch,
+        "enable_persistent_compilation_cache",
+        lambda: installed.append(True),
     )
     rendered = tmp_path / "rendered.png"
-    monkeypatch.setattr("gkx.cli.plot_saved_output", lambda path, out=None: rendered)
+    patch_runtime(monkeypatch, "plot_saved_output", lambda path, out=None: rendered)
     monkeypatch.setattr(sys, "argv", ["gkx", "--plot", "case.summary.json"])
 
     assert main() == 0
@@ -2872,8 +2890,9 @@ def test_cli_wout_run_groups_outputs_and_writes_resolved_deck(
         captured["out"] = kwargs.get("out")
         return _fake_nonlinear_result(), {}
 
-    monkeypatch.setattr(
-        "gkx.cli.run_runtime_nonlinear_with_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear_with_artifacts",
         _fake_run_runtime_nonlinear_with_artifacts,
     )
     monkeypatch.setattr(sys, "argv", ["gkx", str(wout), "--steps", "2"])
@@ -2915,8 +2934,8 @@ def test_cli_wout_linear_flag_runs_default_ky_scan(
         captured["out_base"] = str(base)
         return {"summary": "scan.summary.json", "scan": "scan.csv"}
 
-    monkeypatch.setattr("gkx.cli.run_runtime_scan", _fake_run_runtime_scan)
-    monkeypatch.setattr("gkx.cli.write_runtime_linear_scan_artifacts", _fake_write_scan)
+    patch_runtime(monkeypatch, "run_runtime_scan", _fake_run_runtime_scan)
+    patch_runtime(monkeypatch, "write_runtime_linear_scan_artifacts", _fake_write_scan)
     monkeypatch.setattr(sys, "argv", ["gkx", str(wout), "--linear", "--no-progress"])
 
     assert main() == 0
@@ -3070,7 +3089,7 @@ def test_cli_wout_linear_shorthand_scans_imported_vmec_geometry_end_to_end(
     eik = _write_closed_interval_vmec_eik(tmp_path / "geom.eik.nc")
     imported = load_imported_geometry_netcdf(eik)
     assert imported.theta_closed_interval is True
-    monkeypatch.setattr("gkx.runtime.generate_runtime_vmec_eik", lambda _cfg: eik)
+    patch_runtime(monkeypatch, "generate_runtime_vmec_eik", lambda _cfg: eik)
 
     deck = tmp_path / "deck.toml"
     deck.write_text(_WOUT_LINEAR_E2E_DECK, encoding="utf-8")
@@ -3181,8 +3200,9 @@ def test_scan_runtime_linear_resolves_warm_start(
 
     cfg = RuntimeConfig()
     captured: dict[str, object] = {}
-    monkeypatch.setattr(
-        "gkx.cli.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         lambda _path: (cfg, {"scan": {"ky": [0.1, 0.2], **toml_scan}, "fit": {}}),
     )
 
@@ -3190,7 +3210,7 @@ def test_scan_runtime_linear_resolves_warm_start(
         captured.update(kwargs)
         return _scan_stub()
 
-    monkeypatch.setattr("gkx.cli.run_runtime_scan", _fake_scan)
+    patch_runtime(monkeypatch, "run_runtime_scan", _fake_scan)
     argv = ["gkx", "scan-runtime-linear", "--config", "case.toml", "--no-plots"]
     if argv_flag is not None:
         argv.append(argv_flag)
@@ -3305,13 +3325,13 @@ def test_only_the_deprecated_spellings_warn(capsys, monkeypatch) -> None:
         "scan_runtime_linear_command",
         "run_runtime_nonlinear_command",
     ):
-        monkeypatch.setattr(f"gkx.cli.{target}", lambda _args, deps: 0)
+        monkeypatch.setattr(f"gkx.cli.{target}", lambda _args: 0)
     for nonlinear in (False, True):
         cfg = replace(
             RuntimeConfig(),
             physics=replace(RuntimeConfig().physics, nonlinear=nonlinear),
         )
-        monkeypatch.setattr("gkx.cli.load_runtime_from_toml", lambda _p: (cfg, {}))
+        patch_runtime(monkeypatch, "load_runtime_from_toml", lambda _p: (cfg, {}))
         for argv, warned in (
             (["run", "--config", "case.toml"], False),
             (["scan", "--config", "case.toml"], False),
@@ -3402,31 +3422,6 @@ def test_runtime_small_helper_functions() -> None:
     assert _runtime_model_key(cfg) == "gyrokinetic"
 
 
-def test_runtime_policy_helpers_preserve_public_runtime_facade_exports() -> None:
-    for name in runtime_policies.__all__:
-        assert getattr(runtime, name) is getattr(runtime_policies, name)
-
-
-def test_runtime_facade_module_is_patchable_public_surface() -> None:
-    assert runtime._runtime_facade_module() is runtime
-
-
-def test_runtime_command_helpers_have_single_canonical_owner() -> None:
-    command_names = [
-        "RuntimeCommandDeps",
-        "apply_quasilinear_overrides",
-        "apply_runtime_path_overrides",
-        "run_runtime_linear_command",
-        "run_runtime_nonlinear_command",
-        "runtime_output_path",
-        "scan_runtime_linear_command",
-        "should_show_progress",
-    ]
-
-    for name in command_names:
-        assert getattr(runtime_cases, name) is getattr(runtime_commands, name)
-
-
 def test_runtime_command_artifact_helpers_live_with_artifact_orchestration() -> None:
     assert runtime_artifacts.COMMAND_LINEAR_ARTIFACT_DISPLAY_KEYS == (
         "summary",
@@ -3443,7 +3438,9 @@ def test_runtime_command_artifact_helpers_live_with_artifact_orchestration() -> 
     )
 
 
-def test_prepare_runtime_command_config_applies_explicit_override_policy() -> None:
+def test_prepare_runtime_command_config_applies_explicit_override_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cfg = _base_cfg()
     args = SimpleNamespace(
         config="case.toml",
@@ -3457,22 +3454,19 @@ def test_prepare_runtime_command_config_applies_explicit_override_policy() -> No
         ql_normalization=None,
         ql_output="ql_out",
     )
-    deps = runtime_commands.build_runtime_command_deps(
-        SimpleNamespace(
-            load_runtime_from_toml=lambda _path: (cfg, {"run": {"ky": 0.3}}),
-            run_runtime_linear=lambda *_args, **_kwargs: None,
-            run_runtime_scan=lambda *_args, **_kwargs: None,
-            run_runtime_nonlinear_with_artifacts=lambda *_args, **_kwargs: None,
-            write_runtime_linear_artifacts=lambda *_args, **_kwargs: {},
-            write_runtime_linear_scan_artifacts=lambda *_args, **_kwargs: {},
-            write_quasilinear_artifacts=lambda *_args, **_kwargs: {},
-            resolve_runtime_path=lambda value, **_kwargs: f"resolved::{value}",
-        )
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
+        lambda _path: (cfg, {"run": {"ky": 0.3}}),
+    )
+    patch_runtime(
+        monkeypatch,
+        "resolve_runtime_path",
+        lambda value, **_kwargs: f"resolved::{value}",
     )
 
     prepared, data = runtime_commands._prepare_runtime_command_config(
         args,
-        deps=deps,
         path_overrides=True,
         quasilinear_overrides=True,
     )
@@ -3485,7 +3479,6 @@ def test_prepare_runtime_command_config_applies_explicit_override_policy() -> No
 
     untouched, _ = runtime_commands._prepare_runtime_command_config(
         args,
-        deps=deps,
         path_overrides=False,
         quasilinear_overrides=False,
     )
@@ -3712,6 +3705,7 @@ def test_runtime_nonlinear_command_print_helpers(
 
 def test_runtime_command_artifact_output_helpers(
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[tuple[str, str]] = []
     deps = SimpleNamespace(
@@ -3739,6 +3733,12 @@ def test_runtime_command_artifact_output_helpers(
             }
         ),
     )
+    for name in (
+        "write_runtime_linear_artifacts",
+        "write_runtime_linear_scan_artifacts",
+        "write_quasilinear_artifacts",
+    ):
+        patch_runtime(monkeypatch, name, getattr(deps, name))
     result = RuntimeLinearResult(
         ky=0.2,
         gamma=0.3,
@@ -3787,7 +3787,6 @@ def test_runtime_command_artifact_output_helpers(
         args,
         cfg,
         result,
-        deps=deps,  # type: ignore[arg-type]
     ) == {
         "linear": {
             "state": "linear.state.nc",
@@ -3807,7 +3806,6 @@ def test_runtime_command_artifact_output_helpers(
         args,
         scan_cfg,
         SimpleNamespace(),
-        deps=deps,  # type: ignore[arg-type]
     ) == {
         "quasilinear_spectrum": "scan.ql.csv",
         "summary": "scan.summary.json",
@@ -3845,45 +3843,9 @@ def test_runtime_command_artifact_output_helpers(
     ]
 
 
-def test_runtime_dispatch_deps_are_built_from_patchable_runtime_scope() -> None:
-    linear_deps = runtime._runtime_linear_dispatch_deps()
-    nonlinear_deps = runtime._runtime_nonlinear_dispatch_deps()
-
-    assert (
-        linear_deps.full_deps.build_runtime_geometry is runtime.build_runtime_geometry
-    )
-    assert linear_deps.full_deps.build_linear_cache is runtime.build_linear_cache
-    assert (
-        nonlinear_deps.full_deps.build_runtime_geometry
-        is runtime.build_runtime_geometry
-    )
-    assert (
-        nonlinear_deps.full_deps.integrate_nonlinear_from_config
-        is runtime.integrate_nonlinear_from_config
-    )
-
-
-def test_runtime_scan_deps_are_built_from_patchable_runtime_scope(
+def test_runtime_scan_ky_task_forwards_linear_options(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    scan_plan = object()
-    geometry_builder = object()
-
-    monkeypatch.setattr(runtime, "_runtime_independent_parallel_plan", scan_plan)
-    monkeypatch.setattr(runtime, "build_runtime_geometry", geometry_builder)
-
-    orchestration_deps = runtime._runtime_scan_orchestration_deps()
-    batch_deps = runtime._runtime_scan_batch_deps()
-
-    assert orchestration_deps.runtime_independent_parallel_plan is scan_plan
-    assert orchestration_deps.run_runtime_scan_batch is runtime._run_runtime_scan_batch
-    assert batch_deps.build_runtime_geometry is geometry_builder
-    assert (
-        batch_deps.integrate_linear_diagnostics is runtime.integrate_linear_diagnostics
-    )
-
-
-def test_runtime_scan_ky_task_forwards_linear_options() -> None:
     cfg = _base_cfg()
     sentinel = object()
     calls: list[dict[str, object]] = []
@@ -3917,7 +3879,8 @@ def test_runtime_scan_ky_task_forwards_linear_options() -> None:
         calls.append({"cfg": cfg_arg, **kwargs})
         return sentinel
 
-    assert run_runtime_scan_ky_task(task, run_runtime_linear=_runner) is sentinel
+    patch_runtime(monkeypatch, "run_runtime_linear", _runner)
+    assert run_runtime_scan_ky_task(task) is sentinel
     assert calls == [
         {
             "cfg": cfg,
@@ -4110,7 +4073,7 @@ def test_runtime_nonlinear_diagnostics_kwargs_policy() -> None:
         ),
     )
 
-    kwargs = runtime_policies.build_runtime_nonlinear_diagnostics_kwargs(
+    kwargs = runtime.build_runtime_nonlinear_diagnostics_kwargs(
         cfg,
         dt=0.05,
         steps=9,
@@ -4210,7 +4173,9 @@ def test_fit_runtime_linear_diagnostics_density_fit_contract() -> None:
     np.testing.assert_allclose(out.signal, density[:, 0, 0, 0])
 
 
-def test_fit_runtime_linear_diagnostics_auto_selects_best_scored_channel() -> None:
+def test_fit_runtime_linear_diagnostics_auto_selects_best_scored_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     t = np.asarray([0.0, 1.0, 2.0])
     phi = np.ones((3, 1, 1, 1), dtype=np.complex128)
     density = np.asarray([1.0, 2.0, 4.0], dtype=np.complex128)[:, None, None, None]
@@ -4220,6 +4185,12 @@ def test_fit_runtime_linear_diagnostics_auto_selects_best_scored_channel() -> No
         score = 10.0 if float(np.real(signal[-1])) > 1.5 else 1.0
         return 0.1 * score, -0.2, float(t_arr[0]), float(t_arr[-1]), score, 0.0
 
+    patch_runtime(monkeypatch, "fit_growth_rate_auto_with_stats", _fake_auto_stats)
+    patch_runtime(
+        monkeypatch,
+        "extract_eigenfunction",
+        lambda *_args, **_kwargs: np.asarray([1.0 + 0.0j]),
+    )
     out = fit_runtime_linear_diagnostics(
         t=t,
         phi_t=phi,
@@ -4237,8 +4208,6 @@ def test_fit_runtime_linear_diagnostics_auto_selects_best_scored_channel() -> No
         growth_weight=0.0,
         require_positive=True,
         min_amp_fraction=0.0,
-        fit_growth_rate_auto_with_stats_fn=_fake_auto_stats,
-        extract_eigenfunction_fn=lambda *_args, **_kwargs: np.asarray([1.0 + 0.0j]),
     )
 
     assert out.fit_signal_used == "density"
@@ -4349,13 +4318,6 @@ def test_auto_fit_signal_keeps_the_requested_window_in_a_batched_scan() -> None:
     t, phi, density, options = _fixed_window_fit_case()
     sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
     diagnostics = _BatchDiagnostics(phi_t=phi, density_t=density, time=t)
-    deps = SimpleNamespace(
-        extract_mode_time_series=extract_mode_time_series,
-        fit_growth_rate_auto_with_stats=fit_growth_rate_auto_with_stats,
-        fit_growth_rate_auto=fit_growth_rate_auto,
-        fit_growth_rate=fit_growth_rate,
-        fit_growth_rate_with_stats=fit_growth_rate_with_stats,
-    )
     scan_options = _RuntimeScanOptions(
         method=None,
         dt=None,
@@ -4372,14 +4334,12 @@ def test_auto_fit_signal_keeps_the_requested_window_in_a_batched_scan() -> None:
         sel,
         fit_key="auto",
         options=scan_options,
-        deps=deps,
     )
     gamma_density, omega_density = _fit_batch_scan_point(
         diagnostics,
         sel,
         fit_key="density",
         options=scan_options,
-        deps=deps,
     )
 
     assert gamma_auto == gamma_density
@@ -4388,7 +4348,9 @@ def test_auto_fit_signal_keeps_the_requested_window_in_a_batched_scan() -> None:
     assert omega_auto == pytest.approx(0.9, rel=1e-6)
 
 
-def test_finalize_runtime_linear_quasilinear_contract() -> None:
+def test_finalize_runtime_linear_quasilinear_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cfg = replace(
         _base_cfg(),
         quasilinear=RuntimeQuasilinearConfig(enabled=True, csat=0.7),
@@ -4414,6 +4376,9 @@ def test_finalize_runtime_linear_quasilinear_contract() -> None:
         calls["csat"] = kwargs["csat"]
         return _Payload()
 
+    patch_runtime(monkeypatch, "build_linear_cache", lambda *_args: "cache")
+    patch_runtime(monkeypatch, "compute_quasilinear_from_linear_state", _compute)
+    patch_runtime(monkeypatch, "linear_terms_to_term_config", lambda terms: terms)
     out = finalize_runtime_linear_quasilinear(
         result,
         enabled=True,
@@ -4427,11 +4392,6 @@ def test_finalize_runtime_linear_quasilinear_contract() -> None:
         solver_name="krylov",
         species_names=("ion",),
         return_state_requested=False,
-        deps=RuntimeQuasilinearFinalizationDeps(
-            build_linear_cache=lambda *_args: "cache",
-            compute_quasilinear_from_linear_state=_compute,
-            linear_terms_to_term_config=lambda terms: terms,
-        ),
         status_callback=statuses.append,
     )
 
@@ -4616,57 +4576,6 @@ def test_linear_fit_rejects_overflowing_trajectory() -> None:
         )
 
 
-def test_runtime_wrapper_patch_surfaces(monkeypatch: pytest.MonkeyPatch) -> None:
-    cfg = _base_cfg()
-    captured: dict[str, object] = {}
-    geom = object()
-
-    def _fake_build_geom(_cfg):
-        captured["geom_called"] = True
-        return geom
-
-    def _fake_build_params(_cfg, *, Nm, geom):
-        captured["params"] = {"Nm": Nm, "geom": geom}
-        return "params"
-
-    def _fake_build_terms(_cfg):
-        captured["terms"] = _cfg
-        return "terms"
-
-    def _fake_build_term_config(_cfg):
-        captured["term_cfg"] = _cfg
-        return "term_cfg"
-
-    monkeypatch.setattr("gkx.runtime.build_runtime_geometry", _fake_build_geom)
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.startup.build_runtime_linear_params",
-        _fake_build_params,
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.startup.build_runtime_linear_terms",
-        _fake_build_terms,
-    )
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.startup.build_runtime_term_config",
-        _fake_build_term_config,
-    )
-
-    assert build_runtime_linear_params(cfg, Nm=7) == "params"
-    assert captured["geom_called"] is True
-    assert captured["params"] == {"Nm": 7, "geom": geom}
-
-    captured.clear()
-    explicit_geom = object()
-    assert build_runtime_linear_params(cfg, Nm=5, geom=explicit_geom) == "params"
-    assert "geom_called" not in captured
-    assert captured["params"] == {"Nm": 5, "geom": explicit_geom}
-
-    assert build_runtime_linear_terms(cfg) == "terms"
-    assert captured["terms"] is cfg
-    assert build_runtime_term_config(cfg) == "term_cfg"
-    assert captured["term_cfg"] is cfg
-
-
 def test_runtime_external_phi_helper() -> None:
     cfg = _base_cfg()
 
@@ -4702,26 +4611,9 @@ def test_runtime_build_geometry_vmec_and_miller_branches(
     vmec_path.write_bytes(b"x")
     miller_path.write_bytes(b"x")
 
-    monkeypatch.setattr("gkx.runtime.build_flux_tube_geometry", _fake_build)
-    monkeypatch.setattr("gkx.runtime.generate_runtime_vmec_eik", lambda _cfg: vmec_path)
-    monkeypatch.setattr(
-        "gkx.runtime.generate_runtime_miller_eik", lambda _cfg: miller_path
-    )
-
-    vmec_geom = runtime._runtime_geometry_config_for_builder(
-        replace(cfg, geometry=GeometryConfig(model="vmec"))
-    )
-    miller_geom = runtime._runtime_geometry_config_for_builder(
-        replace(cfg, geometry=GeometryConfig(model="miller"))
-    )
-    default_geom = runtime._runtime_geometry_config_for_builder(cfg)
-
-    assert (vmec_geom.model, vmec_geom.geometry_file) == ("vmec-eik", str(vmec_path))
-    assert (miller_geom.model, miller_geom.geometry_file) == (
-        "imported-eik",
-        str(miller_path),
-    )
-    assert default_geom is cfg.geometry
+    patch_runtime(monkeypatch, "build_flux_tube_geometry", _fake_build)
+    patch_runtime(monkeypatch, "generate_runtime_vmec_eik", lambda _cfg: vmec_path)
+    patch_runtime(monkeypatch, "generate_runtime_miller_eik", lambda _cfg: miller_path)
 
     build_runtime_geometry(replace(cfg, geometry=GeometryConfig(model="vmec")))
     build_runtime_geometry(replace(cfg, geometry=GeometryConfig(model="miller")))
@@ -4835,8 +4727,9 @@ def test_runtime_initial_state_loading_helpers(
     )
 
     nc_path = tmp_path / "restart.nc"
-    monkeypatch.setattr(
-        "gkx.runtime.load_netcdf_restart_state",
+    patch_runtime(
+        monkeypatch,
+        "load_netcdf_restart_state",
         lambda *_args, **_kwargs: np.ones((1, 2, 3, 4, 4, 5), dtype=np.complex64),
     )
     assert _load_initial_state_from_file(
@@ -4942,25 +4835,29 @@ def test_run_runtime_scan_batch_validation_and_selection(
     grid = build_spectral_grid(cfg.grid)
     geom = object()
     params = type("Params", (), {"rho_star": np.asarray(1.0)})()
-    monkeypatch.setattr("gkx.runtime.build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        "gkx.runtime.apply_geometry_grid_defaults",
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
+        "apply_geometry_grid_defaults",
         lambda _geom, grid_cfg: grid_cfg,
     )
-    monkeypatch.setattr("gkx.runtime.build_spectral_grid", lambda _cfg: grid)
-    monkeypatch.setattr(
-        "gkx.runtime.build_runtime_linear_params",
+    patch_runtime(monkeypatch, "build_spectral_grid", lambda _cfg: grid)
+    patch_runtime(
+        monkeypatch,
+        "build_runtime_linear_params",
         lambda *_args, **_kwargs: params,
     )
-    monkeypatch.setattr("gkx.runtime.build_runtime_linear_terms", lambda _cfg: object())
-    monkeypatch.setattr(
-        "gkx.runtime._build_initial_condition",
+    patch_runtime(monkeypatch, "build_runtime_linear_terms", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch,
+        "_build_initial_condition",
         lambda *_args, **_kwargs: np.ones(
             (1, 2, 3, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
         ),
     )
-    monkeypatch.setattr(
-        "gkx.runtime.integrate_linear_diagnostics",
+    patch_runtime(
+        monkeypatch,
+        "integrate_linear_diagnostics",
         lambda *_args, **_kwargs: (
             None,
             np.ones((3, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64),
@@ -4968,14 +4865,16 @@ def test_run_runtime_scan_batch_validation_and_selection(
             * np.ones((3, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64),
         ),
     )
-    monkeypatch.setattr(
-        "gkx.runtime.extract_mode_time_series",
+    patch_runtime(
+        monkeypatch,
+        "extract_mode_time_series",
         lambda arr, sel, method="project": np.asarray(
             arr[:, sel.ky_index, sel.kx_index, 0]
         ),
     )
-    monkeypatch.setattr(
-        "gkx.runtime.fit_growth_rate_auto_with_stats",
+    patch_runtime(
+        monkeypatch,
+        "fit_growth_rate_auto_with_stats",
         lambda t, signal, **kwargs: (
             0.2,
             0.3,
@@ -4985,15 +4884,15 @@ def test_run_runtime_scan_batch_validation_and_selection(
             0.0,
         ),
     )
-    monkeypatch.setattr(
-        "gkx.runtime.fit_growth_rate_auto",
+    patch_runtime(
+        monkeypatch,
+        "fit_growth_rate_auto",
         lambda *args, **kwargs: (0.4, 0.5, 0.0, 0.2),
     )
-    monkeypatch.setattr(
-        "gkx.runtime.fit_growth_rate", lambda *args, **kwargs: (0.6, 0.7)
-    )
-    monkeypatch.setattr(
-        "gkx.runtime.apply_diagnostic_normalization",
+    patch_runtime(monkeypatch, "fit_growth_rate", lambda *args, **kwargs: (0.6, 0.7))
+    patch_runtime(
+        monkeypatch,
+        "apply_diagnostic_normalization",
         lambda g, o, **kwargs: (g, o),
     )
 
@@ -5073,7 +4972,6 @@ def test_run_runtime_scan_batch_validation_and_selection(
 def test_run_runtime_scan_default_parallel_config_keeps_serial_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = _base_cfg()
     calls: list[float] = []
@@ -5088,8 +4986,8 @@ def test_run_runtime_scan_default_parallel_config_keeps_serial_order(
         calls.append(ky)
         return SimpleNamespace(gamma=10.0 + ky, omega=-(20.0 + ky), quasilinear=None)
 
-    monkeypatch.setattr(runtime, "_run_runtime_scan_batch", _unexpected_batch)
-    monkeypatch.setattr(runtime, "run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "run_runtime_scan_batch", _unexpected_batch)
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
 
     result = run_runtime_scan(
         cfg,
@@ -5115,7 +5013,6 @@ def test_run_runtime_scan_default_parallel_config_keeps_serial_order(
 def test_run_runtime_scan_collects_quasilinear_payloads_and_worker_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = _base_cfg()
     calls: list[float] = []
@@ -5133,7 +5030,7 @@ def test_run_runtime_scan_collects_quasilinear_payloads_and_worker_metadata(
             },
         )
 
-    monkeypatch.setattr(runtime, "run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
 
     result = run_runtime_scan(
         cfg,
@@ -5160,7 +5057,6 @@ def test_run_runtime_scan_collects_quasilinear_payloads_and_worker_metadata(
 def test_run_runtime_scan_parallel_config_requests_combined_ky_batch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = replace(
         _base_cfg(),
@@ -5179,9 +5075,9 @@ def test_run_runtime_scan_parallel_config_requests_combined_ky_batch(
         captured["solverless_kwargs"] = kwargs
         return sentinel
 
-    monkeypatch.setattr(runtime, "_run_runtime_scan_batch", _fake_batch)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "run_runtime_scan_batch", _fake_batch)
+    patch_runtime(
+        monkeypatch,
         "run_runtime_linear",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("combined-ky scan must not dispatch per-ky workers")
@@ -5207,7 +5103,6 @@ def test_run_runtime_scan_parallel_config_requests_combined_ky_batch(
 def test_run_runtime_nonlinear_final_state_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = replace(
         _base_cfg(),
@@ -5217,18 +5112,18 @@ def test_run_runtime_nonlinear_final_state_contract(
     grid = build_spectral_grid(cfg.grid)
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda *args, **kwargs: type("P", (), {"rho_star": np.asarray(1.0)})(),
     )
-    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    patch_runtime(monkeypatch, "build_runtime_term_config", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
@@ -5250,7 +5145,7 @@ def test_run_runtime_nonlinear_final_state_contract(
             ),
         )
 
-    monkeypatch.setattr(runtime, "integrate_nonlinear_from_config", _fake_final_state)
+    patch_runtime(monkeypatch, "integrate_nonlinear_from_config", _fake_final_state)
 
     out = run_runtime_nonlinear(
         cfg,
@@ -5270,7 +5165,6 @@ def test_run_runtime_nonlinear_final_state_contract(
 def test_run_runtime_nonlinear_final_state_without_progress_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = replace(
         _base_cfg(),
@@ -5280,18 +5174,18 @@ def test_run_runtime_nonlinear_final_state_without_progress_contract(
     grid = build_spectral_grid(cfg.grid)
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda *args, **kwargs: type("P", (), {"rho_star": np.asarray(1.0)})(),
     )
-    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    patch_runtime(monkeypatch, "build_runtime_term_config", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
@@ -5314,7 +5208,7 @@ def test_run_runtime_nonlinear_final_state_without_progress_contract(
             ),
         )
 
-    monkeypatch.setattr(runtime, "integrate_nonlinear_from_config", _fake_final_state)
+    patch_runtime(monkeypatch, "integrate_nonlinear_from_config", _fake_final_state)
 
     out = run_runtime_nonlinear(
         cfg,
@@ -5334,7 +5228,6 @@ def test_run_runtime_nonlinear_final_state_without_progress_contract(
 def test_run_runtime_nonlinear_return_state_uses_diagnostics_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = replace(
         _base_cfg(),
@@ -5343,18 +5236,18 @@ def test_run_runtime_nonlinear_return_state_uses_diagnostics_path(
     geom = build_runtime_geometry(cfg)
     grid = build_spectral_grid(cfg.grid)
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda *args, **kwargs: type("P", (), {"rho_star": np.asarray(1.0)})(),
     )
-    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    patch_runtime(monkeypatch, "build_runtime_term_config", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
@@ -5391,8 +5284,10 @@ def test_run_runtime_nonlinear_return_state_uses_diagnostics_path(
             ),
         )
 
-    monkeypatch.setattr(
-        runtime, "integrate_nonlinear_explicit_diagnostics_state", _fake_diag_integrator
+    patch_runtime(
+        monkeypatch,
+        "integrate_nonlinear_explicit_diagnostics_state",
+        _fake_diag_integrator,
     )
 
     out = run_runtime_nonlinear(
@@ -5432,7 +5327,6 @@ def test_run_runtime_nonlinear_rejects_unknown_external_source() -> None:
 def test_run_runtime_nonlinear_adaptive_chunk_requires_progress(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = replace(
         _base_cfg(),
@@ -5444,18 +5338,18 @@ def test_run_runtime_nonlinear_adaptive_chunk_requires_progress(
     geom = build_runtime_geometry(cfg)
     grid = build_spectral_grid(cfg.grid)
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda *args, **kwargs: type("P", (), {"rho_star": np.asarray(1.0)})(),
     )
-    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    patch_runtime(monkeypatch, "build_runtime_term_config", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
@@ -5492,8 +5386,10 @@ def test_run_runtime_nonlinear_adaptive_chunk_requires_progress(
             ),
         )
 
-    monkeypatch.setattr(
-        runtime, "integrate_nonlinear_explicit_diagnostics_state", _fake_diag_integrator
+    patch_runtime(
+        monkeypatch,
+        "integrate_nonlinear_explicit_diagnostics_state",
+        _fake_diag_integrator,
     )
 
     with pytest.raises(RuntimeError, match="made no time-step progress"):
@@ -5503,7 +5399,6 @@ def test_run_runtime_nonlinear_adaptive_chunk_requires_progress(
 def test_run_runtime_nonlinear_phiext_source_uses_diagnostics_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = replace(
         _base_cfg(),
@@ -5514,18 +5409,18 @@ def test_run_runtime_nonlinear_phiext_source_uses_diagnostics_path(
     grid = build_spectral_grid(cfg.grid)
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda *args, **kwargs: type("P", (), {"rho_star": np.asarray(1.0)})(),
     )
-    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    patch_runtime(monkeypatch, "build_runtime_term_config", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
@@ -5563,8 +5458,10 @@ def test_run_runtime_nonlinear_phiext_source_uses_diagnostics_path(
             ),
         )
 
-    monkeypatch.setattr(
-        runtime, "integrate_nonlinear_explicit_diagnostics_state", _fake_diag_integrator
+    patch_runtime(
+        monkeypatch,
+        "integrate_nonlinear_explicit_diagnostics_state",
+        _fake_diag_integrator,
     )
 
     out = run_runtime_nonlinear(cfg, ky_target=0.2, Nl=3, Nm=4, diagnostics=False)
@@ -5577,7 +5474,6 @@ def test_run_runtime_nonlinear_phiext_source_uses_diagnostics_path(
 def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_split(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     base = _base_cfg()
     cfg = replace(
@@ -5598,18 +5494,18 @@ def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_
     grid = build_spectral_grid(cfg.grid)
     captured: list[dict[str, object]] = []
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda *args, **kwargs: type("P", (), {"rho_star": np.asarray(1.0)})(),
     )
-    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    patch_runtime(monkeypatch, "build_runtime_term_config", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
@@ -5650,8 +5546,10 @@ def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_
             ),
         )
 
-    monkeypatch.setattr(
-        runtime, "integrate_nonlinear_explicit_diagnostics_state", _fake_diag_integrator
+    patch_runtime(
+        monkeypatch,
+        "integrate_nonlinear_explicit_diagnostics_state",
+        _fake_diag_integrator,
     )
 
     out = run_runtime_nonlinear(

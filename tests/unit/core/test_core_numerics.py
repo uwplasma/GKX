@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from support.runtime_patch import patch_runtime
+
 import io
 import subprocess
 import sys
@@ -540,12 +542,17 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
         calls.append(("linear", cfg, options))
         return "linear-result"
 
+    prepared_calls: list[tuple[RuntimeConfig, dict[str, object]]] = []
+
     def fake_nonlinear(cfg, **options):
+        if options.get("prepare_only"):
+            prepared_calls.append((cfg, options))
+            return "prepared-simulation"
         calls.append(("nonlinear", cfg, options))
         return "nonlinear-result"
 
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_linear)
-    monkeypatch.setattr(runtime, "run_runtime_nonlinear", fake_nonlinear)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_linear)
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", fake_nonlinear)
     # gkx.prepare is now the public PreparedSimulation constructor rather than
     # the runtime function it wraps. The delegation this test exists to pin is
     # still real and is asserted directly: preparing a nonlinear case reaches
@@ -556,13 +563,6 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
     assert "runtime.prepare" in inspect.getsource(prepare_simulation).replace(
         "_runtime.prepare", "runtime.prepare"
     )
-    prepared_calls: list[tuple[RuntimeConfig, dict[str, object]]] = []
-
-    def fake_prepare(cfg, **options):
-        prepared_calls.append((cfg, options))
-        return "prepared-simulation"
-
-    monkeypatch.setattr(runtime, "run_runtime_nonlinear_impl", fake_prepare)
     assert gkx.solve(case, ky_target=0.2) == "linear-result"
     # linear must be cleared as well: a case that declares both is rejected by
     # Case.validate, which is what prepare now runs before it builds anything.

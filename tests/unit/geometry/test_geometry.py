@@ -1546,7 +1546,9 @@ def test_generate_miller_eik_internal_publishes_atomically(
 def test_miller_float32_accepts_its_own_theta_grid_at_nperiod_5(
     tmp_path: Path,
 ) -> None:
-    from gkx.runtime import run_runtime_linear
+    from gkx.runtime import (
+        run_runtime_linear,
+    )
     from gkx.workflows.runtime.toml import load_runtime_from_toml
 
     cfg, _ = load_runtime_from_toml(

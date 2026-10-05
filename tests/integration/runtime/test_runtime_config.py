@@ -12,18 +12,24 @@ from gkx.config import (
 )
 from gkx.runtime import (
     RuntimeIndependentParallelPlan,
+    _runtime_external_phi,
+    _select_nonlinear_mode_indices,
+)
+from gkx.workflows.nonlinear import (
     _active_kx_indices,
     _active_ky_indices,
     _infer_runtime_nonlinear_steps,
-    _midplane_index,
     _nearest_index_from_candidates,
-    _normalize_linear_solver_name,
-    _parallel_requests_combined_ky_scan,
-    _runtime_external_phi,
-    _runtime_independent_parallel_plan,
-    _select_nonlinear_mode_indices,
     _validate_dealias_mask_shape,
+)
+from gkx.workflows.linear import (
+    _midplane_index,
+    _normalize_linear_solver_name,
     _zero_kx_index,
+)
+from gkx.workflows.runtime.orchestration_scan import (
+    _parallel_requests_combined_ky_scan,
+    _runtime_independent_parallel_plan,
 )
 from gkx.workflows.runtime.wout import (
     PERP_LADDER,
@@ -239,7 +245,9 @@ def test_zonal_deck_kx_selects_the_fitted_mode() -> None:
     with Boltzmann electrons.
     """
 
-    from gkx.runtime import run_runtime_linear
+    from gkx.runtime import (
+        run_runtime_linear,
+    )
 
     path = REPO_ROOT / "benchmarks" / "cases" / "miller_zonal_response.toml"
     cfg, data = load_runtime_from_toml(path)

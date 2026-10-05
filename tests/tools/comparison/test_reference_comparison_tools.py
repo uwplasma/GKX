@@ -2092,7 +2092,9 @@ def _runtime_config_from_kbm_case(cfg: KBMBaseCase) -> RuntimeConfig:
 def test_runtime_linear_accepts_vmec_and_desc_eik_geometry_aliases(
     tmp_path: Path,
 ) -> None:
-    from gkx.runtime import run_runtime_linear
+    from gkx.runtime import (
+        run_runtime_linear,
+    )
 
     netcdf4 = pytest.importorskip("netCDF4")
     Dataset = netcdf4.Dataset

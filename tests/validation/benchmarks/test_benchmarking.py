@@ -59,7 +59,9 @@ from gkx.diagnostics.validation_gates import (
 from gkx.diagnostics.modes import EigenfunctionComparisonMetrics
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.zonal_validation import zonal_flow_response_metrics
-from gkx.runtime import RuntimeNonlinearResult
+from gkx.runtime import (
+    RuntimeNonlinearResult,
+)
 from dataclasses import fields
 import math
 import re

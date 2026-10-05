@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from support.runtime_patch import patch_runtime
+
 from dataclasses import fields, replace
 from gkx.artifacts.io import (
     _expand_netcdf_restart_state_full_ky,
@@ -67,7 +69,10 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
 )
 from gkx.operators.linear.params import Species, build_linear_params
-from gkx.runtime import RuntimeLinearResult, RuntimeNonlinearResult
+from gkx.runtime import (
+    RuntimeLinearResult,
+    RuntimeNonlinearResult,
+)
 from gkx.solvers_time_explicit import (
     ExplicitTimeConfig,
     _apply_completed_step_state_mask,
@@ -88,20 +93,15 @@ from gkx.solvers_time_explicit import (
 )
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.terms.config import FieldState
-from gkx.workflows.runtime.artifacts import (
+from gkx.artifacts.spectral_layout import (
     KY_WEIGHTING_PAIR,
     KY_WEIGHTING_PER_ROW,
-    _ensure_parent,
-    _artifact_base,
     _condense_kx,
     _condense_ky,
     _condense_kykx,
-    _condense_diagnostics_for_netcdf_output,
     _condense_kx_for_output,
     _condense_ky_for_output,
     _condense_kykx_for_output,
-    _condense_resolved_for_output,
-    _flatten_series,
     _dealiased_spectral_field,
     _dealiased_ky_count,
     _dealiased_ky_indices,
@@ -109,16 +109,9 @@ from gkx.workflows.runtime.artifacts import (
     _dealiased_kx_count,
     _dealiased_kx_indices,
     _dealiased_kx_values,
-    _netcdf_bundle_base,
-    _is_netcdf_output_target,
     _maybe_var,
-    _nonlinear_summary,
-    _particle_moments,
     _real_space_axis,
-    _read_optional_var,
     _require_netcdf4,
-    _resolved_species_time,
-    _resolve_restart_path,
     _restart_to_netcdf_layout,
     _spectral_species_to_ri,
     _species_matrix,
@@ -127,15 +120,33 @@ from gkx.workflows.runtime.artifacts import (
     _spectral_to_ri,
     _spectral_to_xy,
     _take_axis,
-    _write_csv,
-    _write_geometry_group,
-    _write_input_parameters_group,
-    _write_json,
-    write_runtime_linear_scan_artifacts,
-    _write_nonlinear_netcdf_outputs,
     _write_runtime_root_metadata,
+)
+from gkx.artifacts.io import (
+    _ensure_parent,
+    _artifact_base,
+    _condense_diagnostics_for_netcdf_output,
+    _condense_resolved_for_output,
+    _flatten_series,
+    _netcdf_bundle_base,
+    _is_netcdf_output_target,
+    _nonlinear_summary,
+    _read_optional_var,
+    _resolved_species_time,
+    _resolve_restart_path,
+    _write_csv,
+    _write_json,
     _write_state,
     load_nonlinear_netcdf_diagnostics,
+)
+from gkx.artifacts.nonlinear_netcdf import (
+    _particle_moments,
+    _write_geometry_group,
+    _write_input_parameters_group,
+    _write_nonlinear_netcdf_outputs,
+)
+from gkx.workflows.runtime.artifacts import (
+    write_runtime_linear_scan_artifacts,
     run_runtime_nonlinear_with_artifacts,
     write_runtime_linear_artifacts,
     write_runtime_nonlinear_artifacts,
@@ -144,21 +155,11 @@ from gkx.config import RuntimeConfig, RuntimeOutputConfig
 from gkx.workflows.runtime.diagnostic_arrays import (
     validate_finite_runtime_diagnostics,
 )
-from gkx.workflows.runtime.diagnostic_arrays import concat_runtime_diagnostics
-from gkx.workflows.runtime.orchestration_artifacts import (
-    resolve_nonlinear_artifact_policy,
-    run_runtime_nonlinear_artifact_handoff,
-)
+from gkx.workflows.runtime.artifacts import resolve_nonlinear_artifact_policy
 from netCDF4 import Dataset
 from pathlib import Path
 from types import SimpleNamespace
-import gkx.artifacts as artifact_package
-import gkx.artifacts.io as artifact_io
-import gkx.artifacts.io as artifact_linear
-import gkx.artifacts.io as artifact_nonlinear
-import gkx.artifacts.io as artifact_nonlinear_diag
 import gkx.artifacts.nonlinear_netcdf as nonlinear_netcdf
-import gkx.artifacts.spectral_layout as spectral_layout
 import gkx.diagnostics as diagnostics_module
 import gkx.diagnostics.metadata as diagnostics_metadata
 import gkx.operators.moments as diagnostics_moments
@@ -168,103 +169,6 @@ import jax.numpy as jnp
 import json
 import numpy as np
 import pytest
-
-
-def test_runtime_artifacts_facade_reexports_split_helper_contracts() -> None:
-    assert artifact_package.write_runtime_linear_artifacts is (
-        artifact_linear.write_runtime_linear_artifacts
-    )
-    assert artifact_package.write_runtime_nonlinear_table_artifacts is (
-        artifact_nonlinear.write_runtime_nonlinear_table_artifacts
-    )
-    assert artifact_package.load_nonlinear_netcdf_diagnostics is (
-        artifact_nonlinear_diag.load_nonlinear_netcdf_diagnostics
-    )
-    assert runtime_artifacts._artifact_base is artifact_io._artifact_base
-    assert runtime_artifacts._write_json is artifact_io._write_json
-    assert runtime_artifacts._write_csv is artifact_io._write_csv
-    assert runtime_artifacts._write_state is artifact_io._write_state
-    assert runtime_artifacts._netcdf_bundle_base is artifact_io._netcdf_bundle_base
-    assert artifact_package.validate_finite_array is artifact_io.validate_finite_array
-    assert artifact_package.validate_finite_runtime_result is (
-        artifact_io.validate_finite_runtime_result
-    )
-    assert (
-        runtime_artifacts._is_netcdf_output_target
-        is artifact_io._is_netcdf_output_target
-    )
-    assert (
-        runtime_artifacts._dealiased_kx_indices is spectral_layout._dealiased_kx_indices
-    )
-    assert artifact_io._dealiased_kx_count is spectral_layout._dealiased_kx_count
-    assert artifact_io._dealiased_kx_indices is spectral_layout._dealiased_kx_indices
-    assert artifact_io._dealiased_ky_count is spectral_layout._dealiased_ky_count
-    assert (
-        runtime_artifacts._dealiased_ky_indices is spectral_layout._dealiased_ky_indices
-    )
-    assert (
-        runtime_artifacts._condense_kykx_for_output
-        is spectral_layout._condense_kykx_for_output
-    )
-    assert runtime_artifacts._spectral_to_ri is spectral_layout._spectral_to_ri
-    assert (
-        runtime_artifacts._restart_to_netcdf_layout
-        is spectral_layout._restart_to_netcdf_layout
-    )
-    assert (
-        runtime_artifacts._write_runtime_root_metadata
-        is spectral_layout._write_runtime_root_metadata
-    )
-    assert (
-        runtime_artifacts._resolve_restart_path
-        is artifact_nonlinear_diag._resolve_restart_path
-    )
-    assert (
-        runtime_artifacts._read_optional_var
-        is artifact_nonlinear_diag._read_optional_var
-    )
-    assert (
-        runtime_artifacts._condense_diagnostics_for_netcdf_output
-        is artifact_nonlinear_diag._condense_diagnostics_for_netcdf_output
-    )
-    assert (
-        runtime_artifacts.load_nonlinear_netcdf_diagnostics
-        is artifact_nonlinear_diag.load_nonlinear_netcdf_diagnostics
-    )
-    assert (
-        runtime_artifacts.write_quasilinear_artifacts
-        is artifact_linear.write_quasilinear_artifacts
-    )
-    assert (
-        runtime_artifacts.write_runtime_linear_artifacts
-        is artifact_linear.write_runtime_linear_artifacts
-    )
-    assert (
-        runtime_artifacts.write_runtime_linear_scan_artifacts
-        is artifact_linear.write_runtime_linear_scan_artifacts
-    )
-    assert runtime_artifacts._nonlinear_summary is artifact_nonlinear._nonlinear_summary
-    assert (
-        runtime_artifacts.write_runtime_nonlinear_table_artifacts
-        is artifact_nonlinear.write_runtime_nonlinear_table_artifacts
-    )
-    assert (
-        runtime_artifacts._build_output_grid_and_geometry
-        is nonlinear_netcdf._build_output_grid_and_geometry
-    )
-    assert runtime_artifacts._particle_moments is nonlinear_netcdf._particle_moments
-    assert (
-        runtime_artifacts._write_geometry_group
-        is nonlinear_netcdf._write_geometry_group
-    )
-    assert (
-        runtime_artifacts._write_input_parameters_group
-        is nonlinear_netcdf._write_input_parameters_group
-    )
-    assert (
-        runtime_artifacts._write_nonlinear_netcdf_outputs
-        is nonlinear_netcdf._write_nonlinear_netcdf_outputs
-    )
 
 
 def test_write_runtime_linear_artifacts_writes_bundle(tmp_path: Path) -> None:
@@ -541,7 +445,9 @@ def test_runtime_artifact_helper_paths_and_flattening(tmp_path: Path) -> None:
     )
 
 
-def test_runtime_artifact_restart_resolution_and_species_helpers() -> None:
+def test_runtime_artifact_restart_resolution_and_species_helpers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     cfg = RuntimeConfig(output=RuntimeOutputConfig(path="tools_out/run.out.nc"))
     assert (
         _resolve_restart_path("tools_out/run.out.nc", cfg, for_write=True).name
@@ -574,10 +480,12 @@ def test_runtime_artifact_restart_resolution_and_species_helpers() -> None:
             path="tools_out/policy.out.nc", save_for_restart=True, nsave=2
         ),
     )
-    deps = SimpleNamespace(
-        is_netcdf_output_target=lambda path: Path(path).suffix == ".nc",
-        resolve_restart_path=lambda _path, _cfg: Path("policy_from.restart.nc"),
-        resolve_restart_write_path=lambda _path, _cfg: Path("policy_to.restart.nc"),
+    monkeypatch.setattr(
+        runtime_artifacts,
+        "_resolve_restart_path",
+        lambda _path, _cfg, *, for_write: Path(
+            "policy_to.restart.nc" if for_write else "policy_from.restart.nc"
+        ),
     )
     policy = resolve_nonlinear_artifact_policy(
         policy_cfg,
@@ -585,7 +493,6 @@ def test_runtime_artifact_restart_resolution_and_species_helpers() -> None:
         diagnostics=None,
         steps=None,
         dt=None,
-        deps=deps,
     )
     assert policy.netcdf_output_target is True
     assert policy.diagnostics_on is True
@@ -1660,12 +1567,14 @@ def test_run_runtime_nonlinear_with_artifacts_uses_restart_if_exists(
         restart_path.write_bytes(b"stub")
         return {"out": str(out_path), "restart": str(restart_path)}
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         _fake_run_runtime_nonlinear,
     )
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.write_runtime_nonlinear_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "write_runtime_nonlinear_artifacts",
         _fake_write_runtime_nonlinear_artifacts,
     )
 
@@ -1685,7 +1594,9 @@ def test_run_runtime_nonlinear_with_artifacts_uses_restart_if_exists(
     assert calls[1]["init_file_scale"] == 1.0
 
 
-def test_runtime_orchestration_handoff_chunks_and_restarts(tmp_path: Path) -> None:
+def test_runtime_orchestration_handoff_chunks_and_restarts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     calls: list[dict[str, object]] = []
     writes: list[float] = []
     out_path = tmp_path / "direct.out.nc"
@@ -1738,26 +1649,22 @@ def test_runtime_orchestration_handoff_chunks_and_restarts(tmp_path: Path) -> No
         restart_path.write_bytes(b"restart")
         return {"out": str(out_path), "restart": str(restart_path)}
 
-    deps = SimpleNamespace(
-        is_netcdf_output_target=lambda path: Path(path).suffix == ".nc",
-        resolve_restart_path=lambda _path, _cfg: restart_path,
-        resolve_restart_write_path=lambda _path, _cfg: restart_path,
-        netcdf_bundle_base=lambda path: Path(path).with_suffix("").with_suffix(""),
-        load_nonlinear_netcdf_diagnostics=lambda _path: _diag(0.0),
-        condense_diagnostics_for_netcdf_output=lambda diag: diag,
-        concat_runtime_diagnostics=lambda diags: concat_runtime_diagnostics(diags),
-        validate_finite_runtime_result=lambda _result: None,
-        run_runtime_nonlinear=_run,
-        write_runtime_nonlinear_artifacts=_write,
-    )
+    for name, value in (
+        ("_resolve_restart_path", lambda _path, _cfg, *, for_write: restart_path),
+        ("load_nonlinear_netcdf_diagnostics", lambda _path: _diag(0.0)),
+        ("_condense_diagnostics_for_netcdf_output", lambda diag, **_kw: diag),
+        ("validate_finite_runtime_result", lambda _result, **_kw: None),
+        ("run_runtime_nonlinear", _run),
+        ("write_runtime_nonlinear_artifacts", _write),
+    ):
+        monkeypatch.setattr(runtime_artifacts, name, value)
 
-    result, paths = run_runtime_nonlinear_artifact_handoff(
+    result, paths = run_runtime_nonlinear_with_artifacts(
         cfg,
         out=out_path,
         ky_target=0.2,
         steps=12,
         diagnostics=True,
-        deps=deps,
     )
 
     assert result.diagnostics is not None
@@ -1805,12 +1712,14 @@ def test_run_runtime_nonlinear_with_artifacts_keeps_adaptive_steps_none(
             state=np.zeros((1, 1, 1, 1, 1, 1), dtype=np.complex64),
         )
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         _fake_run_runtime_nonlinear,
     )
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.write_runtime_nonlinear_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "write_runtime_nonlinear_artifacts",
         lambda *_args, **_kwargs: {"out": str(out_path)},
     )
 
@@ -1860,8 +1769,9 @@ def test_run_runtime_nonlinear_with_artifacts_forwards_live_output_options(
             kx_selected=0.0,
         )
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         _fake_run_runtime_nonlinear,
     )
 
@@ -1915,12 +1825,14 @@ def test_run_runtime_nonlinear_with_artifacts_rejects_nonfinite_chunk(
         calls["write"] += 1
         return {"out": str(out_path)}
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         _fake_run_runtime_nonlinear,
     )
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.write_runtime_nonlinear_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "write_runtime_nonlinear_artifacts",
         _fake_write,
     )
 
@@ -2080,8 +1992,9 @@ def test_run_runtime_nonlinear_with_artifacts_append_preserves_loaded_netcdf_sch
             kx_selected=0.0,
         )
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         _fake_run_runtime_nonlinear,
     )
 
@@ -2191,20 +2104,24 @@ def test_run_runtime_nonlinear_with_artifacts_history_and_restart_paths(
     )
     captured = {"writes": 0}
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.load_nonlinear_netcdf_diagnostics",
+    patch_runtime(
+        monkeypatch,
+        "load_nonlinear_netcdf_diagnostics",
         lambda _path: cumulative,
     )
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         lambda *_args, **_kwargs: result_chunk,
     )
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts._concat_runtime_diagnostics",
+    patch_runtime(
+        monkeypatch,
+        "concat_runtime_diagnostics",
         lambda diags: diags[-1],
     )
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.write_runtime_nonlinear_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "write_runtime_nonlinear_artifacts",
         lambda *_args, **_kwargs: (
             captured.__setitem__("writes", captured["writes"] + 1) or {"out": str(out)}
         ),
