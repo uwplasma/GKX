@@ -299,7 +299,7 @@ LANES: dict[str, tuple[EvidenceCheck, ...]] = {
         EvidenceCheck(
             "runtime scan orchestration module",
             "src/gkx/workflows/runtime/orchestration_scan.py",
-            "RuntimeScanDeps",
+            "def run_runtime_scan_ky_task",
         ),
         EvidenceCheck(
             "runtime policy module",
