@@ -3227,3 +3227,33 @@ def test_saved_nonlinear_summary_carries_the_imex_solve_status() -> None:
     assert summary["implicit_max_iterations"] == 11
     assert summary["implicit_unconverged_solves"] == 0
     assert summary_of()["implicit_converged"] is None
+
+
+def test_artifact_checkpoint_helpers_cover_their_early_returns() -> None:
+    from types import SimpleNamespace
+
+    from gkx.workflows.runtime import artifacts as art
+
+    assert "no measurable window (no_window)" in art._format_saturation_summary(
+        {"mean": None}
+    )
+    assert "drift" in art._format_saturation_summary(
+        {"mean": None, "reasons": ["drift"]}
+    )
+    assert art._next_runtime_chunk_steps(remaining_steps=7, checkpoint_steps=None) == 7
+    assert art._next_runtime_chunk_steps(remaining_steps=None, checkpoint_steps=5) == 5
+    assert art._next_runtime_chunk_steps(remaining_steps=9, checkpoint_steps=5) == 5
+    cfg = object()
+    assert art._advance_restart_run_config(cfg, None) is cfg
+    chunk = SimpleNamespace(diagnostics=None)
+    assert art._merge_chunk_diagnostics(
+        chunk, cumulative_diag=None, time_offset=1.5, history_from_file=False
+    )[1:] == (None, 1.5)
+    policy = SimpleNamespace(checkpoint_steps=None)
+    assert art._checkpoint_loop_done(
+        policy=policy,
+        result_effective=chunk,
+        remaining_steps=None,
+        time_offset=0.0,
+        cfg=cfg,
+    )
