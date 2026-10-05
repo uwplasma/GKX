@@ -569,32 +569,6 @@ def build_runtime_term_config(cfg: RuntimeConfig) -> TermConfig:
     return linear_terms_to_term_config(lin_terms, nonlinear=nonlinear_on)
 
 
-def _build_initial_condition(
-    grid,
-    geom: FluxTubeGeometryLike,
-    cfg: RuntimeConfig,
-    *,
-    ky_index: int,
-    kx_index: int,
-    Nl: int,
-    Nm: int,
-    nspecies: int,
-) -> jnp.ndarray:
-    """Build the runtime initial state using this module's patchable params builder."""
-
-    return _build_initial_condition_impl(
-        grid,
-        geom,
-        cfg,
-        ky_index=ky_index,
-        kx_index=kx_index,
-        Nl=Nl,
-        Nm=Nm,
-        nspecies=nspecies,
-        build_runtime_linear_params_fn=build_runtime_linear_params,
-    )
-
-
 # ---- merged from workflows/runtime/initial_conditions.py ----
 # That module had exactly one consumer -- this one -- which imported ten of
 # its private names. A boundary that wide is a split, not an interface.
@@ -929,7 +903,6 @@ class _InitialConditionBuilder:
     Nm: int
     state: np.ndarray
     species_targets: tuple[int, ...]
-    build_runtime_linear_params_fn: Callable[..., LinearParams]
     phi_seed_context: tuple[object, LinearParams] | None = None
 
     def set_mode(
@@ -958,7 +931,7 @@ class _InitialConditionBuilder:
                 "init_field='phi' requires at least one Laguerre and one Hermite moment"
             )
         if self.phi_seed_context is None:
-            phi_params = self.build_runtime_linear_params_fn(
+            phi_params = build_runtime_linear_params(
                 self.cfg, Nm=self.Nm, geom=self.geom
             )
             self.phi_seed_context = (
@@ -1080,7 +1053,7 @@ def _finalize_initial_state(
     return jnp.asarray(cast(np.ndarray, loaded_state + state), dtype=dtype)
 
 
-def _build_initial_condition_impl(
+def _build_initial_condition(
     grid: SpectralGrid,
     geom: FluxTubeGeometryLike,
     cfg: RuntimeConfig,
@@ -1090,8 +1063,9 @@ def _build_initial_condition_impl(
     Nl: int,
     Nm: int,
     nspecies: int,
-    build_runtime_linear_params_fn: Callable[..., LinearParams],
 ) -> jnp.ndarray:
+    """Build the runtime initial state for one selected mode or seed policy."""
+
     init_field, init_file_mode = _validate_initialization(cfg)
     state: np.ndarray = np.zeros(
         (nspecies, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size),
@@ -1109,7 +1083,7 @@ def _build_initial_condition_impl(
                 loaded_state,
                 grid,
                 geom,
-                build_runtime_linear_params_fn(cfg, Nm=Nm, geom=geom),
+                build_runtime_linear_params(cfg, Nm=Nm, geom=geom),
             ),
             dtype=np.complex64,
         )
@@ -1122,7 +1096,6 @@ def _build_initial_condition_impl(
         Nm=Nm,
         state=state,
         species_targets=_species_targets(cfg, nspecies),
-        build_runtime_linear_params_fn=build_runtime_linear_params_fn,
     )
 
     if cfg.init.gaussian_init and not cfg.init.init_single:

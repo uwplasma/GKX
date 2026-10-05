@@ -274,10 +274,6 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return _cmd_run_runtime_linear(args)
 
 
-def _cmd_default_demo() -> int:
-    return run_default_linear_demo()
-
-
 def _add_quasilinear_flags(cmd: argparse.ArgumentParser) -> None:
     cmd.add_argument(
         "--quasilinear",
@@ -693,7 +689,7 @@ def main() -> int:
     # cold compile every time. See gkx.compilation_cache.
     enable_persistent_compilation_cache()
     if not argv:
-        return _cmd_default_demo()
+        return run_default_linear_demo()
     if argv[0] in {"plot", "--plot"}:
         return plot_saved_output_command(argv, plot_saved_output=plot_saved_output)
 
@@ -706,7 +702,7 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     if args.cmd is None:
-        return _cmd_default_demo()
+        return run_default_linear_demo()
     return args.func(args)
 
 

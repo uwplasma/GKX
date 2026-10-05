@@ -789,12 +789,6 @@ _CASE_NONLINEAR_SPECS = (
 )
 
 
-def _runtime_case_fit_config(raw: dict[str, Any]) -> dict[str, Any]:
-    """Return fit options accepted by programmatic runtime-case helpers."""
-
-    return _runtime_fit_config(raw)
-
-
 def _case_run_kwargs(
     raw: dict[str, Any],
     overrides: Mapping[str, Any],
@@ -874,7 +868,7 @@ def run_linear_case(
     result = run_runtime_linear(
         cfg,
         **run_kwargs,
-        **_runtime_case_fit_config(raw),
+        **_runtime_fit_config(raw),
     )
     if cfg.output.path:
         paths = write_runtime_linear_artifacts(cfg.output.path, result)

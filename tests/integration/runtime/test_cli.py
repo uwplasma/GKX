@@ -3564,9 +3564,9 @@ def test_runtime_case_option_helpers_resolve_python_overrides() -> None:
         "fit": {"fit_signal": "phi"},
     }
 
-    assert runtime_cases._runtime_case_fit_config(raw) == {"fit_signal": "phi"}
+    assert runtime_cases._runtime_fit_config(raw) == {"fit_signal": "phi"}
     with pytest.raises(ValueError, match=r"\[fit\].*'ignored'"):
-        runtime_cases._runtime_case_fit_config({"fit": {"ignored": "value"}})
+        runtime_cases._runtime_fit_config({"fit": {"ignored": "value"}})
     assert runtime_cases._linear_case_run_kwargs(
         raw,
         {
