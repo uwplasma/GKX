@@ -265,7 +265,7 @@ jobs:
         with:
           files: coverage-fast.xml
           flags: fast-surface
-          fail_ci_if_error: true
+          fail_ci_if_error: false  # coverage is gated by our own fail-under steps; a Codecov outage must not block CI
           use_oidc: true
 
   wide-coverage-shards:
@@ -393,7 +393,7 @@ jobs:
         with:
           files: coverage-wide.xml
           flags: wide-package
-          fail_ci_if_error: true
+          fail_ci_if_error: false  # coverage is gated by our own fail-under steps; a Codecov outage must not block CI
           use_oidc: true
 
   docs-and-packaging:

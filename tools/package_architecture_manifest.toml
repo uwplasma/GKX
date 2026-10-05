@@ -1459,7 +1459,8 @@ recursive = true
 # 82606 -> 82675: tests for the ky-alias, float32 Miller and cache fixes (#321).
 # 82675 -> 82760: kinetic-electron step tests (measured bound, chain solve), merged tree.
 # 82760 -> 82803: bitwise test for the adaptive chunk compile cache, measured.
-baseline = 82803
+# 82803 -> 82997: #333 HNGC skip and #335 backend-restore tests, measured.
+baseline = 82997
 target = 35000
 
 [[line_budget_policy.counts]]
