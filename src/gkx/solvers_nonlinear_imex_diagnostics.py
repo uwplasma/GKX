@@ -331,67 +331,6 @@ class _IMEXRuntimeOperators:
     solve_step_with_stats: StatsSolveStepFn
 
 
-@dataclass(frozen=True)
-class _IMEXPreparationOptions:
-    cache: LinearCache | None
-    terms: TermConfig | None
-    collision_split: bool
-    implicit_preconditioner: str | None
-    compressed_real_fft: bool
-    use_dealias_mask: bool
-    z_index: int | None
-    fixed_mode_ky_index: int | None
-    fixed_mode_kx_index: int | None
-
-
-@dataclass(frozen=True)
-class _IMEXRuntimeOptions:
-    collision_split: bool
-    external_phi: jnp.ndarray | float | None
-    compressed_real_fft: bool
-    laguerre_mode: str
-    implicit_iters: int
-    implicit_relax: float
-    implicit_tol: float
-    implicit_maxiter: int
-    implicit_restart: int
-
-
-@dataclass(frozen=True)
-class _IMEXDiagnosticOptions:
-    omega_ky_index: int | None
-    omega_kx_index: int | None
-    flux_scale: float
-    wphi_scale: float
-
-
-@dataclass(frozen=True)
-class _IMEXScanOptions:
-    method: str
-    steps: int
-    checkpoint: bool
-    sample_stride: int
-    diagnostics_stride: int
-    external_phi: jnp.ndarray | float | None
-    show_progress: bool
-    collision_scheme: str
-
-
-@dataclass(frozen=True)
-class _IMEXOptionBundle:
-    preparation: _IMEXPreparationOptions
-    runtime: _IMEXRuntimeOptions
-    diagnostics: _IMEXDiagnosticOptions
-    scan: _IMEXScanOptions
-
-
-@dataclass(frozen=True)
-class _IMEXScanContext:
-    prepared: _IMEXPreparedState
-    step: DiagnosticStepFn
-    compute_diag_from_state: DiagnosticFn
-
-
 def _prepare_imex_diagnostic_state(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -672,192 +611,6 @@ def _run_imex_diagnostic_scan_and_finalize(
     return jnp.asarray(diag_out.t), diag_out, solve_stats
 
 
-def _build_imex_scan_context(
-    G0: jnp.ndarray,
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    params: LinearParams,
-    dt: float,
-    *,
-    deps: IMEXNonlinearDiagnosticsDeps,
-    preparation: _IMEXPreparationOptions,
-    runtime: _IMEXRuntimeOptions,
-    diagnostics: _IMEXDiagnosticOptions,
-    scan: _IMEXScanOptions,
-) -> _IMEXScanContext:
-    prepared = _prepare_imex_diagnostic_state(
-        G0,
-        grid,
-        geom,
-        params,
-        dt,
-        scan.steps,
-        deps=deps,
-        cache=preparation.cache,
-        terms=preparation.terms,
-        collision_split=preparation.collision_split,
-        implicit_preconditioner=preparation.implicit_preconditioner,
-        compressed_real_fft=preparation.compressed_real_fft,
-        use_dealias_mask=preparation.use_dealias_mask,
-        z_index=preparation.z_index,
-        fixed_mode_ky_index=preparation.fixed_mode_ky_index,
-        fixed_mode_kx_index=preparation.fixed_mode_kx_index,
-    )
-    linear_rhs_fn = deps.linear_rhs_for_terms_fn(prepared.linear_cfg)
-    runtime_ops = _build_imex_runtime_operators(
-        prepared,
-        params,
-        deps=deps,
-        linear_rhs_fn=linear_rhs_fn,
-        collision_split=runtime.collision_split,
-        external_phi=runtime.external_phi,
-        compressed_real_fft=runtime.compressed_real_fft,
-        laguerre_mode=runtime.laguerre_mode,
-        implicit_iters=runtime.implicit_iters,
-        implicit_relax=runtime.implicit_relax,
-        implicit_tol=runtime.implicit_tol,
-        implicit_maxiter=runtime.implicit_maxiter,
-        implicit_restart=runtime.implicit_restart,
-    )
-    compute_diag_from_state = _make_imex_diagnostic_callable(
-        prepared,
-        grid,
-        params=params,
-        deps=deps,
-        omega_ky_index=diagnostics.omega_ky_index,
-        omega_kx_index=diagnostics.omega_kx_index,
-        flux_scale=diagnostics.flux_scale,
-        wphi_scale=diagnostics.wphi_scale,
-    )
-    step = _make_imex_scan_step(
-        prepared,
-        runtime_ops,
-        compute_diag_from_state,
-        params,
-        deps=deps,
-        method=scan.method,
-        # Refresh diagnostics on the rows the output keeps (see the explicit
-        # scan builder).
-        diagnostics_stride=max(scan.sample_stride, scan.diagnostics_stride, 1),
-        show_progress=scan.show_progress,
-        steps=scan.steps,
-        external_phi=scan.external_phi,
-        collision_scheme=scan.collision_scheme,
-    )
-    return _IMEXScanContext(prepared, step, compute_diag_from_state)
-
-
-def _integrate_imex_nonlinear_diagnostics_core(
-    G0: jnp.ndarray,
-    grid: SpectralGrid,
-    geom: FluxTubeGeometryLike,
-    params: LinearParams,
-    dt: float,
-    *,
-    deps: IMEXNonlinearDiagnosticsDeps,
-    preparation: _IMEXPreparationOptions,
-    runtime: _IMEXRuntimeOptions,
-    diagnostics: _IMEXDiagnosticOptions,
-    scan: _IMEXScanOptions,
-) -> tuple[jnp.ndarray, SimulationDiagnostics, ImplicitSolveStats | None]:
-    context = _build_imex_scan_context(
-        G0,
-        grid,
-        geom,
-        params,
-        dt,
-        deps=deps,
-        preparation=preparation,
-        runtime=runtime,
-        diagnostics=diagnostics,
-        scan=scan,
-    )
-    return _run_imex_diagnostic_scan_and_finalize(
-        context.prepared,
-        context.step,
-        context.compute_diag_from_state,
-        params,
-        deps=deps,
-        steps=scan.steps,
-        checkpoint=scan.checkpoint,
-        sample_stride=scan.sample_stride,
-        diagnostics_stride=scan.diagnostics_stride,
-        external_phi=scan.external_phi,
-    )
-
-
-def _imex_option_bundle(
-    *,
-    cache: LinearCache | None,
-    terms: TermConfig | None,
-    collision_split: bool,
-    implicit_preconditioner: str | None,
-    external_phi: jnp.ndarray | float | None,
-    compressed_real_fft: bool,
-    use_dealias_mask: bool,
-    z_index: int | None,
-    fixed_mode_ky_index: int | None,
-    fixed_mode_kx_index: int | None,
-    laguerre_mode: str,
-    implicit_iters: int,
-    implicit_relax: float,
-    implicit_tol: float,
-    implicit_maxiter: int,
-    implicit_restart: int,
-    omega_ky_index: int | None,
-    omega_kx_index: int | None,
-    flux_scale: float,
-    wphi_scale: float,
-    method: str,
-    steps: int,
-    checkpoint: bool,
-    sample_stride: int,
-    diagnostics_stride: int,
-    show_progress: bool,
-    collision_scheme: str,
-) -> _IMEXOptionBundle:
-    return _IMEXOptionBundle(
-        preparation=_IMEXPreparationOptions(
-            cache=cache,
-            terms=terms,
-            collision_split=collision_split,
-            implicit_preconditioner=implicit_preconditioner,
-            compressed_real_fft=compressed_real_fft,
-            use_dealias_mask=use_dealias_mask,
-            z_index=z_index,
-            fixed_mode_ky_index=fixed_mode_ky_index,
-            fixed_mode_kx_index=fixed_mode_kx_index,
-        ),
-        runtime=_IMEXRuntimeOptions(
-            collision_split=collision_split,
-            external_phi=external_phi,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-            implicit_iters=implicit_iters,
-            implicit_relax=implicit_relax,
-            implicit_tol=implicit_tol,
-            implicit_maxiter=implicit_maxiter,
-            implicit_restart=implicit_restart,
-        ),
-        diagnostics=_IMEXDiagnosticOptions(
-            omega_ky_index=omega_ky_index,
-            omega_kx_index=omega_kx_index,
-            flux_scale=flux_scale,
-            wphi_scale=wphi_scale,
-        ),
-        scan=_IMEXScanOptions(
-            method=method,
-            steps=steps,
-            checkpoint=checkpoint,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            external_phi=external_phi,
-            show_progress=show_progress,
-            collision_scheme=collision_scheme,
-        ),
-    )
-
-
 def integrate_imex_nonlinear_diagnostics_impl(
     G0: jnp.ndarray,
     grid: SpectralGrid,
@@ -900,7 +653,14 @@ def integrate_imex_nonlinear_diagnostics_impl(
     Returns ``(t, diagnostics)``, or ``(t, diagnostics, stats)`` with
     ``return_solve_stats=True``.
     """
-    options = _imex_option_bundle(
+    prepared = _prepare_imex_diagnostic_state(
+        G0,
+        grid,
+        geom,
+        params,
+        dt,
+        steps,
+        deps=deps,
         cache=cache,
         terms=terms,
         collision_split=collision_split,
@@ -910,36 +670,59 @@ def integrate_imex_nonlinear_diagnostics_impl(
         z_index=z_index,
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
+    )
+    linear_rhs_fn = deps.linear_rhs_for_terms_fn(prepared.linear_cfg)
+    runtime_ops = _build_imex_runtime_operators(
+        prepared,
+        params,
+        deps=deps,
+        linear_rhs_fn=linear_rhs_fn,
+        collision_split=collision_split,
         external_phi=external_phi,
+        compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
         implicit_iters=implicit_iters,
         implicit_relax=implicit_relax,
         implicit_tol=implicit_tol,
         implicit_maxiter=implicit_maxiter,
         implicit_restart=implicit_restart,
+    )
+    compute_diag_from_state = _make_imex_diagnostic_callable(
+        prepared,
+        grid,
+        params=params,
+        deps=deps,
         omega_ky_index=omega_ky_index,
         omega_kx_index=omega_kx_index,
         flux_scale=flux_scale,
         wphi_scale=wphi_scale,
+    )
+    step = _make_imex_scan_step(
+        prepared,
+        runtime_ops,
+        compute_diag_from_state,
+        params,
+        deps=deps,
         method=method,
+        # Refresh diagnostics on the rows the output keeps (see the explicit
+        # scan builder).
+        diagnostics_stride=max(sample_stride, diagnostics_stride, 1),
+        show_progress=show_progress,
+        steps=steps,
+        external_phi=external_phi,
+        collision_scheme=collision_scheme,
+    )
+    t, diag, solve_stats = _run_imex_diagnostic_scan_and_finalize(
+        prepared,
+        step,
+        compute_diag_from_state,
+        params,
+        deps=deps,
         steps=steps,
         checkpoint=checkpoint,
         sample_stride=sample_stride,
         diagnostics_stride=diagnostics_stride,
-        show_progress=show_progress,
-        collision_scheme=collision_scheme,
-    )
-    t, diag, solve_stats = _integrate_imex_nonlinear_diagnostics_core(
-        G0,
-        grid,
-        geom,
-        params,
-        dt,
-        deps=deps,
-        preparation=options.preparation,
-        runtime=options.runtime,
-        diagnostics=options.diagnostics,
-        scan=options.scan,
+        external_phi=external_phi,
     )
     if return_solve_stats:
         return t, diag, solve_stats
