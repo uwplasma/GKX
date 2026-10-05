@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from support.paired_solvax import requires_paired_solvax
+from support.helpers import requires_paired_solvax
 from support.paths import REPO_ROOT
 
 # ---- test_autodiff_validation.py ----

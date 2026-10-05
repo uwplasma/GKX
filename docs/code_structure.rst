@@ -147,7 +147,7 @@ Equations to code
      - ``operators/moments.py``, ``operators/fluxes.py``
      - ``tests/unit/nonlinear/test_nonlinear.py``
    * - Growth-rate and frequency fits, fit windows
-     - ``diagnostics/growth_rates.py``, ``diagnostics/growth_windows.py``,
+     - ``diagnostics/growth_rates.py``,
        ``diagnostics/modes.py``
      - ``tests/unit/diagnostics/test_analysis.py``
    * - Quasilinear weights and calibration

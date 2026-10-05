@@ -208,7 +208,6 @@ path = "src/gkx/terms/assembly.py"
 owned_modules = [
   "gkx.diagnostics.analysis",
   "gkx.diagnostics.growth_rates",
-  "gkx.diagnostics.growth_windows",
   "gkx.diagnostics.modes",
   "gkx.core_velocity",
   "gkx.core_grid",

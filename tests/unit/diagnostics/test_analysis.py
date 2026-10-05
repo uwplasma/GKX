@@ -45,13 +45,6 @@ def test_growth_rate_public_facades_point_to_numerical_owners() -> None:
 
     import gkx.diagnostics.analysis as analysis
     import gkx.diagnostics.growth_rates as growth_rates
-    import gkx.diagnostics.growth_windows as growth_windows
-
-    assert growth_rates.select_fit_window is growth_windows.select_fit_window
-    assert (
-        growth_rates.select_fit_window_loglinear
-        is growth_windows.select_fit_window_loglinear
-    )
     assert growth_rates.instantaneous_growth_rate_from_phi.__module__ == (
         "gkx.diagnostics.growth_rates"
     )
@@ -1132,7 +1125,7 @@ from gkx.benchmarking_shared import CycloneReference, CycloneScanResult
 import matplotlib.pyplot as plt
 import gkx.artifacts.plotting as plotting
 from gkx.workflows.runtime.results import plot
-from scripts.checks._gates.zonal_plots import zonal_flow_response_figure
+from scripts.checks._gates.zonal_validation import zonal_flow_response_figure
 from gkx.artifacts.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,

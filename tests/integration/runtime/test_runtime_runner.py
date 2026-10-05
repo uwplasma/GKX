@@ -95,7 +95,7 @@ from gkx.workflows.runtime.orchestration_scan import (
 from gkx.workflows.runtime.results import RuntimeParameterScanResult
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from pathlib import Path
-from support.paired_solvax import requires_paired_solvax
+from support.helpers import requires_paired_solvax
 from support.paths import REPO_ROOT
 from types import SimpleNamespace
 import gkx.workflows.runtime.startup as startup

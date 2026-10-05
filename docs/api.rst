@@ -579,12 +579,6 @@ Growth-Rate Diagnostics
    :members:
    :private-members:
 
-Growth-Rate Fit Windows
------------------------
-
-.. automodule:: gkx.diagnostics.growth_windows
-   :members:
-
 Publication Plotting
 --------------------
 

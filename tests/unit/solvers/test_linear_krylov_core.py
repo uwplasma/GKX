@@ -24,7 +24,7 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
 )
 import gkx.solvers_linear_implicit as implicit
-from support.paired_solvax import requires_paired_solvax
+from support.helpers import requires_paired_solvax
 from types import SimpleNamespace
 import inspect
 import re
