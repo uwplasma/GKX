@@ -44,19 +44,21 @@ from gkx.diagnostics import (
     magnetic_vector_potential_energy_resolved,
     heat_flux_total,
     heat_flux_channel_resolved_species,
-    heat_flux_channel_species,
     heat_flux_species,
     particle_flux_total,
     particle_flux_channel_resolved_species,
-    particle_flux_channel_species,
     particle_flux_species,
     phi2_resolved,
     zonal_phi_line_kxt,
     zonal_phi_mode_kxt,
     fieldline_quadrature_weights,
-    turbulent_heating_total,
     turbulent_heating_resolved_species,
     turbulent_heating_species,
+)
+from support.src_reference_kernels import (
+    heat_flux_channel_species,
+    particle_flux_channel_species,
+    turbulent_heating_total,
 )
 from gkx.diagnostics.analysis import ModeSelection
 from gkx.diagnostics.analysis import select_ky_index

@@ -167,7 +167,6 @@ __all__ = [
     "cfl_limiter_report",
     "cfl_limiting_term",
     "cfl_scales_from_array",
-    "estimate_observed_order",
     "ModeSelection",
     "_log_amp_phase",
     "extract_eigenfunction",
@@ -347,36 +346,4 @@ def cfl_limiter_report(dt: np.ndarray, scales: CFLScales) -> CFLLimiterReport:
             name: limiters.count(name) / len(limiters) for name in CFL_TERM_NAMES
         },
         **counts,
-    )
-
-
-def estimate_observed_order(
-    step_sizes: np.ndarray, errors: np.ndarray
-) -> ObservedOrderMetrics:
-    """Estimate observed order from successive step-size refinements."""
-
-    h = np.asarray(step_sizes, dtype=float)
-    err = np.asarray(errors, dtype=float)
-    if h.ndim != 1 or err.ndim != 1 or h.size != err.size or h.size < 2:
-        raise ValueError(
-            "step_sizes and errors must be one-dimensional arrays of equal length >= 2"
-        )
-    if np.any(~np.isfinite(h)) or np.any(~np.isfinite(err)):
-        raise ValueError("step_sizes and errors must be finite")
-    if np.any(h <= 0.0):
-        raise ValueError("step_sizes must be positive")
-    if np.any(err <= 0.0):
-        raise ValueError("errors must be positive")
-
-    orders: list[float] = []
-    for i in range(h.size - 1):
-        if np.isclose(h[i], h[i + 1]):
-            raise ValueError("successive step sizes must differ")
-        orders.append(float(np.log(err[i] / err[i + 1]) / np.log(h[i] / h[i + 1])))
-    orders_arr = np.asarray(orders, dtype=float)
-    return ObservedOrderMetrics(
-        step_sizes=h,
-        errors=err,
-        orders=orders_arr,
-        asymptotic_order=float(orders_arr[-1]),
     )

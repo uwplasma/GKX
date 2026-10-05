@@ -296,35 +296,6 @@ def _apply_flutter(
     return -vth_s * (sqrt_m_b * b_m1 + sqrt_m_p1_b * b_p1)
 
 
-def exb_nonlinear_contribution(
-    G: jnp.ndarray,
-    *,
-    phi: jnp.ndarray,
-    dealias_mask: jnp.ndarray,
-    kx_grid: jnp.ndarray,
-    ky_grid: jnp.ndarray,
-    weight: jnp.ndarray,
-    compressed_real_fft: bool = True,
-    ny_full: int | None = None,
-    radial_phase: jnp.ndarray | None = None,
-) -> jnp.ndarray:
-    """Return the nonlinear E×B contribution using a pseudospectral bracket."""
-    phi = _apply_mask_xy(phi, dealias_mask)
-    bracket_hat = _spectral_bracket(
-        G,
-        phi,
-        kx_grid=kx_grid,
-        ky_grid=ky_grid,
-        dealias_mask=dealias_mask,
-        kxfac=jnp.asarray(1.0),
-        radial_phase=radial_phase,
-        compressed_real_fft=compressed_real_fft,
-        ny_full=ny_full,
-    )
-    real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-    return jnp.asarray(weight, dtype=real_dtype) * bracket_hat
-
-
 def _bracket_kwargs(c: _NonlinearBracketContext) -> dict:
     return {
         "kx_grid": c.kx_grid,

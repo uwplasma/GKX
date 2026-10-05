@@ -589,26 +589,6 @@ def _vmec_betaprim(request: Any) -> float:
     return -float(request.beta) * float(np.sum(dens * temp * (tprim + fprim)))
 
 
-def _vmec_fieldline_geometry(
-    *,
-    request: Any,
-    theta: np.ndarray,
-    betaprim: float,
-) -> Any:
-    return _vmec_fieldlines(
-        vmec_fname=str(request.vmec_file),
-        s_val=float(request.torflux),
-        betaprim=betaprim,
-        alpha=float(request.alpha),
-        include_shear_variation=bool(request.include_shear_variation),
-        include_pressure_variation=bool(request.include_pressure_variation),
-        theta1d=theta,
-        isaxisym=bool(request.isaxisym),
-        iota_input=None,
-        s_hat_input=None,
-    )
-
-
 def _vmec_profiles_from_equal_arc(
     geo: Any, arrays_equal_arc: dict[str, Any]
 ) -> dict[str, Any]:
@@ -649,10 +629,15 @@ def generate_vmec_eik_internal(
     request = _require_vmec_request(request)
     grid = _vmec_theta_grid(request)
     cut = _vmec_flux_tube_cut(request, grid=grid)
-    geo = _vmec_fieldline_geometry(
-        request=request,
-        theta=grid.theta,
+    geo = _vmec_fieldlines(
+        vmec_fname=str(request.vmec_file),
+        s_val=float(request.torflux),
         betaprim=_vmec_betaprim(request),
+        alpha=float(request.alpha),
+        include_shear_variation=bool(request.include_shear_variation),
+        include_pressure_variation=bool(request.include_pressure_variation),
+        theta1d=grid.theta,
+        isaxisym=bool(request.isaxisym),
     )
     theta_cut, arrays_cut = _apply_flux_tube_cut(
         theta=grid.theta,

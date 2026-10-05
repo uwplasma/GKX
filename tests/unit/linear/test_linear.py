@@ -8,7 +8,9 @@ import numpy as np
 import pytest
 
 from gkx.config import CycloneBaseCase, GridConfig, GeometryConfig
-from gkx.diagnostics.analysis import estimate_observed_order
+from support.src_reference_kernels import (
+    estimate_observed_order,
+)
 from gkx.geometry import SAlphaGeometry, SlabGeometry, sample_flux_tube_geometry
 from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
@@ -42,9 +44,11 @@ from gkx.terms.linear_terms import (
     collisions_contribution,
     conservative_full_f_dougherty_cross_moments,
     drift_kinetic_coulomb_six_moment_contribution,
-    drift_kinetic_dougherty_contribution,
     drift_kinetic_sugama_six_moment_contribution,
     multispecies_collision_invariant_rates,
+)
+from support.src_reference_kernels import (
+    drift_kinetic_dougherty_contribution,
 )
 from gkx.terms.assembly import assemble_rhs_terms_cached
 import inspect

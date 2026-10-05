@@ -28,6 +28,8 @@ from gkx.diagnostics.modes import (
 from gkx.diagnostics.analysis import (
     LateTimeLinearMetrics,
     NonlinearWindowMetrics,
+)
+from support.src_reference_kernels import (
     estimate_observed_order,
 )
 from scripts.checks._gates.zonal_validation import (
@@ -74,7 +76,12 @@ from scripts.benchmarks.benchmark_runtime_memory import (
     _write_row_logs,
     _write_summary,
 )
-from gkx.core_velocity import J_l_all, single_precision_factorial
+from gkx.core_velocity import (
+    J_l_all,
+)
+from support.src_reference_kernels import (
+    single_precision_factorial,
+)
 from gkx.config import resolve_cfl_fac
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.params import LinearParams, LinearTerms

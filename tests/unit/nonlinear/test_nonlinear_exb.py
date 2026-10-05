@@ -23,15 +23,19 @@ from gkx.operators.nonlinear.brackets import (
     _broadcast_mask,
     _broadcast_to_G,
     _spectral_bracket,
-    _spectral_bracket_multi,
     _stack_fields,
+)
+from support.src_reference_kernels import (
+    _spectral_bracket_multi,
 )
 from gkx.operators.nonlinear.projection import advance_shearing_coordinates
 from gkx.terms import nonlinear as nonlinear_terms_module
 from gkx.terms.nonlinear import (
     _apply_flutter,
-    exb_nonlinear_contribution,
     nonlinear_em_contribution,
+)
+from support.src_reference_kernels import (
+    exb_nonlinear_contribution,
 )
 from scripts.comparison.nonlinear_components import nonlinear_em_components
 from scripts.benchmarks.secondary_slab_workflow import (

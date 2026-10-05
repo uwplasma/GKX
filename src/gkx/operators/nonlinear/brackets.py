@@ -378,18 +378,3 @@ def _spectral_bracket(
         _spectral_bracket_real_fft if compressed_real_fft else _spectral_bracket_full
     )
     return kernel(G_hat, chi_hat, **kwargs)
-
-
-def _spectral_bracket_multi(
-    G_hat: jnp.ndarray,
-    chi_hat_stack: jnp.ndarray,
-    *,
-    compressed_real_fft: bool = True,
-    **kwargs,
-) -> jnp.ndarray:
-    kernel = (
-        _spectral_bracket_multi_real_fft
-        if compressed_real_fft
-        else _spectral_bracket_multi_full
-    )
-    return kernel(G_hat, chi_hat_stack, **kwargs)
