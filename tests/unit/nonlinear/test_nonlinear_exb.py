@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from support.runtime_patch import patch_runtime
+from support.helpers import patch_runtime
 
 from gkx.config import GridConfig
 from gkx.config import InitializationConfig, TimeConfig

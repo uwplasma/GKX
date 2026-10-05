@@ -48,6 +48,7 @@ from gkx.workflows.runtime.toml import (
 )
 from pathlib import Path
 from support.paths import REPO_ROOT
+from support.helpers import assert_fields
 from types import SimpleNamespace
 import json
 import numpy as np
@@ -77,15 +78,19 @@ def test_runtime_config_to_dict_contains_sections() -> None:
 
 
 def test_runtime_defaults_match_reference_contract() -> None:
-    cfg = RuntimeConfig()
-    assert cfg.geometry.drift_scale == 1.0
-    assert cfg.normalization.diagnostic_norm == "rho_star"
-    assert cfg.normalization.flux_scale == 1.0
-    assert cfg.collisions.p_hyper_m is None
-    assert cfg.collisions.damp_ends_amp == pytest.approx(0.1)
-    assert cfg.collisions.damp_ends_widthfrac == pytest.approx(0.125)
-    assert cfg.parallel.strategy == "serial"
-    assert cfg.parallel.axis == "ky"
+    assert_fields(
+        RuntimeConfig(),
+        {
+            "geometry.drift_scale": 1.0,
+            "normalization.diagnostic_norm": "rho_star",
+            "normalization.flux_scale": 1.0,
+            "collisions.p_hyper_m": None,
+            "collisions.damp_ends_amp": 0.1,
+            "collisions.damp_ends_widthfrac": 0.125,
+            "parallel.strategy": "serial",
+            "parallel.axis": "ky",
+        },
+    )
 
 
 def test_runtime_config_to_dict_is_json_roundtrippable_with_serial_aliases() -> None:
@@ -270,14 +275,19 @@ def test_zonal_deck_kx_selects_the_fitted_mode() -> None:
     assert np.max(np.abs(res.signal)) > 0.0
 
 
+def _maintained_decks(*, include_comparison: bool = True) -> list[Path]:
+    paths = sorted((REPO_ROOT / "examples").rglob("*.toml"))
+    paths += sorted((REPO_ROOT / "benchmarks").rglob("*.toml"))
+    if include_comparison:
+        paths += sorted((REPO_ROOT / "tools" / "comparison").rglob("*.toml"))
+    assert paths
+    return paths
+
+
 def test_maintained_runtime_decks_carry_no_removed_time_keys() -> None:
     """Every shipped deck must load under the current schema."""
 
-    paths = sorted((REPO_ROOT / "examples").rglob("*.toml"))
-    paths += sorted((REPO_ROOT / "benchmarks").rglob("*.toml"))
-    paths += sorted((REPO_ROOT / "tools" / "comparison").rglob("*.toml"))
-    assert paths
-    for path in paths:
+    for path in _maintained_decks():
         time_section = load_toml(path).get("time", {})
         assert not [key for key in time_section if "diffrax" in key], path
 
@@ -349,59 +359,48 @@ Nz = 16
 """
 
 
-def test_deck_without_a_chosen_step_gets_the_cfl_controller_and_rk4(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("time_table", "expected"),
+    [
+        # A step nobody chose must not be applied as a fixed one.
+        # ``TimeConfig.dt`` defaults to 0.1, which is ~7.8x the CFL-stable step
+        # of the shipped Cyclone deck: applied fixed, it overflows to a
+        # FloatingPointError whatever the scheme. With the controller on, the
+        # same deck integrates and rk4 covers the horizon in 29.1% fewer
+        # right-hand-side evaluations than rk2. So the integrator and the step
+        # policy are defaulted as a pair, and only where the deck chose no step.
+        pytest.param("", (None, False, "rk4"), id="no-time-table"),
+        pytest.param("\n[time]\nt_max = 4.0\n", (None, False, "rk4"), id="no-step"),
+        # Every shipped deck sets ``dt``, so none of them may move. Fourteen
+        # shipped decks and parity fixtures omit ``fixed_dt`` and depend on it
+        # being ``True`` at their own ``dt``; several back evidence-ledger rows.
+        # A chosen step keeps rk2 too, because a fixed step gives rk4 no
+        # step-size compensation for its four stages -- it would simply be
+        # twice the cost.
+        pytest.param(
+            "\n[time]\nt_max = 4.0\ndt = 0.002\n",
+            (0.002, True, "rk2"),
+            id="chosen-step",
+        ),
+        # The coupling supplies defaults; it never overrides what the deck said.
+        pytest.param(
+            '\n[time]\nt_max = 4.0\nmethod = "rk3"\nfixed_dt = true\n',
+            (None, True, "rk3"),
+            id="explicit-overrides",
+        ),
+    ],
+)
+def test_step_choice_selects_the_integrator_and_step_pairing(
+    tmp_path: Path, time_table: str, expected: tuple
 ) -> None:
-    """A step nobody chose must not be applied as a fixed one.
-
-    ``TimeConfig.dt`` defaults to 0.1, which is ~7.8x the CFL-stable step of
-    the shipped Cyclone deck: applied fixed, it overflows to a
-    FloatingPointError whatever the scheme. With the controller on, the same
-    deck integrates and rk4 covers the horizon in 29.1% fewer right-hand-side
-    evaluations than rk2. So the integrator and the step policy are defaulted
-    as a pair, and only where the deck chose no step.
-    """
-
-    for table in ("", "\n[time]\nt_max = 4.0\n"):
-        path = tmp_path / f"deck{len(table)}.toml"
-        path.write_text(_minimal_deck(table), encoding="utf-8")
-        cfg, _ = load_runtime_from_toml(path)
-        assert cfg.time.fixed_dt is False
-        assert cfg.time.method == "rk4"
-
-
-def test_deck_that_chooses_a_step_keeps_the_fixed_rk2_pairing(
-    tmp_path: Path,
-) -> None:
-    """Every shipped deck sets ``dt``, so none of them may move.
-
-    Fourteen shipped decks and parity fixtures omit ``fixed_dt`` and depend on
-    it being ``True`` at their own ``dt``; several back evidence-ledger rows.
-    A chosen step keeps rk2 too, because a fixed step gives rk4 no step-size
-    compensation for its four stages -- it would simply be twice the cost.
-    """
-
-    path = tmp_path / "chosen.toml"
-    path.write_text(_minimal_deck("\n[time]\nt_max = 4.0\ndt = 0.002\n"), "utf-8")
+    dt, fixed_dt, method = expected
+    path = tmp_path / "deck.toml"
+    path.write_text(_minimal_deck(time_table), encoding="utf-8")
     cfg, _ = load_runtime_from_toml(path)
-    assert cfg.time.dt == 0.002
-    assert cfg.time.fixed_dt is True
-    assert cfg.time.method == "rk2"
-
-
-def test_deck_overrides_still_win_over_the_unchosen_step_pairing(
-    tmp_path: Path,
-) -> None:
-    """The coupling supplies defaults; it never overrides what the deck said."""
-
-    path = tmp_path / "explicit.toml"
-    path.write_text(
-        _minimal_deck('\n[time]\nt_max = 4.0\nmethod = "rk3"\nfixed_dt = true\n'),
-        encoding="utf-8",
-    )
-    cfg, _ = load_runtime_from_toml(path)
-    assert cfg.time.method == "rk3"
-    assert cfg.time.fixed_dt is True
+    if dt is not None:
+        assert cfg.time.dt == dt
+    assert cfg.time.fixed_dt is fixed_dt
+    assert cfg.time.method == method
 
 
 def test_every_shipped_deck_chooses_its_own_step() -> None:
@@ -414,11 +413,8 @@ def test_every_shipped_deck_chooses_its_own_step() -> None:
 
     import tomllib
 
-    paths = sorted((REPO_ROOT / "examples").rglob("*.toml"))
-    paths += sorted((REPO_ROOT / "benchmarks").rglob("*.toml"))
-    paths += sorted((REPO_ROOT / "tools" / "comparison").rglob("*.toml"))
     missing = []
-    for deck in paths:
+    for deck in _maintained_decks():
         data = tomllib.loads(deck.read_text(encoding="utf-8"))
         if "schema_version" not in data and "grid" not in data:
             continue  # not a GKX runtime deck (e.g. a GX-schema reference file)
@@ -429,27 +425,23 @@ def test_every_shipped_deck_chooses_its_own_step() -> None:
 
 
 def test_load_runtime_from_toml_roundtrip(tmp_path: Path) -> None:
-    toml = """
+    species = "\n".join(
+        f"""
 [[species]]
-name = "ion"
-charge = 1.0
-mass = 1.0
+name = "{name}"
+charge = {charge}
+mass = {mass}
 density = 1.0
 temperature = 1.0
 tprim = 2.49
 fprim = 0.8
 kinetic = true
-
-[[species]]
-name = "electron"
-charge = -1.0
-mass = 0.00027248
-density = 1.0
-temperature = 1.0
-tprim = 2.49
-fprim = 0.8
-kinetic = true
-
+"""
+        for name, charge, mass in (("ion", 1.0, 1.0), ("electron", -1.0, 0.00027248))
+    )
+    toml = (
+        species
+        + """
 [grid]
 Nx = 1
 Ny = 8
@@ -496,50 +488,53 @@ strict_identity = true
 profile = true
 backend = "auto"
 """
+    )
     path = tmp_path / "runtime.toml"
     path.write_text(toml, encoding="utf-8")
     cfg, data = load_runtime_from_toml(path)
     assert isinstance(data, dict)
-    assert cfg.grid.Ny == 8
-    assert cfg.physics.electromagnetic
-    assert cfg.physics.use_apar
-    assert not cfg.physics.adiabatic_electrons
-    assert cfg.physics.beta == pytest.approx(0.2)
-    assert cfg.normalization.contract == "kbm"
-    assert cfg.normalization.omega_star_scale == pytest.approx(0.7)
-    assert cfg.expert.fixed_mode is True
-    assert cfg.expert.iky_fixed == 1
-    assert cfg.expert.ikx_fixed == 0
-    assert cfg.init.init_file == str(Path("/tmp/restart.bin").resolve())
-    assert cfg.init.init_file_scale == pytest.approx(5.0)
-    assert cfg.init.init_file_mode == "add"
-    assert cfg.output.path == str((tmp_path / "tools_out" / "runtime_case").resolve())
-    assert cfg.quasilinear.enabled is True
-    assert cfg.quasilinear.mode == "saturated"
-    assert cfg.quasilinear.saturation_rule == "mixing_length"
-    assert cfg.quasilinear.csat == pytest.approx(0.7)
-    assert cfg.quasilinear.channels == ("es",)
-    assert cfg.quasilinear.output_path == str(
-        (tmp_path / "tools_out" / "ql_case").resolve()
+    assert_fields(
+        cfg,
+        {
+            "grid.Ny": 8,
+            "physics.electromagnetic": True,
+            "physics.use_apar": True,
+            "physics.adiabatic_electrons": False,
+            "physics.beta": 0.2,
+            "normalization.contract": "kbm",
+            "normalization.omega_star_scale": 0.7,
+            "expert.fixed_mode": True,
+            "expert.iky_fixed": 1,
+            "expert.ikx_fixed": 0,
+            "init.init_file": str(Path("/tmp/restart.bin").resolve()),
+            "init.init_file_scale": 5.0,
+            "init.init_file_mode": "add",
+            "output.path": str((tmp_path / "tools_out" / "runtime_case").resolve()),
+            "quasilinear.enabled": True,
+            "quasilinear.mode": "saturated",
+            "quasilinear.saturation_rule": "mixing_length",
+            "quasilinear.csat": 0.7,
+            "quasilinear.channels": ("es",),
+            "quasilinear.output_path": str(
+                (tmp_path / "tools_out" / "ql_case").resolve()
+            ),
+            "parallel.strategy": "combined_ky",
+            "parallel.axis": "ky",
+            "parallel.batch_size": 3,
+            "parallel.num_devices": 2,
+            "parallel.strict_identity": True,
+            "parallel.profile": True,
+            "species[1].charge": -1.0,
+        },
     )
-    assert cfg.parallel.strategy == "combined_ky"
-    assert cfg.parallel.axis == "ky"
-    assert cfg.parallel.batch_size == 3
-    assert cfg.parallel.num_devices == 2
-    assert cfg.parallel.strict_identity is True
-    assert cfg.parallel.profile is True
     assert len(cfg.species) == 2
-    assert cfg.species[1].charge == pytest.approx(-1.0)
 
 
 def test_runtime_parallel_config_validates_values() -> None:
     assert RuntimeParallelConfig(strategy="batch-ky").strategy == "combined_ky"
-    with pytest.raises(ValueError):
-        RuntimeParallelConfig(strategy="unknown")
-    with pytest.raises(ValueError):
-        RuntimeParallelConfig(batch_size=0)
-    with pytest.raises(ValueError):
-        RuntimeParallelConfig(num_devices=0)
+    for bad in ({"strategy": "unknown"}, {"batch_size": 0}, {"num_devices": 0}):
+        with pytest.raises(ValueError):
+            RuntimeParallelConfig(**bad)
 
 
 def test_gx_aligned_kbm_runtime_examples_keep_end_damping_enabled() -> None:
@@ -601,172 +596,253 @@ def test_nonaxisymmetric_quasilinear_examples_keep_electrostatic_contract() -> N
         assert cfg.terms.bpar == pytest.approx(0.0), name
 
 
-def test_etg_nonlinear_pilot_example_keeps_two_species_full_gk_contract() -> None:
-    path = REPO_ROOT / "benchmarks" / "cases/etg_nonlinear.toml"
+_QI_WOUT = REPO_ROOT / "examples" / "vmec" / "wout_nfp3_QI_fixed_resolution_final.nc"
+_TOOLS_OUT = REPO_ROOT / "tools_out"
 
-    cfg, data = load_runtime_from_toml(path)
+# Each shipped deck's pinned contract, as dotted paths into (cfg, raw data).
+_SHIPPED_DECK_CONTRACTS = {
+    "benchmarks/cases/etg_nonlinear.toml": {
+        "cfg.physics.linear": False,
+        "cfg.physics.nonlinear": True,
+        "cfg.physics.electrostatic": True,
+        "cfg.physics.electromagnetic": False,
+        "cfg.physics.adiabatic_ions": False,
+        "cfg.physics.adiabatic_electrons": False,
+        "cfg.grid.Lx": 1.25,
+        "cfg.init.gaussian_init": True,
+        "cfg.init.init_single": False,
+        "cfg.collisions.hypercollisions_const": 0.0,
+        "cfg.collisions.hypercollisions_kz": 1.0,
+        "data.run.ky": 5.0,
+        "cfg.output.path": str((_TOOLS_OUT / "etg_nonlinear_runtime").resolve()),
+        "n_species": 2,
+    },
+    "benchmarks/cases/w7x_linear_imported_geometry.toml": {
+        "cfg.geometry.model": "vmec",
+        "cfg.geometry.geometry_file": None,
+        "cfg.geometry.vmec_file": str(_QI_WOUT.resolve()),
+        "cfg.geometry.torflux": 0.64,
+        "cfg.init.init_field": "density",
+        "cfg.physics.adiabatic_electrons": True,
+        "cfg.normalization.diagnostic_norm": "rho_star",
+    },
+    "benchmarks/cases/w7x_nonlinear_imported_geometry.toml": {
+        "cfg.geometry.model": "vmec",
+        "cfg.geometry.geometry_file": None,
+        "cfg.geometry.vmec_file": str(_QI_WOUT.resolve()),
+        "cfg.geometry.torflux": 0.64,
+        "cfg.physics.nonlinear": True,
+        "cfg.physics.adiabatic_electrons": True,
+        "cfg.physics.collisions": True,
+        "cfg.terms.collisions": 1.0,
+        "cfg.terms.nonlinear": 1.0,
+        "run_has_steps": False,
+        "cfg.output.path": str(
+            (_TOOLS_OUT / "w7x_nonlinear_imported_runtime").resolve()
+        ),
+    },
+    "examples/04_nonlinear_stellarator/case_full.toml": {
+        "cfg.geometry.model": "vmec",
+        "cfg.geometry.vmec_file": str(
+            (
+                REPO_ROOT / "examples" / "vmec" / "wout_NuhrenbergZille_1988_QHS.nc"
+            ).resolve()
+        ),
+        "cfg.geometry.geometry_helper_python": None,
+        "cfg.geometry.torflux": 0.64,
+        "cfg.physics.nonlinear": True,
+        "cfg.physics.adiabatic_electrons": True,
+        "cfg.physics.collisions": True,
+        "cfg.terms.collisions": 1.0,
+        "cfg.terms.nonlinear": 1.0,
+        "run_has_steps": False,
+        "cfg.output.path": str((_TOOLS_OUT / "hsx_nonlinear_vmec_runtime").resolve()),
+    },
+    "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml": {
+        "cfg.geometry.model": "vmec",
+        "cfg.geometry.vmec_file": str(_QI_WOUT.resolve()),
+        "cfg.geometry.geometry_helper_python": None,
+        "cfg.geometry.torflux": 0.64,
+        "cfg.physics.nonlinear": True,
+        "cfg.physics.adiabatic_electrons": True,
+        "cfg.physics.collisions": True,
+        "cfg.terms.collisions": 1.0,
+        "run_has_steps": False,
+        "cfg.output.path": str((_TOOLS_OUT / "w7x_nonlinear_vmec_runtime").resolve()),
+    },
+    "benchmarks/cases/secondary_slab.toml": {
+        "cfg.geometry.model": "slab",
+        "cfg.geometry.s_hat": 1.0e-8,
+        "cfg.physics.linear": True,
+        "cfg.physics.nonlinear": False,
+        "cfg.physics.adiabatic_electrons": True,
+    },
+    "benchmarks/cases/cyclone_nonlinear_miller.toml": {
+        "cfg.geometry.model": "miller",
+        "cfg.geometry.q": 1.4,
+        "cfg.geometry.s_hat": 0.8,
+        "cfg.geometry.rhoc": 0.5,
+        "cfg.physics.nonlinear": True,
+        "cfg.physics.adiabatic_electrons": True,
+    },
+    # Merlo Case III contract.
+    "benchmarks/cases/miller_zonal_response.toml": {
+        "cfg.expert.source": "default",
+        "cfg.expert.phi_ext": 0.0,
+        "cfg.init.init_field": "density",
+        "cfg.init.init_amp": 1.0e-6,
+        "cfg.output.save_for_restart": True,
+        "cfg.geometry.q": 1.389,
+        "cfg.geometry.s_hat": 0.751,
+        "cfg.geometry.akappa": 1.4723,
+        "cfg.geometry.tri": -0.0070,
+        "cfg.geometry.shift": -0.1569,
+        "cfg.grid.Nz": 32,
+        "data.run.Nl": 4,
+        "data.run.kx": 0.05,
+        "data.run.ky": 0.0,
+        # A zero-gradient relaxation run has no saturation to stop at: the
+        # default run_to = "saturation" declares the ~0 heat flux converged
+        # inside the first chunk and truncates the trace at t ~ 6 without raising.
+        "cfg.time.run_to": "t_max",
+    },
+    # W7-X test 4 contract.
+    "benchmarks/cases/w7x_zonal_response_vmec.toml": {
+        "cfg.geometry.model": "vmec",
+        "cfg.geometry.vmec_file": str(_QI_WOUT.resolve()),
+        "cfg.geometry.torflux": 0.64,
+        "cfg.geometry.alpha": 0.0,
+        "cfg.geometry.R0": 5.485,
+        "cfg.grid.boundary": "linked",
+        "cfg.grid.nperiod": 4,
+        "cfg.grid.Nz": 256,
+        "cfg.init.gaussian_init": True,
+        "cfg.init.gaussian_width": 1.0,
+        "cfg.init.init_field": "phi",
+        "cfg.physics.adiabatic_electrons": True,
+        "cfg.physics.nonlinear": False,
+        "cfg.physics.collisions": False,
+        "cfg.physics.hypercollisions": False,
+        "cfg.species[0].tprim": 0.0,
+        "cfg.species[0].fprim": 0.0,
+        "data.run.ky": 0.0,
+        "data.run.kx": 0.05,
+        "data.run.Nl": 8,
+        "data.run.Nm": 32,
+        # dt is set by the parallel-streaming CFL of the equilibrium the deck
+        # loads, not by taste: at Nm = 32 the runtime's own bound is 0.0311, and
+        # the 0.05 this deck used to ship went non-finite at t = 5.65 of a
+        # requested 60. Raising it, or raising Nm, needs the bound re-derived.
+        "data.run.dt": 0.02,
+        "data.run.steps": 3000,
+        "cfg.time.dt": 0.02,
+    },
+}
 
+
+@pytest.mark.parametrize("relative", sorted(_SHIPPED_DECK_CONTRACTS))
+def test_shipped_deck_keeps_its_contract(relative: str) -> None:
+    cfg, data = load_runtime_from_toml(REPO_ROOT / relative)
     assert isinstance(data, dict)
-    assert len(cfg.species) == 2
-    assert cfg.physics.linear is False
-    assert cfg.physics.nonlinear is True
-    assert cfg.physics.electrostatic is True
-    assert cfg.physics.electromagnetic is False
-    assert cfg.physics.adiabatic_ions is False
-    assert cfg.physics.adiabatic_electrons is False
-    assert cfg.grid.Lx == pytest.approx(1.25)
-    assert cfg.init.gaussian_init is True
-    assert cfg.init.init_single is False
-    assert cfg.collisions.hypercollisions_const == pytest.approx(0.0)
-    assert cfg.collisions.hypercollisions_kz == pytest.approx(1.0)
-    assert data["run"]["ky"] == pytest.approx(5.0)
-    assert cfg.output.path == str(
-        (path.parents[2] / "tools_out" / "etg_nonlinear_runtime").resolve()
+    view = {
+        "cfg": cfg,
+        "data": data,
+        "n_species": len(cfg.species),
+        "run_has_steps": "steps" in data.get("run", {}),
+    }
+    assert_fields(view, _SHIPPED_DECK_CONTRACTS[relative], label=relative)
+
+
+def test_zonal_response_decks_cover_their_horizon() -> None:
+    _cfg, data = load_runtime_from_toml(
+        REPO_ROOT / "benchmarks" / "cases" / "miller_zonal_response.toml"
     )
+    # Converged Hermite baseline, not the retired Nm=24 one. Nm >= 120 is what
+    # puts the whole analysis window before the recurrence onset
+    # t_quiet ~ 5.5 sqrt(Nm), and dt <= 0.0025 is what keeps Nm=144 stable --
+    # the Hermite streaming CFL scales as sqrt(Nm) and dt=0.005 goes non-finite
+    # at t=46.5 there.
+    assert data["run"]["Nm"] >= 120
+    assert data["run"]["dt"] <= 0.0025
+    assert data["run"]["steps"] * data["run"]["dt"] == pytest.approx(60.0)
+
+    cfg, data = load_runtime_from_toml(
+        REPO_ROOT / "benchmarks" / "cases" / "w7x_zonal_response_vmec.toml"
+    )
+    assert data["run"]["steps"] * data["run"]["dt"] == pytest.approx(cfg.time.t_max)
 
 
-def test_load_runtime_from_toml_keeps_imported_geometry_fields(tmp_path: Path) -> None:
-    toml = """
-[[species]]
-name = "ion"
-charge = 1.0
-mass = 1.0
-density = 1.0
-temperature = 1.0
-tprim = 3.0
-fprim = 1.0
-kinetic = true
-
-[grid]
-Nx = 1
-Ny = 12
-Nz = 32
-
-[geometry]
-model = "imported-netcdf"
-geometry_file = "/tmp/w7x.eik.nc"
-
-[physics]
-adiabatic_electrons = true
-electromagnetic = false
-
-[run]
-ky = 0.3
-Nl = 8
-Nm = 12
-solver = "explicit_time"
-"""
-    path = tmp_path / "runtime_w7x.toml"
-    path.write_text(toml, encoding="utf-8")
-
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        pytest.param(
+            '[[species]]\nname = "ion"\ncharge = 1.0\nmass = 1.0\ndensity = 1.0\n'
+            "temperature = 1.0\ntprim = 3.0\nfprim = 1.0\nkinetic = true\n"
+            "[grid]\nNx = 1\nNy = 12\nNz = 32\n"
+            '[geometry]\nmodel = "imported-netcdf"\n'
+            'geometry_file = "/tmp/w7x.eik.nc"\n'
+            "[physics]\nadiabatic_electrons = true\nelectromagnetic = false\n"
+            '[run]\nky = 0.3\nNl = 8\nNm = 12\nsolver = "explicit_time"\n',
+            {
+                "geometry.model": "imported-netcdf",
+                "geometry.geometry_file": str(Path("/tmp/w7x.eik.nc").resolve()),
+                "physics.adiabatic_electrons": True,
+            },
+            id="imported-netcdf",
+        ),
+        pytest.param(
+            '[geometry]\nmodel = "desc-eik"\ngeometry_file = "/tmp/w7x-desc.eik.nc"\n',
+            {
+                "geometry.model": "desc-eik",
+                "geometry.geometry_file": str(Path("/tmp/w7x-desc.eik.nc").resolve()),
+            },
+            id="desc-eik-alias",
+        ),
+        pytest.param(
+            '[geometry]\nmodel = "vmec"\nvmec_file = "/tmp/wout_test.nc"\n'
+            'torflux = 0.64\ngeometry_helper_python = "python3"\n',
+            {
+                "geometry.model": "vmec",
+                "geometry.vmec_file": str(Path("/tmp/wout_test.nc").resolve()),
+                "geometry.geometry_helper_python": "python3",
+            },
+            id="vmec-helper-python",
+        ),
+        pytest.param(
+            '[geometry]\nmodel = "vmec"\nvmec_file = "/tmp/wout_test.nc"\n'
+            'torflux = 0.64\ngeometry_helper_python = "python3"\n'
+            'geometry_helper_repo = "/tmp/helper"\n',
+            {
+                "geometry.geometry_helper_python": "python3",
+                "geometry.geometry_helper_repo": str(Path("/tmp/helper")),
+            },
+            id="helper-fields",
+        ),
+        pytest.param(
+            '[geometry]\nmodel = "miller"\nrhoc = 0.5\nq = 1.4\ns_hat = 0.8\n'
+            "R0 = 2.77778\nR_geo = 2.77778\nshift = 0.0\nakappa = 1.0\n"
+            "akappri = 0.0\ntri = 0.0\ntripri = 0.0\nbetaprim = 0.0\n"
+            'geometry_helper_python = "python3"\n',
+            {
+                "geometry.model": "miller",
+                "geometry.rhoc": 0.5,
+                "geometry.R_geo": 2.77778,
+                "geometry.akappa": 1.0,
+                "geometry.tripri": 0.0,
+                "geometry.geometry_helper_python": "python3",
+            },
+            id="miller",
+        ),
+    ],
+)
+def test_load_runtime_from_toml_keeps_geometry_fields(
+    tmp_path: Path, body: str, expected: dict
+) -> None:
+    path = tmp_path / "runtime_geometry.toml"
+    path.write_text(body, encoding="utf-8")
     cfg, data = load_runtime_from_toml(path)
-
     assert isinstance(data, dict)
-    assert cfg.geometry.model == "imported-netcdf"
-    assert cfg.geometry.geometry_file == str(Path("/tmp/w7x.eik.nc").resolve())
-    assert cfg.physics.adiabatic_electrons is True
-
-
-def test_w7x_imported_geometry_example_toml_loads() -> None:
-    path = REPO_ROOT / "benchmarks" / "cases/w7x_linear_imported_geometry.toml"
-
-    cfg, data = load_runtime_from_toml(path)
-
-    assert isinstance(data, dict)
-    assert cfg.geometry.model == "vmec"
-    assert cfg.geometry.geometry_file is None
-    assert cfg.geometry.vmec_file == str(
-        (
-            path.parents[2]
-            / "examples"
-            / "vmec"
-            / "wout_nfp3_QI_fixed_resolution_final.nc"
-        ).resolve()
-    )
-    assert cfg.geometry.torflux == pytest.approx(0.64)
-    assert cfg.init.init_field == "density"
-    assert cfg.physics.adiabatic_electrons is True
-    assert cfg.normalization.diagnostic_norm == "rho_star"
-
-
-def test_w7x_nonlinear_imported_geometry_example_toml_loads() -> None:
-    path = REPO_ROOT / "benchmarks" / "cases/w7x_nonlinear_imported_geometry.toml"
-
-    cfg, data = load_runtime_from_toml(path)
-
-    assert isinstance(data, dict)
-    assert cfg.geometry.model == "vmec"
-    assert cfg.geometry.geometry_file is None
-    assert cfg.geometry.vmec_file == str(
-        (
-            path.parents[2]
-            / "examples"
-            / "vmec"
-            / "wout_nfp3_QI_fixed_resolution_final.nc"
-        ).resolve()
-    )
-    assert cfg.geometry.torflux == pytest.approx(0.64)
-    assert cfg.physics.nonlinear is True
-    assert cfg.physics.adiabatic_electrons is True
-    assert cfg.physics.collisions is True
-    assert cfg.terms.collisions == pytest.approx(1.0)
-    assert cfg.terms.nonlinear == pytest.approx(1.0)
-    assert "steps" not in data.get("run", {})
-    assert cfg.output.path == str(
-        (path.parents[2] / "tools_out" / "w7x_nonlinear_imported_runtime").resolve()
-    )
-
-
-def test_hsx_nonlinear_vmec_geometry_example_toml_loads() -> None:
-    path = REPO_ROOT / "examples" / "04_nonlinear_stellarator/case_full.toml"
-
-    cfg, data = load_runtime_from_toml(path)
-
-    assert isinstance(data, dict)
-    assert cfg.geometry.model == "vmec"
-    assert cfg.geometry.vmec_file is not None
-    assert cfg.geometry.vmec_file == str(
-        (path.parents[1] / "vmec" / "wout_NuhrenbergZille_1988_QHS.nc").resolve()
-    )
-    assert cfg.geometry.geometry_helper_python is None
-    assert cfg.geometry.torflux == pytest.approx(0.64)
-    assert cfg.physics.nonlinear is True
-    assert cfg.physics.adiabatic_electrons is True
-    assert cfg.physics.collisions is True
-    assert cfg.terms.collisions == pytest.approx(1.0)
-    assert cfg.terms.nonlinear == pytest.approx(1.0)
-    assert "steps" not in data.get("run", {})
-    assert cfg.output.path == str(
-        (path.parents[2] / "tools_out" / "hsx_nonlinear_vmec_runtime").resolve()
-    )
-
-
-def test_w7x_nonlinear_vmec_geometry_example_toml_loads() -> None:
-    path = REPO_ROOT / "benchmarks" / "cases/w7x_nonlinear_vmec_geometry.toml"
-
-    cfg, data = load_runtime_from_toml(path)
-
-    assert isinstance(data, dict)
-    assert cfg.geometry.model == "vmec"
-    assert cfg.geometry.vmec_file is not None
-    assert cfg.geometry.vmec_file == str(
-        (
-            path.parents[2]
-            / "examples"
-            / "vmec"
-            / "wout_nfp3_QI_fixed_resolution_final.nc"
-        ).resolve()
-    )
-    assert cfg.geometry.geometry_helper_python is None
-    assert cfg.geometry.torflux == pytest.approx(0.64)
-    assert cfg.physics.nonlinear is True
-    assert cfg.physics.adiabatic_electrons is True
-    assert cfg.physics.collisions is True
-    assert cfg.terms.collisions == pytest.approx(1.0)
-    assert "steps" not in data.get("run", {})
-    assert cfg.output.path == str(
-        (path.parents[2] / "tools_out" / "w7x_nonlinear_vmec_runtime").resolve()
-    )
+    assert_fields(cfg, expected)
 
 
 def test_load_runtime_from_toml_resolves_relative_runtime_paths_against_config_dir(
@@ -794,205 +870,15 @@ restart_from_file = "../out/run.resume.nc"
 
     cfg, _ = load_runtime_from_toml(path)
 
-    assert cfg.geometry.vmec_file == str((tmp_path / "vmec" / "wout.nc").resolve())
-    assert cfg.geometry.geometry_file == str(
-        (tmp_path / "geom" / "run.eik.nc").resolve()
-    )
-    assert cfg.init.init_file == str((tmp_path / "restart" / "state.bin").resolve())
-    assert cfg.output.path == str((tmp_path / "out" / "run.out.nc").resolve())
-    assert cfg.output.restart_to_file == str(
-        (tmp_path / "out" / "run.restart.nc").resolve()
-    )
-    assert cfg.output.restart_from_file == str(
-        (tmp_path / "out" / "run.resume.nc").resolve()
-    )
-
-
-def test_secondary_slab_example_toml_loads() -> None:
-    path = REPO_ROOT / "benchmarks" / "cases" / "secondary_slab.toml"
-
-    cfg, data = load_runtime_from_toml(path)
-
-    assert isinstance(data, dict)
-    assert cfg.geometry.model == "slab"
-    assert cfg.geometry.s_hat == pytest.approx(1.0e-8)
-    assert cfg.physics.linear is True
-    assert cfg.physics.nonlinear is False
-    assert cfg.physics.adiabatic_electrons is True
-
-
-def test_load_runtime_from_toml_accepts_desc_eik_geometry_alias(tmp_path: Path) -> None:
-    toml = """
-[geometry]
-model = "desc-eik"
-geometry_file = "/tmp/w7x-desc.eik.nc"
-"""
-    path = tmp_path / "runtime_desc.toml"
-    path.write_text(toml, encoding="utf-8")
-
-    cfg, _ = load_runtime_from_toml(path)
-
-    assert cfg.geometry.model == "desc-eik"
-    assert cfg.geometry.geometry_file == str(Path("/tmp/w7x-desc.eik.nc").resolve())
-
-
-def test_load_runtime_from_toml_accepts_vmec_geometry_helper_python(
-    tmp_path: Path,
-) -> None:
-    toml = """
-[geometry]
-model = "vmec"
-vmec_file = "/tmp/wout_test.nc"
-torflux = 0.64
-geometry_helper_python = "python3"
-"""
-    path = tmp_path / "runtime_vmec.toml"
-    path.write_text(toml, encoding="utf-8")
-
-    cfg, _ = load_runtime_from_toml(path)
-
-    assert cfg.geometry.model == "vmec"
-    assert cfg.geometry.vmec_file == str(Path("/tmp/wout_test.nc").resolve())
-    assert cfg.geometry.geometry_helper_python == "python3"
-
-
-def test_load_runtime_from_toml_accepts_geometry_helper_fields(
-    tmp_path: Path,
-) -> None:
-    toml = """
-[geometry]
-model = "vmec"
-vmec_file = "/tmp/wout_test.nc"
-torflux = 0.64
-geometry_helper_python = "python3"
-geometry_helper_repo = "/tmp/helper"
-"""
-    path = tmp_path / "runtime_vmec_helper.toml"
-    path.write_text(toml, encoding="utf-8")
-
-    cfg, _ = load_runtime_from_toml(path)
-
-    assert cfg.geometry.geometry_helper_python == "python3"
-    assert cfg.geometry.geometry_helper_repo == str(Path("/tmp/helper"))
-
-
-def test_load_runtime_from_toml_accepts_miller_geometry_fields(tmp_path: Path) -> None:
-    toml = """
-[geometry]
-model = "miller"
-rhoc = 0.5
-q = 1.4
-s_hat = 0.8
-R0 = 2.77778
-R_geo = 2.77778
-shift = 0.0
-akappa = 1.0
-akappri = 0.0
-tri = 0.0
-tripri = 0.0
-betaprim = 0.0
-geometry_helper_python = "python3"
-"""
-    path = tmp_path / "runtime_miller.toml"
-    path.write_text(toml, encoding="utf-8")
-
-    cfg, _ = load_runtime_from_toml(path)
-
-    assert cfg.geometry.model == "miller"
-    assert cfg.geometry.rhoc == pytest.approx(0.5)
-    assert cfg.geometry.R_geo == pytest.approx(2.77778)
-    assert cfg.geometry.akappa == pytest.approx(1.0)
-    assert cfg.geometry.tripri == pytest.approx(0.0)
-    assert cfg.geometry.geometry_helper_python == "python3"
-
-
-def test_cyclone_nonlinear_gx_miller_example_toml_loads() -> None:
-    path = REPO_ROOT / "benchmarks" / "cases/cyclone_nonlinear_miller.toml"
-
-    cfg, data = load_runtime_from_toml(path)
-
-    assert isinstance(data, dict)
-    assert cfg.geometry.model == "miller"
-    assert cfg.geometry.q == pytest.approx(1.4)
-    assert cfg.geometry.s_hat == pytest.approx(0.8)
-    assert cfg.geometry.rhoc == pytest.approx(0.5)
-    assert cfg.physics.nonlinear is True
-    assert cfg.physics.adiabatic_electrons is True
-
-
-def test_miller_zonal_response_example_uses_merlo_case_iii_contract() -> None:
-    path = REPO_ROOT / "benchmarks" / "cases" / "miller_zonal_response.toml"
-
-    cfg, data = load_runtime_from_toml(path)
-
-    assert isinstance(data, dict)
-    assert cfg.expert.source == "default"
-    assert cfg.expert.phi_ext == pytest.approx(0.0)
-    assert cfg.init.init_field == "density"
-    assert cfg.init.init_amp == pytest.approx(1.0e-6)
-    assert cfg.output.save_for_restart is True
-    assert cfg.geometry.q == pytest.approx(1.389)
-    assert cfg.geometry.s_hat == pytest.approx(0.751)
-    assert cfg.geometry.akappa == pytest.approx(1.4723)
-    assert cfg.geometry.tri == pytest.approx(-0.0070)
-    assert cfg.geometry.shift == pytest.approx(-0.1569)
-    assert cfg.grid.Nz == 32
-    assert data["run"]["Nl"] == 4
-    assert data["run"]["kx"] == pytest.approx(0.05)
-    assert data["run"]["ky"] == pytest.approx(0.0)
-    # Converged Hermite baseline, not the retired Nm=24 one. Nm >= 120 is what
-    # puts the whole analysis window before the recurrence onset
-    # t_quiet ~ 5.5 sqrt(Nm), and dt <= 0.0025 is what keeps Nm=144 stable --
-    # the Hermite streaming CFL scales as sqrt(Nm) and dt=0.005 goes non-finite
-    # at t=46.5 there.
-    assert data["run"]["Nm"] >= 120
-    assert data["run"]["dt"] <= 0.0025
-    assert data["run"]["steps"] * data["run"]["dt"] == pytest.approx(60.0)
-    # A zero-gradient relaxation run has no saturation to stop at: the default
-    # run_to = "saturation" declares the ~0 heat flux converged inside the first
-    # chunk and truncates the trace at t ~ 6 without raising.
-    assert cfg.time.run_to == "t_max"
-
-
-def test_w7x_zonal_response_vmec_example_uses_test4_contract() -> None:
-    path = REPO_ROOT / "benchmarks" / "cases" / "w7x_zonal_response_vmec.toml"
-
-    cfg, data = load_runtime_from_toml(path)
-
-    assert isinstance(data, dict)
-    assert cfg.geometry.model == "vmec"
-    assert cfg.geometry.vmec_file == str(
-        (
-            REPO_ROOT / "examples" / "vmec" / "wout_nfp3_QI_fixed_resolution_final.nc"
-        ).resolve()
-    )
-    assert cfg.geometry.torflux == pytest.approx(0.64)
-    assert cfg.geometry.alpha == pytest.approx(0.0)
-    assert cfg.geometry.R0 == pytest.approx(5.485)
-    assert cfg.grid.boundary == "linked"
-    assert cfg.grid.nperiod == 4
-    assert cfg.grid.Nz == 256
-    assert cfg.init.gaussian_init is True
-    assert cfg.init.gaussian_width == pytest.approx(1.0)
-    assert cfg.init.init_field == "phi"
-    assert cfg.physics.adiabatic_electrons is True
-    assert cfg.physics.nonlinear is False
-    assert cfg.physics.collisions is False
-    assert cfg.physics.hypercollisions is False
-    assert cfg.species[0].tprim == pytest.approx(0.0)
-    assert cfg.species[0].fprim == pytest.approx(0.0)
-    assert data["run"]["ky"] == pytest.approx(0.0)
-    assert data["run"]["kx"] == pytest.approx(0.05)
-    assert data["run"]["Nl"] == 8
-    assert data["run"]["Nm"] == 32
-    # dt is set by the parallel-streaming CFL of the equilibrium the deck loads,
-    # not by taste: at Nm = 32 the runtime's own bound is 0.0311, and the 0.05
-    # this deck used to ship went non-finite at t = 5.65 of a requested 60.
-    # Raising it, or raising Nm, needs the bound re-derived first.
-    assert data["run"]["dt"] == pytest.approx(0.02)
-    assert data["run"]["steps"] == 3000
-    assert cfg.time.dt == pytest.approx(data["run"]["dt"])
-    assert data["run"]["steps"] * data["run"]["dt"] == pytest.approx(cfg.time.t_max)
+    expected = {
+        "geometry.vmec_file": "vmec/wout.nc",
+        "geometry.geometry_file": "geom/run.eik.nc",
+        "init.init_file": "restart/state.bin",
+        "output.path": "out/run.out.nc",
+        "output.restart_to_file": "out/run.restart.nc",
+        "output.restart_from_file": "out/run.resume.nc",
+    }
+    assert_fields(cfg, {k: str((tmp_path / v).resolve()) for k, v in expected.items()})
 
 
 def test_output_warm_start_is_opt_in_and_round_trips(tmp_path: Path) -> None:
@@ -1263,42 +1149,26 @@ def test_active_dealias_indices_fall_back_to_full_axis_for_empty_masks() -> None
 
 
 def test_select_nonlinear_mode_indices_uses_nearest_retained_dealiased_mode() -> None:
+    mask = np.asarray(
+        [[False, False, True], [False, False, False], [True, False, False]], dtype=bool
+    )
     grid = SimpleNamespace(
         ky=np.asarray([0.0, 0.4, 0.8]),
         kx=np.asarray([-1.0, 0.0, 1.0]),
-        dealias_mask=np.asarray(
-            [
-                [False, False, True],
-                [False, False, False],
-                [True, False, False],
-            ],
-            dtype=bool,
-        ),
+        dealias_mask=mask,
     )
+    assert _select_nonlinear_mode_indices(
+        grid, ky_target=0.39, kx_target=0.2, use_dealias_mask=True
+    ) == (0, 2)
 
-    ky_idx, kx_idx = _select_nonlinear_mode_indices(
-        grid,
-        ky_target=0.39,
-        kx_target=0.2,
-        use_dealias_mask=True,
-    )
-
-    assert (ky_idx, kx_idx) == (0, 2)
-
-
-def test_select_nonlinear_mode_indices_validates_dealias_mask_shape() -> None:
     bad_grid = SimpleNamespace(
         ky=np.asarray([0.0, 0.4]),
         kx=np.asarray([-1.0, 0.0, 1.0]),
         dealias_mask=np.ones((2, 2), dtype=bool),
     )
-
     with pytest.raises(ValueError, match="dealias_mask shape"):
         _select_nonlinear_mode_indices(
-            bad_grid,
-            ky_target=0.4,
-            kx_target=0.0,
-            use_dealias_mask=True,
+            bad_grid, ky_target=0.4, kx_target=0.0, use_dealias_mask=True
         )
 
 
@@ -1317,16 +1187,10 @@ def test_runtime_independent_parallel_plan_serializes_argument_policy() -> None:
     cfg = SimpleNamespace(parallel=None)
 
     plan = _runtime_independent_parallel_plan(
-        cfg,
-        problem_size=3,
-        workers=8,
-        executor="threads",
+        cfg, problem_size=3, workers=8, executor="threads"
     )
     empty = _runtime_independent_parallel_plan(
-        cfg,
-        problem_size=0,
-        workers=2,
-        executor="process",
+        cfg, problem_size=0, workers=2, executor="process"
     )
 
     assert isinstance(plan, RuntimeIndependentParallelPlan)
@@ -1352,10 +1216,7 @@ def test_runtime_independent_parallel_plan_honors_batch_config_and_guards() -> N
     )
 
     plan = _runtime_independent_parallel_plan(
-        cfg,
-        problem_size=2,
-        workers=1,
-        executor="thread",
+        cfg, problem_size=2, workers=1, executor="thread"
     )
 
     assert plan.requested_workers == 4
@@ -1365,45 +1226,23 @@ def test_runtime_independent_parallel_plan_honors_batch_config_and_guards() -> N
     assert plan.axis == "ky"
     assert plan.source == "runtime_config"
 
-    with pytest.raises(ValueError, match="problem_size"):
-        _runtime_independent_parallel_plan(
-            SimpleNamespace(parallel=None),
-            problem_size=-1,
-            workers=1,
-            executor="thread",
+    def batch(axis: str, backend: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            parallel=SimpleNamespace(strategy="batch", axis=axis, backend=backend)
         )
-    with pytest.raises(ValueError, match="workers"):
-        _runtime_independent_parallel_plan(
-            SimpleNamespace(parallel=None),
-            problem_size=1,
-            workers=0,
-            executor="thread",
-        )
-    with pytest.raises(ValueError, match="parallel_executor"):
-        _runtime_independent_parallel_plan(
-            SimpleNamespace(parallel=None),
-            problem_size=1,
-            workers=1,
-            executor="gpu",
-        )
-    with pytest.raises(ValueError, match="axis='ky'"):
-        _runtime_independent_parallel_plan(
-            SimpleNamespace(
-                parallel=SimpleNamespace(strategy="batch", axis="kx", backend="auto")
-            ),
-            problem_size=2,
-            workers=1,
-            executor="thread",
-        )
-    with pytest.raises(ValueError, match="independent scans"):
-        _runtime_independent_parallel_plan(
-            SimpleNamespace(
-                parallel=SimpleNamespace(strategy="batch", axis="ky", backend="mpi")
-            ),
-            problem_size=2,
-            workers=1,
-            executor="thread",
-        )
+
+    serial = SimpleNamespace(parallel=None)
+    for config, problem_size, workers, executor, match in (
+        (serial, -1, 1, "thread", "problem_size"),
+        (serial, 1, 0, "thread", "workers"),
+        (serial, 1, 1, "gpu", "parallel_executor"),
+        (batch("kx", "auto"), 2, 1, "thread", "axis='ky'"),
+        (batch("ky", "mpi"), 2, 1, "thread", "independent scans"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            _runtime_independent_parallel_plan(
+                config, problem_size=problem_size, workers=workers, executor=executor
+            )
 
 
 def test_runtime_solver_and_combined_ky_policy_helpers_normalize_inputs() -> None:
@@ -1411,18 +1250,12 @@ def test_runtime_solver_and_combined_ky_policy_helpers_normalize_inputs() -> Non
     assert _normalize_linear_solver_name(" Krylov ") == "krylov"
 
     assert _parallel_requests_combined_ky_scan(SimpleNamespace(parallel=None)) is False
-    assert (
-        _parallel_requests_combined_ky_scan(
-            SimpleNamespace(parallel=SimpleNamespace(strategy="Combined_KY", axis="KY"))
-        )
-        is True
-    )
-    assert (
-        _parallel_requests_combined_ky_scan(
-            SimpleNamespace(parallel=SimpleNamespace(strategy="combined_ky", axis="kx"))
-        )
-        is False
-    )
+    for strategy, axis, expected in (
+        ("Combined_KY", "KY", True),
+        ("combined_ky", "kx", False),
+    ):
+        cfg = SimpleNamespace(parallel=SimpleNamespace(strategy=strategy, axis=axis))
+        assert _parallel_requests_combined_ky_scan(cfg) is expected
 
 
 def test_runtime_mode_and_axis_helpers_cover_unmasked_selection() -> None:
@@ -1449,33 +1282,26 @@ def test_runtime_mode_and_axis_helpers_cover_unmasked_selection() -> None:
 
 
 def test_runtime_step_and_external_phi_policies_are_fail_closed() -> None:
-    fixed = SimpleNamespace(
-        time=SimpleNamespace(fixed_dt=True, t_max=1.0, dt=0.25, dt_max=None)
-    )
-    adaptive_capped = SimpleNamespace(
-        time=SimpleNamespace(fixed_dt=False, t_max=1.0, dt=0.2, dt_max=0.3)
-    )
-    adaptive_uncapped = SimpleNamespace(
-        time=SimpleNamespace(fixed_dt=False, t_max=1.0, dt=0.2, dt_max=None)
-    )
+    def time_cfg(fixed_dt: bool, dt: float, dt_max) -> SimpleNamespace:
+        return SimpleNamespace(
+            time=SimpleNamespace(fixed_dt=fixed_dt, t_max=1.0, dt=dt, dt_max=dt_max)
+        )
 
-    assert _infer_runtime_nonlinear_steps(fixed, dt=0.125, steps=None) == 4
-    assert _infer_runtime_nonlinear_steps(fixed, dt=0.125, steps=7) == 7
-    assert _infer_runtime_nonlinear_steps(adaptive_capped, dt=0.2, steps=None) == 4
-    assert _infer_runtime_nonlinear_steps(adaptive_uncapped, dt=0.2, steps=None) == 5
+    fixed = time_cfg(True, 0.25, None)
+    for cfg, dt, steps, expected in (
+        (fixed, 0.125, None, 4),
+        (fixed, 0.125, 7, 7),
+        (time_cfg(False, 0.2, 0.3), 0.2, None, 4),
+        (time_cfg(False, 0.2, None), 0.2, None, 5),
+    ):
+        assert _infer_runtime_nonlinear_steps(cfg, dt=dt, steps=steps) == expected
     with pytest.raises(ValueError, match="steps"):
         _infer_runtime_nonlinear_steps(fixed, dt=0.125, steps=0)
 
-    assert (
-        _runtime_external_phi(
-            SimpleNamespace(expert=SimpleNamespace(source=" default ", phi_ext=3.0))
-        )
-        is None
-    )
-    assert _runtime_external_phi(
-        SimpleNamespace(expert=SimpleNamespace(source="phiext_full", phi_ext=2.5))
-    ) == pytest.approx(2.5)
+    def expert(source: str, phi_ext: float) -> SimpleNamespace:
+        return SimpleNamespace(expert=SimpleNamespace(source=source, phi_ext=phi_ext))
+
+    assert _runtime_external_phi(expert(" default ", 3.0)) is None
+    assert _runtime_external_phi(expert("phiext_full", 2.5)) == pytest.approx(2.5)
     with pytest.raises(ValueError, match="unsupported expert.source"):
-        _runtime_external_phi(
-            SimpleNamespace(expert=SimpleNamespace(source="external_phi", phi_ext=1.0))
-        )
+        _runtime_external_phi(expert("external_phi", 1.0))

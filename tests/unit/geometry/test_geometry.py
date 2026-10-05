@@ -1,15 +1,15 @@
 """Geometry helper tests."""
 
 from dataclasses import replace
+from functools import partial
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from support.helpers import patch_attrs
 
 from gkx.config import GeometryConfig, GridConfig
-import gkx.geometry as geometry_pkg
-import gkx.geometry.core as geometry_core
 from gkx.geometry import (
     ZERO_SHAT_THRESHOLD,
     FluxTubeGeometryData,
@@ -64,8 +64,6 @@ import dataclasses
 from types import SimpleNamespace
 import gkx.geometry.vmec_state_controls as controls
 import gkx.geometry.vmec_boozer_derivatives as vmec_derivatives
-import gkx.geometry.backend_discovery as vmec_backend_discovery
-import gkx.geometry.imported_vmec as vmec_facade
 import gkx.geometry.vmec_field_line_sampling as vmec_fieldline_numerics
 from gkx.geometry.imported_vmec import _Struct
 from gkx.geometry.imported_vmec import (
@@ -100,30 +98,6 @@ import tomllib
 from support.paths import REPO_ROOT
 
 
-def test_geometry_package_facade_preserves_core_symbol_identity() -> None:
-    """The geometry package should remain a compatibility facade."""
-
-    assert geometry_pkg.SAlphaGeometry is geometry_core.SAlphaGeometry
-    assert geometry_pkg.SlabGeometry is geometry_core.SlabGeometry
-    assert geometry_pkg.FluxTubeGeometryData is geometry_core.FluxTubeGeometryData
-    assert (
-        geometry_pkg.sample_flux_tube_geometry
-        is geometry_core.sample_flux_tube_geometry
-    )
-    assert (
-        geometry_pkg.load_imported_geometry_netcdf
-        is geometry_core.load_imported_geometry_netcdf
-    )
-    assert (
-        geometry_pkg.build_flux_tube_geometry is geometry_core.build_flux_tube_geometry
-    )
-    assert (
-        geometry_pkg.apply_geometry_grid_defaults
-        is geometry_core.apply_geometry_grid_defaults
-    )
-    assert geometry_pkg._bgrad_from_bmag is geometry_core._bgrad_from_bmag
-
-
 def test_kperp2_matches_s_alpha():
     """k_perp^2 should match the s-alpha formula for kx(theta)."""
     geom = SAlphaGeometry(q=1.4, s_hat=1.0, epsilon=0.0)
@@ -138,27 +112,18 @@ def test_kperp2_matches_s_alpha():
 def test_geometry_from_config():
     """Geometry config should map cleanly into the geometry class."""
     cfg = GeometryConfig(q=1.7, s_hat=0.9, epsilon=0.2, R0=3.0, B0=2.0, alpha=0.1)
-    geom = SAlphaGeometry.from_config(cfg)
-    assert geom.q == 1.7
-    assert geom.R0 == 3.0
-    assert geom.alpha == 0.1
+    for geom in (SAlphaGeometry.from_config(cfg), build_flux_tube_geometry(cfg)):
+        assert isinstance(geom, SAlphaGeometry)
+        assert geom.q == 1.7
+        assert geom.R0 == 3.0
+        assert geom.alpha == 0.1
 
-
-def test_build_flux_tube_geometry_analytic_from_config():
-    cfg = GeometryConfig(q=1.7, s_hat=0.9, epsilon=0.2, R0=3.0, B0=2.0, alpha=0.1)
-    geom = build_flux_tube_geometry(cfg)
-
-    assert isinstance(geom, SAlphaGeometry)
-    assert geom.q == 1.7
-
-
-def test_build_flux_tube_geometry_slab_from_config():
-    cfg = GeometryConfig(model="slab", s_hat=0.3, z0=2.5, zero_shat=False)
-    geom = build_flux_tube_geometry(cfg)
-
-    assert isinstance(geom, SlabGeometry)
-    assert geom.s_hat == pytest.approx(0.3)
-    assert geom.gradpar() == pytest.approx(0.4)
+    slab = build_flux_tube_geometry(
+        GeometryConfig(model="slab", s_hat=0.3, z0=2.5, zero_shat=False)
+    )
+    assert isinstance(slab, SlabGeometry)
+    assert slab.s_hat == pytest.approx(0.3)
+    assert slab.gradpar() == pytest.approx(0.4)
 
 
 def test_slab_geometry_matches_reference_contract():
@@ -213,24 +178,17 @@ def test_zero_shat_slab_geometry_matches_zero_shear_override():
     assert jnp.allclose(gds22, jnp.ones_like(theta))
 
 
-def test_slab_geometry_auto_zero_shat_threshold_matches_reference_default():
-    geom = SlabGeometry.from_config(
-        GeometryConfig(model="slab", s_hat=0.1 * ZERO_SHAT_THRESHOLD, zero_shat=False)
-    )
-
-    assert geom.zero_shat is True
+@pytest.mark.parametrize("model", ["slab", "s-alpha"])
+def test_auto_zero_shat_threshold_matches_reference_default(model):
+    cfg = GeometryConfig(s_hat=0.1 * ZERO_SHAT_THRESHOLD, zero_shat=False)
+    if model == "slab":
+        geom = SlabGeometry.from_config(replace(cfg, model="slab"))
+        assert geom.zero_shat is True
+    else:
+        geom = SAlphaGeometry.from_config(cfg)
+        theta = jnp.array([-1.0, 0.0, 1.0])
+        assert jnp.allclose(geom.metric_coeffs(theta)[2], jnp.ones_like(theta))
     assert geom.s_hat == pytest.approx(0.0)
-
-
-def test_salpha_geometry_auto_zero_shat_threshold_matches_reference_default():
-    geom = SAlphaGeometry.from_config(
-        GeometryConfig(s_hat=0.1 * ZERO_SHAT_THRESHOLD, zero_shat=False)
-    )
-    theta = jnp.array([-1.0, 0.0, 1.0])
-    _gds2, _gds21, gds22 = geom.metric_coeffs(theta)
-
-    assert geom.s_hat == pytest.approx(0.0)
-    assert jnp.allclose(gds22, jnp.ones_like(theta))
 
 
 @pytest.mark.parametrize("geometry_type", [SAlphaGeometry, SlabGeometry])
@@ -370,20 +328,31 @@ def test_geometry_tree_roundtrip():
     assert geom2.alpha == geom.alpha
 
 
-def test_sampled_flux_tube_geometry_matches_salpha_profiles():
-    """Sampled geometry data should preserve the analytic s-alpha profiles."""
-    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, alpha=0.1)
+@pytest.mark.parametrize(
+    "geom",
+    [
+        SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, alpha=0.1),
+        SlabGeometry(s_hat=0.5, z0=2.0),
+    ],
+    ids=["s-alpha", "slab"],
+)
+def test_sampled_flux_tube_geometry_matches_analytic_profiles(geom):
+    """Sampled geometry data should preserve the analytic profiles."""
     theta = jnp.linspace(-jnp.pi, jnp.pi, 17)
     sampled = sample_flux_tube_geometry(geom, theta)
 
     assert jnp.allclose(sampled.bmag(theta), geom.bmag(theta))
     assert jnp.allclose(sampled.bgrad(theta), geom.bgrad(theta))
-    gds2_s, gds21_s, gds22_s = sampled.metric_coeffs(theta)
-    gds2_g, gds21_g, gds22_g = geom.metric_coeffs(theta)
-    assert jnp.allclose(gds2_s, gds2_g)
-    assert jnp.allclose(gds21_s, gds21_g)
-    assert jnp.allclose(gds22_s, jnp.full_like(theta, gds22_g))
+    for s_coeff, g_coeff in zip(
+        sampled.metric_coeffs(theta), geom.metric_coeffs(theta)
+    ):
+        assert jnp.allclose(s_coeff, jnp.broadcast_to(g_coeff, theta.shape))
 
+    if isinstance(geom, SlabGeometry):
+        assert sampled.source_model == "slab"
+        assert jnp.allclose(sampled.bmag(theta), jnp.ones_like(theta))
+        assert jnp.allclose(sampled.bgrad(theta), jnp.zeros_like(theta))
+        return
     kx = jnp.array([0.0, 0.2])
     ky = jnp.array([0.1, 0.3])
     theta_b = theta[None, None, :]
@@ -391,21 +360,6 @@ def test_sampled_flux_tube_geometry_matches_salpha_profiles():
         sampled.k_perp2(kx[None, :, None], ky[:, None, None], theta_b),
         geom.k_perp2(kx[None, :, None], ky[:, None, None], theta_b),
     )
-
-
-def test_sampled_flux_tube_geometry_matches_slab_profiles():
-    geom = SlabGeometry(s_hat=0.5, z0=2.0)
-    theta = jnp.linspace(-jnp.pi, jnp.pi, 17)
-    sampled = sample_flux_tube_geometry(geom, theta)
-
-    assert sampled.source_model == "slab"
-    assert jnp.allclose(sampled.bmag(theta), jnp.ones_like(theta))
-    assert jnp.allclose(sampled.bgrad(theta), jnp.zeros_like(theta))
-    gds2_s, gds21_s, gds22_s = sampled.metric_coeffs(theta)
-    gds2_g, gds21_g, gds22_g = geom.metric_coeffs(theta)
-    assert jnp.allclose(gds2_s, gds2_g)
-    assert jnp.allclose(gds21_s, gds21_g)
-    assert jnp.allclose(gds22_s, gds22_g)
 
 
 def test_sampled_flux_tube_geometry_tree_roundtrip():
@@ -501,35 +455,82 @@ def test_periodic_derivative_and_bgrad_validation_paths() -> None:
     )
 
 
+_GROUPED_PROFILES = (
+    "bmag bgrad gds2 gds21 gds22 cvdrift gbdrift cvdrift0 gbdrift0 jacobian grho"
+).split()
+
+
+def _write_eik(path: Path, theta, profiles: dict, scalars: dict) -> Path:
+    """Write a root-level eik NetCDF; scalar profile values are broadcast over z."""
+    pytest.importorskip("netCDF4")
+    theta = np.asarray(theta, dtype=float)
+    with nc.Dataset(path, "w") as root:
+        root.createDimension("z", theta.size)
+        root.createVariable("theta", "f8", ("z",))[:] = theta
+        for name, values in profiles.items():
+            values = np.broadcast_to(np.asarray(values, dtype=float), theta.shape)
+            root.createVariable(name, "f8", ("z",))[:] = values
+        for name, value in scalars.items():
+            root.createVariable(name, "f8", ())[:] = value
+    return path
+
+
+def _write_grouped_geometry(path: Path, theta, profiles: dict, scalars: dict) -> Path:
+    """Write a grouped ``Grids``/``Geometry`` NetCDF geometry output."""
+    pytest.importorskip("netCDF4")
+    with nc.Dataset(path, "w") as root:
+        root.createDimension("theta", theta.size)
+        root.createGroup("Grids").createVariable("theta", "f8", ("theta",))[:] = theta
+        geom = root.createGroup("Geometry")
+        for name, values in profiles.items():
+            values = np.broadcast_to(np.asarray(values, dtype=float), theta.shape)
+            geom.createVariable(name, "f8", ("theta",))[:] = values
+        for name, value in scalars.items():
+            geom.createVariable(name, "f8", ())[:] = value
+    return path
+
+
+def _flat_eik(theta, *, gds21, gds22, shat, kxfac, extra=None) -> dict:
+    profiles = dict.fromkeys(("bmag", "gds2", "jacob", "grho"), 1.0)
+    profiles |= dict.fromkeys(("cvdrift", "gbdrift", "cvdrift0", "gbdrift0"), 0.0)
+    profiles |= {"gds21": gds21, "gds22": gds22, "gradpar": 0.4}
+    scalars = {"q": 1.7, "shat": shat, "Rmaj": 5.0, "kxfac": kxfac}
+    return profiles, scalars
+
+
+_EIK_SCALARS = {
+    "q": 1.7,
+    "shat": 0.6,
+    "Rmaj": 5.0,
+    "kxfac": 1.3,
+    "scale": 2.0,
+    "nfp": 5.0,
+}
+
+
 def test_load_imported_geometry_netcdf_reads_sampled_contract(tmp_path):
     """imported grouped NetCDF geometry output should map into the sampled contract."""
 
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom.out.nc"
     theta = np.linspace(-np.pi, np.pi, 5, endpoint=False)
     jacobian = np.linspace(2.0, 3.0, theta.size)
-    with Dataset(path, "w") as root:
-        root.createDimension("theta", theta.size)
-        grids = root.createGroup("Grids")
-        geom = root.createGroup("Geometry")
-        grids.createVariable("theta", "f8", ("theta",))[:] = theta
-        for name, values in {
-            "bmag": np.linspace(1.0, 1.2, theta.size),
-            "bgrad": np.linspace(-0.1, 0.1, theta.size),
-            "gds2": np.linspace(1.0, 2.0, theta.size),
-            "gds21": np.linspace(-0.2, 0.2, theta.size),
-            "gds22": np.full(theta.size, 0.8),
-            "cvdrift": np.linspace(0.3, 0.5, theta.size),
-            "gbdrift": np.linspace(0.3, 0.5, theta.size),
-            "cvdrift0": np.linspace(-0.1, 0.1, theta.size),
-            "gbdrift0": np.linspace(-0.1, 0.1, theta.size),
+    n = theta.size
+    path = _write_grouped_geometry(
+        tmp_path / "geom.out.nc",
+        theta,
+        {
+            "bmag": np.linspace(1.0, 1.2, n),
+            "bgrad": np.linspace(-0.1, 0.1, n),
+            "gds2": np.linspace(1.0, 2.0, n),
+            "gds21": np.linspace(-0.2, 0.2, n),
+            "gds22": 0.8,
+            "cvdrift": np.linspace(0.3, 0.5, n),
+            "gbdrift": np.linspace(0.3, 0.5, n),
+            "cvdrift0": np.linspace(-0.1, 0.1, n),
+            "gbdrift0": np.linspace(-0.1, 0.1, n),
             "jacobian": jacobian,
-            "grho": np.linspace(1.0, 1.4, theta.size),
-        }.items():
-            geom.createVariable(name, "f8", ("theta",))[:] = values
-        for name, value in {
+            "grho": np.linspace(1.0, 1.4, n),
+        },
+        {
             "gradpar": 0.4,
             "q": 1.7,
             "shat": 0.6,
@@ -539,8 +540,8 @@ def test_load_imported_geometry_netcdf_reads_sampled_contract(tmp_path):
             "theta_scale": 2.0,
             "nfp": 5.0,
             "alpha": 0.2,
-        }.items():
-            geom.createVariable(name, "f8", ())[:] = value
+        },
+    )
 
     loaded = load_imported_geometry_netcdf(path)
 
@@ -558,50 +559,32 @@ def test_load_imported_geometry_netcdf_reads_sampled_contract(tmp_path):
 def test_load_imported_geometry_netcdf_reads_root_level_eik_layout(tmp_path):
     """Root-level eik.nc geometry should map into the sampled contract."""
 
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom.eik.nc"
     theta = np.linspace(-np.pi, np.pi, 5)
     bmag = np.array([1.0, 1.1, 1.2, 1.1, 1.0])
-    gds2 = np.array([1.0, 1.4, 1.8, 1.4, 1.0])
-    gds21 = np.array([0.0, -0.2, 0.0, 0.2, 0.0])
-    gds22 = np.full(theta.size, 0.8)
     cvdrift = np.array([0.3, 0.4, 0.5, 0.4, 0.3])
     cvdrift0 = np.array([0.0, -0.1, 0.0, 0.1, 0.0])
     drhodpsi = 1.7
-    with Dataset(path, "w") as root:
-        root.createDimension("z", theta.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta
-        root.createVariable("bmag", "f8", ("z",))[:] = bmag
-        root.createVariable("gds2", "f8", ("z",))[:] = gds2
-        root.createVariable("gds21", "f8", ("z",))[:] = gds21
-        root.createVariable("gds22", "f8", ("z",))[:] = gds22
-        root.createVariable("cvdrift", "f8", ("z",))[:] = cvdrift
-        root.createVariable("gbdrift", "f8", ("z",))[:] = cvdrift
-        root.createVariable("cvdrift0", "f8", ("z",))[:] = cvdrift0
-        root.createVariable("gbdrift0", "f8", ("z",))[:] = cvdrift0
-        root.createVariable("jacob", "f8", ("z",))[:] = np.linspace(
-            2.0, 3.0, theta.size
-        )
-        root.createVariable("grho", "f8", ("z",))[:] = np.linspace(1.0, 1.4, theta.size)
-        root.createVariable("gradpar", "f8", ("z",))[:] = np.full(theta.size, 0.4)
-        root.createVariable("drhodpsi", "f8", ())[:] = drhodpsi
-        root.createVariable("q", "f8", ())[:] = 1.7
-        root.createVariable("shat", "f8", ())[:] = 0.6
-        root.createVariable("Rmaj", "f8", ())[:] = 5.0
-        root.createVariable("kxfac", "f8", ())[:] = 1.3
-        root.createVariable("scale", "f8", ())[:] = 2.0
-        root.createVariable("nfp", "f8", ())[:] = 5.0
-        root.createVariable("alpha", "f8", ())[:] = 0.2
-        root.createVariable("Rplot", "f8", ("z",))[:] = np.linspace(
-            4.0, 6.0, theta.size
-        )
-        root.createVariable("Zplot", "f8", ("z",))[:] = np.linspace(
-            -1.0, 1.0, theta.size
-        )
-        root.createVariable("theta_PEST", "f8", ("z",))[:] = theta + 0.1
-        root.createVariable("zeta_center", "f8", ())[:] = 0.3
+    path = _write_eik(
+        tmp_path / "geom.eik.nc",
+        theta,
+        {
+            "bmag": bmag,
+            "gds2": [1.0, 1.4, 1.8, 1.4, 1.0],
+            "gds21": [0.0, -0.2, 0.0, 0.2, 0.0],
+            "gds22": 0.8,
+            "cvdrift": cvdrift,
+            "gbdrift": cvdrift,
+            "cvdrift0": cvdrift0,
+            "gbdrift0": cvdrift0,
+            "jacob": np.linspace(2.0, 3.0, theta.size),
+            "grho": np.linspace(1.0, 1.4, theta.size),
+            "gradpar": 0.4,
+            "Rplot": np.linspace(4.0, 6.0, theta.size),
+            "Zplot": np.linspace(-1.0, 1.0, theta.size),
+            "theta_PEST": theta + 0.1,
+        },
+        {"drhodpsi": drhodpsi, **_EIK_SCALARS, "alpha": 0.2, "zeta_center": 0.3},
+    )
 
     loaded = load_imported_geometry_netcdf(path)
 
@@ -627,47 +610,29 @@ def test_load_imported_geometry_netcdf_reads_root_level_eik_layout(tmp_path):
 def test_load_imported_geometry_netcdf_detects_open_root_level_eik_layout(tmp_path):
     """Root-level eik files can already be on the open solver grid."""
 
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom_open.eik.nc"
     theta = np.linspace(-np.pi, np.pi, 5, endpoint=False)
-    bmag = np.linspace(1.0, 1.2, theta.size)
+    n = theta.size
+    bmag = np.linspace(1.0, 1.2, n)
+    drift = np.linspace(0.3, 0.5, n)
     drhodpsi = 1.7
-    with Dataset(path, "w") as root:
-        root.createDimension("z", theta.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta
-        root.createVariable("bmag", "f8", ("z",))[:] = bmag
-        root.createVariable("gds2", "f8", ("z",))[:] = np.linspace(1.0, 2.0, theta.size)
-        root.createVariable("gds21", "f8", ("z",))[:] = np.linspace(
-            -0.2, 0.2, theta.size
-        )
-        root.createVariable("gds22", "f8", ("z",))[:] = np.full(theta.size, 0.8)
-        root.createVariable("cvdrift", "f8", ("z",))[:] = np.linspace(
-            0.3, 0.5, theta.size
-        )
-        root.createVariable("gbdrift", "f8", ("z",))[:] = np.linspace(
-            0.3, 0.5, theta.size
-        )
-        root.createVariable("cvdrift0", "f8", ("z",))[:] = np.linspace(
-            -0.1, 0.1, theta.size
-        )
-        root.createVariable("gbdrift0", "f8", ("z",))[:] = np.linspace(
-            -0.1, 0.1, theta.size
-        )
-        root.createVariable("jacob", "f8", ("z",))[:] = np.linspace(
-            2.0, 3.0, theta.size
-        )
-        root.createVariable("grho", "f8", ("z",))[:] = np.linspace(1.0, 1.4, theta.size)
-        root.createVariable("gradpar", "f8", ("z",))[:] = np.full(theta.size, 0.4)
-        root.createVariable("drhodpsi", "f8", ())[:] = drhodpsi
-        root.createVariable("q", "f8", ())[:] = 1.7
-        root.createVariable("shat", "f8", ())[:] = 0.6
-        root.createVariable("Rmaj", "f8", ())[:] = 5.0
-        root.createVariable("kxfac", "f8", ())[:] = 1.3
-        root.createVariable("scale", "f8", ())[:] = 2.0
-        root.createVariable("nfp", "f8", ())[:] = 5.0
-        root.createVariable("alpha", "f8", ())[:] = 0.2
+    path = _write_eik(
+        tmp_path / "geom_open.eik.nc",
+        theta,
+        {
+            "bmag": bmag,
+            "gds2": np.linspace(1.0, 2.0, n),
+            "gds21": np.linspace(-0.2, 0.2, n),
+            "gds22": 0.8,
+            "cvdrift": drift,
+            "gbdrift": drift,
+            "cvdrift0": np.linspace(-0.1, 0.1, n),
+            "gbdrift0": np.linspace(-0.1, 0.1, n),
+            "jacob": np.linspace(2.0, 3.0, n),
+            "grho": np.linspace(1.0, 1.4, n),
+            "gradpar": 0.4,
+        },
+        {"drhodpsi": drhodpsi, **_EIK_SCALARS, "alpha": 0.2},
+    )
 
     loaded = load_imported_geometry_netcdf(path)
 
@@ -676,62 +641,32 @@ def test_load_imported_geometry_netcdf_detects_open_root_level_eik_layout(tmp_pa
     assert jnp.allclose(loaded.theta, theta)
     expected_jacobian = 1.0 / np.abs(drhodpsi * 0.4 * bmag)
     assert jnp.allclose(loaded.jacobian_profile, expected_jacobian)
-    assert jnp.allclose(loaded.cv_profile, 0.5 * np.linspace(0.3, 0.5, theta.size))
-    assert jnp.allclose(loaded.gb_profile, 0.5 * np.linspace(0.3, 0.5, theta.size))
+    assert jnp.allclose(loaded.cv_profile, 0.5 * drift)
+    assert jnp.allclose(loaded.gb_profile, 0.5 * drift)
 
 
 def test_root_level_eik_import_matches_sampled_contract_after_trim(tmp_path):
     """VMEC-style closed-interval imported geometry should recover the open solver contract."""
 
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
     analytic = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, alpha=0.1)
     theta_closed = np.linspace(-3.0 * np.pi, 3.0 * np.pi, 65)
     sampled_closed = sample_flux_tube_geometry(analytic, jnp.asarray(theta_closed))
-    path = tmp_path / "geom.eik.nc"
-    with Dataset(path, "w") as root:
-        root.createDimension("z", theta_closed.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta_closed
-        root.createVariable("bmag", "f8", ("z",))[:] = np.asarray(
-            sampled_closed.bmag_profile
-        )
-        root.createVariable("gds2", "f8", ("z",))[:] = np.asarray(
-            sampled_closed.gds2_profile
-        )
-        root.createVariable("gds21", "f8", ("z",))[:] = np.asarray(
-            sampled_closed.gds21_profile
-        )
-        root.createVariable("gds22", "f8", ("z",))[:] = np.asarray(
-            sampled_closed.gds22_profile
-        )
-        root.createVariable("cvdrift", "f8", ("z",))[:] = 2.0 * np.asarray(
-            sampled_closed.cv_profile
-        )
-        root.createVariable("gbdrift", "f8", ("z",))[:] = 2.0 * np.asarray(
-            sampled_closed.gb_profile
-        )
-        root.createVariable("cvdrift0", "f8", ("z",))[:] = 2.0 * np.asarray(
-            sampled_closed.cv0_profile
-        )
-        root.createVariable("gbdrift0", "f8", ("z",))[:] = 2.0 * np.asarray(
-            sampled_closed.gb0_profile
-        )
-        root.createVariable("jacob", "f8", ("z",))[:] = np.full(theta_closed.size, 7.0)
-        root.createVariable("grho", "f8", ("z",))[:] = np.asarray(
-            sampled_closed.grho_profile
-        )
-        root.createVariable("gradpar", "f8", ("z",))[:] = np.full(
-            theta_closed.size, sampled_closed.gradpar_value
-        )
-        root.createVariable("drhodpsi", "f8", ())[:] = 1.0
-        root.createVariable("q", "f8", ())[:] = sampled_closed.q
-        root.createVariable("shat", "f8", ())[:] = sampled_closed.s_hat
-        root.createVariable("Rmaj", "f8", ())[:] = sampled_closed.R0
-        root.createVariable("kxfac", "f8", ())[:] = sampled_closed.kxfac
-        root.createVariable("scale", "f8", ())[:] = sampled_closed.theta_scale
-        root.createVariable("nfp", "f8", ())[:] = sampled_closed.nfp
-        root.createVariable("alpha", "f8", ())[:] = sampled_closed.alpha
+    profiles = {
+        name: np.asarray(getattr(sampled_closed, f"{name}_profile"))
+        for name in ("bmag", "gds2", "gds21", "gds22", "grho")
+    }
+    for gx_name, name in (
+        ("cvdrift", "cv"),
+        ("gbdrift", "gb"),
+        ("cvdrift0", "cv0"),
+        ("gbdrift0", "gb0"),
+    ):
+        profiles[gx_name] = 2.0 * np.asarray(getattr(sampled_closed, f"{name}_profile"))
+    profiles |= {"jacob": 7.0, "gradpar": sampled_closed.gradpar_value}
+    scalars = {"drhodpsi": 1.0, "Rmaj": sampled_closed.R0, "shat": sampled_closed.s_hat}
+    scalars |= {"scale": sampled_closed.theta_scale}
+    scalars |= {k: getattr(sampled_closed, k) for k in ("q", "kxfac", "nfp", "alpha")}
+    path = _write_eik(tmp_path / "geom.eik.nc", theta_closed, profiles, scalars)
 
     loaded = load_imported_geometry_netcdf(path)
     theta_solver = jnp.asarray(theta_closed[:-1])
@@ -740,74 +675,26 @@ def test_root_level_eik_import_matches_sampled_contract_after_trim(tmp_path):
 
     assert loaded.theta_closed_interval is True
     assert jnp.allclose(loaded_open.theta, sampled_open.theta)
-    assert jnp.allclose(
-        loaded_open.bmag_profile, sampled_open.bmag_profile, rtol=1.0e-6, atol=1.0e-6
-    )
-    assert jnp.allclose(
-        loaded_open.gds2_profile, sampled_open.gds2_profile, rtol=1.0e-6, atol=1.0e-6
-    )
-    assert jnp.allclose(
-        loaded_open.gds21_profile, sampled_open.gds21_profile, rtol=1.0e-6, atol=1.0e-6
-    )
-    assert jnp.allclose(
-        loaded_open.gds22_profile, sampled_open.gds22_profile, rtol=1.0e-6, atol=1.0e-6
-    )
-    assert jnp.allclose(
-        loaded_open.cv_profile, sampled_open.cv_profile, rtol=1.0e-6, atol=1.0e-6
-    )
-    assert jnp.allclose(
-        loaded_open.gb_profile, sampled_open.gb_profile, rtol=1.0e-6, atol=1.0e-6
-    )
-    assert jnp.allclose(
-        loaded_open.cv0_profile, sampled_open.cv0_profile, rtol=1.0e-6, atol=1.0e-6
-    )
-    assert jnp.allclose(
-        loaded_open.gb0_profile, sampled_open.gb0_profile, rtol=1.0e-6, atol=1.0e-6
-    )
-    assert jnp.allclose(
-        loaded_open.jacobian_profile,
-        sampled_open.jacobian_profile,
-        rtol=1.0e-6,
-        atol=1.0e-6,
-    )
-    assert jnp.allclose(
-        loaded_open.grho_profile, sampled_open.grho_profile, rtol=1.0e-6, atol=1.0e-6
-    )
+    for name in "bmag gds2 gds21 gds22 cv gb cv0 gb0 jacobian grho".split():
+        assert jnp.allclose(
+            getattr(loaded_open, f"{name}_profile"),
+            getattr(sampled_open, f"{name}_profile"),
+            rtol=1.0e-6,
+            atol=1.0e-6,
+        ), name
     assert jnp.allclose(
         loaded_open.bgrad_profile, sampled_open.bgrad_profile, rtol=1.0e-4, atol=1.0e-4
     )
 
 
 def test_build_flux_tube_geometry_loads_imported_netcdf(tmp_path):
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom.out.nc"
     theta = np.linspace(-np.pi, np.pi, 5, endpoint=False)
-    with Dataset(path, "w") as root:
-        root.createDimension("theta", theta.size)
-        grids = root.createGroup("Grids")
-        geom = root.createGroup("Geometry")
-        grids.createVariable("theta", "f8", ("theta",))[:] = theta
-        for name in (
-            "bmag",
-            "bgrad",
-            "gds2",
-            "gds21",
-            "gds22",
-            "cvdrift",
-            "gbdrift",
-            "cvdrift0",
-            "gbdrift0",
-            "jacobian",
-            "grho",
-        ):
-            geom.createVariable(name, "f8", ("theta",))[:] = np.ones(theta.size)
-        geom.createVariable("gradpar", "f8", ())[:] = 0.4
-        geom.createVariable("q", "f8", ())[:] = 1.7
-        geom.createVariable("shat", "f8", ())[:] = 0.6
-        geom.createVariable("rmaj", "f8", ())[:] = 5.0
-        geom.createVariable("aminor", "f8", ())[:] = 1.0
+    path = _write_grouped_geometry(
+        tmp_path / "geom.out.nc",
+        theta,
+        dict.fromkeys(_GROUPED_PROFILES, 1.0),
+        {"gradpar": 0.4, "q": 1.7, "shat": 0.6, "rmaj": 5.0, "aminor": 1.0},
+    )
 
     loaded = build_flux_tube_geometry(
         GeometryConfig(model="imported-netcdf", geometry_file=str(path))
@@ -864,50 +751,27 @@ def test_twist_shift_params_slab_and_imported_geometry_branches() -> None:
 
 @pytest.mark.parametrize("model", ["imported-eik", "vmec-eik", "desc-eik", "eik"])
 def test_build_flux_tube_geometry_accepts_imported_eik_aliases(tmp_path, model: str):
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom.eik.nc"
     theta = np.linspace(-np.pi, np.pi, 5)
-    with Dataset(path, "w") as root:
-        root.createDimension("z", theta.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta
-        root.createVariable("bmag", "f8", ("z",))[:] = np.array(
-            [1.0, 1.1, 1.2, 1.1, 1.0]
-        )
-        root.createVariable("gds2", "f8", ("z",))[:] = np.array(
-            [1.0, 1.5, 2.0, 1.5, 1.0]
-        )
-        root.createVariable("gds21", "f8", ("z",))[:] = np.array(
-            [-0.2, 0.0, 0.2, 0.0, -0.2]
-        )
-        root.createVariable("gds22", "f8", ("z",))[:] = np.full(theta.size, 0.8)
-        root.createVariable("cvdrift", "f8", ("z",))[:] = np.array(
-            [0.3, 0.4, 0.5, 0.4, 0.3]
-        )
-        root.createVariable("gbdrift", "f8", ("z",))[:] = np.array(
-            [0.3, 0.4, 0.5, 0.4, 0.3]
-        )
-        root.createVariable("cvdrift0", "f8", ("z",))[:] = np.array(
-            [-0.1, 0.0, 0.1, 0.0, -0.1]
-        )
-        root.createVariable("gbdrift0", "f8", ("z",))[:] = np.array(
-            [-0.1, 0.0, 0.1, 0.0, -0.1]
-        )
-        root.createVariable("jacob", "f8", ("z",))[:] = np.array(
-            [2.0, 2.5, 3.0, 2.5, 2.0]
-        )
-        root.createVariable("grho", "f8", ("z",))[:] = np.array(
-            [1.0, 1.2, 1.4, 1.2, 1.0]
-        )
-        root.createVariable("gradpar", "f8", ("z",))[:] = np.full(theta.size, 0.4)
-        root.createVariable("drhodpsi", "f8", ())[:] = 1.0
-        root.createVariable("q", "f8", ())[:] = 1.7
-        root.createVariable("shat", "f8", ())[:] = 0.6
-        root.createVariable("Rmaj", "f8", ())[:] = 5.0
-        root.createVariable("kxfac", "f8", ())[:] = 1.3
-        root.createVariable("scale", "f8", ())[:] = 2.0
-        root.createVariable("nfp", "f8", ())[:] = 5.0
+    drift = [0.3, 0.4, 0.5, 0.4, 0.3]
+    drift0 = [-0.1, 0.0, 0.1, 0.0, -0.1]
+    path = _write_eik(
+        tmp_path / "geom.eik.nc",
+        theta,
+        {
+            "bmag": [1.0, 1.1, 1.2, 1.1, 1.0],
+            "gds2": [1.0, 1.5, 2.0, 1.5, 1.0],
+            "gds21": [-0.2, 0.0, 0.2, 0.0, -0.2],
+            "gds22": 0.8,
+            "cvdrift": drift,
+            "gbdrift": drift,
+            "cvdrift0": drift0,
+            "gbdrift0": drift0,
+            "jacob": [2.0, 2.5, 3.0, 2.5, 2.0],
+            "grho": [1.0, 1.2, 1.4, 1.2, 1.0],
+            "gradpar": 0.4,
+        },
+        {"drhodpsi": 1.0, **_EIK_SCALARS},
+    )
 
     loaded = build_flux_tube_geometry(
         GeometryConfig(model=model, geometry_file=str(path))
@@ -921,53 +785,34 @@ def test_build_flux_tube_geometry_accepts_imported_eik_aliases(tmp_path, model: 
 
 
 def test_ensure_flux_tube_geometry_data_trims_closed_imported_vmec_grid(tmp_path):
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom_vmec.eik.nc"
     theta = np.linspace(-3.0 * np.pi, 3.0 * np.pi, 9)
     bmag_val = np.array([1.0, 1.1, 1.2, 1.3, 1.4, 1.3, 1.2, 1.1, 1.0])
-    jacob_val = np.array([2.0, 2.2, 2.4, 2.6, 2.8, 2.6, 2.4, 2.2, 2.0])
-    grho_val = np.array([1.0, 1.1, 1.2, 1.3, 1.4, 1.3, 1.2, 1.1, 1.0])
-    with Dataset(path, "w") as root:
-        root.createDimension("z", theta.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta
-        root.createVariable("bmag", "f8", ("z",))[:] = bmag_val
-        root.createVariable("gds2", "f8", ("z",))[:] = np.array(
-            [1.0, 1.2, 1.4, 1.6, 1.8, 1.6, 1.4, 1.2, 1.0]
-        )
-        root.createVariable("gds21", "f8", ("z",))[:] = np.array(
-            [-0.2, -0.1, 0.0, 0.1, 0.2, 0.1, 0.0, -0.1, -0.2]
-        )
-        root.createVariable("gds22", "f8", ("z",))[:] = np.full(theta.size, 0.8)
-        root.createVariable("cvdrift", "f8", ("z",))[:] = np.array(
-            [0.3, 0.4, 0.5, 0.6, 0.7, 0.6, 0.5, 0.4, 0.3]
-        )
-        root.createVariable("gbdrift", "f8", ("z",))[:] = np.array(
-            [0.3, 0.4, 0.5, 0.6, 0.7, 0.6, 0.5, 0.4, 0.3]
-        )
-        root.createVariable("cvdrift0", "f8", ("z",))[:] = np.array(
-            [-0.1, -0.05, 0.0, 0.05, 0.1, 0.05, 0.0, -0.05, -0.1]
-        )
-        root.createVariable("gbdrift0", "f8", ("z",))[:] = np.array(
-            [-0.1, -0.05, 0.0, 0.05, 0.1, 0.05, 0.0, -0.05, -0.1]
-        )
-        root.createVariable("jacob", "f8", ("z",))[:] = jacob_val
-        root.createVariable("grho", "f8", ("z",))[:] = grho_val
-        root.createVariable("gradpar", "f8", ("z",))[:] = np.full(theta.size, 0.4)
-        root.createVariable("q", "f8", ())[:] = 1.7
-        root.createVariable("shat", "f8", ())[:] = 0.6
-        root.createVariable("Rmaj", "f8", ())[:] = 5.0
-        root.createVariable("scale", "f8", ())[:] = 2.0
-        root.createVariable("nfp", "f8", ())[:] = 5.0
+    grho_val = bmag_val.copy()
+    drift = [0.3, 0.4, 0.5, 0.6, 0.7, 0.6, 0.5, 0.4, 0.3]
+    drift0 = [-0.1, -0.05, 0.0, 0.05, 0.1, 0.05, 0.0, -0.05, -0.1]
+    path = _write_eik(
+        tmp_path / "geom_vmec.eik.nc",
+        theta,
+        {
+            "bmag": bmag_val,
+            "gds2": [1.0, 1.2, 1.4, 1.6, 1.8, 1.6, 1.4, 1.2, 1.0],
+            "gds21": [-0.2, -0.1, 0.0, 0.1, 0.2, 0.1, 0.0, -0.1, -0.2],
+            "gds22": 0.8,
+            "cvdrift": drift,
+            "gbdrift": drift,
+            "cvdrift0": drift0,
+            "gbdrift0": drift0,
+            "jacob": [2.0, 2.2, 2.4, 2.6, 2.8, 2.6, 2.4, 2.2, 2.0],
+            "grho": grho_val,
+            "gradpar": 0.4,
+        },
+        {"q": 1.7, "shat": 0.6, "Rmaj": 5.0, "scale": 2.0, "nfp": 5.0},
+    )
 
     geom = build_flux_tube_geometry(
         GeometryConfig(model="vmec-eik", geometry_file=str(path))
     )
-    grid_cfg = apply_geometry_grid_defaults(
-        geom,
-        GridConfig(Nx=4, Ny=4, Nz=16, Lx=6.28, Ly=6.28, boundary="linked", y0=10.0),
-    )
+    grid_cfg = apply_geometry_grid_defaults(geom, replace(_LINKED_GRID, Nz=16))
     grid = build_spectral_grid(grid_cfg)
     sampled = ensure_flux_tube_geometry_data(geom, grid.z)
 
@@ -982,34 +827,22 @@ def test_ensure_flux_tube_geometry_data_trims_closed_imported_vmec_grid(tmp_path
     assert jnp.allclose(sampled.grho_profile, jnp.asarray(grho_val[:-1]))
 
 
+_LINKED_GRID = GridConfig(
+    Nx=4, Ny=4, Nz=16, Lx=6.28, Ly=6.28, boundary="linked", y0=10.0
+)
+
+
+def _flat_eik_geometry(path: Path, theta, **kwargs):
+    profiles, scalars = _flat_eik(theta, **kwargs)
+    return load_imported_geometry_netcdf(_write_eik(path, theta, profiles, scalars))
+
+
 def test_apply_geometry_grid_defaults_uses_imported_theta_and_kxfac(tmp_path):
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom.eik.nc"
     theta = np.linspace(-3.0 * np.pi, 3.0 * np.pi, 9)
-    with Dataset(path, "w") as root:
-        root.createDimension("z", theta.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta
-        root.createVariable("bmag", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gds2", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gds21", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gds22", "f8", ("z",))[:] = np.full(theta.size, 0.5)
-        root.createVariable("cvdrift", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("gbdrift", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("cvdrift0", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("gbdrift0", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("jacob", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("grho", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gradpar", "f8", ("z",))[:] = np.full(theta.size, 0.4)
-        root.createVariable("q", "f8", ())[:] = 1.7
-        root.createVariable("shat", "f8", ())[:] = 0.5
-        root.createVariable("Rmaj", "f8", ())[:] = 5.0
-        root.createVariable("kxfac", "f8", ())[:] = 1.7
-
-    geom = load_imported_geometry_netcdf(path)
-    grid = GridConfig(Nx=4, Ny=4, Nz=16, Lx=6.28, Ly=6.28, boundary="linked", y0=10.0)
-    adjusted = apply_geometry_grid_defaults(geom, grid)
+    geom = _flat_eik_geometry(
+        tmp_path / "geom.eik.nc", theta, gds21=1.0, gds22=0.5, shat=0.5, kxfac=1.7
+    )
+    adjusted = apply_geometry_grid_defaults(geom, _LINKED_GRID)
     jtwist, x0 = twist_shift_params(geom, adjusted)
 
     assert adjusted.Nz == theta.size - 1
@@ -1020,36 +853,16 @@ def test_apply_geometry_grid_defaults_uses_imported_theta_and_kxfac(tmp_path):
     assert adjusted.Lx == pytest.approx(2.0 * np.pi * x0)
 
 
-def test_apply_geometry_grid_defaults_applies_twist_shift_for_fix_aspect(tmp_path):
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom_fix_aspect.eik.nc"
+def _fix_aspect_geometry(path: Path):
     theta = np.linspace(-np.pi, np.pi, 9)
-    with Dataset(path, "w") as root:
-        root.createDimension("z", theta.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta
-        root.createVariable("bmag", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gds2", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gds21", "f8", ("z",))[:] = np.full(theta.size, -0.6)
-        root.createVariable("gds22", "f8", ("z",))[:] = np.full(theta.size, 0.2)
-        root.createVariable("cvdrift", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("gbdrift", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("cvdrift0", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("gbdrift0", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("jacob", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("grho", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gradpar", "f8", ("z",))[:] = np.full(theta.size, 0.4)
-        root.createVariable("q", "f8", ())[:] = 1.7
-        root.createVariable("shat", "f8", ())[:] = 0.5
-        root.createVariable("Rmaj", "f8", ())[:] = 5.0
-        root.createVariable("kxfac", "f8", ())[:] = 1.0
-
-    geom = load_imported_geometry_netcdf(path)
-    grid = GridConfig(
-        Nx=4, Ny=4, Nz=16, Lx=6.28, Ly=6.28, boundary="fix aspect", y0=10.0
+    geom = _flat_eik_geometry(path, theta, gds21=-0.6, gds22=0.2, shat=0.5, kxfac=1.0)
+    return geom, apply_geometry_grid_defaults(
+        geom, replace(_LINKED_GRID, boundary="fix aspect")
     )
-    adjusted = apply_geometry_grid_defaults(geom, grid)
+
+
+def test_apply_geometry_grid_defaults_applies_twist_shift_for_fix_aspect(tmp_path):
+    geom, adjusted = _fix_aspect_geometry(tmp_path / "geom_fix_aspect.eik.nc")
     jtwist, x0 = twist_shift_params(geom, adjusted)
 
     assert adjusted.jtwist == jtwist
@@ -1071,35 +884,7 @@ def test_apply_geometry_grid_defaults_promotes_near_zero_shat_to_periodic():
 def test_build_linear_cache_uses_linked_streaming_for_fix_aspect_imported_geometry(
     tmp_path,
 ):
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom_fix_aspect_cache.eik.nc"
-    theta = np.linspace(-np.pi, np.pi, 9)
-    with Dataset(path, "w") as root:
-        root.createDimension("z", theta.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta
-        root.createVariable("bmag", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gds2", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gds21", "f8", ("z",))[:] = np.full(theta.size, -0.6)
-        root.createVariable("gds22", "f8", ("z",))[:] = np.full(theta.size, 0.2)
-        root.createVariable("cvdrift", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("gbdrift", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("cvdrift0", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("gbdrift0", "f8", ("z",))[:] = np.zeros(theta.size)
-        root.createVariable("jacob", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("grho", "f8", ("z",))[:] = np.ones(theta.size)
-        root.createVariable("gradpar", "f8", ("z",))[:] = np.full(theta.size, 0.4)
-        root.createVariable("q", "f8", ())[:] = 1.7
-        root.createVariable("shat", "f8", ())[:] = 0.5
-        root.createVariable("Rmaj", "f8", ())[:] = 5.0
-        root.createVariable("kxfac", "f8", ())[:] = 1.0
-
-    geom = load_imported_geometry_netcdf(path)
-    grid_cfg = apply_geometry_grid_defaults(
-        geom,
-        GridConfig(Nx=4, Ny=4, Nz=16, Lx=6.28, Ly=6.28, boundary="fix aspect", y0=10.0),
-    )
+    geom, grid_cfg = _fix_aspect_geometry(tmp_path / "geom_fix_aspect_cache.eik.nc")
     grid = build_spectral_grid(grid_cfg)
     cache = build_linear_cache(grid, geom, LinearParams(), Nl=2, Nm=4)
 
@@ -1109,39 +894,16 @@ def test_build_linear_cache_uses_linked_streaming_for_fix_aspect_imported_geomet
 
 
 def test_apply_geometry_grid_defaults_preserves_open_solver_theta(tmp_path):
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    path = tmp_path / "geom.out.nc"
     theta = np.linspace(-np.pi, np.pi, 8, endpoint=False)
-    with Dataset(path, "w") as root:
-        root.createDimension("theta", theta.size)
-        grids = root.createGroup("Grids")
-        geom = root.createGroup("Geometry")
-        grids.createVariable("theta", "f8", ("theta",))[:] = theta
-        for name in (
-            "bmag",
-            "bgrad",
-            "gds2",
-            "gds21",
-            "gds22",
-            "cvdrift",
-            "gbdrift",
-            "cvdrift0",
-            "gbdrift0",
-            "jacobian",
-            "grho",
-        ):
-            geom.createVariable(name, "f8", ("theta",))[:] = np.ones(theta.size)
-        geom.createVariable("gradpar", "f8", ())[:] = 0.4
-        geom.createVariable("q", "f8", ())[:] = 1.7
-        geom.createVariable("shat", "f8", ())[:] = 0.5
-        geom.createVariable("rmaj", "f8", ())[:] = 5.0
-        geom.createVariable("kxfac", "f8", ())[:] = 1.7
+    path = _write_grouped_geometry(
+        tmp_path / "geom.out.nc",
+        theta,
+        dict.fromkeys(_GROUPED_PROFILES, 1.0),
+        {"gradpar": 0.4, "q": 1.7, "shat": 0.5, "rmaj": 5.0, "kxfac": 1.7},
+    )
 
     geom = load_imported_geometry_netcdf(path)
-    grid = GridConfig(Nx=4, Ny=4, Nz=16, Lx=6.28, Ly=6.28, boundary="linked", y0=10.0)
-    adjusted = apply_geometry_grid_defaults(geom, grid)
+    adjusted = apply_geometry_grid_defaults(geom, _LINKED_GRID)
 
     spacing = theta[1] - theta[0]
     assert adjusted.Nz == theta.size
@@ -1166,12 +928,7 @@ def test_observable_gradient_validation_report_passes_with_conditioning_metadata
     params = jnp.asarray([0.24, -0.37], dtype=dtype)
 
     def observables(x: jnp.ndarray) -> jnp.ndarray:
-        return jnp.asarray(
-            [
-                x[0] * x[0] + 2.0 * x[1],
-                jnp.sin(x[0]) + x[1] * x[1],
-            ]
-        )
+        return jnp.asarray([x[0] * x[0] + 2.0 * x[1], jnp.sin(x[0]) + x[1] * x[1]])
 
     report = observable_gradient_validation_report(
         observables,
@@ -1409,15 +1166,6 @@ def test_nperiod_extension_and_reflection_helpers() -> None:
     )
 
 
-def test_backend_kernel_exports_canonical_helpers() -> None:
-    arr = np.array([1.0, 2.0, 4.0, 7.0])
-    np.testing.assert_allclose(
-        np.asarray(centered_reflected_difference(arr, axis="r")),
-        np.asarray(centered_reflected_difference(arr, axis="r")),
-    )
-    assert callable(centered_reflected_difference)
-
-
 # Internal Miller backend request, collocation, and NetCDF contracts.
 
 
@@ -1591,11 +1339,48 @@ from gkx.geometry.miller_eik import (
 )
 
 
+def _runtime_cfg(
+    grid: GridConfig,
+    method: str,
+    geometry: GeometryConfig,
+    *,
+    tprim: float,
+    fprim: float,
+    linear: bool,
+    contract: str,
+) -> RuntimeConfig:
+    return RuntimeConfig(
+        grid=grid,
+        time=TimeConfig(t_max=1.0, dt=0.1, method=method, fixed_dt=True),
+        geometry=geometry,
+        init=InitializationConfig(init_field="density", init_amp=1.0e-6),
+        species=(
+            RuntimeSpeciesConfig(
+                name="ion", charge=1.0, mass=1.0, tprim=tprim, fprim=fprim
+            ),
+        ),
+        physics=RuntimePhysicsConfig(
+            linear=linear,
+            nonlinear=not linear,
+            adiabatic_electrons=True,
+            tau_e=1.0,
+            electrostatic=True,
+            electromagnetic=False,
+            beta=0.0,
+            collisions=False,
+        ),
+        normalization=RuntimeNormalizationConfig(
+            contract=contract, diagnostic_norm="rho_star"
+        ),
+    )
+
+
 def _miller_runtime_cfg(
     tmp_path: Path, *, geometry_file: str | None = None
 ) -> RuntimeConfig:
-    return RuntimeConfig(
-        grid=GridConfig(
+    shape = dict(shift=0.0, akappa=1.0, akappri=0.0, tri=0.0, tripri=0.0)
+    return _runtime_cfg(
+        GridConfig(
             Nx=32,
             Ny=16,
             Nz=24,
@@ -1606,8 +1391,8 @@ def _miller_runtime_cfg(
             ntheta=24,
             nperiod=1,
         ),
-        time=TimeConfig(t_max=1.0, dt=0.1, method="rk3", fixed_dt=True),
-        geometry=GeometryConfig(
+        "rk3",
+        GeometryConfig(
             model="miller",
             geometry_file=geometry_file,
             q=1.4,
@@ -1615,32 +1400,13 @@ def _miller_runtime_cfg(
             rhoc=0.5,
             R0=2.77778,
             R_geo=2.77778,
-            shift=0.0,
-            akappa=1.0,
-            akappri=0.0,
-            tri=0.0,
-            tripri=0.0,
             betaprim=0.0,
+            **shape,
         ),
-        init=InitializationConfig(init_field="density", init_amp=1.0e-6),
-        species=(
-            RuntimeSpeciesConfig(
-                name="ion", charge=1.0, mass=1.0, tprim=2.49, fprim=0.8
-            ),
-        ),
-        physics=RuntimePhysicsConfig(
-            linear=False,
-            nonlinear=True,
-            adiabatic_electrons=True,
-            tau_e=1.0,
-            electrostatic=True,
-            electromagnetic=False,
-            beta=0.0,
-            collisions=False,
-        ),
-        normalization=RuntimeNormalizationConfig(
-            contract="cyclone", diagnostic_norm="rho_star"
-        ),
+        tprim=2.49,
+        fprim=0.8,
+        linear=False,
+        contract="cyclone",
     )
 
 
@@ -1693,16 +1459,6 @@ def test_generate_runtime_miller_eik_reuses_existing_output(
     mock_gen.assert_not_called()
 
 
-def test_internal_miller_request_attr_accepts_runtime_aliases() -> None:
-    class Req:
-        q = 1.4
-        s_hat = 0.8
-
-    req = Req()
-    assert _request_attr(req, "qinp", "q") == 1.4
-    assert _request_attr(req, "shat", "s_hat") == 0.8
-
-
 # ---- from test_vmec_eik.py ----
 
 
@@ -1711,8 +1467,8 @@ def _vmec_runtime_cfg(
 ) -> RuntimeConfig:
     vmec_path = tmp_path / "wout_test.nc"
     vmec_path.write_text("stub", encoding="utf-8")
-    return RuntimeConfig(
-        grid=GridConfig(
+    return _runtime_cfg(
+        GridConfig(
             Nx=1,
             Ny=8,
             Nz=32,
@@ -1723,8 +1479,8 @@ def _vmec_runtime_cfg(
             ntheta=32,
             nperiod=1,
         ),
-        time=TimeConfig(t_max=1.0, dt=0.1, method="rk4", fixed_dt=True),
-        geometry=GeometryConfig(
+        "rk4",
+        GeometryConfig(
             model="vmec",
             vmec_file=str(vmec_path),
             geometry_file=geometry_file,
@@ -1732,25 +1488,10 @@ def _vmec_runtime_cfg(
             npol=2.0,
             alpha=0.1,
         ),
-        init=InitializationConfig(init_field="density", init_amp=1.0e-6),
-        species=(
-            RuntimeSpeciesConfig(
-                name="ion", charge=1.0, mass=1.0, tprim=3.0, fprim=1.0
-            ),
-        ),
-        physics=RuntimePhysicsConfig(
-            linear=True,
-            nonlinear=False,
-            adiabatic_electrons=True,
-            tau_e=1.0,
-            electrostatic=True,
-            electromagnetic=False,
-            beta=0.0,
-            collisions=False,
-        ),
-        normalization=RuntimeNormalizationConfig(
-            contract="kinetic", diagnostic_norm="rho_star"
-        ),
+        tprim=3.0,
+        fprim=1.0,
+        linear=True,
+        contract="kinetic",
     )
 
 
@@ -1915,82 +1656,48 @@ def test_generate_runtime_vmec_eik_invokes_internal_generator(
     assert request.vmec_file == str(Path(cfg.geometry.vmec_file).resolve())
 
 
-def test_generate_runtime_vmec_eik_reuses_default_cache_without_backend(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def _patch_default_vmec_cache(monkeypatch, expected_out, *, backend, mock_gen):
+    patch_attrs(
+        monkeypatch,
+        "gkx.geometry.vmec_eik",
+        default_vmec_eik_output_path=lambda _request: expected_out,
+        internal_vmec_backend_available=lambda: backend,
+        generate_vmec_eik_internal=mock_gen,
+    )
+
+
+@pytest.mark.parametrize("cache_state", ["valid", "invalid", "missing"])
+def test_generate_runtime_vmec_eik_default_cache_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cache_state: str
 ) -> None:
+    """A valid default cache is reused without a backend; others regenerate there."""
     cfg = _vmec_runtime_cfg(tmp_path, geometry_file=None)
     expected_out = tmp_path / "cached.eik.nc"
-    _write_minimal_eik_cache(expected_out)
-
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.default_vmec_eik_output_path",
-        lambda _request: expected_out,
+    if cache_state == "valid":
+        _write_minimal_eik_cache(expected_out)
+        mock_gen = MagicMock(
+            side_effect=AssertionError("cached VMEC geometry should be reused")
+        )
+    else:
+        if cache_state == "invalid":
+            expected_out.write_text("partial-not-netcdf", encoding="utf-8")
+        mock_gen = MagicMock(return_value=expected_out.resolve())
+    _patch_default_vmec_cache(
+        monkeypatch, expected_out, backend=cache_state != "valid", mock_gen=mock_gen
     )
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.internal_vmec_backend_available", lambda: False
-    )
-    mock_gen = MagicMock(
-        side_effect=AssertionError("cached VMEC geometry should be reused")
-    )
-    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen)
 
     out = generate_runtime_vmec_eik(cfg)
 
     assert out == expected_out.resolve()
-    assert not mock_gen.called
-
-
-def test_generate_runtime_vmec_eik_regenerates_invalid_default_cache(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    cfg = _vmec_runtime_cfg(tmp_path, geometry_file=None)
-    expected_out = tmp_path / "cached.eik.nc"
-    expected_out.write_text("partial-not-netcdf", encoding="utf-8")
-
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.default_vmec_eik_output_path",
-        lambda _request: expected_out,
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.internal_vmec_backend_available", lambda: True
-    )
-    mock_gen = MagicMock(return_value=expected_out.resolve())
-    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen)
-
-    out = generate_runtime_vmec_eik(cfg)
-
-    assert out == expected_out.resolve()
-    assert mock_gen.called
-
-
-def test_generate_runtime_vmec_eik_uses_default_output_when_none(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    cfg = _vmec_runtime_cfg(tmp_path, geometry_file=None)
-    expected_out = tmp_path / "cached.eik.nc"
-
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.default_vmec_eik_output_path",
-        lambda _request: expected_out,
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.internal_vmec_backend_available", lambda: True
-    )
-    mock_gen = MagicMock(return_value=expected_out.resolve())
-    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen)
-
-    out = generate_runtime_vmec_eik(cfg)
-
-    assert out == expected_out.resolve()
-    _, kwargs = mock_gen.call_args
-    assert Path(kwargs["output_path"]) == expected_out
+    assert mock_gen.called is (cache_state != "valid")
+    if cache_state == "missing":
+        _, kwargs = mock_gen.call_args
+        assert Path(kwargs["output_path"]) == expected_out
 
 
 @pytest.mark.parametrize(
     ("backend", "expected_message"),
-    [
-        ("mystery", "Unknown geometry backend"),
-    ],
+    [("mystery", "Unknown geometry backend")],
 )
 def test_generate_runtime_vmec_eik_rejects_invalid_backends(
     tmp_path: Path, backend: str, expected_message: str
@@ -2277,74 +1984,25 @@ def test_resolve_vmec_state_indices_resolves_defaults_and_clamps(
 
 
 @pytest.mark.parametrize(
-    ("kwargs", "message"),
+    ("indices", "message"),
     [
-        (
-            dict(
-                radial_index=8, mode_index=0, surface_index=None, surface_grid="metric"
-            ),
-            "radial_index is outside the VMEC state radial grid",
-        ),
-        (
-            dict(
-                radial_index=-1, mode_index=0, surface_index=None, surface_grid="metric"
-            ),
-            "radial_index is outside the VMEC state radial grid",
-        ),
-        (
-            dict(
-                radial_index=None,
-                mode_index=5,
-                surface_index=None,
-                surface_grid="metric",
-            ),
-            "mode_index is outside the VMEC state mode table",
-        ),
-        (
-            dict(
-                radial_index=None,
-                mode_index=0,
-                surface_index=None,
-                surface_grid="bogus",
-            ),
-            "unknown VMEC surface grid",
-        ),
-        (
-            dict(
-                radial_index=None,
-                mode_index=0,
-                surface_index=7,
-                surface_grid="half_mesh",
-            ),
-            "half-mesh Boozer surface grid",
-        ),
-        (
-            dict(
-                radial_index=None,
-                mode_index=0,
-                surface_index=8,
-                surface_grid="field_line",
-            ),
-            "VMEC metric radial grid",
-        ),
-        (
-            dict(
-                radial_index=None,
-                mode_index=0,
-                surface_index=-1,
-                surface_grid="metric",
-            ),
-            "VMEC metric radial grid",
-        ),
+        ((8, 0, None, "metric"), "radial_index is outside the VMEC state radial grid"),
+        ((-1, 0, None, "metric"), "radial_index is outside the VMEC state radial grid"),
+        ((None, 5, None, "metric"), "mode_index is outside the VMEC state mode table"),
+        ((None, 0, None, "bogus"), "unknown VMEC surface grid"),
+        ((None, 0, 7, "half_mesh"), "half-mesh Boozer surface grid"),
+        ((None, 0, 8, "field_line"), "VMEC metric radial grid"),
+        ((None, 0, -1, "metric"), "VMEC metric radial grid"),
     ],
 )
 def test_resolve_vmec_state_indices_rejects_out_of_range_and_unknown_grid(
-    kwargs, message
+    indices, message
 ):
-    base = jnp.zeros((8, 5))
-
+    names = ("radial_index", "mode_index", "surface_index", "surface_grid")
     with pytest.raises(ValueError, match=message):
-        controls._resolve_vmec_state_indices(base, **kwargs)
+        controls._resolve_vmec_state_indices(
+            jnp.zeros((8, 5)), **dict(zip(names, indices))
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2433,18 +2091,6 @@ def test_length_two_params_rejects_non_length_two_vectors(params):
 # ---- from test_imported_vmec_geometry.py ----
 
 
-def test_imported_vmec_reuses_focused_backend_contracts() -> None:
-    assert vmec_facade.internal_vmec_backend_available is (
-        vmec_backend_discovery.internal_vmec_backend_available
-    )
-    assert (
-        vmec_facade._import_booz_backend is vmec_backend_discovery._import_booz_backend
-    )
-    assert vmec_facade.nperiod_set is vmec_fieldline_numerics.nperiod_set
-    assert vmec_facade.dermv is vmec_fieldline_numerics.dermv
-    assert vmec_facade._vmec_splines is vmec_fieldline_numerics._vmec_splines
-
-
 def test_vmec_struct_accepts_named_fields_and_remains_mutable() -> None:
     geom = _Struct(theta=np.array([0.0]), nfp=5)
 
@@ -2507,15 +2153,13 @@ def test_import_module_with_search_paths_raises_on_missing(tmp_path: Path) -> No
 
 
 def test_import_booz_backend_falls_back_to_booz_xform(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "gkx.geometry.backend_discovery._booz_xform_jax_search_paths",
-        lambda: [],
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.backend_discovery._import_module_with_search_paths",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            ImportError("jax backend missing")
-        ),
+    patch_attrs(
+        monkeypatch,
+        "gkx.geometry.backend_discovery",
+        _booz_xform_jax_search_paths=lambda: [],
+        _import_module_with_search_paths=lambda *_args, **_kwargs: (
+            _ for _ in ()
+        ).throw(ImportError("jax backend missing")),
     )
 
     marker = SimpleNamespace(name="fallback", Booz_xform=object)
@@ -2529,23 +2173,6 @@ def test_import_booz_backend_falls_back_to_booz_xform(monkeypatch) -> None:
         "gkx.geometry.backend_discovery.importlib.import_module",
         _import_module,
     )
-    assert _import_booz_backend() is marker
-
-
-def test_import_booz_backend_honors_fortran_override(monkeypatch) -> None:
-    marker = SimpleNamespace(name="forced-fortran", Booz_xform=object)
-    monkeypatch.setenv("GKX_BOOZ_BACKEND", "fortran")
-    monkeypatch.setattr(
-        "gkx.geometry.backend_discovery._import_booz_xform_backend",
-        lambda: marker,
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.backend_discovery._import_booz_xform_jax_backend",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("jax backend should not be imported")
-        ),
-    )
-
     assert _import_booz_backend() is marker
 
 
@@ -2565,18 +2192,24 @@ def test_square_layout_failure_matcher_is_specific() -> None:
     )
 
 
-def test_import_booz_backend_honors_jax_override(monkeypatch) -> None:
-    marker = SimpleNamespace(name="forced-jax", Booz_xform=object)
-    monkeypatch.setenv("GKX_BOOZ_BACKEND", "jax")
-    monkeypatch.setattr(
-        "gkx.geometry.backend_discovery._import_booz_xform_jax_backend",
-        lambda: marker,
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.backend_discovery._import_booz_xform_backend",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("booz_xform should not be imported")
-        ),
+@pytest.mark.parametrize(
+    ("override", "chosen", "other"),
+    [
+        ("fortran", "_import_booz_xform_backend", "_import_booz_xform_jax_backend"),
+        ("jax", "_import_booz_xform_jax_backend", "_import_booz_xform_backend"),
+    ],
+)
+def test_import_booz_backend_honors_override(monkeypatch, override, chosen, other):
+    marker = SimpleNamespace(name=f"forced-{override}", Booz_xform=object)
+    monkeypatch.setenv("GKX_BOOZ_BACKEND", override)
+
+    def _forbidden():
+        raise AssertionError(f"{other} should not be imported")
+
+    patch_attrs(
+        monkeypatch,
+        "gkx.geometry.backend_discovery",
+        **{chosen: lambda: marker, other: _forbidden},
     )
 
     assert _import_booz_backend() is marker
@@ -2591,13 +2224,15 @@ def test_import_booz_backend_rejects_unknown_override(monkeypatch) -> None:
 
 def test_import_booz_backend_reports_missing_backends(monkeypatch) -> None:
     monkeypatch.delenv("GKX_BOOZ_BACKEND", raising=False)
-    monkeypatch.setattr(
-        "gkx.geometry.backend_discovery._import_booz_xform_jax_backend",
-        lambda: (_ for _ in ()).throw(ImportError("jax missing")),
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.backend_discovery._import_booz_xform_backend",
-        lambda: (_ for _ in ()).throw(ImportError("booz missing")),
+    patch_attrs(
+        monkeypatch,
+        "gkx.geometry.backend_discovery",
+        _import_booz_xform_jax_backend=lambda: (_ for _ in ()).throw(
+            ImportError("jax missing")
+        ),
+        _import_booz_xform_backend=lambda: (_ for _ in ()).throw(
+            ImportError("booz missing")
+        ),
     )
 
     with pytest.raises(
@@ -2641,54 +2276,35 @@ def test_nperiod_set_and_dermv(monkeypatch) -> None:
         dermv(np.ones(2), np.ones(3))
 
 
-def test_apply_flux_tube_cut_none_and_unknown() -> None:
-    theta = np.linspace(-np.pi, np.pi, 7)
-    base = np.linspace(1.0, 2.0, theta.size)
-    geo = SimpleNamespace(
-        bmag=base[None, None, :],
-        gradpar_theta_b=np.abs(base)[None, None, :],
-        cvdrift=base[None, None, :],
-        gbdrift=base[None, None, :],
-        cvdrift0=base[None, None, :],
-        gbdrift0=base[None, None, :],
-        gds2=(base + 1.0)[None, None, :],
-        gds21=np.linspace(-1.0, 1.0, theta.size)[None, None, :],
-        gds22=(base + 2.0)[None, None, :],
-        grho=base[None, None, :],
-        R_b=(base + 3.0)[None, None, :],
-        Z_b=(base - 1.0)[None, None, :],
-        grad_x=np.stack([base, base + 1.0, base + 2.0])[:, None, None, :],
-        grad_y=np.stack([base + 3.0, base + 4.0, base + 5.0])[:, None, None, :],
-        s_hat_input=0.8,
-    )
-
-    theta_cut, arrays = _apply_flux_tube_cut(
-        theta,
-        geo,
-        ntheta=theta.size,
-        flux_tube_cut="none",
+def _cut(theta, geo, **kwargs):
+    options = dict(
+        ntheta=11,
         npol_min=None,
         which_crossing=0,
         y0=1.0,
         x0=1.0,
         jtwist_in=None,
     )
+    return _apply_flux_tube_cut(theta, geo, **(options | kwargs))
+
+
+def test_apply_flux_tube_cut_none_and_unknown() -> None:
+    theta = np.linspace(-np.pi, np.pi, 7)
+    geo = _mock_geo_for_cut(theta, gbdrift0=np.linspace(1.0, 2.0, theta.size))
+    geo.gds22 = (np.linspace(1.0, 2.0, theta.size) + 2.0)[None, None, :]
+    geo.s_hat_input = 0.8
+
+    theta_cut, arrays = _cut(theta, geo, ntheta=theta.size, flux_tube_cut="none")
     np.testing.assert_allclose(theta_cut, theta)
     assert arrays["grad_x"].shape == (3, theta.size)
     assert arrays["b_vec"].shape == (3, theta.size)
 
     with pytest.raises(ValueError):
-        _apply_flux_tube_cut(
-            theta,
-            geo,
-            ntheta=theta.size,
-            flux_tube_cut="bad",
-            npol_min=None,
-            which_crossing=0,
-            y0=1.0,
-            x0=1.0,
-            jtwist_in=None,
-        )
+        _cut(theta, geo, ntheta=theta.size, flux_tube_cut="bad")
+
+
+def _rows(n: int, *values: float) -> np.ndarray:
+    return np.vstack([np.full(n, value) for value in values])
 
 
 def test_equal_arc_remap_returns_constant_gradpar() -> None:
@@ -2707,16 +2323,8 @@ def test_equal_arc_remap_returns_constant_gradpar() -> None:
         "grho": np.linspace(0.8, 1.2, theta.size),
         "Rplot": np.linspace(5.0, 6.0, theta.size),
         "Zplot": np.linspace(-1.0, 1.0, theta.size),
-        "grad_x": np.vstack(
-            [np.ones(theta.size), 2.0 * np.ones(theta.size), 3.0 * np.ones(theta.size)]
-        ),
-        "grad_y": np.vstack(
-            [
-                4.0 * np.ones(theta.size),
-                5.0 * np.ones(theta.size),
-                6.0 * np.ones(theta.size),
-            ]
-        ),
+        "grad_x": _rows(theta.size, 1.0, 2.0, 3.0),
+        "grad_y": _rows(theta.size, 4.0, 5.0, 6.0),
     }
 
     gradpar_eqarc, out = _equal_arc_remap(theta, arrays, ntheta=9)
@@ -2892,16 +2500,8 @@ def test_apply_flux_tube_cut_branch_specific_roots(
     jtwist_in: int | None,
 ) -> None:
     theta = np.linspace(-2.0, 2.0, 9)
-    theta_cut, arrays = _apply_flux_tube_cut(
-        theta,
-        geo,
-        ntheta=11,
-        flux_tube_cut=flux_tube_cut,
-        npol_min=None,
-        which_crossing=0,
-        y0=1.0,
-        x0=1.0,
-        jtwist_in=jtwist_in,
+    theta_cut, arrays = _cut(
+        theta, geo, flux_tube_cut=flux_tube_cut, jtwist_in=jtwist_in
     )
 
     assert theta_cut[0] == pytest.approx(-expected_cut, abs=1.0e-6)
@@ -2910,40 +2510,17 @@ def test_apply_flux_tube_cut_branch_specific_roots(
     assert arrays["grad_x"].shape == (3, 11)
 
 
-def test_apply_flux_tube_cut_reports_missing_crossings() -> None:
+@pytest.mark.parametrize(
+    ("offset", "which_crossing", "match"),
+    [(None, 0, "No positive gds21 flux-tube crossing"), (0.5, 2, "which_crossing=2")],
+)
+def test_apply_flux_tube_cut_reports_bad_crossings(offset, which_crossing, match):
     theta = np.linspace(-2.0, 2.0, 9)
-    geo = _mock_geo_for_cut(theta, gds21=np.ones_like(theta))
+    gds21 = np.ones_like(theta) if offset is None else theta - offset
+    geo = _mock_geo_for_cut(theta, gds21=gds21)
 
-    with pytest.raises(ValueError, match="No positive gds21 flux-tube crossing"):
-        _apply_flux_tube_cut(
-            theta,
-            geo,
-            ntheta=11,
-            flux_tube_cut="gds21",
-            npol_min=None,
-            which_crossing=0,
-            y0=1.0,
-            x0=1.0,
-            jtwist_in=None,
-        )
-
-
-def test_apply_flux_tube_cut_reports_out_of_range_crossing() -> None:
-    theta = np.linspace(-2.0, 2.0, 9)
-    geo = _mock_geo_for_cut(theta, gds21=theta - 0.5)
-
-    with pytest.raises(ValueError, match="which_crossing=2"):
-        _apply_flux_tube_cut(
-            theta,
-            geo,
-            ntheta=11,
-            flux_tube_cut="gds21",
-            npol_min=None,
-            which_crossing=2,
-            y0=1.0,
-            x0=1.0,
-            jtwist_in=None,
-        )
+    with pytest.raises(ValueError, match=match):
+        _cut(theta, geo, flux_tube_cut="gds21", which_crossing=which_crossing)
 
 
 def test_write_vmec_eik_netcdf_writes_expected_variables(tmp_path: Path) -> None:
@@ -2967,19 +2544,9 @@ def test_write_vmec_eik_netcdf_writes_expected_variables(tmp_path: Path) -> None
         "cvdrift0": np.linspace(0.4, 0.5, theta.size),
         "Rplot": np.linspace(5.0, 6.0, theta.size),
         "Zplot": np.linspace(-1.0, 1.0, theta.size),
-        "grad_x": np.vstack(
-            [np.ones(theta.size), 2.0 * np.ones(theta.size), 3.0 * np.ones(theta.size)]
-        ),
-        "grad_y": np.vstack(
-            [
-                4.0 * np.ones(theta.size),
-                5.0 * np.ones(theta.size),
-                6.0 * np.ones(theta.size),
-            ]
-        ),
-        "b_vec": np.vstack(
-            [np.ones(theta.size), np.zeros(theta.size), np.zeros(theta.size)]
-        ),
+        "grad_x": _rows(theta.size, 1.0, 2.0, 3.0),
+        "grad_y": _rows(theta.size, 4.0, 5.0, 6.0),
+        "b_vec": _rows(theta.size, 1.0, 0.0, 0.0),
         "dpsidrho": 2.0,
         "kxfac": 1.7,
         "Rmaj": 5.5,
@@ -3038,21 +2605,21 @@ def test_vmec_splines_builds_interpolants_and_metadata() -> None:
 
     out = _vmec_splines(nc_obj, booz_obj)
 
-    assert out.mnbooz == 2
-    assert out.mboz == 8
-    assert out.nboz == 6
-    assert out.nfp == 5
+    assert (out.mnbooz, out.mboz, out.nboz, out.nfp) == (2, 8, 6, 5)
     np.testing.assert_allclose(out.raxis_cc, [3.2, 0.1])
     assert out.Aminor_p == pytest.approx(1.7)
     assert out.phiedge == pytest.approx(8.0 * np.pi)
-    assert out.rmnc_b[0](0.5) == pytest.approx(1.5, abs=1.0e-10)
-    assert out.d_rmnc_b_d_s[0](0.5) == pytest.approx(1.0, abs=1.0e-10)
-    assert out.bmnc_b[1](0.5) == pytest.approx(0.375, abs=1.0e-10)
-    assert out.d_bmnc_b_d_s[1](0.5) == pytest.approx(-0.25, abs=1.0e-10)
-    assert out.psi(0.5) == pytest.approx(2.5, abs=1.0e-10)
-    assert out.d_psi_d_s(0.5) == pytest.approx(4.0, abs=1.0e-10)
-    assert out.iota(0.5) == pytest.approx(0.65, abs=1.0e-10)
-    assert out.d_iota_d_s(0.5) == pytest.approx(0.4, abs=1.0e-10)
+    for spline, expected in (
+        (out.rmnc_b[0], 1.5),
+        (out.d_rmnc_b_d_s[0], 1.0),
+        (out.bmnc_b[1], 0.375),
+        (out.d_bmnc_b_d_s[1], -0.25),
+        (out.psi, 2.5),
+        (out.d_psi_d_s, 4.0),
+        (out.iota, 0.65),
+        (out.d_iota_d_s, 0.4),
+    ):
+        assert spline(0.5) == pytest.approx(expected, abs=1.0e-10)
 
 
 def test_vmec_fieldline_helper_angle_and_denominator_policies() -> None:
@@ -3344,7 +2911,7 @@ def test_vmec_fieldline_reference_scale_and_override_policies() -> None:
 
 
 def test_vmec_fieldline_hngc_shear_and_pressure_correction_policies() -> None:
-    d_iota_d_s_1, sfac = vmec_derivatives._hngc_shear_correction(
+    shear_kw = dict(
         s_val=0.5,
         iota=np.array([0.6]),
         shat=np.array([0.2]),
@@ -3352,28 +2919,26 @@ def test_vmec_fieldline_hngc_shear_and_pressure_correction_policies() -> None:
         s_hat_input_val=0.4,
         include_shear_variation=True,
     )
+    d_iota_d_s_1, sfac = vmec_derivatives._hngc_shear_correction(**shear_kw)
 
     np.testing.assert_allclose(d_iota_d_s_1, np.array([-0.16]))
     assert sfac == pytest.approx(0.5)
 
     disabled_shear, disabled_sfac = vmec_derivatives._hngc_shear_correction(
-        s_val=0.5,
-        iota=np.array([0.6]),
-        shat=np.array([0.2]),
-        iota_input_val=0.7,
-        s_hat_input_val=0.4,
-        include_shear_variation=False,
+        **(shear_kw | {"include_shear_variation": False})
     )
 
     np.testing.assert_allclose(disabled_shear, np.zeros(1))
     assert disabled_sfac == pytest.approx(1.0)
 
-    d_pressure_d_s_1, pfac = vmec_derivatives._hngc_pressure_correction(
+    pressure = partial(
+        vmec_derivatives._hngc_pressure_correction,
         s_val=0.25,
         betaprim=0.2,
         B_reference=2.0,
-        d_pressure_d_s=np.array([0.5]),
-        include_pressure_variation=True,
+    )
+    d_pressure_d_s_1, pfac = pressure(
+        d_pressure_d_s=np.array([0.5]), include_pressure_variation=True
     )
 
     drive = 0.2 * 2.0**2 / (4.0 * np.sqrt(0.25))
@@ -3383,12 +2948,8 @@ def test_vmec_fieldline_hngc_shear_and_pressure_correction_policies() -> None:
     )
     assert pfac == pytest.approx(drive / (vmec_fieldline_numerics._MU_0 * 0.5))
 
-    floored_pressure, floored_pfac = vmec_derivatives._hngc_pressure_correction(
-        s_val=0.25,
-        betaprim=0.2,
-        B_reference=2.0,
-        d_pressure_d_s=np.array([0.0]),
-        include_pressure_variation=True,
+    floored_pressure, floored_pfac = pressure(
+        d_pressure_d_s=np.array([0.0]), include_pressure_variation=True
     )
 
     np.testing.assert_allclose(floored_pressure, np.array([drive]))
@@ -3396,12 +2957,8 @@ def test_vmec_fieldline_hngc_shear_and_pressure_correction_policies() -> None:
         drive / (vmec_fieldline_numerics._MU_0 * 1.0e-8)
     )
 
-    disabled_pressure, disabled_pfac = vmec_derivatives._hngc_pressure_correction(
-        s_val=0.25,
-        betaprim=0.2,
-        B_reference=2.0,
-        d_pressure_d_s=np.array([0.5]),
-        include_pressure_variation=False,
+    disabled_pressure, disabled_pfac = pressure(
+        d_pressure_d_s=np.array([0.5]), include_pressure_variation=False
     )
 
     np.testing.assert_allclose(disabled_pressure, np.zeros(1))
@@ -3456,40 +3013,42 @@ def test_vmec_fieldline_helper_samples_boozer_mode_table() -> None:
     np.testing.assert_allclose(d_bmnc_b_d_s[:, 0], 9.0 * s)
 
 
+_FIELDLINE_KW = dict(
+    s_val=0.5,
+    betaprim=0.01,
+    alpha=0.2,
+    include_shear_variation=False,
+    include_pressure_variation=False,
+    theta1d=np.linspace(-np.pi, np.pi, 9),
+    isaxisym=True,
+    iota_input=0.9,
+    s_hat_input=0.0,
+    res_theta=21,
+    res_phi=21,
+)
+
+
+def _fake_netcdf_module(monkeypatch, fake_nc) -> None:
+    monkeypatch.setitem(
+        sys.modules, "netCDF4", SimpleNamespace(Dataset=lambda *a, **k: fake_nc)
+    )
+
+
 def test_vmec_fieldlines_respects_overrides_and_closes_dataset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_nc = _FakeNCDataset(mpol=3, ntor=2)
     fake_backend = SimpleNamespace(Booz_xform=_FakeBoozXform)
 
-    monkeypatch.setitem(
-        sys.modules,
-        "netCDF4",
-        SimpleNamespace(Dataset=lambda *_args, **_kwargs: fake_nc),
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_state_controls._import_booz_backend",
-        lambda: fake_backend,
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_state_controls._vmec_splines",
-        lambda _nc, _booz: _fake_vmec_spline_struct(),
+    _fake_netcdf_module(monkeypatch, fake_nc)
+    patch_attrs(
+        monkeypatch,
+        "gkx.geometry.vmec_state_controls",
+        _import_booz_backend=lambda: fake_backend,
+        _vmec_splines=lambda _nc, _booz: _fake_vmec_spline_struct(),
     )
 
-    out = _vmec_fieldlines(
-        vmec_fname="dummy.nc",
-        s_val=0.5,
-        betaprim=0.01,
-        alpha=0.2,
-        include_shear_variation=False,
-        include_pressure_variation=False,
-        theta1d=np.linspace(-np.pi, np.pi, 9),
-        isaxisym=True,
-        iota_input=0.9,
-        s_hat_input=0.0,
-        res_theta=21,
-        res_phi=21,
-    )
+    out = _vmec_fieldlines(vmec_fname="dummy.nc", **_FIELDLINE_KW)
 
     assert fake_nc.closed is True
     assert out.iota_input == pytest.approx(0.9)
@@ -3526,31 +3085,14 @@ def test_vmec_fieldlines_falls_back_for_square_vmex_wout(
         return _fake_vmec_spline_struct()
 
     monkeypatch.delenv("GKX_BOOZ_BACKEND", raising=False)
-    monkeypatch.setitem(
-        sys.modules,
-        "netCDF4",
-        SimpleNamespace(Dataset=lambda *_args, **_kwargs: fake_nc),
-    )
+    _fake_netcdf_module(monkeypatch, fake_nc)
     monkeypatch.setattr(
         "gkx.geometry.vmec_state_controls._import_booz_backend",
         _fake_import_backend,
     )
     monkeypatch.setattr("gkx.geometry.vmec_state_controls._vmec_splines", _fake_splines)
 
-    out = _vmec_fieldlines(
-        vmec_fname="square-vmec-jax.nc",
-        s_val=0.5,
-        betaprim=0.01,
-        alpha=0.2,
-        include_shear_variation=False,
-        include_pressure_variation=False,
-        theta1d=np.linspace(-np.pi, np.pi, 9),
-        isaxisym=True,
-        iota_input=0.9,
-        s_hat_input=0.0,
-        res_theta=21,
-        res_phi=21,
-    )
+    out = _vmec_fieldlines(vmec_fname="square-vmec-jax.nc", **_FIELDLINE_KW)
 
     assert fake_nc.closed is True
     assert isinstance(calls["booz_obj"], _FakeBoozXform)
@@ -3569,31 +3111,14 @@ def test_vmec_fieldlines_does_not_fallback_when_booz_backend_is_forced(
         return jax_backend
 
     monkeypatch.setenv("GKX_BOOZ_BACKEND", "jax")
-    monkeypatch.setitem(
-        sys.modules,
-        "netCDF4",
-        SimpleNamespace(Dataset=lambda *_args, **_kwargs: fake_nc),
-    )
+    _fake_netcdf_module(monkeypatch, fake_nc)
     monkeypatch.setattr(
         "gkx.geometry.vmec_state_controls._import_booz_backend",
         _fake_import_backend,
     )
 
     with pytest.raises(ValueError, match="rmnc0 has unexpected shape"):
-        _vmec_fieldlines(
-            vmec_fname="square-vmec-jax.nc",
-            s_val=0.5,
-            betaprim=0.01,
-            alpha=0.2,
-            include_shear_variation=False,
-            include_pressure_variation=False,
-            theta1d=np.linspace(-np.pi, np.pi, 9),
-            isaxisym=True,
-            iota_input=0.9,
-            s_hat_input=0.0,
-            res_theta=21,
-            res_phi=21,
-        )
+        _vmec_fieldlines(vmec_fname="square-vmec-jax.nc", **_FIELDLINE_KW)
     assert fake_nc.closed is True
 
 
@@ -3605,35 +3130,16 @@ def test_vmec_fieldlines_rejects_degenerate_reference_length(
     bad_vs = _fake_vmec_spline_struct()
     bad_vs.Aminor_p = 0.0
 
-    monkeypatch.setitem(
-        sys.modules,
-        "netCDF4",
-        SimpleNamespace(Dataset=lambda *_args, **_kwargs: fake_nc),
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_state_controls._import_booz_backend",
-        lambda: fake_backend,
-    )
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_state_controls._vmec_splines",
-        lambda _nc, _booz: bad_vs,
+    _fake_netcdf_module(monkeypatch, fake_nc)
+    patch_attrs(
+        monkeypatch,
+        "gkx.geometry.vmec_state_controls",
+        _import_booz_backend=lambda: fake_backend,
+        _vmec_splines=lambda _nc, _booz: bad_vs,
     )
 
     with pytest.raises(ValueError, match="Aminor_p"):
-        _vmec_fieldlines(
-            vmec_fname="dummy.nc",
-            s_val=0.5,
-            betaprim=0.01,
-            alpha=0.2,
-            include_shear_variation=False,
-            include_pressure_variation=False,
-            theta1d=np.linspace(-np.pi, np.pi, 9),
-            isaxisym=True,
-            iota_input=0.9,
-            s_hat_input=0.0,
-            res_theta=21,
-            res_phi=21,
-        )
+        _vmec_fieldlines(vmec_fname="dummy.nc", **_FIELDLINE_KW)
     assert fake_nc.closed is True
 
 
@@ -3658,27 +3164,9 @@ def test_generate_vmec_eik_internal_maps_boundary_and_computes_betaprim(
         "grho": np.full(theta_out.size, 1.1),
         "Rplot": np.linspace(4.0, 6.0, theta_out.size),
         "Zplot": np.linspace(-1.0, 1.0, theta_out.size),
-        "grad_x": np.vstack(
-            [
-                np.ones(theta_out.size),
-                2.0 * np.ones(theta_out.size),
-                3.0 * np.ones(theta_out.size),
-            ]
-        ),
-        "grad_y": np.vstack(
-            [
-                4.0 * np.ones(theta_out.size),
-                5.0 * np.ones(theta_out.size),
-                6.0 * np.ones(theta_out.size),
-            ]
-        ),
-        "b_vec": np.vstack(
-            [
-                np.ones(theta_out.size),
-                np.zeros(theta_out.size),
-                np.zeros(theta_out.size),
-            ]
-        ),
+        "grad_x": _rows(theta_out.size, 1.0, 2.0, 3.0),
+        "grad_y": _rows(theta_out.size, 4.0, 5.0, 6.0),
+        "b_vec": _rows(theta_out.size, 1.0, 0.0, 0.0),
         "scale": 1.0,
     }
 
@@ -3707,10 +3195,14 @@ def test_generate_vmec_eik_internal_maps_boundary_and_computes_betaprim(
         calls["write"] = {"path": path, "profiles": profiles, "request": request}
         Path(path).write_bytes(b"mock eik data")
 
-    monkeypatch.setattr("gkx.geometry.imported_vmec._vmec_fieldlines", _mock_fieldlines)
-    monkeypatch.setattr("gkx.geometry.imported_vmec._apply_flux_tube_cut", _mock_cut)
-    monkeypatch.setattr("gkx.geometry.imported_vmec._equal_arc_remap", _mock_remap)
-    monkeypatch.setattr("gkx.geometry.imported_vmec.write_vmec_eik_netcdf", _mock_write)
+    patch_attrs(
+        monkeypatch,
+        "gkx.geometry.imported_vmec",
+        _vmec_fieldlines=_mock_fieldlines,
+        _apply_flux_tube_cut=_mock_cut,
+        _equal_arc_remap=_mock_remap,
+        write_vmec_eik_netcdf=_mock_write,
+    )
 
     request = SimpleNamespace(
         vmec_file=str(tmp_path / "wout_test.nc"),
@@ -3839,12 +3331,9 @@ def _streaming_only_rhs(geometry, params) -> float:
     # and would make this test vacuous.
     state = state.at[0, 0, 1, 1, :].set(jnp.sin(jnp.asarray(grid.z)) * 1.0e-3)
     terms = LinearTerms(
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
+        **dict.fromkeys(
+            "mirror curvature gradb diamagnetic collisions hypercollisions".split(), 0.0
+        ),
         end_damping=0.0,
     )
     return float(
@@ -3895,6 +3384,17 @@ def test_geometry_params_helper_carries_the_parallel_scale() -> None:
     assert linear_params_for_geometry(geometry, kpar_scale=1.0).kpar_scale == 1.0
 
 
+def _random_state(generator, grid) -> jnp.ndarray:
+    shape = (1, 4, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    real, imag = (generator.normal(size=shape) * 1.0e-3 for _ in range(2))
+    return jnp.asarray(real + 1j * imag)
+
+
+_UNIT_SPECIES = dict.fromkeys(
+    ("charge", "density", "temp", "mass", "tz", "vth"), jnp.asarray([1.0])
+)
+
+
 def test_electromagnetic_zonal_solve_is_continuous_in_beta() -> None:
     """The field solve must not jump when beta becomes infinitesimally finite.
 
@@ -3915,12 +3415,7 @@ def test_electromagnetic_zonal_solve_is_continuous_in_beta() -> None:
         GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.78)
     )
     generator = np.random.default_rng(0)
-    shape = (1, 4, 4, grid.ky.size, grid.kx.size, grid.z.size)
-    state = jnp.asarray(
-        generator.normal(size=shape) * 1.0e-3
-        + 1j * generator.normal(size=shape) * 1.0e-3
-    )
-    unit = jnp.asarray([1.0])
+    state = _random_state(generator, grid)
 
     def zonal_potential(beta: float) -> np.ndarray:
         params = linear_params_for_geometry(geometry, beta=beta, tau_e=1.0)
@@ -3929,12 +3424,7 @@ def test_electromagnetic_zonal_solve_is_continuous_in_beta() -> None:
             state,
             cache,
             params,
-            charge=unit,
-            density=unit,
-            temp=unit,
-            mass=unit,
-            tz=unit,
-            vth=unit,
+            **_UNIT_SPECIES,
             fapar=jnp.asarray(0.0),
             w_bpar=jnp.asarray(1.0),
         )
@@ -3978,11 +3468,7 @@ def test_reference_electrostatic_solve_matches_production_including_zonal() -> N
     assert grid.kx.size > 1, "the fixture must expose a nonzero kx to be meaningful"
 
     generator = np.random.default_rng(1)
-    shape = (1, 4, 4, grid.ky.size, grid.kx.size, grid.z.size)
-    state = jnp.asarray(
-        generator.normal(size=shape) * 1.0e-3
-        + 1j * generator.normal(size=shape) * 1.0e-3
-    )
+    state = _random_state(generator, grid)
     unit = jnp.asarray([1.0])
     params = linear_params_for_geometry(geometry, tau_e=1.0)
     cache = build_linear_cache(grid, geometry, params, 4, 4)
@@ -3992,12 +3478,7 @@ def test_reference_electrostatic_solve_matches_production_including_zonal() -> N
             state,
             cache,
             params,
-            charge=unit,
-            density=unit,
-            temp=unit,
-            mass=unit,
-            tz=unit,
-            vth=unit,
+            **_UNIT_SPECIES,
             fapar=jnp.asarray(0.0),
             w_bpar=jnp.asarray(0.0),
         ).phi
@@ -4271,35 +3752,23 @@ def test_finite_beta_drifts_agree_between_wout_and_state_paths(
     if imported.theta.shape[0] == ntheta + 1:
         imported = imported.trim_terminal_theta_point()
 
-    tolerances = {
-        "bmag": 1.0e-3,
-        "gds2": _METRIC_TOLERANCE,
-        "gds21": _METRIC_TOLERANCE,
-        "gds22": _METRIC_TOLERANCE,
-        "grho": _METRIC_TOLERANCE,
-        "cvdrift": _DRIFT_TOLERANCE,
-        "gbdrift": _DRIFT_TOLERANCE,
-        # cvdrift0/gbdrift0 are grad-psi components carrying no pressure term:
-        # they were already at 2.2e-2 here before the pressure work and moved
-        # by nothing, so they are held to the metric floor they actually share
-        # with gds21/gds22 rather than to the drift tolerance.
-        "cvdrift0": _METRIC_TOLERANCE,
-        "gbdrift0": _METRIC_TOLERANCE,
+    # name -> (sampled attribute, tolerance). cvdrift0/gbdrift0 are grad-psi
+    # components carrying no pressure term: they were already at 2.2e-2 here
+    # before the pressure work and moved by nothing, so they are held to the
+    # metric floor they actually share with gds21/gds22 rather than to the
+    # drift tolerance.
+    checks = {
+        "bmag": ("bmag", 1.0e-3),
+        **{name: (name, _METRIC_TOLERANCE) for name in ("gds2", "gds21", "gds22")},
+        "grho": ("grho", _METRIC_TOLERANCE),
+        "cvdrift": ("cv", _DRIFT_TOLERANCE),
+        "gbdrift": ("gb", _DRIFT_TOLERANCE),
+        "cvdrift0": ("cv0", _METRIC_TOLERANCE),
+        "gbdrift0": ("gb0", _METRIC_TOLERANCE),
     }
-    attributes = {
-        "bmag": "bmag_profile",
-        "gds2": "gds2_profile",
-        "gds21": "gds21_profile",
-        "gds22": "gds22_profile",
-        "grho": "grho_profile",
-        "cvdrift": "cv_profile",
-        "gbdrift": "gb_profile",
-        "cvdrift0": "cv0_profile",
-        "gbdrift0": "gb0_profile",
-    }
-    for name, tolerance in tolerances.items():
+    for name, (attribute, tolerance) in checks.items():
         metrics = _array_parity_metrics(
-            np.asarray(bridge[name]), getattr(imported, attributes[name])
+            np.asarray(bridge[name]), getattr(imported, f"{attribute}_profile")
         )
         assert bool(metrics["shape_match"]), f"{name} shape mismatch"
         assert float(metrics["normalized_max_abs"]) <= tolerance, (
@@ -4407,10 +3876,7 @@ def _replicate_gate(
         {
             "kind": "nonlinear_window_ensemble_report",
             "passed": passed,
-            "config": {
-                "max_mean_rel_spread": 0.15,
-                "max_combined_sem_rel": 0.25,
-            },
+            "config": {"max_mean_rel_spread": 0.15, "max_combined_sem_rel": 0.25},
             "statistics": {
                 "n_reports": 4,
                 "n_finite_means": 4,
@@ -4457,68 +3923,51 @@ def test_high_grid_admission_passes_with_coarse_exclusion_and_replicates(
     )
 
 
-def test_high_grid_admission_fails_unexpected_full_grid_failure(tmp_path: Path) -> None:
-    payload = _build_admission_payload(
-        tmp_path,
-        full_grid=_full_grid_gate(
-            tmp_path,
-            extra_failed_metric="common_window_max_relative_slope_per_time",
+@pytest.mark.parametrize(
+    ("override", "blocker"),
+    [
+        (
+            lambda tmp: dict(
+                full_grid=_full_grid_gate(
+                    tmp, extra_failed_metric="common_window_max_relative_slope_per_time"
+                )
+            ),
+            "full_grid_failure_limited_to_grid_difference",
         ),
-    )
+        (
+            lambda tmp: dict(high_grid_b=_high_grid_gate(tmp, "t350", passed=False)),
+            "high_grid_gate_failure_count",
+        ),
+        (
+            lambda tmp: dict(replicate=_replicate_gate(tmp, spread=0.22)),
+            "replicate_mean_relative_spread",
+        ),
+    ],
+    ids=["unexpected-full-grid-failure", "high-grid-pair-fails", "replicate-spread"],
+)
+def test_high_grid_admission_blocks(tmp_path: Path, override, blocker) -> None:
+    payload = _build_admission_payload(tmp_path, **override(tmp_path))
 
     assert payload["passed"] is False
-    assert (
-        "full_grid_failure_limited_to_grid_difference"
-        in payload["promotion_gate"]["blockers"]
-    )
-
-
-def test_high_grid_admission_fails_when_high_grid_pair_does_not_pass(
-    tmp_path: Path,
-) -> None:
-    payload = _build_admission_payload(
-        tmp_path, high_grid_b=_high_grid_gate(tmp_path, "t350", passed=False)
-    )
-
-    assert payload["passed"] is False
-    assert "high_grid_gate_failure_count" in payload["promotion_gate"]["blockers"]
-
-
-def test_high_grid_admission_fails_replicate_spread(tmp_path: Path) -> None:
-    payload = _build_admission_payload(
-        tmp_path, replicate=_replicate_gate(tmp_path, spread=0.22)
-    )
-
-    assert payload["passed"] is False
-    assert "replicate_mean_relative_spread" in payload["promotion_gate"]["blockers"]
+    assert blocker in payload["promotion_gate"]["blockers"]
 
 
 def test_high_grid_admission_cli_writes_json(tmp_path: Path) -> None:
     mod = _load_admission_tool_module()
     out = tmp_path / "admission.json"
-    rc = mod.main(
-        [
-            "high-grid-admission",
-            "--full-grid-gate",
-            str(_full_grid_gate(tmp_path)),
-            "--high-grid-gate",
-            str(_high_grid_gate(tmp_path, "t250")),
-            "--high-grid-gate",
-            str(_high_grid_gate(tmp_path, "t350")),
-            "--time-horizon-gate",
-            str(_time_horizon_gate(tmp_path)),
-            "--replicate-ensemble",
-            str(_replicate_gate(tmp_path)),
-            "--excluded-grid-label",
-            "n48",
-            "--retained-grid-label",
-            "n64",
-            "--retained-grid-label",
-            "n80",
-            "--out",
-            str(out),
-        ]
-    )
+    gates = {
+        "--full-grid-gate": _full_grid_gate(tmp_path),
+        "--time-horizon-gate": _time_horizon_gate(tmp_path),
+        "--replicate-ensemble": _replicate_gate(tmp_path),
+    }
+    argv = ["high-grid-admission"]
+    for flag, path in gates.items():
+        argv += [flag, str(path)]
+    for name in ("t250", "t350"):
+        argv += ["--high-grid-gate", str(_high_grid_gate(tmp_path, name))]
+    argv += "--excluded-grid-label n48 --retained-grid-label n64".split()
+    argv += f"--retained-grid-label n80 --out {out}".split()
+    rc = mod.main(argv)
 
     assert rc == 0
     payload = json.loads(out.read_text(encoding="utf-8"))

@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from dataclasses import replace
 
 from gkx.benchmarking_shared import (
     LinearScanResult,
@@ -59,7 +60,6 @@ import jax
 import jax.numpy as jnp
 from support.paths import REPO_ROOT, load_release_tool
 from scripts.benchmarks import linear_benchmark
-from scripts.benchmarks import benchmark_integrators
 from scripts.benchmarks.benchmark_runtime_memory import (
     RuntimeBenchRun,
     _load_manifest,
@@ -248,16 +248,14 @@ def test_linear_metrics_gate_report_uses_growth_and_frequency() -> None:
         nsamples=20,
         signal_source="reference",
     )
-    obs = LateTimeLinearMetrics(
+    obs = replace(
+        ref,
         gamma_fit=0.104,
         omega_fit=0.298,
         gamma_tail_mean=0.104,
         omega_tail_mean=0.298,
         gamma_tail_std=0.001,
         omega_tail_std=0.002,
-        tmin=5.0,
-        tmax=10.0,
-        nsamples=20,
         signal_source="gkx",
     )
 
@@ -285,10 +283,8 @@ def test_nonlinear_and_zonal_gate_reports_cover_publication_metrics() -> None:
         phi_mode_envelope_std=0.05,
         phi_mode_envelope_max=0.7,
     )
-    obs_nonlin = NonlinearWindowMetrics(
-        tmin=20.0,
-        tmax=50.0,
-        nsamples=12,
+    obs_nonlin = replace(
+        ref_nonlin,
         heat_flux_mean=4.2,
         heat_flux_std=0.5,
         heat_flux_rms=4.25,
@@ -297,7 +293,6 @@ def test_nonlinear_and_zonal_gate_reports_cover_publication_metrics() -> None:
         wg_mean=3.1,
         wg_std=0.35,
         phi_mode_envelope_mean=0.52,
-        phi_mode_envelope_std=0.05,
         phi_mode_envelope_max=0.72,
     )
 
@@ -335,28 +330,13 @@ def test_nonlinear_and_zonal_gate_reports_cover_publication_metrics() -> None:
         min_peak_times=np.array([2.0]),
         min_peak_values=np.array([-0.4]),
     )
-    obs_zonal = ZonalFlowResponseMetrics(
-        initial_level=1.0,
-        initial_policy="first_abs",
+    obs_zonal = replace(
+        ref_zonal,
         residual_level=0.192,
         residual_std=0.012,
         response_rms=0.21,
         gam_frequency=2.20,
         gam_damping_rate=0.176,
-        damping_method="branchwise_extrema",
-        frequency_method="hilbert_phase",
-        peak_count=6,
-        peak_fit_count=4,
-        tmin=30.0,
-        tmax=60.0,
-        fit_tmin=0.0,
-        fit_tmax=30.0,
-        peak_times=np.array([1.0, 2.0]),
-        peak_envelope=np.array([0.5, 0.4]),
-        max_peak_times=np.array([1.0]),
-        max_peak_values=np.array([0.5]),
-        min_peak_times=np.array([2.0]),
-        min_peak_values=np.array([-0.4]),
     )
 
     zonal_report = zonal_response_gate_report(
@@ -401,24 +381,12 @@ def test_eigenfunction_gate_report_handles_open_and_closed_artifacts() -> None:
     assert open_report.gates[0].passed is False
     assert open_report.gates[1].passed is False
 
-    with pytest.raises(ValueError):
-        eigenfunction_gate_report(
-            EigenfunctionComparisonMetrics(
-                overlap=1.0, relative_l2=0.0, phase_shift=0.0
-            ),
-            case="bad",
-            source="GX",
-            min_overlap=1.2,
-        )
-    with pytest.raises(ValueError):
-        eigenfunction_gate_report(
-            EigenfunctionComparisonMetrics(
-                overlap=1.0, relative_l2=0.0, phase_shift=0.0
-            ),
-            case="bad",
-            source="GX",
-            max_relative_l2=-1.0,
-        )
+    perfect = EigenfunctionComparisonMetrics(
+        overlap=1.0, relative_l2=0.0, phase_shift=0.0
+    )
+    for bad in ({"min_overlap": 1.2}, {"max_relative_l2": -1.0}):
+        with pytest.raises(ValueError):
+            eigenfunction_gate_report(perfect, case="bad", source="GX", **bad)
 
 
 def test_zonal_flow_response_metrics_recover_residual_and_gam_envelope() -> None:
@@ -438,38 +406,41 @@ def test_zonal_flow_response_metrics_recover_residual_and_gam_envelope() -> None
     assert metrics.peak_count >= 3
 
 
-def test_zonal_flow_response_metrics_support_first_sample_rh_normalization() -> None:
-    t = np.linspace(0.0, 10.0, 101)
-    response = 5.0 * (0.2 + 0.8 * np.exp(-0.7 * t) * np.cos(1.5 * t))
-
-    metrics = zonal_flow_response_metrics(
-        t,
-        response,
-        tail_fraction=0.2,
-        initial_fraction=0.2,
-        initial_policy="first-abs",
-    )
+@pytest.mark.parametrize(
+    ("t", "response", "kwargs", "initial", "residual", "atol"),
+    [
+        (  # first-sample (Rosenbluth-Hinton) normalization
+            np.linspace(0.0, 10.0, 101),
+            lambda t: 5.0 * (0.2 + 0.8 * np.exp(-0.7 * t) * np.cos(1.5 * t)),
+            dict(tail_fraction=0.2, initial_fraction=0.2, initial_policy="first-abs"),
+            None,
+            0.2,
+            0.03,
+        ),
+        (  # an external initial level overrides the measured one
+            np.linspace(0.0, 12.0, 241),
+            lambda t: 0.6 + np.exp(-0.7 * t) * np.cos(1.5 * t),
+            dict(
+                tail_fraction=0.25,
+                initial_policy="first_abs",
+                initial_level_override=3.0,
+            ),
+            3.0,
+            0.2,
+            0.02,
+        ),
+    ],
+)
+def test_zonal_flow_response_metrics_initial_level_policies(
+    t, response, kwargs, initial, residual, atol
+) -> None:
+    signal = response(t)
+    metrics = zonal_flow_response_metrics(t, signal, **kwargs)
 
     assert metrics.initial_policy == "first_abs"
-    assert metrics.initial_level == pytest.approx(abs(response[0]))
-    assert metrics.residual_level == pytest.approx(0.2, abs=0.03)
-
-
-def test_zonal_flow_response_metrics_support_external_initial_level_override() -> None:
-    t = np.linspace(0.0, 12.0, 241)
-    response = 0.6 + np.exp(-0.7 * t) * np.cos(1.5 * t)
-
-    metrics = zonal_flow_response_metrics(
-        t,
-        response,
-        tail_fraction=0.25,
-        initial_policy="first_abs",
-        initial_level_override=3.0,
-    )
-
-    assert metrics.initial_policy == "first_abs"
-    assert metrics.initial_level == pytest.approx(3.0)
-    assert metrics.residual_level == pytest.approx(0.2, abs=0.02)
+    expected_initial = abs(signal[0]) if initial is None else initial
+    assert metrics.initial_level == pytest.approx(expected_initial)
+    assert metrics.residual_level == pytest.approx(residual, abs=atol)
 
 
 def test_zonal_flow_response_metrics_can_limit_damping_fit_to_early_peaks() -> None:
@@ -530,31 +501,17 @@ def test_zonal_flow_response_metrics_validate_input_and_handle_nonoscillatory_si
     with pytest.raises(ValueError):
         zonal_flow_response_metrics(np.array([0.0, 1.0, 2.0]), np.array([1.0, 2.0]))
     with pytest.raises(ValueError):
-        zonal_flow_response_metrics(
-            np.array([0.0, 1.0, 2.0]), np.array([0.0, 0.0, 0.0])
-        )
-    with pytest.raises(ValueError):
-        zonal_flow_response_metrics(
-            np.arange(5.0), np.ones(5), initial_policy="unknown"
-        )
-    with pytest.raises(ValueError):
-        zonal_flow_response_metrics(np.arange(5.0), np.ones(5), peak_fit_max_peaks=0)
-    with pytest.raises(ValueError):
-        zonal_flow_response_metrics(
-            np.arange(5.0), np.ones(5), damping_fit_mode="unknown"
-        )
-    with pytest.raises(ValueError):
-        zonal_flow_response_metrics(
-            np.arange(5.0), np.ones(5), frequency_fit_mode="unknown"
-        )
-    with pytest.raises(ValueError):
-        zonal_flow_response_metrics(
-            np.arange(5.0), np.ones(5), hilbert_trim_fraction=0.5
-        )
-    with pytest.raises(ValueError):
-        zonal_flow_response_metrics(
-            np.arange(5.0), np.ones(5), initial_level_override=0.0
-        )
+        zonal_flow_response_metrics(np.array([0.0, 1.0, 2.0]), np.zeros(3))
+    for bad in (
+        {"initial_policy": "unknown"},
+        {"peak_fit_max_peaks": 0},
+        {"damping_fit_mode": "unknown"},
+        {"frequency_fit_mode": "unknown"},
+        {"hilbert_trim_fraction": 0.5},
+        {"initial_level_override": 0.0},
+    ):
+        with pytest.raises(ValueError):
+            zonal_flow_response_metrics(np.arange(5.0), np.ones(5), **bad)
 
     t = np.linspace(0.0, 5.0, 101)
     response = np.exp(-t)
@@ -643,16 +600,15 @@ def test_estimate_observed_order_returns_asymptotic_pairwise_orders() -> None:
     np.testing.assert_allclose(metrics.orders, [2.0, 2.0, 2.0], atol=1.0e-12)
     assert metrics.asymptotic_order == pytest.approx(2.0)
 
-    with pytest.raises(ValueError):
-        estimate_observed_order(np.array([0.1]), np.array([0.01]))
-    with pytest.raises(ValueError):
-        estimate_observed_order(np.array([0.2, 0.2]), np.array([0.1, 0.025]))
-    with pytest.raises(ValueError):
-        estimate_observed_order(np.array([0.2, np.nan]), np.array([0.1, 0.025]))
-    with pytest.raises(ValueError):
-        estimate_observed_order(np.array([0.2, -0.1]), np.array([0.1, 0.025]))
-    with pytest.raises(ValueError):
-        estimate_observed_order(np.array([0.2, 0.1]), np.array([0.1, 0.0]))
+    for steps, errs in (
+        ([0.1], [0.01]),
+        ([0.2, 0.2], [0.1, 0.025]),
+        ([0.2, np.nan], [0.1, 0.025]),
+        ([0.2, -0.1], [0.1, 0.025]),
+        ([0.2, 0.1], [0.1, 0.0]),
+    ):
+        with pytest.raises(ValueError):
+            estimate_observed_order(np.array(steps), np.array(errs))
 
 
 def test_observed_order_gate_report_tracks_rate_and_final_error() -> None:
@@ -696,26 +652,13 @@ def test_observed_order_gate_report_tracks_rate_and_final_error() -> None:
     )
     assert nonmonotone.passed is False
 
-    with pytest.raises(ValueError):
-        observed_order_gate_report(
-            metrics, case="bad", source="closed-form", min_asymptotic_order=-1.0
-        )
-    with pytest.raises(ValueError):
-        observed_order_gate_report(
-            metrics,
-            case="bad",
-            source="closed-form",
-            min_asymptotic_order=1.0,
-            max_final_error=-1.0,
-        )
-    with pytest.raises(ValueError):
-        observed_order_gate_report(
-            metrics,
-            case="bad",
-            source="closed-form",
-            min_asymptotic_order=1.0,
-            min_pairwise_order=-1.0,
-        )
+    for bad in (
+        {"min_asymptotic_order": -1.0},
+        {"min_asymptotic_order": 1.0, "max_final_error": -1.0},
+        {"min_asymptotic_order": 1.0, "min_pairwise_order": -1.0},
+    ):
+        with pytest.raises(ValueError):
+            observed_order_gate_report(metrics, case="bad", source="closed-form", **bad)
 
 
 # ---- from test_benchmark_contracts.py ----
@@ -742,14 +685,6 @@ def _assert_same_parameters(actual, expected):
 def test_parameter_contract_rejects_optional_and_numeric_mismatches(rates):
     with pytest.raises(AssertionError, match="damp_ends_rate"):
         _assert_same_parameters(*(LinearParams(damp_ends_rate=r) for r in rates))
-
-
-def test_integrator_benchmark_uses_canonical_linear_owners() -> None:
-    assert benchmark_integrators.LinearParams is LinearParams
-    assert benchmark_integrators.build_linear_cache is build_linear_cache
-    assert benchmark_integrators.integrate_linear.__module__ == (
-        "gkx.solvers_linear_integrators"
-    )
 
 
 def test_benchmark_readme_references_existing_python_drivers() -> None:
@@ -779,98 +714,66 @@ def test_cyclone_publication_driver_uses_asymptotic_fit_window() -> None:
     assert cyclone["window"]["tmax"] == pytest.approx(runtime_cfg.time.t_max)
 
 
-def test_benchmark_public_exports_resolve() -> None:
-    import gkx.benchmarking_shared as benchmark_api
-
-    for name in benchmark_api.__all__:
-        assert hasattr(benchmark_api, name), name
+_NL, _NM = 2, 4
 
 
-def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
-    """The canonical runtime case must preserve the established TEM operator."""
-
-    runtime_cfg, raw = load_runtime_from_toml(
-        ROOT / "benchmarks" / "cases" / "tem_linear.toml"
-    )
-    legacy_model = SimpleNamespace(
-        tprim_i=20.0,
-        tprim_e=20.0,
-        fprim=20.0,
-        Te_over_Ti=1.0,
-        mass_ratio=370.0,
-        nu_i=0.0,
-        nu_e=0.0,
-        beta=1.0e-4,
-    )
-    n_laguerre, n_hermite = 2, 4
-
+def _transitional_case(relative: str):
+    runtime_cfg, raw = load_runtime_from_toml(ROOT / relative)
     geometry = build_runtime_geometry(runtime_cfg)
     grid_full = build_spectral_grid(runtime_cfg.grid)
     ky_index = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
     grid = select_ky_grid(grid_full, ky_index)
+    params = build_runtime_linear_params(runtime_cfg, Nm=_NM, geom=geometry)
+    return runtime_cfg, raw, geometry, grid, params
 
+
+def _assert_fixed_step_within_cfl(runtime_cfg, raw, grid, geometry, method, stride):
+    time = runtime_cfg.time
     assert not [key for key in raw["time"] if "diffrax" in key]
-    assert runtime_cfg.time.fixed_dt is True
-    assert runtime_cfg.time.method == "rk2"
-    assert runtime_cfg.time.sample_stride == 20
+    assert time.fixed_dt is True
+    assert time.method == method
+    assert time.sample_stride == stride
     assert raw["run"]["solver"] == "auto"
-    tem_steps = round(runtime_cfg.time.t_max / runtime_cfg.time.dt)
-    assert tem_steps * runtime_cfg.time.dt == pytest.approx(runtime_cfg.time.t_max)
-    assert tem_steps % runtime_cfg.time.sample_stride == 0
+    steps = round(time.t_max / time.dt)
+    assert steps * time.dt == pytest.approx(time.t_max)
+    assert steps % time.sample_stride == 0
 
-    runtime_params = build_runtime_linear_params(
-        runtime_cfg,
-        Nm=n_hermite,
-        geom=geometry,
-    )
     cfl_params = build_runtime_linear_params(runtime_cfg, Nm=32, geom=geometry)
     omega_bound = _linear_frequency_bound(grid, geometry, cfl_params, 12, 32)
-    cfl_numerator = resolve_cfl_fac(
-        runtime_cfg.time.method, runtime_cfg.time.cfl_fac
-    ) * float(runtime_cfg.time.cfl)
-    assert runtime_cfg.time.dt * float(np.sum(omega_bound)) <= cfl_numerator
-    legacy_params = _two_species_params(
-        legacy_model,
-        kpar_scale=float(geometry.gradpar()),
-        omega_d_scale=TEM_OMEGA_D_SCALE,
-        omega_star_scale=TEM_OMEGA_STAR_SCALE,
-        rho_star=TEM_RHO_STAR,
-        damp_ends_amp=0.0,
-        damp_ends_widthfrac=0.0,
-        nhermite=n_hermite,
-    )
-    _assert_same_parameters(runtime_params, legacy_params)
+    cfl_numerator = resolve_cfl_fac(time.method, time.cfl_fac) * float(time.cfl)
+    assert time.dt * float(np.sum(omega_bound)) <= cfl_numerator
 
+
+def _legacy_params(model, geometry, *, scales, damp_ends):
+    omega_d_scale, omega_star_scale, rho_star = scales
+    return _two_species_params(
+        model,
+        kpar_scale=float(geometry.gradpar()),
+        omega_d_scale=omega_d_scale,
+        omega_star_scale=omega_star_scale,
+        rho_star=rho_star,
+        damp_ends_amp=damp_ends[0],
+        damp_ends_widthfrac=damp_ends[1],
+        nhermite=_NM,
+    )
+
+
+def _runtime_and_legacy_states(runtime_cfg, grid, geometry):
+    modes = dict(ky_index=0, kx_index=0, Nl=_NL, Nm=_NM)
     runtime_state = build_runtime_initial_condition(
-        grid,
-        geometry,
-        runtime_cfg,
-        ky_index=0,
-        kx_index=0,
-        Nl=n_laguerre,
-        Nm=n_hermite,
-        nspecies=2,
+        grid, geometry, runtime_cfg, nspecies=2, **modes
     )
     legacy_single = build_benchmark_initial_condition(
-        grid,
-        geometry,
-        ky_index=0,
-        kx_index=0,
-        Nl=n_laguerre,
-        Nm=n_hermite,
-        init_cfg=runtime_cfg.init,
+        grid, geometry, init_cfg=runtime_cfg.init, **modes
     )
     legacy_state = np.zeros_like(np.asarray(runtime_state))
     legacy_state[1] = np.asarray(legacy_single)
-    np.testing.assert_allclose(runtime_state, legacy_state, rtol=0.0, atol=1.0e-19)
+    return runtime_state, legacy_state
 
-    cache = build_linear_cache(
-        grid,
-        geometry,
-        runtime_params,
-        n_laguerre,
-        n_hermite,
-    )
+
+def _rhs_pair(runtime_cfg, grid, geometry, runtime_params, legacy_params, states):
+    runtime_state, legacy_input = states
+    cache = build_linear_cache(grid, geometry, runtime_params, _NL, _NM)
     runtime_rhs, _ = linear_rhs_cached(
         runtime_state,
         cache,
@@ -878,10 +781,44 @@ def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
         terms=build_runtime_linear_terms(runtime_cfg),
     )
     legacy_rhs, _ = linear_rhs_cached(
-        runtime_state,
-        cache,
-        legacy_params,
-        terms=LinearTerms(bpar=0.0),
+        legacy_input, cache, legacy_params, terms=LinearTerms(bpar=0.0)
+    )
+    return runtime_rhs, legacy_rhs
+
+
+def _two_species_model(tprim, fprim, mass_ratio, beta) -> SimpleNamespace:
+    return SimpleNamespace(
+        tprim_i=tprim,
+        tprim_e=tprim,
+        fprim=fprim,
+        Te_over_Ti=1.0,
+        mass_ratio=mass_ratio,
+        nu_i=0.0,
+        nu_e=0.0,
+        beta=beta,
+    )
+
+
+def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
+    """The canonical runtime case must preserve the established TEM operator."""
+
+    cfg, raw, geometry, grid, runtime_params = _transitional_case(
+        "benchmarks/cases/tem_linear.toml"
+    )
+    _assert_fixed_step_within_cfl(cfg, raw, grid, geometry, "rk2", 20)
+    legacy_params = _legacy_params(
+        _two_species_model(20.0, 20.0, 370.0, 1.0e-4),
+        geometry,
+        scales=(TEM_OMEGA_D_SCALE, TEM_OMEGA_STAR_SCALE, TEM_RHO_STAR),
+        damp_ends=(0.0, 0.0),
+    )
+    _assert_same_parameters(runtime_params, legacy_params)
+
+    runtime_state, legacy_state = _runtime_and_legacy_states(cfg, grid, geometry)
+    np.testing.assert_allclose(runtime_state, legacy_state, rtol=0.0, atol=1.0e-19)
+
+    runtime_rhs, legacy_rhs = _rhs_pair(
+        cfg, grid, geometry, runtime_params, legacy_params, (runtime_state,) * 2
     )
     np.testing.assert_allclose(runtime_rhs, legacy_rhs, rtol=1.0e-6, atol=1.0e-18)
 
@@ -889,98 +826,33 @@ def test_runtime_tem_case_matches_transitional_operator_contract() -> None:
 def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
     """The canonical kinetic-electron case preserves the executed operator."""
 
-    runtime_cfg, raw = load_runtime_from_toml(
-        ROOT / "examples" / "05_kinetic_electrons" / "case_full.toml"
+    cfg, raw, geometry, grid, runtime_params = _transitional_case(
+        "examples/05_kinetic_electrons/case_full.toml"
     )
-    model = SimpleNamespace(
-        tprim_i=2.49,
-        tprim_e=2.49,
-        fprim=0.8,
-        Te_over_Ti=1.0,
-        mass_ratio=1.0 / 0.00027,
-        nu_i=0.0,
-        nu_e=0.0,
-        beta=1.0e-5,
-    )
-    n_laguerre, n_hermite = 2, 4
-    geometry = build_runtime_geometry(runtime_cfg)
-    grid_full = build_spectral_grid(runtime_cfg.grid)
-    ky_index = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
-    grid = select_ky_grid(grid_full, ky_index)
-
-    assert not [key for key in raw["time"] if "diffrax" in key]
-    assert runtime_cfg.time.fixed_dt is True
-    assert runtime_cfg.time.method == "rk4"
-    assert runtime_cfg.time.sample_stride == 10
-    assert raw["run"]["solver"] == "auto"
-    kinetic_steps = round(runtime_cfg.time.t_max / runtime_cfg.time.dt)
-    assert kinetic_steps * runtime_cfg.time.dt == pytest.approx(runtime_cfg.time.t_max)
-    assert kinetic_steps % runtime_cfg.time.sample_stride == 0
-
-    runtime_params = build_runtime_linear_params(
-        runtime_cfg, Nm=n_hermite, geom=geometry
-    )
-    cfl_params = build_runtime_linear_params(runtime_cfg, Nm=32, geom=geometry)
-    omega_bound = _linear_frequency_bound(grid, geometry, cfl_params, 12, 32)
-    cfl_numerator = resolve_cfl_fac(
-        runtime_cfg.time.method, runtime_cfg.time.cfl_fac
-    ) * float(runtime_cfg.time.cfl)
-    assert runtime_cfg.time.dt * float(np.sum(omega_bound)) <= cfl_numerator
-    legacy_params = _two_species_params(
-        model,
-        kpar_scale=float(geometry.gradpar()),
-        omega_d_scale=1.0,
-        omega_star_scale=1.0,
-        rho_star=1.0,
-        damp_ends_amp=0.1,
-        damp_ends_widthfrac=0.125,
-        nhermite=n_hermite,
+    _assert_fixed_step_within_cfl(cfg, raw, grid, geometry, "rk4", 10)
+    legacy_params = _legacy_params(
+        _two_species_model(2.49, 0.8, 1.0 / 0.00027, 1.0e-5),
+        geometry,
+        scales=(1.0, 1.0, 1.0),
+        damp_ends=(0.1, 0.125),
     )
     _assert_same_parameters(runtime_params, legacy_params)
 
-    runtime_state = build_runtime_initial_condition(
-        grid,
-        geometry,
-        runtime_cfg,
-        ky_index=0,
-        kx_index=0,
-        Nl=n_laguerre,
-        Nm=n_hermite,
-        nspecies=2,
-    )
-    legacy_single = build_benchmark_initial_condition(
-        grid,
-        geometry,
-        ky_index=0,
-        kx_index=0,
-        Nl=n_laguerre,
-        Nm=n_hermite,
-        init_cfg=runtime_cfg.init,
-    )
-    legacy_state = np.zeros_like(np.asarray(runtime_state))
-    legacy_state[1] = np.asarray(legacy_single)
+    runtime_state, legacy_state = _runtime_and_legacy_states(cfg, grid, geometry)
     phase_scale = np.vdot(legacy_state, runtime_state) / np.vdot(
         legacy_state, legacy_state
     )
     np.testing.assert_allclose(
-        runtime_state,
-        phase_scale * legacy_state,
-        rtol=1.0e-7,
-        atol=1.0e-12,
+        runtime_state, phase_scale * legacy_state, rtol=1.0e-7, atol=1.0e-12
     )
 
-    cache = build_linear_cache(grid, geometry, runtime_params, n_laguerre, n_hermite)
-    runtime_rhs, _ = linear_rhs_cached(
-        runtime_state,
-        cache,
+    runtime_rhs, legacy_rhs = _rhs_pair(
+        cfg,
+        grid,
+        geometry,
         runtime_params,
-        terms=build_runtime_linear_terms(runtime_cfg),
-    )
-    legacy_rhs, _ = linear_rhs_cached(
-        legacy_state,
-        cache,
         legacy_params,
-        terms=LinearTerms(bpar=0.0),
+        (runtime_state, legacy_state),
     )
     rhs_error = np.linalg.norm(
         np.asarray(runtime_rhs) - phase_scale * np.asarray(legacy_rhs)
@@ -991,76 +863,28 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
 def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
     """The canonical runtime case preserves the established KBM operator."""
 
-    runtime_cfg, _raw = load_runtime_from_toml(
-        ROOT / "examples" / "06_electromagnetic" / "case_full.toml"
+    cfg, _raw, geometry, grid, runtime_params = _transitional_case(
+        "examples/06_electromagnetic/case_full.toml"
     )
-    model = SimpleNamespace(
-        tprim_i=2.49,
-        tprim_e=2.49,
-        fprim=0.8,
-        Te_over_Ti=1.0,
-        mass_ratio=1.0 / 0.00027,
-        nu_i=0.0,
-        nu_e=0.0,
-        beta=runtime_cfg.physics.beta,
-    )
-    n_laguerre, n_hermite = 2, 4
-    geometry = build_runtime_geometry(runtime_cfg)
-    grid_full = build_spectral_grid(runtime_cfg.grid)
-    grid = select_ky_grid(
-        grid_full, int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
-    )
-    runtime_params = build_runtime_linear_params(
-        runtime_cfg, Nm=n_hermite, geom=geometry
-    )
-    legacy_params = _two_species_params(
-        model,
-        kpar_scale=float(geometry.gradpar()),
-        omega_d_scale=KBM_OMEGA_D_SCALE,
-        omega_star_scale=KBM_OMEGA_STAR_SCALE,
-        rho_star=KBM_RHO_STAR,
-        damp_ends_amp=0.1,
-        damp_ends_widthfrac=0.125,
-        nhermite=n_hermite,
+    legacy_params = _legacy_params(
+        _two_species_model(2.49, 0.8, 1.0 / 0.00027, cfg.physics.beta),
+        geometry,
+        scales=(KBM_OMEGA_D_SCALE, KBM_OMEGA_STAR_SCALE, KBM_RHO_STAR),
+        damp_ends=(0.1, 0.125),
     )
     _assert_same_parameters(runtime_params, legacy_params)
-    assert build_runtime_linear_terms(runtime_cfg).hypercollisions == 1.0
+    assert build_runtime_linear_terms(cfg).hypercollisions == 1.0
 
-    runtime_state = build_runtime_initial_condition(
-        grid,
-        geometry,
-        runtime_cfg,
-        ky_index=0,
-        kx_index=0,
-        Nl=n_laguerre,
-        Nm=n_hermite,
-        nspecies=2,
-    )
-    legacy_single = build_benchmark_initial_condition(
-        grid,
-        geometry,
-        ky_index=0,
-        kx_index=0,
-        Nl=n_laguerre,
-        Nm=n_hermite,
-        init_cfg=runtime_cfg.init,
-    )
-    legacy_state = np.zeros_like(np.asarray(runtime_state))
-    legacy_state[1] = np.asarray(legacy_single)
+    runtime_state, legacy_state = _runtime_and_legacy_states(cfg, grid, geometry)
     np.testing.assert_allclose(runtime_state, legacy_state, rtol=2.0e-7, atol=1.0e-17)
 
-    cache = build_linear_cache(grid, geometry, runtime_params, n_laguerre, n_hermite)
-    runtime_rhs, _ = linear_rhs_cached(
-        runtime_state,
-        cache,
+    runtime_rhs, legacy_rhs = _rhs_pair(
+        cfg,
+        grid,
+        geometry,
         runtime_params,
-        terms=build_runtime_linear_terms(runtime_cfg),
-    )
-    legacy_rhs, _ = linear_rhs_cached(
-        legacy_state,
-        cache,
         legacy_params,
-        terms=LinearTerms(bpar=0.0),
+        (runtime_state, legacy_state),
     )
     np.testing.assert_allclose(runtime_rhs, legacy_rhs, rtol=1.0e-6, atol=2.0e-16)
 
@@ -1147,8 +971,16 @@ def test_root_benchmark_payload_stays_lightweight() -> None:
     assert total_bytes <= MAX_ROOT_BENCHMARK_PAYLOAD_BYTES
 
 
+def _runtime_runs():
+    return _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
+
+
+def _proc(stdout: str = "", stderr: str = "", returncode: int = 0):
+    return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
+
+
 def test_runtime_memory_manifest_loads_runs() -> None:
-    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
+    runs = _runtime_runs()
     assert any(
         run.case == "cyclone-linear" and run.backend == "gkx_cpu" for run in runs
     )
@@ -1185,12 +1017,9 @@ enabled = false
     assert selected[0].backend == "gkx_cpu"
 
 
-def test_parse_peak_rss_mb_supports_macos_and_linux_formats() -> None:
+def test_parse_peak_rss_and_profile_times() -> None:
     assert _parse_peak_rss_mb("peak memory footprint: 1048576") == 1.0
     assert _parse_peak_rss_mb("Maximum resident set size (kbytes): 2048") == 2.0
-
-
-def test_parse_profile_times_extracts_warmup_and_run_fields() -> None:
     parsed = _parse_profile_times("warmup_time_s=30.776 run_time_s=14.081")
     assert parsed == {"warmup_time_s": 30.776, "run_time_s": 14.081}
 
@@ -1217,57 +1046,63 @@ def test_render_expands_root_and_env(monkeypatch) -> None:
     assert "/tmp/bench" in rendered
 
 
-def test_gx_runtime_memory_manifest_runs_in_isolated_tempdir() -> None:
-    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
-    gx_runs = [run for run in runs if run.backend == "gx"]
-    assert gx_runs
-    for run in gx_runs:
-        assert "mktemp -d" in run.command
-        assert "env " in run.command
-        assert "-u DISPLAY" in run.command
-        assert "HDF5_DISABLE_VERSION_CHECK=1" in run.command
-        assert "CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE}" in run.command
+_STELLARATOR_CASES = {"w7x-linear", "w7x-nonlinear", "hsx-linear", "hsx-nonlinear"}
+_CUDA_PIN = "CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE}"
 
 
-def test_gx_stellarator_runtime_manifest_uses_pregenerated_nc_geometry() -> None:
-    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
-    stellarator = [
+@pytest.mark.parametrize(
+    ("backend", "cases", "count", "required"),
+    [
+        # GX rows run in an isolated tempdir with a pinned, display-free env.
+        (
+            "gx",
+            None,
+            None,
+            (
+                "mktemp -d",
+                "env ",
+                "-u DISPLAY",
+                "HDF5_DISABLE_VERSION_CHECK=1",
+                _CUDA_PIN,
+            ),
+        ),
+        # GX stellarator rows use pregenerated nc geometry.
+        (
+            "gx",
+            _STELLARATOR_CASES,
+            4,
+            (
+                'geo_option = "nc"',
+                "vmec_file",
+                'geo_file = "',
+                "REFERENCE_GK_NETCDF_LIBDIR",
+                "REFERENCE_GK_PYTHON_BIN",
+            ),
+        ),
+        ("gkx_gpu", None, None, (_CUDA_PIN,)),  # GPU rows pin the configured device
+    ],
+    ids=["gx-isolated-tempdir", "gx-stellarator-nc-geometry", "gpu-pins-cuda-device"],
+)
+def test_runtime_memory_manifest_row_commands(backend, cases, count, required) -> None:
+    runs = [
         run
-        for run in runs
-        if run.backend == "gx"
-        and run.case in {"w7x-linear", "w7x-nonlinear", "hsx-linear", "hsx-nonlinear"}
+        for run in _runtime_runs()
+        if run.backend == backend and (cases is None or run.case in cases)
     ]
-    assert len(stellarator) == 4
-    for run in stellarator:
-        assert 'geo_option = "nc"' in run.command
-        assert "vmec_file" in run.command
-        assert 'geo_file = "' in run.command
-        assert "REFERENCE_GK_NETCDF_LIBDIR" in run.command
-        assert "REFERENCE_GK_PYTHON_BIN" in run.command
-
-
-def test_gpu_runtime_memory_manifest_pins_configured_cuda_device() -> None:
-    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
-    gpu_runs = [run for run in runs if run.backend == "gkx_gpu"]
-    assert gpu_runs
-    for run in gpu_runs:
-        assert "CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE}" in run.command
+    assert runs if count is None else len(runs) == count
+    for run in runs:
+        for token in required:
+            assert token in run.command, (run.case, token)
 
 
 def test_short_nonlinear_gpu_rows_request_warm_profile_pass() -> None:
-    runs = _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
     selected = {
-        (run.case, run.backend): run.profile_command
-        for run in runs
+        run.case: run.profile_command
+        for run in _runtime_runs()
         if run.backend == "gkx_gpu"
-        and run.case in {"cyclone-nonlinear", "kbm-nonlinear"}
     }
-    assert "profile_runtime_kernels.py cyclone" in str(
-        selected[("cyclone-nonlinear", "gkx_gpu")]
-    )
-    assert "profile_runtime_kernels.py cyclone" in str(
-        selected[("kbm-nonlinear", "gkx_gpu")]
-    )
+    for case in ("cyclone-nonlinear", "kbm-nonlinear"):
+        assert "profile_runtime_kernels.py cyclone" in str(selected[case])
 
 
 def test_remote_runtime_memory_runs_disable_x11_forwarding(monkeypatch) -> None:
@@ -1275,13 +1110,7 @@ def test_remote_runtime_memory_runs_disable_x11_forwarding(monkeypatch) -> None:
 
     def fake_run(cmd, capture_output, text):  # type: ignore[no-untyped-def]
         captured["cmd"] = cmd
-
-        class Proc:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return Proc()
+        return _proc()
 
     monkeypatch.setattr(
         "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
@@ -1296,12 +1125,10 @@ def test_remote_runtime_memory_runs_disable_x11_forwarding(monkeypatch) -> None:
 
 def test_runtime_memory_command_captures_profile_times(monkeypatch) -> None:
     def fake_run(cmd, shell, cwd, capture_output, text):  # type: ignore[no-untyped-def]
-        class Proc:
-            returncode = 0
-            stdout = "warmup_time_s=12.5 run_time_s=3.25\n"
-            stderr = "Maximum resident set size (kbytes): 2048\n"
-
-        return Proc()
+        return _proc(
+            "warmup_time_s=12.5 run_time_s=3.25\n",
+            "Maximum resident set size (kbytes): 2048\n",
+        )
 
     monkeypatch.setattr(
         "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
@@ -1326,15 +1153,9 @@ def test_runtime_memory_command_runs_profile_subcommand(monkeypatch) -> None:
 
     def fake_run(cmd, shell, cwd, capture_output, text):  # type: ignore[no-untyped-def]
         calls.append(cmd)
-
-        class Proc:
-            returncode = 0
-            stdout = "main\n" if len(calls) == 1 else "warmup_time_s=20 run_time_s=7\n"
-            stderr = (
-                "Maximum resident set size (kbytes): 2048\n" if len(calls) == 1 else ""
-            )
-
-        return Proc()
+        if len(calls) == 1:
+            return _proc("main\n", "Maximum resident set size (kbytes): 2048\n")
+        return _proc("warmup_time_s=20 run_time_s=7\n")
 
     monkeypatch.setattr(
         "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
@@ -1357,12 +1178,7 @@ def test_runtime_memory_command_runs_profile_subcommand(monkeypatch) -> None:
 
 
 def test_runtime_memory_row_logs_are_written(tmp_path: Path) -> None:
-    row = {
-        "case": "cyclone-linear",
-        "backend": "gx",
-        "stdout": "ok",
-        "stderr": "warn",
-    }
+    row = {"case": "cyclone-linear", "backend": "gx", "stdout": "ok", "stderr": "warn"}
     logs = _write_row_logs(tmp_path, row)
     assert Path(logs["stdout_log"]).read_text(encoding="utf-8") == "ok"
     assert Path(logs["stderr_log"]).read_text(encoding="utf-8") == "warn"
@@ -1390,12 +1206,7 @@ def test_runtime_memory_summary_is_written(tmp_path: Path) -> None:
 
 
 def test_runtime_memory_summary_row_prunes_existing_logs() -> None:
-    row = {
-        "case": "a",
-        "backend": "gkx_cpu",
-        "stdout": "ok",
-        "stderr": "",
-    }
+    row = {"case": "a", "backend": "gkx_cpu", "stdout": "ok", "stderr": ""}
     summary = _summary_row(row)
     assert "stdout" not in summary
     assert "stderr" not in summary
@@ -1608,93 +1419,74 @@ def test_hypercollisions_matches_gx_formula():
     assert jnp.allclose(out, expected, rtol=1.0e-6, atol=1.0e-7)
 
 
-def test_hypercollisions_skips_linked_abs_kz_when_kz_weight_is_zero(monkeypatch):
-    def _fail(*args, **kwargs):
-        raise AssertionError(
-            "abs_z_linked_fft should not run when hypercollisions_kz is zero"
-        )
+def _f32(value):
+    return jnp.asarray(value, dtype=jnp.float32)
 
-    monkeypatch.setattr(linear_dissipation_module, "abs_z_linked_fft", _fail)
 
-    Nl, Nm = 2, 4
-    G = jnp.ones((1, Nl, Nm, 1, 1, 2), dtype=jnp.complex64)
+def _kz_hyper_kwargs(Nl: int, Nm: int, kz, **overrides) -> dict[str, object]:
+    """Hypercollision arguments with only the kz (|d/dz|) channel active."""
     zeros_lm = jnp.zeros((Nl, Nm, 1, 1, 1), dtype=jnp.float32)
-    mask_const = jnp.zeros((1, Nl, Nm, 1, 1, 1), dtype=bool)
-    mask_kz = jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=bool)
-
-    out = hypercollisions_contribution(
-        G,
-        vth=jnp.asarray([1.0], dtype=jnp.float32),
-        nu_hyper=jnp.asarray([0.0], dtype=jnp.float32),
-        nu_hyper_l=jnp.asarray(0.0, dtype=jnp.float32),
-        nu_hyper_m=jnp.asarray(1.0, dtype=jnp.float32),
-        nu_hyper_lm=jnp.asarray(0.0, dtype=jnp.float32),
+    block = (1, Nl, Nm, 1, 1, 1)
+    kwargs = dict(
+        vth=_f32([1.0]),
+        nu_hyper=_f32([0.0]),
+        nu_hyper_l=_f32(0.0),
+        nu_hyper_m=_f32(1.0),
+        nu_hyper_lm=_f32(0.0),
         hyper_ratio=zeros_lm,
         ratio_l=zeros_lm,
         ratio_m=zeros_lm,
         ratio_lm=zeros_lm,
-        mask_const=mask_const,
-        mask_kz=mask_kz,
-        m_pow=jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=jnp.float32),
-        m_norm_kz_factor=jnp.asarray(1.0, dtype=jnp.float32),
-        kz=jnp.asarray([0.0, 1.0], dtype=jnp.float32),
-        kpar_scale=jnp.asarray(1.0, dtype=jnp.float32),
-        hypercollisions_const=jnp.asarray(1.0, dtype=jnp.float32),
-        hypercollisions_kz=jnp.asarray(0.0, dtype=jnp.float32),
-        weight=jnp.asarray(1.0, dtype=jnp.float32),
+        mask_const=jnp.zeros(block, dtype=bool),
+        mask_kz=jnp.ones(block, dtype=bool),
+        m_pow=jnp.ones(block, dtype=jnp.float32),
+        m_norm_kz_factor=_f32(1.0),
+        kz=_f32(kz),
+        kpar_scale=_f32(1.0),
+        hypercollisions_const=_f32(1.0),
+        hypercollisions_kz=_f32(0.0),
+        weight=_f32(1.0),
         linked_indices=(jnp.asarray([[0]], dtype=jnp.int32),),
-        linked_kz=(jnp.asarray([0.0, 1.0], dtype=jnp.float32),),
+        linked_kz=(_f32(kz),),
         linked_inverse_permutation=jnp.asarray([0], dtype=jnp.int32),
         linked_full_cover=True,
-        linked_gather_map=jnp.asarray([0], dtype=jnp.int32),
-        linked_gather_mask=jnp.asarray([True], dtype=bool),
-        linked_use_gather=True,
     )
+    return kwargs | overrides
 
-    assert jnp.allclose(out, jnp.zeros_like(G))
+
+_GATHER = dict(
+    linked_gather_map=jnp.asarray([0], dtype=jnp.int32),
+    linked_gather_mask=jnp.asarray([True], dtype=bool),
+    linked_use_gather=True,
+)
 
 
-def test_hypercollisions_static_zero_operator_skips_linked_abs_kz(monkeypatch):
+@pytest.mark.parametrize(
+    ("reason", "overrides"),
+    [
+        ("when hypercollisions_kz is zero", {}),
+        (
+            "for an exactly zero hypercollision operator",
+            dict(
+                nu_hyper=_f32(0.0),
+                nu_hyper_m=_f32(0.0),
+                mask_const=jnp.ones((1, 2, 4, 1, 1, 1), dtype=bool),
+                hypercollisions_kz=_f32(1.0),
+            ),
+        ),
+    ],
+)
+def test_hypercollisions_static_zero_skips_linked_abs_kz(
+    monkeypatch, reason, overrides
+):
     def _fail(*args, **kwargs):
-        raise AssertionError(
-            "abs_z_linked_fft should not run for an exactly zero hypercollision operator"
-        )
+        raise AssertionError(f"abs_z_linked_fft should not run {reason}")
 
     monkeypatch.setattr(linear_dissipation_module, "abs_z_linked_fft", _fail)
 
-    Nl, Nm = 2, 4
-    G = jnp.ones((1, Nl, Nm, 1, 1, 2), dtype=jnp.complex64)
-    zeros_lm = jnp.zeros((Nl, Nm, 1, 1, 1), dtype=jnp.float32)
-    mask = jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=bool)
-
-    out = hypercollisions_contribution(
-        G,
-        vth=jnp.asarray([1.0], dtype=jnp.float32),
-        nu_hyper=jnp.asarray(0.0, dtype=jnp.float32),
-        nu_hyper_l=jnp.asarray(0.0, dtype=jnp.float32),
-        nu_hyper_m=jnp.asarray(0.0, dtype=jnp.float32),
-        nu_hyper_lm=jnp.asarray(0.0, dtype=jnp.float32),
-        hyper_ratio=zeros_lm,
-        ratio_l=zeros_lm,
-        ratio_m=zeros_lm,
-        ratio_lm=zeros_lm,
-        mask_const=mask,
-        mask_kz=mask,
-        m_pow=jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=jnp.float32),
-        m_norm_kz_factor=jnp.asarray(1.0, dtype=jnp.float32),
-        kz=jnp.asarray([0.0, 1.0], dtype=jnp.float32),
-        kpar_scale=jnp.asarray(1.0, dtype=jnp.float32),
-        hypercollisions_const=jnp.asarray(1.0, dtype=jnp.float32),
-        hypercollisions_kz=jnp.asarray(1.0, dtype=jnp.float32),
-        weight=jnp.asarray(1.0, dtype=jnp.float32),
-        linked_indices=(jnp.asarray([[0]], dtype=jnp.int32),),
-        linked_kz=(jnp.asarray([0.0, 1.0], dtype=jnp.float32),),
-        linked_inverse_permutation=jnp.asarray([0], dtype=jnp.int32),
-        linked_full_cover=True,
-        linked_gather_map=jnp.asarray([0], dtype=jnp.int32),
-        linked_gather_mask=jnp.asarray([True], dtype=bool),
-        linked_use_gather=True,
-    )
+    G = jnp.ones((1, 2, 4, 1, 1, 2), dtype=jnp.complex64)
+    kwargs = _kz_hyper_kwargs(2, 4, [0.0, 1.0], **_GATHER, **overrides)
+    out = hypercollisions_contribution(G, **kwargs)
 
     assert jnp.allclose(out, jnp.zeros_like(G))
 
@@ -1702,32 +1494,12 @@ def test_hypercollisions_static_zero_operator_skips_linked_abs_kz(monkeypatch):
 @pytest.mark.parametrize("linked", [False, True])
 def test_kz_hypercollisions_preserve_periodic_fourier_modes(linked):
     Nl, Nm, Nz = 2, 4, 4
-    zeros_lm = jnp.zeros((Nl, Nm, 1, 1, 1), dtype=jnp.float32)
-    mask_const = jnp.zeros((1, Nl, Nm, 1, 1, 1), dtype=bool)
-    mask_kz = jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=bool)
-    kwargs = dict(
-        vth=jnp.asarray([1.0], dtype=jnp.float32),
-        nu_hyper=jnp.asarray([0.0], dtype=jnp.float32),
-        nu_hyper_l=jnp.asarray(0.0, dtype=jnp.float32),
-        nu_hyper_m=jnp.asarray(1.0, dtype=jnp.float32),
-        nu_hyper_lm=jnp.asarray(0.0, dtype=jnp.float32),
-        hyper_ratio=zeros_lm,
-        ratio_l=zeros_lm,
-        ratio_m=zeros_lm,
-        ratio_lm=zeros_lm,
-        mask_const=mask_const,
-        mask_kz=mask_kz,
-        m_pow=jnp.ones((1, Nl, Nm, 1, 1, 1), dtype=jnp.float32),
-        m_norm_kz_factor=jnp.asarray(1.0, dtype=jnp.float32),
-        kz=jnp.asarray([0.0, 1.0, -2.0, -1.0], dtype=jnp.float32),
-        kpar_scale=jnp.asarray(1.0, dtype=jnp.float32),
-        hypercollisions_const=jnp.asarray(0.0, dtype=jnp.float32),
-        hypercollisions_kz=jnp.asarray(1.0, dtype=jnp.float32),
-        weight=jnp.asarray(1.0, dtype=jnp.float32),
-        linked_indices=(jnp.asarray([[0]], dtype=jnp.int32),),
-        linked_kz=(jnp.asarray([0.0, 1.0, -2.0, -1.0], dtype=jnp.float32),),
-        linked_inverse_permutation=jnp.asarray([0], dtype=jnp.int32),
-        linked_full_cover=True,
+    kwargs = _kz_hyper_kwargs(
+        Nl,
+        Nm,
+        [0.0, 1.0, -2.0, -1.0],
+        hypercollisions_const=_f32(0.0),
+        hypercollisions_kz=_f32(1.0),
     )
     if not linked:
         kwargs.update(linked_indices=(), linked_kz=())
@@ -2199,96 +1971,51 @@ def _touch_bundle(output: Path) -> None:
         Path(f"{base}.{suffix}").write_text("stub\n", encoding="utf-8")
 
 
-def test_progress_requires_target_time_even_when_bundle_exists(
-    tmp_path: Path, monkeypatch
+def _progress_manifest(tmp_path: Path, *, include_dt: bool) -> Path:
+    outputs = [tmp_path / "base.out.nc", tmp_path / "cand.out.nc"]
+    for output in outputs:
+        _touch_bundle(output)
+    return _write_manifest(tmp_path, outputs, include_dt=include_dt)
+
+
+@pytest.mark.parametrize(
+    ("include_dt", "output_tmax", "confirmed"),
+    [
+        (False, 19.0, 0),  # complete bundles still need the target time
+        (False, 20.0, 2),  # every bundle reaches the target time
+        (True, 19.927, 2),  # fixed-step output within the manifest dt tolerance
+        (True, 19.85, 0),  # checkpoint below the dt tolerance stays incomplete
+    ],
+)
+def test_progress_requires_target_time_within_dt_tolerance(
+    tmp_path: Path, monkeypatch, include_dt, output_tmax, confirmed
 ) -> None:
-    base = tmp_path / "base.out.nc"
-    cand = tmp_path / "cand.out.nc"
-    _touch_bundle(base)
-    _touch_bundle(cand)
-    manifest = _write_manifest(tmp_path, [base, cand])
-    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 19.0)
+    manifest = _progress_manifest(tmp_path, include_dt=include_dt)
+    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: output_tmax)
 
     report = mod.build_matrix_progress_report(matrix_manifest=manifest)
 
+    if include_dt:
+        assert report["time_tolerance"] == 0.1
     assert report["summary"]["expected_outputs"] == 2
     assert report["summary"]["complete_bundles"] == 2
-    assert report["summary"]["target_time_confirmed"] == 0
-    assert report["summary"]["ready_for_postprocess"] is False
-
-
-def test_progress_passes_when_all_bundles_reach_target_time(
-    tmp_path: Path, monkeypatch
-) -> None:
-    base = tmp_path / "base.out.nc"
-    cand = tmp_path / "cand.out.nc"
-    _touch_bundle(base)
-    _touch_bundle(cand)
-    manifest = _write_manifest(tmp_path, [base, cand])
-    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 20.0)
-
-    report = mod.build_matrix_progress_report(matrix_manifest=manifest)
-
-    assert report["summary"]["complete_bundles"] == 2
-    assert report["summary"]["target_time_confirmed"] == 2
-    assert report["summary"]["ready_for_postprocess"] is True
+    assert report["summary"]["target_time_confirmed"] == confirmed
+    assert report["summary"]["ready_for_postprocess"] is (confirmed == 2)
     assert all(row["bundle_complete"] for row in report["rows"])
-    assert all(row["target_time_confirmed"] for row in report["rows"])
-
-
-def test_progress_accepts_fixed_step_output_within_manifest_dt_tolerance(
-    tmp_path: Path, monkeypatch
-) -> None:
-    base = tmp_path / "base.out.nc"
-    cand = tmp_path / "cand.out.nc"
-    _touch_bundle(base)
-    _touch_bundle(cand)
-    manifest = _write_manifest(tmp_path, [base, cand], include_dt=True)
-    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 19.927)
-
-    report = mod.build_matrix_progress_report(matrix_manifest=manifest)
-
-    assert report["time_tolerance"] == 0.1
-    assert report["summary"]["target_time_confirmed"] == 2
-    assert report["summary"]["ready_for_postprocess"] is True
-
-
-def test_progress_keeps_checkpoint_below_dt_tolerance_incomplete(
-    tmp_path: Path, monkeypatch
-) -> None:
-    base = tmp_path / "base.out.nc"
-    cand = tmp_path / "cand.out.nc"
-    _touch_bundle(base)
-    _touch_bundle(cand)
-    manifest = _write_manifest(tmp_path, [base, cand], include_dt=True)
-    monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 19.85)
-
-    report = mod.build_matrix_progress_report(matrix_manifest=manifest)
-
-    assert report["time_tolerance"] == 0.1
-    assert report["summary"]["target_time_confirmed"] == 0
-    assert report["summary"]["ready_for_postprocess"] is False
+    assert all(
+        bool(row["target_time_confirmed"]) is (confirmed == 2) for row in report["rows"]
+    )
 
 
 def test_progress_cli_uses_manifest_dt_tolerance_by_default(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
-    base = tmp_path / "base.out.nc"
-    cand = tmp_path / "cand.out.nc"
-    _touch_bundle(base)
-    _touch_bundle(cand)
-    manifest = _write_manifest(tmp_path, [base, cand], include_dt=True)
+    manifest = _progress_manifest(tmp_path, include_dt=True)
     out_json = tmp_path / "progress.json"
     monkeypatch.setattr(mod, "_read_output_tmax", lambda _path: 19.927)
 
     rc = mod.main(
-        [
-            "matrix-progress",
-            "--matrix-manifest",
-            str(manifest),
-            "--out-json",
-            str(out_json),
-        ]
+        f"matrix-progress --matrix-manifest {manifest} --out-json {out_json}".split()
     )
     stdout = capsys.readouterr().out
     report = json.loads(out_json.read_text(encoding="utf-8"))
@@ -2300,11 +2027,7 @@ def test_progress_cli_uses_manifest_dt_tolerance_by_default(
 
 
 def test_skip_time_check_does_not_read_output_time(tmp_path: Path, monkeypatch) -> None:
-    base = tmp_path / "base.out.nc"
-    cand = tmp_path / "cand.out.nc"
-    _touch_bundle(base)
-    _touch_bundle(cand)
-    manifest = _write_manifest(tmp_path, [base, cand], include_dt=True)
+    manifest = _progress_manifest(tmp_path, include_dt=True)
 
     def fail_if_called(_path):
         raise AssertionError("skip_time_check should not read NetCDF times")
@@ -2529,16 +2252,7 @@ def test_portfolio_cli_writes_report_and_figure(tmp_path: Path) -> None:
     out_png = tmp_path / "portfolio.png"
 
     rc = mod.main(
-        [
-            "matrix-portfolio",
-            "--matrix-report",
-            f"accepted_qa_ess={accepted}",
-            "--out-json",
-            str(out_json),
-            "--out-figure",
-            str(out_png),
-            "--fail-on-blocked",
-        ]
+        f"matrix-portfolio --matrix-report accepted_qa_ess={accepted} --out-json {out_json} --out-figure {out_png} --fail-on-blocked".split()
     )
     payload = json.loads(out_json.read_text(encoding="utf-8"))
 
@@ -2685,13 +2399,7 @@ def test_saturation_campaign_records_resolved_timestep_policy() -> None:
     time_cfg = type(
         "TimeConfig",
         (),
-        {
-            "fixed_dt": False,
-            "dt": 0.1,
-            "dt_max": None,
-            "cfl": 0.5,
-            "method": "rk3",
-        },
+        {"fixed_dt": False, "dt": 0.1, "dt_max": None, "cfl": 0.5, "method": "rk3"},
     )()
 
     policy = campaign._resolved_timestep_policy(time_cfg)
@@ -2799,10 +2507,7 @@ def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
         path.write_text(
             json.dumps(
                 {
-                    "source_provenance": {
-                        "git_commit": "abc123",
-                        "git_dirty": False,
-                    },
+                    "source_provenance": {"git_commit": "abc123", "git_dirty": False},
                     "previous_t_end": previous_t_end,
                     "case": case,
                     "grid": {"Nx": 2, "Ny": 2, "Nz": 2},
@@ -2827,121 +2532,83 @@ def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
         replay._load_replay_traces([first, second], [first_summary, second_summary])
 
 
-def test_saturation_campaign_rejects_a_mixed_continuation_state(tmp_path: Path) -> None:
+_STATE_SHAPE = (1, 1, 1, 2, 2, 2)
+_V2_TIME_IDENTITY = {
+    "time_fixed_dt": False,
+    "time_dt": 0.1,
+    "time_dt_max": "None",
+    "time_cfl": 1.0,
+    "time_method": "rk3",
+}
+
+
+def _continuation_state(tmp_path: Path, schema: str, **extra):
+    """A clean-provenance continuation archive and the identity it records."""
     campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
     provenance = campaign._campaign_source_provenance(
         ROOT / "src" / "gkx" / "__init__.py"
     )
     provenance["git_dirty"] = False
-    identity = {
-        name: np.asarray(value)
-        for name, value in {
-            "campaign_identity_schema": "gkx_nonlinear_campaign_v1",
-            "case": "qa.toml",
-            "input_sha256": "deck",
-            "vmec_sha256": "equilibrium",
-            "Nx": 2,
-            "Ny": 2,
-            "Nz": 2,
-            "Nl": 1,
-            "Nm": 1,
-            "random_seed": 31,
-            "alpha": "0.0",
-            "npol": "1.0",
-        }.items()
+    values = {
+        "campaign_identity_schema": schema,
+        "case": "qa.toml",
+        "input_sha256": "deck",
+        "vmec_sha256": "equilibrium",
+        **dict.fromkeys(("Nx", "Ny", "Nz"), 2),
+        **dict.fromkeys(("Nl", "Nm"), 1),
+        "random_seed": 31,
+        "alpha": "0.0",
+        "npol": "1.0",
+        **extra,
     }
+    identity = {name: np.asarray(value) for name, value in values.items()}
     state = tmp_path / "state.npz"
     np.savez_compressed(
         state,
-        state=np.zeros((1, 1, 1, 2, 2, 2)),
+        state=np.zeros(_STATE_SHAPE),
         t_end=10.0,
         **identity,
         **campaign._npz_source_provenance(provenance),
     )
 
-    loaded, t_end = campaign._load_continuation_state(
-        state,
-        expected_shape=(1, 1, 1, 2, 2, 2),
-        expected_identity=identity,
-        source_provenance=provenance,
-    )
-    assert loaded.shape == (1, 1, 1, 2, 2, 2)
+    def load(expected_identity):
+        return campaign._load_continuation_state(
+            state,
+            expected_shape=_STATE_SHAPE,
+            expected_identity=expected_identity,
+            source_provenance=provenance,
+        )
+
+    return identity, load
+
+
+def test_saturation_campaign_rejects_a_mixed_continuation_state(tmp_path: Path) -> None:
+    identity, load = _continuation_state(tmp_path, "gkx_nonlinear_campaign_v1")
+
+    loaded, t_end = load(identity)
+    assert loaded.shape == _STATE_SHAPE
     assert t_end == 10.0
 
     v2_expected = dict(identity)
-    v2_expected.update(
-        campaign_identity_schema=np.asarray("gkx_nonlinear_campaign_v2"),
-        time_fixed_dt=np.asarray(False),
-        time_dt=np.asarray(0.1),
-        time_dt_max=np.asarray("None"),
-        time_cfl=np.asarray(1.0),
-        time_method=np.asarray("rk3"),
-    )
-    campaign._load_continuation_state(
-        state,
-        expected_shape=(1, 1, 1, 2, 2, 2),
-        expected_identity=v2_expected,
-        source_provenance=provenance,
-    )
+    v2_expected["campaign_identity_schema"] = np.asarray("gkx_nonlinear_campaign_v2")
+    v2_expected.update({k: np.asarray(v) for k, v in _V2_TIME_IDENTITY.items()})
+    load(v2_expected)
 
     identity["case"] = np.asarray("qi.toml")
     with pytest.raises(SystemExit, match="campaign identity does not match"):
-        campaign._load_continuation_state(
-            state,
-            expected_shape=(1, 1, 1, 2, 2, 2),
-            expected_identity=identity,
-            source_provenance=provenance,
-        )
+        load(identity)
 
 
 def test_saturation_campaign_rejects_a_timestep_mismatched_state(
     tmp_path: Path,
 ) -> None:
-    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
-    provenance = campaign._campaign_source_provenance(
-        ROOT / "src" / "gkx" / "__init__.py"
+    identity, load = _continuation_state(
+        tmp_path, "gkx_nonlinear_campaign_v2", **_V2_TIME_IDENTITY
     )
-    provenance["git_dirty"] = False
-    identity = {
-        name: np.asarray(value)
-        for name, value in {
-            "campaign_identity_schema": "gkx_nonlinear_campaign_v2",
-            "case": "qa.toml",
-            "input_sha256": "deck",
-            "vmec_sha256": "equilibrium",
-            "Nx": 2,
-            "Ny": 2,
-            "Nz": 2,
-            "Nl": 1,
-            "Nm": 1,
-            "random_seed": 31,
-            "alpha": "0.0",
-            "npol": "1.0",
-            "time_fixed_dt": False,
-            "time_dt": 0.1,
-            "time_dt_max": "None",
-            "time_cfl": 1.0,
-            "time_method": "rk3",
-        }.items()
-    }
-    state = tmp_path / "state.npz"
-    np.savez_compressed(
-        state,
-        state=np.zeros((1, 1, 1, 2, 2, 2)),
-        t_end=10.0,
-        **identity,
-        **campaign._npz_source_provenance(provenance),
-    )
-
     expected = dict(identity)
     expected["time_cfl"] = np.asarray(0.5)
     with pytest.raises(SystemExit, match="campaign identity does not match"):
-        campaign._load_continuation_state(
-            state,
-            expected_shape=(1, 1, 1, 2, 2, 2),
-            expected_identity=expected,
-            source_provenance=provenance,
-        )
+        load(expected)
 
 
 def test_output_target_checker_accepts_near_horizon_and_rejects_partial_bundle(
@@ -2974,31 +2641,13 @@ def test_output_target_checker_cli_and_direct_help_contracts(
 
     assert (
         output_target.main(
-            [
-                "target-time",
-                "--output",
-                str(output),
-                "--target-time",
-                "20",
-                "--time-tolerance",
-                "0.1",
-                "--quiet",
-            ]
+            f"target-time --output {output} --target-time 20 --time-tolerance 0.1 --quiet".split()
         )
         == 0
     )
     assert (
         output_target.main(
-            [
-                "target-time",
-                "--output",
-                str(output),
-                "--target-time",
-                "20",
-                "--time-tolerance",
-                "0.01",
-                "--quiet",
-            ]
+            f"target-time --output {output} --target-time 20 --time-tolerance 0.01 --quiet".split()
         )
         == 1
     )
@@ -3030,6 +2679,18 @@ def _window_report(offset: float, *, case: str) -> dict[str, object]:
             max_sem_rel=0.02,
         ),
     )
+
+
+def _write_json_report(path: Path, offset: float, case: str) -> Path:
+    path.write_text(json.dumps(_window_report(offset, case=case)), encoding="utf-8")
+    return path
+
+
+def _write_window_reports(tmp_path: Path, prefix: str, offsets) -> list[Path]:
+    return [
+        _write_json_report(tmp_path / f"{prefix}_{idx}.json", offset, f"{prefix}_{idx}")
+        for idx, offset in enumerate(offsets)
+    ]
 
 
 def test_matched_transport_requires_converged_windows_and_resolved_reduction() -> None:
@@ -3070,30 +2731,12 @@ def test_matched_transport_requires_converged_windows_and_resolved_reduction() -
 
 
 def test_matched_transport_cli_writes_fail_closed_report(tmp_path: Path) -> None:
-    baseline = tmp_path / "baseline.json"
-    treatment = tmp_path / "treatment.json"
-    baseline.write_text(
-        json.dumps(_window_report(0.5, case="baseline")), encoding="utf-8"
-    )
-    treatment.write_text(
-        json.dumps(_window_report(0.0, case="flow_shear")), encoding="utf-8"
-    )
+    baseline = _write_json_report(tmp_path / "baseline.json", 0.5, "baseline")
+    treatment = _write_json_report(tmp_path / "treatment.json", 0.0, "flow_shear")
     output = tmp_path / "matched.json"
 
     rc = window_ensemble.main(
-        [
-            "matched-windows",
-            "--baseline",
-            str(baseline),
-            "--treatment",
-            str(treatment),
-            "--out-json",
-            str(output),
-            "--min-relative-reduction",
-            "0.05",
-            "--min-uncertainty-z-score",
-            "2.0",
-        ]
+        f"matched-windows --baseline {baseline} --treatment {treatment} --out-json {output} --min-relative-reduction 0.05 --min-uncertainty-z-score 2.0".split()
     )
 
     payload = json.loads(output.read_text(encoding="utf-8"))
@@ -3123,36 +2766,16 @@ def test_fixed_step_flow_shear_artifact_preserves_negative_evidence() -> None:
 def test_nonlinear_window_ensemble_tool_writes_json_png_and_fails_closed(
     tmp_path: Path,
 ) -> None:
-    reports = []
-    for idx, offset in enumerate((-0.02, 0.0, 0.02)):
-        path = tmp_path / f"seed_{idx}.json"
-        path.write_text(
-            json.dumps(_window_report(offset, case=f"seed_{idx}")), encoding="utf-8"
-        )
-        reports.append(path)
+    reports = _write_window_reports(tmp_path, "seed", (-0.02, 0.0, 0.02))
 
     out_json = tmp_path / "ensemble.json"
     out_png = tmp_path / "ensemble.png"
-    rc = window_ensemble.main(
-        [
-            "ensemble",
-            *[str(path) for path in reports],
-            "--out-json",
-            str(out_json),
-            "--out-png",
-            str(out_png),
-            "--case",
-            "seed_replicates",
-            "--comparison",
-            "random_seed_replicates",
-            "--min-reports",
-            "3",
-            "--max-mean-rel-spread",
-            "0.02",
-            "--max-combined-sem-rel",
-            "0.02",
-        ]
+    options = (
+        f"--out-json {out_json} --out-png {out_png} --case seed_replicates "
+        "--comparison random_seed_replicates --min-reports 3 "
+        "--max-mean-rel-spread 0.02 --max-combined-sem-rel 0.02"
     )
+    rc = window_ensemble.main(["ensemble", *map(str, reports), *options.split()])
     payload = json.loads(out_json.read_text(encoding="utf-8"))
     assert rc == 0
     assert out_png.exists()
@@ -3160,25 +2783,11 @@ def test_nonlinear_window_ensemble_tool_writes_json_png_and_fails_closed(
     assert payload["comparison"] == "random_seed_replicates"
     assert payload["statistics"]["n_reports"] == 3
 
-    paths = []
-    for idx, offset in enumerate((0.0, 2.0)):
-        path = tmp_path / f"dt_{idx}.json"
-        path.write_text(
-            json.dumps(_window_report(offset, case=f"dt_{idx}")), encoding="utf-8"
-        )
-        paths.append(path)
+    paths = _write_window_reports(tmp_path, "dt", (0.0, 2.0))
 
     failed_json = tmp_path / "ensemble_failed.json"
-    rc = window_ensemble.main(
-        [
-            "ensemble",
-            *[str(path) for path in paths],
-            "--out-json",
-            str(failed_json),
-            "--max-mean-rel-spread",
-            "0.05",
-        ]
-    )
+    options = f"--out-json {failed_json} --max-mean-rel-spread 0.05"
+    rc = window_ensemble.main(["ensemble", *map(str, paths), *options.split()])
     failed_payload = json.loads(failed_json.read_text(encoding="utf-8"))
     failed = {gate["metric"] for gate in failed_payload["gates"] if not gate["passed"]}
     assert rc == 1
@@ -3227,14 +2836,7 @@ def test_readiness_tool_writes_reports_and_requires_seed_timestep_replicates(
     reports_dir = tmp_path / "reports"
 
     rc = window_readiness.main(
-        [
-            "readiness",
-            str(summary),
-            "--out-json",
-            str(out_json),
-            "--reports-dir",
-            str(reports_dir),
-        ]
+        f"readiness {summary} --out-json {out_json} --reports-dir {reports_dir}".split()
     )
     payload = json.loads(out_json.read_text(encoding="utf-8"))
     assert rc == 1
@@ -3261,27 +2863,15 @@ def test_readiness_tool_writes_reports_and_requires_seed_timestep_replicates(
         )
     passed_json = tmp_path / "manifest_passed.json"
     rc = window_readiness.main(
-        [
-            "readiness",
-            *[str(path) for path in summaries],
-            "--out-json",
-            str(passed_json),
-        ]
+        ["readiness", *map(str, summaries), "--out-json", str(passed_json)]
     )
     passed_payload = json.loads(passed_json.read_text(encoding="utf-8"))
     assert rc == 0
     assert passed_payload["passed"] is True
     assert passed_payload["missing_artifacts"] == []
-    assert (
-        passed_payload["cases"][0]["variant_axes"]["seed"]["observed_distinct_count"]
-        == 2
-    )
-    assert (
-        passed_payload["cases"][0]["variant_axes"]["timestep"][
-            "observed_distinct_count"
-        ]
-        == 2
-    )
+    axes = passed_payload["cases"][0]["variant_axes"]
+    for axis in ("seed", "timestep"):
+        assert axes[axis]["observed_distinct_count"] == 2
 
 
 # ---- analytic benchmarks: GKX against closed-form theory

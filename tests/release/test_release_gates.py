@@ -9,8 +9,6 @@ import pytest
 
 # ---- quasilinear calibration-input provenance gates ----
 
-"""Tests for quasilinear calibration input validation gates."""
-
 
 from support.paths import load_release_tool
 import json
@@ -52,95 +50,89 @@ def _write_report(path: Path, artifact: str, *, split: str = "holdout") -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def test_audit_passes_when_required_point_matches_passed_gate(tmp_path: Path) -> None:
+def _audit(
+    tmp_path: Path,
+    artifact: str,
+    gates: dict[str, dict],
+    *,
+    split: str = "holdout",
+    patterns: list[str] | None = None,
+) -> tuple[dict, dict]:
+    """Write ``gates`` under tmp_path, audit one report point, return (payload, point)."""
+
     mod = _load_quasilinear_tool_module()
-    gate = tmp_path / "gate.json"
-    gate.write_text(
-        json.dumps(
-            {
-                "case": "synthetic_nonlinear_window",
-                "gkx": "tools_out/synthetic.csv",
-                "gate_report": {
-                    "case": "synthetic_nonlinear_window",
-                    "passed": True,
-                    "gates": [],
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
+    for relative, gate in gates.items():
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(gate), encoding="utf-8")
     report = tmp_path / "report.json"
-    _write_report(report, "tools_out/synthetic.csv")
-
+    _write_report(report, artifact, split=split)
+    if patterns is None:
+        patterns = [str(tmp_path / relative) for relative in gates]
     paths = mod.write_audit(
-        [report],
-        gate_patterns=[str(gate)],
-        out_json=tmp_path / "audit.json",
-        no_plot=True,
+        [report], gate_patterns=patterns, out_json=tmp_path / "audit.json", no_plot=True
     )
-
     payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
+    return payload, payload["reports"][0]["points"][0]
+
+
+_SYNTHETIC_PASSED_GATE = {
+    "case": "synthetic_nonlinear_window",
+    "gkx": "tools_out/synthetic.csv",
+    "gate_report": {"case": "synthetic_nonlinear_window", "passed": True, "gates": []},
+}
+_MATCHED = "matched passed nonlinear gate"
+_NEGATIVE = "matching nonlinear gate is negative evidence for calibration admission"
+
+
+@pytest.mark.parametrize(
+    "artifact",
+    ["tools_out/synthetic.csv", "/Users/example/local/GKX/tools_out/synthetic.csv"],
+    ids=["relative", "absolute-from-other-checkout"],
+)
+def test_audit_passes_when_required_point_matches_passed_gate(
+    tmp_path: Path, artifact: str
+) -> None:
+    payload, point = _audit(tmp_path, artifact, {"gate.json": _SYNTHETIC_PASSED_GATE})
     assert payload["passed"] is True
-    assert (
-        payload["reports"][0]["points"][0]["reason"] == "matched passed nonlinear gate"
-    )
+    assert point["reason"] == _MATCHED
+    assert point["nonlinear_artifact"] == "tools_out/synthetic.csv"
 
 
 def test_audit_passes_when_required_point_cites_passed_gate_sidecar(
     tmp_path: Path,
 ) -> None:
-    mod = _load_quasilinear_tool_module()
-    gate = tmp_path / "ensemble_gate.json"
-    gate.write_text(
-        json.dumps(
-            {
-                "case": "replicated_nonlinear_window",
-                "kind": "nonlinear_window_ensemble_report",
-                "promotion_gate": {"passed": True},
-            }
-        ),
-        encoding="utf-8",
-    )
-    report = tmp_path / "report.json"
-    _write_report(report, gate.as_posix())
-
-    paths = mod.write_audit(
-        [report],
-        gate_patterns=[str(gate)],
-        out_json=tmp_path / "audit.json",
-        no_plot=True,
-    )
-
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
-    point = payload["reports"][0]["points"][0]
+    gate = {
+        "case": "replicated_nonlinear_window",
+        "kind": "nonlinear_window_ensemble_report",
+        "promotion_gate": {"passed": True},
+    }
+    artifact = (tmp_path / "ensemble_gate.json").as_posix()
+    payload, point = _audit(tmp_path, artifact, {"ensemble_gate.json": gate})
     assert payload["passed"] is True
-    assert point["reason"] == "matched passed nonlinear gate"
-    assert point["matched_gate"]["artifact"] == gate.as_posix()
+    assert point["reason"] == _MATCHED
+    assert point["matched_gate"]["artifact"] == artifact
 
 
 def test_default_gate_glob_recurses_into_nested_holdout_artifacts(
     tmp_path: Path,
 ) -> None:
     mod = _load_quasilinear_tool_module()
-    gate = tmp_path / "docs/_static/nested_holdouts/case/ensemble_gate.json"
-    gate.parent.mkdir(parents=True)
-    gate.write_text(
-        json.dumps(
-            {
-                "case": "nested_replicated_ensemble",
-                "kind": "nonlinear_window_ensemble_report",
-                "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
-                "passed": True,
-                "promotion_gate": {"passed": True},
-            }
-        ),
-        encoding="utf-8",
-    )
-    report = tmp_path / "report.json"
-    _write_report(report, gate.as_posix())
+    relative = "docs/_static/nested_holdouts/case/ensemble_gate.json"
+    gate = {
+        "case": "nested_replicated_ensemble",
+        "kind": "nonlinear_window_ensemble_report",
+        "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+        "passed": True,
+        "promotion_gate": {"passed": True},
+    }
     old_default = mod.DEFAULT_GATE_GLOB
     mod.DEFAULT_GATE_GLOB = str(tmp_path / "docs/_static/**/*.json")
     try:
+        (tmp_path / relative).parent.mkdir(parents=True)
+        (tmp_path / relative).write_text(json.dumps(gate), encoding="utf-8")
+        report = tmp_path / "report.json"
+        _write_report(report, (tmp_path / relative).as_posix())
         paths = mod.write_audit(
             [report], out_json=tmp_path / "audit.json", no_plot=True
         )
@@ -155,185 +147,73 @@ def test_default_gate_glob_recurses_into_nested_holdout_artifacts(
     )
 
 
-def test_audit_normalizes_absolute_artifact_paths_from_other_checkouts(
-    tmp_path: Path,
-) -> None:
-    mod = _load_quasilinear_tool_module()
-    gate = tmp_path / "gate.json"
-    gate.write_text(
-        json.dumps(
-            {
-                "case": "synthetic_nonlinear_window",
-                "gkx": "tools_out/synthetic.csv",
-                "gate_report": {
-                    "case": "synthetic_nonlinear_window",
-                    "passed": True,
-                    "gates": [],
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-    report = tmp_path / "report.json"
-    _write_report(report, "/Users/example/local/GKX/tools_out/synthetic.csv")
-
-    paths = mod.write_audit(
-        [report],
-        gate_patterns=[str(gate)],
-        out_json=tmp_path / "audit.json",
-        no_plot=True,
-    )
-
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
-    point = payload["reports"][0]["points"][0]
-    assert payload["passed"] is True
-    assert point["nonlinear_artifact"] == "tools_out/synthetic.csv"
-    assert point["reason"] == "matched passed nonlinear gate"
-
-
 def test_audit_fails_when_required_point_uses_failed_gate(tmp_path: Path) -> None:
-    mod = _load_quasilinear_tool_module()
-    gate = tmp_path / "external_gate.json"
-    gate.write_text(
-        json.dumps(
-            {
-                "case": "external_cth_like",
-                "promotion_gate": {"passed": False},
-                "runs": [
-                    {
-                        "csv": "docs/_static/external_vmec_cth_like_nonlinear_t150_pilot.traces.csv"
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    report = tmp_path / "report.json"
-    _write_report(
-        report, "docs/_static/external_vmec_cth_like_nonlinear_t150_pilot.traces.csv"
-    )
-
-    paths = mod.write_audit(
-        [report],
-        gate_patterns=[str(gate)],
-        out_json=tmp_path / "audit.json",
-        no_plot=True,
-    )
-
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
+    csv = "docs/_static/external_vmec_cth_like_nonlinear_t150_pilot.traces.csv"
+    gate = {
+        "case": "external_cth_like",
+        "promotion_gate": {"passed": False},
+        "runs": [{"csv": csv}],
+    }
+    payload, point = _audit(tmp_path, csv, {"external_gate.json": gate})
     assert payload["passed"] is False
-    assert (
-        payload["reports"][0]["points"][0]["reason"]
-        == "matching nonlinear gate is negative evidence for calibration admission"
-    )
+    assert point["reason"] == _NEGATIVE
     assert payload["n_negative_evidence"] == 1
 
 
 def test_audit_records_qh_gate_with_unacceptable_claim_as_negative_evidence(
     tmp_path: Path,
 ) -> None:
-    mod = _load_quasilinear_tool_module()
-    gate = tmp_path / "external_qh_gate.json"
-    gate.write_text(
-        json.dumps(
-            {
-                "case": "nfp4 QH external VMEC nonlinear high-grid convergence",
-                "claim_level": "finite_high_grid_long_nonlinear_feasibility_not_yet_transport_validation",
-                "gate_report": {
-                    "case": "nfp4 QH external VMEC nonlinear high-grid convergence",
-                    "passed": True,
-                    "gates": [],
-                },
-                "kind": "external_vmec_nonlinear_grid_convergence_gate",
-                "promotion_gate": {"passed": True},
-                "runs": [
-                    {
-                        "csv": "docs/_static/external_vmec_qh_nonlinear_t150_n64_pilot.traces.csv"
-                    }
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    report = tmp_path / "report.json"
-    _write_report(
-        report,
-        "docs/_static/external_vmec_qh_nonlinear_t150_n64_pilot.traces.csv",
-    )
-
-    paths = mod.write_audit(
-        [report],
-        gate_patterns=[str(gate)],
-        out_json=tmp_path / "audit.json",
-        no_plot=True,
-    )
-
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
-    point = payload["reports"][0]["points"][0]
+    case = "nfp4 QH external VMEC nonlinear high-grid convergence"
+    csv = "docs/_static/external_vmec_qh_nonlinear_t150_n64_pilot.traces.csv"
+    gate = {
+        "case": case,
+        "claim_level": "finite_high_grid_long_nonlinear_feasibility_not_yet_transport_validation",
+        "gate_report": {"case": case, "passed": True, "gates": []},
+        "kind": "external_vmec_nonlinear_grid_convergence_gate",
+        "promotion_gate": {"passed": True},
+        "runs": [{"csv": csv}],
+    }
+    payload, point = _audit(tmp_path, csv, {"external_qh_gate.json": gate})
     assert payload["passed"] is False
     assert point["passed"] is False
-    assert (
-        point["reason"]
-        == "matching nonlinear gate is negative evidence for calibration admission"
-    )
-    assert point["matched_gate"]["raw_gate_passed"] is True
-    assert point["matched_gate"]["promotion_gate_passed"] is True
-    assert point["matched_gate"]["claim_level_acceptable"] is False
-    assert point["matched_gate"]["admission_blockers"] == ["claim_level_not_acceptable"]
-    assert (
-        payload["negative_evidence"][0]["case"]
-        == "nfp4 QH external VMEC nonlinear high-grid convergence"
-    )
+    assert point["reason"] == _NEGATIVE
+    matched = point["matched_gate"]
+    assert matched["raw_gate_passed"] is True
+    assert matched["promotion_gate_passed"] is True
+    assert matched["claim_level_acceptable"] is False
+    assert matched["admission_blockers"] == ["claim_level_not_acceptable"]
+    assert payload["negative_evidence"][0]["case"] == case
 
 
-def test_audit_fails_when_required_point_has_no_gate(tmp_path: Path) -> None:
-    mod = _load_quasilinear_tool_module()
-    report = tmp_path / "report.json"
-    _write_report(report, "tools_out/missing.csv")
-
-    paths = mod.write_audit(
-        [report], gate_patterns=[], out_json=tmp_path / "audit.json", no_plot=True
+@pytest.mark.parametrize(
+    ("split", "passed", "reason"),
+    [
+        ("holdout", False, "no matching nonlinear validation/convergence gate"),
+        ("audit", True, "not required split"),
+    ],
+)
+def test_audit_requires_a_gate_only_for_required_splits(
+    tmp_path: Path, split: str, passed: bool, reason: str
+) -> None:
+    payload, point = _audit(
+        tmp_path, "tools_out/missing.csv", {}, split=split, patterns=[]
     )
-
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
-    assert payload["passed"] is False
-    assert (
-        payload["reports"][0]["points"][0]["reason"]
-        == "no matching nonlinear validation/convergence gate"
-    )
+    assert payload["passed"] is passed
+    assert point["reason"] == reason
 
 
 def test_audit_accepts_nested_high_grid_admission_input_artifact(
     tmp_path: Path,
 ) -> None:
-    mod = _load_quasilinear_tool_module()
-    gate = tmp_path / "high_grid_admission.json"
-    gate.write_text(
-        json.dumps(
-            {
-                "kind": "external_vmec_high_grid_admission_gate",
-                "case": "synthetic high-grid admission",
-                "claim_level": "passed_high_grid_transport_holdout_admission_under_coarse_grid_exclusion",
-                "inputs": {
-                    "replicate_ensemble_gate": "docs/_static/replicate/ensemble_gate.json",
-                },
-                "promotion_gate": {"passed": True},
-            }
-        ),
-        encoding="utf-8",
-    )
-    report = tmp_path / "report.json"
-    _write_report(report, "docs/_static/replicate/ensemble_gate.json")
-
-    paths = mod.write_audit(
-        [report],
-        gate_patterns=[str(gate)],
-        out_json=tmp_path / "audit.json",
-        no_plot=True,
-    )
-
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
-    point = payload["reports"][0]["points"][0]
+    artifact = "docs/_static/replicate/ensemble_gate.json"
+    gate = {
+        "kind": "external_vmec_high_grid_admission_gate",
+        "case": "synthetic high-grid admission",
+        "claim_level": "passed_high_grid_transport_holdout_admission_under_coarse_grid_exclusion",
+        "inputs": {"replicate_ensemble_gate": artifact},
+        "promotion_gate": {"passed": True},
+    }
+    payload, point = _audit(tmp_path, artifact, {"high_grid_admission.json": gate})
     assert payload["passed"] is True
     assert point["matched_gate"]["case"] == "synthetic high-grid admission"
 
@@ -341,63 +221,27 @@ def test_audit_accepts_nested_high_grid_admission_input_artifact(
 def test_audit_prefers_external_admission_gate_over_raw_nested_ensemble(
     tmp_path: Path,
 ) -> None:
-    mod = _load_quasilinear_tool_module()
-    raw = tmp_path / "docs/_static/external_vmec_holdouts/case/ensemble_gate.json"
-    admission = tmp_path / "aa_admission.json"
-    artifact = raw.as_posix()
-    raw.parent.mkdir(parents=True)
-    raw.write_text(
-        json.dumps(
-            {
-                "case": "synthetic_external_vmec_ensemble",
-                "kind": "nonlinear_window_ensemble_report",
-                "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
-                "passed": True,
-            }
-        ),
-        encoding="utf-8",
-    )
-    admission.write_text(
-        json.dumps(
-            {
-                "case": "synthetic external admission",
-                "kind": "external_vmec_replicate_admission_gate",
-                "claim_level": "passed_replicated_external_vmec_transport_holdout_under_explicit_spread_gate",
-                "inputs": {"replicate_ensemble_gate": artifact},
-                "promotion_gate": {"passed": True},
-            }
-        ),
-        encoding="utf-8",
-    )
-    report = tmp_path / "report.json"
-    _write_report(report, artifact)
-
-    paths = mod.write_audit(
-        [report],
-        gate_patterns=[str(raw), str(admission)],
-        out_json=tmp_path / "audit.json",
-        no_plot=True,
-    )
-
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
-    point = payload["reports"][0]["points"][0]
+    raw = "docs/_static/external_vmec_holdouts/case/ensemble_gate.json"
+    artifact = (tmp_path / raw).as_posix()
+    gates = {
+        raw: {
+            "case": "synthetic_external_vmec_ensemble",
+            "kind": "nonlinear_window_ensemble_report",
+            "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
+            "passed": True,
+        },
+        "aa_admission.json": {
+            "case": "synthetic external admission",
+            "kind": "external_vmec_replicate_admission_gate",
+            "claim_level": "passed_replicated_external_vmec_transport_holdout_under_explicit_spread_gate",
+            "inputs": {"replicate_ensemble_gate": artifact},
+            "promotion_gate": {"passed": True},
+        },
+    }
+    payload, point = _audit(tmp_path, artifact, gates)
     assert payload["passed"] is True
     assert point["matched_gate"]["kind"] == "external_vmec_replicate_admission_gate"
     assert point["matched_gate"]["claim_level_acceptable"] is True
-
-
-def test_audit_ignores_non_required_audit_split_without_gate(tmp_path: Path) -> None:
-    mod = _load_quasilinear_tool_module()
-    report = tmp_path / "report.json"
-    _write_report(report, "tools_out/missing.csv", split="audit")
-
-    paths = mod.write_audit(
-        [report], gate_patterns=[], out_json=tmp_path / "audit.json", no_plot=True
-    )
-
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
-    assert payload["passed"] is True
-    assert payload["reports"][0]["points"][0]["reason"] == "not required split"
 
 
 def test_tracked_quasilinear_train_holdout_reports_use_passed_nonlinear_gates() -> None:
@@ -585,98 +429,96 @@ coverage:
 """.lstrip(),
         encoding="utf-8",
     )
-    (root / "benchmarks" / "references" / "gkx_1_7_release_contract.json").write_text(
-        """
-{
-  "kind": "gkx_1_7_frozen_release_contract",
-  "optimization_policy": {
-    "prelaunch_gates": [
-      {
-        "label": "replicated landscape admission",
-        "path": "docs/_static/vmec_boundary_transport_landscape_admission.json",
-        "passed": true,
-        "expected_raw_passed": true,
-        "raw_passed": true,
-        "sample_count": 12.0,
-        "blockers": []
-      },
-      {
-        "label": "selected reduced prelaunch",
-        "path": "docs/_static/vmec_boundary_transport_prelaunch_gate.json",
-        "passed": true,
-        "expected_raw_passed": true,
-        "raw_passed": true,
-        "sample_count": 18.0,
-        "blockers": []
-      },
-      {
-        "label": "weak reduced-margin reference",
-        "path": "docs/_static/strict_qa_top12_edge_prelaunch_gate.json",
-        "passed": true,
-        "expected_raw_passed": false,
-        "raw_passed": false,
-        "sample_count": 18.0,
-        "blockers": ["insufficient_reduced_margin_for_nonlinear_audit"]
-      },
-      {
-        "label": "next nonlinear campaign admission",
-        "path": "docs/_static/nonlinear_campaign_admission_report.json",
-        "passed": true,
-        "expected_raw_passed": true,
-        "raw_passed": true,
-        "sample_count": 18.0,
-        "blockers": []
-      }
-    ],
-    "summary": {
-      "qa_baseline_gate_passed": true,
-      "quasilinear_model_selection_passed": false,
-      "simple_quasilinear_absolute_flux_promoted": false,
-      "long_window_nonlinear_audit_passed": true,
-      "nonlinear_prelaunch_policy_ready": true,
-      "nonlinear_campaign_admission_ready": true,
-      "negative_reference_blocks_weak_margin": true,
-      "claim_evidence_level": "scoped_matched_replicated_nonlinear_audit",
-      "claim_promotion_blockers": [
-        "quasilinear_model_selection_not_promoted",
-        "simple_quasilinear_absolute_flux_not_promoted"
-      ]
-    }
-  },
-  "performance": {
-    "representative_refresh": {
-      "path": "benchmarks/references/gkx_2_representative_performance_refresh.json",
-      "correctness_passed": true,
-      "cpu_rows_admitted": 2,
-      "gpu_rows_admitted": 0,
-      "gpu_rows_blocked": 2,
-      "performance_claim_updated": false
-    },
-    "row_count": 1,
-    "rows": [{"case": "test", "backend": "cpu", "status": "success"}]
-  },
-  "public_api": {
-    "count": 1,
-    "exports": [{"name": "solve", "module": "gkx", "symbol": "solve"}]
-  },
-  "release_lanes": [
-    {
-      "claim_level": "release_claim",
-      "lane": "CI/release hygiene and status automation",
-      "status": "closed"
-    },
-    {
-      "claim_level": "deferred_out_of_release_scope",
-      "lane": "Future physics extension",
-      "status": "deferred"
-    }
-  ]
-}
-""".lstrip(),
-        encoding="utf-8",
-    )
+    prelaunch = [
+        dict(
+            label=label,
+            path=f"docs/_static/{name}.json",
+            passed=True,
+            expected_raw_passed=raw,
+            raw_passed=raw,
+            sample_count=count,
+            blockers=blockers,
+        )
+        for label, name, raw, count, blockers in (
+            (
+                "replicated landscape admission",
+                "vmec_boundary_transport_landscape_admission",
+                True,
+                12.0,
+                [],
+            ),
+            (
+                "selected reduced prelaunch",
+                "vmec_boundary_transport_prelaunch_gate",
+                True,
+                18.0,
+                [],
+            ),
+            (
+                "weak reduced-margin reference",
+                "strict_qa_top12_edge_prelaunch_gate",
+                False,
+                18.0,
+                ["insufficient_reduced_margin_for_nonlinear_audit"],
+            ),
+            (
+                "next nonlinear campaign admission",
+                "nonlinear_campaign_admission_report",
+                True,
+                18.0,
+                [],
+            ),
+        )
+    ]
     contract_path = root / "benchmarks" / "references" / "gkx_1_7_release_contract.json"
-    contract = json.loads(contract_path.read_text(encoding="utf-8"))
+    contract = {
+        "kind": "gkx_1_7_frozen_release_contract",
+        "optimization_policy": {
+            "prelaunch_gates": prelaunch,
+            "summary": {
+                "qa_baseline_gate_passed": True,
+                "quasilinear_model_selection_passed": False,
+                "simple_quasilinear_absolute_flux_promoted": False,
+                "long_window_nonlinear_audit_passed": True,
+                "nonlinear_prelaunch_policy_ready": True,
+                "nonlinear_campaign_admission_ready": True,
+                "negative_reference_blocks_weak_margin": True,
+                "claim_evidence_level": "scoped_matched_replicated_nonlinear_audit",
+                "claim_promotion_blockers": [
+                    "quasilinear_model_selection_not_promoted",
+                    "simple_quasilinear_absolute_flux_not_promoted",
+                ],
+            },
+        },
+        "performance": {
+            "representative_refresh": {
+                "path": "benchmarks/references/gkx_2_representative_performance_refresh.json",
+                "correctness_passed": True,
+                "cpu_rows_admitted": 2,
+                "gpu_rows_admitted": 0,
+                "gpu_rows_blocked": 2,
+                "performance_claim_updated": False,
+            },
+            "row_count": 1,
+            "rows": [{"case": "test", "backend": "cpu", "status": "success"}],
+        },
+        "public_api": {
+            "count": 1,
+            "exports": [{"name": "solve", "module": "gkx", "symbol": "solve"}],
+        },
+        "release_lanes": [
+            {
+                "claim_level": "release_claim",
+                "lane": "CI/release hygiene and status automation",
+                "status": "closed",
+            },
+            {
+                "claim_level": "deferred_out_of_release_scope",
+                "lane": "Future physics extension",
+                "status": "deferred",
+            },
+        ],
+    }
     frozen_path = "docs/_static/validation_gate_index.json"
     contract["baseline"] = {"git_tag": "v1.7.0"}
     contract["frozen_output_fingerprints"] = {
@@ -778,261 +620,178 @@ def test_release_readiness_accepts_ci_release_docs_and_artifact_contracts(
     ]["status_counts"] == {"closed": 1, "deferred": 1}
 
 
-def test_release_readiness_rejects_changed_frozen_output(tmp_path: Path) -> None:
-    _write_release_ready_tree(tmp_path)
-    (tmp_path / "docs" / "_static" / "validation_gate_index.json").write_text(
-        '{"changed": 1}', encoding="utf-8"
-    )
-
-    with pytest.raises(
-        ReleaseReadinessError, match="frozen numerical output fingerprints changed"
-    ):
-        check_release_readiness(tmp_path)
+_CONTRACT = "benchmarks/references/gkx_1_7_release_contract.json"
+_REFRESH = "benchmarks/references/gkx_2_representative_performance_refresh.json"
+_OPTIMIZATION_FAILED = "optimization status prelaunch/claim-boundary flags failed"
 
 
-def test_release_readiness_rejects_false_performance_promotion(tmp_path: Path) -> None:
-    _write_release_ready_tree(tmp_path)
-    refresh = (
-        tmp_path
-        / "benchmarks"
-        / "references"
-        / "gkx_2_representative_performance_refresh.json"
-    )
-    payload = json.loads(refresh.read_text(encoding="utf-8"))
-    payload["summary"]["performance_claim_updated"] = True
-    refresh.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(ReleaseReadinessError, match="performance_claim_updated"):
-        check_release_readiness(tmp_path)
+def _write(root: Path, relative: str, text: str) -> None:
+    (root / relative).write_text(text, encoding="utf-8")
 
 
-def test_release_readiness_rejects_missing_ci_guardrails(tmp_path: Path) -> None:
-    _write_release_ready_tree(tmp_path)
-    (tmp_path / ".github" / "workflows" / "ci.yml").write_text(
-        "wide-coverage-shards\n",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ReleaseReadinessError, match="ci.yml missing release checks"):
-        check_release_readiness(tmp_path)
+def _edit_json(root: Path, relative: str, edit) -> None:
+    path = root / relative
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    edit(payload)
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def test_release_readiness_rejects_missing_codecov_status_policy(
-    tmp_path: Path,
-) -> None:
-    _write_release_ready_tree(tmp_path)
-    (tmp_path / "codecov.yml").write_text(
-        """
-coverage:
-  status:
-    project:
-      default:
-        target: 95%
-""".lstrip(),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(
-        ReleaseReadinessError,
-        match="codecov.yml missing wide-coverage status policy",
-    ):
-        check_release_readiness(tmp_path)
+def _drop_release_cleanup(root: Path) -> None:
+    workflow = root / ".github" / "workflows" / "release.yml"
+    text = workflow.read_text(encoding="utf-8")
+    workflow.write_text(text.replace("rm -rf build dist\n", ""), encoding="utf-8")
 
 
-def test_release_readiness_rejects_missing_release_guardrails(tmp_path: Path) -> None:
-    _write_release_ready_tree(tmp_path)
-    (tmp_path / ".github" / "workflows" / "release.yml").write_text(
-        "name: Release\nscripts/check.py readiness version\ngh-action-pypi-publish\n",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(
-        ReleaseReadinessError, match="release.yml missing publish/version checks"
-    ):
-        check_release_readiness(tmp_path)
+def _stale_prelaunch_rows(policy: dict) -> None:
+    gates = policy["optimization_policy"]["prelaunch_gates"]
+    gates[1]["sample_count"] = 1.0
+    gates[2].update(expected_raw_passed=True, raw_passed=True, blockers=[])
 
 
-def test_release_readiness_rejects_unclean_distribution_build(tmp_path: Path) -> None:
-    _write_release_ready_tree(tmp_path)
-    workflow = tmp_path / ".github" / "workflows" / "release.yml"
-    workflow.write_text(
-        workflow.read_text(encoding="utf-8").replace("rm -rf build dist\n", ""),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(
-        ReleaseReadinessError, match="release.yml missing publish/version checks"
-    ):
-        check_release_readiness(tmp_path)
-
-
-def test_release_readiness_rejects_below_target_release_completion(
-    tmp_path: Path,
-) -> None:
-    _write_release_ready_tree(tmp_path)
-    contract = tmp_path / "benchmarks" / "references" / "gkx_1_7_release_contract.json"
-    payload = json.loads(contract.read_text(encoding="utf-8"))
-    payload["release_lanes"] = [
-        {
-            "claim_level": "release_claim",
-            "lane": "CI/release hygiene and status automation",
-            "status": "partial",
-        }
-    ]
-    contract.write_text(json.dumps(payload), encoding="utf-8")
-
-    with pytest.raises(
-        ReleaseReadinessError,
-        match="release-scoped technical completion below target",
-    ):
-        check_release_readiness(tmp_path)
-
-
-def test_release_readiness_rejects_failed_technical_status(tmp_path: Path) -> None:
-    _write_release_ready_tree(tmp_path)
-    (tmp_path / "docs" / "_static" / "technical_release_status.json").write_text(
-        """
-{
-  "failed_required": ["docs_release_hygiene: release scope"],
-  "kind": "gkx_technical_release_status",
-  "lanes": {},
-  "passed": false,
-  "target_percent": 98.0,
-  "technical_release_completion_percent": 92.0
+_UNREADY_OPTIMIZATION_SUMMARY = {
+    "qa_baseline_gate_passed": True,
+    "quasilinear_model_selection_passed": False,
+    "long_window_nonlinear_audit_passed": True,
 }
-""".lstrip(),
-        encoding="utf-8",
-    )
-
-    with pytest.raises(
-        ReleaseReadinessError,
-        match="technical release status below target",
-    ):
-        check_release_readiness(tmp_path)
 
 
-def test_release_readiness_rejects_missing_optimization_prelaunch_policy(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("mutate", "match"),
+    [
+        pytest.param(
+            lambda root: _write(
+                root, "docs/_static/validation_gate_index.json", '{"changed": 1}'
+            ),
+            "frozen numerical output fingerprints changed",
+            id="changed-frozen-output",
+        ),
+        pytest.param(
+            lambda root: _edit_json(
+                root,
+                _REFRESH,
+                lambda p: p["summary"].__setitem__("performance_claim_updated", True),
+            ),
+            "performance_claim_updated",
+            id="false-performance-promotion",
+        ),
+        pytest.param(
+            lambda root: _write(
+                root, ".github/workflows/ci.yml", "wide-coverage-shards\n"
+            ),
+            "ci.yml missing release checks",
+            id="missing-ci-guardrails",
+        ),
+        pytest.param(
+            lambda root: _write(
+                root,
+                "codecov.yml",
+                "coverage:\n  status:\n    project:\n      default:\n"
+                "        target: 95%\n",
+            ),
+            "codecov.yml missing wide-coverage status policy",
+            id="missing-codecov-status-policy",
+        ),
+        pytest.param(
+            lambda root: _write(
+                root,
+                ".github/workflows/release.yml",
+                "name: Release\nscripts/check.py readiness version\n"
+                "gh-action-pypi-publish\n",
+            ),
+            "release.yml missing publish/version checks",
+            id="missing-release-guardrails",
+        ),
+        pytest.param(
+            _drop_release_cleanup,
+            "release.yml missing publish/version checks",
+            id="unclean-distribution-build",
+        ),
+        pytest.param(
+            lambda root: _edit_json(
+                root,
+                _CONTRACT,
+                lambda p: p.__setitem__(
+                    "release_lanes",
+                    [
+                        {
+                            "claim_level": "release_claim",
+                            "lane": "CI/release hygiene and status automation",
+                            "status": "partial",
+                        }
+                    ],
+                ),
+            ),
+            "release-scoped technical completion below target",
+            id="below-target-release-completion",
+        ),
+        pytest.param(
+            lambda root: _write(
+                root,
+                "docs/_static/technical_release_status.json",
+                json.dumps(
+                    {
+                        "failed_required": ["docs_release_hygiene: release scope"],
+                        "kind": "gkx_technical_release_status",
+                        "lanes": {},
+                        "passed": False,
+                        "target_percent": 98.0,
+                        "technical_release_completion_percent": 92.0,
+                    }
+                ),
+            ),
+            "technical release status below target",
+            id="failed-technical-status",
+        ),
+        pytest.param(
+            lambda root: _replace_release_optimization_policy(
+                root,
+                {
+                    "prelaunch_gates": [],
+                    "summary": {
+                        **_UNREADY_OPTIMIZATION_SUMMARY,
+                        "simple_quasilinear_absolute_flux_promoted": False,
+                        "nonlinear_prelaunch_policy_ready": False,
+                        "nonlinear_campaign_admission_ready": True,
+                        "negative_reference_blocks_weak_margin": False,
+                    },
+                },
+            ),
+            _OPTIMIZATION_FAILED,
+            id="missing-optimization-prelaunch-policy",
+        ),
+        pytest.param(
+            lambda root: _replace_release_optimization_policy(
+                root,
+                {
+                    "prelaunch_gates": [
+                        {"label": "landscape", "passed": True},
+                        {"label": "positive", "passed": True},
+                        {"label": "negative", "passed": True},
+                    ],
+                    "summary": {
+                        **_UNREADY_OPTIMIZATION_SUMMARY,
+                        "nonlinear_prelaunch_policy_ready": True,
+                        "negative_reference_blocks_weak_margin": True,
+                    },
+                },
+            ),
+            _OPTIMIZATION_FAILED,
+            id="implicit-optimization-status-booleans",
+        ),
+        pytest.param(
+            lambda root: _edit_json(root, _CONTRACT, _stale_prelaunch_rows),
+            _OPTIMIZATION_FAILED,
+            id="stale-prelaunch-gate-rows",
+        ),
+    ],
+)
+def test_release_readiness_rejects_broken_release_trees(
+    tmp_path: Path, mutate, match: str
 ) -> None:
     _write_release_ready_tree(tmp_path)
-    _replace_release_optimization_policy(
-        tmp_path,
-        {
-            "prelaunch_gates": [],
-            "summary": {
-                "qa_baseline_gate_passed": True,
-                "quasilinear_model_selection_passed": False,
-                "simple_quasilinear_absolute_flux_promoted": False,
-                "long_window_nonlinear_audit_passed": True,
-                "nonlinear_prelaunch_policy_ready": False,
-                "nonlinear_campaign_admission_ready": True,
-                "negative_reference_blocks_weak_margin": False,
-            },
-        },
-    )
+    mutate(tmp_path)
 
-    with pytest.raises(
-        ReleaseReadinessError,
-        match="optimization status prelaunch/claim-boundary flags failed",
-    ):
-        check_release_readiness(tmp_path)
-
-
-def test_release_readiness_requires_explicit_optimization_status_booleans(
-    tmp_path: Path,
-) -> None:
-    _write_release_ready_tree(tmp_path)
-    _replace_release_optimization_policy(
-        tmp_path,
-        {
-            "prelaunch_gates": [
-                {"label": "landscape", "passed": True},
-                {"label": "positive", "passed": True},
-                {"label": "negative", "passed": True},
-            ],
-            "summary": {
-                "qa_baseline_gate_passed": True,
-                "quasilinear_model_selection_passed": False,
-                "long_window_nonlinear_audit_passed": True,
-                "nonlinear_prelaunch_policy_ready": True,
-                "negative_reference_blocks_weak_margin": True,
-            },
-        },
-    )
-
-    with pytest.raises(
-        ReleaseReadinessError,
-        match="optimization status prelaunch/claim-boundary flags failed",
-    ):
-        check_release_readiness(tmp_path)
-
-
-def test_release_readiness_rejects_stale_prelaunch_gate_rows(
-    tmp_path: Path,
-) -> None:
-    _write_release_ready_tree(tmp_path)
-    _replace_release_optimization_policy(
-        tmp_path,
-        {
-            "prelaunch_gates": [
-                {
-                    "label": "replicated landscape admission",
-                    "path": "docs/_static/vmec_boundary_transport_landscape_admission.json",
-                    "passed": True,
-                    "expected_raw_passed": True,
-                    "raw_passed": True,
-                    "sample_count": 12.0,
-                    "blockers": [],
-                },
-                {
-                    "label": "selected reduced prelaunch",
-                    "path": "docs/_static/vmec_boundary_transport_prelaunch_gate.json",
-                    "passed": True,
-                    "expected_raw_passed": True,
-                    "raw_passed": True,
-                    "sample_count": 1.0,
-                    "blockers": [],
-                },
-                {
-                    "label": "weak reduced-margin reference",
-                    "path": "docs/_static/strict_qa_top12_edge_prelaunch_gate.json",
-                    "passed": True,
-                    "expected_raw_passed": True,
-                    "raw_passed": True,
-                    "sample_count": 18.0,
-                    "blockers": [],
-                },
-                {
-                    "label": "next nonlinear campaign admission",
-                    "path": "docs/_static/nonlinear_campaign_admission_report.json",
-                    "passed": True,
-                    "expected_raw_passed": True,
-                    "raw_passed": True,
-                    "sample_count": 18.0,
-                    "blockers": [],
-                },
-            ],
-            "summary": {
-                "qa_baseline_gate_passed": True,
-                "quasilinear_model_selection_passed": False,
-                "simple_quasilinear_absolute_flux_promoted": False,
-                "long_window_nonlinear_audit_passed": True,
-                "nonlinear_prelaunch_policy_ready": True,
-                "nonlinear_campaign_admission_ready": True,
-                "negative_reference_blocks_weak_margin": True,
-                "claim_evidence_level": "scoped_matched_replicated_nonlinear_audit",
-                "claim_promotion_blockers": [
-                    "quasilinear_model_selection_not_promoted",
-                    "simple_quasilinear_absolute_flux_not_promoted",
-                ],
-            },
-        },
-    )
-
-    with pytest.raises(
-        ReleaseReadinessError,
-        match="optimization status prelaunch/claim-boundary flags failed",
-    ):
+    with pytest.raises(ReleaseReadinessError, match=match):
         check_release_readiness(tmp_path)
 
 
@@ -1096,62 +855,49 @@ def test_release_version_accepts_matching_project_source_and_tag(
     assert report["checked_pypi"] is True
 
 
-def test_release_version_rejects_source_pyproject_mismatch(tmp_path: Path) -> None:
-    _write_version_files(tmp_path, project="2.0.1", source="2.0.0")
-
-    with pytest.raises(ReleaseVersionError, match="_version.py"):
-        validate_release_version(root=tmp_path)
-
-
-def test_release_version_rejects_wrong_or_missing_tag(tmp_path: Path) -> None:
-    _write_version_files(tmp_path, project="2.0.1", source="2.0.1")
-
-    with pytest.raises(ReleaseVersionError, match="expected 'v2.0.1'"):
-        validate_release_version(root=tmp_path, tag="v2.0.0", require_tag=True)
-    with pytest.raises(ReleaseVersionError, match="requires a tag"):
-        validate_release_version(root=tmp_path, tag=None, require_tag=True)
-
-
-def test_release_version_rejects_duplicate_pypi_version(tmp_path: Path) -> None:
-    _write_version_files(tmp_path, project="2.0.1", source="2.0.1")
-
-    with pytest.raises(ReleaseVersionError, match="already exists on PyPI"):
-        validate_release_version(
-            root=tmp_path, tag="v2.0.1", require_tag=True, pypi_versions={"2.0.1"}
-        )
-
-
-def test_fetch_pypi_versions_treats_unpublished_project_as_empty(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("source", "kwargs", "match"),
+    [
+        ("2.0.0", {}, "_version.py"),
+        ("2.0.1", {"tag": "v2.0.0", "require_tag": True}, "expected 'v2.0.1'"),
+        ("2.0.1", {"tag": None, "require_tag": True}, "requires a tag"),
+        (
+            "2.0.1",
+            {"tag": "v2.0.1", "require_tag": True, "pypi_versions": {"2.0.1"}},
+            "already exists on PyPI",
+        ),
+    ],
+    ids=["source-mismatch", "wrong-tag", "missing-tag", "duplicate-pypi-version"],
+)
+def test_release_version_rejects_inconsistent_releases(
+    tmp_path: Path, source: str, kwargs: dict, match: str
 ) -> None:
-    """A never-published project answers 404 and must not fail the first release."""
+    _write_version_files(tmp_path, project="2.0.1", source=source)
+
+    with pytest.raises(ReleaseVersionError, match=match):
+        validate_release_version(root=tmp_path, **kwargs)
+
+
+@pytest.mark.parametrize("status", [404, 503])
+def test_fetch_pypi_versions_treats_only_404_as_unpublished(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    """A never-published project answers 404 and must not fail the first release;
+    real PyPI outages must not be mistaken for an unpublished project."""
 
     import urllib.error
     import urllib.request
 
-    def raise_not_found(url: str, timeout: float = 0.0) -> None:
-        raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+    def raise_http_error(url: str, timeout: float = 0.0) -> None:
+        raise urllib.error.HTTPError(url, status, "error", None, None)
 
-    monkeypatch.setattr(urllib.request, "urlopen", raise_not_found)
+    monkeypatch.setattr(urllib.request, "urlopen", raise_http_error)
 
-    assert fetch_pypi_versions("gkx") == set()
-
-
-def test_fetch_pypi_versions_propagates_non_404_http_errors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Real PyPI outages must not be mistaken for an unpublished project."""
-
-    import urllib.error
-    import urllib.request
-
-    def raise_server_error(url: str, timeout: float = 0.0) -> None:
-        raise urllib.error.HTTPError(url, 503, "Service Unavailable", None, None)
-
-    monkeypatch.setattr(urllib.request, "urlopen", raise_server_error)
-
-    with pytest.raises(urllib.error.HTTPError):
-        fetch_pypi_versions("gkx")
+    if status == 404:
+        assert fetch_pypi_versions("gkx") == set()
+    else:
+        with pytest.raises(urllib.error.HTTPError):
+            fetch_pypi_versions("gkx")
 
 
 def test_release_version_readers_and_tag_normalization(tmp_path: Path) -> None:
@@ -1268,33 +1014,41 @@ runpy.run_path(sys.argv[1], run_name="repository_hygiene_import_test")
     assert result.returncode == 0, result.stderr
 
 
-def test_release_artifact_manifest_validates_size_and_sha(tmp_path: Path) -> None:
+def _artifact_manifest_report(
+    tmp_path: Path,
+    payload: bytes,
+    *,
+    on_disk: bytes | None,
+    action: str = "move_to_release",
+    sha: str | None = None,
+    drop_release_fields: bool = False,
+) -> dict:
     mod = load_release_tool("check_repository_size_manifest")
-    payload = b"panel"
-    (tmp_path / "panel.png").write_bytes(payload)
+    if on_disk is not None:
+        (tmp_path / "panel.png").write_bytes(on_disk)
     manifest = _release_artifact_manifest(
-        tmp_path, sha=hashlib.sha256(payload).hexdigest(), size=len(payload)
+        tmp_path,
+        sha=sha or hashlib.sha256(payload).hexdigest(),
+        size=len(payload),
+        action=action,
     )
+    if drop_release_fields:
+        lines = manifest.read_text(encoding="utf-8").splitlines()
+        kept = [ln for ln in lines if not ln.startswith(("release_tag", "release_url"))]
+        manifest.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    return mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
 
-    report = mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
 
+def test_release_artifact_manifest_validates_size_and_sha(tmp_path: Path) -> None:
+    report = _artifact_manifest_report(tmp_path, b"panel", on_disk=b"panel")
     assert report["passed"] is True
-    assert report["move_to_release_bytes"] == len(payload)
+    assert report["move_to_release_bytes"] == len(b"panel")
 
 
 def test_release_artifact_manifest_accepts_kept_preview_action(tmp_path: Path) -> None:
-    mod = load_release_tool("check_repository_size_manifest")
-    payload = b"preview"
-    (tmp_path / "panel.png").write_bytes(payload)
-    manifest = _release_artifact_manifest(
-        tmp_path,
-        sha=hashlib.sha256(payload).hexdigest(),
-        size=len(payload),
-        action="keep_preview_in_repo",
+    report = _artifact_manifest_report(
+        tmp_path, b"preview", on_disk=b"preview", action="keep_preview_in_repo"
     )
-
-    report = mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
-
     assert report["passed"] is True
     assert report["move_to_release_bytes"] == 0
     assert report["artifacts"][0]["action"] == "keep_preview_in_repo"
@@ -1303,91 +1057,52 @@ def test_release_artifact_manifest_accepts_kept_preview_action(tmp_path: Path) -
 def test_release_artifact_manifest_accepts_missing_regenerable_artifact(
     tmp_path: Path,
 ) -> None:
-    mod = load_release_tool("check_repository_size_manifest")
-    payload = b"preview"
-    manifest = _release_artifact_manifest(
-        tmp_path,
-        sha=hashlib.sha256(payload).hexdigest(),
-        size=len(payload),
-        action="regenerate_on_demand",
+    report = _artifact_manifest_report(
+        tmp_path, b"preview", on_disk=None, action="regenerate_on_demand"
     )
-
-    report = mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
-
     assert report["passed"] is True
     assert report["artifacts"][0]["exists"] is False
     assert report["artifacts"][0]["replay_command"] == "python make_panel.py"
 
 
-def test_release_artifact_manifest_checks_present_regenerable_artifact(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("kwargs", "failure"),
+    [
+        (
+            dict(
+                payload=b"preview",
+                on_disk=b"previewchanged",
+                action="regenerate_on_demand",
+            ),
+            "size",
+        ),
+        (dict(payload=b"panel", on_disk=b"panel", sha="0" * 64), "sha256"),
+        (
+            dict(payload=b"panel", on_disk=None, drop_release_fields=True),
+            "does not exist",
+        ),
+    ],
+    ids=["present-regenerable-size", "sha-mismatch", "missing-moved-asset-url"],
+)
+def test_release_artifact_manifest_reports_failures(
+    tmp_path: Path, kwargs: dict, failure: str
 ) -> None:
-    mod = load_release_tool("check_repository_size_manifest")
-    payload = b"preview"
-    (tmp_path / "panel.png").write_bytes(payload + b"changed")
-    manifest = _release_artifact_manifest(
-        tmp_path,
-        sha=hashlib.sha256(payload).hexdigest(),
-        size=len(payload),
-        action="regenerate_on_demand",
-    )
-
-    report = mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
-
+    payload = kwargs.pop("payload")
+    report = _artifact_manifest_report(tmp_path, payload, **kwargs)
     assert report["passed"] is False
-    assert any("size" in failure for failure in report["failures"])
-
-
-def test_release_artifact_manifest_fails_on_sha_mismatch(tmp_path: Path) -> None:
-    mod = load_release_tool("check_repository_size_manifest")
-    payload = b"panel"
-    (tmp_path / "panel.png").write_bytes(payload)
-    manifest = _release_artifact_manifest(tmp_path, sha="0" * 64, size=len(payload))
-
-    report = mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
-
-    assert report["passed"] is False
-    assert any("sha256" in failure for failure in report["failures"])
+    assert any(failure in item for item in report["failures"])
 
 
 def test_release_artifact_manifest_accepts_uploaded_release_asset(
     tmp_path: Path,
 ) -> None:
-    mod = load_release_tool("check_repository_size_manifest")
-    payload = b"panel"
-    manifest = _release_artifact_manifest(
-        tmp_path, sha=hashlib.sha256(payload).hexdigest(), size=len(payload)
-    )
-
-    report = mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
-
+    report = _artifact_manifest_report(tmp_path, b"panel", on_disk=None)
     assert report["passed"] is True
-    assert report["move_to_release_bytes"] == len(payload)
-    assert report["artifacts"][0]["exists"] is False
-    assert report["artifacts"][0]["release_tag"] == "v-test"
-    assert report["artifacts"][0]["release_url"].endswith("/panel.png")
-
-
-def test_release_artifact_manifest_requires_url_for_missing_moved_asset(
-    tmp_path: Path,
-) -> None:
-    mod = load_release_tool("check_repository_size_manifest")
-    payload = b"panel"
-    manifest = _release_artifact_manifest(
-        tmp_path, sha=hashlib.sha256(payload).hexdigest(), size=len(payload)
-    )
-    text = manifest.read_text(encoding="utf-8")
-    text = "\n".join(
-        line
-        for line in text.splitlines()
-        if not line.startswith(("release_tag", "release_url"))
-    )
-    manifest.write_text(text + "\n", encoding="utf-8")
-
-    report = mod.check_release_artifact_manifest(root=tmp_path, manifest=manifest)
-
-    assert report["passed"] is False
-    assert any("does not exist" in failure for failure in report["failures"])
+    assert report["move_to_release_bytes"] == len(b"panel")
+    row = report["artifacts"][0]
+    assert row["exists"] is False
+    assert row["release_tag"] == "v-test"
+    assert row["release_url"].endswith("/panel.png")
 
 
 def _init_size_repo(tmp_path: Path) -> None:
@@ -1397,47 +1112,34 @@ def _init_size_repo(tmp_path: Path) -> None:
     subprocess.run(["git", "add", "small.txt", "large.bin"], cwd=tmp_path, check=True)
 
 
-def test_repository_size_manifest_passes_for_allowed_large_file(tmp_path: Path) -> None:
+_SIZE_POLICY = (
+    "[policy]\nmax_tracked_total_bytes = 1000\nmax_unlisted_tracked_file_bytes = 32\n"
+)
+_ALLOWED_LARGE = (
+    '\n[[allowed_large_files]]\npath = "large.bin"\nmax_bytes = 128\n'
+    'reason = "test fixture"\n'
+)
+
+
+@pytest.mark.parametrize("allowed", [True, False], ids=["allowed", "unlisted"])
+def test_repository_size_manifest_gates_large_files(
+    tmp_path: Path, allowed: bool
+) -> None:
     mod = load_release_tool("check_repository_size_manifest")
     _init_size_repo(tmp_path)
     manifest = tmp_path / "manifest.toml"
     manifest.write_text(
-        textwrap.dedent(
-            """
-            [policy]
-            max_tracked_total_bytes = 1000
-            max_unlisted_tracked_file_bytes = 32
-
-            [[allowed_large_files]]
-            path = "large.bin"
-            max_bytes = 128
-            reason = "test fixture"
-            """
-        ).strip()
-        + "\n",
-        encoding="utf-8",
+        _SIZE_POLICY + (_ALLOWED_LARGE if allowed else ""), encoding="utf-8"
     )
 
     report = mod.check_repository_size_manifest(root=tmp_path, manifest=manifest)
 
-    assert report["passed"] is True
-    assert report["unlisted_large_files"] == []
-
-
-def test_repository_size_manifest_fails_for_unlisted_large_file(tmp_path: Path) -> None:
-    mod = load_release_tool("check_repository_size_manifest")
-    _init_size_repo(tmp_path)
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        "[policy]\nmax_tracked_total_bytes = 1000\nmax_unlisted_tracked_file_bytes = 32\n",
-        encoding="utf-8",
-    )
-
-    report = mod.check_repository_size_manifest(root=tmp_path, manifest=manifest)
-
-    assert report["passed"] is False
-    assert report["unlisted_large_files"] == [{"path": "large.bin", "bytes": 64}]
-    assert any("large.bin" in failure for failure in report["failures"])
+    assert report["passed"] is allowed
+    if allowed:
+        assert report["unlisted_large_files"] == []
+    else:
+        assert report["unlisted_large_files"] == [{"path": "large.bin", "bytes": 64}]
+        assert any("large.bin" in failure for failure in report["failures"])
 
 
 def test_repository_size_report_separates_tracked_and_local_roots(
@@ -1555,16 +1257,22 @@ def _architecture_manifest(*, allowed: list[str]) -> dict[str, object]:
     }
 
 
-def _architecture_manifest_with_topology(
-    *, count_path: str, baseline: int, target: int
+def _architecture_manifest_with_counts(
+    policy: str, *, count_path: str, baseline: int, target: int
 ) -> dict[str, object]:
+    """A manifest with a ``topology_policy`` or ``line_budget_policy`` count row."""
+
     data = _architecture_manifest(allowed=[])
-    data["topology_policy"] = {
+    name, description = {
+        "topology_policy": ("test_python_files", "test topology policy"),
+        "line_budget_policy": ("test_python_lines", "test aggregate line budget"),
+    }[policy]
+    data[policy] = {
         "mode": "no_regression_until_target",
-        "description": "test topology policy",
+        "description": description,
         "counts": [
             {
-                "name": "test_python_files",
+                "name": name,
                 "path": count_path,
                 "pattern": "*.py",
                 "recursive": True,
@@ -1574,6 +1282,25 @@ def _architecture_manifest_with_topology(
         ],
     }
     return data
+
+
+def _arch_tree(tmp_path: Path, files: dict[str, str]) -> tuple[Path, Path]:
+    """Source root with the required domain package plus ``files``; and a count root."""
+
+    source_root = tmp_path / "gkx"
+    (source_root / "operators").mkdir(parents=True)
+    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
+    count_root = tmp_path / "counted"
+    count_root.mkdir()
+    for relative, text in files.items():
+        (tmp_path / relative).write_text(text, encoding="utf-8")
+    return source_root, count_root
+
+
+def _validate_arch(manifest, source_root: Path, **kwargs):
+    return validate_architecture_policy(
+        manifest, source_root=source_root, check_paths=False, **kwargs
+    )
 
 
 def _architecture_manifest_with_complexity(
@@ -1592,27 +1319,6 @@ def _architecture_manifest_with_complexity(
                 "baseline_lines": baseline,
                 "target_lines": target,
                 "reason": "test facade migration",
-            }
-        ],
-    }
-    return data
-
-
-def _architecture_manifest_with_line_budget(
-    *, count_path: str, baseline: int, target: int
-) -> dict[str, object]:
-    data = _architecture_manifest(allowed=[])
-    data["line_budget_policy"] = {
-        "mode": "no_regression_until_target",
-        "description": "test aggregate line budget",
-        "counts": [
-            {
-                "name": "test_python_lines",
-                "path": count_path,
-                "pattern": "*.py",
-                "recursive": True,
-                "baseline": baseline,
-                "target": target,
             }
         ],
     }
@@ -1754,173 +1460,115 @@ def _source_line_count(path: Path) -> int:
 
 
 def test_validate_architecture_policy_accepts_manifested_root_facade(tmp_path):
-    source_root = tmp_path / "gkx"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-    (source_root / "nonlinear_removed_helper.py").write_text("", encoding="utf-8")
+    source_root, _ = _arch_tree(tmp_path, {"gkx/nonlinear_removed_helper.py": ""})
 
-    summary = validate_architecture_policy(
-        _architecture_manifest(allowed=["gkx.nonlinear_removed_helper"]),
-        source_root=source_root,
-        check_paths=False,
+    summary = _validate_arch(
+        _architecture_manifest(allowed=["gkx.nonlinear_removed_helper"]), source_root
     )
 
     assert summary["n_current_root_prefix_modules"] == 1
     assert summary["n_allowed_root_prefix_modules"] == 1
 
 
-def test_validate_architecture_policy_rejects_new_root_prefix_module(tmp_path):
-    source_root = tmp_path / "gkx"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-    (source_root / "runtime_extra.py").write_text("", encoding="utf-8")
+@pytest.mark.parametrize(
+    ("files", "allowed", "match"),
+    [
+        ({"gkx/runtime_extra.py": ""}, [], "root-level prefix modules"),
+        ({}, ["gkx.nonlinear_removed_helper"], "allowlist contains modules"),
+    ],
+    ids=["new-root-prefix-module", "stale-allowlist"],
+)
+def test_validate_architecture_policy_rejects_root_prefix_drift(
+    tmp_path, files, allowed, match
+):
+    source_root, _ = _arch_tree(tmp_path, files)
 
-    with pytest.raises(ValueError, match="root-level prefix modules"):
-        validate_architecture_policy(
-            _architecture_manifest(allowed=[]),
-            source_root=source_root,
-            check_paths=False,
-        )
+    with pytest.raises(ValueError, match=match):
+        _validate_arch(_architecture_manifest(allowed=allowed), source_root)
+
+
+def _three_counted_modules() -> dict[str, str]:
+    return {f"counted/module_{index}.py": "" for index in range(3)}
 
 
 def test_validate_architecture_policy_reports_topology_gap(tmp_path):
-    source_root = tmp_path / "gkx"
-    count_root = tmp_path / "counted"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-    count_root.mkdir()
-    for index in range(3):
-        (count_root / f"module_{index}.py").write_text("", encoding="utf-8")
+    source_root, count_root = _arch_tree(tmp_path, _three_counted_modules())
 
-    summary = validate_architecture_policy(
-        _architecture_manifest_with_topology(
-            count_path=str(count_root), baseline=5, target=2
+    summary = _validate_arch(
+        _architecture_manifest_with_counts(
+            "topology_policy", count_path=str(count_root), baseline=5, target=2
         ),
-        source_root=source_root,
-        check_paths=False,
+        source_root,
     )
 
     row = summary["topology_counts"][0]
-    assert row["count"] == 3
-    assert row["baseline"] == 5
-    assert row["target"] == 2
+    assert (row["count"], row["baseline"], row["target"]) == (3, 5, 2)
     assert row["remaining_to_target"] == 1
     assert row["target_met"] is False
     assert summary["topology_targets_met"] is False
 
 
-def test_validate_architecture_policy_rejects_topology_regression(tmp_path):
-    source_root = tmp_path / "gkx"
-    count_root = tmp_path / "counted"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-    count_root.mkdir()
-    for index in range(3):
-        (count_root / f"module_{index}.py").write_text("", encoding="utf-8")
+@pytest.mark.parametrize(
+    ("policy", "files", "match"),
+    [
+        ("topology_policy", _three_counted_modules(), "above baseline"),
+        ("line_budget_policy", {"counted/a.py": "a\nb\nc\n"}, "line count regressed"),
+    ],
+)
+def test_validate_architecture_policy_rejects_count_regression(
+    tmp_path, policy, files, match
+):
+    source_root, count_root = _arch_tree(tmp_path, files)
 
-    with pytest.raises(ValueError, match="above baseline"):
-        validate_architecture_policy(
-            _architecture_manifest_with_topology(
-                count_path=str(count_root), baseline=2, target=1
+    with pytest.raises(ValueError, match=match):
+        _validate_arch(
+            _architecture_manifest_with_counts(
+                policy, count_path=str(count_root), baseline=2, target=1
             ),
-            source_root=source_root,
-            check_paths=False,
+            source_root,
         )
 
 
 def test_validate_architecture_policy_can_require_topology_targets(tmp_path):
-    source_root = tmp_path / "gkx"
-    count_root = tmp_path / "counted"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-    count_root.mkdir()
-    for index in range(2):
-        (count_root / f"module_{index}.py").write_text("", encoding="utf-8")
+    files = {f"counted/module_{index}.py": "" for index in range(2)}
+    source_root, count_root = _arch_tree(tmp_path, files)
 
-    with pytest.raises(ValueError, match="target not met"):
-        validate_architecture_policy(
-            _architecture_manifest_with_topology(
-                count_path=str(count_root), baseline=3, target=1
-            ),
-            source_root=source_root,
-            check_paths=False,
-            require_topology_targets=True,
+    def manifest(target: int):
+        return _architecture_manifest_with_counts(
+            "topology_policy", count_path=str(count_root), baseline=3, target=target
         )
 
-    summary = validate_architecture_policy(
-        _architecture_manifest_with_topology(
-            count_path=str(count_root), baseline=3, target=2
-        ),
-        source_root=source_root,
-        check_paths=False,
-        require_topology_targets=True,
-    )
+    with pytest.raises(ValueError, match="target not met"):
+        _validate_arch(manifest(1), source_root, require_topology_targets=True)
+
+    summary = _validate_arch(manifest(2), source_root, require_topology_targets=True)
     assert summary["topology_targets_met"] is True
 
 
 def test_validate_architecture_policy_tracks_aggregate_line_budget(tmp_path):
-    source_root = tmp_path / "gkx"
-    count_root = tmp_path / "counted"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-    count_root.mkdir()
-    (count_root / "a.py").write_text("a\nb\n", encoding="utf-8")
-    (count_root / "b.py").write_text("c\n", encoding="utf-8")
-
-    summary = validate_architecture_policy(
-        _architecture_manifest_with_line_budget(
-            count_path=str(count_root), baseline=5, target=2
-        ),
-        source_root=source_root,
-        check_paths=False,
+    source_root, count_root = _arch_tree(
+        tmp_path, {"counted/a.py": "a\nb\n", "counted/b.py": "c\n"}
+    )
+    manifest = _architecture_manifest_with_counts(
+        "line_budget_policy", count_path=str(count_root), baseline=5, target=2
     )
 
+    summary = _validate_arch(manifest, source_root)
+
     row = summary["line_budget_counts"][0]
-    assert row["files"] == 2
-    assert row["lines"] == 3
+    assert (row["files"], row["lines"]) == (2, 3)
     assert row["remaining_to_target"] == 1
     assert summary["line_budget_targets_met"] is False
 
     with pytest.raises(ValueError, match="line-budget target not met"):
-        validate_architecture_policy(
-            _architecture_manifest_with_line_budget(
-                count_path=str(count_root), baseline=5, target=2
-            ),
-            source_root=source_root,
-            check_paths=False,
-            require_line_targets=True,
-        )
-
-
-def test_validate_architecture_policy_rejects_line_budget_regression(tmp_path):
-    source_root = tmp_path / "gkx"
-    count_root = tmp_path / "counted"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-    count_root.mkdir()
-    (count_root / "a.py").write_text("a\nb\nc\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="line count regressed"):
-        validate_architecture_policy(
-            _architecture_manifest_with_line_budget(
-                count_path=str(count_root), baseline=2, target=1
-            ),
-            source_root=source_root,
-            check_paths=False,
-        )
+        _validate_arch(manifest, source_root, require_line_targets=True)
 
 
 def test_validate_architecture_policy_tracks_complexity_exceptions(tmp_path):
-    source_root = tmp_path / "gkx"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-    (source_root / "facade.py").write_text("a\nb\nc\nd\n", encoding="utf-8")
+    source_root, _ = _arch_tree(tmp_path, {"gkx/facade.py": "a\nb\nc\nd\n"})
+    manifest = _architecture_manifest_with_complexity(baseline=5, target=2)
 
-    summary = validate_architecture_policy(
-        _architecture_manifest_with_complexity(baseline=5, target=2),
-        source_root=source_root,
-        check_paths=False,
-    )
+    summary = _validate_arch(manifest, source_root)
 
     row = summary["complexity_exceptions"][0]
     assert row["path"] == "facade.py"
@@ -1929,26 +1577,17 @@ def test_validate_architecture_policy_tracks_complexity_exceptions(tmp_path):
     assert summary["complexity_targets_met"] is False
 
     with pytest.raises(ValueError, match="complexity target not met"):
-        validate_architecture_policy(
-            _architecture_manifest_with_complexity(baseline=5, target=2),
-            source_root=source_root,
-            check_paths=False,
-            require_complexity_targets=True,
-        )
+        _validate_arch(manifest, source_root, require_complexity_targets=True)
 
 
 def test_validate_architecture_policy_rejects_unowned_complexity_growth(tmp_path):
-    source_root = tmp_path / "gkx"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-    (source_root / "facade.py").write_text("a\nb\nc\n", encoding="utf-8")
-    (source_root / "new_hotspot.py").write_text("a\nb\nc\nd\n", encoding="utf-8")
+    source_root, _ = _arch_tree(
+        tmp_path, {"gkx/facade.py": "a\nb\nc\n", "gkx/new_hotspot.py": "a\nb\nc\nd\n"}
+    )
 
     with pytest.raises(ValueError, match="without reviewed exceptions"):
-        validate_architecture_policy(
-            _architecture_manifest_with_complexity(baseline=5, target=2),
-            source_root=source_root,
-            check_paths=False,
+        _validate_arch(
+            _architecture_manifest_with_complexity(baseline=5, target=2), source_root
         )
 
 
@@ -2020,48 +1659,34 @@ def test_benchmark_capability_matrix_is_complete_and_fail_closed() -> None:
         metadata["comparison_source_fingerprint"]
         != metadata["office_instrumented_source_fingerprint"]
     )
-    assert "validated_clean_rebuild" in metadata["office_binary_status"]
-    assert "OpenMPI 4.1.6" in metadata["office_binary_status"]
-    assert "HDF5 1.14.5" in metadata["office_binary_status"]
-    assert "Cyclone" in metadata["office_runtime_probe"]
-    assert "2145 steps" in metadata["office_runtime_probe"]
+    for needle in ("validated_clean_rebuild", "OpenMPI 4.1.6", "HDF5 1.14.5"):
+        assert needle in metadata["office_binary_status"]
+    for needle in ("Cyclone", "2145 steps"):
+        assert needle in metadata["office_runtime_probe"]
     assert len(by_id) == len(rows) >= 15
     assert {row["status"] for row in rows} <= allowed_statuses
     assert all(row["gkx_owner"] and row["evidence"] for row in rows)
-    assert by_id["nonlinear_multi_device_domain_decomposition"]["status"] == "blocked"
-    assert (
-        by_id["conserving_lenard_bernstein_dougherty_like_collisions"]["status"]
-        == "validated_limited_model"
-    )
-    assert (
-        by_id["linearized_sugama_or_coulomb_collisions"]["status"]
-        == "planned_research_lane"
-    )
+    for capability, status in (
+        ("nonlinear_multi_device_domain_decomposition", "blocked"),
+        (
+            "conserving_lenard_bernstein_dougherty_like_collisions",
+            "validated_limited_model",
+        ),
+        ("linearized_sugama_or_coulomb_collisions", "planned_research_lane"),
+        ("species_hermite_multi_device_decomposition", "planned"),
+        ("equilibrium_exb_flow_shear", "planned_research_lane"),
+        ("specialized_reduced_equation_sets", "not_shipped"),
+    ):
+        assert by_id[capability]["status"] == status, capability
     assert (
         by_id["jax_autodiff_and_implicit_gradients"]["group"]
         == "differentiable_extension"
     )
-    assert by_id["species_hermite_multi_device_decomposition"]["status"] == "planned"
-    assert by_id["equilibrium_exb_flow_shear"]["status"] == "planned_research_lane"
-    assert by_id["specialized_reduced_equation_sets"]["status"] == "not_shipped"
 
     required = payload["matched_comparison_contract"]["required_fields"]
     assert len(required) == len(set(required)) >= 10
     assert "fit_or_transport_window" in required
     assert len(payload["matched_comparison_contract"]["fail_closed_rules"]) >= 3
-
-
-def test_validate_architecture_policy_rejects_stale_allowlist(tmp_path):
-    source_root = tmp_path / "gkx"
-    (source_root / "operators").mkdir(parents=True)
-    (source_root / "operators" / "__init__.py").write_text("", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="allowlist contains modules"):
-        validate_architecture_policy(
-            _architecture_manifest(allowed=["gkx.nonlinear_removed_helper"]),
-            source_root=source_root,
-            check_paths=False,
-        )
 
 
 def test_repository_performance_manifest_is_well_formed() -> None:
@@ -2088,156 +1713,98 @@ def test_performance_manifest_main_writes_summary_json(tmp_path: Path) -> None:
     assert "memory_efficiency" in {row["name"] for row in payload["rows"]}
 
 
-def test_performance_manifest_rejects_missing_tool(tmp_path: Path) -> None:
+def _touch(root: Path, *relatives: str) -> None:
+    for relative in relatives:
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        text = "# placeholder\n"
+        if path.suffix == ".json":
+            text = "{}\n"
+        elif path.name.startswith("test_"):
+            text = "def test_placeholder():\n    assert True\n"
+        path.write_text(text, encoding="utf-8")
+
+
+def _validate_tmp_performance_manifest(
+    tmp_path: Path, monkeypatch, *, files: tuple[str, ...], **manifest
+):
     mod = _load_performance_manifest_tool()
-    artifact = tmp_path / "docs" / "_static" / "runtime.png"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("artifact\n", encoding="utf-8")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _performance_manifest_text(
-            tool="tools/missing.py", artifact="docs/_static/runtime.png"
+    _touch(tmp_path, *files)
+    path = tmp_path / "manifest.toml"
+    path.write_text(_performance_manifest_text(**manifest), encoding="utf-8")
+    monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
+    return mod.validate_manifest(mod.load_manifest(path))
+
+
+_RUNTIME_PNG = "docs/_static/runtime.png"
+_PROFILE_TOOL = "scripts/profiling/profile.py"
+
+
+@pytest.mark.parametrize(
+    ("files", "manifest", "match"),
+    [
+        pytest.param(
+            (_RUNTIME_PNG,),
+            dict(tool="tools/missing.py", artifact=_RUNTIME_PNG),
+            "profiling tool does not exist",
+            id="missing-tool",
         ),
-        encoding="utf-8",
-    )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(ValueError, match="profiling tool does not exist"):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
+        pytest.param(
+            (_PROFILE_TOOL,),
+            dict(tool=_PROFILE_TOOL, artifact="benchmarks/results/runtime.json"),
+            "artifact path does not exist",
+            id="missing-machine-readable-evidence",
+        ),
+        pytest.param(
+            ("scripts/benchmark.py", _RUNTIME_PNG),
+            dict(tool="scripts/benchmark.py", artifact=_RUNTIME_PNG),
+            r"must live in a scripts/ tool package",
+            id="unowned-driver-path",
+        ),
+        pytest.param(
+            (_PROFILE_TOOL, _RUNTIME_PNG),
+            dict(tool=_PROFILE_TOOL, artifact=_RUNTIME_PNG, status="halfway"),
+            "invalid status",
+            id="invalid-status",
+        ),
+    ],
+)
+def test_performance_manifest_rejects_bad_rows(
+    tmp_path: Path, monkeypatch, files, manifest, match
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        _validate_tmp_performance_manifest(
+            tmp_path, monkeypatch, files=files, **manifest
+        )
 
 
 def test_performance_manifest_accepts_benchmark_performance_driver(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch
 ) -> None:
-    mod = _load_performance_manifest_tool()
-    tool = tmp_path / "scripts" / "benchmarks" / "benchmark_runtime_memory.py"
-    tool.parent.mkdir(parents=True)
-    tool.write_text("# benchmark\n", encoding="utf-8")
-    artifact = tmp_path / "docs" / "_static" / "runtime.png"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("artifact\n", encoding="utf-8")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _performance_manifest_text(
-            tool="scripts/benchmarks/benchmark_runtime_memory.py",
-            artifact="docs/_static/runtime.png",
-        ),
-        encoding="utf-8",
+    tool = "scripts/benchmarks/benchmark_runtime_memory.py"
+    summary = _validate_tmp_performance_manifest(
+        tmp_path,
+        monkeypatch,
+        files=(tool, _RUNTIME_PNG),
+        tool=tool,
+        artifact=_RUNTIME_PNG,
     )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        summary = mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
-
     assert summary["rows"][0]["n_tools"] == 1
 
 
 def test_performance_manifest_reports_missing_render_without_requiring_it(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch
 ) -> None:
-    mod = _load_performance_manifest_tool()
-    tool = tmp_path / "scripts" / "profiling" / "profile.py"
-    tool.parent.mkdir(parents=True)
-    tool.write_text("# tool\n", encoding="utf-8")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _performance_manifest_text(
-            tool="scripts/profiling/profile.py", artifact="docs/_static/runtime.png"
-        ),
-        encoding="utf-8",
+    summary = _validate_tmp_performance_manifest(
+        tmp_path,
+        monkeypatch,
+        files=(_PROFILE_TOOL,),
+        tool=_PROFILE_TOOL,
+        artifact=_RUNTIME_PNG,
     )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        summary = mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
-
     row = summary["rows"][0]
     assert row["n_required_artifacts"] == 0
     assert row["n_missing_rendered_artifacts"] == 1
-
-
-def test_performance_manifest_still_requires_machine_readable_evidence(
-    tmp_path: Path,
-) -> None:
-    mod = _load_performance_manifest_tool()
-    tool = tmp_path / "scripts" / "profiling" / "profile.py"
-    tool.parent.mkdir(parents=True)
-    tool.write_text("# tool\n", encoding="utf-8")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _performance_manifest_text(
-            tool="scripts/profiling/profile.py",
-            artifact="benchmarks/results/runtime.json",
-        ),
-        encoding="utf-8",
-    )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(ValueError, match="artifact path does not exist"):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
-
-
-def test_performance_manifest_rejects_unowned_driver_path(tmp_path: Path) -> None:
-    mod = _load_performance_manifest_tool()
-    tool = tmp_path / "scripts" / "benchmark.py"
-    tool.parent.mkdir(parents=True)
-    tool.write_text("# benchmark\n", encoding="utf-8")
-    artifact = tmp_path / "docs" / "_static" / "runtime.png"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("artifact\n", encoding="utf-8")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _performance_manifest_text(
-            tool="scripts/benchmark.py", artifact="docs/_static/runtime.png"
-        ),
-        encoding="utf-8",
-    )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(
-            ValueError,
-            match=r"must live in a scripts/ tool package",
-        ):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
-
-
-def test_performance_manifest_rejects_invalid_status(tmp_path: Path) -> None:
-    mod = _load_performance_manifest_tool()
-    tool = tmp_path / "scripts" / "profiling" / "profile.py"
-    tool.parent.mkdir(parents=True)
-    tool.write_text("# tool\n", encoding="utf-8")
-    artifact = tmp_path / "docs" / "_static" / "runtime.png"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("artifact\n", encoding="utf-8")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _performance_manifest_text(
-            tool="scripts/profiling/profile.py",
-            artifact="docs/_static/runtime.png",
-            status="halfway",
-        ),
-        encoding="utf-8",
-    )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(ValueError, match="invalid status"):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
 
 
 def test_documented_public_api_modules_have_manifest_tracking() -> None:
@@ -2291,12 +1858,7 @@ def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
 
     summary = _validate_tmp_coverage_manifest(
         tmp_path,
-        _coverage_manifest(
-            _coverage_row(
-                "gkx.runtime",
-                owned_modules=["gkx.config"],
-            )
-        ),
+        _coverage_manifest(_coverage_row("gkx.runtime", owned_modules=["gkx.config"])),
     )
 
     assert summary["n_direct_modules"] == 1
@@ -2305,44 +1867,39 @@ def test_manifest_accepts_owned_refactor_modules(tmp_path: Path) -> None:
     assert summary["owned_modules_by_owner"]["gkx.runtime"] == ["gkx.config"]
 
 
-def test_manifest_rejects_unowned_package_modules(tmp_path: Path) -> None:
-    _write_package(tmp_path, "gkx.runtime", "gkx.config")
-    _write_fast_inputs(tmp_path)
-
-    with pytest.raises(ValueError, match="package modules lack coverage ownership"):
-        _validate_tmp_coverage_manifest(
-            tmp_path, _coverage_manifest(_coverage_row("gkx.runtime"))
-        )
-
-
-def test_manifest_rejects_duplicate_owned_modules(tmp_path: Path) -> None:
-    _write_package(
-        tmp_path,
-        "gkx.runtime",
-        "gkx.linear",
-        "gkx.config",
-    )
+@pytest.mark.parametrize(
+    ("modules", "rows", "match"),
+    [
+        pytest.param(
+            ("gkx.runtime", "gkx.config"),
+            (("gkx.runtime", None),),
+            "package modules lack coverage ownership",
+            id="unowned-package-modules",
+        ),
+        pytest.param(
+            ("gkx.runtime", "gkx.linear", "gkx.config"),
+            (("gkx.runtime", ["gkx.config"]), ("gkx.linear", ["gkx.config"])),
+            "duplicate coverage ownership",
+            id="duplicate-owned-modules",
+        ),
+        pytest.param(
+            ("gkx.runtime", "gkx.linear"),
+            (("gkx.runtime", ["gkx.linear"]), ("gkx.linear", None)),
+            "direct manifest rows must not be listed as owned modules",
+            id="direct-row-listed-as-owned",
+        ),
+    ],
+)
+def test_manifest_rejects_inconsistent_ownership(
+    tmp_path: Path, modules: tuple, rows: tuple, match: str
+) -> None:
+    _write_package(tmp_path, *modules)
     _write_fast_inputs(tmp_path)
 
     manifest = _coverage_manifest(
-        _coverage_row("gkx.runtime", owned_modules=["gkx.config"]),
-        _coverage_row("gkx.linear", owned_modules=["gkx.config"]),
+        *(_coverage_row(module, owned_modules=owned) for module, owned in rows)
     )
-    with pytest.raises(ValueError, match="duplicate coverage ownership"):
-        _validate_tmp_coverage_manifest(tmp_path, manifest)
-
-
-def test_manifest_rejects_direct_rows_listed_as_owned_modules(tmp_path: Path) -> None:
-    _write_package(tmp_path, "gkx.runtime", "gkx.linear")
-    _write_fast_inputs(tmp_path)
-
-    manifest = _coverage_manifest(
-        _coverage_row("gkx.runtime", owned_modules=["gkx.linear"]),
-        _coverage_row("gkx.linear"),
-    )
-    with pytest.raises(
-        ValueError, match="direct manifest rows must not be listed as owned modules"
-    ):
+    with pytest.raises(ValueError, match=match):
         _validate_tmp_coverage_manifest(tmp_path, manifest)
 
 
@@ -2457,11 +2014,14 @@ def test_readme_python_quickstart_imports_exist() -> None:
     from gkx.core_grid import build_spectral_grid
     from gkx.geometry import SAlphaGeometry
 
-    assert CycloneBaseCase is not None
-    assert LinearParams is not None
-    assert integrate_linear_from_config is not None
-    assert build_spectral_grid is not None
-    assert SAlphaGeometry is not None
+    for name in (
+        CycloneBaseCase,
+        LinearParams,
+        integrate_linear_from_config,
+        build_spectral_grid,
+        SAlphaGeometry,
+    ):
+        assert name is not None
 
 
 def test_claim_scope_pages_avoid_promoted_unscoped_claims() -> None:
@@ -2495,103 +2055,63 @@ def test_core_source_avoids_comparison_code_terminology_outside_benchmarks() -> 
 
 # ---- test_run_test_gates.py fast ----
 
-from pathlib import Path
 
 from scripts.checks import run_test_gates
 
 
-def test_discover_test_files_returns_recursive_tests(tmp_path: Path) -> None:
-    (tmp_path / "test_b.py").write_text("", encoding="utf-8")
-    (tmp_path / "test_a.py").write_text("", encoding="utf-8")
-    (tmp_path / "helper.py").write_text("", encoding="utf-8")
-    nested = tmp_path / "nested"
-    nested.mkdir()
-    (nested / "test_nested.py").write_text("", encoding="utf-8")
-
-    assert [
-        path.relative_to(tmp_path)
-        for path in run_test_gates.discover_test_files(tmp_path)
-    ] == [
-        Path("nested/test_nested.py"),
-        Path("test_a.py"),
-        Path("test_b.py"),
-    ]
-
-
-def test_run_test_gates_fast_relative_test_dir_resolves_under_repository_root() -> None:
-    resolved = run_test_gates._resolve_test_dir(Path("tests"))
-
-    assert resolved.is_absolute()
-    assert resolved.name == "tests"
-    assert run_test_gates.discover_test_files(Path("tests"))
+def _run_one_test_file(monkeypatch, tmp_path: Path, fake_run, **kwargs):
+    test_file = tmp_path / "test_sample.py"
+    test_file.write_text("def test_ok(): assert True\n", encoding="utf-8")
+    monkeypatch.setattr(run_test_gates.subprocess, "run", fake_run)
+    kwargs.setdefault("per_file_timeout_s", 1.0)
+    code, results = run_test_gates.run_tests(
+        [test_file], total_timeout_s=30.0, **kwargs
+    )
+    return test_file, code, results[0][1]
 
 
 def test_run_tests_uses_bounded_pytest_invocations(monkeypatch, tmp_path: Path) -> None:
-    test_file = tmp_path / "test_sample.py"
-    test_file.write_text("def test_ok(): assert True\n", encoding="utf-8")
     calls: list[tuple[list[str], float]] = []
 
     def _fake_run(cmd, *, cwd, check, timeout):
         del cwd, check
         calls.append((list(cmd), float(timeout)))
 
-    monkeypatch.setattr(run_test_gates.subprocess, "run", _fake_run)
-    code, results = run_test_gates.run_tests(
-        [test_file],
+    test_file, code, status = _run_one_test_file(
+        monkeypatch,
+        tmp_path,
+        _fake_run,
         per_file_timeout_s=12.0,
-        total_timeout_s=30.0,
         pytest_args=["-k", "sample"],
     )
 
-    assert code == 0
-    assert results[0][1] == "ok"
+    assert (code, status) == (0, "ok")
     assert calls[0][0][0:4] == [run_test_gates.sys.executable, "-m", "pytest", "-q"]
     assert calls[0][0][-3:] == ["-k", "sample", str(test_file)]
     assert calls[0][1] <= 12.0
 
 
-def test_run_tests_returns_124_on_timeout(monkeypatch, tmp_path: Path) -> None:
-    test_file = tmp_path / "test_timeout.py"
-    test_file.write_text("def test_slow(): assert True\n", encoding="utf-8")
-
-    def _fake_run(cmd, *, cwd, check, timeout):
-        del cwd, check
-        raise subprocess.TimeoutExpired(cmd, timeout)
-
-    monkeypatch.setattr(run_test_gates.subprocess, "run", _fake_run)
-    code, results = run_test_gates.run_tests(
-        [test_file],
-        per_file_timeout_s=1.0,
-        total_timeout_s=30.0,
-    )
-
-    assert code == 124
-    assert results[0][1] == "timeout"
+def _raise_timeout(cmd, *, cwd, check, timeout):
+    raise subprocess.TimeoutExpired(cmd, timeout)
 
 
-def test_run_tests_treats_pytest_no_tests_collected_as_skip(
-    monkeypatch,
-    tmp_path: Path,
+def _raise_no_tests_collected(cmd, *, cwd, check, timeout):
+    raise subprocess.CalledProcessError(5, cmd)
+
+
+@pytest.mark.parametrize(
+    ("fake_run", "expected"),
+    [
+        (_raise_timeout, (124, "timeout")),
+        (_raise_no_tests_collected, (0, "skipped(no_tests_collected)")),
+    ],
+    ids=["timeout", "no-tests-collected"],
+)
+def test_run_tests_maps_pytest_outcomes(
+    monkeypatch, tmp_path: Path, fake_run, expected
 ) -> None:
-    test_file = tmp_path / "test_integration_only.py"
-    test_file.write_text(
-        "import pytest\npytestmark = pytest.mark.integration\n",
-        encoding="utf-8",
-    )
-
-    def _fake_run(cmd, *, cwd, check, timeout):
-        del cwd, check, timeout
-        raise subprocess.CalledProcessError(5, cmd)
-
-    monkeypatch.setattr(run_test_gates.subprocess, "run", _fake_run)
-    code, results = run_test_gates.run_tests(
-        [test_file],
-        per_file_timeout_s=1.0,
-        total_timeout_s=30.0,
-    )
-
-    assert code == 0
-    assert results[0][1] == "skipped(no_tests_collected)"
+    _test_file, code, status = _run_one_test_file(monkeypatch, tmp_path, fake_run)
+    assert (code, status) == expected
 
 
 def test_run_tests_marks_remaining_files_after_total_timeout(
@@ -2622,8 +2142,6 @@ def test_run_tests_marks_remaining_files_after_total_timeout(
 
 
 # ---- test_run_test_gates.py wide-coverage ----
-
-from pathlib import Path
 
 
 from scripts.checks.run_test_gates import (
@@ -2837,8 +2355,6 @@ def test_write_json_creates_parent_directory(tmp_path: Path) -> None:
 
 # ---- test_validation_coverage_manifest.py ----
 
-from pathlib import Path
-
 
 def _load_validation_tool_module():
     return load_release_tool("check_validation_coverage_manifest")
@@ -2899,27 +2415,29 @@ def test_repository_validation_manifest_is_well_formed() -> None:
         + summary["n_excluded_modules"]
     )
     rows = {row["module"]: row for row in summary["rows"]}
-    assert rows["gkx.terms.assembly"]["coverage_target_percent"] == 95.0
     assert rows["gkx.runtime"]["n_owned_modules"] >= 5
     assert rows["gkx.objectives.autodiff_validation"]["coverage_target_percent"] == 98.0
-
-    assert rows["gkx.operators.linear.cache_builder"]["coverage_target_percent"] == 95.0
+    for module in (
+        "gkx.terms.assembly",
+        "gkx.operators.linear.cache_builder",
+        "gkx.solvers_linear_parallel",
+        "gkx.operators.nonlinear.rhs",
+        "gkx.operators.nonlinear.diagnostic_state",
+        "gkx.solvers_nonlinear_explicit",
+        "gkx.solvers_nonlinear_imex",
+    ):
+        assert rows[module]["coverage_target_percent"] == 95.0, module
     assert rows["gkx.operators.linear.cache_builder"]["n_owned_modules"] == 2
-    assert rows["gkx.operators.linear.moments"]["n_numerics_contracts"] >= 2
-    assert rows["gkx.operators.linear.params"]["n_physics_contracts"] >= 2
     assert rows["gkx.operators.linear.linked"]["n_owned_modules"] == 0
-    assert rows["gkx.solvers_linear_parallel"]["coverage_target_percent"] == 95.0
-    assert rows["gkx.operators.nonlinear.rhs"]["coverage_target_percent"] == 95.0
-    assert rows["gkx.operators.nonlinear.rhs"]["n_numerics_contracts"] >= 2
-    assert (
-        rows["gkx.operators.nonlinear.diagnostic_state"]["coverage_target_percent"]
-        == 95.0
-    )
-    assert rows["gkx.operators.nonlinear.diagnostic_state"]["n_physics_contracts"] >= 2
-    assert rows["gkx.solvers_nonlinear_explicit"]["coverage_target_percent"] == 95.0
-    assert rows["gkx.solvers_nonlinear_explicit"]["n_numerics_contracts"] >= 2
-    assert rows["gkx.solvers_nonlinear_imex"]["coverage_target_percent"] == 95.0
-    assert rows["gkx.solvers_nonlinear_imex"]["n_physics_contracts"] >= 2
+    for module, key in (
+        ("gkx.operators.linear.moments", "n_numerics_contracts"),
+        ("gkx.operators.linear.params", "n_physics_contracts"),
+        ("gkx.operators.nonlinear.rhs", "n_numerics_contracts"),
+        ("gkx.operators.nonlinear.diagnostic_state", "n_physics_contracts"),
+        ("gkx.solvers_nonlinear_explicit", "n_numerics_contracts"),
+        ("gkx.solvers_nonlinear_imex", "n_physics_contracts"),
+    ):
+        assert rows[module][key] >= 2, (module, key)
     assert "gkx.solvers_nonlinear_state_integration" in summary["high_priority_open"]
 
 
@@ -2934,278 +2452,131 @@ def test_validation_manifest_main_writes_summary_json(tmp_path: Path) -> None:
     assert payload["package_coverage_target_percent"] == 95.0
 
 
-def test_validation_manifest_rejects_missing_fast_test(tmp_path: Path) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    artifact = tmp_path / "docs" / "_static" / "gate.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("{}\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/missing.py",
-            artifact="docs/_static/gate.json",
-        )
-    )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(ValueError, match="fast test does not exist"):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
+_FAST_TEST = "tests/test_runtime.py"
+_GATE_JSON = "docs/_static/gate.json"
 
 
-def test_validation_manifest_rejects_invalid_status(tmp_path: Path) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    test = tmp_path / "tests" / "test_runtime.py"
-    test.parent.mkdir()
-    test.write_text("def test_placeholder():\n    assert True\n")
-    artifact = tmp_path / "docs" / "_static" / "gate.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("{}\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/test_runtime.py",
-            artifact="docs/_static/gate.json",
-            status="halfway",
-        )
-    )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(ValueError, match="invalid status"):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
-
-
-def test_validation_manifest_rejects_duplicate_manifest_list_entries(
+def _validation_tree(
     tmp_path: Path,
+    monkeypatch,
+    *,
+    files=(_FAST_TEST, _GATE_JSON),
+    dirs=(),
+    text=None,
+    modules=("gkx.runtime",),
+    **manifest,
+):
+    """A tmp repository root with ``files`` and a one-module validation manifest."""
+
+    mod = _load_validation_tool_module()
+    _write_minimal_package(tmp_path, *modules)
+    _touch(tmp_path, *files)
+    for directory in dirs:
+        (tmp_path / directory).mkdir(parents=True)
+    path = tmp_path / "manifest.toml"
+    fields_ = dict(source="src/gkx/runtime.py", test=_FAST_TEST, artifact=_GATE_JSON)
+    fields_.update(manifest)
+    path.write_text(text or _manifest_text(**fields_))
+    monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
+    return mod, mod.load_manifest(path)
+
+
+def _coverage_xml(tmp_path: Path, rate: str, *classes: tuple[str, str]) -> Path:
+    rows = "".join(
+        f'<class filename="{name}" line-rate="{line_rate}" />'
+        for name, line_rate in classes
+    )
+    path = tmp_path / "coverage.xml"
+    path.write_text(
+        f'<coverage line-rate="{rate}"><packages><package name="gkx"><classes>'
+        f"{rows}</classes></package></packages></coverage>"
+    )
+    return path
+
+
+@pytest.mark.parametrize(
+    ("tree", "match"),
+    [
+        pytest.param(
+            dict(files=(_GATE_JSON,), test="tests/missing.py"),
+            "fast test does not exist",
+            id="missing-fast-test",
+        ),
+        pytest.param(dict(status="halfway"), "invalid status", id="invalid-status"),
+        pytest.param(
+            dict(
+                text=_coverage_manifest(
+                    _coverage_row(
+                        "gkx.runtime", owned_modules=["gkx.config", "gkx.config"]
+                    )
+                ),
+                modules=("gkx.runtime", "gkx.config"),
+            ),
+            "owned_modules contains duplicate entries",
+            id="duplicate-list-entries",
+        ),
+        pytest.param(
+            dict(
+                files=(_GATE_JSON,),
+                dirs=("tests/runtime_cases",),
+                test="tests/runtime_cases",
+            ),
+            "fast test must be a file",
+            id="directory-fast-test",
+        ),
+        pytest.param(
+            dict(files=(_FAST_TEST,), artifact="benchmarks/results/gate.json"),
+            "artifact path does not exist",
+            id="missing-machine-readable-evidence",
+        ),
+        pytest.param(
+            dict(
+                files=("tests/runtime_cases.py", _GATE_JSON),
+                test="tests/runtime_cases.py",
+            ),
+            r"tests/\*\*/test_\*\.py",
+            id="non-pytest-fast-test-name",
+        ),
+    ],
+)
+def test_validation_manifest_rejects_bad_rows(
+    tmp_path: Path, monkeypatch, tree: dict, match: str
 ) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime", "gkx.config")
-    test = tmp_path / "tests" / "test_runtime.py"
-    test.parent.mkdir()
-    test.write_text("def test_placeholder():\n    assert True\n")
-    artifact = tmp_path / "docs" / "_static" / "gate.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("{}\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        """
-[metadata]
-package_coverage_target_percent = 95.0
-
-[coverage_inventory]
-require_all_package_modules_owned = true
-excluded_modules = ["gkx.__init__"]
-
-[[modules]]
-module = "gkx.runtime"
-path = "src/gkx/runtime.py"
-owned_modules = ["gkx.config", "gkx.config"]
-owner_lane = "runtime lane"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = ["reference"]
-physics_contracts = ["physics"]
-numerics_contracts = ["numerics"]
-fast_tests = ["tests/test_runtime.py"]
-artifact_paths = ["docs/_static/gate.json"]
-next_tests = ["next"]
-""".strip()
-    )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(
-            ValueError, match="owned_modules contains duplicate entries"
-        ):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
-
-
-def test_validation_manifest_rejects_directory_fast_test(tmp_path: Path) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    test_dir = tmp_path / "tests" / "runtime_cases"
-    test_dir.mkdir(parents=True)
-    artifact = tmp_path / "docs" / "_static" / "gate.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("{}\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/runtime_cases",
-            artifact="docs/_static/gate.json",
-        )
-    )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(ValueError, match="fast test must be a file"):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
+    mod, data = _validation_tree(tmp_path, monkeypatch, **tree)
+    with pytest.raises(ValueError, match=match):
+        mod.validate_manifest(data)
 
 
 def test_validation_manifest_accepts_nested_fast_test_seen_by_wide_gate(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch
 ) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    test = tmp_path / "tests" / "runtime" / "test_runtime.py"
-    test.parent.mkdir(parents=True)
-    test.write_text("def test_placeholder():\n    assert True\n")
-    artifact = tmp_path / "docs" / "_static" / "gate.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("{}\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/runtime/test_runtime.py",
-            artifact="docs/_static/gate.json",
-        )
+    nested = "tests/runtime/test_runtime.py"
+    mod, data = _validation_tree(
+        tmp_path, monkeypatch, files=(nested, _GATE_JSON), test=nested
     )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        summary = mod.validate_manifest(mod.load_manifest(manifest))
-        assert summary["n_modules"] == 1
-    finally:
-        mod.REPO_ROOT = old_root
+    assert mod.validate_manifest(data)["n_modules"] == 1
 
 
 def test_validation_manifest_reports_missing_render_without_requiring_it(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch
 ) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    test = tmp_path / "tests" / "test_runtime.py"
-    test.parent.mkdir()
-    test.write_text("def test_placeholder():\n    assert True\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/test_runtime.py",
-            artifact="docs/_static/gate.png",
-        )
+    mod, data = _validation_tree(
+        tmp_path, monkeypatch, files=(_FAST_TEST,), artifact="docs/_static/gate.png"
     )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        summary = mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
-
-    row = summary["rows"][0]
+    row = mod.validate_manifest(data)["rows"][0]
     assert row["n_required_artifacts"] == 0
     assert row["n_missing_rendered_artifacts"] == 1
 
 
-def test_validation_manifest_still_requires_machine_readable_evidence(
-    tmp_path: Path,
+def test_validation_manifest_attaches_measured_package_coverage(
+    tmp_path: Path, monkeypatch
 ) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    test = tmp_path / "tests" / "test_runtime.py"
-    test.parent.mkdir()
-    test.write_text("def test_placeholder():\n    assert True\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/test_runtime.py",
-            artifact="benchmarks/results/gate.json",
-        )
+    mod, data = _validation_tree(tmp_path, monkeypatch)
+    coverage_xml = _coverage_xml(tmp_path, "0.96", ("src/gkx/runtime.py", "0.97"))
+
+    summary = mod.validate_manifest(
+        data, coverage_xml=coverage_xml, enforce_package_coverage=True
     )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(ValueError, match="artifact path does not exist"):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
-
-
-def test_validation_manifest_rejects_non_pytest_fast_test_name(tmp_path: Path) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    test = tmp_path / "tests" / "runtime_cases.py"
-    test.parent.mkdir()
-    test.write_text("def test_placeholder():\n    assert True\n")
-    artifact = tmp_path / "docs" / "_static" / "gate.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("{}\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/runtime_cases.py",
-            artifact="docs/_static/gate.json",
-        )
-    )
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(ValueError, match=r"tests/\*\*/test_\*\.py"):
-            mod.validate_manifest(mod.load_manifest(manifest))
-    finally:
-        mod.REPO_ROOT = old_root
-
-
-def test_validation_manifest_attaches_measured_package_coverage(tmp_path: Path) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    test = tmp_path / "tests" / "test_runtime.py"
-    test.parent.mkdir()
-    test.write_text("def test_placeholder():\n    assert True\n")
-    artifact = tmp_path / "docs" / "_static" / "gate.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("{}\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/test_runtime.py",
-            artifact="docs/_static/gate.json",
-        )
-    )
-    coverage_xml = tmp_path / "coverage.xml"
-    coverage_xml.write_text(
-        """
-<coverage line-rate="0.96">
-  <packages>
-    <package name="gkx">
-      <classes>
-        <class filename="src/gkx/runtime.py" line-rate="0.97" />
-      </classes>
-    </package>
-  </packages>
-</coverage>
-""".strip()
-    )
-
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        summary = mod.validate_manifest(
-            mod.load_manifest(manifest),
-            coverage_xml=coverage_xml,
-            enforce_package_coverage=True,
-        )
-    finally:
-        mod.REPO_ROOT = old_root
 
     measured = summary["coverage_xml_summary"]
     assert measured["package_coverage_passed"] is True
@@ -3214,99 +2585,33 @@ def test_validation_manifest_attaches_measured_package_coverage(tmp_path: Path) 
     assert measured["module_rows"][0]["coverage_percent"] == pytest.approx(97.0)
 
 
-def test_validation_manifest_rejects_duplicate_coverage_xml_module_entries(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("rate", "classes", "enforce", "match"),
+    [
+        (
+            "0.96",
+            (("src/gkx/runtime.py", "0.97"), ("gkx/runtime.py", "0.50")),
+            False,
+            "duplicate coverage entry for gkx.runtime",
+        ),
+        (
+            "0.949",
+            (("gkx/runtime.py", "1.0"),),
+            True,
+            "package coverage below manifest target",
+        ),
+    ],
+    ids=["duplicate-module-entries", "package-below-target"],
+)
+def test_validation_manifest_rejects_bad_coverage_xml(
+    tmp_path: Path, monkeypatch, rate, classes, enforce, match
 ) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    test = tmp_path / "tests" / "test_runtime.py"
-    test.parent.mkdir()
-    test.write_text("def test_placeholder():\n    assert True\n")
-    artifact = tmp_path / "docs" / "_static" / "gate.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("{}\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/test_runtime.py",
-            artifact="docs/_static/gate.json",
-        )
-    )
-    coverage_xml = tmp_path / "coverage.xml"
-    coverage_xml.write_text(
-        """
-<coverage line-rate="0.96">
-  <packages>
-    <package name="gkx">
-      <classes>
-        <class filename="src/gkx/runtime.py" line-rate="0.97" />
-        <class filename="gkx/runtime.py" line-rate="0.50" />
-      </classes>
-    </package>
-  </packages>
-</coverage>
-""".strip()
-    )
+    mod, data = _validation_tree(tmp_path, monkeypatch)
+    coverage_xml = _coverage_xml(tmp_path, rate, *classes)
+    kwargs = {"enforce_package_coverage": True} if enforce else {}
 
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(
-            ValueError, match="duplicate coverage entry for gkx.runtime"
-        ):
-            mod.validate_manifest(
-                mod.load_manifest(manifest), coverage_xml=coverage_xml
-            )
-    finally:
-        mod.REPO_ROOT = old_root
-
-
-def test_validation_manifest_rejects_package_coverage_below_target(
-    tmp_path: Path,
-) -> None:
-    mod = _load_validation_tool_module()
-    _write_minimal_package(tmp_path, "gkx.runtime")
-    test = tmp_path / "tests" / "test_runtime.py"
-    test.parent.mkdir()
-    test.write_text("def test_placeholder():\n    assert True\n")
-    artifact = tmp_path / "docs" / "_static" / "gate.json"
-    artifact.parent.mkdir(parents=True)
-    artifact.write_text("{}\n")
-    manifest = tmp_path / "manifest.toml"
-    manifest.write_text(
-        _manifest_text(
-            source="src/gkx/runtime.py",
-            test="tests/test_runtime.py",
-            artifact="docs/_static/gate.json",
-        )
-    )
-    coverage_xml = tmp_path / "coverage.xml"
-    coverage_xml.write_text(
-        """
-<coverage line-rate="0.949">
-  <packages>
-    <package name="gkx">
-      <classes>
-        <class filename="gkx/runtime.py" line-rate="1.0" />
-      </classes>
-    </package>
-  </packages>
-</coverage>
-""".strip()
-    )
-
-    old_root = mod.REPO_ROOT
-    try:
-        mod.REPO_ROOT = tmp_path
-        with pytest.raises(ValueError, match="package coverage below manifest target"):
-            mod.validate_manifest(
-                mod.load_manifest(manifest),
-                coverage_xml=coverage_xml,
-                enforce_package_coverage=True,
-            )
-    finally:
-        mod.REPO_ROOT = old_root
+    with pytest.raises(ValueError, match=match):
+        mod.validate_manifest(data, coverage_xml=coverage_xml, **kwargs)
 
 
 # ---- interpreter-floor portability gates ----
@@ -3321,7 +2626,6 @@ exactly one module and these gates keep it there.
 """
 
 import os
-from pathlib import Path
 
 FLOOR_REPO_ROOT = Path(__file__).resolve().parents[2]
 # Gates the repo-hygiene job runs before anything is pip-installed.
@@ -3769,25 +3073,22 @@ _CFL_MARGIN_OVER_BOUND: dict[str, str] = {}
 # Decks reaching the nonlinear runtime that do not need a recorded margin,
 # and why. Adaptive runs recompute dt against this same bound every step, so
 # their configured dt is a starting guess and being over it means nothing.
-_CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = {
-    "examples/common_input.toml": "fixed_dt = false: adaptive dt",
-    "examples/05_kinetic_electrons/case.toml": "fixed_dt = false: adaptive dt",
-    "examples/05_kinetic_electrons/case_stellarator.toml": "fixed_dt = false: adaptive dt",
-    "benchmarks/cases/circular_vmec_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
-    "benchmarks/cases/etg_nonlinear.toml": ("fixed_dt = false: adaptive dt"),
-    "examples/03_nonlinear_tokamak/case_full.toml": ("fixed_dt = false: adaptive dt"),
-    "benchmarks/cases/cyclone_nonlinear_miller.toml": ("fixed_dt = false: adaptive dt"),
-    "benchmarks/cases/cyclone_nonlinear_t400.toml": ("fixed_dt = false: adaptive dt"),
-    "examples/04_nonlinear_stellarator/case_full.toml": (
-        "fixed_dt = false: adaptive dt"
+_CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = dict.fromkeys(
+    (
+        "examples/common_input.toml",
+        "examples/05_kinetic_electrons/case.toml",
+        "examples/05_kinetic_electrons/case_stellarator.toml",
+        "benchmarks/cases/circular_vmec_nonlinear.toml",
+        "benchmarks/cases/etg_nonlinear.toml",
+        "examples/03_nonlinear_tokamak/case_full.toml",
+        "benchmarks/cases/cyclone_nonlinear_miller.toml",
+        "benchmarks/cases/cyclone_nonlinear_t400.toml",
+        "examples/04_nonlinear_stellarator/case_full.toml",
+        "benchmarks/cases/w7x_nonlinear_imported_geometry.toml",
+        "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml",
     ),
-    "benchmarks/cases/w7x_nonlinear_imported_geometry.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-    "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml": (
-        "fixed_dt = false: adaptive dt"
-    ),
-}
+    "fixed_dt = false: adaptive dt",
+)
 
 
 def _deck_uses_fixed_dt(relative: str) -> bool:
@@ -3927,56 +3228,17 @@ def _parity_cases() -> list[dict]:
 # record and the generator-less performance file. Each row is recomputed here
 # from the CSV the benchmark atlas points at. The tolerance is the rounding the
 # table itself shows (three significant figures), not a physics tolerance.
-_README_PARITY_SOURCES: dict[str, tuple[str, str, str, str, str]] = {
-    "KAW": (
-        "kaw_exact_growth_dump.csv",
-        "gamma_ref",
-        "gamma_gkx",
-        "omega_ref",
-        "omega_gkx",
-    ),
-    "ETG": (
-        "etg_mismatch_table.csv",
-        "gamma_ref",
-        "gamma_gkx",
-        "omega_ref",
-        "omega_gkx",
-    ),
-    "W7-X": (
-        "w7x_linear_t2_scan.csv",
-        "gamma_ref_last",
-        "gamma_last",
-        "omega_ref_last",
-        "omega_last",
-    ),
-    "HSX": (
-        "hsx_linear_t2_scan.csv",
-        "gamma_ref_last",
-        "gamma_last",
-        "omega_ref_last",
-        "omega_last",
-    ),
-    "Cyclone Miller": (
-        "cyclone_miller_linear_mismatch.csv",
-        "gamma_gx",
-        "gamma",
-        "omega_gx",
-        "omega",
-    ),
-    "Cyclone ITG": (
-        "cyclone_mismatch_table.csv",
-        "gamma_ref",
-        "gamma_gkx",
-        "omega_ref",
-        "omega_gkx",
-    ),
-    "KBM": (
-        "kbm_mismatch_table.csv",
-        "gamma_ref",
-        "gamma_gkx",
-        "omega_ref",
-        "omega_gkx",
-    ),
+_README_PARITY_SOURCES: dict[str, tuple[str, ...]] = {
+    label: tuple(columns.split())
+    for label, columns in {
+        "KAW": "kaw_exact_growth_dump.csv gamma_ref gamma_gkx omega_ref omega_gkx",
+        "ETG": "etg_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
+        "W7-X": "w7x_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
+        "HSX": "hsx_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
+        "Cyclone Miller": "cyclone_miller_linear_mismatch.csv gamma_gx gamma omega_gx omega",
+        "Cyclone ITG": "cyclone_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
+        "KBM": "kbm_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
+    }.items()
 }
 
 
@@ -3988,22 +3250,24 @@ def _peak_relative_percent(rows: list[dict], ref_key: str, gkx_key: str) -> floa
     return 100.0 * worst / peak
 
 
-def _readme_parity_table(root: Path) -> dict[str, tuple[float, float]]:
+def _readme_parity_table(
+    root: Path, labels: set[str] | None = None
+) -> dict[str, tuple[float, float]]:
+    """README parity rows ``label -> (gamma %, omega %)`` for the given labels."""
+
+    labels = set(_README_PARITY_SOURCES) if labels is None else labels
     text = (root / "README.md").read_text(encoding="utf-8")
     published: dict[str, tuple[float, float]] = {}
     for line in text.splitlines():
         if not line.startswith("|"):
             continue
         cells = [cell.strip().strip("*` ") for cell in line.strip("|").split("|")]
-        if len(cells) != 3:
-            continue
-        label, gamma_cell, omega_cell = cells
-        if label not in _README_PARITY_SOURCES:
+        if len(cells) != 3 or cells[0] not in labels:
             continue
         try:
-            published[label] = (
-                float(gamma_cell.rstrip("%")),
-                float(omega_cell.rstrip("%")),
+            published[cells[0]] = (
+                float(cells[1].rstrip("%")),
+                float(cells[2].rstrip("%")),
             )
         except ValueError:
             continue
@@ -4574,26 +3838,8 @@ def test_shipped_reference_rows_carry_a_hash() -> None:
 
 
 def _published_readme_parity() -> dict[str, tuple[float, float]]:
-    text = (RUN_TO_REPO_ROOT / "README.md").read_text(encoding="utf-8")
     labels = {row["readme_label"] for row in _readme_parity_rows()}
-    published: dict[str, tuple[float, float]] = {}
-    for line in text.splitlines():
-        if not line.startswith("|"):
-            continue
-        cells = [cell.strip().strip("*` ") for cell in line.strip("|").split("|")]
-        if len(cells) != 3:
-            continue
-        label, gamma_cell, omega_cell = cells
-        if label not in labels:
-            continue
-        try:
-            published[label] = (
-                float(gamma_cell.rstrip("%")),
-                float(omega_cell.rstrip("%")),
-            )
-        except ValueError:
-            continue
-    return published
+    return _readme_parity_table(RUN_TO_REPO_ROOT, labels)
 
 
 def test_ledger_covers_every_published_parity_row() -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from support.runtime_patch import patch_runtime
+from support.helpers import patch_runtime
 
 import io
 import subprocess

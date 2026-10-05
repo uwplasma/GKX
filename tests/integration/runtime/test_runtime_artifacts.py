@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from support.runtime_patch import patch_runtime
+from support.helpers import patch_runtime
 
 from dataclasses import fields, replace
 from gkx.artifacts.io import (
@@ -156,8 +156,6 @@ from netCDF4 import Dataset
 from pathlib import Path
 from types import SimpleNamespace
 import gkx.artifacts.nonlinear_netcdf as nonlinear_netcdf
-import gkx.diagnostics as diagnostics_module
-import gkx.diagnostics.metadata as diagnostics_metadata
 import gkx.operators.moments as diagnostics_moments
 import gkx.solvers_time_explicit as explicit_time_integrators
 import gkx.workflows.runtime.artifacts as runtime_artifacts
@@ -167,12 +165,137 @@ import numpy as np
 import pytest
 
 
-def test_write_runtime_linear_artifacts_writes_bundle(tmp_path: Path) -> None:
-    result = RuntimeLinearResult(
+def _diag(n: int = 2, **overrides) -> SimulationDiagnostics:
+    """Finite ``SimulationDiagnostics`` with ``n`` samples; ``overrides`` win."""
+
+    fields_ = dict(
+        t=np.linspace(0.1, 0.1 * n, n),
+        dt_t=np.full(n, 0.1),
+        dt_mean=np.asarray(0.1),
+        gamma_t=np.zeros(n),
+        omega_t=np.zeros(n),
+        Wg_t=np.ones(n),
+        Wphi_t=np.ones(n),
+        Wapar_t=np.zeros(n),
+        heat_flux_t=np.zeros(n),
+        particle_flux_t=np.zeros(n),
+        energy_t=np.ones(n),
+    )
+    fields_.update(
+        {k: np.asarray(v) if isinstance(v, list) else v for k, v in overrides.items()}
+    )
+    return SimulationDiagnostics(**fields_)
+
+
+# The two-sample trace several artifact writers are exercised on.
+_TRACE = dict(
+    gamma_t=[0.01, 0.02],
+    omega_t=[0.03, 0.04],
+    Wg_t=[1.0, 1.1],
+    Wphi_t=[2.0, 2.1],
+    Wapar_t=[0.5, 0.6],
+    heat_flux_t=[3.0, 3.1],
+    particle_flux_t=[4.0, 4.1],
+    energy_t=[3.5, 3.8],
+)
+_STATE6 = np.zeros((1, 1, 1, 1, 1, 1), dtype=np.complex64)
+
+
+def _resolved_bundle() -> ResolvedDiagnostics:
+    """Every resolved family on an (Ny, Nx, Nz) = (8, 8, 6) one-species grid."""
+
+    shapes = {
+        "kxst": (2, 1, 8),
+        "kyst": (2, 1, 8),
+        "kxkyst": (2, 1, 8, 8),
+        "zst": (2, 1, 6),
+    }
+    fill = {
+        "Wg": 1.0,
+        "Wphi": 1.0,
+        "Wapar": 0.0,
+        "HeatFlux": 1.0,
+        "HeatFluxES": 2.0,
+        "HeatFluxApar": 3.0,
+        "HeatFluxBpar": 4.0,
+        "ParticleFlux": 1.0,
+        "ParticleFluxES": 5.0,
+        "ParticleFluxApar": 6.0,
+        "ParticleFluxBpar": 7.0,
+        "TurbulentHeating": 8.0,
+    }
+    payload = {
+        f"{family}_{suffix}": np.full(shape, value, dtype=float)
+        for family, value in fill.items()
+        for suffix, shape in shapes.items()
+    }
+    return ResolvedDiagnostics(
+        **payload,
+        Wg_lmst=np.ones((2, 1, 8, 4)),
+        Phi2_kxt=np.ones((2, 8)),
+        Phi2_kyt=np.ones((2, 8)),
+        Phi2_kxkyt=np.ones((2, 8, 8)),
+        Phi2_zt=np.ones((2, 6)),
+        Phi2_zonal_t=np.ones((2,)),
+        Phi2_zonal_kxt=np.ones((2, 8)),
+        Phi2_zonal_zt=np.ones((2, 6)),
+    )
+
+
+class _FakeVar:
+    def __init__(self) -> None:
+        self.value = None
+        self.attrs: dict = {}
+
+    def __setitem__(self, _idx, value) -> None:
+        self.value = np.asarray(value)
+
+    def setncattr(self, key, value) -> None:
+        self.attrs[key] = value
+
+
+class _FakeGroup:
+    """Records what a writer puts into a netCDF4 group or root."""
+
+    def __init__(self) -> None:
+        self.vars: dict[str, _FakeVar] = {}
+        self.attrs: dict = {}
+
+    def createVariable(self, name, _dtype, _dims=()):
+        self.vars[name] = _FakeVar()
+        return self.vars[name]
+
+    def setncattr(self, key, value) -> None:
+        self.attrs[key] = value
+
+    def __getitem__(self, name):
+        return self.vars[name].value
+
+
+def _linear_result(**overrides) -> RuntimeLinearResult:
+    base = dict(
         ky=0.2,
         gamma=0.3,
         omega=-0.4,
         selection=ModeSelection(ky_index=1, kx_index=2, z_index=3),
+        t=np.asarray([0.1, 0.2]),
+        signal=np.asarray([1.0, 2.0]),
+    )
+    base.update(overrides)
+    return RuntimeLinearResult(**base)
+
+
+def _summary(paths) -> dict:
+    return json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+
+
+def _patch(monkeypatch, target, **values) -> None:
+    for name, value in values.items():
+        monkeypatch.setattr(target, name, value)
+
+
+def test_write_runtime_linear_artifacts_writes_bundle(tmp_path: Path) -> None:
+    result = _linear_result(
         t=np.asarray([0.1, 0.2, 0.3]),
         signal=np.asarray([1.0, 2.0, 4.0]),
         state=np.zeros((1, 2, 3), dtype=np.complex64),
@@ -208,7 +331,7 @@ def test_write_runtime_linear_artifacts_writes_bundle(tmp_path: Path) -> None:
 
     paths = write_runtime_linear_artifacts(tmp_path / "linear_run", result)
 
-    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+    summary = _summary(paths)
     assert summary["kind"] == "linear"
     assert summary["gamma"] == 0.3
     assert summary["fit_window_tmin"] == 0.1
@@ -217,22 +340,23 @@ def test_write_runtime_linear_artifacts_writes_bundle(tmp_path: Path) -> None:
     assert summary["has_eigenfunction"] is True
     assert summary["has_quasilinear"] is True
     assert summary["quasilinear"]["heat_flux_weight_total"] == pytest.approx(1.5)
-    assert (
-        summary["quasilinear"]["metadata"]["claim_level"]
-        == "uncalibrated_saturation_rule"
-    )
+    claim = "uncalibrated_saturation_rule"
+    assert summary["quasilinear"]["metadata"]["claim_level"] == claim
     assert summary["selection"]["ky_index"] == 1
     csv_lines = Path(paths["timeseries"]).read_text(encoding="utf-8").splitlines()
     assert csv_lines[0] == "t,signal_real,signal_imag,signal_abs"
-    assert Path(paths["timeseries"]).exists()
-    assert Path(paths["eigenfunction"]).exists()
-    assert Path(paths["state"]).exists()
-    assert Path(paths["quasilinear_summary"]).exists()
-    assert Path(paths["quasilinear_species"]).exists()
+    for key in (
+        "timeseries",
+        "eigenfunction",
+        "state",
+        "quasilinear_summary",
+        "quasilinear_species",
+    ):
+        assert Path(paths[key]).exists()
     ql_summary = json.loads(
         Path(paths["quasilinear_summary"]).read_text(encoding="utf-8")
     )
-    assert ql_summary["metadata"]["claim_level"] == "uncalibrated_saturation_rule"
+    assert ql_summary["metadata"]["claim_level"] == claim
 
 
 def test_runtime_artifact_file_helpers_and_nonlinear_summary(tmp_path: Path) -> None:
@@ -259,67 +383,36 @@ def test_runtime_artifact_file_helpers_and_nonlinear_summary(tmp_path: Path) -> 
     np.testing.assert_allclose(np.load(state_path), state)
     assert _write_state(base, None) is None
 
-    diag = SimulationDiagnostics(
-        t=np.asarray([0.1, 0.2]),
-        dt_t=np.asarray([0.1, 0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.asarray([0.01, 0.02]),
-        omega_t=np.asarray([0.03, 0.04]),
-        Wg_t=np.asarray([1.0, 1.1]),
-        Wphi_t=np.asarray([2.0, 2.1]),
-        Wapar_t=np.asarray([0.5, 0.6]),
-        heat_flux_t=np.asarray([3.0, 3.1]),
-        particle_flux_t=np.asarray([4.0, 4.1]),
-        energy_t=np.asarray([3.5, 3.8]),
-    )
-    summary = _nonlinear_summary(
-        SimpleNamespace(
-            diagnostics=diag,
-            state=np.zeros((1, 2, 3), dtype=np.complex64),
-            ky_selected=0.2,
-            kx_selected=0.1,
-            phi2=None,
-        )
+    def summary_of(**kw):
+        ns = dict(diagnostics=None, state=None, ky_selected=0.2, kx_selected=0.0)
+        return _nonlinear_summary(SimpleNamespace(**{**ns, "phi2": None, **kw}))
+
+    summary = summary_of(
+        diagnostics=_diag(**_TRACE),
+        state=np.zeros((1, 2, 3), dtype=np.complex64),
+        kx_selected=0.1,
     )
     assert summary["kind"] == "nonlinear"
     assert summary["n_samples"] == 2
     assert summary["heat_flux_last"] == pytest.approx(3.1)
     assert summary["n_state_shape"] == [1, 2, 3]
-
-    scalar_only = _nonlinear_summary(
-        SimpleNamespace(
-            diagnostics=None,
-            state=None,
-            ky_selected=0.2,
-            kx_selected=0.0,
-            phi2=np.asarray(7.0),
-        )
-    )
-    assert scalar_only["phi2_last"] == pytest.approx(7.0)
+    assert summary_of(phi2=np.asarray(7.0))["phi2_last"] == pytest.approx(7.0)
 
 
 def test_write_runtime_linear_artifacts_splits_complex_signal_columns(
     tmp_path: Path,
 ) -> None:
-    result = RuntimeLinearResult(
-        ky=0.2,
-        gamma=0.3,
-        omega=-0.4,
-        selection=ModeSelection(ky_index=1, kx_index=2, z_index=3),
-        t=np.asarray([0.1, 0.2]),
-        signal=np.asarray([1.0 + 2.0j, 3.0 + 4.0j]),
-        state=None,
-        fit_signal_used="phi",
-    )
+    signal = np.asarray([1.0 + 2.0j, 3.0 + 4.0j])
+    result = _linear_result(signal=signal, state=None, fit_signal_used="phi")
 
     paths = write_runtime_linear_artifacts(tmp_path / "linear_complex", result)
 
     rows = Path(paths["timeseries"]).read_text(encoding="utf-8").splitlines()
     assert rows[0] == "t,signal_real,signal_imag,signal_abs"
     data = np.loadtxt(paths["timeseries"], delimiter=",", skiprows=1)
-    np.testing.assert_allclose(data[:, 1], np.asarray([1.0, 3.0]))
-    np.testing.assert_allclose(data[:, 2], np.asarray([2.0, 4.0]))
-    np.testing.assert_allclose(data[:, 3], np.abs(np.asarray([1.0 + 2.0j, 3.0 + 4.0j])))
+    np.testing.assert_allclose(
+        data[:, 1:], np.c_[signal.real, signal.imag, np.abs(signal)]
+    )
 
 
 def test_write_runtime_linear_scan_artifacts_with_quasilinear_spectrum(
@@ -415,60 +508,45 @@ def test_write_runtime_linear_scan_artifacts_handles_quasilinear_length_mismatch
 
 
 def test_runtime_artifact_helper_paths_and_flattening(tmp_path: Path) -> None:
-    assert _artifact_base(tmp_path / "case.summary.json") == tmp_path / "case.summary"
-    assert (
-        _artifact_base(tmp_path / "case.timeseries.csv") == tmp_path / "case.timeseries"
-    )
-    assert (
-        _artifact_base(tmp_path / "case.eigenfunction.csv")
-        == tmp_path / "case.eigenfunction"
-    )
-    assert (
-        _artifact_base(tmp_path / "case.diagnostics.csv")
-        == tmp_path / "case.diagnostics"
-    )
+    for suffix in (
+        "summary.json",
+        "timeseries.csv",
+        "eigenfunction.csv",
+        "diagnostics.csv",
+    ):
+        stem = suffix.split(".")[0]
+        assert _artifact_base(tmp_path / f"case.{suffix}") == tmp_path / f"case.{stem}"
     assert _artifact_base(tmp_path / "case.out.nc") == tmp_path / "case.out.nc"
-    assert _netcdf_bundle_base(tmp_path / "case.nc") == tmp_path / "case"
-    assert _netcdf_bundle_base(tmp_path / "case.restart.nc") == tmp_path / "case"
-    assert _netcdf_bundle_base(tmp_path / "case.big.nc") == tmp_path / "case"
+    for name in ("case.nc", "case.restart.nc", "case.big.nc"):
+        assert _netcdf_bundle_base(tmp_path / name) == tmp_path / "case"
     assert _is_netcdf_output_target(tmp_path / "case.out.nc") is True
     assert _is_netcdf_output_target(tmp_path / "case.csv") is False
 
-    assert np.allclose(_flatten_series(np.array([1.0, 2.0])), np.array([1.0, 2.0]))
-    assert np.allclose(_flatten_series(np.array([[1.0], [2.0]])), np.array([1.0, 2.0]))
-    assert np.allclose(
-        _flatten_series(np.array([[1.0, 3.0], [2.0, 4.0]])), np.array([2.0, 3.0])
-    )
+    for series, flat in (
+        ([1.0, 2.0], [1.0, 2.0]),
+        ([[1.0], [2.0]], [1.0, 2.0]),
+        ([[1.0, 3.0], [2.0, 4.0]], [2.0, 3.0]),
+    ):
+        assert np.allclose(_flatten_series(np.array(series)), np.array(flat))
 
 
 def test_runtime_artifact_restart_resolution_and_species_helpers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cfg = RuntimeConfig(output=RuntimeOutputConfig(path="tools_out/run.out.nc"))
-    assert (
-        _resolve_restart_path("tools_out/run.out.nc", cfg, for_write=True).name
-        == "run.restart.nc"
-    )
-    assert (
-        _resolve_restart_path("tools_out/run.out.nc", cfg, for_write=False).name
-        == "run.restart.nc"
-    )
-
+    out = "tools_out/run.out.nc"
+    cfg = RuntimeConfig(output=RuntimeOutputConfig(path=out))
     cfg_custom = RuntimeConfig(
         output=RuntimeOutputConfig(
-            path="tools_out/run.out.nc",
-            restart_to_file="custom_to.nc",
-            restart_from_file="custom_from.nc",
+            path=out, restart_to_file="custom_to.nc", restart_from_file="custom_from.nc"
         )
     )
-    assert (
-        _resolve_restart_path("tools_out/run.out.nc", cfg_custom, for_write=True).name
-        == "custom_to.nc"
-    )
-    assert (
-        _resolve_restart_path("tools_out/run.out.nc", cfg_custom, for_write=False).name
-        == "custom_from.nc"
-    )
+    for config, for_write, name in (
+        (cfg, True, "run.restart.nc"),
+        (cfg, False, "run.restart.nc"),
+        (cfg_custom, True, "custom_to.nc"),
+        (cfg_custom, False, "custom_from.nc"),
+    ):
+        assert _resolve_restart_path(out, config, for_write=for_write).name == name
 
     policy_cfg = RuntimeConfig(
         time=TimeConfig(dt=0.2, t_max=1.0, fixed_dt=True, diagnostics=True),
@@ -484,11 +562,7 @@ def test_runtime_artifact_restart_resolution_and_species_helpers(
         ),
     )
     policy = resolve_nonlinear_artifact_policy(
-        policy_cfg,
-        out="tools_out/policy.out.nc",
-        diagnostics=None,
-        steps=None,
-        dt=None,
+        policy_cfg, out="tools_out/policy.out.nc", diagnostics=None, steps=None, dt=None
     )
     assert policy.netcdf_output_target is True
     assert policy.diagnostics_on is True
@@ -498,30 +572,19 @@ def test_runtime_artifact_restart_resolution_and_species_helpers(
     assert policy.restart_to == Path("policy_to.restart.nc")
 
     total = np.array([2.0, 4.0], dtype=np.float32)
-    assert np.allclose(
-        _species_matrix(total, 2, None),
-        np.array([[1.0, 1.0], [2.0, 2.0]], dtype=np.float32),
-    )
-    assert np.allclose(
-        _species_matrix(total, 2, np.array([3.0, 4.0], dtype=np.float32)),
-        np.array([[3.0], [4.0]], dtype=np.float32),
-    )
+    per_species = np.array([[3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
+    for species, expected in (
+        (None, [[1.0, 1.0], [2.0, 2.0]]),
+        (np.array([3.0, 4.0], dtype=np.float32), [[3.0], [4.0]]),
+        (per_species, per_species),
+    ):
+        np.testing.assert_allclose(_species_matrix(total, 2, species), expected)
     assert np.allclose(_resolved_species_time(None, fallback=total), total)
     assert np.allclose(
         _resolved_species_time(
             np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32), fallback=total
         ),
         np.array([3.0, 7.0], dtype=np.float32),
-    )
-
-    species_matrix = _species_matrix(
-        total,
-        2,
-        np.array([[3.0, 4.0], [5.0, 6.0]], dtype=np.float32),
-    )
-    np.testing.assert_allclose(
-        species_matrix,
-        np.array([[3.0, 4.0], [5.0, 6.0]], dtype=np.float32),
     )
 
 
@@ -549,52 +612,22 @@ def test_runtime_artifact_finite_validation_covers_state_and_fields() -> None:
     with pytest.raises(RuntimeError, match="finite nonlinear state"):
         validate_finite_runtime_result(bad_state, label="finite nonlinear")
 
-    bad_phi = replace(
-        finite,
-        fields=SimpleNamespace(
-            phi=np.asarray([1.0 + np.nan * 1j]),
-            apar=np.asarray([0.0]),
-            bpar=np.asarray([0.0]),
-        ),
-    )
-    with pytest.raises(RuntimeError, match="finite nonlinear phi"):
-        validate_finite_runtime_result(bad_phi, label="finite nonlinear")
+    for name, bad in (
+        ("phi", np.asarray([1.0 + np.nan * 1j])),
+        ("apar", np.asarray([np.inf])),
+        ("bpar", np.asarray([np.nan])),
+    ):
+        fields_ = {
+            "phi": np.asarray([0.0]),
+            "apar": np.asarray([0.0]),
+            "bpar": np.asarray([0.0]),
+        }
+        fields_[name] = bad
+        bad_field = replace(finite, fields=SimpleNamespace(**fields_))
+        with pytest.raises(RuntimeError, match=f"finite nonlinear {name}"):
+            validate_finite_runtime_result(bad_field, label="finite nonlinear")
 
-    bad_apar = replace(
-        finite,
-        fields=SimpleNamespace(
-            phi=np.asarray([0.0]),
-            apar=np.asarray([np.inf]),
-            bpar=np.asarray([0.0]),
-        ),
-    )
-    with pytest.raises(RuntimeError, match="finite nonlinear apar"):
-        validate_finite_runtime_result(bad_apar, label="finite nonlinear")
-
-    bad_bpar = replace(
-        finite,
-        fields=SimpleNamespace(
-            phi=np.asarray([0.0]),
-            apar=np.asarray([0.0]),
-            bpar=np.asarray([np.nan]),
-        ),
-    )
-    with pytest.raises(RuntimeError, match="finite nonlinear bpar"):
-        validate_finite_runtime_result(bad_bpar, label="finite nonlinear")
-
-    bad_diag = SimulationDiagnostics(
-        t=np.asarray([0.1, 0.2]),
-        dt_t=np.asarray([0.1, 0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.zeros(2),
-        omega_t=np.zeros(2),
-        Wg_t=np.ones(2),
-        Wphi_t=np.ones(2),
-        Wapar_t=np.zeros(2),
-        heat_flux_t=np.zeros(2),
-        particle_flux_t=np.asarray([0.0, np.nan]),
-        energy_t=np.ones(2),
-    )
+    bad_diag = _diag(particle_flux_t=[0.0, np.nan])
     bad_diag_result = replace(finite, diagnostics=bad_diag, fields=None, state=None)
     with pytest.raises(
         RuntimeError,
@@ -604,110 +637,58 @@ def test_runtime_artifact_finite_validation_covers_state_and_fields() -> None:
 
 
 def test_runtime_artifact_condense_output_helpers_reject_bad_axis_lengths() -> None:
-    full_kx = np.arange(7, dtype=np.float32)
-    active_kx = full_kx[_dealiased_kx_indices(full_kx.size)]
-    np.testing.assert_allclose(
-        _condense_kx_for_output(full_kx, full_nx=7, active_nx=active_kx.size),
-        active_kx,
-    )
-    np.testing.assert_allclose(
-        _condense_kx_for_output(active_kx, full_nx=7, active_nx=active_kx.size),
-        active_kx,
-    )
-    with pytest.raises(ValueError, match="kx-resolved diagnostic"):
-        _condense_kx_for_output(np.arange(6), full_nx=7, active_nx=active_kx.size)
-
-    full_ky = np.arange(5, dtype=np.float32)
-    active_ky = full_ky[_dealiased_ky_indices(full_ky.size)]
-    np.testing.assert_allclose(
-        _condense_ky_for_output(full_ky, full_ny=5, active_ny=active_ky.size),
-        active_ky,
-    )
-    np.testing.assert_allclose(
-        _condense_ky_for_output(active_ky, full_ny=5, active_ny=active_ky.size),
-        active_ky,
-    )
-    with pytest.raises(ValueError, match="ky-resolved diagnostic"):
-        _condense_ky_for_output(np.arange(4), full_ny=5, active_ny=active_ky.size)
+    for condense, n, axis_name, kw in (
+        (_condense_kx_for_output, 7, "kx", ("full_nx", "active_nx")),
+        (_condense_ky_for_output, 5, "ky", ("full_ny", "active_ny")),
+    ):
+        full_axis = np.arange(n, dtype=np.float32)
+        indices = (
+            _dealiased_kx_indices if axis_name == "kx" else _dealiased_ky_indices
+        )(n)
+        active_axis = full_axis[indices]
+        lengths = {kw[0]: n, kw[1]: active_axis.size}
+        for given in (full_axis, active_axis):
+            np.testing.assert_allclose(condense(given, **lengths), active_axis)
+        with pytest.raises(ValueError, match=f"{axis_name}-resolved diagnostic"):
+            condense(np.arange(n - 1), **lengths)
 
     full = np.arange(5 * 7, dtype=np.float32).reshape(5, 7)
     active = full[_dealiased_ky_indices(5)][:, _dealiased_kx_indices(7)]
-    np.testing.assert_allclose(
-        _condense_kykx_for_output(
-            full,
+
+    def condense(arr, **kw):
+        return _condense_kykx_for_output(
+            arr,
             full_ny=5,
             full_nx=7,
             active_ny=active.shape[0],
             active_nx=active.shape[1],
-        ),
-        active,
-    )
-    partially_condensed = full[_dealiased_ky_indices(5)]
-    np.testing.assert_allclose(
-        _condense_kykx_for_output(
-            partially_condensed,
-            full_ny=5,
-            full_nx=7,
-            active_ny=active.shape[0],
-            active_nx=active.shape[1],
-        ),
-        active,
-    )
-    with pytest.raises(ValueError, match="ky-kx diagnostic ky length"):
-        _condense_kykx_for_output(
-            np.zeros((4, 7)),
-            full_ny=5,
-            full_nx=7,
-            active_ny=active.shape[0],
-            active_nx=active.shape[1],
+            **kw,
         )
+
+    np.testing.assert_allclose(condense(full), active)
+    np.testing.assert_allclose(condense(full[_dealiased_ky_indices(5)]), active)
+    with pytest.raises(ValueError, match="ky-kx diagnostic ky length"):
+        condense(np.zeros((4, 7)))
     # Nyc = 1 + 5 // 2 = 3 is a *valid* length: it is the half-spectrum block.
     # What it cannot be served without is the family's ky weighting, because a
     # half-axis row of a Hermitian-weighted reduction carries the conjugate
     # partner's share and a transport row does not. The refusal names both
     # conventions rather than guessing one.
     with pytest.raises(ValueError, match="ky_weighting"):
-        _condense_kykx_for_output(
-            np.zeros((3, 7)),
-            full_ny=5,
-            full_nx=7,
-            active_ny=active.shape[0],
-            active_nx=active.shape[1],
-        )
+        condense(np.zeros((3, 7)))
     half_block = full[:3]
     np.testing.assert_allclose(
-        _condense_kykx_for_output(
-            half_block,
-            full_ny=5,
-            full_nx=7,
-            active_ny=active.shape[0],
-            active_nx=active.shape[1],
-            ky_weighting=KY_WEIGHTING_PAIR,
-        ),
-        active,
+        condense(half_block, ky_weighting=KY_WEIGHTING_PAIR), active
     )
     # The other convention divides the pair weight back out, so a paired row
     # publishes the per-row value the two-sided axis stores. Ny = 5 is odd, so
     # only row 0 is self-conjugate and rows 1 and 2 carry the weight 2.
     np.testing.assert_allclose(
-        _condense_kykx_for_output(
-            half_block,
-            full_ny=5,
-            full_nx=7,
-            active_ny=active.shape[0],
-            active_nx=active.shape[1],
-            ky_weighting=KY_WEIGHTING_PER_ROW,
-        ),
+        condense(half_block, ky_weighting=KY_WEIGHTING_PER_ROW),
         active / np.asarray([1.0, 2.0])[:, None],
     )
     with pytest.raises(ValueError, match="ky-kx diagnostic kx length"):
-        _condense_kykx_for_output(
-            np.zeros((active.shape[0], 6)),
-            full_ny=5,
-            full_nx=7,
-            active_ny=active.shape[0],
-            active_nx=active.shape[1],
-        )
+        condense(np.zeros((active.shape[0], 6)))
 
 
 def test_runtime_artifact_spectral_helpers() -> None:
@@ -716,25 +697,19 @@ def test_runtime_artifact_spectral_helpers() -> None:
     assert ri.shape == (1, 1, 2, 2)
     assert np.allclose(ri[0, 0, 0], np.array([1.0, 2.0]))
 
-    xy = _spectral_to_xy(np.ones((2, 2, 1), dtype=np.complex64))
-    assert xy.shape == (2, 2, 1)
+    assert _spectral_to_xy(np.ones((2, 2, 1), dtype=np.complex64)).shape == (2, 2, 1)
+    six_d = np.ones((1, 2, 3, 4, 4, 5), dtype=np.complex64)
+    assert _restart_to_netcdf_layout(six_d).shape[-1] == 2
+    assert _restart_to_netcdf_layout(six_d[0]).shape[0] == 1
 
-    state = np.ones((1, 2, 3, 4, 4, 5), dtype=np.complex64)
-    netcdf_layout = _restart_to_netcdf_layout(state)
-    assert netcdf_layout.shape[-1] == 2
-    netcdf_from_5d = _restart_to_netcdf_layout(
-        np.ones((2, 3, 4, 4, 5), dtype=np.complex64)
-    )
-    assert netcdf_from_5d.shape[0] == 1
-
-    with pytest.raises(ValueError):
-        _spectral_to_ri(np.ones((2, 2), dtype=np.complex64))
-    with pytest.raises(ValueError):
-        _spectral_species_to_ri(np.ones((2, 2), dtype=np.complex64))
-    with pytest.raises(ValueError):
-        _restart_to_netcdf_layout(np.ones((2, 2), dtype=np.complex64))
-    with pytest.raises(ValueError):
-        _state_basis_moments(np.ones((2, 2), dtype=np.complex64))
+    for helper in (
+        _spectral_to_ri,
+        _spectral_species_to_ri,
+        _restart_to_netcdf_layout,
+        _state_basis_moments,
+    ):
+        with pytest.raises(ValueError):
+            helper(np.ones((2, 2), dtype=np.complex64))
 
     ri_series = _complex_to_ri(np.array([[1.0 + 2.0j, 3.0 + 4.0j]], dtype=np.complex64))
     assert ri_series.shape == (1, 2, 2)
@@ -765,18 +740,10 @@ def test_write_runtime_nonlinear_artifacts_preserves_active_resolved_axes(
         2, active_ky, active_kx
     )
     wg_kxst = np.arange(2 * active_kx, dtype=np.float32).reshape(2, 1, active_kx)
-    diag = SimulationDiagnostics(
-        t=np.asarray([0.1, 0.2]),
-        dt_t=np.asarray([0.1, 0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.zeros(2),
-        omega_t=np.zeros(2),
-        Wg_t=np.asarray([1.0, 2.0]),
-        Wphi_t=np.asarray([0.5, 0.6]),
-        Wapar_t=np.zeros(2),
-        heat_flux_t=np.zeros(2),
-        particle_flux_t=np.zeros(2),
-        energy_t=np.asarray([1.5, 2.6]),
+    diag = _diag(
+        Wg_t=[1.0, 2.0],
+        Wphi_t=[0.5, 0.6],
+        energy_t=[1.5, 2.6],
         resolved=ResolvedDiagnostics(
             Phi2_kxkyt=phi2_kykx,
             Phi_zonal_line_kxt=line,
@@ -785,12 +752,7 @@ def test_write_runtime_nonlinear_artifacts_preserves_active_resolved_axes(
         ),
     )
     result = RuntimeNonlinearResult(
-        t=np.asarray(diag.t),
-        diagnostics=diag,
-        state=None,
-        fields=None,
-        ky_selected=0.0,
-        kx_selected=0.0,
+        t=np.asarray(diag.t), diagnostics=diag, ky_selected=0.0, kx_selected=0.0
     )
 
     paths = write_runtime_nonlinear_artifacts(tmp_path / "active.out.nc", result, cfg)
@@ -798,59 +760,33 @@ def test_write_runtime_nonlinear_artifacts_preserves_active_resolved_axes(
     with nc.Dataset(paths["out"], "r") as root:
         assert root.dimensions["kx"].size == active_kx
         assert root.dimensions["ky"].size == active_ky
-        diagnostics = root.groups["Diagnostics"]
-        stored_line_ri = np.asarray(diagnostics.variables["Phi_zonal_line_kxt"][:])
+        variables = root.groups["Diagnostics"].variables
+        stored_line_ri = np.asarray(variables["Phi_zonal_line_kxt"][:])
         stored_line = stored_line_ri[..., 0] + 1j * stored_line_ri[..., 1]
-        stored_wg = np.asarray(diagnostics.variables["Wg_kxst"][:])
-        stored_phi2 = np.asarray(diagnostics.variables["Phi2_kxkyt"][:])
-
-    np.testing.assert_allclose(stored_line, line)
-    np.testing.assert_allclose(stored_wg, wg_kxst)
-    np.testing.assert_allclose(stored_phi2, phi2_kykx)
+        np.testing.assert_allclose(stored_line, line)
+        np.testing.assert_allclose(np.asarray(variables["Wg_kxst"][:]), wg_kxst)
+        np.testing.assert_allclose(np.asarray(variables["Phi2_kxkyt"][:]), phi2_kykx)
 
 
 def test_runtime_artifact_read_optional_var() -> None:
-    class _Group:
-        variables = {"present": np.array([1.0, 2.0])}
-
-    assert _read_optional_var(_Group, "missing") is None
-
-
-def test_runtime_artifact_read_optional_var_converts_ri_dimension() -> None:
     class _Var:
         dimensions = ("time", "ri")
 
         def __getitem__(self, _key):
             return np.array([[1.0, 2.0], [3.0, 4.0]])
 
-    class _Group:
-        variables = {"present": _Var()}
-
-    out = _read_optional_var(_Group, "present")
+    group = SimpleNamespace(variables={"present": _Var()})
+    assert _read_optional_var(group, "missing") is None
+    out = _read_optional_var(group, "present")
     assert np.allclose(out, np.array([1.0 + 2.0j, 3.0 + 4.0j]))
 
 
 def test_runtime_artifact_condense_helpers() -> None:
     assert _condense_resolved_for_output(None) is None
 
-    resolved = ResolvedDiagnostics(
-        Phi2_kxt=np.ones((2, 8), dtype=float),
-        Phi2_kyt=np.ones((2, 8), dtype=float),
-        Phi2_kxkyt=np.ones((2, 8, 8), dtype=float),
-        Phi2_zt=np.ones((2, 6), dtype=float),
-        Phi2_zonal_t=np.ones((2,), dtype=float),
-        Phi2_zonal_kxt=np.ones((2, 8), dtype=float),
-        Phi2_zonal_zt=np.ones((2, 6), dtype=float),
+    resolved = replace(
+        _resolved_bundle(),
         Phi_zonal_mode_kxt=np.ones((2, 8), dtype=np.complex64),
-        Wg_kxst=np.ones((2, 1, 8), dtype=float),
-        Wg_kyst=np.ones((2, 1, 8), dtype=float),
-        Wg_kxkyst=np.ones((2, 1, 8, 8), dtype=float),
-        Wg_zst=np.ones((2, 1, 6), dtype=float),
-        Wg_lmst=np.ones((2, 1, 8, 4), dtype=float),
-        Wphi_kxst=np.ones((2, 1, 8), dtype=float),
-        Wphi_kyst=np.ones((2, 1, 8), dtype=float),
-        Wphi_kxkyst=np.ones((2, 1, 8, 8), dtype=float),
-        Wphi_zst=np.ones((2, 1, 6), dtype=float),
     )
     condensed = _condense_resolved_for_output(resolved)
     assert condensed is not None
@@ -858,21 +794,7 @@ def test_runtime_artifact_condense_helpers() -> None:
     assert (
         condensed.Phi_zonal_mode_kxt.shape[-1] <= resolved.Phi_zonal_mode_kxt.shape[-1]
     )
-    diag = SimulationDiagnostics(
-        t=np.asarray([0.0, 0.1]),
-        dt_t=np.asarray([0.1, 0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.asarray([0.0, 0.0]),
-        omega_t=np.asarray([0.0, 0.0]),
-        Wg_t=np.asarray([1.0, 1.1]),
-        Wphi_t=np.asarray([2.0, 2.1]),
-        Wapar_t=np.asarray([0.0, 0.0]),
-        heat_flux_t=np.asarray([3.0, 3.1]),
-        particle_flux_t=np.asarray([4.0, 4.1]),
-        energy_t=np.asarray([3.0, 3.2]),
-        resolved=resolved,
-    )
-    diag_condensed = _condense_diagnostics_for_netcdf_output(diag)
+    diag_condensed = _condense_diagnostics_for_netcdf_output(_diag(resolved=resolved))
     assert diag_condensed.resolved is not None
 
 
@@ -880,24 +802,9 @@ def test_runtime_artifact_small_helpers() -> None:
     assert _dealiased_kx_count(1) == 1
     assert np.array_equal(_dealiased_kx_indices(1), np.array([0], dtype=np.int32))
 
-    class _Group:
-        def __init__(self):
-            self.created = {}
-
-        def createVariable(self, name, _dtype, _dims):
-            class _Var:
-                def __init__(self, store, key):
-                    self._store = store
-                    self._key = key
-
-                def __setitem__(self, _idx, value):
-                    self._store[self._key] = np.asarray(value)
-
-            return _Var(self.created, name)
-
-    group = _Group()
+    group = _FakeGroup()
     _maybe_var(group, "foo", "f4", ("x",), np.array([1.0, 2.0], dtype=np.float32))
-    assert np.allclose(group.created["foo"], np.array([1.0, 2.0], dtype=np.float32))
+    assert np.allclose(group["foo"], np.array([1.0, 2.0], dtype=np.float32))
 
 
 def test_runtime_artifact_axis_and_condense_helpers() -> None:
@@ -938,39 +845,13 @@ def test_runtime_artifact_axis_and_condense_helpers() -> None:
 
 
 def test_runtime_artifact_root_metadata_and_active_field() -> None:
-    class _Var:
-        def __init__(self):
-            self.values = None
-            self.attrs = {}
-
-        def __setitem__(self, _idx, value):
-            self.values = np.asarray(value)
-
-        def setncattr(self, key, value):
-            self.attrs[key] = value
-
-    class _Root:
-        def __init__(self):
-            self.vars = {}
-            self.attrs = {}
-
-        def setncattr(self, key, value):
-            self.attrs[key] = value
-
-        def createVariable(self, name, _dtype, _dims=()):
-            var = _Var()
-            self.vars[name] = var
-            return var
-
     cfg = SimpleNamespace(
         grid=SimpleNamespace(Ny=5, Nx=7, Nz=8, ntheta=None, nperiod=None)
     )
-    root = _Root()
+    root = _FakeGroup()
     _write_runtime_root_metadata(root, cfg, nspecies=2, nl=3, nm=4)
-    assert int(root.vars["ny"].values) == 5
-    assert int(root.vars["nx"].values) == 7
-    assert int(root.vars["ntheta"].values) == 8
-    assert int(root.vars["nperiod"].values) == 1
+    for name, value in (("ny", 5), ("nx", 7), ("ntheta", 8), ("nperiod", 1)):
+        assert int(root[name]) == value
     assert root.attrs["schema_version"] == 1
     assert root.vars["code_info"].attrs["value"] == "gkx"
 
@@ -982,38 +863,28 @@ def test_runtime_artifact_root_metadata_and_active_field() -> None:
 def test_runtime_artifact_geometry_and_input_group_writers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class _Var:
-        def __init__(self, store, key):
-            self._store = store
-            self._key = key
-
-        def __setitem__(self, _idx, value):
-            self._store[self._key] = np.asarray(value)
-
-    class _Group:
-        def __init__(self):
-            self.values = {}
-
-        def createVariable(self, name, _dtype, _dims=()):
-            return _Var(self.values, name)
-
     grid = SimpleNamespace(
         z=np.asarray([-1.0, 0.0, 1.0], dtype=np.float32),
         kx=np.asarray([-0.2, 0.0, 0.2], dtype=np.float32),
         ky=np.asarray([0.0, 0.3, -0.3], dtype=np.float32),
     )
+    profiles = {
+        "bmag": [1.0, 1.1, 1.2],
+        "bgrad": [0.1, 0.2, 0.3],
+        "gb": [0.4, 0.5, 0.6],
+        "gb0": [0.7, 0.8, 0.9],
+        "cv": [1.0, 1.1, 1.2],
+        "cv0": [1.3, 1.4, 1.5],
+        "gds2": [1.6, 1.7, 1.8],
+        "gds21": [1.9, 2.0, 2.1],
+        "gds22": [2.2, 2.3, 2.4],
+        "grho": [0.9, 1.0, 1.1],
+        "jacobian": [1.0, 1.5, 2.0],
+    }
     geom = SimpleNamespace(
-        bmag_profile=np.asarray([1.0, 1.1, 1.2], dtype=np.float32),
-        bgrad_profile=np.asarray([0.1, 0.2, 0.3], dtype=np.float32),
-        gb_profile=np.asarray([0.4, 0.5, 0.6], dtype=np.float32),
-        gb0_profile=np.asarray([0.7, 0.8, 0.9], dtype=np.float32),
-        cv_profile=np.asarray([1.0, 1.1, 1.2], dtype=np.float32),
-        cv0_profile=np.asarray([1.3, 1.4, 1.5], dtype=np.float32),
-        gds2_profile=np.asarray([1.6, 1.7, 1.8], dtype=np.float32),
-        gds21_profile=np.asarray([1.9, 2.0, 2.1], dtype=np.float32),
-        gds22_profile=np.asarray([2.2, 2.3, 2.4], dtype=np.float32),
-        grho_profile=np.asarray([0.9, 1.0, 1.1], dtype=np.float32),
-        jacobian_profile=np.asarray([1.0, 1.5, 2.0], dtype=np.float32),
+        **{
+            f"{k}_profile": np.asarray(v, dtype=np.float32) for k, v in profiles.items()
+        },
         gradpar_value=0.75,
         q=1.4,
         s_hat=0.6,
@@ -1032,85 +903,63 @@ def test_runtime_artifact_geometry_and_input_group_writers(
         ),
         physics=SimpleNamespace(beta=0.02),
     )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.apply_geometry_grid_defaults",
-        lambda _geom, grid_cfg: grid_cfg,
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.build_spectral_grid", lambda _cfg: grid
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.build_runtime_geometry",
-        lambda _cfg: object(),
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.ensure_flux_tube_geometry_data",
-        lambda _geom, _theta: geom,
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.real_fft_ordered_kx",
-        lambda arr: np.asarray([-0.2, 0.0, 0.2], dtype=np.float32),
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf._half_ky_values_of",
-        lambda _grid: np.asarray([0.0, 0.3], dtype=np.float32),
+    _patch(
+        monkeypatch,
+        nonlinear_netcdf,
+        apply_geometry_grid_defaults=lambda _geom, grid_cfg: grid_cfg,
+        build_spectral_grid=lambda _cfg: grid,
+        build_runtime_geometry=lambda _cfg: object(),
+        ensure_flux_tube_geometry_data=lambda _geom, _theta: geom,
+        real_fft_ordered_kx=lambda arr: np.asarray([-0.2, 0.0, 0.2], dtype=np.float32),
+        _half_ky_values_of=lambda _grid: np.asarray([0.0, 0.3], dtype=np.float32),
     )
 
-    geom_group = _Group()
+    geom_group = _FakeGroup()
     theta, kx_vals, ky_vals, geom_out = _write_geometry_group(geom_group, cfg)
     np.testing.assert_allclose(theta, grid.z)
     np.testing.assert_allclose(kx_vals, np.asarray([-0.2, 0.0, 0.2], dtype=np.float32))
     np.testing.assert_allclose(ky_vals, np.asarray([0.0, 0.3], dtype=np.float32))
     assert geom_out is geom
-    np.testing.assert_allclose(geom_group.values["bmag"], geom.bmag_profile)
-    assert float(geom_group.values["gradpar"]) == pytest.approx(0.75)
-    assert int(geom_group.values["nfp"]) == 5
+    np.testing.assert_allclose(geom_group["bmag"], geom.bmag_profile)
+    assert float(geom_group["gradpar"]) == pytest.approx(0.75)
+    assert int(geom_group["nfp"]) == 5
 
-    inputs_group = _Group()
-    _write_input_parameters_group(inputs_group, cfg, geom)
-    assert int(inputs_group.values["igeo"]) == 0
-    assert int(inputs_group.values["slab"]) == 0
-    assert float(inputs_group.values["kxfac"]) == pytest.approx(1.1)
-    assert float(inputs_group.values["beta"]) == pytest.approx(0.02)
-    assert int(inputs_group.values["zero_shat"]) == 0
-    assert float(inputs_group.values["grhoavg"]) == pytest.approx(
-        np.mean(geom.grho_profile)
-    )
+    inputs = _FakeGroup()
+    _write_input_parameters_group(inputs, cfg, geom)
+    for name, value in (("igeo", 0), ("slab", 0), ("zero_shat", 0)):
+        assert int(inputs[name]) == value
+    assert float(inputs["kxfac"]) == pytest.approx(1.1)
+    assert float(inputs["beta"]) == pytest.approx(0.02)
+    assert float(inputs["grhoavg"]) == pytest.approx(np.mean(geom.grho_profile))
 
 
 def test_runtime_artifact_geometry_writer_applies_imported_grid_defaults(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class _Var:
-        def __init__(self, store, key):
-            self._store = store
-            self._key = key
-
-        def __setitem__(self, _idx, value):
-            self._store[self._key] = np.asarray(value)
-
-    class _Group:
-        def __init__(self):
-            self.values = {}
-
-        def createVariable(self, name, _dtype, _dims=()):
-            return _Var(self.values, name)
-
     theta_closed = np.linspace(-1.0, 1.0, 5, dtype=np.float64)
+    ramps = {
+        "bmag": (1.0, 1.4),
+        "bgrad": (0.1, 0.5),
+        "gds2": (2.0, 2.4),
+        "gds21": (-0.2, 0.2),
+        "gds22": (0.7, 0.9),
+        "cv": (0.3, 0.7),
+        "gb": (0.4, 0.8),
+        "cv0": (-0.1, 0.1),
+        "gb0": (-0.2, 0.2),
+        "jacobian": (3.0, 3.4),
+        "grho": (1.0, 1.2),
+        "cylindrical_R": (5.0, 6.0),
+        "cylindrical_Z": (-0.5, 0.5),
+        "toroidal_angle": (-1.0, 1.0),
+    }
     geom = FluxTubeGeometryData(
         theta=theta_closed,
         gradpar_value=0.5,
-        bmag_profile=np.linspace(1.0, 1.4, theta_closed.size),
-        bgrad_profile=np.linspace(0.1, 0.5, theta_closed.size),
-        gds2_profile=np.linspace(2.0, 2.4, theta_closed.size),
-        gds21_profile=np.linspace(-0.2, 0.2, theta_closed.size),
-        gds22_profile=np.linspace(0.7, 0.9, theta_closed.size),
-        cv_profile=np.linspace(0.3, 0.7, theta_closed.size),
-        gb_profile=np.linspace(0.4, 0.8, theta_closed.size),
-        cv0_profile=np.linspace(-0.1, 0.1, theta_closed.size),
-        gb0_profile=np.linspace(-0.2, 0.2, theta_closed.size),
-        jacobian_profile=np.linspace(3.0, 3.4, theta_closed.size),
-        grho_profile=np.linspace(1.0, 1.2, theta_closed.size),
+        **{
+            f"{k}_profile": np.linspace(a, b, theta_closed.size)
+            for k, (a, b) in ramps.items()
+        },
         q=1.6,
         s_hat=0.0,
         epsilon=0.12,
@@ -1119,39 +968,30 @@ def test_runtime_artifact_geometry_writer_applies_imported_grid_defaults(
         nfp=5,
         theta_closed_interval=True,
         source_model="imported-netcdf",
-        cylindrical_R_profile=np.linspace(5.0, 6.0, theta_closed.size),
-        cylindrical_Z_profile=np.linspace(-0.5, 0.5, theta_closed.size),
-        toroidal_angle_profile=np.linspace(-1.0, 1.0, theta_closed.size),
     )
     cfg = SimpleNamespace(
         grid=GridConfig(Nx=4, Ny=4, Nz=17, Lx=6.28, Ly=6.28, boundary="periodic"),
         geometry=SimpleNamespace(model="vmec", shift=0.0),
         physics=SimpleNamespace(beta=0.0),
     )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.build_runtime_geometry",
-        lambda _cfg: geom,
-    )
+    monkeypatch.setattr(nonlinear_netcdf, "build_runtime_geometry", lambda _cfg: geom)
 
-    group = _Group()
+    group = _FakeGroup()
     theta, _kx, _ky, geom_out = _write_geometry_group(group, cfg)
 
     assert theta.shape == (theta_closed.size - 1,)
     np.testing.assert_allclose(theta, theta_closed[:-1].astype(np.float32))
     np.testing.assert_allclose(
-        group.values["bmag"], np.asarray(geom.bmag_profile[:-1], dtype=np.float32)
+        group["bmag"], np.asarray(geom.bmag_profile[:-1], dtype=np.float32)
     )
     assert geom_out.theta_closed_interval is False
-    np.testing.assert_allclose(group.values["Rplot"], geom.cylindrical_R_profile[:-1])
-    np.testing.assert_allclose(
-        group.values["zeta_plot"], geom.toroidal_angle_profile[:-1]
-    )
-    assert float(group.values["kxfac"]) == pytest.approx(1.25)
+    np.testing.assert_allclose(group["Rplot"], geom.cylindrical_R_profile[:-1])
+    np.testing.assert_allclose(group["zeta_plot"], geom.toroidal_angle_profile[:-1])
+    assert float(group["kxfac"]) == pytest.approx(1.25)
 
 
 def test_runtime_artifact_particle_moments(monkeypatch) -> None:
     state = np.ones((1, 2, 3, 2, 4, 3), dtype=np.complex64)
-    cfg = SimpleNamespace(grid=SimpleNamespace())
     grid = SimpleNamespace(z=np.asarray([-1.0, 0.0, 1.0], dtype=np.float32))
     geom = object()
     cache = SimpleNamespace(
@@ -1159,98 +999,54 @@ def test_runtime_artifact_particle_moments(monkeypatch) -> None:
         JlB=np.ones((1, 2, 2, 4, 3), dtype=np.float32),
         kperp2=np.ones((2, 4, 3), dtype=np.float32),
     )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.apply_geometry_grid_defaults",
-        lambda _geom, grid_cfg: grid_cfg,
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.build_spectral_grid", lambda _grid: grid
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.build_runtime_geometry",
-        lambda _cfg: geom,
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.ensure_flux_tube_geometry_data",
-        lambda _geom, _theta: geom,
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.build_runtime_linear_params",
-        lambda _cfg, **_kwargs: object(),
-    )
-    monkeypatch.setattr(
-        "gkx.artifacts.nonlinear_netcdf.build_linear_cache",
-        lambda *_args, **_kwargs: cache,
+    _patch(
+        monkeypatch,
+        nonlinear_netcdf,
+        apply_geometry_grid_defaults=lambda _geom, grid_cfg: grid_cfg,
+        build_spectral_grid=lambda _grid: grid,
+        build_runtime_geometry=lambda _cfg: geom,
+        ensure_flux_tube_geometry_data=lambda _geom, _theta: geom,
+        build_runtime_linear_params=lambda _cfg, **_kwargs: object(),
+        build_linear_cache=lambda *_args, **_kwargs: cache,
     )
 
-    moments = _particle_moments(state, cfg)
-    np.testing.assert_allclose(moments["ParticleDensity"], np.full((1, 2, 4, 3), 2.0))
-    np.testing.assert_allclose(moments["ParticleUpar"], np.full((1, 2, 4, 3), 2.0))
-    np.testing.assert_allclose(moments["ParticleUperp"], np.full((1, 2, 4, 3), 2.0))
+    moments = _particle_moments(state, SimpleNamespace(grid=SimpleNamespace()))
+    for name in ("ParticleDensity", "ParticleUpar", "ParticleUperp"):
+        np.testing.assert_allclose(moments[name], np.full((1, 2, 4, 3), 2.0))
     np.testing.assert_allclose(
         moments["ParticleTemp"], np.full((1, 2, 4, 3), 2.0 * np.sqrt(2.0))
     )
 
 
-def test_write_runtime_nonlinear_artifacts_preserves_csv_target(tmp_path: Path) -> None:
-    diag = SimulationDiagnostics(
-        t=np.asarray([0.1, 0.2]),
-        dt_t=np.asarray([0.1, 0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.asarray([0.01, 0.02]),
-        omega_t=np.asarray([0.03, 0.04]),
-        Wg_t=np.asarray([1.0, 1.1]),
-        Wphi_t=np.asarray([2.0, 2.1]),
-        Wapar_t=np.asarray([0.5, 0.6]),
-        heat_flux_t=np.asarray([3.0, 3.1]),
-        particle_flux_t=np.asarray([4.0, 4.1]),
-        energy_t=np.asarray([3.5, 3.8]),
-        heat_flux_species_t=np.asarray([[3.0], [3.1]]),
-        particle_flux_species_t=np.asarray([[4.0], [4.1]]),
-        phi_mode_t=None,
-    )
-    result = RuntimeNonlinearResult(
-        t=np.asarray([0.1, 0.2]),
-        diagnostics=diag,
-        state=np.zeros((2, 2), dtype=np.complex64),
-        ky_selected=0.2,
-        kx_selected=0.0,
-    )
-
-    csv_path = tmp_path / "diag.csv"
-    paths = write_runtime_nonlinear_artifacts(csv_path, result)
-
-    assert paths["diagnostics"] == str(csv_path)
-    header = csv_path.read_text(encoding="utf-8").splitlines()[0]
-    assert "heat_flux_s0" in header
-    assert "particle_flux_s0" in header
-    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
-    assert summary["kind"] == "nonlinear"
-    assert summary["n_samples"] == 2
-    assert Path(paths["state"]).exists()
-
-
-def test_write_runtime_nonlinear_artifacts_handles_scalar_result_and_1d_species(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("species_extra", "expected_columns", "target"),
+    [
+        pytest.param(
+            dict(
+                heat_flux_species_t=[[3.0], [3.1]],
+                particle_flux_species_t=[[4.0], [4.1]],
+            ),
+            ("heat_flux_s0", "particle_flux_s0"),
+            "diag.csv",
+            id="2d-species",
+        ),
+        pytest.param(
+            dict(
+                heat_flux_species_t=[3.0, 3.1],
+                particle_flux_species_t=[4.0, 4.1],
+                turbulent_heating_t=[5.0, 5.1],
+                turbulent_heating_species_t=[5.0, 5.1],
+            ),
+            ("heat_flux_s0", "particle_flux_s0", "turbulent_heating_s0"),
+            "diag1d",
+            id="1d-species",
+        ),
+    ],
+)
+def test_write_runtime_nonlinear_artifacts_writes_csv_target(
+    tmp_path: Path, species_extra: dict, expected_columns: tuple, target: str
 ) -> None:
-    diag = SimulationDiagnostics(
-        t=np.asarray([0.1, 0.2]),
-        dt_t=np.asarray([0.1, 0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.asarray([0.01, 0.02]),
-        omega_t=np.asarray([0.03, 0.04]),
-        Wg_t=np.asarray([1.0, 1.1]),
-        Wphi_t=np.asarray([2.0, 2.1]),
-        Wapar_t=np.asarray([0.5, 0.6]),
-        heat_flux_t=np.asarray([3.0, 3.1]),
-        particle_flux_t=np.asarray([4.0, 4.1]),
-        energy_t=np.asarray([3.5, 3.8]),
-        heat_flux_species_t=np.asarray([3.0, 3.1]),
-        particle_flux_species_t=np.asarray([4.0, 4.1]),
-        turbulent_heating_t=np.asarray([5.0, 5.1]),
-        turbulent_heating_species_t=np.asarray([5.0, 5.1]),
-        phi_mode_t=None,
-    )
+    diag = _diag(**_TRACE, **species_extra, phi_mode_t=None)
     result = RuntimeNonlinearResult(
         t=np.asarray([0.1, 0.2]),
         diagnostics=diag,
@@ -1260,12 +1056,23 @@ def test_write_runtime_nonlinear_artifacts_handles_scalar_result_and_1d_species(
         phi2=7.0,
     )
 
-    paths = write_runtime_nonlinear_artifacts(tmp_path / "diag1d", result)
-    header = Path(paths["diagnostics"]).read_text(encoding="utf-8").splitlines()[0]
-    assert "heat_flux_s0" in header
-    assert "particle_flux_s0" in header
-    assert "turbulent_heating_s0" in header
+    paths = write_runtime_nonlinear_artifacts(tmp_path / target, result)
 
+    csv_path = Path(paths["diagnostics"])
+    if target.endswith(".csv"):
+        assert csv_path == tmp_path / target
+    header = csv_path.read_text(encoding="utf-8").splitlines()[0]
+    for column in expected_columns:
+        assert column in header
+    summary = _summary(paths)
+    assert summary["kind"] == "nonlinear"
+    assert summary["n_samples"] == 2
+    assert Path(paths["state"]).exists()
+
+
+def test_write_runtime_nonlinear_artifacts_handles_scalar_only_result(
+    tmp_path: Path,
+) -> None:
     result_no_diag = RuntimeNonlinearResult(
         t=np.asarray([0.1]),
         diagnostics=None,
@@ -1273,106 +1080,39 @@ def test_write_runtime_nonlinear_artifacts_handles_scalar_result_and_1d_species(
         ky_selected=0.2,
         kx_selected=0.0,
     )
-    paths_no_diag = write_runtime_nonlinear_artifacts(
-        tmp_path / "scalar_only", result_no_diag
-    )
-    summary = json.loads(Path(paths_no_diag["summary"]).read_text(encoding="utf-8"))
-    assert summary["phi2_last"] == 7.0
+    paths = write_runtime_nonlinear_artifacts(tmp_path / "scalar_only", result_no_diag)
+    assert _summary(paths)["phi2_last"] == 7.0
 
 
 def test_write_runtime_nonlinear_artifacts_writes_nonlinear_netcdf_bundle(
     tmp_path: Path,
 ) -> None:
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
+    Dataset = pytest.importorskip("netCDF4").Dataset
 
-    diag = SimulationDiagnostics(
-        t=np.asarray([0.0, 0.1], dtype=float),
-        dt_t=np.asarray([0.05, 0.05], dtype=float),
+    diag = _diag(
+        t=[0.0, 0.1],
+        dt_t=[0.05, 0.05],
         dt_mean=np.asarray(0.05),
-        gamma_t=np.asarray([0.0, 0.0], dtype=float),
-        omega_t=np.asarray([0.0, 0.0], dtype=float),
-        Wg_t=np.asarray([1.0, 1.1], dtype=float),
-        Wphi_t=np.asarray([2.0, 2.1], dtype=float),
-        Wapar_t=np.asarray([0.0, 0.0], dtype=float),
-        heat_flux_t=np.asarray([3.0, 3.1], dtype=float),
-        particle_flux_t=np.asarray([4.0, 4.1], dtype=float),
-        energy_t=np.asarray([3.0, 3.2], dtype=float),
-        heat_flux_species_t=np.asarray([[3.0], [3.1]], dtype=float),
-        particle_flux_species_t=np.asarray([[4.0], [4.1]], dtype=float),
-        turbulent_heating_t=np.asarray([8.0, 8.1], dtype=float),
-        turbulent_heating_species_t=np.asarray([[8.0], [8.1]], dtype=float),
+        Wg_t=[1.0, 1.1],
+        Wphi_t=[2.0, 2.1],
+        heat_flux_t=[3.0, 3.1],
+        particle_flux_t=[4.0, 4.1],
+        energy_t=[3.0, 3.2],
+        heat_flux_species_t=[[3.0], [3.1]],
+        particle_flux_species_t=[[4.0], [4.1]],
+        turbulent_heating_t=[8.0, 8.1],
+        turbulent_heating_species_t=[[8.0], [8.1]],
         phi_mode_t=None,
-        resolved=ResolvedDiagnostics(
-            Phi2_kxt=np.ones((2, 8), dtype=float),
-            Phi2_kyt=np.ones((2, 8), dtype=float),
-            Phi2_kxkyt=np.ones((2, 8, 8), dtype=float),
-            Phi2_zt=np.ones((2, 6), dtype=float),
-            Phi2_zonal_t=np.ones((2,), dtype=float),
-            Phi2_zonal_kxt=np.ones((2, 8), dtype=float),
-            Phi2_zonal_zt=np.ones((2, 6), dtype=float),
-            Wg_kxst=np.ones((2, 1, 8), dtype=float),
-            Wg_kyst=np.ones((2, 1, 8), dtype=float),
-            Wg_kxkyst=np.ones((2, 1, 8, 8), dtype=float),
-            Wg_zst=np.ones((2, 1, 6), dtype=float),
-            Wg_lmst=np.ones((2, 1, 8, 4), dtype=float),
-            Wphi_kxst=np.ones((2, 1, 8), dtype=float),
-            Wphi_kyst=np.ones((2, 1, 8), dtype=float),
-            Wphi_kxkyst=np.ones((2, 1, 8, 8), dtype=float),
-            Wphi_zst=np.ones((2, 1, 6), dtype=float),
-            Wapar_kxst=np.zeros((2, 1, 8), dtype=float),
-            Wapar_kyst=np.zeros((2, 1, 8), dtype=float),
-            Wapar_kxkyst=np.zeros((2, 1, 8, 8), dtype=float),
-            Wapar_zst=np.zeros((2, 1, 6), dtype=float),
-            HeatFlux_kxst=np.ones((2, 1, 8), dtype=float),
-            HeatFlux_kyst=np.ones((2, 1, 8), dtype=float),
-            HeatFlux_kxkyst=np.ones((2, 1, 8, 8), dtype=float),
-            HeatFlux_zst=np.ones((2, 1, 6), dtype=float),
-            HeatFluxES_kxst=np.full((2, 1, 8), 2.0, dtype=float),
-            HeatFluxES_kyst=np.full((2, 1, 8), 2.0, dtype=float),
-            HeatFluxES_kxkyst=np.full((2, 1, 8, 8), 2.0, dtype=float),
-            HeatFluxES_zst=np.full((2, 1, 6), 2.0, dtype=float),
-            HeatFluxApar_kxst=np.full((2, 1, 8), 3.0, dtype=float),
-            HeatFluxApar_kyst=np.full((2, 1, 8), 3.0, dtype=float),
-            HeatFluxApar_kxkyst=np.full((2, 1, 8, 8), 3.0, dtype=float),
-            HeatFluxApar_zst=np.full((2, 1, 6), 3.0, dtype=float),
-            HeatFluxBpar_kxst=np.full((2, 1, 8), 4.0, dtype=float),
-            HeatFluxBpar_kyst=np.full((2, 1, 8), 4.0, dtype=float),
-            HeatFluxBpar_kxkyst=np.full((2, 1, 8, 8), 4.0, dtype=float),
-            HeatFluxBpar_zst=np.full((2, 1, 6), 4.0, dtype=float),
-            ParticleFlux_kxst=np.ones((2, 1, 8), dtype=float),
-            ParticleFlux_kyst=np.ones((2, 1, 8), dtype=float),
-            ParticleFlux_kxkyst=np.ones((2, 1, 8, 8), dtype=float),
-            ParticleFlux_zst=np.ones((2, 1, 6), dtype=float),
-            ParticleFluxES_kxst=np.full((2, 1, 8), 5.0, dtype=float),
-            ParticleFluxES_kyst=np.full((2, 1, 8), 5.0, dtype=float),
-            ParticleFluxES_kxkyst=np.full((2, 1, 8, 8), 5.0, dtype=float),
-            ParticleFluxES_zst=np.full((2, 1, 6), 5.0, dtype=float),
-            ParticleFluxApar_kxst=np.full((2, 1, 8), 6.0, dtype=float),
-            ParticleFluxApar_kyst=np.full((2, 1, 8), 6.0, dtype=float),
-            ParticleFluxApar_kxkyst=np.full((2, 1, 8, 8), 6.0, dtype=float),
-            ParticleFluxApar_zst=np.full((2, 1, 6), 6.0, dtype=float),
-            ParticleFluxBpar_kxst=np.full((2, 1, 8), 7.0, dtype=float),
-            ParticleFluxBpar_kyst=np.full((2, 1, 8), 7.0, dtype=float),
-            ParticleFluxBpar_kxkyst=np.full((2, 1, 8, 8), 7.0, dtype=float),
-            ParticleFluxBpar_zst=np.full((2, 1, 6), 7.0, dtype=float),
-            TurbulentHeating_kxst=np.full((2, 1, 8), 8.0, dtype=float),
-            TurbulentHeating_kyst=np.full((2, 1, 8), 8.0, dtype=float),
-            TurbulentHeating_kxkyst=np.full((2, 1, 8, 8), 8.0, dtype=float),
-            TurbulentHeating_zst=np.full((2, 1, 6), 8.0, dtype=float),
-        ),
+        resolved=_resolved_bundle(),
     )
-    state = np.zeros((1, 4, 8, 8, 8, 6), dtype=np.complex64)
-    fields = type(
-        "Fields",
-        (),
-        {"phi": np.zeros((8, 8, 6), dtype=np.complex64), "apar": None, "bpar": None},
-    )()
+    fields_ = SimpleNamespace(
+        phi=np.zeros((8, 8, 6), dtype=np.complex64), apar=None, bpar=None
+    )
     result = RuntimeNonlinearResult(
         t=np.asarray([0.0, 0.1]),
         diagnostics=diag,
-        fields=fields,
-        state=state,
+        fields=fields_,
+        state=np.zeros((1, 4, 8, 8, 8, 6), dtype=np.complex64),
         ky_selected=0.2,
         kx_selected=0.0,
     )
@@ -1388,63 +1128,49 @@ def test_write_runtime_nonlinear_artifacts_writes_nonlinear_netcdf_bundle(
 
     paths = write_runtime_nonlinear_artifacts(tmp_path / "probe.out.nc", result, cfg)
 
-    assert Path(paths["out"]).exists()
-    assert Path(paths["restart"]).exists()
-    assert Path(paths["big"]).exists()
+    for key in ("out", "restart", "big"):
+        assert Path(paths[key]).exists()
 
     with Dataset(paths["out"], "r") as root:
         assert root.getncattr("schema_version") == 1
         assert set(root.groups) == {"Diagnostics", "Geometry", "Grids", "Inputs"}
-        assert int(root.variables["ny"][()]) == 8
-        assert int(root.variables["nx"][()]) == 8
-        assert int(root.variables["ntheta"][()]) == 6
-        assert int(root.variables["nhermite"][()]) == 8
-        assert int(root.variables["nlaguerre"][()]) == 4
-        assert int(root.variables["nspecies"][()]) == 1
+        for name, value in (
+            ("ny", 8),
+            ("nx", 8),
+            ("ntheta", 6),
+            ("nhermite", 8),
+            ("nlaguerre", 4),
+            ("nspecies", 1),
+        ):
+            assert int(root.variables[name][()]) == value
         assert root.variables["code_info"].getncattr("value") == "gkx"
         assert root.dimensions["kx"].size == 5
         assert root.dimensions["ky"].size == 3
-        assert "Phi2_t" in root.groups["Diagnostics"].variables
-        assert "Phi2_kxt" in root.groups["Diagnostics"].variables
+        variables = root.groups["Diagnostics"].variables
+        for name in (
+            "Phi2_t",
+            "Phi2_kxt",
+            "Wg_st",
+            "Wg_kyst",
+            "Wg_lmst",
+            "HeatFlux_st",
+            "ParticleFluxBpar_kxkyst",
+            "TurbulentHeating_kxkyst",
+        ):
+            assert name in variables
         # Phi2_t weights the two paired rows (ky > 0) by 2: 5 * (1 + 2 + 2);
         # Phi2_kxt is the in-memory kx reduction, condensed.
-        np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["Phi2_t"][:], np.full(2, 25.0)
-        )
-        np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["Phi2_kxt"][:],
-            np.full((2, 5), 1.0),
-        )
-        np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["Phi2_kyt"][:],
-            np.full((2, 3), 5.0),
-        )
-        np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["Phi2_kxkyt"][:],
-            np.ones((2, 3, 5)),
-        )
-        assert "Wg_st" in root.groups["Diagnostics"].variables
-        assert "Wg_kyst" in root.groups["Diagnostics"].variables
-        assert "Wg_lmst" in root.groups["Diagnostics"].variables
-        assert "HeatFlux_st" in root.groups["Diagnostics"].variables
-        np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["HeatFluxES_st"][:],
-            np.full((2, 1), 16.0),
-        )
-        np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["HeatFluxApar_st"][:],
-            np.full((2, 1), 24.0),
-        )
-        np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["HeatFluxBpar_st"][:],
-            np.full((2, 1), 32.0),
-        )
-        np.testing.assert_allclose(
-            root.groups["Diagnostics"].variables["TurbulentHeating_st"][:],
-            np.full((2, 1), 64.0),
-        )
-        assert "ParticleFluxBpar_kxkyst" in root.groups["Diagnostics"].variables
-        assert "TurbulentHeating_kxkyst" in root.groups["Diagnostics"].variables
+        for name, expected in (
+            ("Phi2_t", np.full(2, 25.0)),
+            ("Phi2_kxt", np.full((2, 5), 1.0)),
+            ("Phi2_kyt", np.full((2, 3), 5.0)),
+            ("Phi2_kxkyt", np.ones((2, 3, 5))),
+            ("HeatFluxES_st", np.full((2, 1), 16.0)),
+            ("HeatFluxApar_st", np.full((2, 1), 24.0)),
+            ("HeatFluxBpar_st", np.full((2, 1), 32.0)),
+            ("TurbulentHeating_st", np.full((2, 1), 64.0)),
+        ):
+            np.testing.assert_allclose(variables[name][:], expected)
 
     with Dataset(paths["restart"], "r") as root:
         assert root.getncattr("schema_version") == 1
@@ -1456,21 +1182,20 @@ def test_write_runtime_nonlinear_artifacts_writes_nonlinear_netcdf_bundle(
     with Dataset(paths["big"], "r") as root:
         assert root.getncattr("schema_version") == 1
         assert root.variables["code_info"].getncattr("value") == "gkx"
-        assert "Phi" in root.groups["Diagnostics"].variables
-        assert "PhiXY" in root.groups["Diagnostics"].variables
-        assert "Density" in root.groups["Diagnostics"].variables
-        assert "Upar" in root.groups["Diagnostics"].variables
-        assert "Tpar" in root.groups["Diagnostics"].variables
-        assert "Tperp" in root.groups["Diagnostics"].variables
-        assert "ParticleDensity" in root.groups["Diagnostics"].variables
+        for name in (
+            "Phi",
+            "PhiXY",
+            "Density",
+            "Upar",
+            "Tpar",
+            "Tperp",
+            "ParticleDensity",
+        ):
+            assert name in root.groups["Diagnostics"].variables
 
     loaded = load_nonlinear_netcdf_diagnostics(paths["out"])
-    np.testing.assert_allclose(
-        np.asarray(loaded.Wg_t), np.asarray([1.0, 1.1], dtype=float)
-    )
-    np.testing.assert_allclose(
-        np.asarray(loaded.turbulent_heating_t), np.asarray([64.0, 64.0], dtype=float)
-    )
+    np.testing.assert_allclose(np.asarray(loaded.Wg_t), [1.0, 1.1])
+    np.testing.assert_allclose(np.asarray(loaded.turbulent_heating_t), [64.0, 64.0])
     assert loaded.resolved is not None
     assert loaded.resolved.HeatFluxApar_kxst is not None
     assert loaded.resolved.TurbulentHeating_kxst is not None
@@ -1519,42 +1244,16 @@ def test_run_runtime_nonlinear_with_artifacts_uses_restart_if_exists(
         ),
     )
 
-    diag = SimulationDiagnostics(
-        t=np.asarray([0.1]),
-        dt_t=np.asarray([0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.asarray([0.0]),
-        omega_t=np.asarray([0.0]),
-        Wg_t=np.asarray([1.0]),
-        Wphi_t=np.asarray([0.0]),
-        Wapar_t=np.asarray([0.0]),
-        heat_flux_t=np.asarray([0.0]),
-        particle_flux_t=np.asarray([0.0]),
-        energy_t=np.asarray([1.0]),
-    )
-
     def _fake_run_runtime_nonlinear(run_cfg, **kwargs):
-        calls.append(
-            {
-                "init_file": run_cfg.init.init_file,
-                "init_file_mode": run_cfg.init.init_file_mode,
-                "init_file_scale": run_cfg.init.init_file_scale,
-                "steps": kwargs.get("steps"),
-            }
-        )
+        init = run_cfg.init
+        calls.append((init.init_file, init.init_file_mode, init.init_file_scale))
         return RuntimeNonlinearResult(
             t=np.asarray([0.1]),
-            diagnostics=diag,
-            state=np.zeros((1, 1, 1, 1, 1, 1), dtype=np.complex64),
-            fields=type(
-                "Fields",
-                (),
-                {
-                    "phi": np.zeros((1, 1, 1), dtype=np.complex64),
-                    "apar": None,
-                    "bpar": None,
-                },
-            )(),
+            diagnostics=_diag(1, Wphi_t=[0.0], energy_t=[1.0]),
+            state=_STATE6,
+            fields=SimpleNamespace(
+                phi=np.zeros((1, 1, 1), dtype=np.complex64), apar=None, bpar=None
+            ),
             ky_selected=0.2,
             kx_selected=0.0,
         )
@@ -1563,31 +1262,21 @@ def test_run_runtime_nonlinear_with_artifacts_uses_restart_if_exists(
         restart_path.write_bytes(b"stub")
         return {"out": str(out_path), "restart": str(restart_path)}
 
-    patch_runtime(
-        monkeypatch,
-        "run_runtime_nonlinear",
-        _fake_run_runtime_nonlinear,
-    )
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", _fake_run_runtime_nonlinear)
     patch_runtime(
         monkeypatch,
         "write_runtime_nonlinear_artifacts",
         _fake_write_runtime_nonlinear_artifacts,
     )
 
-    _result, _paths = run_runtime_nonlinear_with_artifacts(
-        cfg,
-        out=out_path,
-        ky_target=0.2,
-        steps=2,
-        diagnostics=True,
+    run_runtime_nonlinear_with_artifacts(
+        cfg, out=out_path, ky_target=0.2, steps=2, diagnostics=True
     )
 
-    assert calls[0]["init_file"] == str(restart_path)
-    assert calls[0]["init_file_mode"] == "add"
-    assert calls[0]["init_file_scale"] == 0.25
-    assert calls[1]["init_file"] == str(restart_path)
-    assert calls[1]["init_file_mode"] == "replace"
-    assert calls[1]["init_file_scale"] == 1.0
+    assert calls[:2] == [
+        (str(restart_path), "add", 0.25),
+        (str(restart_path), "replace", 1.0),
+    ]
 
 
 def test_runtime_orchestration_handoff_chunks_and_restarts(
@@ -1607,21 +1296,6 @@ def test_runtime_orchestration_handoff_chunks_and_restarts(
         ),
     )
 
-    def _diag(sample_t: float) -> SimulationDiagnostics:
-        return SimulationDiagnostics(
-            t=np.asarray([sample_t]),
-            dt_t=np.asarray([0.1]),
-            dt_mean=np.asarray(0.1),
-            gamma_t=np.zeros(1),
-            omega_t=np.zeros(1),
-            Wg_t=np.ones(1),
-            Wphi_t=np.ones(1),
-            Wapar_t=np.zeros(1),
-            heat_flux_t=np.zeros(1),
-            particle_flux_t=np.zeros(1),
-            energy_t=np.ones(1),
-        )
-
     def _run(run_cfg, **kwargs):
         chunk_steps = int(kwargs["steps"])
         calls.append(
@@ -1635,8 +1309,8 @@ def test_runtime_orchestration_handoff_chunks_and_restarts(
         )
         return RuntimeNonlinearResult(
             t=np.asarray([0.1 * chunk_steps]),
-            diagnostics=_diag(0.1 * chunk_steps),
-            state=np.zeros((1, 1, 1, 1, 1, 1), dtype=np.complex64),
+            diagnostics=_diag(1, t=[0.1 * chunk_steps]),
+            state=_STATE6,
         )
 
     def _write(_out, result, _cfg):
@@ -1645,22 +1319,19 @@ def test_runtime_orchestration_handoff_chunks_and_restarts(
         restart_path.write_bytes(b"restart")
         return {"out": str(out_path), "restart": str(restart_path)}
 
-    for name, value in (
-        ("_resolve_restart_path", lambda _path, _cfg, *, for_write: restart_path),
-        ("load_nonlinear_netcdf_diagnostics", lambda _path: _diag(0.0)),
-        ("_condense_diagnostics_for_netcdf_output", lambda diag, **_kw: diag),
-        ("validate_finite_runtime_result", lambda _result, **_kw: None),
-        ("run_runtime_nonlinear", _run),
-        ("write_runtime_nonlinear_artifacts", _write),
-    ):
-        monkeypatch.setattr(runtime_artifacts, name, value)
+    _patch(
+        monkeypatch,
+        runtime_artifacts,
+        _resolve_restart_path=lambda _path, _cfg, *, for_write: restart_path,
+        load_nonlinear_netcdf_diagnostics=lambda _path: _diag(1, t=[0.0]),
+        _condense_diagnostics_for_netcdf_output=lambda diag, **_kw: diag,
+        validate_finite_runtime_result=lambda _result, **_kw: None,
+        run_runtime_nonlinear=_run,
+        write_runtime_nonlinear_artifacts=_write,
+    )
 
     result, paths = run_runtime_nonlinear_with_artifacts(
-        cfg,
-        out=out_path,
-        ky_target=0.2,
-        steps=12,
-        diagnostics=True,
+        cfg, out=out_path, ky_target=0.2, steps=12, diagnostics=True
     )
 
     assert result.diagnostics is not None
@@ -1685,34 +1356,16 @@ def test_run_runtime_nonlinear_with_artifacts_keeps_adaptive_steps_none(
             path=str(out_path), save_for_restart=True, nsave=10000
         ),
     )
-    diag = SimulationDiagnostics(
-        t=np.asarray([0.1, 0.2, 0.3]),
-        dt_t=np.asarray([0.1, 0.1, 0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.zeros(3),
-        omega_t=np.zeros(3),
-        Wg_t=np.ones(3),
-        Wphi_t=np.ones(3),
-        Wapar_t=np.zeros(3),
-        heat_flux_t=np.zeros(3),
-        particle_flux_t=np.zeros(3),
-        energy_t=2.0 * np.ones(3),
-    )
+    diag = _diag(3, energy_t=2.0 * np.ones(3))
     captured_steps: list[int | None] = []
 
     def _fake_run_runtime_nonlinear(_cfg, **kwargs):
         captured_steps.append(kwargs.get("steps"))
         return RuntimeNonlinearResult(
-            t=np.asarray(diag.t),
-            diagnostics=diag,
-            state=np.zeros((1, 1, 1, 1, 1, 1), dtype=np.complex64),
+            t=np.asarray(diag.t), diagnostics=diag, state=_STATE6
         )
 
-    patch_runtime(
-        monkeypatch,
-        "run_runtime_nonlinear",
-        _fake_run_runtime_nonlinear,
-    )
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", _fake_run_runtime_nonlinear)
     patch_runtime(
         monkeypatch,
         "write_runtime_nonlinear_artifacts",
@@ -1735,41 +1388,22 @@ def test_run_runtime_nonlinear_with_artifacts_forwards_live_output_options(
             path=str(tmp_path / "live.out.nc"), save_for_restart=False
         ),
     )
-    diag = SimulationDiagnostics(
-        t=np.asarray([0.1]),
-        dt_t=np.asarray([0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.asarray([0.0]),
-        omega_t=np.asarray([0.0]),
-        Wg_t=np.asarray([1.0]),
-        Wphi_t=np.asarray([2.0]),
-        Wapar_t=np.asarray([0.0]),
-        heat_flux_t=np.asarray([3.0]),
-        particle_flux_t=np.asarray([4.0]),
-        energy_t=np.asarray([3.0]),
+    diag = _diag(
+        1, Wphi_t=[2.0], heat_flux_t=[3.0], particle_flux_t=[4.0], energy_t=[3.0]
     )
     messages: list[str] = []
     captured: dict[str, object] = {}
 
     def _fake_run_runtime_nonlinear(_cfg, **kwargs):
         captured["show_progress"] = kwargs["show_progress"]
-        captured["status_callback"] = kwargs["status_callback"]
-        callback = kwargs["status_callback"]
+        callback = captured["status_callback"] = kwargs["status_callback"]
         assert callback is not None
         callback("live status propagated")
         return RuntimeNonlinearResult(
-            t=np.asarray(diag.t),
-            diagnostics=diag,
-            state=None,
-            ky_selected=0.2,
-            kx_selected=0.0,
+            t=np.asarray(diag.t), diagnostics=diag, ky_selected=0.2, kx_selected=0.0
         )
 
-    patch_runtime(
-        monkeypatch,
-        "run_runtime_nonlinear",
-        _fake_run_runtime_nonlinear,
-    )
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", _fake_run_runtime_nonlinear)
 
     result, paths = run_runtime_nonlinear_with_artifacts(
         cfg,
@@ -1794,43 +1428,21 @@ def test_run_runtime_nonlinear_with_artifacts_rejects_nonfinite_chunk(
         time=TimeConfig(dt=0.1, t_max=0.2, fixed_dt=True, diagnostics=True),
         output=RuntimeOutputConfig(path=str(out_path), save_for_restart=True, nsave=1),
     )
-    bad_diag = SimulationDiagnostics(
-        t=np.asarray([0.1]),
-        dt_t=np.asarray([0.1]),
-        dt_mean=np.asarray(0.1),
-        gamma_t=np.zeros(1),
-        omega_t=np.zeros(1),
-        Wg_t=np.asarray([np.nan]),
-        Wphi_t=np.ones(1),
-        Wapar_t=np.zeros(1),
-        heat_flux_t=np.zeros(1),
-        particle_flux_t=np.zeros(1),
-        energy_t=np.asarray([np.nan]),
-    )
+    bad_diag = _diag(1, Wg_t=[np.nan], energy_t=[np.nan])
     calls = {"run": 0, "write": 0}
 
     def _fake_run_runtime_nonlinear(_cfg, **_kwargs):
         calls["run"] += 1
         return RuntimeNonlinearResult(
-            t=np.asarray(bad_diag.t),
-            diagnostics=bad_diag,
-            state=np.zeros((1, 1, 1, 1, 1, 1), dtype=np.complex64),
+            t=np.asarray(bad_diag.t), diagnostics=bad_diag, state=_STATE6
         )
 
     def _fake_write(*_args, **_kwargs):
         calls["write"] += 1
         return {"out": str(out_path)}
 
-    patch_runtime(
-        monkeypatch,
-        "run_runtime_nonlinear",
-        _fake_run_runtime_nonlinear,
-    )
-    patch_runtime(
-        monkeypatch,
-        "write_runtime_nonlinear_artifacts",
-        _fake_write,
-    )
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", _fake_run_runtime_nonlinear)
+    patch_runtime(monkeypatch, "write_runtime_nonlinear_artifacts", _fake_write)
 
     with pytest.raises(
         RuntimeError, match=r"non-finite diagnostics in Wg_t at sample 0"
@@ -1845,24 +1457,13 @@ def test_run_runtime_nonlinear_with_artifacts_rejects_nonfinite_chunk(
 def test_write_runtime_nonlinear_artifacts_requires_cfg_and_diagnostics_for_netcdf_output_target(
     tmp_path: Path,
 ) -> None:
-    with pytest.raises(ValueError):
-        write_runtime_nonlinear_artifacts(
-            tmp_path / "case.out.nc",
-            RuntimeNonlinearResult(t=np.asarray([]), diagnostics=None),
-            cfg=None,
-        )
-
-    cfg = RuntimeConfig()
-    with pytest.raises(ValueError):
-        write_runtime_nonlinear_artifacts(
-            tmp_path / "case.out.nc",
-            RuntimeNonlinearResult(
-                t=np.asarray([]),
-                diagnostics=None,
-                state=np.zeros((1, 1), dtype=np.complex64),
-            ),
-            cfg=cfg,
-        )
+    for state, cfg in (
+        (None, None),
+        (np.zeros((1, 1), dtype=np.complex64), RuntimeConfig()),
+    ):
+        result = RuntimeNonlinearResult(t=np.asarray([]), diagnostics=None, state=state)
+        with pytest.raises(ValueError):
+            write_runtime_nonlinear_artifacts(tmp_path / "case.out.nc", result, cfg=cfg)
 
 
 def test_load_nonlinear_netcdf_diagnostics_fills_missing_turbulent_heating(
@@ -1897,8 +1498,7 @@ def test_run_runtime_nonlinear_with_artifacts_append_preserves_loaded_netcdf_sch
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
+    Dataset = pytest.importorskip("netCDF4").Dataset
     out = tmp_path / "append.out.nc"
     restart = tmp_path / "append.restart.nc"
     restart.write_bytes(b"restart")
@@ -1917,141 +1517,92 @@ def test_run_runtime_nonlinear_with_artifacts_append_preserves_loaded_netcdf_sch
     ky_idx = _dealiased_ky_indices(full_ny)
     kx_idx = _dealiased_kx_indices(full_nx)
 
-    def _diag(sample_t: float, base: float) -> SimulationDiagnostics:
-        phi2_kxkyt = base + np.arange(full_ny * full_nx, dtype=np.float32).reshape(
-            1, full_ny, full_nx
-        )
-        phi2_kxt = np.sum(phi2_kxkyt[:, ky_idx, :], axis=1)
-        phi2_kyt = np.sum(phi2_kxkyt[:, :, kx_idx], axis=2)
-        wg_kxst = base + np.arange(full_nx, dtype=np.float32).reshape(1, 1, full_nx)
-        wg_kyst = base + np.arange(full_ny, dtype=np.float32).reshape(1, 1, full_ny)
-        wg_kxkyst = base + np.arange(full_ny * full_nx, dtype=np.float32).reshape(
-            1, 1, full_ny, full_nx
-        )
-        return SimulationDiagnostics(
-            t=np.asarray([sample_t]),
-            dt_t=np.asarray([0.1]),
-            dt_mean=np.asarray(0.1),
-            gamma_t=np.asarray([0.0]),
-            omega_t=np.asarray([0.0]),
-            Wg_t=np.asarray([base + 1.0]),
-            Wphi_t=np.asarray([base + 2.0]),
-            Wapar_t=np.asarray([0.0]),
-            heat_flux_t=np.asarray([base + 3.0]),
-            particle_flux_t=np.asarray([base + 4.0]),
-            energy_t=np.asarray([base + 3.0]),
-            heat_flux_species_t=np.asarray([[base + 3.0]]),
-            particle_flux_species_t=np.asarray([[base + 4.0]]),
-            turbulent_heating_t=np.asarray([base + 5.0]),
-            turbulent_heating_species_t=np.asarray([[base + 5.0]]),
+    def _chunk(base: float) -> RuntimeNonlinearResult:
+        ramp = np.arange(full_ny * full_nx, dtype=np.float32)
+        phi2_kxkyt = base + ramp.reshape(1, full_ny, full_nx)
+        diag = _diag(
+            1,
+            Wg_t=[base + 1.0],
+            Wphi_t=[base + 2.0],
+            heat_flux_t=[base + 3.0],
+            particle_flux_t=[base + 4.0],
+            energy_t=[base + 3.0],
+            heat_flux_species_t=[[base + 3.0]],
+            particle_flux_species_t=[[base + 4.0]],
+            turbulent_heating_t=[base + 5.0],
+            turbulent_heating_species_t=[[base + 5.0]],
             phi_mode_t=np.asarray([base + 1.0j * base]),
             resolved=ResolvedDiagnostics(
-                Phi2_kxt=phi2_kxt,
-                Phi2_kyt=phi2_kyt,
+                Phi2_kxt=np.sum(phi2_kxkyt[:, ky_idx, :], axis=1),
+                Phi2_kyt=np.sum(phi2_kxkyt[:, :, kx_idx], axis=2),
                 Phi2_kxkyt=phi2_kxkyt,
                 Phi_zonal_line_kxt=(
                     base + np.arange(full_nx, dtype=np.float32)[None, :]
                 ).astype(np.complex64),
-                Wg_kxst=wg_kxst,
-                Wg_kyst=wg_kyst,
-                Wg_kxkyst=wg_kxkyst,
+                Wg_kxst=base
+                + np.arange(full_nx, dtype=np.float32).reshape(1, 1, full_nx),
+                Wg_kyst=base
+                + np.arange(full_ny, dtype=np.float32).reshape(1, 1, full_ny),
+                Wg_kxkyst=base + ramp.reshape(1, 1, full_ny, full_nx),
             ),
         )
+        return RuntimeNonlinearResult(
+            t=np.asarray([0.1]), diagnostics=diag, ky_selected=0.2, kx_selected=0.0
+        )
 
-    write_runtime_nonlinear_artifacts(
-        out,
-        RuntimeNonlinearResult(
-            t=np.asarray([0.1]),
-            diagnostics=_diag(0.1, 1.0),
-            state=None,
-            ky_selected=0.2,
-            kx_selected=0.0,
-        ),
-        cfg,
-    )
+    def _schema(root) -> dict:
+        variables = root.groups["Diagnostics"].variables
+        return {name: tuple(var.dimensions) for name, var in variables.items()}
+
+    write_runtime_nonlinear_artifacts(out, _chunk(1.0), cfg)
     with Dataset(out, "r") as root:
-        before_schema = {
-            name: tuple(var.dimensions)
-            for name, var in root.groups["Diagnostics"].variables.items()
-        }
+        before_schema = _schema(root)
         assert root.dimensions["time"].size == 1
     assert "Phi_zonal_line_kxt" in before_schema
     assert all("phi_mode" not in name.lower() for name in before_schema)
 
     def _fake_run_runtime_nonlinear(run_cfg, **_kwargs):
         assert run_cfg.init.init_file == str(restart)
-        return RuntimeNonlinearResult(
-            t=np.asarray([0.1]),
-            diagnostics=_diag(0.1, 20.0),
-            state=None,
-            ky_selected=0.2,
-            kx_selected=0.0,
-        )
+        return _chunk(20.0)
 
-    patch_runtime(
-        monkeypatch,
-        "run_runtime_nonlinear",
-        _fake_run_runtime_nonlinear,
-    )
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", _fake_run_runtime_nonlinear)
 
     result, paths = run_runtime_nonlinear_with_artifacts(
-        cfg,
-        out=out,
-        ky_target=0.2,
-        steps=1,
-        diagnostics=True,
+        cfg, out=out, ky_target=0.2, steps=1, diagnostics=True
     )
 
     assert result.diagnostics is not None
     assert result.diagnostics.phi_mode_t is None
     with Dataset(paths["out"], "r") as root:
-        after_schema = {
-            name: tuple(var.dimensions)
-            for name, var in root.groups["Diagnostics"].variables.items()
-        }
-        assert after_schema == before_schema
+        assert _schema(root) == before_schema
         assert root.dimensions["time"].size == 2
         np.testing.assert_allclose(
             root.groups["Grids"].variables["time"][:], np.asarray([0.1, 0.2])
         )
-        assert root.groups["Diagnostics"].variables["Phi_zonal_line_kxt"].shape == (
-            2,
-            int(kx_idx.size),
-            2,
-        )
+        line = root.groups["Diagnostics"].variables["Phi_zonal_line_kxt"]
+        assert line.shape == (2, int(kx_idx.size), 2)
 
 
 def test_run_runtime_nonlinear_with_artifacts_validation_branches(
     tmp_path: Path,
 ) -> None:
-    cfg = RuntimeConfig(
-        time=TimeConfig(dt=0.2, t_max=1.0, diagnostics=False, fixed_dt=True),
-        output=RuntimeOutputConfig(path=str(tmp_path / "case.out.nc"), restart=True),
-    )
-    with pytest.raises(ValueError):
-        run_runtime_nonlinear_with_artifacts(
-            cfg, out=tmp_path / "case.out.nc", ky_target=0.2, diagnostics=False
+    out = tmp_path / "case.out.nc"
+    for diagnostics, error in ((False, ValueError), (True, FileNotFoundError)):
+        cfg = RuntimeConfig(
+            time=TimeConfig(dt=0.2, t_max=1.0, diagnostics=diagnostics, fixed_dt=True),
+            output=RuntimeOutputConfig(path=str(out), restart=True),
         )
-
-    cfg_missing_restart = RuntimeConfig(
-        time=TimeConfig(dt=0.2, t_max=1.0, diagnostics=True, fixed_dt=True),
-        output=RuntimeOutputConfig(path=str(tmp_path / "case.out.nc"), restart=True),
-    )
-    with pytest.raises(FileNotFoundError):
-        run_runtime_nonlinear_with_artifacts(
-            cfg_missing_restart,
-            out=tmp_path / "case.out.nc",
-            ky_target=0.2,
-            diagnostics=True,
-        )
+        with pytest.raises(error):
+            run_runtime_nonlinear_with_artifacts(
+                cfg, out=out, ky_target=0.2, diagnostics=diagnostics
+            )
 
 
 def test_run_runtime_nonlinear_with_artifacts_history_and_restart_paths(
     monkeypatch, tmp_path: Path
 ) -> None:
     out = tmp_path / "case.out.nc"
-    restart_path = tmp_path / "case.restart.nc"
-    restart_path.write_bytes(b"restart")
+    (tmp_path / "case.restart.nc").write_bytes(b"restart")
     out.write_bytes(b"history")
 
     cfg = RuntimeConfig(
@@ -2065,63 +1616,36 @@ def test_run_runtime_nonlinear_with_artifacts_history_and_restart_paths(
             nsave=1,
         ),
     )
-    cumulative = SimulationDiagnostics(
-        t=np.asarray([0.5]),
-        dt_t=np.asarray([0.5]),
-        dt_mean=np.asarray(0.5),
-        gamma_t=np.asarray([0.0]),
-        omega_t=np.asarray([0.0]),
-        Wg_t=np.asarray([1.0]),
-        Wphi_t=np.asarray([2.0]),
-        Wapar_t=np.asarray([0.0]),
-        heat_flux_t=np.asarray([3.0]),
-        particle_flux_t=np.asarray([4.0]),
-        energy_t=np.asarray([3.0]),
-        resolved=ResolvedDiagnostics(Phi2_kxt=np.ones((1, 4), dtype=float)),
-    )
-    chunk_diag = SimulationDiagnostics(
-        t=np.asarray([0.5]),
-        dt_t=np.asarray([0.5]),
-        dt_mean=np.asarray(0.5),
-        gamma_t=np.asarray([0.0]),
-        omega_t=np.asarray([0.0]),
-        Wg_t=np.asarray([1.1]),
-        Wphi_t=np.asarray([2.1]),
-        Wapar_t=np.asarray([0.0]),
-        heat_flux_t=np.asarray([3.1]),
-        particle_flux_t=np.asarray([4.1]),
-        energy_t=np.asarray([3.2]),
-        resolved=ResolvedDiagnostics(Phi2_kxt=np.ones((1, 4), dtype=float)),
-    )
+
+    def _sample(offset: float) -> SimulationDiagnostics:
+        return _diag(
+            1,
+            t=[0.5],
+            dt_t=[0.5],
+            dt_mean=np.asarray(0.5),
+            Wg_t=[1.0 + offset],
+            Wphi_t=[2.0 + offset],
+            heat_flux_t=[3.0 + offset],
+            particle_flux_t=[4.0 + offset],
+            energy_t=[3.0 + 2 * offset],
+            resolved=ResolvedDiagnostics(Phi2_kxt=np.ones((1, 4), dtype=float)),
+        )
+
     result_chunk = RuntimeNonlinearResult(
-        t=np.asarray([0.5]),
-        diagnostics=chunk_diag,
-        state=np.zeros((1, 1, 1, 1, 1, 1), dtype=np.complex64),
+        t=np.asarray([0.5]), diagnostics=_sample(0.1), state=_STATE6
     )
     captured = {"writes": 0}
 
+    def _write(*_args, **_kwargs):
+        captured["writes"] += 1
+        return {"out": str(out)}
+
     patch_runtime(
-        monkeypatch,
-        "load_nonlinear_netcdf_diagnostics",
-        lambda _path: cumulative,
+        monkeypatch, "load_nonlinear_netcdf_diagnostics", lambda _path: _sample(0.0)
     )
-    patch_runtime(
-        monkeypatch,
-        "run_runtime_nonlinear",
-        lambda *_args, **_kwargs: result_chunk,
-    )
-    patch_runtime(
-        monkeypatch,
-        "concat_runtime_diagnostics",
-        lambda diags: diags[-1],
-    )
-    patch_runtime(
-        monkeypatch,
-        "write_runtime_nonlinear_artifacts",
-        lambda *_args, **_kwargs: (
-            captured.__setitem__("writes", captured["writes"] + 1) or {"out": str(out)}
-        ),
-    )
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", lambda *_a, **_k: result_chunk)
+    patch_runtime(monkeypatch, "concat_runtime_diagnostics", lambda diags: diags[-1])
+    patch_runtime(monkeypatch, "write_runtime_nonlinear_artifacts", _write)
 
     result, paths = run_runtime_nonlinear_with_artifacts(
         cfg, out=out, ky_target=0.2, diagnostics=True
@@ -2135,8 +1659,6 @@ def test_linear_summary_carries_fit_quality_fields(tmp_path: Path) -> None:
     """gamma/omega stderr and R^2 reach the summary, with None for eigensolves."""
 
     base = dict(
-        ky=0.2,
-        omega=-0.4,
         selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
         t=np.asarray([0.1, 0.2, 0.3]),
         signal=np.asarray([1.0, 2.0, 4.0]),
@@ -2144,20 +1666,18 @@ def test_linear_summary_carries_fit_quality_fields(tmp_path: Path) -> None:
         fit_window_tmax=0.3,
         fit_signal_used="phi",
     )
-    fitted = RuntimeLinearResult(
-        gamma=0.3, gamma_stderr=0.004, omega_stderr=0.007, fit_r2=0.999, **base
+    fitted = _linear_result(
+        gamma_stderr=0.004, omega_stderr=0.007, fit_r2=0.999, **base
     )
-    paths = write_runtime_linear_artifacts(tmp_path / "fitted", fitted)
-    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+    summary = _summary(write_runtime_linear_artifacts(tmp_path / "fitted", fitted))
     assert summary["gamma_stderr"] == pytest.approx(0.004)
     assert summary["omega_stderr"] == pytest.approx(0.007)
     assert summary["fit_r2"] == pytest.approx(0.999)
 
     # An eigensolve has no fit window statistics, and a degenerate fit reports
     # an infinite stderr; both must serialize as JSON null rather than NaN.
-    eigen = RuntimeLinearResult(gamma=0.3, gamma_stderr=float("inf"), **base)
-    paths = write_runtime_linear_artifacts(tmp_path / "eigen", eigen)
-    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+    eigen = _linear_result(gamma_stderr=float("inf"), **base)
+    summary = _summary(write_runtime_linear_artifacts(tmp_path / "eigen", eigen))
     assert summary["gamma_stderr"] is None
     assert summary["omega_stderr"] is None
     assert summary["fit_r2"] is None
@@ -2174,83 +1694,25 @@ def test_write_runtime_linear_scan_artifacts_records_warm_start(
         "warm_points": 1,
         "cold_points": 1,
     }
-    result = SimpleNamespace(
-        ky=np.asarray([0.3, 0.2]),
-        gamma=np.asarray([0.2, 0.1]),
-        omega=np.asarray([-0.5, -0.4]),
-        quasilinear=None,
-        parallel=None,
-        warm_start=warm,
-    )
 
-    paths = write_runtime_linear_scan_artifacts(tmp_path / "warm_bundle", result)
-    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+    def scan(n: int, warm_start):
+        return SimpleNamespace(
+            ky=np.asarray([0.3, 0.2][:n]),
+            gamma=np.asarray([0.2, 0.1][:n]),
+            omega=np.asarray([-0.5, -0.4][:n]),
+            quasilinear=None,
+            parallel=None,
+            warm_start=warm_start,
+        )
 
-    assert summary["warm_start"] == warm
+    paths = write_runtime_linear_scan_artifacts(tmp_path / "warm_bundle", scan(2, warm))
+    assert _summary(paths)["warm_start"] == warm
 
-    cold = SimpleNamespace(
-        ky=np.asarray([0.3]),
-        gamma=np.asarray([0.2]),
-        omega=np.asarray([-0.5]),
-        quasilinear=None,
-        parallel=None,
-        warm_start=None,
-    )
-    cold_paths = write_runtime_linear_scan_artifacts(tmp_path / "cold_bundle", cold)
-    cold_summary = json.loads(Path(cold_paths["summary"]).read_text(encoding="utf-8"))
-
-    assert "warm_start" not in cold_summary
+    cold = write_runtime_linear_scan_artifacts(tmp_path / "cold_bundle", scan(1, None))
+    assert "warm_start" not in _summary(cold)
 
 
 # ---- from test_runtime_diagnostics.py ----
-
-
-def test_diagnostics_refactor_preserves_runtime_import_identities() -> None:
-    assert (
-        diagnostics_module.ResolvedDiagnostics
-        is diagnostics_metadata.ResolvedDiagnostics
-    )
-    assert (
-        diagnostics_module.SimulationDiagnostics
-        is diagnostics_metadata.SimulationDiagnostics
-    )
-    assert (
-        diagnostics_module.SimulationDiagnostics
-        is diagnostics_metadata.SimulationDiagnostics
-    )
-    assert (
-        diagnostics_module.ResolvedDiagnostics
-        is diagnostics_metadata.ResolvedDiagnostics
-    )
-    assert (
-        diagnostics_module.fieldline_quadrature_weights
-        is diagnostics_moments.fieldline_quadrature_weights
-    )
-    assert (
-        diagnostics_module._hermitian_mode_weight
-        is diagnostics_moments._hermitian_mode_weight
-    )
-    assert (
-        diagnostics_module._cached_hermitian_mode_weight
-        is diagnostics_moments._cached_hermitian_mode_weight
-    )
-    assert (
-        diagnostics_module._transport_mode_weight
-        is diagnostics_moments._transport_mode_weight
-    )
-    assert diagnostics_module._jl_family is diagnostics_moments._jl_family
-    assert (
-        diagnostics_module._heat_flux_channel_contrib_species
-        is diagnostics_moments._heat_flux_channel_contrib_species
-    )
-    assert (
-        diagnostics_module._particle_flux_channel_contrib_species
-        is diagnostics_moments._particle_flux_channel_contrib_species
-    )
-    assert (
-        diagnostics_module._turbulent_heating_contrib_species
-        is diagnostics_moments._turbulent_heating_contrib_species
-    )
 
 
 def test_jl_family_accepts_four_dimensional_arrays_and_rejects_bad_ranks() -> None:
@@ -2494,25 +1956,45 @@ def _multispecies_setup(*, Nl: int = 3, Nm: int = 4):
         replace(cfg.grid, Nx=4, Ny=8, Nz=8, ntheta=None, nperiod=None)
     )
     geom = SAlphaGeometry.from_config(cfg.geometry)
+    common = dict(density=1.0, temperature=1.0, tprim=1.0, fprim=1.0)
     params = build_linear_params(
         [
-            Species(
-                charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=1.0, fprim=1.0
-            ),
-            Species(
-                charge=-1.0,
-                mass=0.00027,
-                density=1.0,
-                temperature=1.0,
-                tprim=1.0,
-                fprim=1.0,
-            ),
+            Species(charge=1.0, mass=1.0, **common),
+            Species(charge=-1.0, mass=0.00027, **common),
         ],
         kpar_scale=float(geom.gradpar()),
     )
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
     vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
     return cfg, grid, geom, params, cache, vol_fac, flux_fac
+
+
+def _ramp_state(grid, Nl: int, Nm: int, *, g_offset: float):
+    """Two-species ramp state ``G`` and a ramp ``phi`` on ``grid``."""
+
+    shape = (2, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
+    base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
+    G = jnp.asarray(base + 1.0j * (base + g_offset), dtype=jnp.complex64)
+    field_shape = (grid.ky.size, grid.kx.size, grid.z.size)
+    field_base = np.arange(np.prod(field_shape), dtype=np.float32).reshape(field_shape)
+    phi = jnp.asarray(field_base + 1.0j * (field_base + 1.0), dtype=jnp.complex64)
+    return G, phi
+
+
+def _small_G0():
+    cfg, grid, geom, params, cache = _small_setup()
+    G0 = _build_initial_condition(
+        grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
+    )
+    return cfg, grid, geom, params, cache, G0
+
+
+def _linear_fields(G, cache, params):
+    _dG, fields_ = assemble_rhs_cached(G, cache, params, terms=LinearTerms())
+    phi = fields_.phi
+    apar = fields_.apar if fields_.apar is not None else jnp.zeros_like(phi)
+    bpar = fields_.bpar if fields_.bpar is not None else jnp.zeros_like(phi)
+    return phi, apar, bpar
 
 
 def test_volume_and_flux_weights_are_finite_positive_and_normalized() -> None:
@@ -2543,70 +2025,44 @@ def test_resolved_energy_reductions_sum_to_scalar_totals() -> None:
     phi = jnp.asarray(field_base + 1.0j * (field_base + 0.5), dtype=jnp.complex64)
     apar = (0.2 - 0.1j) * phi
 
-    Wg = distribution_free_energy(G, grid, params, vol_fac, use_dealias=False)
-    Wg_st, Wg_kxst, Wg_kyst, Wg_kxkyst, Wg_zst, Wg_lmst = (
-        distribution_free_energy_resolved(G, grid, params, vol_fac, use_dealias=False)
+    k1, k12 = 1, (1, 2)
+    cases = (
+        (
+            distribution_free_energy(G, grid, params, vol_fac, use_dealias=False),
+            distribution_free_energy_resolved(
+                G, grid, params, vol_fac, use_dealias=False
+            ),
+            (k1, k1, k12, k1, k12),
+            1.0e-5,
+        ),
+        (
+            electrostatic_field_energy(phi, cache, params, vol_fac, use_dealias=False),
+            electrostatic_field_energy_resolved(
+                phi, cache, params, vol_fac, use_dealias=False
+            ),
+            (k1, k1, k12, k1),
+            1.0e-6,
+        ),
+        (
+            magnetic_vector_potential_energy(apar, cache, vol_fac, use_dealias=False),
+            magnetic_vector_potential_energy_resolved(
+                apar, cache, vol_fac, nspecies=2, use_dealias=False
+            ),
+            (k1, k1, k12, k1),
+            1.0e-6,
+        ),
     )
-    np.testing.assert_allclose(
-        np.asarray(Wg_st).sum(), np.asarray(Wg), rtol=1.0e-5, atol=1.0e-5
-    )
-    for spectrum, axes in (
-        (Wg_kxst, 1),
-        (Wg_kyst, 1),
-        (Wg_kxkyst, (1, 2)),
-        (Wg_zst, 1),
-        (Wg_lmst, (1, 2)),
-    ):
+    for total, (per_species, *spectra), axes, tol in cases:
         np.testing.assert_allclose(
-            np.asarray(spectrum).sum(axis=axes),
-            np.asarray(Wg_st),
-            rtol=1.0e-5,
-            atol=1.0e-5,
+            np.asarray(per_species).sum(), np.asarray(total), rtol=tol, atol=tol
         )
-
-    Wphi = electrostatic_field_energy(phi, cache, params, vol_fac, use_dealias=False)
-    Wphi_st, Wphi_kxst, Wphi_kyst, Wphi_kxkyst, Wphi_zst = (
-        electrostatic_field_energy_resolved(
-            phi, cache, params, vol_fac, use_dealias=False
-        )
-    )
-    np.testing.assert_allclose(
-        np.asarray(Wphi_st).sum(), np.asarray(Wphi), rtol=1.0e-6, atol=1.0e-6
-    )
-    for spectrum, axes in (
-        (Wphi_kxst, 1),
-        (Wphi_kyst, 1),
-        (Wphi_kxkyst, (1, 2)),
-        (Wphi_zst, 1),
-    ):
-        np.testing.assert_allclose(
-            np.asarray(spectrum).sum(axis=axes),
-            np.asarray(Wphi_st),
-            rtol=1.0e-6,
-            atol=1.0e-6,
-        )
-
-    Wapar = magnetic_vector_potential_energy(apar, cache, vol_fac, use_dealias=False)
-    Wapar_st, Wapar_kxst, Wapar_kyst, Wapar_kxkyst, Wapar_zst = (
-        magnetic_vector_potential_energy_resolved(
-            apar, cache, vol_fac, nspecies=2, use_dealias=False
-        )
-    )
-    np.testing.assert_allclose(
-        np.asarray(Wapar_st).sum(), np.asarray(Wapar), rtol=1.0e-6, atol=1.0e-6
-    )
-    for spectrum, axes in (
-        (Wapar_kxst, 1),
-        (Wapar_kyst, 1),
-        (Wapar_kxkyst, (1, 2)),
-        (Wapar_zst, 1),
-    ):
-        np.testing.assert_allclose(
-            np.asarray(spectrum).sum(axis=axes),
-            np.asarray(Wapar_st),
-            rtol=1.0e-6,
-            atol=1.0e-6,
-        )
+        for spectrum, axis in zip(spectra, axes, strict=True):
+            np.testing.assert_allclose(
+                np.asarray(spectrum).sum(axis=axis),
+                np.asarray(per_species),
+                rtol=tol,
+                atol=tol,
+            )
 
     phi2_t, phi2_kxt, phi2_kyt, phi2_kxkyt, phi2_zt, *_zonal = phi2_resolved(
         phi, grid, vol_fac, use_dealias=False
@@ -2630,222 +2086,77 @@ def test_diagnostics_mask_dealiased_nonfinite_modes_before_reduction() -> None:
         Nl=2, Nm=2
     )
     shape = (2, 2, 2, grid.ky.size, grid.kx.size, grid.z.size)
-    base = np.ones(shape, dtype=np.complex64)
     field_shape = (grid.ky.size, grid.kx.size, grid.z.size)
-    phi_base = np.ones(field_shape, dtype=np.complex64) * (1.0 + 0.25j)
-    apar_base = np.ones(field_shape, dtype=np.complex64) * (0.1 - 0.05j)
-    bpar_base = np.ones(field_shape, dtype=np.complex64) * (0.02 + 0.03j)
     masked_indices = np.argwhere(~np.asarray(grid.dealias_mask, dtype=bool))
     assert masked_indices.size > 0
     ky_idx, kx_idx = masked_indices[0]
-    contaminated = base.copy()
-    contaminated[:, :, :, ky_idx, kx_idx, :] = np.inf + 0.0j
-    clean = base.copy()
-    clean[:, :, :, ky_idx, kx_idx, :] = 0.0
-    phi_contaminated = phi_base.copy()
-    apar_contaminated = apar_base.copy()
-    bpar_contaminated = bpar_base.copy()
-    phi_contaminated[ky_idx, kx_idx, :] = np.inf + 0.0j
-    apar_contaminated[ky_idx, kx_idx, :] = np.inf + 0.0j
-    bpar_contaminated[ky_idx, kx_idx, :] = np.inf + 0.0j
-    phi_clean = phi_base.copy()
-    apar_clean = apar_base.copy()
-    bpar_clean = bpar_base.copy()
-    phi_clean[ky_idx, kx_idx, :] = 0.0
-    apar_clean[ky_idx, kx_idx, :] = 0.0
-    bpar_clean[ky_idx, kx_idx, :] = 0.0
 
-    wg = distribution_free_energy(
-        jnp.asarray(contaminated), grid, params, vol_fac, use_dealias=True
+    def states(fill):
+        """(G, phi, apar, bpar) with the first dealiased mode set to ``fill``."""
+
+        G = np.ones(shape, dtype=np.complex64)
+        G[:, :, :, ky_idx, kx_idx, :] = fill
+        out = [jnp.asarray(G)]
+        for value in (1.0 + 0.25j, 0.1 - 0.05j, 0.02 + 0.03j):
+            field = np.ones(field_shape, dtype=np.complex64) * value
+            field[ky_idx, kx_idx, :] = fill
+            out.append(jnp.asarray(field))
+        return tuple(out)
+
+    dirty, clean = states(np.inf + 0.0j), states(0.0)
+    reductions = (
+        lambda G, phi, apar, bpar: distribution_free_energy(
+            G, grid, params, vol_fac, use_dealias=True
+        ),
+        lambda G, phi, apar, bpar: distribution_free_energy_resolved(
+            G, grid, params, vol_fac, use_dealias=True
+        ),
+        lambda G, phi, apar, bpar: electrostatic_field_energy(
+            phi, cache, params, vol_fac, use_dealias=True
+        ),
+        lambda G, phi, apar, bpar: magnetic_vector_potential_energy(
+            apar, cache, vol_fac, use_dealias=True
+        ),
+        lambda G, phi, apar, bpar: electrostatic_field_energy_resolved(
+            phi, cache, params, vol_fac, use_dealias=True
+        ),
+        lambda G, phi, apar, bpar: magnetic_vector_potential_energy_resolved(
+            apar, cache, vol_fac, nspecies=2, use_dealias=True
+        ),
+        lambda G, phi, apar, bpar: phi2_resolved(phi, grid, vol_fac),
+        lambda G, phi, apar, bpar: heat_flux_channel_resolved_species(
+            G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=True
+        )[0],
+        lambda G, phi, apar, bpar: heat_flux_species(
+            G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=True
+        ),
+        lambda G, phi, apar, bpar: particle_flux_species(
+            G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=True
+        ),
+        lambda G, phi, apar, bpar: turbulent_heating_species(
+            G,
+            0.9 * G,
+            phi,
+            apar,
+            bpar,
+            0.9 * phi,
+            0.9 * apar,
+            0.9 * bpar,
+            cache,
+            grid,
+            params,
+            vol_fac,
+            0.1,
+            use_dealias=True,
+        ),
     )
-    wg_clean = distribution_free_energy(
-        jnp.asarray(clean), grid, params, vol_fac, use_dealias=True
-    )
-    resolved = distribution_free_energy_resolved(
-        jnp.asarray(contaminated), grid, params, vol_fac, use_dealias=True
-    )
-    resolved_clean = distribution_free_energy_resolved(
-        jnp.asarray(clean), grid, params, vol_fac, use_dealias=True
-    )
-
-    assert np.isfinite(np.asarray(wg))
-    np.testing.assert_allclose(np.asarray(wg), np.asarray(wg_clean))
-    for got, expected in zip(resolved, resolved_clean, strict=True):
-        assert np.all(np.isfinite(np.asarray(got)))
-        np.testing.assert_allclose(np.asarray(got), np.asarray(expected))
-
-    energy_pairs = [
-        (
-            electrostatic_field_energy(
-                jnp.asarray(phi_contaminated), cache, params, vol_fac, use_dealias=True
-            ),
-            electrostatic_field_energy(
-                jnp.asarray(phi_clean), cache, params, vol_fac, use_dealias=True
-            ),
-        ),
-        (
-            magnetic_vector_potential_energy(
-                jnp.asarray(apar_contaminated), cache, vol_fac, use_dealias=True
-            ),
-            magnetic_vector_potential_energy(
-                jnp.asarray(apar_clean), cache, vol_fac, use_dealias=True
-            ),
-        ),
-    ]
-    for got, expected in energy_pairs:
-        assert np.isfinite(np.asarray(got))
-        np.testing.assert_allclose(np.asarray(got), np.asarray(expected))
-
-    resolved_pairs = [
-        (
-            electrostatic_field_energy_resolved(
-                jnp.asarray(phi_contaminated),
-                cache,
-                params,
-                vol_fac,
-                use_dealias=True,
-            ),
-            electrostatic_field_energy_resolved(
-                jnp.asarray(phi_clean), cache, params, vol_fac, use_dealias=True
-            ),
-        ),
-        (
-            magnetic_vector_potential_energy_resolved(
-                jnp.asarray(apar_contaminated),
-                cache,
-                vol_fac,
-                nspecies=2,
-                use_dealias=True,
-            ),
-            magnetic_vector_potential_energy_resolved(
-                jnp.asarray(apar_clean),
-                cache,
-                vol_fac,
-                nspecies=2,
-                use_dealias=True,
-            ),
-        ),
-        (
-            phi2_resolved(jnp.asarray(phi_contaminated), grid, vol_fac),
-            phi2_resolved(jnp.asarray(phi_clean), grid, vol_fac),
-        ),
-        (
-            heat_flux_channel_resolved_species(
-                jnp.asarray(contaminated),
-                jnp.asarray(phi_contaminated),
-                jnp.asarray(apar_contaminated),
-                jnp.asarray(bpar_contaminated),
-                cache,
-                grid,
-                params,
-                flux_fac,
-                use_dealias=True,
-            )[0],
-            heat_flux_channel_resolved_species(
-                jnp.asarray(clean),
-                jnp.asarray(phi_clean),
-                jnp.asarray(apar_clean),
-                jnp.asarray(bpar_clean),
-                cache,
-                grid,
-                params,
-                flux_fac,
-                use_dealias=True,
-            )[0],
-        ),
-    ]
-    for got_tuple, expected_tuple in resolved_pairs:
-        for got, expected in zip(got_tuple, expected_tuple, strict=True):
-            assert np.all(np.isfinite(np.asarray(got)))
-            np.testing.assert_allclose(np.asarray(got), np.asarray(expected))
-
-    channel_pairs = [
-        (
-            heat_flux_species(
-                jnp.asarray(contaminated),
-                jnp.asarray(phi_contaminated),
-                jnp.asarray(apar_contaminated),
-                jnp.asarray(bpar_contaminated),
-                cache,
-                grid,
-                params,
-                flux_fac,
-                use_dealias=True,
-            ),
-            heat_flux_species(
-                jnp.asarray(clean),
-                jnp.asarray(phi_clean),
-                jnp.asarray(apar_clean),
-                jnp.asarray(bpar_clean),
-                cache,
-                grid,
-                params,
-                flux_fac,
-                use_dealias=True,
-            ),
-        ),
-        (
-            particle_flux_species(
-                jnp.asarray(contaminated),
-                jnp.asarray(phi_contaminated),
-                jnp.asarray(apar_contaminated),
-                jnp.asarray(bpar_contaminated),
-                cache,
-                grid,
-                params,
-                flux_fac,
-                use_dealias=True,
-            ),
-            particle_flux_species(
-                jnp.asarray(clean),
-                jnp.asarray(phi_clean),
-                jnp.asarray(apar_clean),
-                jnp.asarray(bpar_clean),
-                cache,
-                grid,
-                params,
-                flux_fac,
-                use_dealias=True,
-            ),
-        ),
-        (
-            turbulent_heating_species(
-                jnp.asarray(contaminated),
-                0.9 * jnp.asarray(contaminated),
-                jnp.asarray(phi_contaminated),
-                jnp.asarray(apar_contaminated),
-                jnp.asarray(bpar_contaminated),
-                0.9 * jnp.asarray(phi_contaminated),
-                0.9 * jnp.asarray(apar_contaminated),
-                0.9 * jnp.asarray(bpar_contaminated),
-                cache,
-                grid,
-                params,
-                vol_fac,
-                0.1,
-                use_dealias=True,
-            ),
-            turbulent_heating_species(
-                jnp.asarray(clean),
-                0.9 * jnp.asarray(clean),
-                jnp.asarray(phi_clean),
-                jnp.asarray(apar_clean),
-                jnp.asarray(bpar_clean),
-                0.9 * jnp.asarray(phi_clean),
-                0.9 * jnp.asarray(apar_clean),
-                0.9 * jnp.asarray(bpar_clean),
-                cache,
-                grid,
-                params,
-                vol_fac,
-                0.1,
-                use_dealias=True,
-            ),
-        ),
-    ]
-    for got, expected in channel_pairs:
-        assert np.all(np.isfinite(np.asarray(got)))
-        np.testing.assert_allclose(np.asarray(got), np.asarray(expected))
+    for reduce in reductions:
+        got, expected = reduce(*dirty), reduce(*clean)
+        if not isinstance(got, tuple):
+            got, expected = (got,), (expected,)
+        for got_arr, expected_arr in zip(got, expected, strict=True):
+            assert np.all(np.isfinite(np.asarray(got_arr)))
+            np.testing.assert_allclose(np.asarray(got_arr), np.asarray(expected_arr))
 
 
 def test_zero_field_state_has_zero_transport_and_heating() -> None:
@@ -2858,20 +2169,8 @@ def test_zero_field_state_has_zero_transport_and_heating() -> None:
     phi = jnp.zeros((grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
     apar = jnp.zeros_like(phi)
     bpar = jnp.zeros_like(phi)
-
-    heat_species = heat_flux_species(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
-    )
-    heat_split = heat_flux_channel_species(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
-    )
-    particle_species = particle_flux_species(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
-    )
-    particle_split = particle_flux_channel_species(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
-    )
-    turbulent_heating_by_species = turbulent_heating_species(
+    flux = (G, phi, apar, bpar, cache, grid, params, flux_fac)
+    heating = (
         G,
         G,
         phi,
@@ -2885,63 +2184,26 @@ def test_zero_field_state_has_zero_transport_and_heating() -> None:
         params,
         vol_fac,
         0.125,
-        use_dealias=False,
     )
 
-    np.testing.assert_allclose(np.asarray(heat_species), 0.0)
-    np.testing.assert_allclose(
-        np.asarray(heat_flux_total(G, phi, apar, bpar, cache, grid, params, flux_fac)),
-        0.0,
-    )
-    for channel in heat_split:
-        np.testing.assert_allclose(np.asarray(channel), 0.0)
-    np.testing.assert_allclose(np.asarray(particle_species), 0.0)
-    np.testing.assert_allclose(
-        np.asarray(
-            particle_flux_total(G, phi, apar, bpar, cache, grid, params, flux_fac)
-        ),
-        0.0,
-    )
-    for channel in particle_split:
-        np.testing.assert_allclose(np.asarray(channel), 0.0)
-    np.testing.assert_allclose(np.asarray(turbulent_heating_by_species), 0.0)
-    np.testing.assert_allclose(
-        np.asarray(
-            turbulent_heating_total(
-                G,
-                G,
-                phi,
-                apar,
-                bpar,
-                phi,
-                apar,
-                bpar,
-                cache,
-                grid,
-                params,
-                vol_fac,
-                0.125,
-                use_dealias=False,
-            )
-        ),
-        0.0,
-    )
+    outputs = [
+        heat_flux_species(*flux, use_dealias=False),
+        heat_flux_total(*flux),
+        *heat_flux_channel_species(*flux, use_dealias=False),
+        particle_flux_species(*flux, use_dealias=False),
+        particle_flux_total(*flux),
+        *particle_flux_channel_species(*flux, use_dealias=False),
+        turbulent_heating_species(*heating, use_dealias=False),
+        turbulent_heating_total(*heating, use_dealias=False),
+    ]
+    for output in outputs:
+        np.testing.assert_allclose(np.asarray(output), 0.0)
 
 
 def test_energy_components_finite():
-    cfg, grid, geom, params, cache = _small_setup()
+    _cfg, grid, geom, params, cache, G0 = _small_G0()
     vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
-    G0 = _build_initial_condition(
-        grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
-    )
-    _, fields = cache, None
-    # Build dummy fields from RHS for consistent shapes
-    from gkx.terms.assembly import assemble_rhs_cached
-
-    _dG, fields = assemble_rhs_cached(G0, cache, params, terms=LinearTerms())
-    phi = fields.phi
-    apar = fields.apar if fields.apar is not None else jnp.zeros_like(phi)
-    bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(phi)
+    phi, apar, bpar = _linear_fields(G0, cache, params)
 
     Wg = distribution_free_energy(G0, grid, params, vol_fac)
     Wphi = electrostatic_field_energy(phi, cache, params, vol_fac)
@@ -2950,12 +2212,8 @@ def test_energy_components_finite():
     pflux = particle_flux_total(G0, phi, apar, bpar, cache, grid, params, flux_fac)
     energy = total_energy(Wg, Wphi, Wapar)
 
-    assert np.isfinite(np.asarray(Wg))
-    assert np.isfinite(np.asarray(Wphi))
-    assert np.isfinite(np.asarray(Wapar))
-    assert np.isfinite(np.asarray(heat))
-    assert np.isfinite(np.asarray(pflux))
-    assert np.isfinite(np.asarray(energy))
+    for value in (Wg, Wphi, Wapar, heat, pflux, energy):
+        assert np.isfinite(np.asarray(value))
     assert energy == Wg + Wphi + Wapar
 
 
@@ -2973,29 +2231,32 @@ def test_fieldline_quadrature_weights_accept_sampled_geometry_contract():
 def test_fieldline_quadrature_weights_trim_closed_sampled_geometry_contract():
     _cfg, grid, geom, _params, _cache = _small_setup()
     sampled = sample_flux_tube_geometry(geom, grid.z)
+    profiles = (
+        "bmag",
+        "bgrad",
+        "gds2",
+        "gds21",
+        "gds22",
+        "cv",
+        "gb",
+        "cv0",
+        "gb0",
+        "jacobian",
+        "grho",
+    )
     closed = replace(
         sampled,
         theta=jnp.concatenate([sampled.theta, jnp.asarray([jnp.pi])]),
-        bmag_profile=jnp.concatenate([sampled.bmag_profile, sampled.bmag_profile[:1]]),
-        bgrad_profile=jnp.concatenate(
-            [sampled.bgrad_profile, sampled.bgrad_profile[:1]]
-        ),
-        gds2_profile=jnp.concatenate([sampled.gds2_profile, sampled.gds2_profile[:1]]),
-        gds21_profile=jnp.concatenate(
-            [sampled.gds21_profile, sampled.gds21_profile[:1]]
-        ),
-        gds22_profile=jnp.concatenate(
-            [sampled.gds22_profile, sampled.gds22_profile[:1]]
-        ),
-        cv_profile=jnp.concatenate([sampled.cv_profile, sampled.cv_profile[:1]]),
-        gb_profile=jnp.concatenate([sampled.gb_profile, sampled.gb_profile[:1]]),
-        cv0_profile=jnp.concatenate([sampled.cv0_profile, sampled.cv0_profile[:1]]),
-        gb0_profile=jnp.concatenate([sampled.gb0_profile, sampled.gb0_profile[:1]]),
-        jacobian_profile=jnp.concatenate(
-            [sampled.jacobian_profile, sampled.jacobian_profile[:1]]
-        ),
-        grho_profile=jnp.concatenate([sampled.grho_profile, sampled.grho_profile[:1]]),
         theta_closed_interval=True,
+        **{
+            f"{name}_profile": jnp.concatenate(
+                [
+                    getattr(sampled, f"{name}_profile"),
+                    getattr(sampled, f"{name}_profile")[:1],
+                ]
+            )
+            for name in profiles
+        },
     )
 
     vol_ref, flux_ref = fieldline_quadrature_weights(sampled, grid)
@@ -3082,160 +2343,74 @@ def test_standard_field_energies_match_geometry_weighted_formula():
 
 
 def test_reduce_scalar_and_species_kykxz_preserve_manual_sums() -> None:
-    scalar = jnp.asarray(np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4))
-    scalar_reduced = _reduce_scalar_kykxz(scalar)
-    np.testing.assert_allclose(
-        np.asarray(scalar_reduced[0]), np.asarray(scalar).sum(axis=(0, 2))
-    )
-    np.testing.assert_allclose(
-        np.asarray(scalar_reduced[1]), np.asarray(scalar).sum(axis=(1, 2))
-    )
-    np.testing.assert_allclose(
-        np.asarray(scalar_reduced[2]), np.asarray(scalar).sum(axis=2)
-    )
-    np.testing.assert_allclose(
-        np.asarray(scalar_reduced[3]), np.asarray(scalar).sum(axis=(0, 1))
-    )
-    np.testing.assert_allclose(np.asarray(scalar_reduced[4]), np.asarray(scalar).sum())
+    scalar = np.arange(2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4)
+    scalar_reduced = _reduce_scalar_kykxz(jnp.asarray(scalar))
+    for got, axes in zip(
+        scalar_reduced, ((0, 2), (1, 2), 2, (0, 1), None), strict=True
+    ):
+        np.testing.assert_allclose(np.asarray(got), scalar.sum(axis=axes))
 
-    species = jnp.asarray(
-        np.arange(2 * 2 * 3 * 4, dtype=np.float32).reshape(2, 2, 3, 4)
-    )
-    species_reduced = _reduce_species_kykxz(species)
-    np.testing.assert_allclose(
-        np.asarray(species_reduced[0]), np.asarray(species).sum(axis=(1, 2, 3))
-    )
-    np.testing.assert_allclose(
-        np.asarray(species_reduced[1]), np.asarray(species).sum(axis=(1, 3))
-    )
-    np.testing.assert_allclose(
-        np.asarray(species_reduced[2]), np.asarray(species).sum(axis=(2, 3))
-    )
-    np.testing.assert_allclose(
-        np.asarray(species_reduced[3]), np.asarray(species).sum(axis=3)
-    )
-    np.testing.assert_allclose(
-        np.asarray(species_reduced[4]), np.asarray(species).sum(axis=(1, 2))
-    )
+    species = np.arange(2 * 2 * 3 * 4, dtype=np.float32).reshape(2, 2, 3, 4)
+    species_reduced = _reduce_species_kykxz(jnp.asarray(species))
+    for got, axes in zip(
+        species_reduced, ((1, 2, 3), (1, 3), (2, 3), 3, (1, 2)), strict=True
+    ):
+        np.testing.assert_allclose(np.asarray(got), species.sum(axis=axes))
 
 
 def test_species_flux_sums_to_total():
-    cfg, grid, geom, params, cache = _small_setup()
+    _cfg, grid, geom, params, cache, G0 = _small_G0()
     _vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
-    G0 = _build_initial_condition(
-        grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
-    )
-    from gkx.terms.assembly import assemble_rhs_cached
+    phi, apar, bpar = _linear_fields(G0, cache, params)
+    flux = (G0, phi, apar, bpar, cache, grid, params, flux_fac)
 
-    _dG, fields = assemble_rhs_cached(G0, cache, params, terms=LinearTerms())
-    phi = fields.phi
-    apar = fields.apar if fields.apar is not None else jnp.zeros_like(phi)
-    bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(phi)
-
-    heat_s = heat_flux_species(G0, phi, apar, bpar, cache, grid, params, flux_fac)
-    pflux_s = particle_flux_species(G0, phi, apar, bpar, cache, grid, params, flux_fac)
-    heat = heat_flux_total(G0, phi, apar, bpar, cache, grid, params, flux_fac)
-    pflux = particle_flux_total(G0, phi, apar, bpar, cache, grid, params, flux_fac)
+    heat_s = heat_flux_species(*flux)
+    pflux_s = particle_flux_species(*flux)
 
     assert heat_s.shape == (1,)
     assert pflux_s.shape == (1,)
-    assert np.allclose(np.asarray(jnp.sum(heat_s)), np.asarray(heat))
-    assert np.allclose(np.asarray(jnp.sum(pflux_s)), np.asarray(pflux))
+    assert np.allclose(np.asarray(jnp.sum(heat_s)), np.asarray(heat_flux_total(*flux)))
+    assert np.allclose(
+        np.asarray(jnp.sum(pflux_s)), np.asarray(particle_flux_total(*flux))
+    )
 
 
-def test_heat_flux_total_channel_helper_matches_public_split_reductions() -> None:
+@pytest.mark.parametrize(
+    ("contrib_fn", "resolved_fn", "Nm", "g_offset", "apar_scale", "bpar_scale"),
+    [
+        pytest.param(
+            _heat_flux_channel_contrib_species,
+            heat_flux_channel_resolved_species,
+            4,
+            1.0,
+            0.3,
+            -0.2,
+            id="heat",
+        ),
+        pytest.param(
+            _particle_flux_channel_contrib_species,
+            particle_flux_channel_resolved_species,
+            3,
+            0.25,
+            0.1,
+            -0.3,
+            id="particle",
+        ),
+    ],
+)
+def test_flux_channel_helper_matches_public_split_reductions(
+    contrib_fn, resolved_fn, Nm, g_offset, apar_scale, bpar_scale
+) -> None:
     _cfg, grid, _geom, params, cache, _vol_fac, flux_fac = _multispecies_setup(
-        Nl=3, Nm=4
+        Nl=3, Nm=Nm
     )
-    shape = (2, 3, 4, grid.ky.size, grid.kx.size, grid.z.size)
-    base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
-    G = jnp.asarray(base + 1.0j * (base + 1.0), dtype=jnp.complex64)
-    field_base = np.arange(
-        grid.ky.size * grid.kx.size * grid.z.size, dtype=np.float32
-    ).reshape(grid.ky.size, grid.kx.size, grid.z.size)
-    phi = jnp.asarray(field_base + 1.0j * (field_base + 1.0), dtype=jnp.complex64)
-    apar = 0.3 * phi
-    bpar = -0.2 * phi
+    G, phi = _ramp_state(grid, 3, Nm, g_offset=g_offset)
+    flux = (G, phi, apar_scale * phi, bpar_scale * phi, cache, grid, params, flux_fac)
 
-    es_contrib, apar_contrib, bpar_contrib = _heat_flux_channel_contrib_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=False,
-        flux_scale=1.0,
-    )
-    es_resolved, apar_resolved, bpar_resolved = heat_flux_channel_resolved_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=False,
-    )
+    contribs = contrib_fn(*flux, use_dealias=False, flux_scale=1.0)
+    resolved = resolved_fn(*flux, use_dealias=False)
 
-    for contrib, reduced in (
-        (es_contrib, es_resolved),
-        (apar_contrib, apar_resolved),
-        (bpar_contrib, bpar_resolved),
-    ):
-        expected = _reduce_species_kykxz(contrib)
-        for got_arr, expected_arr in zip(reduced, expected, strict=True):
-            np.testing.assert_allclose(
-                np.asarray(got_arr), np.asarray(expected_arr), rtol=1.0e-6, atol=1.0e-6
-            )
-
-
-def test_particle_flux_total_channel_helper_matches_public_split_reductions() -> None:
-    _cfg, grid, _geom, params, cache, _vol_fac, flux_fac = _multispecies_setup(
-        Nl=3, Nm=3
-    )
-    shape = (2, 3, 3, grid.ky.size, grid.kx.size, grid.z.size)
-    base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
-    G = jnp.asarray(base + 1.0j * (base + 0.25), dtype=jnp.complex64)
-    field_base = np.arange(
-        grid.ky.size * grid.kx.size * grid.z.size, dtype=np.float32
-    ).reshape(grid.ky.size, grid.kx.size, grid.z.size)
-    phi = jnp.asarray(field_base + 1.0j * (field_base + 1.0), dtype=jnp.complex64)
-    apar = 0.1 * phi
-    bpar = -0.3 * phi
-
-    es_contrib, apar_contrib, bpar_contrib = _particle_flux_channel_contrib_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=False,
-        flux_scale=1.0,
-    )
-    es_resolved, apar_resolved, bpar_resolved = particle_flux_channel_resolved_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=False,
-    )
-
-    for contrib, reduced in (
-        (es_contrib, es_resolved),
-        (apar_contrib, apar_resolved),
-        (bpar_contrib, bpar_resolved),
-    ):
+    for contrib, reduced in zip(contribs, resolved, strict=True):
         expected = _reduce_species_kykxz(contrib)
         for got_arr, expected_arr in zip(reduced, expected, strict=True):
             np.testing.assert_allclose(
@@ -3246,17 +2421,11 @@ def test_particle_flux_total_channel_helper_matches_public_split_reductions() ->
 def test_particle_flux_total_channel_helper_single_species_short_circuits_to_zero() -> (
     None
 ):
-    cfg, grid, geom, params, cache = _small_setup()
+    _cfg, grid, geom, params, cache, G = _small_G0()
     _vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
-    G = _build_initial_condition(
-        grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
-    )
-    _dG, fields = assemble_rhs_cached(G, cache, params, terms=LinearTerms())
-    phi = fields.phi
-    apar = fields.apar if fields.apar is not None else jnp.zeros_like(phi)
-    bpar = fields.bpar if fields.bpar is not None else jnp.zeros_like(phi)
+    phi, apar, bpar = _linear_fields(G, cache, params)
 
-    es_contrib, apar_contrib, bpar_contrib = _particle_flux_channel_contrib_species(
+    contribs = _particle_flux_channel_contrib_species(
         G,
         phi,
         apar,
@@ -3269,34 +2438,12 @@ def test_particle_flux_total_channel_helper_single_species_short_circuits_to_zer
         flux_scale=1.0,
     )
 
-    np.testing.assert_allclose(np.asarray(es_contrib), 0.0)
-    np.testing.assert_allclose(np.asarray(apar_contrib), 0.0)
-    np.testing.assert_allclose(np.asarray(bpar_contrib), 0.0)
+    for contrib in contribs:
+        np.testing.assert_allclose(np.asarray(contrib), 0.0)
 
 
 def test_jl_family_preserves_species_axis() -> None:
-    cfg = CycloneBaseCase()
-    grid = build_spectral_grid(
-        replace(cfg.grid, Nx=4, Ny=8, Nz=8, ntheta=None, nperiod=None)
-    )
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = build_linear_params(
-        [
-            Species(
-                charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=1.0, fprim=1.0
-            ),
-            Species(
-                charge=-1.0,
-                mass=0.00027,
-                density=1.0,
-                temperature=1.0,
-                tprim=1.0,
-                fprim=1.0,
-            ),
-        ],
-        kpar_scale=float(geom.gradpar()),
-    )
-    cache = build_linear_cache(grid, geom, params, 3, 3)
+    cache = _multispecies_setup(Nl=3, Nm=3)[4]
     Jl, JlB, Jfac = _jl_family(cache)
 
     assert np.asarray(Jl).shape == np.asarray(cache.Jl).shape
@@ -3307,51 +2454,16 @@ def test_jl_family_preserves_species_axis() -> None:
 
 
 def test_particle_flux_species_matches_manual_multispecies_formula() -> None:
-    cfg = CycloneBaseCase()
-    grid = build_spectral_grid(
-        replace(cfg.grid, Nx=4, Ny=8, Nz=8, ntheta=None, nperiod=None)
+    _cfg, grid, _geom, params, cache, _vol_fac, flux_fac = _multispecies_setup(
+        Nl=3, Nm=3
     )
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = build_linear_params(
-        [
-            Species(
-                charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=1.0, fprim=1.0
-            ),
-            Species(
-                charge=-1.0,
-                mass=0.00027,
-                density=1.0,
-                temperature=1.0,
-                tprim=1.0,
-                fprim=1.0,
-            ),
-        ],
-        kpar_scale=float(geom.gradpar()),
-    )
-    cache = build_linear_cache(grid, geom, params, 3, 3)
-    _vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
-
-    shape = (2, 3, 3, grid.ky.size, grid.kx.size, grid.z.size)
-    base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
-    G = jnp.asarray(base + 1.0j * (base + 1.0), dtype=jnp.complex64)
-    field_base = np.arange(
-        grid.ky.size * grid.kx.size * grid.z.size, dtype=np.float32
-    ).reshape(grid.ky.size, grid.kx.size, grid.z.size)
-    phi = jnp.asarray(field_base + 1.0j * (field_base + 1.0), dtype=jnp.complex64)
+    G, phi = _ramp_state(grid, 3, 3, g_offset=1.0)
     apar = 0.3 * phi
     bpar = -0.2 * phi
 
     got = np.asarray(
         particle_flux_species(
-            G,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=False,
+            G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
         )
     )
 
@@ -3388,199 +2500,67 @@ def test_particle_flux_species_matches_manual_multispecies_formula() -> None:
 
 
 def test_flux_channel_splits_sum_to_total_multispecies() -> None:
-    cfg = CycloneBaseCase()
-    grid = build_spectral_grid(
-        replace(cfg.grid, Nx=4, Ny=8, Nz=8, ntheta=None, nperiod=None)
+    _cfg, grid, _geom, params, cache, _vol_fac, flux_fac = _multispecies_setup(
+        Nl=3, Nm=4
     )
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = build_linear_params(
-        [
-            Species(
-                charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=1.0, fprim=1.0
-            ),
-            Species(
-                charge=-1.0,
-                mass=0.00027,
-                density=1.0,
-                temperature=1.0,
-                tprim=1.0,
-                fprim=1.0,
-            ),
-        ],
-        kpar_scale=float(geom.gradpar()),
-    )
-    cache = build_linear_cache(grid, geom, params, 3, 4)
-    _vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
+    G, phi = _ramp_state(grid, 3, 4, g_offset=1.0)
+    flux = (G, phi, 0.3 * phi, -0.2 * phi, cache, grid, params, flux_fac)
 
-    shape = (2, 3, 4, grid.ky.size, grid.kx.size, grid.z.size)
-    base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
-    G = jnp.asarray(base + 1.0j * (base + 1.0), dtype=jnp.complex64)
-    field_base = np.arange(
-        grid.ky.size * grid.kx.size * grid.z.size, dtype=np.float32
-    ).reshape(grid.ky.size, grid.kx.size, grid.z.size)
-    phi = jnp.asarray(field_base + 1.0j * (field_base + 1.0), dtype=jnp.complex64)
-    apar = 0.3 * phi
-    bpar = -0.2 * phi
-
-    heat = np.asarray(
-        heat_flux_species(
-            G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
+    for total_fn, split_fn in (
+        (heat_flux_species, heat_flux_channel_species),
+        (particle_flux_species, particle_flux_channel_species),
+    ):
+        total = np.asarray(total_fn(*flux, use_dealias=False))
+        es, apar_part, bpar_part = (
+            np.asarray(arr) for arr in split_fn(*flux, use_dealias=False)
         )
-    )
-    heat_es, heat_apar, heat_bpar = (
-        np.asarray(arr)
-        for arr in heat_flux_channel_species(
-            G,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=False,
+        np.testing.assert_allclose(
+            total, es + apar_part + bpar_part, rtol=1.0e-6, atol=1.0e-6
         )
-    )
-    pflux = np.asarray(
-        particle_flux_species(
-            G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
-        )
-    )
-    pflux_es, pflux_apar, pflux_bpar = (
-        np.asarray(arr)
-        for arr in particle_flux_channel_species(
-            G,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=False,
-        )
-    )
-
-    np.testing.assert_allclose(
-        heat, heat_es + heat_apar + heat_bpar, rtol=1.0e-6, atol=1.0e-6
-    )
-    np.testing.assert_allclose(
-        pflux, pflux_es + pflux_apar + pflux_bpar, rtol=1.0e-6, atol=1.0e-6
-    )
 
 
 def test_turbulent_heating_total_zero_for_steady_state() -> None:
-    cfg = CycloneBaseCase()
-    grid = build_spectral_grid(
-        replace(cfg.grid, Nx=4, Ny=8, Nz=8, ntheta=None, nperiod=None)
+    _cfg, grid, _geom, params, cache, vol_fac, _flux_fac = _multispecies_setup(
+        Nl=3, Nm=4
     )
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = build_linear_params(
-        [
-            Species(
-                charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=1.0, fprim=1.0
-            ),
-            Species(
-                charge=-1.0,
-                mass=0.00027,
-                density=1.0,
-                temperature=1.0,
-                tprim=1.0,
-                fprim=1.0,
-            ),
-        ],
-        kpar_scale=float(geom.gradpar()),
-    )
-    cache = build_linear_cache(grid, geom, params, 3, 4)
-    vol_fac, _flux_fac = fieldline_quadrature_weights(geom, grid)
-
-    shape = (2, 3, 4, grid.ky.size, grid.kx.size, grid.z.size)
-    base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
-    G = jnp.asarray(base + 1.0j * (base + 0.5), dtype=jnp.complex64)
-    field_base = np.arange(
-        grid.ky.size * grid.kx.size * grid.z.size, dtype=np.float32
-    ).reshape(grid.ky.size, grid.kx.size, grid.z.size)
-    phi = jnp.asarray(field_base + 1.0j * (field_base + 1.0), dtype=jnp.complex64)
+    G, phi = _ramp_state(grid, 3, 4, g_offset=0.5)
     apar = 0.2 * phi
     bpar = -0.1 * phi
+    heating = (
+        G,
+        G,
+        phi,
+        apar,
+        bpar,
+        phi,
+        apar,
+        bpar,
+        cache,
+        grid,
+        params,
+        vol_fac,
+        0.05,
+    )
 
-    heat_species = turbulent_heating_species(
-        G,
-        G,
-        phi,
-        apar,
-        bpar,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        vol_fac,
-        0.05,
-        use_dealias=False,
-    )
-    heat_total = turbulent_heating_total(
-        G,
-        G,
-        phi,
-        apar,
-        bpar,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        vol_fac,
-        0.05,
-        use_dealias=False,
-    )
+    heat_species = turbulent_heating_species(*heating, use_dealias=False)
+    heat_total = turbulent_heating_total(*heating, use_dealias=False)
 
     np.testing.assert_allclose(np.asarray(heat_species), 0.0, atol=1.0e-7)
     np.testing.assert_allclose(np.asarray(heat_total), 0.0, atol=1.0e-7)
 
 
 def test_turbulent_heating_total_resolved_sums_to_species_total() -> None:
-    cfg = CycloneBaseCase()
-    grid = build_spectral_grid(
-        replace(cfg.grid, Nx=4, Ny=8, Nz=8, ntheta=None, nperiod=None)
+    _cfg, grid, _geom, params, cache, vol_fac, _flux_fac = _multispecies_setup(
+        Nl=3, Nm=4
     )
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = build_linear_params(
-        [
-            Species(
-                charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=1.0, fprim=1.0
-            ),
-            Species(
-                charge=-1.0,
-                mass=0.00027,
-                density=1.0,
-                temperature=1.0,
-                tprim=1.0,
-                fprim=1.0,
-            ),
-        ],
-        kpar_scale=float(geom.gradpar()),
-    )
-    cache = build_linear_cache(grid, geom, params, 3, 4)
-    vol_fac, _flux_fac = fieldline_quadrature_weights(geom, grid)
-
-    shape = (2, 3, 4, grid.ky.size, grid.kx.size, grid.z.size)
-    base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
-    G_old = jnp.asarray(base + 1.0j * (base + 0.5), dtype=jnp.complex64)
+    G_old, phi_old = _ramp_state(grid, 3, 4, g_offset=0.5)
     G = 1.03 * G_old + (0.02 - 0.01j)
-    field_base = np.arange(
-        grid.ky.size * grid.kx.size * grid.z.size, dtype=np.float32
-    ).reshape(grid.ky.size, grid.kx.size, grid.z.size)
-    phi_old = jnp.asarray(field_base + 1.0j * (field_base + 1.0), dtype=jnp.complex64)
     phi = 1.01 * phi_old + (0.03 + 0.02j)
     apar_old = 0.2 * phi_old
     apar = 0.2 * phi
     bpar_old = -0.1 * phi_old
     bpar = -0.1 * phi + (0.01 - 0.02j)
-
-    heat_species = turbulent_heating_species(
+    heating = (
         G,
         G_old,
         phi,
@@ -3594,54 +2574,26 @@ def test_turbulent_heating_total_resolved_sums_to_species_total() -> None:
         params,
         vol_fac,
         0.05,
-        use_dealias=False,
-    )
-    heat_st, heat_kxst, heat_kyst, heat_kxkyst, heat_zst = (
-        turbulent_heating_resolved_species(
-            G,
-            G_old,
-            phi,
-            apar,
-            bpar,
-            phi_old,
-            apar_old,
-            bpar_old,
-            cache,
-            grid,
-            params,
-            vol_fac,
-            0.05,
-            use_dealias=False,
-        )
     )
 
-    np.testing.assert_allclose(
-        np.asarray(heat_st), np.asarray(heat_species), rtol=1.0e-5, atol=1.0e-6
+    heat_species = turbulent_heating_species(*heating, use_dealias=False)
+    heat_st, heat_kxst, heat_kyst, heat_kxkyst, heat_zst = (
+        turbulent_heating_resolved_species(*heating, use_dealias=False)
     )
-    np.testing.assert_allclose(
-        np.asarray(heat_kxst).sum(axis=1),
-        np.asarray(heat_species),
-        rtol=1.0e-5,
-        atol=1.0e-6,
-    )
-    np.testing.assert_allclose(
-        np.asarray(heat_kyst).sum(axis=1),
-        np.asarray(heat_species),
-        rtol=1.0e-5,
-        atol=1.0e-6,
-    )
-    np.testing.assert_allclose(
-        np.asarray(heat_kxkyst).sum(axis=(1, 2)),
-        np.asarray(heat_species),
-        rtol=1.0e-5,
-        atol=1.0e-6,
-    )
-    np.testing.assert_allclose(
-        np.asarray(heat_zst).sum(axis=1),
-        np.asarray(heat_species),
-        rtol=1.0e-5,
-        atol=1.0e-6,
-    )
+
+    for spectrum, axes in (
+        (heat_st, None),
+        (heat_kxst, 1),
+        (heat_kyst, 1),
+        (heat_kxkyst, (1, 2)),
+        (heat_zst, 1),
+    ):
+        reduced = np.asarray(spectrum)
+        if axes is not None:
+            reduced = reduced.sum(axis=axes)
+        np.testing.assert_allclose(
+            reduced, np.asarray(heat_species), rtol=1.0e-5, atol=1.0e-6
+        )
     assert np.max(np.abs(np.asarray(heat_species))) > 0.0
 
 
@@ -3746,29 +2698,20 @@ def test_turbulent_heating_total_helper_zero_dt_guard_returns_zero_for_changed_s
     _cfg, grid, _geom, params, cache, vol_fac, _flux_fac = _multispecies_setup(
         Nl=3, Nm=4
     )
-    shape = (2, 3, 4, grid.ky.size, grid.kx.size, grid.z.size)
-    base = np.arange(np.prod(shape), dtype=np.float32).reshape(shape)
-    G_old = jnp.asarray(base + 1.0j * (base + 0.5), dtype=jnp.complex64)
+    G_old, phi_old = _ramp_state(grid, 3, 4, g_offset=0.5)
     G = 1.02 * G_old + (0.03 - 0.01j)
-    field_base = np.arange(
-        grid.ky.size * grid.kx.size * grid.z.size, dtype=np.float32
-    ).reshape(grid.ky.size, grid.kx.size, grid.z.size)
-    phi_old = jnp.asarray(field_base + 1.0j * (field_base + 1.0), dtype=jnp.complex64)
     phi = 1.01 * phi_old + (0.02 + 0.01j)
-    apar_old = 0.2 * phi_old
-    apar = 0.2 * phi
-    bpar_old = -0.1 * phi_old
     bpar = -0.1 * phi + (0.01 - 0.02j)
 
     contrib = _turbulent_heating_contrib_species(
         G,
         G_old,
         phi,
-        apar,
+        0.2 * phi,
         bpar,
         phi_old,
-        apar_old,
-        bpar_old,
+        0.2 * phi_old,
+        -0.1 * phi_old,
         cache,
         grid,
         params,
@@ -3805,38 +2748,29 @@ def test_init_all_scaling_matches_reference():
 
 
 def test_integrate_linear_explicit_diagnostics_shapes():
-    cfg, grid, geom, params, cache = _small_setup()
-    G0 = _build_initial_condition(
-        grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
-    )
+    _cfg, grid, geom, params, cache, G0 = _small_G0()
     time_cfg = ExplicitTimeConfig(dt=0.01, t_max=0.1, sample_stride=1, fixed_dt=True)
 
     t, phi_t, gamma_t, omega_t, diag = integrate_linear_explicit_diagnostics(
-        G0,
-        grid,
-        cache,
-        params,
-        geom,
-        time_cfg,
-        terms=LinearTerms(),
-        jit=False,
+        G0, grid, cache, params, geom, time_cfg, terms=LinearTerms(), jit=False
     )
-    assert t.shape[0] == phi_t.shape[0] == gamma_t.shape[0] == omega_t.shape[0]
-    assert diag.t.shape[0] == t.shape[0]
-    assert diag.Wg_t.shape[0] == t.shape[0]
-    assert diag.Wphi_t.shape[0] == t.shape[0]
-    assert diag.Wapar_t.shape[0] == t.shape[0]
-    assert diag.heat_flux_t.shape[0] == t.shape[0]
-    assert diag.particle_flux_t.shape[0] == t.shape[0]
+    n = t.shape[0]
+    assert phi_t.shape[0] == gamma_t.shape[0] == omega_t.shape[0] == n
+    for series in (
+        diag.t,
+        diag.Wg_t,
+        diag.Wphi_t,
+        diag.Wapar_t,
+        diag.heat_flux_t,
+        diag.particle_flux_t,
+    ):
+        assert series.shape[0] == n
 
 
 def test_integrate_linear_explicit_diagnostics_honors_rk3_method(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cfg, grid, geom, params, cache = _small_setup()
-    G0 = _build_initial_condition(
-        grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
-    )
+    _cfg, grid, geom, params, cache, G0 = _small_G0()
     calls: list[str] = []
 
     def _fake_step(G, cache, params, term_cfg, dt, *, method):
@@ -3850,14 +2784,7 @@ def test_integrate_linear_explicit_diagnostics_honors_rk3_method(
         dt=0.01, t_max=0.01, method="rk3", sample_stride=1, fixed_dt=True
     )
     integrate_linear_explicit_diagnostics(
-        G0,
-        grid,
-        cache,
-        params,
-        geom,
-        time_cfg,
-        terms=LinearTerms(),
-        jit=False,
+        G0, grid, cache, params, geom, time_cfg, terms=LinearTerms(), jit=False
     )
 
     assert calls
@@ -3873,12 +2800,9 @@ def test_term_config_and_rk3_wrapper_delegate_to_linear_step(
     captured: dict[str, object] = {}
 
     def _fake_step(G, cache, params, term_cfg, dt, *, method):
-        captured["G"] = G
-        captured["cache"] = cache
-        captured["params"] = params
-        captured["term_cfg"] = term_cfg
-        captured["dt"] = dt
-        captured["method"] = method
+        captured.update(
+            G=G, cache=cache, params=params, term_cfg=term_cfg, dt=dt, method=method
+        )
         return G, FieldState(phi=G[0, 0])
 
     monkeypatch.setattr(explicit_time_integrators, "_linear_explicit_step", _fake_step)
@@ -3892,10 +2816,13 @@ def test_term_config_and_rk3_wrapper_delegate_to_linear_step(
         G0, cache, params, term_cfg, 0.125, method="rk3"
     )
 
-    assert captured["G"] is G0
-    assert captured["cache"] is cache
-    assert captured["params"] is params
-    assert captured["term_cfg"] is term_cfg
+    for key, value in (
+        ("G", G0),
+        ("cache", cache),
+        ("params", params),
+        ("term_cfg", term_cfg),
+    ):
+        assert captured[key] is value
     assert captured["dt"] == pytest.approx(0.125)
     assert captured["method"] == "rk3"
     assert G_next is G0
@@ -3941,12 +2868,27 @@ def test_linear_explicit_step_applies_completed_step_mask(
     assert np.allclose(np.asarray(fields.phi), expected)
 
 
-def test_energy_drift_small_no_drive():
-    cfg, grid, geom, params, cache = _small_setup()
-    params = replace(params, fprim=0.0, tprim=0.0, tprim_e=0.0, nu=0.0)
-    G0 = _build_initial_condition(
-        grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
+def _only_terms(**on) -> LinearTerms:
+    """LinearTerms with every listed channel off except the ones in ``on``."""
+
+    names = (
+        "streaming",
+        "mirror",
+        "curvature",
+        "gradb",
+        "diamagnetic",
+        "collisions",
+        "hypercollisions",
+        "end_damping",
+        "apar",
+        "bpar",
     )
+    return LinearTerms(**{name: on.get(name, 0.0) for name in names})
+
+
+def test_energy_drift_small_no_drive():
+    cfg, grid, geom, params, cache, G0 = _small_G0()
+    params = replace(params, fprim=0.0, tprim=0.0, tprim_e=0.0, nu=0.0)
     time_cfg = ExplicitTimeConfig(dt=0.01, t_max=0.2, sample_stride=1, fixed_dt=True)
 
     _, _, _, _, diag = integrate_linear_explicit_diagnostics(
@@ -3956,18 +2898,7 @@ def test_energy_drift_small_no_drive():
         params,
         geom,
         time_cfg,
-        terms=LinearTerms(
-            streaming=1.0,
-            mirror=0.0,
-            curvature=0.0,
-            gradb=0.0,
-            diamagnetic=0.0,
-            collisions=0.0,
-            hypercollisions=0.0,
-            end_damping=0.0,
-            apar=0.0,
-            bpar=0.0,
-        ),
+        terms=_only_terms(streaming=1.0),
         jit=False,
     )
     energy = np.asarray(diag.energy_t)
@@ -4031,43 +2962,20 @@ def test_growth_rate_step_max_uses_per_step_peak():
     assert np.allclose(np.asarray(omega), -np.angle(ratio) / 0.1)
 
 
-def test_growth_mask_promotes_single_selected_nonzonal_slice() -> None:
+@pytest.mark.parametrize(("ky", "expected"), [(-0.01, True), (0.0, False)])
+def test_growth_mask_promotes_only_a_single_selected_nonzonal_slice(
+    ky: float, expected: bool
+) -> None:
     mask = _growth_rate_mode_mask(
-        jnp.asarray([-0.01]),
-        jnp.asarray([0.0]),
-        jnp.asarray([[False]]),
+        jnp.asarray([ky]), jnp.asarray([0.0]), jnp.asarray([[False]])
     )
-    assert np.asarray(mask).item() is True
-
-
-def test_growth_mask_keeps_single_selected_zonal_slice_masked() -> None:
-    mask = _growth_rate_mode_mask(
-        jnp.asarray([0.0]),
-        jnp.asarray([0.0]),
-        jnp.asarray([[False]]),
-    )
-    assert np.asarray(mask).item() is False
+    assert np.asarray(mask).item() is expected
 
 
 def test_rk4_step_uses_runtime_scaled_end_damping_once() -> None:
-    cfg, grid, geom, params, cache = _small_setup()
+    _cfg, _grid, _geom, params, cache, G0 = _small_G0()
     params = replace(params, damp_ends_amp=0.5)
-    G0 = _build_initial_condition(
-        grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
-    )
-    terms = LinearTerms(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=1.0,
-        apar=0.0,
-        bpar=0.0,
-    )
-    term_cfg = linear_terms_to_term_config(terms)
+    term_cfg = linear_terms_to_term_config(_only_terms(end_damping=1.0))
     dt = 0.2
 
     G_step, fields_step = explicit_time_integrators._linear_explicit_step(
@@ -4101,27 +3009,12 @@ def test_rk4_step_uses_runtime_scaled_end_damping_once() -> None:
 def test_linear_explicit_adaptive_default_dt_max_clamps_to_nominal_dt():
     """When dt_max is unset, the adaptive explicit path should clamp to dt."""
 
-    cfg, grid, geom, params, cache = _small_setup()
-    G0 = _build_initial_condition(
-        grid, geom, ky_index=0, kx_index=0, Nl=4, Nm=4, init_cfg=cfg.init
-    )
+    _cfg, grid, geom, params, cache, G0 = _small_G0()
     time_cfg = ExplicitTimeConfig(
-        dt=0.01,
-        t_max=0.05,
-        sample_stride=1,
-        fixed_dt=False,
-        dt_max=None,
-        cfl=10.0,
+        dt=0.01, t_max=0.05, sample_stride=1, fixed_dt=False, dt_max=None, cfl=10.0
     )
-    _t, _phi_t, _gamma_t, _omega_t, diag = integrate_linear_explicit_diagnostics(
-        G0,
-        grid,
-        cache,
-        params,
-        geom,
-        time_cfg,
-        terms=LinearTerms(),
-        jit=False,
+    *_series, diag = integrate_linear_explicit_diagnostics(
+        G0, grid, cache, params, geom, time_cfg, terms=LinearTerms(), jit=False
     )
     dt_t = np.asarray(diag.dt_t, dtype=float)
     assert dt_t.size > 0
@@ -4129,18 +3022,7 @@ def test_linear_explicit_adaptive_default_dt_max_clamps_to_nominal_dt():
 
 
 def test_linear_omega_max_preserves_selected_ky_mode():
-    cfg = CycloneBaseCase()
-    grid_full = build_spectral_grid(cfg.grid)
-    ky_index = select_ky_index(np.asarray(grid_full.ky), 0.2)
-    grid = select_ky_grid(grid_full, ky_index)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = LinearParams(
-        fprim=cfg.model.fprim,
-        tprim=cfg.model.tprim_i,
-        tprim_e=cfg.model.tprim_e,
-        kpar_scale=float(geom.gradpar()),
-        nu=cfg.model.nu_i,
-    )
+    _cfg, grid, geom, params, _cache = _small_setup()
 
     omega_sel = _linear_frequency_bound(grid, geom, params, 4, 4)
 
@@ -4151,25 +3033,24 @@ def test_linear_omega_max_preserves_selected_ky_mode():
 # Tests for NetCDF restart-state IO helpers.
 
 
+_RESTART_DIMS = ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri")
+
+
+def _write_restart_G(path: Path, data: np.ndarray) -> None:
+    with Dataset(path, "w") as root:
+        for name, size in zip(_RESTART_DIMS, data.shape, strict=True):
+            root.createDimension(name, size)
+        root.createVariable("G", "f4", _RESTART_DIMS)[:] = data
+
+
 def test_load_netcdf_restart_state_accepts_full_ky_reduced_kx_layout(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "gx.restart.nc"
-    root = Dataset(path, "w")
-    root.createDimension("Nspecies", 1)
-    root.createDimension("Nm", 2)
-    root.createDimension("Nl", 2)
-    root.createDimension("Nz", 3)
-    root.createDimension("Nkx", 3)
-    root.createDimension("Nky", 4)
-    root.createDimension("ri", 2)
     data = np.zeros((1, 2, 2, 3, 3, 4, 2), dtype=np.float32)
     data[0, 0, 0, 0, 0, 1, 0] = 1.5
     data[0, 0, 0, 1, 2, 3, 1] = -0.25
-    root.createVariable("G", "f4", ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri"))[
-        :
-    ] = data
-    root.close()
+    _write_restart_G(path, data)
 
     state = load_netcdf_restart_state(path, nspecies=1, Nl=2, Nm=2, ny=4, nx=4, nz=3)
 
@@ -4224,53 +3105,29 @@ def test_restart_expansion_helpers_fail_closed_on_shape_mismatches() -> None:
 
 
 def test_load_netcdf_restart_state_rejects_malformed_netcdf(tmp_path: Path) -> None:
+    def load(path):
+        return load_netcdf_restart_state(path, nspecies=1, Nl=1, Nm=1, ny=4, nx=4, nz=1)
+
     missing_g = tmp_path / "missing_g.restart.nc"
-    root = Dataset(missing_g, "w")
-    root.close()
+    Dataset(missing_g, "w").close()
     with pytest.raises(ValueError, match="does not contain variable"):
-        load_netcdf_restart_state(missing_g, nspecies=1, Nl=1, Nm=1, ny=4, nx=4, nz=1)
+        load(missing_g)
 
     bad_shape = tmp_path / "bad_shape.restart.nc"
-    root = Dataset(bad_shape, "w")
-    root.createDimension("x", 2)
-    root.createVariable("G", "f4", ("x",))[:] = np.zeros(2, dtype=np.float32)
-    root.close()
+    with Dataset(bad_shape, "w") as root:
+        root.createDimension("x", 2)
+        root.createVariable("G", "f4", ("x",))[:] = np.zeros(2, dtype=np.float32)
     with pytest.raises(ValueError, match="unexpected NetCDF restart G shape"):
-        load_netcdf_restart_state(bad_shape, nspecies=1, Nl=1, Nm=1, ny=4, nx=4, nz=1)
+        load(bad_shape)
 
-    shape_mismatch = tmp_path / "shape_mismatch.restart.nc"
-    root = Dataset(shape_mismatch, "w")
-    root.createDimension("Nspecies", 2)
-    root.createDimension("Nm", 1)
-    root.createDimension("Nl", 1)
-    root.createDimension("Nz", 1)
-    root.createDimension("Nkx", 3)
-    root.createDimension("Nky", 2)
-    root.createDimension("ri", 2)
-    root.createVariable("G", "f4", ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri"))[
-        :
-    ] = np.zeros((2, 1, 1, 1, 3, 2, 2), dtype=np.float32)
-    root.close()
-    with pytest.raises(ValueError, match="does not match requested"):
-        load_netcdf_restart_state(
-            shape_mismatch, nspecies=1, Nl=1, Nm=1, ny=4, nx=4, nz=1
-        )
-
-    nz_mismatch = tmp_path / "nz_mismatch.restart.nc"
-    root = Dataset(nz_mismatch, "w")
-    root.createDimension("Nspecies", 1)
-    root.createDimension("Nm", 1)
-    root.createDimension("Nl", 1)
-    root.createDimension("Nz", 2)
-    root.createDimension("Nkx", 3)
-    root.createDimension("Nky", 2)
-    root.createDimension("ri", 2)
-    root.createVariable("G", "f4", ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri"))[
-        :
-    ] = np.zeros((1, 1, 1, 2, 3, 2, 2), dtype=np.float32)
-    root.close()
-    with pytest.raises(ValueError, match="restart Nz"):
-        load_netcdf_restart_state(nz_mismatch, nspecies=1, Nl=1, Nm=1, ny=4, nx=4, nz=1)
+    for name, shape, match in (
+        ("shape_mismatch", (2, 1, 1, 1, 3, 2, 2), "does not match requested"),
+        ("nz_mismatch", (1, 1, 1, 2, 3, 2, 2), "restart Nz"),
+    ):
+        path = tmp_path / f"{name}.restart.nc"
+        _write_restart_G(path, np.zeros(shape, dtype=np.float32))
+        with pytest.raises(ValueError, match=match):
+            load(path)
 
 
 def test_restart_reader_rejects_unsupported_future_schema(tmp_path: Path) -> None:
@@ -4292,13 +3149,7 @@ def test_saved_linear_summary_carries_the_result_solver_status(
     from gkx.solvers_linear_implicit import ImplicitSolveSummary
     from gkx.solvers_linear_krylov import EigenSolveStatus
 
-    result = RuntimeLinearResult(
-        ky=0.2,
-        gamma=0.3,
-        omega=-0.4,
-        selection=ModeSelection(ky_index=1, kx_index=2, z_index=3),
-        t=np.asarray([0.1, 0.2]),
-        signal=np.asarray([1.0, 2.0]),
+    result = _linear_result(
         eigen_status=EigenSolveStatus(
             method="adaptive",
             route="shift_invert",
@@ -4315,8 +3166,7 @@ def test_saved_linear_summary_carries_the_result_solver_status(
         ),
     )
 
-    paths = write_runtime_linear_artifacts(tmp_path / "linear_run", result)
-    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+    summary = _summary(write_runtime_linear_artifacts(tmp_path / "linear_run", result))
 
     assert summary["eigen_route"] == "shift_invert"
     assert summary["eigen_residual"] == pytest.approx(4.5e-9)
@@ -4337,16 +3187,8 @@ def test_saved_linear_summary_carries_the_result_solver_status(
 def test_saved_linear_summary_reports_no_status_as_null(tmp_path: Path) -> None:
     """An explicit-time run without an implicit solve saves ``None``, not a fake."""
 
-    result = RuntimeLinearResult(
-        ky=0.2,
-        gamma=0.3,
-        omega=-0.4,
-        selection=ModeSelection(ky_index=1, kx_index=2, z_index=3),
-        t=np.asarray([0.1, 0.2]),
-        signal=np.asarray([1.0, 2.0]),
-    )
-    paths = write_runtime_linear_artifacts(tmp_path / "linear_run", result)
-    summary = json.loads(Path(paths["summary"]).read_text(encoding="utf-8"))
+    paths = write_runtime_linear_artifacts(tmp_path / "linear_run", _linear_result())
+    summary = _summary(paths)
 
     for key in (
         "eigen_route",
@@ -4361,33 +3203,28 @@ def test_saved_linear_summary_reports_no_status_as_null(tmp_path: Path) -> None:
 def test_saved_nonlinear_summary_carries_the_imex_solve_status() -> None:
     from gkx.solvers_linear_implicit import ImplicitSolveSummary
 
-    summary = _nonlinear_summary(
-        SimpleNamespace(
-            diagnostics=None,
-            state=None,
-            ky_selected=0.2,
-            kx_selected=0.0,
-            phi2=np.asarray(7.0),
-            implicit_solve=ImplicitSolveSummary(
-                max_relative_residual=9.5e-7,
-                max_iterations=11,
-                solves=8,
-                unconverged_solves=0,
-            ),
+    def summary_of(**extra):
+        return _nonlinear_summary(
+            SimpleNamespace(
+                diagnostics=None,
+                state=None,
+                ky_selected=0.2,
+                kx_selected=0.0,
+                phi2=np.asarray(7.0),
+                **extra,
+            )
+        )
+
+    summary = summary_of(
+        implicit_solve=ImplicitSolveSummary(
+            max_relative_residual=9.5e-7,
+            max_iterations=11,
+            solves=8,
+            unconverged_solves=0,
         )
     )
     assert summary["implicit_converged"] is True
     assert summary["implicit_max_relative_residual"] == pytest.approx(9.5e-7)
     assert summary["implicit_max_iterations"] == 11
     assert summary["implicit_unconverged_solves"] == 0
-
-    explicit = _nonlinear_summary(
-        SimpleNamespace(
-            diagnostics=None,
-            state=None,
-            ky_selected=0.2,
-            kx_selected=0.0,
-            phi2=np.asarray(7.0),
-        )
-    )
-    assert explicit["implicit_converged"] is None
+    assert summary_of()["implicit_converged"] is None
