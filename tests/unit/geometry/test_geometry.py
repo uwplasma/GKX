@@ -35,8 +35,6 @@ from gkx.geometry.kernels import (
     weighted_centered_difference,
     extend_nperiod_data,
     reflect_and_append,
-    nperiod_contract,
-    nperiod_mask,
 )
 import os
 from pathlib import Path
@@ -79,7 +77,6 @@ from gkx.geometry.imported_vmec import (
     _vmec_splines,
     dermv,
     generate_vmec_eik_internal,
-    nperiod_set,
     write_vmec_eik_netcdf,
 )
 from gkx.operators.linear.params import (
@@ -1329,18 +1326,6 @@ def test_observable_gradient_validation_report_fails_ill_conditioned_synthetic_m
 # Miller geometry backend, eik-file, and low-level kernel tests.
 
 
-def test_nperiod_helpers_contract_arrays() -> None:
-    theta = np.array([-4.0, -1.0, 0.0, 1.0, 4.0])
-    values = np.arange(theta.size)
-    mask = np.asarray(nperiod_mask(theta, 1.0))
-    assert mask.tolist() == [False, True, True, True, False]
-    contracted_values, contracted_theta = nperiod_contract.__wrapped__(
-        values, theta, 1.0
-    )
-    np.testing.assert_allclose(np.asarray(contracted_values), [1, 2, 3])
-    np.testing.assert_allclose(np.asarray(contracted_theta), [-1.0, 0.0, 1.0])
-
-
 def test_finite_diff_nonuniform_matches_quadratic_derivative() -> None:
     grid = np.array([0.0, 0.5, 1.5, 3.0])
     values = grid**2
@@ -2415,7 +2400,6 @@ def test_imported_vmec_reuses_focused_backend_contracts() -> None:
     assert (
         vmec_facade._import_booz_backend is vmec_backend_discovery._import_booz_backend
     )
-    assert vmec_facade.nperiod_set is vmec_fieldline_numerics.nperiod_set
     assert vmec_facade.dermv is vmec_fieldline_numerics.dermv
     assert vmec_facade._vmec_splines is vmec_fieldline_numerics._vmec_splines
 
@@ -2594,22 +2578,10 @@ def test_internal_vmec_backend_available_uses_backend_probe(monkeypatch) -> None
     assert internal_vmec_backend_available() is False
 
 
-def test_nperiod_set_and_dermv(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_field_line_sampling.nperiod_contract",
-        lambda values, theta, npol: (values[1:-1], theta[1:-1]),
-    )
-    values, theta = nperiod_set(
-        np.array([0.0, 1.0, 2.0]), np.array([-2.0, 0.0, 2.0]), 1.0
-    )
-    np.testing.assert_allclose(values, [1.0])
-    np.testing.assert_allclose(theta, [0.0])
-
+def test_dermv() -> None:
     out = dermv(np.array([0.0, 1.0, 4.0, 9.0]), np.array([0.0, 1.0, 2.0, 3.0]))
     np.testing.assert_allclose(out[1:-1], [2.0, 4.0], atol=1.0e-6)
 
-    with pytest.raises(ValueError):
-        nperiod_set(np.array([1.0, 2.0]), np.array([1.0]), 1.0)
     with pytest.raises(ValueError):
         dermv(np.ones((2, 2)), np.ones((2, 2)))
     with pytest.raises(ValueError):

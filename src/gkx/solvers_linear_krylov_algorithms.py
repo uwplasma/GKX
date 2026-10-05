@@ -998,32 +998,6 @@ def _shift_invert_eigenpair_with_inner_stats(
     return eig, v, stats
 
 
-def dominant_eigenpair_shift_invert_cached(
-    v0: jnp.ndarray,
-    v_ref: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    term_cfg: TermConfig,
-    *,
-    gmres_solve_method: str = "batched",
-    **options: Any,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Restarted shift-invert Arnoldi with GMRES solves.
-
-    ``gmres_solve_method`` is a compatibility alias: every label has always
-    reached the same SOLVAX FGMRES call, so it is validated here and is not a
-    compilation key. ``options`` are the keywords of
-    :func:`_shift_invert_eigenpair_with_inner_stats`, which also returns the
-    inner-solve statistics this wrapper drops.
-    """
-
-    _validate_shift_solve_method(gmres_solve_method)
-    eig, v, _stats = _shift_invert_eigenpair_with_inner_stats(
-        v0, v_ref, cache, params, term_cfg, **options
-    )
-    return eig, v
-
-
 @partial(jax.jit, static_argnames=("krylov_dim", "restarts", "select_overlap"))
 def dominant_eigenpair_cached(
     v0: jnp.ndarray,
@@ -1159,5 +1133,4 @@ __all__ = [
     "dominant_eigenpair_cached",
     "dominant_eigenpair_power",
     "dominant_eigenpair_propagator_cached",
-    "dominant_eigenpair_shift_invert_cached",
 ]

@@ -918,38 +918,6 @@ def test_shift_invert_rejection_names_unconverged_inner_solves(
     assert reported is not None and float(reported.group(1)) > 1.0e-10
 
 
-def test_shift_solve_method_labels_share_one_compiled_solve(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The historical labels are validated but neither change nor recompile."""
-
-    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
-    traces = 0
-    factory = ka._shift_invert_apply_factory
-
-    def counting_factory(*args, **kwargs):
-        nonlocal traces
-        traces += 1
-        return factory(*args, **kwargs)
-
-    monkeypatch.setattr(ka, "_shift_invert_apply_factory", counting_factory)
-    options = _shift_invert_options(1.0e-4, 7, 5)
-    pairs = [
-        ka.dominant_eigenpair_shift_invert_cached(
-            v0, v0, cache, params, term_cfg, gmres_solve_method=label, **options
-        )
-        for label in ("batched", "incremental", "flexible")
-    ]
-    assert traces == 1
-    for eig, vec in pairs[1:]:
-        np.testing.assert_array_equal(np.asarray(eig), np.asarray(pairs[0][0]))
-        np.testing.assert_array_equal(np.asarray(vec), np.asarray(pairs[0][1]))
-    with pytest.raises(ValueError, match="shift_solve_method"):
-        lk.dominant_eigenpair(
-            v0, cache, params, method="shift_invert", shift_solve_method="bogus"
-        )
-
-
 @pytest.mark.parametrize("method", ["power", "propagator", "arnoldi"])
 def test_raw_eigenpair_routes_fail_closed_unless_certify_is_false(method: str) -> None:
     """A four-vector raw solve is unconverged: it must raise, or be flagged."""

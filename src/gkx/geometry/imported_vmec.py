@@ -32,7 +32,6 @@ from gkx.geometry.backend_discovery import (
 from gkx.geometry.vmec_field_line_sampling import (
     _Struct,
     _vmec_splines,
-    nperiod_set,
     dermv,
 )
 from gkx.geometry.vmec_boozer_derivatives import (
@@ -694,6 +693,5 @@ __all__ = [
     "dermv",
     "generate_vmec_eik_internal",
     "internal_vmec_backend_available",
-    "nperiod_set",
     "write_vmec_eik_netcdf",
 ]

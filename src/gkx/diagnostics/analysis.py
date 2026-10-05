@@ -19,12 +19,9 @@ from gkx.diagnostics.growth_rates import (
     select_fit_window,
     select_fit_window_loglinear,
     select_fit_window_stationary,
-    windowed_growth_rate_from_omega_series,
 )
 from gkx.diagnostics.modes import (
     ModeSelection,
-    ModeSelectionBatch,
-    density_moment,
     extract_eigenfunction,
     extract_mode,
     extract_mode_time_series,
@@ -172,9 +169,7 @@ __all__ = [
     "cfl_scales_from_array",
     "estimate_observed_order",
     "ModeSelection",
-    "ModeSelectionBatch",
     "_log_amp_phase",
-    "density_moment",
     "extract_eigenfunction",
     "extract_mode",
     "extract_mode_time_series",
@@ -189,7 +184,6 @@ __all__ = [
     "select_fit_window_loglinear",
     "select_fit_window_stationary",
     "select_ky_index",
-    "windowed_growth_rate_from_omega_series",
 ]
 
 

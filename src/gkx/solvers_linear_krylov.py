@@ -43,7 +43,6 @@ from gkx.solvers_linear_krylov_algorithms import (
     dominant_eigenpair_cached,
     dominant_eigenpair_power,
     dominant_eigenpair_propagator_cached,
-    dominant_eigenpair_shift_invert_cached,
 )
 from gkx.solvers_linear_precond_pr3 import PR3_PRECOND_NAMES, build_pr3_factors
 
@@ -1098,6 +1097,5 @@ __all__ = [
     "dominant_eigenpair_cached",
     "dominant_eigenpair_power",
     "dominant_eigenpair_propagator_cached",
-    "dominant_eigenpair_shift_invert_cached",
     "dominant_eigenvalue",
 ]

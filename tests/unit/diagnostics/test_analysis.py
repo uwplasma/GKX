@@ -6,7 +6,6 @@ import pytest
 from gkx.diagnostics.analysis import (
     ModeSelection,
     _log_amp_phase,
-    density_moment,
     extract_mode,
     extract_eigenfunction,
     extract_mode_time_series,
@@ -16,7 +15,6 @@ from gkx.diagnostics.analysis import (
     fit_growth_rate_uncertainty,
     fit_growth_rate_with_stats,
     instantaneous_growth_rate_from_phi,
-    windowed_growth_rate_from_omega_series,
     select_ky_index,
     select_fit_window,
     select_fit_window_loglinear,
@@ -55,9 +53,6 @@ def test_growth_rate_public_facades_point_to_numerical_owners() -> None:
         is growth_windows.select_fit_window_loglinear
     )
     assert growth_rates.instantaneous_growth_rate_from_phi.__module__ == (
-        "gkx.diagnostics.growth_rates"
-    )
-    assert growth_rates.windowed_growth_rate_from_omega_series.__module__ == (
         "gkx.diagnostics.growth_rates"
     )
     assert analysis.fit_growth_rate is growth_rates.fit_growth_rate
@@ -388,25 +383,6 @@ def test_extract_eigenfunction_zero_signal():
     assert np.all(np.isfinite(mode))
 
 
-def test_density_moment_supports_5d_and_6d_inputs() -> None:
-    jl = np.ones((2, 1, 1, 1), dtype=np.complex128)
-    g5 = np.zeros((2, 3, 1, 1, 1), dtype=np.complex128)
-    g5[:, 0, ...] = np.array([1.0, 2.0])[:, None, None, None]
-    out5 = density_moment(g5, jl)
-    assert np.allclose(out5, np.array([3.0]))
-
-    g6 = np.zeros((2, 2, 3, 1, 1, 1), dtype=np.complex128)
-    g6[0, :, 0, ...] = np.array([1.0, 2.0])[:, None, None, None]
-    g6[1, :, 0, ...] = np.array([3.0, 4.0])[:, None, None, None]
-    out6_all = density_moment(g6, jl)
-    out6_one = density_moment(g6, jl, species_index=1)
-    assert np.allclose(out6_all, np.array([10.0]))
-    assert np.allclose(out6_one, np.array([7.0]))
-
-    with pytest.raises(ValueError):
-        density_moment(np.zeros((1, 2, 3)), jl)
-
-
 def test_fit_growth_rate_validates_and_filters_nonfinite() -> None:
     t = np.array([0.0, 1.0, 2.0, 3.0])
     signal = np.exp((0.4 - 0.25j) * t)
@@ -511,36 +487,6 @@ def test_fit_growth_rate_auto_with_stats_fallback(monkeypatch) -> None:
     assert r2_phase == -np.inf
 
 
-def test_windowed_growth_rate_from_omega_series():
-    """Windowed growth/frequency averaging should select the requested (ky, kx) branch."""
-
-    gamma_t = np.array(
-        [
-            [[0.1, 0.2], [0.3, 0.4]],
-            [[0.2, 0.3], [0.4, 0.5]],
-            [[0.3, 0.4], [0.5, 0.6]],
-            [[0.4, 0.5], [0.6, 0.7]],
-        ],
-        dtype=float,
-    )
-    omega_t = -2.0 * gamma_t
-    sel = ModeSelection(ky_index=1, kx_index=0, z_index=0)
-
-    g, w, gs, ws = windowed_growth_rate_from_omega_series(
-        gamma_t, omega_t, sel, navg_fraction=0.5
-    )
-    assert np.allclose(gs, np.array([0.3, 0.4, 0.5, 0.6]))
-    assert np.allclose(ws, np.array([-0.6, -0.8, -1.0, -1.2]))
-    assert np.isclose(g, np.mean([0.5, 0.6]))
-    assert np.isclose(w, np.mean([-1.0, -1.2]))
-
-    g_last, w_last, _gs, _ws = windowed_growth_rate_from_omega_series(
-        gamma_t, omega_t, sel, use_last=True
-    )
-    assert np.isclose(g_last, 0.6)
-    assert np.isclose(w_last, -1.2)
-
-
 def test_instantaneous_growth_rate_from_phi_supports_projected_branch_selection():
     """Projected GX growth extraction should recover the dominant full-z branch."""
 
@@ -603,25 +549,6 @@ def test_instantaneous_growth_rate_from_phi_validates_inputs_and_handles_last_sa
     phi_bad[:-1] = 0.0
     with pytest.raises(ValueError):
         instantaneous_growth_rate_from_phi(phi_bad, t, sel)
-
-
-def test_windowed_growth_rate_from_omega_series_validates_inputs() -> None:
-    gamma_t = np.ones((4, 2, 2), dtype=float)
-    omega_t = np.ones((4, 2, 2), dtype=float)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
-    with pytest.raises(ValueError):
-        windowed_growth_rate_from_omega_series(gamma_t[0], omega_t, sel)
-    with pytest.raises(ValueError):
-        windowed_growth_rate_from_omega_series(gamma_t, omega_t[:, :, :1], sel)
-    with pytest.raises(ValueError):
-        windowed_growth_rate_from_omega_series(
-            gamma_t, omega_t, ModeSelection(ky_index=5, kx_index=0, z_index=0)
-        )
-
-    gamma_bad = np.full((2, 1, 1), np.nan)
-    omega_bad = np.full((2, 1, 1), np.nan)
-    with pytest.raises(ValueError):
-        windowed_growth_rate_from_omega_series(gamma_bad, omega_bad, sel)
 
 
 def test_log_amp_phase_handles_empty_and_nonfinite() -> None:
@@ -841,20 +768,6 @@ def test_instantaneous_growth_rate_from_phi_branches_and_validation() -> None:
         instantaneous_growth_rate_from_phi(
             np.array([[[[0.0 + 0.0j]]], [[[np.nan + 0.0j]]]]), np.array([0.0, 1.0]), sel
         )
-
-
-def test_windowed_growth_rate_from_omega_series_use_last_branch() -> None:
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
-    gamma_t = np.array([[[0.1]], [[0.2]], [[0.3]]], dtype=float)
-    omega_t = np.array([[[0.4]], [[0.5]], [[0.6]]], dtype=float)
-    gamma_avg, omega_avg, gamma, omega = windowed_growth_rate_from_omega_series(
-        gamma_t,
-        omega_t,
-        sel,
-        use_last=True,
-    )
-    assert gamma_avg == gamma[-1] == 0.3
-    assert omega_avg == omega[-1] == 0.6
 
 
 def test_log_amp_phase_handles_all_nonfinite_and_zero_scale() -> None:

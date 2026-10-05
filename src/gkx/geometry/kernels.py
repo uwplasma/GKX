@@ -18,26 +18,6 @@ except Exception as exc:  # pragma: no cover - optional runtime dependency
 
 
 @jax.jit
-def nperiod_mask(theta: jnp.ndarray, npol: float) -> jnp.ndarray:
-    """Return a mask for entries in [-npol*pi, npol*pi]."""
-
-    eps = 1.0e-11
-    upper = npol * math.pi + eps
-    lower = -npol * math.pi - eps
-    return (theta <= upper) & (theta >= lower)
-
-
-@jax.jit
-def nperiod_contract(
-    values: jnp.ndarray, theta: jnp.ndarray, npol: float
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Contract values/theta arrays to the requested npol span."""
-
-    keep = nperiod_mask(theta, npol)
-    return values[keep], theta[keep]
-
-
-@jax.jit
 def finite_diff_nonuniform(values: jnp.ndarray, grid: jnp.ndarray) -> jnp.ndarray:
     """Second-order finite difference on a non-uniform 1D grid.
 
