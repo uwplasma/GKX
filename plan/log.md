@@ -20986,3 +20986,17 @@ structured banded factor for it (#339: 1.5 GB instead of 53 GB at 64²x24 (4,8);
 recompiles (#338: 22x on kinetic electrons on GPU). Minor bump because ky
 outside the grid now raises. The research-grade milestone previously called
 2.5.0 is now 2.6.0; its exits are unchanged.
+
+## 2026-10-05 — ARCH-C third contraction (G.6 P4, archived plan §8)
+
+Base `2987bb705` (2.5.0), branch `arch/contract-3`; inventory and harness in
+`plan/research/2026-10-04-arch-c/`. src/gkx 136 files / 75,904 lines -> 129 /
+67,191; tests 82,803 -> 74,151 lines (30 files); scripts 59 / 43,611 -> 63 /
+48,382 (about 4.8k of the src cut is relocation of report gates, campaign
+helpers and test-only reference kernels into scripts/). Import cycles 1 -> 0:
+the runtime dependency-injection records are gone and `gkx.runtime` is a
+facade over the owners. Five fingerprints (linear Cyclone eigenpair, nonlinear
+Q trace, window gradient, quasilinear flux, kinetic-electron imex-ars3)
+bitwise identical on office XLA:CPU. Architecture baselines lowered to the
+measured tree; single-consumer 1 -> 2 and low-cohesion 5 -> 8 recorded with
+causes. Targets (45 files / 45k src, 35k tests) not met.
