@@ -6,8 +6,8 @@ authors:
   - family-names: Jorge
     given-names: Rogerio
     affiliation: "University of Wisconsin–Madison"
-version: 2.5.0
-date-released: 2026-10-04
+version: 2.5.1
+date-released: 2026-10-05
 license: MIT
 repository-code: "https://github.com/uwplasma/GKX"
 url: "https://gkx.readthedocs.io"
