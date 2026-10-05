@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from gkx.workflows.runtime.toml import load_runtime_from_toml
-from gkx.workflows.nonlinear import (
+from gkx.runtime import (
     build_secondary_stage2_config,
     run_secondary_modes,
     run_secondary_seed,
