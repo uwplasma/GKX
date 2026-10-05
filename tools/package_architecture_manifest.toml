@@ -1143,7 +1143,8 @@ recursive = true
 # Hermite + Woodbury fields; 53 GB -> 1.5 GB at 64x64x24 (4,8)), measured.
 # 75904 -> 67191 (ARCH-C): dependency-injection records and dead code removed, report gates moved to scripts, test-only helpers moved to tests. Measured.
 # 67191 -> 67215: ARCH-C merged with #341/#342, measured.
-baseline = 67215
+# 67215 -> 67220: coverage test for artifact checkpoint helpers.
+baseline = 67220
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1476,7 +1477,8 @@ recursive = true
 # 82760 -> 82803: bitwise test for the adaptive chunk compile cache, measured.
 # 82803 -> 74151 (ARCH-C): runtime, CLI, artifact, release-gate and helper tests parametrized; forwarding-only tests removed. Measured.
 # 74151 -> 74366: ARCH-C merged with #341/#342, measured.
-baseline = 74366
+# 74366 -> 74397: measured after the mypy and coverage fixes.
+baseline = 74397
 target = 35000
 
 [[line_budget_policy.counts]]
