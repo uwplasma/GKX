@@ -2099,11 +2099,6 @@ def test_terminal_subwindow_gate_blocks_cancelled_running_mean_drift() -> None:
 
 
 def test_nonlinear_window_ensemble_gate_accepts_seed_replicates() -> None:
-    import gkx as sgk
-
-    assert sgk.NonlinearWindowEnsembleConfig is NonlinearWindowEnsembleConfig
-    assert sgk.nonlinear_window_ensemble_report is nonlinear_window_ensemble_report
-
     t, heat = _saturated_trace()
     reports = [
         nonlinear_window_convergence_report(

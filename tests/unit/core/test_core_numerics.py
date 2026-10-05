@@ -408,7 +408,9 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     # scripts/campaigns removed their four advertised names from the registry.
     # 260: ARCH-A contraction 1 deleted the report, gate and prototype modules
     # 86 compatibility names pointed at.
-    assert len(public_api._EXPORT_TARGETS) == 217
+    # 189: ARCH-C moved the gate, window and calibration report modules to
+    # scripts/checks/_gates, removing their 28 compatibility names.
+    assert len(public_api._EXPORT_TARGETS) == 189
     assert len(public_api.__all__) == len(set(public_api.__all__))
     assert set(gkx.__all__) <= set(dir(gkx))
     # Laziness itself is asserted in the fresh interpreters below, not here:

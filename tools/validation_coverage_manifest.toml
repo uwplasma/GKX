@@ -922,6 +922,9 @@ next_tests = [
 [[modules]]
 module = "gkx.diagnostics.quasilinear_transport"
 path = "src/gkx/diagnostics/quasilinear_transport.py"
+owned_modules = [
+  "gkx.diagnostics.saturation",
+]
 owner_lane = "linear-response quasilinear weights and saturation-model diagnostics"
 status = "active"
 coverage_priority = "high"
@@ -959,104 +962,6 @@ artifact_paths = [
 next_tests = [
   "add at least two more converged electrostatic nonlinear holdout windows before promoting richer saturation candidates",
   "add electromagnetic quasilinear channel tests before using KBM in calibration reports",
-]
-
-[[modules]]
-module = "scripts.checks._gates.quasilinear_calibration"
-path = "scripts/checks/_gates/quasilinear_calibration.py"
-owner_lane = "nonlinear-window calibration and train/holdout quasilinear reports"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "held-out nonlinear heat-flux calibration for quasilinear transport models",
-  "case-specific nonlinear window statistics as acceptance data for reduced models",
-]
-physics_contracts = [
-  "calibration points retain split, geometry, electron model, nonlinear artifact, and quasilinear artifact provenance",
-  "absolute-flux reports remain unpromoted unless held-out nonlinear windows pass explicit transport gates",
-  "external VMEC nonlinear pilots enter calibration only after explicit grid/window convergence gates pass",
-]
-numerics_contracts = [
-  "window means and uncertainties include running-mean drift, block/bootstrap SEM, and finite-sample gates",
-  "zero or non-positive quasilinear predictions remain visible in plots instead of being hidden by log axes",
-  "grid-refined late-window means are compared with symmetric relative differences and stationarity gates",
-]
-fast_tests = [
-  "tests/unit/quasilinear/test_quasilinear.py",
-  "tests/release/test_release_gates.py",
-  "tests/unit/geometry/test_geometry.py",
-]
-artifact_paths = [
-  "docs/_static/quasilinear_validated_calibration_inputs.json",
-  "docs/_static/quasilinear_cyclone_miller_train_holdout_report.json",
-  "docs/_static/quasilinear_hsx_train_holdout_report.json",
-  "docs/_static/quasilinear_w7x_train_holdout_report.json",
-  "docs/_static/quasilinear_stellarator_train_holdout_report.json",
-  "docs/_static/external_vmec_dshape_t250_n64_transport_window.json",
-  "docs/_static/external_vmec_dshape_t250_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_readiness.json",
-  "docs/_static/external_vmec_dshape_replicates/dshape_replicate_t250_ensemble_gate.json",
-  "docs/_static/external_vmec_dshape_replicates/nonlinear_window_convergence_reports/dshape_replicate_nonlinear_t250_n64_seed31_transport_window.convergence.json",
-  "docs/_static/external_vmec_dshape_replicates/nonlinear_window_convergence_reports/dshape_replicate_nonlinear_t250_n64_seed32_transport_window.convergence.json",
-  "docs/_static/external_vmec_dshape_replicates/nonlinear_window_convergence_reports/dshape_replicate_nonlinear_t250_n64_dt0p04_transport_window.convergence.json",
-  "docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_readiness.json",
-  "docs/_static/external_vmec_circular_replicates/circular_replicate_t700_ensemble_gate.json",
-  "docs/_static/external_vmec_circular_replicates/nonlinear_window_convergence_reports/circular_replicate_nonlinear_t700_n64_seed31_transport_window.convergence.json",
-  "docs/_static/external_vmec_circular_replicates/nonlinear_window_convergence_reports/circular_replicate_nonlinear_t700_n64_seed32_transport_window.convergence.json",
-  "docs/_static/external_vmec_circular_replicates/nonlinear_window_convergence_reports/circular_replicate_nonlinear_t700_n64_dt0p04_transport_window.convergence.json",
-  "docs/_static/external_vmec_itermodel_t350_n64_transport_window.json",
-  "docs/_static/external_vmec_itermodel_t350_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_updown_asym_t450_n64_transport_window.json",
-  "docs/_static/external_vmec_updown_asym_t450_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_circular_t250_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_qh_grid_convergence_gate.json",
-  "docs/_static/external_vmec_qh_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_cth_like_grid_convergence_gate.json",
-  "docs/_static/external_vmec_cth_like_modified_t350_full_grid_convergence_gate.json",
-  "docs/_static/external_vmec_cth_like_modified_t250_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_cth_like_modified_t350_high_grid_convergence_gate.json",
-  "docs/_static/external_vmec_cth_like_modified_late_high_grid_time_horizon_gate.json",
-  "docs/_static/external_vmec_cth_like_modified_replicates_t700/replicate_ensemble_gate.json",
-  "docs/_static/external_vmec_cth_like_modified_high_grid_admission_gate.json",
-]
-next_tests = [
-  "add per-species ion/electron calibration points once kinetic-electron nonlinear holdouts are validated",
-  "tighten transport-window uncertainty propagation before any absolute saturated-flux model is promoted",
-]
-
-[[modules]]
-module = "scripts.checks._gates.transport_windows"
-path = "scripts/checks/_gates/transport_windows.py"
-owned_modules = [
-  "gkx.diagnostics.saturation",
-]
-owner_lane = "nonlinear late-window convergence metadata for quasilinear holdouts"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "post-transient nonlinear heat-flux windows used for reduced-model holdout validation",
-  "block-bootstrap uncertainty and running-average stationarity gates for noisy turbulence traces",
-]
-physics_contracts = [
-  "absolute-flux quasilinear promotion requires converged nonlinear holdout windows with provenance",
-  "startup/transient-only traces and compact finite-difference plumbing windows cannot promote transport claims",
-]
-numerics_contracts = [
-  "late-window means, running-mean drift, SEM, block-bootstrap SEM, and sample counts remain finite",
-  "NaN late-window samples and undersampled windows fail closed by default",
-]
-fast_tests = [
-  "tests/unit/quasilinear/test_quasilinear.py",
-  "tests/validation/benchmarks/test_benchmarking.py",
-]
-artifact_paths = [
-  "docs/_static/quasilinear_promotion_guardrails.json",
-]
-next_tests = [
-  "regenerate promoted-candidate reports with serialized nonlinear_window_stats once true holdout gates pass",
-  "extend CSV convergence ingestion to NetCDF when a direct promotion workflow needs it",
 ]
 
 [[modules]]
@@ -1127,73 +1032,6 @@ artifact_paths = [
 ]
 next_tests = [
   "add direct tests for every public diagnostic written to NetCDF",
-]
-
-[[modules]]
-module = "scripts.checks._gates.validation_gates"
-path = "scripts/checks/_gates/validation_gates.py"
-owner_lane = "JSON-ready acceptance metrics for linear, nonlinear, eigenfunction, and response gates"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 98.0
-reference_anchors = [
-  "Merlo shaped-tokamak zonal response and Rosenbluth-Hinton/GAM conventions",
-  "W7-X stella/GENE zonal-flow and linear benchmark gate structure",
-]
-physics_contracts = [
-  "gate reports preserve observable names, references, tolerances, and pass/fail details",
-  "open exploratory artifacts can be documented without entering the release gate index",
-]
-numerics_contracts = [
-  "absolute/relative gates handle zero references and nonfinite values deterministically",
-  "observed-order gates use pairwise slopes and final-error thresholds",
-]
-fast_tests = [
-  "tests/validation/physics_gates/test_collision_physics.py",
-]
-artifact_paths = [
-  "docs/_static/validation_gate_index.json",
-  "docs/_static/miller_zonal_response_pilot.json",
-]
-next_tests = [
-  "add branch coverage for failed-gate JSON serialization",
-  "add regression tests for open exploratory gate exclusion",
-]
-
-[[modules]]
-module = "scripts.checks._gates.zonal_validation"
-path = "scripts/checks/_gates/zonal_validation.py"
-owner_lane = "W7-X/Miller zonal-response trace normalization, reference loading, and tails"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "W7-X stella/GENE JPP zonal-flow benchmark",
-  "Merlo shaped-tokamak Rosenbluth-Hinton/GAM response read-off",
-]
-physics_contracts = [
-  "line-first and mode-first normalizations remain explicit",
-  "tail metrics distinguish residual error, recurrence, and velocity-space moment pile-up",
-]
-numerics_contracts = [
-  "trace loaders sort, finite-filter, normalize, and window data deterministically",
-  "closure probes expose hypercollision source and strength explicitly",
-]
-fast_tests = [
-  "tests/validation/physics_gates/test_collision_physics.py",
-  "tests/tools/comparison/test_reference_comparison_tools.py",
-]
-artifact_paths = [
-  "docs/_static/w7x_zonal_response_panel.json",
-  "docs/_static/w7x_zonal_closure_ladder_kx070.json",
-  "docs/_static/w7x_zonal_state_convention_audit.json",
-  "docs/_static/w7x_zonal_recurrence_sweep_kx070.json",
-  "docs/_static/w7x_zonal_hypercollision_probe_kx070.json",
-  "benchmarks/references/gkx_1_7_release_contract.json",
-]
-next_tests = [
-  "promote the final W7-X recurrence/closure method into a release gate when it matches the literature trace",
-  "rerun parallel W7-X recurrence sweeps after the VMEC/eik cache fix to verify the office workflow",
 ]
 
 [[modules]]
@@ -1738,32 +1576,6 @@ artifact_paths = [
   ]
 next_tests = [
   "add office two-GPU identity and speedup gates for UQ ensembles",
-]
-
-[[modules]]
-module = "scripts.checks._gates.zonal_plots"
-path = "scripts/checks/_gates/zonal_plots.py"
-owner_lane = "zonal-response trace and envelope publication plots"
-status = "active"
-coverage_priority = "medium"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "zonal-flow response and damping/recurrence validation figures",
-]
-physics_contracts = [
-  "zonal figures show residual response, fit window, envelope peaks, damping, and GAM frequency",
-]
-numerics_contracts = [
-  "time and response arrays are one-dimensional and length-matched before plotting",
-]
-fast_tests = [
-  "tests/unit/diagnostics/test_analysis.py",
-]
-artifact_paths = [
-  "docs/_static/w7x_zonal_response_panel.png",
-]
-next_tests = [
-  "add image-content smoke tests for residual and envelope annotations",
 ]
 
 [[modules]]
