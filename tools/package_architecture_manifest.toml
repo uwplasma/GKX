@@ -1128,7 +1128,9 @@ recursive = true
 # traced operand (was one XLA compile per chunk, 22x wall on the KE deck), measured.
 # 75552 -> 75904: structured imex-ars3 factor (plan 5.4, block Thomas over
 # Hermite + Woodbury fields; 53 GB -> 1.5 GB at 64x64x24 (4,8)), measured.
-baseline = 75904
+# 75904 -> 75928: CPU thread guard in gkx/__init__.py (XLA:CPU deadlock on 2-3
+# CPUs), measured.
+baseline = 75928
 target = 45000
 
 [[line_budget_policy.counts]]
