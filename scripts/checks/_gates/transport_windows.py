@@ -17,7 +17,7 @@ import math
 
 import numpy as np
 
-from gkx.diagnostics.metadata import _explicit_true, _gate
+from scripts.checks._gates.evidence import _explicit_true, _gate
 
 
 # Consolidated from window_config.py.

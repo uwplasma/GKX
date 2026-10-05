@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from gkx.diagnostics.metadata import _explicit_true, _nonnegative_int
+from scripts.checks._gates.evidence import _explicit_true, _nonnegative_int
 from scripts.campaigns.vmec_transport_admission import (
     VMEXNonlinearAuditPolicy,
     VMEXNonlinearCampaignPolicy,
