@@ -262,6 +262,8 @@ def _fit_auto_candidate(
     signal = np.asarray(
         extract_mode_time_series(data, selection, method=options.mode_method)
     )
+    tmin: float | None
+    tmax: float | None
     if options.auto_window:
         gamma, omega, tmin, tmax, r2, r2_phase = fit_growth_rate_auto_with_stats(
             inputs.t,
@@ -335,9 +337,12 @@ def _fit_requested_runtime_linear_signal(
     use_density = inputs.fit_key == "density" and inputs.density is not None
     signal_name = "density" if use_density else "phi"
     source = inputs.density if use_density else inputs.phi
+    assert source is not None
     signal = np.asarray(
         extract_mode_time_series(source, selection, method=options.mode_method)
     )
+    fit_tmin: float | None
+    fit_tmax: float | None
     if options.auto_window:
         gamma, omega, fit_tmin, fit_tmax = fit_growth_rate_auto(
             inputs.t,

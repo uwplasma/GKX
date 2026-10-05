@@ -118,7 +118,7 @@ def quasilinear(root: Path) -> dict[str, object]:
 
 def imex(root: Path) -> dict[str, object]:
     deck = (root / "examples/05_kinetic_electrons/case.toml").read_text()
-    deck = re.sub(r'(?m)^method = .*$', 'method = "imex-ars3"', deck)
+    deck = re.sub(r"(?m)^method = .*$", 'method = "imex-ars3"', deck)
     deck = re.sub(r"(?m)^fixed_dt = .*$", "fixed_dt = true", deck)
     path = Path(tempfile.mkdtemp()) / "case.toml"
     path.write_text(deck)

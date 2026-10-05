@@ -45,6 +45,7 @@ def test_growth_rate_public_facades_point_to_numerical_owners() -> None:
 
     import gkx.diagnostics.analysis as analysis
     import gkx.diagnostics.growth_rates as growth_rates
+
     assert growth_rates.instantaneous_growth_rate_from_phi.__module__ == (
         "gkx.diagnostics.growth_rates"
     )
