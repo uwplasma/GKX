@@ -34,14 +34,13 @@ from gkx.terms.nonlinear import (
     nonlinear_em_contribution,
     nonlinear_em_components,
 )
-from gkx.runtime import (
+from scripts.benchmarks.secondary_slab_workflow import (
     _embed_linear_seed_on_full_grid,
     _leading_finite_prefix,
     _tail_mean_pair,
     build_secondary_stage2_config,
     run_secondary_modes,
     run_secondary_seed,
-    write_restart_state,
 )
 from gkx.config import (
     RuntimeConfig,
@@ -1696,15 +1695,6 @@ def test_build_secondary_stage2_config_sets_restart_controls(tmp_path) -> None:
     assert out.init.init_single is False
     assert out.time.method == "sspx3"
     assert out.time.dt == 0.01
-
-
-def test_write_restart_state_roundtrip(tmp_path) -> None:
-    state = (
-        np.arange(12, dtype=np.float32) + 1j * np.arange(12, dtype=np.float32)
-    ).astype(np.complex64)
-    path = write_restart_state(tmp_path / "restart.bin", state)
-    restored = np.fromfile(path, dtype=np.complex64)
-    assert np.allclose(restored, state)
 
 
 def test_run_secondary_modes_uses_requested_targets(monkeypatch) -> None:
