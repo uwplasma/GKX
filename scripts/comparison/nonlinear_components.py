@@ -18,7 +18,6 @@ from gkx.terms.nonlinear import (
     _laguerre_chi_fields,
     _LaguerreGridContext,
     _multi_bracket_fn,
-    _nonlinear_bracket_context,
     _NonlinearBracketContext,
     _prepare_nonlinear_path,
     _PreparedNonlinearInputs,
@@ -264,7 +263,7 @@ def nonlinear_em_components(
         b=b,
         laguerre_mode=laguerre_mode,
     )
-    ctx = _nonlinear_bracket_context(
+    ctx = _NonlinearBracketContext(
         tz=tz,
         vth=vth,
         sqrt_m=sqrt_m,
