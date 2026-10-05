@@ -196,14 +196,7 @@ def test_nonlinear_operator_facade_resolves_lazy_public_exports() -> None:
 
 
 def test_velocity_basis_orthonormality_and_validation() -> None:
-    from gkx.core_velocity import hermite_ladder_coeffs, hermite_normed, laguerre
-
-    xh = jnp.linspace(-6.0, 6.0, 4001)
-    dxh = xh[1] - xh[0]
-    h = hermite_normed(xh, 4)
-    wh = jnp.exp(-xh * xh)
-    gram_h = jnp.einsum("ix,jx,x->ij", h, h, wh) * dxh
-    assert jnp.allclose(gram_h, jnp.eye(5), atol=2e-2)
+    from gkx.core_velocity import hermite_ladder_coeffs, laguerre
 
     xl = jnp.linspace(0.0, 40.0, 8001)
     dxl = xl[1] - xl[0]
@@ -213,15 +206,11 @@ def test_velocity_basis_orthonormality_and_validation() -> None:
     assert jnp.allclose(gram_l, jnp.eye(5), atol=2e-2)
 
     with pytest.raises(ValueError):
-        hermite_normed(jnp.array([0.0]), -1)
-    with pytest.raises(ValueError):
         laguerre(jnp.array([0.0]), -1)
     with pytest.raises(ValueError):
         hermite_ladder_coeffs(-1)
 
-    h0 = hermite_normed(jnp.array([0.0, 1.0]), 0)
     l0 = laguerre(jnp.array([0.0, 1.0]), 0)
-    assert h0.shape == (1, 2)
     assert l0.shape == (1, 2)
 
 

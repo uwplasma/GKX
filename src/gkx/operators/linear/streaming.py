@@ -605,12 +605,6 @@ def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
     return jax.lax.dynamic_update_slice(out, body, starts)
 
 
-def _shift_with_zeros(arr: jnp.ndarray, axis: int, offset: int) -> jnp.ndarray:
-    """Shift along ``axis`` and fill the exposed entries with zeros."""
-
-    return shift_axis(arr, offset, axis)
-
-
 def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
     """Multiply Hermite coefficients by v_parallel (ladder form)."""
 
@@ -619,8 +613,8 @@ def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
     sqrt_p, sqrt_m = hermite_ladder_coeffs(Nm - 1)
     sqrt_p = sqrt_p[:Nm]
     sqrt_m = sqrt_m[:Nm]
-    G_plus = _shift_with_zeros(G, axis_m, 1)
-    G_minus = _shift_with_zeros(G, axis_m, -1)
+    G_plus = shift_axis(G, 1, axis_m)
+    G_minus = shift_axis(G, -1, axis_m)
     shape = [1] * G.ndim
     shape[axis_m] = Nm
     sqrt_p = sqrt_p.reshape(shape)
@@ -651,8 +645,8 @@ def apply_laguerre_x(G: jnp.ndarray) -> jnp.ndarray:
     axis_l = -5
     Nl = G.shape[axis_l]
     ell = jnp.arange(Nl)
-    G_plus = _shift_with_zeros(G, axis_l, 1)
-    G_minus = _shift_with_zeros(G, axis_l, -1)
+    G_plus = shift_axis(G, 1, axis_l)
+    G_minus = shift_axis(G, -1, axis_l)
     l_shape = [1] * G.ndim
     l_shape[axis_l] = Nl
     l_col = ell.reshape(l_shape)

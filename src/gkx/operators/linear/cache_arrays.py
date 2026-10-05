@@ -4,36 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 
 from gkx.core_velocity import J_l_all
 from gkx.operators.linear.params import LinearParams, _as_species_array
+from gkx.operators.linear.streaming import shift_axis
 
 if TYPE_CHECKING:
     from gkx.operators.linear.cache_model import LinearCache
-
-
-def _shift_axis_for_cache(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
-    """Shift an array along one axis with zeros introduced at the boundary."""
-
-    axis = axis % arr.ndim
-    if offset == 0:
-        return arr
-    n = arr.shape[axis]
-    if abs(offset) >= n:
-        return jnp.zeros_like(arr)
-    out = jnp.zeros_like(arr)
-    if offset > 0:
-        body = jax.lax.slice_in_dim(arr, offset, n, axis=axis)
-        starts = [0] * arr.ndim
-        starts[axis] = 0
-        return jax.lax.dynamic_update_slice(out, body, starts)
-    body = jax.lax.slice_in_dim(arr, 0, n + offset, axis=axis)
-    starts = [0] * arr.ndim
-    starts[axis] = -offset
-    return jax.lax.dynamic_update_slice(out, body, starts)
 
 
 def _numpy_dtype_for_jax(real_dtype: jnp.dtype) -> type[np.float32] | type[np.float64]:
@@ -136,7 +115,7 @@ def _build_gyroaverage_cache_arrays(
     """Build species-major gyroaverage factors without a Python-level vmap."""
 
     Jl = jnp.moveaxis(J_l_all(b, l_max=Nl - 1), 0, 1).astype(real_dtype)
-    JlB = Jl + _shift_axis_for_cache(Jl, -1, axis=1)
+    JlB = Jl + shift_axis(Jl, -1, axis=1)
     return Jl, JlB.astype(real_dtype)
 
 

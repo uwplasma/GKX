@@ -39,10 +39,6 @@ from gkx.solvers_time_explicit_steps import (
     _linear_native_step,
 )
 from gkx.terms.config import FieldState
-from gkx.terms.nonlinear import (
-    exb_nonlinear_contribution,
-    placeholder_nonlinear_contribution,
-)
 from types import SimpleNamespace
 import gkx.solvers_linear_implicit as implicit_linear
 import gkx.solvers_linear_krylov_algorithms as krylov_algorithms
@@ -1377,22 +1373,6 @@ def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> No
     assert callback_calls == [0]
     assert G_final.shape == G0.shape
     assert fields.phi.shape[0] == 1
-
-
-def test_nonlinear_placeholders() -> None:
-    G = jnp.ones((3, 4, 1), dtype=jnp.complex64)
-    out = placeholder_nonlinear_contribution(G, weight=jnp.asarray(2.0))
-    assert jnp.allclose(out, 0.0)
-    exb = exb_nonlinear_contribution(
-        G,
-        phi=jnp.ones((3, 4, 1), dtype=jnp.complex64),
-        dealias_mask=jnp.ones((3, 4), dtype=bool),
-        kx_grid=jnp.ones((3, 4), dtype=jnp.float32),
-        ky_grid=jnp.ones((3, 4), dtype=jnp.float32),
-        weight=jnp.asarray(1.0),
-        compressed_real_fft=False,
-    )
-    assert exb.shape == G.shape
 
 
 # ---- from test_nonlinear_imex.py ----

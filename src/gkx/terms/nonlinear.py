@@ -898,13 +898,3 @@ def nonlinear_em_components(
         components,
         squeeze_species=path.prep.squeeze_species,
     )
-
-
-def placeholder_nonlinear_contribution(
-    G: jnp.ndarray,
-    *,
-    weight: jnp.ndarray,
-) -> jnp.ndarray:
-    """Return a zero contribution for shape-only tests and disabled-term paths."""
-
-    return jnp.zeros_like(G) * weight

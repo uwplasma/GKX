@@ -65,7 +65,6 @@ _MODULE_EXPORTS: dict[str, tuple[str, ...]] = {
         "integrate_linear_sharded",
         "integrate_nonlinear_sharded",
         "integrate_nonlinear_species_hermite",
-        "species_hermite_nonlinear_rhs",
     ),
 }
 

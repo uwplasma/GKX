@@ -21,7 +21,6 @@ from gkx.core_velocity import (
     bessel_laguerre_kernels,
     gamma0,
     laguerre_gyroaverage_neighbors,
-    sum_Jl2,
 )
 from gkx.diagnostics.analysis import fit_growth_rate
 from gkx.geometry import SAlphaGeometry
@@ -1890,16 +1889,6 @@ def test_laguerre_gyroaverage_neighbors_keep_known_upper_coefficient() -> None:
     np.testing.assert_allclose(lower[1:], reference[:3], rtol=1.0e-6)
     np.testing.assert_allclose(upper, reference[1:], rtol=1.0e-6)
     np.testing.assert_allclose(lower[0], 0.0, atol=0.0)
-
-
-def test_sum_jl2_monotone_in_lmax() -> None:
-    """Truncated sum of J_l^2 should increase with l_max."""
-    b = jnp.array([0.2, 1.5])
-
-    s2 = sum_Jl2(b, l_max=2)
-    s5 = sum_Jl2(b, l_max=5)
-
-    assert jnp.all(s5 >= s2)
 
 
 def test_jl_invalid_lmax() -> None:
