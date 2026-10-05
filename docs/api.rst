@@ -702,7 +702,7 @@ Runtime Orchestration
    :members:
    :private-members:
 
-.. automodule:: gkx.workflows.runtime.orchestration_artifacts
+.. automodule:: gkx.workflows.runtime.artifacts
    :members:
    :private-members:
 

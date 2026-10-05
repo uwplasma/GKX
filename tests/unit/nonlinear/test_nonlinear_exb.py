@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from support.runtime_patch import patch_runtime
+
 from gkx.config import GridConfig
 from gkx.config import InitializationConfig, TimeConfig
 from gkx.core_grid import build_spectral_grid, real_fft_mesh
@@ -32,7 +34,7 @@ from gkx.terms.nonlinear import (
     nonlinear_em_contribution,
     nonlinear_em_components,
 )
-from gkx.workflows.nonlinear import (
+from gkx.runtime import (
     _embed_linear_seed_on_full_grid,
     _leading_finite_prefix,
     _tail_mean_pair,
@@ -1730,7 +1732,7 @@ def test_run_secondary_modes_uses_requested_targets(monkeypatch) -> None:
         captured.append((float(kwargs["ky_target"]), float(kwargs["kx_target"])))
         return _Result()
 
-    monkeypatch.setattr("gkx.workflows.nonlinear._run_runtime_nonlinear", _fake_runner)
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", _fake_runner)
     rows = run_secondary_modes(
         _base_cfg(), modes=((0.0, -0.05), (0.1, 0.05)), Nl=3, Nm=8
     )
@@ -1783,8 +1785,9 @@ def test_run_secondary_modes_uses_phi_fit_for_gamma_and_tail_for_omega(
                 phi_mode_t=signal,
             )
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         lambda *args, **kwargs: _Result(),
     )
     row = run_secondary_modes(
@@ -1817,8 +1820,9 @@ def test_run_secondary_modes_fits_mode_trace_when_diagnostics_invalid(
                 phi_mode_t=signal,
             )
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         lambda *args, **kwargs: _Result(),
     )
     row = run_secondary_modes(
@@ -1867,8 +1871,9 @@ def test_run_secondary_seed_requires_final_state(monkeypatch, tmp_path: Path) ->
     class _Result:
         state = None
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_linear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_linear",
         lambda *args, **kwargs: _Result(),
     )
     with pytest.raises(RuntimeError):
@@ -1881,8 +1886,9 @@ def test_run_secondary_modes_requires_diagnostics(monkeypatch) -> None:
     class _Result:
         diagnostics = None
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         lambda *args, **kwargs: _Result(),
     )
     with pytest.raises(RuntimeError):
@@ -1908,8 +1914,9 @@ def test_run_secondary_modes_uses_tail_when_phi_mode_missing(monkeypatch) -> Non
                 phi_mode_t=None,
             )
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         lambda *args, **kwargs: _Result(),
     )
     row = run_secondary_modes(

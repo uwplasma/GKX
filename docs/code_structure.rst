@@ -177,8 +177,7 @@ Runtime layers
 3. Diagnostics and results: ``workflows/runtime/diagnostics.py``,
    ``workflows/runtime/diagnostic_arrays.py``,
    ``workflows/runtime/results.py``.
-4. Artifacts: ``workflows/runtime/artifacts.py``,
-   ``workflows/runtime/orchestration_artifacts.py``, ``artifacts/``.
+4. Artifacts: ``workflows/runtime/artifacts.py``, ``artifacts/``.
 5. Executable: ``cli.py`` builds the parser; ``workflows/runtime/commands.py``
    runs the linear, scan, nonlinear, and ``--plot`` commands and owns the
    programmatic case helpers ``run_linear_case`` and ``run_nonlinear_case``.

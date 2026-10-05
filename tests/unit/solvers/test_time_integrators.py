@@ -2436,7 +2436,9 @@ def test_krylov_and_explicit_runtime_refuse_a_moment_collision_operator():
     """Paths that cannot carry the operator must refuse, not run as LB."""
 
     from gkx.config import RuntimeConfig, RuntimeSpeciesConfig
-    from gkx.runtime import run_runtime_linear
+    from gkx.runtime import (
+        run_runtime_linear,
+    )
 
     base = RuntimeConfig()
     cfg = dataclasses.replace(

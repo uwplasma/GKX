@@ -170,7 +170,6 @@ module = "gkx.workflows.runtime.orchestration_scan"
 path = "src/gkx/workflows/runtime/orchestration_scan.py"
 owned_modules = [
   "gkx.workflows.runtime.chunks",
-  "gkx.workflows.runtime.orchestration_artifacts",
   "gkx.workflows.runtime.results",
   "gkx.workflows.runtime.warm_start",
 ]

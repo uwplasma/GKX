@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from support.runtime_patch import patch_runtime
+
 from dataclasses import replace
 from gkx.artifacts.io import (
     load_netcdf_restart_state,
@@ -32,10 +34,6 @@ from gkx.operators.linear.cache_builder import (
 from gkx.operators.linear.params import LinearParams
 from gkx.runtime import (
     _build_initial_condition,
-    _centered_glibc_random_pairs,
-    _dealiased_initial_mode_pairs,
-    _periodic_zp_from_grid,
-    _infer_runtime_nonlinear_steps,
     RuntimeLinearResult,
     RuntimeLinearScanResult,
     build_runtime_geometry,
@@ -46,6 +44,14 @@ from gkx.runtime import (
     run_runtime_nonlinear,
     run_runtime_scan,
 )
+from gkx.workflows.runtime.startup import (
+    _centered_glibc_random_pairs,
+    _dealiased_initial_mode_pairs,
+    _periodic_zp_from_grid,
+)
+from gkx.workflows.nonlinear import (
+    _infer_runtime_nonlinear_steps,
+)
 from gkx.terms.assembly import compute_fields_cached
 from gkx.terms.config import FieldState
 from gkx.workflows.nonlinear import (
@@ -53,11 +59,15 @@ from gkx.workflows.nonlinear import (
     _RunContext,
     _saturation_stop_condition,
 )
-from gkx.workflows.runtime.artifacts import (
+from gkx.artifacts.spectral_layout import (
     _condense_kx,
     _condense_kykx,
     _restart_to_netcdf_layout,
+)
+from gkx.artifacts.io import (
     load_nonlinear_netcdf_diagnostics,
+)
+from gkx.workflows.runtime.artifacts import (
     run_runtime_nonlinear_with_artifacts,
     write_runtime_nonlinear_artifacts,
 )
@@ -83,7 +93,7 @@ from gkx.config import (
 )
 from gkx.workflows.runtime.diagnostics import refit_runtime_linear_trajectory
 from gkx.workflows.runtime.orchestration_scan import (
-    _runtime_scan_options,
+    _RuntimeScanOptions,
     _scan_worker_tasks,
     _worker_parallel_strategy,
     run_runtime_parameter_scan,
@@ -263,7 +273,6 @@ def test_runtime_linear_cyclone_etg_kbm_time_smoke() -> None:
 def test_runtime_linear_etg_defaults_to_frequency_targeted_krylov(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     electron = RuntimeSpeciesConfig(
         name="electron",
@@ -299,7 +308,7 @@ def test_runtime_linear_etg_defaults_to_frequency_targeted_krylov(
             EigenSolveStatus("shift_invert", "shift_invert", 1.0e-9, 1.0e-6, True),
         )
 
-    monkeypatch.setattr(runtime, "dominant_eigenpair", fake_dominant_eigenpair)
+    patch_runtime(monkeypatch, "dominant_eigenpair", fake_dominant_eigenpair)
 
     out = run_runtime_linear(cfg, ky_target=2.0, Nl=4, Nm=6, solver="krylov")
 
@@ -884,7 +893,6 @@ def test_runtime_linear_rejects_invalid_fit_signal() -> None:
 def test_runtime_linear_auto_fit_prefers_density_signal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     base_cfg = _base_runtime_cfg()
     cfg = replace(
@@ -902,9 +910,9 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64
@@ -920,13 +928,13 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
             3.0 * np.ones((3, 1, 1, grid.z.size), dtype=np.complex64),
         )
 
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "integrate_linear_diagnostics",
         _fake_integrate_linear_diagnostics,
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "extract_mode_time_series",
         lambda arr, sel, method="project": (
             np.asarray([1.0, 1.1, 1.2], dtype=np.complex128)
@@ -934,8 +942,8 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
             else np.asarray([1.0, 2.0, 4.0], dtype=np.complex128)
         ),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "fit_growth_rate_auto_with_stats",
         lambda t, signal, **kwargs: (
             (0.05, -0.02, 0.01, 0.03, 1.0, 0.0)
@@ -943,13 +951,13 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
             else (0.2, -0.08, 0.01, 0.03, 2.0, 0.0)
         ),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "extract_eigenfunction",
         lambda *args, **kwargs: np.ones(grid.z.size, dtype=np.complex128),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "apply_diagnostic_normalization",
         lambda gamma, omega, **kwargs: (gamma, omega),
     )
@@ -976,7 +984,6 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
 def test_runtime_linear_forwards_velocity_parallel_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg0 = _base_runtime_cfg()
     cfg = replace(
@@ -990,9 +997,9 @@ def test_runtime_linear_forwards_velocity_parallel_config(
     geom = SAlphaGeometry.from_config(cfg.geometry)
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64
@@ -1004,26 +1011,26 @@ def test_runtime_linear_forwards_velocity_parallel_config(
         phi_t = np.ones((3, 1, 1, grid.z.size), dtype=np.complex64)
         return np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64), phi_t
 
-    monkeypatch.setattr(
-        runtime, "integrate_linear_from_config", _fake_integrate_linear_from_config
+    patch_runtime(
+        monkeypatch, "integrate_linear_from_config", _fake_integrate_linear_from_config
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "extract_mode_time_series",
         lambda *args, **kwargs: np.asarray([1.0, 1.1, 1.2], dtype=np.complex128),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "fit_growth_rate_auto",
         lambda *args, **kwargs: (0.05, -0.02, 0.01, 0.03),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "extract_eigenfunction",
         lambda *args, **kwargs: np.ones(grid.z.size, dtype=np.complex128),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "apply_diagnostic_normalization",
         lambda gamma, omega, **kwargs: (gamma, omega),
     )
@@ -1055,7 +1062,6 @@ def test_runtime_linear_forwards_velocity_parallel_config(
 def test_runtime_linear_auto_solver_falls_back_to_krylov(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = replace(
         _base_runtime_cfg(),
@@ -1068,35 +1074,37 @@ def test_runtime_linear_auto_solver_falls_back_to_krylov(
     geom = SAlphaGeometry.from_config(cfg.geometry)
     status: list[str] = []
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64
         ),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "integrate_linear_from_config",
         lambda *args, **kwargs: (
             np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64),
             np.ones((3, 1, 1, grid.z.size), dtype=np.complex64),
         ),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "extract_mode_time_series",
         lambda *args, **kwargs: np.asarray([1.0, 0.9, 0.8], dtype=np.complex128),
     )
-    monkeypatch.setattr(
-        runtime, "fit_growth_rate_auto", lambda *args, **kwargs: (-0.1, 0.2, 0.01, 0.03)
+    patch_runtime(
+        monkeypatch,
+        "fit_growth_rate_auto",
+        lambda *args, **kwargs: (-0.1, 0.2, 0.01, 0.03),
     )
-    monkeypatch.setattr(
-        runtime, "build_linear_cache", lambda *args, **kwargs: SimpleNamespace()
+    patch_runtime(
+        monkeypatch, "build_linear_cache", lambda *args, **kwargs: SimpleNamespace()
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "dominant_eigenpair",
         lambda *args, **kwargs: (
             np.asarray(0.3 + 0.4j, dtype=np.complex64),
@@ -1104,8 +1112,8 @@ def test_runtime_linear_auto_solver_falls_back_to_krylov(
             EigenSolveStatus("adaptive", "adaptive", 1.0e-12, 1.0e-9, True),
         ),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "apply_diagnostic_normalization",
         lambda gamma, omega, **kwargs: (gamma, omega),
     )
@@ -1146,8 +1154,6 @@ def test_runtime_linear_implicit_run_fails_closed_on_unconverged_solves(
 ) -> None:
     """Both implicit time paths request solve stats and refuse an unconverged run."""
 
-    import gkx.runtime as runtime
-
     cfg0 = _base_runtime_cfg()
     cfg = replace(
         cfg0,
@@ -1170,27 +1176,27 @@ def test_runtime_linear_implicit_run_fails_closed_on_unconverged_solves(
         captured.append(kwargs)
         return state, phi_t, np.ones_like(phi_t), stats[-1]
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(runtime, "_build_initial_condition", lambda *a, **k: state)
-    monkeypatch.setattr(runtime, "integrate_linear_from_config", _fake_from_config)
-    monkeypatch.setattr(runtime, "integrate_linear_diagnostics", _fake_diagnostics)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(monkeypatch, "_build_initial_condition", lambda *a, **k: state)
+    patch_runtime(monkeypatch, "integrate_linear_from_config", _fake_from_config)
+    patch_runtime(monkeypatch, "integrate_linear_diagnostics", _fake_diagnostics)
+    patch_runtime(
+        monkeypatch,
         "extract_mode_time_series",
         lambda *args, **kwargs: np.asarray([1.0, 1.1, 1.2], dtype=np.complex128),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "fit_growth_rate_auto",
         lambda *args, **kwargs: (0.05, -0.02, 0.01, 0.03),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "extract_eigenfunction",
         lambda *args, **kwargs: np.ones(grid.z.size, dtype=np.complex128),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "apply_diagnostic_normalization",
         lambda gamma, omega, **kwargs: (gamma, omega),
     )
@@ -1226,7 +1232,6 @@ def test_runtime_linear_implicit_run_fails_closed_on_unconverged_solves(
 def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     base = replace(
         _base_runtime_cfg(),
@@ -1241,19 +1246,19 @@ def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
     captured: dict[str, object] = {}
     stats: list[ImplicitSolveStats] = []
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda *args, **kwargs: SimpleNamespace(),
     )
-    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    patch_runtime(monkeypatch, "build_runtime_term_config", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
     )
     shape = (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(shape, dtype=np.complex64),
     )
@@ -1267,7 +1272,7 @@ def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
             stats[-1],
         )
 
-    monkeypatch.setattr(runtime, "integrate_nonlinear_from_config", _fake_final_state)
+    patch_runtime(monkeypatch, "integrate_nonlinear_from_config", _fake_final_state)
 
     stats.append(_runtime_implicit_stats(1))
     with pytest.raises(
@@ -1628,7 +1633,6 @@ def test_runtime_nonlinear_disable_diagnostics() -> None:
 def test_runtime_nonlinear_disable_diagnostics_uses_final_state_integrator(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = replace(
         _base_runtime_cfg(),
@@ -1641,18 +1645,18 @@ def test_runtime_nonlinear_disable_diagnostics_uses_final_state_integrator(
     geom = SAlphaGeometry.from_config(cfg.geometry)
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda *args, **kwargs: SimpleNamespace(),
     )
-    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    patch_runtime(monkeypatch, "build_runtime_term_config", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
@@ -1674,7 +1678,7 @@ def test_runtime_nonlinear_disable_diagnostics_uses_final_state_integrator(
             ),
         )
 
-    monkeypatch.setattr(runtime, "integrate_nonlinear_from_config", _fake_final_state)
+    patch_runtime(monkeypatch, "integrate_nonlinear_from_config", _fake_final_state)
 
     out = run_runtime_nonlinear(
         cfg,
@@ -1716,7 +1720,6 @@ def test_runtime_nonlinear_validates_dt_steps_and_fixed_mode_contract() -> None:
 def test_runtime_nonlinear_adaptive_chunk_no_progress_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import gkx.runtime as runtime
 
     cfg = replace(
         _base_runtime_cfg(),
@@ -1729,18 +1732,18 @@ def test_runtime_nonlinear_adaptive_chunk_no_progress_raises(
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: geom)
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: geom)
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda *args, **kwargs: SimpleNamespace(),
     )
-    monkeypatch.setattr(runtime, "build_runtime_term_config", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
+    patch_runtime(monkeypatch, "build_runtime_term_config", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch, "_select_nonlinear_mode_indices", lambda *args, **kwargs: (1, 0)
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
@@ -1761,8 +1764,8 @@ def test_runtime_nonlinear_adaptive_chunk_no_progress_raises(
         energy_t=np.asarray([0.0]),
     )
 
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "integrate_nonlinear_explicit_diagnostics_state",
         lambda *args, **kwargs: (
             np.asarray([0.0]),
@@ -2295,8 +2298,9 @@ def test_runtime_nonlinear_adaptive_default_steps_chunk_until_tmax(monkeypatch) 
         )
         return t, diag, np.asarray(G0) + 1.0, fields
 
-    monkeypatch.setattr(
-        "gkx.runtime.integrate_nonlinear_explicit_diagnostics_state",
+    patch_runtime(
+        monkeypatch,
+        "integrate_nonlinear_explicit_diagnostics_state",
         _fake_integrator,
     )
 
@@ -2502,8 +2506,9 @@ def test_runtime_nonlinear_resolves_cfl_factor(
         )
         return t, diag, np.asarray(G0), None
 
-    monkeypatch.setattr(
-        "gkx.runtime.integrate_nonlinear_explicit_diagnostics_state",
+    patch_runtime(
+        monkeypatch,
+        "integrate_nonlinear_explicit_diagnostics_state",
         _fake_integrator,
     )
 
@@ -2751,7 +2756,7 @@ def test_runtime_linear_accepts_vmec_model_via_generated_eik(
     sampled = sample_flux_tube_geometry(analytic, theta)
     _write_root_eik_geometry(path, sampled, Dataset)
 
-    monkeypatch.setattr("gkx.runtime.generate_runtime_vmec_eik", lambda cfg: path)
+    patch_runtime(monkeypatch, "generate_runtime_vmec_eik", lambda cfg: path)
 
     cfg_vmec = replace(
         cfg,
@@ -2820,7 +2825,7 @@ def test_runtime_linear_accepts_miller_model_via_generated_eik(
     path = tmp_path / "miller.eiknc.nc"
     _write_root_eik_geometry(path, sampled, Dataset)
 
-    monkeypatch.setattr("gkx.runtime.generate_runtime_miller_eik", lambda cfg: path)
+    patch_runtime(monkeypatch, "generate_runtime_miller_eik", lambda cfg: path)
 
     cfg_miller = replace(
         cfg,
@@ -3453,8 +3458,9 @@ def test_runtime_nonlinear_mode_selection_respects_dealias(monkeypatch) -> None:
         )
         return t, diag, np.asarray(G0), None
 
-    monkeypatch.setattr(
-        "gkx.runtime.integrate_nonlinear_explicit_diagnostics_state",
+    patch_runtime(
+        monkeypatch,
+        "integrate_nonlinear_explicit_diagnostics_state",
         _fake_integrator,
     )
     _res = run_runtime_nonlinear(cfg, ky_target=0.3, Nl=3, Nm=4, steps=1)
@@ -3517,8 +3523,9 @@ def test_runtime_nonlinear_mode_selection_honors_kx_target(monkeypatch) -> None:
         )
         return t, diag, np.asarray(G0), None
 
-    monkeypatch.setattr(
-        "gkx.runtime.integrate_nonlinear_explicit_diagnostics_state",
+    patch_runtime(
+        monkeypatch,
+        "integrate_nonlinear_explicit_diagnostics_state",
         _fake_integrator,
     )
     _res = run_runtime_nonlinear(
@@ -3550,11 +3557,12 @@ def test_run_linear_case_uses_toml_output_path(
             selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
         )
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.toml.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         fake_load_runtime_from_toml,
     )
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_run_runtime_linear)
 
     rc = run_linear_case(tmp_path / "dummy.toml", show_progress=False)
 
@@ -3704,12 +3712,14 @@ def test_run_nonlinear_case_uses_toml_output_path(
             {"summary": str(summary), "diagnostics": str(diag_path)},
         )
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.toml.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         fake_load_runtime_from_toml,
     )
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.artifacts.run_runtime_nonlinear_with_artifacts",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear_with_artifacts",
         fake_run_runtime_nonlinear_with_artifacts,
     )
 
@@ -3743,11 +3753,12 @@ def test_run_linear_case_without_output_path_prints_summary_only(
             selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
         )
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.toml.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         fake_load_runtime_from_toml,
     )
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_run_runtime_linear)
 
     rc = run_linear_case(tmp_path / "dummy.toml", show_progress=False)
     out = capsys.readouterr().out
@@ -3779,11 +3790,12 @@ def test_run_nonlinear_case_without_output_path_and_without_diagnostics(
             kx_selected=0.0,
         )
 
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.toml.load_runtime_from_toml",
+    patch_runtime(
+        monkeypatch,
+        "load_runtime_from_toml",
         fake_load_runtime_from_toml,
     )
-    monkeypatch.setattr(runtime, "run_runtime_nonlinear", fake_run_runtime_nonlinear)
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", fake_run_runtime_nonlinear)
 
     rc = run_nonlinear_case(tmp_path / "dummy.toml", show_progress=False)
     out = capsys.readouterr().out
@@ -3822,9 +3834,7 @@ def test_run_runtime_scan_serial_forwards_per_ky(
             selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
 
     out = run_runtime_scan(
         cfg,
@@ -3869,9 +3879,7 @@ def test_run_runtime_scan_independent_workers_preserve_quasilinear_order(
             },
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
 
     out = run_runtime_scan(
         cfg,
@@ -3923,10 +3931,8 @@ def test_run_runtime_scan_parallel_config_batch_selects_independent_workers(
         captured["ky"] = [item["ky"] for item in items]
         return [fn(item) for item in items]
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", _fake_run_runtime_linear)
-    monkeypatch.setattr(runtime, "independent_map", _fake_independent_map)
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "independent_map", _fake_independent_map)
 
     out = run_runtime_scan(cfg, ky_values=[0.15, 0.35, 0.25], solver="time")
 
@@ -3970,10 +3976,8 @@ def test_run_runtime_scan_explicit_workers_override_parallel_config(
         captured["executor"] = executor
         return [fn(item) for item in values]
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", _fake_run_runtime_linear)
-    monkeypatch.setattr(runtime, "independent_map", _fake_independent_map)
+    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
+    patch_runtime(monkeypatch, "independent_map", _fake_independent_map)
 
     out = run_runtime_scan(
         cfg,
@@ -4013,7 +4017,7 @@ def _scan_worker_strategies(cfg: RuntimeConfig, ky_values: list[float]) -> list[
         Nm=3,
         solver="time",
         krylov_cfg=None,
-        options=_runtime_scan_options(
+        options=_RuntimeScanOptions(
             method="rk2",
             dt=None,
             steps=None,
@@ -4210,11 +4214,7 @@ def test_run_runtime_scan_parallel_config_selects_combined_ky(
             omega=-(np.asarray(ky_arr, dtype=float) + 2.0),
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(
-        runtime, "_run_runtime_scan_batch", _fake_run_runtime_scan_batch
-    )
+    patch_runtime(monkeypatch, "run_runtime_scan_batch", _fake_run_runtime_scan_batch)
 
     out = run_runtime_scan(cfg, ky_values=[0.15, 0.35], solver="time", sample_stride=2)
 
@@ -4231,25 +4231,22 @@ def test_run_runtime_scan_batch_empty_raises(monkeypatch: pytest.MonkeyPatch) ->
         species=(RuntimeSpeciesConfig(name="ion"),),
         normalization=RuntimeNormalizationConfig(contract="cyclone"),
     )
-    import gkx.runtime as runtime
 
-    monkeypatch.setattr(runtime, "build_runtime_geometry", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime, "apply_geometry_grid_defaults", lambda _geom, grid: grid
-    )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: object())
+    patch_runtime(monkeypatch, "apply_geometry_grid_defaults", lambda _geom, grid: grid)
+    patch_runtime(
+        monkeypatch,
         "build_spectral_grid",
         lambda _grid: SimpleNamespace(
             ky=np.array([0.0, 0.2]), z=np.array([0.0]), kx=np.array([0.0])
         ),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda _cfg, **_kwargs: SimpleNamespace(rho_star=1.0),
     )
-    monkeypatch.setattr(runtime, "build_runtime_linear_terms", lambda _cfg: object())
+    patch_runtime(monkeypatch, "build_runtime_linear_terms", lambda _cfg: object())
 
     with pytest.raises(ValueError):
         run_runtime_scan(cfg, ky_values=[], solver="time", batch_ky=True)
@@ -4265,34 +4262,29 @@ def test_runtime_linear_explicit_time_rejects_return_state_before_setup(
             contract="cyclone", diagnostic_norm="none"
         ),
     )
-    import gkx.runtime as runtime
 
-    monkeypatch.setattr(
-        runtime, "build_runtime_geometry", lambda _cfg: SimpleNamespace()
-    )
-    monkeypatch.setattr(
-        runtime, "apply_geometry_grid_defaults", lambda _geom, grid: grid
-    )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: SimpleNamespace())
+    patch_runtime(monkeypatch, "apply_geometry_grid_defaults", lambda _geom, grid: grid)
+    patch_runtime(
+        monkeypatch,
         "build_spectral_grid",
         lambda _grid: SimpleNamespace(
             ky=np.array([0.0, 0.2]), kx=np.array([0.0]), z=np.array([-1.0, 0.0, 1.0])
         ),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "build_runtime_linear_params",
         lambda _cfg, **_kwargs: SimpleNamespace(rho_star=1.0),
     )
-    monkeypatch.setattr(runtime, "build_runtime_linear_terms", lambda _cfg: object())
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(monkeypatch, "build_runtime_linear_terms", lambda _cfg: object())
+    patch_runtime(
+        monkeypatch,
         "select_ky_grid",
         lambda grid, _idx: SimpleNamespace(ky=np.array([0.2]), kx=grid.kx, z=grid.z),
     )
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "_build_initial_condition",
         lambda *args, **kwargs: np.zeros((2, 2, 1, 1, 3), dtype=np.complex64),
     )
@@ -4350,9 +4342,7 @@ def test_runtime_parameter_scan_updates_config_and_continues_state(
             state=states[index],
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_run)
     result = run_runtime_parameter_scan(
         cfg,
         [0.01, 0.02, 0.04],
@@ -4394,10 +4384,8 @@ def test_runtime_parameter_scan_rejects_invalid_contracts(
             cfg, [1.0], parameter_name="beta", update_config=lambda *_args: object()
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(
-        runtime,
+    patch_runtime(
+        monkeypatch,
         "run_runtime_linear",
         lambda *_args, **_kwargs: RuntimeLinearResult(
             ky=0.3,
@@ -4422,8 +4410,6 @@ def test_runtime_linear_validates_initial_state_shape_and_preserves_dtype(
 ) -> None:
     from jax import enable_x64
 
-    import gkx.runtime as runtime
-
     cfg = replace(
         _base_runtime_cfg(),
         species=(RuntimeSpeciesConfig(name="ion"),),
@@ -4446,7 +4432,7 @@ def test_runtime_linear_validates_initial_state_shape_and_preserves_dtype(
         np.testing.assert_array_equal(actual, state)
         raise RuntimeError("precision checked before eigensolve")
 
-    monkeypatch.setattr(runtime, "dominant_eigenpair", check_state)
+    patch_runtime(monkeypatch, "dominant_eigenpair", check_state)
     with enable_x64(), pytest.raises(RuntimeError, match="precision checked"):
         run_runtime_linear(
             cfg, ky_target=0.3, Nl=2, Nm=2, solver="krylov", initial_state=state
@@ -4470,9 +4456,7 @@ def test_runtime_parameter_scan_selects_one_candidate_branch(
             state=np.asarray([target]),
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_run)
     result = run_runtime_parameter_scan(
         cfg,
         [0.01, 0.02],
@@ -4603,9 +4587,7 @@ def test_run_runtime_scan_warm_start_seeds_neighbours_and_restores_order(
             state=np.full((2, 2), ky, dtype=np.complex64),
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_run)
     out = run_runtime_scan(
         cfg, ky_values=[0.5, 0.1, 0.3], solver="krylov", warm_start=True
     )
@@ -4649,9 +4631,7 @@ def test_run_runtime_scan_warm_start_off_leaves_every_point_cold(
             state=np.ones((2, 2), dtype=np.complex64),
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_run)
     # The default is cold; passing nothing must behave like warm_start=False.
     out = run_runtime_scan(cfg, ky_values=[0.5, 0.1], solver="krylov")
 
@@ -4684,9 +4664,7 @@ def test_run_runtime_scan_warm_start_yields_to_independent_workers(
             state=np.ones((2, 2), dtype=np.complex64),
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_run)
     out = run_runtime_scan(
         cfg, ky_values=[0.15, 0.35], solver="krylov", warm_start=True
     )
@@ -4738,9 +4716,7 @@ def test_runtime_parameter_scan_warm_start_declines_a_large_step(
             state=np.full((2,), float(point_cfg.physics.beta) + 1.0),
         )
 
-    import gkx.runtime as runtime
-
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_run)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_run)
     result = run_runtime_parameter_scan(
         cfg,
         [0.01, 0.011, 1.0],
@@ -5532,12 +5508,10 @@ def _linked_intake_cfg(boundary: str) -> RuntimeConfig:
 
 
 def _intake_context(cfg: RuntimeConfig, initial_state):
-    from gkx.runtime import _runtime_linear_dispatch_deps
     from gkx.workflows.linear import _prepare_linear_runtime_context
 
     return _prepare_linear_runtime_context(
         cfg,
-        deps=_runtime_linear_dispatch_deps().full_deps,
         ky_target=float(np.asarray(build_spectral_grid(cfg.grid).ky)[1]),
         n_laguerre=2,
         n_hermite=3,

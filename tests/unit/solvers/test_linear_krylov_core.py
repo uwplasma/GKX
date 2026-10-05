@@ -3483,7 +3483,6 @@ def test_linked_pilot_eigenpair_is_unchanged_on_linked_chain_modes(
     """
 
     import gkx.solvers_linear_krylov as krylov
-    from gkx.runtime import _runtime_linear_dispatch_deps
     from gkx.workflows.linear import _prepare_linear_runtime_context
 
     runtime, _ = load_runtime_from_toml(
@@ -3494,10 +3493,8 @@ def test_linked_pilot_eigenpair_is_unchanged_on_linked_chain_modes(
         grid=replace(runtime.grid, Nx=8, Ny=16, Nz=16, ntheta=16, nperiod=1, jtwist=1),
         time=replace(runtime.time, damp_ends_rate=0.1),
     )
-    deps = _runtime_linear_dispatch_deps().full_deps
     context = _prepare_linear_runtime_context(
         runtime,
-        deps=deps,
         ky_target=0.3,
         n_laguerre=4,
         n_hermite=8,
@@ -3507,7 +3504,7 @@ def test_linked_pilot_eigenpair_is_unchanged_on_linked_chain_modes(
         initial_state=None,
         status_callback=None,
     )
-    cache = deps.build_linear_cache(context.grid, context.geom, context.params, 4, 8)
+    cache = build_linear_cache(context.grid, context.geom, context.params, 4, 8)
     seed = jnp.asarray(np.asarray(context.initial_state), dtype=jnp.complex128)
     off_chain = np.ones(seed.shape, dtype=bool)
     off_chain[..., [0, 1, 2, 6, 7], :] = False

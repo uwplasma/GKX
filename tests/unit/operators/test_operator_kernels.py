@@ -62,7 +62,9 @@ from gkx.terms.linear_terms import (
     drift_kinetic_coulomb_six_moment_contribution,
     drift_kinetic_sugama_six_moment_contribution,
 )
-from gkx.runtime import run_runtime_scan
+from gkx.runtime import (
+    run_runtime_scan,
+)
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from gkx.config import (
     RuntimeCollisionConfig,

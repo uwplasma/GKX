@@ -19,7 +19,9 @@ import gkx.parallel.independent as parallel_independent
 from dataclasses import replace
 import gkx.workflows.nonlinear as nonlinear_workflow
 from gkx.config import GeometryConfig, GridConfig, InitializationConfig, TimeConfig
-from gkx.runtime import run_runtime_nonlinear
+from gkx.runtime import (
+    run_runtime_nonlinear,
+)
 from gkx.config import (
     RuntimeConfig,
     RuntimeNormalizationConfig,
@@ -603,7 +605,9 @@ def test_cpu_gpu_short_window_gate_matches_within_tolerance() -> None:
         pytest.skip("No GPU backend detected for JAX.")
 
     from support.paths import load_repo_script
-    from gkx.runtime import run_runtime_nonlinear
+    from gkx.runtime import (
+        run_runtime_nonlinear,
+    )
 
     restart_helpers = load_repo_script(
         Path("tests/integration/runtime/test_runtime_runner.py"),
