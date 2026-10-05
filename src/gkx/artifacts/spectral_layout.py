@@ -219,13 +219,6 @@ def _species_matrix(
     ).copy()
 
 
-def _maybe_var(
-    group: Any, name: str, dtype: str, dims: tuple[str, ...], values: np.ndarray
-) -> None:
-    var = group.createVariable(name, dtype, dims)
-    var[...] = values
-
-
 def _write_runtime_root_metadata(
     root: Any, cfg: Any, *, nspecies: int, nl: int, nm: int
 ) -> None:
@@ -475,24 +468,9 @@ def _condense_kykx_for_output(
     return arr_np
 
 
-def infer_triple_dealiased_ny(nky_positive: int) -> int:
-    """Infer the full ``Ny`` from the number of positive ``k_y`` points.
-
-    Reference real-FFT outputs typically store only the non-negative
-    ``k_y`` branch. For the linked-boundary spectral grid used here, the
-    corresponding real-space ``Ny`` follows ``Ny = 3 * (nky - 1) + 1``.
-    """
-
-    nky = int(nky_positive)
-    if nky < 2:
-        raise ValueError("nky_positive must be >= 2")
-    return 3 * (nky - 1) + 1
-
-
 __all__ = [
     "KY_WEIGHTING_PAIR",
     "KY_WEIGHTING_PER_ROW",
-    "infer_triple_dealiased_ny",
     "_half_ky_publish_factor",
     "_complex_to_ri",
     "_condense_kx",
@@ -508,7 +486,6 @@ __all__ = [
     "_dealiased_ky_count",
     "_dealiased_ky_indices",
     "_dealiased_ky_values",
-    "_maybe_var",
     "_real_space_axis",
     "_require_netcdf4",
     "_restart_to_netcdf_layout",

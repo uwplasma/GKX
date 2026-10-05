@@ -10,45 +10,6 @@ from jax.scipy.special import gammaln, i0e
 import numpy as np
 
 
-def hermite_physicists(x: jnp.ndarray, n_max: int) -> jnp.ndarray:
-    """Physicists' Hermite polynomials H_n(x) for n=0..n_max.
-
-    Weight: exp(-x**2). Recurrence:
-        H_0 = 1
-        H_1 = 2x
-        H_{n+1} = 2x H_n - 2n H_{n-1}
-    """
-
-    x = jnp.asarray(x)
-    if n_max < 0:
-        raise ValueError("n_max must be >= 0")
-    if n_max == 0:
-        return jnp.expand_dims(jnp.ones_like(x), axis=0)
-    h0 = jnp.ones_like(x)
-    h1 = 2.0 * x
-
-    def step(carry, n):
-        h_prev, h_curr = carry
-        h_next = 2.0 * x * h_curr - 2.0 * n * h_prev
-        return (h_curr, h_next), h_next
-
-    _, tail = jax.lax.scan(step, (h0, h1), jnp.arange(1, n_max))
-    return jnp.concatenate([h0[None, ...], h1[None, ...], tail], axis=0)
-
-
-def hermite_normed(x: jnp.ndarray, n_max: int) -> jnp.ndarray:
-    """Normalized Hermite functions with weight exp(-x**2).
-
-    psi_n = H_n(x) / sqrt(2**n * n! * sqrt(pi))
-    """
-
-    h = hermite_physicists(x, n_max)
-    n = jnp.arange(0, n_max + 1)
-    log_norm = 0.5 * (n * jnp.log(2.0) + gammaln(n + 1) + 0.5 * jnp.log(jnp.pi))
-    norm = jnp.exp(log_norm)
-    return h / norm[:, None]
-
-
 def laguerre(x: jnp.ndarray, l_max: int) -> jnp.ndarray:
     """Laguerre polynomials L_l(x) for l=0..l_max.
 
@@ -281,24 +242,6 @@ def associated_bessel_laguerre_coefficients(
     return jnp.concatenate([coefficient0[None, ...], tail], axis=0)
 
 
-def single_precision_factorial(m: jnp.ndarray) -> jnp.ndarray:
-    """Return the single-precision factorial approximation."""
-
-    m_arr = jnp.asarray(m)
-    dtype = m_arr.dtype
-    exact = jnp.asarray([1.0, 1.0, 2.0, 6.0, 24.0, 120.0, 720.0], dtype=dtype)
-    m_int = m_arr.astype(jnp.int32)
-    m_clamped = jnp.clip(m_int, 0, exact.shape[0] - 1)
-    m_safe = jnp.where(m_arr > 0, m_arr, jnp.asarray(1.0, dtype=dtype))
-    stirling = (
-        jnp.sqrt(2.0 * jnp.asarray(jnp.pi, dtype=dtype) * m_safe)
-        * (m_safe**m_safe)
-        * jnp.exp(-m_safe)
-        * (1.0 + 1.0 / (12.0 * m_safe) + 1.0 / (288.0 * m_safe * m_safe))
-    )
-    return jnp.where(m_int <= 6, exact[m_clamped], stirling)
-
-
 def J_l_all(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
     """Gyroaveraging coefficients matching the Laguerre-Hermite quadrature convention."""
 
@@ -345,13 +288,6 @@ def laguerre_gyroaverage_neighbors(
     boundary = -values[-1] * (0.5 * b_arr) / order
     upper = jnp.concatenate([values[1:], boundary[None, ...]], axis=0)
     return jnp.moveaxis(lower, 0, axis), jnp.moveaxis(upper, 0, axis)
-
-
-def sum_Jl2(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
-    """Truncated sum of J_l(b)^2, useful for Gamma_0 convergence checks."""
-
-    Jl = J_l_all(b, l_max)
-    return jnp.sum(Jl * Jl, axis=0)
 
 
 def laguerre_quadrature_count(nl: int) -> int:

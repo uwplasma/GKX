@@ -36,10 +36,10 @@ from scripts.campaigns.nonlinear_replicates import (  # noqa: E402
     NonlinearWindowEnsembleManifestConfig,
     nonlinear_window_ensemble_artifact_manifest,
 )
-from gkx.diagnostics.validation_gates import (  # noqa: E402
+from scripts.checks._gates.validation_gates import (  # noqa: E402
     matched_nonlinear_transport_report,
 )
-from gkx.diagnostics.transport_windows import (  # noqa: E402
+from scripts.checks._gates.transport_windows import (  # noqa: E402
     NonlinearWindowConvergenceConfig,
     NonlinearWindowEnsembleConfig,
     nonlinear_window_convergence_from_csv,

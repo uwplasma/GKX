@@ -218,9 +218,6 @@ def total_energy(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:
     return Wg + Wphi + Wapar
 
 
-runtime_energy_total = total_energy
-
-
 def _mask_modes(value: jnp.ndarray, active: jnp.ndarray) -> jnp.ndarray:
     """Zero inactive spectral modes before products or moment reductions."""
 
@@ -820,36 +817,6 @@ def magnetic_vector_potential_energy_resolved(
     return _reduce_species_kykxz(contrib, _ky_pair_fold(cache))
 
 
-def heat_flux_resolved_species(
-    G: jnp.ndarray,
-    phi: jnp.ndarray,
-    apar: jnp.ndarray,
-    bpar: jnp.ndarray,
-    cache: LinearCache,
-    grid: SpectralGrid,
-    params: LinearParams,
-    flux_fac: jnp.ndarray,
-    *,
-    use_dealias: bool = True,
-    flux_scale: float = 1.0,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return Resolved heat-flux reductions per species."""
-
-    es_contrib, apar_contrib, bpar_contrib = _heat_flux_channel_contrib_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
-    )
-    return _reduce_species_kykxz(es_contrib + apar_contrib + bpar_contrib)
-
-
 def heat_flux_channel_resolved_species(
     G: jnp.ndarray,
     phi: jnp.ndarray,
@@ -886,36 +853,6 @@ def heat_flux_channel_resolved_species(
         _reduce_species_kykxz(apar_contrib),
         _reduce_species_kykxz(bpar_contrib),
     )
-
-
-def particle_flux_resolved_species(
-    G: jnp.ndarray,
-    phi: jnp.ndarray,
-    apar: jnp.ndarray,
-    bpar: jnp.ndarray,
-    cache: LinearCache,
-    grid: SpectralGrid,
-    params: LinearParams,
-    flux_fac: jnp.ndarray,
-    *,
-    use_dealias: bool = True,
-    flux_scale: float = 1.0,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return Resolved particle-flux reductions per species."""
-
-    es_contrib, apar_contrib, bpar_contrib = _particle_flux_channel_contrib_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
-    )
-    return _reduce_species_kykxz(es_contrib + apar_contrib + bpar_contrib)
 
 
 def particle_flux_channel_resolved_species(
@@ -1015,13 +952,10 @@ __all__ = [
     "electrostatic_field_energy_resolved",
     "fieldline_quadrature_weights",
     "heat_flux_channel_resolved_species",
-    "heat_flux_resolved_species",
     "magnetic_vector_potential_energy",
     "magnetic_vector_potential_energy_resolved",
     "particle_flux_channel_resolved_species",
-    "particle_flux_resolved_species",
     "phi2_resolved",
-    "runtime_energy_total",
     "total_energy",
     "turbulent_heating_resolved_species",
     "zonal_phi_line_kxt",

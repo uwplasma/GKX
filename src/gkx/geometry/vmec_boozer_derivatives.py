@@ -714,35 +714,6 @@ def _fieldline_shear_factors(
     )
 
 
-def _fieldline_shear(
-    scalars: _VMECFieldlineScalars,
-    samples: _BoozerFieldlineSamples,
-    geometry: _FieldlineMetricGeometry,
-    integrals: _FieldlineHNGCIntegrals,
-    factors: _FieldlineShearFactors,
-) -> Any:
-    """Return the local shear object used by metric/drift assembly."""
-
-    return _fieldline_local_shear(
-        edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
-        d_iota_d_s=scalars.d_iota_d_s,
-        d_iota_d_s_1=factors.d_iota_d_s_1,
-        d_pressure_d_s_1=factors.d_pressure_d_s_1,
-        Vprime=samples.Vprime,
-        G=scalars.G,
-        iota=scalars.iota,
-        boozer_i=scalars.boozer_i,
-        phi_b=samples.phi_b,
-        zeta_center=scalars.zeta_center,
-        intinv_g=integrals.intinv_g,
-        int_lam_div_g=integrals.int_lam_div_g,
-        D1=integrals.D1,
-        D2=integrals.D2,
-        g_sup_psi_psi=geometry.alpha_gradients.g_sup_psi_psi,
-        grad_alpha_dot_grad_psi=geometry.alpha_gradients.grad_alpha_dot_grad_psi,
-    )
-
-
 def _fieldline_metric_coefficients(
     scalars: _VMECFieldlineScalars,
     samples: _BoozerFieldlineSamples,
@@ -772,7 +743,24 @@ def _fieldline_metric_coefficients(
             res_theta=res_theta,
             res_phi=res_phi,
         )
-    shear = _fieldline_shear(scalars, samples, geometry, integrals, factors)
+    shear = _fieldline_local_shear(
+        edge_toroidal_flux_over_2pi=scalars.edge_toroidal_flux_over_2pi,
+        d_iota_d_s=scalars.d_iota_d_s,
+        d_iota_d_s_1=factors.d_iota_d_s_1,
+        d_pressure_d_s_1=factors.d_pressure_d_s_1,
+        Vprime=samples.Vprime,
+        G=scalars.G,
+        iota=scalars.iota,
+        boozer_i=scalars.boozer_i,
+        phi_b=samples.phi_b,
+        zeta_center=scalars.zeta_center,
+        intinv_g=integrals.intinv_g,
+        int_lam_div_g=integrals.int_lam_div_g,
+        D1=integrals.D1,
+        D2=integrals.D2,
+        g_sup_psi_psi=geometry.alpha_gradients.g_sup_psi_psi,
+        grad_alpha_dot_grad_psi=geometry.alpha_gradients.grad_alpha_dot_grad_psi,
+    )
     return _fieldline_metric_drifts(
         tensors=samples.tensors,
         gradients=geometry.gradients,

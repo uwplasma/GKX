@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-from support.paired_solvax import requires_paired_solvax
+from support.helpers import requires_paired_solvax
 from support.paths import REPO_ROOT
 
 # ---- test_autodiff_validation.py ----
@@ -773,7 +773,6 @@ from gkx import (
     solver_objective_vector_from_geometry,
     solver_scalar_objective_from_vector,
 )
-from gkx.geometry.vmec_state_controls import _vmec_boozer_state_parameter_name
 
 
 def default_solver_geometry_design_params() -> jnp.ndarray:
@@ -811,21 +810,6 @@ def solver_ready_geometry_mapping(
         "R0": 1.0,
         "nfp": 1,
     }
-
-
-def test_vmec_boozer_state_parameter_name_tracks_default_and_explicit_modes() -> None:
-    assert (
-        _vmec_boozer_state_parameter_name("Rcos", 17, 1, default_mid_surface=17)
-        == "Rcos_mid_surface_m1"
-    )
-    assert (
-        _vmec_boozer_state_parameter_name("Rcos", 11, 2, default_mid_surface=17)
-        == "Rcos_r11_m2"
-    )
-    assert (
-        _vmec_boozer_state_parameter_name("Zsin", 17, 2, default_mid_surface=17)
-        == "Zsin_mid_surface_m2"
-    )
 
 
 def test_solver_objective_vector_from_geometry_is_finite_and_exported() -> None:

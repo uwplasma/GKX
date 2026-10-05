@@ -19,6 +19,7 @@ from gkx.operators.collision import (
     CollisionOperator,
 )
 from gkx.operators.linear.collisions import (
+    _FieldPytree,
     EqualSpeciesFiniteWavelengthCoulombOperator,
     apply_multispecies_collision_moment_matrix,
     interpolate_collision_diagonal_table,
@@ -215,7 +216,7 @@ def assemble_drift_kinetic_coulomb_matrix(
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class TabulatedMultispeciesCollisionOperator:
+class TabulatedMultispeciesCollisionOperator(_FieldPytree):
     """Finite-wavelength target/source collision matrices on a kperp grid.
 
     The table contains fully assembled collision-frequency-weighted blocks with
@@ -240,18 +241,10 @@ class TabulatedMultispeciesCollisionOperator:
         matrix = interpolate_collision_moment_matrix(self.kperp_grid, table, kperp)
         return apply_multispecies_collision_moment_matrix(context.hamiltonian, matrix)
 
-    def tree_flatten(self):
-        return (self.kperp_grid, self.matrices), None
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        del aux_data
-        return cls(*children)
-
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class EqualSpeciesFiniteWavelengthSugamaOperator:
+class EqualSpeciesFiniteWavelengthSugamaOperator(_FieldPytree):
     r"""Finite-wavelength original/improved-Sugama tables for one species.
 
     The tabulated test and field matrices implement Frei et al. (2021),
@@ -289,19 +282,6 @@ class EqualSpeciesFiniteWavelengthSugamaOperator:
             raise ValueError("pair_frequency must have shape (1, 1)")
         matrix = (frequency[0, 0] * (test + field))[None, None, ...]
         return apply_multispecies_collision_moment_matrix(state, matrix)
-
-    def tree_flatten(self):
-        return (
-            self.bessel_argument_grid,
-            self.pair_frequency,
-            self.test_table,
-            self.field_table,
-        ), None
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        del aux_data
-        return cls(*children)
 
 
 def interpolate_collision_moment_matrix(

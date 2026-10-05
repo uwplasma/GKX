@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from functools import lru_cache, partial
 import hashlib
 import io
@@ -489,9 +489,21 @@ def assemble_drift_kinetic_improved_sugama_matrix(
     )
 
 
+class _FieldPytree:
+    """Flatten a frozen dataclass into its fields, in declaration order."""
+
+    def tree_flatten(self):
+        return tuple(getattr(self, f.name) for f in fields(self)), None
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        del aux_data
+        return cls(*children)
+
+
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class DriftKineticMomentCollisionOperator:
+class DriftKineticMomentCollisionOperator(_FieldPytree):
     r"""Dense drift-kinetic collision matrix acting on gyrocenter moments.
 
     In the zero-Larmor-radius limit the particle perturbation satisfies
@@ -533,18 +545,10 @@ class DriftKineticMomentCollisionOperator:
             context.distribution, self.matrix
         )
 
-    def tree_flatten(self):
-        return (self.matrix,), None
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        del aux_data
-        return cls(*children)
-
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class FiniteWavelengthCoulombOperator:
+class FiniteWavelengthCoulombOperator(_FieldPytree):
     """Tabulated finite-wavelength Coulomb test, field, and polarization blocks.
 
     Pair tables have independent target/source Bessel-argument axes
@@ -594,27 +598,10 @@ class FiniteWavelengthCoulombOperator:
             charge_over_temperature=inverse_tz,
         )
 
-    def tree_flatten(self):
-        return (
-            self.bessel_argument_grid,
-            self.pair_frequency,
-            self.test_table,
-            self.field_table,
-            self.test_phi1,
-            self.field_phi1,
-            self.test_phi2,
-            self.field_phi2,
-        ), None
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        del aux_data
-        return cls(*children)
-
 
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
-class EqualSpeciesFiniteWavelengthCoulombOperator:
+class EqualSpeciesFiniteWavelengthCoulombOperator(_FieldPytree):
     """Finite-wavelength Coulomb tables for one equal-species plasma.
 
     Like-species collisions have the same target and source Bessel argument at
@@ -669,23 +656,6 @@ class EqualSpeciesFiniteWavelengthCoulombOperator:
             pair_frequency=self.pair_frequency,
             charge_over_temperature=inverse_tz,
         )
-
-    def tree_flatten(self):
-        return (
-            self.bessel_argument_grid,
-            self.pair_frequency,
-            self.test_table,
-            self.field_table,
-            self.test_phi1,
-            self.field_phi1,
-            self.test_phi2,
-            self.field_phi2,
-        ), None
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        del aux_data
-        return cls(*children)
 
 
 def interpolate_collision_diagonal_table(

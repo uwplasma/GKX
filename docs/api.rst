@@ -510,12 +510,6 @@ Benchmarks
    :members:
    :no-index:
 
-Validation Gates
-----------------
-
-.. automodule:: gkx.diagnostics.validation_gates
-   :members:
-
 Autodiff Validation
 -------------------
 
@@ -565,12 +559,6 @@ Sharded Integrators
 .. automodule:: gkx.parallel.integrators
    :members:
 
-Zonal Validation
-----------------
-
-.. automodule:: gkx.diagnostics.zonal_validation
-   :members:
-
 Analysis
 --------
 
@@ -590,18 +578,6 @@ Growth-Rate Diagnostics
 .. automodule:: gkx.diagnostics.growth_rates
    :members:
    :private-members:
-
-Growth-Rate Fit Windows
------------------------
-
-.. automodule:: gkx.diagnostics.growth_windows
-   :members:
-
-Zonal Response Plots
---------------------
-
-.. automodule:: gkx.artifacts.zonal_plots
-   :members:
 
 Publication Plotting
 --------------------
@@ -720,7 +696,7 @@ Runtime Orchestration
    :members:
    :private-members:
 
-.. automodule:: gkx.workflows.runtime.orchestration_artifacts
+.. automodule:: gkx.workflows.runtime.artifacts
    :members:
    :private-members:
 
@@ -774,20 +750,6 @@ Quasilinear Transport Diagnostics
 
 .. automodule:: gkx.diagnostics.quasilinear_transport
    :members:
-
-Quasilinear Calibration
------------------------
-
-.. automodule:: gkx.diagnostics.quasilinear_calibration
-   :members:
-   :private-members:
-
-Quasilinear Nonlinear-Window Gates
-----------------------------------
-
-.. automodule:: gkx.diagnostics.transport_windows
-   :members:
-   :private-members:
 
 Run-to-Saturation Stop Policy
 -----------------------------

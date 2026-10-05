@@ -26,7 +26,7 @@ from scripts.campaigns.vmec_flux_tube_reports import (
     vmex_flux_tube_array_parity_report,
     vmex_flux_tube_sensitivity_report,
 )
-import gkx.geometry.vmec_state_controls as vmec_state_controls
+import scripts.campaigns.vmec_state_sensitivity as vmec_state_controls
 import scripts.campaigns.vmec_state_sensitivity as vmec_state_sensitivity
 from scripts.campaigns.vmec_state_sensitivity import (
     vmex_field_line_tensor_sensitivity_report,
@@ -54,14 +54,15 @@ from gkx.geometry.flux_tube_contract import (
     vmec_metric_tensor_observable_names,
 )
 from gkx.geometry.numerics import (
-    _array_parity_metrics,
     _boozer_half_mesh_s_grid,
     _cumulative_trapezoid,
     _interp_equal_arc_profile,
     _interp_radial,
-    _periodic_bilinear_sample_2d,
     _radial_derivative_array,
     _radial_derivative_profile,
+)
+from scripts.campaigns.vmec_state_sensitivity import (
+    _array_parity_metrics,
     _scalar_parity_metrics,
 )
 from gkx.geometry.vmec_boozer_core import (
@@ -1383,21 +1384,6 @@ def test_low_level_radial_and_sampling_helpers_cover_edge_contracts() -> None:
     )
     with pytest.raises(ValueError, match="cumulative trapezoid"):
         _cumulative_trapezoid(jnp.ones((2, 1)), jnp.ones(2))
-
-    grid = jnp.asarray([[0.0, 1.0], [2.0, 3.0]])
-    sampled = _periodic_bilinear_sample_2d(
-        grid,
-        jnp.asarray([0.0, jnp.pi / 2.0]),
-        jnp.asarray([0.0, jnp.pi / 2.0]),
-    )
-    assert sampled.shape == (2,)
-    assert np.all(np.isfinite(np.asarray(sampled)))
-    with pytest.raises(ValueError, match="two-dimensional"):
-        _periodic_bilinear_sample_2d(jnp.ones(2), jnp.ones(2), jnp.ones(2))
-    with pytest.raises(ValueError, match="same shape"):
-        _periodic_bilinear_sample_2d(grid, jnp.ones(2), jnp.ones(3))
-    with pytest.raises(ValueError, match="non-empty"):
-        _periodic_bilinear_sample_2d(jnp.ones((0, 2)), jnp.ones(1), jnp.ones(1))
 
 
 def test_parity_metric_helpers_report_shape_and_error_scales() -> None:

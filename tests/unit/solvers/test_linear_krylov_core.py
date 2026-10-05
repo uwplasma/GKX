@@ -24,7 +24,7 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
 )
 import gkx.solvers_linear_implicit as implicit
-from support.paired_solvax import requires_paired_solvax
+from support.helpers import requires_paired_solvax
 from types import SimpleNamespace
 import inspect
 import re
@@ -916,38 +916,6 @@ def test_shift_invert_rejection_names_unconverged_inner_solves(
         assert "tol=1e-10" in text
     reported = re.search(r"max_relative_residual=(\S+)", str(rejected.value))
     assert reported is not None and float(reported.group(1)) > 1.0e-10
-
-
-def test_shift_solve_method_labels_share_one_compiled_solve(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The historical labels are validated but neither change nor recompile."""
-
-    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
-    traces = 0
-    factory = ka._shift_invert_apply_factory
-
-    def counting_factory(*args, **kwargs):
-        nonlocal traces
-        traces += 1
-        return factory(*args, **kwargs)
-
-    monkeypatch.setattr(ka, "_shift_invert_apply_factory", counting_factory)
-    options = _shift_invert_options(1.0e-4, 7, 5)
-    pairs = [
-        ka.dominant_eigenpair_shift_invert_cached(
-            v0, v0, cache, params, term_cfg, gmres_solve_method=label, **options
-        )
-        for label in ("batched", "incremental", "flexible")
-    ]
-    assert traces == 1
-    for eig, vec in pairs[1:]:
-        np.testing.assert_array_equal(np.asarray(eig), np.asarray(pairs[0][0]))
-        np.testing.assert_array_equal(np.asarray(vec), np.asarray(pairs[0][1]))
-    with pytest.raises(ValueError, match="shift_solve_method"):
-        lk.dominant_eigenpair(
-            v0, cache, params, method="shift_invert", shift_solve_method="bogus"
-        )
 
 
 @pytest.mark.parametrize("method", ["power", "propagator", "arnoldi"])
@@ -2427,7 +2395,7 @@ ALLOWED_UNPINNED_MATRIX_DOTS = {
     # recording why the shifted FGMRES starts from zero, all above it; same
     # code, still the `lifted = jnp.tensordot(eigvecs.T, V[:krylov_dim],
     # axes=1)` of `_propagator_arnoldi_restart_step`, verified at the new line.
-    "solvers_linear_krylov_algorithms.py:818": "overlap ranking only; argmax provably unmoved",
+    "solvers_linear_krylov_algorithms.py:797": "overlap ranking only; argmax provably unmoved",
 }
 
 
@@ -3483,7 +3451,6 @@ def test_linked_pilot_eigenpair_is_unchanged_on_linked_chain_modes(
     """
 
     import gkx.solvers_linear_krylov as krylov
-    from gkx.runtime import _runtime_linear_dispatch_deps
     from gkx.workflows.linear import _prepare_linear_runtime_context
 
     runtime, _ = load_runtime_from_toml(
@@ -3494,10 +3461,8 @@ def test_linked_pilot_eigenpair_is_unchanged_on_linked_chain_modes(
         grid=replace(runtime.grid, Nx=8, Ny=16, Nz=16, ntheta=16, nperiod=1, jtwist=1),
         time=replace(runtime.time, damp_ends_rate=0.1),
     )
-    deps = _runtime_linear_dispatch_deps().full_deps
     context = _prepare_linear_runtime_context(
         runtime,
-        deps=deps,
         ky_target=0.3,
         n_laguerre=4,
         n_hermite=8,
@@ -3507,7 +3472,7 @@ def test_linked_pilot_eigenpair_is_unchanged_on_linked_chain_modes(
         initial_state=None,
         status_callback=None,
     )
-    cache = deps.build_linear_cache(context.grid, context.geom, context.params, 4, 8)
+    cache = build_linear_cache(context.grid, context.geom, context.params, 4, 8)
     seed = jnp.asarray(np.asarray(context.initial_state), dtype=jnp.complex128)
     off_chain = np.ones(seed.shape, dtype=bool)
     off_chain[..., [0, 1, 2, 6, 7], :] = False

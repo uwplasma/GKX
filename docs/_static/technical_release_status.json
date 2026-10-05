@@ -314,7 +314,7 @@
           "passed": true,
           "path": "src/gkx/workflows/runtime/orchestration_scan.py",
           "required": true,
-          "snippet": "RuntimeScanDeps"
+          "snippet": "def run_runtime_scan_ky_task"
         },
         {
           "exists": true,

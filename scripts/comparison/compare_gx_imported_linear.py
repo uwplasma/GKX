@@ -9,6 +9,7 @@ from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
+import sys
 
 import jax
 import jax.numpy as jnp
@@ -16,7 +17,12 @@ import numpy as np
 import pandas as pd
 from netCDF4 import Dataset
 
-from gkx.benchmarking_shared import _apply_reference_hypercollisions
+from scripts.comparison.compare_gx_rhs_terms import (
+    _apply_reference_hypercollisions,
+)
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 from gkx.config import GeometryConfig, GridConfig, InitializationConfig, resolve_cfl_fac
 from gkx.geometry import (
     SlabGeometry,

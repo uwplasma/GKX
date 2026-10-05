@@ -126,25 +126,6 @@ def _use_laguerre_grid(
     return bool(available)
 
 
-def _laguerre_context(
-    *,
-    laguerre_to_grid: jnp.ndarray | None,
-    laguerre_to_spectral: jnp.ndarray | None,
-    laguerre_roots: jnp.ndarray | None,
-    laguerre_j0: jnp.ndarray | None,
-    laguerre_j1_over_alpha: jnp.ndarray | None,
-    b: jnp.ndarray | None,
-) -> _LaguerreGridContext:
-    return _LaguerreGridContext(
-        to_grid=cast(jnp.ndarray, laguerre_to_grid),
-        to_spectral=cast(jnp.ndarray, laguerre_to_spectral),
-        roots=cast(jnp.ndarray, laguerre_roots),
-        j0=cast(jnp.ndarray | None, laguerre_j0),
-        j1_over_alpha=cast(jnp.ndarray | None, laguerre_j1_over_alpha),
-        b=cast(jnp.ndarray, b),
-    )
-
-
 def _multi_bracket_fn(compressed_real_fft: bool):
     return (
         _spectral_bracket_multi_real_fft
@@ -162,18 +143,6 @@ def _weighted_total(
 
 def _squeeze_species_output(value: jnp.ndarray, squeeze_species: bool) -> jnp.ndarray:
     return value[0] if squeeze_species else value
-
-
-def _electromagnetic_enabled(
-    *,
-    apar: jnp.ndarray | None,
-    bpar: jnp.ndarray | None,
-    apar_weight: float,
-    bpar_weight: float,
-) -> bool:
-    return (bpar is not None and bpar_weight != 0.0) or (
-        apar is not None and apar_weight != 0.0
-    )
 
 
 def _laguerre_phi_field(phi: jnp.ndarray, ctx: _LaguerreGridContext) -> jnp.ndarray:
@@ -275,59 +244,21 @@ def _prepare_nonlinear_path(
         b=b,
         laguerre_mode=laguerre_mode,
     ):
-        laguerre = _laguerre_context(
-            laguerre_to_grid=laguerre_to_grid,
-            laguerre_to_spectral=laguerre_to_spectral,
-            laguerre_roots=laguerre_roots,
-            laguerre_j0=laguerre_j0,
-            laguerre_j1_over_alpha=laguerre_j1_over_alpha,
-            b=b,
+        laguerre = _LaguerreGridContext(
+            to_grid=cast(jnp.ndarray, laguerre_to_grid),
+            to_spectral=cast(jnp.ndarray, laguerre_to_spectral),
+            roots=cast(jnp.ndarray, laguerre_roots),
+            j0=cast(jnp.ndarray | None, laguerre_j0),
+            j1_over_alpha=cast(jnp.ndarray | None, laguerre_j1_over_alpha),
+            b=cast(jnp.ndarray, b),
         )
-    electrostatic_only = not _electromagnetic_enabled(
-        apar=prep.apar,
-        bpar=prep.bpar,
-        apar_weight=apar_weight,
-        bpar_weight=bpar_weight,
+    electromagnetic = (prep.bpar is not None and bpar_weight != 0.0) or (
+        prep.apar is not None and apar_weight != 0.0
     )
     return _PreparedNonlinearPath(
         prep=prep,
         laguerre=laguerre,
-        electrostatic_only=electrostatic_only,
-    )
-
-
-def _nonlinear_bracket_context(
-    *,
-    tz: jnp.ndarray,
-    vth: jnp.ndarray,
-    sqrt_m: jnp.ndarray,
-    sqrt_m_p1: jnp.ndarray,
-    kx_grid: jnp.ndarray,
-    ky_grid: jnp.ndarray,
-    dealias_mask: jnp.ndarray,
-    kxfac: jnp.ndarray,
-    weight: jnp.ndarray,
-    apar_weight: float,
-    bpar_weight: float,
-    compressed_real_fft: bool,
-    ny_full: int | None = None,
-    radial_phase: jnp.ndarray | None,
-) -> _NonlinearBracketContext:
-    return _NonlinearBracketContext(
-        tz=tz,
-        vth=vth,
-        sqrt_m=sqrt_m,
-        sqrt_m_p1=sqrt_m_p1,
-        kx_grid=kx_grid,
-        ky_grid=ky_grid,
-        dealias_mask=dealias_mask,
-        kxfac=kxfac,
-        weight=weight,
-        apar_weight=apar_weight,
-        bpar_weight=bpar_weight,
-        compressed_real_fft=compressed_real_fft,
-        ny_full=ny_full,
-        radial_phase=radial_phase,
+        electrostatic_only=not electromagnetic,
     )
 
 
@@ -365,392 +296,84 @@ def _apply_flutter(
     return -vth_s * (sqrt_m_b * b_m1 + sqrt_m_p1_b * b_p1)
 
 
-def exb_nonlinear_contribution(
-    G: jnp.ndarray,
-    *,
-    phi: jnp.ndarray,
-    dealias_mask: jnp.ndarray,
-    kx_grid: jnp.ndarray,
-    ky_grid: jnp.ndarray,
-    weight: jnp.ndarray,
-    compressed_real_fft: bool = True,
-    ny_full: int | None = None,
-    radial_phase: jnp.ndarray | None = None,
-) -> jnp.ndarray:
-    """Return the nonlinear E×B contribution using a pseudospectral bracket."""
-    phi = _apply_mask_xy(phi, dealias_mask)
-    bracket_hat = _spectral_bracket(
-        G,
-        phi,
-        kx_grid=kx_grid,
-        ky_grid=ky_grid,
-        dealias_mask=dealias_mask,
-        kxfac=jnp.asarray(1.0),
-        radial_phase=radial_phase,
-        compressed_real_fft=compressed_real_fft,
-        ny_full=ny_full,
-    )
-    real_dtype = jnp.real(jnp.empty((), dtype=G.dtype)).dtype
-    return jnp.asarray(weight, dtype=real_dtype) * bracket_hat
+def _bracket_kwargs(c: _NonlinearBracketContext) -> dict:
+    return {
+        "kx_grid": c.kx_grid,
+        "ky_grid": c.ky_grid,
+        "dealias_mask": c.dealias_mask,
+        "kxfac": c.kxfac,
+        "radial_phase": c.radial_phase,
+        "ny_full": c.ny_full,
+    }
 
 
 def _laguerre_contribution_from_prepared(
     prep: _PreparedNonlinearInputs,
     ctx: _LaguerreGridContext,
-    *,
     electrostatic_only: bool,
-    tz: jnp.ndarray,
-    vth: jnp.ndarray,
-    sqrt_m: jnp.ndarray,
-    sqrt_m_p1: jnp.ndarray,
-    kx_grid: jnp.ndarray,
-    ky_grid: jnp.ndarray,
-    dealias_mask: jnp.ndarray,
-    kxfac: jnp.ndarray,
-    weight: jnp.ndarray,
-    apar_weight: float,
-    bpar_weight: float,
-    compressed_real_fft: bool,
-    ny_full: int | None = None,
-    radial_phase: jnp.ndarray | None,
+    c: _NonlinearBracketContext,
 ) -> jnp.ndarray:
     g_mu = _laguerre_to_grid(prep.G, ctx.to_grid)
     chi_phi = _laguerre_phi_field(prep.phi, ctx)
     if electrostatic_only:
-        exb_phi = _spectral_bracket(
+        total = _spectral_bracket(
             g_mu,
             chi_phi,
-            kx_grid=kx_grid,
-            ky_grid=ky_grid,
-            dealias_mask=dealias_mask,
-            kxfac=kxfac,
-            radial_phase=radial_phase,
-            compressed_real_fft=compressed_real_fft,
-            ny_full=ny_full,
+            compressed_real_fft=c.compressed_real_fft,
+            **_bracket_kwargs(c),
         )
-        total = _laguerre_to_spectral(exb_phi, ctx.to_spectral)
-        return _squeeze_species_output(
-            _weighted_total(prep.G, weight, total),
-            prep.squeeze_species,
+    else:
+        chi_fields, idx_bpar, idx_apar = _laguerre_chi_fields(
+            prep, ctx, tz=c.tz, apar_weight=c.apar_weight, bpar_weight=c.bpar_weight
         )
-    chi_fields, idx_bpar, idx_apar = _laguerre_chi_fields(
-        prep,
-        ctx,
-        tz=tz,
-        apar_weight=apar_weight,
-        bpar_weight=bpar_weight,
-    )
-    brackets = _multi_bracket_fn(compressed_real_fft)(
-        g_mu,
-        _stack_fields(g_mu, chi_fields),
-        kx_grid=kx_grid,
-        ky_grid=ky_grid,
-        dealias_mask=dealias_mask,
-        kxfac=kxfac,
-        radial_phase=radial_phase,
-        ny_full=ny_full,
-    )
-    exb_phi = brackets[0]
-    exb_bpar = brackets[idx_bpar] if idx_bpar is not None else jnp.zeros_like(exb_phi)
-    flutter = jnp.zeros_like(exb_phi)
-    if idx_apar is not None:
-        flutter = _apply_flutter(brackets[idx_apar], vth, sqrt_m, sqrt_m_p1)
-    total = _laguerre_to_spectral(exb_phi + exb_bpar + flutter, ctx.to_spectral)
+        brackets = _multi_bracket_fn(c.compressed_real_fft)(
+            g_mu, _stack_fields(g_mu, chi_fields), **_bracket_kwargs(c)
+        )
+        exb_phi = brackets[0]
+        exb_bpar = (
+            brackets[idx_bpar] if idx_bpar is not None else jnp.zeros_like(exb_phi)
+        )
+        flutter = jnp.zeros_like(exb_phi)
+        if idx_apar is not None:
+            flutter = _apply_flutter(brackets[idx_apar], c.vth, c.sqrt_m, c.sqrt_m_p1)
+        total = exb_phi + exb_bpar + flutter
+    total = _laguerre_to_spectral(total, ctx.to_spectral)
     return _squeeze_species_output(
-        _weighted_total(prep.G, weight, total),
+        _weighted_total(prep.G, c.weight, total),
         prep.squeeze_species,
     )
 
 
 def _spectral_contribution_from_prepared(
     prep: _PreparedNonlinearInputs,
-    *,
     electrostatic_only: bool,
-    vth: jnp.ndarray,
-    sqrt_m: jnp.ndarray,
-    sqrt_m_p1: jnp.ndarray,
-    kx_grid: jnp.ndarray,
-    ky_grid: jnp.ndarray,
-    dealias_mask: jnp.ndarray,
-    kxfac: jnp.ndarray,
-    weight: jnp.ndarray,
-    apar_weight: float,
-    bpar_weight: float,
-    compressed_real_fft: bool,
-    ny_full: int | None = None,
-    radial_phase: jnp.ndarray | None,
+    c: _NonlinearBracketContext,
 ) -> jnp.ndarray:
     chi_phi = prep.Jl * prep.phi[None, None, ...]
     if electrostatic_only:
         bracket_total = _spectral_bracket(
             prep.G,
             chi_phi,
-            kx_grid=kx_grid,
-            ky_grid=ky_grid,
-            dealias_mask=dealias_mask,
-            kxfac=kxfac,
-            radial_phase=radial_phase,
-            compressed_real_fft=compressed_real_fft,
-            ny_full=ny_full,
+            compressed_real_fft=c.compressed_real_fft,
+            **_bracket_kwargs(c),
         )
-        return _squeeze_species_output(
-            _weighted_total(prep.G, weight, bracket_total),
-            prep.squeeze_species,
+    else:
+        chi_fields, idx_bpar, idx_apar = _spectral_chi_fields(
+            prep, apar_weight=c.apar_weight, bpar_weight=c.bpar_weight
         )
-    chi_fields, idx_bpar, idx_apar = _spectral_chi_fields(
-        prep,
-        apar_weight=apar_weight,
-        bpar_weight=bpar_weight,
-    )
-    brackets = _multi_bracket_fn(compressed_real_fft)(
-        prep.G,
-        _stack_fields(prep.G, chi_fields),
-        kx_grid=kx_grid,
-        ky_grid=ky_grid,
-        dealias_mask=dealias_mask,
-        kxfac=kxfac,
-        radial_phase=radial_phase,
-        ny_full=ny_full,
-    )
-    bracket_total = brackets[0]
-    if idx_bpar is not None:
-        bracket_total = bracket_total + brackets[idx_bpar]
-    if idx_apar is not None:
-        bracket_total = bracket_total + _apply_flutter(
-            brackets[idx_apar], vth, sqrt_m, sqrt_m_p1
+        brackets = _multi_bracket_fn(c.compressed_real_fft)(
+            prep.G, _stack_fields(prep.G, chi_fields), **_bracket_kwargs(c)
         )
+        bracket_total = brackets[0]
+        if idx_bpar is not None:
+            bracket_total = bracket_total + brackets[idx_bpar]
+        if idx_apar is not None:
+            bracket_total = bracket_total + _apply_flutter(
+                brackets[idx_apar], c.vth, c.sqrt_m, c.sqrt_m_p1
+            )
     return _squeeze_species_output(
-        _weighted_total(prep.G, weight, bracket_total),
+        _weighted_total(prep.G, c.weight, bracket_total),
         prep.squeeze_species,
-    )
-
-
-def _laguerre_components_from_prepared(
-    prep: _PreparedNonlinearInputs,
-    ctx: _LaguerreGridContext,
-    *,
-    tz: jnp.ndarray,
-    vth: jnp.ndarray,
-    sqrt_m: jnp.ndarray,
-    sqrt_m_p1: jnp.ndarray,
-    kx_grid: jnp.ndarray,
-    ky_grid: jnp.ndarray,
-    dealias_mask: jnp.ndarray,
-    kxfac: jnp.ndarray,
-    weight: jnp.ndarray,
-    apar_weight: float,
-    bpar_weight: float,
-    compressed_real_fft: bool,
-    ny_full: int | None = None,
-    radial_phase: jnp.ndarray | None,
-) -> dict[str, jnp.ndarray | None]:
-    g_mu = _laguerre_to_grid(prep.G, ctx.to_grid)
-    chi_fields, idx_bpar, idx_apar = _laguerre_chi_fields(
-        prep,
-        ctx,
-        tz=tz,
-        apar_weight=apar_weight,
-        bpar_weight=bpar_weight,
-    )
-    brackets = _multi_bracket_fn(compressed_real_fft)(
-        g_mu,
-        _stack_fields(g_mu, chi_fields),
-        kx_grid=kx_grid,
-        ky_grid=ky_grid,
-        dealias_mask=dealias_mask,
-        kxfac=kxfac,
-        radial_phase=radial_phase,
-        ny_full=ny_full,
-    )
-    exb_phi_mu = brackets[0]
-    exb_bpar_mu = (
-        brackets[idx_bpar] if idx_bpar is not None else jnp.zeros_like(exb_phi_mu)
-    )
-    bracket_apar_mu = brackets[idx_apar] if idx_apar is not None else None
-    flutter_mu = (
-        _apply_flutter(bracket_apar_mu, vth, sqrt_m, sqrt_m_p1)
-        if bracket_apar_mu is not None
-        else jnp.zeros_like(exb_phi_mu)
-    )
-    exb_phi = _laguerre_to_spectral(exb_phi_mu, ctx.to_spectral)
-    exb_bpar = _laguerre_to_spectral(exb_bpar_mu, ctx.to_spectral)
-    flutter = _laguerre_to_spectral(flutter_mu, ctx.to_spectral)
-    bracket_apar = (
-        _laguerre_to_spectral(bracket_apar_mu, ctx.to_spectral)
-        if bracket_apar_mu is not None
-        else None
-    )
-    total_bracket = exb_phi + exb_bpar + flutter
-    return {
-        "exb_phi": exb_phi,
-        "exb_bpar": exb_bpar,
-        "bracket_apar": bracket_apar,
-        "flutter": flutter,
-        "total": _weighted_total(prep.G, weight, total_bracket),
-    }
-
-
-def _spectral_components_from_prepared(
-    prep: _PreparedNonlinearInputs,
-    *,
-    vth: jnp.ndarray,
-    sqrt_m: jnp.ndarray,
-    sqrt_m_p1: jnp.ndarray,
-    kx_grid: jnp.ndarray,
-    ky_grid: jnp.ndarray,
-    dealias_mask: jnp.ndarray,
-    kxfac: jnp.ndarray,
-    weight: jnp.ndarray,
-    apar_weight: float,
-    bpar_weight: float,
-    compressed_real_fft: bool,
-    ny_full: int | None = None,
-    radial_phase: jnp.ndarray | None,
-) -> dict[str, jnp.ndarray | None]:
-    chi_fields, idx_bpar, idx_apar = _spectral_chi_fields(
-        prep,
-        apar_weight=apar_weight,
-        bpar_weight=bpar_weight,
-    )
-    brackets = _multi_bracket_fn(compressed_real_fft)(
-        prep.G,
-        _stack_fields(prep.G, chi_fields),
-        kx_grid=kx_grid,
-        ky_grid=ky_grid,
-        dealias_mask=dealias_mask,
-        kxfac=kxfac,
-        radial_phase=radial_phase,
-        ny_full=ny_full,
-    )
-    exb_phi = brackets[0]
-    exb_bpar = brackets[idx_bpar] if idx_bpar is not None else jnp.zeros_like(exb_phi)
-    bracket_apar = brackets[idx_apar] if idx_apar is not None else None
-    flutter = (
-        _apply_flutter(bracket_apar, vth, sqrt_m, sqrt_m_p1)
-        if bracket_apar is not None
-        else jnp.zeros_like(exb_phi)
-    )
-    total_bracket = exb_phi + exb_bpar + flutter
-    return {
-        "exb_phi": exb_phi,
-        "exb_bpar": exb_bpar,
-        "bracket_apar": bracket_apar,
-        "flutter": flutter,
-        "total": _weighted_total(prep.G, weight, total_bracket),
-    }
-
-
-def _squeeze_component_payload(
-    components: dict[str, jnp.ndarray | None],
-    *,
-    squeeze_species: bool,
-) -> dict[str, jnp.ndarray]:
-    exb_phi = cast(jnp.ndarray, components["exb_phi"])
-    exb_bpar = cast(jnp.ndarray, components["exb_bpar"])
-    flutter = cast(jnp.ndarray, components["flutter"])
-    total = cast(jnp.ndarray, components["total"])
-    bracket_apar = components["bracket_apar"]
-    if squeeze_species:
-        exb_phi = exb_phi[0]
-        exb_bpar = exb_bpar[0]
-        flutter = flutter[0]
-        total = total[0]
-        if bracket_apar is not None:
-            bracket_apar = bracket_apar[0]
-    return {
-        "exb_phi": exb_phi,
-        "exb_bpar": exb_bpar,
-        "bracket_apar": (
-            cast(jnp.ndarray, bracket_apar)
-            if bracket_apar is not None
-            else jnp.zeros_like(exb_phi)
-        ),
-        "flutter": flutter,
-        "total": total,
-    }
-
-
-def _nonlinear_em_contribution_from_path(
-    path: _PreparedNonlinearPath,
-    ctx: _NonlinearBracketContext,
-) -> jnp.ndarray:
-    if path.laguerre is not None:
-        return _laguerre_contribution_from_prepared(
-            path.prep,
-            path.laguerre,
-            electrostatic_only=path.electrostatic_only,
-            tz=ctx.tz,
-            vth=ctx.vth,
-            sqrt_m=ctx.sqrt_m,
-            sqrt_m_p1=ctx.sqrt_m_p1,
-            kx_grid=ctx.kx_grid,
-            ky_grid=ctx.ky_grid,
-            dealias_mask=ctx.dealias_mask,
-            kxfac=ctx.kxfac,
-            weight=ctx.weight,
-            apar_weight=ctx.apar_weight,
-            bpar_weight=ctx.bpar_weight,
-            compressed_real_fft=ctx.compressed_real_fft,
-            ny_full=ctx.ny_full,
-            radial_phase=ctx.radial_phase,
-        )
-    return _spectral_contribution_from_prepared(
-        path.prep,
-        electrostatic_only=path.electrostatic_only,
-        vth=ctx.vth,
-        sqrt_m=ctx.sqrt_m,
-        sqrt_m_p1=ctx.sqrt_m_p1,
-        kx_grid=ctx.kx_grid,
-        ky_grid=ctx.ky_grid,
-        dealias_mask=ctx.dealias_mask,
-        kxfac=ctx.kxfac,
-        weight=ctx.weight,
-        apar_weight=ctx.apar_weight,
-        bpar_weight=ctx.bpar_weight,
-        compressed_real_fft=ctx.compressed_real_fft,
-        ny_full=ctx.ny_full,
-        radial_phase=ctx.radial_phase,
-    )
-
-
-def _nonlinear_em_components_from_path(
-    path: _PreparedNonlinearPath,
-    ctx: _NonlinearBracketContext,
-) -> dict[str, jnp.ndarray | None]:
-    if path.laguerre is not None:
-        return _laguerre_components_from_prepared(
-            path.prep,
-            path.laguerre,
-            tz=ctx.tz,
-            vth=ctx.vth,
-            sqrt_m=ctx.sqrt_m,
-            sqrt_m_p1=ctx.sqrt_m_p1,
-            kx_grid=ctx.kx_grid,
-            ky_grid=ctx.ky_grid,
-            dealias_mask=ctx.dealias_mask,
-            kxfac=ctx.kxfac,
-            weight=ctx.weight,
-            apar_weight=ctx.apar_weight,
-            bpar_weight=ctx.bpar_weight,
-            compressed_real_fft=ctx.compressed_real_fft,
-            ny_full=ctx.ny_full,
-            radial_phase=ctx.radial_phase,
-        )
-    return _spectral_components_from_prepared(
-        path.prep,
-        vth=ctx.vth,
-        sqrt_m=ctx.sqrt_m,
-        sqrt_m_p1=ctx.sqrt_m_p1,
-        kx_grid=ctx.kx_grid,
-        ky_grid=ctx.ky_grid,
-        dealias_mask=ctx.dealias_mask,
-        kxfac=ctx.kxfac,
-        weight=ctx.weight,
-        apar_weight=ctx.apar_weight,
-        bpar_weight=ctx.bpar_weight,
-        compressed_real_fft=ctx.compressed_real_fft,
-        ny_full=ctx.ny_full,
-        radial_phase=ctx.radial_phase,
     )
 
 
@@ -808,7 +431,7 @@ def nonlinear_em_contribution(
         b=b,
         laguerre_mode=laguerre_mode,
     )
-    ctx = _nonlinear_bracket_context(
+    ctx = _NonlinearBracketContext(
         tz=tz,
         vth=vth,
         sqrt_m=sqrt_m,
@@ -824,87 +447,8 @@ def nonlinear_em_contribution(
         ny_full=ny_full,
         radial_phase=radial_phase,
     )
-    return _nonlinear_em_contribution_from_path(path, ctx)
-
-
-def nonlinear_em_components(
-    G: jnp.ndarray,
-    *,
-    phi: jnp.ndarray,
-    apar: jnp.ndarray | None,
-    bpar: jnp.ndarray | None,
-    Jl: jnp.ndarray,
-    JlB: jnp.ndarray,
-    tz: jnp.ndarray,
-    vth: jnp.ndarray,
-    sqrt_m: jnp.ndarray,
-    sqrt_m_p1: jnp.ndarray,
-    kx_grid: jnp.ndarray,
-    ky_grid: jnp.ndarray,
-    dealias_mask: jnp.ndarray,
-    kxfac: jnp.ndarray,
-    weight: jnp.ndarray,
-    apar_weight: float,
-    bpar_weight: float,
-    laguerre_to_grid: jnp.ndarray | None = None,
-    laguerre_to_spectral: jnp.ndarray | None = None,
-    laguerre_roots: jnp.ndarray | None = None,
-    laguerre_j0: jnp.ndarray | None = None,
-    laguerre_j1_over_alpha: jnp.ndarray | None = None,
-    b: jnp.ndarray | None = None,
-    compressed_real_fft: bool = True,
-    ny_full: int | None = None,
-    laguerre_mode: str = "grid",
-    radial_phase: jnp.ndarray | None = None,
-) -> dict[str, jnp.ndarray]:
-    """Return nonlinear E×B/flutter components for diagnostics/comparison checks."""
-
-    path = _prepare_nonlinear_path(
-        G,
-        phi=phi,
-        apar=apar,
-        bpar=bpar,
-        Jl=Jl,
-        JlB=JlB,
-        dealias_mask=dealias_mask,
-        apar_weight=apar_weight,
-        bpar_weight=bpar_weight,
-        laguerre_to_grid=laguerre_to_grid,
-        laguerre_to_spectral=laguerre_to_spectral,
-        laguerre_roots=laguerre_roots,
-        laguerre_j0=laguerre_j0,
-        laguerre_j1_over_alpha=laguerre_j1_over_alpha,
-        b=b,
-        laguerre_mode=laguerre_mode,
-    )
-    ctx = _nonlinear_bracket_context(
-        tz=tz,
-        vth=vth,
-        sqrt_m=sqrt_m,
-        sqrt_m_p1=sqrt_m_p1,
-        kx_grid=kx_grid,
-        ky_grid=ky_grid,
-        dealias_mask=dealias_mask,
-        kxfac=kxfac,
-        weight=weight,
-        apar_weight=apar_weight,
-        bpar_weight=bpar_weight,
-        compressed_real_fft=compressed_real_fft,
-        ny_full=ny_full,
-        radial_phase=radial_phase,
-    )
-    components = _nonlinear_em_components_from_path(path, ctx)
-    return _squeeze_component_payload(
-        components,
-        squeeze_species=path.prep.squeeze_species,
-    )
-
-
-def placeholder_nonlinear_contribution(
-    G: jnp.ndarray,
-    *,
-    weight: jnp.ndarray,
-) -> jnp.ndarray:
-    """Return a zero contribution for shape-only tests and disabled-term paths."""
-
-    return jnp.zeros_like(G) * weight
+    if path.laguerre is not None:
+        return _laguerre_contribution_from_prepared(
+            path.prep, path.laguerre, path.electrostatic_only, ctx
+        )
+    return _spectral_contribution_from_prepared(path.prep, path.electrostatic_only, ctx)

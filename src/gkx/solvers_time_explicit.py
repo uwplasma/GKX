@@ -148,30 +148,6 @@ def _linear_explicit_step(
     )
 
 
-def _rk4_step(
-    G: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    term_cfg,
-    dt: float,
-):
-    """Single Explicit RK4 step through the public explicit facade."""
-
-    return _linear_explicit_step(G, cache, params, term_cfg, dt, method="rk4")
-
-
-def _rk3_heun_step(
-    G: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    term_cfg,
-    dt: float,
-):
-    """Single Explicit RK3/Heun step through the public explicit facade."""
-
-    return _linear_explicit_step(G, cache, params, term_cfg, dt, method="rk3")
-
-
 def _resolve_explicit_method(method: str) -> str:
     method_key = method.strip().lower()
     if method_key not in {
@@ -1006,8 +982,6 @@ __all__ = [
     "_linear_term_config",
     "_non_twist_shift_frequency_max",
     "_parallel_periods_from_grid",
-    "_rk3_heun_step",
-    "_rk4_step",
     "integrate_linear_explicit",
     "integrate_linear_explicit_from_config",
     "integrate_linear_explicit_diagnostics",

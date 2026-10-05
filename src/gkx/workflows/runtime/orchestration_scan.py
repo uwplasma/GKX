@@ -3,13 +3,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from types import SimpleNamespace
-from typing import Any, Callable, Mapping, Protocol, Sequence, cast
+from dataclasses import asdict
+from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 
-from gkx.diagnostics.modes import ModeSelection
+from gkx.benchmarking_shared import _midplane_index
 from gkx.config import RuntimeConfig
+from gkx.core_grid import build_spectral_grid, select_ky_grid
+from gkx.diagnostics.growth_rates import (
+    fit_growth_rate,
+    fit_growth_rate_auto,
+    fit_growth_rate_auto_with_stats,
+    fit_growth_rate_with_stats,
+)
+from gkx.diagnostics.modes import (
+    ModeSelection,
+    extract_mode_time_series,
+    select_ky_index,
+)
+from gkx.diagnostics.normalization import apply_diagnostic_normalization
+from gkx.geometry import apply_geometry_grid_defaults
+from gkx.parallel import independent_map
+from gkx.solvers_linear_integrators import integrate_linear_diagnostics
+from gkx.solvers_linear_krylov import KrylovConfig
+from gkx.workflows.linear import _normalize_linear_solver_name, run_runtime_linear
 from gkx.workflows.runtime.diagnostics import (
     _RuntimeLinearFitOptions,
     _fit_signal_key,
@@ -27,39 +45,124 @@ from gkx.workflows.runtime.warm_start import (
     relative_change,
     scan_visit_order,
 )
+from gkx.workflows.runtime.startup import (
+    _build_initial_condition,
+    _resolve_runtime_hl_dims,
+    build_runtime_geometry,
+    build_runtime_linear_params,
+    build_runtime_linear_terms,
+)
 
 
-class RuntimeScanBatchDeps(Protocol):
-    """Dependency surface needed by the combined-ky scan batch helper."""
+@dataclass(frozen=True)
+class RuntimeIndependentParallelPlan:
+    """Resolved independent-worker policy for runtime scan workloads."""
 
-    build_runtime_geometry: Callable[[RuntimeConfig], Any]
-    build_runtime_linear_params: Callable[..., Any]
-    build_runtime_linear_terms: Callable[[RuntimeConfig], Any]
-    build_initial_condition: Callable[..., Any]
-    apply_geometry_grid_defaults: Callable[..., Any]
-    build_spectral_grid: Callable[[Any], Any]
-    select_ky_grid: Callable[[Any, Any], Any]
-    select_ky_index: Callable[[Any, float], int]
-    midplane_index: Callable[[Any], int]
-    integrate_linear_diagnostics: Callable[..., Any]
-    extract_mode_time_series: Callable[..., Any]
-    fit_growth_rate_auto_with_stats: Callable[..., Any]
-    fit_growth_rate_auto: Callable[..., Any]
-    fit_growth_rate: Callable[..., Any]
-    fit_growth_rate_with_stats: Callable[..., Any]
-    apply_diagnostic_normalization: Callable[..., tuple[float, float]]
+    requested_workers: int
+    effective_workers: int
+    executor: str
+    strategy: str
+    axis: str
+    source: str
+    problem_size: int
+
+    @property
+    def enabled(self) -> bool:
+        """Whether the resolved plan uses more than one independent worker."""
+
+        return self.effective_workers > 1
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly policy payload for runtime artifacts."""
+
+        payload = asdict(self)
+        payload["enabled"] = self.enabled
+        return payload
 
 
-class RuntimeScanDeps(Protocol):
-    """Dependency surface for runtime ky-scan orchestration."""
+def _parallel_requests_combined_ky_scan(cfg: RuntimeConfig) -> bool:
+    """Return whether runtime parallel config requests the combined-ky scan path."""
 
-    resolve_runtime_hl_dims: Callable[..., tuple[int, int]]
-    normalize_linear_solver_name: Callable[[str], str]
-    parallel_requests_combined_ky_scan: Callable[[RuntimeConfig], bool]
-    run_runtime_scan_batch: Callable[..., RuntimeLinearScanResult]
-    runtime_independent_parallel_plan: Callable[..., Any]
-    independent_map: Callable[..., list[Any]]
-    run_runtime_scan_ky_task: Callable[[dict[str, Any]], Any]
+    parallel = getattr(cfg, "parallel", None)
+    if parallel is None:
+        return False
+    return (
+        str(getattr(parallel, "strategy", "serial")).lower() == "combined_ky"
+        and str(getattr(parallel, "axis", "ky")).lower() == "ky"
+    )
+
+
+def _normalize_independent_executor(backend: str, fallback: str) -> str:
+    backend_key = str(backend).strip().lower().replace("-", "_")
+    fallback_key = str(fallback).strip().lower().replace("-", "_")
+    aliases = {
+        "thread": "thread",
+        "threads": "thread",
+        "process": "process",
+        "processes": "process",
+    }
+    if backend_key in {"", "auto"}:
+        try:
+            return aliases[fallback_key]
+        except KeyError as exc:
+            raise ValueError("parallel_executor must be 'thread' or 'process'") from exc
+    try:
+        return aliases[backend_key]
+    except KeyError as exc:
+        raise ValueError(
+            "runtime [parallel] backend for independent scans must be "
+            "'auto', 'thread', or 'process'"
+        ) from exc
+
+
+def _runtime_independent_parallel_plan(
+    cfg: RuntimeConfig,
+    *,
+    problem_size: int,
+    workers: int,
+    executor: str,
+) -> RuntimeIndependentParallelPlan:
+    """Resolve independent ``k_y`` worker policy from arguments and config."""
+
+    size = int(problem_size)
+    if size < 0:
+        raise ValueError("problem_size must be non-negative")
+    requested = int(workers)
+    if requested < 1:
+        raise ValueError("workers must be >= 1")
+    executor_key = _normalize_independent_executor("auto", executor)
+    source = "arguments"
+    strategy = "serial"
+    axis = "ky"
+
+    parallel = getattr(cfg, "parallel", None)
+    if parallel is not None:
+        strategy = str(getattr(parallel, "strategy", "serial")).strip().lower()
+        axis = str(getattr(parallel, "axis", "ky")).strip().lower()
+        if requested == 1 and strategy == "batch":
+            if axis != "ky":
+                raise ValueError(
+                    "runtime [parallel] strategy='batch' is supported only for axis='ky'"
+                )
+            configured_workers = getattr(parallel, "num_devices", None)
+            if configured_workers is None:
+                configured_workers = getattr(parallel, "batch_size", None)
+            requested = max(int(configured_workers or 1), 1)
+            executor_key = _normalize_independent_executor(
+                str(getattr(parallel, "backend", "auto")), executor
+            )
+            source = "runtime_config"
+
+    effective = 0 if size == 0 else min(requested, size)
+    return RuntimeIndependentParallelPlan(
+        requested_workers=requested,
+        effective_workers=effective,
+        executor=executor_key,
+        strategy=strategy,
+        axis=axis,
+        source=source,
+        problem_size=size,
+    )
 
 
 @dataclass(frozen=True)
@@ -92,97 +195,7 @@ class _RuntimeScanOptions(_RuntimeLinearFitOptions):
         return dict(vars(self))
 
 
-def _runtime_scan_options(
-    *,
-    method: str | None,
-    dt: float | None,
-    steps: int | None,
-    sample_stride: int | None,
-    auto_window: bool,
-    tmin: float | None,
-    tmax: float | None,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-    window_method: str,
-    mode_method: str,
-    fit_signal: str,
-    show_progress: bool,
-) -> _RuntimeScanOptions:
-    """Collect scan-window, time-step, and diagnostic options in one object."""
-
-    return _RuntimeScanOptions(
-        method=method,
-        dt=dt,
-        steps=steps,
-        sample_stride=sample_stride,
-        auto_window=auto_window,
-        tmin=tmin,
-        tmax=tmax,
-        window_fraction=window_fraction,
-        min_points=min_points,
-        start_fraction=start_fraction,
-        growth_weight=growth_weight,
-        require_positive=require_positive,
-        min_amp_fraction=min_amp_fraction,
-        window_method=window_method,
-        mode_method=mode_method,
-        fit_signal=fit_signal,
-        show_progress=show_progress,
-    )
-
-
-def build_runtime_scan_orchestration_deps(facade: Any) -> RuntimeScanDeps:
-    """Build ky-scan orchestration deps from the public runtime facade."""
-
-    return cast(
-        RuntimeScanDeps,
-        SimpleNamespace(
-            resolve_runtime_hl_dims=facade._resolve_runtime_hl_dims,
-            normalize_linear_solver_name=facade._normalize_linear_solver_name,
-            parallel_requests_combined_ky_scan=facade._parallel_requests_combined_ky_scan,
-            run_runtime_scan_batch=facade._run_runtime_scan_batch,
-            runtime_independent_parallel_plan=facade._runtime_independent_parallel_plan,
-            independent_map=facade.independent_map,
-            run_runtime_scan_ky_task=facade._run_runtime_scan_ky_task,
-        ),
-    )
-
-
-def build_runtime_scan_batch_deps(facade: Any) -> RuntimeScanBatchDeps:
-    """Build combined-ky scan deps from the public runtime facade."""
-
-    return cast(
-        RuntimeScanBatchDeps,
-        SimpleNamespace(
-            build_runtime_geometry=facade.build_runtime_geometry,
-            build_runtime_linear_params=facade.build_runtime_linear_params,
-            build_runtime_linear_terms=facade.build_runtime_linear_terms,
-            build_initial_condition=facade._build_initial_condition,
-            apply_geometry_grid_defaults=facade.apply_geometry_grid_defaults,
-            build_spectral_grid=facade.build_spectral_grid,
-            select_ky_grid=facade.select_ky_grid,
-            select_ky_index=facade.select_ky_index,
-            midplane_index=facade._midplane_index,
-            integrate_linear_diagnostics=facade.integrate_linear_diagnostics,
-            extract_mode_time_series=facade.extract_mode_time_series,
-            fit_growth_rate_auto_with_stats=facade.fit_growth_rate_auto_with_stats,
-            fit_growth_rate_auto=facade.fit_growth_rate_auto,
-            fit_growth_rate=facade.fit_growth_rate,
-            fit_growth_rate_with_stats=facade.fit_growth_rate_with_stats,
-            apply_diagnostic_normalization=facade.apply_diagnostic_normalization,
-        ),
-    )
-
-
-def run_runtime_scan_ky_task(
-    task: dict[str, Any],
-    *,
-    run_runtime_linear: Callable[..., Any],
-) -> Any:
+def run_runtime_scan_ky_task(task: dict[str, Any]) -> RuntimeLinearResult:
     """Run one independent ky point for ordered scan-worker execution."""
 
     return run_runtime_linear(
@@ -219,9 +232,8 @@ def _combined_ky_scan_requested(
     cfg: RuntimeConfig,
     batch_ky: bool,
     solver_key: str,
-    deps: RuntimeScanDeps,
 ) -> bool:
-    requested = bool(batch_ky or deps.parallel_requests_combined_ky_scan(cfg))
+    requested = bool(batch_ky or _parallel_requests_combined_ky_scan(cfg))
     if requested and solver_key == "krylov":
         raise ValueError("batch_ky is only supported for time integration")
     if requested and bool(getattr(cfg.quasilinear, "enabled", False)):
@@ -352,9 +364,8 @@ def _run_combined_ky_scan(
     Nl: int,
     Nm: int,
     options: _RuntimeScanOptions,
-    deps: RuntimeScanDeps,
 ) -> RuntimeLinearScanResult:
-    return deps.run_runtime_scan_batch(
+    return run_runtime_scan_batch(
         cfg,
         ky_arr,
         Nl=Nl,
@@ -367,8 +378,6 @@ def _run_warm_serial_ky_scan(
     ky_arr: np.ndarray,
     tasks: list[dict[str, Any]],
     parallel_plan: Any,
-    *,
-    deps: RuntimeScanDeps,
 ) -> RuntimeLinearScanResult:
     """Walk a ky scan in neighbour order, seeding each point from the last one.
 
@@ -386,7 +395,7 @@ def _run_warm_serial_ky_scan(
     warm_points = 0
     for position in order:
         index = int(position)
-        result = deps.run_runtime_scan_ky_task(
+        result = run_runtime_scan_ky_task(
             {**tasks[index], "initial_state": carried, "return_state": True}
         )
         results[index] = result
@@ -417,7 +426,6 @@ def _run_independent_ky_scan(
     parallel_executor: str,
     warm_policy: WarmStartPolicy,
     solver_key: str,
-    deps: RuntimeScanDeps,
 ) -> RuntimeLinearScanResult:
     tasks = _scan_worker_tasks(
         cfg,
@@ -428,7 +436,7 @@ def _run_independent_ky_scan(
         krylov_cfg=krylov_cfg,
         options=options,
     )
-    parallel_plan = deps.runtime_independent_parallel_plan(
+    parallel_plan = _runtime_independent_parallel_plan(
         cfg, problem_size=int(ky_arr.size), workers=workers, executor=parallel_executor
     )
     # The plan is resolved first because it can promote the worker count from
@@ -440,9 +448,9 @@ def _run_independent_ky_scan(
         workers=parallel_plan.requested_workers,
     )
     if refusal is None and ky_arr.size > 1:
-        return _run_warm_serial_ky_scan(ky_arr, tasks, parallel_plan, deps=deps)
-    results = deps.independent_map(
-        deps.run_runtime_scan_ky_task,
+        return _run_warm_serial_ky_scan(ky_arr, tasks, parallel_plan)
+    results = independent_map(
+        run_runtime_scan_ky_task,
         tasks,
         workers=parallel_plan.requested_workers,
         executor=parallel_plan.executor,
@@ -456,20 +464,19 @@ def _batch_scan_setup(
     *,
     Nl: int,
     Nm: int,
-    deps: RuntimeScanBatchDeps,
 ) -> _BatchScanSetup:
-    geom = deps.build_runtime_geometry(cfg)
-    grid_cfg = deps.apply_geometry_grid_defaults(geom, cfg.grid)
-    full_grid = deps.build_spectral_grid(grid_cfg)
+    geom = build_runtime_geometry(cfg)
+    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
+    full_grid = build_spectral_grid(grid_cfg)
     full_ky_indices = np.asarray(
-        [deps.select_ky_index(np.asarray(full_grid.ky), ky) for ky in ky_arr],
+        [select_ky_index(np.asarray(full_grid.ky), ky) for ky in ky_arr],
         dtype=int,
     )
     # Linear scans retain every requested mode. The parent mask is only for
     # nonlinear convolution dealiasing and would otherwise suppress high ky.
-    grid = deps.select_ky_grid(full_grid, full_ky_indices)
-    params = deps.build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
-    terms = deps.build_runtime_linear_terms(cfg)
+    grid = select_ky_grid(full_grid, full_ky_indices)
+    params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
+    terms = build_runtime_linear_terms(cfg)
     ky_indices = np.arange(ky_arr.size, dtype=int)
     nspecies = max(len([s for s in cfg.species if s.kinetic]), 1)
     return _BatchScanSetup(
@@ -488,11 +495,10 @@ def _combined_batch_initial_condition(
     *,
     Nl: int,
     Nm: int,
-    deps: RuntimeScanBatchDeps,
 ) -> Any:
     g0 = None
     for ky_idx in setup.ky_indices:
-        g0_local = deps.build_initial_condition(
+        g0_local = _build_initial_condition(
             setup.grid,
             setup.geom,
             cfg,
@@ -531,7 +537,6 @@ def _run_batch_diagnostics(
     tcfg: Any,
     *,
     show_progress: bool,
-    deps: RuntimeScanBatchDeps,
 ) -> _BatchDiagnostics:
     from gkx.solvers_time_runners import _resolve_config_collision_operator
 
@@ -539,7 +544,7 @@ def _run_batch_diagnostics(
     # The runtime linear scan is the path the executable takes, so the TOML
     # collision_operator selection has to be resolved here too.
     collision_operator = _resolve_config_collision_operator(tcfg, setup.params, g0)
-    diag = deps.integrate_linear_diagnostics(
+    diag = integrate_linear_diagnostics(
         g0,
         setup.grid,
         setup.geom,
@@ -571,7 +576,6 @@ def _auto_fit_scan_candidate(
     time: np.ndarray,
     *,
     options: _RuntimeScanOptions,
-    deps: RuntimeScanBatchDeps,
 ) -> tuple[float, float, float]:
     """Fit and score one channel of a combined-ky scan point.
 
@@ -581,7 +585,7 @@ def _auto_fit_scan_candidate(
     """
 
     if options.auto_window:
-        gamma, omega, _tmin, _tmax, r2, r2_phase = deps.fit_growth_rate_auto_with_stats(
+        gamma, omega, _tmin, _tmax, r2, r2_phase = fit_growth_rate_auto_with_stats(
             time,
             signal,
             window_fraction=options.window_fraction,
@@ -593,7 +597,7 @@ def _auto_fit_scan_candidate(
             window_method=options.window_method,
         )
     else:
-        gamma, omega, r2, r2_phase = deps.fit_growth_rate_with_stats(
+        gamma, omega, r2, r2_phase = fit_growth_rate_with_stats(
             time,
             signal,
             tmin=options.tmin,
@@ -607,23 +611,18 @@ def _auto_fit_scan_point(
     sel: ModeSelection,
     *,
     options: _RuntimeScanOptions,
-    deps: RuntimeScanBatchDeps,
 ) -> tuple[float, float]:
     gamma_phi, omega_phi, score_phi = _auto_fit_scan_candidate(
-        deps.extract_mode_time_series(
-            diagnostics.phi_t, sel, method=options.mode_method
-        ),
+        extract_mode_time_series(diagnostics.phi_t, sel, method=options.mode_method),
         diagnostics.time,
         options=options,
-        deps=deps,
     )
     gamma_den, omega_den, score_den = _auto_fit_scan_candidate(
-        deps.extract_mode_time_series(
+        extract_mode_time_series(
             diagnostics.density_t, sel, method=options.mode_method
         ),
         diagnostics.time,
         options=options,
-        deps=deps,
     )
     return (gamma_phi, omega_phi) if score_phi >= score_den else (gamma_den, omega_den)
 
@@ -634,22 +633,20 @@ def _fit_batch_scan_point(
     *,
     fit_key: str,
     options: _RuntimeScanOptions,
-    deps: RuntimeScanBatchDeps,
 ) -> tuple[float, float]:
     if fit_key == "auto":
         return _auto_fit_scan_point(
             diagnostics,
             sel,
             options=options,
-            deps=deps,
         )
-    signal = deps.extract_mode_time_series(
+    signal = extract_mode_time_series(
         diagnostics.density_t if fit_key == "density" else diagnostics.phi_t,
         sel,
         method=options.mode_method,
     )
     if options.auto_window:
-        g_val, o_val, _tmin, _tmax = deps.fit_growth_rate_auto(
+        g_val, o_val, _tmin, _tmax = fit_growth_rate_auto(
             diagnostics.time,
             signal,
             window_fraction=options.window_fraction,
@@ -661,7 +658,7 @@ def _fit_batch_scan_point(
             window_method=options.window_method,
         )
         return g_val, o_val
-    return deps.fit_growth_rate(
+    return fit_growth_rate(
         diagnostics.time, signal, tmin=options.tmin, tmax=options.tmax
     )
 
@@ -673,7 +670,6 @@ def _fit_batch_scan_result(
     diagnostics: _BatchDiagnostics,
     *,
     options: _RuntimeScanOptions,
-    deps: RuntimeScanBatchDeps,
 ) -> RuntimeLinearScanResult:
     """Fit each requested ky from one combined-ky diagnostic time history."""
 
@@ -682,16 +678,15 @@ def _fit_batch_scan_result(
     fit_key = _fit_signal_key(options.fit_signal)
     for i, ky_idx in enumerate(setup.ky_indices):
         sel = ModeSelection(
-            ky_index=int(ky_idx), kx_index=0, z_index=deps.midplane_index(setup.grid)
+            ky_index=int(ky_idx), kx_index=0, z_index=_midplane_index(setup.grid)
         )
         g_val, o_val = _fit_batch_scan_point(
             diagnostics,
             sel,
             fit_key=fit_key,
             options=options,
-            deps=deps,
         )
-        gamma[i], omega[i] = deps.apply_diagnostic_normalization(
+        gamma[i], omega[i] = apply_diagnostic_normalization(
             g_val,
             o_val,
             rho_star=float(np.asarray(setup.params.rho_star)),
@@ -700,43 +695,45 @@ def _fit_batch_scan_result(
     return RuntimeLinearScanResult(ky=ky_arr, gamma=gamma, omega=omega)
 
 
-def run_runtime_scan_orchestration(
+def run_runtime_scan(
     cfg: RuntimeConfig,
-    ky_values: Any,
+    ky_values: Sequence[float],
     *,
-    Nl: int | None,
-    Nm: int | None,
-    solver: str,
-    method: str | None,
-    dt: float | None,
-    steps: int | None,
-    sample_stride: int | None,
-    batch_ky: bool,
-    auto_window: bool,
-    tmin: float | None,
-    tmax: float | None,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-    window_method: str,
-    krylov_cfg: Any,
-    mode_method: str,
-    fit_signal: str,
-    show_progress: bool,
-    workers: int,
-    parallel_executor: str,
-    deps: RuntimeScanDeps,
+    Nl: int | None = None,
+    Nm: int | None = None,
+    solver: str = "auto",
+    method: str | None = None,
+    dt: float | None = None,
+    steps: int | None = None,
+    sample_stride: int | None = None,
+    batch_ky: bool = False,
+    auto_window: bool = True,
+    tmin: float | None = None,
+    tmax: float | None = None,
+    window_fraction: float = 0.4,
+    min_points: int = 40,
+    start_fraction: float = 0.2,
+    growth_weight: float = 0.2,
+    require_positive: bool = True,
+    min_amp_fraction: float = 0.0,
+    window_method: str = "stationary",
+    krylov_cfg: KrylovConfig | None = None,
+    mode_method: str = "project",
+    fit_signal: str = "auto",
+    show_progress: bool = False,
+    workers: int = 1,
+    parallel_executor: str = "thread",
     warm_start: bool | None = None,
 ) -> RuntimeLinearScanResult:
-    """Coordinate serial, independent-worker, or combined-ky runtime scans."""
+    """Run a ky scan; ``warm_start`` overrides the case output policy.
+
+    Coordinates serial, independent-worker, or combined-ky runtime scans.
+    """
 
     ky_arr = np.asarray(ky_values, dtype=float)
-    Nl_use, Nm_use = deps.resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
-    solver_key = deps.normalize_linear_solver_name(solver)
-    options = _runtime_scan_options(
+    Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    solver_key = _normalize_linear_solver_name(solver)
+    options = _RuntimeScanOptions(
         method=method,
         dt=dt,
         steps=steps,
@@ -755,16 +752,13 @@ def run_runtime_scan_orchestration(
         fit_signal=fit_signal,
         show_progress=show_progress,
     )
-    if _combined_ky_scan_requested(
-        cfg=cfg, batch_ky=batch_ky, solver_key=solver_key, deps=deps
-    ):
+    if _combined_ky_scan_requested(cfg=cfg, batch_ky=batch_ky, solver_key=solver_key):
         return _run_combined_ky_scan(
             cfg,
             ky_arr,
             Nl=Nl_use,
             Nm=Nm_use,
             options=options,
-            deps=deps,
         )
 
     return _run_independent_ky_scan(
@@ -779,7 +773,6 @@ def run_runtime_scan_orchestration(
         parallel_executor=parallel_executor,
         warm_policy=WarmStartPolicy.from_config(cfg, override=warm_start),
         solver_key=solver_key,
-        deps=deps,
     )
 
 
@@ -805,7 +798,6 @@ def run_runtime_scan_batch(
     mode_method: str,
     fit_signal: str,
     show_progress: bool,
-    deps: RuntimeScanBatchDeps,
     window_method: str = "stationary",
 ) -> RuntimeLinearScanResult:
     """Batch a ky scan using one time integration over the full grid."""
@@ -813,9 +805,9 @@ def run_runtime_scan_batch(
     if ky_arr.size == 0:
         raise ValueError("ky_values must not be empty")
 
-    setup = _batch_scan_setup(cfg, ky_arr, Nl=Nl, Nm=Nm, deps=deps)
-    g0 = _combined_batch_initial_condition(cfg, setup, Nl=Nl, Nm=Nm, deps=deps)
-    options = _runtime_scan_options(
+    setup = _batch_scan_setup(cfg, ky_arr, Nl=Nl, Nm=Nm)
+    g0 = _combined_batch_initial_condition(cfg, setup, Nl=Nl, Nm=Nm)
+    options = _RuntimeScanOptions(
         method=method,
         dt=dt,
         steps=steps,
@@ -840,11 +832,8 @@ def run_runtime_scan_batch(
         g0,
         tcfg,
         show_progress=options.show_progress,
-        deps=deps,
     )
-    return _fit_batch_scan_result(
-        cfg, ky_arr, setup, diagnostics, options=options, deps=deps
-    )
+    return _fit_batch_scan_result(cfg, ky_arr, setup, diagnostics, options=options)
 
 
 def run_runtime_parameter_scan(
@@ -880,8 +869,6 @@ def run_runtime_parameter_scan(
     from somewhere it has no reason to be. Both compile once and reuse the same
     executable for every point, because the shapes never change.
     """
-
-    from gkx.runtime import run_runtime_linear
 
     name = str(parameter_name).strip()
     if not name:
@@ -947,12 +934,9 @@ def run_runtime_parameter_scan(
 
 
 __all__ = [
-    "RuntimeScanBatchDeps",
-    "RuntimeScanDeps",
-    "build_runtime_scan_batch_deps",
-    "build_runtime_scan_orchestration_deps",
+    "RuntimeIndependentParallelPlan",
     "run_runtime_scan_ky_task",
     "run_runtime_scan_batch",
-    "run_runtime_scan_orchestration",
+    "run_runtime_scan",
     "run_runtime_parameter_scan",
 ]

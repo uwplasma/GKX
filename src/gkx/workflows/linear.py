@@ -8,15 +8,32 @@ from typing import Any, Callable
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.benchmarking_shared import LinearRunResult, LinearScanResult
+from gkx.benchmarking_shared import LinearRunResult, LinearScanResult, _midplane_index
 from gkx.diagnostics.modes import (
     ModeSelection,
 )
 from gkx.config import RuntimeConfig
 from gkx.operators.linear.cache_builder import mask_off_chain_rows
+from gkx.core_grid import build_spectral_grid, select_ky_grid
+from gkx.diagnostics.modes import select_ky_index
+from gkx.diagnostics.normalization import apply_diagnostic_normalization
+from gkx.geometry import apply_geometry_grid_defaults
+from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.solvers_linear_integrators import integrate_linear_diagnostics
+from gkx.solvers_linear_krylov import KrylovConfig, dominant_eigenpair
+from gkx.solvers_time_runners import integrate_linear_from_config
 from gkx.workflows.runtime.diagnostics import (
-    RuntimeQuasilinearFinalizationDeps,
     _fit_signal_key,
+    finalize_runtime_linear_quasilinear,
+    fit_runtime_linear_diagnostics,
+)
+from gkx.workflows.runtime.startup import (
+    _build_initial_condition,
+    _resolve_runtime_hl_dims,
+    _runtime_default_krylov_config,
+    build_runtime_geometry,
+    build_runtime_linear_params,
+    build_runtime_linear_terms,
 )
 from gkx.workflows.runtime.results import (
     RuntimeLinearResult,
@@ -26,38 +43,14 @@ from gkx.workflows.runtime.results import (
 from gkx.solvers_time_explicit import integrate_linear_explicit_from_config
 
 
-@dataclass(frozen=True)
-class FullLinearRuntimeDeps:
-    """Injected dependencies for the full-GK linear runtime workflow."""
-
-    build_runtime_geometry: Callable[[RuntimeConfig], Any]
-    apply_geometry_grid_defaults: Callable[..., Any]
-    build_spectral_grid: Callable[..., Any]
-    build_runtime_linear_params: Callable[..., Any]
-    build_runtime_linear_terms: Callable[..., Any]
-    select_ky_index: Callable[..., int]
-    select_ky_grid: Callable[..., Any]
-    midplane_index: Callable[..., int]
-    build_initial_condition: Callable[..., Any]
-    normalize_linear_solver_name: Callable[..., str]
-    runtime_default_krylov_config: Callable[..., Any]
-    build_linear_cache: Callable[..., Any]
-    dominant_eigenpair: Callable[..., tuple[Any, ...]]
-    apply_diagnostic_normalization: Callable[..., tuple[float, float]]
-    integrate_linear_from_config: Callable[..., tuple[Any, ...]]
-    integrate_linear_diagnostics: Callable[..., tuple[Any, ...]]
-    fit_runtime_linear_diagnostics: Callable[..., Any]
-    finalize_runtime_linear_quasilinear: Callable[..., RuntimeLinearResult]
-    quasilinear_finalization_deps: RuntimeQuasilinearFinalizationDeps
-    extract_mode_time_series: Callable[..., Any]
-    fit_growth_rate_auto_with_stats: Callable[..., Any]
-    fit_growth_rate_auto: Callable[..., Any]
-    fit_growth_rate: Callable[..., Any]
-    fit_growth_rate_with_stats: Callable[..., Any]
-    extract_eigenfunction: Callable[..., Any]
-
-
 _StatusCallback = Callable[[str], None] | None
+
+
+def _normalize_linear_solver_name(solver: str) -> str:
+    solver_key = solver.strip().lower().replace("-", "_")
+    if solver_key == "explicit_time":
+        return "explicit_time"
+    return solver_key
 
 
 @dataclass(frozen=True)
@@ -128,7 +121,6 @@ def _status(callback: _StatusCallback, message: str) -> None:
 def _prepare_linear_runtime_context(
     cfg: RuntimeConfig,
     *,
-    deps: FullLinearRuntimeDeps,
     ky_target: float,
     n_laguerre: int,
     n_hermite: int,
@@ -143,22 +135,22 @@ def _prepare_linear_runtime_context(
     return_state_requested = bool(return_state)
     return_state_effective = return_state_requested or ql_enabled
 
-    geom = deps.build_runtime_geometry(cfg)
+    geom = build_runtime_geometry(cfg)
     _status(status_callback, "building spectral grid")
-    grid_cfg = deps.apply_geometry_grid_defaults(geom, cfg.grid)
-    grid_full = deps.build_spectral_grid(grid_cfg)
+    grid_cfg = apply_geometry_grid_defaults(geom, cfg.grid)
+    grid_full = build_spectral_grid(grid_cfg)
     _status(status_callback, "building runtime linear parameters")
-    params = deps.build_runtime_linear_params(cfg, Nm=n_hermite, geom=geom)
-    terms = deps.build_runtime_linear_terms(cfg)
+    params = build_runtime_linear_params(cfg, Nm=n_hermite, geom=geom)
+    terms = build_runtime_linear_terms(cfg)
 
-    ky_index = deps.select_ky_index(np.asarray(grid_full.ky), ky_target)
-    grid = deps.select_ky_grid(grid_full, ky_index)
+    ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
+    grid = select_ky_grid(grid_full, ky_index)
     kx = np.asarray(grid.kx, dtype=float)
     kx_index = 0 if kx_target is None else int(np.argmin(np.abs(kx - kx_target)))
     selection = ModeSelection(
         ky_index=0,
         kx_index=kx_index,
-        z_index=deps.midplane_index(grid),
+        z_index=_midplane_index(grid),
     )
     _status(
         status_callback,
@@ -176,7 +168,7 @@ def _prepare_linear_runtime_context(
     )
     if initial_state is None:
         _status(status_callback, "building initial condition")
-        state = deps.build_initial_condition(
+        state = _build_initial_condition(
             grid,
             geom,
             cfg,
@@ -206,7 +198,7 @@ def _prepare_linear_runtime_context(
         terms=terms,
         selection=selection,
         initial_state=state,
-        solver_key=deps.normalize_linear_solver_name(solver),
+        solver_key=_normalize_linear_solver_name(solver),
         fit_key=_fit_signal_key(fit_signal),
         ql_enabled=ql_enabled,
         return_state_requested=return_state_requested,
@@ -228,11 +220,10 @@ def _finalize_linear_result(
     result: RuntimeLinearResult,
     *,
     ctx: _LinearRuntimeContext,
-    deps: FullLinearRuntimeDeps,
     state_for_quasilinear: np.ndarray | None = None,
     status_callback: _StatusCallback,
 ) -> RuntimeLinearResult:
-    return deps.finalize_runtime_linear_quasilinear(
+    return finalize_runtime_linear_quasilinear(
         result,
         enabled=ctx.ql_enabled,
         cfg=ctx.cfg,
@@ -246,7 +237,6 @@ def _finalize_linear_result(
         species_names=tuple(s.name for s in ctx.cfg.species if s.kinetic),
         return_state_requested=ctx.return_state_requested,
         state_for_quasilinear=state_for_quasilinear,
-        deps=deps.quasilinear_finalization_deps,
         status_callback=lambda message: _status(status_callback, message),
     )
 
@@ -254,7 +244,6 @@ def _finalize_linear_result(
 def _run_krylov_linear(
     ctx: _LinearRuntimeContext,
     *,
-    deps: FullLinearRuntimeDeps,
     krylov_cfg: Any | None,
     status_callback: _StatusCallback,
 ) -> tuple[float, float, np.ndarray, Any]:
@@ -265,16 +254,16 @@ def _run_krylov_linear(
         ctx.cfg.time, "Krylov eigenvalue", remedy='set solver = "time"'
     )
     _status(status_callback, "starting Krylov solve")
-    kcfg = krylov_cfg or deps.runtime_default_krylov_config(ctx.cfg)
+    kcfg = krylov_cfg or _runtime_default_krylov_config(ctx.cfg)
     _status(status_callback, "building linear cache")
-    cache = deps.build_linear_cache(
+    cache = build_linear_cache(
         ctx.grid,
         ctx.geom,
         ctx.params,
         ctx.n_laguerre,
         ctx.n_hermite,
     )
-    eig, vec, eigen_status = deps.dominant_eigenpair(
+    eig, vec, eigen_status = dominant_eigenpair(
         ctx.initial_state,
         cache,
         ctx.params,
@@ -306,7 +295,7 @@ def _run_krylov_linear(
     )
     gamma = float(jnp.real(eig))
     omega = float(-jnp.imag(eig))
-    gamma, omega = deps.apply_diagnostic_normalization(
+    gamma, omega = apply_diagnostic_normalization(
         gamma,
         omega,
         rho_star=float(np.asarray(ctx.params.rho_star)),
@@ -375,7 +364,6 @@ def _validate_parallel_linear_time_path(ctx: _LinearRuntimeContext, tcfg: Any) -
 def _integrate_linear_density_path(
     ctx: _LinearRuntimeContext,
     *,
-    deps: FullLinearRuntimeDeps,
     tcfg: Any,
     n_steps: int,
     show_progress: bool,
@@ -386,7 +374,7 @@ def _integrate_linear_density_path(
     # collision_operator selection has to be resolved here as well as on the
     # cached-phi path.
     request = solve_stats_request(tcfg.method, kind="linear")
-    diag = deps.integrate_linear_diagnostics(
+    diag = integrate_linear_diagnostics(
         ctx.initial_state,
         ctx.grid,
         ctx.geom,
@@ -419,12 +407,11 @@ def _integrate_linear_density_path(
 def _integrate_linear_cached_phi_path(
     ctx: _LinearRuntimeContext,
     *,
-    deps: FullLinearRuntimeDeps,
     tcfg: Any,
     show_progress: bool,
 ) -> _LinearTrajectory:
     request = solve_stats_request(tcfg.method, kind="linear")
-    g_last, phi_t, *extra = deps.integrate_linear_from_config(
+    g_last, phi_t, *extra = integrate_linear_from_config(
         ctx.initial_state,
         ctx.grid,
         ctx.geom,
@@ -456,7 +443,6 @@ def _linear_saved_sample_times(phi_t: np.ndarray, tcfg: Any) -> np.ndarray:
 def _integrate_linear_time_series(
     ctx: _LinearRuntimeContext,
     *,
-    deps: FullLinearRuntimeDeps,
     tcfg: Any,
     show_progress: bool,
     status_callback: _StatusCallback,
@@ -485,7 +471,6 @@ def _integrate_linear_time_series(
         )
         trajectory = _integrate_linear_density_path(
             ctx,
-            deps=deps,
             tcfg=tcfg,
             n_steps=n_steps,
             show_progress=show_progress,
@@ -497,7 +482,6 @@ def _integrate_linear_time_series(
         )
         trajectory = _integrate_linear_cached_phi_path(
             ctx,
-            deps=deps,
             tcfg=tcfg,
             show_progress=show_progress,
         )
@@ -508,7 +492,6 @@ def _integrate_linear_time_series(
 def _fit_linear_time_series(
     ctx: _LinearRuntimeContext,
     *,
-    deps: FullLinearRuntimeDeps,
     fit_policy: _LinearFitPolicy,
     trajectory: _LinearTrajectory,
     status_callback: _StatusCallback,
@@ -522,7 +505,7 @@ def _fit_linear_time_series(
         status_callback,
         f"integration complete; fitting growth rate from {times.size} saved samples",
     )
-    fit_result = deps.fit_runtime_linear_diagnostics(
+    fit_result = fit_runtime_linear_diagnostics(
         t=times,
         phi_t=trajectory.phi_t,
         density_t=trajectory.density_t,
@@ -540,19 +523,13 @@ def _fit_linear_time_series(
         require_positive=fit_policy.require_positive,
         min_amp_fraction=fit_policy.min_amp_fraction,
         window_method=fit_policy.window_method,
-        extract_mode_time_series_fn=deps.extract_mode_time_series,
-        fit_growth_rate_auto_with_stats_fn=deps.fit_growth_rate_auto_with_stats,
-        fit_growth_rate_auto_fn=deps.fit_growth_rate_auto,
-        fit_growth_rate_fn=deps.fit_growth_rate,
-        fit_growth_rate_with_stats_fn=deps.fit_growth_rate_with_stats,
-        extract_eigenfunction_fn=deps.extract_eigenfunction,
     )
     if ctx.fit_key == "auto":
         _status(
             status_callback,
             f"automatic fit selected signal '{fit_result.fit_signal_used}'",
         )
-    gamma, omega = deps.apply_diagnostic_normalization(
+    gamma, omega = apply_diagnostic_normalization(
         fit_result.gamma,
         fit_result.omega,
         rho_star=float(np.asarray(ctx.params.rho_star)),
@@ -562,7 +539,7 @@ def _fit_linear_time_series(
     omega_stderr = fit_result.omega_stderr
     if gamma_stderr is not None and omega_stderr is not None:
         # Standard errors transform with the same linear reporting scale.
-        gamma_stderr, omega_stderr = deps.apply_diagnostic_normalization(
+        gamma_stderr, omega_stderr = apply_diagnostic_normalization(
             gamma_stderr,
             omega_stderr,
             rho_star=float(np.asarray(ctx.params.rho_star)),
@@ -596,14 +573,12 @@ def _fit_linear_time_series(
 def _run_krylov_linear_runtime(
     ctx: _LinearRuntimeContext,
     *,
-    deps: FullLinearRuntimeDeps,
     krylov_cfg: Any | None,
     status_callback: _StatusCallback,
 ) -> RuntimeLinearResult:
     """Run the Krylov branch and finalize any requested quasilinear diagnostics."""
     gamma, omega, vec, eigen_status = _run_krylov_linear(
         ctx,
-        deps=deps,
         krylov_cfg=krylov_cfg,
         status_callback=status_callback,
     )
@@ -618,7 +593,6 @@ def _run_krylov_linear_runtime(
     return _finalize_linear_result(
         result,
         ctx=ctx,
-        deps=deps,
         state_for_quasilinear=vec,
         status_callback=status_callback,
     )
@@ -627,7 +601,6 @@ def _run_krylov_linear_runtime(
 def _run_linear_runtime_branch(
     ctx: _LinearRuntimeContext,
     *,
-    deps: FullLinearRuntimeDeps,
     method: str | None,
     dt: float | None,
     steps: int | None,
@@ -640,7 +613,6 @@ def _run_linear_runtime_branch(
     if ctx.solver_key == "krylov":
         return _run_krylov_linear_runtime(
             ctx,
-            deps=deps,
             krylov_cfg=krylov_cfg,
             status_callback=status_callback,
         )
@@ -675,14 +647,12 @@ def _run_linear_runtime_branch(
         _warn_if_linear_dt_exceeds_cfl(ctx, time_config)
     trajectory = _integrate_linear_time_series(
         ctx,
-        deps=deps,
         tcfg=time_config,
         show_progress=show_progress,
         status_callback=status_callback,
     )
     result = _fit_linear_time_series(
         ctx,
-        deps=deps,
         fit_policy=fit_policy,
         trajectory=trajectory,
         status_callback=status_callback,
@@ -697,7 +667,6 @@ def _run_linear_runtime_branch(
         )
         return _run_krylov_linear_runtime(
             ctx,
-            deps=deps,
             krylov_cfg=krylov_cfg,
             status_callback=status_callback,
         )
@@ -705,47 +674,50 @@ def _run_linear_runtime_branch(
     return _finalize_linear_result(
         result,
         ctx=ctx,
-        deps=deps,
         status_callback=status_callback,
     )
 
 
-def run_full_linear_runtime(
+def run_runtime_linear(
     cfg: RuntimeConfig,
     *,
-    deps: FullLinearRuntimeDeps,
-    ky_target: float,
-    Nl: int,
-    Nm: int,
-    solver: str,
-    method: str | None,
-    dt: float | None,
-    steps: int | None,
-    sample_stride: int | None,
-    auto_window: bool,
-    tmin: float | None,
-    tmax: float | None,
-    window_fraction: float,
-    min_points: int,
-    start_fraction: float,
-    growth_weight: float,
-    require_positive: bool,
-    min_amp_fraction: float,
-    krylov_cfg: Any | None,
-    mode_method: str,
-    fit_signal: str,
-    return_state: bool,
-    show_progress: bool,
+    ky_target: float = 0.3,
+    Nl: int | None = None,
+    Nm: int | None = None,
+    solver: str = "auto",
+    method: str | None = None,
+    dt: float | None = None,
+    steps: int | None = None,
+    sample_stride: int | None = None,
+    auto_window: bool = True,
+    tmin: float | None = None,
+    tmax: float | None = None,
+    window_fraction: float = 0.4,
+    min_points: int = 40,
+    start_fraction: float = 0.2,
+    growth_weight: float = 0.2,
+    require_positive: bool = True,
+    min_amp_fraction: float = 0.0,
     window_method: str = "stationary",
+    krylov_cfg: KrylovConfig | None = None,
+    mode_method: str = "project",
+    fit_signal: str = "auto",
+    return_state: bool = False,
     initial_state: Any | None = None,
+    show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
     kx_target: float | None = None,
 ) -> RuntimeLinearResult:
-    """Run one full-GK linear point from a runtime config."""
+    """Run one linear point from a case-agnostic runtime config.
+
+    ``kx_target`` picks the fitted kx (nearest grid value; default kx = 0).
+    """
+
+    Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    _status(status_callback, "building runtime geometry")
 
     ctx = _prepare_linear_runtime_context(
         cfg,
-        deps=deps,
         ky_target=ky_target,
         kx_target=kx_target,
         n_laguerre=Nl,
@@ -772,7 +744,6 @@ def run_full_linear_runtime(
 
     return _run_linear_runtime_branch(
         ctx,
-        deps=deps,
         method=method,
         dt=dt,
         steps=steps,

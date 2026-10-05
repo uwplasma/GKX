@@ -136,13 +136,6 @@ def _validate_removed_time_keys(data: dict[str, Any]) -> None:
     )
 
 
-def is_runtime_toml(data: dict[str, Any]) -> bool:
-    """Return whether a parsed input uses the supported runtime schema."""
-
-    _ = data
-    return True
-
-
 def toml_shorthand_command(data: dict[str, Any]) -> str:
     """Return the executable command used for direct TOML path shorthand."""
 

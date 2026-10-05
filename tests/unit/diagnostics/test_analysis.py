@@ -6,7 +6,6 @@ import pytest
 from gkx.diagnostics.analysis import (
     ModeSelection,
     _log_amp_phase,
-    density_moment,
     extract_mode,
     extract_eigenfunction,
     extract_mode_time_series,
@@ -16,7 +15,6 @@ from gkx.diagnostics.analysis import (
     fit_growth_rate_uncertainty,
     fit_growth_rate_with_stats,
     instantaneous_growth_rate_from_phi,
-    windowed_growth_rate_from_omega_series,
     select_ky_index,
     select_fit_window,
     select_fit_window_loglinear,
@@ -25,13 +23,10 @@ from gkx.diagnostics.analysis import (
 import json
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.analysis import (
-    CFL_TERM_NAMES,
     CFL_TERM_UNRESOLVED,
     CFLScales,
     cfl_limiter_report,
-    cfl_limiting_term,
     cfl_scales_from_array,
-    cfl_term_contributions,
 )
 from gkx.diagnostics.metadata import CFL_SCALE_LABELS
 from gkx.workflows.runtime.diagnostic_arrays import (
@@ -50,17 +45,8 @@ def test_growth_rate_public_facades_point_to_numerical_owners() -> None:
 
     import gkx.diagnostics.analysis as analysis
     import gkx.diagnostics.growth_rates as growth_rates
-    import gkx.diagnostics.growth_windows as growth_windows
 
-    assert growth_rates.select_fit_window is growth_windows.select_fit_window
-    assert (
-        growth_rates.select_fit_window_loglinear
-        is growth_windows.select_fit_window_loglinear
-    )
     assert growth_rates.instantaneous_growth_rate_from_phi.__module__ == (
-        "gkx.diagnostics.growth_rates"
-    )
-    assert growth_rates.windowed_growth_rate_from_omega_series.__module__ == (
         "gkx.diagnostics.growth_rates"
     )
     assert analysis.fit_growth_rate is growth_rates.fit_growth_rate
@@ -391,25 +377,6 @@ def test_extract_eigenfunction_zero_signal():
     assert np.all(np.isfinite(mode))
 
 
-def test_density_moment_supports_5d_and_6d_inputs() -> None:
-    jl = np.ones((2, 1, 1, 1), dtype=np.complex128)
-    g5 = np.zeros((2, 3, 1, 1, 1), dtype=np.complex128)
-    g5[:, 0, ...] = np.array([1.0, 2.0])[:, None, None, None]
-    out5 = density_moment(g5, jl)
-    assert np.allclose(out5, np.array([3.0]))
-
-    g6 = np.zeros((2, 2, 3, 1, 1, 1), dtype=np.complex128)
-    g6[0, :, 0, ...] = np.array([1.0, 2.0])[:, None, None, None]
-    g6[1, :, 0, ...] = np.array([3.0, 4.0])[:, None, None, None]
-    out6_all = density_moment(g6, jl)
-    out6_one = density_moment(g6, jl, species_index=1)
-    assert np.allclose(out6_all, np.array([10.0]))
-    assert np.allclose(out6_one, np.array([7.0]))
-
-    with pytest.raises(ValueError):
-        density_moment(np.zeros((1, 2, 3)), jl)
-
-
 def test_fit_growth_rate_validates_and_filters_nonfinite() -> None:
     t = np.array([0.0, 1.0, 2.0, 3.0])
     signal = np.exp((0.4 - 0.25j) * t)
@@ -501,7 +468,9 @@ def test_fit_growth_rate_auto_with_stats_fallback(monkeypatch) -> None:
     def _boom(*_args, **_kwargs):
         raise ValueError("forced")
 
-    monkeypatch.setattr("gkx.diagnostics.analysis.fit_growth_rate_with_stats", _boom)
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.fit_growth_rate_with_stats", _boom
+    )
     gamma, omega, tmin, tmax, r2_log, r2_phase = fit_growth_rate_auto_with_stats(
         t, signal
     )
@@ -510,36 +479,6 @@ def test_fit_growth_rate_auto_with_stats_fallback(monkeypatch) -> None:
     assert tmax > tmin
     assert r2_log == -np.inf
     assert r2_phase == -np.inf
-
-
-def test_windowed_growth_rate_from_omega_series():
-    """Windowed growth/frequency averaging should select the requested (ky, kx) branch."""
-
-    gamma_t = np.array(
-        [
-            [[0.1, 0.2], [0.3, 0.4]],
-            [[0.2, 0.3], [0.4, 0.5]],
-            [[0.3, 0.4], [0.5, 0.6]],
-            [[0.4, 0.5], [0.6, 0.7]],
-        ],
-        dtype=float,
-    )
-    omega_t = -2.0 * gamma_t
-    sel = ModeSelection(ky_index=1, kx_index=0, z_index=0)
-
-    g, w, gs, ws = windowed_growth_rate_from_omega_series(
-        gamma_t, omega_t, sel, navg_fraction=0.5
-    )
-    assert np.allclose(gs, np.array([0.3, 0.4, 0.5, 0.6]))
-    assert np.allclose(ws, np.array([-0.6, -0.8, -1.0, -1.2]))
-    assert np.isclose(g, np.mean([0.5, 0.6]))
-    assert np.isclose(w, np.mean([-1.0, -1.2]))
-
-    g_last, w_last, _gs, _ws = windowed_growth_rate_from_omega_series(
-        gamma_t, omega_t, sel, use_last=True
-    )
-    assert np.isclose(g_last, 0.6)
-    assert np.isclose(w_last, -1.2)
 
 
 def test_instantaneous_growth_rate_from_phi_supports_projected_branch_selection():
@@ -604,25 +543,6 @@ def test_instantaneous_growth_rate_from_phi_validates_inputs_and_handles_last_sa
     phi_bad[:-1] = 0.0
     with pytest.raises(ValueError):
         instantaneous_growth_rate_from_phi(phi_bad, t, sel)
-
-
-def test_windowed_growth_rate_from_omega_series_validates_inputs() -> None:
-    gamma_t = np.ones((4, 2, 2), dtype=float)
-    omega_t = np.ones((4, 2, 2), dtype=float)
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
-    with pytest.raises(ValueError):
-        windowed_growth_rate_from_omega_series(gamma_t[0], omega_t, sel)
-    with pytest.raises(ValueError):
-        windowed_growth_rate_from_omega_series(gamma_t, omega_t[:, :, :1], sel)
-    with pytest.raises(ValueError):
-        windowed_growth_rate_from_omega_series(
-            gamma_t, omega_t, ModeSelection(ky_index=5, kx_index=0, z_index=0)
-        )
-
-    gamma_bad = np.full((2, 1, 1), np.nan)
-    omega_bad = np.full((2, 1, 1), np.nan)
-    with pytest.raises(ValueError):
-        windowed_growth_rate_from_omega_series(gamma_bad, omega_bad, sel)
 
 
 def test_log_amp_phase_handles_empty_and_nonfinite() -> None:
@@ -773,7 +693,7 @@ def test_fit_growth_rate_auto_invalid_window_method_and_stats_fallback(
         fit_growth_rate_auto(t, signal, window_method="bad")
 
     monkeypatch.setattr(
-        "gkx.diagnostics.analysis.fit_growth_rate_with_stats",
+        "gkx.diagnostics.growth_rates.fit_growth_rate_with_stats",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("forced")),
     )
     gamma, omega, tmin, tmax, r2_log, r2_phase = fit_growth_rate_auto_with_stats(
@@ -844,20 +764,6 @@ def test_instantaneous_growth_rate_from_phi_branches_and_validation() -> None:
         )
 
 
-def test_windowed_growth_rate_from_omega_series_use_last_branch() -> None:
-    sel = ModeSelection(ky_index=0, kx_index=0, z_index=0)
-    gamma_t = np.array([[[0.1]], [[0.2]], [[0.3]]], dtype=float)
-    omega_t = np.array([[[0.4]], [[0.5]], [[0.6]]], dtype=float)
-    gamma_avg, omega_avg, gamma, omega = windowed_growth_rate_from_omega_series(
-        gamma_t,
-        omega_t,
-        sel,
-        use_last=True,
-    )
-    assert gamma_avg == gamma[-1] == 0.3
-    assert omega_avg == omega[-1] == 0.6
-
-
 def test_log_amp_phase_handles_all_nonfinite_and_zero_scale() -> None:
     log_amp, phase = _log_amp_phase(np.array([np.nan + 0.0j, np.nan + 1.0j]))
     assert log_amp.shape == (2,)
@@ -866,61 +772,6 @@ def test_log_amp_phase_handles_all_nonfinite_and_zero_scale() -> None:
     log_amp_zero, phase_zero = _log_amp_phase(np.array([0.0 + 0.0j, 0.0 + 0.0j]))
     assert np.all(np.isfinite(log_amp_zero))
     assert np.all(np.isfinite(phase_zero))
-
-
-def test_window_metrics_report_independent_samples_not_output_count() -> None:
-    """A correlated trace must not be scored as if its samples were independent.
-
-    Nonlinear heat-flux outputs are correlated, so ``std / sqrt(nsamples)``
-    understates the uncertainty of the mean. Measured across the tracked traces
-    the understatement is 2.0x to 3.7x, which is what turned the blocked
-    production gradient gate from "needs more sampling" into "needs a different
-    method". The metrics therefore have to carry ``n_eff``, not just ``nsamples``.
-    """
-
-    from gkx.diagnostics.analysis import (
-        integrated_autocorrelation_time,
-        windowed_nonlinear_metrics,
-    )
-
-    dt = 0.5
-    steps = 4096
-    rng = np.random.default_rng(0)
-    # AR(1) with a known correlation time: rho = exp(-dt/tau) with tau = 5.0.
-    tau_true = 5.0
-    rho = np.exp(-dt / tau_true)
-    noise = rng.standard_normal(steps)
-    signal = np.empty(steps)
-    signal[0] = noise[0]
-    for i in range(1, steps):
-        signal[i] = rho * signal[i - 1] + np.sqrt(1.0 - rho**2) * noise[i]
-    signal = signal + 10.0  # a positive mean, as a flux has
-
-    tau = integrated_autocorrelation_time(signal, dt)
-    # The integrated time of an AR(1) is tau_true to within sampling error; the
-    # point is that it is O(tau_true) and not O(dt), which is what a naive
-    # independent-sample assumption implies.
-    assert 0.4 * tau_true < tau < 2.5 * tau_true
-
-    class _Diag:
-        t = np.arange(steps) * dt
-        heat_flux_t = signal
-        Wphi_t = signal
-        Wg_t = signal
-        phi_mode_t = None
-
-    metrics = windowed_nonlinear_metrics(_Diag(), start_fraction=0.0)
-
-    # The contract: fewer independent samples than outputs, and a standard error
-    # larger than the naive one by exactly sqrt(n / n_eff).
-    assert metrics.heat_flux_n_eff < metrics.nsamples
-    naive = metrics.heat_flux_std / np.sqrt(metrics.nsamples)
-    assert metrics.heat_flux_stderr > naive
-    ratio = metrics.heat_flux_stderr / naive
-    assert ratio == pytest.approx(
-        np.sqrt(metrics.nsamples / metrics.heat_flux_n_eff), rel=1e-6
-    )
-    assert metrics.window_in_tau_ac > 1.0
 
 
 def _transient_then_exponential(
@@ -1163,66 +1014,6 @@ def test_report_rejects_mismatched_and_unusable_series() -> None:
 # --- which CFL term is limiting --------------------------------------------
 
 
-def test_term_contributions_are_additive_and_reproduce_the_integrator_sum() -> None:
-    """Contributions sum to the frequency the integrator actually forms."""
-
-    contributions = cfl_term_contributions(
-        magnetic_drift_radial=3.0,
-        magnetic_drift_binormal=5.0,
-        parallel_streaming=2.0,
-        exb_radial=11.0,
-        exb_binormal=1.0,
-    )
-
-    # max(3, 11) + max(5, 1) + 2 == 18
-    assert sum(contributions.values()) == pytest.approx(18.0)
-    assert contributions["exb"] == pytest.approx(8.0)
-    assert set(contributions) == set(CFL_TERM_NAMES)
-
-
-@pytest.mark.parametrize(
-    ("dominant", "speeds"),
-    [
-        ("exb", {"exb_binormal": 100.0}),
-        ("parallel_streaming", {"parallel_streaming": 100.0}),
-        ("magnetic_drift_radial", {"magnetic_drift_radial": 100.0}),
-        ("magnetic_drift_binormal", {"magnetic_drift_binormal": 100.0}),
-    ],
-)
-def test_limiting_term_names_the_speed_that_dominates_by_construction(
-    dominant: str, speeds: dict[str, float]
-) -> None:
-    """One speed set 100x the rest is the term the report names."""
-
-    args = {
-        "magnetic_drift_radial": 1.0,
-        "magnetic_drift_binormal": 1.0,
-        "parallel_streaming": 1.0,
-        "exb_radial": 1.0,
-        "exb_binormal": 1.0,
-    }
-    args.update(speeds)
-    term, share = cfl_limiting_term(cfl_term_contributions(**args))
-
-    assert term == dominant
-    assert share > 0.9
-
-
-def test_matched_exb_does_not_displace_the_drift_it_equals() -> None:
-    """An ExB speed that merely matches a drift is not reported as limiting."""
-
-    term, _share = cfl_limiting_term(
-        cfl_term_contributions(
-            magnetic_drift_radial=4.0,
-            magnetic_drift_binormal=1.0,
-            parallel_streaming=1.0,
-            exb_radial=4.0,
-            exb_binormal=1.0,
-        )
-    )
-    assert term == "magnetic_drift_radial"
-
-
 def test_dt_trajectory_inverts_to_a_growing_exb_share() -> None:
     """A collapsing dt is attributed to the ExB excess over the linear floor."""
 
@@ -1333,9 +1124,9 @@ import numpy as np
 
 from gkx.benchmarking_shared import CycloneReference, CycloneScanResult
 import matplotlib.pyplot as plt
-import pytest
 import gkx.artifacts.plotting as plotting
 from gkx.workflows.runtime.results import plot
+from scripts.checks._gates.zonal_validation import zonal_flow_response_figure
 from gkx.artifacts.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,
@@ -1346,7 +1137,6 @@ from gkx.artifacts.plotting import (
     nonlinear_runtime_panel_figure,
     plot_saved_output,
     scan_comparison_figure,
-    zonal_flow_response_figure,
 )
 
 

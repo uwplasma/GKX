@@ -570,7 +570,7 @@ recover their designed orders, IMEX recovers first order, and all three are
 identical to the static paths at zero shear. Sheared IMEX refuses a custom
 collision operator.
 
-Treatment effects are judged with :func:`gkx.matched_nonlinear_transport_report`,
+Treatment effects are judged with ``matched_nonlinear_transport_report`` (``scripts/checks/_gates/validation_gates.py``),
 not by comparing two chaotic traces: baseline and treatment must each pass
 post-transient finite-sample, running-mean drift, terminal-mean, block-count
 and SEM gates before a relative reduction and its quadrature-SEM separation

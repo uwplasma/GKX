@@ -8,13 +8,13 @@ from typing import Any
 import math
 import re
 
-from gkx.diagnostics.metadata import (
+from scripts.checks._gates.transport_windows import (
     NonlinearTurbulenceGradientEvidenceConfig,
     _artifact_passed,
     _finite_float,
     _gate,
 )
-from gkx.diagnostics.transport_windows import (
+from scripts.checks._gates.transport_windows import (
     NonlinearWindowEnsembleConfig,
     _json_number as _window_json_number,
     _report_statistic,

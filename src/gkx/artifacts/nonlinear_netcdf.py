@@ -53,7 +53,10 @@ from gkx.geometry import (
     ensure_flux_tube_geometry_data,
 )
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.runtime import build_runtime_geometry, build_runtime_linear_params
+from gkx.workflows.runtime.startup import (
+    build_runtime_geometry,
+    build_runtime_linear_params,
+)
 
 
 def _half_ky_values_of(grid: Any) -> np.ndarray:

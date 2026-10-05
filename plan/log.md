@@ -20987,6 +20987,19 @@ recompiles (#338: 22x on kinetic electrons on GPU). Minor bump because ky
 outside the grid now raises. The research-grade milestone previously called
 2.5.0 is now 2.6.0; its exits are unchanged.
 
+## 2026-10-05 — ARCH-C third contraction (G.6 P4, archived plan §8)
+
+Base `2987bb705` (2.5.0), branch `arch/contract-3`; inventory and harness in
+`plan/research/2026-10-04-arch-c/`. src/gkx 136 files / 75,904 lines -> 129 /
+67,191; tests 82,803 -> 74,151 lines (30 files); scripts 59 / 43,611 -> 63 /
+48,382 (about 4.8k of the src cut is relocation of report gates, campaign
+helpers and test-only reference kernels into scripts/). Import cycles 1 -> 0:
+the runtime dependency-injection records are gone and `gkx.runtime` is a
+facade over the owners. Five fingerprints (linear Cyclone eigenpair, nonlinear
+Q trace, window gradient, quasilinear flux, kinetic-electron imex-ars3)
+bitwise identical on office XLA:CPU. Architecture baselines lowered to the
+measured tree; single-consumer 1 -> 2 and low-cohesion 5 -> 8 recorded with
+causes. Targets (45 files / 45k src, 35k tests) not met.
 ## 2026-10-04 — DEFAULTS lane (time-integration choice, CPU threading)
 
 Baseline `main` `2987bb70` (2.5.0). Office A4000s and Xeon W-2295 (18 cores), jax 0.11.2. The host was shared with another user's CPU jobs (load 14-28) and GPU1 with a light job, so short-horizon numbers scatter by up to 2x; the per-unit costs below are (wall(T2) − wall(T1))/(T2 − T1) of warm runs in one process.

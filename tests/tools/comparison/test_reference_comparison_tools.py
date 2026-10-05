@@ -11,7 +11,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+import importlib
+from functools import partial
 import pytest
+from support.helpers import only_terms, patch_attrs
 from support.paths import load_tool_script
 import subprocess
 from support.paths import REPO_ROOT, load_artifact_tool
@@ -79,25 +82,15 @@ from compare_gx_imported_linear import (
 )
 
 
+_GROWTH_DUMP_ARGV = (
+    "--gx-dir-start /tmp/start --gx-dir-stop /tmp/stop --gx-out /tmp/run.out.nc "
+    "--gx-input /tmp/run.in --geometry-file /tmp/geom.nc "
+    "--time-index-start 10 --time-index-stop 11"
+)
+
+
 def test_compare_gx_imported_growth_dump_parser_accepts_required_paths() -> None:
-    args = growth_dump_build_parser().parse_args(
-        [
-            "--gx-dir-start",
-            "/tmp/start",
-            "--gx-dir-stop",
-            "/tmp/stop",
-            "--gx-out",
-            "/tmp/run.out.nc",
-            "--gx-input",
-            "/tmp/run.in",
-            "--geometry-file",
-            "/tmp/geom.nc",
-            "--time-index-start",
-            "10",
-            "--time-index-stop",
-            "11",
-        ]
-    )
+    args = growth_dump_build_parser().parse_args(_GROWTH_DUMP_ARGV.split())
     assert args.gx_dir_start == Path("/tmp/start")
     assert args.gx_dir_stop == Path("/tmp/stop")
     assert args.gx_out == Path("/tmp/run.out.nc")
@@ -106,28 +99,8 @@ def test_compare_gx_imported_growth_dump_parser_accepts_required_paths() -> None
     assert args.time_index_start == 10
     assert args.time_index_stop == 11
 
-
-def test_compare_gx_imported_growth_dump_parser_accepts_restart_start() -> None:
-    args = growth_dump_build_parser().parse_args(
-        [
-            "--gx-dir-start",
-            "/tmp/start",
-            "--gx-dir-stop",
-            "/tmp/stop",
-            "--gx-restart-start",
-            "/tmp/restart.nc",
-            "--gx-out",
-            "/tmp/run.out.nc",
-            "--gx-input",
-            "/tmp/run.in",
-            "--geometry-file",
-            "/tmp/geom.nc",
-            "--time-index-start",
-            "10",
-            "--time-index-stop",
-            "11",
-        ]
-    )
+    restart = f"{_GROWTH_DUMP_ARGV} --gx-restart-start /tmp/restart.nc".split()
+    args = growth_dump_build_parser().parse_args(restart)
     assert args.gx_restart_start == Path("/tmp/restart.nc")
 
 
@@ -218,68 +191,28 @@ from gkx.config import RuntimeConfig
 from gkx.operators.linear.params import Species
 
 
-def test_compare_gx_imported_linear_parser_accepts_gx_input() -> None:
-    args = imported_linear_build_parser().parse_args(
-        [
-            "--gx",
-            "/tmp/run.out.nc",
-            "--geometry-file",
-            "/tmp/run.eik.nc",
-            "--gx-input",
-            "/tmp/run.in",
-        ]
-    )
-    assert args.gx_input == Path("/tmp/run.in")
-
-
-def test_compare_gx_imported_linear_parser_accepts_exact_init_file() -> None:
-    args = imported_linear_build_parser().parse_args(
-        [
-            "--gx",
-            "/tmp/run.out.nc",
-            "--geometry-file",
-            "/tmp/run.eik.nc",
-            "--init-file",
-            "/tmp/g_state.bin",
-        ]
-    )
-    assert args.init_file == Path("/tmp/g_state.bin")
-
-
-def test_compare_gx_imported_linear_parser_accepts_cache_and_sample_controls() -> None:
-    args = imported_linear_build_parser().parse_args(
-        [
-            "--gx",
-            "/tmp/run.out.nc",
-            "--geometry-file",
-            "/tmp/run.eik.nc",
-            "--cache-dir",
-            "/tmp/cache",
-            "--reuse-cache",
-            "--sample-step-stride",
-            "3",
-            "--max-samples",
-            "12",
-        ]
-    )
-    assert args.cache_dir == Path("/tmp/cache")
-    assert args.reuse_cache is True
-    assert args.sample_step_stride == 3
-    assert args.max_samples == 12
-
-
-def test_compare_gx_imported_linear_parser_accepts_project_mode_method() -> None:
-    args = imported_linear_build_parser().parse_args(
-        [
-            "--gx",
-            "/tmp/run.out.nc",
-            "--geometry-file",
-            "/tmp/run.eik.nc",
-            "--mode-method",
-            "project",
-        ]
-    )
-    assert args.mode_method == "project"
+@pytest.mark.parametrize(
+    ("extra", "expected"),
+    [
+        ("--gx-input /tmp/run.in", {"gx_input": Path("/tmp/run.in")}),
+        ("--init-file /tmp/g_state.bin", {"init_file": Path("/tmp/g_state.bin")}),
+        (
+            "--cache-dir /tmp/cache --reuse-cache --sample-step-stride 3 --max-samples 12",
+            {
+                "cache_dir": Path("/tmp/cache"),
+                "reuse_cache": True,
+                "sample_step_stride": 3,
+                "max_samples": 12,
+            },
+        ),
+        ("--mode-method project", {"mode_method": "project"}),
+    ],
+)
+def test_compare_gx_imported_linear_parser_accepts_options(extra, expected) -> None:
+    argv = f"--gx /tmp/run.out.nc --geometry-file /tmp/run.eik.nc {extra}".split()
+    args = imported_linear_build_parser().parse_args(argv)
+    for name, value in expected.items():
+        assert getattr(args, name) == value
 
 
 def test_build_sample_steps_supports_stride_and_early_window() -> None:
@@ -397,12 +330,7 @@ def test_load_gx_input_contract_reads_fix_aspect_and_species_contract(
 
 def test_compare_gx_imported_linear_parser_defaults_hl_dims_to_gx_contract() -> None:
     args = imported_linear_build_parser().parse_args(
-        [
-            "--gx",
-            "/tmp/run.out.nc",
-            "--geometry-file",
-            "/tmp/run.eik.nc",
-        ]
+        "--gx /tmp/run.out.nc --geometry-file /tmp/run.eik.nc".split()
     )
     assert args.Nl is None
     assert args.Nm is None
@@ -497,6 +425,8 @@ scale = 0.125
 
     assert contract.s_hat == pytest.approx(1.0e-8)
     assert contract.zero_shat is True
+    assert contract.restart_with_perturb is True
+    assert contract.restart_scale == pytest.approx(0.125)
     assert (
         _resolve_imported_boundary(contract.boundary, zero_shat=contract.zero_shat)
         == "periodic"
@@ -535,36 +465,6 @@ def test_load_gx_input_contract_reads_vmec_geometry_contract(tmp_path: Path) -> 
     assert contract.npol == pytest.approx(6.0)
 
 
-def test_load_gx_input_contract_parses_restart_contract(tmp_path: Path) -> None:
-    path = tmp_path / "restart_like.in"
-    path.write_text(
-        """
-restart_with_perturb = true
-scale = 0.125
-
-[Dimensions]
- ntheta = 16
- nperiod = 1
- nky = 2
- nkx = 1
- nspecies = 1
-
-[Domain]
- y0 = 100.0
- boundary = "linked"
-
-[Geometry]
- geo_option = "slab"
- shat = 0.0
-""".strip()
-    )
-
-    contract = _load_gx_input_contract(path)
-
-    assert contract.restart_with_perturb is True
-    assert contract.restart_scale == pytest.approx(0.125)
-
-
 def test_imported_linear_uses_raw_damp_ends_rate() -> None:
     contract = _dummy_gx_contract(init_single=False)
     dt = 0.2
@@ -584,34 +484,29 @@ def test_imported_linear_uses_raw_damp_ends_rate() -> None:
     assert float(params.damp_ends_amp) != pytest.approx(0.1 / dt)
 
 
-def test_infer_gx_linear_dt_prefers_explicit_input_dt() -> None:
-    contract = replace(_dummy_gx_contract(init_single=False), dt=0.025, nwrite=50)
-    gx_time = np.asarray([1.25, 2.50, 3.75], dtype=float)
-    assert _infer_gx_linear_dt(gx_time, contract) == pytest.approx(0.025)
+@pytest.mark.parametrize(
+    ("dt", "nwrite", "gx_time", "expected"),
+    [
+        (0.025, 50, [1.25, 2.50, 3.75], 0.025),  # explicit input dt wins
+        (None, 100, [0.5, 1.0, 1.5, 2.0], 0.005),  # diagnostic spacing / nwrite
+    ],
+)
+def test_infer_gx_linear_dt(dt, nwrite, gx_time, expected) -> None:
+    contract = replace(_dummy_gx_contract(init_single=False), dt=dt, nwrite=nwrite)
+    assert _infer_gx_linear_dt(np.asarray(gx_time), contract) == pytest.approx(expected)
 
 
-def test_infer_gx_linear_dt_uses_diagnostic_spacing_without_input_dt() -> None:
-    contract = replace(_dummy_gx_contract(init_single=False), dt=None, nwrite=100)
-    gx_time = np.asarray([0.5, 1.0, 1.5, 2.0], dtype=float)
-    assert _infer_gx_linear_dt(gx_time, contract) == pytest.approx(0.005)
-
-
-def test_gx_has_uniform_linear_dt_true_for_constant_spacing() -> None:
+@pytest.mark.parametrize(
+    ("gx_time", "expected"),
+    [
+        ([0.1, 0.2, 0.3, 0.4], True),  # constant spacing
+        ([0.1, 0.21, 0.33, 0.46], False),  # variable spacing
+        ([0.1, 0.2, 0.3, 0.35], True),  # single truncated final interval ignored
+    ],
+)
+def test_gx_has_uniform_linear_dt(gx_time, expected) -> None:
     contract = replace(_dummy_gx_contract(init_single=False), dt=None, nwrite=10)
-    gx_time = np.asarray([0.1, 0.2, 0.3, 0.4], dtype=float)
-    assert _gx_has_uniform_linear_dt(gx_time, contract) is True
-
-
-def test_gx_has_uniform_linear_dt_false_for_variable_spacing() -> None:
-    contract = replace(_dummy_gx_contract(init_single=False), dt=None, nwrite=10)
-    gx_time = np.asarray([0.1, 0.21, 0.33, 0.46], dtype=float)
-    assert _gx_has_uniform_linear_dt(gx_time, contract) is False
-
-
-def test_gx_has_uniform_linear_dt_ignores_single_truncated_final_interval() -> None:
-    contract = replace(_dummy_gx_contract(init_single=False), dt=None, nwrite=10)
-    gx_time = np.asarray([0.1, 0.2, 0.3, 0.35], dtype=float)
-    assert _gx_has_uniform_linear_dt(gx_time, contract) is True
+    assert _gx_has_uniform_linear_dt(np.asarray(gx_time), contract) is expected
 
 
 @pytest.mark.skipif(
@@ -671,28 +566,18 @@ def test_select_gx_kx_index_honors_explicit_single_mode_startup() -> None:
     assert _select_gx_kx_index(gx_kx, contract) == 4
 
 
-def test_resolve_imported_real_fft_ny_uses_full_gx_ky_layout() -> None:
-    gx_ky = np.asarray([0.0] + [0.05 * i for i in range(1, 16)], dtype=float)
-    contract = replace(_dummy_gx_contract(init_single=False), Ny=16)
-    assert _resolve_imported_real_fft_ny(gx_ky, contract) == 46
-
-
-def test_resolve_imported_real_fft_ny_recovers_miller_gx_nky_contract() -> None:
-    gx_ky = np.asarray([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=float)
-    contract = replace(_dummy_gx_contract(init_single=False), Ny=6)
-    assert _resolve_imported_real_fft_ny(gx_ky, contract) == 16
-
-
-def test_resolve_imported_real_fft_ny_keeps_single_positive_ky_unmasked() -> None:
-    gx_ky = np.asarray([0.0, 0.01], dtype=float)
-    contract = replace(_dummy_gx_contract(init_single=False), Ny=2)
-    assert _resolve_imported_real_fft_ny(gx_ky, contract) == 4
-
-
-def test_resolve_imported_real_fft_ny_accepts_full_diag_state_ky_block() -> None:
-    gx_ky = np.asarray([0.0, 0.01, 0.02], dtype=float)
-    contract = replace(_dummy_gx_contract(init_single=False), Ny=2)
-    assert _resolve_imported_real_fft_ny(gx_ky, contract) == 4
+@pytest.mark.parametrize(
+    ("gx_ky", "ny", "expected"),
+    [
+        ([0.0] + [0.05 * i for i in range(1, 16)], 16, 46),  # full GX ky layout
+        ([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], 6, 16),  # Miller GX nky contract
+        ([0.0, 0.01], 2, 4),  # single positive ky stays unmasked
+        ([0.0, 0.01, 0.02], 2, 4),  # full diag-state ky block
+    ],
+)
+def test_resolve_imported_real_fft_ny(gx_ky, ny, expected) -> None:
+    contract = replace(_dummy_gx_contract(init_single=False), Ny=ny)
+    assert _resolve_imported_real_fft_ny(np.asarray(gx_ky), contract) == expected
 
 
 def _dummy_gx_contract(*, init_single: bool) -> GXInputContract:
@@ -713,11 +598,7 @@ def _dummy_gx_contract(*, init_single: bool) -> GXInputContract:
         y0=10.0,
         fapar=0.0,
         fbpar=0.0,
-        species=(
-            Species(
-                charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=0.0, fprim=0.0
-            ),
-        ),
+        species=(_NEUTRAL_SPECIES,),
         tau_e=0.0,
         beta=0.0,
         dt=0.1,
@@ -766,22 +647,15 @@ def test_build_imported_linear_terms_honors_em_switches() -> None:
     assert electromagnetic.hyperdiffusion == 1.0
 
 
-def test_run_single_ky_uses_full_grid_for_imported_multimode(monkeypatch) -> None:
-    grid_full = SimpleNamespace(
-        ky=np.asarray([0.0, 0.1, 0.2], dtype=float),
-        kx=np.asarray([0.0, 0.1], dtype=float),
-        z=np.asarray([-1.0, 0.0, 1.0, 2.0], dtype=float),
-    )
-    captured: dict[str, Any] = {}
+_NEUTRAL_SPECIES = Species(
+    charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=0.0, fprim=0.0
+)
 
-    monkeypatch.setattr(
-        imported_linear,
-        "_build_imported_initial_condition",
-        lambda **_: np.zeros((1, 1, 1, 3, 2, 4), dtype=np.complex64),
-    )
-    monkeypatch.setattr(
-        imported_linear, "build_linear_cache", lambda *_args, **_kwargs: "cache"
-    )
+
+def _run_single_ky_captured(monkeypatch, grid_full, *, ky_target, gx_contract):
+    """Run ``_run_single_ky`` against stubs; return what reached the integrator."""
+    captured: dict[str, Any] = {}
+    state_shape = (1, 1, 1, grid_full.ky.size, grid_full.kx.size, grid_full.z.size)
 
     def _fake_integrate(**kwargs):
         captured["grid"] = kwargs["grid"]
@@ -789,22 +663,23 @@ def test_run_single_ky_uses_full_grid_for_imported_multimode(monkeypatch) -> Non
         captured["ky_index"] = kwargs["ky_index"]
         return tuple(np.zeros(2, dtype=float) for _ in range(6))
 
-    monkeypatch.setattr(
-        imported_linear, "_integrate_target_mode_series", _fake_integrate
+    patch_attrs(
+        monkeypatch,
+        imported_linear,
+        _build_imported_initial_condition=lambda **_: np.zeros(
+            state_shape, dtype=np.complex64
+        ),
+        build_linear_cache=lambda *_args, **_kwargs: "cache",
+        _integrate_target_mode_series=_fake_integrate,
     )
-
     _run_single_ky(
-        ky_target=0.1,
+        ky_target=ky_target,
         geom=SimpleNamespace(),
         grid_full=grid_full,
         params=SimpleNamespace(),
         time_cfg=ExplicitTimeConfig(dt=0.1, t_max=0.2, sample_stride=1, fixed_dt=True),
-        gx_contract=_dummy_gx_contract(init_single=False),
-        species=(
-            Species(
-                charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=0.0, fprim=0.0
-            ),
-        ),
+        gx_contract=gx_contract,
+        species=(_NEUTRAL_SPECIES,),
         Nl=1,
         Nm=1,
         reference_times=np.asarray([0.1, 0.2], dtype=float),
@@ -812,6 +687,21 @@ def test_run_single_ky_uses_full_grid_for_imported_multimode(monkeypatch) -> Non
         mode_method="z_index",
         kx_index=0,
         terms=LinearTerms(),
+    )
+    return captured
+
+
+def test_run_single_ky_uses_full_grid_for_imported_multimode(monkeypatch) -> None:
+    grid_full = SimpleNamespace(
+        ky=np.asarray([0.0, 0.1, 0.2], dtype=float),
+        kx=np.asarray([0.0, 0.1], dtype=float),
+        z=np.asarray([-1.0, 0.0, 1.0, 2.0], dtype=float),
+    )
+    captured = _run_single_ky_captured(
+        monkeypatch,
+        grid_full,
+        ky_target=0.1,
+        gx_contract=_dummy_gx_contract(init_single=False),
     )
 
     assert captured["grid"] is grid_full
@@ -823,62 +713,13 @@ def test_run_single_ky_preserves_single_ky_fallback_without_gx_contract(
     monkeypatch,
 ) -> None:
     grid_full = build_spectral_grid(
-        GridConfig(
-            Nx=4,
-            Ny=6,
-            Nz=4,
-            Lx=10.0,
-            Ly=20.0,
-            boundary="periodic",
-            y0=10.0,
-        )
+        GridConfig(Nx=4, Ny=6, Nz=4, Lx=10.0, Ly=20.0, boundary="periodic", y0=10.0)
     )
-    captured: dict[str, Any] = {}
-
-    monkeypatch.setattr(
-        imported_linear,
-        "_build_imported_initial_condition",
-        lambda **_: np.zeros(
-            (1, 1, 1, grid_full.ky.size, grid_full.kx.size, grid_full.z.size),
-            dtype=np.complex64,
-        ),
-    )
-    monkeypatch.setattr(
-        imported_linear, "build_linear_cache", lambda *_args, **_kwargs: "cache"
+    captured = _run_single_ky_captured(
+        monkeypatch, grid_full, ky_target=float(grid_full.ky[1]), gx_contract=None
     )
 
-    def _fake_integrate(**kwargs):
-        captured["grid_ky"] = int(kwargs["grid"].ky.size)
-        captured["g_shape"] = tuple(np.asarray(kwargs["G0"]).shape)
-        captured["ky_index"] = kwargs["ky_index"]
-        return tuple(np.zeros(2, dtype=float) for _ in range(6))
-
-    monkeypatch.setattr(
-        imported_linear, "_integrate_target_mode_series", _fake_integrate
-    )
-
-    _run_single_ky(
-        ky_target=float(grid_full.ky[1]),
-        geom=SimpleNamespace(),
-        grid_full=grid_full,
-        params=SimpleNamespace(),
-        time_cfg=ExplicitTimeConfig(dt=0.1, t_max=0.2, sample_stride=1, fixed_dt=True),
-        gx_contract=None,
-        species=(
-            Species(
-                charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=0.0, fprim=0.0
-            ),
-        ),
-        Nl=1,
-        Nm=1,
-        reference_times=np.asarray([0.1, 0.2], dtype=float),
-        output_steps=np.asarray([0, 1], dtype=int),
-        mode_method="z_index",
-        kx_index=0,
-        terms=LinearTerms(),
-    )
-
-    assert captured["grid_ky"] == 1
+    assert int(captured["grid"].ky.size) == 1
     assert captured["g_shape"][3] == 1
     assert captured["ky_index"] == 0
 
@@ -892,14 +733,7 @@ def test_gx_kyst_fac_mask_cached_uses_positive_half_storage_on_full_ky_grid() ->
     fac = np.asarray(_gx_kyst_fac_mask_cached(cache, use_dealias=True), dtype=float)
     np.testing.assert_allclose(
         fac,
-        np.asarray(
-            [
-                [0.0, 0.0],
-                [1.0, 1.0],
-                [2.0, 0.0],
-            ],
-            dtype=float,
-        ),
+        np.asarray([[0.0, 0.0], [1.0, 1.0], [2.0, 0.0]], dtype=float),
     )
 
 
@@ -923,33 +757,22 @@ def test_distribution_free_energy_by_ky_matches_gx_positive_ky_storage_contract(
 def test_select_geometry_source_prefers_gx_output_for_vmec_generated_runs() -> None:
     gx_out = Path("/tmp/run.out.nc").resolve()
     geom = Path("/tmp/run.eik.nc").resolve()
-    vmec_contract = replace(_dummy_gx_contract(init_single=False), geo_option="vmec")
-    desc_contract = replace(_dummy_gx_contract(init_single=False), geo_option="desc")
-    nc_contract = replace(_dummy_gx_contract(init_single=False), geo_option="nc")
-    assert (
-        _resolve_internal_geometry_source(
-            geometry_file=geom, runtime_config=None, gx_contract=vmec_contract
+    for option, source, expected in (
+        ("vmec", geom, geom),
+        ("vmec", gx_out, gx_out),
+        ("desc", gx_out, gx_out),
+        ("nc", geom, geom),
+    ):
+        contract = replace(_dummy_gx_contract(init_single=False), geo_option=option)
+        resolved = _resolve_internal_geometry_source(
+            geometry_file=source, runtime_config=None, gx_contract=contract
         )
-        == geom
-    )
-    assert (
-        _resolve_internal_geometry_source(
-            geometry_file=gx_out, runtime_config=None, gx_contract=vmec_contract
-        )
-        == gx_out
-    )
-    assert (
-        _resolve_internal_geometry_source(
-            geometry_file=gx_out, runtime_config=None, gx_contract=desc_contract
-        )
-        == gx_out
-    )
-    assert (
-        _resolve_internal_geometry_source(
-            geometry_file=geom, runtime_config=None, gx_contract=nc_contract
-        )
-        == geom
-    )
+        assert resolved == expected
+
+
+def _grid_contract(runtime_cfg) -> dict[str, object]:
+    grid = runtime_cfg.grid
+    return {k: getattr(grid, k) for k in ("boundary", "y0", "ntheta", "nperiod")}
 
 
 def test_resolve_internal_geometry_source_uses_gx_grid_contract_for_internal_miller(
@@ -977,11 +800,7 @@ def test_resolve_internal_geometry_source_uses_gx_grid_contract_for_internal_mil
     )
 
     def _fake_generate_runtime_miller_eik(runtime_cfg, *, force):
-        captured["boundary"] = runtime_cfg.grid.boundary
-        captured["y0"] = runtime_cfg.grid.y0
-        captured["ntheta"] = runtime_cfg.grid.ntheta
-        captured["nperiod"] = runtime_cfg.grid.nperiod
-        captured["force"] = force
+        captured.update(_grid_contract(runtime_cfg), force=force)
         return out
 
     monkeypatch.setattr(
@@ -1038,14 +857,9 @@ def test_resolve_internal_geometry_source_uses_gx_vmec_geometry_contract(
     )
 
     def _fake_generate_runtime_vmec_eik(runtime_cfg, *, force):
-        captured["boundary"] = runtime_cfg.grid.boundary
-        captured["y0"] = runtime_cfg.grid.y0
-        captured["ntheta"] = runtime_cfg.grid.ntheta
-        captured["nperiod"] = runtime_cfg.grid.nperiod
-        captured["alpha"] = runtime_cfg.geometry.alpha
-        captured["torflux"] = runtime_cfg.geometry.torflux
-        captured["npol"] = runtime_cfg.geometry.npol
-        captured["force"] = force
+        geometry = runtime_cfg.geometry
+        captured.update(_grid_contract(runtime_cfg), force=force)
+        captured.update({k: getattr(geometry, k) for k in ("alpha", "torflux", "npol")})
         return out
 
     monkeypatch.setattr(
@@ -1071,83 +885,81 @@ def test_resolve_internal_geometry_source_uses_gx_vmec_geometry_contract(
     }
 
 
+def _no_jit(monkeypatch) -> None:
+    monkeypatch.setattr(imported_linear.jax, "jit", lambda fn, donate_argnums=None: fn)
+
+
+def _ZERO_BOUND(*_args, **_kwargs):
+    return np.asarray([0.0, 0.0, 0.0])
+
+
+def _energy_stubs(wg, wphi, wapar) -> dict[str, object]:
+    return {
+        "_distribution_free_energy_by_ky": lambda *a, **k: jnp.asarray(wg),
+        "_electrostatic_field_energy_by_ky": lambda *a, **k: jnp.asarray(wphi),
+        "_magnetic_vector_potential_energy_by_ky": lambda *a, **k: jnp.asarray(wapar),
+    }
+
+
+def _trivial_geom() -> SimpleNamespace:
+    def zeros(theta, count):
+        return tuple(jnp.zeros_like(theta) for _ in range(count))
+
+    return SimpleNamespace(
+        s_hat=0.0,
+        gradpar=lambda: 1.0,
+        metric_coeffs=lambda theta: (
+            jnp.ones_like(theta),
+            jnp.zeros_like(theta),
+            jnp.ones_like(theta),
+        ),
+        drift_coeffs=lambda theta: zeros(theta, 4),
+    )
+
+
+def _phi_fields(shape, value=0.0):
+    phi = jnp.full(shape, value, dtype=jnp.complex64)
+    return SimpleNamespace(phi=phi, apar=None)
+
+
+def _mode_series(**kwargs):
+    defaults = dict(
+        geom=_trivial_geom(),
+        params=SimpleNamespace(),
+        terms=LinearTerms(),
+        mode_method="z_index",
+        kx_index=0,
+    )
+    return _integrate_target_mode_series(**(defaults | kwargs))
+
+
 def test_integrate_target_mode_series_collects_requested_sample_count(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(imported_linear.jax, "jit", lambda fn, donate_argnums=None: fn)
-    monkeypatch.setattr(
-        imported_linear, "ensure_flux_tube_geometry_data", lambda geom, _theta: geom
-    )
-    monkeypatch.setattr(
+    _no_jit(monkeypatch)
+    patch_attrs(
+        monkeypatch,
         imported_linear,
-        "assemble_rhs_cached",
-        lambda *_args, **_kwargs: (
-            None,
-            SimpleNamespace(phi=jnp.zeros((2, 2, 3), dtype=jnp.complex64), apar=None),
-        ),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_linear_explicit_step",
-        lambda G_state, *_args, **_kwargs: (
+        ensure_flux_tube_geometry_data=lambda geom, _theta: geom,
+        assemble_rhs_cached=lambda *_args, **_kwargs: (None, _phi_fields((2, 2, 3))),
+        _linear_explicit_step=lambda G_state, *_args, **_kwargs: (
             G_state,
-            SimpleNamespace(phi=jnp.zeros((2, 2, 3), dtype=jnp.complex64), apar=None),
+            _phi_fields((2, 2, 3)),
         ),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_instantaneous_growth_rate_step",
-        lambda *_args, **_kwargs: (
+        _instantaneous_growth_rate_step=lambda *_args, **_kwargs: (
             jnp.ones((2, 2), dtype=jnp.float32),
             jnp.full((2, 2), 2.0, dtype=jnp.float32),
         ),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_distribution_free_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([0.0, 3.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_electrostatic_field_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([0.0, 4.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_magnetic_vector_potential_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([0.0, 5.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_linear_frequency_bound",
-        lambda *_args, **_kwargs: np.asarray([0.0, 0.0, 0.0]),
+        **_energy_stubs([0.0, 3.0], [0.0, 4.0], [0.0, 5.0]),
+        _linear_frequency_bound=_ZERO_BOUND,
     )
 
-    gamma, omega, Wg, Wphi, Wapar, Phi2 = _integrate_target_mode_series(
+    gamma, omega, Wg, Wphi, Wapar, Phi2 = _mode_series(
         G0=jnp.zeros((1, 1, 1, 2, 2, 3), dtype=jnp.complex64),
         grid=SimpleNamespace(dealias_mask=np.ones((2, 2), dtype=bool), z=np.arange(3)),
-        geom=SimpleNamespace(
-            s_hat=0.0,
-            gradpar=lambda: 1.0,
-            metric_coeffs=lambda theta: (
-                jnp.ones_like(theta),
-                jnp.zeros_like(theta),
-                jnp.ones_like(theta),
-            ),
-            drift_coeffs=lambda theta: (
-                jnp.zeros_like(theta),
-                jnp.zeros_like(theta),
-                jnp.zeros_like(theta),
-                jnp.zeros_like(theta),
-            ),
-        ),
         cache=SimpleNamespace(jacobian=jnp.ones(3, dtype=jnp.float32)),
-        params=SimpleNamespace(),
         time_cfg=ExplicitTimeConfig(dt=0.1, t_max=0.21, sample_stride=1, fixed_dt=True),
-        terms=LinearTerms(),
-        mode_method="z_index",
         ky_index=1,
-        kx_index=0,
         reference_times=np.asarray([0.1, 0.2, 0.3], dtype=float),
         output_steps=np.asarray([0, 1, 2], dtype=int),
     )
@@ -1163,45 +975,20 @@ def test_integrate_target_mode_series_collects_requested_sample_count(
 def test_integrate_target_mode_series_normalizes_imported_geometry_before_omega_max(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(imported_linear.jax, "jit", lambda fn, donate_argnums=None: fn)
-    monkeypatch.setattr(
+    _no_jit(monkeypatch)
+    patch_attrs(
+        monkeypatch,
         imported_linear,
-        "assemble_rhs_cached",
-        lambda *_args, **_kwargs: (
-            None,
-            SimpleNamespace(phi=jnp.zeros((1, 1, 4), dtype=jnp.complex64), apar=None),
-        ),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_linear_explicit_step",
-        lambda G_state, *_args, **_kwargs: (
+        assemble_rhs_cached=lambda *_args, **_kwargs: (None, _phi_fields((1, 1, 4))),
+        _linear_explicit_step=lambda G_state, *_args, **_kwargs: (
             G_state,
-            SimpleNamespace(phi=jnp.zeros((1, 1, 4), dtype=jnp.complex64), apar=None),
+            _phi_fields((1, 1, 4)),
         ),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_instantaneous_growth_rate_step",
-        lambda *_args, **_kwargs: (
+        _instantaneous_growth_rate_step=lambda *_args, **_kwargs: (
             jnp.asarray([[0.0]], dtype=float),
             jnp.asarray([[0.0]], dtype=float),
         ),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_distribution_free_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([0.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_electrostatic_field_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([0.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_magnetic_vector_potential_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([0.0]),
+        **_energy_stubs([0.0], [0.0], [0.0]),
     )
 
     analytic = SAlphaGeometry.from_config(
@@ -1225,7 +1012,7 @@ def test_integrate_target_mode_series_normalizes_imported_geometry_before_omega_
 
     monkeypatch.setattr(imported_linear, "_linear_frequency_bound", _fake_omega_max)
 
-    _integrate_target_mode_series(
+    _mode_series(
         G0=jnp.zeros((1, 1, 1, 1, 1, 4), dtype=jnp.complex64),
         grid=SimpleNamespace(
             dealias_mask=np.ones((1, 1), dtype=bool),
@@ -1233,12 +1020,8 @@ def test_integrate_target_mode_series_normalizes_imported_geometry_before_omega_
         ),
         geom=geom,
         cache=SimpleNamespace(jacobian=jnp.ones(4, dtype=jnp.float32)),
-        params=SimpleNamespace(),
         time_cfg=ExplicitTimeConfig(dt=0.1, t_max=0.1, sample_stride=1, fixed_dt=True),
-        terms=LinearTerms(),
-        mode_method="z_index",
         ky_index=0,
-        kx_index=0,
         reference_times=np.asarray([0.1], dtype=float),
         output_steps=np.asarray([0], dtype=int),
     )
@@ -1248,17 +1031,12 @@ def test_integrate_target_mode_series_normalizes_imported_geometry_before_omega_
 
 
 def test_integrate_target_mode_series_uses_elapsed_sample_interval(monkeypatch) -> None:
-    monkeypatch.setattr(imported_linear.jax, "jit", lambda fn, donate_argnums=None: fn)
-    monkeypatch.setattr(
-        imported_linear, "ensure_flux_tube_geometry_data", lambda geom, _theta: geom
-    )
-    monkeypatch.setattr(
+    _no_jit(monkeypatch)
+    patch_attrs(
+        monkeypatch,
         imported_linear,
-        "assemble_rhs_cached",
-        lambda *_args, **_kwargs: (
-            None,
-            SimpleNamespace(phi=jnp.zeros((1, 1, 1), dtype=jnp.complex64), apar=None),
-        ),
+        ensure_flux_tube_geometry_data=lambda geom, _theta: geom,
+        assemble_rhs_cached=lambda *_args, **_kwargs: (None, _phi_fields((1, 1, 1))),
     )
 
     step_count = {"n": 0}
@@ -1278,55 +1056,20 @@ def test_integrate_target_mode_series_uses_elapsed_sample_interval(monkeypatch) 
         captured["dt"] = float(dt_step)
         return jnp.ones((1, 1), dtype=jnp.float32), jnp.ones((1, 1), dtype=jnp.float32)
 
-    monkeypatch.setattr(
-        imported_linear, "_instantaneous_growth_rate_step", _fake_growth
-    )
-    monkeypatch.setattr(
+    patch_attrs(
+        monkeypatch,
         imported_linear,
-        "_distribution_free_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([1.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_electrostatic_field_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([1.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_magnetic_vector_potential_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([0.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_linear_frequency_bound",
-        lambda *_args, **_kwargs: np.asarray([0.0, 0.0, 0.0]),
+        _instantaneous_growth_rate_step=_fake_growth,
+        **_energy_stubs([1.0], [1.0], [0.0]),
+        _linear_frequency_bound=_ZERO_BOUND,
     )
 
-    _integrate_target_mode_series(
+    _mode_series(
         G0=jnp.zeros((1, 1, 1, 1, 1, 1), dtype=jnp.complex64),
         grid=SimpleNamespace(dealias_mask=np.ones((1, 1), dtype=bool), z=np.arange(1)),
-        geom=SimpleNamespace(
-            s_hat=0.0,
-            gradpar=lambda: 1.0,
-            metric_coeffs=lambda theta: (
-                jnp.ones_like(theta),
-                jnp.zeros_like(theta),
-                jnp.ones_like(theta),
-            ),
-            drift_coeffs=lambda theta: (
-                jnp.zeros_like(theta),
-                jnp.zeros_like(theta),
-                jnp.zeros_like(theta),
-                jnp.zeros_like(theta),
-            ),
-        ),
         cache=SimpleNamespace(jacobian=jnp.ones(1, dtype=jnp.float32)),
-        params=SimpleNamespace(),
         time_cfg=ExplicitTimeConfig(dt=0.1, t_max=0.2, sample_stride=1, fixed_dt=True),
-        terms=LinearTerms(),
-        mode_method="z_index",
         ky_index=0,
-        kx_index=0,
         reference_times=np.asarray([0.2], dtype=float),
         output_steps=np.asarray([0], dtype=int),
     )
@@ -1343,17 +1086,12 @@ def test_integrate_target_mode_series_uses_elapsed_sample_interval(monkeypatch) 
 def test_integrate_target_mode_series_downsamples_output_without_sparsifying_growth_interval(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(imported_linear.jax, "jit", lambda fn, donate_argnums=None: fn)
-    monkeypatch.setattr(
-        imported_linear, "ensure_flux_tube_geometry_data", lambda geom, _theta: geom
-    )
-    monkeypatch.setattr(
+    _no_jit(monkeypatch)
+    patch_attrs(
+        monkeypatch,
         imported_linear,
-        "assemble_rhs_cached",
-        lambda *_args, **_kwargs: (
-            None,
-            SimpleNamespace(phi=jnp.zeros((1, 1, 1), dtype=jnp.complex64), apar=None),
-        ),
+        ensure_flux_tube_geometry_data=lambda geom, _theta: geom,
+        assemble_rhs_cached=lambda *_args, **_kwargs: (None, _phi_fields((1, 1, 1))),
     )
 
     step_count = {"n": 0}
@@ -1375,55 +1113,20 @@ def test_integrate_target_mode_series_downsamples_output_without_sparsifying_gro
             jnp.full((1, 1), 10.0 * float(n), dtype=jnp.float32),
         )
 
-    monkeypatch.setattr(
-        imported_linear, "_instantaneous_growth_rate_step", _fake_growth
-    )
-    monkeypatch.setattr(
+    patch_attrs(
+        monkeypatch,
         imported_linear,
-        "_distribution_free_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([1.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_electrostatic_field_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([1.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_magnetic_vector_potential_energy_by_ky",
-        lambda *_args, **_kwargs: jnp.asarray([0.0]),
-    )
-    monkeypatch.setattr(
-        imported_linear,
-        "_linear_frequency_bound",
-        lambda *_args, **_kwargs: np.asarray([0.0, 0.0, 0.0]),
+        _instantaneous_growth_rate_step=_fake_growth,
+        **_energy_stubs([1.0], [1.0], [0.0]),
+        _linear_frequency_bound=_ZERO_BOUND,
     )
 
-    gamma, omega, *_rest = _integrate_target_mode_series(
+    gamma, omega, *_rest = _mode_series(
         G0=jnp.zeros((1, 1, 1, 1, 1, 1), dtype=jnp.complex64),
         grid=SimpleNamespace(dealias_mask=np.ones((1, 1), dtype=bool), z=np.arange(1)),
-        geom=SimpleNamespace(
-            s_hat=0.0,
-            gradpar=lambda: 1.0,
-            metric_coeffs=lambda theta: (
-                jnp.ones_like(theta),
-                jnp.zeros_like(theta),
-                jnp.ones_like(theta),
-            ),
-            drift_coeffs=lambda theta: (
-                jnp.zeros_like(theta),
-                jnp.zeros_like(theta),
-                jnp.zeros_like(theta),
-                jnp.zeros_like(theta),
-            ),
-        ),
         cache=SimpleNamespace(jacobian=jnp.ones(1, dtype=jnp.float32)),
-        params=SimpleNamespace(),
         time_cfg=ExplicitTimeConfig(dt=0.1, t_max=0.3, sample_stride=1, fixed_dt=True),
-        terms=LinearTerms(),
-        mode_method="z_index",
         ky_index=0,
-        kx_index=0,
         reference_times=np.asarray([0.1, 0.2, 0.3], dtype=float),
         output_steps=np.asarray([2], dtype=int),
     )
@@ -1443,10 +1146,7 @@ def test_integrate_target_mode_series_downsamples_output_without_sparsifying_gro
 def test_write_scan_rows_checkpoints_sorted_csv(tmp_path: Path) -> None:
     out = tmp_path / "scan.csv"
     df = _write_scan_rows(
-        [
-            {"ky": 0.3, "mean_abs_gamma": 3.0},
-            {"ky": 0.1, "mean_abs_gamma": 1.0},
-        ],
+        [{"ky": 0.3, "mean_abs_gamma": 3.0}, {"ky": 0.1, "mean_abs_gamma": 1.0}],
         out,
     )
     assert list(df["ky"]) == [0.1, 0.3]
@@ -1459,54 +1159,30 @@ def test_write_scan_rows_checkpoints_sorted_csv(tmp_path: Path) -> None:
 # ---- test_compare_gx_nonlinear_diagnostics.py ----
 
 
-def _write_minimal_gx_nc(path: Path, ntime: int = 5) -> None:
+def _write_minimal_gx_nc(path: Path, ntime: int = 5, offset: float = 0.0) -> None:
+    """Grouped GX-style diagnostics; ``offset`` shifts every series (GKX uses 0.1)."""
     netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
 
-    with Dataset(path, "w") as root:
+    with netcdf4.Dataset(path, "w") as root:
         root.createDimension("time", ntime)
         root.createDimension("species", 2)
         grids = root.createGroup("Grids")
         diags = root.createGroup("Diagnostics")
-
-        tvar = grids.createVariable("time", "f8", ("time",))
-        tvar[:] = np.linspace(0.0, 1.0, ntime)
-
-        phi2 = diags.createVariable("Phi2_t", "f8", ("time",))
-        phi2[:] = np.linspace(0.1, 0.2, ntime)
+        grids.createVariable("time", "f8", ("time",))[:] = np.linspace(0.0, 1.0, ntime)
+        series = np.linspace(0.1 + offset, 0.2 + offset, ntime)
+        diags.createVariable("Phi2_t", "f8", ("time",))[:] = series
 
         for name in ["Wg_st", "Wphi_st", "HeatFlux_st", "ParticleFlux_st"]:
             var = diags.createVariable(name, "f8", ("time", "species"))
-            series = np.linspace(0.1, 0.2, ntime)[:, None]
-            var[:, :] = np.concatenate([series, 2.0 * series], axis=1)
+            var[:, :] = np.stack([series, 2.0 * series], axis=1)
 
         wapar = diags.createVariable("Wapar_st", "f8", ("time", "species"))
-        wapar[:, :] = np.repeat(np.linspace(0.3, 0.4, ntime)[:, None], 2, axis=1)
+        wapar_series = np.linspace(0.3 + offset, 0.4 + offset, ntime)
+        wapar[:, :] = np.repeat(wapar_series[:, None], 2, axis=1)
 
 
 def _write_minimal_gkx_nc(path: Path, ntime: int = 5) -> None:
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    with Dataset(path, "w") as root:
-        root.createDimension("time", ntime)
-        root.createDimension("species", 2)
-        grids = root.createGroup("Grids")
-        diags = root.createGroup("Diagnostics")
-
-        tvar = grids.createVariable("time", "f8", ("time",))
-        tvar[:] = np.linspace(0.0, 1.0, ntime)
-
-        phi2 = diags.createVariable("Phi2_t", "f8", ("time",))
-        phi2[:] = np.linspace(0.2, 0.3, ntime)
-
-        for name in ["Wg_st", "Wphi_st", "HeatFlux_st", "ParticleFlux_st"]:
-            var = diags.createVariable(name, "f8", ("time", "species"))
-            series = np.linspace(0.2, 0.3, ntime)[:, None]
-            var[:, :] = np.concatenate([series, 2.0 * series], axis=1)
-
-        wapar = diags.createVariable("Wapar_st", "f8", ("time", "species"))
-        wapar[:, :] = np.repeat(np.linspace(0.4, 0.5, ntime)[:, None], 2, axis=1)
+    _write_minimal_gx_nc(path, ntime, offset=0.1)
 
 
 def _write_minimal_gkx_csv(path: Path, ntime: int = 5) -> None:
@@ -1528,7 +1204,7 @@ def _write_minimal_gkx_csv(path: Path, ntime: int = 5) -> None:
     np.savetxt(path, data, delimiter=",", header=header, comments="")
 
 
-def test_compare_gx_nonlinear_diagnostics_plot(tmp_path: Path) -> None:
+def test_compare_gx_nonlinear_diagnostics_plot(tmp_path: Path, monkeypatch) -> None:
     pytest.importorskip("netCDF4")
     os.environ.setdefault("MPLBACKEND", "Agg")
 
@@ -1540,40 +1216,15 @@ def test_compare_gx_nonlinear_diagnostics_plot(tmp_path: Path) -> None:
     _write_minimal_gx_nc(gx_path)
     _write_minimal_gkx_csv(sp_path)
 
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
+    mod = importlib.import_module("compare_gx_nonlinear")
 
-        argv = [
-            "compare_gx_nonlinear_diagnostics.py",
-            "--gx",
-            str(gx_path),
-            "--gkx",
-            str(sp_path),
-            "--tmin",
-            "0.25",
-            "--tmax",
-            "1.0",
-            "--out",
-            str(out_path),
-            "--summary-json",
-            str(summary_path),
-            "--summary-case",
-            "cyclone_nonlinear_window",
-            "--summary-source",
-            "minimal GX fixture",
-            "--gate-mean-rel",
-            "2.0",
-        ]
-        old_argv = sys.argv
-        sys.argv = argv
-        try:
-            assert mod.run_diagnostics() == 0
-        finally:
-            sys.argv = old_argv
-    finally:
-        sys.path.remove(str(tools_dir))
+    argv = (
+        f"compare_gx_nonlinear_diagnostics.py --gx {gx_path} --gkx {sp_path} "
+        f"--tmin 0.25 --tmax 1.0 --out {out_path} --summary-json {summary_path} "
+        "--summary-case cyclone_nonlinear_window --gate-mean-rel 2.0"
+    ).split() + ["--summary-source", "minimal GX fixture"]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert mod.run_diagnostics() == 0
 
     assert out_path.exists()
     assert out_path.stat().st_size > 0
@@ -1592,71 +1243,42 @@ def test_compare_gx_nonlinear_diagnostics_plot(tmp_path: Path) -> None:
     assert "NaN" not in summary_path.read_text(encoding="utf-8")
 
 
-def test_compare_gx_nonlinear_diagnostics_uses_single_species_wapar(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("writer", "loader", "lo", "wapar_lo"),
+    [
+        # GX output: the Wapar diagnostic is single-species, not a species sum.
+        (_write_minimal_gx_nc, "_load_gx_diag", 0.1, 0.3),
+        (_write_minimal_gkx_nc, "_load_gkx", 0.2, 0.4),
+    ],
+    ids=["gx-single-species-wapar", "gkx-out-nc"],
+)
+def test_compare_gx_nonlinear_diagnostics_loaders(
+    tmp_path: Path, writer, loader, lo, wapar_lo
 ) -> None:
     pytest.importorskip("netCDF4")
+    path = tmp_path / "run.out.nc"
+    writer(path)
 
-    gx_path = tmp_path / "gx.out.nc"
-    _write_minimal_gx_nc(gx_path)
+    loaded = getattr(importlib.import_module("compare_gx_nonlinear"), loader)(path)
 
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
-
-        loaded = mod._load_gx_diag(gx_path)
-    finally:
-        sys.path.remove(str(tools_dir))
-
-    t = np.linspace(0.0, 1.0, 5)
-    assert np.allclose(loaded["Wg"], 3.0 * np.linspace(0.1, 0.2, 5))
-    assert np.allclose(loaded["Wphi"], 3.0 * np.linspace(0.1, 0.2, 5))
-    assert np.allclose(loaded["heat_flux"], 3.0 * np.linspace(0.1, 0.2, 5))
-    assert np.allclose(loaded["particle_flux"], 3.0 * np.linspace(0.1, 0.2, 5))
-    assert np.allclose(loaded["Wapar"], np.linspace(0.3, 0.4, 5))
-    assert np.allclose(loaded["t"], t)
-
-
-def test_compare_gx_nonlinear_diagnostics_loads_gkx_out_nc(tmp_path: Path) -> None:
-    pytest.importorskip("netCDF4")
-
-    gkx_path = tmp_path / "gkx.out.nc"
-    _write_minimal_gkx_nc(gkx_path)
-
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
-
-        loaded = mod._load_gkx(gkx_path)
-    finally:
-        sys.path.remove(str(tools_dir))
-
-    t = np.linspace(0.0, 1.0, 5)
-    assert np.allclose(loaded["t"], t)
-    assert np.allclose(loaded["phi2"], np.linspace(0.2, 0.3, 5))
-    assert np.allclose(loaded["Wg"], 3.0 * np.linspace(0.2, 0.3, 5))
-    assert np.allclose(loaded["Wphi"], 3.0 * np.linspace(0.2, 0.3, 5))
-    assert np.allclose(loaded["heat_flux"], 3.0 * np.linspace(0.2, 0.3, 5))
-    assert np.allclose(loaded["particle_flux"], 3.0 * np.linspace(0.2, 0.3, 5))
-    assert np.allclose(loaded["Wapar"], np.linspace(0.4, 0.5, 5))
+    series = np.linspace(lo, lo + 0.1, 5)
+    assert np.allclose(loaded["t"], np.linspace(0.0, 1.0, 5))
+    for name in ("Wg", "Wphi", "heat_flux", "particle_flux"):
+        assert np.allclose(loaded[name], 3.0 * series), name
+    assert np.allclose(loaded["Wapar"], np.linspace(wapar_lo, wapar_lo + 0.1, 5))
+    if loader == "_load_gkx":
+        assert np.allclose(loaded["phi2"], series)
 
 
 def test_compare_gx_nonlinear_diagnostics_interp_summary() -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
+    mod = importlib.import_module("compare_gx_nonlinear")
 
-        mean_rel, max_rel, final_rel = mod._interp_summary(
-            np.array([0.0, 1.0, 2.0]),
-            np.array([2.0, 4.0, 6.0]),
-            np.array([0.0, 2.0]),
-            np.array([1.0, 3.0]),
-        )
-    finally:
-        sys.path.remove(str(tools_dir))
+    mean_rel, max_rel, final_rel = mod._interp_summary(
+        np.array([0.0, 1.0, 2.0]),
+        np.array([2.0, 4.0, 6.0]),
+        np.array([0.0, 2.0]),
+        np.array([1.0, 3.0]),
+    )
 
     assert np.isclose(mean_rel, 1.0)
     assert np.isclose(max_rel, 1.0)
@@ -1664,18 +1286,13 @@ def test_compare_gx_nonlinear_diagnostics_interp_summary() -> None:
 
 
 def test_compare_gx_nonlinear_diagnostics_apply_time_window() -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
+    mod = importlib.import_module("compare_gx_nonlinear")
 
-        series = {
-            "t": np.array([0.0, 1.0, 2.0, 3.0]),
-            "Wg": np.array([10.0, 11.0, 12.0, 13.0]),
-        }
-        windowed = mod._apply_time_window(series, tmin=1.0, tmax=2.0)
-    finally:
-        sys.path.remove(str(tools_dir))
+    series = {
+        "t": np.array([0.0, 1.0, 2.0, 3.0]),
+        "Wg": np.array([10.0, 11.0, 12.0, 13.0]),
+    }
+    windowed = mod._apply_time_window(series, tmin=1.0, tmax=2.0)
 
     assert np.allclose(windowed["t"], [1.0, 2.0])
     assert np.allclose(windowed["Wg"], [11.0, 12.0])
@@ -1685,25 +1302,11 @@ def test_compare_gx_nonlinear_diagnostics_apply_time_window() -> None:
 
 
 def test_compare_gx_nonlinear_terms_parser_accepts_runtime_config() -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
-    finally:
-        sys.path.remove(str(tools_dir))
+    mod = importlib.import_module("compare_gx_nonlinear")
 
     parser = mod.build_terms_parser()
     args = parser.parse_args(
-        [
-            "--gx-dir",
-            "gx_dump",
-            "--gx-out",
-            "gx.out.nc",
-            "--config",
-            "runtime.toml",
-            "--ky",
-            "0.4",
-        ]
+        "--gx-dir gx_dump --gx-out gx.out.nc --config runtime.toml --ky 0.4".split()
     )
 
     assert args.gx_dir == Path("gx_dump")
@@ -1713,12 +1316,7 @@ def test_compare_gx_nonlinear_terms_parser_accepts_runtime_config() -> None:
 
 
 def test_build_runtime_compare_context_overrides_grid_from_dump(monkeypatch) -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
-    finally:
-        sys.path.remove(str(tools_dir))
+    mod = importlib.import_module("compare_gx_nonlinear")
 
     cfg = SimpleNamespace(grid=SimpleNamespace(Nx=8, Ny=8, Nz=8, y0=None))
     captured: dict[str, object] = {}
@@ -1758,10 +1356,8 @@ def test_build_runtime_compare_context_overrides_grid_from_dump(monkeypatch) -> 
         y0_override=None,
     )
 
-    assert cfg_use.grid.Nx == 3
-    assert cfg_use.grid.Ny == 6
-    assert cfg_use.grid.Nz == 5
-    assert cfg_use.grid.y0 == 5.0
+    grid_cfg = cfg_use.grid
+    assert (grid_cfg.Nx, grid_cfg.Ny, grid_cfg.Nz, grid_cfg.y0) == (3, 6, 5, 5.0)
     assert captured["cfg_use"] is cfg_use
     assert geom == "geom"
     assert grid is grid_obj
@@ -1770,12 +1366,7 @@ def test_build_runtime_compare_context_overrides_grid_from_dump(monkeypatch) -> 
 
 
 def test_pick_species_dump_prefers_species_suffix(tmp_path: Path) -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
-    finally:
-        sys.path.remove(str(tools_dir))
+    mod = importlib.import_module("compare_gx_nonlinear")
 
     suffixed = tmp_path / "nl_total_s0.bin"
     plain = tmp_path / "nl_total.bin"
@@ -1788,12 +1379,7 @@ def test_pick_species_dump_prefers_species_suffix(tmp_path: Path) -> None:
 
 
 def test_pick_first_existing_uses_diag_state_kxky_fallback(tmp_path: Path) -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
-    finally:
-        sys.path.remove(str(tools_dir))
+    mod = importlib.import_module("compare_gx_nonlinear")
 
     diag_kx = tmp_path / "diag_state_kx_t23.bin"
     diag_ky = tmp_path / "diag_state_ky_t23.bin"
@@ -1812,12 +1398,7 @@ def test_pick_first_existing_uses_diag_state_kxky_fallback(tmp_path: Path) -> No
 
 
 def test_resolve_dealias_mask_rebuilds_to_compared_shape() -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
-    finally:
-        sys.path.remove(str(tools_dir))
+    mod = importlib.import_module("compare_gx_nonlinear")
 
     mask = mod._resolve_dealias_mask(np.ones((4, 4), dtype=bool), ny=10, nx=4)
 
@@ -1825,12 +1406,7 @@ def test_resolve_dealias_mask_rebuilds_to_compared_shape() -> None:
 
 
 def test_synth_positive_and_full_ky_rebuild_dump_grid() -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_nonlinear as mod
-    finally:
-        sys.path.remove(str(tools_dir))
+    mod = importlib.import_module("compare_gx_nonlinear")
 
     ky_pos = mod._synth_positive_ky(nyc=6, y0=10.0)
     ky_full = mod._synth_full_ky(nyc=6, y0=10.0)
@@ -1845,6 +1421,8 @@ from gkx.benchmarking_shared import (
     KBM_OMEGA_D_SCALE,
     KBM_OMEGA_STAR_SCALE,
     KBM_RHO_STAR,
+)
+from scripts.comparison.compare_gx_rhs_terms import (
     _build_initial_condition,
     _two_species_params,
 )
@@ -1856,12 +1434,7 @@ from gkx.workflows.runtime.toml import load_runtime_from_toml
 
 
 def test_manual_linear_contributions_match_assembly_for_multispecies_kbm() -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_rhs_terms as mod
-    finally:
-        sys.path.remove(str(tools_dir))
+    mod = importlib.import_module("compare_gx_rhs_terms")
 
     cfg = KBMBaseCase(
         grid=GridConfig(
@@ -1931,80 +1504,29 @@ def test_manual_linear_contributions_match_assembly_for_multispecies_kbm() -> No
     assert np.allclose(contrib_sum, np.asarray(rhs_total))
 
 
-def test_compare_gx_rhs_terms_parser_defaults_to_dump_metadata() -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_rhs_terms as mod
-    finally:
-        sys.path.remove(str(tools_dir))
-
-    parser = mod.build_parser()
-    args = parser.parse_args(["--gx-dir", "/tmp/gx", "--gx-out", "/tmp/gx.out.nc"])
-
-    assert args.Nl is None
-    assert args.Nm is None
-    assert args.y0 is None
-
-
-def test_compare_gx_rhs_terms_parser_accepts_runtime_config() -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_rhs_terms as mod
-    finally:
-        sys.path.remove(str(tools_dir))
-
-    parser = mod.build_parser()
-    args = parser.parse_args(
-        [
-            "--gx-dir",
-            "/tmp/gx",
-            "--gx-out",
-            "/tmp/gx.out.nc",
-            "--config",
-            "/tmp/runtime.toml",
-        ]
-    )
-
-    assert args.config == Path("/tmp/runtime.toml")
-
-
-def test_compare_gx_rhs_terms_parser_accepts_imported_geometry_args() -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_rhs_terms as mod
-    finally:
-        sys.path.remove(str(tools_dir))
-
-    parser = mod.build_parser()
-    args = parser.parse_args(
-        [
-            "--gx-dir",
-            "/tmp/gx",
-            "--gx-out",
-            "/tmp/gx.out.nc",
-            "--gx-input",
-            "/tmp/gx.in",
-            "--geometry-file",
-            "/tmp/geom.nc",
-        ]
-    )
-
-    assert args.gx_input == Path("/tmp/gx.in")
-    assert args.geometry_file == Path("/tmp/geom.nc")
+@pytest.mark.parametrize(
+    ("extra", "expected"),
+    [
+        ("", {"Nl": None, "Nm": None, "y0": None}),  # defaults to dump metadata
+        ("--config /tmp/runtime.toml", {"config": Path("/tmp/runtime.toml")}),
+        (
+            "--gx-input /tmp/gx.in --geometry-file /tmp/geom.nc",
+            {"gx_input": Path("/tmp/gx.in"), "geometry_file": Path("/tmp/geom.nc")},
+        ),
+    ],
+)
+def test_compare_gx_rhs_terms_parser(extra, expected) -> None:
+    mod = importlib.import_module("compare_gx_rhs_terms")
+    argv = f"--gx-dir /tmp/gx --gx-out /tmp/gx.out.nc {extra}".split()
+    args = mod.build_parser().parse_args(argv)
+    for name, value in expected.items():
+        assert getattr(args, name) == value
 
 
 def test_compare_gx_rhs_terms_runtime_context_overrides_grid_from_dump(
     monkeypatch,
 ) -> None:
-    tools_dir = Path(__file__).resolve().parents[3] / "scripts" / "comparison"
-    sys.path.insert(0, str(tools_dir))
-    try:
-        import compare_gx_rhs_terms as mod
-    finally:
-        sys.path.remove(str(tools_dir))
+    mod = importlib.import_module("compare_gx_rhs_terms")
 
     cfg = type(
         "Cfg", (), {"grid": type("Grid", (), {"Nx": 8, "Ny": 8, "Nz": 8, "y0": None})()}
@@ -2029,14 +1551,14 @@ def test_compare_gx_rhs_terms_runtime_context_overrides_grid_from_dump(
     grid_obj = type(
         "GridObj", (), {"ky": np.array([0.0, 0.2, -0.2]), "kx": np.array([0.0])}
     )()
-    monkeypatch.setattr(mod, "build_spectral_grid", lambda _grid: grid_obj)
-    monkeypatch.setattr(
-        mod, "build_runtime_linear_params", lambda *_args, **_kwargs: "params"
-    )
-    monkeypatch.setattr(
+    patch_attrs(
+        monkeypatch,
         mod,
-        "build_runtime_term_config",
-        lambda _cfg: TermConfig(hypercollisions=1.0, end_damping=1.0),
+        build_spectral_grid=lambda _grid: grid_obj,
+        build_runtime_linear_params=lambda *_args, **_kwargs: "params",
+        build_runtime_term_config=lambda _cfg: TermConfig(
+            hypercollisions=1.0, end_damping=1.0
+        ),
     )
 
     cfg_use, geom, grid_full, params, term_cfg = mod._build_runtime_compare_context(
@@ -2049,10 +1571,8 @@ def test_compare_gx_rhs_terms_runtime_context_overrides_grid_from_dump(
         y0_override=None,
     )
 
-    assert cfg_use.grid.Nx == 3
-    assert cfg_use.grid.Ny == 6
-    assert cfg_use.grid.Nz == 5
-    assert cfg_use.grid.y0 == 5.0
+    grid_cfg = cfg_use.grid
+    assert (grid_cfg.Nx, grid_cfg.Ny, grid_cfg.Nz, grid_cfg.y0) == (3, 6, 5, 5.0)
     assert captured["cfg_use"] is cfg_use
     assert geom == "geom"
     assert grid_full is grid_obj
@@ -2092,7 +1612,9 @@ def _runtime_config_from_kbm_case(cfg: KBMBaseCase) -> RuntimeConfig:
 def test_runtime_linear_accepts_vmec_and_desc_eik_geometry_aliases(
     tmp_path: Path,
 ) -> None:
-    from gkx.runtime import run_runtime_linear
+    from gkx.runtime import (
+        run_runtime_linear,
+    )
 
     netcdf4 = pytest.importorskip("netCDF4")
     Dataset = netcdf4.Dataset
@@ -2103,48 +1625,35 @@ def test_runtime_linear_accepts_vmec_and_desc_eik_geometry_aliases(
     analytic = SAlphaGeometry.from_config(cfg.geometry)
     sampled = sample_flux_tube_geometry(analytic, theta)
     path = tmp_path / "geom.eik.nc"
+    profiles = {
+        "bmag": "bmag",
+        "gds2": "gds2",
+        "gds21": "gds21",
+        "gds22": "gds22",
+        "cvdrift": "cv",
+        "gbdrift": "gb",
+        "cvdrift0": "cv0",
+        "gbdrift0": "gb0",
+        "jacob": "jacobian",
+        "grho": "grho",
+    }
+    scalars = {"q": "q", "shat": "s_hat", "Rmaj": "R0", "kxfac": "kxfac"}
+    scalars |= {"scale": "theta_scale", "nfp": "nfp", "alpha": "alpha"}
     with Dataset(path, "w") as root:
         root.createDimension("z", theta.size)
         root.createVariable("theta", "f8", ("z",))[:] = theta
-        root.createVariable("bmag", "f8", ("z",))[:] = np.asarray(sampled.bmag_profile)
-        root.createVariable("gds2", "f8", ("z",))[:] = np.asarray(sampled.gds2_profile)
-        root.createVariable("gds21", "f8", ("z",))[:] = np.asarray(
-            sampled.gds21_profile
-        )
-        root.createVariable("gds22", "f8", ("z",))[:] = np.asarray(
-            sampled.gds22_profile
-        )
-        root.createVariable("cvdrift", "f8", ("z",))[:] = np.asarray(sampled.cv_profile)
-        root.createVariable("gbdrift", "f8", ("z",))[:] = np.asarray(sampled.gb_profile)
-        root.createVariable("cvdrift0", "f8", ("z",))[:] = np.asarray(
-            sampled.cv0_profile
-        )
-        root.createVariable("gbdrift0", "f8", ("z",))[:] = np.asarray(
-            sampled.gb0_profile
-        )
-        root.createVariable("jacob", "f8", ("z",))[:] = np.asarray(
-            sampled.jacobian_profile
-        )
-        root.createVariable("grho", "f8", ("z",))[:] = np.asarray(sampled.grho_profile)
-        root.createVariable("gradpar", "f8", ("z",))[:] = np.full(
-            theta.size, sampled.gradpar_value
-        )
-        root.createVariable("q", "f8", ())[:] = sampled.q
-        root.createVariable("shat", "f8", ())[:] = sampled.s_hat
-        root.createVariable("Rmaj", "f8", ())[:] = sampled.R0
-        root.createVariable("kxfac", "f8", ())[:] = sampled.kxfac
-        root.createVariable("scale", "f8", ())[:] = sampled.theta_scale
-        root.createVariable("nfp", "f8", ())[:] = sampled.nfp
-        root.createVariable("alpha", "f8", ())[:] = sampled.alpha
+        for name, attr in profiles.items():
+            values = np.asarray(getattr(sampled, f"{attr}_profile"))
+            root.createVariable(name, "f8", ("z",))[:] = values
+        gradpar = np.full(theta.size, sampled.gradpar_value)
+        root.createVariable("gradpar", "f8", ("z",))[:] = gradpar
+        for name, attr in scalars.items():
+            root.createVariable(name, "f8", ())[:] = getattr(sampled, attr)
 
     for model in ("vmec-eik", "desc-eik"):
         cfg_nc = replace(
             cfg,
-            geometry=replace(
-                cfg.geometry,
-                model=model,
-                geometry_file=str(path),
-            ),
+            geometry=replace(cfg.geometry, model=model, geometry_file=str(path)),
         )
         runtime_cfg = _runtime_config_from_kbm_case(cfg_nc)
         result = run_runtime_linear(
@@ -2242,20 +1751,7 @@ from support.paths import load_comparison_tool  # noqa: E402
 def test_imported_window_parser_accepts_required_args() -> None:
     mod = load_comparison_tool("compare_gx_imported_linear")
     args = mod.build_window_parser().parse_args(
-        [
-            "--gx-dir",
-            "/tmp/gx",
-            "--gx-out",
-            "/tmp/run.out.nc",
-            "--gx-input",
-            "/tmp/run.in",
-            "--geometry-file",
-            "/tmp/run.eik.nc",
-            "--time-index-start",
-            "0",
-            "--time-index-stop",
-            "1",
-        ]
+        "--gx-dir /tmp/gx --gx-out /tmp/run.out.nc --gx-input /tmp/run.in --geometry-file /tmp/run.eik.nc --time-index-start 0 --time-index-stop 1".split()
     )
     assert args.gx_dir == Path("/tmp/gx")
     assert args.gx_out == Path("/tmp/run.out.nc")
@@ -2304,10 +1800,7 @@ def test_gradient_ladder_requires_compatible_clean_state_source(
 
     assert (
         tool._require_compatible_state_source(
-            {
-                "gkx_git_commit": np.asarray("current"),
-                "gkx_git_dirty": np.asarray(0),
-            },
+            {"gkx_git_commit": np.asarray("current"), "gkx_git_dirty": np.asarray(0)},
             provenance,
         )
         == "current"
@@ -2317,10 +1810,7 @@ def test_gradient_ladder_requires_compatible_clean_state_source(
     monkeypatch.setattr(tool, "_gkx_source_tree_matches", lambda *_args: False)
     with pytest.raises(SystemExit, match="differs from current source"):
         tool._require_compatible_state_source(
-            {
-                "gkx_git_commit": np.asarray("old"),
-                "gkx_git_dirty": np.asarray(0),
-            },
+            {"gkx_git_commit": np.asarray("old"), "gkx_git_dirty": np.asarray(0)},
             provenance,
         )
 
@@ -2475,19 +1965,7 @@ def test_profile_nonlinear_sharding_problem_excites_nonlinear_bracket() -> None:
     mod = _load_sharding_tool_module()
     args = SimpleNamespace(nx=8, ny=8, nz=12, nl=2, nm=3, amplitude=1.0e-4)
     state, cache, params = mod._build_problem(args)
-    nonlinear_terms = TermConfig(
-        streaming=0.0,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-        nonlinear=1.0,
-    )
+    nonlinear_terms = only_terms(nonlinear=1.0)
     rhs, _fields = mod.nonlinear_rhs_cached(
         state,
         cache,
@@ -2510,16 +1988,7 @@ def test_profile_nonlinear_sharding_source_contract_is_machine_readable(
 ) -> None:
     mod = _load_sharding_tool_module()
     out_json = tmp_path / "profile.json"
-    argv = [
-        "--out-json",
-        str(out_json),
-        "--sharding",
-        "kx",
-        "--warmups",
-        "0",
-        "--repeats",
-        "2",
-    ]
+    argv = f"--out-json {out_json} --sharding kx --warmups 0 --repeats 2".split()
     args = mod.build_parser().parse_args(argv)
 
     contract = mod._source_contract(args, argv, backend="gpu", device_count=2)
@@ -2556,53 +2025,30 @@ def test_profile_nonlinear_sharding_helpers_report_stats_and_unique_specs() -> N
     assert mod._sharding_specs("auto,kx", None) == ["auto", "kx"]
 
 
+def _candidate(identity: bool, speedup: float, active: bool) -> dict[str, object]:
+    return {
+        "identity_gate_pass": identity,
+        "engineering_speedup_median": speedup,
+        "state_sharding_active": active,
+    }
+
+
 def test_profile_nonlinear_sharding_reports_best_identity_candidate() -> None:
     mod = _load_sharding_tool_module()
 
     best = mod._best_identity_preserving_candidate(
         {
-            "auto": {
-                "identity_gate_pass": True,
-                "engineering_speedup_median": 0.8,
-                "state_sharding_active": True,
-            },
-            "kx": {
-                "identity_gate_pass": True,
-                "engineering_speedup_median": 1.2,
-                "state_sharding_active": True,
-            },
-            "z": {
-                "identity_gate_pass": False,
-                "engineering_speedup_median": 3.0,
-                "state_sharding_active": True,
-            },
+            "auto": _candidate(True, 0.8, True),
+            "kx": _candidate(True, 1.2, True),
+            "z": _candidate(False, 3.0, True),
         }
     )
 
-    assert best == {
-        "spec": "kx",
-        "engineering_speedup_median": 1.2,
-        "state_sharding_active": True,
-        "identity_gate_pass": True,
-    }
+    assert best == {"spec": "kx", **_candidate(True, 1.2, True)}
 
-
-def test_profile_nonlinear_sharding_excludes_inactive_speedup_candidates() -> None:
-    mod = _load_sharding_tool_module()
-
+    # A candidate whose state sharding never activated cannot win on speed.
     best = mod._best_identity_preserving_candidate(
-        {
-            "auto": {
-                "identity_gate_pass": True,
-                "engineering_speedup_median": 4.0,
-                "state_sharding_active": False,
-            },
-            "kx": {
-                "identity_gate_pass": True,
-                "engineering_speedup_median": 1.1,
-                "state_sharding_active": True,
-            },
-        }
+        {"auto": _candidate(True, 4.0, False), "kx": _candidate(True, 1.1, True)}
     )
 
     assert best["spec"] == "kx"
@@ -2612,33 +2058,18 @@ def test_profile_nonlinear_sharding_excludes_inactive_speedup_candidates() -> No
 def test_profile_nonlinear_sharding_skips_unsafe_cpu_state_sharding() -> None:
     mod = _load_sharding_tool_module()
 
-    assert (
-        mod._skip_unsafe_cpu_state_sharding(
-            backend="cpu",
-            device_count=4,
+    for backend, devices, allow, expected in (
+        ("cpu", 4, False, True),
+        ("cpu", 4, True, False),
+        ("gpu", 2, False, False),
+    ):
+        skipped = mod._skip_unsafe_cpu_state_sharding(
+            backend=backend,
+            device_count=devices,
             state_sharding_active=True,
-            allow_unsafe_cpu_state_sharding=False,
+            allow_unsafe_cpu_state_sharding=allow,
         )
-        is True
-    )
-    assert (
-        mod._skip_unsafe_cpu_state_sharding(
-            backend="cpu",
-            device_count=4,
-            state_sharding_active=True,
-            allow_unsafe_cpu_state_sharding=True,
-        )
-        is False
-    )
-    assert (
-        mod._skip_unsafe_cpu_state_sharding(
-            backend="gpu",
-            device_count=2,
-            state_sharding_active=True,
-            allow_unsafe_cpu_state_sharding=False,
-        )
-        is False
-    )
+        assert skipped is expected
 
     row = mod._candidate_failure(
         state_sharding_active=True,
@@ -2763,12 +2194,7 @@ def test_nonlinear_sharding_sweep_subcommand_selects_fastest_identity_candidate(
         "default_backend": "gpu",
         "sharding_axis": "kx",
         "profile_command": "python scripts/profiling/profile_nonlinear_sharding.py --sharding kx",
-        "profile_command_argv": [
-            "python",
-            "scripts/profiling/profile_nonlinear_sharding.py",
-            "--sharding",
-            "kx",
-        ],
+        "profile_command_argv": "python scripts/profiling/profile_nonlinear_sharding.py --sharding kx".split(),
         "source_artifact": "/tmp/profile.json",
         "software_versions": {
             "python": "3.11.0",
@@ -2782,24 +2208,7 @@ def test_nonlinear_sharding_sweep_subcommand_selects_fastest_identity_candidate(
         "state_sharding_requested": "auto",
         "serial_stats_s": {"median": 10.0},
         "best_identity_preserving_candidate": {"spec": "kx"},
-        "sharded_results": {
-            "auto": {
-                "state_sharding_active": True,
-                "stats_s": {"median": 8.0},
-                "identity_gate_pass": True,
-                "max_abs_state_error": 0.0,
-                "max_rel_state_error": 0.0,
-                "error": None,
-            },
-            "kx": {
-                "state_sharding_active": True,
-                "stats_s": {"median": 5.0},
-                "identity_gate_pass": True,
-                "max_abs_state_error": 0.0,
-                "max_rel_state_error": 0.0,
-                "error": None,
-            },
-        },
+        "sharded_results": {"auto": _sharded_row(8.0), "kx": _sharded_row(5.0)},
     }
 
     row = mod._row_from_payload(payload, requested_devices=2)
@@ -2829,6 +2238,36 @@ def test_nonlinear_sharding_sweep_subcommand_json_clean_replaces_nonfinite() -> 
     assert cleaned == {"bad": None, "ok": 1.0}
 
 
+def _sharded_row(median: float, *, active: bool = True) -> dict[str, object]:
+    return {
+        "state_sharding_active": active,
+        "stats_s": {"median": median},
+        "identity_gate_pass": True,
+        "max_abs_state_error": 0.0,
+        "max_rel_state_error": 0.0,
+        "error": None,
+    }
+
+
+_SWEEP_KW = dict(
+    nx=4,
+    ny=4,
+    nz=4,
+    nl=1,
+    nm=1,
+    dt=0.02,
+    steps=1,
+    method="rk2",
+    sharding="auto",
+    sharding_options="auto,kx",
+    laguerre_mode="grid",
+    warmups=0,
+    repeats=1,
+    timeout_s=1.0,
+    trace=False,
+)
+
+
 def test_nonlinear_sharding_sweep_subcommand_records_timeout_rows(monkeypatch) -> None:
     mod = _load_sweep_tool_module()
 
@@ -2843,23 +2282,7 @@ def test_nonlinear_sharding_sweep_subcommand_records_timeout_rows(monkeypatch) -
     monkeypatch.setattr(mod.subprocess, "run", _raise_timeout)
 
     summary = mod.run_sweep(
-        backend="cpu",
-        devices=[2],
-        nx=4,
-        ny=4,
-        nz=4,
-        nl=1,
-        nm=1,
-        dt=0.02,
-        steps=1,
-        method="rk2",
-        sharding="auto",
-        sharding_options="auto,kx",
-        laguerre_mode="grid",
-        warmups=0,
-        repeats=1,
-        timeout_s=0.5,
-        trace=False,
+        backend="cpu", devices=[2], **(_SWEEP_KW | dict(timeout_s=0.5))
     )
 
     assert summary["identity_passed"] is False
@@ -2888,41 +2311,14 @@ def test_nonlinear_sharding_sweep_subcommand_marks_identity_only_slowdown(
             "state_sharding_requested": "auto",
             "serial_stats_s": {"median": 10.0},
             "best_identity_preserving_candidate": {"spec": spec},
-            "sharded_results": {
-                spec: {
-                    "state_sharding_active": device_count > 1,
-                    "stats_s": {"median": median},
-                    "identity_gate_pass": True,
-                    "max_abs_state_error": 0.0,
-                    "max_rel_state_error": 0.0,
-                    "error": None,
-                }
-            },
+            "sharded_results": {spec: _sharded_row(median, active=device_count > 1)},
         }
         out_json.write_text(json.dumps(payload), encoding="utf-8")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(mod.subprocess, "run", _fake_run)
 
-    summary = mod.run_sweep(
-        backend="gpu",
-        devices=[1, 2],
-        nx=4,
-        ny=4,
-        nz=4,
-        nl=1,
-        nm=1,
-        dt=0.02,
-        steps=1,
-        method="rk2",
-        sharding="auto",
-        sharding_options="auto,kx",
-        laguerre_mode="grid",
-        warmups=0,
-        repeats=1,
-        timeout_s=1.0,
-        trace=False,
-    )
+    summary = mod.run_sweep(backend="gpu", devices=[1, 2], **(_SWEEP_KW))
 
     assert summary["identity_passed"] is True
     assert summary["speedup_passed"] is False
@@ -2968,23 +2364,7 @@ def test_nonlinear_sharding_sweep_subcommand_preserves_failed_profile_json(
     monkeypatch.setattr(mod.subprocess, "run", _fake_run)
 
     summary = mod.run_sweep(
-        backend="cpu",
-        devices=[4],
-        nx=4,
-        ny=4,
-        nz=4,
-        nl=1,
-        nm=1,
-        dt=0.02,
-        steps=1,
-        method="rk2",
-        sharding="auto",
-        sharding_options="auto",
-        laguerre_mode="grid",
-        warmups=0,
-        repeats=1,
-        timeout_s=1.0,
-        trace=False,
+        backend="cpu", devices=[4], **(_SWEEP_KW | dict(sharding_options="auto"))
     )
 
     assert summary["identity_passed"] is False
@@ -3171,13 +2551,10 @@ def test_resolved_diagnostic_profiles_are_identity_gated_and_bounded() -> None:
             assert resolved_peak / compact_peak <= 1.10
 
 
-def test_make_profile_options_defaults_disable_python_and_host_tracers() -> None:
+def test_make_profile_options_tracer_levels() -> None:
     opts = make_profile_options()
     assert opts.python_tracer_level == 0
     assert opts.host_tracer_level == 0
-
-
-def test_make_profile_options_accepts_explicit_levels() -> None:
     opts = make_profile_options(python_tracer_level=1, host_tracer_level=2)
     assert opts.python_tracer_level == 1
     assert opts.host_tracer_level == 2
@@ -3572,25 +2949,37 @@ def _write_json(path: Path, payload: dict[str, object]) -> Path:
     return path
 
 
+def _training_samples() -> list[dict[str, object]]:
+    return [
+        {"surface_index": None, "alpha": 0.0, "selected_ky_index": ky, "weight": 0.5}
+        for ky in (1, 2)
+    ]
+
+
+def _training_artifacts(tmp_path: Path) -> tuple[Path, Path]:
+    return (
+        _write_json(tmp_path / "aggregate.json", _aggregate_payload()),
+        _write_json(tmp_path / "line_search.json", _line_search_payload()),
+    )
+
+
+def _alpha_holdout(tmp_path: Path) -> Path:
+    return _write_json(
+        tmp_path / "alpha_holdout.json",
+        {
+            "promotion_gate": {"passed": True},
+            "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
+            "samples": [{"surface_index": None, "alpha": 0.75, "selected_ky_index": 1}],
+        },
+    )
+
+
 def _aggregate_payload() -> dict[str, object]:
     return {
         "kind": "vmec_boozer_aggregate_scalar_objective_finite_difference_report",
         "passed": True,
         "claim_scope": "reduced aggregate objective plumbing",
-        "samples": [
-            {
-                "surface_index": None,
-                "alpha": 0.0,
-                "selected_ky_index": 1,
-                "weight": 0.5,
-            },
-            {
-                "surface_index": None,
-                "alpha": 0.0,
-                "selected_ky_index": 2,
-                "weight": 0.5,
-            },
-        ],
+        "samples": _training_samples(),
     }
 
 
@@ -3598,20 +2987,7 @@ def _line_search_payload() -> dict[str, object]:
     return {
         "kind": "vmec_boozer_aggregate_scalar_objective_line_search_report",
         "passed": True,
-        "samples": [
-            {
-                "surface_index": None,
-                "alpha": 0.0,
-                "selected_ky_index": 1,
-                "weight": 0.5,
-            },
-            {
-                "surface_index": None,
-                "alpha": 0.0,
-                "selected_ky_index": 2,
-                "weight": 0.5,
-            },
-        ],
+        "samples": _training_samples(),
     }
 
 
@@ -3627,8 +3003,7 @@ def _ensemble_payload(*, passed: bool = True) -> dict[str, object]:
 def test_aggregate_holdout_gate_blocks_without_surface_or_field_line_holdout(
     tmp_path: Path,
 ) -> None:
-    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
-    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    aggregate, line_search = _training_artifacts(tmp_path)
 
     report = holdout_mod.check_vmec_boozer_aggregate_holdout_gate(
         aggregate_artifact=aggregate,
@@ -3644,16 +3019,13 @@ def test_aggregate_holdout_gate_blocks_without_surface_or_field_line_holdout(
 
 
 def test_aggregate_holdout_gate_rejects_ky_only_holdout(tmp_path: Path) -> None:
-    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
-    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    aggregate, line_search = _training_artifacts(tmp_path)
     ky_only = _write_json(
         tmp_path / "ky_only.json",
         {
             "passed": True,
             "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
-            "samples": [
-                {"surface_index": None, "alpha": 0.0, "selected_ky_index": 7},
-            ],
+            "samples": [{"surface_index": None, "alpha": 0.0, "selected_ky_index": 7}],
         },
     )
 
@@ -3672,19 +3044,9 @@ def test_aggregate_holdout_gate_rejects_ky_only_holdout(tmp_path: Path) -> None:
 def test_aggregate_holdout_gate_accepts_passed_field_line_holdout(
     tmp_path: Path,
 ) -> None:
-    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
-    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    aggregate, line_search = _training_artifacts(tmp_path)
     ensemble = _write_json(tmp_path / "ensemble.json", _ensemble_payload())
-    holdout = _write_json(
-        tmp_path / "alpha_holdout.json",
-        {
-            "promotion_gate": {"passed": True},
-            "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
-            "samples": [
-                {"surface_index": None, "alpha": 0.75, "selected_ky_index": 1},
-            ],
-        },
-    )
+    holdout = _alpha_holdout(tmp_path)
 
     report = holdout_mod.check_vmec_boozer_aggregate_holdout_gate(
         aggregate_artifact=aggregate,
@@ -3708,16 +3070,8 @@ def test_aggregate_holdout_gate_accepts_passed_field_line_holdout(
 def test_aggregate_holdout_gate_rejects_non_ensemble_nonlinear_artifact(
     tmp_path: Path,
 ) -> None:
-    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
-    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
-    holdout = _write_json(
-        tmp_path / "alpha_holdout.json",
-        {
-            "promotion_gate": {"passed": True},
-            "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
-            "samples": [{"surface_index": None, "alpha": 0.75, "selected_ky_index": 1}],
-        },
-    )
+    aggregate, line_search = _training_artifacts(tmp_path)
+    holdout = _alpha_holdout(tmp_path)
     single_window = _write_json(
         tmp_path / "single_window.json",
         {
@@ -3747,16 +3101,8 @@ def test_aggregate_holdout_gate_rejects_non_ensemble_nonlinear_artifact(
 def test_aggregate_holdout_gate_records_readiness_manifest_blockers(
     tmp_path: Path,
 ) -> None:
-    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
-    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
-    holdout = _write_json(
-        tmp_path / "alpha_holdout.json",
-        {
-            "promotion_gate": {"passed": True},
-            "claim_level": "passed_grid_convergence_candidate_for_transport_holdout",
-            "samples": [{"surface_index": None, "alpha": 0.75, "selected_ky_index": 1}],
-        },
-    )
+    aggregate, line_search = _training_artifacts(tmp_path)
+    holdout = _alpha_holdout(tmp_path)
     manifest = _write_json(
         tmp_path / "manifest.json",
         {
@@ -3767,11 +3113,7 @@ def test_aggregate_holdout_gate_records_readiness_manifest_blockers(
                 "blockers": ["seed_and_timestep_replicates_present"],
             },
             "missing_artifacts": [
-                {
-                    "case": "case_a",
-                    "variant_axis": "seed",
-                    "missing_count": 2,
-                }
+                {"case": "case_a", "variant_axis": "seed", "missing_count": 2}
             ],
         },
     )
@@ -3794,8 +3136,7 @@ def test_aggregate_holdout_gate_records_readiness_manifest_blockers(
 def test_aggregate_holdout_gate_rejects_non_promotable_holdout_scope(
     tmp_path: Path,
 ) -> None:
-    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
-    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    aggregate, line_search = _training_artifacts(tmp_path)
     startup_holdout = _write_json(
         tmp_path / "startup_holdout.json",
         {
@@ -3829,19 +3170,11 @@ def test_aggregate_holdout_gate_rejects_non_promotable_holdout_scope(
 
 
 def test_aggregate_holdout_gate_main_writes_json(tmp_path: Path) -> None:
-    aggregate = _write_json(tmp_path / "aggregate.json", _aggregate_payload())
-    line_search = _write_json(tmp_path / "line_search.json", _line_search_payload())
+    aggregate, line_search = _training_artifacts(tmp_path)
     out = tmp_path / "report.json"
 
     result = holdout_mod.main_aggregate_holdout(
-        [
-            "--aggregate-artifact",
-            str(aggregate),
-            "--line-search-artifact",
-            str(line_search),
-            "--json-out",
-            str(out),
-        ]
+        f"--aggregate-artifact {aggregate} --line-search-artifact {line_search} --json-out {out}".split()
     )
 
     assert result == 0
@@ -3915,6 +3248,18 @@ def _row_artifact() -> dict[str, object]:
     }
 
 
+_ROW_TABLE_KEYS = tuple(
+    f"{side}_{kind}"
+    for kind in ("sample_values", "objective_table")
+    for side in ("base", "minus", "plus")
+)
+
+
+def _write_guard_inputs(tmp_path: Path, row: dict[str, object]) -> tuple[Path, Path]:
+    row_path = _write_json(tmp_path / "row.json", row)
+    return row_path, _write_json(tmp_path / "gradient.json", _gradient_artifact())
+
+
 def _gradient_artifact() -> dict[str, object]:
     return {
         "kind": "mode21_vmec_boozer_quasilinear_gradient_gate",
@@ -3960,10 +3305,7 @@ def test_reduced_portfolio_guard_passes_real_metadata_contract() -> None:
 
 @pytest.mark.parametrize(
     ("reduction", "base_value", "expected_shape"),
-    [
-        ("weighted_mean", 0.95, [1, 2, 2, 1]),
-        ("max", 1.0, [1, 2, 2, 1]),
-    ],
+    [("weighted_mean", 0.95, [1, 2, 2, 1]), ("max", 1.0, [1, 2, 2, 1])],
 )
 def test_reduced_portfolio_guard_accepts_declared_reducer_semantics(
     reduction: str,
@@ -3991,40 +3333,15 @@ def test_reduced_portfolio_guard_distinguishes_physical_torflux_surfaces() -> No
     artifact["samples"] = [
         {
             "surface_index": None,
-            "torflux": 0.5,
-            "surface": 0.5,
+            "torflux": torflux,
+            "surface": torflux,
             "alpha": 0.0,
-            "ky": 0.1,
-            "selected_ky_index": 1,
+            "ky": ky,
+            "selected_ky_index": index,
             "weight": 0.25,
-        },
-        {
-            "surface_index": None,
-            "torflux": 0.5,
-            "surface": 0.5,
-            "alpha": 0.0,
-            "ky": 0.2,
-            "selected_ky_index": 2,
-            "weight": 0.25,
-        },
-        {
-            "surface_index": None,
-            "torflux": 0.7,
-            "surface": 0.7,
-            "alpha": 0.0,
-            "ky": 0.1,
-            "selected_ky_index": 1,
-            "weight": 0.25,
-        },
-        {
-            "surface_index": None,
-            "torflux": 0.7,
-            "surface": 0.7,
-            "alpha": 0.0,
-            "ky": 0.2,
-            "selected_ky_index": 2,
-            "weight": 0.25,
-        },
+        }
+        for torflux in (0.5, 0.7)
+        for index, ky in ((1, 0.1), (2, 0.2))
     ]
     report = reduced_portfolio_artifact_guard_report(
         artifact,
@@ -4054,13 +3371,8 @@ def test_reduced_portfolio_guard_rejects_duplicate_or_incomplete_sample_grids() 
         )
 
     incomplete = _row_artifact()
-    incomplete["samples"] = incomplete["samples"][:-1]  # type: ignore[index]
-    incomplete["base_sample_values"] = incomplete["base_sample_values"][:-1]  # type: ignore[index]
-    incomplete["minus_sample_values"] = incomplete["minus_sample_values"][:-1]  # type: ignore[index]
-    incomplete["plus_sample_values"] = incomplete["plus_sample_values"][:-1]  # type: ignore[index]
-    incomplete["base_objective_table"] = incomplete["base_objective_table"][:-1]  # type: ignore[index]
-    incomplete["minus_objective_table"] = incomplete["minus_objective_table"][:-1]  # type: ignore[index]
-    incomplete["plus_objective_table"] = incomplete["plus_objective_table"][:-1]  # type: ignore[index]
+    for key in ("samples", *_ROW_TABLE_KEYS):
+        incomplete[key] = incomplete[key][:-1]  # type: ignore[index]
     with pytest.raises(ValueError, match="complete rectangular"):
         reduced_portfolio_artifact_guard_report(
             incomplete,
@@ -4179,10 +3491,7 @@ def test_reduced_portfolio_guard_reports_unresolved_finite_difference_diagnostic
 
 def test_reduced_portfolio_guard_fails_single_alpha_or_missing_gradient_gate() -> None:
     artifact = _row_artifact()
-    artifact["samples"] = [
-        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 1, "weight": 0.5},
-        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 2, "weight": 0.5},
-    ]
+    artifact["samples"] = _training_samples()
     artifact["base_sample_values"] = [0.8, 1.0]
     artifact["minus_sample_values"] = [0.7, 0.9]
     artifact["plus_sample_values"] = [0.9, 1.1]
@@ -4235,11 +3544,8 @@ def test_reduced_portfolio_guard_validates_config(
 
 
 def test_tool_writes_guard_artifact(tmp_path: Path) -> None:
-    row_path = tmp_path / "row.json"
-    gradient_path = tmp_path / "gradient.json"
+    row_path, gradient_path = _write_guard_inputs(tmp_path, _row_artifact())
     out_path = tmp_path / "guard.json"
-    row_path.write_text(json.dumps(_row_artifact()), encoding="utf-8")
-    gradient_path.write_text(json.dumps(_gradient_artifact()), encoding="utf-8")
 
     payload = portfolio_mod.build_vmec_boozer_reduced_portfolio_guard_payload(
         row_artifact=row_path,
@@ -4258,21 +3564,15 @@ def test_tool_writes_guard_artifact(tmp_path: Path) -> None:
 def test_tool_exposes_reducer_value_tolerances(tmp_path: Path) -> None:
     row = _row_artifact()
     row["base_value"] = 0.95000004
-    row_path = tmp_path / "row.json"
-    gradient_path = tmp_path / "gradient.json"
-    row_path.write_text(json.dumps(row), encoding="utf-8")
-    gradient_path.write_text(json.dumps(_gradient_artifact()), encoding="utf-8")
+    row_path, gradient_path = _write_guard_inputs(tmp_path, row)
 
-    strict_payload = portfolio_mod.build_vmec_boozer_reduced_portfolio_guard_payload(
+    build = partial(
+        portfolio_mod.build_vmec_boozer_reduced_portfolio_guard_payload,
         row_artifact=row_path,
         gradient_artifacts=[gradient_path],
     )
-    loose_payload = portfolio_mod.build_vmec_boozer_reduced_portfolio_guard_payload(
-        row_artifact=row_path,
-        gradient_artifacts=[gradient_path],
-        value_rtol=1.0e-6,
-        value_atol=1.0e-6,
-    )
+    strict_payload = build()
+    loose_payload = build(value_rtol=1.0e-6, value_atol=1.0e-6)
 
     assert strict_payload["portfolio_reducer_gate"]["passed"] is False
     assert strict_payload["passed"] is False
@@ -4283,10 +3583,7 @@ def test_tool_exposes_reducer_value_tolerances(tmp_path: Path) -> None:
 def test_tool_main_returns_nonzero_for_failed_guard(tmp_path: Path) -> None:
     row = _row_artifact()
     row["options"] = {"mboz": 8, "nboz": 8}
-    row_path = tmp_path / "row.json"
-    gradient_path = tmp_path / "gradient.json"
-    row_path.write_text(json.dumps(row), encoding="utf-8")
-    gradient_path.write_text(json.dumps(_gradient_artifact()), encoding="utf-8")
+    row_path, gradient_path = _write_guard_inputs(tmp_path, row)
 
     result = portfolio_mod.main_reduced_portfolio_guard(
         [

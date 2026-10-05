@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from support.helpers import patch_runtime
+
 from gkx.config import GridConfig
 from gkx.config import InitializationConfig, TimeConfig
 from gkx.core_grid import build_spectral_grid, real_fft_mesh
@@ -21,26 +23,28 @@ from gkx.operators.nonlinear.brackets import (
     _broadcast_mask,
     _broadcast_to_G,
     _spectral_bracket,
-    _spectral_bracket_multi,
     _stack_fields,
+)
+from scripts.checks._gates.validation_gates import (
+    _spectral_bracket_multi,
 )
 from gkx.operators.nonlinear.projection import advance_shearing_coordinates
 from gkx.terms import nonlinear as nonlinear_terms_module
 from gkx.terms.nonlinear import (
     _apply_flutter,
-    exb_nonlinear_contribution,
     nonlinear_em_contribution,
-    nonlinear_em_components,
-    placeholder_nonlinear_contribution,
 )
-from gkx.workflows.nonlinear import (
+from scripts.checks._gates.validation_gates import (
+    exb_nonlinear_contribution,
+)
+from scripts.comparison.compare_gx_nonlinear import nonlinear_em_components
+from scripts.benchmarks.secondary_slab_workflow import (
     _embed_linear_seed_on_full_grid,
     _leading_finite_prefix,
     _tail_mean_pair,
     build_secondary_stage2_config,
     run_secondary_modes,
     run_secondary_seed,
-    write_restart_state,
 )
 from gkx.config import (
     RuntimeConfig,
@@ -1480,7 +1484,7 @@ def test_precomputed_bessel_helpers_match_direct_evaluation():
     assert flutter_scalar_vth.shape == (1, 1, 2, 1, 1, 1)
 
 
-def test_stack_fields_and_placeholder_output_contract():
+def test_stack_fields_output_contract():
     G = jnp.zeros((1, 2, 3, 4, 5, 1), dtype=jnp.complex64)
     phi = jnp.ones((4, 5, 1), dtype=jnp.complex64)
     apar = 2.0 * jnp.ones((1, 1, 4, 5, 1), dtype=jnp.complex64)
@@ -1489,10 +1493,6 @@ def test_stack_fields_and_placeholder_output_contract():
     assert stacked.shape == (2, 1, 1, 1, 4, 5, 1)
     assert np.allclose(np.asarray(stacked[0, 0, 0, 0]), np.asarray(phi))
     assert np.allclose(np.asarray(stacked[1, 0, 0, 0]), 2.0)
-
-    out = placeholder_nonlinear_contribution(G, weight=jnp.asarray(3.0))
-    assert out.shape == G.shape
-    assert np.allclose(np.asarray(out), 0.0)
 
 
 def test_spectral_bracket_explicit_fft_norm_and_single_ky_branch():
@@ -1701,15 +1701,6 @@ def test_build_secondary_stage2_config_sets_restart_controls(tmp_path) -> None:
     assert out.time.dt == 0.01
 
 
-def test_write_restart_state_roundtrip(tmp_path) -> None:
-    state = (
-        np.arange(12, dtype=np.float32) + 1j * np.arange(12, dtype=np.float32)
-    ).astype(np.complex64)
-    path = write_restart_state(tmp_path / "restart.bin", state)
-    restored = np.fromfile(path, dtype=np.complex64)
-    assert np.allclose(restored, state)
-
-
 def test_run_secondary_modes_uses_requested_targets(monkeypatch) -> None:
     captured: list[tuple[float, float]] = []
 
@@ -1735,7 +1726,7 @@ def test_run_secondary_modes_uses_requested_targets(monkeypatch) -> None:
         captured.append((float(kwargs["ky_target"]), float(kwargs["kx_target"])))
         return _Result()
 
-    monkeypatch.setattr("gkx.workflows.nonlinear._run_runtime_nonlinear", _fake_runner)
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", _fake_runner)
     rows = run_secondary_modes(
         _base_cfg(), modes=((0.0, -0.05), (0.1, 0.05)), Nl=3, Nm=8
     )
@@ -1788,8 +1779,9 @@ def test_run_secondary_modes_uses_phi_fit_for_gamma_and_tail_for_omega(
                 phi_mode_t=signal,
             )
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         lambda *args, **kwargs: _Result(),
     )
     row = run_secondary_modes(
@@ -1822,8 +1814,9 @@ def test_run_secondary_modes_fits_mode_trace_when_diagnostics_invalid(
                 phi_mode_t=signal,
             )
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         lambda *args, **kwargs: _Result(),
     )
     row = run_secondary_modes(
@@ -1872,8 +1865,9 @@ def test_run_secondary_seed_requires_final_state(monkeypatch, tmp_path: Path) ->
     class _Result:
         state = None
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_linear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_linear",
         lambda *args, **kwargs: _Result(),
     )
     with pytest.raises(RuntimeError):
@@ -1886,8 +1880,9 @@ def test_run_secondary_modes_requires_diagnostics(monkeypatch) -> None:
     class _Result:
         diagnostics = None
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         lambda *args, **kwargs: _Result(),
     )
     with pytest.raises(RuntimeError):
@@ -1913,8 +1908,9 @@ def test_run_secondary_modes_uses_tail_when_phi_mode_missing(monkeypatch) -> Non
                 phi_mode_t=None,
             )
 
-    monkeypatch.setattr(
-        "gkx.workflows.nonlinear._run_runtime_nonlinear",
+    patch_runtime(
+        monkeypatch,
+        "run_runtime_nonlinear",
         lambda *args, **kwargs: _Result(),
     )
     row = run_secondary_modes(

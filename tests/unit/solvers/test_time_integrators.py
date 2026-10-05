@@ -14,7 +14,9 @@ and test_nonlinear_imex.py; the origin markers below delimit each block.
 
 from __future__ import annotations
 
-from gkx.diagnostics.analysis import estimate_observed_order
+from scripts.checks._gates.validation_gates import (
+    estimate_observed_order,
+)
 from gkx.solvers_nonlinear_explicit import (
     _checkpoint_block_size,
     block_checkpoint_plan,
@@ -39,10 +41,6 @@ from gkx.solvers_time_explicit_steps import (
     _linear_native_step,
 )
 from gkx.terms.config import FieldState
-from gkx.terms.nonlinear import (
-    exb_nonlinear_contribution,
-    placeholder_nonlinear_contribution,
-)
 from types import SimpleNamespace
 import gkx.solvers_linear_implicit as implicit_linear
 import gkx.solvers_linear_krylov_algorithms as krylov_algorithms
@@ -1379,22 +1377,6 @@ def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> No
     assert fields.phi.shape[0] == 1
 
 
-def test_nonlinear_placeholders() -> None:
-    G = jnp.ones((3, 4, 1), dtype=jnp.complex64)
-    out = placeholder_nonlinear_contribution(G, weight=jnp.asarray(2.0))
-    assert jnp.allclose(out, 0.0)
-    exb = exb_nonlinear_contribution(
-        G,
-        phi=jnp.ones((3, 4, 1), dtype=jnp.complex64),
-        dealias_mask=jnp.ones((3, 4), dtype=bool),
-        kx_grid=jnp.ones((3, 4), dtype=jnp.float32),
-        ky_grid=jnp.ones((3, 4), dtype=jnp.float32),
-        weight=jnp.asarray(1.0),
-        compressed_real_fft=False,
-    )
-    assert exb.shape == G.shape
-
-
 # ---- from test_nonlinear_imex.py ----
 
 
@@ -2456,7 +2438,9 @@ def test_krylov_and_explicit_runtime_refuse_a_moment_collision_operator():
     """Paths that cannot carry the operator must refuse, not run as LB."""
 
     from gkx.config import RuntimeConfig, RuntimeSpeciesConfig
-    from gkx.runtime import run_runtime_linear
+    from gkx.runtime import (
+        run_runtime_linear,
+    )
 
     base = RuntimeConfig()
     cfg = dataclasses.replace(

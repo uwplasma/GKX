@@ -23,13 +23,6 @@ class ModeSelection:
     z_index: int = 0
 
 
-@dataclass(frozen=True)
-class ModeSelectionBatch:
-    ky_indices: np.ndarray
-    kx_index: int
-    z_index: int = 0
-
-
 def select_ky_index(ky: np.ndarray, ky_target: float) -> int:
     """Return the best ky index for a requested target.
 
@@ -128,28 +121,6 @@ def extract_mode(phi_t: np.ndarray, sel: ModeSelection) -> np.ndarray:
     return extract_mode_time_series(phi_t, sel, method="z_index")
 
 
-def density_moment(
-    G: np.ndarray,
-    Jl: np.ndarray,
-    *,
-    species_index: int | None = None,
-) -> np.ndarray:
-    """Compute the m=0 density moment for a selected species (or summed if None)."""
-
-    if G.ndim == 5:
-        Gm0 = G[:, 0, ...]
-        return np.sum(Jl * Gm0, axis=0)
-    if G.ndim == 6:
-        if species_index is None:
-            Gm0 = G[:, :, 0, ...]
-            return np.sum(Jl[None, ...] * Gm0, axis=1).sum(axis=0)
-        Gm0 = G[species_index, :, 0, ...]
-        return np.sum(Jl * Gm0, axis=0)
-    raise ValueError(
-        "G must have shape (Nl, Nm, Ny, Nx, Nz) or (Ns, Nl, Nm, Ny, Nx, Nz)"
-    )
-
-
 def extract_eigenfunction(
     phi_t: np.ndarray,
     t: np.ndarray,
@@ -234,59 +205,12 @@ def normalize_eigenfunction(eigenfunction: np.ndarray, z: np.ndarray) -> np.ndar
     return eigenfunction / scale
 
 
-def phase_align_eigenfunction(
-    eigenfunction: np.ndarray, reference: np.ndarray
-) -> tuple[np.ndarray, float]:
-    """Phase-align ``eigenfunction`` to ``reference`` using the global complex phase."""
-
-    lhs = np.asarray(eigenfunction, dtype=np.complex128)
-    rhs = np.asarray(reference, dtype=np.complex128)
-    if lhs.shape != rhs.shape:
-        raise ValueError("eigenfunction and reference must have the same shape")
-    phase = np.vdot(lhs, rhs)
-    if abs(phase) <= 1.0e-30:
-        return lhs, 0.0
-    phase_shift = float(np.angle(phase))
-    return lhs * np.exp(1j * phase_shift), phase_shift
-
-
-def compare_eigenfunctions(
-    eigenfunction: np.ndarray, reference: np.ndarray
-) -> EigenfunctionComparisonMetrics:
-    """Return normalized overlap and relative L2 error after global phase alignment."""
-
-    lhs = np.asarray(eigenfunction, dtype=np.complex128)
-    rhs = np.asarray(reference, dtype=np.complex128)
-    if lhs.shape != rhs.shape:
-        raise ValueError("eigenfunction and reference must have the same shape")
-    lhs_norm = float(np.linalg.norm(lhs))
-    rhs_norm = float(np.linalg.norm(rhs))
-    if lhs_norm <= 0.0 or rhs_norm <= 0.0:
-        return EigenfunctionComparisonMetrics(
-            overlap=float("nan"),
-            relative_l2=float("nan"),
-            phase_shift=0.0,
-        )
-    lhs_aligned, phase_shift = phase_align_eigenfunction(lhs, rhs)
-    overlap = float(np.abs(np.vdot(lhs, rhs)) / (lhs_norm * rhs_norm))
-    rel_l2 = float(np.linalg.norm(lhs_aligned - rhs) / rhs_norm)
-    return EigenfunctionComparisonMetrics(
-        overlap=overlap,
-        relative_l2=rel_l2,
-        phase_shift=phase_shift,
-    )
-
-
 __all__ = [
     "EigenfunctionComparisonMetrics",
     "ModeSelection",
-    "ModeSelectionBatch",
-    "compare_eigenfunctions",
-    "density_moment",
     "extract_eigenfunction",
     "extract_mode",
     "extract_mode_time_series",
     "normalize_eigenfunction",
-    "phase_align_eigenfunction",
     "select_ky_index",
 ]

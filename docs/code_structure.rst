@@ -147,15 +147,15 @@ Equations to code
      - ``operators/moments.py``, ``operators/fluxes.py``
      - ``tests/unit/nonlinear/test_nonlinear.py``
    * - Growth-rate and frequency fits, fit windows
-     - ``diagnostics/growth_rates.py``, ``diagnostics/growth_windows.py``,
+     - ``diagnostics/growth_rates.py``,
        ``diagnostics/modes.py``
      - ``tests/unit/diagnostics/test_analysis.py``
    * - Quasilinear weights and calibration
      - ``diagnostics/quasilinear_transport.py``,
-       ``diagnostics/quasilinear_calibration.py``
+       ``scripts/checks/_gates/quasilinear_calibration.py``
      - ``tests/unit/quasilinear/``
    * - Zonal-flow residual and GAM metrics
-     - ``diagnostics/zonal_validation.py``
+     - ``scripts/checks/_gates/zonal_validation.py``
      - ``tests/validation/physics_gates/test_collision_physics.py``
    * - Implicit eigenvalue derivatives
      - ``objectives/eigen.py``, ``objectives/autodiff_validation.py``
@@ -177,8 +177,7 @@ Runtime layers
 3. Diagnostics and results: ``workflows/runtime/diagnostics.py``,
    ``workflows/runtime/diagnostic_arrays.py``,
    ``workflows/runtime/results.py``.
-4. Artifacts: ``workflows/runtime/artifacts.py``,
-   ``workflows/runtime/orchestration_artifacts.py``, ``artifacts/``.
+4. Artifacts: ``workflows/runtime/artifacts.py``, ``artifacts/``.
 5. Executable: ``cli.py`` builds the parser; ``workflows/runtime/commands.py``
    runs the linear, scan, nonlinear, and ``--plot`` commands and owns the
    programmatic case helpers ``run_linear_case`` and ``run_nonlinear_case``.

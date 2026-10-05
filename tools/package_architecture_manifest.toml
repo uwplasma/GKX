@@ -87,7 +87,8 @@ recursive = true
 # 193 -> 160: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
 # 160 -> 136 (ARCH-B): reduced stellarator model deleted, single-consumer
 # helpers merged into their consumers, decomposition contracts deleted.
-baseline = 136
+# 136 -> 129 (ARCH-C): solve-layer collapse, growth_windows into growth_rates; report gates moved to scripts/checks/_gates. Measured.
+baseline = 129
 target = 45
 
 [[topology_policy.counts]]
@@ -319,7 +320,8 @@ recursive = true
 # 106 -> 57: lowered to the measured value after the 2.4.0 slimming (#296, #294, #281).
 # 57 -> 58: scripts/campaigns/nonlinear_flux_jacobian.py (Jacobian benchmark). Measured.
 # 58 -> 59: scripts/artifacts/build_analytic_benchmarks.py (analytic benchmarks). Measured.
-baseline = 59
+# 59 -> 63 (ARCH-C): a move, not growth: four report-gate modules left src/gkx for scripts/checks/_gates (src files fell 136 -> 129). Measured.
+baseline = 63
 target = 12
 
 
@@ -391,10 +393,20 @@ min_imported_names_for_split = 6
 # 1 -> 2 (2.4.0 integration): ARCH-A (#296) deleted report and wrapper modules,
 # leaving one more helper with a single remaining consumer; merge it next pass.
 # 2 -> 1 (ARCH-B): workflows/runtime/policies folded into runtime.py.
-single_consumer_baseline = 1
+# 1 -> 2 (ARCH-C): measured. growth_windows folded into growth_rates and
+# nonlinear_netcdf gained a second consumer, but two remain: solvers_nonlinear_diagnostics
+# (its sole consumer is solvers_nonlinear_diagnostic_integration; both together exceed the
+# 1200-line budget and the perf lane owns the file) and workflows/runtime/artifacts
+# (absorbed orchestration_artifacts; merging into commands exceeds the budget).
+single_consumer_baseline = 2
 single_consumer_target = 0
 # 8 -> 5 (ARCH-B): measured.
-low_cohesion_baseline = 5
+# 5 -> 8 (ARCH-C): measured, and a metric artifact of deletion rather than new
+# drawers: removing dead or test-only helpers from diagnostics/modes.py,
+# operators/linear/cache_arrays.py and benchmarking_shared.py removed the
+# intra-module references that kept their ratios above 0.3.
+# Measured.
+low_cohesion_baseline = 8
 low_cohesion_target = 0
 min_definitions_for_cohesion = 6
 min_internal_cohesion = 0.30
@@ -426,7 +438,8 @@ public_facades = [
 path = "artifacts/nonlinear_netcdf.py"
 # 1076 -> 1154: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 1154 -> 1174: bug-fix chain (#302 #303 #304 #306 #308), measured.
-baseline_lines = 1174
+# 1174 -> 1177 (ARCH-C): imports the runtime builders from their owner instead of the gkx.runtime facade (breaks the last import cycle). Measured.
+baseline_lines = 1177
 target_lines = 1000
 reason = "One NetCDF schema owner keeps dimensions, geometry, diagnostics, restart, and final-field variables consistent; reduce helper repetition without splitting the schema again."
 
@@ -1128,9 +1141,10 @@ recursive = true
 # traced operand (was one XLA compile per chunk, 22x wall on the KE deck), measured.
 # 75552 -> 75904: structured imex-ars3 factor (plan 5.4, block Thomas over
 # Hermite + Woodbury fields; 53 GB -> 1.5 GB at 64x64x24 (4,8)), measured.
-# 75904 -> 75928: CPU thread guard in gkx/__init__.py (XLA:CPU deadlock on 2-3
-# CPUs), measured.
-baseline = 75928
+# 75904 -> 67191 (ARCH-C): dependency-injection records and dead code removed, report gates moved to scripts, test-only helpers moved to tests. Measured.
+# 67191 -> 67215: ARCH-C merged with #341/#342, measured.
+# 67215 -> 67220: coverage test for artifact checkpoint helpers.
+baseline = 67220
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1461,9 +1475,10 @@ recursive = true
 # 82606 -> 82675: tests for the ky-alias, float32 Miller and cache fixes (#321).
 # 82675 -> 82760: kinetic-electron step tests (measured bound, chain solve), merged tree.
 # 82760 -> 82803: bitwise test for the adaptive chunk compile cache, measured.
-# 82803 -> 82997: #333 HNGC skip and #335 backend-restore tests, measured.
-# 82997 -> 83018: CPU thread-guard test, measured.
-baseline = 83018
+# 82803 -> 74151 (ARCH-C): runtime, CLI, artifact, release-gate and helper tests parametrized; forwarding-only tests removed. Measured.
+# 74151 -> 74366: ARCH-C merged with #341/#342, measured.
+# 74366 -> 74397: measured after the mypy and coverage fixes.
+baseline = 74397
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1579,5 +1594,6 @@ recursive = true
 # 42502 -> 42565: scripts/figures.py crosscode builder (README cross-code figure).
 # 42565 -> 43022: scripts/campaigns/nonlinear_flux_jacobian.py, measured.
 # 43022 -> 43611: build_analytic_benchmarks.py and the figures.py analytic builder. Measured.
-baseline = 43611
+# 43611 -> 48382 (ARCH-C): report-gate and campaign modules moved out of src/gkx (src lines fell 75904 -> 67191). Measured.
+baseline = 48382
 target = 18000

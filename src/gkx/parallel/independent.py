@@ -519,29 +519,6 @@ class IndependentMapExecutionError(RuntimeError):
         )
 
 
-@dataclass(frozen=True)
-class _IndexedPayloads:
-    payloads: tuple[tuple[int, Any], ...]
-    indices: tuple[int, ...]
-    results: tuple[Any, ...]
-
-
-@dataclass(frozen=True)
-class _EnsembleReconstruction:
-    contract: Any
-    reconstructed_indices: tuple[int, ...]
-    report: Any
-
-
-@dataclass(frozen=True)
-class _EnsembleGateChecks:
-    ordering_passed: bool
-    worker_clipping_passed: bool
-    reconstruction_passed: bool
-    exception_passed: bool
-    exception_metadata: dict[str, Any]
-
-
 def _normalize_independent_executor(executor: str) -> str:
     executor_key = str(executor).strip().lower()
     if executor_key in {"thread", "threads"}:
@@ -659,171 +636,6 @@ def _validate_ensemble_workload(workload: str) -> None:
         raise ValueError("workload must be 'uq_ensemble' or 'optimization_ensemble'")
 
 
-def _indexed_payloads(payloads: Iterable[tuple[int, Any]]) -> _IndexedPayloads:
-    frozen = tuple(payloads)
-    return _IndexedPayloads(
-        payloads=frozen,
-        indices=tuple(index for index, _ in frozen),
-        results=tuple(result for _, result in frozen),
-    )
-
-
-def _serial_ensemble_payloads(
-    fn: Callable[[Any], Any],
-    items: tuple[Any, ...],
-) -> _IndexedPayloads:
-    return _indexed_payloads((index, fn(item)) for index, item in enumerate(items))
-
-
-def _parallel_ensemble_payloads(
-    fn: Callable[[Any], Any],
-    items: tuple[Any, ...],
-    worker_metadata: IndependentWorkerMetadata,
-) -> _IndexedPayloads:
-    return _indexed_payloads(
-        independent_map(
-            _run_provenance_indexed_task,
-            ((fn, index, item) for index, item in enumerate(items)),
-            workers=worker_metadata.requested_workers,
-            executor=worker_metadata.executor,
-        )
-    )
-
-
-def _ensemble_reconstruction(
-    parallel: _IndexedPayloads,
-    worker_metadata: IndependentWorkerMetadata,
-    *,
-    workload: str,
-) -> _EnsembleReconstruction:
-
-    contract = build_independent_portfolio_decomposition(
-        worker_metadata.problem_size,
-        requested_shards=worker_metadata.requested_workers,
-        workload=workload,  # type: ignore[arg-type]
-    )
-    shard_payloads = shard_sequence(parallel.payloads, contract)
-    reconstructed_payloads = reconstruct_serial(contract, shard_payloads)
-    return _EnsembleReconstruction(
-        contract=contract,
-        reconstructed_indices=tuple(index for index, _ in reconstructed_payloads),
-        report=serial_reconstruction_identity_report(parallel.indices, contract),
-    )
-
-
-def _ensemble_identity_report(
-    serial: _IndexedPayloads,
-    parallel: _IndexedPayloads,
-    worker_metadata: IndependentWorkerMetadata,
-    *,
-    workload: str,
-    atol: float,
-    rtol: float,
-) -> ParallelIdentityReport:
-    return parallel_identity_report(
-        list(serial.results),
-        list(parallel.results),
-        kind="independent_ensemble_serial_identity",
-        problem_size=worker_metadata.problem_size,
-        requested_workers=worker_metadata.requested_workers,
-        actual_workers=worker_metadata.actual_workers,
-        backend=f"python:{worker_metadata.executor}",
-        atol=atol,
-        rtol=rtol,
-        metadata={
-            "executor": worker_metadata.executor,
-            "worker_metadata": worker_metadata.to_dict(),
-            "workload": workload,
-            "tree": str(jax.tree_util.tree_structure(list(serial.results))),
-        },
-    )
-
-
-def _ensemble_gate_checks(
-    serial: _IndexedPayloads,
-    parallel: _IndexedPayloads,
-    reconstruction: _EnsembleReconstruction,
-    worker_metadata: IndependentWorkerMetadata,
-) -> _EnsembleGateChecks:
-    exception_passed, exception_metadata = _probe_exception_metadata(
-        requested_workers=worker_metadata.requested_workers,
-        executor=worker_metadata.executor,
-    )
-    return _EnsembleGateChecks(
-        ordering_passed=bool(
-            serial.indices == parallel.indices == reconstruction.reconstructed_indices
-        ),
-        worker_clipping_passed=bool(
-            worker_metadata.actual_workers
-            == min(worker_metadata.requested_workers, worker_metadata.problem_size)
-        ),
-        reconstruction_passed=bool(
-            reconstruction.report.identity_passed
-            and reconstruction.reconstructed_indices == parallel.indices
-        ),
-        exception_passed=exception_passed,
-        exception_metadata=exception_metadata,
-    )
-
-
-def _ensemble_report_metadata(
-    metadata: dict[str, Any] | None,
-    contract: Any,
-) -> dict[str, Any]:
-    report_metadata = dict(metadata or {})
-    report_metadata.update(
-        {
-            "claim": (
-                "independent ensemble batching preserves serial result ordering "
-                "and does not change solver layout"
-            ),
-            "contract": contract.to_dict(),
-        }
-    )
-    return report_metadata
-
-
-def _pack_ensemble_provenance_report(
-    *,
-    workload: str,
-    worker_metadata: IndependentWorkerMetadata,
-    serial: _IndexedPayloads,
-    parallel: _IndexedPayloads,
-    reconstruction: _EnsembleReconstruction,
-    identity: ParallelIdentityReport,
-    checks: _EnsembleGateChecks,
-    metadata: dict[str, Any],
-) -> IndependentEnsembleProvenanceReport:
-    passed = bool(
-        identity.identity_passed
-        and checks.ordering_passed
-        and checks.worker_clipping_passed
-        and checks.reconstruction_passed
-        and checks.exception_passed
-    )
-    return IndependentEnsembleProvenanceReport(
-        kind="independent_ensemble_provenance_gate",
-        workload=workload,
-        executor=worker_metadata.executor,
-        requested_workers=worker_metadata.requested_workers,
-        actual_workers=worker_metadata.actual_workers,
-        problem_size=worker_metadata.problem_size,
-        passed=passed,
-        identity_passed=identity.identity_passed,
-        ordering_passed=checks.ordering_passed,
-        worker_clipping_passed=checks.worker_clipping_passed,
-        reconstruction_identity_passed=checks.reconstruction_passed,
-        exception_metadata_passed=checks.exception_passed,
-        serial_indices=serial.indices,
-        parallel_indices=parallel.indices,
-        reconstructed_indices=reconstruction.reconstructed_indices,
-        identity_report=identity,
-        reconstruction_report=reconstruction.report.to_dict(),
-        exception_metadata=checks.exception_metadata,
-        metadata=metadata,
-    )
-
-
 def _independent_map_tasks(
     fn: Callable[[Any], Any],
     items: tuple[Any, ...],
@@ -919,36 +731,97 @@ def independent_ensemble_provenance_gate(
     if worker_metadata.problem_size < 1:
         raise ValueError("values must contain at least one item")
 
-    serial_payloads = _serial_ensemble_payloads(fn, items)
-    parallel_payloads = _parallel_ensemble_payloads(fn, items, worker_metadata)
-    reconstruction = _ensemble_reconstruction(
-        parallel_payloads,
-        worker_metadata,
-        workload=workload,
+    serial = tuple((index, fn(item)) for index, item in enumerate(items))
+    parallel = tuple(
+        independent_map(
+            _run_provenance_indexed_task,
+            ((fn, index, item) for index, item in enumerate(items)),
+            workers=worker_metadata.requested_workers,
+            executor=worker_metadata.executor,
+        )
     )
-    identity = _ensemble_identity_report(
-        serial_payloads,
-        parallel_payloads,
-        worker_metadata,
-        workload=workload,
+    serial_indices = tuple(index for index, _ in serial)
+    serial_results = [result for _, result in serial]
+    parallel_indices = tuple(index for index, _ in parallel)
+    parallel_results = [result for _, result in parallel]
+
+    contract = build_independent_portfolio_decomposition(
+        worker_metadata.problem_size,
+        requested_shards=worker_metadata.requested_workers,
+        workload=workload,  # type: ignore[arg-type]
+    )
+    reconstructed_indices = tuple(
+        index
+        for index, _ in reconstruct_serial(contract, shard_sequence(parallel, contract))
+    )
+    reconstruction_report = serial_reconstruction_identity_report(
+        parallel_indices, contract
+    )
+    identity = parallel_identity_report(
+        serial_results,
+        parallel_results,
+        kind="independent_ensemble_serial_identity",
+        problem_size=worker_metadata.problem_size,
+        requested_workers=worker_metadata.requested_workers,
+        actual_workers=worker_metadata.actual_workers,
+        backend=f"python:{worker_metadata.executor}",
         atol=atol,
         rtol=rtol,
+        metadata={
+            "executor": worker_metadata.executor,
+            "worker_metadata": worker_metadata.to_dict(),
+            "workload": workload,
+            "tree": str(jax.tree_util.tree_structure(serial_results)),
+        },
     )
-    checks = _ensemble_gate_checks(
-        serial_payloads,
-        parallel_payloads,
-        reconstruction,
-        worker_metadata,
+    exception_passed, exception_metadata = _probe_exception_metadata(
+        requested_workers=worker_metadata.requested_workers,
+        executor=worker_metadata.executor,
     )
-    report_metadata = _ensemble_report_metadata(metadata, reconstruction.contract)
-    return _pack_ensemble_provenance_report(
+    ordering_passed = bool(serial_indices == parallel_indices == reconstructed_indices)
+    worker_clipping_passed = bool(
+        worker_metadata.actual_workers
+        == min(worker_metadata.requested_workers, worker_metadata.problem_size)
+    )
+    reconstruction_passed = bool(
+        reconstruction_report.identity_passed
+        and reconstructed_indices == parallel_indices
+    )
+    report_metadata = dict(metadata or {})
+    report_metadata.update(
+        {
+            "claim": (
+                "independent ensemble batching preserves serial result ordering "
+                "and does not change solver layout"
+            ),
+            "contract": contract.to_dict(),
+        }
+    )
+    return IndependentEnsembleProvenanceReport(
+        kind="independent_ensemble_provenance_gate",
         workload=workload,
-        worker_metadata=worker_metadata,
-        serial=serial_payloads,
-        parallel=parallel_payloads,
-        reconstruction=reconstruction,
-        identity=identity,
-        checks=checks,
+        executor=worker_metadata.executor,
+        requested_workers=worker_metadata.requested_workers,
+        actual_workers=worker_metadata.actual_workers,
+        problem_size=worker_metadata.problem_size,
+        passed=bool(
+            identity.identity_passed
+            and ordering_passed
+            and worker_clipping_passed
+            and reconstruction_passed
+            and exception_passed
+        ),
+        identity_passed=identity.identity_passed,
+        ordering_passed=ordering_passed,
+        worker_clipping_passed=worker_clipping_passed,
+        reconstruction_identity_passed=reconstruction_passed,
+        exception_metadata_passed=exception_passed,
+        serial_indices=serial_indices,
+        parallel_indices=parallel_indices,
+        reconstructed_indices=reconstructed_indices,
+        identity_report=identity,
+        reconstruction_report=reconstruction_report.to_dict(),
+        exception_metadata=exception_metadata,
         metadata=report_metadata,
     )
 

@@ -69,7 +69,6 @@ __all__ = [
     "ny_full_candidates",
     "nyc_from_ny",
     "nyquist_row",
-    "reality_residual",
     "rows_for_layout",
     "source_ky_layout",
     "source_ny_full",
@@ -345,31 +344,6 @@ def symmetrize_self_conjugate_rows(state: Any, *, ny_full: int) -> Any:
         mirrored = xp.conj(block[..., order, :])
         out = _set_ky_row(out, row, 0.5 * (block + mirrored))
     return out
-
-
-def reality_residual(state: Any, *, ny_full: int | None = None) -> Any:
-    """Return ``max|F - H(F)| / max|F|`` for a two-sided array.
-
-    ``H`` rebuilds the array from its own ``ky >= 0`` rows, so the residual is
-    zero exactly when the stored negative rows agree with the reality
-    condition.  The self-conjugate rows are included: their internal constraint
-    is part of ``H``.
-    """
-
-    xp = _xp(state)
-    rows = int(state.shape[KY_AXIS])
-    ny = rows if ny_full is None else int(ny_full)
-    if rows != ny:
-        raise ValueError(
-            f"reality_residual needs the full ky axis; got {rows} rows for ny_full={ny}"
-        )
-    rebuilt = to_full(
-        symmetrize_self_conjugate_rows(to_half(state, ny_full=ny), ny_full=ny),
-        ny_full=ny,
-    )
-    scale = xp.max(xp.abs(state))
-    denominator = xp.where(scale > 0, scale, xp.ones_like(scale))
-    return xp.max(xp.abs(state - rebuilt)) / denominator
 
 
 def ky_row_weights(ny_full: int, *, dtype: Any = float) -> np.ndarray:

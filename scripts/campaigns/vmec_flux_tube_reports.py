@@ -17,19 +17,17 @@ from gkx.geometry.flux_tube_contract import flux_tube_geometry_from_mapping
 from gkx.geometry.backend_discovery import (
     discover_differentiable_geometry_backends,
 )
-from gkx.geometry.numerics import (
-    _array_parity_metrics,
-    _scalar_parity_metrics,
-)
 from gkx.geometry.differentiable import geometry_sensitivity_report
 from gkx.geometry.vmec_boozer_core import (
     vmex_boozer_equal_arc_core_profiles_from_state,
 )
-from gkx.geometry.vmec_state_controls import (
+from scripts.campaigns.vmec_state_sensitivity import (
+    _array_parity_metrics,
     _length_two_params,
     _load_vmec_state_context,
     _perturb_vmec_state,
     _resolve_vmec_state_indices,
+    _scalar_parity_metrics,
 )
 from gkx.geometry.vmec_tensor_mapping import (
     vmex_flux_tube_mapping_from_state,

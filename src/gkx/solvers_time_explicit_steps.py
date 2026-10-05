@@ -31,8 +31,6 @@ __all__ = [
     "_linear_explicit_step",
     "_linear_native_step",
     "_linear_term_config",
-    "_rk3_heun_step",
-    "_rk4_step",
 ]
 
 
@@ -129,30 +127,6 @@ def _instantaneous_growth_rate_step(
 
 def _linear_term_config(terms: LinearTerms | None) -> TermConfig:
     return linear_terms_to_term_config(terms)
-
-
-def _rk4_step(
-    G: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    term_cfg: TermConfig,
-    dt: float,
-) -> tuple[jnp.ndarray, FieldState]:
-    """Single Explicit RK4 step for linear dynamics."""
-
-    return _linear_explicit_step(G, cache, params, term_cfg, dt, method="rk4")
-
-
-def _rk3_heun_step(
-    G: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    term_cfg: TermConfig,
-    dt: float,
-) -> tuple[jnp.ndarray, FieldState]:
-    """Single Explicit RK3/Heun step for linear dynamics."""
-
-    return _linear_explicit_step(G, cache, params, term_cfg, dt, method="rk3")
 
 
 def _linear_stage_rhs(

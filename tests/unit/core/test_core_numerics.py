@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from support.helpers import patch_runtime
+
 import io
 import subprocess
 import sys
@@ -71,13 +73,15 @@ from gkx.core_ky_layout import (
     nyc_from_ny,
     nyquist_row,
     paired_row_limit,
-    reality_residual,
     self_conjugate_rows,
     source_ky_layout,
     source_ny_full,
     symmetrize_self_conjugate_rows,
     to_full,
     to_half,
+)
+from scripts.checks._gates.validation_gates import (
+    reality_residual,
 )
 from gkx.core_grid import twothirds_mask
 from gkx.core_ky_layout import (
@@ -170,8 +174,7 @@ def test_linear_terms_import_has_no_facade_order_dependency() -> None:
                 "from gkx.operators.linear.dissipation import "
                 "collisions_contribution; "
                 "from gkx.terms.linear_terms import "
-                "conservative_full_f_dougherty_cross_moments, "
-                "drift_kinetic_dougherty_contribution; "
+                "conservative_full_f_dougherty_cross_moments; "
                 "from gkx.operators.linear import linear_rhs"
             ),
         ],
@@ -196,14 +199,7 @@ def test_nonlinear_operator_facade_resolves_lazy_public_exports() -> None:
 
 
 def test_velocity_basis_orthonormality_and_validation() -> None:
-    from gkx.core_velocity import hermite_ladder_coeffs, hermite_normed, laguerre
-
-    xh = jnp.linspace(-6.0, 6.0, 4001)
-    dxh = xh[1] - xh[0]
-    h = hermite_normed(xh, 4)
-    wh = jnp.exp(-xh * xh)
-    gram_h = jnp.einsum("ix,jx,x->ij", h, h, wh) * dxh
-    assert jnp.allclose(gram_h, jnp.eye(5), atol=2e-2)
+    from gkx.core_velocity import hermite_ladder_coeffs, laguerre
 
     xl = jnp.linspace(0.0, 40.0, 8001)
     dxl = xl[1] - xl[0]
@@ -213,15 +209,11 @@ def test_velocity_basis_orthonormality_and_validation() -> None:
     assert jnp.allclose(gram_l, jnp.eye(5), atol=2e-2)
 
     with pytest.raises(ValueError):
-        hermite_normed(jnp.array([0.0]), -1)
-    with pytest.raises(ValueError):
         laguerre(jnp.array([0.0]), -1)
     with pytest.raises(ValueError):
         hermite_ladder_coeffs(-1)
 
-    h0 = hermite_normed(jnp.array([0.0, 1.0]), 0)
     l0 = laguerre(jnp.array([0.0, 1.0]), 0)
-    assert h0.shape == (1, 2)
     assert l0.shape == (1, 2)
 
 
@@ -408,7 +400,9 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     # scripts/campaigns removed their four advertised names from the registry.
     # 260: ARCH-A contraction 1 deleted the report, gate and prototype modules
     # 86 compatibility names pointed at.
-    assert len(public_api._EXPORT_TARGETS) == 217
+    # 189: ARCH-C moved the gate, window and calibration report modules to
+    # scripts/checks/_gates, removing their 28 compatibility names.
+    assert len(public_api._EXPORT_TARGETS) == 189
     assert len(public_api.__all__) == len(set(public_api.__all__))
     assert set(gkx.__all__) <= set(dir(gkx))
     # Laziness itself is asserted in the fresh interpreters below, not here:
@@ -540,12 +534,17 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
         calls.append(("linear", cfg, options))
         return "linear-result"
 
+    prepared_calls: list[tuple[RuntimeConfig, dict[str, object]]] = []
+
     def fake_nonlinear(cfg, **options):
+        if options.get("prepare_only"):
+            prepared_calls.append((cfg, options))
+            return "prepared-simulation"
         calls.append(("nonlinear", cfg, options))
         return "nonlinear-result"
 
-    monkeypatch.setattr(runtime, "run_runtime_linear", fake_linear)
-    monkeypatch.setattr(runtime, "run_runtime_nonlinear", fake_nonlinear)
+    patch_runtime(monkeypatch, "run_runtime_linear", fake_linear)
+    patch_runtime(monkeypatch, "run_runtime_nonlinear", fake_nonlinear)
     # gkx.prepare is now the public PreparedSimulation constructor rather than
     # the runtime function it wraps. The delegation this test exists to pin is
     # still real and is asserted directly: preparing a nonlinear case reaches
@@ -556,13 +555,6 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
     assert "runtime.prepare" in inspect.getsource(prepare_simulation).replace(
         "_runtime.prepare", "runtime.prepare"
     )
-    prepared_calls: list[tuple[RuntimeConfig, dict[str, object]]] = []
-
-    def fake_prepare(cfg, **options):
-        prepared_calls.append((cfg, options))
-        return "prepared-simulation"
-
-    monkeypatch.setattr(runtime, "run_runtime_nonlinear_impl", fake_prepare)
     assert gkx.solve(case, ky_target=0.2) == "linear-result"
     # linear must be cleared as well: a case that declares both is rejected by
     # Case.validate, which is what prepare now runs before it builds anything.
