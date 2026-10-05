@@ -2427,7 +2427,7 @@ ALLOWED_UNPINNED_MATRIX_DOTS = {
     # recording why the shifted FGMRES starts from zero, all above it; same
     # code, still the `lifted = jnp.tensordot(eigvecs.T, V[:krylov_dim],
     # axes=1)` of `_propagator_arnoldi_restart_step`, verified at the new line.
-    "solvers_linear_krylov_algorithms.py:818": "overlap ranking only; argmax provably unmoved",
+    "solvers_linear_krylov_algorithms.py:797": "overlap ranking only; argmax provably unmoved",
 }
 
 
