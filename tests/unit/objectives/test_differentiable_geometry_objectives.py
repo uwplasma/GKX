@@ -58,7 +58,6 @@ from gkx.geometry.numerics import (
     _cumulative_trapezoid,
     _interp_equal_arc_profile,
     _interp_radial,
-    _periodic_bilinear_sample_2d,
     _radial_derivative_array,
     _radial_derivative_profile,
     _scalar_parity_metrics,
@@ -1316,21 +1315,6 @@ def test_low_level_radial_and_sampling_helpers_cover_edge_contracts() -> None:
     )
     with pytest.raises(ValueError, match="cumulative trapezoid"):
         _cumulative_trapezoid(jnp.ones((2, 1)), jnp.ones(2))
-
-    grid = jnp.asarray([[0.0, 1.0], [2.0, 3.0]])
-    sampled = _periodic_bilinear_sample_2d(
-        grid,
-        jnp.asarray([0.0, jnp.pi / 2.0]),
-        jnp.asarray([0.0, jnp.pi / 2.0]),
-    )
-    assert sampled.shape == (2,)
-    assert np.all(np.isfinite(np.asarray(sampled)))
-    with pytest.raises(ValueError, match="two-dimensional"):
-        _periodic_bilinear_sample_2d(jnp.ones(2), jnp.ones(2), jnp.ones(2))
-    with pytest.raises(ValueError, match="same shape"):
-        _periodic_bilinear_sample_2d(grid, jnp.ones(2), jnp.ones(3))
-    with pytest.raises(ValueError, match="non-empty"):
-        _periodic_bilinear_sample_2d(jnp.ones((0, 2)), jnp.ones(1), jnp.ones(1))
 
 
 def test_parity_metric_helpers_report_shape_and_error_scales() -> None:

@@ -130,56 +130,6 @@ def _vmec_state_family_attribute(parameter_family: str) -> str:
     return attribute
 
 
-def _vmec_boozer_state_array(state: Any, parameter_family: str) -> jnp.ndarray:
-    """Return a validated VMEC state coefficient table for one Fourier family."""
-
-    attribute = _vmec_state_family_attribute(parameter_family)
-    if not hasattr(state, attribute):
-        raise RuntimeError(f"vmex state does not expose {attribute}")
-    array = jnp.asarray(getattr(state, attribute))
-    if array.ndim != 2 or int(array.shape[1]) < 2:
-        raise RuntimeError(
-            f"vmex state {attribute} array must expose at least one non-axisymmetric mode"
-        )
-    return array
-
-
-def _replace_vmec_boozer_state_coefficient(
-    state: Any,
-    parameter_family: str,
-    base_array: jnp.ndarray,
-    radial_index: int,
-    mode_index: int,
-    delta: Any,
-) -> Any:
-    """Return ``state`` with one VMEC/Boozer Fourier coefficient incremented."""
-
-    return dc_replace(
-        state,
-        **{
-            _vmec_state_family_attribute(parameter_family): base_array.at[
-                int(radial_index),
-                int(mode_index),
-            ].add(delta)
-        },
-    )
-
-
-def _vmec_boozer_state_parameter_name(
-    parameter_family: str,
-    radial_index: int,
-    mode_index: int,
-    *,
-    default_mid_surface: int,
-) -> str:
-    """Name the state coefficient used by reports and finite-difference gates."""
-
-    family = str(parameter_family)
-    if int(radial_index) == int(default_mid_surface):
-        return f"{family}_mid_surface_m{int(mode_index)}"
-    return f"{family}_r{int(radial_index)}_m{int(mode_index)}"
-
-
 def _resolve_vmec_state_indices(
     base_Rcos: jnp.ndarray,
     *,
@@ -495,8 +445,5 @@ __all__ = [
     "_length_two_params",
     "_load_vmec_state_context",
     "_perturb_vmec_state",
-    "_replace_vmec_boozer_state_coefficient",
     "_resolve_vmec_state_indices",
-    "_vmec_boozer_state_array",
-    "_vmec_boozer_state_parameter_name",
 ]

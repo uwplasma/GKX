@@ -152,10 +152,10 @@ Equations to code
      - ``tests/unit/diagnostics/test_analysis.py``
    * - Quasilinear weights and calibration
      - ``diagnostics/quasilinear_transport.py``,
-       ``diagnostics/quasilinear_calibration.py``
+       ``scripts/checks/_gates/quasilinear_calibration.py``
      - ``tests/unit/quasilinear/``
    * - Zonal-flow residual and GAM metrics
-     - ``diagnostics/zonal_validation.py``
+     - ``scripts/checks/_gates/zonal_validation.py``
      - ``tests/validation/physics_gates/test_collision_physics.py``
    * - Implicit eigenvalue derivatives
      - ``objectives/eigen.py``, ``objectives/autodiff_validation.py``

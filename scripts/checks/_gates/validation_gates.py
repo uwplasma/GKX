@@ -15,7 +15,7 @@ from gkx.diagnostics.analysis import (
     ObservedOrderMetrics,
 )
 from gkx.diagnostics.modes import EigenfunctionComparisonMetrics
-from gkx.diagnostics.transport_windows import (
+from scripts.checks._gates.transport_windows import (
     nonlinear_window_stats_promotion_ready,
 )
 

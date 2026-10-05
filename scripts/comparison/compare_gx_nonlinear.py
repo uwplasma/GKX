@@ -8,8 +8,11 @@ from dataclasses import replace
 import json
 import math
 from pathlib import Path
+import sys
 import re
 from typing import Any, cast
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import jax.numpy as jnp
 import numpy as np
@@ -17,7 +20,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from netCDF4 import Dataset
 
-from gkx.diagnostics.validation_gates import (
+from scripts.checks._gates.validation_gates import (
     evaluate_scalar_gate,
     gate_report,
     gate_report_to_dict,

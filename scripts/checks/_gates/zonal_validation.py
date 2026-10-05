@@ -18,7 +18,7 @@ from gkx.diagnostics.growth_windows import (
     _leading_window,
     _tail_window,
 )
-from gkx.diagnostics.validation_gates import ZonalFlowResponseMetrics
+from scripts.checks._gates.validation_gates import ZonalFlowResponseMetrics
 
 
 # Zonal-response metrics used by benchmark and manuscript validation gates.

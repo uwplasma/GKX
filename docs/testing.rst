@@ -285,7 +285,7 @@ Validation gate tooling
 
 Artifact gates share one JSON report convention (observable, reference,
 absolute/relative tolerance, pass/fail) from
-``gkx.diagnostics.validation_gates``: ``evaluate_scalar_gate``,
+``scripts.checks._gates.validation_gates``: ``evaluate_scalar_gate``,
 ``observed_order_gate_report``, ``branch_continuity_gate_report``,
 ``eigenfunction_gate_report``, ``linear_metrics_gate_report``,
 ``nonlinear_window_gate_report``, and ``zonal_response_gate_report``. Artifacts

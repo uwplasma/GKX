@@ -3336,35 +3336,6 @@ def test_species_hermite_halo_is_one_exchange_per_direction():
     assert np.array_equal(widened[:, :, 6:8], reference[:, :, 4:6])
 
 
-def test_species_hermite_rhs_reproduces_the_serial_nonlinear_rhs():
-    """The sharded production RHS is the serial answer, not an approximation."""
-
-    import jax
-    import numpy as np
-
-    from gkx.parallel.integrators import species_hermite_nonlinear_rhs
-    from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
-    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
-    from gkx.terms.config import TermConfig
-
-    devices = len(jax.devices())
-    if devices < 2:
-        pytest.skip("needs at least two devices")
-    state, cache, params, _grid, _vol, _flux = _species_hermite_problem()
-    terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
-    reference, _fields = nonlinear_rhs_cached(state, cache, params, terms)
-    for count in (1, 2, 4):
-        if count > devices:
-            continue
-        plan = build_species_hermite_mesh_plan(tuple(state.shape), num_devices=count)
-        got = species_hermite_nonlinear_rhs(
-            state, cache, params, terms=terms, plan=plan, num_devices=count
-        )
-        error = float(np.max(np.abs(np.asarray(reference) - np.asarray(got))))
-        scale = float(np.max(np.abs(np.asarray(reference))))
-        assert error / scale < 1.0e-6, f"{count} devices drifted by {error:.3e}"
-
-
 def test_species_hermite_route_emits_no_all_to_all():
     """An all-to-all in this route would mean a perpendicular axis got split."""
 

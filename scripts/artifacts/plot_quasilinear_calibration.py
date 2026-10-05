@@ -380,7 +380,8 @@ def build_report_parser() -> argparse.ArgumentParser:
 
 
 def _run_report(argv: list[str] | None = None) -> int:
-    from gkx.diagnostics.quasilinear_calibration import (
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from scripts.checks._gates.quasilinear_calibration import (
         calibration_point_from_spectrum_and_nonlinear_window,
         quasilinear_calibration_report,
         write_quasilinear_calibration_report,

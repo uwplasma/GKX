@@ -39,12 +39,10 @@ from gkx.diagnostics import (
     total_energy,
     magnetic_vector_potential_energy_resolved,
     heat_flux_total,
-    heat_flux_resolved_species,
     heat_flux_channel_resolved_species,
     heat_flux_channel_species,
     heat_flux_species,
     particle_flux_total,
-    particle_flux_resolved_species,
     particle_flux_channel_resolved_species,
     particle_flux_channel_species,
     particle_flux_species,
@@ -82,8 +80,6 @@ from gkx.solvers_time_explicit import (
     _completed_step_state_mask,
     _linear_term_config,
     _parallel_periods_from_grid,
-    _rk4_step,
-    _rk3_heun_step,
     integrate_linear_explicit_diagnostics,
 )
 from gkx.terms.assembly import assemble_rhs_cached
@@ -2817,7 +2813,7 @@ def test_diagnostics_mask_dealiased_nonfinite_modes_before_reduction() -> None:
             phi2_resolved(jnp.asarray(phi_clean), grid, vol_fac),
         ),
         (
-            heat_flux_resolved_species(
+            heat_flux_channel_resolved_species(
                 jnp.asarray(contaminated),
                 jnp.asarray(phi_contaminated),
                 jnp.asarray(apar_contaminated),
@@ -2827,8 +2823,8 @@ def test_diagnostics_mask_dealiased_nonfinite_modes_before_reduction() -> None:
                 params,
                 flux_fac,
                 use_dealias=True,
-            ),
-            heat_flux_resolved_species(
+            )[0],
+            heat_flux_channel_resolved_species(
                 jnp.asarray(clean),
                 jnp.asarray(phi_clean),
                 jnp.asarray(apar_clean),
@@ -2838,7 +2834,7 @@ def test_diagnostics_mask_dealiased_nonfinite_modes_before_reduction() -> None:
                 params,
                 flux_fac,
                 use_dealias=True,
-            ),
+            )[0],
         ),
     ]
     for got_tuple, expected_tuple in resolved_pairs:
@@ -3555,30 +3551,6 @@ def test_flux_channel_splits_sum_to_total_multispecies() -> None:
         pflux, pflux_es + pflux_apar + pflux_bpar, rtol=1.0e-6, atol=1.0e-6
     )
 
-    heat_total = heat_flux_resolved_species(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
-    )
-    heat_split = heat_flux_channel_resolved_species(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
-    )
-    pflux_total = particle_flux_resolved_species(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
-    )
-    pflux_split = particle_flux_channel_resolved_species(
-        G, phi, apar, bpar, cache, grid, params, flux_fac, use_dealias=False
-    )
-
-    for total_arr, split_arrs in ((heat_total, heat_split), (pflux_total, pflux_split)):
-        for idx in range(len(total_arr)):
-            combined = (
-                np.asarray(split_arrs[0][idx])
-                + np.asarray(split_arrs[1][idx])
-                + np.asarray(split_arrs[2][idx])
-            )
-            np.testing.assert_allclose(
-                np.asarray(total_arr[idx]), combined, rtol=1.0e-6, atol=1.0e-6
-            )
-
 
 def test_turbulent_heating_total_zero_for_steady_state() -> None:
     cfg = CycloneBaseCase()
@@ -3999,7 +3971,9 @@ def test_term_config_and_rk3_wrapper_delegate_to_linear_step(
     params = object()
     term_cfg = linear_terms_to_term_config(terms)
 
-    G_next, fields = _rk3_heun_step(G0, cache, params, term_cfg, 0.125)
+    G_next, fields = explicit_time_integrators._linear_explicit_step(
+        G0, cache, params, term_cfg, 0.125, method="rk3"
+    )
 
     assert captured["G"] is G0
     assert captured["cache"] is cache
@@ -4179,7 +4153,9 @@ def test_rk4_step_uses_runtime_scaled_end_damping_once() -> None:
     term_cfg = linear_terms_to_term_config(terms)
     dt = 0.2
 
-    G_step, fields_step = _rk4_step(G0, cache, params, term_cfg, dt)
+    G_step, fields_step = explicit_time_integrators._linear_explicit_step(
+        G0, cache, params, term_cfg, dt, method="rk4"
+    )
 
     def rhs(state: jnp.ndarray) -> jnp.ndarray:
         dG, _fields = assemble_rhs_cached(state, cache, params, terms=term_cfg)

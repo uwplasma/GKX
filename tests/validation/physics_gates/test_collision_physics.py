@@ -59,7 +59,6 @@ from scripts.artifacts.build_landau_damping_figure import (
     operator_matrix,
 )
 import json
-import gkx
 from gkx.diagnostics.analysis import (
     BranchContinuationMetrics,
     LateTimeLinearMetrics,
@@ -68,8 +67,8 @@ from gkx.diagnostics.analysis import (
     ObservedOrderMetrics,
 )
 from gkx.diagnostics.modes import EigenfunctionComparisonMetrics
-import gkx.diagnostics.validation_gates as validation_gates
-from gkx.diagnostics.validation_gates import (
+import scripts.checks._gates.validation_gates as validation_gates
+from scripts.checks._gates.validation_gates import (
     GateReport,
     ScalarGateResult,
     ZonalFlowResponseMetrics,
@@ -84,7 +83,7 @@ from gkx.diagnostics.validation_gates import (
     observed_order_gate_report,
     zonal_response_gate_report,
 )
-from gkx.diagnostics.zonal_validation import (
+from scripts.checks._gates.zonal_validation import (
     zonal_flow_response_metrics,
 )
 
@@ -1389,7 +1388,7 @@ def test_the_unstable_branch_converges_in_hermite(cyclone_geometry):
 def test_validation_gate_facade_points_to_focused_modules() -> None:
     import gkx.diagnostics.analysis as metric_analysis
     import gkx.diagnostics.modes as mode_analysis
-    import gkx.diagnostics.validation_gates as gates
+    import scripts.checks._gates.validation_gates as gates
 
     assert LateTimeLinearMetrics is metric_analysis.LateTimeLinearMetrics
     assert NonlinearWindowMetrics is metric_analysis.NonlinearWindowMetrics
@@ -1402,7 +1401,6 @@ def test_validation_gate_facade_points_to_focused_modules() -> None:
 
 
 def test_validation_gate_primitives_are_public_and_owned_by_diagnostics() -> None:
-    assert gkx.evaluate_scalar_gate is evaluate_scalar_gate
     metrics = zonal_flow_response_metrics(
         np.linspace(0.0, 2.0, 8), np.linspace(1.0, 0.6, 8)
     )

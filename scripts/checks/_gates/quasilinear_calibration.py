@@ -15,7 +15,7 @@ import json
 
 import numpy as np
 
-from gkx.diagnostics.transport_windows import (
+from scripts.checks._gates.transport_windows import (
     NonlinearWindowConvergenceConfig,
     nonlinear_window_convergence_report,
     nonlinear_window_stats_promotion_ready,

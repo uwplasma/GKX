@@ -91,7 +91,7 @@ def nonlinear_window_stats_promotion_ready(
     """Return whether serialized nonlinear-window metadata supports promotion.
 
     This duplicates the lightweight schema check from
-    ``gkx.diagnostics.transport_windows`` so the CI repo-hygiene job can run before
+    ``scripts.checks._gates.transport_windows`` so the CI repo-hygiene job can run before
     installing JAX and the rest of the runtime stack.
     """
 

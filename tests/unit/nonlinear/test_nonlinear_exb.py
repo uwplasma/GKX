@@ -31,7 +31,6 @@ from gkx.terms.nonlinear import (
     exb_nonlinear_contribution,
     nonlinear_em_contribution,
     nonlinear_em_components,
-    placeholder_nonlinear_contribution,
 )
 from gkx.workflows.nonlinear import (
     _embed_linear_seed_on_full_grid,
@@ -1480,7 +1479,7 @@ def test_precomputed_bessel_helpers_match_direct_evaluation():
     assert flutter_scalar_vth.shape == (1, 1, 2, 1, 1, 1)
 
 
-def test_stack_fields_and_placeholder_output_contract():
+def test_stack_fields_output_contract():
     G = jnp.zeros((1, 2, 3, 4, 5, 1), dtype=jnp.complex64)
     phi = jnp.ones((4, 5, 1), dtype=jnp.complex64)
     apar = 2.0 * jnp.ones((1, 1, 4, 5, 1), dtype=jnp.complex64)
@@ -1489,10 +1488,6 @@ def test_stack_fields_and_placeholder_output_contract():
     assert stacked.shape == (2, 1, 1, 1, 4, 5, 1)
     assert np.allclose(np.asarray(stacked[0, 0, 0, 0]), np.asarray(phi))
     assert np.allclose(np.asarray(stacked[1, 0, 0, 0]), 2.0)
-
-    out = placeholder_nonlinear_contribution(G, weight=jnp.asarray(3.0))
-    assert out.shape == G.shape
-    assert np.allclose(np.asarray(out), 0.0)
 
 
 def test_spectral_bracket_explicit_fft_norm_and_single_ky_branch():

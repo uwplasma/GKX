@@ -924,59 +924,6 @@ def _species_hermite_mapped(
     return local_step, (index_array,) + sharded, (index_spec,) + specs, state_spec
 
 
-def species_hermite_nonlinear_rhs(
-    G0: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    *,
-    terms: TermConfig | None = None,
-    plan: Any | None = None,
-    devices: Any | None = None,
-    num_devices: int | None = None,
-    compressed_real_fft: bool = True,
-    laguerre_mode: str = "grid",
-) -> jnp.ndarray:
-    """Evaluate one production nonlinear RHS on a species x Hermite mesh."""
-
-    term_cfg = terms or TermConfig()
-    state_dtype = jnp.result_type(G0, jnp.complex64)
-    state = jnp.asarray(G0, dtype=state_dtype)
-    mesh, resolved, state_spec = _resolve_species_hermite_placement(
-        state, cache, params, plan=plan, devices=devices, num_devices=num_devices
-    )
-    _reject_unsharded_hermite_terms(term_cfg, params, resolved)
-    local_step, leaves, specs, state_spec = _species_hermite_mapped(
-        state,
-        cache,
-        params,
-        None,
-        term_cfg=term_cfg,
-        plan=resolved,
-        mesh=mesh,
-        state_spec=state_spec,
-        compressed_real_fft=compressed_real_fft,
-        laguerre_mode=laguerre_mode,
-        vol_fac=None,
-        flux_fac=None,
-    )
-
-    def rhs_only(local, *rest):
-        return local_step(local, *rest)[0]
-
-    mapped = jax.shard_map(
-        rhs_only,
-        mesh=mesh,
-        in_specs=(state_spec,) + specs,
-        out_specs=state_spec,
-        axis_names={"s", "m"},
-    )
-    from jax.sharding import NamedSharding
-
-    return jax.jit(mapped)(
-        stage_from_host(state, NamedSharding(mesh, state_spec)), *leaves
-    )
-
-
 _TRACE_NAMES = ("Wg_t", "Wphi_t", "heat_flux_t", "particle_flux_t")
 
 
@@ -1111,5 +1058,4 @@ __all__ = [
     "integrate_linear_sharded",
     "integrate_nonlinear_sharded",
     "integrate_nonlinear_species_hermite",
-    "species_hermite_nonlinear_rhs",
 ]

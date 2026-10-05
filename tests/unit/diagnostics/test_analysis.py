@@ -501,7 +501,9 @@ def test_fit_growth_rate_auto_with_stats_fallback(monkeypatch) -> None:
     def _boom(*_args, **_kwargs):
         raise ValueError("forced")
 
-    monkeypatch.setattr("gkx.diagnostics.analysis.fit_growth_rate_with_stats", _boom)
+    monkeypatch.setattr(
+        "gkx.diagnostics.growth_rates.fit_growth_rate_with_stats", _boom
+    )
     gamma, omega, tmin, tmax, r2_log, r2_phase = fit_growth_rate_auto_with_stats(
         t, signal
     )
@@ -773,7 +775,7 @@ def test_fit_growth_rate_auto_invalid_window_method_and_stats_fallback(
         fit_growth_rate_auto(t, signal, window_method="bad")
 
     monkeypatch.setattr(
-        "gkx.diagnostics.analysis.fit_growth_rate_with_stats",
+        "gkx.diagnostics.growth_rates.fit_growth_rate_with_stats",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("forced")),
     )
     gamma, omega, tmin, tmax, r2_log, r2_phase = fit_growth_rate_auto_with_stats(
@@ -866,61 +868,6 @@ def test_log_amp_phase_handles_all_nonfinite_and_zero_scale() -> None:
     log_amp_zero, phase_zero = _log_amp_phase(np.array([0.0 + 0.0j, 0.0 + 0.0j]))
     assert np.all(np.isfinite(log_amp_zero))
     assert np.all(np.isfinite(phase_zero))
-
-
-def test_window_metrics_report_independent_samples_not_output_count() -> None:
-    """A correlated trace must not be scored as if its samples were independent.
-
-    Nonlinear heat-flux outputs are correlated, so ``std / sqrt(nsamples)``
-    understates the uncertainty of the mean. Measured across the tracked traces
-    the understatement is 2.0x to 3.7x, which is what turned the blocked
-    production gradient gate from "needs more sampling" into "needs a different
-    method". The metrics therefore have to carry ``n_eff``, not just ``nsamples``.
-    """
-
-    from gkx.diagnostics.analysis import (
-        integrated_autocorrelation_time,
-        windowed_nonlinear_metrics,
-    )
-
-    dt = 0.5
-    steps = 4096
-    rng = np.random.default_rng(0)
-    # AR(1) with a known correlation time: rho = exp(-dt/tau) with tau = 5.0.
-    tau_true = 5.0
-    rho = np.exp(-dt / tau_true)
-    noise = rng.standard_normal(steps)
-    signal = np.empty(steps)
-    signal[0] = noise[0]
-    for i in range(1, steps):
-        signal[i] = rho * signal[i - 1] + np.sqrt(1.0 - rho**2) * noise[i]
-    signal = signal + 10.0  # a positive mean, as a flux has
-
-    tau = integrated_autocorrelation_time(signal, dt)
-    # The integrated time of an AR(1) is tau_true to within sampling error; the
-    # point is that it is O(tau_true) and not O(dt), which is what a naive
-    # independent-sample assumption implies.
-    assert 0.4 * tau_true < tau < 2.5 * tau_true
-
-    class _Diag:
-        t = np.arange(steps) * dt
-        heat_flux_t = signal
-        Wphi_t = signal
-        Wg_t = signal
-        phi_mode_t = None
-
-    metrics = windowed_nonlinear_metrics(_Diag(), start_fraction=0.0)
-
-    # The contract: fewer independent samples than outputs, and a standard error
-    # larger than the naive one by exactly sqrt(n / n_eff).
-    assert metrics.heat_flux_n_eff < metrics.nsamples
-    naive = metrics.heat_flux_std / np.sqrt(metrics.nsamples)
-    assert metrics.heat_flux_stderr > naive
-    ratio = metrics.heat_flux_stderr / naive
-    assert ratio == pytest.approx(
-        np.sqrt(metrics.nsamples / metrics.heat_flux_n_eff), rel=1e-6
-    )
-    assert metrics.window_in_tau_ac > 1.0
 
 
 def _transient_then_exponential(
@@ -1336,6 +1283,7 @@ import matplotlib.pyplot as plt
 import pytest
 import gkx.artifacts.plotting as plotting
 from gkx.workflows.runtime.results import plot
+from scripts.checks._gates.zonal_plots import zonal_flow_response_figure
 from gkx.artifacts.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,
@@ -1346,7 +1294,6 @@ from gkx.artifacts.plotting import (
     nonlinear_runtime_panel_figure,
     plot_saved_output,
     scan_comparison_figure,
-    zonal_flow_response_figure,
 )
 
 

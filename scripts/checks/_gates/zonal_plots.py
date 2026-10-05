@@ -244,7 +244,7 @@ def zonal_flow_response_figure(
 ) -> tuple[plt.Figure, np.ndarray]:
     """Render a zonal-flow response trace and its envelope summary."""
 
-    from gkx.diagnostics.zonal_validation import zonal_flow_response_metrics
+    from scripts.checks._gates.zonal_validation import zonal_flow_response_metrics
 
     set_plot_style()
     t_arr, resp = _validated_zonal_trace(t, response)

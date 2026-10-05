@@ -40,9 +40,8 @@ from gkx.config import (
 import json
 from pathlib import Path
 from support.paths import load_artifact_tool
-import gkx
-import gkx.diagnostics.quasilinear_calibration as qlc
-from gkx.diagnostics.quasilinear_calibration import (
+import scripts.checks._gates.quasilinear_calibration as qlc
+from scripts.checks._gates.quasilinear_calibration import (
     QuasilinearCalibrationPoint,
     apply_heat_flux_scale,
     calibration_point_from_nonlinear_window_summary,
@@ -52,7 +51,7 @@ from gkx.diagnostics.quasilinear_calibration import (
     quasilinear_calibration_report,
     write_quasilinear_calibration_report,
 )
-from gkx.diagnostics.transport_windows import (
+from scripts.checks._gates.transport_windows import (
     NonlinearWindowConvergenceConfig,
     nonlinear_window_convergence_report,
 )
@@ -67,7 +66,7 @@ from gkx.diagnostics.saturation import (
     saturation_stop_decision,
     sokal_autocorrelation_time,
 )
-from gkx.diagnostics.transport_windows import (
+from scripts.checks._gates.transport_windows import (
     NonlinearWindowEnsembleConfig,
     nonlinear_window_convergence_from_csv,
     nonlinear_window_convergence_from_summary,
@@ -454,7 +453,6 @@ def _valid_window_stats(case: str = "holdout") -> dict:
 def test_quasilinear_calibration_report_tracks_train_holdout_claim_level(
     tmp_path: Path,
 ) -> None:
-    assert gkx.QuasilinearCalibrationPoint is QuasilinearCalibrationPoint
     points = [
         QuasilinearCalibrationPoint(
             case="cyclone_ky0p2",
@@ -586,10 +584,8 @@ def test_quasilinear_calibration_report_can_fit_one_train_scale() -> None:
     ]
 
     scale_fit = fit_train_heat_flux_scale(points)
-    assert gkx.fit_train_heat_flux_scale is fit_train_heat_flux_scale
     assert scale_fit["scale"] == pytest.approx(4.0)
     scaled = apply_heat_flux_scale(points, scale=scale_fit["scale"])
-    assert gkx.apply_heat_flux_scale is apply_heat_flux_scale
     assert scaled[0].predicted_heat_flux == pytest.approx(1.0)
     assert scaled[0].raw_predicted_heat_flux == pytest.approx(0.25)
     assert scaled[0].calibration_scale == pytest.approx(4.0)
@@ -1087,10 +1083,6 @@ def test_integrated_quasilinear_flux_from_spectrum_and_window_point(
         encoding="utf-8",
     )
     summed = integrated_quasilinear_flux_from_spectrum(spectrum)
-    assert (
-        gkx.integrated_quasilinear_flux_from_spectrum
-        is integrated_quasilinear_flux_from_spectrum
-    )
     assert summed["estimate"] == pytest.approx(7.0)
     assert summed["n_samples"] == 3
     trapezoid = integrated_quasilinear_flux_from_spectrum(spectrum, method="trapezoid")
@@ -2107,11 +2099,6 @@ def test_terminal_subwindow_gate_blocks_cancelled_running_mean_drift() -> None:
 
 
 def test_nonlinear_window_ensemble_gate_accepts_seed_replicates() -> None:
-    import gkx as sgk
-
-    assert sgk.NonlinearWindowEnsembleConfig is NonlinearWindowEnsembleConfig
-    assert sgk.nonlinear_window_ensemble_report is nonlinear_window_ensemble_report
-
     t, heat = _saturated_trace()
     reports = [
         nonlinear_window_convergence_report(

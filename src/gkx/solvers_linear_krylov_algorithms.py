@@ -559,27 +559,6 @@ def _shift_invert_spectrum(
     return lam, real_part, imag_part, finite
 
 
-def _shift_invert_frequency_masks(
-    *,
-    imag_part: jnp.ndarray,
-    finite: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    omega_min_factor: float,
-    omega_cap_factor: float,
-    omega_sign: int,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    return _frequency_masks_from_imaginary_part(
-        imag_part=imag_part,
-        finite=finite,
-        cache=cache,
-        params=params,
-        omega_min_factor=omega_min_factor,
-        omega_cap_factor=omega_cap_factor,
-        omega_sign=omega_sign,
-    )
-
-
 def _shift_invert_nearest_shift_index(
     *,
     lam: jnp.ndarray,
@@ -895,7 +874,7 @@ def _shift_invert_restart_step(
     Hk = H[:krylov_dim, :krylov_dim]
     eigvals, eigvecs = jnp.linalg.eig(Hk)
     lam, real_part, imag_part, finite = _shift_invert_spectrum(eigvals, sigma_val)
-    mask0, mask, omega_scale = _shift_invert_frequency_masks(
+    mask0, mask, omega_scale = _frequency_masks_from_imaginary_part(
         imag_part=imag_part,
         finite=finite,
         cache=cache,
