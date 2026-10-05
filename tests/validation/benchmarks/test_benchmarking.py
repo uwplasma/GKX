@@ -29,7 +29,7 @@ from gkx.diagnostics.analysis import (
     LateTimeLinearMetrics,
     NonlinearWindowMetrics,
 )
-from support.src_reference_kernels import (
+from scripts.checks._gates.validation_gates import (
     estimate_observed_order,
 )
 from scripts.checks._gates.zonal_validation import (
@@ -79,7 +79,7 @@ from scripts.benchmarks.benchmark_runtime_memory import (
 from gkx.core_velocity import (
     J_l_all,
 )
-from support.src_reference_kernels import (
+from scripts.checks._gates.validation_gates import (
     single_precision_factorial,
 )
 from gkx.config import resolve_cfl_fac
@@ -103,7 +103,7 @@ from gkx.benchmarking_shared import (
     TEM_OMEGA_STAR_SCALE,
     TEM_RHO_STAR,
 )
-from scripts.comparison.reference_params import (
+from scripts.comparison.compare_gx_rhs_terms import (
     _build_initial_condition as build_benchmark_initial_condition,
     _two_species_params,
 )
@@ -118,7 +118,7 @@ from gkx.runtime import (
     build_runtime_linear_terms,
 )
 from gkx.workflows.runtime.toml import load_runtime_from_toml
-from scripts.comparison.reference_params import (
+from scripts.comparison.compare_gx_rhs_terms import (
     _build_gaussian_profile,
     _build_initial_condition,
 )
@@ -129,7 +129,7 @@ from gkx.benchmarking_shared import (
     load_kbm_reference,
     load_tem_reference,
 )
-from scripts.comparison.reference_params import (
+from scripts.comparison.compare_gx_rhs_terms import (
     _apply_reference_hypercollisions,
     _reference_hypercollision_power,
 )

@@ -61,7 +61,7 @@ from gkx.geometry.imported_vmec import internal_vmec_backend_available
 import dataclasses
 from types import SimpleNamespace
 import gkx.geometry.vmec_state_controls as controls
-import scripts.campaigns.vmec_state_context as state_context
+import scripts.campaigns.vmec_state_sensitivity as state_context
 import gkx.geometry.vmec_boozer_derivatives as vmec_derivatives
 import gkx.geometry.backend_discovery as vmec_backend_discovery
 import gkx.geometry.imported_vmec as vmec_facade
@@ -86,7 +86,7 @@ from gkx.operators.linear.params import (
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
 import tempfile
-from scripts.campaigns.vmec_state_context import _array_parity_metrics
+from scripts.campaigns.vmec_state_sensitivity import _array_parity_metrics
 from gkx.geometry.vmec_boozer_derivatives import (
     _MU_0,
     boozer_pressure_gradient,

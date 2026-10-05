@@ -16,7 +16,7 @@ from gkx.artifacts.io import (
     validate_finite_array,
     validate_finite_runtime_result,
 )
-from scripts.comparison.reference_params import (
+from scripts.comparison.compare_gx_rhs_terms import (
     _build_initial_condition,
 )
 from gkx.config import CycloneBaseCase
@@ -55,7 +55,7 @@ from gkx.diagnostics import (
     turbulent_heating_resolved_species,
     turbulent_heating_species,
 )
-from support.src_reference_kernels import (
+from scripts.checks._gates.validation_gates import (
     heat_flux_channel_species,
     particle_flux_channel_species,
     turbulent_heating_total,

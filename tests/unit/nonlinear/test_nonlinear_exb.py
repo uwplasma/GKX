@@ -25,7 +25,7 @@ from gkx.operators.nonlinear.brackets import (
     _spectral_bracket,
     _stack_fields,
 )
-from support.src_reference_kernels import (
+from scripts.checks._gates.validation_gates import (
     _spectral_bracket_multi,
 )
 from gkx.operators.nonlinear.projection import advance_shearing_coordinates
@@ -34,10 +34,10 @@ from gkx.terms.nonlinear import (
     _apply_flutter,
     nonlinear_em_contribution,
 )
-from support.src_reference_kernels import (
+from scripts.checks._gates.validation_gates import (
     exb_nonlinear_contribution,
 )
-from scripts.comparison.nonlinear_components import nonlinear_em_components
+from scripts.comparison.compare_gx_nonlinear import nonlinear_em_components
 from scripts.benchmarks.secondary_slab_workflow import (
     _embed_linear_seed_on_full_grid,
     _leading_finite_prefix,

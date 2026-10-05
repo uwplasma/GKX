@@ -80,7 +80,7 @@ from gkx.core_ky_layout import (
     to_full,
     to_half,
 )
-from support.src_reference_kernels import (
+from scripts.checks._gates.validation_gates import (
     reality_residual,
 )
 from gkx.core_grid import twothirds_mask

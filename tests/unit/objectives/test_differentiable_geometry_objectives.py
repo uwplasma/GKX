@@ -25,7 +25,7 @@ from scripts.campaigns.vmec_flux_tube_reports import (
     vmex_flux_tube_array_parity_report,
     vmex_flux_tube_sensitivity_report,
 )
-import scripts.campaigns.vmec_state_context as vmec_state_controls
+import scripts.campaigns.vmec_state_sensitivity as vmec_state_controls
 import scripts.campaigns.vmec_state_sensitivity as vmec_state_sensitivity
 from scripts.campaigns.vmec_state_sensitivity import (
     vmex_field_line_tensor_sensitivity_report,
@@ -60,7 +60,7 @@ from gkx.geometry.numerics import (
     _radial_derivative_array,
     _radial_derivative_profile,
 )
-from scripts.campaigns.vmec_state_context import (
+from scripts.campaigns.vmec_state_sensitivity import (
     _array_parity_metrics,
     _scalar_parity_metrics,
 )

@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from netCDF4 import Dataset
 
-from scripts.comparison.reference_params import (
+from scripts.comparison.compare_gx_rhs_terms import (
     _apply_reference_hypercollisions,
 )
 

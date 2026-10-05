@@ -35,7 +35,7 @@ from gkx.benchmarking_shared import (
     load_tem_reference,
     LinearScanResult,
 )
-from scripts.comparison.reference_params import (
+from scripts.comparison.compare_gx_rhs_terms import (
     _apply_reference_hypercollisions,
     _build_initial_condition,
 )
