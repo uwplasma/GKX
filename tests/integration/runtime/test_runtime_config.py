@@ -25,7 +25,6 @@ from gkx.workflows.nonlinear import (
 from gkx.workflows.linear import (
     _midplane_index,
     _normalize_linear_solver_name,
-    _zero_kx_index,
 )
 from gkx.workflows.runtime.orchestration_scan import (
     _parallel_requests_combined_ky_scan,
@@ -41,7 +40,6 @@ from gkx.workflows.runtime.wout import (
     direct_config_shorthand_args,
 )
 from gkx.workflows.runtime.toml import (
-    is_runtime_toml,
     load_toml,
     load_runtime_from_toml,
     toml_shorthand_command,
@@ -296,9 +294,6 @@ def test_toml_shorthand_policy_uses_one_runtime_command(
     cfg_path = tmp_path / "case.toml"
     cfg_path.write_text("[physics]\n", encoding="utf-8")
 
-    assert is_runtime_toml({"physics": {}}) is True
-    assert is_runtime_toml({"case": "cyclone"}) is True
-    assert is_runtime_toml({}) is True
     assert toml_shorthand_command({"physics": {}}) == "run"
     assert toml_shorthand_command({"case": "cyclone"}) == "run"
     assert direct_config_shorthand_args(
@@ -1439,7 +1434,6 @@ def test_runtime_mode_and_axis_helpers_cover_unmasked_selection() -> None:
 
     assert _midplane_index(single_z) == 0
     assert _midplane_index(centered) == 3
-    assert _zero_kx_index(centered) == 1
     assert _select_nonlinear_mode_indices(
         grid,
         ky_target=0.6,

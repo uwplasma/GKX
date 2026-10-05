@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from importlib import resources
-from typing import Sequence, TypeVar
+from typing import Sequence
 
 import jax.numpy as jnp
 import numpy as np
@@ -23,10 +23,6 @@ from gkx.diagnostics.normalization import (
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.operators.linear.params import LinearParams
 from gkx.solvers_linear_krylov import KrylovConfig
-
-VALID_FIT_SIGNALS = frozenset({"phi", "density", "auto"})
-_Record = TypeVar("_Record")
-
 
 CYCLONE_OMEGA_D_SCALE = CYCLONE_NORMALIZATION.omega_d_scale
 
@@ -166,15 +162,6 @@ def _two_species_params(
     if damp_ends_widthfrac is not None:
         params = replace(params, damp_ends_widthfrac=float(damp_ends_widthfrac))
     return params
-
-
-KBM_EXPLICIT_SOLVER_LOCK: tuple[tuple[float, str], ...] = (
-    (0.10, "explicit_time"),
-    (0.30, "explicit_time"),
-    (0.40, "explicit_time"),
-)
-
-KBM_EXPLICIT_SOLVER_LOCK_TOL = 0.03
 
 
 def _midplane_index(grid: SpectralGrid) -> int:
@@ -450,7 +437,6 @@ def _build_initial_condition(
 
 __all__ = [
     "resources",
-    "VALID_FIT_SIGNALS",
     "CYCLONE_OMEGA_D_SCALE",
     "CYCLONE_OMEGA_STAR_SCALE",
     "CYCLONE_RHO_STAR",
@@ -475,8 +461,6 @@ __all__ = [
     "_reference_hypercollision_power",
     "_apply_reference_hypercollisions",
     "_two_species_params",
-    "KBM_EXPLICIT_SOLVER_LOCK",
-    "KBM_EXPLICIT_SOLVER_LOCK_TOL",
     "_midplane_index",
     "CYCLONE_KRYLOV_DEFAULT",
     "KINETIC_KRYLOV_DEFAULT",

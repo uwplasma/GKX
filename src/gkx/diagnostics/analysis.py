@@ -170,7 +170,6 @@ __all__ = [
     "cfl_limiter_report",
     "cfl_limiting_term",
     "cfl_scales_from_array",
-    "cfl_term_contributions",
     "estimate_observed_order",
     "ModeSelection",
     "ModeSelectionBatch",
@@ -387,32 +386,3 @@ def estimate_observed_order(
         orders=orders_arr,
         asymptotic_order=float(orders_arr[-1]),
     )
-
-
-def cfl_term_contributions(
-    *,
-    magnetic_drift_radial: float,
-    magnetic_drift_binormal: float,
-    parallel_streaming: float,
-    exb_radial: float,
-    exb_binormal: float,
-) -> dict[str, float]:
-    """Split the nonlinear CFL frequency into additive per-term contributions.
-
-    The integrator forms ``omega_total = max(drift_radial, exb_radial) +
-    max(drift_binormal, exb_binormal) + parallel_streaming``. Since
-    ``max(a, b) = a + max(0, b - a)``, ExB contributes exactly the excess it
-    adds over the drift it displaces, so the returned values are additive and
-    sum to ``omega_total`` -- a share is then a real fraction of the
-    step-setting frequency, not a ranking of quantities never added together.
-    """
-
-    drift_x = float(magnetic_drift_radial)
-    drift_y = float(magnetic_drift_binormal)
-    return {
-        "magnetic_drift_radial": drift_x,
-        "magnetic_drift_binormal": drift_y,
-        "parallel_streaming": float(parallel_streaming),
-        "exb": max(0.0, float(exb_radial) - drift_x)
-        + max(0.0, float(exb_binormal) - drift_y),
-    }

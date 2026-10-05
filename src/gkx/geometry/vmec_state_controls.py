@@ -38,15 +38,6 @@ from gkx.geometry.vmec_field_line_sampling import (
 
 VMEC_BOOZER_STATE_PARAMETER_NAMES = ("Rcos_mid_surface_m1",)
 VMEC_BOOZER_STATE_PARAMETER_FAMILIES = ("Rcos", "Rsin", "Zcos", "Zsin", "Lcos", "Lsin")
-#: Public family strings (config/report values) -> vmex SpectralState attributes.
-_VMEC_STATE_FAMILY_ATTRS = {
-    "Rcos": "R_cos",
-    "Rsin": "R_sin",
-    "Zcos": "Z_cos",
-    "Zsin": "Z_sin",
-    "Lcos": "L_cos",
-    "Lsin": "L_sin",
-}
 #: Provenance marker: vmex equilibria are solved in memory, without a wout file.
 VMEC_STATE_IN_MEMORY_WOUT_PATH = "in-memory:vmex.optimize.solve_equilibrium"
 
@@ -115,19 +106,6 @@ def _load_vmec_state_context(case_name: str) -> _VMECStateContext:
         base_Rcos=base_Rcos,
         base_Zsin=base_Zsin,
     )
-
-
-def _vmec_state_family_attribute(parameter_family: str) -> str:
-    """Map a public Fourier-family string to its vmex state attribute name."""
-
-    family = str(parameter_family)
-    attribute = _VMEC_STATE_FAMILY_ATTRS.get(family)
-    if attribute is None:
-        raise ValueError(
-            "parameter_family must be one of "
-            f"{', '.join(VMEC_BOOZER_STATE_PARAMETER_FAMILIES)}"
-        )
-    return attribute
 
 
 def _resolve_vmec_state_indices(

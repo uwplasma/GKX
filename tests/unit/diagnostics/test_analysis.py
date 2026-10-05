@@ -25,13 +25,10 @@ from gkx.diagnostics.analysis import (
 import json
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.analysis import (
-    CFL_TERM_NAMES,
     CFL_TERM_UNRESOLVED,
     CFLScales,
     cfl_limiter_report,
-    cfl_limiting_term,
     cfl_scales_from_array,
-    cfl_term_contributions,
 )
 from gkx.diagnostics.metadata import CFL_SCALE_LABELS
 from gkx.workflows.runtime.diagnostic_arrays import (
@@ -1110,66 +1107,6 @@ def test_report_rejects_mismatched_and_unusable_series() -> None:
 # --- which CFL term is limiting --------------------------------------------
 
 
-def test_term_contributions_are_additive_and_reproduce_the_integrator_sum() -> None:
-    """Contributions sum to the frequency the integrator actually forms."""
-
-    contributions = cfl_term_contributions(
-        magnetic_drift_radial=3.0,
-        magnetic_drift_binormal=5.0,
-        parallel_streaming=2.0,
-        exb_radial=11.0,
-        exb_binormal=1.0,
-    )
-
-    # max(3, 11) + max(5, 1) + 2 == 18
-    assert sum(contributions.values()) == pytest.approx(18.0)
-    assert contributions["exb"] == pytest.approx(8.0)
-    assert set(contributions) == set(CFL_TERM_NAMES)
-
-
-@pytest.mark.parametrize(
-    ("dominant", "speeds"),
-    [
-        ("exb", {"exb_binormal": 100.0}),
-        ("parallel_streaming", {"parallel_streaming": 100.0}),
-        ("magnetic_drift_radial", {"magnetic_drift_radial": 100.0}),
-        ("magnetic_drift_binormal", {"magnetic_drift_binormal": 100.0}),
-    ],
-)
-def test_limiting_term_names_the_speed_that_dominates_by_construction(
-    dominant: str, speeds: dict[str, float]
-) -> None:
-    """One speed set 100x the rest is the term the report names."""
-
-    args = {
-        "magnetic_drift_radial": 1.0,
-        "magnetic_drift_binormal": 1.0,
-        "parallel_streaming": 1.0,
-        "exb_radial": 1.0,
-        "exb_binormal": 1.0,
-    }
-    args.update(speeds)
-    term, share = cfl_limiting_term(cfl_term_contributions(**args))
-
-    assert term == dominant
-    assert share > 0.9
-
-
-def test_matched_exb_does_not_displace_the_drift_it_equals() -> None:
-    """An ExB speed that merely matches a drift is not reported as limiting."""
-
-    term, _share = cfl_limiting_term(
-        cfl_term_contributions(
-            magnetic_drift_radial=4.0,
-            magnetic_drift_binormal=1.0,
-            parallel_streaming=1.0,
-            exb_radial=4.0,
-            exb_binormal=1.0,
-        )
-    )
-    assert term == "magnetic_drift_radial"
-
-
 def test_dt_trajectory_inverts_to_a_growing_exb_share() -> None:
     """A collapsing dt is attributed to the ExB excess over the linear floor."""
 
@@ -1280,7 +1217,6 @@ import numpy as np
 
 from gkx.benchmarking_shared import CycloneReference, CycloneScanResult
 import matplotlib.pyplot as plt
-import pytest
 import gkx.artifacts.plotting as plotting
 from gkx.workflows.runtime.results import plot
 from scripts.checks._gates.zonal_plots import zonal_flow_response_figure

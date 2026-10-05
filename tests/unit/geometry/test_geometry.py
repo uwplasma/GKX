@@ -2210,31 +2210,6 @@ def test_load_vmec_state_context_rejects_non_2d_state_arrays(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# _vmec_state_family_attribute + _vmec_boozer_state_array
-# ---------------------------------------------------------------------------
-@pytest.mark.parametrize(
-    ("family", "attribute"),
-    [
-        ("Rcos", "R_cos"),
-        ("Rsin", "R_sin"),
-        ("Zcos", "Z_cos"),
-        ("Zsin", "Z_sin"),
-        ("Lcos", "L_cos"),
-        ("Lsin", "L_sin"),
-    ],
-)
-def test_vmec_state_family_attribute_maps_public_family_to_state_attr(
-    family, attribute
-):
-    assert controls._vmec_state_family_attribute(family) == attribute
-
-
-def test_vmec_state_family_attribute_rejects_unknown_family():
-    with pytest.raises(ValueError, match="parameter_family must be one of"):
-        controls._vmec_state_family_attribute("Bcos")
-
-
-# ---------------------------------------------------------------------------
 # _resolve_vmec_state_indices (default resolution, clamps, validation)
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize(

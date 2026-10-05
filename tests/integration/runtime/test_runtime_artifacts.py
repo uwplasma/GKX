@@ -105,7 +105,6 @@ from gkx.artifacts.spectral_layout import (
     _dealiased_kx_count,
     _dealiased_kx_indices,
     _dealiased_kx_values,
-    _maybe_var,
     _real_space_axis,
     _require_netcdf4,
     _restart_to_netcdf_layout,
@@ -879,25 +878,6 @@ def test_runtime_artifact_condense_helpers() -> None:
 def test_runtime_artifact_small_helpers() -> None:
     assert _dealiased_kx_count(1) == 1
     assert np.array_equal(_dealiased_kx_indices(1), np.array([0], dtype=np.int32))
-
-    class _Group:
-        def __init__(self):
-            self.created = {}
-
-        def createVariable(self, name, _dtype, _dims):
-            class _Var:
-                def __init__(self, store, key):
-                    self._store = store
-                    self._key = key
-
-                def __setitem__(self, _idx, value):
-                    self._store[self._key] = np.asarray(value)
-
-            return _Var(self.created, name)
-
-    group = _Group()
-    _maybe_var(group, "foo", "f4", ("x",), np.array([1.0, 2.0], dtype=np.float32))
-    assert np.allclose(group.created["foo"], np.array([1.0, 2.0], dtype=np.float32))
 
 
 def test_runtime_artifact_axis_and_condense_helpers() -> None:

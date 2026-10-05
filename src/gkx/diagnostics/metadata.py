@@ -17,33 +17,6 @@ from gkx.diagnostics_contract import (
 )
 
 
-NON_PRODUCTION_SCOPE_MARKERS = (
-    "startup",
-    "plumbing",
-    "reduced",
-    "estimator",
-    "smooth_logistic",
-    "mixing_length",
-    "not_transport",
-    "not transport",
-    "not_production",
-    "not production",
-    "not_simulation_claim",
-    "not simulation claim",
-    "feasibility",
-    "pilot",
-    "pending",
-)
-
-PRODUCTION_SCOPE_MARKERS = (
-    "production_long_window",
-    "production long-window",
-    "long_window_nonlinear_turbulence_gradient",
-    "long-window nonlinear turbulence gradient",
-    "production nonlinear window gradient",
-)
-
-
 @dataclass(frozen=True)
 class NonlinearTurbulenceGradientEvidenceConfig:
     """Acceptance limits for production nonlinear turbulence-gradient evidence."""
@@ -120,8 +93,6 @@ def _artifact_passed(payload: dict[str, Any]) -> bool:
 __all__ = [
     "ArrayLike",
     "CFL_SCALE_LABELS",
-    "NON_PRODUCTION_SCOPE_MARKERS",
-    "PRODUCTION_SCOPE_MARKERS",
     "NonlinearTurbulenceGradientEvidenceConfig",
     "ResolvedDiagnostics",
     "SimulationDiagnostics",
