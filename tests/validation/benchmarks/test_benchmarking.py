@@ -42,7 +42,7 @@ from gkx.diagnostics.growth_windows import (
     _explicit_time_window,
     _leading_window,
 )
-from gkx.diagnostics.validation_gates import (
+from scripts.checks._gates.validation_gates import (
     GateReport,
     ScalarGateResult,
     ZonalFlowResponseMetrics,
@@ -58,7 +58,7 @@ from gkx.diagnostics.validation_gates import (
 )
 from gkx.diagnostics.modes import EigenfunctionComparisonMetrics
 from gkx.diagnostics import SimulationDiagnostics
-from gkx.diagnostics.zonal_validation import zonal_flow_response_metrics
+from scripts.checks._gates.zonal_validation import zonal_flow_response_metrics
 from gkx.runtime import RuntimeNonlinearResult
 from dataclasses import fields
 import math
@@ -145,11 +145,11 @@ from gkx.config import InitializationConfig
 import hashlib
 import sys
 from support.paths import load_tool_script
-from gkx.diagnostics.transport_windows import (
+from scripts.checks._gates.transport_windows import (
     NonlinearWindowConvergenceConfig,
     nonlinear_window_convergence_report,
 )
-from gkx.diagnostics.validation_gates import matched_nonlinear_transport_report
+from scripts.checks._gates.validation_gates import matched_nonlinear_transport_report
 
 
 def test_normalize_eigenfunction_uses_nearest_zero() -> None:

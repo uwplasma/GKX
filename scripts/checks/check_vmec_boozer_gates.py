@@ -1461,7 +1461,8 @@ def build_high_grid_admission_payload(
     min_replicates: int = DEFAULT_MIN_REPLICATES,
     value_floor: float = DEFAULT_VALUE_FLOOR,
 ) -> dict[str, Any]:
-    from gkx.diagnostics.validation_gates import (
+    sys.path.insert(0, str(REPO_ROOT))
+    from scripts.checks._gates.validation_gates import (
         evaluate_scalar_gate,
         gate_report,
         gate_report_to_dict,

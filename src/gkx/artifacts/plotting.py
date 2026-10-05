@@ -657,14 +657,6 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
     return out_path
 
 
-def zonal_flow_response_figure(*args: Any, **kwargs: Any) -> tuple[Any, Any]:
-    """Render a zonal response without importing its fit helpers at startup."""
-
-    from gkx.artifacts.zonal_plots import zonal_flow_response_figure as render
-
-    return render(*args, **kwargs)
-
-
 __all__ = [
     "LinearValidationPanel",
     "cyclone_comparison_figure",
@@ -676,5 +668,4 @@ __all__ = [
     "plot_saved_output",
     "scan_comparison_figure",
     "set_plot_style",
-    "zonal_flow_response_figure",
 ]

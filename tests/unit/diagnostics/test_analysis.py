@@ -1336,6 +1336,7 @@ import matplotlib.pyplot as plt
 import pytest
 import gkx.artifacts.plotting as plotting
 from gkx.workflows.runtime.results import plot
+from scripts.checks._gates.zonal_plots import zonal_flow_response_figure
 from gkx.artifacts.plotting import (
     cyclone_comparison_figure,
     cyclone_reference_figure,
@@ -1346,7 +1347,6 @@ from gkx.artifacts.plotting import (
     nonlinear_runtime_panel_figure,
     plot_saved_output,
     scan_comparison_figure,
-    zonal_flow_response_figure,
 )
 
 

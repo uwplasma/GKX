@@ -962,8 +962,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.diagnostics.quasilinear_calibration"
-path = "src/gkx/diagnostics/quasilinear_calibration.py"
+module = "scripts.checks._gates.quasilinear_calibration"
+path = "scripts/checks/_gates/quasilinear_calibration.py"
 owner_lane = "nonlinear-window calibration and train/holdout quasilinear reports"
 status = "active"
 coverage_priority = "high"
@@ -1026,8 +1026,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.diagnostics.transport_windows"
-path = "src/gkx/diagnostics/transport_windows.py"
+module = "scripts.checks._gates.transport_windows"
+path = "scripts/checks/_gates/transport_windows.py"
 owned_modules = [
   "gkx.diagnostics.saturation",
 ]
@@ -1130,8 +1130,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.diagnostics.validation_gates"
-path = "src/gkx/diagnostics/validation_gates.py"
+module = "scripts.checks._gates.validation_gates"
+path = "scripts/checks/_gates/validation_gates.py"
 owner_lane = "JSON-ready acceptance metrics for linear, nonlinear, eigenfunction, and response gates"
 status = "active"
 coverage_priority = "high"
@@ -1161,8 +1161,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.diagnostics.zonal_validation"
-path = "src/gkx/diagnostics/zonal_validation.py"
+module = "scripts.checks._gates.zonal_validation"
+path = "scripts/checks/_gates/zonal_validation.py"
 owner_lane = "W7-X/Miller zonal-response trace normalization, reference loading, and tails"
 status = "active"
 coverage_priority = "high"
@@ -1741,8 +1741,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.artifacts.zonal_plots"
-path = "src/gkx/artifacts/zonal_plots.py"
+module = "scripts.checks._gates.zonal_plots"
+path = "scripts/checks/_gates/zonal_plots.py"
 owner_lane = "zonal-response trace and envelope publication plots"
 status = "active"
 coverage_priority = "medium"

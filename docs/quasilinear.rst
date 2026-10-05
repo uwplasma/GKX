@@ -299,7 +299,7 @@ Implementation map
        :mod:`gkx.workflows.runtime.toml`
      - ``[quasilinear]`` parsing and round-trip serialization
    * - Calibration reports
-     - :mod:`gkx.diagnostics.quasilinear_calibration`
+     - :mod:`scripts.checks._gates.quasilinear_calibration`
      - train/holdout/audit schemas, spectrum integration, nonlinear-window
        ingestion, scale fitting and scoring
    * - Plotting tools
@@ -413,7 +413,7 @@ The fast suite covers:
 Calibration reports
 -------------------
 
-Calibration artifacts use :mod:`gkx.diagnostics.quasilinear_calibration`, so
+Calibration artifacts use :mod:`scripts.checks._gates.quasilinear_calibration`, so
 train, holdout and audit points share one schema. A report is promoted to
 ``calibrated_absolute_flux`` only when it has at least one training point, at
 least one holdout, passed finite late-window convergence metadata for every
@@ -441,11 +441,11 @@ where :math:`q_j^{\rm raw}` is the unscaled spectrum sum and
    \right\rangle_{\rm holdout}
    \le 0.35 .
 
-Window metadata comes from ``gkx.diagnostics.transport_windows`` or
+Window metadata comes from ``scripts.checks._gates.transport_windows`` or
 ``scripts/checks/check_nonlinear_transport_gates.py convergence`` and records the
 transient cutoff, late-window mean and standard deviation, running-mean drift,
 block-bootstrap SEM, sample counts and source provenance. Replicated windows are
-combined with ``gkx.diagnostics.transport_windows.nonlinear_window_ensemble_report``
+combined with ``scripts.checks._gates.transport_windows.nonlinear_window_ensemble_report``
 (command line: ``check_nonlinear_transport_gates.py ensemble``), which requires
 every input window to be promotion-ready and checks the relative spread of the
 late-window means and the combined SEM. ``check_nonlinear_transport_gates.py

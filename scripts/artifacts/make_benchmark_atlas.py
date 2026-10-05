@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 import tomllib
 
 import matplotlib.image as mpimg
@@ -13,7 +14,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from gkx.diagnostics.validation_gates import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.checks._gates.validation_gates import (
     evaluate_scalar_gate,
     gate_report,
     gate_report_to_dict,
