@@ -1462,7 +1462,8 @@ recursive = true
 # 82675 -> 82760: kinetic-electron step tests (measured bound, chain solve), merged tree.
 # 82760 -> 82803: bitwise test for the adaptive chunk compile cache, measured.
 # 82803 -> 82997: #333 HNGC skip and #335 backend-restore tests, measured.
-baseline = 82997
+# 82997 -> 83018: CPU thread-guard test, measured.
+baseline = 83018
 target = 35000
 
 [[line_budget_policy.counts]]
