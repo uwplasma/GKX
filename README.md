@@ -379,6 +379,44 @@ per-trace drift test, and these traces predate the periodic hypercollision
 correction. A transport claim needs matched, replicated, long post-saturation
 windows. [Stellarator optimization](docs/stellarator_optimization.rst).
 
+## Solvers and defaults
+
+| Choice | Set with | Use it for | Default? |
+|---|---|---|---|
+| `rk4` + CFL controller | no `dt` in `[time]` | any deck; the step follows the stiffest explicit term | yes, when the deck sets no `dt` |
+| `rk2`/`rk3` at a fixed step | `dt = ...` (`fixed_dt = true`) | reproducing a published step, parity runs | `rk2` when the deck sets `dt` |
+| `rk3`/`sspx3`/`k10` + CFL | `method`, `fixed_dt = false` | GX-matched decks | no |
+| `imex-ars3` | `method = "imex-ars3"`, `fixed_dt = true`, `dt` | nonlinear kinetic electrons at 32x32 and up, long horizons | no (opt-in) |
+| `solver = "krylov"` | `[run]` | linear growth rates without a time step | fallback of linear `auto`, which integrates in time first |
+| shift-invert eigensolver | `[run] solver` | certified eigenpairs and their gradients | no |
+
+Measured on one RTX A4000 (jax 0.11.2), steady seconds per unit of simulated
+time after compilation, Cyclone kinetic electrons at (Nl, Nm) = (4, 8):
+
+| Grid | `rk3` fixed (CFL-bound dt) | `rk3` + CFL | `rk4` + CFL | `imex-ars3` |
+|---|---|---|---|---|
+| 32x32x16 | 3.6 | 4.9 | 2.4 | 0.43 (dt 0.05) |
+| 64x64x24 | 62 | 40 | 43 | 2.8 (dt 0.035) |
+
+`imex-ars3` also builds a factor at startup (cold start 127 s against 62 s at
+64x64x24) and on the 16x16 tutorial grids it does not pay. It stays opt-in
+because its step is fixed and cannot be chosen safely in advance: dt 0.05 is
+stable at 32x32 and goes non-finite at t = 15 at 64x64, 0.1 fails at 32x32.
+With adiabatic electrons, `rk4` + CFL is 2.2x faster than `rk3` + CFL at
+64x64x24 (4, 8) and ties on the tutorial grids, which are launch-bound; the
+schemes agree on the growth rate to better than 1%.
+
+- **GPU:** set `XLA_PYTHON_CLIENT_PREALLOCATE=false` for `imex-ars3` at
+  production size; GKX uses one GPU per run, more only through `[parallel]`.
+- **CPU:** XLA uses all visible cores for FFTs and contractions; a 32x32x16
+  nonlinear step is 2.2x faster on 16 cores than on one (scaling is
+  memory-bound, not linear). On 2-3 CPUs GKX switches XLA's multithreaded
+  Eigen pool off, because XLA:CPU deadlocked there; set
+  `XLA_FLAGS=--xla_cpu_multi_thread_eigen=...` yourself to override. For
+  many `k_y` or surfaces, run them as separate processes
+  (`[parallel] strategy = "batch"`, `backend = "process"`) rather than
+  forcing logical CPU devices, which share one thread pool.
+
 ## Performance
 
 ![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
