@@ -30,7 +30,7 @@ from gkx.diagnostics.analysis import (
     NonlinearWindowMetrics,
     estimate_observed_order,
 )
-from gkx.diagnostics.growth_windows import (
+from scripts.checks._gates.zonal_validation import (
     _analytic_signal,
     _explicit_time_window,
     _leading_window,

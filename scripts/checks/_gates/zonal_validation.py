@@ -12,13 +12,75 @@ if TYPE_CHECKING:
 else:
     DataFrame = Any
 
-from gkx.diagnostics.growth_windows import (
-    _analytic_signal,
-    _explicit_time_window,
-    _leading_window,
-    _tail_window,
-)
 from scripts.checks._gates.validation_gates import ZonalFlowResponseMetrics
+
+
+def _tail_window(
+    t: np.ndarray, tail_fraction: float
+) -> tuple[np.ndarray, float | None, float | None]:
+    if not 0.0 < float(tail_fraction) <= 1.0:
+        raise ValueError("tail_fraction must be in (0, 1]")
+    if t.ndim != 1:
+        raise ValueError("t must be one-dimensional")
+    if t.size == 0:
+        raise ValueError("t must be non-empty")
+    start = max(0, int(np.floor((1.0 - float(tail_fraction)) * t.size)))
+    mask = np.zeros_like(t, dtype=bool)
+    mask[start:] = True
+    if not np.any(mask):
+        mask[-1] = True
+    tt = np.asarray(t[mask], dtype=float)
+    return mask, float(tt[0]) if tt.size else None, float(tt[-1]) if tt.size else None
+
+
+def _leading_window(
+    t: np.ndarray,
+    lead_fraction: float,
+) -> tuple[np.ndarray, float | None, float | None]:
+    if not 0.0 < float(lead_fraction) <= 1.0:
+        raise ValueError("lead_fraction must be in (0, 1]")
+    if t.ndim != 1:
+        raise ValueError("t must be one-dimensional")
+    if t.size == 0:
+        raise ValueError("t must be non-empty")
+    stop = max(1, int(np.ceil(float(lead_fraction) * t.size)))
+    mask = np.zeros_like(t, dtype=bool)
+    mask[:stop] = True
+    tt = np.asarray(t[mask], dtype=float)
+    return mask, float(tt[0]) if tt.size else None, float(tt[-1]) if tt.size else None
+
+
+def _explicit_time_window(
+    t: np.ndarray,
+    *,
+    tmin: float | None = None,
+    tmax: float | None = None,
+) -> tuple[np.ndarray, float, float]:
+    mask = np.ones_like(t, dtype=bool)
+    if tmin is not None:
+        mask &= t >= float(tmin)
+    if tmax is not None:
+        mask &= t <= float(tmax)
+    if not np.any(mask):
+        raise ValueError("explicit fit window is empty")
+    tt = np.asarray(t[mask], dtype=float)
+    return mask, float(tt[0]), float(tt[-1])
+
+
+def _analytic_signal(signal: np.ndarray) -> np.ndarray:
+    x = np.asarray(signal, dtype=float)
+    if x.ndim != 1 or x.size == 0:
+        raise ValueError("signal must be a non-empty one-dimensional array")
+    spec = np.fft.fft(x)
+    filt = np.zeros(x.size, dtype=float)
+    if x.size % 2 == 0:
+        filt[0] = 1.0
+        filt[x.size // 2] = 1.0
+        filt[1 : x.size // 2] = 2.0
+    else:
+        filt[0] = 1.0
+        filt[1 : (x.size + 1) // 2] = 2.0
+    return np.fft.ifft(spec * filt)
 
 
 # Zonal-response metrics used by benchmark and manuscript validation gates.
