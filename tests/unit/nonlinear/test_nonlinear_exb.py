@@ -32,8 +32,8 @@ from gkx.terms.nonlinear import (
     _apply_flutter,
     exb_nonlinear_contribution,
     nonlinear_em_contribution,
-    nonlinear_em_components,
 )
+from scripts.comparison.nonlinear_components import nonlinear_em_components
 from scripts.benchmarks.secondary_slab_workflow import (
     _embed_linear_seed_on_full_grid,
     _leading_finite_prefix,

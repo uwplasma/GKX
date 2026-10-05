@@ -54,8 +54,8 @@ from gkx.terms.config import TermConfig
 from gkx.terms.nonlinear import (
     _laguerre_j0_field,
     _laguerre_to_grid,
-    nonlinear_em_components,
 )
+from scripts.comparison.nonlinear_components import nonlinear_em_components
 from gkx.workflows.runtime.toml import (
     load_runtime_from_toml,
 )
