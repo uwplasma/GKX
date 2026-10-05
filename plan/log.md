@@ -21008,3 +21008,10 @@ Baseline `main` `2987bb70` (2.5.0). Office A4000s and Xeon W-2295 (18 cores), ja
 - **Decision:** default unchanged (no `dt` → rk4 + CFL; `dt` → rk2 fixed). imex-ars3 not auto-selected: no safe a-priori dt (0.05 non-finite at 64², 0.1 at 32²), no fallback or dt ladder, factor build doubles the cold start, loses on tutorial grids. Documented as the choice for long kinetic-electron runs at ≥ 32².
 - **CPU:** 32²×16 nonlinear adiabatic per unit time: 1 core 1.1, 4 0.69, 8 0.72, 16 0.50 (2.2x); `--xla_cpu_multi_thread_eigen=false` at 16 cores 0.79, so the pool stays on. On 2 and 3 CPUs (taskset, physical or sibling threads) nonlinear runs at 32²×16 and the kinetic-electron 16³ deck **deadlocked** with every XLA thread parked in futex (5/5; 1, 4, 5, 6, 8, 16 fine; a minimal FFT scan does not reproduce). Fix: `import gkx` sets the flag false on 2-3 schedulable CPUs unless `XLA_FLAGS` names it (both decks then run). Thread-worker k_y batches gave no gain on the 8-point tutorial scan (9.1 s serial, 7.9 s 4 workers, 9.9 s 8 workers): left serial by default; docs point to process workers. Logical CPU devices not made a default (one shared pool).
 Not done: linear decks were not re-timed (the toml.py table covers rk2/rk3/rk4 + CFL); a W7-X deck needs a geometry file not shipped; the XLA deadlock is not reduced to an upstream reproducer.
+
+## 2026-10-05 — release 2.5.1
+
+Since 2.5.0: ARCH-C contraction (#343: src 75,904 → 67,220 lines, 136 → 129
+files, no import cycles, bitwise fingerprints unchanged), solver defaults
+benchmarked and documented with the XLA:CPU 2-3 core deadlock workaround (#342),
+#322 #330 #333 #335 via #341, and Codecov uploads made non-fatal.
