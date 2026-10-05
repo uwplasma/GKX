@@ -95,6 +95,8 @@ from gkx.benchmarking_shared import (
     TEM_OMEGA_D_SCALE,
     TEM_OMEGA_STAR_SCALE,
     TEM_RHO_STAR,
+)
+from scripts.comparison.reference_params import (
     _build_initial_condition as build_benchmark_initial_condition,
     _two_species_params,
 )
@@ -109,7 +111,7 @@ from gkx.runtime import (
     build_runtime_linear_terms,
 )
 from gkx.workflows.runtime.toml import load_runtime_from_toml
-from gkx.benchmarking_shared import (
+from scripts.comparison.reference_params import (
     _build_gaussian_profile,
     _build_initial_condition,
 )
@@ -120,7 +122,7 @@ from gkx.benchmarking_shared import (
     load_kbm_reference,
     load_tem_reference,
 )
-from gkx.benchmarking_shared import (
+from scripts.comparison.reference_params import (
     _apply_reference_hypercollisions,
     _reference_hypercollision_power,
 )

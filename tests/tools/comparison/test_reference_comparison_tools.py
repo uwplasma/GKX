@@ -1845,6 +1845,8 @@ from gkx.benchmarking_shared import (
     KBM_OMEGA_D_SCALE,
     KBM_OMEGA_STAR_SCALE,
     KBM_RHO_STAR,
+)
+from scripts.comparison.reference_params import (
     _build_initial_condition,
     _two_species_params,
 )

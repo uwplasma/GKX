@@ -16,8 +16,9 @@ from tqdm.auto import tqdm
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+for _path in (SRC, ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 from gkx.benchmarking_shared import (
     CYCLONE_OMEGA_D_SCALE,
@@ -27,14 +28,16 @@ from gkx.benchmarking_shared import (
     REFERENCE_DAMP_ENDS_WIDTHFRAC,
     KINETIC_KRYLOV_REFERENCE_ALIGNED,
     TEM_KRYLOV_DEFAULT,
-    _apply_reference_hypercollisions,
-    _build_initial_condition,
     _midplane_index,
     load_cyclone_reference,
     load_cyclone_reference_kinetic,
     load_etg_reference,
     load_tem_reference,
     LinearScanResult,
+)
+from scripts.comparison.reference_params import (
+    _apply_reference_hypercollisions,
+    _build_initial_condition,
 )
 from gkx.config import (
     CycloneBaseCase,

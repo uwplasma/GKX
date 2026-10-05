@@ -6,12 +6,15 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 from pathlib import Path
+import sys
 from typing import Any
 
 import numpy as np
 import jax.numpy as jnp
 import jax
 from netCDF4 import Dataset
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from gkx.benchmarking_shared import (
     CYCLONE_OMEGA_D_SCALE,
@@ -26,6 +29,8 @@ from gkx.benchmarking_shared import (
     TEM_OMEGA_D_SCALE,
     TEM_OMEGA_STAR_SCALE,
     TEM_RHO_STAR,
+)
+from scripts.comparison.reference_params import (
     _apply_reference_hypercollisions,
     _build_initial_condition,
     _two_species_params,
