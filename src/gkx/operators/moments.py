@@ -218,9 +218,6 @@ def total_energy(Wg: ArrayLike, Wphi: ArrayLike, Wapar: ArrayLike) -> ArrayLike:
     return Wg + Wphi + Wapar
 
 
-runtime_energy_total = total_energy
-
-
 def _mask_modes(value: jnp.ndarray, active: jnp.ndarray) -> jnp.ndarray:
     """Zero inactive spectral modes before products or moment reductions."""
 
@@ -959,7 +956,6 @@ __all__ = [
     "magnetic_vector_potential_energy_resolved",
     "particle_flux_channel_resolved_species",
     "phi2_resolved",
-    "runtime_energy_total",
     "total_energy",
     "turbulent_heating_resolved_species",
     "zonal_phi_line_kxt",

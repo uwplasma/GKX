@@ -8,7 +8,7 @@ from typing import Any
 import math
 import re
 
-from gkx.diagnostics.metadata import (
+from scripts.checks._gates.transport_windows import (
     NonlinearTurbulenceGradientEvidenceConfig,
     _artifact_passed,
     _finite_float,

@@ -556,44 +556,14 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     params: LinearParams,
     dt: float,
     steps: int,
-    *,
-    method: str = "rk3",
-    cache: LinearCache | None = None,
-    terms: TermConfig | None = None,
-    checkpoint: bool = False,
-    sample_stride: int = 1,
-    diagnostics_stride: int = 1,
-    use_dealias_mask: bool = False,
-    z_index: int | None = None,
-    compressed_real_fft: bool = True,
-    laguerre_mode: str = "grid",
-    omega_ky_index: int | None = None,
-    omega_kx_index: int | None = None,
-    flux_scale: float = 1.0,
-    wphi_scale: float = 1.0,
-    fixed_dt: bool = True,
-    dt_min: float = 1.0e-7,
-    dt_max: float | None = None,
-    time_horizon: float | None = None,
-    cfl: float = 0.9,
-    cfl_fac: float | None = None,
-    collision_split: bool = False,
-    collision_scheme: str = "implicit",
-    implicit_tol: float = 1.0e-6,
-    implicit_maxiter: int = 200,
-    implicit_iters: int = 3,
-    implicit_relax: float = 0.7,
-    implicit_restart: int = 20,
-    implicit_preconditioner: str | None = None,
-    fixed_mode_ky_index: int | None = None,
-    fixed_mode_kx_index: int | None = None,
-    external_phi: jnp.ndarray | float | None = None,
-    resolved_diagnostics: bool = True,
-    show_progress: bool = False,
+    **options: Any,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
-    """Integrate nonlinear system and return runtime diagnostics plus final state."""
+    """Integrate nonlinear system and return runtime diagnostics plus final state.
 
-    options = _options_from_scope(locals(), _EXPLICIT_DIAGNOSTIC_OPTION_KEYS)
+    ``options`` are the explicit-route keywords of
+    :func:`integrate_nonlinear_explicit_diagnostics_state`, with its defaults.
+    """
+
     return integrate_explicit_nonlinear_diagnostics_impl(
         G0,
         grid,

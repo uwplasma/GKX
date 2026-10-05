@@ -219,13 +219,6 @@ def _species_matrix(
     ).copy()
 
 
-def _maybe_var(
-    group: Any, name: str, dtype: str, dims: tuple[str, ...], values: np.ndarray
-) -> None:
-    var = group.createVariable(name, dtype, dims)
-    var[...] = values
-
-
 def _write_runtime_root_metadata(
     root: Any, cfg: Any, *, nspecies: int, nl: int, nm: int
 ) -> None:
@@ -493,7 +486,6 @@ __all__ = [
     "_dealiased_ky_count",
     "_dealiased_ky_indices",
     "_dealiased_ky_values",
-    "_maybe_var",
     "_real_space_axis",
     "_require_netcdf4",
     "_restart_to_netcdf_layout",

@@ -242,24 +242,6 @@ def associated_bessel_laguerre_coefficients(
     return jnp.concatenate([coefficient0[None, ...], tail], axis=0)
 
 
-def single_precision_factorial(m: jnp.ndarray) -> jnp.ndarray:
-    """Return the single-precision factorial approximation."""
-
-    m_arr = jnp.asarray(m)
-    dtype = m_arr.dtype
-    exact = jnp.asarray([1.0, 1.0, 2.0, 6.0, 24.0, 120.0, 720.0], dtype=dtype)
-    m_int = m_arr.astype(jnp.int32)
-    m_clamped = jnp.clip(m_int, 0, exact.shape[0] - 1)
-    m_safe = jnp.where(m_arr > 0, m_arr, jnp.asarray(1.0, dtype=dtype))
-    stirling = (
-        jnp.sqrt(2.0 * jnp.asarray(jnp.pi, dtype=dtype) * m_safe)
-        * (m_safe**m_safe)
-        * jnp.exp(-m_safe)
-        * (1.0 + 1.0 / (12.0 * m_safe) + 1.0 / (288.0 * m_safe * m_safe))
-    )
-    return jnp.where(m_int <= 6, exact[m_clamped], stirling)
-
-
 def J_l_all(b: jnp.ndarray, l_max: int) -> jnp.ndarray:
     """Gyroaveraging coefficients matching the Laguerre-Hermite quadrature convention."""
 

@@ -14,7 +14,7 @@ from gkx.diagnostics.modes import (
 )
 from gkx.config import RuntimeConfig
 from gkx.operators.linear.cache_builder import mask_off_chain_rows
-from gkx.core_grid import SpectralGrid, build_spectral_grid, select_ky_grid
+from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.diagnostics.modes import select_ky_index
 from gkx.diagnostics.normalization import apply_diagnostic_normalization
 from gkx.geometry import apply_geometry_grid_defaults
@@ -51,11 +51,6 @@ def _normalize_linear_solver_name(solver: str) -> str:
     if solver_key == "explicit_time":
         return "explicit_time"
     return solver_key
-
-
-def _zero_kx_index(grid: SpectralGrid) -> int:
-    kx = np.asarray(grid.kx, dtype=float)
-    return int(np.argmin(np.abs(kx)))
 
 
 @dataclass(frozen=True)

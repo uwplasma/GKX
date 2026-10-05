@@ -73,13 +73,15 @@ from gkx.core_ky_layout import (
     nyc_from_ny,
     nyquist_row,
     paired_row_limit,
-    reality_residual,
     self_conjugate_rows,
     source_ky_layout,
     source_ny_full,
     symmetrize_self_conjugate_rows,
     to_full,
     to_half,
+)
+from scripts.checks._gates.validation_gates import (
+    reality_residual,
 )
 from gkx.core_grid import twothirds_mask
 from gkx.core_ky_layout import (
@@ -172,8 +174,7 @@ def test_linear_terms_import_has_no_facade_order_dependency() -> None:
                 "from gkx.operators.linear.dissipation import "
                 "collisions_contribution; "
                 "from gkx.terms.linear_terms import "
-                "conservative_full_f_dougherty_cross_moments, "
-                "drift_kinetic_dougherty_contribution; "
+                "conservative_full_f_dougherty_cross_moments; "
                 "from gkx.operators.linear import linear_rhs"
             ),
         ],

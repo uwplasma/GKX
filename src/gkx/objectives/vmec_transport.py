@@ -732,32 +732,6 @@ def _geometry_transport_weights(
     return kperp_eff2, heat_weight, particle_weight
 
 
-def _transport_sample_geometry(
-    state: Any,
-    static: Any,
-    indata: Any,
-    wout_reference: Any,
-    config: VMEXTransportObjectiveConfig,
-    *,
-    torflux: float,
-    alpha: float,
-) -> Any:
-    return flux_tube_geometry_from_vmec_boozer_state(
-        state,
-        static,
-        indata,
-        wout_reference,
-        torflux=float(torflux),
-        alpha=float(alpha),
-        ntheta=int(config.ntheta),
-        mboz=int(config.mboz),
-        nboz=int(config.nboz),
-        reference_length=config.reference_length,
-        reference_b=config.reference_b,
-        validate_finite=bool(config.validate_finite),
-    )
-
-
 def _solver_objective_row(gamma: jnp.ndarray) -> jnp.ndarray:
     row = jnp.zeros((len(SOLVER_OBJECTIVE_NAMES),), dtype=jnp.asarray(gamma).dtype)
     return row.at[_SOLVER_OBJECTIVE_INDEX["gamma"]].set(gamma)
@@ -806,14 +780,19 @@ def _transport_feature_table_from_state(
     rows: list[jnp.ndarray] = []
     for torflux in samples.surfaces:
         for alpha in samples.alphas:
-            geom = _transport_sample_geometry(
+            geom = flux_tube_geometry_from_vmec_boozer_state(
                 state,
                 static,
                 indata,
                 wout_reference,
                 torflux=float(torflux),
                 alpha=float(alpha),
-                config=config,
+                ntheta=int(config.ntheta),
+                mboz=int(config.mboz),
+                nboz=int(config.nboz),
+                reference_length=config.reference_length,
+                reference_b=config.reference_b,
+                validate_finite=bool(config.validate_finite),
             )
             for selected_ky_index in selected_indices:
                 gamma = solver_growth_rate_from_geometry(

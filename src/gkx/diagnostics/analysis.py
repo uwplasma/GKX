@@ -19,12 +19,9 @@ from gkx.diagnostics.growth_rates import (
     select_fit_window,
     select_fit_window_loglinear,
     select_fit_window_stationary,
-    windowed_growth_rate_from_omega_series,
 )
 from gkx.diagnostics.modes import (
     ModeSelection,
-    ModeSelectionBatch,
-    density_moment,
     extract_eigenfunction,
     extract_mode,
     extract_mode_time_series,
@@ -170,12 +167,8 @@ __all__ = [
     "cfl_limiter_report",
     "cfl_limiting_term",
     "cfl_scales_from_array",
-    "cfl_term_contributions",
-    "estimate_observed_order",
     "ModeSelection",
-    "ModeSelectionBatch",
     "_log_amp_phase",
-    "density_moment",
     "extract_eigenfunction",
     "extract_mode",
     "extract_mode_time_series",
@@ -190,7 +183,6 @@ __all__ = [
     "select_fit_window_loglinear",
     "select_fit_window_stationary",
     "select_ky_index",
-    "windowed_growth_rate_from_omega_series",
 ]
 
 
@@ -355,64 +347,3 @@ def cfl_limiter_report(dt: np.ndarray, scales: CFLScales) -> CFLLimiterReport:
         },
         **counts,
     )
-
-
-def estimate_observed_order(
-    step_sizes: np.ndarray, errors: np.ndarray
-) -> ObservedOrderMetrics:
-    """Estimate observed order from successive step-size refinements."""
-
-    h = np.asarray(step_sizes, dtype=float)
-    err = np.asarray(errors, dtype=float)
-    if h.ndim != 1 or err.ndim != 1 or h.size != err.size or h.size < 2:
-        raise ValueError(
-            "step_sizes and errors must be one-dimensional arrays of equal length >= 2"
-        )
-    if np.any(~np.isfinite(h)) or np.any(~np.isfinite(err)):
-        raise ValueError("step_sizes and errors must be finite")
-    if np.any(h <= 0.0):
-        raise ValueError("step_sizes must be positive")
-    if np.any(err <= 0.0):
-        raise ValueError("errors must be positive")
-
-    orders: list[float] = []
-    for i in range(h.size - 1):
-        if np.isclose(h[i], h[i + 1]):
-            raise ValueError("successive step sizes must differ")
-        orders.append(float(np.log(err[i] / err[i + 1]) / np.log(h[i] / h[i + 1])))
-    orders_arr = np.asarray(orders, dtype=float)
-    return ObservedOrderMetrics(
-        step_sizes=h,
-        errors=err,
-        orders=orders_arr,
-        asymptotic_order=float(orders_arr[-1]),
-    )
-
-
-def cfl_term_contributions(
-    *,
-    magnetic_drift_radial: float,
-    magnetic_drift_binormal: float,
-    parallel_streaming: float,
-    exb_radial: float,
-    exb_binormal: float,
-) -> dict[str, float]:
-    """Split the nonlinear CFL frequency into additive per-term contributions.
-
-    The integrator forms ``omega_total = max(drift_radial, exb_radial) +
-    max(drift_binormal, exb_binormal) + parallel_streaming``. Since
-    ``max(a, b) = a + max(0, b - a)``, ExB contributes exactly the excess it
-    adds over the drift it displaces, so the returned values are additive and
-    sum to ``omega_total`` -- a share is then a real fraction of the
-    step-setting frequency, not a ranking of quantities never added together.
-    """
-
-    drift_x = float(magnetic_drift_radial)
-    drift_y = float(magnetic_drift_binormal)
-    return {
-        "magnetic_drift_radial": drift_x,
-        "magnetic_drift_binormal": drift_y,
-        "parallel_streaming": float(parallel_streaming),
-        "exb": max(0.0, float(exb_radial) - drift_x)
-        + max(0.0, float(exb_binormal) - drift_y),
-    }

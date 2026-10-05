@@ -3,21 +3,16 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, replace as dc_replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import jax.numpy as jnp
 import numpy as np
 
 from gkx.geometry.backend_discovery import (
     _booz_read_wout_square_layout_failure,
     _import_booz_backend,
     _new_booz_object,
-)
-from gkx.geometry.vmec_boozer_core import (
-    load_solved_vmex_case,
-    resolve_vmex_case_input_path,
 )
 from gkx.geometry.vmec_boozer_derivatives import (
     _BoozerFieldlineSamples,
@@ -38,17 +33,6 @@ from gkx.geometry.vmec_field_line_sampling import (
 
 VMEC_BOOZER_STATE_PARAMETER_NAMES = ("Rcos_mid_surface_m1",)
 VMEC_BOOZER_STATE_PARAMETER_FAMILIES = ("Rcos", "Rsin", "Zcos", "Zsin", "Lcos", "Lsin")
-#: Public family strings (config/report values) -> vmex SpectralState attributes.
-_VMEC_STATE_FAMILY_ATTRS = {
-    "Rcos": "R_cos",
-    "Rsin": "R_sin",
-    "Zcos": "Z_cos",
-    "Zsin": "Z_sin",
-    "Lcos": "L_cos",
-    "Lsin": "L_sin",
-}
-#: Provenance marker: vmex equilibria are solved in memory, without a wout file.
-VMEC_STATE_IN_MEMORY_WOUT_PATH = "in-memory:vmex.optimize.solve_equilibrium"
 
 
 def _new_boozer_object_with_auto_fallback(
@@ -75,123 +59,6 @@ def _new_boozer_object_with_auto_fallback(
                 raise
         nc_obj.close()
         raise
-
-
-@dataclass(frozen=True)
-class _VMECStateContext:
-    """Solved vmex example state plus coefficient arrays used by AD gates.
-
-    ``base_Rcos``/``base_Zsin`` mirror the vmex ``R_cos``/``Z_sin`` spectral
-    tables; ``wout_path`` is the in-memory provenance marker because vmex
-    solves the equilibrium directly instead of reading a wout file.
-    """
-
-    input_path: Any
-    wout_path: Any
-    inp: Any
-    runtime: Any
-    wout: Any
-    state: Any
-    base_Rcos: jnp.ndarray
-    base_Zsin: jnp.ndarray
-
-
-def _load_vmec_state_context(case_name: str) -> _VMECStateContext:
-    """Solve a bundled vmex example and expose differentiable state arrays."""
-
-    input_path = resolve_vmex_case_input_path(str(case_name))
-    inp, state, runtime, wout = load_solved_vmex_case(str(case_name))
-    base_Rcos = jnp.asarray(state.R_cos)
-    base_Zsin = jnp.asarray(state.Z_sin)
-    if base_Rcos.ndim != 2 or base_Zsin.ndim != 2:
-        raise RuntimeError("vmex state R_cos/Z_sin arrays must be two-dimensional")
-    return _VMECStateContext(
-        input_path=input_path,
-        wout_path=VMEC_STATE_IN_MEMORY_WOUT_PATH,
-        inp=inp,
-        runtime=runtime,
-        wout=wout,
-        state=state,
-        base_Rcos=base_Rcos,
-        base_Zsin=base_Zsin,
-    )
-
-
-def _vmec_state_family_attribute(parameter_family: str) -> str:
-    """Map a public Fourier-family string to its vmex state attribute name."""
-
-    family = str(parameter_family)
-    attribute = _VMEC_STATE_FAMILY_ATTRS.get(family)
-    if attribute is None:
-        raise ValueError(
-            "parameter_family must be one of "
-            f"{', '.join(VMEC_BOOZER_STATE_PARAMETER_FAMILIES)}"
-        )
-    return attribute
-
-
-def _resolve_vmec_state_indices(
-    base_Rcos: jnp.ndarray,
-    *,
-    radial_index: int | None,
-    mode_index: int,
-    surface_index: int | None,
-    surface_grid: str,
-) -> tuple[int, int, int]:
-    """Resolve coefficient and surface indices for VMEC-state sensitivity gates."""
-
-    ns_full = int(base_Rcos.shape[0])
-    ridx = ns_full // 2 if radial_index is None else int(radial_index)
-    midx = int(mode_index)
-    if not (0 <= ridx < ns_full):
-        raise ValueError("radial_index is outside the VMEC state radial grid")
-    if not (0 <= midx < int(base_Rcos.shape[1])):
-        raise ValueError("mode_index is outside the VMEC state mode table")
-
-    if surface_grid == "half_mesh":
-        default_sidx = max(0, min(ridx - 1, ns_full - 2))
-        surface_count = ns_full - 1
-        error = "surface_index is outside the VMEC half-mesh Boozer surface grid"
-    elif surface_grid == "field_line":
-        default_sidx = max(1, min(ridx, ns_full - 2))
-        surface_count = ns_full
-        error = "surface_index is outside the VMEC metric radial grid"
-    elif surface_grid == "metric":
-        default_sidx = max(0, min(ridx - 1, ns_full - 1))
-        surface_count = ns_full
-        error = "surface_index is outside the VMEC metric radial grid"
-    else:
-        raise ValueError(f"unknown VMEC surface grid {surface_grid!r}")
-
-    sidx = default_sidx if surface_index is None else int(surface_index)
-    if not (0 <= sidx < surface_count):
-        raise ValueError(error)
-    return int(ridx), int(midx), int(sidx)
-
-
-def _perturb_vmec_state(
-    ctx: _VMECStateContext,
-    x: jnp.ndarray,
-    *,
-    radial_index: int,
-    mode_index: int,
-) -> Any:
-    """Return a VMEC state with two Fourier controls perturbed by ``x``."""
-
-    return dc_replace(
-        ctx.state,
-        R_cos=ctx.base_Rcos.at[radial_index, mode_index].add(x[0]),
-        Z_sin=ctx.base_Zsin.at[radial_index, mode_index].add(x[1]),
-    )
-
-
-def _length_two_params(params: jnp.ndarray | None, default: float) -> jnp.ndarray:
-    """Normalize optional VMEC control perturbations to a length-two vector."""
-
-    p = jnp.asarray([default, default] if params is None else params, dtype=jnp.float64)
-    if p.ndim != 1 or int(p.shape[0]) != 2:
-        raise ValueError("params must be a length-2 vector")
-    return p
 
 
 @dataclass(frozen=True)
@@ -440,10 +307,4 @@ def _sample_fieldline_boozer_state(
 __all__ = [
     "VMEC_BOOZER_STATE_PARAMETER_FAMILIES",
     "VMEC_BOOZER_STATE_PARAMETER_NAMES",
-    "VMEC_STATE_IN_MEMORY_WOUT_PATH",
-    "_VMECStateContext",
-    "_length_two_params",
-    "_load_vmec_state_context",
-    "_perturb_vmec_state",
-    "_resolve_vmec_state_indices",
 ]

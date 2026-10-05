@@ -23,25 +23,28 @@ from gkx.operators.nonlinear.brackets import (
     _broadcast_mask,
     _broadcast_to_G,
     _spectral_bracket,
-    _spectral_bracket_multi,
     _stack_fields,
+)
+from scripts.checks._gates.validation_gates import (
+    _spectral_bracket_multi,
 )
 from gkx.operators.nonlinear.projection import advance_shearing_coordinates
 from gkx.terms import nonlinear as nonlinear_terms_module
 from gkx.terms.nonlinear import (
     _apply_flutter,
-    exb_nonlinear_contribution,
     nonlinear_em_contribution,
-    nonlinear_em_components,
 )
-from gkx.runtime import (
+from scripts.checks._gates.validation_gates import (
+    exb_nonlinear_contribution,
+)
+from scripts.comparison.compare_gx_nonlinear import nonlinear_em_components
+from scripts.benchmarks.secondary_slab_workflow import (
     _embed_linear_seed_on_full_grid,
     _leading_finite_prefix,
     _tail_mean_pair,
     build_secondary_stage2_config,
     run_secondary_modes,
     run_secondary_seed,
-    write_restart_state,
 )
 from gkx.config import (
     RuntimeConfig,
@@ -1696,15 +1699,6 @@ def test_build_secondary_stage2_config_sets_restart_controls(tmp_path) -> None:
     assert out.init.init_single is False
     assert out.time.method == "sspx3"
     assert out.time.dt == 0.01
-
-
-def test_write_restart_state_roundtrip(tmp_path) -> None:
-    state = (
-        np.arange(12, dtype=np.float32) + 1j * np.arange(12, dtype=np.float32)
-    ).astype(np.complex64)
-    path = write_restart_state(tmp_path / "restart.bin", state)
-    restored = np.fromfile(path, dtype=np.complex64)
-    assert np.allclose(restored, state)
 
 
 def test_run_secondary_modes_uses_requested_targets(monkeypatch) -> None:

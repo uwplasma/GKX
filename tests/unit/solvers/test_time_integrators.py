@@ -14,7 +14,9 @@ and test_nonlinear_imex.py; the origin markers below delimit each block.
 
 from __future__ import annotations
 
-from gkx.diagnostics.analysis import estimate_observed_order
+from scripts.checks._gates.validation_gates import (
+    estimate_observed_order,
+)
 from gkx.solvers_nonlinear_explicit import (
     _checkpoint_block_size,
     block_checkpoint_plan,

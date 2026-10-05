@@ -16,7 +16,9 @@ from gkx.artifacts.io import (
     validate_finite_array,
     validate_finite_runtime_result,
 )
-from gkx.benchmarking_shared import _build_initial_condition
+from scripts.comparison.compare_gx_rhs_terms import (
+    _build_initial_condition,
+)
 from gkx.config import CycloneBaseCase
 from gkx.config import GridConfig, TimeConfig
 from gkx.config import InitializationConfig
@@ -42,19 +44,21 @@ from gkx.diagnostics import (
     magnetic_vector_potential_energy_resolved,
     heat_flux_total,
     heat_flux_channel_resolved_species,
-    heat_flux_channel_species,
     heat_flux_species,
     particle_flux_total,
     particle_flux_channel_resolved_species,
-    particle_flux_channel_species,
     particle_flux_species,
     phi2_resolved,
     zonal_phi_line_kxt,
     zonal_phi_mode_kxt,
     fieldline_quadrature_weights,
-    turbulent_heating_total,
     turbulent_heating_resolved_species,
     turbulent_heating_species,
+)
+from scripts.checks._gates.validation_gates import (
+    heat_flux_channel_species,
+    particle_flux_channel_species,
+    turbulent_heating_total,
 )
 from gkx.diagnostics.analysis import ModeSelection
 from gkx.diagnostics.analysis import select_ky_index
@@ -105,7 +109,6 @@ from gkx.artifacts.spectral_layout import (
     _dealiased_kx_count,
     _dealiased_kx_indices,
     _dealiased_kx_values,
-    _maybe_var,
     _real_space_axis,
     _require_netcdf4,
     _restart_to_netcdf_layout,
@@ -801,10 +804,6 @@ def test_runtime_artifact_condense_helpers() -> None:
 def test_runtime_artifact_small_helpers() -> None:
     assert _dealiased_kx_count(1) == 1
     assert np.array_equal(_dealiased_kx_indices(1), np.array([0], dtype=np.int32))
-
-    group = _FakeGroup()
-    _maybe_var(group, "foo", "f4", ("x",), np.array([1.0, 2.0], dtype=np.float32))
-    assert np.allclose(group["foo"], np.array([1.0, 2.0], dtype=np.float32))
 
 
 def test_runtime_artifact_axis_and_condense_helpers() -> None:

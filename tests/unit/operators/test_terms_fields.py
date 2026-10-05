@@ -14,7 +14,9 @@ from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig
 from gkx.core_ky_layout import transport_mode_weights
 from gkx.geometry import SAlphaGeometry
 from gkx.core_grid import build_spectral_grid
-from gkx.operators.fluxes import particle_flux_channel_species
+from scripts.checks._gates.validation_gates import (
+    particle_flux_channel_species,
+)
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import build_H, quasineutrality_phi
 from gkx.operators.linear.params import LinearParams

@@ -85,7 +85,6 @@ __all__ = [
     "select_fit_window",
     "select_fit_window_loglinear",
     "select_fit_window_stationary",
-    "windowed_growth_rate_from_omega_series",
 ]
 
 
@@ -334,38 +333,6 @@ def select_fit_window_stationary(
     if best is None:
         return None
     return best[1], best[2]
-
-
-def windowed_growth_rate_from_omega_series(
-    gamma_t: np.ndarray,
-    omega_t: np.ndarray,
-    sel: ModeSelection,
-    *,
-    navg_fraction: float = 0.5,
-    use_last: bool = False,
-) -> Tuple[float, float, np.ndarray, np.ndarray]:
-    """Average a resolved ``(time, ky, kx)`` growth/frequency series."""
-
-    if gamma_t.ndim != 3 or omega_t.ndim != 3:
-        raise ValueError("gamma_t and omega_t must have shape (t, ky, kx)")
-    if gamma_t.shape != omega_t.shape:
-        raise ValueError("gamma_t and omega_t must have matching shape")
-    if sel.ky_index >= gamma_t.shape[1] or sel.kx_index >= gamma_t.shape[2]:
-        raise ValueError("ModeSelection indices out of range for omega series")
-
-    gamma = np.asarray(gamma_t[:, sel.ky_index, sel.kx_index], dtype=float)
-    omega = np.asarray(omega_t[:, sel.ky_index, sel.kx_index], dtype=float)
-    finite = np.isfinite(gamma) & np.isfinite(omega)
-    gamma = gamma[finite]
-    omega = omega[finite]
-    if gamma.size == 0:
-        raise ValueError("No finite growth/frequency series samples available")
-    if use_last:
-        return float(gamma[-1]), float(omega[-1]), gamma, omega
-
-    istart = int(len(gamma) * navg_fraction)
-    istart = max(0, min(istart, len(gamma) - 1))
-    return float(np.mean(gamma[istart:])), float(np.mean(omega[istart:])), gamma, omega
 
 
 def fit_growth_rate_auto(

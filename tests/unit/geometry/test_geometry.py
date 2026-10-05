@@ -35,8 +35,6 @@ from gkx.geometry.kernels import (
     weighted_centered_difference,
     extend_nperiod_data,
     reflect_and_append,
-    nperiod_contract,
-    nperiod_mask,
 )
 import os
 from pathlib import Path
@@ -63,6 +61,7 @@ from gkx.geometry.imported_vmec import internal_vmec_backend_available
 import dataclasses
 from types import SimpleNamespace
 import gkx.geometry.vmec_state_controls as controls
+import scripts.campaigns.vmec_state_sensitivity as state_context
 import gkx.geometry.vmec_boozer_derivatives as vmec_derivatives
 import gkx.geometry.vmec_field_line_sampling as vmec_fieldline_numerics
 from gkx.geometry.imported_vmec import _Struct
@@ -77,7 +76,6 @@ from gkx.geometry.imported_vmec import (
     _vmec_splines,
     dermv,
     generate_vmec_eik_internal,
-    nperiod_set,
     write_vmec_eik_netcdf,
 )
 from gkx.operators.linear.params import (
@@ -86,7 +84,7 @@ from gkx.operators.linear.params import (
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
 import tempfile
-from gkx.geometry.numerics import _array_parity_metrics
+from scripts.campaigns.vmec_state_sensitivity import _array_parity_metrics
 from gkx.geometry.vmec_boozer_derivatives import (
     _MU_0,
     boozer_pressure_gradient,
@@ -1086,18 +1084,6 @@ def test_observable_gradient_validation_report_fails_ill_conditioned_synthetic_m
 # Miller geometry backend, eik-file, and low-level kernel tests.
 
 
-def test_nperiod_helpers_contract_arrays() -> None:
-    theta = np.array([-4.0, -1.0, 0.0, 1.0, 4.0])
-    values = np.arange(theta.size)
-    mask = np.asarray(nperiod_mask(theta, 1.0))
-    assert mask.tolist() == [False, True, True, True, False]
-    contracted_values, contracted_theta = nperiod_contract.__wrapped__(
-        values, theta, 1.0
-    )
-    np.testing.assert_allclose(np.asarray(contracted_values), [1, 2, 3])
-    np.testing.assert_allclose(np.asarray(contracted_theta), [-1.0, 0.0, 1.0])
-
-
 def test_finite_diff_nonuniform_matches_quadratic_derivative() -> None:
     grid = np.array([0.0, 0.5, 1.5, 3.0])
     values = grid**2
@@ -1883,15 +1869,15 @@ def test_load_vmec_state_context_exposes_differentiable_state_arrays(monkeypatch
         seen["load"] = name
         return bundle
 
-    monkeypatch.setattr(controls, "resolve_vmex_case_input_path", _fake_resolve)
-    monkeypatch.setattr(controls, "load_solved_vmex_case", _fake_load)
+    monkeypatch.setattr(state_context, "resolve_vmex_case_input_path", _fake_resolve)
+    monkeypatch.setattr(state_context, "load_solved_vmex_case", _fake_load)
 
-    ctx = controls._load_vmec_state_context("synthetic_case")
+    ctx = state_context._load_vmec_state_context("synthetic_case")
 
     # The case name is forwarded (as a string) to both resolver and loader.
     assert seen == {"resolve": "synthetic_case", "load": "synthetic_case"}
     assert ctx.input_path == Path("input.synthetic")
-    assert ctx.wout_path == controls.VMEC_STATE_IN_MEMORY_WOUT_PATH
+    assert ctx.wout_path == state_context.VMEC_STATE_IN_MEMORY_WOUT_PATH
     assert ctx.inp is bundle[0]
     assert ctx.state is bundle[1]
     assert ctx.runtime is bundle[2]
@@ -1906,39 +1892,14 @@ def test_load_vmec_state_context_rejects_non_2d_state_arrays(monkeypatch):
     bundle = _solved_case_bundle(np.ones(4), np.ones((3, 4)))  # R_cos is 1-D
 
     monkeypatch.setattr(
-        controls, "resolve_vmex_case_input_path", lambda name: Path("x")
+        state_context, "resolve_vmex_case_input_path", lambda name: Path("x")
     )
-    monkeypatch.setattr(controls, "load_solved_vmex_case", lambda name: bundle)
+    monkeypatch.setattr(state_context, "load_solved_vmex_case", lambda name: bundle)
 
     with pytest.raises(
         RuntimeError, match="R_cos/Z_sin arrays must be two-dimensional"
     ):
-        controls._load_vmec_state_context("synthetic_case")
-
-
-# ---------------------------------------------------------------------------
-# _vmec_state_family_attribute + _vmec_boozer_state_array
-# ---------------------------------------------------------------------------
-@pytest.mark.parametrize(
-    ("family", "attribute"),
-    [
-        ("Rcos", "R_cos"),
-        ("Rsin", "R_sin"),
-        ("Zcos", "Z_cos"),
-        ("Zsin", "Z_sin"),
-        ("Lcos", "L_cos"),
-        ("Lsin", "L_sin"),
-    ],
-)
-def test_vmec_state_family_attribute_maps_public_family_to_state_attr(
-    family, attribute
-):
-    assert controls._vmec_state_family_attribute(family) == attribute
-
-
-def test_vmec_state_family_attribute_rejects_unknown_family():
-    with pytest.raises(ValueError, match="parameter_family must be one of"):
-        controls._vmec_state_family_attribute("Bcos")
+        state_context._load_vmec_state_context("synthetic_case")
 
 
 # ---------------------------------------------------------------------------
@@ -1971,7 +1932,7 @@ def test_resolve_vmec_state_indices_resolves_defaults_and_clamps(
 ):
     base = jnp.zeros(shape)
 
-    resolved = controls._resolve_vmec_state_indices(
+    resolved = state_context._resolve_vmec_state_indices(
         base,
         radial_index=radial_index,
         mode_index=mode_index,
@@ -2000,7 +1961,7 @@ def test_resolve_vmec_state_indices_rejects_out_of_range_and_unknown_grid(
 ):
     names = ("radial_index", "mode_index", "surface_index", "surface_grid")
     with pytest.raises(ValueError, match=message):
-        controls._resolve_vmec_state_indices(
+        state_context._resolve_vmec_state_indices(
             jnp.zeros((8, 5)), **dict(zip(names, indices))
         )
 
@@ -2019,9 +1980,9 @@ def _perturb_context() -> tuple[object, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     state = _FakeSpectralState(
         R_cos=jnp.zeros((3, 4)), Z_sin=jnp.zeros((3, 4)), R_sin=witness
     )
-    ctx = controls._VMECStateContext(
+    ctx = state_context._VMECStateContext(
         input_path=Path("input.synthetic"),
-        wout_path=controls.VMEC_STATE_IN_MEMORY_WOUT_PATH,
+        wout_path=state_context.VMEC_STATE_IN_MEMORY_WOUT_PATH,
         inp=object(),
         runtime=object(),
         wout=object(),
@@ -2036,7 +1997,7 @@ def test_perturb_vmec_state_increments_two_controls_from_base_tables():
     ctx, base_Rcos, base_Zsin, witness = _perturb_context()
     x = jnp.asarray([0.5, -0.3])
 
-    perturbed = controls._perturb_vmec_state(ctx, x, radial_index=1, mode_index=2)
+    perturbed = state_context._perturb_vmec_state(ctx, x, radial_index=1, mode_index=2)
 
     expected_Rcos = np.asarray(base_Rcos).copy()
     expected_Rcos[1, 2] += 0.5
@@ -2059,7 +2020,7 @@ def test_perturb_vmec_state_and_context_are_immutable():
     with pytest.raises(dataclasses.FrozenInstanceError):
         ctx.base_Rcos = jnp.zeros((3, 4))
 
-    perturbed = controls._perturb_vmec_state(
+    perturbed = state_context._perturb_vmec_state(
         ctx, jnp.asarray([0.0, 0.0]), radial_index=0, mode_index=1
     )
     with pytest.raises(dataclasses.FrozenInstanceError):
@@ -2070,12 +2031,12 @@ def test_perturb_vmec_state_and_context_are_immutable():
 # _length_two_params (default fill + length-2 validation)
 # ---------------------------------------------------------------------------
 def test_length_two_params_fills_default_and_preserves_length_two_vectors():
-    filled = controls._length_two_params(None, 2.5)
+    filled = state_context._length_two_params(None, 2.5)
     assert filled.shape == (2,)
     assert np.asarray(filled).dtype == np.float64  # x64: forced float64 contract
     np.testing.assert_allclose(np.asarray(filled), [2.5, 2.5])
 
-    passed = controls._length_two_params(jnp.asarray([0.1, -0.2]), 0.0)
+    passed = state_context._length_two_params(jnp.asarray([0.1, -0.2]), 0.0)
     np.testing.assert_allclose(np.asarray(passed), [0.1, -0.2])
 
 
@@ -2085,7 +2046,7 @@ def test_length_two_params_fills_default_and_preserves_length_two_vectors():
 )
 def test_length_two_params_rejects_non_length_two_vectors(params):
     with pytest.raises(ValueError, match="params must be a length-2 vector"):
-        controls._length_two_params(params, 0.0)
+        state_context._length_two_params(params, 0.0)
 
 
 # ---- from test_imported_vmec_geometry.py ----
@@ -2254,22 +2215,10 @@ def test_internal_vmec_backend_available_uses_backend_probe(monkeypatch) -> None
     assert internal_vmec_backend_available() is False
 
 
-def test_nperiod_set_and_dermv(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_field_line_sampling.nperiod_contract",
-        lambda values, theta, npol: (values[1:-1], theta[1:-1]),
-    )
-    values, theta = nperiod_set(
-        np.array([0.0, 1.0, 2.0]), np.array([-2.0, 0.0, 2.0]), 1.0
-    )
-    np.testing.assert_allclose(values, [1.0])
-    np.testing.assert_allclose(theta, [0.0])
-
+def test_dermv() -> None:
     out = dermv(np.array([0.0, 1.0, 4.0, 9.0]), np.array([0.0, 1.0, 2.0, 3.0]))
     np.testing.assert_allclose(out[1:-1], [2.0, 4.0], atol=1.0e-6)
 
-    with pytest.raises(ValueError):
-        nperiod_set(np.array([1.0, 2.0]), np.array([1.0]), 1.0)
     with pytest.raises(ValueError):
         dermv(np.ones((2, 2)), np.ones((2, 2)))
     with pytest.raises(ValueError):

@@ -78,7 +78,6 @@ from gkx.workflows.nonlinear import _infer_runtime_nonlinear_steps
 from gkx.workflows.linear import (
     _midplane_index,
     _normalize_linear_solver_name,
-    _zero_kx_index,
 )
 from gkx.workflows.runtime.orchestration_scan import (
     run_runtime_scan_batch as _run_runtime_scan_batch,
@@ -104,7 +103,6 @@ from types import SimpleNamespace
 import argparse
 import gkx.cli as cli
 import gkx.runtime as runtime
-import gkx.workflows.runtime.toml as runtime_toml
 import gkx.workflows.runtime.commands as runtime_cases
 import gkx.workflows.runtime.commands as runtime_commands
 import gkx.workflows.runtime.artifacts as runtime_artifacts
@@ -271,19 +269,6 @@ def test_cli_plot_usage_errors(capsys, monkeypatch) -> None:
     monkeypatch.setattr(sys, "argv", ["gkx", "--plot", "a", "--bad"])
     assert main() == 1
     assert "usage: gkx plot" in capsys.readouterr().out
-
-
-def test_cli_runtime_toml_dispatch_is_uniform() -> None:
-    assert runtime_toml.is_runtime_toml({"physics": {}}) is True
-    assert runtime_toml.is_runtime_toml({"case": "cyclone"}) is True
-    assert runtime_toml.is_runtime_toml({}) is True
-    assert runtime_toml.toml_shorthand_command({"physics": {}}) == "run"
-    assert runtime_toml.toml_shorthand_command({"case": "cyclone"}) == "run"
-
-    parser = cli.build_parser()
-    promoted = parser.parse_args(["scan", "--config", "case.toml"])
-    legacy = parser.parse_args(["scan-runtime-linear", "--config", "case.toml"])
-    assert promoted.func is legacy.func is cli._cmd_scan_runtime_linear
 
 
 def test_cli_geometry_routes_vmec_and_miller_backends(
@@ -2247,7 +2232,6 @@ def test_runtime_small_helper_functions() -> None:
     assert _normalize_linear_solver_name("krylov") == "krylov"
     assert _midplane_index(grid) == min(grid.z.size // 2 + 1, grid.z.size - 1)
     assert _midplane_index(type("Grid", (), {"z": np.asarray([0.0])})()) == 0
-    assert _zero_kx_index(grid) == int(np.argmin(np.abs(np.asarray(grid.kx))))
     assert _dealiased_initial_mode_pairs(grid)[0] == (0, 1)
     assert _periodic_zp_from_grid(np.asarray([0.0])) == 1.0
     assert _periodic_zp_from_grid(np.asarray([0.0, 0.0])) == 1.0

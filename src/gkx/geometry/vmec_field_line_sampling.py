@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.interpolate import InterpolatedUnivariateSpline
 
-from gkx.geometry.kernels import finite_diff_nonuniform, nperiod_contract
+from gkx.geometry.kernels import finite_diff_nonuniform
 
 
 def _rms_with_floor(arr: jnp.ndarray, epsilon: jnp.ndarray | float) -> jnp.ndarray:
@@ -101,19 +101,6 @@ def _vmec_splines(nc_obj: Any, booz_obj: Any) -> _Struct:
 
 
 _MU_0 = 4.0 * np.pi * 1.0e-7
-
-
-def nperiod_set(
-    values: np.ndarray, theta: np.ndarray, npol: float
-) -> tuple[np.ndarray, np.ndarray]:
-    """Contract VMEC field-line arrays to ``theta in [-npol*pi, npol*pi]``."""
-
-    v = np.asarray(values)
-    t = np.asarray(theta)
-    if v.shape != t.shape:
-        raise ValueError("values and theta must have the same shape")
-    v_out, t_out = nperiod_contract(v, t, float(npol))
-    return np.asarray(v_out), np.asarray(t_out)
 
 
 def dermv(values: np.ndarray, grid: np.ndarray) -> np.ndarray:
@@ -842,7 +829,6 @@ def _fieldline_metric_drifts(
 __all__ = [
     "_Struct",
     "_vmec_splines",
-    "nperiod_set",
     "dermv",
     "_FieldlineBoozerTensors",
     "_FieldlineCartesianDerivatives",
