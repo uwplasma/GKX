@@ -125,7 +125,8 @@ carry the charge, mass, density, temperature, and gradient inputs:
 
 - ``charge_sign``: :math:`Z_s` (e.g., :math:`+1` for ions, :math:`-1` for electrons).
 - ``temp`` / ``mass`` / ``density``: normalized to the reference species.
-- ``tz``: :math:`Z_s / T_s` coupling used in the field terms.
+- ``tz``: :math:`T_s / Z_s`; field terms use its inverse,
+  :math:`Z_s / T_s`, for the charge-temperature coupling.
 - ``tprim`` / ``fprim``: normalized gradients for each species,
   :math:`a/L_T` and :math:`a/L_n`. These are the only gradient units the
   operator consumes. The legacy names ``R_over_LTi`` / ``R_over_Ln`` are
