@@ -2,10 +2,34 @@
 
 from __future__ import annotations
 
+import os
 from importlib import import_module
 from typing import Any
 
 from gkx._version import __version__
+
+
+def _cpu_thread_defaults() -> None:
+    """Keep XLA:CPU off its multithreaded Eigen pool on fewer than four CPUs.
+
+    With 2 or 3 schedulable CPUs (``taskset``, small containers and CI
+    runners), nonlinear runs at 32x32x16 deadlocked inside XLA:CPU with every
+    thread parked (jax 0.11.2, 5/5 attempts); 1, 4, 5, 6, 8 and 16 CPUs did
+    not, and the single-threaded pool ran them. From four CPUs up the pool is
+    left on: at 16 cores it is 1.6x faster on that grid. An explicit
+    ``xla_cpu_multi_thread_eigen`` in ``XLA_FLAGS`` always wins. JAX reads the
+    variable when it creates the CPU client, so setting it here, before any
+    computation, is in time.
+    """
+
+    flags = os.environ.get("XLA_FLAGS", "")
+    getaff = getattr(os, "sched_getaffinity", None)
+    ncpu = len(getaff(0)) if getaff else (os.cpu_count() or 1)
+    if "xla_cpu_multi_thread_eigen" not in flags and 1 < ncpu < 4:
+        os.environ["XLA_FLAGS"] = f"{flags} --xla_cpu_multi_thread_eigen=false".strip()
+
+
+_cpu_thread_defaults()
 
 _api = import_module("gkx.api")
 __all__ = list(_api.__all__)

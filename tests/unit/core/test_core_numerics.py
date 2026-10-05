@@ -2932,3 +2932,24 @@ def test_the_explicit_cfl_bound_is_the_same_in_both_layouts(ny: int) -> None:
     np.testing.assert_allclose(
         np.asarray(omega_half), np.asarray(omega_full), rtol=1e-12, atol=0.0
     )
+
+
+def test_cpu_thread_defaults_only_below_four_cpus(monkeypatch):
+    import os
+
+    import gkx
+
+    flag = "--xla_cpu_multi_thread_eigen=false"
+    for ncpu, user_flags, expected in (
+        (2, "", flag),
+        (3, "--foo", f"--foo {flag}"),
+        (1, "", ""),
+        (4, "", ""),
+        (2, "--xla_cpu_multi_thread_eigen=true", "--xla_cpu_multi_thread_eigen=true"),
+    ):
+        monkeypatch.setattr(
+            os, "sched_getaffinity", lambda _pid, n=ncpu: set(range(n)), raising=False
+        )
+        monkeypatch.setenv("XLA_FLAGS", user_flags)
+        gkx._cpu_thread_defaults()
+        assert os.environ["XLA_FLAGS"] == expected
