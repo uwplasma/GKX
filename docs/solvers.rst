@@ -29,6 +29,46 @@ Linear methods run inside a JAX ``scan``:
 ``rk2`` at that fixed step; a deck without ``dt`` gets ``rk4`` with the CFL
 controller at ``cfl = 0.9`` (:class:`gkx.config.TimeConfig`).
 
+Nonlinear runs add ``rk3``, ``sspx3``, ``k10`` and the opt-in ``imex-ars3``
+(parallel streaming and the field response implicit per twist-shift chain,
+fixed ``dt`` only).  Measured choice of default, one RTX A4000, steady
+seconds per unit of simulated time, Cyclone kinetic electrons at
+(Nl, Nm) = (4, 8):
+
+.. list-table::
+   :header-rows: 1
+
+   * - grid
+     - ``rk3`` fixed, CFL-bound dt
+     - ``rk3`` + CFL
+     - ``rk4`` + CFL
+     - ``imex-ars3``
+   * - 32x32x16
+     - 3.6
+     - 4.9
+     - 2.4
+     - 0.43 (dt 0.05)
+   * - 64x64x24
+     - 62
+     - 40
+     - 43
+     - 2.8 (dt 0.035)
+
+With adiabatic electrons at 64x64x24 (4, 8), ``rk4`` + CFL takes 0.35 s per
+unit time against 0.77 for ``rk3`` + CFL; on the 16x16 tutorial grids every
+explicit choice is launch-bound and within noise.  So the default stays
+``rk4`` + CFL.  ``imex-ars3`` is 6-14 times faster per unit time at 32x32
+and above, but is not selected automatically: its fixed step has no safe a
+priori value (0.05 is stable at 32x32 and non-finite at t = 15 at 64x64;
+0.1 fails at 32x32), its factor build doubles the cold start, and on the
+tutorial grids it does not pay.  Choose it, with ``dt`` from the kinetic
+electron deck notes, for long kinetic-electron runs at 32x32 and above.
+
+On CPU, XLA spreads FFTs and contractions over the visible cores (2.2x on 16
+cores at 32x32x16).  With 2 or 3 schedulable CPUs, ``import gkx`` sets
+``--xla_cpu_multi_thread_eigen=false`` unless ``XLA_FLAGS`` already names
+that flag: on 2 and 3 CPUs XLA:CPU deadlocked on nonlinear runs (jax 0.11.2).
+
 Shift-invert preconditioners
 ----------------------------
 

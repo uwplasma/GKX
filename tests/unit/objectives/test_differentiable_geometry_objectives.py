@@ -5,6 +5,7 @@ from __future__ import annotations
 
 # ---- test_differentiable_geometry_bridge.py ----
 
+from contextlib import contextmanager
 import sys
 import types
 from pathlib import Path
@@ -68,6 +69,72 @@ from gkx.geometry.vmec_boozer_core import (
     flux_tube_geometry_from_vmec_boozer_state,
     vmex_boozer_equal_arc_core_profiles_from_state,
 )
+
+
+@contextmanager
+def _restored_backend_imports():
+    """Backend discovery may intentionally replace modules and prepend paths."""
+
+    def optional(name):
+        return any(
+            name == root or name.startswith(root + ".")
+            for root in ("vmex", "booz_xform_jax")
+        )
+
+    modules = {name: module for name, module in sys.modules.items() if optional(name)}
+    paths = sys.path.copy()
+    try:
+        yield
+    finally:
+        sys.path[:] = paths
+        for name in list(sys.modules):
+            if optional(name):
+                sys.modules.pop(name)
+        sys.modules.update(modules)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_backend_imports():
+    with _restored_backend_imports():
+        yield
+
+
+@pytest.mark.parametrize("root", ["vmex", "booz_xform_jax"])
+@pytest.mark.parametrize("preexisting", [False, True])
+def test_backend_import_scope_restores_namespace_and_paths(
+    tmp_path, monkeypatch, root, preexisting
+):
+    for name in list(sys.modules):
+        if name == root or name.startswith(root + "."):
+            monkeypatch.delitem(sys.modules, name)
+    if preexisting:
+        module = types.ModuleType(root)
+        module.__file__ = str(tmp_path / "installed" / root / "__init__.py")
+        monkeypatch.setitem(sys.modules, root, module)
+        monkeypatch.setitem(
+            sys.modules, root + ".existing", types.ModuleType(root + ".existing")
+        )
+    before = {
+        name: module
+        for name, module in sys.modules.items()
+        if name == root or name.startswith(root + ".")
+    }
+    paths = sys.path.copy()
+    package = tmp_path / "fake" / root
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("marker = 'fake'\n", encoding="utf-8")
+    with _restored_backend_imports():
+        fake = _find_importable_module(root, [package.parent])
+        assert fake.marker == "fake"
+        sys.modules[root + ".created"] = types.ModuleType(root + ".created")
+        assert str(package.parent) in sys.path
+    after = {
+        name: module
+        for name, module in sys.modules.items()
+        if name == root or name.startswith(root + ".")
+    }
+    assert before == after
+    assert sys.path == paths
 
 
 def _sample_mapping() -> dict[str, object]:
