@@ -4,26 +4,29 @@ from __future__ import annotations
 
 import os
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
-from jax.typing import ArrayLike
 
-from gkx.artifacts.io import write_netcdf_restart_state
-from gkx.core_ky_layout import source_ny_full
-from gkx.core_grid import build_spectral_grid
-from gkx.diagnostics.analysis import fit_growth_rate
+from gkx.core_grid import SpectralGrid, build_spectral_grid
+from gkx.diagnostics.modes import select_ky_index
 from gkx.diagnostics.saturation import (
     SaturationStopConfig,
     saturation_stop_decision,
 )
-from gkx.geometry import apply_geometry_grid_defaults, build_flux_tube_geometry
+from gkx.geometry import apply_geometry_grid_defaults
 from gkx.solvers_time_explicit_cfl import FIXED_DT_CFL_WARN_RATIO
-from gkx.config import RuntimeConfig, RuntimeExpertConfig
+from gkx.config import RuntimeConfig, resolve_cfl_fac
+from gkx.solvers_nonlinear_diagnostic_integration import (
+    integrate_nonlinear_explicit_diagnostics_state,
+    prepare_nonlinear_explicit_diagnostics,
+)
+from gkx.solvers_time_runners import integrate_nonlinear_from_config
+from gkx.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
 from gkx.workflows.runtime.diagnostic_arrays import (
     validate_finite_runtime_diagnostics,
 )
@@ -36,31 +39,201 @@ from gkx.workflows.runtime.parallel_nonlinear import (
 )
 from gkx.workflows.runtime.results import (
     RuntimeNonlinearResult,
+    build_runtime_nonlinear_result,
     checked_solve_summary,
     solve_stats_request,
 )
+from gkx.workflows.runtime.startup import (
+    _build_initial_condition,
+    _resolve_runtime_hl_dims,
+    _species_to_linear,
+    build_runtime_geometry,
+    build_runtime_linear_params,
+    build_runtime_term_config,
+)
 
 
-@dataclass(frozen=True)
-class FullNonlinearRuntimeDeps:
-    """Injected dependencies for the full-GK nonlinear runtime workflow."""
+def build_runtime_nonlinear_diagnostics_kwargs(
+    cfg: RuntimeConfig,
+    *,
+    dt: float,
+    steps: int,
+    method: str | None,
+    term_config: Any,
+    sample_stride: int,
+    diagnostics_stride: int,
+    laguerre_mode: str,
+    ky_index: int,
+    kx_index: int,
+    fixed_dt: bool,
+    fixed_mode_ky_index: int | None,
+    fixed_mode_kx_index: int | None,
+    external_phi: float | None,
+    resolved_diagnostics: bool,
+    show_progress: bool,
+) -> dict[str, Any]:
+    """Build keyword arguments for nonlinear diagnostic integration.
 
-    build_runtime_geometry: Callable[[RuntimeConfig], Any]
-    apply_geometry_grid_defaults: Callable[..., Any]
-    build_spectral_grid: Callable[..., Any]
-    build_runtime_linear_params: Callable[..., Any]
-    build_runtime_term_config: Callable[..., Any]
-    select_nonlinear_mode_indices: Callable[..., tuple[int, int]]
-    build_initial_condition: Callable[..., Any]
-    species_to_linear: Callable[..., Any]
-    infer_runtime_nonlinear_steps: Callable[..., int]
-    runtime_external_phi: Callable[..., Any]
-    build_runtime_nonlinear_diagnostics_kwargs: Callable[..., dict[str, Any]]
-    prepare_nonlinear_explicit_diagnostics: Callable[..., Any]
-    integrate_nonlinear_explicit_diagnostics_state: Callable[..., Any]
-    run_adaptive_runtime_chunk_loop: Callable[..., Any]
-    build_runtime_nonlinear_result: Callable[..., RuntimeNonlinearResult]
-    integrate_nonlinear_from_config: Callable[..., tuple[Any, ...]]
+    Runtime drivers use the same physics kwargs for fixed-window and adaptive
+    chunked diagnostics. Keeping them in one policy helper prevents drift
+    between the two branches while leaving the actual integrator call in the
+    public runtime facade.
+    """
+
+    method_use = str(method or cfg.time.method)
+    kwargs: dict[str, Any] = dict(
+        dt=float(dt),
+        steps=int(steps),
+        method=method_use,
+        terms=term_config,
+        sample_stride=int(sample_stride),
+        diagnostics_stride=int(diagnostics_stride),
+        use_dealias_mask=bool(cfg.time.nonlinear_dealias),
+        laguerre_mode=str(laguerre_mode),
+        omega_ky_index=int(ky_index),
+        omega_kx_index=int(kx_index),
+        flux_scale=float(cfg.normalization.flux_scale),
+        wphi_scale=float(cfg.normalization.wphi_scale),
+        fixed_dt=bool(fixed_dt),
+        dt_min=float(cfg.time.dt_min),
+        dt_max=cfg.time.dt_max,
+        cfl=float(cfg.time.cfl),
+        cfl_fac=resolve_cfl_fac(method_use, cfg.time.cfl_fac),
+        collision_split=bool(cfg.time.collision_split),
+        collision_scheme=str(cfg.time.collision_scheme),
+        implicit_restart=int(cfg.time.implicit_restart),
+        implicit_preconditioner=cfg.time.implicit_preconditioner,
+        fixed_mode_ky_index=fixed_mode_ky_index,
+        fixed_mode_kx_index=fixed_mode_kx_index,
+        external_phi=external_phi,
+    )
+    if not resolved_diagnostics:
+        kwargs["resolved_diagnostics"] = False
+    if show_progress:
+        kwargs["show_progress"] = True
+    return kwargs
+
+
+def _nearest_index_from_candidates(
+    values: np.ndarray,
+    target: float,
+    candidates: np.ndarray,
+) -> int:
+    """Return the candidate index nearest to ``target`` in physical coordinates."""
+
+    values_arr = np.asarray(values, dtype=float)
+    candidate_arr = np.asarray(candidates, dtype=int)
+    if values_arr.size == 0:
+        raise ValueError("values must be non-empty")
+    if candidate_arr.size == 0:
+        raise ValueError("candidate indices must be non-empty")
+    return int(
+        candidate_arr[int(np.argmin(np.abs(values_arr[candidate_arr] - float(target))))]
+    )
+
+
+def _validate_dealias_mask_shape(
+    mask: Any,
+    *,
+    ky_size: int,
+    kx_size: int,
+) -> np.ndarray:
+    """Return a boolean dealias mask after validating it matches ky/kx axes."""
+
+    mask_arr = np.asarray(mask, dtype=bool)
+    expected = (int(ky_size), int(kx_size))
+    if mask_arr.shape != expected:
+        raise ValueError(
+            "dealias_mask shape must match (ky, kx) grid sizes; "
+            f"got {mask_arr.shape}, expected {expected}"
+        )
+    return mask_arr
+
+
+def _active_ky_indices(mask: np.ndarray, ky_size: int) -> np.ndarray:
+    """Return ky rows with at least one retained kx, falling back to all ky."""
+
+    candidates = np.where(np.any(mask, axis=1))[0]
+    if candidates.size == 0:
+        return np.arange(int(ky_size), dtype=int)
+    return candidates
+
+
+def _active_kx_indices(mask: np.ndarray, ky_index: int, kx_size: int) -> np.ndarray:
+    """Return retained kx entries for ``ky_index``, falling back to all kx."""
+
+    candidates = np.where(mask[int(ky_index)])[0]
+    if candidates.size == 0:
+        return np.arange(int(kx_size), dtype=int)
+    return candidates
+
+
+def _select_nonlinear_mode_indices(
+    grid: SpectralGrid,
+    *,
+    ky_target: float,
+    kx_target: float | None,
+    use_dealias_mask: bool,
+) -> tuple[int, int]:
+    ky = np.asarray(grid.ky, dtype=float)
+    kx = np.asarray(grid.kx, dtype=float)
+    kx_pick_target = 0.0 if kx_target is None else float(kx_target)
+    if not use_dealias_mask:
+        ky_pick = select_ky_index(ky, ky_target)
+        kx_pick = _nearest_index_from_candidates(
+            kx, kx_pick_target, np.arange(kx.size, dtype=int)
+        )
+        return ky_pick, kx_pick
+
+    mask = _validate_dealias_mask_shape(
+        grid.dealias_mask,
+        ky_size=ky.size,
+        kx_size=kx.size,
+    )
+    ky_pick = _nearest_index_from_candidates(
+        ky, ky_target, _active_ky_indices(mask, ky.size)
+    )
+    kx_pick = _nearest_index_from_candidates(
+        kx, kx_pick_target, _active_kx_indices(mask, ky_pick, kx.size)
+    )
+    return int(ky_pick), int(kx_pick)
+
+
+def _infer_runtime_nonlinear_steps(
+    cfg: RuntimeConfig,
+    *,
+    dt: float,
+    steps: int | None,
+) -> int:
+    """Infer nonlinear explicit step counts with the same dt ceiling as the integrator."""
+
+    if steps is not None:
+        steps_val = int(steps)
+    elif bool(cfg.time.fixed_dt):
+        steps_val = int(
+            np.round(float(cfg.time.t_max) / max(float(cfg.time.dt), 1.0e-12))
+        )
+    else:
+        # Keep runtime inference aligned with adaptive stepping: when
+        # dt_max is unset, the nonlinear integrator clamps at dt itself.
+        dt_cap = float(cfg.time.dt_max) if cfg.time.dt_max is not None else float(dt)
+        steps_val = int(np.ceil(float(cfg.time.t_max) / max(dt_cap, 1.0e-12)))
+    if steps_val < 1:
+        raise ValueError("steps must be >= 1")
+    return steps_val
+
+
+def _runtime_external_phi(cfg: RuntimeConfig) -> float | None:
+    """Return a runtime external-phi source if requested."""
+
+    source = str(cfg.expert.source).strip().lower()
+    if source in {"", "default"}:
+        return None
+    if source != "phiext_full":
+        raise ValueError(
+            f"unsupported expert.source={cfg.expert.source!r}; expected 'default' or 'phiext_full'"
+        )
+    return float(cfg.expert.phi_ext)
 
 
 @dataclass(frozen=True)
@@ -116,7 +289,6 @@ def _status_callback(callback: Callable[[str], None] | None) -> Callable[[str], 
 def _prepare_context(
     cfg: RuntimeConfig,
     *,
-    deps: FullNonlinearRuntimeDeps,
     ky_target: float,
     kx_target: float | None,
     Nl: int,
@@ -125,13 +297,13 @@ def _prepare_context(
     steps: int | None,
     status: Callable[[str], None],
 ) -> _RunContext:
-    geom = deps.build_runtime_geometry(cfg)
+    geom = build_runtime_geometry(cfg)
     status("building spectral grid")
-    grid = deps.build_spectral_grid(deps.apply_geometry_grid_defaults(geom, cfg.grid))
+    grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
     status("building runtime nonlinear parameters")
-    params = deps.build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
-    terms = deps.build_runtime_term_config(cfg)
-    ky_index, kx_index = deps.select_nonlinear_mode_indices(
+    params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
+    terms = build_runtime_term_config(cfg)
+    ky_index, kx_index = _select_nonlinear_mode_indices(
         grid,
         ky_target=ky_target,
         kx_target=kx_target,
@@ -142,7 +314,7 @@ def _prepare_context(
         f"kx={float(np.asarray(grid.kx[kx_index])):.6g}"
     )
     status("building initial condition")
-    G0 = deps.build_initial_condition(
+    G0 = _build_initial_condition(
         grid,
         geom,
         cfg,
@@ -150,7 +322,7 @@ def _prepare_context(
         kx_index=kx_index,
         Nl=Nl,
         Nm=Nm,
-        nspecies=len(deps.species_to_linear(cfg.species)),
+        nspecies=len(_species_to_linear(cfg.species)),
     )
     dt_val = float(cfg.time.dt if dt is None else dt)
     if dt_val <= 0.0:
@@ -164,7 +336,7 @@ def _prepare_context(
         ky_index=int(ky_index),
         kx_index=int(kx_index),
         dt=dt_val,
-        steps=int(deps.infer_runtime_nonlinear_steps(cfg, dt=dt_val, steps=steps)),
+        steps=int(_infer_runtime_nonlinear_steps(cfg, dt=dt_val, steps=steps)),
         adaptive_chunked=steps is None and not bool(cfg.time.fixed_dt),
     )
     # Before the first step, not after the last: an over-CFL run that is going
@@ -176,7 +348,6 @@ def _prepare_context(
 def _diagnostic_policy(
     cfg: RuntimeConfig,
     *,
-    deps: FullNonlinearRuntimeDeps,
     diagnostics: bool | None,
     sample_stride: int | None,
     diagnostics_stride: int | None,
@@ -215,7 +386,7 @@ def _diagnostic_policy(
         fixed_mode_on=fixed_mode_on,
         fixed_ky_index=fixed_ky,
         fixed_kx_index=fixed_kx,
-        external_phi=deps.runtime_external_phi(cfg),
+        external_phi=_runtime_external_phi(cfg),
         resolved_diagnostics=resolved_diagnostics,
         return_state=return_state,
         show_progress=show_progress,
@@ -227,7 +398,6 @@ def _diagnostic_kwargs(
     ctx: _RunContext,
     policy: _DiagnosticPolicy,
     *,
-    deps: FullNonlinearRuntimeDeps,
     steps: int,
     method: str | None,
     sample_stride: int,
@@ -235,7 +405,7 @@ def _diagnostic_kwargs(
     fixed_dt: bool,
     show_progress: bool,
 ) -> dict[str, Any]:
-    return deps.build_runtime_nonlinear_diagnostics_kwargs(
+    return build_runtime_nonlinear_diagnostics_kwargs(
         cfg,
         dt=ctx.dt,
         steps=steps,
@@ -305,7 +475,6 @@ def _nonlinear_cfl_margin(
     or has not yet been sampled onto the grid.
     """
 
-    from gkx.config import resolve_cfl_fac
     from gkx.geometry import ensure_flux_tube_geometry_data
     from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
 
@@ -368,7 +537,6 @@ def _run_chunked_diagnostics(
     ctx: _RunContext,
     policy: _DiagnosticPolicy,
     *,
-    deps: FullNonlinearRuntimeDeps,
     method: str | None,
     status: Callable[[str], None],
     stop_condition: Callable[[Any, Any, Any, Any], dict[str, Any]] | None,
@@ -395,7 +563,6 @@ def _run_chunked_diagnostics(
             cfg,
             ctx,
             policy,
-            deps=deps,
             steps=steps_now,
             method=method,
             sample_stride=1,
@@ -408,7 +575,7 @@ def _run_chunked_diagnostics(
             kwargs["time_horizon"] = remaining_time
         kwargs["compile_cache"] = compile_cache
         t_chunk, diag_chunk, G_next, fields_next = (
-            deps.integrate_nonlinear_explicit_diagnostics_state(
+            integrate_nonlinear_explicit_diagnostics_state(
                 G_chunk,
                 ctx.grid,
                 ctx.geom,
@@ -428,7 +595,7 @@ def _run_chunked_diagnostics(
         stop = bool(decision.get("saturated")) or (step_capped and steps_left <= 0)
         return {**decision, "stop": stop}
 
-    chunk_result = deps.run_adaptive_runtime_chunk_loop(
+    chunk_result = run_adaptive_runtime_chunk_loop(
         integrate_chunk=run_chunk,
         t_max=ctx.dt * ctx.steps if step_capped else float(cfg.time.t_max),
         chunk_steps=chunk_steps,
@@ -470,7 +637,6 @@ def _run_diagnostics(
     ctx: _RunContext,
     policy: _DiagnosticPolicy,
     *,
-    deps: FullNonlinearRuntimeDeps,
     method: str | None,
     status: Callable[[str], None],
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
@@ -489,7 +655,6 @@ def _run_diagnostics(
             cfg,
             ctx,
             policy,
-            deps=deps,
             method=method,
             status=status,
             stop_condition=stop_condition,
@@ -501,7 +666,6 @@ def _run_diagnostics(
         cfg,
         ctx,
         policy,
-        deps=deps,
         steps=ctx.steps,
         method=method,
         sample_stride=policy.sample_stride,
@@ -509,14 +673,12 @@ def _run_diagnostics(
         fixed_dt=bool(cfg.time.fixed_dt),
         show_progress=policy.show_progress,
     )
-    t, diag, G_final, fields_final = (
-        deps.integrate_nonlinear_explicit_diagnostics_state(
-            ctx.G0,
-            ctx.grid,
-            ctx.geom,
-            ctx.params,
-            **kwargs,
-        )
+    t, diag, G_final, fields_final = integrate_nonlinear_explicit_diagnostics_state(
+        ctx.G0,
+        ctx.grid,
+        ctx.geom,
+        ctx.params,
+        **kwargs,
     )
     # The chunked routes above validate every chunk before returning it. This
     # one is a single scan, so nothing has looked at the trace yet: an unstable
@@ -532,7 +694,6 @@ def _result(
     ctx: _RunContext,
     policy: _DiagnosticPolicy,
     *,
-    deps: FullNonlinearRuntimeDeps,
     t: Any,
     diagnostics: Any,
     fields: Any,
@@ -540,7 +701,7 @@ def _result(
     summarize_fields: bool,
     saturation: dict[str, Any] | None = None,
 ) -> RuntimeNonlinearResult:
-    return deps.build_runtime_nonlinear_result(
+    return build_runtime_nonlinear_result(
         t=np.asarray(t),
         diagnostics=diagnostics,
         fields=fields,
@@ -557,7 +718,6 @@ def _run_final_state(
     ctx: _RunContext,
     policy: _DiagnosticPolicy,
     *,
-    deps: FullNonlinearRuntimeDeps,
     status: Callable[[str], None],
 ) -> tuple[RuntimeNonlinearResult, Any]:
     status(
@@ -569,7 +729,7 @@ def _run_final_state(
     kwargs = {"terms": ctx.terms, **request}
     if policy.show_progress:
         kwargs["show_progress"] = True
-    G_final, fields, *extra = deps.integrate_nonlinear_from_config(
+    G_final, fields, *extra = integrate_nonlinear_from_config(
         ctx.G0, ctx.grid, ctx.geom, ctx.params, time_cfg, **kwargs
     )
     solve = checked_solve_summary(extra, request, label="nonlinear IMEX run")
@@ -577,7 +737,6 @@ def _run_final_state(
     result = _result(
         ctx,
         policy,
-        deps=deps,
         t=np.asarray([]),
         diagnostics=None,
         fields=fields,
@@ -591,7 +750,6 @@ def _diagnostic_run_result(
     ctx: _RunContext,
     policy: _DiagnosticPolicy,
     *,
-    deps: FullNonlinearRuntimeDeps,
     t: Any,
     diagnostics: Any,
     fields: Any,
@@ -604,7 +762,6 @@ def _diagnostic_run_result(
         return _result(
             ctx,
             policy,
-            deps=deps,
             t=t,
             diagnostics=diagnostics,
             fields=fields,
@@ -618,7 +775,6 @@ def _diagnostic_run_result(
     return _result(
         ctx,
         policy,
-        deps=deps,
         t=np.asarray([]),
         diagnostics=None,
         fields=fields,
@@ -632,23 +788,21 @@ def _run_once(
     ctx: _RunContext,
     policy: _DiagnosticPolicy,
     *,
-    deps: FullNonlinearRuntimeDeps,
     method: str | None,
     status: Callable[[str], None],
 ) -> tuple[RuntimeNonlinearResult, Any]:
     """Run one nonlinear trajectory and return its result plus its final state."""
 
     if not policy.requires_diagnostic_path and not ctx.adaptive_chunked:
-        return _run_final_state(cfg, ctx, policy, deps=deps, status=status)
+        return _run_final_state(cfg, ctx, policy, status=status)
 
     t, diag, G_final, fields_final, saturation = _run_diagnostics(
-        cfg, ctx, policy, deps=deps, method=method, status=status
+        cfg, ctx, policy, method=method, status=status
     )
     return (
         _diagnostic_run_result(
             ctx,
             policy,
-            deps=deps,
             t=t,
             diagnostics=diag,
             fields=fields_final,
@@ -665,7 +819,6 @@ def _run_sharded(
     ctx: _RunContext,
     policy: _DiagnosticPolicy,
     *,
-    deps: FullNonlinearRuntimeDeps,
     method: str | None,
     status: Callable[[str], None],
     plan: NonlinearParallelPlan,
@@ -677,14 +830,14 @@ def _run_sharded(
     status(f"routing nonlinear run through {plan.describe()}")
     sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
     result, sharded_state = _run_once(
-        cfg, sharded_ctx, policy, deps=deps, method=method, status=status
+        cfg, sharded_ctx, policy, method=method, status=status
     )
     if not plan.strict_identity:
         status("parallel strict_identity=false; skipping the serial identity gate")
         return result
     status("verifying sharded nonlinear identity against the serial route")
     serial_result, serial_state = _run_once(
-        cfg, ctx, policy, deps=deps, method=method, status=status
+        cfg, ctx, policy, method=method, status=status
     )
     assert_nonlinear_parallel_identity(
         serial_state=serial_state,
@@ -697,28 +850,44 @@ def _run_sharded(
     return result
 
 
-def run_full_nonlinear_runtime(
+def prepare(case: RuntimeConfig, **options: Any) -> Any:
+    """Prepare a reusable compiled nonlinear simulation; see its class docstring."""
+    if not case.physics.nonlinear:
+        raise ValueError("prepare currently requires nonlinear physics")
+    if options.pop("diagnostics", True) is not True:
+        raise ValueError("prepare requires diagnostics=True")
+    return run_runtime_nonlinear(case, diagnostics=True, prepare_only=True, **options)
+
+
+def run_runtime_nonlinear(
     cfg: RuntimeConfig,
     *,
-    deps: FullNonlinearRuntimeDeps,
-    ky_target: float,
-    kx_target: float | None,
-    Nl: int,
-    Nm: int,
-    dt: float | None,
-    steps: int | None,
-    method: str | None,
-    sample_stride: int | None,
-    diagnostics_stride: int | None,
-    laguerre_mode: str | None,
-    diagnostics: bool | None,
-    resolved_diagnostics: bool,
-    return_state: bool,
-    show_progress: bool,
+    ky_target: float = 0.3,
+    kx_target: float | None = None,
+    Nl: int | None = None,
+    Nm: int | None = None,
+    dt: float | None = None,
+    steps: int | None = None,
+    method: str | None = None,
+    sample_stride: int | None = None,
+    diagnostics_stride: int | None = None,
+    laguerre_mode: str | None = None,
+    diagnostics: bool | None = None,
+    resolved_diagnostics: bool = True,
+    return_state: bool = False,
+    show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
     prepare_only: bool = False,
 ) -> Any:
-    """Run one full-GK nonlinear point from a runtime config."""
+    """Run a nonlinear point using the unified runtime config path.
+
+    ``prepare_only`` returns the compiled prepared simulation instead (the
+    :func:`prepare` path).
+    """
+
+    Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    if status_callback is not None:
+        status_callback("building runtime geometry")
 
     # Resolved before any geometry or grid work so an unroutable [parallel]
     # request fails immediately instead of after a long serial run.
@@ -730,7 +899,6 @@ def run_full_nonlinear_runtime(
     status = _status_callback(status_callback)
     ctx = _prepare_context(
         cfg,
-        deps=deps,
         ky_target=ky_target,
         kx_target=kx_target,
         Nl=Nl,
@@ -741,7 +909,6 @@ def run_full_nonlinear_runtime(
     )
     policy = _diagnostic_policy(
         cfg,
-        deps=deps,
         diagnostics=diagnostics,
         sample_stride=sample_stride,
         diagnostics_stride=diagnostics_stride,
@@ -777,7 +944,6 @@ def run_full_nonlinear_runtime(
             cfg,
             ctx,
             policy,
-            deps=deps,
             steps=ctx.steps,
             method=method,
             sample_stride=policy.sample_stride,
@@ -787,249 +953,15 @@ def run_full_nonlinear_runtime(
         )
         if not bool(cfg.time.fixed_dt):
             kwargs["time_horizon"] = float(cfg.time.t_max)
-        return deps.prepare_nonlinear_explicit_diagnostics(
+        return prepare_nonlinear_explicit_diagnostics(
             ctx.G0, ctx.grid, ctx.geom, ctx.params, **kwargs
         )
     if plan is None:
-        return _run_once(cfg, ctx, policy, deps=deps, method=method, status=status)[0]
-    return _run_sharded(
-        cfg, ctx, policy, deps=deps, method=method, status=status, plan=plan
-    )
-
-
-@dataclass(frozen=True)
-class SecondaryModeResult:
-    """Late-time growth and frequency for one secondary-instability mode."""
-
-    ky: float
-    kx: float
-    gamma: float
-    omega: float
-
-
-def _leading_finite_prefix(
-    t: ArrayLike,
-    signal: ArrayLike,
-) -> tuple[np.ndarray, np.ndarray]:
-    t_arr = np.asarray(t, dtype=float)
-    sig_arr = np.asarray(signal, dtype=np.complex128)
-    finite = np.isfinite(sig_arr)
-    if not np.any(finite):
-        return t_arr[:0], sig_arr[:0]
-    first_bad = np.where(~finite)[0]
-    stop = int(first_bad[0]) if first_bad.size else int(sig_arr.size)
-    return t_arr[:stop], sig_arr[:stop]
-
-
-def _tail_mean_pair(
-    gamma_t: ArrayLike,
-    omega_t: ArrayLike,
-    *,
-    tail_fraction: float | None,
-) -> tuple[float, float] | None:
-    gamma_arr = np.asarray(gamma_t, dtype=float)
-    omega_arr = np.asarray(omega_t, dtype=float)
-    finite = np.isfinite(gamma_arr) & np.isfinite(omega_arr)
-    if not np.any(finite):
-        return None
-    gamma_finite = gamma_arr[finite]
-    omega_finite = omega_arr[finite]
-    if tail_fraction is None:
-        return float(gamma_finite[-1]), float(omega_finite[-1])
-    istart = int(len(gamma_finite) * (1.0 - float(tail_fraction)))
-    istart = max(0, min(istart, len(gamma_finite) - 1))
-    return float(np.mean(gamma_finite[istart:])), float(np.mean(omega_finite[istart:]))
-
-
-def _run_runtime_linear(*args: Any, **kwargs: Any) -> Any:
-    from gkx.runtime import run_runtime_linear
-
-    return run_runtime_linear(*args, **kwargs)
-
-
-def _run_runtime_nonlinear(*args: Any, **kwargs: Any) -> Any:
-    from gkx.runtime import run_runtime_nonlinear
-
-    return run_runtime_nonlinear(*args, **kwargs)
-
-
-def write_restart_state(
-    path: str | Path, state: np.ndarray, *, ny_full: int | None = None
-) -> Path:
-    """Write a complex restart state in the runtime NetCDF layout.
-
-    ``ny_full`` is the length of the two-sided ``ky`` axis, and is what lets
-    the writer keep a half-spectrum state out of the one file size whose
-    meaning is already taken; see :func:`gkx.artifacts.io.write_netcdf_restart_state`.
-    """
-
-    return write_netcdf_restart_state(path, state, ny_full=ny_full)
-
-
-def _embed_linear_seed_on_full_grid(
-    cfg: RuntimeConfig,
-    state: np.ndarray,
-    *,
-    ky_target: float,
-) -> np.ndarray:
-    geom = build_flux_tube_geometry(cfg.geometry)
-    grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
-    full_shape = (
-        state.shape[0],
-        state.shape[1],
-        state.shape[2],
-        grid.ky.size,
-        grid.kx.size,
-        grid.z.size,
-    )
-    if tuple(state.shape) == full_shape:
-        return np.asarray(state, dtype=np.complex64)
-    if state.ndim != 6 or state.shape[3] != 1:
-        raise ValueError(
-            f"expected selected-ky linear state with shape (..., 1, Nx, Nz), got {state.shape}"
-        )
-    ky_idx = int(np.argmin(np.abs(np.asarray(grid.ky, dtype=float) - float(ky_target))))
-    full_state = np.zeros(full_shape, dtype=np.complex64)
-    full_state[..., ky_idx : ky_idx + 1, :, :] = np.asarray(state, dtype=np.complex64)
-    return full_state
-
-
-def run_secondary_seed(
-    cfg: RuntimeConfig,
-    *,
-    restart_path: str | Path,
-    ky_target: float,
-    Nl: int,
-    Nm: int,
-    dt: float = 1.0,
-    steps: int = 2,
-    method: str = "sspx3",
-    solver: str = "time",
-) -> Path:
-    """Run the linear seed stage and write its final full-grid restart state."""
-
-    result = _run_runtime_linear(
-        cfg,
-        ky_target=ky_target,
-        Nl=Nl,
-        Nm=Nm,
-        solver=solver,
-        method=method,
-        dt=dt,
-        steps=steps,
-        return_state=True,
-    )
-    if result.state is None:
-        raise RuntimeError("Secondary seed run did not return a final state.")
-    state_full = _embed_linear_seed_on_full_grid(cfg, result.state, ky_target=ky_target)
-    geom = build_flux_tube_geometry(cfg.geometry)
-    grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
-    return write_restart_state(restart_path, state_full, ny_full=source_ny_full(grid))
-
-
-def build_secondary_stage2_config(
-    cfg: RuntimeConfig,
-    *,
-    restart_file: str | Path,
-    restart_scale: float = 500.0,
-    init_amp: float = 1.0e-5,
-    dt: float = 0.01,
-    t_max: float = 100.0,
-    method: str = "sspx3",
-    iky_fixed: int = 1,
-    ikx_fixed: int = 0,
-) -> RuntimeConfig:
-    """Build the nonlinear stage that evolves a saved primary-mode seed."""
-
-    return replace(
-        cfg,
-        time=replace(
-            cfg.time,
-            t_max=float(t_max),
-            dt=float(dt),
-            method=str(method),
-            fixed_dt=True,
-        ),
-        init=replace(
-            cfg.init,
-            init_amp=float(init_amp),
-            init_single=False,
-            init_file=str(restart_file),
-            init_file_scale=float(restart_scale),
-            init_file_mode="add",
-        ),
-        physics=replace(cfg.physics, linear=False, nonlinear=True),
-        terms=replace(cfg.terms, nonlinear=1.0),
-        expert=RuntimeExpertConfig(
-            fixed_mode=True,
-            iky_fixed=int(iky_fixed),
-            ikx_fixed=int(ikx_fixed),
-        ),
-    )
-
-
-def run_secondary_modes(
-    cfg: RuntimeConfig,
-    *,
-    modes: Sequence[tuple[float, float]],
-    Nl: int,
-    Nm: int,
-    steps: int | None = None,
-    sample_stride: int = 100,
-    fit_fraction: float | None = 0.5,
-) -> list[SecondaryModeResult]:
-    """Run one nonlinear secondary stage per requested diagnostic mode."""
-
-    rows: list[SecondaryModeResult] = []
-    for ky_target, kx_target in modes:
-        result = _run_runtime_nonlinear(
-            cfg,
-            ky_target=float(ky_target),
-            kx_target=float(kx_target),
-            Nl=Nl,
-            Nm=Nm,
-            steps=steps,
-            sample_stride=sample_stride,
-        )
-        if result.diagnostics is None:
-            raise RuntimeError("Secondary nonlinear run did not produce diagnostics.")
-        tail_mean = _tail_mean_pair(
-            result.diagnostics.gamma_t,
-            result.diagnostics.omega_t,
-            tail_fraction=fit_fraction,
-        )
-        gamma = float(tail_mean[0]) if tail_mean is not None else 0.0
-        omega = float(tail_mean[1]) if tail_mean is not None else 0.0
-        phi_mode_t = result.diagnostics.phi_mode_t
-        if fit_fraction is not None and phi_mode_t is not None:
-            t, signal = _leading_finite_prefix(result.diagnostics.t, phi_mode_t)
-            if t.size >= 2 and np.max(np.abs(signal)) > 0.0:
-                span = float(t[-1] - t[0])
-                tmin = float(t[0] + (1.0 - fit_fraction) * span) if span > 0.0 else None
-                try:
-                    gamma_fit, omega_fit = fit_growth_rate(t, signal, tmin=tmin)
-                    gamma = float(gamma_fit)
-                    if tail_mean is None:
-                        omega = float(omega_fit)
-                except ValueError:
-                    pass
-        rows.append(
-            SecondaryModeResult(
-                ky=float(ky_target),
-                kx=float(kx_target),
-                gamma=gamma,
-                omega=omega,
-            )
-        )
-    return rows
+        return _run_once(cfg, ctx, policy, method=method, status=status)[0]
+    return _run_sharded(cfg, ctx, policy, method=method, status=status, plan=plan)
 
 
 __all__ = [
-    "FullNonlinearRuntimeDeps",
-    "SecondaryModeResult",
-    "build_secondary_stage2_config",
-    "run_full_nonlinear_runtime",
-    "run_secondary_modes",
-    "run_secondary_seed",
-    "write_restart_state",
+    "prepare",
+    "run_runtime_nonlinear",
 ]

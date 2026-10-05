@@ -6,8 +6,6 @@ import argparse
 import sys
 from pathlib import Path
 from typing import Any, Sequence
-from dataclasses import dataclass
-from typing import Callable
 
 from gkx.workflows.runtime import (
     wout as runtime_wout,
@@ -15,7 +13,6 @@ from gkx.workflows.runtime import (
 from gkx.workflows.runtime.toml import (
     load_runtime_from_toml,
     load_toml,
-    resolve_runtime_path,
 )
 from gkx._version import __version__
 from gkx.artifacts.plotting import (
@@ -24,18 +21,11 @@ from gkx.artifacts.plotting import (
 )
 from gkx.geometry.miller_eik import generate_runtime_miller_eik
 from gkx.geometry.vmec_eik import generate_runtime_vmec_eik
-from gkx.workflows.runtime.artifacts import (
-    run_runtime_nonlinear_with_artifacts,
-    write_quasilinear_artifacts,
-    write_runtime_linear_artifacts,
-    write_runtime_linear_scan_artifacts,
-)
-from gkx.runtime import run_runtime_linear, run_runtime_scan
+from gkx.artifacts.io import write_runtime_linear_artifacts
+from gkx.workflows.linear import run_runtime_linear
 from gkx.compilation_cache import enable_persistent_compilation_cache
 from gkx.workflows.runtime.commands import (
-    RuntimeCommandDeps,
     attach_preloaded_runtime_config,
-    build_runtime_command_deps,
     plot_saved_output_command,
     run_runtime_linear_command,
     run_runtime_nonlinear_command,
@@ -64,16 +54,6 @@ DEFAULT_DEMO_SETTINGS: dict[str, float | int | str] = {
     "sample_stride": 5,
     "fit_signal": "phi",
 }
-
-
-@dataclass(frozen=True)
-class DefaultDemoDeps:
-    """Patchable runtime and output dependencies for the default demo."""
-
-    load_runtime_from_toml: Callable[..., tuple[Any, dict[str, Any]]]
-    run_runtime_linear: Callable[..., Any]
-    linear_runtime_panel_figure: Callable[..., tuple[Any, Any]]
-    write_runtime_linear_artifacts: Callable[[str | Path, Any], dict[str, str]]
 
 
 def default_demo_plot_path() -> Path:
@@ -221,9 +201,9 @@ def _print_intro(toml_path: Path) -> None:
     print(f"wrote reproducible input: {toml_path}", flush=True)
 
 
-def _write_plot(deps: DefaultDemoDeps, result: Any) -> Path:
+def _write_plot(result: Any) -> Path:
     path = default_demo_plot_path()
-    fig, _axes = deps.linear_runtime_panel_figure(
+    fig, _axes = linear_runtime_panel_figure(
         t=result.t,
         signal=result.signal,
         z=result.z,
@@ -239,16 +219,16 @@ def _write_plot(deps: DefaultDemoDeps, result: Any) -> Path:
     return path
 
 
-def run_default_linear_demo(*, deps: DefaultDemoDeps) -> int:
+def run_default_linear_demo() -> int:
     """Run one small runtime case and write its TOML, data, and figure locally."""
 
     settings = DEFAULT_DEMO_SETTINGS
     toml_path = default_demo_toml_path()
     toml_path.write_text(default_demo_toml_text(), encoding="utf-8")
     _print_intro(toml_path)
-    cfg, raw = deps.load_runtime_from_toml(toml_path)
+    cfg, raw = load_runtime_from_toml(toml_path)
     fit = dict(raw.get("fit", {}))
-    result = deps.run_runtime_linear(
+    result = run_runtime_linear(
         cfg,
         ky_target=float(settings["ky"]),
         Nl=int(settings["Nl"]),
@@ -263,8 +243,8 @@ def run_default_linear_demo(*, deps: DefaultDemoDeps) -> int:
         status_callback=_status,
         **fit,
     )
-    paths = deps.write_runtime_linear_artifacts(default_demo_artifact_base(), result)
-    plot_path = _write_plot(deps, result)
+    paths = write_runtime_linear_artifacts(default_demo_artifact_base(), result)
+    plot_path = _write_plot(result)
     print(
         f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}", flush=True
     )
@@ -273,20 +253,6 @@ def run_default_linear_demo(*, deps: DefaultDemoDeps) -> int:
     print(f"saved {plot_path}", flush=True)
     print(f"rerun with: gkx {toml_path} --progress", flush=True)
     return 0
-
-
-# These imports remain on the executable facade so tests and downstream callers
-# can patch command dependencies without reaching into workflow internals.
-_PATCHABLE_RUNTIME_COMMAND_GLOBALS = (
-    load_runtime_from_toml,
-    resolve_runtime_path,
-    run_runtime_linear,
-    run_runtime_scan,
-    run_runtime_nonlinear_with_artifacts,
-    write_runtime_linear_artifacts,
-    write_runtime_linear_scan_artifacts,
-    write_quasilinear_artifacts,
-)
 
 
 def _direct_config_shorthand_args(argv: Sequence[str]) -> list[str] | None:
@@ -309,13 +275,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 
 def _cmd_default_demo() -> int:
-    deps = DefaultDemoDeps(
-        load_runtime_from_toml=load_runtime_from_toml,
-        run_runtime_linear=run_runtime_linear,
-        linear_runtime_panel_figure=linear_runtime_panel_figure,
-        write_runtime_linear_artifacts=write_runtime_linear_artifacts,
-    )
-    return run_default_linear_demo(deps=deps)
+    return run_default_linear_demo()
 
 
 def _add_quasilinear_flags(cmd: argparse.ArgumentParser) -> None:
@@ -750,10 +710,6 @@ def main() -> int:
     return args.func(args)
 
 
-def _runtime_command_deps() -> RuntimeCommandDeps:
-    return build_runtime_command_deps(sys.modules[__name__])
-
-
 def _warn_if_invoked_deprecated(args: argparse.Namespace) -> None:
     # ``gkx run`` and ``gkx scan`` dispatch here too; only the old spellings warn.
     if getattr(args, "cmd", None) in _DEPRECATED_COMMANDS:
@@ -762,17 +718,17 @@ def _warn_if_invoked_deprecated(args: argparse.Namespace) -> None:
 
 def _cmd_run_runtime_linear(args: argparse.Namespace) -> int:
     _warn_if_invoked_deprecated(args)
-    return run_runtime_linear_command(args, deps=_runtime_command_deps())
+    return run_runtime_linear_command(args)
 
 
 def _cmd_scan_runtime_linear(args: argparse.Namespace) -> int:
     _warn_if_invoked_deprecated(args)
-    return scan_runtime_linear_command(args, deps=_runtime_command_deps())
+    return scan_runtime_linear_command(args)
 
 
 def _cmd_run_runtime_nonlinear(args: argparse.Namespace) -> int:
     _warn_if_invoked_deprecated(args)
-    return run_runtime_nonlinear_command(args, deps=_runtime_command_deps())
+    return run_runtime_nonlinear_command(args)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -9,7 +9,19 @@ from typing import Any, Callable, Mapping, Sequence, cast
 import numpy as np
 
 from gkx.config import RuntimeConfig
-from gkx.workflows.runtime.toml import reject_unknown_keys
+from gkx.artifacts.io import (
+    write_quasilinear_artifacts,
+    write_runtime_linear_artifacts,
+    write_runtime_linear_scan_artifacts,
+)
+from gkx.workflows.linear import run_runtime_linear
+from gkx.workflows.nonlinear import run_runtime_nonlinear
+from gkx.workflows.runtime.orchestration_scan import run_runtime_scan
+from gkx.workflows.runtime.toml import (
+    load_runtime_from_toml,
+    reject_unknown_keys,
+    resolve_runtime_path,
+)
 from gkx.workflows.runtime.startup import (
     _RUNTIME_LINEAR_HL_FALLBACK,
     _RUNTIME_NONLINEAR_HL_FALLBACK,
@@ -17,13 +29,13 @@ from gkx.workflows.runtime.startup import (
 from gkx.workflows.runtime.warm_start import resolve_scan_warm_start
 from gkx.workflows.runtime.results import (
     RuntimeLinearResult,
-    RuntimeNonlinearResult,
 )
-from gkx.workflows.runtime.orchestration_artifacts import (
+from gkx.workflows.runtime.artifacts import (
     print_linear_run_header,
     print_nonlinear_command_outputs,
     print_nonlinear_run_header,
     print_nonlinear_run_summary,
+    run_runtime_nonlinear_with_artifacts,
     write_linear_runtime_command_outputs,
     write_scan_runtime_command_outputs,
 )
@@ -321,39 +333,6 @@ _PRELOADED_RUNTIME_CONFIG_ATTR = "_gkx_preloaded_runtime_config"
 _PRELOADED_RUNTIME_DATA_ATTR = "_gkx_preloaded_runtime_data"
 
 
-@dataclass(frozen=True)
-class RuntimeCommandDeps:
-    """Patchable dependencies for executable runtime subcommands."""
-
-    load_runtime_from_toml: Callable[[str | Path], tuple[RuntimeConfig, dict[str, Any]]]
-    run_runtime_linear: Callable[..., RuntimeLinearResult]
-    run_runtime_scan: Callable[..., Any]
-    run_runtime_nonlinear_with_artifacts: Callable[
-        ..., tuple[RuntimeNonlinearResult, dict[str, str]]
-    ]
-    write_runtime_linear_artifacts: Callable[
-        [str | Path, RuntimeLinearResult], dict[str, str]
-    ]
-    write_runtime_linear_scan_artifacts: Callable[[str | Path, Any], dict[str, str]]
-    write_quasilinear_artifacts: Callable[[str | Path, dict[str, Any]], dict[str, str]]
-    resolve_runtime_path: Callable[..., str | None]
-
-
-def build_runtime_command_deps(facade: Any) -> RuntimeCommandDeps:
-    """Build runtime command dependencies from a patchable executable facade."""
-
-    return RuntimeCommandDeps(
-        load_runtime_from_toml=facade.load_runtime_from_toml,
-        run_runtime_linear=facade.run_runtime_linear,
-        run_runtime_scan=facade.run_runtime_scan,
-        run_runtime_nonlinear_with_artifacts=facade.run_runtime_nonlinear_with_artifacts,
-        write_runtime_linear_artifacts=facade.write_runtime_linear_artifacts,
-        write_runtime_linear_scan_artifacts=facade.write_runtime_linear_scan_artifacts,
-        write_quasilinear_artifacts=facade.write_quasilinear_artifacts,
-        resolve_runtime_path=facade.resolve_runtime_path,
-    )
-
-
 def attach_preloaded_runtime_config(
     args: Any,
     cfg: RuntimeConfig,
@@ -372,8 +351,6 @@ def attach_preloaded_runtime_config(
 
 def load_runtime_command_config(
     args: Any,
-    *,
-    deps: RuntimeCommandDeps,
 ) -> tuple[RuntimeConfig, dict[str, Any]]:
     """Load runtime TOML data, reusing the generic-dispatch preload if present."""
 
@@ -381,24 +358,23 @@ def load_runtime_command_config(
     data = getattr(args, _PRELOADED_RUNTIME_DATA_ATTR, None)
     if cfg is not None and data is not None:
         return cast(RuntimeConfig, cfg), cast(dict[str, Any], data)
-    return deps.load_runtime_from_toml(args.config)
+    return load_runtime_from_toml(args.config)
 
 
 def _prepare_runtime_command_config(
     args: Any,
     *,
-    deps: RuntimeCommandDeps,
     path_overrides: bool,
     quasilinear_overrides: bool,
 ) -> tuple[RuntimeConfig, dict[str, Any]]:
     """Load runtime command config and apply the command-specific overrides."""
 
-    cfg, data = load_runtime_command_config(args, deps=deps)
+    cfg, data = load_runtime_command_config(args)
     if path_overrides:
         cfg = apply_runtime_path_overrides(
             cfg,
             args,
-            resolve_runtime_path=deps.resolve_runtime_path,
+            resolve_runtime_path=resolve_runtime_path,
         )
     if quasilinear_overrides:
         cfg = apply_quasilinear_overrides(cfg, args)
@@ -521,8 +497,6 @@ def _write_linear_runtime_command_outputs(
     args: Any,
     cfg: RuntimeConfig,
     result: RuntimeLinearResult,
-    *,
-    deps: RuntimeCommandDeps,
 ) -> dict[str, dict[str, str]]:
     """Write all optional artifacts produced by one linear runtime command."""
 
@@ -532,8 +506,8 @@ def _write_linear_runtime_command_outputs(
             getattr(args, "ql_output", None) or cfg.quasilinear.output_path
         ),
         result=result,
-        linear_writer=deps.write_runtime_linear_artifacts,
-        quasilinear_writer=deps.write_quasilinear_artifacts,
+        linear_writer=write_runtime_linear_artifacts,
+        quasilinear_writer=write_quasilinear_artifacts,
     )
 
 
@@ -541,15 +515,13 @@ def _write_scan_runtime_command_outputs(
     args: Any,
     cfg: RuntimeConfig,
     scan: Any,
-    *,
-    deps: RuntimeCommandDeps,
 ) -> dict[str, str]:
     """Write optional artifacts produced by one linear-scan runtime command."""
 
     return write_scan_runtime_command_outputs(
         runtime_output_path(args, cfg) or cfg.quasilinear.output_path,
         scan,
-        writer=deps.write_runtime_linear_scan_artifacts,
+        writer=write_runtime_linear_scan_artifacts,
     )
 
 
@@ -585,12 +557,11 @@ def plot_saved_output_command(
     return 0
 
 
-def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
+def run_runtime_linear_command(args: Any) -> int:
     """Execute the runtime-linear subcommand after parser dispatch."""
 
     cfg, data = _prepare_runtime_command_config(
         args,
-        deps=deps,
         path_overrides=True,
         quasilinear_overrides=True,
     )
@@ -617,7 +588,7 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     )
 
     kx = run_cfg.get("kx")
-    res = deps.run_runtime_linear(
+    res = run_runtime_linear(
         cfg,
         ky_target=opts.ky,
         kx_target=None if kx is None else float(kx),
@@ -636,7 +607,7 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     gamma_text = _format_fitted_value(res.gamma, getattr(res, "gamma_stderr", None), 6)
     omega_text = _format_fitted_value(res.omega, getattr(res, "omega_stderr", None), 6)
     print(f"ky={res.ky:.4f} gamma={gamma_text} omega={omega_text}")
-    written = _write_linear_runtime_command_outputs(args, cfg, res, deps=deps)
+    written = _write_linear_runtime_command_outputs(args, cfg, res)
     auto_plot_runtime_outputs(
         "linear",
         written.get("linear", {}),
@@ -645,12 +616,11 @@ def run_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     return 0
 
 
-def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
+def scan_runtime_linear_command(args: Any) -> int:
     """Execute the runtime-linear ky-scan subcommand after parser dispatch."""
 
     cfg, data = _prepare_runtime_command_config(
         args,
-        deps=deps,
         path_overrides=False,
         quasilinear_overrides=True,
     )
@@ -658,7 +628,7 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     scan_cfg = _with_fit_signal(data.get("scan", {}), fit_cfg)
     opts = _resolve_scan_command_options(args, cfg, scan_cfg)
 
-    scan = deps.run_runtime_scan(
+    scan = run_runtime_scan(
         cfg,
         list(opts.ky_values),
         Nl=opts.Nl,
@@ -678,7 +648,7 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     )
     for ky, g, w in zip(scan.ky, scan.gamma, scan.omega):
         print(f"ky={ky:.4f} gamma={g:.6f} omega={w:.6f}")
-    written = _write_scan_runtime_command_outputs(args, cfg, scan, deps=deps)
+    written = _write_scan_runtime_command_outputs(args, cfg, scan)
     auto_plot_runtime_outputs(
         "linear_scan",
         written,
@@ -687,12 +657,11 @@ def scan_runtime_linear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
     return 0
 
 
-def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int:
+def run_runtime_nonlinear_command(args: Any) -> int:
     """Execute the runtime-nonlinear subcommand after parser dispatch."""
 
     cfg, data = _prepare_runtime_command_config(
         args,
-        deps=deps,
         path_overrides=True,
         quasilinear_overrides=False,
     )
@@ -717,7 +686,7 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
 
     out_path = runtime_output_path(args, cfg)
     kx = run_cfg.get("kx")
-    result, paths = deps.run_runtime_nonlinear_with_artifacts(
+    result, paths = run_runtime_nonlinear_with_artifacts(
         cfg,
         out=out_path,
         ky_target=opts.ky,
@@ -747,8 +716,6 @@ def run_runtime_nonlinear_command(args: Any, *, deps: RuntimeCommandDeps) -> int
 
 __all__ = [
     "RUNTIME_CASE_FIT_KEYS",
-    "RuntimeCommandDeps",
-    "RuntimeCaseDeps",
     "RuntimeLinearCommandOptions",
     "RuntimeNonlinearCommandOptions",
     "RuntimeScanCommandOptions",
@@ -766,7 +733,6 @@ __all__ = [
     "apply_runtime_path_overrides",
     "attach_preloaded_runtime_config",
     "auto_plot_runtime_outputs",
-    "build_runtime_command_deps",
     "load_runtime_command_config",
     "plot_saved_output_command",
     "print_linear_run_header",
@@ -821,38 +787,6 @@ _CASE_NONLINEAR_SPECS = (
     ("sample_stride", "time", "sample_stride", None, None),
     ("diagnostics_stride", "time", "diagnostics_stride", None, None),
 )
-
-
-@dataclass(frozen=True)
-class RuntimeCaseDeps:
-    """Patchable dependencies for runtime TOML case workflows."""
-
-    load_runtime_from_toml: Callable[[str | Path], tuple[RuntimeConfig, dict[str, Any]]]
-    run_runtime_linear: Callable[..., RuntimeLinearResult]
-    run_runtime_nonlinear: Callable[..., RuntimeNonlinearResult]
-    write_runtime_linear_artifacts: Callable[[str | Path, Any], dict[str, str]]
-    run_runtime_nonlinear_with_artifacts: Callable[
-        ..., tuple[RuntimeNonlinearResult, dict[str, str]]
-    ]
-
-
-def default_runtime_case_deps() -> RuntimeCaseDeps:
-    """Build default executable workflow dependencies."""
-
-    from gkx.workflows.runtime.toml import load_runtime_from_toml
-    from gkx.runtime import run_runtime_linear, run_runtime_nonlinear
-    from gkx.workflows.runtime.artifacts import (
-        run_runtime_nonlinear_with_artifacts,
-        write_runtime_linear_artifacts,
-    )
-
-    return RuntimeCaseDeps(
-        load_runtime_from_toml=load_runtime_from_toml,
-        run_runtime_linear=run_runtime_linear,
-        run_runtime_nonlinear=run_runtime_nonlinear,
-        write_runtime_linear_artifacts=write_runtime_linear_artifacts,
-        run_runtime_nonlinear_with_artifacts=run_runtime_nonlinear_with_artifacts,
-    )
 
 
 def _runtime_case_fit_config(raw: dict[str, Any]) -> dict[str, Any]:
@@ -918,12 +852,10 @@ def run_linear_case(
     steps: int | None = None,
     sample_stride: int | None = None,
     show_progress: bool = True,
-    deps: RuntimeCaseDeps | None = None,
 ) -> int:
     """Run a linear case from a runtime TOML with optional overrides."""
 
-    case_deps = default_runtime_case_deps() if deps is None else deps
-    cfg, raw = case_deps.load_runtime_from_toml(config_path)
+    cfg, raw = load_runtime_from_toml(config_path)
     run_kwargs = _linear_case_run_kwargs(
         raw,
         {
@@ -939,13 +871,13 @@ def run_linear_case(
     )
     run_kwargs["show_progress"] = show_progress
 
-    result = case_deps.run_runtime_linear(
+    result = run_runtime_linear(
         cfg,
         **run_kwargs,
         **_runtime_case_fit_config(raw),
     )
     if cfg.output.path:
-        paths = case_deps.write_runtime_linear_artifacts(cfg.output.path, result)
+        paths = write_runtime_linear_artifacts(cfg.output.path, result)
         if "summary" in paths:
             print(f"saved {paths['summary']}")
     gamma_text = _format_fitted_value(
@@ -970,12 +902,10 @@ def run_nonlinear_case(
     sample_stride: int | None = None,
     diagnostics_stride: int | None = None,
     show_progress: bool = True,
-    deps: RuntimeCaseDeps | None = None,
 ) -> int:
     """Run a nonlinear case from a runtime TOML with optional overrides."""
 
-    case_deps = default_runtime_case_deps() if deps is None else deps
-    cfg, raw = case_deps.load_runtime_from_toml(config_path)
+    cfg, raw = load_runtime_from_toml(config_path)
     run_kwargs = _nonlinear_case_run_kwargs(
         raw,
         {
@@ -992,7 +922,7 @@ def run_nonlinear_case(
     run_kwargs["show_progress"] = show_progress
 
     if cfg.output.path:
-        result, paths = case_deps.run_runtime_nonlinear_with_artifacts(
+        result, paths = run_runtime_nonlinear_with_artifacts(
             cfg,
             out=cfg.output.path,
             **run_kwargs,
@@ -1001,7 +931,7 @@ def run_nonlinear_case(
         if "summary" in paths:
             print(f"saved {paths['summary']}")
     else:
-        result = case_deps.run_runtime_nonlinear(
+        result = run_runtime_nonlinear(
             cfg,
             resolved_diagnostics=False,
             **run_kwargs,

@@ -740,6 +740,7 @@ def _load_initial_state_from_file(
     the discarded rows are the conjugates of the kept ones (plan 5.3 N3).
     """
 
+    ky_layout = cast(KyLayout, str(ky_layout).strip().lower())
     half = ky_layout == HALF
     if path.suffix.lower() == ".nc":
         return load_netcdf_restart_state(
