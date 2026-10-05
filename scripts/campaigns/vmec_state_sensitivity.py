@@ -22,7 +22,7 @@ from gkx.geometry.flux_tube_contract import (
     _VMEC_METRIC_OBSERVABLE_NAMES,
 )
 from gkx.geometry.vmec_field_line_sampling import _rms_with_floor
-from gkx.geometry.vmec_state_controls import (
+from scripts.campaigns.vmec_state_context import (
     _VMECStateContext,
     _length_two_params,
     _load_vmec_state_context,

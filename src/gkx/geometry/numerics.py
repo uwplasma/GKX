@@ -6,60 +6,6 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
-import numpy as np
-
-
-def _array_parity_metrics(
-    candidate: Any, reference: Any, *, floor: float = 1.0e-12
-) -> dict[str, object]:
-    cand = np.asarray(candidate, dtype=float)
-    ref = np.asarray(reference, dtype=float)
-    metrics: dict[str, object] = {
-        "candidate_shape": [int(v) for v in cand.shape],
-        "reference_shape": [int(v) for v in ref.shape],
-        "shape_match": bool(cand.shape == ref.shape),
-    }
-    if cand.shape != ref.shape:
-        return metrics
-    diff = cand - ref
-    ref_scale = max(float(np.nanmax(np.abs(ref))) if ref.size else 0.0, float(floor))
-    local_scale = np.maximum(np.abs(ref), float(floor))
-    metrics.update(
-        {
-            "max_abs": float(np.nanmax(np.abs(diff))) if diff.size else 0.0,
-            "rms_abs": float(np.sqrt(np.nanmean(diff * diff))) if diff.size else 0.0,
-            "max_rel_pointwise": float(np.nanmax(np.abs(diff) / local_scale))
-            if diff.size
-            else 0.0,
-            "rms_rel_pointwise": float(np.sqrt(np.nanmean((diff / local_scale) ** 2)))
-            if diff.size
-            else 0.0,
-            "reference_scale": ref_scale,
-            "normalized_max_abs": float(np.nanmax(np.abs(diff)) / ref_scale)
-            if diff.size
-            else 0.0,
-            "candidate_min": float(np.nanmin(cand)) if cand.size else 0.0,
-            "candidate_max": float(np.nanmax(cand)) if cand.size else 0.0,
-            "reference_min": float(np.nanmin(ref)) if ref.size else 0.0,
-            "reference_max": float(np.nanmax(ref)) if ref.size else 0.0,
-        }
-    )
-    return metrics
-
-
-def _scalar_parity_metrics(
-    candidate: Any, reference: Any, *, floor: float = 1.0e-12
-) -> dict[str, float]:
-    cand = float(np.asarray(candidate))
-    ref = float(np.asarray(reference))
-    diff = cand - ref
-    scale = max(abs(ref), float(floor))
-    return {
-        "candidate": cand,
-        "reference": ref,
-        "abs": abs(diff),
-        "rel": abs(diff) / scale,
-    }
 
 
 def _interp_radial(
@@ -189,7 +135,6 @@ def _cumulative_trapezoid(y: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
 
 
 __all__ = [
-    "_array_parity_metrics",
     "_boozer_half_mesh_s_grid",
     "_cumulative_trapezoid",
     "_evaluate_boozer_cosine_series_on_field_line",
@@ -197,5 +142,4 @@ __all__ = [
     "_interp_radial",
     "_radial_derivative_array",
     "_radial_derivative_profile",
-    "_scalar_parity_metrics",
 ]
