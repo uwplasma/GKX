@@ -1013,7 +1013,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         geometry=components.prepared.setup.geom,
         cache=components.prepared.cache,
         params=params,
-        _run_raw=jit_by_value(run_raw),
+        _run_raw=jax.jit(run_raw),
         _run_dynamic_raw=jax.jit(run_dynamic_raw),
         _finalize=deps.finalize_scan_diagnostics_fn,
         stride=stride,
