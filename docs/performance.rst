@@ -28,6 +28,10 @@ as static arguments. The operator term switches
 a compiled loop to avoid recompilation, and the cached operator arrays can be
 built once and reused across runs. Nonlinear IMEX paths reuse the
 electrostatic compiled linear-RHS route whenever ``apar = bpar = 0``.
+A repeated ``gkx.solve`` of the same deck in one process reuses the compiled
+nonlinear executable instead of recompiling (rk3 and imex-ars3, bitwise
+identical output; the imex ``run_raw`` still recompiles on CPU, where the
+multithreaded factor probe differs at the ulp level).
 
 ``benchmarks/references/gkx_2_representative_performance_refresh.json`` is the
 compact representative refresh. It admits two bounded local-CPU rows after

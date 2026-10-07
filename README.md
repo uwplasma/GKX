@@ -91,7 +91,9 @@ For repeated nonlinear calls, `gkx.prepare(case, steps=N)` compiles once and
 
 ## Examples
 
-[examples/](examples/) is a numbered gallery. Each directory has a `run.py`
+[examples/](examples/) is a numbered gallery; directory N is step N of the
+[tutorial](docs/tutorials.rst), from a first linear run to VMEX optimization,
+with the physics, equations and how to read each plot. Each directory has a `run.py`
 with editable parameters at the top, a `case.toml` that runs in seconds to a
 minute on a laptop, and, where it applies, a literature-resolution
 `case_full.toml`.
@@ -137,8 +139,11 @@ within 0.13% everywhere. (b) The growth rate from three codes: GKX is within
 0.30. Miller 0.15 is the one point where the three codes spread by more than
 1%. Record: [cross-code benchmark](plan/research/2026-09-27-xcode/REPORT.md).
 
-- **GS2 and GX with kinetic electrons** (Cyclone Miller) agree to 1.2% and
-  0.2% at `ky rho_i` 0.30 and 0.50; the GKX eigenpair for this case is next.
+- **Kinetic electrons** (Cyclone Miller, provisional, two `k_y`): the GKX
+  eigenpair is within 0.35% of GX in growth rate at `ky rho_i` 0.30 and 0.50,
+  and within 1.5% of GS2.
+- **TEM** (Dannert & Jenko 2005 case, against converged GS2) is open: the GKX
+  growth rate still rises with velocity resolution (15.7% low at Nl16/Nm48).
 - **stella** gives a growth rate about 1.4 times the other codes on the
   same Cyclone input. In the build tested, stella's growth rate moves by 0.3%
   when its mirror term is switched off, while in GKX the mirror force is 14% of
@@ -269,7 +274,11 @@ linear phase, saturation by `t ~ 60-100`, and an averaging window of 100-200
 after it, or `run_to = "saturation"`. `run.py` plots the ion and
 electron heat flux and the step; set `T_MAX = 150` to run the tutorial grid
 into saturation. Production resolution is in the decks.
-For linear growth rates, `solver = "krylov"` needs no time step at all.
+For linear growth rates, `solver = "krylov"` needs no time step at all, but
+set `[time] damp_ends_rate`: without it the time route damps the ends at
+`damp_ends_amp/dt` and Krylov at `damp_ends_amp`, and the kinetic-electron
+growth rate moves from 0.168 to 0.243 on this deck (issue #354 is open). The
+shipped kinetic-electron decks state the rate.
 
 ## Collisions and proof tests
 
@@ -423,11 +432,15 @@ schemes agree on the growth rate to better than 1%.
 
 Cold wall time and peak memory across the tracked cases, including JAX
 startup and compilation; the executable caches compilations, so reruns are
-warm.
+warm, and a repeated `gkx.solve` of the same deck in one process compiles
+nothing (rk3 and imex-ars3, bitwise identical output).
 
 - **Nonlinear step:** about 196 ns per `Nx*Ny*Nz*Nl*Nm` element per step on
   CPU, flat from 64x64x24 to 96x96x48. On one RTX A4000 an RK3 step at
-  64x64x24, Nl = 4, Nm = 8 takes 15.6 ms; it is memory-traffic bound.
+  64x64x24, Nl = 4, Nm = 8 takes 15.6 ms; it is memory-traffic bound. The
+  GPU profile puts 18-42% of the step in the concatenate/slice fusions of the
+  linear RHS, 11-12% in FFTs and under 5% in the field solve; no single chain
+  exceeds 17%.
 - **Eigenvalues:** the sparse direct shift-invert route certifies the Cyclone
   eigenpair at n = 3,072 in about 5 s against 32-36 s for the matrix-free
   route, and its growth-rate gradient is 6-9 times faster.
