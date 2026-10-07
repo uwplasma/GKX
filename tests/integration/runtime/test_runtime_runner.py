@@ -761,7 +761,9 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     geom = build_runtime_geometry(runtime)
     grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, runtime.grid))
     grid = select_ky_grid(grid_full, select_ky_index(np.asarray(grid_full.ky), 0.15))
-    params = build_runtime_linear_params(runtime, Nm=8, geom=geom)
+    params = startup.timestep_free_linear_params(  # the operator Krylov solves
+        runtime, build_runtime_linear_params(runtime, Nm=8, geom=geom)
+    )
     term_cfg = linear_terms_to_term_config(build_runtime_linear_terms(runtime))
     cache = build_linear_cache(grid, geom, params, 8, 8)
     shape = (1, 8, 8, grid.ky.size, grid.kx.size, grid.z.size)
