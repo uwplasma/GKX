@@ -2301,9 +2301,7 @@ def _hermitian_multimode_case(
         bessel_bmag_power=1.0,
     )
     grid = build_spectral_grid(
-        GridConfig(
-            Nx=n[0], Ny=n[1], Nz=n[2], Lx=length, Ly=length, boundary="periodic"
-        )
+        GridConfig(Nx=n[0], Ny=n[1], Nz=n[2], Lx=length, Ly=length, boundary="periodic")
     )
     cache = build_linear_cache(grid, geom, params, Nl=nl, Nm=4)
     rng = np.random.default_rng(seed)
@@ -2342,18 +2340,36 @@ def _hermitian_multimode_case(
 def _free_energy(G, case):
     """Physical three-field free energy: entropy - Boltzmann + |dB|^2 / beta."""
 
-    cache, params, jv, vol = case["cache"], case["params"], case["jax_values"], case["vol"]
+    cache, params, jv, vol = (
+        case["cache"],
+        case["params"],
+        case["jax_values"],
+        case["vol"],
+    )
     fields = _solve_fields_impl(G, cache, params, fapar=1.0, w_bpar=1.0, **jv)
     H = build_H(
-        G, cache.Jl, fields.phi, jv["tz"], fields.apar, jv["vth"], fields.bpar, cache.JlB
+        G,
+        cache.Jl,
+        fields.phi,
+        jv["tz"],
+        fields.apar,
+        jv["vth"],
+        fields.bpar,
+        cache.JlB,
     )
-    entropy = 0.5 * jnp.sum(vol * case["nt"][:, None, None, None, None, None] * jnp.abs(H) ** 2)
-    boltzmann = 0.5 * jnp.sum(vol * jnp.abs(fields.phi) ** 2) * jnp.sum(
-        jv["density"] * jv["charge"] ** 2 / jv["temp"]
+    entropy = 0.5 * jnp.sum(
+        vol * case["nt"][:, None, None, None, None, None] * jnp.abs(H) ** 2
+    )
+    boltzmann = (
+        0.5
+        * jnp.sum(vol * jnp.abs(fields.phi) ** 2)
+        * jnp.sum(jv["density"] * jv["charge"] ** 2 / jv["temp"])
     )
     B2 = cache.bmag**2
     magnetic = jnp.sum(
-        vol * B2 * (cache.kperp2 * jnp.abs(fields.apar) ** 2 + jnp.abs(fields.bpar) ** 2)
+        vol
+        * B2
+        * (cache.kperp2 * jnp.abs(fields.apar) ** 2 + jnp.abs(fields.bpar) ** 2)
     )
     return entropy - boltzmann + magnetic / params.beta, (H, entropy)
 
@@ -2377,8 +2393,14 @@ def _drive_from_fluxes(case, fields, *, bpar):
         case["flux_fac"],
     )
     kw = dict(use_dealias=False, flux_scale=1.0)
-    Q = sum(jnp.sum(c, axis=(1, 2, 3)) for c in _heat_flux_channel_contrib_species(*args, **kw))
-    gam = sum(jnp.sum(c, axis=(1, 2, 3)) for c in _particle_flux_channel_contrib_species(*args, **kw))
+    Q = sum(
+        jnp.sum(c, axis=(1, 2, 3))
+        for c in _heat_flux_channel_contrib_species(*args, **kw)
+    )
+    gam = sum(
+        jnp.sum(c, axis=(1, 2, 3))
+        for c in _particle_flux_channel_contrib_species(*args, **kw)
+    )
     T = case["values"]["temp"]
     fp, tp = case["fprim"], case["tprim"]
     return case["params"].rho_star * float(
@@ -2405,8 +2427,14 @@ def test_three_field_free_energy_budget_closes_multimode(bpar):
     )
     jv = case["jax_values"]
     H = build_H(
-        G, cache.Jl, fields.phi, jv["tz"], fields.apar, jv["vth"],
-        fields.bpar if bpar else None, cache.JlB,
+        G,
+        cache.Jl,
+        fields.phi,
+        jv["tz"],
+        fields.apar,
+        jv["vth"],
+        fields.bpar if bpar else None,
+        cache.JlB,
     )
     if bpar:
         # Entropy and Boltzmann terms cancel to O(1e-3): fp32 needs that scale.
@@ -2414,7 +2442,12 @@ def test_three_field_free_energy_budget_closes_multimode(bpar):
         np.testing.assert_allclose(np.asarray(H_energy), np.asarray(H), atol=tol)
         # The physical energy is the GX source quadratic 1/2 <G, nT H>.
         source = 0.5 * jnp.real(
-            jnp.sum(case["vol"] * case["nt"][:, None, None, None, None, None] * jnp.conj(G) * H)
+            jnp.sum(
+                case["vol"]
+                * case["nt"][:, None, None, None, None, None]
+                * jnp.conj(G)
+                * H
+            )
         )
         np.testing.assert_allclose(float(W), float(source), atol=tol * float(entropy))
         _, dW = jax.jvp(lambda g: _free_energy(g, case)[0], (G,), (total,))
@@ -2449,8 +2482,10 @@ def test_bpar_diamagnetic_budget_converges_with_laguerre_truncation():
         )
         H = _free_energy(case["G"], case)[1][0]
         rate = jnp.sum(
-            case["vol"] * case["nt"][:, None, None, None, None, None]
-            * jnp.conj(H) * contrib["diamagnetic"]
+            case["vol"]
+            * case["nt"][:, None, None, None, None, None]
+            * jnp.conj(H)
+            * contrib["diamagnetic"]
         )
         drive = _drive_from_fluxes(case, fields, bpar=True)
         errors.append(abs(float(jnp.real(rate)) - drive) / abs(drive))
@@ -2488,10 +2523,18 @@ def test_three_field_nonlinear_bracket_conserves_free_energy(laguerre_mode):
         N, fields = rhs[0][0] - rhs[1][0], rhs[0][1]
         jv = case["jax_values"]
         H = build_H(
-            G, cache.Jl, fields.phi, jv["tz"], fields.apar, jv["vth"], fields.bpar,
+            G,
+            cache.Jl,
+            fields.phi,
+            jv["tz"],
+            fields.apar,
+            jv["vth"],
+            fields.bpar,
             cache.JlB,
         )
-        exchange = case["vol"] * case["nt"][:, None, None, None, None, None] * jnp.conj(H) * N
+        exchange = (
+            case["vol"] * case["nt"][:, None, None, None, None, None] * jnp.conj(H) * N
+        )
         errors.append(float(jnp.abs(jnp.sum(exchange)) / jnp.sum(jnp.abs(exchange))))
     if laguerre_mode == "spectral":
         assert errors[0] < tol

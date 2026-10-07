@@ -4132,3 +4132,210 @@ def test_hngc_integrations_are_needed_only_for_enabled_corrections(
     )
     assert observed["pfac"] == pytest.approx(expected_pfac)
     assert observed["sfac"] == pytest.approx(shat / 0.1 if flags[0] else 1.0)
+
+
+@pytest.mark.parametrize("shat", [0.4, -0.4])
+def test_vmec_field_reversal_is_a_radial_mirror_with_signed_outward_flux(
+    tmp_path, monkeypatch, shat
+):
+    """#332: B -> -B through producer, EIK writer, parser and full RHS.
+
+    Reversing the field (Phi_edge, G, I -> -Phi_edge, -G, -I) of a synthetic
+    up-down symmetric Boozer surface must change only the odd radial
+    couplings (gds21, cvdrift0, gbdrift0), so the reversed solver is the
+    original one with kx -> -kx.  The free-energy drive then fixes the sign of
+    the outward flux: the flux diagnostics, weighted by the flux-surface
+    measure, reproduce the drive in both field directions.
+    """
+
+    from gkx.core_ky_layout import FULL
+    from gkx.geometry.flux_tube import load_imported_geometry_netcdf
+    from gkx.operators.linear.moments import build_H
+    from gkx.operators.moments import (
+        _heat_flux_channel_contrib_species,
+        _particle_flux_channel_contrib_species,
+        fieldline_quadrature_weights,
+    )
+    from gkx.terms.assembly import assemble_rhs_terms_cached
+    from gkx.terms.config import TermConfig
+
+    def const(value):
+        return lambda x: np.full_like(np.asarray(x, dtype=float), value)
+
+    def surface(sign):
+        return SimpleNamespace(
+            phiedge=sign * 2 * np.pi * 0.01,
+            Aminor_p=0.2,
+            nfp=1,
+            raxis_cc=np.array([3.0]),
+            mnbooz=2,
+            xm_b=np.array([0, 1]),
+            xn_b=np.array([0, 0]),
+            rmnc_b=[const(3.0), const(0.1)],
+            zmns_b=[const(0.0), const(0.1)],
+            numns_b=[const(0.0), const(0.0)],
+            d_rmnc_b_d_s=[const(0.0), const(0.2)],
+            d_zmns_b_d_s=[const(0.0), const(0.2)],
+            d_numns_b_d_s=[const(0.0), const(0.0)],
+            gmnc_b=[const(-2.0), const(0.1)],
+            bmnc_b=[const(1.0), const(0.1)],
+            d_bmnc_b_d_s=[const(0.02), const(0.01)],
+            Gfun=const(-2.0 * sign),
+            Ifun=const(0.03 * sign),
+            iota=const(0.6),
+            d_iota_d_s=const(-shat * 0.6 / 0.5),
+            d_pressure_d_s=const(-700.0),
+        )
+
+    request = SimpleNamespace(
+        vmec_file="synthetic",
+        torflux=0.25,
+        beta=0.0,
+        alpha=0.0,
+        include_shear_variation=False,
+        include_pressure_variation=False,
+        npol=1.0,
+        npol_min=None,
+        ntheta=32,
+        isaxisym=True,
+        boundary="linked",
+        which_crossing=None,
+        betaprim=0.0,
+        y0=10.0,
+        x0=None,
+        jtwist=None,
+    )
+    geoms = {}
+    for sign in (1.0, -1.0):
+        monkeypatch.setattr(
+            vmec_backend,
+            "_load_vmec_boozer_splines",
+            lambda _f, sign=sign: (SimpleNamespace(close=lambda: None), surface(sign)),
+        )
+        path = vmec_backend.generate_vmec_eik_internal(
+            output_path=tmp_path / f"b{sign:+.0f}.eik.nc", request=request
+        )
+        geoms[sign] = load_imported_geometry_netcdf(path)
+    forward, reversed_ = geoms[1.0], geoms[-1.0]
+    assert forward.s_hat == pytest.approx(shat)
+    for name in ("gds21", "cv0", "gb0"):
+        odd = np.asarray(getattr(forward, f"{name}_profile"))
+        assert np.max(np.abs(odd)) > 1e-3
+        np.testing.assert_array_equal(
+            np.asarray(getattr(reversed_, f"{name}_profile")), -odd
+        )
+    for name in ("bmag", "bgrad", "gds2", "gds22", "cv", "gb", "jacobian", "grho"):
+        np.testing.assert_array_equal(
+            np.asarray(getattr(reversed_, f"{name}_profile")),
+            np.asarray(getattr(forward, f"{name}_profile")),
+        )
+    assert reversed_.gradpar_value == forward.gradpar_value
+
+    grid = build_spectral_grid(
+        GridConfig(
+            Nx=5, Ny=6, Nz=32, Lx=50.0 / abs(shat), Ly=20 * np.pi, boundary="linked"
+        ),
+        ky_layout=FULL,
+    )
+    tprim, fprim = np.array([3.0, 2.0]), np.array([1.0, 1.0])
+    params = LinearParams(
+        beta=0.01,
+        fapar=1.0,
+        tau_e=0.0,
+        charge_sign=jnp.asarray([1.0, -1.0]),
+        density=jnp.ones(2),
+        temp=jnp.ones(2),
+        mass=jnp.asarray([1.0, 0.01]),
+        tz=jnp.asarray([1.0, -1.0]),
+        vth=jnp.asarray([1.0, 10.0]),
+        rho=jnp.asarray([1.0, 0.1]),
+        fprim=jnp.asarray(fprim),
+        tprim=jnp.asarray(tprim),
+        nu=jnp.asarray([0.01, 0.1]),
+    )
+    rng = np.random.default_rng(1)
+    shape = (2, 2, 3, grid.ky.size, grid.kx.size, grid.z.size)
+    z = np.asarray(grid.z)
+    G = sum(
+        (rng.normal(size=shape[:-1]) + 1j * rng.normal(size=shape[:-1]))[..., None]
+        * np.exp(1j * k * z / 3)
+        for k in (-1, 1, 2)
+    )
+    G = np.fft.fft2(np.fft.ifft2(G, axes=(3, 4)).real, axes=(3, 4))
+    mirror = np.concatenate(([0], np.arange(grid.kx.size - 1, 0, -1)))
+
+    def kx_mirror(x):
+        return np.take(np.asarray(x), mirror, axis=-2)
+
+    results = {}
+    for sign, state in ((1.0, G), (-1.0, kx_mirror(G))):
+        cache = build_linear_cache(grid, geoms[sign], params, Nl=2, Nm=3)
+        rhs, fields, terms = assemble_rhs_terms_cached(
+            jnp.asarray(state),
+            cache,
+            params,
+            terms=TermConfig(end_damping=0.0),
+            use_custom_vjp=False,
+        )
+        vol, flux_fac = fieldline_quadrature_weights(geoms[sign], grid)
+        H = build_H(
+            jnp.asarray(state),
+            cache.Jl,
+            fields.phi,
+            params.tz,
+            fields.apar,
+            params.vth,
+            fields.bpar,
+            cache.JlB,
+        )
+        drive = float(jnp.real(jnp.sum(vol * jnp.conj(H) * terms["diamagnetic"])))
+        args = (
+            jnp.asarray(state),
+            fields.phi,
+            fields.apar,
+            fields.bpar,
+            cache,
+            grid,
+            params,
+            flux_fac,
+        )
+        kw = dict(use_dealias=False, flux_scale=1.0)
+        Q = np.asarray(
+            sum(
+                jnp.sum(c, axis=(1, 2, 3))
+                for c in _heat_flux_channel_contrib_species(*args, **kw)
+            )
+        )
+        gam = np.asarray(
+            sum(
+                jnp.sum(c, axis=(1, 2, 3))
+                for c in _particle_flux_channel_contrib_species(*args, **kw)
+            )
+        )
+        surface_ratio = float(jnp.sum(vol / flux_fac * vol))  # sum(J grho) / sum(J)
+        flux_drive = surface_ratio * float(
+            np.sum(fprim * gam + tprim * (Q - 1.5 * gam))
+        )
+        results[sign] = (rhs, Q, gam, drive, flux_drive)
+
+    tol = 1e-12 if jax.config.x64_enabled else 1e-5
+    rhs_f, Q_f, gam_f, drive_f, flux_f = results[1.0]
+    rhs_r, Q_r, gam_r, drive_r, flux_r = results[-1.0]
+    scale = np.max(np.abs(np.asarray(rhs_f)))
+    np.testing.assert_allclose(kx_mirror(rhs_f), np.asarray(rhs_r), atol=tol * scale)
+    np.testing.assert_allclose(Q_r, Q_f, rtol=tol * 10)
+    np.testing.assert_allclose(gam_r, gam_f, rtol=tol * 10)
+    # Bpar closes the drive identity to Laguerre truncation (test_terms_fields).
+    for drive, flux in ((drive_f, flux_f), (drive_r, flux_r)):
+        np.testing.assert_allclose(drive, flux, rtol=max(1e-6, 50 * tol))
+    # Negative control: a reversal that forgets one odd drift is not a mirror.
+    broken = replace(reversed_, gb0_profile=-reversed_.gb0_profile)
+    cache = build_linear_cache(grid, broken, params, Nl=2, Nm=3)
+    rhs_b, _, _ = assemble_rhs_terms_cached(
+        jnp.asarray(kx_mirror(G)),
+        cache,
+        params,
+        terms=TermConfig(end_damping=0.0),
+        use_custom_vjp=False,
+    )
+    assert np.max(np.abs(kx_mirror(rhs_f) - np.asarray(rhs_b))) > 1e-4 * scale
