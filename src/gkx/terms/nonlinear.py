@@ -194,12 +194,10 @@ def _spectral_chi_fields(
     apar_weight: float,
     bpar_weight: float,
 ) -> tuple[list[jnp.ndarray], int | None, int | None]:
-    phi_hat = prep.phi[None, None, ...]
-    chi_fields = [prep.Jl * phi_hat]
+    chi_fields = [prep.Jl * prep.phi[None, None, ...]]
     idx_bpar = None
     if prep.bpar is not None and bpar_weight != 0.0:
         idx_bpar = len(chi_fields)
-        # chi = J0 phi + (T/Z) 2 mu J1/alpha Bpar, as on the Laguerre grid path.
         tz_s = jnp.reshape(jnp.asarray(tz), (-1, 1, 1, 1, 1))
         chi_fields.append(tz_s * prep.JlB * prep.bpar[None, None, ...])
     idx_apar = None
