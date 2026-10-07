@@ -1,6 +1,7 @@
 # Examples
 
-A numbered gallery, one directory per workflow. Each `run.py` reads top to
+A numbered gallery that mirrors the [tutorial](../docs/tutorials.rst): step N
+of the tutorial is directory `NN_*`, read and run in order. Each `run.py` reads top to
 bottom: editable UPPER_CASE parameters at the top, then geometry, the run,
 a printed summary, a JSON summary, and a figure under
 `outputs/<group>/` in the working directory. `case.toml` is a short tutorial
@@ -11,7 +12,7 @@ not run in CI.
 
 | Group | What it shows | Tutorial runtime |
 |---|---|---|
-| [`01_linear_tokamak/`](01_linear_tokamak) | Cyclone ITG growth-rate scan and eigenfunction, s-alpha geometry | ~10 s CPU |
+| [`01_linear_tokamak/`](01_linear_tokamak) | Cyclone ITG growth-rate scan and eigenfunction, s-alpha geometry; `gkx case.toml` / `gkx case_miller.toml` run one `k_y` from the CLI in s-alpha and Miller geometry | ~10 s CPU |
 | [`02_linear_stellarator/`](02_linear_stellarator) | ITG scan in an HSX-like quasi-helically symmetric VMEC equilibrium (needs `vmex` once to build the wout) | ~1 min CPU |
 | [`03_nonlinear_tokamak/`](03_nonlinear_tokamak) | Nonlinear Cyclone ITG with streamed energy and heat-flux diagnostics | ~10 s CPU |
 | [`04_nonlinear_stellarator/`](04_nonlinear_stellarator) | Nonlinear ITG in the same VMEC stellarator flux tube (needs `vmex` once) | ~1 min CPU |

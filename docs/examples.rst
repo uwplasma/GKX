@@ -1,7 +1,8 @@
 Examples
 ========
 
-The ``examples`` directory is a numbered gallery, one directory per workflow;
+The ``examples`` directory is a numbered gallery whose directories are the
+steps of the :doc:`tutorials`;
 ``examples/README.md`` lists each group with its purpose and runtime. Each
 group has a ``run.py`` and, where deck-driven, a tutorial ``case.toml`` plus the
 literature-resolution ``case_full.toml``. Validation decks live in

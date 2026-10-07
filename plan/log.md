@@ -21199,3 +21199,12 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
+
+## 2026-10-07 — examples pattern and tutorial (docs/examples-and-docs-1007)
+
+- Every `gkx.solve`/`gkx.scan` call in `examples/*/run.py` passes `show_progress=True`; no example uses argparse, `def main` or `__main__`. Example 10 now writes `summary.json` (per-stage QS/aspect/iota/GKX Q), the optimized input, wout and vmex plots under `outputs/10_vmex_optimization`.
+- New `examples/01_linear_tokamak/case_miller.toml` (case.toml with Miller geometry; `gkx case_miller.toml`, 6 s laptop CPU, gamma 0.154 at ky .3, tutorial resolution).
+- `docs/tutorials.rst` rewritten as a 12-step tutorial; step N = `examples/NN_*`. README and docs updated for #347 (repeated solve compiles nothing), #352 (fit_settled criteria), #349 (three-field energy budget), #353 (pr3-cm species fold, KE still stalls), #355 (KE/TEM rows, damp_ends_rate guidance; #354 current behaviour only, owner chose option 2 for another lane), #346 (GPU profile).
+- Smoke run, office CPU (jax 0.10.2, nice 10, 4 threads), shipped tutorial settings, wall s: 01 19, 02 315 (includes vmex wout solve), 03 30, 04 29, 05 139, 06 13, 07 23, 08 22 + implicit_sensitivity 64, 09 40 + geometry_bridge 261, 10 335 (VMEX_EXAMPLES_CI=1, seed deck from a vmex source checkout), 11 21, 12 27. All rc 0.
+- Next: once the #354 option-2 lane lands, replace the damp_ends_rate route-difference text in README, docs/inputs.rst and docs/tutorials.rst step 5.
+- 2026-10-07 pause: rebased on main (chain #356 merged), PR #358 retargeted to main as draft; CI not yet observed on the rebased head.

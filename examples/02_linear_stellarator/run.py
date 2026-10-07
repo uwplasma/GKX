@@ -37,10 +37,17 @@ print(
     f"geometry {case.geometry.model}: {wout.name}, s = {case.geometry.torflux}, alpha = {case.geometry.alpha}"
 )
 
-scan = gkx.scan(case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver)
+scan = gkx.scan(
+    case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver, show_progress=True
+)
 peak_ky = float(scan.ky[int(np.argmax(scan.gamma))])
 peak = gkx.solve(
-    case, ky_target=peak_ky, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
+    case,
+    ky_target=peak_ky,
+    Nl=case.run.Nl,
+    Nm=case.run.Nm,
+    solver=case.run.solver,
+    show_progress=True,
 )
 for ky, gamma, omega in zip(scan.ky, scan.gamma, scan.omega):
     print(f"ky = {ky:.2f}: gamma = {gamma:+.5f}, omega = {omega:+.5f}")

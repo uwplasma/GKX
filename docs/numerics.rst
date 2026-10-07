@@ -747,7 +747,8 @@ The Hermite line solve inverts streaming, hypercollisions and the *z*-mean of
 the drift diagonal exactly. Everything else -- the exact :math:`\omega_d(z)`,
 the mirror term, the drive, the end damping, collisions and the local field
 response -- is *z*-local, so it is a batch of dense :math:`(l, m)` blocks, one
-per ``(species, ky, kx, z)``. With :math:`s_1 = \sigma/2 - \alpha` one
+per ``(ky, kx, z)``, with the species index folded into the Laguerre index
+because the field solve couples kinetic species at the same *z*. With :math:`s_1 = \sigma/2 - \alpha` one
 Peaceman--Rachford double sweep of the two shifted halves costs one solve of
 each and no operator application, and ``pr3-cm`` is three such sweeps started
 from zero. The parameter follows the scalar symbol rule
@@ -782,6 +783,11 @@ approximates when it is not. A grid carrying zonal
 :math:`(k_y = 0, k_x > 0)` rows under adiabatic electrons fails that check,
 because their :math:`\langle\phi\rangle` is a sum over *z*; the linear eigen
 route escapes it by reducing the grid to one non-zero :math:`k_y`.
+On a Miller kinetic-electron deck the folded block passes the locality check
+(defect 1.7e-16) but is no longer *l*-tridiagonal, so the build takes the dense
+inverse, and the inner GMRES still stalls (relative residual 0.89--0.93):
+one Peaceman--Rachford parameter does not cover both ion and electron
+streaming scales.
 
 Automatic solver and fit-signal selection
 -----------------------------------------

@@ -24,9 +24,12 @@ KY = [0.1, 0.2, 0.3, 0.4]  # k_y rho_i points, one worker task each
 case = gkx.load(CASE)
 run = case.run
 options = dict(Nl=run.Nl, Nm=run.Nm, solver=run.solver)
-parallel = gkx.scan(case, KY, **options)
+parallel = gkx.scan(case, KY, **options, show_progress=True)
 serial = gkx.scan(
-    case.replace(parallel=replace(case.parallel, strategy="serial")), KY, **options
+    case.replace(parallel=replace(case.parallel, strategy="serial")),
+    KY,
+    **options,
+    show_progress=True,
 )
 identical = bool(
     np.array_equal(parallel.gamma, serial.gamma)

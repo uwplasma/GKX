@@ -416,7 +416,11 @@ and ``[fit]`` are read by the commands that use them.
   growth-rate window options ``auto_window``, ``tmin``, ``tmax``,
   ``window_fraction``, ``min_points``, ``start_fraction``, ``growth_weight``,
   ``require_positive``, ``min_amp_fraction``, ``window_method``,
-  ``mode_method``, ``fit_signal``)
+  ``mode_method``, ``fit_signal``). A time-domain result reports
+  ``fit_settled = true`` only when the fit window spans at least two fitted
+  e-foldings, the signal grows by at least :math:`e^2` across it, and the
+  half-window drift test passes; otherwise the fitted ``gamma`` is still
+  returned but marked unsettled.
 
 Notable runtime-only keys:
 
@@ -431,6 +435,12 @@ Notable runtime-only keys:
   matching requires :math:`\nu=A/\Delta t_{ref}`; record both reference values
   with the comparison. No automatic conversion or benchmark recertification
   occurs, and adaptive legacy steps do not define one equivalent constant rate.
+  Decks with kinetic electrons should set it: without it the time route damps
+  at ``damp_ends_amp/dt`` and every timestep-free route (Krylov, eigen,
+  shift-invert) at ``damp_ends_amp``, and kinetic-electron growth rates differ
+  by tens of per cent between the two (Cyclone kinetic-electron example: 0.168
+  time route, 0.243 Krylov; issue 354 is open). The shipped kinetic-electron
+  decks state the rate.
 * ``[collisions] damp_ends_amp`` / ``damp_ends_widthfrac``: reference-compatible end
   damping defaults are ``0.1`` and ``0.125``. Linear integration routes supplying
   ``dt`` divide the amplitude by the instantaneous step size: it is a per-step

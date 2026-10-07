@@ -109,8 +109,10 @@ convention is stated explicitly in the GX implementation correction
 GKX checks this convention for compressional pressure balance, the magnetic
 Hamiltonian, and the particle-flux field factor.  The particle-flux check
 reuses the production spatial quadrature weights, so it is not an independent
-validation of that quadrature.  Heat flux and the complete electromagnetic
-free-energy budget remain open.
+validation of that quadrature.  The three-field (:math:`\phi, A_\parallel,
+B_\parallel`) free-energy budget at variable :math:`B` closes channel by
+channel, with the diamagnetic channel equal to the particle- and energy-flux
+formula (``tests/unit/operators/test_terms_fields.py``).
 
 For the Cyclone base case we take the reference length :math:`L_{ref}=a` so
 that the input gradients are expressed as

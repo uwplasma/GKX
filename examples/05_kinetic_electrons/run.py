@@ -64,7 +64,9 @@ for label, path in CASES.items():
                 vmex.VmecInput.from_file(VMEC_INPUT)
             )
             vmex.write_wout(str(wout), equilibrium.wout)
-    result = gkx.solve(case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm)
+    result = gkx.solve(
+        case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm, show_progress=True
+    )
     d = result.diagnostics
     t, dt = np.asarray(d.t), np.asarray(d.dt_t)
     q = np.asarray(d.heat_flux_species_t)  # (time, species): ion, electron

@@ -31,6 +31,7 @@ result = gkx.solve(
     Nl=case.run.Nl,
     Nm=case.run.Nm,
     steps=STEPS or case.run.steps,
+    show_progress=True,
 )
 diagnostics = result.diagnostics
 t = np.asarray(diagnostics.t)
