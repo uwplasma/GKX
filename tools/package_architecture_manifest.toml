@@ -1482,7 +1482,8 @@ recursive = true
 # 74366 -> 74397: measured after the mypy and coverage fixes.
 # 74397 -> 74556: independent oracles for #324-#328 (velocity quadrature, analytic z-derivative). Measured.
 # 74556 -> 74589: repeated-solve compile and cached_jit fallback tests (PERF 2026-10-06).
-baseline = 74589
+# 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
+baseline = 75155
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1599,5 +1600,6 @@ recursive = true
 # 42565 -> 43022: scripts/campaigns/nonlinear_flux_jacobian.py, measured.
 # 43022 -> 43611: build_analytic_benchmarks.py and the figures.py analytic builder. Measured.
 # 43611 -> 48382 (ARCH-C): report-gate and campaign modules moved out of src/gkx (src lines fell 75904 -> 67191). Measured.
-baseline = 48382
+# 48382 -> 48385: chain 2026-10-07 (#346-#353, #355), measured.
+baseline = 48385
 target = 18000
