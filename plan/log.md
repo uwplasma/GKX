@@ -21194,8 +21194,14 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 - **Miller kinetic electrons (VAL-KE).** Certified Krylov eigenpairs, Nl16/Nm48, rate 160.6: ky .3 0.23128/0.23603, ky .5 0.25479/0.46698. Against the repaired GX build: -0.35%/-0.20% and +0.27%/-0.16%. Against GS2 e3: -1.5% and +0.5%. Nl8/Nm24 gives 0.23115 at ky .3 (0.06%). Ledger row `X-ke-miller` (provisional: two ky).
 - **EM-lane gap (#352), reconciled.** That lane's "21-23% above GS2 at every low beta" used variant `damp0.1`, an explicit rate 0.1. Same deck at beta 1e-4, Nl4/Nm32 with rate 500 (= amp/dt): 0.2264 against GS2 0.2344 and 0.2889 at rate 0.1. Not an operator defect.
 - **TEM (case definition).** Dannert & Jenko, Phys. Plasmas 12, 072309 (2005), Sec. II.B: R/Ln 3, R/LTe 6, R/LTi 0, eps 0.16, q 1.4, s_hat 0.8, Te/Ti 3, beta_e 1e-3, m_i/m_e 1836, collisionless, s-alpha with alpha 0. Deck `tools/comparison/fixtures/parity/tem_dannert_jenko_2005.toml` (Lref = R, ion reference; ky_gkx = ky rho_s/sqrt 3). The paper's growth rates are in figures only; GS2 is the reference.
-- **TEM results.** GS2 converged (t1 -> t2 <= 2.5%, beta x2 +0.5%); at ky rho_s .3 gamma 0.8694, omega -1.2723 (v_ti/R). GKX at ky rho_s .3: (Nl,Nm) (4,8) 0.0029, (8,24) 0.6114, (12,32) 0.6475, (16,48) 0.7330 (-15.7%), omega -1.2896 (+1.4%); without hypercollisions (8,24) 0.2973. Not converged; ledger row `X-tem-dj2005` is open.
+- **TEM results.** GS2 converged (t1 -> t2 <= 2.5%, beta x2 +0.5%); at ky rho_s .3 gamma 0.8694, omega -1.2723 (v_ti/R). GKX at ky rho_s .3: (Nl,Nm) (4,8) 0.0029, (8,24) 0.6114, (12,32) 0.6475, (16,48) 0.7330 (-15.7%), omega -1.2896 (+1.4%); without hypercollisions (8,24) 0.2973; end-damping rate 30/100/500 at (12,32): 0.6793/0.6475/0.6441 (settled by 100). Not converged in velocity; ledger row `X-tem-dj2005` is open.
 - **VAL-REF.** No GX build possible on office, so the 2026-09-27 repaired-build goldens and the Q20 GS2/gyaradax points are promoted as fixture rows in `docs/_static/cross_code_linear_points.csv` (assembler `plan/research/2026-10-06-val-ke/scripts/assemble.py`), ledger row `X-cyclone-repaired-gx` (passing).
 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
+
+## 2026-10-07 — VAL-KE pause (branch `validation/tem-rate-check`)
+
+#355 merged via #356. This branch adds the TEM end-damping rate check: at (Nl,Nm) = (12,32), rates 30, 100 and 500 give 0.6793, 0.6475 and 0.6441. The rate has settled by 100, so the remaining -15.7% against GS2 at (16,48) is velocity resolution.
+Paused with two runs queued on office GPU 1 (`lanes/q4.txt`, output in `lanes/val-ke-out/`): `tem_k0.30_l8m48` (Nl/Nm split) was running, and `ke_k0.10_l16m48_r161` was next.
+Next: (1) read those two results; (2) extend the TEM ladder past (16,48); (3) once a rung converges, run the TEM ky scan and close `X-tem-dj2005`; (4) decide #354.

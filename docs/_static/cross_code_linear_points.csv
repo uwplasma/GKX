@@ -54,6 +54,8 @@ tem_dj2005,0.1,gs2,t2,0.265431,-0.59527,plan/research/2026-10-06-val-ke/results/
 tem_dj2005,0.2,gs2,t1,0.625804,-0.946863,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.2,gs2,t2,0.627593,-0.946692,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.3,gkx,Nl12 Nm32,0.647468960678392,-1.3103178617214672,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+tem_dj2005,0.3,gkx,Nl12 Nm32 time.damp_ends_rate=30,0.6793150052004682,-1.2977345036788774,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+tem_dj2005,0.3,gkx,Nl12 Nm32 time.damp_ends_rate=500,0.6441058970599028,-1.3136785850097252,plan/research/2026-10-06-val-ke/results/gkx_results.txt
 tem_dj2005,0.3,gkx,Nl16 Nm48,0.7329552292576801,-1.2896417819956998,plan/research/2026-10-06-val-ke/results/gkx_results.txt
 tem_dj2005,0.3,gkx,Nl4 Nm8,0.0029214563056782867,-0.775223563748923,plan/research/2026-10-06-val-ke/results/gkx_results.txt
 tem_dj2005,0.3,gkx,Nl8 Nm24,0.611431142652512,-1.2020445636504091,plan/research/2026-10-06-val-ke/results/gkx_results.txt
