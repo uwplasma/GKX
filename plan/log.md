@@ -21055,7 +21055,7 @@ Base `7f5e151ac`. Follows #349 (EM-B-PAR ladder).
   | beta 0.005 base (GS2 ntheta 48, negrid 24; GKX Nl 4, Nm 32, Nz 240) | 0.2137 | 0.2593 |
   | GS2 negrid 32 / ntheta 64 | 0.2137 / 0.2137 | |
   | GKX Nm 64 / Nz 320 / Nl 8 / no end damping | | 0.2577 / 0.2591 / 0.2676 / 0.2618 |
-  | beta 1e-4 (ES limit, kinetic electrons) | 0.2344 | 0.2889 |
+  | beta 1e-4 (ES limit, kinetic electrons) | 0.2344 | 0.2889 (Nl 8: 0.2955) |
   | beta 0.0075 | 0.1937 | 0.2382 |
   | beta 0.0125 | 0.1737 (omega 1.13, transition) | unsettled |
   Both codes are resolved; the gap is +21-23% at every low beta including
