@@ -54,7 +54,7 @@ nperiod = 2
 [time]
 t_max = 60.0
 dt = 0.0002
-method = "imex-ars3"
+method = "imex2"
 sample_stride = 50
 
 [geometry]

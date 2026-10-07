@@ -146,7 +146,7 @@ def fit(root):
     print("case,ky_rhos,t_end,gamma_gs2,omega_gs2,drift,gamma_gkx,omega_gkx,gamma_csR,omega_csR")
     for d in sorted(glob.glob(str(Path(root) / "gs2" / "TEM_*"))):
         nc = sorted(Path(d).glob("*.out.nc"))
-        if not nc:
+        if not nc or not (Path(d) / "DONE").exists():
             continue
         ds = Dataset(nc[0])
         t = np.asarray(ds.variables["t"][:], float)
