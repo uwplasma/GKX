@@ -18,7 +18,7 @@ from gkx.core_ky_layout import (
     source_ny_full,
     transport_mode_weights,
 )
-from gkx.core_velocity import gamma0
+from gkx.core_velocity import gamma0, laguerre_gyroaverage_neighbors
 from gkx.diagnostics_contract import ArrayLike
 from gkx.geometry import (
     FluxTubeGeometryData,
@@ -113,8 +113,8 @@ def _jl_family(cache: LinearCache) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarra
 
     Nl = Jl_s.shape[1]
     ell = jnp.arange(Nl, dtype=Jl_s.dtype)[None, :, None, None, None]
-    Jl_m1 = shift_axis(Jl_s, -1, axis=1)
-    Jl_p1 = shift_axis(Jl_s, 1, axis=1)
+    # The upper neighbor of the highest retained moment is analytic (#325).
+    Jl_m1, Jl_p1 = laguerre_gyroaverage_neighbors(Jl_s, cache.b, axis=1)
     JflrA = ell * Jl_m1 + 2.0 * ell * Jl_s + (ell + 1.0) * Jl_p1
     Jfac = 1.5 * Jl_s + JflrA
     return Jl_s, JlB_s, Jfac
@@ -276,9 +276,11 @@ def _heat_flux_channel_contrib_species(
         G3 = _get_m(3)
         p_bar = jnp.sum(Jfac_s * G0 + (1.0 / sqrt2) * Jl_s * G2, axis=0)
         q_bar = jnp.sum(Jfac_s * G1 + Jl_s * (sqrt32 * G3 + G1), axis=0)
+        # Energy recurrence applied to JlB, the x*2J1(A)/A kernel (#326).
+        JlB_m1 = shift_axis(JlB_s, -1, axis=0)
         Jfac_m1 = shift_axis(Jfac_s, -1, axis=0)
         qB_bar = jnp.sum(
-            Jfac_s * G0 + Jfac_m1 * G0 + (1.0 / sqrt2) * JlB_s * G2,
+            (Jfac_s + Jfac_m1 + JlB_s + JlB_m1) * G0 + (1.0 / sqrt2) * JlB_s * G2,
             axis=0,
         )
         weight = 2.0 * flx * fac * nt[s] * flux_scale

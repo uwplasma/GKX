@@ -536,14 +536,20 @@ def build_runtime_linear_params(
     )
 
 
-def build_runtime_linear_terms(cfg: RuntimeConfig) -> LinearTerms:
-    """Build `LinearTerms` from unified toggles."""
+def build_runtime_linear_terms(
+    cfg: RuntimeConfig, *, custom_collisions: bool = False
+) -> LinearTerms:
+    """Build `LinearTerms` from unified toggles.
+
+    All-zero species ``nu`` drop the built-in collision term; a caller passing
+    a custom operator with its own rates sets ``custom_collisions`` (#324).
+    """
 
     em_on = bool(cfg.physics.electromagnetic)
     use_apar = em_on and bool(cfg.physics.use_apar)
     use_bpar = em_on and bool(cfg.physics.use_bpar)
-    collisions_on = bool(cfg.physics.collisions) and any(
-        float(sp.nu) != 0.0 for sp in cfg.species
+    collisions_on = bool(cfg.physics.collisions) and (
+        custom_collisions or any(float(sp.nu) != 0.0 for sp in cfg.species)
     )
     hyper_on = bool(cfg.physics.hypercollisions)
     return LinearTerms(

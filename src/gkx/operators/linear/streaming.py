@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core_ky_layout import is_half
+from gkx.core_ky_layout import is_half, nyc_from_ny
 from gkx.core_velocity import hermite_ladder_coeffs
 
 # One positivity guard for the whole linear operator. The local copy asked
@@ -33,9 +33,17 @@ def _fft_abs_multiplier(kz: jnp.ndarray, like: jnp.ndarray) -> jnp.ndarray:
 
 
 def grad_z_periodic(
-    f: jnp.ndarray, dz: float | jnp.ndarray | None = None, kz: jnp.ndarray | None = None
+    f: jnp.ndarray,
+    dz: float | jnp.ndarray | None = None,
+    kz: jnp.ndarray | None = None,
+    *,
+    ny_full: int | None = None,
 ) -> jnp.ndarray:
-    """Spectral periodic derivative along the last axis."""
+    """Spectral periodic derivative along the last axis.
+
+    ``ny_full`` marks a complete real-FFT layout: see
+    :func:`_real_fft_nyquist_derivative`.
+    """
 
     if kz is None:
         if dz is None:
@@ -47,7 +55,28 @@ def grad_z_periodic(
         kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
     f_hat = jnp.fft.fft(f, axis=-1)
     df_hat = _fft_ik_multiplier(kz, f_hat) * f_hat
-    return jnp.fft.ifft(df_hat, axis=-1)
+    return _real_fft_nyquist_derivative(jnp.fft.ifft(df_hat, axis=-1), ny_full)
+
+
+def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.ndarray:
+    """Zero the even-``Nz`` Nyquist derivative on self-conjugate real-FFT rows.
+
+    Rows ``ky=0`` (and ``ky=Ny/2``) are real in ``(x, z)``: the sampled Nyquist
+    cosine has zero derivative, but ``i k_nyq`` makes it imaginary (#328).
+    Generic complex arrays (``ny_full=None``) keep the signed derivative.
+    """
+    if (
+        ny_full is None
+        or out.ndim < 3
+        or out.shape[-1] % 2
+        or out.shape[-3] not in (int(ny_full), nyc_from_ny(ny_full))
+    ):
+        return out
+    row = jnp.arange(out.shape[-3])
+    self_row = (row == 0) | ((int(ny_full) % 2 == 0) & (row == int(ny_full) // 2))
+    alternating = jnp.asarray((-1.0) ** np.arange(out.shape[-1]), jnp.real(out).dtype)
+    component = jnp.mean(out * alternating, axis=-1, keepdims=True) * alternating
+    return out - self_row.reshape((1,) * (out.ndim - 3) + (-1, 1, 1)) * component
 
 
 def _shift_kx_linked(
@@ -496,8 +525,16 @@ def _linked_fft_apply(
             Ny=Ny,
             Nz=Nz,
         )
-    return _restore_linked_real_fft_conjugates(
+    out = _restore_linked_real_fft_conjugates(
         out, covered_rows=covered_rows, ny_full=ny_full
+    )
+    if isinstance(operator, str):
+        return _real_fft_nyquist_derivative(out, ny_full) if operator == "grad" else out
+    return jnp.stack(
+        [
+            _real_fft_nyquist_derivative(part, ny_full) if op == "grad" else part
+            for part, op in zip(out, operator)
+        ]
     )
 
 
@@ -714,7 +751,7 @@ def streaming_ladder_term(
                 kx_mask_minus=kx_mask_minus,
             )
     else:
-        dH_dz = grad_z_periodic(H, kz=kz)
+        dH_dz = grad_z_periodic(H, kz=kz, ny_full=ny_full)
     axis_m = -4
     pad = [(0, 0)] * H.ndim
     pad[axis_m] = (1, 1)

@@ -1718,6 +1718,7 @@ def test_jl_family_accepts_four_dimensional_arrays_and_rejects_bad_ranks() -> No
     cache_4d = SimpleNamespace(
         Jl=jnp.ones((2, 2, 1, 3), dtype=jnp.float32),
         JlB=2.0 * jnp.ones((2, 2, 1, 3), dtype=jnp.float32),
+        b=jnp.zeros((2, 1, 3), dtype=jnp.float32),
     )
 
     jl, jlb, jfac = _jl_family(cache_4d)

@@ -41,14 +41,15 @@ _VMEC_METRIC_OBSERVABLE_NAMES = (
     "g_sp_rms",
     "g_tp_rms",
 )
+# Order of the campaign's ``_field_line_tensor_observable_fn`` (#327).
 _VMEC_FIELD_LINE_OBSERVABLE_NAMES = (
     "mean_bmag",
-    "relative_bmag_ripple",
-    "sqrtg_rms",
-    "mean_g_tt",
-    "mean_g_pp",
-    "g_tp_rms",
-    "mean_g_ss",
+    "epsilon",
+    "bgrad_rms",
+    "cvdrift_rms",
+    "gbdrift_rms",
+    "gbdrift0_rms",
+    "jacobian_rms",
 )
 
 

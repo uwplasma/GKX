@@ -11,7 +11,10 @@ import pytest
 from scipy.special import eval_laguerre, j1
 
 from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig
-from gkx.core_ky_layout import transport_mode_weights
+from gkx.core_ky_layout import (
+    symmetrize_self_conjugate_rows,
+    transport_mode_weights,
+)
 from gkx.geometry import SAlphaGeometry
 from gkx.core_grid import build_spectral_grid
 from scripts.checks._gates.validation_gates import (
@@ -2214,3 +2217,54 @@ def test_adiabatic_ion_zonal_field_solve_has_no_flux_surface_average(beta) -> No
             np.asarray(nbar / (params.tau_e + qneut)),
             rtol=1.0e-6,
         )
+
+
+# #328: real-FFT parallel derivatives against analytic oracles.
+@pytest.mark.parametrize("nz", [8, 9])
+@pytest.mark.parametrize("nx", [1, 3])
+@pytest.mark.parametrize("half", [False, True])
+@pytest.mark.parametrize("dtype", [jnp.complex64, jnp.complex128])
+def test_parallel_gradient_preserves_real_zonal_field(nz, nx, half, dtype):
+    if dtype == jnp.complex128 and not jax.config.x64_enabled:
+        pytest.skip("complex128 requires x64")
+    ny = 8
+    rows = ny // 2 + 1 if half else ny
+    z = np.arange(nz) * (2 * np.pi / nz)
+    nyq = (-1.0) ** np.arange(nz) * (nz % 2 == 0)
+    f = np.zeros((rows, nx, nz), complex)
+    expected = np.zeros_like(f)
+    f[0, 0], expected[0, 0] = np.sin(z) + 0.7 * nyq, np.cos(z)
+    if nx > 1:
+        f[0, 1] = (1 + 2j) * np.cos(z) + (0.2 + 0.4j) * nyq
+        expected[0, 1] = -(1 + 2j) * np.sin(z)
+        f[0, -1], expected[0, -1] = f[0, 1].conj(), expected[0, 1].conj()
+    kz = 2 * jnp.pi * jnp.fft.fftfreq(nz, d=2 * np.pi / nz)
+    fj = jnp.asarray(f, dtype)
+    linked = grad_z_linked_fft(
+        fj,
+        dz=2 * np.pi / nz,
+        linked_indices=(jnp.asarray(np.arange(nx)[:, None] * rows, jnp.int32),),
+        linked_kz=(kz,),
+        ny_full=ny,
+    )
+    tol = 3e-6 if dtype == jnp.complex64 else 2e-13
+    for observed in (linked, grad_z_periodic(fj, kz=kz, ny_full=ny)):
+        np.testing.assert_allclose(observed, expected, atol=tol, rtol=tol)
+    # Complex linearity, and the generic/selected-ky signed Nyquist is kept.
+    np.testing.assert_allclose(
+        grad_z_periodic(1j * fj, kz=kz, ny_full=ny), 1j * linked, atol=tol, rtol=tol
+    )
+    if nz % 2 == 0:
+        wave = jnp.asarray(nyq, dtype)[None, None, :]
+        for kw in ({}, {"ny_full": 24}):
+            np.testing.assert_allclose(
+                grad_z_periodic(wave, kz=kz, **kw), -(nz // 2) * 1j * wave, atol=tol
+            )
+
+
+def test_single_radial_mode_self_conjugate_row_is_real():
+    value = jnp.ones((8, 1, 2), dtype=jnp.complex64) * (1 + 2j)
+    result = symmetrize_self_conjugate_rows(value, ny_full=8)
+    np.testing.assert_array_equal(result[0].imag, 0)
+    np.testing.assert_array_equal(result[4].imag, 0)
+    np.testing.assert_array_equal(result[1], value[1])

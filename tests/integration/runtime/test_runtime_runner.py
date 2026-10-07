@@ -4708,3 +4708,45 @@ def test_over_cfl_fixed_step_warns_on_every_linear_path(
             pass
     hits = [w for w in caught if "exceeds the estimated" in str(w.message)]
     assert bool(hits) is expect_warning
+
+
+def test_zero_species_nu_admits_declared_custom_collisions() -> None:
+    """#324: zero built-in rates must not silently drop a custom operator."""
+    from types import SimpleNamespace as NS
+
+    from gkx.config import CycloneBaseCase
+    from gkx.operators.linear.cache_builder import build_linear_cache
+    from gkx.operators.linear.params import LinearParams, LinearTerms
+    from gkx.operators.linear.rhs import linear_rhs_cached
+
+    world = CycloneBaseCase(grid=GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0))
+    grid = build_spectral_grid(world.grid)
+    geom = SAlphaGeometry.from_config(world.geometry)
+    params = LinearParams()
+    cache = build_linear_cache(grid, geom, params, Nl=1, Nm=2)
+    G = jnp.ones((1, 2, grid.ky.size, 2, 4), dtype=jnp.complex64)
+
+    class Custom:
+        def apply(self, context):
+            return -3 * context.distribution
+
+    def rhs(terms):
+        return np.asarray(
+            linear_rhs_cached(
+                G, cache, params, terms=terms, collision_operator=Custom()
+            )[0]
+        )
+
+    def cfg(on):
+        physics = NS(electromagnetic=False, collisions=on, hypercollisions=False)
+        return NS(physics=physics, species=(NS(nu=0.0),), terms=LinearTerms())
+
+    builtin = build_runtime_linear_terms(cfg(True))
+    custom = build_runtime_linear_terms(cfg(True), custom_collisions=True)
+    disabled = build_runtime_linear_terms(cfg(False), custom_collisions=True)
+    assert builtin.collisions == 0.0 and disabled.collisions == 0.0
+    assert custom.collisions == 1.0
+    np.testing.assert_array_equal(rhs(disabled), rhs(builtin))
+    np.testing.assert_allclose(
+        rhs(custom) - rhs(builtin), -3 * np.asarray(G), rtol=1e-6
+    )

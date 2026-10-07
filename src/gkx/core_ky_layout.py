@@ -335,8 +335,6 @@ def symmetrize_self_conjugate_rows(state: Any, *, ny_full: int) -> Any:
             f"spectral array has {rows} ky rows; expected {ny} or {nyc_from_ny(ny)}"
         )
     width = int(state.shape[-2])
-    if width <= 1:
-        return state
     order = conjugate_kx_order(width)
     out = state
     for row in self_conjugate_rows(ny):
