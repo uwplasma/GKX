@@ -21076,7 +21076,7 @@ source-vs-physical comparison is reused, its debug probes are not.
   | 0.015 | 0.4065, 0.9620 | 0.3683, 1.0221 |
   | 0.020 | 0.6808, 0.8010 | 0.6738, 0.8148 |
   Not a pass: the ITG side (0.005, 0.010) is 21-27% above GS2; KBM side
-  -9% and -1%. imex2 at dt 1.4e-4 gives the same values.
+  -9% and -1%. imex2 at dt 1.4e-4 gives the same gamma at beta 0.005 (0.25932).
 - Runtime defect found, not fixed: at beta 0.010 the time-fit auto window
   ("no stationary growth window", fit over 0.37 growth times) reports
   gamma 24.0, omega -22.6 with `fit_settled=true`, for a state that grew only
@@ -21090,4 +21090,4 @@ source-vs-physical comparison is reused, its debug probes are not.
   sum(J grho)/sum(J) reproduce the free-energy drive in both directions, so
   outward flux is the down-gradient sign. A reversal that forgets one odd
   drift fails. No sign defect.
-Raw records (office): `~/lanes/em-energy/{gs2,gkxr_*,gkxr40_*}`.
+Raw records: office lane directory `em-energy` (`gs2/`, `gkxr_*`, `gkxr40_*`).
