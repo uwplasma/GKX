@@ -2431,9 +2431,10 @@ def test_three_field_free_energy_budget_closes_multimode(bpar):
     )
 
 
+@pytest.mark.skipif(not jax.config.x64_enabled, reason="truncation below fp32 eps")
 def test_bpar_diamagnetic_budget_converges_with_laguerre_truncation():
     errors = []
-    for nl in (3, 6, 10):
+    for nl in (3, 8, 12):
         case = _hermitian_multimode_case(nl)
         _, fields, contrib = assemble_rhs_terms_cached(
             case["G"], case["cache"], case["params"], use_custom_vjp=False
@@ -2445,5 +2446,4 @@ def test_bpar_diamagnetic_budget_converges_with_laguerre_truncation():
         )
         drive = _drive_from_fluxes(case, fields, bpar=True)
         errors.append(abs(float(jnp.real(rate)) - drive) / abs(drive))
-    floor = 1e-13 if jax.config.x64_enabled else 1e-5
-    assert errors[0] > 10 * errors[1] > 10 * max(errors[2], floor)
+    assert errors[0] > 100 * errors[1] > 1e4 * max(errors[2], 1e-16)
