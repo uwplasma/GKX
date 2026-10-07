@@ -28,13 +28,12 @@ for key, val in over.items():
     sect, _, field = key.rpartition(".")
     sect = sect or ("grid" if hasattr(cfg.grid, field) else "physics")
     cur = getattr(getattr(cfg, sect), field)
-    new = (
-        float(val)
-        if cur is None
-        else type(cur)(float(val))
-        if isinstance(cur, (int, float)) and not isinstance(cur, bool)
-        else val
-    )
+    if isinstance(cur, bool):
+        new = val.lower() in ("1", "true")
+    elif cur is None or isinstance(cur, (int, float)):
+        new = float(val) if cur is None else type(cur)(float(val))
+    else:
+        new = val
     cfg = replace(cfg, **{sect: replace(getattr(cfg, sect), **{field: new})})
 if "nperiod" in over or "ntheta" in over:
     g = cfg.grid
