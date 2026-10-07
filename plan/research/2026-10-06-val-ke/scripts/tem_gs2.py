@@ -56,8 +56,8 @@ def gs2_input(name, ky_rhos, r, beta_e=BETA_E):
  theta0 = 0.0
 /
 &theta_grid_parameters
- ntheta = {r['ntheta']}
- nperiod = {r['nperiod']}
+ ntheta = {r["ntheta"]}
+ nperiod = {r["nperiod"]}
  eps = 0.16
  epsl = 2.0
  shat = 0.8
@@ -71,8 +71,8 @@ def gs2_input(name, ky_rhos, r, beta_e=BETA_E):
  model_option = "default"
 /
 &le_grids_knobs
- ngauss = {r['ngauss']}
- negrid = {r['negrid']}
+ ngauss = {r["ngauss"]}
+ negrid = {r["negrid"]}
 /
 &dist_fn_knobs
  gridfac = 1.0
@@ -95,7 +95,7 @@ def gs2_input(name, ky_rhos, r, beta_e=BETA_E):
  fphi = 1.0
  fapar = 1.0
  fbpar = 0.0
- delt = {r['delt']}
+ delt = {r["delt"]}
  nstep = {nstep}
 /
 &reinit_knobs
@@ -143,7 +143,9 @@ def fit(root):
     import numpy as np
     from netCDF4 import Dataset
 
-    print("case,ky_rhos,t_end,gamma_gs2,omega_gs2,drift,gamma_gkx,omega_gkx,gamma_csR,omega_csR")
+    print(
+        "case,ky_rhos,t_end,gamma_gs2,omega_gs2,drift,gamma_gkx,omega_gkx,gamma_csR,omega_csR"
+    )
     for d in sorted(glob.glob(str(Path(root) / "gs2" / "TEM_*"))):
         nc = sorted(Path(d).glob("*.out.nc"))
         if not nc or not (Path(d) / "DONE").exists():
@@ -157,8 +159,10 @@ def fit(root):
         w1, w0 = t >= 0.8 * t[-1], (t >= 0.6 * t[-1]) & (t < 0.8 * t[-1])
         g1, o1, g0 = g[w1].mean(), o[w1].mean(), g[w0].mean()
         k = float(Path(d).name.split("_")[1][2:])
-        print(f"{Path(d).name},{k},{t[-1]:.1f},{g1:.6f},{o1:.6f},{(g1 - g0) / g1:+.2e},"
-              f"{S2 * g1:.6f},{S2 * o1:.6f},{S2 * S3 * g1:.6f},{S2 * S3 * o1:.6f}")
+        print(
+            f"{Path(d).name},{k},{t[-1]:.1f},{g1:.6f},{o1:.6f},{(g1 - g0) / g1:+.2e},"
+            f"{S2 * g1:.6f},{S2 * o1:.6f},{S2 * S3 * g1:.6f},{S2 * S3 * o1:.6f}"
+        )
 
 
 if __name__ == "__main__":

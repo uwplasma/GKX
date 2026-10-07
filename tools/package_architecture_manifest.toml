@@ -1480,7 +1480,8 @@ recursive = true
 # 74151 -> 74366: ARCH-C merged with #341/#342, measured.
 # 74366 -> 74397: measured after the mypy and coverage fixes.
 # 74397 -> 74556: independent oracles for #324-#328 (velocity quadrature, analytic z-derivative). Measured.
-baseline = 74556
+# 74556 -> 74558: kinetic deck test pins the explicit end-damping rate (VAL-KE).
+baseline = 74558
 target = 35000
 
 [[line_budget_policy.counts]]
