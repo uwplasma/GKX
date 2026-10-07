@@ -2304,8 +2304,13 @@ def _hermitian_multimode_case(nl, *, nu=0.0, seed=0):
     cache = build_linear_cache(grid, geom, params, Nl=nl, Nm=4)
     rng = np.random.default_rng(seed)
     shape = (2, nl, 4, grid.ky.size, grid.kx.size, grid.z.size)
-    G = rng.normal(size=shape) + 1j * rng.normal(size=shape)
-    G *= 0.01 * np.cos(np.asarray(grid.z))[None, None, None, None, None, :] ** 2
+    z = np.asarray(grid.z)
+    G = sum(
+        (rng.normal(size=shape[:-1]) + 1j * rng.normal(size=shape[:-1]))[..., None]
+        * np.exp(1j * k * z)
+        for k in (-2, 1, 3)
+    )
+    G *= 0.01
     # A real field: project through physical space, then drop the mean and
     # the self-conjugate Nyquist rows, which the energy measure treats apart.
     G = np.fft.fft2(np.fft.ifft2(G, axes=(3, 4)).real, axes=(3, 4))
