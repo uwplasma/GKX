@@ -1145,7 +1145,8 @@ recursive = true
 # 67191 -> 67215: ARCH-C merged with #341/#342, measured.
 # 67215 -> 67220: coverage test for artifact checkpoint helpers.
 # 67220 -> 67272: real-FFT Nyquist streaming (#328), custom-collision admission (#324). Measured.
-baseline = 67272
+# 67272 -> 67278: time fit settles only over two fitted and observed e-folds. Measured.
+baseline = 67278
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1480,7 +1481,8 @@ recursive = true
 # 74151 -> 74366: ARCH-C merged with #341/#342, measured.
 # 74366 -> 74397: measured after the mypy and coverage fixes.
 # 74397 -> 74556: independent oracles for #324-#328 (velocity quadrature, analytic z-derivative). Measured.
-baseline = 74556
+# 74556 -> 74578: fail-closed fit_settled regression test. Measured.
+baseline = 74578
 target = 35000
 
 [[line_budget_policy.counts]]

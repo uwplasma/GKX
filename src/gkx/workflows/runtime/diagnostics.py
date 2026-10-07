@@ -605,13 +605,11 @@ def fit_runtime_linear_diagnostics(
         tmin=fit.fit_window_tmin,
         tmax=fit.fit_window_tmax,
     )
-    # Fail closed: a growing fit is settled only over >= 2 fitted and >= 2
-    # observed e-foldings of the signal amplitude in its window.
-    if fit_settled and fit.gamma > 0.0:
-        t_w, amp = np.asarray(inputs.t), np.abs(np.asarray(fit.signal))
-        window = (fit.fit_window_tmin, fit.fit_window_tmax)
-        lo, hi = (np.searchsorted(t_w, t_w[-i] if x is None else x) for i, x in enumerate(window))
-        grown = np.log(amp[min(hi, amp.size - 1)] / max(amp[lo], 1e-300))
+    if fit_settled and fit.gamma > 0.0:  # fail closed: >= 2 fitted and seen e-folds
+        t_w, lo, hi = inputs.t, fit.fit_window_tmin, fit.fit_window_tmax
+        log_amp = np.log(np.abs(np.asarray(fit.signal)) + 1e-300)
+        ends = (t_w[0] if lo is None else lo, t_w[-1] if hi is None else hi)
+        grown = np.diff(np.interp(ends, t_w, log_amp))[0]
         fit_settled = unresolved is None and bool(grown >= 2.0)
 
     return RuntimeLinearFitResult(
