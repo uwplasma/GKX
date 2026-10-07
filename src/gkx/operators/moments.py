@@ -820,8 +820,9 @@ def magnetic_vector_potential_energy_resolved(
 
 
 def _channel_resolved(contrib_fn, doc):
-    def resolved(*args, **kwargs):
-        return tuple(map(_reduce_species_kykxz, contrib_fn(*args, **kwargs)))
+    def resolved(*args, use_dealias: bool = True, flux_scale: float = 1.0):
+        parts = contrib_fn(*args, use_dealias=use_dealias, flux_scale=flux_scale)
+        return tuple(map(_reduce_species_kykxz, parts))
 
     resolved.__doc__ = doc
     return resolved
