@@ -1146,7 +1146,8 @@ recursive = true
 # 67215 -> 67220: coverage test for artifact checkpoint helpers.
 # 67220 -> 67272: real-FFT Nyquist streaming (#328), custom-collision admission (#324). Measured.
 # 67272 -> 67308: cached_jit, so a repeated gkx.solve compiles nothing (PERF 2026-10-06).
-baseline = 67308
+# 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
+baseline = 67113
 target = 45000
 
 [[line_budget_policy.counts]]
