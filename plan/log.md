@@ -21039,3 +21039,10 @@ independent oracle that fails on main and passes here.
   Q trace changes by 5.9e-4 relative (#325, Nl=2); particle flux bitwise.
 Not done: #332 (VMEC signed-flux contract) needs the field-reversal map of the
 whole producer->cache->flux chain; no sign defect found or fixed here.
+
+## 2026-10-07 slim/contract-4 (G.6 P4)
+
+- cuBLAS `scal` kernels (up to 29% of the 32x32x24 GPU step) are not from dots: the compiled step has no dot or custom-call; they are XLA GPU's 1/N normalisation of the 27 inverse FFTs per step (21 IFFT + 6 IRFFT). Removing them means replacing inverse FFTs, not a one-line rewrite, and would not be bitwise; not attempted.
+- src -197 lines, bitwise on all five fingerprints (linear Cyclone eigenpair, nonlinear Q trace, window gradient, quasilinear flux, imex-ars3), float32 and x64, CPU single-threaded Eigen: operators/fluxes.py -48 (heat/particle totals from one `_summed`), operators/moments.py -58 (channel-resolved heat/particle from one `_channel_resolved`), terms/fields.py -77 (custom-VJP fwd/bwd forward positional args instead of re-listing them), operators/nonlinear/brackets.py -14 (one `_single_field` wrapper).
+- a full dead-symbol scan (identifier counted over src/tests/docs/scripts/examples) found no unreferenced top-level src function; five symbols are test/doc-only public API (`streaming_contribution`, `bessel_laguerre_kernels`, `associated_bessel_laguerre_coefficients`, `migrate_end_damping_reference`, `integrated_autocorrelation_time`), all documented, left in place.
+

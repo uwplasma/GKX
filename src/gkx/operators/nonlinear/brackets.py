@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import jax.numpy as jnp
 from jax import lax
@@ -341,30 +341,16 @@ def _spectral_bracket_multi_full(
     )
 
 
-def _spectral_bracket_real_fft(
-    G_hat: jnp.ndarray,
-    chi_hat: jnp.ndarray,
-    **kwargs,
-) -> jnp.ndarray:
-    return _spectral_bracket_real_fft_core(
-        G_hat,
-        _broadcast_to_G(jnp.asarray(chi_hat), G_hat),
-        multiple_fields=False,
-        **kwargs,
-    )
+def _single_field(core: Callable[..., jnp.ndarray]) -> Callable[..., jnp.ndarray]:
+    def bracket(G_hat: jnp.ndarray, chi_hat: jnp.ndarray, **kwargs) -> jnp.ndarray:
+        chi = _broadcast_to_G(jnp.asarray(chi_hat), G_hat)
+        return core(G_hat, chi, multiple_fields=False, **kwargs)
+
+    return bracket
 
 
-def _spectral_bracket_full(
-    G_hat: jnp.ndarray,
-    chi_hat: jnp.ndarray,
-    **kwargs,
-) -> jnp.ndarray:
-    return _spectral_bracket_full_core(
-        G_hat,
-        _broadcast_to_G(jnp.asarray(chi_hat), G_hat),
-        multiple_fields=False,
-        **kwargs,
-    )
+_spectral_bracket_real_fft = _single_field(_spectral_bracket_real_fft_core)
+_spectral_bracket_full = _single_field(_spectral_bracket_full_core)
 
 
 def _spectral_bracket(
