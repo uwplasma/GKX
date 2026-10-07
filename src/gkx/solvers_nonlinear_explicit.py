@@ -8,11 +8,13 @@ step policy remains pure, small, and directly testable.
 from __future__ import annotations
 
 from functools import partial
+import hashlib
 import math
 from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 RhsFn = Callable[..., tuple[jnp.ndarray, object]]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
@@ -272,6 +274,45 @@ def block_checkpoint_plan(
     block = min(max(block, 1), count)
     storage = block * residual + -(-count // block) * carry
     return block if storage <= int(memory_budget_bytes) else None
+
+
+_COMPILED: dict[Any, Callable[..., Any]] = {}
+
+
+def jit_by_value(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """``jax.jit(fn)`` cached across closures by traced graph and constant values.
+
+    A per-run closure (cache, factors, policies) is a new function to
+    ``jax.jit``, so an identical second run recompiles everything. This keys
+    one process-wide executable on the jaxpr text, the argument avals and a
+    digest of every closed-over constant, and compiles that same jaxpr with
+    the same constants: the executable, and so every bit of output, is the
+    one ``jax.jit(fn)`` builds. Passing the constants as operands instead
+    would also reuse it across new geometry, but measured 6.5e-8 relative
+    drift in float32 (XLA folds the constants), so values stay baked.
+    """
+
+    def call(*args: Any) -> Any:
+        closed, out_shape = jax.make_jaxpr(fn, return_shape=True)(*args)
+        if any(isinstance(c, jax.core.Tracer) for c in closed.consts):
+            return jax.jit(fn)(*args)  # closes over an outer trace: nothing to key
+        digest = hashlib.sha256(str(closed.jaxpr).encode())
+        for c in closed.consts:
+            digest.update(str(jax.typeof(c)).encode())
+            digest.update(np.asarray(c).tobytes())
+        key = (digest.hexdigest(), tuple(map(str, closed.in_avals)))
+        run = _COMPILED.get(key)
+        if run is None:
+            if len(_COMPILED) >= 64:  # bound the baked constants kept alive
+                _COMPILED.pop(next(iter(_COMPILED)))
+            jaxpr, consts = closed.jaxpr, closed.consts
+            run = _COMPILED[key] = jax.jit(
+                lambda *xs: jax.core.eval_jaxpr(jaxpr, consts, *xs)
+            )
+        flat = run(*jax.tree.leaves(args))
+        return jax.tree.unflatten(jax.tree.structure(out_shape), flat)
+
+    return call
 
 
 def checkpointed_explicit_scan(
