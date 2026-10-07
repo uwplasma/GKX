@@ -228,7 +228,7 @@ def electrostatic_free_energy_metric(
         terms=TermConfig(apar=0.0, bpar=0.0),
         use_custom_vjp=False,
     )
-    H = build_H(safe_G, cache.Jl, fields.phi, params.tz)
+    H = build_H(safe_G, cache.Jl, fields.phi, jnp.asarray(params.tz))
     ns = 1 if G.ndim == 5 else G.shape[0]
     nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
     weight = nt[:, None, None, None, None, None] * fac[None, None, None, :, :, None]
