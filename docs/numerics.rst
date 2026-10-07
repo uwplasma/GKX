@@ -432,6 +432,20 @@ serves every channel. The Laguerre/Bessel factors on the quadrature grid
 Laguerre quadrature transform and uses the spectral gyroaverage factors ``Jl``
 directly; the default ``"grid"`` applies the transform.
 
+Finite-Laguerre free-energy closure (limitation, #336). The ``"grid"`` bracket
+advects with the full node-space :math:`J_0(b)\phi` and then keeps only the
+first ``Nl`` Laguerre coefficients, while quasineutrality and the retained
+field energy use the analytic retained :math:`J_\ell(b)`. The full node-space
+bracket is skew, but the retained energy
+:math:`W = \tfrac12\sum|G|^2 + \tfrac12\sum q|\phi|^2` is not conserved to
+roundoff: a static slab with ``Nl = Nm = 4`` gives retained work
+:math:`\approx -7\times10^{-8}` of the bilinear scale, made of omitted
+``l = Nl`` node work and the analytic-versus-node :math:`J_\ell` mismatch.
+More quadrature nodes alone do not close it. Treat the retained-energy budget
+of a nonlinear run as a resolution diagnostic, converged in ``Nl``, not as an
+exact invariant; Mandell, Dorland & Landreman (2018), section 4.1, discusses the
+truncated Laguerre-Hermite free-energy balance.
+
 The ``ky`` layout contract
 --------------------------
 

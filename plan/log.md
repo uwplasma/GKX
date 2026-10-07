@@ -21015,3 +21015,27 @@ Since 2.5.0: ARCH-C contraction (#343: src 75,904 → 67,220 lines, 136 → 129
 files, no import cycles, bitwise fingerprints unchanged), solver defaults
 benchmarked and documented with the XLA:CPU 2-3 core deadlock workaround (#342),
 #322 #330 #333 #335 via #341, and Codecov uploads made non-fatal.
+
+## 2026-10-06 — correctness sweep (#324 #325 #326 #327 #328, #336 documented)
+
+Base `ba3d87d96` (2.5.1), branch `fix/correctness-sweep`. Each fix has an
+independent oracle that fails on main and passes here.
+- #328: parallel streaming zeroes the even-Nz Nyquist derivative on the
+  self-conjugate real-FFT rows (ky=0, ky=Ny/2), full and half layouts, Nx=1
+  included; idea from draft #329, re-implemented without its docstring cuts.
+- #325: energy-flux `Jfac` uses the analytic upper neighbor `J_L` (draft #325).
+- #326: the Bpar raw-energy weight is the energy recurrence applied to `JlB`,
+  i.e. `Jfac_l + Jfac_{l-1} + JlB_l + JlB_{l-1}`; the old weight dropped the
+  last two (b=0 density: 1.5 vs 2.5). Checked against 32x96 Gauss quadrature.
+- #324: `build_runtime_linear_terms(..., custom_collisions=True)` keeps the
+  collision weight when every species nu is zero; default unchanged.
+- #327: field-line observable names now match the observables; the optional
+  vmex gate runs at h=1e-7, requires error < 1e-6 of the derivative scale and
+  h^2 convergence. Office, vmex env: max abs error 0.662 / 6.63e-3 / 1.65e-3
+  at h = 1e-6 / 1e-7 / 5e-8 (scale 5.02e4).
+- #336: documented as a finite-Laguerre closure limitation in docs/numerics.rst.
+- Fingerprint (office XLA:CPU, x64, tutorial decks 01/03): linear Cyclone
+  eigenpair bitwise; nonlinear W_g trace changes by 3.6e-14 relative (#328);
+  Q trace changes by 5.9e-4 relative (#325, Nl=2); particle flux bitwise.
+Not done: #332 (VMEC signed-flux contract) needs the field-reversal map of the
+whole producer->cache->flux chain; no sign defect found or fixed here.

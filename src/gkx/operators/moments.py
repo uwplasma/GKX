@@ -276,9 +276,7 @@ def _heat_flux_channel_contrib_species(
         G3 = _get_m(3)
         p_bar = jnp.sum(Jfac_s * G0 + (1.0 / sqrt2) * Jl_s * G2, axis=0)
         q_bar = jnp.sum(Jfac_s * G1 + Jl_s * (sqrt32 * G3 + G1), axis=0)
-        # Raw energy x*(s_par^2+x) weight of the compression kernel
-        # x*2J1(A)/A = sum (J_l+J_{l-1}) L_l: the l-dependent energy
-        # recurrence applied to JlB adds JlB_l+JlB_{l-1} to Jfac_l+Jfac_{l-1}.
+        # Energy recurrence applied to JlB, the x*2J1(A)/A kernel (#326).
         JlB_m1 = shift_axis(JlB_s, -1, axis=0)
         Jfac_m1 = shift_axis(Jfac_s, -1, axis=0)
         qB_bar = jnp.sum(

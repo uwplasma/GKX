@@ -541,10 +541,8 @@ def build_runtime_linear_terms(
 ) -> LinearTerms:
     """Build `LinearTerms` from unified toggles.
 
-    With all species ``nu`` zero the built-in collision term is dropped from
-    the graph. A custom collision operator carries its own rates, so callers
-    that pass one must say so with ``custom_collisions=True`` to keep the
-    collision weight; ``physics.collisions = false`` still disables it (#324).
+    All-zero species ``nu`` drop the built-in collision term; a caller passing
+    a custom operator with its own rates sets ``custom_collisions`` (#324).
     """
 
     em_on = bool(cfg.physics.electromagnetic)

@@ -41,10 +41,8 @@ def grad_z_periodic(
 ) -> jnp.ndarray:
     """Spectral periodic derivative along the last axis.
 
-    ``ny_full`` marks a complete real-FFT ``(ky, kx, z)`` layout, whose
-    self-conjugate rows must stay real fields: see
-    :func:`_real_fft_nyquist_derivative`. Generic complex arrays keep the signed
-    Nyquist derivative.
+    ``ny_full`` marks a complete real-FFT layout: see
+    :func:`_real_fft_nyquist_derivative`.
     """
 
     if kz is None:
@@ -63,11 +61,9 @@ def grad_z_periodic(
 def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.ndarray:
     """Zero the even-``Nz`` Nyquist derivative on self-conjugate real-FFT rows.
 
-    The ``ky=0`` (and even-``Ny`` ``ky=Ny/2``) rows hold a real field in
-    ``(x, z)``; its sampled ``z``-Nyquist cosine has zero derivative, but the
-    signed multiplier ``i k_nyq`` makes it imaginary and breaks reality (#328).
-    Removing the alternating component of the derivative is complex-linear and
-    leaves every other row and every odd-``Nz`` grid untouched.
+    Rows ``ky=0`` (and ``ky=Ny/2``) are real in ``(x, z)``: the sampled Nyquist
+    cosine has zero derivative, but ``i k_nyq`` makes it imaginary (#328).
+    Generic complex arrays (``ny_full=None``) keep the signed derivative.
     """
     if (
         ny_full is None

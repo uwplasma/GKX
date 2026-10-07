@@ -41,8 +41,7 @@ _VMEC_METRIC_OBSERVABLE_NAMES = (
     "g_sp_rms",
     "g_tp_rms",
 )
-# Order of ``_field_line_tensor_observable_fn`` in the VMEC sensitivity
-# campaign: a copy of the metric names mislabelled every derivative (#327).
+# Order of the campaign's ``_field_line_tensor_observable_fn`` (#327).
 _VMEC_FIELD_LINE_OBSERVABLE_NAMES = (
     "mean_bmag",
     "epsilon",
