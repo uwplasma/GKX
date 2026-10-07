@@ -21199,3 +21199,12 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
+
+## 2026-10-07 — #354 option 2 (branch `fix/end-damping-timestep-free`, PAUSED)
+
+Base `origin/chain/2026-10-07` (#356 not yet merged).
+- On a linked deck with no `[time] damp_ends_rate`, the timestep-free linear route (`_run_krylov_linear`, which also serves as the auto-route fallback) now uses `damp_ends_rate = damp_ends_amp / time.dt`. Single owner: `startup.timestep_free_linear_params`. The time and nonlinear routes are unchanged.
+- Test: `test_timestep_free_route_damps_linked_ends_like_the_time_route`. On the KE example deck with its explicit rate removed, the Krylov route receives 125.0, which equals the time route's amp/dt. The test fails without the fix.
+- Golden updated: `test_runtime_linear_cyclone_krylov_matches_time_solver_growth` now builds its dense reference from the operator Krylov solves. Krylov gamma on its reduced Cyclone deck (examples/01 case_full: Ny 8, Nz 16, ky 0.15) moves 0.0831 -> 0.0498. The test still compares this against the time route with its loose rel=0.75 gate.
+- Not done: before/after values for the other affected Krylov/auto decks (examples/06 case_full KBM, cyclone_miller_quasilinear, circular_vmec_linear, tem_linear); a full KE Krylov run at Nl8/Nm16 confirming 0.16813; CI green.
+- Note for #352: its "21-23% ES kinetic-electron gap" came from the explicit `damp_ends_rate = 0.1` in that lane's variants (#354 table: 0.2264 at rate 500 vs GS2 0.2344), not from the operator.

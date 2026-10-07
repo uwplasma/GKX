@@ -761,7 +761,9 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     geom = build_runtime_geometry(runtime)
     grid_full = build_spectral_grid(apply_geometry_grid_defaults(geom, runtime.grid))
     grid = select_ky_grid(grid_full, select_ky_index(np.asarray(grid_full.ky), 0.15))
-    params = build_runtime_linear_params(runtime, Nm=8, geom=geom)
+    params = startup.timestep_free_linear_params(  # the operator Krylov solves
+        runtime, build_runtime_linear_params(runtime, Nm=8, geom=geom)
+    )
     term_cfg = linear_terms_to_term_config(build_runtime_linear_terms(runtime))
     cache = build_linear_cache(grid, geom, params, 8, 8)
     shape = (1, 8, 8, grid.ky.size, grid.kx.size, grid.z.size)
@@ -4750,3 +4752,43 @@ def test_zero_species_nu_admits_declared_custom_collisions() -> None:
     np.testing.assert_allclose(
         rhs(custom) - rhs(builtin), -3 * np.asarray(G), rtol=1e-6
     )
+
+
+def test_timestep_free_route_damps_linked_ends_like_the_time_route(
+    tmp_path, monkeypatch
+) -> None:
+    """#354: Krylov on a linked deck without a rate uses damp_ends_amp / dt."""
+
+    import gkx.workflows.linear as linear
+
+    deck = REPO_ROOT / "examples/05_kinetic_electrons/case_full.toml"
+    text = deck.read_text()
+    assert "damp_ends_rate = 125.0" in text
+    legacy = tmp_path / "legacy.toml"
+    legacy.write_text(text.replace("damp_ends_rate = 125.0", ""))
+    seen = {}
+
+    def capture(_state, _cache, params, **_kw):
+        seen["params"] = params
+        raise RuntimeError("captured")
+
+    monkeypatch.setattr(linear, "dominant_eigenpair", capture)
+    rates = []
+    for path in (deck, legacy):
+        cfg, _ = load_runtime_from_toml(path)
+        assert cfg.time.dt == 0.0008 and cfg.collisions.damp_ends_amp == 0.1
+        with pytest.raises(RuntimeError, match="captured"):
+            linear.run_runtime_linear(cfg, ky_target=0.3, Nl=2, Nm=2, solver="krylov")
+        time_rate = startup.build_runtime_linear_params(cfg).end_damping_strength(
+            cfg.time.dt, jnp.float64
+        )
+        rates.append(
+            (
+                float(seen["params"].end_damping_strength(None, jnp.float64)),
+                float(time_rate),
+            )
+        )
+    assert rates[0] == rates[1] == (125.0, 125.0)
+    periodic = replace(cfg, grid=replace(cfg.grid, boundary="periodic"))
+    params = startup.build_runtime_linear_params(periodic)
+    assert startup.timestep_free_linear_params(periodic, params) is params

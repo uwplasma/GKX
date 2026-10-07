@@ -1147,7 +1147,8 @@ recursive = true
 # 67220 -> 67272: real-FFT Nyquist streaming (#328), custom-collision admission (#324). Measured.
 # 67272 -> 67308: cached_jit, so a repeated gkx.solve compiles nothing (PERF 2026-10-06).
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
-baseline = 67113
+# 67113 -> 67125: timestep-free linear routes damp linked ends at A/dt (#354). Measured.
+baseline = 67125
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1484,7 +1485,8 @@ recursive = true
 # 74397 -> 74556: independent oracles for #324-#328 (velocity quadrature, analytic z-derivative). Measured.
 # 74556 -> 74589: repeated-solve compile and cached_jit fallback tests (PERF 2026-10-06).
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
-baseline = 75155
+# 75155 -> 75195: #354 end-damping route regression test. Measured.
+baseline = 75195
 target = 35000
 
 [[line_budget_policy.counts]]

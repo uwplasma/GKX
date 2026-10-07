@@ -536,6 +536,16 @@ def build_runtime_linear_params(
     )
 
 
+def timestep_free_linear_params(
+    cfg: RuntimeConfig, params: LinearParams
+) -> LinearParams:
+    """Give timestep-free routes the time route's linked end damping, A/dt (#354)."""
+
+    if params.damp_ends_rate is not None or cfg.grid.boundary != "linked":
+        return params
+    return replace(params, damp_ends_rate=float(params.damp_ends_amp) / cfg.time.dt)
+
+
 def build_runtime_linear_terms(
     cfg: RuntimeConfig, *, custom_collisions: bool = False
 ) -> LinearTerms:
