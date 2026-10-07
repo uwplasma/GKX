@@ -144,6 +144,7 @@ def _laguerre_components_from_prepared(
 def _spectral_components_from_prepared(
     prep: _PreparedNonlinearInputs,
     *,
+    tz: jnp.ndarray,
     vth: jnp.ndarray,
     sqrt_m: jnp.ndarray,
     sqrt_m_p1: jnp.ndarray,
@@ -160,6 +161,7 @@ def _spectral_components_from_prepared(
 ) -> dict[str, jnp.ndarray | None]:
     chi_fields, idx_bpar, idx_apar = _spectral_chi_fields(
         prep,
+        tz=tz,
         apar_weight=apar_weight,
         bpar_weight=bpar_weight,
     )
@@ -246,6 +248,7 @@ def _nonlinear_em_components_from_path(
         )
     return _spectral_components_from_prepared(
         path.prep,
+        tz=ctx.tz,
         vth=ctx.vth,
         sqrt_m=ctx.sqrt_m,
         sqrt_m_p1=ctx.sqrt_m_p1,
