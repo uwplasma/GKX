@@ -40,6 +40,7 @@ cyclone_salpha,0.55,gx-repaired,Nl16 Nm48,0.035189,0.498056,plan/research/2026-0
 miller_ke,0.1,gx-repaired,Nl16 Nm48,0.101757,0.090265,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
 miller_ke,0.2,gx-repaired,Nl16 Nm48,0.155925,0.134137,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
 miller_ke,0.3,gkx,Nl16 Nm48 time.damp_ends_rate=160.6,0.23128283635488933,0.23603271060041806,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+miller_ke,0.3,gkx,Nl8 Nm24 time.damp_ends_rate=160.6,0.23115193759431088,0.251113571465238,plan/research/2026-10-06-val-ke/results/gkx_results.txt
 miller_ke,0.3,gs2,e3 ntheta48 nperiod3 negrid16,0.23484,0.221,plan/research/2026-09-27-xcode/results/fit_grid_codes.csv
 miller_ke,0.3,gx-repaired,Nl16 Nm48,0.232093,0.236506,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
 miller_ke,0.4,gx-repaired,Nl16 Nm48,0.262712,0.352705,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
@@ -53,8 +54,10 @@ tem_dj2005,0.1,gs2,t2,0.265431,-0.59527,plan/research/2026-10-06-val-ke/results/
 tem_dj2005,0.2,gs2,t1,0.625804,-0.946863,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.2,gs2,t2,0.627593,-0.946692,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.3,gkx,Nl12 Nm32,0.647468960678392,-1.3103178617214672,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+tem_dj2005,0.3,gkx,Nl16 Nm48,0.7329552292576801,-1.2896417819956998,plan/research/2026-10-06-val-ke/results/gkx_results.txt
 tem_dj2005,0.3,gkx,Nl4 Nm8,0.0029214563056782867,-0.775223563748923,plan/research/2026-10-06-val-ke/results/gkx_results.txt
 tem_dj2005,0.3,gkx,Nl8 Nm24,0.611431142652512,-1.2020445636504091,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+tem_dj2005,0.3,gkx,Nl8 Nm24 hypercollisions=False,0.2972913808802046,-1.123491295315308,plan/research/2026-10-06-val-ke/results/gkx_results.txt
 tem_dj2005,0.3,gs2,t1,0.866992,-1.271813,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.3,gs2,t1_beta2,0.871626,-1.269538,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.3,gs2,t2,0.869385,-1.272288,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
