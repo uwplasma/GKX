@@ -21054,3 +21054,9 @@ whole producer->cache->flux chain; no sign defect found or fixed here.
 - Constants as operands instead (would also reuse across new geometry): 6.5e-8 relative float32 drift in q after 64 steps; rejected by the bitwise rule.
 - GPU run-to-run hash differences across processes: XLA autotuning picks different kernels; with autotune level 0 every process returns identical bits. On CPU the imex factor probes also differ at ulp level (1e-8 relative, only some vmapped batch rows) run to run inside one process; single-threaded Eigen (`--xla_cpu_multi_thread_eigen=false`) removes it, so it is the threaded Eigen contraction. On CPU the imex run_raw therefore still recompiles (its baked factor differs by an ulp).
 
+## 2026-10-07 PERF lane: linear-RHS assembly (branch perf/rhs-assembly)
+
+- `shift_axis` rewritten as slice + `jnp.pad` (pad once) instead of zeros + dynamic_update_slice: -8 lines, every RHS/step output bitwise identical (GPU autotune 0 and CPU), step time unchanged within noise: GPU1 RK3 64x64x24 (8,16) 159.8 vs 159.8 ms, (4,8) 36.0 vs 36.0 ms, 32x32x24 (4,8) 8.3 vs 8.3 ms (3 alternating process rounds); CPU 32x32x24 (4,8) 77-91 vs 76-79 ms (loaded laptop). XLA already lowers both spellings to the same fused slice.
+- negative: optimization_barrier on the concatenated linked-FFT chain updates before the single gather: bitwise identical, no change (76.3 vs 76.3 ms, 320.9 vs 320.8 ms on a contended GPU1). Not kept.
+- the big concatenate/slice fusions are XLA fusing the whole Hermite/Laguerre producer graph into the linked-FFT gather consumer, not separate slice+concatenate passes; removing them needs the streaming term in chain layout end to end (a structural change), not a respelling. Pallas not tried: no isolated launch/memory-bound chain to replace.
+

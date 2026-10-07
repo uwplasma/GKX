@@ -625,21 +625,13 @@ def shift_axis(arr: jnp.ndarray, offset: int, axis: int) -> jnp.ndarray:
     """Shift an array along an axis with zero padding (non-periodic)."""
 
     axis = axis % arr.ndim
-    if offset == 0:
-        return arr
-    axis_len = arr.shape[axis]
-    if abs(offset) >= axis_len:
-        return jnp.zeros_like(arr)
-    out = jnp.zeros_like(arr)
-    if offset > 0:
-        body = jax.lax.slice_in_dim(arr, offset, axis_len, axis=axis)
-        starts = [0] * arr.ndim
-        starts[axis] = 0
-        return jax.lax.dynamic_update_slice(out, body, starts)
-    body = jax.lax.slice_in_dim(arr, 0, axis_len + offset, axis=axis)
-    starts = [0] * arr.ndim
-    starts[axis] = -offset
-    return jax.lax.dynamic_update_slice(out, body, starts)
+    n = arr.shape[axis]
+    k = min(abs(offset), n)
+    start = min(max(offset, 0), n)
+    body = jax.lax.slice_in_dim(arr, start, start + n - k, axis=axis)
+    pad = [(0, 0)] * arr.ndim
+    pad[axis] = (0, k) if offset > 0 else (k, 0)
+    return jnp.pad(body, pad)
 
 
 def apply_hermite_v(G: jnp.ndarray) -> jnp.ndarray:
