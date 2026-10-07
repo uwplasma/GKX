@@ -1,0 +1,91 @@
+case,ky_rhos,t_end,gamma_gs2,omega_gs2,drift,gamma_gkx,omega_gkx,gamma_csR,omega_csR
+TEM_ky0.10_t1,0.1,100.0,0.187533,-0.422084,+6.88e-06,0.265212,-0.596917,0.459360,-1.033891
+TEM_ky0.10_t2,0.1,100.0,0.187688,-0.420919,+5.40e-07,0.265431,-0.595270,0.459740,-1.031037
+TEM_ky0.20_t1,0.2,100.0,0.442510,-0.669534,-4.20e-14,0.625804,-0.946863,1.083924,-1.640016
+TEM_ky0.20_t2,0.2,100.0,0.443775,-0.669412,-6.23e-14,0.627593,-0.946692,1.087023,-1.639718
+TEM_ky0.30_t1,0.3,100.0,0.613056,-0.899307,+2.25e-14,0.866992,-1.271813,1.501674,-2.202844
+TEM_ky0.30_t1_beta2,0.3,100.0,0.616333,-0.897699,-3.28e-14,0.871626,-1.269538,1.509701,-2.198904
+TEM_ky0.30_t2,0.3,100.0,0.614748,-0.899643,-4.51e-15,0.869385,-1.272288,1.505819,-2.203667
+TEM_ky0.40_t1,0.4,100.0,0.713560,-1.109049,-2.29e-14,1.009127,-1.568432,1.747859,-2.716604
+TEM_ky0.40_t2,0.4,100.0,0.714067,-1.110013,+3.76e-14,1.009843,-1.569795,1.749099,-2.718965
+TEM_ky0.50_t1,0.5,100.0,0.759277,-1.297734,+5.70e-15,1.073780,-1.835273,1.859842,-3.178786
+TEM_ky0.50_t2,0.5,100.0,0.756293,-1.298487,+1.15e-14,1.069559,-1.836338,1.852531,-3.180631
+TEM_ky0.60_t1,0.6,100.0,0.763506,-1.470100,+2.04e-15,1.079760,-2.079036,1.870199,-3.600995
+TEM_ky0.60_t2,0.6,100.0,0.755155,-1.467194,-1.60e-14,1.067951,-2.074926,1.849745,-3.593877
+TEM_ky0.80_t1,0.8,100.0,0.682233,-1.792372,+0.00e+00,0.964823,-2.534797,1.671122,-4.390397
+TEM_ky0.80_t2,0.8,100.0,0.665365,-1.764013,-1.55e-14,0.940968,-2.494691,1.629804,-4.320932
+gs2/V_keS3_ky0.30 100.0 [0.320221 0.176825]
+gs2/V_keS_ky0.30 100.0 [0.319705 0.176486]
+gs2/V_te1es_ky0.30 100.0 [-0.451669  0.32684 ]
+gs2/V_te1_ky0.30 100.0 [-0.45108   0.330043]
+lane=temA pid=526391 start=2026-10-06T20:06:34-05:00 np=4 cpus=24-27 queue=q_temA.txt
+gs2 TEM_ky0.10_t1 start=2026-10-06T20:06:34-05:00
+gs2 TEM_ky0.10_t1 rc=0 wall=62.53 end=2026-10-06T20:07:36-05:00
+gs2 TEM_ky0.20_t1 start=2026-10-06T20:07:36-05:00
+gs2 TEM_ky0.20_t1 rc=0 wall=61.83 end=2026-10-06T20:08:38-05:00
+gs2 TEM_ky0.30_t1 start=2026-10-06T20:08:38-05:00
+gs2 TEM_ky0.30_t1 rc=0 wall=99.59 end=2026-10-06T20:10:18-05:00
+gs2 TEM_ky0.40_t1 start=2026-10-06T20:10:18-05:00
+gs2 TEM_ky0.40_t1 rc=0 wall=107.90 end=2026-10-06T20:12:06-05:00
+gs2 TEM_ky0.50_t1 start=2026-10-06T20:12:06-05:00
+gs2 TEM_ky0.50_t1 rc=0 wall=128.53 end=2026-10-06T20:14:14-05:00
+gs2 TEM_ky0.60_t1 start=2026-10-06T20:14:14-05:00
+gs2 TEM_ky0.60_t1 rc=0 wall=336.21 end=2026-10-06T20:19:50-05:00
+gs2 TEM_ky0.80_t1 start=2026-10-06T20:19:50-05:00
+gs2 TEM_ky0.80_t1 rc=0 wall=103.15 end=2026-10-06T20:21:34-05:00
+lane=temA ALL DONE 2026-10-06T20:21:34-05:00
+lane=temB pid=526393 start=2026-10-06T20:06:34-05:00 np=4 cpus=28-31 queue=q_temB.txt
+gs2 TEM_ky0.10_t2 start=2026-10-06T20:06:34-05:00
+gs2 TEM_ky0.10_t2 rc=0 wall=806.96 end=2026-10-06T20:20:01-05:00
+gs2 TEM_ky0.20_t2 start=2026-10-06T20:20:01-05:00
+gs2 TEM_ky0.20_t2 rc=0 wall=616.80 end=2026-10-06T20:30:18-05:00
+gs2 TEM_ky0.30_t2 start=2026-10-06T20:30:18-05:00
+gs2 TEM_ky0.30_t2 rc=0 wall=930.59 end=2026-10-06T20:45:48-05:00
+gs2 TEM_ky0.40_t2 start=2026-10-06T20:45:48-05:00
+gs2 TEM_ky0.40_t2 rc=0 wall=856.16 end=2026-10-06T21:00:04-05:00
+gs2 TEM_ky0.50_t2 start=2026-10-06T21:00:04-05:00
+gs2 TEM_ky0.50_t2 rc=0 wall=554.36 end=2026-10-06T21:09:19-05:00
+gs2 TEM_ky0.60_t2 start=2026-10-06T21:09:19-05:00
+gs2 TEM_ky0.60_t2 rc=0 wall=487.47 end=2026-10-06T21:17:26-05:00
+gs2 TEM_ky0.80_t2 start=2026-10-06T21:17:26-05:00
+gs2 TEM_ky0.80_t2 rc=0 wall=531.78 end=2026-10-06T21:26:18-05:00
+gs2 TEM_ky0.30_t1_beta2 start=2026-10-06T21:26:18-05:00
+gs2 TEM_ky0.30_t1_beta2 rc=0 wall=91.88 end=2026-10-06T21:27:50-05:00
+lane=temB ALL DONE 2026-10-06T21:27:50-05:00
+lane=v2 pid=662229 start=2026-10-06T21:44:40-05:00 np=4 cpus=24-27 queue=q_v2.txt
+gs2 V_te1es_ky0.30 start=2026-10-06T21:44:40-05:00
+gs2 V_te1es_ky0.30 rc=0 wall=69.13 end=2026-10-06T21:45:49-05:00
+lane=v2 ALL DONE 2026-10-06T21:45:49-05:00
+lane=v3 pid=733536 start=2026-10-06T22:14:28-05:00 np=4 cpus=24-27 queue=q_v3.txt
+gs2 V_keS_ky0.30 start=2026-10-06T22:14:28-05:00
+gs2 V_keS_ky0.30 rc=0 wall=37.58 end=2026-10-06T22:15:05-05:00
+lane=v3 ALL DONE 2026-10-06T22:15:05-05:00
+lane=v4 pid=887027 start=2026-10-06T23:00:50-05:00 np=4 cpus=24-27 queue=q_v4.txt
+gs2 V_keS3_ky0.30 start=2026-10-06T23:00:50-05:00
+gs2 V_keS3_ky0.30 rc=0 wall=308.30 end=2026-10-06T23:05:58-05:00
+lane=v4 ALL DONE 2026-10-06T23:05:58-05:00
+lane=v pid=655743 start=2026-10-06T21:38:19-05:00 np=4 cpus=24-27 queue=q_v.txt
+gs2 V_te1_ky0.30 start=2026-10-06T21:38:19-05:00
+gs2 V_te1_ky0.30 rc=0 wall=97.18 end=2026-10-06T21:39:56-05:00
+lane=v ALL DONE 2026-10-06T21:39:56-05:00
+GS2 version 8.2.1
+GYROKINETIC COMPARISON CODES (for GKX / GX comparison, source inspection, profiling)
+=====================================================================================
+Created 2026-09-14. Identical copies:
+  office : <office-home>/gk-codes/README.txt
+  Mac    : ~/local/gk-codes/README.txt
+All sources are official upstream repositories or conda-forge. Nothing is patched.
+
+-------------------------------------------------------------------------------
+0. OFFICE FORTRAN TOOLCHAIN (user space, no sudo)
+-------------------------------------------------------------------------------
+micromamba 2.9.0-0 (https://github.com/mamba-org/micromamba-releases, asset micromamba-linux-64)
+  sha256 366cd9cd8be14df1ab8ed50352a82111082a36686b2d389fdb79a92c3fafb3e3 (matches published digest and .sha256 file)
+  binary      <office-home>/local/micromamba/bin/micromamba
+  root prefix <office-home>/local/micromamba
+env gk-fortran (conda-forge only, --override-channels):
+  gfortran/gcc/g++ 13.4.0, OpenMPI 5.0.8 (mpifort/mpicc/mpicxx), netcdf-fortran 4.6.2 and
+  libnetcdf/hdf5 mpi_openmpi builds (nc4 + parallel), fftw 3.3.10 mpi_openmpi (libfftw3_mpi),
+  libblas/liblapack -> openblas, cmake 4.2.3, make 4.4.1, pkg-config, git,
+  python 3.12.14 + numpy, netCDF4, scipy, matplotlib, f90nml
+  explicit export: <office-home>/local/micromamba/gk-fortran-explicit.txt

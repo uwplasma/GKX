@@ -21186,3 +21186,16 @@ Base `7f5e151ac`.
   cannot cover ion and electron streaming scales. No small fix; a
   species-split alpha or an electron-aware line solve is the next step.
 Raw records: office lane directory `em-energy/pr3/`.
+## 2026-10-07 — VAL-KE and VAL-REF lane (F.4/F.6, branch `validation/ke-and-ref`)
+
+Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella v1.0 present; GX binary and `~/GX` are gone, so no new GX run was possible. GKX eigenpairs ran on office GPU 1 (`venvs/gkx-ke`, JAX 0.11.2, SOLVAX 0.27.0); `lanes/arch-b/venv` has SOLVAX 0.26.0, below the pyproject floor.
+
+- **Root cause of the kinetic-electron "failures": the end-damping contract.** On a linked deck without `[time] damp_ends_rate` the time route damps at `damp_ends_amp/dt` and every timestep-free route at `damp_ends_amp` (1/dt weaker). Kinetic electrons are very sensitive to it; adiabatic ITG is not. KE example ky .3 Nl8/Nm16: time 0.16799, Krylov 0.24317, Krylov with rate 125 0.16813, GS2 0.1768. Issue #354. The KE example, the KE parity fixture (rate 160.6 = GX's 0.1/dt at its settled dt 6.228e-4) and the new TEM fixture state the rate.
+- **Miller kinetic electrons (VAL-KE).** Certified Krylov eigenpairs, Nl16/Nm48, rate 160.6: ky .3 0.23128/0.23603, ky .5 0.25479/0.46698. Against the repaired GX build: -0.35%/-0.20% and +0.27%/-0.16%. Against GS2 e3: -1.5% and +0.5%. Nl8/Nm24 gives 0.23115 at ky .3 (0.06%). Ledger row `X-ke-miller` (provisional: two ky).
+- **EM-lane gap (#352), reconciled.** That lane's "21-23% above GS2 at every low beta" used variant `damp0.1`, an explicit rate 0.1. Same deck at beta 1e-4, Nl4/Nm32 with rate 500 (= amp/dt): 0.2264 against GS2 0.2344 and 0.2889 at rate 0.1. Not an operator defect.
+- **TEM (case definition).** Dannert & Jenko, Phys. Plasmas 12, 072309 (2005), Sec. II.B: R/Ln 3, R/LTe 6, R/LTi 0, eps 0.16, q 1.4, s_hat 0.8, Te/Ti 3, beta_e 1e-3, m_i/m_e 1836, collisionless, s-alpha with alpha 0. Deck `tools/comparison/fixtures/parity/tem_dannert_jenko_2005.toml` (Lref = R, ion reference; ky_gkx = ky rho_s/sqrt 3). The paper's growth rates are in figures only; GS2 is the reference.
+- **TEM results.** GS2 converged (t1 -> t2 <= 2.5%, beta x2 +0.5%); at ky rho_s .3 gamma 0.8694, omega -1.2723 (v_ti/R). GKX at ky rho_s .3: (Nl,Nm) (4,8) 0.0029, (8,24) 0.6114, (12,32) 0.6475, (16,48) 0.7330 (-15.7%), omega -1.2896 (+1.4%); without hypercollisions (8,24) 0.2973. Not converged; ledger row `X-tem-dj2005` is open.
+- **VAL-REF.** No GX build possible on office, so the 2026-09-27 repaired-build goldens and the Q20 GS2/gyaradax points are promoted as fixture rows in `docs/_static/cross_code_linear_points.csv` (assembler `plan/research/2026-10-06-val-ke/scripts/assemble.py`), ledger row `X-cyclone-repaired-gx` (passing).
+
+Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
+Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
