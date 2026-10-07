@@ -2349,7 +2349,7 @@ def _free_energy(G, case):
     magnetic = jnp.sum(
         vol * B2 * (cache.kperp2 * jnp.abs(fields.apar) ** 2 + jnp.abs(fields.bpar) ** 2)
     )
-    return entropy - boltzmann + magnetic / params.beta, H
+    return entropy - boltzmann + magnetic / params.beta, (H, entropy)
 
 
 def _drive_from_fluxes(case, fields, *, bpar):
@@ -2403,19 +2403,20 @@ def test_three_field_free_energy_budget_closes_multimode(bpar):
         fields.bpar if bpar else None, cache.JlB,
     )
     if bpar:
-        W, H_energy = _free_energy(G, case)
+        # Entropy and Boltzmann terms cancel to O(1e-3): fp32 needs that scale.
+        W, (H_energy, entropy) = _free_energy(G, case)
         np.testing.assert_allclose(np.asarray(H_energy), np.asarray(H), atol=tol)
         # The physical energy is the GX source quadratic 1/2 <G, nT H>.
         source = 0.5 * jnp.real(
             jnp.sum(case["vol"] * case["nt"][:, None, None, None, None, None] * jnp.conj(G) * H)
         )
-        np.testing.assert_allclose(float(W), float(source), rtol=tol)
+        np.testing.assert_allclose(float(W), float(source), atol=tol * float(entropy))
         _, dW = jax.jvp(lambda g: _free_energy(g, case)[0], (G,), (total,))
     weight = case["vol"] * case["nt"][:, None, None, None, None, None] * jnp.conj(H)
     rates = {k: float(jnp.real(jnp.sum(weight * v))) for k, v in contrib.items()}
     scale = float(jnp.sum(jnp.abs(weight * total)))
     if bpar:
-        np.testing.assert_allclose(float(dW), sum(rates.values()), rtol=tol, atol=tol * scale)
+        np.testing.assert_allclose(float(dW), sum(rates.values()), atol=tol * scale)
     for name in ("curvature", "gradb"):
         assert abs(rates[name]) < tol * scale
     # Discretization-limited at Nz = 32; it converges with Nz (test above).
@@ -2439,7 +2440,7 @@ def test_bpar_diamagnetic_budget_converges_with_laguerre_truncation():
         _, fields, contrib = assemble_rhs_terms_cached(
             case["G"], case["cache"], case["params"], use_custom_vjp=False
         )
-        _, H = _free_energy(case["G"], case)
+        H = _free_energy(case["G"], case)[1][0]
         rate = jnp.sum(
             case["vol"] * case["nt"][:, None, None, None, None, None]
             * jnp.conj(H) * contrib["diamagnetic"]
