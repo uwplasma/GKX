@@ -1,0 +1,68 @@
+case,ky,code,resolution,gamma,omega,source
+cyclone_miller,0.05,gx-repaired,Nl16 Nm48,0.012298,0.029121,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.1,gx-repaired,Nl16 Nm48,0.032772,0.058904,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.15,gkx,Nl16 Nm48,0.059214796795108424,0.0919708271269749,plan/research/2026-09-27-xcode/results/gkx_cert.txt
+cyclone_miller,0.15,gs2,r3 ntheta48 nperiod3 negrid16,0.05783,0.0916,plan/research/scripts/2026-09-14-cross-code-cyclone/results/final_tables.txt
+cyclone_miller,0.15,gx-repaired,Nl16 Nm48,0.058369,0.09185,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.2,gx-repaired,Nl16 Nm48,0.084876,0.129545,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.25,gx-repaired,Nl16 Nm48,0.107955,0.171185,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.3,gkx,Nl16 Nm48,0.12585373736619834,0.21547633197672786,plan/research/2026-09-27-xcode/results/gkx_cert.txt
+cyclone_miller,0.3,gs2,r3 ntheta48 nperiod3 negrid16,0.12546,0.2157,plan/research/scripts/2026-09-14-cross-code-cyclone/results/final_tables.txt
+cyclone_miller,0.3,gx-repaired,Nl16 Nm48,0.125874,0.215461,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.35,gx-repaired,Nl16 Nm48,0.137688,0.261003,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.4,gkx,Nl16 Nm48,0.1431215509765847,0.30669017205490817,plan/research/2026-09-27-xcode/results/gkx_cert.txt
+cyclone_miller,0.4,gs2,r3 ntheta48 nperiod3 negrid16,0.14297,0.3078,plan/research/scripts/2026-09-14-cross-code-cyclone/results/final_tables.txt
+cyclone_miller,0.4,gx-repaired,Nl16 Nm48,0.143138,0.306705,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.45,gx-repaired,Nl16 Nm48,0.142551,0.351381,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.5,gx-repaired,Nl16 Nm48,0.136382,0.393997,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.55,gs2,r4 ntheta64 nperiod4 negrid24,0.12516,0.4399,plan/research/scripts/2026-09-14-cross-code-cyclone/results/final_tables.txt
+cyclone_miller,0.55,gx-repaired,Nl16 Nm48,0.125906,0.433638,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.6,gx-repaired,Nl16 Nm48,0.112655,0.469788,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.65,gx-repaired,Nl16 Nm48,0.098522,0.50297,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.7,gx-repaired,Nl16 Nm48,0.084484,0.534359,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_miller,0.75,gx-repaired,Nl16 Nm48,0.07074,0.565404,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.05,gx-repaired,Nl16 Nm48,0.010472,0.036028,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.1,gx-repaired,Nl16 Nm48,0.030384,0.08022,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.15,gkx,Nl16 Nm48,0.054823964994948966,0.12700478988653152,plan/research/2026-09-27-xcode/results/gkx_cert.txt
+cyclone_salpha,0.15,gx-repaired,Nl16 Nm48,0.054946,0.126858,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.2,gkx,Nl16 Nm48,0.0751589185200101,0.17790864284217126,plan/research/2026-09-27-xcode/results/gkx_cert.txt
+cyclone_salpha,0.2,gx-repaired,Nl16 Nm48,0.075035,0.177842,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.25,gx-repaired,Nl16 Nm48,0.088424,0.23043,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.3,gs2,r4 ntheta64 nperiod4 negrid24,0.09219,0.284,plan/research/scripts/2026-09-14-cross-code-cyclone/results/final_tables.txt
+cyclone_salpha,0.3,gx-repaired,Nl16 Nm48,0.093049,0.281983,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.3,gyaradax,g2 ns144 nvpar64 nmu16,0.09209,,plan/research/scripts/2026-09-14-cross-code-cyclone/results/final_tables.txt
+cyclone_salpha,0.35,gx-repaired,Nl16 Nm48,0.089881,0.330789,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.4,gkx,Nl16 Nm48,0.08064558562027148,0.37506573544988797,plan/research/2026-09-27-xcode/results/gkx_cert.txt
+cyclone_salpha,0.4,gx-repaired,Nl16 Nm48,0.080885,0.374934,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.45,gx-repaired,Nl16 Nm48,0.068466,0.415385,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.5,gx-repaired,Nl16 Nm48,0.054103,0.455862,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+cyclone_salpha,0.55,gx-repaired,Nl16 Nm48,0.035189,0.498056,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+miller_ke,0.1,gx-repaired,Nl16 Nm48,0.101757,0.090265,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+miller_ke,0.2,gx-repaired,Nl16 Nm48,0.155925,0.134137,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+miller_ke,0.3,gkx,Nl16 Nm48 time.damp_ends_rate=160.6,0.23128283635488933,0.23603271060041806,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+miller_ke,0.3,gs2,e3 ntheta48 nperiod3 negrid16,0.23484,0.221,plan/research/2026-09-27-xcode/results/fit_grid_codes.csv
+miller_ke,0.3,gx-repaired,Nl16 Nm48,0.232093,0.236506,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+miller_ke,0.4,gx-repaired,Nl16 Nm48,0.262712,0.352705,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+miller_ke,0.5,gkx,Nl16 Nm48 time.damp_ends_rate=160.6,0.25478859066166504,0.46698210028782566,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+miller_ke,0.5,gs2,e3 ntheta48 nperiod3 negrid16,0.25354,0.4571,plan/research/2026-09-27-xcode/results/fit_grid_codes.csv
+miller_ke,0.5,gx-repaired,Nl16 Nm48,0.254099,0.467708,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+miller_ke,0.6,gx-repaired,Nl16 Nm48,0.213143,0.575131,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+miller_ke,0.7,gx-repaired,Nl16 Nm48,0.08185,0.708679,plan/research/2026-09-27-xcode/results/gx_repaired_96a53403.txt
+tem_dj2005,0.1,gs2,t1,0.265212,-0.596917,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.1,gs2,t2,0.265431,-0.59527,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.2,gs2,t1,0.625804,-0.946863,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.2,gs2,t2,0.627593,-0.946692,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.3,gkx,Nl12 Nm32,0.647468960678392,-1.3103178617214672,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+tem_dj2005,0.3,gkx,Nl4 Nm8,0.0029214563056782867,-0.775223563748923,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+tem_dj2005,0.3,gkx,Nl8 Nm24,0.611431142652512,-1.2020445636504091,plan/research/2026-10-06-val-ke/results/gkx_results.txt
+tem_dj2005,0.3,gs2,t1,0.866992,-1.271813,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.3,gs2,t1_beta2,0.871626,-1.269538,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.3,gs2,t2,0.869385,-1.272288,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.4,gs2,t1,1.009127,-1.568432,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.4,gs2,t2,1.009843,-1.569795,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.5,gs2,t1,1.07378,-1.835273,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.5,gs2,t2,1.069559,-1.836338,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.6,gs2,t1,1.07976,-2.079036,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.6,gs2,t2,1.067951,-2.074926,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.8,gs2,t1,0.964823,-2.534797,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.8,gs2,t2,0.940968,-2.494691,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
