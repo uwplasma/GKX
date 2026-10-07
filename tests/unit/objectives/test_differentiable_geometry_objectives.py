@@ -1189,7 +1189,10 @@ def test_vmex_field_line_tensor_sensitivity_report_checks_stellarator_tensors_wh
     ):
         sys.modules.pop(name, None)
 
-    report = vmex_field_line_tensor_sensitivity_report(ntheta=24, fd_step=1.0e-6)
+    # Central FD truncation scales as h^2 and the largest derivative is ~5e4,
+    # so a fixed coarse h=1e-6 gave an absolute error of 0.66 (#327). Gate the
+    # error relative to the derivative scale and require h^2 convergence.
+    report = vmex_field_line_tensor_sensitivity_report(ntheta=24, fd_step=1.0e-7)
 
     assert (
         gkx.vmec_field_line_tensor_observable_names
@@ -1207,8 +1210,15 @@ def test_vmex_field_line_tensor_sensitivity_report_checks_stellarator_tensors_wh
         len(vmec_field_line_tensor_observable_names()),
         2,
     )
-    assert float(report["max_abs_ad_fd_error"]) < 5.0e-3
+    scale = float(np.max(np.abs(report["jacobian_ad"])))
+    error = float(report["max_abs_ad_fd_error"])
+    assert error < 1.0e-6 * scale
     assert float(report["max_rel_ad_fd_error"]) < 5.0e-4
+    half = vmex_field_line_tensor_sensitivity_report(ntheta=24, fd_step=5.0e-8)
+    half_error = float(half["max_abs_ad_fd_error"])
+    # Halving h quarters a truncation-dominated error; below 1e-8*scale the
+    # error is at the FD rounding floor and no ratio is expected.
+    assert half_error < 1.0e-8 * scale or 3.0 < error / half_error < 5.0
     assert report["conditioning"]["worst_rel_error"]["parameter_name"] in {
         "delta_Rcos",
         "delta_Zsin",
