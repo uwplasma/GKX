@@ -10,7 +10,8 @@ import jax.numpy as jnp
 import jax.scipy.linalg
 import numpy as np
 import pytest
-from scipy.special import eval_genlaguerre, eval_laguerre, j0, jv
+from scipy.special import eval_genlaguerre, eval_laguerre, j0, j1, jv
+from scipy.special import roots_hermite, roots_laguerre
 
 from gkx.config import GridConfig
 from gkx.operators.collision import CollisionContext
@@ -2580,3 +2581,54 @@ def test_per_species_nu_keeps_multispecies_conservation(model: str) -> None:
     np.testing.assert_allclose(rates.particle_density, 0.0, atol=1.0e-5)
     np.testing.assert_allclose(rates.total_parallel_momentum, 0.0, atol=1.0e-5)
     np.testing.assert_allclose(rates.total_thermal_energy, 0.0, atol=1.0e-4)
+
+
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
+@pytest.mark.parametrize("nl", [1, 2, 4])
+@pytest.mark.parametrize("b", [0.0, 0.27053411424286467, 1.2, 14.856649669530817])
+@pytest.mark.parametrize("channel", [0, 1, 2])  # ES, Apar, Bpar
+def test_energy_flux_matches_velocity_integral(dtype, nl, b, channel):
+    """#325/#326: raw energy flux equals an independent velocity quadrature.
+
+    Mandell et al., JPP 84 (2018) 905840108, App. H. The Bpar drift kernel is
+    ``x 2J1(A)/A`` with ``A=sqrt(2 b x)``; ES/Apar use ``J0(A)``.
+    """
+    from gkx.operators.moments import _heat_flux_channel_contrib_species
+
+    s, ws = roots_hermite(32)
+    x, wx = roots_laguerre(96)
+    ws /= np.sqrt(np.pi)
+    arg = np.sqrt(2 * b * x)
+    kernel = j0(arg) if channel < 2 else (x if b == 0 else x * 2 * j1(arg) / arg)
+    lag = (-1) ** (nl - 1) * eval_laguerre(nl - 1, x)
+    h2 = (4 * s**2 - 2) / np.sqrt(8)
+    h3 = (8 * s**3 - 12 * s) / np.sqrt(48)
+    if channel == 1:  # v_par weighted Apar flux of m=1/m=3 moments
+        dist = (
+            np.sqrt(2)
+            * s[:, None]
+            * (np.sqrt(2) * s[:, None] * lag + 0.3 * h3[:, None])
+        )
+    else:
+        dist = lag[None, :] + 0.3 * h2[:, None]
+    expected = 0.6 * float(ws @ (dist * (s[:, None] ** 2 + x) * kernel) @ wx)
+    expected *= -1 if channel == 1 else 1
+    with jax.enable_x64(dtype == jnp.float64):
+        cdtype = jnp.complex64 if dtype == jnp.float32 else jnp.complex128
+        b_arr = jnp.full((1, 1, 1, 1), b, dtype=dtype)
+        jl = jnp.moveaxis(J_l_all(b_arr, nl - 1), 0, 1)
+        lower = jnp.concatenate([jnp.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+        cache = SimpleNamespace(Jl=jl, JlB=jl + lower, b=b_arr)
+        ones = jnp.ones(1, dtype=dtype)
+        grid = SimpleNamespace(ky=0.3 * ones, kx=0 * ones, z=0 * ones)
+        params = SimpleNamespace(density=ones, temp=ones, vth=ones, tz=ones)
+        p0, p2 = (1, 3) if channel == 1 else (0, 2)
+        G = jnp.zeros((1, nl, 4, 1, 1, 1), cdtype).at[:, nl - 1, p0].set(1j)
+        G = G.at[:, 0, p2].add(0.3j)
+        fields = [jnp.zeros((1, 1, 1), cdtype)] * 3
+        fields[channel] = jnp.ones((1, 1, 1), cdtype)
+        flux = _heat_flux_channel_contrib_species(
+            G, *fields, cache, grid, params, ones, use_dealias=False, flux_scale=1.0
+        )[channel].sum()
+    tol = 3e-6 if dtype == jnp.float32 else 2e-13
+    np.testing.assert_allclose(np.asarray(flux), expected, atol=tol, rtol=tol)
