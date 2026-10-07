@@ -2270,7 +2270,7 @@ def test_single_radial_mode_self_conjugate_row_is_real():
     np.testing.assert_array_equal(result[1], value[1])
 
 
-def _hermitian_multimode_case(nl, *, nu=0.0, seed=0):
+def _hermitian_multimode_case(nl, *, nu=0.0, seed=0, n=(4, 6, 32), length=6.0):
     """Variable-B, sheared, three-field multimode case with a real state."""
 
     dtype = np.float64 if jax.config.x64_enabled else np.float32
@@ -2299,7 +2299,9 @@ def _hermitian_multimode_case(nl, *, nu=0.0, seed=0):
         bessel_bmag_power=1.0,
     )
     grid = build_spectral_grid(
-        GridConfig(Nx=4, Ny=6, Nz=32, Lx=6.0, Ly=6.0, boundary="periodic")
+        GridConfig(
+            Nx=n[0], Ny=n[1], Nz=n[2], Lx=length, Ly=length, boundary="periodic"
+        )
     )
     cache = build_linear_cache(grid, geom, params, Nl=nl, Nm=4)
     rng = np.random.default_rng(seed)
@@ -2314,7 +2316,8 @@ def _hermitian_multimode_case(nl, *, nu=0.0, seed=0):
     # A real field: project through physical space, then drop the mean and
     # the self-conjugate Nyquist rows, which the energy measure treats apart.
     G = np.fft.fft2(np.fft.ifft2(G, axes=(3, 4)).real, axes=(3, 4))
-    G[:, :, :, 0, 0] = G[:, :, :, grid.ky.size // 2] = G[:, :, :, :, 2] = 0.0
+    G *= np.asarray(grid.dealias_mask)[:, :, None]
+    G[:, :, :, 0, 0] = G[:, :, :, n[1] // 2] = G[:, :, :, :, n[0] // 2] = 0.0
     ctype = jnp.complex128 if dtype == np.float64 else jnp.complex64
     vol, flux_fac = fieldline_quadrature_weights(geom, grid)
     return dict(
@@ -2429,7 +2432,7 @@ def test_three_field_free_energy_budget_closes_multimode(bpar):
     # The phi-Bpar cross pairing of the diamagnetic drive uses the analytic
     # upper Laguerre neighbour (#325), so with Bpar it closes to truncation.
     np.testing.assert_allclose(
-        rates["diamagnetic"], drive, rtol=1e-6 if bpar else 50 * tol
+        rates["diamagnetic"], drive, rtol=max(1e-6 if bpar else 0.0, 50 * tol)
     )
 
 
@@ -2449,3 +2452,45 @@ def test_bpar_diamagnetic_budget_converges_with_laguerre_truncation():
         drive = _drive_from_fluxes(case, fields, bpar=True)
         errors.append(abs(float(jnp.real(rate)) - drive) / abs(drive))
     assert errors[0] > 100 * errors[1] > 1e4 * max(errors[2], 1e-16)
+
+
+@pytest.mark.parametrize("laguerre_mode", ["spectral", "grid"])
+def test_three_field_nonlinear_bracket_conserves_free_energy(laguerre_mode):
+    """The E x B + flutter + Bpar bracket transfers but never creates W.
+
+    The spectral route conserves to round-off.  The Laguerre-grid route
+    multiplies by J0 on the quadrature nodes while H carries the truncated
+    Laguerre series of J0, so it conserves to that truncation.
+    """
+
+    from gkx.operators.nonlinear.rhs import nonlinear_rhs_cached_impl
+
+    tol = 1e-13 if jax.config.x64_enabled else 1e-5
+    errors = []
+    for nl in (3, 6, 12) if laguerre_mode == "grid" else (3,):
+        case = _hermitian_multimode_case(nl, n=(8, 12, 16), length=20.0)
+        G, cache, params = case["G"], case["cache"], case["params"]
+        terms = TermConfig(collisions=0.0, hypercollisions=0.0, end_damping=0.0)
+        rhs = [
+            nonlinear_rhs_cached_impl(
+                G,
+                cache,
+                params,
+                replace(terms, nonlinear=w),
+                differentiable=True,
+                laguerre_mode=laguerre_mode,
+            )
+            for w in (1.0, 0.0)
+        ]
+        N, fields = rhs[0][0] - rhs[1][0], rhs[0][1]
+        jv = case["jax_values"]
+        H = build_H(
+            G, cache.Jl, fields.phi, jv["tz"], fields.apar, jv["vth"], fields.bpar,
+            cache.JlB,
+        )
+        exchange = case["vol"] * case["nt"][:, None, None, None, None, None] * jnp.conj(H) * N
+        errors.append(float(jnp.abs(jnp.sum(exchange)) / jnp.sum(jnp.abs(exchange))))
+    if laguerre_mode == "spectral":
+        assert errors[0] < tol
+    else:
+        assert errors[0] > 100 * errors[1] > 1e4 * max(errors[2], tol)
