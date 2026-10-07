@@ -38,7 +38,7 @@
 # resolution-limited rather than converged.
 
 schema_version = 1
-updated = "2026-09-29"
+updated = "2026-10-07"
 
 # ---------------------------------------------------------------- README parity
 
@@ -307,3 +307,27 @@ reference_rank = 1
 tier = 1
 status = "provisional"
 notes = "s-alpha sets omega_kappa = omega_gradB, so this is not AZ's equation; 5% missed, gated at 12%. Closing it needs an s-alpha option with a beta-prime drift split."
+
+[[row]]
+id = "X-cyclone-repaired-gx"
+claim = "Cyclone ITG adiabatic, s-alpha and Miller: certified GKX eigenpairs against the clamp-repaired GX goldens and converged GS2/gyaradax"
+observable = "relative gamma difference per ky, GKX Nl16/Nm48 certified Krylov eigenpair vs GX rerun with the dampEnds_linked grid-stride fix (s-alpha ky .15/.20/.30/.40, Miller .15/.30/.40/.55) and vs GS2 r3/r4 (Miller .15/.30/.40/.55, s-alpha .30) and gyaradax g2 (s-alpha .30)"
+artifact = "docs/_static/cross_code_linear_points.csv"
+generator = "plan/research/2026-10-06-val-ke/scripts/assemble.py"
+reference = "GX 3865a537 + dampEnds_linked grid-stride loop (self-run, sha256 96a53403...); GS2 8.2.1; gyaradax 8d9dc2d2"
+reference_rank = 5
+tier = 3
+status = "passing"
+notes = "GKX vs repaired GX: <= 0.30% at 7 of 8 points, +1.45% at Miller ky .15. GKX vs GS2: <= 0.3% at Miller .30/.40, +0.65% at Miller .55, +1.0% at s-alpha .30, +2.4% at Miller .15; gyaradax s-alpha .30 is 1.1% below GKX. The repaired build reproduces the shipped adiabatic goldens to 0.06% above ky 0.1, so the clamp is immaterial for these two cases; the L-lin-cyclone-* rows still cite the time-fitted parity tables."
+
+[[row]]
+id = "X-ke-miller"
+claim = "Cyclone Miller with kinetic electrons (m_e/m_i 2.7e-4, beta 1e-5, A_par), linear: GKX certified eigenpairs against repaired GX and GS2"
+observable = "relative gamma and omega difference at ky .30 and .50, GKX Nl16/Nm48 with damp_ends_rate 160.6 (GX's 0.1/dt at its settled dt 6.228e-4)"
+artifact = "docs/_static/cross_code_linear_points.csv"
+generator = "plan/research/2026-10-06-val-ke/scripts/assemble.py"
+reference = "GX 3865a537 + dampEnds_linked grid-stride loop (self-run, t = 40); GS2 8.2.1 rung e3 (ntheta 48, nperiod 3, negrid 16, ngauss 8)"
+reference_rank = 5
+tier = 3
+status = "provisional"
+notes = "ky .30: GKX 0.23128/0.23603 vs GX 0.23209/0.23651 (-0.35%/-0.20%) and GS2 0.23484/0.2210 (-1.5%); Nl8/Nm24 gives 0.23115 (0.06% from Nl16/Nm48). ky .50: 0.25479/0.46698 vs GX 0.25410/0.46771 (+0.27%/-0.16%) and GS2 0.25354 (+0.5%). Only two ky are measured; ky .10 is unsettled in both GX (t = 40) and GS2 e3. Before this row the Krylov route damped the linked ends at damp_ends_amp instead of amp/dt and gave 0.3579 at ky .30 (+54%)."
