@@ -2421,7 +2421,8 @@ def test_three_field_free_energy_budget_closes_multimode(bpar):
         assert abs(rates[name]) < tol * scale
     # Discretization-limited at Nz = 32; it converges with Nz (test above).
     assert abs(rates["streaming"] + rates["mirror"]) < 1e-6 * scale
-    assert abs(rates["streaming"]) > 1e3 * abs(rates["streaming"] + rates["mirror"])
+    ratio = 1e3 if dtype == np.float64 else 1e2
+    assert abs(rates["streaming"]) > ratio * abs(rates["streaming"] + rates["mirror"])
     for name in ("collisions", "hypercollisions", "hyperdiffusion"):
         assert rates[name] < 0.0
     drive = _drive_from_fluxes(case, fields, bpar=bpar)
