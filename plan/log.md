@@ -21130,3 +21130,38 @@ Raw records: office lane directory `em-energy` (`gs2/`, `gkxr_*`, `gkxr40_*`).
 - src -196 lines, bitwise on all five fingerprints (linear Cyclone eigenpair, nonlinear Q trace, window gradient, quasilinear flux, imex-ars3), float32 and x64, CPU single-threaded Eigen: operators/fluxes.py -48 (heat/particle totals from one `_summed`), operators/moments.py -57 (channel-resolved heat/particle from one `_channel_resolved`, keeping the public defaults use_dealias=True, flux_scale=1.0), terms/fields.py -77 (custom-VJP fwd/bwd forward positional args instead of re-listing them), operators/nonlinear/brackets.py -14 (one `_single_field` wrapper).
 - a full dead-symbol scan (identifier counted over src/tests/docs/scripts/examples) found no unreferenced top-level src function; five symbols are test/doc-only public API (`streaming_contribution`, `bessel_laguerre_kernels`, `associated_bessel_laguerre_coefficients`, `migrate_end_damping_reference`, `integrated_autocorrelation_time`), all documented, left in place.
 
+
+## 2026-10-07 — EM ITG gap and time-fit fail-closed (branch `validation/em-itg-gap`)
+
+Base `7f5e151ac`. Follows #349 (EM-B-PAR ladder).
+- Fix: the time fit now reports `fit_settled=true` only when the window spans
+  >= 2 fitted e-foldings (the existing `warn_if_growth_unresolved` criterion,
+  previously warning-only) and the signal amplitude grows by >= e^2 across
+  it. The beta 0.010 KBM fit (gamma 24.0 over 0.37 growth times) is now
+  unsettled; regression test `test_fit_settled_requires_two_growth_times_in_the_window`.
+  On office it also flags the beta 0.0125 fit (1.40) and the no-hypercollision
+  blow-up (248) as unsettled.
+- ITG-branch gap (Miller CBC, ky 0.3, A∥+B∥, nperiod 3, office):
+  | case | GS2 gamma | GKX gamma |
+  | beta 0.005 base (GS2 ntheta 48, negrid 24; GKX Nl 4, Nm 32, Nz 240) | 0.2137 | 0.2593 |
+  | GS2 negrid 32 / ntheta 64 | 0.2137 / 0.2137 | |
+  | GKX Nm 64 / Nz 320 / Nl 8 / no end damping | | 0.2577 / 0.2591 / 0.2676 / 0.2618 |
+  | beta 1e-4 (ES limit, kinetic electrons) | 0.2344 | 0.2889 (Nl 8: 0.2955) |
+  | beta 0.0075 | 0.1937 | 0.2382 |
+  | beta 0.0125 | 0.1737 (omega 1.13, transition) | unsettled |
+  Both codes are resolved; the gap is +21-23% at every low beta including
+  beta -> 0, so it is already in the electrostatic kinetic-electron limit and
+  is not EM. GKX without hypercollisions is numerically unstable on this
+  deck (grid-scale, full Hermite tail), so hypercollisions cannot be removed
+  to test them. No GKX defect isolated. Overlaps VAL-KE (Miller kinetic
+  electrons ES), whose office records show the GKX eigenvalue moving
+  0.358 -> 0.231 with end-damping rate and resolution; hand the ES
+  comparison to that lane.
+- Krylov shift-invert inner residual 0.96-0.98: the same with
+  `hermite-line` and `field-corrected`, at Nz 96 and 240, with and without
+  B∥, and at beta 1e-4. So it is not electromagnetic; the line preconditioners
+  do not capture this kinetic-electron operator (as documented for
+  (96, 8, 24)). `pr3-cm`, the preconditioner that converges there, refuses
+  this deck by its own z-locality check (defect 2.1e-2 to 3.6e-2, also without
+  hypercollisions). The term that breaks locality was not identified.
+Raw records: office lane directory `em-energy/gap/`.

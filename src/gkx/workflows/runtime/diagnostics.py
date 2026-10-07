@@ -592,7 +592,7 @@ def fit_runtime_linear_diagnostics(
         fit_window_tmax=fit.fit_window_tmax,
     )
     gamma_stderr, omega_stderr, fit_r2 = _runtime_linear_fit_statistics(inputs.t, fit)
-    warn_if_growth_unresolved(
+    unresolved = warn_if_growth_unresolved(
         gamma=fit.gamma,
         t=inputs.t,
         fit_window_tmin=fit.fit_window_tmin,
@@ -605,6 +605,12 @@ def fit_runtime_linear_diagnostics(
         tmin=fit.fit_window_tmin,
         tmax=fit.fit_window_tmax,
     )
+    if fit_settled and fit.gamma > 0.0:  # fail closed: >= 2 fitted and seen e-folds
+        t_w, lo, hi = inputs.t, fit.fit_window_tmin, fit.fit_window_tmax
+        log_amp = np.log(np.abs(np.asarray(fit.signal)) + 1e-300)
+        ends = (t_w[0] if lo is None else lo, t_w[-1] if hi is None else hi)
+        grown = np.diff(np.interp(ends, t_w, log_amp))[0]
+        fit_settled = unresolved is None and bool(grown >= 2.0)
 
     return RuntimeLinearFitResult(
         gamma=fit.gamma,
