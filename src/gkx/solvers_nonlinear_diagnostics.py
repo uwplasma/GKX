@@ -30,7 +30,7 @@ from gkx.operators.linear.linked import (
 )
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.config import FieldState, TermConfig
-from gkx.solvers_nonlinear_explicit import jit_by_value
+from gkx.solvers_nonlinear_explicit import cached_jit
 from gkx.solvers_nonlinear_imex_diagnostics import (
     IMEXNonlinearDiagnosticsDeps,
     integrate_imex_nonlinear_diagnostics_impl,
@@ -534,7 +534,7 @@ def _run_explicit_diagnostic_scan_and_finalize(
             external_phi=external_phi,
         )
 
-    G_final, scan_diag_out, fields_final = jit_by_value(run_raw)(prepared.G0)
+    G_final, scan_diag_out, fields_final = cached_jit(run_raw)(prepared.G0)
     diag, t, dt_series = scan_diag_out
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
@@ -580,7 +580,7 @@ def _run_explicit_diagnostic_scan_raw(
         policies.time_step_policy.update_dt(fields0, policies.time_step_policy.dt_init),
         dtype=prepared.real_dtype,
     )
-    diag_zero = jit_by_value(compute_diag_from_state)(G0, fields0, G0, fields0, dt0)
+    diag_zero = cached_jit(compute_diag_from_state)(G0, fields0, G0, fields0, dt0)
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
     G_final, scan_diag_out = deps.run_explicit_scan_fn(

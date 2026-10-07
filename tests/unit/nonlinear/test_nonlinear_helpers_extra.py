@@ -2918,13 +2918,13 @@ def test_second_identical_solve_compiles_nothing_and_repeats_bits():
     assert counter["compiles"] == 0 and first == second
 
 
-def test_jit_by_value_falls_back_under_an_outer_trace_and_evicts(monkeypatch):
+def test_cached_jit_falls_back_under_an_outer_trace_and_evicts(monkeypatch):
     import gkx.solvers_nonlinear_explicit as explicit
 
     def outer(a):
-        return explicit.jit_by_value(lambda x: x * a)(jnp.ones(3)).sum()
+        return explicit.cached_jit(lambda x: x * a)(jnp.ones(3)).sum()
 
     assert float(jax.grad(outer)(2.0)) == 3.0
     monkeypatch.setattr(explicit, "_COMPILED", {i: None for i in range(64)})
-    assert float(explicit.jit_by_value(lambda x: x + 1)(jnp.ones(()))) == 2.0
+    assert float(explicit.cached_jit(lambda x: x + 1)(jnp.ones(()))) == 2.0
     assert 0 not in explicit._COMPILED

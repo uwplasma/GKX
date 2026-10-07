@@ -279,35 +279,28 @@ def block_checkpoint_plan(
 _COMPILED: dict[Any, Callable[..., Any]] = {}
 
 
-def jit_by_value(fn: Callable[..., Any]) -> Callable[..., Any]:
-    """``jax.jit(fn)`` cached across closures by traced graph and constant values.
+def cached_jit(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """``jax.jit(fn)`` shared by every closure with the same graph and constants.
 
-    A per-run closure (cache, factors, policies) is a new function to
-    ``jax.jit``, so an identical second run recompiles everything. This keys
-    one process-wide executable on the jaxpr text, the argument avals and a
-    digest of every closed-over constant, and compiles that same jaxpr with
-    the same constants: the executable, and so every bit of output, is the
-    one ``jax.jit(fn)`` builds. Passing the constants as operands instead
-    would also reuse it across new geometry, but measured 6.5e-8 relative
-    drift in float32 (XLA folds the constants), so values stay baked.
+    Keys one executable on the jaxpr text, argument avals and a digest of the
+    closed-over constants, which stay baked: the bits are ``jax.jit(fn)``'s.
+    As operands they also reuse across geometry but drift 6.5e-8 in float32.
     """
 
     def call(*args: Any) -> Any:
         closed, out_shape = jax.make_jaxpr(fn, return_shape=True)(*args)
         if any(isinstance(c, jax.core.Tracer) for c in closed.consts):
             return jax.jit(fn)(*args)  # closes over an outer trace: nothing to key
-        digest = hashlib.sha256(str(closed.jaxpr).encode())
+        digest = hashlib.sha256(str((closed.jaxpr, closed.in_avals)).encode())
         for c in closed.consts:
-            digest.update(str(jax.typeof(c)).encode())
-            digest.update(np.asarray(c).tobytes())
-        key = (digest.hexdigest(), tuple(map(str, closed.in_avals)))
+            digest.update(str(jax.typeof(c)).encode() + np.asarray(c).tobytes())
+        key = digest.hexdigest()
         run = _COMPILED.get(key)
         if run is None:
             if len(_COMPILED) >= 64:  # bound the baked constants kept alive
                 _COMPILED.pop(next(iter(_COMPILED)))
-            jaxpr, consts = closed.jaxpr, closed.consts
             run = _COMPILED[key] = jax.jit(
-                lambda *xs: jax.core.eval_jaxpr(jaxpr, consts, *xs)
+                partial(jax.core.eval_jaxpr, closed.jaxpr, closed.consts)
             )
         flat = run(*jax.tree.leaves(args))
         return jax.tree.unflatten(jax.tree.structure(out_shape), flat)
