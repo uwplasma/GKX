@@ -72,7 +72,7 @@ GS2 version 8.2.1
 GYROKINETIC COMPARISON CODES (for GKX / GX comparison, source inspection, profiling)
 =====================================================================================
 Created 2026-09-14. Identical copies:
-  office : /home/rjorge/gk-codes/README.txt
+  office : <office-home>/gk-codes/README.txt
   Mac    : ~/local/gk-codes/README.txt
 All sources are official upstream repositories or conda-forge. Nothing is patched.
 
@@ -81,11 +81,11 @@ All sources are official upstream repositories or conda-forge. Nothing is patche
 -------------------------------------------------------------------------------
 micromamba 2.9.0-0 (https://github.com/mamba-org/micromamba-releases, asset micromamba-linux-64)
   sha256 366cd9cd8be14df1ab8ed50352a82111082a36686b2d389fdb79a92c3fafb3e3 (matches published digest and .sha256 file)
-  binary      /home/rjorge/local/micromamba/bin/micromamba
-  root prefix /home/rjorge/local/micromamba
+  binary      <office-home>/local/micromamba/bin/micromamba
+  root prefix <office-home>/local/micromamba
 env gk-fortran (conda-forge only, --override-channels):
   gfortran/gcc/g++ 13.4.0, OpenMPI 5.0.8 (mpifort/mpicc/mpicxx), netcdf-fortran 4.6.2 and
   libnetcdf/hdf5 mpi_openmpi builds (nc4 + parallel), fftw 3.3.10 mpi_openmpi (libfftw3_mpi),
   libblas/liblapack -> openblas, cmake 4.2.3, make 4.4.1, pkg-config, git,
   python 3.12.14 + numpy, netCDF4, scipy, matplotlib, f90nml
-  explicit export: /home/rjorge/local/micromamba/gk-fortran-explicit.txt
+  explicit export: <office-home>/local/micromamba/gk-fortran-explicit.txt
