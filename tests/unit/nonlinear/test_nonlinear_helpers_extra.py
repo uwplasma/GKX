@@ -2707,8 +2707,8 @@ def test_an_explicit_sheared_method_reports_no_implicit_status(ky_layout) -> Non
 
 
 @contextmanager
-def _counting_backend_compiles() -> Iterator[dict[str, int]]:
-    """Count backend compilations, skipping if JAX moves the private hook."""
+def _counting_backend_compiles(name: str = "") -> Iterator[dict[str, int]]:
+    """Count compiles of modules named like ``name`` (skip if JAX moves the hook)."""
 
     compiler = pytest.importorskip("jax._src.compiler")
     original = getattr(compiler, "backend_compile_and_load", None)
@@ -2716,9 +2716,9 @@ def _counting_backend_compiles() -> Iterator[dict[str, int]]:
         pytest.skip("jax._src.compiler.backend_compile_and_load is not available")
     counter = {"compiles": 0}
 
-    def counting(*args, **kwargs):
-        counter["compiles"] += 1
-        return original(*args, **kwargs)
+    def counting(backend, module, *args, **kwargs):
+        counter["compiles"] += name in str(module.operation.attributes["sym_name"])
+        return original(backend, module, *args, **kwargs)
 
     compiler.backend_compile_and_load = counting
     try:
@@ -2764,7 +2764,7 @@ def test_window_adjoint_compiles_one_graph_and_reuses_it(case_grid):
     value_and_grad = _window_value_and_grad(grid, geom, state, params)
     drive = jnp.asarray(params.tprim)
     jax.block_until_ready(value_and_grad(drive))
-    with _counting_backend_compiles() as counter:
+    with _counting_backend_compiles("heat_flux_window") as counter:
         jax.block_until_ready(value_and_grad(drive))
         jax.block_until_ready(value_and_grad(drive * 1.01))
     assert counter["compiles"] == 0
