@@ -21199,3 +21199,9 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
+
+## 2026-10-07 — VAL-KE pause (branch `validation/tem-rate-check`)
+
+#355 merged via #356. This branch adds the TEM end-damping rate check: at (Nl,Nm) = (12,32), rates 30, 100 and 500 give 0.6793, 0.6475 and 0.6441. The rate has settled by 100, so the remaining -15.7% against GS2 at (16,48) is velocity resolution.
+Paused with two runs queued on office GPU 1 (`lanes/q4.txt`, output in `lanes/val-ke-out/`): `tem_k0.30_l8m48` (Nl/Nm split) was running, and `ke_k0.10_l16m48_r161` was next.
+Next: (1) read those two results; (2) extend the TEM ladder past (16,48); (3) once a rung converges, run the TEM ky scan and close `X-tem-dj2005`; (4) decide #354.
