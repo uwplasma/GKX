@@ -2268,3 +2268,170 @@ def test_single_radial_mode_self_conjugate_row_is_real():
     np.testing.assert_array_equal(result[0].imag, 0)
     np.testing.assert_array_equal(result[4].imag, 0)
     np.testing.assert_array_equal(result[1], value[1])
+
+
+def _hermitian_multimode_case(nl, *, nu=0.0, seed=0):
+    """Variable-B, sheared, three-field multimode case with a real state."""
+
+    dtype = np.float64 if jax.config.x64_enabled else np.float32
+    values, jax_values, rho, nt = _electromagnetic_species(dtype)
+    fprim, tprim = np.array([0.8, 1.1]), np.array([2.4, 1.7])
+    params = LinearParams(
+        beta=0.04,
+        fapar=1.0,
+        tau_e=0.0,
+        charge_sign=jax_values["charge"],
+        **{k: jax_values[k] for k in ("density", "temp", "mass", "tz", "vth")},
+        rho=jnp.asarray(rho, dtype),
+        rho_star=0.8,
+        kpar_scale=1.0 / (1.4 * 2.77778),
+        fprim=jnp.asarray(fprim, dtype),
+        tprim=jnp.asarray(tprim, dtype),
+        nu=jnp.asarray([nu, 6.0 * nu], dtype),
+        D_hyper=0.1 * nu,
+    )
+    geom = SAlphaGeometry(
+        q=1.4,
+        s_hat=0.8,
+        epsilon=0.18,
+        R0=2.77778,
+        kperp2_bmag=True,
+        bessel_bmag_power=1.0,
+    )
+    grid = build_spectral_grid(
+        GridConfig(Nx=4, Ny=6, Nz=32, Lx=6.0, Ly=6.0, boundary="periodic")
+    )
+    cache = build_linear_cache(grid, geom, params, Nl=nl, Nm=4)
+    rng = np.random.default_rng(seed)
+    shape = (2, nl, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    G = rng.normal(size=shape) + 1j * rng.normal(size=shape)
+    G *= 0.01 * np.cos(np.asarray(grid.z))[None, None, None, None, None, :] ** 2
+    # A real field: project through physical space, then drop the mean and
+    # the self-conjugate Nyquist rows, which the energy measure treats apart.
+    G = np.fft.fft2(np.fft.ifft2(G, axes=(3, 4)).real, axes=(3, 4))
+    G[:, :, :, 0, 0] = G[:, :, :, grid.ky.size // 2] = G[:, :, :, :, 2] = 0.0
+    ctype = jnp.complex128 if dtype == np.float64 else jnp.complex64
+    vol, flux_fac = fieldline_quadrature_weights(geom, grid)
+    return dict(
+        G=jnp.asarray(G, ctype),
+        grid=grid,
+        cache=cache,
+        params=params,
+        values=values,
+        jax_values=jax_values,
+        nt=nt,
+        vol=vol,
+        flux_fac=flux_fac,
+        fprim=fprim,
+        tprim=tprim,
+        dtype=dtype,
+    )
+
+
+def _free_energy(G, case):
+    """Physical three-field free energy: entropy - Boltzmann + |dB|^2 / beta."""
+
+    cache, params, jv, vol = case["cache"], case["params"], case["jax_values"], case["vol"]
+    fields = _solve_fields_impl(G, cache, params, fapar=1.0, w_bpar=1.0, **jv)
+    H = build_H(
+        G, cache.Jl, fields.phi, jv["tz"], fields.apar, jv["vth"], fields.bpar, cache.JlB
+    )
+    entropy = 0.5 * jnp.sum(vol * case["nt"][:, None, None, None, None, None] * jnp.abs(H) ** 2)
+    boltzmann = 0.5 * jnp.sum(vol * jnp.abs(fields.phi) ** 2) * jnp.sum(
+        jv["density"] * jv["charge"] ** 2 / jv["temp"]
+    )
+    B2 = cache.bmag**2
+    magnetic = jnp.sum(
+        vol * B2 * (cache.kperp2 * jnp.abs(fields.apar) ** 2 + jnp.abs(fields.bpar) ** 2)
+    )
+    return entropy - boltzmann + magnetic / params.beta, H
+
+
+def _drive_from_fluxes(case, fields, *, bpar):
+    """rho_* sum_s [fprim T Gamma + tprim (Q - 3/2 T Gamma)] from flux diagnostics."""
+
+    from gkx.operators.moments import (
+        _heat_flux_channel_contrib_species,
+        _particle_flux_channel_contrib_species,
+    )
+
+    args = (
+        case["G"],
+        fields.phi,
+        fields.apar,
+        fields.bpar if bpar else jnp.zeros_like(fields.phi),
+        case["cache"],
+        case["grid"],
+        case["params"],
+        case["flux_fac"],
+    )
+    kw = dict(use_dealias=False, flux_scale=1.0)
+    Q = sum(jnp.sum(c, axis=(1, 2, 3)) for c in _heat_flux_channel_contrib_species(*args, **kw))
+    gam = sum(jnp.sum(c, axis=(1, 2, 3)) for c in _particle_flux_channel_contrib_species(*args, **kw))
+    T = case["values"]["temp"]
+    fp, tp = case["fprim"], case["tprim"]
+    return case["params"].rho_star * float(
+        np.sum(fp * T * gam + tp * (np.asarray(Q) - 1.5 * T * np.asarray(gam)))
+    )
+
+
+@pytest.mark.parametrize("bpar", [0.0, 1.0])
+def test_three_field_free_energy_budget_closes_multimode(bpar):
+    """dW/dt = drive - dissipation for (phi, Apar, Bpar) at variable B.
+
+    W is assembled from physical channels; its time derivative comes from
+    forward-mode AD along the assembled RHS.  The drive comes independently
+    from the particle and heat flux diagnostics.  Mirror/streaming and drifts
+    are conservative; collisions and hyperdiffusion only dissipate.
+    """
+
+    case = _hermitian_multimode_case(3, nu=0.05)
+    G, cache, params, dtype = case["G"], case["cache"], case["params"], case["dtype"]
+    tol = 1e-12 if dtype == np.float64 else 2e-5
+    terms = TermConfig(hyperdiffusion=1.0, end_damping=0.0, bpar=bpar)
+    total, fields, contrib = assemble_rhs_terms_cached(
+        G, cache, params, terms=terms, use_custom_vjp=False
+    )
+    W, H = _free_energy(G, case)
+    if bpar:
+        # The physical energy is the GX source quadratic 1/2 <G, nT H>.
+        source = 0.5 * jnp.real(
+            jnp.sum(case["vol"] * case["nt"][:, None, None, None, None, None] * jnp.conj(G) * H)
+        )
+        np.testing.assert_allclose(float(W), float(source), rtol=tol)
+        _, dW = jax.jvp(lambda g: _free_energy(g, case)[0], (G,), (total,))
+    weight = case["vol"] * case["nt"][:, None, None, None, None, None] * jnp.conj(H)
+    rates = {k: float(jnp.real(jnp.sum(weight * v))) for k, v in contrib.items()}
+    scale = float(jnp.sum(jnp.abs(weight * total)))
+    if bpar:
+        np.testing.assert_allclose(float(dW), sum(rates.values()), rtol=tol, atol=tol * scale)
+    for name in ("curvature", "gradb"):
+        assert abs(rates[name]) < tol * scale
+    assert abs(rates["streaming"] + rates["mirror"]) < 1e-8 * scale
+    assert abs(rates["streaming"]) > 1e3 * abs(rates["streaming"] + rates["mirror"])
+    for name in ("collisions", "hypercollisions", "hyperdiffusion"):
+        assert rates[name] < 0.0
+    drive = _drive_from_fluxes(case, fields, bpar=bpar)
+    # The phi-Bpar cross pairing of the diamagnetic drive uses the analytic
+    # upper Laguerre neighbour (#325), so with Bpar it closes to truncation.
+    np.testing.assert_allclose(
+        rates["diamagnetic"], drive, rtol=1e-6 if bpar else 50 * tol
+    )
+
+
+def test_bpar_diamagnetic_budget_converges_with_laguerre_truncation():
+    errors = []
+    for nl in (3, 6, 10):
+        case = _hermitian_multimode_case(nl)
+        _, fields, contrib = assemble_rhs_terms_cached(
+            case["G"], case["cache"], case["params"], use_custom_vjp=False
+        )
+        _, H = _free_energy(case["G"], case)
+        rate = jnp.sum(
+            case["vol"] * case["nt"][:, None, None, None, None, None]
+            * jnp.conj(H) * contrib["diamagnetic"]
+        )
+        drive = _drive_from_fluxes(case, fields, bpar=True)
+        errors.append(abs(float(jnp.real(rate)) - drive) / abs(drive))
+    floor = 1e-13 if jax.config.x64_enabled else 1e-5
+    assert errors[0] > 10 * errors[1] > 10 * max(errors[2], floor)
