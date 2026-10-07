@@ -2374,6 +2374,184 @@ def _free_energy(G, case):
     return entropy - boltzmann + magnetic / params.beta, (H, entropy)
 
 
+@pytest.mark.parametrize("species", [1, 2])
+def test_electrostatic_metric_independent_velocity_quadrature(species):
+    """Direct J0 and velocity quadrature includes every species and tau response."""
+    from scipy.special import (
+        j0,
+        eval_hermitenorm,
+        factorial,
+        roots_hermitenorm,
+        roots_laguerre,
+    )
+    from gkx.operators.moments import (
+        electrostatic_free_energy,
+        electrostatic_free_energy_metric,
+    )
+
+    case = _hermitian_multimode_case(3, n=(1, 6, 8))
+    grid = select_ky_grid(case["grid"], 1)
+    values = {key: value[:species] for key, value in case["values"].items()}
+    params = replace(
+        case["params"],
+        tau_e=0.7,
+        beta=0.0,
+        fapar=0.0,
+        tprim=0.0,
+        fprim=0.0,
+        nu=0.0,
+        charge_sign=jnp.asarray(values["charge"]),
+        **{
+            key: jnp.asarray(values[key])
+            for key in ("density", "temp", "mass", "tz", "vth")
+        },
+        rho=case["params"].rho[:species],
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.0, epsilon=0.18, R0=2.77778)
+    cache = build_linear_cache(grid, geom, params, 3, 4)
+    rng = np.random.default_rng(23)
+    G = rng.normal(size=(species, 3, 4, 1, 1, 8)) + 1j * rng.normal(
+        size=(species, 3, 4, 1, 1, 8)
+    )
+    vol = np.asarray(cache.jacobian) / np.sum(np.asarray(cache.jacobian))
+    mu, mw = roots_laguerre(48)
+    v, vw = roots_hermitenorm(8)
+    lag = np.array([(-1) ** ell * eval_laguerre(ell, mu) for ell in range(3)])
+    herm = np.array([eval_hermitenorm(m, v) / np.sqrt(factorial(m)) for m in range(4)])
+    b = np.asarray(cache.b)[:, 0, 0, :]
+    jl = np.einsum(
+        "la,a,saz->slz", lag, mw, j0(np.sqrt(2 * mu[None, :, None] * b[:, None, :]))
+    )
+    response = values["density"] * values["charge"] ** 2 / values["temp"]
+    denominator = 0.7 + np.sum(response[:, None] * (1 - np.sum(jl**2, axis=1)), axis=0)
+    qg = np.einsum(
+        "s,slz,slz->z", values["density"] * values["charge"], jl, G[:, :, 0, 0, 0]
+    )
+    phi = qg / denominator
+    h = G[:, :, :, 0, 0].copy()
+    h[:, :, 0] += (values["charge"] / values["temp"])[:, None, None] * jl * phi
+    hgrid = np.einsum("slmz,la,mb->szab", h, lag, herm)
+    entropy = 0.5 * np.einsum(
+        "szab,s,z,a,b->",
+        np.abs(hgrid) ** 2,
+        values["density"] * values["temp"],
+        vol,
+        mw,
+        vw / np.sqrt(2 * np.pi),
+    )
+    expected = 2 * (
+        entropy - 0.5 * (0.7 + response.sum()) * np.sum(vol * np.abs(phi) ** 2)
+    )
+
+    def energy(g):
+        return electrostatic_free_energy(
+            g, cache, params, jnp.asarray(vol), use_dealias=False
+        )
+
+    np.testing.assert_allclose(
+        jax.jit(energy)(jnp.asarray(G)),
+        expected,
+        rtol=2e-6 if not jax.config.x64_enabled else 1e-12,
+    )
+    if species == 1:
+        np.testing.assert_allclose(energy(jnp.asarray(G[0])), expected, rtol=2e-6)
+    image = electrostatic_free_energy_metric(
+        jnp.asarray(G), cache, params, jnp.asarray(vol), use_dealias=False
+    )
+    direction = jnp.asarray(rng.normal(size=G.shape) + 1j * rng.normal(size=G.shape))
+    expected_direction = jnp.real(jnp.vdot(direction, image))
+    _, tangent = jax.jvp(energy, (jnp.asarray(G),), (direction,))
+    np.testing.assert_allclose(tangent, expected_direction, rtol=2e-6)
+    np.testing.assert_allclose(
+        jnp.conj(jax.grad(energy)(jnp.asarray(G))), image, rtol=2e-6
+    )
+    np.testing.assert_allclose(
+        jax.jit(jax.vmap(energy))(jnp.stack([jnp.asarray(G), 2 * jnp.asarray(G)])),
+        jnp.asarray([expected, 4 * expected]),
+        rtol=2e-6,
+    )
+
+    # This direction differentiates the physical metric, not just its input.
+    def tau_energy(tau):
+        return electrostatic_free_energy(
+            jnp.asarray(G),
+            cache,
+            replace(params, tau_e=tau),
+            jnp.asarray(vol),
+            use_dealias=False,
+        )
+
+    expected_tau = -np.sum(
+        vol * np.abs(phi) ** 2
+    )  # conjugate-pair factor 2 cancels 1/2
+    np.testing.assert_allclose(
+        jax.jit(jax.grad(tau_energy))(0.7), expected_tau, rtol=2e-6
+    )
+    for step in (1e-2, 5e-3, 2.5e-3):
+        difference = (tau_energy(0.7 + step) - tau_energy(0.7 - step)) / (2 * step)
+        np.testing.assert_allclose(
+            difference, expected_tau, rtol=max(3e-5, 2 * step**2)
+        )
+
+
+def test_electrostatic_metric_projection_and_slab_identity():
+    """The closed slab is skew in physical M; inactive NaNs contribute nothing."""
+    from gkx.geometry import SlabGeometry
+    from gkx.operators.moments import (
+        electrostatic_free_energy,
+        electrostatic_free_energy_metric,
+    )
+
+    grid = select_ky_grid(
+        build_spectral_grid(GridConfig(Nx=1, Ny=6, Nz=8, boundary="periodic")), 1
+    )
+    geom = SlabGeometry()
+    params = LinearParams(tprim=0.0, fprim=0.0, nu_hyper_m=0.0)
+    cache = build_linear_cache(grid, geom, params, 2, 3)
+    vol = jnp.ones(8) / 8
+    shape = (1, 2, 3, 1, 1, 8)
+    terms = TermConfig(
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+        apar=0.0,
+        bpar=0.0,
+    )
+
+    def metric(v):
+        return electrostatic_free_energy_metric(
+            v.reshape(shape), cache, params, vol, use_dealias=False
+        ).reshape(-1)
+
+    def rhs(v):
+        return assemble_rhs_terms_cached(
+            v.reshape(shape), cache, params, terms=terms, use_custom_vjp=False
+        )[0].reshape(-1)
+
+    basis = jnp.eye(
+        int(np.prod(shape)),
+        dtype=jnp.complex128 if jax.config.x64_enabled else jnp.complex64,
+    )
+    M = np.asarray(jax.jit(jax.vmap(metric))(basis)).T
+    A = np.asarray(jax.jit(jax.vmap(rhs))(basis)).T
+    np.testing.assert_allclose(
+        A.conj().T @ M + M @ A, 0.0, atol=2e-6 if not jax.config.x64_enabled else 1e-13
+    )
+    assert np.linalg.eigvalsh(M)[0] > 0.0
+    w = jnp.sin(jnp.arange(basis.shape[0])) + 1j * jnp.cos(jnp.arange(basis.shape[0]))
+    _, pullback = jax.vjp(metric, w)
+    np.testing.assert_allclose(
+        jnp.conj(pullback(jnp.conj(w))[0]), M @ w, rtol=2e-6, atol=2e-6
+    )
+    inactive = replace(cache, dealias_mask=jnp.zeros_like(cache.dealias_mask))
+    bad = jnp.full(shape, jnp.nan, dtype=basis.dtype)
+    assert float(electrostatic_free_energy(bad, inactive, params, vol)) == 0.0
+    np.testing.assert_array_equal(
+        electrostatic_free_energy_metric(bad, inactive, params, vol), jnp.zeros(shape)
+    )
+
+
 def _drive_from_fluxes(case, fields, *, bpar):
     """rho_* sum_s [fprim T Gamma + tprim (Q - 3/2 T Gamma)] from flux diagnostics."""
 
