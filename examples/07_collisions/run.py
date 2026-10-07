@@ -59,6 +59,7 @@ for nu in NU_VALUES if NU_SCAN else (NU,):
             Nm=case.run.Nm,
             solver=case.run.solver,
             mode_method="z_index",
+            show_progress=True,
         )
         rows.append({"collision_operator": model, "nu": nu, **result.summary()})
         print(

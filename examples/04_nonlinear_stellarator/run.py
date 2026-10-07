@@ -37,7 +37,12 @@ print(
 )
 
 result = gkx.solve(
-    case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm, steps=case.run.steps
+    case,
+    ky_target=case.run.ky,
+    Nl=case.run.Nl,
+    Nm=case.run.Nm,
+    steps=case.run.steps,
+    show_progress=True,
 )
 diagnostics = result.diagnostics
 print(f"t_final = {float(diagnostics.t[-1]):.2f}")
