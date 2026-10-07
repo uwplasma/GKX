@@ -2392,8 +2392,14 @@ def test_three_field_free_energy_budget_closes_multimode(bpar):
     total, fields, contrib = assemble_rhs_terms_cached(
         G, cache, params, terms=terms, use_custom_vjp=False
     )
-    W, H = _free_energy(G, case)
+    jv = case["jax_values"]
+    H = build_H(
+        G, cache.Jl, fields.phi, jv["tz"], fields.apar, jv["vth"],
+        fields.bpar if bpar else None, cache.JlB,
+    )
     if bpar:
+        W, H_energy = _free_energy(G, case)
+        np.testing.assert_allclose(np.asarray(H_energy), np.asarray(H), atol=tol)
         # The physical energy is the GX source quadratic 1/2 <G, nT H>.
         source = 0.5 * jnp.real(
             jnp.sum(case["vol"] * case["nt"][:, None, None, None, None, None] * jnp.conj(G) * H)
