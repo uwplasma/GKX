@@ -1478,7 +1478,8 @@ recursive = true
 # 82803 -> 74151 (ARCH-C): runtime, CLI, artifact, release-gate and helper tests parametrized; forwarding-only tests removed. Measured.
 # 74151 -> 74366: ARCH-C merged with #341/#342, measured.
 # 74366 -> 74397: measured after the mypy and coverage fixes.
-baseline = 74397
+# 74397 -> 74413: window adjoint takes the saturated state as an operand (PERF 2026-10-06).
+baseline = 74413
 target = 35000
 
 [[line_budget_policy.counts]]

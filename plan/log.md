@@ -21015,3 +21015,12 @@ Since 2.5.0: ARCH-C contraction (#343: src 75,904 → 67,220 lines, 136 → 129
 files, no import cycles, bitwise fingerprints unchanged), solver defaults
 benchmarked and documented with the XLA:CPU 2-3 core deadlock workaround (#342),
 #322 #330 #333 #335 via #341, and Codecov uploads made non-fatal.
+
+## 2026-10-06 PERF lane: step / window adjoint / imex-ars3 profile (branch perf/adjoint-and-step)
+
+- pinned ba3d87d, office GPU1 (shared, contended), jax 0.10.2; summary in `plan/research/2026-10-06-perf/SUMMARY.md`.
+- RK3 step device time: 8.3 / 23.6 / 93.3 ms at 32x32x24 (4,8), 64x64x24 (4,8), 64x64x24 (8,16); concatenate+slice fusions 18-42%, FFT 11-12%, field solve 1.4-4.7 ms.
+- window adjoint: inner remat drop (#279) and state-as-operand (#264) already on main; verified 0 recompiles for a new saturated state (new test); block v+g 0.997 s vs nested 1.143 s vs unchecked 0.577 s at 16^3, 256 steps.
+- negative: optimization_barrier on the Laguerre to-spectral contraction, bitwise identical, no speedup (150.3 vs 151.1 ms); not kept. Pallas not tried (no qualifying chain).
+- top remaining: per-call recompiles in gkx.solve (imex-ars3 27 per call, 24 s of 32 s; rk3 1 per call, 5 s of 6.8 s at 32x32x24).
+
