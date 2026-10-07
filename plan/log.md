@@ -21039,3 +21039,11 @@ independent oracle that fails on main and passes here.
   Q trace changes by 5.9e-4 relative (#325, Nl=2); particle flux bitwise.
 Not done: #332 (VMEC signed-flux contract) needs the field-reversal map of the
 whole producer->cache->flux chain; no sign defect found or fixed here.
+
+## 2026-10-07 Pallas plan (branch research/pallas-plan, DRAFT, paused by owner)
+
+- GPU profile (office GPU1, contended) of RK3 adiabatic, KE rk3/imex-ars3, window adjoint and linear eigen recorded in `plan/research/2026-10-07-pallas/PLAN.md`; CPU pass killed at the pause, not recorded.
+- Top finding: one `loop_add_fusion` is 60% of the imex-ars3 step at 32x32x24 (67 ms/step); source not yet identified.
+- Pallas on A4000 = Triton only, deprecated from JAX 0.11; complex must be split; no FFT in kernels.
+- Next: identify the imex fusion source; rerun the CPU pass and the GPU pass on a quiet GPU; then decide the prototype.
+
