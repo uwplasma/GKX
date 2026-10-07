@@ -33,6 +33,7 @@ from gkx.workflows.runtime.startup import (
     _runtime_default_krylov_config,
     build_runtime_geometry,
     build_runtime_linear_params,
+    timestep_free_linear_params,
     build_runtime_linear_terms,
 )
 from gkx.workflows.runtime.results import (
@@ -255,18 +256,19 @@ def _run_krylov_linear(
     )
     _status(status_callback, "starting Krylov solve")
     kcfg = krylov_cfg or _runtime_default_krylov_config(ctx.cfg)
+    params = timestep_free_linear_params(ctx.cfg, ctx.params)
     _status(status_callback, "building linear cache")
     cache = build_linear_cache(
         ctx.grid,
         ctx.geom,
-        ctx.params,
+        params,
         ctx.n_laguerre,
         ctx.n_hermite,
     )
     eig, vec, eigen_status = dominant_eigenpair(
         ctx.initial_state,
         cache,
-        ctx.params,
+        params,
         terms=ctx.terms,
         krylov_dim=kcfg.krylov_dim,
         restarts=kcfg.restarts,
