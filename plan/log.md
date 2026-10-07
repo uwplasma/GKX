@@ -21039,3 +21039,13 @@ independent oracle that fails on main and passes here.
   Q trace changes by 5.9e-4 relative (#325, Nl=2); particle flux bitwise.
 Not done: #332 (VMEC signed-flux contract) needs the field-reversal map of the
 whole producer->cache->flux chain; no sign defect found or fixed here.
+
+## 2026-10-07 PERF lane: chain-layout streaming bound (branch perf/chain-layout-streaming), negative
+
+- question: how much of the 40-45% concatenate/slice share of the RK3 step is the linked-FFT gather/scatter itself, i.e. the most that keeping streaming in chain layout could remove. Stop rule: <15% of the step.
+- the step calls `_linked_fft_apply` 3 times (once per RHS), each on two operands (grad and abs), so 6 gather->FFT->scatter round trips per step.
+- traffic bound: 2 extra passes (read+write) per operand: 64x64x24 (8,16) 100 MB operands -> 2.4 GB/step, ~6 ms of 93 ms (6.5%); (4,8) ~3 ms of 23.6 ms (12.7%); 32x32x24 (4,8) ~0.75 ms of 8.3 ms (9%). These assume nothing fuses into neighbours, so they are upper bounds.
+- measured (linked derivative minus same-size periodic FFT derivative, x6 operands, GPU1 contended by other jobs): 7.0-8.3% at 64x64x24 (8,16), 0.2% at (4,8); 32x32x24 inconclusive (-0.3% to 19.5%, timings quantized by contention). The 2026-10-06 clean trace has gather/scatter kernels at ~0% and MemcpyD2D at 3.9%: the concatenate/slice fusions are the RHS arithmetic fused into the gather consumer, which a layout change would move, not delete.
+- conclusion: bound below 15% at every production size; restructure not attempted.
+- fixed: `test_window_adjoint_compiles_one_graph_and_reuses_it` failed only under xdist because the compile counter saw other tests' compiles in the same worker; `_counting_backend_compiles(name)` now counts only modules whose name contains `heat_flux_window`. `tests/unit/operators` + `tests/unit/nonlinear` pass with `-n 2` in x64.
+
