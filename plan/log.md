@@ -21060,3 +21060,57 @@ whole producer->cache->flux chain; no sign defect found or fixed here.
 - negative: optimization_barrier on the concatenated linked-FFT chain updates before the single gather: bitwise identical, no change (76.3 vs 76.3 ms, 320.9 vs 320.8 ms on a contended GPU1). Not kept.
 - the big concatenate/slice fusions are XLA fusing the whole Hermite/Laguerre producer graph into the linked-FFT gather consumer, not separate slice+concatenate passes; removing them needs the streaming term in chain layout end to end (a structural change), not a respelling. Pallas not tried: no isolated launch/memory-bound chain to replace.
 
+
+## 2026-10-07 — EM-ENERGY, EM-B-PAR, #332 (branch `validation/em-energy-bpar`)
+
+Base `7f5e151ac` (main with #345). Draft #274 read, not modified; its
+source-vs-physical comparison is reused, its debug probes are not.
+- EM-ENERGY. Free energy of the full (phi, A∥, B∥) system at variable B:
+  W = sum_s n_s T_s/2 <|H_s|^2> - sum_s n_s Z_s^2/(2 T_s) <|phi|^2>
+      + (1/beta) <B^2 (k⊥^2 |A∥|^2 + |B∥|^2)>  =  1/2 <G, n T H>,
+  <.> the field-line volume measure (J / sum J), every Fourier mode.
+  dW/dt = Re <n T H, dG/dt> (AD of W along the assembled RHS agrees to 1e-15).
+  Channels: streaming + mirror cancel to the Nz discretization; curvature and
+  grad-B are zero to round-off; collisions, hypercollisions, hyperdiffusion
+  are negative; the diamagnetic channel equals
+  rho_* sum_s [fprim_s T_s Gamma_s + tprim_s (Q_s - 3/2 T_s Gamma_s)]
+  from the particle and energy-flux diagnostics (to 1e-15 without B∥).
+  Tests: `test_three_field_free_energy_budget_closes_multimode`,
+  `test_bpar_diamagnetic_budget_converges_with_laguerre_truncation`,
+  `test_three_field_nonlinear_bracket_conserves_free_energy`.
+- Defect fixed: the spectral nonlinear route (`laguerre_mode="spectral"`) built
+  the B∥ potential as `JlB * bpar` without the `T/Z` factor that `build_H`
+  and the Laguerre-grid route use. Its bracket created free energy at 3e-4
+  of the transfer scale for T/Z != 1; after the fix 2e-16. The default grid
+  route was already right; it conserves to the Laguerre truncation of J0
+  (relative 7e-5 / 7e-7 / 1e-11 at Nl 3 / 6 / 12, small b).
+- Known, not changed: with B∥ the diamagnetic phi-B∥ cross pairing uses the
+  analytic upper Laguerre neighbour (#325) on one side only, so the drive
+  identity closes to truncation: 2.3e-7 / 1.0e-9 / 6.3e-14 at Nl 3 / 8 / 12.
+- EM-B-PAR (office). Circular Miller CBC KBM deck, ky 0.3, A∥ + B∥,
+  nperiod 3, ntheta 48. GS2 8.2.1: ngauss 12, negrid 24, bakdif 0,
+  collisionless. GKX: Nz 240, Nl 4, Nm 32, deck hypercollisions,
+  damp_ends_rate 0.1, rk4 dt 2e-4, t_max 60.
+  | beta | GS2 gamma, omega | GKX gamma, omega |
+  | 0.005 | 0.2137, 0.2624 | 0.2593, 0.2753 |
+  | 0.010 | 0.1591, 0.3164 (std 1.4%) | 0.202 (two-time state ratio; the fit returned 24.0) |
+  | 0.015 | 0.4065, 0.9620 | 0.3683, 1.0221 |
+  | 0.020 | 0.6808, 0.8010 | 0.6738, 0.8148 |
+  Not a pass: the ITG side (0.005, 0.010) is 21-27% above GS2; KBM side
+  -9% and -1%. imex2 at dt 1.4e-4 gives the same gamma at beta 0.005 (0.25932).
+  The two-time ratio reproduces the beta 0.005 fit to 0.3%. Nl 8 / Nm 48 at
+  beta 0.015: 0.3669, 1.0239 (-0.4%), so the gap is not velocity resolution.
+- Runtime defect found, not fixed: at beta 0.010 the time-fit auto window
+  ("no stationary growth window", fit over 0.37 growth times) reports
+  gamma 24.0, omega -22.6 with `fit_settled=true`, for a state that grew only
+  e^12 in 60 time units. Same as KBM-VEL's 0.85 report. Krylov shift-invert
+  still fails on this deck (inner residual 0.985).
+- #332. A synthetic up-down symmetric Boozer surface goes through the
+  producer, EIK writer and parser with B -> -B (Phi_edge, G, I flipped).
+  Only gds21, cvdrift0 and gbdrift0 change sign (bitwise); the full
+  three-field RHS of the reversed tube equals the original with kx -> -kx
+  (bitwise, linked), for shat +-0.4. The flux diagnostics weighted by
+  sum(J grho)/sum(J) reproduce the free-energy drive in both directions, so
+  outward flux is the down-gradient sign. A reversal that forgets one odd
+  drift fails. No sign defect.
+Raw records: office lane directory `em-energy` (`gs2/`, `gkxr_*`, `gkxr40_*`).

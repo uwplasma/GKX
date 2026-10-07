@@ -190,15 +190,16 @@ def _laguerre_chi_fields(
 def _spectral_chi_fields(
     prep: _PreparedNonlinearInputs,
     *,
+    tz: jnp.ndarray,
     apar_weight: float,
     bpar_weight: float,
 ) -> tuple[list[jnp.ndarray], int | None, int | None]:
-    phi_hat = prep.phi[None, None, ...]
-    chi_fields = [prep.Jl * phi_hat]
+    chi_fields = [prep.Jl * prep.phi[None, None, ...]]
     idx_bpar = None
     if prep.bpar is not None and bpar_weight != 0.0:
         idx_bpar = len(chi_fields)
-        chi_fields.append(prep.JlB * prep.bpar[None, None, ...])
+        tz_s = jnp.reshape(jnp.asarray(tz), (-1, 1, 1, 1, 1))
+        chi_fields.append(tz_s * prep.JlB * prep.bpar[None, None, ...])
     idx_apar = None
     if prep.apar is not None and apar_weight != 0.0:
         idx_apar = len(chi_fields)
@@ -359,7 +360,7 @@ def _spectral_contribution_from_prepared(
         )
     else:
         chi_fields, idx_bpar, idx_apar = _spectral_chi_fields(
-            prep, apar_weight=c.apar_weight, bpar_weight=c.bpar_weight
+            prep, tz=c.tz, apar_weight=c.apar_weight, bpar_weight=c.bpar_weight
         )
         brackets = _multi_bracket_fn(c.compressed_real_fft)(
             prep.G, _stack_fields(prep.G, chi_fields), **_bracket_kwargs(c)
