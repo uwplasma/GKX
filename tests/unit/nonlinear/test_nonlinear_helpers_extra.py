@@ -2770,6 +2770,22 @@ def test_window_adjoint_compiles_one_graph_and_reuses_it(case_grid):
     assert counter["compiles"] == 0
 
 
+def test_window_adjoint_takes_the_saturated_state_as_an_operand(case_grid):
+    """A new saturated state reuses the compiled window: no state constant."""
+
+    grid, geom = case_grid
+    params = LinearParams()
+    drive = jnp.asarray(params.tprim)
+    jax.block_until_ready(
+        _window_value_and_grad(grid, geom, _seed(grid, 1, 17), params)(drive)
+    )
+    with _counting_backend_compiles() as counter:
+        jax.block_until_ready(
+            _window_value_and_grad(grid, geom, _seed(grid, 1, 23), params)(drive)
+        )
+    assert counter["compiles"] == 0
+
+
 def test_window_adjoint_reuses_its_graph_for_a_new_geometry(case_grid):
     """Differentiable geometry changes do not trigger recompilation."""
 
