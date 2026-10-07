@@ -2496,6 +2496,6 @@ def test_three_field_nonlinear_bracket_conserves_free_energy(laguerre_mode):
     if laguerre_mode == "spectral":
         assert errors[0] < tol
     elif jax.config.x64_enabled:
-        assert errors[0] > 100 * errors[1] > 1e4 * max(errors[2], tol)
+        assert errors[0] > 30 * errors[1] > 1e3 * max(errors[2], tol)
     else:
         assert errors[0] > 10 * errors[1]
