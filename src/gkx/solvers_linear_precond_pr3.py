@@ -236,9 +236,13 @@ def _block_shape(state_shape: tuple[int, ...]) -> tuple[int, ...]:
     memory order, so the two views share one flat vector.
     """
 
-    if len(state_shape) == 6:
-        return state_shape
-    return (1, *state_shape)
+    if len(state_shape) == 5:
+        return (1, *state_shape)
+    # Species fold into the Laguerre axis: the field response couples them at
+    # one z, so a per-species block is not the z-local operator (kinetic
+    # electrons). The C-order flat vector is unchanged by the fold.
+    ns, nl, *rest = state_shape
+    return (1, ns * nl, *rest)
 
 
 def _z_local_terms(term_cfg: TermConfig) -> TermConfig:
@@ -321,8 +325,8 @@ def _z_mean_drift_diagonal(
     mean = np.broadcast_to(drift.mean(axis=-1, keepdims=True), drift.shape)
     ns, nl, nm, ny, nx, nz = (int(v) for v in drift.shape)
     return (
-        np.transpose(np.asarray(mean), (0, 3, 4, 5, 1, 2))
-        .reshape(ns * ny * nx * nz, nl * nm)
+        np.transpose(np.asarray(mean), (3, 4, 5, 0, 1, 2))
+        .reshape(ny * nx * nz, ns * nl * nm)
         .astype(np.complex128)
     )
 
