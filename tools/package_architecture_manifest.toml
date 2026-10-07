@@ -1147,7 +1147,10 @@ recursive = true
 # 67220 -> 67272: real-FFT Nyquist streaming (#328), custom-collision admission (#324). Measured.
 # 67272 -> 67308: cached_jit, so a repeated gkx.solve compiles nothing (PERF 2026-10-06).
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
-baseline = 67113
+# 67113 -> 67184: electrostatic physical metric and scalar diagnostic in the
+# existing moments owner; solves finite-basis field response rather than adding
+# the legacy energy channels. No new source file or runtime default change.
+baseline = 67184
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1484,7 +1487,9 @@ recursive = true
 # 74397 -> 74556: independent oracles for #324-#328 (velocity quadrature, analytic z-derivative). Measured.
 # 74556 -> 74589: repeated-solve compile and cached_jit fallback tests (PERF 2026-10-06).
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
-baseline = 75155
+# 75155 -> 75333: independent velocity quadrature, species/tau response,
+# transformation and closed-slab metric tests beside the existing energy budget.
+baseline = 75333
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -189,6 +189,75 @@ def electrostatic_field_energy(
     return wphi * jnp.asarray(wphi_scale, dtype=jnp.real(phi).dtype)
 
 
+def electrostatic_free_energy_metric(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+) -> jnp.ndarray:
+    r"""Apply the physical electrostatic metric to stored moments ``G``.
+
+    Returns ``vol * mode_weight * nT * H``, with the electrostatic field
+    constraint solved at the retained Laguerre order. Shapes match ``G``:
+    ``(Nl,Nm,Ny,Nx,Nz)`` or ``(Ns,Nl,Nm,Ny,Nx,Nz)``. Physical inputs require
+    positive density/temperature, ``tz = temp/charge_sign``, and volume
+    quadrature rather than transport weights. For nonzonal modes require
+    ``D = tau_e + sum_s n_s Z_s**2/T_s * (1-sum_l J_l**2) > 0``;
+    a zonal/gauge subspace needs separate qualification. Inactive modes are projected
+    out; any gauge/mean-density constraints remain the caller's responsibility.
+
+    This is the Hessian of ``1/2 Re<G,nT H>`` for the electrostatic closure,
+    including adiabatic response and finite-basis polarization. It does not
+    include electromagnetic fields, nor certify that a particular parallel
+    discretization conserves it. Parameter derivatives include the solved
+    field response; cache/volume derivatives must also be passed by callers.
+    """
+    from gkx.operators.linear.moments import build_H
+    from gkx.terms.assembly import compute_fields_cached
+    from gkx.terms.config import TermConfig
+
+    fac = _cached_hermitian_mode_weight(cache, use_dealias=use_dealias)
+    active = fac[None, None, :, :, None] != 0.0
+    safe_G = jnp.where(active, G, 0.0)
+    fields = compute_fields_cached(
+        safe_G,
+        cache,
+        params,
+        terms=TermConfig(apar=0.0, bpar=0.0),
+        use_custom_vjp=False,
+    )
+    H = build_H(safe_G, cache.Jl, fields.phi, jnp.asarray(params.tz))
+    ns = 1 if G.ndim == 5 else G.shape[0]
+    nt = _species_array(params.density, ns) * _species_array(params.temp, ns)
+    weight = nt[:, None, None, None, None, None] * fac[None, None, None, :, :, None]
+    weight = weight * vol_fac[None, None, None, None, None, :]
+    result = jnp.where(weight != 0.0, weight * H, 0.0)
+    return result[0] if G.ndim == 5 else result
+
+
+def electrostatic_free_energy(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    vol_fac: jnp.ndarray,
+    *,
+    use_dealias: bool = True,
+) -> jnp.ndarray:
+    """Return ``1/2 Re<G, M G>``; see ``electrostatic_free_energy_metric``."""
+    image = electrostatic_free_energy_metric(
+        G, cache, params, vol_fac, use_dealias=use_dealias
+    )
+    active = (
+        _cached_hermitian_mode_weight(cache, use_dealias=use_dealias)[
+            None, None, :, :, None
+        ]
+        != 0.0
+    )
+    return 0.5 * jnp.real(jnp.vdot(jnp.where(active, G, 0.0), image))
+
+
 def magnetic_vector_potential_energy(
     apar: jnp.ndarray,
     cache: LinearCache,
@@ -895,6 +964,8 @@ __all__ = [
     "distribution_free_energy_resolved",
     "electrostatic_field_energy",
     "electrostatic_field_energy_resolved",
+    "electrostatic_free_energy",
+    "electrostatic_free_energy_metric",
     "fieldline_quadrature_weights",
     "heat_flux_channel_resolved_species",
     "magnetic_vector_potential_energy",

@@ -21199,3 +21199,17 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
+
+## 2026-10-07 — Electrostatic physical metric diagnostic
+
+Baseline: `df2953026fec99d40e0f0ba525a68170bb5ccdac`. Added the
+electrostatic reduced physical quadratic form and metric action to the existing
+moments owner. The field response uses the retained Laguerre constraint and
+adiabatic response. Existing diagnostics and runtime defaults are unchanged.
+Independent direct-Bessel and Hermite/Laguerre quadrature tests cover species,
+field response, tangent/reverse derivatives and the closed-slab identity.
+
+Decision: adopt the bounded diagnostic, subject to release checks. A physical
+metric alone does not qualify unrestricted toroidal amplification: conservation
+of the selected parallel discretization and physical subspace remains a separate
+gate. Geometry optimization and nonlinear transport prediction are not promoted.

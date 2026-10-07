@@ -128,6 +128,17 @@ Electromagnetic linear closure:
 - coupled solve for :math:`(\phi, B_\parallel)` from quasineutrality and perpendicular Ampere
 - :math:`A_\parallel` from parallel Ampere
 
+The electrostatic physical free energy in the stored variable is
+:math:`W=\frac12\operatorname{Re}\langle G,nT H\rangle`, using the volume
+Jacobian and the layout's Hermitian mode weights.
+``gkx.operators.moments.electrostatic_free_energy_metric`` applies its metric,
+and ``electrostatic_free_energy`` evaluates the scalar. The field response is
+solved at the retained Laguerre order, including the adiabatic species. These
+functions describe the electrostatic closure; their use as an amplification
+norm requires a separate conservation/discretization check for the selected
+operator and physical subspace. The legacy sum of energy diagnostics has a
+different field response and is not interchangeable with this quadratic form.
+
 The KBM benchmark runs with :math:`A_\parallel` on and :math:`B_\parallel`
 off, because its reference omits :math:`\delta B_\parallel`.
 
