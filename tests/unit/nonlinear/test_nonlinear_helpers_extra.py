@@ -2707,8 +2707,8 @@ def test_an_explicit_sheared_method_reports_no_implicit_status(ky_layout) -> Non
 
 
 @contextmanager
-def _counting_backend_compiles() -> Iterator[dict[str, int]]:
-    """Count backend compilations, skipping if JAX moves the private hook."""
+def _counting_backend_compiles(name: str = "") -> Iterator[dict[str, int]]:
+    """Count compiles of modules named like ``name`` (skip if JAX moves the hook)."""
 
     compiler = pytest.importorskip("jax._src.compiler")
     original = getattr(compiler, "backend_compile_and_load", None)
@@ -2716,9 +2716,9 @@ def _counting_backend_compiles() -> Iterator[dict[str, int]]:
         pytest.skip("jax._src.compiler.backend_compile_and_load is not available")
     counter = {"compiles": 0}
 
-    def counting(*args, **kwargs):
-        counter["compiles"] += 1
-        return original(*args, **kwargs)
+    def counting(backend, module, *args, **kwargs):
+        counter["compiles"] += name in str(module.operation.attributes["sym_name"])
+        return original(backend, module, *args, **kwargs)
 
     compiler.backend_compile_and_load = counting
     try:
@@ -2764,9 +2764,25 @@ def test_window_adjoint_compiles_one_graph_and_reuses_it(case_grid):
     value_and_grad = _window_value_and_grad(grid, geom, state, params)
     drive = jnp.asarray(params.tprim)
     jax.block_until_ready(value_and_grad(drive))
-    with _counting_backend_compiles() as counter:
+    with _counting_backend_compiles("heat_flux_window") as counter:
         jax.block_until_ready(value_and_grad(drive))
         jax.block_until_ready(value_and_grad(drive * 1.01))
+    assert counter["compiles"] == 0
+
+
+def test_window_adjoint_takes_the_saturated_state_as_an_operand(case_grid):
+    """A new saturated state reuses the compiled window: no state constant."""
+
+    grid, geom = case_grid
+    params = LinearParams()
+    drive = jnp.asarray(params.tprim)
+    jax.block_until_ready(
+        _window_value_and_grad(grid, geom, _seed(grid, 1, 17), params)(drive)
+    )
+    with _counting_backend_compiles() as counter:
+        jax.block_until_ready(
+            _window_value_and_grad(grid, geom, _seed(grid, 1, 23), params)(drive)
+        )
     assert counter["compiles"] == 0
 
 
@@ -2895,3 +2911,36 @@ def test_chain_solve_inverts_the_stiff_linear_operator():
     block = int(np.prod(shape[:3])) * shape[-1]
     dense = sum(g.ky.shape[0] * (g.ky.shape[1] * block) ** 2 * 8 for g in op.groups)
     assert op.nbytes < dense
+
+
+def test_second_identical_solve_compiles_nothing_and_repeats_bits():
+    """A rebuilt run closure reuses the executable of an identical first run."""
+
+    import gkx
+
+    deck = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = deck.replace(
+        grid=replace(deck.grid, Nx=8, Ny=8, Nz=8, ntheta=8),
+        time=replace(deck.time, method="rk3", fixed_dt=True, t_max=4 * deck.time.dt),
+    )
+
+    def run():
+        out = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=2).diagnostics
+        return np.asarray(out.Wg_t).tobytes()
+
+    first = run()
+    with _counting_backend_compiles() as counter:
+        second = run()
+    assert counter["compiles"] == 0 and first == second
+
+
+def test_cached_jit_falls_back_under_an_outer_trace_and_evicts(monkeypatch):
+    import gkx.solvers_nonlinear_explicit as explicit
+
+    def outer(a):
+        return explicit.cached_jit(lambda x: x * a)(jnp.ones(3)).sum()
+
+    assert float(jax.grad(outer)(2.0)) == 3.0
+    monkeypatch.setattr(explicit, "_COMPILED", {i: None for i in range(64)})
+    assert float(explicit.cached_jit(lambda x: x + 1)(jnp.ones(()))) == 2.0
+    assert 0 not in explicit._COMPILED

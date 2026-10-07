@@ -1,0 +1,123 @@
+schema_version = 1
+
+# Collisionless trapped-electron mode, nominal case of
+#   T. Dannert and F. Jenko, Phys. Plasmas 12, 072309 (2005), Sec. II.B,
+#   doi:10.1063/1.1947447.
+# Paper parameters, used unchanged: R/Ln = 3, R/LTe = 6, R/LTi = 0,
+# eps_t = r/R = 0.16, q = 1.4, s_hat = 0.8, Te/Ti = 3, beta_e = 0.001,
+# hydrogen mass ratio m_i/m_e = 1836, no collisions, s-alpha geometry with
+# alpha = 0. The paper resolves one connection length; with linked
+# boundaries the extended domain is numerical, so nperiod = 2 here and the
+# parallel ladder is in the validation record.
+#
+# Units here: Lref = R (R0 = 1), reference species = ions (T_i = 1, so
+# T_e = 3), rho_ref = sqrt(T_i/m_i)/Omega_i. Hence
+#   ky_gkx = ky rho_s / sqrt(3),  gamma_gkx [v_ti/R] = gamma [c_s/R] / sqrt(3),
+#   beta_ref = beta_e T_i/T_e = 0.001/3 (8 pi n T / B^2 convention).
+# The paper prints its beta_e definition with 4 pi; the 8 pi reading is used
+# here and the factor-two sensitivity is recorded in the validation record.
+# y0 = sqrt(3)/0.1 puts the ky grid on multiples of ky rho_s = 0.1.
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 0.0
+fprim = 3.0
+nu = 0.0
+kinetic = true
+
+[[species]]
+name = "electron"
+charge = -1.0
+mass = 5.446623093681917e-4
+density = 1.0
+temperature = 3.0
+tprim = 6.0
+fprim = 3.0
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 1
+Ny = 28
+Nz = 96
+Lx = 62.8
+Ly = 108.83
+boundary = "linked"
+y0 = 17.320508075688775
+ntheta = 32
+nperiod = 2
+
+[time]
+t_max = 60.0
+dt = 0.0002
+method = "imex2"
+sample_stride = 50
+# Explicit end-damping rate so the time and timestep-free (Krylov) routes
+# integrate the same operator; without it Krylov damps at damp_ends_amp and
+# the time route at damp_ends_amp/dt. The rate ladder is in the record.
+damp_ends_rate = 100.0
+
+[geometry]
+q = 1.4
+s_hat = 0.8
+epsilon = 0.16
+R0 = 1.0
+
+[init]
+init_field = "density"
+init_amp = 1.0e-10
+init_single = true
+gaussian_init = true
+gaussian_width = 0.5
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = false
+electromagnetic = true
+use_apar = true
+use_bpar = false
+adiabatic_electrons = false
+adiabatic_ions = false
+beta = 3.3333333333333335e-4
+collisions = false
+hypercollisions = true
+
+[collisions]
+nu_hermite = 1.0
+nu_laguerre = 2.0
+nu_hyper = 0.0
+nu_hyper_l = 0.0
+nu_hyper_m = 1.0
+p_hyper_l = 6.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 1.0
+damp_ends_amp = 0.1
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "kinetic"
+diagnostic_norm = "none"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 0.0
+hypercollisions = 1.0
+end_damping = 1.0
+apar = 1.0
+bpar = 0.0
+nonlinear = 0.0
+
+[run]
+ky = 0.17320508075688773
+Nl = 8
+Nm = 24
+solver = "krylov"

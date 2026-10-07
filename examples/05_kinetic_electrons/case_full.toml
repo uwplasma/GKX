@@ -45,6 +45,10 @@ dt = 0.0008
 method = "rk4"
 sample_stride = 10
 fixed_dt = true
+# damp_ends_amp/dt, stated as a rate so the timestep-free solver = "krylov"
+# route damps the linked ends as hard as the time route (otherwise it damps
+# at damp_ends_amp and gamma is 45% high at ky 0.3).
+damp_ends_rate = 125.0
 
 [geometry]
 q = 1.4

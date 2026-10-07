@@ -21039,3 +21039,163 @@ independent oracle that fails on main and passes here.
   Q trace changes by 5.9e-4 relative (#325, Nl=2); particle flux bitwise.
 Not done: #332 (VMEC signed-flux contract) needs the field-reversal map of the
 whole producer->cache->flux chain; no sign defect found or fixed here.
+## 2026-10-06 PERF lane: step / window adjoint / imex-ars3 profile (branch perf/adjoint-and-step)
+
+- pinned ba3d87d, office GPU1 (shared, contended), jax 0.10.2; summary in `plan/research/2026-10-06-perf/SUMMARY.md`.
+- RK3 step device time: 8.3 / 23.6 / 93.3 ms at 32x32x24 (4,8), 64x64x24 (4,8), 64x64x24 (8,16); concatenate+slice fusions 18-42%, FFT 11-12%, field solve 1.4-4.7 ms.
+- window adjoint: inner remat drop (#279) and state-as-operand (#264) already on main; verified 0 recompiles for a new saturated state (new test); block v+g 0.997 s vs nested 1.143 s vs unchecked 0.577 s at 16^3, 256 steps.
+- negative: optimization_barrier on the Laguerre to-spectral contraction, bitwise identical, no speedup (150.3 vs 151.1 ms); not kept. Pallas not tried (no qualifying chain).
+- top remaining: per-call recompiles in gkx.solve (imex-ars3 27 per call, 24 s of 32 s; rk3 1 per call, 5 s of 6.8 s at 32x32x24).
+
+## 2026-10-06 PERF lane: repeated gkx.solve compiles nothing (branch perf/solve-no-recompile)
+
+- `cached_jit` (solvers_nonlinear_explicit.py) keys one executable on jaxpr text + argument avals + a digest of the closed-over constants, constants stay baked; used for the one-shot explicit `run_raw`, the first diagnostic, and the imex-ars3 factor probes. Prepared simulations keep `jax.jit`.
+- GPU1, 32x32x24 (4,8) kinetic-electron deck, 64 fixed steps, warm call, base/new/new/base processes, `--xla_gpu_autotune_level=0`: rk3 12.0 s (1 recompile) -> 2.7 s (0); imex-ars3 53.5 s (37) -> 17.1 s (1, an eager 0.24 s `jit(scan)` left). Outputs bitwise identical to main for both methods. Host peak RSS 1.77 -> 1.48 GB (rk3), 7.5 -> 7.0 GB (imex).
+- Constants as operands instead (would also reuse across new geometry): 6.5e-8 relative float32 drift in q after 64 steps; rejected by the bitwise rule.
+- GPU run-to-run hash differences across processes: XLA autotuning picks different kernels; with autotune level 0 every process returns identical bits. On CPU the imex factor probes also differ at ulp level (1e-8 relative, only some vmapped batch rows) run to run inside one process; single-threaded Eigen (`--xla_cpu_multi_thread_eigen=false`) removes it, so it is the threaded Eigen contraction. On CPU the imex run_raw therefore still recompiles (its baked factor differs by an ulp).
+
+## 2026-10-07 PERF lane: linear-RHS assembly (branch perf/rhs-assembly)
+
+- `shift_axis` rewritten as slice + `jnp.pad` (pad once) instead of zeros + dynamic_update_slice: -8 lines, every RHS/step output bitwise identical (GPU autotune 0 and CPU), step time unchanged within noise: GPU1 RK3 64x64x24 (8,16) 159.8 vs 159.8 ms, (4,8) 36.0 vs 36.0 ms, 32x32x24 (4,8) 8.3 vs 8.3 ms (3 alternating process rounds); CPU 32x32x24 (4,8) 77-91 vs 76-79 ms (loaded laptop). XLA already lowers both spellings to the same fused slice.
+- negative: optimization_barrier on the concatenated linked-FFT chain updates before the single gather: bitwise identical, no change (76.3 vs 76.3 ms, 320.9 vs 320.8 ms on a contended GPU1). Not kept.
+- the big concatenate/slice fusions are XLA fusing the whole Hermite/Laguerre producer graph into the linked-FFT gather consumer, not separate slice+concatenate passes; removing them needs the streaming term in chain layout end to end (a structural change), not a respelling. Pallas not tried: no isolated launch/memory-bound chain to replace.
+
+
+## 2026-10-07 — EM-ENERGY, EM-B-PAR, #332 (branch `validation/em-energy-bpar`)
+
+Base `7f5e151ac` (main with #345). Draft #274 read, not modified; its
+source-vs-physical comparison is reused, its debug probes are not.
+- EM-ENERGY. Free energy of the full (phi, A∥, B∥) system at variable B:
+  W = sum_s n_s T_s/2 <|H_s|^2> - sum_s n_s Z_s^2/(2 T_s) <|phi|^2>
+      + (1/beta) <B^2 (k⊥^2 |A∥|^2 + |B∥|^2)>  =  1/2 <G, n T H>,
+  <.> the field-line volume measure (J / sum J), every Fourier mode.
+  dW/dt = Re <n T H, dG/dt> (AD of W along the assembled RHS agrees to 1e-15).
+  Channels: streaming + mirror cancel to the Nz discretization; curvature and
+  grad-B are zero to round-off; collisions, hypercollisions, hyperdiffusion
+  are negative; the diamagnetic channel equals
+  rho_* sum_s [fprim_s T_s Gamma_s + tprim_s (Q_s - 3/2 T_s Gamma_s)]
+  from the particle and energy-flux diagnostics (to 1e-15 without B∥).
+  Tests: `test_three_field_free_energy_budget_closes_multimode`,
+  `test_bpar_diamagnetic_budget_converges_with_laguerre_truncation`,
+  `test_three_field_nonlinear_bracket_conserves_free_energy`.
+- Defect fixed: the spectral nonlinear route (`laguerre_mode="spectral"`) built
+  the B∥ potential as `JlB * bpar` without the `T/Z` factor that `build_H`
+  and the Laguerre-grid route use. Its bracket created free energy at 3e-4
+  of the transfer scale for T/Z != 1; after the fix 2e-16. The default grid
+  route was already right; it conserves to the Laguerre truncation of J0
+  (relative 7e-5 / 7e-7 / 1e-11 at Nl 3 / 6 / 12, small b).
+- Known, not changed: with B∥ the diamagnetic phi-B∥ cross pairing uses the
+  analytic upper Laguerre neighbour (#325) on one side only, so the drive
+  identity closes to truncation: 2.3e-7 / 1.0e-9 / 6.3e-14 at Nl 3 / 8 / 12.
+- EM-B-PAR (office). Circular Miller CBC KBM deck, ky 0.3, A∥ + B∥,
+  nperiod 3, ntheta 48. GS2 8.2.1: ngauss 12, negrid 24, bakdif 0,
+  collisionless. GKX: Nz 240, Nl 4, Nm 32, deck hypercollisions,
+  damp_ends_rate 0.1, rk4 dt 2e-4, t_max 60.
+  | beta | GS2 gamma, omega | GKX gamma, omega |
+  | 0.005 | 0.2137, 0.2624 | 0.2593, 0.2753 |
+  | 0.010 | 0.1591, 0.3164 (std 1.4%) | 0.202 (two-time state ratio; the fit returned 24.0) |
+  | 0.015 | 0.4065, 0.9620 | 0.3683, 1.0221 |
+  | 0.020 | 0.6808, 0.8010 | 0.6738, 0.8148 |
+  Not a pass: the ITG side (0.005, 0.010) is 21-27% above GS2; KBM side
+  -9% and -1%. imex2 at dt 1.4e-4 gives the same gamma at beta 0.005 (0.25932).
+  The two-time ratio reproduces the beta 0.005 fit to 0.3%. Nl 8 / Nm 48 at
+  beta 0.015: 0.3669, 1.0239 (-0.4%), so the gap is not velocity resolution.
+- Runtime defect found, not fixed: at beta 0.010 the time-fit auto window
+  ("no stationary growth window", fit over 0.37 growth times) reports
+  gamma 24.0, omega -22.6 with `fit_settled=true`, for a state that grew only
+  e^12 in 60 time units. Same as KBM-VEL's 0.85 report. Krylov shift-invert
+  still fails on this deck (inner residual 0.985).
+- #332. A synthetic up-down symmetric Boozer surface goes through the
+  producer, EIK writer and parser with B -> -B (Phi_edge, G, I flipped).
+  Only gds21, cvdrift0 and gbdrift0 change sign (bitwise); the full
+  three-field RHS of the reversed tube equals the original with kx -> -kx
+  (bitwise, linked), for shat +-0.4. The flux diagnostics weighted by
+  sum(J grho)/sum(J) reproduce the free-energy drive in both directions, so
+  outward flux is the down-gradient sign. A reversal that forgets one odd
+  drift fails. No sign defect.
+Raw records: office lane directory `em-energy` (`gs2/`, `gkxr_*`, `gkxr40_*`).
+
+## 2026-10-07 PERF lane: chain-layout streaming bound (branch perf/chain-layout-streaming), negative
+
+- question: how much of the 40-45% concatenate/slice share of the RK3 step is the linked-FFT gather/scatter itself, i.e. the most that keeping streaming in chain layout could remove. Stop rule: <15% of the step.
+- the step calls `_linked_fft_apply` 3 times (once per RHS), each on two operands (grad and abs), so 6 gather->FFT->scatter round trips per step.
+- traffic bound: 2 extra passes (read+write) per operand: 64x64x24 (8,16) 100 MB operands -> 2.4 GB/step, ~6 ms of 93 ms (6.5%); (4,8) ~3 ms of 23.6 ms (12.7%); 32x32x24 (4,8) ~0.75 ms of 8.3 ms (9%). These assume nothing fuses into neighbours, so they are upper bounds.
+- measured (linked derivative minus same-size periodic FFT derivative, x6 operands, GPU1 contended by other jobs): 7.0-8.3% at 64x64x24 (8,16), 0.2% at (4,8); 32x32x24 inconclusive (-0.3% to 19.5%, timings quantized by contention). The 2026-10-06 clean trace has gather/scatter kernels at ~0% and MemcpyD2D at 3.9%: the concatenate/slice fusions are the RHS arithmetic fused into the gather consumer, which a layout change would move, not delete.
+- conclusion: bound below 15% at every production size; restructure not attempted.
+- fixed: `test_window_adjoint_compiles_one_graph_and_reuses_it` failed only under xdist because the compile counter saw other tests' compiles in the same worker; `_counting_backend_compiles(name)` now counts only modules whose name contains `heat_flux_window`. `tests/unit/operators` + `tests/unit/nonlinear` pass with `-n 2` in x64.
+
+## 2026-10-07 slim/contract-4 (G.6 P4)
+
+- cuBLAS `scal` kernels (up to 29% of the 32x32x24 GPU step) are not from dots: the compiled step has no dot or custom-call; they are XLA GPU's 1/N normalisation of the 27 inverse FFTs per step (21 IFFT + 6 IRFFT). Removing them means replacing inverse FFTs, not a one-line rewrite, and would not be bitwise; not attempted.
+- src -196 lines, bitwise on all five fingerprints (linear Cyclone eigenpair, nonlinear Q trace, window gradient, quasilinear flux, imex-ars3), float32 and x64, CPU single-threaded Eigen: operators/fluxes.py -48 (heat/particle totals from one `_summed`), operators/moments.py -57 (channel-resolved heat/particle from one `_channel_resolved`, keeping the public defaults use_dealias=True, flux_scale=1.0), terms/fields.py -77 (custom-VJP fwd/bwd forward positional args instead of re-listing them), operators/nonlinear/brackets.py -14 (one `_single_field` wrapper).
+- a full dead-symbol scan (identifier counted over src/tests/docs/scripts/examples) found no unreferenced top-level src function; five symbols are test/doc-only public API (`streaming_contribution`, `bessel_laguerre_kernels`, `associated_bessel_laguerre_coefficients`, `migrate_end_damping_reference`, `integrated_autocorrelation_time`), all documented, left in place.
+
+
+## 2026-10-07 — EM ITG gap and time-fit fail-closed (branch `validation/em-itg-gap`)
+
+Base `7f5e151ac`. Follows #349 (EM-B-PAR ladder).
+- Fix: the time fit now reports `fit_settled=true` only when the window spans
+  >= 2 fitted e-foldings (the existing `warn_if_growth_unresolved` criterion,
+  previously warning-only) and the signal amplitude grows by >= e^2 across
+  it. The beta 0.010 KBM fit (gamma 24.0 over 0.37 growth times) is now
+  unsettled; regression test `test_fit_settled_requires_two_growth_times_in_the_window`.
+  On office it also flags the beta 0.0125 fit (1.40) and the no-hypercollision
+  blow-up (248) as unsettled.
+- ITG-branch gap (Miller CBC, ky 0.3, A∥+B∥, nperiod 3, office):
+  | case | GS2 gamma | GKX gamma |
+  | beta 0.005 base (GS2 ntheta 48, negrid 24; GKX Nl 4, Nm 32, Nz 240) | 0.2137 | 0.2593 |
+  | GS2 negrid 32 / ntheta 64 | 0.2137 / 0.2137 | |
+  | GKX Nm 64 / Nz 320 / Nl 8 / no end damping | | 0.2577 / 0.2591 / 0.2676 / 0.2618 |
+  | beta 1e-4 (ES limit, kinetic electrons) | 0.2344 | 0.2889 (Nl 8: 0.2955) |
+  | beta 0.0075 | 0.1937 | 0.2382 |
+  | beta 0.0125 | 0.1737 (omega 1.13, transition) | unsettled |
+  Both codes are resolved; the gap is +21-23% at every low beta including
+  beta -> 0, so it is already in the electrostatic kinetic-electron limit and
+  is not EM. GKX without hypercollisions is numerically unstable on this
+  deck (grid-scale, full Hermite tail), so hypercollisions cannot be removed
+  to test them. No GKX defect isolated. Overlaps VAL-KE (Miller kinetic
+  electrons ES), whose office records show the GKX eigenvalue moving
+  0.358 -> 0.231 with end-damping rate and resolution; hand the ES
+  comparison to that lane.
+- Krylov shift-invert inner residual 0.96-0.98: the same with
+  `hermite-line` and `field-corrected`, at Nz 96 and 240, with and without
+  B∥, and at beta 1e-4. So it is not electromagnetic; the line preconditioners
+  do not capture this kinetic-electron operator (as documented for
+  (96, 8, 24)). `pr3-cm`, the preconditioner that converges there, refuses
+  this deck by its own z-locality check (defect 2.1e-2 to 3.6e-2, also without
+  hypercollisions). The term that breaks locality was not identified.
+Raw records: office lane directory `em-energy/gap/`.
+
+## 2026-10-07 — pr3-cm on kinetic-electron decks (branch `fix/pr3cm-ke-locality`)
+
+Base `7f5e151ac`.
+- Diagnosis: on the production state of the Miller kinetic-electron KBM deck
+  every term except collisions failed pr3-cm's z-locality check alone
+  (diamagnetic 0.99, end damping 0.11), yet each is complex-linear and
+  z-local (z leak 0). The block was per species, but the field response
+  couples the two kinetic species at one z. Folding species into the
+  Laguerre axis makes the check exact (defect 3.6e-2 -> 1.7e-16). One
+  kinetic species is unchanged bitwise (fold of one). Test:
+  `test_pr3_z_block_couples_kinetic_species_through_the_field`.
+- Convergence: still none. Shift-invert GMRES inner residual after the fold:
+  0.89 (beta 0.015, A∥+B∥), 0.93 (beta 1e-4), 0.996 without hypercollisions.
+  Before: refused. The block is no longer l-tridiagonal plus rank one
+  (off-tridiagonal 2.5e-2 of 44, Hermite half-width 2), so it is the dense
+  inverse. The automatic alpha is -51.8, set by electron streaming; alpha
+  -5 and -0.5 are worse (0.996, 0.999). A single Peaceman-Rachford parameter
+  cannot cover ion and electron streaming scales. No small fix; a
+  species-split alpha or an electron-aware line solve is the next step.
+Raw records: office lane directory `em-energy/pr3/`.
+## 2026-10-07 — VAL-KE and VAL-REF lane (F.4/F.6, branch `validation/ke-and-ref`)
+
+Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella v1.0 present; GX binary and `~/GX` are gone, so no new GX run was possible. GKX eigenpairs ran on office GPU 1 (`venvs/gkx-ke`, JAX 0.11.2, SOLVAX 0.27.0); `lanes/arch-b/venv` has SOLVAX 0.26.0, below the pyproject floor.
+
+- **Root cause of the kinetic-electron "failures": the end-damping contract.** On a linked deck without `[time] damp_ends_rate` the time route damps at `damp_ends_amp/dt` and every timestep-free route at `damp_ends_amp` (1/dt weaker). Kinetic electrons are very sensitive to it; adiabatic ITG is not. KE example ky .3 Nl8/Nm16: time 0.16799, Krylov 0.24317, Krylov with rate 125 0.16813, GS2 0.1768. Issue #354. The KE example, the KE parity fixture (rate 160.6 = GX's 0.1/dt at its settled dt 6.228e-4) and the new TEM fixture state the rate.
+- **Miller kinetic electrons (VAL-KE).** Certified Krylov eigenpairs, Nl16/Nm48, rate 160.6: ky .3 0.23128/0.23603, ky .5 0.25479/0.46698. Against the repaired GX build: -0.35%/-0.20% and +0.27%/-0.16%. Against GS2 e3: -1.5% and +0.5%. Nl8/Nm24 gives 0.23115 at ky .3 (0.06%). Ledger row `X-ke-miller` (provisional: two ky).
+- **EM-lane gap (#352), reconciled.** That lane's "21-23% above GS2 at every low beta" used variant `damp0.1`, an explicit rate 0.1. Same deck at beta 1e-4, Nl4/Nm32 with rate 500 (= amp/dt): 0.2264 against GS2 0.2344 and 0.2889 at rate 0.1. Not an operator defect.
+- **TEM (case definition).** Dannert & Jenko, Phys. Plasmas 12, 072309 (2005), Sec. II.B: R/Ln 3, R/LTe 6, R/LTi 0, eps 0.16, q 1.4, s_hat 0.8, Te/Ti 3, beta_e 1e-3, m_i/m_e 1836, collisionless, s-alpha with alpha 0. Deck `tools/comparison/fixtures/parity/tem_dannert_jenko_2005.toml` (Lref = R, ion reference; ky_gkx = ky rho_s/sqrt 3). The paper's growth rates are in figures only; GS2 is the reference.
+- **TEM results.** GS2 converged (t1 -> t2 <= 2.5%, beta x2 +0.5%); at ky rho_s .3 gamma 0.8694, omega -1.2723 (v_ti/R). GKX at ky rho_s .3: (Nl,Nm) (4,8) 0.0029, (8,24) 0.6114, (12,32) 0.6475, (16,48) 0.7330 (-15.7%), omega -1.2896 (+1.4%); without hypercollisions (8,24) 0.2973. Not converged; ledger row `X-tem-dj2005` is open.
+- **VAL-REF.** No GX build possible on office, so the 2026-09-27 repaired-build goldens and the Q20 GS2/gyaradax points are promoted as fixture rows in `docs/_static/cross_code_linear_points.csv` (assembler `plan/research/2026-10-06-val-ke/scripts/assemble.py`), ledger row `X-cyclone-repaired-gx` (passing).
+
+Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
+Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.

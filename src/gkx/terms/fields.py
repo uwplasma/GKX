@@ -487,95 +487,18 @@ def solve_fields(
     """Solve for (phi, apar, bpar) with a custom VJP hook."""
 
     return _solve_fields_impl(
-        G,
-        cache,
-        params,
-        charge=charge,
-        density=density,
-        temp=temp,
-        mass=mass,
-        tz=tz,
-        vth=vth,
-        fapar=fapar,
-        w_bpar=w_bpar,
+        G, cache, params, charge, density, temp, mass, tz, vth, fapar, w_bpar
     )
 
 
-def _solve_fields_fwd(
-    G: jnp.ndarray,
-    cache,
-    params,
-    charge: jnp.ndarray,
-    density: jnp.ndarray,
-    temp: jnp.ndarray,
-    mass: jnp.ndarray,
-    tz: jnp.ndarray,
-    vth: jnp.ndarray,
-    fapar: jnp.ndarray,
-    w_bpar: jnp.ndarray,
-) -> tuple[FieldState, tuple]:
-    out = _solve_fields_impl(
-        G,
-        cache,
-        params,
-        charge=charge,
-        density=density,
-        temp=temp,
-        mass=mass,
-        tz=tz,
-        vth=vth,
-        fapar=fapar,
-        w_bpar=w_bpar,
-    )
-    res = (G, cache, params, charge, density, temp, mass, tz, vth, fapar, w_bpar)
-    return out, res
+def _solve_fields_fwd(*args) -> tuple[FieldState, tuple]:
+    return _solve_fields_impl(*args), args
 
 
 def _solve_fields_bwd(res, g):
-    G, cache, params, charge, density, temp, mass, tz, vth, fapar, w_bpar = res
-
-    def wrapped(
-        G_in,
-        cache_in,
-        params_in,
-        charge_in,
-        density_in,
-        temp_in,
-        mass_in,
-        tz_in,
-        vth_in,
-        fapar_in,
-        w_bpar_in,
-    ):
-        return _solve_fields_impl(
-            G_in,
-            cache_in,
-            params_in,
-            charge=charge_in,
-            density=density_in,
-            temp=temp_in,
-            mass=mass_in,
-            tz=tz_in,
-            vth=vth_in,
-            fapar=fapar_in,
-            w_bpar=w_bpar_in,
-        )
-
-    _, pullback = jax.vjp(
-        wrapped,
-        G,
-        cache,
-        params,
-        charge,
-        density,
-        temp,
-        mass,
-        tz,
-        vth,
-        fapar,
-        w_bpar,
-    )
-    return pullback(g)
+    # Residuals are the inputs: the backward pass replays the solve, so no
+    # field-solve intermediates are stored across a trajectory.
+    return jax.vjp(_solve_fields_impl, *res)[1](g)
 
 
 solve_fields.defvjp(_solve_fields_fwd, _solve_fields_bwd)

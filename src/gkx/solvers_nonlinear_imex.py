@@ -27,6 +27,7 @@ from gkx.solvers_linear_implicit import (
     _fold_implicit_solve_stats,
     _gmres_iteration_budget,
 )
+from gkx.solvers_nonlinear_explicit import cached_jit
 from gkx.solvers_nonlinear_imex_diagnostics import (
     StatsSolveStepFn,
     advance_imex_nonlinear_state,
@@ -953,8 +954,8 @@ def _probe_columns(idx, nz: int, make: Callable, probe: Callable, take: Callable
             v = make(k, x, n, j, v)
         return v
 
-    make_all = jax.jit(jax.vmap(make_all))
-    takes = [jax.jit(jax.vmap(partial(take, k, x))) for k, x in idx]
+    make_all = cached_jit(jax.vmap(make_all))
+    takes = [cached_jit(jax.vmap(partial(take, k, x))) for k, x in idx]
     cols: list[list] = [[] for _ in idx]
     for j0 in range(0, max(ns), _PROBE_BATCH):
         out = probe(make_all(jnp.arange(j0, j0 + _PROBE_BATCH)))
@@ -1096,7 +1097,7 @@ def build_chain_implicit_linear(
     rebuilds them. The factorization is checked by the residual of one solve.
     """
     ns, nl, nm, _nky, _nkx, nz = shape
-    split, fld = jax.jit(split_rhs), jax.jit(fields)
+    split, fld = cached_jit(split_rhs), cached_jit(fields)
     zero = jnp.zeros(shape, dtype)
     zero_f = jnp.zeros_like(fld(zero))
 
@@ -1126,15 +1127,15 @@ def build_chain_implicit_linear(
     rows_m = tuple(int(m) for m in np.nonzero(resp > 1e-9 * max(resp.max(), 1e-300))[0])
 
     by_len: dict[int, list] = {}
-    for chain in _chains(jax.jit(lin), shape, np.asarray(modes, dtype=bool), dtype):
+    for chain in _chains(cached_jit(lin), shape, np.asarray(modes, dtype=bool), dtype):
         by_len.setdefault(len(chain), []).append(chain)
     idx = [
         (np.array(c)[..., 0], np.array(c)[..., 1]) for _, c in sorted(by_len.items())
     ]
     gdt = ARS_TABLEAUX[scheme][1][1][1] * float(dt)
 
-    probe_s = jax.jit(jax.vmap(lambda v: split(v, zero_f)))
-    probe_u = jax.jit(jax.vmap(lambda F: split(zero, F)))
+    probe_s = cached_jit(jax.vmap(lambda v: split(v, zero_f)))
+    probe_u = cached_jit(jax.vmap(lambda F: split(zero, F)))
     probed = _probe_stiff_blocks(idx, probe_s, probe_u, zero, zero_f, act, rows_m)
     groups = [
         _factor_chain_group(

@@ -845,6 +845,8 @@ def test_runtime_kinetic_case_matches_transitional_operator_contract() -> None:
         scales=(1.0, 1.0, 1.0),
         damp_ends=(0.1, 0.125),
     )
+    # The deck states the time route's damp_ends_amp/dt as an explicit rate.
+    legacy_params = replace(legacy_params, damp_ends_rate=0.1 / cfg.time.dt)
     _assert_same_parameters(runtime_params, legacy_params)
 
     runtime_state, legacy_state = _runtime_and_legacy_states(cfg, grid, geometry)

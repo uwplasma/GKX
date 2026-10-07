@@ -819,80 +819,23 @@ def magnetic_vector_potential_energy_resolved(
     return _reduce_species_kykxz(contrib, _ky_pair_fold(cache))
 
 
-def heat_flux_channel_resolved_species(
-    G: jnp.ndarray,
-    phi: jnp.ndarray,
-    apar: jnp.ndarray,
-    bpar: jnp.ndarray,
-    cache: LinearCache,
-    grid: SpectralGrid,
-    params: LinearParams,
-    flux_fac: jnp.ndarray,
-    *,
-    use_dealias: bool = True,
-    flux_scale: float = 1.0,
-) -> tuple[
-    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-]:
-    """Return resolved ES, Apar, and Bpar heat-flux channels per species."""
+def _channel_resolved(contrib_fn, doc):
+    def resolved(*args, use_dealias: bool = True, flux_scale: float = 1.0):
+        parts = contrib_fn(*args, use_dealias=use_dealias, flux_scale=flux_scale)
+        return tuple(map(_reduce_species_kykxz, parts))
 
-    es_contrib, apar_contrib, bpar_contrib = _heat_flux_channel_contrib_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
-    )
-    return (
-        _reduce_species_kykxz(es_contrib),
-        _reduce_species_kykxz(apar_contrib),
-        _reduce_species_kykxz(bpar_contrib),
-    )
+    resolved.__doc__ = doc
+    return resolved
 
 
-def particle_flux_channel_resolved_species(
-    G: jnp.ndarray,
-    phi: jnp.ndarray,
-    apar: jnp.ndarray,
-    bpar: jnp.ndarray,
-    cache: LinearCache,
-    grid: SpectralGrid,
-    params: LinearParams,
-    flux_fac: jnp.ndarray,
-    *,
-    use_dealias: bool = True,
-    flux_scale: float = 1.0,
-) -> tuple[
-    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-]:
-    """Return resolved ES, Apar, and Bpar particle-flux channels per species."""
-
-    es_contrib, apar_contrib, bpar_contrib = _particle_flux_channel_contrib_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=use_dealias,
-        flux_scale=flux_scale,
-    )
-    return (
-        _reduce_species_kykxz(es_contrib),
-        _reduce_species_kykxz(apar_contrib),
-        _reduce_species_kykxz(bpar_contrib),
-    )
+heat_flux_channel_resolved_species = _channel_resolved(
+    _heat_flux_channel_contrib_species,
+    "Return resolved ES, Apar, and Bpar heat-flux channels per species.",
+)
+particle_flux_channel_resolved_species = _channel_resolved(
+    _particle_flux_channel_contrib_species,
+    "Return resolved ES, Apar, and Bpar particle-flux channels per species.",
+)
 
 
 def turbulent_heating_resolved_species(

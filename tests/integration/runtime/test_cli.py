@@ -4252,3 +4252,25 @@ def test_cli_and_case_resolution_fallbacks_come_from_the_runtime_owner() -> None
     # A deck value still wins over the fallback.
     opts = commands._resolve_linear_command_options(no_flags, cfg, {"Nl": 16, "Nm": 48})
     assert (opts.Nl, opts.Nm) == (16, 48)
+
+
+@pytest.mark.parametrize("tmax,settled", [(0.5154, False), (0.7, True)])
+def test_fit_settled_requires_two_growth_times_in_the_window(tmax, settled) -> None:
+    """The beta 0.010 KBM fit spanned 0.37 growth times yet reported settled."""
+
+    t = np.linspace(0.0, 1.0, 40001)
+    phi = np.exp((24.0 - 22.6j) * t)[:, None, None, None] * np.ones((1, 1, 1, 2))
+    options = {**_AUTO_FIT_OPTIONS, "auto_window": False, "tmin": 0.5, "tmax": tmax}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        out = fit_runtime_linear_diagnostics(
+            t=t,
+            phi_t=phi,
+            density_t=None,
+            selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+            z=np.asarray([-1.0, 1.0]),
+            fit_signal="phi",
+            **options,
+        )
+    assert out.gamma == pytest.approx(24.0, rel=1e-6)
+    assert out.fit_settled is settled

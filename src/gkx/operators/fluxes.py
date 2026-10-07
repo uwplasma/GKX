@@ -52,35 +52,15 @@ def heat_flux_species(
     return jnp.sum(es_contrib + apar_contrib + bpar_contrib, axis=(1, 2, 3))
 
 
-def heat_flux_total(
-    G: jnp.ndarray,
-    phi: jnp.ndarray,
-    apar: jnp.ndarray,
-    bpar: jnp.ndarray,
-    cache: LinearCache,
-    grid: SpectralGrid,
-    params: LinearParams,
-    flux_fac: jnp.ndarray,
-    *,
-    use_dealias: bool = True,
-    flux_scale: float = 1.0,
-) -> jnp.ndarray:
-    """Total heat-flux diagnostic."""
+def _summed(species_fn):
+    def total(*args, **kwargs) -> jnp.ndarray:
+        return jnp.sum(species_fn(*args, **kwargs))
 
-    return jnp.sum(
-        heat_flux_species(
-            G,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=use_dealias,
-            flux_scale=flux_scale,
-        )
-    )
+    total.__doc__ = f"Sum over species of :func:`{species_fn.__name__}`."
+    return total
+
+
+heat_flux_total = _summed(heat_flux_species)
 
 
 def particle_flux_species(
@@ -115,35 +95,7 @@ def particle_flux_species(
     return jnp.sum(es_contrib + apar_contrib + bpar_contrib, axis=(1, 2, 3))
 
 
-def particle_flux_total(
-    G: jnp.ndarray,
-    phi: jnp.ndarray,
-    apar: jnp.ndarray,
-    bpar: jnp.ndarray,
-    cache: LinearCache,
-    grid: SpectralGrid,
-    params: LinearParams,
-    flux_fac: jnp.ndarray,
-    *,
-    use_dealias: bool = True,
-    flux_scale: float = 1.0,
-) -> jnp.ndarray:
-    """Total particle-flux diagnostic."""
-
-    return jnp.sum(
-        particle_flux_species(
-            G,
-            phi,
-            apar,
-            bpar,
-            cache,
-            grid,
-            params,
-            flux_fac,
-            use_dealias=use_dealias,
-            flux_scale=flux_scale,
-        )
-    )
+particle_flux_total = _summed(particle_flux_species)
 
 
 def turbulent_heating_species(

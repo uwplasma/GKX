@@ -44,6 +44,10 @@ t_max = 10.0
 dt = 0.0005
 method = "imex2"
 sample_stride = 8
+# GX damps the linked ends at damp_ends_amp/dt; its run settles at
+# dt = 6.228e-4, so the matched rate is 0.1/6.228e-4. Stated explicitly so
+# the timestep-free Krylov route integrates the same operator.
+damp_ends_rate = 160.6
 
 [geometry]
 model = "eik"
