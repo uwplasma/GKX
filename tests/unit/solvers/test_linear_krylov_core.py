@@ -3613,3 +3613,48 @@ def test_biorthogonal_continuation_crosses_real_growth_ordering() -> None:
         right = solution.eigenvector
 
     assert ranks == [0, 0, 1, 2]
+
+
+def test_pr3_z_block_couples_kinetic_species_through_the_field() -> None:
+    """Two kinetic species share phi at one z, so the block spans species.
+
+    A per-species block (the pre-fold layout) misses that coupling and the
+    locality check refuses a kinetic-electron operator that is z-local.
+    """
+
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0, boundary="linked", y0=20.0)
+    )
+    geom = SAlphaGeometry.from_config(CycloneBaseCase(grid=GridConfig()).geometry)
+    two = lambda a, b: jnp.asarray([a, b])  # noqa: E731
+    params = LinearParams(
+        charge_sign=two(1.0, -1.0),
+        density=two(1.0, 1.0),
+        temp=two(1.0, 1.0),
+        mass=two(1.0, 0.01),
+        tz=two(1.0, -1.0),
+        vth=two(1.0, 10.0),
+        rho=two(1.0, 0.1),
+        fprim=two(0.8, 0.8),
+        tprim=two(2.5, 2.5),
+        tau_e=0.0,
+        nu=0.0,
+        nu_hyper=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, Nl=3, Nm=4)
+    shape = (2, 3, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    rng = np.random.default_rng(0)
+    v0 = jnp.asarray(rng.standard_normal(shape) + 1j * rng.standard_normal(shape))
+    term_cfg = linear_terms_to_term_config(
+        LinearTerms(collisions=0.0, apar=0.0, bpar=0.0)
+    )
+    _factors, meta = pr3.build_pr3_factors(v0, cache, params, term_cfg, _PR3_SIGMA)
+    assert meta["block_size"] == 2 * 3 * 4
+    assert meta["locality_defect"] < 1e-12
+    original = pr3._block_shape
+    try:
+        pr3._block_shape = lambda s: tuple(s) if len(s) == 6 else (1, *s)
+        with pytest.raises(ValueError, match="not z-local"):
+            pr3.build_pr3_factors(v0, cache, params, term_cfg, _PR3_SIGMA)
+    finally:
+        pr3._block_shape = original

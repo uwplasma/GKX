@@ -21039,3 +21039,24 @@ independent oracle that fails on main and passes here.
   Q trace changes by 5.9e-4 relative (#325, Nl=2); particle flux bitwise.
 Not done: #332 (VMEC signed-flux contract) needs the field-reversal map of the
 whole producer->cache->flux chain; no sign defect found or fixed here.
+
+## 2026-10-07 — pr3-cm on kinetic-electron decks (branch `fix/pr3cm-ke-locality`)
+
+Base `7f5e151ac`.
+- Diagnosis: on the production state of the Miller kinetic-electron KBM deck
+  every term except collisions failed pr3-cm's z-locality check alone
+  (diamagnetic 0.99, end damping 0.11), yet each is complex-linear and
+  z-local (z leak 0). The block was per species, but the field response
+  couples the two kinetic species at one z. Folding species into the
+  Laguerre axis makes the check exact (defect 3.6e-2 -> 1.7e-16). One
+  kinetic species is unchanged bitwise (fold of one). Test:
+  `test_pr3_z_block_couples_kinetic_species_through_the_field`.
+- Convergence: still none. Shift-invert GMRES inner residual after the fold:
+  0.89 (beta 0.015, A∥+B∥), 0.93 (beta 1e-4), 0.996 without hypercollisions.
+  Before: refused. The block is no longer l-tridiagonal plus rank one
+  (off-tridiagonal 2.5e-2 of 44, Hermite half-width 2), so it is the dense
+  inverse. The automatic alpha is -51.8, set by electron streaming; alpha
+  -5 and -0.5 are worse (0.996, 0.999). A single Peaceman-Rachford parameter
+  cannot cover ion and electron streaming scales. No small fix; a
+  species-split alpha or an electron-aware line solve is the next step.
+Raw records: office lane directory `em-energy/pr3/`.

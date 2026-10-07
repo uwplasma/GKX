@@ -238,9 +238,7 @@ def _block_shape(state_shape: tuple[int, ...]) -> tuple[int, ...]:
 
     if len(state_shape) == 5:
         return (1, *state_shape)
-    # Species fold into the Laguerre axis: the field response couples them at
-    # one z, so a per-species block is not the z-local operator (kinetic
-    # electrons). The C-order flat vector is unchanged by the fold.
+    # Fields couple kinetic species at one z: fold species into the l axis.
     ns, nl, *rest = state_shape
     return (1, ns * nl, *rest)
 
