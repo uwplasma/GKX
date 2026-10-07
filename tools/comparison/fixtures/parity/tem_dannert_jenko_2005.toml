@@ -56,6 +56,10 @@ t_max = 60.0
 dt = 0.0002
 method = "imex2"
 sample_stride = 50
+# Explicit end-damping rate so the time and timestep-free (Krylov) routes
+# integrate the same operator; without it Krylov damps at damp_ends_amp and
+# the time route at damp_ends_amp/dt. The rate ladder is in the record.
+damp_ends_rate = 100.0
 
 [geometry]
 q = 1.4

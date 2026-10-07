@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """One GKX linear eigenpair: python gkx_eig.py <deck> <ky_gkx> <Nl> <Nm> [solver] [key=value ...]
 
-key=value overrides set [grid]/[physics] fields (e.g. ntheta=48 nperiod=3 beta=6.67e-4).
+key=value overrides set fields; a bare key is [grid] or [physics], else section.key
+(e.g. ntheta=48 nperiod=3 terms.end_damping=0).
 Prints one line "RESULT {json}" with the git SHA and host type.
 """
 
@@ -24,10 +25,11 @@ solver = sys.argv[5] if len(sys.argv) > 5 else "krylov"
 over = dict(a.split("=") for a in sys.argv[6:])
 cfg, _ = load_runtime_from_toml(deck)
 for key, val in over.items():
-    sect = "grid" if hasattr(cfg.grid, key) else "physics"
-    cur = getattr(getattr(cfg, sect), key)
-    setattr_val = type(cur)(float(val)) if isinstance(cur, (int, float)) else val
-    cfg = replace(cfg, **{sect: replace(getattr(cfg, sect), **{key: setattr_val})})
+    sect, _, field = key.rpartition(".")
+    sect = sect or ("grid" if hasattr(cfg.grid, field) else "physics")
+    cur = getattr(getattr(cfg, sect), field)
+    new = float(val) if cur is None else type(cur)(float(val)) if isinstance(cur, (int, float)) and not isinstance(cur, bool) else val
+    cfg = replace(cfg, **{sect: replace(getattr(cfg, sect), **{field: new})})
 if "nperiod" in over or "ntheta" in over:
     g = cfg.grid
     cfg = replace(cfg, grid=replace(g, Nz=g.ntheta * (2 * g.nperiod - 1)))
@@ -38,7 +40,7 @@ r = run_runtime_linear(cfg, ky_target=ky, Nl=nl, Nm=nm, solver=solver)
 print("RESULT", json.dumps(dict(
     deck=Path(deck).name, ky=float(r.ky), Nl=nl, Nm=nm, solver=solver, over=over,
     Nz=cfg.grid.Nz, gamma=float(r.gamma), omega=float(r.omega), sha=sha,
-    host=f"{platform.system()}-{platform.machine()}-cpu", wall_s=round(time.perf_counter() - t0, 1),
+    host=f"{platform.system()}-{platform.machine()}-{jax.devices()[0].platform}", wall_s=round(time.perf_counter() - t0, 1),
     eigen_status=str(r.eigen_status), fit_settled=r.fit_settled, fit_r2=r.fit_r2,
     window=[r.fit_window_tmin, r.fit_window_tmax])), flush=True)
 if r.t is not None and r.signal is not None:
