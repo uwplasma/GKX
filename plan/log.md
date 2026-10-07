@@ -21124,3 +21124,9 @@ Raw records: office lane directory `em-energy` (`gs2/`, `gkxr_*`, `gkxr40_*`).
 - conclusion: bound below 15% at every production size; restructure not attempted.
 - fixed: `test_window_adjoint_compiles_one_graph_and_reuses_it` failed only under xdist because the compile counter saw other tests' compiles in the same worker; `_counting_backend_compiles(name)` now counts only modules whose name contains `heat_flux_window`. `tests/unit/operators` + `tests/unit/nonlinear` pass with `-n 2` in x64.
 
+## 2026-10-07 slim/contract-4 (G.6 P4)
+
+- cuBLAS `scal` kernels (up to 29% of the 32x32x24 GPU step) are not from dots: the compiled step has no dot or custom-call; they are XLA GPU's 1/N normalisation of the 27 inverse FFTs per step (21 IFFT + 6 IRFFT). Removing them means replacing inverse FFTs, not a one-line rewrite, and would not be bitwise; not attempted.
+- src -196 lines, bitwise on all five fingerprints (linear Cyclone eigenpair, nonlinear Q trace, window gradient, quasilinear flux, imex-ars3), float32 and x64, CPU single-threaded Eigen: operators/fluxes.py -48 (heat/particle totals from one `_summed`), operators/moments.py -57 (channel-resolved heat/particle from one `_channel_resolved`, keeping the public defaults use_dealias=True, flux_scale=1.0), terms/fields.py -77 (custom-VJP fwd/bwd forward positional args instead of re-listing them), operators/nonlinear/brackets.py -14 (one `_single_field` wrapper).
+- a full dead-symbol scan (identifier counted over src/tests/docs/scripts/examples) found no unreferenced top-level src function; five symbols are test/doc-only public API (`streaming_contribution`, `bessel_laguerre_kernels`, `associated_bessel_laguerre_coefficients`, `migrate_end_damping_reference`, `integrated_autocorrelation_time`), all documented, left in place.
+
