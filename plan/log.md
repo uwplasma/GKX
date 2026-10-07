@@ -21077,6 +21077,8 @@ source-vs-physical comparison is reused, its debug probes are not.
   | 0.020 | 0.6808, 0.8010 | 0.6738, 0.8148 |
   Not a pass: the ITG side (0.005, 0.010) is 21-27% above GS2; KBM side
   -9% and -1%. imex2 at dt 1.4e-4 gives the same gamma at beta 0.005 (0.25932).
+  The two-time ratio reproduces the beta 0.005 fit to 0.3%. Nl 8 / Nm 48 at
+  beta 0.015: 0.3669, 1.0239 (-0.4%), so the gap is not velocity resolution.
 - Runtime defect found, not fixed: at beta 0.010 the time-fit auto window
   ("no stationary growth window", fit over 0.37 growth times) reports
   gamma 24.0, omega -22.6 with `fit_settled=true`, for a state that grew only
