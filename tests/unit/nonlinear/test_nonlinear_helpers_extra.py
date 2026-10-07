@@ -2911,3 +2911,36 @@ def test_chain_solve_inverts_the_stiff_linear_operator():
     block = int(np.prod(shape[:3])) * shape[-1]
     dense = sum(g.ky.shape[0] * (g.ky.shape[1] * block) ** 2 * 8 for g in op.groups)
     assert op.nbytes < dense
+
+
+def test_second_identical_solve_compiles_nothing_and_repeats_bits():
+    """A rebuilt run closure reuses the executable of an identical first run."""
+
+    import gkx
+
+    deck = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = deck.replace(
+        grid=replace(deck.grid, Nx=8, Ny=8, Nz=8, ntheta=8),
+        time=replace(deck.time, method="rk3", fixed_dt=True, t_max=4 * deck.time.dt),
+    )
+
+    def run():
+        out = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=2).diagnostics
+        return np.asarray(out.Wg_t).tobytes()
+
+    first = run()
+    with _counting_backend_compiles() as counter:
+        second = run()
+    assert counter["compiles"] == 0 and first == second
+
+
+def test_cached_jit_falls_back_under_an_outer_trace_and_evicts(monkeypatch):
+    import gkx.solvers_nonlinear_explicit as explicit
+
+    def outer(a):
+        return explicit.cached_jit(lambda x: x * a)(jnp.ones(3)).sum()
+
+    assert float(jax.grad(outer)(2.0)) == 3.0
+    monkeypatch.setattr(explicit, "_COMPILED", {i: None for i in range(64)})
+    assert float(explicit.cached_jit(lambda x: x + 1)(jnp.ones(()))) == 2.0
+    assert 0 not in explicit._COMPILED

@@ -21047,3 +21047,10 @@ whole producer->cache->flux chain; no sign defect found or fixed here.
 - negative: optimization_barrier on the Laguerre to-spectral contraction, bitwise identical, no speedup (150.3 vs 151.1 ms); not kept. Pallas not tried (no qualifying chain).
 - top remaining: per-call recompiles in gkx.solve (imex-ars3 27 per call, 24 s of 32 s; rk3 1 per call, 5 s of 6.8 s at 32x32x24).
 
+## 2026-10-06 PERF lane: repeated gkx.solve compiles nothing (branch perf/solve-no-recompile)
+
+- `cached_jit` (solvers_nonlinear_explicit.py) keys one executable on jaxpr text + argument avals + a digest of the closed-over constants, constants stay baked; used for the one-shot explicit `run_raw`, the first diagnostic, and the imex-ars3 factor probes. Prepared simulations keep `jax.jit`.
+- GPU1, 32x32x24 (4,8) kinetic-electron deck, 64 fixed steps, warm call, base/new/new/base processes, `--xla_gpu_autotune_level=0`: rk3 12.0 s (1 recompile) -> 2.7 s (0); imex-ars3 53.5 s (37) -> 17.1 s (1, an eager 0.24 s `jit(scan)` left). Outputs bitwise identical to main for both methods. Host peak RSS 1.77 -> 1.48 GB (rk3), 7.5 -> 7.0 GB (imex).
+- Constants as operands instead (would also reuse across new geometry): 6.5e-8 relative float32 drift in q after 64 steps; rejected by the bitwise rule.
+- GPU run-to-run hash differences across processes: XLA autotuning picks different kernels; with autotune level 0 every process returns identical bits. On CPU the imex factor probes also differ at ulp level (1e-8 relative, only some vmapped batch rows) run to run inside one process; single-threaded Eigen (`--xla_cpu_multi_thread_eigen=false`) removes it, so it is the threaded Eigen contraction. On CPU the imex run_raw therefore still recompiles (its baked factor differs by an ulp).
+

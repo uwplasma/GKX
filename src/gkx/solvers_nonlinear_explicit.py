@@ -8,11 +8,13 @@ step policy remains pure, small, and directly testable.
 from __future__ import annotations
 
 from functools import partial
+import hashlib
 import math
 from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 RhsFn = Callable[..., tuple[jnp.ndarray, object]]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
@@ -272,6 +274,38 @@ def block_checkpoint_plan(
     block = min(max(block, 1), count)
     storage = block * residual + -(-count // block) * carry
     return block if storage <= int(memory_budget_bytes) else None
+
+
+_COMPILED: dict[Any, Callable[..., Any]] = {}
+
+
+def cached_jit(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """``jax.jit(fn)`` shared by every closure with the same graph and constants.
+
+    Keys one executable on the jaxpr text, argument avals and a digest of the
+    closed-over constants, which stay baked: the bits are ``jax.jit(fn)``'s.
+    As operands they also reuse across geometry but drift 6.5e-8 in float32.
+    """
+
+    def call(*args: Any) -> Any:
+        closed, out_shape = jax.make_jaxpr(fn, return_shape=True)(*args)
+        if any(isinstance(c, jax.core.Tracer) for c in closed.consts):
+            return jax.jit(fn)(*args)  # closes over an outer trace: nothing to key
+        digest = hashlib.sha256(str((closed.jaxpr, closed.in_avals)).encode())
+        for c in closed.consts:
+            digest.update(str(jax.typeof(c)).encode() + np.asarray(c).tobytes())
+        key = digest.hexdigest()
+        run = _COMPILED.get(key)
+        if run is None:
+            if len(_COMPILED) >= 64:  # bound the baked constants kept alive
+                _COMPILED.pop(next(iter(_COMPILED)))
+            run = _COMPILED[key] = jax.jit(
+                partial(jax.core.eval_jaxpr, closed.jaxpr, closed.consts)
+            )
+        flat = run(*jax.tree.leaves(args))
+        return jax.tree.unflatten(jax.tree.structure(out_shape), flat)
+
+    return call
 
 
 def checkpointed_explicit_scan(
