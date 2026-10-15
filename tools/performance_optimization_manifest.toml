@@ -1,3 +1,5 @@
+# profiling_tools are provenance: the drivers were removed from scripts/
+# (recover with `git show df2953026:<path>`).
 [metadata]
 schema_version = 1
 branch = "main"
@@ -71,7 +73,6 @@ metrics = [
 ]
 artifact_paths = [
   "docs/performance.rst",
-  "scripts/profiling/profile_startup_and_cache.py",
 ]
 bottleneck_hypotheses = [
   "compile_first_integrator_run is the largest remaining cold-start cost",

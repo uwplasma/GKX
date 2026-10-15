@@ -16,11 +16,11 @@ dispatches to must import with the standard library alone (``python -S``).
 from __future__ import annotations
 
 from pathlib import Path
+import runpy
 import sys
 
-from _command import run_module
-
-CHECKS_DIR = Path(__file__).resolve().parent / "checks"
+SCRIPTS_DIR = Path(__file__).resolve().parent
+CHECKS_DIR = SCRIPTS_DIR / "checks"
 
 # subcommand -> (checker module, one-line purpose)
 SUBCOMMANDS: dict[str, tuple[str, str]] = {
@@ -61,6 +61,37 @@ SUBCOMMANDS: dict[str, tuple[str, str]] = {
         "nonlinear transport completion, convergence and ensemble gates",
     ),
 }
+
+
+def run_module(path: Path, argv: list[str]) -> int:
+    """Run ``path`` as ``__main__`` with ``argv`` and return its exit status.
+
+    ``sys.path[0]`` becomes the module's own directory, as for direct execution.
+    That also takes ``scripts/`` off the path while the module runs, so the
+    ``profile.py`` command cannot shadow the standard-library ``profile``
+    module that ``cProfile`` imports.
+    """
+
+    saved_argv = sys.argv
+    saved_path = list(sys.path)
+    sys.argv = [str(path), *argv]
+    sys.path[:] = [str(path.parent)] + [
+        entry for entry in sys.path if not entry or Path(entry).resolve() != SCRIPTS_DIR
+    ]
+    try:
+        runpy.run_path(str(path), run_name="__main__")
+    except SystemExit as exc:
+        code = exc.code
+        if code is None:
+            return 0
+        if isinstance(code, int):
+            return code
+        print(code, file=sys.stderr)
+        return 1
+    finally:
+        sys.argv = saved_argv
+        sys.path[:] = saved_path
+    return 0
 
 
 def _usage() -> str:
