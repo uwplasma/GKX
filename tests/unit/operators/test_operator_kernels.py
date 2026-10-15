@@ -1235,7 +1235,7 @@ def test_collision_operator_from_config_selects_validates_and_stays_dissipative(
     # selected operators must remain physically valid (H-theorem).
     from gkx.config import TimeConfig
 
-    assert TimeConfig().collision_operator == "none"
+    assert TimeConfig().collision_operator == "landau"
     density = jnp.asarray([1.0])
     mass = jnp.asarray([1.0])
     temperature = jnp.asarray([1.0])
@@ -1287,6 +1287,7 @@ def test_collision_operator_from_config_selects_validates_and_stays_dissipative(
         "improved_sugama",
         "coulomb",
         "coulomb_finite_kperp",
+        "landau",
     }
     with pytest.raises(ValueError, match="collision_operator must be one of"):
         collision_operator_from_config(

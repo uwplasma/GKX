@@ -165,8 +165,8 @@ class LinearParams:
     ampere_g0_scale: float = 0.5
     bpar_beta_scale: float = 0.5
     damp_ends_rate: float | jnp.ndarray | None = None
-    #: Built-in collision kernel: ``"dougherty"`` (GX's conserving
-    #: Lenard-Bernstein form) or ``"landau"`` (linearized Landau, drift-kinetic).
+    #: Built-in collision kernel: ``"dougherty"`` (conserving Lenard-Bernstein
+    #: form) or ``"landau"`` (linearized Landau, drift-kinetic limit).
     collision_model: str = "dougherty"
 
     def const_branch_nu_hyper_m(self):

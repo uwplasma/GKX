@@ -1201,15 +1201,15 @@ def linearized_landau_species_matrices(
     )
 
 
-def apply_linearized_landau(
-    hamiltonian: jnp.ndarray,
+def linearized_landau_operator(
     pair_matrices: jnp.ndarray,
     *,
     nu: jnp.ndarray,
     density: jnp.ndarray,
     charge: jnp.ndarray,
+    dtype: Any = None,
 ) -> jnp.ndarray:
-    r"""Apply the linearized Landau operator to the non-adiabatic response.
+    r"""Assemble the ``(s, s, n, n)`` operator from the unit pair matrices.
 
     ``nu`` is each species' self-collision frequency. The pair frequency is
     :math:`\nu_{ab} = \nu_a n_b Z_b^2 / (n_a Z_a^2)`; inter-species
@@ -1219,19 +1219,27 @@ def apply_linearized_landau(
     """
 
     ns = int(pair_matrices.shape[1])
-    dtype = jnp.real(hamiltonian).dtype
+    dtype = dtype or jnp.asarray(pair_matrices).dtype
     rate = jnp.broadcast_to(jnp.asarray(nu, dtype=dtype).reshape(-1), (ns,))
     weight = jnp.broadcast_to(
         jnp.asarray(density, dtype=dtype).reshape(-1)
         * jnp.asarray(charge, dtype=dtype).reshape(-1) ** 2,
         (ns,),
     )
-    pair = rate[:, None] * weight[None, :] / weight[:, None]
+    pair = (rate[:, None] * weight[None, :] / weight[:, None])[:, :, None, None]
     matrices = jnp.asarray(pair_matrices, dtype=dtype)
-    operator = pair[:, :, None, None] * matrices[1]
-    operator = (
-        operator
-        + jnp.eye(ns, dtype=dtype)[:, :, None, None]
-        * jnp.sum(pair[:, :, None, None] * matrices[0], axis=1)[:, None]
+    test = jnp.sum(pair * matrices[0], axis=1)
+    return (
+        pair * matrices[1] + jnp.eye(ns, dtype=dtype)[:, :, None, None] * test[:, None]
+    )
+
+
+def apply_linearized_landau(
+    hamiltonian: jnp.ndarray, pair_matrices: jnp.ndarray, **frequencies: Any
+) -> jnp.ndarray:
+    """Apply the linearized Landau operator to the non-adiabatic response ``H``."""
+
+    operator = linearized_landau_operator(
+        pair_matrices, dtype=jnp.real(hamiltonian).dtype, **frequencies
     )
     return apply_multispecies_collision_moment_matrix(hamiltonian, operator)

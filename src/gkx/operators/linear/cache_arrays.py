@@ -187,6 +187,21 @@ def collision_damping(
     """
 
     lb_lam = cache.lb_lam.astype(real_dtype)
+    if getattr(cache, "landau_pairs", None) is not None:
+        from gkx.operators.linear.collisions import linearized_landau_operator
+
+        ns, nl, nm = int(cache.b.shape[0]), int(lb_lam.shape[0]), int(lb_lam.shape[1])
+        operator = linearized_landau_operator(
+            cache.landau_pairs,
+            nu=_as_species_array(params.nu, ns, "nu"),
+            density=_as_species_array(params.density, ns, "density"),
+            charge=_as_species_array(params.charge_sign, ns, "charge_sign"),
+            dtype=real_dtype,
+        )
+        own = operator[jnp.arange(ns), jnp.arange(ns)]
+        diagonal = -jnp.diagonal(own, axis1=-2, axis2=-1)
+        damping = diagonal.reshape(ns, nm, nl).swapaxes(1, 2)[..., None, None, None]
+        return damping[0] if squeeze_species else damping
     if lb_lam.ndim == 2:
         b = jnp.asarray(cache.b, dtype=real_dtype)
         ns = int(b.shape[0])
