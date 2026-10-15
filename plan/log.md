@@ -21199,3 +21199,10 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
+
+## 2026-10-15 — bug hunt, second group (fix/bug-hunt-1015-b)
+
+- KBM and ETG runtime Krylov defaults are now `adaptive`, like every other contract.
+- Shift-invert `auto` is now pr3-cm with restart ≥150 and maxiter ≥600. σ is seeded from the adaptive pair, falling back to the propagator seed. The hermite-line → field-corrected retry is removed.
+- Fixed: Krylov fields dropped by `_run_krylov_linear`; pr3 complex128 requested under float32; a `--dt` override not setting the fixed-dt step count; growth-fit late-window, zero-frequency R² and NaN-trace paths.
+- Measurements: plan/research/2026-10-15-bug-hunt/SUMMARY.md (warm imex 9.2 s → 2.9 s with #363).
