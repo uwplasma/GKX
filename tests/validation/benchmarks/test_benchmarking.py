@@ -55,7 +55,6 @@ from gkx.diagnostics.modes import EigenfunctionComparisonMetrics
 from scripts.checks._gates.zonal_validation import zonal_flow_response_metrics
 from dataclasses import fields
 import math
-import re
 import subprocess
 import tomllib
 import jax
@@ -677,24 +676,6 @@ def _assert_same_parameters(actual, expected):
 def test_parameter_contract_rejects_optional_and_numeric_mismatches(rates):
     with pytest.raises(AssertionError, match="damp_ends_rate"):
         _assert_same_parameters(*(LinearParams(damp_ends_rate=r) for r in rates))
-
-
-def test_benchmark_readme_references_existing_python_drivers() -> None:
-    """Keep researcher-facing reproduction commands synchronized with drivers."""
-
-    readme = (ROOT / "benchmarks" / "README.md").read_text(encoding="utf-8")
-    drivers = re.findall(r"python scripts/benchmark\.py (\w+)", readme)
-
-    assert drivers
-    assert all(
-        (ROOT / "scripts" / "benchmarks" / f"{driver}.py").is_file()
-        for driver in drivers
-    )
-    for module in re.findall(r"python scripts/validate\.py (\w+)", readme):
-        assert any(
-            (ROOT / "scripts" / package / f"{module}.py").is_file()
-            for package in ("artifacts", "campaigns")
-        ), module
 
 
 _NL, _NM = 2, 4

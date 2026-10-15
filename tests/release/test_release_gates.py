@@ -3194,9 +3194,6 @@ for cases where nothing was measured.
 """
 
 _PARITY_MANIFEST = RUN_TO_REPO_ROOT / "tools" / "gx_parity_matrix_manifest.toml"
-_PARITY_BUILDER = (
-    RUN_TO_REPO_ROOT / "scripts" / "comparison" / "build_gx_parity_matrix.py"
-)
 # Largest relative move measured between the two builds: 0.204% in omega at
 # ky = 0.2. A floor at or below that would not cover the measurement it exists
 # to record. See the branch-only roadmap's gx_precsqrt note.
@@ -3332,16 +3329,6 @@ def test_parity_floors_are_declared_only_where_they_were_measured() -> None:
     )
 
 
-def test_parity_builder_reads_the_declared_floor() -> None:
-    """A manifest key nothing reads is documentation pretending to be a gate."""
-
-    source = _PARITY_BUILDER.read_text(encoding="utf-8")
-
-    assert 'case.get("build_reproducibility_floor")' in source
-    assert '"build_reproducibility_floor": floor' in source
-    assert '"within_build_reproducibility_floor"' in source
-
-
 # ---- closed VMEX mirror: a solved equilibrium, never the seed ----
 
 """The shipped closed VMEX mirror case must be an equilibrium, not a guess.
@@ -3366,9 +3353,6 @@ import json as _vmex_mirror_json
 _VMEX_MIRROR_ROOT = _VmexMirrorPath(__file__).resolve().parents[2]
 _VMEX_MIRROR_RECORD = (
     _VMEX_MIRROR_ROOT / "docs" / "_static" / "vmex_mirror_gkx_showcase.json"
-)
-_VMEX_MIRROR_BUILDER = (
-    _VMEX_MIRROR_ROOT / "scripts" / "artifacts" / "build_vmex_mirror_gkx_artifacts.py"
 )
 
 # The bars the shipped record has to clear. The three weak-form ones are the
@@ -3453,22 +3437,6 @@ def test_vmex_mirror_record_bars_match_the_builder_that_writes_them() -> None:
         "the shipped record's admission bars differ from the ones pinned here. "
         "Loosening a bar in the builder must not be able to make a worse "
         "equilibrium pass; change both, with the measurement that justifies it"
-    )
-
-
-def test_vmex_mirror_builder_solves_before_it_measures() -> None:
-    """The generator, not just its output, has to refuse the seeded state."""
-
-    source = _VMEX_MIRROR_BUILDER.read_text(encoding="utf-8")
-
-    assert "solve_fixed_boundary(" in source
-    assert "solve_lambda=True" in source
-    assert "require_convergence=True" in source
-    assert "equilibrium_admission_failures" in source
-    assert "state = solved.state" in source, (
-        "the builder must hand the solved state to from_vmex_mirror and "
-        "gk_closed_fieldline_geometry; building on "
-        "discretization.evaluate_state(setup.initial_state) is the regression"
     )
 
 
@@ -3762,7 +3730,10 @@ def test_every_artifact_and_generator_exists() -> None:
             if target and not (RUN_TO_REPO_ROOT / target).exists():
                 problems.append(f"{row['id']}: {key} {target} is missing")
         # A generator may carry arguments; only the script path is checked.
+        # ``retired@<sha>`` marks one removed from the tree, recoverable there.
         script = row["generator"].split()[0]
+        if script.startswith("retired@"):
+            continue
         if not (RUN_TO_REPO_ROOT / script).exists():
             problems.append(f"{row['id']}: generator {script} is missing")
     assert not problems, "ledger rows point at missing files:\n" + "\n".join(problems)

@@ -2316,12 +2316,6 @@ def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
     ):
         assert (EXAMPLES / filename).is_file()
         assert filename in docs
-    for script in (
-        ROOT / "scripts" / "campaigns" / "qa_transport_validation.py",
-        ROOT / "scripts" / "artifacts" / "build_qa_transport_figures.py",
-    ):
-        py_compile.compile(str(script), doraise=True)
-        assert script.name in docs
 
     with TRANSPORT_TIMESERIES.open(encoding="utf-8", newline="") as stream:
         rows = list(csv.DictReader(stream))
