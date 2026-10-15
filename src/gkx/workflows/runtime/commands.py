@@ -290,8 +290,8 @@ def _resolve_nonlinear_command_options(
     )
     if steps is not None:
         nonlinear_steps: int | None = steps
-    elif bool(cfg.time.fixed_dt):
-        nonlinear_steps = int(round(cfg.time.t_max / cfg.time.dt))
+    elif bool(cfg.time.fixed_dt):  # a --dt override sets the step count too
+        nonlinear_steps = int(round(cfg.time.t_max / (dt or cfg.time.dt)))
     else:
         nonlinear_steps = None
 

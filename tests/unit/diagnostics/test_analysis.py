@@ -403,7 +403,7 @@ def test_fit_growth_rate_with_stats_handles_flat_signal() -> None:
     assert np.isfinite(gamma)
     assert np.isfinite(omega)
     assert r2_log == -np.inf
-    assert r2_phase == -np.inf
+    assert r2_phase == 1.0  # constant phase: exact (zero-frequency) fit
 
 
 def test_select_fit_window_loglinear_validates_arguments() -> None:
@@ -454,8 +454,8 @@ def test_fit_growth_rate_auto_fixed_and_invalid_method() -> None:
     assert tmax > tmin
 
     zeros = np.array([np.nan + 0.0j])
-    gamma0, omega0, tmin0, tmax0 = fit_growth_rate_auto(np.array([0.0]), zeros)
-    assert (gamma0, omega0, tmin0, tmax0) == (0.0, 0.0, 0.0, 0.0)
+    with pytest.raises(ValueError, match="finite"):  # not a neutral mode
+        fit_growth_rate_auto(np.array([0.0]), zeros)
 
     with pytest.raises(ValueError):
         fit_growth_rate_auto(t, signal, window_method="bad")
@@ -680,8 +680,8 @@ def test_fit_growth_rate_auto_validation_and_nonfinite_paths() -> None:
     t = np.linspace(0.0, 1.0, 8)
     signal = np.full(t.shape, np.nan + 0.0j, dtype=np.complex128)
     signal[0] = 1.0 + 0.0j
-    gamma, omega, tmin, tmax = fit_growth_rate_auto(t, signal)
-    assert (gamma, omega, tmin, tmax) == (0.0, 0.0, 0.0, 0.0)
+    with pytest.raises(ValueError, match="finite"):
+        fit_growth_rate_auto(t, signal)
 
 
 def test_fit_growth_rate_auto_invalid_window_method_and_stats_fallback(
@@ -703,7 +703,7 @@ def test_fit_growth_rate_auto_invalid_window_method_and_stats_fallback(
     assert np.isfinite(omega)
     assert tmax > tmin
     assert r2_log == -np.inf
-    assert r2_phase == -np.inf
+    assert r2_phase == 1.0  # constant phase: exact (zero-frequency) fit
 
 
 def test_fit_growth_rate_with_stats_applies_tmax_and_handles_flat_signal() -> None:
@@ -714,7 +714,7 @@ def test_fit_growth_rate_with_stats_applies_tmax_and_handles_flat_signal() -> No
     assert np.isfinite(gamma)
     assert np.isfinite(omega)
     assert r2_log == -np.inf
-    assert r2_phase == -np.inf
+    assert r2_phase == 1.0  # constant phase: exact (zero-frequency) fit
 
     with pytest.raises(ValueError):
         fit_growth_rate_with_stats(t, signal, tmax=0.0)
@@ -2144,3 +2144,17 @@ def test_loglinear_window_does_not_depend_on_a_constant_phase() -> None:
     growing = select_fit_window_loglinear(t, envelope.astype(complex))
     assert growing == rotating
     assert growing[1] - growing[0] > 5.0
+
+
+def test_growth_fit_review_findings_2026_10_15():
+    """A late start raises, a zero-frequency mode fits its phase, NaN refuses."""
+
+    import pytest
+    from gkx.diagnostics import growth_rates as gr
+
+    t = np.arange(100.0)
+    with pytest.raises(ValueError, match="no 30-point window"):
+        gr.select_fit_window(t, np.exp(0.1 * t), window_fraction=0.3, start_fraction=0.9)
+    assert gr.fit_growth_rate_with_stats(t, np.exp(0.2 * t))[-1] == 1.0
+    with pytest.raises(ValueError, match="finite"):
+        gr.fit_growth_rate_auto(t, np.full(100, np.nan + 0j))
