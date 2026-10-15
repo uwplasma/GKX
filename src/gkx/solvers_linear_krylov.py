@@ -13,6 +13,7 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     linear_terms_to_term_config,
+    term_config_to_linear_terms,
 )
 from gkx.solvers_linear_adaptive_propagator import (
     AdaptivePropagatorSolution as AdaptivePropagatorSolution,
@@ -326,18 +327,12 @@ def _shift_seed(
     shift_source_key = cfg.shift_source.strip().lower()
     if cfg.shift is None:
         if shift_source_key == "propagator":
-            _status(status_callback, "estimating shift from propagator seed")
-            return _propagator_branch(
-                v0,
-                v_ref,
-                cache,
-                params,
-                term_cfg,
-                cfg,
-                None,
-                restarts=1,
-                select_overlap=False,
-            )
+            # A one-restart propagator over power_dt landed 0.0076 from a damped
+            # mode on Cyclone; the certified adaptive pair is the dominant mode.
+            _status(status_callback, "estimating shift from the adaptive eigenpair")
+            terms = term_config_to_linear_terms(term_cfg)
+            eig, vec, _ = _adaptive_branch(v0, cache, params, terms, cfg, None)
+            return eig, vec
         if shift_source_key == "target":
             _status(status_callback, "building target-frequency shift")
             return _target_shift(v0, cache, params, cfg), v0
@@ -377,14 +372,17 @@ def _shift_selection_flags(shift_selection: str) -> tuple[bool, bool]:
 
 
 def _automatic_shift_preconditioner(params: LinearParams, term_cfg: Any) -> str:
-    """Use the cheap streaming inverse unless electromagnetic fields require more."""
+    """Return ``pr3-cm``, the one preconditioner that treats the drift exactly.
 
-    apar = bool(np.asarray(term_cfg.apar) != 0.0)
-    bpar = bool(np.asarray(term_cfg.bpar) != 0.0)
-    beta = bool(np.asarray(getattr(params, "beta", 0.0)) != 0.0)
-    fapar = bool(np.any(np.asarray(getattr(params, "fapar", 0.0)) != 0.0))
-    electromagnetic = beta and (bpar or (apar and fapar))
-    return "field-corrected" if electromagnetic else "hermite-line"
+    hermite-line and field-corrected replace the z-dependent drift with its
+    z-mean. On Cyclone case_full at (4,8) that made ||(A - sigma) M x - x||
+    11.6 (0.14 with streaming alone): worse than no preconditioner, and the
+    inner FGMRES never converged on any shipped deck. They stay available by
+    name. ``params`` and ``term_cfg`` are unused and kept for the call site.
+    """
+
+    del params, term_cfg
+    return "pr3-cm"
 
 
 def _eigenpair_relative_residual(
@@ -611,11 +609,7 @@ def _shift_invert_branch(
         if automatic
         else cfg.shift_preconditioner
     )
-    preconditioners = (
-        (preconditioner, "field-corrected")
-        if automatic and preconditioner == "hermite-line"
-        else (preconditioner,)
-    )
+    preconditioners = (preconditioner,)
     precond_meta: dict[str, Any] | None = None
     for attempt, mode in enumerate(preconditioners):
         precond_factors = None
@@ -658,8 +652,12 @@ def _shift_invert_branch(
             omega_cap_factor=cfg.omega_cap_factor,
             omega_sign=cfg.omega_sign,
             gmres_tol=cfg.shift_tol,
-            gmres_maxiter=cfg.shift_maxiter,
-            gmres_restart=cfg.shift_restart,
+            gmres_maxiter=max(cfg.shift_maxiter, 600)
+            if automatic
+            else cfg.shift_maxiter,
+            gmres_restart=max(cfg.shift_restart, 150)
+            if automatic
+            else cfg.shift_restart,
             shift_preconditioner=mode,
             select_targeted=select_targeted,
             select_growth=select_growth,
