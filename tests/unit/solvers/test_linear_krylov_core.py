@@ -420,6 +420,7 @@ def test_shift_invert_selection_key_controls_cached_branch_flags(
         shift=0.2 - 1.1j,
         shift_source="target",
         shift_selection=shift_selection,
+        shift_preconditioner="hermite-line",
         select_overlap=True,
         fallback_method="none",
     )
@@ -1855,38 +1856,26 @@ def test_shift_invert_fallback_policy(monkeypatch: pytest.MonkeyPatch) -> None:
     assert jnp.allclose(eig_val, jnp.asarray(0.7 + 0.1j))
 
 
-@pytest.mark.parametrize(
-    ("beta", "apar", "bpar", "residuals", "expected"),
-    (
-        (0.0, 0.0, 0.0, (0.0,), ("hermite-line",)),
-        (0.0, 1.0, 1.0, (0.0,), ("hermite-line",)),
-        (0.01, 1.0, 0.0, (0.0,), ("field-corrected",)),
-        (0.01, 0.0, 1.0, (0.0,), ("field-corrected",)),
-        (0.0, 0.0, 0.0, (1.0, 0.0), ("hermite-line", "field-corrected")),
-    ),
-)
-def test_shift_invert_auto_selects_and_certifies_physics_preconditioner(
-    monkeypatch: pytest.MonkeyPatch,
-    beta: float,
-    apar: float,
-    bpar: float,
-    residuals: tuple[float, ...],
-    expected: tuple[str, ...],
+@pytest.mark.parametrize(("beta", "apar", "bpar"), ((0.0, 0.0, 0.0), (0.01, 1.0, 1.0)))
+def test_shift_invert_auto_selects_pr3_with_long_cycles(
+    monkeypatch: pytest.MonkeyPatch, beta: float, apar: float, bpar: float
 ) -> None:
-    """Auto avoids field setup for ES, uses it for EM, and retries failed ES."""
+    """Auto is pr3-cm for ES and EM alike, with restart >= 150 and maxiter >= 600.
+
+    hermite-line and field-corrected z-average the drift and stalled the inner
+    FGMRES on every shipped deck; pr3-cm needed 219-338 iterations on Cyclone.
+    """
 
     _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    calls: list[str] = []
-    remaining = iter(residuals)
+    calls: list[tuple[str, int, int]] = []
 
-    def fake_shift(*_args, shift_preconditioner, **_kwargs):
-        calls.append(shift_preconditioner)
+    def fake_shift(*_args, shift_preconditioner, gmres_restart, gmres_maxiter, **_k):
+        calls.append((shift_preconditioner, gmres_restart, gmres_maxiter))
         return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.ones_like(v0)
 
     _patch_shift_invert(monkeypatch, fake_shift)
-    monkeypatch.setattr(
-        lk, "_eigenpair_relative_residual", lambda *_args: next(remaining)
-    )
+    monkeypatch.setattr(lk, "build_pr3_factors", lambda *a, **k: (None, _PR3_META))
+    monkeypatch.setattr(lk, "_eigenpair_relative_residual", lambda *_args: 0.0)
     lk.dominant_eigenpair(
         v0,
         cache,
@@ -1896,10 +1885,18 @@ def test_shift_invert_auto_selects_and_certifies_physics_preconditioner(
         shift=0.4 + 0.2j,
         shift_source="reference",
         shift_selection="nearest",
-        shift_preconditioner="auto",
         fallback_method="none",
     )
-    assert tuple(calls) == expected
+    assert calls == [("pr3-cm", 150, 600)]
+
+
+_PR3_META = {
+    "block_solve": "dense",
+    "alpha": [1.0, 0.0],
+    "alpha_source": "test",
+    "factor_bytes": 0,
+    "block_solve_reason": "test",
+}
 
 
 def test_sparse_shift_invert_selects_only_original_operator_certified_modes(
@@ -2232,7 +2229,9 @@ def test_dominant_eigenpair_reports_shift_invert_status(
     assert jnp.allclose(eig, jnp.asarray(0.3 + 0.4j, dtype=v0.dtype))
     assert jnp.allclose(vec, 3.0 + 0.0j)
     assert any("preparing shift-invert solve" in item for item in messages)
-    assert any("estimating shift from propagator seed" in item for item in messages)
+    assert any(
+        "estimating shift from the adaptive eigenpair" in item for item in messages
+    )
     assert any("running shift-invert Arnoldi" in item for item in messages)
     assert any("shift-invert solve finished" in item for item in messages)
     assert any("residual=" in item for item in messages)
@@ -3197,7 +3196,7 @@ def test_pr3_is_selectable_by_name_and_reports_its_setup() -> None:
 
     ``EigenSolveStatus.inner["preconditioner_setup"]`` is the only place a user
     sees which z-block solve ran, so a fallback that did not report itself would
-    be invisible. The default is unchanged: ``"auto"`` still resolves to the
+    be invisible. Since 2026-10-15 ``"auto"`` resolves to pr3-cm itself rather than the
     line solve, and ``KrylovConfig`` still defaults to ``"auto"``.
     """
 
@@ -3205,7 +3204,7 @@ def test_pr3_is_selectable_by_name_and_reports_its_setup() -> None:
     assert lk.KrylovConfig().shift_preconditioner == "auto"
     assert lk.KrylovConfig().shift_precond_block_solve == "auto"
     assert lk.KrylovConfig().shift_precond_alpha is None
-    assert lk._automatic_shift_preconditioner(params, term_cfg) == "hermite-line"
+    assert lk._automatic_shift_preconditioner(params, term_cfg) == "pr3-cm"
     assert pr3.PR3_PRECOND_NAMES <= ka.SHIFT_PRECOND_NAMES
 
     try:
