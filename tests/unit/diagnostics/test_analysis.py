@@ -703,7 +703,7 @@ def test_fit_growth_rate_auto_invalid_window_method_and_stats_fallback(
     assert np.isfinite(omega)
     assert tmax > tmin
     assert r2_log == -np.inf
-    assert r2_phase == 1.0  # constant phase: exact (zero-frequency) fit
+    assert r2_phase == -np.inf
 
 
 def test_fit_growth_rate_with_stats_applies_tmax_and_handles_flat_signal() -> None:
@@ -2154,7 +2154,9 @@ def test_growth_fit_review_findings_2026_10_15():
 
     t = np.arange(100.0)
     with pytest.raises(ValueError, match="no 30-point window"):
-        gr.select_fit_window(t, np.exp(0.1 * t), window_fraction=0.3, start_fraction=0.9)
+        gr.select_fit_window(
+            t, np.exp(0.1 * t), window_fraction=0.3, start_fraction=0.9
+        )
     assert gr.fit_growth_rate_with_stats(t, np.exp(0.2 * t))[-1] == 1.0
     with pytest.raises(ValueError, match="finite"):
         gr.fit_growth_rate_auto(t, np.full(100, np.nan + 0j))

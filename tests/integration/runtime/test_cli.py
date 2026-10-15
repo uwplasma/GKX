@@ -2821,7 +2821,7 @@ def test_runtime_mode_index_selection_and_step_inference() -> None:
         _infer_runtime_nonlinear_steps(
             replace(cfg, time=replace(cfg.time, fixed_dt=True)), dt=0.05, steps=None
         )
-        == 4
+        == 8  # t_max / the overriding dt, not / the deck dt
     )
     adaptive_cfg = replace(cfg, time=replace(cfg.time, fixed_dt=False, dt_max=None))
     assert _infer_runtime_nonlinear_steps(adaptive_cfg, dt=0.2, steps=None) == 2
@@ -3220,15 +3220,11 @@ def test_runtime_species_and_model_helpers() -> None:
             electromagnetic=False,
         ),
     )
-    krylov = _runtime_default_krylov_config(etg_cfg)
-    assert krylov.method == "shift_invert"
-    assert krylov.mode_family == "etg"
-    assert _runtime_default_krylov_config(cfg).method != "shift_invert"
-
+    # Every contract takes the certified adaptive route: the ETG and KBM
+    # shift-invert defaults never converged their inner solves (2026-10-15).
     kbm_cfg = replace(cfg, normalization=RuntimeNormalizationConfig(contract="kbm"))
-    kbm_krylov = _runtime_default_krylov_config(kbm_cfg)
-    assert kbm_krylov.method == "shift_invert"
-    assert kbm_krylov.mode_family == "kbm"
+    for case in (etg_cfg, kbm_cfg, cfg):
+        assert _runtime_default_krylov_config(case).method == "adaptive"
 
     # The linear velocity fallback. It was (24, 12), which the shipped Cyclone
     # deck records as Hermite-starved and which measures 4.405% low in gamma

@@ -331,8 +331,15 @@ def _shift_seed(
             # mode on Cyclone; the certified adaptive pair is the dominant mode.
             _status(status_callback, "estimating shift from the adaptive eigenpair")
             terms = term_config_to_linear_terms(term_cfg)
-            eig, vec, _ = _adaptive_branch(v0, cache, params, terms, cfg, None)
-            return eig, vec
+            try:
+                eig, vec, _ = _adaptive_branch(v0, cache, params, terms, cfg, None)
+                return eig, vec
+            except RuntimeError:  # uncertified: the propagator seed is the fallback
+                _status(status_callback, "adaptive seed rejected; propagator seed")
+            return _propagator_branch(
+                v0, v_ref, cache, params, term_cfg, cfg, None, restarts=1,
+                select_overlap=False,
+            )  # fmt: skip
         if shift_source_key == "target":
             _status(status_callback, "building target-frequency shift")
             return _target_shift(v0, cache, params, cfg), v0
