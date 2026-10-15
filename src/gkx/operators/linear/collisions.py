@@ -1020,13 +1020,17 @@ def apply_linearized_landau(
     """
 
     state = jnp.asarray(hamiltonian)
+    complex_state = jnp.iscomplexobj(state)
     ns, nl, nm = map(int, state.shape[:3])
     operator = linearized_landau_operator(
         pair_matrices, dtype=jnp.real(state).dtype, **frequencies
     ).reshape(ns, ns, nm, nl, nm, nl)
-    result = jnp.zeros_like(state)
+    # A real matrix times a complex state as two real products: XLA otherwise
+    # promotes the matrix and does four (1.7x slower in float64 on GPU).
+    parts = jnp.stack([state.real, state.imag], axis=-1) if complex_state else state
+    result = jnp.zeros_like(parts)
     for parity in (0, 1):
         block = operator[:, :, parity::2, :, parity::2, :]
-        applied = _exact_einsum("stpjqk,tkq...->sjp...", block, state[:, :, parity::2])
+        applied = _exact_einsum("stpjqk,tkq...->sjp...", block, parts[:, :, parity::2])
         result = result.at[:, :, parity::2].set(applied)
-    return result
+    return jax.lax.complex(result[..., 0], result[..., 1]) if complex_state else result

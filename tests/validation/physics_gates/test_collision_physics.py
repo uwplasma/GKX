@@ -2176,15 +2176,14 @@ def test_landau_application_is_differentiable_in_nu() -> None:
     pairs = jnp.asarray(
         np.stack(np.stack(linearized_landau_pair_matrices(2, 6)))[:, None, None]
     )
-    state = jnp.asarray(
-        np.random.default_rng(3).normal(size=(1, 2, 6, 2, 1, 3)), dtype=jnp.float32
-    )
+    draws = np.random.default_rng(3).normal(size=(2, 1, 2, 6, 2, 1, 3))
+    state = jnp.asarray(draws[0] + 1j * draws[1], dtype=jnp.complex64)
 
     def rate(nu):
         out = apply_linearized_landau(
             state, pairs, nu=nu, density=jnp.ones(1), charge=jnp.ones(1)
         )
-        return jnp.sum(out * state)
+        return jnp.real(jnp.vdot(state, out))
 
     dense = apply_multispecies_collision_moment_matrix(
         state, 0.3 * jnp.asarray(sum(linearized_landau_pair_matrices(2, 6)))[None, None]

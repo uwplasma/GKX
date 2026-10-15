@@ -390,28 +390,6 @@ def drift_kinetic_sugama_six_moment_contribution(
     )
 
 
-def drift_kinetic_coulomb_six_moment_contribution(
-    state: jnp.ndarray,
-    *,
-    nu: jnp.ndarray,
-    weight: jnp.ndarray = jnp.asarray(1.0),
-) -> jnp.ndarray:
-    """Apply Frei, Ernst & Ricci (2022), equations (C9a)--(C9f)."""
-
-    sqrt_two = 2.0**0.5
-    return _drift_kinetic_six_moment_contribution(
-        state,
-        nu=nu,
-        weight=weight,
-        thermal_coefficients=(-16 * sqrt_two / 15, 16 / 15, -8 * sqrt_two / 15),
-        heat_coefficients=(
-            -8.0 * sqrt_two / 5.0,
-            8.0 / (5.0 * 3.0**0.5),
-            -28.0 * sqrt_two / 15.0,
-        ),
-    )
-
-
 def collisions_contribution(
     H: jnp.ndarray,
     *,
@@ -942,7 +920,6 @@ __all__ = [
     "collision_invariant_rates",
     "collision_quadratic_rate",
     "collisions_contribution",
-    "drift_kinetic_coulomb_six_moment_contribution",
     "drift_kinetic_sugama_six_moment_contribution",
     "end_damping_contribution",
     "hypercollisions_contribution",

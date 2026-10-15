@@ -167,7 +167,7 @@ class LinearParams:
     damp_ends_rate: float | jnp.ndarray | None = None
     #: Built-in collision kernel: ``"dougherty"`` (conserving Lenard-Bernstein
     #: form) or ``"landau"`` (linearized Landau, drift-kinetic limit).
-    collision_model: str = "dougherty"
+    collision_model: str = "landau"
 
     def const_branch_nu_hyper_m(self):
         """Return the Hermite hypercollision rate the *constant* branch uses.
@@ -473,7 +473,14 @@ def _resolve_implicit_preconditioner(
 
 #: Operators applied inside the linear RHS from the cache (every solver path);
 #: the others are moment operators handed to the fixed-step integrator.
-BUILTIN_COLLISION_OPERATORS: tuple[str, ...] = ("none", "lenard_bernstein", "landau")
+#: ``coulomb`` is a compatibility alias of ``landau``, which reproduces the
+#: retired eight-moment table of Frei, Ernst & Ricci (2022) at half its nu.
+BUILTIN_COLLISION_OPERATORS: tuple[str, ...] = (
+    "none",
+    "lenard_bernstein",
+    "landau",
+    "coulomb",
+)
 COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "none",
     "lenard_bernstein",

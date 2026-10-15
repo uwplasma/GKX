@@ -7,8 +7,8 @@ linearized Coulomb operator with finite-Larmor-radius effects:
     Conserving diagonal Lenard-Bernstein/Dougherty relaxation.
 ``sugama`` / ``improved_sugama``
     Drift-kinetic Sugama models (Frei, Ernst & Ricci 2022, Appendix C).
-``coulomb``
-    Drift-kinetic linearized Coulomb (Landau) operator, equations (C9a)-(C9f).
+``landau``
+    Linearized Landau (Coulomb) operator, drift-kinetic limit, the default.
 ``coulomb_finite_kperp``
     Gyrokinetic Coulomb operator with finite perpendicular wavelength
     (Frei, Ball, Hoffmann, Jorge, Ricci & Stenger 2021, equations 3.47-3.50).
@@ -37,7 +37,7 @@ MODELS = (
     "lenard_bernstein",
     "sugama",
     "improved_sugama",
-    "coulomb",
+    "landau",
     "coulomb_finite_kperp",
 )
 NU = 0.05  # ion collisionality nu a / v_ti for the single table

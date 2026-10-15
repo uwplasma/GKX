@@ -211,8 +211,10 @@ builds the same operator from Python:
      - Improved Sugama, corrected Pfirsch-Schlüter friction
      - Sugama et al. (2019); Frei, Ernst & Ricci (2022)
    * - ``coulomb``
-     - Drift-kinetic linearized Coulomb (Landau)
-     - Frei, Ernst & Ricci (2022), Eqs. (C9a)--(C9f)
+     - Alias of ``landau``. The eight-moment table of Frei, Ernst & Ricci
+       (2022), Eqs. (C9a)--(C9f), it replaced is the same operator with twice
+       GKX's collision frequency
+     - shipped data kept as a regression reference
    * - ``coulomb_finite_kperp``
      - Gyrokinetic Coulomb retaining finite :math:`k_\perp`
      - Frei, Ball, Hoffmann, Jorge, Ricci & Stenger (2021), Eqs. (3.47)--(3.50)
@@ -221,7 +223,7 @@ builds the same operator from Python:
 RHS from the cache, so every solver path (fixed-step, CFL-controlled, Krylov,
 IMEX, nonlinear) uses them; Hermite-sharded runs refuse ``landau``.
 ``none`` and ``lenard_bernstein`` keep the built-in diagonal term described in
-this section. The four moment operators *replace* that term with a dense
+this section. The three moment operators *replace* that term with a dense
 Hermite-Laguerre matrix. The solver switches the diagonal contribution off
 exactly when a moment operator is active, so collisions are never counted twice.
 
@@ -548,10 +550,9 @@ for verification and model development. None of them has a TOML selector.
 
    * - API
      - What it is
-   * - ``drift_kinetic_sugama_six_moment_contribution``,
-       ``drift_kinetic_coulomb_six_moment_contribution``
-     - The like-species six-gyromoment matrices of Appendix C, Eqs.
-       (C6a)--(C6f) and (C9a)--(C9f); zero outside the six-moment projection.
+   * - ``drift_kinetic_sugama_six_moment_contribution``
+     - The like-species six-gyromoment Sugama matrix of Appendix C, Eqs.
+       (C6a)--(C6f); zero outside the six-moment projection.
    * - ``load_collision_moment_matrix``, ``apply_collision_moment_matrix``,
        ``interpolate_collision_moment_matrix``,
        ``apply_multispecies_collision_moment_matrix``

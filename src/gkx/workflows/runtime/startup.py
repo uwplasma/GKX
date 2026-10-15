@@ -535,7 +535,7 @@ def build_runtime_linear_params(
         damp_ends_rate=cfg.time.damp_ends_rate,
         collision_model=(
             "landau"
-            if str(cfg.time.collision_operator).strip().lower() == "landau"
+            if str(cfg.time.collision_operator).strip().lower() in ("landau", "coulomb")
             else "dougherty"
         ),
     )

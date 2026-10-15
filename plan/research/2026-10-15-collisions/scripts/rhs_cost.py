@@ -45,17 +45,20 @@ species = dict(
 )
 shape = (ns, nl, nm, grid.ky.size, grid.kx.size, grid.z.size)
 state = jnp.asarray(np.random.default_rng(0).normal(size=shape), jnp.complex128)
-terms = TermConfig(apar=0.0, bpar=0.0)
 runs = {}
+
+
+def _jitted_rhs(weight):
+    # One jitted function per collision weight; the weight stays static.
+    terms = TermConfig(apar=0.0, bpar=0.0, collisions=weight)
+    return jax.jit(lambda g, c, p: assemble_rhs_cached(g, c, p, terms=terms)[0])
+
+
 for model in ("dougherty", "landau"):
     params = linear_params_for_geometry(geom, collision_model=model, **species)
     cache = build_linear_cache(grid, geom, params, nl, nm)
     for weight in (1.0, 0.0):
-        fn = jax.jit(
-            lambda g, c, p, w=weight: assemble_rhs_cached(
-                g, c, p, terms=TermConfig(apar=0.0, bpar=0.0, collisions=w)
-            )[0]
-        )
+        fn = _jitted_rhs(weight)
         runs[model, weight] = (fn, cache, params)
         fn(state, cache, params).block_until_ready()
 
