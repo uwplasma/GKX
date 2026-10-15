@@ -1485,8 +1485,8 @@ recursive = true
 # 74397 -> 74556: independent oracles for #324-#328 (velocity quadrature, analytic z-derivative). Measured.
 # 74556 -> 74589: repeated-solve compile and cached_jit fallback tests (PERF 2026-10-06).
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
-# 75155 -> 72908 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
-baseline = 72908
+# 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
+baseline = 72926
 target = 35000
 
 [[line_budget_policy.counts]]

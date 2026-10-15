@@ -2021,3 +2021,21 @@ def test_loglinear_window_does_not_depend_on_a_constant_phase() -> None:
     growing = select_fit_window_loglinear(t, envelope.astype(complex))
     assert growing == rotating
     assert growing[1] - growing[0] > 5.0
+
+
+def test_sokal_autocorrelation_time_of_a_cosine_is_its_quarter_period_integral() -> (
+    None
+):
+    from gkx.diagnostics.analysis import (
+        integrated_autocorrelation_time,
+        sokal_autocorrelation_time,
+    )
+
+    dt, period = 0.01, 2.0
+    t = np.arange(4000) * dt
+    tau, cut, rho = sokal_autocorrelation_time(np.cos(2.0 * np.pi * t / period), dt)
+    assert rho[0] == pytest.approx(1.0)
+    assert cut * dt == pytest.approx(period / 4.0, abs=2 * dt)
+    assert tau == pytest.approx(period / (2.0 * np.pi), rel=0.02)
+    assert sokal_autocorrelation_time(np.ones(16), dt)[:2] == (0.0, 1)
+    assert integrated_autocorrelation_time(np.cos(2.0 * np.pi * t / period), dt) == tau
