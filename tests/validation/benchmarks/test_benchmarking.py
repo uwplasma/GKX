@@ -684,9 +684,8 @@ def _assert_same_parameters(actual, expected):
         left, right = getattr(actual, field.name), getattr(expected, field.name)
         if left is None or right is None:
             assert left is right, field.name
-        elif field.name == "collision_model":
-            # The runtime default kernel; the legacy builders predate the choice.
-            assert left == "landau" and right == "dougherty", field.name
+        elif isinstance(left, str):
+            assert left == right, field.name
         else:
             np.testing.assert_allclose(
                 left, right, rtol=1.0e-7, atol=1.0e-9, err_msg=field.name

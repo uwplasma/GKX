@@ -1,0 +1,13 @@
+# whole linear RHS, rhs_cost.py (interleaved, warm, block_until_ready), office A4000 GPU0 shared, Cyclone 16x8x32 grid; 'without' = same cache, collision weight 0
+x64=true RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "species": 1, "shape": [1, 16, 48, 16, 8, 32], "rhs_ms": 23.925, "rhs_without_collisions_ms": 23.015, "collision_share": 0.038, "host": "Linux-x86_64-gpu"}
+x64=true RESULT {"model": "landau", "Nl": 16, "Nm": 48, "species": 1, "shape": [1, 16, 48, 16, 8, 32], "rhs_ms": 61.985, "rhs_without_collisions_ms": 23.341, "collision_share": 0.623, "host": "Linux-x86_64-gpu"}
+x64=true RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "species": 2, "shape": [2, 16, 48, 16, 8, 32], "rhs_ms": 20.628, "rhs_without_collisions_ms": 19.217, "collision_share": 0.068, "host": "Linux-x86_64-gpu"}
+x64=true RESULT {"model": "landau", "Nl": 16, "Nm": 48, "species": 2, "shape": [2, 16, 48, 16, 8, 32], "rhs_ms": 78.159, "rhs_without_collisions_ms": 19.014, "collision_share": 0.757, "host": "Linux-x86_64-gpu"}
+x64=true RESULT {"model": "dougherty", "Nl": 8, "Nm": 24, "species": 2, "shape": [2, 8, 24, 16, 8, 32], "rhs_ms": 6.988, "rhs_without_collisions_ms": 6.988, "collision_share": -0.0, "host": "Linux-x86_64-gpu"}
+x64=true RESULT {"model": "landau", "Nl": 8, "Nm": 24, "species": 2, "shape": [2, 8, 24, 16, 8, 32], "rhs_ms": 11.52, "rhs_without_collisions_ms": 6.005, "collision_share": 0.479, "host": "Linux-x86_64-gpu"}
+x64=false RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "species": 1, "shape": [1, 16, 48, 16, 8, 32], "rhs_ms": 7.819, "rhs_without_collisions_ms": 8.248, "collision_share": -0.055, "host": "Linux-x86_64-gpu"}
+x64=false RESULT {"model": "landau", "Nl": 16, "Nm": 48, "species": 1, "shape": [1, 16, 48, 16, 8, 32], "rhs_ms": 9.203, "rhs_without_collisions_ms": 8.136, "collision_share": 0.116, "host": "Linux-x86_64-gpu"}
+x64=false RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "species": 2, "shape": [2, 16, 48, 16, 8, 32], "rhs_ms": 15.152, "rhs_without_collisions_ms": 11.893, "collision_share": 0.215, "host": "Linux-x86_64-gpu"}
+x64=false RESULT {"model": "landau", "Nl": 16, "Nm": 48, "species": 2, "shape": [2, 16, 48, 16, 8, 32], "rhs_ms": 20.302, "rhs_without_collisions_ms": 11.672, "collision_share": 0.425, "host": "Linux-x86_64-gpu"}
+x64=false RESULT {"model": "dougherty", "Nl": 8, "Nm": 24, "species": 2, "shape": [2, 8, 24, 16, 8, 32], "rhs_ms": 3.043, "rhs_without_collisions_ms": 2.697, "collision_share": 0.114, "host": "Linux-x86_64-gpu"}
+x64=false RESULT {"model": "landau", "Nl": 8, "Nm": 24, "species": 2, "shape": [2, 8, 24, 16, 8, 32], "rhs_ms": 3.439, "rhs_without_collisions_ms": 2.868, "collision_share": 0.166, "host": "Linux-x86_64-gpu"}

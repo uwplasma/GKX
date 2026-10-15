@@ -298,6 +298,16 @@ exact when the species rates are mutually consistent,
 operator still conserves but is not self-adjoint; the thermal equilibration
 :math:`C(F_a,F_b)` is dropped, as in all delta-f codes.
 
+Default and cost. ``landau`` is the default both in the runtime and in
+:class:`~gkx.operators.linear.params.LinearParams` (``collision_model``); the
+matrices are built only when some ``nu`` is nonzero. The product is dense
+within each Hermite parity, so its cost grows as :math:`(N_lN_m)^2` per grid
+point. On an A4000 GPU, Cyclone grid :math:`16\times8\times32`, the whole
+linear RHS at :math:`(N_l,N_m)=(16,48)` costs 1.2x (one species) and 1.3x (two
+species) the Dougherty RHS in float32, and 2.6x and 3.8x in float64, where
+that card's float64 matrix rate is the limit
+(``plan/research/2026-10-15-collisions/results/rhs_collision_share_gpu.txt``).
+
 Not included: finite-:math:`k_\perp` (gyroaveraging) terms, which
 ``coulomb_finite_kperp`` carries for one species at fixed tabulated
 resolutions. The matrix depends on mass and temperature ratios through a
