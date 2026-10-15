@@ -27,6 +27,7 @@ ntheta = 32
 nperiod = 2
 
 [time]
+damp_ends_rate = 0.0
 t_max = 2.0
 dt = 0.00016
 method = "rk4"
@@ -62,7 +63,6 @@ nu_hyper = 0.0
 p_hyper = 4.0
 hypercollisions_const = 0.0
 hypercollisions_kz = 1.0
-damp_ends_amp = 0.0
 damp_ends_widthfrac = 0.0
 
 [normalization]

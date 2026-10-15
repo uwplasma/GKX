@@ -2972,9 +2972,9 @@ def test_growth_mask_promotes_only_a_single_selected_nonzonal_slice(
     assert np.asarray(mask).item() is expected
 
 
-def test_rk4_step_uses_runtime_scaled_end_damping_once() -> None:
+def test_rk4_step_applies_the_end_damping_rate_once() -> None:
     _cfg, _grid, _geom, params, cache, G0 = _small_G0()
-    params = replace(params, damp_ends_amp=0.5)
+    params = replace(params, damp_ends_rate=0.5)
     term_cfg = linear_terms_to_term_config(_only_terms(end_damping=1.0))
     dt = 0.2
 

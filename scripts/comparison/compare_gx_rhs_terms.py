@@ -113,7 +113,7 @@ def _two_species_params(
     apar_beta_scale: float | None = None,
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
-    damp_ends_amp: float | None = None,
+    damp_ends_rate: float | None = None,
     damp_ends_widthfrac: float | None = None,
     nhermite: int | None = None,
 ) -> LinearParams:
@@ -170,8 +170,8 @@ def _two_species_params(
     params = _apply_reference_hypercollisions(params, nhermite=nhermite)
     if fapar_override is not None:
         params = replace(params, fapar=float(fapar_override))
-    if damp_ends_amp is not None:
-        params = replace(params, damp_ends_amp=float(damp_ends_amp))
+    if damp_ends_rate is not None:
+        params = replace(params, damp_ends_rate=float(damp_ends_rate))
     if damp_ends_widthfrac is not None:
         params = replace(params, damp_ends_widthfrac=float(damp_ends_widthfrac))
     return params
@@ -414,7 +414,9 @@ def _manual_linear_contributions_from_fields(
     nu_hyper_lm = jnp.asarray(params.nu_hyper_lm, dtype=real_dtype)
     hypercollisions_const = jnp.asarray(params.hypercollisions_const, dtype=real_dtype)
     hypercollisions_kz = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype)
-    damp_amp = jnp.asarray(params.damp_ends_amp, dtype=real_dtype)
+    damp_amp = params.end_damping_rate(
+        cache.dz * cache.damp_profile.shape[-1], real_dtype
+    )
 
     omega_d_scale = jnp.asarray(params.omega_d_scale, dtype=real_dtype)
     omega_star_scale = jnp.asarray(params.omega_star_scale, dtype=real_dtype)
@@ -730,7 +732,9 @@ def _build_imported_compare_context(
     params = replace(
         params,
         D_hyper=float(gx_contract.D_hyper),
-        damp_ends_amp=float(gx_contract.damp_ends_amp),
+        # GX damps the linked ends at damp_ends_amp/dt.
+        damp_ends_rate=float(gx_contract.damp_ends_amp)
+        / (1.0 if gx_contract.dt is None else float(gx_contract.dt)),
         damp_ends_widthfrac=float(gx_contract.damp_ends_widthfrac),
     )
     terms = LinearTerms(
@@ -913,7 +917,7 @@ def run_compare(argv: list[str] | None = None) -> None:
             rho_star=CYCLONE_RHO_STAR,
             kpar_scale=float(geom.gradpar()),
             nu=cfg.model.nu_i,
-            damp_ends_amp=0.0,
+            damp_ends_rate=0.0,
             damp_ends_widthfrac=0.0,
         )
         params = _apply_reference_hypercollisions(params, nhermite=Nm_use)
@@ -1060,7 +1064,7 @@ def _case_config(name: str, args) -> tuple[object, object, int, float, float, fl
             rho_star=CYCLONE_RHO_STAR,
             kpar_scale=float(geom.gradpar()),
             nu=cfg.model.nu_i,
-            damp_ends_amp=0.0,
+            damp_ends_rate=0.0,
             damp_ends_widthfrac=0.0,
         )
         params = _apply_reference_hypercollisions(params, nhermite=args.Nm)
@@ -1179,7 +1183,7 @@ def _case_config(name: str, args) -> tuple[object, object, int, float, float, fl
             omega_d_scale=KBM_OMEGA_D_SCALE,
             omega_star_scale=KBM_OMEGA_STAR_SCALE,
             rho_star=KBM_RHO_STAR,
-            damp_ends_amp=0.0,
+            damp_ends_rate=0.0,
             damp_ends_widthfrac=0.0,
             nhermite=args.Nm,
         )

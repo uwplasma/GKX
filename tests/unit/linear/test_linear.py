@@ -1391,10 +1391,12 @@ def test_single_ky_linear_run_with_hyperdiffusion_matches_the_full_grid_row(
 
 
 @pytest.mark.parametrize("rate", [None, 0.5])
-def test_linear_integrator_applies_linked_end_damping_per_step(
+def test_linked_end_damping_rate_is_timestep_free(
     only_term_config, only_terms, spectral_grid, rate
 ):
-    """Legacy linear damping scales as 1/dt; its Euler increment is fixed."""
+    """One rate on every route: explicit, or C*vth*kpar/(w*Lz); no dt enters."""
+    from gkx.operators.linear.params import DAMP_ENDS_LAYER_TRANSITS
+
     grid_full = spectral_grid(
         Nx=1,
         Ny=16,
@@ -1409,31 +1411,24 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
     ky_idx = int(np.argmin(np.abs(np.asarray(grid_full.ky) - 0.3)))
     grid = select_ky_grid(grid_full, ky_idx)
     geom = SAlphaGeometry.from_config(GeometryConfig(s_hat=0.8))
-    params = LinearParams(
-        damp_ends_amp=0.1, damp_ends_widthfrac=0.125, damp_ends_rate=rate
-    )
+    params = LinearParams(kpar_scale=0.25, vth=60.0, damp_ends_rate=rate)
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
     G = jnp.ones((2, 4, 1, 1, 96), dtype=jnp.complex64)
-    term_cfg = only_term_config(end_damping=1.0)
-
-    _rhs_raw, _fields_raw, contrib_raw = assemble_rhs_terms_cached(
-        G, cache, params, terms=term_cfg
+    _rhs, _fields, contrib = assemble_rhs_terms_cached(
+        G, cache, params, terms=only_term_config(end_damping=1.0)
     )
-    _rhs_dt, _fields_dt, contrib_dt = assemble_rhs_terms_cached(
-        G, cache, params, terms=term_cfg, dt=0.2
+    end = np.asarray(contrib["end_damping"])
+    # The profile is 1 at the chain ends; H = G there for these moments.
+    expected = (
+        rate
+        if rate is not None
+        else DAMP_ENDS_LAYER_TRANSITS * 60.0 * 0.25 / (0.125 * 6.0 * np.pi)
     )
+    assert float(np.max(np.abs(end[:, 2:]))) == pytest.approx(expected, rel=1e-5)
 
-    end_raw = np.asarray(contrib_raw["end_damping"])
-    end_dt = np.asarray(contrib_dt["end_damping"])
-    mask = np.abs(end_raw) > 1.0e-12
-    assert np.any(mask)
-    scale = 1.0 if rate is not None else 1 / 0.2
-    assert np.allclose(end_dt[mask], end_raw[mask] * scale, rtol=1.0e-6, atol=1.0e-6)
-
-    # Legacy increments are fixed; explicit-rate Euler increments scale with dt.
-    terms = only_terms(end_damping=1.0)
+    # Euler increments per unit time agree across timesteps.
     increments = []
-    for dt in (0.1, 0.2):
+    for dt in (1.0e-4, 2.0e-4):
         integrated, _phi = integrate_linear(
             G,
             grid,
@@ -1442,36 +1437,32 @@ def test_linear_integrator_applies_linked_end_damping_per_step(
             dt=dt,
             steps=1,
             method="euler",
-            terms=terms,
+            terms=only_terms(end_damping=1.0),
         )
-        increment = np.asarray(integrated) - np.asarray(G)
-        increments.append(increment / dt if rate is not None else increment)
-    assert np.any(np.abs(increments[0][mask]) > 1.0e-12)
-    assert np.allclose(increments[0], increments[1], rtol=1.0e-6, atol=1.0e-8)
+        increments.append((np.asarray(integrated) - np.asarray(G)) / dt)
+    assert np.any(np.abs(increments[0]) > 1.0e-6)
+    assert np.allclose(increments[0], increments[1], rtol=1.0e-5, atol=1.0e-3)
 
 
 @pytest.mark.parametrize(
     "method,order", [("euler", 1), ("rk2", 2), ("rk3", 3), ("rk4", 4)]
 )
 @pytest.mark.parametrize("dt", [0.002, 0.2])
-@pytest.mark.parametrize("fixed_rate", [False, True])
-def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt, fixed_rate):
-    """An isolated damped scalar follows R(-A), not an exact removed fraction."""
+def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
+    """An isolated damped scalar follows R(-dt*nu), not an exact removed fraction."""
     from math import factorial
+    from types import SimpleNamespace
 
     from gkx.solvers_time_explicit_steps import _linear_native_step
     from gkx.terms.assembly import _scalar_params
 
+    cache = SimpleNamespace(dz=jnp.asarray(1.0), damp_profile=jnp.zeros(8))
     with jax.enable_x64():
         strength = jnp.asarray(0.2, dtype=jnp.float64)
 
-        def step(amplitude):
+        def step(rate_in):
             rate = _scalar_params(
-                LinearParams(damp_ends_rate=amplitude)
-                if fixed_rate
-                else LinearParams(damp_ends_amp=amplitude),
-                jnp.float64,
-                dt,
+                LinearParams(damp_ends_rate=rate_in), jnp.float64, cache
             ).damp_amp
             return _linear_native_step(
                 jnp.asarray(1.0),
@@ -1482,27 +1473,27 @@ def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt, fixe
             )
 
         value, tangent = jax.jvp(step, (strength,), (jnp.ones_like(strength),))
-        factor = dt if fixed_rate else 1.0
-        expected = sum((-0.2 * factor) ** k / factorial(k) for k in range(order + 1))
-        derivative = -factor * sum(
-            (-0.2 * factor) ** k / factorial(k) for k in range(order)
-        )
+        expected = sum((-0.2 * dt) ** k / factorial(k) for k in range(order + 1))
+        derivative = -dt * sum((-0.2 * dt) ** k / factorial(k) for k in range(order))
         assert float(value) == pytest.approx(expected, rel=0, abs=2e-15)
         assert float(tangent) == pytest.approx(derivative, rel=0, abs=2e-15)
 
 
-@pytest.mark.parametrize("dt", [None, 0.0, 0.002, 0.2])
-def test_fixed_end_damping_rate_pytree_and_reverse_derivative(dt):
-    """Rate survives pytree/JIT and never depends on the caller's timestep."""
+def test_end_damping_rate_pytree_and_reverse_derivative():
+    """Explicit and default rates survive pytree/JIT and are differentiable."""
 
     def objective(params):
-        return params.end_damping_strength(dt, jnp.float32) ** 2
+        return params.end_damping_rate(2.0, jnp.float32) ** 2
 
-    params = LinearParams(damp_ends_amp=99.0, damp_ends_rate=0.3)
-    value, derivative = jax.jit(jax.value_and_grad(objective))(params)
+    value, derivative = jax.jit(jax.value_and_grad(objective))(
+        LinearParams(damp_ends_rate=0.3)
+    )
     assert float(value) == pytest.approx(0.09)
     assert float(derivative.damp_ends_rate) == pytest.approx(0.6)
-    assert float(derivative.damp_ends_amp) == 0.0
+    # Default: rate = C * vth * kpar / (w * Lz), so d(rate^2)/d(vth) = 2 rate^2 / vth.
+    params = LinearParams(vth=2.0, kpar_scale=0.5, damp_ends_widthfrac=0.25)
+    value, derivative = jax.jit(jax.value_and_grad(objective))(params)
+    assert float(derivative.vth) == pytest.approx(float(value), rel=1e-6)
 
 
 def test_streaming_zero_for_constant_z(cyclone_world, only_terms):
@@ -1516,7 +1507,7 @@ def test_streaming_zero_for_constant_z(cyclone_world, only_terms):
         nu_hyper_l=0.0,
         nu_hyper_m=0.0,
         nu_hyper_lm=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
 
@@ -1886,7 +1877,7 @@ def streaming_shift_invert_setup(cyclone_world, only_terms):
         omega_star_scale=0.0,
         nu=0.0,
         nu_hyper=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
         kpar_scale=float(geom.gradpar()),
     )
@@ -2085,7 +2076,7 @@ def test_mirror_curvature_terms_activate_with_drift_scale(cyclone_world, only_te
         omega_d_scale=0.0,
         omega_star_scale=0.0,
         kpar_scale=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     cache_off = build_linear_cache(grid, geom, params_off, G.shape[0], G.shape[1])
@@ -2097,7 +2088,7 @@ def test_mirror_curvature_terms_activate_with_drift_scale(cyclone_world, only_te
         omega_d_scale=1.0,
         omega_star_scale=0.0,
         kpar_scale=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     cache_on = build_linear_cache(grid, geom, params_on, G.shape[0], G.shape[1])
@@ -2117,7 +2108,7 @@ def test_diamagnetic_drive_populates_second_hermite_moment(cyclone_world, only_t
         omega_d_scale=0.0,
         omega_star_scale=0.0,
         kpar_scale=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     cache_off = build_linear_cache(grid, geom, params_off, G.shape[0], G.shape[1])
@@ -2129,7 +2120,7 @@ def test_diamagnetic_drive_populates_second_hermite_moment(cyclone_world, only_t
         omega_d_scale=0.0,
         omega_star_scale=1.0,
         kpar_scale=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     cache_on = build_linear_cache(grid, geom, params_on, G.shape[0], G.shape[1])
@@ -2148,7 +2139,7 @@ def test_diamagnetic_drive_vanishes_for_zonal_mode(cyclone_world, only_terms):
         omega_d_scale=0.0,
         omega_star_scale=1.0,
         kpar_scale=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     cache = build_linear_cache(grid, geom, params, G.shape[0], G.shape[1])
@@ -2188,7 +2179,7 @@ def test_apar_streaming_coupling_changes_rhs(cyclone_world):
         omega_star_scale=0.0,
         nu=0.0,
         nu_hyper=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
         beta=0.0,
         fapar=0.0,
@@ -2199,7 +2190,7 @@ def test_apar_streaming_coupling_changes_rhs(cyclone_world):
         omega_star_scale=0.0,
         nu=0.0,
         nu_hyper=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
         beta=1.0,
         fapar=1.0,
@@ -3390,11 +3381,10 @@ def test_linear_rhs_cached_uses_generic_jit_unless_electrostatic_is_forced(
     cache = params = object()
     calls: list[str] = []
 
-    def _fake_generic(G, cache, params, terms, dt=None, external_phi=None):
+    def _fake_generic(G, cache, params, terms, external_phi=None):
         calls.append("generic")
         assert float(terms.apar) == pytest.approx(0.0)
         assert float(terms.bpar) == pytest.approx(0.0)
-        assert float(dt) == pytest.approx(0.25)
         return jnp.zeros_like(G), FieldState(
             phi=jnp.zeros(G.shape[-3:], dtype=G.dtype), apar=None, bpar=None
         )
@@ -3412,7 +3402,6 @@ def test_linear_rhs_cached_uses_generic_jit_unless_electrostatic_is_forced(
         cache,
         params,
         terms=LinearTerms(apar=0.0, bpar=0.0),
-        dt=0.25,
     )
 
     assert calls == ["generic"]
@@ -3431,7 +3420,7 @@ def test_linear_rhs_parallel_cached_serial_alias_and_error_branches(
         calls.append("serial")
         assert kwargs["use_jit"] is False
         assert kwargs["use_custom_vjp"] is False
-        assert float(kwargs["dt"]) == pytest.approx(0.2)
+        assert "dt" not in kwargs
         return jnp.ones_like(G), jnp.zeros(G.shape[-3:], dtype=G.dtype)
 
     monkeypatch.setattr("gkx.operators.linear.rhs.linear_rhs_cached", _fake_serial)
@@ -3444,7 +3433,6 @@ def test_linear_rhs_parallel_cached_serial_alias_and_error_branches(
         parallel=None,
         use_jit=False,
         use_custom_vjp=False,
-        dt=0.2,
     )
     assert calls == ["serial"]
     assert rhs.shape == G0.shape
@@ -3617,7 +3605,11 @@ def test_linear_rhs_cached_zero_and_near_zero_states_remain_finite() -> None:
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.1)
     params = LinearParams(
-        nu=0.0, nu_hyper=0.0, nu_hyper_m=0.0, damp_ends_amp=0.0, damp_ends_widthfrac=0.0
+        nu=0.0,
+        nu_hyper=0.0,
+        nu_hyper_m=0.0,
+        damp_ends_rate=0.0,
+        damp_ends_widthfrac=0.0,
     )
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=2)
     terms = LinearTerms(

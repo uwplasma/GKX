@@ -127,7 +127,7 @@ def run_trace(
         hypercollisions_kz=1.0,
         D_hyper=0.05,
         p_hyper_kperp=2.0,
-        damp_ends_amp=0.1,
+        damp_ends_rate=0.1,
         damp_ends_widthfrac=0.125,
     )
     terms = gkx.TermConfig(

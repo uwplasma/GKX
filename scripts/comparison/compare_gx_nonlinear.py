@@ -1727,7 +1727,7 @@ def run_terms(argv: list[str] | None = None) -> None:
                 rho_star=KBM_RHO_STAR,
                 nhermite=nm,
                 beta_override=cfg.model.beta,
-                damp_ends_amp=0.0,
+                damp_ends_rate=0.0,
                 damp_ends_widthfrac=0.0,
             )
             params = _slice_species_params(
@@ -1767,7 +1767,7 @@ def run_terms(argv: list[str] | None = None) -> None:
                 rho_star=CYCLONE_RHO_STAR,
                 kpar_scale=float(geom.gradpar()),
                 nu=cfg.model.nu_i,
-                damp_ends_amp=0.0,
+                damp_ends_rate=0.0,
                 damp_ends_widthfrac=0.0,
             )
             params = _apply_reference_hypercollisions(params, nhermite=nm)

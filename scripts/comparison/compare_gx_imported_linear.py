@@ -1348,14 +1348,15 @@ def run_fields(argv: list[str] | None = None) -> None:
         params = replace(
             params,
             D_hyper=float(gx_contract.D_hyper),
-            damp_ends_amp=float(gx_contract.damp_ends_amp),
+            # GX damps the linked ends at damp_ends_amp/dt.
+            damp_ends_rate=float(gx_contract.damp_ends_amp) / float(dt),
             damp_ends_widthfrac=float(gx_contract.damp_ends_widthfrac),
         )
     else:
         params = _apply_reference_hypercollisions(params, nhermite=nm_use)
         params = replace(
             params,
-            damp_ends_amp=float(args.damp_ends_amp),
+            damp_ends_rate=float(args.damp_ends_amp) / float(dt),
             damp_ends_widthfrac=float(args.damp_ends_widthfrac),
         )
     time_cfg = ExplicitTimeConfig(
@@ -1854,14 +1855,15 @@ def run_growth_dump(argv: list[str] | None = None) -> None:
     terms = _build_imported_linear_terms(gx_contract)
     if gx_contract.hypercollisions:
         params = _apply_reference_hypercollisions(params, nhermite=nm)
+    dt = _infer_gx_linear_dt(gx_time, gx_contract)
     params = replace(
         params,
         D_hyper=float(gx_contract.D_hyper),
-        damp_ends_amp=float(gx_contract.damp_ends_amp),
+        # GX damps the linked ends at damp_ends_amp/dt.
+        damp_ends_rate=float(gx_contract.damp_ends_amp) / float(dt),
         damp_ends_widthfrac=float(gx_contract.damp_ends_widthfrac),
     )
     cache = build_linear_cache(grid, geom, params, nl, nm)
-    dt = _infer_gx_linear_dt(gx_time, gx_contract)
     time_cfg = ExplicitTimeConfig(
         dt=dt,
         t_max=float(gx_time[args.time_index_stop] - gx_time[args.time_index_start])
@@ -2208,15 +2210,16 @@ def run_window(argv: list[str] | None = None) -> None:
     terms = _build_imported_linear_terms(gx_contract)
     if gx_contract.hypercollisions:
         params = _apply_reference_hypercollisions(params, nhermite=nm)
+    dt = _infer_gx_linear_dt(gx_time, gx_contract)
     params = replace(
         params,
         D_hyper=float(gx_contract.D_hyper),
-        damp_ends_amp=float(gx_contract.damp_ends_amp),
+        # GX damps the linked ends at damp_ends_amp/dt.
+        damp_ends_rate=float(gx_contract.damp_ends_amp) / float(dt),
         damp_ends_widthfrac=float(gx_contract.damp_ends_widthfrac),
     )
 
     cache = build_linear_cache(grid, geom, params, nl, nm)
-    dt = _infer_gx_linear_dt(gx_time, gx_contract)
     time_cfg = ExplicitTimeConfig(
         dt=dt,
         t_max=float(gx_time[args.time_index_stop] - gx_time[args.time_index_start]),

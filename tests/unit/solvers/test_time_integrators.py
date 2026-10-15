@@ -382,7 +382,7 @@ def test_integrate_linear_explicit_from_config_runs_full_rk4_loop() -> None:
         omega_star_scale=0.0,
         nu=0.0,
         nu_hyper=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     n_l, n_m = 2, 3
@@ -506,7 +506,7 @@ def _tiny_linear_case():
         omega_star_scale=1.0,
         nu=0.0,
         nu_hyper=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     n_l, n_m = 2, 3

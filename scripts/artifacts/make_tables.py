@@ -24,7 +24,6 @@ from gkx.benchmarking_shared import (
     CYCLONE_OMEGA_D_SCALE,
     CYCLONE_OMEGA_STAR_SCALE,
     CYCLONE_RHO_STAR,
-    REFERENCE_DAMP_ENDS_AMP,
     REFERENCE_DAMP_ENDS_WIDTHFRAC,
     KINETIC_KRYLOV_REFERENCE_ALIGNED,
     TEM_KRYLOV_DEFAULT,
@@ -760,7 +759,6 @@ def _cyclone_reference_scan(
             rho_star=CYCLONE_RHO_STAR,
             kpar_scale=float(geom.gradpar()),
             nu=cfg.model.nu_i,
-            damp_ends_amp=REFERENCE_DAMP_ENDS_AMP,
             damp_ends_widthfrac=REFERENCE_DAMP_ENDS_WIDTHFRAC,
         )
         params = _apply_reference_hypercollisions(params, nhermite=Nm)
