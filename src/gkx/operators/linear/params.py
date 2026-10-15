@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from gkx.terms.config import TermConfig
 
 __all__ = [
+    "BUILTIN_COLLISION_OPERATORS",
     "COLLISION_OPERATOR_NAMES",
     "DEPRECATED_LINEAR_PARAM_ALIASES",
     "linear_params_for_geometry",
@@ -164,6 +165,9 @@ class LinearParams:
     ampere_g0_scale: float = 0.5
     bpar_beta_scale: float = 0.5
     damp_ends_rate: float | jnp.ndarray | None = None
+    #: Built-in collision kernel: ``"dougherty"`` (GX's conserving
+    #: Lenard-Bernstein form) or ``"landau"`` (linearized Landau, drift-kinetic).
+    collision_model: str = "dougherty"
 
     def const_branch_nu_hyper_m(self):
         """Return the Hermite hypercollision rate the *constant* branch uses.
@@ -237,11 +241,11 @@ class LinearParams:
             self.bpar_beta_scale,
             self.damp_ends_rate,
         )
-        return children, None
+        return children, self.collision_model
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
+        return cls(*children, collision_model=aux_data)
 
 
 _SPECIES_PARAM_NAMES = (
@@ -467,6 +471,9 @@ def _resolve_implicit_preconditioner(
     return preconditioner
 
 
+#: Operators applied inside the linear RHS from the cache (every solver path);
+#: the others are moment operators handed to the fixed-step integrator.
+BUILTIN_COLLISION_OPERATORS: tuple[str, ...] = ("none", "lenard_bernstein", "landau")
 COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "none",
     "lenard_bernstein",
@@ -474,4 +481,5 @@ COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "improved_sugama",
     "coulomb",
     "coulomb_finite_kperp",
+    "landau",
 )

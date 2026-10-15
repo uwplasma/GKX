@@ -143,7 +143,7 @@ class TimeConfig:
     nstep_restart: int | None = None
     collision_split: bool = False
     collision_scheme: str = "implicit"
-    collision_operator: str = "none"
+    collision_operator: str = "landau"
     compressed_real_fft: bool = True
     nonlinear_dealias: bool = True
     laguerre_nonlinear_mode: str = "grid"

@@ -19,7 +19,11 @@ from gkx.geometry import (
 from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.operators.linear.params import LinearParams, LinearTerms
+from gkx.operators.linear.params import (
+    BUILTIN_COLLISION_OPERATORS,
+    LinearParams,
+    LinearTerms,
+)
 from gkx.config import resolve_cfl_fac
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.callbacks import progress_update_stride
@@ -522,7 +526,7 @@ def _reject_unsupported_config_collision_operator(
     """
 
     name = str(time_cfg.collision_operator).strip().lower()
-    if name in ("none", "lenard_bernstein"):
+    if name in BUILTIN_COLLISION_OPERATORS:
         return
     raise NotImplementedError(
         f"collision_operator={name!r} is not supported by the {path} path; "

@@ -975,3 +975,263 @@ def apply_finite_wavelength_coulomb_moment_operator(
     )
     result = jnp.asarray(weight, dtype=real_dtype) * result
     return result[0] if value.ndim == 5 else result
+
+
+# ---- Linearized Landau operator at any Hermite-Laguerre resolution ----
+#
+# The like- and unlike-species linearized Landau operator is rotationally
+# invariant, so in the orthonormal Legendre-Sonine basis
+# S_lk = N_lk x^l L_k^{(l+1/2)}(x^2) P_l(xi) it is block diagonal in l. Each block
+# is a pair of one-dimensional radial integrals (test part: weak form of the
+# Rosenbluth diffusion; field part: multipole Rosenbluth potentials), evaluated
+# by composite Gauss quadrature. An exact orthogonal map takes the Hermite-
+# Laguerre box (p < Nm, j < Nl) into Legendre-Sonine functions of total degree
+# l + 2k <= (Nm - 1) + 2 (Nl - 1). Velocities are in units of
+# v_ta = sqrt(2 T_a / m_a); a unit pair frequency gives
+# nu_D^ab(v) = [erf(x_b) - G(x_b)] / x_a^3, the GS2 ``vnewk`` convention.
+
+
+def _hermite_values(x: np.ndarray, count: int) -> np.ndarray:
+    values = np.zeros((count,) + x.shape)
+    values[0] = 1.0
+    if count > 1:
+        values[1] = np.sqrt(2.0) * x
+    for p in range(1, count - 1):
+        values[p + 1] = (
+            np.sqrt(2.0 / (p + 1)) * x * values[p]
+            - np.sqrt(p / (p + 1)) * values[p - 1]
+        )
+    return values
+
+
+def _laguerre_values(y: np.ndarray, count: int, alpha: float = 0.0) -> np.ndarray:
+    values = np.zeros((count,) + y.shape)
+    values[0] = 1.0
+    if count > 1:
+        values[1] = 1.0 + alpha - y
+    for k in range(1, count - 1):
+        values[k + 1] = (
+            (2 * k + 1 + alpha - y) * values[k] - (k + alpha) * values[k - 1]
+        ) / (k + 1)
+    return values
+
+
+def _sonine_norm(l: int, k: np.ndarray) -> np.ndarray:  # noqa: E741
+    from scipy.special import gammaln
+
+    return np.exp(
+        0.5
+        * (
+            0.5 * np.log(np.pi)
+            + np.log(2 * l + 1)
+            + gammaln(k + 1)
+            - np.log(2.0)
+            - gammaln(k + l + 1.5)
+        )
+    )
+
+
+def _hermite_laguerre_to_legendre_sonine(nl: int, nm: int) -> tuple[np.ndarray, list]:
+    from scipy.special import roots_genlaguerre, roots_hermite
+
+    degree = (nm - 1) + 2 * (nl - 1)
+    t, wt = roots_hermite(degree + 2)
+    y, wy = roots_genlaguerre(degree + 2, 0.0)
+    par, perp = np.meshgrid(t, y, indexing="ij")
+    weight = np.outer(wt, wy) / np.sqrt(np.pi)
+    hl = (
+        _hermite_values(par, nm)[:, None] * _laguerre_values(perp, nl)[None, :]
+    ).reshape((nm * nl,) + par.shape)
+    r2 = par**2 + perp
+    solid = np.zeros((degree + 1,) + par.shape)  # x^l P_l(xi)
+    solid[0] = 1.0
+    if degree:
+        solid[1] = par
+    for l in range(1, degree):  # noqa: E741
+        solid[l + 1] = ((2 * l + 1) * par * solid[l] - l * r2 * solid[l - 1]) / (l + 1)
+    labels, sonine = [], []
+    for l in range(degree + 1):  # noqa: E741
+        count = (degree - l) // 2 + 1
+        norm = _sonine_norm(l, np.arange(count))[:, None, None]
+        sonine.append(norm * solid[l] * _laguerre_values(r2, count, l + 0.5))
+        labels += [l] * count
+    transform = np.einsum("aij,bij,ij->ab", hl, np.concatenate(sonine), weight)
+    return transform, labels
+
+
+def _composite_gauss(xmax: float, scale: float, fine: float):
+    from scipy.special import roots_legendre
+
+    edges = np.unique(
+        np.concatenate(
+            [
+                [0.0],
+                np.geomspace(1.0e-3 * fine, scale, 20)[:-1],
+                np.arange(scale, xmax + scale, scale),
+            ]
+        )
+    )
+    nodes, weights = roots_legendre(16)
+    lo, hi = edges[:-1, None], edges[1:, None]
+    return ((hi - lo) / 2 * nodes + (hi + lo) / 2).ravel(), (
+        (hi - lo) / 2 * weights
+    ).ravel()
+
+
+def _sonine_radial(x: np.ndarray, l: int, count: int, scale: float = 1.0):  # noqa: E741
+    """Return N_lk u^l L_k(u^2) e^{-u^2/2} and its x-derivative, u = x/scale."""
+
+    u = x / scale
+    with np.errstate(divide="ignore"):
+        base = np.exp(l * np.log(u) - 0.5 * u**2) if l else np.exp(-0.5 * u**2)
+    lag = _laguerre_values(u**2, count + 1, l + 0.5)[:count]
+    dlag = np.zeros_like(lag)
+    dlag[1:] = -_laguerre_values(u**2, count, l + 1.5)[: count - 1]
+    norm = _sonine_norm(l, np.arange(count))[:, None]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        l_over_u = np.where(u > 0, l / u, 0.0)
+    value = norm * base * lag
+    return value, norm * base * ((l_over_u - u) * lag + 2 * u * dlag) / scale
+
+
+@lru_cache(maxsize=32)
+def linearized_landau_pair_matrices(
+    nl: int, nm: int, mass_ratio: float = 1.0, temperature_ratio: float = 1.0
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""Return the unit-frequency test and field matrices of one ordered pair.
+
+    ``C_ab[f_a, f_b] = C(f_a, F_b) + C(F_a, f_b)`` with ``mass_ratio = m_a/m_b``
+    and ``temperature_ratio = T_a/T_b``, linearized about Maxwellians. Rows are
+    species-``a`` moments, columns the moments of the perturbed species (``a``
+    for the test part, ``b`` for the field part), in the runtime's Hermite-major
+    ``p*Nl + j`` order and signed-Laguerre convention. Particles, momentum and
+    energy are conserved exactly by the pair sum; the like-species matrix is
+    symmetric negative semidefinite (H-theorem). With ``T_a != T_b`` the
+    operator still conserves but is no longer self-adjoint.
+    """
+
+    from scipy.special import erf, roots_legendre
+
+    mu, tau = float(mass_ratio), float(temperature_ratio)
+    if mu <= 0.0 or tau <= 0.0:
+        raise ValueError("mass_ratio and temperature_ratio must be positive")
+    transform, labels = _hermite_laguerre_to_legendre_sonine(nl, nm)
+    degree = (nm - 1) + 2 * (nl - 1)
+    extent = np.sqrt(4.0 * degree + 120.0)
+    s = np.sqrt(mu / tau)  # v_tb / v_ta
+    x, w = _composite_gauss(extent, 1.0, min(1.0, s))
+    y = x / s
+    chandrasekhar = (erf(y) - 2 * y * np.exp(-y * y) / np.sqrt(np.pi)) / (2 * y * y)
+    d_par, d_perp = 2 * chandrasekhar / x, (erf(y) - chandrasekhar) / x
+    drift = 2 * chandrasekhar * (1.0 - tau)  # vanishes at equal temperatures
+    t, wt = roots_legendre(48)
+    t, wt = (t + 1) / 2, wt / 2
+    v, wv = _composite_gauss(s * extent, s, s)
+    labels = np.asarray(labels)
+    blocks = [np.zeros((labels.size, labels.size)) for _ in range(2)]
+    for l in range(degree + 1):  # noqa: E741
+        count = (degree - l) // 2 + 1
+        c = 4 * np.pi / (2 * l + 1)
+        r, dr = _sonine_radial(x, l, count)
+        dpsi = dr + x * r
+        outer = c * w * x**2 * np.pi**-1.5
+        test = -np.einsum("x,kx,qx->kq", outer * 0.5 * d_par, dpsi, dpsi)
+        test -= np.einsum(
+            "x,kx,qx->kq", outer * 0.5 * d_perp * l * (l + 1) / x**2, r, r
+        )
+        test += np.einsum("x,kx,qx->kq", outer * drift, dpsi, r)
+
+        def perturbed(points: np.ndarray) -> np.ndarray:
+            radial = _sonine_radial(points.ravel(), l, count, s)[0]
+            gauss = np.exp(-0.5 * (points.ravel() / s) ** 2) * np.pi**-1.5 / s**3
+            return (radial * gauss).reshape((count,) + points.shape)
+
+        # Rosenbluth multipoles as integrals of bounded kernel ratios.
+        span = np.minimum(x, s * extent)[:, None]
+        inner = span * t[None, :]
+        below = perturbed(inner) * ((inner / x[:, None]) ** (l + 1) * inner * span)
+        t1 = np.einsum("qxt,t->qx", below, wt)
+        t2 = np.einsum("qxt,xt,t->qx", below, inner**2, wt)
+        inner = x[:, None] + v[None, :]
+        above = perturbed(inner) * ((x[:, None] / inner) ** l * inner)
+        t3 = np.einsum("qxv,v->qx", above, wv)
+        t4 = np.einsum("qxv,xv,v->qx", above, inner**2, wv)
+        odd = 1.0 / (2 * l - 1)
+        even = (l + 1) * (l + 2) / (2 * l + 3)
+        potentials = c * (
+            -2 * (t1 + t3)
+            + 2 * (mu - 1) * (l * t3 - (l + 1) * t1)
+            + 2 * (even * (t2 + x**2 * t3) - l * (l - 1) * odd * (x**2 * t1 + t4))
+        )
+        source = 4 * np.pi * mu * perturbed(x) + potentials
+        field = np.einsum("x,kx,qx->kq", outer * np.exp(-0.5 * x**2), r, source)
+        index = np.flatnonzero(labels == l)
+        blocks[0][np.ix_(index, index)] = test
+        blocks[1][np.ix_(index, index)] = field
+    sign = (-1.0) ** (np.arange(nl * nm) % nl)
+    convention = transform * sign[:, None]
+    return tuple(convention @ block @ convention.T for block in blocks)  # type: ignore[return-value]
+
+
+def linearized_landau_species_matrices(
+    nl: int, nm: int, mass: Any, temperature: Any
+) -> np.ndarray:
+    """Stack unit-frequency ``(test, field)`` pair matrices as ``(2, s, s, n, n)``."""
+
+    masses = np.atleast_1d(np.asarray(mass, dtype=float))
+    temps = np.broadcast_to(
+        np.atleast_1d(np.asarray(temperature, dtype=float)), masses.shape
+    )
+    return np.stack(
+        [
+            np.stack(
+                [
+                    np.stack(
+                        linearized_landau_pair_matrices(
+                            nl, nm, float(ma / mb), float(ta / tb)
+                        )
+                    )
+                    for mb, tb in zip(masses, temps)
+                ],
+                axis=1,
+            )
+            for ma, ta in zip(masses, temps)
+        ],
+        axis=1,
+    )
+
+
+def apply_linearized_landau(
+    hamiltonian: jnp.ndarray,
+    pair_matrices: jnp.ndarray,
+    *,
+    nu: jnp.ndarray,
+    density: jnp.ndarray,
+    charge: jnp.ndarray,
+) -> jnp.ndarray:
+    r"""Apply the linearized Landau operator to the non-adiabatic response.
+
+    ``nu`` is each species' self-collision frequency. The pair frequency is
+    :math:`\nu_{ab} = \nu_a n_b Z_b^2 / (n_a Z_a^2)`; inter-species
+    conservation is exact when the ``nu_a`` are mutually consistent
+    (:math:`\nu_a \propto n_a Z_a^4 / (m_a^{1/2} T_a^{3/2})`). Differentiable in
+    ``nu``, ``density`` and ``charge``.
+    """
+
+    ns = int(pair_matrices.shape[1])
+    dtype = jnp.real(hamiltonian).dtype
+    rate = jnp.broadcast_to(jnp.asarray(nu, dtype=dtype).reshape(-1), (ns,))
+    weight = jnp.broadcast_to(
+        jnp.asarray(density, dtype=dtype).reshape(-1)
+        * jnp.asarray(charge, dtype=dtype).reshape(-1) ** 2,
+        (ns,),
+    )
+    pair = rate[:, None] * weight[None, :] / weight[:, None]
+    matrices = jnp.asarray(pair_matrices, dtype=dtype)
+    operator = pair[:, :, None, None] * matrices[1]
+    operator = (
+        operator
+        + jnp.eye(ns, dtype=dtype)[:, :, None, None]
+        * jnp.sum(pair[:, :, None, None] * matrices[0], axis=1)[:, None]
+    )
+    return apply_multispecies_collision_moment_matrix(hamiltonian, operator)

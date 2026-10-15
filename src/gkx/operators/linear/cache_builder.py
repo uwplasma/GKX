@@ -1097,22 +1097,35 @@ def build_linear_cache(
         if isinstance(m0, jax.core.Tracer):
             m0 = jax.lax.stop_gradient(m0)
         linked_cache["ntft_m0"] = m0.astype(np.int32)
-    return _to_device_cache(
-        _pack_linear_cache(
-            grid,
-            grid_arrays=grid_arrays,
-            geom_arrays=geom_arrays,
-            twist=twist,
-            kperp2=kperp2,
-            cv_d=cv_d,
-            gb_d=gb_d,
-            omega_d=omega_d,
-            kperp2_bmag=kperp2_bmag,
-            gyro=gyro,
-            moment_cache=moment_cache,
-            linked_cache=linked_cache,
-        )
+    cache = _pack_linear_cache(
+        grid,
+        grid_arrays=grid_arrays,
+        geom_arrays=geom_arrays,
+        twist=twist,
+        kperp2=kperp2,
+        cv_d=cv_d,
+        gb_d=gb_d,
+        omega_d=omega_d,
+        kperp2_bmag=kperp2_bmag,
+        gyro=gyro,
+        moment_cache=moment_cache,
+        linked_cache=linked_cache,
     )
+    if _uses_landau(params):
+        from gkx.operators.linear.collisions import linearized_landau_species_matrices
+
+        pairs = linearized_landau_species_matrices(Nl, Nm, params.mass, params.temp)
+        cache = replace(cache, landau_pairs=pairs.astype(grid_arrays.real_dtype))
+    return _to_device_cache(cache)
+
+
+def _uses_landau(params: LinearParams) -> bool:
+    """Build Landau matrices unless the model or a concrete zero ``nu`` rules them out."""
+
+    if params.collision_model != "landau":
+        return False
+    nu = params.nu
+    return isinstance(nu, jax.core.Tracer) or bool(np.any(np.asarray(nu) != 0.0))
 
 
 def linked_chain_cover_mask(

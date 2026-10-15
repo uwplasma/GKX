@@ -10,7 +10,11 @@ from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.solvers_linear_integrators import integrate_linear
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.operators.linear.params import LinearParams, LinearTerms
+from gkx.operators.linear.params import (
+    BUILTIN_COLLISION_OPERATORS,
+    LinearParams,
+    LinearTerms,
+)
 from gkx.solvers_nonlinear_state_integration import integrate_nonlinear
 from gkx.parallel.state import resolve_state_sharding
 from gkx.parallel.integrators import integrate_nonlinear_sharded
@@ -43,7 +47,7 @@ def _resolve_config_collision_operator(
     from gkx.operators.linear.collision_tables import collision_operator_from_config
 
     name = str(time_cfg.collision_operator).strip().lower()
-    if name in ("none", "lenard_bernstein"):
+    if name in BUILTIN_COLLISION_OPERATORS:
         return None
     # Single-species LinearParams carries scalar normalizations; the moment
     # operator is assembled from per-species vectors.

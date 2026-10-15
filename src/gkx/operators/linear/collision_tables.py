@@ -25,7 +25,10 @@ from gkx.operators.linear.collisions import (
     interpolate_collision_diagonal_table,
     load_collision_moment_matrix,
 )
-from gkx.operators.linear.params import COLLISION_OPERATOR_NAMES
+from gkx.operators.linear.params import (
+    BUILTIN_COLLISION_OPERATORS,
+    COLLISION_OPERATOR_NAMES,
+)
 
 
 _FINITE_WAVELENGTH_STEM = "finite_wavelength_coulomb"
@@ -409,7 +412,7 @@ def collision_operator_from_config(
     )
 
     key = name.strip().lower()
-    if key in ("none", "lenard_bernstein"):
+    if key in BUILTIN_COLLISION_OPERATORS:
         return None
 
     collisionality = jnp.asarray(nu)
