@@ -1148,7 +1148,8 @@ recursive = true
 # 67272 -> 67308: cached_jit, so a repeated gkx.solve compiles nothing (PERF 2026-10-06).
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
 # 67113 -> 67472: linearized Landau operator at any (Nl, Nm), the new default.
-baseline = 67472
+# 67472 -> 67408: eight-moment Frei coulomb kernels retired (coulomb aliases landau).
+baseline = 67408
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1486,7 +1487,8 @@ recursive = true
 # 74556 -> 74589: repeated-solve compile and cached_jit fallback tests (PERF 2026-10-06).
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
 # 75155 -> 75296: linearized Landau physics gates (conservation, Spitzer, tables).
-baseline = 75296
+# 75296 -> 75210: tests of the retired eight-moment coulomb kernels removed.
+baseline = 75210
 target = 35000
 
 [[line_budget_policy.counts]]
