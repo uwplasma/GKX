@@ -702,7 +702,10 @@ quarter of the line and the adiabatic rate keeps falling with C
 
 **Explicit steps.** :math:`\nu_{end}` is explicit in every scheme, so
 :math:`\nu_{end}\Delta t` must stay inside the scheme's stability region. At the
-default and a CFL-limited step this product is below 0.3. The old
+default it is below 0.3 on the shipped ``nperiod >= 2`` linear decks. The
+``nperiod = 1`` KBM tutorial deck (rate 598) blew up at :math:`\Delta t = 10^{-3}`
+(product 0.6 on top of electron streaming) and runs at :math:`5\times10^{-4}`.
+The CFL estimate does not yet include :math:`\nu_{end}`. The old
 :math:`A/\Delta t` reading pinned it at 0.1, which also hid over-CFL steps:
 the end-mode gate in ``tests/validation/physics_gates`` ran away at
 :math:`\Delta t` = 0.002, Nm = 24 (CFL bound 0.0014) for every rate below 40,
