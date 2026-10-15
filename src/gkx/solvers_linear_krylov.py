@@ -701,20 +701,29 @@ def _shift_invert_branch(
         if fallback is not None:
             return fallback
     if need_fallback:
+        # Ritz values of an inexact inverse are not eigenvalues of A: say so,
+        # rather than leaving a NaN residual as the only clue.
+        if int(np.asarray(inner_stats.unconverged_solves)):
+            inner += (
+                "; the inner FGMRES solves did not converge, so no Ritz pair "
+                "approximates an eigenpair of A: raise shift_restart and "
+                "shift_maxiter, try shift_preconditioner='pr3-cm', or use "
+                "method='adaptive'"
+            )
+        if nonfinite_pair:
+            raise RuntimeError(
+                "shift-invert found no Ritz value inside the frequency window "
+                f"(omega_cap_factor={cfg.omega_cap_factor:g}); {inner}"
+            )
         if residual_failed:
             raise RuntimeError(
                 "shift-invert eigenpair failed the outer residual gate: "
                 f"residual={residual:.6g}, tolerance={residual_tol:.6g}; {inner}"
             )
-        if growth_floor_failed:
-            raise RuntimeError(
-                "shift-invert eigenpair failed the growth-selection floor: "
-                f"growth={eig_host.real:.6g}, floor={cfg.fallback_real_floor:.6g}; "
-                f"{inner}"
-            )
         raise RuntimeError(
-            "shift-invert eigenpair is non-finite: "
-            f"eigenvalue={eig_host.real:.6g}{eig_host.imag:+.6g}j; {inner}"
+            "shift-invert eigenpair failed the growth-selection floor: "
+            f"growth={eig_host.real:.6g}, floor={cfg.fallback_real_floor:.6g}; "
+            f"{inner}"
         )
     status = EigenSolveStatus(
         method=cfg.method,
