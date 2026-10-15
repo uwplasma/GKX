@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Cost of the collision term alone: Dougherty vs linearized Landau.
+"""Share of the collision term in one linear RHS: Dougherty vs linearized Landau.
 
-    python rhs_cost.py <Nl> <Nm> [Ny] [Nz]
+    python rhs_cost.py <Nl> <Nm> <species: 1|2> [Ny] [Nz]
 
-Cyclone s-alpha grid (Nx=8), one kinetic species, nu = 0.01. Times the jitted
-collision term for each kernel, median of 20
-calls, models alternated A/B/A/B. Prints RESULT lines.
+Cyclone s-alpha grid (Nx=8), electrostatic. One species (adiabatic electrons) or
+ions plus kinetic electrons (m_e/m_i = 1/1836). Each model gets one jitted
+function, warmed once; the models are then timed interleaved A/B/A/B with
+block_until_ready, median of 20 calls each round. Prints RESULT lines.
 """
 
 import json
@@ -21,55 +22,54 @@ from gkx.config import GridConfig
 from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.operators.linear.collisions import apply_linearized_landau
-from gkx.operators.linear.dissipation import collisions_contribution
 from gkx.operators.linear.params import linear_params_for_geometry
+from gkx.terms.assembly import assemble_rhs_cached
+from gkx.terms.config import TermConfig
 
-nl, nm = int(sys.argv[1]), int(sys.argv[2])
-ny = int(sys.argv[3]) if len(sys.argv) > 3 else 16
-nz = int(sys.argv[4]) if len(sys.argv) > 4 else 32
+nl, nm, ns = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
+ny = int(sys.argv[4]) if len(sys.argv) > 4 else 16
+nz = int(sys.argv[5]) if len(sys.argv) > 5 else 32
 grid = build_spectral_grid(GridConfig(Nx=8, Ny=ny, Nz=nz, Lx=62.8, Ly=62.8))
 geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
-shape = (1, nl, nm, grid.ky.size, grid.kx.size, grid.z.size)
+species = dict(
+    charge_sign=jnp.asarray([1.0, -1.0][:ns]),
+    density=jnp.ones(ns),
+    mass=jnp.asarray([1.0, 1.0 / 1836.0][:ns]),
+    temp=jnp.ones(ns),
+    tz=jnp.asarray([1.0, -1.0][:ns]),
+    vth=jnp.asarray([1.0, 1836.0**0.5][:ns]),
+    rho=jnp.asarray([1.0, 1836.0**-0.5][:ns]),
+    fprim=jnp.full(ns, 0.8),
+    tprim=jnp.full(ns, 2.49),
+    nu=jnp.asarray([0.01, 0.01 * 1836.0**0.5][:ns]),
+)
+shape = (ns, nl, nm, grid.ky.size, grid.kx.size, grid.z.size)
 state = jnp.asarray(np.random.default_rng(0).normal(size=shape), jnp.complex128)
-caches = {}
+terms = TermConfig(apar=0.0, bpar=0.0)
+runs = {}
 for model in ("dougherty", "landau"):
-    params = linear_params_for_geometry(geom, nu=0.01, collision_model=model)
-    start = time.perf_counter()
-    caches[model] = (build_linear_cache(grid, geom, params, nl, nm), params)
-    caches[model] += (time.perf_counter() - start,)
-cache_d = caches["dougherty"][0]
-nu = jnp.asarray([0.01])
-term = {
-    "dougherty": jax.jit(
-        lambda h, jl, jlb, b, lb: collisions_contribution(
-            h, G=h, Jl=jl, JlB=jlb, b=b, nu=nu, lb_lam=lb, weight=jnp.asarray(1.0)
+    params = linear_params_for_geometry(geom, collision_model=model, **species)
+    cache = build_linear_cache(grid, geom, params, nl, nm)
+    for weight in (1.0, 0.0):
+        fn = jax.jit(
+            lambda g, c, p, w=weight: assemble_rhs_cached(
+                g, c, p, terms=TermConfig(apar=0.0, bpar=0.0, collisions=w)
+            )[0]
         )
-    ),
-    "landau": jax.jit(
-        lambda h, pairs: apply_linearized_landau(
-            h, pairs, nu=nu, density=jnp.ones(1), charge=jnp.ones(1)
-        )
-    ),
-}
-args = {
-    "dougherty": (cache_d.Jl, cache_d.JlB, cache_d.b, cache_d.lb_lam),
-    "landau": (caches["landau"][0].landau_pairs,),
-}
+        runs[model, weight] = (fn, cache, params)
+        fn(state, cache, params).block_until_ready()
 
-
-def median_ms(fn):
-    fn().block_until_ready()
-    times = []
-    for _ in range(20):
-        start = time.perf_counter()
-        fn().block_until_ready()
-        times.append(time.perf_counter() - start)
-    return round(1e3 * float(np.median(times)), 3)
-
-
-for model in ("dougherty", "landau") * 2:
-    cache, params, build = caches[model]
+times = {key: [] for key in runs}
+for _ in range(2):
+    for key, (fn, cache, params) in runs.items():
+        for _ in range(10):
+            start = time.perf_counter()
+            fn(state, cache, params).block_until_ready()
+            times[key].append(time.perf_counter() - start)
+host = f"{platform.system()}-{platform.machine()}-{jax.devices()[0].platform}"
+for model in ("dougherty", "landau"):
+    full = 1e3 * float(np.median(times[model, 1.0]))
+    bare = 1e3 * float(np.median(times[model, 0.0]))
     print(
         "RESULT",
         json.dumps(
@@ -77,10 +77,12 @@ for model in ("dougherty", "landau") * 2:
                 model=model,
                 Nl=nl,
                 Nm=nm,
+                species=ns,
                 shape=list(shape),
-                collision_ms=median_ms(lambda: term[model](state, *args[model])),
-                cache_build_s=round(build, 2),
-                host=f"{platform.system()}-{platform.machine()}-{jax.devices()[0].platform}",
+                rhs_ms=round(full, 3),
+                rhs_without_collisions_ms=round(bare, 3),
+                collision_share=round((full - bare) / full, 3),
+                host=host,
             )
         ),
         flush=True,
