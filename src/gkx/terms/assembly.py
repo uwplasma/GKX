@@ -624,12 +624,20 @@ def _dissipation_contributions(
                 "the linearized Landau operator couples all Hermite moments; "
                 "Hermite-sharded runs need collision_operator = 'lenard_bernstein'"
             )
-        collisions = weights.collisions * apply_linearized_landau(
-            H,
-            pairs,
-            nu=species.nu,
-            density=species.density,
-            charge=species.charge,
+        # Traced zero weights (collisions switched off) skip the matrix product.
+        collisions = jax.lax.cond(
+            jnp.all(weights.collisions == 0.0),
+            lambda: jnp.zeros_like(H),
+            lambda: (
+                weights.collisions
+                * apply_linearized_landau(
+                    H,
+                    pairs,
+                    nu=species.nu,
+                    density=species.density,
+                    charge=species.charge,
+                )
+            ),
         )
     else:
         collisions = _collision_contribution_or_zero(
