@@ -5,7 +5,8 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,25 @@ def _jax_float_dtype() -> Any:
     """Return the active JAX floating dtype for small validation arrays."""
 
     return jnp.float64 if bool(jax.config.read("jax_enable_x64")) else jnp.float32
+
+
+@contextmanager
+def geometry_precision() -> Iterator[None]:
+    """Build geometry in float64, then hand back the caller's JAX precision.
+
+    ``vmex`` and ``booz_xform_jax`` set ``jax_enable_x64`` globally on import.
+    Unguarded, the first VMEC geometry of a process left the gyrokinetic solve
+    after it in float64 (2.2x slower, twice the memory), and a later process
+    that hit the cached geometry ran in float32. Inside this scope geometry is
+    always float64, as those packages require; outside it nothing changes.
+    """
+
+    previous = bool(jax.config.read("jax_enable_x64"))
+    jax.config.update("jax_enable_x64", True)
+    try:
+        yield
+    finally:
+        jax.config.update("jax_enable_x64", previous)
 
 
 def _candidate_paths(env_names: Sequence[str], defaults: Sequence[Path]) -> list[Path]:
@@ -129,13 +149,14 @@ def discover_differentiable_geometry_backends() -> dict[str, object]:
             home / "local" / "booz_xform_jax",
         ),
     )
-    vmec = _find_importable_module("vmex", vmec_paths)
-    booz = _find_importable_module("booz_xform_jax", booz_paths)
-    booz_jax_api = (
-        None
-        if booz is None
-        else _find_importable_module("booz_xform_jax.jax_api", booz_paths)
-    )
+    with geometry_precision():
+        vmec = _find_importable_module("vmex", vmec_paths)
+        booz = _find_importable_module("booz_xform_jax", booz_paths)
+        booz_jax_api = (
+            None
+            if booz is None
+            else _find_importable_module("booz_xform_jax.jax_api", booz_paths)
+        )
 
     # The boundary bridge still targets the retired vmex boundary helpers;
     # vmex does not expose them, so this reports False until that route is
@@ -299,6 +320,7 @@ def internal_vmec_backend_available() -> bool:
 
 
 __all__ = [
+    "geometry_precision",
     "_booz_xform_jax_search_paths",
     "_import_module_with_search_paths",
     "_import_booz_xform_jax_backend",

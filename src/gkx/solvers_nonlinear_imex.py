@@ -863,6 +863,7 @@ _HI = jax.lax.Precision.HIGHEST
 # Probes evaluated per vmapped batch while building the factor: one probe is
 # one RHS assembly, too small to fill a GPU alone.
 _PROBE_BATCH = 8
+_FACTORS: dict[Any, ChainImplicitLinear] = {}
 
 
 def _mv(a: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
@@ -1100,6 +1101,26 @@ def build_chain_implicit_linear(
     split, fld = cached_jit(split_rhs), cached_jit(fields)
     zero = jnp.zeros(shape, dtype)
     zero_f = jnp.zeros_like(fld(zero))
+    # The graph digests cover geometry and parameters bit for bit, so a repeat
+    # solve with the same deck and dt reuses the factor (12.9 s at 32^2 x 24).
+    graphs = (split.key(zero, zero_f), fld.key(zero))
+    mode_bits = np.asarray(modes, bool).tobytes()
+    reuse = (
+        None
+        if None in graphs
+        else (
+            *graphs,
+            tuple(shape),
+            float(dt),
+            scheme,
+            mode_bits,
+            str(dtype),
+            check_tol,
+        )
+    )
+    if reuse is not None and reuse in _FACTORS:
+        return _FACTORS[reuse]
+    _FACTORS.clear()  # one factor alive at a time: it can fill the device
 
     def lin(v):
         return split(v, fld(v))
@@ -1167,6 +1188,8 @@ def build_chain_implicit_linear(
             f"structured implicit factor residual {err:.2e} > {check_tol:.0e}: the "
             "stiff operator is not block-tridiagonal in Hermite with z-local fields"
         )
+    if reuse is not None:
+        _FACTORS[reuse] = op
     return op
 
 
