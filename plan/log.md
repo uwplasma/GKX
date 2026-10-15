@@ -21199,3 +21199,13 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
+## 2026-10-15 — COLLISIONS lane (branch `collisions/linear-landau-default`)
+
+Baseline `main` `df2953026`. Laptop CPU for operator work, office GPU1 (`venvs/gkx-latest`) and GS2 8.2.1 for runs.
+
+- **Default collision operator is now the linearized Landau operator** (`[time] collision_operator = "landau"`), drift-kinetic limit, any `(Nl, Nm)`, any species, applied to `H` inside the cached linear RHS, so every solver path uses it (Hermite-sharded runs refuse). Matrices are built once per run on the host (`collision_tables.linearized_landau_pair_matrices`, lru-cached): 0.5 s at (4,8), 11 s at (8,32), 45 s at (16,48) on a loaded office CPU.
+- **Verified:** exact invariants and H-theorem (three zero eigenvalues), equal to the Frei et al. multiprecision Coulomb tables to 1e-12 at (2,4) and (3,6) (their nu is twice GKX's), test part equal to Sugama's at equal temperatures for m_a/m_b = 1, 1/1836, 1836; e-i momentum and energy exchange exact at Te/Ti = 3; Spitzer-Harm gamma_E within 0.5% for Z = 1, 2, 4, 16; differentiable in nu. Convention: GKX nu = sqrt(2) vnewk, nu_ab = nu_a n_b Z_b^2 / (n_a Z_a^2).
+- **Cost:** collision term alone on office GPU, Cyclone 16x8x32 grid: Dougherty 2.6-3.2 ms, Landau 8.3 ms at (8,32) and 66 ms at (16,48), with even/odd Hermite blocks (half the dense flops).
+- **GS2 collisional TEM (ky rho_s 0.3):** gamma_gkx-units 0.867 (nu 0), 0.505 (vnewk_e 0.05), 0.151 (0.2), -0.13 (0.8). GKX comparison runs are queued; see the PR.
+
+Raw records: office `~/gkx-evidence/collisions/`; summaries in `plan/research/2026-10-15-collisions/`.

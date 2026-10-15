@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 import jax
 import jax.numpy as jnp
@@ -284,7 +284,7 @@ def linear_params_for_geometry(geometry, **overrides) -> LinearParams:
 
 def build_linear_params(
     species: Iterable[Species],
-    **overrides: float,
+    **overrides: Any,
 ) -> LinearParams:
     """Build multi-species :class:`LinearParams` from physical inputs.
 

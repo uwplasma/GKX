@@ -186,7 +186,7 @@ Controls:
 Collisions
 ----------
 
-GKX ships five collision models. The ``collision_operator`` key in the
+GKX ships six collision models. The ``collision_operator`` key in the
 ``[time]`` section of a TOML input selects one, and
 :func:`gkx.operators.linear.collision_tables.collision_operator_from_config`
 builds the same operator from Python:
@@ -198,6 +198,9 @@ builds the same operator from Python:
    * - ``collision_operator``
      - Model
      - Reference
+   * - ``landau`` (default)
+     - Linearized Landau (Fokker-Planck), drift-kinetic limit, any ``(Nl, Nm)``
+     - built in, described below
    * - ``none``, ``lenard_bernstein``
      - Conserving diagonal Lenard-Bernstein/Dougherty relaxation
      - built in, described below
@@ -214,6 +217,9 @@ builds the same operator from Python:
      - Gyrokinetic Coulomb retaining finite :math:`k_\perp`
      - Frei, Ball, Hoffmann, Jorge, Ricci & Stenger (2021), Eqs. (3.47)--(3.50)
 
+``landau``, ``none`` and ``lenard_bernstein`` are applied inside the linear
+RHS from the cache, so every solver path (fixed-step, CFL-controlled, Krylov,
+IMEX, nonlinear) uses them; Hermite-sharded runs refuse ``landau``.
 ``none`` and ``lenard_bernstein`` keep the built-in diagonal term described in
 this section. The four moment operators *replace* that term with a dense
 Hermite-Laguerre matrix. The solver switches the diagonal contribution off
@@ -228,6 +234,72 @@ run on the fixed-step cached integrator. The sharded, Krylov eigenvalue, and
 CFL-controlled ``explicit_time`` paths raise rather than silently substituting
 the diagonal term. The Coulomb tables are generated at unit mass and temperature ratio, so a
 multispecies request is refused rather than extrapolated.
+
+Linearized Landau operator (default)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The default is the linearized Landau operator about Maxwellians,
+:math:`C_{ab}[f_a,f_b]=C(f_a,F_b)+C(F_a,f_b)`, in its drift-kinetic
+(:math:`k_\perp\to0`) limit, applied to the non-adiabatic response ``H``.
+With :math:`x=v/v_{ta}`, :math:`v_{ta}=\sqrt{2T_a/m_a}`, the test part is the
+Rosenbluth diffusion
+
+.. math::
+
+   C(f_a,F_b) = \nu_{ab}\,\nabla\cdot\Big[\tfrac12 \mathsf D_b\cdot\nabla f_a
+   - \tfrac{m_a}{m_b}\,f_a\nabla H_b\Big],\qquad
+   \nu_D^{ab}(x)=\nu_{ab}\,\frac{\operatorname{erf}(x_b)-G(x_b)}{x^3},
+
+with :math:`G` the Chandrasekhar function and :math:`H_b`,
+:math:`\mathsf D_b=\nabla\nabla G_b` the Rosenbluth potentials of
+:math:`F_b`. The field part is
+
+.. math::
+
+   C(F_a,f_b)=\nu_{ab}F_a\Big[4\pi\tfrac{m_a}{m_b}f_b-\alpha H_b
+   +\big(\tfrac{m_a}{m_b}-1\big)\alpha\,v\,\partial_v H_b
+   +\tfrac12\alpha^2 v_iv_j\partial_i\partial_j G_b\Big],\qquad
+   \alpha=m_a/T_a,
+
+with :math:`H_b`, :math:`G_b` the potentials of the perturbation :math:`f_b`
+(Helander & Sigmar 2002, ch. 3). The operator is rotationally invariant, so in
+the Legendre-Sonine basis :math:`x^lL_k^{(l+1/2)}(x^2)P_l(\xi)` it is block
+diagonal in :math:`l` and each block is a pair of radial integrals. GKX
+evaluates them by composite Gauss quadrature once per run, for the run's
+``(Nl, Nm)`` and species mass and temperature ratios, and maps them to the
+Hermite-Laguerre box with an exact orthogonal transform
+(:func:`gkx.operators.linear.collisions.linearized_landau_pair_matrices`). The
+result is a dense matrix per species pair; one RHS applies it as a moment-space
+matrix product.
+
+What is verified (``tests/validation/physics_gates/test_collision_physics.py``):
+
+- density, parallel momentum and energy are exact null vectors (``1e-13``), the
+  like-species matrix is symmetric negative semidefinite with exactly three
+  zero eigenvalues (H-theorem);
+- it equals the multiprecision Coulomb tables of Frei et al. (2021, 2022) to
+  ``1e-12`` at ``(Nl, Nm) = (2, 4)`` and ``(3, 6)``, once their collision
+  frequency (twice GKX's) is accounted for;
+- its test part equals the Sugama test part at equal temperatures for
+  :math:`m_a/m_b = 1,\ 1/1836,\ 1836`;
+- electron-ion momentum and energy exchange cancel exactly, also at
+  :math:`T_e/T_i=3`;
+- the Spitzer-Harm ratio :math:`\gamma_E(Z)` is within 0.5% of Spitzer & Harm
+  (1953) for :math:`Z=1,2,4,16`;
+- the application is differentiable in ``nu`` (and in density and charge).
+
+Frequency convention. ``nu`` is each species' self-collision frequency in GKX
+units, :math:`\nu=\sqrt2\,\mathtt{vnewk}^{\rm GS2}`, and
+:math:`\nu_{ab}=\nu_a n_bZ_b^2/(n_aZ_a^2)`. Inter-species conservation is
+exact when the species rates are mutually consistent,
+:math:`\nu_a\propto n_aZ_a^4/(m_a^{1/2}T_a^{3/2})`. At unequal temperatures the
+operator still conserves but is not self-adjoint; the thermal equilibration
+:math:`C(F_a,F_b)` is dropped, as in all delta-f codes.
+
+Not included: finite-:math:`k_\perp` (gyroaveraging) terms, which
+``coulomb_finite_kperp`` carries for one species at fixed tabulated
+resolutions. The matrix depends on mass and temperature ratios through a
+host-side build, so it is not differentiated with respect to them.
 
 Collision frequency
 ^^^^^^^^^^^^^^^^^^^

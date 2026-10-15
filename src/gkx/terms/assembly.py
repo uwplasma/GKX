@@ -614,10 +614,11 @@ def _dissipation_contributions(
     hermite_window: HermiteWindow | None = None,
     hypercollisions: jnp.ndarray | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    landau = getattr(cache, "landau_pairs", None) is not None
+    pairs = getattr(cache, "landau_pairs", None)
+    landau = pairs is not None
     if landau and _is_static_zero(weights.collisions, jnp.real(G).dtype):
         collisions = jnp.zeros_like(H)
-    elif landau:
+    elif pairs is not None:
         if hermite_window is not None:
             raise NotImplementedError(
                 "the linearized Landau operator couples all Hermite moments; "
@@ -625,7 +626,7 @@ def _dissipation_contributions(
             )
         collisions = weights.collisions * apply_linearized_landau(
             H,
-            cache.landau_pairs,
+            pairs,
             nu=species.nu,
             density=species.density,
             charge=species.charge,

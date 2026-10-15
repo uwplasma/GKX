@@ -2066,10 +2066,13 @@ def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None
 # with the independently generated multiprecision tables of Frei et al., the
 # Sugama test part, Spitzer-Harm, and differentiability in nu.
 
+from gkx.operators.linear.collision_tables import (  # noqa: E402
+    linearized_landau_pair_matrices,
+)
 from gkx.operators.linear.collisions import (  # noqa: E402
     apply_linearized_landau,
+    apply_multispecies_collision_moment_matrix,
     drift_kinetic_sugama_pair_matrices,
-    linearized_landau_pair_matrices,
 )
 
 
@@ -2183,6 +2186,13 @@ def test_landau_application_is_differentiable_in_nu() -> None:
         )
         return jnp.sum(out * state)
 
+    dense = apply_multispecies_collision_moment_matrix(
+        state, 0.3 * jnp.asarray(sum(linearized_landau_pair_matrices(2, 6)))[None, None]
+    )
+    blocked = apply_linearized_landau(
+        state, pairs, nu=0.3, density=jnp.ones(1), charge=jnp.ones(1)
+    )
+    assert np.allclose(blocked, dense, rtol=1e-5, atol=1e-6)  # parity blocks
     gradient = jax.grad(rate)(jnp.asarray(0.3))
     assert np.isclose(float(gradient), float(rate(1.0)), rtol=1e-5)
     assert float(gradient) < 0.0  # dissipative: d/dnu of <g, C g> is <g, C g> < 0

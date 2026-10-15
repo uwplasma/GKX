@@ -1112,9 +1112,13 @@ def build_linear_cache(
         linked_cache=linked_cache,
     )
     if _uses_landau(params):
-        from gkx.operators.linear.collisions import linearized_landau_species_matrices
+        from gkx.operators.linear.collision_tables import (
+            linearized_landau_species_matrices,
+        )
 
-        pairs = linearized_landau_species_matrices(Nl, Nm, params.mass, params.temp)
+        pairs: Any = linearized_landau_species_matrices(
+            Nl, Nm, params.mass, params.temp
+        )
         cache = replace(cache, landau_pairs=pairs.astype(grid_arrays.real_dtype))
     return _to_device_cache(cache)
 
