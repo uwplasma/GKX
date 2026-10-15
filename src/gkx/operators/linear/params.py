@@ -65,7 +65,7 @@ DEPRECATED_LINEAR_PARAM_ALIASES: dict[str, str] = {
 
 #: Default end-absorber strength: e-folds per thermal transit of the fastest
 #: kinetic species across one damping layer (:meth:`LinearParams.end_damping_rate`).
-DAMP_ENDS_LAYER_TRANSITS = 10.0
+DAMP_ENDS_LAYER_TRANSITS = 30.0
 
 
 def _warn_alias(old: str, new: str) -> None:

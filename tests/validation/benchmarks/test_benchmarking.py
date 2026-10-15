@@ -879,7 +879,7 @@ def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
         _two_species_model(2.49, 0.8, 1.0 / 0.00027, cfg.physics.beta),
         geometry,
         scales=(KBM_OMEGA_D_SCALE, KBM_OMEGA_STAR_SCALE, KBM_RHO_STAR),
-        damp_ends=(0.1, 0.125),
+        damp_ends=(None, 0.125),
     )
     _assert_same_parameters(runtime_params, legacy_params)
     assert build_runtime_linear_terms(cfg).hypercollisions == 1.0

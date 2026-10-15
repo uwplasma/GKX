@@ -465,25 +465,6 @@ def test_load_gx_input_contract_reads_vmec_geometry_contract(tmp_path: Path) -> 
     assert contract.npol == pytest.approx(6.0)
 
 
-def test_imported_linear_uses_raw_damp_ends_rate() -> None:
-    contract = _dummy_gx_contract(init_single=False)
-    dt = 0.2
-    params = imported_linear.build_linear_params(
-        contract.species,
-        tau_e=contract.tau_e,
-        kpar_scale=1.0,
-        beta=contract.beta,
-    )
-    params = replace(
-        params,
-        D_hyper=float(contract.D_hyper),
-        damp_ends_amp=float(contract.damp_ends_amp),
-        damp_ends_widthfrac=float(contract.damp_ends_widthfrac),
-    )
-    assert float(params.damp_ends_amp) == pytest.approx(0.1)
-    assert float(params.damp_ends_amp) != pytest.approx(0.1 / dt)
-
-
 @pytest.mark.parametrize(
     ("dt", "nwrite", "gx_time", "expected"),
     [

@@ -258,14 +258,8 @@ damping). The runtime schema exposes two diagnostic scale factors:
 Both affect reporting only; they do not alter the RHS/operator. They record
 the exact comparison settings behind benchmark plots.
 
-The reference end-damping defaults are ``damp_ends_amp = 0.1`` and
-``damp_ends_widthfrac = 0.125``. The damping kernel interprets
-``damp_ends_amp`` as a per-step strength when the linear caller supplies a
-timestep; otherwise it remains a rate, including on nonlinear routes.
-Only an isolated Euler damping update removes exactly that local fraction;
-other RK schemes apply their stability polynomial. See :doc:`operators` for
-the equations and for why a linear timestep scan does not refine one fixed
-operator.
+End damping is a rate, :math:`\nu_{end}`, in units of :math:`v_{ti}/a`
+(see :ref:`end-damping`).
 
 Defaults (model parameters):
 

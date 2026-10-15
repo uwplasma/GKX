@@ -377,10 +377,9 @@ Linear
    * - Miller, kinetic electrons
      - provisional (ledger ``X-ke-miller``)
      - Certified eigenpairs at :math:`k_y\rho_i = 0.3, 0.5` within ``0.35%``
-       of repaired GX and ``1.5%`` of GS2. These decks state
-       ``[time] damp_ends_rate``: without it the timestep-free Krylov route
-       damps the linked ends at ``damp_ends_amp`` rather than
-       ``damp_ends_amp/dt`` and returns a growth rate ``54%`` high.
+       of repaired GX and ``1.5%`` of GS2. The deck states GX's end-damping
+       rate (``0.1/dt`` = 160.6); with a rate 1000x weaker the growth rate is
+       ``54%`` high (:ref:`end-damping`).
    * - Shaped tokamak zonal flow / GAM (Merlo et al. Case III)
      - open
      - ``docs/_static/miller_zonal_response_pilot.json`` from

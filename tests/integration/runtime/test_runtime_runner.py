@@ -793,15 +793,11 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     assert krylov.gamma == pytest.approx(float(dominant.real), abs=2.0e-3)
     assert krylov.omega == pytest.approx(float(-dominant.imag), abs=2.0e-3)
 
-    # Same unstable branch as the time solver: positive growth, matching
-    # propagation direction and frequency. The time-solver growth rate carries
-    # a known fit/integration bias at this resolution, so gate it loosely; the
-    # defect regressed here reported gamma < 0 and an unrelated frequency.
-    assert reference.gamma > 0.0
+    # Same operator on both routes (one end-damping rate): measured 0.05406 /
+    # 0.13083 (time) against 0.05402 / 0.13066 (Krylov), 0.1% apart.
     assert krylov.gamma > 0.0
-    assert np.sign(krylov.omega) == np.sign(reference.omega)
-    assert krylov.omega == pytest.approx(reference.omega, rel=0.15)
-    assert krylov.gamma == pytest.approx(reference.gamma, rel=0.75)
+    assert krylov.omega == pytest.approx(reference.omega, rel=0.01)
+    assert krylov.gamma == pytest.approx(reference.gamma, rel=0.01)
 
 
 def test_runtime_scan_batch_matches_serial() -> None:
