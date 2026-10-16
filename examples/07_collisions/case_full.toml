@@ -8,7 +8,7 @@ schema_version = 1
 #   "lenard_bernstein"      conserving diagonal relaxation (the built-in term)
 #   "sugama"                drift-kinetic Sugama          (Frei 2022, C6a-C6f)
 #   "improved_sugama"       improved drift-kinetic Sugama (Frei 2022, + C103)
-#   "coulomb"               drift-kinetic Coulomb         (Frei 2022, C9a-C9f)
+#   "landau"                linearized Landau, drift-kinetic (default)
 #   "coulomb_finite_kperp"  gyrokinetic Coulomb           (Frei 2021, 3.47-3.50)
 #
 # Two constraints apply to the moment operators:

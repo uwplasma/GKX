@@ -496,6 +496,11 @@ def build_runtime_linear_params(
         nu_laguerre=float(cfg.collisions.nu_laguerre),
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
         damp_ends_rate=_runtime_damp_ends_rate(cfg),
+        collision_model=(
+            "landau"
+            if str(cfg.time.collision_operator).strip().lower() in ("landau", "coulomb")
+            else "dougherty"
+        ),
     )
 
 

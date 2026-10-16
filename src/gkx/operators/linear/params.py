@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 import jax
 import jax.numpy as jnp
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from gkx.terms.config import TermConfig
 
 __all__ = [
+    "BUILTIN_COLLISION_OPERATORS",
     "COLLISION_OPERATOR_NAMES",
     "DAMP_ENDS_LAYER_TRANSITS",
     "DEPRECATED_LINEAR_PARAM_ALIASES",
@@ -168,6 +169,10 @@ class LinearParams:
     ampere_g0_scale: float = 0.5
     bpar_beta_scale: float = 0.5
     damp_ends_rate: float | jnp.ndarray | None = None
+    #: Built-in collision kernel: ``"landau"`` (linearized Landau, drift-kinetic
+    #: limit; the default, as in the runtime) or ``"dougherty"`` (conserving
+    #: Lenard-Bernstein form).
+    collision_model: str = "landau"
 
     def const_branch_nu_hyper_m(self):
         """Return the Hermite hypercollision rate the *constant* branch uses.
@@ -248,11 +253,11 @@ class LinearParams:
             self.bpar_beta_scale,
             self.damp_ends_rate,
         )
-        return children, None
+        return children, self.collision_model
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
+        return cls(*children, collision_model=aux_data)
 
 
 _SPECIES_PARAM_NAMES = (
@@ -291,7 +296,7 @@ def linear_params_for_geometry(geometry, **overrides) -> LinearParams:
 
 def build_linear_params(
     species: Iterable[Species],
-    **overrides: float,
+    **overrides: Any,
 ) -> LinearParams:
     """Build multi-species :class:`LinearParams` from physical inputs.
 
@@ -478,6 +483,16 @@ def _resolve_implicit_preconditioner(
     return preconditioner
 
 
+#: Operators applied inside the linear RHS from the cache (every solver path);
+#: the others are moment operators handed to the fixed-step integrator.
+#: ``coulomb`` is a compatibility alias of ``landau``, which reproduces the
+#: retired eight-moment table of Frei, Ernst & Ricci (2022) at half its nu.
+BUILTIN_COLLISION_OPERATORS: tuple[str, ...] = (
+    "none",
+    "lenard_bernstein",
+    "landau",
+    "coulomb",
+)
 COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "none",
     "lenard_bernstein",
@@ -485,4 +500,5 @@ COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "improved_sugama",
     "coulomb",
     "coulomb_finite_kperp",
+    "landau",
 )

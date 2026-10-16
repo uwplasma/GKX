@@ -1,0 +1,17 @@
+# whole linear RHS, block-sparse Landau (e05a6136+), office A4000 GPU0 IDLE (0% before and after), Cyclone 16x8x32; rhs_cost.py; 'without' = collision weight 0
+x64=false RESULT {"model": "dougherty", "Nl": 8, "Nm": 24, "species": 1, "rhs_ms": 2.101, "rhs_without_collisions_ms": 1.872, "collision_share": 0.109
+x64=false RESULT {"model": "landau", "Nl": 8, "Nm": 24, "species": 1, "rhs_ms": 3.052, "rhs_without_collisions_ms": 2.125, "collision_share": 0.304
+x64=false RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "species": 1, "rhs_ms": 4.904, "rhs_without_collisions_ms": 4.635, "collision_share": 0.055
+x64=false RESULT {"model": "landau", "Nl": 16, "Nm": 48, "species": 1, "rhs_ms": 7.746, "rhs_without_collisions_ms": 4.786, "collision_share": 0.382
+x64=false RESULT {"model": "dougherty", "Nl": 8, "Nm": 24, "species": 2, "rhs_ms": 3.102, "rhs_without_collisions_ms": 2.734, "collision_share": 0.119
+x64=false RESULT {"model": "landau", "Nl": 8, "Nm": 24, "species": 2, "rhs_ms": 4.48, "rhs_without_collisions_ms": 2.782, "collision_share": 0.379
+x64=false RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "species": 2, "rhs_ms": 8.392, "rhs_without_collisions_ms": 6.837, "collision_share": 0.185
+x64=false RESULT {"model": "landau", "Nl": 16, "Nm": 48, "species": 2, "rhs_ms": 13.708, "rhs_without_collisions_ms": 6.945, "collision_share": 0.493
+x64=true RESULT {"model": "dougherty", "Nl": 8, "Nm": 24, "species": 1, "rhs_ms": 4.116, "rhs_without_collisions_ms": 3.901, "collision_share": 0.052
+x64=true RESULT {"model": "landau", "Nl": 8, "Nm": 24, "species": 1, "rhs_ms": 6.689, "rhs_without_collisions_ms": 3.559, "collision_share": 0.468
+x64=true RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "species": 1, "rhs_ms": 11.274, "rhs_without_collisions_ms": 9.929, "collision_share": 0.119
+x64=true RESULT {"model": "landau", "Nl": 16, "Nm": 48, "species": 1, "rhs_ms": 20.967, "rhs_without_collisions_ms": 10.086, "collision_share": 0.519
+x64=true RESULT {"model": "dougherty", "Nl": 8, "Nm": 24, "species": 2, "rhs_ms": 6.651, "rhs_without_collisions_ms": 6.182, "collision_share": 0.071
+x64=true RESULT {"model": "landau", "Nl": 8, "Nm": 24, "species": 2, "rhs_ms": 11.566, "rhs_without_collisions_ms": 5.765, "collision_share": 0.502
+x64=true RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "species": 2, "rhs_ms": 20.34, "rhs_without_collisions_ms": 18.159, "collision_share": 0.107
+x64=true RESULT {"model": "landau", "Nl": 16, "Nm": 48, "species": 2, "rhs_ms": 46.518, "rhs_without_collisions_ms": 18.488, "collision_share": 0.603
