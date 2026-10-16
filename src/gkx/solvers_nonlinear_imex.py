@@ -1000,9 +1000,11 @@ def _probe_columns(idx, nz: int, make: Callable, probe: Callable, take: Callable
         out = probe(make_all(jnp.arange(j0, j0 + _PROBE_BATCH)))
         for g, n in enumerate(ns):
             if j0 < n:
-                cols[g].append(takes[g](out))
+                # Host-side: the probed blocks of every group at once are
+                # ~3x the factor (OOM at 64x64, (8, 16) with the mirror).
+                cols[g].append(jax.device_get(takes[g](out)))
     return [
-        jax.tree.map(lambda *a, n=n: jnp.concatenate(a)[:n], *c)
+        jax.tree.map(lambda *a, n=n: np.concatenate(a)[:n], *c)
         for c, n in zip(cols, ns)
     ]
 
@@ -1051,25 +1053,20 @@ def _factor_chain_group(
     ns, nl, nm, *_r, nz = zero.shape
     dtype = zero.dtype
     c, n = k.shape[0], k.shape[1] * nz
-    lower, diag, upper = (jnp.zeros((c, ns, nl, nm, n, n), dtype) for _ in range(3))
+    lower, diag, upper = (np.zeros((c, ns, nl, nm, n, n), dtype) for _ in range(3))
     for res, got in enumerate(s_parts):
         src = np.arange(res, nm, 3)
         for shift, part in zip((1, 0, -1), got):
             rows = src + shift
             ok = (rows >= 0) & (rows < nm)
-            col = jnp.moveaxis(part, 0, -1)[:, :, :, ok]  # (c, s, l, src, N, N)
-            if shift == 1:
-                lower = lower.at[:, :, :, rows[ok]].set(col)
-            elif shift == 0:
-                diag = diag.at[:, :, :, rows[ok]].set(col)
-            else:
-                upper = upper.at[:, :, :, rows[ok]].set(col)
+            col = np.moveaxis(part, 0, -1)[:, :, :, ok]  # (c, s, l, src, N, N)
+            {1: lower, 0: diag, -1: upper}[shift][:, :, :, rows[ok]] = col
     facs, errs = [], []
     for sp in spec:
         e: list[Any] = [None, None]
         if e_mirror is not None and sp[0] in e_mirror[0]:
             e = [jnp.tile(a[np.array(sp)], k.shape[1]) for a in e_mirror[1:]]
-        sel = [b[:, list(sp)] for b in (lower, diag, upper)]
+        sel = [jnp.asarray(b[:, list(sp)]) for b in (lower, diag, upper)]
         fac, err = _thomas_factor(*sel, *e, gdt)
         facs.append(fac)
         errs.append(float(err))
