@@ -39,7 +39,6 @@ from gkx.config import (
 )
 import json
 from pathlib import Path
-from support.paths import load_artifact_tool
 import scripts.checks._gates.quasilinear_calibration as qlc
 from scripts.checks._gates.quasilinear_calibration import (
     QuasilinearCalibrationPoint,
@@ -59,7 +58,6 @@ import os
 from support.paths import REPO_ROOT, load_release_tool
 import subprocess
 import sys
-from support.paths import load_tool_script
 from gkx.diagnostics.saturation import (
     SaturationStopConfig,
     _sokal_window_mean_sem,
@@ -427,10 +425,6 @@ def test_runtime_scan_collects_quasilinear_payloads_and_rejects_batch() -> None:
 
 # ---- from test_quasilinear_calibration.py ----
 # Tests for quasilinear calibration artifact helpers.
-
-
-def _load_build_tool_module():
-    return load_artifact_tool("plot_quasilinear_calibration")
 
 
 def _valid_window_stats(case: str = "holdout") -> dict:
@@ -1209,92 +1203,6 @@ def test_calibration_summary_ingestion_validates_csv_windows_and_relative_paths(
         )
 
 
-def test_build_calibration_report_tool_can_generate_point_from_artifacts(
-    tmp_path: Path,
-) -> None:
-    mod = _load_build_tool_module()
-    spectrum = tmp_path / "ql.csv"
-    spectrum.write_text(
-        "ky,saturated_heat_flux_total\n0.1,1.0\n0.2,2.0\n", encoding="utf-8"
-    )
-    diag = tmp_path / "diag.csv"
-    diag.write_text("t,heat_flux\n0.0,4.0\n1.0,6.0\n", encoding="utf-8")
-    summary = tmp_path / "summary.json"
-    summary.write_text(
-        json.dumps({"case": "generated", "gkx": str(diag)}), encoding="utf-8"
-    )
-    out = tmp_path / "report.json"
-
-    assert (
-        mod.main(
-            [
-                "--spectrum",
-                str(spectrum),
-                "--nonlinear-summary",
-                str(summary),
-                "--split",
-                "audit",
-                "--out",
-                str(out),
-            ]
-        )
-        == 0
-    )
-
-    report = json.loads(out.read_text(encoding="utf-8"))
-    assert report["claim_level"] == "training_or_audit_only"
-    assert report["points"][0]["predicted_heat_flux"] == pytest.approx(3.0)
-    assert report["points"][0]["observed_heat_flux"] == pytest.approx(5.0)
-
-
-def test_build_calibration_report_tool_can_fit_train_scale(tmp_path: Path) -> None:
-    mod = _load_build_tool_module()
-    points = tmp_path / "points.json"
-    points.write_text(
-        json.dumps(
-            [
-                {
-                    "case": "train",
-                    "split": "train",
-                    "predicted_heat_flux": 0.25,
-                    "observed_heat_flux": 1.0,
-                    "saturation_rule": "mixing_length",
-                    "nonlinear_window_stats": _valid_window_stats("tool_train"),
-                },
-                {
-                    "case": "holdout",
-                    "split": "holdout",
-                    "predicted_heat_flux": 0.5,
-                    "observed_heat_flux": 2.2,
-                    "saturation_rule": "mixing_length",
-                    "nonlinear_window_stats": _valid_window_stats("tool_holdout"),
-                },
-            ]
-        ),
-        encoding="utf-8",
-    )
-    out = tmp_path / "report.json"
-
-    assert (
-        mod.main(
-            [
-                "--points",
-                str(points),
-                "--fit-train-scale",
-                "--holdout-mean-rel-gate",
-                "0.1",
-                "--out",
-                str(out),
-            ]
-        )
-        == 0
-    )
-
-    report = json.loads(out.read_text(encoding="utf-8"))
-    assert report["passed"] is True
-    assert report["metadata"]["heat_flux_scale_fit"]["scale"] == pytest.approx(4.0)
-
-
 def test_calibration_point_from_nonlinear_window_summary_rejects_unsupported_sources(
     tmp_path: Path,
 ) -> None:
@@ -1941,36 +1849,6 @@ def test_guardrail_script_runs_before_editable_install(tmp_path: Path) -> None:
 
 def _load_tool_module_quasilinear_window():
     return load_release_tool("check_nonlinear_transport_gates")
-
-
-def test_autocorrelation_campaign_uses_runtime_effective_sample_count(
-    tmp_path: Path,
-) -> None:
-    campaign = load_tool_script("campaigns", "heat_flux_autocorrelation")
-    rng = np.random.default_rng(31)
-    time = np.arange(400, dtype=float) * 0.2
-    flux = np.empty(time.size)
-    flux[0] = 4.0
-    for index in range(1, flux.size):
-        flux[index] = 4.0 + 0.9 * (flux[index - 1] - 4.0) + rng.normal(0.0, 0.1)
-    trace = tmp_path / "trace.csv"
-    np.savetxt(
-        trace,
-        np.column_stack((time, flux)),
-        delimiter=",",
-        header="t,heat_flux",
-        comments="",
-    )
-
-    report = campaign.analyse(trace)
-
-    assert report is not None
-    n = report["samples_in_window"]
-    expected = min(
-        float(n),
-        n * report["output_dt"] / (2.0 * report["tau_ac"]),
-    )
-    assert report["independent_samples"] == pytest.approx(expected)
 
 
 def _saturated_trace() -> tuple[np.ndarray, np.ndarray]:

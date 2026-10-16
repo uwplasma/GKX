@@ -235,7 +235,7 @@ def generate_runtime_vmec_eik(
 
 # Default EIK request template. This is a geometry default rather than report
 # machinery, so it stays in the package even though the parity report builders
-# that consume it moved to scripts/campaigns.
+# that consumed it were removed from scripts/.
 _VMEC_EIK_DEFAULT_REQUEST: dict[str, object] = {
     "y0": 10.0,
     "x0": None,

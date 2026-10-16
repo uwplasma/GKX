@@ -407,15 +407,15 @@ a certified transport reduction.
 Reproduce
 ---------
 
-The checked-in workflow has three owners:
+The workflow has three owners:
 
 * :download:`examples/10_vmex_optimization/run.py <../examples/10_vmex_optimization/run.py>` (formerly ``QA_optimization.py``)
   computes the VMEX--GKX design step;
-* :download:`qa_transport_validation.py
-  <../scripts/campaigns/qa_transport_validation.py>` runs restartable matched
+* ``scripts/campaigns/qa_transport_validation.py`` (retired;
+  :ref:`retired-generators`) runs restartable matched
   saturation pairs;
-* :download:`build_qa_transport_figures.py
-  <../scripts/artifacts/build_qa_transport_figures.py>` computes
+* ``scripts/artifacts/build_qa_transport_figures.py`` (retired;
+  :ref:`retired-generators`) computes
   :math:`\tau_{int}`, effective sample counts, intervals, CSV tables, and plots.
 
 The exact accepted boundaries are

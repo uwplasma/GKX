@@ -61,7 +61,6 @@ from gkx.geometry.imported_vmec import internal_vmec_backend_available
 import dataclasses
 from types import SimpleNamespace
 import gkx.geometry.vmec_state_controls as controls
-import scripts.campaigns.vmec_state_sensitivity as state_context
 import gkx.geometry.vmec_boozer_derivatives as vmec_derivatives
 import gkx.geometry.vmec_field_line_sampling as vmec_fieldline_numerics
 from gkx.geometry.imported_vmec import _Struct
@@ -84,7 +83,7 @@ from gkx.operators.linear.params import (
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
 import tempfile
-from scripts.campaigns.vmec_state_sensitivity import _array_parity_metrics
+from support.reference_physics import _array_parity_metrics
 from gkx.geometry.vmec_boozer_derivatives import (
     _MU_0,
     boozer_pressure_gradient,
@@ -1853,200 +1852,21 @@ def test_auto_fallback_skips_classic_reader_and_closes(monkeypatch, env_backend,
 # ---------------------------------------------------------------------------
 # _load_vmec_state_context: solved-case wiring + 2-D validation
 # ---------------------------------------------------------------------------
-def test_load_vmec_state_context_exposes_differentiable_state_arrays(monkeypatch):
-    r_cos = np.array(
-        [[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0], [9.0, 10.0, 11.0, 12.0]]
-    )
-    z_sin = np.array([[0.0, 0.1, 0.2, 0.3], [0.4, 0.5, 0.6, 0.7], [0.8, 0.9, 1.0, 1.1]])
-    bundle = _solved_case_bundle(r_cos, z_sin)
-    seen: dict[str, str] = {}
-
-    def _fake_resolve(name: str) -> Path:
-        seen["resolve"] = name
-        return Path("input.synthetic")
-
-    def _fake_load(name: str) -> tuple[object, ...]:
-        seen["load"] = name
-        return bundle
-
-    monkeypatch.setattr(state_context, "resolve_vmex_case_input_path", _fake_resolve)
-    monkeypatch.setattr(state_context, "load_solved_vmex_case", _fake_load)
-
-    ctx = state_context._load_vmec_state_context("synthetic_case")
-
-    # The case name is forwarded (as a string) to both resolver and loader.
-    assert seen == {"resolve": "synthetic_case", "load": "synthetic_case"}
-    assert ctx.input_path == Path("input.synthetic")
-    assert ctx.wout_path == state_context.VMEC_STATE_IN_MEMORY_WOUT_PATH
-    assert ctx.inp is bundle[0]
-    assert ctx.state is bundle[1]
-    assert ctx.runtime is bundle[2]
-    assert ctx.wout is bundle[3]
-    assert ctx.base_Rcos.shape == (3, 4)
-    assert ctx.base_Zsin.shape == (3, 4)
-    np.testing.assert_allclose(np.asarray(ctx.base_Rcos), r_cos)
-    np.testing.assert_allclose(np.asarray(ctx.base_Zsin), z_sin)
-
-
-def test_load_vmec_state_context_rejects_non_2d_state_arrays(monkeypatch):
-    bundle = _solved_case_bundle(np.ones(4), np.ones((3, 4)))  # R_cos is 1-D
-
-    monkeypatch.setattr(
-        state_context, "resolve_vmex_case_input_path", lambda name: Path("x")
-    )
-    monkeypatch.setattr(state_context, "load_solved_vmex_case", lambda name: bundle)
-
-    with pytest.raises(
-        RuntimeError, match="R_cos/Z_sin arrays must be two-dimensional"
-    ):
-        state_context._load_vmec_state_context("synthetic_case")
 
 
 # ---------------------------------------------------------------------------
 # _resolve_vmec_state_indices (default resolution, clamps, validation)
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize(
-    (
-        "shape",
-        "radial_index",
-        "mode_index",
-        "surface_index",
-        "surface_grid",
-        "expected",
-    ),
-    [
-        # Default radial index is ns // 2; each grid has its own default surface.
-        ((8, 5), None, 2, None, "half_mesh", (4, 2, 3)),
-        ((8, 5), None, 2, None, "field_line", (4, 2, 4)),
-        ((8, 5), None, 2, None, "metric", (4, 2, 3)),
-        # Explicit, in-range indices pass straight through.
-        ((8, 5), 2, 1, 5, "metric", (2, 1, 5)),
-        # Low-radius clamps: half_mesh/metric floor at 0, field_line floors at 1.
-        ((8, 5), 0, 0, None, "half_mesh", (0, 0, 0)),
-        ((2, 3), 0, 0, None, "metric", (0, 0, 0)),
-        ((2, 3), 0, 0, None, "field_line", (0, 0, 1)),
-    ],
-)
-def test_resolve_vmec_state_indices_resolves_defaults_and_clamps(
-    shape, radial_index, mode_index, surface_index, surface_grid, expected
-):
-    base = jnp.zeros(shape)
-
-    resolved = state_context._resolve_vmec_state_indices(
-        base,
-        radial_index=radial_index,
-        mode_index=mode_index,
-        surface_index=surface_index,
-        surface_grid=surface_grid,
-    )
-
-    assert resolved == expected
-    assert all(isinstance(value, int) for value in resolved)
-
-
-@pytest.mark.parametrize(
-    ("indices", "message"),
-    [
-        ((8, 0, None, "metric"), "radial_index is outside the VMEC state radial grid"),
-        ((-1, 0, None, "metric"), "radial_index is outside the VMEC state radial grid"),
-        ((None, 5, None, "metric"), "mode_index is outside the VMEC state mode table"),
-        ((None, 0, None, "bogus"), "unknown VMEC surface grid"),
-        ((None, 0, 7, "half_mesh"), "half-mesh Boozer surface grid"),
-        ((None, 0, 8, "field_line"), "VMEC metric radial grid"),
-        ((None, 0, -1, "metric"), "VMEC metric radial grid"),
-    ],
-)
-def test_resolve_vmec_state_indices_rejects_out_of_range_and_unknown_grid(
-    indices, message
-):
-    names = ("radial_index", "mode_index", "surface_index", "surface_grid")
-    with pytest.raises(ValueError, match=message):
-        state_context._resolve_vmec_state_indices(
-            jnp.zeros((8, 5)), **dict(zip(names, indices))
-        )
 
 
 # ---------------------------------------------------------------------------
 # _perturb_vmec_state (two-control perturbation + immutability)
 # ---------------------------------------------------------------------------
-def _perturb_context() -> tuple[object, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    base_Rcos = jnp.asarray(np.arange(1.0, 13.0).reshape(3, 4))
-    base_Zsin = jnp.asarray(
-        np.array([[0.0, 0.1, 0.2, 0.3], [0.4, 0.5, 0.6, 0.7], [0.8, 0.9, 1.0, 1.1]])
-    )
-    witness = jnp.asarray(np.full((3, 4), 3.0))
-    # The state tables deliberately differ from base_* so the assertions prove
-    # the perturbation is applied to ctx.base_Rcos/base_Zsin, not ctx.state.*.
-    state = _FakeSpectralState(
-        R_cos=jnp.zeros((3, 4)), Z_sin=jnp.zeros((3, 4)), R_sin=witness
-    )
-    ctx = state_context._VMECStateContext(
-        input_path=Path("input.synthetic"),
-        wout_path=state_context.VMEC_STATE_IN_MEMORY_WOUT_PATH,
-        inp=object(),
-        runtime=object(),
-        wout=object(),
-        state=state,
-        base_Rcos=base_Rcos,
-        base_Zsin=base_Zsin,
-    )
-    return ctx, base_Rcos, base_Zsin, witness
-
-
-def test_perturb_vmec_state_increments_two_controls_from_base_tables():
-    ctx, base_Rcos, base_Zsin, witness = _perturb_context()
-    x = jnp.asarray([0.5, -0.3])
-
-    perturbed = state_context._perturb_vmec_state(ctx, x, radial_index=1, mode_index=2)
-
-    expected_Rcos = np.asarray(base_Rcos).copy()
-    expected_Rcos[1, 2] += 0.5
-    expected_Zsin = np.asarray(base_Zsin).copy()
-    expected_Zsin[1, 2] += -0.3
-
-    assert isinstance(perturbed, _FakeSpectralState)
-    np.testing.assert_allclose(np.asarray(perturbed.R_cos), expected_Rcos)
-    np.testing.assert_allclose(np.asarray(perturbed.Z_sin), expected_Zsin)
-    # Only the [1, 2] entries moved (the [0, 0] control is unchanged base data).
-    assert float(np.asarray(perturbed.R_cos)[0, 0]) == pytest.approx(1.0)
-    # The untouched family survives and the original frozen state is unchanged.
-    assert perturbed.R_sin is witness
-    np.testing.assert_allclose(np.asarray(ctx.state.R_cos), np.zeros((3, 4)))
-
-
-def test_perturb_vmec_state_and_context_are_immutable():
-    ctx, _base_Rcos, _base_Zsin, _witness = _perturb_context()
-
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        ctx.base_Rcos = jnp.zeros((3, 4))
-
-    perturbed = state_context._perturb_vmec_state(
-        ctx, jnp.asarray([0.0, 0.0]), radial_index=0, mode_index=1
-    )
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        perturbed.R_cos = jnp.zeros((3, 4))
 
 
 # ---------------------------------------------------------------------------
 # _length_two_params (default fill + length-2 validation)
 # ---------------------------------------------------------------------------
-def test_length_two_params_fills_default_and_preserves_length_two_vectors():
-    filled = state_context._length_two_params(None, 2.5)
-    assert filled.shape == (2,)
-    assert np.asarray(filled).dtype == np.float64  # x64: forced float64 contract
-    np.testing.assert_allclose(np.asarray(filled), [2.5, 2.5])
-
-    passed = state_context._length_two_params(jnp.asarray([0.1, -0.2]), 0.0)
-    np.testing.assert_allclose(np.asarray(passed), [0.1, -0.2])
-
-
-@pytest.mark.parametrize(
-    "params",
-    [jnp.asarray([1.0]), jnp.asarray([1.0, 2.0, 3.0]), jnp.asarray([[1.0, 2.0]])],
-)
-def test_length_two_params_rejects_non_length_two_vectors(params):
-    with pytest.raises(ValueError, match="params must be a length-2 vector"):
-        state_context._length_two_params(params, 0.0)
 
 
 # ---- from test_imported_vmec_geometry.py ----

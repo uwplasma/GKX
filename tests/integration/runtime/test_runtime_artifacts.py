@@ -16,7 +16,7 @@ from gkx.artifacts.io import (
     validate_finite_array,
     validate_finite_runtime_result,
 )
-from scripts.comparison.compare_gx_rhs_terms import (
+from support.reference_physics import (
     _build_initial_condition,
 )
 from gkx.config import CycloneBaseCase
