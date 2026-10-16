@@ -59,3 +59,10 @@ Command for each row: `prof_lin.py --toml <deck> --opts '{"solver":..., "Nl":..,
 | ETG etg_linear, ky 15 | 4,8 | adaptive | did not finish in 40 min | - | - |
 
 Policy and literature: docs/algorithms.rst, "Eigensolver policy".
+
+## After #366 (timestep-free end damping), same command, 2026-10-16
+
+| deck | route | eigenvalue | residual | wall s |
+|---|---|---|---|---|
+| Cyclone AE (8,24) | adaptive | 0.0986917-0.27687j | 3.5e-6 | 26.2 |
+| KBM (4,8) | adaptive | 0.242567-1.11928j | 1.19e-4 (certified) | 1230.3 |

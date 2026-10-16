@@ -383,6 +383,11 @@ adaptive pair.
      - not run
      - not run
 
+After the timestep-free end-damping contract (#366), adaptive gives
+0.098692-0.276870j (residual 3.5e-6, 26 s) on Cyclone (8, 24) and
+0.242567-1.119282j (residual 1.19e-4, certified, 1230 s) on KBM (4, 8). The
+table rows above predate #366; the routes compare the same way.
+
 On main, every shift-invert run ended with ``residual=nan``: hermite-line and
 field-corrected average the drift over z, which gave
 ||(A - σ)Mx - x|| = 11.6 against 0.14 with streaming alone. pr3-cm finds the
