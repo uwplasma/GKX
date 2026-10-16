@@ -46,6 +46,60 @@ def gs2(name, geom, nu):
     return text
 
 
+ELECTRON = """&species_parameters_2
+ z = -1.0
+ mass = 2.7e-4
+ dens = 1.0
+ temp = 1.0
+ tprim = 2.49
+ fprim = 0.8
+ uprim = 0.0
+ vnewk = {vnewk:.10e}
+ type = "electron"
+/
+&dist_fn_species_knobs_2
+ fexpr = 0.48
+ bakdif = 0.05
+/
+"""
+
+
+def gs2_kinetic_electrons(name, nu):
+    """s-alpha kinetic-electron Cyclone (examples/05, beta 1e-5 with A_par)."""
+
+    q20.GS2_RUNGS["e3"] = dict(ntheta=48, nperiod=3, negrid=16, ngauss=8, delt=0.01)
+    case = dict(
+        name=name,
+        code="gs2",
+        geom="S",
+        phys="a",
+        rung="e3",
+        ky_gx=KY,
+        ky_code=math.sqrt(2) * KY,
+        t_max=100.0,
+    )
+    text = q20.gs2_input(case)
+    vnewk_e = nu * (1.0 / 2.7e-4) ** 0.5 / math.sqrt(2)
+    for a, b in (
+        (" nspec = 1\n", " nspec = 2\n"),
+        (" beta = 0.0\n", " beta = 1e-05\n"),
+        (" fapar = 0.0\n", " fapar = 1.0\n"),
+        (
+            "&init_g_knobs",
+            ELECTRON.format(vnewk=vnewk_e if nu else 0.0) + "&init_g_knobs",
+        ),
+    ):
+        assert text.count(a) == 1, a
+        text = text.replace(a, b)
+    if nu:
+        text = text.replace('collision_model = "none"', 'collision_model = "default"')
+        text = text.replace(
+            'vnewk = 0.0\n type = "ion"',
+            f'vnewk = {nu / math.sqrt(2):.10e}\n type = "ion"',
+        )
+    return text
+
+
 def stella(name, nu, model):
     case = dict(
         name=name,
@@ -77,6 +131,8 @@ if __name__ == "__main__":
         for model in ("fokker-planck", "dougherty") if nu else ("none",):
             name = f"stella_M_{model}_nu{nu:g}"
             jobs.append((name, "stella", stella(name, nu, model)))
+        name = f"gs2_KE_nu{nu:g}"
+        jobs.append((name, "gs2", gs2_kinetic_electrons(name, nu)))
         for name, code, text in jobs:
             d = root / code / name
             d.mkdir(parents=True, exist_ok=True)
