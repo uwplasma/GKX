@@ -18,10 +18,10 @@ Warm solves are 3.2x faster. The final Wg differs at the 1e-11 level between rep
 | deck | adaptive | shift-invert |
 |---|---|---|
 | Cyclone AE case_full (8,24) | 0.098776-0.276905j, res 3.8e-6, 36 s | 0.098774-0.276932j, outer res 1.6e-4 > gate 1.2e-4, inner 48/48 unconverged (0.873), 2246 s |
-| KBM case_full (8,24) | see PR | not run (stopped: same cost class) |
-| ETG etg_linear (8,8) ky=15 | see PR | not run |
+| KBM case_full (8,24) | 0.183+0.189j, res 4.4e-4, **not certified**, 1936 s (wrong branch: reference omega 1.08) | not run |
+| ETG etg_linear (8,8) ky=15 | did not finish in 2400 s | not run |
 
-On main, shift-invert failed every deck with `residual=nan`. With the new policy it finds the right mode, but costs 60x the adaptive solve and still misses the gate. KBM and ETG therefore default to adaptive.
+On main, shift-invert failed every deck with `residual=nan`. With the new policy it finds the right mode, but costs 60x the adaptive solve and still misses the gate. KBM and ETG therefore default to adaptive. It fails closed instead of returning NaN, but at production resolution it does not yet certify KBM (8,24), and ETG did not finish. The fast route for those decks is still open (time solver, or a working preconditioned shift-invert).
 
 ## Review findings fixed in this PR
 
