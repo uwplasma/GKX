@@ -1,2 +1,0 @@
-       11.37 real        27.91 user         1.56 sys
-           930627584  maximum resident set size

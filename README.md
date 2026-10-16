@@ -135,7 +135,7 @@ limit repaired. The growth rate agrees to within 0.3% at seven of eight
 within 0.13% everywhere. (b) The growth rate from three codes: GKX is within
 0.3% of converged GS2 at Miller `ky rho_i` 0.30 and 0.40, and 1.0% at s-alpha
 0.30. Miller 0.15 is the one point where the three codes spread by more than
-1%. Record: [cross-code benchmark](plan/research/2026-09-27-xcode/REPORT.md).
+1%. Record: `plan/research/2026-09-27-xcode/REPORT.md` in the research log.
 
 - **GS2 and GX with kinetic electrons** (Cyclone Miller) agree to 1.2% and
   0.2% at `ky rho_i` 0.30 and 0.50; the GKX eigenpair for this case is next.
@@ -174,7 +174,7 @@ differ in models and options. Detail: [benchmarks](docs/benchmarks.rst),
 The runs are in `docs/_static/analytic_benchmarks.json`, built by
 `scripts/artifacts/build_analytic_benchmarks.py` (removed; `git show df2953026:<path>`). The gates are in
 `tests/validation/benchmarks/test_benchmarking.py`, and the
-specification is in [the research record](plan/research/2026-09-analytic-benchmarks/REPORT.md).
+specification is in the research log (`plan/research/2026-09-analytic-benchmarks/REPORT.md`).
 Units are `v_ti = sqrt(T_i/m_i)`.
 
 - **Zonal-flow residual** (Rosenbluth-Hinton 1998; Xiao-Catto 2006). A `ky = 0`
@@ -439,7 +439,7 @@ warm.
 
 Each PNG in `docs/_static/readme/` has a JSON companion with every plotted
 number. The figure and evidence generators were removed from `scripts/` to keep
-the clone small; `plan/log.md` (2026-10-15) lists each one and the commit to
+the clone small; the research log (`plan/log.md`, 2026-10-15) lists each one and the commit to
 recover it from (`git show df2953026:scripts/figures.py`).
 
 ## Documentation and development
