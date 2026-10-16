@@ -1112,14 +1112,17 @@ def build_linear_cache(
         linked_cache=linked_cache,
     )
     if _uses_landau(params):
-        from gkx.operators.linear.collision_tables import (
-            linearized_landau_species_matrices,
-        )
+        from gkx.operators.linear.collision_tables import linearized_landau_blocks
 
-        pairs: Any = linearized_landau_species_matrices(
-            Nl, Nm, params.mass, params.temp
+        blocks = linearized_landau_blocks(Nl, Nm, params.mass, params.temp)
+        real = grid_arrays.real_dtype
+        cache = replace(
+            cache,
+            landau_pairs=jax.tree_util.tree_map(
+                lambda a: a.astype(real) if np.issubdtype(a.dtype, np.floating) else a,
+                blocks,
+            ),
         )
-        cache = replace(cache, landau_pairs=pairs.astype(grid_arrays.real_dtype))
     return _to_device_cache(cache)
 
 

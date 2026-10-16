@@ -2067,7 +2067,9 @@ def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None
 # Sugama test part, Spitzer-Harm, and differentiability in nu.
 
 from gkx.operators.linear.collision_tables import (  # noqa: E402
+    linearized_landau_blocks,
     linearized_landau_pair_matrices,
+    linearized_landau_species_matrices,
 )
 from gkx.operators.linear.collisions import (  # noqa: E402
     apply_linearized_landau,
@@ -2172,26 +2174,36 @@ def test_landau_spitzer_harm_conductivity() -> None:
         assert abs(ratio - published) / published < 0.005, (charge, ratio)
 
 
-def test_landau_application_is_differentiable_in_nu() -> None:
-    pairs = jnp.asarray(
-        np.stack(np.stack(linearized_landau_pair_matrices(2, 6)))[:, None, None]
-    )
-    draws = np.random.default_rng(3).normal(size=(2, 1, 2, 6, 2, 1, 3))
-    state = jnp.asarray(draws[0] + 1j * draws[1], dtype=jnp.complex64)
+def test_landau_block_apply_equals_dense_and_is_differentiable_in_nu() -> None:
+    """The block-sparse runtime product equals the dense operator, e-i included."""
 
-    def rate(nu):
+    masses, temps = [1.0, 1.0 / 1836.0], [1.0, 3.0]
+    blocks = linearized_landau_blocks(4, 8, masses, temps)
+    dense = linearized_landau_species_matrices(4, 8, masses, temps)
+    nu, charge = jnp.asarray([0.3, 1.7]), jnp.asarray([1.0, -1.0])
+    pair = (np.asarray(nu)[:, None] * np.ones((2, 2)))[..., None, None]
+    operator = (
+        pair * dense[1]
+        + np.eye(2)[:, :, None, None] * np.sum(pair * dense[0], axis=1)[:, None]
+    )
+    draws = np.random.default_rng(3).normal(size=(2, 2, 4, 8, 2, 1, 3))
+    state = jnp.asarray(draws[0] + 1j * draws[1])
+    applied = apply_linearized_landau(
+        state, blocks, nu=nu, density=jnp.ones(2), charge=charge
+    )
+    expected = apply_multispecies_collision_moment_matrix(state, jnp.asarray(operator))
+    assert np.abs(applied - expected).max() < 1e-12 * np.abs(expected).max()
+    assert np.allclose(
+        blocks.diagonal(nu=nu, density=jnp.ones(2), charge=charge),
+        [np.diag(operator[s, s]) for s in range(2)],
+    )
+
+    def rate(scale):
         out = apply_linearized_landau(
-            state, pairs, nu=nu, density=jnp.ones(1), charge=jnp.ones(1)
+            state, blocks, nu=scale * nu, density=jnp.ones(2), charge=charge
         )
         return jnp.real(jnp.vdot(state, out))
 
-    dense = apply_multispecies_collision_moment_matrix(
-        state, 0.3 * jnp.asarray(sum(linearized_landau_pair_matrices(2, 6)))[None, None]
-    )
-    blocked = apply_linearized_landau(
-        state, pairs, nu=0.3, density=jnp.ones(1), charge=jnp.ones(1)
-    )
-    assert np.allclose(blocked, dense, rtol=1e-5, atol=1e-6)  # parity blocks
-    gradient = jax.grad(rate)(jnp.asarray(0.3))
-    assert np.isclose(float(gradient), float(rate(1.0)), rtol=1e-5)
-    assert float(gradient) < 0.0  # dissipative: d/dnu of <g, C g> is <g, C g> < 0
+    gradient = jax.grad(rate)(jnp.asarray(0.5))
+    assert np.isclose(float(gradient), float(rate(1.0)), rtol=1e-10)
+    assert float(gradient) < 0.0  # dissipative

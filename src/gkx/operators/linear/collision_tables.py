@@ -624,7 +624,7 @@ def linearized_landau_factors(
 def linearized_landau_species_matrices(
     nl: int, nm: int, mass: Any, temperature: Any
 ) -> np.ndarray:
-    """Stack unit-frequency ``(test, field)`` pair matrices as ``(2, s, s, n, n)``."""
+    """Stack the dense unit-frequency ``(test, field)`` pairs as ``(2, s, s, n, n)``."""
 
     masses = np.atleast_1d(np.asarray(mass, dtype=float))
     temps = np.broadcast_to(
@@ -634,11 +634,7 @@ def linearized_landau_species_matrices(
         [
             np.stack(
                 [
-                    np.stack(
-                        linearized_landau_pair_matrices(
-                            nl, nm, float(ma / mb), float(ta / tb)
-                        )
-                    )
+                    np.stack(linearized_landau_pair_matrices(nl, nm, ma / mb, ta / tb))
                     for mb, tb in zip(masses, temps)
                 ],
                 axis=1,
@@ -646,4 +642,126 @@ def linearized_landau_species_matrices(
             for ma, ta in zip(masses, temps)
         ],
         axis=1,
+    )
+
+
+def _padded_batches(blocks: list, pads: tuple[int, ...], fill: tuple[int, ...]):
+    """Group index blocks of similar size into zero-padded batches."""
+
+    groups: dict = {}
+    for block in blocks:
+        key = tuple(-(-len(ix) // 4) * 4 for ix in block)
+        groups.setdefault(key, []).append(block)
+    del pads
+    return [
+        (
+            key,
+            [
+                np.stack(
+                    [
+                        np.pad(ix, (0, n - len(ix)), constant_values=f)
+                        for b in members
+                        for ix in (b[a],)
+                    ]
+                )
+                for a, (n, f) in enumerate(zip(key, fill))
+            ],
+            members,
+        )
+        for key, members in groups.items()
+    ]
+
+
+def linearized_landau_blocks(nl: int, nm: int, mass: Any, temperature: Any):
+    """Build :class:`~gkx.operators.linear.collisions.LandauBlocks` for a species set."""
+
+    from gkx.operators.linear.collisions import LandauBlocks
+
+    masses = np.atleast_1d(np.asarray(mass, dtype=float))
+    temps = np.broadcast_to(
+        np.atleast_1d(np.asarray(temperature, dtype=float)), masses.shape
+    )
+    factors = [
+        [
+            linearized_landau_factors(nl, nm, ma / mb, ta / tb)
+            for mb, tb in zip(masses, temps)
+        ]
+        for ma, ta in zip(masses, temps)
+    ]
+    transform = factors[0][0][0]
+    n_hl, n_ls = transform.shape
+    _, labels = _hermite_laguerre_to_legendre_sonine(nl, nm)
+    ls_l = np.asarray(labels)
+    ls_k = np.concatenate([np.arange(np.sum(ls_l == l)) for l in range(ls_l.max() + 1)])  # noqa: E741
+    hl = np.arange(n_hl)
+    hl_degree = (hl // nl) + 2 * (hl % nl)
+    ls_degree = ls_l + 2 * ls_k
+    degree_blocks = [
+        (np.flatnonzero(hl_degree == d), np.flatnonzero(ls_degree == d))
+        for d in range(int(hl_degree.max()) + 1)
+        if np.any(hl_degree == d)
+    ]
+    rows, cols, mats = [], [], []
+    for _, (r, c), members in _padded_batches(degree_blocks, (), (n_hl, n_ls)):
+        rows.append(r)
+        cols.append(c)
+        mats.append(
+            np.stack(
+                [
+                    np.pad(
+                        transform[np.ix_(a, b)],
+                        ((0, r.shape[1] - len(a)), (0, c.shape[1] - len(b))),
+                    )
+                    for a, b in members
+                ]
+            )
+        )
+    l_blocks = [(np.flatnonzero(ls_l == l),) for l in range(int(ls_l.max()) + 1)]  # noqa: E741
+    index, test, field = [], [], []
+    for _, (ix,), members in _padded_batches(l_blocks, (), (n_ls,)):
+        index.append(ix)
+        for out, part in ((test, 1), (field, 2)):
+            out.append(
+                np.stack(
+                    [
+                        np.stack(
+                            [
+                                np.stack(
+                                    [
+                                        np.pad(
+                                            pair[part][np.ix_(b, b)],
+                                            (0, ix.shape[1] - len(b)),
+                                        )
+                                        for (b,) in members
+                                    ]
+                                )
+                                for pair in row
+                            ]
+                        )
+                        for row in factors
+                    ]
+                )
+            )
+    diagonal = [
+        np.asarray(
+            [
+                [
+                    np.einsum("ia,ab,ib->i", transform, pair[part], transform)
+                    for pair in row
+                ]
+                for row in factors
+            ]
+        )
+        for part in (1, 2)
+    ]
+    return LandauBlocks(
+        tuple(rows),
+        tuple(cols),
+        tuple(mats),
+        tuple(index),
+        tuple(test),
+        tuple(field),
+        diagonal[0],
+        diagonal[1],
+        int(n_ls),
     )

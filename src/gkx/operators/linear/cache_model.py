@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field as dataclass_field
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -120,9 +121,10 @@ class LinearCache:
     #: Non-twisting flux tube radial index shift ``m0(ky, z)``: row ``kx`` at
     #: ``z`` holds ballooning mode ``kx + m0``. ``None`` off that geometry.
     ntft_m0: jnp.ndarray | None = None
-    #: Unit-frequency linearized Landau ``(test, field)`` pair matrices,
-    #: ``(2, s, s, n, n)``; ``None`` when the run uses the Dougherty kernel.
-    landau_pairs: jnp.ndarray | None = None
+    #: Block-sparse unit-frequency linearized Landau factors
+    #: (:class:`~gkx.operators.linear.collisions.LandauBlocks`); ``None`` when
+    #: the run uses the Dougherty kernel.
+    landau_pairs: Any = None
 
     def tree_flatten(self):
         children = (
