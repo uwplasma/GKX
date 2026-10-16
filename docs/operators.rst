@@ -300,13 +300,31 @@ operator still conserves but is not self-adjoint; the thermal equilibration
 
 Default and cost. ``landau`` is the default both in the runtime and in
 :class:`~gkx.operators.linear.params.LinearParams` (``collision_model``); the
-matrices are built only when some ``nu`` is nonzero. The product is dense
-within each Hermite parity, so its cost grows as :math:`(N_lN_m)^2` per grid
-point. On an A4000 GPU, Cyclone grid :math:`16\times8\times32`, the whole
-linear RHS at :math:`(N_l,N_m)=(16,48)` costs 1.2x (one species) and 1.3x (two
-species) the Dougherty RHS in float32, and 2.6x and 3.8x in float64, where
-that card's float64 matrix rate is the limit
-(``plan/research/2026-10-15-collisions/results/rhs_collision_share_gpu.txt``).
+matrices are built only when some ``nu`` is nonzero. The runtime applies the
+factors :math:`T B T^{\mathsf T}` directly: :math:`T` is block diagonal in the
+degree :math:`p+2j` and :math:`B` in :math:`l`, which at
+:math:`(N_l,N_m)=(16,48)` is 4.1x fewer flops than the dense product. On an
+idle A4000, Cyclone grid :math:`16\times8\times32`, the whole linear RHS at
+:math:`(16,48)` costs 1.6x the Dougherty RHS in float32 (one and two species)
+and 1.9x (one species) and 2.3x (two species) in float64; at :math:`(8,24)`,
+1.4-1.7x (``plan/research/2026-10-15-collisions/results/rhs_collision_share_gpu.txt``).
+
+Benchmarks against other codes (``results/xcode_collisional.txt``,
+``results/zonal_collisional.txt``):
+
+- Cyclone ITG with adiabatic electrons, :math:`k_y=0.3`, :math:`\nu_i` from 0 to
+  0.1: within 1.1% of GS2's model operator at :math:`(N_l,N_m)=(12,48)`, including
+  GS2's slight collisional destabilisation. The Dougherty kernel goes the other
+  way, and is 21% low at :math:`\nu_i=0.1`.
+- Cyclone with kinetic electrons (:math:`m_e/m_i=2.7\times10^{-4}`), :math:`\nu_i`
+  from 0 to 0.1 with consistent :math:`\nu_e`: within 1.2-4.8% of GS2 at
+  :math:`(8,24)`. Dougherty is 11% low at :math:`\nu_i=0.03`.
+- Collisional decay of the Rosenbluth-Hinton residual (s-alpha, :math:`q=1.4`,
+  :math:`\epsilon=0.18`): the residual levels are within 6% of Xiao, Catto &
+  Molvig (2007), but the decay rate is 21-27% slower. That formula drops energy
+  diffusion, and its :math:`\nu_{ii}` convention was not checked against the
+  paper, so the rate is not used as a gate. The Dougherty kernel does not damp
+  this residual at all.
 
 Not included: finite-:math:`k_\perp` (gyroaveraging) terms, which
 ``coulomb_finite_kperp`` carries for one species at fixed tabulated
