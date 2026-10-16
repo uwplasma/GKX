@@ -602,7 +602,7 @@ for verification and model development. None of them has a TOML selector.
 
 The high-precision coefficient algebra (Coulomb speed integrals, basis
 transforms, Laguerre products and the equation (3.48)--(3.50) contractions)
-lives in the offline generator ``scripts/artifacts/build_linear_validation_artifacts.py``,
+lives in the offline generator ``scripts/artifacts/build_linear_validation_artifacts.py`` (retired; :ref:`retired-generators`),
 not in the package. The runtime only interpolates validated tables and applies
 matrices, which is the same split as the GYACOMO/COSOlver pair.
 
@@ -635,7 +635,7 @@ Collision validation evidence
    ``collision_operator_verification.json``.
 
 Regenerate with
-``python scripts/artifacts/build_linear_validation_artifacts.py collision-verification``.
+``python scripts/artifacts/build_linear_validation_artifacts.py collision-verification`` (retired; :ref:`retired-generators`).
 The largest direct-projection relative error is :math:`3.1\times10^{-13}`. At
 :math:`b=0.8` the assembled block changes by :math:`4.50\times10^{-7}` between
 Bessel orders four and six, at the :math:`(p_{\max},j_{\max})=(8,4)` spherical

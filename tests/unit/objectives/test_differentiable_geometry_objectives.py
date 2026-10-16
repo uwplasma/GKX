@@ -20,18 +20,6 @@ import gkx.geometry.autodiff_checks as diff_autodiff
 import gkx.geometry.differentiable as diff_geom
 import gkx.geometry.vmec_boozer_core as vmec_boozer_core
 import gkx.geometry.vmec_boozer_derivatives as vmec_boozer_derivatives
-import gkx.geometry.vmec_field_line_sampling as vmec_field_line_sampling
-import scripts.campaigns.vmec_flux_tube_reports as vmec_flux_tube_reports
-from scripts.campaigns.vmec_flux_tube_reports import (
-    vmex_flux_tube_array_parity_report,
-    vmex_flux_tube_sensitivity_report,
-)
-import scripts.campaigns.vmec_state_sensitivity as vmec_state_controls
-import scripts.campaigns.vmec_state_sensitivity as vmec_state_sensitivity
-from scripts.campaigns.vmec_state_sensitivity import (
-    vmex_field_line_tensor_sensitivity_report,
-    vmex_metric_tensor_sensitivity_report,
-)
 import gkx.geometry.vmec_tensor_mapping as vmec_tensor_mapping
 from gkx.geometry.backend_discovery import (
     _candidate_paths,
@@ -50,8 +38,6 @@ from gkx.geometry.flux_tube_contract import (
     flux_tube_geometry_from_mapping,
     flux_tube_geometry_observables,
     geometry_observable_names,
-    vmec_field_line_tensor_observable_names,
-    vmec_metric_tensor_observable_names,
 )
 from gkx.geometry.numerics import (
     _boozer_half_mesh_s_grid,
@@ -61,7 +47,7 @@ from gkx.geometry.numerics import (
     _radial_derivative_array,
     _radial_derivative_profile,
 )
-from scripts.campaigns.vmec_state_sensitivity import (
+from support.reference_physics import (
     _array_parity_metrics,
     _scalar_parity_metrics,
 )
@@ -527,88 +513,6 @@ def test_booz_xform_spectral_sensitivity_report_is_bounded_when_available() -> N
     assert np.asarray(report["bmnc_b"]).shape == (1, 2)
 
 
-def test_vmec_state_sensitivity_report_helpers_are_fail_closed_and_json_ready() -> None:
-    backend_info = {"vmex_available": False}
-
-    unavailable = vmec_state_sensitivity._unavailable_vmec_state_sensitivity_report(
-        backend_info=backend_info,
-        fd_step=2.0e-5,
-        case_name="case",
-        reason="missing backend",
-    )
-    assert unavailable == {
-        "available": False,
-        "backend_info": backend_info,
-        "sensitivity": None,
-        "fd_step": 2.0e-5,
-        "case_name": "case",
-        "reason": "missing backend",
-    }
-
-    failed = vmec_state_sensitivity._failed_vmec_state_sensitivity_report(
-        backend_info=backend_info,
-        fd_step=1.0e-6,
-        case_name="case",
-        exc=ValueError("bad probe"),
-    )
-    assert failed["available"] is False
-    assert failed["error"] == "ValueError: bad probe"
-
-    ctx = vmec_state_sensitivity._VMECStateContext(
-        input_path=Path("input.example"),
-        wout_path=Path("wout_example.nc"),
-        inp=object(),
-        runtime=object(),
-        wout=object(),
-        state=object(),
-        base_Rcos=jnp.ones((3, 4)),
-        base_Zsin=jnp.ones((3, 4)),
-    )
-    metadata = vmec_state_sensitivity._vmec_state_sensitivity_metadata(
-        backend_info={"vmex_available": True},
-        ctx=ctx,
-        case_name="case",
-        params=jnp.asarray([0.1, -0.2]),
-        radial_index=1,
-        mode_index=2,
-        surface_index=0,
-        fd_step=3.0e-5,
-    )
-    assert metadata["available"] is True
-    assert metadata["param_names"] == ["delta_Rcos", "delta_Zsin"]
-    np.testing.assert_allclose(metadata["params"], [0.1, -0.2])
-    assert metadata["state_shape"] == [3, 4]
-    assert metadata["radial_index"] == 1
-    assert metadata["surface_index"] == 0
-
-
-def test_vmec_state_control_helpers_have_canonical_owner() -> None:
-    assert vmec_state_sensitivity._VMECStateContext is (
-        vmec_state_controls._VMECStateContext
-    )
-    assert vmec_state_sensitivity._load_vmec_state_context is (
-        vmec_state_controls._load_vmec_state_context
-    )
-    assert vmec_state_sensitivity._resolve_vmec_state_indices is (
-        vmec_state_controls._resolve_vmec_state_indices
-    )
-    assert vmec_state_sensitivity._perturb_vmec_state is (
-        vmec_state_controls._perturb_vmec_state
-    )
-    assert vmec_state_sensitivity._length_two_params is (
-        vmec_state_controls._length_two_params
-    )
-    assert vmec_flux_tube_reports._load_vmec_state_context is (
-        vmec_state_controls._load_vmec_state_context
-    )
-
-
-def test_vmec_field_line_sampling_helpers_have_canonical_owner() -> None:
-    assert vmec_state_sensitivity._rms_with_floor is (
-        vmec_field_line_sampling._rms_with_floor
-    )
-
-
 def test_vmec_tensor_mapping_builds_finite_mapping_from_mocked_vmec_modules(
     monkeypatch,
 ) -> None:
@@ -831,177 +735,6 @@ def test_from_vmex_mirror_missing_owner_is_actionable(monkeypatch) -> None:
         )
 
 
-def test_vmec_state_sensitivity_ad_fd_diagnostics_match_analytic_jacobian() -> None:
-    def observables(params: jnp.ndarray) -> jnp.ndarray:
-        return jnp.asarray(
-            [
-                params[0] + 2.0 * params[1],
-                params[0] * params[0] - params[1],
-            ]
-        )
-
-    report = vmec_state_sensitivity._ad_fd_jacobian_diagnostics(
-        observables,
-        jnp.asarray([0.3, -0.2]),
-        fd_step=1.0e-3,
-        observable_names=("linear_combo", "quadratic_combo"),
-        relative_floor=1.0e-10,
-    )
-
-    np.testing.assert_allclose(
-        np.asarray(report["jacobian_ad"]),
-        np.asarray([[1.0, 2.0], [0.6, -1.0]]),
-        rtol=1.0e-6,
-        atol=1.0e-6,
-    )
-    np.testing.assert_allclose(
-        np.asarray(report["jacobian_fd"]),
-        np.asarray(report["jacobian_ad"]),
-        rtol=1.0e-4,
-        atol=1.0e-4,
-    )
-    assert float(report["max_abs_ad_fd_error"]) < 1.0e-4
-    assert report["conditioning"]["sensitivity_map_rank"] == 2
-    assert report["conditioning"]["worst_rel_error"]["observable_name"] in {
-        "linear_combo",
-        "quadratic_combo",
-    }
-
-
-def test_vmec_state_rms_with_floor_matches_tensor_rms_contract() -> None:
-    values = jnp.asarray([3.0, 4.0])
-
-    rms = vmec_state_sensitivity._rms_with_floor(values, 1.0e-6)
-
-    assert float(rms) == pytest.approx(float(jnp.sqrt(12.5 + 1.0e-6)))
-    assert float(vmec_state_sensitivity._rms_with_floor(jnp.zeros(4), 1.0e-8)) == (
-        pytest.approx(1.0e-4)
-    )
-
-
-def test_vmex_flux_tube_sensitivity_report_starts_from_real_vmec_state_when_available() -> (
-    None
-):
-    for name in (
-        "vmex",
-        "vmex.driver",
-        "vmex.config",
-        "vmex.static",
-        "vmex.wout",
-        "vmex.geom",
-        "vmex.vmec_bcovar",
-        "vmex.field",
-    ):
-        sys.modules.pop(name, None)
-
-    report = vmex_flux_tube_sensitivity_report(ntheta=12, fd_step=2.0e-6)
-
-    assert "available" in report
-    if not report["available"]:
-        assert report["sensitivity"] is None
-        return
-
-    sensitivity = report["sensitivity"]
-    assert report["case_name"] == "nfp4_QH_warm_start"
-    assert report["param_names"] == ["delta_Rcos", "delta_Zsin"]
-    assert sensitivity["observable_names"] == list(geometry_observable_names())
-    assert np.asarray(sensitivity["jacobian_ad"]).shape == (
-        len(geometry_observable_names()),
-        2,
-    )
-    assert float(sensitivity["max_abs_ad_fd_error"]) < 1.0e1
-    assert float(sensitivity["max_rel_ad_fd_error"]) < 1.0e-3
-    assert sensitivity["conditioning"]["finite_fd_jacobian"] is True
-    assert int(report["surface_index"]) > 0
-    assert float(report["reference_length"]) > 0.0
-    assert float(report["reference_b"]) > 0.0
-
-
-def test_vmex_flux_tube_array_parity_report_tracks_production_gap_when_available() -> (
-    None
-):
-    for name in (
-        "vmex",
-        "vmex.driver",
-        "vmex.config",
-        "vmex.static",
-        "vmex.wout",
-        "vmex.geom",
-        "vmex.vmec_bcovar",
-        "vmex.field",
-        "booz_xform_jax",
-        "booz_xform_jax.jax_api",
-    ):
-        sys.modules.pop(name, None)
-
-    report = vmex_flux_tube_array_parity_report(ntheta=8)
-
-    assert "available" in report
-    if not report["available"]:
-        assert "reason" in report or "error" in report
-        return
-
-    assert report["case_name"] == "nfp4_QH_warm_start"
-    assert report["status"] in {"diagnostic_open", "passed"}
-    assert set(report["array_metrics"]) >= {
-        "bmag",
-        "gds2",
-        "gds21",
-        "gds22",
-        "gbdrift",
-        "jacobian",
-        "grho",
-    }
-    assert set(report["scalar_metrics"]) == {"gradpar", "q", "s_hat"}
-    assert "equal_arc_core_array_metrics" in report
-    assert "equal_arc_metric_array_metrics" in report
-    assert "equal_arc_drift_array_metrics" in report
-    assert "equal_arc_core_scalar_metrics" in report
-    assert np.isfinite(float(report["worst_core_normalized_max_abs"]))
-    assert np.isfinite(float(report["worst_scalar_rel"]))
-    assert bool(report["array_metrics"]["bmag"]["shape_match"])
-    if report["equal_arc_core_array_metrics"]:
-        assert (
-            gkx.vmex_boozer_equal_arc_core_profiles_from_state
-            is vmex_boozer_equal_arc_core_profiles_from_state
-        )
-        assert set(report["equal_arc_core_array_metrics"]) >= {
-            "bmag",
-            "bgrad",
-            "jacobian",
-        }
-        assert set(report["equal_arc_metric_array_metrics"]) == {
-            "gds2",
-            "gds21",
-            "gds22",
-            "grho",
-        }
-        assert set(report["equal_arc_drift_array_metrics"]) == {
-            "cvdrift",
-            "gbdrift",
-            "cvdrift0",
-            "gbdrift0",
-        }
-        assert set(report["equal_arc_core_scalar_metrics"]) == {"gradpar", "q", "s_hat"}
-        assert np.isfinite(float(report["equal_arc_core_worst_normalized_max_abs"]))
-        assert np.isfinite(float(report["equal_arc_core_worst_scalar_rel"]))
-        assert np.isfinite(
-            float(report["equal_arc_derivative_worst_normalized_max_abs"])
-        )
-        assert np.isfinite(float(report["equal_arc_metric_worst_normalized_max_abs"]))
-        assert np.isfinite(float(report["equal_arc_drift_worst_normalized_max_abs"]))
-        assert float(report["equal_arc_core_worst_normalized_max_abs"]) < 5.0e-2
-        assert float(report["equal_arc_core_worst_scalar_rel"]) < 5.0e-2
-        assert float(report["equal_arc_derivative_worst_normalized_max_abs"]) < 1.0e-1
-        assert float(report["equal_arc_metric_worst_normalized_max_abs"]) < 1.2e-1
-        assert float(report["equal_arc_drift_worst_normalized_max_abs"]) < 1.2e-1
-
-
-def test_vmex_flux_tube_array_parity_report_enforces_boozer_resolution_floor() -> None:
-    with pytest.raises(ValueError, match="mboz and nboz"):
-        vmex_flux_tube_array_parity_report(mboz=20, nboz=21)
-
-
 def test_boozer_half_mesh_s_grid_uses_fortran_half_mesh_indices() -> None:
     s_half = _boozer_half_mesh_s_grid(
         jnp.asarray([2, 3, 4]),
@@ -1133,98 +866,6 @@ def test_vmex_boozer_surface_stencil_indices_remain_static_under_ad() -> None:
         jnp.asarray(2.0)
     )
     np.testing.assert_allclose(derivative, 6.0)
-
-
-def test_vmex_metric_tensor_sensitivity_report_checks_real_metric_tensors_when_available() -> (
-    None
-):
-    for name in (
-        "vmex",
-        "vmex.driver",
-        "vmex.config",
-        "vmex.static",
-        "vmex.wout",
-        "vmex.geom",
-    ):
-        sys.modules.pop(name, None)
-
-    report = vmex_metric_tensor_sensitivity_report(fd_step=2.0e-5)
-
-    assert (
-        gkx.vmec_metric_tensor_observable_names is vmec_metric_tensor_observable_names
-    )
-    assert "available" in report
-    if not report["available"]:
-        assert report["sensitivity"] is None
-        return
-
-    assert report["case_name"] == "circular_tokamak"
-    assert report["param_names"] == ["delta_Rcos", "delta_Zsin"]
-    assert report["observable_names"] == list(vmec_metric_tensor_observable_names())
-    assert np.asarray(report["jacobian_ad"]).shape == (
-        len(vmec_metric_tensor_observable_names()),
-        2,
-    )
-    assert float(report["max_abs_ad_fd_error"]) < 2.0e-5
-    assert float(report["max_rel_ad_fd_error"]) < 2.0e-4
-    assert report["conditioning"]["jacobian_shape"] == [
-        len(vmec_metric_tensor_observable_names()),
-        2,
-    ]
-    assert len(report["metric_grid_shape"]) == 3
-
-
-def test_vmex_field_line_tensor_sensitivity_report_checks_stellarator_tensors_when_available() -> (
-    None
-):
-    for name in (
-        "vmex",
-        "vmex.driver",
-        "vmex.config",
-        "vmex.static",
-        "vmex.wout",
-        "vmex.geom",
-        "vmex.vmec_bcovar",
-        "vmex.field",
-    ):
-        sys.modules.pop(name, None)
-
-    # Central FD truncation scales as h^2 and the largest derivative is ~5e4,
-    # so a fixed coarse h=1e-6 gave an absolute error of 0.66 (#327). Gate the
-    # error relative to the derivative scale and require h^2 convergence.
-    report = vmex_field_line_tensor_sensitivity_report(ntheta=24, fd_step=1.0e-7)
-
-    assert (
-        gkx.vmec_field_line_tensor_observable_names
-        is vmec_field_line_tensor_observable_names
-    )
-    assert "available" in report
-    if not report["available"]:
-        assert report["sensitivity"] is None
-        return
-
-    assert report["case_name"] == "nfp4_QH_warm_start"
-    assert report["param_names"] == ["delta_Rcos", "delta_Zsin"]
-    assert report["observable_names"] == list(vmec_field_line_tensor_observable_names())
-    assert np.asarray(report["jacobian_ad"]).shape == (
-        len(vmec_field_line_tensor_observable_names()),
-        2,
-    )
-    scale = float(np.max(np.abs(report["jacobian_ad"])))
-    error = float(report["max_abs_ad_fd_error"])
-    assert error < 1.0e-6 * scale
-    assert float(report["max_rel_ad_fd_error"]) < 5.0e-4
-    half = vmex_field_line_tensor_sensitivity_report(ntheta=24, fd_step=5.0e-8)
-    half_error = float(half["max_abs_ad_fd_error"])
-    # Halving h quarters a truncation-dominated error; below 1e-8*scale the
-    # error is at the FD rounding floor and no ratio is expected.
-    assert half_error < 1.0e-8 * scale or 3.0 < error / half_error < 5.0
-    assert report["conditioning"]["worst_rel_error"]["parameter_name"] in {
-        "delta_Rcos",
-        "delta_Zsin",
-    }
-    assert len(report["metric_grid_shape"]) == 3
-    assert int(report["metric_grid_shape"][2]) > 1
 
 
 def _differentiable_mapping(params: jnp.ndarray) -> dict[str, object]:

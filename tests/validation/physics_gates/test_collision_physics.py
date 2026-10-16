@@ -51,7 +51,7 @@ from gkx.terms.linear_terms import (
     hermite_closure_coefficient,
     linked_streaming_contribution,
 )
-from scripts.artifacts.build_landau_damping_figure import (
+from support.reference_physics import (
     _NU_SCAN,
     evolve,
     exact_root,
@@ -90,7 +90,7 @@ from scripts.checks._gates.zonal_validation import (
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "artifacts"))
 
-from build_linear_validation_artifacts import (  # noqa: E402
+from support.reference_physics import (  # noqa: E402
     build_finite_wavelength_coulomb_pair_tables,
     coulomb_drift_kinetic_moment_matrices,
 )
@@ -1072,7 +1072,7 @@ def test_free_streaming_conserves_norm_so_g0_cannot_exceed_one() -> None:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-    from scripts.artifacts.build_recurrence_closure_figure import free_streaming_revival
+    from support.reference_physics import free_streaming_revival
 
     for hermite in (16, 64):
         _, amplitude = free_streaming_revival(hermite, "truncation")
@@ -1100,7 +1100,7 @@ def test_absorbing_closures_beat_truncation_on_both_metrics() -> None:
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-    from scripts.artifacts.build_recurrence_closure_figure import (
+    from support.reference_physics import (
         measure_revival,
         resolved_window_error,
     )

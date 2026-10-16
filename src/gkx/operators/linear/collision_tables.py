@@ -60,7 +60,7 @@ def _finite_wavelength_coulomb_bundle(
         raise ValueError(
             f"no shipped finite-wavelength Coulomb table with {moments} moments; "
             f"available: {sorted(FINITE_WAVELENGTH_MOMENT_COUNTS)}. Generate more "
-            "with scripts/artifacts/build_finite_wavelength_coulomb_data.py"
+            "with tests/support/reference_physics.py"
         )
     suffix = "" if moments == 8 else f"_{moments}"
     data_root = resources.files("gkx").joinpath("data")

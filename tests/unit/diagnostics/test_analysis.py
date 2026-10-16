@@ -1118,7 +1118,6 @@ def test_cfl_scales_survive_slicing_striding_and_concatenation() -> None:
 matplotlib.use("Agg")
 
 import pathlib
-import importlib.util
 
 import numpy as np
 
@@ -1724,128 +1723,6 @@ def test_potential_real_space_round_trip():
         snapshots.potential_real_space(spectral[:2], ny_full=ny)
 
 
-def _movie_tool(name):
-    root = pathlib.Path(__file__).parents[3]
-    script = root / "scripts" / "artifacts" / "build_turbulence_movie.py"
-    spec = importlib.util.spec_from_file_location(name, script)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_movie_snapshot_replays_lightweight_physical_cuts(tmp_path, monkeypatch):
-    module = _movie_tool("gkx_movie_test")
-
-    snapshot = tmp_path / "cuts.npz"
-    np.savez_compressed(
-        snapshot,
-        phi_xy=np.zeros((2, 6, 8)),
-        phi_yz=np.zeros((2, 8, 10)),
-        times=np.array([1.0, 2.0]),
-        label="QHS",
-        q=1.2,
-        epsilon=0.1,
-        major_radius=10.0,
-        nfp=6,
-        extent=np.array([20.0, 30.0]),
-        cylindrical_R_profile=np.array([10.0, 10.1]),
-        cylindrical_Z_profile=np.array([0.0, 0.1]),
-        toroidal_angle_profile=np.array([0.0, 0.2]),
-    )
-    rendered = []
-    monkeypatch.setattr(
-        module, "render_frame", lambda *args, **kwargs: rendered.append((args, kwargs))
-    )
-    monkeypatch.setattr(module, "_encode", lambda *args, **kwargs: 0)
-
-    assert (
-        module.render_snapshots(
-            snapshot, tmp_path / "movie.mp4", fps=2, frames_only=True, keep_frames=True
-        )
-        == 0
-    )
-    assert len(rendered) == 2
-    assert rendered[0][0][0].shape == (6, 8)
-    assert rendered[0][0][1].shape == (8, 10)
-    assert rendered[0][0][2].nfp == 6
-    np.testing.assert_allclose(rendered[0][0][2].cylindrical_R_profile, [10.0, 10.1])
-    assert rendered[0][1]["extent"] == (20.0, 30.0)
-
-
-def test_movie_encode_caps_lightweight_width(tmp_path, monkeypatch):
-    module = _movie_tool("gkx_movie_encode_test")
-    commands = []
-
-    def fake_run(command, **_kwargs):
-        commands.append(command)
-        return module.subprocess.CompletedProcess(command, 0, "", "")
-
-    monkeypatch.setattr(module.subprocess, "run", fake_run)
-    assert (
-        module._encode(
-            tmp_path,
-            [tmp_path / "frame_0000.png"],
-            tmp_path / "movie.mp4",
-            5,
-            False,
-            True,
-        )
-        == 0
-    )
-    assert commands[0][commands[0].index("-vf") + 1] == "scale=900:-2"
-
-
-def test_movie_restores_campaign_state_and_absolute_time(tmp_path):
-    module = _movie_tool("gkx_movie_state_test")
-
-    shape = (1, 2, 2, 4, 4, 4)
-    state = np.arange(np.prod(shape), dtype=np.float32).reshape(shape).astype(complex)
-    archive = tmp_path / "state.npz"
-    np.savez_compressed(archive, state=state, t_end=250.0, saturated=True)
-    restored, t_start, saturated, label = module._movie_initial_state(
-        archive, shape=shape, dtype=np.complex64, seed=0, amplitude=1e-3
-    )
-
-    np.testing.assert_allclose(restored, state)
-    assert (t_start, saturated, label) == (250.0, True, str(archive))
-    with pytest.raises(ValueError, match="movie grid shape"):
-        module._movie_initial_state(
-            archive,
-            shape=shape[:-1] + (5,),
-            dtype=np.complex64,
-            seed=0,
-            amplitude=1e-3,
-        )
-
-
-def test_movie_uses_deck_moment_resolution_unless_overridden():
-    module = _movie_tool("gkx_movie_moments_test")
-
-    raw = {"run": {"Nl": 6, "Nm": 10}}
-    assert module._movie_moment_dims(raw, None, None) == (6, 10)
-    assert module._movie_moment_dims(raw, 3, 5) == (3, 5)
-    assert module._movie_moment_dims({}, None, None) == (4, 8)
-
-
-def test_movie_imported_geometry_requires_physical_profiles():
-    module = _movie_tool("gkx_movie_geometry_test")
-
-    with pytest.raises(RuntimeError, match="require physical R, Z"):
-        module._require_movie_geometry_profiles(object(), model="vmec")
-    geometry = type(
-        "Geometry",
-        (),
-        {
-            "cylindrical_R_profile": np.array([1.0, 1.1]),
-            "cylindrical_Z_profile": np.array([0.0, 0.1]),
-            "toroidal_angle_profile": np.array([0.0, 0.2]),
-        },
-    )()
-    module._require_movie_geometry_profiles(geometry, model="vmec")
-    module._require_movie_geometry_profiles(object(), model="s-alpha")
-
-
 def test_phi_xy_snapshot_figure_renders(tmp_path):
     _real, spectral = _synthetic_spectral_phi()
     grid = SimpleNamespace(x0=1.6, y0=2.4)
@@ -2144,3 +2021,21 @@ def test_loglinear_window_does_not_depend_on_a_constant_phase() -> None:
     growing = select_fit_window_loglinear(t, envelope.astype(complex))
     assert growing == rotating
     assert growing[1] - growing[0] > 5.0
+
+
+def test_sokal_autocorrelation_time_of_a_cosine_is_its_quarter_period_integral() -> (
+    None
+):
+    from gkx.diagnostics.analysis import (
+        integrated_autocorrelation_time,
+        sokal_autocorrelation_time,
+    )
+
+    dt, period = 0.01, 2.0
+    t = np.arange(4000) * dt
+    tau, cut, rho = sokal_autocorrelation_time(np.cos(2.0 * np.pi * t / period), dt)
+    assert rho[0] == pytest.approx(1.0)
+    assert cut * dt == pytest.approx(period / 4.0, abs=2 * dt)
+    assert tau == pytest.approx(period / (2.0 * np.pi), rel=0.02)
+    assert sokal_autocorrelation_time(np.ones(16), dt)[:2] == (0.0, 1)
+    assert integrated_autocorrelation_time(np.cos(2.0 * np.pi * t / period), dt) == tau
