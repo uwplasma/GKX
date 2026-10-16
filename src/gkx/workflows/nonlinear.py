@@ -49,6 +49,7 @@ from gkx.workflows.runtime.startup import (
     _species_to_linear,
     build_runtime_geometry,
     build_runtime_linear_params,
+    end_damping_status,
     build_runtime_term_config,
 )
 
@@ -303,6 +304,7 @@ def _prepare_context(
     status("building runtime nonlinear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
     terms = build_runtime_term_config(cfg)
+    status(end_damping_status(params, grid, cfg.grid.boundary))
     ky_index, kx_index = _select_nonlinear_mode_indices(
         grid,
         ky_target=ky_target,

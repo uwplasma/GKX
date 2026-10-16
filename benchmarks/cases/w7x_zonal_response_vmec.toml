@@ -37,6 +37,7 @@ ntheta = 64
 nperiod = 4
 
 [time]
+damp_ends_rate = 0.0
 # run_to must stay "t_max". This is a zero-gradient zonal-flow relaxation run:
 # tprim = fprim = 0, so the heat-flux moment is identically zero -- measured
 # 0.0 in every one of the first 512 samples, not merely small -- and there is
@@ -110,7 +111,6 @@ p_hyper = 4.0
 hypercollisions_const = 0.0
 hypercollisions_kz = 0.0
 D_hyper = 0.0
-damp_ends_amp = 0.0
 damp_ends_widthfrac = 0.125
 
 [normalization]

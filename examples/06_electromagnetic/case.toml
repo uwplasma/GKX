@@ -41,7 +41,9 @@ nperiod = 1
 
 [time]
 t_max = 2.0
-dt = 0.001
+# dt 1e-3 is unstable with the default end-damping rate at nperiod 1 (598,
+# nu*dt = 0.6 on top of electron streaming); 5e-4 is stable.
+dt = 0.0005
 method = "imex2"
 sample_stride = 2
 
@@ -78,7 +80,6 @@ nu_hyper = 0.0
 p_hyper = 4.0
 hypercollisions_const = 0.0
 hypercollisions_kz = 1.0
-damp_ends_amp = 0.1
 damp_ends_widthfrac = 0.125
 
 [normalization]

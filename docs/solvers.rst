@@ -463,8 +463,8 @@ The linear operator supports:
   The Laguerre channels reach the distribution only through the
   constant-coefficient branch, so they need ``hypercollisions_const``; see
   :ref:`velocity-regularization`; and
-* smooth field-aligned end damping controlled by ``damp_ends_widthfrac`` and
-  ``damp_ends_amp``.
+* smooth field-aligned end damping at the rate ``[time] damp_ends_rate``
+  over ``damp_ends_widthfrac`` of the chain (:ref:`end-damping`).
 
 Each can be disabled or refined independently in resolution studies.
 

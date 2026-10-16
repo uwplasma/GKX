@@ -21200,6 +21200,15 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
 
+## 2026-10-15 — end-damping contract (fix/end-damping-contract, supersedes #357)
+
+- One timestep-free end-damping rate on every route; default 30 thermal
+  transits of the fastest kinetic species across the end layer; RHS `dt`
+  plumbing removed; `damp_ends_amp`-only decks refused.
+- Decks migrated: nonlinear decks keep `damp_ends_rate = 0.1` (bitwise), GX
+  parity fixtures state `0.1/dt`, linear examples take the default.
+- Records: `plan/research/2026-10-15-end-damping/`. Open: nonlinear decks at
+  0.1 are below the linear plateau; KE (8,16) not nperiod-converged.
 ## 2026-10-15 — SLIM+HISTORY lane (branch `slim/scripts-and-media`)
 
 Base: `main` `df2953026` (2.5.1 + chain #356). Every removed file is recoverable with `git show df2953026:<path>`.
