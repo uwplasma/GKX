@@ -629,9 +629,7 @@ def stiff_linear_split(
     vth = np.atleast_1d(np.asarray(params.vth, dtype=float))
     fast = (vth > 4.0 * vth.min()).astype(float)
     mirror = jnp.asarray(fast * float(terms.mirror)).reshape(-1, 1, 1, 1, 1, 1)
-    off = dict(
-        curvature=0.0, gradb=0.0, diamagnetic=0.0, collisions=0.0, nonlinear=0.0
-    )
+    off = dict(curvature=0.0, gradb=0.0, diamagnetic=0.0, collisions=0.0, nonlinear=0.0)
     implicit_terms = dataclasses.replace(terms, mirror=mirror, **off)
     mirror_terms = dataclasses.replace(
         implicit_terms,

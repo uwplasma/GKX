@@ -436,6 +436,13 @@ public_facades = [
 ]
 
 [[complexity_policy.exceptions]]
+path = "solvers_nonlinear_imex.py"
+# 1189 -> 1286: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
+baseline_lines = 1286
+target_lines = 1200
+reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
+
+[[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
 # 1076 -> 1154: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 1154 -> 1174: bug-fix chain (#302 #303 #304 #306 #308), measured.
@@ -1148,7 +1155,8 @@ recursive = true
 # 67220 -> 67272: real-FFT Nyquist streaming (#328), custom-collision admission (#324). Measured.
 # 67272 -> 67308: cached_jit, so a repeated gkx.solve compiles nothing (PERF 2026-10-06).
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
-baseline = 67113
+# 67113 -> 67220: electron mirror implicit in the imex-ars3 chain factor (+107). Measured.
+baseline = 67220
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1486,7 +1494,8 @@ recursive = true
 # 74556 -> 74589: repeated-solve compile and cached_jit fallback tests (PERF 2026-10-06).
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
 # 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
-baseline = 72926
+# 72926 -> 72935: chain-solve test exercises the implicit electron mirror (Nl = 2).
+baseline = 72935
 target = 35000
 
 [[line_budget_policy.counts]]

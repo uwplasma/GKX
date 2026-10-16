@@ -916,9 +916,12 @@ def _thomas_factor(
         x = blocks.reshape(c, ns, nl // k, k, n, n)
         x = jnp.einsum("csbkij,kq->csbkiqj", x, eye_k)
         if e is not None:
-            x = x + jnp.einsum("skqi,ij->skiqj", e, jnp.eye(n, dtype=x.dtype))[
-                :, None
-            ][None]
+            x = (
+                x
+                + jnp.einsum("skqi,ij->skiqj", e, jnp.eye(n, dtype=x.dtype))[:, None][
+                    None
+                ]
+            )
         return x.reshape(c, ns, nl // k, k * n, k * n)
 
     def off(a, e, m):
@@ -933,7 +936,9 @@ def _thomas_factor(
         blk = eye - gdt * dense(diag[:, :, :, m], None)
         if m and e_lo is None:
             coef = gdt**2 * a_lo[:, :, :, m] * a_up[:, :, :, m - 1]
-            blk = blk - coef[..., None, None] * mm(mm(d[:, :, None], dinv[-1]), d[:, :, None])
+            blk = blk - coef[..., None, None] * mm(
+                mm(d[:, :, None], dinv[-1]), d[:, :, None]
+            )
         elif m:
             lo, up = off(a_lo, e_lo, m), off(a_up, e_up, m - 1)
             blk = blk - gdt**2 * mm(mm(lo, dinv[-1]), up)
@@ -1059,17 +1064,17 @@ def _factor_chain_group(
                 diag = diag.at[:, :, :, rows[ok]].set(col)
             else:
                 upper = upper.at[:, :, :, rows[ok]].set(col)
-    factors, errs = [], []
+    facs, errs = [], []
     for sp in spec:
-        e = [None, None]
-        if e_mirror is not None and len(sp) and sp[0] in e_mirror[0]:
+        e: list[Any] = [None, None]
+        if e_mirror is not None and sp[0] in e_mirror[0]:
             e = [jnp.tile(a[np.array(sp)], k.shape[1]) for a in e_mirror[1:]]
-        sel = [lower[:, list(sp)], diag[:, list(sp)], upper[:, list(sp)]]
+        sel = [b[:, list(sp)] for b in (lower, diag, upper)]
         fac, err = _thomas_factor(*sel, *e, gdt)
-        factors.append(fac)
+        facs.append(fac)
         errs.append(float(err))
     del lower, diag, upper, sel
-    factors = tuple(factors)
+    factors = tuple(facs)
     if not max(errs) < 1e-4:
         raise ValueError(
             f"Hermite off-diagonal blocks are not multiples of one parallel-"
@@ -1190,17 +1195,15 @@ def build_chain_implicit_linear(
     ]
     gdt = ARS_TABLEAUX[scheme][1][1][1] * float(dt)
 
-    spec, e_mirror, s_only = ((tuple(range(ns)),), None, split)
+    spec: tuple[tuple[int, ...], ...] = (tuple(range(ns)),)
+    e_mirror, s_only = None, split
     if mirror_rhs is not None:
         mir = cached_jit(mirror_rhs)
         r0, c0 = np.argwhere(modes)[-1]
         # z- and mode-local, the same at every mode: one probe per slot.
         ef = jax.lax.map(
             lambda i: mir(
-                jnp.zeros(ns * nl * nm, dtype)
-                .at[i]
-                .set(1)
-                .reshape(ns, nl, nm, 1, 1, 1)
+                jnp.zeros(ns * nl * nm, dtype).at[i].set(1).reshape(ns, nl, nm, 1, 1, 1)
                 * jnp.ones(shape, dtype),
                 zero_f,
             )[..., r0, c0, :],
@@ -1210,11 +1213,8 @@ def build_chain_implicit_linear(
         mono = [i for i in range(ns) if np.abs(ef[i, :, :, i]).max() > 0]
         e_lo, e_up = (np.zeros((ns, nm, nl, nl, nz), ef.dtype) for _ in range(2))
         for i in mono:  # e[s, m, l, l'] couples (l', m -+ 1) into (l, m)
-            for m in range(nm):
-                if m:
-                    e_lo[i, m] = ef[i, :, m - 1, i, :, m].transpose(1, 0, 2)
-                if m + 1 < nm:
-                    e_up[i, m] = ef[i, :, m + 1, i, :, m].transpose(1, 0, 2)
+            e_lo[i, 1:] = np.diagonal(ef[i, :, :, i], 1, 1, 3).transpose(3, 1, 0, 2)
+            e_up[i, :-1] = np.diagonal(ef[i, :, :, i], -1, 1, 3).transpose(3, 1, 0, 2)
         plain = tuple(i for i in range(ns) if i not in mono)
         spec = tuple(g for g in (plain, tuple(mono)) if g)
         e_mirror = (tuple(mono), jnp.asarray(e_lo, dtype), jnp.asarray(e_up, dtype))
