@@ -997,8 +997,13 @@ def _probe_columns(idx, nz: int, make: Callable, probe: Callable, take: Callable
     make_all = cached_jit(jax.vmap(make_all))
     takes = [cached_jit(jax.vmap(partial(take, k, x))) for k, x in idx]
     cols: list[list] = [[] for _ in idx]
-    for j0 in range(0, max(ns), _PROBE_BATCH):
-        out = probe(make_all(jnp.arange(j0, j0 + _PROBE_BATCH)))
+    # An RHS assembly holds ~9 states of intermediates: 8 probes of a 64x64,
+    # (8, 16) state asked for 10 GB. Fewer per call above 0.4 GB of states.
+    one = jax.eval_shape(make_all, jnp.arange(1))
+    size = np.prod(one.shape) * one.dtype.itemsize
+    batch = int(np.clip(4e8 // size, 1, _PROBE_BATCH))
+    for j0 in range(0, max(ns), batch):
+        out = probe(make_all(jnp.arange(j0, j0 + batch)))
         for g, n in enumerate(ns):
             if j0 < n:
                 # Host-side: the probed blocks of every group at once are
