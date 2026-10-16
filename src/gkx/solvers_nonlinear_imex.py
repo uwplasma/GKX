@@ -725,7 +725,7 @@ IMEX_CHAIN_METHODS = frozenset(ARS_TABLEAUX)
 class _ChainGroup:
     ky: np.ndarray  # (chains, L) row indices
     kx: np.ndarray  # (chains, L) column indices
-    factors: Any  # (dinv, D, lower, upper scalars) of I - gamma dt S
+    factors: Any  # per species group: (dinv, D, ladder scalars, mirror) of I - gdt S
     u: jnp.ndarray  # (chains, s, l, rows_m, N, nf*N): fields -> RHS rows
     w: jnp.ndarray  # (chains, nf, s, l, cols_m, N): moments -> fields (z-local)
     cap: jnp.ndarray  # (chains, nf*N, nf*N): (Dr (I - gamma dt Q B^-1 U) Dc)^-1
@@ -752,6 +752,7 @@ class ChainImplicitLinear:
     rows_m: tuple[int, ...]
     cols_m: tuple[int, ...]
     linear: Callable[[jnp.ndarray], jnp.ndarray]  # L G (stiff terms only)
+    spec: tuple[tuple[int, ...], ...] = ((0,),)  # species groups of the factor
 
     @property
     def nbytes(self) -> int:
@@ -765,7 +766,7 @@ class ChainImplicitLinear:
         return ARS_TABLEAUX[self.scheme][1][1][1] * self.dt
 
     def _bsolve(self, g: _ChainGroup, x: jnp.ndarray) -> jnp.ndarray:
-        return _thomas_solve(g.factors, x)
+        return _block_solve(g.factors, self.spec, x)
 
     def _apply_inverse(self, g: _ChainGroup, x: jnp.ndarray) -> jnp.ndarray:
         x0 = self._bsolve(g, x)
@@ -870,19 +871,25 @@ def _mv(a: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
 
 
 @jax.jit
-def _thomas_factor(lower, diag, upper, gdt) -> tuple[tuple[jnp.ndarray, ...], Any]:
+def _thomas_factor(
+    lower, diag, upper, e_lo, e_up, gdt
+) -> tuple[tuple[jnp.ndarray, ...], Any]:
     """Block Thomas over Hermite for ``I - gdt S``; ``S`` blocks on axis 3.
 
-    Blocks are ``N x N`` (``N = links * Nz``), batched over ``(chains, s,
-    l)``. Every off-diagonal block of ``S`` is the chain's parallel-gradient
-    matrix ``D`` (per species) times a Hermite-ladder scalar, so only ``D``,
-    the scalars and the Schur-complement inverses are stored: one ``N x N``
-    block per ``(s, l, m)`` instead of three, and two matvecs per block in a
-    solve. Inverses, not LU: batched triangular solves of blocks this small
-    are launch-bound on GPU. Inverses are stored ``m``-major so each sweep
-    step reads contiguous memory.
+    ``lower``, ``diag``, ``upper`` are the Laguerre-diagonal ``N x N`` blocks
+    (``N = links * Nz``) batched over ``(chains, s, l)``. Every off-diagonal
+    block is the chain's parallel-gradient matrix ``D`` (per species) times a
+    Hermite-ladder scalar, plus, when ``e_lo``/``e_up`` (``(s, m, Nl, Nl,
+    N)``, z-local) are given, the mirror force, which couples ``l`` to
+    ``l +- 1``. Without the mirror the factor is one ``N x N`` inverse per
+    ``(s, l, m)``; with it one ``Nl N x Nl N`` inverse per ``(s, m)`` (Nl x
+    the memory). Only ``D``, the scalars, ``e`` and the Schur-complement
+    inverses are stored. Inverses, not LU: batched triangular solves of
+    blocks this small are launch-bound on GPU. Stored ``m``-major so each
+    sweep step reads contiguous memory.
     """
-    nm = diag.shape[3]
+    c, ns, nl, nm, n, _ = diag.shape
+    k = 1 if e_lo is None else nl
     d = upper[:, :, 0, 0]  # (c, s, N, N): m = 0 -> 1, l = 0
     dd = jnp.sum(jnp.abs(d) ** 2, axis=(-2, -1))
     safe = jnp.where(dd > 0, dd, 1.0)[:, :, None, None]
@@ -899,35 +906,58 @@ def _thomas_factor(lower, diag, upper, gdt) -> tuple[tuple[jnp.ndarray, ...], An
             for blk, a in ((lower, a_lo), (upper, a_up))
         )
     )
-    eye = jnp.eye(diag.shape[-1], dtype=diag.dtype)
+    eye_k = jnp.eye(k, dtype=diag.dtype)
+
+    def dense(blocks, e):  # (c, s, l, N, N) [+ e (s, k, k, N)] -> (c, s, b, kN, kN)
+        x = blocks.reshape(c, ns, nl // k, k, n, n)
+        x = jnp.einsum("csbkij,kq->csbkiqj", x, eye_k)
+        if e is not None:
+            x = x + jnp.einsum("skqi,ij->skiqj", e, jnp.eye(n, dtype=x.dtype))[
+                :, None
+            ][None]
+        return x.reshape(c, ns, nl // k, k * n, k * n)
+
+    def off(a, e, m):
+        return dense(a[:, :, :, m, None, None] * d[:, :, None], e[:, m])
+
+    def mm(a, b):
+        return jnp.matmul(a, b, precision=_HI)
+
+    eye = jnp.eye(k * n, dtype=diag.dtype)
     dinv: list[jnp.ndarray] = []
     for m in range(nm):
-        blk = eye - gdt * diag[:, :, :, m]
-        if m:
-            ddd = jnp.matmul(
-                jnp.matmul(d[:, :, None], dinv[-1], precision=_HI),
-                d[:, :, None],
-                precision=_HI,
-            )
+        blk = eye - gdt * dense(diag[:, :, :, m], None)
+        if m and e_lo is None:
             coef = gdt**2 * a_lo[:, :, :, m] * a_up[:, :, :, m - 1]
-            blk = blk - coef[..., None, None] * ddd
+            blk = blk - coef[..., None, None] * mm(mm(d[:, :, None], dinv[-1]), d[:, :, None])
+        elif m:
+            lo, up = off(a_lo, e_lo, m), off(a_up, e_up, m - 1)
+            blk = blk - gdt**2 * mm(mm(lo, dinv[-1]), up)
         dinv.append(jnp.linalg.inv(blk))
-    return (jnp.stack(dinv), d, -gdt * a_lo, -gdt * a_up), err
+    e = (None, None) if e_lo is None else (-gdt * e_lo, -gdt * e_up)
+    return (jnp.stack(dinv), d, -gdt * a_lo, -gdt * a_up, *e), err
 
 
 def _thomas_solve(factors: tuple[jnp.ndarray, ...], x: jnp.ndarray) -> jnp.ndarray:
-    dinv, d, lo, up = factors
-    nm = x.shape[3]
+    dinv, d, lo, up, e_lo, e_up = factors
+    c, ns, nl, nm, n = x.shape
+    shape = (c, ns, dinv.shape[3], -1)
 
-    def dmv(v):  # D v, D shared over Laguerre
-        return jnp.einsum("csij,cslj->csli", d, v, precision=_HI)
+    def mv(m, v):  # dinv_m v on (c, s, l, N)
+        return _mv(dinv[m], v.reshape(shape)).reshape(v.shape)
 
-    w = [_mv(dinv[0], x[:, :, :, 0])]
+    def off(a, e, m, v):  # (a D + e) v, D shared over Laguerre
+        y = a[:, :, :, m, None] * jnp.einsum("csij,cslj->csli", d, v, precision=_HI)
+        if e is not None:
+            y = y + jnp.einsum("skqn,csqn->cskn", e[:, m], v, precision=_HI)
+        return y
+
+    w = [mv(0, x[:, :, :, 0])]
     for m in range(1, nm):
-        w.append(_mv(dinv[m], x[:, :, :, m] - lo[:, :, :, m, None] * dmv(w[-1])))
+        w.append(mv(m, x[:, :, :, m] - off(lo, e_lo, m, w[-1])))
     out = [w[-1]]
     for m in range(nm - 2, -1, -1):
-        out.append(w[m] - _mv(dinv[m], up[:, :, :, m, None] * dmv(out[-1])))
+        out.append(w[m] - mv(m, off(up, e_up, m, out[-1])))
     return jnp.stack(out[::-1], 3)
 
 
@@ -1006,7 +1036,7 @@ def _probe_stiff_blocks(idx, probe_s, probe_u, zero, zero_f, act, rows_m):
 
 
 def _factor_chain_group(
-    k, x, s_parts, u_cols, zero, w_all, act, rows_m, cols_m, gdt
+    k, x, s_parts, u_cols, zero, w_all, act, rows_m, cols_m, gdt, spec, e_mirror
 ) -> _ChainGroup:
     """Assemble, factor and couple the probed blocks of one chain group."""
     ns, nl, nm, *_r, nz = zero.shape
@@ -1025,12 +1055,21 @@ def _factor_chain_group(
                 diag = diag.at[:, :, :, rows[ok]].set(col)
             else:
                 upper = upper.at[:, :, :, rows[ok]].set(col)
-    factors, err = _thomas_factor(lower, diag, upper, gdt)
-    del lower, diag, upper
-    if not float(err) < 1e-4:
+    factors, errs = [], []
+    for sp in spec:
+        e = [None, None]
+        if e_mirror is not None and len(sp) and sp[0] in e_mirror[0]:
+            e = [jnp.tile(a[np.array(sp)], k.shape[1]) for a in e_mirror[1:]]
+        sel = [lower[:, list(sp)], diag[:, list(sp)], upper[:, list(sp)]]
+        fac, err = _thomas_factor(*sel, *e, gdt)
+        factors.append(fac)
+        errs.append(float(err))
+    del lower, diag, upper, sel
+    factors = tuple(factors)
+    if not max(errs) < 1e-4:
         raise ValueError(
             f"Hermite off-diagonal blocks are not multiples of one parallel-"
-            f"gradient matrix (defect {float(err):.1e}); the structured factor "
+            f"gradient matrix (defect {max(errs):.1e}); the structured factor "
             "needs it"
         )
 
@@ -1040,12 +1079,22 @@ def _factor_chain_group(
     wq = jnp.transpose(wq, (4, 3, 0, 1, 2, 5, 6)).reshape(
         c, len(act), ns, nl, len(cols_m), n
     )
-    cap, dr, dc = _capacitance(factors, u, wq, gdt, rows_m, cols_m, nm)
+    cap, dr, dc = _capacitance(factors, u, wq, gdt, rows_m, cols_m, nm, spec)
     return _ChainGroup(k, x, factors, u, wq, cap, dr, dc)
 
 
-@partial(jax.jit, static_argnames=("rows_m", "cols_m", "nm"))
-def _capacitance(factors, u, wq, gdt, rows_m, cols_m, nm):
+def _block_solve(factors, spec, x: jnp.ndarray) -> jnp.ndarray:
+    """``(I - gdt S)^-1 x`` per species group (species never couple in ``S``)."""
+    if len(spec) == 1:
+        return _thomas_solve(factors[0], x)
+    out = x
+    for fac, sp in zip(factors, spec):
+        out = out.at[:, list(sp)].set(_thomas_solve(fac, x[:, list(sp)]))
+    return out
+
+
+@partial(jax.jit, static_argnames=("rows_m", "cols_m", "nm", "spec"))
+def _capacitance(factors, u, wq, gdt, rows_m, cols_m, nm, spec):
     """Equilibrated ``(I - gdt Q B^-1 U)^-1`` and its row/column scalings."""
     c, ns, nl, _rows, n, k = u.shape
     dtype = u.dtype
@@ -1056,7 +1105,7 @@ def _capacitance(factors, u, wq, gdt, rows_m, cols_m, nm):
             .at[:, :, :, list(rows_m)]
             .set(u[..., i])
         )
-        y = _thomas_solve(factors, ui)[:, :, :, list(cols_m)]
+        y = _block_solve(factors, spec, ui)[:, :, :, list(cols_m)]
         return jnp.einsum("cfslmn,cslmn->cfn", wq, y, precision=_HI).reshape(c, -1)
 
     qbu = jnp.moveaxis(
@@ -1084,6 +1133,7 @@ def build_chain_implicit_linear(
     scheme: str = "imex-ars3",
     dtype=jnp.complex64,
     check_tol: float | None = None,
+    mirror_rhs: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] | None = None,
 ) -> ChainImplicitLinear:
     """Probe the stiff linear terms per chain and factor ``I - gamma dt L``.
 
@@ -1094,7 +1144,9 @@ def build_chain_implicit_linear(
     ``modes`` (``Nky x Nkx`` bool) selects what is solved: every ``ky >= 0``
     mode, dealiased or not (leaving dealiased-out modes explicit makes their
     stiff terms explicit). ``ky < 0`` rows pass through; the projector
-    rebuilds them. The factorization is checked by the residual of one solve.
+    rebuilds them. ``mirror_rhs`` is the part of ``split_rhs`` that is the
+    mirror force (species it is nonzero for get the ``Nl N`` blocks). The
+    factorization is checked by the residual of one solve.
     """
     ns, nl, nm, _nky, _nkx, nz = shape
     split, fld = cached_jit(split_rhs), cached_jit(fields)
@@ -1134,17 +1186,49 @@ def build_chain_implicit_linear(
     ]
     gdt = ARS_TABLEAUX[scheme][1][1][1] * float(dt)
 
-    probe_s = cached_jit(jax.vmap(lambda v: split(v, zero_f)))
+    spec, e_mirror, s_only = ((tuple(range(ns)),), None, split)
+    if mirror_rhs is not None:
+        mir = cached_jit(mirror_rhs)
+        r0, c0 = np.argwhere(modes)[-1]
+        # z- and mode-local, the same at every mode: one probe per slot.
+        ef = jax.lax.map(
+            lambda i: mir(
+                jnp.zeros(ns * nl * nm, dtype)
+                .at[i]
+                .set(1)
+                .reshape(ns, nl, nm, 1, 1, 1)
+                * jnp.ones(shape, dtype),
+                zero_f,
+            )[..., r0, c0, :],
+            jnp.arange(ns * nl * nm),
+        )
+        ef = np.asarray(ef).reshape(ns, nl, nm, ns, nl, nm, nz)
+        mono = [i for i in range(ns) if np.abs(ef[i, :, :, i]).max() > 0]
+        e_lo, e_up = (np.zeros((ns, nm, nl, nl, nz), ef.dtype) for _ in range(2))
+        for i in mono:  # e[s, m, l, l'] couples (l', m -+ 1) into (l, m)
+            for m in range(nm):
+                if m:
+                    e_lo[i, m] = ef[i, :, m - 1, i, :, m].transpose(1, 0, 2)
+                if m + 1 < nm:
+                    e_up[i, m] = ef[i, :, m + 1, i, :, m].transpose(1, 0, 2)
+        plain = tuple(i for i in range(ns) if i not in mono)
+        spec = tuple(g for g in (plain, tuple(mono)) if g)
+        e_mirror = (tuple(mono), jnp.asarray(e_lo, dtype), jnp.asarray(e_up, dtype))
+
+        def s_only(v, F):
+            return split(v, F) - mir(v, F)
+
+    probe_s = cached_jit(jax.vmap(lambda v: s_only(v, zero_f)))
     probe_u = cached_jit(jax.vmap(lambda F: split(zero, F)))
     probed = _probe_stiff_blocks(idx, probe_s, probe_u, zero, zero_f, act, rows_m)
     groups = [
         _factor_chain_group(
-            k, x, s_parts, u_cols, zero, w_all, act, rows_m, cols_m, gdt
+            k, x, s_parts, u_cols, zero, w_all, act, rows_m, cols_m, gdt, spec, e_mirror
         )
         for (k, x), (s_parts, u_cols) in zip(idx, probed)
     ]
     op = ChainImplicitLinear(
-        tuple(groups), tuple(shape), float(dt), scheme, rows_m, cols_m, lin
+        tuple(groups), tuple(shape), float(dt), scheme, rows_m, cols_m, lin, spec
     )
     # One solve's residual certifies every structural assumption at once
     # (Hermite tridiagonality, z-local fields, the chain partition).

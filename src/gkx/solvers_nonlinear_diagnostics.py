@@ -612,25 +612,33 @@ def _run_explicit_diagnostic_scan_raw(
 
 def stiff_linear_split(
     cache: Any, params: Any, terms: Any, compute_fields_fn: Callable[..., Any]
-) -> tuple[Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray], Callable]:
-    """Return ``(split_rhs, fields)`` for :func:`build_chain_implicit_linear`.
+) -> tuple[Callable, Callable, Callable | None]:
+    """Return ``(split_rhs, fields, mirror_rhs)`` for :func:`build_chain_implicit_linear`.
 
-    Implicit: streaming with its dissipation and the field response. Drifts,
-    mirror, drive and collisions stay explicit with the bracket; they couple
-    Laguerre moments and would break the per-``(s, l)`` Hermite block
-    structure that keeps the factor ``O(N^2)`` per moment row.
+    Implicit: streaming with its dissipation, the field response and, for
+    species much faster than the slowest (electrons), the mirror force, whose
+    explicit bound otherwise sets dt (|lambda| 57 against drifts ~3 on Cyclone
+    at (4, 8)). It couples Laguerre moments, so those species get ``Nl N``
+    blocks. Drifts, the ion mirror, drive and collisions stay explicit with the
+    bracket. ``mirror_rhs`` is the mirror part of ``split_rhs`` (``None``
+    without a fast species).
     """
     from gkx.terms.assembly import assemble_rhs_cached_with_fields
     from gkx.terms.config import FieldState
 
-    implicit_terms = dataclasses.replace(
-        terms,
-        mirror=0.0,
-        curvature=0.0,
-        gradb=0.0,
-        diamagnetic=0.0,
-        collisions=0.0,
-        nonlinear=0.0,
+    vth = np.atleast_1d(np.asarray(params.vth, dtype=float))
+    fast = (vth > 4.0 * vth.min()).astype(float)
+    mirror = jnp.asarray(fast * float(terms.mirror)).reshape(-1, 1, 1, 1, 1, 1)
+    off = dict(
+        curvature=0.0, gradb=0.0, diamagnetic=0.0, collisions=0.0, nonlinear=0.0
+    )
+    implicit_terms = dataclasses.replace(terms, mirror=mirror, **off)
+    mirror_terms = dataclasses.replace(
+        implicit_terms,
+        streaming=0.0,
+        hypercollisions=0.0,
+        hyperdiffusion=0.0,
+        end_damping=0.0,
     )
 
     def fields(state: jnp.ndarray) -> jnp.ndarray:
@@ -644,12 +652,15 @@ def stiff_linear_split(
             ]
         )
 
-    def split_rhs(state: jnp.ndarray, F: jnp.ndarray) -> jnp.ndarray:
-        return assemble_rhs_cached_with_fields(
-            state, cache, params, FieldState(F[0], F[1], F[2]), terms=implicit_terms
-        )
+    def rhs(term_cfg):
+        def split(state: jnp.ndarray, F: jnp.ndarray) -> jnp.ndarray:
+            return assemble_rhs_cached_with_fields(
+                state, cache, params, FieldState(F[0], F[1], F[2]), terms=term_cfg
+            )
 
-    return split_rhs, fields
+        return split
+
+    return rhs(implicit_terms), fields, rhs(mirror_terms) if fast.any() else None
 
 
 def _attach_chain_implicit_linear(
@@ -677,7 +688,7 @@ def _attach_chain_implicit_linear(
         raise ValueError(
             f"method '{scheme}' needs a (species, Nl, Nm, ky, kx, z) state"
         )
-    split_rhs, fields = stiff_linear_split(
+    split_rhs, fields, mirror_rhs = stiff_linear_split(
         prepared.cache, params, terms, compute_fields_fn
     )
     chain_linear = build_chain_implicit_linear(
@@ -690,6 +701,7 @@ def _attach_chain_implicit_linear(
         ),
         scheme=scheme,
         dtype=G0.dtype,
+        mirror_rhs=mirror_rhs,
     )
 
     def rhs_with_chain_linear(state: jnp.ndarray) -> Any:
