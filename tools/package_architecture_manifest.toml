@@ -1148,8 +1148,9 @@ recursive = true
 # 67220 -> 67272: real-FFT Nyquist streaming (#328), custom-collision admission (#324). Measured.
 # 67272 -> 67308: cached_jit, so a repeated gkx.solve compiles nothing (PERF 2026-10-06).
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
-# 67113 -> 67179: bug-hunt 2026-10-15 (cached_jit memo, imex factor reuse, x64 scope).
-baseline = 67179
+# 67113 -> 67126: end-damping contract (#366) on top of #362/#365, measured.
+# 67126 -> 67162: bug-hunt (#363: cached_jit memo, imex factor reuse, x64 scope, eigensolver policy), measured.
+baseline = 67162
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -23,6 +23,7 @@ ntheta = 8
 nperiod = 1
 
 [time]
+damp_ends_rate = 0.0
 # run_to must stay "t_max". This deck ships as the stage-1 linear seed, but
 # scripts/benchmarks/secondary_slab_workflow.py promotes it through
 # build_secondary_stage2_config into a nonlinear run that inherits this [time]
@@ -63,7 +64,6 @@ collisions = false
 hypercollisions = false
 
 [collisions]
-damp_ends_amp = 0.0
 damp_ends_widthfrac = 0.0
 
 [normalization]

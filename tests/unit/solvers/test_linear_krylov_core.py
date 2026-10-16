@@ -117,7 +117,7 @@ def _tiny_krylov_setup(*, linked: bool = False, ky_layout: str | None = None):
         omega_star_scale=0.0,
         nu=0.01,
         nu_hyper=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     Nl, Nm = 2, 4
@@ -710,7 +710,7 @@ def test_field_corrected_preconditioner_covers_em_species_and_linked_layouts(
             beta=0.01,
             fapar=1.0,
             nu_hyper=0.0,
-            damp_ends_amp=0.0,
+            damp_ends_rate=0.0,
             damp_ends_widthfrac=0.0,
         )
         species_shape = (2,)
@@ -719,7 +719,7 @@ def test_field_corrected_preconditioner_covers_em_species_and_linked_layouts(
             beta=0.01,
             fapar=1.0,
             nu_hyper=0.0,
-            damp_ends_amp=0.0,
+            damp_ends_rate=0.0,
             damp_ends_widthfrac=0.0,
         )
         species_shape = ()
@@ -1966,7 +1966,7 @@ def _selected_linked_case(nx: int = 8):
     cfg = CycloneBaseCase(grid=grid_cfg)
     grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
     geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = LinearParams(damp_ends_amp=0.1)
+    params = LinearParams(damp_ends_rate=0.1)
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
     shape = (2, 4, grid.ky.size, grid.kx.size, grid.z.size)
     index = jnp.arange(int(np.prod(shape)), dtype=jnp.float64)
@@ -2519,7 +2519,7 @@ def _linear_setup():
         omega_star_scale=1.0,
         nu=0.01,
         nu_hyper=0.01,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     nl, nm = 2, 4
@@ -2766,7 +2766,7 @@ def _pr3_setup(*, Nx: int = 1, Nl: int = 6, Nm: int = 6, nu: float = 0.0):
         omega_star_scale=1.0,
         nu=nu,
         nu_hyper=0.0,
-        damp_ends_amp=0.1,
+        damp_ends_rate=0.1,
         damp_ends_widthfrac=0.125,
     )
     cache = build_linear_cache(grid, geom, params, Nl=Nl, Nm=Nm)

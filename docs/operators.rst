@@ -766,24 +766,9 @@ grid's :math:`|k_y|` at row ``(Ny - 1) // 3`` is carried as
 The field-line end damping is :math:`\mathcal{R}_{end} = -w_{end}\,\nu_{end}\,d(z)\,H`,
 where :math:`d(z)` is a smooth profile over the last ``damp_ends_widthfrac``
 (default 0.125) of the chain at each end, and zero on a periodic boundary.
-The zonal row carries no end damping. The strength :math:`\nu_{end}` is set
-in one of two ways:
-
-- ``[time] damp_ends_rate`` sets :math:`\nu_{end}` directly, as a finite,
-  nonnegative rate in inverse simulation-time units, on every route. For the
-  isolated absorber a step multiplies by :math:`R(-\Delta t\,\nu_{end} d(z))`,
-  where :math:`R` is the scheme's stability polynomial. In Python use
-  ``LinearParams(damp_ends_rate=nu)``; ``nu`` stays a differentiable leaf.
-- Without it, the reference-compatible amplitude ``damp_ends_amp`` (default
-  0.1) is used as :math:`A/\Delta t` on linear routes that supply the step, and
-  as the rate :math:`A` on RHS calls without a step, including the nonlinear
-  RHS. On the linear routes :math:`A` is then a per-step strength: Euler removes
-  the fraction :math:`w_{end}A\,d(z)`, while RK2 multiplies by
-  :math:`1-a+a^2/2` with :math:`a=w_{end}A\,d(z)`. A timestep scan on such a
-  deck is not a refinement of one fixed continuous operator.
-
-``damp_ends_scale_by_dt = true`` is rejected with a migration message; see
-:doc:`inputs` for the conversion.
+The zonal row carries no end damping. :math:`\nu_{end}` is one timestep-free
+rate on every route; its default and how to check sensitivity are in
+:ref:`end-damping`.
 
 Controls:
 
@@ -791,7 +776,6 @@ Controls:
 - ``RuntimeCollisionConfig.D_hyper``
 - ``RuntimeCollisionConfig.p_hyper_kperp``
 - ``[time] damp_ends_rate``
-- ``RuntimeCollisionConfig.damp_ends_amp``
 - ``RuntimeCollisionConfig.damp_ends_widthfrac``
 
 Nonlinear :math:`E \\times B` And Flutter

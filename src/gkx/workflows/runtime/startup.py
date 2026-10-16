@@ -18,6 +18,7 @@ import numpy as np
 
 from gkx.geometry import FluxTubeGeometryLike, build_flux_tube_geometry
 from gkx.operators.linear.params import (
+    DAMP_ENDS_LAYER_TRANSITS,
     LinearParams,
     LinearTerms,
     _x64_enabled,
@@ -493,9 +494,49 @@ def build_runtime_linear_params(
         ),
         nu_hermite=float(cfg.collisions.nu_hermite),
         nu_laguerre=float(cfg.collisions.nu_laguerre),
-        damp_ends_amp=float(cfg.collisions.damp_ends_amp),
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
-        damp_ends_rate=cfg.time.damp_ends_rate,
+        damp_ends_rate=_runtime_damp_ends_rate(cfg),
+    )
+
+
+def _runtime_damp_ends_rate(cfg: RuntimeConfig) -> float | None:
+    """Return ``[time] damp_ends_rate``, refusing the ambiguous legacy spelling.
+
+    ``None`` selects the default rate of :meth:`LinearParams.end_damping_rate`.
+    """
+
+    rate, amp = cfg.time.damp_ends_rate, cfg.collisions.damp_ends_amp
+    if rate is not None or amp is None:
+        return rate
+    if amp == 0.0:
+        return 0.0
+    if cfg.grid.boundary == "periodic":
+        return None
+    dt = float(cfg.time.dt)
+    raise ValueError(
+        f"[collisions] damp_ends_amp = {amp:g} without [time] damp_ends_rate is "
+        "ambiguous: GKX < 2.6 damped the field-line ends at damp_ends_amp/dt on "
+        f"the time route ({amp / dt:g} at dt = {dt:g}) and at damp_ends_amp on "
+        "the timestep-free and nonlinear routes. Set [time] damp_ends_rate to "
+        "the rate you mean, or delete damp_ends_amp to use the default rate "
+        "(docs/inputs.rst, end damping)."
+    )
+
+
+def end_damping_status(params: LinearParams, grid: Any, boundary: str) -> str:
+    """Describe the end-damping rate a run uses, for the run's status line."""
+
+    if boundary == "periodic":
+        return "end damping: off (periodic boundary)"
+    z = np.asarray(grid.z, dtype=float)
+    z_extent = float(z.size * (z[1] - z[0])) if z.size > 1 else 0.0
+    rate = float(params.end_damping_rate(z_extent, jnp.float32))
+    if params.damp_ends_rate is not None:
+        return f"end damping: rate {rate:.6g} ([time] damp_ends_rate)"
+    return (
+        f"end damping: rate {rate:.6g} (default: {DAMP_ENDS_LAYER_TRANSITS:g} "
+        "thermal transits of the fastest kinetic species across the "
+        f"{float(params.damp_ends_widthfrac):g} end layers of Lz = {z_extent:.6g})"
     )
 
 
@@ -1106,6 +1147,7 @@ __all__ = [
     "_reshape_netcdf_state",
     "build_runtime_geometry",
     "build_runtime_linear_params",
+    "end_damping_status",
     "build_runtime_linear_terms",
     "build_runtime_term_config",
     "load_netcdf_restart_state",
