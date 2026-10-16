@@ -234,6 +234,16 @@ class PreparedExplicitNonlinearDiagnostics:
             jnp.asarray(state), geometry_use, cache_use, params_use
         )
 
+    @property
+    def chain(self) -> Any:
+        """The chain implicit operator the scan takes as an operand, if any."""
+        return getattr(self._run_raw, "keywords", {}).get("chain")
+
+    def with_chain(self, chain: Any) -> PreparedExplicitNonlinearDiagnostics:
+        """Same compiled scan with another operator of the same structure."""
+        run = self._run_raw
+        return replace(self, _run_raw=partial(run.func, chain=chain))  # type: ignore[attr-defined]
+
     def run(
         self,
         initial_state: jnp.ndarray | None = None,
@@ -712,6 +722,8 @@ def _attach_chain_implicit_linear(
         return rhs_fn(state)
 
     rhs_with_chain_linear.chain_implicit_linear = chain_linear  # type: ignore[attr-defined]
+    # Host-side, for ImexDtControl (the RHS without the chain operand).
+    object.__setattr__(chain_linear, "_rhs", (rhs_fn, prepared.project_state))
     return rhs_with_chain_linear
 
 

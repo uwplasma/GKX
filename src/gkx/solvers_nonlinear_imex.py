@@ -1189,8 +1189,69 @@ def refactor_chain_implicit_linear(op: ChainImplicitLinear, dt: float) -> Any:
         for g, r in zip(op.groups, raws)
     )
     new = dataclasses.replace(op, groups=groups, dt=float(dt))
-    object.__setattr__(new, "_raw", raws)
+    for key in ("_raw", "_rhs"):  # host-side extras, not pytree fields
+        if key in op.__dict__:
+            object.__setattr__(new, key, op.__dict__[key])
     return new
+
+
+class ImexDtControl:
+    """Chunk-level dt for the chain IMEX step (``fixed_dt = false``).
+
+    Between chunks: ``dt = min(cfl / (w_nl / 1.7 + rho / 2.5), dt_err,
+    dt_max)``. ``rho`` is the spectral radius of the explicit linear remainder
+    (drifts, ion mirror, drive) by Arnoldi at startup and 2.5 the measured
+    ARK3/ARS3 interval on it (0.82 x 3.6); ``w_nl`` the bracket CFL rate of the
+    current fields with RK3's imaginary interval; ``dt_err`` the embedded
+    ARK3(2) estimate against ``rtol``. The factor is rebuilt only when dt
+    moves by more than 20% (down) or grows past 1.2x, and a non-finite chunk
+    is rejected and redone at half the step.
+    """
+
+    def __init__(self, op, cfl_rate, *, dt_max, cfl=0.9, rtol=1e-3, iters=20):
+        rhs, project = op.__dict__["_rhs"]
+        self.cfl, self.rtol, self.dt_max = float(cfl), float(rtol), float(dt_max)
+
+        def probe(op, G):
+            dG, fields = rhs(G)
+            _, err = op.ars_step(G, dG, lambda s: rhs(s)[0], project, with_error=True)
+            rel = jnp.linalg.norm(err) / (self.rtol * jnp.linalg.norm(G) + 1e-30)
+            return rel, cfl_rate(fields)
+
+        self._probe = jax.jit(probe)
+        scale = 1.0e-8  # rhs(s v) / s is linear in v to O(s |v|^2)
+
+        @jax.jit
+        def remainder(op, v):
+            return rhs(scale * v)[0] / scale - op.linear(v)
+
+        rng = np.random.default_rng(0)
+        shape = op.shape
+        v = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+        q = [v / jnp.linalg.norm(v)]
+        h = np.zeros((iters + 1, iters), complex)
+        for j in range(iters):  # Arnoldi, as measured_streaming_frequency
+            w = remainder(op, q[j].astype(op.groups[0].cap.dtype)).astype(q[j].dtype)
+            for i, qi in enumerate(q):
+                h[i, j] = complex(jnp.vdot(qi, w))
+                w = w - h[i, j] * qi
+            h[j + 1, j] = float(jnp.linalg.norm(w))
+            q.append(w / max(h[j + 1, j], 1e-30))
+        self.rho = float(np.abs(np.linalg.eigvals(h[:iters, :iters])).max())
+
+    def propose(self, op, G) -> float:
+        """Next dt from the state at the end of a chunk."""
+        rel, w_nl = (float(x) for x in self._probe(op, G))
+        dt = float(op.dt)
+        dt_err = dt * min(1.5, max(0.5, 0.9 * max(rel, 1e-12) ** (-1.0 / 3.0)))
+        dt_cfl = self.cfl / max(w_nl / 1.7 + self.rho / 2.5, 1e-30)
+        return min(dt_err, dt_cfl, self.dt_max)
+
+    def retune(self, op, dt: float):
+        """``op`` at ``dt`` if it moved by more than 20%, else ``op``."""
+        if dt < float(op.dt) / 1.2 or dt > 1.2 * float(op.dt):
+            return refactor_chain_implicit_linear(op, dt)
+        return op
 
 
 def _static(a: np.ndarray) -> tuple:
@@ -1382,6 +1443,7 @@ __all__ = [
     "IMEX_CHAIN_METHODS",
     "build_chain_implicit_linear",
     "refactor_chain_implicit_linear",
+    "ImexDtControl",
     "advance_imex_nonlinear_state",
     "advance_imex_nonlinear_state_with_stats",
     "imex_fixed_point_guess",

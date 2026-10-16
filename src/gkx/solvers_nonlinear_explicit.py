@@ -531,6 +531,9 @@ def _advance_explicit_diagnostic_state(
     dt_local = jnp.asarray(
         time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype
     )
+    chain = getattr(rhs_fn, "chain_implicit_linear", None)
+    if chain is not None:  # the factor's dt, which the chunk controller sets
+        dt_local = jnp.asarray(chain.dt, dtype=real_dtype)
     if max_dt is not None:
         dt_local = jnp.minimum(dt_local, jnp.maximum(max_dt, 0.0))
     G_new = advance_explicit_nonlinear_state(
