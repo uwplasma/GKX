@@ -999,7 +999,7 @@ def _probe_columns(idx, nz: int, make: Callable, probe: Callable, take: Callable
     cols: list[list] = [[] for _ in idx]
     # An RHS assembly holds ~9 states of intermediates: 8 probes of a 64x64,
     # (8, 16) state asked for 10 GB. Fewer per call above 0.4 GB of states.
-    one = jax.eval_shape(make_all, jnp.arange(1))
+    one = jax.eval_shape(lambda j: probe(make_all(j)), jnp.arange(1))
     size = np.prod(one.shape) * one.dtype.itemsize
     batch = int(np.clip(4e8 // size, 1, _PROBE_BATCH))
     for j0 in range(0, max(ns), batch):
