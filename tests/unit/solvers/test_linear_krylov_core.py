@@ -1089,6 +1089,37 @@ def test_certify_opt_out_does_not_relax_the_shift_invert_gate(
         )
 
 
+def test_shift_invert_without_a_windowed_ritz_value_says_why_not_nan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every shipped deck stalled its inner solves and reported ``residual=nan``."""
+
+    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
+    stalled = ka._empty_inner_solve_stats(v0.dtype)._replace(
+        solves=jnp.asarray(4), unconverged_solves=jnp.asarray(4)
+    )
+    nan = jnp.asarray(jnp.nan + 1j * jnp.nan, v0.dtype)
+    monkeypatch.setattr(
+        lk,
+        "_shift_invert_eigenpair_with_inner_stats",
+        lambda *args, **kwargs: (nan, jnp.ones_like(v0), stalled),
+    )
+    with pytest.raises(RuntimeError) as rejected:
+        lk.dominant_eigenpair(
+            v0,
+            cache,
+            params,
+            terms=terms,
+            method="shift_invert",
+            shift=0.4 + 0.2j,
+            shift_source="reference",
+            fallback_method="none",
+        )
+    text = str(rejected.value)
+    assert "no Ritz value inside the frequency window" in text
+    assert "inner FGMRES solves did not converge" in text and "nan" not in text
+
+
 def test_long_horizon_propagator_selects_growth_and_recovers_frequency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1802,7 +1833,7 @@ def test_shift_invert_fallback_policy(monkeypatch: pytest.MonkeyPatch) -> None:
 
     # A rejected pair without a fallback must fail rather than escape as NaN.
     _patch_shift_invert(monkeypatch, fake_shift)
-    with pytest.raises(RuntimeError, match="non-finite"):
+    with pytest.raises(RuntimeError, match="no Ritz value inside the frequency window"):
         lk.dominant_eigenpair(
             v0,
             cache,

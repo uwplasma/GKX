@@ -1149,7 +1149,8 @@ recursive = true
 # 67272 -> 67308: cached_jit, so a repeated gkx.solve compiles nothing (PERF 2026-10-06).
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
 # 67113 -> 67081: bug-hunt-b 2026-10-15 (shift-invert retry and ETG/KBM defaults removed).
-baseline = 67081
+# 67113 -> 67179: bug-hunt 2026-10-15 (cached_jit memo, imex factor reuse, x64 scope).
+baseline = 67179
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1488,7 +1489,9 @@ recursive = true
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
 # 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
 # 72926 -> 72937: bug-hunt-b 2026-10-15 regression tests (#368).
-baseline = 72937
+# 72926 -> 72990: bug-hunt 2026-10-15 regression tests (#363).
+# 72990 -> 73001: bug-hunt-b 2026-10-15 regression tests (#368).
+baseline = 73001
 target = 35000
 
 [[line_budget_policy.counts]]
