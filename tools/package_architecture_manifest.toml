@@ -436,6 +436,13 @@ public_facades = [
 ]
 
 [[complexity_policy.exceptions]]
+path = "solvers_nonlinear_imex.py"
+# 1189 -> 1293: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
+baseline_lines = 1293
+target_lines = 1200
+reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
+
+[[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
 # 1076 -> 1154: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 1154 -> 1174: bug-fix chain (#302 #303 #304 #306 #308), measured.
@@ -1150,7 +1157,8 @@ recursive = true
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
 # 67113 -> 67126: end-damping contract (#366) on top of #362/#365, measured.
 # 67126 -> 67622: linearized Landau default, block-sparse apply, coulomb kernels retired.
-baseline = 67622
+# 67622 -> 67736: electron mirror implicit in the imex-ars3 chain factor (+114). Measured.
+baseline = 67736
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1489,7 +1497,8 @@ recursive = true
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
 # 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
 # 72926 -> 73011: linearized Landau physics gates and runtime regression, net of the retired coulomb tests.
-baseline = 73011
+# 73011 -> 73020: chain-solve test exercises the implicit electron mirror (Nl = 2).
+baseline = 73020
 target = 35000
 
 [[line_budget_policy.counts]]
