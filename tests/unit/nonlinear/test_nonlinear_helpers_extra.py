@@ -2959,3 +2959,25 @@ def test_cached_jit_falls_back_under_an_outer_trace_and_evicts(monkeypatch):
     monkeypatch.setattr(explicit, "_COMPILED", {i: None for i in range(64)})
     assert float(explicit.cached_jit(lambda x: x + 1)(jnp.ones(()))) == 2.0
     assert 0 not in explicit._COMPILED
+
+
+def test_adaptive_chain_imex_grows_dt_between_chunks():
+    """fixed_dt = false: the chain IMEX step adapts dt between chunks."""
+    import gkx
+
+    deck = gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    case = deck.replace(
+        grid=replace(deck.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            deck.time,
+            method="imex-ark3",
+            fixed_dt=False,
+            dt=0.05,
+            dt_max=1.0,
+            t_max=4.0,
+        ),
+    )
+    d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
+    dt = np.asarray(d.dt_t)
+    assert np.isfinite(np.asarray(d.Wg_t)).all()
+    assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05

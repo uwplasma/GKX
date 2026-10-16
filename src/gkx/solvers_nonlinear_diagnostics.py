@@ -1063,12 +1063,15 @@ def prepare_explicit_nonlinear_diagnostics_impl(
             external_phi=external_phi,
         )
 
+    chain = _chain_operand(components.step)
     return PreparedExplicitNonlinearDiagnostics(
         initial_state=components.prepared.G0,
         geometry=components.prepared.setup.geom,
         cache=components.prepared.cache,
         params=params,
-        _run_raw=partial(jax.jit(run_raw), chain=_chain_operand(components.step)),
+        _run_raw=jax.jit(run_raw)
+        if chain is None
+        else partial(jax.jit(run_raw), chain=chain),
         _run_dynamic_raw=jax.jit(run_dynamic_raw),
         _finalize=deps.finalize_scan_diagnostics_fn,
         stride=stride,
