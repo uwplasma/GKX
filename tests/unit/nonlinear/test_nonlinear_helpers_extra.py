@@ -15,6 +15,7 @@ from gkx.operators.nonlinear.policies import measured_streaming_frequency
 from gkx.solvers_nonlinear_imex import (
     ARS_TABLEAUX,
     build_chain_implicit_linear,
+    refactor_chain_implicit_linear,
 )
 from gkx.solvers_nonlinear_diagnostics import stiff_linear_split
 from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
@@ -2918,8 +2919,13 @@ def test_chain_solve_inverts_the_stiff_linear_operator():
     x = op.solve(G - gamma * dt * op.linear(G))
     assert float(jnp.linalg.norm(x - G) / jnp.linalg.norm(G)) < 2e-3
     block = int(np.prod(shape[:3])) * shape[-1]
-    dense = sum(g.ky.shape[0] * (g.ky.shape[1] * block) ** 2 * 8 for g in op.groups)
+    dense = sum(np.size(g.ky) * np.shape(g.ky)[1] * block**2 * 8 for g in op.groups)
     assert op.nbytes < dense
+    # A new dt refactors from the stored probes, keeping the pytree structure.
+    op2 = refactor_chain_implicit_linear(op, 4 * dt)
+    assert jax.tree.structure(op2) == jax.tree.structure(op)
+    x = op2.solve(G - gamma * 4 * dt * op.linear(G))
+    assert float(jnp.linalg.norm(x - G) / jnp.linalg.norm(G)) < 2e-3
 
 
 def test_second_identical_solve_compiles_nothing_and_repeats_bits():
