@@ -1034,7 +1034,7 @@ def test_strong_flow_shear_suppresses_linear_itg_amplitude_after_dt_refinement()
         nu_hyper_m=0.0,
         tprim=6.9,
         fprim=2.2,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
     )
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
     rng = np.random.default_rng(10)

@@ -488,7 +488,7 @@ def integrate_linear_explicit(
     t_max, dt, dt_min, dt_max, sample_stride, wmax = _linear_explicit_timing(
         time_cfg, grid, geom, params, G.shape
     )
-    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=dt)
+    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg)
     return _run_linear_explicit_loop(
         G=G,
         cache=cache,
@@ -902,7 +902,7 @@ def integrate_linear_explicit_diagnostics(
     policy = _diagnostic_policy(
         grid, geom_eff, params, G, time_cfg, mode_method=mode_method, z_index=z_index
     )
-    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg, dt=policy.dt)
+    _, fields0 = assemble_rhs_cached(G, cache, params, terms=term_cfg)
     phi_prev = fields0.phi
     vol_fac, flux_fac = fieldline_quadrature_weights(geom_eff, grid)
     stepper = _make_stepper(

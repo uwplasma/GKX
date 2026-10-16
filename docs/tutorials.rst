@@ -20,6 +20,13 @@ gallery version scans ``k_y`` and plots the eigenfunction:
 
 Edit the ``KY`` list at the top of ``run.py``, or the deck ``case.toml``, and run again.
 
+.. note::
+
+   The run prints ``end damping: rate ...``: the field-line end absorber,
+   the same on every solver. For kinetic electrons or KBM, rerun at 3x that
+   ``[time] damp_ends_rate`` either way before quoting a growth rate
+   (:ref:`end-damping`).
+
 From an equilibrium to turbulence
 ---------------------------------
 

@@ -3174,7 +3174,7 @@ def _two_species_params(
     apar_beta_scale: float | None = None,
     ampere_g0_scale: float | None = None,
     bpar_beta_scale: float | None = None,
-    damp_ends_amp: float | None = None,
+    damp_ends_rate: float | None = None,
     damp_ends_widthfrac: float | None = None,
     nhermite: int | None = None,
 ) -> LinearParams:
@@ -3231,8 +3231,8 @@ def _two_species_params(
     params = _apply_reference_hypercollisions(params, nhermite=nhermite)
     if fapar_override is not None:
         params = replace(params, fapar=float(fapar_override))
-    if damp_ends_amp is not None:
-        params = replace(params, damp_ends_amp=float(damp_ends_amp))
+    if damp_ends_rate is not None:
+        params = replace(params, damp_ends_rate=float(damp_ends_rate))
     if damp_ends_widthfrac is not None:
         params = replace(params, damp_ends_widthfrac=float(damp_ends_widthfrac))
     return params
