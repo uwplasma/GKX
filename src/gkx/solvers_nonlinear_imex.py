@@ -662,7 +662,7 @@ def integrate_cached_imex_scan(
     return G_out, fields_t
 
 
-# --- Per-chain implicit linear operator (imex-ars2 / imex-ars3) -------------
+# --- Per-chain implicit linear operator (imex-ars3) ---------------------------
 #
 # Implicit linear operator per linked chain, for the ``imex-ars*`` methods.
 #
@@ -685,22 +685,14 @@ def integrate_cached_imex_scan(
 # (4, 8).
 
 
-_G2 = 1.0 - 1.0 / 2.0**0.5
-_D2 = 1.0 - 1.0 / (2.0 * _G2)
 _G3 = 0.4358665215
 _B1 = -1.5 * _G3**2 + 4.0 * _G3 - 0.25
 _B2 = 1.5 * _G3**2 - 5.0 * _G3 + 1.25
 # (explicit A, implicit A, explicit b, implicit b), Ascher-Ruuth-Spiteri 1997.
-# ARS(2,2,2): two-stage explicit part, whose RK2 has no imaginary-axis interval
-# (bracket advection is weakly unstable at any dt). ARS(3,4,3): third order,
-# four explicit stages with an imaginary-axis interval, three RHS per step.
+# ARS(3,4,3): third order, four explicit stages with an imaginary-axis
+# interval, three RHS per step. (ARS(2,2,2) was removed: its RK2 explicit part
+# has no imaginary-axis interval, so bracket advection is unstable at any dt.)
 ARS_TABLEAUX: dict[str, Any] = {
-    "imex-ars2": (
-        ((0, 0, 0), (_G2, 0, 0), (_D2, 1 - _D2, 0)),
-        ((0, 0, 0), (0, _G2, 0), (0, 1 - _G2, _G2)),
-        (_D2, 1 - _D2, 0),
-        (0, 1 - _G2, _G2),
-    ),
     "imex-ars3": (
         (
             (0, 0, 0, 0),
@@ -753,6 +745,7 @@ class ChainImplicitLinear:
     cols_m: tuple[int, ...]
     linear: Callable[[jnp.ndarray], jnp.ndarray]  # L G (stiff terms only)
     spec: tuple[tuple[int, ...], ...] = ((0,),)  # species groups of the factor
+    on: Any = None  # solved-row mask: refine each solve once (see ``solve``)
 
     @property
     def nbytes(self) -> int:
@@ -781,7 +774,18 @@ class ChainImplicitLinear:
         return x0 + self.gamma_dt * self._bsolve(g, full)
 
     def solve(self, R: jnp.ndarray) -> jnp.ndarray:
-        """``(I - gamma dt L)^{-1} R`` on the chains (identity elsewhere)."""
+        """``(I - gamma dt L)^{-1} R`` on the chains (identity elsewhere).
+
+        With ``on`` set, one step of iterative refinement: in complex64 the
+        factor with the electron mirror leaves a 3e-2 to 0.8 residual at dt 0.2
+        to 0.8 (32x32, (4, 8)), one step 1e-5 to 4e-3.
+        """
+        y = self._solve(R)
+        if self.on is None:
+            return y
+        return y - self._solve(self.on * (y - self.gamma_dt * self.linear(y) - R))
+
+    def _solve(self, R: jnp.ndarray) -> jnp.ndarray:
         out = R
         for g in self.groups:
             x = _gather(g.ky, g.kx, R).astype(g.cap.dtype)
@@ -1227,16 +1231,25 @@ def build_chain_implicit_linear(
         )
         for (k, x), (s_parts, u_cols) in zip(idx, probed)
     ]
-    op = ChainImplicitLinear(
-        tuple(groups), tuple(shape), float(dt), scheme, rows_m, cols_m, lin, spec
-    )
-    # One solve's residual certifies every structural assumption at once
-    # (Hermite tridiagonality, z-local fields, the chain partition).
-    r = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape), dtype)
     mask = np.zeros(shape[3:5], bool)
     for k, x in idx:
         mask[k, x] = True
     on = jnp.asarray(mask, dtype)[None, None, None, :, :, None]
+    refine = e_mirror is not None and jnp.finfo(dtype).bits <= 32
+    op = ChainImplicitLinear(
+        tuple(groups),
+        tuple(shape),
+        float(dt),
+        scheme,
+        rows_m,
+        cols_m,
+        lin,
+        spec,
+        on if refine else None,
+    )
+    # One solve's residual certifies every structural assumption at once
+    # (Hermite tridiagonality, z-local fields, the chain partition).
+    r = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape), dtype)
     r = r * on
     y = op.solve(r)
     # Only the solved rows: the RHS rebuilds ky < 0 rows from their partners.
