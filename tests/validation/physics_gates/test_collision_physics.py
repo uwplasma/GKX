@@ -2207,3 +2207,25 @@ def test_landau_block_apply_equals_dense_and_is_differentiable_in_nu() -> None:
     gradient = jax.grad(rate)(jnp.asarray(0.5))
     assert np.isclose(float(gradient), float(rate(1.0)), rtol=1e-10)
     assert float(gradient) < 0.0  # dissipative
+
+
+def test_runtime_default_is_landau_and_coulomb_is_its_alias() -> None:
+    """Regression: the shipped collisional Cyclone example on the runtime path."""
+
+    import gkx
+
+    case = gkx.load(
+        Path(__file__).resolve().parents[3] / "examples/07_collisions/case.toml"
+    )
+    growth = {}
+    for model in ("landau", "coulomb", "lenard_bernstein"):
+        local = case.replace(
+            time=dataclasses.replace(case.time, collision_operator=model, t_max=10.0)
+        )
+        growth[model] = float(
+            gkx.solve(local, ky_target=0.3, Nl=2, Nm=4, solver="time").gamma
+        )
+    assert growth["coulomb"] == growth["landau"]
+    # Recorded 2026-10-16 (x64 CPU); Dougherty damps ITG more at equal nu.
+    assert np.isclose(growth["landau"], 0.0724033, rtol=1e-3)
+    assert growth["lenard_bernstein"] < growth["landau"]
