@@ -7,6 +7,7 @@ and diagnostic IMEX paths.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Callable
@@ -776,9 +777,9 @@ class ChainImplicitLinear:
     def solve(self, R: jnp.ndarray) -> jnp.ndarray:
         """``(I - gamma dt L)^{-1} R`` on the chains (identity elsewhere).
 
-        With ``on`` set, one step of iterative refinement: in complex64 the
-        factor with the electron mirror leaves a 3e-2 to 0.8 residual at dt 0.2
-        to 0.8 (32x32, (4, 8)), one step 1e-5 to 4e-3.
+        With ``on`` set, one step of iterative refinement (set at build when
+        the check residual exceeds 5e-3; one step takes 3e-2 to 1e-5 and 0.8
+        to 4e-3 at dt 0.2 and 0.8, 32x32, (4, 8), complex64).
         """
         y = self._solve(R)
         if self.on is None:
@@ -1232,25 +1233,23 @@ def build_chain_implicit_linear(
     for k, x in idx:
         mask[k, x] = True
     on = jnp.asarray(mask, dtype)[None, None, None, :, :, None]
-    refine = e_mirror is not None and jnp.finfo(dtype).bits <= 32
     op = ChainImplicitLinear(
-        tuple(groups),
-        tuple(shape),
-        float(dt),
-        scheme,
-        rows_m,
-        cols_m,
-        lin,
-        spec,
-        on if refine else None,
+        tuple(groups), tuple(shape), float(dt), scheme, rows_m, cols_m, lin, spec
     )
     # One solve's residual certifies every structural assumption at once
     # (Hermite tridiagonality, z-local fields, the chain partition).
-    r = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape), dtype)
-    r = r * on
-    y = op.solve(r)
-    # Only the solved rows: the RHS rebuilds ky < 0 rows from their partners.
-    err = float(jnp.linalg.norm(on * (y - gdt * lin(y) - r)) / jnp.linalg.norm(r))
+    r = on * jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape), dtype)
+
+    def residual(op):  # only the solved rows: ky < 0 rows are rebuilt
+        y = op.solve(r)
+        return float(jnp.linalg.norm(on * (y - gdt * lin(y) - r)) / jnp.linalg.norm(r))
+
+    err = residual(op)
+    # Refine (one more linear apply and solve per stage) only where needed:
+    # 32x32, (4, 8), complex64: 1e-3 at dt 0.05, 3e-2 at 0.2, 0.8 at 0.8.
+    if e_mirror is not None and err > 5.0e-3:
+        op = dataclasses.replace(op, on=on)
+        err = residual(op)
     # I - gamma dt L reaches cond 4e5 on the Cyclone tutorial box (A_par at
     # small k_perp), so a complex64 solve, dense or structured, leaves a
     # ~5e-3 residual; a broken structural assumption leaves O(1).

@@ -437,8 +437,8 @@ public_facades = [
 
 [[complexity_policy.exceptions]]
 path = "solvers_nonlinear_imex.py"
-# 1189 -> 1286: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
-baseline_lines = 1286
+# 1189 -> 1282: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
+baseline_lines = 1282
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
