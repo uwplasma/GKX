@@ -890,8 +890,8 @@ def _thomas_factor(
     ``(s, l, m)``; with it one ``Nl N x Nl N`` inverse per ``(s, m)`` (Nl x
     the memory). Only ``D``, the scalars, ``e`` and the Schur-complement
     inverses are stored. Inverses, not LU: batched triangular solves of
-    blocks this small are launch-bound on GPU. Stored ``m``-major so each
-    sweep step reads contiguous memory.
+    blocks this small are launch-bound on GPU. One array per ``m`` (no stacked
+    copy: 3.75 GB for the length-1 chains at 64x64, (8, 16)).
     """
     c, ns, nl, nm, n, _ = diag.shape
     k = 1 if e_lo is None else nl
@@ -945,13 +945,13 @@ def _thomas_factor(
             blk = blk - gdt**2 * mm(mm(lo, dinv[-1]), up)
         dinv.append(jnp.linalg.inv(blk))
     e = (None, None) if e_lo is None else (-gdt * e_lo, -gdt * e_up)
-    return (jnp.stack(dinv), d, -gdt * a_lo, -gdt * a_up, *e), err
+    return (tuple(dinv), d, -gdt * a_lo, -gdt * a_up, *e), err
 
 
 def _thomas_solve(factors: tuple[jnp.ndarray, ...], x: jnp.ndarray) -> jnp.ndarray:
     dinv, d, lo, up, e_lo, e_up = factors
     c, ns, nl, nm, n = x.shape
-    shape = (c, ns, dinv.shape[3], -1)
+    shape = (c, ns, dinv[0].shape[2], -1)
 
     def mv(m, v):  # dinv_m v on (c, s, l, N)
         return _mv(dinv[m], v.reshape(shape)).reshape(v.shape)
