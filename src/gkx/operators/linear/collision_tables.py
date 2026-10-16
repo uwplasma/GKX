@@ -527,11 +527,27 @@ def _sonine_radial(x: np.ndarray, l: int, count: int, scale: float = 1.0):  # no
     return value, norm * base * ((l_over_u - u) * lag + 2 * u * dlag) / scale
 
 
-@lru_cache(maxsize=32)
 def linearized_landau_pair_matrices(
     nl: int, nm: int, mass_ratio: float = 1.0, temperature_ratio: float = 1.0
 ) -> tuple[np.ndarray, np.ndarray]:
-    r"""Return the unit-frequency test and field matrices of one ordered pair.
+    """Return the dense ``(test, field)`` Hermite-Laguerre matrices of one pair."""
+
+    convention, test, field = linearized_landau_factors(
+        nl, nm, mass_ratio, temperature_ratio
+    )
+    return convention @ test @ convention.T, convention @ field @ convention.T
+
+
+@lru_cache(maxsize=32)
+def linearized_landau_factors(
+    nl: int, nm: int, mass_ratio: float = 1.0, temperature_ratio: float = 1.0
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    r"""Return ``(T, test, field)``: the pair operator is ``T @ block @ T.T``.
+
+    ``T`` maps the Hermite-Laguerre box onto Legendre-Sonine functions; it is
+    block diagonal in the degree ``p + 2j = l + 2k`` because each Hermite-
+    Laguerre function is orthogonal to every polynomial of lower degree. The
+    Legendre-Sonine blocks are diagonal in ``l``.
 
     ``C_ab[f_a, f_b] = C(f_a, F_b) + C(F_a, f_b)`` with ``mass_ratio = m_a/m_b``
     and ``temperature_ratio = T_a/T_b``, linearized about Maxwellians. Rows are
@@ -602,8 +618,7 @@ def linearized_landau_pair_matrices(
         blocks[0][np.ix_(index, index)] = test
         blocks[1][np.ix_(index, index)] = field
     sign = (-1.0) ** (np.arange(nl * nm) % nl)
-    convention = transform * sign[:, None]
-    return tuple(convention @ block @ convention.T for block in blocks)  # type: ignore[return-value]
+    return transform * sign[:, None], blocks[0], blocks[1]
 
 
 def linearized_landau_species_matrices(
