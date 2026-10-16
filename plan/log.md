@@ -21209,7 +21209,6 @@ Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan
 
 
 
-<<<<<<< HEAD
 ## 2026-10-15 — bug hunt, known-bug group (fix/bug-hunt-1015)
 
 - `cached_jit` traces, prints and hashes once per argument signature of a wrapper, not on every call; the imex probe loops called one wrapper hundreds of times (17.7 s host time per warm imex solve on the 10-13 profile). Executables are unchanged, so results are bitwise identical.
@@ -21217,7 +21216,6 @@ Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan
 - VMEC `*.eik.nc` generation and backend discovery now run under `geometry_precision()`: float64 inside, the caller's `jax_enable_x64` restored after. Importing vmex/booz_xform_jax used to leave the GK solve in float64.
 - Shift-invert: when no Ritz value falls in the frequency window, or the inner FGMRES stalls, the error now says so and suggests what to change. It no longer reports `residual=nan`. Root cause, measured on Cyclone case_full at (4,8): hermite-line and field-corrected ignore the z-varying drift (||(A-σ)Mx−x|| = 11.6 against 0.14 with streaming only); pr3-cm converges, but only with restart ≥150; the propagator seed σ lands 0.0076 from a damped mode. pr3-cm with restart 150 still stalls on KBM. Not fixed: needs a design decision.
 - Adaptive Cyclone (16,48): no hang reproduced. It certifies γ=0.09309 in 262 s on a shared A4000; the 10-13 ">17 min, GPU idle" ran under the profiler trace and HLO dump. KBM adaptive at (16,48) did not finish in 50 min on a shared GPU.
-=======
 ## 2026-10-15 — SLIM+HISTORY lane (branch `slim/scripts-and-media`)
 
 Base: `main` `df2953026` (2.5.1 + chain #356). Every removed file is recoverable with `git show df2953026:<path>`.
@@ -21237,4 +21235,3 @@ Base: `main` `df2953026` (2.5.1 + chain #356). Every removed file is recoverable
 - **Media.** 28 orphan files in `docs/_static` (no reference anywhere outside `plan/log.md`, by basename, stem or directory) deleted. PNG: pngquant `--quality=90-100` then oxipng `-o 4 --strip safe`, 1.98 MB -> 1.61 MB. `vmex_mirror_gkx_rotation.mp4` re-encoded x264 crf 25, 205 kB -> 83 kB, SSIM 0.997 against the original.
 - **Size.** Tracked tree 2,173 files / 23.9 MB -> 2,095 / 21.8 MB. A fresh GitHub clone is a 19.1 MB pack (heads and tags); the 202 MB figure is the local `.git` (local branches, reflogs, stash, unpruned packs), not the remote.
 - **History.** Rewrite options and dry runs: `plan/research/2026-10-15-history/PLAN.md`. Nothing was rewritten or force-pushed.
->>>>>>> origin/main
