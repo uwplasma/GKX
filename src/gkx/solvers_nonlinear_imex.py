@@ -665,7 +665,7 @@ def integrate_cached_imex_scan(
 
 # --- Per-chain implicit linear operator (imex-ars3) ---------------------------
 #
-# Implicit linear operator per linked chain, for the ``imex-ars*`` methods.
+# Implicit linear operator per linked chain, for ``imex-ars3``.
 #
 # Kinetic-electron runs are step-limited by electron parallel streaming and the
 # electromagnetic electron mode (|lambda| ~ 500-1500 against drift rates ~ 10),
@@ -676,8 +676,10 @@ def integrate_cached_imex_scan(
 # (N = links * Nz) and no species or Laguerre coupling, and Q is z-local
 # (rank nf N). I - gamma dt S is factored by block Thomas, the fields enter
 # by Woodbury. Every block is probed from the run's own RHS assembly, and one
-# solve's residual certifies the structure. Drifts, mirror, drive and
-# collisions stay explicit with the bracket.
+# solve's residual certifies the structure. The electron mirror force is in
+# S too (it set dt otherwise: |lambda| 57 against drifts ~3 at (4, 8)); it is
+# z-local but couples l to l +- 1, so electron blocks are Nl N x Nl N.
+# Drifts, the ion mirror, drive and collisions stay explicit with the bracket.
 #
 # The time step is an Ascher-Ruuth-Spiteri IMEX Runge-Kutta scheme: L-stable
 # SDIRK with one diagonal coefficient for the linear part (one factorization
