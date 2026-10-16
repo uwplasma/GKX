@@ -627,6 +627,12 @@ def _run_chunked_diagnostics(
             dt_new = control["ctl"].propose(control["op"], G_next)
             control["op"] = control["ctl"].retune(control["op"], dt_new)
             control["dt"] = float(control["op"].dt)
+            status(
+                "imex dt {:.3g} (error bound {dt_err:.3g}, CFL bound {dt_cfl:.3g}; "
+                "bracket {bracket:.3g}, remainder {remainder:.3g})".format(
+                    control["dt"], **control["ctl"].last
+                )
+            )
         G_chunk = G_next
         steps_left -= steps_now
         return t_chunk, diag_chunk, G_next, fields_next

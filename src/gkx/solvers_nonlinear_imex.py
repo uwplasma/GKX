@@ -1222,8 +1222,9 @@ class ImexDtControl:
         scale = 1.0e-8  # rhs(s v) / s is linear in v to O(s |v|^2)
 
         @jax.jit
-        def remainder(op, v):
-            return rhs(scale * v)[0] / scale - op.linear(v)
+        def remainder(op, v):  # on projected states: the ky < 0 rows are rebuilt
+            v = project(v)
+            return project(rhs(scale * v)[0] / scale - op.linear(v))
 
         rng = np.random.default_rng(0)
         shape = op.shape
@@ -1245,6 +1246,9 @@ class ImexDtControl:
         dt = float(op.dt)
         dt_err = dt * min(1.5, max(0.5, 0.9 * max(rel, 1e-12) ** (-1.0 / 3.0)))
         dt_cfl = self.cfl / max(w_nl / 1.7 + self.rho / 2.5, 1e-30)
+        self.last = dict(
+            err=rel, bracket=w_nl, remainder=self.rho, dt_err=dt_err, dt_cfl=dt_cfl
+        )
         return min(dt_err, dt_cfl, self.dt_max)
 
     def retune(self, op, dt: float):
