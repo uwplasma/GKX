@@ -46,13 +46,9 @@ rank 5 and is never described as published.
   collisionless row with no Laguerre-space sink reports its velocity limit;
 - :doc:`verification_matrix` matches the ledger.
 
-``scripts/validation_matrix.py`` writes the ledger section of
-:doc:`verification_matrix`:
-
-.. code-block:: bash
-
-   python scripts/validation_matrix.py           # rewrite the generated block
-   python scripts/validation_matrix.py --check   # exit 1 if it is stale
+``scripts/validation_matrix.py`` (retired; :ref:`retired-generators`) wrote the ledger section of
+:doc:`verification_matrix`; edit that block together with
+``tools/evidence_ledger.toml``.
 
 Claim scope
 -----------

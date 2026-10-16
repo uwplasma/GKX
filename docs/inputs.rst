@@ -385,7 +385,8 @@ Python driver
 The canonical KBM TOML is a controlled comparison input rather than
 a promoted standalone solve: its experimental shift-invert branch raises when
 the physical eigenpair-residual gate is not met. Reproduce the reviewed result
-with ``python scripts/benchmark.py linear_benchmark kbm``.
+with ``scripts/benchmarks/linear_benchmark.py kbm`` (retired; :ref:`retired-generators`) (removed from the tree;
+``git show df2953026:scripts/benchmarks/linear_benchmark.py``).
 
 Runtime sections
 ----------------

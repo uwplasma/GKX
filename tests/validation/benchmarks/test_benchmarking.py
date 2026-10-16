@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.artifacts.build_analytic_benchmarks import (
+from support.reference_physics import (
     cht_alpha_crit,
     fit_zonal_response,
     pkj_beta_mhd,
@@ -55,27 +55,11 @@ from gkx.diagnostics.modes import EigenfunctionComparisonMetrics
 from scripts.checks._gates.zonal_validation import zonal_flow_response_metrics
 from dataclasses import fields
 import math
-import re
 import subprocess
 import tomllib
 import jax
 import jax.numpy as jnp
 from support.paths import REPO_ROOT, load_release_tool
-from scripts.benchmarks import linear_benchmark
-from scripts.benchmarks.benchmark_runtime_memory import (
-    RuntimeBenchRun,
-    _load_manifest,
-    _load_summary_rows,
-    _parse_profile_times,
-    _parse_peak_rss_mb,
-    _plot_results,
-    _render,
-    _run_command,
-    _select_runs,
-    _summary_row,
-    _write_row_logs,
-    _write_summary,
-)
 from gkx.core_velocity import (
     J_l_all,
 )
@@ -103,7 +87,7 @@ from gkx.benchmarking_shared import (
     TEM_OMEGA_STAR_SCALE,
     TEM_RHO_STAR,
 )
-from scripts.comparison.compare_gx_rhs_terms import (
+from support.reference_physics import (
     _build_initial_condition as build_benchmark_initial_condition,
     _two_species_params,
 )
@@ -118,7 +102,7 @@ from gkx.runtime import (
     build_runtime_linear_terms,
 )
 from gkx.workflows.runtime.toml import load_runtime_from_toml
-from scripts.comparison.compare_gx_rhs_terms import (
+from support.reference_physics import (
     _build_gaussian_profile,
     _build_initial_condition,
 )
@@ -129,14 +113,12 @@ from gkx.benchmarking_shared import (
     load_kbm_reference,
     load_tem_reference,
 )
-from scripts.comparison.compare_gx_rhs_terms import (
+from support.reference_physics import (
     _apply_reference_hypercollisions,
     _reference_hypercollision_power,
 )
 from gkx.config import InitializationConfig
-import hashlib
 import sys
-from support.paths import load_tool_script
 from scripts.checks._gates.transport_windows import (
     NonlinearWindowConvergenceConfig,
     nonlinear_window_convergence_report,
@@ -696,33 +678,6 @@ def test_parameter_contract_rejects_optional_and_numeric_mismatches(rates):
         _assert_same_parameters(*(LinearParams(damp_ends_rate=r) for r in rates))
 
 
-def test_benchmark_readme_references_existing_python_drivers() -> None:
-    """Keep researcher-facing reproduction commands synchronized with drivers."""
-
-    readme = (ROOT / "benchmarks" / "README.md").read_text(encoding="utf-8")
-    drivers = re.findall(r"python scripts/benchmark\.py (\w+)", readme)
-
-    assert drivers
-    assert all(
-        (ROOT / "scripts" / "benchmarks" / f"{driver}.py").is_file()
-        for driver in drivers
-    )
-    for module in re.findall(r"python scripts/validate\.py (\w+)", readme):
-        assert any(
-            (ROOT / "scripts" / package / f"{module}.py").is_file()
-            for package in ("artifacts", "campaigns")
-        ), module
-
-
-def test_cyclone_publication_driver_uses_asymptotic_fit_window() -> None:
-    """Exclude the measured startup transient from the Cyclone growth fit."""
-
-    cyclone = linear_benchmark.CASES["cyclone"]
-    runtime_cfg, _ = load_runtime_from_toml(cyclone["config"])
-    assert cyclone["window"]["tmin"] >= 0.7 * runtime_cfg.time.t_max
-    assert cyclone["window"]["tmax"] == pytest.approx(runtime_cfg.time.t_max)
-
-
 _NL, _NM = 2, 4
 
 
@@ -982,271 +937,12 @@ def test_root_benchmark_payload_stays_lightweight() -> None:
     assert total_bytes <= MAX_ROOT_BENCHMARK_PAYLOAD_BYTES
 
 
-def _runtime_runs():
-    return _load_manifest(ROOT / "tools" / "runtime_memory_manifest.toml")
-
-
 def _proc(stdout: str = "", stderr: str = "", returncode: int = 0):
     return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
 
 
-def test_runtime_memory_manifest_loads_runs() -> None:
-    runs = _runtime_runs()
-    assert any(
-        run.case == "cyclone-linear" and run.backend == "gkx_cpu" for run in runs
-    )
-    assert any(run.backend == "gx" for run in runs)
-
-
-def test_runtime_memory_selection_filters_case_and_backend(tmp_path: Path) -> None:
-    manifest = tmp_path / "mini.toml"
-    manifest.write_text(
-        """
-[[run]]
-case = "a"
-label = "A"
-backend = "gkx_cpu"
-command = "echo a"
-
-[[run]]
-case = "b"
-label = "B"
-backend = "gx"
-command = "echo b"
-profile_command = "echo profile"
-host = "office"
-enabled = false
-""",
-        encoding="utf-8",
-    )
-    runs = _load_manifest(manifest)
-    assert runs[1].host == "office"
-    assert runs[1].profile_command == "echo profile"
-    selected = _select_runs(runs, {"a"}, {"gkx_cpu"})
-    assert len(selected) == 1
-    assert selected[0].case == "a"
-    assert selected[0].backend == "gkx_cpu"
-
-
-def test_parse_peak_rss_and_profile_times() -> None:
-    assert _parse_peak_rss_mb("peak memory footprint: 1048576") == 1.0
-    assert _parse_peak_rss_mb("Maximum resident set size (kbytes): 2048") == 2.0
-    parsed = _parse_profile_times("warmup_time_s=30.776 run_time_s=14.081")
-    assert parsed == {"warmup_time_s": 30.776, "run_time_s": 14.081}
-
-
-def test_load_summary_rows_merges_matching_json_files(tmp_path: Path) -> None:
-    first = tmp_path / "a.json"
-    first.write_text(
-        '{"rows":[{"case":"a","backend":"gkx_cpu","status":"success"}]}\n',
-        encoding="utf-8",
-    )
-    second = tmp_path / "b.json"
-    second.write_text(
-        '{"rows":[{"case":"a","backend":"gx","status":"success"}]}\n', encoding="utf-8"
-    )
-    rows = _load_summary_rows([str(tmp_path / "*.json")])
-    assert len(rows) == 2
-    assert {row["backend"] for row in rows} == {"gkx_cpu", "gx"}
-
-
-def test_render_expands_root_and_env(monkeypatch) -> None:
-    monkeypatch.setenv("GKX_BENCH_ROOT", "/tmp/bench")
-    rendered = _render("{root}:${GKX_BENCH_ROOT}")
-    assert str(ROOT) in rendered
-    assert "/tmp/bench" in rendered
-
-
 _STELLARATOR_CASES = {"w7x-linear", "w7x-nonlinear", "hsx-linear", "hsx-nonlinear"}
 _CUDA_PIN = "CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE}"
-
-
-@pytest.mark.parametrize(
-    ("backend", "cases", "count", "required"),
-    [
-        # GX rows run in an isolated tempdir with a pinned, display-free env.
-        (
-            "gx",
-            None,
-            None,
-            (
-                "mktemp -d",
-                "env ",
-                "-u DISPLAY",
-                "HDF5_DISABLE_VERSION_CHECK=1",
-                _CUDA_PIN,
-            ),
-        ),
-        # GX stellarator rows use pregenerated nc geometry.
-        (
-            "gx",
-            _STELLARATOR_CASES,
-            4,
-            (
-                'geo_option = "nc"',
-                "vmec_file",
-                'geo_file = "',
-                "REFERENCE_GK_NETCDF_LIBDIR",
-                "REFERENCE_GK_PYTHON_BIN",
-            ),
-        ),
-        ("gkx_gpu", None, None, (_CUDA_PIN,)),  # GPU rows pin the configured device
-    ],
-    ids=["gx-isolated-tempdir", "gx-stellarator-nc-geometry", "gpu-pins-cuda-device"],
-)
-def test_runtime_memory_manifest_row_commands(backend, cases, count, required) -> None:
-    runs = [
-        run
-        for run in _runtime_runs()
-        if run.backend == backend and (cases is None or run.case in cases)
-    ]
-    assert runs if count is None else len(runs) == count
-    for run in runs:
-        for token in required:
-            assert token in run.command, (run.case, token)
-
-
-def test_short_nonlinear_gpu_rows_request_warm_profile_pass() -> None:
-    selected = {
-        run.case: run.profile_command
-        for run in _runtime_runs()
-        if run.backend == "gkx_gpu"
-    }
-    for case in ("cyclone-nonlinear", "kbm-nonlinear"):
-        assert "profile_runtime_kernels.py cyclone" in str(selected[case])
-
-
-def test_remote_runtime_memory_runs_disable_x11_forwarding(monkeypatch) -> None:
-    captured = {}
-
-    def fake_run(cmd, capture_output, text):  # type: ignore[no-untyped-def]
-        captured["cmd"] = cmd
-        return _proc()
-
-    monkeypatch.setattr(
-        "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
-    )
-    run = RuntimeBenchRun(
-        case="c", label="C", backend="gx", command="echo hi", cwd="/tmp", host="office"
-    )
-    row = _run_command(run)
-    assert row["status"] == "success"
-    assert captured["cmd"][:2] == ["ssh", "-x"]
-
-
-def test_runtime_memory_command_captures_profile_times(monkeypatch) -> None:
-    def fake_run(cmd, shell, cwd, capture_output, text):  # type: ignore[no-untyped-def]
-        return _proc(
-            "warmup_time_s=12.5 run_time_s=3.25\n",
-            "Maximum resident set size (kbytes): 2048\n",
-        )
-
-    monkeypatch.setattr(
-        "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
-    )
-    run = RuntimeBenchRun(
-        case="c",
-        label="C",
-        backend="gkx_cpu",
-        command="echo hi",
-        cwd="/tmp",
-        wrap_time=False,
-    )
-    row = _run_command(run)
-    assert row["runtime_s"] >= 0.0
-    assert row["peak_rss_mb"] == 2.0
-    assert row["warmup_time_s"] == 12.5
-    assert row["run_time_s"] == 3.25
-
-
-def test_runtime_memory_command_runs_profile_subcommand(monkeypatch) -> None:
-    calls = []
-
-    def fake_run(cmd, shell, cwd, capture_output, text):  # type: ignore[no-untyped-def]
-        calls.append(cmd)
-        if len(calls) == 1:
-            return _proc("main\n", "Maximum resident set size (kbytes): 2048\n")
-        return _proc("warmup_time_s=20 run_time_s=7\n")
-
-    monkeypatch.setattr(
-        "scripts.benchmarks.benchmark_runtime_memory.subprocess.run", fake_run
-    )
-    run = RuntimeBenchRun(
-        case="c",
-        label="C",
-        backend="gkx_gpu",
-        command="echo cold",
-        profile_command="echo warm",
-        cwd="/tmp",
-        wrap_time=False,
-    )
-    row = _run_command(run)
-    assert len(calls) == 2
-    assert row["status"] == "success"
-    assert row["warmup_time_s"] == 20.0
-    assert row["run_time_s"] == 7.0
-    assert "--- profile stdout ---" in row["stdout"]
-
-
-def test_runtime_memory_row_logs_are_written(tmp_path: Path) -> None:
-    row = {"case": "cyclone-linear", "backend": "gx", "stdout": "ok", "stderr": "warn"}
-    logs = _write_row_logs(tmp_path, row)
-    assert Path(logs["stdout_log"]).read_text(encoding="utf-8") == "ok"
-    assert Path(logs["stderr_log"]).read_text(encoding="utf-8") == "warn"
-
-
-def test_runtime_memory_summary_is_written(tmp_path: Path) -> None:
-    rows = [
-        {
-            "case": "a",
-            "backend": "gkx_cpu",
-            "status": "success",
-            "stdout": "long runtime log",
-            "stderr": "warning log",
-        }
-    ]
-    out = tmp_path / "summary.json"
-    _write_summary(out, rows)
-    text = out.read_text(encoding="utf-8")
-    assert '"case": "a"' in text
-    assert "long runtime log" not in text
-    assert "warning log" not in text
-    assert '"stdout_bytes": 16' in text
-    assert '"stderr_bytes": 11' in text
-    assert '"stdout_sha256"' in text
-
-
-def test_runtime_memory_summary_row_prunes_existing_logs() -> None:
-    row = {"case": "a", "backend": "gkx_cpu", "stdout": "ok", "stderr": ""}
-    summary = _summary_row(row)
-    assert "stdout" not in summary
-    assert "stderr" not in summary
-    assert summary["stdout_bytes"] == 2
-    assert summary["stderr_bytes"] == 0
-    assert summary["stdout_sha256"]
-    assert summary["stderr_sha256"] == ""
-
-
-def test_runtime_memory_plot_supports_warm_runtime_markers(tmp_path: Path) -> None:
-    csv_path = tmp_path / "runtime.csv"
-    csv_path.write_text(
-        "\n".join(
-            [
-                "case,label,backend,status,returncode,runtime_s,warmup_time_s,run_time_s,peak_rss_mb,host,cwd,command,stdout_log,stderr_log",
-                "cyclone-nonlinear,Cyclone ITG Nonlinear,gkx_gpu,success,0,35.3,33.2,14.4,1878.4,office,/tmp,cmd,out,err",
-                "cyclone-nonlinear,Cyclone ITG Nonlinear,gx,success,0,21.1,,,1900.0,office,/tmp,cmd,out,err",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    png_path = tmp_path / "runtime.png"
-    pdf_path = tmp_path / "runtime.pdf"
-
-    _plot_results(csv_path, png_path, pdf_path)
-
-    assert png_path.exists()
-    assert pdf_path.exists()
 
 
 def _gx_jflr(ell: int, b: jnp.ndarray) -> jnp.ndarray:
@@ -2286,263 +1982,6 @@ window_readiness = window_ensemble
 FLOW_SHEAR_GATE = ROOT / "docs" / "_static" / "flow_shear_fixed_step_response_gate.json"
 
 
-def test_saturation_campaign_prints_cumulative_runtime_progress(capsys) -> None:
-    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
-
-    campaign._campaign_progress(
-        "completed nonlinear chunk 2: t=25/100 progress= 25.0% elapsed=01:00"
-    )
-
-    assert capsys.readouterr().out == (
-        "[gkx] completed nonlinear chunk 2: t=25/100 progress= 25.0% elapsed=01:00\n"
-    )
-
-
-def test_saturation_campaign_trace_omits_dealiased_zero_modes() -> None:
-    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
-    full_kx = np.arange(12, dtype=float)
-    full_ky = np.arange(12, dtype=float)
-    resolved = type(
-        "Resolved",
-        (),
-        {
-            "Phi2_kxt": np.arange(24).reshape(2, 12),
-            "HeatFlux_kxst": np.arange(48).reshape(2, 2, 12),
-            "Phi2_kyt": np.arange(24).reshape(2, 12),
-            "HeatFlux_kyst": np.arange(48).reshape(2, 2, 12),
-        },
-    )()
-
-    payload = campaign._trace_spectral_payload(
-        resolved, kx_full=full_kx, ky_full=full_ky
-    )
-
-    assert payload["kx"].shape == (7,)
-    assert payload["ky"].shape == (4,)
-    assert payload["Phi2_kxt"].shape == (2, 7)
-    assert payload["HeatFlux_kxst"].shape == (2, 2, 7)
-    assert payload["Phi2_kyt"].shape == (2, 4)
-    assert payload["HeatFlux_kyst"].shape == (2, 2, 4)
-
-
-def test_saturation_campaign_requires_and_records_its_checkout_source(
-    tmp_path: Path,
-) -> None:
-    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
-    provenance = campaign._campaign_source_provenance(
-        ROOT / "src" / "gkx" / "__init__.py"
-    )
-    encoded = campaign._npz_source_provenance(provenance)
-
-    assert provenance["repository_root"] == str(ROOT)
-    assert provenance["git_commit"]
-    assert campaign._gkx_source_tree_matches(
-        ROOT, provenance["git_commit"], provenance["git_commit"]
-    )
-    assert encoded["gkx_git_commit"].dtype.kind == "U"
-    assert encoded["gkx_git_dirty"].dtype.kind in "iu"
-    with pytest.raises(SystemExit, match="PYTHONPATH=src"):
-        campaign._campaign_source_provenance(tmp_path / "gkx" / "__init__.py")
-
-
-def test_saturation_campaign_does_not_duplicate_requested_npz_trace(
-    tmp_path: Path,
-) -> None:
-    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
-    values = np.arange(3, dtype=float)
-    trace = tmp_path / "trace.npz"
-    np.savez_compressed(trace, time=values)
-
-    addressed = campaign._summary_trace_payload(
-        values, values + 1, values + 2, values + 3, trace_path=trace
-    )
-    inline = campaign._summary_trace_payload(
-        values, values + 1, values + 2, values + 3, trace_path=None
-    )
-
-    assert "trace" not in addressed
-    assert addressed["trace_artifact"]["bytes"] == trace.stat().st_size
-    assert (
-        addressed["trace_artifact"]["sha256"]
-        == hashlib.sha256(trace.read_bytes()).hexdigest()
-    )
-    assert len(inline["trace"]) == 3
-
-
-def test_saturation_campaign_locks_output_paths_between_processes(
-    tmp_path: Path,
-) -> None:
-    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
-    target = tmp_path / "campaign.npz"
-
-    first = campaign._campaign_output_locks((target, None, target))
-    try:
-        assert len(first) == 1
-        assert "pid=" in (tmp_path / "campaign.npz.lock").read_text()
-        with pytest.raises(SystemExit, match="campaign output is locked"):
-            campaign._campaign_output_locks((target,))
-    finally:
-        for handle in first:
-            handle.close()
-
-    second = campaign._campaign_output_locks((target,))
-    for handle in second:
-        handle.close()
-
-
-def test_saturation_campaign_cannot_promote_a_continuation_segment() -> None:
-    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
-    report = {"saturated": True, "reasons": []}
-
-    full = campaign._scope_saturation_report(report, continuation=False)
-    segment = campaign._scope_saturation_report(report, continuation=True)
-
-    assert full == {**report, "history_scope": "full_run"}
-    assert segment["history_scope"] == "continuation_segment"
-    assert segment["segment_saturated"] is True
-    assert segment["saturated"] is False
-    assert segment["reasons"] == ["prior_history_not_in_report"]
-    assert report == {"saturated": True, "reasons": []}
-
-
-def test_saturation_campaign_records_resolved_timestep_policy() -> None:
-    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
-    time_cfg = type(
-        "TimeConfig",
-        (),
-        {"fixed_dt": False, "dt": 0.1, "dt_max": None, "cfl": 0.5, "method": "rk3"},
-    )()
-
-    policy = campaign._resolved_timestep_policy(time_cfg)
-    encoded = campaign._npz_timestep_identity(policy)
-
-    assert policy == {
-        "fixed_dt": False,
-        "dt": 0.1,
-        "dt_max": None,
-        "cfl": 0.5,
-        "method": "rk3",
-    }
-    assert encoded["time_dt_max"].item() == "None"
-    assert encoded["time_cfl"].item() == pytest.approx(0.5)
-
-
-def test_saturation_policy_replay_requires_a_persistent_fixed_window() -> None:
-    replay = load_tool_script("campaigns", "nonlinear_saturated_state")
-    time = np.arange(0.0, 201.0, 0.5)
-    phase = 2.0 * np.pi * time / 10.0
-    report = replay.replay_policy(
-        time,
-        10.0 + 0.15 * np.sin(phase),
-        2.0 + 0.03 * np.sin(phase + 0.3),
-        100.0 + np.sin(phase + 0.7),
-        policy=replay.ReplayPolicy(window=50.0, persistence=20.0),
-    )
-
-    assert report["stopped"] is True
-    assert report["first_stop"]["persistence_start"] == pytest.approx(50.0)
-    assert report["first_stop"]["checkpoint_time"] == pytest.approx(70.0)
-    assert report["first_stop"]["decision"]["window_tmin"] == pytest.approx(20.0)
-    assert report["first_stop"]["decision"]["statistics"]["heat_flux"]["stationary"]
-
-
-def test_saturation_policy_replay_requires_clean_contiguous_source_traces(
-    tmp_path: Path,
-) -> None:
-    replay = load_tool_script("campaigns", "nonlinear_saturated_state")
-
-    def write_trace(
-        path: Path,
-        time: np.ndarray,
-        *,
-        previous_t_end: float,
-        case: str = "qa",
-        dirty: int = 0,
-    ) -> None:
-        np.savez_compressed(
-            path,
-            time=time,
-            heat_flux=np.ones(time.size),
-            Wphi=np.ones(time.size),
-            Wg=np.ones(time.size),
-            gkx_git_commit=np.asarray("abc123"),
-            gkx_git_dirty=np.asarray(dirty),
-            previous_t_end=np.asarray(previous_t_end),
-            campaign_identity_schema=np.asarray("gkx_nonlinear_campaign_v1"),
-            case=np.asarray(case),
-        )
-
-    first = tmp_path / "first.npz"
-    second = tmp_path / "second.npz"
-    write_trace(first, np.arange(0.0, 10.0), previous_t_end=0.0)
-    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0)
-
-    arrays, sources = replay._load_replay_traces([first, second])
-    assert arrays[0].tolist() == list(np.arange(20.0))
-    assert len(sources) == 2
-    assert sources[0]["sha256"] == hashlib.sha256(first.read_bytes()).hexdigest()
-
-    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0, case="qi")
-    with pytest.raises(ValueError, match="campaign identity differs"):
-        replay._load_replay_traces([first, second])
-
-    write_trace(second, np.arange(10.0, 20.0), previous_t_end=8.0)
-    with pytest.raises(ValueError, match="not a contiguous continuation"):
-        replay._load_replay_traces([first, second])
-
-    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0, dirty=1)
-    with pytest.raises(ValueError, match="not pinned to a clean GKX commit"):
-        replay._load_replay_traces([first, second])
-
-    write_trace(second, np.arange(10.0, 20.0), previous_t_end=9.0)
-    for path in (first, second):
-        with np.load(path, allow_pickle=False) as archive:
-            legacy = {name: archive[name] for name in archive.files}
-        legacy.pop("campaign_identity_schema")
-        np.savez_compressed(path, **legacy)
-    with pytest.raises(ValueError, match="legacy continuation replay requires"):
-        replay._load_replay_traces([first, second])
-
-    def write_summary(path: Path, trace_path: Path, *, case: str = "qa") -> None:
-        with np.load(trace_path, allow_pickle=False) as archive:
-            samples = [
-                {"t": t, "heat_flux": q, "Wphi": wphi, "Wg": wg}
-                for t, q, wphi, wg in zip(
-                    archive["time"],
-                    archive["heat_flux"],
-                    archive["Wphi"],
-                    archive["Wg"],
-                )
-            ]
-            previous_t_end = float(archive["previous_t_end"])
-        path.write_text(
-            json.dumps(
-                {
-                    "source_provenance": {"git_commit": "abc123", "git_dirty": False},
-                    "previous_t_end": previous_t_end,
-                    "case": case,
-                    "grid": {"Nx": 2, "Ny": 2, "Nz": 2},
-                    "geometry_override": {"vmec_file": "equilibrium.nc"},
-                    "random_seed": 31,
-                    "alpha": 0.0,
-                    "npol": 1.0,
-                    "trace": samples,
-                }
-            ),
-            encoding="utf-8",
-        )
-
-    first_summary = tmp_path / "first.json"
-    second_summary = tmp_path / "second.json"
-    write_summary(first_summary, first)
-    write_summary(second_summary, second)
-    replay._load_replay_traces([first, second], [first_summary, second_summary])
-
-    write_summary(second_summary, second, case="qi")
-    with pytest.raises(ValueError, match="campaign identity differs"):
-        replay._load_replay_traces([first, second], [first_summary, second_summary])
-
-
 _STATE_SHAPE = (1, 1, 1, 2, 2, 2)
 _V2_TIME_IDENTITY = {
     "time_fixed_dt": False,
@@ -2551,75 +1990,6 @@ _V2_TIME_IDENTITY = {
     "time_cfl": 1.0,
     "time_method": "rk3",
 }
-
-
-def _continuation_state(tmp_path: Path, schema: str, **extra):
-    """A clean-provenance continuation archive and the identity it records."""
-    campaign = load_tool_script("campaigns", "nonlinear_saturated_state")
-    provenance = campaign._campaign_source_provenance(
-        ROOT / "src" / "gkx" / "__init__.py"
-    )
-    provenance["git_dirty"] = False
-    values = {
-        "campaign_identity_schema": schema,
-        "case": "qa.toml",
-        "input_sha256": "deck",
-        "vmec_sha256": "equilibrium",
-        **dict.fromkeys(("Nx", "Ny", "Nz"), 2),
-        **dict.fromkeys(("Nl", "Nm"), 1),
-        "random_seed": 31,
-        "alpha": "0.0",
-        "npol": "1.0",
-        **extra,
-    }
-    identity = {name: np.asarray(value) for name, value in values.items()}
-    state = tmp_path / "state.npz"
-    np.savez_compressed(
-        state,
-        state=np.zeros(_STATE_SHAPE),
-        t_end=10.0,
-        **identity,
-        **campaign._npz_source_provenance(provenance),
-    )
-
-    def load(expected_identity):
-        return campaign._load_continuation_state(
-            state,
-            expected_shape=_STATE_SHAPE,
-            expected_identity=expected_identity,
-            source_provenance=provenance,
-        )
-
-    return identity, load
-
-
-def test_saturation_campaign_rejects_a_mixed_continuation_state(tmp_path: Path) -> None:
-    identity, load = _continuation_state(tmp_path, "gkx_nonlinear_campaign_v1")
-
-    loaded, t_end = load(identity)
-    assert loaded.shape == _STATE_SHAPE
-    assert t_end == 10.0
-
-    v2_expected = dict(identity)
-    v2_expected["campaign_identity_schema"] = np.asarray("gkx_nonlinear_campaign_v2")
-    v2_expected.update({k: np.asarray(v) for k, v in _V2_TIME_IDENTITY.items()})
-    load(v2_expected)
-
-    identity["case"] = np.asarray("qi.toml")
-    with pytest.raises(SystemExit, match="campaign identity does not match"):
-        load(identity)
-
-
-def test_saturation_campaign_rejects_a_timestep_mismatched_state(
-    tmp_path: Path,
-) -> None:
-    identity, load = _continuation_state(
-        tmp_path, "gkx_nonlinear_campaign_v2", **_V2_TIME_IDENTITY
-    )
-    expected = dict(identity)
-    expected["time_cfl"] = np.asarray(0.5)
-    with pytest.raises(SystemExit, match="campaign identity does not match"):
-        load(expected)
 
 
 def test_output_target_checker_accepts_near_horizon_and_rejects_partial_bundle(
@@ -2996,7 +2366,7 @@ def test_zonal_response_bounded_run() -> None:
     free-streaming recurrence spoils the damping fit at this Nm, so only the
     residual (7% of XC) and the GAM frequency (5% of the SW root) are gated.
     """
-    from scripts.artifacts.build_analytic_benchmarks import zonal_run
+    from support.reference_physics import zonal_run
 
     rec = zonal_run(1.0, 0.18, 0.05, Nm=24, Nz=16, t_max_R0=12.0, dt=0.01)
     residual, omega, _ = fit_zonal_response(rec["t"], rec["phi"])
@@ -3064,7 +2434,7 @@ def test_strongly_driven_kbm_frequency_is_half_omega_star_pi() -> None:
 @pytest.mark.slow
 def test_zonal_artifact_record_reproduces() -> None:
     """Re-run the q = 1.4 record (Nm = 128, ~15 CPU min) and refit it."""
-    from scripts.artifacts.build_analytic_benchmarks import zonal_run
+    from support.reference_physics import zonal_run
 
     rec = zonal_run(1.4, 0.18, 0.05)
     stored = fit_zonal_response(

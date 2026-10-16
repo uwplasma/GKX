@@ -19,7 +19,7 @@ not run in CI.
 | [`06_electromagnetic/`](06_electromagnetic) | Kinetic ballooning mode with A_parallel; the tutorial deck exercises the path, `case_full.toml` resolves the mode | ~10 s CPU |
 | [`07_collisions/`](07_collisions) | Every shipped collision operator on one ITG case; optional collisionality scan | <1 min CPU |
 | [`08_quasilinear/`](08_quasilinear) | Quasilinear heat-flux spectrum (`run.py`) and its implicit eigenpair sensitivities (`implicit_sensitivity.py`) | ~10 s + <1 min CPU |
-| [`09_autodiff/`](09_autodiff) | Recover a/L_Ti and a/L_n from two linear modes by autodiff Gauss-Newton; `geometry_bridge.py` differentiates through VMEC/Boozer geometry | ~1 min CPU; bridge: minutes |
+| [`09_autodiff/`](09_autodiff) | Recover a/L_Ti and a/L_n from two linear modes by autodiff Gauss-Newton | ~1 min CPU |
 | [`10_vmex_optimization/`](10_vmex_optimization) | VMEX QA stellarator optimization with a physical nonlinear GKX heat-flux objective (see its README) | research run, GPU |
 | [`11_parallel_scan/`](11_parallel_scan) | Independent `k_y` scan dispatched to parallel workers, checked against the serial scan | ~10 s CPU |
 | [`12_restart_and_analysis/`](12_restart_and_analysis) | Restart a nonlinear run from its saved state and average the joined heat-flux trace | ~20 s CPU |

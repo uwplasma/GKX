@@ -78,11 +78,6 @@ SMOKE_KNOBS: dict[str, dict[str, str]] = {
 SMOKE_SKIPS: dict[str, object] = {
     "02_linear_stellarator/run.py": _needs_vmex_or_wout,
     "04_nonlinear_stellarator/run.py": _needs_vmex_or_wout,
-    "09_autodiff/geometry_bridge.py": (
-        "multi-minute vmex/booz_xform_jax gate campaign that rewrites the tracked "
-        "docs/_static/differentiable_geometry_bridge.* artifacts; its imports are "
-        "checked by test_gallery_first_party_imports_resolve"
-    ),
     "10_vmex_optimization/run.py": (
         "needs vmex and its source-checkout seed deck "
         "examples/data/input.minimal_seed_nfp2; the default ladder is a GPU "

@@ -172,7 +172,7 @@ differ in models and options. Detail: [benchmarks](docs/benchmarks.rst),
 ![GKX against closed-form theory](docs/_static/readme/readme_analytic.png)
 
 The runs are in `docs/_static/analytic_benchmarks.json`, built by
-`scripts/artifacts/build_analytic_benchmarks.py`. The gates are in
+`scripts/artifacts/build_analytic_benchmarks.py` (removed; `git show df2953026:<path>`). The gates are in
 `tests/validation/benchmarks/test_benchmarking.py`, and the
 specification is in [the research record](plan/research/2026-09-analytic-benchmarks/REPORT.md).
 Units are `v_ti = sqrt(T_i/m_i)`.
@@ -320,9 +320,8 @@ derivative. [Nonlinear autodiff](docs/nonlinear_autodiff.rst) ·
 
 ![Jacobian of the nonlinear Cyclone heat flux: AD vs finite differences, cost, and window vs long-time sensitivity](docs/_static/nonlinear_flux_jacobian.png)
 
-```bash
-python scripts/campaigns/nonlinear_flux_jacobian.py   # config: nonlinear_flux_jacobian.toml
-```
+Generator: `scripts/campaigns/nonlinear_flux_jacobian.py`, removed from the
+tree; recover it with `git show df2953026:<path>`.
 
 The Jacobian of the mean heat flux `Q` over a 512-step post-saturation window
 (`gkx.nonlinear_heat_flux_window`, adiabatic-electron Cyclone, 16x16x16,
@@ -438,13 +437,10 @@ warm.
 
 ## Reproducing the figures
 
-```bash
-JAX_ENABLE_X64=true PYTHONPATH=src:. python scripts/figures.py   # or: linear, nonlinear, proof_tests, crosscode
-```
-
-[`scripts/figures.toml`](scripts/figures.toml) lists each figure's inputs;
-each PNG in `docs/_static/readme/` has a JSON companion with every plotted
-number. The proof-test figure takes about 7 CPU-minutes; the others seconds.
+Each PNG in `docs/_static/readme/` has a JSON companion with every plotted
+number. The figure and evidence generators were removed from `scripts/` to keep
+the clone small; `plan/log.md` (2026-10-15) lists each one and the commit to
+recover it from (`git show df2953026:scripts/figures.py`).
 
 ## Documentation and development
 
