@@ -15,6 +15,7 @@ from gkx.operators.linear.moments import build_H
 from gkx.operators.linear.params import LinearParams, _as_species_array
 from gkx.terms.config import FieldState, TermConfig
 from gkx.terms.fields import _solve_fields_impl, solve_fields
+from gkx.operators.linear.collisions import apply_linearized_landau
 from gkx.operators.linear.dissipation import (
     _constant_hypercollision_contribution,
     _hypercollision_kz_source,
@@ -606,17 +607,43 @@ def _dissipation_contributions(
     hermite_window: HermiteWindow | None = None,
     hypercollisions: jnp.ndarray | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    collisions = _collision_contribution_or_zero(
-        H,
-        G=G,
-        Jl=cache.Jl,
-        JlB=cache.JlB,
-        b=cache.b,
-        nu=species.nu,
-        collision_lam=cache.collision_lam,
-        lb_lam=cache.lb_lam,
-        weight=weights.collisions,
-    )
+    pairs = getattr(cache, "landau_pairs", None)
+    landau = pairs is not None
+    if landau and _is_static_zero(weights.collisions, jnp.real(G).dtype):
+        collisions = jnp.zeros_like(H)
+    elif pairs is not None:
+        if hermite_window is not None:
+            raise NotImplementedError(
+                "the linearized Landau operator couples all Hermite moments; "
+                "Hermite-sharded runs need collision_operator = 'lenard_bernstein'"
+            )
+        # Traced zero weights (collisions switched off) skip the matrix product.
+        collisions = jax.lax.cond(
+            jnp.all(weights.collisions == 0.0),
+            lambda: jnp.zeros_like(H),
+            lambda: (
+                weights.collisions
+                * apply_linearized_landau(
+                    H,
+                    pairs,
+                    nu=species.nu,
+                    density=species.density,
+                    charge=species.charge,
+                )
+            ),
+        )
+    else:
+        collisions = _collision_contribution_or_zero(
+            H,
+            G=G,
+            Jl=cache.Jl,
+            JlB=cache.JlB,
+            b=cache.b,
+            nu=species.nu,
+            collision_lam=cache.collision_lam,
+            lb_lam=cache.lb_lam,
+            weight=weights.collisions,
+        )
     if hypercollisions is None:
         hypercollisions = hypercollisions_contribution(
             G,

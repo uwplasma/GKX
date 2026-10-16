@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field as dataclass_field
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -120,6 +121,10 @@ class LinearCache:
     #: Non-twisting flux tube radial index shift ``m0(ky, z)``: row ``kx`` at
     #: ``z`` holds ballooning mode ``kx + m0``. ``None`` off that geometry.
     ntft_m0: jnp.ndarray | None = None
+    #: Block-sparse unit-frequency linearized Landau factors
+    #: (:class:`~gkx.operators.linear.collisions.LandauBlocks`); ``None`` when
+    #: the run uses the Dougherty kernel.
+    landau_pairs: Any = None
 
     def tree_flatten(self):
         children = (
@@ -180,7 +185,7 @@ class LinearCache:
             children
             + tuple(linked_idx)
             + tuple(linked_kz)
-            + (self.ky_cut, self.ntft_m0)
+            + (self.ky_cut, self.ntft_m0, self.landau_pairs)
         )
         aux_data = (
             self.kperp2_bmag,
@@ -224,6 +229,7 @@ class LinearCache:
             linked_full_cover=linked_full_cover,
             linked_use_gather=linked_use_gather,
             ny_full=ny_full,
-            ky_cut=children[-2],
-            ntft_m0=children[-1],
+            ky_cut=children[-3],
+            ntft_m0=children[-2],
+            landau_pairs=children[-1],
         )

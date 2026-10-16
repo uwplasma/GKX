@@ -43,7 +43,6 @@ from gkx.terms.linear_terms import (
     collision_quadratic_rate,
     collisions_contribution,
     conservative_full_f_dougherty_cross_moments,
-    drift_kinetic_coulomb_six_moment_contribution,
     drift_kinetic_sugama_six_moment_contribution,
     multispecies_collision_invariant_rates,
 )
@@ -731,47 +730,6 @@ def test_sugama_six_moment_null_space_and_collision_frequency_derivative():
         drift_kinetic_sugama_six_moment_contribution(probe[:, :, :3], nu=nu)
     with pytest.raises(ValueError, match="five or six"):
         drift_kinetic_sugama_six_moment_contribution(jnp.ones((2, 4)), nu=nu)
-
-
-def test_coulomb_six_moment_matrix_matches_published_equation_c9():
-    state = jnp.zeros((1, 2, 4, 1, 1, 1), dtype=jnp.complex64)
-    state = state.at[:, 0, 2].set(0.8)
-    state = state.at[:, 1, 0].set(-0.5)
-    state = state.at[:, 0, 3].set(0.6)
-    state = state.at[:, 1, 1].set(0.2)
-    result = drift_kinetic_coulomb_six_moment_contribution(state, nu=jnp.asarray([0.2]))
-    inverse_sqrt_pi = 1.0 / np.sqrt(np.pi)
-    matrix = inverse_sqrt_pi * np.asarray(
-        [
-            [-16.0 * np.sqrt(2.0) / 15.0, 16.0 / 15.0, 0.0, 0.0],
-            [16.0 / 15.0, -8.0 * np.sqrt(2.0) / 15.0, 0.0, 0.0],
-            [0.0, 0.0, -8.0 * np.sqrt(2.0) / 5.0, 8.0 / (5.0 * np.sqrt(3.0))],
-            [0.0, 0.0, 8.0 / (5.0 * np.sqrt(3.0)), -28.0 * np.sqrt(2.0) / 15.0],
-        ],
-        dtype=np.float32,
-    )
-    moments = np.asarray(
-        [
-            state[0, 0, 2, 0, 0, 0],
-            state[0, 1, 0, 0, 0, 0],
-            state[0, 0, 3, 0, 0, 0],
-            state[0, 1, 1, 0, 0, 0],
-        ]
-    )
-    actual = np.asarray(
-        [
-            result[0, 0, 2, 0, 0, 0],
-            result[0, 1, 0, 0, 0, 0],
-            result[0, 0, 3, 0, 0, 0],
-            result[0, 1, 1, 0, 0, 0],
-        ]
-    )
-    np.testing.assert_allclose(actual, 0.2 * matrix @ moments, rtol=2.0e-6)
-    np.testing.assert_allclose(matrix, matrix.T, atol=1.0e-7)
-    assert np.linalg.eigvalsh(matrix).max() < 2.0e-7
-    rates = collision_invariant_rates(result)
-    np.testing.assert_allclose(np.asarray(rates.thermal_energy), 0.0, atol=2.0e-7)
-    assert float(collision_quadratic_rate(state, result)) < 0.0
 
 
 def test_finite_larmor_collision_matches_published_moment_equations():

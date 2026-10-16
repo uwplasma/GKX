@@ -1,0 +1,9 @@
+# GKX TEM (Dannert & Jenko 2005) ky rho_s 0.3, Krylov certified eigenpairs, office GPU1, SHA dc08169f
+# command: scripts/gkx_eig.py tools/comparison/fixtures/parity/tem_dannert_jenko_2005.toml 0.1732 Nl Nm krylov [overrides]
+# tag                 Nl Nm  overrides                                            gamma     omega     GS2 gamma
+nohyper_ref(10-06)    8 24  hypercollisions=False                                0.2973   -1.1235    0.867
+default(10-06)        8 24  -                                                    0.6114   -1.2020    0.867
+lagsink_8x24          8 24  hypercollisions_const=1 nu_hyper_m_const=0 nu_hyper_l=1   0.5102   -1.2078    0.867
+landau_v0.2_8x24      8 24  nu=0.0343,0.2828 (vnewk_e 0.2), landau               0.0769   -1.0369    0.151
+dougherty_v0.2_8x24   8 24  nu=0.0343,0.2828, lenard_bernstein                   0.0548   -1.0860    0.151
+# queued at report time: lagsink_16x48, landau_v0.05_8x24, landau_v0.2_12x32 (office ~/gkx-evidence/collisions/gkx_main.log)
