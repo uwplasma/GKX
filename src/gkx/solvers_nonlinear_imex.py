@@ -1217,8 +1217,12 @@ def build_chain_implicit_linear(
         spec = tuple(g for g in (plain, tuple(mono)) if g)
         e_mirror = (tuple(mono), jnp.asarray(e_lo, dtype), jnp.asarray(e_up, dtype))
 
+        # S probes have F = 0, where the mirror is the probed z-local ef:
+        # applying it is cheaper than a second RHS assembly per probe.
+        ef_s = jnp.asarray(np.einsum("plmpqnz->pqnlmz", ef), dtype)
+
         def s_only(v, F):
-            return split(v, F) - mir(v, F)
+            return split(v, F) - jnp.einsum("sqnlmz,slmyxz->sqnyxz", ef_s, v)
 
     probe_s = cached_jit(jax.vmap(lambda v: s_only(v, zero_f)))
     probe_u = cached_jit(jax.vmap(lambda F: split(zero, F)))
