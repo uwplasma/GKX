@@ -33,6 +33,7 @@ from gkx.workflows.runtime.startup import (
     _runtime_default_krylov_config,
     build_runtime_geometry,
     build_runtime_linear_params,
+    end_damping_status,
     build_runtime_linear_terms,
 )
 from gkx.workflows.runtime.results import (
@@ -142,6 +143,7 @@ def _prepare_linear_runtime_context(
     _status(status_callback, "building runtime linear parameters")
     params = build_runtime_linear_params(cfg, Nm=n_hermite, geom=geom)
     terms = build_runtime_linear_terms(cfg)
+    _status(status_callback, end_damping_status(params, grid_full, grid_cfg.boundary))
 
     ky_index = select_ky_index(np.asarray(grid_full.ky), ky_target)
     grid = select_ky_grid(grid_full, ky_index)

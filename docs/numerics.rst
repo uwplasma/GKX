@@ -618,6 +618,107 @@ Both show an increase in heat flux (4.82% and 24.82%) rather than the required
 claim; it does not reject the gated coordinate, remap, operator, integrator or
 derivative identities above.
 
+.. _end-damping:
+
+Parallel boundary and end damping
+---------------------------------
+
+A linked (twist-and-shift) chain is a finite piece of the infinite ballooning
+line. Its spectral :math:`z` derivative is periodic over the chain, so what
+streams out of one end would re-enter at the other. GKX absorbs it in a layer
+at each end of every non-zonal chain:
+
+.. math::
+
+   \partial_t h \;\mathrel{+}= -\nu_{end}\, d(z)\, h, \qquad
+   d = 1 - \frac{2x^2}{1 + x^4},\quad x = \frac{\text{distance from the chain end}}{L_w},
+
+with :math:`L_w` = ``damp_ends_widthfrac`` (0.125) of the chain. The damped
+quantity is the non-adiabatic :math:`h`, as in GX.
+
+**Contract.** :math:`\nu_{end}` is a rate in :math:`v_{ti}/a` units and the
+same on every route: time integration (any step, fixed or adaptive), Krylov,
+eigen, shift-invert and nonlinear. No timestep enters. ``[time]
+damp_ends_rate`` sets it. The default is
+
+.. math::
+
+   \nu_{end} = C\,\frac{\max_s v_{ts}\,|\hat b\cdot\nabla z|}{w\,L_z},\qquad C = 30,
+
+that is, 30 e-folds per thermal transit of the fastest kinetic species across a
+layer of one segment (:math:`L_z` is the stored :math:`z` extent). Each run
+prints the rate it uses (``end damping: rate ...``). A deck that sets only the
+legacy ``damp_ends_amp`` is refused.
+
+**Why a rate.** GX applies ``damp_ends_amp/dt`` (``grad_parallel_linked.cu``;
+before February 2023 it used :math:`5 v_{max}/L` with
+:math:`v_{max}=\sqrt{2N_m}`). Read as a rate, :math:`A/\Delta t` makes a
+timestep-free eigenvalue depend on a step it does not have, and makes a
+:math:`\Delta t` scan change the operator. GS2 [KRT95]_ and stella [BPL19]_
+need no absorber: their upwinded implicit streaming sets :math:`h = 0` for
+particles entering the extended domain. GENE truncates the :math:`k_x`
+connection with zeros and controls grid-scale :math:`z` structure with
+parallel hyperdiffusion [PDJ10]_. A Hermite basis does not separate
+:math:`v_\parallel` directions, so GKX keeps GX's absorbing layer and fixes
+only its units.
+
+**Measured sensitivity** (ky 0.3; ``plan/research/2026-10-15-end-damping``;
+:math:`\gamma` in deck units):
+
+.. list-table::
+   :header-rows: 1
+
+   * - deck (Nl, Nm), route
+     - nperiod
+     - C = 3
+     - C = 10
+     - C = 30
+     - C = 100
+   * - adiabatic Cyclone (8, 16), Krylov
+     - 2 / 3 / 4
+     - 0.09825 / 0.09831 / 0.09831
+     - 0.09829 / 0.09831 / 0.09831
+     - 0.09831 / 0.09831 / 0.09831
+     - 0.09825 / 0.09831 / 0.09831
+   * - kinetic-electron Cyclone (8, 16), time
+     - 2
+     - 0.16786
+     - 0.16792
+     - 0.16803
+     - 0.16807
+   * - KBM s-alpha (4, 8), sparse eigen
+     - 2 / 3
+     - 0.2364 / 0.2382
+     - 0.2441 / 0.2497
+     - 0.2426 / 0.2502
+     - 0.2407 / 0.2499
+
+Below :math:`C \approx 1` the kinetic-electron and KBM rates are not converged
+(KE :math:`\gamma` = 1.59 at C = 0, 0.174 at C = 1). Kinetic electrons at
+(8, 16) are not converged in domain length (nperiod 3 gives 0.288); that is a
+resolution question, not an absorber one. At ``nperiod = 1`` the layer is a
+quarter of the line and the adiabatic rate keeps falling with C
+(0.0923 at C = 10, 0.0817 at C = 300): use ``nperiod >= 2``.
+
+**Explicit steps.** :math:`\nu_{end}` is explicit in every scheme, so
+:math:`\nu_{end}\Delta t` must stay inside the scheme's stability region. At the
+default it is below 0.3 on the shipped ``nperiod >= 2`` linear decks. The
+``nperiod = 1`` KBM tutorial deck (rate 598) blew up at :math:`\Delta t = 10^{-3}`
+(product 0.6 on top of electron streaming) and runs at :math:`5\times10^{-4}`.
+The CFL estimate does not yet include :math:`\nu_{end}`. The old
+:math:`A/\Delta t` reading pinned it at 0.1, which also hid over-CFL steps:
+the end-mode gate in ``tests/validation/physics_gates`` ran away at
+:math:`\Delta t` = 0.002, Nm = 24 (CFL bound 0.0014) for every rate below 40,
+while the operator's dominant eigenvalue there is stable.
+
+**Checking a result.** Rerun at ``damp_ends_rate`` 3x above and below the
+printed rate and at ``nperiod + 1``. A converged growth rate moves by less
+than its quoted tolerance in all three.
+
+.. [KRT95] M. Kotschenreuther, G. Rewoldt, W. M. Tang, Comput. Phys. Commun. 88, 128 (1995).
+.. [BPL19] M. Barnes, F. I. Parra, M. Landreman, J. Comput. Phys. 391, 365 (2019).
+.. [PDJ10] M. J. Pueschel, T. Dannert, F. Jenko, Comput. Phys. Commun. 181, 1428 (2010).
+
 De-aliasing and hyperdiffusion
 ------------------------------
 

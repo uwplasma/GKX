@@ -270,6 +270,10 @@ after it, or `run_to = "saturation"`. `run.py` plots the ion and
 electron heat flux and the step; set `T_MAX = 150` to run the tutorial grid
 into saturation. Production resolution is in the decks.
 For linear growth rates, `solver = "krylov"` needs no time step at all.
+Linked decks damp the field-line ends at one rate, `[time] damp_ends_rate`,
+on every route (default: 30 electron transits of the end layer; the run prints
+it). Kinetic-electron and KBM growth rates depend on it below that default;
+check 3x either way and `nperiod + 1` (`docs/numerics.rst`, end damping).
 
 ## Collisions and proof tests
 

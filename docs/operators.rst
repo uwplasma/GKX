@@ -186,7 +186,7 @@ Controls:
 Collisions
 ----------
 
-GKX ships five collision models. The ``collision_operator`` key in the
+GKX ships six collision models. The ``collision_operator`` key in the
 ``[time]`` section of a TOML input selects one, and
 :func:`gkx.operators.linear.collision_tables.collision_operator_from_config`
 builds the same operator from Python:
@@ -198,6 +198,9 @@ builds the same operator from Python:
    * - ``collision_operator``
      - Model
      - Reference
+   * - ``landau`` (default)
+     - Linearized Landau (Fokker-Planck), drift-kinetic limit, any ``(Nl, Nm)``
+     - built in, described below
    * - ``none``, ``lenard_bernstein``
      - Conserving diagonal Lenard-Bernstein/Dougherty relaxation
      - built in, described below
@@ -208,14 +211,19 @@ builds the same operator from Python:
      - Improved Sugama, corrected Pfirsch-Schlüter friction
      - Sugama et al. (2019); Frei, Ernst & Ricci (2022)
    * - ``coulomb``
-     - Drift-kinetic linearized Coulomb (Landau)
-     - Frei, Ernst & Ricci (2022), Eqs. (C9a)--(C9f)
+     - Alias of ``landau``. The eight-moment table of Frei, Ernst & Ricci
+       (2022), Eqs. (C9a)--(C9f), it replaced is the same operator with twice
+       GKX's collision frequency
+     - shipped data kept as a regression reference
    * - ``coulomb_finite_kperp``
      - Gyrokinetic Coulomb retaining finite :math:`k_\perp`
      - Frei, Ball, Hoffmann, Jorge, Ricci & Stenger (2021), Eqs. (3.47)--(3.50)
 
+``landau``, ``none`` and ``lenard_bernstein`` are applied inside the linear
+RHS from the cache, so every solver path (fixed-step, CFL-controlled, Krylov,
+IMEX, nonlinear) uses them; Hermite-sharded runs refuse ``landau``.
 ``none`` and ``lenard_bernstein`` keep the built-in diagonal term described in
-this section. The four moment operators *replace* that term with a dense
+this section. The three moment operators *replace* that term with a dense
 Hermite-Laguerre matrix. The solver switches the diagonal contribution off
 exactly when a moment operator is active, so collisions are never counted twice.
 
@@ -228,6 +236,100 @@ run on the fixed-step cached integrator. The sharded, Krylov eigenvalue, and
 CFL-controlled ``explicit_time`` paths raise rather than silently substituting
 the diagonal term. The Coulomb tables are generated at unit mass and temperature ratio, so a
 multispecies request is refused rather than extrapolated.
+
+Linearized Landau operator (default)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The default is the linearized Landau operator about Maxwellians,
+:math:`C_{ab}[f_a,f_b]=C(f_a,F_b)+C(F_a,f_b)`, in its drift-kinetic
+(:math:`k_\perp\to0`) limit, applied to the non-adiabatic response ``H``.
+With :math:`x=v/v_{ta}`, :math:`v_{ta}=\sqrt{2T_a/m_a}`, the test part is the
+Rosenbluth diffusion
+
+.. math::
+
+   C(f_a,F_b) = \nu_{ab}\,\nabla\cdot\Big[\tfrac12 \mathsf D_b\cdot\nabla f_a
+   - \tfrac{m_a}{m_b}\,f_a\nabla H_b\Big],\qquad
+   \nu_D^{ab}(x)=\nu_{ab}\,\frac{\operatorname{erf}(x_b)-G(x_b)}{x^3},
+
+with :math:`G` the Chandrasekhar function and :math:`H_b`,
+:math:`\mathsf D_b=\nabla\nabla G_b` the Rosenbluth potentials of
+:math:`F_b`. The field part is
+
+.. math::
+
+   C(F_a,f_b)=\nu_{ab}F_a\Big[4\pi\tfrac{m_a}{m_b}f_b-\alpha H_b
+   +\big(\tfrac{m_a}{m_b}-1\big)\alpha\,v\,\partial_v H_b
+   +\tfrac12\alpha^2 v_iv_j\partial_i\partial_j G_b\Big],\qquad
+   \alpha=m_a/T_a,
+
+with :math:`H_b`, :math:`G_b` the potentials of the perturbation :math:`f_b`
+(Helander & Sigmar 2002, ch. 3). The operator is rotationally invariant, so in
+the Legendre-Sonine basis :math:`x^lL_k^{(l+1/2)}(x^2)P_l(\xi)` it is block
+diagonal in :math:`l` and each block is a pair of radial integrals. GKX
+evaluates them by composite Gauss quadrature once per run, for the run's
+``(Nl, Nm)`` and species mass and temperature ratios, and maps them to the
+Hermite-Laguerre box with an exact orthogonal transform
+(:func:`gkx.operators.linear.collisions.linearized_landau_pair_matrices`). The
+result is a dense matrix per species pair; one RHS applies it as a moment-space
+matrix product.
+
+What is verified (``tests/validation/physics_gates/test_collision_physics.py``):
+
+- density, parallel momentum and energy are exact null vectors (``1e-13``), the
+  like-species matrix is symmetric negative semidefinite with exactly three
+  zero eigenvalues (H-theorem);
+- it equals the multiprecision Coulomb tables of Frei et al. (2021, 2022) to
+  ``1e-12`` at ``(Nl, Nm) = (2, 4)`` and ``(3, 6)``, once their collision
+  frequency (twice GKX's) is accounted for;
+- its test part equals the Sugama test part at equal temperatures for
+  :math:`m_a/m_b = 1,\ 1/1836,\ 1836`;
+- electron-ion momentum and energy exchange cancel exactly, also at
+  :math:`T_e/T_i=3`;
+- the Spitzer-Harm ratio :math:`\gamma_E(Z)` is within 0.5% of Spitzer & Harm
+  (1953) for :math:`Z=1,2,4,16`;
+- the application is differentiable in ``nu`` (and in density and charge).
+
+Frequency convention. ``nu`` is each species' self-collision frequency in GKX
+units, :math:`\nu=\sqrt2\,\mathtt{vnewk}^{\rm GS2}`, and
+:math:`\nu_{ab}=\nu_a n_bZ_b^2/(n_aZ_a^2)`. Inter-species conservation is
+exact when the species rates are mutually consistent,
+:math:`\nu_a\propto n_aZ_a^4/(m_a^{1/2}T_a^{3/2})`. At unequal temperatures the
+operator still conserves but is not self-adjoint; the thermal equilibration
+:math:`C(F_a,F_b)` is dropped, as in all delta-f codes.
+
+Default and cost. ``landau`` is the default both in the runtime and in
+:class:`~gkx.operators.linear.params.LinearParams` (``collision_model``); the
+matrices are built only when some ``nu`` is nonzero. The runtime applies the
+factors :math:`T B T^{\mathsf T}` directly: :math:`T` is block diagonal in the
+degree :math:`p+2j` and :math:`B` in :math:`l`, which at
+:math:`(N_l,N_m)=(16,48)` is 4.1x fewer flops than the dense product. On an
+idle A4000, Cyclone grid :math:`16\times8\times32`, the whole linear RHS at
+:math:`(16,48)` costs 1.6x the Dougherty RHS in float32 (one and two species)
+and 1.9x (one species) and 2.3x (two species) in float64; at :math:`(8,24)`,
+1.4-1.7x (``plan/research/2026-10-15-collisions/results/rhs_collision_share_gpu.txt``).
+
+Benchmarks against other codes (``results/xcode_collisional.txt``,
+``results/zonal_collisional.txt``):
+
+- Cyclone ITG with adiabatic electrons, :math:`k_y=0.3`, :math:`\nu_i` from 0 to
+  0.1: within 1.1% of GS2's model operator at :math:`(N_l,N_m)=(12,48)`, including
+  GS2's slight collisional destabilisation. The Dougherty kernel goes the other
+  way, and is 21% low at :math:`\nu_i=0.1`.
+- Cyclone with kinetic electrons (:math:`m_e/m_i=2.7\times10^{-4}`), :math:`\nu_i`
+  from 0 to 0.1 with consistent :math:`\nu_e`: within 1.2-4.8% of GS2 at
+  :math:`(8,24)`. Dougherty is 11% low at :math:`\nu_i=0.03`.
+- Collisional decay of the Rosenbluth-Hinton residual (s-alpha, :math:`q=1.4`,
+  :math:`\epsilon=0.18`): the residual levels are within 6% of Xiao, Catto &
+  Molvig (2007), but the decay rate is 21-27% slower. That formula drops energy
+  diffusion, and its :math:`\nu_{ii}` convention was not checked against the
+  paper, so the rate is not used as a gate. The Dougherty kernel does not damp
+  this residual at all.
+
+Not included: finite-:math:`k_\perp` (gyroaveraging) terms, which
+``coulomb_finite_kperp`` carries for one species at fixed tabulated
+resolutions. The matrix depends on mass and temperature ratios through a
+host-side build, so it is not differentiated with respect to them.
 
 Collision frequency
 ^^^^^^^^^^^^^^^^^^^
@@ -476,10 +578,9 @@ for verification and model development. None of them has a TOML selector.
 
    * - API
      - What it is
-   * - ``drift_kinetic_sugama_six_moment_contribution``,
-       ``drift_kinetic_coulomb_six_moment_contribution``
-     - The like-species six-gyromoment matrices of Appendix C, Eqs.
-       (C6a)--(C6f) and (C9a)--(C9f); zero outside the six-moment projection.
+   * - ``drift_kinetic_sugama_six_moment_contribution``
+     - The like-species six-gyromoment Sugama matrix of Appendix C, Eqs.
+       (C6a)--(C6f); zero outside the six-moment projection.
    * - ``load_collision_moment_matrix``, ``apply_collision_moment_matrix``,
        ``interpolate_collision_moment_matrix``,
        ``apply_multispecies_collision_moment_matrix``
@@ -766,24 +867,9 @@ grid's :math:`|k_y|` at row ``(Ny - 1) // 3`` is carried as
 The field-line end damping is :math:`\mathcal{R}_{end} = -w_{end}\,\nu_{end}\,d(z)\,H`,
 where :math:`d(z)` is a smooth profile over the last ``damp_ends_widthfrac``
 (default 0.125) of the chain at each end, and zero on a periodic boundary.
-The zonal row carries no end damping. The strength :math:`\nu_{end}` is set
-in one of two ways:
-
-- ``[time] damp_ends_rate`` sets :math:`\nu_{end}` directly, as a finite,
-  nonnegative rate in inverse simulation-time units, on every route. For the
-  isolated absorber a step multiplies by :math:`R(-\Delta t\,\nu_{end} d(z))`,
-  where :math:`R` is the scheme's stability polynomial. In Python use
-  ``LinearParams(damp_ends_rate=nu)``; ``nu`` stays a differentiable leaf.
-- Without it, the reference-compatible amplitude ``damp_ends_amp`` (default
-  0.1) is used as :math:`A/\Delta t` on linear routes that supply the step, and
-  as the rate :math:`A` on RHS calls without a step, including the nonlinear
-  RHS. On the linear routes :math:`A` is then a per-step strength: Euler removes
-  the fraction :math:`w_{end}A\,d(z)`, while RK2 multiplies by
-  :math:`1-a+a^2/2` with :math:`a=w_{end}A\,d(z)`. A timestep scan on such a
-  deck is not a refinement of one fixed continuous operator.
-
-``damp_ends_scale_by_dt = true`` is rejected with a migration message; see
-:doc:`inputs` for the conversion.
+The zonal row carries no end damping. :math:`\nu_{end}` is one timestep-free
+rate on every route; its default and how to check sensitivity are in
+:ref:`end-damping`.
 
 Controls:
 
@@ -791,7 +877,6 @@ Controls:
 - ``RuntimeCollisionConfig.D_hyper``
 - ``RuntimeCollisionConfig.p_hyper_kperp``
 - ``[time] damp_ends_rate``
-- ``RuntimeCollisionConfig.damp_ends_amp``
 - ``RuntimeCollisionConfig.damp_ends_widthfrac``
 
 Nonlinear :math:`E \\times B` And Flutter

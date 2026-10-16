@@ -975,3 +975,127 @@ def apply_finite_wavelength_coulomb_moment_operator(
     )
     result = jnp.asarray(weight, dtype=real_dtype) * result
     return result[0] if value.ndim == 5 else result
+
+
+def _landau_pair_frequency(nu: Any, density: Any, charge: Any, ns: int, dtype: Any):
+    r"""Return :math:`\nu_{ab} = \nu_a n_b Z_b^2 / (n_a Z_a^2)` as ``(s, s)``.
+
+    ``nu`` is each species' self-collision frequency; inter-species
+    conservation is exact when the ``nu_a`` are mutually consistent
+    (:math:`\nu_a \propto n_a Z_a^4 / (m_a^{1/2} T_a^{3/2})`).
+    """
+
+    rate = jnp.broadcast_to(jnp.asarray(nu, dtype=dtype).reshape(-1), (ns,))
+    weight = jnp.broadcast_to(
+        jnp.asarray(density, dtype=dtype).reshape(-1)
+        * jnp.asarray(charge, dtype=dtype).reshape(-1) ** 2,
+        (ns,),
+    )
+    return rate[:, None] * weight[None, :] / weight[:, None]
+
+
+@jax.tree_util.register_pytree_node_class
+@dataclass(frozen=True)
+class LandauBlocks:
+    """Block-sparse factors of the linearized Landau operator, ``T B T^T``.
+
+    ``T`` (Hermite-Laguerre to Legendre-Sonine) is block diagonal in the degree
+    ``p + 2j`` and ``B`` in the Legendre index ``l``, so the dense product is
+    replaced by small batched ones: 4.1x fewer flops at ``(Nl, Nm) = (16, 48)``.
+    Blocks of similar size share one padded batch; padded indices point at one
+    extra zero row. ``*_diagonal`` hold the per-pair diagonal of the dense
+    operator for preconditioners.
+    """
+
+    transform_rows: tuple  # per batch (blocks, R) Hermite-Laguerre indices
+    transform_cols: tuple  # per batch (blocks, C) Legendre-Sonine indices
+    transform: tuple  # per batch (blocks, R, C)
+    block_index: tuple  # per batch (blocks, K) Legendre-Sonine indices
+    block_test: tuple  # per batch (s, s, blocks, K, K)
+    block_field: tuple  # per batch (s, s, blocks, K, K)
+    test_diagonal: Any  # (s, s, n)
+    field_diagonal: Any  # (s, s, n)
+    sonine_count: int  # Legendre-Sonine functions, static
+
+    def tree_flatten(self):
+        return tuple(getattr(self, f.name) for f in fields(self))[
+            :-1
+        ], self.sonine_count
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children, aux_data)
+
+    def diagonal(self, **frequencies: Any) -> jnp.ndarray:
+        """Return the ``(s, n)`` diagonal of the assembled operator."""
+
+        ns = int(self.test_diagonal.shape[0])
+        pair = _landau_pair_frequency(
+            ns=ns, dtype=self.test_diagonal.dtype, **frequencies
+        )[..., None]
+        own = jnp.arange(ns)
+        return (
+            jnp.sum(pair * self.test_diagonal, axis=1)
+            + (pair * self.field_diagonal)[own, own]
+        )
+
+    def apply(self, hamiltonian: jnp.ndarray, **frequencies: Any) -> jnp.ndarray:
+        """Apply the operator to the ``(s, l, m, ...)`` response ``H``."""
+
+        state = jnp.asarray(hamiltonian)
+        ns, nl, nm = map(int, state.shape[:3])
+        dtype = jnp.real(state).dtype
+        # Real and imaginary parts as two real products; XLA otherwise promotes
+        # the real factors and does four (1.7x slower in float64 on GPU).
+        parts = (
+            jnp.stack([state.real, state.imag], -1)
+            if jnp.iscomplexobj(state)
+            else state
+        )
+        flat = jnp.swapaxes(parts, 1, 2).reshape(ns, nl * nm, -1)
+        flat = jnp.pad(flat, ((0, 0), (0, 1), (0, 0)))
+        sonine = jnp.zeros((ns, self.sonine_count + 1, flat.shape[-1]), dtype)
+        for rows, cols, matrix in zip(
+            self.transform_rows, self.transform_cols, self.transform
+        ):
+            values = _exact_einsum(
+                "brc,sbrp->sbcp", matrix.astype(dtype), flat[:, rows]
+            )
+            sonine = sonine.at[:, cols].add(values)
+        pair = _landau_pair_frequency(ns=ns, dtype=dtype, **frequencies)
+        eye = jnp.eye(ns, dtype=dtype)
+        mixed = jnp.zeros_like(sonine)
+        for index, test, field in zip(
+            self.block_index, self.block_test, self.block_field
+        ):
+            weights = pair[:, :, None, None, None]
+            operator = (
+                weights * field.astype(dtype)
+                + eye[:, :, None, None, None]
+                * jnp.sum(weights * test.astype(dtype), axis=1)[:, None]
+            )
+            mixed = mixed.at[:, index].set(
+                _exact_einsum("stbkq,tbqp->sbkp", operator, sonine[:, index])
+            )
+        result = jnp.zeros_like(flat)
+        for rows, cols, matrix in zip(
+            self.transform_rows, self.transform_cols, self.transform
+        ):
+            values = _exact_einsum(
+                "brc,sbcp->sbrp", matrix.astype(dtype), mixed[:, cols]
+            )
+            result = result.at[:, rows].add(values)
+        result = jnp.swapaxes(
+            result[:, :-1].reshape((ns, nm, nl) + parts.shape[3:]), 1, 2
+        )
+        if jnp.iscomplexobj(state):
+            return jax.lax.complex(result[..., 0], result[..., 1])
+        return result
+
+
+def apply_linearized_landau(
+    hamiltonian: jnp.ndarray, blocks: LandauBlocks, **frequencies: Any
+) -> jnp.ndarray:
+    """Apply the linearized Landau operator (see :class:`LandauBlocks`)."""
+
+    return blocks.apply(hamiltonian, **frequencies)

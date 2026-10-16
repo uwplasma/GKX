@@ -1155,8 +1155,10 @@ recursive = true
 # 67220 -> 67272: real-FFT Nyquist streaming (#328), custom-collision admission (#324). Measured.
 # 67272 -> 67308: cached_jit, so a repeated gkx.solve compiles nothing (PERF 2026-10-06).
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
-# 67113 -> 67227: electron mirror implicit in the imex-ars3 chain factor (+114). Measured.
-baseline = 67227
+# 67113 -> 67126: end-damping contract (#366) on top of #362/#365, measured.
+# 67126 -> 67622: linearized Landau default, block-sparse apply, coulomb kernels retired.
+# 67622 -> 67736: electron mirror implicit in the imex-ars3 chain factor (+114). Measured.
+baseline = 67736
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1494,8 +1496,9 @@ recursive = true
 # 74556 -> 74589: repeated-solve compile and cached_jit fallback tests (PERF 2026-10-06).
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
 # 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
-# 72926 -> 72935: chain-solve test exercises the implicit electron mirror (Nl = 2).
-baseline = 72935
+# 72926 -> 73011: linearized Landau physics gates and runtime regression, net of the retired coulomb tests.
+# 73011 -> 73020: chain-solve test exercises the implicit electron mirror (Nl = 2).
+baseline = 73020
 target = 35000
 
 [[line_budget_policy.counts]]

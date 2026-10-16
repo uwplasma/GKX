@@ -1097,22 +1097,26 @@ def build_linear_cache(
         if isinstance(m0, jax.core.Tracer):
             m0 = jax.lax.stop_gradient(m0)
         linked_cache["ntft_m0"] = m0.astype(np.int32)
-    return _to_device_cache(
-        _pack_linear_cache(
-            grid,
-            grid_arrays=grid_arrays,
-            geom_arrays=geom_arrays,
-            twist=twist,
-            kperp2=kperp2,
-            cv_d=cv_d,
-            gb_d=gb_d,
-            omega_d=omega_d,
-            kperp2_bmag=kperp2_bmag,
-            gyro=gyro,
-            moment_cache=moment_cache,
-            linked_cache=linked_cache,
-        )
+    cache = _pack_linear_cache(
+        grid,
+        grid_arrays=grid_arrays,
+        geom_arrays=geom_arrays,
+        twist=twist,
+        kperp2=kperp2,
+        cv_d=cv_d,
+        gb_d=gb_d,
+        omega_d=omega_d,
+        kperp2_bmag=kperp2_bmag,
+        gyro=gyro,
+        moment_cache=moment_cache,
+        linked_cache=linked_cache,
     )
+    from gkx.operators.linear.collision_tables import landau_blocks_for
+
+    landau = landau_blocks_for(params, Nl, Nm, grid_arrays.real_dtype)
+    if landau is not None:
+        cache = replace(cache, landau_pairs=landau)
+    return _to_device_cache(cache)
 
 
 def linked_chain_cover_mask(

@@ -143,7 +143,7 @@ class TimeConfig:
     nstep_restart: int | None = None
     collision_split: bool = False
     collision_scheme: str = "implicit"
-    collision_operator: str = "none"
+    collision_operator: str = "landau"
     compressed_real_fft: bool = True
     nonlinear_dealias: bool = True
     laguerre_nonlinear_mode: str = "grid"
@@ -489,7 +489,8 @@ class RuntimeCollisionConfig:
     # Reference nonlinear dissipation path: kz-proportional hypercollisions.
     hypercollisions_const: float = 0.0
     hypercollisions_kz: float = 1.0
-    damp_ends_amp: float = 0.1
+    # Legacy per-step strength; only 0 (off) is accepted without a rate.
+    damp_ends_amp: float | None = None
     damp_ends_widthfrac: float = 0.125
     damp_ends_scale_by_dt: bool = False
 

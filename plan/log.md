@@ -21200,6 +21200,15 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
 
+## 2026-10-15 — end-damping contract (fix/end-damping-contract, supersedes #357)
+
+- One timestep-free end-damping rate on every route; default 30 thermal
+  transits of the fastest kinetic species across the end layer; RHS `dt`
+  plumbing removed; `damp_ends_amp`-only decks refused.
+- Decks migrated: nonlinear decks keep `damp_ends_rate = 0.1` (bitwise), GX
+  parity fixtures state `0.1/dt`, linear examples take the default.
+- Records: `plan/research/2026-10-15-end-damping/`. Open: nonlinear decks at
+  0.1 are below the linear plateau; KE (8,16) not nperiod-converged.
 ## 2026-10-15 — SLIM+HISTORY lane (branch `slim/scripts-and-media`)
 
 Base: `main` `df2953026` (2.5.1 + chain #356). Every removed file is recoverable with `git show df2953026:<path>`.
@@ -21219,6 +21228,26 @@ Base: `main` `df2953026` (2.5.1 + chain #356). Every removed file is recoverable
 - **Media.** 28 orphan files in `docs/_static` (no reference anywhere outside `plan/log.md`, by basename, stem or directory) deleted. PNG: pngquant `--quality=90-100` then oxipng `-o 4 --strip safe`, 1.98 MB -> 1.61 MB. `vmex_mirror_gkx_rotation.mp4` re-encoded x264 crf 25, 205 kB -> 83 kB, SSIM 0.997 against the original.
 - **Size.** Tracked tree 2,173 files / 23.9 MB -> 2,095 / 21.8 MB. A fresh GitHub clone is a 19.1 MB pack (heads and tags); the 202 MB figure is the local `.git` (local branches, reflogs, stash, unpruned packs), not the remote.
 - **History.** Rewrite options and dry runs: `plan/research/2026-10-15-history/PLAN.md`. Nothing was rewritten or force-pushed.
+## 2026-10-15 — KE/EM solver research (branch `research/ke-em-solvers`)
+
+Base `df2953026`. Office CPU (shared, load 25-70), venv `gkx-ke`, x64, native Miller geometry (the GX `*.out.nc` files are gone). Scripts in `plan/research/2026-10-15-ke-em-solvers/scripts/` (`stiff.py`: dense per-term spectra and exact IMEX one-step-map stability per chain; `bandeig.py`: shift-invert with an exact Hermite-banded direct factor); RESULT lines in `results/`.
+- **imex-ars3's dt is set by the electron mirror term.** The explicit remainder A − S0 (S0 = streaming + dissipation + fields) has the mirror's spectral radius to < 2% on every chain: 56.9 (KE ky .3 and KBM ky .2, (4,8)), 55.9 (every 32² box chain measured); drifts 2.4-3.6. At (16,48), Nz 96: mirror 950 electron / 15.6 ion, drifts 91-137, streaming 3188, hypercollisions 1727, S0 per species 206-252 (ion) vs 3000 (electron).
+- Largest stable dt of the exact linear step map (sqrt(2) ladder): KE ky .3 (4,8) rk4 2.3e-3, ars343 0.051, ark324 0.051, ark436 0.072, ars232 0.036; mirror implicit ars343 1.16; mirror + drifts implicit 13. 32² box dealiased-out rows (mirror only, solved by the imex route) 0.036. Consistent with KE-BANDED's 0.05 ok / 0.1 fail at 32² and 0.035 ok / 0.05 fail at 64². Dominant eigenvalue error at the stable dt 1e-7 to 3e-6; 2e-3 at dt 1.16.
+- **Banded direct shift-invert eigenpair** (the single-ky operator couples m to m±2 only; Hermite pairs give a block-tridiagonal matrix with blocks 2·ns·Nl·Nz, assembled from 3·block compressed RHS probes, equal to the matrix-free operator to 4e-16): KE Miller ky .3, (8,24), n 36,864, σ = 1: γ 0.2311520, ω 0.2511136, residual 5e-13 (VAL-KE adaptive 0.23115 / 0.25111, 963 s GPU). Probes 55 s, factor 65 s (5.4 GB complex128), Arnoldi 661 s (nev 12, 1683 solves; over-asked), CPU at load ~40.
+- Ranked, nonlinear: (1) mirror into the implicit block (monolithic Hermite-tridiagonal with (s,l) blocks, ~Nl x memory, or a Strang-split mirror solve as in stella); (2) adaptive dt = measured explicit-remainder Arnoldi bound + nonlinear CFL + factor ladder (refactor when γdt changes by > 20%, ARKODE), with ARK3(2)4L[2]SA as the embedded pair (same γ, cost and measured stability as ARS343); (3) drop ars232, skip ark436 (1.4x dt for 1.5x work). Linear: (1) banded direct shift-invert up to (12,32); (2) at (16,48) the same factor as a preconditioner, in complex64, or JD with a fixed σ, replacing pr3-cm on KE decks (it holds both species exactly); (3) time-stepper Arnoldi as the fallback. Generic pieces (block-banded probing, block LU with shifts, IMEX ARK driver with an error controller) go to SOLVAX; Hermite grouping, mirror split and the dt bound stay in GKX.
+- Same host, same deck, KE ky .3 (8,24): `adaptive` 6919 s, γ 0.23115195015174 (certified 4.6e-13); banded 788 s, γ 0.23115195015174: **8.8x**, eigenvalues equal to 1e-13 (and ~3x more with nev 4). KBM ky .2 (8,24): banded γ 0.0331533, ω 0.1953119, residual 1.1e-12, 827 s. KE (12,32): killed by the OOM killer (~16 GB complex128 factor on a shared 62 GB host); needs complex64 + refinement.
+- Not done: physical mid/high-ky 32² chains and 64² chains (cut for host load); no nonlinear run with mirror implicit.
+## 2026-10-15 — COLLISIONS lane (branch `collisions/linear-landau-default`)
+
+Baseline `main` `df2953026`. Laptop CPU for operator work, office GPU1 (`venvs/gkx-latest`) and GS2 8.2.1 for runs.
+
+- **Default collision operator is now the linearized Landau operator** (`[time] collision_operator = "landau"`), drift-kinetic limit, any `(Nl, Nm)`, any species, applied to `H` inside the cached linear RHS, so every solver path uses it (Hermite-sharded runs refuse). Matrices are built once per run on the host (`collision_tables.linearized_landau_pair_matrices`, lru-cached): 0.5 s at (4,8), 11 s at (8,32), 45 s at (16,48) on a loaded office CPU.
+- **Verified:** exact invariants and H-theorem (three zero eigenvalues), equal to the Frei et al. multiprecision Coulomb tables to 1e-12 at (2,4) and (3,6) (their nu is twice GKX's), test part equal to Sugama's at equal temperatures for m_a/m_b = 1, 1/1836, 1836; e-i momentum and energy exchange exact at Te/Ti = 3; Spitzer-Harm gamma_E within 0.5% for Z = 1, 2, 4, 16; differentiable in nu. Convention: GKX nu = sqrt(2) vnewk, nu_ab = nu_a n_b Z_b^2 / (n_a Z_a^2).
+- **Cost:** collision term alone on office GPU, Cyclone 16x8x32 grid: Dougherty 2.6-3.2 ms, Landau 8.3 ms at (8,32) and 66 ms at (16,48), with even/odd Hermite blocks (half the dense flops).
+- **GS2 collisional TEM (ky rho_s 0.3):** gamma_gkx-units 0.867 (nu 0), 0.505 (vnewk_e 0.05), 0.151 (0.2), -0.13 (0.8). GKX comparison runs are queued; see the PR.
+
+Raw records: office `~/gkx-evidence/collisions/`; summaries in `plan/research/2026-10-15-collisions/`.
+- **Follow-up (branch `collisions/landau-followup`, 2026-10-15/16):** `LinearParams.collision_model` defaults to `landau` (one default). The eight-moment Frei `coulomb` kernels are retired and `coulomb` is an alias of `landau`. The real and imaginary parts are applied as separate real products, and the product is skipped at run time when the collision weight is zero. Whole-RHS cost at (16,48) on the A4000: 1.2x/1.3x Dougherty in float32 (1/2 species) and 2.6x/3.8x in float64; the float64 matrix rate of the card is the limit. TEM (8,24): Landau at vnewk_e 0.2 gives 0.0769 and Dougherty 0.0548, against GS2 0.151. Collisionless, a fading Laguerre sink lowers gamma from 0.611 to 0.510 (GS2 0.867), so the hypercollision default is unchanged (GX's Hermite |k_z| form, no Laguerre sink). The (16,48) sink rung is still running.
 
 ## 2026-10-16 — IMEX lane: electron mirror implicit (branch `perf/imex-mirror-implicit`)
 

@@ -783,7 +783,7 @@ def _build_case(
         tau_e=1.0,
         nu=0.0,
         nu_hyper=0.0,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
         damp_ends_widthfrac=0.0,
     )
     cache = build_linear_cache(grid, geom, params, Nl=3, Nm=4)

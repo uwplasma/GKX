@@ -29,6 +29,8 @@ ntheta = 256
 nperiod = 1
 
 [time]
+# GX damps the linked ends at damp_ends_amp/dt = 0.1/0.005.
+damp_ends_rate = 20
 t_max = 200.0
 dt = 0.005
 method = "imex2"
@@ -63,7 +65,6 @@ nu_hyper = 0.0
 p_hyper = 4.0
 hypercollisions_const = 0.0
 hypercollisions_kz = 1.0
-damp_ends_amp = 0.1
 damp_ends_widthfrac = 0.125
 
 [normalization]

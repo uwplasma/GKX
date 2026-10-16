@@ -255,7 +255,7 @@ One-shot nonlinear bundle write:
 For the short Cyclone comparison replay (``t_max = 5``, no collisions), use
 ``benchmarks/cases/cyclone_nonlinear_short.toml``.
 That file pins the short-run dissipation contract explicitly
-(``p_hyper = 2``, ``damp_ends_amp = 0``) instead of relying on the longer
+(``p_hyper = 2``, ``damp_ends_rate = 0``) instead of relying on the longer
 production defaults.
 
 Restart-aware TOML snippet:
