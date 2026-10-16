@@ -83,7 +83,7 @@ def test_runtime_defaults_match_reference_contract() -> None:
             "normalization.diagnostic_norm": "rho_star",
             "normalization.flux_scale": 1.0,
             "collisions.p_hyper_m": None,
-            "collisions.damp_ends_amp": 0.1,
+            "collisions.damp_ends_amp": None,
             "collisions.damp_ends_widthfrac": 0.125,
             "parallel.strategy": "serial",
             "parallel.axis": "ky",

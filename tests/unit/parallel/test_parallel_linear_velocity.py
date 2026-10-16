@@ -477,7 +477,7 @@ def test_linear_rhs_parallel_cached_serial_dispatch(monkeypatch) -> None:
         calls.append("serial")
         assert kwargs["use_jit"] is False
         assert kwargs["use_custom_vjp"] is False
-        assert kwargs["dt"] == 0.125
+        assert "dt" not in kwargs
         return _sentinel("serial")
 
     monkeypatch.setattr(linear_rhs_owner, "linear_rhs_cached", fake_serial)
@@ -489,7 +489,6 @@ def test_linear_rhs_parallel_cached_serial_dispatch(monkeypatch) -> None:
         parallel=None,
         use_jit=False,
         use_custom_vjp=False,
-        dt=0.125,
     )
 
     assert calls == ["serial"]
@@ -1202,7 +1201,7 @@ def test_mixed_species_hermite_linked_operator_matches_serial_trajectory() -> No
         nu_hyper_l=0.03,
         nu_hyper_m=0.05,
         hypercollisions_kz=0.4,
-        damp_ends_amp=0.1,
+        damp_ends_rate=0.1,
     )
     terms = replace(
         _electrostatic_slice_terms(),
@@ -1215,7 +1214,6 @@ def test_mixed_species_hermite_linked_operator_matches_serial_trajectory() -> No
         cache,
         params,
         terms=terms,
-        dt=0.01,
         use_jit=False,
         use_custom_vjp=False,
         force_electrostatic_fields=True,
@@ -1226,7 +1224,6 @@ def test_mixed_species_hermite_linked_operator_matches_serial_trajectory() -> No
             cache,
             params,
             terms=terms,
-            dt=0.01,
             devices=devices[:4],
         )
     )
@@ -1533,7 +1530,6 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
         hypercollisions_const=1.0,
         hypercollisions_kz=0.4,
         D_hyper=0.02,
-        damp_ends_amp=0.1,
         damp_ends_rate=rate,
         nu=jnp.asarray([0.1, 0.2]),
     )
@@ -1560,7 +1556,6 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
             dissipative_cache,
             dissipative_params,
             terms=active_terms,
-            dt=0.01,
             use_jit=False,
             use_custom_vjp=False,
             force_electrostatic_fields=True,
@@ -1572,7 +1567,6 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
                 dissipative_cache,
                 dissipative_params,
                 terms=active_terms,
-                dt=0.01,
                 devices=devices[:4],
             )
 

@@ -1111,28 +1111,12 @@ def build_linear_cache(
         moment_cache=moment_cache,
         linked_cache=linked_cache,
     )
-    if _uses_landau(params):
-        from gkx.operators.linear.collision_tables import linearized_landau_blocks
+    from gkx.operators.linear.collision_tables import landau_blocks_for
 
-        blocks = linearized_landau_blocks(Nl, Nm, params.mass, params.temp)
-        real = grid_arrays.real_dtype
-        cache = replace(
-            cache,
-            landau_pairs=jax.tree_util.tree_map(
-                lambda a: a.astype(real) if np.issubdtype(a.dtype, np.floating) else a,
-                blocks,
-            ),
-        )
+    landau = landau_blocks_for(params, Nl, Nm, grid_arrays.real_dtype)
+    if landau is not None:
+        cache = replace(cache, landau_pairs=landau)
     return _to_device_cache(cache)
-
-
-def _uses_landau(params: LinearParams) -> bool:
-    """Build Landau matrices unless the model or a concrete zero ``nu`` rules them out."""
-
-    if params.collision_model != "landau":
-        return False
-    nu = params.nu
-    return isinstance(nu, jax.core.Tracer) or bool(np.any(np.asarray(nu) != 0.0))
 
 
 def linked_chain_cover_mask(

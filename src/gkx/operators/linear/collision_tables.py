@@ -717,7 +717,9 @@ def linearized_landau_blocks(nl: int, nm: int, mass: Any, temperature: Any):
             )
         )
     l_blocks = [(np.flatnonzero(ls_l == l),) for l in range(int(ls_l.max()) + 1)]  # noqa: E741
-    index, test, field = [], [], []
+    index: list = []
+    test: list = []
+    field: list = []
     for _, (ix,), members in _padded_batches(l_blocks, (), (n_ls,)):
         index.append(ix)
         for out, part in ((test, 1), (field, 2)):
@@ -764,4 +766,22 @@ def linearized_landau_blocks(nl: int, nm: int, mass: Any, temperature: Any):
         diagonal[0],
         diagonal[1],
         int(n_ls),
+    )
+
+
+def landau_blocks_for(params: Any, nl: int, nm: int, dtype: Any):
+    """Return the run's :class:`LandauBlocks` in ``dtype``, or ``None`` when unused.
+
+    They are built unless the model is not ``landau`` or every ``nu`` is a
+    concrete zero.
+    """
+
+    nu = params.nu
+    if params.collision_model != "landau" or (
+        not isinstance(nu, jax.core.Tracer) and not np.any(np.asarray(nu) != 0.0)
+    ):
+        return None
+    blocks = linearized_landau_blocks(nl, nm, params.mass, params.temp)
+    return jax.tree_util.tree_map(
+        lambda a: a.astype(dtype) if np.issubdtype(a.dtype, np.floating) else a, blocks
     )

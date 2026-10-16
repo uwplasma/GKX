@@ -796,9 +796,9 @@ def test_diagonal_operator_stays_cheap() -> None:
 # ---- from test_end_damping_physics.py ----
 # Physics gate: parallel-domain end damping on a linked flux tube.
 #
-# Linear RHS assembly uses legacy strength ``damp_ends_amp / dt``. At the pinned
-# ``dt=0.002``, interpreting 0.1 as a rate instead weakens damping 500-fold and
-# allows an unphysical boundary mode to dominate (uwplasma/GKX#192).
+# The end damping is a timestep-free rate (default: 30 thermal transits across
+# the layer). The operator is stable at weak rates; the runaway once blamed on
+# weak damping (uwplasma/GKX#192) is an over-CFL step (see _EXPECTED_GAMMA).
 # References below are measured compatibility regressions, not independent
 
 
@@ -807,14 +807,17 @@ def test_diagonal_operator_stays_cheap() -> None:
 # the runaway to; nperiod=2 is what gives the tube the two damped end caps at
 # all, and every failing case in the parity matrix has it.
 _KY_TARGET = 0.55
-_NL, _NM, _NZ = 8, 24, 96
+_NL, _NM, _NZ = 8, 12, 96
 _DT = 0.002
 _STEPS = 20000
 _SAMPLE_STRIDE = 50
 _SEED_AMPLITUDE = 1.0e-6
 
-#: Measured with the per-step contract in place; the spurious mode gives +11.3.
-_EXPECTED_GAMMA = -0.0405
+#: Measured at the default end-damping rate (9.1 here); rate 3 gives -0.05585.
+#: dt = 0.002 is inside this deck's CFL bound only at Nm <= 12 (0.0023; Nm 24:
+#: 0.0014). Above the bound imex2 runs away at rates below ~40, which the old
+#: damp_ends_amp/dt reading (rate 50) hid.
+_EXPECTED_GAMMA = -0.0553
 
 
 def _linked_salpha_flux_tube():
@@ -848,7 +851,6 @@ def test_end_damping_bounds_the_domain_end_mode_at_a_deck_step_size() -> None:
             geom,
             tprim=2.49,
             fprim=0.8,
-            damp_ends_amp=0.1,
             damp_ends_widthfrac=0.125,
             nu_hermite=1.0,
             nu_laguerre=2.0,

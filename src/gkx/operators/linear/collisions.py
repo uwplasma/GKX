@@ -1013,8 +1013,8 @@ class LandauBlocks:
     block_index: tuple  # per batch (blocks, K) Legendre-Sonine indices
     block_test: tuple  # per batch (s, s, blocks, K, K)
     block_field: tuple  # per batch (s, s, blocks, K, K)
-    test_diagonal: jnp.ndarray  # (s, s, n)
-    field_diagonal: jnp.ndarray  # (s, s, n)
+    test_diagonal: Any  # (s, s, n)
+    field_diagonal: Any  # (s, s, n)
     sonine_count: int  # Legendre-Sonine functions, static
 
     def tree_flatten(self):
