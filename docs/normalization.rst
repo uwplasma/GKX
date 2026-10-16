@@ -192,7 +192,7 @@ The reference diagnostic contract defines the perpendicular metric as
 - ``bessel_bmag_power = 0`` (no extra :math:`B` scaling inside the Bessel argument)
 
 The Cyclone base case defaults use this setting, and
-``scripts/comparison/compare_gx_rhs_terms.py compare`` assumes it.
+``scripts/comparison/compare_gx_rhs_terms.py compare`` (retired; :ref:`retired-generators`) assumes it.
 
 Sign conventions
 ----------------

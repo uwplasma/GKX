@@ -1171,15 +1171,6 @@ def validate_all(
     }
 
 
-# scripts/ packages that hold the modules behind the developer commands.
-TOOL_PACKAGES = (
-    "artifacts",
-    "benchmarks",
-    "campaigns",
-    "checks",
-    "comparison",
-    "profiling",
-)
 ALLOWED_STATUSES = {"closed", "active", "open", "planned"}
 ALLOWED_PRIORITIES = {"high", "medium", "low"}
 REQUIRED_STRING_FIELDS = ("name", "owner", "status", "priority")
@@ -1197,14 +1188,6 @@ REQUIRED_LIST_FIELDS = (
 
 def _repo_path(raw: str) -> Path:
     return (REPO_ROOT / raw).resolve()
-
-
-def _is_relative_to(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return False
-    return True
 
 
 def _as_nonempty_string(value: object, field: str, lane: str) -> str:
@@ -1275,20 +1258,9 @@ def validate_manifest(
         if priority not in ALLOWED_PRIORITIES:
             raise ValueError(f"{name}: invalid priority {priority!r}")
 
-        allowed_tool_roots = tuple(
-            REPO_ROOT / "scripts" / package for package in TOOL_PACKAGES
-        )
-        for tool in lists["profiling_tools"]:
-            resolved = _repo_path(tool)
-            if not resolved.exists():
-                raise ValueError(f"{name}: profiling tool does not exist: {tool}")
-            if not any(
-                _is_relative_to(resolved, root.resolve()) for root in allowed_tool_roots
-            ):
-                raise ValueError(
-                    f"{name}: profiling tool must live in a scripts/ tool "
-                    f"package ({', '.join(TOOL_PACKAGES)}): {tool}"
-                )
+        # profiling_tools name the drivers that produced each lane. They were
+        # removed from scripts/ and are recorded as provenance; recover one with
+        # ``git show df2953026:<path>``.
 
         rendered = [
             artifact

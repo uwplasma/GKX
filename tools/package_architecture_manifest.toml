@@ -321,7 +321,8 @@ recursive = true
 # 57 -> 58: scripts/campaigns/nonlinear_flux_jacobian.py (Jacobian benchmark). Measured.
 # 58 -> 59: scripts/artifacts/build_analytic_benchmarks.py (analytic benchmarks). Measured.
 # 59 -> 63 (ARCH-C): a move, not growth: four report-gate modules left src/gkx for scripts/checks/_gates (src files fell 136 -> 129). Measured.
-baseline = 63
+# 63 -> 16 (SLIM 2026-10-15): artifacts/benchmarks/campaigns/comparison/profiling and their commands removed; recover at df2953026. Measured.
+baseline = 16
 target = 12
 
 
@@ -1147,8 +1148,7 @@ recursive = true
 # 67220 -> 67272: real-FFT Nyquist streaming (#328), custom-collision admission (#324). Measured.
 # 67272 -> 67308: cached_jit, so a repeated gkx.solve compiles nothing (PERF 2026-10-06).
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
-# 67113 -> 67126: end-damping contract (rate resolver, legacy refusal, status line; dt plumbing removed).
-baseline = 67126
+baseline = 67113
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1485,7 +1485,8 @@ recursive = true
 # 74397 -> 74556: independent oracles for #324-#328 (velocity quadrature, analytic z-derivative). Measured.
 # 74556 -> 74589: repeated-solve compile and cached_jit fallback tests (PERF 2026-10-06).
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
-baseline = 75155
+# 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
+baseline = 72926
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1603,6 +1604,6 @@ recursive = true
 # 43022 -> 43611: build_analytic_benchmarks.py and the figures.py analytic builder. Measured.
 # 43611 -> 48382 (ARCH-C): report-gate and campaign modules moved out of src/gkx (src lines fell 75904 -> 67191). Measured.
 # 48382 -> 48385: chain 2026-10-07 (#346-#353, #355), measured.
-# 48385 -> 48390: end-damping contract (GX comparison scripts state amp/dt as a rate).
-baseline = 48390
-target = 18000
+# 48385 -> 16444 (SLIM 2026-10-15): non-gate script packages removed; recover at df2953026. Measured.
+baseline = 16444
+target = 16444

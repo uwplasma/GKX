@@ -51,25 +51,7 @@ def load_tool_script(tool_folder: str, script_name: str) -> ModuleType:
     return load_repo_script(Path("scripts") / tool_folder / f"{script_name}.py")
 
 
-def load_artifact_tool(script_name: str) -> ModuleType:
-    """Load a ``scripts/artifacts`` script directly from the checkout."""
-
-    return load_tool_script("artifacts", script_name)
-
-
 def load_release_tool(script_name: str) -> ModuleType:
     """Load a ``scripts/checks`` checker directly from the checkout."""
 
     return load_repo_script(f"scripts/checks/{script_name}.py")
-
-
-def load_profiling_tool(script_name: str) -> ModuleType:
-    """Load a ``scripts/profiling`` script directly from the checkout."""
-
-    return load_tool_script("profiling", script_name)
-
-
-def load_comparison_tool(script_name: str) -> ModuleType:
-    """Load a ``scripts/comparison`` script directly from the checkout."""
-
-    return load_tool_script("comparison", script_name)

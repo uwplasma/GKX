@@ -10,7 +10,6 @@ gradients is reported. Prints the recovery, saves a JSON summary and two sweep
 CSVs, and plots loss, parameter path, derivative parity and sweeps. About a
 minute on a laptop CPU. Set ``OUTPUT = Path("docs/_static")`` to regenerate
 ``autodiff_inverse_twomode.png``.
-``geometry_bridge.py`` in this directory differentiates through VMEC geometry.
 """
 
 import json

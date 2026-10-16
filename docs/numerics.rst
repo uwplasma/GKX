@@ -923,8 +923,8 @@ cannot be dropped by diagonal operator splitting.
 
 The finite-Larmor-radius collision coefficients contain deeply nested,
 cancellation-sensitive sums. GKX generates them offline in multiple-precision
-arithmetic (``scripts/artifacts/build_linear_validation_artifacts.py`` and
-``scripts/artifacts/build_finite_wavelength_coulomb_data.py``), records
+arithmetic (``scripts/artifacts/build_linear_validation_artifacts.py`` (retired; :ref:`retired-generators`) and
+``scripts/artifacts/build_finite_wavelength_coulomb_data.py`` (retired; :ref:`retired-generators`)), records
 normalization, provenance and checksums with each table, and loads only compact
 arrays into the JAX runtime. The frequency-normalization trap is a real one:
 Frei, Hoffmann & Ricci write the Bessel argument as :math:`B=k_\perp\sqrt{2\tau}`,
@@ -1029,7 +1029,7 @@ a plateau, and the revival at :math:`t_{\mathrm{rec}} = 2\sqrt{N_m}` ends the
 useful window. ``test_recurrence_time_follows_the_square_root_law`` locates
 the revival at the same multiple of :math:`2\sqrt{N_m}` for :math:`N_m = 16`
 and 64. Regenerate the figure with
-``scripts/artifacts/build_landau_damping_figure.py``.
+``scripts/artifacts/build_landau_damping_figure.py`` (retired; :ref:`retired-generators`).
 
 Hermite closure and recurrence
 ------------------------------
