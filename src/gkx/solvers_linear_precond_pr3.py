@@ -775,8 +775,8 @@ def build_pr3_factors(
     del with_phi
 
     factors = Pr3Factors(
-        alpha=jnp.asarray(alpha_value, dtype=jnp.complex128),
-        s1=jnp.asarray(s1, dtype=jnp.complex128),
+        alpha=jnp.asarray(np.complex128(alpha_value)),
+        s1=jnp.asarray(np.complex128(s1)),
         blocks=blocks_pytree,
     )
     nbytes = int(sum(np.asarray(a).nbytes for a in jax.tree.leaves(factors)))

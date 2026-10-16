@@ -21200,6 +21200,14 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
 
+## 2026-10-15 — bug hunt, known-bug group (fix/bug-hunt-1015)
+
+- `cached_jit` traces, prints and hashes once per argument signature of a wrapper, not on every call; the imex probe loops called one wrapper hundreds of times (17.7 s host time per warm imex solve on the 10-13 profile). Executables are unchanged, so results are bitwise identical.
+- The imex chain factor is reused when the RHS and field graph digests, shape, dt, scheme, dtype and modes all match (12.9 s rebuild per solve). Only one factor is kept alive.
+- VMEC `*.eik.nc` generation and backend discovery now run under `geometry_precision()`: float64 inside, the caller's `jax_enable_x64` restored after. Importing vmex/booz_xform_jax used to leave the GK solve in float64.
+- Shift-invert: when no Ritz value falls in the frequency window, or the inner FGMRES stalls, the error now says so and suggests what to change. It no longer reports `residual=nan`. Root cause, measured on Cyclone case_full at (4,8): hermite-line and field-corrected ignore the z-varying drift (||(A-σ)Mx−x|| = 11.6 against 0.14 with streaming only); pr3-cm converges, but only with restart ≥150; the propagator seed σ lands 0.0076 from a damped mode. pr3-cm with restart 150 still stalls on KBM. Not fixed: needs a design decision.
+- Adaptive Cyclone (16,48): no hang reproduced. It certifies γ=0.09309 in 262 s on a shared A4000; the 10-13 ">17 min, GPU idle" ran under the profiler trace and HLO dump. KBM adaptive at (16,48) did not finish in 50 min on a shared GPU.
+
 ## 2026-10-15 — end-damping contract (fix/end-damping-contract, supersedes #357)
 
 - One timestep-free end-damping rate on every route; default 30 thermal

@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 
 from gkx.config import REFERENCE_ELECTRON_MASS
+from gkx.geometry.backend_discovery import geometry_precision
 from gkx.geometry.imported_vmec import (
     generate_vmec_eik_internal,
     internal_vmec_backend_available,
@@ -223,13 +224,13 @@ def generate_runtime_vmec_eik(
     ):
         return resolved_path
 
-    if not internal_vmec_backend_available():
-        raise RuntimeError(
-            "Internal VMEC geometry backend dependencies are missing. "
-            "Install JAX plus booz_xform_jax, or provide a booz_xform-compatible shim."
-        )
-
-    return generate_vmec_eik_internal(output_path=resolved_path, request=request)
+    with geometry_precision():
+        if not internal_vmec_backend_available():
+            raise RuntimeError(
+                "Internal VMEC geometry backend dependencies are missing. Install "
+                "JAX plus booz_xform_jax, or provide a booz_xform-compatible shim."
+            )
+        return generate_vmec_eik_internal(output_path=resolved_path, request=request)
 
 
 # Default EIK request template. This is a geometry default rather than report

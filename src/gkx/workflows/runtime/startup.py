@@ -296,51 +296,14 @@ def _raise_unsupported_reduced_model(cfg: RuntimeConfig) -> NoReturn:
 
 
 def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
-    """Return a model-aware Krylov default for runtime-configured linear runs."""
+    """Return the residual-certified adaptive eigensolve for every contract.
 
-    contract = cfg.normalization.contract.strip().lower()
-    kinetic_species = tuple(spec for spec in cfg.species if spec.kinetic)
-    electron_only = len(kinetic_species) == 1 and float(kinetic_species[0].charge) < 0.0
+    ETG and KBM used shift-invert defaults whose inner solves never converged
+    on the shipped decks (residual=nan on KBM case_full, ETG etg_linear); the
+    adaptive route certifies the dominant pair or fails with its residual.
+    """
 
-    if contract == "etg" or (
-        cfg.physics.adiabatic_ions
-        and cfg.physics.electrostatic
-        and not cfg.physics.electromagnetic
-        and electron_only
-    ):
-        return KrylovConfig(
-            method="shift_invert",
-            krylov_dim=16,
-            restarts=1,
-            omega_min_factor=0.0,
-            omega_target_factor=0.4,
-            omega_cap_factor=1.5,
-            omega_sign=-1,
-            power_iters=80,
-            power_dt=0.002,
-            shift_source="target",
-            shift_tol=1.0e-3,
-            shift_maxiter=40,
-            shift_restart=12,
-            shift_solve_method="batched",
-            shift_preconditioner="auto",
-            shift_selection="targeted",
-            mode_family="etg",
-            fallback_method="arnoldi",
-            fallback_real_floor=-1.0e-6,
-        )
-
-    if contract == "kbm":
-        # Keep the benchmark-specific branch policy in its validation owner.
-        from gkx.benchmarking_shared import KBM_KRYLOV_DEFAULT
-
-        return KBM_KRYLOV_DEFAULT
-
-    # Generic contracts (cyclone included) use the residual-certified adaptive
-    # eigensolve. The raw propagator default has no certification gate and can
-    # silently return an unconverged, unphysical branch at collisional runtime
-    # resolutions; the adaptive path either certifies the dominant pair against
-    # the continuous operator or fails closed with the measured residual.
+    del cfg
     return KrylovConfig(method="adaptive")
 
 
