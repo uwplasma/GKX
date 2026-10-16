@@ -311,7 +311,7 @@ gates.
    * - ``scripts/artifacts/build_linear_validation_artifacts.py kbm-branch`` (retired subcommand; :ref:`retired-generators`)
      - ``docs/_static/kbm_branch_gate_summary.json``; passes the adjacent
        jump and successive-overlap gates.
-   * - ``scripts/comparison/compare_gx_nonlinear.py diagnostics --summary-json``
+   * - ``scripts/comparison/compare_gx_nonlinear.py diagnostics --summary-json`` (retired; :ref:`retired-generators`)
      - ``docs/_static/nonlinear_{cyclone,cyclone_miller,kbm,hsx,w7x}_gate_summary.json``;
        all pass the release-window gate.
    * - ``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel`` (retired; :ref:`retired-generators`)

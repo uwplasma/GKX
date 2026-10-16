@@ -272,51 +272,51 @@ stays unpromoted.
      - ``docs/_static/benchmark_core_linear_atlas.png`` (regenerable render;
        not tracked in git)
      - headline linear validation atlas
-     - ``python scripts/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
    * - Core nonlinear benchmark atlas
      - ``docs/_static/benchmark_core_nonlinear_atlas.png`` (regenerable
        render; not tracked in git)
      - headline nonlinear validation atlas
-     - ``python scripts/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
    * - README benchmark summary panel
      - ``docs/_static/benchmark_readme_panel.png`` (regenerable render; not
        tracked in git)
      - compact publication-facing benchmark summary
-     - ``python scripts/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
    * - Extended linear stress matrix
      - ``docs/_static/benchmark_extended_linear_panel.png`` (regenerable
        render; not tracked in git)
      - stress and provisional lanes, not headline validation claims
-     - ``python scripts/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
    * - Runtime and memory comparison
      - ``docs/_static/runtime_memory_benchmark.png``
      - tracked wall-time and memory comparison rows
-     - ``python scripts/benchmarks/benchmark_runtime_memory.py --summary-glob ...``
+     - ``python scripts/benchmarks/benchmark_runtime_memory.py --summary-glob ...`` (retired; :ref:`retired-generators`)
    * - Runtime and memory result rows
      - ``docs/_static/runtime_memory_results_ship_refresh.csv``
      - machine-readable runtime/memory rows used by the tracked panel
-     - ``python scripts/benchmarks/benchmark_runtime_memory.py``
+     - ``python scripts/benchmarks/benchmark_runtime_memory.py`` (retired; :ref:`retired-generators`)
    * - Runtime and memory summary
      - ``docs/_static/runtime_memory_summary_ship_refresh.json``
      - machine-readable summary for runtime/memory panel generation
-     - ``python scripts/benchmarks/benchmark_runtime_memory.py``
+     - ``python scripts/benchmarks/benchmark_runtime_memory.py`` (retired; :ref:`retired-generators`)
    * - Core linear atlas inputs
      - ``tools/benchmark_atlas_manifest.toml``
      - manifest of small tracked benchmark inputs
-     - ``python scripts/artifacts/make_benchmark_atlas.py``
+     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
    * - Reference-code linear parity matrix
      - ``docs/_static/gkx_gx_linear_parity_matrix.png`` (regenerable render;
        not tracked in git)
      - cross-code linear growth-rate and frequency parity across tokamak and stellarator cases
-     - ``python scripts/comparison/build_gx_parity_matrix.py``
+     - ``python scripts/comparison/build_gx_parity_matrix.py`` (retired; :ref:`retired-generators`)
    * - Reference-code linear parity rows
      - ``docs/_static/gkx_gx_linear_parity_matrix.csv``
      - machine-readable per-wavenumber parity rows with convergence flags
-     - ``python scripts/comparison/build_gx_parity_matrix.py``
+     - ``python scripts/comparison/build_gx_parity_matrix.py`` (retired; :ref:`retired-generators`)
    * - Reference-code linear parity summary
      - ``docs/_static/gkx_gx_linear_parity_matrix.json``
      - per-case resolution, provenance and cost metadata behind the parity rows
-     - ``python scripts/comparison/build_gx_parity_matrix.py``
+     - ``python scripts/comparison/build_gx_parity_matrix.py`` (retired; :ref:`retired-generators`)
 
 The four atlas panels are regenerable renders, not git-tracked files: their
 checksums are recorded under the ``regenerate_on_demand`` action in

@@ -21206,3 +21206,24 @@ Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan
 - Shift-invert `auto` is now pr3-cm with restart ≥150 and maxiter ≥600. σ is seeded from the adaptive pair, falling back to the propagator seed. The hermite-line → field-corrected retry is removed.
 - Fixed: Krylov fields dropped by `_run_krylov_linear`; pr3 complex128 requested under float32; a `--dt` override not setting the fixed-dt step count; growth-fit late-window, zero-frequency R² and NaN-trace paths.
 - Measurements: plan/research/2026-10-15-bug-hunt/SUMMARY.md (warm imex 9.2 s → 2.9 s with #363).
+
+
+## 2026-10-15 — SLIM+HISTORY lane (branch `slim/scripts-and-media`)
+
+Base: `main` `df2953026` (2.5.1 + chain #356). Every removed file is recoverable with `git show df2953026:<path>`.
+
+- **scripts/ cut to the CI gates.** Kept `scripts/check.py` (now self-contained; `_command.py` folded in) and `scripts/checks/`. `campaigns/nonlinear_replicates.py` and `campaigns/portfolio_guard.py` moved to `scripts/checks/_gates/` because the `nonlinear-transport` and `vmec-boozer` gates import them. 65 files / 48,385 lines -> 16 / 16,444.
+- **Removed (recover at `df2953026`):**
+  - `examples/09_autodiff`: `geometry_bridge.py`
+  - `scripts/ (commands)`: `_command.py`, `benchmark.py`, `compare.py`, `figures.py`, `figures.toml`, `profile.py`, `validate.py`, `validation_matrix.py`
+  - `scripts/artifacts`: `build_analytic_benchmarks.py`, `build_finite_wavelength_coulomb_data.py`, `build_landau_damping_figure.py`, `build_linear_validation_artifacts.py`, `build_nonlinear_autodiff_figure.py`, `build_qa_transport_figures.py`, `build_recurrence_closure_figure.py`, `build_runtime_memory_figure.py`, `build_saturation_figure.py`, `build_turbulence_movie.py`, `build_vmex_mirror_gkx_artifacts.py`, `make_benchmark_atlas.py`, `make_tables.py`, `plot_quasilinear_calibration.py`
+  - `scripts/benchmarks`: `benchmark_integrators.py`, `benchmark_runtime_memory.py`, `linear_benchmark.py`, `secondary_slab_workflow.py`
+  - `scripts/campaigns`: `convergence_protocol.py`, `dimits_shift.py`, `heat_flux_autocorrelation.py`, `nonlinear_flux_jacobian.py`, `nonlinear_flux_jacobian.toml`, `nonlinear_gradient_window.py`, `nonlinear_saturated_state.py`, `qa_transport_validation.py`, `stellarator_transport_reports.py`, `vmec_candidate_admission.py`, `vmec_flux_tube_reports.py`, `vmec_state_sensitivity.py`, `vmec_transport_admission.py`
+  - `scripts/comparison`: `build_gx_parity_matrix.py`, `compare_gx_imported_linear.py`, `compare_gx_nonlinear.py`, `compare_gx_rhs_terms.py`
+  - `scripts/profiling`: `_profiler_options.py`, `profile_nonlinear_adjoint_checkpointing.py`, `profile_nonlinear_sharding.py`, `profile_nonlinear_window_device_parity.py`, `profile_runtime_kernels.py`, `profile_startup_and_cache.py`
+- **Tests.** Tests of the removed tooling were dropped (about 4.3k lines). Physics helpers that physics tests shared with removed generators (analytic benchmark formulas, Landau-damping and recurrence helpers, the finite-wavelength Coulomb table generator, the GX RHS initial conditions, the parity metrics) moved verbatim to `tests/support/reference_physics.py`, so the physics tests still run unchanged. Lost: the gallery smoke skip for `geometry_bridge.py`, the verification-matrix generator test, the runtime-memory, saturation-campaign, secondary-slab, VMEC-campaign, movie, GX-comparison (including the manual linear-contribution check) and profiling tool tests, and the parity-builder and VMEX-mirror-builder source checks. Ledger rows whose generator was removed now read `retired@df2953026 <path>`; the existence test skips them.
+- **Gates.** `parallel-scaling --performance-manifest-only` no longer requires `profiling_tools` to exist under `scripts/`; they are provenance now. Script paths were removed from `artifact_paths`. Architecture baselines lowered: script files 63 -> 16, script lines 48,385 -> 16,444 (target set to the same), test lines 75,155 -> 72,926.
+- **Docs.** References to removed generators are marked *retired* and point at `docs/manuscript_figures.rst#retired-generators`, which names `df2953026`. User-facing commands in README, quickstart, benchmarks/README, tools/README and inputs were rewritten.
+- **Media.** 28 orphan files in `docs/_static` (no reference anywhere outside `plan/log.md`, by basename, stem or directory) deleted. PNG: pngquant `--quality=90-100` then oxipng `-o 4 --strip safe`, 1.98 MB -> 1.61 MB. `vmex_mirror_gkx_rotation.mp4` re-encoded x264 crf 25, 205 kB -> 83 kB, SSIM 0.997 against the original.
+- **Size.** Tracked tree 2,173 files / 23.9 MB -> 2,095 / 21.8 MB. A fresh GitHub clone is a 19.1 MB pack (heads and tags); the 202 MB figure is the local `.git` (local branches, reflogs, stash, unpruned packs), not the remote.
+- **History.** Rewrite options and dry runs: `plan/research/2026-10-15-history/PLAN.md`. Nothing was rewritten or force-pushed.
