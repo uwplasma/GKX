@@ -25,7 +25,7 @@ Validation figures
      - Owning command
      - Tracked evidence and status
    * - Linear benchmark atlas
-     - ``scripts/artifacts/make_benchmark_atlas.py``
+     - ``scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
      - Inputs indexed by ``tools/benchmark_atlas_manifest.toml``. Cyclone,
        ETG, KBM, W7-X, HSX, and shaped-tokamak panels; TEM parity is outside
        the release claim.
@@ -36,7 +36,7 @@ Validation figures
        ``docs/_static/reference_modes/w7x_eigenfunction_reference_overlay_ky0p3000.json``
        (0.9999999994, 3.33e-5); gate overlap >= 0.95, :math:`L^2` <= 0.25.
    * - Nonlinear transport windows
-     - ``scripts/comparison/compare_gx_nonlinear.py diagnostics --summary-json``;
+     - ``scripts/comparison/compare_gx_nonlinear.py diagnostics --summary-json`` (retired; :ref:`retired-generators`);
        ``scripts/artifacts/build_nonlinear_validation_panels.py window-statistics`` (retired; :ref:`retired-generators`)
      - ``docs/_static/nonlinear_{cyclone,cyclone_miller,kbm,hsx,w7x}_gate_summary.json``
        all pass; ``docs/_static/nonlinear_window_statistics.json``.
@@ -197,6 +197,13 @@ Restore a generator at its documented path before re-running it:
 
    git show f005418bf575:scripts/artifacts/build_zonal_flow_artifacts.py \
      > scripts/artifacts/build_zonal_flow_artifacts.py
+
+The second tranche, removed on 2026-10-15 to shrink the clone, is every
+module under ``scripts/artifacts``, ``scripts/benchmarks``,
+``scripts/campaigns``, ``scripts/comparison`` and ``scripts/profiling``, and
+the ``benchmark.py``, ``compare.py``, ``profile.py``, ``validate.py``,
+``figures.py`` and ``validation_matrix.py`` commands. Recover them from
+``df2953026`` the same way; ``plan/log.md`` (2026-10-15) lists them.
 
 A *retired subcommand* of a builder that is still here is recovered the same
 way: the file at that commit still carries it. The list, with line counts and

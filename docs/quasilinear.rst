@@ -304,7 +304,7 @@ Implementation map
        ingestion, scale fitting and scoring
    * - Plotting tools
      - ``scripts/artifacts/plot_quasilinear_diagnostics.py`` (retired; :ref:`retired-generators`),
-       ``scripts/artifacts/plot_quasilinear_calibration.py``
+       ``scripts/artifacts/plot_quasilinear_calibration.py`` (retired; :ref:`retired-generators`)
      - spectrum, shape-gate and calibration figures
    * - Differentiability gates
      - :mod:`gkx.objectives.autodiff_validation`

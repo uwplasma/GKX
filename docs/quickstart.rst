@@ -214,4 +214,5 @@ Figure generation
 
 .. code-block:: bash
 
-   python scripts/artifacts/make_benchmark_atlas.py
+   # make_benchmark_atlas.py was removed from scripts/; recover it with
+   git show df2953026:scripts/artifacts/make_benchmark_atlas.py > make_benchmark_atlas.py
