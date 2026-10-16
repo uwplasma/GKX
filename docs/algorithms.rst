@@ -371,23 +371,25 @@ adaptive pair.
      - 0.098803-0.276852j, res 3.6e-4 > 1.2e-4 gate, 48/48 inner unconverged, ~2250 s
      - 0.0962 at t = 18.7 (transient), 23 s
    * - Miller KE, (4, 8)
-     - refused: res 2.3e-4 > 1.2e-4 (float32)
+     - refused: res 2.3e-4 > 1.2e-4 gate (float32)
      - stopped after 40 min
-     - see SUMMARY.md
+     - non-finite at the deck dt
    * - KBM case_full, (4, 8)
-     - see SUMMARY.md
-     - see SUMMARY.md
-     - see SUMMARY.md
-   * - ETG etg_linear, (4, 8)
-     - see SUMMARY.md
-     - see SUMMARY.md
-     - see SUMMARY.md
+     - 0.155051-1.207768j, res 1.15e-4, 409 s
+     - wrong branch, res 0.999, 48/48 inner unconverged
+     - 0.842 at t = 8 (transient), 18 s
+   * - ETG etg_linear, ky = 15, (4, 8)
+     - did not finish within 40 min
+     - not run
+     - not run
 
 On main, every shift-invert run ended with ``residual=nan``: hermite-line and
 field-corrected average the drift over z, which gave
 ||(A - σ)Mx - x|| = 11.6 against 0.14 with streaming alone. pr3-cm finds the
-right mode, at roughly 50x the cost of ``adaptive``, and still misses the gate
-in float32.
+right Cyclone mode at roughly 50x the cost of ``adaptive``, still misses the gate
+in float32, and on KBM converges to the wrong branch. Adaptive is the only route
+that certified a pair here. It refuses honestly where float32 cannot reach the gate
+(Miller KE), and it is too slow at high Hermite resolution.
 
 **Next step.** A banded direct shift-invert. Pairing Hermite m with m±2 makes
 the single-ky operator exactly block-tridiagonal, so it can be assembled from
