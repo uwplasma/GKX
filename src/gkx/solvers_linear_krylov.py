@@ -712,8 +712,7 @@ def _shift_invert_branch(
             inner += (
                 "; the inner FGMRES solves did not converge, so no Ritz pair "
                 "approximates an eigenpair of A: raise shift_restart and "
-                "shift_maxiter, try shift_preconditioner='pr3-cm', or use "
-                "method='adaptive'"
+                "shift_maxiter, or use method='adaptive'"
             )
         if nonfinite_pair:
             raise RuntimeError(
