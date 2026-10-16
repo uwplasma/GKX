@@ -40,3 +40,22 @@ On main, shift-invert failed every deck with `residual=nan`. With the new policy
 - `[physics] tau_fac`, `z_ion`, `[expert] dealias_kz`, and the `KineticElectronModelConfig` fields `nu_e` and `nu_i` are parsed but read nowhere.
 - With `window_method="stationary"` (the default), `start_fraction`, `end_fraction`, `require_positive`, `min_amp_fraction` and `min_r2` are ignored.
 - Adaptive dt CFL: for a ky subset, `ky_max` is taken by index into the subset (`solvers_time_explicit_cfl.py:263`), which can underestimate it about 10x.
+
+## Policy runs at the PR head (2026-10-16, office, gkx-latest, float32, CUDA 1 shared)
+
+Command for each row: `prof_lin.py --toml <deck> --opts '{"solver":..., "Nl":..,"Nm":..,"ky_target":..}'` (from the 10-13 profiler, with status output added).
+
+| deck | (Nl,Nm) | route | eigenvalue (gamma - i omega) | residual / gate | wall s |
+|---|---|---|---|---|---|
+| Cyclone AE case_full, ky 0.3 | 8,24 | adaptive | 0.0987759-0.276905j | 3.8e-6 / 1.2e-4 | 42.9 |
+| | | shift-invert (pr3-cm auto) | 0.0988028-0.276852j | 3.6e-4, 48/48 inner unconverged | ~2250 |
+| | | time, 4000 steps | gamma 0.0962, omega 0.2880 (transient) | - | 22.9 |
+| Miller KE (cyclone_miller_quasilinear, kinetic e), ky 0.3 | 4,8 | adaptive | 0.296078-0.261071j | 2.3e-4, refused | - |
+| | | shift-invert | stopped after 40 min | - | - |
+| | | time, 40000 steps | non-finite fields at the deck dt | - | - |
+| KBM case_full, ky 0.3 | 4,8 | adaptive | 0.155051-1.20777j | 1.15e-4 / 1.2e-4 | 409.3 |
+| | | shift-invert | -0.0356+0.0481j (wrong branch) | 0.999, 48/48 inner unconverged | - |
+| | | time, 8000 steps | gamma 0.842, omega 1.152 (t = 8, transient) | - | 18.3 |
+| ETG etg_linear, ky 15 | 4,8 | adaptive | did not finish in 40 min | - | - |
+
+Policy and literature: docs/algorithms.rst, "Eigensolver policy".

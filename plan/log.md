@@ -21209,6 +21209,7 @@ Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan
 
 
 
+
 ## 2026-10-15 — bug hunt, known-bug group (fix/bug-hunt-1015)
 
 - `cached_jit` traces, prints and hashes once per argument signature of a wrapper, not on every call; the imex probe loops called one wrapper hundreds of times (17.7 s host time per warm imex solve on the 10-13 profile). Executables are unchanged, so results are bitwise identical.

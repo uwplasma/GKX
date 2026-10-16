@@ -374,7 +374,7 @@ def test_runtime_linear_cyclone_etg_kbm_time_smoke() -> None:
         assert np.isfinite(res.omega)
 
 
-def test_runtime_linear_etg_defaults_to_frequency_targeted_krylov(
+def test_runtime_linear_etg_defaults_to_certified_adaptive_krylov(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 
@@ -409,12 +409,8 @@ def test_runtime_linear_etg_defaults_to_frequency_targeted_krylov(
     out = run_runtime_linear(cfg, ky_target=2.0, Nl=4, Nm=6, solver="krylov")
 
     assert np.isfinite(out.gamma)
-    assert captured["method"] == "shift_invert"
-    assert captured["omega_target_factor"] == pytest.approx(0.4)
-    assert captured["omega_sign"] == -1
-    assert captured["shift_source"] == "target"
-    assert captured["shift_selection"] == "targeted"
-    assert captured["mode_family"] == "etg"
+    # ETG takes the certified adaptive route like every contract (2026-10-15).
+    assert captured["method"] == "adaptive"
     assert captured["certify"] is True
 
 
