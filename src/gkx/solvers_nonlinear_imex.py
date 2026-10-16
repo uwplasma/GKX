@@ -716,10 +716,15 @@ ARS_TABLEAUX: dict[str, Any] = {
 IMEX_CHAIN_METHODS = frozenset(ARS_TABLEAUX)
 
 
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["factors", "u", "w", "cap", "dr", "dc"],
+    meta_fields=["ky", "kx"],
+)
 @dataclass(frozen=True)
 class _ChainGroup:
-    ky: np.ndarray  # (chains, L) row indices
-    kx: np.ndarray  # (chains, L) column indices
+    ky: tuple  # (chains, L) row indices (tuples: static in the pytree)
+    kx: tuple  # (chains, L) column indices
     factors: Any  # per species group: (dinv, D, ladder scalars, mirror) of I - gdt S
     u: jnp.ndarray  # (chains, s, l, rows_m, N, nf*N): fields -> RHS rows
     w: jnp.ndarray  # (chains, nf, s, l, cols_m, N): moments -> fields (z-local)
@@ -728,6 +733,11 @@ class _ChainGroup:
     dc: jnp.ndarray  # (chains, nf*N) column equilibration
 
 
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["groups", "dt", "on"],
+    meta_fields=["shape", "scheme", "rows_m", "cols_m", "linear", "spec"],
+)
 @dataclass(frozen=True)
 class ChainImplicitLinear:
     """Structured ``(I - gamma dt L)^{-1}`` for the stiff linear terms.
@@ -791,8 +801,9 @@ class ChainImplicitLinear:
     def _solve(self, R: jnp.ndarray) -> jnp.ndarray:
         out = R
         for g in self.groups:
-            x = _gather(g.ky, g.kx, R).astype(g.cap.dtype)
-            out = _scatter(g.ky, g.kx, self._apply_inverse(g, x).astype(R.dtype), out)
+            ky, kx = np.asarray(g.ky), np.asarray(g.kx)
+            x = _gather(ky, kx, R).astype(g.cap.dtype)
+            out = _scatter(ky, kx, self._apply_inverse(g, x).astype(R.dtype), out)
         return out
 
     def ars_step(
@@ -1094,7 +1105,11 @@ def _factor_chain_group(
         c, len(act), ns, nl, len(cols_m), n
     )
     cap, dr, dc = _capacitance(factors, u, wq, gdt, rows_m, cols_m, nm, spec)
-    return _ChainGroup(k, x, factors, u, wq, cap, dr, dc)
+    return _ChainGroup(_static(k), _static(x), factors, u, wq, cap, dr, dc)
+
+
+def _static(a: np.ndarray) -> tuple:
+    return tuple(map(tuple, np.asarray(a).tolist()))
 
 
 def _block_solve(factors, spec, x: jnp.ndarray) -> jnp.ndarray:

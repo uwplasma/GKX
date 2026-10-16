@@ -8,6 +8,7 @@ keeping the large implementation body inline.
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 
 
@@ -518,23 +519,28 @@ def _run_explicit_diagnostic_scan_and_finalize(
     diagnostics by O(1).
     """
 
-    def run_raw(initial_state: jnp.ndarray) -> tuple[Any, tuple[Any, Any, Any], Any]:
-        return _run_explicit_diagnostic_scan_raw(
-            prepared,
-            policies,
-            step,
-            compute_diag_from_state,
-            params,
-            deps=deps,
-            initial_state=initial_state,
-            steps=steps,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            checkpoint=checkpoint,
-            external_phi=external_phi,
-        )
+    def run_raw(
+        initial_state: jnp.ndarray, chain: Any
+    ) -> tuple[Any, tuple[Any, Any, Any], Any]:
+        with _bound_chain(step, chain):
+            return _run_explicit_diagnostic_scan_raw(
+                prepared,
+                policies,
+                step,
+                compute_diag_from_state,
+                params,
+                deps=deps,
+                initial_state=initial_state,
+                steps=steps,
+                sample_stride=sample_stride,
+                diagnostics_stride=diagnostics_stride,
+                checkpoint=checkpoint,
+                external_phi=external_phi,
+            )
 
-    G_final, scan_diag_out, fields_final = cached_jit(run_raw)(prepared.G0)
+    G_final, scan_diag_out, fields_final = cached_jit(run_raw)(
+        prepared.G0, _chain_operand(step)
+    )
     diag, t, dt_series = scan_diag_out
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
@@ -773,7 +779,31 @@ def _build_explicit_scan_closures(
     # The adaptive chunk loop changes only the horizon between chunks; this
     # lets a prepared run take it as a traced operand instead of recompiling.
     step.with_horizon = make_step  # type: ignore[attr-defined]
+    step.rhs_fn = rhs_fn  # type: ignore[attr-defined]
     return step, compute_diag_from_state
+
+
+@contextlib.contextmanager
+def _bound_chain(step: Any, chain: Any) -> Any:
+    """Trace with ``chain`` (an operand) as the step's chain implicit operator.
+
+    Captured as constants, the 64x64 (8, 16) factor was 7 GB baked into the
+    executable, which also ``cached_jit`` hashed on the host every call.
+    """
+    rhs = getattr(step, "rhs_fn", None)
+    if chain is None:
+        yield
+        return
+    old = rhs.chain_implicit_linear  # type: ignore[union-attr]
+    rhs.chain_implicit_linear = chain  # type: ignore[union-attr]
+    try:
+        yield
+    finally:
+        rhs.chain_implicit_linear = old  # type: ignore[union-attr]
+
+
+def _chain_operand(step: Any) -> Any:
+    return getattr(getattr(step, "rhs_fn", None), "chain_implicit_linear", None)
 
 
 def _build_explicit_scan_components(
@@ -930,25 +960,28 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
 
     def run_raw(
-        initial_state: jnp.ndarray, time_horizon: jnp.ndarray | None = None
+        initial_state: jnp.ndarray,
+        time_horizon: jnp.ndarray | None = None,
+        chain: Any = None,
     ) -> tuple[Any, Any, Any]:
         step = components.step
         if time_horizon is not None:
             step = step.with_horizon(time_horizon=time_horizon)  # type: ignore[attr-defined]
-        return _run_explicit_diagnostic_scan_raw(
-            components.prepared,
-            components.policies,
-            step,
-            components.compute_diag_from_state,
-            params,
-            deps=deps,
-            initial_state=initial_state,
-            steps=steps,
-            sample_stride=sample_stride,
-            diagnostics_stride=diagnostics_stride,
-            checkpoint=checkpoint,
-            external_phi=external_phi,
-        )
+        with _bound_chain(components.step, chain):
+            return _run_explicit_diagnostic_scan_raw(
+                components.prepared,
+                components.policies,
+                step,
+                components.compute_diag_from_state,
+                params,
+                deps=deps,
+                initial_state=initial_state,
+                steps=steps,
+                sample_stride=sample_stride,
+                diagnostics_stride=diagnostics_stride,
+                checkpoint=checkpoint,
+                external_phi=external_phi,
+            )
 
     def run_dynamic_raw(
         initial_state: jnp.ndarray,
@@ -1023,7 +1056,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         geometry=components.prepared.setup.geom,
         cache=components.prepared.cache,
         params=params,
-        _run_raw=jax.jit(run_raw),
+        _run_raw=partial(jax.jit(run_raw), chain=_chain_operand(components.step)),
         _run_dynamic_raw=jax.jit(run_dynamic_raw),
         _finalize=deps.finalize_scan_diagnostics_fn,
         stride=stride,
