@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Mapping
 
 import jax.numpy as jnp
@@ -1139,18 +1139,18 @@ def dominant_eigenpair(
     )
     solved = None
     if cfg.method == "auto" and banded_fits(v0.shape):
-        try:
-            solved = _banded_shift_invert_branch(
+        try:  # like adaptive, the dominant pair: no overlap selection
+            solved = _dispatch_dominant_eigenpair(
                 v0,
                 v_ref_use,
                 cache,
                 params,
                 term_cfg,
-                cfg,
+                replace(cfg, method="banded"),
                 status_callback,
-                select_overlap=False,  # like adaptive, the dominant pair
+                select_overlap=False,
             )
-        except (RuntimeError, ValueError) as error:
+        except (ImportError, RuntimeError, ValueError) as error:
             _status(status_callback, f"banded route failed ({error}); using adaptive")
     if solved is not None:
         pass
