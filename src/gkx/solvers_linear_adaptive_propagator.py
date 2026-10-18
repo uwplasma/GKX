@@ -581,6 +581,7 @@ _RITZ = 12  # eigenvalues asked of ARPACK around the shift
 _PASSES = 3  # shifts tried while the fastest-growing Ritz value keeps moving
 _RECENTER = 0.05  # that movement, in omega_scale, that starts another pass
 _REFINE = 2  # defect corrections per application
+_RESTARTS = 100  # ARPACK restarts allowed per shift before the route gives up
 _OFFSET = 1.0e-3  # step (in omega_scale) from the estimate to the shift
 _BAND_TOL = (
     1.0e-4  # relative mismatch of the blocks against the operator that is refused
@@ -755,6 +756,7 @@ def _banded_ritz_pairs(
             v0=start,
             tol=1.0e-10,
             ncv=2 * _RITZ + 4,
+            maxiter=_RESTARTS,
         )
         best = complex(values[np.argmax(values.real)])
         if abs(best - sigma) <= _RECENTER * scale:
