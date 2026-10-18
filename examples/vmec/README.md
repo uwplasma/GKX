@@ -34,3 +34,5 @@ The bundled QHS/QI/QA decks are self-contained demonstration equilibria. For
 paper-specific HSX or W7-X validation, use the same TOMLs but override
 `geometry.vmec_file` or pass `--vmec-file` with the exact validation
 equilibrium.
+
+`input.minimal_seed_nfp2` is the seed of `examples/10_vmex_optimization`; it needs no `wout`.
