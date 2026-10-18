@@ -377,9 +377,9 @@ whole call; raw records ``plan/research/2026-10-18-banded-shift-invert/``):
      - 0.098754-0.276896j, 22 s
      - 0.0986916-0.276870j, res 1e-13, 30 s
    * - Cyclone adiabatic ky 0.3, (16, 48)
-     - 0.0931303-0.281967j, 91 s
+     - 0.0931303-0.281967j, 91 s (CPU 1109 s)
      - 0.093018-0.282025j, 40 s
-     - GPU: blocks do not fit, ``auto`` runs ``adaptive``; CPU: same pair to 1e-10, res 2e-9, CPU_BAND_1648 s
+     - GPU: blocks do not fit, ``auto`` runs ``adaptive``; CPU: same pair to 1e-10, res 2e-9, 692 s
    * - Miller KE ky 0.3, (8, 24)
      - 0.2311520-0.251114j, 430 s
      - non-finite at the deck dt
@@ -405,7 +405,9 @@ electrons, KBM and ETG, where it is 8x faster (KE, KBM) or the only route that
 finishes (ETG). On the adiabatic Cyclone deck the two are within a factor of two
 (30 against 39 s at (8, 24)), and ``banded`` needs the blocks to fit: at
 (16, 48) they take 7 GB of complex64 on a 16 GB card shared with other jobs.
-Memory, not time, is therefore what ``auto`` tests. CPU_RULE_SENTENCE
+Memory, not time, is therefore what ``auto`` tests. On CPU the blocks fit and
+``banded`` was faster in both adiabatic cases measured: 146 against 217 s at
+(8, 24) and 692 against 1109 s at (16, 48).
 
 **Practice elsewhere.**
 
