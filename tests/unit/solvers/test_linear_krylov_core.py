@@ -2125,6 +2125,115 @@ def test_banded_shift_invert_refuses_what_it_cannot_certify(monkeypatch) -> None
         lk.dominant_eigenpair(seed, cache, params, terms=terms, method="banded")
 
 
+def test_dense_estimate_is_the_fastest_eigenvalue_of_the_leading_truncation(
+    monkeypatch,
+) -> None:
+    """Whole operator when small; else Laguerre < _COARSE_NL of the leading pairs."""
+
+    rng = np.random.default_rng(4)
+    nb, nl, rest = 4, 3, 2
+    laguerre = np.tile(np.repeat(np.arange(nl), rest), (nb, 1))  # (4, 6) per block
+    size = laguerre.shape[1]
+    lower, diag, upper = rng.standard_normal(
+        (3, nb, size, size)
+    ) + 1j * rng.standard_normal((3, nb, size, size))
+
+    def dense(rows_per_block, n_blocks):
+        edge = np.cumsum([0] + [len(r) for r in rows_per_block[:n_blocks]])
+        out = np.zeros((edge[-1], edge[-1]), complex)
+        for b in range(n_blocks):
+            r = rows_per_block[b]
+            out[edge[b] : edge[b + 1], edge[b] : edge[b + 1]] = diag[b][np.ix_(r, r)]
+            if b:
+                p = rows_per_block[b - 1]
+                out[edge[b] : edge[b + 1], edge[b - 1] : edge[b]] = lower[b][
+                    np.ix_(r, p)
+                ]
+            if b + 1 < n_blocks:
+                q = rows_per_block[b + 1]
+                out[edge[b] : edge[b + 1], edge[b + 1] : edge[b + 2]] = upper[b][
+                    np.ix_(r, q)
+                ]
+        return out
+
+    def fastest(matrix):
+        values = np.linalg.eigvals(matrix)
+        return values[np.argmax(values.real)]
+
+    everything = [np.arange(size)] * nb
+    assert ap._dense_estimate(lower, diag, upper, laguerre, nl) == pytest.approx(
+        fastest(dense(everything, nb))
+    )
+    monkeypatch.setattr(ap, "_DENSE_N", 12)
+    monkeypatch.setattr(ap, "_COARSE_NL", 2)
+    kept = [
+        np.flatnonzero(row < 2) for row in laguerre
+    ]  # 4 unknowns a block: 3 pairs fit
+    assert ap._dense_estimate(lower, diag, upper, laguerre, nl) == pytest.approx(
+        fastest(dense(kept, 3))
+    )
+
+
+@requires_banded_solvax
+def test_auto_takes_the_banded_route_and_falls_back_to_adaptive(monkeypatch) -> None:
+    cache, params, seed, terms = _selected_linked_case()
+    messages: list[str] = []
+    kwargs = dict(terms=terms, status_callback=messages.append, return_status=True)
+    _value, _vector, status = lk.dominant_eigenpair(seed, cache, params, **kwargs)
+    assert status.route == "banded"
+
+    # An operator that is not Hermite-banded and a device that cannot hold the
+    # blocks both end on the certified adaptive route.
+    monkeypatch.setattr(
+        lk, "_adaptive_branch", lambda *_a: ("value", "vector", "adaptive")
+    )
+    original = ap.banded_ritz_pairs
+
+    def mismatched(*_args):
+        raise ValueError("operator is not Hermite-banded")
+
+    for patch in (
+        lambda: monkeypatch.setattr(lk, "banded_ritz_pairs", mismatched),
+        lambda: (
+            monkeypatch.setattr(lk, "banded_ritz_pairs", original),
+            monkeypatch.setattr(lk, "banded_fits", lambda _shape: False),
+        ),
+    ):
+        patch()
+        messages.clear()
+        assert lk.dominant_eigenpair(seed, cache, params, **kwargs)[2] == "adaptive"
+        assert not any("banded Arnoldi" in m for m in messages)
+
+
+@requires_banded_solvax
+def test_banded_refuses_an_operator_with_long_range_hermite_coupling(
+    monkeypatch,
+) -> None:
+    cache, params, seed, terms = _selected_linked_case(nm=8)
+    real = ap._apply_operator
+    monkeypatch.setattr(
+        ap,
+        "_apply_operator",
+        lambda g, *a: real(g, *a) + 0.1 * jnp.roll(g, 3, axis=-4),  # m -> m + 3
+    )
+    with pytest.raises(ValueError, match="not Hermite-banded"):
+        lk.dominant_eigenpair(seed, cache, params, terms=terms, method="banded")
+
+
+def test_banded_fits_counts_the_four_complex64_arrays(monkeypatch) -> None:
+    class Device:
+        def memory_stats(self):
+            return {"bytes_limit": 8 * 4 * 6 * 3072**2 * 2 + 1}
+
+    monkeypatch.setattr(ap.jax, "devices", lambda: [Device()])
+    nl, nm, nz = 16, 12, 96  # blocks of 2 * nl * nz = 3072, six of them
+    assert ap.banded_fits((nl, nm, 1, 1, nz))
+    assert not ap.banded_fits((nl, nm + 2, 1, 1, nz))
+    assert not ap.banded_fits((nl, 2, 1, 1, nz))  # Nm < 4 has no band
+    Device.memory_stats = lambda self: None  # CPU: host memory decides
+    assert ap.banded_fits((nl, nm, 1, 1, nz))
+
+
 @pytest.mark.parametrize("method", ["power", "propagator", "arnoldi", "adaptive"])
 def test_eigen_routes_return_no_weight_outside_linked_chains(method) -> None:
     cache, params, seed, terms = _selected_linked_case()
