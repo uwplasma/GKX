@@ -1198,17 +1198,18 @@ def refactor_chain_implicit_linear(op: ChainImplicitLinear, dt: float) -> Any:
 class ImexDtControl:
     """Chunk-level dt for the chain IMEX step (``fixed_dt = false``).
 
-    Between chunks: ``dt = min(cfl / (w_nl / 1.7 + rho / 2.5), dt_err,
+    Between chunks: ``dt = min(5 cfl / (w_nl / 1.7 + rho / 2.5), dt_err,
     dt_max)``. ``rho`` is the spectral radius of the explicit linear remainder
     (drifts, ion mirror, drive) by Arnoldi at startup and 2.5 the measured
     ARK3/ARS3 interval on it (0.82 x 3.6); ``w_nl`` the bracket CFL rate of the
-    current fields with RK3's imaginary interval; ``dt_err`` the embedded
+    current fields; the factor 5 is the saturated-turbulence limit measured
+    on Cyclone KE (stable at dt 0.1, not 0.2, where the bracket rate is 80); ``dt_err`` the embedded
     ARK3(2) estimate against ``rtol``. The factor is rebuilt only when dt
     moves by more than 20% (down) or grows past 1.2x, and a non-finite chunk
     is rejected and redone at half the step.
     """
 
-    def __init__(self, op, cfl_rate, *, dt_max, cfl=0.9, rtol=1e-3, iters=20):
+    def __init__(self, op, cfl_rate, *, dt_max, cfl=0.9, rtol=1e-2, iters=20):
         rhs, project = op.__dict__["_rhs"]
         self.cfl, self.rtol, self.dt_max = float(cfl), float(rtol), float(dt_max)
 
@@ -1245,7 +1246,7 @@ class ImexDtControl:
         rel, w_nl = (float(x) for x in self._probe(op, G))
         dt = float(op.dt)
         dt_err = dt * min(1.5, max(0.5, 0.9 * max(rel, 1e-12) ** (-1.0 / 3.0)))
-        dt_cfl = self.cfl / max(w_nl / 1.7 + self.rho / 2.5, 1e-30)
+        dt_cfl = 5.0 * self.cfl / max(w_nl / 1.7 + self.rho / 2.5, 1e-30)
         self.last = dict(
             err=rel, bracket=w_nl, remainder=self.rho, dt_err=dt_err, dt_cfl=dt_cfl
         )

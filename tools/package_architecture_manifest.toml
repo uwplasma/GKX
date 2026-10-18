@@ -438,7 +438,8 @@ public_facades = [
 [[complexity_policy.exceptions]]
 path = "solvers_nonlinear_imex.py"
 # 1189 -> 1293: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
-baseline_lines = 1293
+# 1293 -> 1463: ARK3(2)4L[2]SA embedded pair, factor as a scan operand, adaptive-dt control (ImexDtControl); measured.
+baseline_lines = 1463
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -1158,7 +1159,8 @@ recursive = true
 # 67113 -> 67126: end-damping contract (#366) on top of #362/#365, measured.
 # 67126 -> 67622: linearized Landau default, block-sparse apply, coulomb kernels retired.
 # 67622 -> 67736: electron mirror implicit in the imex-ars3 chain factor (+114). Measured.
-baseline = 67736
+# 67736 -> 68031: adaptive-dt chain IMEX (+295). Measured.
+baseline = 68031
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1498,7 +1500,8 @@ recursive = true
 # 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
 # 72926 -> 73011: linearized Landau physics gates and runtime regression, net of the retired coulomb tests.
 # 73011 -> 73020: chain-solve test exercises the implicit electron mirror (Nl = 2).
-baseline = 73020
+# 73020 -> 73048: adaptive chain IMEX test (+28). Measured.
+baseline = 73048
 target = 35000
 
 [[line_budget_policy.counts]]
