@@ -16,6 +16,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -27,6 +28,7 @@ CASE = Path(__file__).with_name("case.toml")
 VMEC_INPUT = Path(__file__).parents[1] / "vmec" / "input.NuhrenbergZille_1988_QHS"
 OUTPUT = Path("outputs/02_linear_stellarator")
 KY = [0.2, 0.4, 0.6, 0.8]  # k_y rho_i
+PEAK_T_MAX = 120.0  # time run for the eigenfunction at the fastest-growing k_y
 
 case = gkx.load(CASE)
 wout = Path(case.geometry.vmec_file)
@@ -50,12 +52,14 @@ scan = gkx.scan(
     case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver, show_progress=True
 )
 peak_ky = float(scan.ky[int(np.argmax(scan.gamma))])
+# The eigenfunction comes from a time run, long enough for the mode to emerge
+# from the initial transient; the rates above are certified eigenvalues.
 peak = gkx.solve(
-    case,
+    case.replace(time=replace(case.time, t_max=PEAK_T_MAX)),
     ky_target=peak_ky,
     Nl=case.run.Nl,
     Nm=case.run.Nm,
-    solver=case.run.solver,
+    solver="time",
     show_progress=True,
 )
 for ky, gamma, omega in zip(scan.ky, scan.gamma, scan.omega):

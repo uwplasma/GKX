@@ -1,13 +1,11 @@
-"""Electromagnetic kinetic ballooning mode (KBM) in Cyclone geometry.
+"""Electromagnetic ITG in Cyclone geometry with A_parallel.
 
-Loads ``case.toml`` (kinetic ions and electrons, A_parallel on, beta = 0.015)
-and solves the linear problem at ``k_y rho_i = 0.3``. Prints gamma and omega,
-saves the fit summary as JSON, and plots the potential trace and the
-eigenfunction. A few seconds on a laptop CPU. The tutorial deck only exercises
-the electromagnetic path: with (Nl, Nm) = (2, 4) and Nz = 16 the KBM is not
-resolved and the growth rate is not physical. ``case_full.toml`` is the
-GX-benchmark deck (Nz = 96, Nl = 16, Nm = 48; minutes on a GPU), which is the
-one to use for any KBM number.
+Loads ``case.toml`` (kinetic ions, adiabatic electrons, A_parallel on,
+beta = 0.015) and solves the linear problem at ``k_y rho_i = 0.3``. Prints
+gamma and omega, saves the fit summary as JSON, and plots the potential trace and
+the eigenfunction. A few seconds on a laptop CPU. The kinetic ballooning mode
+needs kinetic electrons and (Nl, Nm) = (16, 48); ``case_full.toml`` is the
+GX-benchmark deck for it (Nz = 96; minutes on a GPU).
 """
 
 import json
@@ -32,8 +30,6 @@ result = gkx.solve(
     show_progress=True,
 )
 print(f"ky = {result.ky:.2f}: gamma = {result.gamma:+.4f}, omega = {result.omega:+.4f}")
-if case.run.Nm < 16:
-    print("tutorial resolution: this growth rate is not converged; use case_full.toml")
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
 result.save(OUTPUT / "kbm")

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Vacuum QA optimization with physical nonlinear GKX heat flux.
 
-Requires ``pip install vmex`` and its seed deck ``examples/data/input.minimal_seed_nfp2``
-(present in a vmex source checkout). The default ladder (five boundary-mode
+Requires ``pip install vmex``; the seed deck is ``examples/vmec/input.minimal_seed_nfp2``.
+The default ladder (five boundary-mode
 stages, 8,000 saturation steps per refresh) is an expensive research
 calculation meant for a GPU; ``VMEX_EXAMPLES_CI=1`` selects a tiny CPU wiring
 run that does not reach saturation. Writes the
@@ -51,7 +51,7 @@ if ci_smoke:
     NX, NY, NZ, NM = 4, 4, 8, 3
     SATURATION_STEPS, WINDOW_STEPS = 2, 2
 
-DATA = Path(vj.__file__).resolve().parents[1] / "examples/data/input.minimal_seed_nfp2"
+DATA = Path(__file__).parents[1] / "vmec" / "input.minimal_seed_nfp2"
 inp = vj.VmecInput.from_file(DATA)
 rbc, zbs = inp.rbc.copy(), inp.zbs.copy()
 rbc[inp.ntor + 1, 1] += SEED_PERTURBATION

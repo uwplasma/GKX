@@ -123,18 +123,19 @@ by electron streaming. The script plots :math:`Q_i`, :math:`Q_e` and
 step, which removes that limit. :doc:`guidance` says when to use which, and how
 to check the end-damping rate.
 
-6. Electromagnetic: kinetic ballooning mode
--------------------------------------------
+6. Electromagnetic
+------------------
 
 .. code-block:: bash
 
    python examples/06_electromagnetic/run.py
 
 At :math:`\beta=0.015` the parallel vector potential, from Ampère's law
-:math:`k_\perp^2A_\parallel\propto\beta\,j_\parallel`, bends field lines and the
-pressure gradient drives the kinetic ballooning mode (KBM). The tutorial deck only
-exercises the path and is not resolved. ``case_full.toml`` (Nz 96, Nl 16,
-Nm 48; a GPU run) is the deck for any KBM number.
+:math:`k_\perp^2A_\parallel\propto\beta\,j_\parallel`, bends field lines and
+modifies the ITG. The tutorial deck uses adiabatic electrons and settles in a
+few seconds. The kinetic ballooning mode (KBM) needs kinetic electrons and
+:math:`(N_l,N_m)=(16,48)`: ``case_full.toml`` (Nz 96; a GPU run) is the deck for
+any KBM number, and :doc:`guidance` lists what to check.
 
 7. Collisions
 -------------

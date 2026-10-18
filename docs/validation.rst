@@ -12,90 +12,50 @@ unresolved. Benchmark figures and cross-code comparisons follow the matrix.
 Evidence ledger
 ---------------
 
-``tools/evidence_ledger.toml`` has one ``[[row]]`` per public number or claim.
-Each row carries ``id``, ``claim``, ``observable``, ``artifact``,
-``generator``, ``reference``, ``reference_rank``, ``tier``, and ``status``.
+``tools/evidence_ledger.toml`` has one ``[[row]]`` per public number or claim,
+with ``id``, ``claim``, ``observable``, ``artifact``, ``generator``,
+``reference``, ``reference_rank`` (1 analytic; 2 published; 3 reference-code
+golden; 4 open dataset; 5 self-run), ``tier`` (0 on push under 60 s; 1 on push,
+bitwise; 2 nightly physics; 3 campaign or GPU) and ``status``. A claim cites the
+highest-ranked reference available; a self-run reference is rank 5 and never
+described as published. ``tests/release/test_release_gates.py`` enforces:
 
-.. list-table::
-   :header-rows: 1
-   :widths: 20 80
-
-   * - Field
-     - Values
-   * - ``reference_rank``
-     - 1 analytic; 2 published numbers; 3 reference-code golden shipped in that
-       code's tree; 4 open published dataset; 5 self-run comparator.
-   * - ``tier``
-     - 0 on push, under 60 s; 1 on push, bitwise on stored outputs; 2 nightly
-       physics; 3 campaign or GPU.
-   * - ``status``
-     - ``open``, ``passing``, ``failing``, ``provisional``, ``superseded``.
-
-A claim cites the highest-ranked reference available. A self-run reference is
-rank 5 and is never described as published.
-
-``tests/release/test_release_gates.py`` enforces the contract:
-
-- every row has the required keys and valid rank, tier, and status;
-- every artifact and generator exists;
+- required keys and valid rank, tier and status; artifacts and generators exist;
 - a ``provisional`` row has ``notes`` saying what is unresolved;
-- a rank-3 row pins its reference file with ``reference_sha256``;
-- linked-boundary GX references record their end-damping clamp state;
+- a rank-3 row pins its reference file with ``reference_sha256``, and
+  linked-boundary GX references record their end-damping clamp state;
 - the README parity table and the ledger list the same cases, and each README
-  percentage recomputes from its artifact as
-  ``100 max|gkx - ref| / max|ref|``;
+  percentage recomputes from its artifact as ``100 max|gkx - ref| / max|ref|``;
 - every linear row declares its velocity-space regularization, and a
-  collisionless row with no Laguerre-space sink reports its velocity limit;
-- the ledger table below matches the ledger.
-
-``scripts/validation_matrix.py`` (retired; :ref:`retired-generators`) wrote the
-ledger table below; edit that block together with ``tools/evidence_ledger.toml``.
+  collisionless row with no Laguerre-space sink reports its velocity limit.
 
 Claim scope
 -----------
 
-A passing test or a covered line does not promote a claim. The artifact must
-also record the observable, reference, tolerance, and accepted claim level.
+A passing test or a covered line does not promote a claim: the artifact must
+record the observable, reference, tolerance and accepted claim level.
 :doc:`release_scope` is the human-readable claim ledger and stays in step with
-``benchmarks/references/gkx_1_7_release_contract.json``. An example that runs
-is a release claim only when it is labeled release-gated and tied to its
-artifact; otherwise it is a stress lane, pilot, or deferred lane.
+``benchmarks/references/gkx_1_7_release_contract.json``. An example that runs is
+a release claim only when labeled release-gated and tied to its artifact.
 
 Coverage manifest
 -----------------
 
 ``tools/validation_coverage_manifest.toml`` gives each module a source path,
 owning lane, reference anchors, physics and numerics contracts, fast tests,
-artifacts, and next tests; :doc:`design` gives the ownership rules.
-
-.. code-block:: bash
-
-   # structure and paths
-   python scripts/checks/check_validation_coverage_manifest.py
-   # JSON summary
-   python scripts/checks/check_validation_coverage_manifest.py \
-     --out-json docs/_static/validation_coverage_manifest_summary.json
-   # with measured coverage, as the wide-coverage CI job runs it
-   python scripts/checks/check_validation_coverage_manifest.py \
-     --coverage-xml coverage-wide.xml \
-     --enforce-package-coverage \
-     --out-json docs/_static/validation_coverage_manifest_summary.json
-   # which tracked gate reports pass
-   python scripts/checks/check_validation_coverage_manifest.py gate-index
-
-``--enforce-package-coverage`` fails below the 95% package target and records
-per-module gaps; ``--enforce-module-coverage`` is a separate switch.
-``gate-index`` writes ``docs/_static/validation_gate_index.json`` and skips
-reports that set ``gate_index_include = false``. :doc:`testing` gives the
-current gate-index result.
+artifacts and next tests (ownership rules in :doc:`design`).
+``scripts/checks/check_validation_coverage_manifest.py`` checks structure and
+paths; with ``--coverage-xml ... --enforce-package-coverage`` it fails below the
+95% package target, and ``gate-index`` writes
+``docs/_static/validation_gate_index.json``. :doc:`testing` gives the current
+result.
 
 Verification matrix
 -------------------
 
-The ledger table is generated from the ledger, and
-``tests/release/test_release_gates.py`` fails when they disagree. The last
-part lists lanes that have artifacts but no ledger row; they are not public
-claims.
+The ledger table below is generated from the ledger, and the release gates
+fail when they disagree. The last part lists lanes that have artifacts but no
+ledger row; they are not public claims.
 
 .. BEGIN LEDGER MATRIX (generated by the retired scripts/validation_matrix.py; keep in step with tools/evidence_ledger.toml)
 
@@ -246,86 +206,55 @@ Ledger rows
 Row notes
 ---------
 
-- ``L-lin-hsx`` (provisional): provenance corrected 2026-09-08. The generator is NOT tools/comparison/fixtures/parity/hsx\_itg.toml, which the GX parity manifest names: that config declares y0=10, Nl=8, Nm=16 while the CSV is spaced dky=1/21 (y0=21) and the real pipeline uses runtime\_hsx\_nonlinear\_vmec\_geometry.toml at y0=21, Nl=4, Nm=8. The equilibrium is Nuhrenberg-Zille 1988 QHS, regenerable from the tracked examples/vmec/input.NuhrenbergZille\_1988\_QHS, and is not literally HSX despite the label. What is still unrecorded is the value of HSX\_IMPORTED\_ARGS, which carries the GX reference; the same gap applies to the W7-X row. Row stays provisional until that is recorded, not because the scan cannot be rebuilt.
-- ``L-lin-cyclone-miller`` (provisional): reference applies no end damping to Hermite m>=42 of 48 (11.11% of index space); the published 5.51%/1.25% disagreement cannot be attributed to GKX until the reference is regenerated with a repaired build
-- ``L-lin-cyclone-salpha`` (provisional): same clamp as L-lin-cyclone-miller; the published 6.83%/1.59% disagreement is not yet attributable
-- ``L-lin-kbm`` (provisional): the largest published disagreement (20.0%/11.1%); the reference omits end damping on its top Hermite moments and also omits delta B\_parallel, so it is a reduced-EM two-field comparison (plan.md EM2)
-- ``F-collision-verification`` (passing): offline operator algebra, not runtime transport; the finite-k Coulomb tables remain research-only (plan.md Phase 6)
-- ``F-nonlinear-autodiff`` (passing): agreement 1e-11 at 512 steps and 2.7e-9 at 1024, degrading by 2048 as trajectories separate; this bounds the useful gradient horizon (plan.md Phase 4)
-- ``F-saturation-policy`` (provisional): plan.md 2.1 replaces this heuristic policy with the pre-registered protocol in plan.md 3.4; this row is superseded once L-stat-calibration exists
-- ``F-qa-transport`` (provisional): Historical traces predate the periodic hypercollision correction and require regeneration; they are not evidence for the current operator. Nominal 12.26% reduction is NOT statistically resolved: 4 of 48 nominal traces fail the published final-drift test. Promotion requires plan.md 4.7
-- ``A-gam`` (provisional): Damping is off by 11-25% against the root, not the 15% of the specification; gated at 30%. Open question: Hermite recurrence at Nm 128 versus physics that SW Eq. (2.7) omits.
-- ``A-kbm-pkj`` (provisional): 8% below GENE, which misses the 3% specification (gated at 10%). Nm 16 and nperiod 3; Nm 32 gives 1.07%. Closing it needs an nperiod and Nm ladder and the subdominant-branch eigen route.
-- ``A-kbm-strong-drive`` (provisional): s-alpha sets omega\_kappa = omega\_gradB, so this is not AZ's equation; 5% missed, gated at 12%. Closing it needs an s-alpha option with a beta-prime drift split.
-- ``X-cyclone-repaired-gx`` (passing): GKX vs repaired GX: <= 0.30% at 7 of 8 points, +1.45% at Miller ky .15. GKX vs GS2: <= 0.3% at Miller .30/.40, +0.65% at Miller .55, +1.0% at s-alpha .30, +2.4% at Miller .15; gyaradax s-alpha .30 is 1.1% below GKX. The repaired build reproduces the shipped adiabatic goldens to 0.06% above ky 0.1, so the clamp is immaterial for these two cases; the L-lin-cyclone-\* rows still cite the time-fitted parity tables.
-- ``X-ke-miller`` (provisional): ky .30: GKX 0.23128/0.23603 vs GX 0.23209/0.23651 (-0.35%/-0.20%) and GS2 0.23484/0.2210 (-1.5%); Nl8/Nm24 gives 0.23115 (0.06% from Nl16/Nm48). ky .50: 0.25479/0.46698 vs GX 0.25410/0.46771 (+0.27%/-0.16%) and GS2 0.25354 (+0.5%). Only two ky are measured; ky .10 is unsettled in both GX (t = 40) and GS2 e3. Before this row the Krylov route damped the linked ends at damp\_ends\_amp instead of amp/dt and gave 0.3579 at ky .30 (+54%).
-- ``X-tem-dj2005`` (open): GS2 is converged (t1 -> t2 <= 2.5% over the scan; beta\_e x2 moves ky .3 by +0.5%): gamma 0.8694, omega -1.2723 (v\_ti/R) at ky rho\_s 0.3. GKX certified eigenpairs at ky rho\_s 0.3 rise with velocity resolution and have not converged: (Nl, Nm) = (4, 8) 0.0029, (8, 24) 0.6114, (12, 32) 0.6475, (16, 48) 0.7330 (-15.7%); omega at (16, 48) -1.2896 (+1.4%). The paper publishes this case in figures only, so GS2 is the reference. Replaces the digitized tem\_reference.csv lane, whose case definition was never reconstructed.
+- ``L-lin-hsx``: the tube is the Nuhrenberg-Zille 1988 QHS equilibrium
+  (regenerable from ``examples/vmec/input.NuhrenbergZille_1988_QHS``), not
+  literally HSX. Provisional until the ``HSX_IMPORTED_ARGS`` value that carries
+  the GX reference is recorded; the same gap applies to W7-X.
+- ``L-lin-cyclone-miller``, ``L-lin-cyclone-salpha``: the reference applies no
+  end damping to Hermite m >= 42 of 48, so the 5.51%/1.25% and 6.83%/1.59%
+  disagreements are not attributable to GKX until the reference is regenerated.
+- ``L-lin-kbm``: largest disagreement (20.0%/11.1%); the reference omits end
+  damping on its top Hermite moments and delta B\_parallel.
+- ``F-nonlinear-autodiff``: 1e-11 at 512 steps and 2.7e-9 at 1024, degrading by
+  2048 as trajectories separate; this bounds the useful gradient horizon.
+- ``F-qa-transport``: historical traces predate the periodic hypercollision
+  correction. The 12.26% reduction is not statistically resolved (4 of 48
+  nominal traces fail the drift test).
+- ``A-gam``: damping is off by 11-25%, gated at 30%. ``A-kbm-pkj``: 8% below
+  GENE, gated at 10%. ``A-kbm-strong-drive``: s-alpha sets
+  omega\_kappa = omega\_gradB, so this is not AZ's equation; gated at 12%.
+- ``X-cyclone-repaired-gx`` (passing): GKX against repaired GX is <= 0.30% at 7
+  of 8 points and +1.45% at Miller ky .15; against GS2 <= 0.3% at Miller
+  .30/.40, +1.0% at s-alpha .30, +2.4% at Miller .15. The repair moves GX's
+  adiabatic goldens by 0.06% above ky 0.1.
+- ``X-ke-miller``: ky .30 GKX 0.23128/0.23603 against GX 0.23209/0.23651
+  (-0.35%/-0.20%) and GS2 (-1.5%); ky .50 +0.27%/-0.16% against GX. Only two ky
+  are measured.
+- ``X-tem-dj2005`` (open): GS2 converged at gamma 0.8694, omega -1.2723 at ky
+  rho\_s 0.3. GKX rises with resolution: (4, 8) 0.0029, (8, 24) 0.6114, (12, 32)
+  0.6475, (16, 48) 0.7330 (-15.7%); omega +1.4%.
 
-Velocity-space regularization of the linear rows
-------------------------------------------------
-
-Each linear row declares the velocity-space dissipation its deck ran with. A row without a Laguerre-space channel also states whether its growth rate is converged in velocity resolution.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 18 22 14 46
-
-   * - ID
-     - Regularization
-     - Velocity limit
-     - Evidence
-   * - ``L-lin-kaw``
-     - ``none``
-     - unmeasured
-     - analytic KAW roots; the generator runs with hypercollisions = 0.0 and no collisions, and no Laguerre ladder has been run for this case
-   * - ``L-lin-etg``
-     - ``none``
-     - unmeasured
-     - self-run GX ETG comparison scan; no Laguerre ladder has been run for this case
-   * - ``L-lin-w7x``
-     - ``hermite-kz-hypercollision``
-     - unmeasured
-     - collisionless GX-parity deck (nu = 0, hypercollisions\_kz = 1, hypercollisions\_const = 0); no Laguerre channel and no ladder for this case
-   * - ``L-lin-hsx``
-     - ``hermite-kz-hypercollision``
-     - unmeasured
-     - collisionless GX-parity deck; no Laguerre channel and no ladder for this case
-   * - ``L-lin-cyclone-miller``
-     - ``hermite-kz-hypercollision``
-     - unmeasured
-     - collisionless GX-parity deck; the s-alpha sibling is truncation-limited at ky=.55, but no Miller ladder has been run
-   * - ``L-lin-cyclone-salpha``
-     - ``hermite-kz-hypercollision``
-     - truncation-limited
-     - plan/log.md Q16 (#252): at ky=.55, Nm96, collisionless certified eigenpairs give gamma .03301/.02485/.01835 at Nl 24/32/48 with a Laguerre cutoff pile-up that relocates to 0.79-0.85 of each new Nl, so this unsunk row's growth rate is a truncation value, not a converged one
-   * - ``L-lin-kbm``
-     - ``hermite-kz-hypercollision``
-     - unmeasured
-     - collisionless GX-parity deck; no Laguerre channel and no ladder for this case
+Linear rows declare their velocity-space regularization: KAW and ETG use
+``none``; W7-X, HSX, Cyclone Miller and KBM use ``hermite-kz-hypercollision``
+with no Laguerre ladder run (velocity limit unmeasured); Cyclone s-alpha is
+truncation-limited at ky .55 (Nm 96, certified gamma .03301/.02485/.01835 at Nl
+24/32/48, with a Laguerre pile-up that moves to 0.79-0.85 of each new Nl).
 
 .. END LEDGER MATRIX
 
 Cross-code linear parity matrix
 -------------------------------
 
-``scripts/comparison/build_gx_parity_matrix.py`` (retired; :ref:`retired-generators`), driven by
-``tools/gx_parity_matrix_manifest.toml``, runs six linear cases against GX with
-one convention. For each case it imports the GX run's geometry, scans
-:math:`k_y` at the GX deck's velocity resolution :math:`(N_l, N_m)`, fits
-:math:`\gamma` and :math:`\omega` over the last 30% of the trajectory, and
-repeats the scan at half the integration time. A :math:`k_y` whose growth rate
-moves by more than 5% between the two lengths is *unsettled*; the headline
-column is the largest :math:`|\Delta\gamma|` over settled :math:`k_y` only.
-Integration times are ``t=150`` (Cyclone), ``t=200`` (W7-X, HSX) and ``t=20``
-(the two electromagnetic cases, whose stable step is ``2e-4``). Per-case
-metadata is in ``docs/_static/gkx_gx_linear_parity_matrix.json``; per-:math:`k_y`
-rows with the settled flag are in ``docs/_static/gkx_gx_linear_parity_matrix.csv``.
-
-These are the GKX-versus-GX differences of the matrix run. The status of each
-case is its ledger row above: the Cyclone and KBM references ship with GX but
-were produced above the ``dampEnds_linked`` launch cap, so their rows stay
-``provisional`` until the references are regenerated from a repaired build; the
-W7-X and HSX references were generated by this campaign (rank 5).
+``tools/gx_parity_matrix_manifest.toml`` drives six linear cases against GX with
+one convention. Each imports the GX run's geometry, scans :math:`k_y` at the GX
+deck's :math:`(N_l, N_m)`, fits :math:`\gamma` and :math:`\omega` over the last
+30% of the trajectory, and repeats at half the integration time. A :math:`k_y`
+whose growth rate moves by more than 5% is *unsettled*; the headline is the
+largest :math:`|\Delta\gamma|` over settled :math:`k_y`. Integration times:
+``t=150`` Cyclone, ``t=200`` W7-X and HSX, ``t=20`` the two electromagnetic
+cases. Metadata is in ``docs/_static/gkx_gx_linear_parity_matrix.json`` and
+per-:math:`k_y` rows in the ``.csv``. Status is the ledger row above (the
+generator is retired; :ref:`retired-generators`).
 
 .. list-table:: Linear parity against GX, matched resolution and geometry
    :header-rows: 1
@@ -381,219 +310,74 @@ W7-X and HSX references were generated by this campaign (rank 5).
      - ``+1.3e-05``
      - ``-8.7e-06``
 
-- **Integration length.** At the Cyclone peak :math:`k_y\rho_i = 0.3`, the older
-  ``t=10`` protocol gives ``+2.24%`` in :math:`\gamma` and ``+5.41%`` in
-  :math:`\omega`; the ``t=150`` of the GX deck gives ``+0.02%`` and ``+0.01%``,
-  and the band :math:`0.15 \le k_y\rho_i \le 0.55` falls within ``0.21%`` and
-  ``0.07%``.
-- **Kinetic electrons.** The Miller kinetic-electron case has 1 of 7
-  :math:`k_y` settled. At :math:`k_y\rho_i = 0.1` the GKX frequency is over 100
-  times the GX value: a different branch (the electrostatic shear-Alfvén
-  response at small finite :math:`\beta`), not an ITG growth-rate error. The
-  table above is a time-trace fit. The certified eigenpairs of ledger row
-  ``X-ke-miller`` agree with the repaired GX build to ``0.35%`` and with GS2
-  to ``1.5%`` at :math:`k_y\rho_i = 0.3` and ``0.5``; only those two
-  :math:`k_y` are measured.
-- **KBM build floor.** Rebuilding GX with ``-prec-sqrt=true`` moves the KBM
-  row by ``0.16%``–``0.20%`` and every other case by at most ``0.07%``. The
-  floor is recorded as ``build_reproducibility_floor = 0.003`` on
-  ``kbm_miller`` in ``tools/gx_parity_matrix_manifest.toml`` and written into
-  the artifact per case; the measurement is in
-  `plan/notes/gx_precsqrt.md <https://github.com/uwplasma/GKX/blob/main/plan/notes/gx_precsqrt.md>`_.
-- **Coverage.** Linear only; no ETG or TEM (GX ships no deck for either).
-- **HSX geometry.** The HSX tube was generated with a local GX geometry patch
-  that squeezes two length-one axes. It satisfies ``cvdrift == gbdrift`` to
-  ``2.8e-17``, and GKX's own VMEC tube reproduces its ``|B|`` to ``1.2e-6``,
-  ``q`` to ``2.2e-7`` and ``s_hat`` to ``1.6e-5``.
-
-Cost per unit simulated time on one RTX A4000, whole-spectrum runs measured
-with ``/usr/bin/time -v``. GX is single precision; these GKX runs are float64.
-GX device memory is the peak of a 2 s ``nvidia-smi`` sample minus the idle
-baseline; GKX device memory is the JAX allocator peak.
-
-.. list-table:: Cost per unit simulated time, same device
-   :header-rows: 1
-   :widths: 24 19 19 19 19
-
-   * - Case
-     - GKX s per unit ``t``
-     - GX s per unit ``t``
-     - GKX peak host / device
-     - GX peak host / device
-   * - Cyclone ITG, s-alpha
-     - ``3.58``
-     - ``2.44``
-     - ``1340`` / ``178`` MB
-     - ``645`` / ``1547`` MB
-   * - W7-X ITG, VMEC
-     - ``1.58``
-     - ``2.20``
-     - ``1954`` / ``636`` MB
-     - ``2838`` / ``1547`` MB
-   * - HSX QHS ITG, VMEC
-     - ``0.70``
-     - ``0.51``
-     - ``1548`` / ``269`` MB
-     - ``636`` / ``1499`` MB
+- **Integration length.** At the Cyclone peak :math:`k_y\rho_i = 0.3`, a ``t=10``
+  fit gives +2.24% in :math:`\gamma`; the GX deck's ``t=150`` gives +0.02%.
+- **Kinetic electrons.** Only 1 of 7 :math:`k_y` settles; at :math:`k_y\rho_i =
+  0.1` GKX returns a different branch (the electrostatic shear-Alfvén response).
+  Use the certified eigenpairs of ``X-ke-miller``.
+- **Build floor.** Rebuilding GX with ``-prec-sqrt=true`` moves KBM by 0.16-0.20%
+  and every other case by at most 0.07% (``build_reproducibility_floor = 0.003``).
+- **Coverage.** Linear only; GX ships no ETG or TEM deck. The HSX tube comes from
+  a GX geometry patch; GKX's own VMEC tube reproduces its :math:`|B|` to 1.2e-6.
+- **Cost** per unit simulated time on one RTX A4000 (GX single precision, GKX
+  float64): Cyclone 3.58 s against 2.44 s, W7-X 1.58 s against 2.20 s, HSX
+  0.70 s against 0.51 s; GKX device memory 178-636 MB against 1547 MB for GX.
 
 Lanes outside the ledger
 ------------------------
 
-These lanes have tracked artifacts but no ledger row. Nothing below is a
-public claim until it gets one.
+Tracked artifacts without a ledger row. Nothing here is a public claim.
 
-Linear
-~~~~~~
+- **Linear.**
 
-.. list-table::
-   :header-rows: 1
-   :widths: 22 26 52
-
-   * - Lane
-     - State
-     - Evidence
-   * - TEM (tokamak)
-     - open (ledger ``X-tem-dj2005``)
-     - The case is now the Dannert & Jenko (2005) nominal TEM, deck
-       ``tools/comparison/fixtures/parity/tem_dannert_jenko_2005.toml``, with
-       a converged GS2 reference. GKX matches the GS2 frequency to ``1.4%`` at
-       :math:`k_y\rho_s = 0.3` but its growth rate is still rising with
-       velocity resolution (``15.7%`` below GS2 at ``(16,48)``). The older
-       ``docs/_static/tem_branch_parity_audit.json`` compares a stress deck
-       against a digitized reference with no reconstructable case definition.
-   * - Miller, kinetic electrons
-     - provisional (ledger ``X-ke-miller``)
-     - Certified eigenpairs at :math:`k_y\rho_i = 0.3, 0.5` within ``0.35%``
-       of repaired GX and ``1.5%`` of GS2. The deck states GX's end-damping
-       rate (``0.1/dt`` = 160.6); with a rate 1000x weaker the growth rate is
-       ``54%`` high (:ref:`end-damping`).
-   * - Shaped tokamak zonal flow / GAM (Merlo et al. Case III)
-     - open
-     - ``docs/_static/miller_zonal_response_pilot.json`` from
-       ``scripts/artifacts/build_zonal_flow_artifacts.py miller-panel`` (retired; :ref:`retired-generators`): residual
-       ``0.192`` against about ``0.19``, :math:`\omega_{GAM} R_0/v_i \approx 2.20`
-       against about ``2.24``, :math:`\gamma_{GAM} R_0/v_i \approx -0.176`
-       against about ``-0.17``, all read off published figures. No
-       Rosenbluth–Hinton analytic row exists yet.
-   * - W7-X TEM / kinetic electrons
-     - open
-     - ``docs/_static/tem_branch_parity_audit.json`` and
-       ``docs/_static/w7x_tem_extension_status.json``. The W7-X ITG ledger row
-       is not a TEM claim.
-   * - W7-X zonal flow
-     - failing
-     - ``docs/_static/w7x_zonal_reference_compare.json`` against the digitized
-       stella/GENE Fig. 11 traces: residuals fail at
-       :math:`k_x\rho_i = 0.07, 0.10, 0.30` and late envelopes fail at all four
-       wavelengths. The artifact is not regenerable: its metadata records
-       ``dt=0.1``, 3.3 times the parallel-streaming CFL bound of the deck's
-       equilibrium, and that run goes non-finite at ``t≈3.7``. The deck
-       ``benchmarks/cases/w7x_zonal_response_vmec.toml`` now pins
-       ``dt=0.02``.
-   * - W7-X fluctuation spectra
-     - simulation diagnostic
-     - ``docs/_static/w7x_fluctuation_spectrum_panel.json``
-       (``claim_level = "validated_nonlinear_simulation_spectrum_not_experimental_validation"``).
-       No Doppler-reflectometry transfer function is applied.
-   * - Stellarator electromagnetic
-     - not started
-     - Finite-beta geometry tests only
-       (``tests/unit/geometry/test_geometry.py``).
-
-Nonlinear
-~~~~~~~~~
-
-Windowed comparisons of ``Wg``, ``Wphi``, ``Wapar`` and heat flux against
-self-run GX (rank 5). Each summary passes when the mean relative mismatch of
-every diagnostic is at most ``0.10``; the column gives the worst diagnostic.
-None is a statistical validation of saturated transport.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 22 18 20 40
-
-   * - Case
-     - Window
-     - Worst mean mismatch
-     - Artifact
-   * - Cyclone ITG, nonlinear
-     - ``t=100..400``
-     - ``0.096``
-     - ``docs/_static/nonlinear_cyclone_gate_summary.json``
-   * - Cyclone Miller, nonlinear
-     - to ``t=121.9``
-     - ``0.092``
-     - ``docs/_static/nonlinear_cyclone_miller_gate_summary.json``
-   * - KBM, nonlinear
-     - to ``t=100``
-     - ``0.0094``
-     - ``docs/_static/nonlinear_kbm_gate_summary.json``
-   * - HSX, nonlinear
-     - to ``t=49.2``
-     - ``0.036``
-     - ``docs/_static/nonlinear_hsx_gate_summary.json``
-   * - W7-X, nonlinear
-     - --
-     - ``0.097`` (``Phi2``)
-     - ``docs/_static/nonlinear_w7x_gate_summary.json``; the exact-state audit
-       ``docs/_static/w7x_exact_state_audit.json`` matches GX startup state,
-       geometry and field arrays to ``4.62e-5`` relative
-
-Kinetic-electron nonlinear Cyclone and the ETG nonlinear pilot have no
-tracked comparison.
-
-Equilibrium flow shear
-~~~~~~~~~~~~~~~~~~~~~~
-
-The shearing-coordinate remap, the periodic and linked linear operators, and
-fixed-step RK2/RK3 and IMEX integration pass their identity, order and
-finite-difference derivative tests as a research API. The full-resolution
-response (``64x64x24``, ``Nl=4``, ``Nm=8``, weak shear, window ``t=[240,300]``)
-is rejected for promotion: the IMEX pair fails stationarity
-(``15.4508 +/- 0.2628`` against ``16.1948 +/- 0.1602``), and the stationary
-fixed-RK4 pair gives ``11.7154 +/- 0.2157`` against ``14.6236 +/- 0.1407``, a
-24.82% *increase* at 11.29 combined SEM. Flow shear therefore has no TOML key
-and no executable claim.
-
-Quasilinear diagnostics and model selection
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. list-table::
-   :header-rows: 1
-   :widths: 24 30 16 30
-
-   * - Lane
-     - Artifact
-     - Status
-     - Gate
-   * - Electrostatic quasilinear weights and spectra
-     - ``docs/_static/quasilinear_*_spectrum_scan.quasilinear_spectrum.csv``,
-       ``docs/_static/quasilinear_*_spectrum_shape_gate.json``,
-       ``docs/_static/quasilinear_validated_calibration_inputs.json``
-     - Closed as diagnostics
-     - channel validation and reproducible spectra; not calibrated
-       absolute-flux prediction
-   * - One-constant and simple saturation-rule absolute-flux models
-     - ``docs/_static/quasilinear_stellarator_train_holdout_report.json``,
-       ``docs/_static/quasilinear_saturation_rule_sweep.json``
-     - Rejected
-     - fail the held-out absolute-flux gate; not exposed as a saturation law
-   * - ``spectral_envelope_ridge`` model selection
-     - ``docs/_static/quasilinear_candidate_uncertainty.json``,
-       ``docs/_static/quasilinear_candidate_regularization_sweep.json``,
-       ``docs/_static/quasilinear_model_selection_status.json``
-     - Closed as scoped model-development result / failed promotion gate
-     - best candidate: mean relative error about ``0.400 > 0.35`` and
-       prediction-interval coverage ``9/11`` on the 11-case gate; with the QP
-       holdout it still fails the rank/correlation screening gates, so it
-       does not promote a runtime/TOML absolute-flux predictor, universal
-       nonlinear transport model, or shipped saturation option
-   * - Absolute-flux promotion
-     - none
-     - Open
-     - every holdout needs passed post-transient convergence metadata:
-       transient cutoff, running-mean drift, block/bootstrap uncertainty,
-       sample count and source provenance
+  - TEM (open, ``X-tem-dj2005``): GKX matches the GS2 frequency to 1.4% but the
+    growth rate rises with velocity resolution (15.7% low at (16, 48)).
+  - Miller kinetic electrons (provisional, ``X-ke-miller``): certified
+    eigenpairs within 0.35% of repaired GX and 1.5% of GS2; the deck states GX's
+    end-damping rate, and a rate 1000x weaker puts the growth rate 54% high
+    (:ref:`end-damping`).
+  - Shaped-tokamak zonal flow/GAM (open): residual 0.192 against about 0.19,
+    :math:`\omega_{GAM}R_0/v_i \approx 2.20` against 2.24, all from published
+    figures (``docs/_static/miller_zonal_response_pilot.json``).
+  - W7-X TEM (open) and W7-X zonal flow (failing): residuals fail at
+    :math:`k_x\rho_i = 0.07, 0.10, 0.30`. The artifact is not regenerable: it
+    used ``dt=0.1``, 3.3 times the streaming CFL bound; the deck now pins
+    ``dt=0.02``.
+  - W7-X fluctuation spectra: a simulation diagnostic, not an experimental
+    validation. Stellarator electromagnetic: finite-beta geometry tests only.
+- **Nonlinear.** Windowed comparisons of ``Wg``, ``Wphi``, ``Wapar`` and heat
+  flux against self-run GX (rank 5) pass at a mean relative mismatch of 0.10:
+  Cyclone 0.096 (``t=100..400``), Cyclone Miller 0.092, KBM 0.0094, HSX 0.036,
+  W7-X 0.097 (``docs/_static/nonlinear_<case>_gate_summary.json``). None is a
+  statistical validation of saturated transport. Kinetic-electron Cyclone and the
+  ETG pilot have no tracked comparison.
+- **Equilibrium flow shear.** The remap, operators, RK2/RK3 and IMEX pass their
+  identity, order and derivative tests as a research API. The full-resolution
+  response is rejected for promotion (:doc:`numerics`): the IMEX pair fails
+  stationarity and the stationary RK4 pair gives a 24.82% *increase*. There is
+  no TOML key.
+- **Quasilinear.** Electrostatic weights and spectra are closed as diagnostics.
+  One-constant and simple saturation rules are rejected (fail the held-out
+  absolute-flux gate). ``spectral_envelope_ridge``: Closed as scoped
+  model-development result / failed promotion gate: mean relative error about
+  ``0.400 > 0.35`` and coverage ``9/11``; with the QP holdout it still fails the
+  rank/correlation gates, so it does not promote a runtime/TOML absolute-flux
+  predictor, universal nonlinear transport model, or shipped saturation option.
+  Absolute-flux promotion is open and needs post-transient convergence metadata
+  for every holdout.
+- **Derivatives and objectives.** VMEC/Boozer parity passes at ``mboz, nboz >=
+  21``. Objective gradients agree with finite differences (largest relative
+  mismatch about 2.7e-2). The aggregate holdout passes as plumbing, not as a
+  nonlinear optimization claim. Central finite differences of the nonlinear heat
+  flux on mapped VMEC-state controls fail every gate (best response fraction
+  0.0045 against 0.03); the QA/ESS ``ZBS(1,0)`` follow-up resolves the response
+  (0.0319) but fails its spread gate (0.196 > 0.15). The selected
+  optimized-equilibrium transport audit is blocked: no raw-source, stationarity,
+  resolution or spectral evidence.
+- **Parallel.** Independent :math:`k_y` and ensemble parallelism is accepted only
+  with a serial identity gate (``max_gamma_rel_error <= 1e-8``,
+  ``docs/_static/parallel_ky_scan_gate.json``). Whole-state nonlinear sharding
+  fails physical identity and is slower than serial (:doc:`parallelization`).
 
 W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron
 validation remain outside the current release scope. Production nonlinear
@@ -601,280 +385,21 @@ optimization remains unpromoted: the selected optimized-equilibrium summaries
 do not carry auditable raw-source, stationarity, uncertainty, resolution and
 spectral evidence.
 
-Derivatives and stellarator objectives
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. list-table::
-   :header-rows: 1
-   :widths: 26 36 38
-
-   * - Lane
-     - Artifact
-     - State
-   * - VMEC/Boozer equal-arc geometry parity
-     - ``docs/_static/vmec_boozer_parity_matrix.json``
-     - passes for its rows at ``mboz, nboz >= 21``; no growth-rate reference
-       on these equilibria
-   * - Solver objective gradients (frequency, growth, :math:`\langle k_\perp^2\rangle`,
-       heat-flux weight, :math:`\gamma Q_i/k_\perp^2`)
-     - ``docs/_static/solver_objective_gradient_gate.json``,
-       ``docs/_static/vmec_boozer_gradient_holdout_matrix.json``
-     - AD against finite differences within the tracked gate; largest relative
-       mismatch about ``2.7e-2``
-   * - Aggregate VMEC/Boozer objective with field-line and surface holdouts
-     - ``docs/_static/vmec_boozer_aggregate_holdout_promotion_gate.json`` and
-       the gates checked by
-       ``scripts/checks/check_vmec_boozer_gates.py aggregate-holdout``
-     - held-out plumbing passes; not a nonlinear optimization claim
-   * - Nonlinear window derivative
-     - ledger row ``F-nonlinear-autodiff``
-     - see the ledger table
-   * - Mapped VMEC-state controls, central finite differences of the
-       nonlinear heat flux
-     - ``docs/_static/nonlinear_gradient_state_control_short_bracket_nonlinear_audit_status.json``,
-       ``docs/_static/nonlinear_gradient_state_control_bracket_sweep_status.json``
-     - negative: all central-FD gates fail; best response fraction about
-       ``0.0045`` against the ``0.03`` gate
-   * - QA/ESS ``ZBS(1,0)`` 7.5% nonlinear-gradient follow-up
-     - ``docs/_static/qa_ess_zbs10_rel7p5_nonlinear_gradient_zbs_1_0_central_fd_gradient_gate.json``
-     - response resolved (``response_fraction = 0.0319``) but not promoted:
-       the plus ensemble fails its spread gate (``0.196 > 0.15``)
-   * - Selected optimized-equilibrium transport audit
-     - ``docs/_static/production_nonlinear_optimization_guard.json``
-     - blocked: no raw-source, per-trace stationarity, resolution or spectral
-       evidence
-   * - Two-mode inverse problem and UQ
-     - ``docs/_static/autodiff_inverse_twomode_summary.json``
-     - planted-parameter recovery with a finite-difference Jacobian check
-
-Parallel execution
-~~~~~~~~~~~~~~~~~~
-
-Independent :math:`k_y` and ensemble parallelism is accepted only with a
-serial identity gate: ``docs/_static/parallel_ky_scan_gate.json`` requires
-``max_gamma_rel_error <= 1e-8`` and ``max_omega_abs_error <= 1e-8`` against a
-``ky_batch=1`` scan. Whole-state nonlinear sharding fails physical identity and
-is slower than serial on the office GPUs
-(``docs/_static/nonlinear_sharding_profile_office_gpu_physical.json``); see
-:doc:`parallelization`.
-
 Benchmarks
 ----------
 
-GKX's benchmark figures form a compact atlas that follows the usual gyrokinetic
-comparison layout:
+Figures follow the usual layout: linear growth rate and frequency against
+:math:`k_y` (or :math:`\beta`) and nonlinear traces of heat flux and energies.
+Status lives in the ledger; the claim boundary is :doc:`release_scope`.
+``benchmarks/`` holds drivers, compact TOML inputs and
+``benchmarks/results/manifest.toml``; outputs go to ``tools_out/`` and only
+reviewed summary figures and small metadata are tracked in ``docs/_static`` (a
+contract test caps ``benchmarks/`` at 200 kB). The Cyclone driver takes its
+settings from ``examples/01_linear_tokamak/case_full.toml`` (``t_max = 150``) and
+fits ``t = 105--150``. The atlas reads ``tools/benchmark_atlas_manifest.toml``.
 
-- linear growth-rate and real-frequency overlays versus ``k_y`` (or ``beta``);
-- nonlinear time traces of heat flux, free energy, electrostatic field energy,
-  and magnetic field energy when present;
-- panels that separate exact diagnostic closures from broader stress lanes.
-
-The pass/fail status of each benchmark lane lives in the evidence ledger.
-Status is in the ledger and matrix above; the release-level claim boundary is in
-:doc:`release_scope`. This part describes how the figures are produced and how
-to read them; it does not assign statuses.
-
-Benchmark directory
--------------------
-
-The root ``benchmarks/`` directory holds lightweight drivers, runtime TOML
-inputs and result-index pointers. It is separate from ``examples/``: examples
-teach workflows, benchmarks reproduce validation panels and comparison traces.
-Generated outputs go to ``tools_out/`` or another scratch directory. Only
-reviewed, compressed summary figures and small CSV/JSON metadata are tracked in
-``docs/_static``.
-
-``benchmarks/`` stays at the scale of small scripts and manifests; a contract
-test caps its tracked payload at 200 kB. NetCDF files, restart
-files, logs, profiler traces and exploratory plots stay outside git.
-
-Drivers:
-
-.. code-block:: bash
-
-   python scripts/benchmark.py linear_benchmark cyclone --outdir tools_out/cyclone_benchmark
-   python scripts/benchmark.py linear_benchmark kbm
-   gkx run --config benchmarks/cases/secondary_slab.toml
-   python scripts/benchmarks/secondary_slab_workflow.py
-
-The Cyclone driver takes its integrator settings from
-``examples/01_linear_tokamak/case_full.toml`` (``t_max = 150``) and fits the last
-30% of the horizon, ``t = 105--150``, well clear of the startup transient. A
-contract test keeps the fit window tied to the deck's ``t_max``.
-
-The KBM driver plots the reviewed fixed-beta ``ky`` comparison table
-``docs/_static/comparison/kbm_reference_candidates.csv``. Regenerate that table
-from a matched external output with ``scripts/comparison/compare_gx_kbm.py`` (retired; :ref:`retired-generators`).
-
-Regenerate the atlas figures with:
-
-.. code-block:: bash
-
-   python scripts/artifacts/make_benchmark_atlas.py
-
-The atlas builder reads its inputs from ``tools/benchmark_atlas_manifest.toml``
-and writes a machine-readable summary to
-``tools_out/benchmark_atlas_summary.json``, which records the provenance of
-each panel.
-
-Capability and matched-comparison contract
-------------------------------------------
-
-``benchmarks/capability_matrix.toml`` is the machine-readable source of truth
-for feature scope. It prevents two errors: implying support because a related
-equation exists, and diagnosing a solver mismatch before the two runs use the
-same physical and numerical contract. The status column below is the
-``status`` field of that file.
-
-.. list-table:: Capability status (``benchmarks/capability_matrix.toml``)
-   :header-rows: 1
-   :widths: 34 20 46
-
-   * - Capability
-     - ``status``
-     - Evidence
-   * - Electrostatic flux-tube dynamics
-     - ``validated``
-     - Cyclone, Cyclone Miller, W7-X and HSX linear/nonlinear atlas gates
-   * - Nonlinear :math:`E\times B` bracket
-     - ``validated_scoped``
-     - operator identity, de-aliasing, invariant and transport-window gates
-   * - Electromagnetic ``A_parallel``/``B_parallel``
-     - ``validated_scoped``
-     - KBM and KAW linear gates; KBM nonlinear window gate
-   * - Boltzmann and kinetic species
-     - ``validated_scoped``
-     - adiabatic-electron ITG atlas; kinetic-electron Cyclone and TEM are
-       stress lanes
-   * - Hermite-Laguerre velocity basis
-     - ``validated``
-     - orthonormality, streaming, gyroaverage and velocity-resolution gates
-   * - s-alpha, Miller and VMEC geometry
-     - ``validated_scoped``
-     - Cyclone, Cyclone Miller, circular VMEC, W7-X and HSX comparisons
-   * - Periodic and linked parallel boundaries; VMEC flux-tube boundary
-       selection
-     - ``validated_scoped``
-     - exact-periodic, continuous-drift and fixed-aspect policy tests;
-       fixed-aspect W7-X/HSX lanes
-   * - Time integration and adaptive time policy
-     - ``validated`` / ``validated_scoped``
-     - observed-order, stability, restart and fixed-CFL gates
-   * - Dominant-eigenmode solver
-     - ``validated_scoped``
-     - Krylov-versus-time evolution, residual, branch-continuity and
-       eigenfunction gates
-   * - Restart and resolved diagnostics
-     - ``validated``
-     - restart identity, schema, heat-flux, field-energy and resolved-spectrum
-       tests
-   * - Conserving Dougherty-like collisions
-     - ``validated_limited_model``
-     - moment damping and low-order momentum/temperature corrections; limited
-       for trapped-particle and multispecies collisional physics
-   * - Drift-kinetic six-gyromoment Sugama and Coulomb operators
-     - ``validated_scoped``
-     - published coefficient matrices, conservation, relaxation, dissipation
-       and JVP/finite-difference gates
-   * - Full linearized Sugama/Coulomb hierarchy
-     - ``planned_research_lane``
-     - needs field-particle terms, conductivity, zonal-damping and
-       collisional-ITG benchmarks
-   * - Multispecies conserving Dougherty operator
-     - ``planned``
-     - species-coupled conservation, null-space, adjointness and entropy gates
-       required
-   * - Independent ``k_y`` scans and UQ ensembles
-     - ``validated``
-     - CPU/GPU numerical-identity and strong-scaling gates
-   * - Nonlinear multi-device domain decomposition
-     - ``blocked``
-     - the benchmark-grid whole-state route runs at 0.211x and fails
-       trajectory identity
-   * - Species/Hermite multi-device decomposition
-     - ``planned``
-     - diagnostic route only; see :doc:`parallelization`
-   * - JAX autodiff and implicit gradients
-     - ``validated_scoped``
-     - AD/FD, tangent, implicit-eigenpair, conditioning and covariance gates
-   * - Differentiable VMEC/Boozer optimization
-     - ``validated_scoped``
-     - ``vmex``/``booz_xform_jax`` parity, gradient holdout and scoped QA
-       optimization gates
-   * - Equilibrium :math:`E\times B` flow shear
-     - ``planned_research_lane``
-     - numerical gates pass; the fixed-step transport-response gate rejects the
-       physical model (below)
-   * - KREHM, Vlasov-Poisson, collisional-ETG, Beer/Smith closures,
-       long-wavelength field limit, forcing and transport coupling
-     - ``not_shipped``
-     - outside the full-gyrokinetic release claim
-
-A matched comparison must record the equations and normalization, geometry
-coefficients and parallel boundary, species conventions, perpendicular and
-velocity grids, initial condition and seed, precision and de-aliasing,
-integrator and timestep policy, collision/dissipation settings, diagnostic
-normalization, and the fit or transport window. A visually similar input file
-is insufficient. This matters most for nonlinear saturation, where short
-state-level agreement does not establish a converged heat-flux comparison.
-
-Comparison-code provenance
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The comparison contract names GX revision ``bc2fe552`` with aggregate source
-fingerprint ``sha256:bfaaadfa...20b``. The instrumented office source tree is
-not a Git checkout and has a different fingerprint, ``sha256:436e403e...a004``;
-the two provenances must not be interchanged. The comparison binary is a clean
-rebuild of that revision against one OpenMPI 4.1.6, parallel netCDF 4.9.2 and
-HDF5 1.14.5 stack; older binaries that mixed system and local libraries are
-excluded. The full values are in the ``[metadata]`` block of
-``benchmarks/capability_matrix.toml``.
-
-The canonical Cyclone s-alpha probe runs 2145 steps to ``t = 10`` and reports
-``(gamma, omega) = (0.101814, 0.286777)`` at ``ky = 0.3``. That reading is taken
-while the mode is still ringing and is not a parity target. The same deck run to
-its own ``t_max = 150`` settles at ``(0.093049, 0.281991)``, matching the
-reference output GX ships for that case. A comparison against the ``t = 10``
-value shows an apparent gap that is entirely transient.
-
-``docs/_static/cyclone_runtime_parity_refresh.json`` records a bounded RK4 check
-to ``t = 20`` at ``ky = 0.3``, ``N_l = 16``, ``N_m = 48``. The reference
-late-window mean is ``gamma = 0.0958 +/- 0.0105``, ``omega = 0.2811 +/- 0.0144``;
-GKX returns ``gamma = 0.0908``, ``omega = 0.2783``, relative differences of 5.3%
-and 1.0%, inside the reference's own late-window spread. Its wall times are not
-a speedup: the reference advanced 12 ``ky`` modes, GKX one.
-
-Scope relative to GX
-~~~~~~~~~~~~~~~~~~~~
-
-GX is the mature baseline for conventional GPU nonlinear initial-value runs and
-species/Hermite multi-device execution. GKX's distinct scope is its Python/JAX
-API, differentiable objectives, implicit gradient paths, CPU execution, and
-in-memory ``vmex``/``booz_xform_jax`` geometry. GKX does not claim the complete
-finite-wavelength multispecies linearized Landau hierarchy: its reduced
-Sugama/Coulomb slice is a separately gated research boundary.
-
-Feature parity is intentionally not blanket parity. The required comparison
-scope is the standard electrostatic/electromagnetic gyrokinetic system, not
-GX's optional KREHM, Vlasov--Poisson, collisional-ETG, forcing,
-transport-coupling or Beer/Smith closure paths. Differentiable eigen/objective
-solves and the in-memory JAX geometry chain are GKX extensions rather than
-comparison requirements.
-
-Equilibrium :math:`E\times B` flow shear has validated coordinate, operator,
-timestep and derivative foundations, but the predeclared fixed-step
-transport-response gate fails: the internal fixed-IMEX windows drift and give a
-4.82% increase, while independently stationary fixed-RK4 comparison windows
-give a 24.82% increase. It is therefore a Python research API with no
-input-file option. The negative-evidence record is
-``docs/_static/flow_shear_fixed_step_response_gate.json``.
-
-Cross-code comparison, 2026-09
-------------------------------
-
-The September 2026 cross-code record (``plan/research/2026-09-27-xcode/REPORT.md``)
-compares GKX with GX, GS2 and stella on the Cyclone cases. All numbers are in
-GX/GKX units. The runs used a shared host, so wall times are not cited.
+The cross-code record of 2026-09 (``plan/research/2026-09-27-xcode/REPORT.md``)
+compares GKX with GX, GS2 and stella on Cyclone, in GX/GKX units:
 
 .. figure:: _static/readme/readme_crosscode.png
    :alt: Cyclone growth rates from GKX, GX, GS2 and stella
@@ -882,248 +407,119 @@ GX/GKX units. The runs used a shared host, so wall times are not cited.
 
    Cyclone growth rates from the four codes.
 
-- **GKX against GX.** GX was rebuilt with the ``dampEnds_linked`` loop repaired
-  (the original stopped at the kernel launch cap). Certified GKX eigenpairs at
-  ``Nl=16``, ``Nm=48`` agree with that build to within 0.3% in
-  :math:`\gamma` at 7 of 8 s-alpha and Miller :math:`k_y` points, and to within
-  0.13% in :math:`\omega` at all 8. The exception is Miller :math:`k_y=0.15`,
-  at +1.45% in :math:`\gamma`. For the adiabatic Cyclone goldens the repair
-  changes GX's own growth rates by at most 0.06% above :math:`k_y=0.1`.
-- **GKX against GS2.** Against converged GS2 ladders GKX is within 0.3% at
-  Miller :math:`k_y=0.30` and 0.40, and within 1.0% at s-alpha
-  :math:`k_y=0.30`.
-- **Kinetic electrons.** GS2 and the repaired GX agree to 1.2% at
-  :math:`k_y=0.30` and 0.2% at :math:`k_y=0.50` on Cyclone Miller with kinetic
-  electrons. A certified GKX eigenpair for this case is still to be run.
-- **stella.** stella's Cyclone growth rate is about 1.4 times the others. In the
-  build tested, its growth rate barely moves (+0.3%) when its mirror term is
-  switched off, while in GKX the mirror term accounts for 14% of
-  :math:`\gamma` at :math:`k_y=0.30`. This is a lead on the difference, not a
-  diagnosis of stella in general.
-- **s-alpha** :math:`k_y=0.55`. Neither the GS2 energy-grid ladder nor the GKX
-  Laguerre ladder is converged. Their finest rungs agree to 0.3%, but there is
-  still no converged reference at this point.
+- **GX.** GX was rebuilt with the ``dampEnds_linked`` loop repaired (the original
+  stopped at the kernel launch cap). Certified GKX eigenpairs at ``Nl=16``,
+  ``Nm=48`` agree within 0.3% in :math:`\gamma` at 7 of 8 points and 0.13% in
+  :math:`\omega` at all 8; the exception is Miller :math:`k_y=0.15` at +1.45%.
+- **GS2.** Within 0.3% at Miller :math:`k_y=0.30` and 0.40, 1.0% at s-alpha 0.30.
+- **Kinetic electrons.** GS2 and repaired GX agree to 1.2% and 0.2% at
+  :math:`k_y=0.30` and 0.50 on Cyclone Miller.
+- **stella.** Its growth rate is about 1.4 times the others and moves 0.3% when
+  its mirror term is removed, while the mirror term is 14% of GKX's
+  :math:`\gamma`. A lead, not a diagnosis.
+- **s-alpha** :math:`k_y=0.55` is converged in neither GS2's energy grid nor
+  GKX's Laguerre ladder; the finest rungs agree to 0.3%.
 
-The parity percentages in the README table (6.83% Cyclone s-alpha, 5.51%
-Miller) come from time-trace fitted tables such as
-``docs/_static/cyclone_mismatch_table.csv``, not from the eigenvalue. They
-measure the fit, not the disagreement between the codes' eigenvalues. The
-ledger rows still cite the fitted tables; nothing from this record has been
-promoted.
+The README parity percentages come from time-trace fits
+(``docs/_static/cyclone_mismatch_table.csv``), not from eigenvalues. ETG
+turbulence pilots follow [Dorland00]_ [Jenko00]_ and are outside the nonlinear
+claim.
+
+**Matched comparisons** must record equations and normalization, geometry and
+boundary, species conventions, grids, initial condition and seed, precision,
+integrator and step policy, dissipation, diagnostic normalization and the fit
+window. The comparison binary is GX revision ``bc2fe552`` rebuilt against one
+OpenMPI/netCDF/HDF5 stack (``[metadata]`` of ``benchmarks/capability_matrix.toml``).
+The Cyclone probe read at ``t = 10`` gives ``(0.101814, 0.286777)``, still
+ringing; run to ``t_max = 150`` it settles at ``(0.093049, 0.281991)``, matching
+GX's shipped output. GX is the mature baseline for GPU nonlinear runs and
+species/Hermite multi-device execution; GKX's scope is the Python/JAX API,
+differentiable objectives, CPU execution and in-memory ``vmex`` geometry. It does
+not claim the full finite-wavelength multispecies linearized Landau hierarchy.
+
+Capability status (``benchmarks/capability_matrix.toml``): ``validated``:
+electrostatic flux-tube dynamics, Hermite-Laguerre basis, restart and resolved
+diagnostics, independent :math:`k_y` scans and UQ ensembles. ``validated_scoped``:
+the nonlinear bracket, electromagnetic ``A_parallel``/``B_parallel``, species,
+s-alpha/Miller/VMEC geometry, boundaries, the dominant-eigenmode solver, the
+drift-kinetic Sugama/Coulomb operators, autodiff and differentiable VMEC/Boozer
+optimization. ``validated_limited_model``: conserving Dougherty-like collisions
+(limited for trapped-particle and multispecies physics).
+``planned_research_lane``: the full linearized Sugama/Coulomb hierarchy and
+equilibrium flow shear. ``planned``: multispecies Dougherty, species/Hermite
+decomposition. ``blocked``: nonlinear multi-device domain decomposition (0.211x,
+fails identity). ``not_shipped``: KREHM, Vlasov-Poisson, collisional-ETG,
+Beer/Smith closures.
 
 Tracked results index
 ---------------------
 
-The root-level result index is ``benchmarks/results/manifest.toml``. It points
-to the promoted benchmark figures and machine-readable tables without moving or
-duplicating large run products. A contract test requires every entry's name,
-path and claim scope to appear in this table; a result that is not listed here
-stays unpromoted.
+``benchmarks/results/manifest.toml`` points to the promoted figures and tables.
+A contract test requires every entry's name, path and claim scope to appear in
+this table; a result not listed here stays unpromoted. Regenerable renders are
+not tracked in git (checksums under ``regenerate_on_demand`` in
+``tools/release_artifact_manifest.toml``); their builders are retired
+(:ref:`retired-generators`).
 
 .. list-table:: Promoted benchmark result artifacts
    :header-rows: 1
-   :widths: 22 30 18 30
+   :widths: 24 40 36
 
    * - Result
-     - Artifact (tracked, or regenerable render)
+     - Artifact
      - Claim scope
-     - Regeneration path
    * - Core linear benchmark atlas
-     - ``docs/_static/benchmark_core_linear_atlas.png`` (regenerable render;
-       not tracked in git)
+     - ``docs/_static/benchmark_core_linear_atlas.png``
      - headline linear validation atlas
-     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
    * - Core nonlinear benchmark atlas
-     - ``docs/_static/benchmark_core_nonlinear_atlas.png`` (regenerable
-       render; not tracked in git)
+     - ``docs/_static/benchmark_core_nonlinear_atlas.png``
      - headline nonlinear validation atlas
-     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
    * - README benchmark summary panel
-     - ``docs/_static/benchmark_readme_panel.png`` (regenerable render; not
-       tracked in git)
+     - ``docs/_static/benchmark_readme_panel.png``
      - compact publication-facing benchmark summary
-     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
    * - Extended linear stress matrix
-     - ``docs/_static/benchmark_extended_linear_panel.png`` (regenerable
-       render; not tracked in git)
+     - ``docs/_static/benchmark_extended_linear_panel.png``
      - stress and provisional lanes, not headline validation claims
-     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
    * - Runtime and memory comparison
      - ``docs/_static/runtime_memory_benchmark.png``
      - tracked wall-time and memory comparison rows
-     - ``python scripts/benchmarks/benchmark_runtime_memory.py --summary-glob ...`` (retired; :ref:`retired-generators`)
+   * - Reference-code linear parity matrix
+     - ``docs/_static/gkx_gx_linear_parity_matrix.png``
+     - cross-code linear growth-rate and frequency parity across tokamak and stellarator cases
    * - Runtime and memory result rows
      - ``docs/_static/runtime_memory_results_ship_refresh.csv``
      - machine-readable runtime/memory rows used by the tracked panel
-     - ``python scripts/benchmarks/benchmark_runtime_memory.py`` (retired; :ref:`retired-generators`)
    * - Runtime and memory summary
      - ``docs/_static/runtime_memory_summary_ship_refresh.json``
      - machine-readable summary for runtime/memory panel generation
-     - ``python scripts/benchmarks/benchmark_runtime_memory.py`` (retired; :ref:`retired-generators`)
    * - Core linear atlas inputs
      - ``tools/benchmark_atlas_manifest.toml``
      - manifest of small tracked benchmark inputs
-     - ``python scripts/artifacts/make_benchmark_atlas.py`` (retired; :ref:`retired-generators`)
-   * - Reference-code linear parity matrix
-     - ``docs/_static/gkx_gx_linear_parity_matrix.png`` (regenerable render;
-       not tracked in git)
-     - cross-code linear growth-rate and frequency parity across tokamak and stellarator cases
-     - ``python scripts/comparison/build_gx_parity_matrix.py`` (retired; :ref:`retired-generators`)
    * - Reference-code linear parity rows
      - ``docs/_static/gkx_gx_linear_parity_matrix.csv``
      - machine-readable per-wavenumber parity rows with convergence flags
-     - ``python scripts/comparison/build_gx_parity_matrix.py`` (retired; :ref:`retired-generators`)
    * - Reference-code linear parity summary
      - ``docs/_static/gkx_gx_linear_parity_matrix.json``
      - per-case resolution, provenance and cost metadata behind the parity rows
-     - ``python scripts/comparison/build_gx_parity_matrix.py`` (retired; :ref:`retired-generators`)
-
-The four atlas panels are regenerable renders, not git-tracked files: their
-checksums are recorded under the ``regenerate_on_demand`` action in
-``tools/release_artifact_manifest.toml``. PDF copies are written next to each
-PNG for manuscript use.
-
-Metrics
--------
-
-The atlas uses one small set of observables throughout:
-
-- growth rate ``gamma`` and real frequency ``omega``;
-- ion heat flux;
-- free energy;
-- electrostatic field energy (output variable ``Wphi``);
-- magnetic field energy when ``A_parallel`` or ``B_parallel`` is active.
-
-The README packs these into one validation panel plus one separate
-runtime/memory panel.
-
-Atlas contents
---------------
-
-The core panels show the full-gyrokinetic lanes used in the regression
-workflow:
-
-- Cyclone ITG, s-alpha, linear and nonlinear (the standard ITG benchmark
-  [Dimits00]_);
-- KBM linear and nonlinear;
-- W7-X VMEC linear and nonlinear;
-- HSX VMEC linear and nonlinear (the Nuhrenberg-Zille QHS deck);
-- Cyclone Miller geometry linear and nonlinear.
-
-The linear master panel also shows ETG, KAW and the KBM Miller late-growth
-replay. The extended strip shows Cyclone with kinetic electrons and TEM, which
-are stress lanes rather than validation claims. Appearing in a panel is not a
-validation status. Status: see the matrix above; several of the core
-linear lanes are ``provisional`` there.
-
-The nonlinear panels are window comparisons: Cyclone, Cyclone Miller, KBM,
-W7-X and HSX pass a mean-relative window gate against self-run GX
-(``docs/_static/nonlinear_<case>_gate_summary.json``). That is not a
-statistical validation of saturated transport (see :doc:`release_scope`). HSX
-uses the ``t <= 50`` trace and W7-X the ``t <= 200`` trace; both are
-long-window comparisons, not small-tolerance claims for every late-time sample.
-
-The full-gyrokinetic ETG nonlinear pilot (ETG turbulence as in [Dorland00]_
-[Jenko00]_) appears in the summary panel but is a short-window pilot and is
-outside the nonlinear claim.
 
 Reading the panels
 ------------------
 
-The atlas mixes two kinds of evidence:
+The core panels cover Cyclone ITG, KBM, W7-X, HSX and Cyclone Miller, linear and
+nonlinear; the linear master panel adds ETG, KAW and the KBM Miller late-growth
+replay, and the extended strip adds Cyclone kinetic electrons and TEM as stress
+lanes. Appearing in a panel is not a validation status. Only the exact-window
+closures are strict small-tolerance gates: the KAW window
+(``docs/_static/kaw_exact_growth_dump.csv``) and the KBM Miller replay
+(``docs/_static/kbm_miller_exact_growth_dump.csv``). Scanned panels are coverage
+figures, not universal ``rtol <= 3e-2`` claims. The nonlinear panels are window
+comparisons, not a statistical validation of saturated transport
+(:doc:`release_scope`).
 
-- benchmark overlays over scanned parameters such as ``k_y`` or ``beta``;
-- exact-window or exact-diagnostic closures on selected lanes.
-
-Only the exact-window closures are strict small-tolerance gates. In the
-tracked set these are the KAW exact diagnostic window
-(``docs/_static/kaw_exact_growth_dump.csv``) and the KBM Miller late-growth
-replay (``docs/_static/kbm_miller_exact_growth_dump.csv``). The scanned panels
-are coverage figures, not universal ``rtol <= 3e-2`` claims for every tile.
-
-Benchmark-specific replay settings stay in the builders under ``tools/``. They
-are not generic runtime defaults for the solver or the example drivers.
-
-Reusable reference loaders and comparison policies live in
-``gkx.benchmarking_shared``; time stepping, scans, geometry and physical
-operators use the same runtime and solver APIs as ordinary simulations.
-Pointwise scans and representative-mode extraction belong to
-``gkx.workflows.linear``, which runs one linear solve per ``k_y`` and owns
-iteration, result assembly, mode selection and fit-window extraction.
-Benchmark drivers supply only case policy.
-
-Supplementary closure artifacts
--------------------------------
-
-Some lanes are tracked as machine-readable closure artifacts rather than atlas
-tiles. Their comparison figures are regenerable renders.
-
-- ``docs/_static/nonlinear_cyclone_short_gate_summary.json``: short nonlinear
-  Cyclone replay with the short-reference dissipation contract. It is an
-  exploratory short-transient diagnostic; the remaining mismatch is localized
-  in resolved ``k_y`` field-energy diagnostics.
-- ``docs/_static/comparison/secondary_reference_out_compare.csv``: secondary
-  stage-2 mode table from the dense ``kh01a`` GX replay.
-- ``docs/_static/nonlinear_w7x_gate_summary.json``,
-  ``docs/_static/nonlinear_hsx_gate_summary.json`` and
-  ``docs/_static/nonlinear_kbm_gate_summary.json``: long-window nonlinear
-  lanes. Figures: ``scripts/comparison/make_reference_panels.py`` (retired; :ref:`retired-generators`).
-- KBM eigenfunction overlap on the tracked KBM candidate table, a
-  branch-identity diagnostic. Figure:
-  ``scripts/artifacts/generate_linear_reference_overlays.py overlap-summary`` (retired; :ref:`retired-generators`).
-  The raw mode-shape evidence is tracked as JSON gate reports and GKX traces
-  under ``docs/_static/reference_modes/``, with frozen GX raw-mode bundles under
-  ``docs/_static/comparison/reference_modes/``.
-
-Extended stress matrix
-----------------------
-
-The extended linear panel keeps lanes visible without folding them into the
-headline set:
-
-- Cyclone kinetic electrons;
-- TEM (literature-digitized reference);
-- KBM Miller exact late-growth window.
-
-The kinetic-electron scan is defined by
-``examples/05_kinetic_electrons/case_full.toml`` and integrates
-with fixed-step RK4 through the unified runtime API. Its reference seed,
-linked-boundary damping, species and electromagnetic toggles are explicit in
-that file.
-
-The TEM input is ``benchmarks/cases/tem_linear.toml`` (fixed-step
-RK2, electron-only Gaussian moment initialization), run through the same scan
-path users call. The shipped ``tem_reference.csv`` is digitized from the
-literature rather than taken from a GX benchmark output, and the exact case
-definition behind it is not reconstructed, so TEM is a stress lane, not a
-parity result. The audit ``docs/_static/tem_branch_parity_audit.json`` records
-the open branch mismatch: maximum absolute relative growth-rate mismatch
-``4.25``, maximum absolute relative frequency mismatch ``3.3`` after excluding
-the near-zero reference denominator, one growth-rate sign mismatch, three
-frequency sign mismatches, and a frequency-branch Spearman coefficient near
-``-0.986``.
-
-Case groups
------------
-
-Tokamak core cases
-~~~~~~~~~~~~~~~~~~
-
-- Cyclone ITG: linear ``gamma``/``omega`` scans and nonlinear transport traces
-- KBM: linear branch-following scans and nonlinear transport traces
-- Cyclone Miller geometry: imported linear scan and nonlinear time-trace audit
-
-Stellarator core cases
-~~~~~~~~~~~~~~~~~~~~~~
-
-- W7-X VMEC: short-window linear scans and nonlinear transport traces
-- HSX VMEC: short-window linear scans and nonlinear transport traces
-
-Reduced and stress cases
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-- ETG: linear benchmark overlays
-- KAW: exact late-time diagnostic reconstruction and exact-window energy audit
-- KBM Miller: exact late-time growth replay on the tracked low-``k_y`` branch
-- Cyclone kinetic electrons: extended linear stress lane
-- TEM: extended linear stress lane
+The kinetic-electron scan is ``examples/05_kinetic_electrons/case_full.toml``.
+The TEM input is ``benchmarks/cases/tem_linear.toml``; its ``tem_reference.csv``
+is digitized from the literature with no reconstructed case definition, so TEM
+is a stress lane (``docs/_static/tem_branch_parity_audit.json`` records the open
+branch mismatch: maximum relative growth-rate mismatch 4.25 and one sign
+mismatch). Reusable reference loaders live in ``gkx.benchmarking_shared``;
+benchmark drivers supply only case policy.

@@ -87,8 +87,9 @@ Electromagnetic and KBM
   the next :math:`N_m`.
 - The linear KBM branch moves with the end-damping rate and with ``nperiod``.
   At ``nperiod = 1`` the layer is a quarter of the line: use 2 or more.
-- Explicit steps must keep :math:`\nu_{end}\Delta t < 0.3`; the tutorial KBM
-  deck uses :math:`\Delta t = 5\times10^{-4}` for this reason.
+- Explicit steps must keep :math:`\nu_{end}\Delta t < 0.3`. An ``nperiod = 1``
+  KBM deck (rate 598) blew up at :math:`\Delta t = 10^{-3}` and ran at
+  :math:`5\times10^{-4}`.
 - Eigenvalues: ``adaptive`` certifies KBM at (4, 8); shift-invert can land on
   the wrong branch.
 
