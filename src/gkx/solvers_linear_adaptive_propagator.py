@@ -581,6 +581,8 @@ _RITZ = 12  # eigenvalues asked of ARPACK around the shift
 _PASSES = 3  # shifts tried while the fastest-growing Ritz value keeps moving
 _RECENTER = 0.05  # that movement, in omega_scale, that starts another pass
 _REFINE = 2  # defect corrections per application
+_DOMINANCE = 0.5  # excess growth, in units of best gamma*dt, that refuses the pair
+_STEPS = 60  # backward-Euler steps of the dominance check
 _RESTARTS = 100  # ARPACK restarts allowed per shift before the route gives up
 _OFFSET = 1.0e-3  # step (in omega_scale) from the estimate to the shift
 _BAND_TOL = (
@@ -615,6 +617,23 @@ def _dense_estimate(lower, diag, upper, laguerre: np.ndarray, nl: int) -> comple
             ]
     values = np.linalg.eigvals(dense)
     return complex(values[np.argmax(values.real)])
+
+
+def _growth_excess(step: Callable, v: np.ndarray, found: complex, dt: float) -> float:
+    """Log growth per backward-Euler step of a random state, beyond that of ``found``.
+
+    ``step`` applies ``(I - dt A)^{-1}``. A mode of rate ``lam`` is amplified by
+    ``1 / |1 - lam dt|`` per step, so after ``_STEPS`` steps the last quarter's
+    mean amplification exceeds that of ``found`` only if a faster mode is present
+    (up to the transient growth of a non-normal operator).
+    """
+
+    ratios = []
+    for _ in range(_STEPS):
+        w = step(v)
+        ratios.append(np.log(np.linalg.norm(w) / np.linalg.norm(v)))
+        v = w / np.linalg.norm(w)
+    return float(np.mean(ratios[-_STEPS // 4 :]) + np.log(abs(1 - found * dt)))
 
 
 def banded_fits(shape: tuple[int, ...]) -> bool:
@@ -711,6 +730,7 @@ def _banded_ritz_pairs(
         )
 
     scale = float(np.asarray(_omega_scale(cache, params)))
+    auto_shift = shift is None
     if shift is None:
         # Dense eigenvalues of a leading truncation: everything if it is small, else
         # Laguerre < _COARSE_NL of as many Hermite pairs as fit in _DENSE_N unknowns.
@@ -765,6 +785,23 @@ def _banded_ritz_pairs(
             best + _OFFSET * scale
         )  # the fastest-growing Ritz value moved: follow it
     note(f"banded Arnoldi: {solves[0]} solves")
+    if auto_shift:
+        # Dominance check: the step is small against the fastest plausible frequency.
+        dt = 0.25 / max(2 * scale, 1.5 * abs(best.imag))
+        factors = block_thomas_factor(lower, diag, upper, shift=1 / dt)  # type: ignore[call-arg]
+        excess = _growth_excess(
+            lambda x: (
+                -np.asarray(inverse(factors, jnp.asarray(x, v0.dtype), 1 / dt)) / dt
+            ),
+            start.astype(np.complex128),
+            best,
+            dt,
+        )
+        note(f"banded dominance check: excess growth {excess:.3g} per step")
+        if excess > _DOMINANCE * max(best.real, 0.0) * dt + 1e-3:
+            raise RuntimeError(
+                f"a faster mode than {best:.4g} is present (growth excess {excess:.3g} per step)"
+            )
     return (
         jnp.asarray(values, v0.dtype),
         jnp.asarray(vectors.T, v0.dtype).reshape((-1, *shape)),
