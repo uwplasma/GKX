@@ -3109,7 +3109,9 @@ def test_pr3_builds_at_float32_and_still_refuses_what_float64_refuses() -> None:
         key: value
         for key, value in os.environ.items()
         if key not in {"JAX_ENABLE_X64", "GKX_X64"}
-        and not key.startswith(("COV_CORE", "COVERAGE"))  # a traced child hangs shard 8 in CI
+        and not key.startswith(
+            ("COV_CORE", "COVERAGE")
+        )  # a traced child hangs shard 8 in CI
     }
     env["JAX_ENABLE_X64"] = "false"
     env["PYTHONPATH"] = os.pathsep.join(
