@@ -18,6 +18,7 @@ from gkx.operators.linear.params import (
 from gkx.solvers_linear_adaptive_propagator import (
     AdaptivePropagatorSolution as AdaptivePropagatorSolution,
     adaptive_propagator_eigenpair,
+    banded_fits,
     banded_ritz_pairs,
     certifiable_residual_tolerance,
 )
@@ -1135,7 +1136,24 @@ def dominant_eigenpair(
         status_callback,
         f"krylov method={cfg.method} dim={cfg.krylov_dim} restarts={cfg.restarts}",
     )
-    if cfg.method == "adaptive":
+    solved = None
+    if cfg.method == "auto" and banded_fits(v0.shape):
+        try:
+            solved = _banded_shift_invert_branch(
+                v0,
+                v_ref_use,
+                cache,
+                params,
+                term_cfg,
+                cfg,
+                status_callback,
+                select_overlap=select_overlap,
+            )
+        except (RuntimeError, ValueError) as error:
+            _status(status_callback, f"banded route failed ({error}); using adaptive")
+    if solved is not None:
+        pass
+    elif cfg.method in ("adaptive", "auto"):
         solved = _adaptive_branch(v0, cache, params, terms, cfg, status_callback)
     else:
         solved = _dispatch_dominant_eigenpair(

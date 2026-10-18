@@ -3220,11 +3220,12 @@ def test_runtime_species_and_model_helpers() -> None:
             electromagnetic=False,
         ),
     )
-    # Every contract takes the certified adaptive route: the ETG and KBM
-    # shift-invert defaults never converged their inner solves (2026-10-15).
+    # Every contract takes ``auto`` (banded where it fits, else the certified
+    # adaptive route): the ETG and KBM pr3-cm defaults never converged their
+    # inner solves (2026-10-15).
     kbm_cfg = replace(cfg, normalization=RuntimeNormalizationConfig(contract="kbm"))
     for case in (etg_cfg, kbm_cfg, cfg):
-        assert _runtime_default_krylov_config(case).method == "adaptive"
+        assert _runtime_default_krylov_config(case).method == "auto"
 
     # The linear velocity fallback. It was (24, 12), which the shipped Cyclone
     # deck records as Hermite-starved and which measures 4.405% low in gamma

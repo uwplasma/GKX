@@ -6,6 +6,7 @@ to the same eigenpairs and shares the file's eigenpair contract.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from typing import NamedTuple
 import jax
@@ -578,6 +579,21 @@ _COARSE_NL = 4  # Laguerre moments kept in the dense shift estimate
 _RITZ = 6  # eigenvalues asked of ARPACK around the shift
 _REFINE = 1  # defect corrections per application
 _OFFSET = 1.0e-3  # step (in omega_scale) from the estimate to the shift
+_BAND_TOL = (
+    1.0e-4  # relative mismatch of the blocks against the operator that is refused
+)
+
+
+def banded_fits(shape: tuple[int, ...]) -> bool:
+    """Whether the three complex64 block bands fit in half the default device's memory."""
+
+    nm = shape[-4]
+    need = 8 * 3 * (nm // 2 + nm % 2) * (2 * int(np.prod(shape)) // nm) ** 2
+    stats = jax.devices()[0].memory_stats() or {}
+    limit = stats.get("bytes_limit") or os.sysconf("SC_PAGE_SIZE") * os.sysconf(
+        "SC_PHYS_PAGES"
+    )
+    return nm >= 4 and need <= limit / 2
 
 
 def banded_ritz_pairs(
@@ -599,6 +615,7 @@ def banded_ritz_pairs(
     from solvax import (  # type: ignore[attr-defined]
         block_thomas_factor,
         block_thomas_solve,
+        block_tridiag_matvec,
         block_tridiagonal_from_products,
         iterative_refinement,
     )
@@ -639,6 +656,18 @@ def banded_ritz_pairs(
     lower, diag, upper = block_tridiagonal_from_products(
         apply, blocks, dtype=jnp.complex64
     )
+
+    # The blocks are the operator only if it is Hermite-banded: compare on a random vector.
+    probe = np.random.default_rng(0).standard_normal((2, size)) * keep.reshape(-1)
+    probe = jnp.asarray(probe[0] + 1j * probe[1], v0.dtype)
+    expected = jnp.append(apply(probe), 0)[safe]
+    mismatch = jnp.linalg.norm(
+        block_tridiag_matvec(lower, diag, upper, jnp.append(probe, 0)[safe]) - expected
+    ) / jnp.linalg.norm(expected)
+    if not mismatch < _BAND_TOL:
+        raise ValueError(
+            f"operator is not Hermite-banded (blocks miss it by {mismatch:.2g})"
+        )
 
     if shift is None:
         k = [np.flatnonzero(laguerre[b] < _COARSE_NL) for b in (0, 1)]
@@ -707,6 +736,7 @@ def banded_ritz_pairs(
 __all__ = [
     "AdaptivePropagatorSolution",
     "adaptive_propagator_eigenpair",
+    "banded_fits",
     "banded_ritz_pairs",
     "certifiable_residual_tolerance",
     "dominant_eigenpairs_propagator_cached",
