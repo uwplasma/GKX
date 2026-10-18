@@ -1,0 +1,1 @@
+RESULT {"deck": "etg.toml", "Nl": 24, "Nm": 8, "method": "time", "over": {}, "sha": "d84f37ab5", "uptime": "7.78", "x64": "1", "host": "Linux-x86_64-gpu", "wall_s": 12.4, "peak_rss_gb": 0.9, "gamma": 5.726676969613694, "omega": -13.698818117553548, "eigen_status": "None", "ky": 15.0}

@@ -1,0 +1,3 @@
+   71.5s banded shift from a dense truncation: sigma=0.12167-0.26051j
+  689.9s banded Arnoldi: 200 solves
+RESULT {"deck": "cyc_adiabatic.toml", "Nl": 16, "Nm": 48, "method": "banded", "over": {}, "sha": "d84f37ab5", "uptime": "11.24", "x64": "1", "host": "Linux-x86_64-cpu", "wall_s": 692.1, "peak_rss_gb": 14.0, "gamma": 0.09313031560622363, "omega": 0.2819665405380761, "eigen_status": "EigenSolveStatus(method='banded', route='banded', residual=1.5487244826166414e-09, tolerance=1e-06, certified=True, inner=None)", "ky": 0.3}
