@@ -628,7 +628,15 @@ def banded_fits(shape: tuple[int, ...]) -> bool:
     return nm >= 4 and need <= limit / 2
 
 
-def banded_ritz_pairs(
+def banded_ritz_pairs(*args, **kwargs):
+    """Eigenpairs near a shift from the Hermite-banded factor; see ``_banded_ritz_pairs``."""
+
+    # TF32 matmuls on GPU would put the factor's error above what one correction removes.
+    with jax.default_matmul_precision("highest"):
+        return _banded_ritz_pairs(*args, **kwargs)
+
+
+def _banded_ritz_pairs(
     v0: jnp.ndarray,
     cache,
     params,

@@ -900,38 +900,6 @@ def _pick_certified(
     return values[selected], vectors[selected], status
 
 
-def _banded_shift_invert_branch(
-    v0: jnp.ndarray,
-    v_ref: jnp.ndarray,
-    cache: LinearCache,
-    params: LinearParams,
-    term_cfg,
-    cfg: KrylovConfig,
-    status_callback: _StatusCallback,
-    *,
-    select_overlap: bool,
-) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
-    """Hermite-banded direct shift-invert; see :func:`banded_ritz_pairs`."""
-
-    values, vectors, sigma = banded_ritz_pairs(
-        v0, cache, params, term_cfg, cfg.shift, status_callback
-    )
-    return _pick_certified(
-        values,
-        vectors,
-        np.ones(values.size, bool),
-        v_ref,
-        cache,
-        params,
-        term_cfg,
-        cfg,
-        status_callback,
-        shift=sigma,
-        select_overlap=select_overlap,
-        route="banded",
-    )
-
-
 def _adaptive_branch(
     v0: jnp.ndarray,
     cache: LinearCache,
@@ -1035,16 +1003,23 @@ def _dispatch_dominant_eigenpair(
             status_callback,
             select_overlap=select_overlap,
         )
-    if cfg.method == "banded":
-        return _banded_shift_invert_branch(
-            v0,
+    if cfg.method == "banded":  # Hermite-banded direct shift-invert
+        values, vectors, shift = banded_ritz_pairs(
+            v0, cache, params, term_cfg, cfg.shift, status_callback
+        )
+        return _pick_certified(
+            values,
+            vectors,
+            np.ones(values.size, bool),
             v_ref,
             cache,
             params,
             term_cfg,
             cfg,
             status_callback,
+            shift=shift,
             select_overlap=select_overlap,
+            route="banded",
         )
     if cfg.method == "power":
         pair = _power_branch(v0, cache, params, term_cfg, cfg, status_callback)
