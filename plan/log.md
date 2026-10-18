@@ -21256,3 +21256,11 @@ Baseline `main` `df2953026`. Laptop CPU for operator work, office GPU1 (`venvs/g
 
 Raw records: office `~/gkx-evidence/collisions/`; summaries in `plan/research/2026-10-15-collisions/`.
 - **Follow-up (branch `collisions/landau-followup`, 2026-10-15/16):** `LinearParams.collision_model` defaults to `landau` (one default). The eight-moment Frei `coulomb` kernels are retired and `coulomb` is an alias of `landau`. The real and imaginary parts are applied as separate real products, and the product is skipped at run time when the collision weight is zero. Whole-RHS cost at (16,48) on the A4000: 1.2x/1.3x Dougherty in float32 (1/2 species) and 2.6x/3.8x in float64; the float64 matrix rate of the card is the limit. TEM (8,24): Landau at vnewk_e 0.2 gives 0.0769 and Dougherty 0.0548, against GS2 0.151. Collisionless, a fading Laguerre sink lowers gamma from 0.611 to 0.510 (GS2 0.867), so the hypercollision default is unchanged (GX's Hermite |k_z| form, no Laguerre sink). The (16,48) sink rung is still running.
+
+## 2026-10-18 — release 2.6.0
+
+Minor release (behaviour changes). Since 2.5.1: linearized Landau default collision
+operator (#364), one timestep-free end-damping rate on every route (#366, #354),
+eigensolver policy with adaptive as the default and shift-invert opt-in (#363),
+cached_jit and imex factor reuse, VMEC x64 isolation (#363), scripts/ cut to
+CI needs and media recompressed (#362), KE/EM solver study (#365).
