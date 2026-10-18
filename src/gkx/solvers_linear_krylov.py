@@ -172,16 +172,14 @@ _StatusCallback = Callable[[str], None] | None
 # express, so a converged complex64 eigenpair is not rejected for failing an
 # f64-only tolerance.
 _ADAPTIVE_BASE_TOL = 1.0e-9
-# Banded shift-invert: Hermite moments kept for the shift estimate, Ritz values
-# asked for at that estimate and around the final shift, defect corrections per
-# application, ARPACK's tolerance and the step (in omega_scale) from the estimate
-# to the shift.
-_BANDED_COARSE_NM = 8
-_BANDED_COARSE_RITZ = 12
+# Banded shift-invert: the dense shift estimate keeps Laguerre < _BANDED_COARSE_NL
+# of the first two Hermite pairs; ARPACK asks for _BANDED_RITZ values around
+# the shift; _BANDED_REFINE defect corrections per application; the shift steps
+# _BANDED_OFFSET (in omega_scale) off the estimate.
+_BANDED_COARSE_NL = 4
 _BANDED_RITZ = 6
 _BANDED_REFINE = 1
-_BANDED_OFFSET = 1.0e-2
-_BANDED_ARPACK_TOL = 1.0e-10
+_BANDED_OFFSET = 1.0e-3
 
 
 def _status(status_callback: _StatusCallback, message: str) -> None:
@@ -908,7 +906,13 @@ def _pick_certified(
     return values[selected], vectors[selected], status
 
 
-def _banded_shift_invert_branch(
+def _banded_shift_invert_branch(*args, **kwargs):
+    # TF32 matmuls would put the factor's error above what one correction removes.
+    with jax.default_matmul_precision("highest"):
+        return _banded_shift_invert(*args, **kwargs)
+
+
+def _banded_shift_invert(
     v0: jnp.ndarray,
     v_ref: jnp.ndarray,
     cache: LinearCache,
@@ -924,10 +928,9 @@ def _banded_shift_invert_branch(
     At one ky the operator couples Hermite m only to m +- 2, so Hermite pairs
     make it block tridiagonal. The blocks are read off GKX's own operator in
     ``3 ceil(m / batch)`` batched products and factored once in complex64 per
-    shift; two defect corrections against the operator restore its precision.
-    Without a shift, the leading ``_BANDED_COARSE_NM`` Hermite moments (the same
-    blocks, truncated) locate the growth near ``omega_scale``, and the full
-    operator is then solved around that estimate.
+    shift; a defect correction against the operator restores its precision.
+    Without a shift, the fastest-growing eigenvalue of a small dense truncation
+    (the first two block rows) is the estimate.
     """
 
     from scipy.sparse.linalg import LinearOperator, eigs
@@ -953,63 +956,86 @@ def _banded_shift_invert_branch(
     mask = jnp.asarray(keep.reshape(-1))
 
     def apply(x):
-        return _apply_operator(x.reshape(shape), cache, params, term_cfg).reshape(-1) * mask
-
-    _status(status_callback, f"assembling {blocks.shape[0]} Hermite-pair blocks of {blocks.shape[1]}")
-    lower, diag, upper = block_tridiagonal_from_products(apply, blocks, dtype=jnp.complex64)
-
-    def solver(sigma: complex, n_blocks: int, refine: int):
-        factors = block_thomas_factor(
-            lower[:n_blocks], diag[:n_blocks], upper[:n_blocks], shift=sigma
+        return (
+            _apply_operator(x.reshape(shape), cache, params, term_cfg).reshape(-1)
+            * mask
         )
-        rows = safe[:n_blocks]
+
+    _status(
+        status_callback,
+        f"assembling {blocks.shape[0]} Hermite-pair blocks of {blocks.shape[1]}",
+    )
+    lower, diag, upper = block_tridiagonal_from_products(
+        apply, blocks, dtype=jnp.complex64
+    )
+
+    def inverse(sigma: complex):
+        factors = block_thomas_factor(lower, diag, upper, shift=sigma)
 
         def bare(b):
-            x = block_thomas_solve(factors, jnp.append(b, 0)[rows].astype(jnp.complex64))
-            return jnp.zeros(size + 1, v0.dtype).at[rows].set(x)[:size]
+            x = block_thomas_solve(
+                factors, jnp.append(b, 0)[safe].astype(jnp.complex64)
+            )
+            return jnp.zeros(size + 1, v0.dtype).at[safe].set(x)[:size]
 
-        if not refine:
-            return jax.jit(bare)
         return jax.jit(
             lambda b: iterative_refinement(
-                lambda x: apply(x) - sigma * x, b, bare, iterations=refine
+                lambda x: apply(x) - sigma * x, b, bare, iterations=_BANDED_REFINE
             )[0].astype(v0.dtype)
         )
 
-    def ritz(sigma: complex, n_blocks: int, refine: int, nev: int):
-        inverse = solver(sigma, n_blocks, refine)
-        n_solves = [0]
-
-        def solve(v):
-            n_solves[0] += 1
-            return np.asarray(inverse(jnp.asarray(v, v0.dtype)))
-
-        values, vectors = eigs(
-            LinearOperator(
-                (size, size),
-                matvec=lambda v: np.asarray(apply(jnp.asarray(v, v0.dtype))),
-                dtype=np.complex128,
-            ),
-            k=nev,
-            sigma=sigma,
-            OPinv=LinearOperator((size, size), matvec=solve, dtype=np.complex128),
-            v0=np.asarray(v0).reshape(-1),
-            tol=_BANDED_ARPACK_TOL,
-            ncv=max(2 * nev + 1, 20),
-        )
-        _status(status_callback, f"banded Arnoldi: {n_solves[0]} solves around sigma={sigma:.5g}")
-        return values, vectors
-
     sigma = cfg.shift
     if sigma is None:
-        coarse = -(-_BANDED_COARSE_NM // 2)
-        guess = complex(np.asarray(_omega_scale(cache, params)))
-        values, _ = ritz(guess, min(coarse, blocks.shape[0]), 0, _BANDED_COARSE_RITZ)
-        # A shift on an eigenvalue of the complex64 factor would defeat the
-        # defect correction, so step off it by a fraction of the scale.
-        sigma = complex(values[np.argmax(values.real)]) + _BANDED_OFFSET * guess.real
-        _status(status_callback, f"banded shift from the coarse operator: sigma={sigma:.5g}")
-    values, vectors = ritz(complex(sigma), blocks.shape[0], _BANDED_REFINE, _BANDED_RITZ)
+        # The leading Hermite pair of blocks with Laguerre < _BANDED_COARSE_NL is a
+        # small dense Galerkin truncation of the same operator; its fastest-growing
+        # eigenvalue lands within a few percent of the full one on Cyclone.
+        laguerre = np.moveaxis(np.indices(shape)[-5], -4, 0).reshape(nm, -1)
+        laguerre = laguerre[:, np.moveaxis(keep, -4, 0)[0].reshape(-1)]
+        if nm % 2:
+            laguerre = np.vstack([laguerre, np.full_like(laguerre[:1], size)])
+        laguerre = laguerre.reshape(blocks.shape)
+        rows = [np.flatnonzero(laguerre[k] < _BANDED_COARSE_NL) for k in (0, 1)]
+        d0, u0, l1, d1 = (
+            np.asarray(x, np.complex128) for x in (diag[0], upper[0], lower[1], diag[1])
+        )
+        small = np.block(
+            [
+                [d0[np.ix_(rows[0], rows[0])], u0[np.ix_(rows[0], rows[1])]],
+                [l1[np.ix_(rows[1], rows[0])], d1[np.ix_(rows[1], rows[1])]],
+            ]
+        )
+        values = np.linalg.eigvals(small)
+        sigma = complex(values[np.argmax(values.real)])
+        _status(
+            status_callback,
+            f"banded shift from the {small.shape[0]}-unknown truncation: sigma={sigma:.5g}",
+        )
+        sigma += _BANDED_OFFSET * float(np.asarray(_omega_scale(cache, params)))
+    _status(
+        status_callback,
+        f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}",
+    )
+    solve_device = inverse(complex(sigma))
+    n_solves = [0]
+
+    def solve(v):
+        n_solves[0] += 1
+        return np.asarray(solve_device(jnp.asarray(v, v0.dtype)))
+
+    values, vectors = eigs(
+        LinearOperator(
+            (size, size),
+            matvec=lambda v: np.asarray(apply(jnp.asarray(v, v0.dtype))),
+            dtype=np.complex128,
+        ),
+        k=_BANDED_RITZ,
+        sigma=complex(sigma),
+        OPinv=LinearOperator((size, size), matvec=solve, dtype=np.complex128),
+        v0=np.asarray(v0).reshape(-1),
+        tol=1.0e-10,
+        ncv=2 * _BANDED_RITZ + 4,
+    )
+    _status(status_callback, f"banded Arnoldi: {n_solves[0]} solves")
     return _pick_certified(
         jnp.asarray(values, v0.dtype),
         jnp.asarray(vectors.T, v0.dtype).reshape((-1, *shape)),
