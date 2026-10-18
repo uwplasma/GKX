@@ -60,15 +60,17 @@ for label, path in CASES.items():
                 print(f"{label}: skipped, needs {wout.name} (pip install vmex)")
                 continue
             print(f"solving {VMEC_INPUT.name} with vmex to create {wout.name}")
+            # vmex exits with status 2 on a loose tolerance but still writes the wout
             subprocess.run(
                 [sys.executable, "-m", "vmex", VMEC_INPUT.name],
                 cwd=VMEC_INPUT.parent,
                 env={
                     **os.environ,
                     "JAX_PLATFORMS": "cpu",
-                },  # a small solve; avoids GPU memory contention
-                check=True,
+                },  # CPU: no GPU memory contention
             )
+            if not wout.exists():
+                raise SystemExit(f"vmex did not write {wout.name}")
     result = gkx.solve(
         case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm, show_progress=True
     )
