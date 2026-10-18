@@ -11,7 +11,11 @@ resolution, so the rates are qualitative. ``case_full.toml`` is the
 96x96x48 quasilinear-audit deck.
 """
 
+import importlib.util
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -26,21 +30,34 @@ KY = [0.2, 0.4, 0.6, 0.8]  # k_y rho_i
 
 case = gkx.load(CASE)
 wout = Path(case.geometry.vmec_file)
-if not wout.exists():
-    import vmex
-    from vmex import optimize
-
+if not wout.exists():  # solve the equilibrium once (minutes on a CPU)
+    if importlib.util.find_spec("vmex") is None:
+        raise SystemExit(f"{wout.name} is missing: pip install vmex, then rerun")
     print(f"solving {VMEC_INPUT.name} with vmex to create {wout.name}")
-    equilibrium = optimize.solve_equilibrium(vmex.VmecInput.from_file(VMEC_INPUT))
-    vmex.write_wout(str(wout), equilibrium.wout)
+    subprocess.run(
+        [sys.executable, "-m", "vmex", VMEC_INPUT.name],
+        cwd=VMEC_INPUT.parent,
+        env={
+            **os.environ,
+            "JAX_PLATFORMS": "cpu",
+        },  # a small solve; avoids GPU memory contention
+        check=True,
+    )
 print(
     f"geometry {case.geometry.model}: {wout.name}, s = {case.geometry.torflux}, alpha = {case.geometry.alpha}"
 )
 
-scan = gkx.scan(case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver)
+scan = gkx.scan(
+    case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver, show_progress=True
+)
 peak_ky = float(scan.ky[int(np.argmax(scan.gamma))])
 peak = gkx.solve(
-    case, ky_target=peak_ky, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
+    case,
+    ky_target=peak_ky,
+    Nl=case.run.Nl,
+    Nm=case.run.Nm,
+    solver=case.run.solver,
+    show_progress=True,
 )
 for ky, gamma, omega in zip(scan.ky, scan.gamma, scan.omega):
     print(f"ky = {ky:.2f}: gamma = {gamma:+.5f}, omega = {omega:+.5f}")

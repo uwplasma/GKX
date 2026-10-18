@@ -558,8 +558,8 @@ Where GKX sits
 
 GKX shares its Hermite--Laguerre gyro-moment velocity representation with GX,
 which makes GX the closest algorithmic and parity reference. The capability
-table is in :doc:`codes`; the parity numbers are in :doc:`benchmarks` and the
-:doc:`verification_matrix`. This section records what has been *measured*
+table is in :doc:`codes`; the parity numbers are in :doc:`validation` and the
+:doc:`validation`. This section records what has been *measured*
 against other codes on one common case, which is less than a comparison.
 
 .. figure:: _static/methods_cross_code_ky_scan.png
@@ -614,4 +614,4 @@ Reading order
   contract.
 - :doc:`performance` and :doc:`parallelization` -- profiles and what is and is
   not a promoted speedup.
-- :doc:`release_scope` and :doc:`verification_matrix` -- the claim boundaries.
+- :doc:`release_scope` and :doc:`validation` -- the claim boundaries.

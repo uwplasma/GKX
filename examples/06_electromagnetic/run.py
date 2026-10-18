@@ -24,7 +24,12 @@ print(
 )
 
 result = gkx.solve(
-    case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm, solver="time"
+    case,
+    ky_target=case.run.ky,
+    Nl=case.run.Nl,
+    Nm=case.run.Nm,
+    solver="time",
+    show_progress=True,
 )
 print(f"ky = {result.ky:.2f}: gamma = {result.gamma:+.4f}, omega = {result.omega:+.4f}")
 if case.run.Nm < 16:

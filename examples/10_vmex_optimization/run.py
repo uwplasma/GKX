@@ -5,12 +5,14 @@ Requires ``pip install vmex`` and its seed deck ``examples/data/input.minimal_se
 (present in a vmex source checkout). The default ladder (five boundary-mode
 stages, 8,000 saturation steps per refresh) is an expensive research
 calculation meant for a GPU; ``VMEX_EXAMPLES_CI=1`` selects a tiny CPU wiring
-run that does not reach saturation. Writes
-``input.QA_GKX_optimized`` and ``wout_QA_GKX_optimized.nc`` to the working
-directory. See README.md in this directory for the scope of the result.
+run that does not reach saturation. Writes the
+per-stage objective history ``summary.json``, ``input.QA_GKX_optimized``,
+``wout_QA_GKX_optimized.nc`` and the vmex equilibrium plots to
+``outputs/10_vmex_optimization``. See README.md in this directory for the scope of the result.
 """
 
 from dataclasses import replace
+import json
 import os
 from pathlib import Path
 
@@ -199,6 +201,9 @@ objective_function_terms = [
 ]
 
 
+history = []
+
+
 def report(label, local_equilibrium):
     values = {
         "QS total": float(qs.total(local_equilibrium)),
@@ -216,6 +221,7 @@ def report(label, local_equilibrium):
         f"[{label}] QS={values['QS total']:.6e}, aspect={values['aspect']:.4f}, "
         f"iota={values['mean iota']:.4f}, GKX Q={values['GKX Q']:.6e}"
     )
+    history.append({"stage": label, **values})
     return values
 
 
@@ -250,12 +256,16 @@ for max_mode, max_nfev in zip(MAX_MODES, MAX_NFEV):
 final_total = report("final", equilibrium)["QS total"]
 final_flux = float(turbulent_transport(equilibrium.state, equilibrium.runtime))
 print(f"\nQS total {final_total:.3e}; GKX Q {seed_flux:.3e} -> {final_flux:.3e}")
-input_path = inp.to_indata("input.QA_GKX_optimized")
-wout_path = vj.write_wout("wout_QA_GKX_optimized.nc", equilibrium.wout)
+OUTPUT = Path("outputs/10_vmex_optimization")
+OUTPUT.mkdir(parents=True, exist_ok=True)
+(OUTPUT / "summary.json").write_text(json.dumps(history, indent=2) + "\n")
+input_path = inp.to_indata(str(OUTPUT / "input.QA_GKX_optimized"))
+wout_path = vj.write_wout(str(OUTPUT / "wout_QA_GKX_optimized.nc"), equilibrium.wout)
+print(f"wrote {OUTPUT}/summary.json")
 print(f"wrote {input_path}")
 print(f"wrote {wout_path}")
 try:
-    for path in vj.plot_wout(wout_path, ".").values():
+    for path in vj.plot_wout(wout_path, OUTPUT).values():
         print(f"wrote {path}")
 except (ImportError, ValueError) as error:
     print(f"skipped optional equilibrium plots: {error}")

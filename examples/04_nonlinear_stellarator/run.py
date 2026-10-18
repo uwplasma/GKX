@@ -11,7 +11,11 @@ a minute on a laptop CPU once the wout exists; the tutorial run does not reach
 saturation. ``case_full.toml`` is the 96x96x48 production deck (a GPU run).
 """
 
+import importlib.util
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -24,20 +28,31 @@ OUTPUT = Path("outputs/04_nonlinear_stellarator")
 
 case = gkx.load(CASE)
 wout = Path(case.geometry.vmec_file)
-if not wout.exists():
-    import vmex
-    from vmex import optimize
-
+if not wout.exists():  # solve the equilibrium once (minutes on a CPU)
+    if importlib.util.find_spec("vmex") is None:
+        raise SystemExit(f"{wout.name} is missing: pip install vmex, then rerun")
     print(f"solving {VMEC_INPUT.name} with vmex to create {wout.name}")
-    equilibrium = optimize.solve_equilibrium(vmex.VmecInput.from_file(VMEC_INPUT))
-    vmex.write_wout(str(wout), equilibrium.wout)
+    subprocess.run(
+        [sys.executable, "-m", "vmex", VMEC_INPUT.name],
+        cwd=VMEC_INPUT.parent,
+        env={
+            **os.environ,
+            "JAX_PLATFORMS": "cpu",
+        },  # a small solve; avoids GPU memory contention
+        check=True,
+    )
 grid = case.grid
 print(
     f"nonlinear ITG, {wout.name}, s = {case.geometry.torflux}, grid {grid.Nx}x{grid.Ny}x{grid.Nz}"
 )
 
 result = gkx.solve(
-    case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm, steps=case.run.steps
+    case,
+    ky_target=case.run.ky,
+    Nl=case.run.Nl,
+    Nm=case.run.Nm,
+    steps=case.run.steps,
+    show_progress=True,
 )
 diagnostics = result.diagnostics
 print(f"t_final = {float(diagnostics.t[-1]):.2f}")
