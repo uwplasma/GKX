@@ -599,7 +599,7 @@ def _dense_estimate(lower, diag, upper, laguerre: np.ndarray, nl: int) -> comple
     cut = nl if (laguerre < nl).sum() <= _DENSE_N else _COARSE_NL
     rows = [np.flatnonzero(row < cut) for row in laguerre]
     fit = np.searchsorted(np.cumsum([r.size for r in rows]), _DENSE_N, side="right")
-    rows = rows[: max(fit, 2)]
+    rows = rows[: max(int(fit), 2)]
     edge = np.cumsum([0] + [r.size for r in rows])
     dense = np.zeros((edge[-1], edge[-1]), np.complex128)
     for b, r in enumerate(rows):
@@ -699,8 +699,8 @@ def _banded_ritz_pairs(
     )
 
     # The blocks are the operator only if it is Hermite-banded: compare on a random vector.
-    probe = np.random.default_rng(0).standard_normal((2, size)) * keep.reshape(-1)
-    probe = jnp.asarray(probe[0] + 1j * probe[1], v0.dtype)
+    noise = np.random.default_rng(0).standard_normal((2, size)) * keep.reshape(-1)
+    probe = jnp.asarray(noise[0] + 1j * noise[1], v0.dtype)
     expected = jnp.append(apply(probe), 0)[safe]
     mismatch = jnp.linalg.norm(
         block_tridiag_matvec(lower, diag, upper, jnp.append(probe, 0)[safe]) - expected
