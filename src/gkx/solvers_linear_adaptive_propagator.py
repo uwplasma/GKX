@@ -723,6 +723,8 @@ def banded_ritz_pairs(
             v0.dtype
         )
 
+    # A seeded random start: the seed state can be orthogonal to the fastest mode.
+    start = np.asarray(probe)
     solves = [0]
     operator = LinearOperator(
         (size, size),
@@ -742,7 +744,7 @@ def banded_ritz_pairs(
             k=_RITZ,
             sigma=sigma,
             OPinv=LinearOperator((size, size), matvec=solve, dtype=np.complex128),
-            v0=np.asarray(v0).reshape(-1),
+            v0=start,
             tol=1.0e-10,
             ncv=2 * _RITZ + 4,
         )
