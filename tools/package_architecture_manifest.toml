@@ -1496,7 +1496,8 @@ recursive = true
 # 72926 -> 73011: linearized Landau physics gates and runtime regression, net of the retired coulomb tests.
 # 73011 -> 73066: bug-hunt (#363) tests on top of #364, measured.
 # 73066 -> 73217: banded route tests (dense estimate, auto fallbacks, band check, memory rule). Measured.
-baseline = 73217
+# 73217 -> 73230: KBM-trap dominance test. Measured.
+baseline = 73230
 target = 35000
 
 [[line_budget_policy.counts]]
