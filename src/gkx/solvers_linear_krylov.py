@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -171,6 +172,16 @@ _StatusCallback = Callable[[str], None] | None
 # express, so a converged complex64 eigenpair is not rejected for failing an
 # f64-only tolerance.
 _ADAPTIVE_BASE_TOL = 1.0e-9
+# Banded shift-invert: Hermite moments kept for the shift estimate, Ritz values
+# asked for at that estimate and around the final shift, defect corrections per
+# application, ARPACK's tolerance and the step (in omega_scale) from the estimate
+# to the shift.
+_BANDED_COARSE_NM = 8
+_BANDED_COARSE_RITZ = 12
+_BANDED_RITZ = 6
+_BANDED_REFINE = 1
+_BANDED_OFFSET = 1.0e-2
+_BANDED_ARPACK_TOL = 1.0e-10
 
 
 def _status(status_callback: _StatusCallback, message: str) -> None:
@@ -822,15 +833,54 @@ def _sparse_shift_invert_branch(
             .at[:, rows]
             .set(eigenvectors)
         )
-    vectors = eigenvectors.reshape((eigenvectors.shape[0], *v0.shape))
+    return _pick_certified(
+        modes.eigenvalues,
+        eigenvectors.reshape((eigenvectors.shape[0], *v0.shape)),
+        np.asarray(modes.converged),
+        v_ref,
+        cache,
+        params,
+        term_cfg,
+        cfg,
+        status_callback,
+        shift=shift,
+        select_overlap=select_overlap,
+        route="sparse_shift_invert",
+    )
+
+
+def _pick_certified(
+    values,
+    vectors,
+    converged,
+    v_ref,
+    cache,
+    params,
+    term_cfg,
+    cfg: KrylovConfig,
+    status_callback: _StatusCallback,
+    *,
+    shift: complex,
+    select_overlap: bool,
+    route: str,
+) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
+    """Gate shift-invert candidates on the original operator and pick one.
+
+    Candidates that converged and pass the outer residual gate compete on the
+    overlap with ``v_ref``, on growth, or on distance to ``shift``, as
+    ``cfg.shift_selection`` says. None certified raises.
+    """
+
+    residual_tol = certifiable_residual_tolerance(
+        cfg.shift_outer_residual_tol, vectors.dtype
+    )
     residuals = np.asarray(
         [
             _eigenpair_relative_residual(value, vector, cache, params, term_cfg)
-            for value, vector in zip(modes.eigenvalues, vectors, strict=True)
+            for value, vector in zip(values, vectors, strict=True)
         ]
     )
-    certified = np.asarray(modes.converged) & np.isfinite(residuals)
-    certified &= residuals <= residual_tol
+    certified = converged & np.isfinite(residuals) & (residuals <= residual_tol)
     _targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
     if select_overlap:
         scores = np.abs(
@@ -838,26 +888,142 @@ def _sparse_shift_invert_branch(
             @ np.asarray(v_ref).reshape(-1).conj()
         )
     elif select_growth:
-        scores = np.asarray(modes.eigenvalues).real
+        scores = np.asarray(values).real
     else:
-        scores = -np.abs(np.asarray(modes.eigenvalues) - shift)
+        scores = -np.abs(np.asarray(values) - shift)
     if not np.any(certified):
         raise RuntimeError(
-            "sparse shift-invert returned no original-operator-certified eigenpair"
+            f"{route} returned no original-operator-certified eigenpair "
+            f"(best residual {np.nanmin(residuals):.3g}, tolerance {residual_tol:.3g})"
         )
     selected = int(np.argmax(np.where(certified, scores, -np.inf)))
-    _status(
-        status_callback,
-        f"sparse shift-invert residual={residuals[selected]:.3g}",
-    )
+    _status(status_callback, f"{route} residual={residuals[selected]:.3g}")
     status = EigenSolveStatus(
         method=cfg.method,
-        route="sparse_shift_invert",
+        route=route,
         residual=float(residuals[selected]),
         tolerance=residual_tol,
         certified=True,
     )
-    return modes.eigenvalues[selected], vectors[selected], status
+    return values[selected], vectors[selected], status
+
+
+def _banded_shift_invert_branch(
+    v0: jnp.ndarray,
+    v_ref: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    term_cfg,
+    cfg: KrylovConfig,
+    status_callback: _StatusCallback,
+    *,
+    select_overlap: bool,
+) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
+    """Shift-invert Arnoldi on the exact Hermite-banded operator.
+
+    At one ky the operator couples Hermite m only to m +- 2, so Hermite pairs
+    make it block tridiagonal. The blocks are read off GKX's own operator in
+    ``3 ceil(m / batch)`` batched products and factored once in complex64 per
+    shift; two defect corrections against the operator restore its precision.
+    Without a shift, the leading ``_BANDED_COARSE_NM`` Hermite moments (the same
+    blocks, truncated) locate the growth near ``omega_scale``, and the full
+    operator is then solved around that estimate.
+    """
+
+    from scipy.sparse.linalg import LinearOperator, eigs
+    from solvax import (
+        block_thomas_factor,
+        block_thomas_solve,
+        block_tridiagonal_from_products,
+        iterative_refinement,
+    )
+
+    shape, size = v0.shape, int(v0.size)
+    covered = _linked_covered_mode_mask(cache)
+    keep = np.ones(shape, bool)
+    if covered is not None:
+        keep = np.broadcast_to(np.asarray(covered)[:, :, None], shape)
+    nm = shape[-4]
+    unknowns = np.moveaxis(np.arange(size).reshape(shape), -4, 0).reshape(nm, -1)
+    unknowns = unknowns[:, np.moveaxis(keep, -4, 0)[0].reshape(-1)]
+    if nm % 2:
+        unknowns = np.vstack([unknowns, -np.ones_like(unknowns[:1])])
+    blocks = unknowns.reshape(unknowns.shape[0] // 2, -1)
+    safe = jnp.asarray(np.where(blocks < 0, size, blocks))
+    mask = jnp.asarray(keep.reshape(-1))
+
+    def apply(x):
+        return _apply_operator(x.reshape(shape), cache, params, term_cfg).reshape(-1) * mask
+
+    _status(status_callback, f"assembling {blocks.shape[0]} Hermite-pair blocks of {blocks.shape[1]}")
+    lower, diag, upper = block_tridiagonal_from_products(apply, blocks, dtype=jnp.complex64)
+
+    def solver(sigma: complex, n_blocks: int, refine: int):
+        factors = block_thomas_factor(
+            lower[:n_blocks], diag[:n_blocks], upper[:n_blocks], shift=sigma
+        )
+        rows = safe[:n_blocks]
+
+        def bare(b):
+            x = block_thomas_solve(factors, jnp.append(b, 0)[rows].astype(jnp.complex64))
+            return jnp.zeros(size + 1, v0.dtype).at[rows].set(x)[:size]
+
+        if not refine:
+            return jax.jit(bare)
+        return jax.jit(
+            lambda b: iterative_refinement(
+                lambda x: apply(x) - sigma * x, b, bare, iterations=refine
+            )[0].astype(v0.dtype)
+        )
+
+    def ritz(sigma: complex, n_blocks: int, refine: int, nev: int):
+        inverse = solver(sigma, n_blocks, refine)
+        n_solves = [0]
+
+        def solve(v):
+            n_solves[0] += 1
+            return np.asarray(inverse(jnp.asarray(v, v0.dtype)))
+
+        values, vectors = eigs(
+            LinearOperator(
+                (size, size),
+                matvec=lambda v: np.asarray(apply(jnp.asarray(v, v0.dtype))),
+                dtype=np.complex128,
+            ),
+            k=nev,
+            sigma=sigma,
+            OPinv=LinearOperator((size, size), matvec=solve, dtype=np.complex128),
+            v0=np.asarray(v0).reshape(-1),
+            tol=_BANDED_ARPACK_TOL,
+            ncv=max(2 * nev + 1, 20),
+        )
+        _status(status_callback, f"banded Arnoldi: {n_solves[0]} solves around sigma={sigma:.5g}")
+        return values, vectors
+
+    sigma = cfg.shift
+    if sigma is None:
+        coarse = -(-_BANDED_COARSE_NM // 2)
+        guess = complex(np.asarray(_omega_scale(cache, params)))
+        values, _ = ritz(guess, min(coarse, blocks.shape[0]), 0, _BANDED_COARSE_RITZ)
+        # A shift on an eigenvalue of the complex64 factor would defeat the
+        # defect correction, so step off it by a fraction of the scale.
+        sigma = complex(values[np.argmax(values.real)]) + _BANDED_OFFSET * guess.real
+        _status(status_callback, f"banded shift from the coarse operator: sigma={sigma:.5g}")
+    values, vectors = ritz(complex(sigma), blocks.shape[0], _BANDED_REFINE, _BANDED_RITZ)
+    return _pick_certified(
+        jnp.asarray(values, v0.dtype),
+        jnp.asarray(vectors.T, v0.dtype).reshape((-1, *shape)),
+        np.ones(values.size, bool),
+        v_ref,
+        cache,
+        params,
+        term_cfg,
+        cfg,
+        status_callback,
+        shift=complex(sigma),
+        select_overlap=select_overlap,
+        route="banded",
+    )
 
 
 def _adaptive_branch(
@@ -963,6 +1129,17 @@ def _dispatch_dominant_eigenpair(
             status_callback,
             select_overlap=select_overlap,
         )
+    if cfg.method == "banded":
+        return _banded_shift_invert_branch(
+            v0,
+            v_ref,
+            cache,
+            params,
+            term_cfg,
+            cfg,
+            status_callback,
+            select_overlap=select_overlap,
+        )
     if cfg.method == "power":
         pair = _power_branch(v0, cache, params, term_cfg, cfg, status_callback)
     elif cfg.method == "propagator":
@@ -989,7 +1166,7 @@ def _dispatch_dominant_eigenpair(
         )
     else:
         raise ValueError(
-            "Krylov method must be adaptive, power, propagator, shift_invert, "
+            "Krylov method must be adaptive, banded, power, propagator, shift_invert, "
             "sparse_shift_invert, or arnoldi"
         )
     return _certify_raw_eigenpair(pair, cache, params, term_cfg, cfg, status_callback)
