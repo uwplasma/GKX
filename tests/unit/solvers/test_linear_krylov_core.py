@@ -2174,6 +2174,19 @@ def test_dense_estimate_is_the_fastest_eigenvalue_of_the_leading_truncation(
     )
 
 
+def test_growth_excess_separates_the_kbm_trap() -> None:
+    """KBM (8,24): a certified 0.0332-0.1953j beside the fastest 0.3427-0.8314j."""
+
+    modes = np.array([0.0332 - 0.1953j, 0.3427 - 0.8314j, -0.05 + 0.1j])
+    dt = 0.2
+    step = lambda x: x / (1 - modes * dt)  # noqa: E731  (I - dt A)^-1, A diagonal
+    start = np.random.default_rng(1).standard_normal(3) + 0j
+    trapped = ap._growth_excess(step, start, modes[0], dt)
+    found = ap._growth_excess(step, start, modes[1], dt)
+    assert trapped > 0.5 * modes[0].real * dt + 1e-3  # refused
+    assert found < 1e-3  # the fastest mode passes
+
+
 @requires_banded_solvax
 def test_auto_takes_the_banded_route_and_falls_back_to_adaptive(monkeypatch) -> None:
     cache, params, seed, terms = _selected_linked_case()

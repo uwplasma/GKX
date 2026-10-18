@@ -1154,7 +1154,8 @@ recursive = true
 # 67658 -> 67962: Hermite-banded shift-invert (`auto` default): block-tridiagonal probe
 # assembly, dense shift estimate, ARPACK driver (about 200 lines in the adaptive-propagator
 # module) and the dispatcher; the SOLVAX half (block recovery, shifted factor) is in SOLVAX. Measured.
-baseline = 67962
+# 67962 -> 67999: backward-Euler dominance check of the banded route. Measured.
+baseline = 67999
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -358,9 +358,23 @@ moves by more than 0.05 :math:`\omega`-scale. The pair is then gated on the
 original operator.
 
 The route returns the fastest-growing certified Ritz value among those nearest
-its shift. That is what makes it fast and what it does not prove: a mode far
-from every shift tried would be missed. The checks below agree with ``adaptive``
-and with the time route wherever those finish.
+its shift, so a mode far from every shift would be missed. When the shift is
+chosen automatically, a dominance check follows. One more factorization at the
+real shift :math:`1/\Delta t` gives the backward-Euler step
+:math:`(I-\Delta t A)^{-1}`, with
+:math:`\Delta t = 0.25/\max(2\,\omega\text{-scale}, 1.5|\omega|)`. A seeded
+random state is stepped 60 times, and its mean amplification over the last 15
+steps must not exceed that of the found eigenvalue, :math:`1/|1-\lambda\Delta t|`,
+by more than :math:`0.5\gamma\Delta t`; otherwise the route raises and ``auto``
+uses ``adaptive``. It costs one factorization and 60 solves (3-5 s, about 10% of
+the run, on the table cases). The excess growth per step was -0.02 (Cyclone,
+Miller KE, ETG) and 0.002 (KBM). Forcing the old prototype's shift on KBM, which
+returns 0.0332-0.195j, gave 0.057 and is refused. The check sees a faster mode
+only if its growth-rate gap exceeds about :math:`2/(60\,\Delta t)` and its
+frequency is resolved by the step; near-degenerate competitors and fast
+oscillators are not covered. A user-supplied shift is not checked, since it asks
+for that branch. The route agrees with ``adaptive`` and with the time route
+wherever those finish.
 
 **Measured** (office RTX A4000, shared, float64, single ky, wall time of the
 whole call; raw records ``plan/research/2026-10-18-banded-shift-invert/``):
