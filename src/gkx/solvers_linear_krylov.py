@@ -953,6 +953,10 @@ def _banded_shift_invert(
         unknowns = np.vstack([unknowns, -np.ones_like(unknowns[:1])])
     blocks = unknowns.reshape(unknowns.shape[0] // 2, -1)
     safe = jnp.asarray(np.where(blocks < 0, size, blocks))
+    # Gathers, not scatters: an XLA scatter of complex values is 10x the solve on GPU.
+    position = np.full(size, blocks.size)
+    position[blocks[blocks >= 0]] = np.flatnonzero(blocks >= 0)
+    position = jnp.asarray(position)
     mask = jnp.asarray(keep.reshape(-1))
 
     def apply(x):
@@ -969,20 +973,18 @@ def _banded_shift_invert(
         apply, blocks, dtype=jnp.complex64
     )
 
-    def inverse(sigma: complex):
-        factors = block_thomas_factor(lower, diag, upper, shift=sigma)
-
-        def bare(b):
+    @jax.jit
+    def inverse(factors, b, sigma):
+        def bare(r):
             x = block_thomas_solve(
-                factors, jnp.append(b, 0)[safe].astype(jnp.complex64)
+                factors, jnp.append(r, 0)[safe].astype(jnp.complex64)
             )
-            return jnp.zeros(size + 1, v0.dtype).at[safe].set(x)[:size]
+            return jnp.append(x.reshape(-1), 0)[position].astype(v0.dtype)
 
-        return jax.jit(
-            lambda b: iterative_refinement(
-                lambda x: apply(x) - sigma * x, b, bare, iterations=_BANDED_REFINE
-            )[0].astype(v0.dtype)
+        refined = iterative_refinement(
+            lambda x: apply(x) - sigma * x, b, bare, iterations=_BANDED_REFINE
         )
+        return refined[0].astype(v0.dtype)
 
     sigma = cfg.shift
     if sigma is None:
@@ -1015,12 +1017,13 @@ def _banded_shift_invert(
         status_callback,
         f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}",
     )
-    solve_device = inverse(complex(sigma))
+    # The factors are an argument: closed over, XLA would bake them in as constants.
+    factors = block_thomas_factor(lower, diag, upper, shift=complex(sigma))
     n_solves = [0]
 
     def solve(v):
         n_solves[0] += 1
-        return np.asarray(solve_device(jnp.asarray(v, v0.dtype)))
+        return np.asarray(inverse(factors, jnp.asarray(v, v0.dtype), sigma))
 
     values, vectors = eigs(
         LinearOperator(
