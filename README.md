@@ -119,7 +119,7 @@ and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
 applies the full gyrokinetic right-hand side, or from a sparse direct
 shift-invert solve; both certify the returned pair against the unprojected
 operator ([solvers](docs/solvers.rst)).
-Eigensolver policy: certified time-advance Arnoldi (`adaptive`) by default; shift-invert is opt-in for a targeted branch ([decision and measurements](docs/algorithms.rst)).
+Eigensolver policy: `auto` by default, a Hermite-banded direct shift-invert where its blocks fit in memory and the certified time-advance Arnoldi (`adaptive`) otherwise; every pair is certified against the original operator ([decision and measurements](docs/algorithms.rst)).
 
 ```bash
 python examples/01_linear_tokamak/run.py      # Cyclone ky scan and eigenfunction

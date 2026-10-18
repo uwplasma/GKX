@@ -577,10 +577,10 @@ def adaptive_propagator_eigenpair(
 # moves. Dominance is that of the nearest ``_RITZ`` eigenvalues, not a proof.
 _COARSE_NL = 3  # Laguerre moments kept in the dense shift estimate
 _DENSE_N = 3072  # unknowns of the largest dense estimate
-_RITZ = 8  # eigenvalues asked of ARPACK around the shift
+_RITZ = 12  # eigenvalues asked of ARPACK around the shift
 _PASSES = 3  # shifts tried while the fastest-growing Ritz value keeps moving
 _RECENTER = 0.05  # that movement, in omega_scale, that starts another pass
-_REFINE = 1  # defect corrections per application
+_REFINE = 2  # defect corrections per application
 _OFFSET = 1.0e-3  # step (in omega_scale) from the estimate to the shift
 _BAND_TOL = (
     1.0e-4  # relative mismatch of the blocks against the operator that is refused

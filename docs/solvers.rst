@@ -241,13 +241,14 @@ state shows almost nothing and a saturated restart shows all of it.
 Eigenpair certification
 -----------------------
 
-``KrylovConfig()`` and ``dominant_eigenpair`` default to ``method="adaptive"``,
-the residual-certified eigensolve runtime linear runs use for generic
-contracts.  ``power_iters`` defaults to 40 in both.  No method returns a pair
-above its original-operator residual gate
+``KrylovConfig()`` and ``dominant_eigenpair`` default to ``method="auto"``:
+the Hermite-banded direct shift-invert (``banded``) when its block arrays fit in
+memory, the residual-certified ``adaptive`` eigensolve when they do not or when
+the banded pair is rejected.  ``power_iters`` defaults to 40 in both.  No method
+returns a pair above its original-operator residual gate
 :math:`\lVert Av-\lambda v\rVert/\max(\lVert Av\rVert,|\lambda|\lVert v\rVert)`:
 
-* ``adaptive``, ``shift_invert`` and ``sparse_shift_invert`` raise when their
+* ``adaptive``, ``banded``, ``shift_invert`` and ``sparse_shift_invert`` raise when their
   gates reject the pair;
 * ``power``, ``propagator`` and ``arnoldi`` return a Rayleigh or Ritz pair
   without a convergence test of their own.  The pair is checked against
@@ -268,10 +269,10 @@ wrong branch with relative residual 0.98--1.00.  Code that relies on the raw
 routes must now name the method, and pass ``certify=False`` if it knowingly
 accepts an unconverged pair.
 
-Why ``adaptive`` is the default, and not shift-invert
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Why the default is not ``pr3-cm`` shift-invert
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Shift-invert with ``pr3-cm`` certifies on the shipped Cyclone deck but is not
+Matrix-free shift-invert with ``pr3-cm`` certifies on the shipped Cyclone deck but is not
 cheaper.  Against a same-session ``adaptive`` control, every arm certified
 against the original operator, in matvec-equivalents to a certified pair:
 

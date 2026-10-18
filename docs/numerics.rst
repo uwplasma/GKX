@@ -172,9 +172,9 @@ flags. Each rests on a load-independent measurement -- residuals,
 certification gates, step counts, growth rates -- recorded in
 :ref:`q28-defaults` and ``plan/log.md``.
 
-**Eigen route.** ``KrylovConfig.method = "adaptive"``, the residual-certified
-propagator eigensolve. See "Why ``adaptive`` is the default, and not
-shift-invert" in :doc:`solvers`.
+**Eigen route.** ``KrylovConfig.method = "auto"``: banded direct shift-invert
+where it fits, else ``adaptive``, the residual-certified propagator eigensolve.
+See "Why the default is not ``pr3-cm`` shift-invert" in :doc:`solvers`.
 
 **Precision.** ``complex64`` by default. On
 ``examples/01_linear_tokamak/case_full.toml`` at its own resolution the float32
