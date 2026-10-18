@@ -1,7 +1,12 @@
-"""Adaptive, residual-certified full-operator propagator eigensolve."""
+"""Adaptive, residual-certified full-operator propagator eigensolve.
+
+The Hermite-banded shift-invert (:func:`banded_ritz_pairs`) is the direct route
+to the same eigenpairs and shares the file's eigenpair contract.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import NamedTuple
 import jax
 import jax.numpy as jnp
@@ -18,6 +23,7 @@ from gkx.operators.linear.params import (
 from gkx.solvers_linear_krylov_algorithms import (
     _apply_operator,
     _linked_covered_mode_mask,
+    _omega_scale,
     _project_to_linked_cover,
     _require_linked_cover_seed,
     dominant_eigenpair_propagator_cached,
@@ -548,9 +554,160 @@ def adaptive_propagator_eigenpair(
     )
 
 
+# --- Hermite-banded shift-invert ---------------------------------------------
+#
+# Hermite-banded direct shift-invert for the single-ky linear operator.
+#
+# At one ky the operator couples Hermite m only to m +- 2 (streaming, mirror and
+# A_par move m by one, the drifts by two, and the field response and collisions
+# stay inside that band). Grouping m in pairs therefore makes it exactly block
+# tridiagonal, with blocks of ``2 ns Nl Nz`` unknowns. The blocks are read off
+# GKX's own operator in ``3 ceil(m / batch)`` batched products
+# (:func:`solvax.block_tridiagonal_from_products`; the prototype matched the
+# matrix-free operator to 4e-16), factored once per shift in complex64 by
+# :func:`solvax.block_thomas_factor`, and one defect correction against the
+# operator restores the working precision of each application. ARPACK runs
+# shift-invert on that inverse; the caller certifies the Ritz pairs against the
+# original operator.
+#
+# Without a shift, the fastest-growing eigenvalue of a small dense truncation
+# (first two Hermite pairs, Laguerre < ``_COARSE_NL``) is the estimate: on
+# Cyclone (Nl, Nm) = (8, 24) it lands 0.0025 from the converged eigenvalue.
+
+_COARSE_NL = 4  # Laguerre moments kept in the dense shift estimate
+_RITZ = 6  # eigenvalues asked of ARPACK around the shift
+_REFINE = 1  # defect corrections per application
+_OFFSET = 1.0e-3  # step (in omega_scale) from the estimate to the shift
+
+
+def banded_ritz_pairs(
+    v0: jnp.ndarray,
+    cache,
+    params,
+    term_cfg,
+    shift: complex | None,
+    status: Callable[[str], None] | None,
+) -> tuple[jnp.ndarray, jnp.ndarray, complex]:
+    """Return ``_RITZ`` eigenpairs of the operator nearest ``shift`` and the shift.
+
+    ``v0`` fixes the state shape ``(..., Nl, Nm, ky, kx, z)`` and dtype. On a
+    linked cache only the chain modes are unknowns. Vectors come back in the
+    full state shape; none is certified here.
+    """
+
+    from scipy.sparse.linalg import LinearOperator, eigs
+    from solvax import (  # type: ignore[attr-defined]
+        block_thomas_factor,
+        block_thomas_solve,
+        block_tridiagonal_from_products,
+        iterative_refinement,
+    )
+
+    note = status or (lambda _message: None)
+    shape, size = v0.shape, int(v0.size)
+    nm = shape[-4]
+    if nm < 4:
+        raise ValueError("banded shift-invert requires Nm >= 4")
+    covered = _linked_covered_mode_mask(cache)
+    keep = np.ones(shape, bool)
+    if covered is not None:
+        keep = np.broadcast_to(np.asarray(covered)[:, :, None], shape)
+    columns = np.moveaxis(keep, -4, 0)[0].reshape(-1)  # unknowns kept, per m
+
+    def pairs(index: np.ndarray, pad: int) -> np.ndarray:
+        """Hermite-moment-major ``index`` as ``(n_blocks, 2 * unknowns)``, padded if Nm is odd."""
+        rows = np.moveaxis(index, -4, 0).reshape(nm, -1)[:, columns]
+        rows = np.vstack([rows, np.full_like(rows[:1], pad)]) if nm % 2 else rows
+        return rows.reshape(rows.shape[0] // 2, -1)
+
+    blocks = pairs(np.arange(size).reshape(shape), -1)
+    laguerre = pairs(np.indices(shape)[-5], size)
+    safe = jnp.asarray(np.where(blocks < 0, size, blocks))
+    # Gathers, not scatters: an XLA scatter of complex values costs 10x the solve on GPU.
+    position = np.full(size, blocks.size)
+    position[blocks[blocks >= 0]] = np.flatnonzero(blocks >= 0)
+    positions = jnp.asarray(position)
+    mask = jnp.asarray(keep.reshape(-1))
+
+    def apply(x):
+        return (
+            _apply_operator(x.reshape(shape), cache, params, term_cfg).reshape(-1)
+            * mask
+        )
+
+    note(f"assembling {blocks.shape[0]} Hermite-pair blocks of {blocks.shape[1]}")
+    lower, diag, upper = block_tridiagonal_from_products(
+        apply, blocks, dtype=jnp.complex64
+    )
+
+    if shift is None:
+        k = [np.flatnonzero(laguerre[b] < _COARSE_NL) for b in (0, 1)]
+        d0, u0, l1, d1 = (
+            np.asarray(x, np.complex128) for x in (diag[0], upper[0], lower[1], diag[1])
+        )
+        small = np.block(
+            [
+                [d0[np.ix_(k[0], k[0])], u0[np.ix_(k[0], k[1])]],
+                [l1[np.ix_(k[1], k[0])], d1[np.ix_(k[1], k[1])]],
+            ]
+        )
+        values = np.linalg.eigvals(small)
+        shift = complex(values[np.argmax(values.real)])
+        note(
+            f"banded shift from the {small.shape[0]}-unknown truncation: sigma={shift:.5g}"
+        )
+        # A shift on an eigenvalue of the complex64 factor would defeat the correction.
+        shift += _OFFSET * float(np.asarray(_omega_scale(cache, params)))
+    sigma = complex(shift)
+    note(f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}")
+    factors = block_thomas_factor(lower, diag, upper, shift=sigma)  # type: ignore[call-arg]
+    del diag  # the factor holds its own shifted copy
+
+    @jax.jit  # factors are an argument: closed over, XLA would bake them in as constants
+    def inverse(factors, b):
+        def bare(r):
+            x = block_thomas_solve(
+                factors, jnp.append(r, 0)[safe].astype(jnp.complex64)
+            )
+            return jnp.append(x.reshape(-1), 0)[positions].astype(v0.dtype)
+
+        residual = lambda x: apply(x) - sigma * x  # noqa: E731
+        return iterative_refinement(residual, b, bare, iterations=_REFINE)[0].astype(
+            v0.dtype
+        )
+
+    solves = [0]
+
+    def solve(v):
+        solves[0] += 1
+        return np.asarray(inverse(factors, jnp.asarray(v, v0.dtype)))
+
+    operator = LinearOperator(
+        (size, size),
+        matvec=lambda v: np.asarray(apply(jnp.asarray(v, v0.dtype))),
+        dtype=np.complex128,
+    )
+    values, vectors = eigs(
+        operator,
+        k=_RITZ,
+        sigma=sigma,
+        OPinv=LinearOperator((size, size), matvec=solve, dtype=np.complex128),
+        v0=np.asarray(v0).reshape(-1),
+        tol=1.0e-10,
+        ncv=2 * _RITZ + 4,
+    )
+    note(f"banded Arnoldi: {solves[0]} solves")
+    return (
+        jnp.asarray(values, v0.dtype),
+        jnp.asarray(vectors.T, v0.dtype).reshape((-1, *shape)),
+        sigma,
+    )
+
+
 __all__ = [
     "AdaptivePropagatorSolution",
     "adaptive_propagator_eigenpair",
+    "banded_ritz_pairs",
     "certifiable_residual_tolerance",
     "dominant_eigenpairs_propagator_cached",
 ]

@@ -181,6 +181,11 @@ jobs:
         with:
           jax-cache: adaptive-eigensolver
 
+      # The banded route imports two names from the open SOLVAX PR (#149). Drop
+      # this step, and the pin, when a SOLVAX release carries them.
+      - name: Install the paired SOLVAX branch
+        run: uv pip install --system --no-deps "solvax @ git+https://github.com/uwplasma/SOLVAX@feat/block-tridiag-from-products"
+
       - name: Paired eigenmode and implicit-AD gates
         env:
           JAX_ENABLE_X64: "true"
@@ -189,12 +194,12 @@ jobs:
           # job passes while skipping every test it exists to run.
           GKX_REQUIRE_PAIRED_SOLVAX: "1"
         run: |
-          python -c "import solvax; assert callable(solvax.exponential_eigenpairs); assert callable(solvax.sparse_eigenpairs)"
+          python -c "import solvax; assert callable(solvax.exponential_eigenpairs); assert callable(solvax.sparse_eigenpairs); assert callable(solvax.block_tridiagonal_from_products)"
           pytest -q --maxfail=1 --disable-warnings \
             tests/unit/solvers/test_linear_krylov_core.py \
             tests/unit/objectives/test_autodiff_solver_objectives.py \
             -m "integration or not integration" \
-            -k "adaptive or biorthogonal or experimental_solvax_eigen_contract"
+            -k "adaptive or biorthogonal or experimental_solvax_eigen_contract or banded"
 
   fast-coverage:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'

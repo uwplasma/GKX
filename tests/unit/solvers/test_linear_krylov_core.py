@@ -1949,7 +1949,7 @@ def test_sparse_shift_invert_selects_only_original_operator_certified_modes(
     assert captured["factorization"] == "factor"
 
 
-def _selected_linked_case(nx: int = 8):
+def _selected_linked_case(nx: int = 8, nl: int = 2, nm: int = 4):
     """One-ky linked grid; at Nx=8 its five-link chain skips kx rows {3, 4, 5}."""
 
     from gkx.core_grid import select_ky_grid
@@ -1967,8 +1967,8 @@ def _selected_linked_case(nx: int = 8):
     grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams(damp_ends_rate=0.1)
-    cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
-    shape = (2, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    cache = build_linear_cache(grid, geom, params, Nl=nl, Nm=nm)
+    shape = (nl, nm, grid.ky.size, grid.kx.size, grid.z.size)
     index = jnp.arange(int(np.prod(shape)), dtype=jnp.float64)
     # Golden-angle start, nonzero on every row like gkx.objectives.core's.
     seed = jnp.reshape(jnp.exp(1j * (index + 1.0) * 0.6180339887498948), shape)
@@ -2082,6 +2082,47 @@ def test_sparse_shift_invert_assembles_linked_chain_columns_only(monkeypatch) ->
     (full_value, _full_vector), full_status = solve()
     assert "n=512 " in full_status
     assert abs(complex(value) - complex(full_value)) <= 1.0e-12 * abs(target)
+
+
+requires_banded_solvax = requires_paired_solvax("block_tridiagonal_from_products")
+
+
+@requires_banded_solvax
+@pytest.mark.parametrize("nm", [4, 5])
+@pytest.mark.parametrize("use_shift", [True, False])
+def test_banded_shift_invert_finds_the_dense_chain_eigenvalue(nm, use_shift) -> None:
+    """Hermite-pair blocks reproduce the operator, odd Nm included, on chain modes only."""
+
+    cache, params, seed, terms = _selected_linked_case(nm=nm)
+    target = _dense_chain_target(
+        cache, params, linear_terms_to_term_config(terms), seed
+    )
+    messages: list[str] = []
+    value, vector, status = lk.dominant_eigenpair(
+        seed,
+        cache,
+        params,
+        terms=terms,
+        method="banded",
+        shift=target + 0.01 if use_shift else None,
+        status_callback=messages.append,
+        return_status=True,
+    )
+    assert status.route == "banded" and status.certified
+    assert abs(complex(value) - target) <= 1.0e-8 * abs(target)
+    assert _off_chain_weight(vector, _chain_modes(cache)) == 0.0
+    assert any("truncation" in m for m in messages) == (not use_shift)
+
+
+@requires_banded_solvax
+def test_banded_shift_invert_refuses_what_it_cannot_certify(monkeypatch) -> None:
+    cache, params, seed, terms = _selected_linked_case()
+    with pytest.raises(ValueError, match="Nm >= 4"):
+        c, p, v, t = _selected_linked_case(nm=2)
+        lk.dominant_eigenpair(v, c, p, terms=t, method="banded")
+    monkeypatch.setattr(lk, "_eigenpair_relative_residual", lambda *_a: 1.0)
+    with pytest.raises(RuntimeError, match="no original-operator-certified"):
+        lk.dominant_eigenpair(seed, cache, params, terms=terms, method="banded")
 
 
 @pytest.mark.parametrize("method", ["power", "propagator", "arnoldi", "adaptive"])
