@@ -622,7 +622,9 @@ def _run_chunked_diagnostics(
             if not imex or bool(jnp.isfinite(G_next).all()):
                 break
             control["dt"] *= 0.5  # reject: redo the chunk at half the step
-            control["op"] = refactor_chain_implicit_linear(control["op"], control["dt"])
+            control["op"] = refactor_chain_implicit_linear(
+                control["op"], control["dt"], free=True
+            )
         if imex:
             dt_new = control["ctl"].propose(control["op"], G_next)
             control["op"] = control["ctl"].retune(control["op"], dt_new)

@@ -1177,11 +1177,19 @@ def _refactor_group(g: _ChainGroup, raw, gdt, rows_m, cols_m, spec) -> _ChainGro
     return dataclasses.replace(g, factors=factors, cap=cap, dr=dr, dc=dc)
 
 
-def refactor_chain_implicit_linear(op: ChainImplicitLinear, dt: float) -> Any:
+def refactor_chain_implicit_linear(
+    op: ChainImplicitLinear, dt: float, *, free: bool = False
+) -> Any:
     """``op`` at a new ``dt``: refactor from the probed blocks, no new probes.
 
     Same pytree structure, so a scan compiled for ``op`` reuses its executable.
+    ``free`` releases ``op``'s device factors first (two copies do not fit at
+    production size); ``op`` is unusable afterwards.
     """
+    if free:
+        for g in op.groups:
+            for a in jax.tree.leaves((g.factors, g.cap, g.dr, g.dc)):
+                a.delete()
     raws = op.__dict__["_raw"]
     gdt = ARS_TABLEAUX[op.scheme][1][1][1] * float(dt)
     groups = tuple(
@@ -1255,7 +1263,7 @@ class ImexDtControl:
     def retune(self, op, dt: float):
         """``op`` at ``dt`` if it moved by more than 20%, else ``op``."""
         if dt < float(op.dt) / 1.2 or dt > 1.2 * float(op.dt):
-            return refactor_chain_implicit_linear(op, dt)
+            return refactor_chain_implicit_linear(op, dt, free=True)
         return op
 
 
