@@ -571,12 +571,15 @@ def adaptive_propagator_eigenpair(
 # shift-invert on that inverse; the caller certifies the Ritz pairs against the
 # original operator.
 #
-# Without a shift, the fastest-growing eigenvalue of a small dense truncation
-# (first two Hermite pairs, Laguerre < ``_COARSE_NL``) is the estimate: on
-# Cyclone (Nl, Nm) = (8, 24) it lands 0.0025 from the converged eigenvalue.
-
-_COARSE_NL = 4  # Laguerre moments kept in the dense shift estimate
-_RITZ = 6  # eigenvalues asked of ARPACK around the shift
+# Without a shift, a dense eigensolve of a leading truncation (everything up to
+# ``_DENSE_N`` unknowns, else Laguerre < ``_COARSE_NL`` of the first Hermite
+# pairs) places it, and it follows the fastest-growing Ritz value while that
+# moves. Dominance is that of the nearest ``_RITZ`` eigenvalues, not a proof.
+_COARSE_NL = 3  # Laguerre moments kept in the dense shift estimate
+_DENSE_N = 3072  # unknowns of the largest dense estimate
+_RITZ = 8  # eigenvalues asked of ARPACK around the shift
+_PASSES = 3  # shifts tried while the fastest-growing Ritz value keeps moving
+_RECENTER = 0.05  # that movement, in omega_scale, that starts another pass
 _REFINE = 1  # defect corrections per application
 _OFFSET = 1.0e-3  # step (in omega_scale) from the estimate to the shift
 _BAND_TOL = (
@@ -584,11 +587,40 @@ _BAND_TOL = (
 )
 
 
+def _dense_estimate(lower, diag, upper, laguerre: np.ndarray, nl: int) -> complex:
+    """Fastest-growing eigenvalue of a dense leading truncation of the blocks.
+
+    The whole operator if it has at most ``_DENSE_N`` unknowns, else Laguerre
+    < ``_COARSE_NL`` of as many leading Hermite pairs (at least two) as fit.
+    ``laguerre`` holds each block unknown's Laguerre index, padding above ``nl``.
+    """
+
+    cut = nl if (laguerre < nl).sum() <= _DENSE_N else _COARSE_NL
+    rows = [np.flatnonzero(row < cut) for row in laguerre]
+    fit = np.searchsorted(np.cumsum([r.size for r in rows]), _DENSE_N, side="right")
+    rows = rows[: max(fit, 2)]
+    edge = np.cumsum([0] + [r.size for r in rows])
+    dense = np.zeros((edge[-1], edge[-1]), np.complex128)
+    for b, r in enumerate(rows):
+        span = slice(edge[b], edge[b + 1])
+        dense[span, span] = np.asarray(diag[b])[np.ix_(r, r)]
+        if b:
+            dense[span, edge[b - 1] : edge[b]] = np.asarray(lower[b])[
+                np.ix_(r, rows[b - 1])
+            ]
+        if b + 1 < len(rows):
+            dense[span, edge[b + 1] : edge[b + 2]] = np.asarray(upper[b])[
+                np.ix_(r, rows[b + 1])
+            ]
+    values = np.linalg.eigvals(dense)
+    return complex(values[np.argmax(values.real)])
+
+
 def banded_fits(shape: tuple[int, ...]) -> bool:
-    """Whether the three complex64 block bands fit in half the default device's memory."""
+    """Whether the four complex64 block arrays fit in half the default device's memory."""
 
     nm = shape[-4]
-    need = 8 * 3 * (nm // 2 + nm % 2) * (2 * int(np.prod(shape)) // nm) ** 2
+    need = 8 * 4 * (nm // 2 + nm % 2) * (2 * int(np.prod(shape)) // nm) ** 2
     stats = jax.devices()[0].memory_stats() or {}
     limit = stats.get("bytes_limit") or os.sysconf("SC_PAGE_SIZE") * os.sysconf(
         "SC_PHYS_PAGES"
@@ -669,31 +701,17 @@ def banded_ritz_pairs(
             f"operator is not Hermite-banded (blocks miss it by {mismatch:.2g})"
         )
 
+    scale = float(np.asarray(_omega_scale(cache, params)))
     if shift is None:
-        k = [np.flatnonzero(laguerre[b] < _COARSE_NL) for b in (0, 1)]
-        d0, u0, l1, d1 = (
-            np.asarray(x, np.complex128) for x in (diag[0], upper[0], lower[1], diag[1])
-        )
-        small = np.block(
-            [
-                [d0[np.ix_(k[0], k[0])], u0[np.ix_(k[0], k[1])]],
-                [l1[np.ix_(k[1], k[0])], d1[np.ix_(k[1], k[1])]],
-            ]
-        )
-        values = np.linalg.eigvals(small)
-        shift = complex(values[np.argmax(values.real)])
-        note(
-            f"banded shift from the {small.shape[0]}-unknown truncation: sigma={shift:.5g}"
-        )
-        # A shift on an eigenvalue of the complex64 factor would defeat the correction.
-        shift += _OFFSET * float(np.asarray(_omega_scale(cache, params)))
+        # Dense eigenvalues of a leading truncation: everything if it is small, else
+        # Laguerre < _COARSE_NL of as many Hermite pairs as fit in _DENSE_N unknowns.
+        shift = _dense_estimate(lower, diag, upper, laguerre, shape[-5])
+        note(f"banded shift from a dense truncation: sigma={shift:.5g}")
+        shift += _OFFSET * scale
     sigma = complex(shift)
-    note(f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}")
-    factors = block_thomas_factor(lower, diag, upper, shift=sigma)  # type: ignore[call-arg]
-    del diag  # the factor holds its own shifted copy
 
     @jax.jit  # factors are an argument: closed over, XLA would bake them in as constants
-    def inverse(factors, b):
+    def inverse(factors, b, sigma):
         def bare(r):
             x = block_thomas_solve(
                 factors, jnp.append(r, 0)[safe].astype(jnp.complex64)
@@ -706,25 +724,34 @@ def banded_ritz_pairs(
         )
 
     solves = [0]
-
-    def solve(v):
-        solves[0] += 1
-        return np.asarray(inverse(factors, jnp.asarray(v, v0.dtype)))
-
     operator = LinearOperator(
         (size, size),
         matvec=lambda v: np.asarray(apply(jnp.asarray(v, v0.dtype))),
         dtype=np.complex128,
     )
-    values, vectors = eigs(
-        operator,
-        k=_RITZ,
-        sigma=sigma,
-        OPinv=LinearOperator((size, size), matvec=solve, dtype=np.complex128),
-        v0=np.asarray(v0).reshape(-1),
-        tol=1.0e-10,
-        ncv=2 * _RITZ + 4,
-    )
+    for _ in range(_PASSES):
+        note(f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}")
+        factors = block_thomas_factor(lower, diag, upper, shift=sigma)  # type: ignore[call-arg]
+
+        def solve(v, factors=factors, sigma=sigma):
+            solves[0] += 1
+            return np.asarray(inverse(factors, jnp.asarray(v, v0.dtype), sigma))
+
+        values, vectors = eigs(
+            operator,
+            k=_RITZ,
+            sigma=sigma,
+            OPinv=LinearOperator((size, size), matvec=solve, dtype=np.complex128),
+            v0=np.asarray(v0).reshape(-1),
+            tol=1.0e-10,
+            ncv=2 * _RITZ + 4,
+        )
+        best = complex(values[np.argmax(values.real)])
+        if abs(best - sigma) <= _RECENTER * scale:
+            break
+        sigma = (
+            best + _OFFSET * scale
+        )  # the fastest-growing Ritz value moved: follow it
     note(f"banded Arnoldi: {solves[0]} solves")
     return (
         jnp.asarray(values, v0.dtype),

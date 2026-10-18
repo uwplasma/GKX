@@ -1016,17 +1016,17 @@ def test_a_zero_eigenvector_never_certifies(monkeypatch: pytest.MonkeyPatch) -> 
         lk.dominant_eigenpair(v0, cache, params, terms=terms, method="arnoldi")
 
 
-def test_default_krylov_config_and_wrapper_resolve_to_certified_adaptive() -> None:
+def test_default_krylov_config_and_wrapper_resolve_to_auto() -> None:
     from gkx.api import KrylovConfig
     from gkx.config import RuntimeConfig
     from gkx.workflows.runtime.startup import _runtime_default_krylov_config
 
     assert KrylovConfig is lk.KrylovConfig
-    assert KrylovConfig().method == "adaptive"
+    assert KrylovConfig().method == "auto"
     assert KrylovConfig().certify is True
     assert _runtime_default_krylov_config(RuntimeConfig()) == KrylovConfig()
     parameters = inspect.signature(lk.dominant_eigenpair).parameters
-    assert parameters["method"].default == "adaptive"
+    assert parameters["method"].default == "auto"
     assert parameters["certify"].default is True
 
 

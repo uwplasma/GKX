@@ -307,7 +307,7 @@ def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
     """
 
     del cfg
-    return KrylovConfig(method="auto")
+    return KrylovConfig()
 
 
 # Velocity-space fallback for a linear call that names no (Nl, Nm). It was

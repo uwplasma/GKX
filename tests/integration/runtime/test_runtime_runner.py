@@ -374,7 +374,7 @@ def test_runtime_linear_cyclone_etg_kbm_time_smoke() -> None:
         assert np.isfinite(res.omega)
 
 
-def test_runtime_linear_etg_defaults_to_certified_adaptive_krylov(
+def test_runtime_linear_etg_defaults_to_the_auto_krylov_route(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 
@@ -409,8 +409,8 @@ def test_runtime_linear_etg_defaults_to_certified_adaptive_krylov(
     out = run_runtime_linear(cfg, ky_target=2.0, Nl=4, Nm=6, solver="krylov")
 
     assert np.isfinite(out.gamma)
-    # ETG takes the certified adaptive route like every contract (2026-10-15).
-    assert captured["method"] == "adaptive"
+    # ETG takes the default ``auto`` route like every contract.
+    assert captured["method"] == "auto"
     assert captured["certify"] is True
 
 

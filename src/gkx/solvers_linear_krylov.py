@@ -54,8 +54,9 @@ from gkx.solvers_linear_precond_pr3 import PR3_PRECOND_NAMES, build_pr3_factors
 class KrylovConfig:
     """Controls for the Krylov-based eigen solver.
 
-    The default ``method="adaptive"`` is the residual-certified eigensolve the
-    runtime already uses for generic contracts. Every method returns only a pair
+    The default ``method="auto"`` runs the Hermite-banded direct shift-invert
+    where its blocks fit in memory and the residual-certified ``adaptive``
+    eigensolve otherwise or when the banded pair is rejected. Every method returns only a pair
     that passes an original-operator residual gate unless ``certify=False``.
     """
 
@@ -65,7 +66,7 @@ class KrylovConfig:
     omega_target_factor: float = 0.0
     omega_cap_factor: float = 2.0
     omega_sign: int = 0
-    method: str = "adaptive"
+    method: str = "auto"
     # Matches the ``dominant_eigenpair(power_iters=40)`` signature default: one
     # route, one cost, whichever door it is entered by. The two used to disagree
     # by 5x, and the larger value bought nothing. Measured on the shipped Cyclone
@@ -1091,7 +1092,7 @@ def dominant_eigenpair(
     omega_target_factor: float = 0.0,
     omega_cap_factor: float = 2.0,
     omega_sign: int = 0,
-    method: str = "adaptive",
+    method: str = "auto",
     power_iters: int = 40,
     power_dt: float = 0.01,
     propagator_steps: int = 1,
@@ -1147,7 +1148,7 @@ def dominant_eigenpair(
                 term_cfg,
                 cfg,
                 status_callback,
-                select_overlap=select_overlap,
+                select_overlap=False,  # like adaptive, the dominant pair
             )
         except (RuntimeError, ValueError) as error:
             _status(status_callback, f"banded route failed ({error}); using adaptive")
