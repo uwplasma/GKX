@@ -1161,8 +1161,8 @@ recursive = true
 # 67126 -> 67622: linearized Landau default, block-sparse apply, coulomb kernels retired.
 # 67622 -> 67658: bug-hunt (#363) on top of #364, measured.
 # 67658 -> 67769: electron mirror implicit (#370) on top of #363/#368, measured.
-# 67769 -> 68118: adaptive-dt chain IMEX (#373). Measured.
-baseline = 68118
+# 67769 -> 68124: adaptive-dt chain IMEX (#373). Measured.
+baseline = 68124
 target = 45000
 
 [[line_budget_policy.counts]]
