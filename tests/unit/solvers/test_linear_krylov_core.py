@@ -3105,10 +3105,12 @@ def test_pr3_builds_at_float32_and_still_refuses_what_float64_refuses() -> None:
 
     tests_root = Path(__file__).resolve().parents[2]
     repo_root = tests_root.parent
+    # The child is not traced: under coverage it hangs shard 8 in CI.
     env = {
         key: value
         for key, value in os.environ.items()
         if key not in {"JAX_ENABLE_X64", "GKX_X64"}
+        and not key.startswith(("COV_CORE", "COVERAGE"))
     }
     env["JAX_ENABLE_X64"] = "false"
     env["PYTHONPATH"] = os.pathsep.join(

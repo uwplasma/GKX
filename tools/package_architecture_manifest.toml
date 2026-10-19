@@ -1491,7 +1491,8 @@ recursive = true
 # 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
 # 72926 -> 73011: linearized Landau physics gates and runtime regression, net of the retired coulomb tests.
 # 73011 -> 73066: bug-hunt (#363) tests on top of #364, measured.
-baseline = 73066
+# 73066 -> 73084: bug-hunt-b (#368) regression tests + untraced pr3 float32 child, measured.
+baseline = 73084
 target = 35000
 
 [[line_budget_policy.counts]]

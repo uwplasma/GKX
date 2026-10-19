@@ -1283,7 +1283,7 @@ def test_runtime_step_and_external_phi_policies_are_fail_closed() -> None:
 
     fixed = time_cfg(True, 0.25, None)
     for cfg, dt, steps, expected in (
-        (fixed, 0.125, None, 4),
+        (fixed, 0.125, None, 8),  # t_max over the dt actually used
         (fixed, 0.125, 7, 7),
         (time_cfg(False, 0.2, 0.3), 0.2, None, 4),
         (time_cfg(False, 0.2, None), 0.2, None, 5),
