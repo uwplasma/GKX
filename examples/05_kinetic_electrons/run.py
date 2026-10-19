@@ -18,6 +18,9 @@ resolution and for how dt and t_max were chosen.
 
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -52,19 +55,25 @@ for label, path in CASES.items():
         case = case.replace(time=replace(case.time, t_max=T_MAX))
     if case.geometry.model == "vmec":
         wout = Path(case.geometry.vmec_file)
-        if not wout.exists():
+        if not wout.exists():  # solve the equilibrium once (minutes on a CPU)
             if importlib.util.find_spec("vmex") is None:
-                print(f"{label}: skipped, needs {wout.name} or vmex to solve it")
+                print(f"{label}: skipped, needs {wout.name} (pip install vmex)")
                 continue
-            import vmex
-            from vmex import optimize
-
             print(f"solving {VMEC_INPUT.name} with vmex to create {wout.name}")
-            equilibrium = optimize.solve_equilibrium(
-                vmex.VmecInput.from_file(VMEC_INPUT)
+            # vmex exits with status 2 on a loose tolerance but still writes the wout
+            subprocess.run(
+                [sys.executable, "-m", "vmex", VMEC_INPUT.name],
+                cwd=VMEC_INPUT.parent,
+                env={
+                    **os.environ,
+                    "JAX_PLATFORMS": "cpu",
+                },  # CPU: no GPU memory contention
             )
-            vmex.write_wout(str(wout), equilibrium.wout)
-    result = gkx.solve(case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm)
+            if not wout.exists():
+                raise SystemExit(f"vmex did not write {wout.name}")
+    result = gkx.solve(
+        case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm, show_progress=True
+    )
     d = result.diagnostics
     t, dt = np.asarray(d.t), np.asarray(d.dt_t)
     q = np.asarray(d.heat_flux_species_t)  # (time, species): ion, electron

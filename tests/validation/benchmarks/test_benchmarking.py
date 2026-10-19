@@ -914,7 +914,7 @@ def test_benchmark_results_manifest_documents_artifact_hygiene_policy() -> None:
 
 def test_root_benchmark_manifest_is_reflected_in_docs() -> None:
     manifest = _load_results_manifest()
-    docs_text = (ROOT / "docs" / "benchmarks.rst").read_text(encoding="utf-8")
+    docs_text = (ROOT / "docs" / "validation.rst").read_text(encoding="utf-8")
     entries = [*manifest.get("figure", []), *manifest.get("table", [])]
 
     for entry in entries:

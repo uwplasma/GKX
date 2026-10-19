@@ -1923,7 +1923,7 @@ REQUIRED_PHRASES = {
         "W7-X long-window zonal recurrence/damping closure",
         "production optimization is not promoted",
     ),
-    "docs/verification_matrix.rst": (
+    "docs/validation.rst": (
         "Closed as scoped model-development result / failed promotion gate",
         "does not promote a runtime/TOML absolute-flux predictor",
         "W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron validation remain outside",
