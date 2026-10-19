@@ -619,14 +619,19 @@ def _run_chunked_diagnostics(
         kwargs["compile_cache"] = compile_cache
         while True:
             t_chunk, diag_chunk, G_next, fields_next = integrate(G_chunk, kwargs)
-            if not imex or bool(jnp.isfinite(G_next).all()):
+            if not imex:
+                break
+            ok = bool(jnp.isfinite(G_next).all())
+            if ok:  # an end-of-chunk error estimate far over rtol: unstable
+                dt_new = control["ctl"].propose(control["op"], G_next)
+                ok = control["ctl"].last["err"] < 30.0
+            if ok:
                 break
             control["dt"] *= 0.5  # reject: redo the chunk at half the step
             control["op"] = refactor_chain_implicit_linear(
                 control["op"], control["dt"], free=True
             )
         if imex:
-            dt_new = control["ctl"].propose(control["op"], G_next)
             control["op"] = control["ctl"].retune(control["op"], dt_new)
             control["dt"] = float(control["op"].dt)
             status(

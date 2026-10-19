@@ -970,12 +970,12 @@ def _thomas_factor(
         return a / safe
 
     a_lo, a_up = scalars(lower), scalars(upper)
-    err = jnp.maximum(
-        *(
-            jnp.linalg.norm(blk - a[..., None, None] * d[:, :, None, None])
-            / jnp.maximum(jnp.linalg.norm(blk), 1e-30)
+    err = jnp.stack(  # squared norms (defect, block) of lower and upper
+        [
+            jnp.sum(jnp.abs(x) ** 2)
             for blk, a in ((lower, a_lo), (upper, a_up))
-        )
+            for x in (blk - a[..., None, None] * d[:, :, None, None], blk)
+        ]
     )
     eye_k = jnp.eye(k, dtype=diag.dtype)
 
@@ -1156,15 +1156,53 @@ def _factor_chain_group(
     ), raw
 
 
+@partial(jax.jit, donate_argnums=0)
+def _put(full: jnp.ndarray, part: jnp.ndarray, i: int) -> jnp.ndarray:
+    return jax.lax.dynamic_update_slice_in_dim(full, part, i, 0)
+
+
+def _defect(sq) -> float:
+    """Relative defect from summed squared norms (defect, block) of lo and up."""
+    sq = np.asarray(sq, np.float64)
+    return float(np.sqrt(sq[::2] / np.maximum(sq[1::2], 1e-60)).max())
+
+
+def _factor_chunked(sel, e, gdt, chunk_bytes: float = 4e8):
+    """``_thomas_factor`` over chain slices of the host blocks.
+
+    Chains do not couple, so slices factor independently into preallocated
+    outputs: the peak is the factor plus one slice, not the factor plus every
+    input block and temporary (10 GB for a 7 GB factor at 64x64, (8, 16)).
+    """
+    c = sel[0].shape[0]
+    parts = np.array_split(
+        np.arange(c), int(min(c, max(1, -(-sum(b.nbytes for b in sel) // chunk_bytes))))
+    )
+    full: Any = None
+    err: Any = 0.0
+    for ix in parts:
+        a, b = int(ix[0]), int(ix[-1]) + 1
+        fac, er = _thomas_factor(*[jnp.asarray(x[a:b]) for x in sel], *e, gdt)
+        err = err + np.asarray(er, np.float64)
+        if len(parts) == 1:
+            return fac, _defect(err)
+        dinv, d, lo, up, *ee = fac
+        lead = [*dinv, d, lo, up]
+        if full is None:
+            full = [jnp.zeros((c, *x.shape[1:]), x.dtype) for x in lead]
+        full = [_put(f, x, a) for f, x in zip(full, lead)]
+    return (tuple(full[: len(dinv)]), *full[len(dinv) :], *ee), _defect(err)
+
+
 def _refactor_group(g: _ChainGroup, raw, gdt, rows_m, cols_m, spec) -> _ChainGroup:
     """Factor one chain group at ``gdt`` from its probed (host) blocks."""
     blocks, es = raw
     facs, errs = [], []
     for sp, e in zip(spec, es):
-        sel = [jnp.asarray(b[:, list(sp)]) for b in blocks]
-        fac, err = _thomas_factor(*sel, *e, gdt)
+        sel = [b[:, list(sp)] for b in blocks]
+        fac, err = _factor_chunked(sel, e, gdt)
         facs.append(fac)
-        errs.append(float(err))
+        errs.append(err)
     if not max(errs) < 1e-4:
         raise ValueError(
             f"Hermite off-diagonal blocks are not multiples of one parallel-"
@@ -1206,11 +1244,11 @@ def refactor_chain_implicit_linear(
 class ImexDtControl:
     """Chunk-level dt for the chain IMEX step (``fixed_dt = false``).
 
-    Between chunks: ``dt = min(5 cfl / (w_nl / 1.7 + rho / 2.5), dt_err,
+    Between chunks: ``dt = min(cfl 8.5 / w_nl, cfl 2.5 / rho, dt_err,
     dt_max)``. ``rho`` is the spectral radius of the explicit linear remainder
     (drifts, ion mirror, drive) by Arnoldi at startup and 2.5 the measured
     ARK3/ARS3 interval on it (0.82 x 3.6); ``w_nl`` the bracket CFL rate of the
-    current fields; the factor 5 is the saturated-turbulence limit measured
+    current fields; 8.5 = 5 x 1.7 is the saturated-turbulence limit measured
     on Cyclone KE (stable at dt 0.1, not 0.2, where the bracket rate is 80); ``dt_err`` the embedded
     ARK3(2) estimate against ``rtol``. The factor is rebuilt only when dt
     moves by more than 20% (down) or grows past 1.2x, and a non-finite chunk
@@ -1254,7 +1292,7 @@ class ImexDtControl:
         rel, w_nl = (float(x) for x in self._probe(op, G))
         dt = float(op.dt)
         dt_err = dt * min(1.5, max(0.5, 0.9 * max(rel, 1e-12) ** (-1.0 / 3.0)))
-        dt_cfl = 5.0 * self.cfl / max(w_nl / 1.7 + self.rho / 2.5, 1e-30)
+        dt_cfl = self.cfl * min(8.5 / max(w_nl, 1e-30), 2.5 / max(self.rho, 1e-30))
         self.last = dict(
             err=rel, bracket=w_nl, remainder=self.rho, dt_err=dt_err, dt_cfl=dt_cfl
         )
