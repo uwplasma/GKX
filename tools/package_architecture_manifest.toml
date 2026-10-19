@@ -1501,8 +1501,8 @@ recursive = true
 # 72926 -> 73011: linearized Landau physics gates and runtime regression, net of the retired coulomb tests.
 # 73011 -> 73066: bug-hunt (#363) tests on top of #364, measured.
 # 73066 -> 73084: bug-hunt-b (#368) regression tests + untraced pr3 float32 child, measured.
-# 73084 -> 73093: electron mirror implicit (#370) on top of #363/#368, measured.
-baseline = 73093
+# 73084 -> 73095: electron mirror implicit (#370) on top of #363/#368, measured.
+baseline = 73095
 target = 35000
 
 [[line_budget_policy.counts]]
