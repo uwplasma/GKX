@@ -31,11 +31,10 @@ from gkx.operators.linear.dissipation import (
 from gkx.operators.linear.params import _check_positive
 from gkx.operators.linear.streaming import _linked_fft_apply
 from gkx.terms.linear_terms import (
-    curvature_gradb_contribution,
     diamagnetic_contribution,
+    drift_contributions,
     linked_streaming_contribution,
     linked_streaming_operand,
-    mirror_contribution,
 )
 
 RhsCallable = Callable[..., tuple[jnp.ndarray, FieldState]]
@@ -420,42 +419,18 @@ def _drift_contributions(
     scalars: _ScalarParams,
     weights: _TermWeights,
     imag: jnp.ndarray,
+    fuse: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    mirror = mirror_contribution(
+    return drift_contributions(
         H,
+        cache,
         vth=species.vth,
-        bgrad=cache.bgrad,
-        ell=cache.l,
-        sqrt_m=cache.sqrt_m,
-        sqrt_m_p1=cache.sqrt_m_p1,
-        weight=weights.mirror,
-    )
-    zero_weight = jnp.asarray(0.0, dtype=weights.curvature.dtype)
-    curvature = curvature_gradb_contribution(
-        H,
         tz=species.tz,
         omega_d_scale=scalars.omega_d_scale,
-        cv_d=cache.cv_d,
-        gb_d=cache.gb_d,
-        ell=cache.l,
-        m=cache.m,
+        weights=(weights.mirror, weights.curvature, weights.gradb),
         imag=imag,
-        weight_curv=weights.curvature,
-        weight_gradb=zero_weight,
+        fuse=fuse,
     )
-    gradb = curvature_gradb_contribution(
-        H,
-        tz=species.tz,
-        omega_d_scale=scalars.omega_d_scale,
-        cv_d=cache.cv_d,
-        gb_d=cache.gb_d,
-        ell=cache.l,
-        m=cache.m,
-        imag=imag,
-        weight_curv=zero_weight,
-        weight_gradb=weights.gradb,
-    )
-    return mirror, curvature, gradb
 
 
 def _diamagnetic_contribution(
@@ -709,8 +684,12 @@ def _rhs_term_contributions(
     *,
     skip_dissipation: bool = False,
     hermite_window: HermiteWindow | None = None,
+    fuse_drift: bool = False,
 ) -> dict[str, jnp.ndarray]:
-    """Return named RHS contributions in the fixed diagnostic sum convention."""
+    """Return named RHS contributions in the fixed diagnostic sum convention.
+
+    ``fuse_drift`` returns the drift terms summed as ``mirror`` (the others zero).
+    """
 
     mirror, curvature, gradb = _drift_contributions(
         rhs_fields.H,
@@ -719,6 +698,7 @@ def _rhs_term_contributions(
         scalars,
         weights,
         state.imag,
+        fuse=fuse_drift and hermite_window is None,
     )
     shared = (
         None
@@ -801,6 +781,7 @@ def _assemble_normalized_rhs(
         rhs_fields,
         skip_dissipation=skip_dissipation,
         hermite_window=hermite_window,
+        fuse_drift=True,
     )
     dG = _sum_rhs_terms(contrib)
     if state.squeeze_species:
