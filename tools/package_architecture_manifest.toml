@@ -1164,7 +1164,8 @@ recursive = true
 # assembly, dense shift estimate, ARPACK driver (about 200 lines in the adaptive-propagator
 # module) and the dispatcher; the SOLVAX half (block recovery, shifted factor) is in SOLVAX. Measured.
 # 67962 -> 67999: backward-Euler dominance check of the banded route. Measured.
-baseline = 68110
+# 68110 -> 68320: fused GPU drift kernel, shared-pad (l, m) views, Nyquist row fix, 2-CPU hang notes. Measured.
+baseline = 68320
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1507,7 +1508,8 @@ recursive = true
 # 73066 -> 73084: bug-hunt-b (#368) regression tests + untraced pr3 float32 child, measured.
 # 73084 -> 73095: electron mirror implicit (#370) on top of #363/#368, measured.
 # 73084 -> 73247: banded route tests (dense estimate, auto fallbacks, band check, memory rule, KBM-trap dominance). Measured.
-baseline = 73252
+# 73252 -> 73403: drift kernel, Nyquist row and 2-CPU guard tests. Measured.
+baseline = 73403
 target = 35000
 
 [[line_budget_policy.counts]]
