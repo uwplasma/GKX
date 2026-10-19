@@ -198,9 +198,27 @@ Ledger rows
      - ``docs/_static/cross_code_linear_points.csv``
    * - ``X-tem-dj2005``
      - Collisionless TEM, Dannert & Jenko PoP 12 072309 (2005) nominal case, linear: GKX against GS2 at matched physics
-     - relative gamma and omega difference at ky rho\_s 0.3 along a GKX (Nl, Nm) ladder; GS2 scan ky rho\_s 0.1-0.8 at two rungs
+     - relative gamma and omega difference at ky rho\_s 0.3 along a GKX (Nl, Nm) ladder with the banded eigensolver; GKX (8, 32) scan ky rho\_s 0.2-0.6 against GS2; end-damping rate and parallel-domain scans
      - GS2 8.2.1 rungs t1 (ntheta 32, nperiod 2, negrid 12, ngauss 6) and t2 (ntheta 48, nperiod 3, negrid 16, ngauss 8); deck tools/comparison/fixtures/parity/tem\_dannert\_jenko\_2005.toml (rank 5)
      - open
+     - ``docs/_static/cross_code_linear_points.csv``
+   * - ``X-kbm-beta-gs2``
+     - Miller CBC kinetic ballooning, ky 0.3, beta 0.005-0.020, A\_par and A\_par+B\_par, linear: GKX against GS2
+     - relative gamma and omega difference at four beta, GKX (8, 24) and (8, 32) nperiod 2 and (8, 24) nperiod 3 against GS2 e4v
+     - GS2 8.2.1 rung e4v (ntheta 48, nperiod 3, negrid 24, ngauss 12, bishop 4, betaprim 0); e3 agrees within 0.3% (rank 5)
+     - open
+     - ``docs/_static/cross_code_linear_points.csv``
+   * - ``X-w7x-itg-gx``
+     - W7-X standard configuration ITG, adiabatic electrons, s = 0.64, 6 poloidal turns, linear: GKX against repaired GX
+     - relative gamma and omega difference over ky 0.8-2.4 at Nl 8, Nm 16 with GX's damp\_ends rate 0.1/dt = 17
+     - GX 3865a537 + dampEnds\_linked grid-stride loop, deck benchmarks/linear/ITG\_w7x, self-run to t = 200 (rank 5)
+     - provisional
+     - ``docs/_static/cross_code_linear_points.csv``
+   * - ``X-hsx-itg-gx``
+     - HSX QHS vacuum ITG, adiabatic electrons, s = 0.64, 4 poloidal turns, linear: GKX against repaired GX
+     - relative gamma and omega difference over ky 0.3-1.5 at Nl 8, Nm 16 with GX's damp\_ends rate 0.1/dt = 9.9
+     - GX 3865a537 + dampEnds\_linked grid-stride loop, W7-X deck with the HSX QHS vacuum VMEC (ns 201) and npol 4, self-run to t = 200 (rank 5)
+     - provisional
      - ``docs/_static/cross_code_linear_points.csv``
 
 Row notes
@@ -231,8 +249,22 @@ Row notes
   (-0.35%/-0.20%) and GS2 (-1.5%); ky .50 +0.27%/-0.16% against GX. Only two ky
   are measured.
 - ``X-tem-dj2005`` (open): GS2 converged at gamma 0.8694, omega -1.2723 at ky
-  rho\_s 0.3. GKX rises with resolution: (4, 8) 0.0029, (8, 24) 0.6114, (12, 32)
-  0.6475, (16, 48) 0.7330 (-15.7%); omega +1.4%.
+  rho\_s 0.3. GKX banded eigenpairs (Nl 8, nperiod 2, damp\_ends\_rate 100) rise
+  with Nm: 16 0.490, 24 0.611, 32 0.673, 48 0.744, 64 0.773, 96 0.825 (-5.1%);
+  omega +1.0% at Nm 96. At Nm 24, Nl = 4, 6, 8, 10, 12 gives 0.480, 0.623,
+  0.611, 0.513, 0.552: not monotone. At (8, 24) gamma is 0.871, 0.668, 0.611 and
+  0.607 at damp\_ends\_rate 5, 20, 100 and 400; at (4, 16) the spread between
+  rates 5 and 100 shrinks from 0.29 (nperiod 2) to 0.07 (nperiod 5). The
+  absorber and parallel domain are part of the answer until Nm converges.
+- ``X-kbm-beta-gs2`` (open): Miller KBM at ky 0.3, (8, 24), nperiod 2, A\_par:
+  gamma -2.4%, -8.2%, +7.3%, +6.1% and omega +10.8%, +8.8%, +7.8%, +4.7% against
+  GS2 at beta 0.005, 0.010, 0.015, 0.020; A\_par+B\_par within 10.1% and 11.0%.
+  nperiod 3 at beta 0.015 gives gamma +16.5%, omega +1.7%. The end-damping rate
+  does not matter (default and 200 agree to 7e-6).
+- ``X-w7x-itg-gx``, ``X-hsx-itg-gx`` (provisional): GKX eigenpairs match
+  repaired GX to 3e-4 at W7-X ky 1.1-2.4 and HSX ky 0.5-1.5. On W7-X at ky
+  0.9-1.0 the eigensolver returns a pair GX does not show (ky 1.0: omega 0.2645
+  against 0.1489 at equal gamma); GKX's time route reproduces GX at ky 1.0.
 
 Linear rows declare their velocity-space regularization: KAW and ETG use
 ``none``; W7-X, HSX, Cyclone Miller and KBM use ``hermite-kz-hypercollision``
@@ -330,8 +362,8 @@ Tracked artifacts without a ledger row. Nothing here is a public claim.
 
 - **Linear.**
 
-  - TEM (open, ``X-tem-dj2005``): GKX matches the GS2 frequency to 1.4% but the
-    growth rate rises with velocity resolution (15.7% low at (16, 48)).
+  - TEM (open, ``X-tem-dj2005``): GKX matches the GS2 frequency to 1.0% but the
+    growth rate rises with Hermite resolution (5.1% low at (8, 96)).
   - Miller kinetic electrons (provisional, ``X-ke-miller``): certified
     eigenpairs within 0.35% of repaired GX and 1.5% of GS2; the deck states GX's
     end-damping rate, and a rate 1000x weaker puts the growth rate 54% high
@@ -342,7 +374,9 @@ Tracked artifacts without a ledger row. Nothing here is a public claim.
   - W7-X TEM (open) and W7-X zonal flow (failing): residuals fail at
     :math:`k_x\rho_i = 0.07, 0.10, 0.30`. The artifact is not regenerable: it
     used ``dt=0.1``, 3.3 times the streaming CFL bound; the deck now pins
-    ``dt=0.02``.
+    ``dt=0.02``. A rerun of the tracked deck at ``dt=0.02`` on the W7-X standard-configuration
+    VMEC (the paper's high-mirror equilibrium was not available) is finite to
+    t = 60 with a CFL ratio of 0.27; it is not compared with the paper.
   - W7-X fluctuation spectra: a simulation diagnostic, not an experimental
     validation. Stellarator electromagnetic: finite-beta geometry tests only.
 - **Nonlinear.** Windowed comparisons of ``Wg``, ``Wphi``, ``Wapar`` and heat

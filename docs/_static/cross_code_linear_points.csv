@@ -69,3 +69,78 @@ tem_dj2005,0.6,gs2,t1,1.07976,-2.079036,plan/research/2026-10-06-val-ke/results/
 tem_dj2005,0.6,gs2,t2,1.067951,-2.074926,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.8,gs2,t1,0.964823,-2.534797,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.8,gs2,t2,0.940968,-2.494691,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
+tem_dj2005,0.3,gkx,Nl8 Nm16 nperiod2 damp_ends_rate100,0.489833,-1.132774,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl12 Nm16 nperiod2 damp_ends_rate100,0.429795,-1.236315,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100,0.479944,-0.993678,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100,0.623129,-1.339886,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl10 Nm24 nperiod2 damp_ends_rate100,0.512508,-1.202769,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl12 Nm24 nperiod2 damp_ends_rate100,0.551658,-1.279849,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl6 Nm32 nperiod2 damp_ends_rate100,0.687230,-1.368376,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.672834,-1.232756,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl4 Nm48 nperiod2 damp_ends_rate100,0.597214,-1.150335,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl6 Nm48 nperiod2 damp_ends_rate100,0.753310,-1.391582,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm48 nperiod2 damp_ends_rate100,0.743542,-1.265551,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm64 nperiod2 damp_ends_rate100,0.773238,-1.277278,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm96 nperiod2 damp_ends_rate100,0.825398,-1.284908,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.2,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.427508,-0.890717,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.4,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.843887,-1.551272,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.5,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.944372,-1.850953,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.6,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.987960,-2.144228,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate5,0.871175,-1.254619,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate20,0.667858,-1.198904,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate50,0.622736,-1.198738,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate400,0.607129,-1.203571,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.005,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.212218,0.258581,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
+kbm_miller_A_beta0.005,0.3,gkx,Nl8 Nm24 nperiod2,0.207024,0.286654,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.005,0.3,gkx,Nl8 Nm32 nperiod2,0.210542,0.279558,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.005,0.3,gkx,Nl8 Nm24 nperiod3,0.205792,0.288847,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.01,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.163328,0.304984,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
+kbm_miller_A_beta0.01,0.3,gkx,Nl8 Nm24 nperiod2,0.149931,0.331860,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.01,0.3,gkx,Nl8 Nm32 nperiod2,0.156593,0.323281,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.015,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.293895,0.993310,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
+kbm_miller_A_beta0.015,0.3,gkx,Nl8 Nm24 nperiod2,0.315466,1.070811,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.015,0.3,gkx,Nl8 Nm32 nperiod2,0.314300,1.075379,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.015,0.3,gkx,Nl8 Nm24 nperiod3,0.342502,1.010162,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.02,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.562169,0.824405,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
+kbm_miller_A_beta0.02,0.3,gkx,Nl8 Nm24 nperiod2,0.596709,0.862868,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_A_beta0.02,0.3,gkx,Nl8 Nm32 nperiod2,0.595139,0.863682,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_AB_beta0.005,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.213968,0.262141,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
+kbm_miller_AB_beta0.005,0.3,gkx,Nl8 Nm24 nperiod2,0.208536,0.290955,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_AB_beta0.01,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.160578,0.317051,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
+kbm_miller_AB_beta0.01,0.3,gkx,Nl8 Nm24 nperiod2,0.144433,0.347125,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_AB_beta0.015,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.386391,0.941069,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
+kbm_miller_AB_beta0.015,0.3,gkx,Nl8 Nm24 nperiod2,0.410023,1.004157,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+kbm_miller_AB_beta0.02,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.657336,0.786119,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
+kbm_miller_AB_beta0.02,0.3,gkx,Nl8 Nm24 nperiod2,0.692367,0.817820,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,0.8,gx-repaired,Nl8 Nm16 t200,0.133411,0.073409,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+w7x_itg,0.8,gkx,Nl8 Nm16 eigen auto,0.143257,0.165602,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,0.9,gx-repaired,Nl8 Nm16 t200,0.149273,0.115390,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+w7x_itg,0.9,gkx,Nl8 Nm16 eigen auto,0.163001,0.213417,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.0,gx-repaired,Nl8 Nm16 t200,0.174714,0.148908,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+w7x_itg,1.0,gkx,Nl8 Nm16 eigen auto,0.174949,0.264494,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.1,gx-repaired,Nl8 Nm16 t200,0.198877,0.189071,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+w7x_itg,1.1,gkx,Nl8 Nm16 eigen auto,0.198867,0.189078,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.2,gx-repaired,Nl8 Nm16 t200,0.218175,0.234362,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+w7x_itg,1.2,gkx,Nl8 Nm16 eigen auto,0.218171,0.234358,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.4,gx-repaired,Nl8 Nm16 t200,0.240246,0.336316,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+w7x_itg,1.4,gkx,Nl8 Nm16 eigen auto,0.240276,0.336321,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.6,gx-repaired,Nl8 Nm16 t200,0.244639,0.444202,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+w7x_itg,1.6,gkx,Nl8 Nm16 eigen auto,0.244654,0.444200,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,2.0,gx-repaired,Nl8 Nm16 t200,0.224737,0.627894,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+w7x_itg,2.0,gkx,Nl8 Nm16 eigen auto,0.224722,0.627912,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,2.4,gx-repaired,Nl8 Nm16 t200,0.200092,0.729594,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+w7x_itg,2.4,gkx,Nl8 Nm16 eigen auto,0.200082,0.729605,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,0.9,gkx,Nl8 Nm16 time route,0.130006,0.116183,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.0,gkx,Nl8 Nm16 time route,0.174749,0.148904,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+hsx_itg,0.3,gx-repaired,Nl8 Nm16 t200,0.073255,0.012130,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+hsx_itg,0.3,gkx,Nl8 Nm16 eigen auto,0.072904,0.065791,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+hsx_itg,0.5,gx-repaired,Nl8 Nm16 t200,0.157448,0.050310,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+hsx_itg,0.5,gkx,Nl8 Nm16 eigen auto,0.157459,0.050302,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+hsx_itg,0.7,gx-repaired,Nl8 Nm16 t200,0.242344,0.126864,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+hsx_itg,0.7,gkx,Nl8 Nm16 eigen auto,0.242344,0.126865,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+hsx_itg,0.9,gx-repaired,Nl8 Nm16 t200,0.292769,0.244981,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+hsx_itg,0.9,gkx,Nl8 Nm16 eigen auto,0.292754,0.244980,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+hsx_itg,1.1,gx-repaired,Nl8 Nm16 t200,0.303037,0.378062,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+hsx_itg,1.1,gkx,Nl8 Nm16 eigen auto,0.303023,0.378069,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+hsx_itg,1.5,gx-repaired,Nl8 Nm16 t200,0.256984,0.632680,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
+hsx_itg,1.5,gkx,Nl8 Nm16 eigen auto,0.256986,0.632681,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt

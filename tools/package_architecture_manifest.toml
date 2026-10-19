@@ -1507,7 +1507,8 @@ recursive = true
 # 73066 -> 73084: bug-hunt-b (#368) regression tests + untraced pr3 float32 child, measured.
 # 73084 -> 73095: electron mirror implicit (#370) on top of #363/#368, measured.
 # 73084 -> 73247: banded route tests (dense estimate, auto fallbacks, band check, memory rule, KBM-trap dominance). Measured.
-baseline = 73252
+# 73252 -> 73288: Dannert & Jenko TEM deck and GS2 reference anchor test (linear validation). Measured.
+baseline = 73288
 target = 35000
 
 [[line_budget_policy.counts]]
