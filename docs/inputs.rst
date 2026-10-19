@@ -298,13 +298,14 @@ The ``[run]`` and ``[scan]`` sections accept ``solver`` and ``fit_signal`` keys:
 * ``solver = "time"``: always use time integration
 * ``solver = "explicit_time"``: force the explicit single-mode time integrator
   used by controlled explicit-time comparisons
-* ``solver = "krylov"``: always use the matrix-free eigensolver. Its default
-  route is ``KrylovConfig(method="adaptive")``, which returns an eigenpair only
-  when its residual passes the certification gate (see `Runtime precision`_).
-  Other ``KrylovConfig.method`` values are ``power``, ``propagator``,
-  ``arnoldi``, ``shift_invert`` (matrix-free GMRES inner solves) and
-  ``sparse_shift_invert`` (assembles the sparse operator and factors it once
-  on the host).
+* ``solver = "krylov"``: always use the eigensolver. Its default route is
+  ``KrylovConfig(method="auto")``: the Hermite-banded direct shift-invert
+  (``banded``) when its block arrays fit in memory, else ``adaptive``. Either
+  returns an eigenpair only when its residual passes the certification gate (see
+  `Runtime precision`_). Other ``KrylovConfig.method`` values are ``adaptive``,
+  ``power``, ``propagator``, ``arnoldi``, ``shift_invert`` (matrix-free GMRES
+  inner solves) and ``sparse_shift_invert`` (assembles the sparse operator and
+  factors it once on the host).
 
 * ``fit_signal = "auto"`` (default): pick ``phi`` vs density based on fit quality
 * ``fit_signal = "phi"``: use the electrostatic potential time trace

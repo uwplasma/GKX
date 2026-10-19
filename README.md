@@ -78,9 +78,10 @@ Growth rate and frequency scans for Cyclone ITG (a), W7-X ITG (b) and KBM (d),
 and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
 0.9999999994.
 
-- The default eigensolver is Arnoldi on the time-advance map. It returns an
-  eigenpair only after checking it against the full operator. Shift-invert is
-  opt-in for a chosen branch ([policy and measurements](docs/algorithms.rst)).
+- The default eigensolver (`auto`) is a banded direct shift-invert where it
+  fits, else Arnoldi on the time-advance map. It returns an
+  eigenpair only after checking it against the full operator. Matrix-free
+  shift-invert is opt-in for a chosen branch ([policy and measurements](docs/algorithms.rst)).
 - Under-resolved or unsettled fits warn instead of reporting a number.
 
 ## Models and defaults
@@ -92,7 +93,7 @@ and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
 | Collisions | linearized Landau | conserving, H-theorem; Dougherty, Sugama alternatives ([operators](docs/operators.rst)) |
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
 | Time stepping | `rk4` with CFL controller | `imex-ars3` for nonlinear kinetic electrons at 32x32 and up |
-| Eigensolver | `adaptive`, certified | shift-invert opt-in |
+| Eigensolver | `auto` (banded, else `adaptive`), certified | shift-invert opt-in |
 
 [Resolution, step and solver guidance](docs/guidance.rst) says what to set for
 kinetic electrons and electromagnetic runs, and how to check it.

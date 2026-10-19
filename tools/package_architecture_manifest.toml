@@ -1160,7 +1160,11 @@ recursive = true
 # 67126 -> 67622: linearized Landau default, block-sparse apply, coulomb kernels retired.
 # 67622 -> 67658: bug-hunt (#363) on top of #364, measured.
 # 67658 -> 67769: electron mirror implicit (#370) on top of #363/#368, measured.
-baseline = 67769
+# 67658 -> 67962: Hermite-banded shift-invert (`auto` default): block-tridiagonal probe
+# assembly, dense shift estimate, ARPACK driver (about 200 lines in the adaptive-propagator
+# module) and the dispatcher; the SOLVAX half (block recovery, shifted factor) is in SOLVAX. Measured.
+# 67962 -> 67999: backward-Euler dominance check of the banded route. Measured.
+baseline = 68110
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1502,7 +1506,8 @@ recursive = true
 # 73011 -> 73066: bug-hunt (#363) tests on top of #364, measured.
 # 73066 -> 73084: bug-hunt-b (#368) regression tests + untraced pr3 float32 child, measured.
 # 73084 -> 73095: electron mirror implicit (#370) on top of #363/#368, measured.
-baseline = 73095
+# 73084 -> 73247: banded route tests (dense estimate, auto fallbacks, band check, memory rule, KBM-trap dominance). Measured.
+baseline = 73252
 target = 35000
 
 [[line_budget_policy.counts]]

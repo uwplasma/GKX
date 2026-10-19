@@ -90,8 +90,8 @@ Electromagnetic and KBM
 - Explicit steps must keep :math:`\nu_{end}\Delta t < 0.3`. An ``nperiod = 1``
   KBM deck (rate 598) blew up at :math:`\Delta t = 10^{-3}` and ran at
   :math:`5\times10^{-4}`.
-- Eigenvalues: ``adaptive`` certifies KBM at (4, 8); shift-invert can land on
-  the wrong branch.
+- Eigenvalues: ``auto`` (banded, else ``adaptive``) certifies KBM; a shift-invert
+  with a poor shift can certify a non-dominant branch.
 
 End damping
 -----------
@@ -115,7 +115,8 @@ needs the velocity resolution of the case; a factor is built once (0.5 s at
 Eigensolver
 -----------
 
-``adaptive`` (default) runs Arnoldi on the time-advance map and certifies the
-pair against the full operator, as GS2 does with SLEPc. Use shift-invert only
-for a chosen interior branch, with a shift seeded from an ``adaptive`` pair
+``auto`` (default) runs the Hermite-banded direct shift-invert where its blocks
+fit in memory and ``adaptive`` otherwise; ``adaptive`` is Arnoldi on the
+time-advance map, as GS2 does with SLEPc. Both certify the pair against the full
+operator. Use matrix-free shift-invert only for a chosen interior branch
 (:doc:`algorithms`).

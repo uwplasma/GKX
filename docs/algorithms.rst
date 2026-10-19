@@ -331,12 +331,97 @@ Krylov basis instead, :math:`O(nm)`.
 Eigensolver policy
 ~~~~~~~~~~~~~~~~~~
 
-**Decision (2026-10-15).** Every runtime contract uses ``method="adaptive"``:
-Arnoldi on the RK4 time-advance map, certified against the original operator.
-Shift-invert is opt-in, for a chosen interior branch. Its ``"auto"``
-preconditioner is ``"pr3-cm"``, with the inner FGMRES raised to at least
-restart 150 and maxiter 600. If no shift is given, σ is seeded from the
-adaptive pair.
+**Decision (2026-10-18).** The runtime default is ``method="auto"``. It runs
+the Hermite-banded direct shift-invert (``banded``, below) when the four
+complex64 block arrays fit in half the default device's memory, and
+``method="adaptive"`` (Arnoldi on the RK4 time-advance map) otherwise. It also
+uses ``adaptive`` when ``Nm < 4``, when the assembled blocks miss the operator
+on a random vector by more than 1e-4, and when no Ritz pair passes the residual
+gate against the original operator. ``adaptive`` stays available by name.
+Matrix-free shift-invert is opt-in, for a chosen interior branch; its
+``"auto"`` preconditioner is ``"pr3-cm"``, with the inner FGMRES raised to at
+least restart 150 and maxiter 600.
+
+**Banded shift-invert.** At one ky the operator couples Hermite m only to
+m ± 2: streaming, mirror and A_par move m by one, the drifts by two, and the
+field response and collisions stay inside that band. Pairs of m give blocks of
+:math:`2 n_s N_\ell N_z` unknowns coupled tridiagonally. Blocks three apart share
+no row, so ``solvax.block_tridiagonal_from_products`` reads the matrix from
+:math:`3\lceil m/32\rceil` batched operator products (``m`` is the block size).
+``solvax.block_thomas_factor(..., shift=σ)`` factors :math:`A-\sigma I` once in
+complex64, and two defect corrections against the operator restore the working
+precision of each application. ARPACK then asks for 12 eigenvalues about σ.
+Without a shift, σ is the fastest-growing eigenvalue of a dense truncation
+(the whole operator up to 3072 unknowns, else Laguerre < 3 of the leading
+Hermite pairs), and the shift follows the fastest-growing Ritz value while it
+moves by more than 0.05 :math:`\omega`-scale. The pair is then gated on the
+original operator.
+
+The route returns the fastest-growing certified Ritz value among those nearest
+its shift, so a mode far from every shift would be missed. When the shift is
+chosen automatically, a dominance check follows. One more factorization at the
+real shift :math:`1/\Delta t` gives the backward-Euler step
+:math:`(I-\Delta t A)^{-1}`, with
+:math:`\Delta t = 0.25/\max(2\,\omega\text{-scale}, 1.5|\omega|)`. A seeded
+random state is stepped 60 times, and its mean amplification over the last 15
+steps must not exceed that of the found eigenvalue, :math:`1/|1-\lambda\Delta t|`,
+by more than :math:`0.5\gamma\Delta t`; otherwise the route raises and ``auto``
+uses ``adaptive``. It costs one factorization and 60 solves (3-5 s, about 10% of
+the run, on the table cases). The excess growth per step was -0.02 (Cyclone,
+Miller KE, ETG) and 0.002 (KBM). Forcing the old prototype's shift on KBM, which
+returns 0.0332-0.195j, gave 0.057 and is refused. The check sees a faster mode
+only if its growth-rate gap exceeds about :math:`2/(60\,\Delta t)` and its
+frequency is resolved by the step; near-degenerate competitors and fast
+oscillators are not covered. A user-supplied shift is not checked, since it asks
+for that branch. The route agrees with ``adaptive`` and with the time route
+wherever those finish.
+
+**Measured** (office RTX A4000, shared, float64, single ky, wall time of the
+whole call; raw records in the private gkx-plan repository, ``plan/research/2026-10-18-banded-shift-invert/``):
+
+.. list-table::
+   :header-rows: 1
+
+   * - deck, (Nl, Nm)
+     - ``adaptive``
+     - time route
+     - ``auto`` (banded)
+   * - Cyclone adiabatic ky 0.3, (8, 24)
+     - 0.0986916-0.276870j, 39 s
+     - 0.098754-0.276896j, 22 s
+     - 0.0986916-0.276870j, res 1e-13, 30 s
+   * - Cyclone adiabatic ky 0.3, (16, 48)
+     - 0.0931303-0.281967j, 91 s (CPU 1109 s)
+     - 0.093018-0.282025j, 40 s
+     - GPU: blocks do not fit, ``auto`` runs ``adaptive``; CPU: same pair to 1e-10, res 2e-9, 692 s
+   * - Miller KE ky 0.3, (8, 24)
+     - 0.2311520-0.251114j, 430 s
+     - non-finite at the deck dt
+     - 0.2311520-0.251114j, res 3e-10, 54 s
+   * - KBM ky 0.2, (8, 24)
+     - 0.3427091-0.831356j, 428 s
+     - non-finite at the deck dt
+     - 0.3427091-0.831356j, res 1e-9, 58 s
+   * - ETG ky 15, (24, 8)
+     - not finished in 40 min
+     - 5.72668+13.69882j, 12 s
+     - 5.73056+13.70390j, res 1e-13, 45 s
+
+Miller KE in float32 certifies at residual 1.2e-4 against the gate of 1.19e-4,
+the noise floor of the float32 operator, which is why ``adaptive`` refuses it
+there. On the earlier CPU run ``adaptive`` took 6919 s on the same pair and the
+unpreconditioned prototype 788 s. For the CBC deck, GS2 8.2.1 (s-alpha,
+ntheta 32, nperiod 2, ngauss 8, negrid 16, ky√2, rates rescaled by √2 and R/a)
+gives 0.0906 and 0.2846 against 0.0931 and 0.2820 for (16, 48).
+
+**Rule.** ``banded`` wins when ``adaptive`` is stiff-limited: kinetic
+electrons, KBM and ETG, where it is 8x faster (KE, KBM) or the only route that
+finishes (ETG). On the adiabatic Cyclone deck the two are within a factor of two
+(30 against 39 s at (8, 24)), and ``banded`` needs the blocks to fit: at
+(16, 48) they take 7 GB of complex64 on a 16 GB card shared with other jobs.
+Memory, not time, is therefore what ``auto`` tests. On CPU the blocks fit and
+``banded`` was faster in both adiabatic cases measured: 146 against 217 s at
+(8, 24) and 692 against 1109 s at (16, 48).
 
 **Practice elsewhere.**
 
@@ -357,7 +442,7 @@ adaptive pair.
   selection near a crossing therefore needs a residual and overlap check, not
   only an ordering.
 
-**Measured** (office RTX A4000, shared, float32, single ky; ``plan/research/2026-10-15-bug-hunt/SUMMARY.md``):
+**Before the banded route** (office RTX A4000, shared, float32, single ky; ``plan/research/2026-10-15-bug-hunt/SUMMARY.md``):
 
 .. list-table::
    :header-rows: 1
@@ -395,12 +480,6 @@ right Cyclone mode at roughly 50x the cost of ``adaptive``, still misses the gat
 in float32, and on KBM converges to the wrong branch. Adaptive is the only route
 that certified a pair here. It refuses honestly where float32 cannot reach the gate
 (Miller KE), and it is too slow at high Hermite resolution.
-
-**Next step.** A banded direct shift-invert. Pairing Hermite m with m±2 makes
-the single-ky operator exactly block-tridiagonal, so it can be assembled from
-compressed probes (research PR #365). That prototype certified KE ky 0.3 at
-(8,24) in 788 s, against 6919 s for ``adaptive``. At high resolution the same
-factor would serve as the preconditioner. The block LU belongs in SOLVAX.
 
 The nonlinear bracket and dealiasing
 ------------------------------------

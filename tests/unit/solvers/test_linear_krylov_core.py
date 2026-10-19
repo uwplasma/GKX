@@ -1016,17 +1016,17 @@ def test_a_zero_eigenvector_never_certifies(monkeypatch: pytest.MonkeyPatch) -> 
         lk.dominant_eigenpair(v0, cache, params, terms=terms, method="arnoldi")
 
 
-def test_default_krylov_config_and_wrapper_resolve_to_certified_adaptive() -> None:
+def test_default_krylov_config_and_wrapper_resolve_to_auto() -> None:
     from gkx.api import KrylovConfig
     from gkx.config import RuntimeConfig
     from gkx.workflows.runtime.startup import _runtime_default_krylov_config
 
     assert KrylovConfig is lk.KrylovConfig
-    assert KrylovConfig().method == "adaptive"
+    assert KrylovConfig().method == "auto"
     assert KrylovConfig().certify is True
     assert _runtime_default_krylov_config(RuntimeConfig()) == KrylovConfig()
     parameters = inspect.signature(lk.dominant_eigenpair).parameters
-    assert parameters["method"].default == "adaptive"
+    assert parameters["method"].default == "auto"
     assert parameters["certify"].default is True
 
 
@@ -1949,7 +1949,7 @@ def test_sparse_shift_invert_selects_only_original_operator_certified_modes(
     assert captured["factorization"] == "factor"
 
 
-def _selected_linked_case(nx: int = 8):
+def _selected_linked_case(nx: int = 8, nl: int = 2, nm: int = 4):
     """One-ky linked grid; at Nx=8 its five-link chain skips kx rows {3, 4, 5}."""
 
     from gkx.core_grid import select_ky_grid
@@ -1967,8 +1967,8 @@ def _selected_linked_case(nx: int = 8):
     grid = select_ky_grid(build_spectral_grid(cfg.grid), 1)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams(damp_ends_rate=0.1)
-    cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
-    shape = (2, 4, grid.ky.size, grid.kx.size, grid.z.size)
+    cache = build_linear_cache(grid, geom, params, Nl=nl, Nm=nm)
+    shape = (nl, nm, grid.ky.size, grid.kx.size, grid.z.size)
     index = jnp.arange(int(np.prod(shape)), dtype=jnp.float64)
     # Golden-angle start, nonzero on every row like gkx.objectives.core's.
     seed = jnp.reshape(jnp.exp(1j * (index + 1.0) * 0.6180339887498948), shape)
@@ -2082,6 +2082,162 @@ def test_sparse_shift_invert_assembles_linked_chain_columns_only(monkeypatch) ->
     (full_value, _full_vector), full_status = solve()
     assert "n=512 " in full_status
     assert abs(complex(value) - complex(full_value)) <= 1.0e-12 * abs(target)
+
+
+@pytest.mark.parametrize("nm", [4, 5])
+@pytest.mark.parametrize("use_shift", [True, False])
+def test_banded_shift_invert_finds_the_dense_chain_eigenvalue(nm, use_shift) -> None:
+    """Hermite-pair blocks reproduce the operator, odd Nm included, on chain modes only."""
+
+    cache, params, seed, terms = _selected_linked_case(nm=nm)
+    target = _dense_chain_target(
+        cache, params, linear_terms_to_term_config(terms), seed
+    )
+    messages: list[str] = []
+    value, vector, status = lk.dominant_eigenpair(
+        seed,
+        cache,
+        params,
+        terms=terms,
+        method="banded",
+        shift=target + 0.01 if use_shift else None,
+        status_callback=messages.append,
+        return_status=True,
+    )
+    assert status.route == "banded" and status.certified
+    assert abs(complex(value) - target) <= 1.0e-8 * abs(target)
+    assert _off_chain_weight(vector, _chain_modes(cache)) == 0.0
+    assert any("truncation" in m for m in messages) == (not use_shift)
+
+
+def test_banded_shift_invert_refuses_what_it_cannot_certify(monkeypatch) -> None:
+    cache, params, seed, terms = _selected_linked_case()
+    with pytest.raises(ValueError, match="Nm >= 4"):
+        c, p, v, t = _selected_linked_case(nm=2)
+        lk.dominant_eigenpair(v, c, p, terms=t, method="banded")
+    monkeypatch.setattr(lk, "_eigenpair_relative_residual", lambda *_a: 1.0)
+    with pytest.raises(RuntimeError, match="no original-operator-certified"):
+        lk.dominant_eigenpair(seed, cache, params, terms=terms, method="banded")
+
+
+def test_dense_estimate_is_the_fastest_eigenvalue_of_the_leading_truncation(
+    monkeypatch,
+) -> None:
+    """Whole operator when small; else Laguerre < _COARSE_NL of the leading pairs."""
+
+    rng = np.random.default_rng(4)
+    nb, nl, rest = 4, 3, 2
+    laguerre = np.tile(np.repeat(np.arange(nl), rest), (nb, 1))  # (4, 6) per block
+    size = laguerre.shape[1]
+    lower, diag, upper = rng.standard_normal(
+        (3, nb, size, size)
+    ) + 1j * rng.standard_normal((3, nb, size, size))
+
+    def dense(rows_per_block, n_blocks):
+        edge = np.cumsum([0] + [len(r) for r in rows_per_block[:n_blocks]])
+        out = np.zeros((edge[-1], edge[-1]), complex)
+        for b in range(n_blocks):
+            r = rows_per_block[b]
+            out[edge[b] : edge[b + 1], edge[b] : edge[b + 1]] = diag[b][np.ix_(r, r)]
+            if b:
+                p = rows_per_block[b - 1]
+                out[edge[b] : edge[b + 1], edge[b - 1] : edge[b]] = lower[b][
+                    np.ix_(r, p)
+                ]
+            if b + 1 < n_blocks:
+                q = rows_per_block[b + 1]
+                out[edge[b] : edge[b + 1], edge[b + 1] : edge[b + 2]] = upper[b][
+                    np.ix_(r, q)
+                ]
+        return out
+
+    def fastest(matrix):
+        values = np.linalg.eigvals(matrix)
+        return values[np.argmax(values.real)]
+
+    everything = [np.arange(size)] * nb
+    assert ap._dense_estimate(lower, diag, upper, laguerre, nl) == pytest.approx(
+        fastest(dense(everything, nb))
+    )
+    monkeypatch.setattr(ap, "_DENSE_N", 12)
+    monkeypatch.setattr(ap, "_COARSE_NL", 2)
+    kept = [
+        np.flatnonzero(row < 2) for row in laguerre
+    ]  # 4 unknowns a block: 3 pairs fit
+    assert ap._dense_estimate(lower, diag, upper, laguerre, nl) == pytest.approx(
+        fastest(dense(kept, 3))
+    )
+
+
+def test_growth_excess_separates_the_kbm_trap() -> None:
+    """KBM (8,24): a certified 0.0332-0.1953j beside the fastest 0.3427-0.8314j."""
+
+    modes = np.array([0.0332 - 0.1953j, 0.3427 - 0.8314j, -0.05 + 0.1j])
+    dt = 0.2
+    step = lambda x: x / (1 - modes * dt)  # noqa: E731  (I - dt A)^-1, A diagonal
+    start = np.random.default_rng(1).standard_normal(3) + 0j
+    trapped = ap._growth_excess(step, start, modes[0], dt)
+    found = ap._growth_excess(step, start, modes[1], dt)
+    assert trapped > 0.5 * modes[0].real * dt + 1e-3  # refused
+    assert found < 1e-3  # the fastest mode passes
+
+
+def test_auto_takes_the_banded_route_and_falls_back_to_adaptive(monkeypatch) -> None:
+    cache, params, seed, terms = _selected_linked_case()
+    messages: list[str] = []
+    kwargs = dict(terms=terms, status_callback=messages.append, return_status=True)
+    _value, _vector, status = lk.dominant_eigenpair(seed, cache, params, **kwargs)
+    assert status.route == "banded"
+
+    # An operator that is not Hermite-banded and a device that cannot hold the
+    # blocks both end on the certified adaptive route.
+    monkeypatch.setattr(
+        lk, "_adaptive_branch", lambda *_a: ("value", "vector", "adaptive")
+    )
+    original = ap.banded_ritz_pairs
+
+    def mismatched(*_args):
+        raise ValueError("operator is not Hermite-banded")
+
+    for patch in (
+        lambda: monkeypatch.setattr(lk, "banded_ritz_pairs", mismatched),
+        lambda: (
+            monkeypatch.setattr(lk, "banded_ritz_pairs", original),
+            monkeypatch.setattr(lk, "banded_fits", lambda _shape: False),
+        ),
+    ):
+        patch()
+        messages.clear()
+        assert lk.dominant_eigenpair(seed, cache, params, **kwargs)[2] == "adaptive"
+        assert not any("banded Arnoldi" in m for m in messages)
+
+
+def test_banded_refuses_an_operator_with_long_range_hermite_coupling(
+    monkeypatch,
+) -> None:
+    cache, params, seed, terms = _selected_linked_case(nm=8)
+    real = ap._apply_operator
+    monkeypatch.setattr(
+        ap,
+        "_apply_operator",
+        lambda g, *a: real(g, *a) + 0.1 * jnp.roll(g, 3, axis=-4),  # m -> m + 3
+    )
+    with pytest.raises(ValueError, match="not Hermite-banded"):
+        lk.dominant_eigenpair(seed, cache, params, terms=terms, method="banded")
+
+
+def test_banded_fits_counts_the_four_complex64_arrays(monkeypatch) -> None:
+    class Device:
+        def memory_stats(self):
+            return {"bytes_limit": 8 * 4 * 6 * 3072**2 * 2 + 1}
+
+    monkeypatch.setattr(ap.jax, "devices", lambda: [Device()])
+    nl, nm, nz = 16, 12, 96  # blocks of 2 * nl * nz = 3072, six of them
+    assert ap.banded_fits((nl, nm, 1, 1, nz))
+    assert not ap.banded_fits((nl, nm + 2, 1, 1, nz))
+    assert not ap.banded_fits((nl, 2, 1, 1, nz))  # Nm < 4 has no band
+    Device.memory_stats = lambda self: None  # CPU: host memory decides
+    assert ap.banded_fits((nl, nm, 1, 1, nz))
 
 
 @pytest.mark.parametrize("method", ["power", "propagator", "arnoldi", "adaptive"])

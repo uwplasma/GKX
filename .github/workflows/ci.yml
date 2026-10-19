@@ -194,7 +194,7 @@ jobs:
             tests/unit/solvers/test_linear_krylov_core.py \
             tests/unit/objectives/test_autodiff_solver_objectives.py \
             -m "integration or not integration" \
-            -k "adaptive or biorthogonal or experimental_solvax_eigen_contract"
+            -k "adaptive or biorthogonal or experimental_solvax_eigen_contract or banded"
 
   fast-coverage:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'

@@ -35,8 +35,9 @@ dependencies = [
   # against the 0.25.0 and 0.26.0 exports, see docs/numerics.rst). The floor
   # is 0.27.0, the first to declare equinox>=0.13.3: with 0.26.0's bare
   # requirement pip kept an installed equinox 0.11.x, which fails on import
-  # under jax >= 0.10.
-  "solvax>=0.27.0",
+  # under jax >= 0.10. 0.29.0 adds block_tridiagonal_from_products and
+  # block_thomas_factor(shift=), which the banded eigensolver imports.
+  "solvax>=0.29.0",
   # The VMEC geometry path hard-requires the booz_xform_jax bridge
   # (gkx.geometry.backend_discovery); 0.4.1 is the first with a jax floor.
   "booz_xform_jax>=0.4.3",

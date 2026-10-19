@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Mapping
 
 import jax.numpy as jnp
@@ -18,6 +18,8 @@ from gkx.operators.linear.params import (
 from gkx.solvers_linear_adaptive_propagator import (
     AdaptivePropagatorSolution as AdaptivePropagatorSolution,
     adaptive_propagator_eigenpair,
+    banded_fits,
+    banded_ritz_pairs,
     certifiable_residual_tolerance,
 )
 from gkx.solvers_linear_krylov_algorithms import (
@@ -52,8 +54,9 @@ from gkx.solvers_linear_precond_pr3 import PR3_PRECOND_NAMES, build_pr3_factors
 class KrylovConfig:
     """Controls for the Krylov-based eigen solver.
 
-    The default ``method="adaptive"`` is the residual-certified eigensolve the
-    runtime already uses for generic contracts. Every method returns only a pair
+    The default ``method="auto"`` runs the Hermite-banded direct shift-invert
+    where its blocks fit in memory and the residual-certified ``adaptive``
+    eigensolve otherwise or when the banded pair is rejected. Every method returns only a pair
     that passes an original-operator residual gate unless ``certify=False``.
     """
 
@@ -63,7 +66,7 @@ class KrylovConfig:
     omega_target_factor: float = 0.0
     omega_cap_factor: float = 2.0
     omega_sign: int = 0
-    method: str = "adaptive"
+    method: str = "auto"
     # Matches the ``dominant_eigenpair(power_iters=40)`` signature default: one
     # route, one cost, whichever door it is entered by. The two used to disagree
     # by 5x, and the larger value bought nothing. Measured on the shipped Cyclone
@@ -822,15 +825,54 @@ def _sparse_shift_invert_branch(
             .at[:, rows]
             .set(eigenvectors)
         )
-    vectors = eigenvectors.reshape((eigenvectors.shape[0], *v0.shape))
+    return _pick_certified(
+        modes.eigenvalues,
+        eigenvectors.reshape((eigenvectors.shape[0], *v0.shape)),
+        np.asarray(modes.converged),
+        v_ref,
+        cache,
+        params,
+        term_cfg,
+        cfg,
+        status_callback,
+        shift=shift,
+        select_overlap=select_overlap,
+        route="sparse_shift_invert",
+    )
+
+
+def _pick_certified(
+    values,
+    vectors,
+    converged,
+    v_ref,
+    cache,
+    params,
+    term_cfg,
+    cfg: KrylovConfig,
+    status_callback: _StatusCallback,
+    *,
+    shift: complex,
+    select_overlap: bool,
+    route: str,
+) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
+    """Gate shift-invert candidates on the original operator and pick one.
+
+    Candidates that converged and pass the outer residual gate compete on the
+    overlap with ``v_ref``, on growth, or on distance to ``shift``, as
+    ``cfg.shift_selection`` says. None certified raises.
+    """
+
+    residual_tol = certifiable_residual_tolerance(
+        cfg.shift_outer_residual_tol, vectors.dtype
+    )
     residuals = np.asarray(
         [
             _eigenpair_relative_residual(value, vector, cache, params, term_cfg)
-            for value, vector in zip(modes.eigenvalues, vectors, strict=True)
+            for value, vector in zip(values, vectors, strict=True)
         ]
     )
-    certified = np.asarray(modes.converged) & np.isfinite(residuals)
-    certified &= residuals <= residual_tol
+    certified = converged & np.isfinite(residuals) & (residuals <= residual_tol)
     _targeted, select_growth = _shift_selection_flags(cfg.shift_selection)
     if select_overlap:
         scores = np.abs(
@@ -838,26 +880,24 @@ def _sparse_shift_invert_branch(
             @ np.asarray(v_ref).reshape(-1).conj()
         )
     elif select_growth:
-        scores = np.asarray(modes.eigenvalues).real
+        scores = np.asarray(values).real
     else:
-        scores = -np.abs(np.asarray(modes.eigenvalues) - shift)
+        scores = -np.abs(np.asarray(values) - shift)
     if not np.any(certified):
         raise RuntimeError(
-            "sparse shift-invert returned no original-operator-certified eigenpair"
+            f"{route} returned no original-operator-certified eigenpair "
+            f"(best residual {np.nanmin(residuals):.3g}, tolerance {residual_tol:.3g})"
         )
     selected = int(np.argmax(np.where(certified, scores, -np.inf)))
-    _status(
-        status_callback,
-        f"sparse shift-invert residual={residuals[selected]:.3g}",
-    )
+    _status(status_callback, f"{route} residual={residuals[selected]:.3g}")
     status = EigenSolveStatus(
         method=cfg.method,
-        route="sparse_shift_invert",
+        route=route,
         residual=float(residuals[selected]),
         tolerance=residual_tol,
         certified=True,
     )
-    return modes.eigenvalues[selected], vectors[selected], status
+    return values[selected], vectors[selected], status
 
 
 def _adaptive_branch(
@@ -963,6 +1003,24 @@ def _dispatch_dominant_eigenpair(
             status_callback,
             select_overlap=select_overlap,
         )
+    if cfg.method == "banded":  # Hermite-banded direct shift-invert
+        values, vectors, shift = banded_ritz_pairs(
+            v0, cache, params, term_cfg, cfg.shift, status_callback
+        )
+        return _pick_certified(
+            values,
+            vectors,
+            np.ones(values.size, bool),
+            v_ref,
+            cache,
+            params,
+            term_cfg,
+            cfg,
+            status_callback,
+            shift=shift,
+            select_overlap=select_overlap,
+            route="banded",
+        )
     if cfg.method == "power":
         pair = _power_branch(v0, cache, params, term_cfg, cfg, status_callback)
     elif cfg.method == "propagator":
@@ -989,7 +1047,7 @@ def _dispatch_dominant_eigenpair(
         )
     else:
         raise ValueError(
-            "Krylov method must be adaptive, power, propagator, shift_invert, "
+            "Krylov method must be adaptive, banded, power, propagator, shift_invert, "
             "sparse_shift_invert, or arnoldi"
         )
     return _certify_raw_eigenpair(pair, cache, params, term_cfg, cfg, status_callback)
@@ -1009,7 +1067,7 @@ def dominant_eigenpair(
     omega_target_factor: float = 0.0,
     omega_cap_factor: float = 2.0,
     omega_sign: int = 0,
-    method: str = "adaptive",
+    method: str = "auto",
     power_iters: int = 40,
     power_dt: float = 0.01,
     propagator_steps: int = 1,
@@ -1054,7 +1112,24 @@ def dominant_eigenpair(
         status_callback,
         f"krylov method={cfg.method} dim={cfg.krylov_dim} restarts={cfg.restarts}",
     )
-    if cfg.method == "adaptive":
+    solved = None
+    if cfg.method == "auto" and banded_fits(v0.shape):
+        try:  # like adaptive, the dominant pair: no overlap selection
+            solved = _dispatch_dominant_eigenpair(
+                v0,
+                v_ref_use,
+                cache,
+                params,
+                term_cfg,
+                replace(cfg, method="banded"),
+                status_callback,
+                select_overlap=False,
+            )
+        except (ImportError, RuntimeError, ValueError) as error:
+            _status(status_callback, f"banded route failed ({error}); using adaptive")
+    if solved is not None:
+        pass
+    elif cfg.method in ("adaptive", "auto"):
         solved = _adaptive_branch(v0, cache, params, terms, cfg, status_callback)
     else:
         solved = _dispatch_dominant_eigenpair(

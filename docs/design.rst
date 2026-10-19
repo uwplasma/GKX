@@ -45,8 +45,9 @@ selectable (:doc:`operators`).
 rate, ``[time] damp_ends_rate``, applies on every route and no time step
 enters it (:ref:`end-damping`).
 
-**Eigensolver.** The default is the residual-certified Arnoldi on the
-time-advance map (``adaptive``). Shift-invert is opt-in for a chosen branch
+**Eigensolver.** The default is ``auto``: a Hermite-banded direct shift-invert where its
+blocks fit in memory, else the residual-certified Arnoldi on the time-advance
+map (``adaptive``). Matrix-free shift-invert is opt-in for a chosen branch
 (:doc:`solvers`, :doc:`algorithms`).
 
 **Certify, do not trust.** Every eigenpair is checked against the unprojected

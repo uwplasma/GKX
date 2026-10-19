@@ -72,8 +72,8 @@ What a first run gets
 Defaults for a deck that leaves a choice open, each backed by a
 load-independent measurement (:ref:`q28-defaults`):
 
-- **Eigen route:** ``adaptive``, the residual-certified propagator eigensolve
-  (:doc:`solvers`).
+- **Eigen route:** ``auto``, banded direct shift-invert where it fits, else
+  ``adaptive``, the residual-certified propagator eigensolve (:doc:`solvers`).
 - **Precision:** ``complex64``. On ``01_linear_tokamak/case_full.toml`` float32
   gives :math:`\gamma = 0.09309106` against float64's :math:`0.09309117`
   (1.2e-6 relative); ``JAX_ENABLE_X64=true`` applies the float64 certification
