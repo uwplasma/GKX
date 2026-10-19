@@ -2978,9 +2978,11 @@ def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
     modes = np.ones(shape[3:5], bool)
 
     def build(dt):
-        split, fields = stiff_linear_split(cache, params, terms, compute_fields_cached)
+        split, fields, mirror = stiff_linear_split(
+            cache, params, terms, compute_fields_cached
+        )
         return build_chain_implicit_linear(
-            split, fields, shape, dt, modes=modes, scheme="imex-ars3"
+            split, fields, shape, dt, modes=modes, scheme="imex-ars3", mirror_rhs=mirror
         )
 
     first = build(0.05)
