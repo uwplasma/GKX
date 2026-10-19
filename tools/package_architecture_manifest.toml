@@ -438,8 +438,8 @@ public_facades = [
 [[complexity_policy.exceptions]]
 path = "solvers_nonlinear_imex.py"
 # 1189 -> 1293: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
-# 1293 -> 1463: ARK3(2)4L[2]SA embedded pair, factor as a scan operand, adaptive-dt control (ImexDtControl); measured.
-baseline_lines = 1463
+# 1293 -> 1471: ARK3(2)4L[2]SA embedded pair, factor as a scan operand, adaptive-dt control (ImexDtControl); measured.
+baseline_lines = 1471
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -1159,8 +1159,8 @@ recursive = true
 # 67113 -> 67126: end-damping contract (#366) on top of #362/#365, measured.
 # 67126 -> 67622: linearized Landau default, block-sparse apply, coulomb kernels retired.
 # 67622 -> 67736: electron mirror implicit in the imex-ars3 chain factor (+114). Measured.
-# 67736 -> 68031: adaptive-dt chain IMEX (+295). Measured.
-baseline = 68031
+# 67736 -> 68039: adaptive-dt chain IMEX (+303). Measured.
+baseline = 68039
 target = 45000
 
 [[line_budget_policy.counts]]
