@@ -438,8 +438,9 @@ public_facades = [
 [[complexity_policy.exceptions]]
 path = "solvers_nonlinear_imex.py"
 # 1189 -> 1293: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
-# 1293 -> 1471: ARK3(2)4L[2]SA embedded pair, factor as a scan operand, adaptive-dt control (ImexDtControl); measured.
-baseline_lines = 1471
+# 1293 -> 1304: electron mirror implicit (#370) on top of #363/#368, measured.
+# 1304 -> 1521: ARK3(2)4L[2]SA, factor as scan operand, chunked factor build, adaptive-dt control (ImexDtControl); measured.
+baseline_lines = 1521
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -1158,9 +1159,10 @@ recursive = true
 # 67308 -> 67113: chain 2026-10-07 measured (#351 -196, others +).
 # 67113 -> 67126: end-damping contract (#366) on top of #362/#365, measured.
 # 67126 -> 67622: linearized Landau default, block-sparse apply, coulomb kernels retired.
-# 67622 -> 67736: electron mirror implicit in the imex-ars3 chain factor (+114). Measured.
-# 67736 -> 68041: adaptive-dt chain IMEX (+305). Measured.
-baseline = 68041
+# 67622 -> 67658: bug-hunt (#363) on top of #364, measured.
+# 67658 -> 67769: electron mirror implicit (#370) on top of #363/#368, measured.
+# 67769 -> 68118: adaptive-dt chain IMEX (#373). Measured.
+baseline = 68118
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1499,9 +1501,11 @@ recursive = true
 # 74589 -> 75155: chain 2026-10-07 (#346-#353, #355), measured.
 # 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
 # 72926 -> 73011: linearized Landau physics gates and runtime regression, net of the retired coulomb tests.
-# 73011 -> 73020: chain-solve test exercises the implicit electron mirror (Nl = 2).
-# 73020 -> 73048: adaptive chain IMEX test (+28). Measured.
-baseline = 73048
+# 73011 -> 73066: bug-hunt (#363) tests on top of #364, measured.
+# 73066 -> 73084: bug-hunt-b (#368) regression tests + untraced pr3 float32 child, measured.
+# 73084 -> 73095: electron mirror implicit (#370) on top of #363/#368, measured.
+# 73095 -> 73123: adaptive chain IMEX test (#373). Measured.
+baseline = 73123
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -220,9 +220,7 @@ def _infer_runtime_nonlinear_steps(
     if steps is not None:
         steps_val = int(steps)
     elif bool(cfg.time.fixed_dt):
-        steps_val = int(
-            np.round(float(cfg.time.t_max) / max(float(cfg.time.dt), 1.0e-12))
-        )
+        steps_val = int(np.round(float(cfg.time.t_max) / max(float(dt), 1.0e-12)))
     else:
         # Keep runtime inference aligned with adaptive stepping: when
         # dt_max is unset, the nonlinear integrator clamps at dt itself.

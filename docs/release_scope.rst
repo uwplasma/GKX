@@ -1,10 +1,10 @@
-Release Scope and Claim Boundaries
-==================================
+Features and Claim Scope
+========================
 
 .. note::
 
    Snapshot: GKX 2.3.0, 2026-09-21, reviewed against 2.4.1 on 2026-09-27. The status of every public number is its
-   row in the evidence ledger, shown on :doc:`verification_matrix`. A claim
+   row in the evidence ledger, shown on :doc:`validation`. A claim
    that is neither in the ledger nor on this page is not made.
 
    The 2.0.0 end-damping regression
@@ -17,7 +17,97 @@ Release Scope and Claim Boundaries
    end-damping rate (`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_).
    The adiabatic Cyclone GX goldens were rerun with a repaired GX build in
    September 2026 and moved by at most 0.06% above :math:`k_y=0.1`
-   (:doc:`benchmarks`); the ledger rows have not been updated.
+   (:doc:`validation`); the ledger rows have not been updated.
+
+Features
+--------
+
+What GKX can be asked to do, with the switch that turns each feature on. Input
+keys are defined in :doc:`inputs`; the physics is in :doc:`theory` and
+:doc:`operators`.
+
+Geometry
+~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 35 35
+
+   * - Geometry
+     - Select with
+     - Notes
+   * - s-alpha tokamak
+     - ``[geometry] model = "s-alpha"`` (default)
+     - Cyclone base case benchmarks
+   * - Miller tokamak
+     - ``model = "miller"``
+     - in-package flux-surface construction
+   * - VMEC or VMEX equilibrium
+     - ``model = "vmec"``, or ``gkx wout_*.nc``
+     - any radius ``s`` and field line ``alpha``; tokamaks and stellarators
+   * - VMEX in memory
+     - ``gkx.geometry.from_vmex(...)``
+     - differentiable through the equilibrium
+   * - Imported flux tube
+     - ``model = "imported-netcdf"``
+     - reads a precomputed ``*.eik.nc`` file
+   * - Slab
+     - ``model = "slab"``
+     - secondary-instability and Landau tests
+
+Physics
+~~~~~~~
+
+- Any number of kinetic species; adiabatic (Boltzmann) electrons or ions.
+- Electrostatic, or electromagnetic with :math:`A_\parallel` and
+  :math:`B_\parallel` (KAW, KBM).
+- Collision operators (``[time] collision_operator``): linearized Landau
+  (default), Lenard-Bernstein/Dougherty, Sugama, improved Sugama, and the
+  gyrokinetic Coulomb operator; see :doc:`operators`.
+- Hypercollisions and hyperdiffusion, declared as regularizations.
+- Twist-and-shift linked parallel boundaries, or periodic.
+
+Linear runs
+~~~~~~~~~~~
+
+- Initial-value runs with explicit (``rk2``, ``rk4``, ``sspx3``), IMEX or
+  backward-Euler GMRES time stepping.
+- Certified Arnoldi on the time-advance map (default), matrix-free Krylov,
+  and shift-invert for a chosen branch; every returned eigenpair is checked
+  against the full operator (:doc:`solvers`).
+- ``k_y`` scans in serial or across devices, identical to the serial result
+  (:doc:`parallelization`).
+
+Nonlinear runs
+~~~~~~~~~~~~~~
+
+- Pseudo-spectral :math:`E\times B` bracket with the two-thirds rule, in the
+  full or half ``k_y`` layout (``[grid] ky_layout``).
+- ``run_to = "saturation"`` stops when heat flux, field and free energy are
+  stationary; a missed saturation is reported.
+- Restart from a saved bundle (``[init] init_file``), NetCDF output with
+  spectra, fluxes and energies (:doc:`outputs`).
+- ``gkx --estimate`` sizes the grid from the geometry and prints the reason
+  for each entry.
+
+Derivatives and optimization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Implicit derivatives of eigenvalues and eigenvector observables
+  (:doc:`differentiable_eigensolver`).
+- A checkpointed discrete adjoint of the nonlinear heat flux over a window
+  (:doc:`nonlinear_autodiff`).
+- Quasilinear heat-flux spectra and their sensitivities (:doc:`quasilinear`).
+- Growth-rate, quasilinear and nonlinear objectives in VMEX shape
+  optimization (:doc:`stellarator_optimization`).
+
+Hardware and precision
+~~~~~~~~~~~~~~~~~~~~~~
+
+- CPU and GPU through JAX; ``float32`` by default, ``float64`` with
+  ``JAX_ENABLE_X64=true``.
+- A persistent compilation cache; ``gkx.prepare`` compiles a nonlinear route
+  once for repeated calls.
 
 Claim scope
 -----------

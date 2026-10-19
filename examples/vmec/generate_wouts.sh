@@ -14,6 +14,7 @@ inputs=(
   input.LandremanPaul2021_QH_reactorScale_lowres
   input.QI_stel_seed_3127
   input.li383_low_res
+  input.minimal_seed_nfp2
 )
 
 for input in "${inputs[@]}"; do

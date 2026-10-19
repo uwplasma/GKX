@@ -156,6 +156,10 @@ def select_fit_window(
     start_index = _amplitude_start_index(
         amp_lin, start_index=int(start_fraction * n), min_amp_fraction=min_amp_fraction
     )
+    if start_index > n - window:
+        raise ValueError(
+            f"no {window}-point window starts at or after index {start_index} of {n}"
+        )
     for start in range(start_index, n - window + 1):
         end = start + window
         tt = t[start:end]
@@ -592,7 +596,7 @@ def fit_growth_rate_with_stats(
         gamma,
         -phase_slope,
         _r2_score(log_amp, log_fit),
-        _r2_score(phase, phase_fit),
+        _phase_r2_score(phase, phase_fit),
     )
 
 
@@ -666,7 +670,7 @@ def fit_growth_rate_uncertainty(
         gamma_stderr=_slope_stderr(tt, log_amp - log_fit),
         omega_stderr=_slope_stderr(tt, phase - phase_fit),
         r2_log=_r2_score(log_amp, log_fit),
-        r2_phase=_r2_score(phase, phase_fit),
+        r2_phase=_phase_r2_score(phase, phase_fit),
         n_points=int(tt.size),
         tmin=float(tt[0]),
         tmax=float(tt[-1]),
@@ -894,15 +898,10 @@ def fit_growth_rate_auto(
         raise ValueError("t and signal must be 1D")
     if t.shape[0] != signal.shape[0]:
         raise ValueError("t and signal must have same length")
-    if t.size < 2:
-        return 0.0, 0.0, 0.0, 0.0
-
     finite = np.isfinite(signal)
-    if not np.all(finite):
-        t = t[finite]
-        signal = signal[finite]
-        if t.size < 2:
-            return 0.0, 0.0, 0.0, 0.0
+    t, signal = t[finite], signal[finite]
+    if t.size < 2:  # gamma = omega = 0 would read as a real neutral mode
+        raise ValueError("not enough finite points to fit")
 
     if window_method not in {"stationary", "loglinear", "fixed"}:
         raise ValueError("window_method must be 'stationary', 'loglinear', or 'fixed'")

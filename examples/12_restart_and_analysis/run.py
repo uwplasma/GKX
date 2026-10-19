@@ -34,11 +34,13 @@ case = gkx.load(CASE)
 options = dict(ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm)
 OUTPUT.mkdir(parents=True, exist_ok=True)
 
-first = gkx.solve(case, steps=STEPS_PER_LEG, return_state=True, **options)
+first = gkx.solve(
+    case, steps=STEPS_PER_LEG, return_state=True, **options, show_progress=True
+)
 restart_file = write_netcdf_restart_state(OUTPUT / "leg1.restart.bin", first.state)
 restarted = case.replace(init=replace(case.init, init_file=str(restart_file.resolve())))
-second = gkx.solve(restarted, steps=STEPS_PER_LEG, **options)
-reference = gkx.solve(case, steps=2 * STEPS_PER_LEG, **options)
+second = gkx.solve(restarted, steps=STEPS_PER_LEG, **options, show_progress=True)
+reference = gkx.solve(case, steps=2 * STEPS_PER_LEG, **options, show_progress=True)
 first.save(OUTPUT / "leg1")
 second.save(OUTPUT / "leg2")
 

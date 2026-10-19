@@ -52,14 +52,11 @@ the residual gates carry a precision floor: the overlap and gap gates compare
 normalized ``O(1)`` quantities, which resolve identically at either precision.
 
 For a supplied target or continuation shift, ``dominant_eigenpair`` can instead
-use right-preconditioned shift-invert Arnoldi.  The default ``"auto"`` policy
-inverts the additive diagonal-plus-Hermite-streaming symbol with an FFT and
-batched tridiagonal solve for electrostatic systems.  Electromagnetic systems
-go directly to ``"field-corrected"``, which adds the exact low-moment field map
-through a Woodbury capacitance solve.  If the cheaper electrostatic solve fails
-the original-operator residual, auto retries it with the same field correction
-before invoking a generic fallback.  Field columns are probed sequentially, so
-setup memory does not grow with velocity resolution.
+use right-preconditioned shift-invert Arnoldi.  Its ``"auto"`` preconditioner
+is ``"pr3-cm"``; the policy and its measurements are in :doc:`algorithms`.
+``"field-corrected"`` remains available by name: it adds the exact
+low-moment field map through a Woodbury capacitance solve, probing field
+columns sequentially so setup memory does not grow with velocity resolution.
 
 This follows the established use of the stiff parallel kinetic block in
 gyrokinetic preconditioning [Merz12]_ and the sparse Laguerre--Hermite

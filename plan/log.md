@@ -21200,6 +21200,24 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
 
+## 2026-10-15 — bug hunt, second group (fix/bug-hunt-1015-b)
+
+- KBM and ETG runtime Krylov defaults are now `adaptive`, like every other contract.
+- Shift-invert `auto` is now pr3-cm with restart ≥150 and maxiter ≥600. σ is seeded from the adaptive pair, falling back to the propagator seed. The hermite-line → field-corrected retry is removed.
+- Fixed: Krylov fields dropped by `_run_krylov_linear`; pr3 complex128 requested under float32; a `--dt` override not setting the fixed-dt step count; growth-fit late-window, zero-frequency R² and NaN-trace paths.
+- Measurements: plan/research/2026-10-15-bug-hunt/SUMMARY.md (warm imex 9.2 s → 2.9 s with #363).
+
+
+
+
+## 2026-10-15 — bug hunt, known-bug group (fix/bug-hunt-1015)
+
+- `cached_jit` traces, prints and hashes once per argument signature of a wrapper, not on every call; the imex probe loops called one wrapper hundreds of times (17.7 s host time per warm imex solve on the 10-13 profile). Executables are unchanged, so results are bitwise identical.
+- The imex chain factor is reused when the RHS and field graph digests, shape, dt, scheme, dtype and modes all match (12.9 s rebuild per solve). Only one factor is kept alive.
+- VMEC `*.eik.nc` generation and backend discovery now run under `geometry_precision()`: float64 inside, the caller's `jax_enable_x64` restored after. Importing vmex/booz_xform_jax used to leave the GK solve in float64.
+- Shift-invert: when no Ritz value falls in the frequency window, or the inner FGMRES stalls, the error now says so and suggests what to change. It no longer reports `residual=nan`. Root cause, measured on Cyclone case_full at (4,8): hermite-line and field-corrected ignore the z-varying drift (||(A-σ)Mx−x|| = 11.6 against 0.14 with streaming only); pr3-cm converges, but only with restart ≥150; the propagator seed σ lands 0.0076 from a damped mode. pr3-cm with restart 150 still stalls on KBM. Not fixed: needs a design decision.
+- Adaptive Cyclone (16,48): no hang reproduced. It certifies γ=0.09309 in 262 s on a shared A4000; the 10-13 ">17 min, GPU idle" ran under the profiler trace and HLO dump. KBM adaptive at (16,48) did not finish in 50 min on a shared GPU.
+
 ## 2026-10-15 — end-damping contract (fix/end-damping-contract, supersedes #357)
 
 - One timestep-free end-damping rate on every route; default 30 thermal
@@ -21256,6 +21274,13 @@ Base `origin/main` 4564828b. Summary and tables: `plan/research/2026-10-16-imex-
 - **Code.** `stiff_linear_split` returns the mirror part as well, weighted per species (vth > 4 vth_min). The mirror is probed once per (s, l, m) slot, since it is z-local and the same at every mode. `_thomas_factor`/`_thomas_solve` take its z-local couplings. One refinement step runs when the complex64 check residual is above 5e-3. Build memory: probes are kept on the host, the probe batch is sized by state, and the Schur inverses are not stacked. `imex-ars2` is removed.
 - **Results.** Linear gamma, KBM: 7e-5 relative to rk4 at dt 0.2. Nonlinear: 32x32 is stable at dt 0.1 (0.2 is not) and 64x64 at 0.07 (0.1 is not), against 0.05 and 0.035 on main; heat flux agrees within its fluctuation. Wall time is unchanged at fixed dt, because the Laguerre-coupled electron blocks cost what the 2x dt saves. 64x64x16 (8, 16): the factor is 7.1 GB with a 10 GB peak (main OOMs), but the run dies at load on 7 GB of captured constants.
 - **Not done.** Adaptive dt: startup Arnoldi bound, nonlinear CFL, ARK3(2)4L[2]SA error control and a factor ladder. Bracket CFL is now the limit, so that is where the speedup is. Also not done: passing the factor as a scan operand, which 64x64 (8, 16) needs, and any SOLVAX PR (nothing generic is split out yet).
+## 2026-10-18 — release 2.6.0
+
+Minor release (behaviour changes). Since 2.5.1: linearized Landau default collision
+operator (#364), one timestep-free end-damping rate on every route (#366, #354),
+eigensolver policy with adaptive as the default and shift-invert opt-in (#363),
+cached_jit and imex factor reuse, VMEC x64 isolation (#363), scripts/ cut to
+CI needs and media recompressed (#362), KE/EM solver study (#365).
 
 ## 2026-10-18 imex-adaptive (PR #373, stacked on #370)
 
