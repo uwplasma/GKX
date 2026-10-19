@@ -22,6 +22,8 @@ ntheta = 24
 nperiod = 1
 
 [time]
+# Nonlinear rate kept from GKX < 2.6 (damp_ends_amp = 0.1 read as a rate).
+damp_ends_rate = 0.1
 t_max = 20.4
 dt = 0.01
 method = "rk3"
@@ -64,7 +66,6 @@ hypercollisions_const = false
 hypercollisions_kz = true
 p_hyper = 2
 p_hyper_m = 4
-damp_ends_amp = 0.1
 damp_ends_widthfrac = 0.125
 
 [terms]

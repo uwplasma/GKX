@@ -23,9 +23,11 @@ from gkx.operators.linear.collisions import (
     EqualSpeciesFiniteWavelengthCoulombOperator,
     apply_multispecies_collision_moment_matrix,
     interpolate_collision_diagonal_table,
-    load_collision_moment_matrix,
 )
-from gkx.operators.linear.params import COLLISION_OPERATOR_NAMES
+from gkx.operators.linear.params import (
+    BUILTIN_COLLISION_OPERATORS,
+    COLLISION_OPERATOR_NAMES,
+)
 
 
 _FINITE_WAVELENGTH_STEM = "finite_wavelength_coulomb"
@@ -160,58 +162,6 @@ def build_finite_wavelength_coulomb_operator(
             for stored, field in field_names.items()
         },
     )
-
-
-def assemble_drift_kinetic_coulomb_matrix(
-    density: jnp.ndarray,
-    mass: jnp.ndarray,
-    temperature: jnp.ndarray,
-) -> jnp.ndarray:
-    """Assemble the drift-kinetic Coulomb operator for one species.
-
-    The tabulated matrix is the full linearized Coulomb (Landau) collision
-    operator projected onto the eight lowest Hermite-Laguerre moments, from
-    Frei, Ernst & Ricci (2022), equations (C9a)--(C9f), generated at 80 decimal
-    digits. Unlike the Sugama models it is only validated for like-species
-    collisions, so a multi-species plasma is rejected rather than silently
-    extrapolated.
-
-    The tabulated coefficients are normalized to unit collision frequency; they
-    are scaled here by the same dimensionless ``nu_aa = n / (sqrt(m) T**1.5)``
-    used by the Sugama assemblers, so all three drift-kinetic models share one
-    normalization.
-    """
-
-    density_s = jnp.atleast_1d(jnp.asarray(density))
-    mass_s = jnp.atleast_1d(jnp.asarray(mass, dtype=jnp.result_type(density_s, float)))
-    temperature_s = jnp.atleast_1d(
-        jnp.asarray(temperature, dtype=jnp.result_type(density_s, mass_s, float))
-    )
-    if mass_s.shape != density_s.shape or temperature_s.shape != density_s.shape:
-        raise ValueError("density, mass, and temperature must have equal length")
-    for value, name in (
-        (density_s, "density"),
-        (mass_s, "mass"),
-        (temperature_s, "temperature"),
-    ):
-        if not isinstance(value, jax.core.Tracer) and np.any(np.asarray(value) <= 0.0):
-            raise ValueError(f"{name} must be positive")
-
-    species_count = int(density_s.size)
-    if species_count != 1:
-        raise ValueError(
-            "the tabulated drift-kinetic Coulomb operator is validated for "
-            f"like-species collisions only, but {species_count} species were "
-            "given; use collision_operator='sugama' or 'improved_sugama' for "
-            "multispecies runs"
-        )
-
-    base = jnp.asarray(
-        load_collision_moment_matrix("coulomb"),
-        dtype=jnp.result_type(density_s, mass_s, temperature_s, float),
-    )
-    frequency = density_s[0] / (jnp.sqrt(mass_s[0]) * temperature_s[0] ** 1.5)
-    return (frequency * base)[None, None, ...]
 
 
 @jax.tree_util.register_pytree_node_class
@@ -384,15 +334,12 @@ def collision_operator_from_config(
 ) -> CollisionOperator | None:
     """Resolve a TOML ``collision_operator`` name to a solver collision operator.
 
-    ``"none"`` and ``"lenard_bernstein"`` return ``None`` so the linear RHS
-    keeps its built-in diagonal Lenard-Bernstein term (the solver re-enables
-    ``collisions_contribution`` exactly when ``collision_operator is None``).
-    ``"sugama"``, ``"improved_sugama"``, and ``"coulomb"`` build the dense
+    The built-in names (``"none"``, ``"lenard_bernstein"``, ``"landau"`` and
+    its alias ``"coulomb"``) return ``None``: the linear RHS applies them from
+    the cache. ``"sugama"`` and ``"improved_sugama"`` build the dense
     drift-kinetic Hermite-Laguerre moment operator (Frei, Ernst & Ricci 2022)
-    that replaces the diagonal term. ``"coulomb"`` is the full linearized
-    Coulomb (Landau) operator of equations (C9a)--(C9f) and is validated for
-    like-species collisions only. ``density``/``mass``/``temperature`` are the
-    per-species normalizations (length ``n_species``).
+    that replaces the built-in term. ``density``/``mass``/``temperature`` are
+    the per-species normalizations (length ``n_species``).
 
     The assembled matrices carry only the dimensionless pair scaling
     ``n_b / (sqrt(m_a) T_a**1.5)``; the common collisionality prefactor is the
@@ -409,7 +356,7 @@ def collision_operator_from_config(
     )
 
     key = name.strip().lower()
-    if key in ("none", "lenard_bernstein"):
+    if key in BUILTIN_COLLISION_OPERATORS:
         return None
 
     collisionality = jnp.asarray(nu)
@@ -446,10 +393,6 @@ def collision_operator_from_config(
         operator = DriftKineticMomentCollisionOperator.from_improved_species(
             density, mass, temperature
         )
-    elif key == "coulomb":
-        operator = DriftKineticMomentCollisionOperator(
-            assemble_drift_kinetic_coulomb_matrix(density, mass, temperature)
-        )
     elif key == "coulomb_finite_kperp":
         finite = build_finite_wavelength_coulomb_operator(
             density, mass, temperature, moments
@@ -465,3 +408,380 @@ def collision_operator_from_config(
             f"collision_operator must be one of {COLLISION_OPERATOR_NAMES}"
         )
     return DriftKineticMomentCollisionOperator(operator.matrix * collisionality)
+
+
+# ---- Linearized Landau operator at any Hermite-Laguerre resolution ----
+#
+# The like- and unlike-species linearized Landau operator is rotationally
+# invariant, so in the orthonormal Legendre-Sonine basis
+# S_lk = N_lk x^l L_k^{(l+1/2)}(x^2) P_l(xi) it is block diagonal in l. Each block
+# is a pair of one-dimensional radial integrals (test part: weak form of the
+# Rosenbluth diffusion; field part: multipole Rosenbluth potentials), evaluated
+# by composite Gauss quadrature. An exact orthogonal map takes the Hermite-
+# Laguerre box (p < Nm, j < Nl) into Legendre-Sonine functions of total degree
+# l + 2k <= (Nm - 1) + 2 (Nl - 1). Velocities are in units of
+# v_ta = sqrt(2 T_a / m_a); a unit pair frequency gives
+# nu_D^ab(v) = [erf(x_b) - G(x_b)] / x_a^3, the GS2 ``vnewk`` convention.
+
+
+def _hermite_values(x: np.ndarray, count: int) -> np.ndarray:
+    values = np.zeros((count,) + x.shape)
+    values[0] = 1.0
+    if count > 1:
+        values[1] = np.sqrt(2.0) * x
+    for p in range(1, count - 1):
+        values[p + 1] = (
+            np.sqrt(2.0 / (p + 1)) * x * values[p]
+            - np.sqrt(p / (p + 1)) * values[p - 1]
+        )
+    return values
+
+
+def _laguerre_values(y: np.ndarray, count: int, alpha: float = 0.0) -> np.ndarray:
+    values = np.zeros((count,) + y.shape)
+    values[0] = 1.0
+    if count > 1:
+        values[1] = 1.0 + alpha - y
+    for k in range(1, count - 1):
+        values[k + 1] = (
+            (2 * k + 1 + alpha - y) * values[k] - (k + alpha) * values[k - 1]
+        ) / (k + 1)
+    return values
+
+
+def _sonine_norm(l: int, k: np.ndarray) -> np.ndarray:  # noqa: E741
+    from scipy.special import gammaln
+
+    return np.exp(
+        0.5
+        * (
+            0.5 * np.log(np.pi)
+            + np.log(2 * l + 1)
+            + gammaln(k + 1)
+            - np.log(2.0)
+            - gammaln(k + l + 1.5)
+        )
+    )
+
+
+def _hermite_laguerre_to_legendre_sonine(nl: int, nm: int) -> tuple[np.ndarray, list]:
+    from scipy.special import roots_genlaguerre, roots_hermite
+
+    degree = (nm - 1) + 2 * (nl - 1)
+    t, wt = roots_hermite(degree + 2)
+    y, wy = roots_genlaguerre(degree + 2, 0.0)
+    par, perp = np.meshgrid(t, y, indexing="ij")
+    weight = np.outer(wt, wy) / np.sqrt(np.pi)
+    hl = (
+        _hermite_values(par, nm)[:, None] * _laguerre_values(perp, nl)[None, :]
+    ).reshape((nm * nl,) + par.shape)
+    r2 = par**2 + perp
+    solid = np.zeros((degree + 1,) + par.shape)  # x^l P_l(xi)
+    solid[0] = 1.0
+    if degree:
+        solid[1] = par
+    for l in range(1, degree):  # noqa: E741
+        solid[l + 1] = ((2 * l + 1) * par * solid[l] - l * r2 * solid[l - 1]) / (l + 1)
+    labels, sonine = [], []
+    for l in range(degree + 1):  # noqa: E741
+        count = (degree - l) // 2 + 1
+        norm = _sonine_norm(l, np.arange(count))[:, None, None]
+        sonine.append(norm * solid[l] * _laguerre_values(r2, count, l + 0.5))
+        labels += [l] * count
+    transform = np.einsum("aij,bij,ij->ab", hl, np.concatenate(sonine), weight)
+    return transform, labels
+
+
+def _composite_gauss(xmax: float, scale: float, fine: float):
+    from scipy.special import roots_legendre
+
+    edges = np.unique(
+        np.concatenate(
+            [
+                [0.0],
+                np.geomspace(1.0e-3 * fine, scale, 20)[:-1],
+                np.arange(scale, xmax + scale, scale),
+            ]
+        )
+    )
+    nodes, weights = roots_legendre(16)
+    lo, hi = edges[:-1, None], edges[1:, None]
+    return ((hi - lo) / 2 * nodes + (hi + lo) / 2).ravel(), (
+        (hi - lo) / 2 * weights
+    ).ravel()
+
+
+def _sonine_radial(x: np.ndarray, l: int, count: int, scale: float = 1.0):  # noqa: E741
+    """Return N_lk u^l L_k(u^2) e^{-u^2/2} and its x-derivative, u = x/scale."""
+
+    u = x / scale
+    with np.errstate(divide="ignore"):
+        base = np.exp(l * np.log(u) - 0.5 * u**2) if l else np.exp(-0.5 * u**2)
+    lag = _laguerre_values(u**2, count + 1, l + 0.5)[:count]
+    dlag = np.zeros_like(lag)
+    dlag[1:] = -_laguerre_values(u**2, count, l + 1.5)[: count - 1]
+    norm = _sonine_norm(l, np.arange(count))[:, None]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        l_over_u = np.where(u > 0, l / u, 0.0)
+    value = norm * base * lag
+    return value, norm * base * ((l_over_u - u) * lag + 2 * u * dlag) / scale
+
+
+def linearized_landau_pair_matrices(
+    nl: int, nm: int, mass_ratio: float = 1.0, temperature_ratio: float = 1.0
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return the dense ``(test, field)`` Hermite-Laguerre matrices of one pair."""
+
+    convention, test, field = linearized_landau_factors(
+        nl, nm, mass_ratio, temperature_ratio
+    )
+    return convention @ test @ convention.T, convention @ field @ convention.T
+
+
+@lru_cache(maxsize=32)
+def linearized_landau_factors(
+    nl: int, nm: int, mass_ratio: float = 1.0, temperature_ratio: float = 1.0
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    r"""Return ``(T, test, field)``: the pair operator is ``T @ block @ T.T``.
+
+    ``T`` maps the Hermite-Laguerre box onto Legendre-Sonine functions; it is
+    block diagonal in the degree ``p + 2j = l + 2k`` because each Hermite-
+    Laguerre function is orthogonal to every polynomial of lower degree. The
+    Legendre-Sonine blocks are diagonal in ``l``.
+
+    ``C_ab[f_a, f_b] = C(f_a, F_b) + C(F_a, f_b)`` with ``mass_ratio = m_a/m_b``
+    and ``temperature_ratio = T_a/T_b``, linearized about Maxwellians. Rows are
+    species-``a`` moments, columns the moments of the perturbed species (``a``
+    for the test part, ``b`` for the field part), in the runtime's Hermite-major
+    ``p*Nl + j`` order and signed-Laguerre convention. Particles, momentum and
+    energy are conserved exactly by the pair sum; the like-species matrix is
+    symmetric negative semidefinite (H-theorem). With ``T_a != T_b`` the
+    operator still conserves but is no longer self-adjoint.
+    """
+
+    from scipy.special import erf, roots_legendre
+
+    mu, tau = float(mass_ratio), float(temperature_ratio)
+    if mu <= 0.0 or tau <= 0.0:
+        raise ValueError("mass_ratio and temperature_ratio must be positive")
+    transform, labels = _hermite_laguerre_to_legendre_sonine(nl, nm)
+    degree = (nm - 1) + 2 * (nl - 1)
+    extent = np.sqrt(4.0 * degree + 120.0)
+    s = np.sqrt(mu / tau)  # v_tb / v_ta
+    x, w = _composite_gauss(extent, 1.0, min(1.0, s))
+    y = x / s
+    chandrasekhar = (erf(y) - 2 * y * np.exp(-y * y) / np.sqrt(np.pi)) / (2 * y * y)
+    d_par, d_perp = 2 * chandrasekhar / x, (erf(y) - chandrasekhar) / x
+    drift = 2 * chandrasekhar * (1.0 - tau)  # vanishes at equal temperatures
+    t, wt = roots_legendre(48)
+    t, wt = (t + 1) / 2, wt / 2
+    v, wv = _composite_gauss(s * extent, s, s)
+    moment_l = np.asarray(labels)
+    blocks = [np.zeros((moment_l.size, moment_l.size)) for _ in range(2)]
+    for l in range(degree + 1):  # noqa: E741
+        count = (degree - l) // 2 + 1
+        c = 4 * np.pi / (2 * l + 1)
+        r, dr = _sonine_radial(x, l, count)
+        dpsi = dr + x * r
+        outer = c * w * x**2 * np.pi**-1.5
+        test = -np.einsum("x,kx,qx->kq", outer * 0.5 * d_par, dpsi, dpsi)
+        test -= np.einsum(
+            "x,kx,qx->kq", outer * 0.5 * d_perp * l * (l + 1) / x**2, r, r
+        )
+        test += np.einsum("x,kx,qx->kq", outer * drift, dpsi, r)
+
+        def perturbed(points: np.ndarray) -> np.ndarray:
+            radial = _sonine_radial(points.ravel(), l, count, s)[0]
+            gauss = np.exp(-0.5 * (points.ravel() / s) ** 2) * np.pi**-1.5 / s**3
+            return (radial * gauss).reshape((count,) + points.shape)
+
+        # Rosenbluth multipoles as integrals of bounded kernel ratios.
+        span = np.minimum(x, s * extent)[:, None]
+        inner = span * t[None, :]
+        below = perturbed(inner) * ((inner / x[:, None]) ** (l + 1) * inner * span)
+        t1 = np.einsum("qxt,t->qx", below, wt)
+        t2 = np.einsum("qxt,xt,t->qx", below, inner**2, wt)
+        inner = x[:, None] + v[None, :]
+        above = perturbed(inner) * ((x[:, None] / inner) ** l * inner)
+        t3 = np.einsum("qxv,v->qx", above, wv)
+        t4 = np.einsum("qxv,xv,v->qx", above, inner**2, wv)
+        odd = 1.0 / (2 * l - 1)
+        even = (l + 1) * (l + 2) / (2 * l + 3)
+        potentials = c * (
+            -2 * (t1 + t3)
+            + 2 * (mu - 1) * (l * t3 - (l + 1) * t1)
+            + 2 * (even * (t2 + x**2 * t3) - l * (l - 1) * odd * (x**2 * t1 + t4))
+        )
+        source = 4 * np.pi * mu * perturbed(x) + potentials
+        field = np.einsum("x,kx,qx->kq", outer * np.exp(-0.5 * x**2), r, source)
+        index = np.flatnonzero(moment_l == l)
+        blocks[0][np.ix_(index, index)] = test
+        blocks[1][np.ix_(index, index)] = field
+    sign = (-1.0) ** (np.arange(nl * nm) % nl)
+    return transform * sign[:, None], blocks[0], blocks[1]
+
+
+def linearized_landau_species_matrices(
+    nl: int, nm: int, mass: Any, temperature: Any
+) -> np.ndarray:
+    """Stack the dense unit-frequency ``(test, field)`` pairs as ``(2, s, s, n, n)``."""
+
+    masses = np.atleast_1d(np.asarray(mass, dtype=float))
+    temps = np.broadcast_to(
+        np.atleast_1d(np.asarray(temperature, dtype=float)), masses.shape
+    )
+    return np.stack(
+        [
+            np.stack(
+                [
+                    np.stack(linearized_landau_pair_matrices(nl, nm, ma / mb, ta / tb))
+                    for mb, tb in zip(masses, temps)
+                ],
+                axis=1,
+            )
+            for ma, ta in zip(masses, temps)
+        ],
+        axis=1,
+    )
+
+
+def _padded_batches(blocks: list, pads: tuple[int, ...], fill: tuple[int, ...]):
+    """Group index blocks of similar size into zero-padded batches."""
+
+    groups: dict = {}
+    for block in blocks:
+        key = tuple(-(-len(ix) // 4) * 4 for ix in block)
+        groups.setdefault(key, []).append(block)
+    del pads
+    return [
+        (
+            key,
+            [
+                np.stack(
+                    [
+                        np.pad(ix, (0, n - len(ix)), constant_values=f)
+                        for b in members
+                        for ix in (b[a],)
+                    ]
+                )
+                for a, (n, f) in enumerate(zip(key, fill))
+            ],
+            members,
+        )
+        for key, members in groups.items()
+    ]
+
+
+def linearized_landau_blocks(nl: int, nm: int, mass: Any, temperature: Any):
+    """Build :class:`~gkx.operators.linear.collisions.LandauBlocks` for a species set."""
+
+    from gkx.operators.linear.collisions import LandauBlocks
+
+    masses = np.atleast_1d(np.asarray(mass, dtype=float))
+    temps = np.broadcast_to(
+        np.atleast_1d(np.asarray(temperature, dtype=float)), masses.shape
+    )
+    factors = [
+        [
+            linearized_landau_factors(nl, nm, ma / mb, ta / tb)
+            for mb, tb in zip(masses, temps)
+        ]
+        for ma, ta in zip(masses, temps)
+    ]
+    transform = factors[0][0][0]
+    n_hl, n_ls = transform.shape
+    _, labels = _hermite_laguerre_to_legendre_sonine(nl, nm)
+    ls_l = np.asarray(labels)
+    ls_k = np.concatenate([np.arange(np.sum(ls_l == l)) for l in range(ls_l.max() + 1)])  # noqa: E741
+    hl = np.arange(n_hl)
+    hl_degree = (hl // nl) + 2 * (hl % nl)
+    ls_degree = ls_l + 2 * ls_k
+    degree_blocks = [
+        (np.flatnonzero(hl_degree == d), np.flatnonzero(ls_degree == d))
+        for d in range(int(hl_degree.max()) + 1)
+        if np.any(hl_degree == d)
+    ]
+    rows, cols, mats = [], [], []
+    for _, (r, c), members in _padded_batches(degree_blocks, (), (n_hl, n_ls)):
+        rows.append(r)
+        cols.append(c)
+        mats.append(
+            np.stack(
+                [
+                    np.pad(
+                        transform[np.ix_(a, b)],
+                        ((0, r.shape[1] - len(a)), (0, c.shape[1] - len(b))),
+                    )
+                    for a, b in members
+                ]
+            )
+        )
+    l_blocks = [(np.flatnonzero(ls_l == l),) for l in range(int(ls_l.max()) + 1)]  # noqa: E741
+    index: list = []
+    test: list = []
+    field: list = []
+    for _, (ix,), members in _padded_batches(l_blocks, (), (n_ls,)):
+        index.append(ix)
+        for out, part in ((test, 1), (field, 2)):
+            out.append(
+                np.stack(
+                    [
+                        np.stack(
+                            [
+                                np.stack(
+                                    [
+                                        np.pad(
+                                            pair[part][np.ix_(b, b)],
+                                            (0, ix.shape[1] - len(b)),
+                                        )
+                                        for (b,) in members
+                                    ]
+                                )
+                                for pair in row
+                            ]
+                        )
+                        for row in factors
+                    ]
+                )
+            )
+    diagonal = [
+        np.asarray(
+            [
+                [
+                    np.einsum("ia,ab,ib->i", transform, pair[part], transform)
+                    for pair in row
+                ]
+                for row in factors
+            ]
+        )
+        for part in (1, 2)
+    ]
+    return LandauBlocks(
+        tuple(rows),
+        tuple(cols),
+        tuple(mats),
+        tuple(index),
+        tuple(test),
+        tuple(field),
+        diagonal[0],
+        diagonal[1],
+        int(n_ls),
+    )
+
+
+def landau_blocks_for(params: Any, nl: int, nm: int, dtype: Any):
+    """Return the run's :class:`LandauBlocks` in ``dtype``, or ``None`` when unused.
+
+    They are built unless the model is not ``landau`` or every ``nu`` is a
+    concrete zero.
+    """
+
+    nu = params.nu
+    if params.collision_model != "landau" or (
+        not isinstance(nu, jax.core.Tracer) and not np.any(np.asarray(nu) != 0.0)
+    ):
+        return None
+    blocks = linearized_landau_blocks(nl, nm, params.mass, params.temp)
+    return jax.tree_util.tree_map(
+        lambda a: a.astype(dtype) if np.issubdtype(a.dtype, np.floating) else a, blocks
+    )

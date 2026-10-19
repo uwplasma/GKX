@@ -24,7 +24,9 @@ OUTPUT = Path("outputs/08_quasilinear")
 KY = [0.1, 0.2, 0.3, 0.4]  # k_y rho_i
 
 case = gkx.load(CASE)
-scan = gkx.scan(case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver)
+scan = gkx.scan(
+    case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver, show_progress=True
+)
 weight = np.array([point["heat_flux_weight_total"] for point in scan.quasilinear])
 kperp2 = np.array([point["kperp_eff2"] for point in scan.quasilinear])
 flux = np.array([point["saturated_heat_flux_total"] for point in scan.quasilinear])

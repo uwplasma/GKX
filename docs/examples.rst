@@ -255,7 +255,7 @@ One-shot nonlinear bundle write:
 For the short Cyclone comparison replay (``t_max = 5``, no collisions), use
 ``benchmarks/cases/cyclone_nonlinear_short.toml``.
 That file pins the short-run dissipation contract explicitly
-(``p_hyper = 2``, ``damp_ends_amp = 0``) instead of relying on the longer
+(``p_hyper = 2``, ``damp_ends_rate = 0``) instead of relying on the longer
 production defaults.
 
 Restart-aware TOML snippet:
@@ -334,8 +334,9 @@ dominant linear eigenvalue of the tutorial linear deck moves by
 **Implicit linear step (opt-in).** ``method = "imex-ars3"`` with
 ``fixed_dt = true`` removes the streaming limit. Only the stiff terms are
 implicit -- parallel streaming with its dissipation (end damping,
-hypercollisions, hyperdiffusion) and the field response; drifts, mirror,
-drive and collisions stay explicit with the bracket. These couple modes only
+hypercollisions, hyperdiffusion), the field response and the electron mirror
+force; drifts, the ion mirror, drive and collisions stay explicit with the
+bracket. These couple modes only
 along one twist-shift chain, and per chain the operator is :math:`S+UQ`:
 :math:`S` block-tridiagonal in Hermite with one :math:`N\times N` block per
 row (:math:`N` = links :math:`\times N_z`; the off-diagonal blocks are the
@@ -404,9 +405,12 @@ factor per dt); derivatives flow through the solve with respect to the state
 but not through the factors with respect to parameters; production grids
 need ``XLA_PYTHON_CLIENT_PREALLOCATE=false`` (the factors are captured as
 constants of the compiled scan, and with the default 75% preallocation the
-64x64x24 executable fails to load). ``imex-ars2`` (two-stage) has no
-imaginary-axis interval in its explicit part and went non-finite at
-:math:`t=25.5`.
+64x64x24 executable fails to load). With the electron mirror implicit the
+electron blocks couple Laguerre moments (:math:`N_l N` square, :math:`N_l`
+times the memory); the linear step map is then stable to :math:`\Delta t\approx1`
+(0.05 before), and the nonlinear bracket sets dt instead: 0.1 is stable at
+32x32x16 and 0.07 at 64x64x16, (4, 8), where 0.2 and 0.1 went non-finite at
+:math:`t=24` and 15.6.
 
 **Choosing t_max** (units of :math:`a/v_{ti}`): the linear phase lasts about
 :math:`10/\gamma`, 20-40 here; saturation follows by :math:`t\approx60`-100;

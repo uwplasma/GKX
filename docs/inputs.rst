@@ -421,39 +421,23 @@ and ``[fit]`` are read by the commands that use them.
 
 Notable runtime-only keys:
 
-* ``[time] damp_ends_rate``: optional finite, nonnegative end-absorber rate in
-  inverse simulation-time units. When set (including zero), overrides
-  ``damp_ends_amp`` consistently for timestep-aware and timestep-free RHS calls.
-  For the isolated absorber, :math:`\dot G=-\nu d(z)G`; a step multiplies by
-  :math:`R(-\Delta t\nu d(z))`, not :math:`R(-A d(z))`. In Python use
-  ``LinearParams(damp_ends_rate=nu)``; ``nu`` remains a differentiable leaf.
-  Omission preserves the legacy behavior below. Combining this option with
-  ``damp_ends_scale_by_dt=true`` is an error. For a fixed-step legacy reference,
-  matching requires :math:`\nu=A/\Delta t_{ref}`; record both reference values
-  with the comparison. No automatic conversion or benchmark recertification
-  occurs, and adaptive legacy steps do not define one equivalent constant rate.
-* ``[collisions] damp_ends_amp`` / ``damp_ends_widthfrac``: reference-compatible end
-  damping defaults are ``0.1`` and ``0.125``. Linear integration routes supplying
-  ``dt`` divide the amplitude by the instantaneous step size: it is a per-step
-  strength, not an exact fraction removed by every RK scheme. RHS calls without
-  ``dt``, including nonlinear integration, retain a rate interpretation.
-  The linear compatibility repair addresses
-  `issue 192 <https://github.com/uwplasma/GKX/issues/192>`_; reconciling routes
-  requires the deck/reference migration in issue 194. See :doc:`operators`
-  for the stage-map equations and limitations.
+* ``[time] damp_ends_rate``: the field-line end-absorber rate
+  :math:`\nu_{end}` in inverse simulation-time units, finite and nonnegative.
+  Every route (time, Krylov, eigen, shift-invert, nonlinear) applies the same
+  rate; no timestep enters. Omit it for the default, 30 thermal transits of the
+  fastest kinetic species across the end layer. ``0`` turns the absorber off.
+  See :ref:`end-damping`.
+* ``[collisions] damp_ends_widthfrac``: layer width as a fraction of the chain
+  (default ``0.125``).
 * ``[physics] reduced_model``: physics-family selector for runtime inputs.
   The maintained runtime supports full gyrokinetics via ``"gyrokinetic"``
   and its full-GK aliases. Non-promoted reduced-model values fail closed with
   ``NotImplementedError`` instead of silently routing through the wrong equations.
-* ``[collisions] damp_ends_scale_by_dt``: ``true`` raises a migration error
-  before geometry construction; omitted/``false`` retains legacy defaults.
-  Remove the true flag and choose ``[time] damp_ends_rate`` explicitly.
-  For an old true-flag deck, the linear rate was
-  :math:`A/(\Delta t_{input}\Delta t_{step})`; a timestep-free RHS used
-  :math:`A/\Delta t_{input}`. Record the route, source deck/hash, amplitude and
-  both timesteps before converting. Adaptive linear steps do not define one
-  equivalent constant rate. No automatic conversion or reference promotion
-  occurs (`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_).
+* ``[collisions] damp_ends_amp`` (removed): a positive value without
+  ``damp_ends_rate`` on a non-periodic deck is refused, because GKX < 2.6 read
+  it as ``damp_ends_amp/dt`` on the time route and as a rate elsewhere.
+  ``damp_ends_amp = 0`` still means no damping. ``damp_ends_scale_by_dt = true``
+  is refused too.
 * ``[collisions] hypercollisions_const`` / ``hypercollisions_kz``: defaults are
   ``0.0`` / ``1.0`` (kz-proportional hypercollisions enabled by
   default, constant hypercollisions off).

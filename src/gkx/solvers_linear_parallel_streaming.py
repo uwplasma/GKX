@@ -73,7 +73,6 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     params: LinearParams,
     *,
     terms: LinearTerms | None = None,
-    dt: jnp.ndarray | float | None = None,
     species_chunks: int = 2,
     hermite_chunks: int = 2,
     devices: Any | None = None,
@@ -413,7 +412,9 @@ def linear_rhs_electrostatic_species_hermite_sharded(
             * cache.dealias_mask[None, None, None, :, :, None]
             * local_state
         )
-        damp_amp = params.end_damping_strength(dt, real_dtype)
+        damp_amp = params.end_damping_rate(
+            cache.dz * cache.damp_profile.shape[-1], real_dtype
+        )
         if cache.use_twist_shift and cache.linked_damp_profile.size != 0:
             damping_profile = cache.linked_damp_profile[None, None, None, ...]
         else:

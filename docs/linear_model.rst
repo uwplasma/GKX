@@ -19,7 +19,7 @@ cover:
 
 Each row is scanned in :math:`k_y`. Its status (passing or provisional),
 measured mismatch, reference and velocity-space regularization are listed in
-:doc:`verification_matrix`, which is generated from the ledger.
+:doc:`validation`, which is generated from the ledger.
 
 Normalized equation
 -------------------
@@ -182,4 +182,4 @@ For all linear benchmark plots/tables:
 - publish mismatch tables by scan coordinate (:math:`k_y` or :math:`\beta_{ref}`)
 - include per-case parameter tables (geometry, gradients, species, toggles, grid, resolution)
 - give every published number a ledger row, so it appears in
-  :doc:`verification_matrix`
+  :doc:`validation`

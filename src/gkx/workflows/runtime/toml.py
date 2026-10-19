@@ -502,7 +502,7 @@ def migrate_end_damping_reference(
         str(path),
         hashlib.sha256(source).hexdigest(),
         route,
-        cfg.collisions.damp_ends_amp,
+        0.1 if cfg.collisions.damp_ends_amp is None else cfg.collisions.damp_ends_amp,
         cfg.time.dt,
         dt_step,
         cfg.collisions.damp_ends_scale_by_dt,

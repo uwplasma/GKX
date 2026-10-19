@@ -1034,7 +1034,7 @@ def test_strong_flow_shear_suppresses_linear_itg_amplitude_after_dt_refinement()
         nu_hyper_m=0.0,
         tprim=6.9,
         fprim=2.2,
-        damp_ends_amp=0.0,
+        damp_ends_rate=0.0,
     )
     cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
     rng = np.random.default_rng(10)
@@ -2846,7 +2846,7 @@ def test_compiled_window_rebuilds_the_projector_the_eager_route_used():
 
 # --- kinetic-electron step: measured streaming bound, per-chain IMEX operator
 
-KE_NL, KE_NM = 1, 3
+KE_NL, KE_NM = 2, 3
 
 
 def _tiny_kinetic_electron_box(layout: str = "half"):
@@ -2896,11 +2896,20 @@ def test_measured_streaming_frequency_skips_adiabatic_like_decks():
 def test_chain_solve_inverts_the_stiff_linear_operator():
     cfg, params, cache, shape = _tiny_kinetic_electron_box()
     terms = rt.build_runtime_term_config(cfg)
-    split, fields = stiff_linear_split(cache, params, terms, compute_fields_cached)
+    split, fields, mirror = stiff_linear_split(
+        cache, params, terms, compute_fields_cached
+    )
     dt = 0.05
     op = build_chain_implicit_linear(
-        split, fields, shape, dt, modes=np.ones(shape[3:5], bool), scheme="imex-ars3"
+        split,
+        fields,
+        shape,
+        dt,
+        modes=np.ones(shape[3:5], bool),
+        scheme="imex-ars3",
+        mirror_rhs=mirror,
     )
+    assert op.spec == ((0,), (1,))  # the electron mirror is implicit
     key = jax.random.PRNGKey(3)
     G = (jax.random.normal(key, shape) + 1j * jax.random.normal(key + 1, shape)).astype(
         jnp.complex64
@@ -2944,3 +2953,38 @@ def test_cached_jit_falls_back_under_an_outer_trace_and_evicts(monkeypatch):
     monkeypatch.setattr(explicit, "_COMPILED", {i: None for i in range(64)})
     assert float(explicit.cached_jit(lambda x: x + 1)(jnp.ones(()))) == 2.0
     assert 0 not in explicit._COMPILED
+
+
+def test_cached_jit_traces_once_per_argument_signature(monkeypatch):
+    import gkx.solvers_nonlinear_explicit as explicit
+
+    traced = []
+    make_jaxpr = jax.make_jaxpr
+    monkeypatch.setattr(
+        jax, "make_jaxpr", lambda *a, **k: traced.append(1) or make_jaxpr(*a, **k)
+    )
+    scale = jnp.arange(3.0)
+    wrapped = explicit.cached_jit(lambda x: x * scale)
+    for _ in range(5):
+        np.testing.assert_array_equal(wrapped(jnp.ones(3)), np.asarray(scale))
+    assert len(traced) == 1 and wrapped.key(jnp.ones(3)) == wrapped.key(jnp.zeros(3))
+    wrapped(jnp.ones(3, jnp.int32))
+    assert len(traced) == 2
+
+
+def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
+    cfg, params, cache, shape = _tiny_kinetic_electron_box()
+    terms = rt.build_runtime_term_config(cfg)
+    modes = np.ones(shape[3:5], bool)
+
+    def build(dt):
+        split, fields, mirror = stiff_linear_split(
+            cache, params, terms, compute_fields_cached
+        )
+        return build_chain_implicit_linear(
+            split, fields, shape, dt, modes=modes, scheme="imex-ars3", mirror_rhs=mirror
+        )
+
+    first = build(0.05)
+    assert build(0.05) is first
+    assert build(0.04) is not first

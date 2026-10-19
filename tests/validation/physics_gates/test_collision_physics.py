@@ -796,9 +796,9 @@ def test_diagonal_operator_stays_cheap() -> None:
 # ---- from test_end_damping_physics.py ----
 # Physics gate: parallel-domain end damping on a linked flux tube.
 #
-# Linear RHS assembly uses legacy strength ``damp_ends_amp / dt``. At the pinned
-# ``dt=0.002``, interpreting 0.1 as a rate instead weakens damping 500-fold and
-# allows an unphysical boundary mode to dominate (uwplasma/GKX#192).
+# The end damping is a timestep-free rate (default: 30 thermal transits across
+# the layer). The operator is stable at weak rates; the runaway once blamed on
+# weak damping (uwplasma/GKX#192) is an over-CFL step (see _EXPECTED_GAMMA).
 # References below are measured compatibility regressions, not independent
 
 
@@ -807,14 +807,17 @@ def test_diagonal_operator_stays_cheap() -> None:
 # the runaway to; nperiod=2 is what gives the tube the two damped end caps at
 # all, and every failing case in the parity matrix has it.
 _KY_TARGET = 0.55
-_NL, _NM, _NZ = 8, 24, 96
+_NL, _NM, _NZ = 8, 12, 96
 _DT = 0.002
 _STEPS = 20000
 _SAMPLE_STRIDE = 50
 _SEED_AMPLITUDE = 1.0e-6
 
-#: Measured with the per-step contract in place; the spurious mode gives +11.3.
-_EXPECTED_GAMMA = -0.0405
+#: Measured at the default end-damping rate (9.1 here); rate 3 gives -0.05585.
+#: dt = 0.002 is inside this deck's CFL bound only at Nm <= 12 (0.0023; Nm 24:
+#: 0.0014). Above the bound imex2 runs away at rates below ~40, which the old
+#: damp_ends_amp/dt reading (rate 50) hid.
+_EXPECTED_GAMMA = -0.0553
 
 
 def _linked_salpha_flux_tube():
@@ -848,7 +851,6 @@ def test_end_damping_bounds_the_domain_end_mode_at_a_deck_step_size() -> None:
             geom,
             tprim=2.49,
             fprim=0.8,
-            damp_ends_amp=0.1,
             damp_ends_widthfrac=0.125,
             nu_hermite=1.0,
             nu_laguerre=2.0,
@@ -2059,3 +2061,174 @@ def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None
         "bound, it prints a biased growth rate. Restore dt and steps rather "
         "than widening this tolerance."
     )
+
+
+# ---- linearized Landau operator at any resolution ----
+# The default collision operator. Gates: exact invariants, H-theorem, agreement
+# with the independently generated multiprecision tables of Frei et al., the
+# Sugama test part, Spitzer-Harm, and differentiability in nu.
+
+from gkx.operators.linear.collision_tables import (  # noqa: E402
+    linearized_landau_blocks,
+    linearized_landau_pair_matrices,
+    linearized_landau_species_matrices,
+)
+from gkx.operators.linear.collisions import (  # noqa: E402
+    apply_linearized_landau,
+    apply_multispecies_collision_moment_matrix,
+    drift_kinetic_sugama_pair_matrices,
+)
+
+
+def _invariant_vectors(nl: int, nm: int) -> tuple[np.ndarray, ...]:
+    """Density, parallel momentum and energy in the signed ``p*Nl+j`` basis."""
+
+    density, momentum, energy = (np.zeros(nl * nm) for _ in range(3))
+    density[0] = 1.0
+    momentum[nl] = 1.0
+    energy[2 * nl], energy[1] = 1.0 / np.sqrt(2.0), 1.0  # x_par^2 + x_perp^2
+    return density, momentum, energy
+
+
+@pytest.mark.parametrize("layout", [(2, 4), (4, 8), (6, 12)])
+def test_landau_conserves_and_obeys_the_h_theorem(layout) -> None:
+    test, field = linearized_landau_pair_matrices(*layout)
+    matrix = test + field
+    scale = np.abs(matrix).max()
+    for vector in _invariant_vectors(*layout):
+        assert np.abs(vector @ matrix).max() < 1e-13 * scale
+        assert np.abs(matrix @ vector).max() < 1e-13 * scale
+    assert np.abs(matrix - matrix.T).max() < 1e-13 * scale
+    eigenvalues = np.linalg.eigvalsh(matrix)
+    assert eigenvalues.max() < 1e-13 * scale
+    assert int(np.sum(eigenvalues > -1e-10 * scale)) == 3  # only the invariants
+
+
+def test_landau_matches_the_multiprecision_coulomb_tables() -> None:
+    """Same operator as Frei et al.'s tables, which use twice GKX's nu."""
+
+    test, field = linearized_landau_pair_matrices(3, 6)
+    arrays, _ = _finite_wavelength_coulomb_bundle(18)
+    table = arrays["test_matrix"][0] + arrays["field_matrix"][0]
+    assert np.abs(2.0 * (test + field) - table).max() < 1e-12
+    eight = load_collision_moment_matrix("coulomb")
+    small = 2.0 * sum(linearized_landau_pair_matrices(2, 4))
+    kept = eight != 0.0  # the published six-moment truncation
+    assert np.abs(small[kept] - eight[kept]).max() < 1e-12
+
+
+@pytest.mark.parametrize("mass_ratio", [1.0, 5.446623093681917e-4, 1836.0])
+def test_landau_test_part_equals_sugama_at_equal_temperature(mass_ratio) -> None:
+    with jax.enable_x64(True):
+        sugama = np.asarray(
+            drift_kinetic_sugama_pair_matrices(
+                jnp.asarray(mass_ratio, dtype=jnp.float64),
+                jnp.asarray(1.0, dtype=jnp.float64),
+            )[0]
+        )
+    landau = 2.0 * linearized_landau_pair_matrices(2, 4, mass_ratio, 1.0)[0]
+    kept = sugama != 0.0
+    assert np.abs(landau[kept] - sugama[kept]).max() < 1e-12 * np.abs(sugama).max()
+
+
+def test_electron_ion_exchange_conserves_momentum_and_energy() -> None:
+    """Hot electrons on cold ions (T_e/T_i = 3): pairwise exchange is exact."""
+
+    nl, nm = 4, 8
+    species = ((1.0, 1.0), (5.446623093681917e-4, 3.0))  # (mass, temperature)
+    pairs = {
+        (a, b): linearized_landau_pair_matrices(
+            nl, nm, species[a][0] / species[b][0], species[a][1] / species[b][1]
+        )
+        for a in range(2)
+        for b in range(2)
+    }
+    frequency = [1.0 / (np.sqrt(m) * t**1.5) for m, t in species]
+    _, momentum, energy = _invariant_vectors(nl, nm)
+    weights = {
+        "momentum": (momentum, [np.sqrt(2.0 * t * m) for m, t in species]),
+        "energy": (energy, [t for _, t in species]),
+    }
+    for source in range(2):
+        for vector, scale in weights.values():
+            test = (
+                scale[source]
+                * frequency[source]
+                * (vector @ pairs[source, 1 - source][0])
+            )
+            field = (
+                scale[1 - source]
+                * frequency[1 - source]
+                * (vector @ pairs[1 - source, source][1])
+            )
+            assert np.abs(test + field).max() < 1e-10 * np.abs(test).max()
+
+
+def test_landau_spitzer_harm_conductivity() -> None:
+    """gamma_E(Z) of the new operator against Spitzer & Harm (1953)."""
+
+    nl, hermite = 4, 12
+    self_test, self_field = linearized_landau_pair_matrices(nl, hermite)
+    ion_test = linearized_landau_pair_matrices(nl, hermite, 1.0e-8, 1.0)[0]
+    blocks = (self_test, self_field, ion_test)
+    for charge, published in SPITZER_HARM_GAMMA_E.items():
+        ratio = spitzer_harm_ratio(blocks, nl - 1, float(charge))
+        assert abs(ratio - published) / published < 0.005, (charge, ratio)
+
+
+def test_landau_block_apply_equals_dense_and_is_differentiable_in_nu() -> None:
+    """The block-sparse runtime product equals the dense operator, e-i included."""
+
+    masses, temps = [1.0, 1.0 / 1836.0], [1.0, 3.0]
+    blocks = linearized_landau_blocks(4, 8, masses, temps)
+    dense = linearized_landau_species_matrices(4, 8, masses, temps)
+    nu, charge = jnp.asarray([0.3, 1.7]), jnp.asarray([1.0, -1.0])
+    pair = (np.asarray(nu)[:, None] * np.ones((2, 2)))[..., None, None]
+    operator = (
+        pair * dense[1]
+        + np.eye(2)[:, :, None, None] * np.sum(pair * dense[0], axis=1)[:, None]
+    )
+    draws = np.random.default_rng(3).normal(size=(2, 2, 4, 8, 2, 1, 3))
+    state = jnp.asarray(draws[0] + 1j * draws[1])
+    applied = apply_linearized_landau(
+        state, blocks, nu=nu, density=jnp.ones(2), charge=charge
+    )
+    expected = apply_multispecies_collision_moment_matrix(state, jnp.asarray(operator))
+    assert np.abs(applied - expected).max() < 1e-12 * np.abs(expected).max()
+    assert np.allclose(
+        blocks.diagonal(nu=nu, density=jnp.ones(2), charge=charge),
+        [np.diag(operator[s, s]) for s in range(2)],
+    )
+
+    def rate(scale):
+        out = apply_linearized_landau(
+            state, blocks, nu=scale * nu, density=jnp.ones(2), charge=charge
+        )
+        return jnp.real(jnp.vdot(state, out))
+
+    gradient = jax.grad(rate)(jnp.asarray(0.5))
+    assert np.isclose(float(gradient), float(rate(1.0)), rtol=1e-10)
+    assert float(gradient) < 0.0  # dissipative
+
+
+def test_runtime_default_is_landau_and_coulomb_is_its_alias() -> None:
+    """Regression: the shipped collisional Cyclone example on the runtime path."""
+
+    import gkx
+
+    case = gkx.load(
+        Path(__file__).resolve().parents[3] / "examples/07_collisions/case.toml"
+    )
+    growth = {}
+    for model in ("landau", "coulomb", "lenard_bernstein"):
+        local = case.replace(
+            time=dataclasses.replace(case.time, collision_operator=model, t_max=10.0)
+        )
+        growth[model] = float(
+            gkx.solve(local, ky_target=0.3, Nl=2, Nm=4, solver="time").gamma
+        )
+    assert growth["coulomb"] == growth["landau"]
+    # Recorded 2026-10-16 (x64 CPU, end-damping contract of #366); Dougherty
+    # damps ITG more at equal nu.
+    assert np.isclose(growth["landau"], 0.0726127, rtol=1e-3)
+    assert growth["lenard_bernstein"] < growth["landau"]

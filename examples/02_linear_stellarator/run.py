@@ -11,7 +11,12 @@ resolution, so the rates are qualitative. ``case_full.toml`` is the
 96x96x48 quasilinear-audit deck.
 """
 
+import importlib.util
 import json
+import os
+import subprocess
+import sys
+from dataclasses import replace
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -23,24 +28,39 @@ CASE = Path(__file__).with_name("case.toml")
 VMEC_INPUT = Path(__file__).parents[1] / "vmec" / "input.NuhrenbergZille_1988_QHS"
 OUTPUT = Path("outputs/02_linear_stellarator")
 KY = [0.2, 0.4, 0.6, 0.8]  # k_y rho_i
+PEAK_T_MAX = 120.0  # time run for the eigenfunction at the fastest-growing k_y
 
 case = gkx.load(CASE)
 wout = Path(case.geometry.vmec_file)
-if not wout.exists():
-    import vmex
-    from vmex import optimize
-
+if not wout.exists():  # solve the equilibrium once (minutes on a CPU)
+    if importlib.util.find_spec("vmex") is None:
+        raise SystemExit(f"{wout.name} is missing: pip install vmex, then rerun")
     print(f"solving {VMEC_INPUT.name} with vmex to create {wout.name}")
-    equilibrium = optimize.solve_equilibrium(vmex.VmecInput.from_file(VMEC_INPUT))
-    vmex.write_wout(str(wout), equilibrium.wout)
+    # vmex exits with status 2 on a loose tolerance but still writes the wout
+    subprocess.run(
+        [sys.executable, "-m", "vmex", VMEC_INPUT.name],
+        cwd=VMEC_INPUT.parent,
+        env={**os.environ, "JAX_PLATFORMS": "cpu"},  # CPU: no GPU memory contention
+    )
+    if not wout.exists():
+        raise SystemExit(f"vmex did not write {wout.name}")
 print(
     f"geometry {case.geometry.model}: {wout.name}, s = {case.geometry.torflux}, alpha = {case.geometry.alpha}"
 )
 
-scan = gkx.scan(case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver)
+scan = gkx.scan(
+    case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver, show_progress=True
+)
 peak_ky = float(scan.ky[int(np.argmax(scan.gamma))])
+# The eigenfunction comes from a time run, long enough for the mode to emerge
+# from the initial transient; the rates above are certified eigenvalues.
 peak = gkx.solve(
-    case, ky_target=peak_ky, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
+    case.replace(time=replace(case.time, t_max=PEAK_T_MAX)),
+    ky_target=peak_ky,
+    Nl=case.run.Nl,
+    Nm=case.run.Nm,
+    solver="time",
+    show_progress=True,
 )
 for ky, gamma, omega in zip(scan.ky, scan.gamma, scan.omega):
     print(f"ky = {ky:.2f}: gamma = {gamma:+.5f}, omega = {omega:+.5f}")

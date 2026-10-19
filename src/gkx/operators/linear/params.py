@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 import jax
 import jax.numpy as jnp
@@ -14,7 +14,9 @@ if TYPE_CHECKING:
     from gkx.terms.config import TermConfig
 
 __all__ = [
+    "BUILTIN_COLLISION_OPERATORS",
     "COLLISION_OPERATOR_NAMES",
+    "DAMP_ENDS_LAYER_TRANSITS",
     "DEPRECATED_LINEAR_PARAM_ALIASES",
     "linear_params_for_geometry",
     "LinearParams",
@@ -61,6 +63,10 @@ DEPRECATED_LINEAR_PARAM_ALIASES: dict[str, str] = {
     "R_over_Ln": "fprim",
     "R_over_LTe": "tprim_e",
 }
+
+#: Default end-absorber strength: e-folds per thermal transit of the fastest
+#: kinetic species across one damping layer (:meth:`LinearParams.end_damping_rate`).
+DAMP_ENDS_LAYER_TRANSITS = 30.0
 
 
 def _warn_alias(old: str, new: str) -> None:
@@ -155,7 +161,6 @@ class LinearParams:
     D_hyper: float = 0.0
     p_hyper_kperp: float = 2.0
     damp_ends_widthfrac: float | jnp.ndarray = 0.125
-    damp_ends_amp: float | jnp.ndarray = 0.1
     tz: float | jnp.ndarray = 1.0
     rho_star: float = 1.0
     beta: float = 0.0
@@ -164,6 +169,10 @@ class LinearParams:
     ampere_g0_scale: float = 0.5
     bpar_beta_scale: float = 0.5
     damp_ends_rate: float | jnp.ndarray | None = None
+    #: Built-in collision kernel: ``"landau"`` (linearized Landau, drift-kinetic
+    #: limit; the default, as in the runtime) or ``"dougherty"`` (conserving
+    #: Lenard-Bernstein form).
+    collision_model: str = "landau"
 
     def const_branch_nu_hyper_m(self):
         """Return the Hermite hypercollision rate the *constant* branch uses.
@@ -182,15 +191,23 @@ class LinearParams:
             return self.nu_hyper_m
         return self.nu_hyper_m_const
 
-    def end_damping_strength(self, dt, dtype):
-        """Explicit rate overrides legacy A/dt (or A when dt is absent/zero)."""
+    def end_damping_rate(self, z_extent, dtype):
+        r"""Return the end-absorber rate :math:`\nu_{end}`, the same on every route.
+
+        An explicit ``damp_ends_rate`` wins. Otherwise
+        :math:`\nu_{end} = C\,\max_s v_{ts}\,k_{\parallel,s}/L_w`, with
+        :math:`k_{\parallel,s}` = ``kpar_scale`` (the geometry's ``gradpar``) and
+        :math:`L_w` = ``damp_ends_widthfrac`` times ``z_extent``: ``C`` e-folds
+        per thermal transit of the fastest kinetic species across the layer
+        (:data:`DAMP_ENDS_LAYER_TRANSITS`). No timestep enters.
+        """
         if self.damp_ends_rate is not None:
             return jnp.asarray(self.damp_ends_rate, dtype=dtype)
-        amplitude = jnp.asarray(self.damp_ends_amp, dtype=dtype)
-        if dt is None:
-            return amplitude
-        step = jnp.asarray(dt, dtype=dtype)
-        return amplitude / jnp.where(step != 0.0, step, 1.0)
+        width = jnp.asarray(self.damp_ends_widthfrac, dtype=dtype) * z_extent
+        transit = jnp.max(jnp.asarray(self.vth, dtype=dtype)) * jnp.abs(
+            jnp.asarray(self.kpar_scale, dtype=dtype)
+        )
+        return DAMP_ENDS_LAYER_TRANSITS * transit / jnp.where(width > 0, width, 1.0)
 
     def tree_flatten(self):
         children = (
@@ -227,7 +244,6 @@ class LinearParams:
             self.D_hyper,
             self.p_hyper_kperp,
             self.damp_ends_widthfrac,
-            self.damp_ends_amp,
             self.tz,
             self.rho_star,
             self.beta,
@@ -237,11 +253,11 @@ class LinearParams:
             self.bpar_beta_scale,
             self.damp_ends_rate,
         )
-        return children, None
+        return children, self.collision_model
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
+        return cls(*children, collision_model=aux_data)
 
 
 _SPECIES_PARAM_NAMES = (
@@ -280,7 +296,7 @@ def linear_params_for_geometry(geometry, **overrides) -> LinearParams:
 
 def build_linear_params(
     species: Iterable[Species],
-    **overrides: float,
+    **overrides: Any,
 ) -> LinearParams:
     """Build multi-species :class:`LinearParams` from physical inputs.
 
@@ -467,6 +483,16 @@ def _resolve_implicit_preconditioner(
     return preconditioner
 
 
+#: Operators applied inside the linear RHS from the cache (every solver path);
+#: the others are moment operators handed to the fixed-step integrator.
+#: ``coulomb`` is a compatibility alias of ``landau``, which reproduces the
+#: retired eight-moment table of Frei, Ernst & Ricci (2022) at half its nu.
+BUILTIN_COLLISION_OPERATORS: tuple[str, ...] = (
+    "none",
+    "lenard_bernstein",
+    "landau",
+    "coulomb",
+)
 COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "none",
     "lenard_bernstein",
@@ -474,4 +500,5 @@ COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "improved_sugama",
     "coulomb",
     "coulomb_finite_kperp",
+    "landau",
 )

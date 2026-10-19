@@ -374,7 +374,7 @@ def test_runtime_linear_cyclone_etg_kbm_time_smoke() -> None:
         assert np.isfinite(res.omega)
 
 
-def test_runtime_linear_etg_defaults_to_frequency_targeted_krylov(
+def test_runtime_linear_etg_defaults_to_certified_adaptive_krylov(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 
@@ -409,12 +409,8 @@ def test_runtime_linear_etg_defaults_to_frequency_targeted_krylov(
     out = run_runtime_linear(cfg, ky_target=2.0, Nl=4, Nm=6, solver="krylov")
 
     assert np.isfinite(out.gamma)
-    assert captured["method"] == "shift_invert"
-    assert captured["omega_target_factor"] == pytest.approx(0.4)
-    assert captured["omega_sign"] == -1
-    assert captured["shift_source"] == "target"
-    assert captured["shift_selection"] == "targeted"
-    assert captured["mode_family"] == "etg"
+    # ETG takes the certified adaptive route like every contract (2026-10-15).
+    assert captured["method"] == "adaptive"
     assert captured["certify"] is True
 
 
@@ -462,13 +458,32 @@ def test_runtime_hypercollision_exponent(collisions, Nm, expected) -> None:
     assert float(build_runtime_linear_params(cfg, Nm=Nm).p_hyper_m) == expected
 
 
-def test_runtime_end_damping_defaults_use_unscaled_reference_rate() -> None:
+@pytest.mark.parametrize(
+    "boundary,amp,expected",
+    [
+        ("linked", None, None),
+        ("linked", 0.0, 0.0),
+        ("periodic", 0.1, None),
+        ("linked", 0.1, "ambiguous"),
+    ],
+)
+def test_runtime_end_damping_default_and_legacy_amplitude(
+    boundary, amp, expected
+) -> None:
+    """No rate selects the default; the legacy amplitude is refused unless 0."""
+
     base = _base_runtime_cfg()
     cfg = replace(
-        base, time=replace(base.time, dt=0.2), collisions=RuntimeCollisionConfig()
+        base,
+        grid=replace(base.grid, boundary=boundary),
+        collisions=RuntimeCollisionConfig(damp_ends_amp=amp),
     )
+    if expected == "ambiguous":
+        with pytest.raises(ValueError, match="ambiguous.*damp_ends_rate"):
+            build_runtime_linear_params(cfg, Nm=8)
+        return
     params = build_runtime_linear_params(cfg, Nm=8)
-    assert float(params.damp_ends_amp) == pytest.approx(0.1)
+    assert params.damp_ends_rate == expected
     assert float(params.damp_ends_widthfrac) == pytest.approx(0.125)
 
 
@@ -530,13 +545,7 @@ def test_end_damping_reference_roundtrip(tmp_path, scaled, route, step):
     assert reloaded == case
     assert not reloaded.collisions.damp_ends_scale_by_dt
     params = build_runtime_linear_params(reloaded, Nm=8)
-    from gkx.operators.linear.params import LinearParams
-
-    legacy = LinearParams(damp_ends_amp=0.5 if scaled else 0.1)
-    assert float(
-        legacy.end_damping_strength(step or None, jnp.float64)
-    ) == pytest.approx(rate)
-    assert float(params.end_damping_strength(0.01, jnp.float64)) == pytest.approx(rate)
+    assert float(params.end_damping_rate(1.0, jnp.float64)) == pytest.approx(rate)
     with pytest.raises(ValueError, match="already has"):
         migrate_end_damping_reference(destination, route=route, dt_step=step)
     with pytest.raises(ValueError, match="stale provenance"):
@@ -780,15 +789,11 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     assert krylov.gamma == pytest.approx(float(dominant.real), abs=2.0e-3)
     assert krylov.omega == pytest.approx(float(-dominant.imag), abs=2.0e-3)
 
-    # Same unstable branch as the time solver: positive growth, matching
-    # propagation direction and frequency. The time-solver growth rate carries
-    # a known fit/integration bias at this resolution, so gate it loosely; the
-    # defect regressed here reported gamma < 0 and an unrelated frequency.
-    assert reference.gamma > 0.0
+    # Same operator on both routes (one end-damping rate): measured 0.05406 /
+    # 0.13083 (time) against 0.05402 / 0.13066 (Krylov), 0.1% apart.
     assert krylov.gamma > 0.0
-    assert np.sign(krylov.omega) == np.sign(reference.omega)
-    assert krylov.omega == pytest.approx(reference.omega, rel=0.15)
-    assert krylov.gamma == pytest.approx(reference.gamma, rel=0.75)
+    assert krylov.omega == pytest.approx(reference.omega, rel=0.01)
+    assert krylov.gamma == pytest.approx(reference.gamma, rel=0.01)
 
 
 def test_runtime_scan_batch_matches_serial() -> None:

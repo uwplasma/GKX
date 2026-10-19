@@ -80,10 +80,9 @@ success value.
 
 ``shift_preconditioner`` selects the right preconditioner:
 
-* ``"auto"`` (default) uses ``"hermite-line"`` for electrostatic models and
-  ``"field-corrected"`` (Woodbury low-moment field correction) for
-  electromagnetic ones, and retries a residual-rejected electrostatic pair with
-  field correction;
+* ``"auto"`` (default) is ``"pr3-cm"``, with the inner cycle raised to at
+  least restart 150 and maxiter 600. See "Eigensolver policy" in
+  :doc:`algorithms` for why;
 * ``"hermite-line"`` and ``"field-corrected"`` can be named directly;
 * ``"pr3-cm"`` is the structured Peaceman--Rachford splitting described in
   :doc:`numerics`.  It is the only choice with host-side setup and structural
@@ -463,8 +462,8 @@ The linear operator supports:
   The Laguerre channels reach the distribution only through the
   constant-coefficient branch, so they need ``hypercollisions_const``; see
   :ref:`velocity-regularization`; and
-* smooth field-aligned end damping controlled by ``damp_ends_widthfrac`` and
-  ``damp_ends_amp``.
+* smooth field-aligned end damping at the rate ``[time] damp_ends_rate``
+  over ``damp_ends_widthfrac`` of the chain (:ref:`end-damping`).
 
 Each can be disabled or refined independently in resolution studies.
 

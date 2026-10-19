@@ -49,6 +49,7 @@ from gkx.workflows.runtime.startup import (
     _species_to_linear,
     build_runtime_geometry,
     build_runtime_linear_params,
+    end_damping_status,
     build_runtime_term_config,
 )
 
@@ -210,9 +211,7 @@ def _infer_runtime_nonlinear_steps(
     if steps is not None:
         steps_val = int(steps)
     elif bool(cfg.time.fixed_dt):
-        steps_val = int(
-            np.round(float(cfg.time.t_max) / max(float(cfg.time.dt), 1.0e-12))
-        )
+        steps_val = int(np.round(float(cfg.time.t_max) / max(float(dt), 1.0e-12)))
     else:
         # Keep runtime inference aligned with adaptive stepping: when
         # dt_max is unset, the nonlinear integrator clamps at dt itself.
@@ -303,6 +302,7 @@ def _prepare_context(
     status("building runtime nonlinear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
     terms = build_runtime_term_config(cfg)
+    status(end_damping_status(params, grid, cfg.grid.boundary))
     ky_index, kx_index = _select_nonlinear_mode_indices(
         grid,
         ky_target=ky_target,

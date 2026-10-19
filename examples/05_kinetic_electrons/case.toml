@@ -21,7 +21,8 @@ schema_version = 1
 #   * or skip the streaming limit: time.method = "imex-ars3" with
 #     fixed_dt = true, dt = 0.05 solves parallel streaming and the field
 #     response implicitly per twist-shift chain (block Thomas + Woodbury;
-#     drifts, mirror and the bracket stay explicit, and set dt). run.py runs
+#     the electron mirror is implicit too; drifts and the bracket stay
+#     explicit and set dt, 0.1 at 32x32 and 0.07 at 64x64). run.py runs
 #     it. 0.05 reproduces the explicit saturated heat flux here and at
 #     Nx = Ny = 32, (Nl, Nm) = (4, 8); at 64x64x24 use 0.035 (0.05 goes
 #     non-finite at t = 15), 10x faster to t = 150 than fixed-dt RK3 with a
@@ -71,6 +72,8 @@ ntheta = 16
 nperiod = 1
 
 [time]
+# Nonlinear rate kept from GKX < 2.6 (damp_ends_amp = 0.1 read as a rate).
+damp_ends_rate = 0.1
 t_max = 0.3
 dt = 0.05
 dt_max = 0.05
@@ -113,7 +116,6 @@ hypercollisions_const = false
 hypercollisions_kz = true
 p_hyper = 2
 p_hyper_m = 4
-damp_ends_amp = 0.1
 damp_ends_widthfrac = 0.125
 
 [terms]

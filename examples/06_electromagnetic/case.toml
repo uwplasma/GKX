@@ -1,26 +1,14 @@
 schema_version = 1
 
-# Electromagnetic Cyclone case with kinetic electrons and A_parallel at
-# beta = 0.015, the kinetic-ballooning-mode (KBM) benchmark, at tutorial
-# resolution. The deck exercises the electromagnetic path in seconds; Nm = 4
-# cannot resolve the KBM, so its growth rate is not physical.
-# case_full.toml is the benchmark deck (Nz = 96, Nl = 16, Nm = 48).
+# Electromagnetic Cyclone case: A_parallel at beta = 0.015 with kinetic ions and
+# adiabatic electrons, tutorial resolution (seconds on a laptop CPU). This is
+# the electromagnetic ITG branch; the kinetic ballooning mode needs kinetic
+# electrons and Nm = 48, which is case_full.toml (Nz = 96, Nl = 16, Nm = 48).
 
 [[species]]
 name = "ion"
 charge = 1.0
 mass = 1.0
-density = 1.0
-temperature = 1.0
-tprim = 2.49
-fprim = 0.8
-nu = 0.0
-kinetic = true
-
-[[species]]
-name = "electron"
-charge = -1.0
-mass = 0.00027
 density = 1.0
 temperature = 1.0
 tprim = 2.49
@@ -37,12 +25,13 @@ Ly = 62.8
 boundary = "linked"
 y0 = 10.0
 ntheta = 16
-nperiod = 1
+nperiod = 2
 
 [time]
-t_max = 2.0
-dt = 0.001
-method = "imex2"
+t_max = 80.0  # about 8 e-folds at ky 0.3
+dt = 0.01  # initial step; the CFL controller sets the rest
+method = "rk4"
+fixed_dt = false
 sample_stride = 2
 
 [geometry]
@@ -56,7 +45,6 @@ init_field = "all"
 init_amp = 1e-10
 gaussian_init = true
 gaussian_width = 0.5
-init_electrons_only = true
 
 [physics]
 linear = true
@@ -65,7 +53,8 @@ electrostatic = false
 electromagnetic = true
 use_apar = true
 use_bpar = false
-adiabatic_electrons = false
+adiabatic_electrons = true
+tau_e = 1.0
 adiabatic_ions = false
 beta = 0.015
 collisions = true
@@ -78,7 +67,6 @@ nu_hyper = 0.0
 p_hyper = 4.0
 hypercollisions_const = 0.0
 hypercollisions_kz = 1.0
-damp_ends_amp = 0.1
 damp_ends_widthfrac = 0.125
 
 [normalization]
@@ -100,6 +88,6 @@ nonlinear = 0.0
 
 [run]
 ky = 0.3
-Nl = 2
-Nm = 4
+Nl = 4
+Nm = 8
 solver = "time"
