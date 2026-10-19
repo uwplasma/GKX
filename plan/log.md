@@ -21285,3 +21285,6 @@ CI needs and media recompressed (#362), KE/EM solver study (#365).
 ## 2026-10-18 imex-adaptive (PR #373, stacked on #370)
 
 Factor passed to the step scan as an operand; ARK3(2)4L[2]SA embedded pair; chunk-level adaptive dt (embedded error, bracket CFL, Arnoldi bound on the explicit remainder, refactor on >20% moves, reject non-finite chunks). Cyclone KE (4, 8): 5.8x over RK4 + CFL at 32^2, 4.65x at 64^2, heat flux within std. 64^2 (8, 16) refactor OOM open. Records in plan/research/2026-10-16-imex-mirror/RESULTS.md.
+
+### 2026-10-19 imex-adaptive (#373)
+Chunked factor build, separate remainder/bracket dt limits, unstable-chunk rejection, last chunk without recompile; merged #370 (main merged there; its shard-8 timeout did not reproduce, passed after merging main). 8.7x / 6.8x / 5.2x over RK4 + CFL at 32^2 / 64^2 / 64^2 (8,16). KBM-like beta 0.015 slower than RK4; QHS refused by the factor check. See RESULTS.md.

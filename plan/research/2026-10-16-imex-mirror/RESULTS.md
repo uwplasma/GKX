@@ -61,21 +61,30 @@ main: OOM while factoring (`_thomas_factor`). Branch: factor 7.1 GB, peak 10.0 G
 
 The mirror limit is gone. dt doubles, and the bracket now sets it: 0.1 at 32x32 and 0.07 at 64x64 against 0.05 and 0.035. The electron blocks cost about as much per step as the doubled dt saves, so time to solution at fixed dt is unchanged (191-221 s against 192-218 s). The gain has to come from adaptive dt: in the linear phase the step map allows dt ~ 1, but a fixed factor cannot follow the bracket CFL once turbulence saturates. That is the next step, and it is not in this branch.
 
-## Adaptive dt (branch `perf/imex-adaptive`, PR #373), 2026-10-18
+## Adaptive dt (PR #373), 2026-10-19 final
 
-Office A4000 (one GPU, other jobs idle), `gkx-latest`, complex64, Cyclone KE deck, (4, 8), `fixed_dt = false`. Records: office `~/gkx-evidence/imex/` (`q6.log`, `q7.log`, `q8.log`, `nl.py`). Wall includes setup and compile. Q = late-half mean +- std (ion, electron).
+Office A4000, `gkx-latest`, complex64, Cyclone KE deck, `fixed_dt = false`, wall incl. setup and compile; Q = late-half mean +- std (ion, electron). Records: office `~/gkx-evidence/imex/` (`q7.log`, `q8.log`, `q9.log`, `q11.log`, `r816f.log`, `nl.py`).
 
-| grid, t_end | code | wall s | steps | Q_i | Q_e |
-|---|---|---|---|---|---|
-| 32, 150 | RK4 + CFL | 1181 | 10622 | 484 +- 73 | 667 +- 93 |
-| 32, 150 | #370, ARS3 fixed 0.1 | 287 | 301 | 494 +- 66 | 689 +- 102 |
-| 32, 150 | adaptive ARK3(2) | 204 | 316 | 485 +- 62 | 674 +- 97 |
-| 64, 100 | RK4 + CFL | 2080 | 8328 | 257 +- 99 | 314 +- 91 |
-| 64, 100 | #370, ARS3 fixed 0.07 | 291 | 287 | 255 +- 65 | 316 +- 70 |
-| 64, 100 | adaptive ARK3(2) | 447 | 280 | 260 +- 61 | 314 +- 56 |
+| grid, (Nl, Nm), t_end | code | wall s | Q_i | Q_e |
+|---|---|---|---|---|
+| 32, (4,8), 150 | RK4 + CFL | 1181 | 484 +- 73 | 667 +- 93 |
+| 32, (4,8), 150 | #370 fixed 0.1 | 287 | 494 +- 66 | 689 +- 102 |
+| 32, (4,8), 150 | adaptive | 136 | 471 +- 65 | 688 +- 83 |
+| 64, (4,8), 100 | RK4 + CFL | 2080 | 257 +- 99 | 314 +- 91 |
+| 64, (4,8), 100 | #370 fixed 0.07 | 291 | 255 +- 65 | 316 +- 70 |
+| 64, (4,8), 100 | adaptive | 305 | 274 +- 101 | 334 +- 100 |
+| 64, (8,16), 30 | RK4 + CFL | 3144 | 290 +- 194 | 333 +- 200 |
+| 64, (8,16), 30 | adaptive | 600 | 277 +- 202 | 331 +- 202 |
 
-Speed-up over RK4 + CFL: 5.8x at 32, 4.65x at 64 (target 5x). At 64 the adaptive run is 1.5x slower than #370 at the same mean dt (0.071): the extra 150 s is control setup (Arnoldi, probe compile) and factor rebuilds, not steps.
+Speed-up over RK4 + CFL: 8.7x (32), 6.8x (64), 5.2x (64, (8,16)). At (8,16) setup is ~400 s of the 600 s, so longer runs gain more.
 
-Control: dt = min(5 cfl / (w_nl/1.7 + rho/2.5), dt_err, dt_max). With the CFL constant 1 the bracket (w_nl ~ 80 in saturation) held dt to 0.019 (665 s at 32); the constant 5 is the measured saturated limit (fixed 0.1 stable, 0.2 not). Embedded-error tolerance 1e-2 per step.
+Changes since the first table:
+- Factor build in chain slices into preallocated outputs, with the defect norm summed over slices (the same global measure). Bitwise equal to the unsliced factor.
+- dt limit is `cfl min(8.5 / w_bracket, 2.5 / rho)`: the bracket constant 8.5 (= 5 x 1.7) is the saturated limit, the explicit-remainder limit is separate. A single sum let dt reach 0.084 at (8,16) (rho 42), where the step went unstable (error estimate 61) and dt then collapsed to 1e-4.
+- A chunk whose end-of-chunk error estimate exceeds 30 rtol is redone at half the step (as a non-finite one is).
+- The last chunk keeps its step count (smaller dt) instead of a shorter scan: no recompile (64^2 t = 8: 231 s to 145 s).
+- (8,16) 64^2: dt sits at the remainder limit 0.053. Peak device memory 12.6 GB (factor 7.1 GB; slicing removed the OOM, not the peak).
 
-64x64x16, (8, 16): the factor is now a scan operand (no 7 GB constants). RK4 + CFL to t = 30: 3144 s. Adaptive ARK3: setup 400 s, then 22 s per 32-step chunk, but a factor rebuild goes out of memory on the 16 GB card (BFC fragmentation near the 10 GB build peak; the old factor is freed first, in use stays 8.0-8.4 GB). With the platform allocator the run did not finish in 57 min. Open.
+Other decks (32^2, (4,8)):
+- KE deck at beta 0.015 (KBM-like), t = 20: adaptive 177 s (dt_mean 0.021, bracket rate ~950), RK4 + CFL 106 s. No gain: the electromagnetic bracket sets dt, and the constant 5 was not tested above its stable value there.
+- QHS stellarator (example 04): `imex-ark3` refuses it: structured factor residual 7.6e-2 > 5e-2 (complex64). Not addressed.
