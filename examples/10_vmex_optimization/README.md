@@ -83,5 +83,5 @@ establish convergence.
 
 [Stellarator optimization](../../docs/stellarator_optimization.rst) contains
 initial/final inputs, shapes, Boozer plots, heat-flux traces, campaign scripts
-and all results. [The active plan](../../plan.md) specifies warm/cold tests,
+and all results. The roadmap (research log) specifies warm/cold tests,
 linear and quasilinear companion examples, and the validation gates.

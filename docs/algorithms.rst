@@ -377,7 +377,7 @@ for that branch. The route agrees with ``adaptive`` and with the time route
 wherever those finish.
 
 **Measured** (office RTX A4000, shared, float64, single ky, wall time of the
-whole call; raw records ``plan/research/2026-10-18-banded-shift-invert/``):
+whole call; raw records in the private gkx-plan repository, ``plan/research/2026-10-18-banded-shift-invert/``):
 
 .. list-table::
    :header-rows: 1

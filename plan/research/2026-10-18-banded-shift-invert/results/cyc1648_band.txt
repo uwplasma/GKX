@@ -1,2 +1,0 @@
-   40.9s banded shift from a dense truncation: sigma=0.12167-0.26051j
-RESULT {"deck": "cyc_adiabatic.toml", "Nl": 16, "Nm": 48, "method": "banded", "over": {}, "sha": "d84f37ab5", "uptime": "5.43", "x64": "1", "host": "Linux-x86_64-gpu", "wall_s": 53.4, "peak_rss_gb": 6.4, "error": "JaxRuntimeError: RESOURCE_EXHAUSTED: Out of memory while trying to allocate 1.83GiB with allocator GPU_0_bfc on device 0. [executable_name='jit_inverse'] [tf-allocator-allocation-error='']"}

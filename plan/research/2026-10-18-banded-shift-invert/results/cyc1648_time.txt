@@ -1,1 +1,0 @@
-RESULT {"deck": "cyc_adiabatic.toml", "Nl": 16, "Nm": 48, "method": "time", "over": {}, "sha": "d84f37ab5", "uptime": "5.11", "x64": "1", "host": "Linux-x86_64-gpu", "wall_s": 39.9, "peak_rss_gb": 1.1, "gamma": 0.09301795467131004, "omega": 0.28202481346802744, "eigen_status": "None", "ky": 0.3}

@@ -1,3 +1,0 @@
-   98.4s banded shift from a dense truncation: sigma=0.15322-0.2371j
- 3168.6s banded Arnoldi: 718 solves
-RESULT {"deck": "cyclone_miller_kinetic_electrons.toml", "Nl": 12, "Nm": 32, "method": "banded", "over": {"geometry.model": "miller", "geometry.rhoc": "0.5", "geometry.q": "1.4", "geometry.s_hat": "0.8", "geometry.R0": "2.77778", "geometry.geometry_file": "<office-evidence>/decks/ke.nc", "time.damp_ends_rate": "160.6"}, "sha": "69e61ec10", "uptime": "8.49", "x64": "1", "host": "Linux-x86_64-cpu", "wall_s": 3170.7, "peak_rss_gb": 19.5, "gamma": 0.23217514168923484, "omega": 0.2427232451881536, "eigen_status": "EigenSolveStatus(method='banded', route='banded', residual=8.102384487536454e-07, tolerance=1e-06, certified=True, inner=None)", "ky": 0.3}

@@ -1,7 +1,7 @@
 # GX shipped linear goldens: provenance and reference validity
 
 GX ships reference outputs for its own linear benchmarks in its repository. They
-are rank-3 references under [plan.md](../../../../plan.md) section 3.1: produced
+are rank-3 references under `plan.md` (research log) section 3.1: produced
 by the reference code's authors, versioned in its tree, and usable without
 running GX. This directory records their provenance, GX's own acceptance
 tolerance, and a reference-validity analysis required by plan.md section 0.4.3.

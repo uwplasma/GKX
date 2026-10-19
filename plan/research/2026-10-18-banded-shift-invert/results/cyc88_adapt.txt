@@ -1,2 +1,0 @@
-   38.6s adaptive solve finished with eig=0.0986916-0.27687j residual=7.08e-15 converged=True stable=True
-RESULT {"deck": "cyc_adiabatic.toml", "Nl": 8, "Nm": 24, "method": "adaptive", "over": {}, "sha": "10e13666f", "uptime": "16.39", "x64": "1", "host": "Linux-x86_64-gpu", "wall_s": 38.7, "peak_rss_gb": 1.1, "gamma": 0.0986915838237184, "omega": 0.27687009835820436, "eigen_status": "EigenSolveStatus(method='adaptive', route='adaptive', residual=7.082720820914695e-15, tolerance=1e-09, certified=True, inner=None)", "ky": 0.3}

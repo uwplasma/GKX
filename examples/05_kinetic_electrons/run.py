@@ -36,7 +36,8 @@ CASES = {
     "stellarator": HERE / "case_stellarator.toml",
 }
 # Implicit linear step (opt-in): parallel streaming and the field response are
-# solved per twist-shift chain (drifts, mirror and the bracket stay explicit),
+# solved per twist-shift chain with the electron mirror (drifts and the bracket
+# stay explicit),
 # so dt is set by the explicit terms instead of the electron streaming CFL.
 # Fixed dt only; 0.05 reproduced the explicit run's saturated heat flux on
 # this deck at Nx = Ny = 16 and 32.

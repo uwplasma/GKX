@@ -127,7 +127,6 @@ versions (VMEX, ESSOS, SOLVAX, JAX) when a result depends on them.
 
 ## Where the work is decided
 
-`plan.md` is the single active roadmap: phases, exits, and what is deliberately
-deferred with the trigger that would reopen it. `plan/log.md` is append-only —
-one entry per step, including the ones that failed. Work that contradicts the
-plan changes the plan in the same pull request rather than working around it.
+The roadmap (`plan.md`) and the append-only research log (`plan/`) live in a
+private maintainers' repository; `plan/...` paths cited in docs and comments
+refer to it. Log one entry per step there, including the ones that failed.

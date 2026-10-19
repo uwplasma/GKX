@@ -1,3 +1,0 @@
-   27.3s banded shift from a dense truncation: sigma=0.44825-0.82349j
-   56.1s banded Arnoldi: 428 solves
-RESULT {"deck": "kbm_miller.toml", "Nl": 8, "Nm": 24, "method": "auto", "over": {"geometry.model": "miller", "geometry.rhoc": "0.5", "geometry.q": "1.4", "geometry.s_hat": "0.8", "geometry.R0": "2.77778", "geometry.geometry_file": "<office-evidence>/decks/kbm.nc", "time.damp_ends_rate": "160.6"}, "sha": "69e61ec10", "uptime": "15.83", "x64": "1", "host": "Linux-x86_64-gpu", "wall_s": 58.0, "peak_rss_gb": 5.8, "gamma": 0.3427091262579159, "omega": 0.8313555546571441, "eigen_status": "EigenSolveStatus(method='banded', route='banded', residual=1.0892980534363735e-09, tolerance=1e-06, certified=True, inner=None)", "ky": 0.19999999999999998}
