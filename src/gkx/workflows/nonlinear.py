@@ -610,12 +610,18 @@ def _run_chunked_diagnostics(
             show_progress=chunk_show_progress,
         )
         dt_cap = control["dt"] if imex else float(cfg.time.dt_max or ctx.dt)
-        if imex:
-            kwargs["dt"] = control["dt"]
-        if remaining_time <= steps_now * dt_cap:
+        if imex and "op" in control and remaining_time < steps_now * dt_cap:
+            # Last chunk: a smaller dt keeps the step count (no recompile).
+            control["dt"] = remaining_time / steps_now
+            control["op"] = refactor_chain_implicit_linear(
+                control["op"], control["dt"], free=True
+            )
+        elif remaining_time <= steps_now * dt_cap:
             kwargs["time_horizon"] = remaining_time
         kwargs["compile_cache"] = compile_cache
         while True:
+            if imex:
+                kwargs["dt"] = control["dt"]
             t_chunk, diag_chunk, G_next, fields_next = integrate(G_chunk, kwargs)
             if not imex:
                 break
