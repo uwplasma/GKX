@@ -1159,8 +1159,8 @@ recursive = true
 # 67113 -> 67126: end-damping contract (#366) on top of #362/#365, measured.
 # 67126 -> 67622: linearized Landau default, block-sparse apply, coulomb kernels retired.
 # 67622 -> 67736: electron mirror implicit in the imex-ars3 chain factor (+114). Measured.
-# 67736 -> 68039: adaptive-dt chain IMEX (+303). Measured.
-baseline = 68039
+# 67736 -> 68041: adaptive-dt chain IMEX (+305). Measured.
+baseline = 68041
 target = 45000
 
 [[line_budget_policy.counts]]
