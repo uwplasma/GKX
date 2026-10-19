@@ -77,7 +77,7 @@ fast_tests = [
   "tests/unit/parallel/test_parallel_core.py",
 ]
 artifact_paths = [
-  "docs/code_structure.rst",
+  "docs/design.rst",
   "docs/api.rst",
 ]
 next_tests = [

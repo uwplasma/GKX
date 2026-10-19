@@ -92,4 +92,4 @@ nonlinear = 0.0
 [run]
 Nl = 2
 Nm = 4
-solver = "time"
+solver = "krylov"  # certified eigenpair: no fit window to settle

@@ -215,7 +215,7 @@ Miller surface, the straight-field-line and equal-arc grids, and the metric and
 drift coefficients, writes a root-level ``*.eiknc.nc`` file, and re-enters the
 imported contract. An existing generated target is reused unless
 ``gkx geometry miller --force`` is requested. The Cyclone Miller rows of
-:doc:`verification_matrix` exercise this backend.
+:doc:`validation` exercise this backend.
 
 Command-line entry points:
 

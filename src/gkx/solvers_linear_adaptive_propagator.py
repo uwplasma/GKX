@@ -672,7 +672,7 @@ def _banded_ritz_pairs(
     """
 
     from scipy.sparse.linalg import LinearOperator, eigs
-    from solvax import (  # type: ignore[attr-defined]
+    from solvax import (
         block_thomas_factor,
         block_thomas_solve,
         block_tridiag_matvec,
@@ -762,7 +762,7 @@ def _banded_ritz_pairs(
     )
     for _ in range(_PASSES):
         note(f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}")
-        factors = block_thomas_factor(lower, diag, upper, shift=sigma)  # type: ignore[call-arg]
+        factors = block_thomas_factor(lower, diag, upper, shift=sigma)
 
         def solve(v, factors=factors, sigma=sigma):
             solves[0] += 1
@@ -788,7 +788,7 @@ def _banded_ritz_pairs(
     if auto_shift:
         # Dominance check: the step is small against the fastest plausible frequency.
         dt = 0.25 / max(2 * scale, 1.5 * abs(best.imag))
-        factors = block_thomas_factor(lower, diag, upper, shift=1 / dt)  # type: ignore[call-arg]
+        factors = block_thomas_factor(lower, diag, upper, shift=1 / dt)
         excess = _growth_excess(
             lambda x: (
                 -np.asarray(inverse(factors, jnp.asarray(x, v0.dtype), 1 / dt)) / dt

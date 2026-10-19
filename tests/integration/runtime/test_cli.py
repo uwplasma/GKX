@@ -2821,7 +2821,7 @@ def test_runtime_mode_index_selection_and_step_inference() -> None:
         _infer_runtime_nonlinear_steps(
             replace(cfg, time=replace(cfg.time, fixed_dt=True)), dt=0.05, steps=None
         )
-        == 4
+        == 8  # t_max / the overriding dt, not / the deck dt
     )
     adaptive_cfg = replace(cfg, time=replace(cfg.time, fixed_dt=False, dt_max=None))
     assert _infer_runtime_nonlinear_steps(adaptive_cfg, dt=0.2, steps=None) == 2

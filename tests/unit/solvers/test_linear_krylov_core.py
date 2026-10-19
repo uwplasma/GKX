@@ -2084,10 +2084,6 @@ def test_sparse_shift_invert_assembles_linked_chain_columns_only(monkeypatch) ->
     assert abs(complex(value) - complex(full_value)) <= 1.0e-12 * abs(target)
 
 
-requires_banded_solvax = requires_paired_solvax("block_tridiagonal_from_products")
-
-
-@requires_banded_solvax
 @pytest.mark.parametrize("nm", [4, 5])
 @pytest.mark.parametrize("use_shift", [True, False])
 def test_banded_shift_invert_finds_the_dense_chain_eigenvalue(nm, use_shift) -> None:
@@ -2114,7 +2110,6 @@ def test_banded_shift_invert_finds_the_dense_chain_eigenvalue(nm, use_shift) -> 
     assert any("truncation" in m for m in messages) == (not use_shift)
 
 
-@requires_banded_solvax
 def test_banded_shift_invert_refuses_what_it_cannot_certify(monkeypatch) -> None:
     cache, params, seed, terms = _selected_linked_case()
     with pytest.raises(ValueError, match="Nm >= 4"):
@@ -2187,7 +2182,6 @@ def test_growth_excess_separates_the_kbm_trap() -> None:
     assert found < 1e-3  # the fastest mode passes
 
 
-@requires_banded_solvax
 def test_auto_takes_the_banded_route_and_falls_back_to_adaptive(monkeypatch) -> None:
     cache, params, seed, terms = _selected_linked_case()
     messages: list[str] = []
@@ -2218,7 +2212,6 @@ def test_auto_takes_the_banded_route_and_falls_back_to_adaptive(monkeypatch) -> 
         assert not any("banded Arnoldi" in m for m in messages)
 
 
-@requires_banded_solvax
 def test_banded_refuses_an_operator_with_long_range_hermite_coupling(
     monkeypatch,
 ) -> None:
@@ -3268,10 +3261,12 @@ def test_pr3_builds_at_float32_and_still_refuses_what_float64_refuses() -> None:
 
     tests_root = Path(__file__).resolve().parents[2]
     repo_root = tests_root.parent
+    # The child is not traced: under coverage it hangs shard 8 in CI.
     env = {
         key: value
         for key, value in os.environ.items()
         if key not in {"JAX_ENABLE_X64", "GKX_X64"}
+        and not key.startswith(("COV_CORE", "COVERAGE"))
     }
     env["JAX_ENABLE_X64"] = "false"
     env["PYTHONPATH"] = os.pathsep.join(

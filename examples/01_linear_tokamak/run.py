@@ -18,17 +18,24 @@ import gkx
 
 CASE = Path(__file__).with_name("case.toml")
 OUTPUT = Path("outputs/01_linear_tokamak")
-KY = [0.1, 0.2, 0.3, 0.4]  # binormal wavenumbers k_y rho_i
+KY = [0.2, 0.3, 0.4]  # binormal wavenumbers k_y rho_i
 
 case = gkx.load(CASE)
 print(
     f"geometry {case.geometry.model}: q={case.geometry.q}, s_hat={case.geometry.s_hat}"
 )
 
-scan = gkx.scan(case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver)
+scan = gkx.scan(
+    case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver, show_progress=True
+)
 peak_ky = float(scan.ky[int(np.argmax(scan.gamma))])
 peak = gkx.solve(
-    case, ky_target=peak_ky, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
+    case,
+    ky_target=peak_ky,
+    Nl=case.run.Nl,
+    Nm=case.run.Nm,
+    solver=case.run.solver,
+    show_progress=True,
 )
 
 print(f"{'ky':>6} {'gamma':>10} {'omega':>10}")

@@ -1155,7 +1155,7 @@ recursive = true
 # assembly, dense shift estimate, ARPACK driver (about 200 lines in the adaptive-propagator
 # module) and the dispatcher; the SOLVAX half (block recovery, shifted factor) is in SOLVAX. Measured.
 # 67962 -> 67999: backward-Euler dominance check of the banded route. Measured.
-baseline = 67999
+baseline = 67996
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1495,9 +1495,9 @@ recursive = true
 # 75155 -> 72926 (SLIM 2026-10-15): tests of removed script tooling dropped; physics helpers they shared moved to tests/support/reference_physics.py. Measured.
 # 72926 -> 73011: linearized Landau physics gates and runtime regression, net of the retired coulomb tests.
 # 73011 -> 73066: bug-hunt (#363) tests on top of #364, measured.
-# 73066 -> 73217: banded route tests (dense estimate, auto fallbacks, band check, memory rule). Measured.
-# 73217 -> 73230: KBM-trap dominance test. Measured.
-baseline = 73230
+# 73066 -> 73084: bug-hunt-b (#368) regression tests + untraced pr3 float32 child, measured.
+# 73084 -> 73247: banded route tests (dense estimate, auto fallbacks, band check, memory rule, KBM-trap dominance). Measured.
+baseline = 73241
 target = 35000
 
 [[line_budget_policy.counts]]
