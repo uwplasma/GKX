@@ -2846,7 +2846,7 @@ def test_compiled_window_rebuilds_the_projector_the_eager_route_used():
 
 # --- kinetic-electron step: measured streaming bound, per-chain IMEX operator
 
-KE_NL, KE_NM = 1, 3
+KE_NL, KE_NM = 2, 3
 
 
 def _tiny_kinetic_electron_box(layout: str = "half"):
@@ -2896,11 +2896,20 @@ def test_measured_streaming_frequency_skips_adiabatic_like_decks():
 def test_chain_solve_inverts_the_stiff_linear_operator():
     cfg, params, cache, shape = _tiny_kinetic_electron_box()
     terms = rt.build_runtime_term_config(cfg)
-    split, fields = stiff_linear_split(cache, params, terms, compute_fields_cached)
+    split, fields, mirror = stiff_linear_split(
+        cache, params, terms, compute_fields_cached
+    )
     dt = 0.05
     op = build_chain_implicit_linear(
-        split, fields, shape, dt, modes=np.ones(shape[3:5], bool), scheme="imex-ars3"
+        split,
+        fields,
+        shape,
+        dt,
+        modes=np.ones(shape[3:5], bool),
+        scheme="imex-ars3",
+        mirror_rhs=mirror,
     )
+    assert op.spec == ((0,), (1,))  # the electron mirror is implicit
     key = jax.random.PRNGKey(3)
     G = (jax.random.normal(key, shape) + 1j * jax.random.normal(key + 1, shape)).astype(
         jnp.complex64
@@ -2969,9 +2978,11 @@ def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
     modes = np.ones(shape[3:5], bool)
 
     def build(dt):
-        split, fields = stiff_linear_split(cache, params, terms, compute_fields_cached)
+        split, fields, mirror = stiff_linear_split(
+            cache, params, terms, compute_fields_cached
+        )
         return build_chain_implicit_linear(
-            split, fields, shape, dt, modes=modes, scheme="imex-ars3"
+            split, fields, shape, dt, modes=modes, scheme="imex-ars3", mirror_rhs=mirror
         )
 
     first = build(0.05)
