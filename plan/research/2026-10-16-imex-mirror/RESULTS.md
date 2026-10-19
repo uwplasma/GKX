@@ -60,3 +60,22 @@ main: OOM while factoring (`_thomas_factor`). Branch: factor 7.1 GB, peak 10.0 G
 ## Reading
 
 The mirror limit is gone. dt doubles, and the bracket now sets it: 0.1 at 32x32 and 0.07 at 64x64 against 0.05 and 0.035. The electron blocks cost about as much per step as the doubled dt saves, so time to solution at fixed dt is unchanged (191-221 s against 192-218 s). The gain has to come from adaptive dt: in the linear phase the step map allows dt ~ 1, but a fixed factor cannot follow the bracket CFL once turbulence saturates. That is the next step, and it is not in this branch.
+
+## Adaptive dt (branch `perf/imex-adaptive`, PR #373), 2026-10-18
+
+Office A4000 (one GPU, other jobs idle), `gkx-latest`, complex64, Cyclone KE deck, (4, 8), `fixed_dt = false`. Records: office `~/gkx-evidence/imex/` (`q6.log`, `q7.log`, `q8.log`, `nl.py`). Wall includes setup and compile. Q = late-half mean +- std (ion, electron).
+
+| grid, t_end | code | wall s | steps | Q_i | Q_e |
+|---|---|---|---|---|---|
+| 32, 150 | RK4 + CFL | 1181 | 10622 | 484 +- 73 | 667 +- 93 |
+| 32, 150 | #370, ARS3 fixed 0.1 | 287 | 301 | 494 +- 66 | 689 +- 102 |
+| 32, 150 | adaptive ARK3(2) | 204 | 316 | 485 +- 62 | 674 +- 97 |
+| 64, 100 | RK4 + CFL | 2080 | 8328 | 257 +- 99 | 314 +- 91 |
+| 64, 100 | #370, ARS3 fixed 0.07 | 291 | 287 | 255 +- 65 | 316 +- 70 |
+| 64, 100 | adaptive ARK3(2) | 447 | 280 | 260 +- 61 | 314 +- 56 |
+
+Speed-up over RK4 + CFL: 5.8x at 32, 4.65x at 64 (target 5x). At 64 the adaptive run is 1.5x slower than #370 at the same mean dt (0.071): the extra 150 s is control setup (Arnoldi, probe compile) and factor rebuilds, not steps.
+
+Control: dt = min(5 cfl / (w_nl/1.7 + rho/2.5), dt_err, dt_max). With the CFL constant 1 the bracket (w_nl ~ 80 in saturation) held dt to 0.019 (665 s at 32); the constant 5 is the measured saturated limit (fixed 0.1 stable, 0.2 not). Embedded-error tolerance 1e-2 per step.
+
+64x64x16, (8, 16): the factor is now a scan operand (no 7 GB constants). RK4 + CFL to t = 30: 3144 s. Adaptive ARK3: setup 400 s, then 22 s per 32-step chunk, but a factor rebuild goes out of memory on the 16 GB card (BFC fragmentation near the 10 GB build peak; the old factor is freed first, in use stays 8.0-8.4 GB). With the platform allocator the run did not finish in 57 min. Open.
