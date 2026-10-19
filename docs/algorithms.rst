@@ -328,19 +328,79 @@ The dense path is bounded by memory, not speed: at :math:`n = 494{,}592` a
 complex128 operator alone would be 3.6 TiB. The matrix-free routes store a
 Krylov basis instead, :math:`O(nm)`.
 
-Shift-invert is selectable but is not the default. With
-``KrylovConfig(shift_preconditioner="pr3-cm")`` every inner FGMRES solve
-converges where the ``hermite-line`` preconditioner leaves all of them
-unconverged, and the certified pair agrees with ``adaptive`` to eight
-significant figures in :math:`\gamma`. It costs more: at
-:math:`(N_z, N_\ell, N_m) = (96, 8, 24)`, :math:`n = 18432`, ``pr3-cm`` takes
-220000 matvec-equivalents against 96700 for ``adaptive``. The z-local
-:math:`(\ell, m)` blocks of ``pr3-cm`` are factored by SOLVAX block-Thomas
-elimination (``solvax.block_thomas_factor_ops``, ``solvax>=0.27.0``), which
-stores 1.43--2.61x less than the dense inverse over :math:`N_\ell N_m` = 36--768
-and agrees with it to :math:`\le 8.9\times10^{-16}` relative per apply. Evidence:
-``plan/log.md``, rows Q28 and "SOLVAX block-Thomas and float32 structural
-gates"; contract: :doc:`solvers`.
+Eigensolver policy
+~~~~~~~~~~~~~~~~~~
+
+**Decision (2026-10-15).** Every runtime contract uses ``method="adaptive"``:
+Arnoldi on the RK4 time-advance map, certified against the original operator.
+Shift-invert is opt-in, for a chosen interior branch. Its ``"auto"``
+preconditioner is ``"pr3-cm"``, with the inner FGMRES raised to at least
+restart 150 and maxiter 600. If no shift is given, σ is seeded from the
+adaptive pair.
+
+**Practice elsewhere.**
+
+- GS2 hands SLEPc the time-advance operator (Krylov-Schur by default), and
+  since 2021 optionally a finite-difference time-derivative operator
+  (`eigval_knobs <https://bitbucket.org/gyrokinetics/gs2/wiki/Namelists/eigval_knobs>`_,
+  `PR 473 <https://bitbucket.org/gyrokinetics/gs2/pull-requests/473>`_).
+  The ``adaptive`` route is the same idea.
+- GENE couples to SLEPc matrix-free for rightmost eigenvalues. Interior and
+  fastest-growing modes needed Jacobi-Davidson with a dedicated preconditioner
+  (Merz et al., CPC 2012, `record <https://mediatum.ub.tum.de/node?id=1461171>`_;
+  Romero and Roman, `riunet <https://riunet.upv.es/handle/10251/35131>`_).
+  The GENE explicit-time-stepping study notes the fastest-growing mode is
+  "more cumbersome" to get from SLEPc than the largest-magnitude ones
+  (`arXiv:1403.7402 <https://arxiv.org/abs/1403.7402>`_).
+- Eigenvalues of the non-Hermitian gyrokinetic operator meet at exceptional
+  points (Kammerer, Merz and Jenko, Phys. Plasmas 15, 052102, 2008). Branch
+  selection near a crossing therefore needs a residual and overlap check, not
+  only an ordering.
+
+**Measured** (office RTX A4000, shared, float32, single ky; ``plan/research/2026-10-15-bug-hunt/SUMMARY.md``):
+
+.. list-table::
+   :header-rows: 1
+
+   * - deck, (Nl, Nm)
+     - adaptive
+     - shift-invert (pr3-cm, auto)
+     - time route
+   * - Cyclone AE case_full, (8, 24)
+     - 0.098776-0.276905j, res 3.8e-6, 43 s
+     - 0.098803-0.276852j, res 3.6e-4 > 1.2e-4 gate, 48/48 inner unconverged, ~2250 s
+     - 0.0962 at t = 18.7 (transient), 23 s
+   * - Miller KE, (4, 8)
+     - refused: res 2.3e-4 > 1.2e-4 gate (float32)
+     - stopped after 40 min
+     - non-finite at the deck dt
+   * - KBM case_full, (4, 8)
+     - 0.155051-1.207768j, res 1.15e-4, 409 s
+     - wrong branch, res 0.999, 48/48 inner unconverged
+     - 0.842 at t = 8 (transient), 18 s
+   * - ETG etg_linear, ky = 15, (4, 8)
+     - did not finish within 40 min
+     - not run
+     - not run
+
+After the timestep-free end-damping contract (#366), adaptive gives
+0.098692-0.276870j (residual 3.5e-6, 26 s) on Cyclone (8, 24) and
+0.242567-1.119282j (residual 1.19e-4, certified, 1230 s) on KBM (4, 8). The
+table rows above predate #366; the routes compare the same way.
+
+On main, every shift-invert run ended with ``residual=nan``: hermite-line and
+field-corrected average the drift over z, which gave
+||(A - σ)Mx - x|| = 11.6 against 0.14 with streaming alone. pr3-cm finds the
+right Cyclone mode at roughly 50x the cost of ``adaptive``, still misses the gate
+in float32, and on KBM converges to the wrong branch. Adaptive is the only route
+that certified a pair here. It refuses honestly where float32 cannot reach the gate
+(Miller KE), and it is too slow at high Hermite resolution.
+
+**Next step.** A banded direct shift-invert. Pairing Hermite m with m±2 makes
+the single-ky operator exactly block-tridiagonal, so it can be assembled from
+compressed probes (research PR #365). That prototype certified KE ky 0.3 at
+(8,24) in 788 s, against 6919 s for ``adaptive``. At high resolution the same
+factor would serve as the preconditioner. The block LU belongs in SOLVAX.
 
 The nonlinear bracket and dealiasing
 ------------------------------------

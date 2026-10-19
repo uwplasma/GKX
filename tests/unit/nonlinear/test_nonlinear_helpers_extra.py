@@ -2953,3 +2953,36 @@ def test_cached_jit_falls_back_under_an_outer_trace_and_evicts(monkeypatch):
     monkeypatch.setattr(explicit, "_COMPILED", {i: None for i in range(64)})
     assert float(explicit.cached_jit(lambda x: x + 1)(jnp.ones(()))) == 2.0
     assert 0 not in explicit._COMPILED
+
+
+def test_cached_jit_traces_once_per_argument_signature(monkeypatch):
+    import gkx.solvers_nonlinear_explicit as explicit
+
+    traced = []
+    make_jaxpr = jax.make_jaxpr
+    monkeypatch.setattr(
+        jax, "make_jaxpr", lambda *a, **k: traced.append(1) or make_jaxpr(*a, **k)
+    )
+    scale = jnp.arange(3.0)
+    wrapped = explicit.cached_jit(lambda x: x * scale)
+    for _ in range(5):
+        np.testing.assert_array_equal(wrapped(jnp.ones(3)), np.asarray(scale))
+    assert len(traced) == 1 and wrapped.key(jnp.ones(3)) == wrapped.key(jnp.zeros(3))
+    wrapped(jnp.ones(3, jnp.int32))
+    assert len(traced) == 2
+
+
+def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
+    cfg, params, cache, shape = _tiny_kinetic_electron_box()
+    terms = rt.build_runtime_term_config(cfg)
+    modes = np.ones(shape[3:5], bool)
+
+    def build(dt):
+        split, fields = stiff_linear_split(cache, params, terms, compute_fields_cached)
+        return build_chain_implicit_linear(
+            split, fields, shape, dt, modes=modes, scheme="imex-ars3"
+        )
+
+    first = build(0.05)
+    assert build(0.05) is first
+    assert build(0.04) is not first

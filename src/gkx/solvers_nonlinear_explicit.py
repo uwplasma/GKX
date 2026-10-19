@@ -285,12 +285,23 @@ def cached_jit(fn: Callable[..., Any]) -> Callable[..., Any]:
     Keys one executable on the jaxpr text, argument avals and a digest of the
     closed-over constants, which stay baked: the bits are ``jax.jit(fn)``'s.
     As operands they also reuse across geometry but drift 6.5e-8 in float32.
+    The key is computed once per argument signature of this wrapper, not per
+    call: tracing, printing and hashing cost ~1 s for an imex RHS, and the
+    imex probes call one wrapper hundreds of times. ``call.key(*args)`` is that
+    digest, or ``None`` when ``fn`` closes over an outer trace.
     """
 
-    def call(*args: Any) -> Any:
+    memo: dict[Any, tuple[str, Callable[..., Any], Any]] = {}
+
+    def resolve(args: tuple[Any, ...]) -> tuple[str, Callable[..., Any], Any] | None:
+        leaves, tree = jax.tree.flatten(args)
+        signature = (tree, tuple(jax.typeof(x) for x in leaves))
+        hit = memo.get(signature)
+        if hit is not None:
+            return hit
         closed, out_shape = jax.make_jaxpr(fn, return_shape=True)(*args)
         if any(isinstance(c, jax.core.Tracer) for c in closed.consts):
-            return jax.jit(fn)(*args)  # closes over an outer trace: nothing to key
+            return None  # closes over an outer trace: nothing to key
         digest = hashlib.sha256(str((closed.jaxpr, closed.in_avals)).encode())
         for c in closed.consts:
             digest.update(str(jax.typeof(c)).encode() + np.asarray(c).tobytes())
@@ -302,9 +313,21 @@ def cached_jit(fn: Callable[..., Any]) -> Callable[..., Any]:
             run = _COMPILED[key] = jax.jit(
                 partial(jax.core.eval_jaxpr, closed.jaxpr, closed.consts)
             )
-        flat = run(*jax.tree.leaves(args))
-        return jax.tree.unflatten(jax.tree.structure(out_shape), flat)
+        hit = memo[signature] = (key, run, jax.tree.structure(out_shape))
+        return hit
 
+    def call(*args: Any) -> Any:
+        hit = resolve(args)
+        if hit is None:
+            return jax.jit(fn)(*args)
+        _key, run, out_tree = hit
+        return jax.tree.unflatten(out_tree, run(*jax.tree.leaves(args)))
+
+    def key(*args: Any) -> str | None:
+        hit = resolve(args)
+        return None if hit is None else hit[0]
+
+    call.key = key  # type: ignore[attr-defined]
     return call
 
 
