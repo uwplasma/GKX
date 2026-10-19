@@ -1,8 +1,0 @@
-# GS2 8.2.1, TEM (Dannert & Jenko 2005) ky rho_s 0.3, rung t1, collision_model "default"
-# command: tem_gs2_coll.py write/fit; office CPU, np 4; GKX units gamma = sqrt(2) gamma_gs2
-# vnewk_i = vnewk_e (me/mi)^(1/2) (Te/Ti)^(3/2); GKX nu = sqrt(2) vnewk
-case,ky_rhos,t_end,gamma_gs2,omega_gs2,drift,gamma_gkx,omega_gkx,gamma_csR,omega_csR
-TEM_ky0.30_t1_vnewk0.05,0.3,100.0,0.357368,-0.906572,+1.28e-12,0.505394,-1.282086,0.875369,-2.220638
-TEM_ky0.30_t1_vnewk0.2,0.3,100.0,0.106782,-0.825090,-9.36e-07,0.151012,-1.166853,0.261561,-2.021049
-TEM_ky0.30_t1_vnewk0.8,0.3,100.0,-0.092268,-0.557275,+1.54e-02,-0.130486,-0.788105,-0.226009,-1.365038
-# collisionless reference (plan/research/2026-10-06-val-ke): gamma_gkx 0.8670 (t1), 0.8694 (t2)
