@@ -21200,6 +21200,16 @@ Baseline: `main` `ba3d87d9` (2.5.1). Office: GS2 8.2.1 (`gk-codes/gs2`), stella 
 Raw records: office `lanes/val-ke-out/` (GKX), `lanes/xcode/bench/gs2/TEM_*` and `V_*` (GS2); summaries in `plan/research/2026-10-06-val-ke/results/`.
 Next: TEM ladder beyond (16,48) and its end-damping and Nl/Nm split; TEM ky scan once a rung is converged; KE ky .1 (queued); decide #354.
 
+## 2026-10-15 — bug hunt, second group (fix/bug-hunt-1015-b)
+
+- KBM and ETG runtime Krylov defaults are now `adaptive`, like every other contract.
+- Shift-invert `auto` is now pr3-cm with restart ≥150 and maxiter ≥600. σ is seeded from the adaptive pair, falling back to the propagator seed. The hermite-line → field-corrected retry is removed.
+- Fixed: Krylov fields dropped by `_run_krylov_linear`; pr3 complex128 requested under float32; a `--dt` override not setting the fixed-dt step count; growth-fit late-window, zero-frequency R² and NaN-trace paths.
+- Measurements: plan/research/2026-10-15-bug-hunt/SUMMARY.md (warm imex 9.2 s → 2.9 s with #363).
+
+
+
+
 ## 2026-10-15 — bug hunt, known-bug group (fix/bug-hunt-1015)
 
 - `cached_jit` traces, prints and hashes once per argument signature of a wrapper, not on every call; the imex probe loops called one wrapper hundreds of times (17.7 s host time per warm imex solve on the 10-13 profile). Executables are unchanged, so results are bitwise identical.
@@ -21256,3 +21266,11 @@ Baseline `main` `df2953026`. Laptop CPU for operator work, office GPU1 (`venvs/g
 
 Raw records: office `~/gkx-evidence/collisions/`; summaries in `plan/research/2026-10-15-collisions/`.
 - **Follow-up (branch `collisions/landau-followup`, 2026-10-15/16):** `LinearParams.collision_model` defaults to `landau` (one default). The eight-moment Frei `coulomb` kernels are retired and `coulomb` is an alias of `landau`. The real and imaginary parts are applied as separate real products, and the product is skipped at run time when the collision weight is zero. Whole-RHS cost at (16,48) on the A4000: 1.2x/1.3x Dougherty in float32 (1/2 species) and 2.6x/3.8x in float64; the float64 matrix rate of the card is the limit. TEM (8,24): Landau at vnewk_e 0.2 gives 0.0769 and Dougherty 0.0548, against GS2 0.151. Collisionless, a fading Laguerre sink lowers gamma from 0.611 to 0.510 (GS2 0.867), so the hypercollision default is unchanged (GX's Hermite |k_z| form, no Laguerre sink). The (16,48) sink rung is still running.
+
+## 2026-10-18 — release 2.6.0
+
+Minor release (behaviour changes). Since 2.5.1: linearized Landau default collision
+operator (#364), one timestep-free end-damping rate on every route (#366, #354),
+eigensolver policy with adaptive as the default and shift-invert opt-in (#363),
+cached_jit and imex factor reuse, VMEC x64 isolation (#363), scripts/ cut to
+CI needs and media recompressed (#362), KE/EM solver study (#365).
