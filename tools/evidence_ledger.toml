@@ -38,7 +38,7 @@
 # resolution-limited rather than converged.
 
 schema_version = 1
-updated = "2026-10-07"
+updated = "2026-10-19"
 
 # ---------------------------------------------------------------- README parity
 
@@ -335,11 +335,47 @@ notes = "ky .30: GKX 0.23128/0.23603 vs GX 0.23209/0.23651 (-0.35%/-0.20%) and G
 [[row]]
 id = "X-tem-dj2005"
 claim = "Collisionless TEM, Dannert & Jenko PoP 12 072309 (2005) nominal case, linear: GKX against GS2 at matched physics"
-observable = "relative gamma and omega difference at ky rho_s 0.3 along a GKX (Nl, Nm) ladder; GS2 scan ky rho_s 0.1-0.8 at two rungs"
+observable = "relative gamma and omega difference at ky rho_s 0.3 along a GKX (Nl, Nm) ladder with the banded eigensolver; GKX (8, 32) scan ky rho_s 0.2-0.6 against GS2; end-damping rate and parallel-domain scans"
 artifact = "docs/_static/cross_code_linear_points.csv"
-generator = "retired@4564828bf plan/research/2026-10-06-val-ke/scripts/assemble.py"
+generator = "retired@gkx-plan plan/research/2026-10-19-val-linear/scripts/csvrows.py"
 reference = "GS2 8.2.1 rungs t1 (ntheta 32, nperiod 2, negrid 12, ngauss 6) and t2 (ntheta 48, nperiod 3, negrid 16, ngauss 8); deck tools/comparison/fixtures/parity/tem_dannert_jenko_2005.toml"
 reference_rank = 5
 tier = 3
 status = "open"
-notes = "GS2 is converged (t1 -> t2 <= 2.5% over the scan; beta_e x2 moves ky .3 by +0.5%): gamma 0.8694, omega -1.2723 (v_ti/R) at ky rho_s 0.3. GKX certified eigenpairs at ky rho_s 0.3 rise with velocity resolution and have not converged: (Nl, Nm) = (4, 8) 0.0029, (8, 24) 0.6114, (12, 32) 0.6475, (16, 48) 0.7330 (-15.7%); omega at (16, 48) -1.2896 (+1.4%). The paper publishes this case in figures only, so GS2 is the reference. Replaces the digitized tem_reference.csv lane, whose case definition was never reconstructed."
+notes = "GS2 is converged (t1 -> t2 <= 2.5% over the scan; beta_e x2 moves ky .3 by +0.5%): gamma 0.8694, omega -1.2723 (v_ti/R) at ky rho_s 0.3. GKX banded eigenpairs (nperiod 2, damp_ends_rate 100) at Nl 8 rise with Nm: 16 0.490, 24 0.611, 32 0.673, 48 0.744, 64 0.773, 96 0.825 (-5.1%); omega at Nm 96 -1.2849 (+1.0%). Not converged in Nm. In Nl at Nm 24 the growth rate is not monotone (Nl 4, 6, 8, 10, 12: 0.480, 0.623, 0.611, 0.513, 0.552): the Hermite |kz| hypercollision has no Laguerre sink. The result also depends on the end absorber and parallel domain: (Nl, Nm) = (8, 24) gives 0.871 at damp_ends_rate 5, 0.668 at 20, 0.611 at 100, 0.607 at 400; at (4, 16) the spread between rates 5 and 100 falls from 0.29 at nperiod 2 to 0.07 at nperiod 5. ky scan at (8, 32) over GS2: 0.68, 0.77, 0.84, 0.88, 0.93 of GS2 gamma at ky rho_s 0.2-0.6. The automatic shift of the banded route lands on a damped fast oscillator for this deck and the route falls back to adaptive (1493 s against 39 s with a shift near the mode). A Laguerre-only sink (hypercollisions_const 1, nu_hyper_m_const 0, nu_hyper_l 0.03, Nm 24) makes the Nl sequence 4, 6, 8, 10 monotone (0.493, 0.507, 0.554, 0.567) and nu 0.01 flat to 2% from Nl 6, at a growth rate below the sink-free one; it was not tested above Nm 24. (12, 32) and (16, 48) were killed by the out-of-memory killer on the shared host. The paper publishes this case in figures only, so GS2 is the reference."
+
+[[row]]
+id = "X-kbm-beta-gs2"
+claim = "Miller CBC kinetic ballooning, ky 0.3, beta 0.005-0.020, A_par and A_par+B_par, linear: GKX against GS2"
+observable = "relative gamma and omega difference at four beta, GKX (8, 24) and (8, 32) nperiod 2 and (8, 24) nperiod 3 against GS2 e4v"
+artifact = "docs/_static/cross_code_linear_points.csv"
+generator = "retired@gkx-plan plan/research/2026-10-19-val-linear/scripts/csvrows.py"
+reference = "GS2 8.2.1 rung e4v (ntheta 48, nperiod 3, negrid 24, ngauss 12, bishop 4, betaprim 0); e3 agrees within 0.3%"
+reference_rank = 5
+tier = 3
+status = "open"
+notes = "A_par, (8, 24) nperiod 2, gamma/omega against GS2: beta .005 -2.4%/+10.8%, .010 -8.2%/+8.8%, .015 +7.3%/+7.8%, .020 +6.1%/+4.7%. A_par+B_par: -2.6%/+11.0%, -10.1%/+9.5%, +6.4%/+6.6%, +5.4%/+4.0%. Nm 32 moves gamma by up to 4 points and omega by up to 3 points. nperiod 3 at beta .015 gives gamma +16.5%, omega +1.7%; at beta .005 -3.0%/+11.7%. The end-damping rate is not a factor: the timestep-free default and 200 agree to 7e-6 in gamma. The signs and size of the gamma differences follow the earlier GX-GS2 KBM gap (GS2 below GX) and are not attributed. Only ky 0.3, one geometry, one velocity resolution family."
+
+[[row]]
+id = "X-w7x-itg-gx"
+claim = "W7-X standard configuration ITG, adiabatic electrons, s = 0.64, 6 poloidal turns, linear: GKX against repaired GX"
+observable = "relative gamma and omega difference over ky 0.8-2.4 at Nl 8, Nm 16 with GX's damp_ends rate 0.1/dt = 17"
+artifact = "docs/_static/cross_code_linear_points.csv"
+generator = "retired@gkx-plan plan/research/2026-10-19-val-linear/scripts/csvrows.py"
+reference = "GX 3865a537 + dampEnds_linked grid-stride loop, deck benchmarks/linear/ITG_w7x, self-run to t = 200"
+reference_rank = 5
+tier = 3
+status = "provisional"
+notes = "GKX eigenpairs agree with GX to 3e-4 relative in gamma and omega at ky 1.1-2.4 (nine points). At ky 0.9-1.0 the eigensolver returns a different certified pair than GX's fit: ky 1.0 gamma +0.1% but omega 0.2645 against 0.1489; ky 0.9 gamma 0.1630 against 0.1493. GKX's time route reproduces GX at ky 1.0 (0.17475/0.1489) and is unsettled at 0.9 (0.1300/0.1162). The extra pair is a bulk mode, not an end-layer one: 2e-6 of |state|^2 lies in the outer 12.5% of the line, and damp_ends_rate 17 to 40 moves no Ritz value by more than 1e-4. At ky 1.0 three certified pairs lie within 2e-4 in gamma, among them GX's (0.17473, 0.1489); GX's fit and the time route follow the one a Gaussian density start excites, the eigensolver returns the fastest. Velocity resolution is not the cause (ky 1.6 gamma 0.2430-0.2456 for Nl 4-12 at Nm 16 and (8, 24), (8, 32)). stella with the same field line (nfield_periods = 6 nfp/iota, geometry checked against the GX eik file) is converged in its own grids but its growth-rate curve differs from GX and GKX, so it is not used as a reference. GX is unsettled below ky 0.8. One velocity resolution (the GX deck's) and one equilibrium; the Gonzalez-Jerez et al. 2022 decks were not obtainable."
+
+[[row]]
+id = "X-hsx-itg-gx"
+claim = "HSX QHS vacuum ITG, adiabatic electrons, s = 0.64, 4 poloidal turns, linear: GKX against repaired GX"
+observable = "relative gamma and omega difference over ky 0.3-1.5 at Nl 8, Nm 16 with GX's damp_ends rate 0.1/dt = 9.9"
+artifact = "docs/_static/cross_code_linear_points.csv"
+generator = "retired@gkx-plan plan/research/2026-10-19-val-linear/scripts/csvrows.py"
+reference = "GX 3865a537 + dampEnds_linked grid-stride loop, W7-X deck with the HSX QHS vacuum VMEC (ns 201) and npol 4, self-run to t = 200"
+reference_rank = 5
+tier = 3
+status = "provisional"
+notes = "GKX eigenpairs agree with GX to 3e-4 relative in gamma and omega at ky 0.5-1.5 (seven points); at ky 0.3 gamma is -0.5% and omega unsettled in GX (0.012 against 0.066). The GX geometry script failed on this equilibrium (an array with an extra axis in the interpolation) and the eik file was generated with the same script after squeezing the arrays; GKX imports that geometry. The equilibrium is the cutstudy HSX QHS vacuum wout, not the Nuhrenberg-Zille example of the L-lin-hsx row. One velocity resolution."
