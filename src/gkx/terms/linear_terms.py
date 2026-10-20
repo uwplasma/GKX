@@ -407,6 +407,59 @@ def _reflectionless_closure(
     return -scale * kpar_scale * vth * abs_tail
 
 
+def _lm_views(H):
+    """Return ``view(dl, dm)``: ``H`` shifted by ``(dl, dm)`` in ``(l, m)``, zero-filled.
+
+    Every view slices one padded copy of ``H``. Written as separate pad-and-slice
+    shifts, XLA:CPU recomputes the producers of ``H`` and its index logic per
+    view; the shared copy is a plain strided read (2x on the drift terms).
+    """
+
+    nl, nm = H.shape[-5], H.shape[-4]
+    pad = [(0, 0)] * H.ndim
+    pad[-5], pad[-4] = (1, 1), (2, 2)
+    padded = jnp.pad(H, pad)
+
+    def view(dl, dm):
+        part = jax.lax.slice_in_dim(padded, 1 + dl, 1 + dl + nl, axis=H.ndim - 5)
+        return jax.lax.slice_in_dim(part, 2 + dm, 2 + dm + nm, axis=H.ndim - 4)
+
+    return view
+
+
+def mirror_term(H, ell, sqrt_m, sqrt_m_p1):
+    """Mirror coupling ``(l, m) <- (l, m+1), (l-1, m+1), (l, m-1), (l+1, m-1)``."""
+
+    view = _lm_views(H)
+    return (
+        -sqrt_m_p1 * (ell + 1.0) * view(0, 1)
+        - sqrt_m_p1 * ell * view(-1, 1)
+        + sqrt_m * ell * view(0, -1)
+        + sqrt_m * (ell + 1.0) * view(1, -1)
+    )
+
+
+def curvature_term(H, m):
+    """Curvature coupling ``m -> m, m +- 2``."""
+
+    # Hermite indices are structural: an instantiated zero tangent through
+    # sqrt(m (m - 1)) at m = 0 is 0 * inf = NaN in forward mode.
+    m = jax.lax.stop_gradient(m)
+    view = _lm_views(H)
+    # Materialized: fused, XLA:CPU evaluates the square roots once per state element.
+    up, down = jax.lax.optimization_barrier(
+        (jnp.sqrt((m + 1.0) * (m + 2.0)), jnp.sqrt(m * (m - 1.0)))
+    )
+    return up * view(0, 2) + (2.0 * m + 1.0) * H + down * view(0, -2)
+
+
+def gradb_term(H, ell):
+    """Grad-B coupling ``l -> l, l +- 1``."""
+
+    view = _lm_views(H)
+    return (ell + 1.0) * view(1, 0) + (2.0 * ell + 1.0) * H + ell * view(-1, 0)
+
+
 def mirror_contribution(
     H: jnp.ndarray,
     *,
@@ -417,20 +470,10 @@ def mirror_contribution(
     sqrt_m_p1: jnp.ndarray,
     weight: jnp.ndarray,
 ) -> jnp.ndarray:
-    axis_l = -5
-    axis_m = -4
-    ell_p1 = ell + 1.0
-    H_m_p1 = shift_axis(H, 1, axis=axis_m)
-    H_m_m1 = shift_axis(H, -1, axis=axis_m)
-    mirror_term = (
-        -sqrt_m_p1 * ell_p1 * H_m_p1
-        - sqrt_m_p1 * ell * shift_axis(H_m_p1, -1, axis=axis_l)
-        + sqrt_m * ell * H_m_m1
-        + sqrt_m * ell_p1 * shift_axis(H_m_m1, 1, axis=axis_l)
-    )
+    mirror = mirror_term(H, ell, sqrt_m, sqrt_m_p1)
     bgrad_s = bgrad[None, None, None, None, None, :]
     vth_s = vth[:, None, None, None, None, None]
-    return -weight * vth_s * bgrad_s * mirror_term
+    return -weight * vth_s * bgrad_s * mirror
 
 
 def curvature_gradb_contribution(
@@ -446,27 +489,185 @@ def curvature_gradb_contribution(
     weight_curv: jnp.ndarray,
     weight_gradb: jnp.ndarray,
 ) -> jnp.ndarray:
-    axis_m = -4
-    # Hermite indices are structural: an instantiated zero tangent through
-    # sqrt(m (m - 1)) at m = 0 is 0 * inf = NaN in forward mode.
-    m = jax.lax.stop_gradient(m)
-    H_m_p2 = shift_axis(H, 2, axis=axis_m)
-    H_m_m2 = shift_axis(H, -2, axis=axis_m)
-    curv_term = (
-        jnp.sqrt((m + 1.0) * (m + 2.0)) * H_m_p2
-        + (2.0 * m + 1.0) * H
-        + jnp.sqrt(m * (m - 1.0)) * H_m_m2
-    )
-    axis_l = -5
-    gradb_term = (
-        (ell + 1.0) * shift_axis(H, 1, axis=axis_l)
-        + (2.0 * ell + 1.0) * H
-        + ell * shift_axis(H, -1, axis=axis_l)
-    )
+    curv = curvature_term(H, m)
+    gradb = gradb_term(H, ell)
     tz_s = tz[:, None, None, None, None, None]
     icv = imag * tz_s * omega_d_scale * cv_d[None, None, None, ...]
     igb = imag * tz_s * omega_d_scale * gb_d[None, None, None, ...]
-    return -weight_curv * icv * curv_term - weight_gradb * igb * gradb_term
+    return -weight_curv * icv * curv - weight_gradb * igb * gradb
+
+
+# The drift terms shift ``H`` by up to two Hermite and one Laguerre index. XLA
+# lowers each shifted view as its own sweep of the state, and the Laguerre stride
+# exceeds the L2 cache, so every view costs a DRAM pass. ``fused_drift`` reads each
+# ``(l, m)`` neighbourhood once per tile (Pallas, on real and imaginary planes
+# because Triton has no complex dtype) and returns
+# ``-f1 M(H) - i f2 C(H) - i f3 B(H)`` with ``M``, ``C``, ``B`` the three terms
+# above, ``f`` real fields. The jnp terms stay the reference and the derivatives.
+# Stencil: (term, dl, dm, coefficient(l, m)).
+_STENCIL = (
+    (0, 0, 1, lambda ell, m: -jnp.sqrt(m + 1.0) * (ell + 1.0)),
+    (0, -1, 1, lambda ell, m: -jnp.sqrt(m + 1.0) * ell),
+    (0, 0, -1, lambda ell, m: jnp.sqrt(m) * ell),
+    (0, 1, -1, lambda ell, m: jnp.sqrt(m) * (ell + 1.0)),
+    (1, 0, 2, lambda ell, m: jnp.sqrt((m + 1.0) * (m + 2.0))),
+    (1, 0, 0, lambda ell, m: 2.0 * m + 1.0),
+    (1, 0, -2, lambda ell, m: jnp.sqrt(m * (m - 1.0))),
+    (2, 1, 0, lambda ell, m: ell + 1.0),
+    (2, 0, 0, lambda ell, m: 2.0 * ell + 1.0),
+    (2, -1, 0, lambda ell, m: ell),
+)
+
+
+def _kernel(hr, hi, f1, f2, f3, out_r, out_i, *, nl: int, nm: int):
+    """One program: every ``(l, m)`` row of one tile of flattened ``(x, z)`` points."""
+
+    a1, a2, a3 = f1[0, 0, :], f2[0, 0, :], f3[0, 0, :]
+
+    def row(index, _):
+        ell = jax.lax.div(index, nm)
+        m = index - ell * nm
+        fl, fm = ell.astype(a1.dtype), m.astype(a1.dtype)
+
+        def at(ref, dl, dm):  # zero outside the (l, m) box
+            inside = (0 <= ell + dl) & (ell + dl < nl) & (0 <= m + dm) & (m + dm < nm)
+            at_row = ref[
+                0, jnp.clip(ell + dl, 0, nl - 1), jnp.clip(m + dm, 0, nm - 1), 0, :
+            ]
+            return jnp.where(inside, at_row, 0.0)
+
+        acc = [[0.0, 0.0] for _ in range(3)]  # (re, im) of mirror, curvature, grad-B
+        for term, dl, dm, coeff in _STENCIL:
+            c = coeff(fl, fm)
+            acc[term][0] += c * at(hr, dl, dm)
+            acc[term][1] += c * at(hi, dl, dm)
+        (mr, mi), (cr, ci), (gr, gi) = acc
+        out_r[0, ell, m, 0, :] = -a1 * mr + a2 * ci + a3 * gi
+        out_i[0, ell, m, 0, :] = -a1 * mi - a2 * cr - a3 * gr
+        return 0
+
+    jax.lax.fori_loop(0, nl * nm, row, 0)
+
+
+def _pallas_drift(H, f1, f2, f3, *, interpret=False):
+    from jax.experimental import pallas as pl
+    from jax.experimental.pallas import triton as plgpu
+
+    ns, nl, nm, ny, nx, nz = H.shape
+    n = nx * nz
+    # Tuned on an RTX A4000: 64-wide tiles saturate fp32 bandwidth; fp64 is arithmetic-bound.
+    block, warps = (64, 4) if H.dtype == jnp.complex64 else (512, 2)
+    block = min(block, 1 << (n - 1).bit_length())
+    pad = ((0, 0),) * 4 + ((0, -n % block),)
+    real = jnp.real(H).dtype
+    planes = [
+        jnp.pad(x.reshape(ns, nl, nm, ny, n), pad) for x in (jnp.real(H), jnp.imag(H))
+    ]
+    f1 = jnp.broadcast_to(f1, (ns, 1, nx, nz)).reshape(ns, 1, n)
+    f2, f3 = (
+        jnp.broadcast_to(f, (ns, ny, nx, nz)).reshape(ns, ny, n) for f in (f2, f3)
+    )
+    f1, f2, f3 = (jnp.pad(f.astype(real), pad[:3]) for f in (f1, f2, f3))
+    npad = n + pad[-1][1]
+    state = pl.BlockSpec((1, nl, nm, 1, block), lambda s, y, p: (s, 0, 0, y, p))
+    shared = pl.BlockSpec((1, 1, block), lambda s, y, p: (s, 0, p))
+    field = pl.BlockSpec((1, 1, block), lambda s, y, p: (s, y, p))
+    out_r, out_i = pl.pallas_call(
+        functools.partial(_kernel, nl=nl, nm=nm),
+        out_shape=[jax.ShapeDtypeStruct((ns, nl, nm, ny, npad), real)] * 2,
+        grid=(ns, ny, npad // block),
+        in_specs=[state, state, shared, field, field],
+        out_specs=[state, state],
+        interpret=interpret,
+        compiler_params=plgpu.CompilerParams(num_warps=warps),
+    )(*planes, f1, f2, f3)
+    return jax.lax.complex(out_r, out_i)[..., :n].reshape(H.shape)
+
+
+def _reference_drift(H, f1, f2, f3):
+    nl, nm = H.shape[1:3]
+    ell = jnp.arange(nl, dtype=f1.dtype)[:, None, None, None, None]
+    m = jnp.arange(nm, dtype=f1.dtype)[:, None, None, None]
+    mirror = mirror_term(H, ell, jnp.sqrt(m), jnp.sqrt(m + 1.0))
+    return -f1[:, None, None] * mirror - 1j * (
+        f2[:, None, None] * curvature_term(H, m)
+        + f3[:, None, None] * gradb_term(H, ell)
+    )
+
+
+def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag, fuse=False):
+    """Mirror, curvature and grad-B terms; ``fuse`` returns their sum as the first.
+
+    ``weights`` is ``(mirror, curvature, grad-B)``. The fused sum is the form the
+    production RHS adds up; the separate terms serve the per-term diagnostics.
+    """
+
+    w_mirror, w_curv, w_gradb = weights
+    if fuse and drift_kernel_usable(H):
+        tz_d = omega_d_scale * tz[:, None, None, None]
+        total = fused_drift(
+            H,
+            w_mirror * vth[:, None, None, None] * cache.bgrad,
+            w_curv * tz_d * cache.cv_d,
+            w_gradb * tz_d * cache.gb_d,
+        )
+        return total, jnp.zeros_like(total), jnp.zeros_like(total)
+    mirror = mirror_contribution(
+        H,
+        vth=vth,
+        bgrad=cache.bgrad,
+        ell=cache.l,
+        sqrt_m=cache.sqrt_m,
+        sqrt_m_p1=cache.sqrt_m_p1,
+        weight=w_mirror,
+    )
+    zero = jnp.asarray(0.0, dtype=w_curv.dtype)
+    kwargs = dict(
+        tz=tz,
+        omega_d_scale=omega_d_scale,
+        cv_d=cache.cv_d,
+        gb_d=cache.gb_d,
+        ell=cache.l,
+        m=cache.m,
+        imag=imag,
+    )
+    curvature = curvature_gradb_contribution(
+        H, weight_curv=w_curv, weight_gradb=zero, **kwargs
+    )
+    gradb = curvature_gradb_contribution(
+        H, weight_curv=zero, weight_gradb=w_gradb, **kwargs
+    )
+    return mirror, curvature, gradb
+
+
+def drift_kernel_usable(H) -> bool:
+    """Whether :func:`fused_drift` applies: an NVIDIA GPU and a state worth tiling."""
+
+    nl, nm, _, nx, nz = H.shape[1:]
+    return (
+        jax.default_backend() == "gpu"
+        and "NVIDIA" in jax.devices()[0].device_kind
+        and nx * nz >= 64
+        and nl * nm <= 256
+    )
+
+
+@jax.custom_jvp
+def fused_drift(H, f1, f2, f3):
+    """Return ``-f1 M(H) - i f2 C(H) - i f3 B(H)`` for ``H`` of shape ``(Ns, Nl, Nm, Ny, Nx, Nz)``.
+
+    ``f1`` broadcasts to ``(Ns, 1, Nx, Nz)``; ``f2`` and ``f3`` to ``(Ns, Ny, Nx, Nz)``.
+    """
+
+    return _pallas_drift(H, f1, f2, f3)
+
+
+@fused_drift.defjvp
+def _fused_drift_jvp(primals, tangents):
+    tangents = tuple(
+        jnp.zeros_like(p) if t is None else t for p, t in zip(primals, tangents)
+    )
+    return fused_drift(*primals), jax.jvp(_reference_drift, primals, tangents)[1]
 
 
 def _laguerre_gradient_profile(
