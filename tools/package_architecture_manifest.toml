@@ -1168,7 +1168,8 @@ recursive = true
 # 68320 -> 68328: one TimeConfig policy for API and deck. Measured.
 # 68110 -> 68153: banded shift estimator (stepped-state Rayleigh quotient, partial ARPACK results). Measured.
 # -> 68371: merged with main; TimeConfig policy. Measured.
-baseline = 68371
+# 68363 -> 68433: rk4-pi (embedded-error RK4 step, one redo) on top of #377, measured.
+baseline = 68433
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1518,7 +1519,8 @@ recursive = true
 # 73428 -> 73464: measured after merging #377.
 # 73464 -> 73474: half-layout default (#378) after #376, measured.
 # -> 73487: merged with main; TimeConfig policy test. Measured.
-baseline = 73487
+# 73474 -> 73551: rk4-pi step, redo and controller-carry tests. Measured.
+baseline = 73551
 target = 35000
 
 [[line_budget_policy.counts]]

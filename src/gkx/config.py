@@ -19,7 +19,7 @@ def explicit_method_default_cfl_fac(method: str) -> float:
     method_key = method.strip().lower()
     if method_key in {"rk3", "sspx3"}:
         return 1.73
-    if method_key == "rk4":
+    if method_key in {"rk4", "rk4-pi"}:
         return 2.82
     return 1.0
 
