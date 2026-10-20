@@ -187,6 +187,9 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
   combines the linear frequency cap with the instantaneous nonlinear cap.
   Leaving ``dt_max`` unset keeps ``dt_max = dt``; raise it explicitly only
   when you trade strict comparison matching for throughput.
+- ``method = "rk4-pi"`` (nonlinear, ``fixed_dt = false``): RK4 whose step is
+  chosen from an embedded error estimate and capped at twice the CFL step; see
+  :doc:`solvers`. ``cfl_fac`` defaults to ``2.82`` as for ``rk4``.
 - ``laguerre_nonlinear_mode``: ``"grid"`` (reference quadrature, default) or
   ``"spectral"`` (spectral ``Jl`` without the quadrature transform) for the
   Laguerre handling in nonlinear brackets.
