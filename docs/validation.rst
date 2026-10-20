@@ -255,7 +255,9 @@ Row notes
   0.611, 0.513, 0.552: not monotone. At (8, 24) gamma is 0.871, 0.668, 0.611 and
   0.607 at damp\_ends\_rate 5, 20, 100 and 400; at (4, 16) the spread between
   rates 5 and 100 shrinks from 0.29 (nperiod 2) to 0.07 (nperiod 5). The
-  absorber and parallel domain are part of the answer until Nm converges.
+  absorber and parallel domain are part of the answer until Nm converges. A
+  Laguerre-only sink (nu\_hyper\_l 0.03, Nm 24) makes the Nl sequence monotone
+  (0.493, 0.507, 0.554, 0.567 for Nl 4-10) at a lower gamma; not tested above Nm 24.
 - ``X-kbm-beta-gs2`` (open): Miller KBM at ky 0.3, (8, 24), nperiod 2, A\_par:
   gamma -2.4%, -8.2%, +7.3%, +6.1% and omega +10.8%, +8.8%, +7.8%, +4.7% against
   GS2 at beta 0.005, 0.010, 0.015, 0.020; A\_par+B\_par within 10.1% and 11.0%.
@@ -263,8 +265,10 @@ Row notes
   does not matter (default and 200 agree to 7e-6).
 - ``X-w7x-itg-gx``, ``X-hsx-itg-gx`` (provisional): GKX eigenpairs match
   repaired GX to 3e-4 at W7-X ky 1.1-2.4 and HSX ky 0.5-1.5. On W7-X at ky
-  0.9-1.0 the eigensolver returns a pair GX does not show (ky 1.0: omega 0.2645
-  against 0.1489 at equal gamma); GKX's time route reproduces GX at ky 1.0.
+  0.9-1.0 the eigensolver returns the fastest of near-degenerate bulk modes
+  (ky 1.0: omega 0.2645 against GX's 0.1489, gamma within 2e-4); GKX's time
+  route reproduces GX at ky 1.0. stella, run on the same field line, does not
+  reproduce either code's growth-rate curve and is not used.
 
 Linear rows declare their velocity-space regularization: KAW and ETG use
 ``none``; W7-X, HSX, Cyclone Miller and KBM use ``hermite-kz-hypercollision``

@@ -144,3 +144,20 @@ hsx_itg,1.1,gx-repaired,Nl8 Nm16 t200,0.303037,0.378062,gkx-plan:plan/research/2
 hsx_itg,1.1,gkx,Nl8 Nm16 eigen auto,0.303023,0.378069,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
 hsx_itg,1.5,gx-repaired,Nl8 Nm16 t200,0.256984,0.632680,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
 hsx_itg,1.5,gkx,Nl8 Nm16 eigen auto,0.256986,0.632681,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.003,0.474701,-1.008028,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.003,0.601075,-1.323567,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.003,0.592934,-1.215713,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.469497,-1.041729,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.560387,-1.293995,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.572158,-1.242405,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl10 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.562523,-1.242088,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.492585,-1.111682,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.506712,-1.248515,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.554189,-1.265323,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+tem_dj2005,0.3,gkx,Nl10 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.567383,-1.251000,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.6,gkx,Nl4 Nm16 eigen auto,0.243008,0.444670,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.6,gkx,Nl6 Nm16 eigen auto,0.244516,0.444306,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.6,gkx,Nl10 Nm16 eigen auto,0.244650,0.444194,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.6,gkx,Nl12 Nm16 eigen auto,0.244646,0.444189,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.6,gkx,Nl8 Nm24 eigen auto,0.245615,0.444309,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+w7x_itg,1.6,gkx,Nl8 Nm32 eigen auto,0.245578,0.443964,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
