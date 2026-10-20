@@ -2985,3 +2985,25 @@ def test_time_config_defaults_follow_one_policy_for_api_and_deck() -> None:
     assert (chosen.method, chosen.fixed_dt, chosen.dt) == ("rk2", True, 0.02)
     assert TimeConfig(method="rk3").fixed_dt is False
     assert TimeConfig(dt=0.02, method="rk3", fixed_dt=False).fixed_dt is False
+
+
+def test_default_stepper_follows_the_run_type() -> None:
+    """A deck with no ``dt`` or ``method``: linear rk4 + CFL; nonlinear by physics."""
+
+    from gkx.workflows.runtime.toml import _normalize_time_overrides as norm
+
+    nl = {"nonlinear": True}
+    assert norm(None, {"linear": True})["method"] == "rk4"
+    assert norm(None, {**nl, "adiabatic_electrons": True})["method"] == "rk4-pi"
+    assert (
+        norm(None, {**nl, "adiabatic_electrons": False}, {"model": "miller"})["method"]
+        == "imex-ark3"
+    )
+    ke_em = {**nl, "adiabatic_electrons": False, "electromagnetic": True}
+    assert norm(None, ke_em, {"model": "miller"})["method"] == "rk4-pi"
+    assert (
+        norm(None, {**nl, "adiabatic_electrons": False}, {"model": "vmec"})["method"]
+        == "rk4-pi"
+    )
+    assert norm({"method": "rk3"}, nl)["method"] == "rk3"
+    assert norm({"dt": 0.05}, nl)["method"] == "rk2"

@@ -273,7 +273,28 @@ def _normalize_geometry_overrides(overrides: dict | None) -> dict | None:
     return dict(overrides)
 
 
-def _normalize_time_overrides(overrides: Any) -> dict[str, Any] | None:
+def _default_nonlinear_stepper(physics: Any, geometry: Any) -> str:
+    """Stepper for a nonlinear deck that chose neither ``dt`` nor ``method``.
+
+    Kinetic electrons make the CFL step the electron-streaming limit, so a tokamak
+    (s-alpha or Miller) electrostatic deck takes the adaptive ``imex-ark3`` (5-9x
+    less wall than rk4 + CFL, #373). Everything else -- adiabatic, electromagnetic,
+    stellarators (``imex-ark3`` refuses their factor) -- takes ``rk4-pi``, 1.8-2x
+    fewer steps than rk4 + CFL at the same flux (#381).
+    """
+
+    ph = physics if isinstance(physics, dict) else {}
+    model = str((geometry or {}).get("model", "s-alpha")).lower()
+    kinetic_electrons = not ph.get("adiabatic_electrons", True)
+    electromagnetic = bool(ph.get("electromagnetic", False))
+    if kinetic_electrons and not electromagnetic and model in ("s-alpha", "miller"):
+        return "imex-ark3"
+    return "rk4-pi"
+
+
+def _normalize_time_overrides(
+    overrides: Any, physics: Any = None, geometry: Any = None
+) -> dict[str, Any] | None:
     """Pair the integrator with the step policy when the deck chose no step.
 
     ``ExplicitTimeConfig.dt`` is a required field and ``TimeConfig.dt`` carries
@@ -321,7 +342,10 @@ def _normalize_time_overrides(overrides: Any) -> dict[str, Any] | None:
     # scheme that makes the controller's step cheapest. An explicit ``method``
     # or ``fixed_dt`` in the deck still wins.
     raw.setdefault("fixed_dt", False)
-    raw.setdefault("method", "rk4")
+    nonlinear = isinstance(physics, dict) and bool(physics.get("nonlinear", False))
+    raw.setdefault(
+        "method", _default_nonlinear_stepper(physics, geometry) if nonlinear else "rk4"
+    )
     return raw
 
 
@@ -331,7 +355,9 @@ def _runtime_base_config(data: dict[str, Any]) -> RuntimeConfig:
     cfg = RuntimeConfig()
     sections = {
         "grid": data.get("grid"),
-        "time": _normalize_time_overrides(data.get("time")),
+        "time": _normalize_time_overrides(
+            data.get("time"), data.get("physics"), data.get("geometry")
+        ),
         "geometry": _normalize_geometry_overrides(data.get("geometry")),
         "init": data.get("init"),
     }

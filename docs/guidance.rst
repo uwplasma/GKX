@@ -18,8 +18,8 @@ What you get when you change nothing, and when to change it.
      - Default
      - Change it when
    * - Time stepper
-     - ``rk4`` with the CFL controller when no ``dt`` is given (deck or ``TimeConfig()``); ``rk2`` at a fixed step when ``dt`` is given
-     - kinetic electrons at 32x32 and up (``imex-ars3``); a published step (``rk3`` at fixed ``dt``)
+     - no ``dt``, linear: ``rk4`` + CFL. Nonlinear: ``imex-ark3`` (adaptive) for electrostatic kinetic electrons in s-alpha or Miller geometry, else ``rk4-pi``. A ``dt`` gives ``rk2`` at that step. A bare ``TimeConfig()`` is ``rk4`` + CFL
+     - a published step (``rk3`` at fixed ``dt``); electromagnetic or stellarator kinetic electrons stay on ``rk4-pi``
    * - Linear growth rates
      - ``solver`` ``auto``: banded shift-invert, else ``adaptive``, certified
      - one mode of a hard branch (``shift-invert``)
@@ -41,6 +41,47 @@ What you get when you change nothing, and when to change it.
    * - Threads and devices
      - XLA's pool; Eigen pool off below four CPUs; one device
      - nothing on CPU; GPUs: ``XLA_PYTHON_CLIENT_PREALLOCATE=false`` when shared
+
+
+Resolution defaults and what they cost
+--------------------------------------
+
+Linear growth rates at ``ky`` 0.4 (Cyclone, s-alpha, adiabatic electrons,
+``solver = "auto"``, float64, four CPU cores) are not converged at the default
+:math:`(N_l, N_m)`:
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`(N_l, N_m)`
+     - :math:`\gamma`
+     - wall (s)
+   * - (4, 8)
+     - 0.1070
+     - 35
+   * - (8, 24)
+     - 0.0930
+     - 107
+   * - (12, 24)
+     - 0.0859
+     - 212
+   * - (16, 32)
+     - 0.0779
+     - 415
+   * - (16, 48)
+     - 0.0809
+     - 675
+   * - (24, 32)
+     - 0.0799
+     - 613
+
+The :math:`N_l` dependence is the large one; a GX-parity check at :math:`N_m` 32
+found :math:`N_l` 8 off by 9--17% (GX v2 and GKX agree). The sequence is not monotone and still moves by 2--4% between (16, 48) and
+(24, 32), so report a growth rate only from a pair of resolutions that agree,
+starting at :math:`(16, 48)`; the banded route makes that affordable (minutes
+on four cores, seconds to minutes on a GPU).
+Nonlinear defaults (4, 8) follow GX's own benchmark decks and are a
+turbulence-statistics resolution, not a growth-rate one.
 
 Choose the time stepper
 -----------------------

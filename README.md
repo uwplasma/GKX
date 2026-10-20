@@ -92,7 +92,7 @@ and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
 | Velocity space | Hermite-Laguerre, `(Nl, Nm)` | hypercollisions damp the last Hermite moments |
 | Collisions | linearized Landau | conserving, H-theorem; Dougherty, Sugama alternatives ([operators](docs/operators.rst)) |
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
-| Time stepping | `rk4` with CFL controller | `imex-ars3` for nonlinear kinetic electrons at 32x32 and up |
+| Time stepping | no `dt`: `rk4` + CFL (linear); nonlinear `rk4-pi`, or adaptive `imex-ark3` for electrostatic kinetic electrons in s-alpha/Miller | a `dt` gives `rk2` at that step |
 | Eigensolver | `auto` (banded, else `adaptive`), certified | shift-invert opt-in |
 | `ky` layout | `half`: the `1 + Ny//2` non-negative rows | `[grid] ky_layout = "full"` stores the two-sided axis; same physics to round-off, about 1.4-1.8x slower and 12-25% more memory |
 | Precision | `float32`; `float64` with `JAX_ENABLE_X64=true` | eigensolver, Krylov residual and conditioning checks need `float64` |
