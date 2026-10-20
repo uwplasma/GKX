@@ -19,7 +19,16 @@ from gkx.diagnostics.saturation import (
     saturation_stop_decision,
 )
 from gkx.geometry import apply_geometry_grid_defaults
-from gkx.solvers_time_explicit_cfl import FIXED_DT_CFL_WARN_RATIO
+from gkx.operators.nonlinear.policies import bracket_cfl_rate
+from gkx.solvers_nonlinear_imex import (
+    IMEX_CHAIN_METHODS,
+    ImexDtControl,
+    refactor_chain_implicit_linear,
+)
+from gkx.solvers_time_explicit_cfl import (
+    FIXED_DT_CFL_WARN_RATIO,
+    _laguerre_velocity_max,
+)
 from gkx.config import RuntimeConfig, resolve_cfl_fac
 from gkx.solvers_nonlinear_diagnostic_integration import (
     integrate_nonlinear_explicit_diagnostics_state,
@@ -555,6 +564,36 @@ def _run_chunked_diagnostics(
     steps_left = ctx.steps
     # One compiled scan per chunk shape, reused by every chunk of this run.
     compile_cache: dict[Any, Any] = {}
+    # Chain IMEX with fixed_dt = false: a fixed factor per chunk, dt chosen
+    # between chunks (ImexDtControl), the factor swapped in as an operand.
+    imex = ctx.adaptive_chunked and (method or cfg.time.method) in IMEX_CHAIN_METHODS
+    control: dict[str, Any] = {"dt": ctx.dt}
+    if imex:
+        chunk_steps = 32
+
+    def integrate(G: Any, kwargs: dict[str, Any]) -> Any:
+        if imex and "op" in control:
+            for key, prepared in compile_cache.items():
+                compile_cache[key] = prepared.with_chain(control["op"])
+        out = integrate_nonlinear_explicit_diagnostics_state(
+            G, ctx.grid, ctx.geom, ctx.params, **kwargs
+        )
+        if imex and "op" not in control:
+            prepared = next(iter(compile_cache.values()))
+            op = prepared.chain
+            rate = bracket_cfl_rate(
+                ctx.grid,
+                ctx.params,
+                prepared.cache,
+                compressed_real_fft=bool(cfg.time.compressed_real_fft),
+                real_dtype=jnp.real(jnp.asarray(G)).dtype,
+                laguerre_velocity_max_fn=_laguerre_velocity_max,
+            )
+            control["op"] = op
+            control["ctl"] = ImexDtControl(
+                op, rate, dt_max=float(cfg.time.dt_max or 1.0), cfl=cfg.time.cfl
+            )
+        return out
 
     def run_chunk(chunk_show_progress: bool, remaining_time: float):
         nonlocal G_chunk, steps_left
@@ -567,22 +606,44 @@ def _run_chunked_diagnostics(
             method=method,
             sample_stride=1,
             diagnostics_stride=1,
-            fixed_dt=bool(cfg.time.fixed_dt),
+            fixed_dt=bool(cfg.time.fixed_dt) or imex,
             show_progress=chunk_show_progress,
         )
-        dt_cap = float(cfg.time.dt_max or ctx.dt)
-        if remaining_time <= steps_now * dt_cap:
+        dt_cap = control["dt"] if imex else float(cfg.time.dt_max or ctx.dt)
+        if imex and "op" in control and remaining_time < steps_now * dt_cap:
+            # Last chunk: a smaller dt keeps the step count (no recompile).
+            control["dt"] = remaining_time / steps_now
+            control["op"] = refactor_chain_implicit_linear(
+                control["op"], control["dt"], free=True
+            )
+        elif remaining_time <= steps_now * dt_cap:
             kwargs["time_horizon"] = remaining_time
         kwargs["compile_cache"] = compile_cache
-        t_chunk, diag_chunk, G_next, fields_next = (
-            integrate_nonlinear_explicit_diagnostics_state(
-                G_chunk,
-                ctx.grid,
-                ctx.geom,
-                ctx.params,
-                **kwargs,
+        while True:
+            if imex:
+                kwargs["dt"] = control["dt"]
+            t_chunk, diag_chunk, G_next, fields_next = integrate(G_chunk, kwargs)
+            if not imex:
+                break
+            ok = bool(jnp.isfinite(G_next).all())
+            if ok:  # an end-of-chunk error estimate far over rtol: unstable
+                dt_new = control["ctl"].propose(control["op"], G_next)
+                ok = control["ctl"].last["err"] < 30.0
+            if ok:
+                break
+            control["dt"] *= 0.5  # reject: redo the chunk at half the step
+            control["op"] = refactor_chain_implicit_linear(
+                control["op"], control["dt"], free=True
             )
-        )
+        if imex:
+            control["op"] = control["ctl"].retune(control["op"], dt_new)
+            control["dt"] = float(control["op"].dt)
+            status(
+                "imex dt {:.3g} (error bound {dt_err:.3g}, CFL bound {dt_cfl:.3g}; "
+                "bracket {bracket:.3g}, remainder {remainder:.3g})".format(
+                    control["dt"], **control["ctl"].last
+                )
+            )
         G_chunk = G_next
         steps_left -= steps_now
         return t_chunk, diag_chunk, G_next, fields_next
