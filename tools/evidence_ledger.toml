@@ -380,8 +380,6 @@ tier = 3
 status = "provisional"
 notes = "GKX eigenpairs agree with GX to 3e-4 relative in gamma and omega at ky 0.5-1.5 (seven points); at ky 0.3 gamma is -0.5% and omega unsettled in GX (0.012 against 0.066). The GX geometry script failed on this equilibrium (an array with an extra axis in the interpolation) and the eik file was generated with the same script after squeezing the arrays; GKX imports that geometry. The equilibrium is the cutstudy HSX QHS vacuum wout, not the Nuhrenberg-Zille example of the L-lin-hsx row. One velocity resolution."
 
-notes = "GS2 is converged (t1 -> t2 <= 2.5% over the scan; beta_e x2 moves ky .3 by +0.5%): gamma 0.8694, omega -1.2723 (v_ti/R) at ky rho_s 0.3. GKX certified eigenpairs at ky rho_s 0.3 rise with velocity resolution and have not converged: (Nl, Nm) = (4, 8) 0.0029, (8, 24) 0.6114, (12, 32) 0.6475, (16, 48) 0.7330 (-15.7%); omega at (16, 48) -1.2896 (+1.4%). The paper publishes this case in figures only, so GS2 is the reference. Replaces the digitized tem_reference.csv lane, whose case definition was never reconstructed."
-
 [[row]]
 id = "N-cyclone-gx-table1"
 claim = "nonlinear Cyclone ITG, adiabatic electrons, a/LT 2.49, 192x64x24 (4,8): GKX heat flux against GX Table 1 and a repaired-GX rerun"
