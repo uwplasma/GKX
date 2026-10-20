@@ -191,11 +191,7 @@ def _explicit_stage_update(
         )
     raise ValueError(
         "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', "
-<<<<<<< HEAD
-        "'rk3_heun', 'rk4', 'rk4-pi', 'k10', 'sspx3', 'imex-ars3'}"
-=======
-        "'rk3_heun', 'rk4', 'k10', 'sspx3', 'imex-ars3', 'imex-ark3'}"
->>>>>>> origin/perf/imex-adaptive
+        "'rk3_heun', 'rk4', 'rk4-pi', 'k10', 'sspx3', 'imex-ars3', 'imex-ark3'}"
     )
 
 
@@ -611,17 +607,14 @@ def _advance_explicit_diagnostic_state(
     dt_local = jnp.asarray(
         time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype
     )
-<<<<<<< HEAD
     scales = time_step_policy.cfl_scales if method == "rk4-pi" else None
     if scales is not None:
         dt_local = jnp.minimum(
             jnp.asarray(dt_prev, real_dtype), jnp.minimum(_PI_CAP * dt_local, scales[5])
         )
-=======
     chain = getattr(rhs_fn, "chain_implicit_linear", None)
     if chain is not None:  # the factor's dt, which the chunk controller sets
         dt_local = jnp.asarray(chain.dt, dtype=real_dtype)
->>>>>>> origin/perf/imex-adaptive
     if max_dt is not None:
         dt_local = jnp.minimum(dt_local, jnp.maximum(max_dt, 0.0))
     dt_next = dt_local
