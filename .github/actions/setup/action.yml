@@ -25,6 +25,7 @@ runs:
     - name: Install GKX with the dev extra
       shell: bash
       run: |
+        uv pip install --system "solvax @ git+https://github.com/uwplasma/SOLVAX@release/0.30.0"
         uv pip install --system -e ".[dev]"
         python -c "import jax, jaxlib, numpy; print('jax', jax.__version__, 'jaxlib', jaxlib.__version__, 'numpy', numpy.__version__)"
 
