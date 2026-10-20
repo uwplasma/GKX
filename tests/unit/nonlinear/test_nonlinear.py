@@ -1097,7 +1097,7 @@ def test_nonlinear_off_stride_final_sample_is_the_final_state(
     carry step 2's diagnostics.
     """
 
-    grid_cfg = GridConfig(Nx=2, Ny=4, Nz=4, Lx=6.0, Ly=6.0)
+    grid_cfg = GridConfig(Nx=2, Ny=4, Nz=4, Lx=6.0, Ly=6.0, ky_layout="full")
     cfg = CycloneBaseCase(grid=grid_cfg)
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)

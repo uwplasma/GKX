@@ -1995,16 +1995,18 @@ def test_the_half_axis_weight_sums_a_non_zero_nyquist_row_correctly(ny: int) -> 
     )
 
 
-def test_the_default_deck_builds_the_two_sided_axis() -> None:
-    """``[grid] ky_layout`` defaults to ``"full"``; ``"half"`` is an opt-in."""
+def test_the_default_deck_builds_the_half_axis() -> None:
+    """``[grid] ky_layout`` defaults to ``"half"``; ``"full"`` is the opt-out."""
 
     from gkx.config import GridConfig
     from gkx.core_grid import build_spectral_grid
 
-    assert GridConfig().ky_layout == FULL
+    assert GridConfig().ky_layout == HALF
     grid = build_spectral_grid(GridConfig(Nx=4, Ny=8, Nz=2))
-    assert source_ky_layout(grid) == FULL
-    assert int(grid.ky.size) == 8
+    assert source_ky_layout(grid) == HALF
+    assert int(grid.ky.size) == 5
+    full = build_spectral_grid(GridConfig(Nx=4, Ny=8, Nz=2, ky_layout="full"))
+    assert source_ky_layout(full) == FULL and int(full.ky.size) == 8
 
 
 @pytest.mark.parametrize("ny", (4, 8, 16, 32))

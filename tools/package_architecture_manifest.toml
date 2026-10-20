@@ -1509,7 +1509,8 @@ recursive = true
 # 73084 -> 73095: electron mirror implicit (#370) on top of #363/#368, measured.
 # 73084 -> 73247: banded route tests (dense estimate, auto fallbacks, band check, memory rule, KBM-trap dominance). Measured.
 # 73252 -> 73403: drift kernel, Nyquist row and 2-CPU guard tests. Measured.
-baseline = 73403
+# 73403 -> 73413: default-layout test updates. Measured.
+baseline = 73413
 target = 35000
 
 [[line_budget_policy.counts]]

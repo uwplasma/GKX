@@ -236,9 +236,12 @@ restarts, NetCDF output, spectra and snapshots. A real field obeys
   blanket factor of two, which over-counts the Nyquist row. A flux on that row
   vanishes for a real field, and two-thirds dealiasing zeroes it anyway.
 
-Decks opt into ``[grid] ky_layout = "half"``; the default stays ``"full"``
-because the checkpointed heat-flux gradient is slower on the half axis
-(:doc:`performance`).
+``[grid] ky_layout = "half"`` is the default; ``"full"`` is the opt-out. On
+Cyclone at ``24x24x24`` to ``64x64x24`` the two layouts agree to 2e-16 (x64) and
+2e-7 (float32) in the nonlinear diagnostics, with even and odd ``Nyc``, with
+``state_sharding = "ky"`` on four forced CPU devices, and bitwise in the
+heat-flux window value and gradient; ``"half"`` runs the window gradient in 0.68
+(CPU) to 0.72 (GPU) of the two-sided time (:doc:`performance`).
 
 Equilibrium-flow shearing coordinates
 -------------------------------------
