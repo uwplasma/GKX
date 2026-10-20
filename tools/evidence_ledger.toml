@@ -382,24 +382,23 @@ notes = "GKX eigenpairs agree with GX to 3e-4 relative in gamma and omega at ky 
 
 [[row]]
 id = "N-cyclone-gx-table1"
-claim = "nonlinear Cyclone ITG, adiabatic electrons, a/LT 2.49, 192x64x24 (4,8): GKX heat flux against GX Table 1 and a repaired-GX rerun"
-observable = "time-averaged Q_i/Q_GB with Sokal-IAT standard error; agreement within two combined standard errors"
-artifact = "docs/_static/nonlinear_statistics.json"
-generator = "retired@gkx-plan plan/research/2026-10-20-nonlinear-stats/nonlinear_statistics.py stats --json"
-reference = "Mandell et al., J. Plasma Phys. (2024), doi:10.1017/S0022377824000631, Table 1: 7.2 +- 0.8 at (4,8), t = 1000; GX 3865a537 + dampEnds_linked repair, same deck (self-run, rank 5): 6.66 +- 0.25"
+claim = "nonlinear Cyclone ITG heat flux, adiabatic electrons, a/LT 2.49, 192x64x24 (4,8), against GX"
+observable = "Q_i/Q_GB, Sokal-IAT standard error, agreement within two combined errors"
+artifact = "docs/validation.rst"
+generator = "retired@gkx-plan plan/research/2026-10-20-nonlinear-stats/nonlinear_statistics.py"
+reference = "GX paper Table 1 (doi:10.1017/S0022377824000631) 7.2 +- 0.8; repaired GX self-run 6.66 +- 0.25"
 reference_rank = 2
 tier = 3
 status = "passing"
-notes = "GKX 6.78 +- 0.19 from two seeds (6.68 +- 0.27 over 18.6 tau, below the 20 tau gate; 6.88 +- 0.26 over 21 tau). Single precision, RK3 fixed dt 0.014, nu_ii 0.01. The paper does not state its averaging window."
 
 [[row]]
 id = "N-dimits-scan"
-claim = "nonlinear Cyclone ITG heat flux against a/LT across the Dimits threshold: GKX does not reproduce the Dimits shift"
-observable = "Q_i/Q_GB at a/LT 1.5-3.0 (64x64x24) and 1.5 (192x64x24)"
-artifact = "docs/_static/nonlinear_statistics.json"
-generator = "retired@gkx-plan plan/research/2026-10-20-nonlinear-stats/nonlinear_statistics.py stats --json"
-reference = "Dimits et al., Phys. Plasmas 7, 969 (2000): linear threshold R/LT about 4, nonlinear about 6; GX paper Sec. 6.1.2 reports suppression at a/LT 1.5; GX 3865a537 + dampEnds_linked repair (self-run, rank 5): 1.47 +- 0.28 at a/LT 1.5"
+claim = "Dimits shift in nonlinear Cyclone ITG: not reproduced by GKX or repaired GX on the shipped deck"
+observable = "Q_i/Q_GB at a/LT 1.5: GKX 1.64 +- 0.22, repaired GX 1.47 +- 0.28"
+artifact = "docs/validation.rst"
+generator = "retired@gkx-plan plan/research/2026-10-20-nonlinear-stats/nonlinear_statistics.py"
+reference = "Dimits et al., Phys. Plasmas 7, 969 (2000); GX paper Sec. 6.1.2"
 reference_rank = 2
 tier = 3
 status = "open"
-notes = "GKX 192x64x24 gives 1.64 +- 0.22 at a/LT 1.5 and the flux extrapolates to zero near R/LT 3.4-3.8, below the linear threshold. The repaired GX build on the shipped deck agrees with GKX, so this is not a GKX defect; the paper's initial condition, run length or collision settings may differ. 64x64 fluxes are 30% above 192x64 at a/LT 2.49."
+notes = "records and scan in gkx-plan plan/research/2026-10-20-nonlinear-stats"
