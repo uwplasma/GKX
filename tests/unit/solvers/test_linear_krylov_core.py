@@ -2198,10 +2198,13 @@ def test_growth_excess_separates_the_kbm_trap() -> None:
     dt = 0.2
     step = lambda x: x / (1 - modes * dt)  # noqa: E731  (I - dt A)^-1, A diagonal
     start = np.random.default_rng(1).standard_normal(3) + 0j
-    trapped = ap._growth_excess(step, start, modes[0], dt)
-    found = ap._growth_excess(step, start, modes[1], dt)
+    growth, grown = ap._step_growth(step, start)
+    trapped = ap._growth_excess(growth, modes[0], dt)
+    found = ap._growth_excess(growth, modes[1], dt)
     assert trapped > 0.5 * modes[0].real * dt + 1e-3  # refused
     assert found < 1e-3  # the fastest mode passes
+    # The stepped state sits on the fast mode: its Rayleigh quotient is the new shift.
+    assert abs(np.vdot(grown, modes * grown) / np.vdot(grown, grown) - modes[1]) < 0.05
 
 
 def test_auto_takes_the_banded_route_and_falls_back_to_adaptive(monkeypatch) -> None:
