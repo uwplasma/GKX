@@ -33,6 +33,8 @@ import gkx.solvers_linear_krylov as lk
 import gkx.solvers_linear_krylov_algorithms as ka
 import gkx.solvers_linear_adaptive_propagator as kp
 import gkx.solvers_linear_precond_pr3 as pr3
+import gc
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -54,6 +56,26 @@ from gkx.runtime import (
 )
 from gkx.solvers_linear_krylov import adaptive_propagator_eigenpair, dominant_eigenpair
 from gkx.workflows.runtime.toml import load_runtime_from_toml
+
+
+_TESTS_RUN = [0]
+
+
+@pytest.fixture(autouse=True)
+def _release_compiled_executables():
+    """Drop compiled executables every few tests.
+
+    One process runs this whole file, and the executables of its many distinct
+    small decks accumulate (6.8 GB peak on a laptop); a CI shard runs four such
+    workers. Clearing every fifth test holds the peak near 3.5 GB for about 50%
+    more wall time.
+    """
+
+    yield
+    _TESTS_RUN[0] += 1
+    if _TESTS_RUN[0] % 5 == 0:
+        jax.clear_caches()
+        gc.collect()
 
 
 requires_solvax_eigen_api = requires_paired_solvax(
