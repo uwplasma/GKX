@@ -69,18 +69,6 @@ Ledger rows
 .. list-table::
    :header-rows: 1
    :widths: 12 18 16 26 8 20
-   * - ``N-cyclone-gx-table1``
-     - Nonlinear Cyclone ITG, adiabatic electrons, 192x64x24 (4,8): heat flux against GX Table 1 and a repaired-GX rerun
-     - 6.78 +- 0.19 against 7.2 +- 0.8 and 6.66 +- 0.25
-     - GX paper Table 1 (rank 2); GX 3865a537 + dampEnds\_linked, self-run (rank 5)
-     - passing
-     - ``docs/_static/nonlinear_statistics.json``
-   * - ``N-dimits-scan``
-     - Nonlinear Cyclone heat flux across the Dimits threshold
-     - no Dimits shift; 1.64 +- 0.22 at a/LT 1.5 (repaired GX 1.47 +- 0.28)
-     - Dimits et al. (2000); GX paper Sec. 6.1.2 (rank 2)
-     - open
-     - ``docs/_static/nonlinear_statistics.json``
 
    * - ID
      - Claim
@@ -232,6 +220,18 @@ Ledger rows
      - GX 3865a537 + dampEnds\_linked grid-stride loop, W7-X deck with the HSX QHS vacuum VMEC (ns 201) and npol 4, self-run to t = 200 (rank 5)
      - provisional
      - ``docs/_static/cross_code_linear_points.csv``
+   * - ``N-cyclone-gx-table1``
+     - Nonlinear Cyclone ITG, adiabatic electrons, 192x64x24 (4,8): heat flux against GX Table 1 and a repaired-GX rerun
+     - 6.78 +- 0.19 against 7.2 +- 0.8 and 6.66 +- 0.25
+     - GX paper Table 1 (rank 2); GX 3865a537 + dampEnds\_linked, self-run (rank 5)
+     - passing
+     - ``docs/_static/nonlinear_statistics.json``
+   * - ``N-dimits-scan``
+     - Nonlinear Cyclone heat flux across the Dimits threshold
+     - no Dimits shift; 1.64 +- 0.22 at a/LT 1.5 (repaired GX 1.47 +- 0.28)
+     - Dimits et al. (2000); GX paper Sec. 6.1.2 (rank 2)
+     - open
+     - ``docs/_static/nonlinear_statistics.json``
 
 Row notes
 ---------
