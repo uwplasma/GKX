@@ -94,6 +94,9 @@ and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
 | Time stepping | `rk4` with CFL controller | `imex-ars3` for nonlinear kinetic electrons at 32x32 and up |
 | Eigensolver | `auto` (banded, else `adaptive`), certified | shift-invert opt-in |
+| `ky` layout | `half`: the `1 + Ny//2` non-negative rows | `[grid] ky_layout = "full"` stores the two-sided axis; same physics to round-off, about 1.4-1.8x slower and 12-25% more memory |
+| Precision | `float32`; `float64` with `JAX_ENABLE_X64=true` | eigensolver, Krylov residual and conditioning checks need `float64` |
+| CPU threads | XLA's own; Eigen pool off on fewer than four CPUs | steps do not scale past about four threads ([performance](docs/performance.rst)) |
 
 [Resolution, step and solver guidance](docs/guidance.rst) says what to set for
 kinetic electrons and electromagnetic runs, and how to check it.

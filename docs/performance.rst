@@ -97,15 +97,15 @@ axis. Completing once per step instead of once per RHS is bitwise identical but
 makes XLA:CPU materialize 2.3--2.7 times more bytes on the runtime route, so
 what removes the concatenate is the state layout. The layout rule is written
 down and tested as the ``ky`` layout contract (:mod:`gkx.core_ky_layout`, see
-:doc:`numerics`), and the half-spectrum layout is available below the runtime.
+:doc:`numerics`), and the half-spectrum layout is the runtime default.
 On a linked Cyclone deck (XLA:CPU, ``jax`` 0.10.2) lowering onto the half
 layout removes the completion entirely -- the ``reverse`` count goes to zero --
 and cuts the bytes owned by materialized ``copy``/``concatenate`` buffers by
 73.5 per cent (rk3) and 71.4 per cent (rk4) on the RK step at ``32x32x24`` and
 by 72.4 and 70.3 per cent at ``64x64x24``, against a state that is only 46.9 per
 cent smaller. Those are byte counts from the compiled module, not wall-clock.
-The runtime still builds a two-sided grid by default, and no part of the 41.9
-per cent is claimed as recovered.
+The runtime now builds the half grid by default; ``ky_layout = "full"`` keeps
+the two-sided state and its completion.
 
 The supported CPU mode is ordinary serial execution with XLA threading its own
 kernels; ``[parallel] strategy = "serial"`` is the default. XLA uses only about

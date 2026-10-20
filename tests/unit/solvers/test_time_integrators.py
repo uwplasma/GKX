@@ -2398,7 +2398,7 @@ def test_integrate_linear_from_config_requires_the_table_moment_basis():
     """
 
     cfg = CycloneBaseCase(
-        grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0),
+        grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0, ky_layout="full"),
         time=TimeConfig(t_max=0.1, dt=0.05, method="rk2", collision_operator="sugama"),
     )
     grid = build_spectral_grid(cfg.grid)

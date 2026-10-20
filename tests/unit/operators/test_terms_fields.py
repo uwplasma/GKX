@@ -2301,7 +2301,15 @@ def _hermitian_multimode_case(
         bessel_bmag_power=1.0,
     )
     grid = build_spectral_grid(
-        GridConfig(Nx=n[0], Ny=n[1], Nz=n[2], Lx=length, Ly=length, boundary="periodic")
+        GridConfig(
+            Nx=n[0],
+            Ny=n[1],
+            Nz=n[2],
+            Lx=length,
+            Ly=length,
+            boundary="periodic",
+            ky_layout="full",
+        )
     )
     cache = build_linear_cache(grid, geom, params, Nl=nl, Nm=4)
     rng = np.random.default_rng(seed)

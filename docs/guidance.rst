@@ -5,6 +5,43 @@ What to set, in what order, and how to check it. Values are starting points
 for Cyclone-like cases; the check at the end of each section is the test.
 Measurements are in :doc:`numerics`, :doc:`solvers` and :doc:`examples`.
 
+Defaults at a glance
+--------------------
+
+What you get when you change nothing, and when to change it.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 28 48
+
+   * - Choice
+     - Default
+     - Change it when
+   * - Time stepper
+     - ``rk4`` with the CFL controller (TOML); ``rk2`` for a bare ``TimeConfig()``
+     - kinetic electrons at 32x32 and up (``imex-ars3``); a published step (``rk3`` at fixed ``dt``)
+   * - Linear growth rates
+     - ``solver`` ``auto``: banded shift-invert, else ``adaptive``, certified
+     - one mode of a hard branch (``shift-invert``)
+   * - ``ky`` layout
+     - ``half`` (``1 + Ny//2`` rows)
+     - ``full`` only to read a two-sided array from an older run
+   * - Velocity space
+     - linear (12, 24), nonlinear (4, 8)
+     - kinetic electrons, TEM, KBM: see the sections below
+   * - Collisions
+     - linearized Landau; hypercollisions on the last Hermite moments
+     - ``nu = 0`` collisionless runs keep the hypercollisions
+   * - End damping
+     - one rate, ``damp_ends_rate``, on every route
+     - never with the step size; see :doc:`numerics`
+   * - Precision
+     - ``float32``
+     - ``float64`` for eigensolves, conditioning and residual checks
+   * - Threads and devices
+     - XLA's pool; Eigen pool off below four CPUs; one device
+     - nothing on CPU; GPUs: ``XLA_PYTHON_CLIENT_PREALLOCATE=false`` when shared
+
 Choose the time stepper
 -----------------------
 

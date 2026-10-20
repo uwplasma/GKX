@@ -20,11 +20,11 @@ Resolution and time-step defaults
   ``Nl`` (Laguerre) and ``Nm`` (Hermite), the fallback is
   ``(Nl, Nm) = (12, 24)`` for linear runs and ``(4, 8)`` for nonlinear runs.
   Set both explicitly for any result you report.
-- **ky layout.** ``[grid] ky_layout = "full"`` (default) stores the two-sided
-  ``ky`` axis of length ``Ny``; ``"half"`` stores the ``1 + Ny // 2``
-  non-negative rows (``gkx.core_ky_layout``). Results do not depend on the
-  choice. ``"half"`` makes a nonlinear step cheaper but the heat-flux window
-  gradient slower.
+- **ky layout.** ``[grid] ky_layout = "half"`` (default) stores the ``1 + Ny // 2``
+  non-negative rows; ``"full"`` stores the two-sided ``ky`` axis of length
+  ``Ny`` (``gkx.core_ky_layout``). Results do not depend on the choice: they
+  agree to round-off, and ``"half"`` is faster and smaller, in the nonlinear
+  step and in the heat-flux window gradient.
 - **Time stepping.** A deck that sets ``[time] dt`` runs ``rk2`` at that fixed
   step unless it names another ``method``. A deck without ``dt`` gets
   ``method = "rk4"`` with ``fixed_dt = false``: the CFL controller chooses the
