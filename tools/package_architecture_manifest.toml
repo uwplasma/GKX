@@ -1165,7 +1165,8 @@ recursive = true
 # module) and the dispatcher; the SOLVAX half (block recovery, shifted factor) is in SOLVAX. Measured.
 # 67962 -> 67999: backward-Euler dominance check of the banded route. Measured.
 # 68110 -> 68320: fused GPU drift kernel, shared-pad (l, m) views, Nyquist row fix, 2-CPU hang notes. Measured.
-baseline = 68320
+# 68320 -> 68328: one TimeConfig policy for API and deck. Measured.
+baseline = 68328
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1510,7 +1511,8 @@ recursive = true
 # 73084 -> 73247: banded route tests (dense estimate, auto fallbacks, band check, memory rule, KBM-trap dominance). Measured.
 # 73252 -> 73403: drift kernel, Nyquist row and 2-CPU guard tests. Measured.
 # 73403 -> 73413: default-layout test updates. Measured.
-baseline = 73413
+# 73413 -> 73426: TimeConfig policy test. Measured.
+baseline = 73426
 target = 35000
 
 [[line_budget_policy.counts]]
