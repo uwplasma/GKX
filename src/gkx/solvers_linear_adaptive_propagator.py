@@ -578,12 +578,12 @@ def adaptive_propagator_eigenpair(
 _COARSE_NL = 3  # Laguerre moments kept in the dense shift estimate
 _DENSE_N = 3072  # unknowns of the largest dense estimate
 _RITZ = 12  # eigenvalues asked of ARPACK around the shift
-_PASSES = 3  # shifts tried while the fastest-growing Ritz value keeps moving
+_PASSES = 4  # shifts tried while the fastest-growing Ritz value keeps moving
 _RECENTER = 0.05  # that movement, in omega_scale, that starts another pass
 _REFINE = 2  # defect corrections per application
 _DOMINANCE = 0.5  # excess growth, in units of best gamma*dt, that refuses the pair
 _STEPS = 60  # backward-Euler steps of the dominance check
-_RESTARTS = 100  # ARPACK restarts allowed per shift before the route gives up
+_RESTARTS = 20  # ARPACK restarts allowed per shift before the route gives up
 _OFFSET = 1.0e-3  # step (in omega_scale) from the estimate to the shift
 _BAND_TOL = (
     1.0e-4  # relative mismatch of the blocks against the operator that is refused
@@ -619,13 +619,13 @@ def _dense_estimate(lower, diag, upper, laguerre: np.ndarray, nl: int) -> comple
     return complex(values[np.argmax(values.real)])
 
 
-def _growth_excess(step: Callable, v: np.ndarray, found: complex, dt: float) -> float:
-    """Log growth per backward-Euler step of a random state, beyond that of ``found``.
+def _step_growth(step: Callable, v: np.ndarray) -> tuple[float, np.ndarray]:
+    """Mean log amplification per step of a state, over its last quarter, and the state.
 
     ``step`` applies ``(I - dt A)^{-1}``. A mode of rate ``lam`` is amplified by
-    ``1 / |1 - lam dt|`` per step, so after ``_STEPS`` steps the last quarter's
-    mean amplification exceeds that of ``found`` only if a faster mode is present
-    (up to the transient growth of a non-normal operator).
+    ``1 / |1 - lam dt|`` per step, so after ``_STEPS`` steps the state sits on the
+    mode with the largest amplification, up to the transient growth of a
+    non-normal operator.
     """
 
     ratios = []
@@ -633,7 +633,13 @@ def _growth_excess(step: Callable, v: np.ndarray, found: complex, dt: float) -> 
         w = step(v)
         ratios.append(np.log(np.linalg.norm(w) / np.linalg.norm(v)))
         v = w / np.linalg.norm(w)
-    return float(np.mean(ratios[-_STEPS // 4 :]) + np.log(abs(1 - found * dt)))
+    return float(np.mean(ratios[-_STEPS // 4 :])), v
+
+
+def _growth_excess(growth: float, found: complex, dt: float) -> float:
+    """Log growth per step beyond that of ``found``: positive means a faster mode."""
+
+    return growth + float(np.log(abs(1 - found * dt)))
 
 
 def banded_fits(shape: tuple[int, ...]) -> bool:
@@ -671,7 +677,7 @@ def _banded_ritz_pairs(
     full state shape; none is certified here.
     """
 
-    from scipy.sparse.linalg import LinearOperator, eigs
+    from scipy.sparse.linalg import ArpackNoConvergence, LinearOperator, eigs
     from solvax import (
         block_thomas_factor,
         block_thomas_solve,
@@ -736,7 +742,6 @@ def _banded_ritz_pairs(
         # Laguerre < _COARSE_NL of as many Hermite pairs as fit in _DENSE_N unknowns.
         shift = _dense_estimate(lower, diag, upper, laguerre, shape[-5])
         note(f"banded shift from a dense truncation: sigma={shift:.5g}")
-        shift += _OFFSET * scale
     sigma = complex(shift)
 
     @jax.jit  # factors are an argument: closed over, XLA would bake them in as constants
@@ -760,48 +765,86 @@ def _banded_ritz_pairs(
         matvec=lambda v: np.asarray(apply(jnp.asarray(v, v0.dtype))),
         dtype=np.complex128,
     )
-    for _ in range(_PASSES):
-        note(f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}")
-        factors = block_thomas_factor(lower, diag, upper, shift=sigma)
 
-        def solve(v, factors=factors, sigma=sigma):
-            solves[0] += 1
-            return np.asarray(inverse(factors, jnp.asarray(v, v0.dtype), sigma))
-
-        values, vectors = eigs(
-            operator,
-            k=_RITZ,
-            sigma=sigma,
-            OPinv=LinearOperator((size, size), matvec=solve, dtype=np.complex128),
-            v0=start,
-            tol=1.0e-10,
-            ncv=2 * _RITZ + 4,
-            maxiter=_RESTARTS,
-        )
-        best = complex(values[np.argmax(values.real)])
-        if abs(best - sigma) <= _RECENTER * scale:
-            break
-        sigma = (
-            best + _OFFSET * scale
-        )  # the fastest-growing Ritz value moved: follow it
-    note(f"banded Arnoldi: {solves[0]} solves")
+    # Backward-Euler power iteration from the seeded state, with a step small
+    # against the fastest plausible frequency. It serves twice: its Rayleigh
+    # quotient is a second shift estimate (the truncation can sit far from the
+    # mode: TEM at (8, 24) is 0.55 away, where ARPACK stalls), and its growth is
+    # the dominance check.
+    dt = 0.25 / max(2 * scale, 1.5 * abs(sigma.imag))
+    growth = rayleigh = None
     if auto_shift:
-        # Dominance check: the step is small against the fastest plausible frequency.
-        dt = 0.25 / max(2 * scale, 1.5 * abs(best.imag))
-        factors = block_thomas_factor(lower, diag, upper, shift=1 / dt)
-        excess = _growth_excess(
+        be_factors = block_thomas_factor(lower, diag, upper, shift=1 / dt)
+        growth, grown = _step_growth(
             lambda x: (
-                -np.asarray(inverse(factors, jnp.asarray(x, v0.dtype), 1 / dt)) / dt
+                -np.asarray(inverse(be_factors, jnp.asarray(x, v0.dtype), 1 / dt)) / dt
             ),
             start.astype(np.complex128),
-            best,
-            dt,
         )
+        g = jnp.asarray(grown, v0.dtype)
+        rayleigh = complex(jnp.vdot(g, apply(g)) / jnp.vdot(g, g))
+        note(f"banded Rayleigh quotient of the stepped state: {rayleigh:.5g}")
+
+    def ritz_passes(sigma: complex):
+        """ARPACK about ``sigma``, re-centred while the fastest Ritz value moves."""
+
+        for _ in range(_PASSES):
+            note(f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}")
+            factors = block_thomas_factor(lower, diag, upper, shift=sigma)
+
+            def solve(v, factors=factors, sigma=sigma):
+                solves[0] += 1
+                return np.asarray(inverse(factors, jnp.asarray(v, v0.dtype), sigma))
+
+            try:
+                values, vectors = eigs(
+                    operator,
+                    k=_RITZ,
+                    sigma=sigma,
+                    OPinv=LinearOperator(
+                        (size, size), matvec=solve, dtype=np.complex128
+                    ),
+                    v0=start,
+                    tol=1.0e-10,
+                    ncv=2 * _RITZ + 4,
+                    maxiter=_RESTARTS,
+                )
+            except ArpackNoConvergence as error:
+                # Keep what converged and re-centre on it: a shift off the mode by
+                # more than the local spacing stalls ARPACK, a closer one does not.
+                if not error.eigenvalues.size:
+                    raise
+                values, vectors = error.eigenvalues, error.eigenvectors
+                note(f"ARPACK kept {values.size} of {_RITZ} Ritz values at {sigma:.5g}")
+            best = complex(values[np.argmax(values.real)])
+            if abs(best - sigma) <= _RECENTER * scale:
+                break  # the nearest Ritz values are the ones that converge first
+            sigma = best + _OFFSET * scale  # the fastest Ritz value moved: follow it
+        return values, vectors, sigma, best
+
+    tries = [sigma]
+    if auto_shift:
+        assert rayleigh is not None
+        tries = [max(sigma, rayleigh, key=lambda z: z.real), rayleigh]
+    for attempt, start_shift in enumerate(tries):
+        values, vectors, sigma, best = ritz_passes(
+            start_shift + _OFFSET * scale * auto_shift
+        )
+        note(f"banded Arnoldi: {solves[0]} solves")
+        if not auto_shift:
+            break
+        assert growth is not None
+        excess = _growth_excess(growth, best, dt)
         note(f"banded dominance check: excess growth {excess:.3g} per step")
-        if excess > _DOMINANCE * max(best.real, 0.0) * dt + 1e-3:
+        if excess <= _DOMINANCE * max(best.real, 0.0) * dt + 1e-3:
+            break
+        if attempt + 1 == len(tries) or tries[1] == tries[0]:
             raise RuntimeError(
                 f"a faster mode than {best:.4g} is present (growth excess {excess:.3g} per step)"
             )
+        note(
+            f"banded shift moved to the stepped state's Rayleigh quotient {rayleigh:.5g}"
+        )
     return (
         jnp.asarray(values, v0.dtype),
         jnp.asarray(vectors.T, v0.dtype).reshape((-1, *shape)),

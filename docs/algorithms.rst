@@ -351,30 +351,39 @@ no row, so ``solvax.block_tridiagonal_from_products`` reads the matrix from
 ``solvax.block_thomas_factor(..., shift=σ)`` factors :math:`A-\sigma I` once in
 complex64, and two defect corrections against the operator restore the working
 precision of each application. ARPACK then asks for 12 eigenvalues about σ.
-Without a shift, σ is the fastest-growing eigenvalue of a dense truncation
-(the whole operator up to 3072 unknowns, else Laguerre < 3 of the leading
-Hermite pairs), and the shift follows the fastest-growing Ritz value while it
-moves by more than 0.05 :math:`\omega`-scale. The pair is then gated on the
-original operator.
+Without a shift there are two estimates. The first is the fastest-growing
+eigenvalue of a dense truncation (the whole operator up to 3072 unknowns, else
+Laguerre < 3 of the leading Hermite pairs). The second is the Rayleigh quotient
+of a random state after 60 backward-Euler steps, the power iteration of
+:math:`(I-\Delta t A)^{-1}` with
+:math:`\Delta t = 0.25/\max(2\,\omega\text{-scale}, 1.5|\omega|)`, which costs
+one more factorization (at the real shift :math:`1/\Delta t`) and 60 solves. The
+shift starts at whichever has the larger real part and follows the
+fastest-growing Ritz value while it moves by more than 0.05
+:math:`\omega`-scale. ARPACK runs at most 20 restarts per shift, and a stalled
+pass keeps the Ritz values that converged and re-centres on the best of them. The
+pair is then gated on the original operator. On the TEM deck (:math:`\nabla T =
+\nabla n = 20`) at (8, 24) the truncation gives 3.22-1.67j, 0.55 from the mode,
+and ARPACK stalls from there; the stepped state gives 3.694-1.530j, 0.06 away, and
+the route returns 3.75635-1.54022j in 121 s where ``adaptive`` needs about 1260 s. In
+the validation lane's TEM run the truncation's best eigenvalue was a damped fast
+oscillator, -0.002+12.96j; the stepped state's larger real part replaces it.
 
 The route returns the fastest-growing certified Ritz value among those nearest
 its shift, so a mode far from every shift would be missed. When the shift is
-chosen automatically, a dominance check follows. One more factorization at the
-real shift :math:`1/\Delta t` gives the backward-Euler step
-:math:`(I-\Delta t A)^{-1}`, with
-:math:`\Delta t = 0.25/\max(2\,\omega\text{-scale}, 1.5|\omega|)`. A seeded
-random state is stepped 60 times, and its mean amplification over the last 15
-steps must not exceed that of the found eigenvalue, :math:`1/|1-\lambda\Delta t|`,
-by more than :math:`0.5\gamma\Delta t`; otherwise the route raises and ``auto``
-uses ``adaptive``. It costs one factorization and 60 solves (3-5 s, about 10% of
-the run, on the table cases). The excess growth per step was -0.02 (Cyclone,
-Miller KE, ETG) and 0.002 (KBM). Forcing the old prototype's shift on KBM, which
-returns 0.0332-0.195j, gave 0.057 and is refused. The check sees a faster mode
-only if its growth-rate gap exceeds about :math:`2/(60\,\Delta t)` and its
-frequency is resolved by the step; near-degenerate competitors and fast
-oscillators are not covered. A user-supplied shift is not checked, since it asks
-for that branch. The route agrees with ``adaptive`` and with the time route
-wherever those finish.
+chosen automatically, a dominance check follows, from the same stepped state: its
+mean amplification over the last 15 steps must not exceed that of the found
+eigenvalue, :math:`1/|1-\lambda\Delta t|`, by more than
+:math:`0.5\gamma\Delta t`. If it does, the other estimate is tried; if that also
+fails, the route raises and ``auto`` uses ``adaptive``. The check adds no solves.
+The excess growth per step was -0.02 (Cyclone, Miller KE, ETG), -0.003 (TEM) and
+0.002 (KBM). Forcing the old prototype's shift on KBM, which returns
+0.0332-0.195j, gave 0.057 and is refused. The check sees a faster mode only if its
+growth-rate gap exceeds about :math:`2/(60\,\Delta t)` and its frequency is
+resolved by the step; near-degenerate competitors, fast oscillators and gaps
+smaller than that (a marginal mode of growth 0.065 on a coarse test grid) are not
+covered. A user-supplied shift is not checked, since it asks for that branch. The
+route agrees with ``adaptive`` and with the time route wherever those finish.
 
 **Measured** (office RTX A4000, shared, float64, single ky, wall time of the
 whole call; raw records in the private gkx-plan repository, ``plan/research/2026-10-18-banded-shift-invert/``):
@@ -402,6 +411,10 @@ whole call; raw records in the private gkx-plan repository, ``plan/research/2026
      - 0.3427091-0.831356j, 428 s
      - non-finite at the deck dt
      - 0.3427091-0.831356j, res 1e-9, 58 s
+   * - TEM ky 0.3, (8, 24)
+     - 3.75635-1.54022j, 1260 s
+     - not run
+     - 3.75635-1.54022j, 121 s
    * - ETG ky 15, (24, 8)
      - not finished in 40 min
      - 5.72668+13.69882j, 12 s
