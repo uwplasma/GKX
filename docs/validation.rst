@@ -526,6 +526,12 @@ not a GKX defect. The GX paper's figure is not tabulated; its initial condition,
 run length and collision settings may differ from the shipped deck. The row is
 open.
 
+Kinetic electrons (GX Table 2, :math:`Q_i/Q_{GB} = 23.6 \pm 3.2` at (4, 16),
+t = 600). Not compared. At 192x64x24 the ``imex-ars3`` factor does not fit on a
+shared 16 GB card; at 64x64x24 with (4, 16), :math:`\Delta t = 0.025`, a run to
+t = 300 had not finished after 6.5 h on a shared A4000 and was stopped, so there
+is no kinetic-electron statistic.
+
 Resolution. The 64x64 flux at 2.49 is 30% above the 192x64 value (8.82 against
 6.78), so the scan above is a trend, not a quotable flux.
 
