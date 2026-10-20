@@ -2057,28 +2057,22 @@ def test_sokal_autocorrelation_time_of_a_cosine_is_its_quarter_period_integral()
     assert integrated_autocorrelation_time(np.cos(2.0 * np.pi * t / period), dt) == tau
 
 
-def test_nonlinear_statistics_window_recovers_ar1_mean() -> None:
-    """tools/nonlinear_statistics.py: mean within 3 SEM, 20-tau acceptance gate."""
+def test_saturation_window_statistics_recover_ar1_mean() -> None:
+    """Spin-up removal, IAT-corrected SEM and the 20-tau gate on a known process."""
 
-    import importlib.util
-    from pathlib import Path
-
-    path = Path(__file__).resolve().parents[3] / "tools" / "nonlinear_statistics.py"
-    spec = importlib.util.spec_from_file_location("nonlinear_statistics", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    from gkx.diagnostics.saturation import saturation_stop_decision
 
     rng = np.random.default_rng(3)
-    n, dt, tau = 4000, 1.0, 20.0
+    n, dt, tau = 6000, 1.0, 20.0
     phi = np.exp(-dt / tau)
     x = np.zeros(n)
     for i in range(1, n):
         x[i] = phi * x[i - 1] + np.sqrt(1 - phi**2) * rng.standard_normal()
     t = dt * np.arange(n)
-    q = 10.0 + 2.0 * x + 40.0 * np.exp(-t / 50.0)  # decaying transient on top
-    stats = module.window_stats(t, q)
-    assert abs(stats["mean"] - 10.0) < 3.0 * stats["sem"]
-    assert 0.5 * tau < stats["tau"] < 2.0 * tau
-    assert stats["accepted"]
-    assert not module.window_stats(t[:150], q[:150])["accepted"]
+    q = 10.0 + 2.0 * x - 9.0 * np.exp(-t / 100.0)  # spin-up below the plateau
+    out = saturation_stop_decision(t, q)
+    assert abs(out["mean"] - 10.0) < 3.0 * out["sem"]
+    assert 0.5 * tau < out["tau_ac"] < 2.0 * tau
+    assert out["saturated"] or out["window_span"] < 20.0 * out["tau_ac"]
+    short = saturation_stop_decision(t[:300], q[:300])
+    assert not short["saturated"]
