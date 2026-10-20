@@ -14,6 +14,8 @@ from scipy.special import eval_genlaguerre, eval_laguerre, j0, j1, jv
 from scipy.special import roots_hermite, roots_laguerre
 
 from gkx.config import GridConfig
+from gkx.terms import linear_terms
+from gkx.terms.linear_terms import curvature_gradb_contribution, mirror_contribution
 from gkx.operators.collision import CollisionContext
 from gkx.core_grid import build_spectral_grid
 from gkx.core_velocity import (
@@ -2591,3 +2593,127 @@ def test_energy_flux_matches_velocity_integral(dtype, nl, b, channel):
         )[channel].sum()
     tol = 3e-6 if dtype == jnp.float32 else 2e-13
     np.testing.assert_allclose(np.asarray(flux), expected, atol=tol, rtol=tol)
+
+
+# Fused drift kernel
+
+
+def _drift_inputs(shape, seed=0):
+    rng = np.random.default_rng(seed)
+    ns, _, _, ny, nx, nz = shape
+    H = jnp.asarray(rng.standard_normal(shape) + 1j * rng.standard_normal(shape))
+    f1 = jnp.asarray(rng.standard_normal((ns, 1, 1, nz)))
+    f2, f3 = (jnp.asarray(rng.standard_normal((ns, ny, nx, nz))) for _ in range(2))
+    return H, f1, f2, f3
+
+
+def _drift_named_terms(H, f1, f2, f3):
+    nl, nm = H.shape[1:3]
+    ell = jnp.arange(nl, dtype=f1.dtype)[:, None, None, None, None]
+    m = jnp.arange(nm, dtype=f1.dtype)[:, None, None, None]
+    ones = jnp.ones(H.shape[0], dtype=f1.dtype)
+    mirror = mirror_contribution(
+        H,
+        vth=ones,
+        bgrad=f1[0, 0, 0],
+        ell=ell,
+        sqrt_m=jnp.sqrt(m),
+        sqrt_m_p1=jnp.sqrt(m + 1.0),
+        weight=jnp.asarray(1.0),
+    )
+    # f is per species and per point; one species keeps the old signature exact.
+    drift = curvature_gradb_contribution(
+        H,
+        tz=ones,
+        omega_d_scale=jnp.asarray(1.0),
+        cv_d=f2[0],
+        gb_d=f3[0],
+        ell=ell,
+        m=m,
+        imag=jnp.asarray(1j, dtype=H.dtype),
+        weight_curv=jnp.asarray(1.0),
+        weight_gradb=jnp.asarray(1.0),
+    )
+    return mirror + drift
+
+
+@pytest.mark.parametrize(
+    "shape", [(1, 3, 5, 2, 8, 16), (1, 1, 1, 3, 4, 32), (1, 2, 4, 2, 5, 24)]
+)
+def test_drift_reference_matches_the_named_terms(shape):
+    H, f1, f2, f3 = _drift_inputs(shape)
+    np.testing.assert_allclose(
+        linear_terms._reference_drift(H, f1, f2, f3),
+        _drift_named_terms(H, f1, f2, f3),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+
+
+@pytest.mark.parametrize(
+    "shape", [(2, 3, 5, 2, 8, 16), (1, 1, 1, 3, 4, 32), (1, 2, 4, 2, 5, 24)]
+)
+def test_drift_kernel_matches_reference(shape):
+    """Interpreted, so it runs on any backend; ragged ``x z`` rows exercise the padding."""
+
+    args = _drift_inputs(shape)
+    got = linear_terms._pallas_drift(*args, interpret=True)
+    np.testing.assert_allclose(
+        got, linear_terms._reference_drift(*args), rtol=1e-12, atol=1e-12
+    )
+
+
+def test_drift_derivatives_go_through_the_reference_terms(monkeypatch):
+    shape = (1, 2, 3, 2, 4, 16)
+    args = _drift_inputs(shape)
+    kernel = linear_terms._pallas_drift
+    monkeypatch.setattr(
+        linear_terms, "_pallas_drift", lambda *a: kernel(*a, interpret=True)
+    )
+    tangents = tuple(
+        jnp.cos(a.real + 1.0) + 0.5j * jnp.sin(a.real)
+        if jnp.iscomplexobj(a)
+        else jnp.cos(a + 1.0)
+        for a in args
+    )
+    primal, dot = jax.jvp(linear_terms.fused_drift, args, tangents)
+    ref_primal, ref_dot = jax.jvp(linear_terms._reference_drift, args, tangents)
+    np.testing.assert_allclose(primal, ref_primal, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(dot, ref_dot, rtol=1e-12, atol=1e-12)
+    grad = jax.grad(
+        lambda H, f2: jnp.sum(
+            jnp.abs(linear_terms.fused_drift(H, args[1], f2, args[3]))
+        )
+    )
+    ref = jax.grad(
+        lambda H, f2: jnp.sum(
+            jnp.abs(linear_terms._reference_drift(H, args[1], f2, args[3]))
+        )
+    )
+    np.testing.assert_allclose(
+        grad(args[0], args[2]), ref(args[0], args[2]), rtol=1e-10, atol=1e-12
+    )
+
+
+def test_drift_kernel_usable_only_on_gpu_with_tileable_rows():
+    H = jnp.zeros((1, 2, 2, 1, 8, 8))
+    assert linear_terms.drift_kernel_usable(H) == (jax.default_backend() == "gpu")
+    assert not linear_terms.drift_kernel_usable(jnp.zeros((1, 2, 2, 1, 2, 8)))
+
+
+@pytest.mark.parametrize("ny, rows, nz", [(8, 8, 6), (8, 5, 6), (7, 4, 4), (6, 4, 5)])
+def test_nyquist_derivative_touches_only_the_self_conjugate_rows(ny, rows, nz):
+    """The two-row fix equals the whole-array formula it replaced."""
+
+    from gkx.operators.linear.streaming import _real_fft_nyquist_derivative
+
+    rng = np.random.default_rng(1)
+    shape = (2, 3, rows, 5, nz)
+    out = jnp.asarray(rng.standard_normal(shape) + 1j * rng.standard_normal(shape))
+    row = jnp.arange(rows)
+    self_row = (row == 0) | ((ny % 2 == 0) & (row == ny // 2))
+    alt = jnp.asarray((-1.0) ** np.arange(nz))
+    comp = jnp.mean(out * alt, axis=-1, keepdims=True) * alt
+    expected = out - self_row.reshape(1, 1, -1, 1, 1) * comp if nz % 2 == 0 else out
+    got = _real_fft_nyquist_derivative(out, ny)
+    np.testing.assert_array_equal(got, expected)
