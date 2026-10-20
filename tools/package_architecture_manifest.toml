@@ -1512,7 +1512,8 @@ recursive = true
 # 73252 -> 73403: drift kernel, Nyquist row and 2-CPU guard tests. Measured.
 # 73252 -> 73274: a fixture that releases compiled executables every fifth test of the Krylov file (CI shard 8 was killed at its peak). Measured. (+3: the stepped-state test.)
 # 73428 -> 73464: measured after merging #377.
-baseline = 73464
+# 73464 -> 73474: half-layout default (#378) after #376, measured.
+baseline = 73474
 target = 35000
 
 [[line_budget_policy.counts]]
