@@ -21,6 +21,7 @@ from gkx.solvers_nonlinear_explicit import (
     _checkpoint_block_size,
     block_checkpoint_plan,
     advance_explicit_nonlinear_state,
+    advance_rk4_pi_state,
     checkpointed_explicit_scan,
     integrate_nonlinear_scan,
     make_explicit_diagnostic_step,
@@ -749,7 +750,9 @@ def test_advance_explicit_nonlinear_state_euler_projects_and_preserves_dtype() -
     assert out.dtype == jnp.float32
 
 
-@pytest.mark.parametrize("method", ["rk2", "rk3", "rk3_heun", "rk3_classic", "rk4"])
+@pytest.mark.parametrize(
+    "method", ["rk2", "rk3", "rk3_heun", "rk3_classic", "rk4", "rk4-pi"]
+)
 def test_advance_explicit_nonlinear_state_rk_methods_match_constant_rhs(
     method: str,
 ) -> None:
@@ -801,6 +804,80 @@ def test_advance_explicit_nonlinear_state_rejects_unknown_method() -> None:
             project_state=lambda state: state,
             state_dtype=jnp.float32,
         )
+
+
+def _oscillator_rhs(omega: float):
+    def rhs_fn(G):
+        return 1j * omega * G, None
+
+    return rhs_fn
+
+
+def test_rk4_pi_state_keeps_a_stable_step_and_grows_it() -> None:
+    G = jnp.asarray([1.0 + 0.0j], dtype=jnp.complex64)
+    dt = jnp.asarray(0.01, dtype=jnp.float32)
+    rhs_fn = _oscillator_rhs(1.0)
+    G_new, dt_used, dt_next = advance_rk4_pi_state(
+        G,
+        rhs_fn(G)[0],
+        dt,
+        rhs_fn=rhs_fn,
+        project_state=lambda s: s,
+        state_dtype=jnp.complex64,
+    )
+    np.testing.assert_allclose(np.asarray(G_new), np.exp(1j * 0.01), rtol=1e-6)
+    assert float(dt_used) == pytest.approx(0.01)
+    assert float(dt_next) == pytest.approx(0.013, rel=1e-5)  # fac_max = 1.3
+
+
+def test_rk4_pi_state_redoes_a_step_past_the_stability_limit() -> None:
+    G = jnp.asarray([1.0 + 0.0j], dtype=jnp.complex64)
+    dt = jnp.asarray(3.0, dtype=jnp.float32)  # omega dt = 3 > 2.82
+    rhs_fn = _oscillator_rhs(1.0)
+    G_new, dt_used, dt_next = advance_rk4_pi_state(
+        G,
+        rhs_fn(G)[0],
+        dt,
+        rhs_fn=rhs_fn,
+        project_state=lambda s: s,
+        state_dtype=jnp.complex64,
+    )
+    assert float(dt_used) == pytest.approx(1.5)  # fac_min = 0.5
+    assert abs(complex(G_new[0])) < 1.5
+    assert float(dt_next) < float(dt)
+
+
+def test_rk4_pi_diagnostic_step_carries_the_proposal_and_honors_the_cap() -> None:
+    time_step_policy = SimpleNamespace(
+        update_dt=lambda _fields, _dt_prev: jnp.asarray(0.01, jnp.float32),
+        cfl_scales=jnp.asarray([1, 1, 1, 1, 1e-7, 0.015], jnp.float32),
+        progress_total=jnp.asarray(1.0, dtype=jnp.float32),
+    )
+    step = make_explicit_diagnostic_step(
+        rhs_fn=_oscillator_rhs(1.0),
+        method="rk4-pi",
+        project_state=lambda s: s,
+        state_dtype=jnp.complex64,
+        real_dtype=jnp.float32,
+        time_step_policy=time_step_policy,
+        compute_fields_fn=lambda G, *_a, **_k: None,
+        cache=None,
+        params=None,
+        term_cfg=None,
+        external_phi=None,
+        compute_diag_from_state=lambda *_a: jnp.asarray(0.0, jnp.float32),
+        diagnostics_stride=1,
+        select_diagnostics_fn=lambda idx, **kw: kw["compute_diag_fn"](),
+        show_progress=False,
+        steps=2,
+        emit_progress_fn=lambda G, **_k: G,
+    )
+    G = jnp.asarray([1.0 + 0.0j], dtype=jnp.complex64)
+    carry = (G, G, None, jnp.asarray(0.0), jnp.asarray(0.0), jnp.asarray(1.0))
+    carry, (_diag, t_new, dt_used) = step(carry, jnp.asarray(0, jnp.int32))
+    assert float(dt_used) == pytest.approx(0.015)  # min(prev, 2 * cfl, dt_max)
+    assert float(carry[5]) == pytest.approx(0.015 * 1.3, rel=1e-5)
+    assert float(t_new) == pytest.approx(0.015)
 
 
 def test_make_explicit_diagnostic_step_forwards_runtime_policies() -> None:

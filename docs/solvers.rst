@@ -64,6 +64,19 @@ priori value (0.05 is stable at 32x32 and non-finite at t = 15 at 64x64;
 tutorial grids it does not pay.  Choose it, with ``dt`` from the kinetic
 electron deck notes, for long kinetic-electron runs at 32x32 and above.
 
+``rk4-pi`` is RK4 with an error-controlled step (opt-in, ``fixed_dt = false``).
+The embedded solution is the explicit midpoint rule built from the RK4 stages,
+so the error estimate costs no extra right-hand side.  The step follows an I
+controller on :math:`\|e\|/(10^{-2}\|G\|)` (safety 0.9, growth <= 1.3), is
+capped at twice the CFL step and at ``dt_max``, and a step with an estimate
+above three tolerances is redone once at the controller's smaller step.
+Adiabatic-electron Cyclone at 64x64x24 (4, 8), one RTX A4000, saturated window
+of ``t`` = 500: 0.34 s per unit time against 0.61 for ``rk4`` + CFL (1.8x), mean
+step 1.97x larger, :math:`Q_i` = 11.90 +- 0.25 against 11.79 +- 0.25.  The
+QHS stellarator (48x48) and the KBM deck take 1.96x and 1.77x larger steps
+with the same flux.  With kinetic electrons the CFL step is already the
+stability limit (1.03x): use ``imex-ars3`` there.
+
 On CPU, XLA spreads FFTs and contractions over the visible cores (2.2x on 16
 cores at 32x32x16).  With 2 or 3 schedulable CPUs, ``import gkx`` sets
 ``--xla_cpu_multi_thread_eigen=false`` unless ``XLA_FLAGS`` already names
