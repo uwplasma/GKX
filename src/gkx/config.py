@@ -19,7 +19,7 @@ def explicit_method_default_cfl_fac(method: str) -> float:
     method_key = method.strip().lower()
     if method_key in {"rk3", "sspx3"}:
         return 1.73
-    if method_key == "rk4":
+    if method_key in {"rk4", "rk4-pi"}:
         return 2.82
     return 1.0
 
@@ -105,27 +105,23 @@ class GridConfig:
 class TimeConfig:
     """Time integration parameters.
 
-    ``method`` and ``fixed_dt`` here differ from
-    :class:`gkx.solvers_time_explicit.ExplicitTimeConfig` (``"rk4"`` and
-    ``False``) on purpose, and the reason is ``dt``: it is a *required* field
-    there and a defaulted one here. A caller of the library struct has always
-    chosen a step, so treating it as a CFL seed is safe; a deck may not have
-    chosen one, and fourteen shipped decks and parity fixtures omit ``fixed_dt``
-    and depend on ``True``.
-
-    So the pairing, not either field alone, is what is defaulted. A deck that
-    chooses ``dt`` gets ``rk2`` at that fixed step -- the cheaper scheme, since
-    a fixed step gives rk4 no step-size compensation for its four stages. A deck
-    that chooses no ``dt`` gets the step from the CFL controller and ``rk4``
-    with it, which reaches a given horizon in 29.1% fewer right-hand-side
-    evaluations than ``rk2`` because its CFL prefactor is 2.82 against 1.0.
-    ``gkx.workflows.runtime.toml._normalize_time_overrides`` applies that
-    coupling and carries the measurement.
+    One policy for the API and for a deck. A caller that chooses ``dt`` gets
+    ``rk2`` at that fixed step: the cheaper scheme, since a fixed step gives
+    ``rk4`` no step-size compensation for its four stages. A caller that
+    chooses no ``dt`` gets the step from the CFL controller and ``rk4`` with it,
+    which reaches a given horizon in 29.1% fewer right-hand-side evaluations
+    than ``rk2`` because its CFL prefactor is 2.82 against 1.0
+    (``gkx.workflows.runtime.toml._normalize_time_overrides`` carries the
+    measurement). ``dt``, ``method`` and ``fixed_dt`` default to ``None`` and are
+    resolved in ``__post_init__``; an explicit value always wins. Before this,
+    a bare ``TimeConfig()`` was ``rk2`` at a fixed ``dt = 0.1``, which overflows
+    on most decks.
     """
 
     t_max: float = 100.0
-    dt: float = 0.1
-    method: str = "rk2"
+    dt: float = None  # type: ignore[assignment]  # resolved in __post_init__
+    method: str = None  # type: ignore[assignment]
+    fixed_dt: bool = None  # type: ignore[assignment]
     sample_stride: int = 1
     diagnostics_stride: int = 1
     diagnostics: bool = True
@@ -135,7 +131,6 @@ class TimeConfig:
     implicit_preconditioner: str | None = None
     state_sharding: str | None = None
     progress_bar: bool = False
-    fixed_dt: bool = True
     dt_min: float = 1.0e-7
     dt_max: float | None = None
     cfl: float = 0.9
@@ -157,6 +152,17 @@ class TimeConfig:
     damp_ends_rate: float | None = None
 
     def __post_init__(self) -> None:
+        # One policy for the API and for a deck: no ``dt`` chosen means the CFL
+        # controller sets the step, with ``rk4``; a chosen ``dt`` is a fixed step
+        # with ``rk2``. Explicit ``method`` or ``fixed_dt`` always win.
+        chosen = self.dt is not None
+        for name, value in (
+            ("dt", 0.1),
+            ("method", "rk2" if chosen else "rk4"),
+            ("fixed_dt", chosen),
+        ):
+            if getattr(self, name) is None:
+                object.__setattr__(self, name, value)
         rate = self.damp_ends_rate
         if rate is not None and (not math.isfinite(rate) or rate < 0.0):
             raise ValueError("time.damp_ends_rate must be finite and nonnegative")

@@ -314,7 +314,9 @@ def _normalize_time_overrides(overrides: Any) -> dict[str, Any] | None:
 
     raw = dict(overrides) if isinstance(overrides, dict) else {}
     if "dt" in raw:
-        return raw or None
+        raw.setdefault("fixed_dt", True)
+        raw.setdefault("method", "rk2")
+        return raw
     # No step was chosen: hand the step to the CFL controller and give it the
     # scheme that makes the controller's step cheapest. An explicit ``method``
     # or ``fixed_dt`` in the deck still wins.
