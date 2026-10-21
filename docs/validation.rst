@@ -423,6 +423,29 @@ optimization remains unpromoted: the selected optimized-equilibrium summaries
 do not carry auditable raw-source, stationarity, uncertainty, resolution and
 spectral evidence.
 
+Nonlinear heat-flux statistics
+------------------------------
+
+Cyclone ITG, adiabatic electrons, 192x64x24, (Nl, Nm) = (4, 8), :math:`\nu_{ii} = 0.01`, fp32; mean :math:`\pm` Sokal-IAT standard error after dropping spin-up, windows of about 20 :math:`\tau` (ledger rows ``N-cyclone-gx-table1``, ``N-dimits-scan``). Agreement means within two combined standard errors.
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`a/L_T`
+     - GKX
+     - GX 3865a537 + dampEnds repair (self-run)
+     - GX paper Table 1
+   * - 2.49
+     - 6.78 +- 0.19
+     - 6.66 +- 0.25
+     - 7.2 +- 0.8
+   * - 1.5
+     - 1.64 +- 0.22
+     - 1.47 +- 0.28
+     - suppressed (figure)
+
+The Dimits shift is not reproduced by either code on the shipped deck (open). No kinetic-electron comparison.
+
 Benchmarks
 ----------
 

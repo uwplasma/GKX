@@ -38,7 +38,7 @@
 # resolution-limited rather than converged.
 
 schema_version = 1
-updated = "2026-10-19"
+updated = "2026-10-20"
 
 # ---------------------------------------------------------------- README parity
 
@@ -379,3 +379,26 @@ reference_rank = 5
 tier = 3
 status = "provisional"
 notes = "GKX eigenpairs agree with GX to 3e-4 relative in gamma and omega at ky 0.5-1.5 (seven points); at ky 0.3 gamma is -0.5% and omega unsettled in GX (0.012 against 0.066). The GX geometry script failed on this equilibrium (an array with an extra axis in the interpolation) and the eik file was generated with the same script after squeezing the arrays; GKX imports that geometry. The equilibrium is the cutstudy HSX QHS vacuum wout, not the Nuhrenberg-Zille example of the L-lin-hsx row. One velocity resolution."
+
+[[row]]
+id = "N-cyclone-gx-table1"
+claim = "nonlinear Cyclone ITG heat flux, adiabatic electrons, a/LT 2.49, 192x64x24 (4,8), against GX"
+observable = "Q_i/Q_GB, Sokal-IAT standard error, agreement within two combined errors"
+artifact = "docs/validation.rst"
+generator = "retired@gkx-plan plan/research/2026-10-20-nonlinear-stats/nonlinear_statistics.py"
+reference = "GX paper Table 1 (doi:10.1017/S0022377824000631) 7.2 +- 0.8; repaired GX self-run 6.66 +- 0.25"
+reference_rank = 2
+tier = 3
+status = "passing"
+
+[[row]]
+id = "N-dimits-scan"
+claim = "Dimits shift in nonlinear Cyclone ITG: not reproduced by GKX or repaired GX on the shipped deck"
+observable = "Q_i/Q_GB at a/LT 1.5: GKX 1.64 +- 0.22, repaired GX 1.47 +- 0.28"
+artifact = "docs/validation.rst"
+generator = "retired@gkx-plan plan/research/2026-10-20-nonlinear-stats/nonlinear_statistics.py"
+reference = "Dimits et al., Phys. Plasmas 7, 969 (2000); GX paper Sec. 6.1.2"
+reference_rank = 2
+tier = 3
+status = "open"
+notes = "records and scan in gkx-plan plan/research/2026-10-20-nonlinear-stats"
