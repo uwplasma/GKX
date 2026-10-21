@@ -1493,8 +1493,7 @@ def build_chain_implicit_linear(
     if not err < check_tol:
         raise ValueError(
             f"structured implicit factor residual {err:.2e} > {check_tol:.0e}: the "
-            "stiff operator is not block-tridiagonal in Hermite with z-local fields; "
-            'use method = "rk4" (explicit, CFL-limited) for this case'
+            'stiff operator is not block-tridiagonal in Hermite with z-local fields; use method = "rk4"'
         )
     object.__setattr__(op, "_raw", tuple(raw for _g, raw in built))
     _FACTORS.update({reuse: op} if reuse else {})
