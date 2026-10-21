@@ -18,7 +18,7 @@ What you get when you change nothing, and when to change it.
      - Default
      - Change it when
    * - Time stepper
-     - ``rk4`` with the CFL controller (TOML); ``rk2`` for a bare ``TimeConfig()``
+     - ``rk4`` with the CFL controller when no ``dt`` is given (deck or ``TimeConfig()``); ``rk2`` at a fixed step when ``dt`` is given
      - kinetic electrons at 32x32 and up (``imex-ars3``); a published step (``rk3`` at fixed ``dt``)
    * - Linear growth rates
      - ``solver`` ``auto``: banded shift-invert, else ``adaptive``, certified

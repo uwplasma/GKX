@@ -2972,3 +2972,16 @@ def test_nonlinear_run_finishes_on_two_cpus(tmp_path):
     subprocess.run(
         [sys.executable, "-c", code], cwd=tmp_path, env=env, timeout=300, check=True
     )
+
+
+def test_time_config_defaults_follow_one_policy_for_api_and_deck() -> None:
+    """No ``dt``: ``rk4`` with the CFL controller. A ``dt``: ``rk2`` at that step."""
+
+    from gkx.config import TimeConfig
+
+    bare = TimeConfig()
+    assert (bare.method, bare.fixed_dt) == ("rk4", False)
+    chosen = TimeConfig(dt=0.02)
+    assert (chosen.method, chosen.fixed_dt, chosen.dt) == ("rk2", True, 0.02)
+    assert TimeConfig(method="rk3").fixed_dt is False
+    assert TimeConfig(dt=0.02, method="rk3", fixed_dt=False).fixed_dt is False

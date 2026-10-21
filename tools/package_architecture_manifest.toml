@@ -1167,7 +1167,8 @@ recursive = true
 # 68110 -> 68320: fused GPU drift kernel, shared-pad (l, m) views, Nyquist row fix, 2-CPU hang notes. Measured.
 # 68110 -> 68153: banded shift estimator (stepped-state Rayleigh quotient, partial ARPACK results). Measured.
 # 68363 -> 68433: rk4-pi (embedded-error RK4 step, one redo) on top of #377, measured.
-baseline = 68433
+# 68433 -> 68441: TimeConfig default (#379) after #381, measured.
+baseline = 68441
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1515,7 +1516,8 @@ recursive = true
 # 73428 -> 73464: measured after merging #377.
 # 73464 -> 73474: half-layout default (#378) after #376, measured.
 # 73474 -> 73551: rk4-pi step, redo and controller-carry tests. Measured.
-baseline = 73551
+# 73551 -> 73564: TimeConfig default (#379) after #381, measured.
+baseline = 73564
 target = 35000
 
 [[line_budget_policy.counts]]
