@@ -1995,16 +1995,18 @@ def test_the_half_axis_weight_sums_a_non_zero_nyquist_row_correctly(ny: int) -> 
     )
 
 
-def test_the_default_deck_builds_the_two_sided_axis() -> None:
-    """``[grid] ky_layout`` defaults to ``"full"``; ``"half"`` is an opt-in."""
+def test_the_default_deck_builds_the_half_axis() -> None:
+    """``[grid] ky_layout`` defaults to ``"half"``; ``"full"`` is the opt-out."""
 
     from gkx.config import GridConfig
     from gkx.core_grid import build_spectral_grid
 
-    assert GridConfig().ky_layout == FULL
+    assert GridConfig().ky_layout == HALF
     grid = build_spectral_grid(GridConfig(Nx=4, Ny=8, Nz=2))
-    assert source_ky_layout(grid) == FULL
-    assert int(grid.ky.size) == 8
+    assert source_ky_layout(grid) == HALF
+    assert int(grid.ky.size) == 5
+    full = build_spectral_grid(GridConfig(Nx=4, Ny=8, Nz=2, ky_layout="full"))
+    assert source_ky_layout(full) == FULL and int(full.ky.size) == 8
 
 
 @pytest.mark.parametrize("ny", (4, 8, 16, 32))
@@ -2945,3 +2947,28 @@ def test_cpu_thread_defaults_only_below_four_cpus(monkeypatch):
         monkeypatch.setenv("XLA_FLAGS", user_flags)
         gkx._cpu_thread_defaults()
         assert os.environ["XLA_FLAGS"] == expected
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    not hasattr(__import__("os"), "sched_setaffinity"), reason="needs CPU affinity"
+)
+def test_nonlinear_run_finishes_on_two_cpus(tmp_path):
+    """Reproducer for the guard: with the Eigen pool on, two schedulable CPUs hung
+    the second step of a 32x32x16 nonlinear run inside XLA:CPU (jax 0.11.2)."""
+
+    import os
+    from pathlib import Path
+
+    deck = Path(__file__).parents[3] / "examples/03_nonlinear_tokamak/case.toml"
+    text = deck.read_text().replace("Nx = 16\nNy = 16", "Nx = 32\nNy = 32")
+    (tmp_path / "case.toml").write_text(text)
+    code = (
+        "import os; os.sched_setaffinity(0, sorted(os.sched_getaffinity(0))[:2]); "
+        "import gkx; c = gkx.load('case.toml'); "
+        "gkx.solve(c, ky_target=0.3, Nl=2, Nm=4, steps=4)"
+    )
+    env = {k: v for k, v in os.environ.items() if k != "XLA_FLAGS"}
+    subprocess.run(
+        [sys.executable, "-c", code], cwd=tmp_path, env=env, timeout=300, check=True
+    )

@@ -16,10 +16,18 @@ def _cpu_thread_defaults() -> None:
     runners), nonlinear runs at 32x32x16 deadlocked inside XLA:CPU with every
     thread parked (jax 0.11.2, 5/5 attempts); 1, 4, 5, 6, 8 and 16 CPUs did
     not, and the single-threaded pool ran them. From four CPUs up the pool is
-    left on: at 16 cores it is 1.6x faster on that grid. An explicit
-    ``xla_cpu_multi_thread_eigen`` in ``XLA_FLAGS`` always wins. JAX reads the
-    variable when it creates the CPU client, so setting it here, before any
-    computation, is in time.
+    left on. An explicit ``xla_cpu_multi_thread_eigen`` in ``XLA_FLAGS`` always
+    wins. JAX reads the variable when it creates the CPU client, so setting it
+    here, before any computation, is in time.
+
+    The hang needs the nonlinear bracket and a second step; it starts at
+    ``Nx = Ny = 28`` (``Nz >= 16``) and is absent at 24 and below or at
+    ``Nz = 8``. Euler, periodic boundaries and the full-complex bracket hang
+    too; the legacy runtime, the concurrency scheduler, XNNPACK and oneDNN
+    switches do not remove it, and no single op in the step hangs alone.
+    ``test_nonlinear_run_finishes_on_two_cpus`` runs that deck on two CPUs under
+    the guard; adding ``--xla_cpu_multi_thread_eigen=true`` to ``XLA_FLAGS``
+    reproduces the hang.
     """
 
     flags = os.environ.get("XLA_FLAGS", "")

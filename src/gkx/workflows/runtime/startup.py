@@ -296,15 +296,18 @@ def _raise_unsupported_reduced_model(cfg: RuntimeConfig) -> NoReturn:
 
 
 def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
-    """Return the residual-certified adaptive eigensolve for every contract.
+    """Return ``auto``: Hermite-banded shift-invert where it fits, else adaptive.
 
-    ETG and KBM used shift-invert defaults whose inner solves never converged
-    on the shipped decks (residual=nan on KBM case_full, ETG etg_linear); the
-    adaptive route certifies the dominant pair or fails with its residual.
+    ``auto`` runs the banded direct route when its block bands fit in memory and
+    falls back to the residual-certified ``adaptive`` route if the operator is
+    not Hermite-banded or the pair misses the original-operator gate. Both gate
+    on the original operator, so no contract returns an uncertified pair. The
+    pr3-cm shift-invert defaults of ETG and KBM never converged their inner
+    solves (2026-10-15), which is why neither is the default.
     """
 
     del cfg
-    return KrylovConfig(method="adaptive")
+    return KrylovConfig()
 
 
 # Velocity-space fallback for a linear call that names no (Nl, Nm). It was

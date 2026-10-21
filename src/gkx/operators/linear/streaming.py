@@ -72,11 +72,25 @@ def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.n
         or out.shape[-3] not in (int(ny_full), nyc_from_ny(ny_full))
     ):
         return out
-    row = jnp.arange(out.shape[-3])
-    self_row = (row == 0) | ((int(ny_full) % 2 == 0) & (row == int(ny_full) // 2))
+    ny = int(ny_full)
     alternating = jnp.asarray((-1.0) ** np.arange(out.shape[-1]), jnp.real(out).dtype)
-    component = jnp.mean(out * alternating, axis=-1, keepdims=True) * alternating
-    return out - self_row.reshape((1,) * (out.ndim - 3) + (-1, 1, 1)) * component
+    rows = [0] + ([ny // 2] if ny % 2 == 0 and ny // 2 < out.shape[-3] else [])
+
+    def component(part):
+        return jnp.mean(part * alternating, axis=-1, keepdims=True) * alternating
+
+    def scatter(out):  # XLA:CPU turns a concatenate here into a slow copy fusion
+        return out.at[..., rows, :, :].add(-component(out[..., rows, :, :]))
+
+    def concatenate(out):
+        pieces, start = [], 0
+        for row in rows:
+            part = out[..., row : row + 1, :, :]
+            pieces += [out[..., start:row, :, :], part - component(part)]
+            start = row + 1
+        return jnp.concatenate([*pieces, out[..., start:, :, :]], axis=-3)
+
+    return jax.lax.platform_dependent(out, cpu=scatter, default=concatenate)
 
 
 def _shift_kx_linked(
@@ -525,6 +539,12 @@ def _linked_fft_apply(
             Ny=Ny,
             Nz=Nz,
         )
+    # Materialized before the conjugate restore: unbarriered, XLA:CPU fuses the
+    # output gather into the restore and the derivative and recomputes it (2.4x
+    # on the stacked streaming and hypercollision pair). On GPU it costs 30%.
+    out = jax.lax.platform_dependent(
+        out, cpu=jax.lax.optimization_barrier, default=lambda x: x
+    )
     out = _restore_linked_real_fft_conjugates(
         out, covered_rows=covered_rows, ny_full=ny_full
     )

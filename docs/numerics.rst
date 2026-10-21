@@ -72,8 +72,8 @@ What a first run gets
 Defaults for a deck that leaves a choice open, each backed by a
 load-independent measurement (:ref:`q28-defaults`):
 
-- **Eigen route:** ``adaptive``, the residual-certified propagator eigensolve
-  (:doc:`solvers`).
+- **Eigen route:** ``auto``, banded direct shift-invert where it fits, else
+  ``adaptive``, the residual-certified propagator eigensolve (:doc:`solvers`).
 - **Precision:** ``complex64``. On ``01_linear_tokamak/case_full.toml`` float32
   gives :math:`\gamma = 0.09309106` against float64's :math:`0.09309117`
   (1.2e-6 relative); ``JAX_ENABLE_X64=true`` applies the float64 certification
@@ -236,9 +236,12 @@ restarts, NetCDF output, spectra and snapshots. A real field obeys
   blanket factor of two, which over-counts the Nyquist row. A flux on that row
   vanishes for a real field, and two-thirds dealiasing zeroes it anyway.
 
-Decks opt into ``[grid] ky_layout = "half"``; the default stays ``"full"``
-because the checkpointed heat-flux gradient is slower on the half axis
-(:doc:`performance`).
+``[grid] ky_layout = "half"`` is the default; ``"full"`` is the opt-out. On
+Cyclone at ``24x24x24`` to ``64x64x24`` the two layouts agree to 2e-16 (x64) and
+2e-7 (float32) in the nonlinear diagnostics, with even and odd ``Nyc``, with
+``state_sharding = "ky"`` on four forced CPU devices, and bitwise in the
+heat-flux window value and gradient; ``"half"`` runs the window gradient in 0.68
+(CPU) to 0.72 (GPU) of the two-sided time (:doc:`performance`).
 
 Equilibrium-flow shearing coordinates
 -------------------------------------

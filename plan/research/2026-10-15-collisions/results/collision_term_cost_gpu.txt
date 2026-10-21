@@ -1,9 +1,0 @@
-# collision term alone (rhs_cost.py, parity-blocked Landau apply), office GPU0 shared, float64, Cyclone grid 16x8x32, one species; median of 20
-RESULT {"model": "dougherty", "Nl": 8, "Nm": 32, "shape": [1, 8, 32, 16, 8, 32], "collision_ms": 2.994, "rhs_ms": 1705.322, "cache_build_s": 7.33, "host": "Linux-x86_64-gpu"}
-RESULT {"model": "landau", "Nl": 8, "Nm": 32, "shape": [1, 8, 32, 16, 8, 32], "collision_ms": 8.369, "rhs_ms": 991.09, "cache_build_s": 11.41, "host": "Linux-x86_64-gpu"}
-RESULT {"model": "dougherty", "Nl": 8, "Nm": 32, "shape": [1, 8, 32, 16, 8, 32], "collision_ms": 2.581, "rhs_ms": 1288.466, "cache_build_s": 7.33, "host": "Linux-x86_64-gpu"}
-RESULT {"model": "landau", "Nl": 8, "Nm": 32, "shape": [1, 8, 32, 16, 8, 32], "collision_ms": 8.297, "rhs_ms": 841.412, "cache_build_s": 11.41, "host": "Linux-x86_64-gpu"}
-RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "shape": [1, 16, 48, 16, 8, 32], "collision_ms": 3.152, "rhs_ms": 1401.003, "cache_build_s": 3.16, "host": "Linux-x86_64-gpu"}
-RESULT {"model": "landau", "Nl": 16, "Nm": 48, "shape": [1, 16, 48, 16, 8, 32], "collision_ms": 65.645, "rhs_ms": 1509.953, "cache_build_s": 45.26, "host": "Linux-x86_64-gpu"}
-RESULT {"model": "dougherty", "Nl": 16, "Nm": 48, "shape": [1, 16, 48, 16, 8, 32], "collision_ms": 3.104, "rhs_ms": 1853.346, "cache_build_s": 3.16, "host": "Linux-x86_64-gpu"}
-RESULT {"model": "landau", "Nl": 16, "Nm": 48, "shape": [1, 16, 48, 16, 8, 32], "collision_ms": 65.756, "rhs_ms": 1581.59, "cache_build_s": 45.26, "host": "Linux-x86_64-gpu"}

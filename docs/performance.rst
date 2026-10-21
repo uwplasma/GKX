@@ -35,6 +35,35 @@ finite CPU/GPU numerical checks; its office-GPU timings are kept as rejected
 provenance because both A4000s were already fully loaded, so they do not update
 the published speed claim.
 
+Explicit-step kernels
+---------------------
+
+The mirror, curvature and grad-B terms shift ``H`` by up to two Hermite and one
+Laguerre index. XLA lowers every shifted view as its own sweep of the state; at
+``64x64x24``, ``(Nl, Nm) = (4, 8)`` in ``float32`` the Laguerre stride is 6 MB
+against a 4 MB L2 on an RTX A4000, so each view costs a DRAM pass. Those fused
+RHS kernels ran at 14--60 GB/s of a 448 GB/s peak and were 55 per cent of the
+explicit step. ``gkx.terms.linear_terms.fused_drift`` reads each
+``(l, m)`` neighbourhood once per tile in a Pallas (Triton) kernel on real and
+imaginary planes, the form Triton accepts: 0.15 ms for the three terms against
+2.2 ms, at round-off agreement with the ``jnp`` terms (``1.8e-7`` relative in
+``float32``, ``1.7e-16`` in ``float64``). It runs on NVIDIA GPUs when
+``Nx*Nz >= 64`` and ``Nl*Nm <= 256``; CPU, other GPUs, Hermite-sharded slabs and
+the per-term diagnostics keep the ``jnp`` terms, which are also what forward-
+and reverse-mode derivatives go through.
+
+Two smaller changes apply on every backend. The ``jnp`` terms slice one padded
+copy of ``H`` instead of padding per shift, which on XLA:CPU removes the
+recomputation of ``H`` in each view (bitwise identical). The Nyquist fix of the
+linked streaming output touches the two self-conjugate rows rather than
+reducing over the whole state (bitwise identical; the stacked streaming and
+hypercollision transform at ``(8, 16)`` went from 5.6 to 3.6 ms on GPU). It is
+a concatenate on GPU and an in-place scatter on CPU, where XLA turns the
+concatenate into a copy fusion twice as slow as the whole-state version. On XLA:CPU the
+linked output is also materialized before the conjugate restore, which
+otherwise fuses the gather into the restore and recomputes it; on GPU that
+barrier costs 30 per cent and is not applied.
+
 Running on CPU
 --------------
 
@@ -68,25 +97,37 @@ axis. Completing once per step instead of once per RHS is bitwise identical but
 makes XLA:CPU materialize 2.3--2.7 times more bytes on the runtime route, so
 what removes the concatenate is the state layout. The layout rule is written
 down and tested as the ``ky`` layout contract (:mod:`gkx.core_ky_layout`, see
-:doc:`numerics`), and the half-spectrum layout is available below the runtime.
+:doc:`numerics`), and the half-spectrum layout is the runtime default.
 On a linked Cyclone deck (XLA:CPU, ``jax`` 0.10.2) lowering onto the half
 layout removes the completion entirely -- the ``reverse`` count goes to zero --
 and cuts the bytes owned by materialized ``copy``/``concatenate`` buffers by
 73.5 per cent (rk3) and 71.4 per cent (rk4) on the RK step at ``32x32x24`` and
 by 72.4 and 70.3 per cent at ``64x64x24``, against a state that is only 46.9 per
 cent smaller. Those are byte counts from the compiled module, not wall-clock.
-The runtime still builds a two-sided grid by default, and no part of the 41.9
-per cent is claimed as recovered.
+The runtime now builds the half grid by default; ``ky_layout = "full"`` keeps
+the two-sided state and its completion.
 
 The supported CPU mode is ordinary serial execution with XLA threading its own
 kernels; ``[parallel] strategy = "serial"`` is the default. XLA uses only about
 3 of 14 cores during stepping on the M3 Max, because the dominant copy kernels
 do not parallelize; that headroom is a limitation of the current kernel mix
-rather than a configuration mistake. Do **not** set
+rather than a configuration mistake. The compiled module says why: XLA gives
+nearly every fusion at most four tasks (``outer_dimension_partitions`` in its
+backend config; two for most of the RHS fusions at ``32x32x24``), however many
+threads exist, and 40--50 per cent of the ops are not partitioned at all. A float32
+RK3 step at ``64x64x24``, ``(4, 8)`` on a shared 36-thread Xeon (load 12--17),
+in ms for 1, 4, 8 and 16 threads, was 1357, 1294, 1193, 1229 before the changes
+above and 660, 539, 526, 527 after; at ``32x32x24`` it was 303, 306, 273, 276
+and 125, 121, 138, 109. The code is twice as fast at every thread count, but
+neither version scales past four threads.
+Do **not** set
 ``XLA_FLAGS=--xla_force_host_platform_device_count=N`` for a production CPU run:
 it splits one thread pool into ``N`` virtual devices, and a serial run measured
 34 per cent slower with it. Forced CPU devices are for identity testing of the
-sharded routes in :doc:`parallelization`, not for speed.
+sharded routes in :doc:`parallelization`, not for speed; ``pmap`` or
+``shard_map`` of the linear RHS over two or more of them segfaulted XLA:CPU's
+compiler on ``jax`` 0.11.2, and the nonlinear ``state_sharding`` route gathers
+the state each step, so it does not divide the work either.
 
 Persistent compilation cache
 ----------------------------

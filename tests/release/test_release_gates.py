@@ -3918,3 +3918,39 @@ def test_rows_without_an_ell_space_sink_report_their_limit(row: dict) -> None:
         f"{row['id']}: velocity_limit = {limit!r} needs velocity_limit_evidence "
         "naming where it was measured, or why it is unmeasured."
     )
+
+
+def test_tem_deck_and_reference_are_the_dannert_jenko_case() -> None:
+    """Dannert & Jenko (2005) nominal TEM: deck parameters and the GS2 reference.
+
+    R/Ln = 3, R/LTe = 6, R/LTi = 0, Te/Ti = 3, eps = 0.16, q = 1.4, s_hat = 0.8,
+    m_i/m_e = 1836; the ky grid sits on multiples of ky rho_s = 0.1 through
+    ky = ky rho_s / sqrt(3). The converged GS2 growth rate at ky rho_s = 0.3 is
+    the number the ledger row quotes.
+    """
+
+    root = RUN_TO_REPO_ROOT
+    deck = tomllib.loads(
+        (
+            root / "tools/comparison/fixtures/parity/tem_dannert_jenko_2005.toml"
+        ).read_text()
+    )
+    ion, electron = deck["species"]
+    assert (ion["fprim"], electron["fprim"]) == (3.0, 3.0)
+    assert (ion["tprim"], electron["tprim"]) == (0.0, 6.0)
+    assert electron["temperature"] / ion["temperature"] == 3.0
+    assert 1.0 / electron["mass"] == pytest.approx(1836.0, abs=0.5)
+    geometry = deck["geometry"]
+    assert (geometry["q"], geometry["s_hat"], geometry["epsilon"]) == (1.4, 0.8, 0.16)
+    assert deck["grid"]["y0"] == pytest.approx(3.0**0.5 / 0.1)
+    assert deck["run"]["ky"] == pytest.approx(0.3 / 3.0**0.5)
+    with (root / "docs/_static/cross_code_linear_points.csv").open() as handle:
+        gs2 = [
+            row
+            for row in csv.DictReader(handle)
+            if (row["case"], row["code"], row["resolution"], row["ky"])
+            == ("tem_dj2005", "gs2", "t2", "0.3")
+        ]
+    assert len(gs2) == 1
+    assert float(gs2[0]["gamma"]) == pytest.approx(0.8694, abs=5e-5)
+    assert float(gs2[0]["omega"]) == pytest.approx(-1.2723, abs=5e-5)

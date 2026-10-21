@@ -1,7 +1,13 @@
-"""Adaptive, residual-certified full-operator propagator eigensolve."""
+"""Adaptive, residual-certified full-operator propagator eigensolve.
+
+The Hermite-banded shift-invert (:func:`banded_ritz_pairs`) is the direct route
+to the same eigenpairs and shares the file's eigenpair contract.
+"""
 
 from __future__ import annotations
 
+import os
+from collections.abc import Callable
 from typing import NamedTuple
 import jax
 import jax.numpy as jnp
@@ -18,6 +24,7 @@ from gkx.operators.linear.params import (
 from gkx.solvers_linear_krylov_algorithms import (
     _apply_operator,
     _linked_covered_mode_mask,
+    _omega_scale,
     _project_to_linked_cover,
     _require_linked_cover_seed,
     dominant_eigenpair_propagator_cached,
@@ -548,9 +555,308 @@ def adaptive_propagator_eigenpair(
     )
 
 
+# --- Hermite-banded shift-invert ---------------------------------------------
+#
+# Hermite-banded direct shift-invert for the single-ky linear operator.
+#
+# At one ky the operator couples Hermite m only to m +- 2 (streaming, mirror and
+# A_par move m by one, the drifts by two, and the field response and collisions
+# stay inside that band). Grouping m in pairs therefore makes it exactly block
+# tridiagonal, with blocks of ``2 ns Nl Nz`` unknowns. The blocks are read off
+# GKX's own operator in ``3 ceil(m / batch)`` batched products
+# (:func:`solvax.block_tridiagonal_from_products`; the prototype matched the
+# matrix-free operator to 4e-16), factored once per shift in complex64 by
+# :func:`solvax.block_thomas_factor`, and one defect correction against the
+# operator restores the working precision of each application. ARPACK runs
+# shift-invert on that inverse; the caller certifies the Ritz pairs against the
+# original operator.
+#
+# Without a shift, a dense eigensolve of a leading truncation (everything up to
+# ``_DENSE_N`` unknowns, else Laguerre < ``_COARSE_NL`` of the first Hermite
+# pairs) places it, and it follows the fastest-growing Ritz value while that
+# moves. Dominance is that of the nearest ``_RITZ`` eigenvalues, not a proof.
+_COARSE_NL = 3  # Laguerre moments kept in the dense shift estimate
+_DENSE_N = 3072  # unknowns of the largest dense estimate
+_RITZ = 12  # eigenvalues asked of ARPACK around the shift
+_PASSES = 4  # shifts tried while the fastest-growing Ritz value keeps moving
+_RECENTER = 0.05  # that movement, in omega_scale, that starts another pass
+_REFINE = 2  # defect corrections per application
+_DOMINANCE = 0.5  # excess growth, in units of best gamma*dt, that refuses the pair
+_STEPS = 60  # backward-Euler steps of the dominance check
+_RESTARTS = 20  # ARPACK restarts allowed per shift before the route gives up
+_OFFSET = 1.0e-3  # step (in omega_scale) from the estimate to the shift
+_BAND_TOL = (
+    1.0e-4  # relative mismatch of the blocks against the operator that is refused
+)
+
+
+def _dense_estimate(lower, diag, upper, laguerre: np.ndarray, nl: int) -> complex:
+    """Fastest-growing eigenvalue of a dense leading truncation of the blocks.
+
+    The whole operator if it has at most ``_DENSE_N`` unknowns, else Laguerre
+    < ``_COARSE_NL`` of as many leading Hermite pairs (at least two) as fit.
+    ``laguerre`` holds each block unknown's Laguerre index, padding above ``nl``.
+    """
+
+    cut = nl if (laguerre < nl).sum() <= _DENSE_N else _COARSE_NL
+    rows = [np.flatnonzero(row < cut) for row in laguerre]
+    fit = np.searchsorted(np.cumsum([r.size for r in rows]), _DENSE_N, side="right")
+    rows = rows[: max(int(fit), 2)]
+    edge = np.cumsum([0] + [r.size for r in rows])
+    dense = np.zeros((edge[-1], edge[-1]), np.complex128)
+    for b, r in enumerate(rows):
+        span = slice(edge[b], edge[b + 1])
+        dense[span, span] = np.asarray(diag[b])[np.ix_(r, r)]
+        if b:
+            dense[span, edge[b - 1] : edge[b]] = np.asarray(lower[b])[
+                np.ix_(r, rows[b - 1])
+            ]
+        if b + 1 < len(rows):
+            dense[span, edge[b + 1] : edge[b + 2]] = np.asarray(upper[b])[
+                np.ix_(r, rows[b + 1])
+            ]
+    values = np.linalg.eigvals(dense)
+    return complex(values[np.argmax(values.real)])
+
+
+def _step_growth(step: Callable, v: np.ndarray) -> tuple[float, np.ndarray]:
+    """Mean log amplification per step of a state, over its last quarter, and the state.
+
+    ``step`` applies ``(I - dt A)^{-1}``. A mode of rate ``lam`` is amplified by
+    ``1 / |1 - lam dt|`` per step, so after ``_STEPS`` steps the state sits on the
+    mode with the largest amplification, up to the transient growth of a
+    non-normal operator.
+    """
+
+    ratios = []
+    for _ in range(_STEPS):
+        w = step(v)
+        ratios.append(np.log(np.linalg.norm(w) / np.linalg.norm(v)))
+        v = w / np.linalg.norm(w)
+    return float(np.mean(ratios[-_STEPS // 4 :])), v
+
+
+def _growth_excess(growth: float, found: complex, dt: float) -> float:
+    """Log growth per step beyond that of ``found``: positive means a faster mode."""
+
+    return growth + float(np.log(abs(1 - found * dt)))
+
+
+def banded_fits(shape: tuple[int, ...]) -> bool:
+    """Whether the four complex64 block arrays fit in half the default device's memory."""
+
+    nm = shape[-4]
+    need = 8 * 4 * (nm // 2 + nm % 2) * (2 * int(np.prod(shape)) // nm) ** 2
+    stats = jax.devices()[0].memory_stats() or {}
+    limit = stats.get("bytes_limit") or os.sysconf("SC_PAGE_SIZE") * os.sysconf(
+        "SC_PHYS_PAGES"
+    )
+    return nm >= 4 and need <= limit / 2
+
+
+def banded_ritz_pairs(*args, **kwargs):
+    """Eigenpairs near a shift from the Hermite-banded factor; see ``_banded_ritz_pairs``."""
+
+    # TF32 matmuls on GPU would put the factor's error above what one correction removes.
+    with jax.default_matmul_precision("highest"):
+        return _banded_ritz_pairs(*args, **kwargs)
+
+
+def _banded_ritz_pairs(
+    v0: jnp.ndarray,
+    cache,
+    params,
+    term_cfg,
+    shift: complex | None,
+    status: Callable[[str], None] | None,
+) -> tuple[jnp.ndarray, jnp.ndarray, complex]:
+    """Return ``_RITZ`` eigenpairs of the operator nearest ``shift`` and the shift.
+
+    ``v0`` fixes the state shape ``(..., Nl, Nm, ky, kx, z)`` and dtype. On a
+    linked cache only the chain modes are unknowns. Vectors come back in the
+    full state shape; none is certified here.
+    """
+
+    from scipy.sparse.linalg import ArpackNoConvergence, LinearOperator, eigs
+    from solvax import (
+        block_thomas_factor,
+        block_thomas_solve,
+        block_tridiag_matvec,
+        block_tridiagonal_from_products,
+        iterative_refinement,
+    )
+
+    note = status or (lambda _message: None)
+    shape, size = v0.shape, int(v0.size)
+    nm = shape[-4]
+    if nm < 4:
+        raise ValueError("banded shift-invert requires Nm >= 4")
+    covered = _linked_covered_mode_mask(cache)
+    keep = np.ones(shape, bool)
+    if covered is not None:
+        keep = np.broadcast_to(np.asarray(covered)[:, :, None], shape)
+    columns = np.moveaxis(keep, -4, 0)[0].reshape(-1)  # unknowns kept, per m
+
+    def pairs(index: np.ndarray, pad: int) -> np.ndarray:
+        """Hermite-moment-major ``index`` as ``(n_blocks, 2 * unknowns)``, padded if Nm is odd."""
+        rows = np.moveaxis(index, -4, 0).reshape(nm, -1)[:, columns]
+        rows = np.vstack([rows, np.full_like(rows[:1], pad)]) if nm % 2 else rows
+        return rows.reshape(rows.shape[0] // 2, -1)
+
+    blocks = pairs(np.arange(size).reshape(shape), -1)
+    laguerre = pairs(np.indices(shape)[-5], size)
+    safe = jnp.asarray(np.where(blocks < 0, size, blocks))
+    # Gathers, not scatters: an XLA scatter of complex values costs 10x the solve on GPU.
+    position = np.full(size, blocks.size)
+    position[blocks[blocks >= 0]] = np.flatnonzero(blocks >= 0)
+    positions = jnp.asarray(position)
+    mask = jnp.asarray(keep.reshape(-1))
+
+    def apply(x):
+        return (
+            _apply_operator(x.reshape(shape), cache, params, term_cfg).reshape(-1)
+            * mask
+        )
+
+    note(f"assembling {blocks.shape[0]} Hermite-pair blocks of {blocks.shape[1]}")
+    lower, diag, upper = block_tridiagonal_from_products(
+        apply, blocks, dtype=jnp.complex64
+    )
+
+    # The blocks are the operator only if it is Hermite-banded: compare on a random vector.
+    noise = np.random.default_rng(0).standard_normal((2, size)) * keep.reshape(-1)
+    probe = jnp.asarray(noise[0] + 1j * noise[1], v0.dtype)
+    expected = jnp.append(apply(probe), 0)[safe]
+    mismatch = jnp.linalg.norm(
+        block_tridiag_matvec(lower, diag, upper, jnp.append(probe, 0)[safe]) - expected
+    ) / jnp.linalg.norm(expected)
+    if not mismatch < _BAND_TOL:
+        raise ValueError(
+            f"operator is not Hermite-banded (blocks miss it by {mismatch:.2g})"
+        )
+
+    scale = float(np.asarray(_omega_scale(cache, params)))
+    auto_shift = shift is None
+    if shift is None:
+        # Dense eigenvalues of a leading truncation: everything if it is small, else
+        # Laguerre < _COARSE_NL of as many Hermite pairs as fit in _DENSE_N unknowns.
+        shift = _dense_estimate(lower, diag, upper, laguerre, shape[-5])
+        note(f"banded shift from a dense truncation: sigma={shift:.5g}")
+    sigma = complex(shift)
+
+    @jax.jit  # factors are an argument: closed over, XLA would bake them in as constants
+    def inverse(factors, b, sigma):
+        def bare(r):
+            x = block_thomas_solve(
+                factors, jnp.append(r, 0)[safe].astype(jnp.complex64)
+            )
+            return jnp.append(x.reshape(-1), 0)[positions].astype(v0.dtype)
+
+        residual = lambda x: apply(x) - sigma * x  # noqa: E731
+        return iterative_refinement(residual, b, bare, iterations=_REFINE)[0].astype(
+            v0.dtype
+        )
+
+    # A seeded random start: the seed state can be orthogonal to the fastest mode.
+    start = np.asarray(probe)
+    solves = [0]
+    operator = LinearOperator(
+        (size, size),
+        matvec=lambda v: np.asarray(apply(jnp.asarray(v, v0.dtype))),
+        dtype=np.complex128,
+    )
+
+    # Backward-Euler power iteration from the seeded state, with a step small
+    # against the fastest plausible frequency. It serves twice: its Rayleigh
+    # quotient is a second shift estimate (the truncation can sit far from the
+    # mode: TEM at (8, 24) is 0.55 away, where ARPACK stalls), and its growth is
+    # the dominance check.
+    dt = 0.25 / max(2 * scale, 1.5 * abs(sigma.imag))
+    growth = rayleigh = None
+    if auto_shift:
+        be_factors = block_thomas_factor(lower, diag, upper, shift=1 / dt)
+        growth, grown = _step_growth(
+            lambda x: (
+                -np.asarray(inverse(be_factors, jnp.asarray(x, v0.dtype), 1 / dt)) / dt
+            ),
+            start.astype(np.complex128),
+        )
+        g = jnp.asarray(grown, v0.dtype)
+        rayleigh = complex(jnp.vdot(g, apply(g)) / jnp.vdot(g, g))
+        note(f"banded Rayleigh quotient of the stepped state: {rayleigh:.5g}")
+
+    def ritz_passes(sigma: complex):
+        """ARPACK about ``sigma``, re-centred while the fastest Ritz value moves."""
+
+        for _ in range(_PASSES):
+            note(f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}")
+            factors = block_thomas_factor(lower, diag, upper, shift=sigma)
+
+            def solve(v, factors=factors, sigma=sigma):
+                solves[0] += 1
+                return np.asarray(inverse(factors, jnp.asarray(v, v0.dtype), sigma))
+
+            try:
+                values, vectors = eigs(
+                    operator,
+                    k=_RITZ,
+                    sigma=sigma,
+                    OPinv=LinearOperator(
+                        (size, size), matvec=solve, dtype=np.complex128
+                    ),
+                    v0=start,
+                    tol=1.0e-10,
+                    ncv=2 * _RITZ + 4,
+                    maxiter=_RESTARTS,
+                )
+            except ArpackNoConvergence as error:
+                # Keep what converged and re-centre on it: a shift off the mode by
+                # more than the local spacing stalls ARPACK, a closer one does not.
+                if not error.eigenvalues.size:
+                    raise
+                values, vectors = error.eigenvalues, error.eigenvectors
+                note(f"ARPACK kept {values.size} of {_RITZ} Ritz values at {sigma:.5g}")
+            best = complex(values[np.argmax(values.real)])
+            if abs(best - sigma) <= _RECENTER * scale:
+                break  # the nearest Ritz values are the ones that converge first
+            sigma = best + _OFFSET * scale  # the fastest Ritz value moved: follow it
+        return values, vectors, sigma, best
+
+    tries = [sigma]
+    if auto_shift:
+        assert rayleigh is not None
+        tries = [max(sigma, rayleigh, key=lambda z: z.real), rayleigh]
+    for attempt, start_shift in enumerate(tries):
+        values, vectors, sigma, best = ritz_passes(
+            start_shift + _OFFSET * scale * auto_shift
+        )
+        note(f"banded Arnoldi: {solves[0]} solves")
+        if not auto_shift:
+            break
+        assert growth is not None
+        excess = _growth_excess(growth, best, dt)
+        note(f"banded dominance check: excess growth {excess:.3g} per step")
+        if excess <= _DOMINANCE * max(best.real, 0.0) * dt + 1e-3:
+            break
+        if attempt + 1 == len(tries) or tries[1] == tries[0]:
+            raise RuntimeError(
+                f"a faster mode than {best:.4g} is present (growth excess {excess:.3g} per step)"
+            )
+        note(
+            f"banded shift moved to the stepped state's Rayleigh quotient {rayleigh:.5g}"
+        )
+    return (
+        jnp.asarray(values, v0.dtype),
+        jnp.asarray(vectors.T, v0.dtype).reshape((-1, *shape)),
+        sigma,
+    )
+
+
 __all__ = [
     "AdaptivePropagatorSolution",
     "adaptive_propagator_eigenpair",
+    "banded_fits",
+    "banded_ritz_pairs",
     "certifiable_residual_tolerance",
     "dominant_eigenpairs_propagator_cached",
 ]
