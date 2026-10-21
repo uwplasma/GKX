@@ -712,14 +712,29 @@ def _run_diagnostics(
                 "run_to=saturation: heat-flux convergence with stationary Wphi/Wg "
                 f"(rel_sem<={float(cfg.time.saturation_rel_sem):.6g})"
             )
-        return _run_chunked_diagnostics(
-            cfg,
-            ctx,
-            policy,
-            method=method,
-            status=status,
-            stop_condition=stop_condition,
-        )
+        try:
+            return _run_chunked_diagnostics(
+                cfg,
+                ctx,
+                policy,
+                method=method,
+                status=status,
+                stop_condition=stop_condition,
+            )
+        except ValueError as exc:
+            if "implicit factor residual" not in str(exc) or cfg.time.fixed_dt:
+                raise
+            warnings.warn(
+                f"imex-ark3 refused ({exc}); falling back to rk4-pi", stacklevel=2
+            )
+            return _run_chunked_diagnostics(
+                cfg,
+                ctx,
+                policy,
+                method="rk4-pi",
+                status=status,
+                stop_condition=stop_condition,
+            )
     status(
         f"running nonlinear diagnostics integrator over {ctx.steps} steps with dt={ctx.dt:.6g}"
     )

@@ -273,7 +273,29 @@ def _normalize_geometry_overrides(overrides: dict | None) -> dict | None:
     return dict(overrides)
 
 
-def _normalize_time_overrides(overrides: Any) -> dict[str, Any] | None:
+_IMEX_BETA_MAX = 1.0e-3  # above it the EM bracket rate removes the imex gain (#373)
+
+
+def _default_nonlinear_stepper(physics: Any) -> str:
+    """Stepper of a nonlinear deck with no ``dt`` and no ``method``.
+
+    Kinetic electrons at low beta: adaptive ``imex-ark3`` (the electron streaming
+    CFL is gone; falls back to ``rk4-pi`` where the factor check refuses it).
+    Everything else: ``rk4-pi`` (about 2x fewer steps than ``rk4`` + CFL).
+    """
+
+    ph = physics if isinstance(physics, dict) else {}
+    kinetic_electrons = not ph.get("adiabatic_electrons", True)
+    return (
+        "imex-ark3"
+        if kinetic_electrons and float(ph.get("beta", 0.0)) <= _IMEX_BETA_MAX
+        else "rk4-pi"
+    )
+
+
+def _normalize_time_overrides(
+    overrides: Any, physics: Any = None
+) -> dict[str, Any] | None:
     """Pair the integrator with the step policy when the deck chose no step.
 
     ``ExplicitTimeConfig.dt`` is a required field and ``TimeConfig.dt`` carries
@@ -321,7 +343,10 @@ def _normalize_time_overrides(overrides: Any) -> dict[str, Any] | None:
     # scheme that makes the controller's step cheapest. An explicit ``method``
     # or ``fixed_dt`` in the deck still wins.
     raw.setdefault("fixed_dt", False)
-    raw.setdefault("method", "rk4")
+    nonlinear = isinstance(physics, dict) and bool(physics.get("nonlinear", False))
+    raw.setdefault(
+        "method", _default_nonlinear_stepper(physics) if nonlinear else "rk4"
+    )
     return raw
 
 
@@ -331,7 +356,7 @@ def _runtime_base_config(data: dict[str, Any]) -> RuntimeConfig:
     cfg = RuntimeConfig()
     sections = {
         "grid": data.get("grid"),
-        "time": _normalize_time_overrides(data.get("time")),
+        "time": _normalize_time_overrides(data.get("time"), data.get("physics")),
         "geometry": _normalize_geometry_overrides(data.get("geometry")),
         "init": data.get("init"),
     }
