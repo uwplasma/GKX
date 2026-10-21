@@ -548,3 +548,19 @@ Equations are in :doc:`operators`. ``LinearTerms`` toggles convert to one
 the linear integrators, Krylov applications and nonlinear IMEX solves.
 ``LinearParams.rho_star`` scales the perpendicular wavenumbers in the drift and
 drive terms without changing the FFT spacing.
+
+Nodal magnetic-moment grid (design, not implemented)
+----------------------------------------------------
+
+A planned off-by-default alternative to the Laguerre expansion stores the
+distribution at quadrature nodes of the fixed variable :math:`\hat\mu=\mu B_0`,
+
+.. math::
+
+   g(v_\parallel,\hat\mu_j,z)=e^{-\mu_j B(z)/2}\sum_m \phi^m(v_\parallel)\,G_m(\hat\mu_j,z).
+
+Mirror coupling becomes
+:math:`\tfrac{\mu_j B}{2}\nabla_\parallel\ln B\,[\sqrt{m}\,G_{m-1}-\sqrt{m+1}\,G_{m+1}]`,
+gyroaverages are evaluated pointwise at each node, and fields are quadrature
+sums. No code is present yet. Motivation: the Laguerre path at ``Nl = 8`` is
+not converged for Cyclone ``ky >= 0.3`` and the TEM case.
