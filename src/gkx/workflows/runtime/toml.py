@@ -273,7 +273,9 @@ def _normalize_geometry_overrides(overrides: dict | None) -> dict | None:
     return dict(overrides)
 
 
-_IMEX_BETA_MAX = 1.0e-3  # above it the EM bracket rate removes the imex gain (#373)
+_IMEX_BETA_MAX = (
+    3.0e-4  # imex gains at beta 1e-4, loses at 1e-3 and 0.015 (A/B in #383)
+)
 
 
 def _default_nonlinear_stepper(physics: Any) -> str:
