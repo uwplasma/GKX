@@ -1174,7 +1174,8 @@ recursive = true
 # 68363 -> 68718: adaptive-dt chain IMEX (#373) on current main. Measured.
 # 68441 -> 68796: adaptive chain IMEX (#373) on main with rk4-pi. Measured.
 # 68796 -> 68838: stepper-default v2 (#385). Measured.
-baseline = 68838
+# 68838 -> 68876: linear KE time-route fix (#386) after #373/#385, measured.
+baseline = 68876
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1527,7 +1528,8 @@ recursive = true
 # 73474 -> 73502: adaptive chain IMEX test (#373) on current main. Measured.
 # 73564 -> 73592: adaptive chain IMEX (#373) on main with rk4-pi. Measured.
 # 73592 -> 73605: stepper-default v2 tests (#385). Measured.
-baseline = 73605
+# 73605 -> 73624: linear KE time-route fix (#386) after #373/#385, measured.
+baseline = 73624
 target = 35000
 
 [[line_budget_policy.counts]]

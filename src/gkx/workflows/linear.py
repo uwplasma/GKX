@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 from typing import Any, Callable
 
@@ -338,12 +339,14 @@ def _resolve_linear_time_config(
     return tcfg
 
 
-def _warn_if_linear_dt_exceeds_cfl(ctx: _LinearRuntimeContext, tcfg: Any) -> None:
+def _warn_if_linear_dt_exceeds_cfl(
+    ctx: _LinearRuntimeContext, tcfg: Any
+) -> float | None:
     """Delegate the fixed-step CFL hint to the module that owns the bound."""
 
     from gkx.solvers_time_explicit_cfl import warn_if_fixed_dt_exceeds_cfl
 
-    warn_if_fixed_dt_exceeds_cfl(
+    return warn_if_fixed_dt_exceeds_cfl(
         grid=ctx.grid,
         geom=ctx.geom,
         params=ctx.params,
@@ -646,9 +649,19 @@ def _run_linear_runtime_branch(
     # 0.10126899, rk4 0.10125984 against the certified 0.10128645), so warning
     # about the adaptive controller's initial guess would be a false positive.
     # The clause is additive -- every warning that fired before still fires.
-    if ctx.solver_key != "explicit_time" or bool(
-        getattr(time_config, "fixed_dt", True)
-    ):
+    fixed = bool(getattr(time_config, "fixed_dt", True))
+    if dt is None and not fixed and ctx.solver_key != "explicit_time":
+        # No dt chosen: this fixed-step route has no controller, so take the
+        # CFL-stable step (the unclamped default 0.1 overflows with kinetic
+        # electrons, whose streaming bound is ~700).
+        dt_cfl = _warn_if_linear_dt_exceeds_cfl(ctx, replace(time_config, dt=0.0))
+        if dt_cfl is not None and dt_cfl < time_config.dt:
+            stride = int(time_config.sample_stride)
+            n_chunks = math.ceil(time_config.t_max / (dt_cfl * stride))
+            time_config = replace(
+                time_config, dt=time_config.t_max / (n_chunks * stride)
+            )
+    elif ctx.solver_key != "explicit_time" or fixed:
         _warn_if_linear_dt_exceeds_cfl(ctx, time_config)
     trajectory = _integrate_linear_time_series(
         ctx,
