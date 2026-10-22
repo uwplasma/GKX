@@ -1168,7 +1168,8 @@ recursive = true
 # 68110 -> 68153: banded shift estimator (stepped-state Rayleigh quotient, partial ARPACK results). Measured.
 # 68363 -> 68433: rk4-pi (embedded-error RK4 step, one redo) on top of #377, measured.
 # 68433 -> 68441: TimeConfig default (#379) after #381, measured.
-baseline = 68441
+# 68441 -> 68479: CFL bound measures the kinetic-electron radius on the linear time route. Measured.
+baseline = 68479
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1517,7 +1518,8 @@ recursive = true
 # 73464 -> 73474: half-layout default (#378) after #376, measured.
 # 73474 -> 73551: rk4-pi step, redo and controller-carry tests. Measured.
 # 73551 -> 73564: TimeConfig default (#379) after #381, measured.
-baseline = 73564
+# 73564 -> 73583: KE linear time-route regression test. Measured.
+baseline = 73583
 target = 35000
 
 [[line_budget_policy.counts]]

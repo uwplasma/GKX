@@ -448,6 +448,7 @@ def _linear_frequency_bound(
     nm: int,
     *,
     include_diamagnetic_drive: bool = True,
+    measure: bool = True,
 ) -> np.ndarray:
     grid_bounds = _grid_frequency_bounds(grid)
     species = _species_frequency_scales(params, nl=nl, nm=nm)
@@ -461,18 +462,34 @@ def _linear_frequency_bound(
         include_diamagnetic_drive=include_diamagnetic_drive,
     )
     omega_max[2] = _parallel_streaming_frequency(params, grid_bounds, species, geometry)
+    # The analytic streaming estimate misses the electromagnetic electron mode
+    # of a kinetic-electron box and the hypercollision rate (see
+    # ``measured_streaming_frequency``); the nonlinear path measures its own.
+    vth = np.abs(np.atleast_1d(np.asarray(params.vth, dtype=float)))
+    if measure and vth.size > 1 and float(vth.max()) > 4.0 * float(vth.min()):
+        from gkx.operators.linear.cache_builder import build_linear_cache
+        from gkx.operators.nonlinear.policies import measured_streaming_frequency
+
+        cache = build_linear_cache(grid, geom, params, Nl=nl, Nm=nm)
+        omega_max[2] = max(
+            omega_max[2],
+            measured_streaming_frequency(
+                params, cache, nl=nl, nm=nm, hypercollisions=1.0
+            ),
+        )
     return omega_max
 
 
 def warn_if_fixed_dt_exceeds_cfl(
     *, grid: Any, geom: Any, params: Any, n_laguerre: int, n_hermite: int, tcfg: Any
-) -> None:
+) -> float | None:
     """Warn at startup when a fixed linear dt exceeds the explicit CFL estimate.
 
     The fixed-step linear paths advance the whole physical RHS explicitly (the
     imex methods only treat damping implicitly), so the explicit-time frequency
     bound applies to them too. An over-CFL dt overflows the trajectory, and the
     growth fit then fails loudly; this names the cause before the run starts.
+    Returns the CFL-stable step, or None when it cannot be bounded.
 
     Geometry is conformed to this grid and any failure is swallowed: an
     imported equilibrium carries a closed theta interval one point longer than
@@ -491,9 +508,9 @@ def warn_if_fixed_dt_exceeds_cfl(
             )
         )
     except Exception:  # noqa: BLE001 - a startup hint must never stop a run
-        return
+        return None
     if not np.isfinite(wmax) or wmax <= 0.0:
-        return
+        return None
     cfl_fac = resolve_cfl_fac(str(tcfg.method), tcfg.cfl_fac)
     dt_stable = cfl_fac * float(tcfg.cfl) / wmax
     if float(tcfg.dt) > dt_stable:
@@ -504,3 +521,4 @@ def warn_if_fixed_dt_exceeds_cfl(
             RuntimeWarning,
             stacklevel=2,
         )
+    return dt_stable
