@@ -18,8 +18,8 @@ What you get when you change nothing, and when to change it.
      - Default
      - Change it when
    * - Time stepper
-     - ``rk4`` with the CFL controller when no ``dt`` is given (deck or ``TimeConfig()``); ``rk2`` at a fixed step when ``dt`` is given
-     - kinetic electrons at 32x32 and up (``imex-ars3``); a published step (``rk3`` at fixed ``dt``)
+     - no ``dt`` (deck): nonlinear ``rk4-pi``; nonlinear kinetic electrons at :math:`\beta \le 3\times10^{-4}` ``imex-ark3`` (adaptive, falls back to ``rk4-pi`` with a warning if its factor check refuses); linear and bare ``TimeConfig()`` ``rk4`` + CFL. A ``dt`` gives ``rk2`` at that step
+     - a published step (``rk3`` at fixed ``dt``); the speedups are in the table below
    * - Linear growth rates
      - ``solver`` ``auto``: banded shift-invert, else ``adaptive``, certified
      - one mode of a hard branch (``shift-invert``)
@@ -42,6 +42,49 @@ What you get when you change nothing, and when to change it.
      - XLA's pool; Eigen pool off below four CPUs; one device
      - nothing on CPU; GPUs: ``XLA_PYTHON_CLIENT_PREALLOCATE=false`` when shared
 
+Default stepper: measured cost
+------------------------------
+
+Deck with no ``dt`` and no ``method`` against ``rk4`` + CFL, one A4000, float32,
+wall time including setup, heat flux over the saturated window (transient
+dropped; error is :math:`\sigma/\sqrt{n_\mathrm{eff}}` with the Sokal
+correlation time, at least 20 correlation times).
+
+.. list-table::
+   :header-rows: 1
+
+   * - Run
+     - Default
+     - Wall, default / ``rk4`` + CFL
+     - :math:`Q` default / ``rk4`` + CFL
+   * - Cyclone, adiabatic, 64x64, (4, 8), t = 1000
+     - ``rk4-pi``
+     - 103 s / 135 s (1.3x)
+     - 8.51 +- 0.14 / 8.87 +- 0.15
+   * - QHS, adiabatic, 48x48, (4, 8), t = 600
+     - ``rk4-pi``
+     - 111 s / 107 s (none)
+     - 9.82 +- 0.10 / 9.91 +- 0.09
+   * - Cyclone, kinetic electrons, :math:`\beta` 1e-4, 32x32, (4, 8), t = 400
+     - ``imex-ark3``
+     - 313 s / 737 s (2.4x)
+     - 1167 +- 20 / 1148 +- 25
+   * - Kinetic electrons, :math:`\beta` 1e-3, t = 60
+     - ``rk4-pi``; ``imex-ark3`` measured 188 s against 129 s (0.7x)
+     - (imex) 188 s / 129 s
+     - (imex) 905 +- 50 / 919 +- 72
+   * - Kinetic electrons, :math:`\beta` 0.015, t = 60
+     - ``rk4-pi``
+     - 182 s / 310 s (1.7x)
+     - 18900 +- 800 / 19500 +- 1000
+
+Setup (compile and factor build, 30 to 130 s) is a fixed part of each wall time,
+so longer runs gain more. The linear eigensolver ``auto`` is the certified route
+but not faster than the time route at (4, 8) or (12, 24) on one GPU (23 s against
+10 s and 44 s against 10 s, Cyclone ``ky`` 0.3); with kinetic electrons the time
+route without a ``dt`` does not yet integrate (non-finite), so use the eigensolver
+or give a ``dt``.
+
 Choose the time stepper
 -----------------------
 
@@ -57,9 +100,15 @@ the field response) and :math:`R` the drifts, mirror, drive and collisions.
    * - Scheme
      - Use it for
      - Limit
-   * - ``rk4`` + CFL (default without ``dt``)
+   * - ``rk4`` + CFL (linear default without ``dt``)
      - any deck; the controller sets the step from the stiffest explicit term
      - step follows electron streaming when electrons are kinetic
+   * - ``rk4-pi`` (nonlinear default without ``dt``)
+     - RK4 with an embedded error estimate and an I controller
+     - 1 to 2x fewer steps than ``rk4`` + CFL at the same flux
+   * - ``imex-ark3`` (adaptive, nonlinear kinetic electrons at low beta)
+     - chunk-level adaptive step, no electron-streaming limit
+     - refuses decks whose factor check fails (some stellarators); no gain at :math:`\beta \gtrsim 10^{-3}`
    * - ``rk2``/``rk3`` at fixed ``dt``
      - reproducing a published step, parity runs
      - warns when ``dt`` exceeds the CFL estimate

@@ -2985,3 +2985,16 @@ def test_time_config_defaults_follow_one_policy_for_api_and_deck() -> None:
     assert (chosen.method, chosen.fixed_dt, chosen.dt) == ("rk2", True, 0.02)
     assert TimeConfig(method="rk3").fixed_dt is False
     assert TimeConfig(dt=0.02, method="rk3", fixed_dt=False).fixed_dt is False
+
+
+def test_deck_default_stepper_follows_run_type() -> None:
+    from gkx.workflows.runtime.toml import _normalize_time_overrides as norm
+
+    nl = {"nonlinear": True, "adiabatic_electrons": True}
+    ke = {"nonlinear": True, "adiabatic_electrons": False, "beta": 1.0e-4}
+    assert norm(None, nl)["method"] == "rk4-pi"
+    assert norm(None, ke)["method"] == "imex-ark3"
+    assert norm(None, {**ke, "beta": 0.015})["method"] == "rk4-pi"
+    assert norm(None, {"nonlinear": False})["method"] == "rk4"
+    assert norm({"dt": 0.1}, ke)["method"] == "rk2"
+    assert norm({"method": "rk3"}, ke)["method"] == "rk3"

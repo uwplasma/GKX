@@ -439,7 +439,8 @@ public_facades = [
 path = "solvers_nonlinear_imex.py"
 # 1189 -> 1293: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
 # 1293 -> 1304: electron mirror implicit (#370) on top of #363/#368, measured.
-baseline_lines = 1304
+# 1304 -> 1521: ARK3(2)4L[2]SA, factor as scan operand, chunked factor build, adaptive-dt control (ImexDtControl); measured.
+baseline_lines = 1521
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -507,7 +508,8 @@ path = "workflows/nonlinear.py"
 # stop. No branch was added; the dispatcher's shape is unchanged.
 # 1023 -> 1032: measured on the P0 integration chain (#278 #286 #272 #288 #283 #285 #282 #287 #279 #280 #284).
 # 1032 -> 1035: per-run compile cache for adaptive chunks.
-baseline_lines = 1035
+# 1035 -> 1043: stepper-default dispatch (#385).
+baseline_lines = 1043
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -1168,8 +1170,11 @@ recursive = true
 # 68110 -> 68153: banded shift estimator (stepped-state Rayleigh quotient, partial ARPACK results). Measured.
 # 68363 -> 68433: rk4-pi (embedded-error RK4 step, one redo) on top of #377, measured.
 # 68433 -> 68441: TimeConfig default (#379) after #381, measured.
-# 68441 -> 68479: CFL bound measures the kinetic-electron radius on the linear time route. Measured.
-baseline = 68479
+# 67769 -> 68124: adaptive-dt chain IMEX (#373). Measured.
+# 68363 -> 68718: adaptive-dt chain IMEX (#373) on current main. Measured.
+# 68441 -> 68796: adaptive chain IMEX (#373) on main with rk4-pi. Measured.
+# 68796 -> 68838: stepper-default v2 (#385). Measured.
+baseline = 68838
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1518,8 +1523,11 @@ recursive = true
 # 73464 -> 73474: half-layout default (#378) after #376, measured.
 # 73474 -> 73551: rk4-pi step, redo and controller-carry tests. Measured.
 # 73551 -> 73564: TimeConfig default (#379) after #381, measured.
-# 73564 -> 73583: KE linear time-route regression test. Measured.
-baseline = 73583
+# 73095 -> 73123: adaptive chain IMEX test (#373). Measured.
+# 73474 -> 73502: adaptive chain IMEX test (#373) on current main. Measured.
+# 73564 -> 73592: adaptive chain IMEX (#373) on main with rk4-pi. Measured.
+# 73592 -> 73605: stepper-default v2 tests (#385). Measured.
+baseline = 73605
 target = 35000
 
 [[line_budget_policy.counts]]
