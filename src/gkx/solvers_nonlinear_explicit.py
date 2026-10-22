@@ -157,7 +157,7 @@ def _explicit_stage_update(
 
     if method == "euler":
         return G + dt_local * dG
-    if method in {"imex-ars3"}:
+    if method in {"imex-ars3", "imex-ark3"}:
         chain_linear = getattr(rhs_fn, "chain_implicit_linear", None)
         if chain_linear is None:
             raise ValueError(
@@ -191,7 +191,7 @@ def _explicit_stage_update(
         )
     raise ValueError(
         "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', "
-        "'rk3_heun', 'rk4', 'rk4-pi', 'k10', 'sspx3', 'imex-ars3'}"
+        "'rk3_heun', 'rk4', 'rk4-pi', 'k10', 'sspx3', 'imex-ars3', 'imex-ark3'}"
     )
 
 
@@ -607,6 +607,9 @@ def _advance_explicit_diagnostic_state(
     dt_local = jnp.asarray(
         time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype
     )
+    chain = getattr(rhs_fn, "chain_implicit_linear", None)
+    if chain is not None:  # the factor's dt, which the chunk controller sets
+        dt_local = jnp.asarray(chain.dt, dtype=real_dtype)
     scales = time_step_policy.cfl_scales if method == "rk4-pi" else None
     if scales is not None:
         dt_local = jnp.minimum(
