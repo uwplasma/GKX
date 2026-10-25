@@ -281,23 +281,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4, 5]
 
     steps:
       - uses: actions/checkout@v6
 
       - uses: ./.github/actions/setup
         with:
-          jax-cache: wide-${{ matrix.shard }}-of-8
+          jax-cache: wide-${{ matrix.shard }}-of-5
 
-      - name: Wide package coverage shard ${{ matrix.shard }}/8
+      - name: Wide package coverage shard ${{ matrix.shard }}/5
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
         run: |
           python scripts/check.py test-gates wide-coverage \
-            --shards 8 \
+            --shards 5 \
             --workers 4 \
             --timeout 1500 \
             --only-shard "${{ matrix.shard }}" \
@@ -361,7 +361,7 @@ jobs:
         run: |
           find coverage-wide-artifacts -name '*.tgz' -print -exec tar -xzf {} \;
           python scripts/check.py test-gates wide-coverage \
-            --shards 8 \
+            --shards 5 \
             --combine-only \
             --require-shard-data \
             --shard-manifest coverage-wide-shard-manifest.json \

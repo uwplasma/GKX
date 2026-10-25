@@ -153,7 +153,7 @@ change. Each job installs for itself; the only ``needs:`` edge is
        ``plotting.py``, ``workflows/runtime/artifacts.py``, and
        ``analysis.py``.
    * - ``wide-coverage-shards``
-     - The test lane: 8 shards of ``scripts/checks/run_test_gates.py
+     - The test lane: 5 shards of ``scripts/checks/run_test_gates.py
        wide-coverage --workers 4`` with ``-o addopts= -m "not slow"``. Every
        non-``slow`` test runs once, at float64, under coverage, across four
        pytest-xdist workers. Shards are packed on the measured per-file seconds
@@ -198,7 +198,7 @@ The wide gate runs locally with the same helper. One process:
 .. code-block:: bash
 
    python scripts/checks/run_test_gates.py wide-coverage \
-     --shards 8 --workers 4 --timeout 1800 --fail-under 95 \
+     --shards 5 --workers 4 --timeout 1800 --fail-under 95 \
      --pytest-arg=-o --pytest-arg=addopts= \
      --pytest-arg=-m --pytest-arg="not slow"
 
@@ -207,15 +207,15 @@ Or shard by shard, then combine, as CI does:
 .. code-block:: bash
 
    python -m coverage erase
-   for shard in $(seq 1 8); do
+   for shard in $(seq 1 5); do
      python scripts/checks/run_test_gates.py wide-coverage \
-       --shards 8 --workers 4 --timeout 1800 --only-shard "${shard}" \
+       --shards 5 --workers 4 --timeout 1800 --only-shard "${shard}" \
        --keep-existing-coverage --skip-combine \
        --pytest-arg=-o --pytest-arg=addopts= \
        --pytest-arg=-m --pytest-arg="not slow"
    done
    python scripts/checks/run_test_gates.py wide-coverage \
-     --shards 8 --combine-only --fail-under 95
+     --shards 5 --combine-only --fail-under 95
 
 A shard that owns a logical-CPU file runs all of its device gates at four
 devices; a lone file in a command is spread test by test over the workers,
