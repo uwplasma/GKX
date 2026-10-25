@@ -1177,7 +1177,8 @@ recursive = true
 # 68838 -> 68890: linear KE time-route fix (#386) after #373/#385, measured.
 # 68890 -> 68892: conventions/B_par CFL (#387) after #386, measured.
 # 68892 -> 68896: SOLVAX 0.33 normalized Thomas (#389) after #387, measured.
-baseline = 68896
+# 68896 -> 68905: Landau electron-ion table overflow fix at (Nl, Nm) = (16, 128), measured.
+baseline = 68905
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1532,7 +1533,8 @@ recursive = true
 # 73592 -> 73605: stepper-default v2 tests (#385). Measured.
 # 73605 -> 73624: linear KE time-route fix (#386) after #373/#385, measured.
 # 73624 -> 73659: conventions/B_par CFL (#387) after #386, measured.
-baseline = 73659
+# 73659 -> 73669: Landau table overflow regression test, measured.
+baseline = 73669
 target = 35000
 
 [[line_budget_policy.counts]]
