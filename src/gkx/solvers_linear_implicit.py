@@ -287,7 +287,11 @@ def _build_implicit_preconditioner_data(
         + hyper_damp
     ).astype(real_dtype)
 
-    ell = (mu_energy(cache, 5) - 1.0) / 2.0 if cache.mu_grid else cache.l
+    ell = (
+        (mu_energy(cache, 5) - 1.0) / 2.0
+        if getattr(cache, "mu_grid", False)
+        else cache.l
+    )
     ell = ell.astype(real_dtype)
     m = cache.m.astype(real_dtype)
     cv_d = cache.cv_d.astype(real_dtype)

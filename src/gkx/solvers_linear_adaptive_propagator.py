@@ -742,7 +742,9 @@ def _banded_ritz_pairs(
     if shift is None:
         # Dense eigenvalues of a leading truncation: everything if it is small, else
         # Laguerre < _COARSE_NL of as many Hermite pairs as fit in _DENSE_N unknowns.
-        shift = _dense_estimate(lower, diag, upper, laguerre, shape[-5], cache.mu_grid)
+        shift = _dense_estimate(
+            lower, diag, upper, laguerre, shape[-5], getattr(cache, "mu_grid", False)
+        )
         note(f"banded shift from a dense truncation: sigma={shift:.5g}")
     sigma = complex(shift)
 

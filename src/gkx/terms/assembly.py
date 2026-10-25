@@ -450,9 +450,13 @@ def _diamagnetic_contribution(
         apar=rhs_fields.h_apar,
         bpar=rhs_fields.h_bpar,
         Jl=cache.Jl,
-        b=None if cache.mu_grid else cache.b,
+        b=None if getattr(cache, "mu_grid", False) else cache.b,
         JlB=cache.JlB,
-        l4=0.5 * (mu_energy(cache, 4) - 1.0) if cache.mu_grid else cache.l4,
+        l4=(
+            0.5 * (mu_energy(cache, 4) - 1.0)
+            if getattr(cache, "mu_grid", False)
+            else cache.l4
+        ),
         tprim=species.tprim,
         fprim=species.fprim,
         tz=species.tz,

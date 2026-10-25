@@ -678,9 +678,9 @@ def _build_laguerre_gyro_cache(
     if bessel_bmag_power != 0.0:
         bmag_factor = bmag[None, None, None, :] ** (-bessel_bmag_power)
         b = b * bmag_factor
-    if params.mu_vperp_max is not None:
+    if (vperp_max := getattr(params, "mu_vperp_max", None)) is not None:
         check_mu_grid_params(params)
-        gyro = mu_grid_gyro_factors(params.mu_vperp_max, b, bmag, Nl, real_dtype, xp)
+        gyro = mu_grid_gyro_factors(vperp_max, b, bmag, Nl, real_dtype, xp)
         return _LaguerreGyroCache(b, *gyro)
     Jl, JlB = _build_gyroaverage_cache_arrays(b, Nl, real_dtype)
     lag_to_grid_np, lag_to_spec_np, lag_roots_np = laguerre_transform(Nl)
@@ -1120,7 +1120,7 @@ def build_linear_cache(
         moment_cache=moment_cache,
         linked_cache=linked_cache,
     )
-    cache = replace(cache, mu_grid=params.mu_vperp_max is not None)
+    cache = replace(cache, mu_grid=getattr(params, "mu_vperp_max", None) is not None)
     from gkx.operators.linear.collision_tables import landau_blocks_for
 
     landau = landau_blocks_for(params, Nl, Nm, grid_arrays.real_dtype)

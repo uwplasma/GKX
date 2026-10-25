@@ -621,7 +621,7 @@ def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag, fuse
     """
 
     w_mirror, w_curv, w_gradb = weights
-    nodal = cache.mu_grid
+    nodal = getattr(cache, "mu_grid", False)
     ell = mu_energy(cache, 5) if nodal else cache.l
     if (
         fuse
