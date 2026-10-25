@@ -170,7 +170,7 @@ def electrostatic_field_energy(
     use_dealias: bool = True,
     wphi_scale: float = 1.0,
 ) -> jnp.ndarray:
-    """Electrostatic field-energy diagnostic."""
+    """Electrostatic field energy with exact Gamma_0 (the field solve truncates)."""
 
     fac = _cached_hermitian_mode_weight(cache, use_dealias=use_dealias)
     weight = fac[:, :, None] * vol_fac[None, None, :]

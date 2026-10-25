@@ -385,6 +385,11 @@ smaller than that (a marginal mode of growth 0.065 on a coarse test grid) are no
 covered. A user-supplied shift is not checked, since it asks for that branch. The
 route agrees with ``adaptive`` and with the time route wherever those finish.
 
+The block factors are SOLVAX's normalized form (``normalized=True``): each Schur
+LU is applied once per block in a solve. On CPU at (8, 24) the route took 0.5 to
+0.7 of the unnormalized wall time (loaded host), with about 20% more memory and
+growth rates equal to 1e-14; block cyclic reduction is not used (12 blocks).
+
 **Measured** (office RTX A4000, shared, float64, single ky, wall time of the
 whole call; raw records in the private gkx-plan repository, ``plan/research/2026-10-18-banded-shift-invert/``):
 
@@ -681,11 +686,12 @@ What the scan established, and what it did not:
   converged, GKX is within -1.0% in :math:`\gamma` and +0.7% in :math:`\omega`;
   gyaradax's converged value is -1.1% from GKX.
 - **stella disagrees with everything else on identical converged Miller input**,
-  by 1.40--1.47x in :math:`\gamma` at the two :math:`k_y` where it was run. No
-  single knob -- drift scaling, drive prefactor, Bessel factor -- moves it onto
-  GS2's settled pair, and the geometry coefficients agree to about 1%. The cause
-  is open. It is a stella-specific disagreement, not a setup difference, and
-  nothing on this page depends on it.
+  by 1.39--1.47x in :math:`\gamma` after the :math:`\sqrt2` mapping of
+  :doc:`conventions`. That mapping is the one GS2 passes, and no combined
+  rescaling of :math:`\gamma` and :math:`k_y` fixes :math:`\gamma` and
+  :math:`\omega` together (:doc:`conventions`). The geometry coefficients agree
+  to about 1%, and mirror, velocity box and time step do not move it. The cause
+  is open and nothing on this page depends on it.
 - **No cross-code reference exists at s-alpha** :math:`k_y\rho_i = 0.55`. GS2's
   ladder does not converge there (its energy grid is the binding axis), only
   gyaradax converges, with a fixed numerical parallel dissipation, and GKX's

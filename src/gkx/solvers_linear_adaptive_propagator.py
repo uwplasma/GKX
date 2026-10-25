@@ -774,7 +774,9 @@ def _banded_ritz_pairs(
     dt = 0.25 / max(2 * scale, 1.5 * abs(sigma.imag))
     growth = rayleigh = None
     if auto_shift:
-        be_factors = block_thomas_factor(lower, diag, upper, shift=1 / dt)
+        be_factors = block_thomas_factor(
+            lower, diag, upper, shift=1 / dt, normalized=True
+        )
         growth, grown = _step_growth(
             lambda x: (
                 -np.asarray(inverse(be_factors, jnp.asarray(x, v0.dtype), 1 / dt)) / dt
@@ -790,7 +792,9 @@ def _banded_ritz_pairs(
 
         for _ in range(_PASSES):
             note(f"factoring the shifted blocks (complex64) at sigma={sigma:.5g}")
-            factors = block_thomas_factor(lower, diag, upper, shift=sigma)
+            factors = block_thomas_factor(
+                lower, diag, upper, shift=sigma, normalized=True
+            )
 
             def solve(v, factors=factors, sigma=sigma):
                 solves[0] += 1

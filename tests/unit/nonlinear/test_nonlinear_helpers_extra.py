@@ -15,6 +15,7 @@ from gkx.operators.nonlinear.policies import measured_streaming_frequency
 from gkx.solvers_nonlinear_imex import (
     ARS_TABLEAUX,
     build_chain_implicit_linear,
+    refactor_chain_implicit_linear,
 )
 from gkx.solvers_nonlinear_diagnostics import stiff_linear_split
 from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
@@ -1169,7 +1170,7 @@ def test_build_nonlinear_time_step_policy_fixed_and_adaptive() -> None:
         real_dtype=jnp.float32,
         resolve_cfl_fac_fn=lambda _method, _cfl_fac: 0.5,
         linear_frequency_bound_fn=lambda *args, **kwargs: np.asarray([1.0, 1.0, 1.0]),
-        laguerre_velocity_max_fn=lambda _nl: 2.0,
+        laguerre_velocity_max_fn=lambda _nl, **_: 2.0,
         cfl_frequency_components_fn=lambda *args, **kwargs: (
             jnp.asarray(2.0, dtype=jnp.float32),
             jnp.asarray(3.0, dtype=jnp.float32),
@@ -1577,7 +1578,7 @@ def _diag_stubs(mask_shape, *, rhs, fields_fn) -> dict[str, object]:
         ),
         _diagnostic_omega_mode_mask=lambda *a, **k: jnp.ones(mask_shape, dtype=bool),
         _linear_frequency_bound=lambda *a, **k: np.zeros(3, dtype=float),
-        _laguerre_velocity_max=lambda nl: 0.0,
+        _laguerre_velocity_max=lambda nl, **_: 0.0,
         nonlinear_rhs_cached=rhs,
         compute_fields_cached=fields_fn,
     )
@@ -2918,8 +2919,13 @@ def test_chain_solve_inverts_the_stiff_linear_operator():
     x = op.solve(G - gamma * dt * op.linear(G))
     assert float(jnp.linalg.norm(x - G) / jnp.linalg.norm(G)) < 2e-3
     block = int(np.prod(shape[:3])) * shape[-1]
-    dense = sum(g.ky.shape[0] * (g.ky.shape[1] * block) ** 2 * 8 for g in op.groups)
+    dense = sum(np.size(g.ky) * np.shape(g.ky)[1] * block**2 * 8 for g in op.groups)
     assert op.nbytes < dense
+    # A new dt refactors from the stored probes, keeping the pytree structure.
+    op2 = refactor_chain_implicit_linear(op, 4 * dt)
+    assert jax.tree.structure(op2) == jax.tree.structure(op)
+    x = op2.solve(G - gamma * 4 * dt * op.linear(G))
+    assert float(jnp.linalg.norm(x - G) / jnp.linalg.norm(G)) < 2e-3
 
 
 def test_second_identical_solve_compiles_nothing_and_repeats_bits():
@@ -2988,3 +2994,25 @@ def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
     first = build(0.05)
     assert build(0.05) is first
     assert build(0.04) is not first
+
+
+def test_adaptive_chain_imex_grows_dt_between_chunks():
+    """fixed_dt = false: the chain IMEX step adapts dt between chunks."""
+    import gkx
+
+    deck = gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    case = deck.replace(
+        grid=replace(deck.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            deck.time,
+            method="imex-ark3",
+            fixed_dt=False,
+            dt=0.05,
+            dt_max=1.0,
+            t_max=4.0,
+        ),
+    )
+    d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
+    dt = np.asarray(d.dt_t)
+    assert np.isfinite(np.asarray(d.Wg_t)).all()
+    assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05

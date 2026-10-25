@@ -161,3 +161,13 @@ w7x_itg,1.6,gkx,Nl10 Nm16 eigen auto,0.244650,0.444194,gkx-plan:plan/research/20
 w7x_itg,1.6,gkx,Nl12 Nm16 eigen auto,0.244646,0.444189,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
 w7x_itg,1.6,gkx,Nl8 Nm24 eigen auto,0.245615,0.444309,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
 w7x_itg,1.6,gkx,Nl8 Nm32 eigen auto,0.245578,0.443964,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
+cyclone_miller,0.1061,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.072295,0.084402,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
+cyclone_miller,0.1768,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.118131,0.142328,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
+cyclone_miller,0.2475,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.154032,0.204308,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
+cyclone_miller,0.3000,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.174809,0.251782,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
+cyclone_miller,0.3536,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.189242,0.301422,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
+cyclone_miller,0.4243,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.197768,0.368071,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
+cyclone_miller,0.4950,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.194201,0.434190,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
+cyclone_miller,0.5500,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.183229,0.483902,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
+cyclone_miller,0.6364,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.152151,0.555154,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
+cyclone_miller,0.7071,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.118464,0.601082,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv

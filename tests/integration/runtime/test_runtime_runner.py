@@ -4755,3 +4755,22 @@ def test_zero_species_nu_admits_declared_custom_collisions() -> None:
     np.testing.assert_allclose(
         rhs(custom) - rhs(builtin), -3 * np.asarray(G), rtol=1e-6
     )
+
+
+def test_runtime_linear_kinetic_electron_time_route_without_dt_is_finite() -> None:
+    # No dt: the fixed-step time route used dt = 0.1, far over the electron
+    # streaming CFL (~700), and overflowed; it now takes the CFL-stable step.
+    cfg, _ = load_runtime_from_toml(
+        REPO_ROOT / "examples/05_kinetic_electrons/case.toml"
+    )
+    cfg = replace(
+        cfg,
+        time=TimeConfig(t_max=12.0, sample_stride=10, damp_ends_rate=0.1),
+        physics=replace(cfg.physics, linear=True, nonlinear=False),
+        grid=replace(cfg.grid, Nx=1, Ny=22, Nz=16),
+    )
+    kw = dict(ky_target=0.3, Nl=2, Nm=4, auto_window=False, tmin=6.0, tmax=12.0)
+    time = run_runtime_linear(cfg, solver="time", **kw)
+    krylov = run_runtime_linear(cfg, solver="krylov", **kw)
+    assert np.isfinite(time.gamma)
+    assert time.gamma == pytest.approx(krylov.gamma, rel=0.08)

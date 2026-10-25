@@ -15,6 +15,7 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
+from solvax.ode import RK4_2, PIController, erk_step, step_factor
 
 RhsFn = Callable[..., tuple[jnp.ndarray, object]]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
@@ -36,6 +37,16 @@ _SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
 _SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
 _SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
 _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
+
+
+# rk4-pi: RK4 with the embedded explicit-midpoint error estimate (no extra RHS)
+# and an I controller on the step. The estimate is relative to ||G||; the step is
+# capped at ``_PI_CAP`` times the CFL step and a step with estimate > ``_PI_REDO``
+# is redone once at the controller's smaller step.
+_PI_RTOL = 1.0e-2
+_PI_CAP = 2.0
+_PI_REDO = 3.0
+_PI_CONTROL = PIController(k_i=1.0, k_p=0.0, safety=0.9, fac_min=0.5, fac_max=1.3)
 
 
 def _rhs_value(rhs_fn: RhsFn, state: jnp.ndarray) -> jnp.ndarray:
@@ -146,7 +157,7 @@ def _explicit_stage_update(
 
     if method == "euler":
         return G + dt_local * dG
-    if method in {"imex-ars3"}:
+    if method in {"imex-ars3", "imex-ark3"}:
         chain_linear = getattr(rhs_fn, "chain_implicit_linear", None)
         if chain_linear is None:
             raise ValueError(
@@ -166,7 +177,7 @@ def _explicit_stage_update(
         return _explicit_rk3_heun_state(
             G, dG, dt_local, rhs_fn=rhs_fn, project_state=project_state
         )
-    if method == "rk4":
+    if method in {"rk4", "rk4-pi"}:
         return _explicit_rk4_state(
             G, dG, dt_local, rhs_fn=rhs_fn, project_state=project_state
         )
@@ -180,7 +191,7 @@ def _explicit_stage_update(
         )
     raise ValueError(
         "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', "
-        "'rk3_heun', 'rk4', 'k10', 'sspx3', 'imex-ars3'}"
+        "'rk3_heun', 'rk4', 'rk4-pi', 'k10', 'sspx3', 'imex-ars3', 'imex-ark3'}"
     )
 
 
@@ -189,6 +200,57 @@ def _materialize(value: jnp.ndarray) -> jnp.ndarray:
 
     return jax.lax.platform_dependent(
         value, cpu=jax.lax.optimization_barrier, default=lambda x: x
+    )
+
+
+def _materialized(rhs_fn: RhsFn, project_state: ProjectFn) -> tuple[RhsFn, ProjectFn]:
+    def materialized_rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, object]:
+        derivative, fields = rhs_fn(state)
+        return _materialize(derivative), fields
+
+    def materialized_projection(state: jnp.ndarray) -> jnp.ndarray:
+        return _materialize(project_state(state))
+
+    materialized_rhs.chain_implicit_linear = getattr(  # type: ignore[attr-defined]
+        rhs_fn, "chain_implicit_linear", None
+    )
+    return materialized_rhs, materialized_projection
+
+
+def advance_rk4_pi_state(
+    G: jnp.ndarray,
+    dG: jnp.ndarray,
+    dt_local: jnp.ndarray,
+    *,
+    rhs_fn: RhsFn,
+    project_state: ProjectFn,
+    state_dtype: jnp.dtype,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """One ``rk4-pi`` step: returns ``(G_new, dt_used, dt_next)``."""
+
+    rhs, project = _materialized(rhs_fn, project_state)
+
+    def attempt(dt: jnp.ndarray, k1: jnp.ndarray):
+        G_new, err, _ = erk_step(
+            lambda _t, y: _rhs_value(rhs, y), 0.0, G, dt, RK4_2, k1=k1, project=project
+        )
+        G_new = jnp.asarray(project_state(G_new), dtype=state_dtype)
+        ratio = jnp.sqrt(jnp.sum(jnp.abs(err) ** 2) / jnp.sum(jnp.abs(G_new) ** 2))
+        en = ratio / _PI_RTOL
+        return G_new, en, step_factor(_PI_CONTROL, en, 1.0, RK4_2.embedded_order)
+
+    G_new, en, fac = attempt(dt_local, _materialize(dG))
+
+    def redo(_):
+        dt = dt_local * fac
+        G_redo, _en, fac_redo = attempt(dt, _materialize(dG))
+        return G_redo, dt, dt * fac_redo
+
+    return jax.lax.cond(
+        en > _PI_REDO,
+        redo,
+        lambda _: (G_new, dt_local, dt_local * fac),
+        None,
     )
 
 
@@ -211,16 +273,7 @@ def advance_explicit_nonlinear_state(
     jaxlib < 0.11 drops the barrier before CPU fusion.
     """
 
-    def materialized_rhs(state: jnp.ndarray) -> tuple[jnp.ndarray, object]:
-        derivative, fields = rhs_fn(state)
-        return _materialize(derivative), fields
-
-    def materialized_projection(state: jnp.ndarray) -> jnp.ndarray:
-        return _materialize(project_state(state))
-
-    materialized_rhs.chain_implicit_linear = getattr(  # type: ignore[attr-defined]
-        rhs_fn, "chain_implicit_linear", None
-    )
+    materialized_rhs, materialized_projection = _materialized(rhs_fn, project_state)
 
     G_new = _explicit_stage_update(
         G,
@@ -547,24 +600,43 @@ def _advance_explicit_diagnostic_state(
     collision_scheme: str,
     apply_collision_split_fn: CollisionSplitFn | None,
     max_dt: jnp.ndarray | None = None,
-) -> tuple[jnp.ndarray, Any, jnp.ndarray]:
+) -> tuple[jnp.ndarray, Any, jnp.ndarray, jnp.ndarray]:
     """Advance one explicit diagnostic state and compute its new fields."""
 
     dG, fields = rhs_fn(G)
     dt_local = jnp.asarray(
         time_step_policy.update_dt(fields, dt_prev), dtype=real_dtype
     )
+    chain = getattr(rhs_fn, "chain_implicit_linear", None)
+    if chain is not None:  # the factor's dt, which the chunk controller sets
+        dt_local = jnp.asarray(chain.dt, dtype=real_dtype)
+    scales = time_step_policy.cfl_scales if method == "rk4-pi" else None
+    if scales is not None:
+        dt_local = jnp.minimum(
+            jnp.asarray(dt_prev, real_dtype), jnp.minimum(_PI_CAP * dt_local, scales[5])
+        )
     if max_dt is not None:
         dt_local = jnp.minimum(dt_local, jnp.maximum(max_dt, 0.0))
-    G_new = advance_explicit_nonlinear_state(
-        G,
-        dG,
-        dt_local,
-        method=method,
-        rhs_fn=rhs_fn,
-        project_state=project_state,
-        state_dtype=state_dtype,
-    )
+    dt_next = dt_local
+    if scales is not None:
+        G_new, dt_local, dt_next = advance_rk4_pi_state(
+            G,
+            dG,
+            dt_local,
+            rhs_fn=rhs_fn,
+            project_state=project_state,
+            state_dtype=state_dtype,
+        )
+    else:
+        G_new = advance_explicit_nonlinear_state(
+            G,
+            dG,
+            dt_local,
+            method=method,
+            rhs_fn=rhs_fn,
+            project_state=project_state,
+            state_dtype=state_dtype,
+        )
     G_new = _apply_explicit_collision_split(
         G_new,
         dt_local,
@@ -577,7 +649,7 @@ def _advance_explicit_diagnostic_state(
     fields_new = compute_fields_fn(
         G_new, cache, params, terms=term_cfg, external_phi=external_phi
     )
-    return G_new, fields_new, dt_local
+    return G_new, fields_new, dt_local, dt_next
 
 
 def _select_explicit_diagnostic(
@@ -644,7 +716,7 @@ def make_explicit_diagnostic_step(
         G, G_prev_step, fields_prev_step, diag_prev, t_prev, dt_prev = carry
 
         def advance(max_dt: jnp.ndarray | None):
-            G_new, fields_new, dt_local = _advance_explicit_diagnostic_state(
+            G_new, fields_new, dt_local, dt_next = _advance_explicit_diagnostic_state(
                 G,
                 dt_prev,
                 rhs_fn=rhs_fn,
@@ -687,7 +759,7 @@ def make_explicit_diagnostic_step(
                 t_new=t_new,
                 progress_total=time_step_policy.progress_total,
             )
-            return (G_new, G_new, fields_new, diag, t_new, dt_local), (
+            return (G_new, G_new, fields_new, diag, t_new, dt_next), (
                 diag,
                 t_new,
                 dt_local,
@@ -755,6 +827,7 @@ def run_explicit_diagnostic_scan(
 
 __all__ = [
     "advance_explicit_nonlinear_state",
+    "advance_rk4_pi_state",
     "block_checkpoint_plan",
     "checkpointed_explicit_scan",
     "integrate_nonlinear_scan",

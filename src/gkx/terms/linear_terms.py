@@ -603,7 +603,7 @@ def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag, fuse
     """
 
     w_mirror, w_curv, w_gradb = weights
-    if fuse and drift_kernel_usable(H):
+    if fuse and all(jnp.ndim(w) == 0 for w in weights) and drift_kernel_usable(H):
         tz_d = omega_d_scale * tz[:, None, None, None]
         total = fused_drift(
             H,

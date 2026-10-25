@@ -2928,6 +2928,41 @@ def test_the_explicit_cfl_bound_is_the_same_in_both_layouts(ny: int) -> None:
     )
 
 
+def test_nonlinear_bpar_cfl_uses_the_last_laguerre_node() -> None:
+    from types import SimpleNamespace
+
+    from numpy.polynomial.laguerre import laggauss
+
+    from gkx.operators.nonlinear.policies import _bracket_bounds
+    from gkx.solvers_time_explicit_cfl import _laguerre_velocity_max
+
+    nl = 8
+    grid = SimpleNamespace(kx=np.zeros(4), ky=np.zeros(4))
+    k = np.arange(4.0)
+    cache = SimpleNamespace(kx=k, ky=k, l=np.zeros(nl), m=np.zeros((1, 4)), kxfac=1.0)
+    params = SimpleNamespace(vth=np.ones(1), tz=np.asarray([2.0]))
+    out = _bracket_bounds(grid, params, cache, jnp.float64, _laguerre_velocity_max)
+    last = laggauss(3 * nl // 2 - 1)[0][-1]
+    assert float(out["muB_max"]) == pytest.approx(2.0 * last)
+    assert last > _laguerre_velocity_max(nl)
+
+
+def test_spectral_bpar_kernel_is_the_quadrature_j1_over_alpha_kernel() -> None:
+    from numpy.polynomial.laguerre import lagval
+    from scipy.special import jv
+
+    from gkx.operators.linear.cache_arrays import _build_gyroaverage_cache_arrays
+
+    b, nl = 0.7, 40
+    _, jlb = _build_gyroaverage_cache_arrays(jnp.full((1, 1, 1), b), nl, jnp.float64)
+    coeff = np.asarray(jlb).reshape(nl) * (-1.0) ** np.arange(nl)
+    x = np.asarray([0.3, 1.0, 2.5])
+    alpha = np.sqrt(2.0 * b * x)
+    np.testing.assert_allclose(
+        lagval(x, coeff), 2.0 * x * jv(1, alpha) / alpha, rtol=1e-10
+    )
+
+
 def test_cpu_thread_defaults_only_below_four_cpus(monkeypatch):
     import os
 
@@ -2972,3 +3007,29 @@ def test_nonlinear_run_finishes_on_two_cpus(tmp_path):
     subprocess.run(
         [sys.executable, "-c", code], cwd=tmp_path, env=env, timeout=300, check=True
     )
+
+
+def test_time_config_defaults_follow_one_policy_for_api_and_deck() -> None:
+    """No ``dt``: ``rk4`` with the CFL controller. A ``dt``: ``rk2`` at that step."""
+
+    from gkx.config import TimeConfig
+
+    bare = TimeConfig()
+    assert (bare.method, bare.fixed_dt) == ("rk4", False)
+    chosen = TimeConfig(dt=0.02)
+    assert (chosen.method, chosen.fixed_dt, chosen.dt) == ("rk2", True, 0.02)
+    assert TimeConfig(method="rk3").fixed_dt is False
+    assert TimeConfig(dt=0.02, method="rk3", fixed_dt=False).fixed_dt is False
+
+
+def test_deck_default_stepper_follows_run_type() -> None:
+    from gkx.workflows.runtime.toml import _normalize_time_overrides as norm
+
+    nl = {"nonlinear": True, "adiabatic_electrons": True}
+    ke = {"nonlinear": True, "adiabatic_electrons": False, "beta": 1.0e-4}
+    assert norm(None, nl)["method"] == "rk4-pi"
+    assert norm(None, ke)["method"] == "imex-ark3"
+    assert norm(None, {**ke, "beta": 0.015})["method"] == "rk4-pi"
+    assert norm(None, {"nonlinear": False})["method"] == "rk4"
+    assert norm({"dt": 0.1}, ke)["method"] == "rk2"
+    assert norm({"method": "rk3"}, ke)["method"] == "rk3"
