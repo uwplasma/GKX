@@ -385,6 +385,11 @@ smaller than that (a marginal mode of growth 0.065 on a coarse test grid) are no
 covered. A user-supplied shift is not checked, since it asks for that branch. The
 route agrees with ``adaptive`` and with the time route wherever those finish.
 
+The block factors are SOLVAX's normalized form (``normalized=True``): each Schur
+LU is applied once per block in a solve. On CPU at (8, 24) the route took 0.5 to
+0.7 of the unnormalized wall time (loaded host), with about 20% more memory and
+growth rates equal to 1e-14; block cyclic reduction is not used (12 blocks).
+
 **Measured** (office RTX A4000, shared, float64, single ky, wall time of the
 whole call; raw records in the private gkx-plan repository, ``plan/research/2026-10-18-banded-shift-invert/``):
 
