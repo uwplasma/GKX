@@ -601,3 +601,130 @@ stiff fixed-:math:`\hat\mu` nodes needs a weak-form matrix; the :math:`|k_z|`
 Hermite hypercollisions are unchanged). Nonlinear runs are refused. The seed
 ``init_field`` writes ``l = 0``, i.e. the first node. Velocity-space diagnostics
 that assume Laguerre moments are not defined for the scaled node amplitudes.
+
+Measured against the Laguerre expansion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Cyclone ITG (s-alpha, adiabatic electrons, ``Nm = 32``, ``vperp_max = 4``), the
+Hermite-banded eigensolver, one laptop CPU (4 threads, shared; wall times carry
+about 30% noise, wall includes compilation, memory is the peak resident set).
+``Delta`` is the growth rate relative to the converged Laguerre value
+(``Nl = 24``: :math:`\gamma=0.0928` at :math:`k_y=0.3`, 0.0798 at 0.4).
+
+.. list-table::
+   :header-rows: 1
+
+   * - grid
+     - n
+     - :math:`\gamma` (0.3)
+     - Delta
+     - wall (s)
+     - memory (GB)
+     - :math:`\gamma` (0.4)
+     - Delta
+     - wall (s)
+   * - Laguerre
+     - 8
+     - 0.0981
+     - +5.6%
+     - 92
+     - 5.7
+     - 0.0912
+     - +14%
+     - 86
+   * - Laguerre
+     - 16
+     - 0.0928
+     - 0.0%
+     - 430
+     - 14.5
+     - 0.0778
+     - -2.5%
+     - 354
+   * - Laguerre
+     - 24
+     - 0.0928
+     - ref
+     - 1457
+     - 19.9
+     - 0.0798
+     - ref
+     - 939
+   * - nodal
+     - 4
+     - 0.0808
+     - -13%
+     - 32
+     - 2.8
+     - 0.0578
+     - -28%
+     - 33
+   * - nodal
+     - 8
+     - 0.0941
+     - +1.4%
+     - 79
+     - 5.3
+     - 0.0794
+     - -0.5%
+     - 77
+   * - nodal
+     - 12
+     - 0.0920
+     - -0.8%
+     - 189
+     - 9.5
+     - 0.0800
+     - +0.3%
+     - 222
+   * - nodal
+     - 16
+     - 0.0918
+     - -1.1%
+     - 421
+     - 15.2
+     - 0.0766
+     - -4.1%
+     - 424
+
+Eight nodes match the converged Laguerre rate to 1.4% and 0.5%, where the
+Laguerre rung of the same accuracy is ``Nl = 16`` (5.4x the wall, 2.7x the
+memory) at :math:`k_y=0.3` and ``Nl = 24`` (12x, 4x) at 0.4. The cost per
+state element is that of the Laguerre path, so the gain is the node count.
+At 0.4 the 16-node rate is 4% below the 12-node one; with ``vperp_max = 6``
+the 12- and 16-node rates are 0.0812 and 0.0813 (+1.8% and +1.9%) and at 0.3
+the 12-node rate is 0.0940 (+1.3%), so the cutoff moves a converged value by
+about 2-4%. The Laguerre ladder moves by 2.5-14% between its rungs.
+The tutorial
+deck (``Nz = 32, Nm = 8``) gives 0.0999 for 8 nodes and 0.1001 for ``Nl = 16``.
+
+Collisionless TEM (Dannert and Jenko 2005, kinetic electrons,
+:math:`A_\parallel`, ``Nm = 24``, :math:`k_y\rho_s=0.3`; GS2 0.869 is
+``Nm``-limited here), same solver with a shift at the mode:
+
+.. list-table::
+   :header-rows: 1
+
+   * - n
+     - 4
+     - 8
+     - 12
+     - 16
+   * - Laguerre :math:`\gamma`
+     - 0.480
+     - 0.611
+     - 0.552
+     - 0.565
+   * - nodal :math:`\gamma`
+     - 0.514
+     - 0.561
+     - 0.547
+     - 0.548
+
+The nodal ladder settles to within 0.4% from 12 nodes; the Laguerre one moves by
+up to 27% between rungs. At equal ``n`` the TEM cost is similar, not lower
+(wall, memory: ``n = 8`` 404 s, 8.5 GB nodal against 433 s, 8.5 GB Laguerre;
+``n = 12`` 1024 s, 18.3 GB against 533 s, 15.2 GB; ``n = 16`` 2459 s, 22.4 GB
+against 2045 s, 23.4 GB), so on this case the gain is a ladder that converges,
+not time. GX v2 reports 0.564 and 0.553 for 8 and 12 nodes with its own rule,
+and 0.0934 and 0.0795 for Cyclone at 8 nodes.
