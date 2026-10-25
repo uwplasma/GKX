@@ -318,7 +318,7 @@ reference = "GX 3865a537 + dampEnds_linked grid-stride loop (self-run, sha256 96
 reference_rank = 5
 tier = 3
 status = "passing"
-notes = "GKX vs repaired GX: <= 0.30% at 7 of 8 points, +1.45% at Miller ky .15. GKX vs GS2: <= 0.3% at Miller .30/.40, +0.65% at Miller .55, +1.0% at s-alpha .30, +2.4% at Miller .15; gyaradax s-alpha .30 is 1.1% below GKX. The repaired build reproduces the shipped adiabatic goldens to 0.06% above ky 0.1, so the clamp is immaterial for these two cases; the L-lin-cyclone-* rows still cite the time-fitted parity tables."
+notes = "GKX vs repaired GX: <= 0.30% at 7 of 8 points, +1.45% at Miller ky .15. GKX vs GS2: <= 0.3% at Miller .30/.40, +0.65% at Miller .55, +1.0% at s-alpha .30, +2.4% at Miller .15; gyaradax s-alpha .30 is 1.1% below GKX. The repaired build reproduces the shipped adiabatic goldens to 0.06% above ky 0.1, so the clamp is immaterial for these two cases; the L-lin-cyclone-* rows still cite the time-fitted parity tables. The csv also holds a stella v1.0 r1 scan in GX units (gamma and omega times sqrt 2, ky over sqrt 2); stella is 1.37-1.49x above GKX in gamma at ky .25-.71, an open stella-side disagreement, and is not a reference."
 
 [[row]]
 id = "X-ke-miller"

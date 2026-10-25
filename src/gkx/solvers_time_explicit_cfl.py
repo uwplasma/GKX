@@ -122,12 +122,13 @@ def _cfl_wavenumber_arrays(
     return kx, ky, kz
 
 
-def _laguerre_velocity_max(nl: int) -> float:
+def _laguerre_velocity_max(nl: int, *, node_max: bool = False) -> float:
+    """``nl``-th Laguerre root; ``node_max``: last node of the padded B_par grid."""
     if nl <= 0:
         return 0.0
     nj = max(1, (3 * nl) // 2 - 1)
     roots, _weights = laggauss(nj)
-    idx = min(max(nl - 1, 0), roots.size - 1)
+    idx = roots.size - 1 if node_max else min(max(nl - 1, 0), roots.size - 1)
     return float(roots[idx])
 
 
