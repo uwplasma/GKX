@@ -1687,7 +1687,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
         rtol=6e-5,
         atol=6e-6,
     )
-    with pytest.raises(NotImplementedError, match="Euler and RK2"):
+    with pytest.raises(NotImplementedError, match="gated for RK2"):
         integrate_linear(
             state,
             _grid,
