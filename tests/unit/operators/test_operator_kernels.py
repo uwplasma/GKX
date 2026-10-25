@@ -24,6 +24,8 @@ from gkx.core_velocity import (
     bessel_laguerre_kernels,
     gamma0,
     laguerre_gyroaverage_neighbors,
+    laguerre_scaled_functions,
+    mu_grid_nodes,
 )
 from gkx.diagnostics.analysis import fit_growth_rate
 from gkx.geometry import SAlphaGeometry
@@ -2717,3 +2719,188 @@ def test_nyquist_derivative_touches_only_the_self_conjugate_rows(ny, rows, nz):
     expected = out - self_row.reshape(1, 1, -1, 1, 1) * comp if nz % 2 == 0 else out
     got = _real_fft_nyquist_derivative(out, ny)
     np.testing.assert_array_equal(got, expected)
+
+
+# --- nodal magnetic-moment grid (LinearParams.mu_vperp_max) against the Laguerre path ---
+_MU_NEEDS_X64 = pytest.mark.skipif(
+    not jax.config.jax_enable_x64, reason="needs JAX_ENABLE_X64=true"
+)
+
+_MU_NZ = 16
+
+
+def _mu_setup(epsilon: float, rho: float, nmu: int, nm: int, vperp_max: float | None):
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=4, Nz=_MU_NZ, Lx=62.8, Ly=62.8, boundary="periodic")
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=epsilon, R0=2.77778)
+    params = LinearParams(
+        rho=rho,
+        kpar_scale=float(geom.gradpar()),
+        hypercollisions_const=0.0,
+        hypercollisions_kz=1.0,
+        p_hyper_m=6.0,
+        mu_vperp_max=vperp_max,
+    )
+    return build_linear_cache(grid, geom, params, nmu, nm), params
+
+
+def _mu_random_state(nmu: int, nm: int) -> jnp.ndarray:
+    rng = np.random.default_rng(0)
+    shape = (nmu, nm, 3, 1, _MU_NZ)
+    return jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+
+
+@_MU_NEEDS_X64
+def test_mu_grid_rule_is_exact_for_polynomials():
+    """Both rules integrate ``x^k exp(-x)``; the truncated one only up to ``x_max``."""
+
+    x, scaled = mu_grid_nodes(6, 4.0)
+    weights = scaled * np.exp(-x)
+    exact = [1.0 - np.exp(-8.0), 1.0 - 9.0 * np.exp(-8.0)]  # k = 0, 1 on [0, 8]
+    assert np.allclose([weights.sum(), (weights * x).sum()], exact, rtol=1e-12)
+    x, scaled = mu_grid_nodes(6, np.inf)
+    assert np.isclose((scaled * np.exp(-x) * x**5).sum(), 120.0, rtol=1e-12)
+
+
+@_MU_NEEDS_X64
+def test_gauss_laguerre_nodes_reduce_to_the_laguerre_operator_at_zero_kperp():
+    """Without ``B`` variation and gyroaveraging the two representations are one.
+
+    At ``epsilon = 0`` and ``k_perp rho -> 0`` the Gauss-Laguerre node amplitudes
+    are an orthogonal image of the Laguerre moments, ``O[j, l] = sqrt(w_j) (-1)^l
+    L_l(x_j)``, so the whole right-hand side (streaming, drifts, drives, field
+    solve, hypercollisions) must agree to round-off.
+    """
+
+    nmu, nm = 6, 6
+    lag_cache, lag_params = _mu_setup(0.0, 1e-6, nmu, nm, None)
+    mu_cache, mu_params = _mu_setup(0.0, 1e-6, nmu, nm, np.inf)
+    x, scaled = mu_grid_nodes(nmu, np.inf)
+    laguerre = laguerre_scaled_functions(x, nmu)[:nmu] * np.exp(x / 2)[None]
+    orth = np.sqrt(scaled * np.exp(-x))[:, None] * (
+        (-1.0) ** np.arange(nmu)[None] * laguerre.T
+    )
+    g_lag = _mu_random_state(nmu, nm)
+    g_mu = jnp.einsum("jl,l...->j...", jnp.asarray(orth), g_lag)
+    d_lag, phi_lag = linear_rhs_cached(g_lag, lag_cache, lag_params)
+    d_mu, phi_mu = linear_rhs_cached(g_mu, mu_cache, mu_params)
+    back = jnp.einsum("jl,j...->l...", jnp.asarray(orth), d_mu)
+    assert jnp.linalg.norm(back - d_lag) < 1e-10 * jnp.linalg.norm(d_lag)
+    assert jnp.linalg.norm(phi_mu - phi_lag) < 1e-10 * jnp.linalg.norm(phi_lag)
+
+
+@_MU_NEEDS_X64
+def test_weak_mirror_conserves_density_per_node():
+    """Streaming plus mirror conserve ``int dz S_j G_{j,0}`` at every node.
+
+    ``S_j = exp(-mu_j B / 2)`` is the half Maxwellian and the stored amplitude is
+    scaled by ``a_j = sqrt(B w_j e^{mu_j})``; the field coupling is switched off
+    (``tz = 0``) so that only the kinetic operator remains.
+    """
+
+    nmu, nm, vperp_max = 5, 6, 4.0
+    cache, params = _mu_setup(0.3, 0.5, nmu, nm, vperp_max)
+    params = replace(params, tz=0.0)
+    terms = LinearTerms(
+        mirror=1.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+    )
+    nodes, scaled = mu_grid_nodes(nmu, vperp_max)
+    bmag = np.asarray(cache.bmag)
+    energy = nodes[:, None] * bmag[None]
+    amplitude = np.sqrt(bmag[None] * scaled[:, None])
+    s_over_a = np.exp(-0.5 * energy) / amplitude  # S_j / a_j, shape (nmu, Nz)
+    z = np.linspace(-np.pi, np.pi, _MU_NZ, endpoint=False)
+    smooth = (
+        np.exp(1j * z)[None, None, None, None]
+        * np.arange(1, nm + 1)[None, :, None, None, None]
+    )
+    physical = jnp.asarray(np.broadcast_to(smooth, (nmu, nm, 3, 1, _MU_NZ)))
+    state = physical * jnp.asarray(amplitude)[:, None, None, None, :]
+    rate, _ = linear_rhs_cached(state, cache, params, terms=terms)
+    density_rate = np.sum(np.asarray(rate[:, 0]) * s_over_a[:, None, None], axis=-1)
+    scale = np.sum(np.abs(np.asarray(rate[:, 0])) * s_over_a[:, None, None], axis=-1)
+    assert np.max(np.abs(density_rate)) < 1e-9 * np.max(scale)
+
+
+@_MU_NEEDS_X64
+def test_ion_acoustic_landau_damping_on_the_mu_grid():
+    """The k_perp -> 0 slab root ``1 + T_i/T_e + zeta Z(zeta) = 0`` is recovered.
+
+    The perpendicular grid cannot change a parallel Landau root, so three nodes
+    must reproduce the damping rate and frequency of the dispersion relation
+    (within the Hermite truncation error of 64 moments).
+    """
+
+    from support.reference_physics import exact_root, fit_standing_wave
+
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=2, Nz=32, Lx=1.0e4, Ly=1.0e4, boundary="periodic")
+    )
+    geom = SAlphaGeometry(q=1.0, s_hat=0.0, epsilon=0.0, R0=1.0)
+    nmu, nm = 3, 64
+    params = LinearParams(
+        kpar_scale=1.0,
+        rho=1e-3,
+        hypercollisions_const=0.0,
+        hypercollisions_kz=1.0,
+        p_hyper_m=6.0,
+        mu_vperp_max=4.0,
+    )
+    terms = LinearTerms(
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        end_damping=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, nmu, nm)
+    rhs = jax.jit(
+        lambda s: linear_rhs_cached(s, cache, params, terms=terms, use_jit=False)[0]
+    )
+    nodes, scaled = mu_grid_nodes(nmu, 4.0)
+    sqrt_w = np.sqrt(
+        scaled * np.exp(-nodes)
+    )  # density weights of the scaled amplitudes
+    z = np.asarray(grid.z)
+    state = (
+        jnp.zeros((1, nmu, nm, grid.ky.size, 1, z.size), dtype=jnp.complex128)
+        .at[0, :, 0, 1, 0, :]
+        .set(jnp.asarray(sqrt_w[:, None] * np.exp(1j * z)[None]))
+    )
+    dt, steps = 0.01, 900
+    signal = np.empty(steps + 1)
+    for i in range(steps + 1):
+        density = np.asarray(state)[0, :, 0, 1, 0, :] * sqrt_w[:, None]
+        signal[i] = np.real(np.sum(density * np.exp(-1j * z)[None]) / z.size)
+        k1 = rhs(state)
+        k2 = rhs(state + 0.5 * dt * k1)
+        k3 = rhs(state + 0.5 * dt * k2)
+        state = state + dt / 6 * (k1 + 2 * k2 + 2 * k3 + rhs(state + dt * k3))
+    root = exact_root(1.0, complex(1.4, -0.6))
+    gamma, omega = fit_standing_wave(
+        np.arange(steps + 1) * dt, signal, (2.0, 9.0), (1.0, root.imag, root.real, 0.0)
+    )
+    assert abs(gamma - root.imag) < 0.01 * abs(root.imag)
+    assert abs(omega - root.real) < 0.01 * root.real
+
+
+@_MU_NEEDS_X64
+def test_mu_grid_refuses_the_dissipation_it_does_not_implement():
+    grid = build_spectral_grid(GridConfig(Nx=1, Ny=2, Nz=8, boundary="periodic"))
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
+    for field, value in (
+        ("nu", 0.01),
+        ("nu_hyper_l", 1.0),
+        ("hypercollisions_const", 1.0),
+    ):
+        kwargs = {"hypercollisions_const": 0.0, "mu_vperp_max": 4.0, field: value}
+        with pytest.raises(NotImplementedError, match="nodal mu grid"):
+            build_linear_cache(grid, geom, LinearParams(**kwargs), 4, 4)

@@ -427,10 +427,17 @@ def _lm_views(H):
     return view
 
 
-def mirror_term(H, ell, sqrt_m, sqrt_m_p1):
-    """Mirror coupling ``(l, m) <- (l, m+1), (l-1, m+1), (l, m-1), (l+1, m-1)``."""
+def mirror_term(H, ell, sqrt_m, sqrt_m_p1, nodal=False):
+    """Mirror coupling ``(l, m) <- (l, m+1), (l-1, m+1), (l, m-1), (l+1, m-1)``.
+
+    Nodal: ``ell`` is ``mu_j B`` and ``[(x-1) sqrt(m) H_{m-1} - (x+1) sqrt(m+1) H_{m+1}] / 2``.
+    """
 
     view = _lm_views(H)
+    if nodal:
+        return 0.5 * (
+            sqrt_m * (ell - 1.0) * view(0, -1) - sqrt_m_p1 * (ell + 1.0) * view(0, 1)
+        )
     return (
         -sqrt_m_p1 * (ell + 1.0) * view(0, 1)
         - sqrt_m_p1 * ell * view(-1, 1)
@@ -453,9 +460,11 @@ def curvature_term(H, m):
     return up * view(0, 2) + (2.0 * m + 1.0) * H + down * view(0, -2)
 
 
-def gradb_term(H, ell):
-    """Grad-B coupling ``l -> l, l +- 1``."""
+def gradb_term(H, ell, nodal=False):
+    """Grad-B coupling ``l -> l, l +- 1`` (nodal: ``mu_j B`` times ``H``)."""
 
+    if nodal:
+        return ell * H
     view = _lm_views(H)
     return (ell + 1.0) * view(1, 0) + (2.0 * ell + 1.0) * H + ell * view(-1, 0)
 
@@ -469,8 +478,9 @@ def mirror_contribution(
     sqrt_m: jnp.ndarray,
     sqrt_m_p1: jnp.ndarray,
     weight: jnp.ndarray,
+    nodal: bool = False,
 ) -> jnp.ndarray:
-    mirror = mirror_term(H, ell, sqrt_m, sqrt_m_p1)
+    mirror = mirror_term(H, ell, sqrt_m, sqrt_m_p1, nodal)
     bgrad_s = bgrad[None, None, None, None, None, :]
     vth_s = vth[:, None, None, None, None, None]
     return -weight * vth_s * bgrad_s * mirror
@@ -488,9 +498,10 @@ def curvature_gradb_contribution(
     imag: jnp.ndarray,
     weight_curv: jnp.ndarray,
     weight_gradb: jnp.ndarray,
+    nodal: bool = False,
 ) -> jnp.ndarray:
     curv = curvature_term(H, m)
-    gradb = gradb_term(H, ell)
+    gradb = gradb_term(H, ell, nodal)
     tz_s = tz[:, None, None, None, None, None]
     icv = imag * tz_s * omega_d_scale * cv_d[None, None, None, ...]
     igb = imag * tz_s * omega_d_scale * gb_d[None, None, None, ...]
@@ -595,6 +606,13 @@ def _reference_drift(H, f1, f2, f3):
     )
 
 
+def mu_energy(cache, ndim: int) -> jnp.ndarray:
+    """Node energy ``mu_j B(z)`` of the mu grid, shaped ``(Nmu, 1, ..., Nz)`` with ``ndim`` axes."""
+
+    nodes = cache.laguerre_roots.reshape((-1,) + (1,) * (ndim - 1))
+    return nodes * cache.bmag
+
+
 def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag, fuse=False):
     """Mirror, curvature and grad-B terms; ``fuse`` returns their sum as the first.
 
@@ -603,7 +621,14 @@ def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag, fuse
     """
 
     w_mirror, w_curv, w_gradb = weights
-    if fuse and all(jnp.ndim(w) == 0 for w in weights) and drift_kernel_usable(H):
+    nodal = cache.mu_grid
+    ell = mu_energy(cache, 5) if nodal else cache.l
+    if (
+        fuse
+        and not nodal
+        and all(jnp.ndim(w) == 0 for w in weights)
+        and drift_kernel_usable(H)
+    ):
         tz_d = omega_d_scale * tz[:, None, None, None]
         total = fused_drift(
             H,
@@ -616,10 +641,11 @@ def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag, fuse
         H,
         vth=vth,
         bgrad=cache.bgrad,
-        ell=cache.l,
+        ell=ell,
         sqrt_m=cache.sqrt_m,
         sqrt_m_p1=cache.sqrt_m_p1,
         weight=w_mirror,
+        nodal=nodal,
     )
     zero = jnp.asarray(0.0, dtype=w_curv.dtype)
     kwargs = dict(
@@ -627,9 +653,10 @@ def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag, fuse
         omega_d_scale=omega_d_scale,
         cv_d=cache.cv_d,
         gb_d=cache.gb_d,
-        ell=cache.l,
+        ell=ell,
         m=cache.m,
         imag=imag,
+        nodal=nodal,
     )
     curvature = curvature_gradb_contribution(
         H, weight_curv=w_curv, weight_gradb=zero, **kwargs
@@ -673,13 +700,15 @@ def _fused_drift_jvp(primals, tangents):
 def _laguerre_gradient_profile(
     J: jnp.ndarray,
     *,
-    b: jnp.ndarray,
+    b: jnp.ndarray | None,
     l4: jnp.ndarray,
     tprim_s: jnp.ndarray,
     fprim_s: jnp.ndarray,
     thermal_shift: float,
     upper_boundary: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
+    if b is None:  # nodal mu grid: ``l4`` is (mu_j B - 1) / 2, no neighbours
+        return J * (fprim_s + (2.0 * l4 + thermal_shift) * tprim_s)
     J_m1, J_p1 = laguerre_gyroaverage_neighbors(J, b, axis=1)
     if upper_boundary is not None:
         J_p1 = J_p1.at[:, -1].set(upper_boundary)
@@ -712,7 +741,7 @@ def _diamagnetic_m0_drive(
     phi: jnp.ndarray,
     bpar: jnp.ndarray | None,
     Jl: jnp.ndarray,
-    b: jnp.ndarray,
+    b: jnp.ndarray | None,
     JlB: jnp.ndarray,
     l4: jnp.ndarray,
     tprim_s: jnp.ndarray,
@@ -734,8 +763,10 @@ def _diamagnetic_m0_drive(
     )
     if bpar is None:
         return drive_m0
-    _, jl_p1 = laguerre_gyroaverage_neighbors(Jl, b, axis=1)
-    jlb_upper_boundary = jl_p1[:, -1] + Jl[:, -1]
+    jlb_upper_boundary = None
+    if b is not None:
+        _, jl_p1 = laguerre_gyroaverage_neighbors(Jl, b, axis=1)
+        jlb_upper_boundary = jl_p1[:, -1] + Jl[:, -1]
     return drive_m0 + omega_star_bpar * bpar * _laguerre_gradient_profile(
         JlB,
         b=b,
@@ -768,7 +799,7 @@ def _diamagnetic_apar_profile_drive(
     *,
     apar: jnp.ndarray,
     Jl: jnp.ndarray,
-    b: jnp.ndarray,
+    b: jnp.ndarray | None,
     l4: jnp.ndarray,
     tprim_s: jnp.ndarray,
     fprim_s: jnp.ndarray,
@@ -811,7 +842,7 @@ def diamagnetic_contribution(
     apar: jnp.ndarray | None,
     bpar: jnp.ndarray | None,
     Jl: jnp.ndarray,
-    b: jnp.ndarray,
+    b: jnp.ndarray | None,
     JlB: jnp.ndarray,
     l4: jnp.ndarray,
     tprim: jnp.ndarray,

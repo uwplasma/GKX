@@ -191,6 +191,7 @@ RUNTIME_RUN_KEYS = frozenset(
         "kx",
         "Nl",
         "Nm",
+        "mu_vperp_max",
         "solver",
         "method",
         "dt",

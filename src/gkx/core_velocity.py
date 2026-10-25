@@ -385,6 +385,75 @@ def laguerre_transform(nl: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return to_grid, to_spectral, roots
 
 
+def mu_grid_nodes(nmu: int, vperp_max: float) -> tuple[np.ndarray, np.ndarray]:
+    r"""Nodes :math:`\hat\mu_j` and scaled weights :math:`w_j e^{\hat\mu_j}` of the mu grid.
+
+    The rule integrates against :math:`e^{-\hat\mu}` exactly for polynomials of
+    degree :math:`2 n_\mu - 1`. A finite ``vperp_max`` truncates it to
+    :math:`[0, v_{\perp,\max}^2/2]`;
+    ``inf`` gives the standard Gauss-Laguerre rule, whose weights are returned
+    in the scaled form :math:`w_j e^{\hat\mu_j}` because :math:`w_j` itself
+    underflows.
+    """
+
+    if nmu < 1:
+        raise ValueError("nmu must be >= 1")
+    if np.isinf(vperp_max):
+        jac = np.diag(2.0 * np.arange(nmu) + 1.0) + np.diag(np.arange(1.0, nmu), 1)
+        x = np.linalg.eigvalsh(jac + np.triu(jac, 1).T)
+        scaled = laguerre_scaled_functions(x, nmu + 1)
+        return x, x / (((nmu + 1.0) ** 2) * scaled[nmu + 1] ** 2)
+    if vperp_max <= 0.0:
+        raise ValueError("vperp_max must be positive")
+    # Lanczos/Stieltjes on a fine Gauss-Legendre discretization of the weight.
+    t, wt = np.polynomial.legendre.leggauss(256)
+    xmax = 0.5 * vperp_max**2
+    pts, mass = (
+        0.5 * xmax * (t + 1.0),
+        0.5 * xmax * wt * np.exp(-0.5 * xmax * (t + 1.0)),
+    )
+    q_old, q = np.zeros_like(pts), np.full_like(pts, 1.0 / np.sqrt(mass.sum()))
+    alpha, beta = np.zeros(nmu), np.zeros(nmu - 1)
+    for k in range(nmu):
+        alpha[k] = np.sum(mass * pts * q * q)
+        if k == nmu - 1:
+            break
+        r = (pts - alpha[k]) * q - (beta[k - 1] * q_old if k else 0.0)
+        beta[k] = np.sqrt(np.sum(mass * r * r))
+        q_old, q = q, r / beta[k]
+    vals, vecs = np.linalg.eigh(np.diag(alpha) + np.diag(beta, 1) + np.diag(beta, -1))
+    return vals, mass.sum() * vecs[0] ** 2 * np.exp(vals)
+
+
+def mu_grid_gyro_factors(
+    vperp_max: float,
+    b: Any,
+    bmag: Any,
+    nmu: int,
+    real_dtype: Any,
+    xp: Any,
+) -> tuple[Any, ...]:
+    r"""Gyro factors of the nodal mu grid, in the slots of the Laguerre ones.
+
+    The state is the node amplitude scaled by :math:`a_j=\sqrt{(B/B_0)\,w_j
+    e^{\hat\mu_j}}`, so the Laguerre field sums apply unchanged with
+    :math:`J_j=a_j e^{-\mu_j B/2} J_0(\alpha_j)` and
+    :math:`J^B_j=2\mu_j B\,a_j e^{-\mu_j B/2} J_1(\alpha_j)/\alpha_j`,
+    :math:`\alpha_j^2=2\mu_j B\,b`. Returns ``(Jl, JlB, to_grid, to_spectral,
+    roots, j0, j1_over_alpha)``; the transforms are identities.
+    """
+
+    nodes, scaled_weights = mu_grid_nodes(nmu, float(vperp_max))
+    roots = xp.asarray(nodes, dtype=real_dtype)
+    energy = (roots[:, None] * bmag[None, :])[None, :, None, None, :]  # mu_j B(z)
+    weight = xp.asarray(scaled_weights, dtype=real_dtype)[:, None] * bmag[None, :]
+    amp = xp.sqrt(weight)[None, :, None, None, :] * xp.exp(-0.5 * energy)
+    alpha2 = xp.maximum(0.0, 2.0 * energy * b[:, None, ...])
+    j0, j1a = (f.astype(real_dtype) for f in _gyro_bessel_factors(alpha2, xp=xp))
+    eye = xp.eye(nmu, dtype=real_dtype)
+    return amp * j0, amp * 2.0 * energy * j1a, eye, eye, roots, j0, j1a
+
+
 # Round-trip accuracy that still leaves headroom below the physics tolerances.
 _LAGUERRE_ROUNDTRIP_TOLERANCE = 1.0e-8
 

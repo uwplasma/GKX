@@ -35,6 +35,7 @@ from gkx.terms.linear_terms import (
     drift_contributions,
     linked_streaming_contribution,
     linked_streaming_operand,
+    mu_energy,
 )
 
 RhsCallable = Callable[..., tuple[jnp.ndarray, FieldState]]
@@ -449,9 +450,9 @@ def _diamagnetic_contribution(
         apar=rhs_fields.h_apar,
         bpar=rhs_fields.h_bpar,
         Jl=cache.Jl,
-        b=cache.b,
+        b=None if cache.mu_grid else cache.b,
         JlB=cache.JlB,
-        l4=cache.l4,
+        l4=0.5 * (mu_energy(cache, 4) - 1.0) if cache.mu_grid else cache.l4,
         tprim=species.tprim,
         fprim=species.fprim,
         tz=species.tz,

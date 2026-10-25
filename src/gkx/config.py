@@ -751,6 +751,10 @@ class RuntimeRunConfig:
     ky: float | None = None
     Nl: int | None = None
     Nm: int | None = None
+    #: Nodal magnetic-moment grid instead of the Laguerre expansion: its
+    #: ``vperp_max`` cutoff (``inf`` for Gauss-Laguerre). ``Nl`` is then the
+    #: number of nodes. ``None`` keeps Laguerre.
+    mu_vperp_max: float | None = None
     solver: str | None = None
     method: str | None = None
     dt: float | None = None
@@ -765,7 +769,7 @@ class RuntimeRunConfig:
             if coerced <= 0:
                 raise ValueError(f"[run] {name} must be a positive integer")
             object.__setattr__(self, name, coerced)
-        for name in ("ky", "dt"):
+        for name in ("ky", "dt", "mu_vperp_max"):
             value = getattr(self, name)
             if value is not None:
                 object.__setattr__(self, name, float(value))

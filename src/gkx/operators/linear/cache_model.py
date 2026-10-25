@@ -125,6 +125,9 @@ class LinearCache:
     #: (:class:`~gkx.operators.linear.collisions.LandauBlocks`); ``None`` when
     #: the run uses the Dougherty kernel.
     landau_pairs: Any = None
+    #: True when the Laguerre axis holds nodes of the mu grid and
+    #: ``laguerre_roots`` their ``mu_hat`` values (``LinearParams.mu_vperp_max``).
+    mu_grid: bool = False
 
     def tree_flatten(self):
         children = (
@@ -196,6 +199,7 @@ class LinearCache:
             self.linked_full_cover,
             self.linked_use_gather,
             self.ny_full,
+            self.mu_grid,
         )
         return children, aux_data
 
@@ -210,6 +214,7 @@ class LinearCache:
             linked_full_cover,
             linked_use_gather,
             ny_full,
+            mu_grid,
         ) = aux_data
         base_count = 50
         base_children = list(children[:base_count])
@@ -229,6 +234,7 @@ class LinearCache:
             linked_full_cover=linked_full_cover,
             linked_use_gather=linked_use_gather,
             ny_full=ny_full,
+            mu_grid=mu_grid,
             ky_cut=children[-3],
             ntft_m0=children[-2],
             landau_pairs=children[-1],

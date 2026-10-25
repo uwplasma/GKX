@@ -1113,7 +1113,8 @@ def dominant_eigenpair(
         f"krylov method={cfg.method} dim={cfg.krylov_dim} restarts={cfg.restarts}",
     )
     solved = None
-    if cfg.method == "auto" and banded_fits(v0.shape):
+    # The banded shift estimate truncates the Laguerre axis, which has no meaning on mu nodes.
+    if cfg.method == "auto" and not cache.mu_grid and banded_fits(v0.shape):
         try:  # like adaptive, the dominant pair: no overlap selection
             solved = _dispatch_dominant_eigenpair(
                 v0,

@@ -173,6 +173,11 @@ class LinearParams:
     #: limit; the default, as in the runtime) or ``"dougherty"`` (conserving
     #: Lenard-Bernstein form).
     collision_model: str = "landau"
+    #: Perpendicular velocity representation. ``None`` keeps the Laguerre
+    #: expansion in ``mu B``. A number selects the nodal magnetic-moment grid
+    #: (:func:`gkx.core_velocity.mu_grid_nodes`) with that ``vperp_max``
+    #: (``inf``: Gauss-Laguerre); the Laguerre axis then holds the ``Nl`` nodes.
+    mu_vperp_max: float | None = None
 
     def const_branch_nu_hyper_m(self):
         """Return the Hermite hypercollision rate the *constant* branch uses.
@@ -253,11 +258,11 @@ class LinearParams:
             self.bpar_beta_scale,
             self.damp_ends_rate,
         )
-        return children, self.collision_model
+        return children, (self.collision_model, self.mu_vperp_max)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, collision_model=aux_data)
+        return cls(*children, collision_model=aux_data[0], mu_vperp_max=aux_data[1])
 
 
 _SPECIES_PARAM_NAMES = (

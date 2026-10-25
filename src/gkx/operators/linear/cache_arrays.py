@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.core_velocity import J_l_all
-from gkx.operators.linear.params import LinearParams, _as_species_array
+from gkx.operators.linear.params import LinearParams, _as_species_array, _is_tracer
 from gkx.operators.linear.streaming import shift_axis
 
 if TYPE_CHECKING:
@@ -117,6 +117,25 @@ def _build_gyroaverage_cache_arrays(
     Jl = jnp.moveaxis(J_l_all(b, l_max=Nl - 1), 0, 1).astype(real_dtype)
     JlB = Jl + shift_axis(Jl, -1, axis=1)
     return Jl, JlB.astype(real_dtype)
+
+
+def check_mu_grid_params(params: LinearParams) -> None:
+    """Refuse the terms the nodal mu grid does not implement (traced values pass)."""
+
+    if any(_is_tracer(v) for v in (params.nu, params.nu_hyper, params.nu_hyper_l)):
+        return
+    refused = {
+        "nu": np.any(np.asarray(params.nu) != 0.0),
+        "nu_hyper": params.nu_hyper != 0.0,
+        "nu_hyper_l": params.nu_hyper_l != 0.0,
+        "nu_hyper_lm": params.nu_hyper_lm != 0.0,
+        "hypercollisions_const": params.hypercollisions_const != 0.0,
+    }
+    if bad := [name for name, hit in refused.items() if hit]:
+        raise NotImplementedError(
+            f"the nodal mu grid has no collision operator and no Laguerre-index "
+            f"dissipation; set {', '.join(bad)} to zero"
+        )
 
 
 def hypercollision_damping(
