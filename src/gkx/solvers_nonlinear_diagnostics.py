@@ -362,14 +362,14 @@ class PreparedExplicitNonlinearDiagnostics:
         return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
 
 
-_EXPLICIT_DIAGNOSTIC_OPTION_KEYS = tuple(_ExplicitDiagnosticOptions.__annotations__)
+_EXPLICIT_OPTION_FIELDS = tuple(_ExplicitDiagnosticOptions.__annotations__)
 
 
 def _explicit_options_from_values(values: dict[str, Any]) -> _ExplicitDiagnosticOptions:
     """Pack public keyword values into a single internal options object."""
 
     return _ExplicitDiagnosticOptions(
-        **{key: values[key] for key in _EXPLICIT_DIAGNOSTIC_OPTION_KEYS}
+        **{key: values[key] for key in _EXPLICIT_OPTION_FIELDS}
     )
 
 
