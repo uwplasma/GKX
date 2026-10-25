@@ -604,14 +604,14 @@ reference_anchors = [
   "KBM, HSX, and W7-X nonlinear parity envelopes from independent-code comparisons",
   "explicit nonlinear diagnostic scans used by transport-window audits",
   "IMEX nonlinear diagnostic scans used by semi-implicit transport-window audits",
-  "facade-injected nonlinear diagnostic kernels used by debug and parity tests",
+  "nonlinear diagnostic kernels patched at module level by debug and parity tests",
 ]
 physics_contracts = [
   "nonlinear acceptance uses window statistics rather than one-time samples",
   "mode-resolved Wphi and heat-flux spectra localize transport mismatches",
   "the post-saturation adjoint differentiates the physical total heat flux",
   "explicit and IMEX diagnostic integration assemble gamma, omega, energy, heat-flux, particle-flux, and resolved spectra from one state convention",
-  "facade-injected diagnostic kernels preserve the same observable definitions as cached nonlinear RHS runs",
+  "module-level diagnostic kernels preserve the same observable definitions as cached nonlinear RHS runs",
 ]
 numerics_contracts = [
   "Poisson-bracket paths preserve expected antisymmetry in reduced tests",
@@ -620,7 +620,7 @@ numerics_contracts = [
   "fixed and adaptive explicit diagnostic paths share one time-step policy and projection convention",
   "IMEX diagnostic paths keep the nonlinear term explicit and the linear solve implicit while sharing diagnostic assembly",
   "sampled diagnostic scans preserve final-time samples and resolved-diagnostic axis lengths",
-  "dependency injection keeps branch choices explicit while leaving traced state arrays JAX-transformable",
+  "branch choices stay explicit while traced state arrays remain JAX-transformable",
 ]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",

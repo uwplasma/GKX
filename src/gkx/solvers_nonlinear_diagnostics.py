@@ -1,9 +1,7 @@
-"""Nonlinear diagnostic integration drivers.
+"""Nonlinear integration: cached RHS, state integrators and diagnostic drivers.
 
-This module owns the orchestration for explicit nonlinear diagnostic runs.
-:mod:`gkx.solvers_nonlinear_diagnostics` injects the concrete
-kernels so tests and downstream users can still patch these seams without
-keeping the large implementation body inline.
+The explicit and IMEX diagnostic drivers call the kernels as module-level
+names, so tests patch them on this module.
 """
 
 from __future__ import annotations
@@ -513,7 +511,7 @@ def _make_explicit_diagnostic_callable(
 def _make_explicit_scan_step(
     prepared: _ExplicitPreparedState,
     policies: _ExplicitRuntimePolicies,
-    rhs_fn: Callable[[jnp.ndarray], jnp.ndarray],
+    rhs_fn: Callable[..., Any],
     compute_diag_from_state: Callable[..., Any],
     params: LinearParams,
     *,
@@ -1984,7 +1982,7 @@ def _options_from_scope(scope: dict[str, Any], keys: tuple[str, ...]) -> dict[st
 
 
 def _nonlinear_diagnostic_kernels() -> NonlinearDiagnosticKernels:
-    """Return diagnostic kernels for dependency-injected nonlinear diagnostics."""
+    """Return the diagnostic kernels passed to the diagnostic tuple builder."""
 
     return NonlinearDiagnosticKernels(
         instantaneous_growth_rate_step=_instantaneous_growth_rate_step,

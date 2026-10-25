@@ -2934,7 +2934,7 @@ def test_nonlinear_bpar_cfl_uses_the_last_laguerre_node() -> None:
     from numpy.polynomial.laguerre import laggauss
 
     from gkx.operators.nonlinear.policies import _bracket_bounds
-    from gkx.solvers_time_explicit_cfl import _laguerre_velocity_max
+    from gkx.solvers_time_explicit import _laguerre_velocity_max
 
     nl = 8
     grid = SimpleNamespace(kx=np.zeros(4), ky=np.zeros(4))

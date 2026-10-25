@@ -88,7 +88,9 @@ recursive = true
 # 160 -> 136 (ARCH-B): reduced stellarator model deleted, single-consumer
 # helpers merged into their consumers, decomposition contracts deleted.
 # 136 -> 129 (ARCH-C): solve-layer collapse, growth_windows into growth_rates; report gates moved to scripts/checks/_gates. Measured.
-baseline = 129
+# 129 -> 124: merged the nonlinear and explicit-time solver families (imex_diagnostics, diagnostic_integration,
+# state_integration, time_explicit_cfl, time_explicit_steps folded into their only consumers). Measured.
+baseline = 124
 target = 45
 
 [[topology_policy.counts]]
@@ -440,9 +442,27 @@ path = "solvers_nonlinear_imex.py"
 # 1189 -> 1293: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
 # 1293 -> 1304: electron mirror implicit (#370) on top of #363/#368, measured.
 # 1304 -> 1521: ARK3(2)4L[2]SA, factor as scan operand, chunked factor build, adaptive-dt control (ImexDtControl); measured.
-baseline_lines = 1521
+# 1521 -> 1754: absorbs solvers_nonlinear_imex_diagnostics (its only consumer besides the diagnostics driver) and the
+# diagnostics driver moved out to solvers_nonlinear_diagnostics; measured.
+baseline_lines = 1754
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
+
+[[complexity_policy.exceptions]]
+path = "solvers_nonlinear_diagnostics.py"
+# 0 -> 3384: merges solvers_nonlinear_diagnostic_integration, solvers_nonlinear_state_integration and the old
+# solvers_nonlinear_diagnostics, and drops the dependency-injection containers between them (every kernel the
+# containers carried is a module-level name here, so tests patch it directly). Measured.
+baseline_lines = 3384
+target_lines = 1200
+reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
+
+[[complexity_policy.exceptions]]
+path = "solvers_time_explicit.py"
+# 0 -> 1701: merges solvers_time_explicit_cfl and solvers_time_explicit_steps, each of which had this module as its only consumer. Measured.
+baseline_lines = 1701
+target_lines = 1200
+reason = "The CFL estimate, the one-step kernels and the linear explicit drivers are one integrator; the offcuts had a single consumer."
 
 [[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
@@ -1178,7 +1198,8 @@ recursive = true
 # 68890 -> 68892: conventions/B_par CFL (#387) after #386, measured.
 # 68892 -> 68896: SOLVAX 0.33 normalized Thomas (#389) after #387, measured.
 # 68896 -> 68785: retired euler, k10, rk3_heun, rk3_classic and semi-implicit. Measured.
-baseline = 68785
+# 68785 -> 68380: merged the solver families (5 modules removed) and dropped the diagnostics dependency containers. Measured.
+baseline = 68380
 target = 45000
 
 [[line_budget_policy.counts]]
