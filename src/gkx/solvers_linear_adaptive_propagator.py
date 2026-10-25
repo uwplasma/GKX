@@ -590,7 +590,9 @@ _BAND_TOL = (
 )
 
 
-def _dense_estimate(lower, diag, upper, laguerre: np.ndarray, nl: int) -> complex:
+def _dense_estimate(
+    lower, diag, upper, laguerre: np.ndarray, nl: int, nodal: bool = False
+) -> complex:
     """Fastest-growing eigenvalue of a dense leading truncation of the blocks.
 
     The whole operator if it has at most ``_DENSE_N`` unknowns, else Laguerre
@@ -598,7 +600,7 @@ def _dense_estimate(lower, diag, upper, laguerre: np.ndarray, nl: int) -> comple
     ``laguerre`` holds each block unknown's Laguerre index, padding above ``nl``.
     """
 
-    cut = nl if (laguerre < nl).sum() <= _DENSE_N else _COARSE_NL
+    cut = nl if nodal or (laguerre < nl).sum() <= _DENSE_N else _COARSE_NL
     rows = [np.flatnonzero(row < cut) for row in laguerre]
     fit = np.searchsorted(np.cumsum([r.size for r in rows]), _DENSE_N, side="right")
     rows = rows[: max(int(fit), 2)]
@@ -740,7 +742,7 @@ def _banded_ritz_pairs(
     if shift is None:
         # Dense eigenvalues of a leading truncation: everything if it is small, else
         # Laguerre < _COARSE_NL of as many Hermite pairs as fit in _DENSE_N unknowns.
-        shift = _dense_estimate(lower, diag, upper, laguerre, shape[-5])
+        shift = _dense_estimate(lower, diag, upper, laguerre, shape[-5], cache.mu_grid)
         note(f"banded shift from a dense truncation: sigma={shift:.5g}")
     sigma = complex(shift)
 

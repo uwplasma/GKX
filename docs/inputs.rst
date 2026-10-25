@@ -417,6 +417,7 @@ and ``[fit]`` are read by the commands that use them.
 * ``[damping_reference]`` (provenance written by
   ``migrate_end_damping_reference``; see `Explicit reference migration`_)
 * ``[run]`` / ``[scan]`` / ``[fit]`` (driver controls: ``ky``, ``Nl``, ``Nm``,
+  ``mu_vperp_max`` (nodal magnetic-moment grid, see :doc:`numerics`),
   ``solver``, ``method``, ``dt``, ``steps``, the scan ``ky`` list, and the
   growth-rate window options ``auto_window``, ``tmin``, ``tmax``,
   ``window_fraction``, ``min_points``, ``start_fraction``, ``growth_weight``,

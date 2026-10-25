@@ -33,6 +33,7 @@ from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.operators.linear.streaming import _scatter_unique_linked_modes
 from gkx.terms.assembly import assemble_rhs_cached_with_fields, compute_fields_cached
 from gkx.terms.config import FieldState, TermConfig
+from gkx.terms.linear_terms import mu_energy
 
 __all__ = [
     "ImplicitSolveStats",
@@ -286,7 +287,8 @@ def _build_implicit_preconditioner_data(
         + hyper_damp
     ).astype(real_dtype)
 
-    ell = cache.l.astype(real_dtype)
+    ell = (mu_energy(cache, 5) - 1.0) / 2.0 if cache.mu_grid else cache.l
+    ell = ell.astype(real_dtype)
     m = cache.m.astype(real_dtype)
     cv_d = cache.cv_d.astype(real_dtype)
     gb_d = cache.gb_d.astype(real_dtype)

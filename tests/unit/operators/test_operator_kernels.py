@@ -2904,3 +2904,24 @@ def test_mu_grid_refuses_the_dissipation_it_does_not_implement():
         kwargs = {"hypercollisions_const": 0.0, "mu_vperp_max": 4.0, field: value}
         with pytest.raises(NotImplementedError, match="nodal mu grid"):
             build_linear_cache(grid, geom, LinearParams(**kwargs), 4, 4)
+
+
+@_MU_NEEDS_X64
+def test_mu_grid_growth_rate_matches_converged_laguerre_on_cyclone():
+    """Cyclone ITG, ky = 0.3: eight nodes land on the Laguerre ``Nl = 16`` rate.
+
+    The shipped tutorial deck at ``Nz = 32, Nm = 8`` (a coarse ``Nz`` moves the two
+    discretizations of the mirror term apart by several percent, so it is not used).
+    """
+
+    import gkx
+    from pathlib import Path
+
+    deck = Path(__file__).parents[3] / "examples/01_linear_tokamak/case.toml"
+    case = gkx.load(deck)
+    case = replace(case, grid=replace(case.grid, Nz=32, ntheta=32))
+    nodal = replace(case, run=replace(case.run, mu_vperp_max=4.0))
+    laguerre = gkx.solve(case, ky_target=0.3, Nl=16, Nm=8, solver="krylov")
+    mu = gkx.solve(nodal, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
+    assert abs(mu.gamma - laguerre.gamma) < 0.03 * laguerre.gamma
+    assert abs(mu.omega - laguerre.omega) < 0.03 * laguerre.omega

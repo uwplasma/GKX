@@ -549,18 +549,55 @@ the linear integrators, Krylov applications and nonlinear IMEX solves.
 ``LinearParams.rho_star`` scales the perpendicular wavenumbers in the drift and
 drive terms without changing the FFT spacing.
 
-Nodal magnetic-moment grid (design, not implemented)
-----------------------------------------------------
+Nodal magnetic-moment grid
+--------------------------
 
-A planned off-by-default alternative to the Laguerre expansion stores the
-distribution at quadrature nodes of the fixed variable :math:`\hat\mu=\mu B_0`,
+``[run] mu_vperp_max`` (``LinearParams.mu_vperp_max``) replaces the Laguerre
+expansion in :math:`\mu B` by values at the nodes of a quadrature rule in the
+fixed variable :math:`\hat\mu=\mu B_0`; ``Nl`` is then the number of nodes.
+The default (unset) is the Laguerre path, bitwise unchanged. The nodes and
+weights :math:`w_j` are those of the rule for the weight :math:`e^{-\hat\mu}` on
+:math:`[0, v_{\perp,\max}^2/2]` (``vperp_max = 4`` is the usual choice;
+``inf`` gives Gauss-Laguerre). Hermite stays spectral. At node :math:`j` and
+position :math:`z`, with :math:`x_j=\mu_j B(z)=\hat\mu_j B/B_0`,
 
 .. math::
 
-   g(v_\parallel,\hat\mu_j,z)=e^{-\mu_j B(z)/2}\sum_m \phi^m(v_\parallel)\,G_m(\hat\mu_j,z).
+   g(v_\parallel,\hat\mu_j,z)=S_j(z)\sum_m\phi^m(v_\parallel)\,G_m(\hat\mu_j,z),
+   \qquad S_j=e^{-x_j/2}.
 
-Mirror coupling becomes
-:math:`\tfrac{\mu_j B}{2}\nabla_\parallel\ln B\,[\sqrt{m}\,G_{m-1}-\sqrt{m+1}\,G_{m+1}]`,
-gyroaverages are evaluated pointwise at each node, and fields are quadrature
-sums. No code is present yet. Motivation: the Laguerre path at ``Nl = 8`` is
-not converged for Cyclone ``ky >= 0.3`` and the TEM case.
+With the half Maxwellian factored out, the parallel advection at fixed
+:math:`\mu` becomes
+
+.. math::
+
+   \big(\mathcal L_\parallel H\big)_m=\sqrt{m+1}\,\nabla_\parallel H_{m+1}
+   +\sqrt m\,\nabla_\parallel H_{m-1}
+   +\tfrac{x_j}{2}\nabla_\parallel\ln B\,\big[\sqrt m\,H_{m-1}-\sqrt{m+1}\,H_{m+1}\big],
+
+so the mirror coupling is local to the node and antisymmetric in :math:`m`.
+:math:`\int dz\,S_jG_{j,0}` is conserved by streaming plus mirror. The other
+terms are evaluated per node: the grad-B drift multiplies by :math:`x_j`, the
+diamagnetic drive is :math:`\omega_*J_j\,[L_n^{-1}+(x_j-1)L_T^{-1}]` at :math:`m=0`
+(and :math:`L_T^{-1}/\sqrt2` at :math:`m=2`, as in the Laguerre path),
+and the gyroaverage is
+:math:`J_0(\alpha_j)`, :math:`2x_jJ_1(\alpha_j)/\alpha_j` with
+:math:`\alpha_j^2=2x_j k_\perp^2\rho^2` at the local field. Fields are quadrature
+sums with weights :math:`(B/B_0)\,w_je^{\hat\mu_j-x_j/2}` for the evolved
+moments and :math:`(B/B_0)\,w_je^{\hat\mu_j-x_j}` for the Maxwellian
+response :math:`\Gamma_0`.
+
+The state stored in the Laguerre slot is :math:`a_jG_{j}` with
+:math:`a_j=\sqrt{(B/B_0)\,w_je^{\hat\mu_j}}`. The two weights above then
+become the single array :math:`J_j=a_jS_jJ_0(\alpha_j)` that the Laguerre field
+solve, Hamiltonian view and streaming already use, and the :math:`\nabla_\parallel`
+of the scaled amplitude adds :math:`\tfrac12\nabla_\parallel\ln B` to the mirror
+coefficients, which become :math:`(x_j\pm1)/2`.
+
+Scope: linear runs, electrostatic and electromagnetic (:math:`A_\parallel`,
+:math:`B_\parallel`). Collisions, ``nu_hyper``, ``nu_hyper_l``, ``nu_hyper_lm``
+and ``hypercollisions_const`` are refused (a collision operator on exponentially
+stiff fixed-:math:`\hat\mu` nodes needs a weak-form matrix; the :math:`|k_z|`
+Hermite hypercollisions are unchanged). Nonlinear runs are refused. The seed
+``init_field`` writes ``l = 0``, i.e. the first node. Velocity-space diagnostics
+that assume Laguerre moments are not defined for the scaled node amplitudes.
