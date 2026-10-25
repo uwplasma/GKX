@@ -186,7 +186,12 @@ _STREAMING_ARNOLDI_STEPS = 30
 
 
 def measured_streaming_frequency(
-    params: LinearParams, cache: LinearCache, *, nl: int, nm: int
+    params: LinearParams,
+    cache: LinearCache,
+    *,
+    nl: int,
+    nm: int,
+    hypercollisions: float = 0.0,
 ) -> float:
     """Largest |eigenvalue| of parallel streaming plus the field solve.
 
@@ -198,8 +203,11 @@ def measured_streaming_frequency(
     step at cfl 0.9 sits at |lambda| dt = 2.15 > sqrt(3), outside RK3's
     imaginary-axis interval. Measured here by Arnoldi on the operator the run
     applies, restricted to ky >= 0 (the two-sided layout rebuilds ky < 0 from
-    them). Only for decks with a light kinetic species (v_t ratio > 4), where
-    streaming sets the step; returns 0 otherwise or when the cache is traced.
+    them). ``hypercollisions=1`` keeps the hypercollision damping, which for
+    kinetic electrons (kz-dependent, ~ v_te k_z) is as large as the streaming
+    rate and bounds an explicit linear step too. Only for decks with a light
+    kinetic species (v_t ratio > 4), where streaming sets the step; returns 0
+    otherwise or when the cache is traced.
     """
 
     vth = np.abs(np.atleast_1d(np.asarray(params.vth, dtype=float)))
@@ -217,7 +225,7 @@ def measured_streaming_frequency(
         gradb=0.0,
         diamagnetic=0.0,
         collisions=0.0,
-        hypercollisions=0.0,
+        hypercollisions=hypercollisions,
         end_damping=0.0,
     )
     ky = np.asarray(cache.ky)
