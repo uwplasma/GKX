@@ -40,7 +40,7 @@ from gkx.solvers_linear_parallel import (
     linear_rhs_parallel_cached,
 )
 from gkx.config import method_error
-from gkx.solvers_time_explicit_steps import (
+from gkx.solvers_time_explicit import (
     _linear_explicit_stage_update,
     _linear_native_step,
 )

@@ -94,7 +94,7 @@ from support.reference_physics import (
 from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
+from gkx.solvers_time_explicit import _linear_frequency_bound
 from gkx.runtime import (
     _build_initial_condition as build_runtime_initial_condition,
     build_runtime_geometry,

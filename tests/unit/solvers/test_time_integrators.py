@@ -37,7 +37,7 @@ from gkx.solvers_nonlinear_imex import (
     run_imex_diagnostic_scan,
     solve_imex_step,
 )
-from gkx.solvers_time_explicit_steps import (
+from gkx.solvers_time_explicit import (
     _linear_explicit_stage_update,
     _linear_native_step,
 )
@@ -46,7 +46,6 @@ from types import SimpleNamespace
 import gkx.solvers_linear_implicit as implicit_linear
 import gkx.solvers_linear_krylov_algorithms as krylov_algorithms
 import gkx.solvers_nonlinear_imex as imex_module
-import gkx.solvers_nonlinear_imex_diagnostics as imex_diagnostics
 import gkx.solvers_time_explicit as eti
 import gkx.solvers_time_explicit as explicit_diagnostics
 import jax
@@ -687,7 +686,7 @@ def test_fixed_dt_cfl_hint_conforms_imported_geometry_instead_of_aborting() -> N
     """
 
     from gkx.geometry import ensure_flux_tube_geometry_data
-    from gkx.solvers_time_explicit_cfl import warn_if_fixed_dt_exceeds_cfl
+    from gkx.solvers_time_explicit import warn_if_fixed_dt_exceeds_cfl
 
     _g0, grid, geom, params, _cache, n_l, n_m = _tiny_linear_case()
     imported = _closed_interval_copy(ensure_flux_tube_geometry_data(geom, grid.z))
@@ -1425,13 +1424,13 @@ def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> No
 
 def test_imex_diagnostic_helpers_have_canonical_owner() -> None:
     assert imex_module.advance_imex_nonlinear_state is (
-        imex_diagnostics.advance_imex_nonlinear_state
+        imex_module.advance_imex_nonlinear_state
     )
     assert imex_module.make_imex_diagnostic_step is (
-        imex_diagnostics.make_imex_diagnostic_step
+        imex_module.make_imex_diagnostic_step
     )
     assert imex_module.run_imex_diagnostic_scan is (
-        imex_diagnostics.run_imex_diagnostic_scan
+        imex_module.run_imex_diagnostic_scan
     )
 
 
@@ -2225,7 +2224,7 @@ _Q29_GENEROUS = dict(implicit_tol=1.0e-8, implicit_maxiter=200, implicit_restart
 def test_imex_diagnostics_route_carries_unconverged_solves_to_the_host_gate() -> None:
     """A starved inner budget is visible on the diagnostics route and refused."""
 
-    from gkx.solvers_nonlinear_diagnostic_integration import (
+    from gkx.solvers_nonlinear_diagnostics import (
         integrate_nonlinear_imex_diagnostics,
     )
 
@@ -2261,7 +2260,7 @@ def test_imex_diagnostics_route_carries_unconverged_solves_to_the_host_gate() ->
 def test_imex_diagnostics_default_return_is_two_elements() -> None:
     """A caller that does not ask gets what it got before, and reads no status."""
 
-    from gkx.solvers_nonlinear_diagnostic_integration import (
+    from gkx.solvers_nonlinear_diagnostics import (
         integrate_nonlinear_explicit_diagnostics,
         integrate_nonlinear_imex_diagnostics,
     )

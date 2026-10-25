@@ -23,7 +23,7 @@ from gkx.operators.linear.params import (
     _SPECIES_PARAM_NAMES,
 )
 from gkx.config import method_error
-from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
 from gkx.core_ky_layout import source_ny_full
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig

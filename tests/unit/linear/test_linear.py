@@ -1408,7 +1408,7 @@ def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
     from math import factorial
     from types import SimpleNamespace
 
-    from gkx.solvers_time_explicit_steps import _linear_native_step
+    from gkx.solvers_time_explicit import _linear_native_step
     from gkx.terms.assembly import _scalar_params
 
     cache = SimpleNamespace(dz=jnp.asarray(1.0), damp_profile=jnp.zeros(8))
@@ -4011,7 +4011,7 @@ def test_imex_routes_respect_dissipation_term_weights(
 
 
 def test_imex2_observed_order_for_noncommuting_split() -> None:
-    from gkx.solvers_time_explicit_steps import _linear_native_step
+    from gkx.solvers_time_explicit import _linear_native_step
 
     explicit = np.asarray([[0.0, 1.0], [-0.4, 0.2]])
     damping = np.asarray([0.3, 1.1])

@@ -121,8 +121,6 @@ owned_modules = [
   "gkx.cli",
   "gkx.config",
   "gkx.solvers_time_explicit",
-  "gkx.solvers_time_explicit_cfl",
-  "gkx.solvers_time_explicit_steps",
   "gkx.workflows.runtime.toml",
   "gkx.workflows.runtime.wout",
   "gkx.compilation_cache",
@@ -591,10 +589,10 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers_nonlinear_state_integration"
-path = "src/gkx/solvers_nonlinear_state_integration.py"
+module = "gkx.solvers_nonlinear_diagnostics"
+path = "src/gkx/solvers_nonlinear_diagnostics.py"
 owned_modules = [
-  "gkx.solvers_nonlinear_diagnostic_integration",
+  "gkx.solvers_nonlinear_diagnostics",
   "gkx.operators.nonlinear.brackets",
   "gkx.terms.nonlinear",
 ]
@@ -781,9 +779,7 @@ next_tests = [
 [[modules]]
 module = "gkx.solvers_nonlinear_imex"
 path = "src/gkx/solvers_nonlinear_imex.py"
-owned_modules = [
-  "gkx.solvers_nonlinear_imex_diagnostics",
-]
+owned_modules = []
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
 status = "active"
 coverage_priority = "high"

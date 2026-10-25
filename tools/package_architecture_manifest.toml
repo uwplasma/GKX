@@ -396,7 +396,7 @@ min_imported_names_for_split = 6
 # 2 -> 1 (ARCH-B): workflows/runtime/policies folded into runtime.py.
 # 1 -> 2 (ARCH-C): measured. growth_windows folded into growth_rates and
 # nonlinear_netcdf gained a second consumer, but two remain: solvers_nonlinear_diagnostics
-# (its sole consumer is solvers_nonlinear_diagnostic_integration; both together exceed the
+# (its sole consumer is solvers_nonlinear_diagnostics; both together exceed the
 # 1200-line budget and the perf lane owns the file) and workflows/runtime/artifacts
 # (absorbed orchestration_artifacts; merging into commands exceeds the budget).
 single_consumer_baseline = 2

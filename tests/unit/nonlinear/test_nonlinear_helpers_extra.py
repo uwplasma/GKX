@@ -18,7 +18,7 @@ from gkx.solvers_nonlinear_imex import (
     refactor_chain_implicit_linear,
 )
 from gkx.solvers_nonlinear_diagnostics import stiff_linear_split
-from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
 from gkx.terms.assembly import assemble_rhs_cached, compute_fields_cached
 from gkx.terms.config import TermConfig
 from gkx.workflows.runtime.toml import load
@@ -48,7 +48,7 @@ from gkx.operators.nonlinear.collisions import (
     _apply_collision_split,
     _collision_damping,
 )
-from gkx.solvers_nonlinear_diagnostic_integration import (
+from gkx.solvers_nonlinear_diagnostics import (
     _pack_resolved_diagnostics,
     _sample_indices_with_final,
     build_nonlinear_simulation_diagnostics,
@@ -75,8 +75,8 @@ from gkx.operators.nonlinear.projection import (
     _make_hermitian_projector,
     _make_nonlinear_state_projector,
 )
-import gkx.solvers_nonlinear_state_integration as nonlinear_state_integration_mod
-from gkx.solvers_nonlinear_state_integration import (
+import gkx.solvers_nonlinear_diagnostics as nonlinear_state_integration_mod
+from gkx.solvers_nonlinear_diagnostics import (
     DIVERGENCE_KNEE_STEPS,
     nonlinear_heat_flux_window,
     integrate_nonlinear,
@@ -1460,8 +1460,8 @@ def test_apply_collision_split_and_nonlinear_wrapper_routing(monkeypatch) -> Non
     assert out_fields.phi.shape == (4, 2, 2)
 
 
-_SI = "gkx.solvers_nonlinear_state_integration"
-_DI = "gkx.solvers_nonlinear_diagnostic_integration"
+_SI = "gkx.solvers_nonlinear_diagnostics"
+_DI = "gkx.solvers_nonlinear_diagnostics"
 
 
 def _diag_call(fn, G0=None, **kwargs):
@@ -2541,7 +2541,7 @@ def test_electromagnetic_window_actually_solves_apar_and_bpar(case_grid):
     """Guard the EM rows: a silently electrostatic field solve would still pass FD."""
 
     from gkx.operators.linear.cache_builder import build_linear_cache
-    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+    from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
 
     grid, geom = case_grid
     params = LinearParams(beta=0.02, fapar=1.0)

@@ -344,7 +344,7 @@ def _warn_if_linear_dt_exceeds_cfl(
 ) -> float | None:
     """Delegate the fixed-step CFL hint to the module that owns the bound."""
 
-    from gkx.solvers_time_explicit_cfl import warn_if_fixed_dt_exceeds_cfl
+    from gkx.solvers_time_explicit import warn_if_fixed_dt_exceeds_cfl
 
     return warn_if_fixed_dt_exceeds_cfl(
         grid=ctx.grid,
