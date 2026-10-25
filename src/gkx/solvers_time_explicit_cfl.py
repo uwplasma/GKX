@@ -448,7 +448,7 @@ def _linear_frequency_bound(
     nm: int,
     *,
     include_diamagnetic_drive: bool = True,
-    measure: bool = True,
+    measure: bool = False,
 ) -> np.ndarray:
     grid_bounds = _grid_frequency_bounds(grid)
     species = _species_frequency_scales(params, nl=nl, nm=nm)
@@ -481,7 +481,14 @@ def _linear_frequency_bound(
 
 
 def warn_if_fixed_dt_exceeds_cfl(
-    *, grid: Any, geom: Any, params: Any, n_laguerre: int, n_hermite: int, tcfg: Any
+    *,
+    grid: Any,
+    geom: Any,
+    params: Any,
+    n_laguerre: int,
+    n_hermite: int,
+    tcfg: Any,
+    measure: bool = False,
 ) -> float | None:
     """Warn at startup when a fixed linear dt exceeds the explicit CFL estimate.
 
@@ -489,7 +496,8 @@ def warn_if_fixed_dt_exceeds_cfl(
     imex methods only treat damping implicitly), so the explicit-time frequency
     bound applies to them too. An over-CFL dt overflows the trajectory, and the
     growth fit then fails loudly; this names the cause before the run starts.
-    Returns the CFL-stable step, or None when it cannot be bounded.
+    Returns the CFL-stable step, or None when it cannot be bounded. ``measure``
+    adds the Arnoldi radius (one cache build) for kinetic-electron decks.
 
     Geometry is conformed to this grid and any failure is swallowed: an
     imported equilibrium carries a closed theta interval one point longer than
@@ -504,7 +512,9 @@ def warn_if_fixed_dt_exceeds_cfl(
         geom_eff = ensure_flux_tube_geometry_data(geom, grid.z)
         wmax = float(
             np.sum(
-                _linear_frequency_bound(grid, geom_eff, params, n_laguerre, n_hermite)
+                _linear_frequency_bound(
+                    grid, geom_eff, params, n_laguerre, n_hermite, measure=measure
+                )
             )
         )
     except Exception:  # noqa: BLE001 - a startup hint must never stop a run

@@ -205,8 +205,9 @@ def measured_streaming_frequency(
     applies, restricted to ky >= 0 (the two-sided layout rebuilds ky < 0 from
     them). ``hypercollisions=1`` keeps the hypercollision damping, which for
     kinetic electrons (kz-dependent, ~ v_te k_z) is as large as the streaming
-    rate and bounds an explicit linear step too. Only for decks with a light kinetic species (v_t ratio > 4), where
-    streaming sets the step; returns 0 otherwise or when the cache is traced.
+    rate and bounds an explicit linear step too. Only for decks with a light
+    kinetic species (v_t ratio > 4), where streaming sets the step; returns 0
+    otherwise or when the cache is traced.
     """
 
     vth = np.abs(np.atleast_1d(np.asarray(params.vth, dtype=float)))
@@ -277,17 +278,10 @@ def _build_nonlinear_cfl_bounds(
     linear_frequency_bound_fn: Callable[..., Any],
     laguerre_velocity_max_fn: Callable[[int], float],
 ) -> _NonlinearCFLBounds:
-    nx = int(grid.kx.size)
-    ny = source_ny_full(grid)
-    kx = jnp.asarray(cache.kx, dtype=real_dtype)
-    ky = jnp.asarray(cache.ky, dtype=real_dtype)
-    nl = int(cache.l.shape[0])
-    nm = int(cache.m.shape[1])
-    vtmax = jnp.max(jnp.abs(jnp.asarray(params.vth, dtype=real_dtype)))
-    tzmax = jnp.max(jnp.abs(jnp.asarray(params.tz, dtype=real_dtype)))
+    nl, nm = int(cache.l.shape[0]), int(cache.m.shape[1])
     linear_omega = np.array(
         linear_frequency_bound_fn(
-            grid, geom, params, nl, nm, include_diamagnetic_drive=False, measure=False
+            grid, geom, params, nl, nm, include_diamagnetic_drive=False
         ),
         dtype=float,
     )
@@ -295,13 +289,46 @@ def _build_nonlinear_cfl_bounds(
         linear_omega[2], measured_streaming_frequency(params, cache, nl=nl, nm=nm)
     )
     return _NonlinearCFLBounds(
+        **_bracket_bounds(grid, params, cache, real_dtype, laguerre_velocity_max_fn),
+        linear_omega=jnp.asarray(linear_omega, dtype=real_dtype),
+    )
+
+
+def _bracket_bounds(grid, params, cache, real_dtype, laguerre_velocity_max_fn):
+    nx, ny = int(grid.kx.size), source_ny_full(grid)
+    kx = jnp.asarray(cache.kx, dtype=real_dtype)
+    ky = jnp.asarray(cache.ky, dtype=real_dtype)
+    nl, nm = int(cache.l.shape[0]), int(cache.m.shape[1])
+    vtmax = jnp.max(jnp.abs(jnp.asarray(params.vth, dtype=real_dtype)))
+    tzmax = jnp.max(jnp.abs(jnp.asarray(params.tz, dtype=real_dtype)))
+    return dict(
         kx_max=jnp.abs(kx[(nx - 1) // 3]) if nx > 1 else jnp.zeros((), real_dtype),
         ky_max=jnp.abs(ky[(ny - 1) // 3]) if ny > 1 else jnp.zeros((), real_dtype),
         vpar_max=2.0 * jnp.sqrt(jnp.asarray(max(nm, 1), real_dtype)) * vtmax,
         muB_max=jnp.asarray(laguerre_velocity_max_fn(nl), real_dtype) * tzmax,
         kxfac=jnp.asarray(cache.kxfac, dtype=real_dtype),
-        linear_omega=jnp.asarray(linear_omega, dtype=real_dtype),
     )
+
+
+def bracket_cfl_rate(
+    grid: SpectralGrid,
+    params: LinearParams,
+    cache: LinearCache,
+    *,
+    compressed_real_fft: bool,
+    real_dtype: Any,
+    laguerre_velocity_max_fn: Callable[[int], float],
+) -> Callable[[FieldState], jnp.ndarray]:
+    """``fields -> w_x + w_y``, the bracket's CFL rate (no linear terms)."""
+    kw = _bracket_bounds(grid, params, cache, real_dtype, laguerre_velocity_max_fn)
+
+    def rate(fields: FieldState) -> jnp.ndarray:
+        wx, wy = _nonlinear_cfl_frequency_components(
+            fields, grid, cache, compressed_real_fft=compressed_real_fft, **kw
+        )
+        return wx + wy
+
+    return rate
 
 
 def _make_nonlinear_dt_update(

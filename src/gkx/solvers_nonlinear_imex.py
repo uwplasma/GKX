@@ -691,7 +691,15 @@ def integrate_cached_imex_scan(
 _G3 = 0.4358665215
 _B1 = -1.5 * _G3**2 + 4.0 * _G3 - 0.25
 _B2 = 1.5 * _G3**2 - 5.0 * _G3 + 1.25
-# (explicit A, implicit A, explicit b, implicit b), Ascher-Ruuth-Spiteri 1997.
+_GK = 1767732205903 / 4055673282236
+_BK = (
+    1471266399579 / 7840856788654,
+    -4482444167858 / 7529755066697,
+    11266239266428 / 11593286722821,
+    _GK,
+)
+# (explicit A, implicit A, explicit b, implicit b, embedded b or None).
+# Ascher-Ruuth-Spiteri 1997.
 # ARS(3,4,3): third order, four explicit stages with an imaginary-axis
 # interval, three RHS per step. (ARS(2,2,2) was removed: its RK2 explicit part
 # has no imaginary-axis interval, so bracket advection is unstable at any dt.)
@@ -711,15 +719,51 @@ ARS_TABLEAUX: dict[str, Any] = {
         ),
         (0, _B1, _B2, _G3),
         (0, _B1, _B2, _G3),
+        None,
+    ),
+    # Kennedy & Carpenter 2003, ARK3(2)4L[2]SA: the stability and cost of
+    # ARS(3,4,3) (one more RHS) with an embedded second-order pair for dt
+    # control. Shared b for both parts, ESDIRK implicit part.
+    "imex-ark3": (
+        (
+            (0, 0, 0, 0),
+            (2 * _GK, 0, 0, 0),
+            (5535828885825 / 10492691773637, 788022342437 / 10882634858940, 0, 0),
+            (
+                6485989280629 / 16251701735622,
+                -4246266847089 / 9704473918619,
+                10755448449292 / 10357097424841,
+                0,
+            ),
+        ),
+        (
+            (0, 0, 0, 0),
+            (_GK, _GK, 0, 0),
+            (2746238789719 / 10658868560708, -640167445237 / 6845629431997, _GK, 0),
+            _BK,
+        ),
+        _BK,
+        _BK,
+        (
+            2756255671327 / 12835298489170,
+            -10771552573575 / 22201958757719,
+            9247589265047 / 10645013368117,
+            2193209047091 / 5459859503100,
+        ),
     ),
 }
 IMEX_CHAIN_METHODS = frozenset(ARS_TABLEAUX)
 
 
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["factors", "u", "w", "cap", "dr", "dc"],
+    meta_fields=["ky", "kx"],
+)
 @dataclass(frozen=True)
 class _ChainGroup:
-    ky: np.ndarray  # (chains, L) row indices
-    kx: np.ndarray  # (chains, L) column indices
+    ky: tuple  # (chains, L) row indices (tuples: static in the pytree)
+    kx: tuple  # (chains, L) column indices
     factors: Any  # per species group: (dinv, D, ladder scalars, mirror) of I - gdt S
     u: jnp.ndarray  # (chains, s, l, rows_m, N, nf*N): fields -> RHS rows
     w: jnp.ndarray  # (chains, nf, s, l, cols_m, N): moments -> fields (z-local)
@@ -728,6 +772,11 @@ class _ChainGroup:
     dc: jnp.ndarray  # (chains, nf*N) column equilibration
 
 
+@partial(
+    jax.tree_util.register_dataclass,
+    data_fields=["groups", "dt", "on"],
+    meta_fields=["shape", "scheme", "rows_m", "cols_m", "linear", "spec"],
+)
 @dataclass(frozen=True)
 class ChainImplicitLinear:
     """Structured ``(I - gamma dt L)^{-1}`` for the stiff linear terms.
@@ -791,8 +840,9 @@ class ChainImplicitLinear:
     def _solve(self, R: jnp.ndarray) -> jnp.ndarray:
         out = R
         for g in self.groups:
-            x = _gather(g.ky, g.kx, R).astype(g.cap.dtype)
-            out = _scatter(g.ky, g.kx, self._apply_inverse(g, x).astype(R.dtype), out)
+            ky, kx = np.asarray(g.ky), np.asarray(g.kx)
+            x = _gather(ky, kx, R).astype(g.cap.dtype)
+            out = _scatter(ky, kx, self._apply_inverse(g, x).astype(R.dtype), out)
         return out
 
     def ars_step(
@@ -801,24 +851,38 @@ class ChainImplicitLinear:
         dG: jnp.ndarray,
         rhs: Callable[[jnp.ndarray], jnp.ndarray],
         project: Callable[[jnp.ndarray], jnp.ndarray],
-    ) -> jnp.ndarray:
-        """One ARS step; ``dG = rhs(G)`` is the full (linear + bracket) RHS."""
-        a_exp, a_imp, b_exp, b_imp = ARS_TABLEAUX[self.scheme]
+        *,
+        with_error: bool = False,
+    ) -> Any:
+        """One IMEX step; ``dG = rhs(G)`` is the full (linear + bracket) RHS.
+
+        ``with_error`` also returns the embedded error estimate (schemes with
+        an embedded pair only).
+        """
+        a_exp, a_imp, b_exp, b_imp, b_hat = ARS_TABLEAUX[self.scheme]
         dt, gam = self.dt, a_imp[1][1]
-        # Stage 1 needs only the explicit part at G (ARS implicit weights on it
-        # are zero): dG minus the stiff linear terms, no further RHS.
-        lin: list[Any] = [None]
-        non: list[Any] = [dG - self.linear(G)]
+        # Stage 1 is explicit: dG minus the stiff linear terms, no further RHS.
+        lin: list[Any] = [self.linear(G)]
+        non: list[Any] = [dG - lin[0]]
+
+        def comb(be, bi):  # dt sum_j (be_j non_j + bi_j lin_j), ARS3 bits kept
+            return dt * sum(
+                (be[j] * non[j] if be[j] else 0.0) + (bi[j] * lin[j] if bi[j] else 0.0)
+                for j in range(len(be))
+            )
+
         for i in range(1, len(b_exp)):
             r = G + dt * sum(a_exp[i][j] * non[j] for j in range(i))
-            r = r + dt * sum(a_imp[i][j] * lin[j] for j in range(1, i))
+            if any(a_imp[i][:i]):
+                r = r + dt * sum(a_imp[i][j] * lin[j] for j in range(i) if a_imp[i][j])
             y = project(self.solve(r))
             lin.append((y - r) / (gam * dt))  # y = r + gamma dt L y
             non.append(rhs(y) - lin[i] if b_exp[i] or i + 1 < len(b_exp) else 0.0)
-        return G + dt * sum(
-            b_exp[j] * non[j] + (b_imp[j] * lin[j] if j else 0.0)
-            for j in range(len(b_exp))
-        )
+        G_new = G + comb(b_exp, b_imp)
+        if not with_error:
+            return G_new
+        d = [b - bh for b, bh in zip(b_imp, b_hat)]
+        return G_new, comb(d, d)
 
 
 def _gather(ky: np.ndarray, kx: np.ndarray, G: jnp.ndarray) -> jnp.ndarray:
@@ -907,12 +971,12 @@ def _thomas_factor(
         return a / safe
 
     a_lo, a_up = scalars(lower), scalars(upper)
-    err = jnp.maximum(
-        *(
-            jnp.linalg.norm(blk - a[..., None, None] * d[:, :, None, None])
-            / jnp.maximum(jnp.linalg.norm(blk), 1e-30)
+    err = jnp.stack(  # squared norms (defect, block) of lower and upper
+        [
+            jnp.sum(jnp.abs(x) ** 2)
             for blk, a in ((lower, a_lo), (upper, a_up))
-        )
+            for x in (blk - a[..., None, None] * d[:, :, None, None], blk)
+        ]
     )
     eye_k = jnp.eye(k, dtype=diag.dtype)
 
@@ -1057,7 +1121,7 @@ def _probe_stiff_blocks(idx, probe_s, probe_u, zero, zero_f, act, rows_m):
 
 def _factor_chain_group(
     k, x, s_parts, u_cols, zero, w_all, act, rows_m, cols_m, gdt, spec, e_mirror
-) -> _ChainGroup:
+) -> tuple[_ChainGroup, Any]:
     """Assemble, factor and couple the probed blocks of one chain group."""
     ns, nl, nm, *_r, nz = zero.shape
     dtype = zero.dtype
@@ -1070,32 +1134,181 @@ def _factor_chain_group(
             ok = (rows >= 0) & (rows < nm)
             col = np.moveaxis(part, 0, -1)[:, :, :, ok]  # (c, s, l, src, N, N)
             {1: lower, 0: diag, -1: upper}[shift][:, :, :, rows[ok]] = col
-    facs, errs = [], []
+    es = []
     for sp in spec:
         e: list[Any] = [None, None]
         if e_mirror is not None and sp[0] in e_mirror[0]:
             e = [jnp.tile(a[np.array(sp)], k.shape[1]) for a in e_mirror[1:]]
-        sel = [jnp.asarray(b[:, list(sp)]) for b in (lower, diag, upper)]
-        fac, err = _thomas_factor(*sel, *e, gdt)
-        facs.append(fac)
-        errs.append(float(err))
-    del lower, diag, upper, sel
-    factors = tuple(facs)
-    if not max(errs) < 1e-4:
-        raise ValueError(
-            f"Hermite off-diagonal blocks are not multiples of one parallel-"
-            f"gradient matrix (defect {max(errs):.1e}); the structured factor "
-            "needs it"
-        )
-
+        es.append(e)
     u = jnp.moveaxis(jnp.stack(u_cols, -1), 0, -1)
     u = u.reshape(c, ns, nl, len(rows_m), n, -1)  # last axis (f, N)
     wq = w_all[:, :, list(cols_m)][:, :, :, act][:, :, :, :, k, x, :]
     wq = jnp.transpose(wq, (4, 3, 0, 1, 2, 5, 6)).reshape(
         c, len(act), ns, nl, len(cols_m), n
     )
-    cap, dr, dc = _capacitance(factors, u, wq, gdt, rows_m, cols_m, nm, spec)
-    return _ChainGroup(k, x, factors, u, wq, cap, dr, dc)
+    raw = ((lower, diag, upper), es)
+    return _refactor_group(
+        _ChainGroup(_static(k), _static(x), (), u, wq, *[jnp.zeros(())] * 3),
+        raw,
+        gdt,
+        rows_m,
+        cols_m,
+        spec,
+    ), raw
+
+
+@partial(jax.jit, donate_argnums=0)
+def _put(full: jnp.ndarray, part: jnp.ndarray, i: int) -> jnp.ndarray:
+    return jax.lax.dynamic_update_slice_in_dim(full, part, i, 0)
+
+
+def _defect(sq) -> float:
+    """Relative defect from summed squared norms (defect, block) of lo and up."""
+    sq = np.asarray(sq, np.float64)
+    return float(np.sqrt(sq[::2] / np.maximum(sq[1::2], 1e-60)).max())
+
+
+def _factor_chunked(sel, e, gdt, chunk_bytes: float = 4e8):
+    """``_thomas_factor`` over chain slices of the host blocks.
+
+    Chains do not couple, so slices factor independently into preallocated
+    outputs: the peak is the factor plus one slice, not the factor plus every
+    input block and temporary (10 GB for a 7 GB factor at 64x64, (8, 16)).
+    """
+    c = sel[0].shape[0]
+    parts = np.array_split(
+        np.arange(c), int(min(c, max(1, -(-sum(b.nbytes for b in sel) // chunk_bytes))))
+    )
+    full: Any = None
+    err: Any = 0.0
+    for ix in parts:
+        a, b = int(ix[0]), int(ix[-1]) + 1
+        fac, er = _thomas_factor(*[jnp.asarray(x[a:b]) for x in sel], *e, gdt)
+        err = err + np.asarray(er, np.float64)
+        if len(parts) == 1:
+            return fac, _defect(err)
+        dinv, d, lo, up, *ee = fac
+        lead = [*dinv, d, lo, up]
+        if full is None:
+            full = [jnp.zeros((c, *x.shape[1:]), x.dtype) for x in lead]
+        full = [_put(f, x, a) for f, x in zip(full, lead)]
+    return (tuple(full[: len(dinv)]), *full[len(dinv) :], *ee), _defect(err)
+
+
+def _refactor_group(g: _ChainGroup, raw, gdt, rows_m, cols_m, spec) -> _ChainGroup:
+    """Factor one chain group at ``gdt`` from its probed (host) blocks."""
+    blocks, es = raw
+    facs, errs = [], []
+    for sp, e in zip(spec, es):
+        sel = [b[:, list(sp)] for b in blocks]
+        fac, err = _factor_chunked(sel, e, gdt)
+        facs.append(fac)
+        errs.append(err)
+    if not max(errs) < 1e-4:
+        raise ValueError(
+            f"Hermite off-diagonal blocks are not multiples of one parallel-"
+            f"gradient matrix (defect {max(errs):.1e}); the structured factor "
+            "needs it"
+        )
+    factors = tuple(facs)
+    nm = blocks[1].shape[3]
+    cap, dr, dc = _capacitance(factors, g.u, g.w, gdt, rows_m, cols_m, nm, spec)
+    return dataclasses.replace(g, factors=factors, cap=cap, dr=dr, dc=dc)
+
+
+def refactor_chain_implicit_linear(
+    op: ChainImplicitLinear, dt: float, *, free: bool = False
+) -> Any:
+    """``op`` at a new ``dt``: refactor from the probed blocks, no new probes.
+
+    Same pytree structure, so a scan compiled for ``op`` reuses its executable.
+    ``free`` releases ``op``'s device factors first (two copies do not fit at
+    production size); ``op`` is unusable afterwards.
+    """
+    if free:
+        _FACTORS.clear()  # the reuse cache may hold ``op``
+        for g in op.groups:
+            for a in jax.tree.leaves((g.factors, g.cap, g.dr, g.dc)):
+                a.delete()
+    raws = op.__dict__["_raw"]
+    gdt = ARS_TABLEAUX[op.scheme][1][1][1] * float(dt)
+    groups = tuple(
+        _refactor_group(g, r, gdt, op.rows_m, op.cols_m, op.spec)
+        for g, r in zip(op.groups, raws)
+    )
+    new = dataclasses.replace(op, groups=groups, dt=float(dt))
+    for key in ("_raw", "_rhs"):  # host-side extras, not pytree fields
+        if key in op.__dict__:
+            object.__setattr__(new, key, op.__dict__[key])
+    return new
+
+
+class ImexDtControl:
+    """Chunk-level dt for the chain IMEX step (``fixed_dt = false``).
+
+    Between chunks: ``dt = min(cfl 8.5 / w_nl, cfl 2.5 / rho, dt_err,
+    dt_max)``. ``rho`` is the spectral radius of the explicit linear remainder
+    (drifts, ion mirror, drive) by Arnoldi at startup and 2.5 the measured
+    ARK3/ARS3 interval on it (0.82 x 3.6); ``w_nl`` the bracket CFL rate of the
+    current fields; 8.5 = 5 x 1.7 is the saturated-turbulence limit measured
+    on Cyclone KE (stable at dt 0.1, not 0.2, where the bracket rate is 80); ``dt_err`` the embedded
+    ARK3(2) estimate against ``rtol``. The factor is rebuilt only when dt
+    moves by more than 20% (down) or grows past 1.2x, and a non-finite chunk
+    is rejected and redone at half the step.
+    """
+
+    def __init__(self, op, cfl_rate, *, dt_max, cfl=0.9, rtol=1e-2, iters=20):
+        rhs, project = op.__dict__["_rhs"]
+        self.cfl, self.rtol, self.dt_max = float(cfl), float(rtol), float(dt_max)
+
+        def probe(op, G):
+            dG, fields = rhs(G)
+            _, err = op.ars_step(G, dG, lambda s: rhs(s)[0], project, with_error=True)
+            rel = jnp.linalg.norm(err) / (self.rtol * jnp.linalg.norm(G) + 1e-30)
+            return rel, cfl_rate(fields)
+
+        self._probe = jax.jit(probe)
+        scale = 1.0e-8  # rhs(s v) / s is linear in v to O(s |v|^2)
+
+        @jax.jit
+        def remainder(op, v):  # on projected states: the ky < 0 rows are rebuilt
+            v = project(v)
+            return project(rhs(scale * v)[0] / scale - op.linear(v))
+
+        rng = np.random.default_rng(0)
+        shape = op.shape
+        v = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+        q = [v / jnp.linalg.norm(v)]
+        h = np.zeros((iters + 1, iters), complex)
+        for j in range(iters):  # Arnoldi, as measured_streaming_frequency
+            w = remainder(op, q[j].astype(op.groups[0].cap.dtype)).astype(q[j].dtype)
+            for i, qi in enumerate(q):
+                h[i, j] = complex(jnp.vdot(qi, w))
+                w = w - h[i, j] * qi
+            h[j + 1, j] = float(jnp.linalg.norm(w))
+            q.append(w / max(h[j + 1, j], 1e-30))
+        self.rho = float(np.abs(np.linalg.eigvals(h[:iters, :iters])).max())
+
+    def propose(self, op, G) -> float:
+        """Next dt from the state at the end of a chunk."""
+        rel, w_nl = (float(x) for x in self._probe(op, G))
+        dt = float(op.dt)
+        dt_err = dt * min(1.5, max(0.5, 0.9 * max(rel, 1e-12) ** (-1.0 / 3.0)))
+        dt_cfl = self.cfl * min(8.5 / max(w_nl, 1e-30), 2.5 / max(self.rho, 1e-30))
+        self.last = dict(
+            err=rel, bracket=w_nl, remainder=self.rho, dt_err=dt_err, dt_cfl=dt_cfl
+        )
+        return min(dt_err, dt_cfl, self.dt_max)
+
+    def retune(self, op, dt: float):
+        """``op`` at ``dt`` if it moved by more than 20%, else ``op``."""
+        if dt < float(op.dt) / 1.2 or dt > 1.2 * float(op.dt):
+            return refactor_chain_implicit_linear(op, dt, free=True)
+        return op
+
+
+def _static(a: np.ndarray) -> tuple:
+    return tuple(map(tuple, np.asarray(a).tolist()))
 
 
 def _block_solve(factors, spec, x: jnp.ndarray) -> jnp.ndarray:
@@ -1244,12 +1457,13 @@ def build_chain_implicit_linear(
     probe_s = cached_jit(jax.vmap(lambda v: s_only(v, zero_f)))
     probe_u = cached_jit(jax.vmap(lambda F: split(zero, F)))
     probed = _probe_stiff_blocks(idx, probe_s, probe_u, zero, zero_f, act, rows_m)
-    groups = [
+    built = [
         _factor_chain_group(
             k, x, s_parts, u_cols, zero, w_all, act, rows_m, cols_m, gdt, spec, e_mirror
         )
         for (k, x), (s_parts, u_cols) in zip(idx, probed)
     ]
+    groups = [g for g, _raw in built]
     mask = np.zeros(shape[3:5], bool)
     for k, x in idx:
         mask[k, x] = True
@@ -1279,8 +1493,9 @@ def build_chain_implicit_linear(
     if not err < check_tol:
         raise ValueError(
             f"structured implicit factor residual {err:.2e} > {check_tol:.0e}: the "
-            "stiff operator is not block-tridiagonal in Hermite with z-local fields"
+            'stiff operator is not block-tridiagonal in Hermite with z-local fields; use method = "rk4-pi"'
         )
+    object.__setattr__(op, "_raw", tuple(raw for _g, raw in built))
     _FACTORS.update({reuse: op} if reuse else {})
     return op
 
@@ -1290,6 +1505,8 @@ __all__ = [
     "ChainImplicitLinear",
     "IMEX_CHAIN_METHODS",
     "build_chain_implicit_linear",
+    "refactor_chain_implicit_linear",
+    "ImexDtControl",
     "advance_imex_nonlinear_state",
     "advance_imex_nonlinear_state_with_stats",
     "imex_fixed_point_guess",

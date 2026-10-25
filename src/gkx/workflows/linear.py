@@ -340,7 +340,7 @@ def _resolve_linear_time_config(
 
 
 def _warn_if_linear_dt_exceeds_cfl(
-    ctx: _LinearRuntimeContext, tcfg: Any
+    ctx: _LinearRuntimeContext, tcfg: Any, measure: bool = False
 ) -> float | None:
     """Delegate the fixed-step CFL hint to the module that owns the bound."""
 
@@ -353,6 +353,7 @@ def _warn_if_linear_dt_exceeds_cfl(
         n_laguerre=ctx.n_laguerre,
         n_hermite=ctx.n_hermite,
         tcfg=tcfg,
+        measure=measure,
     )
 
 
@@ -654,7 +655,9 @@ def _run_linear_runtime_branch(
         # No dt chosen: this fixed-step route has no controller, so take the
         # CFL-stable step (the unclamped default 0.1 overflows with kinetic
         # electrons, whose streaming bound is ~700).
-        dt_cfl = _warn_if_linear_dt_exceeds_cfl(ctx, replace(time_config, dt=0.0))
+        dt_cfl = _warn_if_linear_dt_exceeds_cfl(
+            ctx, replace(time_config, dt=0.0), measure=True
+        )
         if dt_cfl is not None and dt_cfl < time_config.dt:
             stride = int(time_config.sample_stride)
             n_chunks = math.ceil(time_config.t_max / (dt_cfl * stride))
