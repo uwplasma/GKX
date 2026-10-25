@@ -276,7 +276,7 @@ def _build_nonlinear_cfl_bounds(
     *,
     real_dtype: Any,
     linear_frequency_bound_fn: Callable[..., Any],
-    laguerre_velocity_max_fn: Callable[[int], float],
+    laguerre_velocity_max_fn: Callable[..., float],
 ) -> _NonlinearCFLBounds:
     nl, nm = int(cache.l.shape[0]), int(cache.m.shape[1])
     linear_omega = np.array(
@@ -305,7 +305,8 @@ def _bracket_bounds(grid, params, cache, real_dtype, laguerre_velocity_max_fn):
         kx_max=jnp.abs(kx[(nx - 1) // 3]) if nx > 1 else jnp.zeros((), real_dtype),
         ky_max=jnp.abs(ky[(ny - 1) // 3]) if ny > 1 else jnp.zeros((), real_dtype),
         vpar_max=2.0 * jnp.sqrt(jnp.asarray(max(nm, 1), real_dtype)) * vtmax,
-        muB_max=jnp.asarray(laguerre_velocity_max_fn(nl), real_dtype) * tzmax,
+        muB_max=jnp.asarray(laguerre_velocity_max_fn(nl, node_max=True), real_dtype)
+        * tzmax,
         kxfac=jnp.asarray(cache.kxfac, dtype=real_dtype),
     )
 
@@ -317,7 +318,7 @@ def bracket_cfl_rate(
     *,
     compressed_real_fft: bool,
     real_dtype: Any,
-    laguerre_velocity_max_fn: Callable[[int], float],
+    laguerre_velocity_max_fn: Callable[..., float],
 ) -> Callable[[FieldState], jnp.ndarray]:
     """``fields -> w_x + w_y``, the bracket's CFL rate (no linear terms)."""
     kw = _bracket_bounds(grid, params, cache, real_dtype, laguerre_velocity_max_fn)
@@ -387,7 +388,7 @@ def build_nonlinear_time_step_policy(
     real_dtype: Any,
     resolve_cfl_fac_fn: Callable[[str, float | None], float],
     linear_frequency_bound_fn: Callable[..., Any],
-    laguerre_velocity_max_fn: Callable[[int], float],
+    laguerre_velocity_max_fn: Callable[..., float],
     cfl_frequency_components_fn: Callable[..., tuple[jnp.ndarray, jnp.ndarray]],
 ) -> NonlinearTimeStepPolicy:
     """Build the fixed/adaptive nonlinear time-step update policy."""
