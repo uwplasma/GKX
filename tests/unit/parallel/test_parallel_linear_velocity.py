@@ -1235,7 +1235,7 @@ def test_mixed_species_hermite_linked_operator_matches_serial_trajectory() -> No
         np.asarray(observed_rhs), np.asarray(expected_rhs), rtol=8e-5, atol=8e-6
     )
 
-    integration = dict(dt=1.0e-5, steps=2, method="euler", cache=cache, terms=terms)
+    integration = dict(dt=1.0e-5, steps=2, method="rk2", cache=cache, terms=terms)
     serial_state, serial_phi = integrate_linear(
         state, grid, geom, params, **integration
     )
@@ -1628,7 +1628,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
     integration = dict(
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=dissipative_cache,
         terms=integration_terms,
     )
@@ -1775,7 +1775,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         params,
         dt=1e-4,
         steps=9,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=terms,
     )
@@ -1786,7 +1786,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         params,
         dt=1e-4,
         steps=9,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=terms,
         parallel=parallel,
@@ -1866,7 +1866,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         collision_params,
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=collision_terms,
     )
@@ -1877,7 +1877,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         collision_params,
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=collision_terms,
         parallel=parallel,
@@ -1903,7 +1903,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         hyper_params,
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=hyper_terms,
     )
@@ -1914,7 +1914,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         hyper_params,
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=hyper_terms,
         parallel=parallel,
@@ -1963,7 +1963,7 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial(jit: bool) -> No
     integration = dict(
         dt=1e-6,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=terms,
     )
@@ -2050,7 +2050,7 @@ def test_species_pmap_collision_preserves_long_wavelength_moments() -> None:
     integration = dict(
         dt=1e-4,
         steps=5,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=terms,
     )
@@ -2115,7 +2115,7 @@ def test_species_pmap_parameter_gradient_matches_centered_difference() -> None:
             dynamic_params,
             dt=5.0e-4,
             steps=2,
-            method="euler",
+            method="rk2",
             cache=prepared_cache,
             terms=terms,
             parallel=parallel,

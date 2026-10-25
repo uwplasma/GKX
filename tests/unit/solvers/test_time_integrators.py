@@ -162,9 +162,7 @@ def test_instantaneous_growth_rate_step_max_mode_and_invalid_method() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "method", ["euler", "rk2", "rk3_classic", "rk3", "rk3_heun", "rk4", "sspx3", "k10"]
-)
+@pytest.mark.parametrize("method", ["rk2", "rk3", "rk4", "sspx3"])
 def test_linear_explicit_step_methods_match_scalar_linear_amplification(
     monkeypatch, method: str
 ) -> None:
@@ -195,7 +193,7 @@ def test_linear_explicit_step_rejects_unknown_method(monkeypatch) -> None:
         ),
     )
 
-    with pytest.raises(ValueError, match="explicit linear method"):
+    with pytest.raises(ValueError, match="method must be one of"):
         eti._linear_explicit_step(
             jnp.ones((1, 1, 2, 2, 1), dtype=jnp.complex64),
             _cache(),
@@ -206,7 +204,7 @@ def test_linear_explicit_step_rejects_unknown_method(monkeypatch) -> None:
         )
 
 
-@pytest.mark.parametrize(("method", "expected_calls"), [("sspx3", 3), ("k10", 10)])
+@pytest.mark.parametrize(("method", "expected_calls"), [("sspx3", 3)])
 def test_self_staging_explicit_methods_do_not_evaluate_unused_rhs(
     method: str, expected_calls: int
 ) -> None:
@@ -732,7 +730,7 @@ def _constant_rhs(value: float):
     return rhs_fn
 
 
-def test_advance_explicit_nonlinear_state_euler_projects_and_preserves_dtype() -> None:
+def test_advance_explicit_nonlinear_state_rk2_projects_and_preserves_dtype() -> None:
     G = jnp.asarray([1.0], dtype=jnp.float32)
     dG = jnp.asarray([3.0], dtype=jnp.float32)
 
@@ -740,19 +738,17 @@ def test_advance_explicit_nonlinear_state_euler_projects_and_preserves_dtype() -
         G,
         dG,
         jnp.asarray(0.1, dtype=jnp.float32),
-        method="euler",
+        method="rk2",
         rhs_fn=_constant_rhs(0.0),
         project_state=lambda state: 2.0 * state,
         state_dtype=jnp.float32,
     )
 
-    np.testing.assert_allclose(np.asarray(out), [2.6], rtol=1e-6)
+    np.testing.assert_allclose(np.asarray(out), [2.0], rtol=1e-6)
     assert out.dtype == jnp.float32
 
 
-@pytest.mark.parametrize(
-    "method", ["rk2", "rk3", "rk3_heun", "rk3_classic", "rk4", "rk4-pi"]
-)
+@pytest.mark.parametrize("method", ["rk2", "rk3", "rk4", "rk4-pi"])
 def test_advance_explicit_nonlinear_state_rk_methods_match_constant_rhs(
     method: str,
 ) -> None:
@@ -772,10 +768,8 @@ def test_advance_explicit_nonlinear_state_rk_methods_match_constant_rhs(
     np.testing.assert_allclose(np.asarray(out), [1.2], rtol=1e-6)
 
 
-@pytest.mark.parametrize("method", ["sspx3", "k10"])
-def test_advance_explicit_nonlinear_state_extended_methods_are_finite(
-    method: str,
-) -> None:
+def test_advance_explicit_nonlinear_state_sspx3_is_finite() -> None:
+    method = "sspx3"
     G = jnp.asarray([1.0], dtype=jnp.float32)
     dG = jnp.asarray([0.5], dtype=jnp.float32)
 
@@ -923,7 +917,7 @@ def test_make_explicit_diagnostic_step_forwards_runtime_policies() -> None:
 
     step = make_explicit_diagnostic_step(
         rhs_fn=rhs_fn,
-        method="euler",
+        method="rk2",
         project_state=project_state,
         state_dtype=jnp.float32,
         real_dtype=jnp.float32,
@@ -979,7 +973,7 @@ def test_make_explicit_diagnostic_step_forwards_runtime_policies() -> None:
 def test_explicit_diagnostic_step_caps_and_holds_at_time_horizon() -> None:
     step = make_explicit_diagnostic_step(
         rhs_fn=lambda G: (jnp.ones_like(G), G),
-        method="euler",
+        method="rk2",
         project_state=lambda G: G,
         state_dtype=jnp.float32,
         real_dtype=jnp.float32,
@@ -1024,7 +1018,7 @@ def test_explicit_diagnostic_step_caps_and_holds_at_time_horizon() -> None:
 def test_make_explicit_diagnostic_step_requires_collision_split_policy() -> None:
     step = make_explicit_diagnostic_step(
         rhs_fn=lambda G: (jnp.zeros_like(G), "fields"),
-        method="euler",
+        method="rk2",
         project_state=lambda G: G,
         state_dtype=jnp.float32,
         real_dtype=jnp.float32,
@@ -1242,11 +1236,8 @@ def test_block_checkpoint_plan_minimizes_storage_under_the_budget() -> None:
 @pytest.mark.parametrize(
     ("method", "one_step_factor"),
     [
-        ("euler", lambda a: 1.0 + a),
         ("rk2", lambda a: 1.0 + a + 0.5 * a * a),
         ("rk3", lambda a: 1.0 + a + 0.5 * a * a + (a * a * a) / 6.0),
-        ("rk3_heun", lambda a: 1.0 + a + 0.5 * a * a + (a * a * a) / 6.0),
-        ("rk3_classic", lambda a: 1.0 + a + 0.5 * a * a + (a * a * a) / 6.0),
         (
             "rk4",
             lambda a: (
@@ -1314,17 +1305,6 @@ def test_integrate_nonlinear_scan_projects_each_stage() -> None:
     assert jnp.allclose(G_final[..., 3, :], jnp.conj(G_final[..., 1, :]))
 
 
-def test_integrate_nonlinear_scan_rk3_alias_matches_heun_variant() -> None:
-    G0 = jnp.asarray([[1.0 + 0.0j, 0.5 + 0.25j]], dtype=jnp.complex64)
-    out_rk3, _ = integrate_nonlinear_scan(
-        _linear_rhs(0.3 - 0.2j), jnp.array(G0), 0.1, 3, method="rk3"
-    )
-    out_heun, _ = integrate_nonlinear_scan(
-        _linear_rhs(0.3 - 0.2j), jnp.array(G0), 0.1, 3, method="rk3_heun"
-    )
-    assert jnp.allclose(out_rk3, out_heun)
-
-
 def test_integrate_nonlinear_scan_final_only_skips_field_history_rhs() -> None:
     calls = {"rhs": 0}
 
@@ -1333,19 +1313,19 @@ def test_integrate_nonlinear_scan_final_only_skips_field_history_rhs() -> None:
         return 0.2 * G, FieldState(phi=jnp.sum(G, axis=0))
 
     G0 = jnp.asarray([[1.0 + 0.0j]], dtype=jnp.complex64)
-    expected = (1.0 + 0.1 * 0.2) ** 2 * G0
+    expected = (1.0 + 0.02 + 0.5 * 0.02**2) ** 2 * G0
     out = integrate_nonlinear_scan(
         rhs_fn,
         G0,
         0.1,
         2,
-        method="euler",
+        method="rk2",
         return_fields=False,
     )
 
     assert out.shape == G0.shape
     assert jnp.allclose(out, expected)
-    assert calls["rhs"] == 1
+    assert calls["rhs"] == 2
 
 
 def test_integrate_nonlinear_scan_accepts_dynamic_and_static_rhs_arguments() -> None:
@@ -1361,25 +1341,23 @@ def test_integrate_nonlinear_scan_accepts_dynamic_and_static_rhs_arguments() -> 
         G0,
         0.1,
         2,
-        method="euler",
+        method="rk2",
         return_fields=False,
         rhs_args=(jnp.asarray(0.2, dtype=jnp.float32),),
         rhs_static_args=(0.05,),
     )
 
     for _ in range(2):
-        expected = expected + 0.1 * (0.2 * expected + 0.05)
+        mid = expected + 0.05 * (0.2 * expected + 0.05)
+        expected = expected + 0.1 * (0.2 * mid + 0.05)
     np.testing.assert_allclose(np.asarray(out), np.asarray(expected), rtol=1.0e-6)
 
 
 @pytest.mark.parametrize(
     ("method", "expected_order", "min_observed_order"),
     [
-        ("euler", 1.0, 0.9),
         ("rk2", 2.0, 1.75),
         ("rk3", 3.0, 2.6),
-        ("rk3_heun", 3.0, 2.6),
-        ("rk3_classic", 3.0, 2.6),
         ("rk4", 4.0, 3.3),
         ("sspx3", 3.0, 2.6),
     ],
@@ -1411,18 +1389,6 @@ def test_integrate_nonlinear_scan_observed_order_against_exact_solution(
     assert metrics.asymptotic_order <= expected_order + 0.6
 
 
-def test_integrate_nonlinear_scan_k10_branch_is_finite_and_shape_preserving() -> None:
-    G0 = jnp.asarray([[1.0 + 0.0j, 0.5 + 0.25j]], dtype=jnp.complex64)
-
-    G_final, fields = integrate_nonlinear_scan(
-        _linear_rhs(0.3 - 0.2j), G0, 0.1, 2, method="k10"
-    )
-
-    assert G_final.shape == G0.shape
-    assert fields.phi.shape[0] == 2
-    assert np.all(np.isfinite(np.asarray(G_final)))
-
-
 def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> None:
     import gkx.callbacks as callbacks
 
@@ -1445,7 +1411,7 @@ def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> No
         G0,
         0.1,
         1,
-        method="euler",
+        method="rk2",
         show_progress=True,
     )
 
@@ -2712,9 +2678,7 @@ def test_state_split_rejects_anything_but_one_axis_on_one_mesh_axis(spec) -> Non
     assert "(1, 3, 4, 8, 4, 16)" in str(excinfo.value)
 
 
-@pytest.mark.parametrize(
-    "method", ["euler", "rk2", "rk3", "rk3_heun", "rk3_classic", "rk4", "sspx3"]
-)
+@pytest.mark.parametrize("method", ["rk2", "rk3", "rk4", "sspx3"])
 def test_integrate_nonlinear_sharded_explicit_methods_constant_rhs(
     monkeypatch, method: str
 ) -> None:
@@ -2783,7 +2747,7 @@ def test_integrate_nonlinear_sharded_final_only_path(monkeypatch) -> None:
         SimpleNamespace(),
         dt=0.25,
         steps=2,
-        method="euler",
+        method="rk2",
         return_fields=False,
     )
 
@@ -2791,7 +2755,7 @@ def test_integrate_nonlinear_sharded_final_only_path(monkeypatch) -> None:
     assert jnp.allclose(out, 1.0)
     # lax.scan traces one RHS site for the final-only graph. The field-history
     # path has a second RHS site to recover fields at the accepted state.
-    assert calls["rhs"] == 1
+    assert calls["rhs"] == 2
 
 
 def test_integrate_nonlinear_sharded_reuses_compiled_runner(monkeypatch) -> None:
@@ -2826,7 +2790,7 @@ def test_integrate_nonlinear_sharded_reuses_compiled_runner(monkeypatch) -> None
             SimpleNamespace(),
             dt=0.1,
             steps=2,
-            method="euler",
+            method="rk2",
             return_fields=False,
         )
         assert jnp.allclose(out, 0.2)
@@ -2969,3 +2933,22 @@ def _fake_window_metrics(
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     scale = jnp.asarray(float(dt) * int(steps) * float(tail_fraction))
     return gamma * heat * scale, heat / kperp, gamma - kperp
+
+
+@pytest.mark.parametrize(
+    ("method", "replacement"),
+    [("euler", "rk2"), ("k10", "rk4"), ("rk3_heun", "rk3"), ("rk3_classic", "rk3")],
+)
+def test_retired_stepper_names_raise_with_replacement(method, replacement) -> None:
+    with pytest.raises(ValueError, match=f"use '{replacement}'"):
+        eti._resolve_explicit_method(method)
+    with pytest.raises(ValueError, match=f"use '{replacement}'"):
+        advance_explicit_nonlinear_state(
+            jnp.asarray([1.0]),
+            jnp.asarray([0.0]),
+            jnp.asarray(0.1),
+            method=method,
+            rhs_fn=_constant_rhs(0.0),
+            project_state=lambda state: state,
+            state_dtype=jnp.float32,
+        )

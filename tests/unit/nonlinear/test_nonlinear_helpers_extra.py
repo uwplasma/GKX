@@ -1441,7 +1441,7 @@ def test_apply_collision_split_and_nonlinear_wrapper_routing(monkeypatch) -> Non
         SimpleNamespace(),
         dt=0.1,
         steps=2,
-        method="semi-implicit",
+        method="imex",
     )
     assert imex_out == ("imex", "fields")
 
@@ -1508,7 +1508,7 @@ def test_nonlinear_diagnostics_routes_explicit_imex_and_state(monkeypatch) -> No
         integrate_nonlinear_imex_diagnostics=lambda *a, **k: ("t_imex", "diag_imex"),
         _integrate_nonlinear_explicit_diagnostics_impl=lambda *a, **k: payload,
     )
-    imex = _diag_call(integrate_nonlinear_explicit_diagnostics, method="semi-implicit")
+    imex = _diag_call(integrate_nonlinear_explicit_diagnostics, method="imex")
     assert imex == ("t_imex", "diag_imex")
     explicit = _diag_call(integrate_nonlinear_explicit_diagnostics, method="rk3")
     assert explicit == payload[:2]
@@ -1659,7 +1659,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         cache=cache,
     )
 
-    for method in ("rk3_classic", "rk4", "k10"):
+    for method in ("rk3", "rk4"):
         t_branch, diag_branch, G_branch, _fields_branch = run(
             steps=1,
             method=method,
@@ -1678,7 +1678,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
 
     t, diag, G_final, fields_final = run(
         steps=3,
-        method="euler",
+        method="rk2",
         terms=TermConfig(collisions=1.0, hypercollisions=0.0),
         sample_stride=1,
         diagnostics_stride=2,
@@ -1749,7 +1749,7 @@ def test_explicit_diagnostics_resolved_schema_and_sample_axis(monkeypatch) -> No
         _SPECIES_PARAMS,
         dt=0.1,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=TermConfig(nonlinear=0.0),
         sample_stride=2,
@@ -1811,7 +1811,7 @@ def test_fixed_small_amplitude_mode_gamma_omega_are_finite(monkeypatch) -> None:
         _SPECIES_PARAMS,
         dt=0.05,
         steps=2,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=TermConfig(nonlinear=1.0),
         compressed_real_fft=False,

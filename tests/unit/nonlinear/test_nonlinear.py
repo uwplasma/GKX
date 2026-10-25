@@ -104,13 +104,15 @@ def test_explicit_nonlinear_integrator_applies_custom_collision_each_step():
         params,
         dt=0.1,
         steps=2,
-        method="euler",
+        method="rk2",
         terms=terms,
         compressed_real_fft=False,
         return_fields=False,
         collision_operator=DragCollision(),
     )
-    np.testing.assert_allclose(np.asarray(G_final), 0.925**2, atol=1.0e-6)
+    np.testing.assert_allclose(
+        np.asarray(G_final), (1 - 0.075 + 0.075**2 / 2) ** 2, atol=1.0e-6
+    )
 
 
 def test_nonlinear_imex_reuses_prebuilt_operator():

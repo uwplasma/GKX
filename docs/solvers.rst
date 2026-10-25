@@ -12,7 +12,7 @@ Linear methods run inside a JAX ``scan``:
 
    * - ``method``
      - update
-   * - ``euler``, ``rk2``, ``rk4``, ``sspx3``
+   * - ``rk2``, ``rk4``, ``sspx3``
      - explicit
    * - ``imex``
      - first-order diagonal IMEX: collision and hyper-diffusion damping
@@ -29,7 +29,7 @@ Linear methods run inside a JAX ``scan``:
 ``rk2`` at that fixed step; a deck without ``dt`` gets ``rk4`` with the CFL
 controller at ``cfl = 0.9`` (:class:`gkx.config.TimeConfig`).
 
-Nonlinear runs add ``rk3``, ``sspx3``, ``k10`` and the opt-in ``imex-ars3``
+Nonlinear runs add ``rk3``, ``sspx3`` and the opt-in ``imex-ars3``
 (parallel streaming and the field response implicit per twist-shift chain,
 fixed ``dt`` only).  Measured choice of default, one RTX A4000, steady
 seconds per unit of simulated time, Cyclone kinetic electrons at

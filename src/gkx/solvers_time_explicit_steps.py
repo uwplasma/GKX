@@ -7,6 +7,7 @@ from typing import Callable
 import jax
 import jax.numpy as jnp
 
+from gkx.config import method_error
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
     LinearParams,
@@ -144,20 +145,6 @@ def _linear_stage_rhs(
     return rhs
 
 
-def _linear_rk3_classic_state(
-    G: jnp.ndarray,
-    dt_val: jnp.ndarray,
-    *,
-    k1: jnp.ndarray,
-    rhs: LinearStageRhsFn,
-) -> jnp.ndarray:
-    G1 = G + dt_val * k1
-    k2 = rhs(G1)
-    G2 = 0.75 * G + 0.25 * (G1 + dt_val * k2)
-    k3 = rhs(G2)
-    return (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
-
-
 def _linear_rk3_heun_state(
     G: jnp.ndarray,
     dt_val: jnp.ndarray,
@@ -204,27 +191,6 @@ def _linear_sspx3_state(
     )
 
 
-def _linear_k10_state(
-    G: jnp.ndarray,
-    dt_val: jnp.ndarray,
-    *,
-    rhs: LinearStageRhsFn,
-) -> jnp.ndarray:
-    def euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
-        return G_state + (dt_val / 6.0) * rhs(G_state)
-
-    G_q1 = G
-    G_q2 = G
-    for _ in range(5):
-        G_q1 = euler_step(G_q1)
-    G_q2 = 0.04 * G_q2 + 0.36 * G_q1
-    G_q1 = 15.0 * G_q2 - 5.0 * G_q1
-    for _ in range(4):
-        G_q1 = euler_step(G_q1)
-    dG_final = rhs(G_q1)
-    return G_q2 + 0.6 * G_q1 + 0.1 * dt_val * dG_final
-
-
 def _linear_explicit_stage_update(
     G: jnp.ndarray,
     dt_val: jnp.ndarray,
@@ -238,25 +204,15 @@ def _linear_explicit_stage_update(
     # add an unused full gyrokinetic RHS evaluation to every completed step.
     if method_key == "sspx3":
         return _linear_sspx3_state(G, dt_val, rhs=rhs)
-    if method_key == "k10":
-        return _linear_k10_state(G, dt_val, rhs=rhs)
 
     k1 = rhs(G)
-    if method_key == "euler":
-        return G + dt_val * k1
     if method_key == "rk2":
         return G + dt_val * rhs(G + 0.5 * dt_val * k1)
-    if method_key == "rk3_classic":
-        return _linear_rk3_classic_state(G, dt_val, k1=k1, rhs=rhs)
-    if method_key in {"rk3", "rk3_heun"}:
+    if method_key == "rk3":
         return _linear_rk3_heun_state(G, dt_val, k1=k1, rhs=rhs)
     if method_key == "rk4":
         return _linear_rk4_state(G, dt_val, k1=k1, rhs=rhs)
-    raise ValueError(
-        f"Unsupported method {method_key!r}; explicit linear method must be one of "
-        "{'euler', 'rk2', 'rk3', "
-        "'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
-    )
+    raise method_error(method_key, {"rk2", "rk3", "rk4", "sspx3"})
 
 
 def _linear_native_step(

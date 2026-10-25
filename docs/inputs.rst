@@ -559,9 +559,10 @@ Notable runtime-only keys:
   the run. This is useful for long adaptive runs and batch jobs.
 * ``[time] method = "sspx3"``: use the SSPx3 explicit scheme directly. This is
   the relevant explicit method for ``secondary`` and collisional-ETG benchmark
-  families. Plain ``rk3`` is the three-stage Heun-style scheme (alias
-  ``rk3_heun``); ``rk3_classic`` is the classical RK3 update for controlled
-  comparisons. Linear integration also accepts ``euler``, ``rk2``, ``rk4``,
+  families. Plain ``rk3`` is the three-stage Heun-style scheme.
+  The names ``euler``, ``k10``, ``rk3_heun`` and ``rk3_classic`` were retired
+  and raise an error naming the replacement (``rk2``, ``rk4``, ``rk3``,
+  ``rk3``). Linear integration also accepts ``rk2``, ``rk4``,
   and the diagonal IMEX schemes ``imex`` and ``imex2`` (ARS(2,2,2), second
   order).
 * ``[terms]``: each key is a pure multiplicative operator weight:

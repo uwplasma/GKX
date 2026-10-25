@@ -2854,14 +2854,14 @@ def test_linear_explicit_step_applies_completed_step_mask(
         object(),
         linear_terms_to_term_config(LinearTerms()),
         0.1,
-        method="euler",
+        method="rk2",
     )
 
     expected = np.ones((2, 2, 1), dtype=np.complex64)
     expected[0, 0, 0] = 0.0
     expected[1, 1, 0] = 0.0
 
-    assert len(seen_states) == 2
+    assert len(seen_states) == 3
     assert np.allclose(seen_states[0][0, 0], 1.0)
     assert np.allclose(np.asarray(G_next[0, 0]), expected)
     assert np.allclose(np.asarray(seen_states[-1][0, 0]), expected)

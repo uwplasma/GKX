@@ -1325,7 +1325,7 @@ def test_single_ky_linear_run_with_hyperdiffusion_matches_the_full_grid_row(
         dtype=jnp.complex128,
     )
     out_full, _phi = integrate_linear(
-        G_full, grid_full, geom, params, dt=0.05, steps=1, method="euler", terms=terms
+        G_full, grid_full, geom, params, dt=0.05, steps=1, method="rk2", terms=terms
     )
     for iky in (1, 4):
         grid = select_ky_grid(grid_full, iky)
@@ -1336,7 +1336,7 @@ def test_single_ky_linear_run_with_hyperdiffusion_matches_the_full_grid_row(
             params,
             dt=0.05,
             steps=1,
-            method="euler",
+            method="rk2",
             terms=terms,
         )
         np.testing.assert_allclose(
@@ -1383,7 +1383,7 @@ def test_linked_end_damping_rate_is_timestep_free(
     )
     assert float(np.max(np.abs(end[:, 2:]))) == pytest.approx(expected, rel=1e-5)
 
-    # Euler increments per unit time agree across timesteps.
+    # RK2 increments per unit time agree across timesteps up to O(dt).
     increments = []
     for dt in (1.0e-4, 2.0e-4):
         integrated, _phi = integrate_linear(
@@ -1393,17 +1393,15 @@ def test_linked_end_damping_rate_is_timestep_free(
             params,
             dt=dt,
             steps=1,
-            method="euler",
+            method="rk2",
             terms=only_terms(end_damping=1.0),
         )
         increments.append((np.asarray(integrated) - np.asarray(G)) / dt)
     assert np.any(np.abs(increments[0]) > 1.0e-6)
-    assert np.allclose(increments[0], increments[1], rtol=1.0e-5, atol=1.0e-3)
+    assert np.allclose(increments[0], increments[1], rtol=5.0e-2, atol=1.0e-3)
 
 
-@pytest.mark.parametrize(
-    "method,order", [("euler", 1), ("rk2", 2), ("rk3", 3), ("rk4", 4)]
-)
+@pytest.mark.parametrize("method,order", [("rk2", 2), ("rk3", 3), ("rk4", 4)])
 @pytest.mark.parametrize("dt", [0.002, 0.2])
 def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
     """An isolated damped scalar follows R(-dt*nu), not an exact removed fraction."""
@@ -1550,7 +1548,7 @@ def test_integrate_linear_methods(cyclone_world):
     cfg, grid, geom = cyclone_world(Nx=6, Ny=6, Nz=8, Lx=6.0, Ly=6.0)
     params = LinearParams()
     G = jnp.zeros((2, 2, grid.ky.size, cfg.grid.Nx, cfg.grid.Nz))
-    for method in ("euler", "rk2", "imex", "semi-implicit", "sspx3"):
+    for method in ("rk2", "imex", "sspx3"):
         _, phi_t = integrate_linear(
             G, grid, geom, params, dt=0.1, steps=2, method=method
         )
@@ -1696,11 +1694,13 @@ def test_linear_integrator_applies_custom_collision_each_step(
         params,
         dt=0.1,
         steps=2,
-        method="euler",
+        method="rk2",
         terms=terms,
         collision_operator=DragCollision(),
     )
-    np.testing.assert_allclose(np.asarray(G_final), 0.925**2, atol=1.0e-6)
+    np.testing.assert_allclose(
+        np.asarray(G_final), (1 - 0.075 + 0.075**2 / 2) ** 2, atol=1.0e-6
+    )
 
 
 def test_linear_cache_tree_roundtrip(cyclone_world):
@@ -3179,9 +3179,10 @@ def test_integrate_linear_wrapper_routes_methods(monkeypatch) -> None:
         ),
     )
 
-    assert integrate_linear(
-        G0, grid, geom, params, dt=0.1, steps=2, method="semi-implicit"
-    ) == ("G", "phi")
+    assert integrate_linear(G0, grid, geom, params, dt=0.1, steps=2, method="imex") == (
+        "G",
+        "phi",
+    )
     assert integrate_linear(
         G0, grid, geom, params, dt=0.1, steps=2, method="rk2", donate=True
     ) == ("Gd", "phid")
@@ -3625,7 +3626,7 @@ def test_integrate_linear_cached_impl_invalid_and_sampled(monkeypatch) -> None:
         params,
         dt=0.1,
         steps=4,
-        method="euler",
+        method="rk2",
         sample_stride=2,
     )
     assert G_out.shape == G0.shape
@@ -3665,7 +3666,7 @@ def test_integrate_linear_cached_impl_uses_parallel_rhs(monkeypatch) -> None:
         params,
         dt=0.1,
         steps=2,
-        method="euler",
+        method="rk2",
         parallel=parallel,
     )
 
@@ -3757,7 +3758,7 @@ def test_integrate_linear_diagnostics_validates_and_records_energy(
     assert hl_t.shape[0] == 2
 
 
-@pytest.mark.parametrize("method", ["euler", "rk2", "sspx3", "rk4"])
+@pytest.mark.parametrize("method", ["rk2", "sspx3", "rk4"])
 def test_integrate_linear_diagnostics_explicit_method_branches(
     diagnostics_cache, patch_diagnostics_kernels, method: str
 ) -> None:
@@ -3808,7 +3809,7 @@ def test_integrate_linear_diagnostics_multispecies_density_and_invalid_method(
     assert phi_t.shape[0] == 2
     assert density_t.shape[0] == 2
     assert hl_t.shape[0] == 2
-    with pytest.raises(ValueError, match="Unsupported method"):
+    with pytest.raises(ValueError, match="method must be one of"):
         integrate_linear_diagnostics(
             G0,
             object(),
