@@ -1175,8 +1175,8 @@ recursive = true
 # 68441 -> 68796: adaptive chain IMEX (#373) on main with rk4-pi. Measured.
 # 68796 -> 68838: stepper-default v2 (#385). Measured.
 # 68838 -> 68890: linear KE time-route fix (#386) after #373/#385, measured.
-# 68890 -> 68894: normalized=True on two block_thomas_factor calls (ruff wraps them).
-baseline = 68894
+# 68890 -> 68892: conventions/B_par CFL (#387) after #386, measured.
+baseline = 68892
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1530,7 +1530,8 @@ recursive = true
 # 73564 -> 73592: adaptive chain IMEX (#373) on main with rk4-pi. Measured.
 # 73592 -> 73605: stepper-default v2 tests (#385). Measured.
 # 73605 -> 73624: linear KE time-route fix (#386) after #373/#385, measured.
-baseline = 73624
+# 73624 -> 73659: conventions/B_par CFL (#387) after #386, measured.
+baseline = 73659
 target = 35000
 
 [[line_budget_policy.counts]]

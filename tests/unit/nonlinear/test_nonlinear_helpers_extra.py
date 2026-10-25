@@ -1170,7 +1170,7 @@ def test_build_nonlinear_time_step_policy_fixed_and_adaptive() -> None:
         real_dtype=jnp.float32,
         resolve_cfl_fac_fn=lambda _method, _cfl_fac: 0.5,
         linear_frequency_bound_fn=lambda *args, **kwargs: np.asarray([1.0, 1.0, 1.0]),
-        laguerre_velocity_max_fn=lambda _nl: 2.0,
+        laguerre_velocity_max_fn=lambda _nl, **_: 2.0,
         cfl_frequency_components_fn=lambda *args, **kwargs: (
             jnp.asarray(2.0, dtype=jnp.float32),
             jnp.asarray(3.0, dtype=jnp.float32),
@@ -1578,7 +1578,7 @@ def _diag_stubs(mask_shape, *, rhs, fields_fn) -> dict[str, object]:
         ),
         _diagnostic_omega_mode_mask=lambda *a, **k: jnp.ones(mask_shape, dtype=bool),
         _linear_frequency_bound=lambda *a, **k: np.zeros(3, dtype=float),
-        _laguerre_velocity_max=lambda nl: 0.0,
+        _laguerre_velocity_max=lambda nl, **_: 0.0,
         nonlinear_rhs_cached=rhs,
         compute_fields_cached=fields_fn,
     )
