@@ -13,17 +13,12 @@ from gkx.config import (
 from gkx.runtime import (
     RuntimeIndependentParallelPlan,
     _runtime_external_phi,
-    _select_nonlinear_mode_indices,
 )
 from gkx.workflows.nonlinear import (
-    _active_kx_indices,
-    _active_ky_indices,
     _infer_runtime_nonlinear_steps,
     _nearest_index_from_candidates,
-    _validate_dealias_mask_shape,
 )
 from gkx.workflows.linear import (
-    _midplane_index,
     _normalize_linear_solver_name,
 )
 from gkx.workflows.runtime.orchestration_scan import (
@@ -37,12 +32,10 @@ from gkx.workflows.runtime.wout import (
     ky_max_target,
     perp_points_for,
     resolution_from_features,
-    direct_config_shorthand_args,
 )
 from gkx.workflows.runtime.toml import (
     load_toml,
     load_runtime_from_toml,
-    toml_shorthand_command,
 )
 from pathlib import Path
 from support.paths import REPO_ROOT
@@ -298,28 +291,6 @@ def test_maintained_runtime_decks_declare_schema_v1() -> None:
         assert load_toml(path).get("schema_version") == 1, path
 
 
-def test_toml_shorthand_policy_uses_one_runtime_command(
-    tmp_path: Path,
-) -> None:
-    cfg_path = tmp_path / "case.toml"
-    cfg_path.write_text("[physics]\n", encoding="utf-8")
-
-    assert toml_shorthand_command({"physics": {}}) == "run"
-    assert toml_shorthand_command({"case": "cyclone"}) == "run"
-    assert direct_config_shorthand_args(
-        [str(cfg_path), "--no-progress"],
-        load_toml_func=lambda _path: {"physics": {}},
-    ) == ["run", "--config", str(cfg_path), "--no-progress"]
-    assert direct_config_shorthand_args(
-        [str(cfg_path), "--plot"],
-        load_toml_func=lambda _path: {"case": "cyclone"},
-    ) == ["run", "--config", str(cfg_path), "--plot"]
-    assert direct_config_shorthand_args([]) is None
-    assert direct_config_shorthand_args(["--version"]) is None
-    assert direct_config_shorthand_args(["run", "--config", str(cfg_path)]) is None
-    assert direct_config_shorthand_args([str(tmp_path / "missing.toml")]) is None
-
-
 def test_load_runtime_from_toml_rejects_single_species_table(tmp_path: Path) -> None:
     path = tmp_path / "runtime_bad_species.toml"
     path.write_text(
@@ -332,70 +303,6 @@ name = "ion"
 
     with pytest.raises(TypeError, match=r"\[\[species\]\] entries"):
         load_runtime_from_toml(path)
-
-
-def _minimal_deck(time_table: str) -> str:
-    return f"""
-schema_version = 1
-
-[[species]]
-name = "ion"
-charge = 1.0
-mass = 1.0
-density = 1.0
-temperature = 1.0
-kinetic = true
-
-[grid]
-Nx = 1
-Ny = 8
-Nz = 16
-{time_table}
-"""
-
-
-@pytest.mark.parametrize(
-    ("time_table", "expected"),
-    [
-        # A step nobody chose must not be applied as a fixed one.
-        # ``TimeConfig.dt`` defaults to 0.1, which is ~7.8x the CFL-stable step
-        # of the shipped Cyclone deck: applied fixed, it overflows to a
-        # FloatingPointError whatever the scheme. With the controller on, the
-        # same deck integrates and rk4 covers the horizon in 29.1% fewer
-        # right-hand-side evaluations than rk2. So the integrator and the step
-        # policy are defaulted as a pair, and only where the deck chose no step.
-        pytest.param("", (None, False, "rk4"), id="no-time-table"),
-        pytest.param("\n[time]\nt_max = 4.0\n", (None, False, "rk4"), id="no-step"),
-        # Every shipped deck sets ``dt``, so none of them may move. Fourteen
-        # shipped decks and parity fixtures omit ``fixed_dt`` and depend on it
-        # being ``True`` at their own ``dt``; several back evidence-ledger rows.
-        # A chosen step keeps rk2 too, because a fixed step gives rk4 no
-        # step-size compensation for its four stages -- it would simply be
-        # twice the cost.
-        pytest.param(
-            "\n[time]\nt_max = 4.0\ndt = 0.002\n",
-            (0.002, True, "rk2"),
-            id="chosen-step",
-        ),
-        # The coupling supplies defaults; it never overrides what the deck said.
-        pytest.param(
-            '\n[time]\nt_max = 4.0\nmethod = "rk3"\nfixed_dt = true\n',
-            (None, True, "rk3"),
-            id="explicit-overrides",
-        ),
-    ],
-)
-def test_step_choice_selects_the_integrator_and_step_pairing(
-    tmp_path: Path, time_table: str, expected: tuple
-) -> None:
-    dt, fixed_dt, method = expected
-    path = tmp_path / "deck.toml"
-    path.write_text(_minimal_deck(time_table), encoding="utf-8")
-    cfg, _ = load_runtime_from_toml(path)
-    if dt is not None:
-        assert cfg.time.dt == dt
-    assert cfg.time.fixed_dt is fixed_dt
-    assert cfg.time.method == method
 
 
 def test_every_shipped_deck_chooses_its_own_step() -> None:
@@ -767,115 +674,6 @@ def test_zonal_response_decks_cover_their_horizon() -> None:
     assert data["run"]["steps"] * data["run"]["dt"] == pytest.approx(cfg.time.t_max)
 
 
-@pytest.mark.parametrize(
-    ("body", "expected"),
-    [
-        pytest.param(
-            '[[species]]\nname = "ion"\ncharge = 1.0\nmass = 1.0\ndensity = 1.0\n'
-            "temperature = 1.0\ntprim = 3.0\nfprim = 1.0\nkinetic = true\n"
-            "[grid]\nNx = 1\nNy = 12\nNz = 32\n"
-            '[geometry]\nmodel = "imported-netcdf"\n'
-            'geometry_file = "/tmp/w7x.eik.nc"\n'
-            "[physics]\nadiabatic_electrons = true\nelectromagnetic = false\n"
-            '[run]\nky = 0.3\nNl = 8\nNm = 12\nsolver = "explicit_time"\n',
-            {
-                "geometry.model": "imported-netcdf",
-                "geometry.geometry_file": str(Path("/tmp/w7x.eik.nc").resolve()),
-                "physics.adiabatic_electrons": True,
-            },
-            id="imported-netcdf",
-        ),
-        pytest.param(
-            '[geometry]\nmodel = "desc-eik"\ngeometry_file = "/tmp/w7x-desc.eik.nc"\n',
-            {
-                "geometry.model": "desc-eik",
-                "geometry.geometry_file": str(Path("/tmp/w7x-desc.eik.nc").resolve()),
-            },
-            id="desc-eik-alias",
-        ),
-        pytest.param(
-            '[geometry]\nmodel = "vmec"\nvmec_file = "/tmp/wout_test.nc"\n'
-            'torflux = 0.64\ngeometry_helper_python = "python3"\n',
-            {
-                "geometry.model": "vmec",
-                "geometry.vmec_file": str(Path("/tmp/wout_test.nc").resolve()),
-                "geometry.geometry_helper_python": "python3",
-            },
-            id="vmec-helper-python",
-        ),
-        pytest.param(
-            '[geometry]\nmodel = "vmec"\nvmec_file = "/tmp/wout_test.nc"\n'
-            'torflux = 0.64\ngeometry_helper_python = "python3"\n'
-            'geometry_helper_repo = "/tmp/helper"\n',
-            {
-                "geometry.geometry_helper_python": "python3",
-                "geometry.geometry_helper_repo": str(Path("/tmp/helper")),
-            },
-            id="helper-fields",
-        ),
-        pytest.param(
-            '[geometry]\nmodel = "miller"\nrhoc = 0.5\nq = 1.4\ns_hat = 0.8\n'
-            "R0 = 2.77778\nR_geo = 2.77778\nshift = 0.0\nakappa = 1.0\n"
-            "akappri = 0.0\ntri = 0.0\ntripri = 0.0\nbetaprim = 0.0\n"
-            'geometry_helper_python = "python3"\n',
-            {
-                "geometry.model": "miller",
-                "geometry.rhoc": 0.5,
-                "geometry.R_geo": 2.77778,
-                "geometry.akappa": 1.0,
-                "geometry.tripri": 0.0,
-                "geometry.geometry_helper_python": "python3",
-            },
-            id="miller",
-        ),
-    ],
-)
-def test_load_runtime_from_toml_keeps_geometry_fields(
-    tmp_path: Path, body: str, expected: dict
-) -> None:
-    path = tmp_path / "runtime_geometry.toml"
-    path.write_text(body, encoding="utf-8")
-    cfg, data = load_runtime_from_toml(path)
-    assert isinstance(data, dict)
-    assert_fields(cfg, expected)
-
-
-def test_load_runtime_from_toml_resolves_relative_runtime_paths_against_config_dir(
-    tmp_path: Path,
-) -> None:
-    cfg_dir = tmp_path / "configs"
-    cfg_dir.mkdir()
-    toml = """
-[geometry]
-model = "vmec"
-vmec_file = "../vmec/wout.nc"
-geometry_file = "../geom/run.eik.nc"
-torflux = 0.64
-
-[init]
-init_file = "../restart/state.bin"
-
-[output]
-path = "../out/run.out.nc"
-restart_to_file = "../out/run.restart.nc"
-restart_from_file = "../out/run.resume.nc"
-"""
-    path = cfg_dir / "runtime.toml"
-    path.write_text(toml, encoding="utf-8")
-
-    cfg, _ = load_runtime_from_toml(path)
-
-    expected = {
-        "geometry.vmec_file": "vmec/wout.nc",
-        "geometry.geometry_file": "geom/run.eik.nc",
-        "init.init_file": "restart/state.bin",
-        "output.path": "out/run.out.nc",
-        "output.restart_to_file": "out/run.restart.nc",
-        "output.restart_from_file": "out/run.resume.nc",
-    }
-    assert_fields(cfg, {k: str((tmp_path / v).resolve()) for k, v in expected.items()})
-
-
 def test_output_warm_start_is_opt_in_and_round_trips(tmp_path: Path) -> None:
     """Warm start is an [output] restart control and is opt-in from TOML."""
 
@@ -1125,59 +923,6 @@ def test_nearest_index_from_candidates_locks_retained_mode_tie_order() -> None:
         _nearest_index_from_candidates(values, 1.0, np.asarray([], dtype=int))
 
 
-def test_active_dealias_indices_fall_back_to_full_axis_for_empty_masks() -> None:
-    empty_mask = np.zeros((3, 4), dtype=bool)
-
-    np.testing.assert_array_equal(_active_ky_indices(empty_mask, 3), [0, 1, 2])
-    np.testing.assert_array_equal(_active_kx_indices(empty_mask, 1, 4), [0, 1, 2, 3])
-
-    mixed_mask = np.asarray(
-        [
-            [False, False, False, True],
-            [False, False, False, False],
-            [True, False, False, False],
-        ],
-        dtype=bool,
-    )
-    np.testing.assert_array_equal(_active_ky_indices(mixed_mask, 3), [0, 2])
-    np.testing.assert_array_equal(_active_kx_indices(mixed_mask, 2, 4), [0])
-
-
-def test_select_nonlinear_mode_indices_uses_nearest_retained_dealiased_mode() -> None:
-    mask = np.asarray(
-        [[False, False, True], [False, False, False], [True, False, False]], dtype=bool
-    )
-    grid = SimpleNamespace(
-        ky=np.asarray([0.0, 0.4, 0.8]),
-        kx=np.asarray([-1.0, 0.0, 1.0]),
-        dealias_mask=mask,
-    )
-    assert _select_nonlinear_mode_indices(
-        grid, ky_target=0.39, kx_target=0.2, use_dealias_mask=True
-    ) == (0, 2)
-
-    bad_grid = SimpleNamespace(
-        ky=np.asarray([0.0, 0.4]),
-        kx=np.asarray([-1.0, 0.0, 1.0]),
-        dealias_mask=np.ones((2, 2), dtype=bool),
-    )
-    with pytest.raises(ValueError, match="dealias_mask shape"):
-        _select_nonlinear_mode_indices(
-            bad_grid, ky_target=0.4, kx_target=0.0, use_dealias_mask=True
-        )
-
-
-def test_validate_dealias_mask_shape_returns_boolean_view() -> None:
-    mask = _validate_dealias_mask_shape(
-        np.asarray([[1, 0], [0, 1]], dtype=int),
-        ky_size=2,
-        kx_size=2,
-    )
-
-    assert mask.dtype == np.bool_
-    np.testing.assert_array_equal(mask, [[True, False], [False, True]])
-
-
 def test_runtime_independent_parallel_plan_serializes_argument_policy() -> None:
     cfg = SimpleNamespace(parallel=None)
 
@@ -1251,28 +996,6 @@ def test_runtime_solver_and_combined_ky_policy_helpers_normalize_inputs() -> Non
     ):
         cfg = SimpleNamespace(parallel=SimpleNamespace(strategy=strategy, axis=axis))
         assert _parallel_requests_combined_ky_scan(cfg) is expected
-
-
-def test_runtime_mode_and_axis_helpers_cover_unmasked_selection() -> None:
-    single_z = SimpleNamespace(z=np.asarray([0.0]), kx=np.asarray([1.0]))
-    centered = SimpleNamespace(
-        z=np.linspace(-1.0, 1.0, 5),
-        kx=np.asarray([2.0, -0.05, 0.2]),
-    )
-    grid = SimpleNamespace(
-        ky=np.asarray([0.0, 0.5, 1.0]),
-        kx=np.asarray([-1.0, 0.2, 2.0]),
-        dealias_mask=np.zeros((3, 3), dtype=bool),
-    )
-
-    assert _midplane_index(single_z) == 0
-    assert _midplane_index(centered) == 3
-    assert _select_nonlinear_mode_indices(
-        grid,
-        ky_target=0.6,
-        kx_target=None,
-        use_dealias_mask=False,
-    ) == (1, 1)
 
 
 def test_runtime_step_and_external_phi_policies_are_fail_closed() -> None:

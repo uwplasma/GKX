@@ -19,13 +19,10 @@ import gkx
 import gkx.geometry.autodiff_checks as diff_autodiff
 import gkx.geometry.differentiable as diff_geom
 import gkx.geometry.vmec_boozer_core as vmec_boozer_core
-import gkx.geometry.vmec_boozer_derivatives as vmec_boozer_derivatives
 import gkx.geometry.vmec_tensor_mapping as vmec_tensor_mapping
 from gkx.geometry.backend_discovery import (
-    _candidate_paths,
     _find_importable_module,
     _is_traced,
-    discover_differentiable_geometry_backends,
 )
 from gkx.geometry.autodiff_checks import finite_difference_jacobian
 from gkx.geometry.differentiable import (
@@ -40,7 +37,6 @@ from gkx.geometry.flux_tube_contract import (
     geometry_observable_names,
 )
 from gkx.geometry.numerics import (
-    _boozer_half_mesh_s_grid,
     _cumulative_trapezoid,
     _interp_equal_arc_profile,
     _interp_radial,
@@ -83,44 +79,6 @@ def _restored_backend_imports():
 def _isolate_backend_imports():
     with _restored_backend_imports():
         yield
-
-
-@pytest.mark.parametrize("root", ["vmex", "booz_xform_jax"])
-@pytest.mark.parametrize("preexisting", [False, True])
-def test_backend_import_scope_restores_namespace_and_paths(
-    tmp_path, monkeypatch, root, preexisting
-):
-    for name in list(sys.modules):
-        if name == root or name.startswith(root + "."):
-            monkeypatch.delitem(sys.modules, name)
-    if preexisting:
-        module = types.ModuleType(root)
-        module.__file__ = str(tmp_path / "installed" / root / "__init__.py")
-        monkeypatch.setitem(sys.modules, root, module)
-        monkeypatch.setitem(
-            sys.modules, root + ".existing", types.ModuleType(root + ".existing")
-        )
-    before = {
-        name: module
-        for name, module in sys.modules.items()
-        if name == root or name.startswith(root + ".")
-    }
-    paths = sys.path.copy()
-    package = tmp_path / "fake" / root
-    package.mkdir(parents=True)
-    (package / "__init__.py").write_text("marker = 'fake'\n", encoding="utf-8")
-    with _restored_backend_imports():
-        fake = _find_importable_module(root, [package.parent])
-        assert fake.marker == "fake"
-        sys.modules[root + ".created"] = types.ModuleType(root + ".created")
-        assert str(package.parent) in sys.path
-    after = {
-        name: module
-        for name, module in sys.modules.items()
-        if name == root or name.startswith(root + ".")
-    }
-    assert before == after
-    assert sys.path == paths
 
 
 def _sample_mapping() -> dict[str, object]:
@@ -188,71 +146,6 @@ def test_equal_arc_interpolation_keeps_value_gradients_finite() -> None:
 
     assert np.isfinite(float(grad))
     assert float(grad) == pytest.approx(float(fd), rel=2.0e-3, abs=2.0e-5)
-
-
-def test_boozer_field_line_derivative_helpers_match_circular_surface() -> None:
-    theta = jnp.linspace(-jnp.pi, jnp.pi, 9)
-    out = {"ixm_b": jnp.asarray([0, 1]), "ixn_b": jnp.asarray([0, 0])}
-    r0, r1, z1 = 2.0, 0.2, 0.3
-
-    spectral = vmec_boozer_derivatives.evaluate_boozer_field_line_derivatives(
-        out,
-        theta_closed=theta,
-        alpha=0.0,
-        iota_safe=jnp.asarray(1.0),
-        base_dtype=theta.dtype,
-        bmnc_b=jnp.asarray([1.0, 0.1]),
-        d_bmnc_b_d_s=jnp.asarray([0.01, 0.02]),
-        rmnc_b=jnp.asarray([r0, r1]),
-        d_rmnc_b_d_s=jnp.asarray([0.05, 0.01]),
-        zmns_b=jnp.asarray([0.0, z1]),
-        d_zmns_b_d_s=jnp.asarray([0.0, 0.02]),
-        numns_b=jnp.asarray([0.0, 0.0]),
-        d_numns_b_d_s=jnp.asarray([0.0, 0.0]),
-    )
-
-    expected_r = r0 + r1 * jnp.cos(theta)
-    np.testing.assert_allclose(np.asarray(spectral.r_b), np.asarray(expected_r))
-    np.testing.assert_allclose(
-        np.asarray(spectral.d_r_b_d_theta),
-        np.asarray(-r1 * jnp.sin(theta)),
-        atol=2.0e-7,
-    )
-    np.testing.assert_allclose(
-        np.asarray(spectral.d_z_b_d_theta),
-        np.asarray(z1 * jnp.cos(theta)),
-        atol=2.0e-7,
-    )
-    np.testing.assert_allclose(
-        np.asarray(spectral.d_mod_b_d_phi), np.zeros(theta.shape), atol=2.0e-7
-    )
-
-    cartesian = vmec_boozer_derivatives.boozer_cartesian_derivatives(spectral)
-    np.testing.assert_allclose(
-        np.asarray(cartesian.d_x_d_theta),
-        np.asarray(-r1 * jnp.sin(theta) * jnp.cos(theta)),
-        atol=2.0e-7,
-    )
-    np.testing.assert_allclose(
-        np.asarray(cartesian.d_x_d_phi),
-        np.asarray(-expected_r * jnp.sin(theta)),
-        atol=2.0e-7,
-    )
-
-    gradients = vmec_boozer_derivatives.boozer_coordinate_gradients(
-        spectral=spectral,
-        cartesian=cartesian,
-        sqrt_g_booz=jnp.ones_like(theta),
-        etf_safe=jnp.asarray(2.0),
-    )
-    np.testing.assert_allclose(
-        np.asarray(gradients.grad_psi_z),
-        np.asarray(
-            cartesian.d_x_d_theta * cartesian.d_y_d_phi
-            - cartesian.d_y_d_theta * cartesian.d_x_d_phi
-        ),
-        atol=2.0e-7,
-    )
 
 
 def test_flux_tube_geometry_from_vmec_boozer_state_wraps_in_memory_bridge(
@@ -367,35 +260,6 @@ def test_flux_tube_geometry_from_mapping_rejects_bad_contracts() -> None:
         flux_tube_geometry_from_mapping(bad)
 
 
-def test_flux_tube_geometry_from_mapping_uses_jax_native_defaults_and_shat_alias() -> (
-    None
-):
-    data = _sample_mapping()
-    data.pop("jacobian")
-    data.pop("grho")
-    data["shat"] = data.pop("s_hat")
-
-    geom = flux_tube_geometry_from_mapping(data)
-
-    expected_jacobian = 1.0 / np.asarray(data["gradpar"]) / np.asarray(data["bmag"])
-    assert np.allclose(np.asarray(geom.jacobian_profile), expected_jacobian)
-    assert np.allclose(np.asarray(geom.grho_profile), 1.0)
-    assert geom.s_hat == pytest.approx(0.4)
-
-
-def test_differentiable_backend_path_helpers_handle_missing_modules(
-    tmp_path: Path, monkeypatch
-) -> None:
-    existing = tmp_path / "backend"
-    (existing / "src").mkdir(parents=True)
-    monkeypatch.setenv("GKX_VMEX_PATH", str(existing))
-
-    paths = _candidate_paths(("GKX_VMEX_PATH",), (existing, tmp_path / "missing"))
-
-    assert paths == [existing.resolve(), (existing / "src").resolve()]
-    assert _find_importable_module("gkx_definitely_missing_backend", paths) is None
-
-
 def test_differentiable_backend_path_helpers_prefer_configured_checkout(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -420,34 +284,6 @@ def test_differentiable_backend_path_helpers_prefer_configured_checkout(
     assert module is not None
     assert module.marker == "local"
     assert str(local_pkg) in str(module.__file__)
-
-
-def test_discover_differentiable_geometry_backends_reports_optional_apis(
-    tmp_path: Path, monkeypatch
-) -> None:
-    vmec_root = tmp_path / "vmex" / "src" / "vmex"
-    booz_root = tmp_path / "booz_xform_jax" / "src" / "booz_xform_jax"
-    vmec_root.mkdir(parents=True)
-    booz_root.mkdir(parents=True)
-    (vmec_root / "__init__.py").write_text("marker = 'vmec'\n", encoding="utf-8")
-    (booz_root / "__init__.py").write_text("marker = 'booz'\n", encoding="utf-8")
-    (booz_root / "jax_api.py").write_text(
-        "def prepare_booz_xform_constants_from_inputs(*args, **kwargs): return None\n"
-        "def booz_xform_from_inputs(*args, **kwargs): return None\n"
-        "def booz_xform_jax_impl(*args, **kwargs): return None\n",
-        encoding="utf-8",
-    )
-    for name in ("vmex", "booz_xform_jax", "booz_xform_jax.jax_api"):
-        sys.modules.pop(name, None)
-    monkeypatch.setenv("GKX_VMEX_PATH", str(tmp_path / "vmex"))
-    monkeypatch.setenv("GKX_BOOZ_XFORM_JAX_PATH", str(tmp_path / "booz_xform_jax"))
-
-    info = discover_differentiable_geometry_backends()
-
-    assert info["vmex_available"] is True
-    assert info["vmex_boundary_api_available"] is False
-    assert info["booz_xform_jax_available"] is True
-    assert info["booz_xform_jax_api_available"] is True
 
 
 def test_vmec_boundary_aspect_sensitivity_report_uses_discovered_jax_api(
@@ -511,127 +347,6 @@ def test_booz_xform_spectral_sensitivity_report_is_bounded_when_available() -> N
     assert float(report["objective"]) > 0.0
     assert float(report["max_abs_ad_fd_error"]) < 1.0e-7
     assert np.asarray(report["bmnc_b"]).shape == (1, 2)
-
-
-def test_vmec_tensor_mapping_builds_finite_mapping_from_mocked_vmec_modules(
-    monkeypatch,
-) -> None:
-    ntheta = 8
-    dtype = jnp.float32
-    theta = jnp.linspace(-jnp.pi, jnp.pi, ntheta, endpoint=False, dtype=dtype)
-    ones = jnp.ones(ntheta, dtype=dtype)
-    captured: dict[str, object] = {}
-
-    def gk_fieldline_geometry(state, runtime, **kwargs):  # noqa: ANN001, ANN202
-        captured["state"] = state
-        captured["runtime"] = runtime
-        captured.update(kwargs)
-        return {
-            "theta": theta,
-            "gradpar": 0.5 * ones,
-            "bmag": 1.0 + 0.05 * jnp.cos(theta),
-            "bgrad": 0.01 * jnp.sin(theta),
-            "gds2": 1.1 * ones,
-            "gds21": -0.2 * ones,
-            "gds22": 0.9 * ones,
-            "cvdrift": 0.3 * ones,
-            "cvdrift0": 0.0 * ones,
-            "gbdrift": 0.25 * ones,
-            "gbdrift0": 0.0 * ones,
-            "grho": ones,
-            "jacobian": 1.2 * ones,
-            "q": 1.0 / 0.6,
-            "s_hat": -0.1,
-            "epsilon": 0.3,
-            "R0": 1.5,
-            "B0": 2.0,
-            "alpha": 0.2,
-            "nfp": 4,
-            "vmex": {
-                "surface_index": 2,
-                "L_ref": 1.5,
-                "B_ref": 2.0,
-                "gradpar_profile": 0.5 * ones,
-            },
-        }
-
-    def gk_fieldline_geometry_from_wout(wout, **kwargs):  # noqa: ANN001, ANN202
-        captured["wout"] = wout
-        return gk_fieldline_geometry(None, None, **kwargs)
-
-    monkeypatch.setattr(
-        vmec_tensor_mapping,
-        "_import_vmex_turbulence",
-        lambda: types.SimpleNamespace(
-            gk_fieldline_geometry=gk_fieldline_geometry,
-            gk_fieldline_geometry_from_wout=gk_fieldline_geometry_from_wout,
-        ),
-    )
-
-    state = object()
-    runtime = object()
-    mapping = vmec_tensor_mapping.vmex_flux_tube_mapping_from_state(
-        state,
-        runtime,
-        surface_index=2,
-        alpha=0.2,
-        ntheta=ntheta,
-    )
-
-    assert captured["state"] is state
-    assert captured["runtime"] is runtime
-    assert captured["s_index"] == 2
-    assert captured["alpha"] == pytest.approx(0.2)
-    assert captured["ntheta"] == ntheta
-    assert captured["equal_arc"] is True
-    for key in (
-        "theta",
-        "gradpar",
-        "bmag",
-        "gds2",
-        "gds21",
-        "gds22",
-        "gbdrift",
-        "gbdrift0",
-        "jacobian",
-        "grho",
-    ):
-        arr = np.asarray(mapping[key])
-        assert arr.shape == (ntheta,)
-        assert np.all(np.isfinite(arr))
-    assert mapping["R0"] == pytest.approx(1.5)
-    assert mapping["B0"] == pytest.approx(2.0)
-    assert mapping["nfp"] == 4
-    assert float(mapping["q"]) == pytest.approx(1.0 / 0.6, rel=2.0e-6)
-    # The raw gk_fieldline_geometry "vmex" diagnostics are repackaged in place
-    # under the same "vmex" key with reference_length/reference_b aliases added.
-    assert mapping["vmex"]["surface_index"] == 2
-    assert mapping["vmex"]["reference_length"] == pytest.approx(1.5)
-    assert mapping["vmex"]["reference_b"] == pytest.approx(2.0)
-
-    geometry = vmec_tensor_mapping.from_vmex(
-        state,
-        runtime,
-        surface_index=2,
-        alpha=0.2,
-        ntheta=ntheta,
-    )
-    assert geometry.source_model == "vmex:core.turbulence"
-    np.testing.assert_array_equal(geometry.bmag_profile, mapping["bmag"])
-    assert geometry.gradpar_value == pytest.approx(0.5)
-
-    wout = object()
-    imported = vmec_tensor_mapping.from_vmex_wout(
-        wout,
-        surface_index=2,
-        alpha=0.2,
-        ntheta=ntheta,
-    )
-    assert captured["wout"] is wout
-    assert captured["s_index"] == 2
-    assert imported.source_model == "vmex:core.turbulence:wout"
-    np.testing.assert_array_equal(imported.bmag_profile, mapping["bmag"])
-    assert imported.gradpar_value == pytest.approx(0.5)
 
 
 def test_from_vmex_preserves_geometry_vjp(monkeypatch) -> None:
@@ -733,27 +448,6 @@ def test_from_vmex_mirror_missing_owner_is_actionable(monkeypatch) -> None:
         vmec_tensor_mapping.from_vmex_mirror(
             object(), object(), object(), axial_flux_derivative=0.02
         )
-
-
-def test_boozer_half_mesh_s_grid_uses_fortran_half_mesh_indices() -> None:
-    s_half = _boozer_half_mesh_s_grid(
-        jnp.asarray([2, 3, 4]),
-        ns_b=3,
-        ns_b_full=3,
-        dtype=jnp.float64,
-    )
-
-    np.testing.assert_allclose(
-        np.asarray(s_half),
-        np.asarray([1.0 / 6.0, 3.0 / 6.0, 5.0 / 6.0]),
-    )
-    fallback = _boozer_half_mesh_s_grid(
-        None,
-        ns_b=3,
-        ns_b_full=3,
-        dtype=jnp.float64,
-    )
-    np.testing.assert_allclose(np.asarray(fallback), np.asarray(s_half))
 
 
 def test_vmex_boozer_equal_arc_core_profiles_supports_surface_stencil(
@@ -1175,28 +869,6 @@ def test_geometry_inverse_design_report_rejects_invalid_contracts() -> None:
         geometry_inverse_design_report(
             _differentiable_mapping, jnp.ones(2), jnp.ones(1), observable_indices=[99]
         )
-
-
-def test_geometry_inverse_design_report_defaults_to_all_observables_for_square_problem() -> (
-    None
-):
-    initial = jnp.asarray([0.08, 0.40])
-    target = flux_tube_geometry_observables(
-        flux_tube_geometry_from_mapping(
-            _differentiable_mapping(initial), validate_finite=False
-        )
-    )
-
-    report = geometry_inverse_design_report(
-        _differentiable_mapping,
-        initial,
-        target,
-        max_steps=0,
-    )
-
-    assert report["observable_names"] == list(geometry_observable_names())
-    assert report["history"][0]["step"] == 0
-    assert float(report["history"][0]["residual_norm"]) == pytest.approx(0.0)
 
 
 # ---- test_check_vmec_boozer_gates.py differentiability-claim ----

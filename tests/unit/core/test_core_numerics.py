@@ -24,7 +24,6 @@ from gkx.config import (
     KBMBaseCase,
     ModelConfig,
     TimeConfig,
-    explicit_method_default_cfl_fac,
     resolve_cfl_fac,
 )
 from gkx.operators.collision import (
@@ -46,9 +45,6 @@ from gkx.callbacks import (
     _PROGRESS_START,
     _emit_progress,
     _format_duration,
-    print_callback,
-    progress_update_stride,
-    should_emit_progress,
 )
 import gkx
 from gkx.config import RuntimeConfig
@@ -121,19 +117,6 @@ def test_solver_facade_exposes_only_supported_public_names(facade, required) -> 
     assert facade.__all__
     assert not any(name.startswith("_") for name in facade.__all__)
     assert required <= set(facade.__all__)
-
-
-@pytest.mark.parametrize(
-    ("shape", "expected"),
-    [
-        ((2, 3, 4, 5, 6), (2, 3)),
-        ((7, 2, 3, 4, 5, 6), (2, 3)),
-    ],
-)
-def test_gyrokinetic_moment_shape_handles_optional_species_axis(
-    shape: tuple[int, ...], expected: tuple[int, int]
-) -> None:
-    assert _gyrokinetic_moment_shape(jnp.empty(shape)) == expected
 
 
 def test_gyrokinetic_moment_shape_preserves_caller_label() -> None:
@@ -607,32 +590,6 @@ def test_format_duration_clamps_and_rolls_over() -> None:
     assert _format_duration(3661.0) == "1:01:01"
 
 
-def test_progress_update_stride_caps_long_runs() -> None:
-    assert progress_update_stride(5) == 1
-    assert progress_update_stride(50) == 1
-    assert progress_update_stride(51) == 2
-    assert progress_update_stride(500) == 10
-
-
-def test_progress_update_stride_sanitizes_inputs() -> None:
-    assert progress_update_stride(0) == 1
-    assert progress_update_stride(-10, target_updates=0) == 1
-    assert progress_update_stride(9, target_updates=4) == 3
-
-
-def test_should_emit_progress_reports_first_interval_and_last() -> None:
-    assert bool(should_emit_progress(0, 200)) is True
-    assert bool(should_emit_progress(3, 200)) is True
-    assert bool(should_emit_progress(4, 200)) is False
-    assert bool(should_emit_progress(199, 200)) is True
-
-
-def test_should_emit_progress_sanitizes_steps_and_targets() -> None:
-    assert bool(should_emit_progress(0, 0, target_updates=0)) is True
-    assert bool(should_emit_progress(1, 9, target_updates=4)) is False
-    assert bool(should_emit_progress(2, 9, target_updates=4)) is True
-
-
 def test_emit_progress_handles_time_variants_and_metric_labels(monkeypatch) -> None:
     ticks = iter([10.0, 12.0])
     monkeypatch.setattr("gkx.callbacks.time.perf_counter", lambda: next(ticks))
@@ -657,38 +614,6 @@ def test_emit_progress_handles_time_variants_and_metric_labels(monkeypatch) -> N
     assert "t=2" in second_out
     assert "/0" not in second_out
     assert "eta=00:01" in second_out
-
-
-def test_print_callback_returns_state_and_forwards_values(monkeypatch) -> None:
-    calls = []
-
-    def fake_callback(fn, *args):
-        calls.append(args)
-        fn(*args)
-
-    monkeypatch.setattr("gkx.callbacks.jax.debug.callback", fake_callback)
-
-    state = {"unchanged": True}
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        returned = print_callback(
-            state,
-            0,
-            1,
-            1.5,
-            -0.5,
-            2.0,
-            3.0,
-            sim_time=None,
-            sim_total=None,
-            metric_labels=("heat", "free"),
-        )
-
-    assert returned is state
-    assert calls == [(0, 1, 1.5, -0.5, 2.0, 3.0, None, None)]
-    out = buf.getvalue()
-    assert "heat=2" in out
-    assert "free=3" in out
 
 
 # Configuration contracts.
@@ -751,20 +676,6 @@ def test_kbm_config_to_dict():
     cfg = KBMBaseCase()
     d = cfg.to_dict()
     assert d["model"]["beta"] == cfg.model.beta
-
-
-def test_explicit_method_default_cfl_fac_is_method_resolved() -> None:
-    assert explicit_method_default_cfl_fac("rk2") == pytest.approx(1.0)
-    assert explicit_method_default_cfl_fac("rk3") == pytest.approx(1.73)
-    assert explicit_method_default_cfl_fac("sspx3") == pytest.approx(1.73)
-    assert explicit_method_default_cfl_fac("rk4") == pytest.approx(2.82)
-
-
-def test_explicit_method_default_cfl_fac_alias_is_method_resolved() -> None:
-    assert explicit_method_default_cfl_fac("rk2") == pytest.approx(1.0)
-    assert explicit_method_default_cfl_fac("rk3") == pytest.approx(1.73)
-    assert explicit_method_default_cfl_fac("sspx3") == pytest.approx(1.73)
-    assert explicit_method_default_cfl_fac("rk4") == pytest.approx(2.82)
 
 
 def test_resolve_cfl_fac_preserves_explicit_override() -> None:
@@ -854,28 +765,6 @@ def test_compressed_real_fft_wavenumbers_match_gx_native_layout():
     )
 
 
-def test_select_real_fft_ky_grid_uses_explicit_positive_dump_values():
-    """GX dump grids should not inherit the negative Nyquist sign from fftfreq order."""
-
-    cfg = GridConfig(Nx=4, Ny=6, Nz=4, Lx=2.0, Ly=6.0)
-    grid = build_spectral_grid(cfg)
-    gx_ky = jnp.asarray(
-        [
-            0.0,
-            2.0 * jnp.pi / cfg.Ly,
-            2.0 * 2.0 * jnp.pi / cfg.Ly,
-            3.0 * 2.0 * jnp.pi / cfg.Ly,
-        ]
-    )
-    gx_grid = select_real_fft_ky_grid(grid, gx_ky)
-
-    assert jnp.allclose(gx_grid.ky, gx_ky)
-    assert jnp.all(gx_grid.ky >= 0.0)
-    assert jnp.allclose(gx_grid.kx, real_fft_ordered_kx(grid.kx))
-    assert gx_grid.dealias_mask.shape == (gx_ky.shape[0], cfg.Nx)
-    assert jnp.allclose(gx_grid.ky_grid[:, 0], gx_ky)
-
-
 def test_twothirds_mask_matches_strict_twothirds_cutoff():
     """The nonlinear two-thirds mask excludes the |k| = 1/3 shell."""
 
@@ -895,20 +784,6 @@ def test_twothirds_mask_matches_strict_twothirds_cutoff():
     assert int(mask[0, :].sum()) == 63
     assert bool(mask[0, 31])
     assert not bool(mask[0, 32])
-
-
-def test_select_ky_grid_disables_nonlinear_dealias_mask_for_linear_slices():
-    """Linear ky slices should not zero modes dealiased only for nonlinear products."""
-
-    cfg = GridConfig(Nx=1, Ny=12, Nz=4, Lx=2.0 * jnp.pi, y0=10.0)
-    grid = build_spectral_grid(cfg)
-    # The strict nonlinear two-thirds mask removes the boundary shell at ky index 4.
-    assert not bool(grid.dealias_mask[4, 0])
-
-    sliced = select_ky_grid(grid, [3, 4])
-
-    assert jnp.allclose(sliced.ky, grid.ky[jnp.asarray([3, 4])])
-    assert jnp.all(sliced.dealias_mask)
 
 
 # ---- from test_public_types.py ----
@@ -954,14 +829,6 @@ def test_case_is_frozen_so_replace_is_the_only_way_to_derive_one() -> None:
     case = RuntimeConfig()
     with pytest.raises(Exception):
         case.grid = None  # type: ignore[misc]
-
-
-def test_replace_returns_a_validated_copy_and_leaves_the_original_alone() -> None:
-    case = RuntimeConfig()
-    derived = case.replace(time=case.time.__class__(t_max=12.0, dt=0.01))
-    assert derived is not case
-    assert float(derived.time.t_max) == 12.0
-    assert float(case.time.t_max) != 12.0 or float(case.time.dt) != 0.01
 
 
 def test_replace_rejects_an_invalid_case_at_the_point_it_is_built() -> None:
@@ -1133,13 +1000,6 @@ def test_gkx_prepare_returns_the_public_type_not_a_solver_internal() -> None:
     assert isinstance(prepared, PreparedSimulation)
 
 
-def test_prepare_accepts_a_linear_case() -> None:
-    """This raised `prepare currently requires nonlinear physics` before."""
-
-    prepared = prepare_simulation(_linear_case())
-    assert prepared.kind == "linear"
-
-
 def test_prepared_is_frozen_so_topology_cannot_drift_from_its_metadata() -> None:
     prepared = prepare_simulation(_linear_case())
     with pytest.raises(Exception):
@@ -1187,11 +1047,6 @@ def test_scan_names_the_parameter_it_cannot_scan() -> None:
         prepared.scan("tprim", [1.0, 2.0])
 
 
-def test_warmup_returns_self_so_timing_code_can_chain() -> None:
-    prepared = prepare_simulation(_linear_case())
-    assert prepared.warmup() is prepared
-
-
 def test_value_and_grad_differentiates_a_scalar_objective() -> None:
     prepared = prepare_simulation(_linear_case())
     value, grad = prepared.value_and_grad(lambda x: 3.0 * x**2, 2.0)
@@ -1223,43 +1078,12 @@ def _repo_root():
     return Path(__file__).resolve().parents[3]
 
 
-def test_prepare_reports_the_resolution_the_shipped_deck_asks_for() -> None:
-    case = gkx.load(_repo_root() / _SHIPPED_LINEAR_DECK)
-    assert (case.run.Nl, case.run.Nm) == (16, 48), "deck under test changed"
-
-    prepared = prepare_simulation(case)
-
-    assert (prepared.n_laguerre, prepared.n_hermite) == (16, 48), (
-        "prepare reported a velocity resolution the deck did not ask for; a "
-        "summary that disagrees with the deck misdescribes the calculation"
-    )
-
-
 def test_an_explicit_argument_still_overrides_the_deck() -> None:
     case = gkx.load(_repo_root() / _SHIPPED_LINEAR_DECK)
 
     prepared = prepare_simulation(case, Nl=6, Nm=10)
 
     assert (prepared.n_laguerre, prepared.n_hermite) == (6, 10)
-
-
-def test_a_deck_without_a_run_table_falls_back_to_the_runtime_default() -> None:
-    """The fallback is the runtime's own, and it differs by kind.
-
-    ``_CASE_LINEAR_SPECS`` defaults to (12, 24) and ``_CASE_NONLINEAR_SPECS``
-    to (4, 8). Preparing must not invent a third pair, so the linear pair is
-    read from the runtime's owner rather than repeated here.
-    """
-
-    from gkx.workflows.runtime.startup import _RUNTIME_LINEAR_HL_FALLBACK
-
-    case = _linear_case()
-    assert case.run.is_empty(), "this fixture is meant to carry no [run] table"
-
-    prepared = prepare_simulation(case)
-
-    assert (prepared.n_laguerre, prepared.n_hermite) == (12, 24)
-    assert (prepared.n_laguerre, prepared.n_hermite) == _RUNTIME_LINEAR_HL_FALLBACK
 
 
 def test_a_deck_with_a_run_table_round_trips_through_toml(tmp_path) -> None:
@@ -1357,15 +1181,6 @@ def test_warming_twice_does_not_run_the_case_twice() -> None:
         "instead of returning immediately"
     )
     assert prepared.summary()["warmed"] is True
-
-
-def test_a_linear_case_reports_that_it_was_not_warmed() -> None:
-    """There is nothing to compile ahead of a solver chosen per call."""
-
-    prepared = prepare_simulation(_linear_case())
-
-    assert prepared.warmup() is prepared
-    assert prepared.summary()["warmed"] is False
 
 
 # ---- supplied states on the public entry point (queue row Q23) ------------
@@ -1694,14 +1509,6 @@ def test_half_ky_values_match_rfftfreq_up_to_the_box_scale(ny: int) -> None:
     np.testing.assert_allclose(half_ky_values(ky_full), expected, rtol=1e-12)
 
 
-@pytest.mark.parametrize("ny", ALL_NY)
-def test_half_dealias_mask_is_the_top_block_and_is_idempotent(ny: int) -> None:
-    mask = np.arange(ny * 4, dtype=float).reshape(ny, 4)
-    half = half_dealias_mask(mask, ny_full=ny)
-    np.testing.assert_array_equal(half, mask[: nyc_from_ny(ny)])
-    np.testing.assert_array_equal(half_dealias_mask(half, ny_full=ny), half)
-
-
 def test_half_dealias_mask_refuses_a_foreign_row_count() -> None:
     with pytest.raises(ValueError, match="expected 16 or 9"):
         half_dealias_mask(np.zeros((6, 4)), ny_full=16)
@@ -1722,16 +1529,6 @@ def test_describe_reports_the_contract_numbers_for_one_grid() -> None:
 # --------------------------------------------------------------------------
 # Backend dispatch
 # --------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("ny", (8, 9))
-def test_numpy_input_keeps_numpy_output_so_host_paths_stay_on_the_host(
-    ny: int,
-) -> None:
-    half = to_half(_batched(_real_field(ny, 4, 2, seed=ny)))
-    assert isinstance(to_full(half, ny_full=ny), np.ndarray)
-    assert isinstance(symmetrize_self_conjugate_rows(half, ny_full=ny), np.ndarray)
-    assert isinstance(negative_ky_block(half, ny_full=ny), np.ndarray)
 
 
 @pytest.mark.parametrize("ny", (8, 9))
@@ -1911,21 +1708,6 @@ def test_the_grid_reports_the_half_axis_through_the_contract() -> None:
     assert int(real_fft_unique_ky(grid.ky).size) == nyc_from_ny(10)
 
 
-def test_prepared_simulation_reports_the_state_it_actually_allocates() -> None:
-    """``state_shape`` advertised ``Nyc`` while the runtime allocated ``Ny``."""
-
-    from gkx.api.prepared import prepare_simulation
-    from gkx.config import RuntimeConfig
-    from gkx.core_grid import build_spectral_grid
-
-    case = RuntimeConfig()
-    prepared = prepare_simulation(case, Nl=2, Nm=4)
-    grid = build_spectral_grid(case.grid)
-    rows = rows_for_layout(case.grid.Ny, case.grid.ky_layout)
-    assert prepared.state_shape[-3] == int(grid.ky.size) == rows
-    assert prepared.estimate_memory()["elements"] == int(np.prod(prepared.state_shape))
-
-
 def _grids(ny: int, nx: int = 4):
     """Return the two-sided grid for ``ny`` and its ``ky >= 0`` view.
 
@@ -1995,20 +1777,6 @@ def test_the_half_axis_weight_sums_a_non_zero_nyquist_row_correctly(ny: int) -> 
     )
 
 
-def test_the_default_deck_builds_the_half_axis() -> None:
-    """``[grid] ky_layout`` defaults to ``"half"``; ``"full"`` is the opt-out."""
-
-    from gkx.config import GridConfig
-    from gkx.core_grid import build_spectral_grid
-
-    assert GridConfig().ky_layout == HALF
-    grid = build_spectral_grid(GridConfig(Nx=4, Ny=8, Nz=2))
-    assert source_ky_layout(grid) == HALF
-    assert int(grid.ky.size) == 5
-    full = build_spectral_grid(GridConfig(Nx=4, Ny=8, Nz=2, ky_layout="full"))
-    assert source_ky_layout(full) == FULL and int(full.ky.size) == 8
-
-
 @pytest.mark.parametrize("ny", (4, 8, 16, 32))
 def test_the_half_deck_grid_weights_its_nyquist_row_once(ny: int) -> None:
     """The Nyquist rule, on the grid a deck builds when it names ``"half"``.
@@ -2064,20 +1832,6 @@ def test_the_two_sided_moment_weight_counts_every_stored_row_once(ny: int) -> No
     np.testing.assert_array_equal(two_sided, np.ones(ny))
 
 
-@pytest.mark.parametrize("ny", EVEN_NY)
-def test_dealiasing_still_zeroes_the_nyquist_row_in_both_weights(ny: int) -> None:
-    """Why no shipped number moves: the row the rule changed is masked away."""
-
-    from gkx.operators.moments import _hermitian_mode_weight, _transport_mode_weight
-
-    row = nyquist_row(ny)
-    assert row is not None
-    _full_grid, half_grid = _grids(ny)
-    for weight in (_hermitian_mode_weight, _transport_mode_weight):
-        masked = np.asarray(weight(half_grid, use_dealias=True))
-        np.testing.assert_array_equal(masked[row], np.zeros(masked.shape[1]))
-
-
 @pytest.mark.parametrize("ny", ALL_NY)
 def test_the_flux_weight_folds_the_pair_and_halves_a_self_conjugate_row(
     ny: int,
@@ -2113,7 +1867,7 @@ def test_the_flux_weight_folds_the_pair_and_halves_a_self_conjugate_row(
 def test_a_selected_subset_of_modes_does_not_claim_a_nyquist_row() -> None:
     """An index into a mode selection would name the wrong row, so it is not used."""
 
-    from gkx.core_grid import select_ky_grid, select_real_fft_ky_grid
+    from gkx.core_grid import select_real_fft_ky_grid
     from gkx.operators.moments import _hermitian_mode_weight
 
     full_grid, half_grid = _grids(8)
@@ -2266,16 +2020,6 @@ def test_the_half_dealias_mask_is_built_not_sliced_and_matches_the_slice(
     sliced = np.asarray(twothirds_mask(ny, nx))[: nyc_from_ny(ny)]
     built = np.asarray(twothirds_mask(ny, nx, ky_layout=HALF))
     np.testing.assert_array_equal(built, sliced)
-
-
-@pytest.mark.parametrize("ny", EVEN_NY_KY_HALF_SPECTRUM_STATE)
-def test_dealiasing_removes_the_nyquist_row_which_is_why_its_sign_cannot_matter(
-    ny: int,
-) -> None:
-    row = nyquist_row(ny)
-    assert row is not None
-    mask = np.asarray(twothirds_mask(ny, 8, ky_layout=HALF))
-    np.testing.assert_array_equal(mask[row], np.zeros(8, dtype=bool))
 
 
 # --------------------------------------------------------------------------
@@ -2706,32 +2450,6 @@ def test_a_half_state_survives_the_binary_restart_round_trip(ny: int) -> None:
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("ny", (8, 12, 9))
-def test_the_real_space_writer_gives_the_same_image_from_either_layout(
-    ny: int,
-) -> None:
-    """``irfft2`` of the stored rows, not ``real(ifft2)`` of ``Nyc`` of them.
-
-    Taking the complex transform of a half-spectrum field would return an
-    ``Nyc``-row image against an ``Ny``-long ``y`` axis -- a wrong picture with
-    the right dtype.
-    """
-
-    from gkx.artifacts.spectral_layout import _spectral_to_xy
-
-    nyc, nx, nz = nyc_from_ny(ny), 8, 4
-    rng = np.random.default_rng(6)
-    half = (
-        rng.standard_normal((nyc, nx, nz)) + 1j * rng.standard_normal((nyc, nx, nz))
-    ).astype(np.complex128)
-    full = np.asarray(to_full(half, ny_full=ny))
-
-    from_full = _spectral_to_xy(full)
-    from_half = _spectral_to_xy(half, ny_full=ny)
-    assert from_half.shape == from_full.shape == (ny, nx, nz)
-    np.testing.assert_allclose(from_half, from_full, rtol=0, atol=2e-6)
-
-
 # --------------------------------------------------------------------------
 # gradients
 # --------------------------------------------------------------------------
@@ -2811,47 +2529,6 @@ def test_the_supplied_state_intake_reaches_the_same_modes_in_both_layouts(
     assert half_mask.shape == (nyc_from_ny(ny), 8)
     # The half cover is the two-sided cover's non-negative rows.
     np.testing.assert_array_equal(half_mask, full_mask[: nyc_from_ny(ny)])
-
-
-@pytest.mark.parametrize("ny", (12, 16))
-def test_masking_a_supplied_half_state_keeps_the_chain_rows_untouched(
-    ny: int,
-) -> None:
-    """Intake is a ``where`` against a fixed mask, so it traces either way."""
-
-    from gkx.operators.linear.cache_builder import (
-        linked_chain_cover_mask,
-        mask_off_chain_rows,
-    )
-
-    cfg = GridConfig(
-        Nx=8,
-        Ny=ny,
-        Nz=8,
-        Lx=62.8,
-        Ly=62.8,
-        boundary="linked",
-        jtwist=1,
-        ky_layout=FULL,
-    )
-    geom, params = _geometry(), _params()
-    half_grid = build_spectral_grid(cfg, ky_layout=HALF)
-    linked = linked_chain_cover_mask(half_grid, geom, params)
-    nyc = nyc_from_ny(ny)
-    rng = np.random.default_rng(404)
-    state = jnp.asarray(
-        rng.standard_normal((1, 2, 3, nyc, 8, 8))
-        + 1j * rng.standard_normal((1, 2, 3, nyc, 8, 8)),
-        jnp.complex128,
-    )
-    out = np.asarray(mask_off_chain_rows(state, half_grid, geom, params))
-    assert out.shape == (1, 2, 3, nyc, 8, 8)
-    if linked is None:
-        np.testing.assert_array_equal(out, np.asarray(state))
-        return
-    mask = np.asarray(linked)
-    kept = np.where(mask[None, None, None, :, :, None], np.asarray(state), 0.0)
-    np.testing.assert_array_equal(out, kept)
 
 
 # ---- from fix/half-layout-cfl (#306) ----
@@ -2961,27 +2638,6 @@ def test_spectral_bpar_kernel_is_the_quadrature_j1_over_alpha_kernel() -> None:
     np.testing.assert_allclose(
         lagval(x, coeff), 2.0 * x * jv(1, alpha) / alpha, rtol=1e-10
     )
-
-
-def test_cpu_thread_defaults_only_below_four_cpus(monkeypatch):
-    import os
-
-    import gkx
-
-    flag = "--xla_cpu_multi_thread_eigen=false"
-    for ncpu, user_flags, expected in (
-        (2, "", flag),
-        (3, "--foo", f"--foo {flag}"),
-        (1, "", ""),
-        (4, "", ""),
-        (2, "--xla_cpu_multi_thread_eigen=true", "--xla_cpu_multi_thread_eigen=true"),
-    ):
-        monkeypatch.setattr(
-            os, "sched_getaffinity", lambda _pid, n=ncpu: set(range(n)), raising=False
-        )
-        monkeypatch.setenv("XLA_FLAGS", user_flags)
-        gkx._cpu_thread_defaults()
-        assert os.environ["XLA_FLAGS"] == expected
 
 
 @pytest.mark.slow

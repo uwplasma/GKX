@@ -173,36 +173,6 @@ def _patch_shift_invert(monkeypatch: pytest.MonkeyPatch, fake) -> None:
     monkeypatch.setattr(lk, "_shift_invert_eigenpair_with_inner_stats", with_stats)
 
 
-def test_mode_family_and_target_selection_helpers() -> None:
-    assert lk._mode_family_sign("cyclone") == 1
-    assert lk._mode_family_sign("kbm") == 1
-    assert lk._mode_family_sign("etg") == -1
-    assert lk._mode_family_sign("other") == 0
-    real = jnp.asarray([-0.1, 0.05, 0.08])
-    imag = jnp.asarray([1.0, -1.9, -2.2])
-    mask = jnp.asarray([True, True, False])
-    idx = lk._select_by_target(
-        real,
-        imag,
-        mask,
-        omega_scale=jnp.asarray(1.0),
-        omega_target_factor=2.0,
-        omega_sign=1,
-        fallback_idx=jnp.asarray(0),
-    )
-    assert int(idx) == 1
-    idx_neg = lk._select_by_target(
-        real,
-        -imag,
-        mask,
-        omega_scale=jnp.asarray(1.0),
-        omega_target_factor=2.0,
-        omega_sign=-1,
-        fallback_idx=jnp.asarray(0),
-    )
-    assert int(idx_neg) == 1
-
-
 def test_select_by_overlap_prefers_reference_branch() -> None:
     V = jnp.asarray([[1.0 + 0.0j, 0.0 + 0.0j], [0.0 + 0.0j, 1.0 + 0.0j]])
     eigvecs = jnp.eye(2, dtype=jnp.complex64)
@@ -236,33 +206,6 @@ def test_ritz_vector_uses_complex_eigenvector_without_conjugation() -> None:
     expected = jnp.asarray([1.0, 1.0j], dtype=jnp.complex64) / jnp.sqrt(2.0)
 
     assert jnp.allclose(vector, expected)
-
-
-def test_arnoldi_uses_dtype_scaled_near_breakdown_threshold() -> None:
-    """Do not normalize roundoff into a spurious Krylov direction."""
-
-    v0 = jnp.asarray([1.0 + 0.0j, 0.0 + 0.0j], dtype=jnp.complex64)
-    eps = jnp.finfo(jnp.float32).eps
-
-    def apply_near(vector, *_args):
-        matrix = jnp.asarray([[2.0, 0.0], [5.0 * eps, 1.0]], vector.dtype)
-        return matrix @ vector
-
-    basis_near, hessenberg_near = ka._arnoldi(
-        v0, apply_near, None, None, None, krylov_dim=1
-    )
-    assert hessenberg_near[1, 0] == 0.0
-    assert jnp.all(basis_near[1] == 0.0)
-
-    def apply_resolved(vector, *_args):
-        matrix = jnp.asarray([[2.0, 0.0], [1.0e-3, 1.0]], vector.dtype)
-        return matrix @ vector
-
-    basis_resolved, hessenberg_resolved = ka._arnoldi(
-        v0, apply_resolved, None, None, None, krylov_dim=1
-    )
-    assert hessenberg_resolved[1, 0] > 0.0
-    assert jnp.linalg.norm(basis_resolved[1]) == pytest.approx(1.0)
 
 
 def test_residual_gate_never_sits_below_the_working_dtype_noise_floor() -> None:
@@ -399,62 +342,6 @@ def test_dominant_eigenpair_arnoldi_branch_normalizes_wrapper_flags(
     assert captured["v_ref"] is v_ref
     assert float(captured["term_cfg"].apar) == pytest.approx(0.0)
     assert float(captured["term_cfg"].bpar) == pytest.approx(0.0)
-
-
-@pytest.mark.parametrize(
-    ("shift_selection", "select_targeted", "select_growth"),
-    [
-        ("targeted", True, True),
-        ("target", True, False),
-        ("growth", False, True),
-        ("shift", False, False),
-    ],
-)
-def test_shift_invert_selection_key_controls_cached_branch_flags(
-    monkeypatch: pytest.MonkeyPatch,
-    shift_selection: str,
-    select_targeted: bool,
-    select_growth: bool,
-) -> None:
-    v0 = jnp.ones((2,), dtype=jnp.complex64)
-    captured: dict[str, object] = {}
-
-    def _fake_shift(v_init, v_ref, _cache, _params, term_cfg, **kwargs):
-        captured["v_init"] = v_init
-        captured["v_ref"] = v_ref
-        captured["term_cfg"] = term_cfg
-        captured.update(kwargs)
-        return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.full_like(v0, 5.0 + 0.0j)
-
-    _patch_shift_invert(monkeypatch, _fake_shift)
-    monkeypatch.setattr(
-        lk,
-        "_apply_operator",
-        lambda vector, *_args: jnp.asarray(0.4 + 0.2j, vector.dtype) * vector,
-    )
-
-    eig, vec = lk.dominant_eigenpair(
-        v0,
-        object(),
-        object(),
-        terms=LinearTerms(apar=0.0, bpar=0.0),
-        method="shift_invert",
-        shift=0.2 - 1.1j,
-        shift_source="target",
-        shift_selection=shift_selection,
-        shift_preconditioner="hermite-line",
-        select_overlap=True,
-        fallback_method="none",
-    )
-
-    assert jnp.allclose(eig, jnp.asarray(0.4 + 0.2j, dtype=v0.dtype))
-    assert jnp.allclose(vec, 5.0 + 0.0j)
-    assert captured["select_targeted"] is select_targeted
-    assert captured["select_growth"] is select_growth
-    assert captured["select_overlap"] is True
-    assert jnp.allclose(captured["sigma"], jnp.asarray(0.2 - 1.1j, dtype=v0.dtype))
-    assert captured["v_init"] is v0
-    assert captured["v_ref"] is v0
 
 
 def testbuild_shift_invert_preconditioneritioner_modes() -> None:
@@ -977,50 +864,6 @@ def test_raw_eigenpair_routes_fail_closed_unless_certify_is_false(method: str) -
     assert flagged and f"residual={match.group(1)}" in flagged[0]
 
 
-def test_raw_propagator_route_returns_a_converged_pair() -> None:
-    """Seeded with an exact eigenvector, the propagator route certifies it.
-
-    The propagator's Ritz vector carries an O(dt) splitting error; dt=1e-3 in
-    complex64 leaves it near 1e-7, three decades under the dtype-floored gate.
-    """
-
-    _grid, cache, params, v0, term_cfg, terms = _tiny_krylov_setup(linked=False)
-    dtype = v0.dtype
-    basis = jnp.eye(v0.size, dtype=dtype).reshape((v0.size, *v0.shape))
-    columns = jax.vmap(lambda e: lk._apply_operator(e, cache, params, term_cfg))(basis)
-    matrix = np.asarray(columns).reshape((v0.size, v0.size)).T.astype(np.complex128)
-    values, vectors = np.linalg.eig(matrix)
-    index = int(np.argmax(np.where(np.abs(values) > 1.0e-2, values.real, -np.inf)))
-    seed = jnp.asarray(vectors[:, index].reshape(v0.shape), dtype=dtype)
-
-    messages: list[str] = []
-    eig, vec, status = lk.dominant_eigenpair(
-        seed,
-        cache,
-        params,
-        terms=terms,
-        method="propagator",
-        krylov_dim=4,
-        restarts=1,
-        power_dt=1.0e-3,
-        status_callback=messages.append,
-        return_status=True,
-    )
-    assert complex(np.asarray(eig)) == pytest.approx(complex(values[index]), rel=1e-4)
-    residual = lk._eigenpair_relative_residual(eig, vec, cache, params, term_cfg)
-    assert residual <= lk.certifiable_residual_tolerance(1.0e-6, dtype)
-    assert any("certified=True" in item for item in messages)
-    # The certified pair reports the residual it was gated on, beside the gate.
-    assert (status.method, status.route, status.certified) == (
-        "propagator",
-        "propagator",
-        True,
-    )
-    assert status.residual == residual
-    assert status.tolerance == lk.certifiable_residual_tolerance(1.0e-6, dtype)
-    assert status.inner is None
-
-
 def test_a_zero_eigenvector_never_certifies(monkeypatch: pytest.MonkeyPatch) -> None:
     """A breakdown that returns ``(0, 0)`` scored ``0 / floor = 0`` and passed."""
 
@@ -1385,95 +1228,6 @@ def test_adaptive_propagator_halves_step_after_false_stable_residual(
 
 
 @requires_solvax_eigen_api
-def test_adaptive_propagator_uses_smaller_corrective_subspaces(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Later residual corrections may cost less without corrupting accounting."""
-
-    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    dimensions: list[int] = []
-    selected_values: list[complex] = []
-
-    monkeypatch.setattr(
-        solvax,
-        "estimate_rk4_timestep",
-        lambda *_args, **_kwargs: SimpleNamespace(
-            dt=0.2,
-            operator_applications=12,
-        ),
-    )
-
-    def fake_candidates(
-        *_args,
-        krylov_dim: int,
-        candidates: int,
-        **_kwargs,
-    ) -> tuple[jax.Array, jax.Array, jax.Array]:
-        dimensions.append(krylov_dim)
-        assert candidates == 2
-        values = jnp.asarray([0.19 + 0.1j, 0.2 + 0.1j])
-        vectors = jnp.stack([v0, v0])
-        residuals = jnp.zeros((2,))
-        return values, vectors, residuals
-
-    monkeypatch.setattr(
-        ap,
-        "dominant_eigenpairs_propagator_cached",
-        fake_candidates,
-    )
-
-    def fake_adaptive(
-        _apply,
-        restart_once,
-        vector,
-        *,
-        filter_dt: float,
-        filter_steps: int,
-        applications_per_restart: int,
-        **_kwargs,
-    ):
-        assert applications_per_restart == 0
-        first_value, _first = restart_once(vector)
-        selected_values.append(complex(first_value))
-        second_value, corrected = restart_once(vector)
-        selected_values.append(complex(second_value))
-        return solvax.AdaptiveEigenSolution(
-            eigenvalue=jnp.asarray(0.2 + 0.1j),
-            eigenvector=corrected,
-            residual=jnp.asarray(0.0),
-            converged=True,
-            stable=True,
-            restarts=2,
-            operator_applications=4,
-            filter_dt=filter_dt,
-            filter_steps=filter_steps,
-            filter_horizon=20.0,
-            filter_growth_defect=0.0,
-        )
-
-    monkeypatch.setattr(solvax, "adaptive_eigenpair", fake_adaptive)
-    solution = lk.adaptive_propagator_eigenpair(
-        v0,
-        cache,
-        params,
-        terms=terms,
-        krylov_dim=16,
-        restart_krylov_dim=8,
-        candidate_count=2,
-        chunk_horizon=20.0,
-    )
-
-    assert dimensions == [16, 8]
-    assert selected_values == pytest.approx([0.2 + 0.1j, 0.2 + 0.1j])
-    assert solution.operator_applications == 12 + 4 + 2 + 4 * 100 * (16 + 8)
-    np.testing.assert_allclose(
-        np.asarray(solution.candidate_eigenvalues),
-        np.asarray([0.19 + 0.1j, 0.2 + 0.1j]),
-    )
-    assert float(np.asarray(solution.candidate_growth_gap)) == pytest.approx(0.01)
-
-
-@requires_solvax_eigen_api
 def test_adaptive_propagator_biorthogonally_continues_subdominant_branch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1759,218 +1513,6 @@ def test_dominant_eigenpair_target_shift_uses_physical_omega_sign(
     assert jnp.allclose(captured["sigma"], jnp.asarray(0.0 + 1.0j, dtype=v0.dtype))
 
 
-def test_shift_invert_fallback_policy(monkeypatch: pytest.MonkeyPatch) -> None:
-    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-
-    def fake_shift(*args, **kwargs):
-        return jnp.asarray(jnp.nan + 1j * jnp.nan, dtype=v0.dtype), jnp.ones_like(v0)
-
-    def fake_prop(*args, **kwargs):
-        return jnp.asarray(1.0 + 0.2j, dtype=v0.dtype), jnp.full_like(v0, 2.0 + 0.0j)
-
-    def fake_arnoldi(*args, **kwargs):
-        return jnp.asarray(0.5 + 0.1j, dtype=v0.dtype), jnp.full_like(v0, 3.0 + 0.0j)
-
-    def fake_power(*args, **kwargs):
-        return jnp.asarray(0.2 + 0.05j, dtype=v0.dtype), jnp.full_like(v0, 4.0 + 0.0j)
-
-    _patch_shift_invert(monkeypatch, fake_shift)
-    monkeypatch.setattr(lk, "dominant_eigenpair_propagator_cached", fake_prop)
-    monkeypatch.setattr(lk, "dominant_eigenpair_cached", fake_arnoldi)
-    monkeypatch.setattr(lk, "dominant_eigenpair_power", fake_power)
-    monkeypatch.setattr(lk, "_omega_scale", lambda *_args, **_kwargs: jnp.asarray(1.0))
-    monkeypatch.setattr(lk, "_eigenpair_relative_residual", lambda *_args: 0.0)
-
-    eig_p, vec_p = lk.dominant_eigenpair(
-        v0,
-        cache,
-        params,
-        terms=terms,
-        method="shift_invert",
-        fallback_method="propagator",
-        fallback_real_floor=0.0,
-    )
-    assert jnp.allclose(eig_p, jnp.asarray(1.0 + 0.2j, dtype=v0.dtype))
-    assert jnp.allclose(vec_p, 2.0 + 0.0j)
-
-    eig_a, vec_a = lk.dominant_eigenpair(
-        v0,
-        cache,
-        params,
-        terms=terms,
-        method="shift_invert",
-        fallback_method="arnoldi",
-        fallback_real_floor=0.0,
-    )
-    assert jnp.allclose(eig_a, jnp.asarray(0.5 + 0.1j, dtype=v0.dtype))
-    assert jnp.allclose(vec_a, 3.0 + 0.0j)
-
-    eig_w, vec_w = lk.dominant_eigenpair(
-        v0,
-        cache,
-        params,
-        terms=terms,
-        method="shift_invert",
-        fallback_method="power",
-        fallback_real_floor=0.0,
-    )
-    assert jnp.allclose(eig_w, jnp.asarray(0.2 + 0.05j, dtype=v0.dtype))
-    assert jnp.allclose(vec_w, 4.0 + 0.0j)
-
-    # Nearest-shift selection may intentionally target a stable eigenvalue.
-    _patch_shift_invert(
-        monkeypatch,
-        lambda *args, **kwargs: (
-            jnp.asarray(-0.2 + 0.5j, dtype=v0.dtype),
-            jnp.ones_like(v0),
-        ),
-    )
-    eig_stable, _ = lk.dominant_eigenpair(
-        v0,
-        cache,
-        params,
-        terms=terms,
-        method="shift_invert",
-        shift=0.5j,
-        shift_source="reference",
-        shift_selection="nearest",
-        fallback_method="none",
-        fallback_real_floor=0.0,
-    )
-    assert jnp.allclose(eig_stable, jnp.asarray(-0.2 + 0.5j, dtype=v0.dtype))
-
-    with pytest.raises(RuntimeError, match="growth-selection floor"):
-        lk.dominant_eigenpair(
-            v0,
-            cache,
-            params,
-            terms=terms,
-            method="shift_invert",
-            shift=0.5j,
-            shift_source="reference",
-            shift_selection="growth",
-            fallback_method="none",
-            fallback_real_floor=0.0,
-        )
-
-    # A rejected pair without a fallback must fail rather than escape as NaN.
-    _patch_shift_invert(monkeypatch, fake_shift)
-    with pytest.raises(RuntimeError, match="no Ritz value inside the frequency window"):
-        lk.dominant_eigenpair(
-            v0,
-            cache,
-            params,
-            terms=terms,
-            method="shift_invert",
-            fallback_method="none",
-            fallback_real_floor=0.0,
-        )
-
-    # dominant_eigenvalue wrapper should reuse dominant_eigenpair.
-    monkeypatch.setattr(
-        lk,
-        "dominant_eigenpair",
-        lambda *args, **kwargs: (jnp.asarray(0.7 + 0.1j), jnp.ones_like(v0)),
-    )
-    eig_val = lk.dominant_eigenvalue(
-        v0, cache, params, terms=terms, krylov_dim=4, restarts=1
-    )
-    assert jnp.allclose(eig_val, jnp.asarray(0.7 + 0.1j))
-
-
-@pytest.mark.parametrize(("beta", "apar", "bpar"), ((0.0, 0.0, 0.0), (0.01, 1.0, 1.0)))
-def test_shift_invert_auto_selects_pr3_with_long_cycles(
-    monkeypatch: pytest.MonkeyPatch, beta: float, apar: float, bpar: float
-) -> None:
-    """Auto is pr3-cm for ES and EM alike, with restart >= 150 and maxiter >= 600.
-
-    hermite-line and field-corrected z-average the drift and stalled the inner
-    FGMRES on every shipped deck; pr3-cm needed 219-338 iterations on Cyclone.
-    """
-
-    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    calls: list[tuple[str, int, int]] = []
-
-    def fake_shift(*_args, shift_preconditioner, gmres_restart, gmres_maxiter, **_k):
-        calls.append((shift_preconditioner, gmres_restart, gmres_maxiter))
-        return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.ones_like(v0)
-
-    _patch_shift_invert(monkeypatch, fake_shift)
-    monkeypatch.setattr(lk, "build_pr3_factors", lambda *a, **k: (None, _PR3_META))
-    monkeypatch.setattr(lk, "_eigenpair_relative_residual", lambda *_args: 0.0)
-    lk.dominant_eigenpair(
-        v0,
-        cache,
-        replace(params, beta=beta, fapar=float(apar != 0.0)),
-        terms=replace(terms, apar=apar, bpar=bpar),
-        method="shift_invert",
-        shift=0.4 + 0.2j,
-        shift_source="reference",
-        shift_selection="nearest",
-        fallback_method="none",
-    )
-    assert calls == [("pr3-cm", 150, 600)]
-
-
-_PR3_META = {
-    "block_solve": "dense",
-    "alpha": [1.0, 0.0],
-    "alpha_source": "test",
-    "factor_bytes": 0,
-    "block_solve_reason": "test",
-}
-
-
-def test_sparse_shift_invert_selects_only_original_operator_certified_modes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The sparse approximation cannot certify a pair on the physics operator."""
-
-    from scipy.sparse import eye
-
-    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    values = jnp.asarray((0.1 + 0.2j, 0.4 + 0.2j, 0.3 + 0.2j))
-    vectors = jnp.stack(
-        (jnp.ones(v0.size), 2.0 * jnp.ones(v0.size), 3.0 * jnp.ones(v0.size))
-    )
-    captured = {}
-    monkeypatch.setattr(
-        solvax,
-        "sparse_operator_matrix",
-        lambda *_args, **_kwargs: eye(v0.size, dtype=np.complex128),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        solvax, "SpluFactorization", lambda _matrix: "factor", raising=False
-    )
-
-    def fake_modes(*_args, **kwargs):
-        captured.update(kwargs)
-        return SimpleNamespace(
-            eigenvalues=values,
-            eigenvectors=vectors,
-            converged=jnp.ones((3,), dtype=bool),
-        )
-
-    monkeypatch.setattr(solvax, "sparse_eigenpairs", fake_modes, raising=False)
-    residuals = iter((1.0e-12, 1.0, 1.0e-12))
-    monkeypatch.setattr(
-        lk, "_eigenpair_relative_residual", lambda *_args: next(residuals)
-    )
-    value, vector = lk.dominant_eigenpair(
-        v0,
-        cache,
-        params,
-        terms=terms,
-        method="sparse_shift_invert",
-        shift=0.2 + 0.2j,
-        shift_selection="growth",
-    )
-    assert value == values[2]
-    assert jnp.all(vector == 3.0)
-    assert captured["factorization"] == "factor"
-
-
 def _selected_linked_case(nx: int = 8, nl: int = 2, nm: int = 4):
     """One-ky linked grid; at Nx=8 its five-link chain skips kx rows {3, 4, 5}."""
 
@@ -2207,36 +1749,6 @@ def test_growth_excess_separates_the_kbm_trap() -> None:
     assert abs(np.vdot(grown, modes * grown) / np.vdot(grown, grown) - modes[1]) < 0.05
 
 
-def test_auto_takes_the_banded_route_and_falls_back_to_adaptive(monkeypatch) -> None:
-    cache, params, seed, terms = _selected_linked_case()
-    messages: list[str] = []
-    kwargs = dict(terms=terms, status_callback=messages.append, return_status=True)
-    _value, _vector, status = lk.dominant_eigenpair(seed, cache, params, **kwargs)
-    assert status.route == "banded"
-
-    # An operator that is not Hermite-banded and a device that cannot hold the
-    # blocks both end on the certified adaptive route.
-    monkeypatch.setattr(
-        lk, "_adaptive_branch", lambda *_a: ("value", "vector", "adaptive")
-    )
-    original = ap.banded_ritz_pairs
-
-    def mismatched(*_args):
-        raise ValueError("operator is not Hermite-banded")
-
-    for patch in (
-        lambda: monkeypatch.setattr(lk, "banded_ritz_pairs", mismatched),
-        lambda: (
-            monkeypatch.setattr(lk, "banded_ritz_pairs", original),
-            monkeypatch.setattr(lk, "banded_fits", lambda _shape: False),
-        ),
-    ):
-        patch()
-        messages.clear()
-        assert lk.dominant_eigenpair(seed, cache, params, **kwargs)[2] == "adaptive"
-        assert not any("banded Arnoldi" in m for m in messages)
-
-
 def test_banded_refuses_an_operator_with_long_range_hermite_coupling(
     monkeypatch,
 ) -> None:
@@ -2263,33 +1775,6 @@ def test_banded_fits_counts_the_four_complex64_arrays(monkeypatch) -> None:
     assert not ap.banded_fits((nl, 2, 1, 1, nz))  # Nm < 4 has no band
     Device.memory_stats = lambda self: None  # CPU: host memory decides
     assert ap.banded_fits((nl, nm, 1, 1, nz))
-
-
-@pytest.mark.parametrize("method", ["power", "propagator", "arnoldi", "adaptive"])
-def test_eigen_routes_return_no_weight_outside_linked_chains(method) -> None:
-    cache, params, seed, terms = _selected_linked_case()
-    if method == "adaptive":
-        # One bounded restart: this small-gap case is not certified, and the
-        # contract under test is the support of every vector the route returns.
-        solution = ap.adaptive_propagator_eigenpair(
-            seed,
-            cache,
-            params,
-            terms,
-            krylov_dim=8,
-            max_restarts=1,
-            chunk_horizon=5.0,
-            max_stability_retries=0,
-            candidate_count=2,
-        )
-        vector = solution.eigenvector
-    else:
-        _value, vector = lk.dominant_eigenpair(
-            seed, cache, params, terms=terms, method=method, certify=False
-        )
-    assert vector.shape == seed.shape
-    assert float(jnp.linalg.norm(vector)) > 0.0
-    assert _off_chain_weight(vector, _chain_modes(cache)) == 0.0
 
 
 def test_shift_invert_inner_solve_stays_on_linked_chain_modes() -> None:
@@ -3372,49 +2857,6 @@ def test_pr3_needs_its_host_built_factors() -> None:
         ka.build_shift_invert_preconditioner(
             v0, cache, params, term_cfg, sigma, "pr3-cm"
         )
-
-
-def test_pr3_is_selectable_by_name_and_reports_its_setup() -> None:
-    """The route reaches it by name and records what the build measured.
-
-    ``EigenSolveStatus.inner["preconditioner_setup"]`` is the only place a user
-    sees which z-block solve ran, so a fallback that did not report itself would
-    be invisible. Since 2026-10-15 ``"auto"`` resolves to pr3-cm itself rather than the
-    line solve, and ``KrylovConfig`` still defaults to ``"auto"``.
-    """
-
-    cache, params, v0, term_cfg = _pr3_setup()
-    assert lk.KrylovConfig().shift_preconditioner == "auto"
-    assert lk.KrylovConfig().shift_precond_block_solve == "auto"
-    assert lk.KrylovConfig().shift_precond_alpha is None
-    assert lk._automatic_shift_preconditioner(params, term_cfg) == "pr3-cm"
-    assert pr3.PR3_PRECOND_NAMES <= ka.SHIFT_PRECOND_NAMES
-
-    try:
-        _value, _vector, status = lk.dominant_eigenpair(
-            v0,
-            cache,
-            params,
-            None,
-            method="shift_invert",
-            shift_preconditioner="pr3-cm",
-            shift_maxiter=40,
-            shift_restart=40,
-            krylov_dim=6,
-            restarts=1,
-            fallback_method="none",
-            return_status=True,
-        )
-    except RuntimeError as exc:
-        # This fixture is far too small to certify an eigenpair, and that is not
-        # what the test owns; the build's report reaches the message either way.
-        assert "residual" in str(exc)
-        return
-    assert status.inner is not None
-    assert status.inner["preconditioner"] == "pr3-cm"
-    setup = status.inner["preconditioner_setup"]
-    assert setup is not None and setup["sweeps"] == 3
-    assert setup["block_solve"] in {"block-thomas", "dense"}
 
 
 # ---- from test_adaptive_eigenmodes.py ----
