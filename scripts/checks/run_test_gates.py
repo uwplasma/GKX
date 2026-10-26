@@ -21,14 +21,14 @@ COVERAGE_DATA_RE = re.compile(r"^\.coverage\.shard-(?P<shard>[0-9]+)\.")
 #: The planner packs files longest-first on these; an unlisted file costs
 #: ``DEFAULT_TEST_SECONDS``. Re-measure when a shard drifts far from the rest.
 WIDE_COVERAGE_SECONDS: dict[str, float] = {
-    "test_parallel_linear_velocity.py": 1040,
+    "test_parallel_linear_velocity.py": 855,
     "test_nonlinear.py": 925,
     "test_nonlinear_helpers_extra.py": 595,
-    "test_linear.py": 400,
+    "test_linear.py": 320,
     "test_runtime_runner.py": 200,
     "test_autodiff_solver_objectives.py": 200,
     "test_examples.py": 150,
-    "test_linear_krylov_core.py": 100,
+    "test_linear_krylov_core.py": 60,
 }
 DEFAULT_TEST_SECONDS = 15.0
 

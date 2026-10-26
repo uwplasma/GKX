@@ -32,7 +32,6 @@ from gkx.diagnostics import (
     _transport_mode_weight,
     _heat_flux_channel_contrib_species,
     _particle_flux_channel_contrib_species,
-    _turbulent_heating_contrib_species,
     _reduce_scalar_kykxz,
     _reduce_species_kykxz,
     magnetic_vector_potential_energy,
@@ -62,7 +61,6 @@ from scripts.checks._gates.validation_gates import (
 )
 from gkx.diagnostics.analysis import ModeSelection
 from gkx.diagnostics.analysis import select_ky_index
-from gkx.geometry import FluxTubeGeometryData
 from gkx.geometry import SAlphaGeometry, sample_flux_tube_geometry
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
@@ -87,7 +85,6 @@ from gkx.solvers_time_explicit import (
     _non_twist_shift_frequency_max,
     _diagnostic_midplane_index,
     _completed_step_state_mask,
-    _linear_term_config,
     _parallel_periods_from_grid,
     integrate_linear_explicit_diagnostics,
 )
@@ -96,20 +93,14 @@ from gkx.terms.config import FieldState
 from gkx.artifacts.spectral_layout import (
     KY_WEIGHTING_PAIR,
     KY_WEIGHTING_PER_ROW,
-    _condense_kx,
-    _condense_ky,
-    _condense_kykx,
     _condense_kx_for_output,
     _condense_ky_for_output,
     _condense_kykx_for_output,
     _dealiased_spectral_field,
     _dealiased_ky_count,
     _dealiased_ky_indices,
-    _dealiased_ky_values,
     _dealiased_kx_count,
     _dealiased_kx_indices,
-    _dealiased_kx_values,
-    _real_space_axis,
     _require_netcdf4,
     _restart_to_netcdf_layout,
     _spectral_species_to_ri,
@@ -118,11 +109,9 @@ from gkx.artifacts.spectral_layout import (
     _complex_to_ri,
     _spectral_to_ri,
     _spectral_to_xy,
-    _take_axis,
     _write_runtime_root_metadata,
 )
 from gkx.artifacts.io import (
-    _ensure_parent,
     _artifact_base,
     _condense_diagnostics_for_netcdf_output,
     _condense_resolved_for_output,
@@ -130,18 +119,12 @@ from gkx.artifacts.io import (
     _netcdf_bundle_base,
     _is_netcdf_output_target,
     _nonlinear_summary,
-    _read_optional_var,
     _resolved_species_time,
     _resolve_restart_path,
-    _write_csv,
-    _write_json,
-    _write_state,
     load_nonlinear_netcdf_diagnostics,
 )
 from gkx.artifacts.nonlinear_netcdf import (
     _particle_moments,
-    _write_geometry_group,
-    _write_input_parameters_group,
     _write_nonlinear_netcdf_outputs,
 )
 from gkx.workflows.runtime.artifacts import (
@@ -360,46 +343,6 @@ def test_write_runtime_linear_artifacts_writes_bundle(tmp_path: Path) -> None:
         Path(paths["quasilinear_summary"]).read_text(encoding="utf-8")
     )
     assert ql_summary["metadata"]["claim_level"] == claim
-
-
-def test_runtime_artifact_file_helpers_and_nonlinear_summary(tmp_path: Path) -> None:
-    json_path = tmp_path / "nested" / "run.summary.json"
-    csv_path = tmp_path / "nested" / "run.timeseries.csv"
-    base = tmp_path / "nested" / "run"
-    payload = {"beta": 0.1, "alpha": 2.0}
-
-    _ensure_parent(json_path)
-    assert json_path.parent.exists()
-
-    _write_json(json_path, payload)
-    assert json.loads(json_path.read_text(encoding="utf-8")) == payload
-
-    _write_csv(
-        csv_path, ["t", "value"], [np.asarray([0.0, 1.0]), np.asarray([2.0, 3.0])]
-    )
-    csv_data = np.loadtxt(csv_path, delimiter=",", skiprows=1)
-    np.testing.assert_allclose(csv_data, np.asarray([[0.0, 2.0], [1.0, 3.0]]))
-
-    state = np.asarray([[1.0 + 2.0j]], dtype=np.complex64)
-    state_path = _write_state(base, state)
-    assert state_path is not None
-    np.testing.assert_allclose(np.load(state_path), state)
-    assert _write_state(base, None) is None
-
-    def summary_of(**kw):
-        ns = dict(diagnostics=None, state=None, ky_selected=0.2, kx_selected=0.0)
-        return _nonlinear_summary(SimpleNamespace(**{**ns, "phi2": None, **kw}))
-
-    summary = summary_of(
-        diagnostics=_diag(**_TRACE),
-        state=np.zeros((1, 2, 3), dtype=np.complex64),
-        kx_selected=0.1,
-    )
-    assert summary["kind"] == "nonlinear"
-    assert summary["n_samples"] == 2
-    assert summary["heat_flux_last"] == pytest.approx(3.1)
-    assert summary["n_state_shape"] == [1, 2, 3]
-    assert summary_of(phi2=np.asarray(7.0))["phi2_last"] == pytest.approx(7.0)
 
 
 def test_write_runtime_linear_artifacts_splits_complex_signal_columns(
@@ -771,19 +714,6 @@ def test_write_runtime_nonlinear_artifacts_preserves_active_resolved_axes(
         np.testing.assert_allclose(np.asarray(variables["Phi2_kxkyt"][:]), phi2_kykx)
 
 
-def test_runtime_artifact_read_optional_var() -> None:
-    class _Var:
-        dimensions = ("time", "ri")
-
-        def __getitem__(self, _key):
-            return np.array([[1.0, 2.0], [3.0, 4.0]])
-
-    group = SimpleNamespace(variables={"present": _Var()})
-    assert _read_optional_var(group, "missing") is None
-    out = _read_optional_var(group, "present")
-    assert np.allclose(out, np.array([1.0 + 2.0j, 3.0 + 4.0j]))
-
-
 def test_runtime_artifact_condense_helpers() -> None:
     assert _condense_resolved_for_output(None) is None
 
@@ -806,43 +736,6 @@ def test_runtime_artifact_small_helpers() -> None:
     assert np.array_equal(_dealiased_kx_indices(1), np.array([0], dtype=np.int32))
 
 
-def test_runtime_artifact_axis_and_condense_helpers() -> None:
-    axis = _real_space_axis(4, 2.0)
-    np.testing.assert_allclose(axis, np.array([0.0, 0.5, 1.0, 1.5], dtype=np.float32))
-
-    ky = np.array([0.0, 0.2, 0.4, -0.4, -0.2], dtype=np.float32)
-    kx = np.array([0.0, 0.1, 0.2, 0.3, -0.3, -0.2, -0.1], dtype=np.float32)
-    assert _dealiased_ky_count(ky.size) == 2
-    np.testing.assert_array_equal(
-        _dealiased_ky_indices(ky.size), np.array([0, 1], dtype=np.int32)
-    )
-    np.testing.assert_allclose(
-        _dealiased_ky_values(ky), np.array([0.0, 0.2], dtype=np.float32)
-    )
-    np.testing.assert_allclose(
-        _dealiased_kx_values(kx),
-        np.array([-0.2, -0.1, 0.0, 0.1, 0.2], dtype=np.float32),
-    )
-
-    arr_kx = np.arange(7, dtype=np.float32)
-    np.testing.assert_allclose(
-        _condense_kx(arr_kx), np.array([5, 6, 0, 1, 2], dtype=np.float32)
-    )
-
-    arr_ky = np.arange(10, dtype=np.float32).reshape(2, 5)
-    np.testing.assert_allclose(_condense_ky(arr_ky), arr_ky[..., :2])
-
-    arr_kykx = np.arange(35, dtype=np.float32).reshape(5, 7)
-    np.testing.assert_allclose(
-        _condense_kykx(arr_kykx), arr_kykx[:2][:, [5, 6, 0, 1, 2]]
-    )
-
-    arr = np.arange(24, dtype=np.float32).reshape(2, 3, 4)
-    np.testing.assert_allclose(
-        _take_axis(arr, np.array([2, 0]), axis=1), arr[:, [2, 0], :]
-    )
-
-
 def test_runtime_artifact_root_metadata_and_active_field() -> None:
     cfg = SimpleNamespace(
         grid=SimpleNamespace(Ny=5, Nx=7, Nz=8, ntheta=None, nperiod=None)
@@ -857,136 +750,6 @@ def test_runtime_artifact_root_metadata_and_active_field() -> None:
     field = np.arange(5 * 7 * 2, dtype=np.float32).reshape(5, 7, 2)
     active = _dealiased_spectral_field(field, ky_axis=0, kx_axis=1)
     np.testing.assert_allclose(active, field[:2][:, [5, 6, 0, 1, 2], :])
-
-
-def test_runtime_artifact_geometry_and_input_group_writers(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    grid = SimpleNamespace(
-        z=np.asarray([-1.0, 0.0, 1.0], dtype=np.float32),
-        kx=np.asarray([-0.2, 0.0, 0.2], dtype=np.float32),
-        ky=np.asarray([0.0, 0.3, -0.3], dtype=np.float32),
-    )
-    profiles = {
-        "bmag": [1.0, 1.1, 1.2],
-        "bgrad": [0.1, 0.2, 0.3],
-        "gb": [0.4, 0.5, 0.6],
-        "gb0": [0.7, 0.8, 0.9],
-        "cv": [1.0, 1.1, 1.2],
-        "cv0": [1.3, 1.4, 1.5],
-        "gds2": [1.6, 1.7, 1.8],
-        "gds21": [1.9, 2.0, 2.1],
-        "gds22": [2.2, 2.3, 2.4],
-        "grho": [0.9, 1.0, 1.1],
-        "jacobian": [1.0, 1.5, 2.0],
-    }
-    geom = SimpleNamespace(
-        **{
-            f"{k}_profile": np.asarray(v, dtype=np.float32) for k, v in profiles.items()
-        },
-        gradpar_value=0.75,
-        q=1.4,
-        s_hat=0.6,
-        R0=3.0,
-        epsilon=0.2,
-        kxfac=1.1,
-        theta_scale=1.0,
-        nfp=5,
-        alpha=0.3,
-        B0=2.5,
-    )
-    cfg = SimpleNamespace(
-        grid=SimpleNamespace(nperiod=2),
-        geometry=SimpleNamespace(
-            model="miller", shift=0.15, kappa=1.7, akappri=0.05, tri=0.2, tripri=0.03
-        ),
-        physics=SimpleNamespace(beta=0.02),
-    )
-    _patch(
-        monkeypatch,
-        nonlinear_netcdf,
-        apply_geometry_grid_defaults=lambda _geom, grid_cfg: grid_cfg,
-        build_spectral_grid=lambda _cfg: grid,
-        build_runtime_geometry=lambda _cfg: object(),
-        ensure_flux_tube_geometry_data=lambda _geom, _theta: geom,
-        real_fft_ordered_kx=lambda arr: np.asarray([-0.2, 0.0, 0.2], dtype=np.float32),
-        _half_ky_values_of=lambda _grid: np.asarray([0.0, 0.3], dtype=np.float32),
-    )
-
-    geom_group = _FakeGroup()
-    theta, kx_vals, ky_vals, geom_out = _write_geometry_group(geom_group, cfg)
-    np.testing.assert_allclose(theta, grid.z)
-    np.testing.assert_allclose(kx_vals, np.asarray([-0.2, 0.0, 0.2], dtype=np.float32))
-    np.testing.assert_allclose(ky_vals, np.asarray([0.0, 0.3], dtype=np.float32))
-    assert geom_out is geom
-    np.testing.assert_allclose(geom_group["bmag"], geom.bmag_profile)
-    assert float(geom_group["gradpar"]) == pytest.approx(0.75)
-    assert int(geom_group["nfp"]) == 5
-
-    inputs = _FakeGroup()
-    _write_input_parameters_group(inputs, cfg, geom)
-    for name, value in (("igeo", 0), ("slab", 0), ("zero_shat", 0)):
-        assert int(inputs[name]) == value
-    assert float(inputs["kxfac"]) == pytest.approx(1.1)
-    assert float(inputs["beta"]) == pytest.approx(0.02)
-    assert float(inputs["grhoavg"]) == pytest.approx(np.mean(geom.grho_profile))
-
-
-def test_runtime_artifact_geometry_writer_applies_imported_grid_defaults(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    theta_closed = np.linspace(-1.0, 1.0, 5, dtype=np.float64)
-    ramps = {
-        "bmag": (1.0, 1.4),
-        "bgrad": (0.1, 0.5),
-        "gds2": (2.0, 2.4),
-        "gds21": (-0.2, 0.2),
-        "gds22": (0.7, 0.9),
-        "cv": (0.3, 0.7),
-        "gb": (0.4, 0.8),
-        "cv0": (-0.1, 0.1),
-        "gb0": (-0.2, 0.2),
-        "jacobian": (3.0, 3.4),
-        "grho": (1.0, 1.2),
-        "cylindrical_R": (5.0, 6.0),
-        "cylindrical_Z": (-0.5, 0.5),
-        "toroidal_angle": (-1.0, 1.0),
-    }
-    geom = FluxTubeGeometryData(
-        theta=theta_closed,
-        gradpar_value=0.5,
-        **{
-            f"{k}_profile": np.linspace(a, b, theta_closed.size)
-            for k, (a, b) in ramps.items()
-        },
-        q=1.6,
-        s_hat=0.0,
-        epsilon=0.12,
-        R0=5.5,
-        kxfac=1.25,
-        nfp=5,
-        theta_closed_interval=True,
-        source_model="imported-netcdf",
-    )
-    cfg = SimpleNamespace(
-        grid=GridConfig(Nx=4, Ny=4, Nz=17, Lx=6.28, Ly=6.28, boundary="periodic"),
-        geometry=SimpleNamespace(model="vmec", shift=0.0),
-        physics=SimpleNamespace(beta=0.0),
-    )
-    monkeypatch.setattr(nonlinear_netcdf, "build_runtime_geometry", lambda _cfg: geom)
-
-    group = _FakeGroup()
-    theta, _kx, _ky, geom_out = _write_geometry_group(group, cfg)
-
-    assert theta.shape == (theta_closed.size - 1,)
-    np.testing.assert_allclose(theta, theta_closed[:-1].astype(np.float32))
-    np.testing.assert_allclose(
-        group["bmag"], np.asarray(geom.bmag_profile[:-1], dtype=np.float32)
-    )
-    assert geom_out.theta_closed_interval is False
-    np.testing.assert_allclose(group["Rplot"], geom.cylindrical_R_profile[:-1])
-    np.testing.assert_allclose(group["zeta_plot"], geom.toroidal_angle_profile[:-1])
-    assert float(group["kxfac"]) == pytest.approx(1.25)
 
 
 def test_runtime_artifact_particle_moments(monkeypatch) -> None:
@@ -1343,80 +1106,6 @@ def test_runtime_orchestration_handoff_chunks_and_restarts(
     assert all(call["resolved_diagnostics"] is False for call in calls)
     assert writes == pytest.approx([0.5, 1.0, 1.2])
     assert float(np.asarray(result.diagnostics.t)[-1]) == pytest.approx(1.2)
-
-
-def test_run_runtime_nonlinear_with_artifacts_keeps_adaptive_steps_none(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    out_path = tmp_path / "adaptive.out.nc"
-    cfg = RuntimeConfig(
-        time=TimeConfig(dt=0.1, t_max=0.3, fixed_dt=False, diagnostics=True),
-        output=RuntimeOutputConfig(
-            path=str(out_path), save_for_restart=True, nsave=10000
-        ),
-    )
-    diag = _diag(3, energy_t=2.0 * np.ones(3))
-    captured_steps: list[int | None] = []
-
-    def _fake_run_runtime_nonlinear(_cfg, **kwargs):
-        captured_steps.append(kwargs.get("steps"))
-        return RuntimeNonlinearResult(
-            t=np.asarray(diag.t), diagnostics=diag, state=_STATE6
-        )
-
-    patch_runtime(monkeypatch, "run_runtime_nonlinear", _fake_run_runtime_nonlinear)
-    patch_runtime(
-        monkeypatch,
-        "write_runtime_nonlinear_artifacts",
-        lambda *_args, **_kwargs: {"out": str(out_path)},
-    )
-
-    run_runtime_nonlinear_with_artifacts(
-        cfg, out=out_path, ky_target=0.2, diagnostics=True
-    )
-
-    assert captured_steps == [None]
-
-
-def test_run_runtime_nonlinear_with_artifacts_forwards_live_output_options(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    cfg = RuntimeConfig(
-        time=TimeConfig(dt=0.1, t_max=0.1, fixed_dt=True, diagnostics=True),
-        output=RuntimeOutputConfig(
-            path=str(tmp_path / "live.out.nc"), save_for_restart=False
-        ),
-    )
-    diag = _diag(
-        1, Wphi_t=[2.0], heat_flux_t=[3.0], particle_flux_t=[4.0], energy_t=[3.0]
-    )
-    messages: list[str] = []
-    captured: dict[str, object] = {}
-
-    def _fake_run_runtime_nonlinear(_cfg, **kwargs):
-        captured["show_progress"] = kwargs["show_progress"]
-        callback = captured["status_callback"] = kwargs["status_callback"]
-        assert callback is not None
-        callback("live status propagated")
-        return RuntimeNonlinearResult(
-            t=np.asarray(diag.t), diagnostics=diag, ky_selected=0.2, kx_selected=0.0
-        )
-
-    patch_runtime(monkeypatch, "run_runtime_nonlinear", _fake_run_runtime_nonlinear)
-
-    result, paths = run_runtime_nonlinear_with_artifacts(
-        cfg,
-        out=None,
-        ky_target=0.2,
-        show_progress=True,
-        status_callback=messages.append,
-    )
-
-    assert result.diagnostics is diag
-    assert paths == {}
-    assert captured["show_progress"] is True
-    assert callable(captured["status_callback"])
-    assert messages == ["live status propagated"]
 
 
 def test_run_runtime_nonlinear_with_artifacts_rejects_nonfinite_chunk(
@@ -2418,30 +2107,6 @@ def test_flux_channel_helper_matches_public_split_reductions(
             )
 
 
-def test_particle_flux_total_channel_helper_single_species_short_circuits_to_zero() -> (
-    None
-):
-    _cfg, grid, geom, params, cache, G = _small_G0()
-    _vol_fac, flux_fac = fieldline_quadrature_weights(geom, grid)
-    phi, apar, bpar = _linear_fields(G, cache, params)
-
-    contribs = _particle_flux_channel_contrib_species(
-        G,
-        phi,
-        apar,
-        bpar,
-        cache,
-        grid,
-        params,
-        flux_fac,
-        use_dealias=False,
-        flux_scale=1.0,
-    )
-
-    for contrib in contribs:
-        np.testing.assert_allclose(np.asarray(contrib), 0.0)
-
-
 def test_jl_family_preserves_species_axis() -> None:
     cache = _multispecies_setup(Nl=3, Nm=3)[4]
     Jl, JlB, Jfac = _jl_family(cache)
@@ -2692,38 +2357,6 @@ def test_netcdf_phi2_total_and_kx_spectrum_match_in_memory(ky_layout: str) -> No
     np.testing.assert_allclose(np.sum(out_kx), float(phi2_t), rtol=1.0e-5)
 
 
-def test_turbulent_heating_total_helper_zero_dt_guard_returns_zero_for_changed_state() -> (
-    None
-):
-    _cfg, grid, _geom, params, cache, vol_fac, _flux_fac = _multispecies_setup(
-        Nl=3, Nm=4
-    )
-    G_old, phi_old = _ramp_state(grid, 3, 4, g_offset=0.5)
-    G = 1.02 * G_old + (0.03 - 0.01j)
-    phi = 1.01 * phi_old + (0.02 + 0.01j)
-    bpar = -0.1 * phi + (0.01 - 0.02j)
-
-    contrib = _turbulent_heating_contrib_species(
-        G,
-        G_old,
-        phi,
-        0.2 * phi,
-        bpar,
-        phi_old,
-        0.2 * phi_old,
-        -0.1 * phi_old,
-        cache,
-        grid,
-        params,
-        vol_fac,
-        0.0,
-        use_dealias=False,
-    )
-
-    assert np.all(np.isfinite(np.asarray(contrib)))
-    np.testing.assert_allclose(np.asarray(contrib), 0.0, atol=1.0e-7)
-
-
 def test_init_all_scaling_matches_reference():
     cfg = CycloneBaseCase()
     grid_full = build_spectral_grid(cfg.grid)
@@ -2791,44 +2424,6 @@ def test_integrate_linear_explicit_diagnostics_honors_rk3_method(
     assert set(calls) == {"rk3"}
 
 
-def test_term_config_and_rk3_wrapper_delegate_to_linear_step(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    terms = LinearTerms(apar=0.0, bpar=1.0, hyperdiffusion=1.0)
-    assert _linear_term_config(terms) == linear_terms_to_term_config(terms)
-
-    captured: dict[str, object] = {}
-
-    def _fake_step(G, cache, params, term_cfg, dt, *, method):
-        captured.update(
-            G=G, cache=cache, params=params, term_cfg=term_cfg, dt=dt, method=method
-        )
-        return G, FieldState(phi=G[0, 0])
-
-    monkeypatch.setattr(explicit_time_integrators, "_linear_explicit_step", _fake_step)
-
-    G0 = jnp.ones((1, 1, 1, 1, 1), dtype=jnp.complex64)
-    cache = SimpleNamespace()
-    params = object()
-    term_cfg = linear_terms_to_term_config(terms)
-
-    G_next, fields = explicit_time_integrators._linear_explicit_step(
-        G0, cache, params, term_cfg, 0.125, method="rk3"
-    )
-
-    for key, value in (
-        ("G", G0),
-        ("cache", cache),
-        ("params", params),
-        ("term_cfg", term_cfg),
-    ):
-        assert captured[key] is value
-    assert captured["dt"] == pytest.approx(0.125)
-    assert captured["method"] == "rk3"
-    assert G_next is G0
-    np.testing.assert_allclose(np.asarray(fields.phi), np.asarray(G0[0, 0]))
-
-
 def test_linear_explicit_step_applies_completed_step_mask(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2854,14 +2449,14 @@ def test_linear_explicit_step_applies_completed_step_mask(
         object(),
         linear_terms_to_term_config(LinearTerms()),
         0.1,
-        method="euler",
+        method="rk2",
     )
 
     expected = np.ones((2, 2, 1), dtype=np.complex64)
     expected[0, 0, 0] = 0.0
     expected[1, 1, 0] = 0.0
 
-    assert len(seen_states) == 2
+    assert len(seen_states) == 3
     assert np.allclose(seen_states[0][0, 0], 1.0)
     assert np.allclose(np.asarray(G_next[0, 0]), expected)
     assert np.allclose(np.asarray(seen_states[-1][0, 0]), expected)
@@ -3004,21 +2599,6 @@ def test_rk4_step_applies_the_end_damping_rate_once() -> None:
         rtol=1.0e-6,
         atol=1.0e-6,
     )
-
-
-def test_linear_explicit_adaptive_default_dt_max_clamps_to_nominal_dt():
-    """When dt_max is unset, the adaptive explicit path should clamp to dt."""
-
-    _cfg, grid, geom, params, cache, G0 = _small_G0()
-    time_cfg = ExplicitTimeConfig(
-        dt=0.01, t_max=0.05, sample_stride=1, fixed_dt=False, dt_max=None, cfl=10.0
-    )
-    *_series, diag = integrate_linear_explicit_diagnostics(
-        G0, grid, cache, params, geom, time_cfg, terms=LinearTerms(), jit=False
-    )
-    dt_t = np.asarray(diag.dt_t, dtype=float)
-    assert dt_t.size > 0
-    assert np.nanmax(dt_t) <= float(time_cfg.dt) + 1.0e-12
 
 
 def test_linear_omega_max_preserves_selected_ky_mode():

@@ -121,8 +121,6 @@ owned_modules = [
   "gkx.cli",
   "gkx.config",
   "gkx.solvers_time_explicit",
-  "gkx.solvers_time_explicit_cfl",
-  "gkx.solvers_time_explicit_steps",
   "gkx.workflows.runtime.toml",
   "gkx.workflows.runtime.wout",
   "gkx.compilation_cache",
@@ -591,10 +589,9 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers_nonlinear_state_integration"
-path = "src/gkx/solvers_nonlinear_state_integration.py"
+module = "gkx.solvers_nonlinear_diagnostics"
+path = "src/gkx/solvers_nonlinear_diagnostics.py"
 owned_modules = [
-  "gkx.solvers_nonlinear_diagnostic_integration",
   "gkx.operators.nonlinear.brackets",
   "gkx.terms.nonlinear",
 ]
@@ -605,22 +602,32 @@ coverage_target_percent = 95.0
 reference_anchors = [
   "Cyclone and Cyclone-Miller nonlinear transport-window comparison artifacts",
   "KBM, HSX, and W7-X nonlinear parity envelopes from independent-code comparisons",
+  "explicit nonlinear diagnostic scans used by transport-window audits",
+  "IMEX nonlinear diagnostic scans used by semi-implicit transport-window audits",
+  "nonlinear diagnostic kernels patched at module level by debug and parity tests",
 ]
 physics_contracts = [
   "nonlinear acceptance uses window statistics rather than one-time samples",
   "mode-resolved Wphi and heat-flux spectra localize transport mismatches",
   "the post-saturation adjoint differentiates the physical total heat flux",
+  "explicit and IMEX diagnostic integration assemble gamma, omega, energy, heat-flux, particle-flux, and resolved spectra from one state convention",
+  "module-level diagnostic kernels preserve the same observable definitions as cached nonlinear RHS runs",
 ]
 numerics_contracts = [
   "Poisson-bracket paths preserve expected antisymmetry in reduced tests",
   "late-time fixed-mode frequency diagnostics remain conditioned when amplitudes are small",
   "blocked and plain discrete adjoints preserve values and gradients",
+  "fixed and adaptive explicit diagnostic paths share one time-step policy and projection convention",
+  "IMEX diagnostic paths keep the nonlinear term explicit and the linear solve implicit while sharing diagnostic assembly",
+  "sampled diagnostic scans preserve final-time samples and resolved-diagnostic axis lengths",
+  "branch choices stay explicit while traced state arrays remain JAX-transformable",
 ]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear_exb.py",
   "tests/unit/operators/test_terms_fields.py",
+  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = [
   "docs/_static/nonlinear_window_statistics.json",
@@ -640,6 +647,8 @@ next_tests = [
   "add reduced free-energy/conservation tests for nonlinear-only limits",
   "extend spectral communication gates from split/reassemble identity to runtime distributed FFT routing",
   "close TEM branch/frequency parity before kinetic-electron W7-X nonlinear gates",
+  "add manufactured explicit diagnostic observed-order checks after the remaining facade wrappers are split",
+  "add explicit diagnostic transport-window identity checks for production nonlinear decomposition",
 ]
 
 [[modules]]
@@ -744,46 +753,8 @@ next_tests = [
 ]
 
 [[modules]]
-module = "gkx.solvers_nonlinear_diagnostics"
-path = "src/gkx/solvers_nonlinear_diagnostics.py"
-owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
-status = "active"
-coverage_priority = "high"
-coverage_target_percent = 95.0
-reference_anchors = [
-  "explicit nonlinear diagnostic scans used by transport-window audits",
-  "IMEX nonlinear diagnostic scans used by semi-implicit transport-window audits",
-  "facade-injected nonlinear diagnostic kernels used by debug and parity tests",
-]
-physics_contracts = [
-  "explicit and IMEX diagnostic integration assemble gamma, omega, energy, heat-flux, particle-flux, and resolved spectra from one state convention",
-  "facade-injected diagnostic kernels preserve the same observable definitions as cached nonlinear RHS runs",
-]
-numerics_contracts = [
-  "fixed and adaptive explicit diagnostic paths share one time-step policy and projection convention",
-  "IMEX diagnostic paths keep the nonlinear term explicit and the linear solve implicit while sharing diagnostic assembly",
-  "sampled diagnostic scans preserve final-time samples and resolved-diagnostic axis lengths",
-  "dependency injection keeps branch choices explicit while leaving traced state arrays JAX-transformable",
-]
-fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
-  "tests/unit/solvers/test_time_integrators.py",
-]
-artifact_paths = [
-  "docs/_static/nonlinear_window_statistics.json",
-]
-next_tests = [
-  "add manufactured explicit diagnostic observed-order checks after the remaining facade wrappers are split",
-  "add explicit diagnostic transport-window identity checks for production nonlinear decomposition",
-]
-
-[[modules]]
 module = "gkx.solvers_nonlinear_imex"
 path = "src/gkx/solvers_nonlinear_imex.py"
-owned_modules = [
-  "gkx.solvers_nonlinear_imex_diagnostics",
-]
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
 status = "active"
 coverage_priority = "high"

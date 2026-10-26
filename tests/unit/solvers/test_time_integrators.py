@@ -30,14 +30,10 @@ from gkx.solvers_nonlinear_explicit import (
 from gkx.solvers_nonlinear_imex import (
     advance_imex_nonlinear_state,
     imex_fixed_point_guess,
-    integrate_cached_imex_scan,
     make_imex_diagnostic_step,
-    make_imex_nonlinear_term,
-    make_imex_solve_step,
-    run_imex_diagnostic_scan,
     solve_imex_step,
 )
-from gkx.solvers_time_explicit_steps import (
+from gkx.solvers_time_explicit import (
     _linear_explicit_stage_update,
     _linear_native_step,
 )
@@ -46,14 +42,12 @@ from types import SimpleNamespace
 import gkx.solvers_linear_implicit as implicit_linear
 import gkx.solvers_linear_krylov_algorithms as krylov_algorithms
 import gkx.solvers_nonlinear_imex as imex_module
-import gkx.solvers_nonlinear_imex_diagnostics as imex_diagnostics
 import gkx.solvers_time_explicit as eti
 import gkx.solvers_time_explicit as explicit_diagnostics
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-import warnings
 from gkx.config import CycloneBaseCase, GridConfig, TimeConfig
 from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
@@ -67,7 +61,6 @@ from gkx.solvers_time_runners import (
     integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )
-from typing import Any
 import dataclasses
 import gkx.solvers_time_runners as runners
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
@@ -102,12 +95,6 @@ def test_diagnostics_progress_uses_plain_base_install_contract(capsys) -> None:
     assert "explicit linear simulation started" in output
     assert "progress=50% step=1" in output
     assert "explicit linear simulation complete" in output
-
-
-def replace_time_cfg(cfg, **changes):
-    from dataclasses import replace
-
-    return replace(cfg, **changes)
 
 
 def _cache() -> SimpleNamespace:
@@ -162,9 +149,7 @@ def test_instantaneous_growth_rate_step_max_mode_and_invalid_method() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "method", ["euler", "rk2", "rk3_classic", "rk3", "rk3_heun", "rk4", "sspx3", "k10"]
-)
+@pytest.mark.parametrize("method", ["rk2", "rk3", "rk4", "sspx3"])
 def test_linear_explicit_step_methods_match_scalar_linear_amplification(
     monkeypatch, method: str
 ) -> None:
@@ -195,7 +180,7 @@ def test_linear_explicit_step_rejects_unknown_method(monkeypatch) -> None:
         ),
     )
 
-    with pytest.raises(ValueError, match="explicit linear method"):
+    with pytest.raises(ValueError, match="method must be one of"):
         eti._linear_explicit_step(
             jnp.ones((1, 1, 2, 2, 1), dtype=jnp.complex64),
             _cache(),
@@ -206,7 +191,7 @@ def test_linear_explicit_step_rejects_unknown_method(monkeypatch) -> None:
         )
 
 
-@pytest.mark.parametrize(("method", "expected_calls"), [("sspx3", 3), ("k10", 10)])
+@pytest.mark.parametrize(("method", "expected_calls"), [("sspx3", 3)])
 def test_self_staging_explicit_methods_do_not_evaluate_unused_rhs(
     method: str, expected_calls: int
 ) -> None:
@@ -454,44 +439,6 @@ def test_adaptive_linear_dt_fixed_disabled_and_cfl_clamped() -> None:
     ) == pytest.approx(0.005)
 
 
-def test_should_emit_linear_progress_trigger_conditions() -> None:
-    # First step, final step, and stride multiples emit; interior steps do not.
-    assert eti._should_emit_linear_progress(
-        step=1, total_steps_est=100, progress_stride=10
-    )
-    assert eti._should_emit_linear_progress(
-        step=100, total_steps_est=100, progress_stride=10
-    )
-    assert eti._should_emit_linear_progress(
-        step=20, total_steps_est=100, progress_stride=10
-    )
-    assert not eti._should_emit_linear_progress(
-        step=23, total_steps_est=100, progress_stride=10
-    )
-
-
-def test_linear_loop_progress_clock_and_history_arrays() -> None:
-    total_steps_est, progress_stride, started_at = eti._linear_loop_progress_clock(
-        0.2, 0.02
-    )
-    assert total_steps_est == 10
-    assert progress_stride >= 1
-    assert isinstance(started_at, float)
-    # A zero/degenerate dt must not divide-by-zero and still yields >=1 step.
-    assert eti._linear_loop_progress_clock(0.0, 0.0)[0] == 1
-
-    history = eti._LinearHistory()
-    for k in range(3):
-        history.ts.append(0.1 * k)
-        history.phi.append(np.full((2,), float(k)))
-        history.gamma.append(np.asarray(0.5 * k))
-        history.omega.append(np.asarray(-0.5 * k))
-    ts, phi, gamma, omega = eti._linear_history_arrays(history)
-    np.testing.assert_allclose(ts, [0.0, 0.1, 0.2])
-    assert phi.shape == (3, 2)
-    assert gamma.shape == (3,) and omega.shape == (3,)
-
-
 def _tiny_linear_case():
     from gkx.config import CycloneBaseCase, GridConfig
     from gkx.core_grid import build_spectral_grid
@@ -611,117 +558,6 @@ def test_cfl_host_scales_read_inside_a_trace_that_touched_nothing_physical() -> 
     assert isinstance(seen["kz"], np.ndarray)
 
 
-def test_cfl_bound_names_the_traced_input_it_cannot_read() -> None:
-    """A genuinely traced drift is refused by name, not as a conversion error.
-
-    ``dt_max`` is a host scalar fixed before the scan is staged, so a drift
-    that only exists inside the trace has no value to bound with. The refusal
-    says which input and what to do instead.
-    """
-
-    import jax
-    from dataclasses import replace as dataclass_replace
-
-    from gkx.geometry import ensure_flux_tube_geometry_data
-
-    _g0, grid, geom, _params, _cache, _n_l, _n_m = _tiny_linear_case()
-    sampled = ensure_flux_tube_geometry_data(geom, grid.z)
-    theta = np.asarray(grid.z, dtype=float)
-
-    def probe(scale: jnp.ndarray):
-        traced = dataclass_replace(sampled, cv_profile=sampled.cv_profile * scale)
-        return eti._geometry_frequency_maxima(traced, theta)
-
-    with pytest.raises(ValueError, match="cannot read a traced curvature drift"):
-        jax.jit(probe)(jnp.asarray(1.0))
-
-
-def _closed_interval_copy(sampled):
-    """Return `sampled` re-expressed on the closed theta interval.
-
-    This is the shape an imported `*.eik.nc` file carries -- the terminal theta
-    point repeated at the far end of the period -- so its profiles are one
-    sample longer than the spectral grid they belong to.
-    """
-
-    from dataclasses import replace as dataclass_replace
-
-    theta = np.asarray(sampled.theta, dtype=float)
-    closed = np.append(theta, theta[-1] + float(theta[1] - theta[0]))
-
-    def _wrap(name: str) -> np.ndarray:
-        profile = np.asarray(getattr(sampled, name), dtype=float)
-        return np.append(profile, profile[0])
-
-    return dataclass_replace(
-        sampled,
-        theta=closed,
-        theta_closed_interval=True,
-        source_model="vmec-eik",
-        **{
-            name: _wrap(name)
-            for name in (
-                "bmag_profile",
-                "bgrad_profile",
-                "gds2_profile",
-                "gds21_profile",
-                "gds22_profile",
-                "cv_profile",
-                "gb_profile",
-                "cv0_profile",
-                "gb0_profile",
-                "jacobian_profile",
-                "grho_profile",
-            )
-        },
-    )
-
-
-def test_fixed_dt_cfl_hint_conforms_imported_geometry_instead_of_aborting() -> None:
-    """The startup hint survives an imported flux tube -- and still fires.
-
-    An imported equilibrium arrives on the closed theta interval, one sample
-    longer than the grid it is used with, which made this hint raise and take
-    every `gkx wout_XXX.nc --linear` run down with it. Conforming the geometry
-    is what fixes that; the surrounding `except` would also stop the crash, but
-    silently, so this pins the warning itself. Drop the conform and the hint
-    goes quiet on exactly the runs that need it.
-    """
-
-    from gkx.geometry import ensure_flux_tube_geometry_data
-    from gkx.solvers_time_explicit_cfl import warn_if_fixed_dt_exceeds_cfl
-
-    _g0, grid, geom, params, _cache, n_l, n_m = _tiny_linear_case()
-    imported = _closed_interval_copy(ensure_flux_tube_geometry_data(geom, grid.z))
-    assert imported.theta.shape[0] == np.asarray(grid.z).size + 1
-
-    over_cfl = eti.ExplicitTimeConfig(
-        t_max=1.0, dt=5.0, method="rk3", sample_stride=1, fixed_dt=True
-    )
-    with pytest.warns(RuntimeWarning, match="exceeds the estimated"):
-        warn_if_fixed_dt_exceeds_cfl(
-            grid=grid,
-            geom=imported,
-            params=params,
-            n_laguerre=n_l,
-            n_hermite=n_m,
-            tcfg=over_cfl,
-        )
-
-    # A step under the bound stays silent on the same imported geometry.
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        warn_if_fixed_dt_exceeds_cfl(
-            grid=grid,
-            geom=imported,
-            params=params,
-            n_laguerre=n_l,
-            n_hermite=n_m,
-            tcfg=replace_time_cfg(over_cfl, dt=1.0e-6),
-        )
-    assert not [w for w in caught if "exceeds the estimated" in str(w.message)]
-
-
 # ---- from test_nonlinear_explicit_step.py ----
 
 
@@ -732,7 +568,7 @@ def _constant_rhs(value: float):
     return rhs_fn
 
 
-def test_advance_explicit_nonlinear_state_euler_projects_and_preserves_dtype() -> None:
+def test_advance_explicit_nonlinear_state_rk2_projects_and_preserves_dtype() -> None:
     G = jnp.asarray([1.0], dtype=jnp.float32)
     dG = jnp.asarray([3.0], dtype=jnp.float32)
 
@@ -740,19 +576,17 @@ def test_advance_explicit_nonlinear_state_euler_projects_and_preserves_dtype() -
         G,
         dG,
         jnp.asarray(0.1, dtype=jnp.float32),
-        method="euler",
+        method="rk2",
         rhs_fn=_constant_rhs(0.0),
         project_state=lambda state: 2.0 * state,
         state_dtype=jnp.float32,
     )
 
-    np.testing.assert_allclose(np.asarray(out), [2.6], rtol=1e-6)
+    np.testing.assert_allclose(np.asarray(out), [2.0], rtol=1e-6)
     assert out.dtype == jnp.float32
 
 
-@pytest.mark.parametrize(
-    "method", ["rk2", "rk3", "rk3_heun", "rk3_classic", "rk4", "rk4-pi"]
-)
+@pytest.mark.parametrize("method", ["rk2", "rk3", "rk4", "rk4-pi"])
 def test_advance_explicit_nonlinear_state_rk_methods_match_constant_rhs(
     method: str,
 ) -> None:
@@ -772,10 +606,8 @@ def test_advance_explicit_nonlinear_state_rk_methods_match_constant_rhs(
     np.testing.assert_allclose(np.asarray(out), [1.2], rtol=1e-6)
 
 
-@pytest.mark.parametrize("method", ["sspx3", "k10"])
-def test_advance_explicit_nonlinear_state_extended_methods_are_finite(
-    method: str,
-) -> None:
+def test_advance_explicit_nonlinear_state_sspx3_is_finite() -> None:
+    method = "sspx3"
     G = jnp.asarray([1.0], dtype=jnp.float32)
     dG = jnp.asarray([0.5], dtype=jnp.float32)
 
@@ -880,106 +712,10 @@ def test_rk4_pi_diagnostic_step_carries_the_proposal_and_honors_the_cap() -> Non
     assert float(t_new) == pytest.approx(0.015)
 
 
-def test_make_explicit_diagnostic_step_forwards_runtime_policies() -> None:
-    seen: dict[str, object] = {}
-    time_step_policy = SimpleNamespace(
-        update_dt=lambda _fields, dt_prev: dt_prev + 0.25,
-        progress_total=jnp.asarray(5.0, dtype=jnp.float32),
-    )
-
-    def rhs_fn(G):
-        seen["rhs_input"] = G
-        return jnp.ones_like(G) * 2.0, "rhs_fields"
-
-    def project_state(G):
-        seen["projected"] = True
-        return G
-
-    def compute_fields_fn(G, cache, params, **kwargs):
-        seen["fields_G"] = G
-        seen["cache"] = cache
-        seen["params"] = params
-        seen["field_terms"] = kwargs["terms"]
-        seen["external_phi"] = kwargs["external_phi"]
-        return "new_fields"
-
-    def compute_diag_from_state(G, fields, G_prev, fields_prev, dt_local):
-        seen["diag_args"] = (G, fields, G_prev, fields_prev, dt_local)
-        return jnp.asarray(7.0, dtype=jnp.float32)
-
-    def select_diagnostics_fn(idx, **kwargs):
-        seen["diag_idx"] = idx
-        seen["diagnostics_stride"] = kwargs["diagnostics_stride"]
-        seen["diag_prev"] = kwargs["diag_prev"]
-        return kwargs["compute_diag_fn"]()
-
-    def emit_progress_fn(G, **kwargs):
-        seen["progress"] = kwargs
-        return G + 1.0
-
-    def apply_collision_split_fn(G, damping, dt_local, scheme):
-        seen["collision"] = (damping, dt_local, scheme)
-        return G + 3.0
-
-    step = make_explicit_diagnostic_step(
-        rhs_fn=rhs_fn,
-        method="euler",
-        project_state=project_state,
-        state_dtype=jnp.float32,
-        real_dtype=jnp.float32,
-        time_step_policy=time_step_policy,
-        compute_fields_fn=compute_fields_fn,
-        cache="cache",
-        params="params",
-        term_cfg="terms",
-        external_phi="phi",
-        compute_diag_from_state=compute_diag_from_state,
-        diagnostics_stride=2,
-        select_diagnostics_fn=select_diagnostics_fn,
-        show_progress=True,
-        steps=4,
-        emit_progress_fn=emit_progress_fn,
-        use_collision_split=True,
-        damping="damping",
-        collision_scheme="implicit",
-        apply_collision_split_fn=apply_collision_split_fn,
-    )
-
-    carry, out = step(
-        (
-            jnp.asarray([1.0], dtype=jnp.float32),
-            jnp.asarray([0.5], dtype=jnp.float32),
-            "old_fields",
-            jnp.asarray(0.0, dtype=jnp.float32),
-            jnp.asarray(0.0, dtype=jnp.float32),
-            jnp.asarray(0.25, dtype=jnp.float32),
-        ),
-        jnp.asarray(3, dtype=jnp.int32),
-    )
-
-    G_new, G_prev, fields_new, diag, t_new, dt_new = carry
-    np.testing.assert_allclose(np.asarray(G_new), [6.0], rtol=1e-6)
-    np.testing.assert_allclose(np.asarray(G_prev), [6.0], rtol=1e-6)
-    assert fields_new == "new_fields"
-    np.testing.assert_allclose(np.asarray(diag), 7.0, rtol=1e-6)
-    np.testing.assert_allclose(np.asarray(t_new), 0.5, rtol=1e-6)
-    np.testing.assert_allclose(np.asarray(dt_new), 0.5, rtol=1e-6)
-    assert out[0] is diag
-    assert seen["field_terms"] == "terms"
-    assert seen["external_phi"] == "phi"
-    assert seen["diagnostics_stride"] == 2
-    np.testing.assert_allclose(np.asarray(seen["diag_prev"]), 0.0, rtol=1e-6)
-    np.testing.assert_allclose(np.asarray(seen["diag_args"][0]), [5.0], rtol=1e-6)
-    assert seen["collision"][0] == "damping"
-    assert seen["collision"][2] == "implicit"
-    assert seen["progress"]["show_progress"] is True
-    assert seen["progress"]["steps"] == 4
-
-
 def test_explicit_diagnostic_step_caps_and_holds_at_time_horizon() -> None:
     step = make_explicit_diagnostic_step(
         rhs_fn=lambda G: (jnp.ones_like(G), G),
-        method="euler",
+        method="rk2",
         project_state=lambda G: G,
         state_dtype=jnp.float32,
         real_dtype=jnp.float32,
@@ -1021,47 +757,6 @@ def test_explicit_diagnostic_step_caps_and_holds_at_time_horizon() -> None:
     np.testing.assert_allclose(np.asarray(second[0]), np.asarray(first[0]))
 
 
-def test_make_explicit_diagnostic_step_requires_collision_split_policy() -> None:
-    step = make_explicit_diagnostic_step(
-        rhs_fn=lambda G: (jnp.zeros_like(G), "fields"),
-        method="euler",
-        project_state=lambda G: G,
-        state_dtype=jnp.float32,
-        real_dtype=jnp.float32,
-        time_step_policy=SimpleNamespace(
-            update_dt=lambda _fields, dt_prev: dt_prev,
-            progress_total=jnp.asarray(1.0, dtype=jnp.float32),
-        ),
-        compute_fields_fn=lambda G, *_args, **_kwargs: G,
-        cache=None,
-        params=None,
-        term_cfg=None,
-        external_phi=None,
-        compute_diag_from_state=lambda *_args: jnp.asarray(0.0, dtype=jnp.float32),
-        diagnostics_stride=1,
-        select_diagnostics_fn=lambda _idx, **kwargs: kwargs["compute_diag_fn"](),
-        show_progress=False,
-        steps=1,
-        emit_progress_fn=lambda G, **_kwargs: G,
-        use_collision_split=True,
-        damping=jnp.asarray(1.0, dtype=jnp.float32),
-        apply_collision_split_fn=None,
-    )
-
-    with pytest.raises(ValueError, match="apply_collision_split_fn"):
-        step(
-            (
-                jnp.asarray([1.0], dtype=jnp.float32),
-                jnp.asarray([1.0], dtype=jnp.float32),
-                None,
-                jnp.asarray(0.0, dtype=jnp.float32),
-                jnp.asarray(0.0, dtype=jnp.float32),
-                jnp.asarray(0.1, dtype=jnp.float32),
-            ),
-            jnp.asarray(0, dtype=jnp.int32),
-        )
-
-
 def test_run_explicit_diagnostic_scan_dense_path_runs_all_steps() -> None:
     def step_fn(carry, idx):
         G, G_prev, fields_prev, diag_prev, t_prev, dt_prev = carry
@@ -1100,63 +795,8 @@ def test_run_explicit_diagnostic_scan_dense_path_runs_all_steps() -> None:
     np.testing.assert_allclose(np.asarray(dt_series), [0.5, 0.5, 0.5])
 
 
-def test_run_explicit_diagnostic_scan_sampled_path_forwards_policy() -> None:
-    seen: dict[str, object] = {}
-
-    def step_fn(carry, idx):
-        del idx
-        return carry, carry[-3:]
-
-    initial = (
-        jnp.asarray(1),
-        jnp.asarray(2),
-        jnp.asarray(3),
-        jnp.asarray(4),
-        jnp.asarray(5),
-        jnp.asarray(6),
-    )
-
-    def sampled_scan_fn(step, carry, **kwargs):
-        seen["step"] = step
-        seen["carry"] = carry
-        seen.update(kwargs)
-        return carry, (jnp.asarray([7]), jnp.asarray([8]), jnp.asarray([9]))
-
-    G_final, scan_diag_out = run_explicit_diagnostic_scan(
-        step_fn,
-        initial,
-        steps=5,
-        stride=2,
-        sampled_scan=True,
-        checkpoint=False,
-        sampled_scan_fn=sampled_scan_fn,
-    )
-
-    assert int(G_final) == 1
-    assert seen["step"] is step_fn
-    assert seen["carry"] is initial
-    assert seen["steps"] == 5
-    assert seen["stride"] == 2
-    np.testing.assert_allclose(np.asarray(scan_diag_out[0]), [7])
-
-
 # ---- from test_nonlinear_explicit_scan.py ----
 # Tests for nonlinear explicit scan integrator utilities.
-
-
-_SSPX3_ADT = float((1.0 / 6.0) ** (1.0 / 3.0))
-
-
-_SSPX3_WGTFAC = float((9.0 - 2.0 * (6.0 ** (2.0 / 3.0))) ** 0.5)
-
-
-_SSPX3_W1 = 0.5 * (_SSPX3_WGTFAC - 1.0)
-
-
-_SSPX3_W2 = 0.5 * ((6.0 ** (2.0 / 3.0)) - 1.0 - _SSPX3_WGTFAC)
-
-
-_SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
 
 
 def _linear_rhs(rate: complex):
@@ -1242,11 +882,8 @@ def test_block_checkpoint_plan_minimizes_storage_under_the_budget() -> None:
 @pytest.mark.parametrize(
     ("method", "one_step_factor"),
     [
-        ("euler", lambda a: 1.0 + a),
         ("rk2", lambda a: 1.0 + a + 0.5 * a * a),
         ("rk3", lambda a: 1.0 + a + 0.5 * a * a + (a * a * a) / 6.0),
-        ("rk3_heun", lambda a: 1.0 + a + 0.5 * a * a + (a * a * a) / 6.0),
-        ("rk3_classic", lambda a: 1.0 + a + 0.5 * a * a + (a * a * a) / 6.0),
         (
             "rk4",
             lambda a: (
@@ -1314,17 +951,6 @@ def test_integrate_nonlinear_scan_projects_each_stage() -> None:
     assert jnp.allclose(G_final[..., 3, :], jnp.conj(G_final[..., 1, :]))
 
 
-def test_integrate_nonlinear_scan_rk3_alias_matches_heun_variant() -> None:
-    G0 = jnp.asarray([[1.0 + 0.0j, 0.5 + 0.25j]], dtype=jnp.complex64)
-    out_rk3, _ = integrate_nonlinear_scan(
-        _linear_rhs(0.3 - 0.2j), jnp.array(G0), 0.1, 3, method="rk3"
-    )
-    out_heun, _ = integrate_nonlinear_scan(
-        _linear_rhs(0.3 - 0.2j), jnp.array(G0), 0.1, 3, method="rk3_heun"
-    )
-    assert jnp.allclose(out_rk3, out_heun)
-
-
 def test_integrate_nonlinear_scan_final_only_skips_field_history_rhs() -> None:
     calls = {"rhs": 0}
 
@@ -1333,53 +959,26 @@ def test_integrate_nonlinear_scan_final_only_skips_field_history_rhs() -> None:
         return 0.2 * G, FieldState(phi=jnp.sum(G, axis=0))
 
     G0 = jnp.asarray([[1.0 + 0.0j]], dtype=jnp.complex64)
-    expected = (1.0 + 0.1 * 0.2) ** 2 * G0
+    expected = (1.0 + 0.02 + 0.5 * 0.02**2) ** 2 * G0
     out = integrate_nonlinear_scan(
         rhs_fn,
         G0,
         0.1,
         2,
-        method="euler",
+        method="rk2",
         return_fields=False,
     )
 
     assert out.shape == G0.shape
     assert jnp.allclose(out, expected)
-    assert calls["rhs"] == 1
-
-
-def test_integrate_nonlinear_scan_accepts_dynamic_and_static_rhs_arguments() -> None:
-    def rhs_fn(
-        G: jnp.ndarray, rate: jnp.ndarray, offset: float
-    ) -> tuple[jnp.ndarray, FieldState]:
-        return rate * G + offset, FieldState(phi=jnp.sum(G, axis=0))
-
-    G0 = jnp.asarray([[1.0 + 0.0j]], dtype=jnp.complex64)
-    expected = np.asarray(G0).copy()
-    out = integrate_nonlinear_scan(
-        rhs_fn,
-        G0,
-        0.1,
-        2,
-        method="euler",
-        return_fields=False,
-        rhs_args=(jnp.asarray(0.2, dtype=jnp.float32),),
-        rhs_static_args=(0.05,),
-    )
-
-    for _ in range(2):
-        expected = expected + 0.1 * (0.2 * expected + 0.05)
-    np.testing.assert_allclose(np.asarray(out), np.asarray(expected), rtol=1.0e-6)
+    assert calls["rhs"] == 2
 
 
 @pytest.mark.parametrize(
     ("method", "expected_order", "min_observed_order"),
     [
-        ("euler", 1.0, 0.9),
         ("rk2", 2.0, 1.75),
         ("rk3", 3.0, 2.6),
-        ("rk3_heun", 3.0, 2.6),
-        ("rk3_classic", 3.0, 2.6),
         ("rk4", 4.0, 3.3),
         ("sspx3", 3.0, 2.6),
     ],
@@ -1411,18 +1010,6 @@ def test_integrate_nonlinear_scan_observed_order_against_exact_solution(
     assert metrics.asymptotic_order <= expected_order + 0.6
 
 
-def test_integrate_nonlinear_scan_k10_branch_is_finite_and_shape_preserving() -> None:
-    G0 = jnp.asarray([[1.0 + 0.0j, 0.5 + 0.25j]], dtype=jnp.complex64)
-
-    G_final, fields = integrate_nonlinear_scan(
-        _linear_rhs(0.3 - 0.2j), G0, 0.1, 2, method="k10"
-    )
-
-    assert G_final.shape == G0.shape
-    assert fields.phi.shape[0] == 2
-    assert np.all(np.isfinite(np.asarray(G_final)))
-
-
 def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> None:
     import gkx.callbacks as callbacks
 
@@ -1445,7 +1032,7 @@ def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> No
         G0,
         0.1,
         1,
-        method="euler",
+        method="rk2",
         show_progress=True,
     )
 
@@ -1459,13 +1046,13 @@ def test_integrate_nonlinear_scan_show_progress_callback_path(monkeypatch) -> No
 
 def test_imex_diagnostic_helpers_have_canonical_owner() -> None:
     assert imex_module.advance_imex_nonlinear_state is (
-        imex_diagnostics.advance_imex_nonlinear_state
+        imex_module.advance_imex_nonlinear_state
     )
     assert imex_module.make_imex_diagnostic_step is (
-        imex_diagnostics.make_imex_diagnostic_step
+        imex_module.make_imex_diagnostic_step
     )
     assert imex_module.run_imex_diagnostic_scan is (
-        imex_diagnostics.run_imex_diagnostic_scan
+        imex_module.run_imex_diagnostic_scan
     )
 
 
@@ -1513,70 +1100,6 @@ def test_solve_imex_step_identity_system_returns_rhs_shape() -> None:
     )
 
     np.testing.assert_allclose(np.asarray(out), np.asarray(G_rhs), rtol=1e-6)
-
-
-def test_implicit_maxiter_counts_iterations_on_both_implicit_routes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``implicit_maxiter`` caps Arnoldi iterations; it used to count cycles."""
-
-    assert implicit_linear._gmres_iteration_budget(200, 20) == (20, 10)
-    assert implicit_linear._gmres_iteration_budget(45, 20) == (20, 3)
-    assert implicit_linear._gmres_iteration_budget(7, 20) == (7, 1)
-    monkeypatch.setattr(
-        implicit_linear,
-        "linear_rhs_cached",
-        lambda g, *_args, **_kwargs: (jnp.zeros_like(g), None),
-    )
-    diagonal = jnp.linspace(1.0, 100.0, 64)
-    rhs = jnp.ones_like(diagonal)
-    solution = implicit_linear._implicit_gmres_solution(
-        rhs,
-        cache=None,
-        params=None,
-        terms=None,
-        dt_val=jnp.asarray(0.1),
-        size=64,
-        matvec=lambda flat: diagonal * flat,
-        precond_op=None,
-        implicit_tol=1.0e-12,
-        implicit_maxiter=8,
-        implicit_iters=0,
-        implicit_relax=1.0,
-        implicit_restart=4,
-    )
-    # The cycle-count reading allowed 8 cycles of 4, i.e. 32 iterations.
-    assert int(solution.iterations) <= 8
-    assert not bool(solution.converged)
-    assert float(solution.residual_norm) > 1.0e-12 * float(jnp.linalg.norm(rhs))
-
-    budgets: list[tuple[int, int]] = []
-    real_gmres = imex_module.gmres
-
-    def recording_gmres(*args, **kwargs):
-        budgets.append((kwargs["restart"], kwargs["max_restarts"]))
-        return real_gmres(*args, **kwargs)
-
-    monkeypatch.setattr(imex_module, "gmres", recording_gmres)
-    G_rhs = jnp.asarray([[2.0]], dtype=jnp.float32)
-    solve_imex_step(
-        jnp.zeros_like(G_rhs),
-        G_rhs,
-        linear_rhs_fn=lambda g, *_args, **_kwargs: (jnp.zeros_like(g), None),
-        cache=SimpleNamespace(),
-        params=SimpleNamespace(),
-        linear_cfg=SimpleNamespace(),
-        external_phi=None,
-        dt_val=jnp.asarray(0.1, dtype=jnp.float32),
-        implicit_iters=0,
-        implicit_relax=1.0,
-        matvec=lambda flat: flat,
-        shape=tuple(G_rhs.shape),
-        implicit_tol=1.0e-8,
-        implicit_maxiter=8,
-        implicit_restart=4,
-    )
-    assert budgets and set(budgets) == {(4, 2)}
 
 
 @pytest.mark.parametrize("sample_stride", [1, 2])
@@ -1701,114 +1224,6 @@ def test_imex_step_status_matches_the_plain_step_and_its_vjp() -> None:
     )
 
 
-def test_make_imex_nonlinear_term_forwards_injected_kernels() -> None:
-    seen: dict[str, object] = {}
-
-    def fields_fn(*_args, **_kwargs):
-        return "fields"
-
-    def contribution_fn(*_args, **_kwargs):
-        return "contribution"
-
-    def nonlinear_kernel(G, cache, params, terms, **kwargs):
-        seen["G"] = G
-        seen["cache"] = cache
-        seen["params"] = params
-        seen["terms"] = terms
-        seen["fields_fn"] = kwargs["fields_fn"]
-        seen["contribution_fn"] = kwargs["nonlinear_contribution_fn"]
-        seen["real_dtype"] = kwargs["real_dtype"]
-        seen["external_phi"] = kwargs["external_phi"]
-        seen["compressed_real_fft"] = kwargs["compressed_real_fft"]
-        seen["laguerre_mode"] = kwargs["laguerre_mode"]
-        return G + 2.0
-
-    cache = SimpleNamespace(name="cache")
-    params = SimpleNamespace(name="params")
-    terms = SimpleNamespace(name="terms")
-    term = make_imex_nonlinear_term(
-        cache,
-        params,
-        terms,
-        real_dtype=jnp.float32,
-        external_phi=3.0,
-        compressed_real_fft=False,
-        laguerre_mode="spectral",
-        fields_fn=fields_fn,
-        nonlinear_term_fn=nonlinear_kernel,
-        nonlinear_contribution_fn=contribution_fn,
-    )
-    G = jnp.asarray([1.0], dtype=jnp.float32)
-
-    out = term(G)
-
-    np.testing.assert_allclose(np.asarray(out), [3.0])
-    assert seen["G"] is G
-    assert seen["cache"] is cache
-    assert seen["params"] is params
-    assert seen["terms"] is terms
-    assert seen["fields_fn"] is fields_fn
-    assert seen["contribution_fn"] is contribution_fn
-    assert seen["real_dtype"] is jnp.float32
-    assert seen["external_phi"] == 3.0
-    assert seen["compressed_real_fft"] is False
-    assert seen["laguerre_mode"] == "spectral"
-
-
-def test_make_imex_solve_step_forwards_solver_policy() -> None:
-    seen: dict[str, object] = {}
-
-    def solve_step_fn(G_in, G_rhs, **kwargs):
-        seen["G_in"] = G_in
-        seen["G_rhs"] = G_rhs
-        seen.update(kwargs)
-        return G_rhs + 4.0
-
-    def linear_rhs_fn(g, *_args, **_kwargs):
-        return g, None
-
-    def matvec(flat):
-        return flat
-
-    def precond(flat):
-        return flat
-
-    solve_step = make_imex_solve_step(
-        linear_rhs_fn=linear_rhs_fn,
-        cache=SimpleNamespace(name="cache"),
-        params=SimpleNamespace(name="params"),
-        linear_cfg=SimpleNamespace(name="linear"),
-        external_phi=None,
-        dt_val=jnp.asarray(0.2, dtype=jnp.float32),
-        implicit_iters=3,
-        implicit_relax=0.5,
-        matvec=matvec,
-        shape=(1,),
-        implicit_tol=1.0e-5,
-        implicit_maxiter=7,
-        implicit_restart=2,
-        precond_op=precond,
-        solve_step_fn=solve_step_fn,
-    )
-    G_in = jnp.asarray([1.0], dtype=jnp.float32)
-    G_rhs = jnp.asarray([2.0], dtype=jnp.float32)
-
-    out = solve_step(G_in, G_rhs)
-
-    np.testing.assert_allclose(np.asarray(out), [6.0])
-    assert seen["G_in"] is G_in
-    assert seen["G_rhs"] is G_rhs
-    assert seen["linear_rhs_fn"] is linear_rhs_fn
-    assert seen["matvec"] is matvec
-    assert seen["precond_op"] is precond
-    assert seen["implicit_iters"] == 3
-    assert seen["implicit_relax"] == 0.5
-    assert seen["shape"] == (1,)
-    assert seen["implicit_tol"] == 1.0e-5
-    assert seen["implicit_maxiter"] == 7
-    assert seen["implicit_restart"] == 2
-
-
 def test_imex_operator_resolution_and_state_shape_policies() -> None:
     provided = SimpleNamespace(name="provided")
     built: list[dict[str, object]] = []
@@ -1877,29 +1292,6 @@ def test_imex_operator_resolution_and_state_shape_policies() -> None:
         )
 
 
-def test_advance_imex_nonlinear_state_default_method_solves_rhs() -> None:
-    calls: list[float] = []
-
-    def nonlinear_term(g):
-        return 2.0 * g
-
-    def solve_step(g_in, rhs):
-        calls.append(float(np.asarray(g_in[0])))
-        return rhs + 1.0
-
-    out = advance_imex_nonlinear_state(
-        jnp.asarray([1.0], dtype=jnp.float32),
-        dt_val=jnp.asarray(0.25, dtype=jnp.float32),
-        method="imex",
-        nonlinear_term=nonlinear_term,
-        solve_step=solve_step,
-        project_state=lambda g: g,
-    )
-
-    np.testing.assert_allclose(np.asarray(out), [2.5], rtol=1e-6)
-    assert calls == [1.0]
-
-
 def test_advance_imex_nonlinear_state_sspx3_matches_constant_rhs_step() -> None:
     def nonlinear_term(g):
         return jnp.ones_like(g) * 2.0
@@ -1917,117 +1309,6 @@ def test_advance_imex_nonlinear_state_sspx3_matches_constant_rhs_step() -> None:
     )
 
     np.testing.assert_allclose(np.asarray(out), [1.5], rtol=1e-6)
-
-
-def test_make_imex_diagnostic_step_forwards_runtime_policies() -> None:
-    seen: dict[str, object] = {}
-
-    def nonlinear_term(G):
-        return jnp.ones_like(G) * 2.0
-
-    def solve_step(G_in, G_rhs):
-        seen["solve"] = (G_in, G_rhs)
-        return G_rhs + 3.0
-
-    def compute_fields_fn(G, cache, params, **kwargs):
-        seen["fields"] = (G, cache, params, kwargs)
-        return "new_fields"
-
-    def compute_diag_from_state(G, fields, G_prev, fields_prev, dt_val):
-        seen["diag_args"] = (G, fields, G_prev, fields_prev, dt_val)
-        return jnp.asarray(9.0, dtype=jnp.float32)
-
-    def select_diagnostics_fn(idx, **kwargs):
-        seen["select"] = (idx, kwargs)
-        return kwargs["compute_diag_fn"]()
-
-    def emit_progress_fn(G, **kwargs):
-        seen["progress"] = (G, kwargs)
-        return G + 1.0
-
-    def apply_collision_split_fn(G, damping, dt_val, scheme):
-        seen["collision"] = (G, damping, dt_val, scheme)
-        return G + 2.0
-
-    cache = SimpleNamespace(name="cache")
-    params = SimpleNamespace(name="params")
-    term_cfg = SimpleNamespace(name="terms")
-    damping = SimpleNamespace(name="damping")
-    step = make_imex_diagnostic_step(
-        method="imex",
-        nonlinear_term=nonlinear_term,
-        solve_step=solve_step,
-        project_state=lambda G: G,
-        state_dtype=jnp.float32,
-        real_dtype=jnp.float32,
-        dt_val=jnp.asarray(0.5, dtype=jnp.float32),
-        compute_fields_fn=compute_fields_fn,
-        cache=cache,
-        params=params,
-        term_cfg=term_cfg,
-        external_phi=4.0,
-        compute_diag_from_state=compute_diag_from_state,
-        diagnostics_stride=3,
-        select_diagnostics_fn=select_diagnostics_fn,
-        show_progress=True,
-        steps=11,
-        progress_total=jnp.asarray(5.5, dtype=jnp.float32),
-        emit_progress_fn=emit_progress_fn,
-        use_collision_split=True,
-        damping=damping,
-        collision_scheme="exact",
-        apply_collision_split_fn=apply_collision_split_fn,
-    )
-
-    carry_out, step_out = step(
-        (
-            jnp.asarray([1.0], dtype=jnp.float32),
-            jnp.asarray([0.5], dtype=jnp.float32),
-            "old_fields",
-            jnp.asarray(-1.0, dtype=jnp.float32),
-            jnp.asarray(2.0, dtype=jnp.float32),
-        ),
-        jnp.asarray(4, dtype=jnp.int32),
-    )
-
-    G_new, G_prev, fields_new, diag, t_new = carry_out
-    np.testing.assert_allclose(np.asarray(G_new), [8.0])
-    np.testing.assert_allclose(np.asarray(G_prev), [8.0])
-    assert fields_new == "new_fields"
-    np.testing.assert_allclose(np.asarray(diag), 9.0)
-    np.testing.assert_allclose(np.asarray(t_new), 2.5)
-    assert step_out[0] is diag
-    assert step_out[1] is t_new
-    solve_in, solve_rhs = seen["solve"]
-    np.testing.assert_allclose(np.asarray(solve_in), [1.0])
-    np.testing.assert_allclose(np.asarray(solve_rhs), [2.0])
-    fields_args = seen["fields"]
-    assert fields_args[1] is cache
-    assert fields_args[2] is params
-    assert fields_args[3]["terms"] is term_cfg
-    assert fields_args[3]["external_phi"] == 4.0
-    diag_args = seen["diag_args"]
-    np.testing.assert_allclose(np.asarray(diag_args[0]), [7.0])
-    assert diag_args[1] == "new_fields"
-    np.testing.assert_allclose(np.asarray(diag_args[2]), [0.5])
-    assert diag_args[3] == "old_fields"
-    np.testing.assert_allclose(np.asarray(diag_args[4]), 0.5)
-    select_idx, select_kwargs = seen["select"]
-    np.testing.assert_allclose(np.asarray(select_idx), 4)
-    assert select_kwargs["diagnostics_stride"] == 3
-    np.testing.assert_allclose(np.asarray(select_kwargs["diag_prev"]), -1.0)
-    collision_args = seen["collision"]
-    np.testing.assert_allclose(np.asarray(collision_args[0]), [5.0])
-    assert collision_args[1] is damping
-    np.testing.assert_allclose(np.asarray(collision_args[2]), 0.5)
-    assert collision_args[3] == "exact"
-    progress_args = seen["progress"]
-    np.testing.assert_allclose(np.asarray(progress_args[0]), [7.0])
-    assert progress_args[1]["show_progress"] is True
-    assert progress_args[1]["diag"] is diag
-    assert progress_args[1]["steps"] == 11
-    np.testing.assert_allclose(np.asarray(progress_args[1]["t_new"]), 2.5)
-    np.testing.assert_allclose(np.asarray(progress_args[1]["progress_total"]), 5.5)
 
 
 def test_make_imex_diagnostic_step_requires_collision_split_policy() -> None:
@@ -2067,105 +1348,6 @@ def test_make_imex_diagnostic_step_requires_collision_split_policy() -> None:
             ),
             jnp.asarray(0, dtype=jnp.int32),
         )
-
-
-def test_run_imex_diagnostic_scan_runs_fixed_step_policy() -> None:
-    def step(carry, idx):
-        G, G_prev, fields_prev, diag_prev, t_prev = carry
-        del G_prev, fields_prev
-        G_new = G + 1.0
-        diag = diag_prev + idx + 1
-        t_new = t_prev + 0.5
-        return (G_new, G_new, jnp.asarray([2.0], dtype=jnp.float32), diag, t_new), (
-            diag,
-            t_new,
-        )
-
-    G_final, diag_out = run_imex_diagnostic_scan(
-        step,
-        (
-            jnp.asarray([0.0], dtype=jnp.float32),
-            jnp.asarray([0.0], dtype=jnp.float32),
-            jnp.asarray([0.0], dtype=jnp.float32),
-            jnp.asarray(0.0, dtype=jnp.float32),
-            jnp.asarray(0.0, dtype=jnp.float32),
-        ),
-        steps=3,
-        checkpoint=False,
-    )
-
-    diag, t = diag_out
-    np.testing.assert_allclose(np.asarray(G_final), [3.0])
-    np.testing.assert_allclose(np.asarray(diag), [1.0, 3.0, 6.0])
-    np.testing.assert_allclose(np.asarray(t), [0.5, 1.0, 1.5])
-
-
-def test_integrate_cached_imex_scan_owns_cached_scan_policy(monkeypatch) -> None:
-    G0 = jnp.zeros((1,), dtype=jnp.complex64)
-    fields = FieldState(phi=jnp.zeros((1,), dtype=jnp.complex64), apar=None, bpar=None)
-    build_calls: list[dict[str, object]] = []
-    nonlinear_calls: list[str] = []
-    linear_calls: list[str] = []
-
-    def build_operator_fn(G, cache, params, dt, **kwargs):
-        build_calls.append(kwargs)
-        return SimpleNamespace(
-            shape=tuple(G.shape),
-            dt_val=jnp.asarray(dt, dtype=jnp.float32),
-            precond_op=None,
-            matvec=lambda x: x,
-            squeeze_species=False,
-            state_dtype=G.dtype,
-        )
-
-    def linear_rhs_fn(G, *_args, **_kwargs):
-        linear_calls.append("linear")
-        return jnp.zeros_like(G), fields
-
-    def nonlinear_kernel(G, cache, params, terms, **kwargs):
-        del cache, params, terms
-        assert kwargs["fields_fn"] is fields_fn
-        assert kwargs["nonlinear_contribution_fn"] is contribution_fn
-        assert kwargs["compressed_real_fft"] is False
-        assert kwargs["laguerre_mode"] == "spectral"
-        nonlinear_calls.append("nonlinear")
-        return jnp.ones_like(G)
-
-    def fields_fn(*_args, **_kwargs):
-        return fields
-
-    def contribution_fn(*_args, **_kwargs):
-        return jnp.asarray(0.0, dtype=jnp.float32)
-
-    monkeypatch.setattr(
-        "gkx.solvers_nonlinear_imex.jax.scipy.sparse.linalg.gmres",
-        lambda matvec, rhs, **kwargs: (rhs, SimpleNamespace(success=True)),
-    )
-
-    G_out, fields_t = integrate_cached_imex_scan(
-        G0,
-        SimpleNamespace(name="cache"),
-        SimpleNamespace(name="params"),
-        0.2,
-        2,
-        term_cfg=SimpleNamespace(name="terms"),
-        linear_cfg=SimpleNamespace(name="linear"),
-        linear_rhs_fn=linear_rhs_fn,
-        build_operator_fn=build_operator_fn,
-        fields_fn=fields_fn,
-        nonlinear_term_fn=nonlinear_kernel,
-        nonlinear_contribution_fn=contribution_fn,
-        implicit_iters=0,
-        compressed_real_fft=False,
-        laguerre_mode="spectral",
-    )
-
-    assert build_calls
-    assert build_calls[0]["terms"].name == "linear"
-    np.testing.assert_allclose(np.asarray(G_out), np.asarray([0.4]), rtol=1e-6)
-    assert fields_t.phi.shape == (2, 1)
-    assert nonlinear_calls == ["nonlinear"]
-    assert linear_calls
 
 
 # --- Q29: the IMEX diagnostics route carries the same status ------------------
@@ -2234,104 +1416,6 @@ def test_advance_imex_with_stats_folds_every_sspx3_solve() -> None:
         implicit_linear.require_converged_implicit_solves(starved, label="sspx3 probe")
 
 
-def _imex_diagnostics_deck():
-    from gkx.config import CycloneBaseCase, GridConfig
-    from gkx.core_grid import build_spectral_grid
-    from gkx.geometry import SAlphaGeometry
-    from gkx.operators.linear.params import LinearParams
-    from gkx.terms.config import TermConfig
-
-    cfg = CycloneBaseCase(
-        grid=GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.28, Ly=6.28, boundary="periodic")
-    )
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = LinearParams()
-    state = jnp.zeros((1, 2, 3, grid.ky.size, 4, 4), dtype=jnp.complex64)
-    state = state.at[0, 0, 0, 1, 0, :].set(1.0e-2 + 0.5e-2j)
-    return grid, geom, params, state, TermConfig(nonlinear=1.0)
-
-
-_Q29_STARVED = dict(implicit_tol=1.0e-14, implicit_maxiter=1, implicit_restart=1)
-_Q29_GENEROUS = dict(implicit_tol=1.0e-8, implicit_maxiter=200, implicit_restart=20)
-
-
-def test_imex_diagnostics_route_carries_unconverged_solves_to_the_host_gate() -> None:
-    """A starved inner budget is visible on the diagnostics route and refused."""
-
-    from gkx.solvers_nonlinear_diagnostic_integration import (
-        integrate_nonlinear_imex_diagnostics,
-    )
-
-    grid, geom, params, state, terms = _imex_diagnostics_deck()
-
-    def run(budget):
-        _t, _diag, stats = integrate_nonlinear_imex_diagnostics(
-            state,
-            grid,
-            geom,
-            params,
-            dt=1.0e-3,
-            steps=3,
-            terms=terms,
-            return_solve_stats=True,
-            **budget,
-        )
-        return stats
-
-    starved = run(_Q29_STARVED)
-    assert int(starved.solves) == 3
-    assert int(starved.unconverged_solves) == 3
-    with pytest.raises(RuntimeError, match="3 of 3 implicit GMRES solves did not"):
-        implicit_linear.require_converged_implicit_solves(starved, label="probe")
-
-    summary = implicit_linear.require_converged_implicit_solves(
-        run(_Q29_GENEROUS), label="probe"
-    )
-    assert summary.converged and summary.solves == 3
-    assert summary.unconverged_solves == 0
-
-
-def test_imex_diagnostics_default_return_is_two_elements() -> None:
-    """A caller that does not ask gets what it got before, and reads no status."""
-
-    from gkx.solvers_nonlinear_diagnostic_integration import (
-        integrate_nonlinear_explicit_diagnostics,
-        integrate_nonlinear_imex_diagnostics,
-    )
-
-    grid, geom, params, state, terms = _imex_diagnostics_deck()
-    options = dict(dt=1.0e-3, steps=2, terms=terms, **_Q29_GENEROUS)
-
-    plain = integrate_nonlinear_imex_diagnostics(state, grid, geom, params, **options)
-    assert len(plain) == 2
-
-    # The explicit dispatcher reaches the same route by name, and reports None
-    # for a method that takes no implicit solve.
-    _t, _diag, stats = integrate_nonlinear_explicit_diagnostics(
-        state,
-        grid,
-        geom,
-        params,
-        method="rk3",
-        dt=1.0e-3,
-        steps=2,
-        terms=terms,
-        return_solve_stats=True,
-    )
-    assert stats is None
-    _t2, _diag2, imex_stats = integrate_nonlinear_explicit_diagnostics(
-        state,
-        grid,
-        geom,
-        params,
-        method="imex",
-        return_solve_stats=True,
-        **options,
-    )
-    assert imex_stats is not None and int(imex_stats.solves) == 2
-
-
 # ---- from test_runners_and_orchestration.py ----
 # Orchestration above the integrators: config routing, sharding, gradient gates.
 #
@@ -2352,70 +1436,6 @@ def test_integrate_linear_from_config():
     G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz))
     _, phi_t = integrate_linear_from_config(G, grid, geom, params, cfg.time)
     assert phi_t.shape[0] == 2
-
-
-def test_integrate_linear_from_config_forwards_parallel(monkeypatch):
-    """Runtime parallel policy should reach the fixed-step linear integrator."""
-
-    captured = {}
-    parallel = object()
-
-    def fake_integrate_linear(*args, **kwargs):
-        captured["parallel"] = kwargs["parallel"]
-        return "G", "phi"
-
-    monkeypatch.setattr(runners, "integrate_linear", fake_integrate_linear)
-
-    grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2")
-    cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
-
-    assert integrate_linear_from_config(
-        G, grid, geom, params, cfg.time, parallel=parallel
-    ) == ("G", "phi")
-    assert captured["parallel"] is parallel
-
-
-def test_integrate_nonlinear_from_config_routes_fixed_step_state_sharding(monkeypatch):
-    """Nonlinear runs should honor TimeConfig.state_sharding."""
-
-    captured = {}
-
-    def fake_cache(grid, geom, params, nl, nm):
-        captured["cache_shape"] = (nl, nm)
-        return "cache"
-
-    def fake_sharded(G0, cache, params, **kwargs):
-        captured["kwargs"] = kwargs
-        captured["cache"] = cache
-        return G0 + 1.0, FieldState(phi=jnp.ones((2, 1, 1, 1), dtype=G0.dtype))
-
-    monkeypatch.setattr(
-        runners, "resolve_state_sharding", lambda G0, spec: "mesh" if spec else None
-    )
-    monkeypatch.setattr(runners, "build_linear_cache", fake_cache)
-    monkeypatch.setattr(runners, "integrate_nonlinear_sharded", fake_sharded)
-
-    grid_cfg = GridConfig(Nx=1, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    time_cfg = TimeConfig(t_max=0.2, dt=0.1, method="rk2", state_sharding="ky")
-    cfg = CycloneBaseCase(grid=grid_cfg, time=time_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = LinearParams()
-    G = jnp.zeros((2, 2, cfg.grid.Ny, cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex64)
-
-    G_out, fields = integrate_nonlinear_from_config(G, grid, geom, params, cfg.time)
-
-    assert captured["cache_shape"] == (2, 2)
-    assert captured["cache"] == "cache"
-    assert captured["kwargs"]["state_sharding"] == "mesh"
-    assert captured["kwargs"]["return_fields"] is True
-    assert G_out.shape == G.shape
-    assert fields.phi.shape[0] == 2
 
 
 def test_integrate_nonlinear_from_config_rejects_ungated_z_state_sharding():
@@ -2712,9 +1732,7 @@ def test_state_split_rejects_anything_but_one_axis_on_one_mesh_axis(spec) -> Non
     assert "(1, 3, 4, 8, 4, 16)" in str(excinfo.value)
 
 
-@pytest.mark.parametrize(
-    "method", ["euler", "rk2", "rk3", "rk3_heun", "rk3_classic", "rk4", "sspx3"]
-)
+@pytest.mark.parametrize("method", ["rk2", "rk3", "rk4", "sspx3"])
 def test_integrate_nonlinear_sharded_explicit_methods_constant_rhs(
     monkeypatch, method: str
 ) -> None:
@@ -2783,7 +1801,7 @@ def test_integrate_nonlinear_sharded_final_only_path(monkeypatch) -> None:
         SimpleNamespace(),
         dt=0.25,
         steps=2,
-        method="euler",
+        method="rk2",
         return_fields=False,
     )
 
@@ -2791,181 +1809,26 @@ def test_integrate_nonlinear_sharded_final_only_path(monkeypatch) -> None:
     assert jnp.allclose(out, 1.0)
     # lax.scan traces one RHS site for the final-only graph. The field-history
     # path has a second RHS site to recover fields at the accepted state.
-    assert calls["rhs"] == 1
-
-
-def test_integrate_nonlinear_sharded_reuses_compiled_runner(monkeypatch) -> None:
-    calls = {"compile": 0}
-
-    def fake_pjit(fn, **_kwargs):
-        calls["compile"] += 1
-        return fn
-
-    def fake_rhs(
-        G,
-        cache,
-        params,
-        terms=None,
-        *,
-        compressed_real_fft=True,
-        laguerre_mode="grid",
-        external_phi=None,
-    ):
-        del cache, params, terms, compressed_real_fft, laguerre_mode, external_phi
-        return jnp.ones_like(G), FieldState(phi=jnp.ones((1, 1, 1), dtype=G.dtype))
-
-    monkeypatch.setattr(integrator_module, "pjit", fake_pjit)
-    monkeypatch.setattr(integrator_module, "nonlinear_rhs_cached", fake_rhs)
-    integrator_module._compiled_nonlinear_sharded_runner.cache_clear()
-    G0 = jnp.zeros((1, 1, 1, 1, 1), dtype=jnp.complex64)
-
-    for _ in range(2):
-        out = integrate_nonlinear_sharded(
-            G0,
-            _cache_stub(),
-            SimpleNamespace(),
-            dt=0.1,
-            steps=2,
-            method="euler",
-            return_fields=False,
-        )
-        assert jnp.allclose(out, 0.2)
-
-    assert calls["compile"] == 1
-    integrator_module._compiled_nonlinear_sharded_runner.cache_clear()
+    assert calls["rhs"] == 2
 
 
 # ---- from test_solver_gradient_gate_modules.py ----
 
 
-def _fake_state_bundle(_case_name: str) -> dict[str, object]:
-    return {
-        "case_name": "fake",
-        "input_path": "input.fake",
-        "wout_path": "wout.fake.nc",
-        "state": object(),
-        "runtime": object(),
-        "inp": object(),
-        "wout": object(),
-    }
-
-
-def _fake_state_array(_state: object, _parameter_family: str) -> np.ndarray:
-    return np.zeros((5, 3), dtype=float)
-
-
-def _fake_replace_state_coefficient(
-    _state: object,
-    parameter_family: str,
-    _base_coeff: np.ndarray,
-    radial_index: int,
-    mode_index: int,
-    delta: float,
-) -> dict[str, object]:
-    return {
-        "family": parameter_family,
-        "radial_index": radial_index,
-        "mode_index": mode_index,
-        "delta": float(delta),
-    }
-
-
-def _fake_parameter_name(
-    parameter_family: str,
-    radial_index: int,
-    mode_index: int,
-    *,
-    default_mid_surface: int,
-) -> str:
-    suffix = "mid" if radial_index == default_mid_surface else f"r{radial_index}"
-    return f"{parameter_family}_{suffix}_m{mode_index}"
-
-
-def _fake_objective_vector(
-    traced_state: dict[str, object], *_args: Any, **_kwargs: Any
-) -> np.ndarray:
-    x = float(traced_state["delta"])
-    return np.asarray([1.0 + 3.0 * x + x * x, 0.1 + x, 2.0, 3.0, 4.0, 5.0 + x])
-
-
-def _fake_objective_table(
-    traced_state: dict[str, object],
-    *_args: Any,
-    **_kwargs: Any,
-) -> tuple[np.ndarray, list[dict[str, object]]]:
-    x = float(traced_state["delta"])
-    table = np.asarray(
-        [
-            [1.0 + 2.0 * x, 0.0, 1.0, 1.0, 1.0, 2.0],
-            [2.0 + 4.0 * x, 0.0, 1.0, 1.0, 1.0, 4.0],
-        ],
-        dtype=float,
-    )
-    metadata = [
-        {"surface_index": None, "alpha": 0.0, "selected_ky_index": 1},
-        {"surface_index": 2, "alpha": 0.0, "selected_ky_index": 1},
-    ]
-    return table, metadata
-
-
-def _parabola_fd_report(**kwargs: Any) -> dict[str, object]:
-    delta = float(kwargs.get("base_delta", 0.0))
-    value = 1.0 + (delta - 0.03) ** 2
-    derivative = 2.0 * (delta - 0.03)
-    return {
-        "passed": True,
-        "base_value": value,
-        "central_derivative": derivative,
-        "curvature_ratio": 0.0,
-        "n_samples": 1,
-        "samples": [{"surface_index": None, "alpha": 0.0, "selected_ky_index": 1}],
-    }
-
-
-def _one_mode_context(**kwargs: Any) -> dict[str, object]:
-    cfg = SimpleNamespace(grid=SimpleNamespace(Nx=1, Ny=4, Nz=int(kwargs["ntheta"])))
-
-    def matrix_fn(x: jnp.ndarray) -> jnp.ndarray:
-        return jnp.asarray([[1.0 + 2.0 * x[0] + 1j * (0.5 - x[0])]])
-
-    return {
-        "case_name": kwargs["case_name"],
-        "cfg": cfg,
-        "parameter_names": ("Rcos_mid_m1",),
-        "parameter_indices": {"Rcos": [2, 1]},
-        "surface_index": kwargs["surface_index"],
-        "mboz": int(kwargs["mboz"]),
-        "nboz": int(kwargs["nboz"]),
-        "surface_stencil_width": kwargs["surface_stencil_width"],
-        "n_laguerre": int(kwargs["n_laguerre"]),
-        "n_hermite": int(kwargs["n_hermite"]),
-        "state_shape": (1,),
-        "matrix_fn": matrix_fn,
-    }
-
-
-def _fake_ql_features(
-    eigenvalue: jnp.ndarray,
-    _eigenvector: jnp.ndarray,
-    x: jnp.ndarray,
-    _context: dict[str, Any],
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    gamma = jnp.real(eigenvalue)
-    omega = jnp.imag(eigenvalue)
-    kperp = 2.0 + x[0]
-    heat = 3.0 + 2.0 * x[0]
-    proxy = gamma * heat / kperp
-    return gamma, omega, kperp, heat, proxy
-
-
-def _fake_window_metrics(
-    gamma: jnp.ndarray,
-    kperp: jnp.ndarray,
-    heat: jnp.ndarray,
-    *,
-    dt: float,
-    steps: int,
-    tail_fraction: float,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    scale = jnp.asarray(float(dt) * int(steps) * float(tail_fraction))
-    return gamma * heat * scale, heat / kperp, gamma - kperp
+@pytest.mark.parametrize(
+    ("method", "replacement"),
+    [("euler", "rk2"), ("k10", "rk4"), ("rk3_heun", "rk3"), ("rk3_classic", "rk3")],
+)
+def test_retired_stepper_names_raise_with_replacement(method, replacement) -> None:
+    with pytest.raises(ValueError, match=f"use '{replacement}'"):
+        eti._resolve_explicit_method(method)
+    with pytest.raises(ValueError, match=f"use '{replacement}'"):
+        advance_explicit_nonlinear_state(
+            jnp.asarray([1.0]),
+            jnp.asarray([0.0]),
+            jnp.asarray(0.1),
+            method=method,
+            rhs_fn=_constant_rhs(0.0),
+            project_state=lambda state: state,
+            state_dtype=jnp.float32,
+        )

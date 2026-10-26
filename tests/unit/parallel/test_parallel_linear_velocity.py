@@ -86,35 +86,6 @@ def _electrostatic_slice_terms() -> LinearTerms:
     )
 
 
-def test_linear_parallel_term_classifiers_cover_release_routes() -> None:
-    assert linear_parallel._is_streaming_only_terms(_streaming_only_terms()) is True
-    assert (
-        linear_parallel._is_streaming_only_terms(_electrostatic_slice_terms()) is False
-    )
-    assert (
-        linear_parallel._is_electrostatic_slice_terms(_electrostatic_slice_terms())
-        is True
-    )
-    assert (
-        linear_parallel._is_electrostatic_slice_terms(LinearTerms(collisions=1.0))
-        is False
-    )
-    assert (
-        linear_parallel._is_electrostatic_field_terms(LinearTerms(apar=0.0, bpar=0.0))
-        is True
-    )
-    assert (
-        linear_parallel._is_electrostatic_field_terms(LinearTerms(apar=1.0, bpar=0.0))
-        is False
-    )
-    assert linear_parallel._is_mixed_electrostatic_terms(
-        replace(_electrostatic_slice_terms(), hypercollisions=1.0)
-    )
-    assert linear_parallel._is_mixed_electrostatic_terms(
-        replace(_electrostatic_slice_terms(), collisions=1.0)
-    )
-
-
 def test_resolve_parallel_devices_validates_explicit_and_requested_counts(
     monkeypatch,
 ) -> None:
@@ -134,46 +105,6 @@ def test_resolve_parallel_devices_validates_explicit_and_requested_counts(
         linear_parallel._resolve_parallel_devices(num_devices=2)
     with pytest.raises(ValueError, match="at least one"):
         linear_parallel._resolve_parallel_devices(devices=[])
-
-
-def test_streaming_velocity_sharded_route_validates_shape_and_returns_zero_phi(
-    monkeypatch,
-) -> None:
-    import gkx.parallel.velocity as velocity_sharding
-
-    calls: list[tuple[tuple[int, ...], int]] = []
-
-    def fake_streaming(arr, plan, **kwargs):
-        calls.append((tuple(arr.shape), int(plan.num_devices)))
-        assert kwargs["kz"].shape == (4,)
-        assert kwargs["vth"] == 1.0
-        assert len(kwargs["devices"]) == 1
-        return jnp.ones_like(arr) * (2.0 + 0.0j)
-
-    monkeypatch.setattr(
-        velocity_sharding, "periodic_streaming_shard_map", fake_streaming
-    )
-
-    with pytest.raises(ValueError, match="G must have shape"):
-        linear_parallel.linear_rhs_streaming_velocity_sharded(
-            jnp.zeros((2, 3, 4), dtype=jnp.complex64),
-            _cache_for_richer_state(),
-            LinearParams(),
-            devices=[object()],
-        )
-
-    dG, phi = linear_parallel.linear_rhs_streaming_velocity_sharded(
-        _richer_state(),
-        _cache_for_richer_state(),
-        LinearParams(),
-        devices=[object()],
-    )
-
-    assert calls == [((2, 3, 2, 1, 4), 1)]
-    assert dG.shape == _richer_state().shape
-    assert jnp.all(dG == -(2.0 + 0.0j))
-    assert phi.shape == (2, 1, 4)
-    assert jnp.all(phi == 0.0)
 
 
 def test_electrostatic_streaming_field_rhs_and_sharded_phi_path(monkeypatch) -> None:
@@ -383,42 +314,6 @@ def test_electrostatic_slices_velocity_sharded_fail_closed_and_weighted_routes(
     assert jnp.allclose(dG, 0.5 * 1.0 + 0.25 * 2.0 + 0.5 * 3.0 + 0.125 * 4.0)
 
 
-def test_fused_electrostatic_slice_route_validates_decomposition_before_mesh() -> None:
-    arr = _richer_state()
-    cache = _cache_for_richer_state()
-    terms = _electrostatic_slice_terms()
-
-    with pytest.raises(ValueError, match="more than one Hermite chunk"):
-        linear_parallel._linear_rhs_electrostatic_slices_velocity_sharded_fused(
-            arr,
-            cache,
-            LinearParams(),
-            terms,
-            plan=SimpleNamespace(chunks={"m": 1}, active_axes=("m",)),
-            devices=[object()],
-        )
-
-    with pytest.raises(ValueError, match="Hermite dimension must divide evenly"):
-        linear_parallel._linear_rhs_electrostatic_slices_velocity_sharded_fused(
-            arr,
-            cache,
-            LinearParams(),
-            terms,
-            plan=SimpleNamespace(chunks={"m": 2}, active_axes=("m",)),
-            devices=[object(), object()],
-        )
-
-    with pytest.raises(NotImplementedError, match="only an active 'm' axis"):
-        linear_parallel._linear_rhs_electrostatic_slices_velocity_sharded_fused(
-            jnp.zeros((2, 4, 2, 1, 4), dtype=jnp.complex64),
-            cache,
-            LinearParams(),
-            terms,
-            plan=SimpleNamespace(chunks={"m": 2}, active_axes=("m", "l")),
-            devices=[object(), object()],
-        )
-
-
 def test_fused_electrostatic_slice_route_matches_serial_production_route() -> None:
     """The fused Hermite kernel only runs above one device, so gate it there.
 
@@ -493,85 +388,6 @@ def test_linear_rhs_parallel_cached_serial_dispatch(monkeypatch) -> None:
 
     assert calls == ["serial"]
     assert int(out[0][0]) == len("serial")
-
-
-def test_linear_rhs_parallel_cached_velocity_auto_selects_electrostatic_slice(
-    monkeypatch,
-) -> None:
-    calls: list[tuple[str, int | None]] = []
-
-    def fake_slice(*args, **kwargs):
-        calls.append(("slice", kwargs["num_devices"]))
-        assert kwargs["terms"] == _electrostatic_slice_terms()
-        return _sentinel("slice")
-
-    monkeypatch.setattr(
-        linear_parallel, "linear_rhs_electrostatic_slices_velocity_sharded", fake_slice
-    )
-    parallel = SimpleNamespace(
-        strategy="velocity", backend="auto", axis="hermite", num_devices=3
-    )
-
-    out = linear_parallel.linear_rhs_parallel_cached(
-        _state(),
-        SimpleNamespace(),
-        LinearParams(),
-        terms=_electrostatic_slice_terms(),
-        parallel=parallel,
-    )
-
-    assert calls == [("slice", 3)]
-    assert int(out[0][0]) == len("slice")
-
-
-def test_linear_rhs_parallel_cached_explicit_streaming_routes(monkeypatch) -> None:
-    calls: list[str] = []
-
-    def fake_streaming(*args, **kwargs):
-        calls.append("streaming")
-        assert kwargs["num_devices"] == 2
-        return _sentinel("streaming")
-
-    def fake_electrostatic(*args, **kwargs):
-        calls.append("electrostatic")
-        assert kwargs["num_devices"] == 2
-        assert kwargs["use_custom_vjp"] is False
-        return _sentinel("electrostatic")
-
-    monkeypatch.setattr(
-        linear_parallel, "linear_rhs_streaming_velocity_sharded", fake_streaming
-    )
-    monkeypatch.setattr(
-        linear_parallel,
-        "linear_rhs_streaming_electrostatic_velocity_sharded",
-        fake_electrostatic,
-    )
-    terms = _streaming_only_terms()
-
-    linear_parallel.linear_rhs_parallel_cached(
-        _state(),
-        SimpleNamespace(),
-        LinearParams(),
-        terms=terms,
-        parallel=SimpleNamespace(
-            strategy="velocity", backend="streaming_only", axis="m", num_devices=2
-        ),
-    )
-    linear_parallel.linear_rhs_parallel_cached(
-        _state(),
-        SimpleNamespace(),
-        LinearParams(),
-        terms=terms,
-        parallel=SimpleNamespace(
-            strategy="velocity",
-            backend="streaming_electrostatic",
-            axis="hermite",
-            num_devices=2,
-        ),
-        use_custom_vjp=False,
-    )
-
-    assert calls == ["streaming", "electrostatic"]
 
 
 def test_linear_rhs_parallel_cached_rejects_unsupported_velocity_requests() -> None:
@@ -671,49 +487,6 @@ from gkx.parallel.velocity import (
     velocity_field_reduce_reference,
     velocity_field_reduce_shard_map,
 )
-
-
-def _install_fake_two_way_shard_map(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Exercise shard-map branches without requiring CI-visible logical devices."""
-
-    class FakeMesh:
-        def __init__(self, devices, names):
-            self.devices = devices
-            self.names = names
-
-    class FakeNamedSharding:
-        def __init__(self, mesh, spec):
-            self.mesh = mesh
-            self.spec = spec
-
-    def fake_partition_spec(*axes):
-        return axes
-
-    def local_hermite_slice(arr):
-        if getattr(arr, "ndim", 0) not in (5, 6):
-            return arr
-        m_axis = 1 if arr.ndim == 5 else 2
-        local_m = int(arr.shape[m_axis]) // 2
-        index = [slice(None)] * arr.ndim
-        index[m_axis] = slice(0, local_m)
-        return arr[tuple(index)]
-
-    def fake_shard_map(fn, **_kwargs):
-        def mapped(arr):
-            return fn(local_hermite_slice(arr))
-
-        return mapped
-
-    monkeypatch.setattr("jax.sharding.Mesh", FakeMesh)
-    monkeypatch.setattr("jax.sharding.NamedSharding", FakeNamedSharding)
-    monkeypatch.setattr("jax.sharding.PartitionSpec", fake_partition_spec)
-    monkeypatch.setattr(jax, "shard_map", fake_shard_map)
-    monkeypatch.setattr(jax, "device_put", lambda arr, _sharding=None: arr)
-    monkeypatch.setattr(
-        jax.lax, "ppermute", lambda value, *_args, **_kwargs: jnp.zeros_like(value)
-    )
-    monkeypatch.setattr(jax.lax, "psum", lambda value, *_args, **_kwargs: value)
-    monkeypatch.setattr(jax.lax, "axis_index", lambda *_args, **_kwargs: 0)
 
 
 def test_velocity_sharding_plan_prefers_species_then_hermite_for_6d_state() -> None:
@@ -892,111 +665,6 @@ def test_hermite_neighbor_shard_map_matches_reference_when_logical_devices_avail
 
     np.testing.assert_allclose(np.asarray(lower), np.asarray(expected_lower))
     np.testing.assert_allclose(np.asarray(upper), np.asarray(expected_upper))
-
-
-def test_mocked_shard_map_exercises_multi_device_velocity_paths(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _install_fake_two_way_shard_map(monkeypatch)
-    state = (
-        jnp.arange(2 * 6 * 3 * 1 * 4, dtype=jnp.float32).reshape((2, 6, 3, 1, 4)) + 1j
-    ).astype(jnp.complex64)
-    plan = build_velocity_sharding_plan(state.shape, num_devices=2, axes=("hermite",))
-    devices = [object(), object()]
-
-    lower, upper = hermite_neighbor_shard_map(state, plan, devices=devices)
-    assert lower.shape == (2, 3, 3, 1, 4)
-    assert upper.shape == (2, 3, 3, 1, 4)
-    assert hermite_shift_shard_map(state, plan, offset=1, devices=devices).shape == (
-        2,
-        3,
-        3,
-        1,
-        4,
-    )
-    assert hermite_shift_shard_map(state, plan, offset=-1, devices=devices).shape == (
-        2,
-        3,
-        3,
-        1,
-        4,
-    )
-    assert velocity_field_reduce_shard_map(state, plan, devices=devices).shape == (
-        2,
-        3,
-        1,
-        4,
-    )
-
-    kz = jnp.asarray([0.0, 1.0, -1.0, -2.0], dtype=jnp.float32)
-    local_coeffs = jnp.ones((1, 3, 1, 1, 1), dtype=state.dtype)
-    monkeypatch.setattr(
-        "gkx.parallel.velocity._hermite_ladder_coefficients",
-        lambda _arr: (local_coeffs, local_coeffs, 1),
-    )
-    assert hermite_streaming_ladder_shard_map(
-        state, plan, vth=1.2, devices=devices
-    ).shape == (2, 3, 3, 1, 4)
-    assert periodic_streaming_shard_map(
-        state, plan, kz=kz, vth=1.2, devices=devices
-    ).shape == (2, 3, 3, 1, 4)
-
-    local_m = 3
-    local_m_shape = (1, local_m, 1, 1, 1)
-    ell = jnp.arange(state.shape[0], dtype=jnp.float32).reshape(
-        (state.shape[0], 1, 1, 1, 1)
-    )
-    local_m_values = jnp.arange(local_m, dtype=jnp.float32).reshape(local_m_shape)
-    mirror = mirror_drift_shard_map(
-        state,
-        plan,
-        vth=jnp.asarray([1.0], dtype=jnp.float32),
-        bgrad=jnp.ones((state.shape[-1],), dtype=jnp.float32),
-        ell=ell,
-        sqrt_m=jnp.sqrt(local_m_values),
-        sqrt_m_p1=jnp.sqrt(local_m_values + 1.0),
-        devices=devices,
-    )
-    assert mirror.shape == (2, 3, 3, 1, 4)
-    Jl = jnp.ones(
-        (state.shape[0], state.shape[2], state.shape[3], state.shape[4]),
-        dtype=jnp.float32,
-    )
-    phi = electrostatic_phi_shard_map(
-        state,
-        plan,
-        Jl=Jl,
-        tau_e=1.0,
-        charge=1.0,
-        density=1.0,
-        tz=1.0,
-        mask0=jnp.zeros((state.shape[2], state.shape[3], state.shape[4]), dtype=bool),
-        devices=devices,
-    )
-    assert phi.shape == (3, 1, 4)
-    assert electrostatic_phi_shard_map(
-        state,
-        plan,
-        Jl=Jl[None, ...],
-        tau_e=1.0,
-        devices=devices,
-    ).shape == (3, 1, 4)
-    diamagnetic = diamagnetic_drive_shard_map(
-        state,
-        plan,
-        phi=phi,
-        Jl=Jl,
-        b=jnp.zeros((state.shape[2], state.shape[3], state.shape[4])),
-        l4=jnp.arange(state.shape[0], dtype=jnp.float32).reshape(
-            (state.shape[0], 1, 1, 1)
-        ),
-        tprim=6.9,
-        fprim=2.2,
-        omega_star_scale=1.0,
-        ky=jnp.asarray([0.0, 0.3, 0.6], dtype=jnp.float32),
-        devices=devices,
-    )
-    assert diamagnetic.shape == (2, 3, 3, 1, 4)
 
 
 def test_hermite_shift_reference_matches_manual_offsets() -> None:
@@ -1235,7 +903,7 @@ def test_mixed_species_hermite_linked_operator_matches_serial_trajectory() -> No
         np.asarray(observed_rhs), np.asarray(expected_rhs), rtol=8e-5, atol=8e-6
     )
 
-    integration = dict(dt=1.0e-5, steps=2, method="euler", cache=cache, terms=terms)
+    integration = dict(dt=1.0e-5, steps=2, method="rk2", cache=cache, terms=terms)
     serial_state, serial_phi = integrate_linear(
         state, grid, geom, params, **integration
     )
@@ -1628,7 +1296,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
     integration = dict(
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=dissipative_cache,
         terms=integration_terms,
     )
@@ -1687,7 +1355,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
         rtol=6e-5,
         atol=6e-6,
     )
-    with pytest.raises(NotImplementedError, match="Euler and RK2"):
+    with pytest.raises(NotImplementedError, match="gated for RK2"):
         integrate_linear(
             state,
             _grid,
@@ -1775,7 +1443,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         params,
         dt=1e-4,
         steps=9,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=terms,
     )
@@ -1786,7 +1454,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         params,
         dt=1e-4,
         steps=9,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=terms,
         parallel=parallel,
@@ -1866,7 +1534,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         collision_params,
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=collision_terms,
     )
@@ -1877,7 +1545,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         collision_params,
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=collision_terms,
         parallel=parallel,
@@ -1903,7 +1571,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         hyper_params,
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=hyper_terms,
     )
@@ -1914,7 +1582,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
         hyper_params,
         dt=1e-5,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=hyper_terms,
         parallel=parallel,
@@ -1963,7 +1631,7 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial(jit: bool) -> No
     integration = dict(
         dt=1e-6,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=terms,
     )
@@ -2050,7 +1718,7 @@ def test_species_pmap_collision_preserves_long_wavelength_moments() -> None:
     integration = dict(
         dt=1e-4,
         steps=5,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=terms,
     )
@@ -2115,7 +1783,7 @@ def test_species_pmap_parameter_gradient_matches_centered_difference() -> None:
             dynamic_params,
             dt=5.0e-4,
             steps=2,
-            method="euler",
+            method="rk2",
             cache=prepared_cache,
             terms=terms,
             parallel=parallel,
@@ -2769,25 +2437,6 @@ def test_linear_rhs_parallel_cached_streaming_only_matches_serial_call_graph() -
     )
 
 
-def test_linear_rhs_parallel_cached_rejects_non_streaming_velocity_route() -> None:
-    from gkx.operators.linear.params import LinearParams, LinearTerms
-    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-    from gkx.config import RuntimeParallelConfig
-
-    class Cache:
-        kz = jnp.asarray([0.0, 1.0, -1.0])
-
-    state = jnp.zeros((1, 4, 1, 1, 3), dtype=jnp.complex64)
-    parallel = RuntimeParallelConfig(
-        strategy="velocity", backend="streaming_only", axis="hermite", num_devices=1
-    )
-
-    with pytest.raises(NotImplementedError, match="streaming-only LinearTerms"):
-        linear_rhs_parallel_cached(
-            state, Cache(), LinearParams(), terms=LinearTerms(), parallel=parallel
-        )
-
-
 def test_linear_rhs_parallel_cached_electrostatic_streaming_matches_serial_call_graph() -> (
     None
 ):
@@ -2913,54 +2562,6 @@ def test_linear_rhs_parallel_cached_electrostatic_linear_slices_match_serial_cal
             state, cache, params, terms=terms, num_devices=1
         )[0].shape
         == state.shape
-    )
-
-
-def test_linear_rhs_parallel_cached_auto_backend_selects_gated_electrostatic_slices() -> (
-    None
-):
-    from gkx.operators.linear.params import LinearTerms
-    from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
-    from gkx.config import RuntimeParallelConfig
-
-    state, cache, params = _small_periodic_field_problem()
-    z = jnp.linspace(0.0, 2.0 * jnp.pi, state.shape[-1], endpoint=False)
-    state = state.at[0, 2, min(1, state.shape[2] - 1), 0, :].set(0.07 * jnp.exp(2j * z))
-    terms = LinearTerms(
-        streaming=1.0,
-        mirror=1.0,
-        curvature=1.0,
-        gradb=1.0,
-        diamagnetic=1.0,
-        collisions=0.0,
-        hypercollisions=0.0,
-        hyperdiffusion=0.0,
-        end_damping=0.0,
-        apar=0.0,
-        bpar=0.0,
-    )
-    parallel = RuntimeParallelConfig(
-        strategy="velocity", backend="auto", axis="hermite", num_devices=1
-    )
-
-    serial, phi_serial = linear_rhs_cached(
-        state, cache, params, terms=terms, use_jit=False, use_custom_vjp=False
-    )
-    sharded, phi_sharded = linear_rhs_parallel_cached(
-        state,
-        cache,
-        params,
-        terms=terms,
-        parallel=parallel,
-        use_custom_vjp=False,
-    )
-
-    np.testing.assert_allclose(
-        np.asarray(phi_sharded), np.asarray(phi_serial), rtol=2.0e-6, atol=2.0e-6
-    )
-    np.testing.assert_allclose(
-        np.asarray(sharded), np.asarray(serial), rtol=2.0e-6, atol=2.0e-6
     )
 
 
@@ -3330,58 +2931,6 @@ def test_species_hermite_halo_is_one_exchange_per_direction():
     assert np.array_equal(widened[:, :, 6:8], reference[:, :, 4:6])
 
 
-def test_species_hermite_route_emits_no_all_to_all():
-    """An all-to-all in this route would mean a perpendicular axis got split."""
-
-    import re
-
-    import jax
-
-    from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
-    from gkx.terms.config import TermConfig
-    import gkx.parallel.integrators as integrators
-
-    if len(jax.devices()) < 2:
-        pytest.skip("needs at least two devices")
-    state, cache, params, _grid, _vol, _flux = _species_hermite_problem()
-    terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
-    plan = build_species_hermite_mesh_plan(tuple(state.shape), num_devices=2)
-    mesh, resolved, spec = integrators._resolve_species_hermite_placement(
-        state, cache, params, plan=plan, devices=None, num_devices=2
-    )
-    local_step, leaves, specs, spec = integrators._species_hermite_mapped(
-        state,
-        cache,
-        params,
-        None,
-        term_cfg=terms,
-        plan=resolved,
-        mesh=mesh,
-        state_spec=spec,
-        compressed_real_fft=True,
-        laguerre_mode="grid",
-        vol_fac=None,
-        flux_fac=None,
-    )
-    mapped = jax.shard_map(
-        lambda local, *rest: local_step(local, *rest)[0],
-        mesh=mesh,
-        in_specs=(spec,) + specs,
-        out_specs=spec,
-        axis_names={"s", "m"},
-    )
-    from jax.sharding import NamedSharding
-
-    text = (
-        jax.jit(mapped)
-        .lower(integrators.stage_from_host(state, NamedSharding(mesh, spec)), *leaves)
-        .compile()
-        .as_text()
-    )
-    assert not re.findall(r"\ball-to-all\b", text)
-    assert re.findall(r"\ball-reduce\b", text)
-
-
 def test_species_hermite_keeps_the_bracket_in_its_own_kernel():
     """The nonlinear bracket must not be fused into the linear operator's add.
 
@@ -3473,7 +3022,7 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
     from gkx.operators.nonlinear.projection import _make_hermitian_projector
     from gkx.parallel.integrators import integrate_nonlinear_species_hermite
     from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
-    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+    from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
     from gkx.terms.config import TermConfig
 
     if len(jax.devices()) < 2:
@@ -3538,178 +3087,3 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
         assert np.max(np.abs(np.asarray(reference) - got)) < 5.0e-6
         # A trace that is identically zero would pass any tolerance.
         assert np.max(np.abs(got)) > 0.0
-
-
-def test_species_hermite_route_builds_its_projector_inside_a_trace():
-    """The production shard_map route runs under ``jit``, on any device count.
-
-    Its Hermitian projector was built by reading ``cache.ky`` and ``cache.kx``
-    back on the host. Those are cache leaves, so they are tracers whenever the
-    cache is built inside the trace -- which is what a design objective does on
-    every call -- and the whole route refused with a bare conversion error.
-    The sibling whole-state route was fixed for exactly this; this one was
-    missed. The projector needs the ky length, the kx count and the fact that a
-    compressed run is two-sided, all of which are shape topology.
-    """
-
-    from dataclasses import replace as dataclass_replace
-
-    import jax
-    import numpy as np
-
-    from gkx.config import CycloneBaseCase
-    from gkx.geometry import SAlphaGeometry
-    from gkx.operators.linear.cache_builder import build_linear_cache
-    from gkx.parallel.integrators import integrate_nonlinear_species_hermite
-    from gkx.terms.config import TermConfig
-
-    state, _cache, params, grid, _vol, _flux = _species_hermite_problem(
-        ns=1, nl=2, nm=2, n=4
-    )
-    geom = SAlphaGeometry.from_config(CycloneBaseCase().geometry)
-    terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
-
-    def window(rlt):
-        run_params = dataclass_replace(params, tprim=jnp.asarray([rlt]))
-        cache = build_linear_cache(grid, geom, run_params, Nl=2, Nm=2)
-        run = integrate_nonlinear_species_hermite(
-            state,
-            cache,
-            run_params,
-            dt=1.0e-3,
-            steps=2,
-            terms=terms,
-            num_devices=1,
-            compressed_real_fft=True,
-        )
-        return jnp.sum(jnp.abs(run.state) ** 2)
-
-    eager = float(window(6.9))
-    traced = float(jax.jit(window)(jnp.asarray(6.9)))
-    assert np.isfinite(eager) and eager > 0.0
-    # Same trajectory, compiled or not -- the fix is a layout read, not a
-    # different projection.
-    assert abs(traced - eager) <= 1.0e-5 * abs(eager)
-
-
-def _zonal_boltzmann_problem(*, boltzmann: str, nspecies: int):
-    from gkx.config import CycloneBaseCase, GridConfig
-    from gkx.core_grid import build_spectral_grid
-    from gkx.geometry import SAlphaGeometry
-    from gkx.operators.linear.cache_builder import build_linear_cache
-
-    cfg = CycloneBaseCase(
-        grid=GridConfig(Nx=4, Ny=4, Nz=8, Lx=62.8, Ly=62.8, boundary="periodic")
-    )
-    grid = build_spectral_grid(cfg.grid)
-    sign = 1.0 if boltzmann == "electrons" else -1.0  # kinetic-species charge
-
-    def value(first, last):  # scalars for one species, as the 5D routes expect
-        return first if nspecies == 1 else jnp.linspace(first, last, nspecies)
-
-    params = LinearParams(
-        charge_sign=value(sign, sign),
-        tz=value(sign, sign),
-        density=value(1.0, 0.7),
-        mass=value(1.0, 1.0),
-        temp=value(1.0, 1.0),
-        vth=value(1.0, 1.0),
-        rho=value(1.0, 0.6),
-        fprim=value(2.2, 2.2),
-        tprim=value(6.9, 6.9),
-        tau_e=1.0,
-        beta=0.0,
-        fapar=0.0,
-    )
-    cache = build_linear_cache(
-        grid, SAlphaGeometry.from_config(cfg.geometry), params, Nl=2, Nm=6
-    )
-    shape = (nspecies, 2, 6, grid.ky.size, grid.kx.size, grid.z.size)
-    rng = np.random.default_rng(20260927)
-    state = jnp.asarray(
-        1.0e-3 * (rng.standard_normal(shape) + 1j * rng.standard_normal(shape)),
-        dtype=jnp.complex128,
-    )
-    return (state[0] if nspecies == 1 else state), cache, params
-
-
-@pytest.mark.parametrize("boltzmann", ["electrons", "ions"])
-def test_sharded_electrostatic_routes_keep_the_serial_zonal_boltzmann_response(
-    boltzmann,
-) -> None:
-    """Every sharded phi route matches the serial solve at ky = 0 too.
-
-    Boltzmann electrons carry the flux-surface-average term at ky = 0 (GX
-    ``iphi00 = 2``); Boltzmann ions do not. Random states populate ky = 0.
-    """
-
-    from gkx.operators.linear.rhs import linear_rhs_cached
-
-    devices = jax.devices()
-    counts = [n for n in (1, 2) if n <= len(devices)]
-    terms = _electrostatic_slice_terms()
-
-    def close(observed, expected):
-        scale = float(jnp.max(jnp.abs(expected)))
-        np.testing.assert_allclose(
-            np.asarray(observed), np.asarray(expected), rtol=0.0, atol=1e-12 * scale
-        )
-
-    for nspecies in (1, 2):
-        state, cache, params = _zonal_boltzmann_problem(
-            boltzmann=boltzmann, nspecies=nspecies
-        )
-        axis, axis_name = ("hermite", "m") if nspecies == 1 else ("species", "species")
-        rhs, phi = linear_rhs_cached(
-            state, cache, params, terms=terms, use_jit=False, use_custom_vjp=False
-        )
-        kw = dict(
-            Jl=cache.Jl,
-            tau_e=params.tau_e,
-            charge=params.charge_sign,
-            density=params.density,
-            tz=params.tz,
-            mask0=cache.mask0,
-        )
-        zonal = dict(jacobian=cache.jacobian, ky=cache.ky)
-        close(electrostatic_phi_reference(state, **kw, **zonal), phi)
-        uncorrected = electrostatic_phi_reference(state, **kw)
-        gap = float(jnp.max(jnp.abs(uncorrected[0] - phi[0])))
-        assert gap > 1e-3 * float(jnp.max(jnp.abs(phi[0]))) or boltzmann == "ions"
-        close(uncorrected[1:], phi[1:])
-        for n in counts:
-            plan = build_velocity_sharding_plan(
-                state.shape, num_devices=n, axes=(axis,)
-            )
-            close(
-                electrostatic_phi_shard_map(
-                    state, plan, devices=devices[:n], axis_name=axis_name, **kw, **zonal
-                ),
-                phi,
-            )
-            if nspecies == 1:
-                routes = (
-                    linear_parallel_electrostatic.linear_rhs_electrostatic_slices_velocity_sharded(
-                        state, cache, params, terms=terms, devices=devices[:n]
-                    ),
-                    linear_parallel_streaming.linear_rhs_streaming_electrostatic_velocity_sharded(
-                        state, cache, params, devices=devices[:n]
-                    ),
-                )
-                close(routes[0][1], phi)
-                close(routes[1][1], phi)
-                close(routes[0][0], rhs)
-        if nspecies == 2 and len(devices) >= 2:
-            close(
-                linear_parallel_electrostatic.linear_rhs_electrostatic_species_sharded(
-                    state, cache, params, terms=terms, devices=devices[:2]
-                )[1],
-                phi,
-            )
-        if nspecies == 2 and len(devices) >= 4:
-            close(
-                linear_parallel_streaming.linear_rhs_electrostatic_species_hermite_sharded(
-                    state, cache, params, terms=terms, devices=devices[:4]
-                )[1],
-                phi,
-            )

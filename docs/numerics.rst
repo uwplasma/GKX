@@ -38,7 +38,7 @@ Linear integrators (:func:`gkx.solvers_linear_integrators.integrate_linear`)
 share the cached operator data of
 :func:`gkx.operators.linear.cache_builder.build_linear_cache`:
 
-- **Explicit** ``euler``, ``rk2``, ``rk4``, ``sspx3``; **CFL-controlled**
+- **Explicit** ``rk2``, ``rk4``, ``sspx3``; **CFL-controlled**
   (``integrate_linear_explicit``), which recomputes the step from the linear
   max-frequency estimate (defaults ``rk4``, ``fixed_dt=False``, ``cfl=0.9``).
 - **Diagonal IMEX** ``imex`` (first order) and ``imex2``: diagonal collision
@@ -58,7 +58,7 @@ with :math:`\gamma=1-1/\sqrt{2}` and :math:`\delta=1-1/(2\gamma)`:
 
 It is second order and L-stable for pure damping; with :math:`D=0` its
 stability polynomial is explicit midpoint's. Nonlinear runs use an explicit
-scheme (``euler``, ``rk2``, ``rk3`` variants, ``rk4``, ``sspx3``, ``k10``),
+scheme (``rk2``, ``rk3``, ``rk4``, ``sspx3``),
 ``imex`` (linear operator implicit by GMRES, bracket explicit) or the opt-in
 ``imex-ars3`` (:doc:`guidance`). The CFL prefactor ``cfl_fac`` is 1.73 for
 ``rk3``/``sspx3``, 2.82 for ``rk4``, 1.0 otherwise. Reverse derivatives of the

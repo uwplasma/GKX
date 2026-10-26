@@ -22,7 +22,7 @@ from gkx.solvers_linear_krylov import eigen_status_payload
 
 _IMPLICIT_SOLVE_METHODS = {
     "linear": frozenset({"implicit"}),
-    "nonlinear": frozenset({"imex", "semi-implicit"}),
+    "nonlinear": frozenset({"imex"}),
 }
 
 

@@ -201,8 +201,7 @@ runs over an axis this mesh never splits, so a shard is a slab the *serial*
 kernels already evaluate and there is no distributed transpose anywhere in the
 operator. The route is
 ``gkx.parallel.integrators.integrate_nonlinear_species_hermite``; it accepts the
-explicit methods (``euler``, ``rk2``, ``rk3`` and its variants, ``rk4``,
-``sspx3``).
+explicit methods (``rk2``, ``rk3``, ``rk4``, ``sspx3``).
 
 Factoring rule (``gkx.parallel.velocity_plan.build_species_hermite_mesh_plan``):
 the species block count is the largest factor of the device count that divides
@@ -729,7 +728,7 @@ Use the following rules when writing docs, release notes, or papers:
   passes. Other velocity-space ``shard_map`` work remains communication-gated
   and opt-in.
 - Call the mixed species--Hermite linear backend scoped and identity-gated
-  for periodic Euler/RK2 integration. Quote speedup only for its exact tracked
+  for periodic RK2 integration. Quote speedup only for its exact tracked
   four-logical-CPU workload.
 - Do not claim nonlinear speedup from sharding, velocity decomposition, spectral
   toggles, or linear-slice profiles without passing identity gates and fresh
