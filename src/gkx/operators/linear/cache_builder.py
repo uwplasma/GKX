@@ -18,6 +18,7 @@ from gkx.core_velocity import (
 from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_arrays import (
     check_mu_grid_params,
+    with_mu_grid,
     _build_end_damping_profile_array,
     _build_gyroaverage_cache_arrays,
     _build_low_rank_moment_cache_arrays,
@@ -1120,7 +1121,7 @@ def build_linear_cache(
         moment_cache=moment_cache,
         linked_cache=linked_cache,
     )
-    cache = replace(cache, mu_grid=getattr(params, "mu_vperp_max", None) is not None)
+    cache = with_mu_grid(cache, params)
     from gkx.operators.linear.collision_tables import landau_blocks_for
 
     landau = landau_blocks_for(params, Nl, Nm, grid_arrays.real_dtype)

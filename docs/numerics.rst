@@ -716,11 +716,24 @@ and :math:`\sum_jJ_j\partial_tG_{j1}=\kappa\,\partial_tA_\parallel/v_t` for
    \qquad \frac{dW}{dt}=0\quad(\text{collisionless, undriven}),
 
 and with the diamagnetic drive :math:`dW/dt=\mathrm{Re}\langle H,\partial_tG|_{\rm drive}\rangle`.
-This is checked to round-off for ES and :math:`A_\parallel`, on the nodal grid and on the
-Laguerre grid (``test_collisionless_free_energy_is_conserved_without_drive``; the form
-is evaluated on band-limited :math:`z` modes, for which the discrete derivative obeys
-the product rule against :math:`1/B`). A proof for :math:`B_\parallel`, whose solve
-is a coupled :math:`2\times2` system, is not included.
+With :math:`B_\parallel` the solve is the symmetric system
+
+.. math::
+
+   q\,\varphi+q_b\,b=n,\qquad q_b\,\varphi-\kappa_B\,b=P,\qquad
+   P=\sum_jJ^B_j\tilde G_{j0},
+
+with :math:`q_b=-\Gamma_{01}=-\sum_jJ_jJ^B_j` and
+:math:`\kappa_B=B^2/\beta'+\Gamma_{11}`, :math:`\Gamma_{11}=\sum_j(J^B_j)^2`
+(the code solves the row-scaled form; :math:`\beta'` is ``bpar_beta_scale * beta``).
+The :math:`b`-part of :math:`F_0` pairs with :math:`P`, so
+:math:`\mathrm{Re}\langle F,\partial_tG\rangle=\tfrac12\partial_t\int\frac{dz}{B}\,[q|\varphi|^2+2q_b\mathrm{Re}(\bar\varphi b)-\kappa_B|b|^2]` and
+:math:`W` above holds with that field energy (species carry the weights :math:`n_sT_s`
+in :math:`\langle\cdot,\cdot\rangle`). It is checked to round-off for ES,
+:math:`A_\parallel` and :math:`B_\parallel` (single species), on the nodal and on the Laguerre
+grid (``test_collisionless_free_energy_is_conserved_without_drive``); the form is
+evaluated on band-limited :math:`z` modes, for which the discrete derivative obeys
+the product rule against :math:`1/B`.
 
 Relation to the Laguerre expansion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -740,12 +753,58 @@ has neither, and the two agree as :math:`n,N_\ell\to\infty`. A nodal state is
 converted to Laguerre moments by :math:`P_\ell=\sum_j(-1)^\ell L_\ell(x_j)J_j\tilde G_j`
 (``mu_grid_laguerre_modes``); the same modes seed ``init_field`` on all nodes.
 
-Scope: linear runs, electrostatic and electromagnetic. Collisions, ``nu_hyper``,
-``nu_hyper_l``, ``nu_hyper_lm`` and ``hypercollisions_const`` are refused (a
-collision operator on fixed-:math:`\hat\mu` nodes needs a weak-form matrix and is
-exponentially stiff at the outer nodes); the :math:`|k_z|` Hermite
-hypercollisions are unchanged. Nonlinear and velocity-parallel runs are refused.
-``init_field = "phi"`` seeds node 0 only.
+Dougherty collisions
+~~~~~~~~~~~~~~~~~~~~
+
+``collision_operator = "lenard_bernstein"`` with ``nu > 0`` is available on the grid.
+The Hermite part is diagonal (:math:`-\nu\nu_h m`) and the finite-Larmor shift
+:math:`-\nu b` is unchanged. The perpendicular part is the Lenard-Bernstein
+operator at fixed :math:`z`, with :math:`\beta=B/B_0` and
+:math:`u=e^{\beta\hat\mu}g=e^{\beta\hat\mu/2}G`,
+
+.. math::
+
+   \partial_tu=\frac{2}{\beta}\,e^{\beta\hat\mu}\partial_{\hat\mu}\!\big[\hat\mu\,e^{-\beta\hat\mu}\partial_{\hat\mu}u\big],
+
+whose eigenfunctions are :math:`u=L_\ell(\beta\hat\mu)` with rate :math:`-2\ell`
+for every :math:`\beta`. It is discretized by summation by parts on the nodes,
+
+.. math::
+
+   M\,\partial_tu=-D^{\!\top}\mathrm{diag}(\kappa)\,D\,u,\quad
+   M_j=w_je^{\hat\mu_j(1-\beta)},\ \ \kappa_j=\tfrac2\beta\hat\mu_jM_j,
+
+with :math:`D` the Lagrange derivative matrix of the nodes. Then
+:math:`\mathbf 1^{\!\top}M\partial_tu=0` (the quadrature density is conserved exactly),
+:math:`u\equiv1` (the local Maxwellian) is a null vector, and
+:math:`u^{\!\top}M\partial_tu\le0`, which is the discrete H-theorem for the perpendicular
+operator (the scaled amplitude :math:`\tilde G` is Euclidean in this norm). For
+Gauss-Laguerre nodes the spectrum is :math:`0,2,4,\ldots` to round-off at
+:math:`\beta=1`; with the cutoff it is :math:`0,2.03,4.44,7.84,\ldots` for
+:math:`n=8` and the largest rate (outer nodes) is 172 at :math:`n=8` and 1.1e3 at :math:`n=12`. Momentum and energy are restored as in the
+Laguerre operator, with the Laguerre weight :math:`(\ell J_{\ell-1}+2\ell J_\ell+(\ell+1)J_{\ell+1})`
+of :math:`(x-1)J` replaced by the node weight :math:`(x_j-1)J_j`: the momentum, energy
+and perpendicular-flow terms
+:math:`\nu J\bar u_\parallel`, :math:`\nu[2(x-1)J+\sqrt2J]\bar t` and
+:math:`\nu bJ^B\bar u_\perp` with :math:`\bar t=\tfrac{\sqrt2}3\sum JH_2+\tfrac23\sum(x-1)JH_0`.
+For Gauss-Laguerre nodes at :math:`B=B_0` the whole operator is the Laguerre
+Dougherty operator under :math:`O` to :math:`10^{-10}`, and its invariants
+(:math:`\sum JH_0`, :math:`\sum JH_1`, :math:`\sqrt2\sum JH_2+2\sum(x-1)JH_0`) are
+conserved to round-off with :math:`\mathrm{Re}\langle H,CH\rangle<0`. For other
+:math:`B` or with the cutoff the quadrature is not exact for the energy weight and the
+invariants are conserved to 2e-5 (Gauss-Laguerre, :math:`\varepsilon=0.18`) and 2e-2
+(cutoff) of the largest rate; the cutoff operator can have a growing collisional mode
+of rate :math:`3\times10^{-4}\nu` at :math:`k_\perp\to0`. Projections onto the exact
+nodal invariants conserve to round-off but are anti-dissipative at finite
+:math:`k_\perp` (rate :math:`+0.1\nu`) and were not kept. At finite :math:`k_\perp` the
+operator is dissipative and its gyroaveraged invariants are not conserved, as for Laguerre
+(``test_nodal_dougherty_conserves_and_dissipates``; the Cyclone rate at :math:`\nu=0.2` is
+0.0591 for 8 nodes and 0.0595 for ``Nl = 16``). ``collision_model = "landau"`` with ``nu > 0`` is refused.
+
+Scope: linear runs, electrostatic and electromagnetic. ``nu_hyper``,
+``nu_hyper_l``, ``nu_hyper_lm`` and ``hypercollisions_const`` are refused (they act
+on the Laguerre index); the :math:`|k_z|` Hermite hypercollisions are unchanged.
+Nonlinear and velocity-parallel runs are refused. ``init_field = "phi"`` seeds node 0 only.
 
 References: GX ``docs/Numerics.rst`` (V2); Mandell, Dorland, Landreman 2018;
 Golub and Welsch 1969; Gautschi, *Orthogonal Polynomials* (2004), Ch. 2-3 (Stieltjes

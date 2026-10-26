@@ -468,6 +468,35 @@ def mu_grid_laguerre_modes(nodes: Any, scaled_weights: Any, bmag: Any, n_l: int)
     return sign * np.asarray(laguerre(x, n_l - 1)) * amp[None]
 
 
+def mu_grid_lb_rate(nodes: Any, scaled_weights: Any, bmag: Any) -> Any:
+    r"""Perpendicular Lenard-Bernstein rate ``R(z)`` on the nodes, shape ``(nmu, nmu, Nz)``.
+
+    With ``beta = B/B0`` and ``u = e^{beta mu/2} G`` the operator is
+    ``d_t u = (2/beta) e^{beta mu} d_mu[mu e^{-beta mu} d_mu u]`` (eigenvalues ``-2 l``
+    on ``u = L_l(beta mu)``). Discretized by summation by parts,
+    ``M d_t u = -D^T diag(kappa) D u`` with the Lagrange derivative matrix ``D``,
+    ``M_j = w_j e^{mu_j - beta mu_j}`` and ``kappa_j = (2/beta) mu_j M_j``, it conserves
+    ``sum_j M_j u_j`` exactly, annihilates ``u = 1`` and has ``u^T M R u >= 0``.
+    Returned for the scaled amplitude ``a G`` (``a_j = sqrt(beta w_j e^{mu_j})``).
+    """
+
+    x = np.asarray(nodes)
+    n = x.size
+    diff = x[:, None] - x[None, :] + np.eye(n)
+    bary = 1.0 / np.prod(diff, axis=1)
+    off = (bary[None, :] / bary[:, None]) / diff
+    off = off - np.diag(np.diag(off))
+    deriv = off - np.diag(off.sum(axis=1))
+    beta = np.asarray(bmag)[None, :]
+    mass = scaled_weights[:, None] * np.exp(-beta * x[:, None])  # (n, Nz)
+    kappa = 2.0 / beta * x[:, None] * mass
+    stiff = np.einsum("ji,jz,jk->ikz", deriv, kappa, deriv)
+    half = np.exp(0.5 * beta * x[:, None])
+    amp = np.sqrt(beta * scaled_weights[:, None])
+    rate = amp[:, None, :] / half[:, None, :] * (stiff / mass[:, None, :])
+    return rate * (half / amp)[None, :, :]
+
+
 # Round-trip accuracy that still leaves headroom below the physics tolerances.
 _LAGUERRE_ROUNDTRIP_TOLERANCE = 1.0e-8
 

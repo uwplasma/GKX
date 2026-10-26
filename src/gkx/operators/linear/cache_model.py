@@ -128,6 +128,8 @@ class LinearCache:
     #: True when the Laguerre axis holds nodes of the mu grid and
     #: ``laguerre_roots`` their ``mu_hat`` values (``LinearParams.mu_vperp_max``).
     mu_grid: bool = False
+    #: Nodal Lenard-Bernstein perpendicular rate ``(Nmu, Nmu, Nz)`` (mu grid only).
+    mu_lb: Any = None
 
     def tree_flatten(self):
         children = (
@@ -188,7 +190,7 @@ class LinearCache:
             children
             + tuple(linked_idx)
             + tuple(linked_kz)
-            + (self.ky_cut, self.ntft_m0, self.landau_pairs)
+            + (self.ky_cut, self.ntft_m0, self.landau_pairs, self.mu_lb)
         )
         aux_data = (
             self.kperp2_bmag,
@@ -235,7 +237,8 @@ class LinearCache:
             linked_use_gather=linked_use_gather,
             ny_full=ny_full,
             mu_grid=mu_grid,
-            ky_cut=children[-3],
-            ntft_m0=children[-2],
-            landau_pairs=children[-1],
+            ky_cut=children[-4],
+            ntft_m0=children[-3],
+            landau_pairs=children[-2],
+            mu_lb=children[-1],
         )

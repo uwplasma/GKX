@@ -174,6 +174,7 @@ def _collision_contribution_or_zero(
     collision_lam: jnp.ndarray,
     lb_lam: jnp.ndarray,
     weight: jnp.ndarray,
+    mu_grid: tuple[jnp.ndarray, jnp.ndarray] | None = None,
 ) -> jnp.ndarray:
     """Skip the collision operator when the configured operator is exactly zero."""
 
@@ -203,6 +204,7 @@ def _collision_contribution_or_zero(
             collision_lam=collision_lam,
             lb_lam=lb_lam,
             weight=weight,
+            mu_grid=mu_grid,
         ),
         operand=None,
     )
@@ -623,6 +625,11 @@ def _dissipation_contributions(
             collision_lam=cache.collision_lam,
             lb_lam=cache.lb_lam,
             weight=weights.collisions,
+            mu_grid=(
+                (cache.mu_lb, mu_energy(cache, 4))
+                if getattr(cache, "mu_grid", False)
+                else None
+            ),
         )
     if hypercollisions is None:
         hypercollisions = hypercollisions_contribution(

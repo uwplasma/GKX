@@ -2846,9 +2846,13 @@ def test_mu_grid_growth_rate_matches_converged_laguerre_on_cyclone():
 
 @_MU_NEEDS_X64
 @pytest.mark.parametrize("vperp_max", [None, 4.0])
-@pytest.mark.parametrize("mode", ["es", "apar"])
+@pytest.mark.parametrize("mode", ["es", "apar", "bpar"])
 def test_collisionless_free_energy_is_conserved_without_drive(mode, vperp_max):
     """``W = <G,G>/2 + int (q |phi|^2 - kappa |A|^2) / 2B`` is exactly conserved.
+
+    With ``B_par`` the field energy is ``q |phi|^2 + 2 q_b Re(phi* b) - kappa_B |b|^2``,
+    ``q_b = -Gamma_01`` and ``kappa_B = B^2 / beta' + Gamma_11``: the coupled solve is the
+    symmetric system ``q phi + q_b b = n``, ``q_b phi - kappa_B b = P``.
 
     Collisionless, undriven, truncation closure, ``eps = 0.18``. ``<.,.>`` is the
     ``dz / B`` inner product on the stored state; the form is evaluated on band-limited
@@ -2864,13 +2868,14 @@ def test_collisionless_free_energy_is_conserved_without_drive(mode, vperp_max):
     )
     geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
     em = mode == "apar"
+    bp = mode == "bpar"
     params = LinearParams(
         rho=1.0,
         kpar_scale=float(geom.gradpar()),
         hypercollisions_const=0.0,
         hypercollisions_kz=0.0,
         damp_ends_rate=0.0,
-        beta=beta if em else 0.0,
+        beta=beta if (em or bp) else 0.0,
         fapar=1.0 if em else 0.0,
         mu_vperp_max=vperp_max,
     )
@@ -2879,7 +2884,8 @@ def test_collisionless_free_energy_is_conserved_without_drive(mode, vperp_max):
         collisions=0.0,
         hypercollisions=0.0,
         end_damping=0.0,
-        bpar=0.0,
+        apar=1.0 if em else 0.0,
+        bpar=1.0 if bp else 0.0,
     )
     cache = build_linear_cache(grid, geom, params, nl, nm)
     ny, iy, n = cache.ky.shape[0], 1, nl * nm * nz
@@ -2900,7 +2906,7 @@ def test_collisionless_free_energy_is_conserved_without_drive(mode, vperp_max):
             tz=jnp.ones(1),
             vth=jnp.ones(1),
             fapar=jnp.asarray(1.0 if em else 0.0),
-            w_bpar=jnp.asarray(0.0),
+            w_bpar=jnp.asarray(1.0 if bp else 0.0),
         )
 
     def jac(f):
@@ -2932,6 +2938,18 @@ def test_collisionless_free_energy_is_conserved_without_drive(mode, vperp_max):
         rate = rate - energy_rate(
             jac(lambda v: fields(v).apar[iy, 0, :]), kappa * inv_b
         )
+    if bp:
+        bpar_beta = params.bpar_beta_scale * beta
+        jb = jnp.asarray(cache.JlB)
+        g01 = np.asarray(jnp.sum(cache.Jl * jb, axis=1))[0, iy, 0, :]
+        g11 = np.asarray(jnp.sum(jb * jb, axis=1))[0, iy, 0, :]
+        psi_phi = jac(lambda v: fields(v).phi[iy, 0, :])
+        psi_b = jac(lambda v: fields(v).bpar[iy, 0, :])
+        cross = psi_phi.conj().T @ np.diag(-g01 * inv_b) @ psi_b
+        cross = cross + cross.conj().T
+        rate = rate + cross @ a_mat + a_mat.conj().T @ cross
+        kappa_b = np.asarray(cache.bmag) ** 2 / bpar_beta + g11
+        rate = rate - energy_rate(psi_b, kappa_b * inv_b)
     modes = np.abs(np.fft.fftfreq(nz, 1.0 / nz)) <= kmax
     low = np.conj(np.fft.fft(np.eye(nz), axis=0).T)[:, modes] / np.sqrt(nz)
     basis = np.kron(np.eye(nl * nm), low)
@@ -3002,3 +3020,100 @@ def test_zonal_flow_residual_on_the_mu_grid_matches_laguerre():
     laguerre, nodal = residual(None), residual(4.0)
     assert 0.05 < laguerre < 0.2
     assert abs(nodal - laguerre) < 0.03 * laguerre
+
+
+@_MU_NEEDS_X64
+@pytest.mark.parametrize("vperp_max", [np.inf, 4.0])
+def test_nodal_dougherty_conserves_and_dissipates(vperp_max):
+    """Weak-form Lenard-Bernstein on the nodes (``eps = 0.18``, ``k_perp -> 0``).
+
+    Density (``sum_j J_j H_j0``), parallel momentum and thermal energy
+    (``sqrt2 sum J H_2 + 2 sum (x - 1) J H_0``) are conserved to the quadrature error:
+    round-off for Gauss-Laguerre nodes at ``B = B0``, 1e-4 of the largest rate for
+    them at ``eps = 0.18`` and 5e-2 with the cutoff, whose ``l = 1`` rate is 2.03.
+    At ``eps = 0`` the Gauss-Laguerre operator is the Laguerre Dougherty operator under
+    the orthogonal map, and ``Re <H, C H> < 0``.
+    """
+
+    nmu, nm, nz = 6, 6, 8
+    terms = LinearTerms(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+    )
+
+    def operator(epsilon, mu):
+        grid = build_spectral_grid(
+            GridConfig(Nx=1, Ny=4, Nz=nz, Lx=62.8, Ly=62.8, boundary="periodic")
+        )
+        geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=epsilon, R0=2.77778)
+        params = LinearParams(
+            rho=1e-6,
+            nu=0.1,
+            collision_model="dougherty",
+            hypercollisions_const=0.0,
+            hypercollisions_kz=0.0,
+            mu_vperp_max=mu,
+        )
+        cache = build_linear_cache(grid, geom, params, nmu, nm)
+        return cache, lambda g: linear_rhs_cached(g, cache, params, terms=terms)[0]
+
+    cache, rhs = operator(0.18, vperp_max)
+    rng = np.random.default_rng(3)
+    shape = (nmu, nm, 3, 1, nz)
+    state = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    rate = np.asarray(rhs(state))[:, :, 1, 0, :]
+    jl = np.asarray(cache.Jl)[0, :, 1, 0, :]
+    x = np.asarray(cache.laguerre_roots)[:, None] * np.asarray(cache.bmag)[None]
+    energy = np.sqrt(2.0) * (jl * rate[:, 2]).sum(0) + 2.0 * (
+        (x - 1.0) * jl * rate[:, 0]
+    ).sum(0)
+    scale = np.abs(rate).max()
+    tolerance = 5e-2 if np.isfinite(vperp_max) else 1e-4
+    for invariant in ((jl * rate[:, 0]).sum(0), (jl * rate[:, 1]).sum(0), energy):
+        assert np.abs(invariant).max() < tolerance * scale
+    if np.isfinite(vperp_max):
+        return
+    rate_all = np.asarray(rhs(state))
+    assert np.real(np.vdot(np.asarray(state), rate_all)) < 0.0
+
+    # eps = 0: the Laguerre Dougherty operator under the orthogonal map
+    lag_cache, lag_rhs = operator(0.0, None)
+    mu_cache, mu_rhs = operator(0.0, np.inf)
+    nodes, scaled = mu_grid_nodes(nmu, np.inf)
+    laguerre = laguerre_scaled_functions(nodes, nmu)[:nmu] * np.exp(nodes / 2)[None]
+    orth = np.sqrt(scaled * np.exp(-nodes))[:, None] * (
+        (-1.0) ** np.arange(nmu)[None] * laguerre.T
+    )
+    g_lag = state
+    g_mu = jnp.einsum("jl,l...->j...", jnp.asarray(orth), g_lag)
+    back = jnp.einsum("jl,j...->l...", jnp.asarray(orth), mu_rhs(g_mu))
+    assert jnp.linalg.norm(back - lag_rhs(g_lag)) < 1e-10 * jnp.linalg.norm(back)
+
+
+@_MU_NEEDS_X64
+def test_mu_grid_collisional_growth_rate_matches_laguerre():
+    """Cyclone ky 0.3 with Dougherty collisions (``nu = 0.2``): 8 nodes against ``Nl = 16``."""
+
+    import gkx
+    from pathlib import Path
+
+    deck = Path(__file__).parents[3] / "examples/01_linear_tokamak/case.toml"
+    case = gkx.load(deck)
+    case = replace(
+        case,
+        grid=replace(case.grid, Nz=32, ntheta=32),
+        species=tuple(replace(sp, nu=0.2) for sp in case.species),
+        physics=replace(case.physics, collisions=True),
+        terms=replace(case.terms, collisions=1.0),
+        time=replace(case.time, collision_operator="lenard_bernstein"),
+    )
+    nodal = replace(case, run=replace(case.run, mu_vperp_max=4.0))
+    laguerre = gkx.solve(case, ky_target=0.3, Nl=16, Nm=8, solver="krylov")
+    mu = gkx.solve(nodal, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
+    assert 0.03 < laguerre.gamma < 0.1
+    assert abs(mu.gamma - laguerre.gamma) < 0.03 * laguerre.gamma

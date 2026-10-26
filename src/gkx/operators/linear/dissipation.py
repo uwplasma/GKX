@@ -390,6 +390,31 @@ def drift_kinetic_sugama_six_moment_contribution(
     )
 
 
+def _mu_conserving(base, H, Jl, JlB, b, nu, x):
+    """``base`` plus the momentum, energy and perpendicular-flow terms of the Dougherty operator.
+
+    The Laguerre formulas with ``(l J_{l-1} + 2 l J_l + (l+1) J_{l+1})`` replaced by the
+    node weight ``(x_j - 1) J_j`` (the Laguerre coefficients of ``(x - 1) J``): identical
+    to :func:`_collision_moment_correction` under the Gauss-Laguerre map, dissipative at
+    finite ``k_perp`` where projections onto the ``b = 0`` invariants are not.
+    """
+
+    nu_s = nu[:, None, None, None, None]
+    coeff_t = (x - 1.0) * Jl
+    h0, h1, h2 = H[:, :, 0], H[:, :, 1], H[:, :, 2]
+    t_bar = (jnp.sqrt(2.0) / 3.0) * jnp.sum(Jl * h2, axis=1) + (2.0 / 3.0) * jnp.sum(
+        coeff_t * h0, axis=1
+    )
+    b_s = jnp.asarray(b, dtype=jnp.real(H).dtype)[:, None]
+    uperp = jnp.sum(JlB * h0, axis=1)
+    upar = jnp.sum(Jl * h1, axis=1)
+    out = base.at[:, :, 0].add(
+        nu_s * b_s * JlB * uperp[:, None] + 2.0 * nu_s * coeff_t * t_bar[:, None]
+    )
+    out = out.at[:, :, 1].add(nu_s * Jl * upar[:, None])
+    return out.at[:, :, 2].add(nu_s * jnp.sqrt(2.0) * Jl * t_bar[:, None])
+
+
 def collisions_contribution(
     H: jnp.ndarray,
     *,
@@ -401,7 +426,10 @@ def collisions_contribution(
     collision_lam: jnp.ndarray | None = None,
     lb_lam: jnp.ndarray | None = None,
     weight: jnp.ndarray,
+    mu_grid: tuple[jnp.ndarray, jnp.ndarray] | None = None,
 ) -> jnp.ndarray:
+    """``mu_grid = (rate, x)`` selects the nodal perpendicular operator and energy weights."""
+
     real_dtype = jnp.real(H).dtype
     if _is_static_zero(weight, real_dtype):
         return jnp.zeros_like(H)
@@ -416,6 +444,10 @@ def collisions_contribution(
     if collision_base is None:
         return jnp.zeros_like(H)
 
+    if mu_grid is not None:
+        perp = jnp.einsum("jkz,skmyxz->sjmyxz", mu_grid[0], H)
+        base = -(H * collision_base) - nu[:, None, None, None, None, None] * perp
+        return weight * _mu_conserving(base, H, Jl, JlB, b, nu, mu_grid[1])
     base = -(H * collision_base) * weight
     if G is None or Jl is None or JlB is None or b is None:
         return base
