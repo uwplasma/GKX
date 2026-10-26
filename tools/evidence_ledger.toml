@@ -406,10 +406,10 @@ notes = "Deck of the paper's App. G.3 (Nx 192, Ny 64, Nz 24, nu_ii 0.01 Doughert
 [[row]]
 id = "N-cyclone-gx-fig4b"
 claim = "nonlinear Cyclone ITG heat-flux scan in a/LT, adiabatic electrons, GKX against GX paper Fig. 4b and Table 1"
-observable = "Q_i/Q_GB at (4,8): a/LT 2.0 3.43 +- 0.13, 2.49 7.08 +- 0.12, 3.0 11.6 +- 0.2; (8,16) 2.49 @GK249@"
+observable = "Q_i/Q_GB at (4,8): a/LT 2.0 3.43 +- 0.13, 2.49 7.08 +- 0.12, 3.0 11.6 +- 0.2; (8,16) 2.49 7.39 +- 0.19"
 artifact = "docs/validation.rst"
 generator = "retired@gkx-plan plan/research/2026-10-25-paper-exact/scripts/ns.py"
-reference = "GX paper Fig. 4b (read off, about 10%): 3.6, 7.2, 12; Table 1: 7.2 +- 0.8 (4,8), 7.3 +- 0.9 (8,16); repaired GX self-run 7.07 +- 0.23 (4,8) @GX249@"
+reference = "GX paper Fig. 4b (read off, about 10%): 3.6, 7.2, 12; Table 1: 7.2 +- 0.8 (4,8), 7.3 +- 0.9 (8,16); repaired GX self-run 7.07 +- 0.23 (4,8) and 7.49 +- 0.21 (8,16)"
 reference_rank = 2
 tier = 3
 status = "passing"
@@ -436,4 +436,4 @@ reference = "Gonzalez-Jerez et al., JPP 88, 905880310 (2022) Fig. 5 and appendix
 reference_rank = 2
 tier = 3
 status = "passing"
-notes = "GKX (Nl,Nm) = (4,8) 0.1776, (8,16) 0.1750, (16,32) 0.1754; 1, 3, 6 poloidal turns agree to 3e-4 at k_y rho_i 2.1. Against GX at 7 k_y (1.0-4.0): within 0.5%. Against the paper curve at k_y rho_i 1.0, 1.3, 2.3, 3.0, 4.0 (6 turns below 1.3): 0.087/0.116/0.176/0.159/0.140 against 0.085/0.113/0.175/0.157/0.134, read off a figure to about 0.003. The paper's curve is collisionless; the decks here have nu = 0. At k_y rho_i < 1.3 GX's time fit lands on another branch than the eigenpair. Zonal flow (npol 3) and the triangular tube were not run."
+notes = "GKX (Nl,Nm) = (4,8) 0.1776, (8,16) 0.1750, (16,32) 0.1754; 1, 3, 6 poloidal turns agree to 3e-4 at k_y rho_i 2.1. Against GX at 7 k_y (0.7-3.0, one turn): within 0.5%. Against the paper curve at k_y rho_i 1.0, 1.3, 2.3, 3.0, 4.0 (6 turns below 1.3): 0.087/0.116/0.176/0.159/0.140 against 0.085/0.113/0.175/0.157/0.134, read off a figure to about 0.003. The paper's curve is collisionless; the decks here have nu = 0. At k_y rho_i < 1.3 GX's time fit lands on another branch than the eigenpair. Zonal flow (npol 3) and the triangular tube were not run."

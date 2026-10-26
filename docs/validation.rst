@@ -386,7 +386,7 @@ Tracked artifacts without a ledger row. Nothing here is a public claim.
     gives 0.1750 and 0.2628. The paper's curve reads 0.172 and 0.27. Across
     :math:`k_y\rho_i` = 1.0-4.0 GKX is within 5% of the curve read off Fig. 5
     (0.087 at 1.0 with 6 turns, 0.176 at 2.3, 0.159 at 3.0, 0.140 at 4.0), and
-    within 0.5% of GX at seven points; below :math:`k_y\rho_i \approx 1.3` the mode
+    within 0.5% of GX at seven points (one turn); below :math:`k_y\rho_i \approx 1.3` the mode
     needs 6 poloidal turns (1 turn: 0.070 at 1.0), and GX's time fit selects a
     different branch there.
   - Miller kinetic electrons (provisional, ``X-ke-miller``): certified
@@ -473,15 +473,15 @@ Cyclone ITG, adiabatic electrons, 192x64x24, one 2 pi segment, Dougherty :math:`
      - 7.07 +- 0.23
      - 7.2 +- 0.8
    * - 2.49, (8, 16)
-     - @GK249@
-     - @GX249@
+     - 7.39 +- 0.19
+     - 7.49 +- 0.21
      - 7.3 +- 0.9
    * - 3.0, (4, 8)
      - 11.6 +- 0.2
      - not run
      - about 12 (GS2 11.8)
 
-Zonal energy fraction of :math:`\Phi^2` at :math:`a/L_T = 1.5` (:math:`t > 500`): GKX 0.86 and 0.76, GX 0.79 and 0.87 at (4, 8) and (8, 16). GKX and GX agree at every point; both leave the heat flux at 1.5 above the paper's Dimits-suppressed value and move toward it with velocity resolution, so the suppression is not reproduced at (4, 8) by either code (open). With :math:`\nu_{ii} = 0` both decay to a zonal-dominated state (GX flux 0.04 over the last 200; gkx-plan ``2026-10-20-nonlinear-stats``).
+The GKX windows at (4, 8), 1.5 and (8, 16), 2.49 fail the half-window stationarity check (halves differ by more than two standard errors); the others pass. Zonal energy fraction of :math:`\Phi^2` at :math:`a/L_T = 1.5` (:math:`t > 500`): GKX 0.86 and 0.76, GX 0.79 and 0.87 at (4, 8) and (8, 16). GKX and GX agree at every point; both leave the heat flux at 1.5 above the paper's Dimits-suppressed value and move toward it with velocity resolution, so the suppression is not reproduced at (4, 8) by either code (open). With :math:`\nu_{ii} = 0` both decay to a zonal-dominated state (GX flux 0.04 over the last 200; gkx-plan ``2026-10-20-nonlinear-stats``).
 
 Kinetic electrons (GX Table 2, :math:`m_i/m_e = 3670`, :math:`\beta = 10^{-3}`): not run. With GKX 2.7.0 defaults, 192x64x24 at (4, 16) advances 0.079 :math:`a/v_{ti}` in 17 s on a shared RTX A4000 (about 36 h for :math:`t = 600`; the paper's 159 min is on four A100).
 
