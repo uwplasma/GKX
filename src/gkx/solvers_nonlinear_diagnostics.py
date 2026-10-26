@@ -305,7 +305,7 @@ def _prepare_explicit_diagnostic_state(
     """Prepare geometry, cache, projection, and dtype state for explicit scans."""
 
     term_cfg = terms or TermConfig()
-    if method in {"imex", "semi-implicit"}:
+    if method == "imex":
         raise ValueError(
             "Final-state runtime diagnostics helper only supports explicit methods"
         )

@@ -39,20 +39,19 @@ from gkx.solvers_linear_parallel import (
     _is_electrostatic_field_terms,
     linear_rhs_parallel_cached,
 )
+from gkx.config import method_error
 from gkx.solvers_time_explicit_steps import (
     _linear_explicit_stage_update,
     _linear_native_step,
 )
 
 
-_LINEAR_METHODS = {"euler", "rk2", "rk4", "imex", "imex2", "sspx3"}
+_LINEAR_METHODS = frozenset({"rk2", "rk4", "imex", "imex2", "sspx3"})
 
 
 def _validate_linear_method(method: str) -> None:
     if method not in _LINEAR_METHODS:
-        raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk4', 'imex', 'imex2', 'sspx3'}"
-        )
+        raise method_error(method, _LINEAR_METHODS)
 
 
 def _prepared_linear_state_and_damping(
@@ -352,12 +351,9 @@ def _dispatch_parallel_linear(
             "parallel linear integration does not currently support donated input buffers"
         )
     route_axis = str(getattr(parallel, "axis", "hermite")).lower().replace("-", "_")
-    if route_axis in {"species_hermite", "s_m", "mixed"} and method not in {
-        "euler",
-        "rk2",
-    }:
+    if route_axis in {"species_hermite", "s_m", "mixed"} and method != "rk2":
         raise NotImplementedError(
-            "mixed species-Hermite integration is currently gated for Euler and RK2"
+            "mixed species-Hermite integration is currently gated for RK2"
         )
     if route_axis in {"s", "species"}:
         from gkx.solvers_linear_parallel_electrostatic import (
@@ -647,7 +643,6 @@ def integrate_linear(
     cache = _linear_cache_or_build(
         G0, grid, geom, params, cache, cache_builder=build_linear_cache
     )
-    method = "imex" if method == "semi-implicit" else method
     parallel_strategy = _linear_parallel_strategy(parallel)
     force_electrostatic_fields = _is_electrostatic_field_terms(terms)
     if collision_operator is not None:

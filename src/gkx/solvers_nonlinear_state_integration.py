@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.config import resolve_cfl_fac
+from gkx.config import method_error, resolve_cfl_fac
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from gkx.core_ky_layout import source_ny_full
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
@@ -218,7 +218,7 @@ def integrate_nonlinear_cached(
 
     term_cfg = terms or TermConfig()
     G0 = mask_supplied_state(G0, cache)
-    if method in {"imex", "semi-implicit"}:
+    if method == "imex":
         if collision_operator is not None:
             raise NotImplementedError(
                 "custom collision operators currently require explicit nonlinear integration"
@@ -592,10 +592,8 @@ def _integrate_nonlinear_sheared_scan(
     if steps < 1:
         raise ValueError("steps must be at least one")
     method_key = str(method).lower()
-    if method_key not in {"euler", "rk2", "rk3", "imex"}:
-        raise ValueError(
-            "sheared integration method must be 'euler', 'rk2', 'rk3', or 'imex'"
-        )
+    if method_key not in {"rk2", "rk3", "imex"}:
+        raise method_error(method, {"rk2", "rk3", "imex"})
     if not fixed_dt and not record_transport:
         raise ValueError("adaptive sheared integration requires a transport trace")
     if method_key == "imex" and not fixed_dt:
@@ -794,9 +792,7 @@ def _integrate_nonlinear_sheared_scan(
                 new_time,
                 solve_stats,
             )
-        if method_key == "euler":
-            trial = current.state + dt_local * derivative
-        elif method_key == "rk2":
+        if method_key == "rk2":
             midpoint_time = time + 0.5 * dt_local
             midpoint = coordinates(
                 current.state + 0.5 * dt_local * derivative,
@@ -988,7 +984,7 @@ def integrate_nonlinear_sheared(
 ) -> tuple[Any, ...] | jnp.ndarray:
     """Integrate the standard-flux-tube shearing-coordinate foundation.
 
-    This research path supports fixed-step Euler, midpoint RK2, three-stage
+    This research path supports midpoint RK2, three-stage
     Heun RK3, and first-order IMEX. Stage states and derivatives are remapped to
     the stage coordinate basis before the RHS and back to the step basis before
     Runge--Kutta combinations. IMEX evaluates the explicit nonlinear term in the

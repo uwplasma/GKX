@@ -430,7 +430,7 @@ def maybe_emit_nonlinear_progress(
     )
 
 
-_IMEX_METHODS = {"imex", "semi-implicit"}
+_IMEX_METHODS = frozenset({"imex"})
 
 _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
     "method",

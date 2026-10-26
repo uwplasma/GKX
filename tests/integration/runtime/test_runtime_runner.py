@@ -2907,7 +2907,7 @@ boundary = "periodic"
 [time]
 t_max = 0.02
 dt = 0.01
-method = "euler"
+method = "rk2"
 sample_stride = 1
 
 [geometry]

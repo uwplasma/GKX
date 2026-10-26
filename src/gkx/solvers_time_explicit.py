@@ -24,7 +24,7 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
 )
-from gkx.config import resolve_cfl_fac
+from gkx.config import method_error, resolve_cfl_fac
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.callbacks import progress_update_stride
 from gkx.solvers_time_explicit_cfl import (
@@ -153,21 +153,7 @@ def _linear_explicit_step(
 
 
 def _resolve_explicit_method(method: str) -> str:
-    method_key = method.strip().lower()
-    if method_key not in {
-        "euler",
-        "rk2",
-        "rk3",
-        "rk3_classic",
-        "rk3_heun",
-        "rk4",
-        "k10",
-        "sspx3",
-    }:
-        raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
-        )
-    return method_key
+    return _normalize_method(method)
 
 
 def _validate_mode_method(mode_method: str) -> None:
@@ -583,16 +569,7 @@ def integrate_linear_explicit_from_config(
     return t, phi
 
 
-_ALLOWED_METHODS = {
-    "euler",
-    "rk2",
-    "rk3",
-    "rk3_classic",
-    "rk3_heun",
-    "rk4",
-    "k10",
-    "sspx3",
-}
+_ALLOWED_METHODS = frozenset({"rk2", "rk3", "rk4", "sspx3"})
 
 
 class ExplicitTimeConfigLike(Protocol):
@@ -693,9 +670,7 @@ def _finish_progress(show_progress: bool) -> None:
 def _normalize_method(method: str) -> str:
     method_key = method.strip().lower()
     if method_key not in _ALLOWED_METHODS:
-        raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', 'rk3_heun', 'rk4', 'k10', 'sspx3'}"
-        )
+        raise method_error(method, _ALLOWED_METHODS)
     return method_key
 
 

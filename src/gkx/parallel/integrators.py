@@ -22,13 +22,14 @@ from gkx.operators.linear.params import (
     LinearTerms,
     _SPECIES_PARAM_NAMES,
 )
+from gkx.config import method_error
 from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
 from gkx.core_ky_layout import source_ny_full
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
 
 
-_EXPLICIT_METHODS = {"euler", "rk2", "rk3", "rk3_heun", "rk3_classic", "rk4", "sspx3"}
+_EXPLICIT_METHODS = frozenset({"rk2", "rk3", "rk4", "sspx3"})
 pjit = jax.jit
 
 
@@ -44,9 +45,7 @@ def _validate_steps(steps: int) -> None:
 def _validate_explicit_method(method: str) -> str:
     method_key = str(method).strip().lower()
     if method_key not in _EXPLICIT_METHODS:
-        raise ValueError(
-            "method must be one of {'euler', 'rk2', 'rk3', 'rk3_heun', 'rk3_classic', 'rk4', 'sspx3'}"
-        )
+        raise method_error(method, _EXPLICIT_METHODS)
     return method_key
 
 
@@ -156,24 +155,14 @@ def _nonlinear_explicit_update(
     project_shard: Callable[[jnp.ndarray], jnp.ndarray],
     dt_val: jnp.ndarray,
 ) -> jnp.ndarray:
-    if method_key == "euler":
-        return G + dt_val * k1
     if method_key == "rk2":
         k2, _ = rhs(stage(G, k1, 0.5))
         return G + dt_val * k2
-    if method_key == "rk3_classic":
-        return _rk3_classic_update(
-            G,
-            k1,
-            rhs=rhs,
-            stage=stage,
-            project_shard=project_shard,
-            dt_val=dt_val,
-        )
-    if method_key in {"rk3", "rk3_heun"}:
+    if method_key == "rk3":
         return _rk3_heun_update(G, k1, rhs=rhs, stage=stage, dt_val=dt_val)
     if method_key == "rk4":
         return _rk4_update(G, k1, rhs=rhs, stage=stage, dt_val=dt_val)
+    # ``sspx3`` has no sharded tableau and reuses the classic RK3 update.
     return _rk3_classic_update(
         G,
         k1,
