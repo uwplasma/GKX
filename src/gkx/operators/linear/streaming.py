@@ -32,6 +32,16 @@ def _fft_abs_multiplier(kz: jnp.ndarray, like: jnp.ndarray) -> jnp.ndarray:
     return jnp.asarray(jnp.abs(kz), dtype=real_dtype).astype(like.dtype)
 
 
+def _ifft_last(x: jnp.ndarray) -> jnp.ndarray:
+    """``jnp.fft.ifft`` over the last axis as a forward FFT of the conjugate.
+
+    XLA:GPU follows every inverse transform with a separate scaling kernel; the
+    ``1 / n`` here fuses into the neighbouring elementwise work instead.
+    """
+
+    return jnp.conj(jnp.fft.fft(jnp.conj(x), axis=-1)) * (1.0 / x.shape[-1])
+
+
 def grad_z_periodic(
     f: jnp.ndarray,
     dz: float | jnp.ndarray | None = None,
@@ -55,7 +65,7 @@ def grad_z_periodic(
         kz = 2.0 * jnp.pi * jnp.fft.fftfreq(n, d=dz_val)
     f_hat = jnp.fft.fft(f, axis=-1)
     df_hat = _fft_ik_multiplier(kz, f_hat) * f_hat
-    return _real_fft_nyquist_derivative(jnp.fft.ifft(df_hat, axis=-1), ny_full)
+    return _real_fft_nyquist_derivative(_ifft_last(df_hat), ny_full)
 
 
 def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.ndarray:
@@ -320,7 +330,7 @@ def _linked_fft_chain_update(
     f_hat = jnp.fft.fft(f_link, axis=-1)
     multiplier = _linked_fft_multiplier(kz_link, f_hat, operator)
     df_hat = multiplier * f_hat
-    df_link = jnp.fft.ifft(df_hat, axis=-1)
+    df_link = _ifft_last(df_hat)
     df_link = df_link.reshape(*lead_shape, nChains * nLinks, Nz)
     return idx_flat, jnp.asarray(df_link, dtype=dtype)
 
@@ -578,7 +588,7 @@ def abs_z_periodic(
             * jnp.fft.fftfreq(f.shape[-1], d=jnp.asarray(dz, dtype=jnp.real(f).dtype))
         )
     f_hat = jnp.fft.fft(f, axis=-1)
-    return jnp.fft.ifft(_fft_abs_multiplier(kz, f_hat) * f_hat, axis=-1)
+    return _ifft_last(_fft_abs_multiplier(kz, f_hat) * f_hat)
 
 
 def grad_z_linked_fft(

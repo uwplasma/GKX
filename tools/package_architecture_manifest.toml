@@ -1200,7 +1200,8 @@ recursive = true
 # 68896 -> 68785: retired euler, k10, rk3_heun, rk3_classic and semi-implicit. Measured.
 # 68785 -> 68378: merged the solver families (5 modules removed) and dropped the diagnostics dependency containers. Measured.
 # 68378 -> 68387: Landau electron-ion table overflow fix at (Nl, Nm) = (16, 128), measured.
-baseline = 68387
+# 68387 -> 68397: inverse FFT without scal (#396) after #392/#395, measured.
+baseline = 68397
 target = 45000
 
 [[line_budget_policy.counts]]
