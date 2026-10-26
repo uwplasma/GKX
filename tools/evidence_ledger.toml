@@ -354,7 +354,7 @@ reference = "converged GKX Laguerre ladder (Nl 24); GX v2 nodal runs (nmu 8: Cyc
 reference_rank = 5
 tier = 3
 status = "open"
-notes = "Cyclone, Nm 32, vperp_max 4: 8 nodes are within 1.4% (ky 0.3) and 0.5% (ky 0.4) of the converged Laguerre rate, where Laguerre needs Nl 16 and 24 (5.4x and 12x the wall time, 2.7x and 4x the memory). 16 nodes at ky 0.4 are 4% below the 12-node value. TEM (Nm 24, still Nm-limited against GS2 0.869): nodal 0.514, 0.561, 0.547, 0.548 at 4, 8, 12, 16 nodes against Laguerre 0.480, 0.611, 0.552, 0.565, at equal or up to 2x the cost per node. Linear only; collisions and Laguerre-index hypercollisions are refused. Timings are one shared 4-thread CPU."
+notes = "Cyclone, Nm 32, vperp_max 4: 8 nodes are within 1.4% (ky 0.3) and 0.5% (ky 0.4) of the converged Laguerre rate, where Laguerre needs Nl 16 and 24 (5.4x and 12x the wall time, 2.7x and 4x the memory). 16 nodes at ky 0.4 are 4% below the 12-node value. TEM (Nm 24, still Nm-limited against GS2 0.869): nodal 0.514, 0.561, 0.547, 0.548 at 4, 8, 12, 16 nodes against Laguerre 0.480, 0.611, 0.552, 0.565, at equal or up to 2x the cost per node. Linear only; Dougherty collisions on nodes in weak form (landau and Laguerre-index hypercollisions are refused). KBM, Miller KE, W7-X ITG and collisional TEM ladders are in docs/numerics.rst. Timings are one shared 4-thread CPU."
 
 [[row]]
 id = "X-kbm-beta-gs2"

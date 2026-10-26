@@ -950,3 +950,34 @@ late-time mean after the GAM): 0.0929 and 0.0943 for Laguerre ``Nl`` = 8 and 16;
 0.0939 and 0.0940 for 8 and 12 nodes (``test_zonal_flow_residual_on_the_mu_grid_matches_laguerre``).
 The small-:math:`\varepsilon` formula :math:`1/(1+1.6q^2/\sqrt\varepsilon)=0.119`
 does not apply at :math:`\varepsilon=0.18`; the check is the agreement with Laguerre.
+
+Other cases (office CPU, banded route, ``Nm`` as stated; growth rates):
+
+.. list-table::
+   :header-rows: 1
+
+   * - case
+     - Laguerre ``Nl`` 8 / 12
+     - nodes 8 / 12
+   * - TEM, :math:`\nu_e=0.071` (``Nm = 24``; GS2 0.5054)
+     - 0.4169 / 0.4106
+     - 0.4002 / 0.4010
+   * - TEM, :math:`\nu_e=0.283` (GS2 0.1510)
+     - 0.0548 / 0.0589
+     - 0.0537 / 0.0535
+   * - KBM, :math:`\beta=0.015`, :math:`k_y=0.3` (``Nm = 24``)
+     - 0.3155 / 0.3164
+     - 0.2988 / 0.2989
+   * - Miller kinetic electrons, :math:`k_y=0.4` (``Nm = 24``)
+     - 0.2652 / 0.2669
+     - 0.2648 / 0.2650
+   * - W7-X ITG, :math:`k_y\rho=2.1` (``Nm = 16``)
+     - 0.2178 / (24: 0.2176)
+     - 0.2168 / 0.2168
+
+The nodal ladders are flat in every case. For the KBM case the nodal rate is 5.6%
+below the Laguerre one at either resolution; the GS2 comparison of the evidence
+ledger puts the Laguerre ``(8, 24)`` rate 7.3% above GS2, which the nodal rate
+reduces to about 1.6%. The collisional TEM rates are far below GS2 for both
+representations (``Nm`` limit; GS2's collision operator is not Dougherty). W7-X at
+:math:`k_y\rho=2.1` is converged at 4 nodes (0.2184).
