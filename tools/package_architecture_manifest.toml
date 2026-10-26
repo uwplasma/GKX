@@ -530,7 +530,8 @@ path = "workflows/nonlinear.py"
 # 1032 -> 1035: per-run compile cache for adaptive chunks.
 # 1035 -> 1043: stepper-default dispatch (#385).
 # +2: refuse the linear-only nodal mu grid in the nonlinear context.
-baseline_lines = 1045
+# +2: nodal mu grid: nonlinear runs are electrostatic only.
+baseline_lines = 1047
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -1204,7 +1205,8 @@ recursive = true
 # 68387 -> 68397: inverse FFT without scal (#396) after #392/#395, measured.
 # 68397 -> 68421: EM bracket one FFT (#394), measured after merging main.
 # 68421 -> 68707: nodal mu grid (opt-in LinearParams.mu_vperp_max): rule, gyro factors, node-local mirror/drift/drive, Dougherty, Laguerre-mode seeds. Measured.
-baseline = 68707
+# 68707 -> 68730: nodal mu grid nonlinear (electrostatic) and phi seeding on all nodes. Measured.
+baseline = 68730
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1563,7 +1565,8 @@ recursive = true
 # 63547 -> 63557: Landau table overflow regression test, measured.
 # 63557 -> 63571: EM bracket one FFT (#394), measured after merging main.
 # 63571 -> 64074: nodal mu grid tests (equivalence, conservation, free energy, quadrature, Landau, zonal residual, Dougherty, Cyclone rates, refusals). Measured.
-baseline = 64074
+# 64074 -> 64234: nodal mu grid tests (two-species B_par free energy, nonlinear electrostatic run, phi seeding). Measured.
+baseline = 64234
 target = 35000
 
 [[line_budget_policy.counts]]

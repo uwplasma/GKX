@@ -62,6 +62,16 @@ class _PhiMomentAlgebra:
     density: np.ndarray
     denom: np.ndarray
     tau_e: float
+    response: np.ndarray  # density response of the seed profile, (species, ky, kx, z)
+
+
+def _mu_seed_profile(cache, params: LinearParams) -> np.ndarray | None:
+    """Node profile ``(Nmu, Nz)`` of a perpendicular-flat density seed (``None``: Laguerre)."""
+
+    if not getattr(cache, "mu_grid", False) or params.mu_vperp_max is None:
+        return None
+    nodes = mu_grid_nodes(cache.Jl.shape[1], float(params.mu_vperp_max))
+    return mu_grid_laguerre_modes(*nodes, np.asarray(cache.bmag), 1)[0]
 
 
 def _as_runtime_species_array(
@@ -138,7 +148,10 @@ def _phi_moment_algebra(
         raise ValueError(
             "init_field='phi' produced a non-finite quasineutrality denominator"
         )
+    profile = _mu_seed_profile(cache, params)
+    response = Jl[:, 0] if profile is None else np.einsum("sjyxz,jz->syxz", Jl, profile)
     return _PhiMomentAlgebra(
+        response=response,
         Jl=Jl,
         jacobian=jacobian,
         charge=charge,
@@ -183,7 +196,7 @@ def _project_density_average_to_target_species(
     coeff = (
         algebra.density[target_indices, None]
         * algebra.charge[target_indices, None]
-        * algebra.Jl[target_indices, 0, int(ky_i), int(kx_i), :]
+        * algebra.response[target_indices, int(ky_i), int(kx_i), :]
     )
     coeff_norm = np.sum(coeff * coeff, axis=0)
     tiny = 1.0e-30
@@ -980,8 +993,12 @@ class _InitialConditionBuilder:
             kx_i=int(kx_i),
             species_targets=self.species_targets,
         )
+        profile = _mu_seed_profile(cache, phi_params)
         for s_idx, seed_vals in seeds.items():
-            self.state[s_idx, 0, 0, ky_i, kx_i, :] = seed_vals
+            if profile is None:
+                self.state[s_idx, 0, 0, ky_i, kx_i, :] = seed_vals
+            else:
+                self.state[s_idx, :, 0, ky_i, kx_i, :] = profile * seed_vals
 
     def seed_field(
         self, init_field: str, ky_i: int, kx_i: int, vals_k: np.ndarray

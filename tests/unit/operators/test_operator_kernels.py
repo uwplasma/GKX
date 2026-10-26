@@ -3117,3 +3117,130 @@ def test_mu_grid_collisional_growth_rate_matches_laguerre():
     mu = gkx.solve(nodal, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
     assert 0.03 < laguerre.gamma < 0.1
     assert abs(mu.gamma - laguerre.gamma) < 0.03 * laguerre.gamma
+
+
+@_MU_NEEDS_X64
+def test_free_energy_with_bpar_is_conserved_for_two_species():
+    """The ``B_par`` free energy with species weights ``n_s T_s`` (ions and hot electrons)."""
+
+    from gkx.operators.linear.params import Species, build_linear_params
+    from gkx.terms.fields import _solve_fields_impl
+
+    nmu, nm, nz, kmax, beta = 3, 4, 32, 3, 0.02
+    species = (
+        Species(1.0, 1.0, 1.0, 1.0, 0.0, 0.0),
+        Species(-1.0, 0.05, 0.7, 2.0, 0.0, 0.0),
+    )
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=8, Nz=nz, Lx=62.8, Ly=20.9, boundary="periodic")
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
+    params = replace(
+        build_linear_params(
+            species,
+            tau_e=0.0,
+            kpar_scale=float(geom.gradpar()),
+            beta=beta,
+            hypercollisions_const=0.0,
+            hypercollisions_kz=0.0,
+            damp_ends_rate=0.0,
+        ),
+        mu_vperp_max=4.0,
+    )
+    terms = LinearTerms(
+        diamagnetic=0.0, collisions=0.0, hypercollisions=0.0, end_damping=0.0
+    )
+    cache = build_linear_cache(grid, geom, params, nmu, nm)
+    ny, iy, ns = cache.ky.shape[0], 1, 2
+    n = ns * nmu * nm * nz
+
+    def embed(v):
+        state = jnp.zeros((ns, nmu, nm, ny, 1, nz), dtype=jnp.complex128)
+        return state.at[:, :, :, iy, 0, :].set(v.reshape(ns, nmu, nm, nz))
+
+    def fields(v):
+        return _solve_fields_impl(
+            embed(v),
+            cache,
+            params,
+            charge=jnp.asarray([1.0, -1.0]),
+            density=jnp.asarray([1.0, 0.7]),
+            temp=jnp.asarray([1.0, 2.0]),
+            mass=jnp.asarray([1.0, 0.05]),
+            tz=jnp.asarray(params.tz),
+            vth=jnp.asarray(params.vth),
+            fapar=jnp.asarray(0.0),
+            w_bpar=jnp.asarray(1.0),
+        )
+
+    def jac(f):
+        return np.asarray(jax.jacrev(f, holomorphic=True)(jnp.zeros(n, jnp.complex128)))
+
+    a_mat = jac(
+        lambda v: linear_rhs_cached(
+            embed(v), cache, params, terms=terms, use_custom_vjp=False
+        )[0][:, :, :, iy, 0, :].reshape(-1)
+    )
+    inv_b = 1.0 / np.asarray(cache.bmag)
+    nt = np.array([1.0, 0.7 * 2.0])
+    z_weight = np.tile(inv_b, ns * nmu * nm)
+    species_weight = np.repeat(nt, nmu * nm * nz)
+    p0 = np.diag(species_weight * z_weight)
+    jl = np.asarray(cache.Jl)[:, :, iy, 0, :]
+    jb = np.asarray(cache.JlB)[:, :, iy, 0, :]
+    dens = np.array([1.0, 0.7])
+    charge = np.array([1.0, -1.0])
+    temp = np.array([1.0, 2.0])
+    gamma0 = (jl**2).sum(1)
+    q = (dens * charge**2 / temp)[:, None] * (1.0 - gamma0)
+    q = q.sum(0)
+    q_b = -((dens * charge)[:, None] * (jl * jb).sum(1)).sum(0)
+    kappa = np.asarray(cache.bmag) ** 2 / (params.bpar_beta_scale * beta) + (
+        (dens * temp)[:, None] * (jb**2).sum(1)
+    ).sum(0)
+    psi_phi = jac(lambda v: fields(v).phi[iy, 0, :])
+    psi_b = jac(lambda v: fields(v).bpar[iy, 0, :])
+    field = (
+        psi_phi.conj().T @ np.diag(q * inv_b) @ psi_phi
+        + psi_phi.conj().T @ np.diag(q_b * inv_b) @ psi_b
+        + psi_b.conj().T @ np.diag(q_b * inv_b) @ psi_phi
+        - psi_b.conj().T @ np.diag(kappa * inv_b) @ psi_b
+    )
+    rate = p0 @ a_mat + a_mat.conj().T @ p0 + field @ a_mat + a_mat.conj().T @ field
+    modes = np.abs(np.fft.fftfreq(nz, 1.0 / nz)) <= kmax
+    low = np.conj(np.fft.fft(np.eye(nz), axis=0).T)[:, modes] / np.sqrt(nz)
+    basis = np.kron(np.eye(ns * nmu * nm), low)
+    scale = np.linalg.norm(basis.conj().T @ p0 @ a_mat @ basis)
+    residual = basis.conj().T @ (0.5 * (rate + rate.conj().T)) @ basis
+    assert np.linalg.norm(residual) < 1e-8 * scale
+
+
+@_MU_NEEDS_X64
+def test_nonlinear_electrostatic_run_on_the_mu_grid_matches_laguerre():
+    """Cyclone nonlinear (8 x 8 x 16, t = 30, linear phase of the seeded run).
+
+    The grid path of the bracket evaluates ``J0(k_perp sqrt(2 mu_j B)) phi`` on the
+    nodes without a Laguerre transform; the potential energy and the heat flux of
+    6 nodes match Laguerre ``Nl = 12`` to 3%. Electromagnetic nonlinear runs are refused.
+    """
+
+    import gkx
+    from pathlib import Path
+    from gkx.runtime import run_runtime_nonlinear
+
+    deck = Path(__file__).parents[3] / "benchmarks/cases/cyclone_nonlinear_short.toml"
+    case = gkx.load(deck)
+    case = replace(
+        case,
+        time=replace(case.time, t_max=30.0),
+        grid=replace(case.grid, Nx=8, Ny=8, Nz=16, ntheta=16),
+    )
+    lag = run_runtime_nonlinear(case, Nl=12, Nm=8).diagnostics
+    nodal_case = replace(case, run=replace(case.run, mu_vperp_max=4.0))
+    nod = run_runtime_nonlinear(nodal_case, Nl=6, Nm=8).diagnostics
+    for name in ("Wphi_t", "heat_flux_t"):
+        a, b = float(getattr(lag, name)[-1]), float(getattr(nod, name)[-1])
+        assert abs(b - a) < 0.03 * abs(a), name
+    em = replace(nodal_case, physics=replace(nodal_case.physics, electromagnetic=True))
+    with pytest.raises(NotImplementedError, match="electrostatic only"):
+        run_runtime_nonlinear(em, Nl=4, Nm=8)

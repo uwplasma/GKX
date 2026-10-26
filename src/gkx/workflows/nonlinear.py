@@ -310,8 +310,10 @@ def _prepare_context(
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
     status("building runtime nonlinear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
-    if getattr(params, "mu_vperp_max", None) is not None:
-        raise NotImplementedError("[run] mu_vperp_max is linear only")
+    if params.mu_vperp_max is not None and cfg.physics.electromagnetic:
+        raise NotImplementedError(
+            "nodal mu grid: nonlinear runs are electrostatic only"
+        )
     terms = build_runtime_term_config(cfg)
     status(end_damping_status(params, grid, cfg.grid.boundary))
     ky_index, kx_index = _select_nonlinear_mode_indices(
