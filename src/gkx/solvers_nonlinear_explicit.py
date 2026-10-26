@@ -84,13 +84,13 @@ def _explicit_rk4_state(
     rhs_fn: RhsFn,
     project_state: ProjectFn,
 ) -> jnp.ndarray:
-    G2 = project_state(G + 0.5 * dt_local * dG)
-    k2 = _rhs_value(rhs_fn, G2)
-    G3 = project_state(G + 0.5 * dt_local * k2)
-    k3 = _rhs_value(rhs_fn, G3)
-    G4 = project_state(G + dt_local * k3)
-    k4 = _rhs_value(rhs_fn, G4)
-    return G + (dt_local / 6.0) * (dG + 2.0 * k2 + 2.0 * k3 + k4)
+    # Running sum of the slopes: only the latest stage slope stays alive.
+    k2 = _rhs_value(rhs_fn, project_state(G + 0.5 * dt_local * dG))
+    total = dG + 2.0 * k2
+    k3 = _rhs_value(rhs_fn, project_state(G + 0.5 * dt_local * k2))
+    total = total + 2.0 * k3
+    k4 = _rhs_value(rhs_fn, project_state(G + dt_local * k3))
+    return G + (dt_local / 6.0) * (total + k4)
 
 
 def _explicit_sspx3_state(
