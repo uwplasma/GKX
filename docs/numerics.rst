@@ -812,7 +812,12 @@ identity transform: ``laguerre_to_grid`` and ``laguerre_to_spectral`` are the id
 ``laguerre_j0`` holds :math:`J_{0}(\alpha_j)`. The heat-flux weight is
 :math:`(x_j+\tfrac12)J_j` for :math:`(x-1)J+\tfrac32J`. Nonlinear runs are electrostatic only
 (the :math:`B_\parallel` correction would need :math:`x_j` in place of the node value in the
-bracket); the Cyclone heat flux is compared with Laguerre in the tables below.
+bracket). Cyclone adiabatic-electron heat flux (64x64x24, ``Nm = 8``, :math:`t=600`, one seed,
+Sokal-window statistics, accepted at 20 :math:`\tau`): Laguerre ``Nl`` 4 / 8 / 16 give
+:math:`8.86\pm0.30` / :math:`8.84\pm0.23` / :math:`8.77\pm0.16`; 8 nodes give
+:math:`8.85\pm0.26`; 4 nodes give :math:`7.56\pm0.34` (window under 20 :math:`\tau`). The heat flux is
+converged at the shipped ``Nl = 4``, so the grid brings no accuracy gain here and 8 nodes
+cost about 2-3 times the 4 moments (shared GPU).
 
 Scope: linear runs, electrostatic and electromagnetic; nonlinear runs, electrostatic.
 ``nu_hyper``, ``nu_hyper_l``, ``nu_hyper_lm`` and ``hypercollisions_const`` are refused
