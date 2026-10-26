@@ -1199,7 +1199,8 @@ recursive = true
 # 68892 -> 68896: SOLVAX 0.33 normalized Thomas (#389) after #387, measured.
 # 68896 -> 68785: retired euler, k10, rk3_heun, rk3_classic and semi-implicit. Measured.
 # 68785 -> 68378: merged the solver families (5 modules removed) and dropped the diagnostics dependency containers. Measured.
-baseline = 68378
+# 68378 -> 68388: streaming derivative inverse FFT as a conjugated forward FFT (no separate scaling kernel on GPU). Measured.
+baseline = 68388
 target = 45000
 
 [[line_budget_policy.counts]]
