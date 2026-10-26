@@ -19,6 +19,7 @@ from gkx.diagnostics.saturation import (
     saturation_stop_decision,
 )
 from gkx.geometry import apply_geometry_grid_defaults
+from gkx.operators.linear.cache_arrays import check_mu_grid_nonlinear
 from gkx.operators.nonlinear.policies import bracket_cfl_rate
 from gkx.solvers_nonlinear_imex import (
     IMEX_CHAIN_METHODS,
@@ -310,10 +311,7 @@ def _prepare_context(
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
     status("building runtime nonlinear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
-    if params.mu_vperp_max is not None and cfg.physics.electromagnetic:
-        raise NotImplementedError(
-            "nodal mu grid: nonlinear runs are electrostatic only"
-        )
+    check_mu_grid_nonlinear(params, cfg.physics.electromagnetic)
     terms = build_runtime_term_config(cfg)
     status(end_damping_status(params, grid, cfg.grid.boundary))
     ky_index, kx_index = _select_nonlinear_mode_indices(
