@@ -2232,3 +2232,13 @@ def test_runtime_default_is_landau_and_coulomb_is_its_alias() -> None:
     # damps ITG more at equal nu.
     assert np.isclose(growth["landau"], 0.0726127, rtol=1e-3)
     assert growth["lenard_bernstein"] < growth["landau"]
+
+
+def test_sonine_radial_finite_at_high_order_and_large_argument():
+    """The electron-ion Landau tables at (Nl, Nm) = (16, 128) reach u^2 ~ 1e7 at order 75."""
+    from gkx.operators.linear.collision_tables import _sonine_radial
+
+    with np.errstate(over="raise", invalid="raise"):
+        value, deriv = _sonine_radial(np.array([300.0, 1.0]), 2, 75, 0.05)
+    assert np.isfinite(value).all() and np.isfinite(deriv).all()
+    assert np.abs(value[:, 0]).max() == 0.0
