@@ -3043,3 +3043,65 @@ def test_collisionless_free_energy_is_conserved_without_drive(mode, vperp_max):
     )
     residual = basis.conj().T @ (0.5 * (rate + rate.conj().T)) @ basis
     assert np.linalg.norm(residual) < 1e-9 * scale
+
+
+@_MU_NEEDS_X64
+def test_zonal_flow_residual_on_the_mu_grid_matches_laguerre():
+    """Rosenbluth-Hinton residual (ky = 0, k_x rho = 0.05, adiabatic electrons, eps = 0.18).
+
+    Late-time ``phi / phi(0)`` of a density seed after the GAM, 8 nodes against
+    Laguerre ``Nl = 8``; the small-eps formula ``1 / (1 + 1.6 q^2 / sqrt(eps))`` is 0.119.
+    """
+
+    nz, nm, dt, t_max = 32, 16, 0.02, 60.0
+    grid = build_spectral_grid(
+        GridConfig(Nx=4, Ny=2, Nz=nz, Lx=2 * np.pi / 0.05, Ly=62.8, boundary="periodic")
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
+    terms = LinearTerms(end_damping=0.0, collisions=0.0)
+
+    def residual(vperp_max):
+        params = LinearParams(
+            kpar_scale=float(geom.gradpar()),
+            tprim=0.0,
+            fprim=0.0,
+            hypercollisions_const=0.0,
+            hypercollisions_kz=1.0,
+            p_hyper_m=8.0,
+            damp_ends_rate=0.0,
+            mu_vperp_max=vperp_max,
+        )
+        cache = build_linear_cache(grid, geom, params, 8, nm)
+        iy = int(np.argmin(np.abs(np.asarray(cache.ky))))
+        seed = np.ones(nz)
+        if vperp_max is not None:
+            nodes = mu_grid_nodes(8, vperp_max)
+            seed = mu_grid_laguerre_modes(*nodes, np.asarray(cache.bmag), 1)[0]
+        state = np.zeros((1, 8, nm, cache.ky.shape[0], cache.kx.shape[0], nz), complex)
+        if vperp_max is None:
+            state[0, 0, 0, iy, 1, :] = 1e-3
+        else:
+            state[0, :, 0, iy, 1, :] = 1e-3 * seed
+        rhs = lambda s: linear_rhs_cached(  # noqa: E731
+            s, cache, params, terms=terms, use_custom_vjp=False
+        )
+
+        @jax.jit
+        def step(s):
+            k1 = rhs(s)[0]
+            k2 = rhs(s + 0.5 * dt * k1)[0]
+            k3 = rhs(s + 0.5 * dt * k2)[0]
+            return s + dt / 6 * (k1 + 2 * k2 + 2 * k3 + rhs(s + dt * k3)[0])
+
+        phi_of = jax.jit(lambda s: rhs(s)[1][iy, 1, :].mean())
+        state, phis = jnp.asarray(state), []
+        for i in range(int(t_max / dt) + 1):
+            if i % 10 == 0:
+                phis.append(float(jnp.real(phi_of(state))))
+            state = step(state)
+        late = np.arange(len(phis)) * dt * 10 > 0.7 * t_max
+        return np.mean(np.asarray(phis)[late]) / phis[0]
+
+    laguerre, nodal = residual(None), residual(4.0)
+    assert 0.05 < laguerre < 0.2
+    assert abs(nodal - laguerre) < 0.03 * laguerre

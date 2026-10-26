@@ -878,3 +878,16 @@ up to 27% between rungs. At equal ``n`` the TEM cost is similar, not lower
 against 2045 s, 23.4 GB), so on this case the gain is a ladder that converges,
 not time. GX v2 reports 0.564 and 0.553 for 8 and 12 nodes with its own rule,
 and 0.0934 and 0.0795 for Cyclone at 8 nodes.
+
+At 4 nodes the TEM rate is not converged: 0.505, 0.514, 0.360, 0.411 and 0.415
+for ``vperp_max`` 3, 4, 5, 6 and ``inf``, so the 0.612 that GX v2 reports at
+4 nodes is within that spread. The 12-node TEM run took 1024 s and 2022 s on two
+identical runs (a memory-bound, shared host), so the factor 2 against Laguerre
+at that size is timing noise.
+
+Zonal-flow residual (Rosenbluth-Hinton; :math:`k_y=0`, :math:`k_x\rho=0.05`,
+adiabatic electrons, s-alpha :math:`q=1.4`, :math:`\varepsilon=0.18`, ``Nm = 16``,
+late-time mean after the GAM): 0.0929 and 0.0943 for Laguerre ``Nl`` = 8 and 16;
+0.0939 and 0.0940 for 8 and 12 nodes (``test_zonal_flow_residual_on_the_mu_grid_matches_laguerre``).
+The small-:math:`\varepsilon` formula :math:`1/(1+1.6q^2/\sqrt\varepsilon)=0.119`
+does not apply at :math:`\varepsilon=0.18`; the check is the agreement with Laguerre.

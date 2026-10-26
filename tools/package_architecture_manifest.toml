@@ -1534,8 +1534,8 @@ recursive = true
 # 73592 -> 73605: stepper-default v2 tests (#385). Measured.
 # 73605 -> 73624: linear KE time-route fix (#386) after #373/#385, measured.
 # 73624 -> 73659: conventions/B_par CFL (#387) after #386, measured.
-# 73659 -> 73985: nodal mu grid tests (equivalence, mirror density and energy, free energy, quadrature, Landau, Cyclone rate, refusals), measured.
-baseline = 73985
+# 73659 -> 74047: nodal mu grid tests (equivalence, mirror density and energy, free energy, quadrature, Landau, zonal residual, Cyclone rate, refusals), measured.
+baseline = 74047
 target = 35000
 
 [[line_budget_policy.counts]]
