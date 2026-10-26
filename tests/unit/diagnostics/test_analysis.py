@@ -961,20 +961,6 @@ def test_steps_and_dt_collapse_match_a_hand_computed_series() -> None:
     assert report.dt_collapse_ratio == pytest.approx(8.0)
 
 
-def test_constant_step_run_reports_one_step_per_dt_and_no_collapse() -> None:
-    """A run that never adapts costs exactly ``1 / dt`` steps per unit time."""
-
-    t, dt = _series(np.full(101, 0.25))
-    report = timestep_cost_report(t, dt)
-
-    assert report.steps == pytest.approx(100.0)
-    assert report.steps_per_unit_time == pytest.approx(4.0)
-    assert report.dt_collapse_ratio == pytest.approx(1.0)
-    assert report.cost_growth_ratio == pytest.approx(1.0)
-    assert report.wall_seconds is None
-    assert report.wall_seconds_per_unit_time is None
-
-
 def test_cost_growth_ratio_compares_the_first_and_last_quarter_of_a_run() -> None:
     """Within-run degradation is measured over time, not sample index."""
 

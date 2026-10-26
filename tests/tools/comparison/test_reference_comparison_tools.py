@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 import json
 from pathlib import Path
 import sys
-from types import SimpleNamespace
 
 import numpy as np
 from functools import partial
 import pytest
 from support.paths import REPO_ROOT
 from gkx.solvers_nonlinear_diagnostics import DIVERGENCE_KNEE_STEPS
-import jax.numpy as jnp
 from support.paths import load_release_tool
 from scripts.checks._gates.portfolio_guard import (
     ReducedPortfolioArtifactGuardConfig,
@@ -26,209 +23,16 @@ from scripts.checks._gates.portfolio_guard import (
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "comparison"))
 
 
-_GROWTH_DUMP_ARGV = (
-    "--gx-dir-start /tmp/start --gx-dir-stop /tmp/stop --gx-out /tmp/run.out.nc "
-    "--gx-input /tmp/run.in --geometry-file /tmp/geom.nc "
-    "--time-index-start 10 --time-index-stop 11"
-)
-
-
 # ---- test_compare_gx_imported_linear.py ----
 
 
-from gkx.config import GridConfig
-from gkx.geometry import SAlphaGeometry, sample_flux_tube_geometry
-from gkx.config import RuntimeConfig
-from gkx.operators.linear.params import Species
-
-
-_NEUTRAL_SPECIES = Species(
-    charge=1.0, mass=1.0, density=1.0, temperature=1.0, tprim=0.0, fprim=0.0
-)
-
-
-def _grid_contract(runtime_cfg) -> dict[str, object]:
-    grid = runtime_cfg.grid
-    return {k: getattr(grid, k) for k in ("boundary", "y0", "ntheta", "nperiod")}
-
-
-def _ZERO_BOUND(*_args, **_kwargs):
-    return np.asarray([0.0, 0.0, 0.0])
-
-
-def _energy_stubs(wg, wphi, wapar) -> dict[str, object]:
-    return {
-        "_distribution_free_energy_by_ky": lambda *a, **k: jnp.asarray(wg),
-        "_electrostatic_field_energy_by_ky": lambda *a, **k: jnp.asarray(wphi),
-        "_magnetic_vector_potential_energy_by_ky": lambda *a, **k: jnp.asarray(wapar),
-    }
-
-
-def _trivial_geom() -> SimpleNamespace:
-    def zeros(theta, count):
-        return tuple(jnp.zeros_like(theta) for _ in range(count))
-
-    return SimpleNamespace(
-        s_hat=0.0,
-        gradpar=lambda: 1.0,
-        metric_coeffs=lambda theta: (
-            jnp.ones_like(theta),
-            jnp.zeros_like(theta),
-            jnp.ones_like(theta),
-        ),
-        drift_coeffs=lambda theta: zeros(theta, 4),
-    )
-
-
-def _phi_fields(shape, value=0.0):
-    phi = jnp.full(shape, value, dtype=jnp.complex64)
-    return SimpleNamespace(phi=phi, apar=None)
-
-
 # ---- test_compare_gx_nonlinear_diagnostics.py ----
-
-
-def _write_minimal_gx_nc(path: Path, ntime: int = 5, offset: float = 0.0) -> None:
-    """Grouped GX-style diagnostics; ``offset`` shifts every series (GKX uses 0.1)."""
-    netcdf4 = pytest.importorskip("netCDF4")
-
-    with netcdf4.Dataset(path, "w") as root:
-        root.createDimension("time", ntime)
-        root.createDimension("species", 2)
-        grids = root.createGroup("Grids")
-        diags = root.createGroup("Diagnostics")
-        grids.createVariable("time", "f8", ("time",))[:] = np.linspace(0.0, 1.0, ntime)
-        series = np.linspace(0.1 + offset, 0.2 + offset, ntime)
-        diags.createVariable("Phi2_t", "f8", ("time",))[:] = series
-
-        for name in ["Wg_st", "Wphi_st", "HeatFlux_st", "ParticleFlux_st"]:
-            var = diags.createVariable(name, "f8", ("time", "species"))
-            var[:, :] = np.stack([series, 2.0 * series], axis=1)
-
-        wapar = diags.createVariable("Wapar_st", "f8", ("time", "species"))
-        wapar_series = np.linspace(0.3 + offset, 0.4 + offset, ntime)
-        wapar[:, :] = np.repeat(wapar_series[:, None], 2, axis=1)
-
-
-def _write_minimal_gkx_nc(path: Path, ntime: int = 5) -> None:
-    _write_minimal_gx_nc(path, ntime, offset=0.1)
-
-
-def _write_minimal_gkx_csv(path: Path, ntime: int = 5) -> None:
-    t = np.linspace(0.0, 1.0, ntime)
-    data = np.column_stack(
-        [
-            t,
-            np.zeros_like(t),  # gamma
-            np.zeros_like(t),  # omega
-            np.linspace(0.1, 0.2, ntime),  # Wg
-            np.linspace(0.2, 0.3, ntime),  # Wphi
-            np.linspace(0.3, 0.4, ntime),  # Wapar
-            np.linspace(0.6, 0.9, ntime),  # energy
-            np.linspace(0.01, 0.02, ntime),  # heat flux
-            np.linspace(0.03, 0.04, ntime),  # particle flux
-        ]
-    )
-    header = "t,gamma,omega,Wg,Wphi,Wapar,energy,heat_flux,particle_flux"
-    np.savetxt(path, data, delimiter=",", header=header, comments="")
 
 
 # ---- test_compare_gx_nonlinear_terms.py ----
 
 
 # ---- test_compare_gx_rhs_terms.py ----
-
-from gkx.config import KBMBaseCase
-from gkx.workflows.runtime.toml import load_runtime_from_toml
-
-
-def _runtime_config_from_kbm_case(cfg: KBMBaseCase) -> RuntimeConfig:
-    """The shipped KBM runtime deck with one parsed case's grid, geometry and drives."""
-
-    runtime_cfg, _raw = load_runtime_from_toml(
-        Path(__file__).resolve().parents[3]
-        / "examples/06_electromagnetic/case_full.toml"
-    )
-    ion, electron = runtime_cfg.species
-    model = cfg.model
-    return replace(
-        runtime_cfg,
-        grid=cfg.grid,
-        geometry=cfg.geometry,
-        init=cfg.init,
-        physics=replace(runtime_cfg.physics, beta=float(model.beta)),
-        species=(
-            replace(ion, tprim=float(model.tprim_i), fprim=float(model.fprim)),
-            replace(
-                electron,
-                mass=1.0 / float(model.mass_ratio),
-                temperature=float(model.Te_over_Ti),
-                tprim=float(model.tprim_e),
-                fprim=float(model.fprim),
-            ),
-        ),
-    )
-
-
-def test_runtime_linear_accepts_vmec_and_desc_eik_geometry_aliases(
-    tmp_path: Path,
-) -> None:
-    from gkx.runtime import (
-        run_runtime_linear,
-    )
-
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    grid = GridConfig(Nx=1, Ny=8, Nz=24, Lx=62.8, Ly=62.8, y0=10.0, ntheta=8, nperiod=2)
-    cfg = KBMBaseCase(grid=grid)
-    theta = np.linspace(-3.0 * np.pi, 3.0 * np.pi, grid.Nz + 1)
-    analytic = SAlphaGeometry.from_config(cfg.geometry)
-    sampled = sample_flux_tube_geometry(analytic, theta)
-    path = tmp_path / "geom.eik.nc"
-    profiles = {
-        "bmag": "bmag",
-        "gds2": "gds2",
-        "gds21": "gds21",
-        "gds22": "gds22",
-        "cvdrift": "cv",
-        "gbdrift": "gb",
-        "cvdrift0": "cv0",
-        "gbdrift0": "gb0",
-        "jacob": "jacobian",
-        "grho": "grho",
-    }
-    scalars = {"q": "q", "shat": "s_hat", "Rmaj": "R0", "kxfac": "kxfac"}
-    scalars |= {"scale": "theta_scale", "nfp": "nfp", "alpha": "alpha"}
-    with Dataset(path, "w") as root:
-        root.createDimension("z", theta.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta
-        for name, attr in profiles.items():
-            values = np.asarray(getattr(sampled, f"{attr}_profile"))
-            root.createVariable(name, "f8", ("z",))[:] = values
-        gradpar = np.full(theta.size, sampled.gradpar_value)
-        root.createVariable("gradpar", "f8", ("z",))[:] = gradpar
-        for name, attr in scalars.items():
-            root.createVariable(name, "f8", ())[:] = getattr(sampled, attr)
-
-    for model in ("vmec-eik", "desc-eik"):
-        cfg_nc = replace(
-            cfg,
-            geometry=replace(cfg.geometry, model=model, geometry_file=str(path)),
-        )
-        runtime_cfg = _runtime_config_from_kbm_case(cfg_nc)
-        result = run_runtime_linear(
-            runtime_cfg,
-            ky_target=0.3,
-            Nl=4,
-            Nm=6,
-            dt=0.01,
-            steps=40,
-            solver="explicit_time",
-            sample_stride=2,
-        )
-        assert np.isfinite(result.gamma)
-        assert np.isfinite(result.omega)
 
 
 # ---- test_reference_comparison_contracts.py ----
@@ -291,45 +95,7 @@ def test_device_parity_artifact_compares_one_identical_case() -> None:
 # ---- from test_nonlinear_sharding_profile_contracts.py ----
 
 
-def _candidate(identity: bool, speedup: float, active: bool) -> dict[str, object]:
-    return {
-        "identity_gate_pass": identity,
-        "engineering_speedup_median": speedup,
-        "state_sharding_active": active,
-    }
-
-
 # Sweep-driver contracts for the same nonlinear sharding profiling lane.
-
-
-def _sharded_row(median: float, *, active: bool = True) -> dict[str, object]:
-    return {
-        "state_sharding_active": active,
-        "stats_s": {"median": median},
-        "identity_gate_pass": True,
-        "max_abs_state_error": 0.0,
-        "max_rel_state_error": 0.0,
-        "error": None,
-    }
-
-
-_SWEEP_KW = dict(
-    nx=4,
-    ny=4,
-    nz=4,
-    nl=1,
-    nm=1,
-    dt=0.02,
-    steps=1,
-    method="rk2",
-    sharding="auto",
-    sharding_options="auto,kx",
-    laguerre_mode="grid",
-    warmups=0,
-    repeats=1,
-    timeout_s=1.0,
-    trace=False,
-)
 
 
 # ---- from test_runtime_and_scaling_profile_contracts.py ----

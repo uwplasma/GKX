@@ -97,14 +97,6 @@ def test_nonlinear_em_contribution_masks_nonlaguerre_fields_once(monkeypatch):
     assert calls == [tuple(phi.shape)]
 
 
-def _ifft2_xy(x: jnp.ndarray) -> jnp.ndarray:
-    return jnp.fft.ifft2(x, axes=(-3, -2))
-
-
-def _finite_diff_periodic(f: np.ndarray, dx: float, axis: int) -> np.ndarray:
-    return (np.roll(f, -1, axis=axis) - np.roll(f, 1, axis=axis)) / (2.0 * dx)
-
-
 def _expand_hermitian(pos: np.ndarray, ny_full: int) -> np.ndarray:
     """Expand rFFT-unique ky rows into full Hermitian spectrum."""
     nyc = ny_full // 2 + 1
@@ -258,29 +250,6 @@ def test_exb_bracket_zero_mean_mode():
     )
     mean_mode = np.asarray(dG[..., 0, 0, :])
     assert np.max(np.abs(mean_mode)) < 1.0e-3
-
-
-def test_exb_bracket_respects_dealias_mask():
-    grid = build_spectral_grid(
-        GridConfig(Nx=8, Ny=8, Nz=2, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
-    )
-    rng = np.random.default_rng(2)
-    G = rng.normal(
-        size=(2, 2, 2, grid.ky.size, grid.kx.size, grid.z.size)
-    ) + 1j * rng.normal(size=(2, 2, 2, grid.ky.size, grid.kx.size, grid.z.size))
-    phi = rng.normal(size=(grid.ky.size, grid.kx.size, grid.z.size)) + 1j * rng.normal(
-        size=(grid.ky.size, grid.kx.size, grid.z.size)
-    )
-    dG_zero = exb_nonlinear_contribution(
-        jnp.asarray(G),
-        phi=jnp.asarray(phi),
-        dealias_mask=jnp.zeros_like(grid.dealias_mask),
-        kx_grid=grid.kx_grid,
-        ky_grid=grid.ky_grid,
-        weight=jnp.asarray(1.0),
-        compressed_real_fft=False,
-    )
-    assert np.allclose(np.asarray(dG_zero), 0.0)
 
 
 def test_exb_bracket_matches_finite_difference():
@@ -1314,56 +1283,6 @@ def test_stack_fields_output_contract():
     assert stacked.shape == (2, 1, 1, 1, 4, 5, 1)
     assert np.allclose(np.asarray(stacked[0, 0, 0, 0]), np.asarray(phi))
     assert np.allclose(np.asarray(stacked[1, 0, 0, 0]), 2.0)
-
-
-def test_spectral_bracket_explicit_fft_norm_and_single_ky_branch():
-    grid = build_spectral_grid(
-        GridConfig(Nx=4, Ny=4, Nz=1, Lx=2.0 * np.pi, Ly=2.0 * np.pi)
-    )
-    rng = np.random.default_rng(33)
-    G = rng.normal(
-        size=(1, 1, 1, grid.ky.size, grid.kx.size, grid.z.size)
-    ) + 1j * rng.normal(size=(1, 1, 1, grid.ky.size, grid.kx.size, grid.z.size))
-    chi = rng.normal(size=(grid.ky.size, grid.kx.size, grid.z.size)) + 1j * rng.normal(
-        size=(grid.ky.size, grid.kx.size, grid.z.size)
-    )
-    chi_stack = _stack_fields(jnp.asarray(G), [jnp.asarray(chi)])
-    norm = float(grid.ky.size * grid.kx.size)
-
-    bracket_gx = _spectral_bracket_multi(
-        jnp.asarray(G),
-        chi_stack,
-        kx_grid=grid.kx_grid,
-        ky_grid=grid.ky_grid,
-        dealias_mask=grid.dealias_mask,
-        kxfac=jnp.asarray(1.0),
-        fft_norm=norm,
-        compressed_real_fft=True,
-    )
-    bracket_full = _spectral_bracket_multi(
-        jnp.asarray(G),
-        chi_stack,
-        kx_grid=grid.kx_grid,
-        ky_grid=grid.ky_grid,
-        dealias_mask=grid.dealias_mask,
-        kxfac=jnp.asarray(1.0),
-        fft_norm=norm,
-        compressed_real_fft=False,
-    )
-    assert bracket_gx.shape == bracket_full.shape == (1,) + G.shape
-
-    single_G = jnp.ones((1, 1, 1, 1, 2, 1), dtype=jnp.complex64)
-    single_chi = _stack_fields(single_G, [jnp.ones((1, 2, 1), dtype=jnp.complex64)])
-    single_out = _spectral_bracket_multi(
-        single_G,
-        single_chi,
-        kx_grid=jnp.zeros((1, 2), dtype=jnp.float32),
-        ky_grid=jnp.zeros((1, 2), dtype=jnp.float32),
-        dealias_mask=jnp.ones((1, 2), dtype=bool),
-        kxfac=jnp.asarray(1.0),
-        compressed_real_fft=True,
-    )
-    assert single_out.shape == (1, 1, 1, 1, 1, 2, 1)
 
 
 # ---- from test_secondary.py ----

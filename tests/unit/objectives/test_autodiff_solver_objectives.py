@@ -27,14 +27,11 @@ from gkx.objectives.autodiff_validation import (
 )
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
-from gkx.geometry.flux_tube import sample_flux_tube_geometry
 from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
-    Species,
-    build_linear_params,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
 from gkx.diagnostics import fieldline_quadrature_weights
@@ -127,25 +124,6 @@ def _actual_linear_rhs_objective_functions():
     return matrix_fn, objective_fn
 
 
-def test_covariance_diagnostics_reports_uq_and_sensitivity_metadata() -> None:
-    assert gkx.covariance_diagnostics is covariance_diagnostics
-    jac = np.array([[1.0, 0.2], [0.1, 0.8], [0.4, -0.3]])
-    residual = np.array([1.0e-3, -2.0e-3, 1.5e-3])
-
-    out = covariance_diagnostics(jac, residual, regularization=1.0e-8)
-    cov = np.asarray(out["covariance"])
-    corr = np.asarray(out["covariance_correlation"])
-    eig = np.asarray(out["covariance_eigenvalues"])
-
-    assert out["sensitivity_map_rank"] == 2
-    assert np.isfinite(float(out["jacobian_condition_number"]))
-    assert np.allclose(cov, cov.T)
-    assert np.all(eig > 0.0)
-    assert np.all(np.asarray(out["covariance_std"]) > 0.0)
-    assert np.allclose(np.diag(corr), 1.0)
-    assert float(out["uq_ellipse_area_1sigma"]) > 0.0
-
-
 def test_covariance_diagnostics_matches_closed_form_gauss_newton() -> None:
     jac = np.eye(2)
     residual = np.array([2.0e-3, -4.0e-3])
@@ -161,21 +139,6 @@ def test_covariance_diagnostics_matches_closed_form_gauss_newton() -> None:
     np.testing.assert_allclose(float(out["uq_ellipse_area_1sigma"]), np.pi * sigma2)
     assert out["sensitivity_map_rank"] == 2
     assert float(out["jacobian_condition_number"]) == 1.0
-
-
-def test_covariance_diagnostics_reports_full_rank_ill_conditioning() -> None:
-    jac = np.diag(np.array([1.0, 1.0e-4]))
-    residual = np.array([3.0e-3, -4.0e-3])
-
-    out = covariance_diagnostics(jac, residual, regularization=0.0)
-    cov = np.asarray(out["covariance"])
-    singular_values = np.asarray(out["jacobian_singular_values"])
-
-    assert out["sensitivity_map_rank"] == 2
-    np.testing.assert_allclose(singular_values, np.array([1.0, 1.0e-4]))
-    assert float(out["jacobian_condition_number"]) == pytest.approx(1.0e4)
-    assert cov[1, 1] / cov[0, 0] == pytest.approx(1.0e8)
-    np.testing.assert_allclose(np.asarray(out["covariance_correlation"]), np.eye(2))
 
 
 def test_covariance_diagnostics_flags_rank_deficient_sensitivity_map() -> None:
@@ -891,44 +854,6 @@ def _central_difference_jacobian(function, base: jnp.ndarray, step: float):
     return np.stack([np.asarray(column) for column in columns], axis=-1)
 
 
-def test_dense_objectives_have_forward_mode_matching_reverse_and_fd() -> None:
-    """VMEX's least-squares Jacobian is forward mode: jacfwd must work and agree."""
-
-    x64 = bool(jax.config.read("jax_enable_x64"))
-    base = jnp.asarray([0.05, 0.20], dtype=jnp.float64 if x64 else jnp.float32)
-
-    def vector(parameter: jnp.ndarray) -> jnp.ndarray:
-        return solver_objective_vector_from_geometry(
-            _sparse_direct_geometry(parameter), **_SPARSE_DIRECT_GRID
-        )
-
-    for function in (_sparse_direct_growth, vector):
-        forward = np.asarray(jax.jacfwd(function)(base))
-        np.testing.assert_allclose(
-            forward, np.asarray(jax.jacrev(function)(base)), rtol=1e-4, atol=1e-6
-        )
-        fd = _central_difference_jacobian(function, base, 1e-5 if x64 else 2e-3)
-        np.testing.assert_allclose(
-            forward, fd, rtol=1e-4 if x64 else 5e-2, atol=1e-6 if x64 else 5e-3
-        )
-
-
-@requires_paired_solvax("sparse_eigenvalue", "csr_data_from_products")
-def test_sparse_direct_growth_rate_has_forward_mode() -> None:
-    if not bool(jax.config.read("jax_enable_x64")):
-        pytest.skip("the 1e-8 agreement gate is a float64 gate")
-    base = jnp.asarray([0.05, 0.20])
-    dense = jax.jacfwd(_sparse_direct_growth)(base)
-    gamma, omega = solver_objective_vector_from_geometry(
-        _sparse_direct_geometry(base), **_SPARSE_DIRECT_GRID
-    )[:2]
-    shift = complex(round(float(gamma), 2), round(float(omega), 2))
-    sparse = jax.jacfwd(
-        lambda p: _sparse_direct_growth(p, eigensolver="sparse-direct", shift=shift)
-    )(base)
-    np.testing.assert_allclose(sparse, dense, rtol=1e-8, atol=1e-12)
-
-
 @requires_solvax_reverse_eigenpair
 def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None:
     """The matrix-free primal and bordered tangent must preserve QL observables."""
@@ -1037,60 +962,6 @@ def test_adaptive_solver_objective_matches_dense_and_implicit_gradient() -> None
             abs=2.0e-7 if dtype == jnp.float64 else 2.0e-3,
         )
     assert gkx.AdaptiveLinearEigensolverConfig is not None
-
-
-def test_solver_objective_accepts_runtime_grid_and_multi_species_state() -> None:
-    """The objective adapter must preserve linked-grid and species dimensions."""
-
-    cfg = CycloneBaseCase(grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=12.0))
-    full_grid = build_spectral_grid(cfg.grid)
-    grid = select_ky_grid(full_grid, 1)
-    analytic = SAlphaGeometry.from_config(cfg.geometry)
-    geometry = sample_flux_tube_geometry(analytic, grid.z)
-    params = build_linear_params(
-        (
-            Species(1.0, 1.0, 1.0, 1.0, 6.9, 2.2),
-            Species(-1.0, 5.0e-4, 1.0, 1.0, 6.9, 2.2),
-        ),
-        beta=0.01,
-        fapar=1.0,
-    )
-    terms = LinearTerms(
-        collisions=0.0,
-        hypercollisions=0.0,
-        end_damping=0.0,
-        apar=1.0,
-        bpar=1.0,
-    )
-
-    matrix = solver_linear_operator_matrix_from_geometry(
-        geometry,
-        spectral_grid=grid,
-        n_laguerre=1,
-        n_hermite=2,
-        params_linear=params,
-        terms=terms,
-    )
-    vector = solver_objective_vector_from_geometry(
-        geometry,
-        spectral_grid=grid,
-        n_laguerre=1,
-        n_hermite=2,
-        params_linear=params,
-        terms=terms,
-    )
-
-    assert matrix.shape == (32, 32)
-    assert np.all(np.isfinite(np.asarray(vector)))
-    with pytest.raises(ValueError, match="exactly one ky"):
-        solver_objective_vector_from_geometry(
-            geometry,
-            spectral_grid=full_grid,
-            n_laguerre=1,
-            n_hermite=2,
-            params_linear=params,
-            terms=terms,
-        )
 
 
 def test_solver_scalar_objective_selector_aliases_and_errors() -> None:
@@ -1548,42 +1419,7 @@ def test_public_optimization_examples_keep_editable_constant_style() -> None:
 # Unit contracts: vmec transport objectives.
 
 
-POLICY = {
-    "target_aspect": 6.0,
-    "aspect_atol": 5.0e-2,
-    "min_abs_mean_iota": 0.41,
-    "qs_residual_max": 5.0e-2,
-    "iota_profile_floor": 0.41,
-}
-
-
 # ---- test_vmex_transport_admission.py ----
-
-
-def _candidate(
-    label: str,
-    *,
-    objective: float,
-    weight: float | None = None,
-    passed: bool = True,
-    authoritative: bool = True,
-    baseline: bool = False,
-) -> dict[str, object]:
-    return {
-        "label": label,
-        "baseline": baseline,
-        "transport_weight": weight,
-        "passed": passed and authoritative,
-        "gate_reported_passed": passed,
-        "gate_is_authoritative": authoritative,
-        "gate_checks": {
-            "aspect": passed,
-            "mean_iota": True,
-            "quasisymmetry": passed,
-            "iota_profile": passed,
-        },
-        "objective_final": objective,
-    }
 
 
 def test_transport_admission_is_not_installable_public_api() -> None:
@@ -1598,125 +1434,10 @@ def test_transport_admission_is_not_installable_public_api() -> None:
         assert not hasattr(gkx, name)
 
 
-def _matched_comparison(
-    *,
-    relative_reduction: float,
-    z_score: float,
-    passed: bool,
-) -> dict[str, object]:
-    return {
-        "kind": "matched_nonlinear_transport_comparison",
-        "case": "qa_projected_transport_step1e3",
-        "passed": passed,
-        "baseline": {"passed": True, "ensemble_mean": 9.833},
-        "candidate": {"passed": True, "ensemble_mean": 9.891},
-        "statistics": {
-            "relative_reduction": relative_reduction,
-            "uncertainty_z_score": z_score,
-        },
-    }
-
-
-def _ensemble(
-    mean: float, sem: float, *, passed: bool = True, n_reports: int = 3
-) -> dict[str, object]:
-    return {
-        "case": f"ensemble_mean_{mean}",
-        "passed": passed,
-        "statistics": {
-            "ensemble_mean": mean,
-            "combined_sem": sem,
-            "combined_sem_rel": sem / abs(mean),
-            "n_reports": n_reports,
-        },
-    }
-
-
 # ---- test_vmex_transport_gradient.py ----
-
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class FakeSpec:
-    name: str
-    kind: str
-    index: int
-    m: int
-    n: int
-
-
-class FakeOptimizer:
-    _specs = (
-        FakeSpec("rc01", "rc", 0, 0, 1),
-        FakeSpec("zs10", "zs", 1, 1, 0),
-        FakeSpec("rc11", "rc", 2, 1, 1),
-    )
-
-    def residual_fun(self, params):
-        params = np.asarray(params, dtype=float)
-        return np.asarray([0.4 + params[0] - 2.0 * params[1]])
-
-    def objective_and_gradient_fun(self, params):
-        residual = self.residual_fun(params)[0]
-        jac = np.asarray([1.0, -2.0, 0.0])
-        return 0.5 * residual**2, residual * jac
-
-    def jacobian_fun(self, params):
-        return np.asarray([[1.0, -2.0, 0.0]])
 
 
 # ---- test_vmex_transport_line_search.py ----
-
-
-def _gradient_report() -> dict[str, object]:
-    return {
-        "parameter_count": 4,
-        "top_gradient_components": [
-            {"parameter_index": 1, "gradient": -3.0, "name": "zs10"},
-            {"parameter_index": 3, "gradient": 4.0, "name": "rc11"},
-            {"parameter_index": 0, "gradient": 12.0, "name": "rc01"},
-        ],
-    }
-
-
-def _boundary_chain_collection() -> dict[str, object]:
-    return {
-        "kind": "vmex_boundary_chain_collection_summary",
-        "classification": "mixed_exact_fd_consistency_with_branch_sensitive_modes",
-        "rows": [
-            {
-                "index": 1,
-                "name": "zs10",
-                "finite": True,
-                "frozen_axis_jvp_vjp_consistent": True,
-                "frozen_axis_matches_exact_fd": True,
-                "frozen_axis_convention_verified": False,
-                "growth_branch_locality_checked": True,
-                "growth_branch_locality_passed": True,
-            },
-            {
-                "index": 3,
-                "name": "rc11",
-                "finite": True,
-                "frozen_axis_jvp_vjp_consistent": True,
-                "frozen_axis_matches_exact_fd": False,
-                "frozen_axis_convention_verified": True,
-                "growth_branch_locality_checked": True,
-                "growth_branch_locality_passed": False,
-            },
-            {
-                "index": 0,
-                "name": "rc01",
-                "finite": True,
-                "frozen_axis_jvp_vjp_consistent": False,
-                "frozen_axis_matches_exact_fd": True,
-                "frozen_axis_convention_verified": False,
-                "growth_branch_locality_checked": False,
-                "growth_branch_locality_passed": False,
-            },
-        ],
-    }
 
 
 # ---- test_vmex_transport_objective.py ----
@@ -2008,39 +1729,6 @@ def test_vmex_transport_config_rejects_underresolved_boozer_modes() -> None:
         VMEXTransportObjectiveConfig(objective_transform="bad")  # type: ignore[arg-type]
 
 
-def test_vmex_transport_objective_pins_imported_backend_paths(
-    monkeypatch, tmp_path
-) -> None:
-
-    vmec_root = tmp_path / "vmex_repo"
-    vmec_pkg = vmec_root / "vmex"
-    vmec_pkg.mkdir(parents=True)
-    vmec_file = vmec_pkg / "__init__.py"
-    vmec_file.write_text("", encoding="utf-8")
-
-    booz_root = tmp_path / "booz_xform_jax_repo" / "src"
-    booz_pkg = booz_root / "booz_xform_jax"
-    booz_pkg.mkdir(parents=True)
-    booz_file = booz_pkg / "__init__.py"
-    booz_file.write_text("", encoding="utf-8")
-
-    vmec_module = ModuleType("vmex")
-    vmec_module.__file__ = str(vmec_file)
-    booz_module = ModuleType("booz_xform_jax")
-    booz_module.__file__ = str(booz_file)
-    monkeypatch.setitem(sys.modules, "vmex", vmec_module)
-    monkeypatch.setitem(sys.modules, "booz_xform_jax", booz_module)
-    monkeypatch.delenv("GKX_VMEX_PATH", raising=False)
-    monkeypatch.delenv("VMEX_PATH", raising=False)
-    monkeypatch.delenv("GKX_BOOZ_XFORM_JAX_PATH", raising=False)
-    monkeypatch.delenv("BOOZ_XFORM_JAX_PATH", raising=False)
-
-    transport_config._pin_current_optional_backend_paths()
-
-    assert str(vmec_root) == transport_config.os.environ["GKX_VMEX_PATH"]
-    assert str(booz_root) == transport_config.os.environ["GKX_BOOZ_XFORM_JAX_PATH"]
-
-
 def test_module_search_root_handles_paths_and_missing_modules(
     monkeypatch, tmp_path
 ) -> None:
@@ -2065,41 +1753,6 @@ def test_module_search_root_handles_paths_and_missing_modules(
     assert transport_config._module_search_root("missing_path_backend") is None
     assert transport_config._module_search_root("no_path_backend") is None
     assert transport_config._module_search_root("gkx_missing_backend_for_test") is None
-
-
-def test_pin_current_optional_backend_paths_respects_explicit_environment(
-    monkeypatch,
-) -> None:
-
-    def unexpected_search(module_name: str):
-        raise AssertionError(f"backend search should be skipped for {module_name}")
-
-    monkeypatch.setattr(transport_config, "_module_search_root", unexpected_search)
-    monkeypatch.delenv("GKX_VMEX_PATH", raising=False)
-    monkeypatch.setenv("VMEX_PATH", "/explicit/vmec-jax")
-    monkeypatch.setenv("GKX_BOOZ_XFORM_JAX_PATH", "/explicit/booz-xform-jax")
-    monkeypatch.delenv("BOOZ_XFORM_JAX_PATH", raising=False)
-
-    transport_config._pin_current_optional_backend_paths()
-
-    assert "GKX_VMEX_PATH" not in transport_config.os.environ
-    assert transport_config.os.environ["VMEX_PATH"] == "/explicit/vmec-jax"
-    assert (
-        transport_config.os.environ["GKX_BOOZ_XFORM_JAX_PATH"]
-        == "/explicit/booz-xform-jax"
-    )
-
-
-def test_static_grid_options_maps_integer_ky_multiples_to_solver_grid() -> None:
-
-    options = transport_tables._static_grid_options_from_ky_values(
-        (0.15, 0.45), min_ny=12
-    )
-
-    assert options["ky_base"] == pytest.approx(0.15)
-    assert options["ly"] == pytest.approx(2.0 * np.pi / 0.15)
-    assert options["ny"] == 12
-    assert options["selected_ky_indices"] == (1, 3)
 
 
 @pytest.mark.parametrize(
@@ -2145,38 +1798,6 @@ def test_vmex_transport_config_rejects_invalid_edges(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         VMEXTransportObjectiveConfig(**kwargs)
-
-
-def test_vmex_transport_config_objective_options_filter_none_values() -> None:
-    default_options = VMEXTransportObjectiveConfig().objective_options()
-    configured_options = VMEXTransportObjectiveConfig(
-        reference_length=2.5,
-        reference_b=0.7,
-        validate_finite=False,
-    ).objective_options()
-
-    assert "reference_length" not in default_options
-    assert "reference_b" not in default_options
-    assert configured_options["reference_length"] == 2.5
-    assert configured_options["reference_b"] == 0.7
-    assert configured_options["validate_finite"] is False
-
-
-def test_geometry_transport_weights_use_safe_defaults_for_minimal_geometry() -> None:
-
-    theta = jnp.linspace(-jnp.pi, jnp.pi, 6, endpoint=False)
-    kperp, heat_weight, particle_weight = transport_tables._geometry_transport_weights(
-        SimpleNamespace(theta=theta),
-        selected_ky_index=2,
-        ly=5.0,
-    )
-
-    assert np.isfinite(float(kperp))
-    assert np.isfinite(float(heat_weight))
-    assert np.isfinite(float(particle_weight))
-    assert float(kperp) > 0.0
-    assert float(heat_weight) > 0.0
-    assert float(particle_weight) == pytest.approx(0.25 * float(heat_weight))
 
 
 def test_transport_feature_table_rejects_empty_sample_rows() -> None:

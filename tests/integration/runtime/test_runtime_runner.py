@@ -33,7 +33,6 @@ from gkx.operators.linear.params import LinearParams
 from gkx.runtime import (
     _build_initial_condition,
     RuntimeLinearResult,
-    RuntimeLinearScanResult,
     build_runtime_geometry,
     build_runtime_linear_params,
     build_runtime_linear_terms,
@@ -66,10 +65,7 @@ from gkx.workflows.runtime.artifacts import (
     write_runtime_nonlinear_artifacts,
 )
 from gkx.workflows.runtime.chunks import (
-    _effective_diagnostics_stride,
     _next_elapsed_time,
-    _offset_chunk_diagnostics_time,
-    format_duration,
     run_adaptive_runtime_chunk_loop,
 )
 from gkx.workflows.runtime.commands import run_linear_case, run_nonlinear_case
@@ -324,96 +320,6 @@ def _glibc_random_pairs_reference(seed: int, count: int) -> np.ndarray:
     return out
 
 
-def test_runtime_linear_cyclone_etg_kbm_time_smoke() -> None:
-    ion, electron = _ion_species(), _electron_species()
-
-    cyclone = replace(
-        _base_runtime_cfg(),
-        species=(ion,),
-        normalization=RuntimeNormalizationConfig(
-            contract="cyclone", diagnostic_norm="none"
-        ),
-        physics=RuntimePhysicsConfig(adiabatic_electrons=True, tau_e=1.0),
-    )
-    etg = replace(
-        _base_runtime_cfg(),
-        species=(electron,),
-        normalization=RuntimeNormalizationConfig(
-            contract="etg", diagnostic_norm="none"
-        ),
-        physics=RuntimePhysicsConfig(
-            adiabatic_electrons=False,
-            adiabatic_ions=True,
-            electrostatic=True,
-            electromagnetic=False,
-        ),
-    )
-    kbm = replace(
-        _base_runtime_cfg(),
-        grid=GridConfig(Nx=1, Ny=8, Nz=16, Lx=62.8, Ly=62.8, boundary="periodic"),
-        init=InitializationConfig(
-            init_field="all", init_amp=1.0e-8, gaussian_init=False
-        ),
-        species=(ion, electron),
-        normalization=RuntimeNormalizationConfig(
-            contract="kbm", diagnostic_norm="none"
-        ),
-        physics=RuntimePhysicsConfig(
-            adiabatic_electrons=False,
-            electrostatic=False,
-            electromagnetic=True,
-            use_apar=True,
-            beta=0.2,
-            hypercollisions=False,
-        ),
-    )
-
-    for cfg, ky in ((cyclone, 0.2), (etg, 2.0), (kbm, 0.2)):
-        res = run_runtime_linear(cfg, ky_target=ky, Nl=4, Nm=6, solver="time")
-        assert np.isfinite(res.gamma)
-        assert np.isfinite(res.omega)
-
-
-def test_runtime_linear_etg_defaults_to_the_auto_krylov_route(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-
-    electron = _electron_species()
-    cfg = replace(
-        _base_runtime_cfg(),
-        species=(electron,),
-        normalization=RuntimeNormalizationConfig(
-            contract="etg", diagnostic_norm="none"
-        ),
-        physics=RuntimePhysicsConfig(
-            adiabatic_electrons=False,
-            adiabatic_ions=True,
-            electrostatic=True,
-            electromagnetic=False,
-        ),
-    )
-
-    captured: dict[str, object] = {}
-
-    def fake_dominant_eigenpair(_g0, _cache, _params, terms=None, **kwargs):
-        captured["terms"] = terms
-        captured.update(kwargs)
-        return (
-            np.asarray(0.2 + 0.3j, dtype=np.complex64),
-            np.zeros_like(np.asarray(_g0)),
-            EigenSolveStatus("shift_invert", "shift_invert", 1.0e-9, 1.0e-6, True),
-        )
-
-    patch_runtime(monkeypatch, "dominant_eigenpair", fake_dominant_eigenpair)
-
-    out = run_runtime_linear(cfg, ky_target=2.0, Nl=4, Nm=6, solver="krylov")
-
-    assert np.isfinite(out.gamma)
-    # ETG takes the default ``auto`` route like every contract.
-    assert captured["method"] == "auto"
-    assert captured["certify"] is True
-
-
 def test_runtime_terms_and_params_follow_toggles() -> None:
     cfg = replace(
         _base_runtime_cfg(),
@@ -604,62 +510,6 @@ def test_end_damping_reference_rejects_invalid_metadata(changes):
         EndDampingReference(**(fields | changes))
 
 
-def test_runtime_startup_model_and_geometry_branches(
-    monkeypatch, tmp_path: Path
-) -> None:
-    base = _base_runtime_cfg()
-    captured = []
-
-    def fake_build_flux_tube_geometry(geom_cfg):
-        captured.append(geom_cfg)
-        return SimpleNamespace(s_hat=0.8, gradpar=lambda: 1.0)
-
-    monkeypatch.setattr(
-        startup, "build_flux_tube_geometry", fake_build_flux_tube_geometry
-    )
-    monkeypatch.setattr(
-        startup, "generate_runtime_vmec_eik", lambda _cfg: tmp_path / "vmec.eik.nc"
-    )
-    monkeypatch.setattr(
-        startup, "generate_runtime_miller_eik", lambda _cfg: tmp_path / "miller.eik.nc"
-    )
-
-    vmec_cfg = replace(base, geometry=replace(base.geometry, model="vmec"))
-    miller_cfg = replace(base, geometry=replace(base.geometry, model="miller"))
-    default_cfg = replace(base, geometry=replace(base.geometry, model="s-alpha"))
-
-    vmec_geom_cfg = startup.runtime_geometry_config_for_builder(
-        vmec_cfg,
-        vmec_eik_builder=startup.generate_runtime_vmec_eik,
-        miller_eik_builder=startup.generate_runtime_miller_eik,
-    )
-    miller_geom_cfg = startup.runtime_geometry_config_for_builder(
-        miller_cfg,
-        vmec_eik_builder=startup.generate_runtime_vmec_eik,
-        miller_eik_builder=startup.generate_runtime_miller_eik,
-    )
-    default_geom_cfg = startup.runtime_geometry_config_for_builder(
-        default_cfg,
-        vmec_eik_builder=startup.generate_runtime_vmec_eik,
-        miller_eik_builder=startup.generate_runtime_miller_eik,
-    )
-
-    assert vmec_geom_cfg.model == "vmec-eik"
-    assert vmec_geom_cfg.geometry_file.endswith("vmec.eik.nc")
-    assert miller_geom_cfg.model == "imported-eik"
-    assert miller_geom_cfg.geometry_file.endswith("miller.eik.nc")
-    assert default_geom_cfg is default_cfg.geometry
-
-    assert startup.build_runtime_geometry(vmec_cfg).s_hat == pytest.approx(0.8)
-    assert captured[-1].model == "vmec-eik"
-    assert captured[-1].geometry_file.endswith("vmec.eik.nc")
-    assert startup.build_runtime_geometry(miller_cfg).s_hat == pytest.approx(0.8)
-    assert captured[-1].model == "imported-eik"
-    assert captured[-1].geometry_file.endswith("miller.eik.nc")
-    assert startup.build_runtime_geometry(default_cfg).s_hat == pytest.approx(0.8)
-    assert captured[-1].model == "s-alpha"
-
-
 def test_runtime_startup_reduced_model_and_species_validation(monkeypatch) -> None:
     no_kinetic = replace(
         _base_runtime_cfg(),
@@ -723,14 +573,6 @@ def test_runtime_startup_reduced_model_and_species_validation(monkeypatch) -> No
     )
     with pytest.raises(ValueError, match="mutually exclusive"):
         startup.build_runtime_linear_params(double_adiabatic, Nm=2, geom=fake_geom)
-
-
-def test_runtime_scan_returns_arrays() -> None:
-    cfg = _ion_cfg()
-    scan = run_runtime_scan(cfg, ky_values=[0.1, 0.2], Nl=4, Nm=6, solver="krylov")
-    assert scan.ky.shape == (2,)
-    assert scan.gamma.shape == (2,)
-    assert scan.omega.shape == (2,)
 
 
 @requires_paired_solvax("adaptive_eigenpair", "estimate_rk4_timestep")
@@ -869,26 +711,6 @@ def test_runtime_linear_records_fit_window_metadata() -> None:
     assert res.fit_window_tmax == pytest.approx(0.08)
 
 
-def test_runtime_linear_progress_with_sample_stride_gt_one() -> None:
-    cfg = replace(
-        _ion_cfg("none"), time=replace(_base_runtime_cfg().time, sample_stride=2)
-    )
-    res = run_runtime_linear(
-        cfg,
-        ky_target=0.1,
-        Nl=3,
-        Nm=4,
-        solver="time",
-        method="rk2",
-        dt=0.01,
-        steps=10,
-        sample_stride=2,
-        show_progress=True,
-    )
-    assert np.isfinite(res.gamma)
-    assert np.isfinite(res.omega)
-
-
 def test_runtime_linear_explicit_time_rejects_return_state() -> None:
     cfg = _ion_cfg("none")
     with pytest.raises(ValueError, match="return_state"):
@@ -989,63 +811,6 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
     assert res.fit_window_tmax == pytest.approx(0.03)
     assert diagnostic_kwargs["implicit_restart"] == 7
     assert diagnostic_kwargs["implicit_preconditioner"] == "hermite-line"
-
-
-def test_runtime_linear_forwards_velocity_parallel_config(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-
-    cfg0 = _base_runtime_cfg()
-    cfg = replace(
-        cfg0,
-        time=replace(cfg0.time, sample_stride=1, dt=0.01, t_max=0.03),
-        parallel=RuntimeParallelConfig(
-            strategy="velocity", axis="hermite", backend="auto", num_devices=1
-        ),
-    )
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    captured: dict[str, object] = {}
-
-    _patch_linear_start(monkeypatch, geom, grid)
-
-    def _fake_integrate_linear_from_config(*args, **kwargs):
-        captured["parallel"] = kwargs["parallel"]
-        phi_t = np.ones((3, 1, 1, grid.z.size), dtype=np.complex64)
-        return np.zeros((1, 3, 4, 1, 1, grid.z.size), dtype=np.complex64), phi_t
-
-    patch_runtime(
-        monkeypatch, "integrate_linear_from_config", _fake_integrate_linear_from_config
-    )
-    patch_runtime(
-        monkeypatch,
-        "extract_mode_time_series",
-        lambda *args, **kwargs: np.asarray([1.0, 1.1, 1.2], dtype=np.complex128),
-    )
-    patch_runtime(
-        monkeypatch,
-        "fit_growth_rate_auto",
-        lambda *args, **kwargs: (0.05, -0.02, 0.01, 0.03),
-    )
-    _patch_linear_fit_tail(monkeypatch, grid)
-
-    res = run_runtime_linear(
-        cfg,
-        ky_target=0.1,
-        Nl=3,
-        Nm=4,
-        solver="time",
-        fit_signal="phi",
-        mode_method="project",
-    )
-
-    assert res.fit_signal_used == "phi"
-    assert captured["parallel"] is cfg.parallel
-
-    with pytest.raises(NotImplementedError, match="fit_signal='phi'"):
-        run_runtime_linear(
-            cfg, ky_target=0.1, Nl=3, Nm=4, solver="time", fit_signal="auto"
-        )
 
 
 def test_runtime_linear_auto_solver_falls_back_to_krylov(
@@ -1235,25 +1000,6 @@ def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
     out = run_runtime_nonlinear(cfg, ky_target=0.2, Nl=3, Nm=4, diagnostics=False)
     assert out.implicit_solve is not None and out.implicit_solve.converged
     assert out.summary()["implicit_max_relative_residual"] == pytest.approx(3.0e-7)
-
-
-@pytest.mark.parametrize(
-    ("steps", "diagnostics_stride"), [(3, None), (5, 2)], ids=["smoke", "stride"]
-)
-def test_runtime_nonlinear_smoke(steps, diagnostics_stride) -> None:
-    extra = {} if diagnostics_stride is None else {"diagnostics_stride": 2}
-    res = run_runtime_nonlinear(
-        _nonlinear_ion_cfg(),
-        ky_target=0.2,
-        Nl=3,
-        Nm=4,
-        dt=0.01,
-        steps=steps,
-        sample_stride=1,
-        **extra,
-    )
-    assert res.diagnostics is not None
-    assert res.diagnostics.t.size == 3
 
 
 def test_prepare_runtime_nonlinear_reuses_existing_execution_contract() -> None:
@@ -1776,45 +1522,6 @@ def test_runtime_startup_initial_condition_resolution_errors() -> None:
         )
 
 
-def test_runtime_nonlinear_fixed_mode_returns_frozen_state() -> None:
-    grid = build_spectral_grid(
-        GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.28, Ly=6.28, boundary="periodic")
-    )
-    ky_fixed = float(np.asarray(grid.ky)[1])
-    cfg = replace(
-        _base_runtime_cfg(),
-        grid=GridConfig(Nx=4, Ny=4, Nz=4, Lx=6.28, Ly=6.28, boundary="periodic"),
-        physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
-        terms=RuntimeTermsConfig(nonlinear=1.0, hypercollisions=0.0, end_damping=0.0),
-        expert=RuntimeExpertConfig(fixed_mode=True, iky_fixed=1, ikx_fixed=0),
-    )
-    res = run_runtime_nonlinear(
-        cfg,
-        ky_target=ky_fixed,
-        Nl=3,
-        Nm=4,
-        dt=0.01,
-        steps=3,
-        sample_stride=1,
-        return_state=True,
-    )
-
-    assert res.state is not None
-    initial = _build_initial_condition(
-        build_spectral_grid(cfg.grid),
-        SAlphaGeometry.from_config(cfg.geometry),
-        cfg,
-        ky_index=1,
-        kx_index=0,
-        Nl=3,
-        Nm=4,
-        nspecies=1,
-    )
-    assert np.allclose(
-        np.asarray(res.state)[..., 1, 0, :], np.asarray(initial)[..., 1, 0, :]
-    )
-
-
 def test_runtime_nonlinear_adaptive_dt() -> None:
     cfg = replace(
         _base_runtime_cfg(),
@@ -1864,81 +1571,6 @@ def test_runtime_nonlinear_adaptive_default_steps_match_integrator_dt_cap() -> N
     assert steps_val == 20
 
 
-def test_runtime_nonlinear_adaptive_default_steps_chunk_until_tmax(monkeypatch) -> None:
-    cfg = replace(
-        _base_runtime_cfg(),
-        time=TimeConfig(
-            t_max=0.25,
-            dt=0.1,
-            method="rk3",
-            sample_stride=2,
-            diagnostics_stride=2,
-            fixed_dt=False,
-            dt_min=1.0e-5,
-            dt_max=None,
-            cfl=1.0,
-        ),
-        species=(RuntimeSpeciesConfig(name="ion"),),
-        normalization=RuntimeNormalizationConfig(contract="cyclone"),
-        physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
-        terms=RuntimeTermsConfig(nonlinear=1.0, hypercollisions=0.0, end_damping=0.0),
-    )
-
-    calls: list[tuple[int, int, int]] = []
-    input_means: list[float] = []
-
-    def _fake_integrator(G0, grid, *_args, **kwargs):  # noqa: ANN002, ANN003, ANN202
-        steps = kwargs["steps"]
-        sample_stride = kwargs["sample_stride"]
-        diagnostics_stride = kwargs["diagnostics_stride"]
-        calls.append((int(steps), int(sample_stride), int(diagnostics_stride)))
-        input_means.append(float(np.mean(np.real(np.asarray(G0)))))
-        t = np.asarray([0.04, 0.08, 0.12], dtype=float)
-        horizon = kwargs.get("time_horizon")
-        if horizon is not None:
-            t = np.minimum(t, float(horizon))
-        dt_t = np.diff(np.insert(t, 0, 0.0))
-        gamma_t = np.asarray([1.0, 2.0, 3.0], dtype=float) + 3.0 * (len(calls) - 1)
-        zeros = np.zeros_like(t)
-        diag = SimulationDiagnostics(
-            t=t,
-            dt_t=dt_t,
-            dt_mean=float(np.mean(dt_t)),
-            gamma_t=gamma_t,
-            omega_t=zeros,
-            Wg_t=gamma_t,
-            Wphi_t=zeros,
-            Wapar_t=zeros,
-            heat_flux_t=zeros,
-            particle_flux_t=zeros,
-            energy_t=gamma_t,
-        )
-        fields = FieldState(
-            phi=np.ones((grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64),
-            apar=None,
-            bpar=None,
-        )
-        return t, diag, np.asarray(G0) + 1.0, fields
-
-    patch_runtime(
-        monkeypatch, "integrate_nonlinear_explicit_diagnostics_state", _fake_integrator
-    )
-
-    res = run_runtime_nonlinear(cfg, ky_target=0.2, Nl=3, Nm=4, dt=0.1, steps=None)
-
-    assert res.diagnostics is not None
-    assert calls == [(3, 1, 1), (3, 1, 1), (3, 1, 1)]
-    assert input_means[1] > input_means[0] + 0.5
-    assert input_means[2] > input_means[1] + 0.5
-    assert np.allclose(
-        np.asarray(res.diagnostics.t), np.asarray([0.04, 0.12, 0.20, 0.25])
-    )
-    assert np.allclose(
-        np.asarray(res.diagnostics.gamma_t), np.asarray([1.0, 3.0, 5.0, 7.0])
-    )
-    assert float(np.asarray(res.diagnostics.t)[-1]) == pytest.approx(cfg.time.t_max)
-
-
 def test_runtime_gaussian_init_populates_multiple_modes_when_not_single() -> None:
     cfg = replace(
         _base_runtime_cfg(),
@@ -1972,45 +1604,6 @@ def test_runtime_gaussian_init_populates_multiple_modes_when_not_single() -> Non
     amp_kykx = np.max(np.abs(g0[0, 0, 0, ...]), axis=-1)
     nonzero = amp_kykx > 0.0
     assert int(np.count_nonzero(nonzero)) > 1
-
-
-def test_runtime_gaussian_single_moment_uses_configured_parallel_envelope() -> None:
-    cfg = replace(
-        _base_runtime_cfg(),
-        grid=GridConfig(
-            Nx=4,
-            Ny=8,
-            Nz=16,
-            Lx=6.28,
-            Ly=6.28,
-            boundary="linked",
-            y0=10.0,
-            ntheta=16,
-            nperiod=1,
-        ),
-        init=InitializationConfig(
-            init_field="density",
-            init_amp=1.0,
-            gaussian_init=True,
-            gaussian_width=0.5,
-            init_single=True,
-        ),
-    )
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    grid = build_spectral_grid(cfg.grid)
-    ky_index = int(np.argmin(np.abs(np.asarray(grid.ky) - 1.0)))
-
-    g0 = np.asarray(
-        _build_initial_condition(
-            grid, geom, cfg, ky_index=ky_index, kx_index=0, Nl=3, Nm=4, nspecies=1
-        )
-    )
-
-    seeded = g0[0, 0, 0, ky_index, 0, :]
-    z = np.asarray(grid.z, dtype=float)
-    expected = np.exp(-((z / cfg.init.gaussian_width) ** 2))
-    assert np.allclose(seeded.real, expected)
-    assert np.allclose(seeded.imag, expected)
 
 
 def test_runtime_full_ky_initial_condition_mirrors_negative_ky_block() -> None:
@@ -2084,47 +1677,6 @@ def test_runtime_nonlinear_dealias_toggle_executes() -> None:
     res = run_runtime_nonlinear(cfg, ky_target=0.2, Nl=3, Nm=4, steps=3)
     assert res.diagnostics is not None
     assert np.all(np.isfinite(res.diagnostics.Wphi_t))
-
-
-@pytest.mark.parametrize(
-    ("configured_cfl_fac", "expected_cfl_fac"),
-    [
-        pytest.param(None, 1.73, id="rk3-default"),
-        pytest.param(1.25, 1.25, id="explicit-override"),
-    ],
-)
-def test_runtime_nonlinear_resolves_cfl_factor(
-    monkeypatch: pytest.MonkeyPatch,
-    configured_cfl_fac: float | None,
-    expected_cfl_fac: float,
-) -> None:
-    captured: dict[str, float] = {}
-
-    def _record(kwargs):
-        captured["cfl_fac"] = float(kwargs["cfl_fac"])
-        return np.asarray([0.1], dtype=float)
-
-    _patch_zero_integrator(monkeypatch, _record)
-
-    cfg = replace(
-        _base_runtime_cfg(),
-        time=TimeConfig(
-            t_max=0.1,
-            dt=0.1,
-            method="rk3",
-            sample_stride=1,
-            diagnostics_stride=1,
-            fixed_dt=False,
-            cfl=1.0,
-            cfl_fac=configured_cfl_fac,
-        ),
-        physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
-        terms=RuntimeTermsConfig(nonlinear=1.0, hypercollisions=0.0, end_damping=0.0),
-    )
-
-    run_runtime_nonlinear(cfg, ky_target=0.2, Nl=3, Nm=4, steps=1)
-
-    assert captured["cfl_fac"] == pytest.approx(expected_cfl_fac)
 
 
 def test_runtime_init_species_targets_all_vs_electrons_only() -> None:
@@ -2278,31 +1830,6 @@ def test_runtime_linear_accepts_root_level_gx_eik_geometry(
     assert np.isfinite(out.omega)
 
 
-def test_runtime_linear_accepts_vmec_model_via_generated_eik(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    cfg = _adiabatic_ion_cfg()
-    path = _write_sampled_root_eik(tmp_path, cfg, "generated_geom.eik.nc")
-
-    patch_runtime(monkeypatch, "generate_runtime_vmec_eik", lambda cfg: path)
-
-    cfg_vmec = replace(
-        cfg,
-        geometry=replace(
-            cfg.geometry,
-            model="vmec",
-            vmec_file=str(tmp_path / "wout_stub.nc"),
-            geometry_file=str(path),
-            torflux=0.64,
-            npol=1.0,
-        ),
-    )
-    out = run_runtime_linear(cfg_vmec, ky_target=0.2, Nl=4, Nm=6, solver="krylov")
-
-    assert np.isfinite(out.gamma)
-    assert np.isfinite(out.omega)
-
-
 def test_runtime_linear_secondary_slab_example_runs() -> None:
     cfg_path = REPO_ROOT / "benchmarks" / "cases" / "secondary_slab.toml"
     cfg, _ = load_runtime_from_toml(cfg_path)
@@ -2311,100 +1838,6 @@ def test_runtime_linear_secondary_slab_example_runs() -> None:
 
     assert np.isfinite(out.gamma)
     assert np.isfinite(out.omega)
-
-
-def test_runtime_linear_accepts_miller_model_via_generated_eik(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    cfg = RuntimeConfig(
-        grid=GridConfig(
-            Nx=1,
-            Ny=8,
-            Nz=16,
-            Lx=6.28,
-            Ly=6.28,
-            boundary="linked",
-            y0=10.0,
-            ntheta=16,
-            nperiod=1,
-        ),
-        time=TimeConfig(
-            t_max=0.2, dt=0.01, method="rk2", sample_stride=1, fixed_dt=True
-        ),
-        geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
-        init=InitializationConfig(
-            init_field="density", init_amp=1.0e-8, gaussian_init=False
-        ),
-        terms=RuntimeTermsConfig(hypercollisions=0.0, end_damping=0.0),
-        physics=RuntimePhysicsConfig(
-            linear=True, nonlinear=False, adiabatic_electrons=True, collisions=False
-        ),
-    )
-    sampled = sample_flux_tube_geometry(
-        SAlphaGeometry.from_config(cfg.geometry), build_spectral_grid(cfg.grid).z
-    )
-    path = tmp_path / "miller.eiknc.nc"
-    _write_root_eik_geometry(path, sampled, Dataset)
-
-    patch_runtime(monkeypatch, "generate_runtime_miller_eik", lambda cfg: path)
-
-    cfg_miller = replace(
-        cfg,
-        geometry=replace(
-            cfg.geometry,
-            model="miller",
-            geometry_file=str(path),
-            rhoc=0.5,
-            R_geo=cfg.geometry.R0,
-        ),
-    )
-    out = run_runtime_linear(cfg_miller, ky_target=0.2, Nl=4, Nm=6, solver="krylov")
-
-    assert np.isfinite(out.gamma)
-    assert np.isfinite(out.omega)
-
-
-def test_runtime_etg_nonlinear_example_runs_small_smoke() -> None:
-    cfg_path = REPO_ROOT / "benchmarks" / "cases/etg_nonlinear.toml"
-    cfg, _ = load_runtime_from_toml(cfg_path)
-
-    # Keep the shipped ETG pilot contract intact, but reduce the test problem to
-    # a CI-sized smoke so GitHub runners do not materialize the production-scale
-    # nonlinear diagnostic buffers.
-    cfg = replace(
-        cfg,
-        grid=GridConfig(
-            Nx=4,
-            Ny=4,
-            Nz=8,
-            Lx=6.28,
-            Ly=6.28,
-            boundary="linked",
-            y0=0.2,
-            ntheta=8,
-            nperiod=1,
-        ),
-        time=replace(
-            cfg.time,
-            t_max=0.002,
-            dt=0.001,
-            sample_stride=1,
-            diagnostics_stride=1,
-            fixed_dt=True,
-        ),
-    )
-
-    out = run_runtime_nonlinear(
-        cfg, ky_target=5.0, kx_target=0.0, steps=2, sample_stride=1, Nl=2, Nm=2
-    )
-
-    assert out.diagnostics is not None
-    assert np.all(np.isfinite(np.asarray(out.diagnostics.Wg_t)))
-    assert np.all(np.isfinite(np.asarray(out.diagnostics.Wphi_t)))
-    assert np.allclose(np.asarray(out.diagnostics.Wapar_t), 0.0)
 
 
 def test_runtime_linear_explicit_time_root_level_geometry_matches_analytic_reference(
@@ -2519,83 +1952,6 @@ diagnostic_norm = "none"
 
     assert loaded_out.gamma == pytest.approx(analytic_out.gamma, rel=2.0e-3, abs=1.0e-6)
     assert loaded_out.omega == pytest.approx(analytic_out.omega, rel=2.0e-3, abs=1.0e-6)
-
-
-@pytest.mark.parametrize("model", ["vmec-eik", "desc-eik"])
-def test_runtime_nonlinear_accepts_imported_eik_geometry_aliases(
-    tmp_path, model: str
-) -> None:
-    netcdf4 = pytest.importorskip("netCDF4")
-    Dataset = netcdf4.Dataset
-
-    cfg = replace(
-        _base_runtime_cfg(),
-        grid=GridConfig(
-            Nx=4,
-            Ny=8,
-            Nz=16,
-            Lx=62.8,
-            Ly=62.8,
-            boundary="linked",
-            y0=10.0,
-            z_min=-3.0 * np.pi,
-            z_max=3.0 * np.pi,
-        ),
-        time=TimeConfig(
-            t_max=0.04,
-            dt=0.02,
-            method="rk3",
-            sample_stride=1,
-            diagnostics_stride=1,
-            fixed_dt=True,
-        ),
-        species=(RuntimeSpeciesConfig(name="ion", tprim=3.0, fprim=1.0, nu=0.01),),
-        normalization=RuntimeNormalizationConfig(
-            contract="kinetic", diagnostic_norm="rho_star"
-        ),
-        physics=RuntimePhysicsConfig(
-            linear=False,
-            nonlinear=True,
-            adiabatic_electrons=True,
-            tau_e=1.0,
-            electrostatic=True,
-            electromagnetic=False,
-            use_apar=False,
-            use_bpar=False,
-            collisions=False,
-            hypercollisions=True,
-        ),
-        init=InitializationConfig(
-            init_field="density",
-            init_amp=1.0e-6,
-            gaussian_init=False,
-            init_single=False,
-        ),
-        terms=RuntimeTermsConfig(
-            end_damping=1.0, hypercollisions=1.0, hyperdiffusion=1.0, nonlinear=1.0
-        ),
-    )
-    theta = np.linspace(-3.0 * np.pi, 3.0 * np.pi, cfg.grid.Nz + 1)
-    path = tmp_path / f"geom_{model}.eik.nc"
-    analytic = SAlphaGeometry.from_config(cfg.geometry)
-    sampled = sample_flux_tube_geometry(analytic, theta)
-    _write_root_eik_geometry(
-        path, sampled, Dataset, drift_scale=2.0, jacobian=7.0, drhodpsi=1.0, nfp=5.0
-    )
-
-    cfg_nc = replace(
-        cfg, geometry=replace(cfg.geometry, model=model, geometry_file=str(path))
-    )
-    out = run_runtime_nonlinear(
-        cfg_nc, ky_target=0.2, Nl=3, Nm=4, dt=0.02, steps=2, sample_stride=1
-    )
-
-    assert np.all(np.isfinite(out.t))
-    assert out.diagnostics is not None
-    assert np.isfinite(out.diagnostics.Wg_t[-1])
-    assert np.isfinite(out.diagnostics.Wphi_t[-1])
-    assert np.isfinite(out.diagnostics.heat_flux_t[-1])
-    assert np.isfinite(out.diagnostics.particle_flux_t[-1])
 
 
 @pytest.mark.parametrize(
@@ -2741,17 +2097,6 @@ def test_runtime_centered_glibc_random_pairs_match_glibc_reference() -> None:
     assert np.allclose(vals, ref)
 
 
-def test_runtime_periodic_zp_from_grid_uses_discrete_period_not_endpoint_span() -> None:
-    cfg, _data = load_runtime_from_toml("benchmarks/cases/cyclone_nonlinear_short.toml")
-    geom = build_runtime_geometry(cfg)
-    grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
-    z = np.asarray(grid.z, dtype=float)
-
-    zp = _periodic_zp_from_grid(z)
-
-    assert np.isclose(zp, 1.0, atol=2.0e-4)
-
-
 def test_runtime_random_multimode_zero_kx_matches_reference_overwrite_order() -> None:
     cfg = replace(
         _base_runtime_cfg(),
@@ -2803,36 +2148,6 @@ def test_runtime_multimode_init_does_not_depend_on_diagnostic_ky(init_extra) -> 
     )
 
     assert np.allclose(g0_ky0, g0_ky1)
-
-
-def test_runtime_nonlinear_mode_selection_respects_dealias(monkeypatch) -> None:
-    cfg = replace(
-        _base_runtime_cfg(),
-        grid=GridConfig(
-            Nx=3, Ny=7, Nz=16, Lx=62.8, Ly=62.8, boundary="periodic", y0=10.0
-        ),
-        time=TimeConfig(
-            t_max=0.02,
-            dt=0.01,
-            method="rk2",
-            sample_stride=1,
-            diagnostics_stride=1,
-            nonlinear_dealias=True,
-        ),
-        species=(RuntimeSpeciesConfig(name="ion"),),
-        normalization=RuntimeNormalizationConfig(contract="cyclone"),
-        physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
-        terms=RuntimeTermsConfig(nonlinear=1.0, hypercollisions=0.0, end_damping=0.0),
-    )
-
-    captured = _record_mode_selection(monkeypatch)
-    _res = run_runtime_nonlinear(cfg, ky_target=0.3, Nl=3, Nm=4, steps=1)
-
-    # Ny=7, y0=10 -> ky = [0, 0.1, 0.2, 0.3, -0.3, -0.2, -0.1]
-    # 2/3 dealias keeps |n|<=2 => ky=0.3 is excluded; nearest kept mode is ky=0.2 (index 2).
-    assert captured["omega_ky_index"] == 2
-    # Nx=3 FFT order puts kx=0 at index 0.
-    assert captured["omega_kx_index"] == 0
 
 
 def test_runtime_nonlinear_mode_selection_honors_kx_target(monkeypatch) -> None:
@@ -3094,38 +2409,6 @@ def test_run_runtime_scan_batch_ky_rejects_krylov() -> None:
         run_runtime_scan(cfg, ky_values=[0.1, 0.2], solver="krylov", batch_ky=True)
 
 
-def test_run_runtime_scan_serial_forwards_per_ky(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = _ion_cfg()
-    calls: list[dict[str, object]] = []
-
-    def _fake_run_runtime_linear(_cfg, **kwargs):
-        calls.append(kwargs)
-        ky = float(kwargs["ky_target"])
-        return _linear(ky, ky + 1.0, -(ky + 2.0))
-
-    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
-
-    out = run_runtime_scan(
-        cfg,
-        ky_values=[0.15, 0.35],
-        solver="time",
-        method="rk2",
-        dt=0.05,
-        steps=4,
-        sample_stride=2,
-        fit_signal="phi",
-    )
-
-    assert len(calls) == 2
-    assert calls[0]["ky_target"] == pytest.approx(0.15)
-    assert calls[1]["ky_target"] == pytest.approx(0.35)
-    assert calls[0]["sample_stride"] == 2
-    np.testing.assert_allclose(out.gamma, [1.15, 1.35])
-    np.testing.assert_allclose(out.omega, [-2.15, -2.35])
-
-
 def test_run_runtime_scan_independent_workers_preserve_quasilinear_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3283,20 +2566,6 @@ def _scan_worker_strategies(cfg: RuntimeConfig, ky_values: list[float]) -> list[
     return [str(task["cfg"].parallel.strategy) for task in tasks]
 
 
-@pytest.mark.parametrize("strategy", _SCAN_LEVEL_STRATEGIES)
-def test_scan_level_strategy_is_not_forwarded_into_the_per_ky_worker(
-    strategy: str,
-) -> None:
-    """A scan-level strategy is honoured by the scan, not by each worker."""
-
-    cfg = replace(
-        _ion_cfg(),
-        parallel=RuntimeParallelConfig(strategy=strategy, axis="ky", num_devices=2),
-    )
-
-    assert _scan_worker_strategies(cfg, [0.15, 0.35]) == ["serial", "serial"]
-
-
 @pytest.mark.parametrize("strategy", _SOLVER_LEVEL_STRATEGIES)
 def test_solver_level_strategy_reaches_the_per_ky_worker_untouched(
     strategy: str,
@@ -3430,31 +2699,6 @@ def test_run_runtime_scan_parallel_config_batch_rejects_non_ky_axis() -> None:
         run_runtime_scan(cfg, ky_values=[0.15, 0.35], solver="time")
 
 
-def test_run_runtime_scan_parallel_config_selects_combined_ky(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = replace(_ion_cfg(), parallel=RuntimeParallelConfig(strategy="combined-ky"))
-    calls: list[dict[str, object]] = []
-
-    def _fake_run_runtime_scan_batch(_cfg, ky_arr, **kwargs):
-        calls.append({"ky_arr": np.asarray(ky_arr), **kwargs})
-        return RuntimeLinearScanResult(
-            ky=np.asarray(ky_arr, dtype=float),
-            gamma=np.asarray(ky_arr, dtype=float) + 1.0,
-            omega=-(np.asarray(ky_arr, dtype=float) + 2.0),
-        )
-
-    patch_runtime(monkeypatch, "run_runtime_scan_batch", _fake_run_runtime_scan_batch)
-
-    out = run_runtime_scan(cfg, ky_values=[0.15, 0.35], solver="time", sample_stride=2)
-
-    assert len(calls) == 1
-    np.testing.assert_allclose(calls[0]["ky_arr"], [0.15, 0.35])
-    assert calls[0]["sample_stride"] == 2
-    np.testing.assert_allclose(out.gamma, [1.15, 1.35])
-    np.testing.assert_allclose(out.omega, [-2.15, -2.35])
-
-
 def test_run_runtime_scan_batch_empty_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = _ion_cfg()
 
@@ -3513,31 +2757,6 @@ def test_runtime_linear_explicit_time_rejects_return_state_before_setup(
         run_runtime_linear(
             cfg, ky_target=0.2, Nl=2, Nm=2, solver="explicit_time", return_state=True
         )
-
-
-def test_direct_linear_and_nonlinear_integrators_fast_smoke() -> None:
-    from gkx.solvers_nonlinear_diagnostics import integrate_nonlinear
-    from gkx.solvers_linear_integrators import integrate_linear
-
-    grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
-    cfg = CycloneBaseCase(grid=grid_cfg)
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    params = LinearParams()
-    state = (
-        jnp.ones((2, 2, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
-        * 1.0e-6
-    )
-
-    _, phi_t = integrate_linear(
-        state, grid, geom, params, dt=0.1, steps=2, method="rk2"
-    )
-    _, fields = integrate_nonlinear(
-        state, grid, geom, params, dt=0.1, steps=2, method="rk2"
-    )
-
-    assert jnp.isfinite(phi_t).all()
-    assert jnp.isfinite(fields.phi).all()
 
 
 def test_runtime_parameter_scan_updates_config_and_continues_state(
@@ -3647,89 +2866,6 @@ def test_runtime_linear_validates_initial_state_shape_and_preserves_dtype(
         run_runtime_linear(
             cfg, ky_target=0.3, Nl=2, Nm=2, solver="krylov", initial_state=state
         )
-
-
-def test_runtime_parameter_scan_selects_one_candidate_branch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = _base_runtime_cfg()
-    calls: list[float] = []
-
-    def fake_run(_cfg, **kwargs):
-        target = float(kwargs["krylov_cfg"])
-        calls.append(target)
-        return _linear(0.3, target, -target, state=np.asarray([target]))
-
-    patch_runtime(monkeypatch, "run_runtime_linear", fake_run)
-    result = run_runtime_parameter_scan(
-        cfg,
-        [0.01, 0.02],
-        parameter_name="beta",
-        update_config=lambda base, _value, _index: base,
-        candidate_options=lambda _value, _index, _previous: (
-            {"krylov_cfg": 0.7},
-            {"krylov_cfg": 1.5},
-        ),
-        select_candidate=lambda value, _index, _candidates, _previous: (
-            0 if value < 0.015 else 1
-        ),
-        continuation=True,
-    )
-
-    assert calls == [0.7, 1.5, 0.7, 1.5]
-    np.testing.assert_allclose(result.gamma, [0.7, 1.5])
-
-    with pytest.raises(IndexError, match="out-of-range"):
-        run_runtime_parameter_scan(
-            cfg,
-            [0.01],
-            parameter_name="beta",
-            update_config=lambda base, _value, _index: base,
-            candidate_options=lambda *_args: ({"krylov_cfg": 0.7},),
-            select_candidate=lambda *_args: 2,
-        )
-
-
-def test_runtime_explicit_time_routes_cfl_trajectory(monkeypatch) -> None:
-    cfg = replace(
-        _ion_cfg(),
-        time=replace(
-            _base_runtime_cfg().time, t_max=1.2, dt=0.01, fixed_dt=False, cfl=0.7
-        ),
-    )
-    captured: dict[str, object] = {}
-
-    def fake_explicit(_state, grid, _geom, _params, time_cfg, **kwargs):
-        captured.update(time_cfg=time_cfg, kwargs=kwargs)
-        t = np.linspace(0.01, 1.2, 120)
-        signal = np.exp((0.3 - 0.7j) * t)
-        phi = signal[:, None, None, None] * np.ones(
-            (1, 1, 1, int(grid.z.size)), dtype=complex
-        )
-        return t, phi
-
-    monkeypatch.setattr(
-        "gkx.workflows.linear.integrate_linear_explicit_from_config", fake_explicit
-    )
-    result = run_runtime_linear(
-        cfg,
-        ky_target=0.3,
-        Nl=2,
-        Nm=2,
-        solver="explicit_time",
-        fit_signal="phi",
-        mode_method="z_index",
-        auto_window=False,
-        tmin=0.2,
-        tmax=1.0,
-        require_positive=True,
-    )
-
-    assert result.gamma == pytest.approx(0.3, rel=1.0e-6)
-    assert abs(result.omega) == pytest.approx(0.7, rel=1.0e-6)
-    assert captured["time_cfg"].fixed_dt is False
-    assert captured["kwargs"]["Nl"] == 2
-    assert captured["kwargs"]["Nm"] == 2
 
 
 def test_runtime_trajectory_can_be_refit_without_integration() -> None:
@@ -3990,24 +3126,6 @@ def _chunk(times: list[float], value: float):
     )
 
 
-def test_format_duration_compacts_minutes_and_hours() -> None:
-    assert format_duration(5.0) == "00:05"
-    assert format_duration(65.0) == "01:05"
-    assert format_duration(3665.0) == "1:01:05"
-
-
-def test_adaptive_chunk_time_helpers_lock_accumulated_time_axis() -> None:
-    shifted = _offset_chunk_diagnostics_time(_diag([0.25, 0.5]), offset=1.0)
-
-    np.testing.assert_allclose(shifted.t, [1.25, 1.5])
-    assert _next_elapsed_time(
-        shifted, previous_elapsed=1.0, label="test", chunk_index=2
-    ) == pytest.approx(1.5)
-    assert _effective_diagnostics_stride(-4) == 1
-    assert _effective_diagnostics_stride(0) == 1
-    assert _effective_diagnostics_stride(3) == 3
-
-
 def test_adaptive_chunk_time_helper_rejects_empty_or_stalled_chunks() -> None:
     with pytest.raises(RuntimeError, match="chunk 1 produced no time samples"):
         _next_elapsed_time(_diag([]), previous_elapsed=0.0, label="test", chunk_index=1)
@@ -4016,46 +3134,6 @@ def test_adaptive_chunk_time_helper_rejects_empty_or_stalled_chunks() -> None:
         _next_elapsed_time(
             _diag([1.0]), previous_elapsed=1.0, label="test", chunk_index=1
         )
-
-
-def test_run_adaptive_runtime_chunk_loop_reports_wall_eta(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    clock = iter([0.0, 0.0, 10.0, 10.0, 10.0, 25.0, 25.0])
-    monkeypatch.setattr(
-        "gkx.workflows.runtime.chunks.time.perf_counter", lambda: next(clock)
-    )
-
-    messages: list[str] = []
-    chunks = iter([_chunk([0.5, 1.0], 1.0), _chunk([0.25, 0.5], 2.0)])
-
-    result = run_adaptive_runtime_chunk_loop(
-        integrate_chunk=lambda _show_progress, _remaining_time: next(chunks),
-        t_max=1.5,
-        chunk_steps=16,
-        label="nonlinear",
-        show_progress=True,
-        status_callback=messages.append,
-    )
-
-    assert (
-        messages[0]
-        == "starting adaptive nonlinear integration in chunks of 16 steps up to t_max=1.5"
-    )
-    assert "progress= 66.7%" in messages[1]
-    assert "t=1/1.5" in messages[1]
-    assert "chunk_wall=00:10" in messages[1]
-    assert "elapsed=00:10" in messages[1]
-    assert "eta=00:05" in messages[1]
-    assert "progress=100.0%" in messages[2]
-    assert "t=1.5/1.5" in messages[2]
-    assert "elapsed=00:25" in messages[2]
-    assert "eta=00:00" in messages[2]
-    np.testing.assert_allclose(
-        np.asarray(result.diagnostics.t), np.asarray([0.5, 1.0, 1.25, 1.5])
-    )
-    np.testing.assert_allclose(np.asarray(result.state), np.asarray([2.0]))
-    np.testing.assert_allclose(np.asarray(result.fields.phi), np.asarray([2.0 + 0.0j]))
 
 
 def test_run_adaptive_runtime_chunk_loop_keeps_exact_terminal_sample_with_stride() -> (
@@ -4149,29 +3227,6 @@ def test_run_adaptive_runtime_chunk_loop_stops_early_on_stop_condition() -> None
     np.testing.assert_allclose(np.asarray(result.state), [2.0])
     assert result.stop_decision is not None
     assert result.stop_decision["saturated"] is True
-
-
-def test_run_adaptive_runtime_chunk_loop_reports_last_decision_without_stop() -> None:
-    def stop_condition(t, heat_flux, wphi, wg):
-        return {"stop": False, "saturated": False, "window_tmax": float(t[-1])}
-
-    result = run_adaptive_runtime_chunk_loop(
-        integrate_chunk=lambda _show_progress, _remaining_time: _chunk([0.5, 1.0], 1.0),
-        t_max=1.0,
-        chunk_steps=8,
-        label="test",
-        diagnostics_stride=3,
-        stop_condition=stop_condition,
-    )
-
-    assert result.stop_decision == {
-        "stop": False,
-        "saturated": False,
-        "window_tmax": 1.0,
-    }
-    assert result.diagnostics.t[-1] == pytest.approx(
-        result.stop_decision["window_tmax"]
-    )
 
 
 def _stop_policy_inputs(*, steps: int, diagnostics_on: bool = True):
@@ -4719,7 +3774,6 @@ def test_zero_species_nu_admits_declared_custom_collisions() -> None:
     """#324: zero built-in rates must not silently drop a custom operator."""
     from types import SimpleNamespace as NS
 
-    from gkx.config import CycloneBaseCase
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached

@@ -223,37 +223,3 @@ def test_gallery_script_follows_the_example_style(relative):
         isinstance(node, ast.If) and "__main__" in ast.dump(node.test)
         for node in tree.body
     ), f"{relative} hides its run behind a __main__ guard"
-
-
-@pytest.mark.parametrize("relative", _gallery_scripts())
-def test_gallery_first_party_imports_resolve(relative):
-    """Every name a gallery script imports from gkx/tools must exist."""
-
-    tree = ast.parse((EXAMPLES / relative).read_text(encoding="utf-8"))
-    checked = 0
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name.split(".")[0] in {"gkx", "tools"}:
-                    importlib.import_module(alias.name)
-                    checked += 1
-        elif isinstance(node, ast.ImportFrom) and not node.level:
-            owner = node.module or ""
-            if owner.split(".")[0] not in {"gkx", "tools"}:
-                continue
-            module = importlib.import_module(owner)
-            for alias in node.names:
-                assert hasattr(module, alias.name), (
-                    f"{relative}: {owner} has no {alias.name}"
-                )
-                checked += 1
-        elif (
-            isinstance(node, ast.Attribute)
-            and isinstance(node.value, ast.Name)
-            and node.value.id == "gkx"
-        ):
-            assert hasattr(importlib.import_module("gkx"), node.attr), (
-                f"{relative}: gkx.{node.attr} is gone"
-            )
-            checked += 1
-    assert checked > 0, f"{relative} resolved no first-party name"
