@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
+from typing import Callable, cast
 
 import jax
 import jax.numpy as jnp
@@ -269,32 +269,37 @@ def _apply_flutter(
     sqrt_m: jnp.ndarray,
     sqrt_m_p1: jnp.ndarray,
 ) -> jnp.ndarray:
-    axis_m = -4
-    Nm = bracket_apar.shape[axis_m]
-    zero_slice = jnp.zeros_like(jnp.take(bracket_apar, 0, axis=axis_m))
-    zero_slice = jnp.expand_dims(zero_slice, axis=axis_m)
-    b_lo = jax.lax.slice_in_dim(bracket_apar, 0, Nm - 1, axis=axis_m)
-    b_hi = jax.lax.slice_in_dim(bracket_apar, 1, Nm, axis=axis_m)
-    b_m1 = jnp.concatenate([zero_slice, b_lo], axis=axis_m)
-    b_p1 = jnp.concatenate([b_hi, zero_slice], axis=axis_m)
-    vth_arr = jnp.asarray(vth)
-    if vth_arr.ndim == 0:
-        vth_arr = vth_arr[None]
-    v_shape = [1] * bracket_apar.ndim
-    v_shape[0] = vth_arr.shape[0]
-    vth_s = vth_arr.reshape(v_shape)
-    sqrt_m_b = sqrt_m
-    sqrt_m_p1_b = sqrt_m_p1
-    if sqrt_m_b.ndim < bracket_apar.ndim:
-        sqrt_m_b = jnp.reshape(
-            sqrt_m_b, (1,) * (bracket_apar.ndim - sqrt_m_b.ndim) + sqrt_m_b.shape
-        )
-    if sqrt_m_p1_b.ndim < bracket_apar.ndim:
-        sqrt_m_p1_b = jnp.reshape(
-            sqrt_m_p1_b,
-            (1,) * (bracket_apar.ndim - sqrt_m_p1_b.ndim) + sqrt_m_p1_b.shape,
-        )
-    return -vth_s * (sqrt_m_b * b_m1 + sqrt_m_p1_b * b_p1)
+    def neighbour(k: int) -> jnp.ndarray:  # b[m - k], zero outside 0 <= m < Nm
+        config = [(0, 0, 0)] * bracket_apar.ndim
+        config[-4] = (k, -k, 0)
+        return jax.lax.pad(bracket_apar, jnp.zeros((), bracket_apar.dtype), config)
+
+    vth_s = jnp.reshape(
+        jnp.atleast_1d(jnp.asarray(vth)), (-1,) + (1,) * (bracket_apar.ndim - 1)
+    )
+    return -vth_s * (sqrt_m * neighbour(1) + sqrt_m_p1 * neighbour(-1))
+
+
+def _field_sum(
+    c: _NonlinearBracketContext, nm: int, idx_bpar: int | None, idx_apar: int | None
+) -> Callable[[jnp.ndarray], jnp.ndarray]:
+    """E x B + B_par + flutter, summed on the real-space products.
+
+    The Hermite shift of the flutter term and the field sum are linear, so they
+    commute with the forward FFT: one transform instead of one per field.
+    """
+
+    def combine(products: jnp.ndarray) -> jnp.ndarray:
+        total = products[0]
+        if idx_bpar is not None:
+            total = total + products[idx_bpar]
+        if idx_apar is not None and nm > 1:  # no m +- 1 neighbour at Nm = 1
+            total = total + _apply_flutter(
+                products[idx_apar], c.vth, c.sqrt_m, c.sqrt_m_p1
+            )
+        return total
+
+    return combine
 
 
 def _bracket_kwargs(c: _NonlinearBracketContext) -> dict:
@@ -327,17 +332,12 @@ def _laguerre_contribution_from_prepared(
         chi_fields, idx_bpar, idx_apar = _laguerre_chi_fields(
             prep, ctx, tz=c.tz, apar_weight=c.apar_weight, bpar_weight=c.bpar_weight
         )
-        brackets = _multi_bracket_fn(c.compressed_real_fft)(
-            g_mu, _stack_fields(g_mu, chi_fields), **_bracket_kwargs(c)
+        total = _multi_bracket_fn(c.compressed_real_fft)(
+            g_mu,
+            _stack_fields(g_mu, chi_fields),
+            combine=_field_sum(c, g_mu.shape[-4], idx_bpar, idx_apar),
+            **_bracket_kwargs(c),
         )
-        exb_phi = brackets[0]
-        exb_bpar = (
-            brackets[idx_bpar] if idx_bpar is not None else jnp.zeros_like(exb_phi)
-        )
-        flutter = jnp.zeros_like(exb_phi)
-        if idx_apar is not None:
-            flutter = _apply_flutter(brackets[idx_apar], c.vth, c.sqrt_m, c.sqrt_m_p1)
-        total = exb_phi + exb_bpar + flutter
     total = _laguerre_to_spectral(total, ctx.to_spectral)
     return _squeeze_species_output(
         _weighted_total(prep.G, c.weight, total),
@@ -362,16 +362,12 @@ def _spectral_contribution_from_prepared(
         chi_fields, idx_bpar, idx_apar = _spectral_chi_fields(
             prep, tz=c.tz, apar_weight=c.apar_weight, bpar_weight=c.bpar_weight
         )
-        brackets = _multi_bracket_fn(c.compressed_real_fft)(
-            prep.G, _stack_fields(prep.G, chi_fields), **_bracket_kwargs(c)
+        bracket_total = _multi_bracket_fn(c.compressed_real_fft)(
+            prep.G,
+            _stack_fields(prep.G, chi_fields),
+            combine=_field_sum(c, prep.G.shape[-4], idx_bpar, idx_apar),
+            **_bracket_kwargs(c),
         )
-        bracket_total = brackets[0]
-        if idx_bpar is not None:
-            bracket_total = bracket_total + brackets[idx_bpar]
-        if idx_apar is not None:
-            bracket_total = bracket_total + _apply_flutter(
-                brackets[idx_apar], c.vth, c.sqrt_m, c.sqrt_m_p1
-            )
     return _squeeze_species_output(
         _weighted_total(prep.G, c.weight, bracket_total),
         prep.squeeze_species,
