@@ -454,6 +454,20 @@ def mu_grid_gyro_factors(
     return amp * j0, amp * 2.0 * energy * j1a, eye, eye, roots, j0, j1a
 
 
+def mu_grid_laguerre_modes(nodes: Any, scaled_weights: Any, bmag: Any, n_l: int) -> Any:
+    r"""Node values ``a_j e^{-x_j/2} (-1)^l L_l(x_j)`` of Laguerre moment ``l``, shape ``(l, nmu, Nz)``.
+
+    Their sums against ``J_j`` give the Laguerre moments of a nodal state
+    (``P_l = sum_j mode_l,j G_j``) and, as a seed, a nodal state that carries
+    Laguerre moment ``l`` (orthonormal up to the ``vperp_max`` truncation).
+    """
+
+    x = nodes[:, None] * bmag[None, :]
+    amp = np.sqrt(bmag[None, :] * scaled_weights[:, None]) * np.exp(-0.5 * x)
+    sign = ((-1.0) ** np.arange(n_l))[:, None, None]
+    return sign * np.asarray(laguerre(x, n_l - 1)) * amp[None]
+
+
 # Round-trip accuracy that still leaves headroom below the physics tolerances.
 _LAGUERRE_ROUNDTRIP_TOLERANCE = 1.0e-8
 

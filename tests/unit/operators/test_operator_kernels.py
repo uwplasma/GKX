@@ -25,6 +25,7 @@ from gkx.core_velocity import (
     gamma0,
     laguerre_gyroaverage_neighbors,
     laguerre_scaled_functions,
+    mu_grid_laguerre_modes,
     mu_grid_nodes,
 )
 from gkx.diagnostics.analysis import fit_growth_rate
@@ -2752,15 +2753,26 @@ def _mu_random_state(nmu: int, nm: int) -> jnp.ndarray:
 
 
 @_MU_NEEDS_X64
-def test_mu_grid_rule_is_exact_for_polynomials():
-    """Both rules integrate ``x^k exp(-x)``; the truncated one only up to ``x_max``."""
+def test_mu_grid_rule_is_exact_for_polynomials_and_laguerre_modes_are_orthonormal():
+    """Degree ``2 n - 1`` exactness against ``e^{-x}`` and orthonormal Laguerre mode seeds."""
 
-    x, scaled = mu_grid_nodes(6, 4.0)
-    weights = scaled * np.exp(-x)
-    exact = [1.0 - np.exp(-8.0), 1.0 - 9.0 * np.exp(-8.0)]  # k = 0, 1 on [0, 8]
-    assert np.allclose([weights.sum(), (weights * x).sum()], exact, rtol=1e-12)
-    x, scaled = mu_grid_nodes(6, np.inf)
-    assert np.isclose((scaled * np.exp(-x) * x**5).sum(), 120.0, rtol=1e-12)
+    from scipy.special import gamma, gammainc
+
+    n = 6
+    for vperp_max, cutoff in ((4.0, 8.0), (np.inf, np.inf)):
+        x, scaled = mu_grid_nodes(n, vperp_max)
+        weights = scaled * np.exp(-x)
+        for k in range(2 * n):
+            exact = gamma(k + 1.0) * (
+                gammainc(k + 1.0, cutoff) if np.isfinite(cutoff) else 1.0
+            )
+            assert np.isclose((weights * x**k).sum(), exact, rtol=1e-11)
+        # sum_j mode_l mode_l' = delta_ll' at B = B0; Laguerre polynomials are only
+        # orthogonal on [0, 8] up to the cutoff tail, so the truncated rule is checked for l <= 1
+        modes = mu_grid_laguerre_modes(x, scaled, np.ones(1), 4)[:, :, 0]
+        count = 4 if np.isinf(vperp_max) else 2
+        gram = modes[:count] @ modes[:count].T
+        assert np.abs(gram - np.eye(count)).max() < (1e-11 if count == 4 else 0.03)
 
 
 @_MU_NEEDS_X64
@@ -2792,7 +2804,7 @@ def test_gauss_laguerre_nodes_reduce_to_the_laguerre_operator_at_zero_kperp():
 
 @_MU_NEEDS_X64
 def test_weak_mirror_conserves_density_per_node():
-    """Streaming plus mirror conserve ``int dz S_j G_{j,0}`` at every node.
+    """Streaming plus mirror conserve ``int dz S_j G_{j,0}`` and the energy at every node.
 
     ``S_j = exp(-mu_j B / 2)`` is the half Maxwellian and the stored amplitude is
     scaled by ``a_j = sqrt(B w_j e^{mu_j})``; the field coupling is switched off
@@ -2827,6 +2839,14 @@ def test_weak_mirror_conserves_density_per_node():
     density_rate = np.sum(np.asarray(rate[:, 0]) * s_over_a[:, None, None], axis=-1)
     scale = np.sum(np.abs(np.asarray(rate[:, 0])) * s_over_a[:, None, None], axis=-1)
     assert np.max(np.abs(density_rate)) < 1e-9 * np.max(scale)
+    # energy v^2/2 + mu B is conserved at fixed mu: int dz S_j [(1/2 + x_j) G_0 + G_2 / sqrt 2]
+    weight = s_over_a[:, None, None]
+    parts = (0.5 + energy)[:, None, None] * np.asarray(rate[:, 0]) + np.asarray(
+        rate[:, 2]
+    ) / np.sqrt(2.0)
+    assert np.max(np.abs(np.sum(parts * weight, axis=-1))) < 1e-9 * np.max(
+        np.sum(np.abs(parts) * weight, axis=-1)
+    )
 
 
 @_MU_NEEDS_X64
@@ -2925,3 +2945,101 @@ def test_mu_grid_growth_rate_matches_converged_laguerre_on_cyclone():
     mu = gkx.solve(nodal, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
     assert abs(mu.gamma - laguerre.gamma) < 0.03 * laguerre.gamma
     assert abs(mu.omega - laguerre.omega) < 0.03 * laguerre.omega
+
+
+@_MU_NEEDS_X64
+@pytest.mark.parametrize("vperp_max", [None, 4.0])
+@pytest.mark.parametrize("mode", ["es", "apar"])
+def test_collisionless_free_energy_is_conserved_without_drive(mode, vperp_max):
+    """``W = <G,G>/2 + int (q |phi|^2 - kappa |A|^2) / 2B`` is exactly conserved.
+
+    Collisionless, undriven, truncation closure, ``eps = 0.18``. ``<.,.>`` is the
+    ``dz / B`` inner product on the stored state; the form is evaluated on band-limited
+    ``z`` modes, where the spectral derivative obeys the product rule against ``1/B``.
+    ``kappa = (k_perp^2 B^2 / beta + c_g Gamma_0) / s`` is the Ampere response.
+    """
+
+    from gkx.terms.fields import _solve_fields_impl
+
+    nl, nm, nz, kmax, beta = 4, 4, 32, 3, 0.02
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=8, Nz=nz, Lx=62.8, Ly=20.9, boundary="periodic")
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
+    em = mode == "apar"
+    params = LinearParams(
+        rho=1.0,
+        kpar_scale=float(geom.gradpar()),
+        hypercollisions_const=0.0,
+        hypercollisions_kz=0.0,
+        damp_ends_rate=0.0,
+        beta=beta if em else 0.0,
+        fapar=1.0 if em else 0.0,
+        mu_vperp_max=vperp_max,
+    )
+    terms = LinearTerms(
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+        bpar=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, nl, nm)
+    ny, iy, n = cache.ky.shape[0], 1, nl * nm * nz
+
+    def embed(v):
+        state = jnp.zeros((1, nl, nm, ny, 1, nz), dtype=jnp.complex128)
+        return state.at[0, :, :, iy, 0, :].set(v.reshape(nl, nm, nz))
+
+    def fields(v):
+        return _solve_fields_impl(
+            embed(v),
+            cache,
+            params,
+            charge=jnp.ones(1),
+            density=jnp.ones(1),
+            temp=jnp.ones(1),
+            mass=jnp.ones(1),
+            tz=jnp.ones(1),
+            vth=jnp.ones(1),
+            fapar=jnp.asarray(1.0 if em else 0.0),
+            w_bpar=jnp.asarray(0.0),
+        )
+
+    def jac(f):
+        return np.asarray(jax.jacrev(f, holomorphic=True)(jnp.zeros(n, jnp.complex128)))
+
+    rhs = lambda v: linear_rhs_cached(  # noqa: E731
+        embed(v), cache, params, terms=terms, use_custom_vjp=False
+    )[0][0, :, :, iy, 0, :].reshape(-1)
+    a_mat = jac(rhs)
+    inv_b = 1.0 / np.asarray(cache.bmag)
+    gamma0 = np.asarray(jnp.sum(cache.Jl**2, axis=1))[0, iy, 0, :]
+
+    def energy_rate(psi, weight):
+        form = psi.conj().T @ np.diag(weight) @ psi
+        return form @ a_mat + a_mat.conj().T @ form
+
+    rate = np.diag(np.tile(inv_b, nl * nm)) @ a_mat
+    rate = (
+        rate
+        + rate.conj().T
+        + energy_rate(jac(lambda v: fields(v).phi[iy, 0, :]), (2.0 - gamma0) * inv_b)
+    )
+    if em:
+        kappa = np.asarray(cache.kperp2)[iy, 0, :] * np.asarray(cache.bmag) ** 2
+        kappa = (
+            kappa / (beta * params.apar_beta_scale)
+            + (params.ampere_g0_scale / params.apar_beta_scale) * gamma0
+        )
+        rate = rate - energy_rate(
+            jac(lambda v: fields(v).apar[iy, 0, :]), kappa * inv_b
+        )
+    modes = np.abs(np.fft.fftfreq(nz, 1.0 / nz)) <= kmax
+    low = np.conj(np.fft.fft(np.eye(nz), axis=0).T)[:, modes] / np.sqrt(nz)
+    basis = np.kron(np.eye(nl * nm), low)
+    scale = np.linalg.norm(
+        basis.conj().T @ np.diag(np.tile(inv_b, nl * nm)) @ a_mat @ basis
+    )
+    residual = basis.conj().T @ (0.5 * (rate + rate.conj().T)) @ basis
+    assert np.linalg.norm(residual) < 1e-9 * scale

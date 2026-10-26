@@ -555,52 +555,202 @@ Nodal magnetic-moment grid
 ``[run] mu_vperp_max`` (``LinearParams.mu_vperp_max``) replaces the Laguerre
 expansion in :math:`\mu B` by values at the nodes of a quadrature rule in the
 fixed variable :math:`\hat\mu=\mu B_0`; ``Nl`` is then the number of nodes.
-The default (unset) is the Laguerre path, bitwise unchanged. The nodes and
-weights :math:`w_j` are those of the rule for the weight :math:`e^{-\hat\mu}` on
-:math:`[0, v_{\perp,\max}^2/2]` (``vperp_max = 4`` is the usual choice;
-``inf`` gives Gauss-Laguerre). Hermite stays spectral. At node :math:`j` and
-position :math:`z`, with :math:`x_j=\mu_j B(z)=\hat\mu_j B/B_0`,
+Unset keeps the Laguerre path, bitwise unchanged. The construction follows the
+v2 representation of GX (Hermite spectral, :math:`\hat\mu` nodal; GX ``docs/Numerics.rst``,
+"V2: Hermite plus nodal magnetic moment") on the Hermite-Laguerre formulation of
+Mandell, Dorland and Landreman, *J. Plasma Phys.* **84**, 905840108 (2018).
+
+Quadrature
+~~~~~~~~~~
+
+Let :math:`\{\hat\mu_j,w_j\}_{j=1}^{n}` satisfy
 
 .. math::
 
-   g(v_\parallel,\hat\mu_j,z)=S_j(z)\sum_m\phi^m(v_\parallel)\,G_m(\hat\mu_j,z),
-   \qquad S_j=e^{-x_j/2}.
+   \int_0^{X}p(\hat\mu)\,e^{-\hat\mu}\,d\hat\mu=\sum_j w_j\,p(\hat\mu_j)
+   \quad(\deg p\le 2n-1),\qquad X=\tfrac12 v_{\perp,\max}^2 .
 
-With the half Maxwellian factored out, the parallel advection at fixed
-:math:`\mu` becomes
+The :math:`\hat\mu_j` are the eigenvalues of the Jacobi matrix of the monic
+polynomials orthogonal for :math:`e^{-\hat\mu}` on :math:`[0,X]`, and
+:math:`w_j=m_0 v_{0j}^2` with :math:`m_0=1-e^{-X}` and :math:`v_{0j}` the first
+component of the eigenvector (Golub and Welsch, *Math. Comp.* **23**, 221 (1969)).
+The recurrence coefficients come from the Stieltjes (Lanczos) procedure on a
+256-point Gauss-Legendre discretization of the weight. ``vperp_max = 4`` gives
+:math:`X=8`: the neglected Maxwellian tail is :math:`e^{-8}=3\times10^{-4}`, and
+the density moment of the rule is :math:`m_0=0.99966`. ``vperp_max = inf`` is
+Gauss-Laguerre, with :math:`w_je^{\hat\mu_j}` computed directly because
+:math:`w_j` underflows. A finite cutoff shortens the interval the nodes must
+cover, which is the reason to prefer it at small :math:`n`; its cost is the
+:math:`m_0` deficit and a 2-4% dependence of converged rates on
+``vperp_max`` (tables below).
+
+Representation
+~~~~~~~~~~~~~~
+
+With :math:`x_j(z)=\mu_jB(z)=\hat\mu_jB/B_0` and :math:`S_j=e^{-x_j/2}`,
 
 .. math::
 
-   \big(\mathcal L_\parallel H\big)_m=\sqrt{m+1}\,\nabla_\parallel H_{m+1}
-   +\sqrt m\,\nabla_\parallel H_{m-1}
-   +\tfrac{x_j}{2}\nabla_\parallel\ln B\,\big[\sqrt m\,H_{m-1}-\sqrt{m+1}\,H_{m+1}\big],
+   g(v_\parallel,\hat\mu_j,z)=S_j(z)\sum_{m}\phi^m(v_\parallel)\,G_{jm}(z),
+   \qquad F_M^\perp=e^{-x_j}=S_j^2 .
 
-so the mirror coupling is local to the node and antisymmetric in :math:`m`.
-:math:`\int dz\,S_jG_{j,0}` is conserved by streaming plus mirror. The other
-terms are evaluated per node: the grad-B drift multiplies by :math:`x_j`, the
-diamagnetic drive is :math:`\omega_*J_j\,[L_n^{-1}+(x_j-1)L_T^{-1}]` at :math:`m=0`
-(and :math:`L_T^{-1}/\sqrt2` at :math:`m=2`, as in the Laguerre path),
-and the gyroaverage is
-:math:`J_0(\alpha_j)`, :math:`2x_jJ_1(\alpha_j)/\alpha_j` with
-:math:`\alpha_j^2=2x_j k_\perp^2\rho^2` at the local field. Fields are quadrature
-sums with weights :math:`(B/B_0)\,w_je^{\hat\mu_j-x_j/2}` for the evolved
-moments and :math:`(B/B_0)\,w_je^{\hat\mu_j-x_j}` for the Maxwellian
-response :math:`\Gamma_0`.
+The perpendicular measure is :math:`B\,d\mu=(B/B_0)\,d\hat\mu`. For any
+:math:`f` that is smooth in :math:`\hat\mu`,
 
-The state stored in the Laguerre slot is :math:`a_jG_{j}` with
-:math:`a_j=\sqrt{(B/B_0)\,w_je^{\hat\mu_j}}`. The two weights above then
-become the single array :math:`J_j=a_jS_jJ_0(\alpha_j)` that the Laguerre field
-solve, Hamiltonian view and streaming already use, and the :math:`\nabla_\parallel`
-of the scaled amplitude adds :math:`\tfrac12\nabla_\parallel\ln B` to the mirror
-coefficients, which become :math:`(x_j\pm1)/2`.
+.. math::
 
-Scope: linear runs, electrostatic and electromagnetic (:math:`A_\parallel`,
-:math:`B_\parallel`). Collisions, ``nu_hyper``, ``nu_hyper_l``, ``nu_hyper_lm``
-and ``hypercollisions_const`` are refused (a collision operator on exponentially
-stiff fixed-:math:`\hat\mu` nodes needs a weak-form matrix; the :math:`|k_z|`
-Hermite hypercollisions are unchanged). Nonlinear runs are refused. The seed
-``init_field`` writes ``l = 0``, i.e. the first node. Velocity-space diagnostics
-that assume Laguerre moments are not defined for the scaled node amplitudes.
+   \int d^2v_\perp\,F_M^\perp f=\int d\hat\mu\,\frac{B}{B_0}e^{-\hat\mu B/B_0}f
+   \simeq\sum_j\frac{B}{B_0}\,w_je^{\hat\mu_j}\,S_j^2\,f_j .
+
+Parallel advection
+~~~~~~~~~~~~~~~~~~
+
+At fixed :math:`\mu`, :math:`\mathcal L=v_\parallel\nabla_\parallel-\mu\nabla_\parallel B\,\partial_{v_\parallel}`
+and :math:`\nabla_\parallel S_j=-\tfrac12x_jb\,S_j` with
+:math:`b=\nabla_\parallel\ln B`. With :math:`v\phi^m=\sqrt{m+1}\phi^{m+1}+\sqrt m\phi^{m-1}`
+and :math:`\partial_v\phi^m=-\sqrt{m+1}\phi^{m+1}`, projecting
+:math:`\mathcal L(S_j\sum\phi^mH_m)` on :math:`\phi^m` and dividing by :math:`S_j` gives
+
+.. math::
+
+   (\mathcal L H)_m=\sqrt{m+1}\,\big(\nabla_\parallel-\tfrac{x}{2}b\big)H_{m+1}
+   +\sqrt m\,\big(\nabla_\parallel+\tfrac{x}{2}b\big)H_{m-1}.
+
+The factor :math:`S_j` splits the logarithmic derivative of the weight evenly
+between the two couplings (a full Maxwellian would put all of it on one side),
+so that the mirror term :math:`\tfrac x2b[\sqrt mH_{m-1}-\sqrt{m+1}H_{m+1}]` is
+antisymmetric in :math:`m`. Writing
+:math:`\sqrt{m+1}\,S^{-1}\nabla_\parallel(S\,\cdot)+\sqrt m\,S\nabla_\parallel(S^{-1}\cdot)`,
+the operator is the weak (conservative) form of the phase-space flux at
+fixed :math:`\mu`; no :math:`\hat\mu`-derivative appears because the nodes do
+not move. :math:`H=G+\text{field terms}` is the Hamiltonian view of the
+Laguerre code: :math:`H_0=G_0+Z\tau^{-1}S_jJ_0\varphi+\ldots`,
+:math:`H_1=G_1-Z\tau^{-1}v_tS_jJ_0A_\parallel`.
+
+Conservation
+~~~~~~~~~~~~
+
+Per node and without fields, :math:`\partial_t(S_jG_{j0})=-v_t\nabla_\parallel(S_jH_{j1})`,
+so :math:`\int dz\,S_jG_{j0}` is conserved by streaming plus mirror; the energy
+:math:`\int dz\,S_j[(\tfrac12+x_j)G_{j0}+G_{j2}/\sqrt2]` is conserved too, since
+:math:`v_\parallel^2/2+\mu B` is invariant along the unperturbed orbit.
+Momentum is not: the mirror force changes it by
+:math:`-\mu\nabla_\parallel B\int g`. Magnetic drifts have a nonzero divergence
+and do not conserve the node density. Both identities hold to spectral accuracy
+for resolved states (tests ``test_weak_mirror_conserves_density_per_node``).
+
+Scaled amplitude and fields
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The field sums are
+
+.. math::
+
+   n=\sum_j\frac{B}{B_0}w_je^{\hat\mu_j}\,S_jJ_{0j}\,G_{j0},\qquad
+   \Gamma_0=\sum_j\frac{B}{B_0}w_je^{\hat\mu_j}\,S_j^2J_{0j}^2,
+
+(the Maxwellian response carries :math:`S_j^2=e^{-x_j}`, the evolved moment one
+:math:`S_j` because :math:`G` already carries the other), and likewise
+:math:`j_\parallel=v_t\sum(\ldots)J_{0j}G_{j1}` and, for :math:`B_\parallel`,
+:math:`J_0\to2x_jJ_1(\alpha_j)/\alpha_j`, with :math:`\alpha_j^2=2x_jk_\perp^2\rho^2`
+at the local field. Quasineutrality
+:math:`\sum_sn_sZ_s\,n_s[G]=q\,\varphi` with :math:`q=\tau_e+\sum_sn_sZ_s^2T_s^{-1}(1-\Gamma_{0s})`,
+Ampere's law :math:`(k_\perp^2B^2+\beta\,c\sum_sn_sZ_s^2m_s^{-1}\Gamma_{0s})A_\parallel=\beta c'j_\parallel`
+and the :math:`B_\parallel` solve are algebraic in these sums, so they are quadratures.
+
+The state stored is :math:`\tilde G_{jm}=a_jG_{jm}` with
+:math:`a_j=\sqrt{(B/B_0)\,w_je^{\hat\mu_j}}`. Since :math:`(B/B_0)w_je^{\hat\mu_j}S_jJ_{0j}G_j=(a_jS_jJ_{0j})(a_jG_j)`, every sum above is :math:`\sum_jJ_j\tilde G_j` with the single array
+:math:`J_j=a_jS_jJ_0(\alpha_j)` (and :math:`J^B_j=2x_ja_jS_jJ_1(\alpha_j)/\alpha_j`):
+
+.. math::
+
+   n=\sum_jJ_j\tilde G_{j0},\quad\Gamma_0=\sum_jJ_j^2,\quad
+   \tilde H_{j0}=\tilde G_{j0}+Z\tau^{-1}J_j\varphi,
+
+which are exactly the Laguerre expressions with :math:`J_\ell\to J_j`. Field
+solves, the Hamiltonian view and the streaming operand therefore need no change.
+Since :math:`a_j\propto\sqrt B`, :math:`a\nabla_\parallel(\cdot/a)=\nabla_\parallel-\tfrac12b`,
+and the advection becomes
+
+.. math::
+
+   (\mathcal L\tilde H)_m=\sqrt{m+1}\,\big(\nabla_\parallel-\tfrac{x+1}{2}b\big)\tilde H_{m+1}
+   +\sqrt m\,\big(\nabla_\parallel+\tfrac{x-1}{2}b\big)\tilde H_{m-1}:
+
+the only change is the node-local coefficients :math:`(x_j\pm1)/2`. The other
+terms are diagonal in :math:`j`: grad-B multiplies by :math:`x_j`; the curvature
+stencil is unchanged; the diamagnetic drive is
+:math:`\omega_*J_j[L_n^{-1}+(x_j-1)L_T^{-1}]` at :math:`m=0`, :math:`\omega_*J_jL_T^{-1}/\sqrt2`
+at :math:`m=2`, and the :math:`A_\parallel` drive carries :math:`x_j` in place of
+:math:`x_j-1` (the Laguerre-index shift of the existing code is :math:`2\ell+1` there).
+
+Free energy
+~~~~~~~~~~~
+
+Let :math:`\langle u,v\rangle=\int dz\,B_0B^{-1}\sum_{jm}\bar u_{jm}v_{jm}`. For
+:math:`\tilde G=aG` this is :math:`\int dz\sum_jw_je^{\hat\mu_j}|G_{jm}|^2`, the
+phase-space integral :math:`\int d^3x\,d^3v\,g^2/F_M` per flux-tube element
+(:math:`d^3x\propto dz/B`, :math:`d^3v\propto B\,d\mu`). The coupling terms of
+:math:`\mathcal L` between :math:`m` and :math:`m+1` give, for the real part,
+
+.. math::
+
+   \mathrm{Re}\!\int\!\frac{dz}{B}\sqrt{m+1}\Big[\bar G_m(\nabla-\tfrac{x+1}{2}b)G_{m+1}
+   +\bar G_{m+1}(\nabla+\tfrac{x-1}{2}b)G_m\Big]
+   =\int dz\,\mathrm{Re}(\bar G_mG_{m+1})\Big[-\big(\tfrac1B\big)'-\tfrac bB\Big]=0
+
+because :math:`(1/B)'=-b/B`. The weight :math:`1/B` is the unique one for which
+the coefficients :math:`(x\pm1)/2` cancel, and the :math:`x`-dependence cancels
+identically. The drifts are real, diagonal in :math:`(j,z)` and symmetric in
+:math:`m`, hence skew-adjoint; Hermite truncation (:math:`G_M=0`) removes no
+cross term. So :math:`\mathcal L` is skew-adjoint and :math:`\mathrm{Re}\langle H,\mathcal LH\rangle=0`.
+Writing :math:`H=G+F` with :math:`F` the field terms and using
+:math:`\sum_jJ_j\partial_tG_{j0}=\partial_t(q\varphi)` for the electrostatic part
+and :math:`\sum_jJ_j\partial_tG_{j1}=\kappa\,\partial_tA_\parallel/v_t` for
+:math:`A_\parallel` (:math:`q=\tau_e+\sum n_sZ_s^2T_s^{-1}(1-\Gamma_0)`,
+:math:`\kappa=(k_\perp^2B^2/\beta+c\sum n_sZ_s^2m_s^{-1}\Gamma_0)/c'`),
+
+.. math::
+
+   W=\tfrac12\langle G,G\rangle+\tfrac12\int\frac{dz}{B}\big(q|\varphi|^2-\kappa|A_\parallel|^2\big),
+   \qquad \frac{dW}{dt}=0\quad(\text{collisionless, undriven}),
+
+and with the diamagnetic drive :math:`dW/dt=\mathrm{Re}\langle H,\partial_tG|_{\rm drive}\rangle`.
+This is checked to round-off for ES and :math:`A_\parallel`, on the nodal grid and on the
+Laguerre grid (``test_collisionless_free_energy_is_conserved_without_drive``; the form
+is evaluated on band-limited :math:`z` modes, for which the discrete derivative obeys
+the product rule against :math:`1/B`). A proof for :math:`B_\parallel`, whose solve
+is a coupled :math:`2\times2` system, is not included.
+
+Relation to the Laguerre expansion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For :math:`B=B_0` and the Gauss-Laguerre rule, :math:`\tilde G_j=\sum_\ell O_{j\ell}G_\ell`
+with :math:`O_{j\ell}=\sqrt{w_j}\,(-1)^\ell L_\ell(\hat\mu_j)` orthogonal
+(:math:`n` nodes integrate :math:`L_\ell L_{\ell'}e^{-\hat\mu}` exactly for
+:math:`\ell,\ell'<n`). The multiplication :math:`x` is the Jacobi matrix in
+:math:`\ell` and the diagonal :math:`\hat\mu_j` in :math:`j`, which are similar, and
+:math:`J_\ell=O^{\!\top}J_j` at :math:`k_\perp\to0`, so all terms except the mirror
+coincide with the Laguerre ones, and the mirror vanishes at :math:`b=0`. The full
+operator, fields and drives agree to :math:`10^{-14}` at :math:`\varepsilon=0`,
+:math:`k_\perp\to0` (``test_gauss_laguerre_nodes_reduce_to_the_laguerre_operator_at_zero_kperp``).
+For :math:`B\ne B_0` the Laguerre path carries :math:`\mu B` as the coordinate and
+has :math:`\ell\pm1` couplings in the mirror and the Bessel factors; the nodal path
+has neither, and the two agree as :math:`n,N_\ell\to\infty`. A nodal state is
+converted to Laguerre moments by :math:`P_\ell=\sum_j(-1)^\ell L_\ell(x_j)J_j\tilde G_j`
+(``mu_grid_laguerre_modes``); the same modes seed ``init_field`` on all nodes.
+
+Scope: linear runs, electrostatic and electromagnetic. Collisions, ``nu_hyper``,
+``nu_hyper_l``, ``nu_hyper_lm`` and ``hypercollisions_const`` are refused (a
+collision operator on fixed-:math:`\hat\mu` nodes needs a weak-form matrix and is
+exponentially stiff at the outer nodes); the :math:`|k_z|` Hermite
+hypercollisions are unchanged. Nonlinear and velocity-parallel runs are refused.
+``init_field = "phi"`` seeds node 0 only.
+
+References: GX ``docs/Numerics.rst`` (V2); Mandell, Dorland, Landreman 2018;
+Golub and Welsch 1969; Gautschi, *Orthogonal Polynomials* (2004), Ch. 2-3 (Stieltjes
+and Lanczos procedures); Kanekar et al., *J. Plasma Phys.* **81**, 305810104 (2015)
+for the Hermite closure.
 
 Measured against the Laguerre expansion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
