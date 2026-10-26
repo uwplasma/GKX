@@ -448,7 +448,7 @@ Nonlinear Explicit Step
 Nonlinear State Integration
 ---------------------------
 
-.. automodule:: gkx.solvers_nonlinear_state_integration
+.. automodule:: gkx.solvers_nonlinear_diagnostics
    :members:
    :private-members:
    :no-index:
@@ -463,7 +463,7 @@ Nonlinear Diagnostic Drivers
 Nonlinear Diagnostic Integration
 --------------------------------
 
-.. automodule:: gkx.solvers_nonlinear_diagnostic_integration
+.. automodule:: gkx.solvers_nonlinear_diagnostics
    :members:
    :private-members:
    :no-index:
@@ -479,20 +479,6 @@ Explicit Time Integrators
 -------------------------
 
 .. automodule:: gkx.solvers_time_explicit
-   :members:
-   :private-members:
-
-Explicit Step Kernels
----------------------
-
-.. automodule:: gkx.solvers_time_explicit_steps
-   :members:
-   :private-members:
-
-Explicit CFL Policy
--------------------
-
-.. automodule:: gkx.solvers_time_explicit_cfl
    :members:
    :private-members:
 

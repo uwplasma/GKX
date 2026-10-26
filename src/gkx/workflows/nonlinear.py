@@ -25,12 +25,12 @@ from gkx.solvers_nonlinear_imex import (
     ImexDtControl,
     refactor_chain_implicit_linear,
 )
-from gkx.solvers_time_explicit_cfl import (
+from gkx.solvers_time_explicit import (
     FIXED_DT_CFL_WARN_RATIO,
     _laguerre_velocity_max,
 )
 from gkx.config import RuntimeConfig, resolve_cfl_fac
-from gkx.solvers_nonlinear_diagnostic_integration import (
+from gkx.solvers_nonlinear_diagnostics import (
     integrate_nonlinear_explicit_diagnostics_state,
     prepare_nonlinear_explicit_diagnostics,
 )
@@ -487,7 +487,7 @@ def _nonlinear_cfl_margin(
     """
 
     from gkx.geometry import ensure_flux_tube_geometry_data
-    from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
+    from gkx.solvers_time_explicit import _linear_frequency_bound
 
     try:
         geom = ensure_flux_tube_geometry_data(ctx.geom, ctx.grid.z)

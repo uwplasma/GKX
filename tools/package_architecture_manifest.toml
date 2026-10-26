@@ -88,7 +88,9 @@ recursive = true
 # 160 -> 136 (ARCH-B): reduced stellarator model deleted, single-consumer
 # helpers merged into their consumers, decomposition contracts deleted.
 # 136 -> 129 (ARCH-C): solve-layer collapse, growth_windows into growth_rates; report gates moved to scripts/checks/_gates. Measured.
-baseline = 129
+# 129 -> 124: merged the nonlinear and explicit-time solver families (imex_diagnostics, diagnostic_integration,
+# state_integration, time_explicit_cfl, time_explicit_steps folded into their only consumers). Measured.
+baseline = 124
 target = 45
 
 [[topology_policy.counts]]
@@ -396,7 +398,7 @@ min_imported_names_for_split = 6
 # 2 -> 1 (ARCH-B): workflows/runtime/policies folded into runtime.py.
 # 1 -> 2 (ARCH-C): measured. growth_windows folded into growth_rates and
 # nonlinear_netcdf gained a second consumer, but two remain: solvers_nonlinear_diagnostics
-# (its sole consumer is solvers_nonlinear_diagnostic_integration; both together exceed the
+# (its sole consumer is solvers_nonlinear_diagnostics; both together exceed the
 # 1200-line budget and the perf lane owns the file) and workflows/runtime/artifacts
 # (absorbed orchestration_artifacts; merging into commands exceeds the budget).
 single_consumer_baseline = 2
@@ -440,9 +442,27 @@ path = "solvers_nonlinear_imex.py"
 # 1189 -> 1293: electron mirror in the per-chain factor (Laguerre-coupled blocks, z-local mirror probe, one refinement step); measured.
 # 1293 -> 1304: electron mirror implicit (#370) on top of #363/#368, measured.
 # 1304 -> 1521: ARK3(2)4L[2]SA, factor as scan operand, chunked factor build, adaptive-dt control (ImexDtControl); measured.
-baseline_lines = 1521
+# 1521 -> 1754: absorbs solvers_nonlinear_imex_diagnostics (its only consumer besides the diagnostics driver) and the
+# diagnostics driver moved out to solvers_nonlinear_diagnostics; measured.
+baseline_lines = 1754
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
+
+[[complexity_policy.exceptions]]
+path = "solvers_nonlinear_diagnostics.py"
+# 0 -> 3384: merges solvers_nonlinear_diagnostic_integration, solvers_nonlinear_state_integration and the old
+# solvers_nonlinear_diagnostics, and drops the dependency-injection containers between them (every kernel the
+# containers carried is a module-level name here, so tests patch it directly). Measured.
+baseline_lines = 3384
+target_lines = 1200
+reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
+
+[[complexity_policy.exceptions]]
+path = "solvers_time_explicit.py"
+# 0 -> 1701: merges solvers_time_explicit_cfl and solvers_time_explicit_steps, each of which had this module as its only consumer. Measured.
+baseline_lines = 1701
+target_lines = 1200
+reason = "The CFL estimate, the one-step kernels and the linear explicit drivers are one integrator; the offcuts had a single consumer."
 
 [[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
@@ -1178,8 +1198,10 @@ recursive = true
 # 68838 -> 68890: linear KE time-route fix (#386) after #373/#385, measured.
 # 68890 -> 68892: conventions/B_par CFL (#387) after #386, measured.
 # 68892 -> 68896: SOLVAX 0.33 normalized Thomas (#389) after #387, measured.
-# 68896 -> 69089: nodal mu grid prototype (opt-in LinearParams.mu_vperp_max) with Laguerre-mode seeds, measured.
-baseline = 69089
+# 68896 -> 68785: retired euler, k10, rk3_heun, rk3_classic and semi-implicit. Measured.
+# 68785 -> 68378: merged the solver families (5 modules removed) and dropped the diagnostics dependency containers. Measured.
+# 68378 -> 68571: nodal mu grid prototype (opt-in LinearParams.mu_vperp_max) with Laguerre-mode seeds, measured.
+baseline = 68571
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1534,8 +1556,9 @@ recursive = true
 # 73592 -> 73605: stepper-default v2 tests (#385). Measured.
 # 73605 -> 73624: linear KE time-route fix (#386) after #373/#385, measured.
 # 73624 -> 73659: conventions/B_par CFL (#387) after #386, measured.
-# 73659 -> 74047: nodal mu grid tests (equivalence, mirror density and energy, free energy, quadrature, Landau, zonal residual, Cyclone rate, refusals), measured.
-baseline = 74047
+# 73659 -> 63547: removed 272 tests whose lines every other test also executes, and the helpers they left unused. Measured.
+# 63547 -> 63935: nodal mu grid tests (equivalence, mirror density and energy, free energy, quadrature, Landau, zonal residual, Cyclone rate, refusals), measured.
+baseline = 63935
 target = 35000
 
 [[line_budget_policy.counts]]

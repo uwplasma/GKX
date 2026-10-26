@@ -24,6 +24,26 @@ def explicit_method_default_cfl_fac(method: str) -> float:
     return 1.0
 
 
+RETIRED_METHODS = {
+    "euler": "rk2",
+    "k10": "rk4",
+    "rk3_heun": "rk3",
+    "rk3_classic": "rk3",
+    "semi-implicit": "imex",
+}
+
+
+def method_error(method: object, allowed) -> ValueError:
+    """Error for an unsupported ``method``; retired names point to their replacement."""
+
+    key = str(method).strip().lower()
+    if key in RETIRED_METHODS:
+        return ValueError(
+            f"method '{key}' was retired; use '{RETIRED_METHODS[key]}' instead"
+        )
+    return ValueError(f"method must be one of {sorted(allowed)}, got '{method}'")
+
+
 def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
     """Resolve an explicit CFL prefactor, falling back to the method default."""
 
@@ -421,6 +441,8 @@ __all__ = [
     "REFERENCE_ELECTRON_MASS",
     "REFERENCE_MASS_RATIO",
     "TimeConfig",
+    "RETIRED_METHODS",
+    "method_error",
     "explicit_method_default_cfl_fac",
     "resolve_cfl_fac",
 ]

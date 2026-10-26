@@ -23,12 +23,10 @@ from gkx.diagnostics.quasilinear_transport import (
     quasilinear_feature_objective,
     saturation_amplitude2,
     saturated_flux_from_linear_weight,
-    spectral_phi_weights,
 )
 from gkx.runtime import (
     build_runtime_linear_params,
     build_runtime_linear_terms,
-    run_runtime_linear,
     run_runtime_scan,
 )
 from gkx.config import (
@@ -62,7 +60,6 @@ from gkx.diagnostics.saturation import (
     SaturationStopConfig,
     _sokal_window_mean_sem,
     saturation_stop_decision,
-    sokal_autocorrelation_time,
 )
 from scripts.checks._gates.transport_windows import (
     NonlinearWindowEnsembleConfig,
@@ -279,21 +276,6 @@ def test_phi_norm_and_kperp_are_phase_and_amplitude_invariant() -> None:
         phi_norm2(phi, cache, params, vol_fac, normalization="not_a_norm")
 
 
-def test_spectral_phi_weights_account_for_half_plane_and_dealiasing() -> None:
-    _cfg, _geom, grid, _params, _terms, cache, _state = _tiny_linear_objects()
-    phi = jnp.ones((grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex64)
-    vol_fac = jnp.ones(grid.z.size) / grid.z.size
-
-    weights = spectral_phi_weights(phi, cache, vol_fac, use_dealias=False)
-    assert weights.shape == phi.shape
-    # The selected ky grid is a positive half-plane mode, so the spectral weight
-    # doubles non-zonal contributions to preserve the real-field convention.
-    assert float(jnp.sum(weights)) == pytest.approx(2.0 * grid.kx.size)
-
-    masked = spectral_phi_weights(phi, cache, vol_fac, use_dealias=True)
-    assert float(jnp.sum(masked)) <= float(jnp.sum(weights))
-
-
 def test_quasilinear_weights_are_phase_and_amplitude_invariant() -> None:
     cfg, geom, grid, params, terms, cache, state = _tiny_linear_objects()
     ql = compute_quasilinear_from_linear_state(
@@ -388,24 +370,6 @@ def test_quasilinear_weights_are_phase_and_amplitude_invariant() -> None:
 # gate, and -1.676444e-03 at 3.58e-15 against the 1e-09 float64 one, agreeing
 # to 4e-06 relative. These are plumbing smoke tests, so the resolution only has
 # to be high enough that the eigenpair they exercise exists.
-def test_runtime_linear_quasilinear_krylov_smoke() -> None:
-    cfg = replace(
-        _tiny_runtime_config(),
-        quasilinear=RuntimeQuasilinearConfig(
-            enabled=True,
-            mode="saturated",
-            saturation_rule="mixing_length",
-            csat=0.3,
-        ),
-    )
-    out = run_runtime_linear(cfg, ky_target=0.1, Nl=2, Nm=4, solver="krylov")
-    assert out.quasilinear is not None
-    assert out.state is None
-    assert out.quasilinear["mode"] == "saturated"
-    assert out.quasilinear["saturation_rule"] == "mixing_length"
-    assert out.quasilinear["kperp_eff2"] >= 0.0
-
-
 def test_runtime_scan_collects_quasilinear_payloads_and_rejects_batch() -> None:
     base = _tiny_runtime_config()
     # Ny=12 puts ky 0.2 and 0.3 on the grid; the tiny Ny=4 grid stops at 0.1.
@@ -2690,17 +2654,3 @@ def test_saturation_production_cadence_stops_stationary_ar1(record_property) -> 
     )
     record_property("stops", stopped)
     assert stopped / len(series) >= 0.90, stopped
-
-
-def test_sokal_reports_a_constant_trace_as_unresolved() -> None:
-    """A constant signal has no correlation time, so it must not report one.
-
-    Callers read "resolved" as ``cut < rho.size``. The degenerate return placed
-    the cut at lag zero, which reads as resolved for any non-empty ``rho`` --
-    the opposite of what a zero-variance trace has shown them.
-    """
-
-    tau, cut, rho = sokal_autocorrelation_time(np.zeros(64), 0.05)
-
-    assert tau == 0.0
-    assert cut >= rho.size

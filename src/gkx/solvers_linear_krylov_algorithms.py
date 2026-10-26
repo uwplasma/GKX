@@ -26,7 +26,7 @@ from gkx.solvers_linear_precond_pr3 import (
     _apply_operator,
     _assemble_rhs_cached_novjp,
 )
-from gkx.solvers_time_explicit_steps import _linear_native_step
+from gkx.solvers_time_explicit import _linear_native_step
 from gkx.terms.config import TermConfig
 
 

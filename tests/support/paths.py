@@ -13,8 +13,6 @@ from types import ModuleType
 
 TESTS_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = TESTS_ROOT.parent
-SRC_ROOT = REPO_ROOT / "src"
-TOOLS_ROOT = REPO_ROOT / "tools"
 
 
 def load_repo_script(
@@ -43,12 +41,6 @@ def load_repo_script(
     finally:
         sys.dont_write_bytecode = previous
     return module
-
-
-def load_tool_script(tool_folder: str, script_name: str) -> ModuleType:
-    """Load a module from a ``scripts`` tool package by file stem."""
-
-    return load_repo_script(Path("scripts") / tool_folder / f"{script_name}.py")
 
 
 def load_release_tool(script_name: str) -> ModuleType:

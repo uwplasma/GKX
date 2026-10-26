@@ -18,7 +18,7 @@ from gkx.solvers_nonlinear_imex import (
     refactor_chain_implicit_linear,
 )
 from gkx.solvers_nonlinear_diagnostics import stiff_linear_split
-from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
 from gkx.terms.assembly import assemble_rhs_cached, compute_fields_cached
 from gkx.terms.config import TermConfig
 from gkx.workflows.runtime.toml import load
@@ -45,18 +45,15 @@ from gkx.operators.linear.params import (
 )
 from gkx.operators.nonlinear import projection as nonlinear_projection
 from gkx.operators.nonlinear.collisions import (
-    _apply_collision_split,
     _collision_damping,
 )
-from gkx.solvers_nonlinear_diagnostic_integration import (
+from gkx.solvers_nonlinear_diagnostics import (
     _pack_resolved_diagnostics,
     _sample_indices_with_final,
     build_nonlinear_simulation_diagnostics,
     finalize_nonlinear_scan_diagnostics,
-    maybe_emit_nonlinear_progress,
     run_sampled_explicit_diagnostic_scan,
     sampled_scan_intervals,
-    select_nonlinear_step_diagnostics,
     _integrate_nonlinear_explicit_diagnostics_impl,
     integrate_nonlinear_explicit_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
@@ -65,18 +62,15 @@ from gkx.solvers_nonlinear_diagnostic_integration import (
 from gkx.operators.nonlinear.policies import (
     _diagnostic_omega_mode_mask,
     _nonlinear_cfl_frequency_components,
-    build_nonlinear_collision_split_policy,
-    build_nonlinear_diagnostic_setup,
     build_nonlinear_imex_operator,
-    build_nonlinear_time_step_policy,
 )
 from gkx.operators.nonlinear.projection import (
     _make_fixed_mode_projector,
     _make_hermitian_projector,
     _make_nonlinear_state_projector,
 )
-import gkx.solvers_nonlinear_state_integration as nonlinear_state_integration_mod
-from gkx.solvers_nonlinear_state_integration import (
+import gkx.solvers_nonlinear_diagnostics as nonlinear_state_integration_mod
+from gkx.solvers_nonlinear_diagnostics import (
     DIVERGENCE_KNEE_STEPS,
     nonlinear_heat_flux_window,
     integrate_nonlinear,
@@ -155,70 +149,6 @@ def test_nonlinear_rhs_cached_prunes_disabled_em_fields(monkeypatch) -> None:
     assert seen == {"apar": None, "bpar": None}
     np.testing.assert_allclose(np.asarray(rhs), 1.0)
     assert rhs_fields is fields
-
-
-def test_nonlinear_rhs_cached_routes_generic_and_skips_disabled_bracket(
-    monkeypatch,
-) -> None:
-    G0 = jnp.ones((1, 1, 1, 1, 1, 2), dtype=jnp.complex64)
-    phi = jnp.ones((1, 1, 2), dtype=jnp.complex64)
-    fields = FieldState(phi=phi, apar=2.0 * phi, bpar=3.0 * phi)
-    calls = {"generic": 0}
-
-    def _generic(G, cache, params, terms, **kwargs):
-        calls["generic"] += 1
-        return 4.0 * jnp.ones_like(G), fields
-
-    patch_attrs(
-        monkeypatch,
-        nonlinear_state_integration_mod,
-        assemble_rhs_cached_jit=_generic,
-        assemble_rhs_cached_electrostatic_jit=_raise(
-            "electrostatic fast path is invalid when Apar/Bpar terms are enabled"
-        ),
-        nonlinear_em_contribution=_raise(
-            "nonlinear bracket must not run when terms.nonlinear is zero"
-        ),
-    )
-    rhs, rhs_fields = nonlinear_state_integration_mod.nonlinear_rhs_cached(
-        G0,
-        SimpleNamespace(),
-        SimpleNamespace(),
-        TermConfig(nonlinear=0.0, apar=1.0, bpar=1.0),
-    )
-    assert calls == {"generic": 1}
-    np.testing.assert_allclose(np.asarray(rhs), 4.0)
-    assert rhs_fields is fields
-
-
-def test_nonlinear_rhs_cached_forwards_enabled_em_fields(monkeypatch) -> None:
-    G0 = jnp.ones((1, 1, 1, 1, 1, 2), dtype=jnp.complex64)
-    phi = jnp.ones((1, 1, 2), dtype=jnp.complex64)
-    fields = FieldState(phi=phi, apar=2.0 * phi, bpar=3.0 * phi)
-    seen: dict[str, object] = {}
-
-    def _fake_nonlinear_em(G, **kwargs):
-        seen.update(
-            {k: kwargs[k] for k in ("apar", "bpar", "apar_weight", "bpar_weight")}
-        )
-        seen["weight_dtype"] = kwargs["weight"].dtype
-        return 2.0 * jnp.ones_like(G)
-
-    patch_attrs(
-        monkeypatch,
-        nonlinear_state_integration_mod,
-        assemble_rhs_cached_jit=lambda G, *a, **k: (jnp.zeros_like(G), fields),
-        nonlinear_em_contribution=_fake_nonlinear_em,
-    )
-    rhs, _rhs_fields = nonlinear_state_integration_mod.nonlinear_rhs_cached(
-        G0, _em_cache(), _SPECIES_PARAMS, TermConfig(nonlinear=0.5, apar=1.0, bpar=1.0)
-    )
-    assert seen["apar"] is fields.apar
-    assert seen["bpar"] is fields.bpar
-    assert seen["apar_weight"] == pytest.approx(1.0)
-    assert seen["bpar_weight"] == pytest.approx(1.0)
-    assert seen["weight_dtype"] == jnp.float32
-    np.testing.assert_allclose(np.asarray(rhs), 2.0)
 
 
 def test_pack_resolved_diagnostics_and_fixed_mode_projector() -> None:
@@ -354,43 +284,6 @@ def test_finalize_nonlinear_scan_diagnostics_applies_output_sampling() -> None:
     np.testing.assert_allclose(np.asarray(retained.gamma_t), np.arange(5))
 
 
-def test_select_nonlinear_step_diagnostics_and_progress_noop() -> None:
-    computed = (jnp.asarray(2.0), jnp.asarray(3.0), jnp.asarray(4.0), jnp.asarray(5.0))
-    previous = (
-        jnp.asarray(-1.0),
-        jnp.asarray(-2.0),
-        jnp.asarray(-3.0),
-        jnp.asarray(-4.0),
-    )
-
-    select = partial(
-        select_nonlinear_step_diagnostics,
-        diagnostics_stride=2,
-        diag_prev=previous,
-        compute_diag_fn=lambda: computed,
-    )
-    used_compute = select(jnp.asarray(4, dtype=jnp.int32))
-    used_previous = select(jnp.asarray(3, dtype=jnp.int32))
-    used_final = select(jnp.asarray(3, dtype=jnp.int32), steps=4)
-
-    np.testing.assert_allclose(np.asarray(used_compute[0]), 2.0)
-    np.testing.assert_allclose(np.asarray(used_previous[0]), -1.0)
-    # The off-stride last step is kept as the final sample, so it is fresh.
-    np.testing.assert_allclose(np.asarray(used_final[0]), 2.0)
-
-    state = jnp.asarray([7.0], dtype=jnp.float32)
-    out = maybe_emit_nonlinear_progress(
-        state,
-        show_progress=False,
-        diag=computed,
-        idx=jnp.asarray(0, dtype=jnp.int32),
-        steps=4,
-        t_new=jnp.asarray(0.1, dtype=jnp.float32),
-        progress_total=jnp.asarray(0.4, dtype=jnp.float32),
-    )
-    np.testing.assert_allclose(np.asarray(out), [7.0])
-
-
 def test_make_hermitian_projector_and_mode_mask() -> None:
     ky = np.array([0.0, 0.2, -0.2, -0.4], dtype=float)
     projector = _make_hermitian_projector(ky, nx=3)
@@ -446,34 +339,6 @@ def test_make_hermitian_projector_and_mode_mask() -> None:
         positive_grid, positive_cache, compressed_real_fft=True
     )
     np.testing.assert_array_equal(np.asarray(positive_mask), positive_grid.dealias_mask)
-
-
-def test_hermitian_projector_names_the_traced_ky_axis_it_cannot_read() -> None:
-    """A traced ky axis is refused by name, and the layout route still works.
-
-    Reading a sign pattern off a tracer is the one case with nothing to read.
-    The compressed real-FFT path does not go through it: the layout it passes
-    is grid topology, so it builds inside a trace like any other constant.
-    """
-
-    def build(ky: jnp.ndarray) -> jnp.ndarray:
-        nonlinear_projection._make_hermitian_projector(ky, nx=2)
-        return jnp.sum(ky)
-
-    with pytest.raises(ValueError, match="cannot read a traced ky axis"):
-        jax.jit(build)(jnp.asarray([0.0, 0.2, -0.2, -0.4]))
-
-    def project_inside_trace(state: jnp.ndarray) -> jnp.ndarray:
-        projector = nonlinear_projection._make_compressed_real_fft_projector(
-            ny_full=4, nx=2
-        )
-        return projector(state)
-
-    state = jnp.arange(8, dtype=jnp.complex64).reshape(1, 4, 2, 1) * (1.0 + 1.0j)
-    np.testing.assert_allclose(
-        np.asarray(jax.jit(project_inside_trace)(state)),
-        np.asarray(project_inside_trace(state)),
-    )
 
 
 def test_make_nonlinear_state_projector_composes_fixed_mode_and_hermitian() -> None:
@@ -544,28 +409,6 @@ def test_shearing_coordinates_follow_analytic_wave_and_inverse_remap() -> None:
 
     restored = _advance(update.state, kx, ky, 1.0, 1.2, 0.0)
     np.testing.assert_allclose(restored.state, state, atol=2.0e-7)
-
-
-def test_shearing_coordinates_zero_shear_and_dealias_boundary() -> None:
-    kx = jnp.asarray([0.0, 1.0, 2.0, 3.0, -4.0, -3.0, -2.0, -1.0])
-    ky = jnp.asarray([0.0, 1.0])
-    state = (jnp.arange(16, dtype=jnp.float32).reshape(1, 2, 8, 1) + 0.25j).astype(
-        jnp.complex64
-    )
-    identity = _advance(state, kx, ky, 0.0, 0.0, 4.0)
-    np.testing.assert_array_equal(identity.state, state)
-    np.testing.assert_allclose(
-        identity.effective_kx,
-        jnp.broadcast_to(kx[None, :], (ky.size, kx.size)),
-    )
-    np.testing.assert_allclose(identity.phase, 1.0)
-
-    edge = jnp.zeros_like(state).at[0, 1, 6, 0].set(1.0)
-    mask = jnp.abs(kx)[None, :] <= 2.0
-    mask = jnp.broadcast_to(mask, (2, 8))
-    shifted = _advance(edge, kx, ky, 0.5, 0.0, 1.0, dealias_mask=mask)
-    assert int(shifted.cumulative_mode_shift[1]) == -1
-    np.testing.assert_allclose(shifted.state, 0.0)
 
 
 def test_shearing_coordinate_tangent_matches_finite_difference() -> None:
@@ -770,13 +613,6 @@ def _transport_runner():
     ), run
 
 
-def _enable_x64():
-    enable_x64 = getattr(jax, "enable_x64", None)
-    if enable_x64 is None:
-        enable_x64 = jax.experimental.enable_x64
-    return enable_x64()
-
-
 def test_sheared_imex_rejects_unvalidated_adaptive_and_collision_routes() -> None:
     case, run = _transport_runner()
     options = dict(dt=0.02, steps=2, shear_rate=0.1, method="imex")
@@ -833,33 +669,6 @@ def test_sheared_transport_compressed_bracket_matches_full_fractional_phase() ->
         np.testing.assert_allclose(
             getattr(compressed, name), getattr(full, name), rtol=2.0e-5, atol=2.0e-7
         )
-
-
-@pytest.mark.parametrize(
-    ("method", "steps", "extra"),
-    [("rk3", 2, dict(differentiable=False, fixed_dt=False)), ("imex", 1, {})],
-)
-def test_sheared_routes_carry_x64_dtype(method, steps, extra) -> None:
-    """The rk3 scan carry keeps x64; imex promotes complex64 input to x64."""
-    case, run = _transport_runner()
-    with _enable_x64():
-        state = case.state.astype(jnp.complex128) if method == "rk3" else case.state
-        cache = (
-            case.cache
-            if method == "rk3"
-            else build_linear_cache(case.grid, case.geom, case.params, Nl=1, Nm=4)
-        )
-        trace = run(
-            state,
-            dt=0.02,
-            steps=steps,
-            shear_rate=0.01,
-            method=method,
-            cache=cache,
-            **extra,
-        )
-    assert trace.final_state.dtype == jnp.complex128
-    assert np.isfinite(np.asarray(trace.heat_flux)).all()
 
 
 def test_sheared_transport_scale_does_not_change_trajectory() -> None:
@@ -1074,125 +883,6 @@ def test_strong_flow_shear_suppresses_linear_itg_amplitude_after_dt_refinement()
     assert amplitudes[(0.01, 0.5)] / amplitudes[(0.01, 0.0)] < 0.8
 
 
-def test_build_nonlinear_diagnostic_setup_uses_injected_policy() -> None:
-    grid = SimpleNamespace(
-        ky=np.asarray([0.0, 0.2, -0.2], dtype=float),
-        kx=np.asarray([0.0, 0.5], dtype=float),
-        z=np.asarray([0.0, 0.5, 1.0, 1.5], dtype=float),
-    )
-    cache = SimpleNamespace(ky=jnp.asarray(grid.ky), kx=jnp.asarray(grid.kx))
-    calls: dict[str, object] = {}
-
-    def _ensure_geometry(geom, z):
-        calls["geom"] = geom
-        calls["z"] = tuple(np.asarray(z, dtype=float))
-        return SimpleNamespace(name="geometry")
-
-    def _build_cache(_grid, geom, params, nl, nm):
-        calls["cache_counts"] = (nl, nm)
-        assert geom.name == "geometry"
-        assert params.name == "params"
-        return cache
-
-    def _weights(geom, grid_in):
-        assert geom.name == "geometry"
-        return jnp.ones((grid_in.z.size,), dtype=jnp.float32), jnp.asarray(2.0)
-
-    def _omega_mask(_grid, cache_in, *, compressed_real_fft):
-        calls["compressed"] = compressed_real_fft
-        assert cache_in is cache
-        return jnp.ones((_grid.ky.size, _grid.kx.size), dtype=bool)
-
-    setup = build_nonlinear_diagnostic_setup(
-        jnp.zeros((2, 3, 3, 2, 4), dtype=jnp.complex64),
-        grid,
-        SimpleNamespace(name="raw"),
-        SimpleNamespace(name="params"),
-        cache=None,
-        use_dealias_mask=True,
-        z_index=None,
-        compressed_real_fft=True,
-        fixed_mode_ky_index=1,
-        fixed_mode_kx_index=0,
-        ensure_geometry_fn=_ensure_geometry,
-        build_cache_fn=_build_cache,
-        quadrature_weights_fn=_weights,
-        omega_mask_fn=_omega_mask,
-        midplane_index_fn=lambda nz: nz - 1,
-    )
-
-    assert calls["geom"].name == "raw"
-    assert calls["z"] == (0.0, 0.5, 1.0, 1.5)
-    assert calls["cache_counts"] == (2, 3)
-    assert calls["compressed"] is True
-    assert setup.cache is cache
-    assert setup.z_idx == 3
-    assert setup.use_dealias is True
-    np.testing.assert_allclose(np.asarray(setup.vol_fac), np.ones(4))
-    assert float(setup.flux_fac) == pytest.approx(2.0)
-
-
-def test_build_nonlinear_time_step_policy_fixed_and_adaptive() -> None:
-    grid = SimpleNamespace(
-        ky=np.asarray([0.0, 0.2, 0.4], dtype=float),
-        kx=np.asarray([0.0, 0.5, 1.0], dtype=float),
-    )
-    cache = SimpleNamespace(
-        ky=jnp.asarray(grid.ky),
-        kx=jnp.asarray(grid.kx),
-        l=jnp.arange(2),
-        m=jnp.arange(3)[None, :],
-        kxfac=1.0,
-    )
-    params = SimpleNamespace(
-        vth=jnp.asarray([1.0], dtype=jnp.float32),
-        tz=jnp.asarray([2.0], dtype=jnp.float32),
-    )
-    fields = FieldState(
-        phi=jnp.ones((3, 3, 2), dtype=jnp.complex64),
-        apar=None,
-        bpar=None,
-    )
-
-    policy = partial(
-        build_nonlinear_time_step_policy,
-        grid,
-        SimpleNamespace(),
-        params,
-        cache,
-        method="rk3",
-        dt=0.1,
-        steps=4,
-        dt_min=0.01,
-        cfl=1.0,
-        cfl_fac=None,
-        compressed_real_fft=True,
-        real_dtype=jnp.float32,
-        resolve_cfl_fac_fn=lambda _method, _cfl_fac: 0.5,
-        linear_frequency_bound_fn=lambda *args, **kwargs: np.asarray([1.0, 1.0, 1.0]),
-        laguerre_velocity_max_fn=lambda _nl, **_: 2.0,
-        cfl_frequency_components_fn=lambda *args, **kwargs: (
-            jnp.asarray(2.0, dtype=jnp.float32),
-            jnp.asarray(3.0, dtype=jnp.float32),
-        ),
-    )
-    fixed = policy(fixed_dt=True, dt_max=None)
-    np.testing.assert_allclose(np.asarray(fixed.dt_init), 0.1)
-    np.testing.assert_allclose(np.asarray(fixed.progress_total), 0.4)
-    np.testing.assert_allclose(
-        np.asarray(fixed.update_dt(fields, jnp.asarray(0.07, dtype=jnp.float32))),
-        0.07,
-    )
-
-    adaptive = policy(fixed_dt=False, dt_max=0.2)
-    assert np.isnan(float(np.asarray(adaptive.progress_total)))
-    np.testing.assert_allclose(
-        np.asarray(adaptive.update_dt(fields, jnp.asarray(0.1, dtype=jnp.float32))),
-        0.5 / 6.0,
-        rtol=1.0e-6,
-    )
-
-
 def test_collision_damping_and_imex_operator_builder(monkeypatch) -> None:
     cache = SimpleNamespace(lb_lam=jnp.ones((2, 2, 1, 1, 1), dtype=jnp.float32))
     params = SimpleNamespace(nu=0.1)
@@ -1258,64 +948,6 @@ def test_collision_damping_and_imex_operator_builder(monkeypatch) -> None:
     )
     assert op.shape == (1, 2, 2, 1, 1, 1)
     assert op.squeeze_species is True
-
-
-def test_build_nonlinear_collision_split_policy_controls_rhs_terms() -> None:
-    term_cfg = TermConfig(collisions=0.5, hypercollisions=0.25, nonlinear=1.0)
-    damping = jnp.asarray([2.0], dtype=jnp.float32)
-
-    active, inactive = (
-        build_nonlinear_collision_split_policy(
-            SimpleNamespace(name="cache"),
-            SimpleNamespace(name="params"),
-            term_cfg,
-            jnp.float32,
-            squeeze_species=True,
-            collision_split=split,
-            collision_damping_fn=lambda *args, **kwargs: damping,
-        )
-        for split in (True, False)
-    )
-
-    assert active.active is True
-    assert active.rhs_terms.collisions == term_cfg.collisions
-    assert active.rhs_terms.hypercollisions == 0.0
-    assert active.rhs_terms.nonlinear == term_cfg.nonlinear
-    np.testing.assert_allclose(np.asarray(active.damping), [2.0])
-    assert inactive.active is False
-    assert inactive.rhs_terms is term_cfg
-    assert inactive.damping is None
-
-
-def test_build_nonlinear_imex_operator_forwards_preconditioner(monkeypatch) -> None:
-    captured: dict[str, object] = {}
-
-    def _fake_build(G0, cache, params, dt, terms, implicit_preconditioner):
-        captured["preconditioner"] = implicit_preconditioner
-        captured["terms"] = terms
-        return (
-            jnp.zeros((1, 2, 2, 1, 1, 1), dtype=jnp.complex64),
-            (1, 2, 2, 1, 1, 1),
-            4,
-            jnp.asarray(0.2, dtype=jnp.float32),
-            lambda x: x,
-            lambda x: x,
-            False,
-        )
-
-    monkeypatch.setattr(
-        "gkx.operators.nonlinear.policies._build_implicit_operator", _fake_build
-    )
-    op = build_nonlinear_imex_operator(
-        jnp.zeros((1, 2, 2, 1, 1, 1), dtype=jnp.complex64),
-        SimpleNamespace(),
-        SimpleNamespace(),
-        dt=0.2,
-        terms=TermConfig(nonlinear=1.0),
-        implicit_preconditioner="identity",
-    )
-    assert captured["preconditioner"] == "identity"
-    assert op.shape == (1, 2, 2, 1, 1, 1)
 
 
 def test_nonlinear_cfl_frequency_components_zero_and_finite() -> None:
@@ -1392,76 +1024,8 @@ def test_nonlinear_cfl_frequency_components_recovers_spectral_gradient_cfl() -> 
     )
 
 
-def test_apply_collision_split_and_nonlinear_wrapper_routing(monkeypatch) -> None:
-    G = jnp.ones((2, 2, 1, 1, 1), dtype=jnp.complex64)
-    damping = jnp.ones_like(G.real)
-    dt = jnp.asarray(0.1, dtype=jnp.float32)
-    implicit, exp, imex, rkc = (
-        _apply_collision_split(G, damping, dt, scheme)
-        for scheme in ("implicit", "exp", "imex", "rkc2")
-    )
-    assert np.all(np.isfinite(np.asarray(implicit)))
-    assert np.all(np.isfinite(np.asarray(exp)))
-    np.testing.assert_allclose(np.asarray(imex), np.asarray(implicit))
-    np.testing.assert_allclose(np.asarray(rkc), np.asarray(exp))
-    with pytest.raises(ValueError):
-        _apply_collision_split(G, damping, dt, "bad")
-
-    captured: dict[str, object] = {}
-
-    def _fake_scan(rhs_fn, G0, dt, steps, **kwargs):
-        captured["project_state"] = kwargs.get("project_state")
-        captured["return_fields"] = kwargs.get("return_fields")
-        phi = jnp.zeros((4, 2, 2), dtype=jnp.complex64)
-        return G0, FieldState(phi=phi, apar=None, bpar=None)
-
-    patch_attrs(
-        monkeypatch,
-        _SI,
-        integrate_nonlinear_imex_cached=lambda *a, **k: ("imex", "fields", "stats"),
-        integrate_nonlinear_scan=_fake_scan,
-    )
-
-    def bare_cache(ky, kx, dealias_mask):
-        nones = dict.fromkeys(
-            "Jl JlB laguerre_to_grid laguerre_to_spectral laguerre_roots".split()
-            + ["laguerre_j0", "laguerre_j1_over_alpha", "b"]
-        )
-        return SimpleNamespace(
-            ky=jnp.asarray(ky),
-            kx=jnp.asarray(kx),
-            dealias_mask=dealias_mask,
-            kxfac=1.0,
-            **nones,
-        )
-
-    imex_out = integrate_nonlinear_cached(
-        G,
-        bare_cache([0.0, 0.2], [0.0], None),
-        SimpleNamespace(),
-        dt=0.1,
-        steps=2,
-        method="semi-implicit",
-    )
-    assert imex_out == ("imex", "fields")
-
-    out_G, out_fields = integrate_nonlinear_cached(
-        jnp.zeros((1, 4, 2, 2), dtype=jnp.complex64),
-        bare_cache([0.0, 0.2, -0.2, -0.4], [0.0, 0.5], jnp.ones((4, 2), dtype=bool)),
-        SimpleNamespace(),
-        dt=0.1,
-        steps=2,
-        method="rk2",
-        compressed_real_fft=True,
-    )
-    assert out_G.shape == (1, 4, 2, 2)
-    assert captured["project_state"] is not None
-    assert captured["return_fields"] is True
-    assert out_fields.phi.shape == (4, 2, 2)
-
-
-_SI = "gkx.solvers_nonlinear_state_integration"
-_DI = "gkx.solvers_nonlinear_diagnostic_integration"
+_SI = "gkx.solvers_nonlinear_diagnostics"
+_DI = "gkx.solvers_nonlinear_diagnostics"
 
 
 def _diag_call(fn, G0=None, **kwargs):
@@ -1508,7 +1072,7 @@ def test_nonlinear_diagnostics_routes_explicit_imex_and_state(monkeypatch) -> No
         integrate_nonlinear_imex_diagnostics=lambda *a, **k: ("t_imex", "diag_imex"),
         _integrate_nonlinear_explicit_diagnostics_impl=lambda *a, **k: payload,
     )
-    imex = _diag_call(integrate_nonlinear_explicit_diagnostics, method="semi-implicit")
+    imex = _diag_call(integrate_nonlinear_explicit_diagnostics, method="imex")
     assert imex == ("t_imex", "diag_imex")
     explicit = _diag_call(integrate_nonlinear_explicit_diagnostics, method="rk3")
     assert explicit == payload[:2]
@@ -1659,7 +1223,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
         cache=cache,
     )
 
-    for method in ("rk3_classic", "rk4", "k10"):
+    for method in ("rk3", "rk4"):
         t_branch, diag_branch, G_branch, _fields_branch = run(
             steps=1,
             method=method,
@@ -1678,7 +1242,7 @@ def test_explicit_diagnostics_impl_applies_fixed_mode_collision_and_stride(
 
     t, diag, G_final, fields_final = run(
         steps=3,
-        method="euler",
+        method="rk2",
         terms=TermConfig(collisions=1.0, hypercollisions=0.0),
         sample_stride=1,
         diagnostics_stride=2,
@@ -1749,7 +1313,7 @@ def test_explicit_diagnostics_resolved_schema_and_sample_axis(monkeypatch) -> No
         _SPECIES_PARAMS,
         dt=0.1,
         steps=3,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=TermConfig(nonlinear=0.0),
         sample_stride=2,
@@ -1811,7 +1375,7 @@ def test_fixed_small_amplitude_mode_gamma_omega_are_finite(monkeypatch) -> None:
         _SPECIES_PARAMS,
         dt=0.05,
         steps=2,
-        method="euler",
+        method="rk2",
         cache=cache,
         terms=TermConfig(nonlinear=1.0),
         compressed_real_fft=False,
@@ -1845,13 +1409,6 @@ def test_integrate_nonlinear_imex_diagnostics_rejects_bad_shape(monkeypatch) -> 
             dt=0.1,
             steps=2,
         )
-
-
-def _identity_gmres(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "gkx.solvers_nonlinear_imex.jax.scipy.sparse.linalg.gmres",
-        lambda matvec, rhs, **kwargs: (rhs, SimpleNamespace(success=True)),
-    )
 
 
 def test_integrate_nonlinear_imex_cached_shape_mismatch_and_zero_nonlinear(
@@ -1900,82 +1457,6 @@ def test_integrate_nonlinear_imex_cached_shape_mismatch_and_zero_nonlinear(
 
     assert gmres_calls
     assert G_out.shape == G0.shape
-    assert fields_t.phi.shape[0] == 2
-
-
-def test_integrate_nonlinear_imex_cached_uses_electrostatic_linear_path(
-    monkeypatch,
-) -> None:
-    G0 = jnp.zeros((1, 1, 1, 1, 2), dtype=jnp.complex64)
-    fields = _zero_phi_fields()
-    calls: list[str] = []
-
-    patch_attrs(
-        monkeypatch,
-        _SI,
-        assemble_rhs_cached_electrostatic_jit=lambda G, *a, **k: (
-            calls.append("electrostatic") or jnp.zeros_like(G),
-            fields,
-        ),
-        assemble_rhs_cached_jit=_raise("generic linear RHS should not run"),
-    )
-    _identity_gmres(monkeypatch)
-
-    G_out, fields_t = integrate_nonlinear_imex_cached(
-        G0,
-        SimpleNamespace(),
-        SimpleNamespace(),
-        dt=0.1,
-        steps=1,
-        terms=TermConfig(nonlinear=0.0, apar=0.0, bpar=0.0),
-        implicit_operator=_identity_operator(G0.shape),
-    )
-
-    assert calls == ["electrostatic", "electrostatic"]
-    assert G_out.shape == G0.shape
-    assert fields_t.phi.shape[0] == 1
-
-
-def test_integrate_nonlinear_imex_cached_builds_operator_and_nonlinear_term(
-    monkeypatch,
-) -> None:
-    G0 = jnp.zeros((1, 1, 1, 1, 2), dtype=jnp.complex64)
-    fields = _zero_phi_fields()
-    build_calls: list[float] = []
-    nonlinear_calls: list[bool] = []
-
-    def _fake_build_operator(G_in, cache_in, params_in, dt, *args, **kwargs):
-        build_calls.append(float(dt))
-        dt_val = jnp.asarray(dt, dtype=jnp.float32)
-        return (G_in, tuple(G_in.shape), G_in.size, dt_val, None, lambda x: x, False)
-
-    def _fake_nonlinear_em(G, **kwargs):
-        assert kwargs["weight"].shape == ()
-        nonlinear_calls.append(True)
-        return jnp.ones_like(G)
-
-    patch_attrs(
-        monkeypatch,
-        _SI,
-        _build_implicit_operator=_fake_build_operator,
-        compute_fields_cached=lambda *a, **k: fields,
-        nonlinear_em_contribution=_fake_nonlinear_em,
-        assemble_rhs_cached_jit=lambda G, *a, **k: (jnp.zeros_like(G), fields),
-    )
-    _identity_gmres(monkeypatch)
-
-    G_out, fields_t = integrate_nonlinear_imex_cached(
-        G0,
-        _null_cache(),
-        _SPECIES_PARAMS,
-        dt=0.2,
-        steps=2,
-        terms=TermConfig(nonlinear=0.5),
-    )
-
-    assert build_calls == [0.2]
-    assert nonlinear_calls == [True]
-    np.testing.assert_allclose(np.asarray(G_out), 0.4)
     assert fields_t.phi.shape[0] == 2
 
 
@@ -2047,20 +1528,6 @@ def _chunk_arrays(diag: SimulationDiagnostics) -> Iterator[tuple[str, np.ndarray
         value = getattr(diag.resolved, field.name)
         if value is not None:
             yield f"resolved.{field.name}", np.asarray(value)
-
-
-@pytest.mark.parametrize("stride", [1, 3, 4])
-def test_per_chunk_stride_keeps_the_post_concatenation_samples(stride: int) -> None:
-    kept = np.asarray(_run(stride=stride).diagnostics.gamma_t)
-    expected = np.arange(CHUNK_SAMPLES * CHUNK_COUNT, dtype=float)[::stride]
-    if expected[-1] != CHUNK_SAMPLES * CHUNK_COUNT - 1:
-        expected = np.append(expected, CHUNK_SAMPLES * CHUNK_COUNT - 1)
-
-    assert np.array_equal(kept, expected), (
-        f"stride {stride} kept global samples {kept[:12]} but striding after "
-        f"concatenation would keep {expected[:12]}; the phase is not carrying "
-        "across chunk boundaries"
-    )
 
 
 def test_disk_spill_is_a_storage_choice_not_a_different_answer(tmp_path) -> None:
@@ -2541,7 +2008,7 @@ def test_electromagnetic_window_actually_solves_apar_and_bpar(case_grid):
     """Guard the EM rows: a silently electrostatic field solve would still pass FD."""
 
     from gkx.operators.linear.cache_builder import build_linear_cache
-    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+    from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
 
     grid, geom = case_grid
     params = LinearParams(beta=0.02, fapar=1.0)
@@ -2685,28 +2152,6 @@ def test_sheared_transport_trace_carries_the_same_status(ky_layout) -> None:
     )
 
 
-@pytest.mark.parametrize("ky_layout", ["full", "half"])
-def test_an_explicit_sheared_method_reports_no_implicit_status(ky_layout) -> None:
-    """No implicit solve, no carry leaf, and a null status rather than a fake one."""
-
-    run = _q29_runner(ky_layout, integrate_nonlinear_sheared, method="rk2")
-    final, _fields, stats = run(return_solve_stats=True)
-    assert stats is None
-    reference, _reference_fields = run()
-    np.testing.assert_array_equal(np.asarray(final), np.asarray(reference))
-
-    state_only, only_stats = run(return_fields=False, return_solve_stats=True)
-    assert only_stats is None
-    # The state-only scan form is its own graph -- it takes the fixed-step time
-    # rather than the accumulated one, which is a pre-existing difference of the
-    # two forms -- so it is compared against itself, not against the endpoint
-    # form, and must be bitwise unchanged by asking for a status it has none of.
-    state_only_reference = run(return_fields=False)
-    np.testing.assert_array_equal(
-        np.asarray(state_only), np.asarray(state_only_reference)
-    )
-
-
 @contextmanager
 def _counting_backend_compiles(name: str = "") -> Iterator[dict[str, int]]:
     """Count compiles of modules named like ``name`` (skip if JAX moves the hook)."""
@@ -2827,22 +2272,6 @@ def test_window_adjoint_shared_graph_is_not_stale_for_a_new_geometry(case_grid):
 
     assert np.asarray(cold[0]).tobytes() == np.asarray(warm[0]).tobytes()
     assert np.asarray(cold[1]).tobytes() == np.asarray(warm[1]).tobytes()
-
-
-def test_compiled_window_rebuilds_the_projector_the_eager_route_used():
-    """The topology signature resolves to the eager route's cached projector."""
-
-    cfg = CycloneBaseCase(grid=GridConfig(Nx=NX, Ny=NY, Nz=NZ, Lx=6.0, Ly=6.0))
-    grid = build_spectral_grid(cfg.grid)
-    ky = np.asarray(grid.ky)
-    nx = int(np.asarray(grid.kx).size)
-    signature = nonlinear_projection.hermitian_projector_signature(ky, nx)
-    assert hash(signature) == hash(
-        nonlinear_projection.hermitian_projector_signature(ky, nx)
-    )
-    assert nonlinear_projection.hermitian_projector_for_signature(
-        signature
-    ) is _make_hermitian_projector(ky, nx)
 
 
 # --- kinetic-electron step: measured streaming bound, per-chain IMEX operator

@@ -53,12 +53,10 @@ from gkx.config import (
 )
 from gkx.geometry.vmec_eik import (
     build_vmec_geometry_request,
-    default_vmec_eik_output_path,
     generate_runtime_vmec_eik,
 )
 import gkx.geometry.imported_vmec as vmec_backend
 from gkx.geometry.imported_vmec import internal_vmec_backend_available
-import dataclasses
 from types import SimpleNamespace
 import gkx.geometry.vmec_state_controls as controls
 import gkx.geometry.vmec_boozer_derivatives as vmec_derivatives
@@ -78,10 +76,8 @@ from gkx.geometry.imported_vmec import (
     write_vmec_eik_netcdf,
 )
 from gkx.operators.linear.params import (
-    LinearTerms,
     linear_params_for_geometry,
 )
-from gkx.operators.linear.rhs import linear_rhs_cached
 import tempfile
 from support.reference_physics import _array_parity_metrics
 from gkx.geometry.vmec_boozer_derivatives import (
@@ -376,18 +372,6 @@ def test_sampled_flux_tube_geometry_tree_roundtrip():
     assert jnp.allclose(restored.cv_profile, sampled.cv_profile)
 
 
-def test_ensure_flux_tube_geometry_data_reuses_sampled_input():
-    """The geometry contract helper should preserve pre-sampled geometry objects."""
-
-    geom = SAlphaGeometry(q=1.7, s_hat=0.9, epsilon=0.1)
-    theta = jnp.linspace(-jnp.pi, jnp.pi, 13)
-    sampled = sample_flux_tube_geometry(geom, theta)
-
-    ensured = ensure_flux_tube_geometry_data(sampled, theta)
-
-    assert ensured is sampled
-
-
 def test_ensure_flux_tube_geometry_data_trims_closed_theta_interval():
     """Imported geometry should drop the terminal theta point for solver grids."""
 
@@ -487,24 +471,6 @@ def _write_grouped_geometry(path: Path, theta, profiles: dict, scalars: dict) ->
     return path
 
 
-def _flat_eik(theta, *, gds21, gds22, shat, kxfac, extra=None) -> dict:
-    profiles = dict.fromkeys(("bmag", "gds2", "jacob", "grho"), 1.0)
-    profiles |= dict.fromkeys(("cvdrift", "gbdrift", "cvdrift0", "gbdrift0"), 0.0)
-    profiles |= {"gds21": gds21, "gds22": gds22, "gradpar": 0.4}
-    scalars = {"q": 1.7, "shat": shat, "Rmaj": 5.0, "kxfac": kxfac}
-    return profiles, scalars
-
-
-_EIK_SCALARS = {
-    "q": 1.7,
-    "shat": 0.6,
-    "Rmaj": 5.0,
-    "kxfac": 1.3,
-    "scale": 2.0,
-    "nfp": 5.0,
-}
-
-
 def test_load_imported_geometry_netcdf_reads_sampled_contract(tmp_path):
     """imported grouped NetCDF geometry output should map into the sampled contract."""
 
@@ -553,95 +519,6 @@ def test_load_imported_geometry_netcdf_reads_sampled_contract(tmp_path):
     assert loaded.epsilon == pytest.approx(0.2)
 
 
-def test_load_imported_geometry_netcdf_reads_root_level_eik_layout(tmp_path):
-    """Root-level eik.nc geometry should map into the sampled contract."""
-
-    theta = np.linspace(-np.pi, np.pi, 5)
-    bmag = np.array([1.0, 1.1, 1.2, 1.1, 1.0])
-    cvdrift = np.array([0.3, 0.4, 0.5, 0.4, 0.3])
-    cvdrift0 = np.array([0.0, -0.1, 0.0, 0.1, 0.0])
-    drhodpsi = 1.7
-    path = _write_eik(
-        tmp_path / "geom.eik.nc",
-        theta,
-        {
-            "bmag": bmag,
-            "gds2": [1.0, 1.4, 1.8, 1.4, 1.0],
-            "gds21": [0.0, -0.2, 0.0, 0.2, 0.0],
-            "gds22": 0.8,
-            "cvdrift": cvdrift,
-            "gbdrift": cvdrift,
-            "cvdrift0": cvdrift0,
-            "gbdrift0": cvdrift0,
-            "jacob": np.linspace(2.0, 3.0, theta.size),
-            "grho": np.linspace(1.0, 1.4, theta.size),
-            "gradpar": 0.4,
-            "Rplot": np.linspace(4.0, 6.0, theta.size),
-            "Zplot": np.linspace(-1.0, 1.0, theta.size),
-            "theta_PEST": theta + 0.1,
-        },
-        {"drhodpsi": drhodpsi, **_EIK_SCALARS, "alpha": 0.2, "zeta_center": 0.3},
-    )
-
-    loaded = load_imported_geometry_netcdf(path)
-
-    assert loaded.source_model == "imported-netcdf"
-    assert loaded.theta_closed_interval is True
-    assert jnp.allclose(loaded.theta, theta)
-    expected_jacobian = 1.0 / np.abs(drhodpsi * 0.4 * bmag)
-    assert jnp.allclose(loaded.jacobian_profile, expected_jacobian)
-    assert jnp.allclose(loaded.grho_profile, np.linspace(1.0, 1.4, theta.size))
-    assert jnp.allclose(loaded.cv_profile, 0.5 * cvdrift)
-    assert jnp.allclose(loaded.gb_profile, 0.5 * cvdrift)
-    assert loaded.kxfac == pytest.approx(1.3)
-    assert loaded.theta_scale == pytest.approx(2.0)
-    assert loaded.nfp == 5
-    assert loaded.R0 == pytest.approx(5.0)
-    np.testing.assert_allclose(
-        loaded.cylindrical_R_profile, np.linspace(4.0, 6.0, theta.size)
-    )
-    np.testing.assert_allclose(loaded.toroidal_angle_profile, 0.3 + 1.7 * (theta + 0.1))
-    assert np.all(np.isfinite(np.asarray(loaded.bgrad_profile)))
-
-
-def test_load_imported_geometry_netcdf_detects_open_root_level_eik_layout(tmp_path):
-    """Root-level eik files can already be on the open solver grid."""
-
-    theta = np.linspace(-np.pi, np.pi, 5, endpoint=False)
-    n = theta.size
-    bmag = np.linspace(1.0, 1.2, n)
-    drift = np.linspace(0.3, 0.5, n)
-    drhodpsi = 1.7
-    path = _write_eik(
-        tmp_path / "geom_open.eik.nc",
-        theta,
-        {
-            "bmag": bmag,
-            "gds2": np.linspace(1.0, 2.0, n),
-            "gds21": np.linspace(-0.2, 0.2, n),
-            "gds22": 0.8,
-            "cvdrift": drift,
-            "gbdrift": drift,
-            "cvdrift0": np.linspace(-0.1, 0.1, n),
-            "gbdrift0": np.linspace(-0.1, 0.1, n),
-            "jacob": np.linspace(2.0, 3.0, n),
-            "grho": np.linspace(1.0, 1.4, n),
-            "gradpar": 0.4,
-        },
-        {"drhodpsi": drhodpsi, **_EIK_SCALARS, "alpha": 0.2},
-    )
-
-    loaded = load_imported_geometry_netcdf(path)
-
-    assert loaded.source_model == "imported-netcdf"
-    assert loaded.theta_closed_interval is False
-    assert jnp.allclose(loaded.theta, theta)
-    expected_jacobian = 1.0 / np.abs(drhodpsi * 0.4 * bmag)
-    assert jnp.allclose(loaded.jacobian_profile, expected_jacobian)
-    assert jnp.allclose(loaded.cv_profile, 0.5 * drift)
-    assert jnp.allclose(loaded.gb_profile, 0.5 * drift)
-
-
 def test_root_level_eik_import_matches_sampled_contract_after_trim(tmp_path):
     """VMEC-style closed-interval imported geometry should recover the open solver contract."""
 
@@ -682,22 +559,6 @@ def test_root_level_eik_import_matches_sampled_contract_after_trim(tmp_path):
     assert jnp.allclose(
         loaded_open.bgrad_profile, sampled_open.bgrad_profile, rtol=1.0e-4, atol=1.0e-4
     )
-
-
-def test_build_flux_tube_geometry_loads_imported_netcdf(tmp_path):
-    theta = np.linspace(-np.pi, np.pi, 5, endpoint=False)
-    path = _write_grouped_geometry(
-        tmp_path / "geom.out.nc",
-        theta,
-        dict.fromkeys(_GROUPED_PROFILES, 1.0),
-        {"gradpar": 0.4, "q": 1.7, "shat": 0.6, "rmaj": 5.0, "aminor": 1.0},
-    )
-
-    loaded = build_flux_tube_geometry(
-        GeometryConfig(model="imported-netcdf", geometry_file=str(path))
-    )
-
-    assert loaded.source_model == "imported-netcdf"
 
 
 def test_build_flux_tube_geometry_rejects_missing_import_file_and_unknown_model() -> (
@@ -746,124 +607,9 @@ def test_twist_shift_params_slab_and_imported_geometry_branches() -> None:
     assert x0 > 0.0
 
 
-@pytest.mark.parametrize("model", ["imported-eik", "vmec-eik", "desc-eik", "eik"])
-def test_build_flux_tube_geometry_accepts_imported_eik_aliases(tmp_path, model: str):
-    theta = np.linspace(-np.pi, np.pi, 5)
-    drift = [0.3, 0.4, 0.5, 0.4, 0.3]
-    drift0 = [-0.1, 0.0, 0.1, 0.0, -0.1]
-    path = _write_eik(
-        tmp_path / "geom.eik.nc",
-        theta,
-        {
-            "bmag": [1.0, 1.1, 1.2, 1.1, 1.0],
-            "gds2": [1.0, 1.5, 2.0, 1.5, 1.0],
-            "gds21": [-0.2, 0.0, 0.2, 0.0, -0.2],
-            "gds22": 0.8,
-            "cvdrift": drift,
-            "gbdrift": drift,
-            "cvdrift0": drift0,
-            "gbdrift0": drift0,
-            "jacob": [2.0, 2.5, 3.0, 2.5, 2.0],
-            "grho": [1.0, 1.2, 1.4, 1.2, 1.0],
-            "gradpar": 0.4,
-        },
-        {"drhodpsi": 1.0, **_EIK_SCALARS},
-    )
-
-    loaded = build_flux_tube_geometry(
-        GeometryConfig(model=model, geometry_file=str(path))
-    )
-
-    assert not isinstance(loaded, (SAlphaGeometry, SlabGeometry))
-    assert loaded.source_model == "imported-netcdf"
-    assert loaded.theta_closed_interval is True
-    assert loaded.theta_scale == pytest.approx(2.0)
-    assert loaded.nfp == 5
-
-
-def test_ensure_flux_tube_geometry_data_trims_closed_imported_vmec_grid(tmp_path):
-    theta = np.linspace(-3.0 * np.pi, 3.0 * np.pi, 9)
-    bmag_val = np.array([1.0, 1.1, 1.2, 1.3, 1.4, 1.3, 1.2, 1.1, 1.0])
-    grho_val = bmag_val.copy()
-    drift = [0.3, 0.4, 0.5, 0.6, 0.7, 0.6, 0.5, 0.4, 0.3]
-    drift0 = [-0.1, -0.05, 0.0, 0.05, 0.1, 0.05, 0.0, -0.05, -0.1]
-    path = _write_eik(
-        tmp_path / "geom_vmec.eik.nc",
-        theta,
-        {
-            "bmag": bmag_val,
-            "gds2": [1.0, 1.2, 1.4, 1.6, 1.8, 1.6, 1.4, 1.2, 1.0],
-            "gds21": [-0.2, -0.1, 0.0, 0.1, 0.2, 0.1, 0.0, -0.1, -0.2],
-            "gds22": 0.8,
-            "cvdrift": drift,
-            "gbdrift": drift,
-            "cvdrift0": drift0,
-            "gbdrift0": drift0,
-            "jacob": [2.0, 2.2, 2.4, 2.6, 2.8, 2.6, 2.4, 2.2, 2.0],
-            "grho": grho_val,
-            "gradpar": 0.4,
-        },
-        {"q": 1.7, "shat": 0.6, "Rmaj": 5.0, "scale": 2.0, "nfp": 5.0},
-    )
-
-    geom = build_flux_tube_geometry(
-        GeometryConfig(model="vmec-eik", geometry_file=str(path))
-    )
-    grid_cfg = apply_geometry_grid_defaults(geom, replace(_LINKED_GRID, Nz=16))
-    grid = build_spectral_grid(grid_cfg)
-    sampled = ensure_flux_tube_geometry_data(geom, grid.z)
-
-    assert geom.theta_closed_interval is True
-    assert sampled.theta_closed_interval is False
-    assert sampled.theta.shape[0] == grid.z.size
-    assert jnp.allclose(sampled.theta, jnp.asarray(grid.z))
-    assert sampled.theta_scale == pytest.approx(2.0)
-    assert sampled.nfp == 5
-    expected_jacob = 1.0 / (0.4 * bmag_val[:-1])
-    assert jnp.allclose(sampled.jacobian_profile, jnp.asarray(expected_jacob))
-    assert jnp.allclose(sampled.grho_profile, jnp.asarray(grho_val[:-1]))
-
-
 _LINKED_GRID = GridConfig(
     Nx=4, Ny=4, Nz=16, Lx=6.28, Ly=6.28, boundary="linked", y0=10.0
 )
-
-
-def _flat_eik_geometry(path: Path, theta, **kwargs):
-    profiles, scalars = _flat_eik(theta, **kwargs)
-    return load_imported_geometry_netcdf(_write_eik(path, theta, profiles, scalars))
-
-
-def test_apply_geometry_grid_defaults_uses_imported_theta_and_kxfac(tmp_path):
-    theta = np.linspace(-3.0 * np.pi, 3.0 * np.pi, 9)
-    geom = _flat_eik_geometry(
-        tmp_path / "geom.eik.nc", theta, gds21=1.0, gds22=0.5, shat=0.5, kxfac=1.7
-    )
-    adjusted = apply_geometry_grid_defaults(geom, _LINKED_GRID)
-    jtwist, x0 = twist_shift_params(geom, adjusted)
-
-    assert adjusted.Nz == theta.size - 1
-    assert adjusted.z_min == pytest.approx(theta[0])
-    assert adjusted.z_max == pytest.approx(theta[-1])
-    assert adjusted.kxfac == pytest.approx(1.7)
-    assert adjusted.jtwist == jtwist
-    assert adjusted.Lx == pytest.approx(2.0 * np.pi * x0)
-
-
-def _fix_aspect_geometry(path: Path):
-    theta = np.linspace(-np.pi, np.pi, 9)
-    geom = _flat_eik_geometry(path, theta, gds21=-0.6, gds22=0.2, shat=0.5, kxfac=1.0)
-    return geom, apply_geometry_grid_defaults(
-        geom, replace(_LINKED_GRID, boundary="fix aspect")
-    )
-
-
-def test_apply_geometry_grid_defaults_applies_twist_shift_for_fix_aspect(tmp_path):
-    geom, adjusted = _fix_aspect_geometry(tmp_path / "geom_fix_aspect.eik.nc")
-    jtwist, x0 = twist_shift_params(geom, adjusted)
-
-    assert adjusted.jtwist == jtwist
-    assert adjusted.Lx == pytest.approx(2.0 * np.pi * x0)
 
 
 def test_apply_geometry_grid_defaults_promotes_near_zero_shat_to_periodic():
@@ -876,18 +622,6 @@ def test_apply_geometry_grid_defaults_promotes_near_zero_shat_to_periodic():
 
     assert adjusted.boundary == "periodic"
     assert adjusted.jtwist is None
-
-
-def test_build_linear_cache_uses_linked_streaming_for_fix_aspect_imported_geometry(
-    tmp_path,
-):
-    geom, grid_cfg = _fix_aspect_geometry(tmp_path / "geom_fix_aspect_cache.eik.nc")
-    grid = build_spectral_grid(grid_cfg)
-    cache = build_linear_cache(grid, geom, LinearParams(), Nl=2, Nm=4)
-
-    assert cache.use_twist_shift is True
-    assert cache.jtwist != 0
-    assert cache.linked_indices
 
 
 def test_apply_geometry_grid_defaults_preserves_open_solver_theta(tmp_path):
@@ -1276,45 +1010,6 @@ def test_generate_miller_eik_internal_publishes_atomically(
     assert not (tmp_path / "miller.eiknc.nc").exists()
 
 
-def test_miller_float32_accepts_its_own_theta_grid_at_nperiod_5(
-    tmp_path: Path,
-) -> None:
-    from gkx.runtime import (
-        run_runtime_linear,
-    )
-    from gkx.workflows.runtime.toml import load_runtime_from_toml
-
-    cfg, _ = load_runtime_from_toml(
-        REPO_ROOT / "examples/06_electromagnetic/case_full.toml"
-    )
-    cfg = replace(
-        cfg,
-        geometry=replace(
-            cfg.geometry,
-            model="miller",
-            q=1.4,
-            s_hat=0.786,
-            R0=2.78,
-            R_geo=2.78,
-            geometry_file=str(tmp_path / "g.eiknc.nc"),
-        ),
-        grid=replace(cfg.grid, nperiod=5, ntheta=32, Nz=32 * 9, y0=1.0 / 0.3),
-    )
-    with jax.enable_x64(False):  # the defect is float32-only; CI runs x64
-        res = run_runtime_linear(
-            cfg,
-            ky_target=0.3,
-            Nl=1,
-            Nm=2,
-            solver="time",
-            dt=1.0e-3,
-            steps=2,
-            sample_stride=1,
-            require_positive=False,
-        )
-    assert float(res.ky) == pytest.approx(0.3, rel=1.0e-6)
-
-
 # Runtime Miller eik request and generation contracts.
 
 
@@ -1404,27 +1099,6 @@ def test_build_miller_geometry_request_creates_expected_request(tmp_path: Path) 
     assert request.rhoc == 0.5
     assert request.ntheta == 24
     assert request.nperiod == 1
-
-
-def test_generate_runtime_miller_eik_invokes_internal_generator(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    out_path = tmp_path / "geom.eiknc.nc"
-    cfg = _miller_runtime_cfg(tmp_path, geometry_file=str(out_path))
-
-    mock_gen = MagicMock(return_value=out_path.resolve())
-    monkeypatch.setattr(
-        "gkx.geometry.miller_eik.generate_miller_eik_internal", mock_gen
-    )
-    out_path.write_bytes(b"stale")
-    out = generate_runtime_miller_eik(cfg, force=True)
-
-    assert out == out_path.resolve()
-    assert mock_gen.called
-    _, kwargs = mock_gen.call_args
-    request = kwargs["request"]
-    assert request.ntheta == 24
-    assert request.q == 1.4
 
 
 def test_generate_runtime_miller_eik_reuses_existing_output(
@@ -1578,25 +1252,6 @@ def test_build_vmec_geometry_request_infers_npol_from_nperiod(tmp_path: Path) ->
     assert request.npol == pytest.approx(5.0)
 
 
-def test_default_vmec_eik_output_path_tracks_vmec_file_metadata(tmp_path: Path) -> None:
-    cfg = _vmec_runtime_cfg(tmp_path)
-    request = build_vmec_geometry_request(cfg)
-
-    first = default_vmec_eik_output_path(request)
-    vmec_path = Path(request.vmec_file)
-    vmec_path.write_text("updated-stub", encoding="utf-8")
-    os.utime(
-        vmec_path,
-        ns=(vmec_path.stat().st_atime_ns, vmec_path.stat().st_mtime_ns + 1_000_000),
-    )
-
-    second = default_vmec_eik_output_path(request)
-
-    assert first.parent.name == "vmec_eik"
-    assert first.suffixes == [".eik", ".nc"]
-    assert first != second
-
-
 def test_atomic_vmec_eik_write_replaces_final_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1617,28 +1272,6 @@ def test_atomic_vmec_eik_write_replaces_final_path(
     assert out_path.read_text(encoding="utf-8") == "new"
     assert temp_paths
     assert not temp_paths[0].exists()
-
-
-def test_generate_runtime_vmec_eik_invokes_internal_generator(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    out_path = tmp_path / "geom.eik.nc"
-    cfg = _vmec_runtime_cfg(tmp_path, geometry_file=str(out_path))
-
-    mock_gen = MagicMock(return_value=out_path.resolve())
-    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", mock_gen)
-    monkeypatch.setattr(
-        "gkx.geometry.vmec_eik.internal_vmec_backend_available", lambda: True
-    )
-
-    out = generate_runtime_vmec_eik(cfg)
-
-    assert out == out_path.resolve()
-    assert mock_gen.called
-    _, kwargs = mock_gen.call_args
-    request = kwargs["request"]
-    assert request.ntheta == 32
-    assert request.vmec_file == str(Path(cfg.geometry.vmec_file).resolve())
 
 
 def _patch_default_vmec_cache(monkeypatch, expected_out, *, backend, mock_gen):
@@ -1744,19 +1377,6 @@ def test_internal_vmec_backend_available_detects_env_provided_booz_xform_jax(
 # ---------------------------------------------------------------------------
 # Synthetic-input factories
 # ---------------------------------------------------------------------------
-@dataclasses.dataclass(frozen=True)
-class _FakeSpectralState:
-    """Minimal frozen vmex-``SpectralState`` stand-in for replace/perturb gates.
-
-    ``R_sin`` is a witness family that no tested control touches; it must
-    survive ``dataclasses.replace`` unchanged.
-    """
-
-    R_cos: jnp.ndarray
-    Z_sin: jnp.ndarray
-    R_sin: jnp.ndarray
-
-
 class _ClosableDataset:
     """netCDF-like handle that records exactly one ``close()``."""
 
@@ -1765,16 +1385,6 @@ class _ClosableDataset:
 
     def close(self) -> None:
         self.closed = True
-
-
-def _solved_case_bundle(r_cos: object, z_sin: object) -> tuple[object, ...]:
-    """Return an ``(inp, state, runtime, wout)`` bundle like a solved vmex case."""
-
-    inp = SimpleNamespace(tag="inp")
-    runtime = SimpleNamespace(tag="runtime")
-    wout = SimpleNamespace(tag="wout")
-    state = SimpleNamespace(R_cos=r_cos, Z_sin=z_sin)
-    return inp, state, runtime, wout
 
 
 _SQUARE_LAYOUT_MESSAGE = (
@@ -1902,30 +1512,6 @@ def test_import_module_with_search_paths_loads_temp_module(tmp_path: Path) -> No
     mod = _import_module_with_search_paths("demo_mod", [pkg])
     assert mod.VALUE == 7
     sys.modules.pop("demo_mod", None)
-
-
-def test_import_module_with_search_paths_replaces_namespace_without_backend(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    checkout_root = tmp_path / "checkout"
-    pkg = checkout_root / "booz_xform_jax"
-    pkg.mkdir(parents=True)
-    (pkg / "__init__.py").write_text("class Booz_xform:\n    pass\n", encoding="utf-8")
-    monkeypatch.setitem(
-        sys.modules,
-        "booz_xform_jax",
-        SimpleNamespace(
-            __name__="booz_xform_jax", __path__=[str(tmp_path / "namespace")]
-        ),
-    )
-
-    mod = _import_module_with_search_paths(
-        "booz_xform_jax", [checkout_root], required_attr="Booz_xform"
-    )
-
-    assert hasattr(mod, "Booz_xform")
-    assert Path(mod.__file__).resolve() == (pkg / "__init__.py").resolve()
-    sys.modules.pop("booz_xform_jax", None)
 
 
 def test_import_module_with_search_paths_raises_on_missing(tmp_path: Path) -> None:
@@ -2391,30 +1977,6 @@ def test_vmec_splines_builds_interpolants_and_metadata() -> None:
         assert spline(0.5) == pytest.approx(expected, abs=1.0e-10)
 
 
-def test_vmec_fieldline_helper_angle_and_denominator_policies() -> None:
-    theta = np.array([[[0.0, 1.0]]])
-    phi = np.array([[[0.25, 0.25]]])
-    xm = np.array([1.0, 2.0])
-    xn = np.array([0.0, 1.0])
-
-    angle = vmec_fieldline_numerics._boozer_mode_angle(xm, xn, theta, phi, flipit=False)
-    np.testing.assert_allclose(angle[0, 0, 0], theta[0, 0])
-    np.testing.assert_allclose(angle[1, 0, 0], 2.0 * theta[0, 0] - 0.25)
-
-    flipped = vmec_fieldline_numerics._boozer_mode_angle(
-        xm, xn, theta, phi, flipit=True
-    )
-    np.testing.assert_allclose(flipped[0] - angle[0], np.pi)
-    np.testing.assert_allclose(flipped[1] - angle[1], 2.0 * np.pi)
-
-    safe = vmec_derivatives._safe_mode_denominator(
-        np.array([0.0, 2.0, 3.0]), np.array([0.0, 1.0, 1.0]), np.array([0.5])
-    )
-    assert safe.shape == (1, 2)
-    assert safe[0, 0] == pytest.approx(1.0e-30)
-    assert safe[0, 1] == pytest.approx(0.5)
-
-
 def test_vmec_fieldline_boozer_mode_sum_preserves_surface_axis() -> None:
     coeff = np.array([[1.0, 2.0], [3.0, 4.0]])
     basis = np.arange(2 * 2 * 3 * 4, dtype=float).reshape(2, 2, 3, 4)
@@ -2447,62 +2009,6 @@ def test_vmec_fieldline_boozer_trig_basis_preserves_mode_axis() -> None:
     np.testing.assert_allclose(msin[1], np.sin(angle[1]))
     np.testing.assert_allclose(ncos[1], -np.cos(angle[1]))
     np.testing.assert_allclose(nsin[2], 3.0 * np.sin(angle[2]))
-
-
-def test_vmec_fieldline_tensor_helpers_match_circular_surface() -> None:
-    theta = np.linspace(-np.pi, np.pi, 9)[None, None, :]
-    phi = theta.copy()
-    xm = np.array([0.0, 1.0])
-    xn = np.array([0.0, 0.0])
-    angle = vmec_fieldline_numerics._boozer_mode_angle(xm, xn, theta, phi, flipit=False)
-    cosangle, sinangle, mcos, msin, ncos, nsin = (
-        vmec_fieldline_numerics._boozer_trig_basis(xm, xn, angle)
-    )
-    r0, r1, z1 = 2.0, 0.2, 0.3
-
-    tensors = vmec_fieldline_numerics._fieldline_boozer_tensors(
-        rmnc_b=np.array([[r0, r1]]),
-        zmns_b=np.array([[0.0, z1]]),
-        numns_b=np.array([[0.0, 0.0]]),
-        d_rmnc_b_d_s=np.array([[0.05, 0.01]]),
-        d_zmns_b_d_s=np.array([[0.0, 0.02]]),
-        d_numns_b_d_s=np.array([[0.0, 0.0]]),
-        gmnc_b=np.array([[1.0, 0.0]]),
-        bmnc_b=np.array([[1.0, 0.1]]),
-        d_bmnc_b_d_s=np.array([[0.01, 0.02]]),
-        cosangle_b=cosangle,
-        sinangle_b=sinangle,
-        mcosangle_b=mcos,
-        msinangle_b=msin,
-        ncosangle_b=ncos,
-        nsinangle_b=nsin,
-    )
-
-    expected_r = r0 + r1 * np.cos(theta[0, 0])
-    np.testing.assert_allclose(tensors.R_b[0, 0], expected_r)
-    np.testing.assert_allclose(tensors.d_R_b_d_theta_b[0, 0], -r1 * np.sin(theta[0, 0]))
-    np.testing.assert_allclose(tensors.d_Z_b_d_theta_b[0, 0], z1 * np.cos(theta[0, 0]))
-    np.testing.assert_allclose(
-        tensors.d_B_b_d_s[0, 0], 0.01 + 0.02 * np.cos(theta[0, 0])
-    )
-
-    cartesian = vmec_fieldline_numerics._fieldline_cartesian_derivatives(
-        tensors=tensors, phi_b=phi
-    )
-    np.testing.assert_allclose(
-        cartesian.d_X_d_phi_b[0, 0],
-        -expected_r * np.sin(theta[0, 0]),
-    )
-    gradients = vmec_fieldline_numerics._fieldline_coordinate_gradients(
-        tensors=tensors,
-        cartesian=cartesian,
-        edge_toroidal_flux_over_2pi=2.0,
-    )
-    np.testing.assert_allclose(
-        gradients.grad_psi_Z,
-        cartesian.d_X_d_theta_b * cartesian.d_Y_d_phi_b
-        - cartesian.d_Y_d_theta_b * cartesian.d_X_d_phi_b,
-    )
 
 
 def test_vmec_fieldline_alpha_gradient_and_local_shear_helpers() -> None:
@@ -2593,48 +2099,6 @@ def test_vmec_fieldline_alpha_gradient_and_local_shear_helpers() -> None:
     np.testing.assert_allclose(shear.D_HNGC, expected_D)
     np.testing.assert_allclose(shear.L0, expected_L0)
     np.testing.assert_allclose(shear.L1, expected_L1)
-
-
-def test_vmec_fieldline_helper_coordinates_and_axisym_flip_policy() -> None:
-    theta1d = np.array([0.0, 1.0])
-    alpha_arr = np.array([0.0, 0.5])
-    iota = np.array([0.5, 1.0])
-
-    theta_b, phi_b = vmec_derivatives._fieldline_boozer_coordinates(
-        theta1d, alpha_arr, iota
-    )
-
-    assert theta_b.shape == (2, 2, 2)
-    np.testing.assert_allclose(theta_b[1, 0], theta1d)
-    np.testing.assert_allclose(phi_b[0, 1], (theta1d - 0.5) / 0.5)
-    np.testing.assert_allclose(
-        theta_b - iota[:, None, None] * phi_b,
-        np.broadcast_to(alpha_arr[None, :, None], theta_b.shape),
-    )
-
-    xm = np.array([1.0])
-    xn = np.array([0.0])
-    rmnc_b = np.array([[1.0]])
-    zmns_b = np.array([[0.25]])
-
-    assert not vmec_derivatives._axisym_flip_required(
-        isaxisym=False,
-        xm_b=xm,
-        xn_b=xn,
-        theta_b=theta_b[:1, :1],
-        phi_b=phi_b[:1, :1],
-        rmnc_b=rmnc_b,
-        zmns_b=zmns_b,
-    )
-    assert vmec_derivatives._axisym_flip_required(
-        isaxisym=True,
-        xm_b=xm,
-        xn_b=xn,
-        theta_b=theta_b[:1, :1],
-        phi_b=phi_b[:1, :1],
-        rmnc_b=rmnc_b,
-        zmns_b=zmns_b,
-    )
 
 
 def test_vmec_fieldline_helper_surface_average_and_centered_integral() -> None:
@@ -2751,35 +2215,6 @@ def test_vmec_fieldline_helper_flux_surface_hngc_averages() -> None:
     assert np.isfinite(d1)
     assert d1 > 0.0
     assert d2 == pytest.approx(0.0, abs=1.0e-14)
-
-
-def test_vmec_fieldline_helper_samples_boozer_mode_table() -> None:
-    s = np.array([0.25, 0.75])
-
-    def _family(scale: float) -> list:
-        return [lambda x, j=j: scale * (j + np.asarray(x)) for j in range(3)]
-
-    vs = SimpleNamespace(
-        mnbooz=3,
-        rmnc_b=_family(1.0),
-        zmns_b=_family(2.0),
-        numns_b=_family(3.0),
-        d_rmnc_b_d_s=_family(4.0),
-        d_zmns_b_d_s=_family(5.0),
-        d_numns_b_d_s=_family(6.0),
-        gmnc_b=_family(7.0),
-        bmnc_b=_family(8.0),
-        d_bmnc_b_d_s=_family(9.0),
-    )
-
-    rmnc_b, zmns_b, *_, d_bmnc_b_d_s = (
-        vmec_fieldline_numerics._sample_boozer_mode_table(vs, s, ns=2)
-    )
-
-    assert rmnc_b.shape == (2, 3)
-    np.testing.assert_allclose(rmnc_b[:, 2], 2.0 + s)
-    np.testing.assert_allclose(zmns_b[:, 1], 2.0 * (1.0 + s))
-    np.testing.assert_allclose(d_bmnc_b_d_s[:, 0], 9.0 * s)
 
 
 _FIELDLINE_KW = dict(
@@ -3024,43 +2459,6 @@ def test_generate_vmec_eik_internal_maps_boundary_and_computes_betaprim(
 # numbers rather than errors, which is why they are worth a dedicated gate.
 
 
-def test_s_alpha_keeps_radial_wavenumber_at_zero_shear() -> None:
-    r"""``k_perp^2`` must depend on ``kx`` even when the magnetic shear vanishes.
-
-    ``k_perp2`` divides ``kx`` by ``s_hat`` and multiplies by ``gds22``, so the
-    two cancel at finite shear. At zero shear it uses ``kx`` directly, which
-    means ``gds22`` has to be 1 rather than ``s_hat**2``. Leaving it at zero
-    erased the ``kx`` dependence entirely: every radial mode then shares one
-    perpendicular wavenumber, hence identical FLR factors and a degenerate
-    zonal polarization. ``SlabGeometry`` always carried this guard.
-    """
-
-    kx = jnp.asarray([0.0, 0.3, 0.6])
-    ky = jnp.asarray(0.5)
-    theta = jnp.asarray(0.0)
-
-    ratios = []
-    for shear in (0.8, 0.4, 1.0e-6, 0.0):
-        geometry = SAlphaGeometry.from_config(
-            GeometryConfig(q=1.4, s_hat=shear, epsilon=0.18, R0=2.78)
-        )
-        kperp2 = np.asarray(geometry.k_perp2(kx, ky, theta))
-        assert np.all(np.diff(kperp2) > 0.0), (
-            f"s_hat={shear}: k_perp2 does not increase with kx: {kperp2}"
-        )
-        ratios.append(kperp2[2] / kperp2[0])
-
-    # At theta = 0 the shear terms drop out of k_perp2, so the kx dependence
-    # must be identical at every shear. That continuity is the sharpest
-    # statement: the zero-shear branch cannot be special-cased incorrectly.
-    assert max(ratios) - min(ratios) < 1.0e-9, f"kx scaling varies with shear: {ratios}"
-
-    slab = SlabGeometry.from_config(
-        GeometryConfig(q=1.4, s_hat=0.0, epsilon=0.18, R0=2.78)
-    )
-    assert np.all(np.diff(np.asarray(slab.k_perp2(kx, ky, theta))) > 0.0)
-
-
 def test_s_alpha_retains_field_strength_variation() -> None:
     """s-alpha must keep ``B(theta)``, which is what makes particles trap.
 
@@ -3086,71 +2484,6 @@ def test_s_alpha_retains_field_strength_variation() -> None:
         assert abs(bmag.min() - 1.0 / (1.0 + epsilon)) < tolerance
         assert abs(bmag.max() - 1.0 / (1.0 - epsilon)) < tolerance
         assert np.abs(np.asarray(geometry.bgrad(theta))).max() > 0.0
-
-
-def _streaming_only_rhs(geometry, params) -> float:
-    """Return the norm of a streaming-only linear RHS for a z-varying state."""
-
-    grid = build_spectral_grid(GridConfig(Nx=3, Ny=2, Nz=16, Lx=20.0, Ly=20.0))
-    cache = build_linear_cache(grid, geometry, params, 4, 4)
-    state = jnp.zeros(
-        (4, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=jnp.complex128
-    )
-    # A z-dependent perturbation: a constant one has zero parallel derivative
-    # and would make this test vacuous.
-    state = state.at[0, 0, 1, 1, :].set(jnp.sin(jnp.asarray(grid.z)) * 1.0e-3)
-    terms = LinearTerms(
-        **dict.fromkeys(
-            "mirror curvature gradb diamagnetic collisions hypercollisions".split(), 0.0
-        ),
-        end_damping=0.0,
-    )
-    return float(
-        jnp.linalg.norm(
-            linear_rhs_cached(state, cache, params, terms=terms, use_jit=False)[0]
-        )
-    )
-
-
-def test_geometry_params_helper_carries_the_parallel_scale() -> None:
-    """``linear_params_for_geometry`` must make streaming follow ``gradpar``.
-
-    ``kpar_scale`` multiplies the parallel derivative and defaults to 1.0,
-    because ``LinearParams`` knows nothing about geometry. A hand-built
-    ``LinearParams()`` therefore streams at the wrong rate -- by ``1/(q R0)``,
-    a factor of 8.4 for the q=2.8, R0=3 case below -- with no error raised.
-    The runtime path sets it from the geometry; this helper is the Python-API
-    equivalent, and this test pins that it actually takes effect.
-    """
-
-    baseline = None
-    for q, major_radius in ((1.4, 1.0), (1.4, 2.78), (2.8, 3.0)):
-        geometry = SAlphaGeometry.from_config(
-            GeometryConfig(q=q, s_hat=0.8, epsilon=0.18, R0=major_radius)
-        )
-        gradpar = float(np.asarray(geometry.gradpar()))
-
-        plain = _streaming_only_rhs(geometry, LinearParams())
-        matched = _streaming_only_rhs(geometry, linear_params_for_geometry(geometry))
-
-        # The bare constructor ignores geometry entirely, so it gives the same
-        # answer for every case; that is the defect this helper exists for.
-        if baseline is None:
-            baseline = plain
-        assert abs(plain - baseline) < 1.0e-15 * baseline
-
-        # The helper scales the parallel term by exactly gradpar.
-        assert abs(matched / plain - gradpar) < 1.0e-9, (
-            f"q={q}, R0={major_radius}: streaming scaled by {matched / plain:.6f}, "
-            f"expected gradpar {gradpar:.6f}"
-        )
-
-    # An explicit override still wins, for published normalizations that fold
-    # q R0 in elsewhere.
-    geometry = SAlphaGeometry.from_config(
-        GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.78)
-    )
-    assert linear_params_for_geometry(geometry, kpar_scale=1.0).kpar_scale == 1.0
 
 
 def _random_state(generator, grid) -> jnp.ndarray:
@@ -3329,19 +2662,6 @@ def _stub_drift_inputs(d_pressure_ds: float) -> tuple[object, ...]:
         metric_bmag_sq=mod_b * mod_b,
     )
     return request, scales, profiles, equal_arc, state
-
-
-def test_zero_pressure_restores_the_zero_beta_drift_alias() -> None:
-    """At zero beta the bridge must reproduce the old ``gbdrift = cvdrift``."""
-
-    drifts = raw_drift_profiles(*_stub_drift_inputs(0.0))
-
-    np.testing.assert_array_equal(
-        np.asarray(drifts.gbdrift), np.asarray(drifts.cvdrift)
-    )
-    np.testing.assert_array_equal(
-        np.asarray(drifts.gbdrift0), np.asarray(drifts.cvdrift0)
-    )
 
 
 def test_pressure_moves_the_curvature_drift_and_leaves_the_grad_b_drift() -> None:

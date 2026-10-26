@@ -15,7 +15,7 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
 )
-from gkx.solvers_nonlinear_state_integration import integrate_nonlinear
+from gkx.solvers_nonlinear_diagnostics import integrate_nonlinear
 from gkx.parallel.state import resolve_state_sharding
 from gkx.parallel.integrators import integrate_nonlinear_sharded
 from gkx.solvers_time_explicit import _reject_unsupported_config_collision_operator

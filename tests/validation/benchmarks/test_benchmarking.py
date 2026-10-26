@@ -94,7 +94,7 @@ from support.reference_physics import (
 from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers_time_explicit_cfl import _linear_frequency_bound
+from gkx.solvers_time_explicit import _linear_frequency_bound
 from gkx.runtime import (
     _build_initial_condition as build_runtime_initial_condition,
     build_runtime_geometry,
@@ -937,14 +937,6 @@ def test_root_benchmark_payload_stays_lightweight() -> None:
     assert total_bytes <= MAX_ROOT_BENCHMARK_PAYLOAD_BYTES
 
 
-def _proc(stdout: str = "", stderr: str = "", returncode: int = 0):
-    return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
-
-
-_STELLARATOR_CASES = {"w7x-linear", "w7x-nonlinear", "hsx-linear", "hsx-nonlinear"}
-_CUDA_PIN = "CUDA_VISIBLE_DEVICES=${GKX_BENCH_CUDA_DEVICE}"
-
-
 def _gx_jflr(ell: int, b: jnp.ndarray) -> jnp.ndarray:
     """GX Jflr: exp(-b/2) * (-b/2)^ell / ell!."""
 
@@ -1636,7 +1628,6 @@ def test_build_initial_condition_field_map_and_zonal_mode_safety() -> None:
 # Contracts for grouped nonlinear transport release gates.
 
 
-SCRIPT = ROOT / "scripts" / "checks" / "check_nonlinear_transport_gates.py"
 mod = load_release_tool("check_nonlinear_transport_gates")
 
 
@@ -1980,16 +1971,6 @@ output_target = load_release_tool("check_nonlinear_transport_gates")
 window_ensemble = load_release_tool("check_nonlinear_transport_gates")
 window_readiness = window_ensemble
 FLOW_SHEAR_GATE = ROOT / "docs" / "_static" / "flow_shear_fixed_step_response_gate.json"
-
-
-_STATE_SHAPE = (1, 1, 1, 2, 2, 2)
-_V2_TIME_IDENTITY = {
-    "time_fixed_dt": False,
-    "time_dt": 0.1,
-    "time_dt_max": "None",
-    "time_cfl": 1.0,
-    "time_method": "rk3",
-}
 
 
 def test_output_target_checker_accepts_near_horizon_and_rejects_partial_bundle(

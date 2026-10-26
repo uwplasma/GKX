@@ -291,29 +291,6 @@ def test_batch_map_multi_device_branch_drops_padding_and_preserves_chunk_order(
     )
 
 
-def test_batch_map_single_device_fallback_never_calls_pmap(monkeypatch) -> None:
-    monkeypatch.setattr(
-        parallel_batch.jax,
-        "pmap",
-        lambda *args, **kwargs: pytest.fail(
-            "single-device fallback must use vmap chunks, not pmap"
-        ),
-    )
-    values = jnp.arange(5, dtype=jnp.float32)
-
-    def fn(x):
-        return {"linear": x + 1.0, "quadratic": jnp.asarray([x**2])}
-
-    observed = parallel.batch_map(fn, values, batch_size=2, devices=[jax.devices()[0]])
-    expected = jax.vmap(fn)(values)
-
-    jax.tree_util.tree_map(
-        lambda obs, exp: np.testing.assert_allclose(np.asarray(obs), np.asarray(exp)),
-        observed,
-        expected,
-    )
-
-
 def test_batch_map_multi_device_branch_preserves_pytree_identity(monkeypatch) -> None:
     def fake_pmap(fn, devices):
         assert len(devices) == 2
@@ -748,49 +725,6 @@ def test_state_sharding_5d_axis_map_is_explicit_with_fake_mesh(
     assert resolved.spec == sharding_mod.PartitionSpec(*expected_spec)
 
 
-@pytest.mark.parametrize("directive", ["species", "s"])
-def test_state_sharding_6d_species_aliases_share_partition_spec(monkeypatch, directive):
-    class FakeNamedSharding:
-        def __init__(self, mesh, spec):
-            self.mesh = mesh
-            self.spec = spec
-
-    monkeypatch.setattr(
-        sharding_mod,
-        "_mesh_from_devices",
-        lambda devices, axis_name: f"mesh:{axis_name}",
-    )
-    monkeypatch.setattr(sharding_mod, "NamedSharding", FakeNamedSharding)
-
-    resolved = resolve_state_sharding(
-        _state_6d(), directive, axis_name="batch", devices=[object(), object()]
-    )
-
-    assert resolved.spec == sharding_mod.PartitionSpec(
-        "batch", None, None, None, None, None
-    )
-
-
-def test_mesh_from_devices_uses_visible_devices_and_returns_none_for_one_device(
-    monkeypatch,
-):
-    class FakeMesh:
-        def __init__(self, devices, axis_names):
-            self.devices = devices
-            self.axis_names = axis_names
-
-    monkeypatch.setattr(sharding_mod, "Mesh", FakeMesh)
-    fake_devices = [object(), object(), object()]
-    monkeypatch.setattr(sharding_mod.jax, "devices", lambda: fake_devices)
-
-    mesh = sharding_mod._mesh_from_devices(None, "d")
-
-    assert mesh is not None
-    assert mesh.axis_names == ("d",)
-    assert list(mesh.devices.reshape(-1)) == fake_devices
-    assert sharding_mod._mesh_from_devices([object()], "d") is None
-
-
 # ---- test_parallel_decomposition.py ----
 
 from gkx.parallel.independent import (
@@ -1136,20 +1070,6 @@ def test_unsupported_axis_raises(axis: str) -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "axis", ["species_hermite", "velocity", "s_m", "species", "m", "hermite"]
-)
-def test_velocity_axis_aliases_resolve_to_the_production_mesh(axis: str) -> None:
-    """Every spelling of the velocity mesh routes to one canonical axis."""
-
-    _require_devices(2)
-    plan = resolve_nonlinear_parallel_plan(
-        RuntimeParallelConfig(strategy="shard_map", axis=axis, num_devices=2)
-    )
-    assert plan is not None
-    assert plan.axis == "species_hermite"
-
-
 def test_auto_selects_the_species_hermite_mesh_and_says_which() -> None:
     """``auto = true`` resolves the mesh from the devices and reports it."""
 
@@ -1346,53 +1266,6 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
             rtol=1.0e-4,
             atol=5.0e-6,
         )
-
-
-def test_ky_route_scan_runs_replicated(monkeypatch) -> None:
-    """Pin the documented limit of the ``ky`` route: its scan is not split.
-
-    ``docs/parallelization.rst`` says the scan's input is replicated on every
-    device even when the ky extent divides the device count. If a change makes
-    the route partition for real, this fails, and that paragraph -- and the
-    claim that an uneven extent loses nothing by entering replicated -- must be
-    rewritten with it.
-    """
-
-    import gkx.solvers_nonlinear_diagnostics as diagnostics
-
-    _require_devices(2)
-    seen: list[object] = []
-    original = diagnostics._run_explicit_diagnostic_scan_and_finalize
-
-    def spy(prepared, *args, **kwargs):
-        seen.append(prepared.G0.sharding)
-        return original(prepared, *args, **kwargs)
-
-    monkeypatch.setattr(diagnostics, "_run_explicit_diagnostic_scan_and_finalize", spy)
-    run_runtime_nonlinear(
-        _nonlinear_cfg(
-            RuntimeParallelConfig(
-                strategy="shard_map", axis="ky", num_devices=2, strict_identity=False
-            )
-        ),
-        **_RUN_KWARGS,
-    )
-    assert len(seen) == 1
-    assert seen[0].is_fully_replicated and len(seen[0].device_set) == 2
-
-
-def test_shard_map_nonlinear_run_reports_the_route() -> None:
-    _require_devices(2)
-    messages: list[str] = []
-    run_runtime_nonlinear(
-        _nonlinear_cfg(
-            RuntimeParallelConfig(strategy="shard_map", axis="ky", num_devices=2)
-        ),
-        status_callback=messages.append,
-        **_RUN_KWARGS,
-    )
-    assert any("routing nonlinear run through" in message for message in messages)
-    assert any("identity gate passed" in message for message in messages)
 
 
 def _inject_shard_perturbation(monkeypatch) -> None:

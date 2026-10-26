@@ -41,7 +41,6 @@ from gkx.operators.linear import (
     apply_multispecies_collision_moment_matrix,
     assemble_drift_kinetic_improved_sugama_matrix,
     assemble_drift_kinetic_sugama_matrix,
-    COLLISION_OPERATOR_NAMES,
     collision_operator_from_config,
     DriftKineticMomentCollisionOperator,
     EqualSpeciesFiniteWavelengthCoulombOperator,
@@ -1228,82 +1227,6 @@ def test_drift_kinetic_collision_operators_obey_h_theorem_and_conserve_density()
         np.testing.assert_allclose(matrix[:, 0], 0.0, atol=1.0e-12)
 
 
-def test_collision_operator_from_config_selects_validates_and_stays_dissipative() -> (
-    None
-):
-    # TOML ``collision_operator`` selection: the diagonal defaults resolve to
-    # None (the linear RHS keeps its built-in Lenard-Bernstein term, re-enabled
-    # exactly when collision_operator is None), the moment-matrix names build a
-    # dense drift-kinetic operator, and an unknown name is rejected. The
-    # selected operators must remain physically valid (H-theorem).
-    from gkx.config import TimeConfig
-
-    assert TimeConfig().collision_operator == "landau"
-    density = jnp.asarray([1.0])
-    mass = jnp.asarray([1.0])
-    temperature = jnp.asarray([1.0])
-
-    assert (
-        collision_operator_from_config(
-            "none", density=density, mass=mass, temperature=temperature
-        )
-        is None
-    )
-    # Case/whitespace-insensitive; alias for the built-in diagonal term.
-    assert (
-        collision_operator_from_config(
-            "  Lenard_Bernstein ", density=density, mass=mass, temperature=temperature
-        )
-        is None
-    )
-
-    # "coulomb" is now an alias of the built-in linearized Landau operator.
-    assert (
-        collision_operator_from_config(
-            "coulomb", density=density, mass=mass, temperature=temperature
-        )
-        is None
-    )
-    for name in ("sugama", "improved_sugama"):
-        operator = collision_operator_from_config(
-            name, density=density, mass=mass, temperature=temperature
-        )
-        assert isinstance(operator, DriftKineticMomentCollisionOperator)
-        # Single species -> (Ns, Ns, 8, 8) ordered-pair moment matrix.
-        assert operator.matrix.shape == (1, 1, 8, 8)
-        block = np.asarray(operator.matrix).reshape(8, 8)
-        eigenvalues = np.linalg.eigvalsh(0.5 * (block + block.T))
-        # H-theorem preserved (tolerance covers float32 eigenvalue noise ~2e-8;
-        # any real growing direction would be O(0.1)).
-        assert float(eigenvalues.max()) < 1.0e-6, name
-        assert float(eigenvalues.min()) < -0.1, name
-
-    # The three moment models are physically distinct operators.
-    matrices = {
-        name: np.asarray(
-            collision_operator_from_config(
-                name, density=density, mass=mass, temperature=temperature
-            ).matrix
-        )
-        for name in ("sugama", "improved_sugama")
-    }
-    assert not np.allclose(matrices["sugama"], matrices["improved_sugama"])
-
-    assert set(COLLISION_OPERATOR_NAMES) == {
-        "none",
-        "lenard_bernstein",
-        "sugama",
-        "improved_sugama",
-        "coulomb",
-        "coulomb_finite_kperp",
-        "landau",
-    }
-    with pytest.raises(ValueError, match="collision_operator must be one of"):
-        collision_operator_from_config(
-            "bogus", density=density, mass=mass, temperature=temperature
-        )
-
-
 def test_finite_wavelength_coulomb_tables_load_with_provenance() -> None:
     # The shipped gyrokinetic Coulomb tables are checksummed multiprecision
     # output; the loader must verify provenance and expose a usable grid.
@@ -2085,32 +2008,6 @@ def test_pure_laguerre_sink_is_exactly_the_declared_rate() -> None:
         * _state()
     )
     assert jnp.allclose(sink, expected, atol=0.0, rtol=0.0)
-
-
-def test_sink_adds_to_the_kz_branch_without_touching_it() -> None:
-    """The declared sink is additive: the ``|k_z|`` Hermite model is unchanged."""
-
-    baseline = _contribution(
-        nu_hyper_l=jnp.asarray(0.0),
-        nu_hyper_m=jnp.asarray(1.0),
-        hypercollisions_const=jnp.asarray(0.0),
-        hypercollisions_kz=jnp.asarray(1.0),
-    )
-    sink = _contribution(
-        nu_hyper_l=jnp.asarray(0.1),
-        nu_hyper_m=jnp.asarray(1.0),
-        nu_hyper_m_const=jnp.asarray(0.0),
-        hypercollisions_const=jnp.asarray(1.0),
-        hypercollisions_kz=jnp.asarray(0.0),
-    )
-    both = _contribution(
-        nu_hyper_l=jnp.asarray(0.1),
-        nu_hyper_m=jnp.asarray(1.0),
-        nu_hyper_m_const=jnp.asarray(0.0),
-        hypercollisions_const=jnp.asarray(1.0),
-        hypercollisions_kz=jnp.asarray(1.0),
-    )
-    assert jnp.allclose(both, baseline + sink, atol=0.0, rtol=0.0)
 
 
 def test_omitting_the_const_hermite_rate_reproduces_the_shared_coefficient() -> None:

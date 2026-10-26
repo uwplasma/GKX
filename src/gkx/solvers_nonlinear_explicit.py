@@ -1,6 +1,6 @@
 """Explicit nonlinear time-step policies.
 
-This module keeps the RK/SSP/K10 one-step formulas outside the public nonlinear
+This module keeps the RK/SSP one-step formulas outside the public nonlinear
 facade.  The integrator still injects the RHS and projection functions so the
 step policy remains pure, small, and directly testable.
 """
@@ -14,6 +14,8 @@ from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
+
+from gkx.config import method_error
 import numpy as np
 from solvax.ode import RK4_2, PIController, erk_step, step_factor
 
@@ -48,25 +50,14 @@ _PI_CAP = 2.0
 _PI_REDO = 3.0
 _PI_CONTROL = PIController(k_i=1.0, k_p=0.0, safety=0.9, fac_min=0.5, fac_max=1.3)
 
+_NONLINEAR_METHODS = frozenset(
+    {"rk2", "rk3", "rk4", "rk4-pi", "sspx3", "imex-ars3", "imex-ark3"}
+)
+
 
 def _rhs_value(rhs_fn: RhsFn, state: jnp.ndarray) -> jnp.ndarray:
     dG, _fields = rhs_fn(state)
     return dG
-
-
-def _explicit_rk3_classic_state(
-    G: jnp.ndarray,
-    dG: jnp.ndarray,
-    dt_local: jnp.ndarray,
-    *,
-    rhs_fn: RhsFn,
-    project_state: ProjectFn,
-) -> jnp.ndarray:
-    G1 = project_state(G + dt_local * dG)
-    k2 = _rhs_value(rhs_fn, G1)
-    G2 = project_state(0.75 * G + 0.25 * (G1 + dt_local * k2))
-    k3 = _rhs_value(rhs_fn, G2)
-    return (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_local * k3)
 
 
 def _explicit_rk3_heun_state(
@@ -122,28 +113,6 @@ def _explicit_sspx3_state(
     )
 
 
-def _explicit_k10_state(
-    G: jnp.ndarray,
-    dt_local: jnp.ndarray,
-    *,
-    rhs_fn: RhsFn,
-    project_state: ProjectFn,
-) -> jnp.ndarray:
-    def euler_step(G_state: jnp.ndarray) -> jnp.ndarray:
-        return project_state(G_state + (dt_local / 6.0) * _rhs_value(rhs_fn, G_state))
-
-    G_q1 = G
-    G_q2 = G
-    for _ in range(5):
-        G_q1 = euler_step(G_q1)
-    G_q2 = 0.04 * G_q2 + 0.36 * G_q1
-    G_q1 = 15.0 * G_q2 - 5.0 * G_q1
-    for _ in range(4):
-        G_q1 = euler_step(G_q1)
-    dG_final = _rhs_value(rhs_fn, G_q1)
-    return G_q2 + 0.6 * G_q1 + 0.1 * dt_local * dG_final
-
-
 def _explicit_stage_update(
     G: jnp.ndarray,
     dG: jnp.ndarray,
@@ -155,8 +124,6 @@ def _explicit_stage_update(
 ) -> jnp.ndarray:
     """Advance one nonlinear explicit method before final projection/dtype cast."""
 
-    if method == "euler":
-        return G + dt_local * dG
     if method in {"imex-ars3", "imex-ark3"}:
         chain_linear = getattr(rhs_fn, "chain_implicit_linear", None)
         if chain_linear is None:
@@ -169,11 +136,7 @@ def _explicit_stage_update(
     if method == "rk2":
         G_half = project_state(G + 0.5 * dt_local * dG)
         return G + dt_local * _rhs_value(rhs_fn, G_half)
-    if method == "rk3_classic":
-        return _explicit_rk3_classic_state(
-            G, dG, dt_local, rhs_fn=rhs_fn, project_state=project_state
-        )
-    if method in {"rk3", "rk3_heun"}:
+    if method == "rk3":
         return _explicit_rk3_heun_state(
             G, dG, dt_local, rhs_fn=rhs_fn, project_state=project_state
         )
@@ -185,14 +148,7 @@ def _explicit_stage_update(
         return _explicit_sspx3_state(
             G, dt_local, rhs_fn=rhs_fn, project_state=project_state
         )
-    if method == "k10":
-        return _explicit_k10_state(
-            G, dt_local, rhs_fn=rhs_fn, project_state=project_state
-        )
-    raise ValueError(
-        "method must be one of {'euler', 'rk2', 'rk3', 'rk3_classic', "
-        "'rk3_heun', 'rk4', 'rk4-pi', 'k10', 'sspx3', 'imex-ars3', 'imex-ark3'}"
-    )
+    raise method_error(method, _NONLINEAR_METHODS)
 
 
 def _materialize(value: jnp.ndarray) -> jnp.ndarray:
