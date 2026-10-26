@@ -3516,7 +3516,7 @@ def test_runtime_linear_explicit_time_rejects_return_state_before_setup(
 
 
 def test_direct_linear_and_nonlinear_integrators_fast_smoke() -> None:
-    from gkx.solvers_nonlinear_state_integration import integrate_nonlinear
+    from gkx.solvers_nonlinear_diagnostics import integrate_nonlinear
     from gkx.solvers_linear_integrators import integrate_linear
 
     grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)

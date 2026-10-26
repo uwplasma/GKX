@@ -215,10 +215,10 @@ The same rule holds at the library entry points that accept a caller-built
 state: ``PreparedSimulation.solve(initial_state=...)`` on the object
 ``gkx.prepare`` returns,
 ``integrate_nonlinear_explicit_diagnostics_state``, the differentiable
-objective :func:`~gkx.solvers_nonlinear_state_integration.nonlinear_heat_flux_window`,
+objective :func:`~gkx.solvers_nonlinear_diagnostics.nonlinear_heat_flux_window`,
 and the raw drivers
-:func:`~gkx.solvers_nonlinear_state_integration.integrate_nonlinear` and
-:func:`~gkx.solvers_nonlinear_state_integration.integrate_nonlinear_cached`.
+:func:`~gkx.solvers_nonlinear_diagnostics.integrate_nonlinear` and
+:func:`~gkx.solvers_nonlinear_diagnostics.integrate_nonlinear_cached`.
 Each **projects** the state onto the linked chain cover; none rejects it.  At
 the raw drivers the projection runs once, in ``integrate_nonlinear_cached``
 (``integrate_nonlinear`` builds a cache and delegates), before the scan is
@@ -404,7 +404,7 @@ that one graph and keeps the out-of-jit placement under ``--route eager-scan``.
 One adjoint window graph
 ------------------------
 
-:func:`~gkx.solvers_nonlinear_state_integration.nonlinear_heat_flux_window`, the
+:func:`~gkx.solvers_nonlinear_diagnostics.nonlinear_heat_flux_window`, the
 route a transport optimization takes, runs its differentiated scan as one
 ``jax.jit`` graph that is compiled once and reused for matching shapes, dtypes,
 topology and static options (GKX 2.3.0; earlier releases recompiled on every

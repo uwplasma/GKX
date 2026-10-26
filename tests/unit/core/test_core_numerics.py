@@ -2405,7 +2405,7 @@ def test_the_nonlinear_rhs_agrees_to_roundoff_between_the_layouts(ny: int) -> No
     it.  The difference is at the level of the transform's own round-off.
     """
 
-    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+    from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
 
     nx, nz, nl, nm = 8, 8, 2, 4
     _full_grid, _half_grid, full_cache, half_cache, params = _caches(ny, nx, nz, nl, nm)
@@ -2869,7 +2869,7 @@ def test_the_explicit_cfl_bound_is_the_same_in_both_layouts(ny: int) -> None:
         _build_nonlinear_cfl_bounds,
         _nonlinear_cfl_frequency_components,
     )
-    from gkx.solvers_time_explicit_cfl import (
+    from gkx.solvers_time_explicit import (
         _grid_frequency_bounds,
         _laguerre_velocity_max,
         _linear_frequency_bound,
@@ -2934,7 +2934,7 @@ def test_nonlinear_bpar_cfl_uses_the_last_laguerre_node() -> None:
     from numpy.polynomial.laguerre import laggauss
 
     from gkx.operators.nonlinear.policies import _bracket_bounds
-    from gkx.solvers_time_explicit_cfl import _laguerre_velocity_max
+    from gkx.solvers_time_explicit import _laguerre_velocity_max
 
     nl = 8
     grid = SimpleNamespace(kx=np.zeros(4), ky=np.zeros(4))

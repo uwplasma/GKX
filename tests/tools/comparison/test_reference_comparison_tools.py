@@ -12,7 +12,7 @@ import numpy as np
 from functools import partial
 import pytest
 from support.paths import REPO_ROOT
-from gkx.solvers_nonlinear_state_integration import DIVERGENCE_KNEE_STEPS
+from gkx.solvers_nonlinear_diagnostics import DIVERGENCE_KNEE_STEPS
 import jax.numpy as jnp
 from support.paths import load_release_tool
 from scripts.checks._gates.portfolio_guard import (

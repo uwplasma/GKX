@@ -26,12 +26,12 @@ from gkx.operators.nonlinear.rhs import (
     nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
-from gkx.solvers_nonlinear_diagnostic_integration import (
+from gkx.solvers_nonlinear_diagnostics import (
     integrate_nonlinear_explicit_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
     prepare_nonlinear_explicit_diagnostics,
 )
-from gkx.solvers_nonlinear_state_integration import (
+from gkx.solvers_nonlinear_diagnostics import (
     ADJOINT_MEMORY_BUDGET_BYTES,
     integrate_nonlinear,
     integrate_nonlinear_cached,
@@ -1412,7 +1412,7 @@ def test_adaptive_time_step_run_compiles_and_matches_the_eager_trajectory() -> N
     the tube spans) that has no derivative in the first place.
     """
 
-    from gkx.solvers_nonlinear_state_integration import (
+    from gkx.solvers_nonlinear_diagnostics import (
         integrate_nonlinear_sheared_transport,
     )
 

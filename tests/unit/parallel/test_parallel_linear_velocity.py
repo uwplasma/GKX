@@ -3473,7 +3473,7 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
     from gkx.operators.nonlinear.projection import _make_hermitian_projector
     from gkx.parallel.integrators import integrate_nonlinear_species_hermite
     from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
-    from gkx.solvers_nonlinear_state_integration import nonlinear_rhs_cached
+    from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
     from gkx.terms.config import TermConfig
 
     if len(jax.devices()) < 2:
