@@ -342,7 +342,7 @@ reference = "GS2 8.2.1 rungs t1 (ntheta 32, nperiod 2, negrid 12, ngauss 6) and 
 reference_rank = 5
 tier = 3
 status = "open"
-notes = "GS2 is converged (t1 -> t2 <= 2.5% over the scan; beta_e x2 moves ky .3 by +0.5%): gamma 0.8694, omega -1.2723 (v_ti/R) at ky rho_s 0.3. GKX banded eigenpairs (nperiod 2, damp_ends_rate 100) at Nl 8 rise with Nm: 16 0.490, 24 0.611, 32 0.673, 48 0.744, 64 0.773, 96 0.825 (-5.1%); omega at Nm 96 -1.2849 (+1.0%). Not converged in Nm. In Nl at Nm 24 the growth rate is not monotone (Nl 4, 6, 8, 10, 12: 0.480, 0.623, 0.611, 0.513, 0.552): the Hermite |kz| hypercollision has no Laguerre sink. The result also depends on the end absorber and parallel domain: (Nl, Nm) = (8, 24) gives 0.871 at damp_ends_rate 5, 0.668 at 20, 0.611 at 100, 0.607 at 400; at (4, 16) the spread between rates 5 and 100 falls from 0.29 at nperiod 2 to 0.07 at nperiod 5. ky scan at (8, 32) over GS2: 0.68, 0.77, 0.84, 0.88, 0.93 of GS2 gamma at ky rho_s 0.2-0.6. The automatic shift of the banded route lands on a damped fast oscillator for this deck and the route falls back to adaptive (1493 s against 39 s with a shift near the mode). A Laguerre-only sink (hypercollisions_const 1, nu_hyper_m_const 0, nu_hyper_l 0.03, Nm 24) makes the Nl sequence 4, 6, 8, 10 monotone (0.493, 0.507, 0.554, 0.567) and nu 0.01 flat to 2% from Nl 6, at a growth rate below the sink-free one; it was not tested above Nm 24. (12, 32) and (16, 48) were killed by the out-of-memory killer on the shared host. The paper publishes this case in figures only, so GS2 is the reference."
+notes = "nu_ee 0.01 (Dougherty) against GS2 default operator (vnewk 0.00707, ions at the physical ratio; GS2 t1/t2 0.7618/0.7674 in GKX units): GKX banded, shift near the mode, Nl 8, Nm 32/64/96 gamma 0.639/0.734/0.779 (-16.8%/-4.4%/+1.5% of t2), omega -1.238/-1.280/-1.288 (-4.7%/-1.5%/-0.9%). Nl 16 banded was killed at Nm 64 (62 GB host); the time route at the deck dt exceeds the CFL bound and diverges; the Landau tables overflowed at (16,128) (fixed in GKX PR 392). Collisionless: GS2 is converged (t1 -> t2 <= 2.5% over the scan; beta_e x2 moves ky .3 by +0.5%): gamma 0.8694, omega -1.2723 (v_ti/R) at ky rho_s 0.3. GKX banded eigenpairs (nperiod 2, damp_ends_rate 100) at Nl 8 rise with Nm: 16 0.490, 24 0.611, 32 0.673, 48 0.744, 64 0.773, 96 0.825 (-5.1%); omega at Nm 96 -1.2849 (+1.0%). Not converged in Nm. In Nl at Nm 24 the growth rate is not monotone (Nl 4, 6, 8, 10, 12: 0.480, 0.623, 0.611, 0.513, 0.552): the Hermite |kz| hypercollision has no Laguerre sink. The result also depends on the end absorber and parallel domain: (Nl, Nm) = (8, 24) gives 0.871 at damp_ends_rate 5, 0.668 at 20, 0.611 at 100, 0.607 at 400; at (4, 16) the spread between rates 5 and 100 falls from 0.29 at nperiod 2 to 0.07 at nperiod 5. ky scan at (8, 32) over GS2: 0.68, 0.77, 0.84, 0.88, 0.93 of GS2 gamma at ky rho_s 0.2-0.6. The automatic shift of the banded route lands on a damped fast oscillator for this deck and the route falls back to adaptive (1493 s against 39 s with a shift near the mode). A Laguerre-only sink (hypercollisions_const 1, nu_hyper_m_const 0, nu_hyper_l 0.03, Nm 24) makes the Nl sequence 4, 6, 8, 10 monotone (0.493, 0.507, 0.554, 0.567) and nu 0.01 flat to 2% from Nl 6, at a growth rate below the sink-free one; it was not tested above Nm 24. (12, 32) and (16, 48) were killed by the out-of-memory killer on the shared host. The paper publishes this case in figures only, so GS2 is the reference."
 
 [[row]]
 id = "X-kbm-beta-gs2"
@@ -393,12 +393,47 @@ status = "passing"
 
 [[row]]
 id = "N-dimits-scan"
-claim = "Dimits shift in nonlinear Cyclone ITG: not reproduced by GKX or repaired GX on the shipped deck"
-observable = "Q_i/Q_GB at a/LT 1.5: GKX 1.64 +- 0.22, repaired GX 1.47 +- 0.28"
+claim = "Dimits shift in nonlinear Cyclone ITG (GX paper Sec. 6.1.2 deck): not reproduced at (4, 8) by GKX or repaired GX; both move toward it at (8, 16)"
+observable = "Q_i/Q_GB at a/LT 1.5, t = 1000: GKX 1.20 +- 0.04 (4,8), 0.77 +- 0.15 (8,16); repaired GX 1.37 +- 0.12, 0.61 +- 0.22; paper about 0.3 (Fig. 4b)"
 artifact = "docs/validation.rst"
-generator = "retired@gkx-plan plan/research/2026-10-20-nonlinear-stats/nonlinear_statistics.py"
-reference = "Dimits et al., Phys. Plasmas 7, 969 (2000); GX paper Sec. 6.1.2"
+generator = "retired@gkx-plan plan/research/2026-10-25-paper-exact/scripts/ns.py"
+reference = "Dimits et al., Phys. Plasmas 7, 969 (2000); GX paper Sec. 6.1.2 and Fig. 4b"
 reference_rank = 2
 tier = 3
 status = "open"
-notes = "records and scan in gkx-plan plan/research/2026-10-20-nonlinear-stats"
+notes = "Deck of the paper's App. G.3 (Nx 192, Ny 64, Nz 24, nu_ii 0.01 Dougherty, hypercollisions p = Nm/2, D_hyper 0.05 n 4, RK3, init 1e-5, one seed). Zonal fraction late: GKX 0.86/0.76, GX 0.79/0.87. The (4,8) GKX window is not stationary (halves differ). With nu_ii = 0 both decay to a zonal-dominated state (gkx-plan 2026-10-20-nonlinear-stats). The paper's initial condition and averaging window are not stated. Records in gkx-plan plan/research/2026-10-25-paper-exact."
+
+[[row]]
+id = "N-cyclone-gx-fig4b"
+claim = "nonlinear Cyclone ITG heat-flux scan in a/LT, adiabatic electrons, GKX against GX paper Fig. 4b and Table 1"
+observable = "Q_i/Q_GB at (4,8): a/LT 2.0 3.43 +- 0.13, 2.49 7.08 +- 0.12, 3.0 11.6 +- 0.2; (8,16) 2.49 7.39 +- 0.19"
+artifact = "docs/validation.rst"
+generator = "retired@gkx-plan plan/research/2026-10-25-paper-exact/scripts/ns.py"
+reference = "GX paper Fig. 4b (read off, about 10%): 3.6, 7.2, 12; Table 1: 7.2 +- 0.8 (4,8), 7.3 +- 0.9 (8,16); repaired GX self-run 7.07 +- 0.23 (4,8) and 7.49 +- 0.21 (8,16)"
+reference_rank = 2
+tier = 3
+status = "passing"
+
+[[row]]
+id = "N-cyclone-ke-table2"
+claim = "nonlinear Cyclone with kinetic electrons (GX Table 2, Q_i 23.6, Q_e 7.3 at (4,16), t = 600): not run"
+observable = "GKX 2.7.0 defaults at 192x64x24 advance 0.079 a/v_ti in 17 s on a shared RTX A4000, about 36 h for t = 600"
+artifact = "docs/validation.rst"
+generator = "retired@gkx-plan plan/research/2026-10-25-paper-exact/scripts/ns.py"
+reference = "GX paper Table 2 (doi:10.1017/S0022377824000631)"
+reference_rank = 2
+tier = 3
+status = "open"
+notes = "Cost only; no heat-flux statistic exists. Needs an exclusive GPU for about a day or a cheaper stepper for the electron streaming."
+
+[[row]]
+id = "X-w7x-itg-paper"
+claim = "W7-X high-mirror bean tube ITG (Gonzalez-Jerez 2022 test 1), adiabatic electrons, linear: GKX against the paper's curves and repaired GX"
+observable = "a gamma/v_th, a omega/v_th at k_y rho_i 2.1 (v_th = sqrt(2T/m)): GKX 0.1750, 0.2628; repaired GX 0.1750, 0.2628; paper 0.172, 0.27 (Fig. 5, read off)"
+artifact = "docs/validation.rst"
+generator = "retired@gkx-plan plan/research/2026-10-25-paper-exact/scripts/w7x.py"
+reference = "Gonzalez-Jerez et al., JPP 88, 905880310 (2022) Fig. 5 and appendix INDATA (VMEC rebuilt: a 0.4944 m, R0 5.485 m, beta 3.0%, iota 0.910 at s 0.64); GX 3865a537 + dampEnds repair self-run"
+reference_rank = 2
+tier = 3
+status = "passing"
+notes = "GKX (Nl,Nm) = (4,8) 0.1776, (8,16) 0.1750, (16,32) 0.1754; 1, 3, 6 poloidal turns agree to 3e-4 at k_y rho_i 2.1. Against GX at 7 k_y (0.7-3.0, one turn): within 0.5%. Against the paper curve at k_y rho_i 1.0, 1.3, 2.3, 3.0, 4.0 (6 turns below 1.3): 0.087/0.116/0.176/0.159/0.140 against 0.085/0.113/0.175/0.157/0.134, read off a figure to about 0.003. The paper's curve is collisionless; the decks here have nu = 0. At k_y rho_i < 1.3 GX's time fit lands on another branch than the eigenpair. Zonal flow (npol 3) and the triangular tube were not run."

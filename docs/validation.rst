@@ -368,6 +368,27 @@ Tracked artifacts without a ledger row. Nothing here is a public claim.
 
   - TEM (open, ``X-tem-dj2005``): GKX matches the GS2 frequency to 1.0% but the
     growth rate rises with Hermite resolution (5.1% low at (8, 96)).
+
+    With :math:`\nu_{ee} = 0.01` (Dougherty; GS2 default model operator, ions at the
+    physical ratio) GS2 gives :math:`\gamma = 0.7674`, :math:`\omega = -1.2991`. GKX
+    banded eigenpairs at :math:`N_l = 8` against it: :math:`N_m` = 32, 64, 96 give
+    :math:`\gamma` -16.8%, -4.4%, +1.5% and :math:`\omega` -4.7%, -1.5%, -0.9%.
+    :math:`N_l = 16` does not fit in 62 GB, and the time route at the deck's
+    ``dt`` exceeds the electron-streaming CFL bound and diverges.
+  - W7-X high-mirror bean tube (``X-w7x-itg-paper``, passing): the equilibrium
+    built from the INDATA in the appendix of Gonzalez-Jerez et al. (2022) has
+    :math:`a = 0.4944` m, :math:`R_0 = 5.485` m, :math:`\beta = 3.0\%` and
+    :math:`\iota(s = 0.64) = 0.910`, as published. At :math:`k_y\rho_i = 2.1`
+    (:math:`\rho_i` with :math:`v_{th} = \sqrt{2T/m}`, :math:`a/L_{Ti} = 3`,
+    :math:`a/L_{ni} = 1`) GKX gives :math:`a\gamma/v_{th} = 0.1750`,
+    :math:`a\omega/v_{th} = 0.2628` at (8, 16), (4, 8) and (16, 32) within 1.5%,
+    independent of the number of poloidal turns (1, 3, 6) to 3e-4; repaired GX
+    gives 0.1750 and 0.2628. The paper's curve reads 0.172 and 0.27. Across
+    :math:`k_y\rho_i` = 1.0-4.0 GKX is within 5% of the curve read off Fig. 5
+    (0.087 at 1.0 with 6 turns, 0.176 at 2.3, 0.159 at 3.0, 0.140 at 4.0), and
+    within 0.5% of GX at seven points (one turn); below :math:`k_y\rho_i \approx 1.3` the mode
+    needs 6 poloidal turns (1 turn: 0.070 at 1.0), and GX's time fit selects a
+    different branch there.
   - Miller kinetic electrons (provisional, ``X-ke-miller``): certified
     eigenpairs within 0.35% of repaired GX and 1.5% of GS2; the deck states GX's
     end-damping rate, and a rate 1000x weaker puts the growth rate 54% high
@@ -426,25 +447,43 @@ spectral evidence.
 Nonlinear heat-flux statistics
 ------------------------------
 
-Cyclone ITG, adiabatic electrons, 192x64x24, (Nl, Nm) = (4, 8), :math:`\nu_{ii} = 0.01`, fp32; mean :math:`\pm` Sokal-IAT standard error after dropping spin-up, windows of about 20 :math:`\tau` (ledger rows ``N-cyclone-gx-table1``, ``N-dimits-scan``). Agreement means within two combined standard errors.
+Cyclone ITG, adiabatic electrons, 192x64x24, one 2 pi segment, Dougherty :math:`\nu_{ii} = 0.01`, hypercollisions :math:`p = N_m/2`, hyperviscosity :math:`D = 0.05` (n = 4), RK3, :math:`t = 1000`, fp32, seed 22, initial amplitude 1e-5; mean :math:`\pm` Sokal-IAT standard error after dropping spin-up, windows of 26-70 :math:`\tau` (ledger rows ``N-cyclone-gx-table1``, ``N-cyclone-gx-fig4b``, ``N-dimits-scan``). The paper column is GX paper Table 1 or read off Fig. 4b (about 10%). Agreement means within two combined standard errors.
 
 .. list-table::
    :header-rows: 1
 
-   * - :math:`a/L_T`
+   * - :math:`a/L_T`, :math:`(N_l, N_m)`
      - GKX
      - GX 3865a537 + dampEnds repair (self-run)
-     - GX paper Table 1
-   * - 2.49
-     - 6.78 +- 0.19
-     - 6.66 +- 0.25
+     - GX paper
+   * - 1.5, (4, 8)
+     - 1.20 +- 0.04
+     - 1.37 +- 0.12
+     - about 0.3
+   * - 1.5, (8, 16)
+     - 0.77 +- 0.15
+     - 0.61 +- 0.22
+     - about 0.3
+   * - 2.0, (4, 8)
+     - 3.43 +- 0.13
+     - not run
+     - about 3.6
+   * - 2.49, (4, 8)
+     - 7.08 +- 0.12
+     - 7.07 +- 0.23
      - 7.2 +- 0.8
-   * - 1.5
-     - 1.64 +- 0.22
-     - 1.47 +- 0.28
-     - suppressed (figure)
+   * - 2.49, (8, 16)
+     - 7.39 +- 0.19
+     - 7.49 +- 0.21
+     - 7.3 +- 0.9
+   * - 3.0, (4, 8)
+     - 11.6 +- 0.2
+     - not run
+     - about 12 (GS2 11.8)
 
-The Dimits shift is not reproduced by either code on the shipped deck (open). No kinetic-electron comparison.
+The GKX windows at (4, 8), 1.5 and (8, 16), 2.49 fail the half-window stationarity check (halves differ by more than two standard errors); the others pass. Zonal energy fraction of :math:`\Phi^2` at :math:`a/L_T = 1.5` (:math:`t > 500`): GKX 0.86 and 0.76, GX 0.79 and 0.87 at (4, 8) and (8, 16). GKX and GX agree at every point; both leave the heat flux at 1.5 above the paper's Dimits-suppressed value and move toward it with velocity resolution, so the suppression is not reproduced at (4, 8) by either code (open). With :math:`\nu_{ii} = 0` both decay to a zonal-dominated state (GX flux 0.04 over the last 200; gkx-plan ``2026-10-20-nonlinear-stats``).
+
+Kinetic electrons (GX Table 2, :math:`m_i/m_e = 3670`, :math:`\beta = 10^{-3}`): not run. With GKX 2.7.0 defaults, 192x64x24 at (4, 16) advances 0.079 :math:`a/v_{ti}` in 17 s on a shared RTX A4000 (about 36 h for :math:`t = 600`; the paper's 159 min is on four A100).
 
 Benchmarks
 ----------
