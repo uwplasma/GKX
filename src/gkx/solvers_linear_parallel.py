@@ -219,6 +219,8 @@ def _velocity_parallel_rhs_cached(
     *,
     use_custom_vjp: bool,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    if getattr(cache, "mu_grid", False):
+        raise NotImplementedError("velocity-parallel routes assume the Laguerre axis")
     route = _resolve_velocity_backend(route, terms, state_ndim=G.ndim)
     if route.backend == "electrostatic_species_hermite":
         if route.axis not in {"species_hermite", "s_m", "mixed"}:

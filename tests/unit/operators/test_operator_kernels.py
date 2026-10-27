@@ -24,6 +24,9 @@ from gkx.core_velocity import (
     bessel_laguerre_kernels,
     gamma0,
     laguerre_gyroaverage_neighbors,
+    laguerre_scaled_functions,
+    mu_grid_laguerre_modes,
+    mu_grid_nodes,
 )
 from gkx.diagnostics.analysis import fit_growth_rate
 from gkx.geometry import SAlphaGeometry
@@ -2614,3 +2617,503 @@ def test_nyquist_derivative_touches_only_the_self_conjugate_rows(ny, rows, nz):
     expected = out - self_row.reshape(1, 1, -1, 1, 1) * comp if nz % 2 == 0 else out
     got = _real_fft_nyquist_derivative(out, ny)
     np.testing.assert_array_equal(got, expected)
+
+
+# --- nodal magnetic-moment grid (LinearParams.mu_vperp_max) against the Laguerre path ---
+_MU_NEEDS_X64 = pytest.mark.skipif(
+    not jax.config.jax_enable_x64, reason="needs JAX_ENABLE_X64=true"
+)
+
+_MU_NZ = 16
+
+
+def _mu_setup(epsilon: float, rho: float, nmu: int, nm: int, vperp_max: float | None):
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=4, Nz=_MU_NZ, Lx=62.8, Ly=62.8, boundary="periodic")
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=epsilon, R0=2.77778)
+    params = LinearParams(
+        rho=rho,
+        kpar_scale=float(geom.gradpar()),
+        hypercollisions_const=0.0,
+        hypercollisions_kz=1.0,
+        p_hyper_m=6.0,
+        mu_vperp_max=vperp_max,
+    )
+    return build_linear_cache(grid, geom, params, nmu, nm), params
+
+
+def _mu_random_state(nmu: int, nm: int) -> jnp.ndarray:
+    rng = np.random.default_rng(0)
+    shape = (nmu, nm, 3, 1, _MU_NZ)
+    return jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+
+
+@_MU_NEEDS_X64
+def test_mu_grid_rule_is_exact_for_polynomials_and_laguerre_modes_are_orthonormal():
+    """Degree ``2 n - 1`` exactness against ``e^{-x}`` and orthonormal Laguerre mode seeds."""
+
+    from scipy.special import gamma, gammainc
+
+    n = 6
+    for vperp_max, cutoff in ((4.0, 8.0), (np.inf, np.inf)):
+        x, scaled = mu_grid_nodes(n, vperp_max)
+        weights = scaled * np.exp(-x)
+        for k in range(2 * n):
+            exact = gamma(k + 1.0) * (
+                gammainc(k + 1.0, cutoff) if np.isfinite(cutoff) else 1.0
+            )
+            assert np.isclose((weights * x**k).sum(), exact, rtol=1e-11)
+        # sum_j mode_l mode_l' = delta_ll' at B = B0; Laguerre polynomials are only
+        # orthogonal on [0, 8] up to the cutoff tail, so the truncated rule is checked for l <= 1
+        modes = mu_grid_laguerre_modes(x, scaled, np.ones(1), 4)[:, :, 0]
+        count = 4 if np.isinf(vperp_max) else 2
+        gram = modes[:count] @ modes[:count].T
+        assert np.abs(gram - np.eye(count)).max() < (1e-11 if count == 4 else 0.03)
+
+
+@_MU_NEEDS_X64
+def test_gauss_laguerre_nodes_reduce_to_the_laguerre_operator_at_zero_kperp():
+    """Without ``B`` variation and gyroaveraging the two representations are one.
+
+    At ``epsilon = 0`` and ``k_perp rho -> 0`` the Gauss-Laguerre node amplitudes
+    are an orthogonal image of the Laguerre moments, ``O[j, l] = sqrt(w_j) (-1)^l
+    L_l(x_j)``, so the whole right-hand side (streaming, drifts, drives, field
+    solve, hypercollisions) must agree to round-off.
+    """
+
+    nmu, nm = 6, 6
+    lag_cache, lag_params = _mu_setup(0.0, 1e-6, nmu, nm, None)
+    mu_cache, mu_params = _mu_setup(0.0, 1e-6, nmu, nm, np.inf)
+    x, scaled = mu_grid_nodes(nmu, np.inf)
+    laguerre = laguerre_scaled_functions(x, nmu)[:nmu] * np.exp(x / 2)[None]
+    orth = np.sqrt(scaled * np.exp(-x))[:, None] * (
+        (-1.0) ** np.arange(nmu)[None] * laguerre.T
+    )
+    g_lag = _mu_random_state(nmu, nm)
+    g_mu = jnp.einsum("jl,l...->j...", jnp.asarray(orth), g_lag)
+    d_lag, phi_lag = linear_rhs_cached(g_lag, lag_cache, lag_params)
+    d_mu, phi_mu = linear_rhs_cached(g_mu, mu_cache, mu_params)
+    back = jnp.einsum("jl,j...->l...", jnp.asarray(orth), d_mu)
+    assert jnp.linalg.norm(back - d_lag) < 1e-10 * jnp.linalg.norm(d_lag)
+    assert jnp.linalg.norm(phi_mu - phi_lag) < 1e-10 * jnp.linalg.norm(phi_lag)
+
+
+@_MU_NEEDS_X64
+def test_weak_mirror_conserves_density_per_node():
+    """Streaming plus mirror conserve ``int dz S_j G_{j,0}`` and the energy at every node.
+
+    ``S_j = exp(-mu_j B / 2)`` is the half Maxwellian and the stored amplitude is
+    scaled by ``a_j = sqrt(B w_j e^{mu_j})``; the field coupling is switched off
+    (``tz = 0``) so that only the kinetic operator remains.
+    """
+
+    nmu, nm, vperp_max = 5, 6, 4.0
+    cache, params = _mu_setup(0.3, 0.5, nmu, nm, vperp_max)
+    params = replace(params, tz=0.0)
+    terms = LinearTerms(
+        mirror=1.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+    )
+    nodes, scaled = mu_grid_nodes(nmu, vperp_max)
+    bmag = np.asarray(cache.bmag)
+    energy = nodes[:, None] * bmag[None]
+    amplitude = np.sqrt(bmag[None] * scaled[:, None])
+    s_over_a = np.exp(-0.5 * energy) / amplitude  # S_j / a_j, shape (nmu, Nz)
+    z = np.linspace(-np.pi, np.pi, _MU_NZ, endpoint=False)
+    smooth = (
+        np.exp(1j * z)[None, None, None, None]
+        * np.arange(1, nm + 1)[None, :, None, None, None]
+    )
+    physical = jnp.asarray(np.broadcast_to(smooth, (nmu, nm, 3, 1, _MU_NZ)))
+    state = physical * jnp.asarray(amplitude)[:, None, None, None, :]
+    rate, _ = linear_rhs_cached(state, cache, params, terms=terms)
+    density_rate = np.sum(np.asarray(rate[:, 0]) * s_over_a[:, None, None], axis=-1)
+    scale = np.sum(np.abs(np.asarray(rate[:, 0])) * s_over_a[:, None, None], axis=-1)
+    assert np.max(np.abs(density_rate)) < 1e-9 * np.max(scale)
+    # energy v^2/2 + mu B is conserved at fixed mu: int dz S_j [(1/2 + x_j) G_0 + G_2 / sqrt 2]
+    weight = s_over_a[:, None, None]
+    parts = (0.5 + energy)[:, None, None] * np.asarray(rate[:, 0]) + np.asarray(
+        rate[:, 2]
+    ) / np.sqrt(2.0)
+    assert np.max(np.abs(np.sum(parts * weight, axis=-1))) < 1e-9 * np.max(
+        np.sum(np.abs(parts) * weight, axis=-1)
+    )
+
+
+@_MU_NEEDS_X64
+def test_ion_acoustic_landau_damping_on_the_mu_grid():
+    """The k_perp -> 0 slab root ``1 + T_i/T_e + zeta Z(zeta) = 0`` is recovered.
+
+    The perpendicular grid cannot change a parallel Landau root, so three nodes
+    must reproduce the damping rate and frequency of the dispersion relation
+    (within the Hermite truncation error of 64 moments).
+    """
+
+    from support.reference_physics import exact_root, fit_standing_wave
+
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=2, Nz=32, Lx=1.0e4, Ly=1.0e4, boundary="periodic")
+    )
+    geom = SAlphaGeometry(q=1.0, s_hat=0.0, epsilon=0.0, R0=1.0)
+    nmu, nm = 3, 64
+    params = LinearParams(
+        kpar_scale=1.0,
+        rho=1e-3,
+        hypercollisions_const=0.0,
+        hypercollisions_kz=1.0,
+        p_hyper_m=6.0,
+        mu_vperp_max=4.0,
+    )
+    terms = LinearTerms(
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        end_damping=0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, nmu, nm)
+    rhs = jax.jit(
+        lambda s: linear_rhs_cached(s, cache, params, terms=terms, use_jit=False)[0]
+    )
+    nodes, scaled = mu_grid_nodes(nmu, 4.0)
+    sqrt_w = np.sqrt(
+        scaled * np.exp(-nodes)
+    )  # density weights of the scaled amplitudes
+    z = np.asarray(grid.z)
+    state = (
+        jnp.zeros((1, nmu, nm, grid.ky.size, 1, z.size), dtype=jnp.complex128)
+        .at[0, :, 0, 1, 0, :]
+        .set(jnp.asarray(sqrt_w[:, None] * np.exp(1j * z)[None]))
+    )
+    dt, steps = 0.01, 900
+    signal = np.empty(steps + 1)
+    for i in range(steps + 1):
+        density = np.asarray(state)[0, :, 0, 1, 0, :] * sqrt_w[:, None]
+        signal[i] = np.real(np.sum(density * np.exp(-1j * z)[None]) / z.size)
+        k1 = rhs(state)
+        k2 = rhs(state + 0.5 * dt * k1)
+        k3 = rhs(state + 0.5 * dt * k2)
+        state = state + dt / 6 * (k1 + 2 * k2 + 2 * k3 + rhs(state + dt * k3))
+    root = exact_root(1.0, complex(1.4, -0.6))
+    gamma, omega = fit_standing_wave(
+        np.arange(steps + 1) * dt, signal, (2.0, 9.0), (1.0, root.imag, root.real, 0.0)
+    )
+    assert abs(gamma - root.imag) < 0.01 * abs(root.imag)
+    assert abs(omega - root.real) < 0.01 * root.real
+
+
+@_MU_NEEDS_X64
+def test_mu_grid_refuses_the_dissipation_it_does_not_implement():
+    grid = build_spectral_grid(GridConfig(Nx=1, Ny=2, Nz=8, boundary="periodic"))
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
+    for field, value in (
+        ("nu", 0.01),
+        ("nu_hyper_l", 1.0),
+        ("hypercollisions_const", 1.0),
+    ):
+        kwargs = {"hypercollisions_const": 0.0, "mu_vperp_max": 4.0, field: value}
+        with pytest.raises(NotImplementedError, match="nodal mu grid"):
+            build_linear_cache(grid, geom, LinearParams(**kwargs), 4, 4)
+
+
+@_MU_NEEDS_X64
+def test_mu_grid_growth_rate_matches_converged_laguerre_on_cyclone():
+    """Cyclone ITG, ky = 0.3: eight nodes land on the Laguerre ``Nl = 16`` rate.
+
+    The shipped tutorial deck at ``Nz = 32, Nm = 8`` (a coarse ``Nz`` moves the two
+    discretizations of the mirror term apart by several percent, so it is not used).
+    """
+
+    import gkx
+    from pathlib import Path
+
+    deck = Path(__file__).parents[3] / "examples/01_linear_tokamak/case.toml"
+    case = gkx.load(deck)
+    case = replace(case, grid=replace(case.grid, Nz=32, ntheta=32))
+    nodal = replace(case, run=replace(case.run, mu_vperp_max=4.0))
+    laguerre = gkx.solve(case, ky_target=0.3, Nl=16, Nm=8, solver="krylov")
+    mu = gkx.solve(nodal, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
+    assert abs(mu.gamma - laguerre.gamma) < 0.03 * laguerre.gamma
+    assert abs(mu.omega - laguerre.omega) < 0.03 * laguerre.omega
+
+
+@_MU_NEEDS_X64
+@pytest.mark.parametrize("vperp_max", [None, 4.0])
+@pytest.mark.parametrize("mode", ["es", "apar", "bpar"])
+def test_collisionless_free_energy_is_conserved_without_drive(mode, vperp_max):
+    """``W = <G,G>/2 + int (q |phi|^2 - kappa |A|^2) / 2B`` is exactly conserved.
+
+    With ``B_par`` the field energy is ``q |phi|^2 + 2 q_b Re(phi* b) - kappa_B |b|^2``,
+    ``q_b = -Gamma_01`` and ``kappa_B = B^2 / beta' + Gamma_11``: the coupled solve is the
+    symmetric system ``q phi + q_b b = n``, ``q_b phi - kappa_B b = P``.
+
+    Collisionless, undriven, truncation closure, ``eps = 0.18``. ``<.,.>`` is the
+    ``dz / B`` inner product on the stored state; the form is evaluated on band-limited
+    ``z`` modes, where the spectral derivative obeys the product rule against ``1/B``.
+    ``kappa = (k_perp^2 B^2 / beta + c_g Gamma_0) / s`` is the Ampere response.
+    """
+
+    from gkx.terms.fields import _solve_fields_impl
+
+    nl, nm, nz, kmax, beta = 4, 4, 32, 3, 0.02
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=8, Nz=nz, Lx=62.8, Ly=20.9, boundary="periodic")
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
+    em = mode == "apar"
+    bp = mode == "bpar"
+    params = LinearParams(
+        rho=1.0,
+        kpar_scale=float(geom.gradpar()),
+        hypercollisions_const=0.0,
+        hypercollisions_kz=0.0,
+        damp_ends_rate=0.0,
+        beta=beta if (em or bp) else 0.0,
+        fapar=1.0 if em else 0.0,
+        mu_vperp_max=vperp_max,
+    )
+    terms = LinearTerms(
+        diamagnetic=0.0,
+        collisions=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+        apar=1.0 if em else 0.0,
+        bpar=1.0 if bp else 0.0,
+    )
+    cache = build_linear_cache(grid, geom, params, nl, nm)
+    ny, iy, n = cache.ky.shape[0], 1, nl * nm * nz
+
+    def embed(v):
+        state = jnp.zeros((1, nl, nm, ny, 1, nz), dtype=jnp.complex128)
+        return state.at[0, :, :, iy, 0, :].set(v.reshape(nl, nm, nz))
+
+    def fields(v):
+        return _solve_fields_impl(
+            embed(v),
+            cache,
+            params,
+            charge=jnp.ones(1),
+            density=jnp.ones(1),
+            temp=jnp.ones(1),
+            mass=jnp.ones(1),
+            tz=jnp.ones(1),
+            vth=jnp.ones(1),
+            fapar=jnp.asarray(1.0 if em else 0.0),
+            w_bpar=jnp.asarray(1.0 if bp else 0.0),
+        )
+
+    def jac(f):
+        return np.asarray(jax.jacrev(f, holomorphic=True)(jnp.zeros(n, jnp.complex128)))
+
+    rhs = lambda v: linear_rhs_cached(  # noqa: E731
+        embed(v), cache, params, terms=terms, use_custom_vjp=False
+    )[0][0, :, :, iy, 0, :].reshape(-1)
+    a_mat = jac(rhs)
+    inv_b = 1.0 / np.asarray(cache.bmag)
+    gamma0 = np.asarray(jnp.sum(cache.Jl**2, axis=1))[0, iy, 0, :]
+
+    def energy_rate(psi, weight):
+        form = psi.conj().T @ np.diag(weight) @ psi
+        return form @ a_mat + a_mat.conj().T @ form
+
+    rate = np.diag(np.tile(inv_b, nl * nm)) @ a_mat
+    rate = (
+        rate
+        + rate.conj().T
+        + energy_rate(jac(lambda v: fields(v).phi[iy, 0, :]), (2.0 - gamma0) * inv_b)
+    )
+    if em:
+        kappa = np.asarray(cache.kperp2)[iy, 0, :] * np.asarray(cache.bmag) ** 2
+        kappa = (
+            kappa / (beta * params.apar_beta_scale)
+            + (params.ampere_g0_scale / params.apar_beta_scale) * gamma0
+        )
+        rate = rate - energy_rate(
+            jac(lambda v: fields(v).apar[iy, 0, :]), kappa * inv_b
+        )
+    if bp:
+        bpar_beta = params.bpar_beta_scale * beta
+        jb = jnp.asarray(cache.JlB)
+        g01 = np.asarray(jnp.sum(cache.Jl * jb, axis=1))[0, iy, 0, :]
+        g11 = np.asarray(jnp.sum(jb * jb, axis=1))[0, iy, 0, :]
+        psi_phi = jac(lambda v: fields(v).phi[iy, 0, :])
+        psi_b = jac(lambda v: fields(v).bpar[iy, 0, :])
+        cross = psi_phi.conj().T @ np.diag(-g01 * inv_b) @ psi_b
+        cross = cross + cross.conj().T
+        rate = rate + cross @ a_mat + a_mat.conj().T @ cross
+        kappa_b = np.asarray(cache.bmag) ** 2 / bpar_beta + g11
+        rate = rate - energy_rate(psi_b, kappa_b * inv_b)
+    modes = np.abs(np.fft.fftfreq(nz, 1.0 / nz)) <= kmax
+    low = np.conj(np.fft.fft(np.eye(nz), axis=0).T)[:, modes] / np.sqrt(nz)
+    basis = np.kron(np.eye(nl * nm), low)
+    scale = np.linalg.norm(
+        basis.conj().T @ np.diag(np.tile(inv_b, nl * nm)) @ a_mat @ basis
+    )
+    residual = basis.conj().T @ (0.5 * (rate + rate.conj().T)) @ basis
+    assert np.linalg.norm(residual) < 1e-9 * scale
+
+
+@_MU_NEEDS_X64
+def test_zonal_flow_residual_on_the_mu_grid_matches_laguerre():
+    """Rosenbluth-Hinton residual (ky = 0, k_x rho = 0.05, adiabatic electrons, eps = 0.18).
+
+    Late-time ``phi / phi(0)`` of a density seed after the GAM, 8 nodes against
+    Laguerre ``Nl = 8``; the small-eps formula ``1 / (1 + 1.6 q^2 / sqrt(eps))`` is 0.119.
+    """
+
+    nz, nm, dt, t_max = 32, 16, 0.02, 60.0
+    grid = build_spectral_grid(
+        GridConfig(Nx=4, Ny=2, Nz=nz, Lx=2 * np.pi / 0.05, Ly=62.8, boundary="periodic")
+    )
+    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778)
+    terms = LinearTerms(end_damping=0.0, collisions=0.0)
+
+    def residual(vperp_max):
+        params = LinearParams(
+            kpar_scale=float(geom.gradpar()),
+            tprim=0.0,
+            fprim=0.0,
+            hypercollisions_const=0.0,
+            hypercollisions_kz=1.0,
+            p_hyper_m=8.0,
+            damp_ends_rate=0.0,
+            mu_vperp_max=vperp_max,
+        )
+        cache = build_linear_cache(grid, geom, params, 8, nm)
+        iy = int(np.argmin(np.abs(np.asarray(cache.ky))))
+        seed = np.ones(nz)
+        if vperp_max is not None:
+            nodes = mu_grid_nodes(8, vperp_max)
+            seed = mu_grid_laguerre_modes(*nodes, np.asarray(cache.bmag), 1)[0]
+        state = np.zeros((1, 8, nm, cache.ky.shape[0], cache.kx.shape[0], nz), complex)
+        if vperp_max is None:
+            state[0, 0, 0, iy, 1, :] = 1e-3
+        else:
+            state[0, :, 0, iy, 1, :] = 1e-3 * seed
+        rhs = lambda s: linear_rhs_cached(  # noqa: E731
+            s, cache, params, terms=terms, use_custom_vjp=False
+        )
+
+        @jax.jit
+        def step(s):
+            k1 = rhs(s)[0]
+            k2 = rhs(s + 0.5 * dt * k1)[0]
+            k3 = rhs(s + 0.5 * dt * k2)[0]
+            return s + dt / 6 * (k1 + 2 * k2 + 2 * k3 + rhs(s + dt * k3)[0])
+
+        phi_of = jax.jit(lambda s: rhs(s)[1][iy, 1, :].mean())
+        state, phis = jnp.asarray(state), []
+        for i in range(int(t_max / dt) + 1):
+            if i % 10 == 0:
+                phis.append(float(jnp.real(phi_of(state))))
+            state = step(state)
+        late = np.arange(len(phis)) * dt * 10 > 0.7 * t_max
+        return np.mean(np.asarray(phis)[late]) / phis[0]
+
+    laguerre, nodal = residual(None), residual(4.0)
+    assert 0.05 < laguerre < 0.2
+    assert abs(nodal - laguerre) < 0.03 * laguerre
+
+
+@_MU_NEEDS_X64
+@pytest.mark.parametrize("vperp_max", [np.inf, 4.0])
+def test_nodal_dougherty_conserves_and_dissipates(vperp_max):
+    """Weak-form Lenard-Bernstein on the nodes (``eps = 0.18``, ``k_perp -> 0``).
+
+    Density (``sum_j J_j H_j0``), parallel momentum and thermal energy
+    (``sqrt2 sum J H_2 + 2 sum (x - 1) J H_0``) are conserved to the quadrature error:
+    round-off for Gauss-Laguerre nodes at ``B = B0``, 1e-4 of the largest rate for
+    them at ``eps = 0.18`` and 5e-2 with the cutoff, whose ``l = 1`` rate is 2.03.
+    At ``eps = 0`` the Gauss-Laguerre operator is the Laguerre Dougherty operator under
+    the orthogonal map, and ``Re <H, C H> < 0``.
+    """
+
+    nmu, nm, nz = 6, 6, 8
+    terms = LinearTerms(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        hypercollisions=0.0,
+        end_damping=0.0,
+    )
+
+    def operator(epsilon, mu):
+        grid = build_spectral_grid(
+            GridConfig(Nx=1, Ny=4, Nz=nz, Lx=62.8, Ly=62.8, boundary="periodic")
+        )
+        geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=epsilon, R0=2.77778)
+        params = LinearParams(
+            rho=1e-6,
+            nu=0.1,
+            collision_model="dougherty",
+            hypercollisions_const=0.0,
+            hypercollisions_kz=0.0,
+            mu_vperp_max=mu,
+        )
+        cache = build_linear_cache(grid, geom, params, nmu, nm)
+        return cache, lambda g: linear_rhs_cached(g, cache, params, terms=terms)[0]
+
+    cache, rhs = operator(0.18, vperp_max)
+    rng = np.random.default_rng(3)
+    shape = (nmu, nm, 3, 1, nz)
+    state = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    rate = np.asarray(rhs(state))[:, :, 1, 0, :]
+    jl = np.asarray(cache.Jl)[0, :, 1, 0, :]
+    x = np.asarray(cache.laguerre_roots)[:, None] * np.asarray(cache.bmag)[None]
+    energy = np.sqrt(2.0) * (jl * rate[:, 2]).sum(0) + 2.0 * (
+        (x - 1.0) * jl * rate[:, 0]
+    ).sum(0)
+    scale = np.abs(rate).max()
+    tolerance = 5e-2 if np.isfinite(vperp_max) else 1e-4
+    for invariant in ((jl * rate[:, 0]).sum(0), (jl * rate[:, 1]).sum(0), energy):
+        assert np.abs(invariant).max() < tolerance * scale
+    if np.isfinite(vperp_max):
+        return
+    rate_all = np.asarray(rhs(state))
+    assert np.real(np.vdot(np.asarray(state), rate_all)) < 0.0
+
+    # eps = 0: the Laguerre Dougherty operator under the orthogonal map
+    lag_cache, lag_rhs = operator(0.0, None)
+    mu_cache, mu_rhs = operator(0.0, np.inf)
+    nodes, scaled = mu_grid_nodes(nmu, np.inf)
+    laguerre = laguerre_scaled_functions(nodes, nmu)[:nmu] * np.exp(nodes / 2)[None]
+    orth = np.sqrt(scaled * np.exp(-nodes))[:, None] * (
+        (-1.0) ** np.arange(nmu)[None] * laguerre.T
+    )
+    g_lag = state
+    g_mu = jnp.einsum("jl,l...->j...", jnp.asarray(orth), g_lag)
+    back = jnp.einsum("jl,j...->l...", jnp.asarray(orth), mu_rhs(g_mu))
+    assert jnp.linalg.norm(back - lag_rhs(g_lag)) < 1e-10 * jnp.linalg.norm(back)
+
+
+@_MU_NEEDS_X64
+def test_mu_grid_collisional_growth_rate_matches_laguerre():
+    """Cyclone ky 0.3 with Dougherty collisions (``nu = 0.2``): 8 nodes against ``Nl = 16``."""
+
+    import gkx
+    from pathlib import Path
+
+    deck = Path(__file__).parents[3] / "examples/01_linear_tokamak/case.toml"
+    case = gkx.load(deck)
+    case = replace(
+        case,
+        grid=replace(case.grid, Nz=32, ntheta=32),
+        species=tuple(replace(sp, nu=0.2) for sp in case.species),
+        physics=replace(case.physics, collisions=True),
+        terms=replace(case.terms, collisions=1.0),
+        time=replace(case.time, collision_operator="lenard_bernstein"),
+    )
+    nodal = replace(case, run=replace(case.run, mu_vperp_max=4.0))
+    laguerre = gkx.solve(case, ky_target=0.3, Nl=16, Nm=8, solver="krylov")
+    mu = gkx.solve(nodal, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
+    assert 0.03 < laguerre.gamma < 0.1
+    assert abs(mu.gamma - laguerre.gamma) < 0.03 * laguerre.gamma

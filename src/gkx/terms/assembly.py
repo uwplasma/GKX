@@ -35,6 +35,7 @@ from gkx.terms.linear_terms import (
     drift_contributions,
     linked_streaming_contribution,
     linked_streaming_operand,
+    mu_energy,
 )
 
 RhsCallable = Callable[..., tuple[jnp.ndarray, FieldState]]
@@ -173,6 +174,7 @@ def _collision_contribution_or_zero(
     collision_lam: jnp.ndarray,
     lb_lam: jnp.ndarray,
     weight: jnp.ndarray,
+    mu_grid: tuple[jnp.ndarray, jnp.ndarray] | None = None,
 ) -> jnp.ndarray:
     """Skip the collision operator when the configured operator is exactly zero."""
 
@@ -202,6 +204,7 @@ def _collision_contribution_or_zero(
             collision_lam=collision_lam,
             lb_lam=lb_lam,
             weight=weight,
+            mu_grid=mu_grid,
         ),
         operand=None,
     )
@@ -449,9 +452,13 @@ def _diamagnetic_contribution(
         apar=rhs_fields.h_apar,
         bpar=rhs_fields.h_bpar,
         Jl=cache.Jl,
-        b=cache.b,
+        b=None if getattr(cache, "mu_grid", False) else cache.b,
         JlB=cache.JlB,
-        l4=cache.l4,
+        l4=(
+            0.5 * (mu_energy(cache, 4) - 1.0)
+            if getattr(cache, "mu_grid", False)
+            else cache.l4
+        ),
         tprim=species.tprim,
         fprim=species.fprim,
         tz=species.tz,
@@ -618,6 +625,11 @@ def _dissipation_contributions(
             collision_lam=cache.collision_lam,
             lb_lam=cache.lb_lam,
             weight=weights.collisions,
+            mu_grid=(
+                (cache.mu_lb, mu_energy(cache, 4))
+                if getattr(cache, "mu_grid", False)
+                else None
+            ),
         )
     if hypercollisions is None:
         hypercollisions = hypercollisions_contribution(

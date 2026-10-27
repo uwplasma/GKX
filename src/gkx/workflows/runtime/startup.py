@@ -16,7 +16,12 @@ from pathlib import Path
 from typing import cast
 import numpy as np
 
-from gkx.geometry import FluxTubeGeometryLike, build_flux_tube_geometry
+from gkx.core_velocity import mu_grid_laguerre_modes, mu_grid_nodes
+from gkx.geometry import (
+    FluxTubeGeometryLike,
+    build_flux_tube_geometry,
+    ensure_flux_tube_geometry_data,
+)
 from gkx.operators.linear.params import (
     DAMP_ENDS_LAYER_TRANSITS,
     LinearParams,
@@ -499,6 +504,7 @@ def build_runtime_linear_params(
         nu_laguerre=float(cfg.collisions.nu_laguerre),
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
         damp_ends_rate=_runtime_damp_ends_rate(cfg),
+        mu_vperp_max=cfg.run.mu_vperp_max,
         collision_model=(
             "landau"
             if str(cfg.time.collision_operator).strip().lower() in ("landau", "coulomb")
@@ -928,8 +934,17 @@ class _InitialConditionBuilder:
     ) -> None:
         if l_idx >= self.Nl or m_idx >= self.Nm:
             return
+        rows: int | slice = l_idx
+        if (vperp_max := self.cfg.run.mu_vperp_max) is not None:  # nodal mu grid
+            theta = jnp.asarray(self.grid.z)
+            bmag = np.asarray(
+                ensure_flux_tube_geometry_data(self.geom, theta).bmag(theta)
+            )
+            nodes = mu_grid_nodes(self.Nl, float(vperp_max))
+            modes = mu_grid_laguerre_modes(*nodes, bmag, l_idx + 1)[l_idx]
+            vals_k, rows = modes * np.asarray(vals_k)[None], slice(None)
         for s_idx in self.species_targets:
-            self.state[s_idx, l_idx, m_idx, ky_i, kx_i, :] = vals_k
+            self.state[s_idx, rows, m_idx, ky_i, kx_i, :] = vals_k
 
     def set_named_mode_scaled(
         self, field_name: str, ky_i: int, kx_i: int, vals_k: np.ndarray

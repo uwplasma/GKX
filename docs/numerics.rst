@@ -548,3 +548,436 @@ Equations are in :doc:`operators`. ``LinearTerms`` toggles convert to one
 the linear integrators, Krylov applications and nonlinear IMEX solves.
 ``LinearParams.rho_star`` scales the perpendicular wavenumbers in the drift and
 drive terms without changing the FFT spacing.
+
+Nodal magnetic-moment grid
+--------------------------
+
+``[run] mu_vperp_max`` (``LinearParams.mu_vperp_max``) replaces the Laguerre
+expansion in :math:`\mu B` by values at the nodes of a quadrature rule in the
+fixed variable :math:`\hat\mu=\mu B_0`; ``Nl`` is then the number of nodes.
+Unset keeps the Laguerre path, bitwise unchanged. The construction follows the
+v2 representation of GX (Hermite spectral, :math:`\hat\mu` nodal; GX ``docs/Numerics.rst``,
+"V2: Hermite plus nodal magnetic moment") on the Hermite-Laguerre formulation of
+Mandell, Dorland and Landreman, *J. Plasma Phys.* **84**, 905840108 (2018).
+
+Quadrature
+~~~~~~~~~~
+
+Let :math:`\{\hat\mu_j,w_j\}_{j=1}^{n}` satisfy
+
+.. math::
+
+   \int_0^{X}p(\hat\mu)\,e^{-\hat\mu}\,d\hat\mu=\sum_j w_j\,p(\hat\mu_j)
+   \quad(\deg p\le 2n-1),\qquad X=\tfrac12 v_{\perp,\max}^2 .
+
+The :math:`\hat\mu_j` are the eigenvalues of the Jacobi matrix of the monic
+polynomials orthogonal for :math:`e^{-\hat\mu}` on :math:`[0,X]`, and
+:math:`w_j=m_0 v_{0j}^2` with :math:`m_0=1-e^{-X}` and :math:`v_{0j}` the first
+component of the eigenvector (Golub and Welsch, *Math. Comp.* **23**, 221 (1969)).
+The recurrence coefficients come from the Stieltjes (Lanczos) procedure on a
+256-point Gauss-Legendre discretization of the weight. ``vperp_max = 4`` gives
+:math:`X=8`: the neglected Maxwellian tail is :math:`e^{-8}=3\times10^{-4}`, and
+the density moment of the rule is :math:`m_0=0.99966`. ``vperp_max = inf`` is
+Gauss-Laguerre, with :math:`w_je^{\hat\mu_j}` computed directly because
+:math:`w_j` underflows. A finite cutoff shortens the interval the nodes must
+cover, which is the reason to prefer it at small :math:`n`; its cost is the
+:math:`m_0` deficit and a 2-4% dependence of converged rates on
+``vperp_max`` (tables below).
+
+Representation
+~~~~~~~~~~~~~~
+
+With :math:`x_j(z)=\mu_jB(z)=\hat\mu_jB/B_0` and :math:`S_j=e^{-x_j/2}`,
+
+.. math::
+
+   g(v_\parallel,\hat\mu_j,z)=S_j(z)\sum_{m}\phi^m(v_\parallel)\,G_{jm}(z),
+   \qquad F_M^\perp=e^{-x_j}=S_j^2 .
+
+The perpendicular measure is :math:`B\,d\mu=(B/B_0)\,d\hat\mu`. For any
+:math:`f` that is smooth in :math:`\hat\mu`,
+
+.. math::
+
+   \int d^2v_\perp\,F_M^\perp f=\int d\hat\mu\,\frac{B}{B_0}e^{-\hat\mu B/B_0}f
+   \simeq\sum_j\frac{B}{B_0}\,w_je^{\hat\mu_j}\,S_j^2\,f_j .
+
+Parallel advection
+~~~~~~~~~~~~~~~~~~
+
+At fixed :math:`\mu`, :math:`\mathcal L=v_\parallel\nabla_\parallel-\mu\nabla_\parallel B\,\partial_{v_\parallel}`
+and :math:`\nabla_\parallel S_j=-\tfrac12x_jb\,S_j` with
+:math:`b=\nabla_\parallel\ln B`. With :math:`v\phi^m=\sqrt{m+1}\phi^{m+1}+\sqrt m\phi^{m-1}`
+and :math:`\partial_v\phi^m=-\sqrt{m+1}\phi^{m+1}`, projecting
+:math:`\mathcal L(S_j\sum\phi^mH_m)` on :math:`\phi^m` and dividing by :math:`S_j` gives
+
+.. math::
+
+   (\mathcal L H)_m=\sqrt{m+1}\,\big(\nabla_\parallel-\tfrac{x}{2}b\big)H_{m+1}
+   +\sqrt m\,\big(\nabla_\parallel+\tfrac{x}{2}b\big)H_{m-1}.
+
+The factor :math:`S_j` splits the logarithmic derivative of the weight evenly
+between the two couplings (a full Maxwellian would put all of it on one side),
+so that the mirror term :math:`\tfrac x2b[\sqrt mH_{m-1}-\sqrt{m+1}H_{m+1}]` is
+antisymmetric in :math:`m`. Writing
+:math:`\sqrt{m+1}\,S^{-1}\nabla_\parallel(S\,\cdot)+\sqrt m\,S\nabla_\parallel(S^{-1}\cdot)`,
+the operator is the weak (conservative) form of the phase-space flux at
+fixed :math:`\mu`; no :math:`\hat\mu`-derivative appears because the nodes do
+not move. :math:`H=G+\text{field terms}` is the Hamiltonian view of the
+Laguerre code: :math:`H_0=G_0+Z\tau^{-1}S_jJ_0\varphi+\ldots`,
+:math:`H_1=G_1-Z\tau^{-1}v_tS_jJ_0A_\parallel`.
+
+Conservation
+~~~~~~~~~~~~
+
+Per node and without fields, :math:`\partial_t(S_jG_{j0})=-v_t\nabla_\parallel(S_jH_{j1})`,
+so :math:`\int dz\,S_jG_{j0}` is conserved by streaming plus mirror; the energy
+:math:`\int dz\,S_j[(\tfrac12+x_j)G_{j0}+G_{j2}/\sqrt2]` is conserved too, since
+:math:`v_\parallel^2/2+\mu B` is invariant along the unperturbed orbit.
+Momentum is not: the mirror force changes it by
+:math:`-\mu\nabla_\parallel B\int g`. Magnetic drifts have a nonzero divergence
+and do not conserve the node density. Both identities hold to spectral accuracy
+for resolved states (tests ``test_weak_mirror_conserves_density_per_node``).
+
+Scaled amplitude and fields
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The field sums are
+
+.. math::
+
+   n=\sum_j\frac{B}{B_0}w_je^{\hat\mu_j}\,S_jJ_{0j}\,G_{j0},\qquad
+   \Gamma_0=\sum_j\frac{B}{B_0}w_je^{\hat\mu_j}\,S_j^2J_{0j}^2,
+
+(the Maxwellian response carries :math:`S_j^2=e^{-x_j}`, the evolved moment one
+:math:`S_j` because :math:`G` already carries the other), and likewise
+:math:`j_\parallel=v_t\sum(\ldots)J_{0j}G_{j1}` and, for :math:`B_\parallel`,
+:math:`J_0\to2x_jJ_1(\alpha_j)/\alpha_j`, with :math:`\alpha_j^2=2x_jk_\perp^2\rho^2`
+at the local field. Quasineutrality
+:math:`\sum_sn_sZ_s\,n_s[G]=q\,\varphi` with :math:`q=\tau_e+\sum_sn_sZ_s^2T_s^{-1}(1-\Gamma_{0s})`,
+Ampere's law :math:`(k_\perp^2B^2+\beta\,c\sum_sn_sZ_s^2m_s^{-1}\Gamma_{0s})A_\parallel=\beta c'j_\parallel`
+and the :math:`B_\parallel` solve are algebraic in these sums, so they are quadratures.
+
+The state stored is :math:`\tilde G_{jm}=a_jG_{jm}` with
+:math:`a_j=\sqrt{(B/B_0)\,w_je^{\hat\mu_j}}`. Since :math:`(B/B_0)w_je^{\hat\mu_j}S_jJ_{0j}G_j=(a_jS_jJ_{0j})(a_jG_j)`, every sum above is :math:`\sum_jJ_j\tilde G_j` with the single array
+:math:`J_j=a_jS_jJ_0(\alpha_j)` (and :math:`J^B_j=2x_ja_jS_jJ_1(\alpha_j)/\alpha_j`):
+
+.. math::
+
+   n=\sum_jJ_j\tilde G_{j0},\quad\Gamma_0=\sum_jJ_j^2,\quad
+   \tilde H_{j0}=\tilde G_{j0}+Z\tau^{-1}J_j\varphi,
+
+which are exactly the Laguerre expressions with :math:`J_\ell\to J_j`. Field
+solves, the Hamiltonian view and the streaming operand therefore need no change.
+Since :math:`a_j\propto\sqrt B`, :math:`a\nabla_\parallel(\cdot/a)=\nabla_\parallel-\tfrac12b`,
+and the advection becomes
+
+.. math::
+
+   (\mathcal L\tilde H)_m=\sqrt{m+1}\,\big(\nabla_\parallel-\tfrac{x+1}{2}b\big)\tilde H_{m+1}
+   +\sqrt m\,\big(\nabla_\parallel+\tfrac{x-1}{2}b\big)\tilde H_{m-1}:
+
+the only change is the node-local coefficients :math:`(x_j\pm1)/2`. The other
+terms are diagonal in :math:`j`: grad-B multiplies by :math:`x_j`; the curvature
+stencil is unchanged; the diamagnetic drive is
+:math:`\omega_*J_j[L_n^{-1}+(x_j-1)L_T^{-1}]` at :math:`m=0`, :math:`\omega_*J_jL_T^{-1}/\sqrt2`
+at :math:`m=2`, and the :math:`A_\parallel` drive carries :math:`x_j` in place of
+:math:`x_j-1` (the Laguerre-index shift of the existing code is :math:`2\ell+1` there).
+
+Free energy
+~~~~~~~~~~~
+
+Let :math:`\langle u,v\rangle=\int dz\,B_0B^{-1}\sum_{jm}\bar u_{jm}v_{jm}`. For
+:math:`\tilde G=aG` this is :math:`\int dz\sum_jw_je^{\hat\mu_j}|G_{jm}|^2`, the
+phase-space integral :math:`\int d^3x\,d^3v\,g^2/F_M` per flux-tube element
+(:math:`d^3x\propto dz/B`, :math:`d^3v\propto B\,d\mu`). The coupling terms of
+:math:`\mathcal L` between :math:`m` and :math:`m+1` give, for the real part,
+
+.. math::
+
+   \mathrm{Re}\!\int\!\frac{dz}{B}\sqrt{m+1}\Big[\bar G_m(\nabla-\tfrac{x+1}{2}b)G_{m+1}
+   +\bar G_{m+1}(\nabla+\tfrac{x-1}{2}b)G_m\Big]
+   =\int dz\,\mathrm{Re}(\bar G_mG_{m+1})\Big[-\big(\tfrac1B\big)'-\tfrac bB\Big]=0
+
+because :math:`(1/B)'=-b/B`. The weight :math:`1/B` is the unique one for which
+the coefficients :math:`(x\pm1)/2` cancel, and the :math:`x`-dependence cancels
+identically. The drifts are real, diagonal in :math:`(j,z)` and symmetric in
+:math:`m`, hence skew-adjoint; Hermite truncation (:math:`G_M=0`) removes no
+cross term. So :math:`\mathcal L` is skew-adjoint and :math:`\mathrm{Re}\langle H,\mathcal LH\rangle=0`.
+Writing :math:`H=G+F` with :math:`F` the field terms and using
+:math:`\sum_jJ_j\partial_tG_{j0}=\partial_t(q\varphi)` for the electrostatic part
+and :math:`\sum_jJ_j\partial_tG_{j1}=\kappa\,\partial_tA_\parallel/v_t` for
+:math:`A_\parallel` (:math:`q=\tau_e+\sum n_sZ_s^2T_s^{-1}(1-\Gamma_0)`,
+:math:`\kappa=(k_\perp^2B^2/\beta+c\sum n_sZ_s^2m_s^{-1}\Gamma_0)/c'`),
+
+.. math::
+
+   W=\tfrac12\langle G,G\rangle+\tfrac12\int\frac{dz}{B}\big(q|\varphi|^2-\kappa|A_\parallel|^2\big),
+   \qquad \frac{dW}{dt}=0\quad(\text{collisionless, undriven}),
+
+and with the diamagnetic drive :math:`dW/dt=\mathrm{Re}\langle H,\partial_tG|_{\rm drive}\rangle`.
+With :math:`B_\parallel` the solve is the symmetric system
+
+.. math::
+
+   q\,\varphi+q_b\,b=n,\qquad q_b\,\varphi-\kappa_B\,b=P,\qquad
+   P=\sum_jJ^B_j\tilde G_{j0},
+
+with :math:`q_b=-\Gamma_{01}=-\sum_jJ_jJ^B_j` and
+:math:`\kappa_B=B^2/\beta'+\Gamma_{11}`, :math:`\Gamma_{11}=\sum_j(J^B_j)^2`
+(the code solves the row-scaled form; :math:`\beta'` is ``bpar_beta_scale * beta``).
+The :math:`b`-part of :math:`F_0` pairs with :math:`P`, so
+:math:`\mathrm{Re}\langle F,\partial_tG\rangle=\tfrac12\partial_t\int\frac{dz}{B}\,[q|\varphi|^2+2q_b\mathrm{Re}(\bar\varphi b)-\kappa_B|b|^2]` and
+:math:`W` above holds with that field energy (species carry the weights :math:`n_sT_s`
+in :math:`\langle\cdot,\cdot\rangle`). It is checked to round-off for ES,
+:math:`A_\parallel` and :math:`B_\parallel` (single species), on the nodal and on the Laguerre
+grid (``test_collisionless_free_energy_is_conserved_without_drive``); the form is
+evaluated on band-limited :math:`z` modes, for which the discrete derivative obeys
+the product rule against :math:`1/B`.
+
+Relation to the Laguerre expansion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For :math:`B=B_0` and the Gauss-Laguerre rule, :math:`\tilde G_j=\sum_\ell O_{j\ell}G_\ell`
+with :math:`O_{j\ell}=\sqrt{w_j}\,(-1)^\ell L_\ell(\hat\mu_j)` orthogonal
+(:math:`n` nodes integrate :math:`L_\ell L_{\ell'}e^{-\hat\mu}` exactly for
+:math:`\ell,\ell'<n`). The multiplication :math:`x` is the Jacobi matrix in
+:math:`\ell` and the diagonal :math:`\hat\mu_j` in :math:`j`, which are similar, and
+:math:`J_\ell=O^{\!\top}J_j` at :math:`k_\perp\to0`, so all terms except the mirror
+coincide with the Laguerre ones, and the mirror vanishes at :math:`b=0`. The full
+operator, fields and drives agree to :math:`10^{-14}` at :math:`\varepsilon=0`,
+:math:`k_\perp\to0` (``test_gauss_laguerre_nodes_reduce_to_the_laguerre_operator_at_zero_kperp``).
+For :math:`B\ne B_0` the Laguerre path carries :math:`\mu B` as the coordinate and
+has :math:`\ell\pm1` couplings in the mirror and the Bessel factors; the nodal path
+has neither, and the two agree as :math:`n,N_\ell\to\infty`. A nodal state is
+converted to Laguerre moments by :math:`P_\ell=\sum_j(-1)^\ell L_\ell(x_j)J_j\tilde G_j`
+(``mu_grid_laguerre_modes``); the same modes seed ``init_field`` on all nodes.
+
+Dougherty collisions
+~~~~~~~~~~~~~~~~~~~~
+
+``collision_operator = "lenard_bernstein"`` with ``nu > 0`` is available on the grid.
+The Hermite part is diagonal (:math:`-\nu\nu_h m`) and the finite-Larmor shift
+:math:`-\nu b` is unchanged. The perpendicular part is the Lenard-Bernstein
+operator at fixed :math:`z`, with :math:`\beta=B/B_0` and
+:math:`u=e^{\beta\hat\mu}g=e^{\beta\hat\mu/2}G`,
+
+.. math::
+
+   \partial_tu=\frac{2}{\beta}\,e^{\beta\hat\mu}\partial_{\hat\mu}\!\big[\hat\mu\,e^{-\beta\hat\mu}\partial_{\hat\mu}u\big],
+
+whose eigenfunctions are :math:`u=L_\ell(\beta\hat\mu)` with rate :math:`-2\ell`
+for every :math:`\beta`. It is discretized by summation by parts on the nodes,
+
+.. math::
+
+   M\,\partial_tu=-D^{\!\top}\mathrm{diag}(\kappa)\,D\,u,\quad
+   M_j=w_je^{\hat\mu_j(1-\beta)},\ \ \kappa_j=\tfrac2\beta\hat\mu_jM_j,
+
+with :math:`D` the Lagrange derivative matrix of the nodes. Then
+:math:`\mathbf 1^{\!\top}M\partial_tu=0` (the quadrature density is conserved exactly),
+:math:`u\equiv1` (the local Maxwellian) is a null vector, and
+:math:`u^{\!\top}M\partial_tu\le0`, which is the discrete H-theorem for the perpendicular
+operator (the scaled amplitude :math:`\tilde G` is Euclidean in this norm). For
+Gauss-Laguerre nodes the spectrum is :math:`0,2,4,\ldots` to round-off at
+:math:`\beta=1`; with the cutoff it is :math:`0,2.03,4.44,7.84,\ldots` for
+:math:`n=8` and the largest rate (outer nodes) is 172 at :math:`n=8` and 1.1e3 at :math:`n=12`. Momentum and energy are restored as in the
+Laguerre operator, with the Laguerre weight :math:`(\ell J_{\ell-1}+2\ell J_\ell+(\ell+1)J_{\ell+1})`
+of :math:`(x-1)J` replaced by the node weight :math:`(x_j-1)J_j`: the momentum, energy
+and perpendicular-flow terms
+:math:`\nu J\bar u_\parallel`, :math:`\nu[2(x-1)J+\sqrt2J]\bar t` and
+:math:`\nu bJ^B\bar u_\perp` with :math:`\bar t=\tfrac{\sqrt2}3\sum JH_2+\tfrac23\sum(x-1)JH_0`.
+For Gauss-Laguerre nodes at :math:`B=B_0` the whole operator is the Laguerre
+Dougherty operator under :math:`O` to :math:`10^{-10}`, and its invariants
+(:math:`\sum JH_0`, :math:`\sum JH_1`, :math:`\sqrt2\sum JH_2+2\sum(x-1)JH_0`) are
+conserved to round-off with :math:`\mathrm{Re}\langle H,CH\rangle<0`. For other
+:math:`B` or with the cutoff the quadrature is not exact for the energy weight and the
+invariants are conserved to 2e-5 (Gauss-Laguerre, :math:`\varepsilon=0.18`) and 2e-2
+(cutoff) of the largest rate; the cutoff operator can have a growing collisional mode
+of rate :math:`3\times10^{-4}\nu` at :math:`k_\perp\to0`. Projections onto the exact
+nodal invariants conserve to round-off but are anti-dissipative at finite
+:math:`k_\perp` (rate :math:`+0.1\nu`) and were not kept. At finite :math:`k_\perp` the
+operator is dissipative and its gyroaveraged invariants are not conserved, as for Laguerre
+(``test_nodal_dougherty_conserves_and_dissipates``; the Cyclone rate at :math:`\nu=0.2` is
+0.0591 for 8 nodes and 0.0595 for ``Nl = 16``). ``collision_model = "landau"`` with ``nu > 0`` is refused.
+
+Scope: linear runs, electrostatic and electromagnetic. ``nu_hyper``,
+``nu_hyper_l``, ``nu_hyper_lm`` and ``hypercollisions_const`` are refused (they act
+on the Laguerre index); the :math:`|k_z|` Hermite hypercollisions are unchanged.
+Nonlinear and velocity-parallel runs are refused. ``init_field = "phi"`` seeds node 0 only.
+
+References: GX ``docs/Numerics.rst`` (V2); Mandell, Dorland, Landreman 2018;
+Golub and Welsch 1969; Gautschi, *Orthogonal Polynomials* (2004), Ch. 2-3 (Stieltjes
+and Lanczos procedures); Kanekar et al., *J. Plasma Phys.* **81**, 305810104 (2015)
+for the Hermite closure.
+
+Measured against the Laguerre expansion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Cyclone ITG (s-alpha, adiabatic electrons, ``Nm = 32``, ``vperp_max = 4``), the
+Hermite-banded eigensolver, one laptop CPU (4 threads, shared; wall times carry
+about 30% noise, wall includes compilation, memory is the peak resident set).
+``Delta`` is the growth rate relative to the converged Laguerre value
+(``Nl = 24``: :math:`\gamma=0.0928` at :math:`k_y=0.3`, 0.0798 at 0.4).
+
+.. list-table::
+   :header-rows: 1
+
+   * - grid
+     - n
+     - :math:`\gamma` (0.3)
+     - Delta
+     - wall (s)
+     - memory (GB)
+     - :math:`\gamma` (0.4)
+     - Delta
+     - wall (s)
+   * - Laguerre
+     - 8
+     - 0.0981
+     - +5.6%
+     - 92
+     - 5.7
+     - 0.0912
+     - +14%
+     - 86
+   * - Laguerre
+     - 16
+     - 0.0928
+     - 0.0%
+     - 430
+     - 14.5
+     - 0.0778
+     - -2.5%
+     - 354
+   * - Laguerre
+     - 24
+     - 0.0928
+     - ref
+     - 1457
+     - 19.9
+     - 0.0798
+     - ref
+     - 939
+   * - nodal
+     - 4
+     - 0.0808
+     - -13%
+     - 32
+     - 2.8
+     - 0.0578
+     - -28%
+     - 33
+   * - nodal
+     - 8
+     - 0.0941
+     - +1.4%
+     - 79
+     - 5.3
+     - 0.0794
+     - -0.5%
+     - 77
+   * - nodal
+     - 12
+     - 0.0920
+     - -0.8%
+     - 189
+     - 9.5
+     - 0.0800
+     - +0.3%
+     - 222
+   * - nodal
+     - 16
+     - 0.0918
+     - -1.1%
+     - 421
+     - 15.2
+     - 0.0766
+     - -4.1%
+     - 424
+
+Eight nodes match the converged Laguerre rate to 1.4% and 0.5%, where the
+Laguerre rung of the same accuracy is ``Nl = 16`` (5.4x the wall, 2.7x the
+memory) at :math:`k_y=0.3` and ``Nl = 24`` (12x, 4x) at 0.4. The cost per
+state element is that of the Laguerre path, so the gain is the node count.
+At 0.4 the 16-node rate is 4% below the 12-node one; with ``vperp_max = 6``
+the 12- and 16-node rates are 0.0812 and 0.0813 (+1.8% and +1.9%) and at 0.3
+the 12-node rate is 0.0940 (+1.3%), so the cutoff moves a converged value by
+about 2-4%. The Laguerre ladder moves by 2.5-14% between its rungs.
+The tutorial
+deck (``Nz = 32, Nm = 8``) gives 0.0999 for 8 nodes and 0.1001 for ``Nl = 16``.
+
+Collisionless TEM (Dannert and Jenko 2005, kinetic electrons,
+:math:`A_\parallel`, ``Nm = 24``, :math:`k_y\rho_s=0.3`; GS2 0.869 is
+``Nm``-limited here), same solver with a shift at the mode:
+
+.. list-table::
+   :header-rows: 1
+
+   * - n
+     - 4
+     - 8
+     - 12
+     - 16
+   * - Laguerre :math:`\gamma`
+     - 0.480
+     - 0.611
+     - 0.552
+     - 0.565
+   * - nodal :math:`\gamma`
+     - 0.514
+     - 0.561
+     - 0.547
+     - 0.548
+
+The nodal ladder settles to within 0.4% from 12 nodes; the Laguerre one moves by
+up to 27% between rungs. At equal ``n`` the TEM cost is similar, not lower
+(wall, memory: ``n = 8`` 404 s, 8.5 GB nodal against 433 s, 8.5 GB Laguerre;
+``n = 12`` 1024 s, 18.3 GB against 533 s, 15.2 GB; ``n = 16`` 2459 s, 22.4 GB
+against 2045 s, 23.4 GB), so on this case the gain is a ladder that converges,
+not time. GX v2 reports 0.564 and 0.553 for 8 and 12 nodes with its own rule,
+and 0.0934 and 0.0795 for Cyclone at 8 nodes.
+
+At 4 nodes the TEM rate is not converged: 0.505, 0.514, 0.360, 0.411 and 0.415
+for ``vperp_max`` 3, 4, 5, 6 and ``inf``, so the 0.612 that GX v2 reports at
+4 nodes is within that spread. The 12-node TEM run took 1024 s and 2022 s on two
+identical runs (a memory-bound, shared host), so the factor 2 against Laguerre
+at that size is timing noise.
+
+Zonal-flow residual (Rosenbluth-Hinton; :math:`k_y=0`, :math:`k_x\rho=0.05`,
+adiabatic electrons, s-alpha :math:`q=1.4`, :math:`\varepsilon=0.18`, ``Nm = 16``,
+late-time mean after the GAM): 0.0929 and 0.0943 for Laguerre ``Nl`` = 8 and 16;
+0.0939 and 0.0940 for 8 and 12 nodes (``test_zonal_flow_residual_on_the_mu_grid_matches_laguerre``).
+The small-:math:`\varepsilon` formula :math:`1/(1+1.6q^2/\sqrt\varepsilon)=0.119`
+does not apply at :math:`\varepsilon=0.18`; the check is the agreement with Laguerre.
+
+Other cases (office CPU, banded route, ``Nm`` as stated; growth rates):
+
+.. list-table::
+   :header-rows: 1
+
+   * - case
+     - Laguerre ``Nl`` 8 / 12
+     - nodes 8 / 12
+   * - TEM, :math:`\nu_e=0.071` (``Nm = 24``; GS2 0.5054)
+     - 0.4169 / 0.4106
+     - 0.4002 / 0.4010
+   * - TEM, :math:`\nu_e=0.283` (GS2 0.1510)
+     - 0.0548 / 0.0589
+     - 0.0537 / 0.0535
+   * - KBM, :math:`\beta=0.015`, :math:`k_y=0.3` (``Nm = 24``)
+     - 0.3155 / 0.3164
+     - 0.2988 / 0.2989
+   * - Miller kinetic electrons, :math:`k_y=0.4` (``Nm = 24``)
+     - 0.2652 / 0.2669
+     - 0.2648 / 0.2650
+   * - W7-X ITG, :math:`k_y\rho=2.1` (``Nm = 16``)
+     - 0.2178 / (24: 0.2176)
+     - 0.2168 / 0.2168
+
+The nodal ladders are flat in every case. For the KBM case the nodal rate is 5.6%
+below the Laguerre one at either resolution; the GS2 comparison of the evidence
+ledger puts the Laguerre ``(8, 24)`` rate 7.3% above GS2, which the nodal rate
+reduces to about 1.6%. The collisional TEM rates are far below GS2 for both
+representations (``Nm`` limit; GS2's collision operator is not Dougherty). W7-X at
+:math:`k_y\rho=2.1` is converged at 4 nodes (0.2184).

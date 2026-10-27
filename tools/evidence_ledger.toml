@@ -345,6 +345,18 @@ status = "open"
 notes = "nu_ee 0.01 (Dougherty) against GS2 default operator (vnewk 0.00707, ions at the physical ratio; GS2 t1/t2 0.7618/0.7674 in GKX units): GKX banded, shift near the mode, Nl 8, Nm 32/64/96 gamma 0.639/0.734/0.779 (-16.8%/-4.4%/+1.5% of t2), omega -1.238/-1.280/-1.288 (-4.7%/-1.5%/-0.9%). Nl 16 banded was killed at Nm 64 (62 GB host); the time route at the deck dt exceeds the CFL bound and diverges; the Landau tables overflowed at (16,128) (fixed in GKX PR 392). Collisionless: GS2 is converged (t1 -> t2 <= 2.5% over the scan; beta_e x2 moves ky .3 by +0.5%): gamma 0.8694, omega -1.2723 (v_ti/R) at ky rho_s 0.3. GKX banded eigenpairs (nperiod 2, damp_ends_rate 100) at Nl 8 rise with Nm: 16 0.490, 24 0.611, 32 0.673, 48 0.744, 64 0.773, 96 0.825 (-5.1%); omega at Nm 96 -1.2849 (+1.0%). Not converged in Nm. In Nl at Nm 24 the growth rate is not monotone (Nl 4, 6, 8, 10, 12: 0.480, 0.623, 0.611, 0.513, 0.552): the Hermite |kz| hypercollision has no Laguerre sink. The result also depends on the end absorber and parallel domain: (Nl, Nm) = (8, 24) gives 0.871 at damp_ends_rate 5, 0.668 at 20, 0.611 at 100, 0.607 at 400; at (4, 16) the spread between rates 5 and 100 falls from 0.29 at nperiod 2 to 0.07 at nperiod 5. ky scan at (8, 32) over GS2: 0.68, 0.77, 0.84, 0.88, 0.93 of GS2 gamma at ky rho_s 0.2-0.6. The automatic shift of the banded route lands on a damped fast oscillator for this deck and the route falls back to adaptive (1493 s against 39 s with a shift near the mode). A Laguerre-only sink (hypercollisions_const 1, nu_hyper_m_const 0, nu_hyper_l 0.03, Nm 24) makes the Nl sequence 4, 6, 8, 10 monotone (0.493, 0.507, 0.554, 0.567) and nu 0.01 flat to 2% from Nl 6, at a growth rate below the sink-free one; it was not tested above Nm 24. (12, 32) and (16, 48) were killed by the out-of-memory killer on the shared host. The paper publishes this case in figures only, so GS2 is the reference."
 
 [[row]]
+id = "X-mu-grid-convergence"
+claim = "Nodal magnetic-moment grid (opt-in, linear) against the Laguerre expansion: Cyclone ITG at ky 0.3 and 0.4 with adiabatic electrons, and the Dannert-Jenko TEM"
+observable = "gamma against the node count 4-16 and the Laguerre count 8-24 (Cyclone, Nm 32) and 4-16 (TEM, Nm 24), banded eigensolver, with wall time and peak memory"
+artifact = "docs/numerics.rst"
+generator = "retired@gkx-plan plan/research/2026-10-25-mu-grid/scripts/mu2.py"
+reference = "converged GKX Laguerre ladder (Nl 24); GX v2 nodal runs (nmu 8: Cyclone 0.0934 and 0.0795, TEM 0.564) as a cross-check"
+reference_rank = 5
+tier = 3
+status = "open"
+notes = "Cyclone, Nm 32, vperp_max 4: 8 nodes are within 1.4% (ky 0.3) and 0.5% (ky 0.4) of the converged Laguerre rate, where Laguerre needs Nl 16 and 24 (5.4x and 12x the wall time, 2.7x and 4x the memory). 16 nodes at ky 0.4 are 4% below the 12-node value. TEM (Nm 24, still Nm-limited against GS2 0.869): nodal 0.514, 0.561, 0.547, 0.548 at 4, 8, 12, 16 nodes against Laguerre 0.480, 0.611, 0.552, 0.565, at equal or up to 2x the cost per node. Linear only; Dougherty collisions on nodes in weak form (landau and Laguerre-index hypercollisions are refused). KBM, Miller KE, W7-X ITG and collisional TEM ladders are in docs/numerics.rst. Timings are one shared 4-thread CPU."
+
+[[row]]
 id = "X-kbm-beta-gs2"
 claim = "Miller CBC kinetic ballooning, ky 0.3, beta 0.005-0.020, A_par and A_par+B_par, linear: GKX against GS2"
 observable = "relative gamma and omega difference at four beta, GKX (8, 24) and (8, 32) nperiod 2 and (8, 24) nperiod 3 against GS2 e4v"

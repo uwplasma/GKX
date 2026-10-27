@@ -10,9 +10,15 @@ import jax.numpy as jnp
 import numpy as np
 
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
-from gkx.core_velocity import _gyro_bessel_factors, laguerre_transform
+from gkx.core_velocity import (
+    _gyro_bessel_factors,
+    laguerre_transform,
+    mu_grid_gyro_factors,
+)
 from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_arrays import (
+    check_mu_grid_params,
+    with_mu_grid,
     _build_end_damping_profile_array,
     _build_gyroaverage_cache_arrays,
     _build_low_rank_moment_cache_arrays,
@@ -673,6 +679,10 @@ def _build_laguerre_gyro_cache(
     if bessel_bmag_power != 0.0:
         bmag_factor = bmag[None, None, None, :] ** (-bessel_bmag_power)
         b = b * bmag_factor
+    if (vperp_max := getattr(params, "mu_vperp_max", None)) is not None:
+        check_mu_grid_params(params)
+        gyro = mu_grid_gyro_factors(vperp_max, b, bmag, Nl, real_dtype, xp)
+        return _LaguerreGyroCache(b, *gyro)
     Jl, JlB = _build_gyroaverage_cache_arrays(b, Nl, real_dtype)
     lag_to_grid_np, lag_to_spec_np, lag_roots_np = laguerre_transform(Nl)
     laguerre_to_grid = xp.asarray(lag_to_grid_np, dtype=real_dtype)
@@ -1111,6 +1121,7 @@ def build_linear_cache(
         moment_cache=moment_cache,
         linked_cache=linked_cache,
     )
+    cache = with_mu_grid(cache, params)
     from gkx.operators.linear.collision_tables import landau_blocks_for
 
     landau = landau_blocks_for(params, Nl, Nm, grid_arrays.real_dtype)

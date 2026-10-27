@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING, Any
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core_velocity import J_l_all
-from gkx.operators.linear.params import LinearParams, _as_species_array
+from dataclasses import replace
+
+from gkx.core_velocity import J_l_all, mu_grid_lb_rate, mu_grid_nodes
+from gkx.operators.linear.params import LinearParams, _as_species_array, _is_tracer
 from gkx.operators.linear.streaming import shift_axis
 
 if TYPE_CHECKING:
@@ -117,6 +119,44 @@ def _build_gyroaverage_cache_arrays(
     Jl = jnp.moveaxis(J_l_all(b, l_max=Nl - 1), 0, 1).astype(real_dtype)
     JlB = Jl + shift_axis(Jl, -1, axis=1)
     return Jl, JlB.astype(real_dtype)
+
+
+def with_mu_grid(cache: Any, params: LinearParams) -> Any:
+    """Mark ``cache`` as nodal and add the nodal Lenard-Bernstein rate (identity otherwise)."""
+
+    vperp_max = getattr(params, "mu_vperp_max", None)
+    if vperp_max is None:
+        return cache
+    nodes, weights = mu_grid_nodes(cache.Jl.shape[1], float(vperp_max))
+    dtype = cache.bmag.dtype
+    rate = mu_grid_lb_rate(nodes, weights, np.asarray(cache.bmag, dtype=np.float64))
+    hermite = float(params.nu_hermite) * np.asarray(cache.m).reshape(1, -1)
+    return replace(
+        cache,
+        mu_grid=True,
+        mu_lb=jnp.asarray(0.5 * float(params.nu_laguerre) * rate, dtype=dtype),
+        lb_lam=jnp.broadcast_to(jnp.asarray(hermite, dtype=dtype), cache.lb_lam.shape),
+    )
+
+
+def check_mu_grid_params(params: LinearParams) -> None:
+    """Refuse the terms the nodal mu grid does not implement (traced values pass)."""
+
+    if any(_is_tracer(v) for v in (params.nu, params.nu_hyper, params.nu_hyper_l)):
+        return
+    refused = {
+        "nu with collision_model='landau'": params.collision_model != "dougherty"
+        and np.any(np.asarray(params.nu) != 0.0),
+        "nu_hyper": params.nu_hyper != 0.0,
+        "nu_hyper_l": params.nu_hyper_l != 0.0,
+        "nu_hyper_lm": params.nu_hyper_lm != 0.0,
+        "hypercollisions_const": params.hypercollisions_const != 0.0,
+    }
+    if bad := [name for name, hit in refused.items() if hit]:
+        raise NotImplementedError(
+            f"the nodal mu grid has no collision operator and no Laguerre-index "
+            f"dissipation; set {', '.join(bad)} to zero"
+        )
 
 
 def hypercollision_damping(
