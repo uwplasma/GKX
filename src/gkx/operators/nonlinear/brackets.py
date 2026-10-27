@@ -127,6 +127,7 @@ def _spectral_bracket_half_core(
     radial_phase: jnp.ndarray | None = None,
     ny_full: int | None = None,
     multiple_fields: bool,
+    combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
 ) -> tuple[jnp.ndarray, int, int]:
     """Return the bracket on the ``ky >= 0`` rows, with ``(ny_full, nx)``.
 
@@ -200,6 +201,8 @@ def _spectral_bracket_half_core(
         bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
     else:
         bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
+    if combine is not None:  # linear in the real-space products: one forward FFT
+        bracket = combine(bracket)
     positive_ky = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
     positive_ky *= _broadcast_mask(
         half_dealias_mask(mask, ny_full=ny), positive_ky.ndim
@@ -246,6 +249,7 @@ def _spectral_bracket_full_core(
     radial_phase: jnp.ndarray | None = None,
     ny_full: int | None = None,
     multiple_fields: bool,
+    combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
 ) -> jnp.ndarray:
     """Return the bracket by full complex transforms on a two-sided ``ky`` axis.
 
@@ -298,6 +302,8 @@ def _spectral_bracket_full_core(
         bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
     else:
         bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
+    if combine is not None:
+        bracket = combine(bracket)
     bracket_hat = (
         _fft2_xy(bracket)
         if phase is None
@@ -310,8 +316,15 @@ def _spectral_bracket_full_core(
 def _spectral_bracket_multi_real_fft(
     G_hat: jnp.ndarray,
     chi_hat_stack: jnp.ndarray,
+    combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
     **kwargs,
 ) -> jnp.ndarray:
+    """Bracket of ``G`` with each field of the stack.
+
+    ``combine`` reduces the field axis of the real-space products (linear, so
+    one forward FFT serves every field); without it each field keeps its own.
+    """
+
     # Shared singleton batch axes trigger XLA:CPU YNN's f32 VJP reduction fault.
     # Keep the original GPU layout: squeezing increases its VJP temporary memory.
     axes = tuple(
@@ -321,23 +334,38 @@ def _spectral_bracket_multi_real_fft(
     )
     field_axes = tuple(i + 1 for i in axes)
 
-    def original(g, chi):
-        return _spectral_bracket_real_fft_core(g, chi, multiple_fields=True, **kwargs)
+    def run(g, chi, combine):
+        return _spectral_bracket_real_fft_core(
+            g, chi, multiple_fields=True, combine=combine, **kwargs
+        )
 
     def reduced(g, chi):
-        result = original(jnp.squeeze(g, axis=axes), jnp.squeeze(chi, axis=field_axes))
-        return jnp.expand_dims(result, axis=field_axes)
+        def squeezed(products):  # the caller's sum sees the full batch shape
+            return jnp.squeeze(combine(jnp.expand_dims(products, field_axes)), axes)
 
-    return lax.platform_dependent(G_hat, chi_hat_stack, cpu=reduced, default=original)
+        result = run(
+            jnp.squeeze(g, axis=axes),
+            jnp.squeeze(chi, axis=field_axes),
+            None if combine is None else squeezed,
+        )
+        return jnp.expand_dims(result, axis=field_axes if combine is None else axes)
+
+    return lax.platform_dependent(
+        G_hat,
+        chi_hat_stack,
+        cpu=reduced,
+        default=lambda g, chi: run(g, chi, combine),
+    )
 
 
 def _spectral_bracket_multi_full(
     G_hat: jnp.ndarray,
     chi_hat_stack: jnp.ndarray,
+    combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
     **kwargs,
 ) -> jnp.ndarray:
     return _spectral_bracket_full_core(
-        G_hat, chi_hat_stack, multiple_fields=True, **kwargs
+        G_hat, chi_hat_stack, multiple_fields=True, combine=combine, **kwargs
     )
 
 

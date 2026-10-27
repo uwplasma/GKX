@@ -931,6 +931,20 @@ def test_real_fft_singleton_batch_axes_preserve_bracket_and_vjp(batch):
         ):
             np.testing.assert_allclose(got, expected, rtol=2e-13, atol=2e-13)
 
+        # One forward FFT of the summed products: value and both adjoints.
+        one_fft = lambda g, c: _spectral_bracket_multi_real_fft(  # noqa: E731
+            g, c, combine=lambda p: p.sum(0), **kwargs
+        )
+        summed = lambda g, c: original(g, c).sum(0)  # noqa: E731
+        (got_sum, got_pull), (ref_sum, ref_pull) = (
+            jax.vjp(f, state, fields) for f in (one_fft, summed)
+        )
+        np.testing.assert_allclose(got_sum, ref_sum, rtol=2e-13, atol=2e-13)
+        for got, expected in zip(
+            got_pull(cotangent[0]), ref_pull(cotangent[0]), strict=True
+        ):
+            np.testing.assert_allclose(got, expected, rtol=2e-13, atol=2e-13)
+
 
 def test_bracket_multi_matches_separate():
     grid = build_spectral_grid(

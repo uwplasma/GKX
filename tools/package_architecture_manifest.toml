@@ -1199,7 +1199,10 @@ recursive = true
 # 68892 -> 68896: SOLVAX 0.33 normalized Thomas (#389) after #387, measured.
 # 68896 -> 68785: retired euler, k10, rk3_heun, rk3_classic and semi-implicit. Measured.
 # 68785 -> 68378: merged the solver families (5 modules removed) and dropped the diagnostics dependency containers. Measured.
-baseline = 68378
+# 68378 -> 68387: Landau electron-ion table overflow fix at (Nl, Nm) = (16, 128), measured.
+# 68387 -> 68397: inverse FFT without scal (#396) after #392/#395, measured.
+# 68397 -> 68421: EM bracket one FFT (#394), measured after merging main.
+baseline = 68421
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1555,7 +1558,9 @@ recursive = true
 # 73605 -> 73624: linear KE time-route fix (#386) after #373/#385, measured.
 # 73624 -> 73659: conventions/B_par CFL (#387) after #386, measured.
 # 73659 -> 63547: removed 272 tests whose lines every other test also executes, and the helpers they left unused. Measured.
-baseline = 63547
+# 63547 -> 63557: Landau table overflow regression test, measured.
+# 63557 -> 63571: EM bracket one FFT (#394), measured after merging main.
+baseline = 63571
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -437,11 +437,15 @@ def _hermite_values(x: np.ndarray, count: int) -> np.ndarray:
     return values
 
 
-def _laguerre_values(y: np.ndarray, count: int, alpha: float = 0.0) -> np.ndarray:
+def _laguerre_values(
+    y: np.ndarray, count: int, alpha: float = 0.0, damped: bool = False
+) -> np.ndarray:
+    """Laguerre polynomials; ``damped`` returns ``exp(-y/2) L_k``, bounded at large ``y``."""
+
     values = np.zeros((count,) + y.shape)
-    values[0] = 1.0
+    values[0] = np.exp(-0.5 * y) if damped else 1.0
     if count > 1:
-        values[1] = 1.0 + alpha - y
+        values[1] = (1.0 + alpha - y) * values[0]
     for k in range(1, count - 1):
         values[k + 1] = (
             (2 * k + 1 + alpha - y) * values[k] - (k + alpha) * values[k - 1]
@@ -516,10 +520,15 @@ def _sonine_radial(x: np.ndarray, l: int, count: int, scale: float = 1.0):  # no
 
     u = x / scale
     with np.errstate(divide="ignore"):
-        base = np.exp(l * np.log(u) - 0.5 * u**2) if l else np.exp(-0.5 * u**2)
-    lag = _laguerre_values(u**2, count + 1, l + 0.5)[:count]
+        # u**l overflows where exp(-u**2 / 2) has long underflowed: drop u > 60.
+        base = (
+            np.exp(l * np.log(np.minimum(u, 60.0))) * (u < 60.0)
+            if l
+            else np.ones_like(u)
+        )
+    lag = _laguerre_values(u**2, count + 1, l + 0.5, damped=True)[:count]
     dlag = np.zeros_like(lag)
-    dlag[1:] = -_laguerre_values(u**2, count, l + 1.5)[: count - 1]
+    dlag[1:] = -_laguerre_values(u**2, count, l + 1.5, damped=True)[: count - 1]
     norm = _sonine_norm(l, np.arange(count))[:, None]
     with np.errstate(divide="ignore", invalid="ignore"):
         l_over_u = np.where(u > 0, l / u, 0.0)
