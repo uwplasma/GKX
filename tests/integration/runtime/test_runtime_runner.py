@@ -1376,6 +1376,39 @@ def test_runtime_phi_init_inverts_adiabatic_zonal_quasineutrality(
     assert not np.allclose(seeded_density.real, expected_phi)
 
 
+def test_runtime_phi_init_on_the_mu_grid_inverts_quasineutrality() -> None:
+    """``init_field = "phi"`` spreads the density seed over every node."""
+
+    cfg = replace(
+        _base_runtime_cfg(),
+        grid=GridConfig(
+            Nx=4, Ny=4, Nz=16, Lx=2.0 * np.pi, Ly=2.0 * np.pi, boundary="periodic"
+        ),
+        init=InitializationConfig(
+            init_field="phi", init_amp=0.25, gaussian_init=False, init_single=True
+        ),
+        physics=RuntimePhysicsConfig(adiabatic_electrons=True, tau_e=1.0),
+        species=(
+            RuntimeSpeciesConfig(
+                name="ion", charge=1.0, density=1.0, temperature=1.0, kinetic=True
+            ),
+        ),
+    )
+    cfg = replace(cfg, run=replace(cfg.run, mu_vperp_max=4.0))
+    grid = build_spectral_grid(cfg.grid)
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    g0 = _build_initial_condition(
+        grid, geom, cfg, ky_index=1, kx_index=1, Nl=6, Nm=2, nspecies=1
+    )
+    params = build_runtime_linear_params(cfg, Nm=2, geom=geom)
+    cache = build_linear_cache(grid, geom, params, Nl=6, Nm=2)
+    fields = compute_fields_cached(jnp.asarray(g0), cache, params, use_custom_vjp=False)
+    z = np.asarray(grid.z, dtype=float)
+    expected = cfg.init.init_amp * np.cos(float(cfg.init.kpar_init) * z)
+    assert np.count_nonzero(np.abs(np.asarray(g0)[0, :, 0, 1, 1, :]).max(axis=-1)) == 6
+    assert np.allclose(np.asarray(fields.phi[1, 1, :]).real, expected, atol=1e-5)
+
+
 def test_runtime_phi_init_rejects_masked_gauge_mode() -> None:
     cfg = replace(
         _base_runtime_cfg(),

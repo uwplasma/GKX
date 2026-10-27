@@ -139,6 +139,15 @@ def with_mu_grid(cache: Any, params: LinearParams) -> Any:
     )
 
 
+def check_mu_grid_nonlinear(params: Any, electromagnetic: bool) -> None:
+    """Nonlinear runs on the nodal mu grid are electrostatic only."""
+
+    if electromagnetic and getattr(params, "mu_vperp_max", None) is not None:
+        raise NotImplementedError(
+            "nodal mu grid: nonlinear runs are electrostatic only"
+        )
+
+
 def check_mu_grid_params(params: LinearParams) -> None:
     """Refuse the terms the nodal mu grid does not implement (traced values pass)."""
 

@@ -731,7 +731,7 @@ The :math:`b`-part of :math:`F_0` pairs with :math:`P`, so
 :math:`W` above holds with that field energy (species carry the weights :math:`n_sT_s`
 in :math:`\langle\cdot,\cdot\rangle`). It is checked to round-off for ES,
 :math:`A_\parallel` and :math:`B_\parallel` (single species), on the nodal and on the Laguerre
-grid (``test_collisionless_free_energy_is_conserved_without_drive``); the form is
+grid; a nodal two-species :math:`B_\parallel` case with weights :math:`n_sT_s` also passes (``test_collisionless_free_energy_is_conserved_without_drive``); the form is
 evaluated on band-limited :math:`z` modes, for which the discrete derivative obeys
 the product rule against :math:`1/B`.
 
@@ -801,10 +801,28 @@ operator is dissipative and its gyroaveraged invariants are not conserved, as fo
 (``test_nodal_dougherty_conserves_and_dissipates``; the Cyclone rate at :math:`\nu=0.2` is
 0.0591 for 8 nodes and 0.0595 for ``Nl = 16``). ``collision_model = "landau"`` with ``nu > 0`` is refused.
 
-Scope: linear runs, electrostatic and electromagnetic. ``nu_hyper``,
-``nu_hyper_l``, ``nu_hyper_lm`` and ``hypercollisions_const`` are refused (they act
-on the Laguerre index); the :math:`|k_z|` Hermite hypercollisions are unchanged.
-Nonlinear and velocity-parallel runs are refused. ``init_field = "phi"`` seeds node 0 only.
+Nonlinear bracket
+~~~~~~~~~~~~~~~~~
+
+The :math:`E\times B` term is local in :math:`z` and in :math:`\hat\mu`, and :math:`a_j`
+depends on :math:`z` only, so on the nodes it is
+:math:`-\{J_0(\alpha_j)\varphi,\tilde G_j\}` with :math:`\alpha_j^2=2x_jk_\perp^2\rho^2`
+evaluated at the local field. This is the existing grid path of the bracket with an
+identity transform: ``laguerre_to_grid`` and ``laguerre_to_spectral`` are the identity and
+``laguerre_j0`` holds :math:`J_{0}(\alpha_j)`. The heat-flux weight is
+:math:`(x_j+\tfrac12)J_j` for :math:`(x-1)J+\tfrac32J`. Nonlinear runs are electrostatic only
+(the :math:`B_\parallel` correction would need :math:`x_j` in place of the node value in the
+bracket). Cyclone adiabatic-electron heat flux (64x64x24, ``Nm = 8``, :math:`t=600`, one seed,
+Sokal-window statistics, accepted at 20 :math:`\tau`): Laguerre ``Nl`` 4 / 8 / 16 give
+:math:`8.86\pm0.30` / :math:`8.84\pm0.23` / :math:`8.77\pm0.16`; 8 nodes give
+:math:`8.85\pm0.26`; 4 nodes give :math:`7.56\pm0.34` (window under 20 :math:`\tau`). The heat flux is
+converged at the shipped ``Nl = 4``, so the grid brings no accuracy gain here and 8 nodes
+cost about 2-3 times the 4 moments (shared GPU).
+
+Scope: linear runs, electrostatic and electromagnetic; nonlinear runs, electrostatic.
+``nu_hyper``, ``nu_hyper_l``, ``nu_hyper_lm`` and ``hypercollisions_const`` are refused
+(they act on the Laguerre index); the :math:`|k_z|` Hermite hypercollisions are unchanged.
+Velocity-parallel routes are refused. ``init_field`` (including ``"phi"``) seeds every node.
 
 References: GX ``docs/Numerics.rst`` (V2); Mandell, Dorland, Landreman 2018;
 Golub and Welsch 1969; Gautschi, *Orthogonal Polynomials* (2004), Ch. 2-3 (Stieltjes
