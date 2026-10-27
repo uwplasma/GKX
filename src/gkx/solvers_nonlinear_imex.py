@@ -1235,12 +1235,12 @@ def refactor_chain_implicit_linear(
 class ImexDtControl:
     """Chunk-level dt for the chain IMEX step (``fixed_dt = false``).
 
-    Between chunks: ``dt = min(cfl 8.5 / w_nl, cfl 2.5 / rho, dt_err,
+    Between chunks: ``dt = min(cfl 17 / w_nl, cfl 2.5 / rho, dt_err,
     dt_max)``. ``rho`` is the spectral radius of the explicit linear remainder
     (drifts, ion mirror, drive) by Arnoldi at startup and 2.5 the measured
     ARK3/ARS3 interval on it (0.82 x 3.6); ``w_nl`` the bracket CFL rate of the
-    current fields; 8.5 = 5 x 1.7 is the saturated-turbulence limit measured
-    on Cyclone KE (stable at dt 0.1, not 0.2, where the bracket rate is 80); ``dt_err`` the embedded
+    current fields; 17 = 10 x 1.7: Cyclone KE 32x32 stays finite and within 2 SE of
+    rk4-pi to 34 at beta 1e-4, 1e-3 and 0.015, and steps stop shrinking above 17; ``dt_err`` the embedded
     ARK3(2) estimate against ``rtol``. The factor is rebuilt only when dt
     moves by more than 20% (down) or grows past 1.2x, and a non-finite chunk
     is rejected and redone at half the step.
@@ -1283,7 +1283,7 @@ class ImexDtControl:
         rel, w_nl = (float(x) for x in self._probe(op, G))
         dt = float(op.dt)
         dt_err = dt * min(1.5, max(0.5, 0.9 * max(rel, 1e-12) ** (-1.0 / 3.0)))
-        dt_cfl = self.cfl * min(8.5 / max(w_nl, 1e-30), 2.5 / max(self.rho, 1e-30))
+        dt_cfl = self.cfl * min(17.0 / max(w_nl, 1e-30), 2.5 / max(self.rho, 1e-30))
         self.last = dict(
             err=rel, bracket=w_nl, remainder=self.rho, dt_err=dt_err, dt_cfl=dt_cfl
         )
