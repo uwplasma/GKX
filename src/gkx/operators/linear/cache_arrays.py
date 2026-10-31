@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 import jax.numpy as jnp
 import numpy as np
@@ -19,74 +19,6 @@ if TYPE_CHECKING:
 
 def _numpy_dtype_for_jax(real_dtype: jnp.dtype) -> type[np.float32] | type[np.float64]:
     return np.float64 if real_dtype == jnp.float64 else np.float32
-
-
-def _hypercollision_arrays(
-    Nl: int,
-    Nm: int,
-    nl: int,
-    nm: int,
-    p_hyper_m: float,
-    params: LinearParams,
-    np_dtype: Any,
-) -> dict[str, Any]:
-    """Hypercollision ratios on an ``(Nl, Nm)`` state for a species keeping ``(nl, nm)``.
-
-    The operator multiplies ``ratio_l`` and ``ratio_m`` by the state extents, so
-    the ``nl / Nl`` and ``nm / Nm`` factors make the product the species' own
-    ``nl * (l / nl)**p`` rather than the state's.
-    """
-
-    ell: Any = np.arange(Nl, dtype=np_dtype).reshape(Nl, 1, 1, 1, 1)
-    m: Any = np.arange(Nm, dtype=np_dtype).reshape(1, Nm, 1, 1, 1)
-    l_norm, m_norm = np_dtype(max(nl - 1, 1)), np_dtype(max(nm - 1, 1))
-    l_norm_full, m_norm_full = np_dtype(max(nl, 1)), np_dtype(max(nm, 1))
-    p_hyper_l = np_dtype(params.p_hyper_l)
-    p_hyper_m = np_dtype(p_hyper_m)
-    p_hyper_lm = np_dtype(params.p_hyper_lm)
-    return {
-        "hyper_ratio": (ell / l_norm) ** params.p_hyper
-        + (m / m_norm) ** params.p_hyper,
-        "ratio_l": (ell / l_norm_full) ** p_hyper_l * np_dtype(nl / Nl),
-        "ratio_m": (m / m_norm_full) ** p_hyper_m * np_dtype(nm / Nm),
-        "ratio_lm": ((2.0 * ell + m) / (2.0 * l_norm_full + m_norm_full)) ** p_hyper_lm,
-        "m_pow": (m / m_norm) ** p_hyper_m,
-        "m_norm_kz_factor": (p_hyper_m + 0.5) / np.sqrt(m_norm),
-    }
-
-
-def moment_resolution(
-    moments: tuple | None, Nl: int, Nm: int
-) -> list[tuple[int, int, float]] | None:
-    """Per-species ``(nl, nm, p_hyper_m)`` resolved against the state, or ``None`` if uniform."""
-
-    if moments is None:
-        return None
-    rows = [(Nl if a is None else a, Nm if b is None else b, p) for a, b, p in moments]
-    if any(a > Nl or b > Nm for a, b, _ in rows):
-        raise ValueError(
-            f"a species keeps more moments than the state ({Nl}, {Nm}): {rows}"
-        )
-    return None if all((a, b) == (Nl, Nm) for a, b, _ in rows) else rows
-
-
-def kept_moments(rows: list[tuple[int, int, float]], Nl: int, Nm: int) -> np.ndarray:
-    """Boolean ``(Ns, Nl, Nm, 1, 1, 1)`` mask of the moments each species keeps."""
-
-    keep = [
-        (np.arange(Nl)[:, None] < nl) & (np.arange(Nm)[None, :] < nm)
-        for nl, nm, _ in rows
-    ]
-    return np.stack(keep)[..., None, None, None]
-
-
-def keep_moments(state: Any, moments: tuple | None) -> Any:
-    """Zero the moments each species does not keep in a ``(Ns, Nl, Nm, ...)`` state."""
-
-    rows = moment_resolution(moments, state.shape[1], state.shape[2])
-    if rows is None:
-        return state
-    return jnp.where(kept_moments(rows, state.shape[1], state.shape[2]), state, 0)
 
 
 def _build_low_rank_moment_cache_arrays(
@@ -108,18 +40,15 @@ def _build_low_rank_moment_cache_arrays(
     hermite_index: Any = np.arange(Nm, dtype=np_dtype)
     sqrt_p_np = np.sqrt(hermite_index + np_dtype(1.0)).reshape(sqrt_shape)
     sqrt_m_ladder_np = np.sqrt(hermite_index).reshape(sqrt_shape)
-    rows = moment_resolution(params.moments, Nl, Nm)
-    if rows is None:
-        hyper = _hypercollision_arrays(
-            Nl, Nm, Nl, Nm, params.p_hyper_m, params, np_dtype
-        )
-    else:  # one set per species, stacked on a leading species axis
-        sets = [
-            _hypercollision_arrays(Nl, Nm, nl, nm, p, params, np_dtype)
-            for nl, nm, p in rows
-        ]
-        hyper = {k: np.stack([x[k] for x in sets]) for k in sets[0]}
-        hyper["m_norm_kz_factor"] = hyper["m_norm_kz_factor"].reshape(-1, 1, 1, 1, 1, 1)
+    l_norm = np_dtype(max(Nl - 1, 1))
+    m_norm = np_dtype(max(Nm - 1, 1))
+    l_norm_full = np_dtype(max(Nl, 1))
+    m_norm_full = np_dtype(max(Nm, 1))
+    m_norm_kz = np_dtype(max(Nm - 1, 1))
+    p_hyper_l = np_dtype(params.p_hyper_l)
+    p_hyper_m = np_dtype(params.p_hyper_m)
+    p_hyper_lm = np_dtype(params.p_hyper_lm)
+    normalized_m = m / m_norm_kz
     return {
         "lb_lam": jnp.asarray(lb_lam_np, dtype=real_dtype),
         "l": jnp.asarray(ell, dtype=real_dtype),
@@ -131,12 +60,22 @@ def _build_low_rank_moment_cache_arrays(
         "sqrt_m_p1": jnp.asarray(np.sqrt(m + np_dtype(1.0)), dtype=real_dtype),
         "sqrt_p": jnp.asarray(sqrt_p_np, dtype=real_dtype),
         "sqrt_m_ladder": jnp.asarray(sqrt_m_ladder_np, dtype=real_dtype),
+        "hyper_ratio": jnp.asarray(
+            (ell / l_norm) ** params.p_hyper + (m / m_norm) ** params.p_hyper,
+            dtype=real_dtype,
+        ),
+        "ratio_l": jnp.asarray((ell / l_norm_full) ** p_hyper_l, dtype=real_dtype),
+        "ratio_m": jnp.asarray((m / m_norm_full) ** p_hyper_m, dtype=real_dtype),
+        "ratio_lm": jnp.asarray(
+            ((2.0 * ell + m) / (2.0 * l_norm_full + m_norm_full)) ** p_hyper_lm,
+            dtype=real_dtype,
+        ),
         "mask_const": jnp.asarray((m > 2.0) | (ell > 1.0), dtype=bool),
         "mask_kz": jnp.asarray(m > 2.0, dtype=bool),
-        **{k: jnp.asarray(v, dtype=real_dtype) for k, v in hyper.items()},
-        "moment_mask": None
-        if rows is None
-        else jnp.asarray(kept_moments(rows, Nl, Nm)),
+        "m_pow": jnp.asarray(normalized_m**p_hyper_m, dtype=real_dtype),
+        "m_norm_kz_factor": jnp.asarray(
+            (p_hyper_m + 0.5) / np.sqrt(m_norm_kz), dtype=real_dtype
+        ),
     }
 
 
@@ -198,6 +137,57 @@ def with_mu_grid(cache: Any, params: LinearParams) -> Any:
         mu_lb=jnp.asarray(0.5 * float(params.nu_laguerre) * rate, dtype=dtype),
         lb_lam=jnp.broadcast_to(jnp.asarray(hermite, dtype=dtype), cache.lb_lam.shape),
     )
+
+
+def with_species_groups(
+    cache: Any,
+    params: LinearParams,
+    build: Callable[..., Any],
+    *args: Any,
+) -> Any:
+    """Attach one exact-size cache per run of species keeping the same ``(nl, nm)``.
+
+    ``build(*args, params_g, nl, nm)`` makes a group's cache. The field solve runs on the full
+    state, so the gyro factors above a species' ``nl`` are zeroed in ``cache`` itself:
+    its polarization and gyroaverages then carry that species' own Laguerre terms.
+    Identity when ``params.moments`` is ``None`` or every species keeps the state's.
+    """
+
+    if params.moments is None:
+        return cache
+    Nl, Nm = cache.Jl.shape[1], cache.m.size
+    rows = [
+        (Nl if nl is None else nl, Nm if nm is None else nm, p)
+        for nl, nm, p in params.moments
+    ]
+    if any(nl > Nl or nm > Nm for nl, nm, _ in rows):
+        raise ValueError(f"a species keeps more moments than the state ({Nl}, {Nm})")
+    if all(r[:2] == (Nl, Nm) for r in rows):
+        return cache
+    if params.mu_vperp_max is not None and any(r[0] != Nl for r in rows):
+        raise ValueError("a species cannot keep fewer Laguerre nodes on the mu grid")
+    runs: list[list[int]] = []
+    for i, row in enumerate(rows):
+        if runs and rows[runs[-1][0]] == row:
+            runs[-1][1] = i + 1
+        else:
+            runs.append([i, i + 1])
+    groups = tuple(
+        build(*args, params.species_slice(a, b, p_hyper_m=rows[a][2]), *rows[a][:2])
+        for a, b in runs
+    )
+    nl = np.array([r[0] for r in rows])
+    keep = np.arange(Nl)[None, :, None, None, None] < nl[:, None, None, None, None]
+    return replace(cache, Jl=cache.Jl * keep, JlB=cache.JlB * keep, groups=groups)
+
+
+def keep_moments(state: Any, moments: tuple | None) -> Any:
+    """Zero the moments each species does not keep in a ``(Ns, Nl, Nm, ...)`` state."""
+
+    for i, (nl, nm, _) in enumerate(moments or ()):
+        state = jnp.asarray(state).at[i, nl or state.shape[1] :].set(0)
+        state = state.at[i, :, nm or state.shape[2] :].set(0)
+    return state
 
 
 def check_mu_grid_params(params: LinearParams) -> None:

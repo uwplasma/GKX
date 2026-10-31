@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 import jax
@@ -178,11 +178,22 @@ class LinearParams:
     #: (:func:`gkx.core_velocity.mu_grid_nodes`) with that ``vperp_max``
     #: (``inf``: Gauss-Laguerre); the Laguerre axis then holds the ``Nl`` nodes.
     mu_vperp_max: float | None = None
-    #: Moments each species keeps, one ``(Nl, Nm, p_hyper_m)`` per species; ``None``
-    #: in a slot keeps the state's full extent there, and ``None`` for the whole
-    #: field gives every species the full state. Moments above a species' count
-    #: stay zero and its hypercollisions are normalized to its own count.
+    #: Moments each species keeps, one ``(Nl, Nm, p_hyper_m)`` per species, at most the
+    #: state's ``(Nl, Nm)``; ``None`` in a slot keeps the state's there and ``None`` for
+    #: the field gives every species the state's. The RHS runs each run of equal species
+    #: at its own size, so the moments above it stay zero and its hypercollisions are
+    #: normalized to its own count (:attr:`LinearCache.groups`).
     moments: tuple[tuple[int | None, int | None, float], ...] | None = None
+
+    def species_slice(self, a: int, b: int, **overrides: Any) -> "LinearParams":
+        """The parameters of species ``a:b`` of a ``moments`` run, with ``overrides``."""
+
+        ns = len(self.moments or ())
+        rows: dict[str, Any] = {
+            n: _as_species_array(getattr(self, n), ns, n)[a:b]
+            for n in _SPECIES_PARAM_NAMES
+        }
+        return replace(self, **{**rows, "moments": None, **overrides})
 
     def const_branch_nu_hyper_m(self):
         """Return the Hermite hypercollision rate the *constant* branch uses.

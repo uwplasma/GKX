@@ -89,7 +89,7 @@ and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
 | Choice | Default | Notes |
 |---|---|---|
 | Geometry | s-alpha, Miller, VMEC/VMEX, imported | `[geometry] model`; `gkx wout_*.nc` for any VMEC |
-| Velocity space | Hermite-Laguerre, `(Nl, Nm)` | hypercollisions damp the last Hermite moments |
+| Velocity space | Hermite-Laguerre, `(Nl, Nm)`, per species with `[[species]] Nl`/`Nm` | hypercollisions damp the last Hermite moments; kinetic-electron decks that name no resolution get ions (12, 32) and electrons (6, 48) linear, (4, 16) nonlinear ([guidance](docs/guidance.rst)) |
 | Perpendicular velocity (opt-in) | nodal `mu` grid: `[run] mu_vperp_max = 4.0`, `Nl` = nodes | linear runs; 8 nodes match Laguerre `Nl` 16-24 on Cyclone at 5-12x less cost; flat convergence on TEM and KBM ([numerics](docs/numerics.rst)) |
 | Collisions | linearized Landau | conserving, H-theorem; Dougherty, Sugama alternatives ([operators](docs/operators.rst)) |
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
@@ -177,6 +177,15 @@ measure, not a runtime/TOML absolute-flux predictor
   64x64x24, and does not pay on tutorial grids.
 - **Parallel work:** independent `k_y` scans and ensembles run across devices
   with results identical to the serial run.
+
+Each species can keep its own `Nl` and `Nm`, so ions do not pay for the
+electrons' Hermite moments. Against uniform counts the growth rate agrees to
+1.6% on Cyclone ITG, TEM, ETG-range and QA stellarator decks and the nonlinear
+heat-flux window mean to 2%; an explicit 64x64x24 step is 1.1-1.9x faster in
+1.3-1.5x less memory. The implicit `imex` factor is built on the padded state
+and does not shrink ([guidance](docs/guidance.rst)).
+
+![Per-species moment counts against uniform counts](docs/_static/readme/readme_species_moments.png)
 
 [Performance](docs/performance.rst) · [parallelization](docs/parallelization.rst).
 

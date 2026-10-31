@@ -1,8 +1,10 @@
 schema_version = 1
 
 # Nonlinear Cyclone ITG with kinetic electrons (m_e/m_i = 2.7e-4, beta = 1e-4),
-# tutorial resolution: 16x16x16, (Nl, Nm) = (2, 4). Seconds to a minute on a
-# CPU; the horizon covers the start of the linear phase only.
+# tutorial resolution: 16x16x16, (Nl, Nm) = (4, 16). A minute on a CPU; the
+# horizon covers the start of the linear phase only. (4, 16) is the converged
+# nonlinear resolution for kinetic electrons: the saturated heat flux is within
+# 3% of (8, 32), where the old (4, 8) was 10% high (docs/guidance.rst).
 #
 # Choosing dt. The step is set by the CFL controller (fixed_dt = false), and
 # with kinetic electrons the controller is bound by electron parallel
@@ -35,10 +37,11 @@ schema_version = 1
 # "saturation" stops once the heat-flux mean is converged). The tutorial
 # horizon below is 0.3.
 #
-# Production (GPU, hours): Nx = Ny = 64 (or 96), Nz = 24-32, Nl = 4, Nm = 8-16,
-# t_max = 400, run_to = "saturation", same beta. Nm = 8 raises the
-# streaming bound by 1.4 (2 sqrt(Nm)); check the flux against Nm = 16 before
-# quoting it.
+# Production (GPU, hours): Nx = Ny = 64 (or 96), Nz = 24-32, Nl = 4, Nm = 16,
+# t_max = 400, run_to = "saturation", same beta. For (8, 32) give each species its
+# own counts, ions Nl = 8, Nm = 24 and electrons Nl = 4, under [[species]] with
+# [run] Nl = 8, Nm = 32: the same heat flux, an explicit step 1.5x faster
+# (docs/inputs.rst, "Per-species velocity resolution").
 
 [[species]]
 name = "ion"
@@ -132,5 +135,5 @@ diagnostic_norm = "rho_star"
 
 [run]
 ky = 0.3
-Nl = 2
-Nm = 4
+Nl = 4
+Nm = 16

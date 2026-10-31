@@ -14,7 +14,7 @@ from typing import Any, Callable
 import jax.numpy as jnp
 
 from gkx.operators.collision import CollisionOperator
-from gkx.operators.linear.cache_model import LinearCache, mask_moments
+from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.assembly import (
     _is_static_zero,
@@ -23,6 +23,7 @@ from gkx.terms.assembly import (
     assemble_rhs_cached_electrostatic_jit,
     assemble_rhs_cached_jit,
     linear_rhs_jit_for_terms as linear_rhs_jit_for_terms_impl,
+    split_species,
 )
 from gkx.terms.config import FieldState, TermConfig
 from gkx.terms.nonlinear import nonlinear_em_contribution
@@ -33,10 +34,43 @@ NonlinearContributionCallable = Callable[..., jnp.ndarray]
 FieldSolveCallable = Callable[..., FieldState]
 
 
-def _masked(fn: NonlinearContributionCallable, cache: LinearCache):
-    """``fn`` with its result restricted to the moments each species keeps."""
+def _bracket(
+    fn: NonlinearContributionCallable,
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    **kwargs: Any,
+) -> jnp.ndarray:
+    """The nonlinear bracket of ``G``, run per species group when moments differ."""
 
-    return lambda *args, **kwargs: mask_moments(fn(*args, **kwargs), cache)
+    def one(
+        g: jnp.ndarray, c: LinearCache, p: LinearParams, _: Any = None
+    ) -> jnp.ndarray:
+        return fn(
+            g,
+            Jl=c.Jl,
+            JlB=c.JlB,
+            tz=jnp.asarray(p.tz),
+            vth=jnp.asarray(p.vth),
+            sqrt_m=c.sqrt_m,
+            sqrt_m_p1=c.sqrt_m_p1,
+            kx_grid=c.kx_grid,
+            ky_grid=c.ky_grid,
+            ny_full=getattr(c, "ny_full", None),
+            dealias_mask=c.dealias_mask,
+            kxfac=c.kxfac,
+            laguerre_to_grid=c.laguerre_to_grid,
+            laguerre_to_spectral=c.laguerre_to_spectral,
+            laguerre_roots=c.laguerre_roots,
+            laguerre_j0=c.laguerre_j0,
+            laguerre_j1_over_alpha=c.laguerre_j1_over_alpha,
+            b=c.b,
+            **kwargs,
+        )
+
+    if getattr(cache, "groups", None) is None:
+        return one(G, cache, params)
+    return split_species(G, cache, params, one)
 
 
 def nonlinear_rhs_cached_impl(
@@ -60,7 +94,6 @@ def nonlinear_rhs_cached_impl(
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
     term_cfg = terms or TermConfig()
-    nonlinear_contribution_fn = _masked(nonlinear_contribution_fn, cache)
     dG, fields = assemble_linear_rhs_cached(
         G,
         cache,
@@ -89,31 +122,17 @@ def nonlinear_rhs_cached_impl(
             if fields.bpar is None or is_static_zero_fn(term_cfg.bpar)
             else fields.bpar
         )
-        dG = dG + nonlinear_contribution_fn(
+        dG = dG + _bracket(
+            nonlinear_contribution_fn,
             G,
+            cache,
+            params,
             phi=fields.phi,
             apar=apar,
             bpar=bpar,
-            Jl=cache.Jl,
-            JlB=cache.JlB,
-            tz=jnp.asarray(params.tz),
-            vth=jnp.asarray(params.vth),
-            sqrt_m=cache.sqrt_m,
-            sqrt_m_p1=cache.sqrt_m_p1,
-            kx_grid=cache.kx_grid,
-            ky_grid=cache.ky_grid,
-            ny_full=getattr(cache, "ny_full", None),
-            dealias_mask=cache.dealias_mask,
-            kxfac=cache.kxfac,
             weight=weight,
             apar_weight=float(term_cfg.apar),
             bpar_weight=float(term_cfg.bpar),
-            laguerre_to_grid=cache.laguerre_to_grid,
-            laguerre_to_spectral=cache.laguerre_to_spectral,
-            laguerre_roots=cache.laguerre_roots,
-            laguerre_j0=cache.laguerre_j0,
-            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
-            b=cache.b,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
             radial_phase=radial_phase,
@@ -139,35 +158,20 @@ def nonlinear_em_term_cached_impl(
 
     if term_cfg.nonlinear == 0.0:
         return jnp.zeros_like(G)
-    nonlinear_contribution_fn = _masked(nonlinear_contribution_fn, cache)
     dtype = real_dtype or jnp.real(jnp.empty((), dtype=G.dtype)).dtype
     weight = jnp.asarray(term_cfg.nonlinear, dtype=dtype)
     fields = fields_fn(G, cache, params, terms=term_cfg, external_phi=external_phi)
-    return nonlinear_contribution_fn(
+    return _bracket(
+        nonlinear_contribution_fn,
         G,
+        cache,
+        params,
         phi=fields.phi,
         apar=fields.apar,
         bpar=fields.bpar,
-        Jl=cache.Jl,
-        JlB=cache.JlB,
-        tz=jnp.asarray(params.tz),
-        vth=jnp.asarray(params.vth),
-        sqrt_m=cache.sqrt_m,
-        sqrt_m_p1=cache.sqrt_m_p1,
-        kx_grid=cache.kx_grid,
-        ky_grid=cache.ky_grid,
-        ny_full=getattr(cache, "ny_full", None),
-        dealias_mask=cache.dealias_mask,
-        kxfac=cache.kxfac,
         weight=weight,
         apar_weight=float(term_cfg.apar),
         bpar_weight=float(term_cfg.bpar),
-        laguerre_to_grid=cache.laguerre_to_grid,
-        laguerre_to_spectral=cache.laguerre_to_spectral,
-        laguerre_roots=cache.laguerre_roots,
-        laguerre_j0=cache.laguerre_j0,
-        laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
-        b=cache.b,
         compressed_real_fft=compressed_real_fft,
         laguerre_mode=laguerre_mode,
         radial_phase=radial_phase,

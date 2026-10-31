@@ -1208,10 +1208,10 @@ recursive = true
 # 68421 -> 68707: nodal mu grid (opt-in LinearParams.mu_vperp_max): rule, gyro factors, node-local mirror/drift/drive, Dougherty, Laguerre-mode seeds. Measured.
 # 68707 -> 68721: Python 3.10 support: tomli fallback in two modules, the jax < 0.7 enable_x64 import and the shard_map vma switch. Measured.
 # 68721 -> 68867: local implicit collision sub-step of the chain IMEX steps, used when explicit collisions would bind. Measured.
-# 68867 -> 69002: per-species Laguerre/Hermite moment counts ([[species]] Nl/Nm):
-# LinearParams.moments, species-stacked hypercollision arrays, the moment mask on the
-# RHS and the initial state. Measured.
-baseline = 69002
+# 68867 -> 69106: per-species Laguerre/Hermite moment counts ([[species]] Nl/Nm):
+# LinearParams.moments, one exact-size cache per species group run by the RHS and the
+# bracket (LinearCache.groups), the kinetic-electron fallback counts. Measured.
+baseline = 69106
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1573,9 +1573,10 @@ recursive = true
 # 64074 -> 64075: adaptive dt with dt set must not default to rk2 (imex-ark3 assertion). Measured.
 # 64075 -> 64112: Python 3.10 floor: the jax < 0.7 skips, the tomllib alias in conftest and the guarded-import gate. Measured.
 # 64112 -> 64201: chain IMEX collision sub-step tests (conservation, when it binds, dt beyond the explicit bound). Measured.
-# 64201 -> 64360: per-species moment count tests (uniform bitwise identity, equivalence to a
-# smaller state, no leakage above a species' block, hypercollision normalization, deck path). Measured.
-baseline = 64360
+# 64201 -> 64466: per-species moment count tests (uniform bitwise identity, equivalence to a
+# smaller state, containment, bracket per group, end-damping rate, species-weighted terms,
+# refused routes, hypercollision normalization, deck path, kinetic-electron fallback). Measured.
+baseline = 64466
 target = 35000
 
 [[line_budget_policy.counts]]
