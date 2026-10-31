@@ -334,10 +334,8 @@ def _normalize_time_overrides(
     the dataclass default stays rk2 for a deck that chose its own dt.
 
     A deck that sets ``dt`` keeps today's behaviour exactly, and every shipped
-    deck sets it, so this changes none of them. A deck that sets ``dt`` with
-    ``fixed_dt = false`` takes the controller's default: rk2 has no
-    imaginary-axis stability, so adaptive rk2 on a kinetic-electron deck grows
-    every streaming mode until the controller's step collapses.
+    deck sets it, so this changes none of them. ``fixed_dt = false`` with ``dt``
+    takes the controller's stepper: adaptive rk2 grows every streaming mode.
     """
 
     raw = dict(overrides) if isinstance(overrides, dict) else {}
