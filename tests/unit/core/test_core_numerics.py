@@ -2676,6 +2676,8 @@ def test_time_config_defaults_follow_one_policy_for_api_and_deck() -> None:
     assert (chosen.method, chosen.fixed_dt, chosen.dt) == ("rk2", True, 0.02)
     assert TimeConfig(method="rk3").fixed_dt is False
     assert TimeConfig(dt=0.02, method="rk3", fixed_dt=False).fixed_dt is False
+    # An adaptive step never defaults to rk2: no imaginary-axis stability.
+    assert TimeConfig(dt=0.02, fixed_dt=False).method == "rk4"
 
 
 def test_deck_default_stepper_follows_run_type() -> None:
@@ -2688,4 +2690,5 @@ def test_deck_default_stepper_follows_run_type() -> None:
     assert norm(None, {**ke, "beta": 0.015})["method"] == "rk4-pi"
     assert norm(None, {"nonlinear": False})["method"] == "rk4"
     assert norm({"dt": 0.1}, ke)["method"] == "rk2"
+    assert norm({"dt": 0.1, "fixed_dt": False}, ke)["method"] == "imex-ark3"
     assert norm({"method": "rk3"}, ke)["method"] == "rk3"

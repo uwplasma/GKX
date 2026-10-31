@@ -176,10 +176,11 @@ class TimeConfig:
         # controller sets the step, with ``rk4``; a chosen ``dt`` is a fixed step
         # with ``rk2``. Explicit ``method`` or ``fixed_dt`` always win.
         chosen = self.dt is not None
+        fixed = chosen if self.fixed_dt is None else self.fixed_dt
         for name, value in (
             ("dt", 0.1),
-            ("method", "rk2" if chosen else "rk4"),
-            ("fixed_dt", chosen),
+            ("method", "rk2" if fixed else "rk4"),
+            ("fixed_dt", fixed),
         ):
             if getattr(self, name) is None:
                 object.__setattr__(self, name, value)
