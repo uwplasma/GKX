@@ -16,6 +16,7 @@ from gkx.operators.nonlinear.policies import measured_streaming_frequency
 from gkx.solvers_nonlinear_imex import (
     ARS_TABLEAUX,
     build_chain_implicit_linear,
+    collisions_bind,
     refactor_chain_implicit_linear,
 )
 from gkx.solvers_nonlinear_diagnostics import stiff_linear_split
@@ -2403,6 +2404,16 @@ def test_chain_collisions_are_a_conserving_local_implicit_substep():
     again = refactor_chain_implicit_linear(op, 4 * 0.05)
     assert jax.tree.structure(again) == jax.tree.structure(op)
     assert not np.allclose(again.cfac[0], op.cfac[0])
+
+
+def test_collision_substep_is_used_only_when_explicit_collisions_would_bind():
+    for nu, binds in ((0.002, False), (0.5, True)):  # nu_e = nu / sqrt(m_e)
+        cfg, params, cache, shape = _tiny_kinetic_electron_box(nu=nu)
+        terms = rt.build_runtime_term_config(cfg)
+        _split, fields, _mirror, coll = stiff_linear_split(
+            cache, params, terms, compute_fields_cached
+        )
+        assert collisions_bind(coll, fields, shape, jnp.complex128, 0.05) is binds
 
 
 def test_chain_imex_dt_is_not_bound_by_the_electron_collision_rate():

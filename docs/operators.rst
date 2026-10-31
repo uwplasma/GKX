@@ -547,8 +547,8 @@ The ``[time] collision_split`` policy splits only diagonal hypercollisions. The
 conserving collision term stays in the Runge--Kutta RHS, with its
 field-particle corrections; the chain IMEX steps (``imex-ars3``, ``imex-ark3``)
 advance the Landau operator by a local backward-Euler sub-step instead
-(``collision_scheme = "implicit"``), which removes :math:`\nu_e` from the
-step-size bound.
+(``collision_scheme = "implicit"``) when the explicit collision bound would
+bind, which removes :math:`\nu_e` from the step-size bound (:doc:`guidance`).
 
 Diagnostics in ``src/gkx/operators/linear/dissipation.py``:
 
