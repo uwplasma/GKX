@@ -110,6 +110,10 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         raise NotImplementedError(
             "mixed routing requires the standard factorized collision operator"
         )
+    if bool(jnp.any(jnp.asarray(params.closure) != 0.0)):
+        raise NotImplementedError(
+            "mixed species-Hermite routing does not support the reflectionless closure"
+        )
     ns = int(arr.shape[0])
     nm = int(arr.shape[2])
     s_chunks = int(species_chunks)

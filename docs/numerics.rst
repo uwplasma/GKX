@@ -503,6 +503,8 @@ Four traps give plausible but wrong numbers (all gated in
 4. ``tau_e`` is :math:`T_i/T_e`; the reciprocal is invisible at :math:`T_e=T_i`.
    GKX normalizes to :math:`v_{ti}=\sqrt{T/m}`, not :math:`\sqrt{2T/m}`.
 
+.. _hermite-closure:
+
 Hermite closure and recurrence
 ------------------------------
 
@@ -517,8 +519,9 @@ of high moments with the :math:`|k_z|`-scaled branch
 :math:`\propto \nu_{hyper,m}|k_z|(m/M)^{p_m}` (``nu_hyper_m``, ``p_hyper_m``;
 :doc:`operators`).
 
-**Reflectionless closure** (opt-in, Python API
-``hermite_closure="reflectionless"``) applies the outgoing-wave condition of
+**Reflectionless closure** (opt-in per species with ``[[species]]
+hermite_closure = "reflectionless"``, ``LinearParams.closure``; in the Python
+streaming kernel ``hermite_closure="reflectionless"``) applies the outgoing-wave condition of
 Kanekar et al., *J. Plasma Phys.* **81**, 305810104 (2015), Eq. (4.36):
 
 .. math::

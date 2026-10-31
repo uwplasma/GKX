@@ -476,6 +476,11 @@ Notable runtime-only keys:
   ``0.0`` alongside ``hypercollisions_const = 1.0`` to declare a pure Laguerre
   sink while the :math:`|k_z|` Hermite hypercollisions stay exactly as the
   reference code sets them. See :ref:`velocity-regularization`.
+* ``[[species]] hermite_closure``: ``"hypercollision"`` (default) or
+  ``"reflectionless"``. The latter drops that species' :math:`|k_z|`
+  hypercollisions and absorbs the outgoing Hermite flux at the last moment
+  instead (:ref:`hermite-closure`); it is meant for kinetic electrons, whose
+  :math:`v_{te}|k_z|` hypercollision rate is as large as streaming itself.
 * ``[collisions] D_hyper`` / ``p_hyper_kperp``: perpendicular hyperdiffusion
   amplitude and exponent.
 * ``[normalization] flux_scale``: multiplicative factor applied to

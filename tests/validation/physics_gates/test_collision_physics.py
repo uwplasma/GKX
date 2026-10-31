@@ -2242,3 +2242,76 @@ def test_sonine_radial_finite_at_high_order_and_large_argument():
         value, deriv = _sonine_radial(np.array([300.0, 1.0]), 2, 75, 0.05)
     assert np.isfinite(value).all() and np.isfinite(deriv).all()
     assert np.abs(value[:, 0]).max() == 0.0
+
+
+def test_species_closure_replaces_that_species_kz_hypercollisions() -> None:
+    """``closure = 1`` swaps one species' hypercollisions for the Kanekar sink.
+
+    The closed species must feel only ``-R sqrt(M) v_th |k_par| G_M`` on the last
+    moment, with its hypercollision band gone; the other species is untouched.
+    """
+
+    from gkx.config import RuntimeSpeciesConfig
+    from gkx.operators.linear.params import Species, build_linear_params
+    from gkx.terms.assembly import assemble_rhs_cached
+    from gkx.terms.config import TermConfig
+    from gkx.workflows.runtime.startup import _species_to_linear
+
+    cfg = CycloneBaseCase()
+    grid = build_spectral_grid(
+        dataclasses.replace(
+            cfg.grid, Nx=1, Ny=4, Nz=16, ntheta=None, nperiod=None, boundary="periodic"
+        )
+    )
+    geom = SAlphaGeometry.from_config(cfg.geometry)
+    hermite_count = 8
+    common = dict(density=1.0, temperature=1.0, tprim=1.0, fprim=1.0)
+    ions, electrons = (
+        Species(charge=1.0, mass=1.0, **common),
+        Species(charge=-1.0, mass=0.01, **common),
+    )
+    params = build_linear_params(
+        [ions, electrons],
+        kpar_scale=float(geom.gradpar()),
+        hypercollisions_const=0.0,
+        hypercollisions_kz=1.0,
+    )
+    cache = build_linear_cache(grid, geom, params, 2, hermite_count)
+    terms = TermConfig(
+        streaming=0.0,
+        mirror=0.0,
+        curvature=0.0,
+        gradb=0.0,
+        diamagnetic=0.0,
+        collisions=0.0,
+        end_damping=0.0,
+    )
+    generator = np.random.default_rng(1)
+    shape = (2, 2, hermite_count, int(grid.ky.size), 1, 16)
+    state = jnp.asarray(
+        generator.normal(size=shape) + 1j * generator.normal(size=shape)
+    )
+
+    def rhs(closure):
+        closed = dataclasses.replace(params, closure=jnp.asarray(closure))
+        return np.asarray(assemble_rhs_cached(state, cache, closed, terms=terms)[0])
+
+    band, closed = rhs([0.0, 0.0]), rhs([0.0, 1.0])
+    assert np.abs(band[1]).max() > 0.0
+    np.testing.assert_array_equal(closed[0], band[0])
+    assert np.abs(closed[1, :, :-1]).max() == 0.0
+
+    tail = jnp.asarray(np.asarray(state)[1, :, -1])
+    sink = -(
+        hermite_closure_coefficient(hermite_count)
+        * np.sqrt(hermite_count)
+        * float(params.vth[1])
+        * float(params.kpar_scale)
+        * np.asarray(abs_z_periodic(tail, kz=cache.kz))
+    )
+    np.testing.assert_allclose(closed[1, :, -1], sink, rtol=1e-12, atol=1e-14)
+
+    rows = _species_to_linear(
+        (RuntimeSpeciesConfig(), RuntimeSpeciesConfig(hermite_closure="reflectionless"))
+    )
+    assert [row.closure for row in rows] == [0.0, 1.0]
