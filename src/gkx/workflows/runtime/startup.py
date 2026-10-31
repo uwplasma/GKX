@@ -274,6 +274,7 @@ def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Spec
             tprim=float(s.tprim),
             fprim=float(s.fprim),
             nu=float(s.nu),
+            closure=float(s.hermite_closure == "reflectionless"),
         )
         for s in kinetic
     ]

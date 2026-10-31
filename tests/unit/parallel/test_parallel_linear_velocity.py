@@ -2775,6 +2775,15 @@ def test_bounded_mixed_species_hermite_rhs_matches_serial_operator() -> None:
     )
 
 
+def test_mixed_species_hermite_route_refuses_reflectionless_closure() -> None:
+    state, cache, params, _grid, _geom = _small_kinetic_electron_problem()
+    closed = replace(params, closure=jnp.asarray([0.0, 1.0]))
+    with pytest.raises(NotImplementedError, match="reflectionless closure"):
+        linear_parallel_streaming.linear_rhs_electrostatic_species_hermite_sharded(
+            state, cache, closed, terms=_streaming_only_terms(), devices=None
+        )
+
+
 def test_bounded_species_sharded_rhs_matches_serial_operator() -> None:
     """One complete species-sharded compile must preserve the serial equations."""
 

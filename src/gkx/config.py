@@ -468,6 +468,17 @@ class RuntimeSpeciesConfig:
     fprim: float = 0.8
     nu: float = 0.0
     kinetic: bool = True
+    #: ``"hypercollision"`` damps a band of high Hermite moments with
+    #: ``|k_z|``-scaled hypercollisions; ``"reflectionless"`` absorbs the
+    #: outgoing Hermite flux at the last moment instead (Kanekar et al. 2015).
+    hermite_closure: str = "hypercollision"
+
+    def __post_init__(self) -> None:
+        if self.hermite_closure not in ("hypercollision", "reflectionless"):
+            raise ValueError(
+                "species hermite_closure must be 'hypercollision' or "
+                f"'reflectionless', got {self.hermite_closure!r}"
+            )
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

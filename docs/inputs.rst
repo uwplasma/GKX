@@ -476,6 +476,19 @@ Notable runtime-only keys:
   ``0.0`` alongside ``hypercollisions_const = 1.0`` to declare a pure Laguerre
   sink while the :math:`|k_z|` Hermite hypercollisions stay exactly as the
   reference code sets them. See :ref:`velocity-regularization`.
+* ``[[species]] hermite_closure``: ``"hypercollision"`` (default) or
+  ``"reflectionless"``; any other string raises ``ValueError``. It selects how
+  that species ends its Hermite ladder, so each species is set separately and
+  an omitted key keeps the existing behavior bit for bit. ``"reflectionless"``
+  removes the species' :math:`|k_z|` hypercollision band
+  (``hypercollisions_kz``, ``nu_hyper_m``, ``p_hyper_m``) and applies the
+  outgoing-wave sink of Kanekar et al. on the last Hermite moment instead
+  (:ref:`hermite-closure`). The constant Laguerre/Hermite hypercollision branch,
+  ``nu_hyper``, collisions and end damping are unchanged, and the sink is
+  switched off with ``[physics] hypercollisions = false``. It has no tunable
+  parameter and needs no ``hypercollisions_kz``. Meant for kinetic electrons at
+  modest ``Nm`` (see the guidance in :ref:`hermite-closure`); the mixed
+  species-Hermite electrostatic parallel route refuses it.
 * ``[collisions] D_hyper`` / ``p_hyper_kperp``: perpendicular hyperdiffusion
   amplitude and exponent.
 * ``[normalization] flux_scale``: multiplicative factor applied to

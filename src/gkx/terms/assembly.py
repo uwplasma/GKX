@@ -61,6 +61,7 @@ class _SpeciesArrays:
     tprim: jnp.ndarray
     fprim: jnp.ndarray
     nu: jnp.ndarray
+    closure: jnp.ndarray
 
 
 @dataclass(frozen=True)
@@ -250,6 +251,7 @@ def _species_arrays(params: LinearParams, ns: int, real_dtype: Any) -> _SpeciesA
         tprim=_as_species_array(params.tprim, ns, "tprim").astype(real_dtype),
         fprim=_as_species_array(params.fprim, ns, "fprim").astype(real_dtype),
         nu=_as_species_array(params.nu, ns, "nu").astype(real_dtype),
+        closure=_as_species_array(params.closure, ns, "closure").astype(real_dtype),
     )
 
 
@@ -507,9 +509,13 @@ def _shared_linked_streaming_hypercollisions(
             hypercollisions_kz=scalars.hypercollisions_kz,
             dtype=real_dtype,
             nu_hyper_m_const=scalars.nu_hyper_m_const,
+            closure=species.closure,
         )
-        or _is_static_zero(
-            weights.hypercollisions * scalars.hypercollisions_kz, real_dtype
+        or (
+            _is_static_zero(
+                weights.hypercollisions * scalars.hypercollisions_kz, real_dtype
+            )
+            and _is_static_zero(species.closure)
         )
     )
     if (
@@ -542,6 +548,8 @@ def _shared_linked_streaming_hypercollisions(
         kpar_scale=scalars.kpar_scale,
         mask_kz=cache.mask_kz,
         m_pow=cache.m_pow,
+        closure=species.closure,
+        hermite_window=hermite_window,
     )
     if operand.dtype != kz_source.dtype:
         return None
@@ -663,6 +671,7 @@ def _dissipation_contributions(
             ny_full=getattr(cache, "ny_full", None),
             ntft_m0=getattr(cache, "ntft_m0", None),
             hermite_window=hermite_window,
+            closure=species.closure,
         )
     hyperdiffusion = hyperdiffusion_contribution(
         G,
