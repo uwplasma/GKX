@@ -595,6 +595,13 @@ def _resolution_lines(
         lines.append(("grid", f"Nx x Ny x Nz = {nx} x {ny} x {nz}"))
     if None not in (nl, nm):
         lines.append(("moments", f"Nl x Nm = {nl} x {nm}"))
+    kept = [
+        f"{sp.get('name', 'species')} {sp.get('Nl') or nl} x {sp.get('Nm') or nm}"
+        for sp in (deck or {}).get("species", [])
+        if sp.get("Nl") or sp.get("Nm")
+    ]
+    if kept:
+        lines.append(("species moments", ", ".join(kept)))
     return lines
 
 

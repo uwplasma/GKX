@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict
 import dataclasses
 from pathlib import Path
-from typing import Tuple
+from typing import Mapping, Tuple
 
 REFERENCE_ELECTRON_MASS: float = 2.7e-4
 REFERENCE_MASS_RATIO: float = 1.0 / REFERENCE_ELECTRON_MASS
@@ -468,6 +468,16 @@ class RuntimeSpeciesConfig:
     fprim: float = 0.8
     nu: float = 0.0
     kinetic: bool = True
+    #: Laguerre / Hermite moments this species keeps, at most the ``[run]`` ``Nl``
+    #: / ``Nm`` that sizes the state; ``None`` keeps all of them.
+    Nl: int | None = None
+    Nm: int | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("Nl", "Nm"):
+            value = getattr(self, name)
+            if value is not None and int(value) < 1:
+                raise ValueError(f"[[species]] {name} must be a positive integer")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -909,6 +919,38 @@ class RuntimeConfig:
         updated = dataclasses.replace(self, **changes)
         updated.validate()
         return updated
+
+    def with_species_fallback(
+        self,
+        Nl: int,
+        Nm: int,
+        table: Mapping[Tuple[int, int], Tuple[Tuple[int, int], ...]],
+    ) -> Tuple["RuntimeConfig", int, int]:
+        """The config at per-species moment counts, with the ``(Nl, Nm)`` of its state.
+
+        Applies when ``(Nl, Nm)`` is a generic fallback (a key of ``table``), no kinetic
+        species names counts, and one is at least 4x faster than another (kinetic
+        electrons): the slower species take ``table[Nl, Nm][0]``, the faster ``[1]``.
+        Otherwise ``self`` and ``(Nl, Nm)`` come back unchanged.
+        """
+
+        kinetic = [s for s in self.species if s.kinetic]
+        speed = [(s.temperature / s.mass) ** 0.5 for s in kinetic]
+        counts = table.get((Nl, Nm))
+        if counts is None or any(s.Nl or s.Nm for s in kinetic):
+            return self, Nl, Nm
+        if len(kinetic) < 2 or max(speed) < 4 * min(speed):
+            return self, Nl, Nm
+        pick = iter(counts[v > 2 * min(speed)] for v in speed)
+        species = tuple(
+            dataclasses.replace(s, **dict(zip(("Nl", "Nm"), next(pick))))
+            if s.kinetic
+            else s
+            for s in self.species
+        )
+        used = [counts[v > 2 * min(speed)] for v in speed]
+        cfg = self.replace(species=species)
+        return cfg, max(u[0] for u in used), max(u[1] for u in used)
 
     def validate(self) -> "RuntimeConfig":
         """Check cross-section consistency and return ``self``.

@@ -27,8 +27,8 @@ What you get when you change nothing, and when to change it.
      - ``half`` (``1 + Ny//2`` rows)
      - ``full`` only to read a two-sided array from an older run
    * - Velocity space
-     - linear (12, 24), nonlinear (4, 8)
-     - kinetic electrons, TEM, KBM: see the sections below
+     - linear (12, 24), nonlinear (4, 8); with kinetic electrons per species: linear ions (12, 32), electrons (6, 48), nonlinear (4, 16) for both species
+     - a deck or call that names ``Nl``/``Nm``; TEM, KBM: see the sections below
    * - Collisions
      - linearized Landau; hypercollisions on the last Hermite moments
      - ``nu = 0`` collisionless runs keep the hypercollisions
@@ -143,6 +143,8 @@ Resolution
 - **Velocity space.** Linear runs default to :math:`(N_l, N_m) = (12, 24)`,
   nonlinear runs to (4, 8). Vary :math:`N_m` first. Kinetic electrons and TEM
   need more: TEM growth rates still change at (16, 48).
+- **Per species.** A kinetic-electron deck that names no resolution gives the
+  ions and the electrons their own counts; see `Velocity space per species`_.
 - **Perpendicular.** Nonlinear production runs use 64-96 points in
   :math:`x` and :math:`y`; ``gkx --estimate`` prints the grid the geometry
   asks for, with the reason.
@@ -150,6 +152,184 @@ Resolution
   ``nperiod >= 2`` for any linear run with linked boundaries.
 - **Check.** The heat flux or growth rate changes less than your tolerance
   when :math:`N_m` doubles.
+
+Velocity space per species
+--------------------------
+
+Ions and electrons converge at different moment counts, and one count for both
+pays the larger for each. ``[[species]] Nl`` and ``Nm`` (:ref:`inputs
+<per-species-moments>`) give each species its own, and the right-hand side runs
+each at that size, so the cost is the sum over species of
+:math:`N_l N_m` rather than :math:`N_s \max N_l \max N_m`.
+
+**What each species needs** (Cyclone s-alpha, :math:`m_e/m_i = 2.7\times10^{-4}`,
+:math:`\beta = 10^{-4}`, :math:`N_z = 32`, certified Krylov eigenvalue at
+:math:`k_y\rho_i = 0.3`; the other species held at (12, 48); reference uniform
+(12, 64), :math:`\gamma = 0.1394`):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 14 14 14 14 14
+
+   * - Electron :math:`N_l` (:math:`N_m = 48`)
+     - 1
+     - 2
+     - 4
+     - 6
+     - 12
+   * - :math:`\gamma` against reference
+     - -26%
+     - -13%
+     - -1.1%
+     - +0.2%
+     - +0.3%
+   * - Electron :math:`N_m` (:math:`N_l = 4`)
+     - 16
+     - 24
+     - 32
+     - 48
+     -
+   * - :math:`\gamma` against reference
+     - +5.1%
+     - +4.6%
+     - +1.9%
+     - -1.1%
+     -
+   * - Ion :math:`N_m` (:math:`N_l = 12`)
+     - 8
+     - 12
+     - 16
+     - 24
+     - 32
+   * - :math:`\gamma` against reference
+     - +11%
+     - -3.4%
+     - -4.7%
+     - +1.8%
+     - +1.7%
+   * - Ion :math:`N_l` (:math:`N_m = 48`)
+     - 4
+     - 6
+     - 8
+     - 10
+     - 12
+   * - :math:`\gamma` against reference
+     - -22%
+     - +7%
+     - -2%
+     - -5%
+     - +0.3%
+
+Trapped-electron physics needs a few Laguerre moments and many Hermite ones;
+the ions need Laguerre moments for the finite Larmor radius and fewer Hermite
+ones. This branch keeps a scatter of a few percent for ion :math:`N_l` between
+6 and 10 even at (12, 48): ITG and trapped-electron branches sit close at
+:math:`k_y\rho_i = 0.3`, so judge a choice by the table below, not by one
+entry.
+
+**Fallback and check.** Ions (12, 32), electrons (6, 48) against the uniform
+(12, 64) reference (uniform (12, 48) is within 0.3% on the ITG point):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Deck
+     - Reference :math:`\gamma`
+     - Per species
+     - Difference
+   * - Cyclone ITG, :math:`k_y\rho_i = 0.3`
+     - 0.13940
+     - 0.14161
+     - +1.6%
+   * - Cyclone ITG, :math:`k_y\rho_i = 0.2`
+     - 0.0807 (12, 48)
+     - 0.0798
+     - -1.1%
+   * - TEM, :math:`a/L_{n}` 2, :math:`a/L_{Te}` 4, :math:`k_y\rho_i = 0.4`
+     - 0.4492 (12, 48)
+     - 0.4495
+     - +0.1%
+   * - ETG-range, :math:`k_y\rho_i = 30`
+     - 19.381
+     - 19.514
+     - +0.7%
+   * - Landreman-Paul QA stellarator, :math:`k_y\rho_i = 0.3`
+     - 0.22193
+     - 0.22217
+     - +0.1%
+
+The reference moves by 5% between (8, 32) and (12, 48) on the TEM deck, so use
+no smaller counts there. The cost is :math:`12\cdot32 + 6\cdot48 = 672`
+moments per grid point against 1152 for uniform (12, 48) and 1536 for
+(12, 64). Smaller counts (ions (8, 24), electrons (4, 32)) are within 1% on the
+ITG and stellarator decks and 12% low on the TEM deck.
+
+Nonlinear: (4, 16) for both species is the fallback. Against uniform (8, 32)
+the heat-flux window mean (t = 50-100, Cyclone with kinetic electrons,
+32x32x16, ``imex-ars3``, one realization) is:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Counts
+     - :math:`Q_i`
+     - :math:`Q_e`
+   * - uniform (4, 8) (the old fallback)
+     - +12.5%
+     - +9.5%
+   * - uniform (4, 16)
+     - -0.4%
+     - +2.4%
+   * - ions (4, 8), electrons (4, 16)
+     - +5.6%
+     - +4.2%
+   * - ions (8, 24), electrons (4, 32)
+     - -0.8%
+     - +2.0%
+   * - ions (8, 16), electrons (4, 32)
+     - -0.2%
+     - +3.1%
+
+One window mean moves by 5-10% with the window start, so differences below that
+are not resolved; the old (4, 8) is outside it.
+
+**Cost of per-species counts.** One A4000, float32, 64x64x24, explicit ``rk3`` at
+a fixed step (time per step from a long and a short run), peak device memory:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Counts
+     - ms per step
+     - Peak memory
+   * - uniform (4, 16)
+     - 34.9
+     - 0.89 GB
+   * - ions (4, 8), electrons (4, 16)
+     - 31.3 (1.12x)
+     - 0.67 GB
+   * - uniform (8, 32)
+     - 161.3
+     - 3.29 GB
+   * - ions (8, 24), electrons (4, 32)
+     - 110.3 (1.46x)
+     - 2.32 GB
+   * - ions (8, 16), electrons (4, 32)
+     - 84.4 (1.91x)
+     - 2.26 GB
+
+One right-hand side at (12, 48): 147.6 ms and 5.5 GB uniform, 86.5 ms and
+3.1 GB with ions (12, 32) and electrons (6, 48). Small states are launch-bound
+(two groups launch twice the kernels), so the gain grows with the state. The
+state arrays keep the ``[run]`` extents, which sets the floor on memory.
+
+**Where it does not help.** ``imex-ars3``/``imex-ark3`` factor the implicit
+streaming on the padded state, so the factor, its memory and its solves do not
+shrink with a smaller ion count (the t = 100 run above takes 349-374 s with
+per-species counts against 390 s uniform at (8, 32)); the explicit part does. The state and restart
+arrays keep the ``[run]`` extents (zeros above a species' count). Hermite-sharded
+routes, a custom collision operator and the per-term diagnostics refuse unequal
+counts with ``NotImplementedError``.
 
 Kinetic electrons
 -----------------
