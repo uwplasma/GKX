@@ -51,6 +51,7 @@ from gkx.core_ky_layout import (
     to_full,
     to_half,
 )
+from gkx.operators.linear.cache_arrays import keep_moments
 from gkx.operators.linear.cache_builder import build_linear_cache, mask_off_chain_rows
 
 
@@ -279,6 +280,23 @@ def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Spec
     ]
 
 
+def _species_moments(cfg: RuntimeConfig, Nm: int | None) -> tuple | None:
+    """Return ``LinearParams.moments`` for the kinetic species, ``None`` if none override."""
+    kinetic, p = [s for s in cfg.species if s.kinetic], cfg.collisions.p_hyper_m
+    if all(s.Nl is None and s.Nm is None for s in kinetic):
+        return None
+    return tuple(
+        (
+            s.Nl,
+            s.Nm,
+            _default_hermite_hypercollision_exponent(s.Nm or Nm)
+            if p is None
+            else float(p),
+        )
+        for s in kinetic
+    )
+
+
 def _default_hermite_hypercollision_exponent(nhermite: int | None) -> float:
     """Return the default Hermite hypercollision exponent."""
 
@@ -315,33 +333,29 @@ def _runtime_default_krylov_config(cfg: RuntimeConfig) -> KrylovConfig:
     return KrylovConfig()
 
 
-# Velocity-space fallback for a linear call that names no (Nl, Nm). It was
-# (24, 12), which the shipped Cyclone deck's own comment records as Hermite-
-# starved and ~4.5% low in gamma. It is (12, 24) -- the same Nl*Nm, so the same
-# cost per propagator apply, with the budget spent on the axis that needs it.
+# Velocity-space fallback for a linear call that names no (Nl, Nm). It was (24, 12),
+# Hermite-starved and ~4.5% low in gamma on the shipped Cyclone deck; (12, 24) has the
+# same Nl*Nm and puts the budget on the axis that needs it. Certified adaptive
+# eigensolves at ky=0.3 against the golden gamma=0.09302951
+# (src/gkx/data/cyclone_reference_adiabatic.csv), float32:
 #
-# Certified adaptive eigensolves on the shipped Cyclone deck at its own ky=0.3,
-# float32, against the tracked reference golden gamma=0.09302951 in
-# src/gkx/data/cyclone_reference_adiabatic.csv:
+#   Nl   Nm   gamma        rel. to golden
+#    8   24   0.09877566       +6.177%
+#    8   32   0.09801412       +5.358%
+#   24   12   0.08893196       -4.405%   <- was
+#   12   24   0.09340143       +0.400%   <- is
 #
-#   Nl   Nm   Nl*Nm   gamma        rel. to golden   residual   certified
-#    8   24     192   0.09877566       +6.177%      3.16e-06   yes
-#    8   32     256   0.09801412       +5.358%      3.97e-06   yes
-#   24   12     288   0.08893196       -4.405%      2.39e-06   yes   <- was
-#   12   24     288   0.09340143       +0.400%      3.27e-06   yes   <- is
-#
-# Eleven times less error at identical cost, so the change is a strict
-# improvement rather than a trade. Nl=8 at either Hermite count is worse than
-# both, so this is a balance and not simply "more Hermite wins": the parallel
-# phase mixing that sets an ITG rate needs Hermite resolution, and the FLR
-# response still needs enough Laguerre. A deck whose physics is the other way
-# round -- the shipped ETG decks, at Nl=24/Nm=8 -- must still say so, and all
-# of them do. Spending more than 288 would buy more accuracy but is a cost
-# increase this fallback has no mandate to make on a deck's behalf; the docs
-# continue to say to set Nl and Nm.
+# Nl = 8 at either Hermite count is worse than both, so this is a balance. A deck
+# whose physics is the other way round (the ETG decks, Nl=24/Nm=8) must still say so.
 _RUNTIME_LINEAR_HL_FALLBACK = (12, 24)
 # A nonlinear run without Nl/Nm starts coarse; resolution is the deck's call.
 _RUNTIME_NONLINEAR_HL_FALLBACK = (4, 8)
+# Kinetic-electron decks that name no resolution take these instead, (slower species,
+# faster species) -- docs/guidance.rst, "Velocity space per species".
+_SPECIES_HL_FALLBACK = {
+    _RUNTIME_LINEAR_HL_FALLBACK: ((12, 32), (6, 48)),
+    _RUNTIME_NONLINEAR_HL_FALLBACK: ((4, 16), (4, 16)),
+}
 
 
 def _resolve_runtime_hl_dims(
@@ -349,14 +363,19 @@ def _resolve_runtime_hl_dims(
     *,
     Nl: int | None,
     Nm: int | None,
-) -> tuple[int, int]:
-    """Resolve model-native Hermite/Laguerre dimensions."""
+    nonlinear: bool = False,
+) -> tuple[RuntimeConfig, int, int]:
+    """Resolve model-native Hermite/Laguerre dimensions (and per-species fallbacks)."""
 
     model = _runtime_model_key(cfg)
     if model in {"", "gyrokinetic", "full", "full-gk"}:
-        default_l, default_m = _RUNTIME_LINEAR_HL_FALLBACK
-        return int(default_l if Nl is None else Nl), int(
-            default_m if Nm is None else Nm
+        fallback = (
+            _RUNTIME_NONLINEAR_HL_FALLBACK if nonlinear else _RUNTIME_LINEAR_HL_FALLBACK
+        )
+        return cfg.with_species_fallback(
+            int(fallback[0] if Nl is None else Nl),
+            int(fallback[1] if Nm is None else Nm),
+            _SPECIES_HL_FALLBACK,
         )
     _raise_unsupported_reduced_model(cfg)
 
@@ -495,6 +514,7 @@ def build_runtime_linear_params(
     )
     return replace(
         params,
+        moments=_species_moments(cfg, Nm),
         nu_hyper_m_const=(
             None
             if cfg.collisions.nu_hyper_m_const is None
@@ -1147,12 +1167,13 @@ def _build_initial_condition(
         )
         builder.seed_field(init_field, ky_index, kx_index, vals)
 
-    return _finalize_initial_state(
+    state0 = _finalize_initial_state(
         grid,
         state,
         loaded_state=loaded_state,
         init_file_mode=init_file_mode,
     )
+    return keep_moments(state0, _species_moments(cfg, Nm))
 
 
 __all__ = [

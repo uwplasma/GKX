@@ -19,6 +19,7 @@ from gkx.core_grid import SpectralGrid
 from gkx.operators.linear.cache_arrays import (
     check_mu_grid_params,
     with_mu_grid,
+    with_species_groups,
     _build_end_damping_profile_array,
     _build_gyroaverage_cache_arrays,
     _build_low_rank_moment_cache_arrays,
@@ -1127,7 +1128,8 @@ def build_linear_cache(
     landau = landau_blocks_for(params, Nl, Nm, grid_arrays.real_dtype)
     if landau is not None:
         cache = replace(cache, landau_pairs=landau)
-    return _to_device_cache(cache)
+    cache = _to_device_cache(cache)
+    return with_species_groups(cache, params, build_linear_cache, grid, geom)
 
 
 def linked_chain_cover_mask(

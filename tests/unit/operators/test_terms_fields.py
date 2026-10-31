@@ -10,22 +10,22 @@ import numpy as np
 import pytest
 from scipy.special import eval_laguerre, j1
 
-from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig
+from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig, RuntimeSpeciesConfig
 from gkx.core_ky_layout import (
     symmetrize_self_conjugate_rows,
     transport_mode_weights,
 )
-from gkx.geometry import SAlphaGeometry
+from gkx.geometry import SAlphaGeometry, ensure_flux_tube_geometry_data
 from gkx.core_grid import build_spectral_grid
 from scripts.checks._gates.validation_gates import (
     particle_flux_channel_species,
 )
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import build_H, quasineutrality_phi
-from gkx.operators.linear.params import LinearParams
+from gkx.operators.linear.params import LinearParams, Species, build_linear_params
 from gkx.operators.moments import fieldline_quadrature_weights
 from gkx.parallel.velocity_drive import electrostatic_phi_reference
-from gkx.terms.assembly import assemble_rhs_terms_cached
+from gkx.terms.assembly import assemble_linear_rhs_cached, assemble_rhs_terms_cached
 from gkx.terms.config import TermConfig
 from gkx.terms.fields import _solve_fields_impl, solve_fields
 from gkx.terms.linear_terms import linked_streaming_contribution, mirror_contribution
@@ -2429,3 +2429,268 @@ def test_three_field_nonlinear_bracket_conserves_free_energy(laguerre_mode):
         assert errors[0] > 30 * errors[1] > 1e3 * max(errors[2], tol)
     else:
         assert errors[0] > 10 * errors[1]
+
+
+# --- per-species Laguerre/Hermite moment counts (LinearParams.moments) ---
+
+MOMENTS_P_HYPER_M = 6.0
+
+
+def _moments_case(Nl, Nm, moments=None, p_hyper_m=MOMENTS_P_HYPER_M):
+    """Two kinetic species on a linked grid with every dissipation branch on."""
+
+    cfg = CycloneBaseCase(
+        grid=GridConfig(
+            Nx=8, Ny=16, Nz=8, Lx=6.28, Ly=6.28, boundary="linked", jtwist=1
+        )
+    )
+    grid = build_spectral_grid(cfg.grid)
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
+    params = build_linear_params(
+        [
+            Species(1.0, 1.0, 1.0, 1.0, 2.0, 0.8),
+            Species(-1.0, 0.05, 1.0, 3.0, 6.0, 0.8, 0.1),
+        ],
+        kpar_scale=float(geom.gradpar()),
+        collision_model="dougherty",
+        nu_hyper=0.1,
+        nu_hyper_l=0.2,
+        nu_hyper_m=1.0,
+        nu_hyper_lm=0.3,
+        p_hyper_m=p_hyper_m,
+        hypercollisions_const=1.0,
+        hypercollisions_kz=1.0,
+        beta=1e-2,
+        fapar=1.0,
+    )
+    params = replace(params, moments=moments)
+    cache = build_linear_cache(grid, geom, params, Nl, Nm)
+    shape = (2, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
+    rng = np.random.default_rng(3)
+    G = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    return cache, params, G
+
+
+def _moments_rhs_terms(G, cache, params, terms):
+    return assemble_rhs_cached(G, cache, params, terms=terms)[0]
+
+
+def _moments_rhs(G, cache, params):
+    return _moments_rhs_terms(G, cache, params, TermConfig())
+
+
+def _kept(moments, G):
+    """Zero the moments each species does not keep (``None`` keeps the state's)."""
+
+    for i, (nl, nm, _) in enumerate(moments):
+        G = G.at[i, nl or G.shape[1] :].set(0).at[i, :, nm or G.shape[2] :].set(0)
+    return G
+
+
+def test_species_that_keep_everything_are_the_uniform_operator_bitwise():
+    cache, params, G = _moments_case(3, 8)
+    same, params_same, _ = _moments_case(
+        3, 8, moments=((None, None, MOMENTS_P_HYPER_M), (3, 8, MOMENTS_P_HYPER_M))
+    )
+    assert same.groups is None
+    np.testing.assert_array_equal(
+        _moments_rhs(G, cache, params), _moments_rhs(G, same, params_same)
+    )
+
+
+def test_species_with_equal_counts_match_a_state_of_that_size():
+    """Both species at (2, 5) inside a (3, 9) state reproduce a (2, 5) state."""
+
+    moments = ((2, 5, MOMENTS_P_HYPER_M), (2, 5, MOMENTS_P_HYPER_M))
+    cache, params, G = _moments_case(3, 9, moments)
+    ref_cache, ref_params, _ = _moments_case(2, 5)
+    G = _kept(moments, G)
+    out = jax.jit(_moments_rhs)(G, cache, params)  # ``moments`` is static pytree data
+    ref = _moments_rhs(G[:, :2, :5], ref_cache, ref_params)
+    np.testing.assert_allclose(out[:, :2, :5], ref, rtol=1e-12, atol=1e-11)
+    assert float(jnp.abs(ref).max()) > 1.0
+    assert float(jnp.abs(out.at[:, :2, :5].set(0)).max()) == 0.0
+
+
+def test_unequal_counts_stay_inside_each_species_block():
+    """Ions keep (2, 4), electrons all of (3, 9); nothing is written above a block."""
+
+    moments = ((2, 4, MOMENTS_P_HYPER_M), (None, None, MOMENTS_P_HYPER_M))
+    cache, params, G = _moments_case(3, 9, moments)
+    assert [c.Jl.shape[:2] for c in cache.groups] == [(1, 2), (1, 3)]
+    out = jax.jit(_moments_rhs)(_kept(moments, G), cache, params)
+    assert (
+        float(jnp.abs(out[0, 2:]).max()) == float(jnp.abs(out[0, :, 4:]).max()) == 0.0
+    )
+    assert float(jnp.abs(out[0, :2, :4]).max()) > 0.0
+    assert float(jnp.abs(out[1, 2:, 4:]).max()) > 0.0  # electrons fill their block
+
+
+def test_unequal_counts_run_the_nonlinear_bracket_per_group():
+    from gkx.operators.nonlinear.rhs import nonlinear_rhs_cached_impl
+
+    moments = ((2, 4, MOMENTS_P_HYPER_M), (2, 4, MOMENTS_P_HYPER_M))
+    cache, params, G = _moments_case(3, 9, moments)
+    ref_cache, ref_params, _ = _moments_case(2, 4)
+    G = _kept(moments, G)
+    terms = TermConfig(nonlinear=1.0)
+    out, _ = nonlinear_rhs_cached_impl(G, cache, params, terms)
+    ref, _ = nonlinear_rhs_cached_impl(G[:, :2, :4], ref_cache, ref_params, terms)
+    np.testing.assert_allclose(out[:, :2, :4], ref, rtol=1e-10, atol=1e-10)
+    assert float(jnp.abs(ref).max()) > 1.0
+
+
+def test_groups_share_the_end_damping_rate_of_the_fastest_species():
+    """Ions in their own group are damped at the electron-set rate, as in a uniform run."""
+
+    moments = ((2, 4, MOMENTS_P_HYPER_M), (None, None, MOMENTS_P_HYPER_M))
+    cache, params, G = _moments_case(3, 9, moments)
+    uniform, uparams, _ = _moments_case(3, 9)
+    G = _kept(moments, G)
+    off = {k: 0.0 for k in ("streaming", "mirror", "curvature", "gradb", "diamagnetic")}
+    terms = TermConfig(collisions=0.0, hypercollisions=0.0, **off)
+    out = _moments_rhs_terms(G, cache, params, terms)
+    ref = _moments_rhs_terms(G, uniform, uparams, terms)
+    # the ions' third Laguerre gyro factor (~1e-8 in the fields) is the only difference
+    np.testing.assert_allclose(out[0, :2, :4], ref[0, :2, :4], rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(out[1], ref[1], rtol=1e-6, atol=1e-6)
+    assert float(jnp.abs(ref[0]).max()) > 0.0
+
+
+def test_routes_that_need_one_moment_count_refuse_unequal_counts():
+    from gkx.operators.linear.cache_model import HermiteWindow
+    from gkx.terms.assembly import (
+        assemble_rhs_cached_with_fields,
+        compute_fields_cached,
+    )
+
+    cache, params, G = _moments_case(
+        2, 4, ((2, 2, MOMENTS_P_HYPER_M), (None, None, MOMENTS_P_HYPER_M))
+    )
+    fields = compute_fields_cached(G, cache, params)
+    window = HermiteWindow(jnp.arange(4), 4)
+    with pytest.raises(NotImplementedError, match="one moment count"):
+        assemble_rhs_cached_with_fields(G, cache, params, fields, hermite_window=window)
+    with pytest.raises(NotImplementedError, match="one moment count"):
+        assemble_rhs_terms_cached(G, cache, params)
+    with pytest.raises(NotImplementedError, match="one moment count"):
+        assemble_linear_rhs_cached(G, cache, params, collision_operator=object())
+
+
+def test_species_weighted_terms_follow_their_species_into_a_group():
+    """The IMEX split weights the mirror force per species; a group takes its slice."""
+
+    from gkx.terms.assembly import (
+        assemble_rhs_cached_with_fields,
+        compute_fields_cached,
+    )
+
+    moments = ((2, 4, MOMENTS_P_HYPER_M), (None, None, MOMENTS_P_HYPER_M))
+    cache, params, G = _moments_case(3, 9, moments)
+    G = _kept(moments, G)
+    fields = compute_fields_cached(G, cache, params)
+    off = dict(streaming=0.0, curvature=0.0, gradb=0.0, diamagnetic=0.0)
+    off.update(collisions=0.0, hypercollisions=0.0, end_damping=0.0)
+    mirror = jnp.asarray([0.0, 1.0]).reshape(-1, 1, 1, 1, 1, 1)
+    out = assemble_rhs_cached_with_fields(
+        G, cache, params, fields, terms=TermConfig(mirror=mirror, **off)
+    )
+    assert float(jnp.abs(out[0]).max()) == 0.0 < float(jnp.abs(out[1]).max())
+
+
+def test_hypercollisions_are_normalized_to_the_species_own_count():
+    cache, _, _ = _moments_case(2, 9, ((2, 4, 3.0), (2, 9, MOMENTS_P_HYPER_M)))
+    own = _moments_case(2, 4, p_hyper_m=3.0)[0]
+    full = _moments_case(2, 9)[0]
+    for name in ("m_pow", "ratio_m", "ratio_lm", "m_norm_kz_factor"):
+        np.testing.assert_array_equal(
+            getattr(cache.groups[0], name), getattr(own, name)
+        )
+        np.testing.assert_array_equal(
+            getattr(cache.groups[1], name), getattr(full, name)
+        )
+
+
+def test_a_species_cannot_keep_more_than_the_state():
+    with pytest.raises(ValueError, match="more moments than the state"):
+        _moments_case(2, 4, ((2, 6, MOMENTS_P_HYPER_M), (2, 4, MOMENTS_P_HYPER_M)))
+
+
+def test_species_table_accepts_moment_counts():
+    assert RuntimeSpeciesConfig(Nm=8).Nm == 8
+    assert RuntimeSpeciesConfig().Nl is None
+    with pytest.raises(ValueError, match="positive integer"):
+        RuntimeSpeciesConfig(Nm=0)
+
+
+def test_deck_species_counts_reach_params_and_the_initial_state(tmp_path):
+    import gkx
+    from gkx.workflows.runtime.startup import (
+        _build_initial_condition,
+        build_runtime_geometry,
+        build_runtime_linear_params,
+    )
+
+    deck = tmp_path / "deck.toml"
+    deck.write_text(
+        "schema_version = 1\n"
+        "[[species]]\nname='ion'\nNm = 4\n"
+        "[[species]]\nname='electron'\ncharge=-1.0\nmass=0.01\n"
+        "[grid]\nNx = 1\nNy = 4\nNz = 8\nLx = 6.28\nLy = 6.28\nboundary='periodic'\n"
+        "[physics]\nadiabatic_electrons=false\n"
+        "[init]\ninit_field='density'\ninit_amp=1e-3\ngaussian_init=false\n"
+    )
+    cfg = gkx.load(deck)
+    params = build_runtime_linear_params(cfg, Nm=8)
+    assert params.moments == ((None, 4, 2.0), (None, None, 4.0))
+    grid = build_spectral_grid(cfg.grid)
+    state = _build_initial_condition(
+        grid,
+        build_runtime_geometry(cfg),
+        cfg,
+        ky_index=1,
+        kx_index=0,
+        Nl=2,
+        Nm=8,
+        nspecies=2,
+    )
+    assert float(jnp.abs(state[0, :, 4:]).max()) == 0.0
+    assert float(jnp.abs(state[1]).max()) > 0.0
+
+
+def test_kinetic_electron_decks_without_a_resolution_take_per_species_fallbacks():
+    from dataclasses import replace
+
+    from gkx.config import RuntimeConfig
+    from gkx.workflows.runtime.startup import _resolve_runtime_hl_dims
+
+    electron = RuntimeSpeciesConfig(name="e", charge=-1.0, mass=2.7e-4)
+    cfg = RuntimeConfig(species=(RuntimeSpeciesConfig(name="i"), electron))
+    out, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=None, Nm=None)
+    assert [(s.Nl, s.Nm) for s in out.species] == [(12, 32), (6, 48)]
+    assert (Nl, Nm) == (12, 48)
+    out, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=4, Nm=8)  # the nonlinear fallback
+    assert [(s.Nl, s.Nm) for s in out.species] == [(4, 16), (4, 16)]
+    assert (Nl, Nm) == (4, 16)
+    named = replace(cfg, species=(cfg.species[0], replace(electron, Nm=8)))
+    equal = replace(cfg, species=(cfg.species[0], replace(electron, mass=1.0)))
+    for same in (cfg, named, equal, RuntimeConfig()):
+        nl = 6 if same is cfg else None  # a named [run] resolution counts too
+        nm = 16 if same is cfg else None
+        assert _resolve_runtime_hl_dims(same, Nl=nl, Nm=nm)[0] is same
+
+
+def test_run_summary_lists_the_species_that_keep_fewer_moments():
+    from gkx.artifacts.run_summary import _resolution_lines
+
+    deck = {
+        "run": {"Nl": 12, "Nm": 48},
+        "species": [{"name": "ion", "Nm": 32, "Nl": None}, {"name": "electron"}],
+    }
+    assert ("species moments", "ion 12 x 32") in _resolution_lines(deck, {})
+    assert all(
+        k != "species moments"
+        for k, _ in _resolution_lines({"run": {"Nl": 2, "Nm": 4}}, {})
+    )

@@ -377,6 +377,41 @@ def _solve_cached_fields(
     return _apply_external_phi_source(fields, external_phi=external_phi)
 
 
+def split_species(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    fn: Callable[[jnp.ndarray, LinearCache, LinearParams, slice], jnp.ndarray],
+) -> jnp.ndarray:
+    """``fn(G_g, cache_g, params_g, species_slice)`` over each group at its own ``(nl, nm)``.
+
+    The groups are the exact-size caches of ``cache.groups``; each result is zero-padded
+    back to the moment extents of ``G`` and the species are concatenated in order.
+    """
+
+    out: Any = None
+    a = 0
+    # the end-damping rate follows the fastest species of the whole run, not of a group
+    rate = params.end_damping_rate(
+        cache.dz * cache.damp_profile.shape[-1], jnp.real(G).dtype
+    )
+    for c in cache.groups or ():
+        ns, nl, nm = c.Jl.shape[0], c.Jl.shape[1], c.m.size
+        sl = slice(a, a + ns)
+        d = jax.lax.optimization_barrier(
+            fn(
+                G[sl, :nl, :nm],
+                c,
+                params.species_slice(a, a + ns, damp_ends_rate=rate),
+                sl,
+            )
+        )
+        out = jnp.zeros(G.shape, d.dtype) if out is None else out
+        out = out.at[sl, :nl, :nm].set(d)
+        a += ns
+    return out
+
+
 def _streaming_contribution(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -834,6 +869,25 @@ def assemble_rhs_cached(
     species = _species_arrays(params, state.G.shape[0], state.real_dtype)
     scalars = _scalar_params(params, state.real_dtype, cache)
     weights = _term_weights(params, term_cfg, state.real_dtype)
+    if cache.groups is not None:
+        fields = _solve_cached_fields(
+            state.G,
+            cache,
+            params,
+            species=species,
+            weights=weights,
+            use_custom_vjp=use_custom_vjp,
+            external_phi=external_phi,
+        )
+        dG = assemble_rhs_cached_with_fields(
+            state.G,
+            cache,
+            params,
+            fields,
+            terms=term_cfg,
+            force_electrostatic_fields=force_electrostatic_fields,
+        )
+        return dG.astype(state.out_dtype), fields
     rhs_fields = _solved_rhs_fields(
         state.G,
         cache,
@@ -873,6 +927,25 @@ def assemble_rhs_cached_with_fields(
     """
 
     term_cfg = terms or TermConfig()
+    if cache.groups is not None:
+        if hermite_window is not None:
+            raise NotImplementedError("a Hermite-sharded route needs one moment count")
+        return split_species(
+            G,
+            cache,
+            params,
+            lambda g, c, p, sl: assemble_rhs_cached_with_fields(
+                g,
+                c,
+                p,
+                fields,
+                terms=jax.tree.map(  # species-shaped weights (the IMEX mirror) follow
+                    lambda x: x[sl] if getattr(x, "ndim", 0) == 6 else x, term_cfg
+                ),
+                force_electrostatic_fields=force_electrostatic_fields,
+                skip_dissipation=skip_dissipation,
+            ),
+        )
     state = _normalized_rhs_state(G, cache)
     species = _species_arrays(params, state.G.shape[0], state.real_dtype)
     scalars = _scalar_params(params, state.real_dtype, cache)
@@ -974,6 +1047,8 @@ def assemble_linear_rhs_cached(
 ) -> tuple[jnp.ndarray, FieldState]:
     """Assemble cached linear terms and any replacing custom collision."""
 
+    if collision_operator is not None and getattr(cache, "groups", None):
+        raise NotImplementedError("a custom collision operator needs one moment count")
     electrostatic_rhs_fn = electrostatic_rhs_fn or assemble_rhs_cached_electrostatic_jit
     full_rhs_fn = full_rhs_fn or assemble_rhs_cached_jit
     eager_rhs_fn = eager_rhs_fn or assemble_rhs_cached
@@ -1065,6 +1140,8 @@ def assemble_rhs_terms_cached(
     policy.
     """
 
+    if cache.groups is not None:
+        raise NotImplementedError("per-term RHS needs one moment count for all species")
     term_cfg = terms or TermConfig()
     state = _normalized_rhs_state(G, cache)
     species = _species_arrays(params, state.G.shape[0], state.real_dtype)
@@ -1118,4 +1195,5 @@ __all__ = [
     "assemble_rhs_terms_cached",
     "compute_fields_cached",
     "linear_rhs_jit_for_terms",
+    "split_species",
 ]

@@ -963,7 +963,7 @@ def run_runtime_nonlinear(
     :func:`prepare` path).
     """
 
-    Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm, nonlinear=True)
     if status_callback is not None:
         status_callback("building runtime geometry")
 
