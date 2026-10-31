@@ -10,19 +10,19 @@ import numpy as np
 import pytest
 from scipy.special import eval_laguerre, j1
 
-from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig
+from gkx.config import CycloneBaseCase, GeometryConfig, GridConfig, RuntimeSpeciesConfig
 from gkx.core_ky_layout import (
     symmetrize_self_conjugate_rows,
     transport_mode_weights,
 )
-from gkx.geometry import SAlphaGeometry
+from gkx.geometry import SAlphaGeometry, ensure_flux_tube_geometry_data
 from gkx.core_grid import build_spectral_grid
 from scripts.checks._gates.validation_gates import (
     particle_flux_channel_species,
 )
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.moments import build_H, quasineutrality_phi
-from gkx.operators.linear.params import LinearParams
+from gkx.operators.linear.params import LinearParams, Species, build_linear_params
 from gkx.operators.moments import fieldline_quadrature_weights
 from gkx.parallel.velocity_drive import electrostatic_phi_reference
 from gkx.terms.assembly import assemble_rhs_terms_cached
@@ -2429,3 +2429,162 @@ def test_three_field_nonlinear_bracket_conserves_free_energy(laguerre_mode):
         assert errors[0] > 30 * errors[1] > 1e3 * max(errors[2], tol)
     else:
         assert errors[0] > 10 * errors[1]
+
+
+# --- per-species Laguerre/Hermite moment counts (LinearParams.moments) ---
+
+MOMENTS_P_HYPER_M = 6.0
+
+
+def _moments_case(Nl, Nm, moments=None, p_hyper_m=MOMENTS_P_HYPER_M):
+    """Two kinetic species on a linked grid with every dissipation branch on."""
+
+    cfg = CycloneBaseCase(
+        grid=GridConfig(
+            Nx=8, Ny=16, Nz=8, Lx=6.28, Ly=6.28, boundary="linked", jtwist=1
+        )
+    )
+    grid = build_spectral_grid(cfg.grid)
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
+    params = build_linear_params(
+        [
+            Species(1.0, 1.0, 1.0, 1.0, 2.0, 0.8),
+            Species(-1.0, 0.05, 1.0, 3.0, 6.0, 0.8, 0.1),
+        ],
+        kpar_scale=float(geom.gradpar()),
+        collision_model="dougherty",
+        nu_hyper=0.1,
+        nu_hyper_l=0.2,
+        nu_hyper_m=1.0,
+        nu_hyper_lm=0.3,
+        p_hyper_m=p_hyper_m,
+        hypercollisions_const=1.0,
+        hypercollisions_kz=1.0,
+        beta=1e-2,
+        fapar=1.0,
+    )
+    params = replace(params, moments=moments)
+    cache = build_linear_cache(grid, geom, params, Nl, Nm)
+    shape = (2, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
+    rng = np.random.default_rng(3)
+    G = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape))
+    return cache, params, G
+
+
+def _moments_rhs(G, cache, params):
+    return assemble_rhs_cached(G, cache, params, terms=TermConfig())[0]
+
+
+def test_species_that_keep_everything_are_the_uniform_operator_bitwise():
+    cache, params, G = _moments_case(3, 8)
+    same, params_same, _ = _moments_case(
+        3, 8, moments=((None, None, MOMENTS_P_HYPER_M), (3, 8, MOMENTS_P_HYPER_M))
+    )
+    assert same.moment_mask is None
+    for name in (
+        "hyper_ratio",
+        "ratio_l",
+        "ratio_m",
+        "ratio_lm",
+        "m_pow",
+        "m_norm_kz_factor",
+    ):
+        np.testing.assert_array_equal(getattr(cache, name), getattr(same, name))
+    np.testing.assert_array_equal(
+        _moments_rhs(G, cache, params), _moments_rhs(G, same, params_same)
+    )
+
+
+def test_species_with_equal_counts_match_a_state_of_that_size():
+    """Both species at Nm = 5 inside an Nm = 9 state reproduce an Nm = 5 state.
+
+    The Laguerre extent is shared, because the polarization sums run over the
+    state's ``Nl`` whatever each species keeps, so ``Nl`` is left alone here.
+    """
+
+    moments = ((2, 5, MOMENTS_P_HYPER_M), (2, 5, MOMENTS_P_HYPER_M))
+    cache, params, G = _moments_case(2, 9, moments)
+    ref_cache, ref_params, _ = _moments_case(2, 5)
+    G = jnp.where(cache.moment_mask, G, 0)
+    out = _moments_rhs(G, cache, params)
+    ref = _moments_rhs(G[:, :2, :5], ref_cache, ref_params)
+    np.testing.assert_allclose(out[:, :, :5], ref, rtol=1e-12, atol=1e-11)
+    assert float(jnp.abs(ref).max()) > 1.0
+    assert float(jnp.abs(jnp.where(cache.moment_mask, 0, out)).max()) == 0.0
+
+
+def test_unequal_counts_stay_inside_each_species_block():
+    """Ions keep (2, 4), electrons all of (3, 9); nothing is written above a block."""
+
+    cache, params, G = _moments_case(
+        3, 9, ((2, 4, MOMENTS_P_HYPER_M), (None, None, MOMENTS_P_HYPER_M))
+    )
+    expected = np.zeros((2, 3, 9, 1, 1, 1), bool)
+    expected[0, :2, :4] = True
+    expected[1] = True
+    np.testing.assert_array_equal(cache.moment_mask, expected)
+    G = jnp.where(cache.moment_mask, G, 0)
+    out = jax.jit(_moments_rhs)(G, cache, params)  # ``moments`` is static pytree data
+    assert float(jnp.abs(jnp.where(cache.moment_mask, 0, out)).max()) == 0.0
+    assert float(jnp.abs(out[0, :2, :4]).max()) > 0.0
+
+
+def test_hypercollisions_are_normalized_to_the_species_own_count():
+    cache, _, _ = _moments_case(2, 9, ((2, 4, 3.0), (2, 9, MOMENTS_P_HYPER_M)))
+    own = _moments_case(2, 4, p_hyper_m=3.0)[0]
+    np.testing.assert_allclose(cache.m_pow[0, :, :4], own.m_pow, rtol=1e-14)
+    np.testing.assert_allclose(
+        cache.m_norm_kz_factor[0, 0, 0, 0, 0, 0], own.m_norm_kz_factor
+    )
+    np.testing.assert_allclose(cache.ratio_lm[0, :2, :4], own.ratio_lm, rtol=1e-14)
+    full = _moments_case(2, 9)[0]
+    np.testing.assert_allclose(cache.ratio_m[1], full.ratio_m, rtol=1e-14)
+
+
+def test_a_species_cannot_keep_more_than_the_state():
+    with pytest.raises(ValueError, match="more moments than the state"):
+        _moments_case(2, 4, ((2, 6, MOMENTS_P_HYPER_M), (2, 4, MOMENTS_P_HYPER_M)))
+
+
+def test_species_table_accepts_moment_counts():
+    assert RuntimeSpeciesConfig(Nm=8).Nm == 8
+    assert RuntimeSpeciesConfig().Nl is None
+    with pytest.raises(ValueError, match="positive integer"):
+        RuntimeSpeciesConfig(Nm=0)
+
+
+def test_deck_species_counts_reach_params_and_the_initial_state(tmp_path):
+    import gkx
+    from gkx.workflows.runtime.startup import (
+        _build_initial_condition,
+        build_runtime_geometry,
+        build_runtime_linear_params,
+    )
+
+    deck = tmp_path / "deck.toml"
+    deck.write_text(
+        "schema_version = 1\n"
+        "[[species]]\nname='ion'\nNm = 4\n"
+        "[[species]]\nname='electron'\ncharge=-1.0\nmass=0.01\n"
+        "[grid]\nNx = 1\nNy = 4\nNz = 8\nLx = 6.28\nLy = 6.28\nboundary='periodic'\n"
+        "[physics]\nadiabatic_electrons=false\n"
+        "[init]\ninit_field='density'\ninit_amp=1e-3\ngaussian_init=false\n"
+    )
+    cfg = gkx.load(deck)
+    params = build_runtime_linear_params(cfg, Nm=8)
+    assert params.moments == ((None, 4, 2.0), (None, 8, 4.0))
+    grid = build_spectral_grid(cfg.grid)
+    state = _build_initial_condition(
+        grid,
+        build_runtime_geometry(cfg),
+        cfg,
+        ky_index=1,
+        kx_index=0,
+        Nl=2,
+        Nm=8,
+        nspecies=2,
+    )
+    assert float(jnp.abs(state[0, :, 4:]).max()) == 0.0
+    assert float(jnp.abs(state[1]).max()) > 0.0

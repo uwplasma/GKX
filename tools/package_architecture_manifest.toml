@@ -1204,7 +1204,10 @@ recursive = true
 # 68387 -> 68397: inverse FFT without scal (#396) after #392/#395, measured.
 # 68397 -> 68421: EM bracket one FFT (#394), measured after merging main.
 # 68421 -> 68707: nodal mu grid (opt-in LinearParams.mu_vperp_max): rule, gyro factors, node-local mirror/drift/drive, Dougherty, Laguerre-mode seeds. Measured.
-baseline = 68707
+# 68707 -> 68842: per-species Laguerre/Hermite moment counts ([[species]] Nl/Nm):
+# LinearParams.moments, species-stacked hypercollision arrays, the moment mask on the
+# RHS and the initial state. Measured.
+baseline = 68842
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1563,7 +1566,9 @@ recursive = true
 # 63547 -> 63557: Landau table overflow regression test, measured.
 # 63557 -> 63571: EM bracket one FFT (#394), measured after merging main.
 # 63571 -> 64074: nodal mu grid tests (equivalence, conservation, free energy, quadrature, Landau, zonal residual, Dougherty, Cyclone rates, refusals). Measured.
-baseline = 64074
+# 64074 -> 64233: per-species moment count tests (uniform bitwise identity, equivalence to a
+# smaller state, no leakage above a species' block, hypercollision normalization, deck path). Measured.
+baseline = 64233
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -110,6 +110,10 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         raise NotImplementedError(
             "mixed routing requires the standard factorized collision operator"
         )
+    if cache.moment_mask is not None:
+        raise NotImplementedError(
+            "mixed routing needs one moment count for all species"
+        )
     ns = int(arr.shape[0])
     nm = int(arr.shape[2])
     s_chunks = int(species_chunks)

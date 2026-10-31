@@ -178,6 +178,11 @@ class LinearParams:
     #: (:func:`gkx.core_velocity.mu_grid_nodes`) with that ``vperp_max``
     #: (``inf``: Gauss-Laguerre); the Laguerre axis then holds the ``Nl`` nodes.
     mu_vperp_max: float | None = None
+    #: Moments each species keeps, one ``(Nl, Nm, p_hyper_m)`` per species; ``None``
+    #: in a slot keeps the state's full extent there, and ``None`` for the whole
+    #: field gives every species the full state. Moments above a species' count
+    #: stay zero and its hypercollisions are normalized to its own count.
+    moments: tuple[tuple[int | None, int | None, float], ...] | None = None
 
     def const_branch_nu_hyper_m(self):
         """Return the Hermite hypercollision rate the *constant* branch uses.
@@ -258,11 +263,16 @@ class LinearParams:
             self.bpar_beta_scale,
             self.damp_ends_rate,
         )
-        return children, (self.collision_model, self.mu_vperp_max)
+        return children, (self.collision_model, self.mu_vperp_max, self.moments)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, collision_model=aux_data[0], mu_vperp_max=aux_data[1])
+        return cls(
+            *children,
+            collision_model=aux_data[0],
+            mu_vperp_max=aux_data[1],
+            moments=aux_data[2],
+        )
 
 
 _SPECIES_PARAM_NAMES = (

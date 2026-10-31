@@ -14,7 +14,7 @@ from typing import Any, Callable
 import jax.numpy as jnp
 
 from gkx.operators.collision import CollisionOperator
-from gkx.operators.linear.cache_model import LinearCache
+from gkx.operators.linear.cache_model import LinearCache, mask_moments
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.assembly import (
     _is_static_zero,
@@ -31,6 +31,12 @@ RhsCallable = Callable[..., tuple[jnp.ndarray, FieldState]]
 StaticZeroCallable = Callable[[object], bool]
 NonlinearContributionCallable = Callable[..., jnp.ndarray]
 FieldSolveCallable = Callable[..., FieldState]
+
+
+def _masked(fn: NonlinearContributionCallable, cache: LinearCache):
+    """``fn`` with its result restricted to the moments each species keeps."""
+
+    return lambda *args, **kwargs: mask_moments(fn(*args, **kwargs), cache)
 
 
 def nonlinear_rhs_cached_impl(
@@ -54,6 +60,7 @@ def nonlinear_rhs_cached_impl(
     """Compute the assembled nonlinear RHS and electromagnetic field state."""
 
     term_cfg = terms or TermConfig()
+    nonlinear_contribution_fn = _masked(nonlinear_contribution_fn, cache)
     dG, fields = assemble_linear_rhs_cached(
         G,
         cache,
@@ -132,6 +139,7 @@ def nonlinear_em_term_cached_impl(
 
     if term_cfg.nonlinear == 0.0:
         return jnp.zeros_like(G)
+    nonlinear_contribution_fn = _masked(nonlinear_contribution_fn, cache)
     dtype = real_dtype or jnp.real(jnp.empty((), dtype=G.dtype)).dtype
     weight = jnp.asarray(term_cfg.nonlinear, dtype=dtype)
     fields = fields_fn(G, cache, params, terms=term_cfg, external_phi=external_phi)
