@@ -40,15 +40,6 @@ def hermite_total_of(window: HermiteWindow | None, local_count: int) -> int:
     return int(local_count) if window is None else int(window.total)
 
 
-def mask_moments(x: jnp.ndarray, cache: "LinearCache") -> jnp.ndarray:
-    """Zero the moments each species does not keep (identity on a uniform cache)."""
-
-    mask = cache.moment_mask
-    if mask is None:
-        return x
-    return jnp.where(mask[0] if x.ndim == 5 else mask, x, 0)
-
-
 @jax.tree_util.register_pytree_node_class
 @dataclass(frozen=True)
 class LinearCache:
@@ -139,9 +130,10 @@ class LinearCache:
     mu_grid: bool = False
     #: Nodal Lenard-Bernstein perpendicular rate ``(Nmu, Nmu, Nz)`` (mu grid only).
     mu_lb: Any = None
-    #: ``(Ns, Nl, Nm, 1, 1, 1)`` boolean, true where a species keeps the moment, ``None`` when
-    #: every species keeps all of them (``LinearParams.moments``).
-    moment_mask: Any = None
+    #: Per-species moment counts (``LinearParams.moments``): one exact-size cache per run of
+    #: species sharing a ``(Nl, Nm)``, in species order; ``None`` when every species keeps
+    #: the state's. The RHS runs each group at its own size.
+    groups: tuple["LinearCache", ...] | None = None
 
     def tree_flatten(self):
         children = (
@@ -202,13 +194,7 @@ class LinearCache:
             children
             + tuple(linked_idx)
             + tuple(linked_kz)
-            + (
-                self.ky_cut,
-                self.ntft_m0,
-                self.landau_pairs,
-                self.mu_lb,
-                self.moment_mask,
-            )
+            + (self.ky_cut, self.ntft_m0, self.landau_pairs, self.mu_lb, self.groups)
         )
         aux_data = (
             self.kperp2_bmag,
@@ -259,5 +245,5 @@ class LinearCache:
             ntft_m0=children[-4],
             landau_pairs=children[-3],
             mu_lb=children[-2],
-            moment_mask=children[-1],
+            groups=children[-1],
         )

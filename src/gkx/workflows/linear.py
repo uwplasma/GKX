@@ -734,7 +734,7 @@ def run_runtime_linear(
     ``kx_target`` picks the fitted kx (nearest grid value; default kx = 0).
     """
 
-    Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     _status(status_callback, "building runtime geometry")
 
     ctx = _prepare_linear_runtime_context(

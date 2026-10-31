@@ -1204,10 +1204,10 @@ recursive = true
 # 68387 -> 68397: inverse FFT without scal (#396) after #392/#395, measured.
 # 68397 -> 68421: EM bracket one FFT (#394), measured after merging main.
 # 68421 -> 68707: nodal mu grid (opt-in LinearParams.mu_vperp_max): rule, gyro factors, node-local mirror/drift/drive, Dougherty, Laguerre-mode seeds. Measured.
-# 68707 -> 68842: per-species Laguerre/Hermite moment counts ([[species]] Nl/Nm):
-# LinearParams.moments, species-stacked hypercollision arrays, the moment mask on the
-# RHS and the initial state. Measured.
-baseline = 68842
+# 68707 -> 68946: per-species Laguerre/Hermite moment counts ([[species]] Nl/Nm):
+# LinearParams.moments, one exact-size cache per species group run by the RHS and the
+# bracket (LinearCache.groups), the kinetic-electron fallback counts. Measured.
+baseline = 68946
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1566,9 +1566,10 @@ recursive = true
 # 63547 -> 63557: Landau table overflow regression test, measured.
 # 63557 -> 63571: EM bracket one FFT (#394), measured after merging main.
 # 63571 -> 64074: nodal mu grid tests (equivalence, conservation, free energy, quadrature, Landau, zonal residual, Dougherty, Cyclone rates, refusals). Measured.
-# 64074 -> 64233: per-species moment count tests (uniform bitwise identity, equivalence to a
-# smaller state, no leakage above a species' block, hypercollision normalization, deck path). Measured.
-baseline = 64233
+# 64074 -> 64339: per-species moment count tests (uniform bitwise identity, equivalence to a
+# smaller state, containment, bracket per group, end-damping rate, species-weighted terms,
+# refused routes, hypercollision normalization, deck path, kinetic-electron fallback). Measured.
+baseline = 64339
 target = 35000
 
 [[line_budget_policy.counts]]
