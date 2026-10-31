@@ -88,6 +88,11 @@ import jax.numpy as jnp
 import numpy as np
 import solvax
 
+try:
+    from jax import enable_x64 as _enable_x64
+except ImportError:  # jax < 0.7
+    from jax.experimental import enable_x64 as _enable_x64  # type: ignore[attr-defined,no-redef]
+
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import LinearParams
 from gkx.terms.assembly import assemble_rhs_cached
@@ -518,7 +523,7 @@ def _block_thomas_factors(
     # elimination is pinned to it here and its result is re-canonicalized on
     # the way out: the stored factors keep exactly the dtype they had before,
     # and only the arithmetic that produces them is protected.
-    with jax.enable_x64(True):
+    with _enable_x64(True):
         factors = jax.jit(jax.vmap(factor))(
             jnp.asarray(diag),
             (

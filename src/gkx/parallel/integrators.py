@@ -913,6 +913,8 @@ def _species_hermite_mapped(
     return local_step, (index_array,) + sharded, (index_spec,) + specs, state_spec
 
 
+# jax < 0.7 cannot join the field solve's lax.cond branches under vma checking.
+_CHECK_VMA = jax.__version_info__ >= (0, 7)
 _TRACE_NAMES = ("Wg_t", "Wphi_t", "heat_flux_t", "particle_flux_t")
 
 
@@ -1015,6 +1017,7 @@ def integrate_nonlinear_species_hermite(
         in_specs=(state_spec,) + specs,
         out_specs=out_specs,
         axis_names={"s", "m"},
+        check_vma=_CHECK_VMA,
     )
     from jax.sharding import NamedSharding
 
