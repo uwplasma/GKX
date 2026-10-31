@@ -468,6 +468,16 @@ class RuntimeSpeciesConfig:
     fprim: float = 0.8
     nu: float = 0.0
     kinetic: bool = True
+    #: Laguerre / Hermite moments this species keeps, at most the ``[run]`` ``Nl``
+    #: / ``Nm`` that sizes the state; ``None`` keeps all of them.
+    Nl: int | None = None
+    Nm: int | None = None
+
+    def __post_init__(self) -> None:
+        for name in ("Nl", "Nm"):
+            value = getattr(self, name)
+            if value is not None and int(value) < 1:
+                raise ValueError(f"[[species]] {name} must be a positive integer")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

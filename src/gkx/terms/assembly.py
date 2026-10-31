@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 
 from gkx.operators.collision import CollisionOperator
-from gkx.operators.linear.cache_model import HermiteWindow, LinearCache
+from gkx.operators.linear.cache_model import HermiteWindow, LinearCache, mask_moments
 from gkx.operators.linear.moments import build_H
 from gkx.operators.linear.params import LinearParams, _as_species_array
 from gkx.terms.config import FieldState, TermConfig
@@ -795,7 +795,9 @@ def _assemble_normalized_rhs(
         hermite_window=hermite_window,
         fuse_drift=True,
     )
-    dG = _sum_rhs_terms(contrib)
+    if hermite_window is not None and cache.moment_mask is not None:
+        raise NotImplementedError("per-species moments need an unsharded Hermite axis")
+    dG = mask_moments(_sum_rhs_terms(contrib), cache)
     if state.squeeze_species:
         dG = dG[0]
     return dG.astype(state.out_dtype)
@@ -1083,7 +1085,7 @@ def assemble_rhs_terms_cached(
     contrib = _rhs_term_contributions(
         state, cache, species, scalars, weights, rhs_fields
     )
-    total = _sum_rhs_terms(contrib)
+    total = mask_moments(_sum_rhs_terms(contrib), cache)
     if state.squeeze_species:
         total, contrib = _squeeze_species_rhs_outputs(total, contrib)
     return total.astype(state.out_dtype), rhs_fields.fields, contrib

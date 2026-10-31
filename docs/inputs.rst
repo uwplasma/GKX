@@ -415,7 +415,13 @@ and ``[fit]`` are read by the commands that use them.
 * ``schema_version`` (document root; see `Schema compatibility`_)
 * ``[grid]`` (``GridConfig``), ``[time]`` (``TimeConfig``),
   ``[geometry]`` (``GeometryConfig``), ``[init]`` (``InitializationConfig``)
-* ``[[species]]`` (kinetic species definitions)
+* ``[[species]]`` (kinetic species definitions). ``Nl`` and ``Nm`` keep fewer
+  Laguerre or Hermite moments for one species than the state holds (the
+  ``[run]`` values), for instance ``Nm = 8`` on the ions beside electrons at
+  the ``[run]`` ``Nm = 48``. The state stays one dense array, so this changes
+  the physics (each species' truncation and hypercollision normalization)
+  but not the memory or cost; a value above the state's extent raises
+  ``ValueError``, and Hermite-sharded routes refuse it.
 * ``[physics]`` (electrostatic/electromagnetic, adiabatic/kinetic, linear/nonlinear)
 * ``[collisions]`` (collision and hypercollision controls)
 * ``[normalization]`` (contract key + optional overrides)

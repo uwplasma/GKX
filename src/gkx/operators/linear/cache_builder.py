@@ -1038,6 +1038,7 @@ def _pack_linear_cache(
         use_twist_shift=twist.use_twist_shift,
         jtwist=int(linked_cache["jtwist"]),
         ntft_m0=linked_cache.get("ntft_m0"),
+        moment_mask=moment_cache["moment_mask"],
         ny_full=getattr(grid, "ny_full", None),
         ky_cut=(
             None

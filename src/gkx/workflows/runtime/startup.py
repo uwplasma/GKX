@@ -51,6 +51,7 @@ from gkx.core_ky_layout import (
     to_full,
     to_half,
 )
+from gkx.operators.linear.cache_arrays import keep_moments
 from gkx.operators.linear.cache_builder import build_linear_cache, mask_off_chain_rows
 
 
@@ -279,6 +280,23 @@ def _species_to_linear(species_cfg: Sequence[RuntimeSpeciesConfig]) -> list[Spec
     ]
 
 
+def _species_moments(cfg: RuntimeConfig, Nm: int | None) -> tuple | None:
+    """Return ``LinearParams.moments`` for the kinetic species, ``None`` if none override."""
+    kinetic, p = [s for s in cfg.species if s.kinetic], cfg.collisions.p_hyper_m
+    if all(s.Nl is None and s.Nm is None for s in kinetic):
+        return None
+    return tuple(
+        (
+            s.Nl,
+            s.Nm or Nm,
+            _default_hermite_hypercollision_exponent(s.Nm or Nm)
+            if p is None
+            else float(p),
+        )
+        for s in kinetic
+    )
+
+
 def _default_hermite_hypercollision_exponent(nhermite: int | None) -> float:
     """Return the default Hermite hypercollision exponent."""
 
@@ -495,6 +513,7 @@ def build_runtime_linear_params(
     )
     return replace(
         params,
+        moments=_species_moments(cfg, Nm),
         nu_hyper_m_const=(
             None
             if cfg.collisions.nu_hyper_m_const is None
@@ -1147,12 +1166,13 @@ def _build_initial_condition(
         )
         builder.seed_field(init_field, ky_index, kx_index, vals)
 
-    return _finalize_initial_state(
+    state0 = _finalize_initial_state(
         grid,
         state,
         loaded_state=loaded_state,
         init_file_mode=init_file_mode,
     )
+    return keep_moments(state0, _species_moments(cfg, Nm))
 
 
 __all__ = [
