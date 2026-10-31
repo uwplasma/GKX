@@ -943,12 +943,16 @@ def test_installed_jax_meets_the_floor_the_package_declares() -> None:
     from pathlib import Path
 
     import jax
+    from packaging.requirements import Requirement
 
     root = Path(__file__).resolve().parents[3]
     pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    requirements = pyproject["project"]["dependencies"]
-    declared = next(r for r in requirements if r.replace(" ", "").startswith("jax>="))
-    floor = re.search(r">=\s*([0-9.]+)", declared).group(1)
+    declared = next(
+        req
+        for req in map(Requirement, pyproject["project"]["dependencies"])
+        if req.name == "jax" and (req.marker is None or req.marker.evaluate())
+    )
+    floor = re.search(r">=\s*([0-9.]+)", str(declared.specifier)).group(1)
 
     def as_tuple(text: str) -> tuple[int, ...]:
         return tuple(int(part) for part in text.split(".") if part.isdigit())

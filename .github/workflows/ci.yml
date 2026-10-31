@@ -86,27 +86,29 @@ jobs:
   python-floor:
     # Every other job pins 3.11, which is why a stdlib-only-from-3.11 import
     # could sit in twelve modules while pyproject advertised a lower floor. This
-    # job runs the declared floor and collects the whole suite: collection is
-    # where an import that does not exist on the floor actually fails, and it
-    # costs a minute rather than a second full test run. The floor moved to 3.11
-    # when the jax minimum did; jax >= 0.10.1 publishes no 3.10 wheels.
+    # job runs the declared floor (3.10, where jax stops at 0.6.2) and collects
+    # the whole suite: collection is where an import that does not exist on the
+    # floor actually fails. A bounded unit subset then runs for real, because
+    # an old-jax API difference only shows when the code executes.
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v6
 
       - uses: ./.github/actions/setup
         with:
+          python-version: "3.10"
           jax-cache: python-floor
 
       - name: Confirm the floor really is the floor
         run: |
           python - <<'PY'
-          import sys, tomllib, gkx
-          assert sys.version_info[:2] == (3, 11), sys.version_info
-          assert tomllib.loads("a = 1") == {"a": 1}
+          import sys, tomli, jax, gkx
+          assert sys.version_info[:2] == (3, 10), sys.version_info
+          assert tomli.loads("a = 1") == {"a": 1}
+          assert jax.__version__ == "0.6.2", jax.__version__
           print("gkx", gkx.__version__, "on", sys.version)
           PY
 
@@ -122,6 +124,18 @@ jobs:
           GKX_X64: "1"
         run: |
           pytest -q --collect-only --disable-warnings > /dev/null
+
+      - name: Unit subset on the floor (jax 0.6.2)
+        env:
+          MPLBACKEND: Agg
+          JAX_ENABLE_X64: "true"
+          GKX_X64: "1"
+        run: |
+          pytest -q -n 4 --disable-warnings -m "not slow" \
+            tests/unit/core \
+            tests/unit/solvers/test_linear_krylov_core.py \
+            tests/unit/parallel/test_parallel_linear_velocity.py \
+            tests/unit/objectives/test_autodiff_solver_objectives.py
 
       - name: Default-f32 compressed nonlinear gradient (isolated backend failures)
         env:
