@@ -16,7 +16,10 @@ from typing import Any
 # no install, so reach the repository's single TOML shim through ``src``.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import tomllib
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MANIFEST = ROOT / "tools/repository_size_manifest.toml"

@@ -546,7 +546,10 @@ def _read_deck(source: str | Path) -> tuple[dict[str, Any] | None, Path | None]:
     path = Path(f"{_artifact_base(Path(source))}.toml")
     if not path.is_file():
         return None, None
-    import tomllib
+    try:  # Python 3.11+
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10
+        import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
     try:
         return tomllib.loads(path.read_text(encoding="utf-8")), path

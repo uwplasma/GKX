@@ -1204,7 +1204,8 @@ recursive = true
 # 68387 -> 68397: inverse FFT without scal (#396) after #392/#395, measured.
 # 68397 -> 68421: EM bracket one FFT (#394), measured after merging main.
 # 68421 -> 68707: nodal mu grid (opt-in LinearParams.mu_vperp_max): rule, gyro factors, node-local mirror/drift/drive, Dougherty, Laguerre-mode seeds. Measured.
-baseline = 68707
+# 68707 -> 68721: Python 3.10 support: tomli fallback in two modules, the jax < 0.7 enable_x64 import and the shard_map vma switch. Measured.
+baseline = 68721
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1564,7 +1565,8 @@ recursive = true
 # 63557 -> 63571: EM bracket one FFT (#394), measured after merging main.
 # 63571 -> 64074: nodal mu grid tests (equivalence, conservation, free energy, quadrature, Landau, zonal residual, Dougherty, Cyclone rates, refusals). Measured.
 # 64074 -> 64075: adaptive dt with dt set must not default to rk2 (imex-ark3 assertion). Measured.
-baseline = 64075
+# 64075 -> 64112: Python 3.10 floor: the jax < 0.7 skips, the tomllib alias in conftest and the guarded-import gate. Measured.
+baseline = 64112
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -1683,5 +1685,6 @@ recursive = true
 # 43611 -> 48382 (ARCH-C): report-gate and campaign modules moved out of src/gkx (src lines fell 75904 -> 67191). Measured.
 # 48382 -> 48385: chain 2026-10-07 (#346-#353, #355), measured.
 # 48385 -> 16444 (SLIM 2026-10-15): non-gate script packages removed; recover at df2953026. Measured.
-baseline = 16444
+# 16444 -> 16459: the guarded tomllib import in the five release-gate scripts. Measured.
+baseline = 16459
 target = 16444

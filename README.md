@@ -5,7 +5,7 @@
 [![CI](https://github.com/uwplasma/GKX/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/GKX/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/uwplasma/GKX/graph/badge.svg)](https://codecov.io/gh/uwplasma/GKX)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue.svg)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](pyproject.toml)
 [![Docs](https://readthedocs.org/projects/gkx/badge/?version=latest)](https://gkx.readthedocs.io)
 
 GKX is a JAX gyrokinetic solver for tokamak and stellarator flux tubes. It
@@ -35,7 +35,7 @@ pip install gkx
 gkx
 ```
 
-Python 3.11+. The wheel installs CPU JAX; for GPUs add an accelerator JAX wheel
+Python 3.10+. The wheel installs CPU JAX; for GPUs add an accelerator JAX wheel
 ([JAX install guide](https://docs.jax.dev/en/latest/installation.html)).
 `gkx` with no arguments runs a linear Cyclone case in under a minute on a
 laptop CPU and prints `gamma` and `omega`; a CI gate holds its growth rate

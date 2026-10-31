@@ -10,7 +10,10 @@ from typing import Any, Callable, cast
 import os
 from pathlib import Path
 
-import tomllib
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 from gkx.config import (
     Case,
     EndDampingReference,
