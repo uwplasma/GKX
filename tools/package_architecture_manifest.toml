@@ -1563,7 +1563,8 @@ recursive = true
 # 63547 -> 63557: Landau table overflow regression test, measured.
 # 63557 -> 63571: EM bracket one FFT (#394), measured after merging main.
 # 63571 -> 64074: nodal mu grid tests (equivalence, conservation, free energy, quadrature, Landau, zonal residual, Dougherty, Cyclone rates, refusals). Measured.
-baseline = 64074
+# 64074 -> 64075: adaptive dt with dt set must not default to rk2 (imex-ark3 assertion). Measured.
+baseline = 64075
 target = 35000
 
 [[line_budget_policy.counts]]

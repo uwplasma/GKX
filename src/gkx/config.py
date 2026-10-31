@@ -178,7 +178,7 @@ class TimeConfig:
         chosen = self.dt is not None
         for name, value in (
             ("dt", 0.1),
-            ("method", "rk2" if chosen else "rk4"),
+            ("method", "rk2" if chosen and self.fixed_dt is not False else "rk4"),
             ("fixed_dt", chosen),
         ):
             if getattr(self, name) is None:

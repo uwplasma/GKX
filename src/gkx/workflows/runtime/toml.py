@@ -334,12 +334,12 @@ def _normalize_time_overrides(
     the dataclass default stays rk2 for a deck that chose its own dt.
 
     A deck that sets ``dt`` keeps today's behaviour exactly, and every shipped
-    deck sets it, so this changes none of them.
+    deck sets it, so this changes none of them. ``fixed_dt = false`` with ``dt``
+    takes the controller's stepper: adaptive rk2 grows every streaming mode.
     """
 
     raw = dict(overrides) if isinstance(overrides, dict) else {}
-    if "dt" in raw:
-        raw.setdefault("fixed_dt", True)
+    if "dt" in raw and raw.setdefault("fixed_dt", True):
         raw.setdefault("method", "rk2")
         return raw
     # No step was chosen: hand the step to the CFL controller and give it the
