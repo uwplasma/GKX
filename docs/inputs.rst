@@ -212,6 +212,16 @@ RHS because its field-particle correction is not diagonal. The
 ``implicit`` (backward-Euler), ``exp`` (exact diagonal exponential), and
 ``sts``/``rkc`` aliases (treated as stabilized explicit/exponential updates for
 diagonal operators).
+With ``method = "imex-ars3"`` or ``"imex-ark3"`` and the default Landau
+operator, ``collision_scheme = "implicit"`` (the default) advances the full
+conserving collision operator, field-particle part included, by a local
+backward-Euler sub-step after each step (density, momentum and energy are
+conserved to rounding), but only when the explicit collision bound would bind:
+the spectral radius :math:`\rho(C)` of the collision matrix, :math:`8.7\,\nu_e`
+at :math:`(N_l, N_m) = (4, 8)`, satisfies :math:`\rho(C)\,\mathrm{d}t > 2`.
+Otherwise collisions stay in the explicit RHS, as for any other value of
+``collision_scheme``. With ``fixed_dt = false`` the step is also kept below
+:math:`5/\rho(C)` when the sub-step is on (:doc:`guidance`).
 
 Geometry controls
 -----------------

@@ -137,6 +137,134 @@ stable at 32x32x16 and non-finite at 64x64x24, where 0.035 and 0.025 work.
 Rerun at half the step and compare the heat flux. Set
 ``XLA_PYTHON_CLIENT_PREALLOCATE=false`` on a GPU.
 
+**Collisions in the IMEX step.** Explicit ARK3 is stable to
+:math:`\rho(C)\,\mathrm{d}t \approx 2.5`, with :math:`\rho(C)` the spectral
+radius of the Landau matrix: :math:`\nu_e` times 2.9, 8.7, 16 and 24 at
+:math:`(N_l, N_m)` = (2, 4), (4, 8), (4, 16) and (8, 16). With
+``collision_scheme = "implicit"`` (the default) GKX measures :math:`\rho(C)` at
+startup and, only if :math:`\rho(C)\,\mathrm{d}t > 2`, takes collisions out of
+the RHS and advances them by a backward-Euler sub-step after each step (dense
+per point, field-particle part by a Woodbury correction, density, momentum and
+energy conserved to rounding). Otherwise nothing changes: the run is the
+explicit one. At ``dt`` 0.05 the switch is :math:`\nu_e \approx 4.6` at (4, 8),
+:math:`\nu_i \approx 0.08` for :math:`m_e/m_i = 2.7\times10^{-4}`. Below it
+the sub-step costs 10% per step on small grids and buys nothing; above it
+explicit goes non-finite at fixed ``dt``, and an adaptive run is held to
+:math:`\mathrm{d}t \lesssim 2.5/\rho(C)`. The sub-step is first order (Lie): its
+splitting error is outside the embedded estimate, so with ``fixed_dt = false``
+:math:`\mathrm{d}t` is also capped at :math:`5/\rho(C)`. Measured on
+8x10x16 flux tubes, :math:`\beta` 1e-4 unless stated, (4, 8), ARK3, 15 time
+units; error is the heat flux at the end against adaptive ``rk4`` (CFL 0.3), the
+electrostatic row against explicit at ``dt`` 0.0125:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 8 8 8 14 14 18
+
+   * - Deck
+     - :math:`\nu_e`
+     - ``dt``
+     - :math:`\rho(C)\mathrm{d}t`
+     - :math:`Q` error, explicit
+     - :math:`Q` error, implicit
+     - wall, explicit / implicit
+   * - Cyclone, linked
+     - 0.6
+     - 0.2
+     - 1.0
+     - 0.0%
+     - 0.2%
+     - 41 / 46 s
+   * - Cyclone, linked
+     - 3
+     - 0.05
+     - 1.3
+     - 0.0%
+     - 0.7%
+     - 74 / 75 s
+   * - Cyclone, linked
+     - 3
+     - 0.2
+     - 5.3
+     - non-finite
+     - 1.7%
+     - -- / 45 s
+   * - Cyclone, linked
+     - 12
+     - 0.05
+     - 5.3
+     - non-finite
+     - 2.4%
+     - -- / 76 s
+   * - Cyclone, linked
+     - 12
+     - 0.2
+     - 21
+     - non-finite
+     - 4.9%
+     - -- / 56 s
+   * - Cyclone, :math:`\beta` 1e-2
+     - 12
+     - 0.05, 0.2
+     - 5.3, 21
+     - non-finite
+     - 2.1%, 5.1%
+     - -- / 65, 38 s
+   * - Cyclone, electrostatic
+     - 12
+     - 0.05, 0.2
+     - 5.3, 21
+     - non-finite
+     - 1.7%, 2.9%
+     - -- / 68, 47 s
+   * - Cyclone, periodic
+     - 12
+     - 0.05, 0.2
+     - 5.3, 21
+     - non-finite
+     - 0.1%, 0.4%
+     - -- / 70, 55 s
+   * - QA stellarator
+     - 12
+     - 0.05, 0.2
+     - 5.3, 21
+     - non-finite
+     - 3.2%, 8.7%
+     - -- / 88, 62 s
+   * - W7-X
+     - 0.6
+     - 0.2
+     - 1.0
+     - 1.3%
+     - 3.0%
+     - 60 / 67 s
+   * - W7-X
+     - 12
+     - 0.0125, 0.025
+     - 1.3, 2.7
+     - 0.1%, --
+     - 2.7%, 5.7%
+     - 257 / 276, 144 s
+   * - W7-X
+     - 12
+     - 0.05, 0.2
+     - 5.3, 21
+     - non-finite
+     - 10%, 26%
+     - -- / 97, 61 s
+
+The growth rate of the Cyclone decks is within 0.35% at every row. The error
+grows with :math:`\rho(C)\,\mathrm{d}t`, as :math:`\sqrt{\mathrm{d}t}` on the
+growing Cyclone, QA and periodic modes and about linearly on the transient W7-X
+flux, so a flux that matters at a few percent at high :math:`\nu_e` wants
+``dt`` near the explicit bound or ``collision_scheme = "explicit"``. Adaptive
+nonlinear Cyclone, :math:`\beta` 1e-4, 16x16x16, (4, 8), t = 24 on two cores:
+:math:`\nu_e` = 0.6 explicit 411 s and implicit 366 s, first-burst flux within
+0.3% (the default is the explicit run); :math:`\nu_e` = 12 explicit 979 s at
+``dt`` 0.025, default (implicit, ``dt`` 0.05 at the cap) 490 s and 2.2% in the
+first burst. Adiabatic-electron decks are not affected: the chain IMEX factor
+check refuses them with or without the sub-step.
+
 Resolution
 ----------
 

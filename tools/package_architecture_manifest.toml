@@ -444,7 +444,8 @@ path = "solvers_nonlinear_imex.py"
 # 1304 -> 1521: ARK3(2)4L[2]SA, factor as scan operand, chunked factor build, adaptive-dt control (ImexDtControl); measured.
 # 1521 -> 1754: absorbs solvers_nonlinear_imex_diagnostics (its only consumer besides the diagnostics driver) and the
 # diagnostics driver moved out to solvers_nonlinear_diagnostics; measured.
-baseline_lines = 1754
+# 1754 -> 1865: the local implicit collision sub-step of the chain IMEX steps (_LocalCollisions), used when explicit collisions would bind; measured.
+baseline_lines = 1865
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -453,7 +454,8 @@ path = "solvers_nonlinear_diagnostics.py"
 # 0 -> 3384: merges solvers_nonlinear_diagnostic_integration, solvers_nonlinear_state_integration and the old
 # solvers_nonlinear_diagnostics, and drops the dependency-injection containers between them (every kernel the
 # containers carried is a module-level name here, so tests patch it directly). Measured.
-baseline_lines = 3384
+# 3384 -> 3417: chain IMEX leaves the Landau operator out of the RHS and passes it to the factor when explicit collisions would bind; measured.
+baseline_lines = 3417
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -1205,7 +1207,8 @@ recursive = true
 # 68397 -> 68421: EM bracket one FFT (#394), measured after merging main.
 # 68421 -> 68707: nodal mu grid (opt-in LinearParams.mu_vperp_max): rule, gyro factors, node-local mirror/drift/drive, Dougherty, Laguerre-mode seeds. Measured.
 # 68707 -> 68721: Python 3.10 support: tomli fallback in two modules, the jax < 0.7 enable_x64 import and the shard_map vma switch. Measured.
-baseline = 68721
+# 68721 -> 68867: local implicit collision sub-step of the chain IMEX steps, used when explicit collisions would bind. Measured.
+baseline = 68867
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1566,7 +1569,8 @@ recursive = true
 # 63571 -> 64074: nodal mu grid tests (equivalence, conservation, free energy, quadrature, Landau, zonal residual, Dougherty, Cyclone rates, refusals). Measured.
 # 64074 -> 64075: adaptive dt with dt set must not default to rk2 (imex-ark3 assertion). Measured.
 # 64075 -> 64112: Python 3.10 floor: the jax < 0.7 skips, the tomllib alias in conftest and the guarded-import gate. Measured.
-baseline = 64112
+# 64112 -> 64201: chain IMEX collision sub-step tests (conservation, when it binds, dt beyond the explicit bound). Measured.
+baseline = 64201
 target = 35000
 
 [[line_budget_policy.counts]]
