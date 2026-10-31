@@ -472,12 +472,21 @@ class RuntimeSpeciesConfig:
     #: / ``Nm`` that sizes the state; ``None`` keeps all of them.
     Nl: int | None = None
     Nm: int | None = None
+    #: ``"hypercollision"`` damps a band of high Hermite moments with
+    #: ``|k_z|``-scaled hypercollisions; ``"reflectionless"`` absorbs the
+    #: outgoing Hermite flux at the last moment instead (Kanekar et al. 2015).
+    hermite_closure: str = "hypercollision"
 
     def __post_init__(self) -> None:
         for name in ("Nl", "Nm"):
             value = getattr(self, name)
             if value is not None and int(value) < 1:
                 raise ValueError(f"[[species]] {name} must be a positive integer")
+        if self.hermite_closure not in ("hypercollision", "reflectionless"):
+            raise ValueError(
+                "species hermite_closure must be 'hypercollision' or "
+                f"'reflectionless', got {self.hermite_closure!r}"
+            )
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

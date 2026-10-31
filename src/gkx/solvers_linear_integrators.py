@@ -23,6 +23,7 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     PreconditionerSpec,
+    _SPECIES_PARAM_NAMES,
     _x64_enabled,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
@@ -455,19 +456,8 @@ def _integrate_species_sharded_explicit(
     ns = int(state.shape[0])
     if len(devices) != ns:
         raise ValueError("species integration requires one device per species")
-    species_names = (
-        "charge_sign",
-        "density",
-        "mass",
-        "temp",
-        "vth",
-        "rho",
-        "fprim",
-        "tprim",
-        "tprim_e",
-        "nu",
-        "tz",
-    )
+    species_names = _SPECIES_PARAM_NAMES
+    tz_index = species_names.index("tz")
     species_values = tuple(
         _as_species_array(getattr(params, name), ns, name).astype(real_dtype)
         for name in species_names
@@ -497,7 +487,7 @@ def _integrate_species_sharded_explicit(
                     local_params,
                     local_species[0],
                     local_species[1],
-                    local_species[-1],
+                    local_species[tz_index],
                 )
                 zero = jnp.zeros_like(phi)
                 return FieldState(phi=phi, apar=zero, bpar=zero)
@@ -509,7 +499,7 @@ def _integrate_species_sharded_explicit(
                 local_species[1],
                 local_species[3],
                 local_species[2],
-                local_species[-1],
+                local_species[tz_index],
                 local_species[4],
                 jnp.asarray(params.fapar * terms.apar, dtype=real_dtype),
                 jnp.asarray(terms.bpar, dtype=real_dtype),

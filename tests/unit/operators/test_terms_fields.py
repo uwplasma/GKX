@@ -2436,7 +2436,7 @@ def test_three_field_nonlinear_bracket_conserves_free_energy(laguerre_mode):
 MOMENTS_P_HYPER_M = 6.0
 
 
-def _moments_case(Nl, Nm, moments=None, p_hyper_m=MOMENTS_P_HYPER_M):
+def _moments_case(Nl, Nm, moments=None, p_hyper_m=MOMENTS_P_HYPER_M, closure=0.0):
     """Two kinetic species on a linked grid with every dissipation branch on."""
 
     cfg = CycloneBaseCase(
@@ -2465,7 +2465,7 @@ def _moments_case(Nl, Nm, moments=None, p_hyper_m=MOMENTS_P_HYPER_M):
         beta=1e-2,
         fapar=1.0,
     )
-    params = replace(params, moments=moments)
+    params = replace(params, moments=moments, closure=jnp.asarray(closure))
     cache = build_linear_cache(grid, geom, params, Nl, Nm)
     shape = (2, Nl, Nm, grid.ky.size, grid.kx.size, grid.z.size)
     rng = np.random.default_rng(3)
@@ -2598,6 +2598,20 @@ def test_species_weighted_terms_follow_their_species_into_a_group():
         G, cache, params, fields, terms=TermConfig(mirror=mirror, **off)
     )
     assert float(jnp.abs(out[0]).max()) == 0.0 < float(jnp.abs(out[1]).max())
+
+
+def test_reflectionless_closure_sits_on_each_species_own_last_moment():
+    """The electron sink of a (2, 5) group in a (3, 9) state is that of a (2, 5) state."""
+
+    moments = ((2, 5, MOMENTS_P_HYPER_M),) * 2
+    cache, params, G = _moments_case(3, 9, moments, closure=(0.0, 1.0))
+    ref_cache, ref_params, _ = _moments_case(2, 5, closure=(0.0, 1.0))
+    G = _kept(moments, G)
+    out = jax.jit(_moments_rhs)(G, cache, params)
+    ref = _moments_rhs(G[:, :2, :5], ref_cache, ref_params)
+    np.testing.assert_allclose(out[:, :2, :5], ref, rtol=1e-12, atol=1e-11)
+    open_ref = _moments_rhs(G[:, :2, :5], *_moments_case(2, 5)[:2])
+    assert float(jnp.abs(ref[1] - open_ref[1]).max()) > 1e-3  # the closure acts
 
 
 def test_hypercollisions_are_normalized_to_the_species_own_count():

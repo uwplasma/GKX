@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 from typing import Any, NamedTuple
 
@@ -550,6 +551,51 @@ def collision_quadratic_rate(
     return jnp.sum(product)
 
 
+def hermite_closure_coefficient(hermite_count: int) -> float:
+    r"""Return ``R_{M+1}`` for the reflectionless Hermite closure.
+
+    Closing the hierarchy with ``g_{M+1} = 0`` makes the truncation a
+    reflecting wall: the free-energy pulse that streams up in ``m`` bounces
+    back and returns as recurrence. The outgoing (absorbing) condition is
+
+    .. math:: g_{M+1} = -i\,\mathrm{sgn}(k_\parallel)\,R_{M+1}\,g_M,
+       \qquad R_{M+1}=\frac{M}{\sqrt{2(M+1)}}\frac{\Gamma(M/2)}{\Gamma((M+1)/2)}
+
+    which adds ``-R sqrt(M+1) v_th |k_par| G_M`` to the last moment. Since
+    ``R > 0`` that is a strictly positive-definite sink -- it can only remove
+    free energy. ``R -> 1 - 1/(4M)``, so the absorption becomes exact as the
+    resolution grows, and ``R_3 = 0.921318`` reproduces the Hammett-Perkins
+    three-pole coefficient exactly, the ``M = 2`` member of the same family.
+
+    Reference: Kanekar, Schekochihin, Dorland & Loureiro, *J. Plasma Phys.*
+    81, 305810104 (2015), equation (4.36).
+    """
+
+    order = int(hermite_count) - 1
+    if order < 1:
+        return 0.0
+    return float(
+        order
+        / math.sqrt(2.0 * (order + 1.0))
+        * math.gamma(order / 2.0)
+        / math.gamma((order + 1.0) / 2.0)
+    )
+
+
+def hermite_closure_profile(
+    local_count: int, hermite_window: HermiteWindow | None = None
+) -> jnp.ndarray:
+    """Return ``R_{M+1} sqrt(M+1)`` on the last global Hermite moment, else 0.
+
+    Shape ``(local_count, 1, 1, 1)``, aligned with the ``(m, ky, kx, z)`` axes.
+    """
+
+    total = hermite_total_of(hermite_window, local_count)
+    scale = hermite_closure_coefficient(total) * math.sqrt(float(total))
+    last = hermite_index_of(hermite_window, local_count) == total - 1
+    return jnp.where(last, scale, 0.0)[:, None, None, None]
+
+
 def _hypercollision_operator_is_static_zero(
     *,
     weight: jnp.ndarray,
@@ -561,6 +607,7 @@ def _hypercollision_operator_is_static_zero(
     hypercollisions_kz: jnp.ndarray,
     dtype: jnp.dtype,
     nu_hyper_m_const: jnp.ndarray | None = None,
+    closure: jnp.ndarray | float = 0.0,
 ) -> bool:
     const_nu_m = nu_hyper_m if nu_hyper_m_const is None else nu_hyper_m_const
     const_branch_zero = (
@@ -569,7 +616,9 @@ def _hypercollision_operator_is_static_zero(
         and _is_static_zero(weight * hypercollisions_const * nu_hyper_lm, dtype)
     )
     isotropic_branch_zero = _is_static_zero(weight * nu_hyper, dtype)
-    kz_branch_zero = _is_static_zero(weight * hypercollisions_kz * nu_hyper_m, dtype)
+    kz_branch_zero = _is_static_zero(
+        weight * hypercollisions_kz * nu_hyper_m, dtype
+    ) and _is_static_zero(closure)
     return const_branch_zero and isotropic_branch_zero and kz_branch_zero
 
 
@@ -618,13 +667,26 @@ def _hypercollision_kz_source(
     kpar_scale: jnp.ndarray,
     mask_kz: jnp.ndarray,
     m_pow: jnp.ndarray,
+    closure: jnp.ndarray | None = None,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
-    """Return the pre-``|k_z|`` source used by hypercollisional damping."""
+    """Return the pre-``|k_z|`` source used by hypercollisional damping.
+
+    ``closure`` (per species, 1 = reflectionless) swaps the species' band of
+    ``|k_z|`` hypercollisions for the single sink of
+    :func:`hermite_closure_profile` on the last moment.
+    """
 
     vth_s = vth[:, None, None, None, None, None]
     kz_weight = jnp.asarray(weight) * jnp.asarray(hypercollisions_kz)
     nu_hyp_m = nu_hyper_m * m_norm_kz_factor * 2.3 * vth_s * jnp.abs(kpar_scale)
-    return kz_weight * jnp.where(mask_kz, -nu_hyp_m * m_pow, 0.0) * G
+    rate = kz_weight * jnp.where(mask_kz, -nu_hyp_m * m_pow, 0.0)
+    if closure is not None:
+        c = closure[:, None, None, None, None, None]
+        profile = hermite_closure_profile(G.shape[-4], hermite_window)
+        sink = jnp.asarray(weight) * jnp.abs(kpar_scale) * vth_s * profile
+        rate = (1.0 - c) * rate - c * sink
+    return rate * G
 
 
 def _apply_parallel_hypercollision(
@@ -669,6 +731,7 @@ def _inactive_hypercollision_result(
     hypercollisions_kz: jnp.ndarray,
     dtype: jnp.dtype,
     nu_hyper_m_const: jnp.ndarray | None = None,
+    closure: jnp.ndarray | float = 0.0,
 ) -> jnp.ndarray | None:
     """Return a zero result when all hypercollision branches are statically off."""
 
@@ -682,6 +745,7 @@ def _inactive_hypercollision_result(
         hypercollisions_kz=hypercollisions_kz,
         dtype=dtype,
         nu_hyper_m_const=nu_hyper_m_const,
+        closure=closure,
     ):
         return _zeros_like_result(
             G,
@@ -718,6 +782,8 @@ def _parallel_hypercollision_contribution(
     linked_use_gather: bool,
     ny_full: int | None = None,
     ntft_m0: jnp.ndarray | None = None,
+    closure: jnp.ndarray | None = None,
+    hermite_window: HermiteWindow | None = None,
 ) -> jnp.ndarray:
     """Compute the ``|k_z|`` hypercollision branch, including linked tubes."""
 
@@ -731,6 +797,8 @@ def _parallel_hypercollision_contribution(
         kpar_scale=kpar_scale,
         mask_kz=mask_kz,
         m_pow=m_pow,
+        closure=closure,
+        hermite_window=hermite_window,
     )
     return _apply_parallel_hypercollision(
         kz_source,
@@ -779,6 +847,7 @@ def hypercollisions_contribution(
     ny_full: int | None = None,
     ntft_m0: jnp.ndarray | None = None,
     hermite_window: HermiteWindow | None = None,
+    closure: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     coeffs = _HypercollisionCoefficients(
         vth=vth,
@@ -821,6 +890,7 @@ def hypercollisions_contribution(
         hypercollisions_kz=coeffs.hypercollisions_kz,
         dtype=real_dtype,
         nu_hyper_m_const=coeffs.nu_hyper_m_const,
+        closure=0.0 if closure is None else closure,
     )
     if inactive_result is not None:
         return inactive_result
@@ -842,7 +912,9 @@ def hypercollisions_contribution(
         hermite_window=hermite_window,
         nu_hyper_m_const=coeffs.nu_hyper_m_const,
     )
-    if _is_static_zero(weight * coeffs.hypercollisions_kz, real_dtype):
+    if _is_static_zero(weight * coeffs.hypercollisions_kz, real_dtype) and (
+        closure is None or _is_static_zero(closure)
+    ):
         return dG
     return dG + _parallel_hypercollision_contribution(
         G,
@@ -864,6 +936,8 @@ def hypercollisions_contribution(
         linked_use_gather=route.linked_use_gather,
         ny_full=route.ny_full,
         ntft_m0=route.ntft_m0,
+        closure=closure,
+        hermite_window=hermite_window,
     )
 
 

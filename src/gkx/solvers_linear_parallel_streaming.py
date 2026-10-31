@@ -5,12 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 import jax.numpy as jnp
+import numpy as np
 
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     _as_species_array,
+    _is_tracer,
     linear_terms_to_term_config,
 )
 from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
@@ -26,7 +28,6 @@ def _species_hermite_mesh_and_state_sharding(
 ):
     """Return the validated mixed mesh and state sharding."""
 
-    import numpy as np
     from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
     device_list = _resolve_parallel_devices(
@@ -109,6 +110,10 @@ def linear_rhs_electrostatic_species_hermite_sharded(
     if cache.collision_lam.size != 0:
         raise NotImplementedError(
             "mixed routing requires the standard factorized collision operator"
+        )
+    if not _is_tracer(params.closure) and np.any(np.asarray(params.closure)):
+        raise NotImplementedError(
+            "mixed species-Hermite routing does not support the reflectionless closure"
         )
     ns = int(arr.shape[0])
     nm = int(arr.shape[2])
