@@ -434,7 +434,8 @@ def test_actual_linear_rhs_branch_objective_derivative_gate() -> None:
     assert report["passed"] is False
     assert report["ad_supported"] is False
     assert report["branch_isolated"] is True
-    assert "non-symmetric eigenvectors" in str(report["failure_reason"])
+    # jax 0.6 words this "derivatives of eigenvectors are not implemented".
+    assert "eigenvectors" in str(report["failure_reason"])
 
 
 def test_implicit_eigenpair_observable_gate_matches_closed_form_branch() -> None:

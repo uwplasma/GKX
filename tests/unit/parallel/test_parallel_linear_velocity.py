@@ -2980,6 +2980,7 @@ def test_species_hermite_keeps_the_bracket_in_its_own_kernel():
         in_specs=(spec,) + specs,
         out_specs=spec,
         axis_names={"s", "m"},
+        check_vma=integrators._CHECK_VMA,
     )
 
     def equations(jaxpr):

@@ -15,6 +15,19 @@ if str(ROOT) not in sys.path:
 if str(TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(TESTS_ROOT))
 
+try:  # Python 3.11+
+    import tomllib  # noqa: F401
+except ModuleNotFoundError:  # Python 3.10: the tests import it by its stdlib name
+    import tomli
+
+    sys.modules["tomllib"] = tomli
+
+import jax
+import jax.experimental
+
+if not hasattr(jax, "enable_x64"):  # jax < 0.7 spells it jax.experimental.enable_x64
+    jax.enable_x64 = jax.experimental.enable_x64
+
 #: The XLA:CPU FFT is only handed to a thread pool when this flag is true, and
 #: the pool's reduction order is not reproducible run to run.
 DETERMINISTIC_CPU_FFT_FLAG = "--xla_cpu_multi_thread_eigen=false"
