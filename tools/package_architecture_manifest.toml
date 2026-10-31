@@ -444,7 +444,8 @@ path = "solvers_nonlinear_imex.py"
 # 1304 -> 1521: ARK3(2)4L[2]SA, factor as scan operand, chunked factor build, adaptive-dt control (ImexDtControl); measured.
 # 1521 -> 1754: absorbs solvers_nonlinear_imex_diagnostics (its only consumer besides the diagnostics driver) and the
 # diagnostics driver moved out to solvers_nonlinear_diagnostics; measured.
-baseline_lines = 1754
+# 1754 -> 1865: the local implicit collision sub-step of the chain IMEX steps (_LocalCollisions), used when explicit collisions would bind; measured.
+baseline_lines = 1865
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -453,7 +454,8 @@ path = "solvers_nonlinear_diagnostics.py"
 # 0 -> 3384: merges solvers_nonlinear_diagnostic_integration, solvers_nonlinear_state_integration and the old
 # solvers_nonlinear_diagnostics, and drops the dependency-injection containers between them (every kernel the
 # containers carried is a module-level name here, so tests patch it directly). Measured.
-baseline_lines = 3384
+# 3384 -> 3417: chain IMEX leaves the Landau operator out of the RHS and passes it to the factor when explicit collisions would bind; measured.
+baseline_lines = 3417
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -1204,7 +1206,8 @@ recursive = true
 # 68387 -> 68397: inverse FFT without scal (#396) after #392/#395, measured.
 # 68397 -> 68421: EM bracket one FFT (#394), measured after merging main.
 # 68421 -> 68707: nodal mu grid (opt-in LinearParams.mu_vperp_max): rule, gyro factors, node-local mirror/drift/drive, Dougherty, Laguerre-mode seeds. Measured.
-baseline = 68707
+# 68707 -> 68853: local implicit collision sub-step of the chain IMEX steps, used when explicit collisions would bind. Measured.
+baseline = 68853
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1563,7 +1566,8 @@ recursive = true
 # 63547 -> 63557: Landau table overflow regression test, measured.
 # 63557 -> 63571: EM bracket one FFT (#394), measured after merging main.
 # 63571 -> 64074: nodal mu grid tests (equivalence, conservation, free energy, quadrature, Landau, zonal residual, Dougherty, Cyclone rates, refusals). Measured.
-baseline = 64074
+# 64074 -> 64163: chain IMEX collision sub-step tests (conservation, when it binds, dt beyond the explicit bound). Measured.
+baseline = 64163
 target = 35000
 
 [[line_budget_policy.counts]]

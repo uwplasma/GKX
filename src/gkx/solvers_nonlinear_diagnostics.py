@@ -102,6 +102,7 @@ from gkx.solvers_nonlinear_imex import (
     ProjectFn,
     SolveStepFn,
     StatsSolveStepFn,
+    collisions_bind,
     integrate_cached_imex_scan,
     make_imex_diagnostic_step,
     make_imex_nonlinear_term,
@@ -679,16 +680,16 @@ def _run_explicit_diagnostic_scan_raw(
 
 def stiff_linear_split(
     cache: Any, params: Any, terms: Any, compute_fields_fn: Callable[..., Any]
-) -> tuple[Callable, Callable, Callable | None]:
-    """Return ``(split_rhs, fields, mirror_rhs)`` for :func:`build_chain_implicit_linear`.
+) -> tuple[Callable, Callable, Callable | None, Callable]:
+    """Return ``(split_rhs, fields, mirror_rhs, collision_rhs)`` for :func:`build_chain_implicit_linear`.
 
     Implicit: streaming with its dissipation, the field response and, for
     species much faster than the slowest (electrons), the mirror force, whose
     explicit bound otherwise sets dt (|lambda| 57 against drifts ~3 on Cyclone
     at (4, 8)). It couples Laguerre moments, so those species get ``Nl N``
-    blocks. Drifts, the ion mirror, drive and collisions stay explicit with the
-    bracket. ``mirror_rhs`` is the mirror part of ``split_rhs`` (``None``
-    without a fast species).
+    blocks. Drifts, the ion mirror and drive stay explicit with the bracket.
+    ``mirror_rhs`` is the mirror part of ``split_rhs`` (``None`` without a fast
+    species); ``collision_rhs`` is the collision operator alone.
     """
     from gkx.terms.assembly import assemble_rhs_cached_with_fields
     from gkx.terms.config import FieldState
@@ -704,6 +705,9 @@ def stiff_linear_split(
         hypercollisions=0.0,
         hyperdiffusion=0.0,
         end_damping=0.0,
+    )
+    collision_terms = dataclasses.replace(
+        mirror_terms, mirror=0.0, collisions=terms.collisions
     )
 
     def fields(state: jnp.ndarray) -> jnp.ndarray:
@@ -725,7 +729,8 @@ def stiff_linear_split(
 
         return split
 
-    return rhs(implicit_terms), fields, rhs(mirror_terms) if fast.any() else None
+    mirror_rhs = rhs(mirror_terms) if fast.any() else None
+    return rhs(implicit_terms), fields, mirror_rhs, rhs(collision_terms)
 
 
 def _attach_chain_implicit_linear(
@@ -738,6 +743,7 @@ def _attach_chain_implicit_linear(
     fixed_dt: bool,
     dt: float,
     scheme: str,
+    implicit_collisions: bool = False,
 ) -> Callable[..., Any]:
     """Return ``rhs_fn`` carrying the per-chain implicit operator of imex-ars*."""
 
@@ -753,7 +759,7 @@ def _attach_chain_implicit_linear(
         raise ValueError(
             f"method '{scheme}' needs a (species, Nl, Nm, ky, kx, z) state"
         )
-    split_rhs, fields, mirror_rhs = stiff_linear_split(
+    split_rhs, fields, mirror_rhs, collision_rhs = stiff_linear_split(
         prepared.cache, params, terms, compute_fields_fn
     )
     chain_linear = build_chain_implicit_linear(
@@ -767,6 +773,7 @@ def _attach_chain_implicit_linear(
         scheme=scheme,
         dtype=G0.dtype,
         mirror_rhs=mirror_rhs,
+        collision_rhs=collision_rhs if implicit_collisions else None,
     )
 
     def rhs_with_chain_linear(state: jnp.ndarray) -> Any:
@@ -788,6 +795,33 @@ def _build_explicit_scan_closures(
 ) -> tuple[Callable[..., Any], Callable[..., Any]]:
     """Build diagnostic scan closures after state and policies are prepared."""
 
+    chain_terms = policies.collision_policy.rhs_terms
+    # Chain IMEX: when explicit collisions would bound dt, the Landau operator is
+    # a local implicit sub-step instead of part of the RHS.
+    implicit_collisions = (
+        options.method in {"imex-ars3", "imex-ark3"}
+        and options.collision_scheme == "implicit"
+        and options.fixed_dt
+        and getattr(prepared.cache, "landau_pairs", None) is not None
+        and float(chain_terms.collisions) != 0.0
+        and jnp.asarray(prepared.G0).ndim == 6
+    )
+    if implicit_collisions:
+        _, fields, _, coll = stiff_linear_split(
+            prepared.cache, params, chain_terms, compute_fields_cached
+        )
+        G0 = jnp.asarray(prepared.G0)
+        implicit_collisions = collisions_bind(
+            coll, fields, tuple(G0.shape), G0.dtype, options.dt
+        )
+    if implicit_collisions:
+        policies = replace(
+            policies,
+            collision_policy=replace(
+                policies.collision_policy,
+                rhs_terms=replace(chain_terms, collisions=0.0),
+            ),
+        )
     rhs_fn = _make_explicit_rhs_fn(
         prepared,
         policies,
@@ -801,11 +835,12 @@ def _build_explicit_scan_closures(
             rhs_fn,
             prepared,
             params=params,
-            terms=policies.collision_policy.rhs_terms,
+            terms=chain_terms,
             compute_fields_fn=compute_fields_cached,
             fixed_dt=options.fixed_dt,
             dt=options.dt,
             scheme=options.method,
+            implicit_collisions=implicit_collisions,
         )
     compute_diag_from_state = _make_explicit_diagnostic_callable(
         prepared,

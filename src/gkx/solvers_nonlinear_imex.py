@@ -668,7 +668,8 @@ def integrate_cached_imex_scan(
 # solve's residual certifies the structure. The electron mirror force is in
 # S too (it set dt otherwise: |lambda| 57 against drifts ~3 at (4, 8)); it is
 # z-local but couples l to l +- 1, so electron blocks are Nl N x Nl N.
-# Drifts, the ion mirror, drive and collisions stay explicit with the bracket.
+# Drifts, the ion mirror and drive stay explicit with the bracket. Collisions
+# are a local backward-Euler sub-step after each step (``_LocalCollisions``).
 #
 # The time step is an Ascher-Ruuth-Spiteri IMEX Runge-Kutta scheme: L-stable
 # SDIRK with one diagonal coefficient for the linear part (one factorization
@@ -763,8 +764,8 @@ class _ChainGroup:
 
 @partial(
     jax.tree_util.register_dataclass,
-    data_fields=["groups", "dt", "on"],
-    meta_fields=["shape", "scheme", "rows_m", "cols_m", "linear", "spec"],
+    data_fields=["groups", "dt", "on", "cfac"],
+    meta_fields=["shape", "scheme", "rows_m", "cols_m", "linear", "spec", "collisions"],
 )
 @dataclass(frozen=True)
 class ChainImplicitLinear:
@@ -787,6 +788,8 @@ class ChainImplicitLinear:
     linear: Callable[[jnp.ndarray], jnp.ndarray]  # L G (stiff terms only)
     spec: tuple[tuple[int, ...], ...] = ((0,),)  # species groups of the factor
     on: Any = None  # solved-row mask: refine each solve once (see ``solve``)
+    cfac: Any = None  # collision sub-step factors at ``dt`` (``_LocalCollisions``)
+    collisions: Any = None  # the local collision sub-step, or None (explicit)
 
     @property
     def nbytes(self) -> int:
@@ -834,6 +837,12 @@ class ChainImplicitLinear:
             out = _scatter(ky, kx, self._apply_inverse(g, x).astype(R.dtype), out)
         return out
 
+    def collide(self, G: jnp.ndarray) -> jnp.ndarray:
+        """One backward-Euler collision sub-step (identity when explicit)."""
+        if self.collisions is None:
+            return G
+        return self.collisions.apply(G, self.cfac, self.dt)
+
     def ars_step(
         self,
         G: jnp.ndarray,
@@ -845,8 +854,9 @@ class ChainImplicitLinear:
     ) -> Any:
         """One IMEX step; ``dG = rhs(G)`` is the full (linear + bracket) RHS.
 
-        ``with_error`` also returns the embedded error estimate (schemes with
-        an embedded pair only).
+        Collisions given to the factor are not in ``rhs``: the step ends with
+        their sub-step (Lie splitting). ``with_error`` also returns the
+        embedded error estimate (schemes with an embedded pair only).
         """
         a_exp, a_imp, b_exp, b_imp, b_hat = ARS_TABLEAUX[self.scheme]
         dt, gam = self.dt, a_imp[1][1]
@@ -867,7 +877,7 @@ class ChainImplicitLinear:
             y = project(self.solve(r))
             lin.append((y - r) / (gam * dt))  # y = r + gamma dt L y
             non.append(rhs(y) - lin[i] if b_exp[i] or i + 1 < len(b_exp) else 0.0)
-        G_new = G + comb(b_exp, b_imp)
+        G_new = self.collide(G + comb(b_exp, b_imp))
         if not with_error:
             return G_new
         d = [b - bh for b, bh in zip(b_imp, b_hat)]
@@ -1025,6 +1035,88 @@ def _thomas_solve(factors: tuple[jnp.ndarray, ...], x: jnp.ndarray) -> jnp.ndarr
     for m in range(nm - 2, -1, -1):
         out.append(w[m] - mv(m, off(up, e_up, m, out[-1])))
     return jnp.stack(out[::-1], 3)
+
+
+def _slots(a: jnp.ndarray, x: jnp.ndarray) -> jnp.ndarray:
+    """``a`` (``n x n``, ``n = ns Nl Nm``) applied to every point's velocity slots."""
+    a = a.astype(jnp.real(x).dtype)
+    return jnp.matmul(a, x.reshape(a.shape[0], -1), precision=_HI).reshape(x.shape)
+
+
+class _LocalCollisions:
+    """Collisions as a local backward-Euler sub-step, ``y = (I - tau C_H)^{-1} x``.
+
+    The collision operator acts on ``H = G + h(F)``: ``C_H = C + U_C Q`` with
+    ``C`` the dense ``n x n`` velocity matrix (``n = ns Nl Nm``, one matrix at
+    every point) and ``U_C = C h`` its response to the fields. It is not
+    tridiagonal in Hermite (Landau couples ``m`` to ``m +- 2k``), so it cannot
+    join the block-Thomas factor; it is local in ``(ky, kx, z)``, so the sub-step
+    is a dense solve ``A = I - tau C`` plus a Woodbury correction of rank
+    ``nf`` per point. ``w^T C_H = 0`` for the density, momentum and energy
+    functionals, so the sub-step conserves them to rounding at any ``tau``.
+    """
+
+    def __init__(self, coll, fields, shape, dtype) -> None:
+        self.coll, self.fields, self.shape, self.dtype = coll, fields, shape, dtype
+        ns, nl, nm, *_r = shape
+        n, npts = ns * nl * nm, int(np.prod(shape[3:]))
+        self.zero_f = zero_f = jnp.zeros_like(fields(jnp.zeros(shape, dtype)))
+
+        def columns(i0):  # unit slot i0 + p at point p: column i0 + p of C at p
+            j = i0 + jnp.arange(npts)
+            at = jnp.zeros((n, npts), dtype).at[jnp.minimum(j, n - 1), jnp.arange(npts)]
+            return coll(at.set(j < n).reshape(shape), zero_f).reshape(n, npts)
+
+        cols = jnp.concatenate([columns(i0) for i0 in range(0, n, npts)], 1)[:, :n]
+        self.cmat = np.asarray(cols, np.complex128).real
+        self.rho = float(np.abs(np.linalg.eigvals(self.cmat)).max())  # explicit bound
+        rng = np.random.default_rng(0)  # the same matrix at every point?
+        x = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape), dtype)
+        err = float(jnp.abs(coll(x, zero_f) - _slots(jnp.asarray(self.cmat), x)).max())
+        if not err <= 1e-5 * float(np.abs(self.cmat).max() * jnp.abs(x).max()):
+            raise ValueError("the collision operator is not the same at every point")
+
+    def factor(self, tau: float) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """``A^{-1}`` and the inverse capacitance ``(I - tau Q A^{-1} U_C)^{-1}``."""
+        n = self.cmat.shape[0]
+        ainv = jnp.asarray(np.linalg.inv(np.eye(n) - tau * self.cmat))
+        zero = jnp.zeros(self.shape, self.dtype)
+        nf = self.zero_f.shape[0]
+        m = jnp.stack(  # M[f, g] = Q A^-1 U_C e_g at every point
+            [
+                self.fields(_slots(ainv, self.coll(zero, self.zero_f.at[g].set(1))))
+                for g in range(nf)
+            ],
+            1,
+        )
+        cap = jnp.eye(nf, dtype=m.dtype)[:, :, None, None, None] - tau * m
+        return ainv, jnp.linalg.inv(jnp.moveaxis(cap, (0, 1), (-2, -1)))
+
+    def apply(self, G: jnp.ndarray, factors: Any, tau: Any) -> jnp.ndarray:
+        ainv, cap = factors
+        z = _slots(ainv, G)
+        f = jnp.einsum("yxzfg,gyxz->fyxz", cap, self.fields(z), precision=_HI)
+        return z + tau * _slots(ainv, self.coll(jnp.zeros_like(G), f))
+
+
+# Explicit ARK3 stays stable to rho(C) dt = 2.5 (measured on Cyclone KE nu_e 3, 12);
+# the sub-step is only used from 2.
+COLLISION_STIFFNESS = 2.0
+# The sub-step's splitting error grows ~ (rho dt)^(1/2) and the embedded estimate
+# does not see it; adaptive dt stays below 5 (Cyclone KE nu_e 12: flux error 2.4% at
+# 5.3, 4.9% at 21; W7-X 7% and 22%).
+COLLISION_DT_CAP = 5.0
+
+
+def collisions_bind(collision_rhs, fields, shape, dtype, dt: float) -> bool:
+    """True if explicit collisions would bound ``dt``: ``rho(C) dt`` past the limit."""
+    try:
+        loc = _LocalCollisions(
+            cached_jit(collision_rhs), cached_jit(fields), shape, dtype
+        )
+    except ValueError:  # not one matrix at every point: stays explicit
+        return False
+    return loc.rho * dt > COLLISION_STIFFNESS
 
 
 def _unit(n: int, j: jnp.ndarray, dtype) -> jnp.ndarray:
@@ -1225,7 +1317,8 @@ def refactor_chain_implicit_linear(
         _refactor_group(g, r, gdt, op.rows_m, op.cols_m, op.spec)
         for g, r in zip(op.groups, raws)
     )
-    new = dataclasses.replace(op, groups=groups, dt=float(dt))
+    cfac = None if op.collisions is None else op.collisions.factor(float(dt))
+    new = dataclasses.replace(op, groups=groups, dt=float(dt), cfac=cfac)
     for key in ("_raw", "_rhs"):  # host-side extras, not pytree fields
         if key in op.__dict__:
             object.__setattr__(new, key, op.__dict__[key])
@@ -1236,7 +1329,8 @@ class ImexDtControl:
     """Chunk-level dt for the chain IMEX step (``fixed_dt = false``).
 
     Between chunks: ``dt = min(cfl 17 / w_nl, cfl 2.5 / rho, dt_err,
-    dt_max)``. ``rho`` is the spectral radius of the explicit linear remainder
+    dt_max)`` (``dt_max`` also stays below ``COLLISION_DT_CAP / rho(C)`` when
+    collisions are a sub-step). ``rho`` is the spectral radius of the explicit linear remainder
     (drifts, ion mirror, drive) by Arnoldi at startup and 2.5 the measured
     ARK3/ARS3 interval on it (0.82 x 3.6); ``w_nl`` the bracket CFL rate of the
     current fields; 17 = 10 x 1.7: Cyclone KE 32x32 stays finite and within 2 SE of
@@ -1249,6 +1343,8 @@ class ImexDtControl:
     def __init__(self, op, cfl_rate, *, dt_max, cfl=0.9, rtol=1e-2, iters=20):
         rhs, project = op.__dict__["_rhs"]
         self.cfl, self.rtol, self.dt_max = float(cfl), float(rtol), float(dt_max)
+        if op.collisions is not None:  # the sub-step's splitting error is not in err
+            self.dt_max = min(self.dt_max, COLLISION_DT_CAP / op.collisions.rho)
 
         def probe(op, G):
             dG, fields = rhs(G)
@@ -1351,6 +1447,7 @@ def build_chain_implicit_linear(
     dtype=jnp.complex64,
     check_tol: float | None = None,
     mirror_rhs: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] | None = None,
+    collision_rhs: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray] | None = None,
 ) -> ChainImplicitLinear:
     """Probe the stiff linear terms per chain and factor ``I - gamma dt L``.
 
@@ -1362,15 +1459,25 @@ def build_chain_implicit_linear(
     mode, dealiased or not (leaving dealiased-out modes explicit makes their
     stiff terms explicit). ``ky < 0`` rows pass through; the projector
     rebuilds them. ``mirror_rhs`` is the part of ``split_rhs`` that is the
-    mirror force (species it is nonzero for get the ``Nl N`` blocks). The
-    factorization is checked by the residual of one solve.
+    mirror force (species it is nonzero for get the ``Nl N`` blocks).
+    ``collision_rhs(G, F)`` is the collision operator alone, same convention:
+    given, every step ends with its local backward-Euler sub-step
+    (:class:`_LocalCollisions`), so ``nu`` does not bound ``dt``; the caller
+    then leaves collisions out of the explicit RHS. The factorization is
+    checked by the residual of one solve.
     """
     ns, nl, nm, _nky, _nkx, nz = shape
     split, fld = cached_jit(split_rhs), cached_jit(fields)
+    coll = None if collision_rhs is None else cached_jit(collision_rhs)
     zero = jnp.zeros(shape, dtype)
     zero_f = jnp.zeros_like(fld(zero))
     # Graph digests cover geometry and parameters bitwise: same deck+dt, same factor.
-    keyed = getattr(split, "key")(zero, zero_f), getattr(fld, "key")(zero)
+    keyed: tuple[Any, ...] = (
+        getattr(split, "key")(zero, zero_f),
+        getattr(fld, "key")(zero),
+    )
+    if coll is not None:
+        keyed += (getattr(coll, "key")(zero, zero_f),)
     bits = np.asarray(modes, bool).tobytes()
     reuse = (
         None if None in keyed else (*keyed, shape, dt, scheme, dtype, check_tol, bits)
@@ -1484,6 +1591,9 @@ def build_chain_implicit_linear(
             f"structured implicit factor residual {err:.2e} > {check_tol:.0e}: the "
             'stiff operator is not block-tridiagonal in Hermite with z-local fields; use method = "rk4-pi"'
         )
+    if coll is not None:
+        loc = _LocalCollisions(coll, fld, shape, dtype)
+        op = dataclasses.replace(op, collisions=loc, cfac=loc.factor(float(dt)))
     object.__setattr__(op, "_raw", tuple(raw for _g, raw in built))
     _FACTORS.update({reuse: op} if reuse else {})
     return op
@@ -1735,6 +1845,7 @@ def run_imex_diagnostic_scan(
 __all__ = [
     "ARS_TABLEAUX",
     "ChainImplicitLinear",
+    "collisions_bind",
     "IMEX_CHAIN_METHODS",
     "ImexDtControl",
     "StatsSolveStepFn",
