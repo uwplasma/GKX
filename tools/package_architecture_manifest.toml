@@ -1205,7 +1205,8 @@ recursive = true
 # 68397 -> 68421: EM bracket one FFT (#394), measured after merging main.
 # 68421 -> 68707: nodal mu grid (opt-in LinearParams.mu_vperp_max): rule, gyro factors, node-local mirror/drift/drive, Dougherty, Laguerre-mode seeds. Measured.
 # 68707 -> 68792: per-species reflectionless Hermite closure (LinearParams.closure) folded into the existing |k_z| hypercollision source, so it shares the linked transform and every damping route. Measured.
-baseline = 68792
+# 68792 -> 68793: mixed species-Hermite route refuses the closure only when params are concrete (a traced bool broke jitted routes), measured.
+baseline = 68793
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1565,7 +1566,8 @@ recursive = true
 # 63557 -> 63571: EM bracket one FFT (#394), measured after merging main.
 # 63571 -> 64074: nodal mu grid tests (equivalence, conservation, free energy, quadrature, Landau, zonal residual, Dougherty, Cyclone rates, refusals). Measured.
 # 64074 -> 64148: species-closure gate (closed species feels only the last-moment sink, the other is bitwise unchanged), plus the runtime-config mapping. Measured.
-baseline = 64148
+# 64148 -> 64164: closure-route refusal test, TOML mapping and config validation asserts, measured.
+baseline = 64164
 target = 35000
 
 [[line_budget_policy.counts]]

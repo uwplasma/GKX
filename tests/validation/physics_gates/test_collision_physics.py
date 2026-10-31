@@ -2315,3 +2315,10 @@ def test_species_closure_replaces_that_species_kz_hypercollisions() -> None:
         (RuntimeSpeciesConfig(), RuntimeSpeciesConfig(hermite_closure="reflectionless"))
     )
     assert [row.closure for row in rows] == [0.0, 1.0]
+
+    from gkx.workflows.runtime.toml import _runtime_species_from_toml
+
+    parsed = _runtime_species_from_toml([{"hermite_closure": "reflectionless"}])
+    assert parsed is not None and parsed[0].hermite_closure == "reflectionless"
+    with pytest.raises(ValueError, match="hermite_closure"):
+        RuntimeSpeciesConfig(hermite_closure="reflectionles")

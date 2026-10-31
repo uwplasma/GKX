@@ -11,6 +11,7 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     _as_species_array,
+    _is_tracer,
     linear_terms_to_term_config,
 )
 from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
@@ -110,7 +111,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         raise NotImplementedError(
             "mixed routing requires the standard factorized collision operator"
         )
-    if bool(jnp.any(jnp.asarray(params.closure) != 0.0)):
+    if not _is_tracer(params.closure) and bool(jnp.any(jnp.asarray(params.closure))):
         raise NotImplementedError(
             "mixed species-Hermite routing does not support the reflectionless closure"
         )

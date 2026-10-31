@@ -90,6 +90,7 @@ and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
 |---|---|---|
 | Geometry | s-alpha, Miller, VMEC/VMEX, imported | `[geometry] model`; `gkx wout_*.nc` for any VMEC |
 | Velocity space | Hermite-Laguerre, `(Nl, Nm)` | hypercollisions damp the last Hermite moments |
+| Hermite closure (opt-in) | `[[species]] hermite_closure = "reflectionless"` | absorbing last-moment closure per species: TEM growth rate +4-11% at `Nm` 16, +1-2% at `Nm` >= 48; not the default ([numerics](docs/numerics.rst)) |
 | Perpendicular velocity (opt-in) | nodal `mu` grid: `[run] mu_vperp_max = 4.0`, `Nl` = nodes | linear runs; 8 nodes match Laguerre `Nl` 16-24 on Cyclone at 5-12x less cost; flat convergence on TEM and KBM ([numerics](docs/numerics.rst)) |
 | Collisions | linearized Landau | conserving, H-theorem; Dougherty, Sugama alternatives ([operators](docs/operators.rst)) |
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
