@@ -1069,6 +1069,7 @@ class _LocalCollisions:
 
         cols = jnp.concatenate([columns(i0) for i0 in range(0, n, npts)], 1)[:, :n]
         self.cmat = np.asarray(cols, np.complex128).real
+        self.rho = float(np.abs(np.linalg.eigvals(self.cmat)).max())  # explicit bound
         rng = np.random.default_rng(0)  # the same matrix at every point?
         x = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape), dtype)
         err = float(jnp.abs(coll(x, zero_f) - _slots(jnp.asarray(self.cmat), x)).max())
@@ -1096,6 +1097,26 @@ class _LocalCollisions:
         z = _slots(ainv, G)
         f = jnp.einsum("yxzfg,gyxz->fyxz", cap, self.fields(z), precision=_HI)
         return z + tau * _slots(ainv, self.coll(jnp.zeros_like(G), f))
+
+
+# Explicit ARK3 stays stable to rho(C) dt = 2.5 (measured on Cyclone KE nu_e 3, 12);
+# the sub-step is only used from 2.
+COLLISION_STIFFNESS = 2.0
+# The sub-step's splitting error grows ~ (rho dt)^(1/2) and the embedded estimate
+# does not see it; adaptive dt stays below 5 (Cyclone KE nu_e 12: flux error 2.4% at
+# 5.3, 4.9% at 21; W7-X 7% and 22%).
+COLLISION_DT_CAP = 5.0
+
+
+def collisions_bind(collision_rhs, fields, shape, dtype, dt: float) -> bool:
+    """True if explicit collisions would bound ``dt``: ``rho(C) dt`` past the limit."""
+    try:
+        loc = _LocalCollisions(
+            cached_jit(collision_rhs), cached_jit(fields), shape, dtype
+        )
+    except ValueError:  # not one matrix at every point: stays explicit
+        return False
+    return loc.rho * dt > COLLISION_STIFFNESS
 
 
 def _unit(n: int, j: jnp.ndarray, dtype) -> jnp.ndarray:
@@ -1308,7 +1329,8 @@ class ImexDtControl:
     """Chunk-level dt for the chain IMEX step (``fixed_dt = false``).
 
     Between chunks: ``dt = min(cfl 17 / w_nl, cfl 2.5 / rho, dt_err,
-    dt_max)``. ``rho`` is the spectral radius of the explicit linear remainder
+    dt_max)`` (``dt_max`` also stays below ``COLLISION_DT_CAP / rho(C)`` when
+    collisions are a sub-step). ``rho`` is the spectral radius of the explicit linear remainder
     (drifts, ion mirror, drive) by Arnoldi at startup and 2.5 the measured
     ARK3/ARS3 interval on it (0.82 x 3.6); ``w_nl`` the bracket CFL rate of the
     current fields; 17 = 10 x 1.7: Cyclone KE 32x32 stays finite and within 2 SE of
@@ -1321,6 +1343,8 @@ class ImexDtControl:
     def __init__(self, op, cfl_rate, *, dt_max, cfl=0.9, rtol=1e-2, iters=20):
         rhs, project = op.__dict__["_rhs"]
         self.cfl, self.rtol, self.dt_max = float(cfl), float(rtol), float(dt_max)
+        if op.collisions is not None:  # the sub-step's splitting error is not in err
+            self.dt_max = min(self.dt_max, COLLISION_DT_CAP / op.collisions.rho)
 
         def probe(op, G):
             dG, fields = rhs(G)
@@ -1448,7 +1472,10 @@ def build_chain_implicit_linear(
     zero = jnp.zeros(shape, dtype)
     zero_f = jnp.zeros_like(fld(zero))
     # Graph digests cover geometry and parameters bitwise: same deck+dt, same factor.
-    keyed = getattr(split, "key")(zero, zero_f), getattr(fld, "key")(zero)
+    keyed: tuple[Any, ...] = (
+        getattr(split, "key")(zero, zero_f),
+        getattr(fld, "key")(zero),
+    )
     if coll is not None:
         keyed += (getattr(coll, "key")(zero, zero_f),)
     bits = np.asarray(modes, bool).tobytes()
@@ -1818,6 +1845,7 @@ def run_imex_diagnostic_scan(
 __all__ = [
     "ARS_TABLEAUX",
     "ChainImplicitLinear",
+    "collisions_bind",
     "IMEX_CHAIN_METHODS",
     "ImexDtControl",
     "StatsSolveStepFn",

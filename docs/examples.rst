@@ -336,9 +336,10 @@ dominant linear eigenvalue of the tutorial linear deck moves by
 implicit -- parallel streaming with its dissipation (end damping,
 hypercollisions, hyperdiffusion), the field response and the electron mirror
 force; drifts, the ion mirror and drive stay explicit with the bracket. The
-Landau collision operator is a local backward-Euler sub-step after each step
-(``collision_scheme = "implicit"``, the default), so :math:`\nu_e` does not bound
-``dt``; ``"explicit"`` keeps it in the RHS. These couple modes only
+Landau collision operator stays in the RHS, unless it would bound ``dt``
+(:math:`\rho(C)\,\mathrm{d}t > 2`, :math:`\nu_e \gtrsim 5` at ``dt`` 0.05): then it is
+a local backward-Euler sub-step after each step (``collision_scheme =
+"implicit"``, the default; ``"explicit"`` never uses it). These couple modes only
 along one twist-shift chain, and per chain the operator is :math:`S+UQ`:
 :math:`S` block-tridiagonal in Hermite with one :math:`N\times N` block per
 row (:math:`N` = links :math:`\times N_z`; the off-diagonal blocks are the

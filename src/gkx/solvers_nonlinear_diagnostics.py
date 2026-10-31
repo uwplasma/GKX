@@ -102,6 +102,7 @@ from gkx.solvers_nonlinear_imex import (
     ProjectFn,
     SolveStepFn,
     StatsSolveStepFn,
+    collisions_bind,
     integrate_cached_imex_scan,
     make_imex_diagnostic_step,
     make_imex_nonlinear_term,
@@ -795,13 +796,24 @@ def _build_explicit_scan_closures(
     """Build diagnostic scan closures after state and policies are prepared."""
 
     chain_terms = policies.collision_policy.rhs_terms
-    # Chain IMEX: the Landau operator is a local implicit sub-step, not in the RHS.
+    # Chain IMEX: when explicit collisions would bound dt, the Landau operator is
+    # a local implicit sub-step instead of part of the RHS.
     implicit_collisions = (
         options.method in {"imex-ars3", "imex-ark3"}
         and options.collision_scheme == "implicit"
+        and options.fixed_dt
         and getattr(prepared.cache, "landau_pairs", None) is not None
         and float(chain_terms.collisions) != 0.0
+        and jnp.asarray(prepared.G0).ndim == 6
     )
+    if implicit_collisions:
+        _, fields, _, coll = stiff_linear_split(
+            prepared.cache, params, chain_terms, compute_fields_cached
+        )
+        G0 = jnp.asarray(prepared.G0)
+        implicit_collisions = collisions_bind(
+            coll, fields, tuple(G0.shape), G0.dtype, options.dt
+        )
     if implicit_collisions:
         policies = replace(
             policies,
