@@ -825,7 +825,7 @@ def linear_rhs_electrostatic_species_sharded(
         tau_e=params.tau_e,
         charge=species_values[0],
         density=species_values[1],
-        tz=species_values[-1],
+        tz=species_values[_SPECIES_PARAM_NAMES.index("tz")],
         mask0=cache.mask0,
         devices=device_list,
         axis_name="species",

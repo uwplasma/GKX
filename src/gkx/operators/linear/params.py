@@ -52,6 +52,7 @@ class Species:
     tprim: float
     fprim: float
     nu: float = 0.0
+    closure: float = 0.0
 
 
 #: Retired :class:`LinearParams` field names, mapped to what replaced them. The
@@ -158,6 +159,10 @@ class LinearParams:
     p_hyper_lm: float = 6.0
     hypercollisions_const: float = 1.0
     hypercollisions_kz: float = 0.0
+    #: Per species, 1 closes the Hermite hierarchy with the reflectionless
+    #: sink on the last moment (:func:`hermite_closure_profile`) and drops that
+    #: species' ``|k_z|`` hypercollisions; 0 keeps the hypercollisions.
+    closure: float | jnp.ndarray = 0.0
     D_hyper: float = 0.0
     p_hyper_kperp: float = 2.0
     damp_ends_widthfrac: float | jnp.ndarray = 0.125
@@ -262,6 +267,7 @@ class LinearParams:
             self.p_hyper_lm,
             self.hypercollisions_const,
             self.hypercollisions_kz,
+            self.closure,
             self.D_hyper,
             self.p_hyper_kperp,
             self.damp_ends_widthfrac,
@@ -298,6 +304,7 @@ _SPECIES_PARAM_NAMES = (
     "tprim_e",
     "nu",
     "tz",
+    "closure",
 )
 
 
@@ -352,6 +359,7 @@ def build_linear_params(
         tprim=array("tprim"),
         fprim=array("fprim"),
         nu=array("nu"),
+        closure=array("closure"),
         **overrides,
     )
 

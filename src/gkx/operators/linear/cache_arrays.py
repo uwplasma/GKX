@@ -10,6 +10,7 @@ import numpy as np
 from dataclasses import replace
 
 from gkx.core_velocity import J_l_all, mu_grid_lb_rate, mu_grid_nodes
+from gkx.operators.linear.dissipation import hermite_closure_profile
 from gkx.operators.linear.params import LinearParams, _as_species_array, _is_tracer
 from gkx.operators.linear.streaming import shift_axis
 
@@ -258,9 +259,16 @@ def hypercollision_kz_coefficient(
         * vth_s
         * jnp.abs(jnp.asarray(params.kpar_scale, dtype=real_dtype))
     )
-    return jnp.asarray(params.hypercollisions_kz, dtype=real_dtype) * jnp.where(
+    rate = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype) * jnp.where(
         cache.mask_kz, nu_hyp_m * cache.m_pow.astype(real_dtype), 0.0
     )
+    if vth.ndim == 0:
+        return rate
+    closure = jnp.asarray(params.closure, dtype=real_dtype)
+    closure = jnp.broadcast_to(closure, vth.shape)[:, None, None, None, None, None]
+    sink = hermite_closure_profile(int(cache.m.shape[1])) * vth_s
+    sink = sink * jnp.abs(jnp.asarray(params.kpar_scale, dtype=real_dtype))
+    return (1.0 - closure) * rate + closure * sink
 
 
 def collision_damping(

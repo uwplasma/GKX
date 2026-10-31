@@ -503,6 +503,8 @@ Four traps give plausible but wrong numbers (all gated in
 4. ``tau_e`` is :math:`T_i/T_e`; the reciprocal is invisible at :math:`T_e=T_i`.
    GKX normalizes to :math:`v_{ti}=\sqrt{T/m}`, not :math:`\sqrt{2T/m}`.
 
+.. _hermite-closure:
+
 Hermite closure and recurrence
 ------------------------------
 
@@ -517,8 +519,10 @@ of high moments with the :math:`|k_z|`-scaled branch
 :math:`\propto \nu_{hyper,m}|k_z|(m/M)^{p_m}` (``nu_hyper_m``, ``p_hyper_m``;
 :doc:`operators`).
 
-**Reflectionless closure** (opt-in, Python API
-``hermite_closure="reflectionless"``) applies the outgoing-wave condition of
+**Reflectionless closure** (opt-in per species with ``[[species]]
+hermite_closure = "reflectionless"``, ``LinearParams.closure``; in the Python
+streaming kernel ``hermite_closure="reflectionless"``) applies the
+outgoing-wave condition of
 Kanekar et al., *J. Plasma Phys.* **81**, 305810104 (2015), Eq. (4.36):
 
 .. math::
@@ -538,6 +542,95 @@ treatment to cut the revived :math:`|g_0|` below a tenth of truncation's and
 to keep the pre-recurrence error below 0.1, since suppression alone rewards any
 strong damping. It carries no free parameter but is not a drop-in replacement
 for a tuned hypercollision.
+
+For a species with ``hermite_closure = "reflectionless"`` the sink replaces that
+species' :math:`|k_z|` hypercollision band; it reuses the linked parallel
+transform of that branch (no extra FFT) and appears in the explicit, implicit
+and Hermite-windowed routes. It acts only where ``[physics] hypercollisions``
+is on. Other species, and the constant Laguerre branch and collision operator
+of the closed species, are untouched; with the key omitted the right-hand side
+is bitwise the one without the closure. The mixed species-Hermite electrostatic
+route refuses it.
+
+*Measured effect.* Dannert-Jenko trapped-electron mode (Miller :math:`q=1.4`,
+:math:`\hat s=0.8`, :math:`T_e/T_i=3`, :math:`R/L_n=3`, :math:`R/L_{Te}=6`,
+:math:`m_i/m_e=1836`, :math:`\beta_e=10^{-3}`, :math:`A_\parallel`,
+:math:`N_l=8`, ``rk4``, float64). Linear growth rate, hypercollision / closure,
+against GS2:
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`k_y\rho_s`
+     - ``Nm`` 16
+     - ``Nm`` 32
+     - ``Nm`` 48
+     - ``Nm`` 96
+     - GS2
+   * - 0.2
+     - 0.349 / 0.388
+     - 0.468 / 0.487
+     - 0.531 / 0.537
+     - 0.601 / 0.613
+     - 0.675
+   * - 0.3
+     - 0.624 / 0.661
+     - 0.786 / 0.806
+     - 0.855 / 0.865
+     - 0.938 / 0.949
+     - 1.005
+   * - 0.5
+     - 0.991 / 1.028
+     - 1.203 / 1.229
+     - 1.282 / 1.298
+     - 1.367 / 1.378
+     - 1.402
+
+The closure raises :math:`\gamma` by 4 to 11 % at ``Nm`` 16 and by 1 to 2 % at
+``Nm`` :math:`\ge` 48; at :math:`k_y\rho_s = 0.3`, ``Nm`` 192 gives 0.969 /
+0.974. The frequency does not move (-0.922 / -0.923 at ``Nm`` 96), and the
+:math:`\gamma` deficit against GS2 at ``Nm`` 48 is 21/15/9 % with hypercollisions
+and 20/14/7 % with the closure. Electron-temperature-gradient mode (GS2
+:math:`k_y=10`, 3.988 / -6.212, :math:`N_l=24`): ``Nm`` 32 3.988 / -6.227 against
+3.986 / -6.229, ``Nm`` 16 4.022 / -6.200 against 4.028 / -6.202, so no
+degradation where hypercollisions already converge. The explicit step bound is
+unchanged: the Arnoldi radius of streaming, fields and the Hermite damping is
+4887 / 10157 / 15009 (hypercollisions) and 5523 / 10717 / 15708 (closure) at
+``Nm`` 16 / 48 / 96, equal to streaming alone within 1 %, and the wall time at
+``Nm`` 48 is 181 s against 182 s.
+
+*Nonlinear check.* The same trapped-electron case as a small nonlinear box
+(:math:`8\times8\times32`, :math:`N_l=4`, random initial phases, ``rk4``,
+electromagnetic, same seed for every row), once with each closure on the
+electrons. The effective growth rate of :math:`W_\phi` before saturation is
+0.95 to 0.97 at ``Nm`` 16 with hypercollisions, 1.02 to 1.03 with the closure
+and 1.40 to 1.41 at ``Nm`` 48 (1.44 with the closure): the closure moves the
+nonlinear growth by the same few percent as the linear rate, and both ``Nm`` 16
+values are far below ``Nm`` 48.
+After the first burst, :math:`t = 18` to 30, the mean electron heat flux is
+135 :math:`\pm` 7 (hypercollisions) and 176 :math:`\pm` 6 (closure) at ``Nm`` 16,
+and 248 :math:`\pm` 36 and 371 :math:`\pm` 103 at ``Nm`` 32 (GKX units;
+:math:`\pm` is the spread of four time blocks; one seed, one box). The flux
+rises with ``Nm`` and the closure moves it the same way, recovering about a
+third of the ``Nm`` 16 to 32 step at ``Nm`` 16, but it is higher than the
+hypercollision value at both ``Nm`` (+31 % and +50 %, the second within the
+scatter) and is not shown to converge faster. All runs are stable and finite.
+The saturated flux depends on the closure by more than the linear rate does, so
+a switch changes pinned nonlinear baselines.
+
+*When to use it.* It is a better truncation than the hypercollision band at the
+same ``Nm``, but a modest one: it does not remove the Hermite resolution error.
+Use it for kinetic electrons when ``Nm`` is limited by cost and the
+trapped-electron or ETG growth rate matters to a few percent, and compare it
+with the default at two ``Nm`` before trusting either. Keep the default for
+ions, for any species at ``Nm`` :math:`\ge` 48 (the gain is 1 to 2 %, below
+what a pinned baseline tolerates), and wherever a reference deck sets
+hypercollisions deliberately. It is not on by default for kinetic electrons:
+at ``Nm`` 16 the growth rate is still 27 to 43 % below GS2 with it (29 to
+48 % without), and the remainder, 2 to 9 % at ``Nm`` 96, is resolution of the
+trapped-passing structure (``Nm`` 192 still moves). The closure costs nothing
+extra but cannot be tuned: a deck that needs more damping of the top moments
+has to keep the hypercollision band.
 
 Operator assembly
 -----------------
