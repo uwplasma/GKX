@@ -605,13 +605,18 @@ electromagnetic, same seed for every row), once with each closure on the
 electrons. The effective growth rate of :math:`W_\phi` before saturation is
 0.95 to 0.97 at ``Nm`` 16 with hypercollisions, 1.02 to 1.03 with the closure
 and 1.40 to 1.41 at ``Nm`` 48 (1.44 with the closure): the closure moves the
-nonlinear growth the same few percent as the linear rate, far from converged.
-After the first burst, :math:`t = 18` to 30, the electron heat flux at ``Nm`` 16
-is 135 :math:`\pm` 7 with hypercollisions and 176 :math:`\pm` 6 with the
-closure (+31 %), the ion flux 10.6 :math:`\pm` 1.8 and 12.4 :math:`\pm` 1.3 (GKX
-units; :math:`\pm` is the spread of four time blocks). Both runs are stable and
-finite, but the saturated flux depends on the closure by more than the linear
-rate does, so a switch changes pinned nonlinear baselines.
+nonlinear growth by the same few percent as the linear rate, and both ``Nm`` 16
+values are far below ``Nm`` 48.
+After the first burst, :math:`t = 18` to 30, the mean electron heat flux is
+135 :math:`\pm` 7 (hypercollisions) and 176 :math:`\pm` 6 (closure) at ``Nm`` 16,
+and 248 :math:`\pm` 36 and 371 :math:`\pm` 103 at ``Nm`` 32 (GKX units;
+:math:`\pm` is the spread of four time blocks; one seed, one box). The flux
+rises with ``Nm`` and the closure moves it the same way, recovering about a
+third of the ``Nm`` 16 to 32 step at ``Nm`` 16, but it is higher than the
+hypercollision value at both ``Nm`` (+31 % and +50 %, the second within the
+scatter) and is not shown to converge faster. All runs are stable and finite.
+The saturated flux depends on the closure by more than the linear rate does, so
+a switch changes pinned nonlinear baselines.
 
 *When to use it.* It is a better truncation than the hypercollision band at the
 same ``Nm``, but a modest one: it does not remove the Hermite resolution error.

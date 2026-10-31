@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import jax.numpy as jnp
+import numpy as np
 
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
@@ -27,7 +28,6 @@ def _species_hermite_mesh_and_state_sharding(
 ):
     """Return the validated mixed mesh and state sharding."""
 
-    import numpy as np
     from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
     device_list = _resolve_parallel_devices(
@@ -111,7 +111,7 @@ def linear_rhs_electrostatic_species_hermite_sharded(
         raise NotImplementedError(
             "mixed routing requires the standard factorized collision operator"
         )
-    if not _is_tracer(params.closure) and bool(jnp.any(jnp.asarray(params.closure))):
+    if not _is_tracer(params.closure) and np.any(np.asarray(params.closure)):
         raise NotImplementedError(
             "mixed species-Hermite routing does not support the reflectionless closure"
         )
