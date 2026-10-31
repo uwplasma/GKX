@@ -212,6 +212,11 @@ RHS because its field-particle correction is not diagonal. The
 ``implicit`` (backward-Euler), ``exp`` (exact diagonal exponential), and
 ``sts``/``rkc`` aliases (treated as stabilized explicit/exponential updates for
 diagonal operators).
+With ``method = "imex-ars3"`` or ``"imex-ark3"`` and the default Landau
+operator, ``collision_scheme = "implicit"`` also advances the full conserving
+collision operator, field-particle part included, by a local backward-Euler
+sub-step after each step (density, momentum and energy are conserved to
+rounding); any other value keeps it in the explicit RHS.
 
 Geometry controls
 -----------------

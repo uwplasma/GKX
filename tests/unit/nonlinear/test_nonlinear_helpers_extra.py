@@ -11,6 +11,7 @@ from gkx import runtime as rt
 from gkx.core_grid import build_spectral_grid
 from gkx.geometry.core import apply_geometry_grid_defaults
 from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.operators.linear.dissipation import multispecies_collision_invariant_rates
 from gkx.operators.nonlinear.policies import measured_streaming_frequency
 from gkx.solvers_nonlinear_imex import (
     ARS_TABLEAUX,
@@ -2279,11 +2280,20 @@ def test_window_adjoint_shared_graph_is_not_stale_for_a_new_geometry(case_grid):
 KE_NL, KE_NM = 2, 3
 
 
-def _tiny_kinetic_electron_box(layout: str = "half"):
+def _tiny_kinetic_electron_box(layout: str = "half", nu: float = 0.0):
     cfg = load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
     cfg = replace(
         cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8, ntheta=8, ky_layout=layout)
     )
+    if nu:  # ion rate nu, electron rate nu / sqrt(m_e / m_i)
+        ion, electron = cfg.species
+        cfg = replace(
+            cfg,
+            species=(
+                replace(ion, nu=nu),
+                replace(electron, nu=nu / electron.mass**0.5),
+            ),
+        )
     geom = rt.build_runtime_geometry(cfg)
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
     params = rt.build_runtime_linear_params(cfg, Nm=KE_NM, geom=geom)
@@ -2326,7 +2336,7 @@ def test_measured_streaming_frequency_skips_adiabatic_like_decks():
 def test_chain_solve_inverts_the_stiff_linear_operator():
     cfg, params, cache, shape = _tiny_kinetic_electron_box()
     terms = rt.build_runtime_term_config(cfg)
-    split, fields, mirror = stiff_linear_split(
+    split, fields, mirror, _coll = stiff_linear_split(
         cache, params, terms, compute_fields_cached
     )
     dt = 0.05
@@ -2355,6 +2365,74 @@ def test_chain_solve_inverts_the_stiff_linear_operator():
     assert jax.tree.structure(op2) == jax.tree.structure(op)
     x = op2.solve(G - gamma * 4 * dt * op.linear(G))
     assert float(jnp.linalg.norm(x - G) / jnp.linalg.norm(G)) < 2e-3
+
+
+def test_chain_collisions_are_a_conserving_local_implicit_substep():
+    cfg, params, cache, shape = _tiny_kinetic_electron_box(nu=0.05)
+    terms = rt.build_runtime_term_config(cfg)
+    split, fields, mirror, coll = stiff_linear_split(
+        cache, params, terms, compute_fields_cached
+    )
+    op = build_chain_implicit_linear(
+        split,
+        fields,
+        shape,
+        0.05,
+        modes=np.ones(shape[3:5], bool),
+        scheme="imex-ars3",
+        dtype=jnp.complex128,
+        mirror_rhs=mirror,
+        collision_rhs=coll,
+    )
+    key = jax.random.PRNGKey(3)
+    G = jax.random.normal(key, shape) + 1j * jax.random.normal(key + 1, shape)
+    # tau = 100 dt: far beyond the explicit bound, 1 / tau still resolves C.
+    tau = 5.0
+    y = op.collisions.apply(G, op.collisions.factor(tau), tau)
+    # It solves (I - tau C_H) y = G with C_H the operator acting on H(G).
+    residual = y - tau * coll(y, fields(y)) - G
+    assert float(jnp.linalg.norm(residual) / jnp.linalg.norm(G)) < 1e-12
+    # Particle number, total momentum and total energy are untouched.
+    rates = multispecies_collision_invariant_rates(
+        y - G, density=params.density, mass=params.mass, temperature=params.temp
+    )
+    for rate in rates:
+        assert float(jnp.abs(rate).max()) < 1e-9 * float(jnp.abs(G).max())
+    assert float(jnp.linalg.norm(y - G)) > 0.1 * float(jnp.linalg.norm(G))
+    # A new dt refactors the sub-step too, keeping the pytree structure.
+    again = refactor_chain_implicit_linear(op, 4 * 0.05)
+    assert jax.tree.structure(again) == jax.tree.structure(op)
+    assert not np.allclose(again.cfac[0], op.cfac[0])
+
+
+def test_chain_imex_dt_is_not_bound_by_the_electron_collision_rate():
+    """nu_e rho(C) dt = 7: past the explicit bound, finite with the sub-step."""
+    import gkx
+
+    deck = gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    ion, electron = deck.species
+    case = deck.replace(
+        species=(replace(ion, nu=0.6), replace(electron, nu=36.5)),
+        grid=replace(deck.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            deck.time,
+            method="imex-ars3",
+            fixed_dt=True,
+            dt=0.05,
+            t_max=2.0,
+            run_to="t_max",
+        ),
+    )
+
+    def run(scheme):
+        timed = replace(case.time, collision_scheme=scheme)
+        return gkx.solve(
+            case.replace(time=timed), ky_target=case.run.ky, Nl=2, Nm=3
+        ).diagnostics
+
+    assert np.isfinite(np.asarray(run("implicit").Wg_t)).all()
+    with pytest.raises(RuntimeError, match="non-finite"):
+        run("explicit")
 
 
 def test_second_identical_solve_compiles_nothing_and_repeats_bits():
@@ -2413,7 +2491,7 @@ def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
     modes = np.ones(shape[3:5], bool)
 
     def build(dt):
-        split, fields, mirror = stiff_linear_split(
+        split, fields, mirror, _coll = stiff_linear_split(
             cache, params, terms, compute_fields_cached
         )
         return build_chain_implicit_linear(

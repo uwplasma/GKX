@@ -544,8 +544,11 @@ and ``bpar``; ``context.hamiltonian`` follows the same enabled-field policy as
 the gyrokinetic RHS.
 
 The ``[time] collision_split`` policy splits only diagonal hypercollisions. The
-conserving collision term stays in the Runge--Kutta or IMEX RHS, with its
-field-particle corrections.
+conserving collision term stays in the Runge--Kutta RHS, with its
+field-particle corrections; the chain IMEX steps (``imex-ars3``, ``imex-ark3``)
+advance the Landau operator by a local backward-Euler sub-step instead
+(``collision_scheme = "implicit"``), which removes :math:`\nu_e` from the
+step-size bound.
 
 Diagnostics in ``src/gkx/operators/linear/dissipation.py``:
 
