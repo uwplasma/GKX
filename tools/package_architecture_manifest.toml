@@ -548,20 +548,6 @@ baseline_lines = 1023
 target_lines = 1000
 reason = "One command table keeps the CLI subcommands parsing and dispatching consistently; reduce the per-command duplication rather than splitting the table."
 
-[[complexity_policy.exceptions]]
-path = "terms/assembly.py"
-# 1199 -> 1208: per-species Hermite closure (#403) crosses the 1200 tripwire after the per-species moment groups (#401): the closure array, its hypercollision pass-through and the static-zero guard.
-baseline_lines = 1208
-target_lines = 1200
-reason = "The species arrays, the shared linked-streaming transform and the damping contributions read the same per-species fields; splitting them would leave a helper with one consumer."
-
-[[complexity_policy.exceptions]]
-path = "workflows/runtime/startup.py"
-# 1200 -> 1201: the species-to-linear mapping carries the Hermite closure flag (#403).
-baseline_lines = 1201
-target_lines = 1200
-reason = "Deck-to-params startup keeps the species mapping, resolution defaults and refusals in one place; splitting it would leave a helper with one consumer."
-
 [line_budget_policy]
 mode = "no_regression_until_target"
 description = "Track real code deletion rather than file reshuffling."
@@ -1227,7 +1213,8 @@ recursive = true
 # bracket (LinearCache.groups), the kinetic-electron fallback counts. Measured.
 # 69106 -> 69180: per-species reflectionless Hermite closure (LinearParams.closure) folded into the existing |k_z| hypercollision source, so it shares the linked transform and every damping route. Measured.
 # 69180 -> 69183: the log-linear growth-fit fallback requires a late-time share of the run, so a few-sample transient window cannot be reported as a rate. Measured.
-baseline = 69183
+# 69183 -> 69159: terms/assembly.py (1208 -> 1191) and workflows/runtime/startup.py (1201 -> 1194) back under the 1200-line tripwire by collapsing duplicated field-by-field assembly; both exceptions deleted. Measured.
+baseline = 69159
 target = 45000
 
 [[line_budget_policy.counts]]

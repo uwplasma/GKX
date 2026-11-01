@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields as dataclass_fields
 import functools
 from typing import Any, Callable, Tuple
 
@@ -239,19 +239,17 @@ def _normalized_rhs_state(G: jnp.ndarray, cache: LinearCache) -> _RHSState:
 def _species_arrays(params: LinearParams, ns: int, real_dtype: Any) -> _SpeciesArrays:
     """Expand scalar or per-species parameters into arrays used by RHS terms."""
 
+    def array(name: str, attr: str | None = None) -> jnp.ndarray:
+        attr = attr or name
+        return _as_species_array(getattr(params, attr), ns, attr).astype(real_dtype)
+
     return _SpeciesArrays(
-        charge=_as_species_array(params.charge_sign, ns, "charge_sign").astype(
-            real_dtype
-        ),
-        density=_as_species_array(params.density, ns, "density").astype(real_dtype),
-        mass=_as_species_array(params.mass, ns, "mass").astype(real_dtype),
-        temp=_as_species_array(params.temp, ns, "temp").astype(real_dtype),
-        tz=_as_species_array(params.tz, ns, "tz").astype(real_dtype),
-        vth=_as_species_array(params.vth, ns, "vth").astype(real_dtype),
-        tprim=_as_species_array(params.tprim, ns, "tprim").astype(real_dtype),
-        fprim=_as_species_array(params.fprim, ns, "fprim").astype(real_dtype),
-        nu=_as_species_array(params.nu, ns, "nu").astype(real_dtype),
-        closure=_as_species_array(params.closure, ns, "closure").astype(real_dtype),
+        charge=array("charge", "charge_sign"),
+        **{
+            f.name: array(f.name)
+            for f in dataclass_fields(_SpeciesArrays)
+            if f.name != "charge"
+        },
     )
 
 
@@ -292,19 +290,14 @@ def _term_weights(
 ) -> _TermWeights:
     """Return term weights in the active real dtype."""
 
+    weights = {
+        f.name: jnp.asarray(getattr(term_cfg, f.name), dtype=real_dtype)
+        for f in dataclass_fields(_TermWeights)
+        if f.name != "fapar"
+    }
     w_apar = jnp.asarray(term_cfg.apar, dtype=real_dtype)
     return _TermWeights(
-        streaming=jnp.asarray(term_cfg.streaming, dtype=real_dtype),
-        mirror=jnp.asarray(term_cfg.mirror, dtype=real_dtype),
-        curvature=jnp.asarray(term_cfg.curvature, dtype=real_dtype),
-        gradb=jnp.asarray(term_cfg.gradb, dtype=real_dtype),
-        diamagnetic=jnp.asarray(term_cfg.diamagnetic, dtype=real_dtype),
-        collisions=jnp.asarray(term_cfg.collisions, dtype=real_dtype),
-        hypercollisions=jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype),
-        hyperdiffusion=jnp.asarray(term_cfg.hyperdiffusion, dtype=real_dtype),
-        end_damping=jnp.asarray(term_cfg.end_damping, dtype=real_dtype),
-        bpar=jnp.asarray(term_cfg.bpar, dtype=real_dtype),
-        fapar=jnp.asarray(params.fapar, dtype=real_dtype) * w_apar,
+        **weights, fapar=jnp.asarray(params.fapar, dtype=real_dtype) * w_apar
     )
 
 
@@ -845,15 +838,6 @@ def _assemble_normalized_rhs(
     return dG.astype(state.out_dtype)
 
 
-def _squeeze_species_rhs_outputs(
-    total: jnp.ndarray,
-    contrib: dict[str, jnp.ndarray],
-) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
-    """Remove the synthetic species axis from total and per-term outputs."""
-
-    return total[0], {key: arr[0] for key, arr in contrib.items()}
-
-
 def assemble_rhs_cached(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -1171,7 +1155,7 @@ def assemble_rhs_terms_cached(
     )
     total = _sum_rhs_terms(contrib)
     if state.squeeze_species:
-        total, contrib = _squeeze_species_rhs_outputs(total, contrib)
+        total, contrib = total[0], {key: arr[0] for key, arr in contrib.items()}
     return total.astype(state.out_dtype), rhs_fields.fields, contrib
 
 
@@ -1193,7 +1177,6 @@ __all__ = [
     "_scalar_params",
     "_solved_rhs_fields",
     "_species_arrays",
-    "_squeeze_species_rhs_outputs",
     "_streaming_contribution",
     "_sum_rhs_terms",
     "_term_weights",
