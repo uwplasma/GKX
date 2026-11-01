@@ -67,8 +67,8 @@ correlation time, at least 20 correlation times).
      - 9.82 +- 0.10 / 9.91 +- 0.09
    * - Cyclone, kinetic electrons, :math:`\beta` 1e-4, 32x32, (4, 8), t = 400
      - ``imex-ark3``
-     - 313 s / 737 s (2.4x)
-     - 1167 +- 20 / 1148 +- 25
+     - 450 s / 1434 s (3.2x)
+     - 1129 +- 14 / 1068 +- 18 (``rk4-pi`` 1162 +- 11 in 1123 s)
    * - Kinetic electrons, :math:`\beta` 1e-3, t = 60
      - ``rk4-pi``; ``imex-ark3`` measured 188 s against 129 s (0.7x)
      - (imex) 188 s / 129 s
@@ -121,6 +121,96 @@ the field response) and :math:`R` the drifts, mirror, drive and collisions.
    * - ``solver = "krylov"``/``"adaptive"``
      - linear growth rates: no time step at all
      - one mode per solve
+
+**Accuracy of the adaptive IMEX step.** ``imex-ark3`` keeps the embedded
+ARK3(2) error of each step below ``rtol`` = 1e-3 of the state norm. Against
+``rk4-pi`` (Cyclone, kinetic electrons, :math:`m_e/m_i` = 1/1836, 32x32x16,
+(4, 16), t = 120, A4000, heat-flux window mean over t = 30-120 with the Sokal
+standard error of each run, three random seeds):
+
+.. list-table::
+   :header-rows: 1
+
+   * - ``rtol``
+     - Steps
+     - Wall
+     - :math:`Q_i` against ``rk4-pi``
+     - :math:`Q_e` against ``rk4-pi``
+   * - ``rk4-pi``
+     - 37200
+     - 334-342 s
+     - 503, 507, 506
+     - 709, 724, 749
+   * - 1e-2 (before)
+     - 960-1090
+     - 165-201 s
+     - +34, +32, +30 (+6%)
+     - +47, +39, +17 (+5%)
+   * - 1e-3
+     - 2020-2140
+     - 204-222 s
+     - +3, -3, +10 (+0.7%)
+     - +12, +8, -33 (-0.6%)
+   * - 1e-4 (one seed)
+     - 4830
+     - 349 s
+     - -20 (-4%)
+     - +11 (+2%)
+
+Each window mean carries a standard error of 5-25, so one seed does not resolve
+the 1e-2 offset; all three seeds have it, and the 1e-3 offsets scatter about zero.
+Wall times include the 100-200 s of setup. The first turbulent burst is a
+trajectory comparison, which only holds until the peak: ``rk4`` runs at
+CFL 0.9, 0.45 and 0.225 (16x16x16, 1/100) agree to 0.1% through the onset and
+peak, then differ by 10-30% by t = 26-30 (chaotic divergence), so errors of 40%
+after the peak are not a property of the step. Up to the peak, against ``rk4`` CFL 0.45
+(window 12-22) or ``rk4-pi`` (32x32x16, window 10-20), the error of
+:math:`Q(t)` is:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Case
+     - 1e-2
+     - 1e-3
+     - 1e-4
+     - 3e-5
+   * - 16x16x16, 1/100: error, steps to t = 30
+     - 6.7%, 384
+     - 4.7%, 544
+     - 3.9%, 1088
+     - 0.2%, 1760
+   * - 16x16x16, 1/1836: error, steps to t = 25
+     - 4.2%, 256
+     - 8.4%, 288
+     - 0.4%, 608
+     - n/a
+   * - 16x16x16, 1/3670: error, steps to t = 25
+     - 3.0%, 288
+     - 4.0%, 320
+     - 1.0%, 672
+     - n/a
+   * - 32x32x16, 1/1836: error, steps to t = 22
+     - 5.2%, 224
+     - 5.2%, 256
+     - 2.6%, 416
+     - 0.4%, 704
+
+The onset time (:math:`Q` = 1e2 to 2e4) is within 0.05 of the reference
+(t = 12-20) at every tolerance, and a QA stellarator (16x16x32, t = 60) agrees
+over its first burst to 0.3% at 1e-2 and 0.1% at 1e-4. The peak error plateaus
+for 1e-2 to 1e-3 and drops only at 1e-4 and below, where the saturated phase
+takes 5x the steps of 1e-2, so 1e-3 is the default: it is the loosest
+tolerance whose seed-mean saturated flux agrees with ``rk4-pi``. The bracket
+constant (``dt`` bound ``17 / w_nl``) does not change the first-burst error: 2.5,
+4 and 8.5 at 1e-2 give 5.3%, 5.2% and 5.2% (320, 256, 224 steps; 224 at 17), and
+8.5 and 34 at 1e-4 repeat the result of 17 (2.6%, 416 steps). A bound of 4 costs
+2.6x the steps in the saturated phase (one seed) for about the flux offset of
+1e-3, so it stays 17. The error is not float32: the same 16x16x16, 1/100 runs in
+``float64`` give 14.7% against 14.5% at 1e-2 (window 12-23). With a fixed step
+``imex-ars3`` at 0.05 is 0.2% off at t = 20 and at 0.02 it is within 0.1% to
+t = 21 (0.6% at 22), while 0.1 and 0.15 go non-finite at the burst, so a fixed
+step needs the margin the adaptive controller gives.
 
 **Why IMEX helps.** With kinetic electrons the explicit step is set by
 electron streaming, :math:`\Delta t \lesssim 1/(v_{te}k_{z,\max})`, about

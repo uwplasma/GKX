@@ -196,7 +196,10 @@ measure, not a runtime/TOML absolute-flux predictor
 - **Eigenvalues:** the sparse direct shift-invert route certifies the Cyclone
   eigenpair at n = 3,072 in about 5 s against 32-36 s matrix-free.
 - **Kinetic electrons:** `imex-ars3` is 10x faster to solution than RK3 at
-  64x64x24, and does not pay on tutorial grids.
+  64x64x24, and does not pay on tutorial grids. The adaptive `imex-ark3`
+  default holds the error per step to 1e-3: its saturated heat flux averages within
+  1% of `rk4-pi` (three seeds, 32x32x16) at about 2x the steps of 1e-2, which
+  read 6% high ([guidance](docs/guidance.rst)).
 - **Parallel work:** independent `k_y` scans and ensembles run across devices
   with results identical to the serial run.
 
