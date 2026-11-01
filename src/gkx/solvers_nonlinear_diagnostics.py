@@ -733,6 +733,19 @@ def stiff_linear_split(
     return rhs(implicit_terms), fields, mirror_rhs, rhs(collision_terms)
 
 
+def species_moments(cache: Any) -> tuple[tuple[int, int], ...] | None:
+    """``(Nl, Nm)`` each species keeps in the zero-padded state (``None``: all alike)."""
+    return (
+        None
+        if cache.groups is None
+        else tuple(
+            (c.Jl.shape[1], c.m.size)
+            for c in cache.groups
+            for _ in range(c.Jl.shape[0])
+        )
+    )
+
+
 def _attach_chain_implicit_linear(
     rhs_fn: Callable[..., Any],
     prepared: _ExplicitPreparedState,
@@ -774,6 +787,7 @@ def _attach_chain_implicit_linear(
         dtype=G0.dtype,
         mirror_rhs=mirror_rhs,
         collision_rhs=collision_rhs if implicit_collisions else None,
+        moments=species_moments(prepared.cache),
     )
 
     def rhs_with_chain_linear(state: jnp.ndarray) -> Any:
@@ -812,7 +826,12 @@ def _build_explicit_scan_closures(
         )
         G0 = jnp.asarray(prepared.G0)
         implicit_collisions = collisions_bind(
-            coll, fields, tuple(G0.shape), G0.dtype, options.dt
+            coll,
+            fields,
+            tuple(G0.shape),
+            G0.dtype,
+            options.dt,
+            species_moments(prepared.cache),
         )
     if implicit_collisions:
         policies = replace(

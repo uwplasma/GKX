@@ -19,7 +19,8 @@ from gkx.solvers_nonlinear_imex import (
     collisions_bind,
     refactor_chain_implicit_linear,
 )
-from gkx.solvers_nonlinear_diagnostics import stiff_linear_split
+from gkx.operators.linear.cache_arrays import keep_moments
+from gkx.solvers_nonlinear_diagnostics import species_moments, stiff_linear_split
 from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
 from gkx.terms.assembly import assemble_rhs_cached, compute_fields_cached
 from gkx.terms.config import TermConfig
@@ -2281,7 +2282,13 @@ def test_window_adjoint_shared_graph_is_not_stale_for_a_new_geometry(case_grid):
 KE_NL, KE_NM = 2, 3
 
 
-def _tiny_kinetic_electron_box(layout: str = "half", nu: float = 0.0):
+def _tiny_kinetic_electron_box(
+    layout: str = "half",
+    nu: float = 0.0,
+    nl: int = KE_NL,
+    nm: int = KE_NM,
+    ion_counts=None,
+):
     cfg = load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
     cfg = replace(
         cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8, ntheta=8, ky_layout=layout)
@@ -2295,11 +2302,15 @@ def _tiny_kinetic_electron_box(layout: str = "half", nu: float = 0.0):
                 replace(electron, nu=nu / electron.mass**0.5),
             ),
         )
+    if ion_counts:  # the ion keeps fewer moments than the state
+        ions, electron = cfg.species
+        counts = dict(zip(("Nl", "Nm"), ion_counts))
+        cfg = replace(cfg, species=(replace(ions, **counts), electron))
     geom = rt.build_runtime_geometry(cfg)
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
-    params = rt.build_runtime_linear_params(cfg, Nm=KE_NM, geom=geom)
-    cache = build_linear_cache(grid, geom, params, KE_NL, KE_NM)
-    shape = (2, KE_NL, KE_NM, grid.ky.size, grid.kx.size, grid.z.size)
+    params = rt.build_runtime_linear_params(cfg, Nm=nm, geom=geom)
+    cache = build_linear_cache(grid, geom, params, nl, nm)
+    shape = (2, nl, nm, grid.ky.size, grid.kx.size, grid.z.size)
     return cfg, params, cache, shape
 
 
@@ -2366,6 +2377,49 @@ def test_chain_solve_inverts_the_stiff_linear_operator():
     assert jax.tree.structure(op2) == jax.tree.structure(op)
     x = op2.solve(G - gamma * 4 * dt * op.linear(G))
     assert float(jnp.linalg.norm(x - G) / jnp.linalg.norm(G)) < 2e-3
+
+
+def test_chain_factor_follows_each_species_moment_count():
+    """Ions keeping fewer moments: the factor and the collision sub-step shrink, same result."""
+    cfg, params, cache, shape = _tiny_kinetic_electron_box(
+        nu=0.05, nl=3, nm=6, ion_counts=(2, 4)
+    )
+    terms = rt.build_runtime_term_config(cfg)
+    split, fields, mirror, coll = stiff_linear_split(
+        cache, params, terms, compute_fields_cached
+    )
+    moments = species_moments(cache)
+    assert moments == ((2, 4), (3, 6))
+
+    def build(counts):
+        return build_chain_implicit_linear(
+            split,
+            fields,
+            shape,
+            0.05,
+            modes=np.ones(shape[3:5], bool),
+            scheme="imex-ars3",
+            dtype=jnp.complex128,
+            mirror_rhs=mirror,
+            collision_rhs=coll,
+            moments=counts,
+        )
+
+    grouped, padded = build(moments), build(None)
+    assert grouped.dims == ((2, 4), (3, 6)) and padded.dims == ((3, 6), (3, 6))
+    assert grouped.nbytes < 0.9 * padded.nbytes
+    key = jax.random.PRNGKey(3)
+    G = jax.random.normal(key, shape) + 1j * jax.random.normal(key + 1, shape)
+    G = keep_moments(G, params.moments)
+    ref = padded.solve(G)
+    assert float(jnp.abs(grouped.solve(G) - ref).max() / jnp.abs(ref).max()) < 1e-12
+    again = refactor_chain_implicit_linear(grouped, 0.1)
+    assert again.dims == grouped.dims
+    cols = grouped.collisions, padded.collisions
+    assert (cols[0].cmat.shape[0], cols[1].cmat.shape[0]) == (2 * 4 + 3 * 6, 36)
+    ya = cols[0].apply(G, cols[0].factor(5.0), 5.0)
+    yb = cols[1].apply(G, cols[1].factor(5.0), 5.0)
+    assert float(jnp.abs(ya - yb).max() / jnp.abs(yb).max()) < 1e-12
 
 
 def test_chain_collisions_are_a_conserving_local_implicit_substep():

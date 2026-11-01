@@ -204,8 +204,10 @@ Each species can keep its own `Nl` and `Nm`, so ions do not pay for the
 electrons' Hermite moments. Against uniform counts the growth rate agrees to
 1.6% on Cyclone ITG, TEM, ETG-range and QA stellarator decks and the nonlinear
 heat-flux window mean to 2%; an explicit 64x64x24 step is 1.1-1.9x faster in
-1.3-1.5x less memory. The implicit `imex` factor is built on the padded state
-and does not shrink ([guidance](docs/guidance.rst)).
+1.3-1.5x less memory. The implicit `imex` factor and collision sub-step also
+run at each species' own counts: with ions (8, 16) and electrons (4, 32) the
+32x32x16 factor is 3.3x smaller and a solve 2.2x faster, and 64x64x24 fits a
+16 GB GPU where the padded factor does not ([guidance](docs/guidance.rst)).
 
 ![Per-species moment counts against uniform counts](docs/_static/readme/readme_species_moments.png)
 
