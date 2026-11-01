@@ -655,7 +655,7 @@ the next larger counts of that species, as for ``[run]`` (:doc:`guidance`).
 *Not supported.* Hermite-sharded routes, a custom collision operator and the
 per-term diagnostic RHS raise ``NotImplementedError`` with unequal counts;
 ``mu_vperp_max`` refuses a species with fewer Laguerre nodes. ``imex-ars3`` and
-``imex-ark3`` run, but their implicit factor is built on the padded state.
+``imex-ark3`` factor and solve each species group at its own counts.
 
 Runtime parallelization controls
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

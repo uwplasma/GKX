@@ -451,10 +451,51 @@ One right-hand side at (12, 48): 147.6 ms and 5.5 GB uniform, 86.5 ms and
 (two groups launch twice the kernels), so the gain grows with the state. The
 state arrays keep the ``[run]`` extents, which sets the floor on memory.
 
-**Where it does not help.** ``imex-ars3``/``imex-ark3`` factor the implicit
-streaming on the padded state, so the factor, its memory and its solves do not
-shrink with a smaller ion count (the t = 100 run above takes 349-374 s with
-per-species counts against 390 s uniform at (8, 32)); the explicit part does. The state and restart
+**Implicit (IMEX) factor.** ``imex-ars3``/``imex-ark3`` build the block-Thomas
+factor, its field coupling and the collision sub-step per species group, at the
+counts each species keeps (zero rows above them stay the identity), so memory and
+solve time follow the counts. One A4000, float32, state at the ``[run]`` counts,
+electrons (4, 32), factor build plus one solve and one collision sub-step:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Grid, ions
+     - Factor, padded / per group
+     - Peak memory
+     - Solve, ms
+     - Build, s
+   * - 32x32x16, uniform (4, 32)
+     - 0.93 / 0.93 GB
+     - 1.29 / 1.29 GB
+     - 24.5 / 24.0
+     - 63 / 62
+   * - 32x32x16, ions (4, 16)
+     - 0.93 / 0.85 GB
+     - 1.30 / 1.22 GB
+     - 25.5 / 21.0
+     - 65 / 63
+   * - 32x32x16, ions (8, 16)
+     - 3.22 / 0.96 GB
+     - 5.56 / 1.61 GB
+     - 48.2 / 22.2
+     - 75 / 68
+   * - 64x64x24, ions (4, 16)
+     - 8.99 / 8.16 GB
+     - 10.65 / 9.98 GB
+     - 137 / 117
+     - 183 / 136
+   * - 64x64x24, ions (8, 16)
+     - out of memory (16 GB)
+     - 12.33 GB
+     - 283
+     - 166
+
+The electron mirror blocks (Laguerre-coupled) dominate the factor, so the gain is
+large when the state's ``Nl`` is set by the ions. Uniform counts give the same
+factor to round-off (solve 2e-14 relative, collision sub-step bitwise). On a
+loaded 10-core CPU the 32x32x16 ions (8, 16) build took 254 s against 3819 s
+padded (16 against 9 GB resident). The state and restart
 arrays keep the ``[run]`` extents (zeros above a species' count). Hermite-sharded
 routes, a custom collision operator and the per-term diagnostics refuse unequal
 counts with ``NotImplementedError``.
