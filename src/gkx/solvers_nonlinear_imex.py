@@ -1397,12 +1397,15 @@ class ImexDtControl:
     ARK3/ARS3 interval on it (0.82 x 3.6); ``w_nl`` the bracket CFL rate of the
     current fields; 17 = 10 x 1.7: Cyclone KE 32x32 stays finite and within 2 SE of
     rk4-pi to 34 at beta 1e-4, 1e-3 and 0.015, and steps stop shrinking above 17; ``dt_err`` the embedded
-    ARK3(2) estimate against ``rtol``. The factor is rebuilt only when dt
+    ARK3(2) estimate against ``rtol``: 1e-3 of the state per step, 2x the steps of
+    1e-2, which put the saturated heat flux 6% above ``rk4-pi`` (three seeds,
+    Cyclone KE 32x32x16, m_e/m_i 1/1836); 1e-3 is within 1% on the seed mean (docs/guidance.rst).
+    The factor is rebuilt only when dt
     moves by more than 20% (down) or grows past 1.2x, and a non-finite chunk
     is rejected and redone at half the step.
     """
 
-    def __init__(self, op, cfl_rate, *, dt_max, cfl=0.9, rtol=1e-2, iters=20):
+    def __init__(self, op, cfl_rate, *, dt_max, cfl=0.9, rtol=1e-3, iters=20):
         rhs, project = op.__dict__["_rhs"]
         self.cfl, self.rtol, self.dt_max = float(cfl), float(rtol), float(dt_max)
         if op.collisions is not None:  # the sub-step's splitting error is not in err
