@@ -241,6 +241,27 @@ def test_fit_growth_rate_auto_fallback_respects_start_fraction() -> None:
     assert tmin >= t[int(0.6 * t.size)]
 
 
+def test_fit_growth_rate_auto_fallback_does_not_fit_a_transient() -> None:
+    # No stationary window exists (the amplitude beats), so the log-linear
+    # fallback runs; it used to pick a one-time-unit window at gamma ~ 1.2.
+    t = np.linspace(0.0, 40.0, 1600)
+    signal = np.exp((0.16 - 0.3j) * t) * (1.0 + 0.6 * np.cos(1.5 * t))
+
+    with pytest.warns(RuntimeWarning, match="no stationary growth window"):
+        gamma, omega, tmin, tmax = fit_growth_rate_auto(
+            t,
+            signal,
+            min_points=40,
+            start_fraction=0.2,
+            growth_weight=0.2,
+            require_positive=True,
+        )
+
+    assert tmax - tmin >= 0.3 * (t[-1] - t[0])
+    assert gamma == pytest.approx(0.16, abs=0.02)
+    assert omega == pytest.approx(0.3, abs=1e-6)
+
+
 def test_select_ky_index_prefers_nonzonal_matching_magnitude() -> None:
     ky = np.array([0.0, -0.01])
     assert select_ky_index(ky, 0.01) == 1

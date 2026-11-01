@@ -917,6 +917,9 @@ def fit_growth_rate_auto(
                     RuntimeWarning,
                 )
                 window_method = "loglinear"
+                # A window of a few samples sits inside a transient and wins on
+                # growth_weight * gamma; require a late-time share of the run.
+                min_points = max(min_points, int(0.3 * t.size))
         if window_method == "loglinear":
             tmin, tmax = select_fit_window_loglinear(
                 t,

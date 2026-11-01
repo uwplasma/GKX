@@ -481,6 +481,16 @@ Electromagnetic and KBM
   the next :math:`N_m`.
 - The linear KBM branch moves with the end-damping rate and with ``nperiod``.
   At ``nperiod = 1`` the layer is a quarter of the line: use 2 or more.
+- The Miller KBM needs more points along the line than the reference deck's
+  ``ntheta = 32``. At :math:`\beta=0.015`, :math:`k_y=0.3`, ``nperiod = 2``, ``(16, 48)``,
+  :math:`\gamma` is 0.3128, 0.2999, 0.2953 and 0.2920 at ``ntheta`` 32, 48, 64
+  and 96, falling as :math:`1/n_\theta^2`; use 64 or more and rerun at 1.5x.
+  ``Nm`` 96 moves it by 0.5%. The comparison with GS2 is in :doc:`validation`
+  (``X-kbm-beta-gs2``).
+- A time run that stops without a stationary growth window falls back to a
+  log-linear window of at least 30% of the samples and warns. Read the slope of
+  the late trace before trusting a rate from such a run; an electron-only start
+  (``init_electrons_only``) shows a faster transient for the first 10 to 20 time units.
 - Explicit steps must keep :math:`\nu_{end}\Delta t < 0.3`. An ``nperiod = 1``
   KBM deck (rate 598) blew up at :math:`\Delta t = 10^{-3}` and ran at
   :math:`5\times10^{-4}`.
