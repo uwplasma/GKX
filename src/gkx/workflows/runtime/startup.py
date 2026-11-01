@@ -445,20 +445,13 @@ def build_runtime_linear_params(
     if geom is None:
         geom = build_runtime_geometry(cfg)
     contract = get_normalization_contract(cfg.normalization.contract)
-    rho_star = (
-        contract.rho_star
-        if cfg.normalization.rho_star is None
-        else float(cfg.normalization.rho_star)
-    )
-    omega_d_scale = (
-        contract.omega_d_scale
-        if cfg.normalization.omega_d_scale is None
-        else float(cfg.normalization.omega_d_scale)
-    )
-    omega_star_scale = (
-        contract.omega_star_scale
-        if cfg.normalization.omega_star_scale is None
-        else float(cfg.normalization.omega_star_scale)
+    rho_star, omega_d_scale, omega_star_scale = (
+        float(default if override is None else override)
+        for default, override in (
+            (contract.rho_star, cfg.normalization.rho_star),
+            (contract.omega_d_scale, cfg.normalization.omega_d_scale),
+            (contract.omega_star_scale, cfg.normalization.omega_star_scale),
+        )
     )
 
     species = _species_to_linear(cfg.species)
@@ -495,9 +488,9 @@ def build_runtime_linear_params(
         species,
         tau_e=tau_e,
         kpar_scale=float(geom.gradpar()),
-        omega_d_scale=float(omega_d_scale),
-        omega_star_scale=float(omega_star_scale),
-        rho_star=float(rho_star),
+        omega_d_scale=omega_d_scale,
+        omega_star_scale=omega_star_scale,
+        rho_star=rho_star,
         beta=beta,
         fapar=fapar,
         nu_hyper=float(cfg.collisions.nu_hyper),
