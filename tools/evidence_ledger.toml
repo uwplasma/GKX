@@ -358,15 +358,15 @@ notes = "Cyclone, Nm 32, vperp_max 4: 8 nodes are within 1.4% (ky 0.3) and 0.5% 
 
 [[row]]
 id = "X-kbm-beta-gs2"
-claim = "Miller CBC kinetic ballooning, ky 0.3, beta 0.005-0.020, A_par and A_par+B_par, linear: GKX against GS2"
-observable = "relative gamma and omega difference at four beta, GKX (8, 24) and (8, 32) nperiod 2 and (8, 24) nperiod 3 against GS2 e4v"
+claim = "Miller CBC kinetic ballooning, ky 0.3, beta 0.005-0.020, A_par, linear: GKX against GS2 along an ntheta ladder"
+observable = "relative gamma and omega difference at four beta, GKX (16, 48) nperiod 2 and 3 against GS2 (negrid 16, ngauss 8) at matched ntheta 32-96 and at the ntheta limit of each code"
 artifact = "docs/_static/cross_code_linear_points.csv"
 generator = "retired@gkx-plan plan/research/2026-10-19-val-linear/scripts/csvrows.py"
-reference = "GS2 8.2.1 rung e4v (ntheta 48, nperiod 3, negrid 24, ngauss 12, bishop 4, betaprim 0); e3 agrees within 0.3%"
+reference = "GS2 8.2.1, ntheta 32-128, nperiod 2-4, bishop 4, betaprim 0; GX 3865a537 + dampEnds_linked grid-stride loop self-run at ntheta 32 and 64"
 reference_rank = 5
 tier = 3
-status = "open"
-notes = "A_par, (8, 24) nperiod 2, gamma/omega against GS2: beta .005 -2.4%/+10.8%, .010 -8.2%/+8.8%, .015 +7.3%/+7.8%, .020 +6.1%/+4.7%. A_par+B_par: -2.6%/+11.0%, -10.1%/+9.5%, +6.4%/+6.6%, +5.4%/+4.0%. Nm 32 moves gamma by up to 4 points and omega by up to 3 points. nperiod 3 at beta .015 gives gamma +16.5%, omega +1.7%; at beta .005 -3.0%/+11.7%. The end-damping rate is not a factor: the timestep-free default and 200 agree to 7e-6 in gamma. The signs and size of the gamma differences follow the earlier GX-GS2 KBM gap (GS2 below GX) and are not attributed. Only ky 0.3, one geometry, one velocity resolution family."
+status = "provisional"
+notes = "The gap against GS2 is the parallel grid. At beta .015, nperiod 2, ntheta 32/48/64/96: GKX gamma .3128/.2999/.2953/.2920 (limit .2895 as ntheta^-2), GS2 .2619/.2733/.2795/.2860 and .2894 at 128 (limit .299 as 1/ntheta); +19%/+4% at ntheta 32, -3.2%/+1.8% at the limits, +1.5%/+0.8% at nperiod 3, +0.05%/+1.0% at beta .02, GX ntheta 32 and 64 within 0.4%. Beta .01 -4.8%/+4.5% and beta .005 -2.7%/+5.2% at ntheta 64 (omega excess is the electron Hermite ladder: Nm 96 gives .2113/.2653 at beta .005; m_e/m_i .04 agrees to 1.1%/0.6% at beta .015). The beta .01 rates of 1.32/2.21 were a one-time-unit transient window chosen by the growth-fit fallback, fixed in diagnostics/growth_rates.py. Unresolved: GS2 and GKX limits are 1/ntheta and ntheta^-2 extrapolations, nperiod 4 beyond ntheta 32 is not run, B_par only at beta .015, only ky 0.3 and one geometry."
 
 [[row]]
 id = "X-w7x-itg-gx"

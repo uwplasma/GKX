@@ -134,7 +134,11 @@ kinetic electrons and electromagnetic runs, and how to check it.
 
 `100 * max|GKX - ref| / max|ref|` over the tracked scan, recomputed by CI from
 the [evidence ledger](tools/evidence_ledger.toml). The Cyclone rows compare a
-time-trace fit, not the certified eigenvalue, and KBM is the known outlier.
+time-trace fit, not the certified eigenvalue, and KBM is the known outlier: its
+reference omits end damping on the top Hermite moments, a repaired GX run of
+the deck agrees with GKX to 0.3% at `k_y` 0.2 and 0.3, and against GS2 the KBM
+growth rate agrees to 5% (frequency 6%) once `ntheta` is resolved, against 19% at the
+deck's `ntheta = 32`, where both codes are under-resolved.
 Against GX's repaired launch limit the certified Cyclone eigenpairs agree to
 0.3% in growth rate at seven of eight `k_y`; against converged GS2 GKX is
 within 1.0% at the three `k_y` compared. These are agreements on shared test

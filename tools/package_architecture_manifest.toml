@@ -1226,7 +1226,8 @@ recursive = true
 # LinearParams.moments, one exact-size cache per species group run by the RHS and the
 # bracket (LinearCache.groups), the kinetic-electron fallback counts. Measured.
 # 69106 -> 69180: per-species reflectionless Hermite closure (LinearParams.closure) folded into the existing |k_z| hypercollision source, so it shares the linked transform and every damping route. Measured.
-baseline = 69180
+# 69180 -> 69183: the log-linear growth-fit fallback requires a late-time share of the run, so a few-sample transient window cannot be reported as a rate. Measured.
+baseline = 69183
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1592,7 +1593,8 @@ recursive = true
 # smaller state, containment, bracket per group, end-damping rate, species-weighted terms,
 # refused routes, hypercollision normalization, deck path, kinetic-electron fallback). Measured.
 # 64466 -> 64570: species-closure gate (closed species feels only the last-moment sink, the other is bitwise unchanged), the runtime-config mapping and the closure on a per-species moment group. Measured.
-baseline = 64570
+# 64570 -> 64592: regression test for the growth-fit fallback window (beating amplitude, no stationary window) and a re-recorded unsettled collisional rate. Measured.
+baseline = 64592
 target = 35000
 
 [[line_budget_policy.counts]]
