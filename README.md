@@ -28,6 +28,23 @@ differentiable on CPUs and GPUs.
 Saturated ITG turbulence on a Cyclone flux tube
 ([full-rate movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)).
 
+## New in 2.8
+
+- **Per-species velocity resolution:** ions and electrons keep their own
+  `(Nl, Nm)`, so ions no longer pay for the electrons' Hermite moments.
+  Kinetic-electron decks that name no resolution get converged per-species
+  counts; explicit steps are up to 1.9x faster in 1.5x less memory.
+- **Implicit collisions when needed:** at high electron collisionality the
+  IMEX steps take the Landau operator implicitly, where the explicit step
+  goes non-finite; low-collisionality runs are unchanged.
+- **Reflectionless Hermite closure (opt-in):** `[[species]] hermite_closure`
+  absorbs the last Hermite moment instead of damping it.
+- **Safer adaptive steps:** a deck with `dt` and `fixed_dt = false` uses the
+  controller's stepper, not `rk2`, which blew up on kinetic-electron decks.
+- **Python 3.10** is supported again.
+- Also: a nodal `mu` grid for linear runs, faster electromagnetic brackets and
+  RK4 stages, and a NaN fix in high-resolution Landau tables.
+
 ## Install and first run
 
 ```bash
@@ -94,7 +111,7 @@ and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
 | Perpendicular velocity (opt-in) | nodal `mu` grid: `[run] mu_vperp_max = 4.0`, `Nl` = nodes | linear runs; 8 nodes match Laguerre `Nl` 16-24 on Cyclone at 5-12x less cost; flat convergence on TEM and KBM ([numerics](docs/numerics.rst)) |
 | Collisions | linearized Landau | conserving, H-theorem; Dougherty, Sugama alternatives ([operators](docs/operators.rst)) |
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
-| Time stepping | no `dt`: nonlinear `rk4-pi`, or adaptive `imex-ark3` for kinetic electrons at beta <= 3e-4; linear `rk4` + CFL | a `dt` gives `rk2` at that step ([measured speedups](docs/guidance.rst)) |
+| Time stepping | no `dt`: nonlinear `rk4-pi`, or adaptive `imex-ark3` for kinetic electrons at beta <= 3e-4; linear `rk4` + CFL | a `dt` gives `rk2` at that step; `fixed_dt = false` keeps the controller's stepper ([measured speedups](docs/guidance.rst)) |
 | Eigensolver | `auto` (banded, else `adaptive`), certified | shift-invert opt-in |
 | `ky` layout | `half`: the `1 + Ny//2` non-negative rows | `[grid] ky_layout = "full"` stores the two-sided axis; same physics to round-off, about 1.4-1.8x slower and 12-25% more memory |
 | Precision | `float32`; `float64` with `JAX_ENABLE_X64=true` | eigensolver, Krylov residual and conditioning checks need `float64` |
