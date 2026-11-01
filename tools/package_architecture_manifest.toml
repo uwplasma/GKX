@@ -1593,8 +1593,8 @@ recursive = true
 # smaller state, containment, bracket per group, end-damping rate, species-weighted terms,
 # refused routes, hypercollision normalization, deck path, kinetic-electron fallback). Measured.
 # 64466 -> 64570: species-closure gate (closed species feels only the last-moment sink, the other is bitwise unchanged), the runtime-config mapping and the closure on a per-species moment group. Measured.
-# 64570 -> 64591: regression test for the growth-fit fallback window (beating amplitude, no stationary window). Measured.
-baseline = 64591
+# 64570 -> 64592: regression test for the growth-fit fallback window (beating amplitude, no stationary window) and a re-recorded unsettled collisional rate. Measured.
+baseline = 64592
 target = 35000
 
 [[line_budget_policy.counts]]
