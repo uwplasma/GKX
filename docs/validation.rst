@@ -408,8 +408,8 @@ Tracked artifacts without a ledger row. Nothing here is a public claim.
   flux against self-run GX (rank 5) pass at a mean relative mismatch of 0.10:
   Cyclone 0.096 (``t=100..400``), Cyclone Miller 0.092, KBM 0.0094, HSX 0.036,
   W7-X 0.097 (``docs/_static/nonlinear_<case>_gate_summary.json``). None is a
-  statistical validation of saturated transport. Kinetic-electron Cyclone and the
-  ETG pilot have no tracked comparison.
+  statistical validation of saturated transport. Kinetic-electron Cyclone has no
+  tracked comparison; the W7-X ETG comparison is under :ref:`nonlinear-etg-w7x`.
 - **Equilibrium flow shear.** The remap, operators, RK2/RK3 and IMEX pass their
   identity, order and derivative tests as a research API. The full-resolution
   response is rejected for promotion (:doc:`numerics`): the IMEX pair fails
@@ -484,6 +484,39 @@ Cyclone ITG, adiabatic electrons, 192x64x24, one 2 pi segment, Dougherty :math:`
 The GKX windows at (4, 8), 1.5 and (8, 16), 2.49 fail the half-window stationarity check (halves differ by more than two standard errors); the others pass. Zonal energy fraction of :math:`\Phi^2` at :math:`a/L_T = 1.5` (:math:`t > 500`): GKX 0.86 and 0.76, GX 0.79 and 0.87 at (4, 8) and (8, 16). GKX and GX agree at every point; both leave the heat flux at 1.5 above the paper's Dimits-suppressed value and move toward it with velocity resolution, so the suppression is not reproduced at (4, 8) by either code (open). With :math:`\nu_{ii} = 0` both decay to a zonal-dominated state (GX flux 0.04 over the last 200; gkx-plan ``2026-10-20-nonlinear-stats``).
 
 Kinetic electrons (GX Table 2, :math:`m_i/m_e = 3670`, :math:`\beta = 10^{-3}`): not run. With GKX 2.7.0 defaults, 192x64x24 at (4, 16) advances 0.079 :math:`a/v_{ti}` in 17 s on a shared RTX A4000 (about 36 h for :math:`t = 600`; the paper's 159 min is on four A100).
+
+.. _nonlinear-etg-w7x:
+
+Nonlinear W7-X ETG against GX
+-----------------------------
+
+W7-X standard configuration, :math:`s = 0.5`, fixed-aspect tube (one poloidal turn, ``jtwist = -1``, :math:`x_0 = 0.2157`), kinetic ions and electrons (:math:`m_e/m_i = 2.7\times10^{-4}`), :math:`a/L_{Te} = 3`, :math:`a/L_n = 1`, :math:`a/L_{Ti} = 0`, :math:`\beta = 10^{-4}`, 48x48x48, :math:`y_0 = 0.2`, :math:`(N_l, N_m) = (4, 8)`, hyperviscosity :math:`D = 0.05`, kz hypercollisions, RK3, Gaussian density seed of amplitude :math:`10^{-3}` in every dealiased mode. Electron heat flux in gyro-Bohm units, mean :math:`\pm` Sokal-IAT standard error (GX 3865a537, float32, self-run; GKX float64; GPU).
+
+.. list-table::
+   :header-rows: 1
+
+   * - run
+     - :math:`Q_e`, :math:`t = 2.5`-5.0
+     - :math:`Q_e`, :math:`t = 2.5`-7.4
+   * - GX, :math:`\Delta t = 2\times10^{-4}` (end damping :math:`0.1/\Delta t = 500`)
+     - 0.111 +- 0.006
+     - 0.121 +- 0.006
+   * - GX, :math:`\Delta t \le 8.8\times10^{-4}` (CFL-limited; rate at least 114)
+     - 0.111 +- 0.008
+     - 0.106 +- 0.005
+   * - GKX, ``damp_ends_rate = 500``
+     - 0.113 +- 0.004
+     - 0.108 +- 0.004
+   * - GKX, default rate (about 128)
+     - 0.097 +- 0.002
+     - not run
+   * - GKX, ``damp_ends_rate = 0.1``
+     - 0.061 +- 0.001
+     - 0.061 +- 0.001
+
+An earlier GKX run of this case gave about half the GX flux (0.06 against 0.12). It was a setup mismatch, not a solver difference. First, the deck omitted ``init_single = false``; GKX's default seeds only the selected mode, GX seeds all of them (``[init]`` in :doc:`inputs`). With that fixed the initial :math:`W_\phi` agrees (4.75e-6 against 4.74e-6) and the linear overshoot peaks at the same time (:math:`t = 0.37` against 0.40; :math:`Q_e` 0.65 against 0.42). Second, the end-damping rate: GX applies ``damp_ends_amp/dt``, so this deck at :math:`\Delta t = 2\times10^{-4}` damps the layer at 500, while the deck had set 0.1. At ``nperiod = 1`` the layer is a quarter of the line and the flux depends on the rate (0.061, 0.097 and 0.113 at 0.1, 128 and 500); GX shows the same dependence through its own step (0.121 at :math:`\Delta t = 2\times10^{-4}`, 0.106 with the CFL-limited step). With the GX rate GKX is 0.89 of GX over :math:`t = 2.5`-7.4, 1.7 combined standard errors, and its early-time :math:`W_\phi`, :math:`Q_e` and peak time follow GX. The window is about five correlation times in GX, so the agreement is statistical only. Neither code was run nonlinearly at higher velocity resolution (GX at (8, 16) did not finish in the time allowed).
+
+The linear check on this tube is a single-:math:`k_y` run at :math:`k_y = 50`, :math:`k_x = 0`: GX gives :math:`\gamma = 8.751` at (4, 8) and 8.442 at (8, 16); GKX gives 8.446 at (4, 8). GKX at (4, 8) therefore sits on GX's higher-resolution value, and GX at (4, 8) is 3.5% high. The (8, 16) GKX time-route fit on this tube did not settle (:math:`\gamma` 12.1, the fit window under one growth time), so no GKX value is quoted there. Reproducing a GX nonlinear run needs ``init_single = false`` and ``[time] damp_ends_rate`` equal to ``damp_ends_amp`` divided by GX's step.
 
 Benchmarks
 ----------
