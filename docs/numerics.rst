@@ -326,6 +326,9 @@ need no absorber (upwinded implicit streaming sets :math:`h = 0` for incoming
 particles); GENE truncates the :math:`k_x` connection and uses parallel
 hyperdiffusion [PDJ10]_. A Hermite basis does not separate :math:`v_\parallel`
 directions, so GKX keeps GX's layer and fixes only its units.
+A GX nonlinear run applies :math:`A/\Delta t` at its own step, so matching it
+means setting ``damp_ends_rate`` to :math:`A/\Delta t_{GX}`; the W7-X ETG
+flux moves by a factor of two over that range (:ref:`nonlinear-etg-w7x`).
 
 **Measured sensitivity** (ky 0.3; ``plan/research/2026-10-15-end-damping``;
 :math:`\gamma` in deck units):
