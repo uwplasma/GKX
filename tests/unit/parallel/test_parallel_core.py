@@ -359,22 +359,12 @@ def test_independent_map_clips_thread_workers_and_accepts_executor_aliases(
 ) -> None:
     records: list[tuple[int, tuple[tuple[object, int, int, str, int], ...]]] = []
 
-    class FakeThreadPool:
-        def __init__(self, *, max_workers: int):
-            self.max_workers = max_workers
+    def fake_map(fn, tasks, *, workers, executor):
+        assert executor == "thread"
+        records.append((workers, tuple(tasks)))
+        return [fn(task) for task in tasks]
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def map(self, fn, items):
-            materialized = tuple(items)
-            records.append((self.max_workers, materialized))
-            return [fn(item) for item in materialized]
-
-    monkeypatch.setattr(parallel_independent, "ThreadPoolExecutor", FakeThreadPool)
+    monkeypatch.setattr(parallel_independent, "map_independent", fake_map)
 
     observed = parallel.independent_map(
         lambda value: value * 11, [3, 1, 4], workers=99, executor="threads"
