@@ -129,6 +129,33 @@ sharded routes in :doc:`parallelization`, not for speed; ``pmap`` or
 compiler on ``jax`` 0.11.2, and the nonlinear ``state_sharding`` route gathers
 the state each step, so it does not divide the work either.
 
+CPU, GPU and multi-device defaults
+----------------------------------
+
+GKX uses JAX's default device, so one GPU when a CUDA ``jaxlib`` is installed, else the CPU with XLA's own threads. One run uses one device. Independent ``k_y`` scans and ensembles are the production multi-device route (:doc:`parallelization`). Whole-state sharding is diagnostic.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Setting
+     - Default
+     - Change it when
+   * - ``JAX_PLATFORMS=cpu``
+     - GPU when a CUDA ``jaxlib`` is installed
+     - A deck is small enough that GPU launch overhead dominates, or the GPU is busy
+   * - ``XLA_PYTHON_CLIENT_PREALLOCATE=false``
+     - JAX preallocates most GPU memory
+     - Several processes share one GPU
+   * - ``GKX_JAX_CACHE_DIR``, ``GKX_JAX_CACHE=0``
+     - cache on, beside the source tree
+     - The tree is on a slow or shared filesystem; ``0`` turns it off
+   * - ``JAX_ENABLE_X64=true``
+     - ``float32``
+     - You use the eigensolver or Krylov residual and conditioning checks
+   * - ``--xla_force_host_platform_device_count``
+     - not set
+     - Only to test sharded routes; it is not for speed
+
 Persistent compilation cache
 ----------------------------
 
