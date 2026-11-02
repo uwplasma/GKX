@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from typing import Any
+
+from solvax import map_independent
 import jax
 import numpy as np
 import jax.numpy as jnp
@@ -647,43 +648,6 @@ def _independent_map_tasks(
     )
 
 
-def _executor_class(
-    executor: str,
-) -> type[ThreadPoolExecutor] | type[ProcessPoolExecutor]:
-    return ThreadPoolExecutor if executor == "thread" else ProcessPoolExecutor
-
-
-def _run_parallel_indexed_tasks(
-    tasks: tuple[tuple[Callable[[Any], Any], int, Any, str, int], ...],
-    worker_metadata: IndependentWorkerMetadata,
-) -> list[tuple[int, Any]]:
-    try:
-        with _executor_class(worker_metadata.executor)(
-            max_workers=worker_metadata.actual_workers
-        ) as pool:
-            return list(pool.map(_run_indexed_independent_task, tasks))
-    except IndependentMapExecutionError:
-        raise
-    except Exception as exc:
-        raise RuntimeError(
-            "independent_map executor "
-            f"'{worker_metadata.executor}' failed before completing "
-            f"{worker_metadata.problem_size} task(s) with "
-            f"actual_workers={worker_metadata.actual_workers}: {exc}"
-        ) from exc
-
-
-def _ordered_results(indexed_results: list[tuple[int, Any]], size: int) -> list[Any]:
-    indices = [index for index, _ in indexed_results]
-    expected_indices = list(range(size))
-    if indices != expected_indices:
-        raise RuntimeError(
-            "independent_map executor returned results out of serial order: "
-            f"{indices} != {expected_indices}"
-        )
-    return [result for _, result in indexed_results]
-
-
 def _independent_identity_metadata(
     metadata: dict[str, Any] | None,
     worker_metadata: IndependentWorkerMetadata,
@@ -852,11 +816,16 @@ def independent_map(
     if worker_metadata.actual_workers == 1:
         return [fn(item) for item in items]
 
-    indexed_results = _run_parallel_indexed_tasks(
-        _independent_map_tasks(fn, items, worker_metadata),
-        worker_metadata,
-    )
-    return _ordered_results(indexed_results, len(items))
+    tasks = _independent_map_tasks(fn, items, worker_metadata)
+    return [
+        result
+        for _, result in map_independent(
+            _run_indexed_independent_task,
+            tasks,
+            workers=worker_metadata.actual_workers,
+            executor=worker_metadata.executor,
+        )
+    ]
 
 
 def independent_map_identity_report(
