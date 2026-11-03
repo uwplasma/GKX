@@ -383,6 +383,51 @@ generator is retired; :ref:`retired-generators`).
   float64): Cyclone 3.58 s against 2.44 s, W7-X 1.58 s against 2.20 s, HSX
   0.70 s against 0.51 s; GKX device memory 178-636 MB against 1547 MB for GX.
 
+Four-code kinetic-electron comparison
+-------------------------------------
+
+Cyclone Miller (:math:`m_i/m_e` = 3670, :math:`T_e = T_i`, :math:`a/L_T` 2.49,
+:math:`a/L_n` 0.8), :math:`k_y\rho_i = 0.3`, growth rate in GX units
+(2026-10-27, office). GX: repaired variant, :math:`t = 60`, ``Nl`` 16 unless
+stated; GKX: nodal :math:`\mu` grid, 8 nodes, end-damping rate 160.6; GS2: rung
+k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8). stella is excluded (see
+:doc:`conventions`).
+
+.. list-table::
+   :header-rows: 1
+
+   * - code, resolution
+     - :math:`\gamma`
+     - :math:`\omega`
+   * - GS2 k2 (k1 differs by 0.01%, 1%)
+     - 0.2349
+     - 0.2210
+   * - GX ``Nm`` 24 / 32 / 48 / 64
+     - 0.2324 / 0.2330 / 0.2318 / 0.2325
+     - 0.2506 / 0.2428 / 0.2361 / 0.2339
+   * - GX ``Nl`` 4 / 8 / 12 / 16 at ``Nm`` 48
+     - 0.2254 / 0.2322 / 0.2336 / 0.2318
+     - 0.2270 / 0.2379 / 0.2376 / 0.2361
+   * - GKX ``Nm`` 16 / 24 / 32 / 48
+     - 0.2245 / 0.2304 / 0.2303 / 0.2295
+     - 0.2635 / 0.2496 / 0.2417 / 0.2364
+   * - GKX nodes 4 / 8 / 12 at ``Nm`` 24
+     - 0.2355 / 0.2304 / 0.2304
+     - 0.2564 / 0.2496 / 0.2499
+
+At equal ``Nm`` GKX is within 1.2% of GX in :math:`\gamma` and 0.5% in
+:math:`\omega`. The growth rate is converged to about 1% (0.2295-0.2349 over
+all three codes). The frequency is not: GX and GKX still fall with ``Nm`` at 48-64
+and sit 6-7% above GS2. GX returns NaN for ``Nm`` 96 and 128 in this build.
+Collisionless TEM (ky rho_s 0.3): GS2 0.871, GX ``Nm`` 32 / 64 0.670 / 0.770,
+GKX ``Nm`` 24 / 48 0.611 / 0.744; both moment codes are 15-23% low at the usual
+``Nm`` and need more than 96. With :math:`\nu_{ee} = 0.01`, GS2 loses 15%, GX
+14%, GKX 7-8% (Lenard-Bernstein or Landau): the collisional damping in GKX is
+about half of GX's at the same ``nu``, not explained.
+KBM, beta 0.015, A_par, ky 0.3: GX 0.3135 (nperiod 2, ``Nm`` 48) and 0.3389
+(nperiod 3); GKX 0.3155 and 0.3425; GS2 (nperiod 3) 0.2939, which is 13% below
+both. The GS2-GX gap on KBM is open.
+
 Lanes outside the ledger
 ------------------------
 

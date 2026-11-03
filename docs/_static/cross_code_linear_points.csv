@@ -217,3 +217,52 @@ kbm_miller_AB_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.35766,0.968
 kbm_miller_AB_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod2,0.3714,0.9908,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
 kbm_miller_AB_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod2,0.37675,0.9974,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
 kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48 ntheta64 nperiod2,0.2942,1.0939,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
+miller_ke,0.2,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.157226,0.116551,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
+miller_ke,0.3,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.234917,0.220980,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
+miller_ke,0.4,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.264977,0.340404,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
+miller_ke,0.5,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.253635,0.457117,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
+miller_ke,0.6,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.212998,0.560695,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
+miller_ke,0.7,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.156104,0.647048,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
+tem_dj2005,0.3,gs2,t3 ntheta64 nperiod4 negrid24,0.870731,-1.270882,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
+tem_dj2005_nuee0.01,0.3,gs2,t3 vnewk_e 0.01,0.742300,-1.297554,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
+kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm24,0.318458,1.068189,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48,0.313468,1.076446,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+kbm_miller_AB_beta0.015,0.3,gx-repaired,Nl16 Nm48,0.406260,1.008833,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+miller_ke,0.3,gx-repaired,Nl2 Nm48 t60,0.233609,0.237631,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+miller_ke,0.3,gx-repaired,Nl6 Nm24 t60,0.232405,0.250632,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+miller_ke,0.3,gx-repaired,Nl6 Nm32 t60,0.232985,0.242808,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+miller_ke,0.3,gx-repaired,Nl6 Nm48 t60,0.231775,0.236118,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+miller_ke,0.3,gx-repaired,Nl6 Nm64 t60,0.232510,0.233923,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+miller_ke,0.3,gx-repaired,Nl Nm48 t60,0.225403,0.226987,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+miller_ke,0.3,gx-repaired,Nl Nm48 t60,0.232248,0.237877,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+miller_ke,0.3,gx-repaired,Nl Nm64 t60,0.233877,0.233077,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+tem_dj2005,0.3,gx-repaired,Nl6 Nm64,0.756970,-1.294316,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+tem_dj2005,0.3,gx-repaired,Nl Nm64,0.674980,-1.169977,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+tem_dj2005,0.3,gx-repaired,Nl Nm32,0.669513,-1.235776,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+tem_dj2005_nuee0.01,0.3,gx-repaired,Nl Nm32,0.577625,-1.248559,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+tem_dj2005,0.3,gx-repaired,Nl Nm64,0.769995,-1.280872,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+tem_dj2005_nuee0.01,0.3,gx-repaired,Nl Nm64,0.664120,-1.288228,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+miller_ke,0.3,gkx,nodes8 Nm24 damp_ends_rate160.6,0.230403,0.249604,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.5,gkx,nodes8 Nm24 damp_ends_rate160.6,0.257626,0.474809,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.3,gkx,Nl8 Nm24 damp_ends_rate160.6,0.231152,0.251114,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.5,gkx,Nl8 Nm24 damp_ends_rate160.6,0.257377,0.476047,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.3,gkx,nodes4 Nm24 damp_ends_rate160.6,0.235459,0.256397,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.3,gkx,nodes12 Nm24 damp_ends_rate160.6,0.230399,0.249902,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.3,gkx,nodes8 Nm16 damp_ends_rate160.6,0.224522,0.263521,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.3,gkx,nodes8 Nm32 damp_ends_rate160.6,0.230337,0.241681,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.3,gkx,nodes8 Nm48 damp_ends_rate160.6,0.229462,0.236377,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.4,gkx,nodes8 Nm24 damp_ends_rate160.6,0.264808,0.363504,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.2,gkx,nodes8 Nm24 damp_ends_rate160.6,0.152504,0.146653,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.6,gkx,nodes8 Nm24 damp_ends_rate160.6,0.218263,0.572963,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.1,gkx,nodes8 Nm24 damp_ends_rate160.6,0.056269,0.066309,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.7,gkx,nodes8 Nm24 damp_ends_rate160.6,0.157170,0.647274,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+miller_ke,0.8,gkx,nodes8 Nm24 damp_ends_rate160.6,0.099039,0.690047,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+tem_dj2005,0.3,gkx,Nl8 Nm24 damp_ends_rate100,0.611431,-1.202045,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+tem_dj2005,0.3,gkx,Nl8 Nm48 damp_ends_rate100,0.743542,-1.265551,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+tem_dj2005,0.3,gkx,nodes8 Nm24 damp_ends_rate100,0.561048,-1.229952,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm24 lenard_bernstein damp_ends_rate100,0.565748,-1.207311,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+tem_dj2005_nuee0.01,0.3,gkx,nodes8 Nm24 lenard_bernstein damp_ends_rate100,0.520799,-1.238541,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm24 landau damp_ends_rate100,0.568484,-1.197161,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm48 lenard_bernstein damp_ends_rate100,0.691071,-1.270731,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm48 landau damp_ends_rate100,0.680284,-1.259406,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
+kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48 nperiod3,0.338932,1.015025,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
