@@ -122,7 +122,11 @@ keeping :math:`k_y/\sqrt2` brings :math:`\gamma` within 5% for
 :math:`\omega`, which stays 5--21% low, nor the W7-X scan (1.2--1.7x). A
 two-parameter fit of the rescalings to the stella points leaves 7% residuals.
 The stella numbers are in ``docs/_static/cross_code_linear_points.csv`` and are
-not used as a reference.
+not used as a reference. A rebuild of stella master without vectorisation flags
+(``-O1``) reproduces both builds to the last printed digit. Its growth rate does
+not change when ``streamknob`` is varied from 0 to 100 (adiabatic Cyclone) and
+is 6x GS2's with kinetic electrons, while its geometry arrays agree with GS2 to
+0.5%. Parallel streaming appears not to act in these runs; the cause is open.
 
 GX needs no conversion: GKX was built to reproduce GX, and the certified GKX
 eigenvalues agree with GX to 0.3% or better on the Cyclone decks (README,
