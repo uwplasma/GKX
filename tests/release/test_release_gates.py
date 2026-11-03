@@ -3224,9 +3224,6 @@ _README_PARITY_SOURCES: dict[str, tuple[str, ...]] = {
         "ETG": "etg_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
         "W7-X": "w7x_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
         "HSX": "hsx_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
-        "Cyclone Miller": "cyclone_miller_linear_mismatch.csv gamma_gx gamma omega_gx omega",
-        "Cyclone ITG": "cyclone_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
-        "KBM": "kbm_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
     }.items()
 }
 
@@ -3251,15 +3248,13 @@ def _readme_parity_table(
         if not line.startswith("|"):
             continue
         cells = [cell.strip().strip("*` ") for cell in line.strip("|").split("|")]
-        if len(cells) != 3 or cells[0] not in labels:
+        if len(cells) != 3:
             continue
-        try:
-            published[cells[0]] = (
-                float(cells[1].rstrip("%")),
-                float(cells[2].rstrip("%")),
-            )
-        except ValueError:
-            continue
+        label = cells[0].split(" (")[0]
+        gamma = re.search(r"gamma ([\d.]+)%", cells[2])
+        omega = re.search(r"omega ([\d.]+)%", cells[2])
+        if label in labels and gamma and omega:
+            published[label] = (float(gamma.group(1)), float(omega.group(1)))
     return published
 
 
