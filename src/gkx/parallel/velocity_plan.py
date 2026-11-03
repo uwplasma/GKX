@@ -204,8 +204,14 @@ def build_species_hermite_mesh_plan(
     *,
     num_devices: int,
     hermite_ghost_depth: int = 2,
+    laguerre_chunks: int = 1,
 ) -> VelocityShardingPlan:
     """Factor ``num_devices`` over a species-first, Hermite-second device mesh.
+
+    ``laguerre_chunks > 1`` reserves that many devices per ``(s, m)`` block for
+    the nonlinear bracket's Laguerre quadrature points. The state is not split
+    along it (``shard_shape`` is unchanged); it costs one ``psum`` of the
+    bracket's moment sum.
 
     Unlike the ceil-padded chunking of :func:`build_velocity_sharding_plan`,
     species are factored first, the Hermite remainder must divide the moment
@@ -222,6 +228,12 @@ def build_species_hermite_mesh_plan(
     devices = int(num_devices)
     if devices < 1:
         raise ValueError("num_devices must be >= 1")
+    nl_chunks = int(laguerre_chunks)
+    if nl_chunks < 1 or devices % nl_chunks:
+        raise ValueError(
+            f"{devices} devices are not a multiple of {nl_chunks} Laguerre blocks"
+        )
+    total, devices = devices, devices // nl_chunks
     depth = int(hermite_ghost_depth)
     if depth < 0:
         raise ValueError("hermite_ghost_depth must be >= 0")
@@ -251,12 +263,16 @@ def build_species_hermite_mesh_plan(
     if "s" in dims:
         chunks["s"] = ns_chunks
     chunks["m"] = nm_chunks
-    shard_shape = tuple(sizes[dim] // chunks[dim] for dim in dims)
+    if nl_chunks > 1:
+        chunks["l"] = nl_chunks
+    shard_shape = tuple(
+        sizes[dim] // (1 if dim == "l" else chunks[dim]) for dim in dims
+    )
     needs_halo = bool(nm_chunks > 1 and depth > 0)
     return VelocityShardingPlan(
         state_shape=shape,
         dims=dims,
-        num_devices=devices,
+        num_devices=total,
         chunks=chunks,
         shard_shape=shard_shape,
         active_axes=tuple(dim for dim in dims if chunks[dim] > 1),
@@ -267,7 +283,9 @@ def build_species_hermite_mesh_plan(
             axis for axis in ("s", "m") if chunks.get(axis, 1) > 1
         ),
         communication_pattern=(
-            "hermite_ghost_exchange+field_psum" if needs_halo else "field_psum"
+            ("hermite_ghost_exchange+" if needs_halo else "")
+            + "field_psum"
+            + ("+laguerre_psum" if nl_chunks > 1 else "")
         ),
         load_balance=1.0,
     )

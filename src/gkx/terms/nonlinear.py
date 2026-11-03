@@ -45,6 +45,7 @@ class _LaguerreGridContext:
     j0: jnp.ndarray | None
     j1_over_alpha: jnp.ndarray | None
     b: jnp.ndarray
+    reduce_axis: str | None = None  # mesh axis the quadrature points are split over
 
 
 @dataclass(frozen=True)
@@ -225,6 +226,7 @@ def _prepare_nonlinear_path(
     laguerre_j1_over_alpha: jnp.ndarray | None,
     b: jnp.ndarray | None,
     laguerre_mode: str,
+    laguerre_axis_name: str | None = None,
 ) -> _PreparedNonlinearPath:
     """Prepare common nonlinear bracket routing decisions."""
 
@@ -252,6 +254,7 @@ def _prepare_nonlinear_path(
             j0=cast(jnp.ndarray | None, laguerre_j0),
             j1_over_alpha=cast(jnp.ndarray | None, laguerre_j1_over_alpha),
             b=cast(jnp.ndarray, b),
+            reduce_axis=laguerre_axis_name,
         )
     electromagnetic = (prep.bpar is not None and bpar_weight != 0.0) or (
         prep.apar is not None and apar_weight != 0.0
@@ -339,6 +342,8 @@ def _laguerre_contribution_from_prepared(
             **_bracket_kwargs(c),
         )
     total = _laguerre_to_spectral(total, ctx.to_spectral)
+    if ctx.reduce_axis is not None:
+        total = jax.lax.psum(total, ctx.reduce_axis)
     return _squeeze_species_output(
         _weighted_total(prep.G, c.weight, total),
         prep.squeeze_species,
@@ -403,8 +408,12 @@ def nonlinear_em_contribution(
     ny_full: int | None = None,
     laguerre_mode: str = "grid",
     radial_phase: jnp.ndarray | None = None,
+    laguerre_axis_name: str | None = None,
 ) -> jnp.ndarray:
     """Nonlinear E×B + flutter contribution using Laguerre gyroaveraging.
+
+    ``laguerre_axis_name`` names a ``shard_map`` axis over which the Laguerre
+    quadrature-point arrays are split; the partial moment sums are ``psum``-ed.
 
     ``apar_weight`` and ``bpar_weight`` are used as on/off toggles (nonzero
     enables the term); the fields themselves already include any scaling.
@@ -427,6 +436,7 @@ def nonlinear_em_contribution(
         laguerre_j1_over_alpha=laguerre_j1_over_alpha,
         b=b,
         laguerre_mode=laguerre_mode,
+        laguerre_axis_name=laguerre_axis_name,
     )
     ctx = _NonlinearBracketContext(
         tz=tz,

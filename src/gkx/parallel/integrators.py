@@ -23,6 +23,7 @@ from gkx.operators.linear.params import (
     _SPECIES_PARAM_NAMES,
 )
 from gkx.config import method_error
+from gkx.parallel.state import LAGUERRE_MESH_AXIS
 from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
 from gkx.core_ky_layout import source_ny_full
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
@@ -494,6 +495,44 @@ class SpeciesHermiteRun:
         )
 
 
+# Cache arrays indexed by Laguerre quadrature point, and the axis that is.
+_LAGUERRE_GRID_AXES = {
+    "laguerre_to_grid": 1,
+    "laguerre_to_spectral": 0,
+    "laguerre_roots": 0,
+    "laguerre_j0": 1,
+    "laguerre_j1_over_alpha": 1,
+}
+
+
+def _split_laguerre_grid(cache, arrays, specs, chunks):
+    """Pad the quadrature-point arrays to a multiple of ``chunks`` and split them.
+
+    Padded points carry zero transform weight, so they add exact zeros to the
+    moment sum and the split bracket equals the whole one up to summation order.
+    """
+
+    from jax.sharding import PartitionSpec
+
+    for name, axis in _LAGUERRE_GRID_AXES.items():
+        value = getattr(cache, name, None)
+        if value is None:
+            raise NotImplementedError(f"Laguerre-split bracket needs cache.{name}")
+        n_grid = int(cache.laguerre_roots.shape[0])
+        if int(value.shape[axis]) != n_grid:
+            raise NotImplementedError(
+                f"Laguerre-split bracket needs cache.{name} indexed by the "
+                f"{n_grid} quadrature points on axis {axis}"
+            )
+        pad = [(0, 0)] * value.ndim
+        pad[axis] = (0, -n_grid % chunks)
+        spec = list(specs[name]) if name in specs else [None] * value.ndim
+        spec += [None] * (value.ndim - len(spec))
+        spec[axis] = LAGUERRE_MESH_AXIS
+        arrays[name] = jnp.pad(jnp.asarray(value), pad)
+        specs[name] = PartitionSpec(*spec)
+
+
 def _species_hermite_inputs(cache, params, ns, real_dtype, plan, hermite_count):
     """Return the sharded leaves and their specs for one mesh placement."""
 
@@ -522,6 +561,8 @@ def _species_hermite_inputs(cache, params, ns, real_dtype, plan, hermite_count):
         name: PartitionSpec("s", *([None] * (value.ndim - 1)))
         for name, value in species_cache.items()
     }
+    if int(plan.chunks.get("l", 1)) > 1:
+        _split_laguerre_grid(cache, species_cache, species_specs, plan.chunks["l"])
     species_params = {
         name: _as_species_array(getattr(params, name), ns, name).astype(real_dtype)
         for name in _SPECIES_PARAM_NAMES
@@ -651,6 +692,7 @@ def _species_hermite_local_rhs(
     real_dtype,
     compressed_real_fft,
     laguerre_mode,
+    laguerre_axis_name=None,
 ):
     """Evaluate the production nonlinear RHS on one shard of the mesh."""
 
@@ -740,6 +782,7 @@ def _species_hermite_local_rhs(
             b=cache.b,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
+            laguerre_axis_name=laguerre_axis_name,
         )
     )
     return dG + bracket, fields, head
@@ -790,7 +833,7 @@ def _reject_unsharded_hermite_terms(term_cfg, params, plan) -> None:
 
 
 def _resolve_species_hermite_placement(
-    G0, cache, params, *, plan, devices, num_devices
+    G0, cache, params, *, plan, devices, num_devices, laguerre_devices=1
 ):
     """Return the mesh, plan, and every sharded leaf for one placement."""
 
@@ -811,7 +854,9 @@ def _resolve_species_hermite_placement(
         else list(_resolve_parallel_devices(num_devices=num_devices))
     )
     resolved = plan or build_species_hermite_mesh_plan(
-        tuple(G0.shape), num_devices=len(device_list)
+        tuple(G0.shape),
+        num_devices=len(device_list),
+        laguerre_chunks=laguerre_devices,
     )
     mesh = build_species_hermite_mesh(resolved, devices=device_list)
     return mesh, resolved, species_hermite_state_spec(6)
@@ -864,6 +909,7 @@ def _species_hermite_mapped(
     )
     n_cache = len(species_cache) + len(windowed)
     mesh_axes = ("s", "m")
+    laguerre_split = int(plan.chunks.get("l", 1)) > 1
 
     def local_step(local, index, *leaves):
         shard_cache = replace(cache, **dict(zip(names[:n_cache], leaves[:n_cache])))
@@ -883,6 +929,7 @@ def _species_hermite_mapped(
             real_dtype=real_dtype,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
+            laguerre_axis_name=LAGUERRE_MESH_AXIS if laguerre_split else None,
         )
         scalars = (
             _fused_scalar_diagnostics(
@@ -935,6 +982,7 @@ def integrate_nonlinear_species_hermite(
     num_devices: int | None = None,
     compressed_real_fft: bool = True,
     laguerre_mode: str = "grid",
+    laguerre_devices: int = 1,
 ) -> SpeciesHermiteRun:
     """Integrate the nonlinear system on a species x Hermite ``shard_map`` mesh.
 
@@ -942,6 +990,12 @@ def integrate_nonlinear_species_hermite(
     traces are stacked from inside that scan rather than recomputed afterwards.
     Supplying ``grid`` with ``vol_fac``/``flux_fac`` turns the traces on; without
     them the route is compute-only and returns an empty trace map.
+
+    ``laguerre_devices = L > 1`` additionally splits the bracket's Laguerre
+    quadrature points over ``L`` devices per ``(species, Hermite)`` block
+    (``num_devices`` counts all of them). The state, the linear terms and the
+    field solve are replicated over that axis; the cost is one ``psum`` of the
+    bracket's moment sum per RHS. It needs ``laguerre_mode = "grid"``.
     """
 
     _validate_steps(steps)
@@ -950,7 +1004,13 @@ def integrate_nonlinear_species_hermite(
     state_dtype = jnp.result_type(G0, jnp.complex64)
     state = jnp.asarray(G0, dtype=state_dtype)
     mesh, resolved, state_spec = _resolve_species_hermite_placement(
-        state, cache, params, plan=plan, devices=devices, num_devices=num_devices
+        state,
+        cache,
+        params,
+        plan=plan,
+        devices=devices,
+        num_devices=num_devices,
+        laguerre_devices=laguerre_devices,
     )
     _reject_unsharded_hermite_terms(term_cfg, params, resolved)
     record = grid is not None and vol_fac is not None and flux_fac is not None
@@ -1016,7 +1076,7 @@ def integrate_nonlinear_species_hermite(
         mesh=mesh,
         in_specs=(state_spec,) + specs,
         out_specs=out_specs,
-        axis_names={"s", "m"},
+        axis_names={"s", "m", LAGUERRE_MESH_AXIS},
         check_vma=_CHECK_VMA,
     )
     from jax.sharding import NamedSharding
