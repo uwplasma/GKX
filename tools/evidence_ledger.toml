@@ -38,7 +38,7 @@
 # resolution-limited rather than converged.
 
 schema_version = 1
-updated = "2026-10-20"
+updated = "2026-11-02"
 
 # ---------------------------------------------------------------- README parity
 
@@ -119,7 +119,6 @@ notes = "provenance corrected 2026-09-08. The generator is NOT tools/comparison/
 [[row]]
 id = "L-lin-cyclone-miller"
 claim = "README linear parity table, Cyclone Miller"
-readme_label = "Cyclone Miller"
 observable = "100*max|gkx-ref|/max|ref| over the tracked scan, gamma and omega"
 artifact = "docs/_static/cyclone_miller_linear_mismatch.csv"
 columns = { gamma_ref = "gamma_gx", gamma_gkx = "gamma", omega_ref = "omega_gx", omega_gkx = "omega" }
@@ -139,7 +138,6 @@ notes = "reference applies no end damping to Hermite m>=42 of 48 (11.11% of inde
 [[row]]
 id = "L-lin-cyclone-salpha"
 claim = "README linear parity table, Cyclone ITG"
-readme_label = "Cyclone ITG"
 observable = "100*max|gkx-ref|/max|ref| over the tracked scan, gamma and omega"
 artifact = "docs/_static/cyclone_mismatch_table.csv"
 columns = { gamma_ref = "gamma_ref", gamma_gkx = "gamma_gkx", omega_ref = "omega_ref", omega_gkx = "omega_gkx" }
@@ -159,7 +157,6 @@ notes = "same clamp as L-lin-cyclone-miller; the published 6.83%/1.59% disagreem
 [[row]]
 id = "L-lin-kbm"
 claim = "README linear parity table, KBM"
-readme_label = "KBM"
 observable = "100*max|gkx-ref|/max|ref| over the tracked scan, gamma and omega"
 artifact = "docs/_static/kbm_mismatch_table.csv"
 columns = { gamma_ref = "gamma_ref", gamma_gkx = "gamma_gkx", omega_ref = "omega_ref", omega_gkx = "omega_gkx" }
