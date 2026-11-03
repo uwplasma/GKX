@@ -540,6 +540,8 @@ class RuntimeCollisionConfig:
     damp_ends_amp: float | None = None
     damp_ends_widthfrac: float = 0.125
     damp_ends_scale_by_dt: bool = False
+    #: Dougherty only: electrons also scatter off the ions, GX ``ei_colls``.
+    electron_ion: bool = False
 
     def __post_init__(self) -> None:
         self._check_declared_velocity_regularization()
