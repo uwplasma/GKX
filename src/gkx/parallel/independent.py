@@ -6,10 +6,10 @@ from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from solvax import map_independent
 import jax
 import numpy as np
 import jax.numpy as jnp
+from solvax import map_independent
 from collections import Counter
 from collections.abc import Sequence
 from typing import Literal, TypeVar
