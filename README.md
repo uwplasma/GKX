@@ -70,16 +70,6 @@ result = gkx.solve(
 print(result.gamma, result.omega)
 ```
 
-## Linear stability
-
-![Linear growth rates, frequencies and an eigenfunction against GX](docs/_static/readme/readme_linear.png)
-
-Growth rate and frequency scans for Cyclone ITG (a), W7-X ITG (b) and KBM (d),
-and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
-0.9999999994.
-
-Under-resolved or unsettled fits warn instead of reporting a number.
-
 ## Models and defaults
 
 | Choice | Default | Notes |
@@ -104,31 +94,23 @@ kinetic electrons and electromagnetic runs, and how to check it.
 
 ## Agreement with other codes
 
-| Case | `gamma` | `omega` |
-| --- | ---: | ---: |
-| KAW | 0.0004% | 0.051% |
-| ETG | 0.040% | 0.074% |
-| W7-X | 0.265% | 0.296% |
-| HSX | 0.577% | 0.273% |
-
-`100 * max|GKX - ref| / max|ref|` over the tracked scan, recomputed by CI from
-the [evidence ledger](tools/evidence_ledger.toml). Newer comparisons use
-certified eigenpairs and a GX rebuilt with its `dampEnds_linked` clamp repaired;
-the older time-fit Cyclone and KBM rows were dropped because their GX reference
-omits end damping on the top Hermite moments.
-
-| Case | Result | Ledger row |
+| Case (reference) | Quantity | Agreement |
 | --- | --- | --- |
-| Cyclone ITG and Miller vs repaired GX | `gamma` within 0.3% at 7 of 8 `k_y`, +1.45% at Miller 0.15 | `X-cyclone-repaired-gx` |
-| Cyclone vs GS2 | within 0.3% at Miller 0.30, 0.40; 1.0% at s-alpha 0.30 | `X-cyclone-repaired-gx` |
-| Cyclone Miller, kinetic electrons, vs GX | `gamma` -0.35% and +0.27% at `k_y` 0.3, 0.5 | `X-ke-miller` |
-| W7-X bean tube vs repaired GX and Gonzalez-Jerez 2022 | `gamma`, `omega` 0.1750, 0.2628 (GX same; paper 0.172, 0.27) | `X-w7x-itg-paper` |
-| KBM vs GS2 | 19% at `ntheta` 32, -3.2% at the `ntheta` limit | `X-kbm-beta-gs2` |
-| Nonlinear Cyclone heat flux vs GX Table 1 | 7.08 +- 0.12 against 7.2 +- 0.8 | `N-cyclone-gx-table1`, `N-cyclone-gx-fig4b` |
+| KAW (analytic dispersion) | gamma, omega | gamma 0.0004%, omega 0.051% |
+| ETG (GX) | gamma, omega | gamma 0.040%, omega 0.074% |
+| W7-X ITG (GX) | gamma, omega | gamma 0.265%, omega 0.296% |
+| HSX ITG (GX) | gamma, omega | gamma 0.577%, omega 0.273% |
+| Cyclone ITG and Miller (GX) | gamma | within 0.3% at 7 of 8 `k_y` |
+| Cyclone ITG and Miller (GS2) | gamma | within 1.0% at 5 of 6 `k_y` compared |
+| Cyclone Miller, kinetic electrons (GX, GS2) | gamma, omega | within 0.4% of GX, 1.5% of GS2 |
+| W7-X bean tube, `k_y rho_i` 2.1 (GX, Gonzalez-Jerez 2022) | gamma, omega | 0.1750, 0.2628 as GX; paper 0.172, 0.27 |
+| KBM, beta 0.015 (GS2) | gamma | 3% at the converged `ntheta` |
+| Nonlinear Cyclone heat flux (GX paper Table 1) | Q_i/Q_GB | 7.08 +- 0.12 against 7.2 +- 0.8 |
 
-These are agreements on shared test cases, not a ranking of codes. Open items
-(TEM velocity convergence, stella's mirror-term sensitivity, weakly growing
-modes) and the figures are in [validation](docs/validation.rst).
+Linear scan rows are `100 * max|GKX - ref| / max|ref|` over the scan, checked
+against the [evidence ledger](tools/evidence_ledger.toml) in CI. These are
+agreements on shared test cases, not a ranking of codes. Cases, resolutions,
+open items and provenance are in [validation](docs/validation.rst).
 
 ## Nonlinear turbulence
 
@@ -218,8 +200,7 @@ pytest -n 4
 CI requires 95% line coverage plus the physics, convergence, comparison,
 differentiability and performance gates ([CONTRIBUTING.md](CONTRIBUTING.md)).
 Figures in `docs/_static/readme/` have JSON companions with every plotted
-number; their generators were removed from `scripts/` and are listed in
-`plan/log.md` (2026-10-15). Cite GKX with [CITATION.cff](CITATION.cff).
+number. Cite GKX with [CITATION.cff](CITATION.cff).
 
 ## License
 
