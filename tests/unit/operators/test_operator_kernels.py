@@ -3117,3 +3117,50 @@ def test_mu_grid_collisional_growth_rate_matches_laguerre():
     mu = gkx.solve(nodal, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
     assert 0.03 < laguerre.gamma < 0.1
     assert abs(mu.gamma - laguerre.gamma) < 0.03 * laguerre.gamma
+
+
+_PRODUCT_GROUPS = ((0, 1), (2,))
+
+
+def _product_inputs():
+    rng = np.random.default_rng(5)
+    f = lambda *s: jnp.asarray(rng.normal(size=s), jnp.float32)
+    shape = (2, 3, 5, 4, 6, 16)
+    chi = (3, 2, 3, 1, 4, 6, 16)
+    return f(*shape), f(*shape), f(*chi), f(*chi)
+
+
+def test_fused_products_match_the_reference_and_its_derivatives(monkeypatch):
+    """Interpreted, so it runs on any backend; groups sum fields in the RHS order."""
+
+    from gkx.operators.nonlinear import brackets
+
+    args = _product_inputs()
+    got = brackets._pallas_products(*args, 7.0, _PRODUCT_GROUPS, interpret=True)
+    ref = brackets._reference_products(*args, 7.0, _PRODUCT_GROUPS)
+    np.testing.assert_allclose(got, ref, rtol=1e-6, atol=1e-4)
+    kernel = brackets._pallas_products
+    monkeypatch.setattr(
+        brackets, "_pallas_products", lambda *a: kernel(*a, interpret=True)
+    )
+    tangents = tuple(jnp.cos(a + 1.0) for a in args)
+    _, dot = jax.jvp(lambda *a: brackets.fused_products(*a, 7.0, _PRODUCT_GROUPS), args, tangents)
+    _, ref_dot = jax.jvp(lambda *a: brackets._reference_products(*a, 7.0, _PRODUCT_GROUPS), args, tangents)
+    np.testing.assert_allclose(dot, ref_dot, rtol=1e-5, atol=1e-2)
+    loss = lambda fn: lambda gx: jnp.sum(fn(gx, *args[1:], 7.0, _PRODUCT_GROUPS) ** 2)
+    np.testing.assert_allclose(
+        jax.grad(loss(brackets.fused_products))(args[0]),
+        jax.grad(loss(brackets._reference_products))(args[0]),
+        rtol=1e-4,
+        atol=1e-1,
+    )
+
+
+def test_product_kernel_usable_only_on_nvidia_gpu_float32():
+    from gkx.operators.nonlinear import brackets
+
+    g = jnp.zeros((1, 2, 2, 4, 4, 4), jnp.float32)
+    assert not brackets.product_kernel_usable(g.astype(jnp.float16))
+    assert not brackets.product_kernel_usable(g[0])
+    if jax.default_backend() != "gpu":
+        assert not brackets.product_kernel_usable(g)

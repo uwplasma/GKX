@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import functools
 from typing import Any, Callable, Sequence
 
+import jax
 import jax.numpy as jnp
 from jax import lax
 
@@ -116,6 +118,105 @@ def _complete_hermitian_ky(
     )
 
 
+# Real-space bracket product. After the two ``irfft2`` calls the bracket is
+# ``dG_x dchi_y - dG_y dchi_x`` per Hermite row, summed over the fields of a
+# group. XLA fuses the scale, the broadcast over ``m`` and the field sum into
+# loop fusions that run well off roofline, and writes them in a layout the
+# forward transform then re-reads. ``fused_products`` reads each ``chi`` tile
+# once per ``(s, l)`` program, reuses it for every ``m`` row, and writes the
+# group sums in the layout ``rfft2`` consumes (Pallas/Triton, float32, NVIDIA).
+# The jnp expression below stays the reference and the derivatives.
+
+
+def _products_kernel(gx, gy, cx, cy, out, *, nm: int, groups, scale: float):
+    s = jnp.asarray(scale, gx.dtype)
+    cxs = [cx[f, 0, 0, :] * s for f in range(cx.shape[0])]
+    cys = [cy[f, 0, 0, :] * s for f in range(cy.shape[0])]
+
+    def row(m, _):
+        a, b = gx[0, 0, m, :] * s, gy[0, 0, m, :] * s
+        for g, fields in enumerate(groups):
+            total = a * cys[fields[0]] - b * cxs[fields[0]]
+            for f in fields[1:]:
+                total = total + (a * cys[f] - b * cxs[f])
+            out[g, 0, 0, m, :] = total
+        return 0
+
+    lax.fori_loop(0, nm, row, 0)
+
+
+def _pallas_products(dgx, dgy, dcx, dcy, scale, groups, *, interpret=False):
+    from jax.experimental import pallas as pl
+    from jax.experimental.pallas import triton as plgpu
+
+    ns, nl, nm, ny, nx, nz = dgx.shape
+    nf, n = dcx.shape[0], ny * nx * nz
+    block = min(512, n & -n)
+    flat = (ns, nl, nm, n)
+    chi = (nf, ns, nl, n)
+    g_spec = pl.BlockSpec((1, 1, nm, block), lambda s, l, p: (s, l, 0, p))
+    c_spec = pl.BlockSpec((nf, 1, 1, block), lambda s, l, p: (0, s, l, p))
+    o_spec = pl.BlockSpec(
+        (len(groups), 1, 1, nm, block), lambda s, l, p: (0, s, l, 0, p)
+    )
+    out = pl.pallas_call(
+        functools.partial(_products_kernel, nm=nm, groups=groups, scale=scale),
+        out_shape=jax.ShapeDtypeStruct((len(groups),) + flat, dgx.dtype),
+        grid=(ns, nl, n // block),
+        in_specs=[g_spec, g_spec, c_spec, c_spec],
+        out_specs=o_spec,
+        interpret=interpret,
+        compiler_params=plgpu.CompilerParams(num_warps=4),
+    )(dgx.reshape(flat), dgy.reshape(flat), dcx.reshape(chi), dcy.reshape(chi))
+    return out.reshape((len(groups),) + dgx.shape)
+
+
+def _reference_products(dgx, dgy, dcx, dcy, scale, groups):
+    dgx, dgy, dcx, dcy = (x * jnp.asarray(scale, x.dtype) for x in (dgx, dgy, dcx, dcy))
+    prod = dgx[None] * dcy - dgy[None] * dcx
+
+    def group_sum(fields):
+        total = prod[fields[0]]
+        for f in fields[1:]:
+            total = total + prod[f]
+        return total
+
+    return jnp.stack([group_sum(fields) for fields in groups])
+
+
+@functools.partial(jax.custom_jvp, nondiff_argnums=(4, 5))
+def fused_products(dgx, dgy, dcx, dcy, scale, groups):
+    """Group sums of ``dG_x dchi_y - dG_y dchi_x`` over the field stack.
+
+    ``dgx``, ``dgy``: ``(Ns, Nl, Nm, Ny, Nx, Nz)``; ``dcx``, ``dcy``:
+    ``(Nf, Ns, Nl, 1, Ny, Nx, Nz)``, all before the inverse-transform scale,
+    which the kernel applies. Returns ``(len(groups), Ns, Nl, Nm, Ny, Nx, Nz)``.
+    """
+
+    return _pallas_products(dgx, dgy, dcx, dcy, scale, groups)
+
+
+@fused_products.defjvp
+def _fused_products_jvp(scale, groups, primals, tangents):
+    tangents = tuple(
+        jnp.zeros_like(p) if t is None else t for p, t in zip(primals, tangents)
+    )
+    ref = functools.partial(_reference_products, scale=scale, groups=groups)
+    return fused_products(*primals, scale, groups), jax.jvp(ref, primals, tangents)[1]
+
+
+def product_kernel_usable(g) -> bool:
+    """Whether :func:`fused_products` applies: NVIDIA GPU, float32, 6-D state."""
+
+    return (
+        jax.default_backend() == "gpu"
+        and "NVIDIA" in jax.devices()[0].device_kind
+        and g.ndim == 6
+        and g.dtype == jnp.float32
+        and (g.shape[-3] * g.shape[-2] * g.shape[-1]) % 64 == 0
+    )
+
+
 def _spectral_bracket_half_core(
     G_hat: jnp.ndarray,
     chi_hat: jnp.ndarray,
@@ -128,6 +229,7 @@ def _spectral_bracket_half_core(
     ny_full: int | None = None,
     multiple_fields: bool,
     combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
+    fuse: tuple[tuple[tuple[int, ...], ...], Callable | None] | None = None,
 ) -> tuple[jnp.ndarray, int, int]:
     """Return the bracket on the ``ky >= 0`` rows, with ``(ny_full, nx)``.
 
@@ -188,21 +290,30 @@ def _spectral_bracket_half_core(
     kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
     ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
     grad_G = jnp.stack([imag * kx_b * G_nyc, imag * ky_b * G_nyc], axis=0)
-    grad_G = jnp.fft.irfft2(grad_G, s=(kx.shape[1], ny), axes=axes) * ifft_scale
-    dG_dx, dG_dy = grad_G
-
     kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
     ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
     grad_chi = jnp.stack([imag * kx_chi * chi_nyc, imag * ky_chi * chi_nyc], axis=0)
-    grad_chi = jnp.fft.irfft2(grad_chi, s=(kx.shape[1], ny), axes=axes) * ifft_scale
-    dchi_dx, dchi_dy = grad_chi
-
-    if multiple_fields:
-        bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
+    shape = (kx.shape[1], ny)
+    grad_G = jnp.fft.irfft2(grad_G, s=shape, axes=axes)
+    grad_chi = jnp.fft.irfft2(grad_chi, s=shape, axes=axes)
+    if fuse is not None and product_kernel_usable(grad_G[0]):
+        groups, group_combine = fuse  # the kernel applies the scale
+        chi_x, chi_y = grad_chi if multiple_fields else grad_chi[:, None]
+        chi_shape = (chi_x.shape[0],) + grad_G[0].shape[:2] + chi_x.shape[-4:]
+        chi_x, chi_y = (jnp.broadcast_to(c, chi_shape) for c in (chi_x, chi_y))
+        bracket = fused_products(
+            grad_G[0], grad_G[1], chi_x, chi_y, float(ifft_scale), groups
+        )
+        bracket = bracket[0] if group_combine is None else group_combine(bracket)
     else:
-        bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
-    if combine is not None:  # linear in the real-space products: one forward FFT
-        bracket = combine(bracket)
+        dG_dx, dG_dy = grad_G * ifft_scale
+        dchi_dx, dchi_dy = grad_chi * ifft_scale
+        if multiple_fields:
+            bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
+        else:
+            bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
+        if combine is not None:  # linear in the real-space products: one forward FFT
+            bracket = combine(bracket)
     positive_ky = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
     positive_ky *= _broadcast_mask(
         half_dealias_mask(mask, ny_full=ny), positive_ky.ndim
@@ -250,6 +361,7 @@ def _spectral_bracket_full_core(
     ny_full: int | None = None,
     multiple_fields: bool,
     combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
+    fuse: Any = None,  # the product kernel serves the half-spectrum route only
 ) -> jnp.ndarray:
     """Return the bracket by full complex transforms on a two-sided ``ky`` axis.
 
@@ -317,6 +429,7 @@ def _spectral_bracket_multi_real_fft(
     G_hat: jnp.ndarray,
     chi_hat_stack: jnp.ndarray,
     combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
+    fuse: tuple | None = None,
     **kwargs,
 ) -> jnp.ndarray:
     """Bracket of ``G`` with each field of the stack.
@@ -334,9 +447,9 @@ def _spectral_bracket_multi_real_fft(
     )
     field_axes = tuple(i + 1 for i in axes)
 
-    def run(g, chi, combine):
+    def run(g, chi, combine, fuse=None):
         return _spectral_bracket_real_fft_core(
-            g, chi, multiple_fields=True, combine=combine, **kwargs
+            g, chi, multiple_fields=True, combine=combine, fuse=fuse, **kwargs
         )
 
     def reduced(g, chi):
@@ -354,7 +467,7 @@ def _spectral_bracket_multi_real_fft(
         G_hat,
         chi_hat_stack,
         cpu=reduced,
-        default=lambda g, chi: run(g, chi, combine),
+        default=lambda g, chi: run(g, chi, combine, fuse),
     )
 
 
@@ -362,6 +475,7 @@ def _spectral_bracket_multi_full(
     G_hat: jnp.ndarray,
     chi_hat_stack: jnp.ndarray,
     combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
+    fuse: Any = None,
     **kwargs,
 ) -> jnp.ndarray:
     return _spectral_bracket_full_core(
