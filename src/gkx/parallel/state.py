@@ -91,6 +91,7 @@ def resolve_state_sharding(
 
 SPECIES_MESH_AXIS = "s"
 HERMITE_MESH_AXIS = "m"
+LAGUERRE_MESH_AXIS = "l"
 
 
 def build_species_hermite_mesh(
@@ -98,7 +99,10 @@ def build_species_hermite_mesh(
     *,
     devices: Iterable[jax.Device] | None = None,
 ) -> Mesh:
-    """Return the 2-D ``(species, hermite)`` device mesh a plan asks for.
+    """Return the ``(species, hermite, laguerre)`` device mesh a plan asks for.
+
+    The Laguerre axis has size 1 unless the plan splits the bracket's
+    quadrature points; the state is replicated over it.
 
     Species vary slowest so that a species-only mesh keeps each species'
     devices adjacent, which makes the halo-free configuration the natural one
@@ -108,14 +112,17 @@ def build_species_hermite_mesh(
     device_list = list(devices) if devices is not None else list(jax.devices())
     ns_chunks = int(plan.chunks.get(SPECIES_MESH_AXIS, 1))
     nm_chunks = int(plan.chunks.get(HERMITE_MESH_AXIS, 1))
-    needed = ns_chunks * nm_chunks
+    nl_chunks = int(plan.chunks.get(LAGUERRE_MESH_AXIS, 1))
+    needed = ns_chunks * nm_chunks * nl_chunks
     if len(device_list) < needed:
         raise ValueError(
-            f"the ({ns_chunks}, {nm_chunks}) species-Hermite mesh needs {needed} "
+            f"the ({ns_chunks}, {nm_chunks}, {nl_chunks}) species-Hermite-Laguerre mesh needs {needed} "
             f"devices, but {len(device_list)} are visible"
         )
-    grid = np.array(device_list[:needed], dtype=object).reshape(ns_chunks, nm_chunks)
-    return Mesh(grid, (SPECIES_MESH_AXIS, HERMITE_MESH_AXIS))
+    grid = np.array(device_list[:needed], dtype=object).reshape(
+        ns_chunks, nm_chunks, nl_chunks
+    )
+    return Mesh(grid, (SPECIES_MESH_AXIS, HERMITE_MESH_AXIS, LAGUERRE_MESH_AXIS))
 
 
 def species_hermite_state_spec(ndim: int) -> PartitionSpec:
@@ -152,6 +159,7 @@ def resolve_species_hermite_sharding(
 
 __all__ = [
     "HERMITE_MESH_AXIS",
+    "LAGUERRE_MESH_AXIS",
     "SPECIES_MESH_AXIS",
     "build_species_hermite_mesh",
     "resolve_species_hermite_sharding",

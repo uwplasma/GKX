@@ -3097,3 +3097,34 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
         assert np.max(np.abs(np.asarray(reference) - got)) < 5.0e-6
         # A trace that is identically zero would pass any tolerance.
         assert np.max(np.abs(got)) > 0.0
+
+
+@pytest.mark.parametrize("electromagnetic", [False, True])
+def test_laguerre_split_bracket_matches_unsplit_route(electromagnetic):
+    """Splitting the quadrature points (5 padded to 6) only reorders a sum."""
+
+    import jax
+    import numpy as np
+
+    from gkx.parallel.integrators import integrate_nonlinear_species_hermite
+    from gkx.terms.config import TermConfig
+
+    if len(jax.devices()) < 4:
+        pytest.skip("needs four devices")
+    state, cache, params, grid, vol_fac, flux_fac = _species_hermite_problem(nl=4)
+    terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
+    if electromagnetic:
+        params = replace(params, beta=jnp.asarray(0.01), fapar=1.0)
+        terms = TermConfig(nonlinear=1.0, apar=1.0, bpar=1.0)
+    kw = dict(
+        dt=1.0e-3, steps=3, terms=terms, grid=grid, vol_fac=vol_fac, flux_fac=flux_fac
+    )
+    whole = integrate_nonlinear_species_hermite(
+        state, cache, params, num_devices=2, **kw
+    )
+    split = integrate_nonlinear_species_hermite(
+        state, cache, params, num_devices=4, laguerre_devices=2, **kw
+    )
+    assert np.max(np.abs(np.asarray(whole.state) - np.asarray(split.state))) < 1.0e-6
+    for name, reference in whole.traces.items():
+        assert np.allclose(reference, split.traces[name], rtol=1.0e-5, atol=1.0e-12)
