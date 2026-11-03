@@ -3224,9 +3224,6 @@ _README_PARITY_SOURCES: dict[str, tuple[str, ...]] = {
         "ETG": "etg_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
         "W7-X": "w7x_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
         "HSX": "hsx_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
-        "Cyclone Miller": "cyclone_miller_linear_mismatch.csv gamma_gx gamma omega_gx omega",
-        "Cyclone ITG": "cyclone_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
-        "KBM": "kbm_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
     }.items()
 }
 
