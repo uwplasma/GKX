@@ -132,7 +132,7 @@ the state each step, so it does not divide the work either.
 CPU, GPU and multi-device defaults
 ----------------------------------
 
-GKX uses JAX's default device, so one GPU when a CUDA ``jaxlib`` is installed, else the CPU with XLA's own threads. One run uses one device. Independent ``k_y`` scans and ensembles are the production multi-device route (:doc:`parallelization`). Whole-state sharding is diagnostic.
+GKX uses JAX's default device, so one GPU when a CUDA ``jaxlib`` is installed, else the CPU with XLA's own threads. One run uses one device (``[parallel] strategy = "serial"``). Independent ``k_y`` scans and ensembles are the production multi-device route (:doc:`parallelization`). Whole-state sharding is diagnostic.
 
 .. list-table::
    :header-rows: 1
@@ -147,7 +147,7 @@ GKX uses JAX's default device, so one GPU when a CUDA ``jaxlib`` is installed, e
      - JAX preallocates most GPU memory
      - Several processes share one GPU
    * - ``GKX_JAX_CACHE_DIR``, ``GKX_JAX_CACHE=0``
-     - cache on, beside the source tree
+     - on for the ``gkx`` command, off in the Python API; beside the source tree
      - The tree is on a slow or shared filesystem; ``0`` turns it off
    * - ``JAX_ENABLE_X64=true``
      - ``float32``
