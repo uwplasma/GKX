@@ -291,8 +291,7 @@ Row notes
   repaired GX to 3e-4 at W7-X ky 1.1-2.4 and HSX ky 0.5-1.5. On W7-X at ky
   0.9-1.0 the eigensolver returns the fastest of near-degenerate bulk modes
   (ky 1.0: omega 0.2645 against GX's 0.1489, gamma within 2e-4); GKX's time
-  route reproduces GX at ky 1.0. stella, run on the same field line, does not
-  reproduce either code's growth-rate curve and is not used.
+  route reproduces GX at ky 1.0.
 
 Linear rows declare their velocity-space regularization: KAW and ETG use
 ``none``; W7-X, HSX, Cyclone Miller and KBM use ``hermite-kz-hypercollision``
@@ -390,8 +389,8 @@ Cyclone Miller (:math:`m_i/m_e` = 3670, :math:`T_e = T_i`, :math:`a/L_T` 2.49,
 :math:`a/L_n` 0.8), :math:`k_y\rho_i = 0.3`, growth rate in GX units
 (2026-10-27, office). GX: repaired variant, :math:`t = 60`, ``Nl`` 16 unless
 stated; GKX: nodal :math:`\mu` grid, 8 nodes, end-damping rate 160.6; GS2: rung
-k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8). stella is excluded (see
-:doc:`conventions`).
+k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8); stella: nzed 48, nperiod 3,
+nvgrid 24, nmu 12.
 
 .. list-table::
    :header-rows: 1
@@ -408,6 +407,9 @@ k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8). stella is excluded (see
    * - GX ``Nl`` 4 / 8 / 12 / 16 at ``Nm`` 48
      - 0.2254 / 0.2322 / 0.2336 / 0.2318
      - 0.2270 / 0.2379 / 0.2376 / 0.2361
+   * - stella (nvgrid, nmu) = (16, 8) / (24, 12) / (32, 16)
+     - 0.2280 / 0.2294 / 0.2296
+     - 0.2496 / 0.2376 / 0.2329
    * - GKX ``Nm`` 16 / 24 / 32 / 48
      - 0.2245 / 0.2304 / 0.2303 / 0.2295
      - 0.2635 / 0.2496 / 0.2417 / 0.2364
@@ -416,17 +418,30 @@ k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8). stella is excluded (see
      - 0.2564 / 0.2496 / 0.2499
 
 At equal ``Nm`` GKX is within 1.2% of GX in :math:`\gamma` and 0.5% in
-:math:`\omega`. The growth rate is converged to about 1% (0.2295-0.2349 over
-all three codes). The frequency is not: GX and GKX still fall with ``Nm`` at 48-64
-and sit 6-7% above GS2. GX returns NaN for ``Nm`` 96 and 128 in this build.
-Collisionless TEM (ky rho_s 0.3): GS2 0.871, GX ``Nm`` 32 / 64 0.670 / 0.770,
-GKX ``Nm`` 24 / 48 0.611 / 0.744; both moment codes are 15-23% low at the usual
-``Nm`` and need more than 96. With :math:`\nu_{ee} = 0.01`, GS2 loses 15%, GX
-14%, GKX 7-8% (Lenard-Bernstein or Landau): the collisional damping in GKX is
-about half of GX's at the same ``nu``, not explained.
-KBM, beta 0.015, A_par, ky 0.3: GX 0.3135 (nperiod 2, ``Nm`` 48) and 0.3389
-(nperiod 3); GKX 0.3155 and 0.3425; GS2 (nperiod 3) 0.2939, which is 13% below
-both. The GS2-GX gap on KBM is open.
+:math:`\omega`. The growth rate is converged to about 1% across the four codes
+(0.2294-0.2349). The frequency is not: GX, GKX and stella fall with velocity
+resolution (GX 0.2271 at ``Nm`` 96) towards GS2's 0.221. GX with the default
+``p_hyper_m = min(20, Nm/2)`` returns NaN from ``Nm`` 96; ``p_hyper_m = 10``
+runs (the sharp hypercollision exponent is unstable in single precision).
+Kinetic electrons at ky 0.4-0.6 agree to 1.6% in :math:`\gamma` and 0.3% in
+:math:`\omega` between stella and GX.
+
+TEM, collisionless, ky rho_s 0.3 (GX units, s-alpha, :math:`\epsilon = 0.16`):
+GS2 0.871, GX ``Nm`` 32 / 64 0.670 / 0.770, GKX ``Nm`` 24 / 48 0.611 / 0.744.
+The moment codes are 15-23% low at the usual ``Nm`` and need more than 96.
+The same TEM on a circular Miller surface: GS2 0.997, GX ``Nm`` 32 / 64
+0.778 / 0.876, stella (nvgrid, nmu) = (24, 12) / (32, 16) 0.853 / 0.902.
+With :math:`\nu_{ee} = 0.01` GS2 and GX lose 11-15% and GKX 7-8%. GX and GS2
+add electron-ion scattering to the electron rate (GX: ``nuei = Z nu``);
+GKX's Lenard-Bernstein operator is self-collision only. With
+:math:`\nu_e` doubled GKX loses 14.3% at ``Nm`` 24 and 13.6% at ``Nm`` 48,
+as GX does. The Landau operator, which carries the physical electron-ion term
+with an energy-dependent rate, loses 7-8%.
+
+KBM, beta 0.015, A_par, ky 0.3 (nperiod 2): GX ``ntheta`` 32 / 48 / 64 gives
+0.3135 / 0.2996 / 0.2944 and GS2 ``ntheta`` 32 / 48 / 64 gives 0.2617 / 0.2730 /
+0.2792 (``negrid`` 16 to 32 moves it 0.3%). The gap is 5% at ``ntheta`` 64 and
+closing; GKX uses ``ntheta`` 32 (0.3155).
 
 Lanes outside the ledger
 ------------------------
@@ -601,13 +616,7 @@ settings from ``examples/01_linear_tokamak/case_full.toml`` (``t_max = 150``) an
 fits ``t = 105--150``. The atlas reads ``tools/benchmark_atlas_manifest.toml``.
 
 The cross-code record of 2026-09 (``plan/research/2026-09-27-xcode/REPORT.md``)
-compares GKX with GX, GS2 and stella on Cyclone, in GX/GKX units:
-
-.. figure:: _static/readme/readme_crosscode.png
-   :alt: Cyclone growth rates from GKX, GX, GS2 and stella
-   :width: 90%
-
-   Cyclone growth rates from the four codes.
+compares GKX with GX and GS2 on Cyclone, in GX/GKX units:
 
 - **GX.** GX was rebuilt with the ``dampEnds_linked`` loop repaired (the original
   stopped at the kernel launch cap). Certified GKX eigenpairs at ``Nl=16``,
@@ -616,9 +625,6 @@ compares GKX with GX, GS2 and stella on Cyclone, in GX/GKX units:
 - **GS2.** Within 0.3% at Miller :math:`k_y=0.30` and 0.40, 1.0% at s-alpha 0.30.
 - **Kinetic electrons.** GS2 and repaired GX agree to 1.2% and 0.2% at
   :math:`k_y=0.30` and 0.50 on Cyclone Miller.
-- **stella.** Its growth rate is about 1.4 times the others and moves 0.3% when
-  its mirror term is removed, while the mirror term is 14% of GKX's
-  :math:`\gamma`. A lead, not a diagnosis.
 - **s-alpha** :math:`k_y=0.55` is converged in neither GS2's energy grid nor
   GKX's Laguerre ladder; the finest rungs agree to 0.3%.
 
