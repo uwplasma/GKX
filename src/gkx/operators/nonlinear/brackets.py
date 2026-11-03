@@ -298,11 +298,12 @@ def _spectral_bracket_half_core(
     grad_chi = jnp.fft.irfft2(grad_chi, s=shape, axes=axes)
     if fuse is not None and product_kernel_usable(grad_G[0]):
         groups, group_combine = fuse  # the kernel applies the scale
+        norm = float(ny * kx.shape[1]) if fft_norm is None else float(fft_norm)
         chi_x, chi_y = grad_chi if multiple_fields else grad_chi[:, None]
         chi_shape = (chi_x.shape[0],) + grad_G[0].shape[:2] + chi_x.shape[-4:]
         chi_x, chi_y = (jnp.broadcast_to(c, chi_shape) for c in (chi_x, chi_y))
         bracket = fused_products(
-            grad_G[0], grad_G[1], chi_x, chi_y, float(ifft_scale), groups
+            grad_G[0], grad_G[1], chi_x, chi_y, norm, groups
         )
         bracket = bracket[0] if group_combine is None else group_combine(bracket)
     else:
