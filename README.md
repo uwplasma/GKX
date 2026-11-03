@@ -98,13 +98,13 @@ kinetic electrons and electromagnetic runs, and how to check it.
 | --- | --- | --- |
 | KAW (analytic dispersion) | gamma, omega | gamma 0.0004%, omega 0.051% |
 | ETG (GX) | gamma, omega | gamma 0.040%, omega 0.074% |
-| W7-X ITG (GX) | gamma, omega | gamma 0.265%, omega 0.296% |
-| HSX ITG (GX) | gamma, omega | gamma 0.577%, omega 0.273% |
+| W7-X (GX) | gamma, omega | gamma 0.265%, omega 0.296% |
+| HSX (GX) | gamma, omega | gamma 0.577%, omega 0.273% |
 | Cyclone ITG and Miller (GX) | gamma | within 0.3% at 7 of 8 `k_y` |
-| Cyclone ITG and Miller (GS2) | gamma | within 1.0% at 5 of 6 `k_y` compared |
+| Cyclone ITG and Miller (GS2) | gamma | within 2.4% at five points, 0.3% at two |
 | Cyclone Miller, kinetic electrons (GX, GS2) | gamma, omega | within 0.4% of GX, 1.5% of GS2 |
 | W7-X bean tube, `k_y rho_i` 2.1 (GX, Gonzalez-Jerez 2022) | gamma, omega | 0.1750, 0.2628 as GX; paper 0.172, 0.27 |
-| KBM, beta 0.015 (GS2) | gamma | 3% at the converged `ntheta` |
+| KBM, beta 0.015 (GS2) | gamma | 3.2% at the `ntheta` limit of each code |
 | Nonlinear Cyclone heat flux (GX paper Table 1) | Q_i/Q_GB | 7.08 +- 0.12 against 7.2 +- 0.8 |
 
 Linear scan rows are `100 * max|GKX - ref| / max|ref|` over the scan, checked
