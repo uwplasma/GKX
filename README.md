@@ -28,23 +28,6 @@ differentiable on CPUs and GPUs.
 Saturated ITG turbulence on a Cyclone flux tube
 ([full-rate movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)).
 
-## New in 2.8
-
-- **Per-species velocity resolution:** ions and electrons keep their own
-  `(Nl, Nm)`, so ions no longer pay for the electrons' Hermite moments.
-  Kinetic-electron decks that name no resolution get converged per-species
-  counts; explicit steps are up to 1.9x faster in 1.5x less memory.
-- **Implicit collisions when needed:** at high electron collisionality the
-  IMEX steps take the Landau operator implicitly, where the explicit step
-  goes non-finite; low-collisionality runs are unchanged.
-- **Reflectionless Hermite closure (opt-in):** `[[species]] hermite_closure`
-  absorbs the last Hermite moment instead of damping it.
-- **Safer adaptive steps:** a deck with `dt` and `fixed_dt = false` uses the
-  controller's stepper, not `rk2`, which blew up on kinetic-electron decks.
-- **Python 3.10** is supported again.
-- Also: a nodal `mu` grid for linear runs, faster electromagnetic brackets and
-  RK4 stages, and a NaN fix in high-resolution Landau tables.
-
 ## Install and first run
 
 ```bash
@@ -87,20 +70,6 @@ result = gkx.solve(
 print(result.gamma, result.omega)
 ```
 
-## Linear stability
-
-![Linear growth rates, frequencies and an eigenfunction against GX](docs/_static/readme/readme_linear.png)
-
-Growth rate and frequency scans for Cyclone ITG (a), W7-X ITG (b) and KBM (d),
-and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
-0.9999999994.
-
-- The default eigensolver (`auto`) is a banded direct shift-invert where it
-  fits, else Arnoldi on the time-advance map. It returns an
-  eigenpair only after checking it against the full operator. Matrix-free
-  shift-invert is opt-in for a chosen branch ([policy and measurements](docs/algorithms.rst)).
-- Under-resolved or unsettled fits warn instead of reporting a number.
-
 ## Models and defaults
 
 | Choice | Default | Notes |
@@ -112,8 +81,11 @@ and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
 | Collisions | linearized Landau | conserving, H-theorem; Dougherty, Sugama alternatives ([operators](docs/operators.rst)) |
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
 | Time stepping | no `dt`: nonlinear `rk4-pi`, or adaptive `imex-ark3` for kinetic electrons at beta <= 3e-4; linear `rk4` + CFL | a `dt` gives `rk2` at that step; `fixed_dt = false` keeps the controller's stepper ([measured speedups](docs/guidance.rst)) |
-| Eigensolver | `auto` (banded, else `adaptive`), certified | shift-invert opt-in |
+| Eigensolver | `auto`: banded direct shift-invert where it fits, else Arnoldi on the time-advance map; every pair certified | matrix-free shift-invert opt-in ([algorithms](docs/algorithms.rst)) |
+| SOLVAX | `solvax>=0.33.0` | provides the sparse eigensolver and the `rk4-pi` stepper; installed with `pip install gkx` |
 | `ky` layout | `half`: the `1 + Ny//2` non-negative rows | `[grid] ky_layout = "full"` stores the two-sided axis; same physics to round-off, about 1.4-1.8x slower and 12-25% more memory |
+| Drift kernel | fused Pallas kernel on NVIDIA GPUs when `Nx*Nz >= 64` and `Nl*Nm <= 256` | default there; CPU and other GPUs keep the `jnp` terms, which derivatives use ([performance](docs/performance.rst)) |
+| Devices | one device | `[parallel] strategy = "batch"`, `axis = "ky"`, `num_devices` spreads independent `k_y` scans and ensembles; results match the serial run ([parallelization](docs/parallelization.rst)) |
 | Precision | `float32`; `float64` with `JAX_ENABLE_X64=true` | eigensolver, Krylov residual and conditioning checks need `float64` |
 | CPU threads | XLA's own; Eigen pool off on fewer than four CPUs | steps do not scale past about four threads ([performance](docs/performance.rst)) |
 
@@ -122,29 +94,23 @@ kinetic electrons and electromagnetic runs, and how to check it.
 
 ## Agreement with other codes
 
-| Case | `gamma` | `omega` |
-| --- | ---: | ---: |
-| KAW | 0.0004% | 0.051% |
-| ETG | 0.040% | 0.074% |
-| W7-X | 0.265% | 0.296% |
-| HSX | 0.577% | 0.273% |
-| Cyclone Miller | 5.51% | 1.25% |
-| Cyclone ITG | 6.83% | 1.59% |
-| **KBM** | **20.0%** | **11.1%** |
+| Case (reference) | Quantity | Agreement |
+| --- | --- | --- |
+| KAW (analytic dispersion) | gamma, omega | gamma 0.0004%, omega 0.051% |
+| ETG (GX) | gamma, omega | gamma 0.040%, omega 0.074% |
+| W7-X (GX) | gamma, omega | gamma 0.265%, omega 0.296% |
+| HSX (GX) | gamma, omega | gamma 0.577%, omega 0.273% |
+| Cyclone ITG and Miller (GX) | gamma | within 0.3% at 7 of 8 `k_y` |
+| Cyclone ITG and Miller (GS2) | gamma | within 2.4% at five points, 0.3% at two |
+| Cyclone Miller, kinetic electrons (GX, GS2) | gamma, omega | within 0.4% of GX, 1.5% of GS2 |
+| W7-X bean tube, `k_y rho_i` 2.1 (GX, Gonzalez-Jerez 2022) | gamma, omega | 0.1750, 0.2628 as GX; paper 0.172, 0.27 |
+| KBM, beta 0.015 (GS2) | gamma | 3.2% at the `ntheta` limit of each code |
+| Nonlinear Cyclone heat flux (GX paper Table 1) | Q_i/Q_GB | 7.08 +- 0.12 against 7.2 +- 0.8 |
 
-`100 * max|GKX - ref| / max|ref|` over the tracked scan, recomputed by CI from
-the [evidence ledger](tools/evidence_ledger.toml). The Cyclone rows compare a
-time-trace fit, not the certified eigenvalue, and KBM is the known outlier: its
-reference omits end damping on the top Hermite moments, a repaired GX run of
-the deck agrees with GKX to 0.3% at `k_y` 0.2 and 0.3, and against GS2 the KBM
-growth rate agrees to 5% (frequency 6%) once `ntheta` is resolved, against 19% at the
-deck's `ntheta = 32`, where both codes are under-resolved.
-Against GX's repaired launch limit the certified Cyclone eigenpairs agree to
-0.3% in growth rate at seven of eight `k_y`; against converged GS2 GKX is
-within 1.0% at the three `k_y` compared. These are agreements on shared test
-cases, not a ranking of codes. Open items (TEM velocity convergence, stella's
-mirror-term sensitivity, weakly growing modes) and the figures are in
-[validation](docs/validation.rst).
+Linear scan rows are `100 * max|GKX - ref| / max|ref|` over the scan, checked
+against the [evidence ledger](tools/evidence_ledger.toml) in CI. These are
+agreements on shared test cases, not a ranking of codes. Cases, resolutions,
+open items and provenance are in [validation](docs/validation.rst).
 
 ## Nonlinear turbulence
 
@@ -234,8 +200,7 @@ pytest -n 4
 CI requires 95% line coverage plus the physics, convergence, comparison,
 differentiability and performance gates ([CONTRIBUTING.md](CONTRIBUTING.md)).
 Figures in `docs/_static/readme/` have JSON companions with every plotted
-number; their generators were removed from `scripts/` and are listed in
-`plan/log.md` (2026-10-15). Cite GKX with [CITATION.cff](CITATION.cff).
+number. Cite GKX with [CITATION.cff](CITATION.cff).
 
 ## License
 
