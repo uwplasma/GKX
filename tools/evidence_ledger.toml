@@ -327,7 +327,7 @@ reference = "GX 3865a537 + dampEnds_linked grid-stride loop (self-run, t = 40); 
 reference_rank = 5
 tier = 3
 status = "provisional"
-notes = "ky .30: GKX 0.23128/0.23603 vs GX 0.23209/0.23651 (-0.35%/-0.20%) and GS2 0.23484/0.2210 (-1.5%); Nl8/Nm24 gives 0.23115 (0.06% from Nl16/Nm48). ky .50: 0.25479/0.46698 vs GX 0.25410/0.46771 (+0.27%/-0.16%) and GS2 0.25354 (+0.5%). Only two ky are measured; ky .10 is unsettled in both GX (t = 40) and GS2 e3. Before this row the Krylov route damped the linked ends at damp_ends_amp instead of amp/dt and gave 0.3579 at ky .30 (+54%)."
+notes = "ky .30: GKX 0.23128/0.23603 vs GX 0.23209/0.23651 (-0.35%/-0.20%) and GS2 0.23484/0.2210 (-1.5%); Nl8/Nm24 gives 0.23115 (0.06% from Nl16/Nm48). ky .50: 0.25479/0.46698 vs GX 0.25410/0.46771 (+0.27%/-0.16%) and GS2 0.25354 (+0.5%). Only two ky are measured; ky .10 is unsettled in both GX (t = 40) and GS2 e3. Before this row the Krylov route damped the linked ends at damp_ends_amp instead of amp/dt and gave 0.3579 at ky .30 (+54%). Four-code ladder (2026-10-27, see docs/validation.rst): at ky .30 GKX 8-node Nm 24-48 is within 1.2% of GX in gamma and 0.5% in omega at equal Nm; omega is not converged in Nm (GX/GKX 6-7% above GS2 at Nm 48-64). Scan ky .2-.7 at GKX 8 nodes Nm 24 is in the CSV."
 
 [[row]]
 id = "X-tem-dj2005"
