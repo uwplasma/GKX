@@ -87,7 +87,7 @@ _NEGATIVE = "matching nonlinear gate is negative evidence for calibration admiss
 
 @pytest.mark.parametrize(
     "artifact",
-    ["tools_out/synthetic.csv", "/Users/example/local/GKX/tools_out/synthetic.csv"],
+    ["tools_out/synthetic.csv", "/tmp/project/tools_out/synthetic.csv"],
     ids=["relative", "absolute-from-other-checkout"],
 )
 def test_audit_passes_when_required_point_matches_passed_gate(
