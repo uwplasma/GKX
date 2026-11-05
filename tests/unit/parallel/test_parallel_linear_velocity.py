@@ -3022,7 +3022,11 @@ def test_species_hermite_keeps_the_bracket_in_its_own_kernel():
     ), "the barrier must guard the bracket the linear RHS is added to"
 
 
-def test_species_hermite_trajectory_and_fused_traces_match_serial():
+@pytest.mark.parametrize("num_devices", [2, 4])
+@pytest.mark.parametrize("record_traces", [False, True])
+def test_species_hermite_trajectory_and_fused_traces_match_serial(
+    num_devices, record_traces
+):
     """Traces come out of the scan carry and still equal the serial trajectory."""
 
     import jax
@@ -3039,7 +3043,7 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
     from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
     from gkx.terms.config import TermConfig
 
-    if len(jax.devices()) < 2:
+    if len(jax.devices()) < num_devices:
         pytest.skip("needs at least two devices")
     state, cache, params, grid, vol_fac, flux_fac = _species_hermite_problem()
     terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
@@ -3075,7 +3079,7 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
     serial_final, serial_traces = jax.lax.scan(
         jax.jit(serial_step), state, xs=None, length=steps
     )
-    plan = build_species_hermite_mesh_plan(tuple(state.shape), num_devices=2)
+    plan = build_species_hermite_mesh_plan(tuple(state.shape), num_devices=num_devices)
     run = integrate_nonlinear_species_hermite(
         state,
         cache,
@@ -3083,17 +3087,20 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
         dt=dt,
         steps=steps,
         terms=terms,
-        grid=grid,
-        vol_fac=vol_fac,
-        flux_fac=flux_fac,
+        grid=grid if record_traces else None,
+        vol_fac=vol_fac if record_traces else None,
+        flux_fac=flux_fac if record_traces else None,
         plan=plan,
-        num_devices=2,
+        num_devices=num_devices,
     )
-    assert run.mesh_shape == (2, 1)
+    assert run.mesh_shape == (2, num_devices // 2)
     state_error = float(
         np.max(np.abs(np.asarray(serial_final) - np.asarray(run.state)))
     )
     assert state_error < 5.0e-6
+    if not record_traces:
+        assert not run.traces
+        return
     names = ("Wg_t", "Wphi_t", "heat_flux_t", "particle_flux_t")
     for name, reference in zip(names, serial_traces, strict=True):
         got = np.asarray(run.traces[name])

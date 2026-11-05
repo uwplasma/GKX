@@ -568,6 +568,7 @@ def _species_hermite_local_rhs(
     real_dtype,
     compressed_real_fft,
     laguerre_mode,
+    head_rows=_DIAGNOSTIC_MOMENT_ROWS,
 ):
     """Evaluate the production nonlinear RHS on one shard of the mesh."""
 
@@ -591,11 +592,7 @@ def _species_hermite_local_rhs(
     head = hermite_field_moment_head(
         local,
         index=index[interior],
-        rows=(
-            _DIAGNOSTIC_MOMENT_ROWS
-            if nm_chunks > 1
-            else min(_DIAGNOSTIC_MOMENT_ROWS, local.shape[2])
-        ),
+        rows=head_rows if nm_chunks > 1 else min(head_rows, local.shape[2]),
         chunks=nm_chunks,
         axis_name="m",
     )
@@ -818,6 +815,9 @@ def _species_hermite_mapped(
             real_dtype=real_dtype,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
+            head_rows=_DIAGNOSTIC_MOMENT_ROWS
+            if vol_fac is not None and flux_fac is not None
+            else 2,
         )
         scalars = (
             _fused_scalar_diagnostics(
