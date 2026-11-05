@@ -398,6 +398,14 @@ def _build_explicit_runtime_policies(
 ) -> _ExplicitRuntimePolicies:
     """Build timestep and collision-splitting policies for explicit scans."""
 
+    def cfl_components(fields: FieldState, *args: Any, **kwargs: Any):
+        fields = FieldState(
+            fields.phi,
+            None if _is_static_zero(prepared.term_cfg.apar) else fields.apar,
+            None if _is_static_zero(prepared.term_cfg.bpar) else fields.bpar,
+        )
+        return _nonlinear_cfl_frequency_components(fields, *args, **kwargs)
+
     time_step_policy = build_nonlinear_time_step_policy(
         grid,
         prepared.setup.geom,
@@ -416,7 +424,7 @@ def _build_explicit_runtime_policies(
         resolve_cfl_fac_fn=resolve_cfl_fac,
         linear_frequency_bound_fn=_linear_frequency_bound,
         laguerre_velocity_max_fn=_laguerre_velocity_max,
-        cfl_frequency_components_fn=_nonlinear_cfl_frequency_components,
+        cfl_frequency_components_fn=cfl_components,
     )
     collision_policy = build_nonlinear_collision_split_policy(
         prepared.cache,
@@ -1029,17 +1037,14 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     """Prepare one compile-stable explicit nonlinear diagnostic simulation."""
 
     if _rhs_factory is not None and (
-        not fixed_dt
-        or method not in {"rk2", "rk3", "rk4", "sspx3"}
+        method not in {"rk2", "rk3", "rk4", "sspx3", "rk4-pi"}
         or checkpoint
         or collision_split
         or external_phi is not None
         or fixed_mode_ky_index is not None
         or fixed_mode_kx_index is not None
-        or show_progress
-        or time_horizon is not None
     ):
-        raise ValueError("named diagnostics require supported fixed-step policy")
+        raise ValueError("named diagnostics require supported explicit policy")
     options = _explicit_options_from_values(locals())
     components = _build_explicit_scan_components(
         G0,
@@ -1064,9 +1069,8 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         chain: Any = None,
         initial_dt: jnp.ndarray | None = None,
         rhs_fn: Any = None,
+        initial_dt: jnp.ndarray | None = None,
     ) -> tuple[Any, Any, Any, Any]:
-        if rhs_fn is not None and time_horizon is not None:
-            raise ValueError("named diagnostics do not support horizon overrides")
         step = components.step
         if rhs_fn is not None:
             step, _ = _build_explicit_scan_closures(
@@ -1168,7 +1172,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         replicated = jax.sharding.NamedSharding(
             named_sharding.mesh, jax.sharding.PartitionSpec()
         )
-        output_shardings = (named_sharding, replicated, replicated, replicated)
+        output_shardings = (None, replicated, replicated, replicated)
     return PreparedExplicitNonlinearDiagnostics(
         initial_state=components.prepared.G0,
         geometry=components.prepared.setup.geom,
@@ -2180,10 +2184,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
     prepared = _cached_explicit_diagnostics(
         G0, grid, geom, params, dt, steps, compile_cache, time_horizon, options
     )
-    t, diagnostics, state, fields = prepared.run(G0, time_horizon=time_horizon)
-    if diagnostics is None:
-        raise RuntimeError("diagnosed integration requires a diagnostic backend")
-    return t, diagnostics, state, fields
+    return prepared.run(G0, time_horizon=time_horizon)
 
 
 def _cached_explicit_diagnostics(

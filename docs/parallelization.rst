@@ -332,24 +332,27 @@ counts from every process, with ``num_devices`` as an upper bound. It refuses
 when no compatible balanced mesh fits that bound. Explicit device counts are
 not reduced or reassigned.
 
-The ``species_hermite`` runtime uses named collectives for fixed-step
-``rk2``, ``rk3``, ``rk4`` and ``sspx3`` runs with ``run_to = "t_max"``.
-Diagnosed runs reuse the production post-step scan and its complete scalar,
-per-species and optional resolved diagnostic contract, including saved cadence
-and the final off-cadence sample. Distribution reductions operate over the
-partitioned logical state; replicated field energies are counted once.
-Diagnostic outputs are replicated at the compiled return boundary for global
-host validation and consumption; the final state remains sharded. Resolved
-histories therefore retain their global replication cost. Diagnostics-off runs
-retain the final-state integrator.
+The ``species_hermite`` runtime uses named collectives for explicit
+``rk2``, ``rk3``, ``rk4``, ``rk4-pi`` and ``sspx3`` runs. Diagnosed runs reuse
+the production post-step scan and its complete scalar, per-species and optional
+resolved diagnostic contract, including saved cadence and the final off-cadence
+sample. Adaptive CFL updates, PI error norms and retry decisions operate on the
+logical global state. Runtime chunks reuse the existing controller continuation,
+physical-horizon clipping, saturation checks and progress handling.
+Distribution reductions operate over the partitioned state; replicated field
+energies are counted once. Diagnostic and field outputs are replicated at the
+compiled return boundary before host validation; final states remain sharded
+until an explicit global host return. Resolved histories retain their global
+replication cost. Supported fixed-step diagnostics-off runs retain the separate
+final-state integrator; fixed-step diagnostics-off ``rk4-pi`` retains
+whole-state placement.
 
-Adaptive stepping, saturation stopping, sources, fixed modes, active collisions,
-checkpointing, progress, additional state sharding, unequal species moment
-counts and reflectionless closures retain ordinary whole-state placement.
-In particular, the usual adaptive/saturation CLI policy is still outside the
-named route. Status distinguishes the chosen route. ``ky`` remains a
-whole-state placement diagnostic. These routing capabilities establish no
-throughput, aggregate-memory-capacity or multi-node scaling guarantee.
+Sources, fixed modes, active collisions, checkpointing, additional state
+sharding, unequal species moment counts and reflectionless closures retain
+ordinary whole-state placement. Status distinguishes the chosen route. ``ky``
+remains a placement diagnostic. These capabilities establish no throughput,
+aggregate-memory-capacity or multi-node scaling guarantee. Host saturation and
+burn-in selection are not differentiated.
 
 Routing is fail-closed on numerical identity. With ``strict_identity = true``
 the run is also executed serially and the two answers must agree on the final
@@ -382,20 +385,32 @@ The independent-work strategies (``batch``, ``combined_ky``) are also rejected
 on this path: they orchestrate separate solver calls for ``k_y`` scans and
 ensembles and cannot shard a single nonlinear run.
 
-Prepared final-state execution
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Prepared execution
+~~~~~~~~~~~~~~~~~~
 
 The supported species-Hermite final-state policy can also be prepared with
 ``gkx.prepare(case, diagnostics=False, steps=N)``. The case must use fixed
 steps, ``run_to = "t_max"`` and ``strict_identity = false`` after independent
 identity qualification. The same numerical-policy restrictions apply as in
-the runtime named route; diagnosed, adaptive and unsupported physics requests
-are refused. Fixed model operands are staged once during preparation.
+the runtime named route; unsupported physics requests are refused. Fixed model
+operands are staged once during final-state preparation.
 
 ``simulation.solve(initial_state=state)`` returns the existing four-tuple:
 empty saved times, ``None`` diagnostics, the global JAX final state and final
 fields. Changed initial states of the prepared shape reuse the executable;
 model, geometry and horizon overrides are unsupported.
+
+Diagnosed preparation with ``diagnostics=True`` uses the same production
+explicit scan and supports adaptive methods, supplied initial states and the
+backend's existing traced horizon operand. It requires
+``strict_identity=False`` after independent identity qualification; automatic
+serial comparison is a runtime-solve feature. Explicit ``steps=N`` fixes the
+accepted-step budget, while an inferred adaptive length retains its physical
+horizon. Each public prepared solve starts a new local clock and controller
+initialization for the supplied state; only chunks of one runtime trajectory
+carry the PI next-step operand. Repeated states and horizon values of the same
+structure reuse the compiled callable. Model and geometry overrides remain
+unsupported. Prepared finite windows do not implement host saturation stopping.
 
 With externally initialized multi-process JAX, every rank must enter
 preparation, warmup, solves and differentiation in the same order. Returned

@@ -5,13 +5,15 @@ Laguerre, perpendicular and parallel spatial axes. Auto mode selects the
 largest compatible subset of the device budget; explicit counts fail closed
 when they cannot factor. Status reports selected and budgeted devices.
 
-Named collectives serve fixed-step ``rk2``/``rk3``/``rk4``/``sspx3`` runs
-with ``run_to="t_max"``, using the production post-step diagnostic contract or
-the diagnostics-off final-state scan. Adaptive/stop policies, active collisions,
-sources, fixed modes, checkpointing, progress, additional state sharding,
-unequal species moment counts and reflectionless closures retain the ordinary
-solver. Uniform moment stamps must match the normalized state's dimensions.
-Fallback reports whole-state placement and does not imply distributed RHS work.
+Named collectives serve explicit ``rk2``/``rk3``/``rk4``/``rk4-pi``/``sspx3``
+runs with production diagnostics, adaptive chunks, saturation checks and progress.
+Fixed-step diagnostics-off runs retain the final-state scan where supported.
+Diagnosed preparation reuses the same backend with ``strict_identity=False``;
+model overrides remain unsupported. Active collisions, sources, fixed modes,
+checkpointing, additional state sharding, unequal species moment counts and
+reflectionless closures retain the ordinary solver. Uniform moment stamps must
+match the normalized state. Fallback reports whole-state placement and does not
+imply distributed RHS work.
 
 ``ky`` is a single-process placement diagnostic with replicated work. FFT axes
 remain local; unsupported strategies and axes raise with their reasons.
@@ -402,22 +404,17 @@ def assert_nonlinear_parallel_identity(
 
 
 def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
-    """Check shared fixed-step named-collective physics and runtime limits."""
+    """Check shared named-collective explicit physics and runtime limits."""
 
     return (
         plan.axis == "species_hermite"
-        and bool(cfg.time.fixed_dt)
-        and not ctx.adaptive_chunked
         and not policy.fixed_mode_on
         and not policy.source_on
-        and not policy.show_progress
-        and not cfg.time.progress_bar
-        and str(cfg.time.run_to).strip().lower() == "t_max"
         and not cfg.time.checkpoint
         and not cfg.time.collision_split
         and not cfg.time.state_sharding
         and (method is None or method == cfg.time.method)
-        and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3"}
+        and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3", "rk4-pi"}
         and all(
             sp.Nl in (None, ctx.G0.shape[1])
             and sp.Nm in (None, ctx.G0.shape[2])
@@ -465,6 +462,11 @@ def _integrate_species_hermite_final_state(
 
     if (
         policy.diagnostics_on
+        or not cfg.time.fixed_dt
+        or (method or cfg.time.method) == "rk4-pi"
+        or str(cfg.time.run_to).strip().lower() != "t_max"
+        or policy.show_progress
+        or cfg.time.progress_bar
         or (prepare is not None and plan.strict_identity)
         or not _supports_species_hermite_policy(
             cfg, ctx, policy, method=method, plan=plan

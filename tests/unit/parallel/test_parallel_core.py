@@ -973,7 +973,7 @@ def _nonlinear_cfg(
         ),
         species=(RuntimeSpeciesConfig(name="ion"),),
         normalization=RuntimeNormalizationConfig(contract="cyclone"),
-        physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
+        physics=RuntimePhysicsConfig(linear=False, nonlinear=True),
         terms=RuntimeTermsConfig(nonlinear=1.0, hypercollisions=0.0, end_damping=0.0),
     )
     return cfg if parallel is None else replace(cfg, parallel=parallel)
@@ -1247,6 +1247,14 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     _require_devices(num_devices)
     cfg = _live_cfg(ky_layout=ky_layout)
     cfg = replace(cfg, time=replace(cfg.time, run_to="t_max"))
+    if axis == "species_hermite" and ky_layout == "half":
+        cfg = replace(
+            cfg,
+            time=replace(cfg.time, method="rk4-pi", fixed_dt=False, dt_max=0.01),
+            species=cfg.species
+            + (RuntimeSpeciesConfig(name="electron", charge=-1.0, mass=0.1),),
+            physics=replace(cfg.physics, adiabatic_electrons=False),
+        )
     options = {
         **_RUN_KWARGS,
         "Nm": 8,
@@ -1257,15 +1265,11 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     }
     serial = run_runtime_nonlinear(cfg, **options)
     messages = []
+    parallel = RuntimeParallelConfig(
+        strategy="shard_map", axis=axis, num_devices=num_devices
+    )
     sharded = run_runtime_nonlinear(
-        replace(
-            cfg,
-            parallel=RuntimeParallelConfig(
-                strategy="shard_map", axis=axis, num_devices=num_devices
-            ),
-        ),
-        status_callback=messages.append,
-        **options,
+        replace(cfg, parallel=parallel), status_callback=messages.append, **options
     )
     if axis == "species_hermite":
         assert any("RHS with production post-step diagnostics" in m for m in messages)
@@ -1292,6 +1296,27 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
         np.testing.assert_allclose(candidate, reference, rtol=1.0e-4, atol=5.0e-6)
         if axis == "species_hermite":
             assert getattr(candidate, "is_fully_replicated", True)
+    if axis == "species_hermite" and num_devices == 2 and ky_layout == "half":
+        fixed = replace(cfg, time=replace(cfg.time, fixed_dt=True))
+        opts = dict(Nl=3, Nm=8, steps=2, resolved_diagnostics=False)
+        reference = gkx.prepare(fixed, **opts)
+        named = gkx.prepare(
+            replace(fixed, parallel=replace(parallel, strict_identity=False)), **opts
+        )
+
+        def loss(state, model, diagnostic):
+            final, (traces, _, _), _ = model._backend.run_arrays(state)
+            energy = jnp.real(jnp.vdot(final, final))
+            return jnp.mean(traces[2]) if diagnostic else energy
+
+        differentiate = jax.value_and_grad(loss)
+        for diagnostic in (False, True):
+            gradients = [
+                differentiate(sharded.state, m, diagnostic) for m in (reference, named)
+            ]
+            for value, target in zip(*gradients):
+                np.testing.assert_allclose(value, target, rtol=1e-4, atol=5e-6)
+            assert float(jnp.linalg.norm(gradients[0][1])) > 0
 
 
 def _inject_shard_perturbation(monkeypatch) -> None:
