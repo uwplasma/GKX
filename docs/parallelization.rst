@@ -422,8 +422,6 @@ so each device count gets a clean JAX runtime:
      --backend gpu --devices 1,2 \
      --nx 48 --ny 96 --nz 128 --nl 4 --nm 8 --steps 12 \
      --out-prefix docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge
-   # Equivalent two-GPU preset with JAX traces enabled.
-   python scripts/profiling/profile_nonlinear_sharding.py sweep --office-gpu-xlarge
 
    # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_scaling_panels.py > scripts/artifacts/plot_scaling_panels.py
    python scripts/artifacts/plot_scaling_panels.py nonlinear-sharding
@@ -625,7 +623,7 @@ Laguerre sum with the analytic truncation coefficient
 production chain FFT on each shard because ``ky``, ``kx`` and ``z`` stay local,
 and a nontrivial linked case with conserving collisions passes state/field
 identity on four logical CPU devices. Mixed-mesh electromagnetic fields, other
-integrators and all GPU claims remain fail-closed; the two-GPU office host
+integrators and all GPU claims remain fail-closed; the two-GPU workstation host
 cannot test a four-device mixed mesh.
 
 Tracked engineering profiles for these routes (``docs/_static``):
