@@ -1610,17 +1610,8 @@ def test_heat_flux_time_figure_from_arrays(tmp_path):
 def test_heat_flux_time_figure_from_csv_sidecar(tmp_path):
     base = _write_csv_sidecar(tmp_path)
     base.with_suffix(".summary.json").write_text(
-        json.dumps(
-            {
-                "saturation": {
-                    "window_tmin": 0.1,
-                    "window_tmax": 0.3,
-                    "mean": 7.25,
-                    "sem": 0.125,
-                    "saturated": True,
-                }
-            }
-        )
+        '{"saturation":{"window_tmin":0.1,"window_tmax":0.3,'
+        '"mean":7.25,"sem":0.125,"saturated":true}}'
     )
     out = tmp_path / "heat_flux_csv.png"
     fig, axes = heat_flux_time_figure(

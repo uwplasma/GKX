@@ -181,7 +181,7 @@ def _window_flux_statistics(
     """Use recorded Q statistics only for their exact window; Gamma is IID."""
     from gkx.artifacts.run_figures import _pair_from, _read_summary
 
-    blocks: list[Any] = [getattr(source, "saturation", getattr(diag, "saturation", None))]
+    blocks: list[Any] = [getattr(obj, "saturation", None) for obj in (source, diag)]
     if isinstance(source, (str, Path)):
         path = Path(source)
         base = _artifact_base(path)
@@ -197,7 +197,7 @@ def _window_flux_statistics(
     recorded = None
     kind = "sample IID SEM"
     for block in blocks:
-        if window is None or _pair_from(block) != window:
+        if window is None or _pair_from(block) != tuple(window):
             continue
         try:
             mean, sem = float(block["mean"]), float(block["sem"])
