@@ -12,6 +12,7 @@ from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
+from jax import tree_util
 from jax.experimental.multihost_utils import process_allgather
 
 from gkx.core_grid import SpectralGrid, build_spectral_grid
@@ -794,6 +795,7 @@ def _result(
         diagnostics=diagnostics,
         fields=fields,
         state=np.asarray(state) if policy.return_state else None,
+        state_shape=tuple(state.shape),
         ky_selected=float(np.asarray(ctx.grid.ky[ctx.ky_index])),
         kx_selected=float(np.asarray(ctx.grid.kx[ctx.kx_index])),
         summarize_fields=summarize_fields,
@@ -812,7 +814,12 @@ def _run_final_state(
         "diagnostics disabled; running final-state nonlinear integrator over "
         f"{ctx.steps} steps with dt={ctx.dt:.6g}"
     )
-    time_cfg = replace(cfg.time, dt=ctx.dt, t_max=ctx.dt * ctx.steps)
+    time_cfg = replace(
+        cfg.time,
+        dt=ctx.dt,
+        t_max=ctx.dt * ctx.steps,
+        laguerre_nonlinear_mode=policy.laguerre_mode,
+    )
     request = solve_stats_request(time_cfg.method, kind="nonlinear")
     kwargs = {"terms": ctx.terms, **request}
     if policy.show_progress:
@@ -820,6 +827,7 @@ def _run_final_state(
     G_final, fields, *extra = integrate_nonlinear_from_config(
         ctx.G0, ctx.grid, ctx.geom, ctx.params, time_cfg, **kwargs
     )
+    fields = tree_util.tree_map(lambda value: value[-1], fields)
     solve = checked_solve_summary(extra, request, label="nonlinear IMEX run")
     status("completed nonlinear final-state integration")
     result = _result(
@@ -848,7 +856,7 @@ def _diagnostic_run_result(
     if policy.diagnostics_on:
         status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
     elif fields is None:
-        raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
+        raise RuntimeError("nonlinear runtime did not produce final fields")
     else:
         status("diagnostics disabled; returning final nonlinear field summary")
     return _result(
@@ -872,7 +880,13 @@ def _run_once(
     status: Callable[[str], None],
     rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[RuntimeNonlinearResult, Any]:
-    if not policy.requires_diagnostic_path and not ctx.adaptive_chunked:
+    """Run one nonlinear trajectory and return its result plus its final state."""
+
+    if (
+        not policy.requires_diagnostic_path
+        and cfg.time.fixed_dt
+        and cfg.time.method not in IMEX_CHAIN_METHODS
+    ):
         return _run_final_state(cfg, ctx, policy, status=status)
 
     t, diag, G_final, fields_final, saturation = _run_diagnostics(
@@ -1011,6 +1025,8 @@ def run_runtime_nonlinear(
     :func:`prepare` path).
     """
 
+    if method is not None:
+        cfg = replace(cfg, time=replace(cfg.time, method=method))
     cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm, nonlinear=True)
     if status_callback is not None:
         status_callback("building runtime geometry")
