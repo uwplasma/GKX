@@ -33,12 +33,10 @@ tools_out/
 *.npz
 # Required source collision tables
 !src/gkx/data/*.npz
-# Curated documentation media
+# Generated documentation media; tracked illustrations remain versioned
 docs/_build/
-!docs/_static/*.png
-!docs/_static/**/*.png
-!docs/_static/*.mp4
-!docs/_static/**/*.mp4
+docs/_static/**/*.webp
+docs/_static/**/*.svg
 # Numeric documentation and benchmark results regenerate on demand
 docs/_static/**/*.json
 docs/_static/**/*.csv
