@@ -336,9 +336,14 @@ norm after coordinate interpolation. This is finite-truncation linear
 consistency, with spatial, velocity, timestep, regularization and domain
 convergence still open; it is not nonlinear or performance validation.
 
-Provenance: GKX snapshot ``09e12e42725b86d441f05403f9f43c06a121b5b2``;
+Provenance: exact public GKX base
+`e33034a01f572132fd36acae95a091736365403f
+<https://github.com/uwplasma/GKX/commit/e33034a01f572132fd36acae95a091736365403f>`_;
 GX ``3865a53778862e1686f414bf6f416339e24887c9`` with the documented
-``dampEnds_linked`` grid-stride repair, not an unmodified upstream build.
+``dampEnds_linked`` grid-stride repair. The repair loops over remaining
+z/moment indices below ``Nz*Nl*Nm`` in strides of ``blockDim.z*gridDim.z``;
+the original handles only the first capped launch grid. No other source change
+is included in this reference binary.
 The GX binary SHA256 is
 ``b168172bba73a4b6af6505a114e42a9c3cab2f2ed65e2843227fbecf94f20d83``;
 repair diff SHA256 is
