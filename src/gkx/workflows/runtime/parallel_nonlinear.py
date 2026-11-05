@@ -97,9 +97,6 @@ _Z_AXIS_REASON = (
     + "."
 )
 
-# Scalar traces compared alongside the final state. These are the runtime
-# diagnostics a nonlinear run is actually read for, so a route that reproduced
-# the state but not the transport traces would still fail the gate.
 _IDENTITY_TRACE_FIELDS = ("Wg_t", "Wphi_t", "heat_flux_t", "particle_flux_t")
 
 
@@ -407,8 +404,11 @@ def _integrate_species_hermite_final_state(
         and (method is None or method == cfg.time.method)
         and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3"}
         and all(
-            sp.Nl is None and sp.Nm is None and sp.hermite_closure == "hypercollision"
+            sp.Nl in (None, ctx.G0.shape[1])
+            and sp.Nm in (None, ctx.G0.shape[2])
+            and sp.hermite_closure == "hypercollision"
             for sp in cfg.species
+            if sp.kinetic
         )
         and (
             float(ctx.terms.collisions) == 0.0
