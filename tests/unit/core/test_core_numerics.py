@@ -500,6 +500,7 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from dataclasses import replace
+    from types import SimpleNamespace
 
     import gkx
     import gkx.runtime as runtime
@@ -519,20 +520,18 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
         return "linear-result"
 
     prepared_calls: list[tuple[RuntimeConfig, dict[str, object]]] = []
+    backend = SimpleNamespace(initial_state=np.zeros((1, 4, 8, 1, 1, 1), complex))
 
     def fake_nonlinear(cfg, **options):
         if options.get("prepare_only"):
             prepared_calls.append((cfg, options))
-            return "prepared-simulation"
+            return backend
         calls.append(("nonlinear", cfg, options))
         return "nonlinear-result"
 
     patch_runtime(monkeypatch, "run_runtime_linear", fake_linear)
     patch_runtime(monkeypatch, "run_runtime_nonlinear", fake_nonlinear)
-    # gkx.prepare is now the public PreparedSimulation constructor rather than
-    # the runtime function it wraps. The delegation this test exists to pin is
-    # still real and is asserted directly: preparing a nonlinear case reaches
-    # runtime.prepare, so the facade adds a type without adding numerics.
+    # The public wrapper delegates preparation without owning numerics.
     from gkx.api.prepared import prepare_simulation
 
     assert gkx.prepare is prepare_simulation
@@ -560,7 +559,7 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
     assert nonlinear_prepared.kind == "nonlinear"
     # The wrapper adds a type, not numerics: the object the runtime built is
     # carried through unchanged.
-    assert nonlinear_prepared._backend == "prepared-simulation"
+    assert nonlinear_prepared._backend is backend
     assert prepared_calls[0][0] is nonlinear
     assert prepared_calls[0][1]["diagnostics"] is True
     assert prepared_calls[0][1]["prepare_only"] is True
