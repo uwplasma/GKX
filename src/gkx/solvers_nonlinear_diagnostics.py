@@ -1078,10 +1078,10 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         terms=terms,
         options=options,
     )
-    named_rhs = (
+    named_rhs, named_sharding = (
         _rhs_factory(components.prepared, components.policies)
         if _rhs_factory is not None
-        else None
+        else (None, None)
     )
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
@@ -1189,12 +1189,22 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         )
 
     chain = _chain_operand(components.step)
+    output_shardings = None
+    if named_sharding is not None:
+        replicated = jax.sharding.NamedSharding(
+            named_sharding.mesh, jax.sharding.PartitionSpec()
+        )
+        output_shardings = (named_sharding, replicated, replicated)
     return PreparedExplicitNonlinearDiagnostics(
         initial_state=components.prepared.G0,
         geometry=components.prepared.setup.geom,
         cache=components.prepared.cache,
         params=params,
-        _run_raw=partial(jax.jit(run_raw), chain=chain, rhs_fn=named_rhs),
+        _run_raw=partial(
+            jax.jit(run_raw, out_shardings=output_shardings),
+            chain=chain,
+            rhs_fn=named_rhs,
+        ),
         _run_dynamic_raw=jax.jit(run_dynamic_raw),
         _finalize=finalize_nonlinear_scan_diagnostics,
         stride=stride,

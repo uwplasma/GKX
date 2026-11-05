@@ -333,7 +333,10 @@ Diagnosed runs reuse the production post-step scan and its complete scalar,
 per-species and optional resolved diagnostic contract, including saved cadence
 and the final off-cadence sample. Distribution reductions operate over the
 partitioned logical state; replicated field energies are counted once.
-Diagnostics-off runs retain the final-state integrator.
+Diagnostic outputs are replicated at the compiled return boundary for global
+host validation and consumption; the final state remains sharded. Resolved
+histories therefore retain their global replication cost. Diagnostics-off runs
+retain the final-state integrator.
 
 Adaptive stepping, saturation stopping, sources, fixed modes, active collisions,
 checkpointing, progress, additional state sharding, unequal species moment

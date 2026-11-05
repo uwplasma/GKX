@@ -1275,6 +1275,8 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     )
     for candidate, reference in pairs:
         np.testing.assert_allclose(candidate, reference, rtol=1.0e-4, atol=5.0e-6)
+        if axis == "species_hermite":
+            assert getattr(candidate, "is_fully_replicated", True)
 
 
 def _inject_shard_perturbation(monkeypatch) -> None:

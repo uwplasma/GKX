@@ -1005,7 +1005,7 @@ def _prepare_species_hermite_rhs(
     compressed_real_fft=True,
     laguerre_mode="grid",
 ):
-    """Stage the named RHS and return replicated production fields with it."""
+    """Return the staged named RHS and its global state placement."""
     mesh, resolved, state_spec = _resolve_species_hermite_placement(
         G0, cache, params, plan=plan, devices=devices, num_devices=None
     )
@@ -1038,7 +1038,7 @@ def _prepare_species_hermite_rhs(
     def execute(operands, state):
         return mapped(stage_from_host(state, sharding), *operands)
 
-    return jax.tree_util.Partial(execute, leaves)
+    return jax.tree_util.Partial(execute, leaves), sharding
 
 
 def _project_local(value, projector, dtype):

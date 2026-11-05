@@ -459,7 +459,9 @@ path = "solvers_nonlinear_diagnostics.py"
 # 3417 -> 3436: the chain factor gets each species' moment counts (species_moments); measured.
 # 3436 -> 3441: optional prepared diagnostics plus explicit narrowing at the
 # diagnosed-only integration boundary. Measured; target unchanged.
-baseline_lines = 3441
+# 3441 -> 3451: explicit named output placement keeps the final state sharded
+# and replicates global diagnostics for the existing host result contract.
+baseline_lines = 3451
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -1227,7 +1229,8 @@ recursive = true
 # factories and normalizes equivalent distributed placements. Measured.
 # 69331 -> 69440: fixed-step named diagnosed RHS and shared production
 # diagnostic runner, including the separate sampled-gradient prerequisite.
-baseline = 69440
+# 69440 -> 69450: enforce global diagnostic output placement at compilation.
+baseline = 69450
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1599,7 +1602,8 @@ recursive = true
 # result tuple, state AD/FD, equivalent placement and unsupported overrides.
 # 64688 -> 64707: extend existing nonlinear routing identity coverage to the
 # named route, all scalar/resolved channels and a partial saved cadence.
-baseline = 64707
+# 64707 -> 64709: assert named diagnostic leaves retain replicated placement.
+baseline = 64709
 target = 35000
 
 [[line_budget_policy.counts]]
