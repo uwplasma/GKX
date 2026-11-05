@@ -38,7 +38,7 @@ Workflow
    result = gkx.solve(case)
    figure, axes = gkx.plot(result)
    spectrum = gkx.scan(case, [0.1, 0.2, 0.3])
-   simulation = gkx.prepare(case)
+   simulation = gkx.prepare(case, steps=64)
    result = simulation.solve()
 
 ``load``
@@ -73,10 +73,12 @@ every method delegates to the runtime path the case would take anyway.
    * - Member
      - Behavior
    * - ``solve(parameters=None, initial_state=None)``
-     - Nonlinear: runs the prepared integration and returns
-       ``(time, diagnostics, state, fields)``. Linear: calls
-       ``gkx.runtime.solve``. ``parameters`` must be ``None``; a linear
-       ``initial_state`` raises ``NotImplementedError``.
+     - Nonlinear: returns ``(time, diagnostics, state, fields)`` from the
+       prepared backend. ``diagnostics``
+       may be ``None`` when disabled; ``fields`` is a ``FieldState``.
+       Linear: calls ``gkx.runtime.solve`` and returns its ``LinearResult``.
+       ``parameters`` must be ``None``; a linear ``initial_state`` raises
+       ``NotImplementedError``.
    * - ``scan(parameter, values, *, parallel="auto")``
      - Only ``parameter="ky"``; delegates to ``run_runtime_scan``. An integer
        ``parallel`` sets the worker count.
@@ -103,10 +105,40 @@ Preparing a nonlinear case builds its diagnostic backend through
 Explicit ``steps=N`` fixes a finite window. Without that budget, adaptive
 ``solve`` and ``warmup`` reuse compiled chunks until ``t_max``; every call resets
 the clock and controller, retaining executable caches rather than physical state.
-This host loop cannot be transformed through ``run_arrays``: pass explicit
-``steps`` for finite-window differentiation. Adaptive chain IMEX and generic
-``imex`` preparation remain unsupported. A saturation-stopping deck raises
-unless ``steps=N`` is passed or ``run_to = "t_max"`` is selected.
+A saturation-stopping deck raises unless ``steps=N`` is passed or
+``run_to = "t_max"`` is selected. Use ``gkx.solve`` or the CLI to retain
+saturation stopping. Adaptive chain IMEX and generic ``imex`` preparation
+remain unsupported.
+
+The lower-level ``gkx.runtime.prepare`` accepts nonlinear cases and returns a
+backend with ``run`` and ``run_arrays``. ``run`` returns the same four-part
+result as the nonlinear wrapper. ``run_arrays`` returns
+``(state, (diagnostic_arrays, time, dt_series), fields)`` without host
+conversion or diagnostic assembly. Prepare with explicit ``steps`` for this
+finite-window interface; the host loop for an adaptive full horizon cannot
+be transformed with JAX.
+
+For fixed-step model differentiation, ``run_arrays`` accepts ``cache`` and
+``params`` together, with optional matched ``geometry``. A geometry override
+requires both cache and parameters. Named-collective model inputs must retain
+the prepared tree structure, array shapes and dtypes. Adaptive model overrides
+are refused, and ``time_horizon`` cannot be combined with model overrides.
+The diagnostics-off named final-state path also refuses model overrides.
+
+For example, the finite-window nonlinear backend exposes arrays directly:
+
+.. code-block:: python
+
+   import gkx.runtime as runtime
+
+   nonlinear_case = gkx.load("examples/03_nonlinear_tokamak/case.toml")
+   backend = runtime.prepare(nonlinear_case, steps=64)
+   state, (diagnostic_arrays, time, dt_series), fields = backend.run_arrays()
+
+Keep the case topology and numerical policy fixed when reusing this backend.
+A full-horizon call restarts its clock and timestep controller on each run;
+continuing a physical trajectory requires an explicit state and a suitable
+continuation policy.
 
 For the same finite window, the prepared route and
 ``integrate_nonlinear_explicit_diagnostics_state`` compile the same graph

@@ -7,8 +7,7 @@ adds the :math:`E\times B` and flutter brackets to the same operator.
 Scope
 -----
 
-The linear benchmark rows of the evidence ledger (``tools/evidence_ledger.toml``)
-cover:
+Representative linear validation problems include:
 
 - KAW: slab kinetic Alfven wave against the analytic dispersion relation
 - ETG: kinetic electrons with Boltzmann ions, electrostatic
@@ -17,9 +16,9 @@ cover:
 - KBM: kinetic ions and electrons, :math:`A_\parallel` on and
   :math:`B_\parallel` off
 
-Each row is scanned in :math:`k_y`. Its status (passing or provisional),
-measured mismatch, reference and velocity-space regularization are listed in
-:doc:`validation`, which is generated from the ledger.
+Scan each case in :math:`k_y` and report the reference, measured mismatch,
+resolution and velocity-space regularization with the result. See
+:doc:`validation` for the comparison requirements.
 
 Normalized equation
 -------------------
@@ -181,5 +180,5 @@ For all linear benchmark plots/tables:
 - report :math:`\gamma,\omega` with explicit normalization
 - publish mismatch tables by scan coordinate (:math:`k_y` or :math:`\beta_{ref}`)
 - include per-case parameter tables (geometry, gradients, species, toggles, grid, resolution)
-- give every published number a ledger row, so it appears in
-  :doc:`validation`
+- record the input configuration, analysis command and numerical acceptance
+  criterion with every shared result (:doc:`validation`)

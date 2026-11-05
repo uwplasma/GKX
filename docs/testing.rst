@@ -45,8 +45,8 @@ prefer one parametrized module per physical or workflow contract.
    * - ``tools/``
      - Tests for ``tools/comparison`` and ``scripts/profiling`` scripts.
    * - ``release/``
-     - Repository-policy gates (``test_release_gates.py``) and the evidence
-       ledger contract (``test_evidence_ledger.py``).
+     - Source, package, CI and repository-policy gates
+       (``test_release_gates.py``).
    * - ``support/``
      - Shared helpers; not package API.
 

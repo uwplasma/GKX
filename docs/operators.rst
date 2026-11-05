@@ -712,9 +712,8 @@ velocity-space regularization it used, and reports the
 single regularized number. ``none`` is a legal declaration and the common one
 for reference-code parity rows, whose decks must reproduce the reference
 exactly; it commits the row to being reported as resolution-limited, not as a
-converged growth rate. The declaration is a required field of every linear row
-of ``tools/evidence_ledger.toml`` and is checked by
-``tests/release/test_release_gates.py``.
+converged growth rate. Report that declaration with the input configuration and convergence study
+for each shared result.
 
 Hyperdiffusion And End Damping
 ------------------------------

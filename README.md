@@ -25,7 +25,7 @@ differentiable on CPUs and GPUs.
 
 <img src="docs/_static/turbulence_loop.webp" width="720" alt="Saturated ITG turbulence on a Cyclone flux tube, shown as a perpendicular cut and as the field-aligned tube">
 
-Saturated ITG turbulence on a Cyclone flux tube
+Illustration of ITG turbulence on a Cyclone flux tube
 ([full-rate movie](https://github.com/uwplasma/GKX/releases/download/v1.7.0/gkx-cyclone-itg-turbulence.mp4)).
 
 ## Install and first run
@@ -37,9 +37,8 @@ gkx
 
 Python 3.10+. The wheel installs CPU JAX; for GPUs add an accelerator JAX wheel
 ([JAX install guide](https://docs.jax.dev/en/latest/installation.html)).
-`gkx` with no arguments runs a linear Cyclone case in under a minute on a
-laptop CPU and prints `gamma` and `omega`; a CI gate holds its growth rate
-within 1% of the certified eigenvalue. The [tutorial](docs/tutorials.rst) walks
+`gkx` with no arguments runs a linear Cyclone case and prints its growth
+rate `gamma` and real frequency `omega`. The [tutorial](docs/tutorials.rst) walks
 through twelve runs, from this one to a stellarator optimization; each is a
 directory in [examples/](examples/).
 
@@ -82,111 +81,74 @@ identity checks, and eigenmode and finite-window gradient limitations.
 |---|---|---|
 | Geometry | s-alpha, Miller, VMEC/VMEX, imported | `[geometry] model`; `gkx wout_*.nc` for any VMEC |
 | Velocity space | Hermite-Laguerre, `(Nl, Nm)`, per species with `[[species]] Nl`/`Nm` | hypercollisions damp the last Hermite moments; kinetic-electron decks that name no resolution get ions (12, 32) and electrons (6, 48) linear, (4, 16) nonlinear ([guidance](docs/guidance.rst)) |
-| Hermite closure (opt-in) | `[[species]] hermite_closure = "reflectionless"` | absorbing last-moment closure per species: TEM growth rate +4-11% at `Nm` 16, +1-2% at `Nm` >= 48; not the default ([numerics](docs/numerics.rst)) |
-| Perpendicular velocity (opt-in) | nodal `mu` grid: `[run] mu_vperp_max = 4.0`, `Nl` = nodes | linear runs; 8 nodes match Laguerre `Nl` 16-24 on Cyclone at 5-12x less cost; flat convergence on TEM and KBM ([numerics](docs/numerics.rst)) |
+| Hermite closure (opt-in) | `[[species]] hermite_closure = "reflectionless"` | absorbing last-moment closure per species; check resolution and closure sensitivity ([numerics](docs/numerics.rst)) |
+| Perpendicular velocity (opt-in) | nodal `mu` grid: `[run] mu_vperp_max = 4.0`, `Nl` = nodes | linear runs; check node count, velocity extent and agreement with the Laguerre representation ([numerics](docs/numerics.rst)) |
 | Collisions | linearized Landau | conserving, H-theorem; Dougherty, Sugama alternatives ([operators](docs/operators.rst)) |
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
-| Time stepping | no `dt`: nonlinear `rk4-pi`, or adaptive `imex-ark3` for kinetic electrons at beta <= 3e-4; linear `rk4` + CFL | a `dt` gives `rk2` at that step; `fixed_dt = false` keeps the controller's stepper ([measured speedups](docs/guidance.rst)) |
+| Time stepping | no `dt`: nonlinear `rk4-pi`, or adaptive `imex-ark3` for kinetic electrons at beta <= 3e-4; linear `rk4` + CFL | a `dt` gives `rk2` at that step; `fixed_dt = false` keeps the controller's stepper ([method guidance](docs/guidance.rst)) |
 | Eigensolver | `auto`: banded direct shift-invert where it fits, else Arnoldi on the time-advance map; every pair certified | matrix-free shift-invert opt-in ([algorithms](docs/algorithms.rst)) |
-| SOLVAX | `solvax>=0.33.0` | provides the sparse eigensolver and the `rk4-pi` stepper; installed with `pip install gkx` |
-| `ky` layout | `half`: the `1 + Ny//2` non-negative rows | `[grid] ky_layout = "full"` stores the two-sided axis; same physics to round-off, about 1.4-1.8x slower and 12-25% more memory |
+| SOLVAX | `solvax>=0.35.0` | provides the sparse eigensolver and the `rk4-pi` stepper; installed with `pip install gkx` |
+| `ky` layout | `half`: the `1 + Ny//2` non-negative rows | `[grid] ky_layout = "full"` stores the two-sided axis; check equivalent states and diagnostics when comparing layouts |
 | Drift kernel | fused Pallas kernel on NVIDIA GPUs when `Nx*Nz >= 64` and `Nl*Nm <= 256` | default there; CPU and other GPUs keep the `jnp` terms, which derivatives use ([performance](docs/performance.rst)) |
 | Devices | one device | `[parallel] strategy = "batch"`, `axis = "ky"`, `num_devices` spreads independent `k_y` scans and ensembles; results match the serial run ([parallelization](docs/parallelization.rst)) |
 | Precision | `float32`; `float64` with `JAX_ENABLE_X64=true` | eigensolver, Krylov residual and conditioning checks need `float64` |
-| CPU threads | XLA's own; Eigen pool off on fewer than four CPUs | steps do not scale past about four threads ([performance](docs/performance.rst)) |
+| CPU threads | XLA's own; Eigen pool off on fewer than four CPUs | choose thread and worker counts by measuring the intended workload ([performance](docs/performance.rst)) |
 
 [Resolution, step and solver guidance](docs/guidance.rst) says what to set for
 kinetic electrons and electromagnetic runs, and how to check it.
 
-## Agreement with other codes
+## Validation and comparisons
 
-| Case (reference) | Quantity | Agreement |
-| --- | --- | --- |
-| KAW (analytic dispersion) | gamma, omega | gamma 0.0004%, omega 0.051% |
-| ETG (GX) | gamma, omega | gamma 0.040%, omega 0.074% |
-| W7-X (GX) | gamma, omega | gamma 0.265%, omega 0.296% |
-| HSX (GX) | gamma, omega | gamma 0.577%, omega 0.273% |
-| Cyclone ITG and Miller (GX) | gamma | within 0.3% at 7 of 8 `k_y` |
-| Cyclone ITG and Miller (GS2) | gamma | within 2.4% at five points, 0.3% at two |
-| Cyclone Miller, kinetic electrons (GX, GS2) | gamma, omega | within 0.4% of GX, 1.5% of GS2 |
-| W7-X bean tube, `k_y rho_i` 2.1 (GX, Gonzalez-Jerez 2022) | gamma, omega | 0.1750, 0.2628 as GX; paper 0.172, 0.27 |
-| KBM, beta 0.015 (GS2) | gamma | 3.2% at the `ntheta` limit of each code |
-| Nonlinear Cyclone heat flux (GX paper Table 1) | Q_i/Q_GB | 7.08 +- 0.12 against 7.2 +- 0.8 |
+| Problem | Quantities to compare |
+| --- | --- |
+| Slab waves and Landau damping | growth or damping rate, real frequency, dispersion and recurrence |
+| Cyclone, Miller, ETG and KBM | eigenpair residual, branch identity, growth rate, frequency and eigenfunction |
+| W7-X and HSX flux tubes | geometry profiles, fields, linear modes and transport diagnostics |
+| Nonlinear turbulence | stationary heat-flux windows, energies, resolved spectra and replicated-seed uncertainty |
 
-Linear scan rows are `100 * max|GKX - ref| / max|ref|` over the scan, checked
-against the [evidence ledger](tools/evidence_ledger.toml) in CI. These are
-agreements on shared test cases, not a ranking of codes. Cases, resolutions,
-open items and provenance are in [validation](docs/validation.rst).
+Run the input decks in [benchmarks/cases](benchmarks/cases) and the workflows
+in [examples](examples), then compare the same model, geometry, normalization,
+resolution, timestep policy, collisions and diagnostic definitions. The
+[validation guide](docs/validation.rst) explains convergence and uncertainty
+checks; [conventions](docs/conventions.rst) gives cross-code conversions.
+Agreement at one finite resolution supports that configuration and observable.
 
-## Nonlinear turbulence
-
-![Replicated nonlinear heat flux and trajectory agreement with GX](docs/_static/readme/readme_nonlinear.png)
-
-(a) A circular tokamak run straight from a VMEC `wout`, replicated with two
-seeds and a second time step: window means 18.7, 19.3 and 18.9 over
-`t = 350-700`, a 3.5% spread against a 15% gate. (b) Mean relative difference
-from GX runs of the same decks in heat flux, free energy and field energy for
-Cyclone, Cyclone Miller, W7-X, HSX and KBM, all below 10%. This is a window
-comparison, not a validation of saturated transport.
+References include the [GX code paper](https://doi.org/10.1017/S0022377822000617)
+and the [W7-X stella–GENE benchmark](https://doi.org/10.1017/S0022377822000393).
+Use their declared models and analysis protocols when reconstructing a
+comparison. Keep generated results outside version control and record the
+input deck, command, source revisions and acceptance criteria with each result.
 
 ## Derivatives and optimization
 
-Eigenvalue derivatives use `dλ/dp = wᴴ(dA/dp)v / (wᴴv)`. The nonlinear heat
-flux over a post-saturation window is differentiated through a
-block-checkpointed discrete adjoint
-([figure](docs/_static/nonlinear_autodiff_validation.png)): on a 16x16x16
-Cyclone case over 1024 steps, checkpointing cuts temporary memory from 7.8 GB to
-187 MB for about twice the runtime, and the gradient matches finite differences
-to 1e-11 through 512 steps.
+Eigenvalue derivatives use `dλ/dp = wᴴ(dA/dp)v / (wᴴv)` with residual,
+overlap and conditioning checks. Nonlinear heat-flux derivatives use a
+checkpointed discrete adjoint over a finite post-saturation window. Compare
+these derivatives with finite differences across perturbation sizes and
+window lengths; assess a design change with independent long simulations.
+See [nonlinear autodiff](docs/nonlinear_autodiff.rst).
 
-```python
-heat_flux, gradient = jax.value_and_grad(loss)(shape0)
-```
-
-[VMEX](https://github.com/uwplasma/vmex) composes its implicit equilibrium
-derivative with GKX's, so a growth rate, quasilinear flux or nonlinear heat flux
-sits next to quasisymmetry, aspect ratio and iota in one least-squares problem.
-`examples/10_vmex_optimization/run.py` extends VMEX's `QA_optimization.py` with
-the nonlinear heat flux as a fourth objective on the vacuum QA ladder ([equilibria](docs/_static/qa_transport_equilibria.png),
-[traces](docs/_static/qa_transport_reduction.svg)).
-
-The boundary change is small (aspect ratio +0.0115%, mean iota -0.044%). The
-preliminary 12.26% reduction across 24 nominal pairs (conditional 95% CI
-10.64-13.88%) is not statistically resolved: 4 of 48 nominal traces fail the
-per-trace drift test. A transport claim needs matched, replicated, long
-post-saturation windows. The quasilinear flux is a ranking and screening
-measure, not a runtime/TOML absolute-flux predictor
-([quasilinear](docs/quasilinear.rst),
+[VMEX](https://github.com/uwplasma/vmex) composes its equilibrium derivative
+with GKX solver objectives. Run
+[the optimization example](examples/10_vmex_optimization/run.py) to combine
+heat flux with equilibrium constraints. Quasilinear flux requires calibration
+and held-out nonlinear validation before it supports an absolute transport
+prediction ([quasilinear](docs/quasilinear.rst),
 [stellarator optimization](docs/stellarator_optimization.rst)).
 
 ## Performance
 
-![Runtime and memory comparison](docs/_static/runtime_memory_benchmark.png)
+Reuse prepared cases when topology is fixed. Warm the exact callable before
+timing, wait for device completion and report compilation separately from
+execution. Check numerical agreement before comparing kernels or device
+layouts, and include diagnostics and I/O in end-to-end measurements.
 
-- **Nonlinear step:** about 196 ns per `Nx*Ny*Nz*Nl*Nm` element per step on CPU;
-  15.6 ms for 64x64x24, Nl = 4, Nm = 8 on one RTX A4000.
-- **Eigenvalues:** the sparse direct shift-invert route certifies the Cyclone
-  eigenpair at n = 3,072 in about 5 s against 32-36 s matrix-free.
-- **Kinetic electrons:** `imex-ars3` is 10x faster to solution than RK3 at
-  64x64x24, and does not pay on tutorial grids. The adaptive `imex-ark3`
-  default holds the error per step to 1e-3: its saturated heat flux averages within
-  1% of `rk4-pi` (three seeds, 32x32x16) at about 2x the steps of 1e-2, which
-  read 6% high ([guidance](docs/guidance.rst)).
-- **Parallel work:** independent `k_y` scans and ensembles run across devices
-  with results identical to the serial run.
-
-Each species can keep its own `Nl` and `Nm`, so ions do not pay for the
-electrons' Hermite moments. Against uniform counts the growth rate agrees to
-1.6% on Cyclone ITG, TEM, ETG-range and QA stellarator decks and the nonlinear
-heat-flux window mean to 2%; an explicit 64x64x24 step is 1.1-1.9x faster in
-1.3-1.5x less memory. The implicit `imex` factor and collision sub-step also
-run at each species' own counts: with ions (8, 16) and electrons (4, 32) the
-32x32x16 factor is 3.3x smaller and a solve 2.2x faster, and 64x64x24 fits a
-16 GB GPU where the padded factor does not ([guidance](docs/guidance.rst)).
-
-![Per-species moment counts against uniform counts](docs/_static/readme/readme_species_moments.png)
-
-[Performance](docs/performance.rst) · [parallelization](docs/parallelization.rst).
+Each species can use its own `Nl` and `Nm`; validate the observable at higher
+moment counts before reducing them. Named species–Hermite parallel execution
+has narrower operator support than whole-state placement, so inspect the
+resolved routing message when assessing scaling.
+See [performance](docs/performance.rst) and
+[parallel execution](docs/parallelization.rst).
 
 ## Documentation and development
 
@@ -205,8 +167,8 @@ pytest -n 4
 
 CI requires 95% line coverage plus the physics, convergence, comparison,
 differentiability and performance gates ([CONTRIBUTING.md](CONTRIBUTING.md)).
-Figures in `docs/_static/readme/` have JSON companions with every plotted
-number. Cite GKX with [CITATION.cff](CITATION.cff).
+Keep generated test and benchmark outputs outside version control.
+Cite GKX with [CITATION.cff](CITATION.cff).
 
 ## License
 

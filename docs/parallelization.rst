@@ -44,16 +44,28 @@ strategy or axis settings raise a configuration error.
 
 The mesh factors devices across species first, then Hermite moments. The
 Hermite block count must divide the Hermite extent exactly, and each block
-must accommodate the width-two halo. The perpendicular plane, Laguerre
-moments and field-line coordinate remain replicated. Consequently, the FFTs
+must accommodate the width-two halo. Auto mode selects the largest compatible
+subset within the device budget; an explicit incompatible device count raises.
+The perpendicular plane, Laguerre moments and field-line coordinate remain replicated. Consequently, the FFTs
 operate on local complete axes. Field moments use collective reductions;
 Hermite neighbours use halo exchanges when that axis is split.
 
 ``gkx.parallel.integrators.integrate_nonlinear_species_hermite`` provides
-the named-collective integration path. The runtime and prepared APIs validate
-method, timestep policy and operator support before execution. An unsupported
-combination raises an error; changing the method or collision model to make a
-mesh fit changes the numerical problem and requires its own validation.
+the named-collective integration path. Named collectives support ``rk2``,
+``rk3``, ``rk4``, ``sspx3`` and adaptive ``rk4-pi`` with production diagnostics, adaptive chunks, progress and saturation
+checks. Fixed-step diagnostics-off runs use a final-state scan when supported.
+Diagnosed preparation uses the same backend with ``strict_identity = false``.
+Its fixed-step array interface supports matched model differentiation under the
+prepared topology constraints described in :doc:`api`.
+
+Active physical collisions, sources, fixed-mode restrictions, checkpointing,
+additional state sharding, unequal per-species moment counts and reflectionless
+closures use the ordinary solver with whole-state placement. IMEX policies also
+use that fallback. Status messages identify this placement; it does not establish
+distributed RHS work. Unsupported strategies or axes still raise.
+Adaptive chain IMEX and generic ``imex`` preparation are refused. Changing a
+method or collision model changes the numerical problem and requires its own
+validation.
 
 ``strict_identity`` defaults to true. It compares the parallel result with a
 serial execution, including the final state and energy and transport traces.
@@ -74,6 +86,21 @@ collision model and output sampling against serial execution. Check final
 states, fields, conserved quantities and transport windows. Logical CPU
 devices are useful for communication and differentiation checks, but share
 physical CPU resources and cannot establish hardware scaling.
+
+Multiple processes
+------------------
+
+Initialize JAX distributed execution externally and enter the solve on every
+rank. The selected mesh must contain devices from every initialized process.
+Auto selection balances the participating device count across processes before
+factoring the species--Hermite mesh. The ``ky`` placement diagnostic accepts
+only one process.
+
+A runtime call with ``return_state = true`` gathers the full global state onto
+every host, so each host needs memory for that complete array. Strict identity
+checks compare addressable shards and exchange error scalars rather than
+gathering the state solely for validation. Plan state-return and host-memory
+costs separately from the distributed device allocation.
 
 Benchmark warm runs after compilation, wait for device completion and report
 the workload, backend, device count, precision and numerical tolerances with

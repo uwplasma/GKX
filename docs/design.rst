@@ -52,8 +52,8 @@ map (``adaptive``). Matrix-free shift-invert is opt-in for a chosen branch
 
 **Certify, do not trust.** Every eigenpair is checked against the unprojected
 operator, and a failed check is an error. Under-resolved or unsaturated runs
-warn. Published numbers are tied to artifacts and recomputed in CI through the
-evidence ledger (:doc:`validation`).
+warn. The test suite checks numerical contracts; physical comparisons need
+reproducible inputs and convergence studies (:doc:`validation`).
 
 **:math:`k_y` layouts.** Fields are real, so negative :math:`k_y` is the
 conjugate of positive. ``full`` (default) stores both halves; ``half`` stores
@@ -170,10 +170,10 @@ Operator equations are in :doc:`operators`.
 Repository rules
 ----------------
 
-- ``examples/``: small workflows to copy. ``benchmarks/``: drivers, compact
-  TOML inputs and ``benchmarks/results/manifest.toml``; raw products stay out
-  of git. ``tools/``: manifests and the evidence ledger. ``tests/``: gates that
-  need no raw outputs (:doc:`testing`).
+- ``examples/``: small workflows to copy. ``benchmarks/``: compact TOML
+  inputs and capability contracts. ``tools/``: repository manifests and
+  comparison fixtures. ``tests/``: executable contracts (:doc:`testing`).
+  Generated products stay outside version control.
 - ``tools/package_architecture_manifest.toml`` fixes the module layout, the
   per-module line cap and the repository line budget. Add a module only when it
   replaces several files or isolates a measured compilation boundary. Prefer
