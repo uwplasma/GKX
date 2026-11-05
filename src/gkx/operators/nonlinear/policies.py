@@ -305,7 +305,11 @@ def _bracket_bounds(grid, params, cache, real_dtype, laguerre_velocity_max_fn):
         kx_max=jnp.abs(kx[(nx - 1) // 3]) if nx > 1 else jnp.zeros((), real_dtype),
         ky_max=jnp.abs(ky[(ny - 1) // 3]) if ny > 1 else jnp.zeros((), real_dtype),
         vpar_max=2.0 * jnp.sqrt(jnp.asarray(max(nm, 1), real_dtype)) * vtmax,
-        muB_max=jnp.asarray(laguerre_velocity_max_fn(nl, node_max=True), real_dtype)
+        muB_max=(
+            jnp.max(cache.laguerre_roots) * jnp.max(cache.bmag)
+            if getattr(cache, "mu_grid", False)
+            else jnp.asarray(laguerre_velocity_max_fn(nl, node_max=True), real_dtype)
+        )
         * tzmax,
         kxfac=jnp.asarray(cache.kxfac, dtype=real_dtype),
     )

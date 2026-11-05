@@ -917,6 +917,10 @@ agree for Laguerre ``Nl = 4, 8, 16`` and 8 nodes under that protocol; they do no
 establish replicated saturated-transport convergence. Eight nodes cost about
 2-3 times the 4 moments on the shared GPU; this is not a controlled speed comparison.
 
+Node count and perpendicular cutoff need separate convergence scans: increasing
+nodes does not remove velocity-domain truncation. Adaptive CFL estimates use
+:math:`\max_j\hat\mu_j\,\max_z(B/B_0)` from the actual nodes.
+
 Scope: linear runs, electrostatic and electromagnetic; nonlinear runs, electrostatic
 with ``laguerre_nonlinear_mode = "grid"`` (other bracket modes are refused).
 ``nu_hyper``, ``nu_hyper_l``, ``nu_hyper_lm`` and ``hypercollisions_const`` are refused
