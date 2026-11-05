@@ -106,10 +106,7 @@ Nm = 4
 solver = "time"
 
 [fit]
-# window_method left at the default "stationary"; see cyclone.toml for why the
-# "loglinear" override was removed. The dropped max_fraction / end_fraction /
-# max_amp_fraction / late_penalty keys only fed that scorer, and were in any
-# case filtered out by RUNTIME_COMMAND_FIT_KEYS before reaching the fit.
+# Use the default stationary fit-window selection.
 auto_window = true
 window_fraction = 0.3
 start_fraction = 0.58

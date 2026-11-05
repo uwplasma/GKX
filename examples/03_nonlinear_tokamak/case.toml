@@ -1,7 +1,7 @@
 schema_version = 1
 
 # Cyclone base case nonlinear ITG, tutorial resolution: a 16x16x16 box with
-# (Nl, Nm) = (2, 4) and 200 fixed steps. Seconds on a laptop CPU; the run shows
+# (Nl, Nm) = (2, 4) and 200 fixed steps. The run shows
 # the linear growth phase and the onset of the nonlinear transfer, not a
 # saturated heat flux. case_full.toml is the 64x64x24 production deck.
 
@@ -27,7 +27,7 @@ ntheta = 16
 nperiod = 1
 
 [time]
-# Nonlinear rate kept from GKX < 2.6 (damp_ends_amp = 0.1 read as a rate).
+# Explicit nonlinear end-damping rate.
 damp_ends_rate = 0.1
 t_max = 10.0
 dt = 0.05

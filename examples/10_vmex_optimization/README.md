@@ -74,14 +74,10 @@ fixed RK window. It is not the exact derivative of long-time mean transport.
 Keep seed/state and numerical policy fixed during each optimizer stage;
 validate accepted candidates with independent cold runs.
 
-## Results and next qualification
+## Qualification
 
-The retained QA candidate's nominal reduction is 12.26%, but **not statistically
-resolved**: 4 of 48 nominal traces fail the final-drift test.
-The conditional interval and overlapping refinement intervals alone do not
-establish convergence.
-
-[Stellarator optimization](../../docs/stellarator_optimization.rst) contains
-initial/final inputs, shapes, Boozer plots, heat-flux traces, campaign scripts
-and all results. The roadmap (research log) specifies warm/cold tests,
-linear and quasilinear companion examples, and the validation gates.
+Validate accepted candidates with independent cold starts, replicated seeds,
+and timestep and resolution refinement. Compare matched linear, quasilinear
+and nonlinear objectives, and check finite-window derivatives with centered
+finite differences. See [Stellarator optimization](../../docs/stellarator_optimization.rst)
+for the composed workflow and its numerical limits.

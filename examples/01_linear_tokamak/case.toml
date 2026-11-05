@@ -1,7 +1,7 @@
 schema_version = 1
 
 # Cyclone base case ITG, tutorial resolution: s-alpha geometry, one kinetic ion
-# species, adiabatic electrons. Runs in seconds on a laptop CPU. The resolution
+# species, adiabatic electrons. The resolution
 # is deliberately coarse (Nz = 16, Nl = 2, Nm = 4, gamma*t_max ~ 10), so growth
 # rates are qualitative. case_full.toml is the GX-matched literature deck.
 

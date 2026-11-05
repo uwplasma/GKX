@@ -38,28 +38,15 @@ nperiod = 4
 
 [time]
 damp_ends_rate = 0.0
-# run_to must stay "t_max". This is a zero-gradient zonal-flow relaxation run:
-# tprim = fprim = 0, so the heat-flux moment is identically zero -- measured
-# 0.0 in every one of the first 512 samples, not merely small -- and there is
-# no saturated flux for the default run_to = "saturation" to find. The
-# observable this benchmark exists to produce is the zonal potential response
-# Phi_zonal(kx, t) out to t = 60, which a flux-based stop policy cannot see.
+# Integrate the zero-gradient zonal-flow relaxation through the full horizon.
+# With tprim = fprim = 0, heat flux cannot diagnose completion; the observable
+# is the zonal potential response Phi_zonal(kx, t).
 run_to = "t_max"
 t_max = 60.0
-# dt must stay under the parallel-streaming CFL of the equilibrium this deck
-# loads. That limit is omega_streaming = |gradpar| * kz_max * 2*sqrt(Nm), and it
-# is the term that dominates here: at Nm = 32 the runtime's own bound
-# (gkx.solvers_time_explicit) reads omega = 75.0 of a total 81.5, giving a
-# stable dt of 0.0311 for rk4, near-constant across the four kx of the sweep.
-# The deck shipped dt = 0.05 -- 1.6x over -- and blew up: Wphi grew from 5.4e-16
-# to 3.2e+42 and went NaN at t = 5.65, then integrated NaN to t_max. Measured
-# at dt = 0.05: unstable; 0.025, 0.0125, 0.00625: stable. dt = 0.02 is 0.66x the
-# tightest bound in the sweep (kx rho_i = 0.30) and reaches t = 60 finite at
-# both ends of it; halving to 0.01 moves Wphi(t) by at most 0.3%.
-# fixed_dt = true means none of this is checked at run time, so re-derive the
-# bound before changing dt, Nm, ntheta, or vmec_file. Overriding the equilibrium
-# changes it directly: |gradpar| = 0.207 here, 0.113 for the QHS example wout,
-# whose bound is 0.058 and which is therefore stable at the old dt = 0.05.
+# Check the fixed step against the equilibrium's parallel-streaming CFL:
+# omega_streaming = |gradpar| * kz_max * 2*sqrt(Nm). Recheck the bound when
+# changing dt, Nm, ntheta or vmec_file, and verify timestep convergence of
+# the zonal potential response.
 dt = 0.02
 method = "rk4"
 sample_stride = 4
