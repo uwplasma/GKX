@@ -676,9 +676,21 @@ def stage_from_host(value: Any, sharding: Any) -> Any:
     if isinstance(value, jax.core.Tracer):
         return value
     current = getattr(value, "sharding", None)
+    if current == sharding:
+        return value
     if current is not None and current.is_equivalent_to(sharding, value.ndim):
         # Same shards/devices: normalize metadata without a host round trip.
-        return jax.device_put(value, sharding)
+        local = {shard.device: shard for shard in value.addressable_shards}
+        target = sharding.addressable_devices_indices_map(value.shape)
+        arrays = []
+        for device, index in target.items():
+            shard = local[device]
+            if shard.index != index:
+                raise ValueError("equivalent placement changed a local shard index")
+            arrays.append(shard.data)
+        if not arrays:
+            raise ValueError("placement normalization requires an addressable shard")
+        return jax.make_array_from_single_device_arrays(value.shape, sharding, arrays)
     return jax.device_put(np.asarray(jax.device_get(value)), sharding)
 
 

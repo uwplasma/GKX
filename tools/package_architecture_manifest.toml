@@ -1221,9 +1221,9 @@ recursive = true
 # 69180 -> 69183: the log-linear growth-fit fallback requires a late-time share of the run, so a few-sample transient window cannot be reported as a rate. Measured.
 # 69183 -> 69159: terms/assembly.py (1208 -> 1191) and workflows/runtime/startup.py (1201 -> 1194) back under the 1200-line tripwire by collapsing duplicated field-by-field assembly; both exceptions deleted. Measured.
 # 69159 -> 69271: the chain IMEX factor, probes and collision sub-step per species group at the group's own (Nl, Nm). Measured.
-# 69271 -> 69319: reusable fixed-step named preparation shares the existing
-# backend and trajectory factory; no new API or source files. Measured.
-baseline = 69319
+# 69271 -> 69331: reusable named preparation shares existing backend/trajectory
+# factories and normalizes equivalent distributed placements. Measured.
+baseline = 69331
 target = 45000
 
 [[line_budget_policy.counts]]
