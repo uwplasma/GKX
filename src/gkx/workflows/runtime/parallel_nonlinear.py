@@ -380,22 +380,17 @@ def assert_nonlinear_parallel_identity(
 
 
 def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
-    """Check shared fixed-step named-collective physics and runtime limits."""
+    """Check shared named-collective explicit physics and runtime limits."""
 
     return (
         plan.axis == "species_hermite"
-        and bool(cfg.time.fixed_dt)
-        and not ctx.adaptive_chunked
         and not policy.fixed_mode_on
         and not policy.source_on
-        and not policy.show_progress
-        and not cfg.time.progress_bar
-        and str(cfg.time.run_to).strip().lower() == "t_max"
         and not cfg.time.checkpoint
         and not cfg.time.collision_split
         and not cfg.time.state_sharding
         and (method is None or method == cfg.time.method)
-        and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3"}
+        and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3", "rk4-pi"}
         and all(
             sp.Nl in (None, ctx.G0.shape[1])
             and sp.Nm in (None, ctx.G0.shape[2])
@@ -443,6 +438,11 @@ def _integrate_species_hermite_final_state(
 
     if (
         policy.diagnostics_on
+        or not cfg.time.fixed_dt
+        or cfg.time.method == "rk4-pi"
+        or str(cfg.time.run_to).strip().lower() != "t_max"
+        or policy.show_progress
+        or cfg.time.progress_bar
         or (prepare is not None and plan.strict_identity)
         or not _supports_species_hermite_policy(
             cfg, ctx, policy, method=method, plan=plan

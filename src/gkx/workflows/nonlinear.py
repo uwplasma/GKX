@@ -541,6 +541,7 @@ def _run_chunked_diagnostics(
     method: str | None,
     status: Callable[[str], None],
     stop_condition: Callable[[Any, Any, Any, Any], dict[str, Any]] | None,
+    rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
     """Run adaptive chunks or fixed-step saturation checks within the hard cap."""
 
@@ -565,13 +566,15 @@ def _run_chunked_diagnostics(
         if imex and "op" in control:
             for key, prepared in compile_cache.items():
                 compile_cache[key] = prepared.with_chain(control["op"])
-        if continue_pi:
+        if rhs_factory is not None:
+            kwargs["_rhs_factory"] = rhs_factory
+        if continue_pi or rhs_factory is not None:
             out, control["next_dt"] = _continue_nonlinear_diagnostics(
                 G,
                 ctx.grid,
                 ctx.geom,
                 ctx.params,
-                initial_dt=control["next_dt"],
+                initial_dt=control["next_dt"] if continue_pi else None,
                 **kwargs,
             )
         else:
@@ -720,6 +723,7 @@ def _run_diagnostics(
                 method=method,
                 status=status,
                 stop_condition=stop_condition,
+                rhs_factory=rhs_factory,
             )
         except ValueError as exc:
             if "implicit factor residual" not in str(exc) or cfg.time.fixed_dt:
@@ -734,6 +738,7 @@ def _run_diagnostics(
                 method="rk4-pi",
                 status=status,
                 stop_condition=stop_condition,
+                rhs_factory=rhs_factory,
             )
     status(
         f"running nonlinear diagnostics integrator over {ctx.steps} steps with dt={ctx.dt:.6g}"
@@ -894,7 +899,7 @@ def _run_sharded(
     method: str | None,
     status: Callable[[str], None],
     plan: NonlinearParallelPlan,
-    prepare: Callable[[], Any] | None = None,
+    prepare: Callable[..., Any] | None = None,
 ) -> Any:
     """Run the sharded nonlinear route, fail-closed against the serial answer."""
 
@@ -902,8 +907,8 @@ def _run_sharded(
         plan = resolve_species_hermite_mesh(ctx.G0, plan)
     status(f"routing nonlinear run through {plan.describe()}")
     if (
-        prepare is None
-        and policy.diagnostics_on
+        (prepare is None or policy.diagnostics_on)
+        and (policy.diagnostics_on or not cfg.time.fixed_dt or policy.show_progress)
         and _supports_species_hermite_policy(cfg, ctx, policy, method=method, plan=plan)
     ):
         rhs_factory = partial(
@@ -914,6 +919,10 @@ def _run_sharded(
             laguerre_mode=policy.laguerre_mode,
         )
         status("using named species-Hermite RHS with production post-step diagnostics")
+        if prepare is not None:
+            if plan.strict_identity:
+                raise ValueError("parallel preparation requires strict_identity=False")
+            return prepare(_rhs_factory=rhs_factory)
         result, sharded_state = _run_once(
             cfg, ctx, policy, method=method, status=status, rhs_factory=rhs_factory
         )
@@ -1009,8 +1018,6 @@ def run_runtime_nonlinear(
     # Resolved before any geometry or grid work so an unroutable [parallel]
     # request fails immediately instead of after a long serial run.
     plan = resolve_nonlinear_parallel_plan(cfg.parallel)
-    if prepare_only and plan is not None and diagnostics is not False:
-        raise ValueError("parallel preparation requires diagnostics=False")
     status = status_callback if status_callback is not None else lambda _message: None
     ctx = _prepare_context(
         cfg,
@@ -1036,7 +1043,7 @@ def run_runtime_nonlinear(
         f"nonlinear diagnostics={'on' if policy.diagnostics_on else 'off'} "
         f"fixed_mode={'on' if policy.fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
-    prepare_factory: Callable[[], Any] | None = None
+    prepare_factory: Callable[..., Any] | None = None
     if prepare_only:
         if _saturation_stop_condition(cfg, ctx, policy) is not None and steps is None:
             raise ValueError(

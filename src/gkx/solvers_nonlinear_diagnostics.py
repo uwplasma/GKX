@@ -1029,17 +1029,14 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     """Prepare one compile-stable explicit nonlinear diagnostic simulation."""
 
     if _rhs_factory is not None and (
-        not fixed_dt
-        or method not in {"rk2", "rk3", "rk4", "sspx3"}
+        method not in {"rk2", "rk3", "rk4", "sspx3", "rk4-pi"}
         or checkpoint
         or collision_split
         or external_phi is not None
         or fixed_mode_ky_index is not None
         or fixed_mode_kx_index is not None
-        or show_progress
-        or time_horizon is not None
     ):
-        raise ValueError("named diagnostics require supported fixed-step policy")
+        raise ValueError("named diagnostics require supported explicit policy")
     options = _explicit_options_from_values(locals())
     components = _build_explicit_scan_components(
         G0,
@@ -1065,8 +1062,6 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         rhs_fn: Any = None,
         initial_dt: jnp.ndarray | None = None,
     ) -> tuple[Any, Any, Any, Any]:
-        if rhs_fn is not None and time_horizon is not None:
-            raise ValueError("named diagnostics do not support horizon overrides")
         step = components.step
         if rhs_fn is not None:
             step, _ = _build_explicit_scan_closures(
