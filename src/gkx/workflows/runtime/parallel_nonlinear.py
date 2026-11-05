@@ -15,8 +15,8 @@ compiled scan's input is ``{replicated}`` on every device (read from the
 optimized HLO on JAX 0.10.2), and forcing the ``ky`` split inside the jit
 instead fails on XLA:CPU, whose FFT rejects the layout the partitioner's
 all-gather leaves it. Any device count is therefore accepted on ``ky``,
-including one that does not divide ``Nyc``. ``auto = true`` picks the species x Hermite mesh from the
-visible devices and reports which one it chose. Fixed-step, collision-free
+including one that does not divide ``Nyc``. ``auto = true`` selects the largest
+compatible multi-device subset of the device budget. Fixed-step, collision-free
 ``rk2``/``rk3``/``rk4``/``sspx3`` runs with diagnostics disabled and ``run_to = "t_max"``
 use :func:`gkx.parallel.integrators.integrate_nonlinear_species_hermite` when
 no source, fixed-mode, collision-split, checkpoint, progress or additional
@@ -122,7 +122,7 @@ class NonlinearParallelPlan:
 
     @property
     def device_count(self) -> int:
-        return len(self.devices)
+        return int(getattr(self.mesh_plan, "num_devices", len(self.devices)))
 
     @property
     def mesh_shape(self) -> tuple[int, int]:
@@ -149,7 +149,7 @@ class NonlinearParallelPlan:
         return (
             f"shard_map nonlinear route on a {chosen}species x Hermite mesh "
             f"({ns_chunks} species x {nm_chunks} Hermite) across "
-            f"{self.device_count} devices, shard "
+            f"{self.device_count} of {len(self.devices)} devices, shard "
             f"{tuple(self.mesh_plan.shard_shape)}, collectives: {collectives} "
             f"(strict_identity={strict})"
         )
@@ -239,12 +239,7 @@ def resolve_nonlinear_parallel_plan(parallel: Any) -> NonlinearParallelPlan | No
 def resolve_species_hermite_mesh(
     state: Any, plan: NonlinearParallelPlan
 ) -> NonlinearParallelPlan:
-    """Attach the ``(species, hermite)`` mesh a state and device count imply.
-
-    Failure is a routing error naming the device counts that *do* factor, so a
-    user who asked for three devices is told which numbers work rather than
-    only which one did not.
-    """
+    """Attach the requested mesh, selecting a feasible subset only in auto mode."""
 
     from gkx.parallel.velocity_plan import (
         build_species_hermite_mesh_plan,
@@ -252,17 +247,23 @@ def resolve_species_hermite_mesh(
     )
 
     shape = tuple(int(x) for x in state.shape)
-    try:
-        mesh_plan = build_species_hermite_mesh_plan(
-            shape, num_devices=plan.device_count
+    if len(shape) not in (5, 6) or min(shape) < 1:
+        raise NonlinearParallelRoutingError(
+            f"expected a nonempty 5D or 6D state, got {shape}"
         )
+    ns = shape[0] if len(shape) == 6 else 1
+    nm = shape[2] if len(shape) == 6 else shape[1]
+    count = len(plan.devices)
+    if plan.auto:
+        feasible = species_hermite_device_counts(ns, nm, limit=count)
+        count = max((n for n in feasible if n >= 2), default=count)
+    try:
+        mesh_plan = build_species_hermite_mesh_plan(shape, num_devices=count)
     except ValueError as exc:
-        ns = shape[0] if len(shape) == 6 else 1
-        nm = shape[2] if len(shape) == 6 else shape[1]
         supported = species_hermite_device_counts(ns, nm)
         raise NonlinearParallelRoutingError(
             f"[parallel] axis='species_hermite' cannot factor "
-            f"{plan.device_count} devices over Ns={ns}, Nm={nm}: {exc}. "
+            f"{count} devices over Ns={ns}, Nm={nm}: {exc}. "
             "Species are factored first and the Hermite remainder must divide "
             "Nm exactly, so this grid supports "
             f"{', '.join(str(count) for count in supported)} devices."
