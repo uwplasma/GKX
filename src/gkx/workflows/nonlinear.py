@@ -553,10 +553,8 @@ def _run_chunked_diagnostics(
     chunk_steps = min(ctx.steps, 128)
     G_chunk = ctx.G0
     steps_left = ctx.steps
-    # One compiled scan per chunk shape, reused by every chunk of this run.
     compile_cache: dict[Any, Any] = {}
-    # Chain IMEX with fixed_dt = false: a fixed factor per chunk, dt chosen
-    # between chunks (ImexDtControl), the factor swapped in as an operand.
+    # Chain IMEX retunes its fixed factor between chunks.
     imex = ctx.adaptive_chunked and (method or cfg.time.method) in IMEX_CHAIN_METHODS
     # Zero requests the original CFL initialization on this trajectory only.
     control: dict[str, Any] = {
@@ -657,8 +655,7 @@ def _run_chunked_diagnostics(
     def loop_stop(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
         assert stop_condition is not None
         decision = stop_condition(t, heat_flux, wphi, wg)
-        # "stop" ends the loop; "saturated" is the physics verdict. The step
-        # budget running out stops the loop without claiming saturation.
+        # Exhausting the step budget stops without claiming saturation.
         stop = bool(decision.get("saturated")) or (step_capped and steps_left <= 0)
         return {**decision, "stop": stop}
 
@@ -1005,7 +1002,6 @@ def run_runtime_nonlinear(
     )
     if prepare_only:
         if _saturation_stop_condition(cfg, ctx, policy) is not None:
-            # A fixed-length prepared scan cannot stop at saturation.
             raise ValueError(
                 "prepared execution cannot stop early at saturation: this deck "
                 f"sets [time] run_to = {str(cfg.time.run_to).strip().lower()!r}, "
