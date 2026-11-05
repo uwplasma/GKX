@@ -291,8 +291,8 @@ Runtime routing for nonlinear runs
 ----------------------------------
 
 ``[parallel]`` is read by the nonlinear runtime path as well as the linear
-one, and every request it cannot honour raises rather than silently running
-serially. One sharded nonlinear run is requested with:
+one. Unsupported strategies and axes raise instead of being ignored.
+One sharded nonlinear run is requested with:
 
 .. code-block:: toml
 
@@ -302,7 +302,7 @@ serially. One sharded nonlinear run is requested with:
    num_devices = 2
    strict_identity = true
 
-or, letting the mesh follow the visible devices:
+or, selecting a compatible subset automatically:
 
 .. code-block:: toml
 
@@ -310,12 +310,14 @@ or, letting the mesh follow the visible devices:
    auto = true
 
 ``auto`` resolves to ``strategy = "shard_map"`` and
-``axis = "species_hermite"`` over every visible device, with
-``strict_identity = true``, and the resolved plan is printed before the run
-starts, for example::
+``axis = "species_hermite"`` and defaults to ``strict_identity = true``. It
+selects the largest shape-compatible subset of the requested device budget, using all
+visible devices as the budget when ``num_devices`` is omitted. An explicit
+non-auto count must be compatible or the request is refused. The resolved
+plan reports selected and budgeted counts before the run starts, for example::
 
    routing nonlinear run through shard_map nonlinear route on a auto-selected
-   species x Hermite mesh (2 species x 1 Hermite) across 2 devices, shard
+   species x Hermite mesh (2 species x 1 Hermite) across 2 of 2 devices, shard
    (1, 4, 16, 8, 8, 8), collectives: field psum, no halo (strict_identity=on)
 
 ``auto`` never silently overrules an explicit request: a conflicting
@@ -325,24 +327,28 @@ the production mesh are ``species_hermite``, ``velocity``, ``s_m``, ``species``,
 diagnostic: ``num_devices`` must divide the ``k_y`` extent the state actually
 stores, and the refusal names the layout that extent came from.
 
-For either axis the runtime places the whole nonlinear state on the mesh and
-runs the ordinary production integrator on it, so the operator is the
-production nonlinear RHS rather than a reduced stand-in. The audited
-``shard_map`` route with the named collectives above is the one the fixed-step
-trajectory gate covers; the runtime lane does not yet call it. This is a
-*routing* claim only, and no speedup is claimed for either runtime axis.
+The ``species_hermite`` runtime uses the named collective integrator for
+fixed-step ``rk2``, ``rk3``, ``rk4`` and ``sspx3`` final-state runs with
+diagnostics disabled and ``run_to = "t_max"``. Sources, fixed modes, active
+collisions, checkpointing, progress, additional state sharding, unequal species
+moment counts and reflectionless closures retain ordinary whole-state
+placement. The status message distinguishes these routes. ``ky`` remains a
+whole-state placement diagnostic. All routes use the production nonlinear
+operator; none of these routing capabilities alone establishes a speedup.
 
 Routing is fail-closed on numerical identity. With ``strict_identity = true``
 the run is also executed serially and the two answers must agree on the final
-state and on the ``Wg``, ``Wphi``, heat-flux, and particle-flux traces, with the
+state and, when diagnostics are recorded, on the ``Wg``, ``Wphi``, heat-flux and
+particle-flux traces. Diagnostics-off runs compare final states only, with the
 same allclose-style tolerance convention (``atol = 5e-6``,
 ``rtol = 1e-4``). A violation raises ``NonlinearParallelIdentityError`` and the
 sharded result is discarded; it is never returned in place of the serial answer.
 Setting ``strict_identity = false`` skips the serial reference and is only
 appropriate once the gate is known to pass for that workload. The sharded route
 needs at least two JAX devices; on CPU they can be forced with
-``XLA_FLAGS=--xla_force_host_platform_device_count=N`` for testing, which splits
-one thread pool and is slower than serial (:doc:`performance`).
+``XLA_FLAGS=--xla_force_host_platform_device_count=N`` for testing. These logical
+devices share host resources and do not establish physical-device scaling
+(:doc:`performance`).
 
 Every other combination raises ``NonlinearParallelRoutingError`` naming the
 supported set. In particular ``axis = "z"`` is rejected, for two separate
