@@ -266,6 +266,15 @@ production nonlinear RHS to ``1e-6`` relative on one-, two- and four-device
 meshes, and a fixed-step trajectory with its scan-fused scalar traces matches
 serial to ``5e-6`` absolute.
 
+More devices do not yet guarantee that a problem larger than one device or
+host can run. The default ``strict_identity = true`` executes a full serial
+reference on each process, so its serial working set must fit one device.
+After independent qualification, ``strict_identity = false`` removes that
+reference, but initialization still creates a full state and cache before
+sharding. Geometry and fields remain replicated, and ``return_state = true``
+materializes the full global state on every host. Throughput scaling and
+aggregate-memory capacity therefore require separate qualification.
+
 Speedup status: **not a production speedup claim.** The nonlinear bracket is
 kept in its own kernel (``optimization_barrier``) because XLA otherwise folds
 the whole linear operator into the elementwise ``add`` that joins it to the

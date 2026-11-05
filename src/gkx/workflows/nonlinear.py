@@ -12,6 +12,7 @@ from typing import Any
 import jax.numpy as jnp
 import numpy as np
 from jax import tree_util
+from jax.experimental.multihost_utils import process_allgather
 
 from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.modes import select_ky_index
@@ -743,12 +744,6 @@ def _run_diagnostics(
         ctx.params,
         **kwargs,
     )
-    # The chunked routes above validate every chunk before returning it. This
-    # one is a single scan, so nothing has looked at the trace yet: an unstable
-    # step runs to the last step and hands back a diagnostics array whose tail
-    # is NaN, and every caller that is not the artifact writer -- the library
-    # API, and the CLI whenever [output] path is unset -- reports that as a
-    # successful run. Refuse the trace instead of returning it.
     validate_finite_runtime_diagnostics(diag, label="fixed-step nonlinear run")
     return t, diag, G_final, fields_final, None
 
@@ -764,6 +759,11 @@ def _result(
     summarize_fields: bool,
     saturation: dict[str, Any] | None = None,
 ) -> RuntimeNonlinearResult:
+    if policy.return_state and not (
+        getattr(state, "is_fully_addressable", True)
+        or getattr(state, "is_fully_replicated", False)
+    ):
+        state = process_allgather(state, tiled=True)
     return build_runtime_nonlinear_result(
         t=np.asarray(t),
         diagnostics=diagnostics,
