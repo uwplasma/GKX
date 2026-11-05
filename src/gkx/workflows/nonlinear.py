@@ -93,11 +93,13 @@ def build_runtime_nonlinear_diagnostics_kwargs(
     """
 
     method_use = str(method or cfg.time.method)
-    kwargs: dict[str, Any] = dict(
+    return dict(
         dt=float(dt),
         steps=int(steps),
         method=method_use,
         terms=term_config,
+        checkpoint=bool(cfg.time.checkpoint),
+        compressed_real_fft=bool(cfg.time.compressed_real_fft),
         sample_stride=int(sample_stride),
         diagnostics_stride=int(diagnostics_stride),
         use_dealias_mask=bool(cfg.time.nonlinear_dealias),
@@ -118,12 +120,9 @@ def build_runtime_nonlinear_diagnostics_kwargs(
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
         external_phi=external_phi,
+        resolved_diagnostics=resolved_diagnostics,
+        show_progress=show_progress,
     )
-    if not resolved_diagnostics:
-        kwargs["resolved_diagnostics"] = False
-    if show_progress:
-        kwargs["show_progress"] = True
-    return kwargs
 
 
 def _nearest_index_from_candidates(
