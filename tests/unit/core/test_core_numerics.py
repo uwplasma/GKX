@@ -884,7 +884,7 @@ def test_nonlinear_summary_never_hides_an_unsaturated_verdict() -> None:
     result = RuntimeNonlinearResult(
         t=np.linspace(0.0, 10.0, 3),
         diagnostics=None,
-        saturation={"saturated": False, "mean_flux": 4.5, "sem": 0.3},
+        saturation={"saturated": False, "mean": 4.5, "sem": 0.3},
     )
     summary = result.summary()
     assert summary["saturated"] is False
