@@ -1297,11 +1297,8 @@ def _parallel_streaming_frequency(
     beta = float(_host_cfl_value(params.beta, "beta"))
     nspec_in = int(max(species.charge.size, 1))
     nte = _electron_pressure_product(species)
-    mime = (
-        (species.vtmax * species.vtmax) / (species.vtmin * species.vtmin)
-        if species.vtmin > 0.0
-        else 0.0
-    )
+    vmax, vmin = species.vtmax, species.vtmin
+    mime = (vmax * vmax) / (vmin * vmin) if vmin > 0.0 else 0.0
     kmin, bmax = grid_bounds.kperp_min, geometry.bmag_max
     kperprho2 = kmin * kmin / (bmax * bmax) if bmax > 0.0 else 0.0
     if nspec_in > 1:
@@ -1309,12 +1306,8 @@ def _parallel_streaming_frequency(
         guard = 1.0 / np.sqrt(denom) if denom > 0.0 else 0.0
     else:
         guard = 0.0
-    return (
-        species.vtmax
-        * grid_bounds.kz_max
-        * abs(geometry.gradpar)
-        * max(species.vpar_max, guard)
-    )
+    streaming = species.vtmax * grid_bounds.kz_max * abs(geometry.gradpar)
+    return streaming * max(species.vpar_max, guard)
 
 
 def _linear_frequency_bound(
