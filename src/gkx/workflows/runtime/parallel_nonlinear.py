@@ -5,13 +5,15 @@ Laguerre, perpendicular and parallel spatial axes. Auto mode selects the
 largest compatible subset of the device budget; explicit counts fail closed
 when they cannot factor. Status reports selected and budgeted devices.
 
-Named collectives serve fixed-step ``rk2``/``rk3``/``rk4``/``sspx3`` runs
-with ``run_to="t_max"``, using the production post-step diagnostic contract or
-the diagnostics-off final-state scan. Adaptive/stop policies, active collisions,
-sources, fixed modes, checkpointing, progress, additional state sharding,
-unequal species moment counts and reflectionless closures retain the ordinary
-solver. Uniform moment stamps must match the normalized state's dimensions.
-Fallback reports whole-state placement and does not imply distributed RHS work.
+Named collectives serve explicit ``rk2``/``rk3``/``rk4``/``rk4-pi``/``sspx3``
+runs with production diagnostics, adaptive chunks, saturation checks and progress.
+Fixed-step diagnostics-off runs retain the final-state scan where supported.
+Diagnosed preparation reuses the same backend with ``strict_identity=False``;
+model overrides remain unsupported. Active collisions, sources, fixed modes,
+checkpointing, additional state sharding, unequal species moment counts and
+reflectionless closures retain the ordinary solver. Uniform moment stamps must
+match the normalized state. Fallback reports whole-state placement and does not
+imply distributed RHS work.
 
 ``ky`` is a single-process placement diagnostic with replicated work. FFT axes
 remain local; unsupported strategies and axes raise with their reasons.
@@ -439,7 +441,7 @@ def _integrate_species_hermite_final_state(
     if (
         policy.diagnostics_on
         or not cfg.time.fixed_dt
-        or cfg.time.method == "rk4-pi"
+        or (method or cfg.time.method) == "rk4-pi"
         or str(cfg.time.run_to).strip().lower() != "t_max"
         or policy.show_progress
         or cfg.time.progress_bar

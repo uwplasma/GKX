@@ -1232,6 +1232,10 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     _require_devices(num_devices)
     cfg = _live_cfg(ky_layout=ky_layout)
     cfg = replace(cfg, time=replace(cfg.time, run_to="t_max"))
+    if axis == "species_hermite" and ky_layout == "half":
+        cfg = replace(
+            cfg, time=replace(cfg.time, method="rk4-pi", fixed_dt=False, dt_max=0.01)
+        )
     options = {
         **_RUN_KWARGS,
         "Nm": 8,

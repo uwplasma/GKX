@@ -222,8 +222,7 @@ def _infer_runtime_nonlinear_steps(
     elif bool(cfg.time.fixed_dt):
         steps_val = int(np.round(float(cfg.time.t_max) / max(float(dt), 1.0e-12)))
     else:
-        # Keep runtime inference aligned with adaptive stepping: when
-        # dt_max is unset, the nonlinear integrator clamps at dt itself.
+        # Match the integrator's dt fallback when dt_max is unset.
         dt_cap = float(cfg.time.dt_max) if cfg.time.dt_max is not None else float(dt)
         steps_val = int(np.ceil(float(cfg.time.t_max) / max(dt_cap, 1.0e-12)))
     if steps_val < 1:
@@ -433,14 +432,7 @@ _RUN_TO_VALUES = ("saturation", "t_max")
 def _saturation_stop_condition(
     cfg: RuntimeConfig, ctx: _RunContext, policy: _DiagnosticPolicy
 ) -> Callable[[Any, Any, Any, Any], dict[str, Any]] | None:
-    """Build the run-to-saturation stop check, or ``None`` to run to t_max.
-
-    Saturation stopping needs the streamed heat-flux trace, so a run with
-    diagnostics disabled falls back to the t_max horizon. So does a run whose
-    whole step budget is shorter than the minimum sample count: it could never
-    reach a stop decision, and routing it through the chunk loop would only
-    add machinery around the same integration.
-    """
+    """Build a stop check when diagnostics can meet the sample floor."""
 
     run_to = str(cfg.time.run_to).strip().lower()
     if run_to not in _RUN_TO_VALUES:
@@ -470,12 +462,7 @@ def _saturation_stop_condition(
 def _nonlinear_cfl_margin(
     cfg: RuntimeConfig, ctx: _RunContext, *, Nl: int, Nm: int
 ) -> tuple[float, float, np.ndarray] | None:
-    """Return the nonlinear CFL bound and ratio, or ``None`` if unavailable.
-
-    Match the adaptive step's no-diamagnetic-drive convention. This advisory
-    calculation must not abort an otherwise valid run when geometry is traced
-    or has not yet been sampled onto the grid.
-    """
+    """Estimate the adaptive no-diamagnetic-drive CFL bound when available."""
 
     from gkx.geometry import ensure_flux_tube_geometry_data
     from gkx.solvers_time_explicit import _linear_frequency_bound
