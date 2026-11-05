@@ -407,11 +407,8 @@ Python driver
   # point CONFIG at the top of the script at benchmarks/cases/etg_linear_scan.toml
   python examples/12_restart_and_analysis/run.py
 
-The canonical KBM TOML is a controlled comparison input rather than
-a promoted standalone solve: its experimental shift-invert branch raises when
-the physical eigenpair-residual gate is not met. Reproduce the reviewed result
-with ``scripts/benchmarks/linear_benchmark.py kbm`` (retired; :ref:`retired-generators`) (removed from the tree;
-``git show df2953026:scripts/benchmarks/linear_benchmark.py``).
+The canonical KBM TOML is a controlled comparison input. Inspect the
+physical eigenpair residual and compare solver routes before using a result.
 
 Runtime sections
 ----------------

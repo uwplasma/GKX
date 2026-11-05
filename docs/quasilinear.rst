@@ -12,29 +12,13 @@ separate:
 * **calibrated absolute flux** requires nonlinear training and holdout
   validation and cannot be inferred from an uncalibrated rule.
 
-Status
-------
+Scope
+-----
 
-The quasilinear layer is a scoped core-portfolio diagnostic and
-optimization-screening tool. It is not a runtime/TOML absolute-flux predictor,
-and the tracked calibration reports are not a calibrated absolute-flux claim.
-
-* One-constant saturation rules fail the held-out transport gate on the 12-case
-  portfolio (2 training, 10 held-out nonlinear windows): held-out mean relative
-  error 6.49 for positive-growth mixing length, 4.42 for the raw linear weight,
-  6.85 for absolute-growth mixing length, against a gate of 0.35.
-* The best reduced candidate, ``spectral_envelope_ridge``, reaches
-  leave-one-geometry-out mean relative error 0.697 with interval coverage
-  11/12. It is not exposed as a runtime saturation law.
-* On the declared 10-case core portfolio (Solovev and shaped-pressure external
-  VMEC excluded as stress outliers), the same candidate passes the transport
-  and coverage gate: mean relative error 0.280, held-out 0.275, maximum 0.575,
-  coverage 10/10. The core rank-screening gate fails (Spearman 0.745 against
-  0.75).
-
-The numbers come from ``docs/_static/quasilinear_saturation_rule_sweep.json``,
-``docs/_static/quasilinear_candidate_uncertainty.json`` and the
-``core_portfolio_gate`` block of ``docs/_static/quasilinear_error_anatomy.json``.
+Quasilinear outputs are linear diagnostics and model-dependent optimization
+proxies. Absolute flux requires nonlinear calibration and independent holdout
+validation in the intended regime. Assess uncertainty coverage and ranking
+on held-out geometries before using a reduced model for optimization.
 
 Literature anchors
 ------------------
@@ -115,21 +99,8 @@ solves in parallel and keeps the serial ordering of the spectrum:
      --workers 2 \
      --out tools_out/cyclone_quasilinear_scan
 
-   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_quasilinear_diagnostics.py > scripts/artifacts/plot_quasilinear_diagnostics.py
-   python scripts/artifacts/plot_quasilinear_diagnostics.py spectrum \
-     --spectrum tools_out/cyclone_quasilinear_scan.quasilinear_spectrum.csv \
-     --out tools_out/quasilinear_cyclone_spectrum.png
-
-The serial/worker identity gate for this path
-(``docs/_static/quasilinear_runtime_parallel_gate.json``) checks ordered
-identity of the linear heat-flux weight and the saturated estimate; its timing
-fields are engineering metadata, not a speedup claim:
-
-.. code-block:: bash
-
-   JAX_ENABLE_X64=1 python scripts/artifacts/generate_parallel_identity_gate.py quasilinear-runtime \
-     --workers 2 --ky 0.1 0.2 \
-     --out-prefix docs/_static/quasilinear_runtime_parallel_gate
+Compare serial and worker runs with the same points and verify ordered
+identity of both linear weights and saturated estimates.
 
 The Miller companion spectrum uses ``ky`` values resolved by the nonlinear
 run's ``Ny = 64`` grid:
@@ -140,7 +111,7 @@ run's ``Ny = 64`` grid:
      --config benchmarks/cases/cyclone_miller_quasilinear.toml \
      --ky-values 0.1,0.2,0.3,0.4,0.5 \
      --quasilinear \
-     --out docs/_static/quasilinear_cyclone_miller_spectrum_scan
+     --out tools_out/miller_spectrum_scan
 
 Model
 -----
@@ -302,10 +273,6 @@ Implementation map
      - :mod:`scripts.checks._gates.quasilinear_calibration`
      - train/holdout/audit schemas, spectrum integration, nonlinear-window
        ingestion, scale fitting and scoring
-   * - Plotting tools
-     - ``scripts/artifacts/plot_quasilinear_diagnostics.py`` (retired; :ref:`retired-generators`),
-       ``scripts/artifacts/plot_quasilinear_calibration.py`` (retired; :ref:`retired-generators`)
-     - spectrum, shape-gate and calibration figures
    * - Differentiability gates
      - :mod:`gkx.objectives.autodiff_validation`
      - finite-difference checks, dense operator fixtures and implicit
@@ -387,10 +354,8 @@ implicit left/right path is the validation route for quasilinear observables.
 a small Cyclone linear-RHS fixture. The differentiated observable is
 :math:`[\gamma, \omega, k_{\perp,\mathrm{eff}}^2, \widehat{Q}_i,
 Q_i^{(\mathrm{ML})}]`, where :math:`Q_i^{(\mathrm{ML})}` is the uncalibrated
-mixing-length heat-flux proxy, with respect to ``[a/L_n, a/L_Ti]``. Against
-central finite differences that follow the nearest isolated branch, the tracked
-artifact ``docs/_static/quasilinear_implicit_sensitivity.json`` records maximum
-relative derivative error 1.2e-2 at eigenvalue gap 0.24.
+mixing-length heat-flux proxy, with respect to ``[a/L_n, a/L_Ti]``. Compare with central finite differences that follow the nearest isolated
+branch, and inspect the eigenvalue gap before interpreting the derivative.
 
 .. code-block:: bash
 
@@ -468,307 +433,9 @@ selected heat-flux column (usually ``heat_flux``). NetCDF inputs use
 target. The window is the summary's ``tmin``/``tmax`` when present, otherwise
 the full finite range.
 
-.. code-block:: bash
-
-   python scripts/artifacts/plot_quasilinear_calibration.py report \
-     --spectrum docs/_static/quasilinear_cyclone_spectrum_scan.quasilinear_spectrum.csv \
-     --nonlinear-summary docs/_static/nonlinear_cyclone_gate_summary.json \
-     --split audit \
-     --case cyclone_long_window \
-     --geometry cyclone \
-     --electron-model adiabatic \
-     --saturation-rule mixing_length \
-     --out docs/_static/quasilinear_cyclone_calibration_audit_report.json
-
-   python scripts/artifacts/plot_quasilinear_calibration.py \
-     --report docs/_static/quasilinear_cyclone_calibration_audit_report.json \
-     --out tools_out/quasilinear_cyclone_calibration_audit.png
-
-With ``C_sat = 1`` the mixing-length rule underpredicts the Cyclone nonlinear
-heat flux by orders of magnitude, so this audit report stays
-``training_or_audit_only``.
-
-Guardrails
-^^^^^^^^^^
-
-``scripts/checks/check_quasilinear_promotion_guardrails.py calibration-inputs``
-matches each train/holdout point's ``nonlinear_artifact`` to tracked, passed
-nonlinear gate metadata, so an exploratory or non-converged pilot cannot enter
-calibration. ``scripts/checks/check_quasilinear_promotion_guardrails.py``
-without a subcommand audits the calibration and model-selection JSON reports
-(finite window statistics, train/holdout provenance, passed held-out gates
-before ``calibrated_absolute_flux``), scans documentation for scope markers and
-positive absolute-flux wording, and checks that each quasilinear figure in the
-manuscript index has a JSON sidecar and a non-absolute claim level. Its output
-is ``docs/_static/quasilinear_promotion_guardrails.json``.
-
-Calibration portfolio
----------------------
-
-The combined report ``docs/_static/quasilinear_stellarator_train_holdout_report.json``
-fits on two training windows and scores ten held-out windows, all adiabatic
-electron, electrostatic ITG. :math:`\langle Q_i\rangle` is the admitted
-nonlinear window mean in gyro-Bohm units.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 24 10 40 12
-
-   * - Case
-     - Split
-     - Admission
-     - :math:`\langle Q_i\rangle`
-   * - Cyclone s-alpha
-     - train
-     - long-window nonlinear gate
-     - 6.67
-   * - ITERModel external VMEC
-     - train
-     - ``n48``/``n64`` convergence at ``t = 350``
-     - 22.05
-   * - Cyclone Miller
-     - holdout
-     - long-window nonlinear gate
-     - 4.26
-   * - HSX (QHS deck)
-     - holdout
-     - ``t <= 50`` nonlinear gate
-     - 5.09
-   * - W7-X
-     - holdout
-     - ``t <= 200`` nonlinear gate
-     - 5.38
-   * - D-shaped external VMEC
-     - holdout
-     - ``n48``/``n64`` convergence at ``t = 250``
-     - 18.48
-   * - Up-down asymmetric external VMEC
-     - holdout
-     - ``n48``/``n64`` convergence at ``t = 450``
-     - 7.76
-   * - Circular external VMEC
-     - holdout
-     - ``n48``/``n64`` convergence at ``t = 450``
-     - 19.43
-   * - CTH-like external VMEC
-     - holdout
-     - ``n64``/``n80`` high-grid admission; ``n80`` seed/timestep ensemble on
-       ``t=[350,700]`` (spread 0.041, SEM/mean 0.052)
-     - 9.60
-   * - Shaped-pressure external VMEC
-     - holdout
-     - ``n64``/``n80`` high-grid admission; ``n80`` ensemble on
-       ``t=[325,650]`` (spread 0.094, SEM/mean 0.046)
-     - 7.16
-   * - QP ``nfp2`` external VMEC
-     - holdout
-     - replicated ``t = 250`` ensemble (spread 0.071)
-     - 16.40
-   * - Solovev external VMEC
-     - holdout
-     - replicated ``n48``/``t250`` ensemble, 20% spread tolerance (spread 0.160)
-     - 1.41
-
-CTH-like and shaped-pressure are admitted only under coarse-grid exclusion:
-their full ``n48/n64/n80`` ladders fail (shaped-pressure grid shift 0.469
-against 0.15), so neither is a full-ladder convergence claim. The admission
-sidecars are
-``docs/_static/external_vmec_cth_like_modified_high_grid_admission_gate.json``
-and
-``docs/_static/external_vmec_shaped_tokamak_pressure_dt0p04_high_grid_admission_gate.json``;
-the ensemble gates are named in each point's ``nonlinear_artifact``.
-
-Excluded windows and the reason for each are listed under
-``excluded_candidates`` in ``docs/_static/quasilinear_holdout_gap_report.json``.
-They include:
-
-* KBM: electromagnetic, while the quasilinear channels are electrostatic;
-* nfp4 QH external VMEC: grid shifts 0.523/0.480 (``n32``/``n48``) and
-  0.630/0.704 (``n48``/``n64``) on the common/least-trending windows, above
-  0.15;
-* a same-family ITERModel ``t = 450`` audit: reproducibility evidence for the
-  training reference, not an independent holdout.
-
-The QI seed equilibrium (``quasilinear_vmec_qi_seed_linear_spectrum_scan``)
-peaks at :math:`\gamma \approx 3.8\times10^{-3}` near ``ky = 0.143``, below the
-0.02 nonlinear-launch threshold of ``scripts/artifacts/build_qi_branch_refinement_gate.py`` (retired; :ref:`retired-generators`),
-so no nonlinear window exists for it.
-
-Results
--------
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 46 24
-
-   * - Test
-     - Result
-     - Artifact
-   * - One-constant transfer, Cyclone to Cyclone Miller
-     - fitted ``C_sat = 3839.966``; Miller error far above 0.35;
-       ``passed = false``
-     - ``quasilinear_cyclone_miller_train_holdout_report.json``
-   * - One-constant transfer, 12 cases
-     - held-out mean relative error 6.49; worst holdout Solovev (predicted 53.2,
-       observed 1.41)
-     - ``quasilinear_stellarator_train_holdout_report.json``,
-       ``quasilinear_holdout_gap_report.json``
-   * - Saturation-rule sweep
-     - linear weight 4.42, mixing length 6.49, absolute growth 6.85,
-       training-mean null 1.80; no rule accepted
-     - ``quasilinear_saturation_rule_sweep.json``
-   * - Shape-aware power law
-     - leave-one-geometry-out error 0.725 against linear weight 0.624 and
-       training-mean null 0.170; ``promotion_gate.passed = false``
-     - ``quasilinear_shape_aware_saturation.json``
-   * - Candidate uncertainty
-     - ``spectral_envelope_ridge`` 0.697, coverage 11/12; linear weight 1.320;
-       null 1.171; ``linear_state_ridge`` 1.907; none accepted
-     - ``quasilinear_candidate_uncertainty.json``
-   * - Ridge-penalty sweep
-     - best ``lambda = 0.5``: error 0.689, held-out 0.764, coverage 11/12; no
-       penalty passes 0.35
-     - ``quasilinear_candidate_regularization_sweep.json``
-   * - Rank screening
-     - ``spectral_envelope_ridge`` Spearman 0.636 (held-out 0.624), pairwise
-       order 0.697 (held-out 0.689), held-out error 0.777; gates 0.75; no model
-       passes
-     - ``quasilinear_screening_skill.json``
-   * - Residual anatomy
-     - external axisymmetric VMEC cases carry 83% of the
-       ``spectral_envelope_ridge`` residual; HSX and W7-X mean error 0.31
-     - ``quasilinear_error_anatomy.json``
-   * - Model selection
-     - blockers ``dataset_sufficiency_passed``,
-       ``candidate_uncertainty_passed``, ``required_candidate_accepted``,
-       ``required_candidate_transport_error``
-     - ``quasilinear_model_selection_status.json``
-
-All artifacts are under ``docs/_static/``. Every model-development report
-carries an ``input_validation`` block built from the nonlinear summary gates, so
-it can only be regenerated from windows that passed those gates.
-
-HSX and W7-X
-^^^^^^^^^^^^
-
-Every scanned HSX and W7-X branch in the tracked short electrostatic
-adiabatic-electron spectra is stable, so with ``gamma_floor = 0`` the
-mixing-length estimate is zero while the nonlinear windows are finite (relative
-error one by construction). The raw linear-weight fit overpredicts both by
-roughly a factor of four; ``spectral_envelope_ridge`` is closer
-(``docs/_static/quasilinear_stellarator_usefulness.json``).
-
-.. image:: _static/quasilinear_stellarator_usefulness.png
-   :alt: Stellarator quasilinear usefulness summary
-   :width: 100%
-
-Stellarator saturated states involve subdominant and stable eigenmodes
-[Pueschel16]_, energy transfer to damped modes [Hegna18]_ and zonal-flow
-dynamics [Tiwari25]_, and linear growth rates are a weak proxy for saturated
-heat flux across quasi-symmetric configurations [McKinney19]_. In GKX,
-quasilinear metrics are used for screening, differentiable-optimization
-research and model development, not for absolute stellarator heat flux.
-
-The HSX input is the Nuhrenberg-Zille QHS deck generated by ``vmex``; the W7-X
-command uses the shipped QI deck. For the benchmark equilibria, point
-``[geometry].vmec_file`` at the machine-specific WOUT, which is not in Git.
-
-.. code-block:: bash
-
-   cd examples/vmec
-   vmex input.NuhrenbergZille_1988_QHS
-   vmex input.nfp3_QI_fixed_resolution_final
-   cd ../..
-   gkx scan \
-     --config examples/02_linear_stellarator/case_full.toml \
-     --ky-values 0.047619047619047616,0.09523809523809523,0.14285714285714285,0.19047619047619047,0.23809523809523808,0.2857142857142857 \
-     --Nl 4 --Nm 8 --solver time --dt 0.005 --steps 400 \
-     --quasilinear \
-     --out docs/_static/quasilinear_hsx_spectrum_scan \
-     --no-progress
-   gkx scan \
-     --config benchmarks/cases/w7x_linear_quasilinear_vmec.toml \
-     --ky-values 0.047619047619047616,0.09523809523809523,0.14285714285714285,0.19047619047619047,0.23809523809523808,0.2857142857142857 \
-     --Nl 4 --Nm 8 --solver time --dt 0.005 --steps 400 \
-     --quasilinear \
-     --out docs/_static/quasilinear_w7x_spectrum_scan \
-     --no-progress
-
-Each holdout is added to the Cyclone/Miller report with, for W7-X:
-
-.. code-block:: bash
-
-   python scripts/artifacts/plot_quasilinear_calibration.py report \
-     --points docs/_static/quasilinear_cyclone_miller_train_holdout_points.json \
-     --spectrum docs/_static/quasilinear_w7x_spectrum_scan.quasilinear_spectrum.csv \
-     --nonlinear-summary docs/_static/nonlinear_w7x_gate_summary.json \
-     --split holdout \
-     --case w7x_nonlinear_window \
-     --geometry w7x \
-     --electron-model adiabatic \
-     --fit-train-scale \
-     --out docs/_static/quasilinear_w7x_train_holdout_report.json
-
-Spectrum-shape gates
---------------------
-
-A shape gate compares only the normalized ``ky`` distribution of the linear
-heat-flux weight with the resolved nonlinear ``Diagnostics/HeatFlux_kyst``
-spectrum; it does not test the absolute level. Pass criteria are total
-variation ``TV <= 0.2`` and cosine similarity ``>= 0.95``.
-
-.. list-table::
-   :header-rows: 1
-
-   * - Case
-     - TV
-     - cosine
-     - Result
-   * - W7-X
-     - 0.056
-     - 0.992
-     - pass
-   * - HSX
-     - 0.11
-     - 0.97
-     - pass
-   * - Cyclone Miller
-     - 0.094
-     - 0.983
-     - pass
-   * - Cyclone s-alpha (long window)
-     - 0.215
-     - 0.896
-     - fail; mismatch in the low- and high-``ky`` tails
-
-The values are in ``docs/_static/quasilinear_<case>_spectrum_shape_gate.json``.
-KBM has no shape gate because its nonlinear lane is electromagnetic.
-
-.. code-block:: bash
-
-   # retired generator; restore it first: git show f005418bf575:scripts/artifacts/plot_quasilinear_diagnostics.py > scripts/artifacts/plot_quasilinear_diagnostics.py
-   python scripts/artifacts/plot_quasilinear_diagnostics.py shape-gate \
-     --spectrum docs/_static/quasilinear_hsx_spectrum_scan.quasilinear_spectrum.csv \
-     --nonlinear tools_out/final_nonlinear_audit/hsx_nonlinear_t50.out.nc \
-     --out tools_out/quasilinear_hsx_spectrum_shape_gate.png \
-     --ql-column heat_flux_weight_total \
-     --nonlinear-variable Diagnostics/HeatFlux_kyst \
-     --time-max 49.2 \
-     --tv-gate 0.2 \
-     --cosine-gate 0.95
-
-The nonlinear NetCDF inputs are local run outputs and are not tracked.
-
-Convergence evidence
---------------------
-
-Admission follows the practice of nonlinear benchmark papers: a saturated
-heat-flux window is used only if it is robust to resolution and window choice
-[Dimits00]_ [GX]_ [GonzalezJerez22]_. The 0.15 grid-shift threshold is of the
-order of the heat-flux convergence tolerances reported for Laguerre-Hermite
-calculations in [GX]_. Stellarator flux-tube domain choices change results
-[Sanchez21]_, which is why external-VMEC cases sit behind explicit gates.
-Turbulent flux traces are autocorrelated and need uncertainty and stopping
-checks [Oberparleiter16]_, low velocity resolution can move the saturated heat
-flux [Hoffmann23]_, and W7-X heat-flux time series show the same statistical
-structure [Papadopoulos23]_.
+Keep generated calibration reports and spectra outside version control.
+Separate training, holdout and audit points and record the selected saturation
+rule, spectrum integration weights and nonlinear diagnostic convention.
+A fitted multiplier does not establish the physical validity of a saturation
+rule. Require resolution checks and independent geometry holdouts before
+reporting absolute flux accuracy.

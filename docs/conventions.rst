@@ -10,8 +10,8 @@ Each entry below is marked with how it was checked:
 
 - **code**: read from the GKX source (``src/gkx``) or from the other code's
   source or official documentation;
-- **run**: confirmed by running the codes on the same case (the 2026-09-27
-  cross-code record, ``plan/research/2026-09-27-xcode/REPORT.md``);
+- **run**: a case-level numerical comparison; repeat it for the intended
+  code versions and configuration;
 - **derived**: follows from the unit definitions but was not checked by a run;
 - **unverified**: stated from the literature without a check here.
 
@@ -111,26 +111,11 @@ frequency is a rate, so it converts like :math:`\gamma`. GS2's manual defines
 ``nu_ss`` with no rescaling (``parameters.cu``), so GX's ``vnewk`` is already
 in GKX units.
 
-stella follows the same table (**run**, 2026-10-24). With it, stella's growth
-rate on the adiabatic Cyclone Miller surface is 1.39x GKX's at
-:math:`k_y\rho_i=0.30`, 1.37--1.49x over 0.25--0.71, 1.6x at 0.18 and 2.0x at
-0.11. The
-excess is not a missed :math:`\sqrt2`: GS2 takes the identical mapping and
-agrees with GX to 0.3%. Dropping the :math:`\sqrt2` on :math:`\gamma` while
-keeping :math:`k_y/\sqrt2` brings :math:`\gamma` within 5% for
-:math:`k_y\rho_i` 0.25--0.71, but not below (0.70 of GX at 0.11) and not
-:math:`\omega`, which stays 5--21% low, nor the W7-X scan (1.2--1.7x). A
-two-parameter fit of the rescalings to the stella points leaves 7% residuals.
-The stella numbers are in ``docs/_static/cross_code_linear_points.csv`` and are
-not used as a reference. A rebuild of stella master without vectorisation flags
-(``-O1``) reproduces both builds to the last printed digit. Its growth rate does
-not change when ``streamknob`` is varied from 0 to 100 (adiabatic Cyclone) and
-is 6x GS2's with kinetic electrons, while its geometry arrays agree with GS2 to
-0.5%. Parallel streaming appears not to act in these runs; the cause is open.
-
-GX needs no conversion: GKX was built to reproduce GX, and the certified GKX
-eigenvalues agree with GX to 0.3% or better on the Cyclone decks (README,
-*Benchmarks*).
+Apply unit conversions from the definitions above and check the actual input
+and diagnostic conventions of each comparison code. A fitted rate discrepancy
+does not justify changing a unit factor. Match geometry, boundaries, collision
+models and regularization before interpreting disagreement; see
+:doc:`validation` for the comparison protocol.
 
 Gradients and geometry parameters
 ---------------------------------
@@ -215,7 +200,7 @@ Fields are expanded as :math:`\phi = \sum_{\mathbf k} \hat\phi_{\mathbf k}
 e^{i(k_x x + k_y y)}` (``jnp.fft.fftfreq`` ordering), and growth rates are
 fitted to :math:`\hat\phi \propto e^{(\gamma - i\omega)t}`
 (``fit_growth_rate``, **code**). With this time convention the Cyclone ITG mode
-has :math:`\omega > 0` in all four codes: GKX and GX (tracked reference CSV),
+has :math:`\omega > 0` in all four codes: GKX and GX,
 GS2 (:math:`\hat\omega = 0.153` at ``aky = 0.4243``, Miller) and stella
 (:math:`\hat\omega = 0.178`) (**run**). Positive :math:`\omega` is the
 ion-diamagnetic direction for :math:`k_y > 0`: the tracked goldens that GKX

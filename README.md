@@ -70,6 +70,12 @@ result = gkx.solve(
 print(result.gamma, result.omega)
 ```
 
+Independent scans and ensembles support parallel workers; nonlinear solves can
+opt into a species–Hermite device mesh, with serial execution as the default.
+See [parallel execution](docs/parallelization.rst) and
+[features and limitations](docs/release_scope.rst) for supported configurations,
+identity checks, and eigenmode and finite-window gradient limitations.
+
 ## Models and defaults
 
 | Choice | Default | Notes |
