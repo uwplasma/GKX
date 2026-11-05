@@ -338,8 +338,7 @@ def _prepare_context(
         steps=int(_infer_runtime_nonlinear_steps(cfg, dt=dt_val, steps=steps)),
         adaptive_chunked=steps is None and not bool(cfg.time.fixed_dt),
     )
-    # Before the first step, not after the last: an over-CFL run that is going
-    # to overflow should say so while the step is still cheap to change.
+    # Report an unsafe fixed step before integration.
     _report_nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm, status=status)
     return ctx
 
@@ -540,6 +539,7 @@ def _run_chunked_diagnostics(
     """Run adaptive chunks or fixed-step saturation checks within the hard cap."""
 
     step_capped = not ctx.adaptive_chunked
+    step_bound = ctx.dt if cfg.time.fixed_dt else float(cfg.time.dt_max or ctx.dt)
     chunk_steps = min(ctx.steps, 128)
     G_chunk = ctx.G0
     steps_left = ctx.steps
@@ -550,7 +550,7 @@ def _run_chunked_diagnostics(
         "dt": min(ctx.dt, float(cfg.time.dt_max or ctx.dt)),
         "next_dt": jnp.asarray(0.0, dtype=jnp.real(ctx.G0).dtype),
     }
-    continue_pi = ctx.adaptive_chunked and (method or cfg.time.method) == "rk4-pi"
+    continue_pi = not cfg.time.fixed_dt and (method or cfg.time.method) == "rk4-pi"
     if imex:
         chunk_steps = 32
 
@@ -650,7 +650,7 @@ def _run_chunked_diagnostics(
 
     chunk_result = run_adaptive_runtime_chunk_loop(
         integrate_chunk=run_chunk,
-        t_max=ctx.dt * ctx.steps if step_capped else float(cfg.time.t_max),
+        t_max=step_bound * ctx.steps if step_capped else float(cfg.time.t_max),
         chunk_steps=chunk_steps,
         label="nonlinear",
         show_progress=policy.show_progress,
@@ -987,7 +987,7 @@ def run_runtime_nonlinear(
         f"fixed_mode={'on' if policy.fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
     if prepare_only:
-        if _saturation_stop_condition(cfg, ctx, policy) is not None:
+        if _saturation_stop_condition(cfg, ctx, policy) is not None and steps is None:
             raise ValueError(
                 "prepared execution cannot stop early at saturation: this deck "
                 f"sets [time] run_to = {str(cfg.time.run_to).strip().lower()!r}, "
@@ -1008,7 +1008,7 @@ def run_runtime_nonlinear(
             fixed_dt=bool(cfg.time.fixed_dt),
             show_progress=show_progress,
         )
-        if not bool(cfg.time.fixed_dt):
+        if ctx.adaptive_chunked:
             kwargs["time_horizon"] = float(cfg.time.t_max)
         return prepare_nonlinear_explicit_diagnostics(
             ctx.G0, ctx.grid, ctx.geom, ctx.params, **kwargs

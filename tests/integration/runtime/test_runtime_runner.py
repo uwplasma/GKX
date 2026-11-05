@@ -746,7 +746,6 @@ def test_runtime_linear_rejects_invalid_fit_signal() -> None:
 def test_runtime_linear_auto_fit_prefers_density_signal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     base_cfg = _base_runtime_cfg()
     cfg = replace(
         base_cfg,
@@ -817,7 +816,6 @@ def test_runtime_linear_auto_fit_prefers_density_signal(
 def test_runtime_linear_auto_solver_falls_back_to_krylov(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     cfg = _ion_cfg("none")
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -965,7 +963,6 @@ def test_runtime_linear_implicit_run_fails_closed_on_unconverged_solves(
 def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     base = _nonlinear_ion_cfg()
     cfg = replace(base, time=replace(base.time, method="imex", fixed_dt=True))
     grid = build_spectral_grid(cfg.grid)
@@ -1042,9 +1039,9 @@ def test_prepare_runtime_nonlinear_reuses_existing_execution_contract(
     assert direct.diagnostics is not None and direct.state is not None
     np.testing.assert_allclose(diagnostics.heat_flux_t, direct.diagnostics.heat_flux_t)
     np.testing.assert_allclose(np.asarray(state), direct.state)
-    assert prepare(cfg, steps=255, **options) is not None
+    assert prepare(cfg, steps=256, **options) is not None
     with pytest.raises(ValueError, match="cannot stop early at saturation"):
-        prepare(cfg, steps=256, **options)
+        prepare(cfg, **options)
     full_horizon = replace(cfg, time=replace(cfg.time, run_to="t_max"))
     with pytest.raises(ValueError, match="only support explicit methods"):
         prepare(full_horizon, steps=2, method="imex", **options)
@@ -2181,7 +2178,6 @@ def test_runtime_nonlinear_mode_selection_honors_kx_target(monkeypatch) -> None:
 def test_run_linear_case_uses_toml_output_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-
     base = _base_runtime_cfg()
     cfg = replace(base, output=replace(base.output, path=str(tmp_path / "linear_case")))
 
@@ -2355,7 +2351,6 @@ def test_run_nonlinear_case_uses_toml_output_path(
 def test_run_linear_case_without_output_path_prints_summary_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-
     cfg = _base_runtime_cfg()
 
     def fake_load_runtime_from_toml(_path):
