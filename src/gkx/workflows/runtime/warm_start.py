@@ -171,6 +171,7 @@ def signature_from_arrays(arrays: Iterable[Any]) -> np.ndarray:
 
 
 _SIGNATURE_FIELDS = (
+    "theta",
     "gradpar_value",
     "bmag_profile",
     "bgrad_profile",
@@ -179,15 +180,33 @@ _SIGNATURE_FIELDS = (
     "gds22_profile",
     "cv_profile",
     "gb_profile",
+    "cv0_profile",
+    "gb0_profile",
+    "jacobian_profile",
+    "grho_profile",
+    "q",
+    "s_hat",
+    "epsilon",
+    "R0",
+    "B0",
+    "alpha",
+    "drift_scale",
+    "kxfac",
+    "theta_scale",
+    "nfp",
+    "kperp2_bmag",
+    "bessel_bmag_power",
+    "theta_closed_interval",
 )
 
 
 def flux_tube_signature(geom: Any) -> np.ndarray:
     """Return the flux-tube profiles a carried saturated state is judged against.
 
-    These are exactly the metric coefficients the nonlinear operator reads, so
-    two geometries with the same signature drive the same turbulence and a
-    state saturated in one is a valid seed in the other.
+    Include radial drifts, flux quadrature and geometry conventions as well as
+    the binormal profiles: changing any of them can change the evolution or
+    measured transport. The distance threshold remains a reuse heuristic;
+    a warm seed must still re-equilibrate to the new geometry.
     """
 
     present = [getattr(geom, name) for name in _SIGNATURE_FIELDS if hasattr(geom, name)]
