@@ -3044,7 +3044,7 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial(
     from gkx.terms.config import TermConfig
 
     if len(jax.devices()) < num_devices:
-        pytest.skip("needs at least two devices")
+        pytest.skip("needs the requested device count")
     state, cache, params, grid, vol_fac, flux_fac = _species_hermite_problem()
     terms = TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0)
     steps, dt = 3, 1.0e-3
