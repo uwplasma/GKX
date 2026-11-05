@@ -69,200 +69,192 @@ tem_dj2005,0.6,gs2,t1,1.07976,-2.079036,plan/research/2026-10-06-val-ke/results/
 tem_dj2005,0.6,gs2,t2,1.067951,-2.074926,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.8,gs2,t1,0.964823,-2.534797,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
 tem_dj2005,0.8,gs2,t2,0.940968,-2.494691,plan/research/2026-10-06-val-ke/results/gs2_tem_fits.txt
-tem_dj2005,0.3,gkx,Nl8 Nm16 nperiod2 damp_ends_rate100,0.489833,-1.132774,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl12 Nm16 nperiod2 damp_ends_rate100,0.429795,-1.236315,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100,0.479944,-0.993678,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100,0.623129,-1.339886,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl10 Nm24 nperiod2 damp_ends_rate100,0.512508,-1.202769,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl12 Nm24 nperiod2 damp_ends_rate100,0.551658,-1.279849,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl6 Nm32 nperiod2 damp_ends_rate100,0.687230,-1.368376,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.672834,-1.232756,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl4 Nm48 nperiod2 damp_ends_rate100,0.597214,-1.150335,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl6 Nm48 nperiod2 damp_ends_rate100,0.753310,-1.391582,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm48 nperiod2 damp_ends_rate100,0.743542,-1.265551,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm64 nperiod2 damp_ends_rate100,0.773238,-1.277278,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm96 nperiod2 damp_ends_rate100,0.825398,-1.284908,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.2,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.427508,-0.890717,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.4,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.843887,-1.551272,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.5,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.944372,-1.850953,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.6,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.987960,-2.144228,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate5,0.871175,-1.254619,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate20,0.667858,-1.198904,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate50,0.622736,-1.198738,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate400,0.607129,-1.203571,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.005,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.212218,0.258581,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
-kbm_miller_A_beta0.005,0.3,gkx,Nl8 Nm24 nperiod2,0.207024,0.286654,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.005,0.3,gkx,Nl8 Nm32 nperiod2,0.210542,0.279558,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.005,0.3,gkx,Nl8 Nm24 nperiod3,0.205792,0.288847,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.01,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.163328,0.304984,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
-kbm_miller_A_beta0.01,0.3,gkx,Nl8 Nm24 nperiod2,0.149931,0.331860,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.01,0.3,gkx,Nl8 Nm32 nperiod2,0.156593,0.323281,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.015,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.293895,0.993310,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
-kbm_miller_A_beta0.015,0.3,gkx,Nl8 Nm24 nperiod2,0.315466,1.070811,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.015,0.3,gkx,Nl8 Nm32 nperiod2,0.314300,1.075379,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.015,0.3,gkx,Nl8 Nm24 nperiod3,0.342502,1.010162,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.02,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.562169,0.824405,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
-kbm_miller_A_beta0.02,0.3,gkx,Nl8 Nm24 nperiod2,0.596709,0.862868,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_A_beta0.02,0.3,gkx,Nl8 Nm32 nperiod2,0.595139,0.863682,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_AB_beta0.005,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.213968,0.262141,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
-kbm_miller_AB_beta0.005,0.3,gkx,Nl8 Nm24 nperiod2,0.208536,0.290955,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_AB_beta0.01,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.160578,0.317051,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
-kbm_miller_AB_beta0.01,0.3,gkx,Nl8 Nm24 nperiod2,0.144433,0.347125,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_AB_beta0.015,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.386391,0.941069,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
-kbm_miller_AB_beta0.015,0.3,gkx,Nl8 Nm24 nperiod2,0.410023,1.004157,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-kbm_miller_AB_beta0.02,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.657336,0.786119,gkx-plan:plan/research/2026-10-19-val-linear/results/gs2_beta.csv
-kbm_miller_AB_beta0.02,0.3,gkx,Nl8 Nm24 nperiod2,0.692367,0.817820,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,0.8,gx-repaired,Nl8 Nm16 t200,0.133411,0.073409,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-w7x_itg,0.8,gkx,Nl8 Nm16 eigen auto,0.143257,0.165602,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,0.9,gx-repaired,Nl8 Nm16 t200,0.149273,0.115390,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-w7x_itg,0.9,gkx,Nl8 Nm16 eigen auto,0.163001,0.213417,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.0,gx-repaired,Nl8 Nm16 t200,0.174714,0.148908,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-w7x_itg,1.0,gkx,Nl8 Nm16 eigen auto,0.174949,0.264494,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.1,gx-repaired,Nl8 Nm16 t200,0.198877,0.189071,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-w7x_itg,1.1,gkx,Nl8 Nm16 eigen auto,0.198867,0.189078,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.2,gx-repaired,Nl8 Nm16 t200,0.218175,0.234362,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-w7x_itg,1.2,gkx,Nl8 Nm16 eigen auto,0.218171,0.234358,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.4,gx-repaired,Nl8 Nm16 t200,0.240246,0.336316,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-w7x_itg,1.4,gkx,Nl8 Nm16 eigen auto,0.240276,0.336321,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.6,gx-repaired,Nl8 Nm16 t200,0.244639,0.444202,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-w7x_itg,1.6,gkx,Nl8 Nm16 eigen auto,0.244654,0.444200,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,2.0,gx-repaired,Nl8 Nm16 t200,0.224737,0.627894,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-w7x_itg,2.0,gkx,Nl8 Nm16 eigen auto,0.224722,0.627912,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,2.4,gx-repaired,Nl8 Nm16 t200,0.200092,0.729594,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-w7x_itg,2.4,gkx,Nl8 Nm16 eigen auto,0.200082,0.729605,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,0.9,gkx,Nl8 Nm16 time route,0.130006,0.116183,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.0,gkx,Nl8 Nm16 time route,0.174749,0.148904,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-hsx_itg,0.3,gx-repaired,Nl8 Nm16 t200,0.073255,0.012130,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-hsx_itg,0.3,gkx,Nl8 Nm16 eigen auto,0.072904,0.065791,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-hsx_itg,0.5,gx-repaired,Nl8 Nm16 t200,0.157448,0.050310,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-hsx_itg,0.5,gkx,Nl8 Nm16 eigen auto,0.157459,0.050302,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-hsx_itg,0.7,gx-repaired,Nl8 Nm16 t200,0.242344,0.126864,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-hsx_itg,0.7,gkx,Nl8 Nm16 eigen auto,0.242344,0.126865,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-hsx_itg,0.9,gx-repaired,Nl8 Nm16 t200,0.292769,0.244981,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-hsx_itg,0.9,gkx,Nl8 Nm16 eigen auto,0.292754,0.244980,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-hsx_itg,1.1,gx-repaired,Nl8 Nm16 t200,0.303037,0.378062,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-hsx_itg,1.1,gkx,Nl8 Nm16 eigen auto,0.303023,0.378069,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-hsx_itg,1.5,gx-repaired,Nl8 Nm16 t200,0.256984,0.632680,gkx-plan:plan/research/2026-10-19-val-linear/results/gx_stellarator.json
-hsx_itg,1.5,gkx,Nl8 Nm16 eigen auto,0.256986,0.632681,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.003,0.474701,-1.008028,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.003,0.601075,-1.323567,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.003,0.592934,-1.215713,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.469497,-1.041729,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.560387,-1.293995,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.572158,-1.242405,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl10 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.562523,-1.242088,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.492585,-1.111682,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.506712,-1.248515,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.554189,-1.265323,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-tem_dj2005,0.3,gkx,Nl10 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.567383,-1.251000,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.6,gkx,Nl4 Nm16 eigen auto,0.243008,0.444670,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.6,gkx,Nl6 Nm16 eigen auto,0.244516,0.444306,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.6,gkx,Nl10 Nm16 eigen auto,0.244650,0.444194,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.6,gkx,Nl12 Nm16 eigen auto,0.244646,0.444189,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.6,gkx,Nl8 Nm24 eigen auto,0.245615,0.444309,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-w7x_itg,1.6,gkx,Nl8 Nm32 eigen auto,0.245578,0.443964,gkx-plan:plan/research/2026-10-19-val-linear/results/results_all.txt
-cyclone_miller,0.1061,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.072295,0.084402,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-cyclone_miller,0.1768,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.118131,0.142328,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-cyclone_miller,0.2475,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.154032,0.204308,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-cyclone_miller,0.3000,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.174809,0.251782,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-cyclone_miller,0.3536,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.189242,0.301422,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-cyclone_miller,0.4243,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.197768,0.368071,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-cyclone_miller,0.4950,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.194201,0.434190,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-cyclone_miller,0.5500,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.183229,0.483902,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-cyclone_miller,0.6364,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.152151,0.555154,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-cyclone_miller,0.7071,stella,r1 nzed24 nperiod2 nvgrid12 nmu6,0.118464,0.601082,gkx-plan:plan/research/2026-10-24-conventions/results/stella_fit.csv
-kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.3128,1.0775,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta48 nperiod2,0.2998,1.0884,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.2953,1.0923,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta96 nperiod2,0.2921,1.0953,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod3,0.3384,1.0155,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta48 nperiod3,0.3257,1.0239,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta64 nperiod3,0.3212,1.0269,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod4,0.3385,0.9925,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm96 ntheta32 nperiod2,0.3111,1.0813,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.26187,1.03361,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod2,0.27331,1.04947,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod2,0.27949,1.05689,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod2,0.286,1.0639,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta128 nperiod2,0.28937,1.06724,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod3,0.28564,0.9803,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod3,0.29308,0.99492,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod3,0.29725,1.00193,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod3,0.30178,1.00865,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod4,0.28431,0.9573,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48 ntheta32 nperiod2,0.3134,1.0759,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.005,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.2089,0.2708,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.005,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.2087,0.2703,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.005,0.3,gkx,Nl16 Nm96 ntheta32 nperiod2,0.2113,0.2653,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.005,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.21444,0.25531,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.005,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod2,0.21435,0.25701,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.01,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.1612,0.3165,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.01,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.17063,0.30126,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.01,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod2,0.16991,0.30232,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.01,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod2,0.16963,0.30273,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.01,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod2,0.16925,0.30291,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.02,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.5941,0.8637,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.02,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.581,0.8707,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.02,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.54423,0.83086,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.02,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod2,0.55412,0.8427,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.02,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod2,0.55946,0.84827,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.02,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod2,0.56512,0.85361,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_me0.04_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.6795,0.5602,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_me0.04_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.67179,0.55711,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_me0.04_beta1e-5,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.4041,0.3916,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_me0.04_beta1e-5,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.40418,0.38415,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_AB_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.4055,1.0098,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_AB_beta0.015,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.3876,1.0214,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_AB_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.35766,0.96894,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_AB_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod2,0.3714,0.9908,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_AB_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod2,0.37675,0.9974,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48 ntheta64 nperiod2,0.2942,1.0939,kbm-resolution-2026-11-01: office run, late-trace slope (gkx), gs2fit (gs2)
-miller_ke,0.2,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.157226,0.116551,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
-miller_ke,0.3,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.234917,0.220980,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
-miller_ke,0.4,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.264977,0.340404,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
-miller_ke,0.5,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.253635,0.457117,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
-miller_ke,0.6,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.212998,0.560695,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
-miller_ke,0.7,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.156104,0.647048,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
-tem_dj2005,0.3,gs2,t3 ntheta64 nperiod4 negrid24,0.870731,-1.270882,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
-tem_dj2005_nuee0.01,0.3,gs2,t3 vnewk_e 0.01,0.742300,-1.297554,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gs2.csv
-kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm24,0.318458,1.068189,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48,0.313468,1.076446,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-kbm_miller_AB_beta0.015,0.3,gx-repaired,Nl16 Nm48,0.406260,1.008833,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-miller_ke,0.3,gx-repaired,Nl2 Nm48 t60,0.233609,0.237631,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-miller_ke,0.3,gx-repaired,Nl6 Nm24 t60,0.232405,0.250632,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-miller_ke,0.3,gx-repaired,Nl6 Nm32 t60,0.232985,0.242808,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-miller_ke,0.3,gx-repaired,Nl6 Nm48 t60,0.231775,0.236118,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-miller_ke,0.3,gx-repaired,Nl6 Nm64 t60,0.232510,0.233923,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-miller_ke,0.3,gx-repaired,Nl Nm48 t60,0.225403,0.226987,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-miller_ke,0.3,gx-repaired,Nl Nm48 t60,0.232248,0.237877,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-miller_ke,0.3,gx-repaired,Nl Nm64 t60,0.233877,0.233077,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-tem_dj2005,0.3,gx-repaired,Nl6 Nm64,0.756970,-1.294316,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-tem_dj2005,0.3,gx-repaired,Nl Nm64,0.674980,-1.169977,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-tem_dj2005,0.3,gx-repaired,Nl Nm32,0.669513,-1.235776,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-tem_dj2005_nuee0.01,0.3,gx-repaired,Nl Nm32,0.577625,-1.248559,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-tem_dj2005,0.3,gx-repaired,Nl Nm64,0.769995,-1.280872,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-tem_dj2005_nuee0.01,0.3,gx-repaired,Nl Nm64,0.664120,-1.288228,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
-miller_ke,0.3,gkx,nodes8 Nm24 damp_ends_rate160.6,0.230403,0.249604,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.5,gkx,nodes8 Nm24 damp_ends_rate160.6,0.257626,0.474809,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.3,gkx,Nl8 Nm24 damp_ends_rate160.6,0.231152,0.251114,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.5,gkx,Nl8 Nm24 damp_ends_rate160.6,0.257377,0.476047,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.3,gkx,nodes4 Nm24 damp_ends_rate160.6,0.235459,0.256397,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.3,gkx,nodes12 Nm24 damp_ends_rate160.6,0.230399,0.249902,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.3,gkx,nodes8 Nm16 damp_ends_rate160.6,0.224522,0.263521,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.3,gkx,nodes8 Nm32 damp_ends_rate160.6,0.230337,0.241681,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.3,gkx,nodes8 Nm48 damp_ends_rate160.6,0.229462,0.236377,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.4,gkx,nodes8 Nm24 damp_ends_rate160.6,0.264808,0.363504,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.2,gkx,nodes8 Nm24 damp_ends_rate160.6,0.152504,0.146653,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.6,gkx,nodes8 Nm24 damp_ends_rate160.6,0.218263,0.572963,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.1,gkx,nodes8 Nm24 damp_ends_rate160.6,0.056269,0.066309,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.7,gkx,nodes8 Nm24 damp_ends_rate160.6,0.157170,0.647274,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-miller_ke,0.8,gkx,nodes8 Nm24 damp_ends_rate160.6,0.099039,0.690047,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-tem_dj2005,0.3,gkx,Nl8 Nm24 damp_ends_rate100,0.611431,-1.202045,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-tem_dj2005,0.3,gkx,Nl8 Nm48 damp_ends_rate100,0.743542,-1.265551,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-tem_dj2005,0.3,gkx,nodes8 Nm24 damp_ends_rate100,0.561048,-1.229952,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm24 lenard_bernstein damp_ends_rate100,0.565748,-1.207311,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-tem_dj2005_nuee0.01,0.3,gkx,nodes8 Nm24 lenard_bernstein damp_ends_rate100,0.520799,-1.238541,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm24 landau damp_ends_rate100,0.568484,-1.197161,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm48 lenard_bernstein damp_ends_rate100,0.691071,-1.270731,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm48 landau damp_ends_rate100,0.680284,-1.259406,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
-kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48 nperiod3,0.338932,1.015025,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+tem_dj2005,0.3,gkx,Nl8 Nm16 nperiod2 damp_ends_rate100,0.489833,-1.132774,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl12 Nm16 nperiod2 damp_ends_rate100,0.429795,-1.236315,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100,0.479944,-0.993678,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100,0.623129,-1.339886,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl10 Nm24 nperiod2 damp_ends_rate100,0.512508,-1.202769,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl12 Nm24 nperiod2 damp_ends_rate100,0.551658,-1.279849,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl6 Nm32 nperiod2 damp_ends_rate100,0.687230,-1.368376,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.672834,-1.232756,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl4 Nm48 nperiod2 damp_ends_rate100,0.597214,-1.150335,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl6 Nm48 nperiod2 damp_ends_rate100,0.753310,-1.391582,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm48 nperiod2 damp_ends_rate100,0.743542,-1.265551,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm64 nperiod2 damp_ends_rate100,0.773238,-1.277278,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm96 nperiod2 damp_ends_rate100,0.825398,-1.284908,historical self-run; private raw output unavailable
+tem_dj2005,0.2,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.427508,-0.890717,historical self-run; private raw output unavailable
+tem_dj2005,0.4,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.843887,-1.551272,historical self-run; private raw output unavailable
+tem_dj2005,0.5,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.944372,-1.850953,historical self-run; private raw output unavailable
+tem_dj2005,0.6,gkx,Nl8 Nm32 nperiod2 damp_ends_rate100,0.987960,-2.144228,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate5,0.871175,-1.254619,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate20,0.667858,-1.198904,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate50,0.622736,-1.198738,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate400,0.607129,-1.203571,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.005,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.212218,0.258581,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.005,0.3,gkx,Nl8 Nm24 nperiod2,0.207024,0.286654,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.005,0.3,gkx,Nl8 Nm32 nperiod2,0.210542,0.279558,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.005,0.3,gkx,Nl8 Nm24 nperiod3,0.205792,0.288847,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.01,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.163328,0.304984,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.01,0.3,gkx,Nl8 Nm24 nperiod2,0.149931,0.331860,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.01,0.3,gkx,Nl8 Nm32 nperiod2,0.156593,0.323281,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.293895,0.993310,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl8 Nm24 nperiod2,0.315466,1.070811,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl8 Nm32 nperiod2,0.314300,1.075379,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl8 Nm24 nperiod3,0.342502,1.010162,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.02,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.562169,0.824405,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.02,0.3,gkx,Nl8 Nm24 nperiod2,0.596709,0.862868,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.02,0.3,gkx,Nl8 Nm32 nperiod2,0.595139,0.863682,historical self-run; private raw output unavailable
+kbm_miller_AB_beta0.005,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.213968,0.262141,historical self-run; private raw output unavailable
+kbm_miller_AB_beta0.005,0.3,gkx,Nl8 Nm24 nperiod2,0.208536,0.290955,historical self-run; private raw output unavailable
+kbm_miller_AB_beta0.01,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.160578,0.317051,historical self-run; private raw output unavailable
+kbm_miller_AB_beta0.01,0.3,gkx,Nl8 Nm24 nperiod2,0.144433,0.347125,historical self-run; private raw output unavailable
+kbm_miller_AB_beta0.015,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.386391,0.941069,historical self-run; private raw output unavailable
+kbm_miller_AB_beta0.015,0.3,gkx,Nl8 Nm24 nperiod2,0.410023,1.004157,historical self-run; private raw output unavailable
+kbm_miller_AB_beta0.02,0.3,gs2,e4v ntheta48 nperiod3 negrid24 ngauss12,0.657336,0.786119,historical self-run; private raw output unavailable
+kbm_miller_AB_beta0.02,0.3,gkx,Nl8 Nm24 nperiod2,0.692367,0.817820,historical self-run; private raw output unavailable
+w7x_itg,0.8,gx-repaired,Nl8 Nm16 t200,0.133411,0.073409,historical self-run; private raw output unavailable
+w7x_itg,0.8,gkx,Nl8 Nm16 eigen auto,0.143257,0.165602,historical self-run; private raw output unavailable
+w7x_itg,0.9,gx-repaired,Nl8 Nm16 t200,0.149273,0.115390,historical self-run; private raw output unavailable
+w7x_itg,0.9,gkx,Nl8 Nm16 eigen auto,0.163001,0.213417,historical self-run; private raw output unavailable
+w7x_itg,1.0,gx-repaired,Nl8 Nm16 t200,0.174714,0.148908,historical self-run; private raw output unavailable
+w7x_itg,1.0,gkx,Nl8 Nm16 eigen auto,0.174949,0.264494,historical self-run; private raw output unavailable
+w7x_itg,1.1,gx-repaired,Nl8 Nm16 t200,0.198877,0.189071,historical self-run; private raw output unavailable
+w7x_itg,1.1,gkx,Nl8 Nm16 eigen auto,0.198867,0.189078,historical self-run; private raw output unavailable
+w7x_itg,1.2,gx-repaired,Nl8 Nm16 t200,0.218175,0.234362,historical self-run; private raw output unavailable
+w7x_itg,1.2,gkx,Nl8 Nm16 eigen auto,0.218171,0.234358,historical self-run; private raw output unavailable
+w7x_itg,1.4,gx-repaired,Nl8 Nm16 t200,0.240246,0.336316,historical self-run; private raw output unavailable
+w7x_itg,1.4,gkx,Nl8 Nm16 eigen auto,0.240276,0.336321,historical self-run; private raw output unavailable
+w7x_itg,1.6,gx-repaired,Nl8 Nm16 t200,0.244639,0.444202,historical self-run; private raw output unavailable
+w7x_itg,1.6,gkx,Nl8 Nm16 eigen auto,0.244654,0.444200,historical self-run; private raw output unavailable
+w7x_itg,2.0,gx-repaired,Nl8 Nm16 t200,0.224737,0.627894,historical self-run; private raw output unavailable
+w7x_itg,2.0,gkx,Nl8 Nm16 eigen auto,0.224722,0.627912,historical self-run; private raw output unavailable
+w7x_itg,2.4,gx-repaired,Nl8 Nm16 t200,0.200092,0.729594,historical self-run; private raw output unavailable
+w7x_itg,2.4,gkx,Nl8 Nm16 eigen auto,0.200082,0.729605,historical self-run; private raw output unavailable
+w7x_itg,0.9,gkx,Nl8 Nm16 time route,0.130006,0.116183,historical self-run; private raw output unavailable
+w7x_itg,1.0,gkx,Nl8 Nm16 time route,0.174749,0.148904,historical self-run; private raw output unavailable
+hsx_itg,0.3,gx-repaired,Nl8 Nm16 t200,0.073255,0.012130,historical self-run; private raw output unavailable
+hsx_itg,0.3,gkx,Nl8 Nm16 eigen auto,0.072904,0.065791,historical self-run; private raw output unavailable
+hsx_itg,0.5,gx-repaired,Nl8 Nm16 t200,0.157448,0.050310,historical self-run; private raw output unavailable
+hsx_itg,0.5,gkx,Nl8 Nm16 eigen auto,0.157459,0.050302,historical self-run; private raw output unavailable
+hsx_itg,0.7,gx-repaired,Nl8 Nm16 t200,0.242344,0.126864,historical self-run; private raw output unavailable
+hsx_itg,0.7,gkx,Nl8 Nm16 eigen auto,0.242344,0.126865,historical self-run; private raw output unavailable
+hsx_itg,0.9,gx-repaired,Nl8 Nm16 t200,0.292769,0.244981,historical self-run; private raw output unavailable
+hsx_itg,0.9,gkx,Nl8 Nm16 eigen auto,0.292754,0.244980,historical self-run; private raw output unavailable
+hsx_itg,1.1,gx-repaired,Nl8 Nm16 t200,0.303037,0.378062,historical self-run; private raw output unavailable
+hsx_itg,1.1,gkx,Nl8 Nm16 eigen auto,0.303023,0.378069,historical self-run; private raw output unavailable
+hsx_itg,1.5,gx-repaired,Nl8 Nm16 t200,0.256984,0.632680,historical self-run; private raw output unavailable
+hsx_itg,1.5,gkx,Nl8 Nm16 eigen auto,0.256986,0.632681,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.003,0.474701,-1.008028,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.003,0.601075,-1.323567,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.003,0.592934,-1.215713,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.469497,-1.041729,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.560387,-1.293995,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.572158,-1.242405,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl10 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.01,0.562523,-1.242088,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl4 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.492585,-1.111682,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl6 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.506712,-1.248515,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.554189,-1.265323,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl10 Nm24 nperiod2 damp_ends_rate100 laguerre_sink_nu0.03,0.567383,-1.251000,historical self-run; private raw output unavailable
+w7x_itg,1.6,gkx,Nl4 Nm16 eigen auto,0.243008,0.444670,historical self-run; private raw output unavailable
+w7x_itg,1.6,gkx,Nl6 Nm16 eigen auto,0.244516,0.444306,historical self-run; private raw output unavailable
+w7x_itg,1.6,gkx,Nl10 Nm16 eigen auto,0.244650,0.444194,historical self-run; private raw output unavailable
+w7x_itg,1.6,gkx,Nl12 Nm16 eigen auto,0.244646,0.444189,historical self-run; private raw output unavailable
+w7x_itg,1.6,gkx,Nl8 Nm24 eigen auto,0.245615,0.444309,historical self-run; private raw output unavailable
+w7x_itg,1.6,gkx,Nl8 Nm32 eigen auto,0.245578,0.443964,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.3128,1.0775,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta48 nperiod2,0.2998,1.0884,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.2953,1.0923,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta96 nperiod2,0.2921,1.0953,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod3,0.3384,1.0155,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta48 nperiod3,0.3257,1.0239,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta64 nperiod3,0.3212,1.0269,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod4,0.3385,0.9925,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gkx,Nl16 Nm96 ntheta32 nperiod2,0.3111,1.0813,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.26187,1.03361,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod2,0.27331,1.04947,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod2,0.27949,1.05689,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod2,0.286,1.0639,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta128 nperiod2,0.28937,1.06724,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod3,0.28564,0.9803,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod3,0.29308,0.99492,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod3,0.29725,1.00193,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod3,0.30178,1.00865,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod4,0.28431,0.9573,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48 ntheta32 nperiod2,0.3134,1.0759,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.005,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.2089,0.2708,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.005,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.2087,0.2703,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.005,0.3,gkx,Nl16 Nm96 ntheta32 nperiod2,0.2113,0.2653,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.005,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.21444,0.25531,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.005,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod2,0.21435,0.25701,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.01,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.1612,0.3165,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.01,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.17063,0.30126,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.01,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod2,0.16991,0.30232,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.01,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod2,0.16963,0.30273,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.01,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod2,0.16925,0.30291,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.02,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.5941,0.8637,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.02,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.581,0.8707,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.02,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.54423,0.83086,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.02,0.3,gs2,negrid16 ngauss8 ntheta48 nperiod2,0.55412,0.8427,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.02,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod2,0.55946,0.84827,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.02,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod2,0.56512,0.85361,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_me0.04_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.6795,0.5602,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_me0.04_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.67179,0.55711,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_me0.04_beta1e-5,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.4041,0.3916,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_me0.04_beta1e-5,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.40418,0.38415,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_AB_beta0.015,0.3,gkx,Nl16 Nm48 ntheta32 nperiod2,0.4055,1.0098,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_AB_beta0.015,0.3,gkx,Nl16 Nm48 ntheta64 nperiod2,0.3876,1.0214,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_AB_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta32 nperiod2,0.35766,0.96894,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_AB_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta64 nperiod2,0.3714,0.9908,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_AB_beta0.015,0.3,gs2,negrid16 ngauss8 ntheta96 nperiod2,0.37675,0.9974,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48 ntheta64 nperiod2,0.2942,1.0939,historical self-run; late-trace slope (GKX) or gs2fit (GS2); private raw output unavailable
+miller_ke,0.2,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.157226,0.116551,historical self-run; private raw output unavailable
+miller_ke,0.3,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.234917,0.220980,historical self-run; private raw output unavailable
+miller_ke,0.4,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.264977,0.340404,historical self-run; private raw output unavailable
+miller_ke,0.5,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.253635,0.457117,historical self-run; private raw output unavailable
+miller_ke,0.6,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.212998,0.560695,historical self-run; private raw output unavailable
+miller_ke,0.7,gs2,k2 ntheta48 nperiod3 negrid16 ngauss8,0.156104,0.647048,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gs2,t3 ntheta64 nperiod4 negrid24,0.870731,-1.270882,historical self-run; private raw output unavailable
+tem_dj2005_nuee0.01,0.3,gs2,t3 vnewk_e 0.01,0.742300,-1.297554,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm24,0.318458,1.068189,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48,0.313468,1.076446,historical self-run; private raw output unavailable
+kbm_miller_AB_beta0.015,0.3,gx-repaired,Nl16 Nm48,0.406260,1.008833,historical self-run; private raw output unavailable
+miller_ke,0.3,gx-repaired,Nl2 Nm48 t60,0.233609,0.237631,historical self-run; private raw output unavailable
+miller_ke,0.3,gx-repaired,Nl6 Nm24 t60,0.232405,0.250632,historical self-run; private raw output unavailable
+miller_ke,0.3,gx-repaired,Nl6 Nm32 t60,0.232985,0.242808,historical self-run; private raw output unavailable
+miller_ke,0.3,gx-repaired,Nl6 Nm48 t60,0.231775,0.236118,historical self-run; private raw output unavailable
+miller_ke,0.3,gx-repaired,Nl6 Nm64 t60,0.232510,0.233923,historical self-run; private raw output unavailable
+miller_ke,0.3,gx-repaired,Nl Nm48 t60,0.225403,0.226987,historical self-run; private raw output unavailable
+miller_ke,0.3,gx-repaired,Nl Nm48 t60,0.232248,0.237877,historical self-run; private raw output unavailable
+miller_ke,0.3,gx-repaired,Nl Nm64 t60,0.233877,0.233077,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gx-repaired,Nl6 Nm64,0.756970,-1.294316,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gx-repaired,Nl Nm64,0.674980,-1.169977,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gx-repaired,Nl Nm32,0.669513,-1.235776,historical self-run; private raw output unavailable
+tem_dj2005_nuee0.01,0.3,gx-repaired,Nl Nm32,0.577625,-1.248559,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gx-repaired,Nl Nm64,0.769995,-1.280872,historical self-run; private raw output unavailable
+tem_dj2005_nuee0.01,0.3,gx-repaired,Nl Nm64,0.664120,-1.288228,historical self-run; private raw output unavailable
+miller_ke,0.3,gkx,nodes8 Nm24 damp_ends_rate160.6,0.230403,0.249604,historical self-run; private raw output unavailable
+miller_ke,0.5,gkx,nodes8 Nm24 damp_ends_rate160.6,0.257626,0.474809,historical self-run; private raw output unavailable
+miller_ke,0.3,gkx,Nl8 Nm24 damp_ends_rate160.6,0.231152,0.251114,historical self-run; private raw output unavailable
+miller_ke,0.5,gkx,Nl8 Nm24 damp_ends_rate160.6,0.257377,0.476047,historical self-run; private raw output unavailable
+miller_ke,0.3,gkx,nodes4 Nm24 damp_ends_rate160.6,0.235459,0.256397,historical self-run; private raw output unavailable
+miller_ke,0.3,gkx,nodes12 Nm24 damp_ends_rate160.6,0.230399,0.249902,historical self-run; private raw output unavailable
+miller_ke,0.3,gkx,nodes8 Nm16 damp_ends_rate160.6,0.224522,0.263521,historical self-run; private raw output unavailable
+miller_ke,0.3,gkx,nodes8 Nm32 damp_ends_rate160.6,0.230337,0.241681,historical self-run; private raw output unavailable
+miller_ke,0.3,gkx,nodes8 Nm48 damp_ends_rate160.6,0.229462,0.236377,historical self-run; private raw output unavailable
+miller_ke,0.4,gkx,nodes8 Nm24 damp_ends_rate160.6,0.264808,0.363504,historical self-run; private raw output unavailable
+miller_ke,0.2,gkx,nodes8 Nm24 damp_ends_rate160.6,0.152504,0.146653,historical self-run; private raw output unavailable
+miller_ke,0.6,gkx,nodes8 Nm24 damp_ends_rate160.6,0.218263,0.572963,historical self-run; private raw output unavailable
+miller_ke,0.1,gkx,nodes8 Nm24 damp_ends_rate160.6,0.056269,0.066309,historical self-run; private raw output unavailable
+miller_ke,0.7,gkx,nodes8 Nm24 damp_ends_rate160.6,0.157170,0.647274,historical self-run; private raw output unavailable
+miller_ke,0.8,gkx,nodes8 Nm24 damp_ends_rate160.6,0.099039,0.690047,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm24 damp_ends_rate100,0.611431,-1.202045,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,Nl8 Nm48 damp_ends_rate100,0.743542,-1.265551,historical self-run; private raw output unavailable
+tem_dj2005,0.3,gkx,nodes8 Nm24 damp_ends_rate100,0.561048,-1.229952,historical self-run; private raw output unavailable
+tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm24 lenard_bernstein damp_ends_rate100,0.565748,-1.207311,historical self-run; private raw output unavailable
+tem_dj2005_nuee0.01,0.3,gkx,nodes8 Nm24 lenard_bernstein damp_ends_rate100,0.520799,-1.238541,historical self-run; private raw output unavailable
+tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm24 landau damp_ends_rate100,0.568484,-1.197161,historical self-run; private raw output unavailable
+tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm48 lenard_bernstein damp_ends_rate100,0.691071,-1.270731,historical self-run; private raw output unavailable
+tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm48 landau damp_ends_rate100,0.680284,-1.259406,historical self-run; private raw output unavailable
+kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48 nperiod3,0.338932,1.015025,historical self-run; private raw output unavailable
+cyclone_miller_fixed_p4,0.3,gkx,ntheta32 nperiod2 Nl8 Nm16 p4 nu1,0.12820933941770632,0.2129853464679111,GKX e33034a01f572132fd36acae95a091736365403f; residual-certified eigenpair; geometry512
+cyclone_miller_fixed_p4,0.3,gx-repaired,ntheta32 nperiod2 Nl8 Nm16 p4 nu1,0.12820932934681217,0.2129853093930182,GX 3865a53778862e1686f414bf6f416339e24887c9 + dampEnds_linked grid-stride repair; complex projection fit t120-150; geometry512

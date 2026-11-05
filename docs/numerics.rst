@@ -330,7 +330,7 @@ A GX nonlinear run applies :math:`A/\Delta t` at its own step, so matching it
 means setting ``damp_ends_rate`` to :math:`A/\Delta t_{GX}`; the W7-X ETG
 flux moves by a factor of two over that range (:ref:`nonlinear-etg-w7x`).
 
-**Measured sensitivity** (ky 0.3; ``plan/research/2026-10-15-end-damping``;
+**Historical self-run sensitivity** (ky 0.3; raw-output archive not publicly available;
 :math:`\gamma` in deck units):
 
 .. list-table::
@@ -1047,7 +1047,7 @@ late-time mean after the GAM): 0.0929 and 0.0943 for Laguerre ``Nl`` = 8 and 16;
 The small-:math:`\varepsilon` formula :math:`1/(1+1.6q^2/\sqrt\varepsilon)=0.119`
 does not apply at :math:`\varepsilon=0.18`; the check is the agreement with Laguerre.
 
-Other cases (office CPU, banded route, ``Nm`` as stated; growth rates):
+Other cases (CPU workstation, banded route, ``Nm`` as stated; growth rates):
 
 .. list-table::
    :header-rows: 1

@@ -307,10 +307,10 @@ degree :math:`p+2j` and :math:`B` in :math:`l`, which at
 idle A4000, Cyclone grid :math:`16\times8\times32`, the whole linear RHS at
 :math:`(16,48)` costs 1.6x the Dougherty RHS in float32 (one and two species)
 and 1.9x (one species) and 2.3x (two species) in float64; at :math:`(8,24)`,
-1.4-1.7x (``plan/research/2026-10-15-collisions/results/rhs_collision_share_gpu.txt``).
+1.4-1.7x (historical self-run; raw-output archive not publicly available).
 
-Benchmarks against other codes (``results/xcode_collisional.txt``,
-``results/zonal_collisional.txt``):
+Historical self-run benchmarks against other codes (raw-output archive not
+publicly available):
 
 - Cyclone ITG with adiabatic electrons, :math:`k_y=0.3`, :math:`\nu_i` from 0 to
   0.1: within 1.1% of GS2's model operator at :math:`(N_l,N_m)=(12,48)`, including

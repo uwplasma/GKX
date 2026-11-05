@@ -77,12 +77,14 @@ steps in blocks of length :math:`B` and retains block boundaries:
    M(B)=O(N/B+B),\qquad B=\lceil\sqrt N\rceil,
    \qquad M=O(\sqrt N).
 
-Measured on one host, the same 16x16x16 Cyclone case and the same 1024-step
-float32 window of ``nonlinear_heat_flux_window``, XLA temporary memory falls
+Measured on one host with the same recorded Cyclone state shape
+``(1, 4, 8, 16, 16, 24)`` and 1024-step float32 window of
+``nonlinear_heat_flux_window``, XLA temporary memory falls
 from 7.82 GB to 187 MB on the CPU and from 7.80 GB to 148 MB on an RTX A4000 --
 42x and 53x. Runtime rises by 1.92x and 1.77x respectively: rematerialization is
-the trade. The blocked and plain values and gradients agree to single-precision
-round-off, which the profiler asserts before it reports anything.
+the trade. The recorded blocked and plain values and gradients agree to
+single-precision round-off. These are direct-helper measurements; they do not
+qualify the prepared runtime's checkpoint configuration.
 
 The step-checkpoint policy is what sets the ceiling: its temporary memory grows
 linearly with the window and is already 7.8 GB at 1024 steps, while the block
@@ -187,39 +189,21 @@ tolerance, so remeasure it for a new case and then pass
 ``examples/10_vmex_optimization/run.py`` runs at exactly 1024, one rung
 below the departure.
 
-Regenerating the evidence
--------------------------
+Archived evidence
+-----------------
 
-Every number on this page and on the figure below is written by one of three
-generators; the figure builder reads their JSON rather than carrying literals.
+The memory records are ``docs/_static/nonlinear_adjoint_checkpointing_cpu32.json``
+and ``docs/_static/nonlinear_adjoint_checkpointing_gpu32.json``; they identify
+``gkx.nonlinear_heat_flux_window`` as the measured entry point and record the
+actual carry shape, including 24 parallel points despite the requested
+16-point override. The gradient-window and device-parity records are
+``docs/_static/nonlinear_heat_flux_gradient_window_rk3.json`` and
+``docs/_static/nonlinear_window_device_parity.json``.
 
-.. code-block:: bash
-
-   # (i) AD-vs-FD ladder and the divergence knee (right panel)
-   python scripts/campaigns/nonlinear_saturated_state.py --nx 16 --ny 16 --nz 16 \
-       --state-out tools_out/cyclone16_saturated.npz
-   python scripts/campaigns/nonlinear_gradient_window.py --nx 16 --ny 16 --nz 16 \
-       --saturated-state tools_out/cyclone16_saturated.npz \
-       --min-window 64 --max-window 2048 --fd-step 1e-5 \
-       --output docs/_static/nonlinear_heat_flux_gradient_window_rk3.json
-
-   # (ii) checkpoint memory profile (left panel), once per device
-   python scripts/profiling/profile_nonlinear_adjoint_checkpointing.py \
-       --nx 16 --ny 16 --nz 16 --steps 1024 --precision 32 \
-       --output docs/_static/nonlinear_adjoint_checkpointing_gpu32.json
-
-   # (iii) CPU/GPU parity on one fixed case, once per device, then compare
-   python scripts/profiling/profile_nonlinear_window_device_parity.py \
-       --output tools_out/window_parity_cpu.json
-   python scripts/profiling/profile_nonlinear_window_device_parity.py \
-       --compare tools_out/window_parity_cpu.json tools_out/window_parity_gpu.json
-
-   python scripts/artifacts/build_nonlinear_autodiff_figure.py
-
-Cost scales linearly in the window: the ladder's longest rung and the
-step-checkpoint arm of the memory profile dominate, and the step-checkpoint arm
-needs device memory linear in ``--steps`` (7.8 GB at 1024). ``--steps 64`` is a
-smoke test of every path of the memory profiler. The parity case is small.
+The historical campaign, profiler and figure-generation scripts are absent
+from this source tree. These files preserve archived measurements rather than
+a currently executable regeneration workflow. The Python example above
+documents the helper API; it does not regenerate those archived measurements.
 
 Evidence and scope
 ------------------
@@ -253,13 +237,13 @@ differentiated on three environments. The recorded values are in
    * - compared
      - isolates
      - relative gradient difference
-   * - office CPU vs RTX A4000, both jax 0.11.1
+   * - workstation CPU vs RTX A4000, both jax 0.11.1
      - device only
      - :math:`1.5\times10^{-15}`
    * - laptop CPU (jax 0.9.2) vs RTX A4000 (jax 0.11.1)
      - device, architecture and jax version
      - :math:`7.7\times10^{-16}`
-   * - laptop CPU (jax 0.9.2) vs office CPU (jax 0.11.1)
+   * - laptop CPU (jax 0.9.2) vs workstation CPU (jax 0.11.1)
      - architecture and jax version, device fixed
      - :math:`2.3\times10^{-15}`
 

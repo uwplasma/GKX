@@ -111,22 +111,14 @@ frequency is a rate, so it converts like :math:`\gamma`. GS2's manual defines
 ``nu_ss`` with no rescaling (``parameters.cu``), so GX's ``vnewk`` is already
 in GKX units.
 
-stella follows the same table (**run**, 2026-10-24). With it, stella's growth
-rate on the adiabatic Cyclone Miller surface is 1.39x GKX's at
-:math:`k_y\rho_i=0.30`, 1.37--1.49x over 0.25--0.71, 1.6x at 0.18 and 2.0x at
-0.11. The
-excess is not a missed :math:`\sqrt2`: GS2 takes the identical mapping and
-agrees with GX to 0.3%. Dropping the :math:`\sqrt2` on :math:`\gamma` while
-keeping :math:`k_y/\sqrt2` brings :math:`\gamma` within 5% for
-:math:`k_y\rho_i` 0.25--0.71, but not below (0.70 of GX at 0.11) and not
-:math:`\omega`, which stays 5--21% low, nor the W7-X scan (1.2--1.7x). A
-two-parameter fit of the rescalings to the stella points leaves 7% residuals.
-The stella numbers are in ``docs/_static/cross_code_linear_points.csv`` and are
-not used as a reference. A rebuild of stella master without vectorisation flags
-(``-O1``) reproduces both builds to the last printed digit. Its growth rate does
-not change when ``streamknob`` is varied from 0 to 100 (adiabatic Cyclone) and
-is 6x GS2's with kinetic electrons, while its geometry arrays agree with GS2 to
-0.5%. Parallel streaming appears not to act in these runs; the cause is open.
+stella follows the same table. On the adiabatic Cyclone Miller surface its
+growth rate at :math:`k_y\rho_i=0.30` is 0.1251 against 0.1254 for GS2
+(0.3%). The kinetic-electron velocity ladder still changes the frequency;
+inter-code agreement at one truncation does not establish convergence (see
+:doc:`validation`). Single-mode inputs must not use ``grid_option = "range"``
+with linked boundaries on stella versions without the connection fix
+(`stellaGK/stella#251 <https://github.com/stellaGK/stella/pull/251>`_): the
+implicit parallel streaming is then silently dropped.
 
 GX needs no conversion: GKX was built to reproduce GX, and the certified GKX
 eigenvalues agree with GX to 0.3% or better on the Cyclone decks (README,
@@ -385,10 +377,11 @@ Measured growth rates, circular Miller, :math:`k_y\rho_i = 0.3`
    * - GS2 8.2.1
      - 0.0887
      - 0.1255
-   * - stella v1.0
+   * - stella v1.0 (superseded range-grid run)
      - 0.1236
      - 0.1748
 
-GS2 agrees with GKX to 0.3% after the :math:`\sqrt{2}`. stella is 1.4 times
-higher on this case; the record traces the gap to stella's mirror term, not
-to a unit conversion.
+GS2 agrees with GKX to 0.3% after the :math:`\sqrt{2}`. The historical stella
+row is superseded: it omitted implicit parallel streaming because of the
+range-grid connection defect described above. Its excess is neither a valid
+physics comparison nor evidence of a mirror-term discrepancy.

@@ -390,8 +390,8 @@ LU is applied once per block in a solve. On CPU at (8, 24) the route took 0.5 to
 0.7 of the unnormalized wall time (loaded host), with about 20% more memory and
 growth rates equal to 1e-14; block cyclic reduction is not used (12 blocks).
 
-**Measured** (office RTX A4000, shared, float64, single ky, wall time of the
-whole call; raw records in the private gkx-plan repository, ``plan/research/2026-10-18-banded-shift-invert/``):
+**Historical self-run measurements** (shared RTX A4000, float64, single ky,
+wall time of the whole call; the raw-output archive is not publicly available):
 
 .. list-table::
    :header-rows: 1
@@ -460,7 +460,8 @@ Memory, not time, is therefore what ``auto`` tests. On CPU the blocks fit and
   selection near a crossing therefore needs a residual and overlap check, not
   only an ordering.
 
-**Before the banded route** (office RTX A4000, shared, float32, single ky; ``plan/research/2026-10-15-bug-hunt/SUMMARY.md``):
+**Historical measurements before the banded route** (shared RTX A4000,
+float32, single ky; the raw-output archive is not publicly available):
 
 .. list-table::
    :header-rows: 1

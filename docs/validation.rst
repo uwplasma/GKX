@@ -291,8 +291,7 @@ Row notes
   repaired GX to 3e-4 at W7-X ky 1.1-2.4 and HSX ky 0.5-1.5. On W7-X at ky
   0.9-1.0 the eigensolver returns the fastest of near-degenerate bulk modes
   (ky 1.0: omega 0.2645 against GX's 0.1489, gamma within 2e-4); GKX's time
-  route reproduces GX at ky 1.0. stella, run on the same field line, does not
-  reproduce either code's growth-rate curve and is not used.
+  route reproduces GX at ky 1.0.
 
 Linear rows declare their velocity-space regularization: KAW and ETG use
 ``none``; W7-X, HSX, Cyclone Miller and KBM use ``hermite-kz-hypercollision``
@@ -301,6 +300,415 @@ truncation-limited at ky .55 (Nm 96, certified gamma .03301/.02485/.01835 at Nl
 24/32/48, with a Laguerre pile-up that moves to 0.79-0.85 of each new Nl).
 
 .. END LEDGER MATRIX
+
+Changing ``Nm`` also changes the default ``p_hyper_m`` to
+``min(20, max(Nm // 2, 1))``. Even at a fixed exponent :math:`p`, the
+:math:`|k_z|` damping at shared Hermite modes scales as
+:math:`\nu_{hyper,m}(N_m-1)^{-p-1/2}` for :math:`N_m>1`. For a velocity
+convergence scan with fixed shared-mode damping, set the exponent explicitly
+and scale ``nu_hyper_m`` by
+:math:`[(N_{m,\mathrm{new}}-1)/(N_{m,\mathrm{old}}-1)]^{p+1/2}`; report
+numerical-regularization sensitivity separately.
+
+Fresh fixed-regularization control
+----------------------------------
+
+A fresh collisionless, electrostatic circular-Miller control uses one kinetic
+ion and adiabatic electrons, :math:`k_y=0.3`, ``Nl=8``, ``Nm=16``, kinetic
+``ntheta=32`` over three turns, and identical nested samples of geometry
+computed at 512 points. The surface has :math:`r=0.5`, :math:`q=1.4`,
+:math:`\hat s=0.8`, :math:`R=2.77778`, :math:`a/L_T=2.49` and
+:math:`a/L_n=0.8`. Both codes use explicit Hermite exponent 4, coefficient 1,
+end-damping rate 50 and layer fraction 0.125. GX uses RK4 at :math:`\Delta t=1/512`;
+GKX uses a residual-certified eigenpair.
+
+GX reaches :math:`t=150` and saves 600 complex-potential samples at cadence
+0.25. Independent amplitude and unwrapped-phase fits over :math:`t=120`--150
+use :math:`\omega=-d\arg(\phi)/dt`, in the shared
+:math:`\sqrt{T/m}/L` units: GX gives :math:`\gamma=0.1282093293`,
+:math:`\omega=0.2129853094`; GKX gives 0.1282093394 and 0.2129853465.
+Relative rate differences are :math:`7.9\times10^{-8}` and
+:math:`1.7\times10^{-7}`. Moving the fit to :math:`t=90`--120 changes the
+rates by less than :math:`2.5\times10^{-7}` relative; fixed spatial projection,
+local phase and integrated potential amplitude agree. The normalized,
+phase-aligned potential differs by :math:`2.2\times10^{-4}` in relative L2
+norm after coordinate interpolation. This is finite-truncation linear
+consistency, with spatial, velocity, timestep, regularization and domain
+convergence still open; it is not nonlinear or performance validation.
+
+Provenance: exact public GKX base
+`e33034a01f572132fd36acae95a091736365403f
+<https://github.com/uwplasma/GKX/commit/e33034a01f572132fd36acae95a091736365403f>`_;
+GX ``3865a53778862e1686f414bf6f416339e24887c9`` with the documented
+``dampEnds_linked`` grid-stride repair. The repair loops over remaining
+z/moment indices below ``Nz*Nl*Nm`` in strides of ``blockDim.z*gridDim.z``;
+the original handles only the first capped launch grid. No other source change
+is included in this reference binary.
+The GX binary SHA256 is
+``b168172bba73a4b6af6505a114e42a9c3cab2f2ed65e2843227fbecf94f20d83``;
+repair diff SHA256 is
+``1cc8cb08d685cd6271c416755f2a2b60950512f3767deb28cdc0453101ce67ee``.
+The two ``cyclone_miller_fixed_p4`` rows in
+``docs/_static/cross_code_linear_points.csv`` preserve these fitted values.
+Archived raw outputs remain private; the recipe below reconstructs the
+inputs and fitting procedure from public source. This control does not replace the separate unresolved
+kinetic-electron, GS2 or stella ladders below.
+
+Reconstructing the setup
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following cells reconstruct the inputs and analysis from public source;
+the archived raw outputs are private. Use a fresh working directory and
+Python 3.11 or newer. The recorded CPU eigenpair used the versions below.
+
+.. code-block:: bash
+
+   git clone https://github.com/uwplasma/GKX.git GKX
+   git -C GKX checkout e33034a01f572132fd36acae95a091736365403f
+   git clone https://bitbucket.org/gyrokinetics/gx.git GX
+   git -C GX checkout 3865a53778862e1686f414bf6f416339e24887c9
+   python -m pip install -e ./GKX jax==0.10.2 jaxlib==0.10.2 numpy==2.4.6 \
+       scipy==1.17.1 netCDF4==1.7.4 \
+       'solvax @ git+https://github.com/uwplasma/SOLVAX.git@59b8c317357fd78582f3e06be6202972445eac68'
+
+Apply the sole numerical GX source change:
+
+.. code-block:: bash
+
+   git -C GX apply --unidiff-zero <<'PATCH'
+   diff --git a/src/device_funcs.cu b/src/device_funcs.cu
+   index 52b993b3..fdec6da5 100644
+   --- a/src/device_funcs.cu
+   +++ b/src/device_funcs.cu
+   @@ -2831 +2831,3 @@ __global__ void __launch_bounds__(512) dampEnds_linked(cuComplex* G,
+   -  if (unmasked(idx,idy) && idy > 0 && idzlm < nz*nMoms) {
+   +  if (unmasked(idx,idy) && idy > 0) {
+   +    // dG_all.z is capped: cover every z/moment index as in linkedCopyBackAll.
+   +    for (; idzlm < nz*nMoms; idzlm += blockDim.z * gridDim.z) {
+   @@ -2874,0 +2877 @@ __global__ void __launch_bounds__(512) dampEnds_linked(cuComplex* G,
+   +    }
+   PATCH
+
+Configure GX's ``Makefiles/Makefile.generic`` library locations following its
+`build instructions <https://bitbucket.org/gyrokinetics/gx/src/3865a53778862e1686f414bf6f416339e24887c9/README.md>`_.
+The measured binary used CUDA 11.5.119, GCC 10.4.0, and the flags below; select
+those compiler versions as ``nvcc`` and ``g++``. Rebuilt binaries contain
+build metadata, so record their hashes and toolchain/library versions rather
+than expecting the archived binary hash.
+
+.. code-block:: bash
+
+   make -C GX GK_SYSTEM=generic CUDAARCH=86 CXX=g++ CFLAGS=-fPIC \
+       NVCC='nvcc -ccbin g++' \
+       NVCCFLAGS='-std=c++17 --forward-unknown-to-host-compiler -arch=compute_86 -code=sm_86 -use_fast_math -fPIC -rdc=true -O3'
+   mkdir control
+   cd control
+   export JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1
+
+Run this Python cell in ``control``. It reuses the existing full tokamak
+example and geometry helpers of the pinned revision, restricts the fine
+profiles to the kinetic grid, then calls the public solver. Geometry and field
+helpers are pinned implementation details, without a public API compatibility
+promise:
+
+.. code-block:: python
+
+   from dataclasses import replace
+   from pathlib import Path
+   import numpy as np
+   import gkx
+   from gkx.geometry.miller_eik import build_miller_geometry_request
+   from gkx.geometry.imported_miller import (
+       _assemble_miller_profiles_for_request, write_miller_eik_netcdf,
+   )
+   from gkx.workflows.linear import _prepare_linear_runtime_context
+   from gkx.operators.linear.cache_builder import build_linear_cache
+   from gkx.operators.linear.rhs import linear_rhs_cached
+
+   assert Path(gkx.__file__).resolve().is_relative_to(Path('../GKX/src').resolve())
+   base = gkx.load('../GKX/examples/01_linear_tokamak/case_full.toml')
+   miller = replace(base.geometry, model='miller', geometry_file=None,
+                    rhoc=0.5, R_geo=2.77778)
+   fine_case = replace(base, geometry=miller, grid=replace(base.grid, ntheta=512))
+   fine = _assemble_miller_profiles_for_request(build_miller_geometry_request(fine_case))
+   p = {k: np.asarray(v)[::16] if np.ndim(v) else v for k, v in fine.items()}
+   write_miller_eik_netcdf(Path('geometry.nc'), p)
+   lines = ['ntgrid nperiod ntheta drhodpsi Rmaj shat kxfac q',
+            '48 2 32 ' + ' '.join(format(p[k], '.17g') for k in
+                                 ['drhodpsi', 'Rmaj', 'shat', 'kxfac', 'q'])]
+   for keys in [('gbdrift', 'gradpar', 'grho', 'theta'), ('cvdrift', 'gds2', 'bmag'),
+                ('gds21', 'gds22'), ('cvdrift0', 'gbdrift0')]:
+       lines.append(' '.join(keys))
+       lines.extend(' '.join(format(p[k][i], '.17g') for k in keys) for i in range(97))
+   Path('geometry.eik').write_text('\n'.join(lines) + '\n')
+   case = replace(base, geometry=replace(miller, model='imported-eik',
+                  geometry_file=str(Path('geometry.nc').resolve())),
+                  time=replace(base.time, dt=1/512, damp_ends_rate=50., progress_bar=False),
+                  collisions=replace(base.collisions, p_hyper_m=4., nu_hyper_m=1.))
+   result = gkx.solve(case, ky_target=0.3, Nl=8, Nm=16, solver='krylov', return_state=True)
+   ctx = _prepare_linear_runtime_context(case, ky_target=0.3, n_laguerre=8,
+         n_hermite=16, solver='krylov', fit_signal='phi', return_state=True,
+         initial_state=None, status_callback=None)
+   cache = build_linear_cache(ctx.grid, ctx.geom, ctx.params, 8, 16)
+   _, phi = linear_rhs_cached(result.state, cache, ctx.params, terms=ctx.terms)
+   np.savez('mode.npz', z=np.asarray(ctx.grid.z), phi=np.asarray(phi).ravel(),
+            gamma=result.gamma, omega=result.omega)
+   print(result.gamma, result.omega, result.eigen_status)
+
+Save the following inline-table TOML as ``control.in`` in the same directory.
+The explicit big-field cadence is essential: GX's default is 100 times the
+ordinary diagnostic cadence. ``damp_ends_amp/dt`` is the matched rate 50.
+
+.. code-block:: toml
+
+   Dimensions = { ntheta=32, nperiod=2, nky=2, nkx=1, nhermite=16, nlaguerre=8, nspecies=1 }
+   Domain = { y0=3.3333333333333333, boundary="linked" }
+   Physics = { beta=0.0, nonlinear_mode=false }
+   Time = { dt=0.001953125, dt_max=0.001953125, fixed_dt=true, t_max=150.0, scheme="rk4" }
+   Initialization = { gaussian_init=true, init_field="density", init_amp=1.0e-10 }
+   Geometry = { geo_option="eik", geo_file="geometry.eik" }
+   species = { z=[1.0], mass=[1.0], dens=[1.0], temp=[1.0], tprim=[2.49], fprim=[0.8], vnewk=[0.0], type=["ion"] }
+   Boltzmann = { add_Boltzmann_species=true, Boltzmann_type="electrons", tau_fac=1.0 }
+   Dissipation = { closure_model="none", hypercollisions=true, hypercollisions_const=false, nu_hyper_m=1, p_hyper_m=4, hyper=false, hyperz=false }
+   Expert = { init_single=true, iky_single=1, ikx_single=0, damp_ends_amp=0.09765625, damp_ends_widthfrac=0.125 }
+   Diagnostics = { nwrite=128, nwrite_big=128, omega=true, free_energy=true, fields=true, moments=false }
+
+On an allocated GPU, run ``../GX/gx control.in``. The following Python cell
+checks the reached horizon, fits the two late intervals from the big-field
+file, cross-checks the phase branch with the native frequency diagnostic, and
+compares normalized potentials. GX and GKX share the same
+:math:`\sqrt{T/m}/L` time convention here; no :math:`\sqrt{2}` rate factor is
+applied. The imported-geometry readers handle the raw drift convention.
+
+.. code-block:: python
+
+   import numpy as np
+   from netCDF4 import Dataset
+   from scipy.interpolate import CubicSpline
+   with Dataset('control.big.nc') as f:
+       t = np.asarray(f.groups['Grids']['time'][:])
+       z = np.asarray(f.groups['Grids']['theta'][:])
+       a = np.asarray(f.groups['Diagnostics']['Phi'][:, 1, 0])
+   phi = (a[..., 0] + 1j*a[..., 1]).astype(np.complex128)
+   assert len(t) == 600 and np.allclose(np.diff(t), 0.25)
+   with Dataset('control.restart.nc') as f:
+       assert float(f['time'][:]) == 150.
+   with Dataset('control.out.nc') as f:
+       native_omega = np.asarray(f.groups['Diagnostics']['omega_kxkyt'][:, 1, 0, 0])
+   with np.load('mode.npz') as mode:
+       u = CubicSpline(mode['z'], mode['phi'])(z)
+       gamma, omega = float(mode['gamma']), float(mode['omega'])
+   signal = phi @ (phi[-1]/np.linalg.norm(phi[-1])).conj()
+   for lo, hi in [(90, 120), (120, 150)]:
+       keep = (t >= lo) & (t < hi)
+       g = np.polyfit(t[keep], np.log(abs(signal[keep])), 1)[0]
+       w = -np.polyfit(t[keep], np.unwrap(np.angle(signal[keep])), 1)[0]
+       assert abs(w-np.mean(native_omega[keep])) < 1e-4
+       print(lo, hi, g, w, 'relative:', g/gamma-1, w/omega-1)
+   u /= np.linalg.norm(u)
+   v = phi[-1]/np.linalg.norm(phi[-1])
+   phase = np.vdot(u, v)
+   print('normalized field L2:', np.linalg.norm(v-u*phase/abs(phase)))
+
+The geometry, eigenpair and fitting cells were checked against the saved run;
+the patch applies to the pinned source and the TOML matches the executed deck.
+A fresh native rebuild/run is needed for a new toolchain. These cells expose
+the setup and analysis without supplying the private archived raw outputs or
+promoting the finite-truncation result to a convergence claim.
+
+Collisionless Cyclone setup against gyaradax
+--------------------------------------------
+
+This recipe fixes a finite-discretization electrostatic case with one kinetic
+ion and adiabatic electrons. It supplies source, inputs and raw-field analysis;
+no velocity/spatial convergence, whole-distribution eigenvector, derivative,
+nonlinear-transport or performance claim follows. Late field fits and
+whole-state residuals are separate qualifications.
+
+Use Python 3.12 or newer (required by the reference package) and a fresh working
+directory. The preparation/analysis were checked with JAX 0.10.2; the archived
+trajectories used Python 3.12.13 and JAX/JAXLIB 0.12.0.1 with complex128 states.
+No bitwise portability across compilers/backends is assumed. Select a JAX
+backend for allocated compute before importing either package; the commands
+below install the CPU numerical environment, not a GPU-specific wheel.
+
+.. code-block:: bash
+
+   git clone https://github.com/uwplasma/GKX.git GKX
+   git -C GKX checkout e33034a01f572132fd36acae95a091736365403f
+   git clone https://github.com/gerkone/gyaradax.git gyaradax
+   git -C gyaradax checkout 8d9dc2d205e8993ae9e43e6e1e82ec1ea2875234
+   python -m pip install -e ./GKX -e ./gyaradax jax==0.10.2 jaxlib==0.10.2 \
+       numpy==2.4.6 scipy==1.17.1 \
+       'solvax @ git+https://github.com/uwplasma/SOLVAX.git@59b8c317357fd78582f3e06be6202972445eac68'
+   mkdir control
+   cd control
+   export JAX_ENABLE_X64=true GKX_X64=1
+
+Run the cells in one Python session. Preparation reuses the shipped tokamak
+example and pinned implementation helpers; the latter are not a stable public
+API. The reference coordinate is :math:`\theta=2\pi s`, with
+:math:`v_{\parallel,G}=\sqrt{2}v_{\parallel,r}` and
+:math:`\mu_G=2\mu_r`. Set :math:`k_{y,G}=-0.5/\sqrt{2}` for reference
+``kt=+0.5``: both RHS implementations use ``-i`` for drift and ``+i`` for the
+background-gradient drive, so the signed coefficient assertions below fix the
+orientation before any phase fit. No empirical frequency-sign flip is used.
+The time mapping is :math:`t_G=t_r/\sqrt{2}`; reported reference rates are
+therefore multiplied by :math:`\sqrt{2}`.
+
+.. code-block:: python
+
+   from dataclasses import replace
+   from pathlib import Path
+   import numpy as np
+   import gkx
+   from gkx.workflows.linear import _prepare_linear_runtime_context, _warn_if_linear_dt_exceeds_cfl
+   from gkx.operators.linear.cache_builder import build_linear_cache
+   from gyaradax.geometry import compute_geometry
+   from gyaradax.params import GKParams
+   from gyaradax.precompute import linear_precompute
+   from gyaradax.solver import init_f, default_state
+   from gyaradax.cfl import estimate_linear_timestep
+
+   assert Path(gkx.__file__).resolve().is_relative_to(Path('../GKX/src').resolve())
+   base = gkx.load('../GKX/examples/01_linear_tokamak/case_full.toml')
+   nl, nm, nz = 24, 48, 216
+   gkx_chunks, reference_chunks = 30, 300
+   ky = -.5 / np.sqrt(2)
+   case = replace(base,
+       species=(replace(base.species[0], tprim=6.9, fprim=2.2, nu=0.),),
+       geometry=replace(base.geometry, model='s-alpha', q=1.4, s_hat=.78,
+                        epsilon=.19, R0=1., kperp2_bmag=True),
+       grid=replace(base.grid, Ny=24, Nz=nz, y0=np.sqrt(8), ntheta=None, nperiod=5,
+                    ky_layout='full', z_min=-9*np.pi+np.pi/24, z_max=9*np.pi+np.pi/24),
+       time=replace(base.time, dt=.0015/np.sqrt(2), t_max=90/np.sqrt(2), fixed_dt=True,
+                    method='rk4', sample_stride=200, progress_bar=False, damp_ends_rate=0.),
+       physics=replace(base.physics, beta=0., collisions=False, hypercollisions=False),
+       collisions=replace(base.collisions, nu_hermite=0., nu_laguerre=0., nu_hyper=0.,
+                          nu_hyper_m=0., p_hyper_m=4., D_hyper=0.,
+                          hypercollisions_const=0., hypercollisions_kz=0.),
+       terms=replace(base.terms, collisions=0., hypercollisions=0., end_damping=0.,
+                     apar=0., bpar=0., nonlinear=0.),
+       run=replace(base.run, ky=ky, Nl=nl, Nm=nm, solver='time'))
+   ctx = _prepare_linear_runtime_context(case, ky_target=ky, n_laguerre=nl,
+         n_hermite=nm, solver='time', fit_signal='phi', return_state=True,
+         initial_state=None, status_callback=None)
+   cache = build_linear_cache(ctx.grid, ctx.geom, ctx.params, nl, nm)
+   assert case.time.dt < _warn_if_linear_dt_exceeds_cfl(ctx, case.time, measure=True)
+   g = compute_geometry(q=1.4, shat=.78, eps=.19, ns=nz, nvpar=120, nmu=30,
+       vpar_max=3.75, nkx=1, nky=1, nperiod=5, kxmax=.5, signB=1., Rref=1.,
+       krhomax=.5, geom_type='s-alpha')
+   p = GKParams(dt=.003, naverage=100, non_linear=False, adaptive_dt=False,
+       adiabatic_electrons=True, disp_par=0., disp_vp=0., disp_x=0., disp_y=0.,
+       finit='cosine2', amp_init=1e-4, mas=1., signz=1., tmp=1., de=1., vthrat=1.,
+       rlt=6.9, rln=2.2, dgrid=1., tgrid=1., sgr_dist=float(g['sgr_dist']),
+       dvp=float(g['dvp']), kxmax=.5, kymax=.5, norm_eps=1e-14, drive_scale=1.,
+       idisp=2, cfl_safety=.95, mixed_precision=False, backend='jax', use_z2z=False)
+   pre = linear_precompute(g, p)
+   assert p.dt < float(estimate_linear_timestep(pre, params=p))
+   assert np.max(abs(np.asarray(ctx.grid.z)-2*np.pi*np.asarray(g['sgrid']))) < 2e-14
+   assert np.max(abs(np.asarray(cache.bmag).ravel()-np.asarray(g['bn']))) < 2e-14
+   rg = init_f(g, finit='cosine2', amp_init_real=1e-4)
+   rs = default_state(nky=1)
+   print('Prepared exact finite-discretization inputs; no evolution performed.')
+   for actual, expected in [
+       (cache.b, g['krho'][0]**2*g['little_g'][:, 0]/(2*g['bn']**2)),
+       (cache.bgrad, g['gfun']),
+       (cache.cv_d, np.sqrt(2)*g['krho'][0]*g['dfun'][:, 1]/2),
+       (np.full(nz, float(ctx.grid.ky[0])), np.sqrt(2)*g['krho'][0]*g['efun']),
+   ]:
+       np.testing.assert_allclose(np.asarray(actual).ravel(), np.asarray(expected).ravel(),
+                                  rtol=5e-13, atol=5e-13)
+   assert abs(float(ctx.params.kpar_scale)-2*np.pi*float(g['ffun'][0])) < 1e-13
+
+These checks align continuous coefficients and actual spatial nodes. They do
+not equate the finite discrete operators: the reference has finite midpoint
+velocity boxes, fourth-order finite differences and open zero-ghost ends;
+GKX uses Hermite/Laguerre moments and the linked FFT derivative. The initial
+functions also differ: GKX has its fixed-width Gaussian density seed, while
+the reference has its velocity-flat ``cosine2`` seed. Absolute initial
+amplitudes and distribution functions are not compared.
+
+The following cell performs the two trajectories on allocated compute, saves
+every sampled prefix and rejects non-finite output; the fitting cell refuses
+incomplete output. The defaults request the full horizons; setting both chunk
+counts to two supplies a bounded preflight with actual reached-time checks. It uses the recorded half-reference timestep for GKX and the unchanged
+reference timestep. No trajectory is required merely to check preparation.
+
+.. code-block:: python
+
+   import jax.numpy as jnp
+   from gkx.solvers_linear_integrators import integrate_linear
+   from gyaradax.simulate import gk_run
+
+   G = jnp.asarray(ctx.initial_state, dtype=jnp.complex128)
+   times, potentials = [], []
+   for chunk in range(gkx_chunks):
+       G, history = integrate_linear(G, ctx.grid, ctx.geom, ctx.params,
+           dt=case.time.dt, steps=2000, method='rk4', cache=cache,
+           terms=ctx.terms, sample_stride=200)
+       times.extend((chunk*2000+np.arange(1, 11)*200)*case.time.dt)
+       potentials.extend(np.asarray(history).reshape(10, nz))
+       np.savez('gkx_fields.npz', time=times, phi=potentials, z=np.asarray(ctx.grid.z))
+       np.save('gkx_final_state.npy', np.asarray(G))
+       assert np.isfinite(np.asarray(G)).all() and np.isfinite(potentials).all()
+   assert np.isclose(times[-1], gkx_chunks*2000*case.time.dt)
+
+   native_times, reference_phi, factors = [], [], []
+   for chunk in range(reference_chunks):
+       rg, phi, _, rs = gk_run(rg, g, p, rs, 100, pre=pre)
+       native_times.append(float(rs.time))
+       reference_phi.append(np.asarray(phi).ravel())
+       factors.append(float(np.asarray(rs.accumulated_norm_factor).ravel()[0]))
+       np.savez('reference_fields.npz', native_time=native_times, phi=reference_phi,
+                factor=factors, z=2*np.pi*np.asarray(g['sgrid']))
+       assert np.isfinite(np.asarray(rg)).all() and np.isfinite(reference_phi).all()
+       assert np.isfinite(factors).all() and np.all(np.asarray(factors)>0)
+   assert np.isclose(native_times[-1], reference_chunks*100*p.dt)
+
+Fit reference time 70.2--90 in both codes. Phase unwrapping assumes the dominant
+phase is sampled sufficiently often; output-cadence and timestep convergence
+remain open. A bounded principal-angle increment cannot establish that
+assumption. The reference repeatedly
+normalizes its state by a positive factor; remove that factor from log
+amplitude, not phase. Compare normalized potentials only on common nodes.
+These outputs are finite-discretization field-rate measurements, not a
+whole-state certificate or a convergence/extrapolation result.
+
+.. code-block:: python
+
+   a = np.load('gkx_fields.npz')
+   b = np.load('reference_fields.npz')
+   assert len(a['time']) == len(b['native_time']) == 300
+   np.testing.assert_allclose(a['time']*np.sqrt(2), b['native_time'], atol=1e-8)
+   np.testing.assert_allclose(a['z'], b['z'], rtol=0, atol=2e-14)
+   results = {}
+   for label, time, phi, factor in [
+       ('GKX', a['time'], a['phi'], np.ones(300)),
+       ('reference', b['native_time']/np.sqrt(2), b['phi'], b['factor']),
+   ]:
+       assert np.isfinite(phi).all() and np.all(factor>0)
+       keep = (time*np.sqrt(2)>=70.-1e-6) & (time*np.sqrt(2)<=90.+1e-6)
+       assert keep.sum() == 67
+       profile = phi[-1]/np.linalg.norm(phi[-1])
+       signal = phi@profile.conj()
+       gamma = np.polyfit(time[keep], np.log(abs(signal[keep]))-np.log(factor[keep]), 1)[0]
+       omega = -np.polyfit(time[keep], np.unwrap(np.angle(signal[keep])), 1)[0]
+       results[label] = dict(gamma=float(gamma), omega=float(omega), profile=profile)
+   x, y = results['GKX'], results['reference']
+   overlap = np.vdot(y['profile'], x['profile'])
+   print('GKX:', x['gamma'], x['omega'], 'reference:', y['gamma'], y['omega'])
+   print('relative rate differences:', x['gamma']/y['gamma']-1, x['omega']/y['omega']-1)
+   print('normalized common-node potential L2:',
+         np.linalg.norm(x['profile']-overlap/abs(overlap)*y['profile']))
+
+The preparation cell reproduces the frozen runtime parameters, geometry
+coefficients and retained initial state. The exact evolution cell was executed
+for two chunks per code at these shapes, saving and reloading finite output
+with correct post-step times and fields. The fitting cell was replayed on saved
+full trajectories. Requirements resolve in an isolated Python 3.12 dry run; a
+fresh installed environment and complete trajectories were not rerun for this
+documentation change. Archived raw trajectories remain private.
 
 Cross-code linear parity matrix
 -------------------------------
@@ -388,10 +796,10 @@ Four-code kinetic-electron comparison
 
 Cyclone Miller (:math:`m_i/m_e` = 3670, :math:`T_e = T_i`, :math:`a/L_T` 2.49,
 :math:`a/L_n` 0.8), :math:`k_y\rho_i = 0.3`, growth rate in GX units
-(2026-10-27, office). GX: repaired variant, :math:`t = 60`, ``Nl`` 16 unless
+(self-run, 2026-10-27). GX: repaired variant, :math:`t = 60`, ``Nl`` 16 unless
 stated; GKX: nodal :math:`\mu` grid, 8 nodes, end-damping rate 160.6; GS2: rung
-k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8). stella is excluded (see
-:doc:`conventions`).
+k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8); stella: nzed 48, nperiod 3,
+nvgrid 24, nmu 12.
 
 .. list-table::
    :header-rows: 1
@@ -408,6 +816,9 @@ k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8). stella is excluded (see
    * - GX ``Nl`` 4 / 8 / 12 / 16 at ``Nm`` 48
      - 0.2254 / 0.2322 / 0.2336 / 0.2318
      - 0.2270 / 0.2379 / 0.2376 / 0.2361
+   * - stella (nvgrid, nmu) = (16, 8) / (24, 12) / (32, 16)
+     - 0.2280 / 0.2294 / 0.2296
+     - 0.2496 / 0.2376 / 0.2329
    * - GKX ``Nm`` 16 / 24 / 32 / 48
      - 0.2245 / 0.2304 / 0.2303 / 0.2295
      - 0.2635 / 0.2496 / 0.2417 / 0.2364
@@ -416,17 +827,40 @@ k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8). stella is excluded (see
      - 0.2564 / 0.2496 / 0.2499
 
 At equal ``Nm`` GKX is within 1.2% of GX in :math:`\gamma` and 0.5% in
-:math:`\omega`. The growth rate is converged to about 1% (0.2295-0.2349 over
-all three codes). The frequency is not: GX and GKX still fall with ``Nm`` at 48-64
-and sit 6-7% above GS2. GX returns NaN for ``Nm`` 96 and 128 in this build.
-Collisionless TEM (ky rho_s 0.3): GS2 0.871, GX ``Nm`` 32 / 64 0.670 / 0.770,
-GKX ``Nm`` 24 / 48 0.611 / 0.744; both moment codes are 15-23% low at the usual
-``Nm`` and need more than 96. With :math:`\nu_{ee} = 0.01`, GS2 loses 15%, GX
-14%, GKX 7-8% (Lenard-Bernstein or Landau): the collisional damping in GKX is
-about half of GX's at the same ``nu``, not explained.
-KBM, beta 0.015, A_par, ky 0.3: GX 0.3135 (nperiod 2, ``Nm`` 48) and 0.3389
-(nperiod 3); GKX 0.3155 and 0.3425; GS2 (nperiod 3) 0.2939, which is 13% below
-both. The GS2-GX gap on KBM is open.
+:math:`\omega`. The reported finer-grid growth rates span 0.2294-0.2349,
+about 2.4% across the four codes; that spread is not a convergence estimate.
+The frequency remains unresolved: GX, GKX and stella fall with velocity
+resolution (GX 0.2271 at ``Nm`` 96) towards GS2's 0.221. GX with the default
+``p_hyper_m = min(20, Nm/2)`` returns NaN from ``Nm`` 96; ``p_hyper_m = 10``
+runs at those settings. This is a measured workaround, not an identified
+single-precision failure mechanism. Independent refits of GS2's complex
+potential over :math:`t=120`--160 and 160--200 give the same frequency,
+0.2209803, so its difference from the moment-code values is not an early fit.
+For stella's three velocity rungs, the late :math:`t=48`--60 diagnostic means
+reproduce the table; the finest frequency still shifts about 0.4% from the
+preceding :math:`t=36`--48 window. These corrected stella runs use the
+range-grid streaming patch, not the unmodified build. Finite-horizon scan
+agreement does not close their velocity-space or time-window convergence.
+
+TEM, collisionless, ky rho_s 0.3 (GX units, s-alpha, :math:`\epsilon = 0.16`):
+GS2 0.871, GX ``Nm`` 32 / 64 0.670 / 0.770, GKX ``Nm`` 24 / 48 0.611 / 0.744.
+The moment codes are 15-23% low at the usual ``Nm``; their velocity-space
+convergence remains open.
+The same TEM on a circular Miller surface: GS2 0.997, GX ``Nm`` 32 / 64
+0.778 / 0.876, stella (nvgrid, nmu) = (24, 12) / (32, 16) 0.853 / 0.902.
+With :math:`\nu_{ee} = 0.01` GS2 and GX lose 11-15% and GKX 7-8%. GX and GS2
+add electron-ion scattering to the electron rate (GX: ``nuei = Z nu``);
+GKX's Lenard-Bernstein operator is self-collision only. With
+:math:`\nu_e` doubled GKX loses 14.3% at ``Nm`` 24 and 13.6% at ``Nm`` 48,
+which reproduces the reduction seen in GX for this observable. Doubling the
+self-collision rate is a sensitivity probe, not an implementation of GX's
+separate electron-ion restoring terms. Landau loses 7-8%; its rate convention
+and operator contract against GS2 remain unresolved.
+
+KBM, beta 0.015, A_par, ky 0.3 (nperiod 2): GX ``ntheta`` 32 / 48 / 64 gives
+0.3135 / 0.2996 / 0.2944 and GS2 ``ntheta`` 32 / 48 / 64 gives 0.2617 / 0.2730 /
+0.2792 (``negrid`` 16 to 32 moves it 0.3%). The gap is 5% at ``ntheta`` 64 and
+closing; GKX uses ``ntheta`` 32 (0.3155).
 
 Lanes outside the ledger
 ------------------------
@@ -550,7 +984,7 @@ Cyclone ITG, adiabatic electrons, 192x64x24, one 2 pi segment, Dougherty :math:`
      - not run
      - about 12 (GS2 11.8)
 
-The GKX windows at (4, 8), 1.5 and (8, 16), 2.49 fail the half-window stationarity check (halves differ by more than two standard errors); the others pass. Zonal energy fraction of :math:`\Phi^2` at :math:`a/L_T = 1.5` (:math:`t > 500`): GKX 0.86 and 0.76, GX 0.79 and 0.87 at (4, 8) and (8, 16). GKX and GX agree at every point; both leave the heat flux at 1.5 above the paper's Dimits-suppressed value and move toward it with velocity resolution, so the suppression is not reproduced at (4, 8) by either code (open). With :math:`\nu_{ii} = 0` both decay to a zonal-dominated state (GX flux 0.04 over the last 200; gkx-plan ``2026-10-20-nonlinear-stats``).
+The GKX windows at (4, 8), 1.5 and (8, 16), 2.49 fail the half-window stationarity check (halves differ by more than two standard errors); the others pass. Zonal energy fraction of :math:`\Phi^2` at :math:`a/L_T = 1.5` (:math:`t > 500`): GKX 0.86 and 0.76, GX 0.79 and 0.87 at (4, 8) and (8, 16). These historical self-run comparisons report agreement at each point; both codes leave the heat flux at 1.5 above the paper's Dimits-suppressed value and move toward it with velocity resolution, so the suppression is not reproduced at (4, 8) by either code (open). With :math:`\nu_{ii} = 0` both decay to a zonal-dominated state (historical self-run GX flux 0.04 over the last 200; the raw-output archive is not publicly available).
 
 Kinetic electrons (GX Table 2, :math:`m_i/m_e = 3670`, :math:`\beta = 10^{-3}`): not run. With GKX 2.7.0 defaults, 192x64x24 at (4, 16) advances 0.079 :math:`a/v_{ti}` in 17 s on a shared RTX A4000 (about 36 h for :math:`t = 600`; the paper's 159 min is on four A100).
 
@@ -601,13 +1035,7 @@ settings from ``examples/01_linear_tokamak/case_full.toml`` (``t_max = 150``) an
 fits ``t = 105--150``. The atlas reads ``tools/benchmark_atlas_manifest.toml``.
 
 The cross-code record of 2026-09 (``plan/research/2026-09-27-xcode/REPORT.md``)
-compares GKX with GX, GS2 and stella on Cyclone, in GX/GKX units:
-
-.. figure:: _static/readme/readme_crosscode.png
-   :alt: Cyclone growth rates from GKX, GX, GS2 and stella
-   :width: 90%
-
-   Cyclone growth rates from the four codes.
+compares GKX with GX and GS2 on Cyclone, in GX/GKX units:
 
 - **GX.** GX was rebuilt with the ``dampEnds_linked`` loop repaired (the original
   stopped at the kernel launch cap). Certified GKX eigenpairs at ``Nl=16``,
@@ -616,9 +1044,6 @@ compares GKX with GX, GS2 and stella on Cyclone, in GX/GKX units:
 - **GS2.** Within 0.3% at Miller :math:`k_y=0.30` and 0.40, 1.0% at s-alpha 0.30.
 - **Kinetic electrons.** GS2 and repaired GX agree to 1.2% and 0.2% at
   :math:`k_y=0.30` and 0.50 on Cyclone Miller.
-- **stella.** Its growth rate is about 1.4 times the others and moves 0.3% when
-  its mirror term is removed, while the mirror term is 14% of GKX's
-  :math:`\gamma`. A lead, not a diagnosis.
 - **s-alpha** :math:`k_y=0.55` is converged in neither GS2's energy grid nor
   GKX's Laguerre ladder; the finest rungs agree to 0.3%.
 
