@@ -1332,7 +1332,7 @@ def run_sampled_explicit_diagnostic_scan(
     steps: int,
     stride: int,
 ) -> tuple[tuple[Any, Any, Any, Any, Any, Any], tuple[Any, Any, Any]]:
-    """Run an explicit diagnostic scan only at retained sample intervals."""
+    """Retain diagnostic samples with static bounds for reverse-mode differentiation."""
 
     intervals = sampled_scan_intervals(steps, stride)
 
@@ -1341,7 +1341,6 @@ def run_sampled_explicit_diagnostic_scan(
             next_carry, _ = step_fn(inner_carry[:-1], inner_carry[-1])
             return (*next_carry, inner_carry[-1] + 1)
 
-        # Static bounds preserve reverse-mode differentiation for every interval.
         carry_next = jax.lax.fori_loop(
             0,
             int(intervals.max(initial=1)),
