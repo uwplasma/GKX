@@ -201,27 +201,33 @@ def test_sampled_scan_intervals_and_runner_retain_final_step() -> None:
         sampled_scan_intervals(5, 2), np.asarray([1, 2, 2], dtype=np.int32)
     )
 
-    def step_fn(carry, _idx):
-        G, _G_prev, fields_prev, _diag_prev, t_prev, dt_prev = carry
-        G_new = G + 1
-        fields_new = fields_prev + 10
-        diag = G_new * 100
-        t_new = t_prev + dt_prev
-        return (G_new, G_new, fields_new, diag, t_new, dt_prev), (diag, t_new, dt_prev)
+    def run(scale, steps=5, stride=2):
+        def step_fn(carry, _idx):
+            G, _G_prev, fields_prev, _diag_prev, t_prev, dt_prev = carry
+            G_new = G * scale + 1
+            fields_new = fields_prev + 10
+            diag = G_new * 100
+            t_new = t_prev + dt_prev
+            return (G_new, G_new, fields_new, diag, t_new, dt_prev), (
+                diag,
+                t_new,
+                dt_prev,
+            )
 
-    final_carry, diag_out = run_sampled_explicit_diagnostic_scan(
-        step_fn,
-        (
-            jnp.asarray(0, dtype=jnp.int32),
-            jnp.asarray(0, dtype=jnp.int32),
-            jnp.asarray(0, dtype=jnp.int32),
-            jnp.asarray(0, dtype=jnp.int32),
-            jnp.asarray(0.0, dtype=jnp.float32),
-            jnp.asarray(0.1, dtype=jnp.float32),
-        ),
-        steps=5,
-        stride=2,
-    )
+        return run_sampled_explicit_diagnostic_scan(
+            step_fn,
+            (jnp.asarray(0.0),) * 5 + (jnp.asarray(0.1),),
+            steps=steps,
+            stride=stride,
+        )
+
+    final_carry, diag_out = run(1.0)
+    for steps, stride in ((5, 2), (6, 4), (1, 7), (7, 1), (0, 3)):
+        value, grad = jax.jit(
+            jax.value_and_grad(lambda scale: run(scale, steps, stride)[0][0])
+        )(1.0)
+        np.testing.assert_allclose(value, steps)
+        np.testing.assert_allclose(grad, steps * (steps - 1) / 2)
 
     G_final, _G_prev, fields_final, diag_final, t_final, dt_final = final_carry
     diag_t, t_t, dt_t = diag_out
