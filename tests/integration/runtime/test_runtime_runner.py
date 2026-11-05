@@ -6,6 +6,7 @@ from support.helpers import patch_runtime
 from support.helpers import patch_nonlinear_setup, zero_field_diag
 
 from dataclasses import replace
+import json
 from gkx.artifacts.io import load_netcdf_restart_state, write_netcdf_restart_state
 from gkx.config import (
     CycloneBaseCase,
@@ -966,7 +967,7 @@ def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
 ) -> None:
 
     base = _nonlinear_ion_cfg()
-    cfg = replace(base, time=replace(base.time, method="imex"))
+    cfg = replace(base, time=replace(base.time, method="imex", fixed_dt=True))
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     captured: dict[str, object] = {}
@@ -979,10 +980,11 @@ def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
 
     def _fake_final_state(*args, **kwargs):
         captured.update(kwargs)
+        captured["time_config"] = args[4]
         phi = np.ones((grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64)
         return (
             np.zeros(shape, dtype=np.complex64),
-            FieldState(phi=phi, apar=None, bpar=None),
+            FieldState(phi=phi[None], apar=None, bpar=None),
             stats[-1],
         )
 
@@ -997,7 +999,10 @@ def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
     assert captured["return_solve_stats"] is True
 
     stats.append(_runtime_implicit_stats(0))
-    out = run_runtime_nonlinear(cfg, ky_target=0.2, Nl=3, Nm=4, diagnostics=False)
+    out = run_runtime_nonlinear(
+        cfg, ky_target=0.2, Nl=3, Nm=4, diagnostics=False, laguerre_mode="spectral"
+    )
+    assert captured["time_config"].laguerre_nonlinear_mode == "spectral"
     assert out.implicit_solve is not None and out.implicit_solve.converged
     assert out.summary()["implicit_max_relative_residual"] == pytest.approx(3.0e-7)
 
@@ -1196,13 +1201,22 @@ def test_runtime_nonlinear_em_flux_channels_sum_to_total() -> None:
         )
 
 
-def test_runtime_nonlinear_disable_diagnostics() -> None:
+@pytest.mark.parametrize(
+    "method,fixed_dt", [("rk2", True), ("rk2", False), ("imex-ars3", True)]
+)
+def test_runtime_nonlinear_disable_diagnostics(method, fixed_dt, tmp_path) -> None:
     cfg = _nonlinear_ion_cfg()
-    res = run_runtime_nonlinear(
-        cfg, ky_target=0.2, Nl=3, Nm=4, dt=0.01, steps=3, diagnostics=False
-    )
-    assert res.diagnostics is None
-    assert res.phi2 is not None
+    cfg = replace(cfg, time=replace(cfg.time, method="rk3", fixed_dt=fixed_dt))
+    options = dict(ky_target=0.2, Nl=3, Nm=4, dt=0.01, steps=3)
+    res = run_runtime_nonlinear(cfg, method=method, diagnostics=False, **options)
+    cfg = replace(cfg, time=replace(cfg.time, method=method))
+    reference = run_runtime_nonlinear(cfg, return_state=True, **options)
+    assert res.diagnostics is None and res.state is None
+    saved = json.loads(Path(res.save(tmp_path / "result")["summary"]).read_text())
+    assert tuple(saved["n_state_shape"]) == reference.state.shape
+    assert res.fields.phi.shape == reference.fields.phi.shape
+    np.testing.assert_allclose(res.fields.phi, reference.fields.phi, atol=1e-15)
+    assert res.phi2 == pytest.approx(float(np.mean(np.abs(reference.fields.phi) ** 2)))
 
 
 def test_runtime_nonlinear_validates_dt_steps_and_fixed_mode_contract() -> None:
