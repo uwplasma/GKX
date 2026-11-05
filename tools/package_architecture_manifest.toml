@@ -1230,7 +1230,8 @@ recursive = true
 # 69331 -> 69440: fixed-step named diagnosed RHS and shared production
 # diagnostic runner, including the separate sampled-gradient prerequisite.
 # 69440 -> 69450: enforce global diagnostic output placement at compilation.
-baseline = 69450
+# 69450 -> 69455: reuse the existing Hermite halo for magnetic flutter.
+baseline = 69455
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1605,7 +1606,9 @@ recursive = true
 # 64707 -> 64709: assert named diagnostic leaves retain replicated placement.
 # 64709 -> 64712: exercise adaptive chain retuning and a first-chunk horizon
 # through the same existing runtime regression test.
-baseline = 64712
+# Eight electromagnetic RHS/JVP/VJP interface controls extend the existing
+# species-Hermite fixture across both layouts and minimum valid local slabs.
+baseline = 64790
 target = 35000
 
 [[line_budget_policy.counts]]

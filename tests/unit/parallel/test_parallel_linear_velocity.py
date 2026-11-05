@@ -2826,8 +2826,10 @@ def test_bounded_species_sharded_rhs_matches_serial_operator() -> None:
 # ---- production species x Hermite mesh (plan item 4.2) ----
 
 
-def _species_hermite_problem(ns: int = 2, nl: int = 2, nm: int = 8, n: int = 4):
-    """Build a small two-species electrostatic nonlinear problem."""
+def _species_hermite_problem(
+    ns: int = 2, nl: int = 2, nm: int = 8, n: int = 4, *, beta=0.0, ky_layout="half"
+):
+    """Build a small species-Hermite nonlinear problem."""
 
     import numpy as np
 
@@ -2838,13 +2840,15 @@ def _species_hermite_problem(ns: int = 2, nl: int = 2, nm: int = 8, n: int = 4):
     from gkx.operators.linear.cache_builder import build_linear_cache
 
     cfg = CycloneBaseCase(
-        grid=GridConfig(Nx=n, Ny=n, Nz=n, Lx=6.0, Ly=6.0, boundary="periodic")
+        grid=GridConfig(
+            Nx=n, Ny=n, Nz=n, Lx=6.0, Ly=6.0, boundary="periodic", ky_layout=ky_layout
+        )
     )
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams(
-        beta=0.0,
-        fapar=0.0,
+        beta=beta,
+        fapar=float(beta != 0.0),
         tau_e=0.0,
         charge_sign=jnp.asarray([1.0, -1.0][:ns]),
         density=jnp.asarray([1.0, 1.0][:ns]),
@@ -3097,3 +3101,77 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial():
         assert np.max(np.abs(np.asarray(reference) - got)) < 5.0e-6
         # A trace that is identically zero would pass any tolerance.
         assert np.max(np.abs(got)) > 0.0
+
+
+@pytest.mark.parametrize("ns", [1, 2])
+@pytest.mark.parametrize("nm", [4, 8])
+@pytest.mark.parametrize("ky_layout", ["half", "full"])
+def test_magnetic_flutter_uses_cross_shard_hermite_neighbors(ns, nm, ky_layout):
+    from gkx.parallel.integrators import _prepare_species_hermite_rhs
+    from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
+    from gkx.terms.config import TermConfig
+
+    count = 2 * ns
+    if len(jax.devices()) < count:
+        pytest.skip("requires the requested device count")
+    state, cache, params, *_ = _species_hermite_problem(
+        ns=ns, nm=nm, beta=0.01, ky_layout=ky_layout
+    )
+    dtype = jnp.complex128 if jax.config.x64_enabled else jnp.complex64
+    state = state.astype(dtype) * 10.0
+    terms = TermConfig(
+        streaming=0,
+        mirror=0,
+        curvature=0,
+        gradb=0,
+        diamagnetic=0,
+        collisions=0,
+        hypercollisions=0,
+        end_damping=0,
+        nonlinear=1,
+        apar=1,
+        bpar=1,
+    )
+    rhs, _ = _prepare_species_hermite_rhs(
+        state,
+        cache,
+        params,
+        terms=terms,
+        plan=None,
+        devices=jax.devices()[:count],
+    )
+
+    @jax.jit
+    def named(value):
+        return rhs(value)[0]
+
+    @jax.jit
+    def serial(value):
+        return nonlinear_rhs_cached(value, cache, params, terms, differentiable=True)[0]
+
+    apar = jax.jit(
+        lambda value: (
+            nonlinear_rhs_cached(value, cache, params, terms, differentiable=True)[
+                1
+            ].apar
+        )
+    )(state)
+    assert float(jnp.linalg.norm(apar)) > 0.0
+    direction = jnp.flip(state, axis=2)
+    cotangent = jnp.roll(state, 1, axis=-1)
+    pairs = [
+        (named(state), serial(state)),
+        (
+            jax.jvp(named, (state,), (direction,))[1],
+            jax.jvp(serial, (state,), (direction,))[1],
+        ),
+        (
+            jax.grad(lambda value: jnp.real(jnp.vdot(named(value), cotangent)))(state),
+            jax.grad(lambda value: jnp.real(jnp.vdot(serial(value), cotangent)))(state),
+        ),
+    ]
+    for observed, reference in pairs:
+        scale = jnp.linalg.norm(reference)
+        assert float(scale) > 0.0
+        error = jnp.linalg.norm(observed - reference) / scale
+        assert float(error) < (1e-9 if jax.config.x64_enabled else 5e-5)
