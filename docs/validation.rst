@@ -387,7 +387,7 @@ Four-code kinetic-electron comparison
 
 Cyclone Miller (:math:`m_i/m_e` = 3670, :math:`T_e = T_i`, :math:`a/L_T` 2.49,
 :math:`a/L_n` 0.8), :math:`k_y\rho_i = 0.3`, growth rate in GX units
-(2026-10-27, office). GX: repaired variant, :math:`t = 60`, ``Nl`` 16 unless
+(self-run, 2026-10-27). GX: repaired variant, :math:`t = 60`, ``Nl`` 16 unless
 stated; GKX: nodal :math:`\mu` grid, 8 nodes, end-damping rate 160.6; GS2: rung
 k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8); stella: nzed 48, nperiod 3,
 nvgrid 24, nmu 12.
@@ -418,25 +418,35 @@ nvgrid 24, nmu 12.
      - 0.2564 / 0.2496 / 0.2499
 
 At equal ``Nm`` GKX is within 1.2% of GX in :math:`\gamma` and 0.5% in
-:math:`\omega`. The growth rate is converged to about 1% across the four codes
-(0.2294-0.2349). The frequency is not: GX, GKX and stella fall with velocity
+:math:`\omega`. The reported finer-grid growth rates span 0.2294-0.2349,
+about 2.4% across the four codes; that spread is not a convergence estimate.
+The frequency remains unresolved: GX, GKX and stella fall with velocity
 resolution (GX 0.2271 at ``Nm`` 96) towards GS2's 0.221. GX with the default
 ``p_hyper_m = min(20, Nm/2)`` returns NaN from ``Nm`` 96; ``p_hyper_m = 10``
-runs (the sharp hypercollision exponent is unstable in single precision).
-Kinetic electrons at ky 0.4-0.6 agree to 1.6% in :math:`\gamma` and 0.3% in
-:math:`\omega` between stella and GX.
+runs at those settings. This is a measured workaround, not an identified
+single-precision failure mechanism. Independent refits of GS2's complex
+potential over :math:`t=120`--160 and 160--200 give the same frequency,
+0.2209803, so its difference from the moment-code values is not an early fit.
+For stella's three velocity rungs, the late :math:`t=48`--60 diagnostic means
+reproduce the table; the finest frequency still shifts about 0.4% from the
+preceding :math:`t=36`--48 window. These corrected stella runs use the
+range-grid streaming patch, not the unmodified build. Finite-horizon scan
+agreement does not close their velocity-space or time-window convergence.
 
 TEM, collisionless, ky rho_s 0.3 (GX units, s-alpha, :math:`\epsilon = 0.16`):
 GS2 0.871, GX ``Nm`` 32 / 64 0.670 / 0.770, GKX ``Nm`` 24 / 48 0.611 / 0.744.
-The moment codes are 15-23% low at the usual ``Nm`` and need more than 96.
+The moment codes are 15-23% low at the usual ``Nm``; their velocity-space
+convergence remains open.
 The same TEM on a circular Miller surface: GS2 0.997, GX ``Nm`` 32 / 64
 0.778 / 0.876, stella (nvgrid, nmu) = (24, 12) / (32, 16) 0.853 / 0.902.
 With :math:`\nu_{ee} = 0.01` GS2 and GX lose 11-15% and GKX 7-8%. GX and GS2
 add electron-ion scattering to the electron rate (GX: ``nuei = Z nu``);
 GKX's Lenard-Bernstein operator is self-collision only. With
 :math:`\nu_e` doubled GKX loses 14.3% at ``Nm`` 24 and 13.6% at ``Nm`` 48,
-as GX does. The Landau operator, which carries the physical electron-ion term
-with an energy-dependent rate, loses 7-8%.
+which reproduces the reduction seen in GX for this observable. Doubling the
+self-collision rate is a sensitivity probe, not an implementation of GX's
+separate electron-ion restoring terms. Landau loses 7-8%; its rate convention
+and operator contract against GS2 remain unresolved.
 
 KBM, beta 0.015, A_par, ky 0.3 (nperiod 2): GX ``ntheta`` 32 / 48 / 64 gives
 0.3135 / 0.2996 / 0.2944 and GS2 ``ntheta`` 32 / 48 / 64 gives 0.2617 / 0.2730 /
