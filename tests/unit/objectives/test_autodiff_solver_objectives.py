@@ -1890,24 +1890,16 @@ def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
     nodes = [
         node
         for node in ast.parse(text).body
-        if (
-            isinstance(node, ast.Assign)
-            and any(
-                isinstance(target, ast.Name) and target.id == "grid"
-                for target in node.targets
-            )
-        )
-        or (isinstance(node, ast.FunctionDef) and node.name == "initial_state")
+        if getattr(node, "name", None) == "initial_state"
+        or any(getattr(t, "id", None) == "grid" for t in getattr(node, "targets", ()))
     ]
     scope = dict(gkx=gkx, jnp=jnp, NX=8, NY=8, NZ=8, NL=2, NM=4)
-    exec(
-        compile(ast.Module(body=nodes, type_ignores=[]), str(QA_SCRIPT), "exec"), scope
-    )
+    module = ast.Module(body=nodes, type_ignores=[])
+    exec(compile(module, str(QA_SCRIPT), "exec"), scope)
     state, grid = np.asarray(scope["initial_state"]()), scope["grid"]
     assert state.shape[-3:] == (grid.ky.size, grid.kx.size, grid.z.size)
-    partner = np.take(
-        np.take(state, (-np.arange(8)) % 8, axis=-3), (-np.arange(8)) % 8, axis=-2
-    )
+    reverse = (-np.arange(8)) % 8
+    partner = np.take(np.take(state, reverse, axis=-3), reverse, axis=-2)
     np.testing.assert_array_equal(state, np.conj(partner))
 
 
