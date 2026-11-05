@@ -350,9 +350,171 @@ repair diff SHA256 is
 ``1cc8cb08d685cd6271c416755f2a2b60950512f3767deb28cdc0453101ce67ee``.
 The two ``cyclone_miller_fixed_p4`` rows in
 ``docs/_static/cross_code_linear_points.csv`` preserve these fitted values.
-A public raw-input/output and executable fit package remains an open
-reproducibility gate. This control does not replace the separate unresolved
+Archived raw outputs remain private; the recipe below reconstructs the
+inputs and fitting procedure from public source. This control does not replace the separate unresolved
 kinetic-electron, GS2 or stella ladders below.
+
+Reconstructing the setup
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following cells reconstruct the inputs and analysis from public source;
+the archived raw outputs are private. Use a fresh working directory and
+Python 3.11 or newer. The recorded CPU eigenpair used the versions below.
+
+.. code-block:: bash
+
+   git clone https://github.com/uwplasma/GKX.git GKX
+   git -C GKX checkout e33034a01f572132fd36acae95a091736365403f
+   git clone https://bitbucket.org/gyrokinetics/gx.git GX
+   git -C GX checkout 3865a53778862e1686f414bf6f416339e24887c9
+   python -m pip install -e ./GKX jax==0.10.2 jaxlib==0.10.2 numpy==2.4.6 \
+       scipy==1.17.1 netCDF4==1.7.4 \
+       'solvax @ git+https://github.com/uwplasma/SOLVAX.git@59b8c317357fd78582f3e06be6202972445eac68'
+
+Apply the sole numerical GX source change:
+
+.. code-block:: bash
+
+   git -C GX apply --unidiff-zero <<'PATCH'
+   diff --git a/src/device_funcs.cu b/src/device_funcs.cu
+   index 52b993b3..fdec6da5 100644
+   --- a/src/device_funcs.cu
+   +++ b/src/device_funcs.cu
+   @@ -2831 +2831,3 @@ __global__ void __launch_bounds__(512) dampEnds_linked(cuComplex* G,
+   -  if (unmasked(idx,idy) && idy > 0 && idzlm < nz*nMoms) {
+   +  if (unmasked(idx,idy) && idy > 0) {
+   +    // dG_all.z is capped: cover every z/moment index as in linkedCopyBackAll.
+   +    for (; idzlm < nz*nMoms; idzlm += blockDim.z * gridDim.z) {
+   @@ -2874,0 +2877 @@ __global__ void __launch_bounds__(512) dampEnds_linked(cuComplex* G,
+   +    }
+   PATCH
+
+Configure GX's ``Makefiles/Makefile.generic`` library locations following its
+`build instructions <https://bitbucket.org/gyrokinetics/gx/src/3865a53778862e1686f414bf6f416339e24887c9/README.md>`_.
+The measured binary used CUDA 11.5.119, GCC 10.4.0, and the flags below; select
+those compiler versions as ``nvcc`` and ``g++``. Rebuilt binaries contain
+build metadata, so record their hashes and toolchain/library versions rather
+than expecting the archived binary hash.
+
+.. code-block:: bash
+
+   make -C GX GK_SYSTEM=generic CUDAARCH=86 CXX=g++ CFLAGS=-fPIC \
+       NVCC='nvcc -ccbin g++' \
+       NVCCFLAGS='-std=c++17 --forward-unknown-to-host-compiler -arch=compute_86 -code=sm_86 -use_fast_math -fPIC -rdc=true'
+   mkdir control
+   cd control
+   export JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1
+
+Run this Python cell in ``control``. It reuses the existing full tokamak
+example and geometry helpers of the pinned revision, restricts the fine
+profiles to the kinetic grid, then calls the public solver. Geometry and field
+helpers are pinned implementation details, without a public API compatibility
+promise:
+
+.. code-block:: python
+
+   from dataclasses import replace
+   from pathlib import Path
+   import numpy as np
+   import gkx
+   from gkx.geometry.miller_eik import build_miller_geometry_request
+   from gkx.geometry.imported_miller import (
+       _assemble_miller_profiles_for_request, write_miller_eik_netcdf,
+   )
+   from gkx.workflows.linear import _prepare_linear_runtime_context
+   from gkx.operators.linear.cache_builder import build_linear_cache
+   from gkx.operators.linear.rhs import linear_rhs_cached
+
+   assert Path(gkx.__file__).resolve().is_relative_to(Path('../GKX/src').resolve())
+   base = gkx.load('../GKX/examples/01_linear_tokamak/case_full.toml')
+   miller = replace(base.geometry, model='miller', geometry_file=None,
+                    rhoc=0.5, R_geo=2.77778)
+   fine_case = replace(base, geometry=miller, grid=replace(base.grid, ntheta=512))
+   fine = _assemble_miller_profiles_for_request(build_miller_geometry_request(fine_case))
+   p = {k: np.asarray(v)[::16] if np.ndim(v) else v for k, v in fine.items()}
+   write_miller_eik_netcdf(Path('geometry.nc'), p)
+   lines = ['ntgrid nperiod ntheta drhodpsi Rmaj shat kxfac q',
+            '48 2 32 ' + ' '.join(format(p[k], '.17g') for k in
+                                 ['drhodpsi', 'Rmaj', 'shat', 'kxfac', 'q'])]
+   for keys in [('gbdrift', 'gradpar', 'grho', 'theta'), ('cvdrift', 'gds2', 'bmag'),
+                ('gds21', 'gds22'), ('cvdrift0', 'gbdrift0')]:
+       lines.append(' '.join(keys))
+       lines.extend(' '.join(format(p[k][i], '.17g') for k in keys) for i in range(97))
+   Path('geometry.eik').write_text('\n'.join(lines) + '\n')
+   case = replace(base, geometry=replace(miller, model='imported-eik',
+                  geometry_file=str(Path('geometry.nc').resolve())),
+                  time=replace(base.time, dt=1/512, damp_ends_rate=50., progress_bar=False),
+                  collisions=replace(base.collisions, p_hyper_m=4., nu_hyper_m=1.))
+   result = gkx.solve(case, ky_target=0.3, Nl=8, Nm=16, solver='krylov', return_state=True)
+   ctx = _prepare_linear_runtime_context(case, ky_target=0.3, n_laguerre=8,
+         n_hermite=16, solver='krylov', fit_signal='phi', return_state=True,
+         initial_state=None, status_callback=None)
+   cache = build_linear_cache(ctx.grid, ctx.geom, ctx.params, 8, 16)
+   _, phi = linear_rhs_cached(result.state, cache, ctx.params, terms=ctx.terms)
+   np.savez('mode.npz', z=np.asarray(ctx.grid.z), phi=np.asarray(phi).ravel(),
+            gamma=result.gamma, omega=result.omega)
+   print(result.gamma, result.omega, result.eigen_status)
+
+Save the following inline-table TOML as ``control.in`` in the same directory.
+The explicit big-field cadence is essential: GX's default is 100 times the
+ordinary diagnostic cadence. ``damp_ends_amp/dt`` is the matched rate 50.
+
+.. code-block:: toml
+
+   Dimensions = { ntheta=32, nperiod=2, nky=2, nkx=1, nhermite=16, nlaguerre=8, nspecies=1 }
+   Domain = { y0=3.3333333333333333, boundary="linked" }
+   Physics = { beta=0.0, nonlinear_mode=false }
+   Time = { dt=0.001953125, dt_max=0.001953125, fixed_dt=true, t_max=150.0, scheme="rk4" }
+   Initialization = { gaussian_init=true, init_field="density", init_amp=1.0e-10 }
+   Geometry = { geo_option="eik", geo_file="geometry.eik" }
+   species = { z=[1.0], mass=[1.0], dens=[1.0], temp=[1.0], tprim=[2.49], fprim=[0.8], vnewk=[0.0], type=["ion"] }
+   Boltzmann = { add_Boltzmann_species=true, Boltzmann_type="electrons", tau_fac=1.0 }
+   Dissipation = { closure_model="none", hypercollisions=true, hypercollisions_const=false, nu_hyper_m=1, p_hyper_m=4, hyper=false, hyperz=false }
+   Expert = { init_single=true, iky_single=1, ikx_single=0, damp_ends_amp=0.09765625, damp_ends_widthfrac=0.125 }
+   Diagnostics = { nwrite=128, nwrite_big=128, omega=true, free_energy=true, fields=true, moments=false }
+
+On an allocated GPU, run ``../GX/gx control.in``. The following Python cell
+checks the reached horizon, fits the two late intervals from the big-field
+file, cross-checks the phase branch with the native frequency diagnostic, and
+compares normalized potentials. GX and GKX share the same
+:math:`\sqrt{T/m}/L` time convention here; no :math:`\sqrt{2}` rate factor is
+applied. The imported-geometry readers handle the raw drift convention.
+
+.. code-block:: python
+
+   import numpy as np
+   from netCDF4 import Dataset
+   from scipy.interpolate import CubicSpline
+   with Dataset('control.big.nc') as f:
+       t = np.asarray(f.groups['Grids']['time'][:])
+       z = np.asarray(f.groups['Grids']['theta'][:])
+       a = np.asarray(f.groups['Diagnostics']['Phi'][:, 1, 0])
+   phi = (a[..., 0] + 1j*a[..., 1]).astype(np.complex128)
+   assert len(t) == 600 and np.allclose(np.diff(t), 0.25)
+   with Dataset('control.restart.nc') as f:
+       assert float(f['time'][:]) == 150.
+   with Dataset('control.out.nc') as f:
+       native_omega = np.asarray(f.groups['Diagnostics']['omega_kxkyt'][:, 1, 0, 0])
+   with np.load('mode.npz') as mode:
+       u = CubicSpline(mode['z'], mode['phi'])(z)
+       gamma, omega = float(mode['gamma']), float(mode['omega'])
+   signal = phi @ (phi[-1]/np.linalg.norm(phi[-1])).conj()
+   for lo, hi in [(90, 120), (120, 150)]:
+       keep = (t >= lo) & (t < hi)
+       g = np.polyfit(t[keep], np.log(abs(signal[keep])), 1)[0]
+       w = -np.polyfit(t[keep], np.unwrap(np.angle(signal[keep])), 1)[0]
+       assert abs(w-np.mean(native_omega[keep])) < 1e-4
+       print(lo, hi, g, w, 'relative:', g/gamma-1, w/omega-1)
+   u /= np.linalg.norm(u)
+   v = phi[-1]/np.linalg.norm(phi[-1])
+   phase = np.vdot(u, v)
+   print('normalized field L2:', np.linalg.norm(v-u*phase/abs(phase)))
+
+The geometry, eigenpair and fitting cells were checked against the saved run;
+the patch applies to the pinned source and the TOML matches the executed deck.
+A fresh native rebuild/run is needed for a new toolchain. These cells expose
+the setup and analysis without supplying the private archived raw outputs or
+promoting the finite-truncation result to a convergence claim.
 
 Cross-code linear parity matrix
 -------------------------------
