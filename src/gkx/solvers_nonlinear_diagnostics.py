@@ -187,42 +187,26 @@ class _ExplicitScanComponents:
 
 @dataclass(frozen=True)
 class PreparedExplicitNonlinearDiagnostics:
-    """Reusable compiled explicit nonlinear diagnostic simulation.
+    """Reusable compiled simulation with fixed geometry and numerical policy.
 
-    Geometry, field operators, and static numerical policy are prepared once.
-    Calls to :meth:`run` may supply a new initial state with the same shape and
-    dtype without rebuilding the scan closure. Fixed-step sensitivity studies
-    may instead pass matched geometry, cache, and parameter PyTrees.
+    New states of the prepared shape and dtype reuse the compiled scan.
+    Fixed-step sensitivity studies may pass matched geometry/cache/params.
+    The function entry point uses the same graph, but takes its caller's state
+    dtype; this object casts states to its prepared dtype.
 
-    This object and :func:`integrate_nonlinear_explicit_diagnostics_state`
-    compile one graph and return bitwise identical arrays for the same inputs
-    (plan §5.3, queue row Q18). The one difference that remains is the state
-    dtype: this object freezes the dtype of the ``G0`` it was prepared with and
-    casts every later state to it, while the function entry point takes the
-    dtype of the ``G0`` it is called with. Feeding a promoted state to one and
-    not the other is a precision change, not a route difference.
-
-    **Supplied states** (queue row Q23). On a linked (twist-shift) deck the
-    ``kx`` rows outside the linked chains are decoupled, and the runtime's own
-    initial conditions never populate them. Every state this object is given --
-    the ``G0`` it was prepared with and any ``initial_state`` passed to
-    :meth:`run` or :meth:`run_arrays` -- is projected onto the chain cover
-    before it is integrated, because the ExB bracket takes the whole state to
-    real space and dealiases only its output, so off-chain content aliases back
-    onto the chain rows. The projection is a mask fixed by the deck's topology,
-    not a check on the state's values, so it holds under ``jit`` and under
-    reverse-mode AD; gradients with respect to a supplied state are exactly
-    zero on the off-chain rows and unchanged elsewhere. Periodic and full-cover
-    decks are untouched and trace exactly as before.
+    Supplied states are projected onto the linked-chain cover before the ExB
+    bracket can alias unreachable rows back onto the chains. The topology-only
+    mask holds under jit and reverse AD, with zero gradients off the cover.
+    Periodic and full-cover decks are unchanged.
     """
 
     initial_state: jnp.ndarray
     geometry: Any
     cache: LinearCache
     params: LinearParams
-    _run_raw: Callable[..., tuple[Any, Any, Any]]
+    _run_raw: Callable[..., tuple[Any, Any, Any, Any]]
     _run_dynamic_raw: Callable[
-        [jnp.ndarray, Any, LinearCache, LinearParams], tuple[Any, Any, Any]
+        [jnp.ndarray, Any, LinearCache, LinearParams], tuple[Any, Any, Any, Any]
     ]
     _finalize: Callable[..., SimulationDiagnostics]
     stride: int
@@ -243,17 +227,9 @@ class PreparedExplicitNonlinearDiagnostics:
     ) -> tuple[jnp.ndarray, tuple[Any, Any, Any], FieldState]:
         """Run the compiled scan without host conversion or artifact assembly.
 
-        This method is the differentiable Python boundary. The initial state is
-        dynamic. Fixed-step runs may also receive a matched ``cache``/``params``
-        pair for parameter differentiation. A changed ``geometry`` requires
-        that pair. Grid layout and numerical policy remain fixed by
-        :func:`prepare_nonlinear_explicit_diagnostics`; adaptive runs currently
-        support state changes but reject traced model overrides.
-
-        A supplied ``initial_state`` is projected onto the linked chain cover
-        first, as the class docstring describes. The prepared state was
-        projected once at preparation, so passing ``None`` runs exactly the
-        graph it ran before.
+        State is dynamic and projected onto the linked-chain cover. Fixed-step
+        differentiation may supply matched cache/params and geometry. Adaptive
+        model overrides are refused; its operator remains fixed.
 
         ``time_horizon`` (adaptive runs) stops stepping once the run time
         reaches it. It is a traced operand, so changing it between calls
@@ -281,8 +257,8 @@ class PreparedExplicitNonlinearDiagnostics:
             )
         if geometry is None and cache is None:
             if time_horizon is None:
-                return self._run_raw(jnp.asarray(state))
-            return self._run_raw(jnp.asarray(state), jnp.asarray(time_horizon))
+                return self._run_raw(jnp.asarray(state))[:3]
+            return self._run_raw(jnp.asarray(state), jnp.asarray(time_horizon))[:3]
         if time_horizon is not None:
             raise ValueError("time_horizon cannot be combined with dynamic inputs")
         if not self.fixed_dt:
@@ -292,7 +268,7 @@ class PreparedExplicitNonlinearDiagnostics:
         params_use = self.params if params is None else params
         return self._run_dynamic_raw(
             jnp.asarray(state), geometry_use, cache_use, params_use
-        )
+        )[:3]
 
     @property
     def chain(self) -> Any:
@@ -322,6 +298,9 @@ class PreparedExplicitNonlinearDiagnostics:
             params=params,
             time_horizon=time_horizon,
         )
+        return self._finalize_arrays(G_final, scan_diag_out, fields_final)
+
+    def _finalize_arrays(self, G_final, scan_diag_out, fields_final):
         diag, t, dt_series = scan_diag_out
         diag_out = self._finalize(
             diag,
@@ -566,21 +545,10 @@ def _run_explicit_diagnostic_scan_and_finalize(
     resolved_diagnostics: bool,
     external_phi: jnp.ndarray | float | None,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
-    """Run the explicit scan and convert raw scan output into diagnostics.
+    """Run the reference jitted scan, then package diagnostics outside jit.
 
-    The raw scan runs under ``jax.jit``, which is the reference-route contract
-    (plan §5.3, queue row Q18). ``prepare_explicit_nonlinear_diagnostics_impl``
-    jits the same function over the same components, so this entry point --
-    the one ``run_runtime_nonlinear`` reaches on its fixed-window, chunked and
-    sharded routes -- and ``gkx.prepare`` compile one graph and return bitwise
-    identical arrays.
-
-    Run outside jit, as this did before, XLA compiles the scan primitive alone
-    with the arrays its body closes over as operands, optimizes the field solve
-    and the first diagnostic as separate modules, and the two routes then agree
-    only to roundoff: on a 100-step Cyclone gate the state differed by up to
-    2.1e-7 relative in float32, and two near-cancelling turbulent-heating
-    diagnostics by O(1).
+    Prepared and runtime routes must compile the same graph for bitwise parity;
+    eager field solves and scan execution can otherwise differ through rounding.
     """
 
     def run_raw(
@@ -599,7 +567,7 @@ def _run_explicit_diagnostic_scan_and_finalize(
                 diagnostics_stride=diagnostics_stride,
                 checkpoint=checkpoint,
                 external_phi=external_phi,
-            )
+            )[:3]
 
     G_final, scan_diag_out, fields_final = cached_jit(run_raw)(
         prepared.G0, _chain_operand(step)
@@ -632,7 +600,8 @@ def _run_explicit_diagnostic_scan_raw(
     diagnostics_stride: int,
     checkpoint: bool,
     external_phi: jnp.ndarray | float | None,
-) -> tuple[jnp.ndarray, tuple[Any, Any, Any], FieldState]:
+    initial_dt: jnp.ndarray | None = None,
+) -> tuple[jnp.ndarray, tuple[Any, Any, Any], FieldState, jnp.ndarray]:
     """Run the device scan and return raw arrays for outside-JIT packaging."""
 
     G0 = prepared.project_state(jnp.asarray(initial_state, dtype=prepared.state_dtype))
@@ -648,10 +617,12 @@ def _run_explicit_diagnostic_scan_raw(
         policies.time_step_policy.update_dt(fields0, policies.time_step_policy.dt_init),
         dtype=prepared.real_dtype,
     )
+    if initial_dt is not None:
+        dt0 = jnp.where(initial_dt == 0.0, dt0, initial_dt)
     diag_zero = cached_jit(compute_diag_from_state)(G0, fields0, G0, fields0, dt0)
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
-    G_final, scan_diag_out = run_explicit_diagnostic_scan(
+    G_final, scan_diag_out, dt_next = run_explicit_diagnostic_scan(
         step,
         (
             G0,
@@ -666,6 +637,7 @@ def _run_explicit_diagnostic_scan_raw(
         sampled_scan=sampled_scan,
         checkpoint=checkpoint,
         sampled_scan_fn=run_sampled_explicit_diagnostic_scan,
+        _return_dt=True,
     )
 
     fields_final = compute_fields_cached(
@@ -675,7 +647,7 @@ def _run_explicit_diagnostic_scan_raw(
         terms=prepared.term_cfg,
         external_phi=external_phi,
     )
-    return G_final, scan_diag_out, fields_final
+    return G_final, scan_diag_out, fields_final, dt_next
 
 
 def stiff_linear_split(
@@ -1068,7 +1040,8 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         initial_state: jnp.ndarray,
         time_horizon: jnp.ndarray | None = None,
         chain: Any = None,
-    ) -> tuple[Any, Any, Any]:
+        initial_dt: jnp.ndarray | None = None,
+    ) -> tuple[Any, Any, Any, Any]:
         step = components.step
         if time_horizon is not None:
             step = step.with_horizon(time_horizon=time_horizon)  # type: ignore[attr-defined]
@@ -1085,6 +1058,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
                 diagnostics_stride=diagnostics_stride,
                 checkpoint=checkpoint,
                 external_phi=external_phi,
+                initial_dt=initial_dt,
             )
 
     def run_dynamic_raw(
@@ -1092,7 +1066,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         dynamic_geometry: Any,
         dynamic_cache: LinearCache,
         dynamic_params: LinearParams,
-    ) -> tuple[Any, Any, Any]:
+    ) -> tuple[Any, Any, Any, Any]:
         dynamic_setup = build_nonlinear_diagnostic_setup(
             initial_state,
             grid,
@@ -2176,14 +2150,9 @@ def integrate_nonlinear_explicit_diagnostics_state(
     show_progress: bool = False,
     compile_cache: dict[Any, Any] | None = None,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
-    """Integrate nonlinear system and return runtime diagnostics plus the final state.
+    """Return diagnostics and final state using the prepared reference graph.
 
-    This is the entry point ``run_runtime_nonlinear`` uses on its fixed-window,
-    chunked and sharded routes. It runs the same jitted graph as
-    :func:`prepare_nonlinear_explicit_diagnostics` and returns bitwise
-    identical arrays for the same inputs (plan §5.3, queue row Q18). Prefer the
-    prepared object when the same case is run more than once: it keeps the
-    compiled graph, while each call here compiles its own.
+    A caller-owned compile cache reuses that graph between runtime chunks.
     """
 
     if method in _IMEX_METHODS:
@@ -2196,20 +2165,51 @@ def integrate_nonlinear_explicit_diagnostics_state(
         return _integrate_nonlinear_explicit_diagnostics_impl(
             G0, grid, geom, params, dt, steps, **options
         )
-    # Chunked runs call this once per chunk with only the state, the horizon
-    # and (on the last capped chunk) the step count changing. Keep one
-    # prepared graph per static shape and pass the horizon as an operand:
-    # rebuilding and re-jitting the closure every chunk cost a full XLA
-    # compile per chunk. The caller owns the cache, one per run, so every
-    # other option is fixed for its lifetime.
-    key = (int(steps), time_horizon is None, bool(show_progress))
+    prepared = _cached_explicit_diagnostics(
+        G0, grid, geom, params, dt, steps, compile_cache, time_horizon, options
+    )
+    return prepared.run(G0, time_horizon=time_horizon)
+
+
+def _cached_explicit_diagnostics(
+    G0, grid, geom, params, dt, steps, compile_cache, time_horizon, options
+):
+    # Caller-owned cache: model and policy stay fixed for this trajectory.
+    # Only state, controller and horizon operands change between chunks.
+    key = (int(steps), time_horizon is None, bool(options.get("show_progress", False)))
     prepared = compile_cache.get(key)
     if prepared is None:
         prepared = prepare_nonlinear_explicit_diagnostics(
             G0, grid, geom, params, dt, steps, **{**options, "time_horizon": None}
         )
         compile_cache[key] = prepared
-    return prepared.run(G0, time_horizon=time_horizon)
+    return prepared
+
+
+def _continue_nonlinear_diagnostics(
+    G0,
+    grid,
+    geom,
+    params,
+    *,
+    initial_dt,
+    compile_cache,
+    dt,
+    steps,
+    time_horizon=None,
+    **options,
+):
+    """Continue a runtime chunk with its controller operand, without state mutation."""
+
+    prepared = _cached_explicit_diagnostics(
+        G0, grid, geom, params, dt, steps, compile_cache, time_horizon, options
+    )
+    G_final, arrays, fields, dt_next = prepared._run_raw(
+        project_to_linked_cover(jnp.asarray(G0), prepared.cover_mask),
+        None if time_horizon is None else jnp.asarray(time_horizon),
+        initial_dt=initial_dt,
+    )
+    return prepared._finalize_arrays(G_final, arrays, fields), dt_next
 
 
 def prepare_nonlinear_explicit_diagnostics(
