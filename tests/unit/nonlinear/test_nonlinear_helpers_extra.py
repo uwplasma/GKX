@@ -2568,7 +2568,8 @@ def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
     assert build(0.04) is not first
 
 
-def test_adaptive_chain_imex_grows_dt_between_chunks():
+@pytest.mark.parametrize("horizon", [4.0, 0.1])
+def test_adaptive_chain_imex_grows_dt_between_chunks(horizon):
     """fixed_dt = false: the chain IMEX step adapts dt between chunks."""
     import gkx
 
@@ -2581,10 +2582,12 @@ def test_adaptive_chain_imex_grows_dt_between_chunks():
             fixed_dt=False,
             dt=0.05,
             dt_max=1.0,
-            t_max=4.0,
+            t_max=horizon,
         ),
     )
     d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
     dt = np.asarray(d.dt_t)
     assert np.isfinite(np.asarray(d.Wg_t)).all()
-    assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05
+    assert float(d.t[-1]) == pytest.approx(horizon)
+    if horizon > 1.0:
+        assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05

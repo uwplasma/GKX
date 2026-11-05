@@ -302,7 +302,7 @@ class PreparedExplicitNonlinearDiagnostics:
     def with_chain(self, chain: Any) -> PreparedExplicitNonlinearDiagnostics:
         """Same compiled scan with another operator of the same structure."""
         run = self._run_raw
-        return replace(self, _run_raw=partial(run.func, chain=chain))  # type: ignore[attr-defined]
+        return replace(self, _run_raw=partial(run, chain=chain))
 
     def run(
         self,
@@ -1104,9 +1104,9 @@ def prepare_explicit_nonlinear_diagnostics_impl(
                 options=options,
                 rhs_fn=rhs_fn,
             )
-        if time_horizon is not None:
-            step = step.with_horizon(time_horizon=time_horizon)  # type: ignore[attr-defined]
         with _bound_chain(step, chain):
+            if time_horizon is not None:
+                step = step.with_horizon(time_horizon=time_horizon)  # type: ignore[attr-defined]
             return _run_explicit_diagnostic_scan_raw(
                 components.prepared,
                 components.policies,
