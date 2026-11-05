@@ -80,6 +80,9 @@ def linear_rhs_electrostatic_species_hermite_sharded(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Compute the electrostatic RHS on a species--Hermite mesh."""
 
+    if getattr(params, "_nu_ei", None) is not None:
+        raise NotImplementedError("electron_ion requires serial execution")
+
     import jax
     from jax.sharding import NamedSharding, PartitionSpec
 

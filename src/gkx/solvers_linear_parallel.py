@@ -301,6 +301,8 @@ def linear_rhs_parallel_cached(
             use_custom_vjp=use_custom_vjp,
         )
 
+    if getattr(params, "_nu_ei", None) is not None:
+        raise NotImplementedError("electron_ion requires serial execution")
     route = _parallel_linear_route(parallel)
     if route.strategy == "velocity":
         return _velocity_parallel_rhs_cached(
