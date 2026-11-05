@@ -73,7 +73,7 @@ every method delegates to the runtime path the case would take anyway.
    * - Member
      - Behavior
    * - ``solve(parameters=None, initial_state=None)``
-     - Nonlinear: runs the compiled scan and returns
+     - Nonlinear: runs the prepared integration and returns
        ``(time, diagnostics, state, fields)``. Linear: calls
        ``gkx.runtime.solve``. ``parameters`` must be ``None``; a linear
        ``initial_state`` raises ``NotImplementedError``.
@@ -83,7 +83,7 @@ every method delegates to the runtime path the case would take anyway.
    * - ``value_and_grad(objective, parameters)``
      - ``jax.value_and_grad(objective)(parameters)``.
    * - ``warmup()``
-     - Nonlinear: runs the scan once so XLA compiles it, and returns ``self``;
+     - Nonlinear: completes one solve so XLA compiles it, and returns ``self``;
        a second call does nothing. Linear: no-op, because the linear runtime
        picks its solver per call.
    * - ``estimate_memory()``
@@ -98,14 +98,19 @@ every method delegates to the runtime path the case would take anyway.
      - ``"float64"`` or ``"float32"`` from ``jax_enable_x64``; visible JAX
        devices as ``platform:id``.
 
-Preparing a nonlinear case builds its explicit diagnostic scan through
-``gkx.runtime.prepare``. That route requires a serial ``[parallel]`` policy
-and an explicit time method (IMEX methods raise ``ValueError``). It compiles one
-scan of fixed length, so a deck with ``[time] run_to = "saturation"`` raises
-unless ``steps=N`` is passed or the deck sets ``run_to = "t_max"``.
+Preparing a nonlinear case builds its diagnostic backend through
+``gkx.runtime.prepare``; see :doc:`parallelization` for supported named policies.
+Explicit ``steps=N`` fixes a finite window. Without that budget, adaptive
+``solve`` and ``warmup`` reuse compiled chunks until ``t_max``; every call resets
+the clock and controller, retaining executable caches rather than physical state.
+This host loop cannot be transformed through ``run_arrays``: pass explicit
+``steps`` for finite-window differentiation. Adaptive chain IMEX and generic
+``imex`` preparation remain unsupported. A saturation-stopping deck raises
+unless ``steps=N`` is passed or ``run_to = "t_max"`` is selected.
 
-The prepared route and ``integrate_nonlinear_explicit_diagnostics_state``
-compile the same graph and return bitwise identical arrays
+For the same finite window, the prepared route and
+``integrate_nonlinear_explicit_diagnostics_state`` compile the same graph
+and return bitwise identical arrays
 (``tests/unit/nonlinear/test_nonlinear.py``). Prefer ``prepare`` when a case
 runs more than once: it keeps the compiled graph, while each call to the
 function entry point compiles its own. :doc:`solvers` gives the contract and

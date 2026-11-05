@@ -401,12 +401,13 @@ fields. Changed initial states of the prepared shape reuse the executable;
 model, geometry and horizon overrides are unsupported.
 
 Diagnosed preparation with ``diagnostics=True`` uses the same production
-explicit scan and supports adaptive methods, supplied initial states and the
-backend's existing traced horizon operand. It requires
+explicit scan and supports adaptive methods and supplied initial states. It requires
 ``strict_identity=False`` after independent identity qualification; automatic
 serial comparison is a runtime-solve feature. Explicit ``steps=N`` fixes the
-accepted-step budget, while an inferred adaptive length retains its physical
-horizon. Each public prepared solve starts a new local clock and controller
+accepted-step budget with a traced horizon operand. Inferred adaptive execution
+uses host chunks through its physical horizon; ``run_arrays`` and transformed
+finite-window execution require explicit ``steps``. Each public prepared solve
+starts a new local clock and controller
 initialization for the supplied state; only chunks of one runtime trajectory
 carry the PI next-step operand. Repeated states and horizon values of the same
 structure reuse the compiled callable. Fixed-step diagnosed runs also accept

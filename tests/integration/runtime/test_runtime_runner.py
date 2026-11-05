@@ -98,6 +98,7 @@ from types import SimpleNamespace
 import gkx.workflows.runtime.startup as startup
 import warnings
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -1045,6 +1046,29 @@ def test_prepare_runtime_nonlinear_reuses_existing_execution_contract(
     full_horizon = replace(cfg, time=replace(cfg.time, run_to="t_max"))
     with pytest.raises(ValueError, match="only support explicit methods"):
         prepare(full_horizon, steps=2, method="imex", **options)
+
+    adaptive = replace(
+        full_horizon,
+        time=replace(
+            full_horizon.time, t_max=0.1, dt_max=1.0, fixed_dt=False, cfl_fac=0.01
+        ),
+    )
+    simulation = prepare(adaptive, Nl=2, Nm=2, resolved_diagnostics=False)
+    direct = run_runtime_nonlinear(
+        adaptive, Nl=2, Nm=2, resolved_diagnostics=False, return_state=True
+    )
+    for _ in range(2):
+        t, diagnostics, state, _fields = simulation.run()
+        assert len(t) > 1 and float(t[-1]) == pytest.approx(0.1)
+        np.testing.assert_allclose(t, direct.t)
+        np.testing.assert_allclose(state, direct.state)
+        np.testing.assert_allclose(
+            diagnostics.heat_flux_t, direct.diagnostics.heat_flux_t
+        )
+    with pytest.raises(ValueError, match="explicit steps"):
+        simulation.run_arrays()
+    with pytest.raises(ValueError, match="explicit steps for transformed execution"):
+        jax.jit(lambda value: simulation.run(value)[2])(state)
 
 
 def test_runtime_nonlinear_sampled_diagnostics_match_full_scan() -> None:
