@@ -339,7 +339,8 @@ energies are counted once. Diagnostic and field outputs are replicated at the
 compiled return boundary before host validation; final states remain sharded
 until an explicit global host return. Resolved histories retain their global
 replication cost. Supported fixed-step diagnostics-off runs retain the separate
-final-state integrator; fixed-step ``rk4-pi`` retains whole-state placement.
+final-state integrator; fixed-step diagnostics-off ``rk4-pi`` retains
+whole-state placement.
 
 Sources, fixed modes, active collisions, checkpointing, additional state
 sharding, unequal species moment counts and reflectionless closures retain
