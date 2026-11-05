@@ -1293,8 +1293,12 @@ def test_prepared_solve_projects_a_supplied_state_onto_the_linked_cover(
         ):
             with pytest.raises(ValueError):
                 backend.run_arrays(**override)
-        with pytest.raises(ValueError, match="requires diagnostics=False"):
-            prepare_simulation(case, Nl=2, Nm=4, steps=2)
+        diagnosed = prepare_simulation(case, Nl=2, Nm=4, steps=2)
+        full = diagnosed.solve(initial_state=supplied)
+        covered = diagnosed.solve(initial_state=on_cover)
+        assert full[0].size == 2 and full[1] is not None
+        assert np.max(np.abs(np.asarray(full[2])[off])) == 0.0
+        np.testing.assert_array_equal(full[2], covered[2])
 
 
 # ---- from test_core_ky_layout.py ----

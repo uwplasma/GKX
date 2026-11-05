@@ -1612,7 +1612,8 @@ recursive = true
 # species-Hermite fixture across both layouts and minimum valid local slabs.
 # 64790 -> 64794: exercise the adaptive named route with kinetic electrons
 # and statically disabled electromagnetic fields in the existing fixture.
-baseline = 64794
+# 64794 -> 64798: verify diagnosed linked-cover projection after enabling preparation.
+baseline = 64798
 target = 35000
 
 [[line_budget_policy.counts]]
