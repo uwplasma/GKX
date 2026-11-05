@@ -41,6 +41,7 @@ from gkx.workflows.runtime.diagnostic_arrays import (
 )
 from gkx.workflows.runtime.parallel_nonlinear import (
     NonlinearParallelPlan,
+    _integrate_species_hermite_final_state,
     assert_nonlinear_parallel_identity,
     resolve_nonlinear_parallel_plan,
     resolve_species_hermite_mesh,
@@ -284,14 +285,6 @@ class _DiagnosticPolicy:
             or self.return_state
             or self.source_on
         )
-
-
-def _status_callback(callback: Callable[[str], None] | None) -> Callable[[str], None]:
-    def status(message: str) -> None:
-        if callback is not None:
-            callback(message)
-
-    return status
 
 
 def _prepare_context(
@@ -906,17 +899,24 @@ def _run_sharded(
     if plan.axis == "species_hermite":
         plan = resolve_species_hermite_mesh(ctx.G0, plan)
     status(f"routing nonlinear run through {plan.describe()}")
-    sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
-    result, sharded_state = _run_once(
-        cfg, sharded_ctx, policy, method=method, status=status
+    named = _integrate_species_hermite_final_state(
+        cfg, ctx, policy, method=method, plan=plan, status=status
     )
+    if named is None:
+        status("using whole-state placement; named collectives do not support these settings")
+        sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
+        result, sharded_state = _run_once(cfg, sharded_ctx, policy, method=method, status=status)
+    else:
+        sharded_state, fields = named
+        result = _result(
+            ctx, policy, t=np.asarray([]), diagnostics=None, fields=fields,
+            state=sharded_state, summarize_fields=True,
+        )
     if not plan.strict_identity:
         status("parallel strict_identity=false; skipping the serial identity gate")
         return result
     status("verifying sharded nonlinear identity against the serial route")
-    serial_result, serial_state = _run_once(
-        cfg, ctx, policy, method=method, status=status
-    )
+    serial_result, serial_state = _run_once(cfg, ctx, policy, method=method, status=status)
     assert_nonlinear_parallel_identity(
         serial_state=serial_state,
         sharded_state=sharded_state,
@@ -974,7 +974,7 @@ def run_runtime_nonlinear(
         raise ValueError(
             "prepared nonlinear execution currently requires serial policy"
         )
-    status = _status_callback(status_callback)
+    status = status_callback if status_callback is not None else lambda _message: None
     ctx = _prepare_context(
         cfg,
         ky_target=ky_target,

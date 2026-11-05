@@ -16,11 +16,13 @@ optimized HLO on JAX 0.10.2), and forcing the ``ky`` split inside the jit
 instead fails on XLA:CPU, whose FFT rejects the layout the partitioner's
 all-gather leaves it. Any device count is therefore accepted on ``ky``,
 including one that does not divide ``Nyc``. ``auto = true`` picks the species x Hermite mesh from the
-visible devices and reports which one it chose. In both cases the whole
-nonlinear state is placed on the mesh and the ordinary production integrator
-runs on it, so the operator is the production nonlinear RHS rather than a
-reduced stand-in; the audited ``shard_map`` route with named collectives is
-:func:`gkx.parallel.integrators.integrate_nonlinear_species_hermite`. Every
+visible devices and reports which one it chose. Fixed-step, collision-free
+``rk2``/``rk3``/``rk4``/``sspx3`` runs with diagnostics disabled and ``run_to = "t_max"``
+use :func:`gkx.parallel.integrators.integrate_nonlinear_species_hermite` when
+no source, fixed-mode, collision-split, checkpoint, progress or additional
+state-sharding policy is requested. Other settings retain the ordinary
+production integrator with whole-state placement and report that fallback;
+whole-state placement alone does not demonstrate distributed RHS work. Every
 other strategy/axis combination raises instead of falling back to serial.
 
 ``axis = "z"`` is rejected for two independent reasons, both measured on this
@@ -376,6 +378,56 @@ def assert_nonlinear_parallel_identity(
         + ", ".join(failures)
         + ". The sharded result is discarded rather than returned."
     )
+
+
+def _integrate_species_hermite_final_state(
+    cfg: Any, ctx: Any, policy: Any, *, method: str | None,
+    plan: NonlinearParallelPlan, status: Any,
+) -> tuple[Any, Any] | None:
+    """Use named collectives only when every requested policy is supported."""
+
+    supported = (
+        plan.axis == "species_hermite"
+        and bool(cfg.time.fixed_dt)
+        and not ctx.adaptive_chunked
+        and not policy.diagnostics_on
+        and not policy.fixed_mode_on
+        and not policy.source_on
+        and not policy.show_progress
+        and not cfg.time.progress_bar
+        and str(cfg.time.run_to).strip().lower() == "t_max"
+        and not cfg.time.checkpoint
+        and not cfg.time.collision_split
+        and not cfg.time.state_sharding
+        and (method is None or method == cfg.time.method)
+        and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3"}
+        and all(
+            sp.Nl is None and sp.Nm is None and sp.hermite_closure == "hypercollision"
+            for sp in cfg.species
+        )
+        and (
+            float(ctx.terms.collisions) == 0.0
+            or not np.any(np.asarray(ctx.params.nu) != 0.0)
+        )
+    )
+    if not supported:
+        return None
+    from gkx.operators.linear.cache_builder import build_linear_cache
+    from gkx.parallel.integrators import integrate_nonlinear_species_hermite
+    from gkx.terms.assembly import compute_fields_cached
+
+    status("using named species-Hermite collectives for the fixed-step trajectory")
+    cache = build_linear_cache(ctx.grid, ctx.geom, ctx.params, *ctx.G0.shape[1:3])
+    sharded_state = integrate_nonlinear_species_hermite(
+        ctx.G0, cache, ctx.params, dt=ctx.dt, steps=ctx.steps,
+        method=cfg.time.method, terms=ctx.terms, plan=plan.mesh_plan,
+        devices=plan.devices, compressed_real_fft=cfg.time.compressed_real_fft,
+        laguerre_mode=policy.laguerre_mode,
+    ).state
+    if not bool(jnp.all(jnp.isfinite(sharded_state))):
+        raise FloatingPointError("species-Hermite integration produced a non-finite state")
+    fields = compute_fields_cached(sharded_state, cache, ctx.params, terms=ctx.terms)
+    return sharded_state, fields
 
 
 __all__ = [

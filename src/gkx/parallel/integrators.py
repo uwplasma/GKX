@@ -24,6 +24,7 @@ from gkx.operators.linear.params import (
 )
 from gkx.config import method_error
 from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
+from gkx.solvers_nonlinear_explicit import _explicit_stage_update
 from gkx.core_ky_layout import source_ny_full
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
@@ -100,77 +101,6 @@ def integrate_linear_sharded(
         G0 = jax.device_put(G0, state_sharding)
         G0 = _maybe_shard(G0)
     return run_pjit(G0)
-
-
-def _rk3_classic_update(
-    G: jnp.ndarray,
-    k1: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
-    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
-    project_shard: Callable[[jnp.ndarray], jnp.ndarray],
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    G1 = stage(G, k1, 1.0)
-    k2, _ = rhs(G1)
-    G2 = project_shard(0.75 * G + 0.25 * (G1 + dt_val * k2))
-    k3, _ = rhs(G2)
-    return (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
-
-
-def _rk3_heun_update(
-    G: jnp.ndarray,
-    k1: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
-    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    k2, _ = rhs(stage(G, k1, 1.0 / 3.0))
-    k3, _ = rhs(stage(G, k2, 2.0 / 3.0))
-    return stage(G, k3, 0.75) + 0.25 * dt_val * k1
-
-
-def _rk4_update(
-    G: jnp.ndarray,
-    k1: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
-    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    k2, _ = rhs(stage(G, k1, 0.5))
-    k3, _ = rhs(stage(G, k2, 0.5))
-    k4, _ = rhs(stage(G, k3, 1.0))
-    return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-
-
-def _nonlinear_explicit_update(
-    method_key: str,
-    G: jnp.ndarray,
-    k1: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
-    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
-    project_shard: Callable[[jnp.ndarray], jnp.ndarray],
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    if method_key == "rk2":
-        k2, _ = rhs(stage(G, k1, 0.5))
-        return G + dt_val * k2
-    if method_key == "rk3":
-        return _rk3_heun_update(G, k1, rhs=rhs, stage=stage, dt_val=dt_val)
-    if method_key == "rk4":
-        return _rk4_update(G, k1, rhs=rhs, stage=stage, dt_val=dt_val)
-    # ``sspx3`` has no sharded tableau and reuses the classic RK3 update.
-    return _rk3_classic_update(
-        G,
-        k1,
-        rhs=rhs,
-        stage=stage,
-        project_shard=project_shard,
-        dt_val=dt_val,
-    )
 
 
 @dataclass(frozen=True)
@@ -274,24 +204,11 @@ def _compiled_nonlinear_sharded_runner(
                 )
                 return jnp.asarray(dG, dtype=state_dtype), fields
 
-            def stage(
-                state: jnp.ndarray, increment: jnp.ndarray, scale: float
-            ) -> jnp.ndarray:
-                return project(
-                    state + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment
-                )
-
             G = project(G)
             k1, _ = rhs(G)
             G_next = project(
-                _nonlinear_explicit_update(
-                    method_key,
-                    G,
-                    k1,
-                    rhs=rhs,
-                    stage=stage,
-                    project_shard=project,
-                    dt_val=dt_val,
+                _explicit_stage_update(
+                    G, k1, dt_val, method=method_key, rhs_fn=rhs, project_state=project
                 )
             )
             if not return_fields:
@@ -984,21 +901,13 @@ def integrate_nonlinear_species_hermite(
         def rhs(value):
             return local_step(value, index, *rest)
 
-        def stage(value, increment, scale):
-            nxt = value + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment
-            return _project_local(nxt, projector, state_dtype)
-
         def step(carry, _unused):
             value = _project_local(carry, projector, state_dtype)
             k1, scalars = rhs(value)
-            nxt = _nonlinear_explicit_update(
-                method_key,
-                value,
-                k1,
-                rhs=lambda arg: (rhs(arg)[0], None),
-                stage=stage,
-                project_shard=lambda arg: _project_local(arg, projector, state_dtype),
-                dt_val=dt_val,
+            nxt = _explicit_stage_update(
+                value, k1, dt_val, method=method_key,
+                rhs_fn=lambda arg: (rhs(arg)[0], None),
+                project_state=lambda arg: _project_local(arg, projector, state_dtype),
             )
             nxt = _project_local(nxt, projector, state_dtype)
             return nxt, (scalars if record else None)
