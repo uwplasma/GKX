@@ -1,46 +1,26 @@
-"""Route the runtime ``[parallel]`` policy into the nonlinear solver path.
+"""Route nonlinear parallel policy without dropping requested behavior.
 
-``RuntimeParallelConfig`` used to be read only by :mod:`gkx.workflows.linear`,
-so a nonlinear TOML could ask for a sharded run and silently get a serial one.
-This module is the nonlinear half of that routing, and it is deliberately
-narrow about what it will accept.
+``species_hermite`` uses the production species x Hermite mesh, replicating
+Laguerre, perpendicular and parallel spatial axes. Auto mode selects the
+largest compatible subset of the device budget; explicit counts fail closed
+when they cannot factor. Status reports selected and budgeted devices.
 
-Supported today: ``strategy = "shard_map"`` with ``axis = "species_hermite"``
-(the production decomposition -- a ``(species, hermite)`` mesh with the
-perpendicular plane, Laguerre and ``z`` replicated) or ``axis = "ky"`` (kept as
-a routing diagnostic). The ``ky`` route does not partition the work: the
-diagnostic integrator's initial-state projection (``setup.project_state`` in
-:mod:`gkx.solvers_nonlinear_diagnostics`) returns the state replicated, so the
-compiled scan's input is ``{replicated}`` on every device (read from the
-optimized HLO on JAX 0.10.2), and forcing the ``ky`` split inside the jit
-instead fails on XLA:CPU, whose FFT rejects the layout the partitioner's
-all-gather leaves it. Any device count is therefore accepted on ``ky``,
-including one that does not divide ``Nyc``. ``auto = true`` selects the largest
-compatible multi-device subset of the device budget. Fixed-step, collision-free
-``rk2``/``rk3``/``rk4``/``sspx3`` runs with diagnostics disabled and ``run_to = "t_max"``
-use :func:`gkx.parallel.integrators.integrate_nonlinear_species_hermite` when
-no source, fixed-mode, collision-split, checkpoint, progress or additional
-state-sharding policy is requested. Other settings retain the ordinary
-production integrator with whole-state placement and report that fallback;
-whole-state placement alone does not demonstrate distributed RHS work. Every
-other strategy/axis combination raises instead of falling back to serial.
+Named collectives serve fixed-step ``rk2``/``rk3``/``rk4``/``sspx3`` final-state
+runs with diagnostics off and ``run_to="t_max"``. Active collisions, sources,
+fixed modes, checkpointing, progress, additional state sharding, unequal
+species moment counts and reflectionless closures retain the ordinary solver.
+Uniform moment stamps must match the normalized state's full dimensions.
+Fallback reports whole-state placement and does not imply distributed RHS work.
 
-``axis = "z"`` is rejected for two independent reasons, both measured on this
-stack rather than assumed:
+``ky`` is a placement diagnostic that can execute replicated work. FFT axes
+remain local; unsupported strategies and axes raise with their reasons.
 
-* the production parallel-streaming derivative is a spectral FFT along ``z``
-  (:func:`gkx.operators.linear.streaming.grad_z_periodic`), so a whole-state
-  ``z`` shard does not survive SPMD partitioning;
-* the former ``gkx.operators.nonlinear.device_z`` route was a reduced
-  diagnostic operator -- the ``-{phi,g}`` bracket with a model field solve, no
-  streaming, mirror, curvature, collisions, or species axis -- so routing a
-  production run through it would have answered a different physics question.
-
-Routing is fail-closed on numerical identity. With ``strict_identity = true``
-the same run is also executed serially and the two answers must agree, or
-:class:`NonlinearParallelIdentityError` is raised. Agreement is allclose-style:
-the maximum absolute error is within ``atol`` or the maximum relative error
-(scaled by ``max(|reference|, atol)``) is within ``rtol``.
+``strict_identity`` compares serial state and transport traces, accepting a
+maximum absolute error within ``atol`` or maximum scaled relative error within
+``rtol``. Multi-process callers must initialize JAX externally and enter on
+every rank; the selected mesh must include each process. Explicit global state
+returns gather the full array to every host. Identity checks compare local
+shards and exchange only error scalars.
 """
 
 from __future__ import annotations
@@ -52,6 +32,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax.sharding import NamedSharding, PartitionSpec
+from jax.experimental.multihost_utils import process_allgather
 
 from gkx.parallel.state import resolve_state_sharding
 from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
@@ -268,6 +249,12 @@ def resolve_species_hermite_mesh(
             "Nm exactly, so this grid supports "
             f"{', '.join(str(count) for count in supported)} devices."
         ) from exc
+    if jax.process_count() > 1 and {
+        d.process_index for d in plan.devices[: mesh_plan.num_devices]
+    } != set(range(jax.process_count())):
+        raise NonlinearParallelRoutingError(
+            "the nonlinear mesh must include a device from every initialized process"
+        )
     return replace(plan, mesh_plan=mesh_plan)
 
 
@@ -355,15 +342,24 @@ def assert_nonlinear_parallel_identity(
         sharded_diagnostics=sharded_diagnostics,
     ):
         reference = np.asarray(jax.device_get(jnp.asarray(serial_value)))
-        candidate = np.asarray(jax.device_get(jnp.asarray(sharded_value)))
+        candidate = jnp.asarray(sharded_value)
+        errors = np.zeros(2)
         if reference.shape != candidate.shape:
-            abs_error = rel_error = float("inf")
+            errors[:] = np.inf
         else:
-            error = np.abs(candidate - reference)
-            abs_error = float(np.max(error))
-            rel_error = float(
-                np.max(error / np.maximum(np.abs(reference), float(plan.atol)))
-            )
+            for shard in candidate.addressable_shards:
+                local_reference = reference[shard.index]
+                error = np.abs(np.asarray(shard.data) - local_reference)
+                errors = np.maximum(
+                    errors,
+                    [
+                        np.max(error),
+                        np.max(error / np.maximum(np.abs(local_reference), plan.atol)),
+                    ],
+                )
+        if jax.process_count() > 1:
+            errors = np.max(process_allgather(errors).reshape(-1, 2), axis=0)
+        abs_error, rel_error = map(float, errors)
         if not (abs_error <= float(plan.atol) or rel_error <= float(plan.rtol)):
             failures.append(
                 f"{name} (max_abs={abs_error:.6e}, max_rel={rel_error:.6e})"
