@@ -5,11 +5,12 @@ Laguerre, perpendicular and parallel spatial axes. Auto mode selects the
 largest compatible subset of the device budget; explicit counts fail closed
 when they cannot factor. Status reports selected and budgeted devices.
 
-Named collectives serve fixed-step ``rk2``/``rk3``/``rk4``/``sspx3`` final-state
-runs with diagnostics off and ``run_to="t_max"``. Active collisions, sources,
-fixed modes, checkpointing, progress, additional state sharding, unequal
-species moment counts and reflectionless closures retain the ordinary solver.
-Uniform moment stamps must match the normalized state's full dimensions.
+Named collectives serve fixed-step ``rk2``/``rk3``/``rk4``/``sspx3`` runs
+with ``run_to="t_max"``, using the production post-step diagnostic contract or
+the diagnostics-off final-state scan. Adaptive/stop policies, active collisions,
+sources, fixed modes, checkpointing, progress, additional state sharding,
+unequal species moment counts and reflectionless closures retain the ordinary
+solver. Uniform moment stamps must match the normalized state's dimensions.
 Fallback reports whole-state placement and does not imply distributed RHS work.
 
 ``ky`` is a single-process placement diagnostic with replicated work. FFT axes
@@ -406,6 +407,25 @@ def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
             float(ctx.terms.collisions) == 0.0
             or not np.any(np.asarray(ctx.params.nu) != 0.0)
         )
+    )
+
+
+def _species_hermite_diagnostic_rhs(
+    prepared, policies, *, params, plan, compressed_real_fft, laguerre_mode
+):
+    """Build the staged named RHS for the shared production diagnostic scan."""
+
+    from gkx.parallel.integrators import _prepare_species_hermite_rhs
+
+    return _prepare_species_hermite_rhs(
+        prepared.G0,
+        prepared.cache,
+        params,
+        terms=policies.collision_policy.rhs_terms,
+        plan=plan.mesh_plan,
+        devices=plan.devices,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
     )
 
 

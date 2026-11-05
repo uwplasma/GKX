@@ -538,7 +538,9 @@ path = "workflows/nonlinear.py"
 # +2: refuse the linear-only nodal mu grid in the nonlinear context.
 # 1045 -> 1068: shared lazy preparation and bounded named final-state dispatch.
 # Reuses the existing backend and policy guards; measured, target unchanged.
-baseline_lines = 1068
+# 1068 -> 1097: named diagnosed RHS reuses the existing one-shot diagnostic
+# runner, finite checks and result handling; no second diagnostic scan.
+baseline_lines = 1097
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -1223,7 +1225,9 @@ recursive = true
 # 69159 -> 69271: the chain IMEX factor, probes and collision sub-step per species group at the group's own (Nl, Nm). Measured.
 # 69271 -> 69331: reusable named preparation shares existing backend/trajectory
 # factories and normalizes equivalent distributed placements. Measured.
-baseline = 69331
+# 69331 -> 69440: fixed-step named diagnosed RHS and shared production
+# diagnostic runner, including the separate sampled-gradient prerequisite.
+baseline = 69440
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1593,7 +1597,9 @@ recursive = true
 # 64592 -> 64646: per-species-count IMEX factor test (ions keep fewer moments than the state). Measured.
 # 64646 -> 64688: extend the existing linked-cover prepared test with the named
 # result tuple, state AD/FD, equivalent placement and unsupported overrides.
-baseline = 64688
+# 64688 -> 64707: extend existing nonlinear routing identity coverage to the
+# named route, all scalar/resolved channels and a partial saved cadence.
+baseline = 64707
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -327,14 +327,21 @@ the production mesh are ``species_hermite``, ``velocity``, ``s_m``, ``species``,
 diagnostic: ``num_devices`` must divide the ``k_y`` extent the state actually
 stores, and the refusal names the layout that extent came from.
 
-The ``species_hermite`` runtime uses the named collective integrator for
-fixed-step ``rk2``, ``rk3``, ``rk4`` and ``sspx3`` final-state runs with
-diagnostics disabled and ``run_to = "t_max"``. Sources, fixed modes, active
-collisions, checkpointing, progress, additional state sharding, unequal species
-moment counts and reflectionless closures retain ordinary whole-state
-placement. The status message distinguishes these routes. ``ky`` remains a
-whole-state placement diagnostic. All routes use the production nonlinear
-operator; none of these routing capabilities alone establishes a speedup.
+The ``species_hermite`` runtime uses named collectives for fixed-step
+``rk2``, ``rk3``, ``rk4`` and ``sspx3`` runs with ``run_to = "t_max"``.
+Diagnosed runs reuse the production post-step scan and its complete scalar,
+per-species and optional resolved diagnostic contract, including saved cadence
+and the final off-cadence sample. Distribution reductions operate over the
+partitioned logical state; replicated field energies are counted once.
+Diagnostics-off runs retain the final-state integrator.
+
+Adaptive stepping, saturation stopping, sources, fixed modes, active collisions,
+checkpointing, progress, additional state sharding, unequal species moment
+counts and reflectionless closures retain ordinary whole-state placement.
+In particular, the usual adaptive/saturation CLI policy is still outside the
+named route. Status distinguishes the chosen route. ``ky`` remains a
+whole-state placement diagnostic. These routing capabilities establish no
+throughput, aggregate-memory-capacity or multi-node scaling guarantee.
 
 Routing is fail-closed on numerical identity. With ``strict_identity = true``
 the run is also executed serially and the two answers must agree on the final
