@@ -47,6 +47,8 @@ from gkx.workflows.runtime.diagnostic_arrays import (
 from gkx.workflows.runtime.parallel_nonlinear import (
     NonlinearParallelPlan,
     _integrate_species_hermite_final_state,
+    _supports_species_hermite_policy,
+    _species_hermite_diagnostic_rhs,
     assert_nonlinear_parallel_identity,
     resolve_nonlinear_parallel_plan,
     resolve_species_hermite_mesh,
@@ -689,6 +691,7 @@ def _run_diagnostics(
     *,
     method: str | None,
     status: Callable[[str], None],
+    rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
     status(
         f"sample_stride={policy.sample_stride} "
@@ -738,13 +741,21 @@ def _run_diagnostics(
         fixed_dt=bool(cfg.time.fixed_dt),
         show_progress=policy.show_progress,
     )
-    t, diag, G_final, fields_final = integrate_nonlinear_explicit_diagnostics_state(
-        ctx.G0,
-        ctx.grid,
-        ctx.geom,
-        ctx.params,
-        **kwargs,
-    )
+    if rhs_factory is None:
+        t, diag, G_final, fields_final = integrate_nonlinear_explicit_diagnostics_state(
+            ctx.G0,
+            ctx.grid,
+            ctx.geom,
+            ctx.params,
+            **kwargs,
+        )
+    else:
+        t, named_diag, G_final, fields_final = prepare_nonlinear_explicit_diagnostics(
+            ctx.G0, ctx.grid, ctx.geom, ctx.params, _rhs_factory=rhs_factory, **kwargs
+        ).run()
+        if named_diag is None:
+            raise RuntimeError("named diagnosed integration requires diagnostics")
+        diag = named_diag
     validate_finite_runtime_diagnostics(diag, label="fixed-step nonlinear run")
     return t, diag, G_final, fields_final, None
 
@@ -853,6 +864,7 @@ def _run_once(
     *,
     method: str | None,
     status: Callable[[str], None],
+    rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[RuntimeNonlinearResult, Any]:
     if (
         not policy.requires_diagnostic_path
@@ -862,7 +874,7 @@ def _run_once(
         return _run_final_state(cfg, ctx, policy, status=status)
 
     t, diag, G_final, fields_final, saturation = _run_diagnostics(
-        cfg, ctx, policy, method=method, status=status
+        cfg, ctx, policy, method=method, status=status, rhs_factory=rhs_factory
     )
     result = _diagnostic_run_result(
         ctx,
@@ -892,32 +904,49 @@ def _run_sharded(
     if plan.axis == "species_hermite":
         plan = resolve_species_hermite_mesh(ctx.G0, plan)
     status(f"routing nonlinear run through {plan.describe()}")
-    named = _integrate_species_hermite_final_state(
-        cfg, ctx, policy, method=method, plan=plan, status=status, prepare=prepare
-    )
-    if prepare is not None:
-        if named is None:
-            raise ValueError("unsupported fixed-step parallel preparation policy")
-        return named
-    if named is None:
-        status(
-            "using whole-state placement; named collectives do not support these settings"
+    if (
+        prepare is None
+        and policy.diagnostics_on
+        and _supports_species_hermite_policy(cfg, ctx, policy, method=method, plan=plan)
+    ):
+        rhs_factory = partial(
+            _species_hermite_diagnostic_rhs,
+            params=ctx.params,
+            plan=plan,
+            compressed_real_fft=cfg.time.compressed_real_fft,
+            laguerre_mode=policy.laguerre_mode,
         )
-        sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
+        status("using named species-Hermite RHS with production post-step diagnostics")
         result, sharded_state = _run_once(
-            cfg, sharded_ctx, policy, method=method, status=status
+            cfg, ctx, policy, method=method, status=status, rhs_factory=rhs_factory
         )
     else:
-        sharded_state, fields = named
-        result = _result(
-            ctx,
-            policy,
-            t=np.asarray([]),
-            diagnostics=None,
-            fields=fields,
-            state=sharded_state,
-            summarize_fields=True,
+        named = _integrate_species_hermite_final_state(
+            cfg, ctx, policy, method=method, plan=plan, status=status, prepare=prepare
         )
+        if prepare is not None:
+            if named is None:
+                raise ValueError("unsupported fixed-step parallel preparation policy")
+            return named
+        if named is None:
+            status(
+                "using whole-state placement; named collectives do not support these settings"
+            )
+            sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
+            result, sharded_state = _run_once(
+                cfg, sharded_ctx, policy, method=method, status=status
+            )
+        else:
+            sharded_state, fields = named
+            result = _result(
+                ctx,
+                policy,
+                t=np.asarray([]),
+                diagnostics=None,
+                fields=fields,
+                state=sharded_state,
+                summarize_fields=True,
+            )
     if not plan.strict_identity:
         status("parallel strict_identity=false; skipping the serial identity gate")
         return result

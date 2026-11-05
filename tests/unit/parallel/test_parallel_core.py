@@ -1234,8 +1234,9 @@ def test_identity_gate_reports_a_shape_mismatch_as_a_failure() -> None:
 
 @pytest.mark.parametrize("ky_layout", ["full", "half"])
 @pytest.mark.parametrize("num_devices", [2, 4])
+@pytest.mark.parametrize("axis", ["ky", "species_hermite"])
 def test_shard_map_nonlinear_run_matches_serial_diagnostics(
-    num_devices: int, ky_layout: str
+    num_devices: int, ky_layout: str, axis: str
 ) -> None:
     """A sharded nonlinear run reproduces the serial run's diagnostics.
 
@@ -1244,19 +1245,31 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     """
 
     _require_devices(num_devices)
-    serial = run_runtime_nonlinear(
-        _live_cfg(ky_layout=ky_layout), return_state=True, **_RUN_KWARGS
-    )
-    sharded = run_runtime_nonlinear(
-        _live_cfg(
-            RuntimeParallelConfig(
-                strategy="shard_map", axis="ky", num_devices=num_devices
-            ),
-            ky_layout=ky_layout,
-        ),
-        return_state=True,
+    cfg = _live_cfg(ky_layout=ky_layout)
+    cfg = replace(cfg, time=replace(cfg.time, run_to="t_max"))
+    options = {
         **_RUN_KWARGS,
+        "Nm": 8,
+        "steps": 5,
+        "sample_stride": 3,
+        "diagnostics_stride": 2,
+        "return_state": True,
+    }
+    serial = run_runtime_nonlinear(cfg, **options)
+    messages = []
+    sharded = run_runtime_nonlinear(
+        replace(
+            cfg,
+            parallel=RuntimeParallelConfig(
+                strategy="shard_map", axis=axis, num_devices=num_devices
+            ),
+        ),
+        status_callback=messages.append,
+        **options,
     )
+    if axis == "species_hermite":
+        assert any("RHS with production post-step diagnostics" in m for m in messages)
+    np.testing.assert_allclose(sharded.t, [0.01, 0.04, 0.05])
     assert np.asarray(sharded.state).shape[-3] == (8 if ky_layout == "full" else 5)
     assert serial.diagnostics is not None and sharded.diagnostics is not None
     # The live deck's field energy is nonzero, so the comparison can fail.
@@ -1264,13 +1277,21 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     np.testing.assert_allclose(
         np.asarray(sharded.state), np.asarray(serial.state), rtol=0.0, atol=5.0e-6
     )
-    for name in ("Wg_t", "Wphi_t", "heat_flux_t", "particle_flux_t"):
-        np.testing.assert_allclose(
-            np.asarray(getattr(sharded.diagnostics, name)),
-            np.asarray(getattr(serial.diagnostics, name)),
-            rtol=1.0e-4,
-            atol=5.0e-6,
-        )
+    pairs = [
+        (value, getattr(serial.diagnostics, name))
+        for name, value in vars(sharded.diagnostics).items()
+        if name != "resolved" and value is not None
+    ]
+    assert sharded.diagnostics.resolved is not None
+    assert serial.diagnostics.resolved is not None
+    pairs.extend(
+        (value, getattr(serial.diagnostics.resolved, name))
+        for name, value in vars(sharded.diagnostics.resolved).items()
+    )
+    for candidate, reference in pairs:
+        np.testing.assert_allclose(candidate, reference, rtol=1.0e-4, atol=5.0e-6)
+        if axis == "species_hermite":
+            assert getattr(candidate, "is_fully_replicated", True)
 
 
 def _inject_shard_perturbation(monkeypatch) -> None:

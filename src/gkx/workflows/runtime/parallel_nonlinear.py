@@ -5,11 +5,12 @@ Laguerre, perpendicular and parallel spatial axes. Auto mode selects the
 largest compatible subset of the device budget; explicit counts fail closed
 when they cannot factor. Status reports selected and budgeted devices.
 
-Named collectives serve fixed-step ``rk2``/``rk3``/``rk4``/``sspx3`` final-state
-runs with diagnostics off and ``run_to="t_max"``. Active collisions, sources,
-fixed modes, checkpointing, progress, additional state sharding, unequal
-species moment counts and reflectionless closures retain the ordinary solver.
-Uniform moment stamps must match the normalized state's full dimensions.
+Named collectives serve fixed-step ``rk2``/``rk3``/``rk4``/``sspx3`` runs
+with ``run_to="t_max"``, using the production post-step diagnostic contract or
+the diagnostics-off final-state scan. Adaptive/stop policies, active collisions,
+sources, fixed modes, checkpointing, progress, additional state sharding,
+unequal species moment counts and reflectionless closures retain the ordinary
+solver. Uniform moment stamps must match the normalized state's dimensions.
 Fallback reports whole-state placement and does not imply distributed RHS work.
 
 ``ky`` is a single-process placement diagnostic with replicated work. FFT axes
@@ -400,24 +401,13 @@ def assert_nonlinear_parallel_identity(
     )
 
 
-def _integrate_species_hermite_final_state(
-    cfg: Any,
-    ctx: Any,
-    policy: Any,
-    *,
-    method: str | None,
-    plan: NonlinearParallelPlan,
-    status: Any,
-    prepare: Callable[[], Any] | None = None,
-) -> Any:
-    """Use named collectives only when every requested policy is supported."""
+def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
+    """Check shared fixed-step named-collective physics and runtime limits."""
 
-    supported = (
+    return (
         plan.axis == "species_hermite"
-        and (prepare is None or not plan.strict_identity)
         and bool(cfg.time.fixed_dt)
         and not ctx.adaptive_chunked
-        and not policy.diagnostics_on
         and not policy.fixed_mode_on
         and not policy.source_on
         and not policy.show_progress
@@ -440,7 +430,46 @@ def _integrate_species_hermite_final_state(
             or not np.any(np.asarray(ctx.params.nu) != 0.0)
         )
     )
-    if not supported:
+
+
+def _species_hermite_diagnostic_rhs(
+    prepared, policies, *, params, plan, compressed_real_fft, laguerre_mode
+):
+    """Build the staged named RHS for the shared production diagnostic scan."""
+
+    from gkx.parallel.integrators import _prepare_species_hermite_rhs
+
+    return _prepare_species_hermite_rhs(
+        prepared.G0,
+        prepared.cache,
+        params,
+        terms=policies.collision_policy.rhs_terms,
+        plan=plan.mesh_plan,
+        devices=plan.devices,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+    )
+
+
+def _integrate_species_hermite_final_state(
+    cfg: Any,
+    ctx: Any,
+    policy: Any,
+    *,
+    method: str | None,
+    plan: NonlinearParallelPlan,
+    status: Any,
+    prepare: Callable[[], Any] | None = None,
+) -> Any:
+    """Use named collectives only when every requested policy is supported."""
+
+    if (
+        policy.diagnostics_on
+        or (prepare is not None and plan.strict_identity)
+        or not _supports_species_hermite_policy(
+            cfg, ctx, policy, method=method, plan=plan
+        )
+    ):
         return None
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.parallel.integrators import _prepare_nonlinear_species_hermite

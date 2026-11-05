@@ -278,7 +278,7 @@ class PreparedExplicitNonlinearDiagnostics:
     def with_chain(self, chain: Any) -> PreparedExplicitNonlinearDiagnostics:
         """Same compiled scan with another operator of the same structure."""
         run = self._run_raw
-        return replace(self, _run_raw=partial(run.func, chain=chain))  # type: ignore[attr-defined]
+        return replace(self, _run_raw=partial(run, chain=chain))
 
     def run(
         self,
@@ -780,6 +780,7 @@ def _build_explicit_scan_closures(
     params: LinearParams,
     *,
     options: _ExplicitDiagnosticOptions,
+    rhs_fn: Callable[..., Any] | None = None,
 ) -> tuple[Callable[..., Any], Callable[..., Any]]:
     """Build diagnostic scan closures after state and policies are prepared."""
 
@@ -815,14 +816,15 @@ def _build_explicit_scan_closures(
                 rhs_terms=replace(chain_terms, collisions=0.0),
             ),
         )
-    rhs_fn = _make_explicit_rhs_fn(
-        prepared,
-        policies,
-        params,
-        compressed_real_fft=options.compressed_real_fft,
-        laguerre_mode=options.laguerre_mode,
-        external_phi=options.external_phi,
-    )
+    if rhs_fn is None:
+        rhs_fn = _make_explicit_rhs_fn(
+            prepared,
+            policies,
+            params,
+            compressed_real_fft=options.compressed_real_fft,
+            laguerre_mode=options.laguerre_mode,
+            external_phi=options.external_phi,
+        )
     if options.method in {"imex-ars3", "imex-ark3"}:
         rhs_fn = _attach_chain_implicit_linear(
             rhs_fn,
@@ -1022,9 +1024,22 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     external_phi: jnp.ndarray | float | None = None,
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
+    _rhs_factory: Callable[..., Any] | None = None,
 ) -> PreparedExplicitNonlinearDiagnostics:
     """Prepare one compile-stable explicit nonlinear diagnostic simulation."""
 
+    if _rhs_factory is not None and (
+        not fixed_dt
+        or method not in {"rk2", "rk3", "rk4", "sspx3"}
+        or checkpoint
+        or collision_split
+        or external_phi is not None
+        or fixed_mode_ky_index is not None
+        or fixed_mode_kx_index is not None
+        or show_progress
+        or time_horizon is not None
+    ):
+        raise ValueError("named diagnostics require supported fixed-step policy")
     options = _explicit_options_from_values(locals())
     components = _build_explicit_scan_components(
         G0,
@@ -1035,6 +1050,11 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         terms=terms,
         options=options,
     )
+    named_rhs, named_sharding = (
+        _rhs_factory(components.prepared, components.policies)
+        if _rhs_factory is not None
+        else (None, None)
+    )
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
 
@@ -1043,11 +1063,23 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         time_horizon: jnp.ndarray | None = None,
         chain: Any = None,
         initial_dt: jnp.ndarray | None = None,
+        rhs_fn: Any = None,
     ) -> tuple[Any, Any, Any, Any]:
+        if rhs_fn is not None and time_horizon is not None:
+            raise ValueError("named diagnostics do not support horizon overrides")
         step = components.step
-        if time_horizon is not None:
-            step = step.with_horizon(time_horizon=time_horizon)  # type: ignore[attr-defined]
-        with _bound_chain(components.step, chain):
+        if rhs_fn is not None:
+            step, _ = _build_explicit_scan_closures(
+                components.prepared,
+                components.policies,
+                grid,
+                params,
+                options=options,
+                rhs_fn=rhs_fn,
+            )
+        with _bound_chain(step, chain):
+            if time_horizon is not None:
+                step = step.with_horizon(time_horizon=time_horizon)  # type: ignore[attr-defined]
             return _run_explicit_diagnostic_scan_raw(
                 components.prepared,
                 components.policies,
@@ -1069,6 +1101,8 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         dynamic_cache: LinearCache,
         dynamic_params: LinearParams,
     ) -> tuple[Any, Any, Any, Any]:
+        if named_rhs is not None:
+            raise ValueError("named diagnostics do not support model overrides")
         dynamic_setup = build_nonlinear_diagnostic_setup(
             initial_state,
             grid,
@@ -1129,14 +1163,22 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         )
 
     chain = _chain_operand(components.step)
+    output_shardings = None
+    if named_sharding is not None:
+        replicated = jax.sharding.NamedSharding(
+            named_sharding.mesh, jax.sharding.PartitionSpec()
+        )
+        output_shardings = (named_sharding, replicated, replicated, replicated)
     return PreparedExplicitNonlinearDiagnostics(
         initial_state=components.prepared.G0,
         geometry=components.prepared.setup.geom,
         cache=components.prepared.cache,
         params=params,
-        _run_raw=jax.jit(run_raw)
-        if chain is None
-        else partial(jax.jit(run_raw), chain=chain),
+        _run_raw=partial(
+            jax.jit(run_raw, out_shardings=output_shardings),
+            chain=chain,
+            rhs_fn=named_rhs,
+        ),
         _run_dynamic_raw=jax.jit(run_dynamic_raw),
         _finalize=finalize_nonlinear_scan_diagnostics,
         stride=stride,

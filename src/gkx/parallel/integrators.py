@@ -760,6 +760,7 @@ def _species_hermite_mapped(
     laguerre_mode,
     vol_fac,
     flux_fac,
+    return_fields=False,
 ):
     """Return the shard-mapped step callable plus its sharded argument tuple."""
 
@@ -829,7 +830,10 @@ def _species_hermite_mapped(
             if vol_fac is not None and flux_fac is not None
             else None
         )
-        return dG, scalars
+        if return_fields and nm_chunks == 1:
+            # Discharge the unit Hermite axis's varying metadata explicitly.
+            fields = jax.tree.map(lambda value: jax.lax.psum(value, "m"), fields)
+        return dG, fields if return_fields else scalars
 
     sharded = tuple(
         stage_from_host(value, jsharding.NamedSharding(mesh, spec))
@@ -988,6 +992,53 @@ def _prepare_nonlinear_species_hermite(
         )
 
     return jax.tree_util.Partial(execute, leaves)
+
+
+def _prepare_species_hermite_rhs(
+    G0,
+    cache,
+    params,
+    *,
+    terms,
+    plan,
+    devices,
+    compressed_real_fft=True,
+    laguerre_mode="grid",
+):
+    """Return the staged named RHS and its global state placement."""
+    mesh, resolved, state_spec = _resolve_species_hermite_placement(
+        G0, cache, params, plan=plan, devices=devices, num_devices=None
+    )
+    _reject_unsharded_hermite_terms(terms, params, resolved)
+    local, leaves, specs, _ = _species_hermite_mapped(
+        G0,
+        cache,
+        params,
+        None,
+        term_cfg=terms,
+        plan=resolved,
+        mesh=mesh,
+        state_spec=state_spec,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        vol_fac=None,
+        flux_fac=None,
+        return_fields=True,
+    )
+    mapped = jax.shard_map(
+        local,
+        mesh=mesh,
+        in_specs=(state_spec,) + specs,
+        out_specs=(state_spec, jax.sharding.PartitionSpec()),
+        axis_names={"s", "m"},
+        check_vma=_CHECK_VMA,
+    )
+    sharding = jax.sharding.NamedSharding(mesh, state_spec)
+
+    def execute(operands, state):
+        return mapped(stage_from_host(state, sharding), *operands)
+
+    return jax.tree_util.Partial(execute, leaves), sharding
 
 
 def _project_local(value, projector, dtype):
