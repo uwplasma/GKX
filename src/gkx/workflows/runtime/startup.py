@@ -454,8 +454,7 @@ def build_runtime_linear_params(
         )
     )
 
-    species = _species_to_linear(cfg.species)
-    nu_ei = cfg._electron_ion_rates()
+    species, nu_ei = _species_to_linear(cfg.species), cfg._electron_ion_rates()
     has_kinetic_electron = any(float(s.charge) < 0.0 for s in species)
     has_kinetic_ion = any(float(s.charge) > 0.0 for s in species)
     if cfg.physics.adiabatic_electrons and cfg.physics.adiabatic_ions:
