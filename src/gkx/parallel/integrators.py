@@ -905,7 +905,10 @@ def integrate_nonlinear_species_hermite(
             value = _project_local(carry, projector, state_dtype)
             k1, scalars = rhs(value)
             nxt = _explicit_stage_update(
-                value, k1, dt_val, method=method_key,
+                value,
+                k1,
+                dt_val,
+                method=method_key,
                 rhs_fn=lambda arg: (rhs(arg)[0], None),
                 project_state=lambda arg: _project_local(arg, projector, state_dtype),
             )

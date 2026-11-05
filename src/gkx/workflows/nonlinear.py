@@ -830,27 +830,19 @@ def _diagnostic_run_result(
 ) -> RuntimeNonlinearResult:
     if policy.diagnostics_on:
         status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
-        return _result(
-            ctx,
-            policy,
-            t=t,
-            diagnostics=diagnostics,
-            fields=fields,
-            state=state,
-            summarize_fields=False,
-            saturation=saturation,
-        )
-    if fields is None:
+    elif fields is None:
         raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
-    status("diagnostics disabled; returning final nonlinear field summary")
+    else:
+        status("diagnostics disabled; returning final nonlinear field summary")
     return _result(
         ctx,
         policy,
-        t=np.asarray([]),
-        diagnostics=None,
+        t=t if policy.diagnostics_on else np.asarray([]),
+        diagnostics=diagnostics if policy.diagnostics_on else None,
         fields=fields,
         state=state,
-        summarize_fields=True,
+        summarize_fields=not policy.diagnostics_on,
+        saturation=saturation if policy.diagnostics_on else None,
     )
 
 
@@ -862,27 +854,23 @@ def _run_once(
     method: str | None,
     status: Callable[[str], None],
 ) -> tuple[RuntimeNonlinearResult, Any]:
-    """Run one nonlinear trajectory and return its result plus its final state."""
-
     if not policy.requires_diagnostic_path and not ctx.adaptive_chunked:
         return _run_final_state(cfg, ctx, policy, status=status)
 
     t, diag, G_final, fields_final, saturation = _run_diagnostics(
         cfg, ctx, policy, method=method, status=status
     )
-    return (
-        _diagnostic_run_result(
-            ctx,
-            policy,
-            t=t,
-            diagnostics=diag,
-            fields=fields_final,
-            state=G_final,
-            saturation=saturation,
-            status=status,
-        ),
-        G_final,
+    result = _diagnostic_run_result(
+        ctx,
+        policy,
+        t=t,
+        diagnostics=diag,
+        fields=fields_final,
+        state=G_final,
+        saturation=saturation,
+        status=status,
     )
+    return result, G_final
 
 
 def _run_sharded(
@@ -903,20 +891,31 @@ def _run_sharded(
         cfg, ctx, policy, method=method, plan=plan, status=status
     )
     if named is None:
-        status("using whole-state placement; named collectives do not support these settings")
+        status(
+            "using whole-state placement; named collectives do not support these settings"
+        )
         sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
-        result, sharded_state = _run_once(cfg, sharded_ctx, policy, method=method, status=status)
+        result, sharded_state = _run_once(
+            cfg, sharded_ctx, policy, method=method, status=status
+        )
     else:
         sharded_state, fields = named
         result = _result(
-            ctx, policy, t=np.asarray([]), diagnostics=None, fields=fields,
-            state=sharded_state, summarize_fields=True,
+            ctx,
+            policy,
+            t=np.asarray([]),
+            diagnostics=None,
+            fields=fields,
+            state=sharded_state,
+            summarize_fields=True,
         )
     if not plan.strict_identity:
         status("parallel strict_identity=false; skipping the serial identity gate")
         return result
     status("verifying sharded nonlinear identity against the serial route")
-    serial_result, serial_state = _run_once(cfg, ctx, policy, method=method, status=status)
+    serial_result, serial_state = _run_once(
+        cfg, ctx, policy, method=method, status=status
+    )
     assert_nonlinear_parallel_identity(
         serial_state=serial_state,
         sharded_state=sharded_state,

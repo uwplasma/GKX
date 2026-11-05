@@ -381,8 +381,13 @@ def assert_nonlinear_parallel_identity(
 
 
 def _integrate_species_hermite_final_state(
-    cfg: Any, ctx: Any, policy: Any, *, method: str | None,
-    plan: NonlinearParallelPlan, status: Any,
+    cfg: Any,
+    ctx: Any,
+    policy: Any,
+    *,
+    method: str | None,
+    plan: NonlinearParallelPlan,
+    status: Any,
 ) -> tuple[Any, Any] | None:
     """Use named collectives only when every requested policy is supported."""
 
@@ -419,13 +424,22 @@ def _integrate_species_hermite_final_state(
     status("using named species-Hermite collectives for the fixed-step trajectory")
     cache = build_linear_cache(ctx.grid, ctx.geom, ctx.params, *ctx.G0.shape[1:3])
     sharded_state = integrate_nonlinear_species_hermite(
-        ctx.G0, cache, ctx.params, dt=ctx.dt, steps=ctx.steps,
-        method=cfg.time.method, terms=ctx.terms, plan=plan.mesh_plan,
-        devices=plan.devices, compressed_real_fft=cfg.time.compressed_real_fft,
+        ctx.G0,
+        cache,
+        ctx.params,
+        dt=ctx.dt,
+        steps=ctx.steps,
+        method=cfg.time.method,
+        terms=ctx.terms,
+        plan=plan.mesh_plan,
+        devices=plan.devices,
+        compressed_real_fft=cfg.time.compressed_real_fft,
         laguerre_mode=policy.laguerre_mode,
     ).state
     if not bool(jnp.all(jnp.isfinite(sharded_state))):
-        raise FloatingPointError("species-Hermite integration produced a non-finite state")
+        raise FloatingPointError(
+            "species-Hermite integration produced a non-finite state"
+        )
     fields = compute_fields_cached(sharded_state, cache, ctx.params, terms=ctx.terms)
     return sharded_state, fields
 
