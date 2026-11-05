@@ -430,7 +430,7 @@ def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
 
 
 def _species_hermite_diagnostic_rhs(
-    prepared, policies, *, params, plan, compressed_real_fft, laguerre_mode
+    prepared, policies, params, *, plan, compressed_real_fft, laguerre_mode
 ):
     """Build the staged named RHS for the shared production diagnostic scan."""
 

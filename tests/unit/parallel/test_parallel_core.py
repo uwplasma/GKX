@@ -19,6 +19,8 @@ import gkx.parallel.independent as parallel_batch
 import gkx.parallel.independent as parallel_independent
 from dataclasses import replace
 import gkx.workflows.nonlinear as nonlinear_workflow
+from gkx.core_grid import build_spectral_grid
+from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.config import GeometryConfig, GridConfig, InitializationConfig, TimeConfig
 from gkx.runtime import (
     run_runtime_nonlinear,
@@ -1317,6 +1319,31 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
             for value, target in zip(*gradients):
                 np.testing.assert_allclose(value, target, rtol=1e-4, atol=5e-6)
             assert float(jnp.linalg.norm(gradients[0][1])) > 0
+
+        def model_loss(scale, model):
+            backend = model._backend
+            params = replace(backend.params, rho=backend.params.rho * (1 + 0.1 * scale))
+            geometry = replace(
+                backend.geometry,
+                bmag_profile=backend.geometry.bmag_profile * (1 + 0.07 * scale),
+            )
+            cache = build_linear_cache(
+                build_spectral_grid(cfg.grid), geometry, params, 3, 8
+            )
+            _, _, fields = backend.run_arrays(
+                sharded.state, geometry=geometry, cache=cache, params=params
+            )
+            return jnp.real(jnp.vdot(fields.phi, fields.phi))
+
+        model_gradients = [
+            jax.value_and_grad(model_loss)(jnp.asarray(0.15), m)
+            for m in (reference, named)
+        ]
+        for value, target in zip(*model_gradients):
+            np.testing.assert_allclose(value, target, rtol=1e-5, atol=1e-10)
+        fd = (model_loss(0.20, named) - model_loss(0.10, named)) / 0.10
+        assert abs(float(model_gradients[1][1])) > 0
+        np.testing.assert_allclose(model_gradients[1][1], fd, rtol=1e-3, atol=1e-10)
 
 
 def _inject_shard_perturbation(monkeypatch) -> None:
