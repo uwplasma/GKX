@@ -3267,6 +3267,13 @@ def test_saturation_stop_condition_defaults_on_for_diagnosed_nonlinear_runs() ->
     time = np.arange(16.0)
     with pytest.raises(ValueError, match="free_energy_guard"):
         stop(time, np.ones_like(time), np.ones_like(time), np.ones(15))
+    time = np.cumsum(np.where(np.arange(1024) % 2, 0.02, 0.01))
+    decision = stop(time, time, 2 * time, 3 * time)
+    assert decision["analysis"]["n_window_unit"] == "complete_bins"
+    assert decision["mean"] == pytest.approx(
+        (decision["window_tmin"] + decision["window_tmax"]) / 2
+    )
+    assert decision["saturated"] is False
 
 
 @pytest.mark.parametrize(

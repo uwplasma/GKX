@@ -1217,7 +1217,9 @@ recursive = true
 # 69180 -> 69183: the log-linear growth-fit fallback requires a late-time share of the run, so a few-sample transient window cannot be reported as a rate. Measured.
 # 69183 -> 69159: terms/assembly.py (1208 -> 1191) and workflows/runtime/startup.py (1201 -> 1194) back under the 1200-line tripwire by collapsing duplicated field-by-field assembly; both exceptions deleted. Measured.
 # 69159 -> 69271: the chain IMEX factor, probes and collision sub-step per species group at the group's own (Nl, Nm). Measured.
-baseline = 69271
+# Physical-time batches share the saturation core and bound quadrature workspace;
+# measured source growth preserves the existing file and per-owner ceilings.
+baseline = 69438
 target = 45000
 
 [[line_budget_policy.counts]]
