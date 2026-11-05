@@ -1326,7 +1326,7 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
         ]
         for value, target in zip(*model_gradients):
             np.testing.assert_allclose(value, target, rtol=1e-5, atol=1e-10)
-        fd = (model_loss(0.151, named) - model_loss(0.149, named)) / 0.002
+        fd = (model_loss(0.20, named) - model_loss(0.10, named)) / 0.10
         assert abs(float(model_gradients[1][1])) > 0
         np.testing.assert_allclose(model_gradients[1][1], fd, rtol=1e-3, atol=1e-10)
 
