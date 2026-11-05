@@ -1,26 +1,6 @@
-"""The one figure a finished nonlinear run is read from.
-
-The individual figures a run writes each answer one question. A person opening
-a result directory for the first time has a different question -- *what
-happened?* -- and answering it from six PNGs means knowing which to open in
-which order. This module composes the single page that answers it: the flux
-traces with the window the run actually measured, the ``ky`` spectra that say
-which scales carry the transport, the real-space potential, and a text panel
-naming the equilibrium, the resolution, the deck, and the saturated
-``<Q> +/- SEM``.
-
-Nothing here re-derives a figure. The panels are drawn by the same functions
-that draw them standalone (:mod:`gkx.artifacts.transport_figures` and
-:mod:`gkx.artifacts.run_summary`), through their ``axes=``/``panels=``
-arguments, so the summary cannot drift away from the figures it summarizes.
-
-The one thing this module does own is reading the *final field* sidecar. The
-``*.out.nc`` history carries spectra but no potential; the potential lives in
-the ``*.big.nc`` companion, stored through ``numpy.fft.ifft2`` and therefore
-scaled by ``1/(Ny Nx)`` relative to the convention the solver and
-:func:`gkx.artifacts.run_summary.potential_real_space` use. Undoing that here is
-what keeps the amplitude on the colorbar the same number the rest of the run
-reports.
+"""Compose nonlinear traces, spectra, final potential, and recorded statistics.
+Panels reuse the standalone figure functions. Final potential comes from the
+``*.big.nc`` sidecar; undo its ``1/(Ny Nx)`` FFT scaling before displaying it.
 """
 
 from __future__ import annotations
@@ -613,17 +593,20 @@ def _flux_lines(
     window: tuple[float, float] | None,
     measured: bool,
     saturated: bool | None = None,
+    source: Any = None,
 ) -> list[tuple[str, str]]:
     """Stop time, averaging window, and the windowed mean +/- SEM of Q and Gamma."""
 
-    from gkx.artifacts.transport_figures import _mean_sem, _time_window
+    from gkx.artifacts.transport_figures import _window_flux_statistics
 
     t = np.asarray(diag.t, dtype=float)
     lines: list[tuple[str, str]] = []
     if t.size:
         lines.append(("stop time", f"t cs/a = {float(t[-1]):.4g}  ({t.size} samples)"))
     try:
-        mask, tmin, tmax = _time_window(t, window)
+        tmin, tmax, q, g, kind = _window_flux_statistics(
+            diag if source is None else source, diag, window
+        )
     except ValueError:  # pragma: no cover - empty or unusable trace
         return lines
     lines.append(("window", f"t in [{tmin:.4g}, {tmax:.4g}]"))
@@ -636,12 +619,16 @@ def _flux_lines(
     else:
         origin = "stop policy window"
     lines.append(("window from", origin))
-    for label, values in (
-        ("<Q>/Q_gB", np.asarray(diag.heat_flux_t, dtype=float)),
-        ("<G>/G_gB", np.asarray(diag.particle_flux_t, dtype=float)),
+    for label, estimate, uncertainty in (
+        ("<Q>/Q_gB", q, kind),
+        ("<G>/G_gB", g, "sample IID SEM"),
     ):
-        mean, sem = _mean_sem(values[mask])
-        lines.append((label, f"{mean:.4g} +/- {sem:.2g}"))
+        value = (
+            "no diagnostic samples"
+            if estimate is None
+            else (f"{estimate[0]:.4g} +/- {estimate[1]:.2g} ({uncertainty})")
+        )
+        lines.append((label, value))
     return lines
 
 
@@ -653,13 +640,7 @@ def summary_metadata_lines(
     measured_window: bool,
     saturated: bool | None = None,
 ) -> list[tuple[str, str]]:
-    """Assemble the ``(label, value)`` rows of the metadata panel.
-
-    Every row is optional: the deck, the NetCDF root, and the diagnostics are
-    read for what they happen to carry, because this figure has to render for a
-    bundle produced by any of the output paths, not only the equilibrium
-    shorthand that writes all three.
-    """
+    """Read optional bundle metadata and estimates for the requested window."""
 
     deck, deck_path = _read_deck(source)
     geometry = _table(deck, "geometry")
@@ -677,7 +658,7 @@ def summary_metadata_lines(
     if isinstance(species, list) and species:
         kinetic = sum(1 for entry in species if entry.get("kinetic", True))
         lines.append(("species", f"{len(species)} ({kinetic} kinetic)"))
-    lines += _flux_lines(diag, window, measured_window, saturated)
+    lines += _flux_lines(diag, window, measured_window, saturated, source)
     if deck_path is not None:
         lines.append(("input deck", deck_path.name))
     lines.append(("output", Path(source).name))
