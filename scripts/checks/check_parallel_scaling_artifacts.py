@@ -1352,8 +1352,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--root",
         type=Path,
-        default=STATIC,
-        help="Directory containing scaling artifacts.",
+        default=None,
+        help="Explicit directory containing scaling reports; otherwise validate source policy.",
     )
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--out-json", type=Path, default=None)
@@ -1374,7 +1374,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    if args.performance_manifest_only:
+    if args.performance_manifest_only or args.root is None:
         summary = validate_manifest(
             load_manifest(args.manifest),
             check_artifacts=not args.skip_artifact_check,

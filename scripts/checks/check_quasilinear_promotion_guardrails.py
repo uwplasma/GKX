@@ -1698,7 +1698,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_MANUSCRIPT_INDEX,
         help="Manuscript figure index file to check for figure/sidecar references.",
     )
-    parser.add_argument("--out-json", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--out-json", type=Path, required=True)
     return parser
 
 

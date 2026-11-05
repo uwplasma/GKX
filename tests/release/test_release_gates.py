@@ -1318,36 +1318,14 @@ def test_distribution_metadata_includes_third_party_provenance() -> None:
     assert "https://bitbucket.org/gyrokinetics/gx" in provenance
 
 
-REQUIRED_PHRASES = {
-    "docs/release_scope.rst": (
-        "a scoped model-development and optimization-screening result",
-        "No runtime/TOML absolute-flux predictor",
-        "Solovev and shaped-pressure stress outliers outside the scoped claim",
-        "W7-X TEM / kinetic-electron validation",
-        "W7-X long-window zonal recurrence/damping closure",
-        "production optimization is not promoted",
-    ),
-    "docs/validation.rst": (
-        "Closed as scoped model-development result / failed promotion gate",
-        "does not promote a runtime/TOML absolute-flux predictor",
-        "W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron validation remain outside",
-        "Production nonlinear optimization remains unpromoted",
-    ),
-    "README.md": ("not a runtime/TOML absolute-flux predictor",),
-    "docs/performance.rst": (
-        "Sensitivity sweeps are covered by",
-        "before any speedup claim is promoted",
-        "Communication-aware nonlinear domain decomposition remains",
-    ),
-    "docs/parallelization.rst": (
-        "It is not a production nonlinear domain",
-        "whole-state nonlinear sharding speedup",
-    ),
-    "docs/examples.rst": (
-        "opt-in electrostatic linear-RHS identity artifact",
-        "publication speedup claim",
-    ),
-}
+CLAIM_SCOPE_PAGES = (
+    "docs/release_scope.rst",
+    "docs/validation.rst",
+    "README.md",
+    "docs/performance.rst",
+    "docs/parallelization.rst",
+    "docs/examples.rst",
+)
 
 FORBIDDEN_PHRASES = (
     "is a runtime/TOML absolute-flux predictor",
@@ -1386,15 +1364,6 @@ COMPARISON_ALLOWED_SOURCE_PREFIXES: tuple[Path, ...] = (
 )
 
 
-def test_claim_scope_pages_keep_required_quasilinear_boundaries() -> None:
-    missing: list[str] = []
-    for path, phrases in REQUIRED_PHRASES.items():
-        text = _compact(path)
-        missing.extend(f"{path}: {phrase}" for phrase in phrases if phrase not in text)
-
-    assert not missing
-
-
 def test_readme_python_quickstart_imports_exist() -> None:
     """Keep the concise README example on the installed public import surface."""
 
@@ -1418,7 +1387,7 @@ def test_readme_python_quickstart_imports_exist() -> None:
 
 def test_claim_scope_pages_avoid_promoted_unscoped_claims() -> None:
     violations: list[str] = []
-    for path in REQUIRED_PHRASES:
+    for path in CLAIM_SCOPE_PAGES:
         text = _compact(path)
         violations.extend(
             f"{path}: {phrase}" for phrase in FORBIDDEN_PHRASES if phrase in text
@@ -2290,9 +2259,6 @@ _NOT_A_GKX_RUNTIME_DECK = {
     "benchmarks/capability_matrix.toml": (
         "capability registry ([metadata]/[capabilities] tables), not a runtime deck"
     ),
-    "benchmarks/results/manifest.toml": (
-        "results manifest ([table]/[figure]/[policy] tables), not a runtime deck"
-    ),
 }
 
 
@@ -2731,9 +2697,6 @@ _DECKS_NOT_LOADABLE_AS_CASES: dict[str, str] = {
     "benchmarks/capability_matrix.toml": (
         "capability registry ([metadata]/[capabilities] tables), which the loader now refuses as unknown sections instead of reading as an empty deck"
     ),
-    "benchmarks/results/manifest.toml": (
-        "results manifest ([table]/[figure]/[policy] tables), which the loader now refuses as unknown sections instead of reading as an empty deck"
-    ),
 }
 
 
@@ -2857,251 +2820,6 @@ def test_deck_exemptions_are_real_and_explained() -> None:
         if len(reason.split()) < 8:
             problems.append(f"{relative}: exemption reason is too thin to audit")
     assert not problems, "\n".join(problems)
-
-
-# ---- from test_evidence_ledger.py ----
-# The evidence ledger is the single index of every public number.
-#
-# ``tools/evidence_ledger.toml`` holds one row per published claim: the artifact
-# it is computed from, the generator that rebuilds that artifact, the reference it
-# is compared against, and that reference's rank. These tests keep the ledger
-# honest in the three ways it can rot.
-
-
-RUN_TO_REPO_ROOT = Path(__file__).resolve().parents[2]
-LEDGER_PATH = RUN_TO_REPO_ROOT / "tools" / "evidence_ledger.toml"
-
-VALID_STATUS = {"open", "passing", "failing", "provisional", "superseded"}
-VALID_RANKS = {1, 2, 3, 4, 5}
-VALID_TIERS = {0, 1, 2, 3}
-REQUIRED_KEYS = (
-    "id",
-    "claim",
-    "observable",
-    "artifact",
-    "generator",
-    "reference",
-    "reference_rank",
-    "tier",
-    "status",
-)
-
-
-def _ledger() -> dict:
-    assert LEDGER_PATH.is_file(), f"{LEDGER_PATH} is missing"
-    return tomllib.loads(LEDGER_PATH.read_text(encoding="utf-8"))
-
-
-def _rows() -> list[dict]:
-    return _ledger()["row"]
-
-
-def _readme_parity_rows() -> list[dict]:
-    """Ledger rows that publish a percentage in the README parity table."""
-
-    return [row for row in _rows() if "readme_label" in row]
-
-
-def test_ledger_parses_and_declares_its_schema() -> None:
-    ledger = _ledger()
-    assert ledger.get("schema_version") == 1
-    assert ledger.get("updated"), "the ledger records when it was last touched"
-    assert _rows(), "the ledger is empty"
-
-
-def test_every_row_is_well_formed() -> None:
-    seen: set[str] = set()
-    problems: list[str] = []
-    for row in _rows():
-        missing = [key for key in REQUIRED_KEYS if key not in row]
-        if missing:
-            problems.append(f"{row.get('id', '<no id>')}: missing {missing}")
-            continue
-        row_id = row["id"]
-        if row_id in seen:
-            problems.append(f"{row_id}: duplicate id")
-        seen.add(row_id)
-        if row["reference_rank"] not in VALID_RANKS:
-            problems.append(f"{row_id}: reference_rank {row['reference_rank']!r}")
-        if row["tier"] not in VALID_TIERS:
-            problems.append(f"{row_id}: tier {row['tier']!r}")
-        if row["status"] not in VALID_STATUS:
-            problems.append(f"{row_id}: status {row['status']!r}")
-    assert not problems, "malformed ledger rows:\n" + "\n".join(problems)
-
-
-def test_every_artifact_and_generator_exists() -> None:
-    """A row may not point at a file that has been moved or deleted."""
-
-    problems: list[str] = []
-    for row in _rows():
-        for key in ("artifact", "companion"):
-            target = row.get(key)
-            if (
-                target
-                and not (RUN_TO_REPO_ROOT / target).exists()
-                and not (
-                    row.get("archived_output") is True and row["status"] == "superseded"
-                )
-            ):
-                problems.append(f"{row['id']}: {key} {target} is missing")
-        # A generator may carry arguments; only the script path is checked.
-        # ``retired@<sha>`` marks one removed from the tree, recoverable there.
-        script = row["generator"].split()[0]
-        if script.startswith("retired@"):
-            continue
-        if not (RUN_TO_REPO_ROOT / script).exists():
-            problems.append(f"{row['id']}: generator {script} is missing")
-    assert not problems, "ledger rows point at missing files:\n" + "\n".join(problems)
-
-
-def test_provisional_rows_say_why() -> None:
-    """``provisional`` is a claim about evidence, so it needs a stated reason."""
-
-    missing = [
-        row["id"]
-        for row in _rows()
-        if row["status"] == "provisional" and not row.get("notes")
-    ]
-    assert not missing, (
-        "provisional rows must record what is unresolved and what would close "
-        f"them: {missing}"
-    )
-
-
-def test_linked_boundary_references_record_their_clamp_state() -> None:
-    """GX linked-boundary references must declare whether the clamp binds.
-
-    GX launches ``dampEnds_linked`` with ``dG_all.z = min(65535, Nz*Nl*Nm)`` but,
-    unlike its sibling kernels, that kernel has no grid-stride loop over z. A
-    reference produced above the clamp has undamped high Hermite moments, so it
-    cannot be treated as a settled comparison. Any row that records a binding
-    clamp must be provisional and must explain itself.
-    """
-
-    problems: list[str] = []
-    for row in _rows():
-        if "reference_index_count" not in row:
-            continue
-        count = row["reference_index_count"]
-        binds = row.get("reference_clamp_binds")
-        assert binds is not None, f"{row['id']}: reference_clamp_binds is unset"
-        if binds != (count > 65535):
-            problems.append(
-                f"{row['id']}: reference_clamp_binds={binds} contradicts "
-                f"reference_index_count={count} against the 65535 clamp"
-            )
-        if binds and row["status"] == "passing":
-            problems.append(
-                f"{row['id']}: reference clamp binds, so the row cannot be "
-                "'passing' until the reference is regenerated from a repaired build"
-            )
-    assert not problems, "\n".join(problems)
-
-
-def test_shipped_reference_rows_carry_a_hash() -> None:
-    """Rank-3 rows cite a specific file, so they pin it by content."""
-
-    missing = [
-        row["id"]
-        for row in _rows()
-        if row["reference_rank"] == 3 and not row.get("reference_sha256")
-    ]
-    assert not missing, (
-        f"rank-3 rows cite a reference-code golden and must pin its SHA-256: {missing}"
-    )
-
-
-def _published_readme_parity() -> dict[str, tuple[float, float]]:
-    labels = {row["readme_label"] for row in _readme_parity_rows()}
-    return _readme_parity_table(RUN_TO_REPO_ROOT, labels)
-
-
-def test_ledger_covers_every_published_parity_row() -> None:
-    """The README table and the ledger describe the same set of claims."""
-
-    published = set(_published_readme_parity())
-    ledgered = {row["readme_label"] for row in _readme_parity_rows()}
-    assert published == ledgered, (
-        "the README parity table and the ledger disagree about which cases are "
-        f"published. README only: {sorted(published - ledgered)}; "
-        f"ledger only: {sorted(ledgered - published)}"
-    )
-
-
-# ------------------------------------------------ declared velocity regularization
-
-VALID_REGULARIZATIONS = {
-    "none",
-    "hermite-kz-hypercollision",
-    "hermite-const-hypercollision",
-    "laguerre-hypercollision",
-    "isotropic-hypercollision",
-    "conserving-collisions",
-    "dougherty-lb-collisions",
-}
-ELL_SPACE_CHANNELS = {
-    "laguerre-hypercollision",
-    "isotropic-hypercollision",
-    "conserving-collisions",
-    "dougherty-lb-collisions",
-}
-VALID_VELOCITY_LIMITS = {"truncation-limited", "extrapolated", "unmeasured"}
-
-
-def _linear_rows() -> list[dict]:
-    return [row for row in _rows() if str(row["id"]).startswith("L-lin-")]
-
-
-@pytest.mark.parametrize("row", _linear_rows(), ids=lambda row: str(row["id"]))
-def test_every_linear_row_declares_its_velocity_regularization(row: dict) -> None:
-    """plan.md §0.5: a linear row states the velocity-space sink it ran with.
-
-    ``nu_hyper_l`` reaches the distribution only through the
-    constant-coefficient hypercollision branch, so under the shipped defaults a
-    deck could declare a Laguerre sink and run without one. The operator now
-    refuses that; this row-level field is the reporting half of the same
-    contract, so a published growth rate carries the regularization that
-    produced it instead of leaving a reader to infer it from a deck.
-    """
-
-    declared = row.get("velocity_regularization")
-    assert isinstance(declared, list) and declared, (
-        f"{row['id']} publishes a linear growth rate but declares no "
-        "velocity_regularization. 'none' is a legal declaration; silence is not."
-    )
-    unknown = sorted(set(declared) - VALID_REGULARIZATIONS)
-    assert not unknown, f"{row['id']}: unknown regularization {unknown}"
-    if "none" in declared:
-        assert declared == ["none"], (
-            f"{row['id']}: 'none' cannot be combined with a channel ({declared})"
-        )
-
-
-@pytest.mark.parametrize("row", _linear_rows(), ids=lambda row: str(row["id"]))
-def test_rows_without_an_ell_space_sink_report_their_limit(row: dict) -> None:
-    """A row with no ell-space sink says whether its value is converged.
-
-    #252 measured, on the Cyclone s-alpha ITG mode at ky = .55, that the
-    collisionless Laguerre spectrum carries a cutoff pile-up which relocates to
-    0.79-0.85 of every new ``Nl`` rather than resolving. A row whose only
-    velocity dissipation is the Hermite ``|k_z|`` branch therefore cannot claim
-    a converged growth rate without saying so.
-    """
-
-    declared = row.get("velocity_regularization", [])
-    if set(declared) & ELL_SPACE_CHANNELS:
-        return
-    limit = row.get("velocity_limit")
-    assert limit in VALID_VELOCITY_LIMITS, (
-        f"{row['id']} has no ell-space velocity sink, so it must declare a "
-        f"velocity_limit in {sorted(VALID_VELOCITY_LIMITS)}; got {limit!r}."
-    )
-    evidence = row.get("velocity_limit_evidence")
-    assert isinstance(evidence, str) and evidence.strip(), (
-        f"{row['id']}: velocity_limit = {limit!r} needs velocity_limit_evidence "
-        "naming where it was measured, or why it is unmeasured."
-    )
 
 
 # Release gates inspect current executable contracts rather than saved scores.

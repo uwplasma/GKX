@@ -56,7 +56,6 @@ from scripts.checks._gates.zonal_validation import zonal_flow_response_metrics
 from dataclasses import fields
 import math
 import subprocess
-import tomllib
 import jax
 import jax.numpy as jnp
 from support.paths import REPO_ROOT, load_release_tool
@@ -656,8 +655,6 @@ def test_observed_order_gate_report_tracks_rate_and_final_error() -> None:
 
 
 ROOT = REPO_ROOT
-MANIFEST = ROOT / "benchmarks" / "results" / "manifest.toml"
-MAX_TRACKED_RESULT_BYTES = 1_000_000
 MAX_ROOT_BENCHMARK_PAYLOAD_BYTES = 200_000
 
 
@@ -853,72 +850,6 @@ def test_runtime_kbm_case_matches_transitional_operator_contract() -> None:
         (runtime_state, legacy_state),
     )
     np.testing.assert_allclose(runtime_rhs, legacy_rhs, rtol=1.0e-6, atol=2.0e-16)
-
-
-def _load_results_manifest() -> dict:
-    with MANIFEST.open("rb") as fh:
-        return tomllib.load(fh)
-
-
-def test_benchmark_results_manifest_is_root_level_and_small() -> None:
-    assert MANIFEST.exists()
-    assert MANIFEST.relative_to(ROOT).parts[:2] == ("benchmarks", "results")
-    assert MANIFEST.stat().st_size < 20_000
-
-    readme = MANIFEST.parent / "README.md"
-    assert readme.exists()
-    assert readme.stat().st_size < 20_000
-
-
-def test_benchmark_results_manifest_points_to_tracked_or_regenerable_outputs() -> None:
-    manifest = _load_results_manifest()
-    rendered_suffixes = load_release_tool(
-        "check_validation_coverage_manifest"
-    ).RENDERED_ARTIFACT_SUFFIXES
-    entries = [*manifest.get("figure", []), *manifest.get("table", [])]
-    assert {entry["name"] for entry in entries} >= {
-        "Core linear benchmark atlas",
-        "Core nonlinear benchmark atlas",
-    }
-
-    for entry in entries:
-        path = ROOT / entry["path"]
-        action = entry.get("action", "keep_in_repo")
-        rendered = path.suffix.lower() in rendered_suffixes
-        assert action in {"keep_in_repo", "regenerate_on_demand"}
-        assert ROOT / "tools_out" not in path.parents
-        assert ROOT / "docs" / "_build" not in path.parents
-        if path.exists():
-            assert path.is_file(), entry["path"]
-            assert path.stat().st_size <= MAX_TRACKED_RESULT_BYTES, entry["path"]
-        else:
-            assert action == "regenerate_on_demand", entry["path"]
-            assert rendered, entry["path"]
-
-        source_manifest = ROOT / entry["source_manifest"]
-        assert source_manifest.exists(), entry["source_manifest"]
-        assert source_manifest.suffix == ".toml"
-        assert entry["regenerate"].startswith("python ")
-        assert entry["docs_page"].endswith((".rst", ".md"))
-        assert entry["claim_scope"].strip()
-
-
-def test_benchmark_results_manifest_documents_artifact_hygiene_policy() -> None:
-    policy = _load_results_manifest()["policy"]
-    assert policy["tracked_payload"] == "small pointers only"
-    assert "tools_out" in policy["raw_outputs"]
-    assert "docs/_static" in policy["docs_payload"]
-
-
-def test_root_benchmark_manifest_is_reflected_in_docs() -> None:
-    manifest = _load_results_manifest()
-    docs_text = (ROOT / "docs" / "validation.rst").read_text(encoding="utf-8")
-    entries = [*manifest.get("figure", []), *manifest.get("table", [])]
-
-    for entry in entries:
-        assert entry["name"] in docs_text
-        assert entry["path"] in docs_text
-        assert entry["claim_scope"] in docs_text
 
 
 def test_root_benchmark_payload_stays_lightweight() -> None:

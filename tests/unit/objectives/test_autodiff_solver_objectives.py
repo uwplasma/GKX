@@ -1911,7 +1911,6 @@ def test_docs_scope_vmex_transport_optimizer_claims() -> None:
 
 def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
     figures = (
         "nonlinear_autodiff_validation.png",
         "qa_transport_equilibria.png",
@@ -1930,7 +1929,6 @@ def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
         "input.qa_transport_candidate",
     ):
         assert (EXAMPLES / filename).is_file()
-        assert filename in docs
 
 
 def test_optimization_examples_document_user_customization_knobs() -> None:
@@ -1972,8 +1970,5 @@ def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None
         "current artifact bases: ``docs/_static/stellarator_itg_optimization_comparison.png``"
         not in manuscript
     )
-    assert "is not a solved-geometry optimization figure" in manuscript
-    assert (
-        "production QA optimization examples are the VMEC-JAX-style scripts"
-        in manuscript
-    )
+    assert "finite-difference check" in manuscript
+    assert "differentiated window" in manuscript

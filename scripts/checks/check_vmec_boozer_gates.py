@@ -804,7 +804,7 @@ def build_vmec_boozer_differentiability_claim_guard(
 
 def build_differentiability_claim_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=REPO_ROOT)
+    parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--parity-matrix", default=DEFAULT_PARITY_MATRIX)
     parser.add_argument("--gradient-matrix", default=DEFAULT_GRADIENT_MATRIX)
     parser.add_argument("--bridge", default=DEFAULT_BRIDGE)
