@@ -569,7 +569,7 @@ def _run_chunked_diagnostics(
     # Chain IMEX with fixed_dt = false: a fixed factor per chunk, dt chosen
     # between chunks (ImexDtControl), the factor swapped in as an operand.
     imex = ctx.adaptive_chunked and (method or cfg.time.method) in IMEX_CHAIN_METHODS
-    control: dict[str, Any] = {"dt": ctx.dt}
+    control: dict[str, Any] = {"dt": min(ctx.dt, float(cfg.time.dt_max or ctx.dt))}
     if imex:
         chunk_steps = 32
 
