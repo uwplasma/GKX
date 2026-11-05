@@ -35,15 +35,6 @@ def _state_shape(case: Any, *, n_laguerre: int, n_hermite: int) -> tuple[int, ..
 
     grid = case.grid
     n_species = sum(1 for s in case.species if getattr(s, "kinetic", False))
-    # How many ky rows the run allocates, which is a question about the
-    # layout and not about the resolution (gkx.core_ky_layout, plan 5.3 N3).
-    # A two-sided state holds Ny rows and rebuilds the negative half by the
-    # reality condition; a half-spectrum state holds Nyc = 1 + Ny // 2 and
-    # does not. What this line must never do is report a layout the run did
-    # not build: reporting Nyc for a two-sided run halves the array it
-    # advertises and costs, and reporting Ny for a half-spectrum run doubles
-    # it. Reading the same key the grid was built from is what keeps the two
-    # in step.
     n_ky = rows_for_layout(
         int(grid.Ny), cast(KyLayout, str(getattr(grid, "ky_layout", FULL)).lower())
     )
@@ -193,6 +184,8 @@ class PreparedSimulation:
 
         import jax
 
+        if self._backend is not None:
+            return np.finfo(self._backend.initial_state.dtype).dtype.name
         return "float64" if jax.config.read("jax_enable_x64") else "float32"
 
     @property
@@ -303,14 +296,17 @@ def prepare_simulation(case: Any, **options: Any) -> PreparedSimulation:
     kind = _case_kind(case)
     n_laguerre, n_hermite = _resolve_velocity_resolution(case, kind, options)
     backend = None
+    shape = _state_shape(case, n_laguerre=n_laguerre, n_hermite=n_hermite)
     if kind == "nonlinear":
         from gkx import runtime as _runtime
 
         backend = _runtime.prepare(case, **options)
+        shape = tuple(backend.initial_state.shape)
+        n_laguerre, n_hermite = shape[-5:-3]
     return PreparedSimulation(
         case=case,
         kind=kind,
-        state_shape=_state_shape(case, n_laguerre=n_laguerre, n_hermite=n_hermite),
+        state_shape=shape,
         n_laguerre=n_laguerre,
         n_hermite=n_hermite,
         options=dict(options),
