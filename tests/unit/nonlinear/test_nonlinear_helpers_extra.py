@@ -205,14 +205,8 @@ def test_sampled_scan_intervals_and_runner_retain_final_step() -> None:
         def step_fn(carry, _idx):
             G, _G_prev, fields_prev, _diag_prev, t_prev, dt_prev = carry
             G_new = G * scale + 1
-            fields_new = fields_prev + 10
-            diag = G_new * 100
-            t_new = t_prev + dt_prev
-            return (G_new, G_new, fields_new, diag, t_new, dt_prev), (
-                diag,
-                t_new,
-                dt_prev,
-            )
+            saved = (G_new * 100, t_prev + dt_prev, dt_prev)
+            return (G_new, G_new, fields_prev + 10, *saved), saved
 
         return run_sampled_explicit_diagnostic_scan(
             step_fn,
