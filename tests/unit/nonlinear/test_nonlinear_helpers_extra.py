@@ -2568,9 +2568,24 @@ def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
     assert build(0.04) is not first
 
 
-def test_adaptive_chain_imex_grows_dt_between_chunks():
+@pytest.mark.parametrize(
+    "horizon, initial_dt, dt_max",
+    [(4.0, 0.05, 1.0), (0.1, 0.05, 1.0), (0.1, 0.1, 0.05), (0.1, 0.05, None)],
+)
+def test_adaptive_chain_imex_grows_dt_between_chunks(
+    horizon, initial_dt, dt_max, monkeypatch
+):
     """fixed_dt = false: the chain IMEX step adapts dt between chunks."""
     import gkx
+    import gkx.workflows.nonlinear as workflow
+
+    original_controller = workflow.ImexDtControl
+
+    def controller(op, *args, **kwargs):
+        assert float(op.dt) <= kwargs["dt_max"]
+        return original_controller(op, *args, **kwargs)
+
+    monkeypatch.setattr(workflow, "ImexDtControl", controller)
 
     deck = gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
     case = deck.replace(
@@ -2579,12 +2594,18 @@ def test_adaptive_chain_imex_grows_dt_between_chunks():
             deck.time,
             method="imex-ark3",
             fixed_dt=False,
-            dt=0.05,
-            dt_max=1.0,
-            t_max=4.0,
+            dt=initial_dt,
+            dt_max=dt_max,
+            t_max=horizon,
         ),
     )
     d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
     dt = np.asarray(d.dt_t)
     assert np.isfinite(np.asarray(d.Wg_t)).all()
-    assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05
+    if dt_max is not None:
+        assert np.all(dt <= dt_max * (1.0 + 1e-12))
+    assert dt[0] == pytest.approx(min(initial_dt, dt_max or initial_dt))
+    assert np.all(np.diff(np.asarray(d.t)) > 0)
+    assert float(d.t[-1]) == pytest.approx(horizon)
+    if horizon > 1.0:
+        assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05

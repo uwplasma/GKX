@@ -548,9 +548,8 @@ def _run_chunked_diagnostics(
     compile_cache: dict[Any, Any] = {}
     # Chain IMEX retunes its fixed factor between chunks.
     imex = ctx.adaptive_chunked and (method or cfg.time.method) in IMEX_CHAIN_METHODS
-    # Zero requests the original CFL initialization on this trajectory only.
     control: dict[str, Any] = {
-        "dt": ctx.dt,
+        "dt": min(ctx.dt, float(cfg.time.dt_max or ctx.dt)),
         "next_dt": jnp.asarray(0.0, dtype=jnp.real(ctx.G0).dtype),
     }
     continue_pi = ctx.adaptive_chunked and (method or cfg.time.method) == "rk4-pi"
