@@ -119,15 +119,19 @@ _STATIONARITY_SEM_FACTOR = 2.0
 
 
 def _halves_stationary(
-    values: np.ndarray, dt: float
+    values: np.ndarray, dt: float, *, check_terminal: bool = True
 ) -> tuple[float, float, float, bool]:
-    """First/second half-window means, their combined SEM, and agreement."""
+    """Half-window means, combined SEM, and agreement including the late half."""
 
     half = values.size // 2
     first_mean, first_sem, _, _ = _sokal_window_mean_sem(values[:half], dt)
     second_mean, second_sem, _, _ = _sokal_window_mean_sem(values[half:], dt)
     combined = float(math.hypot(first_sem, second_sem))
     stationary = abs(second_mean - first_mean) <= _STATIONARITY_SEM_FACTOR * combined
+    if check_terminal and stationary:
+        # Opposing startup decay and late growth can give equal full-window
+        # halves. Also compare the terminal quarters on the same SEM scale.
+        stationary = _halves_stationary(values[half:], dt, check_terminal=False)[3]
     return first_mean, second_mean, combined, stationary
 
 
@@ -153,9 +157,10 @@ def saturation_stop_decision(
     only noise), at least ``min_samples`` retained samples, window span at
     least ``20 tau_ac`` and any larger configured ``min_window``, IAT-corrected
     relative SEM at most ``rel_sem``,
-    first/second half-window means within twice their combined SEM, and --
+    first/second half-window means within twice their combined SEM, the same
+    agreement between the third and fourth quarters, and --
     when ``guard`` (Wphi) or ``free_energy_guard`` (Wg) is given -- the same
-    half-window stationarity on each guard over the same window. Guards have no
+    full-window and terminal-half stationarity on each guard. Guards have no
     relative-SEM gate: they protect against a flat-looking flux while either
     energy still drifts.
     The trace is assumed finite; the runtime validates each chunk before this.
@@ -190,9 +195,10 @@ def saturation_stop_decision(
     wy = y[start:]
     if wy.size < min_samples:
         return _empty_saturation_decision(cfg, reason="post_spinup_window_too_short")
-    dt = float(np.median(np.diff(wt)))
-    if not math.isfinite(dt) or dt <= 0.0:
+    intervals = np.diff(wt)
+    if not np.all(np.isfinite(intervals)) or np.any(intervals <= 0.0):
         return _empty_saturation_decision(cfg, reason="degenerate_window_time_axis")
+    dt = float(np.median(intervals))
 
     mean, sem, tau, tau_resolved = _sokal_window_mean_sem(wy, dt)
     span = float(wt[-1] - wt[0])

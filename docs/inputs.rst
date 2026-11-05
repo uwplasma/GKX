@@ -365,12 +365,17 @@ autocorrelation-corrected relative SEM of the windowed mean is at or below
 ``saturation_rel_sem``, the retained window has at least 256 samples and spans
 at least 20 integrated autocorrelation times, any larger
 ``saturation_min_window`` is met, and the first and second halves agree within
-twice their combined SEM. The same drift-consistency guard is applied to the
+twice their combined SEM. The third and fourth quarters must also agree on
+that scale, to check for late drift hidden by agreeing full-window halves.
+The same two drift-consistency checks are applied to the
 electrostatic field energy ``Wphi`` and gyrokinetic free energy ``Wg``. These
 operational finite-sample safeguards provide neither a universal sequential-
 confidence guarantee nor qualification for irregular adaptive-time sampling.
 ``t_max`` remains the hard cap, so a run that never saturates integrates the
 full horizon.
+Nonfinite or non-increasing retained timestamps cannot produce a saturation
+verdict. Valid adaptive timestamps remain supported, but the sample-based
+uncertainty estimator is not qualified for irregular sampling.
 The chosen window and its ``mean +/- SEM`` are printed in the run summary and
 recorded under ``saturation`` in the summary JSON. Pass
 ``--no-until-saturated`` (or set ``run_to = "t_max"``) for a fixed horizon.
@@ -579,7 +584,9 @@ Notable runtime-only keys:
   correlation-time floor. Every accepted window also retains at least 256
   samples. These are finite-sample safeguards calibrated on regularly sampled
   synthetic traces, not a guarantee for irregular adaptive-time sampling or
-  arbitrary nonstationarity.
+  arbitrary nonstationarity. Agreement is checked between the full-window
+  halves and between the two terminal quarters, for heat flux and both energy
+  guards; a small SEM alone does not establish stationarity.
 * ``[time] nstep_restart``: when writing a nonlinear NetCDF bundle,
   checkpoint every ``nstep_restart`` steps instead of waiting for the end of
   the run. This is useful for long adaptive runs and batch jobs.
