@@ -1163,7 +1163,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         replicated = jax.sharding.NamedSharding(
             named_sharding.mesh, jax.sharding.PartitionSpec()
         )
-        output_shardings = (named_sharding, replicated, replicated, replicated)
+        output_shardings = (None, replicated, replicated, replicated)
     return PreparedExplicitNonlinearDiagnostics(
         initial_state=components.prepared.G0,
         geometry=components.prepared.setup.geom,
