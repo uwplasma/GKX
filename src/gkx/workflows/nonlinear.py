@@ -6,6 +6,7 @@ import os
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -884,15 +885,20 @@ def _run_sharded(
     method: str | None,
     status: Callable[[str], None],
     plan: NonlinearParallelPlan,
-) -> RuntimeNonlinearResult:
+    prepare: Callable[[], Any] | None = None,
+) -> Any:
     """Run the sharded nonlinear route, fail-closed against the serial answer."""
 
     if plan.axis == "species_hermite":
         plan = resolve_species_hermite_mesh(ctx.G0, plan)
     status(f"routing nonlinear run through {plan.describe()}")
     named = _integrate_species_hermite_final_state(
-        cfg, ctx, policy, method=method, plan=plan, status=status
+        cfg, ctx, policy, method=method, plan=plan, status=status, prepare=prepare
     )
+    if prepare is not None:
+        if named is None:
+            raise ValueError("unsupported fixed-step parallel preparation policy")
+        return named
     if named is None:
         status(
             "using whole-state placement; named collectives do not support these settings"
@@ -934,9 +940,14 @@ def prepare(case: RuntimeConfig, **options: Any) -> Any:
     """Prepare a reusable compiled nonlinear simulation; see its class docstring."""
     if not case.physics.nonlinear:
         raise ValueError("prepare currently requires nonlinear physics")
-    if options.pop("diagnostics", True) is not True:
+    diagnostics = options.pop("diagnostics", True)
+    if diagnostics is not True and (
+        diagnostics is not False or case.parallel.strategy == "serial"
+    ):
         raise ValueError("prepare requires diagnostics=True")
-    return run_runtime_nonlinear(case, diagnostics=True, prepare_only=True, **options)
+    return run_runtime_nonlinear(
+        case, diagnostics=diagnostics, prepare_only=True, **options
+    )
 
 
 def run_runtime_nonlinear(
@@ -974,10 +985,8 @@ def run_runtime_nonlinear(
     # Resolved before any geometry or grid work so an unroutable [parallel]
     # request fails immediately instead of after a long serial run.
     plan = resolve_nonlinear_parallel_plan(cfg.parallel)
-    if prepare_only and plan is not None:
-        raise ValueError(
-            "prepared nonlinear execution currently requires serial policy"
-        )
+    if prepare_only and plan is not None and diagnostics is not False:
+        raise ValueError("parallel preparation requires diagnostics=False")
     status = status_callback if status_callback is not None else lambda _message: None
     ctx = _prepare_context(
         cfg,
@@ -1003,6 +1012,7 @@ def run_runtime_nonlinear(
         f"nonlinear diagnostics={'on' if policy.diagnostics_on else 'off'} "
         f"fixed_mode={'on' if policy.fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
+    prepare_factory: Callable[[], Any] | None = None
     if prepare_only:
         if _saturation_stop_condition(cfg, ctx, policy) is not None and steps is None:
             raise ValueError(
@@ -1027,12 +1037,27 @@ def run_runtime_nonlinear(
         )
         if ctx.adaptive_chunked:
             kwargs["time_horizon"] = float(cfg.time.t_max)
-        return prepare_nonlinear_explicit_diagnostics(
-            ctx.G0, ctx.grid, ctx.geom, ctx.params, **kwargs
+        prepare_factory = partial(
+            prepare_nonlinear_explicit_diagnostics,
+            ctx.G0,
+            ctx.grid,
+            ctx.geom,
+            ctx.params,
+            **kwargs,
         )
-    if plan is None:
-        return _run_once(cfg, ctx, policy, method=method, status=status)[0]
-    return _run_sharded(cfg, ctx, policy, method=method, status=status, plan=plan)
+    if plan is not None:
+        return _run_sharded(
+            cfg,
+            ctx,
+            policy,
+            method=method,
+            status=status,
+            plan=plan,
+            prepare=prepare_factory,
+        )
+    if prepare_factory is not None:
+        return prepare_factory()
+    return _run_once(cfg, ctx, policy, method=method, status=status)[0]
 
 
 __all__ = [

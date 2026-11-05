@@ -372,6 +372,39 @@ The independent-work strategies (``batch``, ``combined_ky``) are also rejected
 on this path: they orchestrate separate solver calls for ``k_y`` scans and
 ensembles and cannot shard a single nonlinear run.
 
+Prepared final-state execution
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The supported species-Hermite final-state policy can also be prepared with
+``gkx.prepare(case, diagnostics=False, steps=N)``. The case must use fixed
+steps, ``run_to = "t_max"`` and ``strict_identity = false`` after independent
+identity qualification. The same numerical-policy restrictions apply as in
+the runtime named route; diagnosed, adaptive and unsupported physics requests
+are refused. Fixed model operands are staged once during preparation.
+
+``simulation.solve(initial_state=state)`` returns the existing four-tuple:
+empty saved times, ``None`` diagnostics, the global JAX final state and final
+fields. Changed initial states of the prepared shape reuse the executable;
+model, geometry and horizon overrides are unsupported.
+
+With externally initialized multi-process JAX, every rank must enter
+preparation, warmup, solves and differentiation in the same order. Returned
+states remain global JAX arrays; host materialization across processes needs
+an explicit collective rather than silently returning a local shard.
+
+Across processes, call ``simulation.value_and_grad`` directly. Enclosing a
+prepared instance with global model arrays in another ``jax.jit`` is not
+supported by current JAX constant lowering; the trajectory executor itself
+remains compiled and reusable.
+
+For transformed initial-state objectives, use NumPy input, an uncommitted JAX
+array created from host data, or reuse the state returned by
+``simulation.solve()[2]``. JAX rejects an explicitly committed single-device
+array inside a transformation that spans a different device mesh. Direct
+``solve`` calls stage such arrays before tracing; transformed calls do not
+silently transfer tracers through host memory. This is an initial-state
+differentiation contract, not a parameter- or geometry-gradient claim.
+
 Diagnostic path: whole-state nonlinear sharding
 -----------------------------------------------
 

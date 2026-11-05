@@ -663,22 +663,34 @@ def _species_hermite_local_rhs(
 
 
 def stage_from_host(value: Any, sharding: Any) -> Any:
-    """Place ``value`` on ``sharding`` from host memory rather than resharding.
+    """Reuse equivalent layouts; use host placement for genuine repartitioning.
 
-    Handing ``device_put`` an array that is already committed to one device asks
-    the runtime to reshard it across the mesh, and on the two-GPU box that path
-    silently produces a wrong answer: the sharded route drops to a max relative
-    error of 1.0 against serial while a one-device mesh on the same GPU is exact.
-    Round-tripping through the host is the reliable placement, and it happens
-    once per run rather than once per step.
+    Direct device-to-mesh resharding of a committed single-device array failed
+    the two-GPU identity gate. Keep host placement for genuine repartitioning.
+
+    Equivalent layouts retain the same shards/devices. Normalizing only their
+    metadata avoids host fetches after linked-cover projection, including across
+    processes.
     """
 
     if isinstance(value, jax.core.Tracer):
         return value
-    if getattr(value, "sharding", None) == sharding:
-        # Already exactly where it belongs: re-staging would only add a host
-        # round trip per call, which on a repeated route dominates the step.
+    current = getattr(value, "sharding", None)
+    if current == sharding:
         return value
+    if current is not None and current.is_equivalent_to(sharding, value.ndim):
+        # Same shards/devices: normalize metadata without a host round trip.
+        local = {shard.device: shard for shard in value.addressable_shards}
+        target = sharding.addressable_devices_indices_map(value.shape)
+        arrays = []
+        for device, index in target.items():
+            shard = local[device]
+            if shard.index != index:
+                raise ValueError("equivalent placement changed a local shard index")
+            arrays.append(shard.data)
+        if not arrays:
+            raise ValueError("placement normalization requires an addressable shard")
+        return jax.make_array_from_single_device_arrays(value.shape, sharding, arrays)
     return jax.device_put(np.asarray(jax.device_get(value)), sharding)
 
 
@@ -861,6 +873,29 @@ def integrate_nonlinear_species_hermite(
     them the route is compute-only and returns an empty trace map.
     """
 
+    return _prepare_nonlinear_species_hermite(**locals())(G0)
+
+
+def _prepare_nonlinear_species_hermite(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str = "rk2",
+    terms: TermConfig | None = None,
+    grid: Any | None = None,
+    vol_fac: jnp.ndarray | None = None,
+    flux_fac: jnp.ndarray | None = None,
+    plan: Any | None = None,
+    devices: Any | None = None,
+    num_devices: int | None = None,
+    compressed_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+) -> Callable[[jnp.ndarray], SpeciesHermiteRun]:
+    """Stage fixed model operands once and return the shared trajectory callable."""
+
     _validate_steps(steps)
     method_key = _validate_explicit_method(method)
     term_cfg = terms or TermConfig()
@@ -933,19 +968,26 @@ def integrate_nonlinear_species_hermite(
     )
     from jax.sharding import NamedSharding
 
-    final, stacked = jax.jit(mapped)(
-        stage_from_host(state, NamedSharding(mesh, state_spec)), *leaves
-    )
-    traces = dict(zip(_TRACE_NAMES, stacked, strict=True)) if record else {}
-    return SpeciesHermiteRun(
-        state=final,
-        traces=traces,
-        plan=resolved,
-        mesh_shape=(
-            int(resolved.chunks.get("s", 1)),
-            int(resolved.chunks.get("m", 1)),
-        ),
-    )
+    compiled = jax.jit(mapped)
+    sharding = NamedSharding(mesh, state_spec)
+
+    def execute(model_operands, value):
+        final, stacked = compiled(
+            stage_from_host(jnp.asarray(value, dtype=state_dtype), sharding),
+            *model_operands,
+        )
+        traces = dict(zip(_TRACE_NAMES, stacked, strict=True)) if record else {}
+        return SpeciesHermiteRun(
+            state=final,
+            traces=traces,
+            plan=resolved,
+            mesh_shape=(
+                int(resolved.chunks.get("s", 1)),
+                int(resolved.chunks.get("m", 1)),
+            ),
+        )
+
+    return jax.tree_util.Partial(execute, leaves)
 
 
 def _project_local(value, projector, dtype):
