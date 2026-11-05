@@ -3,6 +3,7 @@ from __future__ import annotations
 from support.helpers import patch_runtime
 
 import io
+import dataclasses
 import subprocess
 import sys
 from contextlib import redirect_stdout
@@ -499,6 +500,7 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from dataclasses import replace
+    from types import SimpleNamespace
 
     import gkx
     import gkx.runtime as runtime
@@ -518,20 +520,18 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
         return "linear-result"
 
     prepared_calls: list[tuple[RuntimeConfig, dict[str, object]]] = []
+    backend = SimpleNamespace(initial_state=np.zeros((1, 4, 8, 1, 1, 1), complex))
 
     def fake_nonlinear(cfg, **options):
         if options.get("prepare_only"):
             prepared_calls.append((cfg, options))
-            return "prepared-simulation"
+            return backend
         calls.append(("nonlinear", cfg, options))
         return "nonlinear-result"
 
     patch_runtime(monkeypatch, "run_runtime_linear", fake_linear)
     patch_runtime(monkeypatch, "run_runtime_nonlinear", fake_nonlinear)
-    # gkx.prepare is now the public PreparedSimulation constructor rather than
-    # the runtime function it wraps. The delegation this test exists to pin is
-    # still real and is asserted directly: preparing a nonlinear case reaches
-    # runtime.prepare, so the facade adds a type without adding numerics.
+    # The public wrapper delegates preparation without owning numerics.
     from gkx.api.prepared import prepare_simulation
 
     assert gkx.prepare is prepare_simulation
@@ -559,7 +559,7 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
     assert nonlinear_prepared.kind == "nonlinear"
     # The wrapper adds a type, not numerics: the object the runtime built is
     # carried through unchanged.
-    assert nonlinear_prepared._backend == "prepared-simulation"
+    assert nonlinear_prepared._backend is backend
     assert prepared_calls[0][0] is nonlinear
     assert prepared_calls[0][1]["diagnostics"] is True
     assert prepared_calls[0][1]["prepare_only"] is True
@@ -1010,14 +1010,24 @@ def test_prepared_is_frozen_so_topology_cannot_drift_from_its_metadata() -> None
         prepared.kind = "nonlinear"  # type: ignore[misc]
 
 
-def test_state_shape_follows_the_case_grid() -> None:
+@pytest.mark.parametrize("nonlinear", [False, True])
+def test_state_shape_follows_the_case_grid(nonlinear) -> None:
     case = _linear_case()
-    prepared = prepare_simulation(case, Nl=6, Nm=12)
-    n_species, n_l, n_m, _n_ky, n_kx, n_z = prepared.state_shape
-    assert (n_l, n_m) == (6, 12)
-    assert n_kx == int(case.grid.Nx)
-    assert n_z == int(case.grid.Nz)
-    assert n_species >= 1
+    if nonlinear:
+        case = gkx.load(_repo_root() / "examples/05_kinetic_electrons/case.toml")
+        case = dataclasses.replace(case, grid=GridConfig(Nx=4, Ny=4, Nz=8))
+    with jax.enable_x64(False):
+        prepared = prepare_simulation(case, Nl=4, Nm=8, dt=1e-5, steps=2)
+    if nonlinear:
+        state = prepared._backend.initial_state
+        assert prepared.state_shape == state.shape
+        assert (prepared.n_laguerre, prepared.n_hermite) == state.shape[-5:-3]
+        assert prepared.precision == "float32"
+        assert prepared.estimate_memory()["state_bytes"] == state.nbytes
+    else:
+        n_species, n_l, n_m, _n_ky, n_kx, n_z = prepared.state_shape
+        assert (n_l, n_m, n_kx, n_z) == (4, 8, case.grid.Nx, case.grid.Nz)
+        assert n_species >= 1
 
 
 def test_estimate_memory_scales_with_the_grid_and_admits_it_is_a_floor() -> None:
@@ -1063,15 +1073,6 @@ def test_print_summary_writes_every_field(capsys) -> None:
     printed = capsys.readouterr().out
     assert "kind" in printed and "precision" in printed
 
-
-# ---- the prepared topology is the one solve will build --------------------
-#
-# The deck's [run] table names the velocity resolution. Before it was carried
-# on the case, the loader dropped it and prepare_simulation substituted a
-# hard-coded (4, 8), so preparing the shipped Cyclone deck -- which asks for
-# (16, 48) -- described a calculation nobody had requested. Reporting a
-# resolution that solve will not build is worse than reporting none, because a
-# recorded result then carries a resolution it was not run at.
 
 _SHIPPED_LINEAR_DECK = "examples/01_linear_tokamak/case_full.toml"
 
@@ -1124,8 +1125,6 @@ def test_a_deck_without_a_run_table_does_not_grow_one(tmp_path) -> None:
 
 def _tiny_nonlinear_case() -> RuntimeConfig:
     """The smallest nonlinear case that still exercises a real compile."""
-
-    import dataclasses
 
     base = RuntimeConfig()
     return base.replace(
@@ -1198,8 +1197,6 @@ def test_warming_twice_does_not_run_the_case_twice() -> None:
 
 def _linked_nonlinear_case() -> RuntimeConfig:
     """A tiny nonlinear case whose linked chains leave kx rows uncovered."""
-
-    import dataclasses
 
     base = RuntimeConfig()
     return base.replace(
