@@ -176,7 +176,12 @@ Time-integration controls
 Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
 
 - ``compressed_real_fft`` (default ``true``): compressed real-FFT nonlinear
-  bracket; ``false`` uses a full complex FFT for the nonlinear term.
+  bracket; ``false`` uses a full complex FFT and requires two-sided
+  ``ky_layout = "full"`` storage. A half-spectrum state is refused.
+- ``checkpoint`` (default ``false``): rematerialize fixed-step explicit
+  nonlinear scans during reverse-mode differentiation. This reduces retained
+  intermediates at the cost of recomputation, including diagnosed and prepared
+  runs.
 - ``sample_stride`` (record every ``N`` steps) and ``diagnostics_stride``
   (compute streaming diagnostics every ``N`` steps). ``diagnostics = false``
   (or ``--no-diagnostics``) disables diagnostics entirely.

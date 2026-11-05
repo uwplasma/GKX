@@ -1007,32 +1007,47 @@ def test_runtime_nonlinear_imex_final_state_fails_closed_on_unconverged_solves(
     assert out.summary()["implicit_max_relative_residual"] == pytest.approx(3.0e-7)
 
 
-def test_prepare_runtime_nonlinear_reuses_existing_execution_contract() -> None:
+@pytest.mark.parametrize("checkpoint", [False, True])
+@pytest.mark.parametrize("compressed_real_fft", [False, True])
+@pytest.mark.parametrize("ky_layout", ["half", "full"])
+def test_prepare_runtime_nonlinear_reuses_existing_execution_contract(
+    monkeypatch, checkpoint, compressed_real_fft, ky_layout
+) -> None:
+    from unittest.mock import Mock
+    from gkx import solvers_nonlinear_diagnostics as nd
+
+    factory = Mock(wraps=nd.prepare_nonlinear_explicit_diagnostics)
+    patch_runtime(monkeypatch, "prepare_nonlinear_explicit_diagnostics", factory)
+    base = _nonlinear_ion_cfg()
     cfg = replace(
-        _base_runtime_cfg(),
-        grid=GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0, boundary="periodic"),
-        time=TimeConfig(t_max=0.02, dt=0.01, method="rk2", fixed_dt=True),
-        species=(RuntimeSpeciesConfig(name="ion"),),
-        physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
-        terms=RuntimeTermsConfig(nonlinear=0.0, hypercollisions=0.0, end_damping=0.0),
+        base,
+        grid=replace(base.grid, Nx=4, Ny=4, Nz=4, ky_layout=ky_layout),
+        time=replace(
+            base.time,
+            checkpoint=checkpoint,
+            compressed_real_fft=compressed_real_fft,
+        ),
     )
-    simulation = prepare(cfg, Nl=2, Nm=2, steps=2, resolved_diagnostics=False)
+    options = dict(Nl=2, Nm=2, resolved_diagnostics=False)
+    simulation = prepare(cfg, steps=2, **options)
+    assert factory.call_args.kwargs["checkpoint"] is checkpoint
+    assert factory.call_args.kwargs["compressed_real_fft"] is compressed_real_fft
+    if ky_layout == "half" and not compressed_real_fft:
+        with pytest.raises(ValueError, match="full-complex bracket needs"):
+            simulation.run()
+        return
     t, diagnostics, state, _fields = simulation.run()
-    direct = run_runtime_nonlinear(
-        cfg, Nl=2, Nm=2, steps=2, resolved_diagnostics=False, return_state=True
-    )
+    direct = run_runtime_nonlinear(cfg, steps=2, return_state=True, **options)
     np.testing.assert_allclose(np.asarray(t), direct.t)
     assert direct.diagnostics is not None and direct.state is not None
-    np.testing.assert_allclose(
-        np.asarray(diagnostics.heat_flux_t), np.asarray(direct.diagnostics.heat_flux_t)
-    )
+    np.testing.assert_allclose(diagnostics.heat_flux_t, direct.diagnostics.heat_flux_t)
     np.testing.assert_allclose(np.asarray(state), direct.state)
-    assert prepare(cfg, Nl=2, Nm=2, steps=255, resolved_diagnostics=False) is not None
+    assert prepare(cfg, steps=255, **options) is not None
     with pytest.raises(ValueError, match="cannot stop early at saturation"):
-        prepare(cfg, Nl=2, Nm=2, steps=256, resolved_diagnostics=False)
+        prepare(cfg, steps=256, **options)
     full_horizon = replace(cfg, time=replace(cfg.time, run_to="t_max"))
     with pytest.raises(ValueError, match="only support explicit methods"):
-        prepare(full_horizon, Nl=2, Nm=2, steps=2, method="imex")
+        prepare(full_horizon, steps=2, method="imex", **options)
 
 
 def test_runtime_nonlinear_sampled_diagnostics_match_full_scan() -> None:
