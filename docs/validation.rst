@@ -400,7 +400,7 @@ than expecting the archived binary hash.
 
    make -C GX GK_SYSTEM=generic CUDAARCH=86 CXX=g++ CFLAGS=-fPIC \
        NVCC='nvcc -ccbin g++' \
-       NVCCFLAGS='-std=c++17 --forward-unknown-to-host-compiler -arch=compute_86 -code=sm_86 -use_fast_math -fPIC -rdc=true'
+       NVCCFLAGS='-std=c++17 --forward-unknown-to-host-compiler -arch=compute_86 -code=sm_86 -use_fast_math -fPIC -rdc=true -O3'
    mkdir control
    cd control
    export JAX_PLATFORMS=cpu JAX_ENABLE_X64=true GKX_X64=1
