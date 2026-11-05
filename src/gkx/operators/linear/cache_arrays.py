@@ -140,6 +140,23 @@ def with_mu_grid(cache: Any, params: LinearParams) -> Any:
     )
 
 
+def _check_mu_nonlinear(
+    params: Any, electromagnetic: bool, laguerre_mode: str = "grid"
+) -> None:
+    """Nonlinear runs on the nodal mu grid are electrostatic only."""
+
+    if getattr(params, "mu_vperp_max", None) is None:
+        return
+    if electromagnetic:
+        raise NotImplementedError(
+            "nodal mu grid: nonlinear runs are electrostatic only"
+        )
+    if str(laguerre_mode).lower() != "grid":
+        raise NotImplementedError(
+            "nodal mu grid: nonlinear runs require laguerre_mode='grid'"
+        )
+
+
 def with_species_groups(
     cache: Any,
     params: LinearParams,

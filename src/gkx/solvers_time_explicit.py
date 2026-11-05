@@ -8,12 +8,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from numpy.polynomial.laguerre import laggauss
 from typing import Any, Callable, Protocol
 from gkx.callbacks import progress_update_stride
 from gkx.config import method_error, resolve_cfl_fac
 from gkx.core_grid import SpectralGrid
+from gkx.core_velocity import mu_grid_nodes
 from gkx.core_ky_layout import HALF, half_ky_values, source_ky_layout, source_ny_full
 from gkx.diagnostics_contract import SimulationDiagnostics
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
@@ -1280,18 +1281,11 @@ def _binormal_drift_frequency(
 
 
 def _electron_pressure_product(species: _SpeciesFrequencyScales) -> float:
-    if species.charge.size:
-        neg = species.charge < 0.0
-        if np.any(neg):
-            ne = float(species.dens[neg][0])
-            Te = float(species.temp[neg][0])
-        else:
-            ne = float(species.dens[0])
-            Te = float(species.temp[0])
-    else:
-        ne = 1.0
-        Te = 1.0
-    return ne * Te
+    if not species.charge.size:
+        return 1.0
+    electrons = np.flatnonzero(species.charge < 0.0)
+    index = int(electrons[0]) if electrons.size else 0
+    return float(species.dens[index]) * float(species.temp[index])
 
 
 def _parallel_streaming_frequency(
@@ -1303,29 +1297,17 @@ def _parallel_streaming_frequency(
     beta = float(_host_cfl_value(params.beta, "beta"))
     nspec_in = int(max(species.charge.size, 1))
     nte = _electron_pressure_product(species)
-    mime = (
-        (species.vtmax * species.vtmax) / (species.vtmin * species.vtmin)
-        if species.vtmin > 0.0
-        else 0.0
-    )
-    kperprho2 = (
-        grid_bounds.kperp_min
-        * grid_bounds.kperp_min
-        / (geometry.bmag_max * geometry.bmag_max)
-        if geometry.bmag_max > 0.0
-        else 0.0
-    )
+    vmax, vmin = species.vtmax, species.vtmin
+    mime = (vmax * vmax) / (vmin * vmin) if vmin > 0.0 else 0.0
+    kmin, bmax = grid_bounds.kperp_min, geometry.bmag_max
+    kperprho2 = kmin * kmin / (bmax * bmax) if bmax > 0.0 else 0.0
     if nspec_in > 1:
         denom = beta * nte / 2.0 * mime + kperprho2
         guard = 1.0 / np.sqrt(denom) if denom > 0.0 else 0.0
     else:
         guard = 0.0
-    return (
-        species.vtmax
-        * grid_bounds.kz_max
-        * abs(geometry.gradpar)
-        * max(species.vpar_max, guard)
-    )
+    streaming = species.vtmax * grid_bounds.kz_max * abs(geometry.gradpar)
+    return streaming * max(species.vpar_max, guard)
 
 
 def _linear_frequency_bound(
@@ -1340,6 +1322,13 @@ def _linear_frequency_bound(
 ) -> np.ndarray:
     grid_bounds = _grid_frequency_bounds(grid)
     species = _species_frequency_scales(params, nl=nl, nm=nm)
+    if (vperp_max := getattr(params, "mu_vperp_max", None)) is not None:
+        nodes, _ = mu_grid_nodes(nl, float(vperp_max))
+        species = replace(
+            species,
+            muB_max=float(nodes[-1])
+            * float(np.max(_host_cfl_value(geom.bmag(grid.z), "bmag"))),
+        )
     geometry = _effective_geometry_frequency_scales(geom, grid, grid_bounds, species)
     omega_max = np.zeros(3, dtype=float)
     omega_max[0] = _radial_drift_frequency(geom, grid, grid_bounds, species, geometry)

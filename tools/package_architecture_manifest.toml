@@ -1217,7 +1217,8 @@ recursive = true
 # 69180 -> 69183: the log-linear growth-fit fallback requires a late-time share of the run, so a few-sample transient window cannot be reported as a rate. Measured.
 # 69183 -> 69159: terms/assembly.py (1208 -> 1191) and workflows/runtime/startup.py (1201 -> 1194) back under the 1200-line tripwire by collapsing duplicated field-by-field assembly; both exceptions deleted. Measured.
 # 69159 -> 69271: the chain IMEX factor, probes and collision sub-step per species group at the group's own (Nl, Nm). Measured.
-baseline = 69271
+# 69271 -> 69264: electrostatic nodal nonlinear runs and density seeding on all nodes. Measured.
+baseline = 69264
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1585,7 +1586,8 @@ recursive = true
 # 64466 -> 64570: species-closure gate (closed species feels only the last-moment sink, the other is bitwise unchanged), the runtime-config mapping and the closure on a per-species moment group. Measured.
 # 64570 -> 64592: regression test for the growth-fit fallback window (beating amplitude, no stationary window) and a re-recorded unsettled collisional rate. Measured.
 # 64592 -> 64646: per-species-count IMEX factor test (ions keep fewer moments than the state). Measured.
-baseline = 64646
+# 64646 -> 64791: nodal nonlinear equivalence, phi seeding and two-species free-energy checks. Measured.
+baseline = 64791
 target = 35000
 
 [[line_budget_policy.counts]]

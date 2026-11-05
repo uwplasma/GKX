@@ -111,6 +111,10 @@ def _jl_family(cache: LinearCache) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarra
     else:
         raise ValueError(f"unexpected JlB rank {JlB.ndim}; expected 4 or 5")
 
+    if getattr(cache, "mu_grid", False):  # nodal: (x_j + 1/2) J_j
+        from gkx.terms.linear_terms import mu_energy
+
+        return Jl_s, JlB_s, (mu_energy(cache, 4) + 0.5) * Jl_s
     Nl = Jl_s.shape[1]
     ell = jnp.arange(Nl, dtype=Jl_s.dtype)[None, :, None, None, None]
     # The upper neighbor of the highest retained moment is analytic (#325).
