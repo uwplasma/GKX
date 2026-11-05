@@ -676,13 +676,7 @@ def _run_chunked_diagnostics(
 
 
 def _chunk_spill_dir() -> Path | None:
-    """Directory for spilled chunk diagnostics, or ``None`` to keep them in RAM.
-
-    Environment rather than TOML because it is a property of the *machine* the
-    run lands on, not of the physics case: the same config is submitted to a
-    workstation with 512 GB and to a batch node with 16, and only the second one
-    needs to spill.
-    """
+    """Resolve machine-specific diagnostic spilling independently of the case."""
 
     raw = os.environ.get("GKX_CHUNK_SPILL_DIR", "").strip()
     return Path(raw) if raw else None
@@ -861,8 +855,6 @@ def _run_once(
     method: str | None,
     status: Callable[[str], None],
 ) -> tuple[RuntimeNonlinearResult, Any]:
-    """Run one nonlinear trajectory and return its result plus its final state."""
-
     if (
         not policy.requires_diagnostic_path
         and cfg.time.fixed_dt
@@ -999,14 +991,7 @@ def run_runtime_nonlinear(
     )
     if prepare_only:
         if _saturation_stop_condition(cfg, ctx, policy) is not None:
-            # A prepared object compiles one scan of a fixed length, and
-            # saturation stopping decides the length while the run is going, so
-            # the two cannot both hold. Refusing is right -- quietly dropping
-            # the stop condition would hand back a simulation that integrates
-            # past where the deck asked it to stop. But the refusal used to end
-            # here, and every shipped nonlinear deck sets run_to = "saturation",
-            # so gkx.prepare had no working example in the tree. Name the two
-            # ways out.
+            # A fixed-length prepared scan cannot stop at saturation.
             raise ValueError(
                 "prepared execution cannot stop early at saturation: this deck "
                 f"sets [time] run_to = {str(cfg.time.run_to).strip().lower()!r}, "

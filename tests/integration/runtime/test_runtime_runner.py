@@ -1235,66 +1235,36 @@ def test_runtime_nonlinear_validates_dt_steps_and_fixed_mode_contract() -> None:
         run_runtime_nonlinear(fixed_cfg, ky_target=0.2, Nl=3, Nm=4, dt=0.1, steps=2)
 
 
-def test_runtime_init_file_replace_mode_scales_loaded_state(tmp_path) -> None:
+@pytest.mark.parametrize("mode,scale", [("replace", 2.5), ("add", 3.0)])
+def test_runtime_init_file_modes(mode, scale, tmp_path) -> None:
     cfg = replace(
         _base_runtime_cfg(),
         grid=GridConfig(Nx=2, Ny=4, Nz=4, Lx=6.28, Ly=6.28, boundary="periodic"),
         init=InitializationConfig(
             init_field="density",
-            init_amp=1.0e-8,
+            init_amp=0.25 if mode == "add" else 1.0e-8,
             gaussian_init=False,
+            init_single=mode == "add",
             init_file=str(tmp_path / "restart.bin"),
-            init_file_scale=2.5,
-            init_file_mode="replace",
+            init_file_scale=scale,
+            init_file_mode=mode,
         ),
     )
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
-    raw = (1.0 + 2.0j) * np.ones(
-        (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
+    raw = np.full(
+        (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size),
+        1.0 if mode == "add" else 1.0 + 2.0j,
+        dtype=np.complex64,
     )
     raw.tofile(cfg.init.init_file)
-
     g0 = _build_initial_condition(
         grid, geom, cfg, ky_index=1, kx_index=0, Nl=3, Nm=4, nspecies=1
     )
-
-    assert np.allclose(np.asarray(g0), 2.5 * raw)
-
-
-def test_runtime_init_file_add_mode_adds_seed_perturbation(tmp_path) -> None:
-    cfg = replace(
-        _base_runtime_cfg(),
-        grid=GridConfig(Nx=2, Ny=4, Nz=4, Lx=6.28, Ly=6.28, boundary="periodic"),
-        init=InitializationConfig(
-            init_field="density",
-            init_amp=0.25,
-            gaussian_init=False,
-            init_single=True,
-            init_file=str(tmp_path / "restart.bin"),
-            init_file_scale=3.0,
-            init_file_mode="add",
-        ),
-    )
-    grid = build_spectral_grid(cfg.grid)
-    geom = SAlphaGeometry.from_config(cfg.geometry)
-    base = np.ones(
-        (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
-    )
-    base.tofile(cfg.init.init_file)
-
-    g0 = np.asarray(
-        _build_initial_condition(
-            grid, geom, cfg, ky_index=1, kx_index=0, Nl=3, Nm=4, nspecies=1
-        )
-    )
-
-    assert np.allclose(g0[0, 1:, :, :, :, :], 3.0)
-    assert np.allclose(g0[0, 0, 1:, :, :, :], 3.0)
-    assert np.allclose(g0[0, 0, 0, 0, :, :], 3.0)
-    assert np.allclose(g0[0, 0, 0, 1, 1:, :], 3.0)
-    expected = 3.0 + 0.25
-    assert np.allclose(g0[0, 0, 0, 1, 0, :], expected)
+    expected = scale * raw
+    if mode == "add":
+        expected[0, 0, 0, 1, 0, :] += 0.25
+    np.testing.assert_allclose(g0, expected)
 
 
 @pytest.mark.parametrize(
