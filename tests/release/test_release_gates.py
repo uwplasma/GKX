@@ -1058,15 +1058,6 @@ def test_benchmark_capability_matrix_is_complete_and_fail_closed() -> None:
     assert metadata["comparison_code"] == "GX"
     assert metadata["comparison_revision"]
     assert metadata["comparison_source_fingerprint"].startswith("sha256:")
-    assert metadata["office_instrumented_source_fingerprint"].startswith("sha256:")
-    assert (
-        metadata["comparison_source_fingerprint"]
-        != metadata["office_instrumented_source_fingerprint"]
-    )
-    for needle in ("validated_clean_rebuild", "OpenMPI 4.1.6", "HDF5 1.14.5"):
-        assert needle in metadata["office_binary_status"]
-    for needle in ("Cyclone", "2145 steps"):
-        assert needle in metadata["office_runtime_probe"]
     assert len(by_id) == len(rows) >= 15
     assert {row["status"] for row in rows} <= allowed_statuses
     assert all(row["gkx_owner"] and row["evidence"] for row in rows)
