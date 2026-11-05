@@ -312,7 +312,7 @@ class PreparedExplicitNonlinearDiagnostics:
         cache: LinearCache | None = None,
         params: LinearParams | None = None,
         time_horizon: float | None = None,
-    ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
+    ) -> tuple[jnp.ndarray, SimulationDiagnostics | None, jnp.ndarray, FieldState]:
         """Advance one state through the prepared compiled simulation."""
 
         G_final, scan_diag_out, fields_final = self.run_arrays(
@@ -323,6 +323,8 @@ class PreparedExplicitNonlinearDiagnostics:
             time_horizon=time_horizon,
         )
         diag, t, dt_series = scan_diag_out
+        if diag is None:
+            return jnp.asarray(t), None, G_final, fields_final
         diag_out = self._finalize(
             diag,
             t=t,
@@ -2209,7 +2211,10 @@ def integrate_nonlinear_explicit_diagnostics_state(
             G0, grid, geom, params, dt, steps, **{**options, "time_horizon": None}
         )
         compile_cache[key] = prepared
-    return prepared.run(G0, time_horizon=time_horizon)
+    t, diagnostics, state, fields = prepared.run(G0, time_horizon=time_horizon)
+    if diagnostics is None:
+        raise RuntimeError("diagnosed integration requires a diagnostic backend")
+    return t, diagnostics, state, fields
 
 
 def prepare_nonlinear_explicit_diagnostics(

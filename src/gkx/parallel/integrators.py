@@ -861,6 +861,29 @@ def integrate_nonlinear_species_hermite(
     them the route is compute-only and returns an empty trace map.
     """
 
+    return _prepare_nonlinear_species_hermite(**locals())(G0)
+
+
+def _prepare_nonlinear_species_hermite(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str = "rk2",
+    terms: TermConfig | None = None,
+    grid: Any | None = None,
+    vol_fac: jnp.ndarray | None = None,
+    flux_fac: jnp.ndarray | None = None,
+    plan: Any | None = None,
+    devices: Any | None = None,
+    num_devices: int | None = None,
+    compressed_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+) -> Callable[[jnp.ndarray], SpeciesHermiteRun]:
+    """Stage fixed model operands once and return the shared trajectory callable."""
+
     _validate_steps(steps)
     method_key = _validate_explicit_method(method)
     term_cfg = terms or TermConfig()
@@ -933,19 +956,26 @@ def integrate_nonlinear_species_hermite(
     )
     from jax.sharding import NamedSharding
 
-    final, stacked = jax.jit(mapped)(
-        stage_from_host(state, NamedSharding(mesh, state_spec)), *leaves
-    )
-    traces = dict(zip(_TRACE_NAMES, stacked, strict=True)) if record else {}
-    return SpeciesHermiteRun(
-        state=final,
-        traces=traces,
-        plan=resolved,
-        mesh_shape=(
-            int(resolved.chunks.get("s", 1)),
-            int(resolved.chunks.get("m", 1)),
-        ),
-    )
+    compiled = jax.jit(mapped)
+    sharding = NamedSharding(mesh, state_spec)
+
+    def execute(model_operands, value):
+        final, stacked = compiled(
+            stage_from_host(jnp.asarray(value, dtype=state_dtype), sharding),
+            *model_operands,
+        )
+        traces = dict(zip(_TRACE_NAMES, stacked, strict=True)) if record else {}
+        return SpeciesHermiteRun(
+            state=final,
+            traces=traces,
+            plan=resolved,
+            mesh_shape=(
+                int(resolved.chunks.get("s", 1)),
+                int(resolved.chunks.get("m", 1)),
+            ),
+        )
+
+    return jax.tree_util.Partial(execute, leaves)
 
 
 def _project_local(value, projector, dtype):

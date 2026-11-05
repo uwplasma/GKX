@@ -26,7 +26,7 @@ shards and exchange only error scalars.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
@@ -386,11 +386,13 @@ def _integrate_species_hermite_final_state(
     method: str | None,
     plan: NonlinearParallelPlan,
     status: Any,
-) -> tuple[Any, Any] | None:
+    prepare: Callable[[], Any] | None = None,
+) -> Any:
     """Use named collectives only when every requested policy is supported."""
 
     supported = (
         plan.axis == "species_hermite"
+        and (prepare is None or not plan.strict_identity)
         and bool(cfg.time.fixed_dt)
         and not ctx.adaptive_chunked
         and not policy.diagnostics_on
@@ -419,24 +421,66 @@ def _integrate_species_hermite_final_state(
     if not supported:
         return None
     from gkx.operators.linear.cache_builder import build_linear_cache
-    from gkx.parallel.integrators import integrate_nonlinear_species_hermite
+    from gkx.parallel.integrators import _prepare_nonlinear_species_hermite
     from gkx.terms.assembly import compute_fields_cached
 
     status("using named species-Hermite collectives for the fixed-step trajectory")
-    cache = build_linear_cache(ctx.grid, ctx.geom, ctx.params, *ctx.G0.shape[1:3])
-    sharded_state = integrate_nonlinear_species_hermite(
+    prepared = prepare() if prepare is not None else None
+    cache = (
+        prepared.cache
+        if prepared is not None
+        else build_linear_cache(ctx.grid, ctx.geom, ctx.params, *ctx.G0.shape[1:3])
+    )
+    params, terms = ctx.params, ctx.terms
+
+    advance = _prepare_nonlinear_species_hermite(
         ctx.G0,
         cache,
-        ctx.params,
+        params,
         dt=ctx.dt,
         steps=ctx.steps,
         method=cfg.time.method,
-        terms=ctx.terms,
+        terms=terms,
         plan=plan.mesh_plan,
         devices=plan.devices,
         compressed_real_fft=cfg.time.compressed_real_fft,
         laguerre_mode=policy.laguerre_mode,
-    ).state
+    )
+
+    if prepared is not None:
+        from gkx.parallel.integrators import stage_from_host
+        from gkx.parallel.state import resolve_species_hermite_sharding
+
+        sharding = resolve_species_hermite_sharding(
+            prepared.initial_state, plan.mesh_plan, devices=plan.devices
+        )
+        shape, dtype = prepared.initial_state.shape, prepared.initial_state.dtype
+
+        @jax.jit
+        def run_raw(state, advance):
+            final = advance(state).state
+            fields = compute_fields_cached(final, cache, params, terms=terms)
+            empty = jnp.empty((0,), dtype=jnp.real(final).dtype)
+            return final, (None, empty, empty), fields
+
+        def execute(state, time_horizon=None):
+            if time_horizon is not None or state.shape != shape:
+                raise ValueError(
+                    "parallel preparation requires its fixed shape and horizon"
+                )
+            state = jnp.asarray(state, dtype=dtype)
+            return run_raw(stage_from_host(state, sharding), advance)
+
+        def reject_dynamic(*_args):
+            raise ValueError("parallel preparation does not support model overrides")
+
+        return replace(
+            prepared,
+            initial_state=stage_from_host(prepared.initial_state, sharding),
+            _run_raw=execute,
+            _run_dynamic_raw=reject_dynamic,
+        )
+    sharded_state = advance(ctx.G0).state
     if not bool(jnp.all(jnp.isfinite(sharded_state))):
         raise FloatingPointError(
             "species-Hermite integration produced a non-finite state"

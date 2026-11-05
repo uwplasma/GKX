@@ -1211,12 +1211,35 @@ def _linked_nonlinear_case() -> RuntimeConfig:
     )
 
 
-def test_prepared_solve_projects_a_supplied_state_onto_the_linked_cover() -> None:
+@pytest.mark.parametrize("parallel", [False, True])
+def test_prepared_solve_projects_a_supplied_state_onto_the_linked_cover(
+    monkeypatch, parallel
+) -> None:
+    import dataclasses
     import numpy as np
 
     from gkx.operators.linear.linked import linked_cover_mask_from_cache
 
-    prepared = prepare_simulation(_linked_nonlinear_case(), Nl=2, Nm=4, steps=2)
+    case = _linked_nonlinear_case()
+    if parallel:
+        import gkx.workflows.nonlinear as workflow
+
+        # Test the numeric adapter on the available mesh; topology has its own gates.
+        plan = workflow.NonlinearParallelPlan(
+            "species_hermite", tuple(jax.devices()[:2]), False
+        )
+        monkeypatch.setattr(
+            workflow, "resolve_nonlinear_parallel_plan", lambda _cfg: plan
+        )
+        case = case.replace(
+            parallel=public_config.RuntimeParallelConfig(
+                strategy="shard_map", axis="species_hermite", strict_identity=False
+            ),
+            time=dataclasses.replace(case.time, method="rk3", fixed_dt=True),
+        )
+    prepared = prepare_simulation(
+        case, Nl=2, Nm=4, steps=2, **({"diagnostics": False} if parallel else {})
+    )
     backend = prepared._backend
     cover = np.asarray(linked_cover_mask_from_cache(backend.cache))
     assert not cover.all(), "this deck must leave rows outside the chains"
@@ -1238,6 +1261,26 @@ def test_prepared_solve_projects_a_supplied_state_onto_the_linked_cover() -> Non
     final_on_cover = np.asarray(from_on_cover[2])
     assert np.max(np.abs(final_supplied[off])) == 0.0
     np.testing.assert_array_equal(final_supplied, final_on_cover)
+    if parallel:
+        assert from_supplied[0].size == 0 and from_supplied[1] is None
+
+        def objective(scale):
+            final = prepared.solve(initial_state=scale * jnp.asarray(supplied))[2]
+            return jnp.real(jnp.vdot(final, final))
+
+        value, gradient = prepared.value_and_grad(objective, jnp.asarray(1.0))
+        fd = (objective(1.01) - objective(0.99)) / 0.02
+        assert float(value) > 0 and bool(jnp.isfinite(gradient))
+        np.testing.assert_allclose(gradient, fd, rtol=2e-2, atol=1e-12)
+        for override in (
+            {"initial_state": supplied[:, :, :-1]},
+            {"time_horizon": 1.0},
+            {"cache": backend.cache, "params": backend.params},
+        ):
+            with pytest.raises(ValueError):
+                backend.run_arrays(**override)
+        with pytest.raises(ValueError, match="requires diagnostics=False"):
+            prepare_simulation(case, Nl=2, Nm=4, steps=2)
 
 
 # ---- from test_core_ky_layout.py ----
