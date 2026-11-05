@@ -378,24 +378,13 @@ def assert_nonlinear_parallel_identity(
     )
 
 
-def _integrate_species_hermite_final_state(
-    cfg: Any,
-    ctx: Any,
-    policy: Any,
-    *,
-    method: str | None,
-    plan: NonlinearParallelPlan,
-    status: Any,
-    prepare: Callable[[], Any] | None = None,
-) -> Any:
-    """Use named collectives only when every requested policy is supported."""
+def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
+    """Check shared fixed-step named-collective physics and runtime limits."""
 
-    supported = (
+    return (
         plan.axis == "species_hermite"
-        and (prepare is None or not plan.strict_identity)
         and bool(cfg.time.fixed_dt)
         and not ctx.adaptive_chunked
-        and not policy.diagnostics_on
         and not policy.fixed_mode_on
         and not policy.source_on
         and not policy.show_progress
@@ -418,7 +407,27 @@ def _integrate_species_hermite_final_state(
             or not np.any(np.asarray(ctx.params.nu) != 0.0)
         )
     )
-    if not supported:
+
+
+def _integrate_species_hermite_final_state(
+    cfg: Any,
+    ctx: Any,
+    policy: Any,
+    *,
+    method: str | None,
+    plan: NonlinearParallelPlan,
+    status: Any,
+    prepare: Callable[[], Any] | None = None,
+) -> Any:
+    """Use named collectives only when every requested policy is supported."""
+
+    if (
+        policy.diagnostics_on
+        or (prepare is not None and plan.strict_identity)
+        or not _supports_species_hermite_policy(
+            cfg, ctx, policy, method=method, plan=plan
+        )
+    ):
         return None
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.parallel.integrators import _prepare_nonlinear_species_hermite
