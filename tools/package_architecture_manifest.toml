@@ -461,7 +461,8 @@ path = "solvers_nonlinear_diagnostics.py"
 # diagnosed-only integration boundary. Measured; target unchanged.
 # 3441 -> 3451: explicit named output placement keeps the final state sharded
 # and replicates global diagnostics for the existing host result contract.
-baseline_lines = 3451
+# 3451 -> 3472: host-horizon execution hook and explicit transformed-window boundary.
+baseline_lines = 3472
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -542,7 +543,8 @@ path = "workflows/nonlinear.py"
 # Reuses the existing backend and policy guards; measured, target unchanged.
 # 1068 -> 1097: named diagnosed RHS reuses the existing one-shot diagnostic
 # runner, finite checks and result handling; no second diagnostic scan.
-baseline_lines = 1097
+# 1097 -> 1119: shared prepared horizon chunk runner; measured, target unchanged.
+baseline_lines = 1119
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -1233,7 +1235,8 @@ recursive = true
 # 69450 -> 69455: reuse the existing Hermite halo for magnetic flutter.
 # 69455 -> 69463: omit statically disabled electromagnetic fields from the
 # adaptive CFL view; preserve the field outputs and active-field calculation.
-baseline = 69463
+# 69463 -> 69511: reuse adaptive host chunks for complete prepared horizons.
+baseline = 69511
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1614,7 +1617,8 @@ recursive = true
 # and statically disabled electromagnetic fields in the existing fixture.
 # 64794 -> 64798: verify diagnosed linked-cover projection after enabling preparation.
 # 64798 -> 64819: verify adaptive chunks reuse one prepared horizon variant.
-baseline = 64819
+# 64819 -> 64843: prepared horizon completion, reset and transform refusal controls.
+baseline = 64843
 target = 35000
 
 [[line_budget_policy.counts]]

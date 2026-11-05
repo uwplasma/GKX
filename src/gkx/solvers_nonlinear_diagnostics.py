@@ -215,6 +215,7 @@ class PreparedExplicitNonlinearDiagnostics:
     fixed_dt: bool
     cfl_scales: Any = None
     cover_mask: Any = None
+    _run_to_horizon: Callable[..., Any] | None = None
 
     def run_arrays(
         self,
@@ -230,12 +231,19 @@ class PreparedExplicitNonlinearDiagnostics:
         State is dynamic and projected onto the linked-chain cover. Fixed-step
         differentiation may supply matched cache/params and geometry. Adaptive
         model overrides are refused; its operator remains fixed.
+        Runtime preparation without an explicit step budget uses host chunks
+        through ``run``; prepare with ``steps`` for this finite-window interface.
 
         ``time_horizon`` (adaptive runs) stops stepping once the run time
         reaches it. It is a traced operand, so changing it between calls
         reuses the compiled scan; it overrides any prepared horizon.
         """
 
+        if self._run_to_horizon is not None:
+            raise ValueError(
+                "adaptive horizon execution uses host chunks; prepare with explicit "
+                "steps for finite-window run_arrays and differentiation"
+            )
         if (cache is None) != (params is None):
             raise ValueError("cache and params must be supplied together")
         if geometry is not None and cache is None:
@@ -291,6 +299,19 @@ class PreparedExplicitNonlinearDiagnostics:
     ) -> tuple[jnp.ndarray, SimulationDiagnostics | None, jnp.ndarray, FieldState]:
         """Advance one state through the prepared compiled simulation."""
 
+        if self._run_to_horizon is not None:
+            if any(
+                isinstance(value, jax.core.Tracer)
+                for value in jax.tree_util.tree_leaves((initial_state, time_horizon))
+            ):
+                raise ValueError(
+                    "prepare with explicit steps for transformed execution"
+                )
+            if any(value is not None for value in (geometry, cache, params)):
+                raise ValueError(
+                    "dynamic geometry, cache, or params require fixed_dt=True"
+                )
+            return self._run_to_horizon(initial_state, time_horizon)
         G_final, scan_diag_out, fields_final = self.run_arrays(
             initial_state,
             geometry=geometry,

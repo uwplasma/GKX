@@ -22,6 +22,7 @@ from gkx.diagnostics.saturation import (
     saturation_stop_decision,
 )
 from gkx.geometry import apply_geometry_grid_defaults
+from gkx.operators.linear.linked import project_to_linked_cover
 from gkx.operators.nonlinear.policies import bracket_cfl_rate
 from gkx.solvers_nonlinear_imex import (
     IMEX_CHAIN_METHODS,
@@ -530,6 +531,7 @@ def _run_chunked_diagnostics(
     status: Callable[[str], None],
     stop_condition: Callable[[Any, Any, Any, Any], dict[str, Any]] | None,
     rhs_factory: Callable[..., Any] | None = None,
+    compile_cache: dict[Any, Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
     """Run adaptive chunks or fixed-step saturation checks within the hard cap."""
 
@@ -538,7 +540,7 @@ def _run_chunked_diagnostics(
     chunk_steps = min(ctx.steps, 128)
     G_chunk = ctx.G0
     steps_left = ctx.steps
-    compile_cache: dict[Any, Any] = {}
+    compile_cache = {} if compile_cache is None else compile_cache
     # Chain IMEX retunes its fixed factor between chunks.
     imex = ctx.adaptive_chunked and (method or cfg.time.method) in IMEX_CHAIN_METHODS
     # Zero requests the original CFL initialization on this trajectory only.
@@ -1054,23 +1056,48 @@ def run_runtime_nonlinear(
             cfg,
             ctx,
             policy,
-            steps=ctx.steps,
+            steps=min(ctx.steps, 128) if ctx.adaptive_chunked else ctx.steps,
             method=method,
-            sample_stride=policy.sample_stride,
-            diagnostics_stride=policy.diagnostics_stride,
+            sample_stride=1 if ctx.adaptive_chunked else policy.sample_stride,
+            diagnostics_stride=1 if ctx.adaptive_chunked else policy.diagnostics_stride,
             fixed_dt=bool(cfg.time.fixed_dt),
             show_progress=show_progress,
         )
         if ctx.adaptive_chunked:
             kwargs["time_horizon"] = float(cfg.time.t_max)
-        prepare_factory = partial(
-            prepare_nonlinear_explicit_diagnostics,
-            ctx.G0,
-            ctx.grid,
-            ctx.geom,
-            ctx.params,
-            **kwargs,
-        )
+
+        def prepare_window(**runtime_options):
+            backend = prepare_nonlinear_explicit_diagnostics(
+                ctx.G0, ctx.grid, ctx.geom, ctx.params, **kwargs, **runtime_options
+            )
+            if not ctx.adaptive_chunked:
+                return backend
+            cache = {(min(ctx.steps, 128), False, show_progress): backend}
+
+            def run_to_horizon(initial_state, time_horizon):
+                state = (
+                    backend.initial_state if initial_state is None else initial_state
+                )
+                state = project_to_linked_cover(jnp.asarray(state), backend.cover_mask)
+                config = (
+                    cfg
+                    if time_horizon is None
+                    else replace(cfg, time=replace(cfg.time, t_max=float(time_horizon)))
+                )
+                return _run_chunked_diagnostics(
+                    config,
+                    replace(ctx, G0=state),
+                    policy,
+                    method=method,
+                    status=status,
+                    stop_condition=None,
+                    rhs_factory=runtime_options.get("_rhs_factory"),
+                    compile_cache=cache,
+                )[:4]
+
+            return replace(backend, _run_to_horizon=run_to_horizon)
+
+        prepare_factory = prepare_window
     if plan is not None:
         return _run_sharded(
             cfg,
