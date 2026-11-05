@@ -33,6 +33,7 @@ from gkx.solvers_time_explicit import (
 )
 from gkx.config import RuntimeConfig, resolve_cfl_fac
 from gkx.solvers_nonlinear_diagnostics import (
+    _continue_nonlinear_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
     prepare_nonlinear_explicit_diagnostics,
 )
@@ -87,13 +88,7 @@ def build_runtime_nonlinear_diagnostics_kwargs(
     resolved_diagnostics: bool,
     show_progress: bool,
 ) -> dict[str, Any]:
-    """Build keyword arguments for nonlinear diagnostic integration.
-
-    Runtime drivers use the same physics kwargs for fixed-window and adaptive
-    chunked diagnostics. Keeping them in one policy helper prevents drift
-    between the two branches while leaving the actual integrator call in the
-    public runtime facade.
-    """
+    """Keep fixed-window and adaptive diagnostic routes on one physics policy."""
 
     method_use = str(method or cfg.time.method)
     return dict(
@@ -548,13 +543,7 @@ def _run_chunked_diagnostics(
     status: Callable[[str], None],
     stop_condition: Callable[[Any, Any, Any, Any], dict[str, Any]] | None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
-    """Run chunked nonlinear diagnostics for the adaptive and saturation routes.
-
-    The adaptive route keeps its historical chunking; the fixed-step route only
-    goes through here for run-to-saturation, chunking on step count so the stop
-    check runs a few times per horizon while the total step budget stays the
-    hard cap.
-    """
+    """Run adaptive chunks or fixed-step saturation checks within the hard cap."""
 
     step_capped = not ctx.adaptive_chunked
     chunk_steps = min(ctx.steps, 128)
@@ -565,7 +554,12 @@ def _run_chunked_diagnostics(
     # Chain IMEX with fixed_dt = false: a fixed factor per chunk, dt chosen
     # between chunks (ImexDtControl), the factor swapped in as an operand.
     imex = ctx.adaptive_chunked and (method or cfg.time.method) in IMEX_CHAIN_METHODS
-    control: dict[str, Any] = {"dt": ctx.dt}
+    # Zero requests the original CFL initialization on this trajectory only.
+    control: dict[str, Any] = {
+        "dt": ctx.dt,
+        "next_dt": jnp.asarray(0.0, dtype=jnp.real(ctx.G0).dtype),
+    }
+    continue_pi = ctx.adaptive_chunked and (method or cfg.time.method) == "rk4-pi"
     if imex:
         chunk_steps = 32
 
@@ -573,9 +567,19 @@ def _run_chunked_diagnostics(
         if imex and "op" in control:
             for key, prepared in compile_cache.items():
                 compile_cache[key] = prepared.with_chain(control["op"])
-        out = integrate_nonlinear_explicit_diagnostics_state(
-            G, ctx.grid, ctx.geom, ctx.params, **kwargs
-        )
+        if continue_pi:
+            out, control["next_dt"] = _continue_nonlinear_diagnostics(
+                G,
+                ctx.grid,
+                ctx.geom,
+                ctx.params,
+                initial_dt=control["next_dt"],
+                **kwargs,
+            )
+        else:
+            out = integrate_nonlinear_explicit_diagnostics_state(
+                G, ctx.grid, ctx.geom, ctx.params, **kwargs
+            )
         if imex and "op" not in control:
             prepared = next(iter(compile_cache.values()))
             op = prepared.chain
@@ -1038,14 +1042,7 @@ def run_runtime_nonlinear(
     prepare_factory: Callable[[], Any] | None = None
     if prepare_only:
         if _saturation_stop_condition(cfg, ctx, policy) is not None:
-            # A prepared object compiles one scan of a fixed length, and
-            # saturation stopping decides the length while the run is going, so
-            # the two cannot both hold. Refusing is right -- quietly dropping
-            # the stop condition would hand back a simulation that integrates
-            # past where the deck asked it to stop. But the refusal used to end
-            # here, and every shipped nonlinear deck sets run_to = "saturation",
-            # so gkx.prepare had no working example in the tree. Name the two
-            # ways out.
+            # A fixed-length prepared scan cannot stop at saturation.
             raise ValueError(
                 "prepared execution cannot stop early at saturation: this deck "
                 f"sets [time] run_to = {str(cfg.time.run_to).strip().lower()!r}, "
