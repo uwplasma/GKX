@@ -629,37 +629,42 @@ def _species_hermite_local_rhs(
     dG = hermite_halo_interior(dG, chunks=nm_chunks, ghost_depth=ghost_depth)
     if term_cfg.nonlinear == 0.0:
         return dG, fields, head
-    bracket = _unfused(
-        nonlinear_em_contribution(
-            local,
-            phi=fields.phi,
-            apar=fields.apar if term_cfg.apar != 0.0 else None,
-            bpar=fields.bpar if term_cfg.bpar != 0.0 else None,
-            Jl=cache.Jl,
-            JlB=cache.JlB,
-            tz=params.tz,
-            vth=params.vth,
-            sqrt_m=cache.sqrt_m[:, interior],
-            sqrt_m_p1=cache.sqrt_m_p1[:, interior],
-            kx_grid=cache.kx_grid,
-            ky_grid=cache.ky_grid,
-            ny_full=getattr(cache, "ny_full", None),
-            dealias_mask=cache.dealias_mask,
-            kxfac=cache.kxfac,
-            weight=jnp.asarray(term_cfg.nonlinear, dtype=real_dtype),
-            apar_weight=float(term_cfg.apar),
-            bpar_weight=float(term_cfg.bpar),
-            laguerre_to_grid=cache.laguerre_to_grid,
-            laguerre_to_spectral=cache.laguerre_to_spectral,
-            laguerre_roots=cache.laguerre_roots,
-            laguerre_j0=cache.laguerre_j0,
-            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
-            b=cache.b,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-        )
+    flutter_halo = nm_chunks > 1 and term_cfg.apar != 0.0
+    bracket_state = extended if flutter_halo else local
+    bracket_rows = slice(None) if flutter_halo else interior
+    bracket = nonlinear_em_contribution(
+        bracket_state,
+        phi=fields.phi,
+        apar=fields.apar if term_cfg.apar != 0.0 else None,
+        bpar=fields.bpar if term_cfg.bpar != 0.0 else None,
+        Jl=cache.Jl,
+        JlB=cache.JlB,
+        tz=params.tz,
+        vth=params.vth,
+        sqrt_m=cache.sqrt_m[:, bracket_rows],
+        sqrt_m_p1=cache.sqrt_m_p1[:, bracket_rows],
+        kx_grid=cache.kx_grid,
+        ky_grid=cache.ky_grid,
+        ny_full=getattr(cache, "ny_full", None),
+        dealias_mask=cache.dealias_mask,
+        kxfac=cache.kxfac,
+        weight=jnp.asarray(term_cfg.nonlinear, dtype=real_dtype),
+        apar_weight=float(term_cfg.apar),
+        bpar_weight=float(term_cfg.bpar),
+        laguerre_to_grid=cache.laguerre_to_grid,
+        laguerre_to_spectral=cache.laguerre_to_spectral,
+        laguerre_roots=cache.laguerre_roots,
+        laguerre_j0=cache.laguerre_j0,
+        laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
+        b=cache.b,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
     )
-    return dG + bracket, fields, head
+    if flutter_halo:
+        bracket = hermite_halo_interior(
+            bracket, chunks=nm_chunks, ghost_depth=ghost_depth
+        )
+    return dG + _unfused(bracket), fields, head
 
 
 def stage_from_host(value: Any, sharding: Any) -> Any:
