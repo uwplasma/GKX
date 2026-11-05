@@ -42,6 +42,7 @@ from gkx.diagnostics.quasilinear_transport import (
 import sys
 from types import SimpleNamespace
 import csv
+import ast
 import py_compile
 import re
 
@@ -1886,6 +1887,20 @@ def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
     assert "(turbulent_transport, 0.0, transport_weight)," in text
     assert "result = least_squares(" in text
     assert "def report(label, local_equilibrium):" in text
+    nodes = [
+        node
+        for node in ast.parse(text).body
+        if getattr(node, "name", None) == "initial_state"
+        or any(getattr(t, "id", None) == "grid" for t in getattr(node, "targets", ()))
+    ]
+    scope = dict(gkx=gkx, jnp=jnp, NX=8, NY=8, NZ=8, NL=2, NM=4)
+    module = ast.Module(body=nodes, type_ignores=[])
+    exec(compile(module, str(QA_SCRIPT), "exec"), scope)
+    state, grid = np.asarray(scope["initial_state"]()), scope["grid"]
+    assert state.shape[-3:] == (grid.ky.size, grid.kx.size, grid.z.size)
+    reverse = (-np.arange(8)) % 8
+    partner = np.take(np.take(state, reverse, axis=-3), reverse, axis=-2)
+    np.testing.assert_array_equal(state, np.conj(partner))
 
 
 def test_docs_name_the_single_qa_autodiff_script() -> None:
