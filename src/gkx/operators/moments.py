@@ -591,7 +591,7 @@ def _ky_pair_fold(source: Any) -> _KyPairFold | None:
     return _KyPairFold(
         inv_weight=jnp.asarray(1.0 / weights),
         paired=jnp.asarray((weights > 1.0).astype(float)),
-        kx_order=conjugate_kx_order(int(np.asarray(source.kx).shape[0])),
+        kx_order=conjugate_kx_order(int(np.shape(source.kx)[0])),
     )
 
 

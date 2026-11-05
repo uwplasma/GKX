@@ -906,7 +906,6 @@ def _run_sharded(
     ):
         rhs_factory = partial(
             _species_hermite_diagnostic_rhs,
-            params=ctx.params,
             plan=plan,
             compressed_real_fft=cfg.time.compressed_real_fft,
             laguerre_mode=policy.laguerre_mode,

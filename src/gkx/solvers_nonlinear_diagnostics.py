@@ -14,7 +14,7 @@ import numpy as np
 import warnings
 from dataclasses import dataclass, replace
 from functools import partial
-from typing import Any, Callable, NamedTuple
+from typing import Any, Callable, NamedTuple, cast
 from gkx.config import method_error, resolve_cfl_fac
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.core_ky_layout import source_ny_full
@@ -1056,7 +1056,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         options=options,
     )
     named_rhs, named_sharding = (
-        _rhs_factory(components.prepared, components.policies)
+        _rhs_factory(components.prepared, components.policies, params)
         if _rhs_factory is not None
         else (None, None)
     )
@@ -1098,6 +1098,11 @@ def prepare_explicit_nonlinear_diagnostics_impl(
                 initial_dt=initial_dt,
             )
 
+    model_leaves, model_tree = jax.tree_util.tree_flatten(
+        (components.prepared.setup.geom, components.prepared.cache, params)
+    )
+    model_layout = tuple((np.shape(v), jnp.result_type(v)) for v in model_leaves)
+
     def run_dynamic_raw(
         initial_state: jnp.ndarray,
         dynamic_geometry: Any,
@@ -1105,7 +1110,13 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         dynamic_params: LinearParams,
     ) -> tuple[Any, Any, Any, Any]:
         if named_rhs is not None:
-            raise ValueError("named diagnostics do not support model overrides")
+            leaves, tree = jax.tree_util.tree_flatten(
+                (dynamic_geometry, dynamic_cache, dynamic_params)
+            )
+            same_tree = cast(Any, tree) == model_tree
+            layout = tuple((np.shape(v), jnp.result_type(v)) for v in leaves)
+            if not same_tree or layout != model_layout:
+                raise ValueError("named model inputs require the prepared topology")
         dynamic_setup = build_nonlinear_diagnostic_setup(
             initial_state,
             grid,
@@ -1144,12 +1155,18 @@ def prepare_explicit_nonlinear_diagnostics_impl(
             compressed_real_fft=options.compressed_real_fft,
             collision_split=options.collision_split,
         )
+        dynamic_rhs = (
+            _rhs_factory(dynamic_prepared, dynamic_policies, dynamic_params)[0]
+            if _rhs_factory is not None
+            else None
+        )
         dynamic_step, dynamic_diagnostics = _build_explicit_scan_closures(
             dynamic_prepared,
             dynamic_policies,
             grid,
             dynamic_params,
             options=options,
+            rhs_fn=dynamic_rhs,
         )
         return _run_explicit_diagnostic_scan_raw(
             dynamic_prepared,
@@ -1182,7 +1199,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
             chain=chain,
             rhs_fn=named_rhs,
         ),
-        _run_dynamic_raw=jax.jit(run_dynamic_raw),
+        _run_dynamic_raw=jax.jit(run_dynamic_raw, out_shardings=output_shardings),
         _finalize=finalize_nonlinear_scan_diagnostics,
         stride=stride,
         sampled_scan=sampled_scan,

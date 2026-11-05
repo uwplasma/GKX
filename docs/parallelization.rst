@@ -404,8 +404,14 @@ accepted-step budget, while an inferred adaptive length retains its physical
 horizon. Each public prepared solve starts a new local clock and controller
 initialization for the supplied state; only chunks of one runtime trajectory
 carry the PI next-step operand. Repeated states and horizon values of the same
-structure reuse the compiled callable. Model and geometry overrides remain
-unsupported. Prepared finite windows do not implement host saturation stopping.
+structure reuse the compiled callable. Fixed-step diagnosed runs also accept
+matched geometry, cache and parameter operands through the existing
+``run_arrays`` backend contract. Rebuild them with the same spectral grid;
+static metadata, leaf shapes and dtypes must match preparation. Numeric leaves
+remain differentiable. Callers supply a matched model: arbitrary cache values
+are not validated, and derivatives across changes in discrete linked-chain
+indices or masks are not defined. Adaptive model overrides remain unsupported.
+Prepared finite windows do not implement host saturation stopping.
 
 With externally initialized multi-process JAX, every rank must enter
 preparation, warmup, solves and differentiation in the same order. Returned

@@ -461,7 +461,9 @@ path = "solvers_nonlinear_diagnostics.py"
 # diagnosed-only integration boundary. Measured; target unchanged.
 # 3441 -> 3451: explicit named output placement keeps the final state sharded
 # and replicates global diagnostics for the existing host result contract.
-baseline_lines = 3451
+# 3451 -> 3468: reuse the named RHS for fixed-window dynamic model operands
+# with compile-time topology/shape checks and replicated diagnostic outputs.
+baseline_lines = 3468
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -1233,7 +1235,9 @@ recursive = true
 # 69450 -> 69455: reuse the existing Hermite halo for magnetic flutter.
 # 69455 -> 69463: omit statically disabled electromagnetic fields from the
 # adaptive CFL view; preserve the field outputs and active-field calculation.
-baseline = 69463
+# 69463 -> 69479: pass dynamic fixed-window model operands through the existing
+# named factory, retaining static topology without a host callback.
+baseline = 69479
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1613,7 +1617,9 @@ recursive = true
 # 64790 -> 64794: exercise the adaptive named route with kinetic electrons
 # and statically disabled electromagnetic fields in the existing fixture.
 # 64794 -> 64798: verify diagnosed linked-cover projection after enabling preparation.
-baseline = 64798
+# 64798 -> 64825: extend the existing named regression with matched-model
+# geometry/profile derivatives and a centered finite-difference comparison.
+baseline = 64825
 target = 35000
 
 [[line_budget_policy.counts]]
