@@ -556,7 +556,7 @@ def _nonlinear_summary(result: Any) -> dict[str, Any]:
         "kx_selected": None
         if result.kx_selected is None
         else float(result.kx_selected),
-        "n_state_shape": None
+        "n_state_shape": getattr(result, "_state_shape", None)
         if result.state is None
         else list(np.asarray(result.state).shape),
         # Every implicit GMRES solve of an IMEX run, as the in-memory result

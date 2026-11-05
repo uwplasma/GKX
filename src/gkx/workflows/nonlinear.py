@@ -11,6 +11,7 @@ from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
+from jax import tree_util
 
 from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.modes import select_ky_index
@@ -284,14 +285,6 @@ class _DiagnosticPolicy:
             or self.return_state
             or self.source_on
         )
-
-
-def _status_callback(callback: Callable[[str], None] | None) -> Callable[[str], None]:
-    def status(message: str) -> None:
-        if callback is not None:
-            callback(message)
-
-    return status
 
 
 def _prepare_context(
@@ -683,13 +676,7 @@ def _run_chunked_diagnostics(
 
 
 def _chunk_spill_dir() -> Path | None:
-    """Directory for spilled chunk diagnostics, or ``None`` to keep them in RAM.
-
-    Environment rather than TOML because it is a property of the *machine* the
-    run lands on, not of the physics case: the same config is submitted to a
-    workstation with 512 GB and to a batch node with 16, and only the second one
-    needs to spill.
-    """
+    """Resolve machine-specific diagnostic spilling independently of the case."""
 
     raw = os.environ.get("GKX_CHUNK_SPILL_DIR", "").strip()
     return Path(raw) if raw else None
@@ -784,6 +771,7 @@ def _result(
         diagnostics=diagnostics,
         fields=fields,
         state=np.asarray(state) if policy.return_state else None,
+        state_shape=tuple(state.shape),
         ky_selected=float(np.asarray(ctx.grid.ky[ctx.ky_index])),
         kx_selected=float(np.asarray(ctx.grid.kx[ctx.kx_index])),
         summarize_fields=summarize_fields,
@@ -802,7 +790,12 @@ def _run_final_state(
         "diagnostics disabled; running final-state nonlinear integrator over "
         f"{ctx.steps} steps with dt={ctx.dt:.6g}"
     )
-    time_cfg = replace(cfg.time, dt=ctx.dt, t_max=ctx.dt * ctx.steps)
+    time_cfg = replace(
+        cfg.time,
+        dt=ctx.dt,
+        t_max=ctx.dt * ctx.steps,
+        laguerre_nonlinear_mode=policy.laguerre_mode,
+    )
     request = solve_stats_request(time_cfg.method, kind="nonlinear")
     kwargs = {"terms": ctx.terms, **request}
     if policy.show_progress:
@@ -810,6 +803,7 @@ def _run_final_state(
     G_final, fields, *extra = integrate_nonlinear_from_config(
         ctx.G0, ctx.grid, ctx.geom, ctx.params, time_cfg, **kwargs
     )
+    fields = tree_util.tree_map(lambda value: value[-1], fields)
     solve = checked_solve_summary(extra, request, label="nonlinear IMEX run")
     status("completed nonlinear final-state integration")
     result = _result(
@@ -837,27 +831,19 @@ def _diagnostic_run_result(
 ) -> RuntimeNonlinearResult:
     if policy.diagnostics_on:
         status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
-        return _result(
-            ctx,
-            policy,
-            t=t,
-            diagnostics=diagnostics,
-            fields=fields,
-            state=state,
-            summarize_fields=False,
-            saturation=saturation,
-        )
-    if fields is None:
-        raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
-    status("diagnostics disabled; returning final nonlinear field summary")
+    elif fields is None:
+        raise RuntimeError("nonlinear runtime did not produce final fields")
+    else:
+        status("diagnostics disabled; returning final nonlinear field summary")
     return _result(
         ctx,
         policy,
-        t=np.asarray([]),
-        diagnostics=None,
+        t=t if policy.diagnostics_on else np.asarray([]),
+        diagnostics=diagnostics if policy.diagnostics_on else None,
         fields=fields,
         state=state,
-        summarize_fields=True,
+        summarize_fields=not policy.diagnostics_on,
+        saturation=saturation if policy.diagnostics_on else None,
     )
 
 
@@ -869,9 +855,11 @@ def _run_once(
     method: str | None,
     status: Callable[[str], None],
 ) -> tuple[RuntimeNonlinearResult, Any]:
-    """Run one nonlinear trajectory and return its result plus its final state."""
-
-    if not policy.requires_diagnostic_path and not ctx.adaptive_chunked:
+    if (
+        not policy.requires_diagnostic_path
+        and cfg.time.fixed_dt
+        and cfg.time.method not in IMEX_CHAIN_METHODS
+    ):
         return _run_final_state(cfg, ctx, policy, status=status)
 
     t, diag, G_final, fields_final, saturation = _run_diagnostics(
@@ -963,6 +951,8 @@ def run_runtime_nonlinear(
     :func:`prepare` path).
     """
 
+    if method is not None:
+        cfg = replace(cfg, time=replace(cfg.time, method=method))
     cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm, nonlinear=True)
     if status_callback is not None:
         status_callback("building runtime geometry")
@@ -974,7 +964,7 @@ def run_runtime_nonlinear(
         raise ValueError(
             "prepared nonlinear execution currently requires serial policy"
         )
-    status = _status_callback(status_callback)
+    status = status_callback if status_callback is not None else lambda _message: None
     ctx = _prepare_context(
         cfg,
         ky_target=ky_target,
@@ -1001,14 +991,7 @@ def run_runtime_nonlinear(
     )
     if prepare_only:
         if _saturation_stop_condition(cfg, ctx, policy) is not None:
-            # A prepared object compiles one scan of a fixed length, and
-            # saturation stopping decides the length while the run is going, so
-            # the two cannot both hold. Refusing is right -- quietly dropping
-            # the stop condition would hand back a simulation that integrates
-            # past where the deck asked it to stop. But the refusal used to end
-            # here, and every shipped nonlinear deck sets run_to = "saturation",
-            # so gkx.prepare had no working example in the tree. Name the two
-            # ways out.
+            # A fixed-length prepared scan cannot stop at saturation.
             raise ValueError(
                 "prepared execution cannot stop early at saturation: this deck "
                 f"sets [time] run_to = {str(cfg.time.run_to).strip().lower()!r}, "
