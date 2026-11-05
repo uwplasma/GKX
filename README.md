@@ -134,7 +134,7 @@ comparison, not a validation of saturated transport.
 ## Derivatives and optimization
 
 Eigenvalue derivatives use `dλ/dp = wᴴ(dA/dp)v / (wᴴv)`. The nonlinear heat
-flux over a post-saturation window is differentiated through a
+flux over a finite window from a fixed initial state is differentiated through a
 block-checkpointed discrete adjoint
 ([figure](docs/_static/nonlinear_autodiff_validation.png)): the archived Cyclone
 helper profile over 1024 steps cuts temporary memory from 7.8 GB to 187 MB for
@@ -150,7 +150,8 @@ derivative with GKX's, so a growth rate, quasilinear flux or nonlinear heat flux
 sits next to quasisymmetry, aspect ratio and iota in one least-squares problem.
 `examples/10_vmex_optimization/run.py` extends VMEX's `QA_optimization.py` with
 the nonlinear heat flux as a fourth objective on the vacuum QA ladder ([equilibria](docs/_static/qa_transport_equilibria.png),
-[traces](docs/_static/qa_transport_reduction.svg)).
+[traces](docs/_static/qa_transport_reduction.svg)). Its fixed-budget spin-up
+does not itself establish saturation.
 
 The boundary change is small (aspect ratio +0.0115%, mean iota -0.044%). The
 preliminary 12.26% reduction across 24 nominal pairs (conditional 95% CI

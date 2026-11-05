@@ -93,13 +93,13 @@ is GKX's spectral ion heat flux,
       \mathcal J^{fac}_\ell G_{i\ell0}
       +\frac{\mathcal J_\ell}{\sqrt2}G_{i\ell2}\right).
 
-The public objective is the discrete post-saturation mean
+The pinned example objective is the discrete post-spin-up mean
 
 .. math::
 
    J(x)=\frac1{N_w}\sum_{k=N-N_w+1}^{N}Q_i(G_k,x),\qquad
    G_{k+1}=\Phi_{\Delta t}(G_k;x),\qquad
-   G_0=\operatorname{stop\_gradient}(G_{sat}).
+   G_0=\operatorname{stop\_gradient}(G_{spin}).
 
 The least-squares residual is
 
@@ -120,11 +120,11 @@ Algorithm
 For each boundary-mode stage:
 
 #. solve the VMEX equilibrium;
-#. run GKX to a saturated state on the selected flux tube;
+#. run a fixed-budget GKX spin-up on the selected flux tube;
 #. minimize QA, aspect, iota, and the physical heat-flux window using analytic
    VMEX and GKX derivatives; VMEX's ``auto`` policy selects the lower-memory
    block-factorized Jacobian for this four-residual problem;
-#. refresh the saturated state after accepting the stage.
+#. refresh the detached spin-up state after accepting the stage.
 
 The transport residual is normalized by the seed flux,
 
@@ -144,7 +144,7 @@ Run
    pip install -e /path/to/VMEX
    python examples/10_vmex_optimization/run.py
 
-Use a GPU for the default saturation and 1024-step differentiated windows. A short
+Use a GPU for the default spin-up and 1024-step differentiated windows. A short
 ``VMEX_EXAMPLES_CI=1`` mode checks the complete solver/derivative path.
 
 Outputs are the optimized VMEC input and WOUT plus standard VMEX equilibrium
@@ -157,7 +157,8 @@ Controls
    GKX gradient drives. These are :math:`a/L`, not :math:`R/L`.
 
 ``SATURATION_STEPS``
-   Spin-up length. Increase until the heat-flux running mean is stationary.
+   Fixed spin-up budget, without an online saturation gate. Qualify the
+   heat flux, Wphi/Wg stationarity and correlated uncertainty separately.
 
 ``WINDOW_STEPS``
    Differentiated window. Use several autocorrelation times but remain below
@@ -394,7 +395,7 @@ VMEX ships three QA boundary optimizations that call GKX, in
   below the 0.42 floor these weights do not enforce. 29 min, 6.9 GB peak.
 - ``QA_optimization_turbulence_nonlinear.py``: gated saturated heat flux over
   a finite window, differentiated with the checkpointed discrete adjoint from a
-  fixed saturated start and passed to L-BFGS-B as one scalar. The flux went
+  fixed gate-accepted start and passed to L-BFGS-B as one scalar. The flux went
   53.0 +- 2.6 to 36.3 +- 1.8 after stage 1 and 42.6 +- 2.1 after stage 2, which
   traded flux for quasisymmetry (error 2.29 to 0.75); aspect ratio 11.5 to 6.0.
   70 min, 5.5 GB peak.

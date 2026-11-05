@@ -46,9 +46,9 @@ objective_function_terms = [
 ```
 
 The equilibrium is vacuum; `A_OVER_LT=3` and `A_OVER_LN=1` supply finite
-gyrokinetic drive. The script uses exact discrete differentiation of a physical
-post-saturation heat-flux window,
-not a state norm. VMEX's equilibrium response and GKX's finite-window
+gyrokinetic drive. The script differentiates a finite post-spin-up heat-flux window exactly,
+not a state norm. Spin-up uses a fixed step budget without a stationarity or
+correlated-uncertainty gate. VMEX's equilibrium response and GKX's finite-window
 response are different parts of the derivative.
 SciPy's `least_squares` consumes the residuals and their analytic Jacobian.
 
