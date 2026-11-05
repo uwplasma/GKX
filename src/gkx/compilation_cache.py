@@ -1,33 +1,13 @@
 """Persistent JAX compilation cache for the GKX executable.
 
-A GKX run is compile-dominated at the sizes people actually iterate on. On an
-office GPU a 100-step nonlinear case spends ~22.9 s of a ~25 s integrator wall
-inside XLA compilation, so the accelerator only wins end to end past roughly
-seventy steps; on a laptop CPU the same compile costs ~14 s. That cost is paid
-again on every fresh process even when nothing about the problem changed, which
-is the common case while a user edits a TOML and re-runs.
+The executable reuses compiled kernels across processes. Set ``GKX_JAX_CACHE=0``
+to disable caching or ``GKX_JAX_CACHE_DIR`` to select a directory. The default
+is ``.cache/gkx/jax`` beside the source tree, with ``~/.cache/gkx/jax`` as the
+fallback for read-only installations.
 
-JAX can persist compiled executables across processes, and this module turns
-that on by default for the executable. Two environment variables are the
-escape: ``GKX_JAX_CACHE=0`` disables the cache entirely, and
-``GKX_JAX_CACHE_DIR`` moves it. The default location mirrors how the repository
-already caches generated ``*.eik.nc`` geometry -- a ``.cache/gkx`` directory
-beside the source tree -- and falls back to ``~/.cache/gkx/jax`` when that tree
-is read-only, which is what an installed wheel sees.
-
-On correctness: the cache key is XLA's, not ours. It is computed from the
-lowered HLO module, the compilation options, and the backend/device the
-executable was built for, so a changed grid, changed physics, or a different
-device is a different key rather than a stale hit. The one thing that key does
-not span is the toolchain itself, so entries are additionally namespaced by the
-installed ``jax`` version: upgrading JAX starts a new directory instead of
-reading executables built by a different compiler. ``jax_raise_persistent_cache_errors``
-is left at its default of ``False`` so a corrupt or unwritable entry degrades
-to a recompile rather than failing a simulation.
-
-The directory only grows, at roughly 1.6 MB per distinct problem shape. JAX
-0.9 exposes no writable size cap, so clearing it is `rm -rf` on the directory
-this module reports; nothing is lost but the next cold compile.
+JAX keys entries by the compiled program, compilation options and device.
+Directories are also separated by JAX version. Unwritable or corrupt entries
+fall back to compilation. Delete unused cache entries to reclaim disk space.
 """
 
 from __future__ import annotations

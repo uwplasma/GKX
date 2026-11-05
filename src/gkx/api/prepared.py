@@ -204,7 +204,7 @@ class PreparedSimulation:
         enabled = compilation_cache.compilation_cache_enabled()
         return {
             "persistent_cache_enabled": enabled,
-            # Compilation happens on first execution, not during preparation.
+            # The first execution compiles the prepared graph.
             "compiled_at_prepare": False,
             "warmed": bool(self._warmed[0]),
             "devices": self.devices,
