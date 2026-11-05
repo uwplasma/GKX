@@ -310,6 +310,45 @@ and scale ``nu_hyper_m`` by
 :math:`[(N_{m,\mathrm{new}}-1)/(N_{m,\mathrm{old}}-1)]^{p+1/2}`; report
 numerical-regularization sensitivity separately.
 
+Fresh fixed-regularization control
+----------------------------------
+
+A fresh collisionless, electrostatic circular-Miller control uses one kinetic
+ion and adiabatic electrons, :math:`k_y=0.3`, ``Nl=8``, ``Nm=16``, kinetic
+``ntheta=32`` over three turns, and identical nested samples of geometry
+computed at 512 points. The surface has :math:`r=0.5`, :math:`q=1.4`,
+:math:`\hat s=0.8`, :math:`R=2.77778`, :math:`a/L_T=2.49` and
+:math:`a/L_n=0.8`. Both codes use explicit Hermite exponent 4, coefficient 1,
+end-damping rate 50 and layer fraction 0.125. GX uses RK4 at :math:`\Delta t=1/512`;
+GKX uses a residual-certified eigenpair.
+
+GX reaches :math:`t=150` and saves 600 complex-potential samples at cadence
+0.25. Independent amplitude and unwrapped-phase fits over :math:`t=120`--150
+use :math:`\omega=-d\arg(\phi)/dt`, in the shared
+:math:`\sqrt{T/m}/L` units: GX gives :math:`\gamma=0.1282093293`,
+:math:`\omega=0.2129853094`; GKX gives 0.1282093394 and 0.2129853465.
+Relative rate differences are :math:`7.9\times10^{-8}` and
+:math:`1.7\times10^{-7}`. Moving the fit to :math:`t=90`--120 changes the
+rates by less than :math:`2.5\times10^{-7}` relative; fixed spatial projection,
+local phase and integrated potential amplitude agree. The normalized,
+phase-aligned potential differs by :math:`2.2\times10^{-4}` in relative L2
+norm after coordinate interpolation. This is finite-truncation linear
+consistency, with spatial, velocity, timestep, regularization and domain
+convergence still open; it is not nonlinear or performance validation.
+
+Provenance: GKX snapshot ``09e12e42725b86d441f05403f9f43c06a121b5b2``;
+GX ``3865a53778862e1686f414bf6f416339e24887c9`` with the documented
+``dampEnds_linked`` grid-stride repair, not an unmodified upstream build.
+The GX binary SHA256 is
+``b168172bba73a4b6af6505a114e42a9c3cab2f2ed65e2843227fbecf94f20d83``;
+repair diff SHA256 is
+``1cc8cb08d685cd6271c416755f2a2b60950512f3767deb28cdc0453101ce67ee``.
+The two ``cyclone_miller_fixed_p4`` rows in
+``docs/_static/cross_code_linear_points.csv`` preserve these fitted values.
+A public raw-input/output and executable fit package remains an open
+reproducibility gate. This control does not replace the separate unresolved
+kinetic-electron, GS2 or stella ladders below.
+
 Cross-code linear parity matrix
 -------------------------------
 

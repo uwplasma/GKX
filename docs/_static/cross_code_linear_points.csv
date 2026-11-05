@@ -256,3 +256,5 @@ tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm24 landau damp_ends_rate100,0.568484,-1.197161
 tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm48 lenard_bernstein damp_ends_rate100,0.691071,-1.270731,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
 tem_dj2005_nuee0.01,0.3,gkx,Nl8 Nm48 landau damp_ends_rate100,0.680284,-1.259406,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gkx.csv
 kbm_miller_A_beta0.015,0.3,gx-repaired,Nl16 Nm48 nperiod3,0.338932,1.015025,gkx-plan:plan/research/2026-10-27-ke-four-code/results/gx.csv
+cyclone_miller_fixed_p4,0.3,gkx,ntheta32 nperiod2 Nl8 Nm16 p4 nu1,0.12820933941770632,0.2129853464679111,GKX 09e12e42725b86d441f05403f9f43c06a121b5b2; residual-certified eigenpair; geometry512
+cyclone_miller_fixed_p4,0.3,gx-repaired,ntheta32 nperiod2 Nl8 Nm16 p4 nu1,0.12820932934681217,0.2129853093930182,GX 3865a53778862e1686f414bf6f416339e24887c9 + dampEnds_linked grid-stride repair; complex projection fit t120-150; geometry512
