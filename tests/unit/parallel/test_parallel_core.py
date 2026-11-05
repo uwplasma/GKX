@@ -1234,7 +1234,11 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     cfg = replace(cfg, time=replace(cfg.time, run_to="t_max"))
     if axis == "species_hermite" and ky_layout == "half":
         cfg = replace(
-            cfg, time=replace(cfg.time, method="rk4-pi", fixed_dt=False, dt_max=0.01)
+            cfg,
+            time=replace(cfg.time, method="rk4-pi", fixed_dt=False, dt_max=0.01),
+            species=cfg.species
+            + (RuntimeSpeciesConfig(name="electron", charge=-1.0, mass=0.1),),
+            physics=replace(cfg.physics, adiabatic_electrons=False),
         )
     options = {
         **_RUN_KWARGS,

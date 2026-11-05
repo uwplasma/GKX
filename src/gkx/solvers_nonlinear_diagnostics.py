@@ -398,6 +398,14 @@ def _build_explicit_runtime_policies(
 ) -> _ExplicitRuntimePolicies:
     """Build timestep and collision-splitting policies for explicit scans."""
 
+    def cfl_components(fields: FieldState, *args: Any, **kwargs: Any):
+        fields = FieldState(
+            fields.phi,
+            None if _is_static_zero(prepared.term_cfg.apar) else fields.apar,
+            None if _is_static_zero(prepared.term_cfg.bpar) else fields.bpar,
+        )
+        return _nonlinear_cfl_frequency_components(fields, *args, **kwargs)
+
     time_step_policy = build_nonlinear_time_step_policy(
         grid,
         prepared.setup.geom,
@@ -416,7 +424,7 @@ def _build_explicit_runtime_policies(
         resolve_cfl_fac_fn=resolve_cfl_fac,
         linear_frequency_bound_fn=_linear_frequency_bound,
         laguerre_velocity_max_fn=_laguerre_velocity_max,
-        cfl_frequency_components_fn=_nonlinear_cfl_frequency_components,
+        cfl_frequency_components_fn=cfl_components,
     )
     collision_policy = build_nonlinear_collision_split_policy(
         prepared.cache,
