@@ -113,6 +113,13 @@ frequency convergence and collisionless TEM parity remain open. These are
 agreements on shared test cases, not a ranking of codes. Cases, resolutions,
 open items and provenance are in [validation](docs/validation.rst).
 
+A fresh matched Miller control (`Nl/Nm = 8/16`, Hermite exponent 4,
+geometry 512, GX `t = 150`, fit `120–150`) differs by `7.9e-8` in gamma and
+`1.7e-7` in omega relative to the certified GKX pair. The normalized field
+L2 difference is `2.2e-4`. This tests finite-truncation linear consistency;
+resolution, nonlinear and performance claims remain open
+([scope and provenance](docs/validation.rst#fresh-fixed-regularization-control)).
+
 ## Nonlinear turbulence
 
 ![Replicated nonlinear heat flux and trajectory agreement with GX](docs/_static/readme/readme_nonlinear.png)
@@ -129,10 +136,10 @@ comparison, not a validation of saturated transport.
 Eigenvalue derivatives use `dλ/dp = wᴴ(dA/dp)v / (wᴴv)`. The nonlinear heat
 flux over a post-saturation window is differentiated through a
 block-checkpointed discrete adjoint
-([figure](docs/_static/nonlinear_autodiff_validation.png)): on a 16x16x16
-Cyclone case over 1024 steps, checkpointing cuts temporary memory from 7.8 GB to
-187 MB for about twice the runtime, and the gradient matches finite differences
-to 1e-11 through 512 steps.
+([figure](docs/_static/nonlinear_autodiff_validation.png)): the archived Cyclone
+helper profile over 1024 steps cuts temporary memory from 7.8 GB to 187 MB for
+about twice the runtime. A separate gradient check matches finite differences
+to 1e-11 through 512 steps ([provenance](docs/nonlinear_autodiff.rst)).
 
 ```python
 heat_flux, gradient = jax.value_and_grad(loss)(shape0)
