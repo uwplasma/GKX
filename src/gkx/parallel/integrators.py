@@ -693,10 +693,10 @@ def _reject_unsharded_hermite_terms(term_cfg, params, plan) -> None:
     this branch.
     """
 
-    if int(plan.chunks.get("m", 1)) < 2:
+    if int(plan.chunks.get("m", 1)) < 2 or float(term_cfg.collisions) == 0.0:
         return
     nu = np.asarray(jax.device_get(getattr(params, "nu", 0.0)), dtype=float)
-    if float(term_cfg.collisions) == 0.0 or not np.any(nu != 0.0):
+    if not np.any(nu != 0.0):
         return
     raise NotImplementedError(
         "conserving collisions need the m = 0, 1, 2 moments summed across the "
