@@ -325,6 +325,11 @@ the production mesh are ``species_hermite``, ``velocity``, ``s_m``, ``species``,
 diagnostic: ``num_devices`` must divide the ``k_y`` extent the state actually
 stores, and the refusal names the layout that extent came from.
 
+Across multiple initialized processes, automatic selection uses equal device
+counts from every process, with ``num_devices`` as an upper bound. It refuses
+when no compatible balanced mesh fits that bound. Explicit device counts are
+not reduced or reassigned.
+
 For either axis the runtime places the whole nonlinear state on the mesh and
 runs the ordinary production integrator on it, so the operator is the
 production nonlinear RHS rather than a reduced stand-in. The audited

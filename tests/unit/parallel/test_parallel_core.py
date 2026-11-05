@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from importlib import import_module
+from types import SimpleNamespace
 
 
 # ---- test_parallel.py ----
@@ -1060,7 +1061,7 @@ def test_unsupported_axis_raises(axis: str) -> None:
         )
 
 
-def test_auto_selects_the_species_hermite_mesh_and_says_which() -> None:
+def test_auto_selects_the_species_hermite_mesh_and_says_which(monkeypatch) -> None:
     """``auto = true`` resolves the mesh from the devices and reports it."""
 
     _require_devices(2)
@@ -1078,6 +1079,20 @@ def test_auto_selects_the_species_hermite_mesh_and_says_which() -> None:
     assert "2 species x 1 Hermite" in described
     assert "auto-selected" in described
     assert "no halo" in described
+
+    devices = tuple(
+        SimpleNamespace(id=i, process_index=p) for i, p in enumerate((0, 0, 1, 1))
+    )
+    monkeypatch.setattr(jax, "devices", lambda: devices)
+    monkeypatch.setattr(jax, "process_count", lambda: 2)
+    state = SimpleNamespace(shape=(1, 2, 4, 3, 4, 8))
+    for budget in (2, 3, 4):
+        plan = resolve_nonlinear_parallel_plan(
+            RuntimeParallelConfig(auto=True, num_devices=budget)
+        )
+        resolved = resolve_species_hermite_mesh(state, plan)
+        assert resolved.device_count == 2
+        assert [d.id for d in resolved.devices[:2]] == [0, 2]
 
 
 def test_auto_conflicting_with_an_explicit_strategy_is_an_error() -> None:

@@ -141,6 +141,14 @@ def _normalized(value: Any, default: str) -> str:
     return text.replace("-", "_")
 
 
+def _process_balanced_devices(devices: Any) -> tuple[Any, ...]:
+    groups = [
+        [device for device in devices if device.process_index == process]
+        for process in range(jax.process_count())
+    ]
+    return tuple(device for group in zip(*groups) for device in group)
+
+
 def _reject_independent_worker_options(parallel: Any) -> None:
     """Reject batching knobs that only apply to independent-scan strategies."""
 
@@ -206,6 +214,8 @@ def resolve_nonlinear_parallel_plan(parallel: Any) -> NonlinearParallelPlan | No
         raise NonlinearParallelRoutingError(
             f"[parallel] num_devices is not satisfiable: {exc}"
         ) from exc
+    if bool(getattr(parallel, "auto", False)) and jax.process_count() > 1:
+        devices = _process_balanced_devices(jax.devices())[: len(devices)]
     if len(devices) < 2:
         raise NonlinearParallelRoutingError(
             "the sharded nonlinear route needs at least two JAX devices, but "
@@ -238,10 +248,25 @@ def resolve_species_hermite_mesh(
         )
     ns = shape[0] if len(shape) == 6 else 1
     nm = shape[2] if len(shape) == 6 else shape[1]
-    count = len(plan.devices)
+    balanced = plan.auto and jax.process_count() > 1
+    devices = _process_balanced_devices(plan.devices) if balanced else plan.devices
+    count = len(devices)
     if plan.auto:
         feasible = species_hermite_device_counts(ns, nm, limit=count)
-        count = max((n for n in feasible if n >= 2), default=count)
+        count = max(
+            (
+                n
+                for n in feasible
+                if n >= 2 and (not balanced or n % jax.process_count() == 0)
+            ),
+            default=count,
+        )
+    if jax.process_count() > 1 and {d.process_index for d in devices[:count]} != set(
+        range(jax.process_count())
+    ):
+        raise NonlinearParallelRoutingError(
+            "the nonlinear mesh must include a device from every initialized process"
+        )
     try:
         mesh_plan = build_species_hermite_mesh_plan(shape, num_devices=count)
     except ValueError as exc:
@@ -253,13 +278,10 @@ def resolve_species_hermite_mesh(
             "Nm exactly, so this grid supports "
             f"{', '.join(str(count) for count in supported)} devices."
         ) from exc
-    if jax.process_count() > 1 and {
-        d.process_index for d in plan.devices[: mesh_plan.num_devices]
-    } != set(range(jax.process_count())):
-        raise NonlinearParallelRoutingError(
-            "the nonlinear mesh must include a device from every initialized process"
-        )
-    return replace(plan, mesh_plan=mesh_plan)
+    if balanced:
+        selected = tuple(sorted(devices[:count], key=lambda d: d.process_index))
+        devices = selected + tuple(d for d in plan.devices if d not in selected)
+    return replace(plan, mesh_plan=mesh_plan, devices=devices)
 
 
 def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
@@ -277,7 +299,7 @@ def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
         return stage_from_host(
             state,
             resolve_species_hermite_sharding(
-                state, resolved.mesh_plan, devices=list(plan.devices)
+                state, resolved.mesh_plan, devices=list(resolved.devices)
             ),
         )
 
