@@ -595,14 +595,14 @@ def _flux_lines(
     saturated: bool | None = None,
     source: Any = None,
 ) -> list[tuple[str, str]]:
-    """Stop time, averaging window, and the windowed mean +/- SEM of Q and Gamma."""
+    """Last saved sample, averaging window, and mean +/- SEM of Q and Gamma."""
 
     from gkx.artifacts.transport_figures import _window_flux_statistics
 
     t = np.asarray(diag.t, dtype=float)
     lines: list[tuple[str, str]] = []
     if t.size:
-        lines.append(("stop time", f"t cs/a = {float(t[-1]):.4g}  ({t.size} samples)"))
+        lines.append(("last saved sample", f"t cs/a = {t[-1]:.4g} ({t.size} samples)"))
     try:
         tmin, tmax, q, g, kind = _window_flux_statistics(
             diag if source is None else source, diag, window
