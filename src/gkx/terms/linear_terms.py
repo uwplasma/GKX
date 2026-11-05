@@ -536,7 +536,7 @@ def _pallas_drift(H, f1, f2, f3, *, interpret=False):
 
     ns, nl, nm, ny, nx, nz = H.shape
     n = nx * nz
-    # Tuned on an RTX A4000: 64-wide tiles saturate fp32 bandwidth; fp64 is arithmetic-bound.
+    # Use a fixed tile width for the fused matrix-vector product.
     block, warps = (64, 4) if H.dtype == jnp.complex64 else (512, 2)
     block = min(block, 1 << (n - 1).bit_length())
     pad = ((0, 0),) * 4 + ((0, -n % block),)

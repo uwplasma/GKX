@@ -905,8 +905,8 @@ def _build_explicit_scan_closures(
 def _bound_chain(step: Any, chain: Any) -> Any:
     """Trace with ``chain`` (an operand) as the step's chain implicit operator.
 
-    Captured as constants, the 64x64 (8, 16) factor was 7 GB baked into the
-    executable, which also ``cached_jit`` hashed on the host every call.
+    Keeping the factor as an operand avoids embedding it in the executable
+    and hashing its contents for the compilation cache.
     """
     rhs = getattr(step, "rhs_fn", None)
     if chain is None:
@@ -950,11 +950,11 @@ def _build_explicit_scan_components(
         fixed_mode_ky_index=options.fixed_mode_ky_index,
         fixed_mode_kx_index=options.fixed_mode_kx_index,
     )
-    # Supplied-state contract (queue row Q23). ``G0`` is a state this module did
+    # Supplied-state contract. ``G0`` is a state this module did
     # not build, so on a linked deck it can carry kx rows the chains never
     # reach; the bracket would alias them back onto the chain rows. Project it
     # once here, where both the prepared object and the function entry point
-    # pass, so the two stay the one graph row Q18 made them. Periodic and
+    # pass, so both routes use the same graph. Periodic and
     # full-cover decks get ``None`` and the same object back.
     cover_mask = linked_cover_mask_from_cache(prepared.cache)
     prepared = replace(prepared, G0=project_to_linked_cover(prepared.G0, cover_mask))
@@ -2353,18 +2353,12 @@ def integrate_nonlinear_imex_diagnostics(
     )
 
 
-#: Longest window whose discrete adjoint has been measured to still behave like
-#: a gradient on the shipped saturated Cyclone case: the AD/FD ladder in
-#: ``scripts/campaigns/nonlinear_gradient_window.py`` (removed; at df2953026) tracks centered differences
-#: through 1024 RK3 steps and departs between 1024 and 2048. It is a property of
-#: that trajectory's Lyapunov time, not a solver tolerance, so it is a default to
-#: warn against and remeasure -- not a hard limit. ``examples/
-#: 10_vmex_optimization/run.py`` runs at exactly 1024, one rung below the departure.
+#: Default warning threshold for long discrete-adjoint windows. The useful
+#: derivative horizon depends on the trajectory and must be checked with
+#: centered finite differences for the case being differentiated.
 DIVERGENCE_KNEE_STEPS = 1024
 
-#: Reverse-pass checkpoint storage allowed before the window falls back to the
-#: nested (three-forward) schedule. 4 GiB admits 32x32x24 Nl4/Nm8 at 1024 steps
-#: (3.0 GiB measured on an A4000, 1.27x faster than nested).
+#: Reverse-pass checkpoint budget; larger windows use nested recomputation.
 ADJOINT_MEMORY_BUDGET_BYTES = 4 * 1024**3
 
 
@@ -2379,8 +2373,7 @@ def _warn_if_window_exceeds_divergence_knee(
         f"differentiating a {steps}-step window, above the measured divergence "
         f"knee of {knee} steps: past it the windowed adjoint grows with the "
         "leading Lyapunov exponent and is large, reproducible, and not a "
-        "descent direction. Remeasure the knee for this case with "
-        "scripts/campaigns/nonlinear_gradient_window.py (git show df2953026), then pass "
+        "descent direction. Check centered finite differences for this case, then pass "
         "divergence_knee_steps=<measured> or None.",
         RuntimeWarning,
         stacklevel=2,
@@ -2491,8 +2484,8 @@ def integrate_nonlinear_cached(
 
     ``G0`` is a state this driver did not build, so on a linked (twist-shift)
     deck it is projected onto the chain cover before the run starts, exactly as
-    the runtime does at intake (queue row Q19) and as the entry points above
-    this one do (Q23). The projection is a ``where`` against a mask fixed by the
+    the runtime does at intake and as the entry points above
+    this one do. The projection is a ``where`` against a mask fixed by the
     deck's topology, applied once here and outside the compiled scan, so the
     scan's graph is unchanged and periodic or full-cover decks get the same
     array object back.
@@ -2739,7 +2732,7 @@ def nonlinear_heat_flux_window(
     :math:`O(N)` for a window of ``N`` steps.
 
     On a linked (twist-shift) deck ``saturated_state`` is projected onto the
-    linked chain cover before the window starts (queue row Q23): it is a state
+    linked chain cover before the window starts: it is a state
     this function did not build, and the ExB bracket takes the whole state to
     real space while dealiasing only its output, so off-chain rows would alias
     back onto the chain rows and change the flux this objective returns. The
@@ -2755,8 +2748,7 @@ def nonlinear_heat_flux_window(
     ``steps`` above ``divergence_knee_steps`` warns. Past the measured knee the
     windowed adjoint grows with the leading Lyapunov exponent and stops being a
     useful design direction; pass ``None`` to silence the check when the knee
-    has been remeasured for the case at hand with
-    ``scripts/campaigns/nonlinear_gradient_window.py``.
+    has been checked against centered finite differences for the case at hand.
 
     ``adjoint_memory_budget_bytes`` bounds the reverse pass's checkpoint
     storage. When the block-only schedule fits, each step's forward runs twice
@@ -3006,8 +2998,8 @@ def _integrate_nonlinear_sheared_scan(
         """Advance one sheared step, folding any implicit solve into the status.
 
         ``solve_stats`` rides through the scan carry because a traced step
-        cannot raise, exactly as the cached IMEX and implicit linear scans do
-        (queue row Q15). Explicit methods pass ``None`` straight back, so they
+        cannot raise, as in the cached IMEX and implicit linear scans.
+        Explicit methods pass ``None`` straight back, so they
         add no carry leaf and compile unchanged.
         """
 

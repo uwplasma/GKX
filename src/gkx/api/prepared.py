@@ -77,7 +77,7 @@ class PreparedSimulation:
 
         A nonlinear ``initial_state`` on a linked (twist-shift) deck is
         projected onto the linked chain cover before it is integrated, which is
-        the same rule the runtime applies at intake (queue rows Q19 and Q23):
+        the same rule the runtime applies at intake:
         the rows outside the chains are decoupled, and the ExB bracket would
         alias whatever sits there back onto the chain rows. Periodic and
         full-cover decks are untouched.

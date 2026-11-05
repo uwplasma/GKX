@@ -90,15 +90,8 @@ def enable_persistent_compilation_cache(
         directory.mkdir(parents=True, exist_ok=True)
         jax.config.update("jax_compilation_cache_dir", str(directory))
         jax.config.update("jax_enable_compilation_cache", True)
-        # JAX defaults to persisting only compiles that took longer than a
-        # second, on the theory that a cheap compile is not worth a disk round
-        # trip. That heuristic is wrong for GKX, and measurably so. A 16x16x32
-        # nonlinear step compiles ~320 separate kernels; the fused scan is only
-        # 2.1 s of a 13.5 s total and every one of the rest is a ~20 ms compile
-        # that the default threshold refuses to store. Keeping the threshold
-        # saves 3.9 s of that 13.5 s; dropping it to zero saves 12.6 s, for
-        # 1.6 MB of cache. The threshold is what was making a re-run of an
-        # unchanged case still feel cold.
+        # Persist short kernel compilations as well as the fused scan, so a
+        # repeated case can reuse the complete compiled workload.
         jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
     except Exception as exc:  # pragma: no cover - depends on the environment
         # Say so rather than failing silently: a cache that did not install is

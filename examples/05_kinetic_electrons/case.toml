@@ -1,47 +1,8 @@
 schema_version = 1
 
-# Nonlinear Cyclone ITG with kinetic electrons (m_e/m_i = 2.7e-4, beta = 1e-4),
-# tutorial resolution: 16x16x16, (Nl, Nm) = (4, 16). A minute on a CPU; the
-# horizon covers the start of the linear phase only. (4, 16) is the converged
-# nonlinear resolution for kinetic electrons: the saturated heat flux is within
-# 3% of (8, 32), where the old (4, 8) was 10% high (docs/guidance.rst).
-#
-# Choosing dt. The step is set by the CFL controller (fixed_dt = false), and
-# with kinetic electrons the controller is bound by electron parallel
-# streaming, ~ v_te k_z,max = sqrt(m_i/m_e) ~ 60 times the ion rate: on this
-# grid omega_stream = 702 against omega_drift = 1.6. Measured rules:
-#   * keep a small finite beta with A_parallel. At beta = 0 the electrostatic
-#     omega_H mode (k_par v_te / k_perp rho_s at the smallest k_perp) sets
-#     omega_stream = 4300 and dt = 3.6e-4; beta = 1e-4 gives dt = 2.2e-3, six
-#     times fewer steps, with the linear growth rate at k_y rho_i = 0.3
-#     unchanged to 2e-4 (0.62492 at beta = 1e-4 against 0.62478 at 1e-6).
-#   * the default cfl = 0.9. The controller measures the largest streaming +
-#     field-solve frequency by Arnoldi at startup (702 here, not the GX
-#     estimate's 500: an electromagnetic electron m = 1 mode of the linked box
-#     that the estimate misses, which made cfl 0.9 grow W_g by 1e8 by t = 0.2
-#     before), so 0.9 is stable at beta = 1e-5, 1e-4 and 1e-3: dt = 2.2e-3.
-#   * or skip the streaming limit: time.method = "imex-ars3" with
-#     fixed_dt = true, dt = 0.05 solves parallel streaming and the field
-#     response implicitly per twist-shift chain (block Thomas + Woodbury;
-#     the electron mirror is implicit too; drifts and the bracket stay
-#     explicit and set dt, 0.1 at 32x32 and 0.07 at 64x64). run.py runs
-#     it. 0.05 reproduces the explicit saturated heat flux here and at
-#     Nx = Ny = 32, (Nl, Nm) = (4, 8); at 64x64x24 use 0.035 (0.05 goes
-#     non-finite at t = 15), 10x faster to t = 150 than fixed-dt RK3 with a
-#     1.5 GB factor. Opt-in, fixed dt; set XLA_PYTHON_CLIENT_PREALLOCATE=false
-#     on GPU at production size.
-#
-# Choosing t_max (in a/v_ti): the linear phase lasts ~ 10/gamma ~ 20-40, the
-# first nonlinear burst and saturation follow by t ~ 60-100, and fluxes are
-# averaged over a window of at least 100-200 after saturation (run_to =
-# "saturation" stops once the heat-flux mean is converged). The tutorial
-# horizon below is 0.3.
-#
-# Production (GPU, hours): Nx = Ny = 64 (or 96), Nz = 24-32, Nl = 4, Nm = 16,
-# t_max = 400, run_to = "saturation", same beta. For (8, 32) give each species its
-# own counts, ions Nl = 8, Nm = 24 and electrons Nl = 4, under [[species]] with
-# [run] Nl = 8, Nm = 32: the same heat flux, an explicit step 1.5x faster
-# (docs/inputs.rst, "Per-species velocity resolution").
+# Tutorial nonlinear Cyclone ITG with kinetic electrons. The horizon covers
+# the start of the linear phase. CFL control includes electron streaming
+# and the electromagnetic field response; transport requires a longer run.
 
 [[species]]
 name = "ion"

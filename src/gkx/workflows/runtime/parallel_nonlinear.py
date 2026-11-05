@@ -321,8 +321,7 @@ def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
     # ``Ny`` on a two-sided axis and ``Nyc = 1 + Ny//2`` on a ``ky >= 0`` one
     # (gkx.core_ky_layout), and ``Nyc`` is odd whenever ``Ny`` is a multiple
     # of four. JAX places an array only in equal shares, so an extent the
-    # devices do not divide enters replicated on the same mesh (SHARD-PAD,
-    # plan F.6). That is not a weaker run than the divisible case: the
+    # devices do not divide enters replicated on the same mesh. The
     # integrator's initial-state projection hands the scan a replicated state
     # either way, so this route integrates the whole state on every device
     # whatever the extent (see the module docstring).

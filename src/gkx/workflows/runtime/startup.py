@@ -573,7 +573,7 @@ def build_runtime_linear_terms(
     """Build `LinearTerms` from unified toggles.
 
     All-zero species ``nu`` drop the built-in collision term; a caller passing
-    a custom operator with its own rates sets ``custom_collisions`` (#324).
+    a custom operator with its own rates sets ``custom_collisions``.
     """
 
     em_on = bool(cfg.physics.electromagnetic)
@@ -748,7 +748,7 @@ def _load_initial_state_from_file(
     ``Nyc`` rows is the ``ky >= 0`` block and is widened only when the caller
     asked for the two-sided axis, and a two-sided file is narrowed only when
     the caller asked for the half one.  Neither conversion loses anything --
-    the discarded rows are the conjugates of the kept ones (plan 5.3 N3).
+    the discarded rows are the conjugates of the kept ones.
     """
 
     ky_layout = cast(KyLayout, str(ky_layout).strip().lower())

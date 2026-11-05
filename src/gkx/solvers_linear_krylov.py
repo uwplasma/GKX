@@ -81,7 +81,7 @@ class KrylovConfig:
     shift_solve_method: str = "batched"
     shift_preconditioner: str | None = "auto"
     # Only ``pr3-cm`` reads the two fields below. ``shift_precond_alpha`` is its
-    # Peaceman-Rachford parameter; None takes Q7's scalar symbol-bound rule
+    # Peaceman-Rachford parameter; None takes the scalar symbol-bound rule
     # ``alpha = -sqrt(s1 d)``, which that row measured as good as a per-rung scan
     # at Nz=96. ``shift_precond_block_solve`` picks how its z-local block is
     # inverted: "auto" takes the exact block-Thomas plus Sherman-Morrison solve

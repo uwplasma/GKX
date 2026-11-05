@@ -293,10 +293,9 @@ def cached_jit(fn: Callable[..., Any]) -> Callable[..., Any]:
 
     Keys one executable on the jaxpr text, argument avals and a digest of the
     closed-over constants, which stay baked: the bits are ``jax.jit(fn)``'s.
-    As operands they also reuse across geometry but drift 6.5e-8 in float32.
-    The key is computed once per argument signature of this wrapper, not per
-    call: tracing, printing and hashing cost ~1 s for an imex RHS, and the
-    imex probes call one wrapper hundreds of times. ``call.key(*args)`` is that
+    The key is computed once per argument signature of this wrapper, avoiding
+    repeated tracing and constant hashing during implicit probes.
+    ``call.key(*args)`` is that
     digest, or ``None`` when ``fn`` closes over an outer trace.
     """
 

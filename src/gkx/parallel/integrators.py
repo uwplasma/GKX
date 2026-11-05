@@ -234,7 +234,7 @@ def _compiled_nonlinear_sharded_runner(
             region per step matters on XLA:GPU. With one region per RHS and
             projector call, two regions fed each other inside a step and the
             ky-split result came out wrong, although each region alone was
-            exact. See plan/research/scripts/2026-09-22-ky-state-sharding.
+            exact.
             """
 
             if split is None or state_sharding is None:
@@ -527,24 +527,9 @@ def _mesh_owner_mask(mesh_axes, like):
 def _unfused(value):
     """Keep ``value`` in its own kernel instead of the consumer's.
 
-    Measured on 2 x RTX A4000 (jax 0.11.1) at ``(2, 8, 16, 64, 64, 32)``. Left
-    alone, XLA folds the whole linear operator -- every shifted, scaled copy of
-    the slab that streaming, mirror, curvature and the diamagnetic drive
-    contribute -- into the elementwise ``add`` that joins it to the nonlinear
-    bracket, and emits one ``kLoop`` fusion with 29 operands that re-reads the
-    shard once per shifted term. That fusion is the single most expensive
-    kernel in the step and it runs at roughly 40% of the throughput the
-    two-kernel form reaches.
-
-    The cost model tips over on shard *shape*, not on shard size, which is why
-    it is a sharding bug rather than a small-problem effect: on one device with
-    two species the fusion costs 11.0 ms/step, and on the one-species shard a
-    two-device mesh gives it, the same fusion costs 37.4 ms/step -- 3.4x longer
-    on half the data. Per-species cost is otherwise flat (49.2, 49.1 and
-    47.1 ms/step/species at Ns = 2, 3, 4) and jumps to 69.7 at Ns = 1, so a
-    two-species run on two devices could never scale past 1.41x however cheap
-    the collectives were. Splitting the bracket out takes the shard from
-    69.7 to 46.7 ms/step and the two-device mesh from 75.8 to 47.4.
+    Without a barrier, XLA can fuse the shifted linear terms with the
+    nonlinear bracket's consumer, repeatedly reading the same local slab.
+    Keeping the bracket separate bounds that fusion across shard shapes.
 
     ``optimization_barrier`` is an identity, so this cannot move the answer on
     its own; it can only change which multiply-adds XLA contracts, and the

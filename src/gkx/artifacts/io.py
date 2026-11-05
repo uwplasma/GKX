@@ -557,7 +557,7 @@ def _nonlinear_summary(result: Any) -> dict[str, Any]:
         if result.state is None
         else list(np.asarray(result.state).shape),
         # Every implicit GMRES solve of an IMEX run, as the in-memory result
-        # reports it; None for explicit methods (queue row Q29).
+        # reports it; None for explicit methods.
         **implicit_solve_payload(getattr(result, "implicit_solve", None)),
     }
     if diag is not None:
@@ -786,7 +786,7 @@ def load_netcdf_restart_state(
     ``Nyc = 1 + Ny // 2``.  The file itself is unchanged by the layout: it has
     always stored the dealiased ``ky >= 0`` block, which is why a run started
     on either axis can continue from a file written by the other, and why a
-    2.1.0 restart still loads (plan 5.3 N3, queue row Q10).
+    2.1.0 restart still loads.
     """
 
     try:

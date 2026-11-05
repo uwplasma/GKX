@@ -1151,12 +1151,11 @@ class _LocalCollisions:
         return z + tau * _slots(ainv, self.coll(jnp.zeros_like(G), f), self.act)
 
 
-# Explicit ARK3 stays stable to rho(C) dt = 2.5 (measured on Cyclone KE nu_e 3, 12);
-# the sub-step is only used from 2.
+# Activate the local collision sub-step before the explicit collision
+# stiffness rho(C) dt exceeds its configured safety threshold.
 COLLISION_STIFFNESS = 2.0
-# The sub-step's splitting error grows ~ (rho dt)^(1/2) and the embedded estimate
-# does not see it; adaptive dt stays below 5 (Cyclone KE nu_e 12: flux error 2.4% at
-# 5.3, 4.9% at 21; W7-X 7% and 22%).
+# Bound collision splitting error separately: the embedded estimate does
+# not include the local collision sub-step's splitting error.
 COLLISION_DT_CAP = 5.0
 
 
@@ -1822,7 +1821,7 @@ def make_imex_diagnostic_step(
     With ``solve_step_with_stats`` the carry grows one
     :class:`~gkx.solvers_linear_implicit.ImplicitSolveStats` leaf and every
     implicit solve folds into it, which is how this route gets a convergence
-    channel a traced step cannot raise on (queue row Q15). Without it the step
+    channel a traced step cannot raise on. Without it the step
     keeps exactly the five-element carry, and the same solve, it had.
     """
 

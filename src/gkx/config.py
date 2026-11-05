@@ -94,18 +94,14 @@ class GridConfig:
     nperiod: int | None = None
     zp: int | None = None
     #: Layout of the ``ky`` axis of every spectral array built from this grid
-    #: (:mod:`gkx.core_ky_layout`, plan 5.3 N3).  ``"half"`` -- the default --
+    #: (:mod:`gkx.core_ky_layout`).  ``"half"`` -- the default --
     #: stores the ``Nyc = 1 + Ny // 2`` non-negative rows and lets the reality
     #: condition hold by construction; ``"full"`` stores the two-sided
     #: ``fftfreq`` axis of length ``Ny`` and rebuilds the negative rows in the
     #: bracket and after every stage.  ``Ny`` means the same thing in both: the
     #: length of the physical ``y`` axis, and therefore the resolution of the
-    #: run.  The physics, the resolution and the published output do not depend
-    #: on the choice: nonlinear diagnostics agree to round-off (2e-16 in x64,
-    #: 2e-7 in float32), the window gradient is bitwise equal, and ``"half"``
-    #: is faster (an RK3 step 0.54-0.60x of the two-sided time on CPU, 0.65x on
-    #: an RTX A4000; the checkpointed window gradient 0.68-0.72x) with 12-25%
-    #: less memory.
+    #: run. Both layouts represent the same physical state; half storage omits
+    #: conjugate rows and reconstructs their contribution in diagnostics.
     ky_layout: str = "half"
 
     def __post_init__(self) -> None:

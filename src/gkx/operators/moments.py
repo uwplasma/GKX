@@ -113,7 +113,7 @@ def _jl_family(cache: LinearCache) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarra
 
     Nl = Jl_s.shape[1]
     ell = jnp.arange(Nl, dtype=Jl_s.dtype)[None, :, None, None, None]
-    # The upper neighbor of the highest retained moment is analytic (#325).
+    # The upper neighbor of the highest retained moment is analytic.
     Jl_m1, Jl_p1 = laguerre_gyroaverage_neighbors(Jl_s, cache.b, axis=1)
     JflrA = ell * Jl_m1 + 2.0 * ell * Jl_s + (ell + 1.0) * Jl_p1
     Jfac = 1.5 * Jl_s + JflrA
@@ -276,7 +276,7 @@ def _heat_flux_channel_contrib_species(
         G3 = _get_m(3)
         p_bar = jnp.sum(Jfac_s * G0 + (1.0 / sqrt2) * Jl_s * G2, axis=0)
         q_bar = jnp.sum(Jfac_s * G1 + Jl_s * (sqrt32 * G3 + G1), axis=0)
-        # Energy recurrence applied to JlB, the x*2J1(A)/A kernel (#326).
+        # Energy recurrence applied to JlB, the x*2J1(A)/A kernel.
         JlB_m1 = shift_axis(JlB_s, -1, axis=0)
         Jfac_m1 = shift_axis(Jfac_s, -1, axis=0)
         qB_bar = jnp.sum(
@@ -555,10 +555,7 @@ class _KyPairFold:
     partner of ``(ky, kx)`` is ``(-ky, -kx)``, not ``(-ky, kx)``.  So a
     weighted sum over the stored rows charges the partner's energy to the
     wrong ``kx`` column -- the mirror one -- and returns the ``kx``-reflected
-    spectrum.  On an isotropic state the two are close, which is what makes
-    this worth a fold rather than a shrug: measured on one field at
-    ``16x16x24`` the error is 11 per cent on ``Phi2_kxt`` and 13 per cent on
-    ``Wphi_kxst``, large enough to matter and small enough to look plausible.
+    spectrum. The error can be obscured by approximate isotropy.
 
     The fold restores the two-sided answer exactly.  Writing ``C`` for the
     unweighted per-row contribution and ``m`` for the ``kx -> -kx``

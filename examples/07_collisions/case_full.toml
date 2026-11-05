@@ -42,11 +42,8 @@ ntheta = 32
 nperiod = 2
 
 [time]
-# This case has no Krylov path and no GX counterpart, so the time horizon is the
-# only route to a converged growth rate. Collisions lower gamma to ~0.0716, so
-# gamma*t_max >= 7 needs t_max >= 98; 120 leaves margin (gamma*t_max ~= 8.6).
-# Measured at t_max = 10 the fit reports 0.0839, 17% high. dt and the scheme are
-# unchanged -- the moment collision operators require the fixed-step integrator.
+# Collisions reduce the growth rate, so this fixed-step case uses a long
+# horizon to separate the asymptotic mode from startup transients.
 t_max = 120.0
 dt = 0.002
 method = "rk2"
