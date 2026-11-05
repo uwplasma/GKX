@@ -1059,7 +1059,7 @@ def run_runtime_nonlinear(
             fixed_dt=bool(cfg.time.fixed_dt),
             show_progress=show_progress,
         )
-        if not bool(cfg.time.fixed_dt):
+        if ctx.adaptive_chunked:
             kwargs["time_horizon"] = float(cfg.time.t_max)
         prepare_factory = partial(
             prepare_nonlinear_explicit_diagnostics,
