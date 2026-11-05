@@ -3,7 +3,7 @@
 
 Requires ``pip install vmex``; the seed deck is ``examples/vmec/input.minimal_seed_nfp2``.
 The default ladder (five boundary-mode
-stages, 8,000 saturation steps per refresh) is an expensive research
+stages, 8,000 spin-up steps per refresh) is an expensive research
 calculation meant for a GPU; ``VMEX_EXAMPLES_CI=1`` selects a tiny CPU wiring
 run that does not reach saturation. Writes the
 per-stage objective history ``summary.json``, ``input.QA_GKX_optimized``,
@@ -116,24 +116,11 @@ def parameters(local_geometry):
     )
 
 
-# Spin-up warm start, wired but not switched on. The saturated state is still
-# detached and still refreshed exactly where it always was -- once per accepted
-# VMEX stage -- so the objective remains a fixed function of (state, runtime)
-# for the whole of each stage and never becomes a function of the optimizer's
-# within-stage history. What a warm spin-up would change is only the cost of
-# producing the refreshed state: a stage that barely moved the flux tube could
-# reseed from the previous saturated state instead of climbing out of a 1e-3
-# seed again, on a quarter of the step budget. The policy restores the full
-# cold spin-up as soon as the geometry moves by more than `geometry_tolerance`,
-# or after `max_reuse` consecutive warm spin-ups, so a run of individually
-# small steps cannot drift away from the attractor.
-#
-# `max_reuse=0` disables it, so this script's numbers are exactly what they
-# were. Raise it to opt in. It is off by default because the saving is real but
-# its cost has not been measured here: a shortened spin-up still has to
-# re-equilibrate to the new geometry, and whether a quarter budget suffices is
-# a question about this objective's sensitivity that only a full optimization
-# run answers. Turn it on alongside a comparison against a `max_reuse=0` run.
+# Fixed-budget spin-up; this script does not check saturation. The refreshed
+# state is detached and held fixed throughout each optimizer stage.
+# Warm reuse is disabled (max_reuse=0). The geometry threshold and quarter
+# budget are heuristics; an equal-accuracy speedup has not been established.
+# If enabled, compare against independent cold runs before claiming transport.
 saturation_warm_start = SaturationWarmStart(
     policy=SaturationRefreshPolicy(
         max_reuse=0, geometry_tolerance=0.05, warm_step_fraction=0.25
@@ -147,7 +134,7 @@ def saturate(equilibrium):
     plan = saturation_warm_start.plan(signature, cold_steps=SATURATION_STEPS)
     seed = initial_state() if plan.seed is None else jnp.asarray(plan.seed)
     print(
-        f"saturation spin-up: {'warm' if plan.warm else 'cold'} seed, "
+        f"GKX spin-up: {'warm' if plan.warm else 'cold'} seed, "
         f"{plan.steps} steps ({plan.reason or 'first spin-up'})",
         flush=True,
     )
@@ -169,13 +156,13 @@ def saturate(equilibrium):
 
 print("solving vacuum seed equilibrium", flush=True)
 equilibrium = opt.solve_equilibrium(inp)
-print("running GKX saturation", flush=True)
+print("running fixed-budget GKX spin-up", flush=True)
 saturated_state = saturate(equilibrium)
 qs = opt.QuasisymmetryRatioResidual(SURFACES, helicity_m=1, helicity_n=0)
 
 
 def turbulent_transport(state, runtime):
-    """Actual GKX heat flux, differentiated through the post-saturation window."""
+    """GKX heat flux, differentiated through a finite post-spin-up window."""
 
     local_geometry = geometry(state, runtime)
     return gkx.nonlinear_heat_flux_window(

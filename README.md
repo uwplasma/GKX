@@ -102,15 +102,23 @@ kinetic electrons and electromagnetic runs, and how to check it.
 | HSX (GX) | gamma, omega | gamma 0.577%, omega 0.273% |
 | Cyclone ITG and Miller (GX) | gamma | within 0.3% at 7 of 8 `k_y` |
 | Cyclone ITG and Miller (GS2) | gamma | within 2.4% at five points, 0.3% at two |
-| Cyclone Miller, kinetic electrons (GX, GS2) | gamma, omega | within 0.4% of GX, 1.5% of GS2 |
+| Cyclone Miller, kinetic electrons (GX, GS2) | gamma | within 0.4% of GX, 1.5% of GS2 |
 | W7-X bean tube, `k_y rho_i` 2.1 (GX, Gonzalez-Jerez 2022) | gamma, omega | 0.1750, 0.2628 as GX; paper 0.172, 0.27 |
 | KBM, beta 0.015 (GS2) | gamma | 3.2% at the `ntheta` limit of each code |
 | Nonlinear Cyclone heat flux (GX paper Table 1) | Q_i/Q_GB | 7.08 +- 0.12 against 7.2 +- 0.8 |
 
-Linear scan rows are `100 * max|GKX - ref| / max|ref|` over the scan, checked
-against the [evidence ledger](tools/evidence_ledger.toml) in CI. These are
+The first four rows use `100 * max|GKX - ref| / max|ref|` over each scan, checked
+against the [evidence ledger](tools/evidence_ledger.toml) in CI. Kinetic-electron
+frequency convergence and collisionless TEM parity remain open. These are
 agreements on shared test cases, not a ranking of codes. Cases, resolutions,
 open items and provenance are in [validation](docs/validation.rst).
+
+A fresh matched Miller control (`Nl/Nm = 8/16`, Hermite exponent 4,
+geometry 512, GX `t = 150`, fit `120–150`) differs by `7.9e-8` in gamma and
+`1.7e-7` in omega relative to the certified GKX pair. The normalized field
+L2 difference is `2.2e-4`. This tests finite-truncation linear consistency;
+resolution, nonlinear and performance claims remain open
+([scope and provenance](docs/validation.rst#fresh-fixed-regularization-control)).
 
 ## Nonlinear turbulence
 
@@ -126,12 +134,12 @@ comparison, not a validation of saturated transport.
 ## Derivatives and optimization
 
 Eigenvalue derivatives use `dλ/dp = wᴴ(dA/dp)v / (wᴴv)`. The nonlinear heat
-flux over a post-saturation window is differentiated through a
+flux over a finite window from a fixed initial state is differentiated through a
 block-checkpointed discrete adjoint
-([figure](docs/_static/nonlinear_autodiff_validation.png)): on a 16x16x16
-Cyclone case over 1024 steps, checkpointing cuts temporary memory from 7.8 GB to
-187 MB for about twice the runtime, and the gradient matches finite differences
-to 1e-11 through 512 steps.
+([figure](docs/_static/nonlinear_autodiff_validation.png)): the archived Cyclone
+helper profile over 1024 steps cuts temporary memory from 7.8 GB to 187 MB for
+about twice the runtime. A separate gradient check matches finite differences
+to 1e-11 through 512 steps ([provenance](docs/nonlinear_autodiff.rst)).
 
 ```python
 heat_flux, gradient = jax.value_and_grad(loss)(shape0)
@@ -142,7 +150,8 @@ derivative with GKX's, so a growth rate, quasilinear flux or nonlinear heat flux
 sits next to quasisymmetry, aspect ratio and iota in one least-squares problem.
 `examples/10_vmex_optimization/run.py` extends VMEX's `QA_optimization.py` with
 the nonlinear heat flux as a fourth objective on the vacuum QA ladder ([equilibria](docs/_static/qa_transport_equilibria.png),
-[traces](docs/_static/qa_transport_reduction.svg)).
+[traces](docs/_static/qa_transport_reduction.svg)). Its fixed-budget spin-up
+does not itself establish saturation.
 
 The boundary change is small (aspect ratio +0.0115%, mean iota -0.044%). The
 preliminary 12.26% reduction across 24 nominal pairs (conditional 95% CI
