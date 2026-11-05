@@ -12,7 +12,7 @@ species moment counts and reflectionless closures retain the ordinary solver.
 Uniform moment stamps must match the normalized state's full dimensions.
 Fallback reports whole-state placement and does not imply distributed RHS work.
 
-``ky`` is a placement diagnostic that can execute replicated work. FFT axes
+``ky`` is a single-process placement diagnostic with replicated work. FFT axes
 remain local; unsupported strategies and axes raise with their reasons.
 
 ``strict_identity`` compares serial state and transport traces, accepting a
@@ -191,6 +191,10 @@ def resolve_nonlinear_parallel_plan(parallel: Any) -> NonlinearParallelPlan | No
             f"{_SUPPORT_SUMMARY.capitalize()}."
         )
     _reject_independent_worker_options(parallel)
+    if axis == "ky" and jax.process_count() > 1:
+        raise NonlinearParallelRoutingError(
+            "axis='ky' is a single-process placement diagnostic"
+        )
 
     try:
         devices = tuple(
