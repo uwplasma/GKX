@@ -327,6 +327,11 @@ the production mesh are ``species_hermite``, ``velocity``, ``s_m``, ``species``,
 diagnostic: ``num_devices`` must divide the ``k_y`` extent the state actually
 stores, and the refusal names the layout that extent came from.
 
+Across multiple initialized processes, automatic selection uses equal device
+counts from every process, with ``num_devices`` as an upper bound. It refuses
+when no compatible balanced mesh fits that bound. Explicit device counts are
+not reduced or reassigned.
+
 The ``species_hermite`` runtime uses the named collective integrator for
 fixed-step ``rk2``, ``rk3``, ``rk4`` and ``sspx3`` final-state runs with
 diagnostics disabled and ``run_to = "t_max"``. Sources, fixed modes, active
