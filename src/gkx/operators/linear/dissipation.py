@@ -330,7 +330,7 @@ def _collision_moment_correction(
             corr, 2, nu_s * jnp.sqrt(2.0) * Jl * t_bar[:, None, ...]
         )
     if nu_ei is not None:
-        # GX keeps the analytic J_(Nl) in its e-i temperature contraction.
+        # Retain analytic J_(Nl) in the separate e-i temperature contraction.
         tail = -0.5 * b_s * Jl[:, -1]
         coeff_ei = coeff_t.at[:, -1].add(tail)
         t_ei = t_bar + (2.0 / 3.0) * tail * H_m0[:, -1]
@@ -447,7 +447,7 @@ def collisions_contribution(
 ) -> jnp.ndarray:
     """``mu_grid = (rate, x)`` selects the nodal perpendicular operator and energy weights."""
 
-    # GX beta=0 fixes the ion flow to zero: e-i restores energy, not electron flow.
+    # The beta=0 model fixes ion flow to zero: e-i restores energy, not flow.
     if nu_ei is not None and (
         mu_grid is not None
         or (collision_lam is not None and collision_lam.size)

@@ -540,7 +540,7 @@ class RuntimeCollisionConfig:
     damp_ends_amp: float | None = None
     damp_ends_widthfrac: float = 0.125
     damp_ends_scale_by_dt: bool = False
-    #: Opt-in GX beta=0 electron-ion model with fixed ion flow (Dougherty only).
+    #: Opt-in beta=0 electron-ion model with fixed ion flow (Dougherty only).
     electron_ion: bool = False
 
     def __post_init__(self) -> None:
@@ -964,7 +964,7 @@ class RuntimeConfig:
         return cfg, max(u[0] for u in used), max(u[1] for u in used)
 
     def _electron_ion_rates(self) -> tuple[float, ...] | None:
-        """Separate e-i rates for the scoped GX beta=0, fixed-ion-flow model."""
+        """Separate e-i rates for the scoped beta=0, fixed-ion-flow model."""
 
         if not self.collisions.electron_ion:
             return None

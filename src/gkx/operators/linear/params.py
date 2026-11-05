@@ -189,7 +189,7 @@ class LinearParams:
     #: at its own size, so the moments above it stay zero and its hypercollisions are
     #: normalized to its own count (:attr:`LinearCache.groups`).
     moments: tuple[tuple[int | None, int | None, float], ...] | None = None
-    #: Internal GX beta=0 e-i rates; self-collision ``nu`` is unchanged.
+    #: Internal beta=0 e-i rates; self-collision ``nu`` is unchanged.
     _nu_ei: tuple[float, ...] | jnp.ndarray | None = None
 
     def species_slice(self, a: int, b: int, **overrides: Any) -> "LinearParams":
