@@ -108,8 +108,9 @@ This host loop cannot be transformed through ``run_arrays``: pass explicit
 ``imex`` preparation remain unsupported. A saturation-stopping deck raises
 unless ``steps=N`` is passed or ``run_to = "t_max"`` is selected.
 
-The prepared route and ``integrate_nonlinear_explicit_diagnostics_state``
-compile the same graph and return bitwise identical arrays
+For the same finite window, the prepared route and
+``integrate_nonlinear_explicit_diagnostics_state`` compile the same graph
+and return bitwise identical arrays
 (``tests/unit/nonlinear/test_nonlinear.py``). Prefer ``prepare`` when a case
 runs more than once: it keeps the compiled graph, while each call to the
 function entry point compiles its own. :doc:`solvers` gives the contract and

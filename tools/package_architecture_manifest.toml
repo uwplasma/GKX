@@ -1236,7 +1236,8 @@ recursive = true
 # 69455 -> 69463: omit statically disabled electromagnetic fields from the
 # adaptive CFL view; preserve the field outputs and active-field calculation.
 # 69463 -> 69511: reuse adaptive host chunks for complete prepared horizons.
-baseline = 69511
+# 69511 -> 69507: reuse the full-result warmup synchronization prerequisite.
+baseline = 69507
 target = 45000
 
 [[line_budget_policy.counts]]
