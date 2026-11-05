@@ -301,6 +301,15 @@ truncation-limited at ky .55 (Nm 96, certified gamma .03301/.02485/.01835 at Nl
 
 .. END LEDGER MATRIX
 
+Changing ``Nm`` also changes the default ``p_hyper_m`` to
+``min(20, max(Nm // 2, 1))``. Even at a fixed exponent :math:`p`, the
+:math:`|k_z|` damping at shared Hermite modes scales as
+:math:`\nu_{hyper,m}(N_m-1)^{-p-1/2}` for :math:`N_m>1`. For a velocity
+convergence scan with fixed shared-mode damping, set the exponent explicitly
+and scale ``nu_hyper_m`` by
+:math:`[(N_{m,\mathrm{new}}-1)/(N_{m,\mathrm{old}}-1)]^{p+1/2}`; report
+numerical-regularization sensitivity separately.
+
 Cross-code linear parity matrix
 -------------------------------
 
