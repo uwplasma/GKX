@@ -137,30 +137,30 @@ class PreparedSimulation:
     # -- introspection ---------------------------------------------------
 
     def warmup(self) -> "PreparedSimulation":
-        """Force compilation now, so a later timed call measures execution.
+        """Compile and finish one nonlinear integration before returning self.
 
-        Preparing a nonlinear case builds its scan closure but does not compile
-        it: XLA compiles when the scan first executes. Measured on the shipped
-        five-step KBM deck, ``prepare`` took 4.3 s, the first ``solve`` 19.6 s
-        and the second 0.000 s. This method used to return ``self`` without
-        doing anything, so code that called it and then timed ``solve`` was
-        timing the compile.
-
-        Forcing compilation means executing the prepared closure once, because
-        the scan exposes no separately lowerable handle. That costs one run --
-        cheap next to the compile it triggers, but not free, so it happens only
-        when asked for. A second call is a no-op.
-
-        A linear case has nothing to compile ahead of time: the linear runtime
-        chooses its solver per call, so warming one would compile a solver the
-        next call may not use. ``summary()["warmed"]`` reports which happened.
-
-        Returns ``self`` so a caller can chain.
+        Preparation builds a scan closure; its first execution compiles it.
+        Warmup executes that closure once and waits for its result arrays, so
+        later synchronized timings exclude compilation and this initial run.
+        Further calls are no-ops. Linear cases select their solver per call and
+        remain unwarmed; ``summary()["warmed"]`` reports the distinction.
         """
+
+        import jax
 
         if self.kind == "nonlinear" and self._backend is not None:
             if not self._warmed[0]:
-                self._backend.run()
+                result = self._backend.run()
+                diag = result[1]
+                jax.block_until_ready(
+                    (
+                        result,
+                        vars(diag) if diag is not None else (),
+                        vars(diag.resolved)
+                        if diag is not None and diag.resolved is not None
+                        else (),
+                    )
+                )
                 self._warmed[0] = True
         return self
 
@@ -211,11 +211,7 @@ class PreparedSimulation:
         enabled = compilation_cache.compilation_cache_enabled()
         return {
             "persistent_cache_enabled": enabled,
-            # Preparation builds the nonlinear scan closure; XLA compiles it
-            # when that scan first executes, not here. Measured on the shipped
-            # five-step KBM deck: prepare 4.3 s, first solve 19.6 s, second
-            # 0.000 s. This key reported ``kind == "nonlinear"`` and so claimed
-            # a compile that had not happened.
+            # Compilation happens on first execution, not during preparation.
             "compiled_at_prepare": False,
             "warmed": bool(self._warmed[0]),
             "devices": self.devices,
