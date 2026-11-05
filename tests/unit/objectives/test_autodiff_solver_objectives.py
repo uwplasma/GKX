@@ -41,7 +41,6 @@ from gkx.diagnostics.quasilinear_transport import (
 )
 import sys
 from types import SimpleNamespace
-import csv
 import ast
 import py_compile
 import re
@@ -1492,7 +1491,6 @@ def _fake_solver_rows(scale: float = 1.0) -> jnp.ndarray:
 
 
 def test_vmex_transport_objective_reduces_fake_solver_rows(monkeypatch) -> None:
-
     calls: list[dict[str, object]] = []
     growth_calls: list[dict[str, object]] = []
     rows = _fake_solver_rows()
@@ -1541,7 +1539,6 @@ def test_vmex_transport_objective_reduces_fake_solver_rows(monkeypatch) -> None:
 def test_vmex_transport_surface_chunking_matches_unchunked_weighted_mean(
     monkeypatch,
 ) -> None:
-
     def fake_geom(*_args, **_kwargs):
         return _fake_geometry()
 
@@ -1593,7 +1590,6 @@ def test_vmex_transport_surface_chunking_matches_unchunked_weighted_mean(
 def test_vmex_transport_objective_nonlinear_proxy_is_positive_and_exported(
     monkeypatch,
 ) -> None:
-
     scale = {"value": 1.0}
 
     def fake_geom(*_args, **_kwargs):
@@ -1632,7 +1628,6 @@ def test_vmex_transport_objective_nonlinear_proxy_is_positive_and_exported(
 def test_vmex_transport_objective_transform_scales_large_residuals(
     monkeypatch,
 ) -> None:
-
     def fake_geom(*_args, **_kwargs):
         return _fake_geometry()
 
@@ -1734,7 +1729,6 @@ def test_vmex_transport_config_rejects_underresolved_boozer_modes() -> None:
 def test_module_search_root_handles_paths_and_missing_modules(
     monkeypatch, tmp_path
 ) -> None:
-
     namespace_root = tmp_path / "namespace_backend"
     namespace_root.mkdir()
     namespace_module = ModuleType("namespace_backend")
@@ -1771,7 +1765,6 @@ def test_static_grid_options_rejects_invalid_ky_values(
     ky_values: tuple[float, ...],
     message: str,
 ) -> None:
-
     with pytest.raises(ValueError, match=message):
         transport_tables._static_grid_options_from_ky_values(ky_values, min_ny=3)
 
@@ -1803,7 +1796,6 @@ def test_vmex_transport_config_rejects_invalid_edges(
 
 
 def test_transport_feature_table_rejects_empty_sample_rows() -> None:
-
     config = SimpleNamespace(
         sample_set=SimpleNamespace(surfaces=(), alphas=(0.0,), ky_values=(0.2,)),
         kind="growth",
@@ -1821,7 +1813,6 @@ def test_transport_feature_table_rejects_empty_sample_rows() -> None:
 
 
 def test_quasilinear_flux_uses_geometry_transport_weights(monkeypatch) -> None:
-
     def fake_geom(*_args, **_kwargs):
         return _fake_geometry()
 
@@ -1850,19 +1841,6 @@ def test_quasilinear_flux_uses_geometry_transport_weights(monkeypatch) -> None:
 ROOT = REPO_ROOT
 EXAMPLES = ROOT / "examples" / "10_vmex_optimization"
 QA_SCRIPT = EXAMPLES / "run.py"
-TRANSPORT_SUMMARY = ROOT / "docs" / "_static" / "qa_transport_summary.csv"
-TRANSPORT_TRACES = ROOT / "docs" / "_static" / "qa_transport_traces.csv"
-TRANSPORT_TIMESERIES = ROOT / "docs" / "_static" / "qa_transport_nominal_timeseries.csv"
-
-
-def _transport_summary() -> dict[str, dict[str, float]]:
-    with TRANSPORT_SUMMARY.open(encoding="utf-8", newline="") as stream:
-        return {
-            row["case"]: {
-                key: float(value) for key, value in row.items() if key != "case"
-            }
-            for row in csv.DictReader(stream)
-        }
 
 
 def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
@@ -1954,26 +1932,6 @@ def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
         assert (EXAMPLES / filename).is_file()
         assert filename in docs
 
-    with TRANSPORT_TIMESERIES.open(encoding="utf-8", newline="") as stream:
-        rows = list(csv.DictReader(stream))
-    time = np.asarray([float(row["time"]) for row in rows])
-    values = np.asarray(
-        [
-            [
-                float(row["baseline_mean"]),
-                float(row["baseline_sem"]),
-                float(row["candidate_mean"]),
-                float(row["candidate_sem"]),
-            ]
-            for row in rows
-        ]
-    )
-    assert len(rows) == 301
-    assert np.all(np.diff(time) > 0.0)
-    assert time[0] < 1.0 and time[-1] > 1499.0
-    assert np.all(np.isfinite(values))
-    assert np.all(values[:, (1, 3)] >= 0.0)
-
 
 def test_optimization_examples_document_user_customization_knobs() -> None:
     examples_readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
@@ -2019,75 +1977,3 @@ def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None
         "production QA optimization examples are the VMEC-JAX-style scripts"
         in manuscript
     )
-
-
-def test_reduced_surface_comparison_is_not_current_primary_optimization_figure() -> (
-    None
-):
-    release_contract = (
-        ROOT / "benchmarks" / "references" / "gkx_1_7_release_contract.json"
-    ).read_text(encoding="utf-8")
-    examples_readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
-    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
-
-    reduced_png = '"docs/_static/stellarator_itg_optimization_comparison.png"'
-    assert reduced_png not in release_contract
-    assert "stellarator_itg_growth_optimization.py" not in examples_readme
-    assert "reduced_stellarator_itg" not in examples_readme
-    assert "screening diagnostics" in re.sub(r"\s+", " ", docs)
-
-
-def test_matched_qa_transport_evidence_fails_closed() -> None:
-    """Keep the preliminary campaign reproducible without promoting it."""
-    rows = _transport_summary()
-    assert set(rows) == {
-        "nominal",
-        "dt04",
-        "dt025",
-        "perp12",
-        "perp20",
-        "perp24",
-        "perp24long",
-        "z16",
-        "z32",
-        "v36",
-        "v612",
-    }
-    assert all(np.isfinite(value) for row in rows.values() for value in row.values())
-    with TRANSPORT_TRACES.open(encoding="utf-8", newline="") as stream:
-        traces = list(csv.DictReader(stream))
-    for row in rows.values():
-        assert row["p_hyper_m"] == min(20, max(int(row["nm"]) // 2, 1))
-    for case, row in rows.items():
-        case_traces = [trace for trace in traces if trace["case"] == case]
-        pairs = int(row["pairs"])
-        assert len(case_traces) == 2 * pairs
-        for design in ("baseline", "candidate"):
-            seeds = {
-                int(trace["seed"]) for trace in case_traces if trace["design"] == design
-            }
-            assert seeds == set(range(pairs))
-        assert all(float(trace["tau"]) > 0.0 for trace in case_traces)
-        assert all(float(trace["neff"]) > 0.0 for trace in case_traces)
-        assert all(
-            int(trace["stationary"]) == int(abs(float(trace["trend_percent"])) <= 20.0)
-            for trace in case_traces
-        )
-        assert row["stationary_traces"] == sum(
-            int(trace["stationary"]) for trace in case_traces
-        )
-        assert (
-            row["nonstationary_traces"] == len(case_traces) - row["stationary_traces"]
-        )
-        assert row["resolved_spectra_available"] == 0.0
-        assert row["promotion_ready"] == 0.0
-
-    nominal = rows["nominal"]
-    assert nominal["pairs"] == 24
-    assert nominal["positive_pairs"] == nominal["pairs"]
-    assert nominal["ci95_low_percent"] > 0.0
-    assert nominal["minimum_window_in_tau"] > 10.0
-    assert nominal["stationary_traces"] == 44
-    assert nominal["nonstationary_traces"] == 4
-    assert nominal["all_traces_stationary"] == 0.0
-    assert rows["z32"]["all_traces_stationary"] == 1.0

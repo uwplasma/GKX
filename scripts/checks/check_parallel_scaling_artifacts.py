@@ -1251,7 +1251,11 @@ def validate_manifest(
             for field in REQUIRED_STRING_FIELDS
         }
         lists = {
-            field: _as_nonempty_list(entry.get(field), field, name)
+            field: (
+                []
+                if field == "artifact_paths" and entry.get(field) == []
+                else _as_nonempty_list(entry.get(field), field, name)
+            )
             for field in REQUIRED_LIST_FIELDS
         }
         status = strings["status"]

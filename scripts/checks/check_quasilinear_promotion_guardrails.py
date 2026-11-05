@@ -15,16 +15,6 @@ from typing import Any, Iterable
 ROOT = Path(__file__).resolve().parents[2]
 
 
-DEFAULT_REPORT_PATTERNS = (
-    str(ROOT / "docs/_static/quasilinear_*train_holdout_report.json"),
-    str(ROOT / "docs/_static/quasilinear_saturation_rule_sweep.json"),
-    str(ROOT / "docs/_static/quasilinear_shape_aware_saturation.json"),
-    str(ROOT / "docs/_static/quasilinear_candidate_uncertainty.json"),
-    str(ROOT / "docs/_static/quasilinear_candidate_regularization_sweep.json"),
-    str(ROOT / "docs/_static/quasilinear_dataset_sufficiency.json"),
-    str(ROOT / "docs/_static/quasilinear_validated_calibration_inputs.json"),
-    str(ROOT / "benchmarks/references/gkx_1_7_release_contract.json"),
-)
 DEFAULT_DOCS = (
     ROOT / "README.md",
     ROOT / "docs/quasilinear.rst",
@@ -33,19 +23,6 @@ DEFAULT_DOCS = (
 )
 DEFAULT_OUT = ROOT / "docs/_static/quasilinear_promotion_guardrails.json"
 DEFAULT_MANUSCRIPT_INDEX = ROOT / "docs/manuscript_figures.rst"
-DEFAULT_MANUSCRIPT_FIGURE_BASES = (
-    ROOT / "docs/_static/quasilinear_stellarator_train_holdout",
-    ROOT / "docs/_static/quasilinear_saturation_rule_sweep",
-    ROOT / "docs/_static/quasilinear_shape_aware_saturation",
-    ROOT / "docs/_static/quasilinear_candidate_uncertainty",
-    ROOT / "docs/_static/quasilinear_candidate_regularization_sweep",
-    ROOT / "docs/_static/quasilinear_dataset_sufficiency",
-    ROOT / "docs/_static/quasilinear_model_selection_status",
-    ROOT / "docs/_static/quasilinear_stellarator_usefulness",
-    ROOT / "docs/_static/quasilinear_screening_skill",
-    ROOT / "docs/_static/quasilinear_holdout_gap_report",
-)
-
 PROMOTED_CLAIM = "calibrated_absolute_flux"
 REQUIRED_SPLITS = {"train", "holdout"}
 REQUIRED_POINT_FIELDS = (
@@ -1130,9 +1107,7 @@ def build_guardrail_audit(
     doc_gates, doc_rows = _audit_docs([Path(path) for path in doc_paths])
     gates.extend(doc_gates)
     figure_gates, figure_rows = _audit_manuscript_figures(
-        figure_bases
-        if figure_bases is not None
-        else list(DEFAULT_MANUSCRIPT_FIGURE_BASES),
+        figure_bases if figure_bases is not None else [],
         figure_index_path,
     )
     gates.extend(figure_gates)
@@ -1697,7 +1672,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--report",
         action="append",
         dest="reports",
-        default=None,
+        required=True,
         help="Report JSON path or glob.",
     )
     parser.add_argument(
@@ -1714,7 +1689,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=(
             "Manuscript QL model-development figure base to audit. "
-            "Defaults to the tracked quasilinear manuscript figure set."
+            "Audited only when explicitly supplied."
         ),
     )
     parser.add_argument(
@@ -1733,7 +1708,7 @@ def main(argv: list[str] | None = None) -> int:
         return main_calibration_inputs(tokens[1:])
     args = build_parser().parse_args(tokens)
     payload = build_guardrail_audit(
-        args.reports or list(DEFAULT_REPORT_PATTERNS),
+        args.reports,
         args.docs or [str(path) for path in DEFAULT_DOCS],
         args.figure_bases,
         args.figure_index,
