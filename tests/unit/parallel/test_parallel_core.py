@@ -1096,7 +1096,7 @@ def test_indivisible_device_count_names_the_counts_that_work() -> None:
     from gkx.workflows.runtime.parallel_nonlinear import resolve_species_hermite_mesh
 
     plan = resolve_nonlinear_parallel_plan(
-        RuntimeParallelConfig(auto=True, num_devices=3)
+        RuntimeParallelConfig(strategy="shard_map", axis="m", num_devices=3)
     )
     with pytest.raises(NonlinearParallelRoutingError) as excinfo:
         resolve_species_hermite_mesh(

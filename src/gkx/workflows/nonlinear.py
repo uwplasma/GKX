@@ -44,6 +44,7 @@ from gkx.workflows.runtime.diagnostic_arrays import (
 )
 from gkx.workflows.runtime.parallel_nonlinear import (
     NonlinearParallelPlan,
+    _integrate_species_hermite_final_state,
     assert_nonlinear_parallel_identity,
     resolve_nonlinear_parallel_plan,
     resolve_species_hermite_mesh,
@@ -862,19 +863,17 @@ def _run_once(
     t, diag, G_final, fields_final, saturation = _run_diagnostics(
         cfg, ctx, policy, method=method, status=status
     )
-    return (
-        _diagnostic_run_result(
-            ctx,
-            policy,
-            t=t,
-            diagnostics=diag,
-            fields=fields_final,
-            state=G_final,
-            saturation=saturation,
-            status=status,
-        ),
-        G_final,
+    result = _diagnostic_run_result(
+        ctx,
+        policy,
+        t=t,
+        diagnostics=diag,
+        fields=fields_final,
+        state=G_final,
+        saturation=saturation,
+        status=status,
     )
+    return result, G_final
 
 
 def _run_sharded(
@@ -891,10 +890,28 @@ def _run_sharded(
     if plan.axis == "species_hermite":
         plan = resolve_species_hermite_mesh(ctx.G0, plan)
     status(f"routing nonlinear run through {plan.describe()}")
-    sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
-    result, sharded_state = _run_once(
-        cfg, sharded_ctx, policy, method=method, status=status
+    named = _integrate_species_hermite_final_state(
+        cfg, ctx, policy, method=method, plan=plan, status=status
     )
+    if named is None:
+        status(
+            "using whole-state placement; named collectives do not support these settings"
+        )
+        sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
+        result, sharded_state = _run_once(
+            cfg, sharded_ctx, policy, method=method, status=status
+        )
+    else:
+        sharded_state, fields = named
+        result = _result(
+            ctx,
+            policy,
+            t=np.asarray([]),
+            diagnostics=None,
+            fields=fields,
+            state=sharded_state,
+            summarize_fields=True,
+        )
     if not plan.strict_identity:
         status("parallel strict_identity=false; skipping the serial identity gate")
         return result
