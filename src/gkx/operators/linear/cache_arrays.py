@@ -30,6 +30,20 @@ def _build_low_rank_moment_cache_arrays(
 ) -> dict[str, jnp.ndarray]:
     """Build small moment-space cache arrays without many eager JAX dispatches."""
 
+    if getattr(params, "_nu_ei", None) is not None and (
+        params.beta != 0
+        or params.fapar != 0
+        or params.mu_vperp_max is not None
+        or params.collision_model != "dougherty"
+        or params.moments is not None
+        or params.nu_hermite != 1
+        or params.nu_laguerre != 2
+        or Nl < 2
+        or Nm < 3
+    ):
+        raise ValueError(
+            "electron_ion requires ES Dougherty, Nl>=2, Nm>=3, uniform Laguerre"
+        )
     np_dtype: Any = _numpy_dtype_for_jax(real_dtype)
     ell: Any = np.arange(Nl, dtype=np_dtype).reshape(Nl, 1, 1, 1, 1)
     m: Any = np.arange(Nm, dtype=np_dtype).reshape(1, Nm, 1, 1, 1)
@@ -300,6 +314,8 @@ def collision_damping(
         b = jnp.asarray(cache.b, dtype=real_dtype)
         ns = int(b.shape[0])
         nu = _as_species_array(params.nu, ns, "nu").astype(real_dtype)
+        if (nu_ei := getattr(params, "_nu_ei", None)) is not None:
+            nu = nu + _as_species_array(nu_ei, ns, "nu_ei").astype(real_dtype)
         nu_s = nu[:, None, None, None, None, None]
         damping = nu_s * lb_lam[None, :, :, None, None, None]
         damping = damping + nu_s * b[:, None, None, ...]

@@ -455,15 +455,7 @@ def build_runtime_linear_params(
     )
 
     species = _species_to_linear(cfg.species)
-    if cfg.collisions.electron_ion and str(
-        cfg.time.collision_operator
-    ).strip().lower() in ("none", "lenard_bernstein"):
-        # GX ei_colls: nu_ei = Z_i nu_ee adds to the damping and the energy restoring terms,
-        # and the ion flow fixed by zero current makes the momentum term equal too.
-        z_i = next((s.charge for s in species if s.charge > 0), 1.0)
-        species = [
-            replace(s, nu=s.nu * (1.0 + z_i)) if s.charge < 0 else s for s in species
-        ]
+    nu_ei = cfg._electron_ion_rates()
     has_kinetic_electron = any(float(s.charge) < 0.0 for s in species)
     has_kinetic_ion = any(float(s.charge) > 0.0 for s in species)
     if cfg.physics.adiabatic_electrons and cfg.physics.adiabatic_ions:
@@ -517,6 +509,7 @@ def build_runtime_linear_params(
     )
     return replace(
         params,
+        _nu_ei=nu_ei,
         moments=_species_moments(cfg, Nm),
         nu_hyper_m_const=(
             None

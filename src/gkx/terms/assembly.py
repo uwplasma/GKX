@@ -61,6 +61,7 @@ class _SpeciesArrays:
     tprim: jnp.ndarray
     fprim: jnp.ndarray
     nu: jnp.ndarray
+    nu_ei: jnp.ndarray | None
     closure: jnp.ndarray
 
 
@@ -176,6 +177,7 @@ def _collision_contribution_or_zero(
     lb_lam: jnp.ndarray,
     weight: jnp.ndarray,
     mu_grid: tuple[jnp.ndarray, jnp.ndarray] | None = None,
+    nu_ei: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Skip the collision operator when the configured operator is exactly zero."""
 
@@ -184,13 +186,15 @@ def _collision_contribution_or_zero(
     if _is_static_zero(weight, real_dtype):
         return jnp.zeros_like(H)
 
+    collision_nu = nu if nu_ei is None else nu + nu_ei
     no_preexpanded_operator = collision_lam.size == 0
-    if no_preexpanded_operator and _is_static_zero(nu, real_dtype):
+    if no_preexpanded_operator and _is_static_zero(collision_nu, real_dtype):
         return jnp.zeros_like(H)
 
-    zero_nu_operator = jnp.logical_and(no_preexpanded_operator, jnp.all(nu == 0.0))
-    zero_weight = jnp.all(weight == 0.0)
-    skip = jnp.logical_or(zero_weight, zero_nu_operator)
+    zero_nu_operator = jnp.logical_and(
+        no_preexpanded_operator, jnp.all(collision_nu == 0.0)
+    )
+    skip = jnp.logical_or(jnp.all(weight == 0.0), zero_nu_operator)
 
     return jax.lax.cond(
         skip,
@@ -202,6 +206,7 @@ def _collision_contribution_or_zero(
             JlB=JlB,
             b=b,
             nu=nu,
+            nu_ei=nu_ei,
             collision_lam=collision_lam,
             lb_lam=lb_lam,
             weight=weight,
@@ -245,10 +250,11 @@ def _species_arrays(params: LinearParams, ns: int, real_dtype: Any) -> _SpeciesA
 
     return _SpeciesArrays(
         charge=array("charge", "charge_sign"),
+        nu_ei=None if params._nu_ei is None else array("nu_ei", "_nu_ei"),
         **{
             f.name: array(f.name)
             for f in dataclass_fields(_SpeciesArrays)
-            if f.name != "charge"
+            if f.name not in {"charge", "nu_ei"}
         },
     )
 
@@ -658,6 +664,7 @@ def _dissipation_contributions(
             JlB=cache.JlB,
             b=cache.b,
             nu=species.nu,
+            nu_ei=species.nu_ei,
             collision_lam=cache.collision_lam,
             lb_lam=cache.lb_lam,
             weight=weights.collisions,
@@ -920,6 +927,8 @@ def assemble_rhs_cached_with_fields(
     """
 
     term_cfg = terms or TermConfig()
+    if hermite_window is not None and params._nu_ei is not None:
+        raise NotImplementedError("electron_ion does not support Hermite shards")
     if cache.groups is not None:
         if hermite_window is not None:
             raise NotImplementedError("a Hermite-sharded route needs one moment count")
