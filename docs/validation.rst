@@ -516,6 +516,200 @@ A fresh native rebuild/run is needed for a new toolchain. These cells expose
 the setup and analysis without supplying the private archived raw outputs or
 promoting the finite-truncation result to a convergence claim.
 
+Collisionless Cyclone setup against gyaradax
+--------------------------------------------
+
+This recipe fixes a finite-discretization electrostatic case with one kinetic
+ion and adiabatic electrons. It supplies source, inputs and raw-field analysis;
+no velocity/spatial convergence, whole-distribution eigenvector, derivative,
+nonlinear-transport or performance claim follows. Late field fits and
+whole-state residuals are separate qualifications.
+
+Use Python 3.12 or newer (required by the reference package) and a fresh working
+directory. The preparation/analysis were checked with JAX 0.10.2; the archived
+trajectories used Python 3.12.13 and JAX/JAXLIB 0.12.0.1 with complex128 states.
+No bitwise portability across compilers/backends is assumed. Select a JAX
+backend for allocated compute before importing either package; the commands
+below install the CPU numerical environment, not a GPU-specific wheel.
+
+.. code-block:: bash
+
+   git clone https://github.com/uwplasma/GKX.git GKX
+   git -C GKX checkout e33034a01f572132fd36acae95a091736365403f
+   git clone https://github.com/gerkone/gyaradax.git gyaradax
+   git -C gyaradax checkout 8d9dc2d205e8993ae9e43e6e1e82ec1ea2875234
+   python -m pip install -e ./GKX -e ./gyaradax jax==0.10.2 jaxlib==0.10.2 \
+       numpy==2.4.6 scipy==1.17.1 \
+       'solvax @ git+https://github.com/uwplasma/SOLVAX.git@59b8c317357fd78582f3e06be6202972445eac68'
+   mkdir control
+   cd control
+   export JAX_ENABLE_X64=true GKX_X64=1
+
+Run the cells in one Python session. Preparation reuses the shipped tokamak
+example and pinned implementation helpers; the latter are not a stable public
+API. The reference coordinate is :math:`\theta=2\pi s`, with
+:math:`v_{\parallel,G}=\sqrt{2}v_{\parallel,r}` and
+:math:`\mu_G=2\mu_r`. Set :math:`k_{y,G}=-0.5/\sqrt{2}` for reference
+``kt=+0.5``: both RHS implementations use ``-i`` for drift and ``+i`` for the
+background-gradient drive, so the signed coefficient assertions below fix the
+orientation before any phase fit. No empirical frequency-sign flip is used.
+The time mapping is :math:`t_G=t_r/\sqrt{2}`; reported reference rates are
+therefore multiplied by :math:`\sqrt{2}`.
+
+.. code-block:: python
+
+   from dataclasses import replace
+   from pathlib import Path
+   import numpy as np
+   import gkx
+   from gkx.workflows.linear import _prepare_linear_runtime_context, _warn_if_linear_dt_exceeds_cfl
+   from gkx.operators.linear.cache_builder import build_linear_cache
+   from gyaradax.geometry import compute_geometry
+   from gyaradax.params import GKParams
+   from gyaradax.precompute import linear_precompute
+   from gyaradax.solver import init_f, default_state
+   from gyaradax.cfl import estimate_linear_timestep
+
+   assert Path(gkx.__file__).resolve().is_relative_to(Path('../GKX/src').resolve())
+   base = gkx.load('../GKX/examples/01_linear_tokamak/case_full.toml')
+   nl, nm, nz = 24, 48, 216
+   gkx_chunks, reference_chunks = 30, 300
+   ky = -.5 / np.sqrt(2)
+   case = replace(base,
+       species=(replace(base.species[0], tprim=6.9, fprim=2.2, nu=0.),),
+       geometry=replace(base.geometry, model='s-alpha', q=1.4, s_hat=.78,
+                        epsilon=.19, R0=1., kperp2_bmag=True),
+       grid=replace(base.grid, Ny=24, Nz=nz, y0=np.sqrt(8), ntheta=None, nperiod=5,
+                    ky_layout='full', z_min=-9*np.pi+np.pi/24, z_max=9*np.pi+np.pi/24),
+       time=replace(base.time, dt=.0015/np.sqrt(2), t_max=90/np.sqrt(2), fixed_dt=True,
+                    method='rk4', sample_stride=200, progress_bar=False, damp_ends_rate=0.),
+       physics=replace(base.physics, beta=0., collisions=False, hypercollisions=False),
+       collisions=replace(base.collisions, nu_hermite=0., nu_laguerre=0., nu_hyper=0.,
+                          nu_hyper_m=0., p_hyper_m=4., D_hyper=0.,
+                          hypercollisions_const=0., hypercollisions_kz=0.),
+       terms=replace(base.terms, collisions=0., hypercollisions=0., end_damping=0.,
+                     apar=0., bpar=0., nonlinear=0.),
+       run=replace(base.run, ky=ky, Nl=nl, Nm=nm, solver='time'))
+   ctx = _prepare_linear_runtime_context(case, ky_target=ky, n_laguerre=nl,
+         n_hermite=nm, solver='time', fit_signal='phi', return_state=True,
+         initial_state=None, status_callback=None)
+   cache = build_linear_cache(ctx.grid, ctx.geom, ctx.params, nl, nm)
+   assert case.time.dt < _warn_if_linear_dt_exceeds_cfl(ctx, case.time, measure=True)
+   g = compute_geometry(q=1.4, shat=.78, eps=.19, ns=nz, nvpar=120, nmu=30,
+       vpar_max=3.75, nkx=1, nky=1, nperiod=5, kxmax=.5, signB=1., Rref=1.,
+       krhomax=.5, geom_type='s-alpha')
+   p = GKParams(dt=.003, naverage=100, non_linear=False, adaptive_dt=False,
+       adiabatic_electrons=True, disp_par=0., disp_vp=0., disp_x=0., disp_y=0.,
+       finit='cosine2', amp_init=1e-4, mas=1., signz=1., tmp=1., de=1., vthrat=1.,
+       rlt=6.9, rln=2.2, dgrid=1., tgrid=1., sgr_dist=float(g['sgr_dist']),
+       dvp=float(g['dvp']), kxmax=.5, kymax=.5, norm_eps=1e-14, drive_scale=1.,
+       idisp=2, cfl_safety=.95, mixed_precision=False, backend='jax', use_z2z=False)
+   pre = linear_precompute(g, p)
+   assert p.dt < float(estimate_linear_timestep(pre, params=p))
+   assert np.max(abs(np.asarray(ctx.grid.z)-2*np.pi*np.asarray(g['sgrid']))) < 2e-14
+   assert np.max(abs(np.asarray(cache.bmag).ravel()-np.asarray(g['bn']))) < 2e-14
+   rg = init_f(g, finit='cosine2', amp_init_real=1e-4)
+   rs = default_state(nky=1)
+   print('Prepared exact finite-discretization inputs; no evolution performed.')
+   for actual, expected in [
+       (cache.b, g['krho'][0]**2*g['little_g'][:, 0]/(2*g['bn']**2)),
+       (cache.bgrad, g['gfun']),
+       (cache.cv_d, np.sqrt(2)*g['krho'][0]*g['dfun'][:, 1]/2),
+       (np.full(nz, float(ctx.grid.ky[0])), np.sqrt(2)*g['krho'][0]*g['efun']),
+   ]:
+       np.testing.assert_allclose(np.asarray(actual).ravel(), np.asarray(expected).ravel(),
+                                  rtol=5e-13, atol=5e-13)
+   assert abs(float(ctx.params.kpar_scale)-2*np.pi*float(g['ffun'][0])) < 1e-13
+
+These checks align continuous coefficients and actual spatial nodes. They do
+not equate the finite discrete operators: the reference has finite midpoint
+velocity boxes, fourth-order finite differences and open zero-ghost ends;
+GKX uses Hermite/Laguerre moments and the linked FFT derivative. The initial
+functions also differ: GKX has its fixed-width Gaussian density seed, while
+the reference has its velocity-flat ``cosine2`` seed. Absolute initial
+amplitudes and distribution functions are not compared.
+
+The following cell performs the two trajectories on allocated compute, saves
+every sampled prefix and rejects non-finite output; the fitting cell refuses
+incomplete output. The defaults request the full horizons; setting both chunk
+counts to two supplies a bounded preflight with actual reached-time checks. It uses the recorded half-reference timestep for GKX and the unchanged
+reference timestep. No trajectory is required merely to check preparation.
+
+.. code-block:: python
+
+   import jax.numpy as jnp
+   from gkx.solvers_linear_integrators import integrate_linear
+   from gyaradax.simulate import gk_run
+
+   G = jnp.asarray(ctx.initial_state, dtype=jnp.complex128)
+   times, potentials = [], []
+   for chunk in range(gkx_chunks):
+       G, history = integrate_linear(G, ctx.grid, ctx.geom, ctx.params,
+           dt=case.time.dt, steps=2000, method='rk4', cache=cache,
+           terms=ctx.terms, sample_stride=200)
+       times.extend((chunk*2000+np.arange(1, 11)*200)*case.time.dt)
+       potentials.extend(np.asarray(history).reshape(10, nz))
+       np.savez('gkx_fields.npz', time=times, phi=potentials, z=np.asarray(ctx.grid.z))
+       np.save('gkx_final_state.npy', np.asarray(G))
+       assert np.isfinite(np.asarray(G)).all() and np.isfinite(potentials).all()
+   assert np.isclose(times[-1], gkx_chunks*2000*case.time.dt)
+
+   native_times, reference_phi, factors = [], [], []
+   for chunk in range(reference_chunks):
+       rg, phi, _, rs = gk_run(rg, g, p, rs, 100, pre=pre)
+       native_times.append(float(rs.time))
+       reference_phi.append(np.asarray(phi).ravel())
+       factors.append(float(np.asarray(rs.accumulated_norm_factor).ravel()[0]))
+       np.savez('reference_fields.npz', native_time=native_times, phi=reference_phi,
+                factor=factors, z=2*np.pi*np.asarray(g['sgrid']))
+       assert np.isfinite(np.asarray(rg)).all() and np.isfinite(reference_phi).all()
+       assert np.isfinite(factors).all() and np.all(np.asarray(factors)>0)
+   assert np.isclose(native_times[-1], reference_chunks*100*p.dt)
+
+Fit reference time 70.2--90 in both codes. Phase unwrapping assumes the dominant
+phase is sampled sufficiently often; output-cadence and timestep convergence
+remain open. A bounded principal-angle increment cannot establish that
+assumption. The reference repeatedly
+normalizes its state by a positive factor; remove that factor from log
+amplitude, not phase. Compare normalized potentials only on common nodes.
+These outputs are finite-discretization field-rate measurements, not a
+whole-state certificate or a convergence/extrapolation result.
+
+.. code-block:: python
+
+   a = np.load('gkx_fields.npz')
+   b = np.load('reference_fields.npz')
+   assert len(a['time']) == len(b['native_time']) == 300
+   np.testing.assert_allclose(a['time']*np.sqrt(2), b['native_time'], atol=1e-8)
+   np.testing.assert_allclose(a['z'], b['z'], rtol=0, atol=2e-14)
+   results = {}
+   for label, time, phi, factor in [
+       ('GKX', a['time'], a['phi'], np.ones(300)),
+       ('reference', b['native_time']/np.sqrt(2), b['phi'], b['factor']),
+   ]:
+       assert np.isfinite(phi).all() and np.all(factor>0)
+       keep = (time*np.sqrt(2)>=70.-1e-6) & (time*np.sqrt(2)<=90.+1e-6)
+       assert keep.sum() == 67
+       profile = phi[-1]/np.linalg.norm(phi[-1])
+       signal = phi@profile.conj()
+       gamma = np.polyfit(time[keep], np.log(abs(signal[keep]))-np.log(factor[keep]), 1)[0]
+       omega = -np.polyfit(time[keep], np.unwrap(np.angle(signal[keep])), 1)[0]
+       results[label] = dict(gamma=float(gamma), omega=float(omega), profile=profile)
+   x, y = results['GKX'], results['reference']
+   overlap = np.vdot(y['profile'], x['profile'])
+   print('GKX:', x['gamma'], x['omega'], 'reference:', y['gamma'], y['omega'])
+   print('relative rate differences:', x['gamma']/y['gamma']-1, x['omega']/y['omega']-1)
+   print('normalized common-node potential L2:',
+         np.linalg.norm(x['profile']-overlap/abs(overlap)*y['profile']))
+
+The preparation cell reproduces the frozen runtime parameters, geometry
+coefficients and retained initial state. The exact evolution cell was executed
+for two chunks per code at these shapes, saving and reloading finite output
+with correct post-step times and fields. The fitting cell was replayed on saved
+full trajectories. Requirements resolve in an isolated Python 3.12 dry run; a
+fresh installed environment and complete trajectories were not rerun for this
+documentation change. Archived raw trajectories remain private.
+
 Cross-code linear parity matrix
 -------------------------------
 
