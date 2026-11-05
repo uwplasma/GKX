@@ -1069,7 +1069,6 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         chain: Any = None,
         initial_dt: jnp.ndarray | None = None,
         rhs_fn: Any = None,
-        initial_dt: jnp.ndarray | None = None,
     ) -> tuple[Any, Any, Any, Any]:
         step = components.step
         if rhs_fn is not None:
