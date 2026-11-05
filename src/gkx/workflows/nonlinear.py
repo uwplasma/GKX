@@ -611,7 +611,7 @@ def _run_chunked_diagnostics(
             control["op"] = refactor_chain_implicit_linear(
                 control["op"], control["dt"], free=True
             )
-        elif remaining_time <= steps_now * dt_cap:
+        elif (not imex and not step_capped) or remaining_time <= steps_now * dt_cap:
             kwargs["time_horizon"] = remaining_time
         kwargs["compile_cache"] = compile_cache
         while True:
