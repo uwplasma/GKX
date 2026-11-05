@@ -16,6 +16,7 @@ from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.modes import select_ky_index
 from gkx.diagnostics.saturation import (
     SaturationStopConfig,
+    _physical_saturation_stop_decision,
     saturation_stop_decision,
 )
 from gkx.geometry import apply_geometry_grid_defaults
@@ -442,14 +443,7 @@ _RUN_TO_VALUES = ("saturation", "t_max")
 def _saturation_stop_condition(
     cfg: RuntimeConfig, ctx: _RunContext, policy: _DiagnosticPolicy
 ) -> Callable[[Any, Any, Any, Any], dict[str, Any]] | None:
-    """Build the run-to-saturation stop check, or ``None`` to run to t_max.
-
-    Saturation stopping needs the streamed heat-flux trace, so a run with
-    diagnostics disabled falls back to the t_max horizon. So does a run whose
-    whole step budget is shorter than the minimum sample count: it could never
-    reach a stop decision, and routing it through the chunk loop would only
-    add machinery around the same integration.
-    """
+    """Build a diagnostic stop check when the run can reach its sample floor."""
 
     run_to = str(cfg.time.run_to).strip().lower()
     if run_to not in _RUN_TO_VALUES:
@@ -469,6 +463,10 @@ def _saturation_stop_condition(
         return None
 
     def check(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
+        if not cfg.time.fixed_dt:
+            return _physical_saturation_stop_decision(
+                t, heat_flux, wphi, wg, config=stop_cfg
+            )
         return saturation_stop_decision(
             t, heat_flux, guard=wphi, free_energy_guard=wg, config=stop_cfg
         )

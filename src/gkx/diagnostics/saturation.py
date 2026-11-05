@@ -12,14 +12,16 @@ That module scores a window after the fact against promotion gates; this one is
 asked the same question repeatedly by a running solver, on a trace that grows
 under it, and has to answer "not yet" with a reason the runtime can record.
 
-The Sokal estimator is shared with post-hoc analysis, so runtime and campaign
-uncertainties use one definition.
+Fixed-step traces retain the point-sample estimator shared with post-hoc
+analysis. Adaptive runtime traces use physical interval means and their
+estimated covariance, requiring both estimators to accept the same prefix.
+Neither gate certifies stationarity or nominal sequential confidence coverage.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 import math
 
 import numpy as np
@@ -63,6 +65,9 @@ _SATURATION_DECISION_FIELDS = (
     "guard_stationary",
     "Wg_guard_stationary",
 )
+
+
+_WindowStatistics = Callable[[np.ndarray, float], tuple[float, float, float, bool]]
 
 
 def _sokal_window_mean_sem(
@@ -119,20 +124,38 @@ _STATIONARITY_SEM_FACTOR = 2.0
 
 
 def _halves_stationary(
-    values: np.ndarray, dt: float, *, check_terminal: bool = True
+    values: np.ndarray,
+    dt: float,
+    *,
+    check_terminal: bool = True,
+    statistics: _WindowStatistics | None = None,
 ) -> tuple[float, float, float, bool]:
     """Half-window means, combined SEM, and agreement including the late half."""
 
     half = values.size // 2
-    first_mean, first_sem, _, _ = _sokal_window_mean_sem(values[:half], dt)
-    second_mean, second_sem, _, _ = _sokal_window_mean_sem(values[half:], dt)
+    stats = statistics or _sokal_window_mean_sem
+    first_mean, first_sem, _, _ = stats(values[:half], dt)
+    second_mean, second_sem, _, _ = stats(values[half:], dt)
     combined = float(math.hypot(first_sem, second_sem))
     stationary = abs(second_mean - first_mean) <= _STATIONARITY_SEM_FACTOR * combined
     if check_terminal and stationary:
         # Opposing startup decay and late growth can give equal full-window
         # halves. Also compare the terminal quarters on the same SEM scale.
-        stationary = _halves_stationary(values[half:], dt, check_terminal=False)[3]
+        stationary = _halves_stationary(
+            values[half:], dt, check_terminal=False, statistics=stats
+        )[3]
     return first_mean, second_mean, combined, stationary
+
+
+def _saturation_config(config: SaturationStopConfig | None) -> SaturationStopConfig:
+    cfg = config or SaturationStopConfig()
+    if float(cfg.rel_sem) <= 0.0:
+        raise ValueError("rel_sem must be positive")
+    if cfg.min_window is not None and (
+        not math.isfinite(float(cfg.min_window)) or float(cfg.min_window) < 0.0
+    ):
+        raise ValueError("min_window must be finite and non-negative when supplied")
+    return cfg
 
 
 def saturation_stop_decision(
@@ -166,13 +189,26 @@ def saturation_stop_decision(
     The trace is assumed finite; the runtime validates each chunk before this.
     """
 
-    cfg = config or SaturationStopConfig()
-    if float(cfg.rel_sem) <= 0.0:
-        raise ValueError("rel_sem must be positive")
-    if cfg.min_window is not None and (
-        not math.isfinite(float(cfg.min_window)) or float(cfg.min_window) < 0.0
-    ):
-        raise ValueError("min_window must be finite and non-negative when supplied")
+    return _saturation_decision(
+        time,
+        values,
+        guard=guard,
+        free_energy_guard=free_energy_guard,
+        config=config,
+        statistics=_sokal_window_mean_sem,
+    )
+
+
+def _saturation_decision(
+    time: Any,
+    values: Any,
+    *,
+    guard: Any,
+    free_energy_guard: Any,
+    config: SaturationStopConfig | None,
+    statistics: _WindowStatistics,
+) -> dict[str, Any]:
+    cfg = _saturation_config(config)
     t = np.asarray(time, dtype=float).reshape(-1)
     y = np.asarray(values, dtype=float).reshape(-1)
     if t.size != y.size:
@@ -200,16 +236,26 @@ def saturation_stop_decision(
         return _empty_saturation_decision(cfg, reason="degenerate_window_time_axis")
     dt = float(np.median(intervals))
 
-    mean, sem, tau, tau_resolved = _sokal_window_mean_sem(wy, dt)
+    mean, sem, tau, tau_resolved = statistics(wy, dt)
     span = float(wt[-1] - wt[0])
     min_window = max(
         _MIN_IAT_SPANS * tau,
         0.0 if cfg.min_window is None else float(cfg.min_window),
     )
     rel_sem = float(sem / max(abs(mean), _SATURATION_VALUE_FLOOR))
-    first_mean, second_mean, halves_sem, stationary = _halves_stationary(wy, dt)
-    guard_stationary = None if g is None else _halves_stationary(g[start:], dt)[3]
-    wg_stationary = None if wg is None else _halves_stationary(wg[start:], dt)[3]
+    first_mean, second_mean, halves_sem, stationary = _halves_stationary(
+        wy, dt, statistics=statistics
+    )
+    guard_stationary = (
+        None
+        if g is None
+        else _halves_stationary(g[start:], dt, statistics=statistics)[3]
+    )
+    wg_stationary = (
+        None
+        if wg is None
+        else _halves_stationary(wg[start:], dt, statistics=statistics)[3]
+    )
     # A trace that never left zero has nothing to converge: the relative SEM
     # divides by a floor rather than a mean, so every gate below passes on a
     # dead signal and the run stops in its first chunk. A zonal-response case,
@@ -250,6 +296,156 @@ def saturation_stop_decision(
         "Wg_guard_stationary": wg_stationary,
         "config": asdict(cfg),
     }
+
+
+_MAX_PHYSICAL_BINS = 4096
+
+
+def _batch_window_mean_sem(
+    values: np.ndarray, dt: float
+) -> tuple[float, float, float, bool]:
+    """Estimated covariance of interval means, including residual batch correlation."""
+    _, cut, rho = sokal_autocorrelation_time(values, dt)
+    inflation = max(1.0, 1.0 + 2.0 * float(np.sum(rho[1:cut])))
+    n_eff = len(values) / inflation
+    return (
+        float(np.mean(values)),
+        float(np.std(values, ddof=1) / np.sqrt(n_eff)),
+        0.5 * dt * inflation,
+        cut < len(rho),
+    )
+
+
+def _physical_time_bins(
+    time: Any, channels: Sequence[Any]
+) -> tuple[
+    np.ndarray, np.ndarray, np.ndarray, tuple[np.ndarray, np.ndarray], dict[str, Any]
+]:
+    """Integrate full observed support in O(N) time and bounded extra workspace."""
+    t = np.asarray(time)
+    if t.ndim != 1 or len(t) < 2:
+        raise ValueError("need two clock nodes")
+    if len(channels) != 3 or any(np.size(c) != len(t) for c in channels):
+        raise ValueError("incomplete transport histories")
+    origin = float(t[0])
+    span = float(t[-1]) - origin
+    n = min(_MAX_PHYSICAL_BINS, len(t) - 1)
+    if not np.isfinite(span) or span <= 0:
+        raise ValueError("invalid physical clock span")
+    edges = np.linspace(0.0, span, n + 1)
+    integrals = np.zeros((n + 1, 3))
+    left_count = np.zeros(n + 1, dtype=int)
+    right_count = np.zeros(n + 1, dtype=int)
+    baseline = np.array([c[0] for c in channels], dtype=float)
+    running = np.zeros(3)
+    tol = 8 * np.finfo(float).eps * max(span, span / n)
+    for start in range(0, len(t) - 1, _MAX_PHYSICAL_BINS):
+        end = min(len(t), start + _MAX_PHYSICAL_BINS + 1)
+        x = np.asarray(t[start:end], dtype=float) - origin
+        y = (
+            np.column_stack([np.asarray(c[start:end], dtype=float) for c in channels])
+            - baseline
+        )
+        dx = np.diff(x)
+        if not np.isfinite(x).all() or np.any(dx <= 0) or not np.isfinite(y).all():
+            raise ValueError("invalid physical clock or channel")
+        cumulative = np.vstack(
+            (np.zeros(3), np.cumsum(0.5 * (y[1:] + y[:-1]) * dx[:, None], axis=0))
+        )
+        a = np.searchsorted(edges, x[0], side="left")
+        b = np.searchsorted(edges, x[-1], side="right")
+        e = edges[a:b]
+        ix = np.clip(np.searchsorted(x, e, side="right") - 1, 0, len(x) - 2)
+        offset = e - x[ix]
+        integrals[a:b] = (
+            running
+            + cumulative[ix]
+            + y[ix] * offset[:, None]
+            + 0.5 * (np.diff(y, axis=0) / dx[:, None])[ix] * offset[:, None] ** 2
+        )
+        left_count[a:b] = start + np.searchsorted(x, e - tol, side="left")
+        right_count[a:b] = start + np.searchsorted(x, e + tol, side="right")
+        running += cumulative[-1]
+    values = np.diff(integrals, axis=0) / np.diff(edges)[:, None] + baseline
+    meta = dict(
+        kind="physical_time_batch_covariance",
+        origin=origin,
+        cadence=float(span / n),
+        max_bins=_MAX_PHYSICAL_BINS,
+        n_raw_total=len(t),
+        n_complete_total=n,
+        partial_bins="none; full observed support",
+        n_window_unit="complete_bins",
+        clock_dtype=str(t.dtype),
+        covariance_estimator="first_negative_discrete_sum",
+        resolution_gate="native_same_prefix",
+        correlation_floor="variance inflation at least one",
+    )
+    return (
+        0.5 * (edges[:-1] + edges[1:]),
+        values,
+        edges,
+        (left_count, right_count),
+        meta,
+    )
+
+
+def _physical_saturation_stop_decision(
+    time: Any, q: Any, w: Any, g: Any, *, config: SaturationStopConfig | None = None
+) -> dict[str, Any]:
+    """Admit physical-batch estimates only with native same-prefix acceptance.
+
+    Report bin edges while preserving the center-span minimum-window gate.
+    Covariance estimates and repeated stopping remain calibration dependent.
+    """
+    cfg = _saturation_config(config)
+    for name, trace in (("values", q), ("guard", w), ("free_energy_guard", g)):
+        if trace is None or np.size(trace) != np.size(time):
+            raise ValueError(f"{name} must match the time axis")
+    try:
+        centers, bins, edges, counts, meta = _physical_time_bins(time, (q, w, g))
+    except ValueError as exc:
+        return _empty_saturation_decision(cfg, reason=str(exc))
+    d = _saturation_decision(
+        centers,
+        bins[:, 0],
+        guard=bins[:, 1],
+        free_energy_guard=bins[:, 2],
+        config=cfg,
+        statistics=_batch_window_mean_sem,
+    )
+    d["analysis"] = meta
+    meta.update(native_gate="not_evaluated", n_raw_window=0, n_eff=None)
+    if d["mean"] is None:
+        return d
+    first = int(np.searchsorted(centers, d["window_tmin"]))
+    raw = int(counts[1][-1] - counts[0][first])
+    reasons = d["reasons"]
+    meta.update(
+        center_span=d["window_span"],
+        center_min_window=d["min_window"],
+        n_raw_window=raw,
+        n_eff=min(
+            float(d["n_window"]), d["n_window"] * meta["cadence"] / (2 * d["tau_ac"])
+        ),
+    )
+    if raw < d["min_samples"]:
+        reasons.append("raw_effort_below_minimum")
+    if not reasons:
+        native = saturation_stop_decision(
+            time, q, guard=w, free_energy_guard=g, config=cfg
+        )
+        meta["native_gate"] = "passed" if native["saturated"] else "failed"
+        if not native["saturated"]:
+            reasons.append("sample_clock_crosscheck_failed")
+    d.update(
+        window_tmin=meta["origin"] + float(edges[first]),
+        window_tmax=meta["origin"] + float(edges[-1]),
+        window_span=float(edges[-1] - edges[first]),
+        min_window=float(d["min_window"] + meta["cadence"]),
+        saturated=not reasons,
+    )
+    return d
 
 
 __all__ = [
