@@ -46,7 +46,7 @@ method = "rk4"
 sample_stride = 10
 fixed_dt = true
 # End damping: the default rate (30 electron transits of the end layers,
-# 199 here); gamma moves < 0.1% for 3x either way (plan/research/2026-10-15-end-damping).
+# 199 here); gamma moves < 0.1% for 3x either way (historical self-run; raw-output archive not public).
 
 [geometry]
 q = 1.4
