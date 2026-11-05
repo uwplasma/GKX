@@ -684,13 +684,7 @@ def _run_chunked_diagnostics(
 
 
 def _chunk_spill_dir() -> Path | None:
-    """Directory for spilled chunk diagnostics, or ``None`` to keep them in RAM.
-
-    Environment rather than TOML because it is a property of the *machine* the
-    run lands on, not of the physics case: the same config is submitted to a
-    workstation with 512 GB and to a batch node with 16, and only the second one
-    needs to spill.
-    """
+    """Resolve machine-specific diagnostic spilling independently of the case."""
 
     raw = os.environ.get("GKX_CHUNK_SPILL_DIR", "").strip()
     return Path(raw) if raw else None
@@ -880,8 +874,6 @@ def _run_once(
     status: Callable[[str], None],
     rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[RuntimeNonlinearResult, Any]:
-    """Run one nonlinear trajectory and return its result plus its final state."""
-
     if (
         not policy.requires_diagnostic_path
         and cfg.time.fixed_dt
