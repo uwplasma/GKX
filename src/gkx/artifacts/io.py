@@ -425,10 +425,7 @@ def _runtime_linear_summary(result: Any) -> dict[str, Any]:
             result.z is not None and result.eigenfunction is not None
         ),
         "has_quasilinear": bool(getattr(result, "quasilinear", None) is not None),
-        # Solver status, with the same key names the in-memory result reports.
-        # A saved run used to carry no convergence channel at all, so a reader
-        # could not tell a certified eigenpair or a converged implicit scan from
-        # an unchecked one (queue row Q29).
+        # Preserve the in-memory convergence status in saved summaries.
         **eigen_status_payload(getattr(result, "eigen_status", None)),
         **implicit_solve_payload(getattr(result, "implicit_solve", None)),
     }

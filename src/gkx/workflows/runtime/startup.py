@@ -468,8 +468,7 @@ def build_runtime_linear_params(
     if cfg.physics.adiabatic_ions and has_kinetic_ion:
         raise ValueError("adiabatic_ions=True conflicts with kinetic ion species")
 
-    # ``tau_e`` is the field solver's historical name for the Boltzmann-species
-    # quasineutrality coefficient; it applies to either adiabatic species.
+    # ``tau_e`` is the quasineutrality coefficient for either adiabatic species.
     has_boltzmann_species = (
         cfg.physics.adiabatic_electrons or cfg.physics.adiabatic_ions
     )

@@ -87,10 +87,7 @@ def _sokal_window_mean_sem(
     """
 
     tau, cut, rho = sokal_autocorrelation_time(values, dt)
-    # A correlation time at or below one sample is the discretization floor,
-    # not resolved physics. Positive lag-one noise made 190/400 flat traces
-    # stop before this gate; their tau never exceeded 0.883 dt, while measured
-    # deck traces span 8.5--81 dt.
+    # Require a correlation time above the sampling interval.
     resolved = cut < rho.size and tau > dt
     n_eff = (
         min(float(values.size), values.size * dt / (2.0 * tau))
