@@ -1613,7 +1613,8 @@ recursive = true
 # 64790 -> 64794: exercise the adaptive named route with kinetic electrons
 # and statically disabled electromagnetic fields in the existing fixture.
 # 64794 -> 64798: verify diagnosed linked-cover projection after enabling preparation.
-baseline = 64798
+# 64798 -> 64819: verify adaptive chunks reuse one prepared horizon variant.
+baseline = 64819
 target = 35000
 
 [[line_budget_policy.counts]]

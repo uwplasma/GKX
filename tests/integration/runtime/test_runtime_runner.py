@@ -1503,13 +1503,14 @@ def test_runtime_startup_initial_condition_resolution_errors() -> None:
         )
 
 
-def test_runtime_nonlinear_adaptive_dt() -> None:
+@pytest.mark.parametrize("method", ["rk2", "rk4-pi"])
+def test_runtime_nonlinear_adaptive_dt(method, monkeypatch) -> None:
     cfg = replace(
         _base_runtime_cfg(),
         time=TimeConfig(
             t_max=0.2,
             dt=0.01,
-            method="rk2",
+            method=method,
             sample_stride=1,
             fixed_dt=False,
             dt_min=1.0e-5,
@@ -1525,6 +1526,26 @@ def test_runtime_nonlinear_adaptive_dt() -> None:
     assert res.diagnostics is not None
     t_arr = np.asarray(res.diagnostics.t)
     assert np.all(np.diff(t_arr) > 0)
+
+    import gkx.solvers_nonlinear_diagnostics as backend
+
+    prepare = backend._cached_explicit_diagnostics
+    calls = []
+
+    def observe(*args, **kwargs):
+        prepared = prepare(*args, **kwargs)
+        calls.append(id(prepared))
+        return prepared
+
+    monkeypatch.setattr(backend, "_cached_explicit_diagnostics", observe)
+    cfg = replace(
+        cfg,
+        time=replace(cfg.time, t_max=0.3, dt=0.001, dt_max=0.001, run_to="t_max"),
+    )
+    res = run_runtime_nonlinear(cfg, ky_target=0.2, Nl=3, Nm=4)
+    assert len(calls) >= 3 and len(set(calls)) == 1
+    assert np.all(np.diff(res.t) > 0)
+    assert res.t[-1] == pytest.approx(0.3)
 
 
 def test_runtime_nonlinear_adaptive_default_steps_match_integrator_dt_cap() -> None:
