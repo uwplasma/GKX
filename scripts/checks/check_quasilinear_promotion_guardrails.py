@@ -894,6 +894,8 @@ def _audit_manuscript_figures(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     gates: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
+    if not figure_bases:
+        return gates, rows
     index = Path(index_path)
     index_text = index.read_text(encoding="utf-8") if index.exists() else ""
     normalized_index = _normalized_text(index_text)

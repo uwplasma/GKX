@@ -1198,7 +1198,7 @@ coverage_priority = "medium"
 coverage_target_percent = 90.0
 reference_anchors = [
   "JAX pmap/pjit/sharding documentation and production scan/ensemble workflows",
-  "multi-CPU local and multi-GPU office scaling sweeps",
+  "multi-CPU local and multi-GPU scaling sweeps",
 ]
 physics_contracts = [
   "parallel execution is numerically identical to serial execution for independent cases",
@@ -1337,7 +1337,7 @@ fast_tests = [
 ]
 artifact_paths = ["docs/_static/parallel_ky_scan_gate.png", "docs/_static/independent_ky_scan_scaling_large.png", "docs/_static/independent_ky_scan_scaling_cpu_large.png", "docs/_static/independent_ky_scan_scaling_gpu_large.png", "docs/_static/quasilinear_uq_ensemble_scaling_large.png", "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.png", "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.png", "docs/_static/parallelization_completion_status.png", "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png", "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.png", "docs/_static/nonlinear_sharding_strong_scaling_large.png", "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png", "docs/_static/linear_rhs_parallel_slices_sweep.png"]
 next_tests = [
-  "add office two-GPU identity and speedup gates for UQ ensembles",
+  "add two-GPU identity and speedup gates for UQ ensembles",
 ]
 
 [[modules]]
