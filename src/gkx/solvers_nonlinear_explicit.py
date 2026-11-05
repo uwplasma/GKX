@@ -745,7 +745,8 @@ def run_explicit_diagnostic_scan(
     sampled_scan: bool,
     checkpoint: bool,
     sampled_scan_fn: SampledDiagnosticScanFn,
-) -> tuple[jnp.ndarray, tuple[Any, Any, Any]]:
+    _return_dt: bool = False,
+) -> Any:
     """Run the explicit diagnostic scan using sampled or dense retention."""
 
     scan_step = jax.checkpoint(step_fn) if checkpoint else step_fn
@@ -766,7 +767,11 @@ def run_explicit_diagnostic_scan(
             steps=steps,
             stride=stride,
         )
-        return G_final, scan_diag_out
+        return (
+            (G_final, scan_diag_out, _dt_last)
+            if _return_dt
+            else (G_final, scan_diag_out)
+        )
 
     idx = jnp.arange(steps, dtype=jnp.int32)
     (
@@ -778,7 +783,9 @@ def run_explicit_diagnostic_scan(
         idx,
         checkpoint=checkpoint,
     )
-    return G_final, scan_diag_out
+    return (
+        (G_final, scan_diag_out, _dt_last) if _return_dt else (G_final, scan_diag_out)
+    )
 
 
 __all__ = [
