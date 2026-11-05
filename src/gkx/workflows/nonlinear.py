@@ -19,7 +19,7 @@ from gkx.diagnostics.saturation import (
     saturation_stop_decision,
 )
 from gkx.geometry import apply_geometry_grid_defaults
-from gkx.operators.linear.cache_arrays import check_mu_grid_nonlinear
+from gkx.operators.linear.cache_arrays import _check_mu_nonlinear
 from gkx.operators.nonlinear.policies import bracket_cfl_rate
 from gkx.solvers_nonlinear_imex import (
     IMEX_CHAIN_METHODS,
@@ -311,7 +311,6 @@ def _prepare_context(
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
     status("building runtime nonlinear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
-    check_mu_grid_nonlinear(params, cfg.physics.electromagnetic)
     terms = build_runtime_term_config(cfg)
     status(end_damping_status(params, grid, cfg.grid.boundary))
     ky_index, kx_index = _select_nonlinear_mode_indices(
@@ -995,9 +994,7 @@ def run_runtime_nonlinear(
         return_state=return_state,
         show_progress=show_progress,
     )
-    check_mu_grid_nonlinear(
-        ctx.params, cfg.physics.electromagnetic, policy.laguerre_mode
-    )
+    _check_mu_nonlinear(ctx.params, cfg.physics.electromagnetic, policy.laguerre_mode)
     status(
         f"nonlinear diagnostics={'on' if policy.diagnostics_on else 'off'} "
         f"fixed_mode={'on' if policy.fixed_mode_on else 'off'} source={cfg.expert.source}"

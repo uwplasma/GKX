@@ -140,7 +140,7 @@ def with_mu_grid(cache: Any, params: LinearParams) -> Any:
     )
 
 
-def check_mu_grid_nonlinear(
+def _check_mu_nonlinear(
     params: Any, electromagnetic: bool, laguerre_mode: str = "grid"
 ) -> None:
     """Nonlinear runs on the nodal mu grid are electrostatic only."""
