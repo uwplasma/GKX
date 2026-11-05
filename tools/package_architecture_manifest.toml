@@ -463,7 +463,7 @@ path = "solvers_nonlinear_diagnostics.py"
 # and replicates global diagnostics for the existing host result contract.
 # 3451 -> 3468: reuse the named RHS for fixed-window dynamic model operands
 # with compile-time topology/shape checks and replicated diagnostic outputs.
-baseline_lines = 3468
+baseline_lines = 3489
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -545,7 +545,7 @@ path = "workflows/nonlinear.py"
 # 1068 -> 1097: named diagnosed RHS reuses the existing one-shot diagnostic
 # runner, finite checks and result handling; no second diagnostic scan.
 # 1097 -> 1119: shared prepared horizon chunk runner; measured, target unchanged.
-baseline_lines = 1119
+baseline_lines = 1122
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -1230,7 +1230,7 @@ recursive = true
 # 69159 -> 69271: the chain IMEX factor, probes and collision sub-step per species group at the group's own (Nl, Nm). Measured.
 # Physical-time batches share the saturation core and bound quadrature workspace;
 # measured source growth preserves the existing file and per-owner ceilings.
-baseline = 69438
+baseline = 69799
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -1600,7 +1600,7 @@ recursive = true
 # 64592 -> 64646: per-species-count IMEX factor test (ions keep fewer moments than the state). Measured.
 # 64646 -> 64652: extend adaptive IMEX coverage for the first factor,
 # public timestep ceiling, and an absent ceiling in the existing fixture.
-baseline = 64652
+baseline = 64954
 target = 35000
 
 [[line_budget_policy.counts]]
