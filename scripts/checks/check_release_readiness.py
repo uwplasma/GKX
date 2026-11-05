@@ -1,8 +1,4 @@
-"""Check source, packaging, coverage and version contracts before release.
-
-Numerical validation belongs to executable tests. Historical campaign output and
-self-reported completion scores are not release gates.
-"""
+"""Check source, packaging, coverage and version contracts before release."""
 
 from __future__ import annotations
 import argparse
@@ -81,13 +77,7 @@ def default_tag_from_github_env() -> str | None:
 
 
 def fetch_pypi_versions(package: str) -> set[str]:
-    """Return released versions for ``package`` from the public PyPI JSON API.
-
-    PyPI answers 404 for a project that has never published a release, which is
-    the expected state for a first publish. Treat that as an empty release set
-    so the duplicate-version check stays meaningful instead of failing the
-    debut release.
-    """
+    """Read PyPI versions, treating a project-level HTTP 404 as unpublished."""
 
     url = f"https://pypi.org/pypi/{package}/json"
     try:
@@ -222,7 +212,7 @@ def main_version(argv: list[str] | None = None) -> int:
     return 0
 
 
-# These are executable CI/package contracts, not numerical performance claims.
+# Define required CI and package contracts.
 REQUIRED_CI_SNIPPETS = (
     "wide-coverage-shards",
     "--require-shard-data",
