@@ -663,22 +663,22 @@ def _species_hermite_local_rhs(
 
 
 def stage_from_host(value: Any, sharding: Any) -> Any:
-    """Place ``value`` on ``sharding`` from host memory rather than resharding.
+    """Reuse equivalent layouts; use host placement for genuine repartitioning.
 
-    Handing ``device_put`` an array that is already committed to one device asks
-    the runtime to reshard it across the mesh, and on the two-GPU box that path
-    silently produces a wrong answer: the sharded route drops to a max relative
-    error of 1.0 against serial while a one-device mesh on the same GPU is exact.
-    Round-tripping through the host is the reliable placement, and it happens
-    once per run rather than once per step.
+    Direct device-to-mesh resharding of a committed single-device array failed
+    the two-GPU identity gate. Keep host placement for genuine repartitioning.
+
+    Equivalent layouts retain the same shards/devices. Normalizing only their
+    metadata avoids host fetches after linked-cover projection, including across
+    processes.
     """
 
     if isinstance(value, jax.core.Tracer):
         return value
-    if getattr(value, "sharding", None) == sharding:
-        # Already exactly where it belongs: re-staging would only add a host
-        # round trip per call, which on a repeated route dominates the step.
-        return value
+    current = getattr(value, "sharding", None)
+    if current is not None and current.is_equivalent_to(sharding, value.ndim):
+        # Same shards/devices: normalize metadata without a host round trip.
+        return jax.device_put(value, sharding)
     return jax.device_put(np.asarray(jax.device_get(value)), sharding)
 
 

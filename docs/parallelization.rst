@@ -381,6 +381,11 @@ preparation, warmup, solves and differentiation in the same order. Returned
 states remain global JAX arrays; host materialization across processes needs
 an explicit collective rather than silently returning a local shard.
 
+Across processes, call ``simulation.value_and_grad`` directly. Enclosing a
+prepared instance with global model arrays in another ``jax.jit`` is not
+supported by current JAX constant lowering; the trajectory executor itself
+remains compiled and reusable.
+
 For transformed initial-state objectives, use NumPy input, an uncommitted JAX
 array created from host data, or reuse the state returned by
 ``simulation.solve()[2]``. JAX rejects an explicitly committed single-device

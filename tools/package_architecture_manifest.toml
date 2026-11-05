@@ -1591,9 +1591,9 @@ recursive = true
 # 64466 -> 64570: species-closure gate (closed species feels only the last-moment sink, the other is bitwise unchanged), the runtime-config mapping and the closure on a per-species moment group. Measured.
 # 64570 -> 64592: regression test for the growth-fit fallback window (beating amplitude, no stationary window) and a re-recorded unsettled collisional rate. Measured.
 # 64592 -> 64646: per-species-count IMEX factor test (ions keep fewer moments than the state). Measured.
-# 64646 -> 64674: extend the existing linked-cover prepared test with the named
-# result tuple, initial-state AD/FD, and unsupported override contracts.
-baseline = 64674
+# 64646 -> 64688: extend the existing linked-cover prepared test with the named
+# result tuple, state AD/FD, equivalent placement and unsupported overrides.
+baseline = 64688
 target = 35000
 
 [[line_budget_policy.counts]]

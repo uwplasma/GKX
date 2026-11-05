@@ -1241,6 +1241,20 @@ def test_prepared_solve_projects_a_supplied_state_onto_the_linked_cover(
         case, Nl=2, Nm=4, steps=2, **({"diagnostics": False} if parallel else {})
     )
     backend = prepared._backend
+    if parallel:
+        from gkx.parallel.integrators import stage_from_host
+
+        alternate = jax.sharding.NamedSharding(
+            jax.sharding.Mesh(np.asarray(plan.devices), ("equivalent",)),
+            jax.sharding.PartitionSpec(None, None, "equivalent"),
+        )
+        supplied_placement = jax.device_put(backend.initial_state, alternate)
+        with monkeypatch.context() as guard:
+            guard.setattr(jax, "device_get", lambda _v: pytest.fail("host round trip"))
+            normalized = stage_from_host(
+                supplied_placement, backend.initial_state.sharding
+            )
+        assert normalized.sharding == backend.initial_state.sharding
     cover = np.asarray(linked_cover_mask_from_cache(backend.cache))
     assert not cover.all(), "this deck must leave rows outside the chains"
 
