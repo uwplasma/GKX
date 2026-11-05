@@ -546,7 +546,10 @@ def _read_deck(source: str | Path) -> tuple[dict[str, Any] | None, Path | None]:
     path = Path(f"{_artifact_base(Path(source))}.toml")
     if not path.is_file():
         return None, None
-    import tomllib
+    try:  # Python 3.11+
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10
+        import tomli as tomllib  # type: ignore[import-not-found,no-redef]
 
     try:
         return tomllib.loads(path.read_text(encoding="utf-8")), path
@@ -595,6 +598,13 @@ def _resolution_lines(
         lines.append(("grid", f"Nx x Ny x Nz = {nx} x {ny} x {nz}"))
     if None not in (nl, nm):
         lines.append(("moments", f"Nl x Nm = {nl} x {nm}"))
+    kept = [
+        f"{sp.get('name', 'species')} {sp.get('Nl') or nl} x {sp.get('Nm') or nm}"
+        for sp in (deck or {}).get("species", [])
+        if sp.get("Nl") or sp.get("Nm")
+    ]
+    if kept:
+        lines.append(("species moments", ", ".join(kept)))
     return lines
 
 

@@ -119,7 +119,7 @@ CI jobs
 -------
 
 ``.github/workflows/ci.yml`` runs these jobs on every push and pull request.
-All Python jobs use 3.11 and install through ``.github/actions/setup``: uv
+All Python jobs use 3.11, except ``python-floor`` (3.10), and install through ``.github/actions/setup``: uv
 with a cached wheel store, and, for the test jobs, a JAX persistent
 compilation cache restored per job and saved whenever ``src/`` or ``tests/``
 change. Each job installs for itself; the only ``needs:`` edge is
@@ -140,8 +140,9 @@ change. Each job installs for itself; the only ``needs:`` edge is
        differentiability guard, technical status, release readiness) differ
        from the commit.
    * - ``python-floor``
-     - Installs at ``requires-python`` (3.11), imports ``gkx`` and ``gkx.cli``,
-       collects the whole suite, runs two float32 nonlinear gradient checks,
+     - Installs at ``requires-python`` (3.10, JAX 0.6.2), imports ``gkx`` and ``gkx.cli``,
+       collects the whole suite, runs a bounded unit subset (core, Krylov, velocity-parallel,
+       solver-objective gradients), two float32 nonlinear gradient checks,
        and the ``tomllib`` portability gates.
    * - ``mypy``
      - ``mypy``.
@@ -244,9 +245,10 @@ interpreter. Run them before pushing.
 4. **API reference.** Every ``.. automodule:: gkx...`` in ``docs/api.rst`` must
    resolve to a real module tracked by the coverage manifest, and the docs build
    with ``-W``.
-5. **Python floor.** ``python-floor`` collects the suite on 3.11; TOML is read
-   with the standard-library ``tomllib`` and a release gate forbids the
-   ``tomli`` backport.
+5. **Python floor.** ``python-floor`` collects the suite on 3.10 and runs a
+   bounded unit subset there; TOML is read with ``tomllib``, falling back to the
+   ``tomli`` backport on 3.10, and a release gate keeps that guarded form the
+   only one outside the tests.
 
 The checklist in CI order:
 
@@ -271,10 +273,9 @@ Numerical stack
 ---------------
 
 ``pyproject.toml`` requires ``jax>=0.10.1``, ``jaxlib>=0.10.1``, and
-``solvax>=0.29.0``. The JAX floor is hard: ``gkx.objectives.core`` calls
-``lax_linalg.eig(..., enable_eigvec_derivs=True)``, which first shipped in JAX
-0.10.1; older JAX fails the solver-objective tests with ``TypeError: eig() got
-an unexpected keyword argument``. Every CI job prints the resolved ``jax``,
+``solvax>=0.29.0`` on Python 3.11+, and ``jax>=0.6.2`` on Python 3.10, where
+0.6.2 is the newest JAX with wheels; a few reverse-mode tests are skipped there.
+Every CI job prints the resolved ``jax``,
 ``jaxlib``, and ``numpy`` versions ("Print benchmark stack"); reproduce a parity
 regression on that stack, with ``JAX_ENABLE_X64=1``, before changing solver
 logic. Near-marginal lanes (TEM, ETG scans, some imported-linear stellarator

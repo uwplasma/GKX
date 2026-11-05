@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 import jax.numpy as jnp
 import numpy as np
@@ -10,6 +10,7 @@ import numpy as np
 from dataclasses import replace
 
 from gkx.core_velocity import J_l_all, mu_grid_lb_rate, mu_grid_nodes
+from gkx.operators.linear.dissipation import hermite_closure_profile
 from gkx.operators.linear.params import LinearParams, _as_species_array, _is_tracer
 from gkx.operators.linear.streaming import shift_axis
 
@@ -139,13 +140,72 @@ def with_mu_grid(cache: Any, params: LinearParams) -> Any:
     )
 
 
-def check_mu_grid_nonlinear(params: Any, electromagnetic: bool) -> None:
+def check_mu_grid_nonlinear(
+    params: Any, electromagnetic: bool, laguerre_mode: str = "grid"
+) -> None:
     """Nonlinear runs on the nodal mu grid are electrostatic only."""
 
-    if electromagnetic and getattr(params, "mu_vperp_max", None) is not None:
+    if getattr(params, "mu_vperp_max", None) is None:
+        return
+    if electromagnetic:
         raise NotImplementedError(
             "nodal mu grid: nonlinear runs are electrostatic only"
         )
+    if str(laguerre_mode).lower() != "grid":
+        raise NotImplementedError(
+            "nodal mu grid: nonlinear runs require laguerre_mode='grid'"
+        )
+
+
+def with_species_groups(
+    cache: Any,
+    params: LinearParams,
+    build: Callable[..., Any],
+    *args: Any,
+) -> Any:
+    """Attach one exact-size cache per run of species keeping the same ``(nl, nm)``.
+
+    ``build(*args, params_g, nl, nm)`` makes a group's cache. The field solve runs on the full
+    state, so the gyro factors above a species' ``nl`` are zeroed in ``cache`` itself:
+    its polarization and gyroaverages then carry that species' own Laguerre terms.
+    Identity when ``params.moments`` is ``None`` or every species keeps the state's.
+    """
+
+    if params.moments is None:
+        return cache
+    Nl, Nm = cache.Jl.shape[1], cache.m.size
+    rows = [
+        (Nl if nl is None else nl, Nm if nm is None else nm, p)
+        for nl, nm, p in params.moments
+    ]
+    if any(nl > Nl or nm > Nm for nl, nm, _ in rows):
+        raise ValueError(f"a species keeps more moments than the state ({Nl}, {Nm})")
+    if all(r[:2] == (Nl, Nm) for r in rows):
+        return cache
+    if params.mu_vperp_max is not None and any(r[0] != Nl for r in rows):
+        raise ValueError("a species cannot keep fewer Laguerre nodes on the mu grid")
+    runs: list[list[int]] = []
+    for i, row in enumerate(rows):
+        if runs and rows[runs[-1][0]] == row:
+            runs[-1][1] = i + 1
+        else:
+            runs.append([i, i + 1])
+    groups = tuple(
+        build(*args, params.species_slice(a, b, p_hyper_m=rows[a][2]), *rows[a][:2])
+        for a, b in runs
+    )
+    nl = np.array([r[0] for r in rows])
+    keep = np.arange(Nl)[None, :, None, None, None] < nl[:, None, None, None, None]
+    return replace(cache, Jl=cache.Jl * keep, JlB=cache.JlB * keep, groups=groups)
+
+
+def keep_moments(state: Any, moments: tuple | None) -> Any:
+    """Zero the moments each species does not keep in a ``(Ns, Nl, Nm, ...)`` state."""
+
+    for i, (nl, nm, _) in enumerate(moments or ()):
+        state = jnp.asarray(state).at[i, nl or state.shape[1] :].set(0)
+        state = state.at[i, :, nm or state.shape[2] :].set(0)
+    return state
 
 
 def check_mu_grid_params(params: LinearParams) -> None:
@@ -216,9 +276,16 @@ def hypercollision_kz_coefficient(
         * vth_s
         * jnp.abs(jnp.asarray(params.kpar_scale, dtype=real_dtype))
     )
-    return jnp.asarray(params.hypercollisions_kz, dtype=real_dtype) * jnp.where(
+    rate = jnp.asarray(params.hypercollisions_kz, dtype=real_dtype) * jnp.where(
         cache.mask_kz, nu_hyp_m * cache.m_pow.astype(real_dtype), 0.0
     )
+    if vth.ndim == 0:
+        return rate
+    closure = jnp.asarray(params.closure, dtype=real_dtype)
+    closure = jnp.broadcast_to(closure, vth.shape)[:, None, None, None, None, None]
+    sink = hermite_closure_profile(int(cache.m.shape[1])) * vth_s
+    sink = sink * jnp.abs(jnp.asarray(params.kpar_scale, dtype=real_dtype))
+    return (1.0 - closure) * rate + closure * sink
 
 
 def collision_damping(

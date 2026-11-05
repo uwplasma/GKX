@@ -18,8 +18,9 @@ Resolution and time-step defaults
 
 - **Velocity resolution.** When neither the call nor the deck names
   ``Nl`` (Laguerre) and ``Nm`` (Hermite), the fallback is
-  ``(Nl, Nm) = (12, 24)`` for linear runs and ``(4, 8)`` for nonlinear runs.
-  Set both explicitly for any result you report.
+  ``(Nl, Nm) = (12, 24)`` for linear runs and ``(4, 8)`` for nonlinear runs;
+  a deck with kinetic electrons gets per-species counts instead (see
+  :ref:`per-species-moments`). Set both explicitly for any result you report.
 - **ky layout.** ``[grid] ky_layout = "half"`` (default) stores the ``1 + Ny // 2``
   non-negative rows; ``"full"`` stores the two-sided ``ky`` axis of length
   ``Ny`` (``gkx.core_ky_layout``). Results do not depend on the choice: they
@@ -212,6 +213,16 @@ RHS because its field-particle correction is not diagonal. The
 ``implicit`` (backward-Euler), ``exp`` (exact diagonal exponential), and
 ``sts``/``rkc`` aliases (treated as stabilized explicit/exponential updates for
 diagonal operators).
+With ``method = "imex-ars3"`` or ``"imex-ark3"`` and the default Landau
+operator, ``collision_scheme = "implicit"`` (the default) advances the full
+conserving collision operator, field-particle part included, by a local
+backward-Euler sub-step after each step (density, momentum and energy are
+conserved to rounding), but only when the explicit collision bound would bind:
+the spectral radius :math:`\rho(C)` of the collision matrix, :math:`8.7\,\nu_e`
+at :math:`(N_l, N_m) = (4, 8)`, satisfies :math:`\rho(C)\,\mathrm{d}t > 2`.
+Otherwise collisions stay in the explicit RHS, as for any other value of
+``collision_scheme``. With ``fixed_dt = false`` the step is also kept below
+:math:`5/\rho(C)` when the sub-step is on (:doc:`guidance`).
 
 Geometry controls
 -----------------
@@ -405,7 +416,8 @@ and ``[fit]`` are read by the commands that use them.
 * ``schema_version`` (document root; see `Schema compatibility`_)
 * ``[grid]`` (``GridConfig``), ``[time]`` (``TimeConfig``),
   ``[geometry]`` (``GeometryConfig``), ``[init]`` (``InitializationConfig``)
-* ``[[species]]`` (kinetic species definitions)
+* ``[[species]]`` (kinetic species definitions); the per-species moment
+  counts are described under `Per-species velocity resolution`_.
 * ``[physics]`` (electrostatic/electromagnetic, adiabatic/kinetic, linear/nonlinear)
 * ``[collisions]`` (collision and hypercollision controls)
 * ``[normalization]`` (contract key + optional overrides)
@@ -476,6 +488,19 @@ Notable runtime-only keys:
   ``0.0`` alongside ``hypercollisions_const = 1.0`` to declare a pure Laguerre
   sink while the :math:`|k_z|` Hermite hypercollisions stay exactly as the
   reference code sets them. See :ref:`velocity-regularization`.
+* ``[[species]] hermite_closure``: ``"hypercollision"`` (default) or
+  ``"reflectionless"``; any other string raises ``ValueError``. It selects how
+  that species ends its Hermite ladder, so each species is set separately and
+  an omitted key keeps the existing behavior bit for bit. ``"reflectionless"``
+  removes the species' :math:`|k_z|` hypercollision band
+  (``hypercollisions_kz``, ``nu_hyper_m``, ``p_hyper_m``) and applies the
+  outgoing-wave sink of Kanekar et al. on the last Hermite moment instead
+  (:ref:`hermite-closure`). The constant Laguerre/Hermite hypercollision branch,
+  ``nu_hyper``, collisions and end damping are unchanged, and the sink is
+  switched off with ``[physics] hypercollisions = false``. It has no tunable
+  parameter and needs no ``hypercollisions_kz``. Meant for kinetic electrons at
+  modest ``Nm`` (see the guidance in :ref:`hermite-closure`); the mixed
+  species-Hermite electrostatic parallel route refuses it.
 * ``[collisions] D_hyper`` / ``p_hyper_kperp``: perpendicular hyperdiffusion
   amplitude and exponent.
 * ``[normalization] flux_scale``: multiplicative factor applied to
@@ -570,6 +595,67 @@ Notable runtime-only keys:
   ``streaming``, ``mirror``, ``curvature``, ``gradb``, ``diamagnetic``,
   ``collisions``, ``hypercollisions``, ``hyperdiffusion``, ``end_damping``,
   ``apar``, ``bpar``, ``nonlinear``.
+
+.. _per-species-moments:
+
+Per-species velocity resolution
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``[run] Nl`` and ``Nm`` size the state and are the default for every species.
+A ``[[species]]`` table may keep fewer moments for its species with its own
+``Nl`` (Laguerre) and ``Nm`` (Hermite); a value left out keeps the ``[run]``
+value, and a value above it raises ``ValueError``.
+
+.. code-block:: toml
+
+   [run]
+   Nl = 12
+   Nm = 48
+
+   [[species]]
+   name = "ion"
+   Nm = 32          # ions: (12, 32)
+
+   [[species]]
+   name = "electron"
+   Nl = 6           # electrons: (6, 48)
+
+*Input.* ``[[species]] Nl`` / ``Nm`` (``RuntimeSpeciesConfig.Nl`` / ``Nm``,
+positive integers or absent); from Python ``LinearParams.moments``, one
+``(Nl, Nm, p_hyper_m)`` per species with ``None`` for "the state's". The same
+resolved numbers are written to the run's ``gkx.toml`` copy, and the run summary
+prints ``species moments: ion 12 x 32, electron 6 x 48`` beside ``moments``.
+
+*Fallback.* A deck with two kinetic species whose thermal speeds differ by
+a factor of 4 or more (kinetic electrons) that names no ``Nl`` or ``Nm``, in
+``[run]``, on the call or in a species table, takes per-species counts: linear
+ions (12, 32) and electrons (6, 48); nonlinear (4, 16) for both. The rule keys on the resolved pair being the generic fallback, so
+naming exactly (12, 24) (linear) or (4, 8) (nonlinear) is read as naming none;
+name any other pair, or any species count, to turn it off. The evidence is in
+:doc:`guidance`.
+
+*What a count changes.* A species keeps its moments below its counts; the ones
+above stay zero. Its hypercollisions are normalized to its own counts (the
+default ``p_hyper_m`` is ``min(20, Nm/2)`` of its own ``Nm``), its gyroaveraged
+fields carry only its own ``Nl`` Laguerre terms, and the end-damping rate stays
+the one set by the fastest species. The right-hand side, the nonlinear bracket and the
+linear eigensolvers run each group of species at its own size, so the cost is
+the sum over species of ``Nl * Nm``. A run with every species at the state's
+counts is the uniform run, bit for bit.
+
+*Outputs.* The state and restart arrays keep the ``[run]`` extents with zeros
+above a species' counts, and a restart written at one set of counts reads back
+at another by zeroing what the species no longer keeps.
+
+*When to change it.* Raise the electron ``Nm`` first for a trapped-electron or
+EM mode, the ion ``Nl`` for large ``ky rho_i``; lower the ion ``Nm`` for a case
+dominated by electron physics. Check the growth rate or the heat flux against
+the next larger counts of that species, as for ``[run]`` (:doc:`guidance`).
+
+*Not supported.* Hermite-sharded routes, a custom collision operator and the
+per-term diagnostic RHS raise ``NotImplementedError`` with unequal counts;
+``mu_vperp_max`` refuses a species with fewer Laguerre nodes. ``imex-ars3`` and
+``imex-ark3`` factor and solve each species group at its own counts.
 
 Runtime parallelization controls
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

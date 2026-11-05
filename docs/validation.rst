@@ -203,10 +203,10 @@ Ledger rows
      - open
      - ``docs/_static/cross_code_linear_points.csv``
    * - ``X-kbm-beta-gs2``
-     - Miller CBC kinetic ballooning, ky 0.3, beta 0.005-0.020, A\_par and A\_par+B\_par, linear: GKX against GS2
-     - relative gamma and omega difference at four beta, GKX (8, 24) and (8, 32) nperiod 2 and (8, 24) nperiod 3 against GS2 e4v
-     - GS2 8.2.1 rung e4v (ntheta 48, nperiod 3, negrid 24, ngauss 12, bishop 4, betaprim 0); e3 agrees within 0.3% (rank 5)
-     - open
+     - Miller CBC kinetic ballooning, ky 0.3, beta 0.005-0.020, A\_par, linear: GKX against GS2 along an ``ntheta`` ladder
+     - relative gamma and omega difference at four beta, GKX (16, 48) nperiod 2 and 3 against GS2 (negrid 16, ngauss 8) at matched ``ntheta`` 32-96 and at the ``ntheta`` limit of each code
+     - GS2 8.2.1, ntheta 32-128, nperiod 2-4, bishop 4, betaprim 0; GX 3865a537 + dampEnds\_linked grid-stride loop self-run at ntheta 32 and 64 (rank 5)
+     - provisional
      - ``docs/_static/cross_code_linear_points.csv``
    * - ``X-w7x-itg-gx``
      - W7-X standard configuration ITG, adiabatic electrons, s = 0.64, 6 poloidal turns, linear: GKX against repaired GX
@@ -258,11 +258,35 @@ Row notes
   absorber and parallel domain are part of the answer until Nm converges. A
   Laguerre-only sink (nu\_hyper\_l 0.03, Nm 24) makes the Nl sequence monotone
   (0.493, 0.507, 0.554, 0.567 for Nl 4-10) at a lower gamma; not tested above Nm 24.
-- ``X-kbm-beta-gs2`` (open): Miller KBM at ky 0.3, (8, 24), nperiod 2, A\_par:
-  gamma -2.4%, -8.2%, +7.3%, +6.1% and omega +10.8%, +8.8%, +7.8%, +4.7% against
-  GS2 at beta 0.005, 0.010, 0.015, 0.020; A\_par+B\_par within 10.1% and 11.0%.
-  nperiod 3 at beta 0.015 gives gamma +16.5%, omega +1.7%. The end-damping rate
-  does not matter (default and 200 agree to 7e-6).
+- ``X-kbm-beta-gs2`` (provisional): the 6-20% gaps against GS2 are the parallel
+  grid, not the electromagnetic model. The reference deck's ``ntheta`` 32 does not
+  resolve the Miller KBM in either code, and the two err in opposite directions.
+  At beta 0.015, nperiod 2, GKX gamma/omega is 0.3128/1.0775, 0.2999/1.0884,
+  0.2953/1.0923 and 0.2920/1.0954 at ``ntheta`` 32, 48, 64, 96 (error falling as
+  ``ntheta``\ :sup:`-2`, limit 0.2895/1.097); GS2 is 0.2619/1.0336, 0.2733/1.0495,
+  0.2795/1.0569, 0.2860/1.0639, 0.2894/1.0672 at 32, 48, 64, 96, 128 (error falling
+  as 1/``ntheta``, the first-order upwinding of its theta derivative; limit
+  0.299/1.078). At ``ntheta`` 32 GKX is +19%/+4% against GS2 at nperiod 2, 3 and 4
+  (nperiod 3: 0.3384/1.0155 against 0.2856/0.9803). At the limits it is -3.2%/+1.8%
+  (nperiod 2) and +1.5%/+0.8% (nperiod 3: GKX 0.3154/1.031 from 32, 48, 64, GS2
+  0.3108/1.023 from 48, 64, 96). Beta 0.02, nperiod 2: GKX 0.5941/0.8637 and
+  0.5810/0.8707 at ``ntheta`` 32 and 64, limits 0.5766/0.873 against GS2 0.5763/0.864
+  (+0.05%/+1.0%). GX at ntheta 32 and 64 gives 0.3134/1.0759 and 0.2942/1.0939, within 0.4% of GKX. ``Nm``
+  96 moves the beta 0.015 rate by -0.5%/+0.4%. With B\_par added at beta 0.015
+  (nperiod 2) GKX is 0.4055/1.0098 and 0.3876/1.0214 at ``ntheta`` 32 and 64 against
+  GS2 0.3577/0.9689, 0.3714/0.9908, 0.3768/0.9974 at 32, 64, 96: +13%/+4% at 32 and
+  -1.5%/+1.5% at the limits (0.3816/1.025 against 0.3875/1.011). Beta 0.01 (``ntheta`` 64, t = 70, two
+  near-degenerate branches): 0.1612/0.3165 against GS2 0.1693/0.3029 (-4.8%/+4.5%).
+  Beta 0.005: 0.2087/0.2703 at ``ntheta`` 64 against GS2 0.2144/0.2570
+  (-2.7%/+5.2%), converged in ``ntheta`` for both; the omega excess is the electron
+  Hermite ladder, as at beta 1e-5 (omega 0.2350 at ``Nm`` 48, 0.2315 at 96, GS2
+  about 0.225): at beta 0.005 ``Nm`` 96 gives 0.2113/0.2653. With
+  m\_e/m\_i 0.04 the Hermite ladder is not the limit and GKX is within 1.1%/0.6%
+  of GS2 at beta 0.015 (0.6795/0.5602 against 0.6718/0.5571) and 0.02%/1.9% at
+  beta 1e-5, both ``ntheta`` 32, nperiod 2. The earlier garbage rates at beta 0.01
+  (1.32/2.21, read as an explicit-step instability) were the log-linear fallback of
+  the growth fit choosing a one-time-unit transient window; the trace itself settles
+  at 0.16/0.32.
 - ``X-w7x-itg-gx``, ``X-hsx-itg-gx`` (provisional): GKX eigenpairs match
   repaired GX to 3e-4 at W7-X ky 1.1-2.4 and HSX ky 0.5-1.5. On W7-X at ky
   0.9-1.0 the eigensolver returns the fastest of near-degenerate bulk modes
@@ -359,6 +383,51 @@ generator is retired; :ref:`retired-generators`).
   float64): Cyclone 3.58 s against 2.44 s, W7-X 1.58 s against 2.20 s, HSX
   0.70 s against 0.51 s; GKX device memory 178-636 MB against 1547 MB for GX.
 
+Four-code kinetic-electron comparison
+-------------------------------------
+
+Cyclone Miller (:math:`m_i/m_e` = 3670, :math:`T_e = T_i`, :math:`a/L_T` 2.49,
+:math:`a/L_n` 0.8), :math:`k_y\rho_i = 0.3`, growth rate in GX units
+(2026-10-27, office). GX: repaired variant, :math:`t = 60`, ``Nl`` 16 unless
+stated; GKX: nodal :math:`\mu` grid, 8 nodes, end-damping rate 160.6; GS2: rung
+k2 (ntheta 48, nperiod 3, negrid 16, ngauss 8). stella is excluded (see
+:doc:`conventions`).
+
+.. list-table::
+   :header-rows: 1
+
+   * - code, resolution
+     - :math:`\gamma`
+     - :math:`\omega`
+   * - GS2 k2 (k1 differs by 0.01%, 1%)
+     - 0.2349
+     - 0.2210
+   * - GX ``Nm`` 24 / 32 / 48 / 64
+     - 0.2324 / 0.2330 / 0.2318 / 0.2325
+     - 0.2506 / 0.2428 / 0.2361 / 0.2339
+   * - GX ``Nl`` 4 / 8 / 12 / 16 at ``Nm`` 48
+     - 0.2254 / 0.2322 / 0.2336 / 0.2318
+     - 0.2270 / 0.2379 / 0.2376 / 0.2361
+   * - GKX ``Nm`` 16 / 24 / 32 / 48
+     - 0.2245 / 0.2304 / 0.2303 / 0.2295
+     - 0.2635 / 0.2496 / 0.2417 / 0.2364
+   * - GKX nodes 4 / 8 / 12 at ``Nm`` 24
+     - 0.2355 / 0.2304 / 0.2304
+     - 0.2564 / 0.2496 / 0.2499
+
+At equal ``Nm`` GKX is within 1.2% of GX in :math:`\gamma` and 0.5% in
+:math:`\omega`. The growth rate is converged to about 1% (0.2295-0.2349 over
+all three codes). The frequency is not: GX and GKX still fall with ``Nm`` at 48-64
+and sit 6-7% above GS2. GX returns NaN for ``Nm`` 96 and 128 in this build.
+Collisionless TEM (ky rho_s 0.3): GS2 0.871, GX ``Nm`` 32 / 64 0.670 / 0.770,
+GKX ``Nm`` 24 / 48 0.611 / 0.744; both moment codes are 15-23% low at the usual
+``Nm`` and need more than 96. With :math:`\nu_{ee} = 0.01`, GS2 loses 15%, GX
+14%, GKX 7-8% (Lenard-Bernstein or Landau): the collisional damping in GKX is
+about half of GX's at the same ``nu``, not explained.
+KBM, beta 0.015, A_par, ky 0.3: GX 0.3135 (nperiod 2, ``Nm`` 48) and 0.3389
+(nperiod 3); GKX 0.3155 and 0.3425; GS2 (nperiod 3) 0.2939, which is 13% below
+both. The GS2-GX gap on KBM is open.
+
 Lanes outside the ledger
 ------------------------
 
@@ -368,6 +437,27 @@ Tracked artifacts without a ledger row. Nothing here is a public claim.
 
   - TEM (open, ``X-tem-dj2005``): GKX matches the GS2 frequency to 1.0% but the
     growth rate rises with Hermite resolution (5.1% low at (8, 96)).
+
+    With :math:`\nu_{ee} = 0.01` (Dougherty; GS2 default model operator, ions at the
+    physical ratio) GS2 gives :math:`\gamma = 0.7674`, :math:`\omega = -1.2991`. GKX
+    banded eigenpairs at :math:`N_l = 8` against it: :math:`N_m` = 32, 64, 96 give
+    :math:`\gamma` -16.8%, -4.4%, +1.5% and :math:`\omega` -4.7%, -1.5%, -0.9%.
+    :math:`N_l = 16` does not fit in 62 GB, and the time route at the deck's
+    ``dt`` exceeds the electron-streaming CFL bound and diverges.
+  - W7-X high-mirror bean tube (``X-w7x-itg-paper``, passing): the equilibrium
+    built from the INDATA in the appendix of Gonzalez-Jerez et al. (2022) has
+    :math:`a = 0.4944` m, :math:`R_0 = 5.485` m, :math:`\beta = 3.0\%` and
+    :math:`\iota(s = 0.64) = 0.910`, as published. At :math:`k_y\rho_i = 2.1`
+    (:math:`\rho_i` with :math:`v_{th} = \sqrt{2T/m}`, :math:`a/L_{Ti} = 3`,
+    :math:`a/L_{ni} = 1`) GKX gives :math:`a\gamma/v_{th} = 0.1750`,
+    :math:`a\omega/v_{th} = 0.2628` at (8, 16), (4, 8) and (16, 32) within 1.5%,
+    independent of the number of poloidal turns (1, 3, 6) to 3e-4; repaired GX
+    gives 0.1750 and 0.2628. The paper's curve reads 0.172 and 0.27. Across
+    :math:`k_y\rho_i` = 1.0-4.0 GKX is within 5% of the curve read off Fig. 5
+    (0.087 at 1.0 with 6 turns, 0.176 at 2.3, 0.159 at 3.0, 0.140 at 4.0), and
+    within 0.5% of GX at seven points (one turn); below :math:`k_y\rho_i \approx 1.3` the mode
+    needs 6 poloidal turns (1 turn: 0.070 at 1.0), and GX's time fit selects a
+    different branch there.
   - Miller kinetic electrons (provisional, ``X-ke-miller``): certified
     eigenpairs within 0.35% of repaired GX and 1.5% of GS2; the deck states GX's
     end-damping rate, and a rate 1000x weaker puts the growth rate 54% high
@@ -387,8 +477,8 @@ Tracked artifacts without a ledger row. Nothing here is a public claim.
   flux against self-run GX (rank 5) pass at a mean relative mismatch of 0.10:
   Cyclone 0.096 (``t=100..400``), Cyclone Miller 0.092, KBM 0.0094, HSX 0.036,
   W7-X 0.097 (``docs/_static/nonlinear_<case>_gate_summary.json``). None is a
-  statistical validation of saturated transport. Kinetic-electron Cyclone and the
-  ETG pilot have no tracked comparison.
+  statistical validation of saturated transport. Kinetic-electron Cyclone has no
+  tracked comparison; the W7-X ETG comparison is under :ref:`nonlinear-etg-w7x`.
 - **Equilibrium flow shear.** The remap, operators, RK2/RK3 and IMEX pass their
   identity, order and derivative tests as a research API. The full-resolution
   response is rejected for promotion (:doc:`numerics`): the IMEX pair fails
@@ -426,25 +516,76 @@ spectral evidence.
 Nonlinear heat-flux statistics
 ------------------------------
 
-Cyclone ITG, adiabatic electrons, 192x64x24, (Nl, Nm) = (4, 8), :math:`\nu_{ii} = 0.01`, fp32; mean :math:`\pm` Sokal-IAT standard error after dropping spin-up, windows of about 20 :math:`\tau` (ledger rows ``N-cyclone-gx-table1``, ``N-dimits-scan``). Agreement means within two combined standard errors.
+Cyclone ITG, adiabatic electrons, 192x64x24, one 2 pi segment, Dougherty :math:`\nu_{ii} = 0.01`, hypercollisions :math:`p = N_m/2`, hyperviscosity :math:`D = 0.05` (n = 4), RK3, :math:`t = 1000`, fp32, seed 22, initial amplitude 1e-5; mean :math:`\pm` Sokal-IAT standard error after dropping spin-up, windows of 26-70 :math:`\tau` (ledger rows ``N-cyclone-gx-table1``, ``N-cyclone-gx-fig4b``, ``N-dimits-scan``). The paper column is GX paper Table 1 or read off Fig. 4b (about 10%). Agreement means within two combined standard errors.
 
 .. list-table::
    :header-rows: 1
 
-   * - :math:`a/L_T`
+   * - :math:`a/L_T`, :math:`(N_l, N_m)`
      - GKX
      - GX 3865a537 + dampEnds repair (self-run)
-     - GX paper Table 1
-   * - 2.49
-     - 6.78 +- 0.19
-     - 6.66 +- 0.25
+     - GX paper
+   * - 1.5, (4, 8)
+     - 1.20 +- 0.04
+     - 1.37 +- 0.12
+     - about 0.3
+   * - 1.5, (8, 16)
+     - 0.77 +- 0.15
+     - 0.61 +- 0.22
+     - about 0.3
+   * - 2.0, (4, 8)
+     - 3.43 +- 0.13
+     - not run
+     - about 3.6
+   * - 2.49, (4, 8)
+     - 7.08 +- 0.12
+     - 7.07 +- 0.23
      - 7.2 +- 0.8
-   * - 1.5
-     - 1.64 +- 0.22
-     - 1.47 +- 0.28
-     - suppressed (figure)
+   * - 2.49, (8, 16)
+     - 7.39 +- 0.19
+     - 7.49 +- 0.21
+     - 7.3 +- 0.9
+   * - 3.0, (4, 8)
+     - 11.6 +- 0.2
+     - not run
+     - about 12 (GS2 11.8)
 
-The Dimits shift is not reproduced by either code on the shipped deck (open). No kinetic-electron comparison.
+The GKX windows at (4, 8), 1.5 and (8, 16), 2.49 fail the half-window stationarity check (halves differ by more than two standard errors); the others pass. Zonal energy fraction of :math:`\Phi^2` at :math:`a/L_T = 1.5` (:math:`t > 500`): GKX 0.86 and 0.76, GX 0.79 and 0.87 at (4, 8) and (8, 16). GKX and GX agree at every point; both leave the heat flux at 1.5 above the paper's Dimits-suppressed value and move toward it with velocity resolution, so the suppression is not reproduced at (4, 8) by either code (open). With :math:`\nu_{ii} = 0` both decay to a zonal-dominated state (GX flux 0.04 over the last 200; gkx-plan ``2026-10-20-nonlinear-stats``).
+
+Kinetic electrons (GX Table 2, :math:`m_i/m_e = 3670`, :math:`\beta = 10^{-3}`): not run. With GKX 2.7.0 defaults, 192x64x24 at (4, 16) advances 0.079 :math:`a/v_{ti}` in 17 s on a shared RTX A4000 (about 36 h for :math:`t = 600`; the paper's 159 min is on four A100).
+
+.. _nonlinear-etg-w7x:
+
+Nonlinear W7-X ETG against GX
+-----------------------------
+
+W7-X standard configuration, :math:`s = 0.5`, fixed-aspect tube (one poloidal turn, ``jtwist = -1``, :math:`x_0 = 0.2157`), kinetic ions and electrons (:math:`m_e/m_i = 2.7\times10^{-4}`), :math:`a/L_{Te} = 3`, :math:`a/L_n = 1`, :math:`a/L_{Ti} = 0`, :math:`\beta = 10^{-4}`, 48x48x48, :math:`y_0 = 0.2`, :math:`(N_l, N_m) = (4, 8)`, hyperviscosity :math:`D = 0.05`, kz hypercollisions, RK3, Gaussian density seed of amplitude :math:`10^{-3}` in every dealiased mode. Electron heat flux in gyro-Bohm units, mean :math:`\pm` Sokal-IAT standard error (GX 3865a537, float32, self-run; GKX float64; GPU).
+
+.. list-table::
+   :header-rows: 1
+
+   * - run
+     - :math:`Q_e`, :math:`t = 2.5`-5.0
+     - :math:`Q_e`, :math:`t = 2.5`-7.4
+   * - GX, :math:`\Delta t = 2\times10^{-4}` (end damping :math:`0.1/\Delta t = 500`)
+     - 0.111 +- 0.006
+     - 0.121 +- 0.006
+   * - GX, :math:`\Delta t \le 8.8\times10^{-4}` (CFL-limited; rate at least 114)
+     - 0.111 +- 0.008
+     - 0.106 +- 0.005
+   * - GKX, ``damp_ends_rate = 500``
+     - 0.113 +- 0.004
+     - 0.108 +- 0.004
+   * - GKX, default rate (about 128)
+     - 0.097 +- 0.002
+     - not run
+   * - GKX, ``damp_ends_rate = 0.1``
+     - 0.061 +- 0.001
+     - 0.061 +- 0.001
+
+An earlier GKX run of this case gave about half the GX flux (0.06 against 0.12). It was a setup mismatch, not a solver difference. First, the deck omitted ``init_single = false``; GKX's default seeds only the selected mode, GX seeds all of them (``[init]`` in :doc:`inputs`). With that fixed the initial :math:`W_\phi` agrees (4.75e-6 against 4.74e-6) and the linear overshoot peaks at the same time (:math:`t = 0.37` against 0.40; :math:`Q_e` 0.65 against 0.42). Second, the end-damping rate: GX applies ``damp_ends_amp/dt``, so this deck at :math:`\Delta t = 2\times10^{-4}` damps the layer at 500, while the deck had set 0.1. At ``nperiod = 1`` the layer is a quarter of the line and the flux depends on the rate (0.061, 0.097 and 0.113 at 0.1, 128 and 500); GX shows the same dependence through its own step (0.121 at :math:`\Delta t = 2\times10^{-4}`, 0.106 with the CFL-limited step). With the GX rate GKX is 0.89 of GX over :math:`t = 2.5`-7.4, 1.7 combined standard errors, and its early-time :math:`W_\phi`, :math:`Q_e` and peak time follow GX. The window is about five correlation times in GX, so the agreement is statistical only. Neither code was run nonlinearly at higher velocity resolution (GX at (8, 16) did not finish in the time allowed).
+
+The linear check on this tube is a single-:math:`k_y` run at :math:`k_y = 50`, :math:`k_x = 0`: GX gives :math:`\gamma = 8.751` at (4, 8) and 8.442 at (8, 16); GKX gives 8.446 at (4, 8). GKX at (4, 8) therefore sits on GX's higher-resolution value, and GX at (4, 8) is 3.5% high. The (8, 16) GKX time-route fit on this tube did not settle (:math:`\gamma` 12.1, the fit window under one growth time), so no GKX value is quoted there. Reproducing a GX nonlinear run needs ``init_single = false`` and ``[time] damp_ends_rate`` equal to ``damp_ends_amp`` divided by GX's step.
 
 Benchmarks
 ----------

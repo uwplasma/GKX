@@ -22,6 +22,7 @@ from gkx.operators.linear.dissipation import (
     collision_invariant_rates as collision_invariant_rates,
     collision_quadratic_rate as collision_quadratic_rate,
     collisions_contribution as collisions_contribution,
+    hermite_closure_coefficient as hermite_closure_coefficient,
     drift_kinetic_sugama_six_moment_contribution as drift_kinetic_sugama_six_moment_contribution,
     end_damping_contribution as end_damping_contribution,
     hypercollisions_contribution as hypercollisions_contribution,
@@ -39,37 +40,6 @@ from gkx.operators.linear.streaming import (
     shift_axis,
     streaming_ladder_term,
 )
-
-
-def hermite_closure_coefficient(hermite_count: int) -> float:
-    r"""Return ``R_{M+1}`` for the reflectionless Hermite closure.
-
-    Closing the hierarchy with ``g_{M+1} = 0`` makes the truncation a
-    reflecting wall: the free-energy pulse that streams up in ``m`` bounces
-    back and returns as recurrence. The outgoing (absorbing) condition is
-
-    .. math:: g_{M+1} = -i\,\mathrm{sgn}(k_\parallel)\,R_{M+1}\,g_M,
-       \qquad R_{M+1}=\frac{M}{\sqrt{2(M+1)}}\frac{\Gamma(M/2)}{\Gamma((M+1)/2)}
-
-    which adds ``-R sqrt(M+1) v_th |k_par| G_M`` to the last moment. Since
-    ``R > 0`` that is a strictly positive-definite sink -- it can only remove
-    free energy. ``R -> 1 - 1/(4M)``, so the absorption becomes exact as the
-    resolution grows, and ``R_3 = 0.921318`` reproduces the Hammett-Perkins
-    three-pole coefficient exactly, the ``M = 2`` member of the same family.
-
-    Reference: Kanekar, Schekochihin, Dorland & Loureiro, *J. Plasma Phys.*
-    81, 305810104 (2015), equation (4.36).
-    """
-
-    order = int(hermite_count) - 1
-    if order < 1:
-        return 0.0
-    return float(
-        order
-        / math.sqrt(2.0 * (order + 1.0))
-        * math.gamma(order / 2.0)
-        / math.gamma((order + 1.0) / 2.0)
-    )
 
 
 def streaming_contribution(

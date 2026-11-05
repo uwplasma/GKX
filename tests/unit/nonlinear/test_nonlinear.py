@@ -45,6 +45,14 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+requires_jax_07 = pytest.mark.skipif(
+    jax.__version_info__ < (0, 7),
+    reason=(
+        "jax 0.6 does not prune the unused diagnostics from the scan adjoint, "
+        "whose NaN derivatives then reach the state gradient"
+    ),
+)
+
 
 def test_integrate_nonlinear_checkpoint_runs():
     """Checkpointed nonlinear integration should run on a tiny grid."""
@@ -637,6 +645,7 @@ def test_block_only_adjoint_schedule_keeps_the_window_gradient(ky_layout: str):
     )
 
 
+@requires_jax_07
 @pytest.mark.parametrize("checkpoint", [False, True])
 def test_prepared_nonlinear_arrays_differentiate_dynamic_geometry(
     checkpoint: bool,
@@ -1855,6 +1864,7 @@ def test_the_function_entry_point_takes_the_same_view_as_the_prepared_object() -
     np.testing.assert_array_equal(np.asarray(final_state), np.asarray(prepared_final))
 
 
+@requires_jax_07
 def test_a_supplied_states_off_chain_rows_carry_no_gradient() -> None:
     """The VJP of the projection: exactly zero off the chains, unchanged on them."""
 

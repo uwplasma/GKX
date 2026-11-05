@@ -2024,6 +2024,7 @@ def test_species_parameter_order_has_one_sharding_contract() -> None:
         "tprim_e",
         "nu",
         "tz",
+        "closure",
     )
 
 

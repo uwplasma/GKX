@@ -731,7 +731,7 @@ def run_runtime_scan(
     """
 
     ky_arr = np.asarray(ky_values, dtype=float)
-    Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    cfg, Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     solver_key = _normalize_linear_solver_name(solver)
     options = _RuntimeScanOptions(
         method=method,

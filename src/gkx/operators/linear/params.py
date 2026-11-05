@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 import jax
@@ -52,6 +52,7 @@ class Species:
     tprim: float
     fprim: float
     nu: float = 0.0
+    closure: float = 0.0
 
 
 #: Retired :class:`LinearParams` field names, mapped to what replaced them. The
@@ -158,6 +159,10 @@ class LinearParams:
     p_hyper_lm: float = 6.0
     hypercollisions_const: float = 1.0
     hypercollisions_kz: float = 0.0
+    #: Per species, 1 closes the Hermite hierarchy with the reflectionless
+    #: sink on the last moment (:func:`hermite_closure_profile`) and drops that
+    #: species' ``|k_z|`` hypercollisions; 0 keeps the hypercollisions.
+    closure: float | jnp.ndarray = 0.0
     D_hyper: float = 0.0
     p_hyper_kperp: float = 2.0
     damp_ends_widthfrac: float | jnp.ndarray = 0.125
@@ -178,6 +183,22 @@ class LinearParams:
     #: (:func:`gkx.core_velocity.mu_grid_nodes`) with that ``vperp_max``
     #: (``inf``: Gauss-Laguerre); the Laguerre axis then holds the ``Nl`` nodes.
     mu_vperp_max: float | None = None
+    #: Moments each species keeps, one ``(Nl, Nm, p_hyper_m)`` per species, at most the
+    #: state's ``(Nl, Nm)``; ``None`` in a slot keeps the state's there and ``None`` for
+    #: the field gives every species the state's. The RHS runs each run of equal species
+    #: at its own size, so the moments above it stay zero and its hypercollisions are
+    #: normalized to its own count (:attr:`LinearCache.groups`).
+    moments: tuple[tuple[int | None, int | None, float], ...] | None = None
+
+    def species_slice(self, a: int, b: int, **overrides: Any) -> "LinearParams":
+        """The parameters of species ``a:b`` of a ``moments`` run, with ``overrides``."""
+
+        ns = len(self.moments or ())
+        rows: dict[str, Any] = {
+            n: _as_species_array(getattr(self, n), ns, n)[a:b]
+            for n in _SPECIES_PARAM_NAMES
+        }
+        return replace(self, **{**rows, "moments": None, **overrides})
 
     def const_branch_nu_hyper_m(self):
         """Return the Hermite hypercollision rate the *constant* branch uses.
@@ -246,6 +267,7 @@ class LinearParams:
             self.p_hyper_lm,
             self.hypercollisions_const,
             self.hypercollisions_kz,
+            self.closure,
             self.D_hyper,
             self.p_hyper_kperp,
             self.damp_ends_widthfrac,
@@ -258,11 +280,16 @@ class LinearParams:
             self.bpar_beta_scale,
             self.damp_ends_rate,
         )
-        return children, (self.collision_model, self.mu_vperp_max)
+        return children, (self.collision_model, self.mu_vperp_max, self.moments)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children, collision_model=aux_data[0], mu_vperp_max=aux_data[1])
+        return cls(
+            *children,
+            collision_model=aux_data[0],
+            mu_vperp_max=aux_data[1],
+            moments=aux_data[2],
+        )
 
 
 _SPECIES_PARAM_NAMES = (
@@ -277,6 +304,7 @@ _SPECIES_PARAM_NAMES = (
     "tprim_e",
     "nu",
     "tz",
+    "closure",
 )
 
 
@@ -331,6 +359,7 @@ def build_linear_params(
         tprim=array("tprim"),
         fprim=array("fprim"),
         nu=array("nu"),
+        closure=array("closure"),
         **overrides,
     )
 

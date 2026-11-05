@@ -2607,10 +2607,9 @@ def test_validation_manifest_rejects_bad_coverage_xml(
 """Tests that the declared ``requires-python`` floor is actually reachable.
 
 ``tomllib`` is standard library only from Python 3.11, so a bare ``import
-tomllib`` makes the importing module uncollectable on the declared 3.10 floor.
-Every CI job ran 3.11, so such imports accumulated unseen until the suite was
-run on a stock 3.10 box and died during collection. The fallback now lives in
-exactly one module and these gates keep it there.
+tomllib`` makes the importing module uncollectable on the declared 3.10 floor,
+where ``tomli`` is the same parser. The ``python-floor`` CI job runs 3.10 and
+this gate keeps the guarded form the only one outside the tests.
 """
 
 import os
@@ -2658,32 +2657,37 @@ def _uninstalled_run(args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_no_module_imports_the_tomli_backport() -> None:
-    """`tomllib` is stdlib on the declared floor, so the backport must not appear.
+def test_tomli_backport_only_behind_the_tomllib_guard() -> None:
+    """`import tomli` may appear only as the fallback of a `tomllib` import.
 
-    This gate used to require the opposite: every module had to route through a
-    `gkx.utils.tomlcompat` shim, because a bare `import tomllib` raises on
-    Python 3.10 and the suite was uncollectable there. The floor is now 3.11,
-    `requires-python` says so, and `tomli` is not a declared dependency, so the
-    shim's fallback branch was unreachable and the indirection bought nothing.
-    What still needs guarding is the reverse: nothing may quietly reintroduce a
-    dependency on the backport.
+    `tomllib` is stdlib from 3.11 and `tomli` is declared for `python_version <
+    '3.11'`, so the sanctioned form is `try: import tomllib` / `except
+    ModuleNotFoundError: import tomli as tomllib`. A bare `import tomli` would
+    make 3.11+ depend on the backport; a bare `import tomllib` outside the
+    tests, whose conftest aliases it, would break 3.10.
     """
 
     offenders: dict[str, list[int]] = {}
     for relative in _tracked_python_files():
-        text = (FLOOR_REPO_ROOT / relative).read_text(encoding="utf-8")
-        hits = [
-            number
-            for number, line in enumerate(text.splitlines(), start=1)
-            if line.split("#")[0].strip().split(" as ")[0] == "import tomli"
-        ]
+        lines = (FLOOR_REPO_ROOT / relative).read_text(encoding="utf-8").splitlines()
+        hits = []
+        for number, line in enumerate(lines, start=1):
+            statement = line.split("#")[0].strip().split(" as ")[0]
+            before = lines[number - 2].split("#")[0].strip() if number > 1 else ""
+            if statement == "import tomli" and before != "except ModuleNotFoundError:":
+                hits.append(number)
+            if (
+                statement == "import tomllib"
+                and not relative.startswith("tests/")
+                and before != "try:"
+            ):
+                hits.append(number)
         if hits:
             offenders[relative] = hits
 
     assert not offenders, (
-        "these modules import the tomli backport; the declared floor is 3.11 and "
-        f"stdlib tomllib is the only sanctioned parser: {offenders}"
+        "TOML imports outside the try/except-ModuleNotFoundError guard; the floor "
+        f"is 3.10, where tomllib does not exist: {offenders}"
     )
 
 
@@ -3220,9 +3224,6 @@ _README_PARITY_SOURCES: dict[str, tuple[str, ...]] = {
         "ETG": "etg_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
         "W7-X": "w7x_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
         "HSX": "hsx_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
-        "Cyclone Miller": "cyclone_miller_linear_mismatch.csv gamma_gx gamma omega_gx omega",
-        "Cyclone ITG": "cyclone_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
-        "KBM": "kbm_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
     }.items()
 }
 
@@ -3247,15 +3248,13 @@ def _readme_parity_table(
         if not line.startswith("|"):
             continue
         cells = [cell.strip().strip("*` ") for cell in line.strip("|").split("|")]
-        if len(cells) != 3 or cells[0] not in labels:
+        if len(cells) != 3:
             continue
-        try:
-            published[cells[0]] = (
-                float(cells[1].rstrip("%")),
-                float(cells[2].rstrip("%")),
-            )
-        except ValueError:
-            continue
+        label = cells[0].split(" (")[0]
+        gamma = re.search(r"gamma ([\d.]+)%", cells[2])
+        omega = re.search(r"omega ([\d.]+)%", cells[2])
+        if label in labels and gamma and omega:
+            published[label] = (float(gamma.group(1)), float(omega.group(1)))
     return published
 
 

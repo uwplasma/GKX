@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields as dataclass_fields
 import functools
 from typing import Any, Callable, Tuple
 
@@ -61,6 +61,7 @@ class _SpeciesArrays:
     tprim: jnp.ndarray
     fprim: jnp.ndarray
     nu: jnp.ndarray
+    closure: jnp.ndarray
 
 
 @dataclass(frozen=True)
@@ -238,18 +239,17 @@ def _normalized_rhs_state(G: jnp.ndarray, cache: LinearCache) -> _RHSState:
 def _species_arrays(params: LinearParams, ns: int, real_dtype: Any) -> _SpeciesArrays:
     """Expand scalar or per-species parameters into arrays used by RHS terms."""
 
+    def array(name: str, attr: str | None = None) -> jnp.ndarray:
+        attr = attr or name
+        return _as_species_array(getattr(params, attr), ns, attr).astype(real_dtype)
+
     return _SpeciesArrays(
-        charge=_as_species_array(params.charge_sign, ns, "charge_sign").astype(
-            real_dtype
-        ),
-        density=_as_species_array(params.density, ns, "density").astype(real_dtype),
-        mass=_as_species_array(params.mass, ns, "mass").astype(real_dtype),
-        temp=_as_species_array(params.temp, ns, "temp").astype(real_dtype),
-        tz=_as_species_array(params.tz, ns, "tz").astype(real_dtype),
-        vth=_as_species_array(params.vth, ns, "vth").astype(real_dtype),
-        tprim=_as_species_array(params.tprim, ns, "tprim").astype(real_dtype),
-        fprim=_as_species_array(params.fprim, ns, "fprim").astype(real_dtype),
-        nu=_as_species_array(params.nu, ns, "nu").astype(real_dtype),
+        charge=array("charge", "charge_sign"),
+        **{
+            f.name: array(f.name)
+            for f in dataclass_fields(_SpeciesArrays)
+            if f.name != "charge"
+        },
     )
 
 
@@ -290,19 +290,14 @@ def _term_weights(
 ) -> _TermWeights:
     """Return term weights in the active real dtype."""
 
+    weights = {
+        f.name: jnp.asarray(getattr(term_cfg, f.name), dtype=real_dtype)
+        for f in dataclass_fields(_TermWeights)
+        if f.name != "fapar"
+    }
     w_apar = jnp.asarray(term_cfg.apar, dtype=real_dtype)
     return _TermWeights(
-        streaming=jnp.asarray(term_cfg.streaming, dtype=real_dtype),
-        mirror=jnp.asarray(term_cfg.mirror, dtype=real_dtype),
-        curvature=jnp.asarray(term_cfg.curvature, dtype=real_dtype),
-        gradb=jnp.asarray(term_cfg.gradb, dtype=real_dtype),
-        diamagnetic=jnp.asarray(term_cfg.diamagnetic, dtype=real_dtype),
-        collisions=jnp.asarray(term_cfg.collisions, dtype=real_dtype),
-        hypercollisions=jnp.asarray(term_cfg.hypercollisions, dtype=real_dtype),
-        hyperdiffusion=jnp.asarray(term_cfg.hyperdiffusion, dtype=real_dtype),
-        end_damping=jnp.asarray(term_cfg.end_damping, dtype=real_dtype),
-        bpar=jnp.asarray(term_cfg.bpar, dtype=real_dtype),
-        fapar=jnp.asarray(params.fapar, dtype=real_dtype) * w_apar,
+        **weights, fapar=jnp.asarray(params.fapar, dtype=real_dtype) * w_apar
     )
 
 
@@ -375,6 +370,41 @@ def _solve_cached_fields(
         w_bpar=weights.bpar,
     )
     return _apply_external_phi_source(fields, external_phi=external_phi)
+
+
+def split_species(
+    G: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    fn: Callable[[jnp.ndarray, LinearCache, LinearParams, slice], jnp.ndarray],
+) -> jnp.ndarray:
+    """``fn(G_g, cache_g, params_g, species_slice)`` over each group at its own ``(nl, nm)``.
+
+    The groups are the exact-size caches of ``cache.groups``; each result is zero-padded
+    back to the moment extents of ``G`` and the species are concatenated in order.
+    """
+
+    out: Any = None
+    a = 0
+    # the end-damping rate follows the fastest species of the whole run, not of a group
+    rate = params.end_damping_rate(
+        cache.dz * cache.damp_profile.shape[-1], jnp.real(G).dtype
+    )
+    for c in cache.groups or ():
+        ns, nl, nm = c.Jl.shape[0], c.Jl.shape[1], c.m.size
+        sl = slice(a, a + ns)
+        d = jax.lax.optimization_barrier(
+            fn(
+                G[sl, :nl, :nm],
+                c,
+                params.species_slice(a, a + ns, damp_ends_rate=rate),
+                sl,
+            )
+        )
+        out = jnp.zeros(G.shape, d.dtype) if out is None else out
+        out = out.at[sl, :nl, :nm].set(d)
+        a += ns
+    return out
 
 
 def _streaming_contribution(
@@ -507,9 +537,13 @@ def _shared_linked_streaming_hypercollisions(
             hypercollisions_kz=scalars.hypercollisions_kz,
             dtype=real_dtype,
             nu_hyper_m_const=scalars.nu_hyper_m_const,
+            closure=species.closure,
         )
-        or _is_static_zero(
-            weights.hypercollisions * scalars.hypercollisions_kz, real_dtype
+        or (
+            _is_static_zero(
+                weights.hypercollisions * scalars.hypercollisions_kz, real_dtype
+            )
+            and _is_static_zero(species.closure)
         )
     )
     if (
@@ -542,6 +576,8 @@ def _shared_linked_streaming_hypercollisions(
         kpar_scale=scalars.kpar_scale,
         mask_kz=cache.mask_kz,
         m_pow=cache.m_pow,
+        closure=species.closure,
+        hermite_window=hermite_window,
     )
     if operand.dtype != kz_source.dtype:
         return None
@@ -663,6 +699,7 @@ def _dissipation_contributions(
             ny_full=getattr(cache, "ny_full", None),
             ntft_m0=getattr(cache, "ntft_m0", None),
             hermite_window=hermite_window,
+            closure=species.closure,
         )
     hyperdiffusion = hyperdiffusion_contribution(
         G,
@@ -801,15 +838,6 @@ def _assemble_normalized_rhs(
     return dG.astype(state.out_dtype)
 
 
-def _squeeze_species_rhs_outputs(
-    total: jnp.ndarray,
-    contrib: dict[str, jnp.ndarray],
-) -> tuple[jnp.ndarray, dict[str, jnp.ndarray]]:
-    """Remove the synthetic species axis from total and per-term outputs."""
-
-    return total[0], {key: arr[0] for key, arr in contrib.items()}
-
-
 def assemble_rhs_cached(
     G: jnp.ndarray,
     cache: LinearCache,
@@ -834,6 +862,25 @@ def assemble_rhs_cached(
     species = _species_arrays(params, state.G.shape[0], state.real_dtype)
     scalars = _scalar_params(params, state.real_dtype, cache)
     weights = _term_weights(params, term_cfg, state.real_dtype)
+    if cache.groups is not None:
+        fields = _solve_cached_fields(
+            state.G,
+            cache,
+            params,
+            species=species,
+            weights=weights,
+            use_custom_vjp=use_custom_vjp,
+            external_phi=external_phi,
+        )
+        dG = assemble_rhs_cached_with_fields(
+            state.G,
+            cache,
+            params,
+            fields,
+            terms=term_cfg,
+            force_electrostatic_fields=force_electrostatic_fields,
+        )
+        return dG.astype(state.out_dtype), fields
     rhs_fields = _solved_rhs_fields(
         state.G,
         cache,
@@ -873,6 +920,25 @@ def assemble_rhs_cached_with_fields(
     """
 
     term_cfg = terms or TermConfig()
+    if cache.groups is not None:
+        if hermite_window is not None:
+            raise NotImplementedError("a Hermite-sharded route needs one moment count")
+        return split_species(
+            G,
+            cache,
+            params,
+            lambda g, c, p, sl: assemble_rhs_cached_with_fields(
+                g,
+                c,
+                p,
+                fields,
+                terms=jax.tree.map(  # species-shaped weights (the IMEX mirror) follow
+                    lambda x: x[sl] if getattr(x, "ndim", 0) == 6 else x, term_cfg
+                ),
+                force_electrostatic_fields=force_electrostatic_fields,
+                skip_dissipation=skip_dissipation,
+            ),
+        )
     state = _normalized_rhs_state(G, cache)
     species = _species_arrays(params, state.G.shape[0], state.real_dtype)
     scalars = _scalar_params(params, state.real_dtype, cache)
@@ -974,6 +1040,8 @@ def assemble_linear_rhs_cached(
 ) -> tuple[jnp.ndarray, FieldState]:
     """Assemble cached linear terms and any replacing custom collision."""
 
+    if collision_operator is not None and getattr(cache, "groups", None):
+        raise NotImplementedError("a custom collision operator needs one moment count")
     electrostatic_rhs_fn = electrostatic_rhs_fn or assemble_rhs_cached_electrostatic_jit
     full_rhs_fn = full_rhs_fn or assemble_rhs_cached_jit
     eager_rhs_fn = eager_rhs_fn or assemble_rhs_cached
@@ -1065,6 +1133,8 @@ def assemble_rhs_terms_cached(
     policy.
     """
 
+    if cache.groups is not None:
+        raise NotImplementedError("per-term RHS needs one moment count for all species")
     term_cfg = terms or TermConfig()
     state = _normalized_rhs_state(G, cache)
     species = _species_arrays(params, state.G.shape[0], state.real_dtype)
@@ -1085,7 +1155,7 @@ def assemble_rhs_terms_cached(
     )
     total = _sum_rhs_terms(contrib)
     if state.squeeze_species:
-        total, contrib = _squeeze_species_rhs_outputs(total, contrib)
+        total, contrib = total[0], {key: arr[0] for key, arr in contrib.items()}
     return total.astype(state.out_dtype), rhs_fields.fields, contrib
 
 
@@ -1107,7 +1177,6 @@ __all__ = [
     "_scalar_params",
     "_solved_rhs_fields",
     "_species_arrays",
-    "_squeeze_species_rhs_outputs",
     "_streaming_contribution",
     "_sum_rhs_terms",
     "_term_weights",
@@ -1118,4 +1187,5 @@ __all__ = [
     "assemble_rhs_terms_cached",
     "compute_fields_cached",
     "linear_rhs_jit_for_terms",
+    "split_species",
 ]

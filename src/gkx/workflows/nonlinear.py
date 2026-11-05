@@ -963,7 +963,7 @@ def run_runtime_nonlinear(
     :func:`prepare` path).
     """
 
-    Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm, nonlinear=True)
     if status_callback is not None:
         status_callback("building runtime geometry")
 
@@ -994,6 +994,9 @@ def run_runtime_nonlinear(
         resolved_diagnostics=resolved_diagnostics,
         return_state=return_state,
         show_progress=show_progress,
+    )
+    check_mu_grid_nonlinear(
+        ctx.params, cfg.physics.electromagnetic, policy.laguerre_mode
     )
     status(
         f"nonlinear diagnostics={'on' if policy.diagnostics_on else 'off'} "

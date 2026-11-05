@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gkx"
-version = "2.7.0"
+version = "2.8.1"
 description = "JAX gyrokinetic solver with Hermite-Laguerre velocity space"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE", "PROVENANCE.md"]
 authors = [{name = "GKX team"}]
@@ -17,15 +17,18 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Topic :: Scientific/Engineering :: Physics",
 ]
 
 dependencies = [
-  # gkx.objectives.core opts into lax_linalg.eig(..., enable_eigvec_derivs=True),
-  # which first shipped in jax 0.10.1.
-  "jax>=0.10.1",
-  "jaxlib>=0.10.1",
+  # Python 3.10 tops out at jax 0.6.2, the last release with cp310 wheels.
+  "jax>=0.10.1; python_version >= '3.11'",
+  "jaxlib>=0.10.1; python_version >= '3.11'",
+  "jax>=0.6.2; python_version < '3.11'",
+  "jaxlib>=0.6.2; python_version < '3.11'",
+  "tomli; python_version < '3.11'",
   "numpy",
   "matplotlib",
   "scipy",
@@ -38,7 +41,7 @@ dependencies = [
   # under jax >= 0.10. 0.29.0 adds block_tridiagonal_from_products and
   # block_thomas_factor(shift=), which the banded eigensolver imports. 0.30.0
   # adds solvax.ode (erk_step, RK4_2, step_factor), which rk4-pi imports.
-  "solvax>=0.33.0",
+  "solvax>=0.35.0",
   # The VMEC geometry path hard-requires the booz_xform_jax bridge
   # (gkx.geometry.backend_discovery); 0.4.1 is the first with a jax floor.
   "booz_xform_jax>=0.4.3",

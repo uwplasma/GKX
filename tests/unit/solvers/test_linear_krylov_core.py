@@ -439,6 +439,10 @@ def test_hermite_line_inverts_additive_diagonal_and_streaming_symbol() -> None:
     assert jnp.allclose(observed, expected, rtol=2.0e-5, atol=2.0e-5)
 
 
+@pytest.mark.skipif(
+    jax.__version_info__ < (0, 7),
+    reason="jax 0.6 cannot linear_transpose solvax's scan-based Thomas solve",
+)
 @pytest.mark.parametrize("weight", [0.0, 0.4, 1.0])
 @pytest.mark.parametrize("linked", [False, True])
 def test_hermite_line_inverts_kz_hypercollisions(weight, linked) -> None:

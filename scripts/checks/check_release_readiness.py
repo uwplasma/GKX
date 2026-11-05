@@ -20,7 +20,10 @@ from typing import Any, Iterable
 # no install, so reach the repository's single TOML shim through ``src``.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import tomllib
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:

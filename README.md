@@ -5,7 +5,7 @@
 [![CI](https://github.com/uwplasma/GKX/actions/workflows/ci.yml/badge.svg)](https://github.com/uwplasma/GKX/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/uwplasma/GKX/graph/badge.svg)](https://codecov.io/gh/uwplasma/GKX)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-%3E%3D3.11-blue.svg)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue.svg)](pyproject.toml)
 [![Docs](https://readthedocs.org/projects/gkx/badge/?version=latest)](https://gkx.readthedocs.io)
 
 GKX is a JAX gyrokinetic solver for tokamak and stellarator flux tubes. It
@@ -35,7 +35,7 @@ pip install gkx
 gkx
 ```
 
-Python 3.11+. The wheel installs CPU JAX; for GPUs add an accelerator JAX wheel
+Python 3.10+. The wheel installs CPU JAX; for GPUs add an accelerator JAX wheel
 ([JAX install guide](https://docs.jax.dev/en/latest/installation.html)).
 `gkx` with no arguments runs a linear Cyclone case in under a minute on a
 laptop CPU and prints `gamma` and `omega`; a CI gate holds its growth rate
@@ -70,31 +70,22 @@ result = gkx.solve(
 print(result.gamma, result.omega)
 ```
 
-## Linear stability
-
-![Linear growth rates, frequencies and an eigenfunction against GX](docs/_static/readme/readme_linear.png)
-
-Growth rate and frequency scans for Cyclone ITG (a), W7-X ITG (b) and KBM (d),
-and the W7-X eigenfunction at `ky rho_i = 0.3` (c), whose overlap with GX's is
-0.9999999994.
-
-- The default eigensolver (`auto`) is a banded direct shift-invert where it
-  fits, else Arnoldi on the time-advance map. It returns an
-  eigenpair only after checking it against the full operator. Matrix-free
-  shift-invert is opt-in for a chosen branch ([policy and measurements](docs/algorithms.rst)).
-- Under-resolved or unsettled fits warn instead of reporting a number.
-
 ## Models and defaults
 
 | Choice | Default | Notes |
 |---|---|---|
 | Geometry | s-alpha, Miller, VMEC/VMEX, imported | `[geometry] model`; `gkx wout_*.nc` for any VMEC |
-| Velocity space | Hermite-Laguerre, `(Nl, Nm)` | hypercollisions damp the last Hermite moments |
+| Velocity space | Hermite-Laguerre, `(Nl, Nm)`, per species with `[[species]] Nl`/`Nm` | hypercollisions damp the last Hermite moments; kinetic-electron decks that name no resolution get ions (12, 32) and electrons (6, 48) linear, (4, 16) nonlinear ([guidance](docs/guidance.rst)) |
+| Hermite closure (opt-in) | `[[species]] hermite_closure = "reflectionless"` | absorbing last-moment closure per species: TEM growth rate +4-11% at `Nm` 16, +1-2% at `Nm` >= 48; not the default ([numerics](docs/numerics.rst)) |
+| Perpendicular velocity (opt-in) | nodal `mu` grid: `[run] mu_vperp_max = 4.0`, `Nl` = nodes | linear runs; 8 nodes match Laguerre `Nl` 16-24 on Cyclone at 5-12x less cost; flat convergence on TEM and KBM ([numerics](docs/numerics.rst)) |
 | Collisions | linearized Landau | conserving, H-theorem; Dougherty, Sugama alternatives ([operators](docs/operators.rst)) |
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
-| Time stepping | no `dt`: nonlinear `rk4-pi`, or adaptive `imex-ark3` for kinetic electrons at beta <= 3e-4; linear `rk4` + CFL | a `dt` gives `rk2` at that step ([measured speedups](docs/guidance.rst)) |
-| Eigensolver | `auto` (banded, else `adaptive`), certified | shift-invert opt-in |
+| Time stepping | no `dt`: nonlinear `rk4-pi`, or adaptive `imex-ark3` for kinetic electrons at beta <= 3e-4; linear `rk4` + CFL | a `dt` gives `rk2` at that step; `fixed_dt = false` keeps the controller's stepper ([measured speedups](docs/guidance.rst)) |
+| Eigensolver | `auto`: banded direct shift-invert where it fits, else Arnoldi on the time-advance map; every pair certified | matrix-free shift-invert opt-in ([algorithms](docs/algorithms.rst)) |
+| SOLVAX | `solvax>=0.33.0` | provides the sparse eigensolver and the `rk4-pi` stepper; installed with `pip install gkx` |
 | `ky` layout | `half`: the `1 + Ny//2` non-negative rows | `[grid] ky_layout = "full"` stores the two-sided axis; same physics to round-off, about 1.4-1.8x slower and 12-25% more memory |
+| Drift kernel | fused Pallas kernel on NVIDIA GPUs when `Nx*Nz >= 64` and `Nl*Nm <= 256` | default there; CPU and other GPUs keep the `jnp` terms, which derivatives use ([performance](docs/performance.rst)) |
+| Devices | one device | `[parallel] strategy = "batch"`, `axis = "ky"`, `num_devices` spreads independent `k_y` scans and ensembles; results match the serial run ([parallelization](docs/parallelization.rst)) |
 | Precision | `float32`; `float64` with `JAX_ENABLE_X64=true` | eigensolver, Krylov residual and conditioning checks need `float64` |
 | CPU threads | XLA's own; Eigen pool off on fewer than four CPUs | steps do not scale past about four threads ([performance](docs/performance.rst)) |
 
@@ -103,25 +94,23 @@ kinetic electrons and electromagnetic runs, and how to check it.
 
 ## Agreement with other codes
 
-| Case | `gamma` | `omega` |
-| --- | ---: | ---: |
-| KAW | 0.0004% | 0.051% |
-| ETG | 0.040% | 0.074% |
-| W7-X | 0.265% | 0.296% |
-| HSX | 0.577% | 0.273% |
-| Cyclone Miller | 5.51% | 1.25% |
-| Cyclone ITG | 6.83% | 1.59% |
-| **KBM** | **20.0%** | **11.1%** |
+| Case (reference) | Quantity | Agreement |
+| --- | --- | --- |
+| KAW (analytic dispersion) | gamma, omega | gamma 0.0004%, omega 0.051% |
+| ETG (GX) | gamma, omega | gamma 0.040%, omega 0.074% |
+| W7-X (GX) | gamma, omega | gamma 0.265%, omega 0.296% |
+| HSX (GX) | gamma, omega | gamma 0.577%, omega 0.273% |
+| Cyclone ITG and Miller (GX) | gamma | within 0.3% at 7 of 8 `k_y` |
+| Cyclone ITG and Miller (GS2) | gamma | within 2.4% at five points, 0.3% at two |
+| Cyclone Miller, kinetic electrons (GX, GS2) | gamma, omega | within 0.4% of GX, 1.5% of GS2 |
+| W7-X bean tube, `k_y rho_i` 2.1 (GX, Gonzalez-Jerez 2022) | gamma, omega | 0.1750, 0.2628 as GX; paper 0.172, 0.27 |
+| KBM, beta 0.015 (GS2) | gamma | 3.2% at the `ntheta` limit of each code |
+| Nonlinear Cyclone heat flux (GX paper Table 1) | Q_i/Q_GB | 7.08 +- 0.12 against 7.2 +- 0.8 |
 
-`100 * max|GKX - ref| / max|ref|` over the tracked scan, recomputed by CI from
-the [evidence ledger](tools/evidence_ledger.toml). The Cyclone rows compare a
-time-trace fit, not the certified eigenvalue, and KBM is the known outlier.
-Against GX's repaired launch limit the certified Cyclone eigenpairs agree to
-0.3% in growth rate at seven of eight `k_y`; against converged GS2 GKX is
-within 1.0% at the three `k_y` compared. These are agreements on shared test
-cases, not a ranking of codes. Open items (TEM velocity convergence, stella's
-mirror-term sensitivity, weakly growing modes) and the figures are in
-[validation](docs/validation.rst).
+Linear scan rows are `100 * max|GKX - ref| / max|ref|` over the scan, checked
+against the [evidence ledger](tools/evidence_ledger.toml) in CI. These are
+agreements on shared test cases, not a ranking of codes. Cases, resolutions,
+open items and provenance are in [validation](docs/validation.rst).
 
 ## Nonlinear turbulence
 
@@ -173,9 +162,23 @@ measure, not a runtime/TOML absolute-flux predictor
 - **Eigenvalues:** the sparse direct shift-invert route certifies the Cyclone
   eigenpair at n = 3,072 in about 5 s against 32-36 s matrix-free.
 - **Kinetic electrons:** `imex-ars3` is 10x faster to solution than RK3 at
-  64x64x24, and does not pay on tutorial grids.
+  64x64x24, and does not pay on tutorial grids. The adaptive `imex-ark3`
+  default holds the error per step to 1e-3: its saturated heat flux averages within
+  1% of `rk4-pi` (three seeds, 32x32x16) at about 2x the steps of 1e-2, which
+  read 6% high ([guidance](docs/guidance.rst)).
 - **Parallel work:** independent `k_y` scans and ensembles run across devices
   with results identical to the serial run.
+
+Each species can keep its own `Nl` and `Nm`, so ions do not pay for the
+electrons' Hermite moments. Against uniform counts the growth rate agrees to
+1.6% on Cyclone ITG, TEM, ETG-range and QA stellarator decks and the nonlinear
+heat-flux window mean to 2%; an explicit 64x64x24 step is 1.1-1.9x faster in
+1.3-1.5x less memory. The implicit `imex` factor and collision sub-step also
+run at each species' own counts: with ions (8, 16) and electrons (4, 32) the
+32x32x16 factor is 3.3x smaller and a solve 2.2x faster, and 64x64x24 fits a
+16 GB GPU where the padded factor does not ([guidance](docs/guidance.rst)).
+
+![Per-species moment counts against uniform counts](docs/_static/readme/readme_species_moments.png)
 
 [Performance](docs/performance.rst) · [parallelization](docs/parallelization.rst).
 
@@ -197,8 +200,7 @@ pytest -n 4
 CI requires 95% line coverage plus the physics, convergence, comparison,
 differentiability and performance gates ([CONTRIBUTING.md](CONTRIBUTING.md)).
 Figures in `docs/_static/readme/` have JSON companions with every plotted
-number; their generators were removed from `scripts/` and are listed in
-`plan/log.md` (2026-10-15). Cite GKX with [CITATION.cff](CITATION.cff).
+number. Cite GKX with [CITATION.cff](CITATION.cff).
 
 ## License
 
