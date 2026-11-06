@@ -110,6 +110,26 @@ A saturation-stopping deck raises unless ``steps=N`` is passed or
 saturation stopping. Adaptive chain IMEX and generic ``imex`` preparation
 remain unsupported.
 
+With ``time.diagnostics_interval`` set, prepared ``run`` selects retained
+rows during host-side result assembly, including an adaptive full-horizon run.
+That ``run`` is host-only and refuses traced state or model inputs.
+
+For a fixed timestep and known step count, ``run_arrays`` gathers the interval
+samples with a static index schedule. This preserves fixed output shapes,
+``jax.jit`` and autodiff for state and matched model inputs. The schedule follows
+accumulated step times and includes the final record; it does not interpolate.
+It uses the prepared horizon and refuses a ``time_horizon`` override. Use
+host-side ``run`` when overriding the horizon.
+
+An adaptive trajectory has a variable number of interval samples, so its
+``run_arrays`` refuses an active physical-time interval. Leave the interval
+unset for the existing adaptive fixed-shape array contract and pass explicit
+``steps`` for a finite differentiated window. ``output.time_interval`` belongs
+to file writing and does not change returned backend diagnostics.
+``chunk_steps`` controls the host loop of an inferred adaptive full-horizon
+run. Fixed-window preparation refuses an explicit chunk length; omit it to
+retain the fixed compiled scan.
+
 The lower-level ``gkx.runtime.prepare`` accepts nonlinear cases and returns a
 backend with ``run`` and ``run_arrays``. ``run`` returns the same four-part
 result as the nonlinear wrapper. ``run_arrays`` returns

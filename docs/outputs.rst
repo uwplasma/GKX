@@ -6,6 +6,60 @@ GKX supports two saved-output modes:
 - lightweight prefix-based JSON/CSV sidecars for quick solver runs,
 - nonlinear NetCDF restart bundles for parity, post-processing, and restart.
 
+Nonlinear sampling in physical time
+-----------------------------------
+
+``[time] diagnostics_interval`` controls the diagnostics retained in the
+returned nonlinear result. An interval is expressed in the same normalized
+simulation-time units as ``t_max``. Thresholds are multiples of the interval
+on the accumulated time axis, so crossing a runtime chunk does not restart the
+sampling phase.
+
+GKX retains the first available accepted-step sample at or after a threshold.
+It does not interpolate the state or assign an artificial threshold timestamp.
+One large step can cross several thresholds; its diagnostic row is kept only
+once. The final accepted sample is always retained once. Thus adaptive sample
+spacing can be irregular even when the requested interval is constant.
+``dt_t`` remains the integration step associated with a retained sample; it is
+not the time difference between adjacent saved rows.
+
+For example, fixed steps ending at ``0.1, 0.2, ..., 1.0`` and an interval of
+``0.25`` retain ``0.3, 0.5, 0.8, 1.0``. A run ending before the first threshold
+still retains its final sample. Output sampling does not change the integration
+horizon or force the timestep controller to land on diagnostic thresholds.
+
+``[output] time_interval`` separately thins nonlinear CSV and NetCDF history
+among the diagnostic rows already available. It cannot provide finer time
+resolution than the returned diagnostics. The same threshold and final-record
+rules apply on the cumulative time axis, including checkpoint append. The
+returned result, summary and final state are unchanged. This is a history-row
+policy; ``time.nstep_restart`` and ``output.nsave`` still control restart
+checkpoint cadence in steps.
+
+For example:
+
+.. code-block:: toml
+
+   [time]
+   chunk_steps = 64
+   diagnostics_interval = 0.25
+
+   [output]
+   time_interval = 1.0
+
+Physical-time interval options apply to nonlinear execution. Unsupported
+linear or final-state-only policies raise instead of silently ignoring them.
+
+Chunked runs keep the dense scalar monitoring traces needed for saturation
+checks independently of the retained sampling interval. Thinning the returned
+history does not itself reduce diagnostic computation or guarantee lower
+integration cost. Choose ``resolved_diagnostics = false`` when mode-resolved
+history is unnecessary. Unset intervals preserve step-stride sampling.
+
+Runtime progress uses accumulated accepted simulation time against the full
+requested horizon, with elapsed wall time accumulated across chunks. It does not restart
+at each inner chunk. Saturation can end a run before the horizon is reached.
+
 Lightweight saved outputs
 -------------------------
 
