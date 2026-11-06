@@ -140,6 +140,8 @@ class TimeConfig:
     fixed_dt: bool = None  # type: ignore[assignment]
     sample_stride: int = 1
     diagnostics_stride: int = 1
+    chunk_steps: int | None = None
+    diagnostics_interval: float | None = None
     diagnostics: bool = True
     save_state: bool = False
     checkpoint: bool = False
@@ -179,6 +181,18 @@ class TimeConfig:
         ):
             if getattr(self, name) is None:
                 object.__setattr__(self, name, value)
+        if self.chunk_steps is not None and (
+            isinstance(self.chunk_steps, bool)
+            or not isinstance(self.chunk_steps, int)
+            or self.chunk_steps < 1
+        ):
+            raise ValueError("time.chunk_steps must be a positive integer")
+        if self.diagnostics_interval is not None and (
+            isinstance(self.diagnostics_interval, bool)
+            or not math.isfinite(self.diagnostics_interval)
+            or self.diagnostics_interval <= 0
+        ):
+            raise ValueError("time.diagnostics_interval must be finite and positive")
         rate = self.damp_ends_rate
         if rate is not None and (not math.isfinite(rate) or rate < 0.0):
             raise ValueError("time.damp_ends_rate must be finite and nonnegative")
@@ -660,6 +674,15 @@ class RuntimeOutputConfig:
     plots: bool = True
     restart_scale: float = 1.0
     nsave: int = 10000
+    time_interval: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.time_interval is not None and (
+            isinstance(self.time_interval, bool)
+            or not math.isfinite(self.time_interval)
+            or self.time_interval <= 0
+        ):
+            raise ValueError("output.time_interval must be finite and positive")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

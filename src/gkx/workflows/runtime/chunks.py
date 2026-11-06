@@ -13,6 +13,7 @@ from gkx.callbacks import _format_duration as format_duration
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.metadata import ResolvedDiagnostics
 from gkx.workflows.runtime.diagnostic_arrays import (
+    _time_sample_runtime_diagnostics,
     concat_runtime_diagnostics,
     slice_runtime_diagnostics,
     stride_runtime_diagnostics,
@@ -207,6 +208,10 @@ def run_adaptive_runtime_chunk_loop(
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
     diagnostics_stride: int = 1,
+    diagnostics_interval: float | None = None,
+    time_offset: float = 0.0,
+    progress_t_max: float | None = None,
+    progress_wall_start: float | None = None,
     max_chunks: int = 100000,
     spill_dir: Path | None = None,
     stop_condition: Callable[
@@ -233,7 +238,9 @@ def run_adaptive_runtime_chunk_loop(
     if spill_dir is not None:
         spill_dir.mkdir(parents=True, exist_ok=True)
     fields_final: FieldState | None = None
-    wall_start = time.perf_counter()
+    wall_start = (
+        time.perf_counter() if progress_wall_start is None else progress_wall_start
+    )
     _status(
         f"starting adaptive {label} integration in chunks of {chunk_steps} steps up to t_max={float(t_max):.6g}"
     )
@@ -242,7 +249,7 @@ def run_adaptive_runtime_chunk_loop(
         chunk_start = time.perf_counter()
         remaining_time = max(float(t_max) - t_elapsed, 0.0)
         _t_chunk, diag_chunk, state_chunk, fields_final = integrate_chunk(
-            show_progress, remaining_time
+            False, remaining_time
         )
         chunk_index = chunk + 1
         diag_chunk = _chunk_diagnostics_to_host(diag_chunk)
@@ -271,6 +278,7 @@ def run_adaptive_runtime_chunk_loop(
                 f"adaptive {label} chunk {chunk_index} crossed t_max; "
                 "integrate_chunk must honor remaining_time"
             )
+        previous_time = t_elapsed
         t_elapsed = t_next
         if stop_condition is not None:
             trace_chunks.append(
@@ -292,7 +300,15 @@ def run_adaptive_runtime_chunk_loop(
             stop_now = bool(stop_decision.get("stop"))
         reached_horizon = t_elapsed >= float(t_max) - time_tol
         chunk_samples = int(np.asarray(diag_chunk.t).shape[0])
-        if stride > 1:
+        if diagnostics_interval is not None:
+            diag_chunk = _time_sample_runtime_diagnostics(
+                diag_chunk,
+                diagnostics_interval,
+                previous_time=previous_time + time_offset,
+                time_offset=time_offset,
+                keep_last=stop_now or reached_horizon,
+            )
+        elif stride > 1:
             diag_chunk = stride_runtime_diagnostics(
                 diag_chunk,
                 stride=stride,
@@ -309,8 +325,10 @@ def run_adaptive_runtime_chunk_loop(
         message, _snapshot = build_runtime_progress_message(
             label=label,
             chunk_index=chunk_index,
-            t_elapsed=t_elapsed,
-            t_max=float(t_max),
+            t_elapsed=t_elapsed + time_offset,
+            t_max=float(t_max) + time_offset
+            if progress_t_max is None
+            else progress_t_max,
             chunk_wall_seconds=chunk_wall,
             elapsed_seconds=wall_elapsed,
         )

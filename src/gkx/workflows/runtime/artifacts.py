@@ -522,6 +522,7 @@ def _run_runtime_nonlinear_chunk(
     policy: NonlinearArtifactPolicy,
     options: _NonlinearArtifactRunOptions,
     chunk_steps: int | None,
+    progress: tuple[float, float, float] | None = None,
 ) -> RuntimeNonlinearResult:
     """Run one chunk and include compilation in its measured wall time."""
 
@@ -543,6 +544,7 @@ def _run_runtime_nonlinear_chunk(
         return_state=policy.netcdf_output_target,
         show_progress=options.show_progress,
         status_callback=options.status_callback,
+        _progress=progress,
     )
     wall_seconds = max(time.perf_counter() - wall_start, 0.0)
     validate_finite_runtime_result(result_chunk, label="nonlinear runtime chunk")
@@ -605,6 +607,12 @@ def _run_artifact_checkpoint_loop(
     result_final: RuntimeNonlinearResult | None = None
     paths: dict[str, str] = {}
     wall_total = 0.0
+    progress_wall_start = time.perf_counter()
+    progress_t_max = time_offset + (
+        float(remaining_steps) * float(options.dt or cfg.time.dt)
+        if remaining_steps is not None
+        else float(cfg.time.t_max)
+    )
     while True:
         chunk_steps = _next_runtime_chunk_steps(
             remaining_steps=remaining_steps,
@@ -615,6 +623,11 @@ def _run_artifact_checkpoint_loop(
             policy=policy,
             options=options,
             chunk_steps=chunk_steps,
+            progress=(time_offset, progress_t_max, progress_wall_start)
+            if policy.diagnostics_on
+            and (options.show_progress or cfg.time.diagnostics_interval is not None)
+            and (policy.checkpoint_steps is not None or time_offset != 0)
+            else None,
         )
         wall_total += float(result_chunk.wall_seconds or 0.0)
         result_effective, cumulative_diag, time_offset = _merge_chunk_diagnostics(
@@ -624,6 +637,19 @@ def _run_artifact_checkpoint_loop(
             history_from_file=history_from_file,
             ny_full=int(cfg.grid.Ny),
         )
+        if cfg.time.diagnostics_interval is not None and cumulative_diag is not None:
+            from gkx.workflows.runtime.diagnostic_arrays import (
+                _time_sample_runtime_diagnostics,
+            )
+
+            cumulative_diag = _time_sample_runtime_diagnostics(
+                cumulative_diag, cfg.time.diagnostics_interval
+            )
+            result_effective = replace(
+                result_effective,
+                diagnostics=cumulative_diag,
+                t=np.asarray(cumulative_diag.t),
+            )
         result_effective = replace(result_effective, wall_seconds=wall_total)
         result_final = result_effective
         paths = _write_nonlinear_artifacts_if_requested(policy, result_effective, cfg)
@@ -711,19 +737,37 @@ def write_runtime_nonlinear_artifacts(
 ) -> dict[str, str]:
     """Write summary/diagnostics/state artifacts for a nonlinear runtime run."""
 
+    saved_diag = None
+    if cfg is not None and cfg.output.time_interval is not None:
+        if result.diagnostics is None:
+            raise ValueError("output.time_interval requires nonlinear diagnostics")
+        from gkx.workflows.runtime.diagnostic_arrays import (
+            _time_sample_runtime_diagnostics,
+        )
+
+        saved_diag = _time_sample_runtime_diagnostics(
+            result.diagnostics, cfg.output.time_interval
+        )
     out_path = Path(out)
     if _is_netcdf_output_target(out_path):
         if cfg is None:
             raise ValueError(
                 "cfg is required to write nonlinear NetCDF output artifacts"
             )
-        paths = _write_nonlinear_netcdf_outputs(out_path, result, cfg)
+        saved_result = (
+            result
+            if saved_diag is None
+            else replace(result, diagnostics=saved_diag, t=np.asarray(saved_diag.t))
+        )
+        paths = _write_nonlinear_netcdf_outputs(out_path, saved_result, cfg)
         # The sidecar records the saturation window, mean and uncertainty.
         summary_path = Path(f"{_netcdf_bundle_base(out_path)}.summary.json")
         _write_json(summary_path, _nonlinear_summary(result))
         paths["summary"] = str(summary_path)
         return paths
-    return write_runtime_nonlinear_table_artifacts(out_path, result)
+    return write_runtime_nonlinear_table_artifacts(
+        out_path, result, _diagnostics=saved_diag
+    )
 
 
 __all__ = [

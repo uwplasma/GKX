@@ -596,7 +596,7 @@ def _nonlinear_summary(result: Any) -> dict[str, Any]:
 
 
 def write_runtime_nonlinear_table_artifacts(
-    out: str | Path, result: Any
+    out: str | Path, result: Any, *, _diagnostics: SimulationDiagnostics | None = None
 ) -> dict[str, str]:
     """Write non-NetCDF nonlinear summary/diagnostics/state artifacts."""
 
@@ -613,7 +613,7 @@ def write_runtime_nonlinear_table_artifacts(
 
     _write_json(summary_path, _nonlinear_summary(result))
     paths = {"summary": str(summary_path)}
-    diag: SimulationDiagnostics | None = result.diagnostics
+    diag = result.diagnostics if _diagnostics is None else _diagnostics
     if diag is not None:
         cols = [
             _flatten_series(np.asarray(diag.t)),

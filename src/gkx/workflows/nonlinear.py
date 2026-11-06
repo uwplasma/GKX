@@ -257,6 +257,7 @@ class _RunContext:
     dt: float
     steps: int
     adaptive_chunked: bool
+    progress: tuple[float, float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -542,7 +543,7 @@ def _run_chunked_diagnostics(
 
     step_capped = not ctx.adaptive_chunked
     step_bound = ctx.dt if cfg.time.fixed_dt else float(cfg.time.dt_max or ctx.dt)
-    chunk_steps = min(ctx.steps, 128)
+    chunk_steps = min(ctx.steps, cfg.time.chunk_steps or 128)
     G_chunk = ctx.G0
     steps_left = ctx.steps
     compile_cache = {} if compile_cache is None else compile_cache
@@ -554,7 +555,7 @@ def _run_chunked_diagnostics(
     }
     continue_pi = not cfg.time.fixed_dt and (method or cfg.time.method) == "rk4-pi"
     if imex:
-        chunk_steps = 32
+        chunk_steps = cfg.time.chunk_steps or 32
 
     def integrate(G: Any, kwargs: dict[str, Any]) -> Any:
         if imex and "op" in control:
@@ -660,6 +661,10 @@ def _run_chunked_diagnostics(
         show_progress=policy.show_progress,
         status_callback=status,
         diagnostics_stride=max(policy.sample_stride, policy.diagnostics_stride, 1),
+        diagnostics_interval=cfg.time.diagnostics_interval,
+        time_offset=0.0 if ctx.progress is None else ctx.progress[0],
+        progress_t_max=None if ctx.progress is None else ctx.progress[1],
+        progress_wall_start=None if ctx.progress is None else ctx.progress[2],
         # Opt-in disk spill for runs whose strided diagnostics still outgrow host
         # RAM. Off by default because it trades wall time for peak memory; set
         # GKX_CHUNK_SPILL_DIR to a path to turn it on.
@@ -697,7 +702,13 @@ def _run_diagnostics(
         f"diagnostics_stride={policy.diagnostics_stride} laguerre_mode={policy.laguerre_mode}"
     )
     stop_condition = _saturation_stop_condition(cfg, ctx, policy)
-    if ctx.adaptive_chunked or stop_condition is not None:
+    if (
+        ctx.adaptive_chunked
+        or stop_condition is not None
+        or cfg.time.chunk_steps is not None
+        or cfg.time.diagnostics_interval is not None
+        or ctx.progress is not None
+    ):
         if stop_condition is not None:
             status(
                 "run_to=saturation: heat-flux convergence with stationary Wphi/Wg "
@@ -1002,6 +1013,7 @@ def run_runtime_nonlinear(
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
     prepare_only: bool = False,
+    _progress: tuple[float, float, float] | None = None,
 ) -> Any:
     """Run a nonlinear point using the unified runtime config path.
 
@@ -1018,7 +1030,11 @@ def run_runtime_nonlinear(
     # Resolved before any geometry or grid work so an unroutable [parallel]
     # request fails immediately instead of after a long serial run.
     plan = resolve_nonlinear_parallel_plan(cfg.parallel)
-    status = status_callback if status_callback is not None else lambda _message: None
+    status = (
+        status_callback
+        if status_callback is not None
+        else (print if show_progress else lambda _message: None)
+    )
     ctx = _prepare_context(
         cfg,
         ky_target=ky_target,
@@ -1029,6 +1045,7 @@ def run_runtime_nonlinear(
         steps=steps,
         status=status,
     )
+    ctx = replace(ctx, progress=_progress)
     policy = _diagnostic_policy(
         cfg,
         diagnostics=diagnostics,
@@ -1039,12 +1056,22 @@ def run_runtime_nonlinear(
         return_state=return_state,
         show_progress=show_progress,
     )
+    if not policy.diagnostics_on and (
+        cfg.time.diagnostics_interval is not None or cfg.time.chunk_steps is not None
+    ):
+        raise ValueError(
+            "chunk_steps and diagnostics_interval require nonlinear diagnostics"
+        )
     status(
         f"nonlinear diagnostics={'on' if policy.diagnostics_on else 'off'} "
         f"fixed_mode={'on' if policy.fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
     prepare_factory: Callable[..., Any] | None = None
     if prepare_only:
+        if cfg.time.chunk_steps is not None and not ctx.adaptive_chunked:
+            raise ValueError(
+                "chunk_steps requires host chunked execution; prepare without it for a fixed window"
+            )
         if _saturation_stop_condition(cfg, ctx, policy) is not None and steps is None:
             raise ValueError(
                 "prepared execution cannot stop early at saturation: this deck "
@@ -1059,10 +1086,16 @@ def run_runtime_nonlinear(
             cfg,
             ctx,
             policy,
-            steps=min(ctx.steps, 128) if ctx.adaptive_chunked else ctx.steps,
+            steps=min(ctx.steps, cfg.time.chunk_steps or 128)
+            if ctx.adaptive_chunked
+            else ctx.steps,
             method=method,
-            sample_stride=1 if ctx.adaptive_chunked else policy.sample_stride,
-            diagnostics_stride=1 if ctx.adaptive_chunked else policy.diagnostics_stride,
+            sample_stride=1
+            if ctx.adaptive_chunked or cfg.time.diagnostics_interval is not None
+            else policy.sample_stride,
+            diagnostics_stride=1
+            if ctx.adaptive_chunked or cfg.time.diagnostics_interval is not None
+            else policy.diagnostics_stride,
             fixed_dt=bool(cfg.time.fixed_dt),
             show_progress=show_progress,
         )
@@ -1074,8 +1107,32 @@ def run_runtime_nonlinear(
                 ctx.G0, ctx.grid, ctx.geom, ctx.params, **kwargs, **runtime_options
             )
             if not ctx.adaptive_chunked:
-                return backend
-            cache = {(min(ctx.steps, 128), False, show_progress): backend}
+                indices = None
+                if cfg.time.fixed_dt and cfg.time.diagnostics_interval is not None:
+                    from gkx.workflows.runtime.diagnostic_arrays import (
+                        _physical_time_indices,
+                    )
+
+                    dtype = np.empty((), dtype=backend.initial_state.dtype).real.dtype
+                    times = np.cumsum(np.full(ctx.steps, ctx.dt, dtype=dtype))
+                    indices = tuple(
+                        int(index)
+                        for index in _physical_time_indices(
+                            times, cfg.time.diagnostics_interval
+                        )
+                    )
+                return replace(
+                    backend,
+                    _retention_interval=cfg.time.diagnostics_interval,
+                    _retention_indices=indices,
+                )
+            cache = {
+                (
+                    min(ctx.steps, cfg.time.chunk_steps or 128),
+                    False,
+                    show_progress,
+                ): backend
+            }
 
             def run_to_horizon(initial_state, time_horizon):
                 state = (
