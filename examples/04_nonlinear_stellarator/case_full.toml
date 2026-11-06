@@ -23,6 +23,9 @@ ntheta = 48
 nperiod = 1
 
 [time]
+# Optional runtime controls; intervals use normalized time, like t_max.
+# chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
+# diagnostics_interval = 5.0  # Overrides the step-stride cadence.
 # Explicit nonlinear end-damping rate.
 damp_ends_rate = 0.1
 t_max = 200.0
@@ -93,4 +96,6 @@ Nl = 4
 Nm = 8
 
 [output]
+# Optional saved-record cadence in the same time units as time.t_max.
+# time_interval = 10.0  # nsave and nstep_restart keep step-based checkpoints.
 path = "../../tools_out/hsx_nonlinear_vmec_runtime"

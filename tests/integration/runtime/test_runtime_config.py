@@ -1137,3 +1137,47 @@ def test_runtime_chunk_policy_preserves_state_and_fresh_physical_samples(
         prepare(
             replace(case, time=replace(case.time, chunk_steps=3)), Nl=2, Nm=4, steps=8
         )
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "examples/common_input.toml",
+        "examples/03_nonlinear_tokamak/case.toml",
+        "examples/03_nonlinear_tokamak/case_full.toml",
+        "examples/04_nonlinear_stellarator/case.toml",
+        "examples/04_nonlinear_stellarator/case_full.toml",
+        "examples/05_kinetic_electrons/case.toml",
+        "examples/05_kinetic_electrons/case_stellarator.toml",
+    ],
+)
+def test_nonlinear_example_optional_time_controls_parse(relative, tmp_path):
+    import re
+
+    text = (REPO_ROOT / relative).read_text()
+    path = tmp_path / "case.toml"
+    path.write_text(text)
+    defaults, _ = load_runtime_from_toml(path)
+    assert defaults.physics.nonlinear and not defaults.physics.linear
+    assert defaults.time.chunk_steps is None
+    assert defaults.time.diagnostics_interval is None
+    assert defaults.output.time_interval is None
+    enabled_text, count = re.subn(
+        r"(?m)^# (chunk_steps|diagnostics_interval|time_interval) =", r"\1 =", text
+    )
+    assert count == 3
+    path.write_text(enabled_text)
+    enabled, _ = load_runtime_from_toml(path)
+    assert enabled.time.chunk_steps == 128
+    assert 0 < enabled.time.diagnostics_interval <= enabled.time.t_max
+    assert enabled.output.time_interval > 0
+    expected = replace(
+        defaults,
+        time=replace(
+            defaults.time,
+            chunk_steps=128,
+            diagnostics_interval=enabled.time.diagnostics_interval,
+        ),
+        output=replace(defaults.output, time_interval=enabled.output.time_interval),
+    )
+    assert enabled.to_dict() == expected.to_dict()
