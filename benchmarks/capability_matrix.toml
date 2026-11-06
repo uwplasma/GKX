@@ -1,12 +1,8 @@
 [metadata]
 schema_version = 1
-updated = "2026-07-13"
 comparison_code = "GX"
 comparison_revision = "bc2fe552"
 comparison_source_fingerprint = "sha256:bfaaadfa724c4e56e32364b5cb957449555bed94f6a4ee082e3b4e651b0cc20b"
-office_instrumented_source_fingerprint = "sha256:436e403e769cae7fc38362185d1da49920255d5dfd288eb06ad4ac8715b5a004"
-office_binary_status = "validated_clean_rebuild; isolated revision bc2fe552 links one local OpenMPI 4.1.6, parallel netCDF 4.9.2, and HDF5 1.14.5 stack; the older instrumented binary remains excluded because of its HDF5 ABI mismatch"
-office_runtime_probe = "2026-07-13: canonical Cyclone s-alpha adiabatic-electron run completed 2145 steps to t=10 in 23.1 s and wrote valid netCDF/restart outputs; ky=0.3 gamma=0.101814 and omega=0.286777, a mid-transient smoke reading and not a parity target; the same deck run to t_max=150 converges to gamma=0.093049 and omega=0.281991, matching the reference GX ships for that case"
 scope = "Required-core and differentiable-extension capability contract; feature names are mathematical, while GX appears only as benchmark provenance."
 
 [[capabilities]]
@@ -79,7 +75,7 @@ group = "optional_extension"
 status = "planned_research_lane"
 gkx_owner = "gkx.operators.nonlinear.projection, gkx.operators.linear.cache_builder, and gkx.solvers_nonlinear_diagnostics"
 comparison_owner = "src/exb.cu plus sheared perpendicular-grid phase updates"
-evidence = "coordinate, periodic/linked cache, split-phase and canonical compressed brackets, Hermitian stage projection, fixed/adaptive/restartable RK2/Heun-RK3, fixed-step IMEX, and canonical heat-flux trace pass zero-shear trajectory identity, analytic kx evolution, integer/fractional remap/dealias, linked-chain invariance, machine-zero Hermitian residual, inverse-remap, designed-order, linear-suppression, adaptive-CFL accepted-time/JVP/finite-difference, chunk-restart, fast/differentiable identity, endpoint-IMEX transport, and transport JVP/gradient/finite-difference gates; an adaptive 64x64x24 periodic x64 campaign gave a 6.10% gamma_E=0.01 reduction, while an adaptive comparison gave -0.084% under a different stage-time policy; the final fixed-step campaign rejects physical-model promotion: internal fixed-IMEX t=[240,300] windows drift and give a 4.82% increase, while independently stationary fixed-RK4 comparison windows give a 24.82% increase with -11.29-SEM reduction separation; the compact negative-evidence artifact is docs/_static/flow_shear_fixed_step_response_gate.json, and no input-file option is exposed"
+evidence = "coordinate, periodic/linked cache, split-phase and canonical compressed brackets, Hermitian stage projection, fixed/adaptive/restartable RK2/Heun-RK3, fixed-step IMEX, and canonical heat-flux trace pass zero-shear trajectory identity, analytic kx evolution, integer/fractional remap/dealias, linked-chain invariance, machine-zero Hermitian residual, inverse-remap, designed-order, linear-suppression, adaptive-CFL accepted-time/JVP/finite-difference, chunk-restart, fast/differentiable identity, endpoint-IMEX transport, and transport JVP/gradient/finite-difference gates; physical-model qualification requires independent converged transport controls; no input-file option is exposed"
 
 [[capabilities]]
 id = "initial_value_time_integration"

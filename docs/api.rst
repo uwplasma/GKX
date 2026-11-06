@@ -38,7 +38,7 @@ Workflow
    result = gkx.solve(case)
    figure, axes = gkx.plot(result)
    spectrum = gkx.scan(case, [0.1, 0.2, 0.3])
-   simulation = gkx.prepare(case)
+   simulation = gkx.prepare(case, steps=64)
    result = simulation.solve()
 
 ``load``
@@ -73,17 +73,19 @@ every method delegates to the runtime path the case would take anyway.
    * - Member
      - Behavior
    * - ``solve(parameters=None, initial_state=None)``
-     - Nonlinear: runs the compiled scan and returns
-       ``(time, diagnostics, state, fields)``. Linear: calls
-       ``gkx.runtime.solve``. ``parameters`` must be ``None``; a linear
-       ``initial_state`` raises ``NotImplementedError``.
+     - Nonlinear: returns ``(time, diagnostics, state, fields)`` from the
+       prepared backend. ``diagnostics``
+       may be ``None`` when disabled; ``fields`` is a ``FieldState``.
+       Linear: calls ``gkx.runtime.solve`` and returns its ``LinearResult``.
+       ``parameters`` must be ``None``; a linear ``initial_state`` raises
+       ``NotImplementedError``.
    * - ``scan(parameter, values, *, parallel="auto")``
      - Only ``parameter="ky"``; delegates to ``run_runtime_scan``. An integer
        ``parallel`` sets the worker count.
    * - ``value_and_grad(objective, parameters)``
      - ``jax.value_and_grad(objective)(parameters)``.
    * - ``warmup()``
-     - Nonlinear: runs the scan once so XLA compiles it, and returns ``self``;
+     - Nonlinear: completes one solve so XLA compiles it, and returns ``self``;
        a second call does nothing. Linear: no-op, because the linear runtime
        picks its solver per call.
    * - ``estimate_memory()``
@@ -98,14 +100,49 @@ every method delegates to the runtime path the case would take anyway.
      - ``"float64"`` or ``"float32"`` from ``jax_enable_x64``; visible JAX
        devices as ``platform:id``.
 
-Preparing a nonlinear case builds its explicit diagnostic scan through
-``gkx.runtime.prepare``. That route requires a serial ``[parallel]`` policy
-and an explicit time method (IMEX methods raise ``ValueError``). It compiles one
-scan of fixed length, so a deck with ``[time] run_to = "saturation"`` raises
-unless ``steps=N`` is passed or the deck sets ``run_to = "t_max"``.
+Preparing a nonlinear case builds its diagnostic backend through
+``gkx.runtime.prepare``; see :doc:`parallelization` for supported named policies.
+Explicit ``steps=N`` fixes a finite window. Without that budget, adaptive
+``solve`` and ``warmup`` reuse compiled chunks until ``t_max``; every call resets
+the clock and controller, retaining executable caches rather than physical state.
+A saturation-stopping deck raises unless ``steps=N`` is passed or
+``run_to = "t_max"`` is selected. Use ``gkx.solve`` or the CLI to retain
+saturation stopping. Adaptive chain IMEX and generic ``imex`` preparation
+remain unsupported.
 
-The prepared route and ``integrate_nonlinear_explicit_diagnostics_state``
-compile the same graph and return bitwise identical arrays
+The lower-level ``gkx.runtime.prepare`` accepts nonlinear cases and returns a
+backend with ``run`` and ``run_arrays``. ``run`` returns the same four-part
+result as the nonlinear wrapper. ``run_arrays`` returns
+``(state, (diagnostic_arrays, time, dt_series), fields)`` without host
+conversion or diagnostic assembly. Prepare with explicit ``steps`` for this
+finite-window interface; the host loop for an adaptive full horizon cannot
+be transformed with JAX.
+
+For fixed-step model differentiation, ``run_arrays`` accepts ``cache`` and
+``params`` together, with optional matched ``geometry``. A geometry override
+requires both cache and parameters. Named-collective model inputs must retain
+the prepared tree structure, array shapes and dtypes. Adaptive model overrides
+are refused, and ``time_horizon`` cannot be combined with model overrides.
+The diagnostics-off named final-state path also refuses model overrides.
+
+For example, the finite-window nonlinear backend exposes arrays directly:
+
+.. code-block:: python
+
+   import gkx.runtime as runtime
+
+   nonlinear_case = gkx.load("examples/03_nonlinear_tokamak/case.toml")
+   backend = runtime.prepare(nonlinear_case, steps=64)
+   state, (diagnostic_arrays, time, dt_series), fields = backend.run_arrays()
+
+Keep the case topology and numerical policy fixed when reusing this backend.
+A full-horizon call restarts its clock and timestep controller on each run;
+continuing a physical trajectory requires an explicit state and a suitable
+continuation policy.
+
+For the same finite window, the prepared route and
+``integrate_nonlinear_explicit_diagnostics_state`` compile the same graph
+and return bitwise identical arrays
 (``tests/unit/nonlinear/test_nonlinear.py``). Prefer ``prepare`` when a case
 runs more than once: it keeps the compiled graph, while each call to the
 function entry point compiles its own. :doc:`solvers` gives the contract and

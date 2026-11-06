@@ -169,52 +169,15 @@ Controls
 ``NX, NY, NZ, NL, NM``
    Perpendicular, parallel, Laguerre, and Hermite resolution.
 
-Matched validation
-------------------
+Independent transport validation
+--------------------------------
 
-The differentiated window selects a boundary direction; historical independent
-forward runs supply the conditional transport summaries below. The candidate uses
-one ``max_mode=1`` stage from VMEX's optimized QA input. It holds the seed aspect
-and iota targets, moves eight boundary coefficients, and uses the same four
-residuals and priorities as the example. The search differentiates a 16-step
-post-saturation window; centered finite-difference checks validate that local
-derivative, while all acceptance statistics come from new long runs.
-The coefficients are
-:download:`available as CSV <_static/qa_transport_boundary_delta.csv>`.
-
-Both boundaries are re-solved as vacuum equilibria with ``Ns=101``,
-``ftol=1e-10``, and ``niter=15000``:
-
-.. list-table::
-   :header-rows: 1
-
-   * - quantity
-     - baseline
-     - candidate
-   * - aspect ratio
-     - 5.006406
-     - 5.006984
-   * - mean iota
-     - 0.419017
-     - 0.418831
-   * - QA residual
-     - :math:`5.88\times10^{-4}`
-     - :math:`1.54\times10^{-3}`
-
-.. figure:: _static/qa_transport_equilibria.png
-   :width: 900px
-   :alt: initial and optimized QA boundaries and Boozer field strength on the LCFS
-
-   Initial and optimized vacuum equilibria. The 3-D LCFS and Boozer maps use
-   one :math:`|B|/\langle|B|\rangle` scale. Eight low-order boundary
-   coefficients move; aspect and mean iota remain within 0.05%.
-
-Forward GKX runs use :math:`s=0.64`, :math:`\alpha=0`,
-``(Nx, Ny, Nz, Nl, Nm)=(16,16,24,4,8)``, ``Lx=Ly=62.8``, and
-:math:`\Delta t=0.05`. Each pair shares one fresh random Hermitian multimode
-state; seeds are independent between pairs. Nominal traces run to
-:math:`t=1500`, are sampled every :math:`\Delta t_s=1`, and average
-:math:`1100\leq t\leq1500`.
+The differentiated window selects a local boundary direction. Evaluate the
+initial and candidate boundaries with matched equilibrium tolerances, flux
+tubes, species, grids and timestep policies. Use independent saturated runs
+and paired seeds for transport acceptance. Save energy and resolved
+field/flux spectra as well as heat-flux traces so stationarity and spectral
+convergence can be tested.
 
 Uncertainty estimator
 ---------------------
@@ -275,104 +238,11 @@ where :math:`\hat\beta` is the least-squares slope. The final-drift test is
 traces; signed drifts may not cancel across seeds. Heat flux is in gyro-Bohm
 units.
 
-.. list-table:: Matched post-saturation transport
-   :header-rows: 1
-
-   * - check
-     - pairs
-     - :math:`\bar Q_b`
-     - :math:`\bar Q_c`
-     - reduction [95% CI]
-     - stationary traces
-   * - nominal
-     - 24
-     - 11.16
-     - 9.78
-     - 12.26% [10.64, 13.88]
-     - 44/48
-   * - :math:`\Delta t=0.04`
-     - 8
-     - 11.27
-     - 9.58
-     - 14.79% [10.52, 19.05]
-     - 13/16
-   * - :math:`\Delta t=0.025`
-     - 4
-     - 10.76
-     - 9.40
-     - 12.57% [6.51, 18.64]
-     - 7/8
-   * - :math:`N_x=N_y=12` (coarse)
-     - 4
-     - 18.73
-     - 14.38
-     - 23.13% [14.22, 32.04]
-     - 7/8
-   * - :math:`N_x=N_y=20`
-     - 16
-     - 10.05
-     - 9.53
-     - 4.95% [2.12, 7.78]
-     - 27/32
-   * - :math:`N_x=N_y=24` (short, rejected)
-     - 4
-     - 9.27
-     - 9.24
-     - 0.04% [-14.87, 14.96]
-     - 6/8
-   * - :math:`N_x=N_y=24` (long)
-     - 16
-     - 9.92
-     - 9.07
-     - 8.50% [6.34, 10.66]
-     - 30/32
-   * - :math:`N_z=16`
-     - 4
-     - 10.74
-     - 9.76
-     - 9.06% [2.37, 15.74]
-     - 6/8
-   * - :math:`N_z=32`
-     - 4
-     - 11.60
-     - 10.15
-     - 12.51% [5.76, 19.25]
-     - 8/8
-   * - :math:`(N_l,N_m)=(3,6)` (coarse)
-     - 4
-     - 13.78
-     - 11.33
-     - 17.12% [0.42, 33.81]
-     - 6/8
-   * - :math:`(N_l,N_m)=(6,12)`
-     - 16
-     - 10.93
-     - 9.56
-     - 12.32% [9.62, 15.03]
-     - 30/32
-
-The intervals above are conditional summaries, not validation intervals.
-The old gate averaged signed half-window shifts across seeds; opposing drifts
-cancelled. Applying the published final-drift test independently rejects 4 of
-48 nominal traces. Every case except :math:`N_z=32` has at least one drift
-failure, including 2 of 32 long-24x24 and 2 of 32
-:math:`(N_l,N_m)=(6,12)` traces.
-
-The compact raw files contain only :math:`Q_i(t)`, so neither the increasing
-high-:math:`k_y` tail nor spectral convergence can be tested. Thus none of the
-104 matched pairs is promotion-ready. These outputs predate the periodic
-hypercollision correction and require regeneration: they establish neither
-transport nor cost for the corrected operator. The 15.32 GPU integration hours
-on one RTX A4000 describe the historical run only.
-
-.. figure:: _static/qa_transport_reduction.svg
-   :width: 900px
-   :alt: matched QA heat-flux traces and transport-reduction convergence
-
-   Historical initial and candidate ensemble means with seed SEM; the shaded
-   interval is the measured window. Error bars are autocorrelation-corrected
-   conditional summaries. Regeneration with the corrected periodic operator,
-   per-trace stationarity and spectral gates remain open.
+Check every trace independently before reporting an ensemble interval.
+Opposing signed drifts cannot cancel a stationarity failure. Repeat the
+comparison at finer perpendicular, parallel and velocity-space resolutions
+and smaller timesteps. A conditional confidence interval at one resolution
+does not establish converged transport reduction.
 
 VMEX turbulence examples
 ------------------------
@@ -404,53 +274,19 @@ Each number is a single run with default settings on a shared 36-core CPU host
 one tube and one seed with no held-out check: it shows the pipeline works, not
 a certified transport reduction.
 
-Reproduce
----------
+Running and assessing the workflow
+----------------------------------
 
-The workflow has three owners:
-
-* :download:`examples/10_vmex_optimization/run.py <../examples/10_vmex_optimization/run.py>` (formerly ``QA_optimization.py``)
-  computes the VMEX--GKX design step;
-* ``scripts/campaigns/qa_transport_validation.py`` (retired;
-  :ref:`retired-generators`) runs restartable matched
-  saturation pairs;
-* ``scripts/artifacts/build_qa_transport_figures.py`` (retired;
-  :ref:`retired-generators`) computes
-  :math:`\tau_{int}`, effective sample counts, intervals, CSV tables, and plots.
-
-The exact accepted boundaries are
-:download:`initial <../examples/10_vmex_optimization/input.qa_transport_baseline>` and
-:download:`optimized <../examples/10_vmex_optimization/input.qa_transport_candidate>`.
-Use a fresh, source-SHA-specific output directory: the campaign skips existing
-filenames without checking source provenance. Never mix pre-correction and
-corrected-operator traces. For example,
+Run the checked-in optimization example from the repository root:
 
 .. code-block:: bash
 
-   campaign_dir="campaign/transport-$(git rev-parse --short=12 HEAD)"
-   python scripts/campaigns/qa_transport_validation.py nominal \
-     --seed-stop 24 --output-dir "$campaign_dir"
-   python scripts/campaigns/qa_transport_validation.py perp24long \
-     --seed-stop 16 --output-dir "$campaign_dir"
-   python scripts/campaigns/qa_transport_validation.py v612 \
-     --seed-stop 16 --output-dir "$campaign_dir"
-   python scripts/artifacts/build_qa_transport_figures.py \
-     --raw-dir "$campaign_dir" --output-dir docs/_static
+   python examples/10_vmex_optimization/run.py
 
-Use the case names and pair counts in the table for the timestep, perpendicular,
-parallel, and velocity-space scans. Each ``.npz`` stores only ``time``,
-``heat_flux``, and elapsed seconds. The 208 raw traces stay outside git; their
-per-trace summary statistics and the plotted nominal mean/SEM are committed.
-Future promotion runs must also retain content hashes plus :math:`W_\phi(t)`,
-:math:`W_g(t)`, and resolved flux/field spectra.
+Write generated equilibria, restart states and diagnostics to a separate output
+directory. Record the input configuration and source revision with the result;
+restart states and analysis windows must use the same operator conventions.
 
-Download the :download:`case summary <_static/qa_transport_summary.csv>`,
-:download:`per-trace statistics <_static/qa_transport_traces.csv>`, or
-:download:`nominal time series <_static/qa_transport_nominal_timeseries.csv>`,
-or :download:`boundary displacement <_static/qa_transport_boundary_delta.csv>`.
-The Hermite hypercollision exponent follows the resolution-aware
-``min(20, Nm//2)`` policy.
-
-The derivative mathematics, memory profile, and limitations are in
-:doc:`nonlinear_autodiff`. Reduced linear and quasilinear objectives remain
-screening diagnostics, not substitutes for the saturated nonlinear objective.
+The derivative mathematics and limitations are in :doc:`nonlinear_autodiff`.
+Reduced linear and quasilinear objectives provide screening diagnostics;
+validate proposed improvements with independent saturated nonlinear runs.

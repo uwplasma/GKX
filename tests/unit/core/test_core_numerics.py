@@ -3,6 +3,7 @@ from __future__ import annotations
 from support.helpers import patch_runtime
 
 import io
+import dataclasses
 import subprocess
 import sys
 from contextlib import redirect_stdout
@@ -499,6 +500,7 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from dataclasses import replace
+    from types import SimpleNamespace
 
     import gkx
     import gkx.runtime as runtime
@@ -518,20 +520,18 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
         return "linear-result"
 
     prepared_calls: list[tuple[RuntimeConfig, dict[str, object]]] = []
+    backend = SimpleNamespace(initial_state=np.zeros((1, 4, 8, 1, 1, 1), complex))
 
     def fake_nonlinear(cfg, **options):
         if options.get("prepare_only"):
             prepared_calls.append((cfg, options))
-            return "prepared-simulation"
+            return backend
         calls.append(("nonlinear", cfg, options))
         return "nonlinear-result"
 
     patch_runtime(monkeypatch, "run_runtime_linear", fake_linear)
     patch_runtime(monkeypatch, "run_runtime_nonlinear", fake_nonlinear)
-    # gkx.prepare is now the public PreparedSimulation constructor rather than
-    # the runtime function it wraps. The delegation this test exists to pin is
-    # still real and is asserted directly: preparing a nonlinear case reaches
-    # runtime.prepare, so the facade adds a type without adding numerics.
+    # The public wrapper delegates preparation without owning numerics.
     from gkx.api.prepared import prepare_simulation
 
     assert gkx.prepare is prepare_simulation
@@ -559,7 +559,7 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
     assert nonlinear_prepared.kind == "nonlinear"
     # The wrapper adds a type, not numerics: the object the runtime built is
     # carried through unchanged.
-    assert nonlinear_prepared._backend == "prepared-simulation"
+    assert nonlinear_prepared._backend is backend
     assert prepared_calls[0][0] is nonlinear
     assert prepared_calls[0][1]["diagnostics"] is True
     assert prepared_calls[0][1]["prepare_only"] is True
@@ -884,7 +884,7 @@ def test_nonlinear_summary_never_hides_an_unsaturated_verdict() -> None:
     result = RuntimeNonlinearResult(
         t=np.linspace(0.0, 10.0, 3),
         diagnostics=None,
-        saturation={"saturated": False, "mean_flux": 4.5, "sem": 0.3},
+        saturation={"saturated": False, "mean": 4.5, "sem": 0.3},
     )
     summary = result.summary()
     assert summary["saturated"] is False
@@ -1010,14 +1010,24 @@ def test_prepared_is_frozen_so_topology_cannot_drift_from_its_metadata() -> None
         prepared.kind = "nonlinear"  # type: ignore[misc]
 
 
-def test_state_shape_follows_the_case_grid() -> None:
+@pytest.mark.parametrize("nonlinear", [False, True])
+def test_state_shape_follows_the_case_grid(nonlinear) -> None:
     case = _linear_case()
-    prepared = prepare_simulation(case, Nl=6, Nm=12)
-    n_species, n_l, n_m, _n_ky, n_kx, n_z = prepared.state_shape
-    assert (n_l, n_m) == (6, 12)
-    assert n_kx == int(case.grid.Nx)
-    assert n_z == int(case.grid.Nz)
-    assert n_species >= 1
+    if nonlinear:
+        case = gkx.load(_repo_root() / "examples/05_kinetic_electrons/case.toml")
+        case = dataclasses.replace(case, grid=GridConfig(Nx=4, Ny=4, Nz=8))
+    with jax.enable_x64(False):
+        prepared = prepare_simulation(case, Nl=4, Nm=8, dt=1e-5, steps=2)
+    if nonlinear:
+        state = prepared._backend.initial_state
+        assert prepared.state_shape == state.shape
+        assert (prepared.n_laguerre, prepared.n_hermite) == state.shape[-5:-3]
+        assert prepared.precision == "float32"
+        assert prepared.estimate_memory()["state_bytes"] == state.nbytes
+    else:
+        n_species, n_l, n_m, _n_ky, n_kx, n_z = prepared.state_shape
+        assert (n_l, n_m, n_kx, n_z) == (4, 8, case.grid.Nx, case.grid.Nz)
+        assert n_species >= 1
 
 
 def test_estimate_memory_scales_with_the_grid_and_admits_it_is_a_floor() -> None:
@@ -1063,15 +1073,6 @@ def test_print_summary_writes_every_field(capsys) -> None:
     printed = capsys.readouterr().out
     assert "kind" in printed and "precision" in printed
 
-
-# ---- the prepared topology is the one solve will build --------------------
-#
-# The deck's [run] table names the velocity resolution. Before it was carried
-# on the case, the loader dropped it and prepare_simulation substituted a
-# hard-coded (4, 8), so preparing the shipped Cyclone deck -- which asks for
-# (16, 48) -- described a calculation nobody had requested. Reporting a
-# resolution that solve will not build is worse than reporting none, because a
-# recorded result then carries a resolution it was not run at.
 
 _SHIPPED_LINEAR_DECK = "examples/01_linear_tokamak/case_full.toml"
 
@@ -1124,8 +1125,6 @@ def test_a_deck_without_a_run_table_does_not_grow_one(tmp_path) -> None:
 
 def _tiny_nonlinear_case() -> RuntimeConfig:
     """The smallest nonlinear case that still exercises a real compile."""
-
-    import dataclasses
 
     base = RuntimeConfig()
     return base.replace(
@@ -1199,8 +1198,6 @@ def test_warming_twice_does_not_run_the_case_twice() -> None:
 def _linked_nonlinear_case() -> RuntimeConfig:
     """A tiny nonlinear case whose linked chains leave kx rows uncovered."""
 
-    import dataclasses
-
     base = RuntimeConfig()
     return base.replace(
         grid=dataclasses.replace(
@@ -1211,13 +1208,50 @@ def _linked_nonlinear_case() -> RuntimeConfig:
     )
 
 
-def test_prepared_solve_projects_a_supplied_state_onto_the_linked_cover() -> None:
+@pytest.mark.parametrize("parallel", [False, True])
+def test_prepared_solve_projects_a_supplied_state_onto_the_linked_cover(
+    monkeypatch, parallel
+) -> None:
+    import dataclasses
     import numpy as np
 
     from gkx.operators.linear.linked import linked_cover_mask_from_cache
 
-    prepared = prepare_simulation(_linked_nonlinear_case(), Nl=2, Nm=4, steps=2)
+    case = _linked_nonlinear_case()
+    if parallel:
+        import gkx.workflows.nonlinear as workflow
+
+        # Test the numeric adapter on the available mesh; topology has its own gates.
+        plan = workflow.NonlinearParallelPlan(
+            "species_hermite", tuple(jax.devices()[:2]), False
+        )
+        monkeypatch.setattr(
+            workflow, "resolve_nonlinear_parallel_plan", lambda _cfg: plan
+        )
+        case = case.replace(
+            parallel=public_config.RuntimeParallelConfig(
+                strategy="shard_map", axis="species_hermite", strict_identity=False
+            ),
+            time=dataclasses.replace(case.time, method="rk3", fixed_dt=True),
+        )
+    prepared = prepare_simulation(
+        case, Nl=2, Nm=4, steps=2, **({"diagnostics": False} if parallel else {})
+    )
     backend = prepared._backend
+    if parallel:
+        from gkx.parallel.integrators import stage_from_host
+
+        alternate = jax.sharding.NamedSharding(
+            jax.sharding.Mesh(np.asarray(plan.devices), ("equivalent",)),
+            jax.sharding.PartitionSpec(None, None, "equivalent"),
+        )
+        supplied_placement = jax.device_put(backend.initial_state, alternate)
+        with monkeypatch.context() as guard:
+            guard.setattr(jax, "device_get", lambda _v: pytest.fail("host round trip"))
+            normalized = stage_from_host(
+                supplied_placement, backend.initial_state.sharding
+            )
+        assert normalized.sharding == backend.initial_state.sharding
     cover = np.asarray(linked_cover_mask_from_cache(backend.cache))
     assert not cover.all(), "this deck must leave rows outside the chains"
 
@@ -1238,6 +1272,30 @@ def test_prepared_solve_projects_a_supplied_state_onto_the_linked_cover() -> Non
     final_on_cover = np.asarray(from_on_cover[2])
     assert np.max(np.abs(final_supplied[off])) == 0.0
     np.testing.assert_array_equal(final_supplied, final_on_cover)
+    if parallel:
+        assert from_supplied[0].size == 0 and from_supplied[1] is None
+
+        def objective(scale):
+            final = prepared.solve(initial_state=scale * jnp.asarray(supplied))[2]
+            return jnp.real(jnp.vdot(final, final))
+
+        value, gradient = prepared.value_and_grad(objective, jnp.asarray(1.0))
+        fd = (objective(1.01) - objective(0.99)) / 0.02
+        assert float(value) > 0 and bool(jnp.isfinite(gradient))
+        np.testing.assert_allclose(gradient, fd, rtol=2e-2, atol=1e-12)
+        for override in (
+            {"initial_state": supplied[:, :, :-1]},
+            {"time_horizon": 1.0},
+            {"cache": backend.cache, "params": backend.params},
+        ):
+            with pytest.raises(ValueError):
+                backend.run_arrays(**override)
+        diagnosed = prepare_simulation(case, Nl=2, Nm=4, steps=2)
+        full = diagnosed.solve(initial_state=supplied)
+        covered = diagnosed.solve(initial_state=on_cover)
+        assert full[0].size == 2 and full[1] is not None
+        assert np.max(np.abs(np.asarray(full[2])[off])) == 0.0
+        np.testing.assert_array_equal(full[2], covered[2])
 
 
 # ---- from test_core_ky_layout.py ----

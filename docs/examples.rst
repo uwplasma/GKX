@@ -149,78 +149,12 @@ Autodiff validation reports also accept ``workers`` for thread-parallel
 central finite-difference columns; acceptance is numerical identity with the
 serial report.
 
-Parallel identity gates
-^^^^^^^^^^^^^^^^^^^^^^^
+Parallel verification
+---------------------
 
-Each script below writes a JSON sidecar and a figure that compare a parallel
-route against the serial or production result it replaces. The ``ky-scan``
-figure also reports the observed batch speedup, separately from the identity
-check.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 55 45
-
-   * - Command
-     - What it compares
-   * - ``python scripts/artifacts/generate_parallel_identity_gate.py ky-scan`` (retired; :ref:`retired-generators`)
-     - Real Cyclone linear solver: serial against fixed-shape ``k_y``-batched
-       scans; ``gamma`` and ``omega`` must be identical.
-   * - ``python scripts/artifacts/generate_parallel_identity_gate.py logical-cpu --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - ``RuntimeParallelConfig`` and pytree outputs for independent scans (the
-       API used by UQ and sensitivity ensembles); not a nonlinear performance
-       claim.
-   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py hermite-exchange --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - ``shard_map`` nearest-neighbor exchange of Hermite moments.
-   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py field-reduce --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - ``shard_map`` reduction/broadcast over a Hermite mesh.
-   * - ``python scripts/artifacts/generate_electrostatic_parallel_gates.py field-reduce --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - Hermite-sharded ``m=0`` density reduction against the production
-       electrostatic quasineutrality solve.
-   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py hermite-ladder --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - Hermite exchange plus the ``sqrt(m+1)`` / ``sqrt(m)`` streaming-ladder
-       coefficients.
-   * - ``python scripts/artifacts/generate_electrostatic_parallel_gates.py drift --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - Hermite-sharded mirror and curvature/grad-B drift slices (offset-1 and
-       offset-2 Hermite exchanges) against the production linear RHS with only
-       those terms enabled.
-   * - ``python scripts/artifacts/generate_electrostatic_parallel_gates.py diamagnetic --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - Hermite-sharded electrostatic diamagnetic drive: the field-reduction
-       gate followed by the local ``m=0`` and ``m=2`` drive masks on each shard.
-   * - ``python scripts/artifacts/generate_velocity_parallel_gates.py periodic-streaming --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - Periodic spectral parallel derivative plus Hermite streaming ladder
-       through ``shard_map``, against the production streaming operator.
-   * - ``python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - Streaming-only ``linear_rhs_cached`` against the velocity-sharded
-       periodic streaming path (streaming term only; not a linear-scan or
-       nonlinear speedup claim).
-   * - ``python scripts/artifacts/generate_linear_rhs_parallel_gates.py streaming-electrostatic --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - Streaming plus electrostatic ``phi``, with the field solve on the
-       Hermite-sharded reduction.
-   * - ``python scripts/artifacts/generate_linear_rhs_parallel_gates.py electrostatic-slices --logical-devices 2`` (retired; :ref:`retired-generators`)
-     - Full opt-in electrostatic linear-slices call graph for streaming,
-       mirror, curvature, grad-B, and diamagnetic drive.
-
-The ``electrostatic-slices`` gate is an
-opt-in electrostatic linear-RHS identity artifact for the single-species
-periodic electrostatic RHS path; collisions, linked boundaries,
-electromagnetic terms, and nonlinear brackets are not covered.
-
-For the opt-in Hermite-sharded electrostatic linear RHS path, use the
-engineering sweep helper:
-
-.. code-block:: bash
-
-   # retired generator; restore it first: git show f005418bf575:scripts/profiling/profile_linear_rhs_parallel_slices.py > scripts/profiling/profile_linear_rhs_parallel_slices.py
-   python scripts/profiling/profile_linear_rhs_parallel_slices.py sweep \
-     --platform cpu --devices 1,2,4,8 --nms 64,128 \
-     --nl 4 --ny 32 --nz 128 --rtol 1e-5
-
-The script writes a device-count and Hermite-resolution sweep figure for the
-opt-in electrostatic linear-slices backend. The right panel is the identity
-gate; the left panel is engineering timing only and should not be promoted as a nonlinear or
-publication speedup claim.
-
+Use ``tests/unit/parallel/`` to compare serial and parallel numerical paths.
+See :doc:`parallelization` for supported layouts and identity tolerances.
+Scaling requires separate warm-run timing on the intended physical devices.
 
 Plotting outputs
 ----------------
@@ -489,45 +423,14 @@ Miller uses the in-package backend:
    gkx geometry miller \
      --config benchmarks/cases/cyclone_nonlinear_miller.toml
 
-Benchmark and scan helpers
---------------------------
+Benchmark and derivative workflows
+----------------------------------
 
-These scripts produce the scan-level plots and tables used in the benchmark
-discussion:
-
-.. code-block:: bash
-
-   python scripts/benchmark.py linear_benchmark cyclone
-   python scripts/benchmark.py linear_benchmark etg
-   python scripts/benchmark.py linear_benchmark kbm
-   python scripts/benchmark.py linear_benchmark kinetic
-   python scripts/benchmark.py linear_benchmark tem
-
-``linear_benchmark kbm`` plots the reviewed fixed-beta ``ky`` table. The
-matched rerun and branch-continuity analysis live in
-``scripts/comparison/compare_gx_kbm.py`` (retired; :ref:`retired-generators`).
-
-The kinetic-electron script loads
-``examples/05_kinetic_electrons/case_full.toml``. The same input
-can be run directly with
-``gkx examples/05_kinetic_electrons/case_full.toml``.
-It runs on the native RK4 owner.
-
-The TEM script loads ``benchmarks/cases/tem_linear.toml``; users
-can run the same single-mode case directly with
-``gkx benchmarks/cases/tem_linear.toml``.
-It runs on the native RK2 owner.
-
-Foundational demos
-------------------
-
-These smaller examples are useful for understanding the numerical building
-blocks without running a full benchmark case:
+Run the input decks in ``benchmarks/cases/`` with the runtime CLI. Use the
+checked-in autodiff examples for parameter sensitivities:
 
 .. code-block:: bash
 
-   # retired generator; restore it first: git show f005418bf575:scripts/benchmarks/basis_orthonormality.py > scripts/benchmarks/basis_orthonormality.py
-   python scripts/benchmarks/basis_orthonormality.py
    python examples/09_autodiff/run.py
    python examples/08_quasilinear/implicit_sensitivity.py
 
@@ -541,23 +444,15 @@ physical GKX heat-flux tuple appended to the objective list:
 
    python examples/10_vmex_optimization/run.py
 
-``run.py`` (formerly ``QA_optimization.py``) mirrors VMEX's boundary-mode ladder, preserves its
+``run.py`` mirrors VMEX's boundary-mode ladder, preserves its
 ``A=6`` and mean-``iota=0.42`` targets, and adds the checkpointed nonlinear
 heat-flux derivative. The equilibrium is vacuum; finite ``a/L_T`` and ``a/L_n``
 drive GKX. Edit the top-level constants to set resolution and run length.
 
 The optimizer window starts from a detached saturated state and supplies a
-local design derivative. Historical matched runs give a preliminary 12.26%
-nominal reduction (conditional 95% CI 10.64--13.88%). This is not statistically
-resolved: individual drift failures and missing resolved spectra block
-promotion. These traces predate the periodic hypercollision correction and must
-be regenerated before evaluating current-operator transport.
-See :doc:`stellarator_optimization` for the audit, resolution
-ladder, and CSV data.
-
-The reduced synthetic stellarator-ITG diagnostic scripts were retired from
-``examples/`` after GKX 2.3.0 (recoverable from commit ``f9485f044``); their
-tracked JSON sidecars under ``docs/_static`` remain as historical records.
+local design derivative. Evaluate a candidate with independent long runs,
+replicated seeds, per-trace stationarity and resolved spectra. See
+:doc:`stellarator_optimization` for the validation protocol.
 
 The production bridge exposes the same portfolio layout for real
 ``vmex -> booz_xform_jax -> GKX`` rows:

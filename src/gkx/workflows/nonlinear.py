@@ -6,19 +6,24 @@ import os
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 import jax.numpy as jnp
 import numpy as np
+from jax import tree_util
+from jax.experimental.multihost_utils import process_allgather
 
 from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.modes import select_ky_index
 from gkx.diagnostics.saturation import (
     SaturationStopConfig,
+    _physical_saturation_stop_decision,
     saturation_stop_decision,
 )
 from gkx.geometry import apply_geometry_grid_defaults
+from gkx.operators.linear.linked import project_to_linked_cover
 from gkx.operators.nonlinear.policies import bracket_cfl_rate
 from gkx.solvers_nonlinear_imex import (
     IMEX_CHAIN_METHODS,
@@ -31,6 +36,7 @@ from gkx.solvers_time_explicit import (
 )
 from gkx.config import RuntimeConfig, resolve_cfl_fac
 from gkx.solvers_nonlinear_diagnostics import (
+    _continue_nonlinear_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
     prepare_nonlinear_explicit_diagnostics,
 )
@@ -41,6 +47,9 @@ from gkx.workflows.runtime.diagnostic_arrays import (
 )
 from gkx.workflows.runtime.parallel_nonlinear import (
     NonlinearParallelPlan,
+    _integrate_species_hermite_final_state,
+    _supports_species_hermite_policy,
+    _species_hermite_diagnostic_rhs,
     assert_nonlinear_parallel_identity,
     resolve_nonlinear_parallel_plan,
     resolve_species_hermite_mesh,
@@ -82,20 +91,16 @@ def build_runtime_nonlinear_diagnostics_kwargs(
     resolved_diagnostics: bool,
     show_progress: bool,
 ) -> dict[str, Any]:
-    """Build keyword arguments for nonlinear diagnostic integration.
-
-    Runtime drivers use the same physics kwargs for fixed-window and adaptive
-    chunked diagnostics. Keeping them in one policy helper prevents drift
-    between the two branches while leaving the actual integrator call in the
-    public runtime facade.
-    """
+    """Keep fixed-window and adaptive diagnostic routes on one physics policy."""
 
     method_use = str(method or cfg.time.method)
-    kwargs: dict[str, Any] = dict(
+    return dict(
         dt=float(dt),
         steps=int(steps),
         method=method_use,
         terms=term_config,
+        checkpoint=bool(cfg.time.checkpoint),
+        compressed_real_fft=bool(cfg.time.compressed_real_fft),
         sample_stride=int(sample_stride),
         diagnostics_stride=int(diagnostics_stride),
         use_dealias_mask=bool(cfg.time.nonlinear_dealias),
@@ -116,12 +121,9 @@ def build_runtime_nonlinear_diagnostics_kwargs(
         fixed_mode_ky_index=fixed_mode_ky_index,
         fixed_mode_kx_index=fixed_mode_kx_index,
         external_phi=external_phi,
+        resolved_diagnostics=resolved_diagnostics,
+        show_progress=show_progress,
     )
-    if not resolved_diagnostics:
-        kwargs["resolved_diagnostics"] = False
-    if show_progress:
-        kwargs["show_progress"] = True
-    return kwargs
 
 
 def _nearest_index_from_candidates(
@@ -222,8 +224,7 @@ def _infer_runtime_nonlinear_steps(
     elif bool(cfg.time.fixed_dt):
         steps_val = int(np.round(float(cfg.time.t_max) / max(float(dt), 1.0e-12)))
     else:
-        # Keep runtime inference aligned with adaptive stepping: when
-        # dt_max is unset, the nonlinear integrator clamps at dt itself.
+        # Match the integrator's dt fallback when dt_max is unset.
         dt_cap = float(cfg.time.dt_max) if cfg.time.dt_max is not None else float(dt)
         steps_val = int(np.ceil(float(cfg.time.t_max) / max(dt_cap, 1.0e-12)))
     if steps_val < 1:
@@ -286,14 +287,6 @@ class _DiagnosticPolicy:
         )
 
 
-def _status_callback(callback: Callable[[str], None] | None) -> Callable[[str], None]:
-    def status(message: str) -> None:
-        if callback is not None:
-            callback(message)
-
-    return status
-
-
 def _prepare_context(
     cfg: RuntimeConfig,
     *,
@@ -350,8 +343,7 @@ def _prepare_context(
         steps=int(_infer_runtime_nonlinear_steps(cfg, dt=dt_val, steps=steps)),
         adaptive_chunked=steps is None and not bool(cfg.time.fixed_dt),
     )
-    # Before the first step, not after the last: an over-CFL run that is going
-    # to overflow should say so while the step is still cheap to change.
+    # Report an unsafe fixed step before integration.
     _report_nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm, status=status)
     return ctx
 
@@ -442,14 +434,7 @@ _RUN_TO_VALUES = ("saturation", "t_max")
 def _saturation_stop_condition(
     cfg: RuntimeConfig, ctx: _RunContext, policy: _DiagnosticPolicy
 ) -> Callable[[Any, Any, Any, Any], dict[str, Any]] | None:
-    """Build the run-to-saturation stop check, or ``None`` to run to t_max.
-
-    Saturation stopping needs the streamed heat-flux trace, so a run with
-    diagnostics disabled falls back to the t_max horizon. So does a run whose
-    whole step budget is shorter than the minimum sample count: it could never
-    reach a stop decision, and routing it through the chunk loop would only
-    add machinery around the same integration.
-    """
+    """Build a diagnostic stop check when the run can reach its sample floor."""
 
     run_to = str(cfg.time.run_to).strip().lower()
     if run_to not in _RUN_TO_VALUES:
@@ -469,6 +454,10 @@ def _saturation_stop_condition(
         return None
 
     def check(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
+        if not cfg.time.fixed_dt:
+            return _physical_saturation_stop_decision(
+                t, heat_flux, wphi, wg, config=stop_cfg
+            )
         return saturation_stop_decision(
             t, heat_flux, guard=wphi, free_energy_guard=wg, config=stop_cfg
         )
@@ -479,12 +468,7 @@ def _saturation_stop_condition(
 def _nonlinear_cfl_margin(
     cfg: RuntimeConfig, ctx: _RunContext, *, Nl: int, Nm: int
 ) -> tuple[float, float, np.ndarray] | None:
-    """Return the nonlinear CFL bound and ratio, or ``None`` if unavailable.
-
-    Match the adaptive step's no-diamagnetic-drive convention. This advisory
-    calculation must not abort an otherwise valid run when geometry is traced
-    or has not yet been sampled onto the grid.
-    """
+    """Estimate the adaptive no-diamagnetic-drive CFL bound when available."""
 
     from gkx.geometry import ensure_flux_tube_geometry_data
     from gkx.solvers_time_explicit import _linear_frequency_bound
@@ -551,25 +535,24 @@ def _run_chunked_diagnostics(
     method: str | None,
     status: Callable[[str], None],
     stop_condition: Callable[[Any, Any, Any, Any], dict[str, Any]] | None,
+    rhs_factory: Callable[..., Any] | None = None,
+    compile_cache: dict[Any, Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
-    """Run chunked nonlinear diagnostics for the adaptive and saturation routes.
-
-    The adaptive route keeps its historical chunking; the fixed-step route only
-    goes through here for run-to-saturation, chunking on step count so the stop
-    check runs a few times per horizon while the total step budget stays the
-    hard cap.
-    """
+    """Run adaptive chunks or fixed-step saturation checks within the hard cap."""
 
     step_capped = not ctx.adaptive_chunked
+    step_bound = ctx.dt if cfg.time.fixed_dt else float(cfg.time.dt_max or ctx.dt)
     chunk_steps = min(ctx.steps, 128)
     G_chunk = ctx.G0
     steps_left = ctx.steps
-    # One compiled scan per chunk shape, reused by every chunk of this run.
-    compile_cache: dict[Any, Any] = {}
-    # Chain IMEX with fixed_dt = false: a fixed factor per chunk, dt chosen
-    # between chunks (ImexDtControl), the factor swapped in as an operand.
+    compile_cache = {} if compile_cache is None else compile_cache
+    # Chain IMEX retunes its fixed factor between chunks.
     imex = ctx.adaptive_chunked and (method or cfg.time.method) in IMEX_CHAIN_METHODS
-    control: dict[str, Any] = {"dt": ctx.dt}
+    control: dict[str, Any] = {
+        "dt": min(ctx.dt, float(cfg.time.dt_max or ctx.dt)),
+        "next_dt": jnp.asarray(0.0, dtype=jnp.real(ctx.G0).dtype),
+    }
+    continue_pi = not cfg.time.fixed_dt and (method or cfg.time.method) == "rk4-pi"
     if imex:
         chunk_steps = 32
 
@@ -577,9 +560,21 @@ def _run_chunked_diagnostics(
         if imex and "op" in control:
             for key, prepared in compile_cache.items():
                 compile_cache[key] = prepared.with_chain(control["op"])
-        out = integrate_nonlinear_explicit_diagnostics_state(
-            G, ctx.grid, ctx.geom, ctx.params, **kwargs
-        )
+        if rhs_factory is not None:
+            kwargs["_rhs_factory"] = rhs_factory
+        if continue_pi or rhs_factory is not None:
+            out, control["next_dt"] = _continue_nonlinear_diagnostics(
+                G,
+                ctx.grid,
+                ctx.geom,
+                ctx.params,
+                initial_dt=control["next_dt"] if continue_pi else None,
+                **kwargs,
+            )
+        else:
+            out = integrate_nonlinear_explicit_diagnostics_state(
+                G, ctx.grid, ctx.geom, ctx.params, **kwargs
+            )
         if imex and "op" not in control:
             prepared = next(iter(compile_cache.values()))
             op = prepared.chain
@@ -618,7 +613,7 @@ def _run_chunked_diagnostics(
             control["op"] = refactor_chain_implicit_linear(
                 control["op"], control["dt"], free=True
             )
-        elif remaining_time <= steps_now * dt_cap:
+        elif (not imex and not step_capped) or remaining_time <= steps_now * dt_cap:
             kwargs["time_horizon"] = remaining_time
         kwargs["compile_cache"] = compile_cache
         while True:
@@ -653,14 +648,13 @@ def _run_chunked_diagnostics(
     def loop_stop(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
         assert stop_condition is not None
         decision = stop_condition(t, heat_flux, wphi, wg)
-        # "stop" ends the loop; "saturated" is the physics verdict. The step
-        # budget running out stops the loop without claiming saturation.
+        # Exhausting the step budget stops without claiming saturation.
         stop = bool(decision.get("saturated")) or (step_capped and steps_left <= 0)
         return {**decision, "stop": stop}
 
     chunk_result = run_adaptive_runtime_chunk_loop(
         integrate_chunk=run_chunk,
-        t_max=ctx.dt * ctx.steps if step_capped else float(cfg.time.t_max),
+        t_max=step_bound * ctx.steps if step_capped else float(cfg.time.t_max),
         chunk_steps=chunk_steps,
         label="nonlinear",
         show_progress=policy.show_progress,
@@ -683,13 +677,7 @@ def _run_chunked_diagnostics(
 
 
 def _chunk_spill_dir() -> Path | None:
-    """Directory for spilled chunk diagnostics, or ``None`` to keep them in RAM.
-
-    Environment rather than TOML because it is a property of the *machine* the
-    run lands on, not of the physics case: the same config is submitted to a
-    workstation with 512 GB and to a batch node with 16, and only the second one
-    needs to spill.
-    """
+    """Resolve machine-specific diagnostic spilling independently of the case."""
 
     raw = os.environ.get("GKX_CHUNK_SPILL_DIR", "").strip()
     return Path(raw) if raw else None
@@ -702,6 +690,7 @@ def _run_diagnostics(
     *,
     method: str | None,
     status: Callable[[str], None],
+    rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
     status(
         f"sample_stride={policy.sample_stride} "
@@ -722,6 +711,7 @@ def _run_diagnostics(
                 method=method,
                 status=status,
                 stop_condition=stop_condition,
+                rhs_factory=rhs_factory,
             )
         except ValueError as exc:
             if "implicit factor residual" not in str(exc) or cfg.time.fixed_dt:
@@ -736,6 +726,7 @@ def _run_diagnostics(
                 method="rk4-pi",
                 status=status,
                 stop_condition=stop_condition,
+                rhs_factory=rhs_factory,
             )
     status(
         f"running nonlinear diagnostics integrator over {ctx.steps} steps with dt={ctx.dt:.6g}"
@@ -751,19 +742,21 @@ def _run_diagnostics(
         fixed_dt=bool(cfg.time.fixed_dt),
         show_progress=policy.show_progress,
     )
-    t, diag, G_final, fields_final = integrate_nonlinear_explicit_diagnostics_state(
-        ctx.G0,
-        ctx.grid,
-        ctx.geom,
-        ctx.params,
-        **kwargs,
-    )
-    # The chunked routes above validate every chunk before returning it. This
-    # one is a single scan, so nothing has looked at the trace yet: an unstable
-    # step runs to the last step and hands back a diagnostics array whose tail
-    # is NaN, and every caller that is not the artifact writer -- the library
-    # API, and the CLI whenever [output] path is unset -- reports that as a
-    # successful run. Refuse the trace instead of returning it.
+    if rhs_factory is None:
+        t, diag, G_final, fields_final = integrate_nonlinear_explicit_diagnostics_state(
+            ctx.G0,
+            ctx.grid,
+            ctx.geom,
+            ctx.params,
+            **kwargs,
+        )
+    else:
+        t, named_diag, G_final, fields_final = prepare_nonlinear_explicit_diagnostics(
+            ctx.G0, ctx.grid, ctx.geom, ctx.params, _rhs_factory=rhs_factory, **kwargs
+        ).run()
+        if named_diag is None:
+            raise RuntimeError("named diagnosed integration requires diagnostics")
+        diag = named_diag
     validate_finite_runtime_diagnostics(diag, label="fixed-step nonlinear run")
     return t, diag, G_final, fields_final, None
 
@@ -779,11 +772,17 @@ def _result(
     summarize_fields: bool,
     saturation: dict[str, Any] | None = None,
 ) -> RuntimeNonlinearResult:
+    if policy.return_state and not (
+        getattr(state, "is_fully_addressable", True)
+        or getattr(state, "is_fully_replicated", False)
+    ):
+        state = process_allgather(state, tiled=True)
     return build_runtime_nonlinear_result(
         t=np.asarray(t),
         diagnostics=diagnostics,
         fields=fields,
         state=np.asarray(state) if policy.return_state else None,
+        state_shape=tuple(state.shape),
         ky_selected=float(np.asarray(ctx.grid.ky[ctx.ky_index])),
         kx_selected=float(np.asarray(ctx.grid.kx[ctx.kx_index])),
         summarize_fields=summarize_fields,
@@ -802,7 +801,12 @@ def _run_final_state(
         "diagnostics disabled; running final-state nonlinear integrator over "
         f"{ctx.steps} steps with dt={ctx.dt:.6g}"
     )
-    time_cfg = replace(cfg.time, dt=ctx.dt, t_max=ctx.dt * ctx.steps)
+    time_cfg = replace(
+        cfg.time,
+        dt=ctx.dt,
+        t_max=ctx.dt * ctx.steps,
+        laguerre_nonlinear_mode=policy.laguerre_mode,
+    )
     request = solve_stats_request(time_cfg.method, kind="nonlinear")
     kwargs = {"terms": ctx.terms, **request}
     if policy.show_progress:
@@ -810,6 +814,7 @@ def _run_final_state(
     G_final, fields, *extra = integrate_nonlinear_from_config(
         ctx.G0, ctx.grid, ctx.geom, ctx.params, time_cfg, **kwargs
     )
+    fields = tree_util.tree_map(lambda value: value[-1], fields)
     solve = checked_solve_summary(extra, request, label="nonlinear IMEX run")
     status("completed nonlinear final-state integration")
     result = _result(
@@ -837,27 +842,19 @@ def _diagnostic_run_result(
 ) -> RuntimeNonlinearResult:
     if policy.diagnostics_on:
         status(f"completed nonlinear run with {int(np.asarray(t).size)} saved samples")
-        return _result(
-            ctx,
-            policy,
-            t=t,
-            diagnostics=diagnostics,
-            fields=fields,
-            state=state,
-            summarize_fields=False,
-            saturation=saturation,
-        )
-    if fields is None:
-        raise RuntimeError("adaptive nonlinear runtime did not produce final fields")
-    status("diagnostics disabled; returning final nonlinear field summary")
+    elif fields is None:
+        raise RuntimeError("nonlinear runtime did not produce final fields")
+    else:
+        status("diagnostics disabled; returning final nonlinear field summary")
     return _result(
         ctx,
         policy,
-        t=np.asarray([]),
-        diagnostics=None,
+        t=t if policy.diagnostics_on else np.asarray([]),
+        diagnostics=diagnostics if policy.diagnostics_on else None,
         fields=fields,
         state=state,
-        summarize_fields=True,
+        summarize_fields=not policy.diagnostics_on,
+        saturation=saturation if policy.diagnostics_on else None,
     )
 
 
@@ -868,28 +865,29 @@ def _run_once(
     *,
     method: str | None,
     status: Callable[[str], None],
+    rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[RuntimeNonlinearResult, Any]:
-    """Run one nonlinear trajectory and return its result plus its final state."""
-
-    if not policy.requires_diagnostic_path and not ctx.adaptive_chunked:
+    if (
+        not policy.requires_diagnostic_path
+        and cfg.time.fixed_dt
+        and cfg.time.method not in IMEX_CHAIN_METHODS
+    ):
         return _run_final_state(cfg, ctx, policy, status=status)
 
     t, diag, G_final, fields_final, saturation = _run_diagnostics(
-        cfg, ctx, policy, method=method, status=status
+        cfg, ctx, policy, method=method, status=status, rhs_factory=rhs_factory
     )
-    return (
-        _diagnostic_run_result(
-            ctx,
-            policy,
-            t=t,
-            diagnostics=diag,
-            fields=fields_final,
-            state=G_final,
-            saturation=saturation,
-            status=status,
-        ),
-        G_final,
+    result = _diagnostic_run_result(
+        ctx,
+        policy,
+        t=t,
+        diagnostics=diag,
+        fields=fields_final,
+        state=G_final,
+        saturation=saturation,
+        status=status,
     )
+    return result, G_final
 
 
 def _run_sharded(
@@ -900,16 +898,59 @@ def _run_sharded(
     method: str | None,
     status: Callable[[str], None],
     plan: NonlinearParallelPlan,
-) -> RuntimeNonlinearResult:
+    prepare: Callable[..., Any] | None = None,
+) -> Any:
     """Run the sharded nonlinear route, fail-closed against the serial answer."""
 
     if plan.axis == "species_hermite":
         plan = resolve_species_hermite_mesh(ctx.G0, plan)
     status(f"routing nonlinear run through {plan.describe()}")
-    sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
-    result, sharded_state = _run_once(
-        cfg, sharded_ctx, policy, method=method, status=status
-    )
+    if (
+        (prepare is None or policy.diagnostics_on)
+        and (policy.diagnostics_on or not cfg.time.fixed_dt or policy.show_progress)
+        and _supports_species_hermite_policy(cfg, ctx, policy, method=method, plan=plan)
+    ):
+        rhs_factory = partial(
+            _species_hermite_diagnostic_rhs,
+            plan=plan,
+            compressed_real_fft=cfg.time.compressed_real_fft,
+            laguerre_mode=policy.laguerre_mode,
+        )
+        status("using named species-Hermite RHS with production post-step diagnostics")
+        if prepare is not None:
+            if plan.strict_identity:
+                raise ValueError("parallel preparation requires strict_identity=False")
+            return prepare(_rhs_factory=rhs_factory)
+        result, sharded_state = _run_once(
+            cfg, ctx, policy, method=method, status=status, rhs_factory=rhs_factory
+        )
+    else:
+        named = _integrate_species_hermite_final_state(
+            cfg, ctx, policy, method=method, plan=plan, status=status, prepare=prepare
+        )
+        if prepare is not None:
+            if named is None:
+                raise ValueError("unsupported fixed-step parallel preparation policy")
+            return named
+        if named is None:
+            status(
+                "using whole-state placement; named collectives do not support these settings"
+            )
+            sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
+            result, sharded_state = _run_once(
+                cfg, sharded_ctx, policy, method=method, status=status
+            )
+        else:
+            sharded_state, fields = named
+            result = _result(
+                ctx,
+                policy,
+                t=np.asarray([]),
+                diagnostics=None,
+                fields=fields,
+                state=sharded_state,
+                summarize_fields=True,
+            )
     if not plan.strict_identity:
         status("parallel strict_identity=false; skipping the serial identity gate")
         return result
@@ -932,9 +973,14 @@ def prepare(case: RuntimeConfig, **options: Any) -> Any:
     """Prepare a reusable compiled nonlinear simulation; see its class docstring."""
     if not case.physics.nonlinear:
         raise ValueError("prepare currently requires nonlinear physics")
-    if options.pop("diagnostics", True) is not True:
+    diagnostics = options.pop("diagnostics", True)
+    if diagnostics is not True and (
+        diagnostics is not False or case.parallel.strategy == "serial"
+    ):
         raise ValueError("prepare requires diagnostics=True")
-    return run_runtime_nonlinear(case, diagnostics=True, prepare_only=True, **options)
+    return run_runtime_nonlinear(
+        case, diagnostics=diagnostics, prepare_only=True, **options
+    )
 
 
 def run_runtime_nonlinear(
@@ -963,6 +1009,8 @@ def run_runtime_nonlinear(
     :func:`prepare` path).
     """
 
+    if method is not None:
+        cfg = replace(cfg, time=replace(cfg.time, method=method))
     cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm, nonlinear=True)
     if status_callback is not None:
         status_callback("building runtime geometry")
@@ -970,11 +1018,7 @@ def run_runtime_nonlinear(
     # Resolved before any geometry or grid work so an unroutable [parallel]
     # request fails immediately instead of after a long serial run.
     plan = resolve_nonlinear_parallel_plan(cfg.parallel)
-    if prepare_only and plan is not None:
-        raise ValueError(
-            "prepared nonlinear execution currently requires serial policy"
-        )
-    status = _status_callback(status_callback)
+    status = status_callback if status_callback is not None else lambda _message: None
     ctx = _prepare_context(
         cfg,
         ky_target=ky_target,
@@ -999,16 +1043,9 @@ def run_runtime_nonlinear(
         f"nonlinear diagnostics={'on' if policy.diagnostics_on else 'off'} "
         f"fixed_mode={'on' if policy.fixed_mode_on else 'off'} source={cfg.expert.source}"
     )
+    prepare_factory: Callable[..., Any] | None = None
     if prepare_only:
-        if _saturation_stop_condition(cfg, ctx, policy) is not None:
-            # A prepared object compiles one scan of a fixed length, and
-            # saturation stopping decides the length while the run is going, so
-            # the two cannot both hold. Refusing is right -- quietly dropping
-            # the stop condition would hand back a simulation that integrates
-            # past where the deck asked it to stop. But the refusal used to end
-            # here, and every shipped nonlinear deck sets run_to = "saturation",
-            # so gkx.prepare had no working example in the tree. Name the two
-            # ways out.
+        if _saturation_stop_condition(cfg, ctx, policy) is not None and steps is None:
             raise ValueError(
                 "prepared execution cannot stop early at saturation: this deck "
                 f"sets [time] run_to = {str(cfg.time.run_to).strip().lower()!r}, "
@@ -1022,21 +1059,61 @@ def run_runtime_nonlinear(
             cfg,
             ctx,
             policy,
-            steps=ctx.steps,
+            steps=min(ctx.steps, 128) if ctx.adaptive_chunked else ctx.steps,
             method=method,
-            sample_stride=policy.sample_stride,
-            diagnostics_stride=policy.diagnostics_stride,
+            sample_stride=1 if ctx.adaptive_chunked else policy.sample_stride,
+            diagnostics_stride=1 if ctx.adaptive_chunked else policy.diagnostics_stride,
             fixed_dt=bool(cfg.time.fixed_dt),
             show_progress=show_progress,
         )
-        if not bool(cfg.time.fixed_dt):
+        if ctx.adaptive_chunked:
             kwargs["time_horizon"] = float(cfg.time.t_max)
-        return prepare_nonlinear_explicit_diagnostics(
-            ctx.G0, ctx.grid, ctx.geom, ctx.params, **kwargs
+
+        def prepare_window(**runtime_options):
+            backend = prepare_nonlinear_explicit_diagnostics(
+                ctx.G0, ctx.grid, ctx.geom, ctx.params, **kwargs, **runtime_options
+            )
+            if not ctx.adaptive_chunked:
+                return backend
+            cache = {(min(ctx.steps, 128), False, show_progress): backend}
+
+            def run_to_horizon(initial_state, time_horizon):
+                state = (
+                    backend.initial_state if initial_state is None else initial_state
+                )
+                state = project_to_linked_cover(jnp.asarray(state), backend.cover_mask)
+                config = (
+                    cfg
+                    if time_horizon is None
+                    else replace(cfg, time=replace(cfg.time, t_max=float(time_horizon)))
+                )
+                return _run_chunked_diagnostics(
+                    config,
+                    replace(ctx, G0=state),
+                    policy,
+                    method=method,
+                    status=status,
+                    stop_condition=None,
+                    rhs_factory=runtime_options.get("_rhs_factory"),
+                    compile_cache=cache,
+                )[:4]
+
+            return replace(backend, _run_to_horizon=run_to_horizon)
+
+        prepare_factory = prepare_window
+    if plan is not None:
+        return _run_sharded(
+            cfg,
+            ctx,
+            policy,
+            method=method,
+            status=status,
+            plan=plan,
+            prepare=prepare_factory,
         )
-    if plan is None:
-        return _run_once(cfg, ctx, policy, method=method, status=status)[0]
-    return _run_sharded(cfg, ctx, policy, method=method, status=status, plan=plan)
+    if prepare_factory is not None:
+        return prepare_factory()
+    return _run_once(cfg, ctx, policy, method=method, status=status)[0]
 
 
 __all__ = [

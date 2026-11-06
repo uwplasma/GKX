@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from importlib import import_module
+from types import SimpleNamespace
 
 
 # ---- test_parallel.py ----
@@ -18,6 +19,8 @@ import gkx.parallel.independent as parallel_batch
 import gkx.parallel.independent as parallel_independent
 from dataclasses import replace
 import gkx.workflows.nonlinear as nonlinear_workflow
+from gkx.core_grid import build_spectral_grid
+from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.config import GeometryConfig, GridConfig, InitializationConfig, TimeConfig
 from gkx.runtime import (
     run_runtime_nonlinear,
@@ -972,7 +975,7 @@ def _nonlinear_cfg(
         ),
         species=(RuntimeSpeciesConfig(name="ion"),),
         normalization=RuntimeNormalizationConfig(contract="cyclone"),
-        physics=RuntimePhysicsConfig(adiabatic_electrons=True, nonlinear=True),
+        physics=RuntimePhysicsConfig(linear=False, nonlinear=True),
         terms=RuntimeTermsConfig(nonlinear=1.0, hypercollisions=0.0, end_damping=0.0),
     )
     return cfg if parallel is None else replace(cfg, parallel=parallel)
@@ -1060,7 +1063,7 @@ def test_unsupported_axis_raises(axis: str) -> None:
         )
 
 
-def test_auto_selects_the_species_hermite_mesh_and_says_which() -> None:
+def test_auto_selects_the_species_hermite_mesh_and_says_which(monkeypatch) -> None:
     """``auto = true`` resolves the mesh from the devices and reports it."""
 
     _require_devices(2)
@@ -1079,6 +1082,20 @@ def test_auto_selects_the_species_hermite_mesh_and_says_which() -> None:
     assert "auto-selected" in described
     assert "no halo" in described
 
+    devices = tuple(
+        SimpleNamespace(id=i, process_index=p) for i, p in enumerate((0, 0, 1, 1))
+    )
+    monkeypatch.setattr(jax, "devices", lambda: devices)
+    monkeypatch.setattr(jax, "process_count", lambda: 2)
+    state = SimpleNamespace(shape=(1, 2, 4, 3, 4, 8))
+    for budget in (2, 3, 4):
+        plan = resolve_nonlinear_parallel_plan(
+            RuntimeParallelConfig(auto=True, num_devices=budget)
+        )
+        resolved = resolve_species_hermite_mesh(state, plan)
+        assert resolved.device_count == 2
+        assert [d.id for d in resolved.devices[:2]] == [0, 2]
+
 
 def test_auto_conflicting_with_an_explicit_strategy_is_an_error() -> None:
     """``auto`` must not silently overrule an explicit request."""
@@ -1096,7 +1113,7 @@ def test_indivisible_device_count_names_the_counts_that_work() -> None:
     from gkx.workflows.runtime.parallel_nonlinear import resolve_species_hermite_mesh
 
     plan = resolve_nonlinear_parallel_plan(
-        RuntimeParallelConfig(auto=True, num_devices=3)
+        RuntimeParallelConfig(strategy="shard_map", axis="m", num_devices=3)
     )
     with pytest.raises(NonlinearParallelRoutingError) as excinfo:
         resolve_species_hermite_mesh(
@@ -1219,8 +1236,9 @@ def test_identity_gate_reports_a_shape_mismatch_as_a_failure() -> None:
 
 @pytest.mark.parametrize("ky_layout", ["full", "half"])
 @pytest.mark.parametrize("num_devices", [2, 4])
+@pytest.mark.parametrize("axis", ["ky", "species_hermite"])
 def test_shard_map_nonlinear_run_matches_serial_diagnostics(
-    num_devices: int, ky_layout: str
+    num_devices: int, ky_layout: str, axis: str
 ) -> None:
     """A sharded nonlinear run reproduces the serial run's diagnostics.
 
@@ -1229,19 +1247,35 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     """
 
     _require_devices(num_devices)
-    serial = run_runtime_nonlinear(
-        _live_cfg(ky_layout=ky_layout), return_state=True, **_RUN_KWARGS
+    cfg = _live_cfg(ky_layout=ky_layout)
+    cfg = replace(cfg, time=replace(cfg.time, run_to="t_max"))
+    if axis == "species_hermite" and ky_layout == "half":
+        cfg = replace(
+            cfg,
+            time=replace(cfg.time, method="rk4-pi", fixed_dt=False, dt_max=0.01),
+            species=cfg.species
+            + (RuntimeSpeciesConfig(name="electron", charge=-1.0, mass=0.1),),
+            physics=replace(cfg.physics, adiabatic_electrons=False),
+        )
+    options = {
+        **_RUN_KWARGS,
+        "Nm": 8,
+        "steps": 5,
+        "sample_stride": 3,
+        "diagnostics_stride": 2,
+        "return_state": True,
+    }
+    serial = run_runtime_nonlinear(cfg, **options)
+    messages = []
+    parallel = RuntimeParallelConfig(
+        strategy="shard_map", axis=axis, num_devices=num_devices
     )
     sharded = run_runtime_nonlinear(
-        _live_cfg(
-            RuntimeParallelConfig(
-                strategy="shard_map", axis="ky", num_devices=num_devices
-            ),
-            ky_layout=ky_layout,
-        ),
-        return_state=True,
-        **_RUN_KWARGS,
+        replace(cfg, parallel=parallel), status_callback=messages.append, **options
     )
+    if axis == "species_hermite":
+        assert any("RHS with production post-step diagnostics" in m for m in messages)
+    np.testing.assert_allclose(sharded.t, [0.01, 0.04, 0.05])
     assert np.asarray(sharded.state).shape[-3] == (8 if ky_layout == "full" else 5)
     assert serial.diagnostics is not None and sharded.diagnostics is not None
     # The live deck's field energy is nonzero, so the comparison can fail.
@@ -1249,13 +1283,67 @@ def test_shard_map_nonlinear_run_matches_serial_diagnostics(
     np.testing.assert_allclose(
         np.asarray(sharded.state), np.asarray(serial.state), rtol=0.0, atol=5.0e-6
     )
-    for name in ("Wg_t", "Wphi_t", "heat_flux_t", "particle_flux_t"):
-        np.testing.assert_allclose(
-            np.asarray(getattr(sharded.diagnostics, name)),
-            np.asarray(getattr(serial.diagnostics, name)),
-            rtol=1.0e-4,
-            atol=5.0e-6,
+    pairs = [
+        (value, getattr(serial.diagnostics, name))
+        for name, value in vars(sharded.diagnostics).items()
+        if name != "resolved" and value is not None
+    ]
+    assert sharded.diagnostics.resolved is not None
+    assert serial.diagnostics.resolved is not None
+    pairs.extend(
+        (value, getattr(serial.diagnostics.resolved, name))
+        for name, value in vars(sharded.diagnostics.resolved).items()
+    )
+    for candidate, reference in pairs:
+        np.testing.assert_allclose(candidate, reference, rtol=1.0e-4, atol=5.0e-6)
+        if axis == "species_hermite":
+            assert getattr(candidate, "is_fully_replicated", True)
+    if axis == "species_hermite" and num_devices == 2 and ky_layout == "half":
+        fixed = replace(cfg, time=replace(cfg.time, fixed_dt=True))
+        opts = dict(Nl=3, Nm=8, steps=2, resolved_diagnostics=False)
+        reference = gkx.prepare(fixed, **opts)
+        named = gkx.prepare(
+            replace(fixed, parallel=replace(parallel, strict_identity=False)), **opts
         )
+
+        def loss(state, model, diagnostic):
+            final, (traces, _, _), _ = model._backend.run_arrays(state)
+            energy = jnp.real(jnp.vdot(final, final))
+            return jnp.mean(traces[2]) if diagnostic else energy
+
+        differentiate = jax.value_and_grad(loss)
+        for diagnostic in (False, True):
+            gradients = [
+                differentiate(sharded.state, m, diagnostic) for m in (reference, named)
+            ]
+            for value, target in zip(*gradients):
+                np.testing.assert_allclose(value, target, rtol=1e-4, atol=5e-6)
+            assert float(jnp.linalg.norm(gradients[0][1])) > 0
+
+        def model_loss(scale, model):
+            backend = model._backend
+            params = replace(backend.params, rho=backend.params.rho * (1 + 0.1 * scale))
+            geometry = replace(
+                backend.geometry,
+                bmag_profile=backend.geometry.bmag_profile * (1 + 0.07 * scale),
+            )
+            cache = build_linear_cache(
+                build_spectral_grid(cfg.grid), geometry, params, 3, 8
+            )
+            _, _, fields = backend.run_arrays(
+                sharded.state, geometry=geometry, cache=cache, params=params
+            )
+            return jnp.real(jnp.vdot(fields.phi, fields.phi))
+
+        model_gradients = [
+            jax.value_and_grad(model_loss)(jnp.asarray(0.15), m)
+            for m in (reference, named)
+        ]
+        for value, target in zip(*model_gradients):
+            np.testing.assert_allclose(value, target, rtol=1e-5, atol=1e-10)
+        fd = (model_loss(0.20, named) - model_loss(0.10, named)) / 0.10
+        assert abs(float(model_gradients[1][1])) > 0
+        np.testing.assert_allclose(model_gradients[1][1], fd, rtol=1e-3, atol=1e-10)
 
 
 def _inject_shard_perturbation(monkeypatch) -> None:
@@ -1407,10 +1495,6 @@ ROOT = REPO_ROOT
 STATIC = ROOT / "docs" / "_static"
 
 
-def _load_json(name: str) -> dict:
-    return json.loads((STATIC / name).read_text(encoding="utf-8"))
-
-
 def _load_toml(path: Path) -> dict:
     with path.open("rb") as stream:
         return tomllib.load(stream)
@@ -1455,260 +1539,6 @@ def _assert_worker_timing_payload(row: dict) -> None:
         assert worker["samples_s"]
         assert all(sample > 0.0 for sample in worker["samples_s"])
         _assert_positive_stats(worker["stats_s"])
-
-
-def test_parallel_manifests_track_current_cpu_gpu_scaling_artifacts() -> None:
-    required = {
-        "docs/_static/independent_ky_scan_scaling_large.json",
-        "docs/_static/independent_ky_scan_scaling_large.csv",
-        "docs/_static/independent_ky_scan_scaling_large.png",
-        "docs/_static/independent_ky_scan_scaling_cpu_large.json",
-        "docs/_static/independent_ky_scan_scaling_cpu_large.csv",
-        "docs/_static/independent_ky_scan_scaling_cpu_large.png",
-        "docs/_static/independent_ky_scan_scaling_gpu_large.json",
-        "docs/_static/independent_ky_scan_scaling_gpu_large.csv",
-        "docs/_static/independent_ky_scan_scaling_gpu_large.png",
-        "docs/_static/quasilinear_uq_ensemble_scaling_large.json",
-        "docs/_static/quasilinear_uq_ensemble_scaling_large.csv",
-        "docs/_static/quasilinear_uq_ensemble_scaling_large.png",
-        "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.json",
-        "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.csv",
-        "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.png",
-        "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.json",
-        "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.csv",
-        "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.png",
-        "docs/_static/parallelization_completion_status.json",
-        "docs/_static/parallelization_completion_status.png",
-        "docs/_static/nonlinear_sharding_strong_scaling_large.json",
-        "docs/_static/nonlinear_sharding_strong_scaling_large.csv",
-        "docs/_static/nonlinear_sharding_strong_scaling_large.png",
-        "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
-        "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.csv",
-        "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png",
-        "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
-        "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.csv",
-        "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.png",
-        "docs/_static/nonlinear_sharding_production_speedup_gate.json",
-        "docs/_static/nonlinear_sharding_production_speedup_gate.csv",
-        "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.json",
-        "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.csv",
-        "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png",
-        "docs/_static/linear_rhs_parallel_slices_sweep.json",
-        "docs/_static/linear_rhs_parallel_slices_sweep.csv",
-        "docs/_static/linear_rhs_parallel_slices_sweep.png",
-    }
-
-    performance = _load_toml(ROOT / "tools" / "performance_optimization_manifest.toml")
-    parallel_lane = next(
-        lane for lane in performance["lanes"] if lane["name"] == "parallel_scaling"
-    )
-    validation = _load_toml(ROOT / "tools" / "validation_coverage_manifest.toml")
-    validation_paths = {
-        path
-        for module in validation["modules"]
-        if module["module"] in {"gkx.parallel.__init__", "gkx.parallel.state"}
-        for path in module["artifact_paths"]
-    }
-
-    assert required <= set(parallel_lane["artifact_paths"])
-    assert required <= validation_paths
-    parallel_checker = _load_parallel_checker()
-    validation_checker = load_release_tool("check_validation_coverage_manifest")
-    assert (
-        parallel_checker.RENDERED_ARTIFACT_SUFFIXES
-        == validation_checker.RENDERED_ARTIFACT_SUFFIXES
-    )
-    for artifact in required:
-        if Path(artifact).suffix in parallel_checker.RENDERED_ARTIFACT_SUFFIXES:
-            continue
-        assert (ROOT / artifact).exists(), artifact
-
-
-def test_parallelization_completion_status_scopes_production_and_diagnostic_lanes() -> (
-    None
-):
-    payload = _load_json("parallelization_completion_status.json")
-
-    assert payload["kind"] == "parallelization_completion_status"
-    assert payload["passed"] is True
-    assert payload["production_completion_percent"] == 100.0
-    assert "Release production parallelization is closed" in payload["claim_scope"]
-    lanes = {lane["lane"]: lane for lane in payload["lanes"]}
-    assert lanes["independent_ky_scan"]["status"] == "production_closed"
-    assert lanes["quasilinear_uq_ensemble"]["status"] == "production_closed"
-    assert (
-        lanes["independent_ky_scan"]["source_contract"]["claim_separation_passed"]
-        is True
-    )
-    assert lanes["independent_ky_scan"]["source_contract"]["input_backends"] == [
-        "cpu",
-        "gpu",
-    ]
-    assert (
-        lanes["quasilinear_uq_ensemble"]["source_contract"]["claim_separation_passed"]
-        is True
-    )
-    assert lanes["independent_ky_scan"]["best_speedups"]["cpu"] >= 5.0
-    assert lanes["independent_ky_scan"]["best_speedups"]["gpu"] >= 1.5
-    assert (
-        lanes["whole_state_nonlinear_sharding"]["status"]
-        == "diagnostic_closed_not_production"
-    )
-    assert (
-        lanes["whole_state_nonlinear_sharding"]["source_contract"][
-            "claim_separation_passed"
-        ]
-        is True
-    )
-    assert lanes["fft_axis_domain"]["status"] == "diagnostic_identity_closed"
-
-
-def test_nonlinear_domain_parallel_identity_gate_is_scoped_and_fail_closed() -> None:
-    payload = _load_json("nonlinear_domain_parallel_identity_gate.json")
-
-    assert payload["case"] == "Nonlinear state-domain decomposition identity gate"
-    assert payload["gate"]["identity_passed"] is True
-    assert payload["gate"]["decomposed_path_enabled"] is True
-    assert payload["gated_state_matches_serial"] is True
-    assert payload["gated_state_matches_decomposed"] is True
-    assert payload["gate"]["max_abs_error"] <= payload["gate"]["atol"]
-    assert payload["gate"]["max_rel_error"] <= payload["gate"]["rtol"]
-    assert payload["transport_window"]["gate"]["identity_passed"] is True
-    assert payload["transport_window"]["gate"]["decomposed_path_enabled"] is True
-    assert (
-        payload["transport_window"]["gate"]["max_abs_state_error"]
-        <= payload["gate"]["atol"]
-    )
-    assert (
-        payload["transport_window"]["gate"]["mass_trace_max_abs_error"]
-        <= payload["gate"]["atol"]
-    )
-    assert (
-        payload["transport_window"]["gate"]["free_energy_trace_max_abs_error"]
-        <= payload["gate"]["atol"]
-    )
-    assert (
-        payload["transport_window"]["gate"]["flux_proxy_trace_max_abs_error"]
-        <= payload["gate"]["atol"]
-    )
-    assert {row["metric"] for row in payload["transport_window"]["metrics"]} == {
-        "mass_trace",
-        "free_energy_trace",
-        "boundary_flux_proxy_trace",
-    }
-    assert all(
-        row["identity_passed"] is True for row in payload["transport_window"]["metrics"]
-    )
-    assert "no production routing or speedup claim" in payload["claim_scope"]
-
-
-def test_nonlinear_spectral_communication_identity_gate_is_scoped_and_fail_closed() -> (
-    None
-):
-    payload = _load_json("nonlinear_spectral_communication_identity_gate.json")
-
-    assert payload["case"] == "Nonlinear spectral decomposition identity gate"
-    assert payload["kind"] == "nonlinear_spectral_communication_identity_gate"
-    assert payload["gate"]["identity_passed"] is True
-    assert payload["gate"]["decomposed_path_enabled"] is True
-    assert payload["gate"]["communication_identity_passed"] is True
-    assert payload["gate"]["rhs_identity_passed"] is True
-    assert payload["gate"]["integrator_identity_passed"] is True
-    assert payload["gate"]["pencil_rhs_identity_passed"] is True
-    assert payload["gate"]["pencil_transport_window_identity_passed"] is True
-    assert payload["communication_gate"]["fft_max_abs_error"] <= payload["gate"]["atol"]
-    assert (
-        payload["communication_gate"]["bracket_max_abs_error"]
-        <= payload["gate"]["atol"]
-    )
-    assert (
-        payload["communication_gate"]["field_max_abs_error"] <= payload["gate"]["atol"]
-    )
-    assert payload["rhs_gate"]["rhs_max_abs_error"] <= payload["gate"]["atol"]
-    assert (
-        payload["integrator_gate"]["final_state_max_abs_error"]
-        <= payload["gate"]["atol"]
-    )
-    assert (
-        payload["integrator_gate"]["flux_proxy_trace_max_abs_error"]
-        <= payload["gate"]["atol"]
-    )
-    assert payload["pencil_rhs_gate"]["rhs_max_abs_error"] <= payload["gate"]["atol"]
-    assert (
-        payload["pencil_transport_window_gate"]["final_state_max_abs_error"]
-        <= payload["gate"]["atol"]
-    )
-    assert all(row["identity_passed"] is True for row in payload["rows"])
-    assert {row["operator"] for row in payload["rows"]} == {
-        "fft_forward_inverse",
-        "nonlinear_bracket",
-        "spectral_field_solve_layout",
-        "logical_sharded_rhs",
-        "logical_integrator_final_state",
-        "logical_integrator_flux_proxy_trace",
-        "pencil_fused_rhs",
-        "pencil_physical_transport_window",
-    }
-    assert "pencil fused-bracket" in payload["claim_scope"]
-    assert "physical transport-window identity gate" in payload["claim_scope"]
-    assert (
-        "no production distributed FFT routing or speedup claim"
-        in payload["claim_scope"]
-    )
-
-
-def test_parallel_scaling_artifact_checker_validates_tracked_large_run_evidence() -> (
-    None
-):
-    mod = _load_parallel_checker()
-
-    summary = mod.validate_all()
-
-    assert summary["n_families"] == 4
-    assert summary["n_json_artifacts"] == 12
-    assert summary["n_sidecars"] == 24
-    assert summary["manifest_checked"] is True
-    assert {family["name"] for family in summary["families"]} == {
-        "independent_ky_scan",
-        "quasilinear_uq_ensemble",
-        "nonlinear_sharding",
-        "linear_rhs_parallel_slices",
-    }
-    assert (
-        summary["production_gate"]["name"]
-        == "nonlinear_sharding_production_speedup_gate"
-    )
-    assert summary["production_gate"]["gate_passed"] is False
-    assert summary["production_gate"]["status"] == "diagnostic_only"
-    assert summary["production_gate"]["production_candidate_backends"] == ["cpu"]
-    assert summary["observable_split"]["name"] == "device_z_pencil_observable_split"
-    assert summary["observable_split"]["production_speedup_claim_allowed"] is False
-    assert summary["observable_split"]["max_observable_gate_overhead_vs_compute"] > 1.0
-
-
-def test_parallel_scaling_artifact_checker_validates_observable_split() -> None:
-    mod = _load_parallel_checker()
-
-    summary = mod.validate_device_z_pencil_observable_split(STATIC)
-
-    assert summary["json"] == mod.OBSERVABLE_SPLIT_JSON
-    assert summary["production_speedup_claim_allowed"] is False
-    assert summary["max_speedup_vs_serial"] < summary["min_speedup"]
-    assert summary["max_observable_gate_overhead_vs_compute"] > 10.0
-
-
-def test_parallel_scaling_artifact_checker_rejects_promoted_observable_split(
-    tmp_path: Path,
-) -> None:
-    mod = _load_parallel_checker()
-    payload = _load_json(mod.OBSERVABLE_SPLIT_JSON)
-    payload["summary"]["max_speedup_vs_serial"] = payload["min_speedup"]
-    (tmp_path / mod.OBSERVABLE_SPLIT_JSON).write_text(
-        json.dumps(payload), encoding="utf-8"
-    )
-
-    with pytest.raises(ValueError, match="no longer below gate"):
-        mod.validate_device_z_pencil_observable_split(tmp_path, check_sidecars=False)
 
 
 def test_parallel_scaling_artifact_checker_rejects_failed_identity_gate(
@@ -2166,247 +1996,23 @@ def test_parallel_scaling_artifact_checker_rejects_stale_production_gate_blocker
         mod.validate_nonlinear_sharding_production_gate(tmp_path, check_sidecars=False)
 
 
-def test_independent_ky_scaling_artifact_preserves_order_and_identity_scope() -> None:
-    payload = _load_json("independent_ky_scan_scaling_large.json")
-
-    assert payload["kind"] == "independent_ky_scan_scaling_combined"
-    assert payload["identity_passed"] is True
-    assert "not a nonlinear domain-decomposition" in payload["claim_scope"]
-    for backend in {"cpu", "gpu"}:
-        rows = sorted(
-            (row for row in payload["rows"] if row["backend"] == backend),
-            key=lambda row: row["requested_devices"],
-        )
-        assert rows
-        reference_ky = rows[0]["ky"]
-        reference_gamma = rows[0]["gamma"]
-        reference_omega = rows[0]["omega"]
-        for row in rows:
-            assert row["identity_gate_pass"] is True
-            assert row["actual_workers"] <= row["requested_devices"]
-            assert row["ky"] == reference_ky
-            assert row["gamma"] == reference_gamma
-            assert row["omega"] == reference_omega
-            assert row["max_gamma_rel_error"] == 0.0
-            assert row["max_omega_abs_error"] == 0.0
-
-
-def test_independent_ky_split_artifacts_are_large_solver_backed_identity_profiles() -> (
-    None
-):
-    for backend, artifact in {
-        "cpu": "independent_ky_scan_scaling_cpu_large.json",
-        "gpu": "independent_ky_scan_scaling_gpu_large.json",
-    }.items():
-        payload = _load_json(artifact)
-
-        assert payload["kind"] == "independent_ky_scan_strong_scaling"
-        assert payload["backend"] == backend
-        assert payload["identity_passed"] is True
-        assert "not a nonlinear domain-decomposition" in payload["claim_scope"]
-        assert len(payload["ky"]) >= 8
-        assert payload["warmups"] >= 1
-        assert payload["repeats"] >= 1
-        assert payload["time"]["steps"] >= 200
-        assert payload["grid"]["Ny"] >= 96
-        assert payload["grid"]["Nz"] >= 64
-        assert payload["grid"]["Nl"] >= 4
-        assert payload["grid"]["Nm"] >= 8
-
-        rows = sorted(payload["rows"], key=lambda row: row["requested_devices"])
-        assert rows[0]["requested_devices"] == 1
-        assert rows[-1]["requested_devices"] > 1
-        reference = rows[0]
-        for row in rows:
-            assert row["identity_gate_pass"] is True
-            assert row["actual_workers"] <= row["requested_devices"]
-            assert row["ky"] == reference["ky"]
-            assert row["gamma"] == reference["gamma"]
-            assert row["omega"] == reference["omega"]
-            assert row["max_gamma_abs_error"] == 0.0
-            assert row["max_gamma_rel_error"] == 0.0
-            assert row["max_omega_abs_error"] == 0.0
-            _assert_worker_timing_payload(row)
-
-
-def test_quasilinear_uq_scaling_artifact_preserves_member_order_and_identity_scope() -> (
-    None
-):
-    payload = _load_json("quasilinear_uq_ensemble_scaling_large.json")
-
-    assert payload["kind"] == "quasilinear_uq_ensemble_scaling_combined"
-    assert payload["identity_passed"] is True
+def test_parallel_docs_require_matched_numerics_and_warm_timing() -> None:
+    parallel = (ROOT / "docs/parallelization.rst").read_text(encoding="utf-8")
+    performance = (ROOT / "docs/performance.rst").read_text(encoding="utf-8")
+    compact = " ".join(parallel.split())
+    assert "strict_identity`` defaults to true" in compact
+    assert "atol = 5e-6" in compact and "rtol = 1e-4" in compact
+    assert "checking the observables against a serial run" in compact
     assert (
-        "not a promoted absolute nonlinear heat-flux predictor"
-        in payload["claim_scope"]
+        "Diagnostic split/reassemble and linear-slice helpers do not establish"
+        in compact
     )
-    for backend in {"cpu", "gpu"}:
-        rows = sorted(
-            (row for row in payload["rows"] if row["backend"] == backend),
-            key=lambda row: row["requested_devices"],
-        )
-        assert rows
-        reference_gradients = [member["tprim"] for member in rows[0]["members"]]
-        reference_flux = [member["heat_flux_proxy"] for member in rows[0]["members"]]
-        for row in rows:
-            gradients = [member["tprim"] for member in row["members"]]
-            flux = [member["heat_flux_proxy"] for member in row["members"]]
-            assert row["identity_gate_pass"] is True
-            assert row["actual_workers"] <= row["requested_devices"]
-            assert gradients == reference_gradients
-            assert flux == reference_flux
-            assert row["max_heat_flux_proxy_rel_error"] == 0.0
-            assert row["max_gamma_abs_error"] == 0.0
-
-
-def test_quasilinear_uq_split_artifacts_are_large_solver_backed_identity_profiles() -> (
-    None
-):
-    for backend, artifact in {
-        "cpu": "quasilinear_uq_ensemble_scaling_cpu_large.json",
-        "gpu": "quasilinear_uq_ensemble_scaling_gpu_large.json",
-    }.items():
-        payload = _load_json(artifact)
-
-        assert payload["kind"] == "quasilinear_uq_ensemble_scaling"
-        assert payload["backend"] == backend
-        assert payload["identity_passed"] is True
-        assert (
-            "not an absolute nonlinear heat-flux validation claim"
-            in payload["claim_scope"]
-        )
-        assert len(payload["gradients"]) >= 6
-        assert len(payload["ky"]) >= 5
-        assert payload["warmups"] >= 1
-        assert payload["repeats"] >= 1
-        assert payload["time"]["steps"] >= 1000
-        assert payload["grid"]["Ny"] >= 64
-        assert payload["grid"]["Nz"] >= 64
-        assert payload["grid"]["Nl"] >= 3
-        assert payload["grid"]["Nm"] >= 6
-
-        rows = sorted(payload["rows"], key=lambda row: row["requested_devices"])
-        assert rows[0]["requested_devices"] == 1
-        assert rows[-1]["requested_devices"] > 1
-        reference_gradients = [member["tprim"] for member in rows[0]["members"]]
-        reference_flux = [member["heat_flux_proxy"] for member in rows[0]["members"]]
-        for row in rows:
-            gradients = [member["tprim"] for member in row["members"]]
-            flux = [member["heat_flux_proxy"] for member in row["members"]]
-            assert row["identity_gate_pass"] is True
-            assert row["actual_workers"] <= row["requested_devices"]
-            assert gradients == reference_gradients
-            assert flux == reference_flux
-            assert row["max_heat_flux_proxy_abs_error"] == 0.0
-            assert row["max_heat_flux_proxy_rel_error"] == 0.0
-            assert row["max_gamma_abs_error"] == 0.0
-            _assert_worker_timing_payload(row)
-
-
-def test_nonlinear_whole_state_scaling_artifact_is_identity_only_not_speedup_claim() -> (
-    None
-):
-    payload = _load_json("nonlinear_sharding_strong_scaling_large.json")
-
-    assert payload["kind"] == "nonlinear_sharding_strong_scaling_combined"
-    assert payload["identity_passed"] is True
-    assert payload["speedup_passed"] is False
-    assert payload["status"] == "diagnostic_identity_only"
-    assert payload["speedup_blockers"]
-    assert "not a production speedup claim" in payload["claim_scope"]
-    assert {row["backend"] for row in payload["rows"]} == {"cpu", "gpu"}
-    for row in payload["rows"]:
-        assert row["identity_gate_pass"] is True
-        assert row["max_abs_state_error"] == 0.0
-        assert row["max_rel_state_error"] == 0.0
-        assert row["strong_speedup_vs_1_device"] > 0.0
-        assert row["parallel_median_s"] > 0.0
-        assert row["best_spec"] in {"auto", "ky", "kx"}
-        if row["actual_devices"] < 2:
-            assert row["state_sharding_active"] is False
-
-
-def test_nonlinear_strong_scaling_split_artifacts_embed_profiler_payloads() -> None:
-    artifacts = {
-        "cpu": (
-            "nonlinear_sharding_strong_scaling_cpu_large.json",
-            {"Nx": 24, "Ny_requested": 48, "Nz": 96, "Nl": 4, "Nm": 8},
-        ),
-        "gpu": (
-            "nonlinear_sharding_strong_scaling_gpu_xlarge.json",
-            {"Nx": 48, "Ny_requested": 96, "Nz": 128, "Nl": 4, "Nm": 8},
-        ),
-    }
-
-    for backend, (artifact, expected_grid) in artifacts.items():
-        payload = _load_json(artifact)
-
-        assert payload["kind"] == "nonlinear_sharding_strong_scaling_sweep"
-        assert payload["backend"] == backend
-        assert payload["grid"] == expected_grid
-        assert payload["steps"] >= 8
-        assert payload["identity_passed"] is True
-        assert "not as a broad production speedup claim" in payload["claim_scope"]
-        assert set(payload["profiles"]) == {
-            str(row["requested_devices"]) for row in payload["rows"]
-        }
-
-        for row in payload["rows"]:
-            assert row["error"] is None
-            assert row["identity_gate_pass"] is True
-            assert row["actual_devices"] <= row["requested_devices"]
-            assert row["max_abs_state_error"] == 0.0
-            assert row["max_rel_state_error"] == 0.0
-            assert row["parallel_median_s"] > 0.0
-            assert row["serial_median_s"] > 0.0
-            assert row["same_process_speedup"] > 0.0
-            assert row["strong_speedup_vs_1_device"] > 0.0
-            assert row["best_spec"] in {"auto", "ky", "kx"}
-            if row["actual_devices"] >= 2:
-                assert row["state_sharding_active"] is True
-
-            profile = payload["profiles"][str(row["requested_devices"])]
-            assert profile["_profile_json"] == row["profile_json"]
-            assert profile["default_backend"] == backend
-            assert profile["device_count"] == row["actual_devices"]
-            assert profile["state_shape"] == row["state_shape"]
-            assert profile["identity_gate_pass"] is True
-            assert "Do not use as a published runtime claim" in profile["claim_scope"]
-            assert set(profile["profiler_trace"]) >= {"requested", "path", "error"}
-            assert profile["profiler_trace"]["error"] is None
-            _assert_positive_stats(profile["serial_stats_s"])
-
-            best = profile["best_identity_preserving_candidate"]
-            assert best["spec"] == row["best_spec"]
-            assert best["identity_gate_pass"] is True
-            result = profile["sharded_results"][row["best_spec"]]
-            assert result["identity_gate_pass"] is True
-            assert result["max_abs_state_error"] == row["max_abs_state_error"]
-            assert result["max_rel_state_error"] == row["max_rel_state_error"]
-            _assert_positive_stats(result["stats_s"])
-
-
-def test_parallel_docs_keep_speedup_claims_tied_to_current_artifacts() -> None:
-    docs = "\n".join(
-        (ROOT / path).read_text(encoding="utf-8")
-        for path in (
-            "docs/parallelization.rst",
-            "docs/performance.rst",
-            "docs/testing.rst",
-        )
+    assert "wait for device completion" in compact
+    assert (
+        "Neither a successful placement nor an identity test establishes speedup"
+        in " ".join(performance.split())
     )
-
-    for artifact in (
-        "independent_ky_scan_scaling_large.json",
-        "quasilinear_uq_ensemble_scaling_large.json",
-        "nonlinear_sharding_strong_scaling_large.json",
-        "linear_rhs_parallel_slices_sweep.json",
-    ):
-        assert artifact in docs
-    compact_docs = " ".join(docs.split())
-    assert "Large-run scaling acceptance checklist" in compact_docs
-    assert "fresh profiler artifacts for the exact workload" in compact_docs
-    assert "not a production nonlinear speedup claim" in compact_docs
+    assert "outputs outside version control" in " ".join(performance.split())
 
 
 def _assert_independent_ky_scaling_artifact(payload: dict) -> None:
@@ -2420,26 +2026,6 @@ def _assert_independent_ky_scaling_artifact(payload: dict) -> None:
         assert row["max_gamma_rel_error"] == 0.0
         assert row["max_omega_abs_error"] == 0.0
         assert row["strong_speedup_vs_1_device"] > 0.0
-
-
-def test_independent_ky_cpu_gpu_scaling_artifacts_are_identity_gated() -> None:
-    cpu = _load_json("independent_ky_scan_scaling_cpu_large.json")
-    gpu = _load_json("independent_ky_scan_scaling_gpu_large.json")
-    combined = _load_json("independent_ky_scan_scaling_large.json")
-
-    _assert_independent_ky_scaling_artifact(cpu)
-    assert cpu["backend"] == "cpu"
-    assert [row["requested_devices"] for row in cpu["rows"]] == [1, 2, 4, 8]
-    assert cpu["rows"][-1]["strong_speedup_vs_1_device"] > 7.0
-
-    _assert_independent_ky_scaling_artifact(gpu)
-    assert gpu["backend"] == "gpu"
-    assert [row["requested_devices"] for row in gpu["rows"]] == [1, 2]
-    assert gpu["rows"][-1]["strong_speedup_vs_1_device"] > 1.8
-
-    assert combined["identity_passed"] is True
-    assert {row["backend"] for row in combined["rows"]} == {"cpu", "gpu"}
-    assert "not a nonlinear domain-decomposition" in combined["claim_scope"]
 
 
 def _assert_nonlinear_sharding_identity_artifact(payload: dict) -> None:
@@ -2457,115 +2043,3 @@ def _assert_nonlinear_sharding_identity_artifact(payload: dict) -> None:
         assert result["max_rel_phi_error"] == 0.0
         assert result["max_abs_rhs_error"] == 0.0
         assert result["max_rel_rhs_error"] == 0.0
-
-
-def test_nonlinear_sharding_profiles_are_identity_gated_and_scoped() -> None:
-    local = _load_json("nonlinear_sharding_profile.json")
-    office_gpu = _load_json("nonlinear_sharding_profile_office_gpu.json")
-    benchmark_gpu = _load_json(
-        "nonlinear_sharding_profile_office_gpu_benchmark_grid.json"
-    )
-
-    _assert_nonlinear_sharding_identity_artifact(local)
-    assert local["default_backend"] == "cpu"
-    assert local["state_sharding_active"] is False
-
-    _assert_nonlinear_sharding_identity_artifact(office_gpu)
-    assert office_gpu["default_backend"] == "gpu"
-    assert office_gpu["device_count"] >= 2
-    assert office_gpu["state_sharding_active"] is True
-    assert office_gpu["profiler_trace"]["requested"] is True
-
-    # The old profile is a tiny control-flow smoke. The matched benchmark grid
-    # is the production-candidate gate and must fail closed on trajectory drift.
-    assert benchmark_gpu["default_backend"] == "gpu"
-    assert benchmark_gpu["device_count"] == 2
-    assert benchmark_gpu["state_shape"] == [4, 8, 64, 192, 24]
-    assert benchmark_gpu["state_sharding_active"] is True
-    assert benchmark_gpu["identity_gate_pass"] is False
-    assert benchmark_gpu["max_abs_state_error"] > 1.0
-    assert benchmark_gpu["engineering_speedup"] < 1.0
-    assert benchmark_gpu["best_identity_preserving_candidate"]["spec"] is None
-    assert (
-        benchmark_gpu["best_identity_preserving_candidate"]["identity_gate_pass"]
-        is False
-    )
-    assert (
-        benchmark_gpu["sharded_results"]["kx"]["diagnostic_identity_gate_pass"] is False
-    )
-    assert benchmark_gpu["sharded_results"]["kx"]["max_abs_rhs_error"] > 1.0
-    assert benchmark_gpu["sharded_results"]["kx"]["identity_gate_pass"] is False
-
-
-def test_device_z_transport_window_profiles_are_identity_gated_and_scoped() -> None:
-    cpu = _load_json("nonlinear_device_z_pencil_transport_cpu4_profile.json")
-    gpu = _load_json("nonlinear_device_z_pencil_transport_gpu2_profile.json")
-
-    for payload in (cpu, gpu):
-        assert payload["kind"] == "nonlinear_device_z_pencil_transport_window_profile"
-        assert (
-            "not yet a full production nonlinear turbulent-transport solve"
-            in payload["claim_scope"]
-        )
-        assert payload["summary"]["all_active_identity_passed"] is True
-        assert payload["summary"]["full_solver_speedup_claim_allowed"] is False
-        assert payload["shape"] == [4, 16, 96, 96, 32]
-        assert payload["steps"] == 4
-        active_rows = [
-            row for row in payload["rows"] if row["active"] and row["device_count"] > 1
-        ]
-        assert active_rows
-        for row in active_rows:
-            assert row["identity_passed"] is True
-            assert row["transport_window_identity_passed"] is True
-            assert row["final_state_max_abs_error"] <= payload["atol"]
-            assert row["physical_flux_trace_max_abs_error"] <= payload["atol"]
-            assert row["transport_window_report"]["identity_passed"] is True
-
-    assert cpu["backend"] == "cpu"
-    assert cpu["summary"]["transport_window_speedup_claim_allowed"] is True
-    assert cpu["summary"]["max_speedup_vs_serial"] >= 1.5
-    assert cpu["hlo"]["device_4"]["all_to_all"] == 0
-    assert cpu["hlo"]["device_4"]["collective_permute"] == 0
-    assert cpu["trace"]["requested"] is True
-
-    assert gpu["backend"] == "gpu"
-    assert gpu["summary"]["transport_window_speedup_claim_allowed"] is False
-    assert gpu["rows"][1]["blocked_reasons"] == ["speedup_below_gate"]
-    assert gpu["hlo"]["device_2"]["all_to_all"] == 0
-    assert gpu["hlo"]["device_2"]["collective_permute"] == 0
-    assert gpu["trace"]["requested"] is True
-
-
-def test_quasilinear_uq_cpu_gpu_artifacts_have_identity_and_speedup() -> None:
-    cpu = _load_json("quasilinear_uq_ensemble_scaling_cpu_large.json")
-    gpu = _load_json("quasilinear_uq_ensemble_scaling_gpu_large.json")
-    combined = _load_json("quasilinear_uq_ensemble_scaling_large.json")
-
-    assert cpu["identity_passed"] is True
-    assert cpu["grid"] == {"Nx": 1, "Ny": 96, "Nz": 64, "Nl": 3, "Nm": 6}
-    assert cpu["time"]["steps"] == 2000
-    assert cpu["time"]["fit_start_fraction"] == 0.5
-    assert cpu["time"]["fit_end_fraction"] == 0.95
-    assert cpu["gradients"] == [2.2, 2.4, 2.6, 2.8, 3.0, 3.2]
-    assert cpu["ky"] == [0.1, 0.2, 0.3, 0.4, 0.5]
-    assert [row["requested_devices"] for row in cpu["rows"]] == [1, 2, 4, 8]
-    assert all(row["identity_gate_pass"] for row in cpu["rows"])
-    assert min(row["ensemble_mean_heat_flux_proxy"] for row in cpu["rows"]) > 1.0
-    assert cpu["rows"][-1]["actual_workers"] == 6
-    assert cpu["rows"][-1]["strong_speedup_vs_1_device"] > 5.0
-
-    assert gpu["identity_passed"] is True
-    assert gpu["grid"] == {"Nx": 1, "Ny": 96, "Nz": 64, "Nl": 3, "Nm": 6}
-    assert [row["requested_devices"] for row in gpu["rows"]] == [1, 2]
-    assert all(row["identity_gate_pass"] for row in gpu["rows"])
-    assert min(row["ensemble_mean_heat_flux_proxy"] for row in gpu["rows"]) > 1.0
-    assert gpu["rows"][-1]["strong_speedup_vs_1_device"] > 1.5
-
-    assert combined["identity_passed"] is True
-    assert combined["kind"] == "quasilinear_uq_ensemble_scaling_combined"
-    assert {row["backend"] for row in combined["rows"]} == {"cpu", "gpu"}
-    assert (
-        "not a promoted absolute nonlinear heat-flux predictor"
-        in combined["claim_scope"]
-    )

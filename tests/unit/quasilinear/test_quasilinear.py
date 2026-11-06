@@ -1765,28 +1765,19 @@ def test_dataset_sufficiency_failure_can_be_downstream_skill_not_data_volume(
     assert f"ql_figure_failed_baselines_explicit:{figure_base}" not in failed_metrics
 
 
-def test_tracked_quasilinear_promotion_guardrails_pass() -> None:
-    mod = _load_tool_module()
-
-    audit = mod.build_guardrail_audit(
-        list(mod.DEFAULT_REPORT_PATTERNS),
-        [str(path) for path in mod.DEFAULT_DOCS],
-    )
-
-    assert audit["passed"] is True
-    assert audit["summary"]["n_calibration_reports"] == 4
-    assert audit["summary"]["n_input_validation_reports"] >= 4
-    assert audit["summary"]["n_promotion_gate_reports"] >= 4
-    assert audit["summary"]["n_release_contracts"] == 1
-    assert audit["summary"]["n_doc_checks"] == 4
-    assert audit["summary"]["n_manuscript_figure_checks"] == len(
-        mod.DEFAULT_MANUSCRIPT_FIGURE_BASES
-    )
-
-
 def test_guardrail_script_runs_before_editable_install(tmp_path: Path) -> None:
     root = REPO_ROOT
     out = tmp_path / "guardrails.json"
+    report = tmp_path / "report.json"
+    report.write_text(
+        json.dumps(
+            _calibration_report(
+                claim_level="calibration_dataset", passed=False, holdout_error=4.0
+            )
+        )
+    )
+    doc = tmp_path / "scope.rst"
+    _write_doc(doc)
     env = {**os.environ, "PYTHONPATH": ""}
 
     completed = subprocess.run(
@@ -1794,6 +1785,10 @@ def test_guardrail_script_runs_before_editable_install(tmp_path: Path) -> None:
             sys.executable,
             "scripts/check.py",
             "quasilinear",
+            "--report",
+            str(report),
+            "--doc",
+            str(doc),
             "--out-json",
             str(out),
         ],

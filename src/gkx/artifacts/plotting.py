@@ -558,9 +558,7 @@ def _load_nonlinear_netcdf(
 
     with netCDF4.Dataset(path) as root:
         diag = root.groups["Diagnostics"]
-        # The time axis lives in Grids/time, which is where this and the
-        # comparison code both write it; Diagnostics/t was never written by
-        # either, so --plot on a real *.out.nc used to die on a KeyError.
+        # Read the standard grid axis, with support for the diagnostic alias.
         grids = root.groups.get("Grids")
         time_var = None
         if grids is not None and "time" in grids.variables:

@@ -135,7 +135,7 @@ def _spectral_bracket_half_core(
     non-negative rows, transformed with ``irfft2``, multiplied in real space,
     and transformed back with ``rfft2``, which lands the product back on
     ``Nyc = 1 + Ny // 2`` rows.  Nothing in it needs the negative half, so it
-    is the primitive the ``ky >= 0`` state layout (plan 5.3 N3) calls directly;
+    is the primitive the ``ky >= 0`` state layout calls directly;
     :func:`_spectral_bracket_real_fft_core` is this function plus the widening
     that a two-sided state still requires.
 
@@ -220,9 +220,8 @@ def _spectral_bracket_real_fft_core(
     """Return the bracket in the ``ky`` layout its operands arrived in.
 
     The kernel is the same either way.  A two-sided operand pays the widening
-    back onto ``Ny`` rows; a half-spectrum one does not, which is the whole of
-    plan 5.3 N3 in the bracket -- the reality condition is a property of what
-    is stored rather than something restored after the fact.
+    back onto ``Ny`` rows; a half-spectrum one does not. The stored layout
+    determines how the reality condition is enforced.
     """
 
     rows = int(jnp.asarray(kwargs["ky_grid"]).shape[0])

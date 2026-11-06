@@ -76,8 +76,7 @@ this affects the driven modes the parity scans measure.
 
 ### What follows for GKX
 
-1. The four shipped tokamak goldens are **provisional** references in
-   `tools/evidence_ledger.toml`: they are legitimate GX output, but the physics
+1. The four shipped tokamak goldens are **provisional** references: they are legitimate GX output, but the physics
    they encode at high Hermite index is not the physics the deck requests.
 2. GKX's published Cyclone (5.51% / 6.83% in gamma) and KBM (20.0% in gamma)
    disagreements are therefore **not yet attributable to GKX**. Closing those

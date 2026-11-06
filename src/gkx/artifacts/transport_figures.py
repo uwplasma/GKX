@@ -5,6 +5,7 @@ CSV sidecars carry time traces; resolved spectra require a NetCDF bundle.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Tuple
 
@@ -166,13 +167,59 @@ def _time_window(
 
 def _mean_sem(values: np.ndarray) -> tuple[float, float]:
     arr = np.asarray(values, dtype=float)
-    mean = float(np.mean(arr))
     sem = (
         float(np.std(arr, ddof=1) / np.sqrt(arr.size))
         if arr.size >= 2
         else float("nan")
     )
-    return mean, sem
+    return float(np.mean(arr)), sem
+
+
+def _window_flux_statistics(
+    source: Any, diag: Any, window: tuple[float, float] | None
+) -> tuple[float, float, tuple[float, float], tuple[float, float] | None, str]:
+    """Use recorded Q statistics only for their exact window; Gamma is IID."""
+    from gkx.artifacts.run_figures import _pair_from, _read_summary
+
+    blocks: list[Any] = [getattr(obj, "saturation", None) for obj in (source, diag)]
+    if isinstance(source, (str, Path)):
+        path = Path(source)
+        base = _artifact_base(path)
+        paths = (
+            (path,)
+            if path.suffix == ".json"
+            else (Path(f"{base}.summary.json"), Path(f"{base}.json"))
+        )
+        for candidate in paths:
+            summary = _read_summary(candidate)
+            if isinstance(summary, Mapping):
+                blocks.append(summary.get("saturation"))
+    recorded = None
+    kind = "sample IID SEM"
+    for block in blocks:
+        if window is None or _pair_from(block) != tuple(window):
+            continue
+        try:
+            mean, sem = float(block["mean"]), float(block["sem"])
+            if np.isfinite(mean) and np.isfinite(sem) and sem >= 0.0:
+                recorded = (mean, sem)
+                kind = "recorded SEM" + (
+                    "; rejected" if block.get("saturated") is False else ""
+                )
+                break
+        except (KeyError, TypeError, ValueError):
+            pass
+    t = np.asarray(diag.t, dtype=float)
+    if recorded is None:
+        mask, lo, hi = _time_window(t, window)
+        q = _mean_sem(np.asarray(diag.heat_flux_t)[mask])
+    else:
+        assert window is not None
+        lo, hi = map(float, window)
+        mask = (t >= lo) & (t <= hi)
+        q = recorded
+    g = _mean_sem(np.asarray(diag.particle_flux_t)[mask]) if np.any(mask) else None
+    return lo, hi, q, g, kind
 
 
 def _species_series(diag: Any, attr: str) -> np.ndarray | None:
@@ -226,8 +273,9 @@ def heat_flux_time_figure(
 ) -> Tuple[plt.Figure, np.ndarray]:
     """Plot ``Q(t)`` and ``Gamma(t)`` with an optional measured window.
 
-    Sources may be diagnostics, NetCDF, or CSV. Figure SEM treats samples as
-    independent; published estimates need correlation-corrected uncertainty.
+    Sources may be diagnostics, NetCDF, or CSV. Matching recorded Q estimates
+    retain their SEM; fallback estimates label the independent-sample assumption.
+    File sources need their associated summary JSON to recover recorded estimates.
     ``axes=`` embeds the two panels in another figure.
     """
 
@@ -271,21 +319,25 @@ def heat_flux_time_figure(
                 ax.legend(loc="best", ncols=2)
 
         if window is not None:
-            mask, tmin, tmax = _time_window(t, window)
-            q_mean, q_sem = _mean_sem(heat[mask])
-            g_mean, g_sem = _mean_sem(particle[mask])
+            tmin, tmax, (q_mean, q_sem), g, kind = _window_flux_statistics(
+                source, diag, window
+            )
             for ax in panel_axes:
                 ax.axvspan(tmin, tmax, color=GKX_COLORS["grey"], alpha=0.16, zorder=0)
             annotate_reference(
                 ax_q,
                 rf"$\langle Q \rangle = {q_mean:.3g} \pm {q_sem:.2g}$"
-                rf"  over $t \in [{tmin:.4g}, {tmax:.4g}]$",
+                rf"  over $t \in [{tmin:.4g}, {tmax:.4g}]$ ({kind})",
                 loc="lower right",
             )
             annotate_reference(
                 ax_g,
-                rf"$\langle \Gamma \rangle = {g_mean:.3g} \pm {g_sem:.2g}$"
-                rf"  over $t \in [{tmin:.4g}, {tmax:.4g}]$",
+                (
+                    rf"$\langle \Gamma \rangle = {g[0]:.3g} \pm {g[1]:.2g}$"
+                    rf"  over $t \in [{tmin:.4g}, {tmax:.4g}]$ (sample IID SEM)"
+                )
+                if g is not None
+                else "No diagnostic samples in window",
                 loc="lower right",
             )
 

@@ -1016,7 +1016,7 @@ def end_damping_contribution(
     # rows undamped, which is invisible in every shipped route because they are
     # the conjugates of the damped ones and are rewritten from them; on a
     # half-spectrum state there are no such rows and the mask selects exactly
-    # the non-zonal modes (plan 5.3 N3).
+    # the non-zonal modes.
     ky_mask = (ky > 0.0).astype(damp.dtype)[None, None, None, :, None, None]
     return -(ky_mask * damp * H)
 

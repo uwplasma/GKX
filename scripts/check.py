@@ -46,7 +46,7 @@ SUBCOMMANDS: dict[str, tuple[str, str]] = {
     ),
     "readiness": (
         "check_release_readiness",
-        "version, technical status and release readiness",
+        "version and executable source/package release contracts",
     ),
     "validation-coverage": (
         "check_validation_coverage_manifest",

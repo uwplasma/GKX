@@ -272,6 +272,8 @@ class RuntimeNonlinearResult(_ResultArtifacts):
     saturation: dict[str, Any] | None = None
     # Every GMRES solve of an IMEX run; None for explicit methods.
     implicit_solve: ImplicitSolveSummary | None = None
+    # Actual normalized dimensions survive omission of the large state array.
+    _state_shape: tuple[int, ...] | None = None
 
     @staticmethod
     def _artifact_writer(io_module: Any) -> Any:
@@ -296,7 +298,7 @@ class RuntimeNonlinearResult(_ResultArtifacts):
             "kx_selected": self.kx_selected,
             "wall_seconds": self.wall_seconds,
             "saturated": saturation.get("saturated"),
-            "heat_flux_mean": saturation.get("mean_flux"),
+            "heat_flux_mean": saturation.get("mean"),
             "heat_flux_sem": saturation.get("sem"),
             "window_tmin": saturation.get("window_tmin"),
             "window_tmax": saturation.get("window_tmax"),
@@ -334,6 +336,7 @@ def build_runtime_nonlinear_result(
     kx_selected: float | None,
     summarize_fields: bool,
     saturation: dict[str, Any] | None = None,
+    state_shape: tuple[int, ...] | None = None,
 ) -> RuntimeNonlinearResult:
     """Build a runtime nonlinear result with optional final-field summary."""
 
@@ -355,6 +358,7 @@ def build_runtime_nonlinear_result(
         ky_selected=ky_selected,
         kx_selected=kx_selected,
         saturation=saturation,
+        _state_shape=state_shape,
     )
 
 

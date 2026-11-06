@@ -72,7 +72,7 @@ def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.n
     """Zero the even-``Nz`` Nyquist derivative on self-conjugate real-FFT rows.
 
     Rows ``ky=0`` (and ``ky=Ny/2``) are real in ``(x, z)``: the sampled Nyquist
-    cosine has zero derivative, but ``i k_nyq`` makes it imaginary (#328).
+    cosine has zero derivative, but ``i k_nyq`` makes it imaginary.
     Generic complex arrays (``ny_full=None``) keep the signed derivative.
     """
     if (
@@ -147,13 +147,8 @@ def _grad_z_linked_fd(
 def _reverse_from_one(x: jnp.ndarray, axis: int) -> jnp.ndarray:
     """Return ``x`` reindexed as ``[0, n-1, n-2, ..., 1]`` along ``axis``.
 
-    This is the conjugate partner index for a real-FFT half spectrum. Written as
-    ``jnp.take`` with that index vector, XLA lowers it as a general gather and
-    materialises the result: profiling on 2026-09-01 attributed a transpose, a
-    full-array copy, the gather and a transpose back to each such call. Written
-    as a slice, a reverse and a concatenate the same permutation fuses, and
-    measures 9.6 ms against 13.0 ms on a ``(2,4,8,96,96,48)`` complex64 state
-    with byte-identical output.
+    This is the conjugate partner index for a real-FFT half spectrum. Slice,
+    reverse and concatenate express the permutation without a general gather.
     """
 
     head = jax.lax.slice_in_dim(x, 0, 1, axis=axis)
@@ -174,7 +169,7 @@ def _restore_linked_real_fft_conjugates(
     untouched negative rows must be reconstructed by real-FFT conjugate
     symmetry so the linked derivative acts on the physical Hermitian state.
 
-    On a half-spectrum state (plan 5.3 N3) there are no negative rows and this
+    On a half-spectrum state there are no negative rows and this
     is the identity, returning the *same object* so the graph is unchanged. The
     fill must not merely be skipped but recognized as inapplicable: ``(-j) % Nyc``
     is a different positive row, not a partner, so running the two-sided rule on

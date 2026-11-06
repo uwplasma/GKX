@@ -1,7 +1,7 @@
 schema_version = 1
 
 # Electromagnetic Cyclone case: A_parallel at beta = 0.015 with kinetic ions and
-# adiabatic electrons, tutorial resolution (seconds on a laptop CPU). This is
+# adiabatic electrons at tutorial resolution. This is
 # the electromagnetic ITG branch; the kinetic ballooning mode needs kinetic
 # electrons and Nm = 48, which is case_full.toml (Nz = 96, Nl = 16, Nm = 48).
 

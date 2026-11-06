@@ -92,60 +92,14 @@ load-independent measurement (:ref:`q28-defaults`):
 
 .. _q28-defaults:
 
-Measurements behind the defaults
---------------------------------
+Default selection and convergence
+---------------------------------
 
-Shipped Cyclone deck, float32, counting propagator applies, steps and
-right-hand-side evaluations rather than wall time.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 20 50
-
-   * - default
-     - value
-     - accuracy
-   * - ``KrylovConfig.power_iters``
-     - 40
-     - residual 9.50e-01; 200 applies give 9.47e-01; neither certifies
-   * - ``TimeConfig`` pairing when the deck chose no ``dt``
-     - rk4, CFL-controlled
-     - -2.63e-04 relative to the certified eigensolve
-   * - ``Nl``/``Nm`` linear fallback
-     - (12, 24)
-     - +0.400% of the tracked GX golden
-
-**power_iters.** At (4, 8), ``ky = 0.3`` the power ladder stalls near a residual
-of 6e-3 (5000 applies) against the 1.19e-4 gate, so no count certifies and 40
-is chosen for cost. No shipped deck selects the power route, and with
-``certify=True`` it raises rather than return an uncertified pair.
-
-**Time pairing.** The defaulted ``dt = 0.1`` is 7.8x the CFL-stable 0.01281, so
-fixed-step rk2 and rk4 overflow. With the controller, rk2, rk3 and rk4 agree
-within 3e-4 and rk4 needs 29.1% fewer right-hand-side evaluations (11072
-against 15612 for rk2), exactly :math:`4/(2.82\times2)`. A deck that chooses
-``dt`` keeps rk2, and every shipped deck sets ``dt``.
-
-**Resolution.** Certified eigensolves at ``ky = 0.3`` against the GX golden
-:math:`\gamma = 0.09302951`:
-
-====  ====  ==========  ==============
-Nl    Nm    gamma       rel. to golden
-====  ====  ==========  ==============
-8     24    0.09877566  +6.177%
-24    12    0.08893196  -4.405%
-12    24    0.09340143  **+0.400%**
-12    32    0.09263792  -0.421%
-16    32    0.09284505  -0.198%
-24    24    0.09368346  +0.703%
-16    48    0.09309106  +0.066%
-====  ====  ==========  ==============
-
-All rungs certify at the 1.19e-4 gate. The ladder is not monotone, so
-(12, 24) is where this case lands at that cost, not an error bound for another
-case. Parallel phase mixing needs Hermite resolution while the FLR response
-needs enough Laguerre; a deck whose physics runs the other way, such as the
-ETG decks at ``Nl = 24``, ``Nm = 8``, says so.
+Defaults provide a starting resolution and timestep policy. They do not set a
+physics error bound. Check Hermite and Laguerre truncations separately, compare
+fit windows or residual-certified modes, and vary numerical regularization.
+A non-monotone resolution ladder requires additional points before drawing a
+convergence conclusion.
 
 .. _saturation-stop:
 
@@ -262,30 +216,8 @@ the gate below tests that. Integrators:
 ``integrate_nonlinear_sheared_transport``. Treatment effects are judged with
 ``matched_nonlinear_transport_report``, not by comparing two chaotic traces.
 
-**The response gate fails, so flow shear stays out of input files.**
-``docs/_static/flow_shear_fixed_step_response_gate.json`` (Cyclone ITG,
-``64x64x24``, ``Nl=4``, ``Nm=8``, ``dt = 0.02``, window :math:`t = [240, 300]`):
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 25 25 20
-
-   * - integrator
-     - :math:`\gamma_E = 0`
-     - :math:`\gamma_E = 0.01`
-     - windows pass
-   * - GKX fixed-step IMEX
-     - 15.451 ± 0.263
-     - 16.195 ± 0.160
-     - no
-   * - independent fixed-step RK4
-     - 11.715 ± 0.216
-     - 14.624 ± 0.141
-     - yes
-
-Both increase the heat flux (4.82% and 24.82%) instead of the required 5%
-reduction at two combined SEMs, which rejects the weak-shear suppression claim.
-The coordinate, remap, operator and derivative identities are not rejected.
+Flow shear remains a research API. Validate its response with matched,
+stationary windows and resolution studies before assigning a physical effect.
 
 .. _end-damping:
 
@@ -327,56 +259,13 @@ particles); GENE truncates the :math:`k_x` connection and uses parallel
 hyperdiffusion [PDJ10]_. A Hermite basis does not separate :math:`v_\parallel`
 directions, so GKX keeps GX's layer and fixes only its units.
 A GX nonlinear run applies :math:`A/\Delta t` at its own step, so matching it
-means setting ``damp_ends_rate`` to :math:`A/\Delta t_{GX}`; the W7-X ETG
-flux moves by a factor of two over that range (:ref:`nonlinear-etg-w7x`).
+means setting ``damp_ends_rate`` to :math:`A/\Delta t_{GX}`. Match the same
+absorbing-layer policy before comparing transport.
 
-**Measured sensitivity** (ky 0.3; ``plan/research/2026-10-15-end-damping``;
-:math:`\gamma` in deck units):
-
-.. list-table::
-   :header-rows: 1
-
-   * - deck (Nl, Nm), route
-     - nperiod
-     - C = 3
-     - C = 10
-     - C = 30
-     - C = 100
-   * - adiabatic Cyclone (8, 16), Krylov
-     - 2 / 3 / 4
-     - 0.09825 / 0.09831 / 0.09831
-     - 0.09829 / 0.09831 / 0.09831
-     - 0.09831 / 0.09831 / 0.09831
-     - 0.09825 / 0.09831 / 0.09831
-   * - kinetic-electron Cyclone (8, 16), time
-     - 2
-     - 0.16786
-     - 0.16792
-     - 0.16803
-     - 0.16807
-   * - KBM s-alpha (4, 8), sparse eigen
-     - 2 / 3
-     - 0.2364 / 0.2382
-     - 0.2441 / 0.2497
-     - 0.2426 / 0.2502
-     - 0.2407 / 0.2499
-
-Below :math:`C \approx 1` the kinetic-electron and KBM rates are not converged
-(KE :math:`\gamma` = 1.59 at C = 0, 0.174 at C = 1). Kinetic electrons at
-(8, 16) are not converged in domain length (nperiod 3 gives 0.288); that is a
-resolution question, not an absorber one. At ``nperiod = 1`` the layer is a
-quarter of the line and the adiabatic rate keeps falling with C
-(0.0923 at C = 10, 0.0817 at C = 300): use ``nperiod >= 2``.
-
-**Explicit steps.** :math:`\nu_{end}` is explicit, so :math:`\nu_{end}\Delta t`
-must stay inside the scheme's stability region. It is below 0.3 on the shipped
-``nperiod >= 2`` linear decks; an ``nperiod = 1`` KBM deck (rate 598)
-blew up at :math:`\Delta t = 10^{-3}` and runs at :math:`5\times10^{-4}`. The
-CFL estimate does not yet include :math:`\nu_{end}`.
-
-**Checking a result.** Rerun at ``damp_ends_rate`` 3x above and below the
-printed rate and at ``nperiod + 1``. A converged growth rate moves by less
-than its quoted tolerance in all three.
+Vary the end-damping rate and parallel domain together when checking a linked
+boundary. Report the rate, width and timestep policy in cross-code comparisons.
+An absorbing layer is a numerical regularization and its influence must be
+separated from collisional and collisionless damping.
 
 .. [KRT95] M. Kotschenreuther, G. Rewoldt, W. M. Tang, Comput. Phys. Commun. 88, 128 (1995).
 .. [BPL19] M. Barnes, F. I. Parra, M. Landreman, J. Comput. Phys. 391, 365 (2019).
@@ -467,7 +356,7 @@ it. The finite-Larmor-radius coefficients are cancellation-sensitive, so they
 are generated offline in multiple precision with their provenance and loaded as
 compact arrays. Frei, Hoffmann & Ricci write the Bessel argument as
 :math:`B=k_\perp\sqrt{2\tau}`; the runtime interpolates at :math:`B=\sqrt{2b}`.
-Evidence files are ``docs/_static/collision_*.json``.
+The operator identities and source tables are checked by the collision tests.
 
 Landau damping against the exact kinetic roots
 ----------------------------------------------
@@ -907,173 +796,11 @@ Golub and Welsch 1969; Gautschi, *Orthogonal Polynomials* (2004), Ch. 2-3 (Stiel
 and Lanczos procedures); Kanekar et al., *J. Plasma Phys.* **81**, 305810104 (2015)
 for the Hermite closure.
 
-Measured against the Laguerre expansion
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Verification against the Laguerre expansion
+-------------------------------------------
 
-Cyclone ITG (s-alpha, adiabatic electrons, ``Nm = 32``, ``vperp_max = 4``), the
-Hermite-banded eigensolver, one laptop CPU (4 threads, shared; wall times carry
-about 30% noise, wall includes compilation, memory is the peak resident set).
-``Delta`` is the growth rate relative to the converged Laguerre value
-(``Nl = 24``: :math:`\gamma=0.0928` at :math:`k_y=0.3`, 0.0798 at 0.4).
-
-.. list-table::
-   :header-rows: 1
-
-   * - grid
-     - n
-     - :math:`\gamma` (0.3)
-     - Delta
-     - wall (s)
-     - memory (GB)
-     - :math:`\gamma` (0.4)
-     - Delta
-     - wall (s)
-   * - Laguerre
-     - 8
-     - 0.0981
-     - +5.6%
-     - 92
-     - 5.7
-     - 0.0912
-     - +14%
-     - 86
-   * - Laguerre
-     - 16
-     - 0.0928
-     - 0.0%
-     - 430
-     - 14.5
-     - 0.0778
-     - -2.5%
-     - 354
-   * - Laguerre
-     - 24
-     - 0.0928
-     - ref
-     - 1457
-     - 19.9
-     - 0.0798
-     - ref
-     - 939
-   * - nodal
-     - 4
-     - 0.0808
-     - -13%
-     - 32
-     - 2.8
-     - 0.0578
-     - -28%
-     - 33
-   * - nodal
-     - 8
-     - 0.0941
-     - +1.4%
-     - 79
-     - 5.3
-     - 0.0794
-     - -0.5%
-     - 77
-   * - nodal
-     - 12
-     - 0.0920
-     - -0.8%
-     - 189
-     - 9.5
-     - 0.0800
-     - +0.3%
-     - 222
-   * - nodal
-     - 16
-     - 0.0918
-     - -1.1%
-     - 421
-     - 15.2
-     - 0.0766
-     - -4.1%
-     - 424
-
-Eight nodes match the converged Laguerre rate to 1.4% and 0.5%, where the
-Laguerre rung of the same accuracy is ``Nl = 16`` (5.4x the wall, 2.7x the
-memory) at :math:`k_y=0.3` and ``Nl = 24`` (12x, 4x) at 0.4. The cost per
-state element is that of the Laguerre path, so the gain is the node count.
-At 0.4 the 16-node rate is 4% below the 12-node one; with ``vperp_max = 6``
-the 12- and 16-node rates are 0.0812 and 0.0813 (+1.8% and +1.9%) and at 0.3
-the 12-node rate is 0.0940 (+1.3%), so the cutoff moves a converged value by
-about 2-4%. The Laguerre ladder moves by 2.5-14% between its rungs.
-The tutorial
-deck (``Nz = 32, Nm = 8``) gives 0.0999 for 8 nodes and 0.1001 for ``Nl = 16``.
-
-Collisionless TEM (Dannert and Jenko 2005, kinetic electrons,
-:math:`A_\parallel`, ``Nm = 24``, :math:`k_y\rho_s=0.3`; GS2 0.869 is
-``Nm``-limited here), same solver with a shift at the mode:
-
-.. list-table::
-   :header-rows: 1
-
-   * - n
-     - 4
-     - 8
-     - 12
-     - 16
-   * - Laguerre :math:`\gamma`
-     - 0.480
-     - 0.611
-     - 0.552
-     - 0.565
-   * - nodal :math:`\gamma`
-     - 0.514
-     - 0.561
-     - 0.547
-     - 0.548
-
-The nodal ladder settles to within 0.4% from 12 nodes; the Laguerre one moves by
-up to 27% between rungs. At equal ``n`` the TEM cost is similar, not lower
-(wall, memory: ``n = 8`` 404 s, 8.5 GB nodal against 433 s, 8.5 GB Laguerre;
-``n = 12`` 1024 s, 18.3 GB against 533 s, 15.2 GB; ``n = 16`` 2459 s, 22.4 GB
-against 2045 s, 23.4 GB), so on this case the gain is a ladder that converges,
-not time. GX v2 reports 0.564 and 0.553 for 8 and 12 nodes with its own rule,
-and 0.0934 and 0.0795 for Cyclone at 8 nodes.
-
-At 4 nodes the TEM rate is not converged: 0.505, 0.514, 0.360, 0.411 and 0.415
-for ``vperp_max`` 3, 4, 5, 6 and ``inf``, so the 0.612 that GX v2 reports at
-4 nodes is within that spread. The 12-node TEM run took 1024 s and 2022 s on two
-identical runs (a memory-bound, shared host), so the factor 2 against Laguerre
-at that size is timing noise.
-
-Zonal-flow residual (Rosenbluth-Hinton; :math:`k_y=0`, :math:`k_x\rho=0.05`,
-adiabatic electrons, s-alpha :math:`q=1.4`, :math:`\varepsilon=0.18`, ``Nm = 16``,
-late-time mean after the GAM): 0.0929 and 0.0943 for Laguerre ``Nl`` = 8 and 16;
-0.0939 and 0.0940 for 8 and 12 nodes (``test_zonal_flow_residual_on_the_mu_grid_matches_laguerre``).
-The small-:math:`\varepsilon` formula :math:`1/(1+1.6q^2/\sqrt\varepsilon)=0.119`
-does not apply at :math:`\varepsilon=0.18`; the check is the agreement with Laguerre.
-
-Other cases (office CPU, banded route, ``Nm`` as stated; growth rates):
-
-.. list-table::
-   :header-rows: 1
-
-   * - case
-     - Laguerre ``Nl`` 8 / 12
-     - nodes 8 / 12
-   * - TEM, :math:`\nu_e=0.071` (``Nm = 24``; GS2 0.5054)
-     - 0.4169 / 0.4106
-     - 0.4002 / 0.4010
-   * - TEM, :math:`\nu_e=0.283` (GS2 0.1510)
-     - 0.0548 / 0.0589
-     - 0.0537 / 0.0535
-   * - KBM, :math:`\beta=0.015`, :math:`k_y=0.3` (``Nm = 24``)
-     - 0.3155 / 0.3164
-     - 0.2988 / 0.2989
-   * - Miller kinetic electrons, :math:`k_y=0.4` (``Nm = 24``)
-     - 0.2652 / 0.2669
-     - 0.2648 / 0.2650
-   * - W7-X ITG, :math:`k_y\rho=2.1` (``Nm = 16``)
-     - 0.2178 / (24: 0.2176)
-     - 0.2168 / 0.2168
-
-The nodal ladders are flat in every case. For the KBM case the nodal rate is 5.6%
-below the Laguerre one at either resolution; the GS2 comparison of the evidence
-ledger puts the Laguerre ``(8, 24)`` rate 7.3% above GS2, which the nodal rate
-reduces to about 1.6%. The collisional TEM rates are far below GS2 for both
-representations (``Nm`` limit; GS2's collision operator is not Dougherty). W7-X at
-:math:`k_y\rho=2.1` is converged at 4 nodes (0.2184).
+Compare the nodal and Laguerre representations at increasing resolution using
+matched quadrature, velocity extent, collisions and field normalization.
+Check conservation and converged linear rates as well as nonlinear transport.
+The two representations can agree before either is physically converged;
+retain independent resolution and velocity-domain checks.

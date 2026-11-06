@@ -104,8 +104,8 @@ def project_to_linked_cover(v: Any, mask: Any | None) -> Any:
 def mask_supplied_state(state: Any, cache: Any) -> Any:
     """Apply the supplied-state contract for ``cache``: zero the off-chain rows.
 
-    This is the library-level form of the rule the runtime applies at intake
-    (queue row Q19): a state the caller supplies is projected onto the modes the
+    This is the library-level form of the rule the runtime applies at intake:
+    a state the caller supplies is projected onto the modes the
     linked chains reach, because the ExB bracket takes the *whole* state to real
     space and dealiases only its output, so off-chain content aliases back onto
     the chain rows. The projection is a ``where`` against a mask fixed by the

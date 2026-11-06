@@ -24,6 +24,7 @@ from gkx.operators.linear.params import (
 )
 from gkx.config import method_error
 from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
+from gkx.solvers_nonlinear_explicit import _explicit_stage_update
 from gkx.core_ky_layout import source_ny_full
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
@@ -100,77 +101,6 @@ def integrate_linear_sharded(
         G0 = jax.device_put(G0, state_sharding)
         G0 = _maybe_shard(G0)
     return run_pjit(G0)
-
-
-def _rk3_classic_update(
-    G: jnp.ndarray,
-    k1: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
-    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
-    project_shard: Callable[[jnp.ndarray], jnp.ndarray],
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    G1 = stage(G, k1, 1.0)
-    k2, _ = rhs(G1)
-    G2 = project_shard(0.75 * G + 0.25 * (G1 + dt_val * k2))
-    k3, _ = rhs(G2)
-    return (1.0 / 3.0) * G + (2.0 / 3.0) * (G2 + dt_val * k3)
-
-
-def _rk3_heun_update(
-    G: jnp.ndarray,
-    k1: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
-    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    k2, _ = rhs(stage(G, k1, 1.0 / 3.0))
-    k3, _ = rhs(stage(G, k2, 2.0 / 3.0))
-    return stage(G, k3, 0.75) + 0.25 * dt_val * k1
-
-
-def _rk4_update(
-    G: jnp.ndarray,
-    k1: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
-    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    k2, _ = rhs(stage(G, k1, 0.5))
-    k3, _ = rhs(stage(G, k2, 0.5))
-    k4, _ = rhs(stage(G, k3, 1.0))
-    return G + (dt_val / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-
-
-def _nonlinear_explicit_update(
-    method_key: str,
-    G: jnp.ndarray,
-    k1: jnp.ndarray,
-    *,
-    rhs: Callable[[jnp.ndarray], tuple[jnp.ndarray, FieldState]],
-    stage: Callable[[jnp.ndarray, jnp.ndarray, float], jnp.ndarray],
-    project_shard: Callable[[jnp.ndarray], jnp.ndarray],
-    dt_val: jnp.ndarray,
-) -> jnp.ndarray:
-    if method_key == "rk2":
-        k2, _ = rhs(stage(G, k1, 0.5))
-        return G + dt_val * k2
-    if method_key == "rk3":
-        return _rk3_heun_update(G, k1, rhs=rhs, stage=stage, dt_val=dt_val)
-    if method_key == "rk4":
-        return _rk4_update(G, k1, rhs=rhs, stage=stage, dt_val=dt_val)
-    # ``sspx3`` has no sharded tableau and reuses the classic RK3 update.
-    return _rk3_classic_update(
-        G,
-        k1,
-        rhs=rhs,
-        stage=stage,
-        project_shard=project_shard,
-        dt_val=dt_val,
-    )
 
 
 @dataclass(frozen=True)
@@ -274,24 +204,11 @@ def _compiled_nonlinear_sharded_runner(
                 )
                 return jnp.asarray(dG, dtype=state_dtype), fields
 
-            def stage(
-                state: jnp.ndarray, increment: jnp.ndarray, scale: float
-            ) -> jnp.ndarray:
-                return project(
-                    state + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment
-                )
-
             G = project(G)
             k1, _ = rhs(G)
             G_next = project(
-                _nonlinear_explicit_update(
-                    method_key,
-                    G,
-                    k1,
-                    rhs=rhs,
-                    stage=stage,
-                    project_shard=project,
-                    dt_val=dt_val,
+                _explicit_stage_update(
+                    G, k1, dt_val, method=method_key, rhs_fn=rhs, project_state=project
                 )
             )
             if not return_fields:
@@ -317,7 +234,7 @@ def _compiled_nonlinear_sharded_runner(
             region per step matters on XLA:GPU. With one region per RHS and
             projector call, two regions fed each other inside a step and the
             ky-split result came out wrong, although each region alone was
-            exact. See plan/research/scripts/2026-09-22-ky-state-sharding.
+            exact.
             """
 
             if split is None or state_sharding is None:
@@ -610,24 +527,9 @@ def _mesh_owner_mask(mesh_axes, like):
 def _unfused(value):
     """Keep ``value`` in its own kernel instead of the consumer's.
 
-    Measured on 2 x RTX A4000 (jax 0.11.1) at ``(2, 8, 16, 64, 64, 32)``. Left
-    alone, XLA folds the whole linear operator -- every shifted, scaled copy of
-    the slab that streaming, mirror, curvature and the diamagnetic drive
-    contribute -- into the elementwise ``add`` that joins it to the nonlinear
-    bracket, and emits one ``kLoop`` fusion with 29 operands that re-reads the
-    shard once per shifted term. That fusion is the single most expensive
-    kernel in the step and it runs at roughly 40% of the throughput the
-    two-kernel form reaches.
-
-    The cost model tips over on shard *shape*, not on shard size, which is why
-    it is a sharding bug rather than a small-problem effect: on one device with
-    two species the fusion costs 11.0 ms/step, and on the one-species shard a
-    two-device mesh gives it, the same fusion costs 37.4 ms/step -- 3.4x longer
-    on half the data. Per-species cost is otherwise flat (49.2, 49.1 and
-    47.1 ms/step/species at Ns = 2, 3, 4) and jumps to 69.7 at Ns = 1, so a
-    two-species run on two devices could never scale past 1.41x however cheap
-    the collectives were. Splitting the bracket out takes the shard from
-    69.7 to 46.7 ms/step and the two-device mesh from 75.8 to 47.4.
+    Without a barrier, XLA can fuse the shifted linear terms with the
+    nonlinear bracket's consumer, repeatedly reading the same local slab.
+    Keeping the bracket separate bounds that fusion across shard shapes.
 
     ``optimization_barrier`` is an identity, so this cannot move the answer on
     its own; it can only change which multiply-adds XLA contracts, and the
@@ -651,6 +553,7 @@ def _species_hermite_local_rhs(
     real_dtype,
     compressed_real_fft,
     laguerre_mode,
+    head_rows=_DIAGNOSTIC_MOMENT_ROWS,
 ):
     """Evaluate the production nonlinear RHS on one shard of the mesh."""
 
@@ -674,11 +577,7 @@ def _species_hermite_local_rhs(
     head = hermite_field_moment_head(
         local,
         index=index[interior],
-        rows=(
-            _DIAGNOSTIC_MOMENT_ROWS
-            if nm_chunks > 1
-            else min(_DIAGNOSTIC_MOMENT_ROWS, local.shape[2])
-        ),
+        rows=head_rows if nm_chunks > 1 else min(head_rows, local.shape[2]),
         chunks=nm_chunks,
         axis_name="m",
     )
@@ -712,56 +611,73 @@ def _species_hermite_local_rhs(
     dG = hermite_halo_interior(dG, chunks=nm_chunks, ghost_depth=ghost_depth)
     if term_cfg.nonlinear == 0.0:
         return dG, fields, head
-    bracket = _unfused(
-        nonlinear_em_contribution(
-            local,
-            phi=fields.phi,
-            apar=fields.apar if term_cfg.apar != 0.0 else None,
-            bpar=fields.bpar if term_cfg.bpar != 0.0 else None,
-            Jl=cache.Jl,
-            JlB=cache.JlB,
-            tz=params.tz,
-            vth=params.vth,
-            sqrt_m=cache.sqrt_m[:, interior],
-            sqrt_m_p1=cache.sqrt_m_p1[:, interior],
-            kx_grid=cache.kx_grid,
-            ky_grid=cache.ky_grid,
-            ny_full=getattr(cache, "ny_full", None),
-            dealias_mask=cache.dealias_mask,
-            kxfac=cache.kxfac,
-            weight=jnp.asarray(term_cfg.nonlinear, dtype=real_dtype),
-            apar_weight=float(term_cfg.apar),
-            bpar_weight=float(term_cfg.bpar),
-            laguerre_to_grid=cache.laguerre_to_grid,
-            laguerre_to_spectral=cache.laguerre_to_spectral,
-            laguerre_roots=cache.laguerre_roots,
-            laguerre_j0=cache.laguerre_j0,
-            laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
-            b=cache.b,
-            compressed_real_fft=compressed_real_fft,
-            laguerre_mode=laguerre_mode,
-        )
+    flutter_halo = nm_chunks > 1 and term_cfg.apar != 0.0
+    bracket_state = extended if flutter_halo else local
+    bracket_rows = slice(None) if flutter_halo else interior
+    bracket = nonlinear_em_contribution(
+        bracket_state,
+        phi=fields.phi,
+        apar=fields.apar if term_cfg.apar != 0.0 else None,
+        bpar=fields.bpar if term_cfg.bpar != 0.0 else None,
+        Jl=cache.Jl,
+        JlB=cache.JlB,
+        tz=params.tz,
+        vth=params.vth,
+        sqrt_m=cache.sqrt_m[:, bracket_rows],
+        sqrt_m_p1=cache.sqrt_m_p1[:, bracket_rows],
+        kx_grid=cache.kx_grid,
+        ky_grid=cache.ky_grid,
+        ny_full=getattr(cache, "ny_full", None),
+        dealias_mask=cache.dealias_mask,
+        kxfac=cache.kxfac,
+        weight=jnp.asarray(term_cfg.nonlinear, dtype=real_dtype),
+        apar_weight=float(term_cfg.apar),
+        bpar_weight=float(term_cfg.bpar),
+        laguerre_to_grid=cache.laguerre_to_grid,
+        laguerre_to_spectral=cache.laguerre_to_spectral,
+        laguerre_roots=cache.laguerre_roots,
+        laguerre_j0=cache.laguerre_j0,
+        laguerre_j1_over_alpha=cache.laguerre_j1_over_alpha,
+        b=cache.b,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
     )
-    return dG + bracket, fields, head
+    if flutter_halo:
+        bracket = hermite_halo_interior(
+            bracket, chunks=nm_chunks, ghost_depth=ghost_depth
+        )
+    return dG + _unfused(bracket), fields, head
 
 
 def stage_from_host(value: Any, sharding: Any) -> Any:
-    """Place ``value`` on ``sharding`` from host memory rather than resharding.
+    """Reuse equivalent layouts; use host placement for genuine repartitioning.
 
-    Handing ``device_put`` an array that is already committed to one device asks
-    the runtime to reshard it across the mesh, and on the two-GPU box that path
-    silently produces a wrong answer: the sharded route drops to a max relative
-    error of 1.0 against serial while a one-device mesh on the same GPU is exact.
-    Round-tripping through the host is the reliable placement, and it happens
-    once per run rather than once per step.
+    Direct device-to-mesh resharding of a committed single-device array failed
+    the two-GPU identity gate. Keep host placement for genuine repartitioning.
+
+    Equivalent layouts retain the same shards/devices. Normalizing only their
+    metadata avoids host fetches after linked-cover projection, including across
+    processes.
     """
 
     if isinstance(value, jax.core.Tracer):
         return value
-    if getattr(value, "sharding", None) == sharding:
-        # Already exactly where it belongs: re-staging would only add a host
-        # round trip per call, which on a repeated route dominates the step.
+    current = getattr(value, "sharding", None)
+    if current == sharding:
         return value
+    if current is not None and current.is_equivalent_to(sharding, value.ndim):
+        # Same shards/devices: normalize metadata without a host round trip.
+        local = {shard.device: shard for shard in value.addressable_shards}
+        target = sharding.addressable_devices_indices_map(value.shape)
+        arrays = []
+        for device, index in target.items():
+            shard = local[device]
+            if shard.index != index:
+                raise ValueError("equivalent placement changed a local shard index")
+            arrays.append(shard.data)
+        if not arrays:
+            raise ValueError("placement normalization requires an addressable shard")
+        return jax.make_array_from_single_device_arrays(value.shape, sharding, arrays)
     return jax.device_put(np.asarray(jax.device_get(value)), sharding)
 
 
@@ -776,10 +692,10 @@ def _reject_unsharded_hermite_terms(term_cfg, params, plan) -> None:
     this branch.
     """
 
-    if int(plan.chunks.get("m", 1)) < 2:
+    if int(plan.chunks.get("m", 1)) < 2 or float(term_cfg.collisions) == 0.0:
         return
     nu = np.asarray(jax.device_get(getattr(params, "nu", 0.0)), dtype=float)
-    if float(term_cfg.collisions) == 0.0 or not np.any(nu != 0.0):
+    if not np.any(nu != 0.0):
         return
     raise NotImplementedError(
         "conserving collisions need the m = 0, 1, 2 moments summed across the "
@@ -831,6 +747,7 @@ def _species_hermite_mapped(
     laguerre_mode,
     vol_fac,
     flux_fac,
+    return_fields=False,
 ):
     """Return the shard-mapped step callable plus its sharded argument tuple."""
 
@@ -883,6 +800,9 @@ def _species_hermite_mapped(
             real_dtype=real_dtype,
             compressed_real_fft=compressed_real_fft,
             laguerre_mode=laguerre_mode,
+            head_rows=_DIAGNOSTIC_MOMENT_ROWS
+            if vol_fac is not None and flux_fac is not None
+            else 2,
         )
         scalars = (
             _fused_scalar_diagnostics(
@@ -900,7 +820,10 @@ def _species_hermite_mapped(
             if vol_fac is not None and flux_fac is not None
             else None
         )
-        return dG, scalars
+        if return_fields and nm_chunks == 1:
+            # Discharge the unit Hermite axis's varying metadata explicitly.
+            fields = jax.tree.map(lambda value: jax.lax.psum(value, "m"), fields)
+        return dG, fields if return_fields else scalars
 
     sharded = tuple(
         stage_from_host(value, jsharding.NamedSharding(mesh, spec))
@@ -944,6 +867,29 @@ def integrate_nonlinear_species_hermite(
     them the route is compute-only and returns an empty trace map.
     """
 
+    return _prepare_nonlinear_species_hermite(**locals())(G0)
+
+
+def _prepare_nonlinear_species_hermite(
+    G0: jnp.ndarray,
+    cache: LinearCache,
+    params: LinearParams,
+    *,
+    dt: float,
+    steps: int,
+    method: str = "rk2",
+    terms: TermConfig | None = None,
+    grid: Any | None = None,
+    vol_fac: jnp.ndarray | None = None,
+    flux_fac: jnp.ndarray | None = None,
+    plan: Any | None = None,
+    devices: Any | None = None,
+    num_devices: int | None = None,
+    compressed_real_fft: bool = True,
+    laguerre_mode: str = "grid",
+) -> Callable[[jnp.ndarray], SpeciesHermiteRun]:
+    """Stage fixed model operands once and return the shared trajectory callable."""
+
     _validate_steps(steps)
     method_key = _validate_explicit_method(method)
     term_cfg = terms or TermConfig()
@@ -984,21 +930,16 @@ def integrate_nonlinear_species_hermite(
         def rhs(value):
             return local_step(value, index, *rest)
 
-        def stage(value, increment, scale):
-            nxt = value + jnp.asarray(scale, dtype=dt_val.dtype) * dt_val * increment
-            return _project_local(nxt, projector, state_dtype)
-
         def step(carry, _unused):
             value = _project_local(carry, projector, state_dtype)
             k1, scalars = rhs(value)
-            nxt = _nonlinear_explicit_update(
-                method_key,
+            nxt = _explicit_stage_update(
                 value,
                 k1,
-                rhs=lambda arg: (rhs(arg)[0], None),
-                stage=stage,
-                project_shard=lambda arg: _project_local(arg, projector, state_dtype),
-                dt_val=dt_val,
+                dt_val,
+                method=method_key,
+                rhs_fn=lambda arg: (rhs(arg)[0], None),
+                project_state=lambda arg: _project_local(arg, projector, state_dtype),
             )
             nxt = _project_local(nxt, projector, state_dtype)
             return nxt, (scalars if record else None)
@@ -1021,19 +962,73 @@ def integrate_nonlinear_species_hermite(
     )
     from jax.sharding import NamedSharding
 
-    final, stacked = jax.jit(mapped)(
-        stage_from_host(state, NamedSharding(mesh, state_spec)), *leaves
+    compiled = jax.jit(mapped)
+    sharding = NamedSharding(mesh, state_spec)
+
+    def execute(model_operands, value):
+        final, stacked = compiled(
+            stage_from_host(jnp.asarray(value, dtype=state_dtype), sharding),
+            *model_operands,
+        )
+        traces = dict(zip(_TRACE_NAMES, stacked, strict=True)) if record else {}
+        return SpeciesHermiteRun(
+            state=final,
+            traces=traces,
+            plan=resolved,
+            mesh_shape=(
+                int(resolved.chunks.get("s", 1)),
+                int(resolved.chunks.get("m", 1)),
+            ),
+        )
+
+    return jax.tree_util.Partial(execute, leaves)
+
+
+def _prepare_species_hermite_rhs(
+    G0,
+    cache,
+    params,
+    *,
+    terms,
+    plan,
+    devices,
+    compressed_real_fft=True,
+    laguerre_mode="grid",
+):
+    """Return the staged named RHS and its global state placement."""
+    mesh, resolved, state_spec = _resolve_species_hermite_placement(
+        G0, cache, params, plan=plan, devices=devices, num_devices=None
     )
-    traces = dict(zip(_TRACE_NAMES, stacked, strict=True)) if record else {}
-    return SpeciesHermiteRun(
-        state=final,
-        traces=traces,
+    _reject_unsharded_hermite_terms(terms, params, resolved)
+    local, leaves, specs, _ = _species_hermite_mapped(
+        G0,
+        cache,
+        params,
+        None,
+        term_cfg=terms,
         plan=resolved,
-        mesh_shape=(
-            int(resolved.chunks.get("s", 1)),
-            int(resolved.chunks.get("m", 1)),
-        ),
+        mesh=mesh,
+        state_spec=state_spec,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        vol_fac=None,
+        flux_fac=None,
+        return_fields=True,
     )
+    mapped = jax.shard_map(
+        local,
+        mesh=mesh,
+        in_specs=(state_spec,) + specs,
+        out_specs=(state_spec, jax.sharding.PartitionSpec()),
+        axis_names={"s", "m"},
+        check_vma=_CHECK_VMA,
+    )
+    sharding = jax.sharding.NamedSharding(mesh, state_spec)
+
+    def execute(operands, state):
+        return mapped(stage_from_host(state, sharding), *operands)
+
+    return jax.tree_util.Partial(execute, leaves), sharding
 
 
 def _project_local(value, projector, dtype):

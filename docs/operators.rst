@@ -303,28 +303,8 @@ Default and cost. ``landau`` is the default both in the runtime and in
 matrices are built only when some ``nu`` is nonzero. The runtime applies the
 factors :math:`T B T^{\mathsf T}` directly: :math:`T` is block diagonal in the
 degree :math:`p+2j` and :math:`B` in :math:`l`, which at
-:math:`(N_l,N_m)=(16,48)` is 4.1x fewer flops than the dense product. On an
-idle A4000, Cyclone grid :math:`16\times8\times32`, the whole linear RHS at
-:math:`(16,48)` costs 1.6x the Dougherty RHS in float32 (one and two species)
-and 1.9x (one species) and 2.3x (two species) in float64; at :math:`(8,24)`,
-1.4-1.7x (``plan/research/2026-10-15-collisions/results/rhs_collision_share_gpu.txt``).
-
-Benchmarks against other codes (``results/xcode_collisional.txt``,
-``results/zonal_collisional.txt``):
-
-- Cyclone ITG with adiabatic electrons, :math:`k_y=0.3`, :math:`\nu_i` from 0 to
-  0.1: within 1.1% of GS2's model operator at :math:`(N_l,N_m)=(12,48)`, including
-  GS2's slight collisional destabilisation. The Dougherty kernel goes the other
-  way, and is 21% low at :math:`\nu_i=0.1`.
-- Cyclone with kinetic electrons (:math:`m_e/m_i=2.7\times10^{-4}`), :math:`\nu_i`
-  from 0 to 0.1 with consistent :math:`\nu_e`: within 1.2-4.8% of GS2 at
-  :math:`(8,24)`. Dougherty is 11% low at :math:`\nu_i=0.03`.
-- Collisional decay of the Rosenbluth-Hinton residual (s-alpha, :math:`q=1.4`,
-  :math:`\epsilon=0.18`): the residual levels are within 6% of Xiao, Catto &
-  Molvig (2007), but the decay rate is 21-27% slower. That formula drops energy
-  diffusion, and its :math:`\nu_{ii}` convention was not checked against the
-  paper, so the rate is not used as a gate. The Dougherty kernel does not damp
-  this residual at all.
+:math:`(N_l,N_m)=(16,48)` is 4.1x fewer flops than the dense product. Operator cost depends on moment counts, species and backend. Compare full
+RHS execution with matched precision and collision frequencies.
 
 Not included: finite-:math:`k_\perp` (gyroaveraging) terms, which
 ``coulomb_finite_kperp`` carries for one species at fixed tabulated
@@ -407,32 +387,7 @@ the couplings between different Laguerre parities and leaves same-parity
 entries alone, so the comparison checks the convention as well as the values.
 
 ``tests/validation/physics_gates/test_collision_physics.py`` gates the
-properties a linearized collision operator must satisfy. The offline
-verification artifact ``docs/_static/collision_operator_verification.json``
-records the measured values against its thresholds:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 46 30 24
-
-   * - Property
-     - Measured
-     - Gate
-   * - Density, parallel-momentum, energy conservation
-     - :math:`5.6\times10^{-17}`
-     - :math:`5\times10^{-12}`
-   * - H-theorem (largest eigenvalue of the symmetrized operator)
-     - :math:`9.0\times10^{-18}`
-     - :math:`10^{-12}`
-   * - Onsager self-adjointness
-     - :math:`8.3\times10^{-17}`
-     - :math:`5\times10^{-12}`
-   * - Published Appendix-C coefficients
-     - :math:`1.1\times10^{-16}`
-     - :math:`5\times10^{-12}`
-   * - Finite-Larmor gyrocenter-diffusion order at small :math:`b`
-     - :math:`B^{1.94}`--:math:`B^{2.00}`
-     - :math:`B^{1.7}`--:math:`B^{2.3}`
+properties a linearized collision operator must satisfy.
 
 The invariants are the left null vectors of the moment matrix, since the
 production of a moment functional :math:`v` is :math:`v^{T} C N`. With the
@@ -623,8 +578,8 @@ for verification and model development. None of them has a TOML selector.
 
 The high-precision coefficient algebra (Coulomb speed integrals, basis
 transforms, Laguerre products and the equation (3.48)--(3.50) contractions)
-lives in the offline generator ``scripts/artifacts/build_linear_validation_artifacts.py`` (retired; :ref:`retired-generators`),
-not in the package. The runtime only interpolates validated tables and applies
+is evaluated offline when building the source collision tables. The runtime
+interpolates those tables and applies
 matrices, which is the same split as the GYACOMO/COSOlver pair.
 
 References: `Frei et al. (2021) <https://arxiv.org/abs/2104.11480>`_,
@@ -636,103 +591,15 @@ null-space, adjointness and H-theorem requirements),
 transforms), and the
 `improved multispecies Dougherty derivation <https://doi.org/10.1017/S0022377822000289>`_.
 
-Collision validation evidence
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Collision verification
+^^^^^^^^^^^^^^^^^^^^^^
 
-.. figure:: _static/collision_operator_verification.png
-   :alt: Coulomb collision operator convergence, projection, entropy, and matrix gates
-   :width: 100%
-
-   **Offline Coulomb-operator closure.** Panel (a) shows Bessel--Laguerre
-   convergence of a finite-:math:`b` polarization coefficient to a 24-term
-   reference, Bessel convergence of an assembled 4-by-4 collision block, and
-   the independent spherical/radial hierarchy convergence of that block;
-   panel (b) compares five generated coefficients with independent
-   80-by-80 Gauss--Hermite/Laguerre velocity projection; panel (c) shows five
-   dissipative modes and the three density, parallel-momentum, and thermal-
-   energy null modes, while its inset verifies leading :math:`O(b^2)` classical
-   gyro-diffusion away from the drift-kinetic limit; panel (d) shows the
-   complete retained drift-kinetic moment block. The machine-readable gate is
-   ``collision_operator_verification.json``.
-
-Regenerate with
-``python scripts/artifacts/build_linear_validation_artifacts.py collision-verification`` (retired; :ref:`retired-generators`).
-The largest direct-projection relative error is :math:`3.1\times10^{-13}`. At
-:math:`b=0.8` the assembled block changes by :math:`4.50\times10^{-7}` between
-Bessel orders four and six, at the :math:`(p_{\max},j_{\max})=(8,4)` spherical
-cutoff, which is within :math:`8.68\times10^{-7}` of the :math:`(9,4)`
-reference. The smaller cutoff :math:`(3,1)` differs from that reference by 29%
-and is rejected.
-
-**Driven parallel current.** The ``collision-response`` subcommand (retired;
-:ref:`retired-generators`) built
-``docs/_static/collision_response_convergence.json`` from equations
-(3.53)--(3.56). With :math:`\widehat E=eE/(m_ev_{Te}\nu_{ee})`, the plotted
-response :math:`(u_e/v_{Te})/\widehat E` is
-:math:`\sigma_\parallel/[n_e e^2/(m_e\nu_{ee})]`. At :math:`(P,J)=(20,5)` the
-largest current change from :math:`(15,5)` is :math:`1.66\times10^{-4}` over
-:math:`Z=1,2,5,10,100`, and the invariant, self-adjointness, spectrum and
-driven-solve residuals pass a :math:`2\times10^{-12}` gate. Original Sugama
-gives 11.29% less current than Coulomb at :math:`Z=1` and 0.61% less at
-:math:`Z=100`; improved Sugama stays within 0.307% of Coulomb at every scanned
-charge. The :math:`Z=100` Coulomb point is 7.453% from the Spitzer high-charge
-limit :math:`64/[3\,2^{3/2}\pi Z]`, inside the 8% gate. This validates the
-unmagnetized equal-temperature conductivity problem, not finite-:math:`b`
-collisional transport.
-
-**Collisional zonal response.** ``docs/_static/collision_finite_wavelength_zonal_response.json``
-reproduces the Figure 12--14 protocol of Frei, Ernst & Ricci (2022) at
-``P24/J10`` through :math:`t\nu=30`. The late responses are:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 25 25 25 25
-
-   * - :math:`k_x\rho_i`
-     - original Sugama
-     - improved Sugama
-     - Coulomb
-   * - 0.1
-     - 0.00242
-     - 0.00255
-     - 0.00288
-   * - 0.2
-     - :math:`9.66\times10^{-5}`
-     - :math:`1.15\times10^{-4}`
-     - :math:`1.92\times10^{-4}`
-
-Improved Sugama tracks Coulomb more closely than the original model in the
-early window at both wavenumbers.
-
-**Short-wavelength ITG boundary.** On a Cyclone-like s-:math:`\alpha` probe,
-raising the
-drift-kinetic collision weight damps the growth rate at
-:math:`k_y\rho\simeq0.63` but excites the short-wave branch at
-:math:`k_y\rho\simeq0.94`, the behaviour expected when collisional FLR terms are
-omitted. ``test_drift_kinetic_collision_model_is_blocked_for_short_wave_itg``
-requires both observations. Only a converged finite-:math:`b` operator can
-close that lane.
-
-Controls:
-
-- ``[time] collision_operator``
-- ``RuntimePhysicsConfig.collisions``
-- ``RuntimeTermsConfig.collisions``
-- ``RuntimeSpeciesConfig.nu``
-- ``RuntimeCollisionConfig.nu_hermite``
-- ``RuntimeCollisionConfig.nu_laguerre``
-
-For two kinetic species, the explicit species-parallel integrator evaluates
-the complete built-in collision contribution locally on each device after the
-shared field reduction; nonzero, unequal ion/electron rates are
-identity-gated against serial evolution. The direct species-sharded RHS helper
-is collision-free, so use ``integrate_linear(...,
-parallel=RuntimeParallelConfig(strategy="velocity", axis="species",
-num_devices=2))`` for the collisional route. The same route is gated for
-Hermite/Laguerre hypercollisions with nonzero ``nu_hyper_l``/``nu_hyper_m``.
-Electromagnetic species decomposition sums the local field moments over the
-species axis and reduces them across devices, so ``phi``, ``apar`` and ``bpar``
-are the serial fields; mixed species--Hermite meshes are not covered.
+Check invariant null modes, self-adjointness, dissipativity, direct velocity
+projection and convergence of tabulated resolutions for the selected operator.
+The drift-kinetic and finite-wavelength models have different domains of
+validity; finite-:math:`b` transport needs a converged finite-wavelength model.
+See :doc:`validation` for the test workflow and the source references above for
+the model definitions.
 
 Hypercollisions
 ---------------
@@ -845,9 +712,8 @@ velocity-space regularization it used, and reports the
 single regularized number. ``none`` is a legal declaration and the common one
 for reference-code parity rows, whose decks must reproduce the reference
 exactly; it commits the row to being reported as resolution-limited, not as a
-converged growth rate. The declaration is a required field of every linear row
-of ``tools/evidence_ledger.toml`` and is checked by
-``tests/release/test_release_gates.py``.
+converged growth rate. Report that declaration with the input configuration and convergence study
+for each shared result.
 
 Hyperdiffusion And End Damping
 ------------------------------

@@ -718,10 +718,7 @@ def write_runtime_nonlinear_artifacts(
                 "cfg is required to write nonlinear NetCDF output artifacts"
             )
         paths = _write_nonlinear_netcdf_outputs(out_path, result, cfg)
-        # The bundle is the parity format and stores no measured saturation
-        # window, so a NetCDF run used to leave nothing a person -- or a later
-        # ``gkx --plot`` -- could read the window and <Q> +/- SEM back out of.
-        # The same sidecar the prefix form writes costs one file and restores it.
+        # The sidecar records the saturation window, mean and uncertainty.
         summary_path = Path(f"{_netcdf_bundle_base(out_path)}.summary.json")
         _write_json(summary_path, _nonlinear_summary(result))
         paths["summary"] = str(summary_path)

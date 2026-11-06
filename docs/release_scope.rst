@@ -1,261 +1,56 @@
-Features and Claim Scope
+Features and limitations
 ========================
 
-.. note::
+GKX solves linear and nonlinear gyrokinetic flux-tube problems with JAX.
+Input keys and defaults are defined in :doc:`inputs`; numerical methods are
+described in :doc:`numerics` and :doc:`solvers`.
 
-   Snapshot: GKX 2.3.0, 2026-09-21, reviewed against 2.4.1 on 2026-09-27. The status of every public number is its
-   row in the evidence ledger, shown on :doc:`validation`. A claim
-   that is neither in the ledger nor on this page is not made.
+Supported workflows
+-------------------
 
-   The 2.0.0 end-damping regression
-   (`issue 192 <https://github.com/uwplasma/GKX/issues/192>`_) is fixed by
-   `PR 197 <https://github.com/uwplasma/GKX/pull/197>`_, which restores the
-   per-step contract and reproduces the recorded artifact bit-identically.
-   Numbers recorded with 2.0.0 time integration still need repaired-build
-   evidence before they are cited, and the GX references behind the
-   provisional linear rows have not yet been regenerated with the per-unit-time
-   end-damping rate (`issue 194 <https://github.com/uwplasma/GKX/issues/194>`_).
-   The adiabatic Cyclone GX goldens were rerun with a repaired GX build in
-   September 2026 and moved by at most 0.06% above :math:`k_y=0.1`
-   (:doc:`validation`); the ledger rows have not been updated.
+- Analytic slab, s-alpha and Miller geometry; VMEC/VMEX equilibria and imported
+  flux tubes for tokamak and stellarator calculations.
+- Kinetic species with electrostatic or electromagnetic fields, optional
+  adiabatic responses, collisions and declared numerical regularization.
+- Initial-value integration, linear eigenmodes, restartable runtime output,
+  independent parameter scans and opt-in nonlinear species--Hermite meshes.
+- Differentiable geometry and solver objectives, residual-certified linear
+  eigenpair sensitivities and finite-window nonlinear derivatives.
 
-Features
---------
+Use the checked-in examples for configuration and the tests for executable
+contracts. Keep generated simulation, benchmark and test outputs outside
+version control. Source collision tables and input decks are required inputs.
 
-What GKX can be asked to do, with the switch that turns each feature on. Input
-keys are defined in :doc:`inputs`; the physics is in :doc:`theory` and
-:doc:`operators`.
+Numerical limits
+----------------
 
-Geometry
-~~~~~~~~
+A certified eigenpair establishes the residual of the discretized operator.
+Physical convergence also requires resolution, domain, collision and
+regularization studies. At a branch crossing, mode identity and derivative
+conditioning need independent checks. An initial-value fit also depends on
+the fit window and contamination by competing modes.
 
-.. list-table::
-   :header-rows: 1
-   :widths: 30 35 35
+A finite nonlinear derivative describes the executed discrete trajectory and
+its selected diagnostic window. It does not establish the derivative of an
+infinite-time turbulent average. Verify finite differences over a suitable
+step-size range and use independent, longer runs and replicated seeds to
+assess a proposed design change. See :doc:`nonlinear_autodiff`.
 
-   * - Geometry
-     - Select with
-     - Notes
-   * - s-alpha tokamak
-     - ``[geometry] model = "s-alpha"`` (default)
-     - Cyclone base case benchmarks
-   * - Miller tokamak
-     - ``model = "miller"``
-     - in-package flux-surface construction
-   * - VMEC or VMEX equilibrium
-     - ``model = "vmec"``, or ``gkx wout_*.nc``
-     - any radius ``s`` and field line ``alpha``; tokamaks and stellarators
-   * - VMEX in memory
-     - ``gkx.geometry.from_vmex(...)``
-     - differentiable through the equilibrium
-   * - Imported flux tube
-     - ``model = "imported-netcdf"``
-     - reads a precomputed ``*.eik.nc`` file
-   * - Slab
-     - ``model = "slab"``
-     - secondary-instability and Landau tests
+Quasilinear observables and fitted saturation models require calibration and
+holdout checks for the intended geometry and regime. They do not by themselves
+establish absolute nonlinear heat flux or transfer to another regime.
 
-Physics
-~~~~~~~
+Parallel execution defaults to serial. Independent batches preserve separate
+solver calls; a species--Hermite mesh partitions one nonlinear state under
+explicit support checks. Distributed perpendicular FFTs and whole-state
+field-line decomposition are outside the supported nonlinear runtime. See
+:doc:`parallelization` for the configuration and validation requirements.
 
-- Any number of kinetic species; adiabatic (Boltzmann) electrons or ions.
-- Electrostatic, or electromagnetic with :math:`A_\parallel` and
-  :math:`B_\parallel` (KAW, KBM).
-- Collision operators (``[time] collision_operator``): linearized Landau
-  (default), Lenard-Bernstein/Dougherty, Sugama, improved Sugama, and the
-  gyrokinetic Coulomb operator; see :doc:`operators`.
-- Hypercollisions and hyperdiffusion, declared as regularizations.
-- Twist-and-shift linked parallel boundaries, or periodic.
-
-Linear runs
-~~~~~~~~~~~
-
-- Initial-value runs with explicit (``rk2``, ``rk4``, ``sspx3``), IMEX or
-  backward-Euler GMRES time stepping.
-- Certified Arnoldi on the time-advance map (default), matrix-free Krylov,
-  and shift-invert for a chosen branch; every returned eigenpair is checked
-  against the full operator (:doc:`solvers`).
-- ``k_y`` scans in serial or across devices, identical to the serial result
-  (:doc:`parallelization`).
-
-Nonlinear runs
-~~~~~~~~~~~~~~
-
-- Pseudo-spectral :math:`E\times B` bracket with the two-thirds rule, in the
-  full or half ``k_y`` layout (``[grid] ky_layout``).
-- ``run_to = "saturation"`` stops when heat flux, field and free energy are
-  stationary; a missed saturation is reported.
-- Restart from a saved bundle (``[init] init_file``), NetCDF output with
-  spectra, fluxes and energies (:doc:`outputs`).
-- ``gkx --estimate`` sizes the grid from the geometry and prints the reason
-  for each entry.
-
-Derivatives and optimization
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- Implicit derivatives of eigenvalues and eigenvector observables
-  (:doc:`differentiable_eigensolver`).
-- A checkpointed discrete adjoint of the nonlinear heat flux over a window
-  (:doc:`nonlinear_autodiff`).
-- Quasilinear heat-flux spectra and their sensitivities (:doc:`quasilinear`).
-- Growth-rate, quasilinear and nonlinear objectives in VMEX shape
-  optimization (:doc:`stellarator_optimization`).
-
-Hardware and precision
-~~~~~~~~~~~~~~~~~~~~~~
-
-- CPU and GPU through JAX; ``float32`` by default, ``float64`` with
-  ``JAX_ENABLE_X64=true``.
-- A persistent compilation cache; ``gkx.prepare`` compiles a nonlinear route
-  once for repeated calls.
-
-Claim scope
+Comparisons
 -----------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 24 18 58
-
-   * - Lane
-     - Status
-     - Supported claim
-   * - Linear benchmarks
-     - per ledger row
-     - KAW (analytic), ETG and W7-X (self-run GX) are ``passing``. Cyclone
-       s-alpha, Cyclone Miller and KBM are ``provisional``: their GX goldens
-       were produced above the ``dampEnds_linked`` launch cap and leave the top
-       Hermite moments without end damping. HSX is ``provisional`` until the
-       GX run arguments are recorded. TEM and Miller kinetic electrons are not
-       validated.
-   * - Nonlinear benchmarks
-     - window comparison only
-     - Cyclone, Cyclone Miller, KBM, W7-X and HSX pass a ``0.10`` mean-relative
-       window comparison against self-run GX (``docs/_static/nonlinear_*_gate_summary.json``).
-       This is not a statistical validation of saturated transport. ETG
-       nonlinear pilots and KAW/TEM stress lanes are outside it.
-   * - Quasilinear diagnostics
-     - diagnostics only
-     - Electrostatic linear heat/particle weights, spectra and model-selection
-       artifacts are reproducible. The 12-case train/holdout report rejects the
-       one-constant absolute-flux family, and simple one-scalar saturation
-       rules are rejected. ``spectral_envelope_ridge`` fits the declared core
-       portfolio with the Solovev and shaped-pressure stress outliers outside
-       the scoped claim: core mean relative error about ``0.280``, held-out
-       core error about ``0.275``, interval coverage ``10/10``. It is retained
-       as a scoped model-development and optimization-screening result. The
-       full 12-case predictor fails the stress cases and the rank/correlation
-       gates. No runtime/TOML absolute-flux predictor, universal nonlinear
-       transport model or user-facing saturation law is promoted.
-       Electromagnetic quasilinear normalization and KBM calibration are not
-       done.
-   * - Differentiable geometry
-     - equal-arc parity and reduced QH/Li383 gradients
-     - ``vmex -> booz_xform_jax -> GKX`` matches equal-arc field-line
-       geometry at ``mboz = nboz = 21`` for the QH, fixed-resolution QI and
-       shaped-pressure finite-beta rows of
-       ``docs/_static/vmec_boozer_parity_matrix.json`` (QI drift mismatch
-       ``7.13e-2`` against an ``8e-2`` tolerance). Reduced frequency,
-       quasilinear and nonlinear-window-estimator gradients pass
-       AD/finite-difference gates on QH and Li383 (largest relative mismatch
-       about ``2.7e-2``) and on the shaped-pressure case (``6.4e-11`` and
-       ``2.1e-4``). Nonlinear finite-difference audits of the startup window
-       have ``transport_average_gate = false``; they are plumbing checks.
-   * - Stellarator optimization examples
-     - reduced objectives; nonlinear transport open
-     - The examples demonstrate differentiable reduced ITG objectives, UQ and
-       AD/finite-difference checks. Every nonlinear heat-flux optimization
-       audit so far is negative or unresolved (see below); production
-       optimization is not promoted.
-   * - Parallelization
-     - production for independent work
-     - Independent ``k_y`` scans, quasilinear spectra, sensitivity batches and
-       UQ ensembles preserve serial results and have scaling artifacts. Runtime
-       scan TOMLs use ``[parallel] strategy = "batch"`` with ``axis = "ky"``.
-       Whole-state nonlinear sharding is an identity/profiler gate only.
-   * - Performance
-     - profiler evidence
-     - Runtime/memory panels, RHS profiles and sharding identity checks are
-       tracked. No nonlinear multi-GPU speedup or domain-decomposition claim is
-       made.
-
-Explicitly unpromoted claims
-----------------------------
-
-- universal or user-facing absolute quasilinear flux prediction, including
-  ``spectral_envelope_ridge`` as a runtime or TOML saturation option;
-- electromagnetic quasilinear transport calibration for KBM;
-- nonlinear heat-flux stellarator optimization, and production nonlinear
-  optimization without auditable raw post-transient runs, per-trace
-  stationarity, autocorrelation-aware uncertainty, and resolution and spectral
-  convergence;
-- converged nonlinear transport gradients through ``vmex`` and
-  ``booz_xform_jax``;
-- startup finite-difference audits or reduced nonlinear-window estimators used
-  as saturated transport averages or optimized-equilibrium audit bars;
-- multi-surface, multi-alpha or multi-``k_y`` stellarator optimization from the
-  current single-fixture objective evidence;
-- W7-X validation beyond the tracked single-flux-tube ITG windows, and QI
-  validation beyond the fixed-resolution mode-21 equal-arc parity row;
-- W7-X TEM / kinetic-electron validation;
-- W7-X long-window zonal recurrence/damping closure;
-- nonlinear multi-GPU speedup from whole-state sharding, and FFT-axis
-  nonlinear domain decomposition;
-- treating refactor or test coverage as physics validation.
-
-Negative and blocking evidence
-------------------------------
-
-.. list-table::
-   :header-rows: 1
-   :widths: 40 60
-
-   * - Artifact (``docs/_static/``)
-     - Result
-   * - ``quasilinear_stellarator_train_holdout_report.json``
-     - one-constant absolute-flux model ``passed = false``; held-out mean
-       relative error about ``6.49``
-   * - ``quasilinear_saturation_rule_sweep.json``
-     - no simple rule accepted; best (linear-weight fit) held-out error about
-       ``4.42``, mixing-length ``6.49``, training-mean null ``1.80``
-   * - ``quasilinear_candidate_uncertainty.json``
-     - ``spectral_envelope_ridge``: full-ledger mean relative error about
-       ``0.697``, coverage ``11/12``
-   * - ``quasilinear_candidate_regularization_sweep.json``
-     - best ridge penalty ``lambda = 0.5``: mean relative error ``0.689``,
-       held-out ``0.764``; none accepted
-   * - ``quasilinear_screening_skill.json``
-     - Spearman ``0.636``/``0.624`` and pairwise order accuracy
-       ``0.697``/``0.689`` (full/held-out), below the ``0.75`` gates
-   * - ``quasilinear_holdout_gap_report.json``
-     - absolute train/holdout error ``6.49`` against the ``0.35`` gate
-   * - ``production_nonlinear_optimization_guard.json``
-     - release safety passes (reduced estimators blocked; D-shaped, circular
-       and QH VMEC holdout ensembles pass); production optimization is not
-       promoted because optimized and matched summaries lack hashed raw
-       sources and per-trace stationarity, autocorrelation, resolution and
-       spectral gates
-   * - ``nonlinear_turbulence_gradient_evidence_status.json``
-     - no control passes: QA/ESS ``ZBS(1,0)`` 7.5% is resolved
-       (``response_fraction = 0.0319``) and local (``fd_asymmetry_rel =
-       0.044``) but fails spread (``0.196 > 0.15``) and propagated uncertainty
-       (``1.81 > 0.5``); ``RBC(1,1)`` 3% fails uncertainty (``0.683``);
-       ``ZBS(1,1)`` is nonlocal
-   * - ``broad_nonlinear_transport_matrix_negative_evidence.json``
-     - every candidate family of the broad matrix campaign fails
-   * - ``nonlinear_sharding_profile_office_gpu_benchmark_grid.json``
-     - whole-state sharding fails final-state identity and is slower than
-       serial
-
-Deferred lanes
---------------
-
-- W7-X zonal long-window recurrence/damping closure under the paper-facing
-  initializer and observable;
-- W7-X multi-flux-tube, multi-surface and TEM / kinetic-electron validation
-  (``docs/_static/w7x_tem_extension_status.json``);
-- experimental W7-X fluctuation-spectrum comparison through a diagnostic
-  transfer function. ``docs/_static/w7x_fluctuation_spectrum_panel.json`` is a
-  simulation diagnostic only.
-
-The frozen record of these decisions is
-``benchmarks/references/gkx_1_7_release_contract.json``.
+A cross-code comparison needs matched geometry, normalization, species, grid,
+boundaries, initialization, precision, timestep policy, collisions,
+regularization, diagnostic definition and analysis window. A discrepancy at
+one finite resolution cannot establish which code has the converged answer.
+A bounded test or one successful case supports only the tested configuration.

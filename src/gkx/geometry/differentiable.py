@@ -105,13 +105,8 @@ def _damped_gauss_newton_step(
 ) -> jnp.ndarray:
     """Return one damped Gauss-Newton step, with the normal equations pinned.
 
-    ``J^T J`` is the only matrix-times-matrix product in the loop, and XLA
-    satisfies it with TF32 on Ampere and later NVIDIA GPUs. Forming the normal
-    equations already squares the conditioning, so 10 mantissa bits land straight
-    in the step: measured against a float64 reference on an RTX A4000 the entries
-    carry 1.8e-04 and the step itself 1.7e-04, against the 1.0e-04 rtol this
-    module's own AD-versus-FD report gates on. Pinned they are 4.0e-08 and
-    4.7e-08. The matvec below is vector-shaped and stays exact unpinned.
+    Forming ``J^T J`` squares the Jacobian's condition number. Full contraction
+    precision avoids adding reduced-mantissa matrix-product error to the step.
 
     The step lives in its own function because the loop around it converts to
     host floats to build its history, so it cannot be traced -- and a CPU test

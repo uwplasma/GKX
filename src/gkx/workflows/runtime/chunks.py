@@ -275,7 +275,7 @@ def run_adaptive_runtime_chunk_loop(
         if stop_condition is not None:
             trace_chunks.append(
                 (
-                    np.asarray(diag_chunk.t, dtype=float),
+                    np.asarray(diag_chunk.t),
                     np.asarray(diag_chunk.heat_flux_t, dtype=float),
                     np.asarray(diag_chunk.Wphi_t, dtype=float),
                     np.asarray(diag_chunk.Wg_t, dtype=float),

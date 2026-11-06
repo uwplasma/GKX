@@ -209,7 +209,7 @@ class LinearParams:
         the two: ``None`` keeps the historical behaviour (the constant branch
         reuses ``nu_hyper_m``), and ``0.0`` gives a pure Laguerre sink beside an
         unchanged ``|k_z|`` branch.  This is the only knob the Laguerre
-        regularization contract (:ref:`plan 0.5 <velocity-regularization>`)
+        regularization contract (:ref:`velocity regularization <velocity-regularization>`)
         needs that the operator could not express.
         """
 
