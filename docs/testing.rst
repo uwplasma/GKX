@@ -117,7 +117,7 @@ Opt-in parity gates skip unless their environment variable is set:
 CI and release checks
 ---------------------
 
-CI runs the full test groups and combines 24 wide-coverage shards. The package
+CI runs the full test groups and combines 8 wide-coverage shards. The package
 coverage requirement is 95%; keep numerical and physical contracts in the
 coverage run rather than replacing them with generated-result assertions.
 
