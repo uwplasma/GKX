@@ -16,6 +16,9 @@ from gkx.core_velocity import hermite_ladder_coeffs
 # question rather than two that can drift apart again.
 from gkx.operators.linear.params import _check_positive, _is_tracer  # noqa: F401
 
+# Longest chain (nLinks * Nz) applied as a dense matrix on CPU; FFT beyond it.
+_DENSE_CHAIN_MAX = 256
+
 
 def _fft_ik_multiplier(kz: jnp.ndarray, like: jnp.ndarray) -> jnp.ndarray:
     """Return ``1j * kz`` with the same complex dtype as an FFT array."""
@@ -322,6 +325,26 @@ def _linked_fft_chain_update(
         dtype = f_flat.dtype
         f_link = jnp.take(f_flat, rows, axis=-2)
     f_link = f_link.reshape(*lead_shape, nChains, nLinks * Nz)
+    if (
+        jax.default_backend() == "cpu"
+        and kz_link.ndim == 1
+        and f_link.shape[-1] <= _DENSE_CHAIN_MAX
+    ):
+        # F^-1 diag(m) F as one (L, L) matrix per operator: a matmul replaces
+        # the FFT pair. HIGHEST keeps an accelerator from rounding it via TF32.
+        dtype_c = f_link.dtype
+        dft = jnp.fft.fft(jnp.eye(f_link.shape[-1], dtype=dtype_c), axis=0)
+        mult = _linked_fft_multiplier(kz_link, dft[0], operator)
+        mats = jnp.fft.ifft(mult[..., :, None] * dft, axis=-2)
+        df_link = jnp.einsum(
+            "s...l,sml->s...m" if mult.ndim == 2 else "...l,ml->...m",
+            f_link,
+            mats,
+            precision=jax.lax.Precision.HIGHEST,
+        )
+        return idx_flat, jnp.asarray(
+            df_link.reshape(*lead_shape, nChains * nLinks, Nz), dtype=dtype_c
+        )
     f_hat = jnp.fft.fft(f_link, axis=-1)
     multiplier = _linked_fft_multiplier(kz_link, f_hat, operator)
     df_hat = multiplier * f_hat

@@ -34,6 +34,7 @@ from gkx.solvers_linear_integrators import (
 )
 from gkx.operators.linear.linked import _build_linked_fft_maps
 from gkx.operators.linear.params import _x64_enabled
+from gkx.operators.linear import streaming
 from gkx.operators.linear.streaming import grad_z_linked_fft
 from gkx.core_velocity import J_l_all
 from gkx.solvers_linear_krylov import dominant_eigenpair
@@ -117,7 +118,7 @@ def test_grad_z_periodic_sine():
     assert jnp.allclose(df, jnp.cos(z), atol=2.0e-2)
 
 
-def test_linked_fft_derivative_matches_periodic_for_one_link_chains():
+def test_linked_fft_derivative_matches_periodic_for_one_link_chains(monkeypatch):
     rng = np.random.default_rng(0)
     f = (rng.normal(size=(2, 3, 1, 32)) + 1j * rng.normal(size=(2, 3, 1, 32))).astype(
         np.complex64
@@ -148,6 +149,21 @@ def test_linked_fft_derivative_matches_periodic_for_one_link_chains():
     )
 
     assert jnp.allclose(df_linked, df_periodic, rtol=1.0e-6, atol=2.0e-6)
+
+    # The CPU dense-matrix path and the FFT path agree to round-off.
+    monkeypatch.setattr(streaming, "_DENSE_CHAIN_MAX", 0)
+    df_fft = grad_z_linked_fft(
+        jnp.asarray(f),
+        dz=dz,
+        linked_indices=linked_indices,
+        linked_kz=linked_kz,
+        linked_full_cover=True,
+        linked_inverse_permutation=jnp.arange(3, dtype=jnp.int32),
+        linked_use_gather=True,
+        linked_gather_map=jnp.arange(3, dtype=jnp.int32),
+        linked_gather_mask=jnp.ones(3, dtype=bool),
+    )
+    assert jnp.allclose(df_linked, df_fft, rtol=1.0e-5, atol=1.0e-5)
 
 
 def test_compute_b_shape_and_value(cyclone_world):
