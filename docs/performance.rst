@@ -24,6 +24,20 @@ indices so RHS evaluations can reuse them. Reuse a prepared case when topology
 is fixed. Batch independent parameter points only when the resulting live
 states fit device memory; increasing the worker count can increase peak memory.
 
+Chunk size and retained diagnostics
+-----------------------------------
+
+``[time] chunk_steps`` controls the number of steps between nonlinear runtime
+handoffs. Larger chunks amortize host synchronization but delay monitoring and
+status updates and can retain more diagnostic data at once. Adaptive chain
+IMEX also retunes its factor between chunks, so check numerical tolerances
+when changing its chunk length.
+
+``[time] diagnostics_interval`` changes the retained history in physical time.
+Adaptive host-side thinning can reduce returned and saved data without
+reducing diagnostic kernel evaluations. Measure the actual compute and memory
+costs; a smaller output file does not establish faster integration.
+
 CPU and GPU runs
 ----------------
 

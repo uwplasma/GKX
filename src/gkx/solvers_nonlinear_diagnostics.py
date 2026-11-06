@@ -216,6 +216,11 @@ class PreparedExplicitNonlinearDiagnostics:
     cfl_scales: Any = None
     cover_mask: Any = None
     _run_to_horizon: Callable[..., Any] | None = None
+    _retention_interval: float | None = None
+    _retention_indices: tuple[int, ...] | None = None
+    _retain_diagnostics: (
+        Callable[[SimulationDiagnostics], SimulationDiagnostics] | None
+    ) = None
 
     def run_arrays(
         self,
@@ -239,6 +244,22 @@ class PreparedExplicitNonlinearDiagnostics:
         reuses the compiled scan; it overrides any prepared horizon.
         """
 
+        if self._retention_interval is not None:
+            if self._retention_indices is None:
+                raise ValueError(
+                    "adaptive physical-time retention uses host run(); "
+                    "prepare without diagnostics_interval for fixed-shape run_arrays"
+                )
+            if time_horizon is not None:
+                raise ValueError(
+                    "physical-time run_arrays uses the prepared fixed horizon; use host run() for overrides"
+                )
+            state, scan_out, fields = replace(
+                self, _retention_interval=None
+            ).run_arrays(initial_state, geometry=geometry, cache=cache, params=params)
+            indices = jnp.asarray(self._retention_indices, dtype=jnp.int32)
+            scan_out = jax.tree_util.tree_map(lambda value: value[indices], scan_out)
+            return state, scan_out, fields
         if self._run_to_horizon is not None:
             raise ValueError(
                 "adaptive horizon execution uses host chunks; prepare with explicit "
@@ -299,6 +320,28 @@ class PreparedExplicitNonlinearDiagnostics:
     ) -> tuple[jnp.ndarray, SimulationDiagnostics | None, jnp.ndarray, FieldState]:
         """Advance one state through the prepared compiled simulation."""
 
+        if self._retention_interval is not None:
+            if any(
+                isinstance(v, jax.core.Tracer)
+                for v in jax.tree_util.tree_leaves(
+                    (initial_state, geometry, cache, params, time_horizon)
+                )
+            ):
+                raise ValueError(
+                    "physical-time diagnostic retention requires host run()"
+                )
+            t, diag, state, fields = replace(self, _retention_interval=None).run(
+                initial_state,
+                geometry=geometry,
+                cache=cache,
+                params=params,
+                time_horizon=time_horizon,
+            )
+            if diag is not None:
+                assert self._retain_diagnostics is not None
+                diag = self._retain_diagnostics(diag)
+                t = jnp.asarray(diag.t)
+            return t, diag, state, fields
         if self._run_to_horizon is not None:
             if any(
                 isinstance(value, jax.core.Tracer)

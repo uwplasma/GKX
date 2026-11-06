@@ -852,6 +852,12 @@ def _write_diagnostics_group(
 ) -> None:
     """Write scalar, species, resolved, and split nonlinear diagnostics."""
     diag_group = root.createGroup("Diagnostics")
+    native_dt = getattr(diag, "dt_t", None)
+    if native_dt is not None:
+        native_dt = np.asarray(native_dt, dtype=np.float64)
+        if native_dt.shape != np.shape(diag.t):
+            raise ValueError("native NetCDF timesteps must match the time records")
+        diag_group.createVariable("dt_t", "f8", ("time",))[:] = native_dt
     resolved = diag.resolved
     phi2_t, phi2_kx_out, phi2_ky_out, phi2_kykx_out = _phi2_outputs_for_netcdf(
         resolved,

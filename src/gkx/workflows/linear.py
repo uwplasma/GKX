@@ -721,6 +721,14 @@ def run_runtime_linear(
 
     ``kx_target`` picks the fitted kx (nearest grid value; default kx = 0).
     """
+    if (
+        cfg.time.chunk_steps is not None
+        or cfg.time.diagnostics_interval is not None
+        or cfg.output.time_interval is not None
+    ):
+        raise ValueError(
+            "chunk_steps and physical-time intervals require nonlinear runtime execution"
+        )
 
     cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     _status(status_callback, "building runtime geometry")

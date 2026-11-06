@@ -1022,3 +1022,162 @@ def test_runtime_step_and_external_phi_policies_are_fail_closed() -> None:
     assert _runtime_external_phi(expert("phiext_full", 2.5)) == pytest.approx(2.5)
     with pytest.raises(ValueError, match="unsupported expert.source"):
         _runtime_external_phi(expert("external_phi", 1.0))
+
+
+@pytest.mark.parametrize("value", [True, 0, -1, 1.5])
+def test_runtime_chunk_steps_requires_positive_integer(value):
+    from gkx.config import TimeConfig
+
+    with pytest.raises(ValueError, match="chunk_steps"):
+        TimeConfig(chunk_steps=value)
+
+
+@pytest.mark.parametrize("value", [True, 0.0, -0.1, float("nan"), float("inf")])
+def test_runtime_physical_diagnostic_interval_requires_positive_finite(value):
+    from gkx.config import TimeConfig
+
+    with pytest.raises(ValueError, match="diagnostics_interval"):
+        TimeConfig(diagnostics_interval=value)
+
+
+def test_runtime_time_cadence_loads_through_existing_time_section(tmp_path):
+    path = tmp_path / "case.toml"
+    path.write_text(
+        "schema_version = 1\n[time]\nchunk_steps = 7\ndiagnostics_interval = 0.25\n"
+    )
+    cfg, _ = load_runtime_from_toml(path)
+    assert cfg.time.chunk_steps == 7
+    assert cfg.time.diagnostics_interval == 0.25
+    assert cfg.to_dict()["time"]["diagnostics_interval"] == 0.25
+
+
+@pytest.mark.parametrize("value", [True, 0.0, -0.1, float("nan"), float("inf")])
+def test_output_physical_interval_requires_positive_finite(value):
+    from gkx.config import RuntimeOutputConfig
+
+    with pytest.raises(ValueError, match="time_interval"):
+        RuntimeOutputConfig(time_interval=value)
+
+
+@pytest.mark.parametrize(("method", "fixed_dt"), [("rk2", True), ("rk4-pi", False)])
+def test_runtime_chunk_policy_preserves_state_and_fresh_physical_samples(
+    method, fixed_dt
+):
+    from gkx.workflows.nonlinear import run_runtime_nonlinear, prepare
+
+    cfg, _ = load_runtime_from_toml(
+        REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml"
+    )
+    cfg = replace(
+        cfg,
+        grid=replace(cfg.grid, Nx=4, Ny=4, Nz=4),
+        time=replace(
+            cfg.time,
+            dt=0.001,
+            dt_max=0.001,
+            t_max=0.008,
+            method=method,
+            fixed_dt=fixed_dt,
+            run_to="t_max",
+            sample_stride=1,
+            diagnostics_stride=1,
+        ),
+    )
+    options = dict(Nl=2, Nm=4, steps=8, resolved_diagnostics=False, return_state=True)
+    dense = run_runtime_nonlinear(cfg, **options)
+    for chunk_steps in (1, 3):
+        case = replace(
+            cfg,
+            time=replace(
+                cfg.time, chunk_steps=chunk_steps, diagnostics_interval=0.0025
+            ),
+        )
+        selected = run_runtime_nonlinear(case, **options)
+        np.testing.assert_allclose(selected.state, dense.state, rtol=1e-12, atol=1e-15)
+        indices = np.searchsorted(dense.t, selected.t - 1e-14)
+        np.testing.assert_allclose(
+            selected.diagnostics.heat_flux_t,
+            dense.diagnostics.heat_flux_t[indices],
+            rtol=1e-12,
+            atol=1e-15,
+        )
+        np.testing.assert_allclose(selected.t, [0.003, 0.005, 0.008], atol=1e-14)
+    case = replace(cfg, time=replace(cfg.time, diagnostics_interval=0.0025))
+    backend = prepare(case, Nl=2, Nm=4, steps=8, resolved_diagnostics=False)
+    np.testing.assert_allclose(backend.run()[0], [0.003, 0.005, 0.008], atol=1e-14)
+    if fixed_dt:
+        arrays = backend.run_arrays()
+        np.testing.assert_allclose(arrays[1][1], [0.003, 0.005, 0.008], atol=1e-14)
+        import jax
+        import jax.numpy as jnp
+
+        def loss(state):
+            final = backend.run_arrays(state)[0]
+            return jnp.real(jnp.vdot(final, final))
+
+        grad = jax.jit(jax.grad(loss))(backend.initial_state)
+        dense_backend = replace(backend, _retention_interval=None)
+
+        def dense_loss(state):
+            final = dense_backend.run_arrays(state)[0]
+            return jnp.real(jnp.vdot(final, final))
+
+        reference_grad = jax.jit(jax.grad(dense_loss))(backend.initial_state)
+        np.testing.assert_allclose(grad, reference_grad, rtol=1e-12, atol=1e-15)
+    else:
+        with pytest.raises(ValueError, match="fixed-shape"):
+            backend.run_arrays()
+    import jax
+
+    with pytest.raises(ValueError, match="host run"):
+        jax.jit(lambda state: backend.run(initial_state=state)[2])(
+            backend.initial_state
+        )
+    with pytest.raises(ValueError, match="chunk_steps requires host"):
+        prepare(
+            replace(case, time=replace(case.time, chunk_steps=3)), Nl=2, Nm=4, steps=8
+        )
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "examples/common_input.toml",
+        "examples/03_nonlinear_tokamak/case.toml",
+        "examples/03_nonlinear_tokamak/case_full.toml",
+        "examples/04_nonlinear_stellarator/case.toml",
+        "examples/04_nonlinear_stellarator/case_full.toml",
+        "examples/05_kinetic_electrons/case.toml",
+        "examples/05_kinetic_electrons/case_stellarator.toml",
+    ],
+)
+def test_nonlinear_example_optional_time_controls_parse(relative, tmp_path):
+    import re
+
+    text = (REPO_ROOT / relative).read_text()
+    path = tmp_path / "case.toml"
+    path.write_text(text)
+    defaults, _ = load_runtime_from_toml(path)
+    assert defaults.physics.nonlinear and not defaults.physics.linear
+    assert defaults.time.chunk_steps is None
+    assert defaults.time.diagnostics_interval is None
+    assert defaults.output.time_interval is None
+    enabled_text, count = re.subn(
+        r"(?m)^# (chunk_steps|diagnostics_interval|time_interval) =", r"\1 =", text
+    )
+    assert count == 3
+    path.write_text(enabled_text)
+    enabled, _ = load_runtime_from_toml(path)
+    assert enabled.time.chunk_steps == 128
+    assert 0 < enabled.time.diagnostics_interval <= enabled.time.t_max
+    assert enabled.output.time_interval > 0
+    expected = replace(
+        defaults,
+        time=replace(
+            defaults.time,
+            chunk_steps=128,
+            diagnostics_interval=enabled.time.diagnostics_interval,
+        ),
+        output=replace(defaults.output, time_interval=enabled.output.time_interval),
+    )
+    assert enabled.to_dict() == expected.to_dict()

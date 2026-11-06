@@ -2569,19 +2569,27 @@ def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
 
 
 @pytest.mark.parametrize(
-    "horizon, initial_dt, dt_max",
-    [(4.0, 0.05, 1.0), (0.1, 0.05, 1.0), (0.1, 0.1, 0.05), (0.1, 0.05, None)],
+    "horizon, initial_dt, dt_max, chunk_steps",
+    [
+        (4.0, 0.05, 1.0, None),
+        (0.1, 0.05, 1.0, None),
+        (0.1, 0.1, 0.05, None),
+        (0.1, 0.05, None, None),
+        (0.1, 0.01, 0.01, 3),
+    ],
 )
 def test_adaptive_chain_imex_grows_dt_between_chunks(
-    horizon, initial_dt, dt_max, monkeypatch
+    horizon, initial_dt, dt_max, chunk_steps, monkeypatch
 ):
     """fixed_dt = false: the chain IMEX step adapts dt between chunks."""
     import gkx
     import gkx.workflows.nonlinear as workflow
 
     original_controller = workflow.ImexDtControl
+    controllers = []
 
     def controller(op, *args, **kwargs):
+        controllers.append(op)
         assert float(op.dt) <= kwargs["dt_max"]
         return original_controller(op, *args, **kwargs)
 
@@ -2597,9 +2605,14 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
             dt=initial_dt,
             dt_max=dt_max,
             t_max=horizon,
+            chunk_steps=chunk_steps,
+            diagnostics_interval=0.025 if chunk_steps is not None else None,
         ),
     )
     d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
+    assert controllers  # Require the IMEX controller to execute.
+    if chunk_steps is not None:
+        np.testing.assert_allclose(d.t, [0.03, 0.05, 0.08, 0.1], atol=1e-12)
     dt = np.asarray(d.dt_t)
     assert np.isfinite(np.asarray(d.Wg_t)).all()
     if dt_max is not None:
@@ -2609,3 +2622,97 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
     assert float(d.t[-1]) == pytest.approx(horizon)
     if horizon > 1.0:
         assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05
+
+
+def _cadence_diag(times, values=None):
+    times = np.asarray(times)
+    values = times if values is None else np.asarray(values)
+    zeros = np.zeros_like(times)
+    return SimulationDiagnostics(
+        t=times,
+        dt_t=np.full_like(times, 0.1),
+        dt_mean=np.asarray(0.1),
+        gamma_t=values,
+        omega_t=zeros,
+        Wg_t=values,
+        Wphi_t=values,
+        Wapar_t=zeros,
+        heat_flux_t=values,
+        particle_flux_t=zeros,
+        energy_t=2 * values,
+        resolved=ResolvedDiagnostics(Phi2_kxt=values[:, None]),
+    )
+
+
+@pytest.mark.parametrize("partition", [1, 3, 7])
+def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition):
+    times = np.arange(1, 11, dtype=float) / 10
+    cursor = 0
+    flags, messages, monitoring = [], [], []
+
+    def integrate(show_progress, remaining):
+        nonlocal cursor
+        stop = min(cursor + partition, times.size)
+        offset = 0.0 if cursor == 0 else times[cursor - 1]
+        diag = _cadence_diag(times[cursor:stop] - offset, times[cursor:stop])
+        flags.append(show_progress)
+        cursor = stop
+        return diag.t, diag, object(), object()
+
+    def monitor(t, q, wphi, wg):
+        monitoring.append((t.copy(), q.copy()))
+        return {"stop": False}
+
+    result = run_adaptive_runtime_chunk_loop(
+        integrate_chunk=integrate,
+        t_max=1.0,
+        chunk_steps=partition,
+        label="cadence",
+        diagnostics_stride=7,
+        diagnostics_interval=0.25,
+        stop_condition=monitor,
+        show_progress=True,
+        status_callback=messages.append,
+        time_offset=3.0,
+        progress_t_max=4.0,
+    )
+    expected = np.asarray([0.3, 0.5, 0.8, 1.0])
+    np.testing.assert_allclose(result.diagnostics.t, expected, atol=1e-14)
+    np.testing.assert_allclose(result.diagnostics.heat_flux_t, expected, atol=1e-14)
+    np.testing.assert_allclose(result.diagnostics.resolved.Phi2_kxt[:, 0], expected)
+    np.testing.assert_allclose(result.diagnostics.dt_t, 0.1)
+    np.testing.assert_allclose(monitoring[-1][0], times)
+    np.testing.assert_allclose(monitoring[-1][1], times)
+    assert flags and not any(flags)
+    assert "from t=3 up to t_max=4" in messages[0]
+    assert "t=4/4" in messages[-1] and "elapsed=" in messages[-1]
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_physical_cadence_deduplicates_crossings_and_keeps_final(dtype):
+    from gkx.workflows.runtime.diagnostic_arrays import _time_sample_runtime_diagnostics
+
+    diag = _cadence_diag(np.asarray([0.1, 0.9, 1.0], dtype=dtype))
+    selected = _time_sample_runtime_diagnostics(diag, 0.2)
+    np.testing.assert_allclose(selected.t, [0.9, 1.0])
+    final_only = _time_sample_runtime_diagnostics(diag, 2.0)
+    np.testing.assert_allclose(final_only.t, [1.0])
+    boundary = _cadence_diag(np.asarray([0.25, 0.25, 0.5], dtype=dtype))
+    selected = _time_sample_runtime_diagnostics(boundary, 0.25, previous_time=0.25)
+    np.testing.assert_allclose(selected.t, [0.5])
+    exact = _cadence_diag(np.asarray([0.1, 0.2, 0.3], dtype=dtype))
+    np.testing.assert_allclose(_time_sample_runtime_diagnostics(exact, 0.1).t, exact.t)
+
+
+def test_physical_cadence_keeps_the_accepted_terminal_row_before_padding():
+    from gkx.workflows.runtime.diagnostic_arrays import _time_sample_runtime_diagnostics
+
+    diag = replace(_cadence_diag([0.1, 0.3, 0.3]), dt_t=np.asarray([0.1, 0.2, 0.0]))
+    selected = _time_sample_runtime_diagnostics(diag, 0.25)
+    np.testing.assert_allclose(selected.t, [0.3])
+    np.testing.assert_allclose(selected.dt_t, [0.2])
+    diag = _cadence_diag(np.arange(1, 11) / 10)
+    selected = _time_sample_runtime_diagnostics(
+        diag, 0.25, previous_time=1.13, time_offset=1.13
+    )
+    np.testing.assert_allclose(selected.t, [0.2, 0.4, 0.7, 0.9, 1.0])
