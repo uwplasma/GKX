@@ -241,8 +241,12 @@ def run_adaptive_runtime_chunk_loop(
     wall_start = (
         time.perf_counter() if progress_wall_start is None else progress_wall_start
     )
+    progress_target = (
+        float(t_max) + time_offset if progress_t_max is None else progress_t_max
+    )
     _status(
-        f"starting adaptive {label} integration in chunks of {chunk_steps} steps up to t_max={float(t_max):.6g}"
+        f"starting {label} integration in chunks of {chunk_steps} steps "
+        f"from t={time_offset:.6g} up to t_max={progress_target:.6g}"
     )
 
     for chunk in range(max_chunks):
@@ -326,15 +330,13 @@ def run_adaptive_runtime_chunk_loop(
             label=label,
             chunk_index=chunk_index,
             t_elapsed=t_elapsed + time_offset,
-            t_max=float(t_max) + time_offset
-            if progress_t_max is None
-            else progress_t_max,
+            t_max=progress_target,
             chunk_wall_seconds=chunk_wall,
             elapsed_seconds=wall_elapsed,
         )
         _status(message)
         if stop_now:
-            _status(f"stopping {label} integration at t={t_elapsed:.6g}")
+            _status(f"stopping {label} integration at t={t_elapsed + time_offset:.6g}")
             break
         if reached_horizon:
             break

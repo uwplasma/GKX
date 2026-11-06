@@ -2569,19 +2569,27 @@ def test_chain_factor_is_reused_for_an_identical_deck_and_dt():
 
 
 @pytest.mark.parametrize(
-    "horizon, initial_dt, dt_max",
-    [(4.0, 0.05, 1.0), (0.1, 0.05, 1.0), (0.1, 0.1, 0.05), (0.1, 0.05, None)],
+    "horizon, initial_dt, dt_max, chunk_steps",
+    [
+        (4.0, 0.05, 1.0, None),
+        (0.1, 0.05, 1.0, None),
+        (0.1, 0.1, 0.05, None),
+        (0.1, 0.05, None, None),
+        (0.1, 0.01, 0.01, 3),
+    ],
 )
 def test_adaptive_chain_imex_grows_dt_between_chunks(
-    horizon, initial_dt, dt_max, monkeypatch
+    horizon, initial_dt, dt_max, chunk_steps, monkeypatch
 ):
     """fixed_dt = false: the chain IMEX step adapts dt between chunks."""
     import gkx
     import gkx.workflows.nonlinear as workflow
 
     original_controller = workflow.ImexDtControl
+    controllers = []
 
     def controller(op, *args, **kwargs):
+        controllers.append(op)
         assert float(op.dt) <= kwargs["dt_max"]
         return original_controller(op, *args, **kwargs)
 
@@ -2597,9 +2605,14 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
             dt=initial_dt,
             dt_max=dt_max,
             t_max=horizon,
+            chunk_steps=chunk_steps,
+            diagnostics_interval=0.025 if chunk_steps is not None else None,
         ),
     )
     d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
+    assert controllers  # Require the IMEX controller to execute.
+    if chunk_steps is not None:
+        np.testing.assert_allclose(d.t, [0.03, 0.05, 0.08, 0.1], atol=1e-12)
     dt = np.asarray(d.dt_t)
     assert np.isfinite(np.asarray(d.Wg_t)).all()
     if dt_max is not None:
@@ -2671,6 +2684,7 @@ def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition)
     np.testing.assert_allclose(monitoring[-1][0], times)
     np.testing.assert_allclose(monitoring[-1][1], times)
     assert flags and not any(flags)
+    assert "from t=3 up to t_max=4" in messages[0]
     assert "t=4/4" in messages[-1] and "elapsed=" in messages[-1]
 
 
