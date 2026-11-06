@@ -62,6 +62,43 @@ Physical reference cases include electron-temperature-gradient turbulence
 transport and zonal-flow studies [Hegna18]_ [McKinney19]_ [Tiwari25]_. Match
 the published model and analysis protocol before interpreting agreement.
 
+Velocity-space closure qualification
+------------------------------------
+
+Compare undamped truncation, the configured hypercollision model and the
+per-species reflectionless Hermite closure at matched physical parameters.
+The closure changes the finite operator. A smaller eigenmode residual alone
+does not establish a more accurate growth rate or transport prediction.
+See :doc:`numerics` for the implementation and supported execution routes.
+
+Vary Hermite count and Laguerre count independently before a joint refinement.
+For the Hermite direction, measure recurrence, outgoing and returning moment
+transfer, field fits and full-state residuals. For the Laguerre direction,
+check gyroaveraging, mirror and drift couplings, quadrature convergence and
+free-energy transfer at the retained boundary. A parallel-streaming closure
+cannot be assumed to close perpendicular phase mixing [MDL17]_.
+
+Compare Laguerre moments with independently refined nodal magnetic-moment
+calculations. Match the velocity coordinate, Jacobian, Maxwellian weight,
+field normalization and physical observables. Refine node count and velocity
+extent separately; equal node and moment counts do not imply equal accuracy.
+Keep nonlinear quadrature and perpendicular-grid aliasing checks separate
+from velocity-basis truncation. Check boundary flux and collision invariants
+before introducing damping of the final Laguerre moments.
+
+Require stability of the chosen observables under timestep, parallel-grid,
+velocity-resolution and analysis-window refinement. Use absolute error scales
+for nearly zero rates. Set tolerances before candidate comparisons and retain
+failed cases. For nonlinear calculations, compare multiple seeds, correlation-
+aware transport uncertainty, zonal response and resolved spectra. Qualify
+finite-window derivatives with perturbation-size and resolution scans.
+
+Report cold preparation, synchronized warm execution, memory and derivative
+cost at a shared accuracy target. Keep a closure opt-in until its physical
+accuracy and supported runtime routes satisfy the declared acceptance gates.
+Store generated measurements outside version control; retain reproducible
+inputs and analysis commands with source revisions.
+
 Nonlinear transport
 -------------------
 
