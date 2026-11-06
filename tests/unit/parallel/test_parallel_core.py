@@ -1996,27 +1996,23 @@ def test_parallel_scaling_artifact_checker_rejects_stale_production_gate_blocker
         mod.validate_nonlinear_sharding_production_gate(tmp_path, check_sidecars=False)
 
 
-def test_parallel_docs_keep_speedup_claims_tied_to_current_artifacts() -> None:
-    docs = "\n".join(
-        (ROOT / path).read_text(encoding="utf-8")
-        for path in (
-            "docs/parallelization.rst",
-            "docs/performance.rst",
-            "docs/testing.rst",
-        )
+def test_parallel_docs_require_matched_numerics_and_warm_timing() -> None:
+    parallel = (ROOT / "docs/parallelization.rst").read_text(encoding="utf-8")
+    performance = (ROOT / "docs/performance.rst").read_text(encoding="utf-8")
+    compact = " ".join(parallel.split())
+    assert "strict_identity`` defaults to true" in compact
+    assert "atol = 5e-6" in compact and "rtol = 1e-4" in compact
+    assert "checking the observables against a serial run" in compact
+    assert (
+        "Diagnostic split/reassemble and linear-slice helpers do not establish"
+        in compact
     )
-
-    for artifact in (
-        "independent_ky_scan_scaling_large.json",
-        "quasilinear_uq_ensemble_scaling_large.json",
-        "nonlinear_sharding_strong_scaling_large.json",
-        "linear_rhs_parallel_slices_sweep.json",
-    ):
-        assert artifact in docs
-    compact_docs = " ".join(docs.split())
-    assert "Large-run scaling acceptance checklist" in compact_docs
-    assert "fresh profiler artifacts for the exact workload" in compact_docs
-    assert "not a production nonlinear speedup claim" in compact_docs
+    assert "wait for device completion" in compact
+    assert (
+        "Neither a successful placement nor an identity test establishes speedup"
+        in " ".join(performance.split())
+    )
+    assert "outputs outside version control" in " ".join(performance.split())
 
 
 def _assert_independent_ky_scaling_artifact(payload: dict) -> None:

@@ -1881,17 +1881,14 @@ def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
     np.testing.assert_array_equal(state, np.conj(partner))
 
 
-def test_docs_name_the_single_qa_autodiff_script() -> None:
-    docs = [
-        ROOT / "README.md",
-        ROOT / "docs" / "stellarator_optimization.rst",
-        EXAMPLES / "README.md",
-    ]
-    for path in docs:
-        text = path.read_text(encoding="utf-8")
-        assert "QA_optimization.py" in text, path
-
+def test_docs_link_the_runnable_qa_autodiff_example() -> None:
+    for path in (ROOT / "README.md", ROOT / "docs/stellarator_optimization.rst"):
+        assert "examples/10_vmex_optimization/run.py" in path.read_text(
+            encoding="utf-8"
+        )
     examples_readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
+    assert "[run.py](run.py)" in examples_readme
+    assert QA_SCRIPT.is_file()
     assert "exact discrete differentiation" in re.sub(r"\s+", " ", examples_readme)
 
 
@@ -1909,26 +1906,20 @@ def test_docs_scope_vmex_transport_optimizer_claims() -> None:
         assert "post-saturation" in normalized, path
 
 
-def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    figures = (
-        "nonlinear_autodiff_validation.png",
-        "qa_transport_equilibria.png",
-        "qa_transport_reduction.svg",
-    )
-    for filename in figures:
-        path = ROOT / "docs" / "_static" / filename
-        assert f"docs/_static/{filename}" in readme
-        assert path.stat().st_size > 0
-    equilibria = ROOT / "docs" / "_static" / "qa_transport_equilibria.png"
-    assert equilibria.stat().st_size < 100_000
-    assert equilibria.read_bytes()[25] == 3  # indexed-color PNG
+def test_qa_example_keeps_the_input_needed_to_reproduce_the_workflow() -> None:
+    import ast
 
-    for filename in (
-        "input.qa_transport_baseline",
-        "input.qa_transport_candidate",
-    ):
-        assert (EXAMPLES / filename).is_file()
+    script = QA_SCRIPT.read_text(encoding="utf-8")
+    seed = "input.minimal_seed_nfp2"
+    assert seed in script
+    assert (ROOT / "examples/vmec" / seed).is_file()
+    tree = ast.parse(script)
+    assert any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "from_file"
+        for node in ast.walk(tree)
+    )
 
 
 def test_optimization_examples_document_user_customization_knobs() -> None:
@@ -1943,32 +1934,17 @@ def test_optimization_examples_document_user_customization_knobs() -> None:
     assert "least_squares" in examples_readme
 
 
-def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
-    manuscript = (ROOT / "docs" / "manuscript_figures.rst").read_text(encoding="utf-8")
-    normalized_readme = re.sub(r"\s+", " ", readme)
-
-    # The README presents the production method, not a reduced proxy panel.
-    assert "docs/_static/qa_itg_optimization_summary_panel.png" not in readme
-    assert "docs/_static/vmex_qa_solved_boundary_boozer_panel.png" not in readme
-    assert "docs/_static/stellarator_itg_optimization_comparison.png" not in readme
-    assert "docs/_static/stellarator_itg_optimization_uq.png" not in readme
-    assert "independent matched runs validate" not in normalized_readme.lower()
-    assert "preliminary 12.26% reduction" in normalized_readme.lower()
-    assert "not statistically resolved" in normalized_readme.lower()
-    assert "replicated" in normalized_readme.lower()
-    assert "post-saturation" in normalized_readme.lower()
-
-    assert "QA_optimization.py" in docs
-    assert (
-        "nonlinear_heat_flux_window" not in docs or "physical heat-flux window" in docs
+def test_readme_scopes_qa_claims_to_finite_window_derivatives() -> None:
+    readme = " ".join((ROOT / "README.md").read_text(encoding="utf-8").split())
+    docs = " ".join(
+        (ROOT / "docs/stellarator_optimization.rst").read_text(encoding="utf-8").split()
     )
-    assert ".. figure:: _static/stellarator_itg_optimization_comparison.png" not in docs
+    manuscript = " ".join(
+        (ROOT / "docs/manuscript_figures.rst").read_text(encoding="utf-8").split()
+    )
+    assert "finite post-saturation window" in readme
+    assert "finite differences across perturbation sizes" in readme
+    assert "independent long simulations" in readme
     assert "screening diagnostics" in docs
-    assert (
-        "current artifact bases: ``docs/_static/stellarator_itg_optimization_comparison.png``"
-        not in manuscript
-    )
     assert "finite-difference check" in manuscript
     assert "differentiated window" in manuscript
