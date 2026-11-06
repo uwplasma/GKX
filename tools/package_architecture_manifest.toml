@@ -165,7 +165,7 @@ reason = "The CFL estimate, the one-step kernels and the linear explicit drivers
 
 [[complexity_policy.exceptions]]
 path = "artifacts/nonlinear_netcdf.py"
-baseline_lines = 1177
+baseline_lines = 1183
 target_lines = 1000
 reason = "One NetCDF schema owner keeps dimensions, geometry, diagnostics, restart, and final-field variables consistent; reduce helper repetition without splitting the schema again."
 
@@ -202,7 +202,7 @@ name = "installable_source_python_lines"
 path = "src/gkx"
 pattern = "*.py"
 recursive = true
-baseline = 69877
+baseline = 69891
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -1176,6 +1176,28 @@ def test_load_nonlinear_netcdf_diagnostics_fills_missing_turbulent_heating(
             diag.createVariable(name, "f4", ("time", "s"))[:] = values
     loaded = load_nonlinear_netcdf_diagnostics(out_nc)
     assert np.allclose(loaded.turbulent_heating_t, np.zeros(2, dtype=np.float32))
+    np.testing.assert_allclose(loaded.dt_t, [0.0, 0.1])
+    with Dataset(out_nc, "a") as root:
+        root.groups["Diagnostics"].createVariable("dt_t", "f8", ("time",))[:] = [
+            0.005,
+            0.007,
+        ]
+    loaded = load_nonlinear_netcdf_diagnostics(out_nc)
+    np.testing.assert_array_equal(loaded.dt_t, [0.005, 0.007])
+    assert loaded.dt_t.dtype == np.dtype("float64")
+    malformed = tmp_path / "bad_timesteps.nc"
+    with Dataset(malformed, "w") as root:
+        root.createDimension("time", 2)
+        root.createDimension("short", 1)
+        root.createGroup("Grids").createVariable("time", "f8", ("time",))[:] = [
+            0.0,
+            0.1,
+        ]
+        root.createGroup("Diagnostics").createVariable("dt_t", "f8", ("short",))[:] = (
+            0.005
+        )
+    with pytest.raises(ValueError, match="timesteps must match"):
+        load_nonlinear_netcdf_diagnostics(malformed)
     with Dataset(out_nc, "a") as root:
         root.setncattr("schema_version", 2)
     with pytest.raises(ValueError, match="unsupported GKX NetCDF schema_version 2"):
@@ -2838,3 +2860,87 @@ def test_artifact_checkpoint_helpers_cover_their_early_returns() -> None:
         time_offset=0.0,
         cfg=cfg,
     )
+
+
+def test_physical_output_cadence_preserves_checkpointed_solver_result(tmp_path):
+    from support.paths import REPO_ROOT
+    from gkx.workflows.runtime.toml import load_runtime_from_toml
+
+    cfg, _ = load_runtime_from_toml(
+        REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml"
+    )
+    cfg = replace(
+        cfg,
+        grid=replace(cfg.grid, Nx=4, Ny=4, Nz=4),
+        time=replace(
+            cfg.time,
+            dt=0.001,
+            t_max=0.008,
+            method="rk2",
+            fixed_dt=True,
+            run_to="t_max",
+            chunk_steps=3,
+            diagnostics_interval=0.0025,
+        ),
+        output=replace(
+            cfg.output,
+            nsave=3,
+            save_for_restart=True,
+            resolved_diagnostics=False,
+            plots=False,
+        ),
+    )
+    native, native_paths = run_runtime_nonlinear_with_artifacts(
+        cfg,
+        out=tmp_path / "native.out.nc",
+        ky_target=0.3,
+        Nl=2,
+        Nm=4,
+        steps=8,
+    )
+    messages = []
+    coarse, coarse_paths = run_runtime_nonlinear_with_artifacts(
+        replace(cfg, output=replace(cfg.output, time_interval=0.004)),
+        out=tmp_path / "coarse.out.nc",
+        ky_target=0.3,
+        Nl=2,
+        Nm=4,
+        steps=8,
+        status_callback=messages.append,
+    )
+    np.testing.assert_allclose(native.t, [0.003, 0.005, 0.008], atol=1e-14)
+    np.testing.assert_array_equal(coarse.t, native.t)
+    np.testing.assert_array_equal(coarse.state, native.state)
+    np.testing.assert_array_equal(
+        coarse.diagnostics.heat_flux_t, native.diagnostics.heat_flux_t
+    )
+    assert np.ptp(native.diagnostics.heat_flux_t) > 0
+    saved = load_nonlinear_netcdf_diagnostics(coarse_paths["out"])
+    with Dataset(coarse_paths["out"]) as root:
+        native_steps = root.groups["Diagnostics"].variables["dt_t"]
+        assert native_steps.dtype == np.dtype("float64")
+        assert native_steps.shape == saved.t.shape
+    np.testing.assert_allclose(saved.t, [0.005, 0.008], atol=1e-14)
+    np.testing.assert_allclose(saved.dt_t, coarse.diagnostics.dt_t[[1, 2]])
+    native_summary, coarse_summary = _summary(native_paths), _summary(coarse_paths)
+    native_summary.pop("timestep_cost", None)
+    coarse_summary.pop("timestep_cost", None)
+    assert coarse_summary == native_summary
+    assert (
+        Path(coarse_paths["restart"]).read_bytes()
+        == Path(native_paths["restart"]).read_bytes()
+    )
+    progress = [
+        line for line in messages if line.startswith("completed nonlinear chunk")
+    ]
+    assert "t=0.008/0.008" in progress[-1]
+
+    with pytest.raises(ValueError, match="timesteps must match"):
+        write_runtime_nonlinear_artifacts(
+            tmp_path / "bad.out.nc",
+            replace(
+                coarse,
+                diagnostics=replace(coarse.diagnostics, dt_t=np.asarray([0.001])),
+            ),
+            cfg,
+        )

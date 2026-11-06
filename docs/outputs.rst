@@ -22,6 +22,9 @@ once. The final accepted sample is always retained once. Thus adaptive sample
 spacing can be irregular even when the requested interval is constant.
 ``dt_t`` remains the integration step associated with a retained sample; it is
 not the time difference between adjacent saved rows.
+NetCDF stores these steps as the optional float64 variable
+``Diagnostics/dt_t``. Readers infer record spacing for legacy files that omit
+this variable.
 
 For example, fixed steps ending at ``0.1, 0.2, ..., 1.0`` and an interval of
 ``0.25`` retain ``0.3, 0.5, 0.8, 1.0``. A run ending before the first threshold
