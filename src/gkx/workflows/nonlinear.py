@@ -1107,6 +1107,18 @@ def run_runtime_nonlinear(
                 ctx.G0, ctx.grid, ctx.geom, ctx.params, **kwargs, **runtime_options
             )
             if not ctx.adaptive_chunked:
+                from gkx.workflows.runtime.diagnostic_arrays import (
+                    _time_sample_runtime_diagnostics,
+                )
+
+                retain = (
+                    None
+                    if cfg.time.diagnostics_interval is None
+                    else partial(
+                        _time_sample_runtime_diagnostics,
+                        interval=cfg.time.diagnostics_interval,
+                    )
+                )
                 indices = None
                 if cfg.time.fixed_dt and cfg.time.diagnostics_interval is not None:
                     from gkx.workflows.runtime.diagnostic_arrays import (
@@ -1125,6 +1137,7 @@ def run_runtime_nonlinear(
                     backend,
                     _retention_interval=cfg.time.diagnostics_interval,
                     _retention_indices=indices,
+                    _retain_diagnostics=retain,
                 )
             cache = {
                 (

@@ -218,6 +218,9 @@ class PreparedExplicitNonlinearDiagnostics:
     _run_to_horizon: Callable[..., Any] | None = None
     _retention_interval: float | None = None
     _retention_indices: tuple[int, ...] | None = None
+    _retain_diagnostics: (
+        Callable[[SimulationDiagnostics], SimulationDiagnostics] | None
+    ) = None
 
     def run_arrays(
         self,
@@ -327,10 +330,6 @@ class PreparedExplicitNonlinearDiagnostics:
                 raise ValueError(
                     "physical-time diagnostic retention requires host run()"
                 )
-            from gkx.workflows.runtime.diagnostic_arrays import (
-                _time_sample_runtime_diagnostics,
-            )
-
             t, diag, state, fields = replace(self, _retention_interval=None).run(
                 initial_state,
                 geometry=geometry,
@@ -339,7 +338,8 @@ class PreparedExplicitNonlinearDiagnostics:
                 time_horizon=time_horizon,
             )
             if diag is not None:
-                diag = _time_sample_runtime_diagnostics(diag, self._retention_interval)
+                assert self._retain_diagnostics is not None
+                diag = self._retain_diagnostics(diag)
                 t = jnp.asarray(diag.t)
             return t, diag, state, fields
         if self._run_to_horizon is not None:
