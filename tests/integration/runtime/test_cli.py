@@ -1741,7 +1741,6 @@ def test_run_runtime_scan_batch_validation_and_selection(
 def test_run_runtime_scan_default_parallel_config_keeps_serial_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     cfg = _base_cfg()
     calls: list[float] = []
 
@@ -1782,7 +1781,6 @@ def test_run_runtime_scan_default_parallel_config_keeps_serial_order(
 def test_run_runtime_scan_collects_quasilinear_payloads_and_worker_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     cfg = _base_cfg()
     calls: list[float] = []
 
@@ -1826,7 +1824,6 @@ def test_run_runtime_scan_collects_quasilinear_payloads_and_worker_metadata(
 def test_run_runtime_scan_parallel_config_requests_combined_ky_batch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     cfg = replace(
         _base_cfg(), parallel=RuntimeParallelConfig(strategy="combined_ky", axis="ky")
     )
@@ -1954,6 +1951,7 @@ def test_run_runtime_nonlinear_phiext_source_uses_diagnostics_path(
 
 def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_split(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     cfg = _nonlinear_cfg(
         time=replace(
@@ -1995,7 +1993,11 @@ def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_
     assert captured[0]["collision_scheme"] == "exp"
     assert captured[0]["fixed_mode_ky_index"] == 1
     assert captured[0]["fixed_mode_kx_index"] == 0
-    assert captured[0]["show_progress"] is True
+    assert all(call["show_progress"] is False for call in captured)
+    progress = capsys.readouterr().out
+    assert "t=0.2/0.35" in progress
+    assert "t=0.35/0.35" in progress
+    assert "elapsed=" in progress
     assert out.diagnostics is not None
     assert out.state is None
     assert out.fields is not None
