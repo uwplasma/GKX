@@ -302,6 +302,27 @@ def _field_sum(
     return combine
 
 
+def _field_groups(
+    nm: int, idx_bpar: int | None, idx_apar: int | None, c: _NonlinearBracketContext
+) -> tuple[tuple[tuple[int, ...], ...], Callable[[jnp.ndarray], jnp.ndarray]]:
+    """Field groups of the fused product kernel and the sum of their results.
+
+    Group 0 is E x B plus B_par; group 1, the flutter field, needs the Hermite
+    shift and so is kept apart. Same sum as :func:`_field_sum`, same order.
+    """
+
+    main = (0,) if idx_bpar is None else (0, idx_bpar)
+    flutter = idx_apar is not None and nm > 1
+    groups = (main, (idx_apar,)) if flutter else (main,)
+
+    def combine(products: jnp.ndarray) -> jnp.ndarray:
+        if not flutter:
+            return products[0]
+        return products[0] + _apply_flutter(products[1], c.vth, c.sqrt_m, c.sqrt_m_p1)
+
+    return groups, combine
+
+
 def _bracket_kwargs(c: _NonlinearBracketContext) -> dict:
     return {
         "kx_grid": c.kx_grid,
@@ -326,6 +347,7 @@ def _laguerre_contribution_from_prepared(
             g_mu,
             chi_phi,
             compressed_real_fft=c.compressed_real_fft,
+            fuse=(((0,),), None),
             **_bracket_kwargs(c),
         )
     else:
@@ -336,6 +358,7 @@ def _laguerre_contribution_from_prepared(
             g_mu,
             _stack_fields(g_mu, chi_fields),
             combine=_field_sum(c, g_mu.shape[-4], idx_bpar, idx_apar),
+            fuse=_field_groups(g_mu.shape[-4], idx_bpar, idx_apar, c),
             **_bracket_kwargs(c),
         )
     total = _laguerre_to_spectral(total, ctx.to_spectral)
@@ -356,6 +379,7 @@ def _spectral_contribution_from_prepared(
             prep.G,
             chi_phi,
             compressed_real_fft=c.compressed_real_fft,
+            fuse=(((0,),), None),
             **_bracket_kwargs(c),
         )
     else:
@@ -366,6 +390,7 @@ def _spectral_contribution_from_prepared(
             prep.G,
             _stack_fields(prep.G, chi_fields),
             combine=_field_sum(c, prep.G.shape[-4], idx_bpar, idx_apar),
+            fuse=_field_groups(prep.G.shape[-4], idx_bpar, idx_apar, c),
             **_bracket_kwargs(c),
         )
     return _squeeze_species_output(
