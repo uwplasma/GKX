@@ -1,5 +1,8 @@
 schema_version = 1
 
+# Speed benchmark at 64x64x24 and (Nl, Nm) = (4, 8); not a converged heat flux
+# (Q = 8.6 here, 4.8 at Nx = 192). See docs/examples.rst.
+
 [[species]]
 name = "ion"
 charge = 1.0
@@ -32,7 +35,6 @@ diagnostics_stride = 20
 fixed_dt = false
 dt_max = 0.05
 cfl = 0.9
-cfl_fac = 1.0
 compressed_real_fft = true
 laguerre_nonlinear_mode = "grid"
 

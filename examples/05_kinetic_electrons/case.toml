@@ -45,6 +45,7 @@ t_max = 0.3
 dt = 0.05
 dt_max = 0.05
 method = "rk3"
+cfl_fac = 1.4  # 65% of the largest stable factor (2.2 here); electron streaming dominates the bound
 fixed_dt = false
 sample_stride = 10
 diagnostics_stride = 10

@@ -2624,6 +2624,53 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
         assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05
 
 
+def test_explicit_chunk_retries_at_half_cfl_fac_on_non_finite_state(monkeypatch):
+    """A non-finite explicit chunk is redone at half the CFL factor, and it sticks."""
+    import gkx
+    import gkx.workflows.nonlinear as workflow
+
+    real = workflow.integrate_nonlinear_explicit_diagnostics_state
+    seen = []
+
+    def flaky(G, *args, **kwargs):
+        seen.append(kwargs["cfl_fac"])
+        t, diag, G_next, fields = real(G, *args, **kwargs)
+        return t, diag, G_next * (jnp.nan if kwargs["cfl_fac"] > 1.0 else 1.0), fields
+
+    monkeypatch.setattr(
+        workflow, "integrate_nonlinear_explicit_diagnostics_state", flaky
+    )
+    deck = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = deck.replace(
+        grid=replace(deck.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            deck.time,
+            method="rk3",
+            fixed_dt=False,
+            dt_max=0.1,
+            cfl_fac=3.0,
+            t_max=0.5,
+            chunk_steps=2,
+            run_to="t_max",
+        ),
+    )
+    d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
+    assert seen[:3] == [3.0, 1.5, 0.75]
+    assert max(seen[3:]) == 0.75
+    assert np.isfinite(np.asarray(d.Wg_t)).all()
+
+
+def test_nonlinear_cfl_fac_defaults_sit_below_the_measured_edge():
+    from gkx.config import resolve_cfl_fac, resolve_nonlinear_cfl_fac
+
+    nonlinear = {
+        m: resolve_nonlinear_cfl_fac(m, None) for m in ("rk3", "rk4", "rk4-pi")
+    }
+    assert nonlinear == {"rk3": 2.3, "rk4": 3.0, "rk4-pi": 2.82}
+    assert resolve_nonlinear_cfl_fac("rk3", 1.0) == 1.0
+    assert resolve_cfl_fac("rk3", None) == pytest.approx(1.73)  # linear runs keep it
+
+
 def _cadence_diag(times, values=None):
     times = np.asarray(times)
     values = times if values is None else np.asarray(values)

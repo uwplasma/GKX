@@ -15,7 +15,7 @@ import warnings
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, Callable, NamedTuple, cast
-from gkx.config import method_error, resolve_cfl_fac
+from gkx.config import method_error, resolve_nonlinear_cfl_fac
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.core_ky_layout import source_ny_full
 from gkx.diagnostics_contract import ResolvedDiagnostics, SimulationDiagnostics
@@ -485,7 +485,7 @@ def _build_explicit_runtime_policies(
         cfl_fac=cfl_fac,
         compressed_real_fft=compressed_real_fft,
         real_dtype=prepared.real_dtype,
-        resolve_cfl_fac_fn=resolve_cfl_fac,
+        resolve_cfl_fac_fn=resolve_nonlinear_cfl_fac,
         linear_frequency_bound_fn=_linear_frequency_bound,
         laguerre_velocity_max_fn=_laguerre_velocity_max,
         cfl_frequency_components_fn=cfl_components,
@@ -2964,7 +2964,7 @@ def _integrate_nonlinear_sheared_scan(
             cfl_fac=cfl_fac,
             compressed_real_fft=compressed_real_fft,
             real_dtype=real_dtype,
-            resolve_cfl_fac_fn=resolve_cfl_fac,
+            resolve_cfl_fac_fn=resolve_nonlinear_cfl_fac,
             linear_frequency_bound_fn=_linear_frequency_bound,
             laguerre_velocity_max_fn=_laguerre_velocity_max,
             cfl_frequency_components_fn=_nonlinear_cfl_frequency_components,

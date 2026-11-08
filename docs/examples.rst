@@ -358,6 +358,12 @@ then average the flux over at least 100-200 more, or set
 plane. Production runs use 64-96 points in x and y, Nz = 24-64, Nl = 4 and
 Nm = 8-16 on a GPU; check the heat flux against the next Nm before quoting it.
 
+``benchmarks/cases/cyclone_nonlinear_t400.toml`` (64x64x24, (Nl, Nm) = (4, 8))
+is a speed benchmark, not a converged calculation. Its saturated heat flux is
+Q = 8.6 at Nx = 64 and 4.8 at Nx = 192, and (4, 8) overestimates the linear
+growth rate by 9 to 86% at ky = 0.3 to 0.5. Quote transport from a resolution
+scan, not from this deck.
+
 For linear growth rates use ``solver = "krylov"``: the eigen solve has no time
 step, so the electron-streaming CFL does not apply.
 

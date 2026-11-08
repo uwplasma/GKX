@@ -200,7 +200,12 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
 - ``fixed_dt = false`` with ``cfl`` (default ``0.9``) and optional
   ``cfl_fac`` / ``dt_min`` / ``dt_max``: CFL-controlled steps. When ``cfl_fac``
   is omitted, ``rk3``/``sspx3`` use ``1.73``, ``rk4`` uses ``2.82``, and other
-  methods ``1.0``. Adaptive runs record ``dt_t`` (per-sample step history) and
+  methods ``1.0``. Nonlinear runs use ``2.3`` for ``rk3`` and ``3.0`` for
+  ``rk4``, about 60% of the largest stable factor measured on the shipped
+  tokamak and stellarator decks (3.8-4.9 and 4.8-5.1); kinetic-electron
+  ``rk3`` decks that are bound by electron streaming pin a lower value. A
+  nonlinear chunk that ends non-finite is redone at half the factor, and the
+  smaller factor is kept. Adaptive runs record ``dt_t`` (per-sample step history) and
   ``dt_mean`` (average effective step). The nonlinear adaptive ``dt`` estimate
   combines the linear frequency cap with the instantaneous nonlinear cap.
   Leaving ``dt_max`` unset keeps ``dt_max = dt``; raise it explicitly only

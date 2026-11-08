@@ -34,7 +34,7 @@ from gkx.solvers_time_explicit import (
     FIXED_DT_CFL_WARN_RATIO,
     _laguerre_velocity_max,
 )
-from gkx.config import RuntimeConfig, resolve_cfl_fac
+from gkx.config import RuntimeConfig, resolve_nonlinear_cfl_fac
 from gkx.solvers_nonlinear_diagnostics import (
     _continue_nonlinear_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
@@ -113,7 +113,7 @@ def build_runtime_nonlinear_diagnostics_kwargs(
         dt_min=float(cfg.time.dt_min),
         dt_max=cfg.time.dt_max,
         cfl=float(cfg.time.cfl),
-        cfl_fac=resolve_cfl_fac(method_use, cfg.time.cfl_fac),
+        cfl_fac=resolve_nonlinear_cfl_fac(method_use, cfg.time.cfl_fac),
         collision_split=bool(cfg.time.collision_split),
         collision_scheme=str(cfg.time.collision_scheme),
         implicit_restart=int(cfg.time.implicit_restart),
@@ -487,7 +487,7 @@ def _nonlinear_cfl_margin(
     wmax = float(np.sum(omega))
     if not np.isfinite(wmax) or wmax <= 0.0:
         return None
-    cfl_fac = resolve_cfl_fac(str(cfg.time.method), cfg.time.cfl_fac)
+    cfl_fac = resolve_nonlinear_cfl_fac(str(cfg.time.method), cfg.time.cfl_fac)
     bound = cfl_fac * float(cfg.time.cfl) / wmax
     return bound, float(ctx.dt) / bound, omega
 
@@ -552,6 +552,7 @@ def _run_chunked_diagnostics(
     control: dict[str, Any] = {
         "dt": min(ctx.dt, float(cfg.time.dt_max or ctx.dt)),
         "next_dt": jnp.asarray(0.0, dtype=jnp.real(ctx.G0).dtype),
+        "cfl_scale": 1.0,
     }
     continue_pi = not cfg.time.fixed_dt and (method or cfg.time.method) == "rk4-pi"
     if imex:
@@ -617,13 +618,20 @@ def _run_chunked_diagnostics(
         elif (not imex and not step_capped) or remaining_time <= steps_now * dt_cap:
             kwargs["time_horizon"] = remaining_time
         kwargs["compile_cache"] = compile_cache
+        kwargs["cfl_fac"] *= control["cfl_scale"]
+        next_dt = control["next_dt"]
         while True:
             if imex:
                 kwargs["dt"] = control["dt"]
             t_chunk, diag_chunk, G_next, fields_next = integrate(G_chunk, kwargs)
-            if not imex:
-                break
             ok = bool(jnp.isfinite(G_next).all())
+            if not imex:
+                if ok or cfg.time.fixed_dt or control["cfl_scale"] < 0.2:
+                    break
+                control["cfl_scale"] *= 0.5  # redo the chunk at half the CFL factor
+                kwargs["cfl_fac"] *= 0.5
+                control["next_dt"] = next_dt
+                continue
             if ok:  # an end-of-chunk error estimate far over rtol: unstable
                 dt_new = control["ctl"].propose(control["op"], G_next)
                 ok = control["ctl"].last["err"] < 30.0

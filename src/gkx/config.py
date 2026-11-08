@@ -52,6 +52,20 @@ def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
     return float(cfl_fac)
 
 
+# Largest stable nonlinear factors measured: rk3 3.8-4.9, rk4 4.8-5.1; ~60% here.
+NONLINEAR_CFL_FAC = {"rk3": 2.3, "rk4": 3.0}
+
+
+def resolve_nonlinear_cfl_fac(method: str, cfl_fac: float | None) -> float:
+    """Resolve the CFL prefactor of a nonlinear run."""
+
+    if cfl_fac is None:
+        return NONLINEAR_CFL_FAC.get(method.strip().lower()) or resolve_cfl_fac(
+            method, None
+        )
+    return float(cfl_fac)
+
+
 @dataclass(frozen=True)
 class InitializationConfig:
     """Initialization options for linear runs."""
@@ -455,6 +469,7 @@ __all__ = [
     "method_error",
     "explicit_method_default_cfl_fac",
     "resolve_cfl_fac",
+    "resolve_nonlinear_cfl_fac",
 ]
 
 
