@@ -550,6 +550,8 @@ class RuntimeCollisionConfig:
     damp_ends_amp: float | None = None
     damp_ends_widthfrac: float = 0.125
     damp_ends_scale_by_dt: bool = False
+    #: Opt-in beta=0 electron-ion model with fixed ion flow (Dougherty only).
+    electron_ion: bool = False
 
     def __post_init__(self) -> None:
         self._check_declared_velocity_regularization()
@@ -979,6 +981,60 @@ class RuntimeConfig:
         used = [counts[v > 2 * min(speed)] for v in speed]
         cfg = self.replace(species=species)
         return cfg, max(u[0] for u in used), max(u[1] for u in used)
+
+    def _electron_ion_rates(self) -> tuple[float, ...] | None:
+        """Separate e-i rates for the scoped beta=0, fixed-ion-flow model."""
+
+        if not self.collisions.electron_ion:
+            return None
+        ions = [s for s in self.species if s.charge > 0]
+        electrons = [s for s in self.species if s.charge == -1]
+        if len(self.species) != 2 or len(ions) != 1 or len(electrons) != 1:
+            raise ValueError("electron_ion requires one kinetic ion and one electron")
+        ion, electron = ions[0], electrons[0]
+        if not all(
+            math.isfinite(v) and v > 0
+            for s in self.species
+            for v in (s.mass, s.density, s.temperature)
+        ) or not all(math.isfinite(s.nu) and s.nu >= 0 for s in self.species):
+            raise ValueError(
+                "electron_ion requires finite positive species data and nu>=0"
+            )
+        if not all(s.kinetic for s in self.species) or not math.isclose(
+            electron.density, ion.charge * ion.density, rel_tol=1e-10, abs_tol=1e-12
+        ):
+            raise ValueError("electron_ion requires kinetic, quasineutral species")
+        if (
+            self.physics.electromagnetic
+            or not self.physics.electrostatic
+            or self.physics.beta != 0
+            or self.physics.use_apar
+            or self.physics.use_bpar
+            or self.physics.adiabatic_electrons
+            or self.physics.adiabatic_ions
+        ):
+            raise ValueError("electron_ion supports electrostatic beta=0 only")
+        if (
+            self.time.collision_operator.strip().lower()
+            not in ("none", "lenard_bernstein")
+            or self.collisions.nu_hermite != 1
+            or self.collisions.nu_laguerre != 2
+            or not self.physics.collisions
+            or self.terms.collisions == 0
+        ):
+            raise ValueError(
+                "electron_ion requires enabled standard Dougherty collisions"
+            )
+        if (
+            self.run.mu_vperp_max is not None
+            or self.parallel.strategy != "serial"
+            or self.parallel.auto
+            or any(s.Nl or s.Nm for s in self.species)
+        ):
+            raise ValueError(
+                "electron_ion requires uniform, unsharded Laguerre moments"
+            )
+        return tuple(ion.charge * s.nu if s.charge < 0 else 0.0 for s in self.species)
 
     def validate(self) -> "RuntimeConfig":
         """Check cross-section consistency and return ``self``.

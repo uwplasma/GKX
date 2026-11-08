@@ -189,6 +189,8 @@ class LinearParams:
     #: at its own size, so the moments above it stay zero and its hypercollisions are
     #: normalized to its own count (:attr:`LinearCache.groups`).
     moments: tuple[tuple[int | None, int | None, float], ...] | None = None
+    #: Internal beta=0 e-i rates; self-collision ``nu`` is unchanged.
+    _nu_ei: tuple[float, ...] | jnp.ndarray | None = None
 
     def species_slice(self, a: int, b: int, **overrides: Any) -> "LinearParams":
         """The parameters of species ``a:b`` of a ``moments`` run, with ``overrides``."""
@@ -279,13 +281,15 @@ class LinearParams:
             self.ampere_g0_scale,
             self.bpar_beta_scale,
             self.damp_ends_rate,
+            self._nu_ei,
         )
         return children, (self.collision_model, self.mu_vperp_max, self.moments)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(
-            *children,
+            *children[:-1],
+            _nu_ei=children[-1],
             collision_model=aux_data[0],
             mu_vperp_max=aux_data[1],
             moments=aux_data[2],

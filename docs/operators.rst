@@ -368,6 +368,41 @@ is the physics of the published model, not a residual to tune away. A direct
 finite-:math:`b` gate checks every term of equations (3.38)--(3.42) of Frei et
 al. (2021), including parallel/perpendicular flow and temperature restoration.
 
+GX electrostatic electron-ion option
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``[collisions] electron_ion = true`` adds the `GX revision 3865a537
+<https://bitbucket.org/gyrokinetics/gx/src/3865a53778862e1686f414bf6f416339e24887c9/src/device_funcs.cu>`_
+:math:`\beta=0` electron-ion increment to the existing Dougherty self operator.
+Self-collision ``nu`` is preserved and :math:`\nu_{ei}=Z_i\nu_{ee}` is separate.
+Both rates contribute to diagonal damping and temperature restoration; flow
+restoration retains the self rate. GX sets its reconstructed ion
+flow to zero at :math:`\beta=0`, so this option damps electron momentum even
+when the kinetic ion flow is nonzero. It has no reciprocal ion response and is
+not a general conserving multispecies collision model or a finite-beta model.
+
+The added electron contribution is
+
+.. math::
+
+   C_{ei,\ell m} = -\nu_{ei}(b+2\ell+m)H_{\ell m}
+   +2\nu_{ei}c_\ell\bar T\,\delta_{m0}
+   +\sqrt2\nu_{ei}J_\ell\bar T\,\delta_{m2},
+
+where :math:`c_\ell=\ell J_{\ell-1}+2\ell J_\ell+(\ell+1)J_{\ell+1}` and
+:math:`\bar T=(\sqrt2/3)\sum J_\ell G_{\ell2}+(2/3)\sum c_\ell H_{\ell0}`.
+The e-i increment retains GX's analytic upper :math:`J_{N_l}`; the disabled
+self operator is unchanged, so the full finite-truncation operator is not
+identical to GX. At :math:`b=0`, the increment conserves electron
+density and thermal energy, while relaxing electron flow toward fixed ions.
+Its algebra and short-step checks do not establish collisional transport parity.
+
+Supported inputs are one kinetic ion and one kinetic electron with quasineutral
+densities, standard Dougherty coefficients, :math:`N_l\ge2`, :math:`N_m\ge3`,
+and uniform unsharded Laguerre moments in serial execution. Electromagnetic,
+nodal, custom-operator and decomposed routes are refused. The opt-in default
+remains ``false``.
+
 Structural verification of the moment operators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

@@ -490,6 +490,12 @@ Notable runtime-only keys:
   Hermite resolutions.
 * ``[collisions] nu_hermite`` / ``nu_laguerre``: coefficients entering the
   Lenard-Bernstein collision eigenvalue used by the modular collision kernel.
+* ``[collisions] electron_ion`` (default ``false``): scoped GX electrostatic
+  electron-ion increment with fixed ion flow at ``beta = 0``. Select
+  ``[time] collision_operator = "lenard_bernstein"`` and standard coefficients
+  ``nu_hermite = 1``, ``nu_laguerre = 2``. It requires one quasineutral kinetic
+  ion/electron pair, uniform Laguerre counts (``Nl >= 2``, ``Nm >= 3``) and
+  serial execution; :doc:`operators` gives the approximation and refusals.
 * ``[collisions] nu_hyper`` / ``p_hyper``: isotropic hypercollision amplitude
   and exponent.
 * ``[collisions] nu_hyper_l`` / ``nu_hyper_m`` / ``nu_hyper_lm`` and

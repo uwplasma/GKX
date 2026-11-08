@@ -126,6 +126,8 @@ def custom_collision_contribution(
 
     if operator is None or _is_static_zero(terms.collisions):
         return None
+    if getattr(parameters, "_nu_ei", None) is not None:
+        raise NotImplementedError("electron_ion cannot use a custom collision operator")
     # Deferred to keep this low-level term module importable before operator facades.
     from gkx.operators.linear.moments import build_H
 
@@ -302,6 +304,7 @@ def _collision_moment_correction(
     JlB: jnp.ndarray,
     b: jnp.ndarray,
     nu: jnp.ndarray,
+    nu_ei: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     nu_s = nu[:, None, None, None, None]
     b_s = jnp.asarray(b, dtype=jnp.real(H).dtype)
@@ -325,6 +328,18 @@ def _collision_moment_correction(
     if Nm > 2:
         corr = corr + _hermite_mode_drive(
             corr, 2, nu_s * jnp.sqrt(2.0) * Jl * t_bar[:, None, ...]
+        )
+    if nu_ei is not None:
+        # Retain analytic J_(Nl) in the separate e-i temperature contraction.
+        tail = -0.5 * b_s * Jl[:, -1]
+        coeff_ei = coeff_t.at[:, -1].add(tail)
+        t_ei = t_bar + (2.0 / 3.0) * tail * H_m0[:, -1]
+        rate = nu_ei[:, None, None, None, None]
+        corr = corr + _hermite_mode_drive(
+            corr, 0, 2.0 * rate * coeff_ei * t_ei[:, None]
+        )
+        corr = corr + _hermite_mode_drive(
+            corr, 2, jnp.sqrt(2.0) * rate * Jl * t_ei[:, None]
         )
     return corr
 
@@ -428,15 +443,31 @@ def collisions_contribution(
     lb_lam: jnp.ndarray | None = None,
     weight: jnp.ndarray,
     mu_grid: tuple[jnp.ndarray, jnp.ndarray] | None = None,
+    nu_ei: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """``mu_grid = (rate, x)`` selects the nodal perpendicular operator and energy weights."""
 
+    # The beta=0 model fixes ion flow to zero: e-i restores energy, not flow.
+    if nu_ei is not None and (
+        mu_grid is not None
+        or (collision_lam is not None and collision_lam.size)
+        or G is None
+        or Jl is None
+        or JlB is None
+        or b is None
+        or H.shape[1] < 2
+        or H.shape[2] < 3
+    ):
+        raise NotImplementedError(
+            "electron_ion requires the Laguerre Dougherty operator"
+        )
+    total_nu = nu if nu_ei is None else nu + nu_ei
     real_dtype = jnp.real(H).dtype
     if _is_static_zero(weight, real_dtype):
         return jnp.zeros_like(H)
     collision_base = _collision_base_operator(
         H,
-        nu=nu,
+        nu=total_nu,
         collision_lam=collision_lam,
         lb_lam=lb_lam,
         b=b,
@@ -453,7 +484,7 @@ def collisions_contribution(
     if G is None or Jl is None or JlB is None or b is None:
         return base
 
-    corr = _collision_moment_correction(H, G=G, Jl=Jl, JlB=JlB, b=b, nu=nu)
+    corr = _collision_moment_correction(H, G=G, Jl=Jl, JlB=JlB, b=b, nu=nu, nu_ei=nu_ei)
     return base + weight * corr
 
 

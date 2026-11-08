@@ -202,7 +202,8 @@ name = "installable_source_python_lines"
 path = "src/gkx"
 pattern = "*.py"
 recursive = true
-baseline = 69891
+# 69891 -> 70013: dougherty e-i collision operator, measured after merging main.
+baseline = 70013
 target = 45000
 
 [[line_budget_policy.counts]]
