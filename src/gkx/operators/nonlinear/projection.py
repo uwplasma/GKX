@@ -243,7 +243,7 @@ def _make_compressed_real_fft_projector(
     On a two-sided state the projector is ``to_full(to_half(G))``: the bracket
     transforms the first ``Nyc`` rows and rebuilds the rest, so the state has
     to be put back on the reality-condition subspace after every stage. On a
-    half-spectrum state (plan 5.3 N3) the reality condition holds by
+    half-spectrum state the reality condition holds by
     construction and the projector is the **identity** -- not an approximation
     of the old one but exactly it, because ``to_full(to_half(.))`` restores the
     unstored rows and imposes nothing on the stored ones. The self-conjugate

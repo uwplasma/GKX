@@ -176,10 +176,27 @@ Time-integration controls
 Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
 
 - ``compressed_real_fft`` (default ``true``): compressed real-FFT nonlinear
-  bracket; ``false`` uses a full complex FFT for the nonlinear term.
-- ``sample_stride`` (record every ``N`` steps) and ``diagnostics_stride``
-  (compute streaming diagnostics every ``N`` steps). ``diagnostics = false``
-  (or ``--no-diagnostics``) disables diagnostics entirely.
+  bracket; ``false`` uses a full complex FFT and requires two-sided
+  ``ky_layout = "full"`` storage. A half-spectrum state is refused.
+- ``checkpoint`` (default ``false``): rematerialize fixed-step explicit
+  nonlinear scans during reverse-mode differentiation. This reduces retained
+  intermediates at the cost of recomputation, including diagnosed and prepared
+  runs.
+- ``sample_stride`` and ``diagnostics_stride``: step-based sampling controls.
+  Nonlinear explicit diagnostics use the larger stride for fresh retained
+  rows. ``diagnostics = false`` (or ``--no-diagnostics``) disables diagnostics.
+- ``chunk_steps``: optional positive integer controlling the nonlinear runtime
+  chunk length. When omitted, explicit chunks use 128 steps and adaptive
+  chain-IMEX chunks use 32. A chunk boundary is a monitoring and host-handoff
+  boundary; it does not request a new diagnostic timestamp or a restart file.
+  It also enables chunking for diagnosed fixed-step runs to ``t_max``. These
+  controls are nonlinear-only; unsupported execution routes raise.
+- ``diagnostics_interval``: optional positive finite interval in simulation
+  time for retained nonlinear diagnostics. It takes precedence over both
+  step-stride controls. Samples use actual accepted-step times, with the first
+  step at or after each interval threshold retained. Several thresholds crossed
+  in one step produce one row. The final accepted state is retained once even
+  when it falls between thresholds. See :doc:`outputs` for sampling semantics.
 - ``fixed_dt = false`` with ``cfl`` (default ``0.9``) and optional
   ``cfl_fac`` / ``dt_min`` / ``dt_max``: CFL-controlled steps. When ``cfl_fac``
   is omitted, ``rk3``/``sspx3`` use ``1.73``, ``rk4`` uses ``2.82``, and other
@@ -365,12 +382,17 @@ autocorrelation-corrected relative SEM of the windowed mean is at or below
 ``saturation_rel_sem``, the retained window has at least 256 samples and spans
 at least 20 integrated autocorrelation times, any larger
 ``saturation_min_window`` is met, and the first and second halves agree within
-twice their combined SEM. The same drift-consistency guard is applied to the
+twice their combined SEM. The third and fourth quarters must also agree on
+that scale, to check for late drift hidden by agreeing full-window halves.
+The same two drift-consistency checks are applied to the
 electrostatic field energy ``Wphi`` and gyrokinetic free energy ``Wg``. These
 operational finite-sample safeguards provide neither a universal sequential-
 confidence guarantee nor qualification for irregular adaptive-time sampling.
 ``t_max`` remains the hard cap, so a run that never saturates integrates the
 full horizon.
+Nonfinite or non-increasing retained timestamps cannot produce a saturation
+verdict. Valid adaptive timestamps remain supported, but the sample-based
+uncertainty estimator is not qualified for irregular sampling.
 The chosen window and its ``mean +/- SEM`` are printed in the run summary and
 recorded under ``saturation`` in the summary JSON. Pass
 ``--no-until-saturated`` (or set ``run_to = "t_max"``) for a fixed horizon.
@@ -397,11 +419,8 @@ Python driver
   # point CONFIG at the top of the script at benchmarks/cases/etg_linear_scan.toml
   python examples/12_restart_and_analysis/run.py
 
-The canonical KBM TOML is a controlled comparison input rather than
-a promoted standalone solve: its experimental shift-invert branch raises when
-the physical eigenpair-residual gate is not met. Reproduce the reviewed result
-with ``scripts/benchmarks/linear_benchmark.py kbm`` (retired; :ref:`retired-generators`) (removed from the tree;
-``git show df2953026:scripts/benchmarks/linear_benchmark.py``).
+The canonical KBM TOML is a controlled comparison input. Inspect the
+physical eigenpair residual and compare solver routes before using a result.
 
 Runtime sections
 ----------------
@@ -585,7 +604,9 @@ Notable runtime-only keys:
   correlation-time floor. Every accepted window also retains at least 256
   samples. These are finite-sample safeguards calibrated on regularly sampled
   synthetic traces, not a guarantee for irregular adaptive-time sampling or
-  arbitrary nonstationarity.
+  arbitrary nonstationarity. Agreement is checked between the full-window
+  halves and between the two terminal quarters, for heat flux and both energy
+  guards; a small SEM alone does not establish stationarity.
 * ``[time] nstep_restart``: when writing a nonlinear NetCDF bundle,
   checkpoint every ``nstep_restart`` steps instead of waiting for the end of
   the run. This is useful for long adaptive runs and batch jobs.
@@ -769,6 +790,11 @@ The ``[output]`` section controls runtime artifact layout and restart behavior:
   the larger spectral-history arrays.
 * ``nsave``: checkpoint cadence fallback, in steps, for nonlinear NetCDF
   bundles when ``time.nstep_restart`` is not set.
+* ``time_interval``: optional positive finite interval in simulation time for
+  rows written to nonlinear CSV and NetCDF history. This selects among the
+  diagnostics already retained by the solver; it does not change returned
+  diagnostics, the summary, the final state or checkpoint cadence. See
+  :doc:`outputs` for its relation to ``time.diagnostics_interval``.
 * ``plots``: draw the run's figures beside its output once it finishes. It
   defaults to ``true``; set it to ``false`` (or pass ``--no-plots``) on batch
   surfaces that only want the data. See :doc:`outputs` for the figure set each

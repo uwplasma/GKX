@@ -90,15 +90,9 @@ def dominant_eigenpairs_propagator_cached(
         projected[:krylov_dim, :krylov_dim],
     )
     candidate_indices = jnp.argsort(jnp.abs(eigenvalues))[-candidates:][::-1]
-    # The only matrix-shaped contraction anywhere on the certified path, and it
-    # produces the very vectors ``certify`` below and the adaptive solver's own
-    # residual are measured against. XLA answers a matrix-shaped dot with TF32 on
-    # Ampere and later NVIDIA GPUs, whose 10 mantissa bits carry ~4.9e-04 -- four
-    # times ``certifiable_residual_tolerance``'s complex64 floor of 1.19e-04, so
-    # unpinned the gate cannot certify a converged pair no matter how many
-    # restarts it spends. On an RTX A4000 the Cyclone ky = 0.3 runtime scan
-    # measured 3.37e-03 and was rejected after 19 minutes of restarts; pinned it
-    # certifies on the first restart in 28.7 s at the CPU eigenvalue.
+    # Lift Ritz vectors with full contraction precision. Reduced-precision
+    # matrix products can otherwise exceed the residual certification floor
+    # before the lifted vectors reach the convergence check.
     lifted = jnp.tensordot(
         coefficients[:, candidate_indices].T,
         basis[:krylov_dim],
@@ -708,7 +702,7 @@ def _banded_ritz_pairs(
     blocks = pairs(np.arange(size).reshape(shape), -1)
     laguerre = pairs(np.indices(shape)[-5], size)
     safe = jnp.asarray(np.where(blocks < 0, size, blocks))
-    # Gathers, not scatters: an XLA scatter of complex values costs 10x the solve on GPU.
+    # Gather complex values directly to avoid scatter overhead.
     position = np.full(size, blocks.size)
     position[blocks[blocks >= 0]] = np.flatnonzero(blocks >= 0)
     positions = jnp.asarray(position)

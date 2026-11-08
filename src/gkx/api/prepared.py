@@ -35,15 +35,6 @@ def _state_shape(case: Any, *, n_laguerre: int, n_hermite: int) -> tuple[int, ..
 
     grid = case.grid
     n_species = sum(1 for s in case.species if getattr(s, "kinetic", False))
-    # How many ky rows the run allocates, which is a question about the
-    # layout and not about the resolution (gkx.core_ky_layout, plan 5.3 N3).
-    # A two-sided state holds Ny rows and rebuilds the negative half by the
-    # reality condition; a half-spectrum state holds Nyc = 1 + Ny // 2 and
-    # does not. What this line must never do is report a layout the run did
-    # not build: reporting Nyc for a two-sided run halves the array it
-    # advertises and costs, and reporting Ny for a half-spectrum run doubles
-    # it. Reading the same key the grid was built from is what keeps the two
-    # in step.
     n_ky = rows_for_layout(
         int(grid.Ny), cast(KyLayout, str(getattr(grid, "ky_layout", FULL)).lower())
     )
@@ -86,7 +77,7 @@ class PreparedSimulation:
 
         A nonlinear ``initial_state`` on a linked (twist-shift) deck is
         projected onto the linked chain cover before it is integrated, which is
-        the same rule the runtime applies at intake (queue rows Q19 and Q23):
+        the same rule the runtime applies at intake:
         the rows outside the chains are decoupled, and the ExB bracket would
         alias whatever sits there back onto the chain rows. Periodic and
         full-cover decks are untouched.
@@ -137,30 +128,30 @@ class PreparedSimulation:
     # -- introspection ---------------------------------------------------
 
     def warmup(self) -> "PreparedSimulation":
-        """Force compilation now, so a later timed call measures execution.
+        """Compile and finish one nonlinear integration before returning self.
 
-        Preparing a nonlinear case builds its scan closure but does not compile
-        it: XLA compiles when the scan first executes. Measured on the shipped
-        five-step KBM deck, ``prepare`` took 4.3 s, the first ``solve`` 19.6 s
-        and the second 0.000 s. This method used to return ``self`` without
-        doing anything, so code that called it and then timed ``solve`` was
-        timing the compile.
-
-        Forcing compilation means executing the prepared closure once, because
-        the scan exposes no separately lowerable handle. That costs one run --
-        cheap next to the compile it triggers, but not free, so it happens only
-        when asked for. A second call is a no-op.
-
-        A linear case has nothing to compile ahead of time: the linear runtime
-        chooses its solver per call, so warming one would compile a solver the
-        next call may not use. ``summary()["warmed"]`` reports which happened.
-
-        Returns ``self`` so a caller can chain.
+        Preparation builds a scan closure; its first execution compiles it.
+        Warmup executes that closure once and waits for its result arrays, so
+        later synchronized timings exclude compilation and this initial run.
+        Further calls are no-ops. Linear cases select their solver per call and
+        remain unwarmed; ``summary()["warmed"]`` reports the distinction.
         """
+
+        import jax
 
         if self.kind == "nonlinear" and self._backend is not None:
             if not self._warmed[0]:
-                self._backend.run()
+                result = self._backend.run()
+                diag = result[1]
+                jax.block_until_ready(
+                    (
+                        result,
+                        vars(diag) if diag is not None else (),
+                        vars(diag.resolved)
+                        if diag is not None and diag.resolved is not None
+                        else (),
+                    )
+                )
                 self._warmed[0] = True
         return self
 
@@ -193,6 +184,8 @@ class PreparedSimulation:
 
         import jax
 
+        if self._backend is not None:
+            return np.finfo(self._backend.initial_state.dtype).dtype.name
         return "float64" if jax.config.read("jax_enable_x64") else "float32"
 
     @property
@@ -211,11 +204,7 @@ class PreparedSimulation:
         enabled = compilation_cache.compilation_cache_enabled()
         return {
             "persistent_cache_enabled": enabled,
-            # Preparation builds the nonlinear scan closure; XLA compiles it
-            # when that scan first executes, not here. Measured on the shipped
-            # five-step KBM deck: prepare 4.3 s, first solve 19.6 s, second
-            # 0.000 s. This key reported ``kind == "nonlinear"`` and so claimed
-            # a compile that had not happened.
+            # The first execution compiles the prepared graph.
             "compiled_at_prepare": False,
             "warmed": bool(self._warmed[0]),
             "devices": self.devices,
@@ -303,14 +292,17 @@ def prepare_simulation(case: Any, **options: Any) -> PreparedSimulation:
     kind = _case_kind(case)
     n_laguerre, n_hermite = _resolve_velocity_resolution(case, kind, options)
     backend = None
+    shape = _state_shape(case, n_laguerre=n_laguerre, n_hermite=n_hermite)
     if kind == "nonlinear":
         from gkx import runtime as _runtime
 
         backend = _runtime.prepare(case, **options)
+        shape = tuple(backend.initial_state.shape)
+        n_laguerre, n_hermite = shape[-5:-3]
     return PreparedSimulation(
         case=case,
         kind=kind,
-        state_shape=_state_shape(case, n_laguerre=n_laguerre, n_hermite=n_hermite),
+        state_shape=shape,
         n_laguerre=n_laguerre,
         n_hermite=n_hermite,
         options=dict(options),

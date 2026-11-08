@@ -509,17 +509,10 @@ def _shift_invert_apply_factory(
         b = x.reshape(size)
         # SOLVAX FGMRES applies the structured inverse on the right, so its
         # least-squares norm is the physical residual ||b - (A-sigma I)x||.
-        # A left-preconditioned solve can report convergence in a transformed
-        # norm while this residual remains O(1), which previously forced an
-        # expensive unpreconditioned retry for nearly every right-hand side.
         restart = min(max(gmres_restart, 1), gmres_maxiter, size)
         max_restarts = max(1, math.ceil(gmres_maxiter / restart))
-        # Start from zero, not from ``M^-1 b``: under right preconditioning the
-        # first Krylov vector is already ``M^-1 b``, so the first cycle from
-        # zero minimizes over a space containing that point, and with a weak
-        # ``M`` the guess starts the solve behind ``x = 0`` and the restarted
-        # budget reports that. Q28 measured the difference on the shipped
-        # Cyclone deck (docs/numerics.rst, plan/log.md).
+        # A zero initial guess includes the preconditioned right-hand side
+        # in the first Krylov search space.
         solution = gmres(
             matvec,
             b,

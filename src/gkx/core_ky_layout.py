@@ -18,7 +18,7 @@ through this module.
     because the negative rows are not stored.  The evolved state takes it on
     request, ``[grid] ky_layout = "half"``.  GKX's restart files, NetCDF
     output and real-space snapshots have always used it, as do the flux-tube
-    codes the plan compares against (docs ``numerics``, plan 2.4).
+    codes described in the numerical documentation.
 
 Three facts about the contract are easy to get wrong and are therefore stated
 here rather than rederived at each call site.
@@ -322,9 +322,8 @@ def symmetrize_self_conjugate_rows(state: Any, *, ny_full: int) -> Any:
     """Impose ``F[j, kx] = conj(F[j, -kx])`` on the self-conjugate rows.
 
     Applies to either layout.  Averaging the pair rather than keeping one side
-    keeps the operation self-adjoint and idempotent.  It is also the published
-    fix for a packed-transform gyroaverage, which without it left a ``ky = 0``
-    asymmetry of up to 14 per cent (plan 5.3 N4 and its cited source).
+    keeps the operation self-adjoint and idempotent, preserving the reality
+    condition on the self-conjugate rows.
     """
 
     xp = _xp(state)
@@ -456,12 +455,8 @@ def transport_mode_weights(
     so it takes half the weight and the kernel's factor of two restores it to
     one.
 
-    **The Nyquist row is a representative in both layouts** (plan 5.3 N3, which
-    Q24 left this decision to).  Before the state switch the two-sided rule
-    selected the ``ky > 0`` rows, which drops an even grid's Nyquist row --
-    stored once, as ``-Ny/2`` -- from the flux altogether, while the half axis
-    stores the same row as ``+Ny/2`` and counts it.  The two layouts therefore
-    named different sums.  They are reconciled here in favour of counting it,
+    **The Nyquist row is a representative in both layouts**. The two-sided
+    axis stores it at ``-Ny/2`` and the half axis at ``+Ny/2``. Both count it
     with the self-conjugate weight, because the flux may not depend on which
     sign of ``|ky| = Ny/2`` a layout happens to store: the flux kernel carries
     an explicit factor ``i * ky``, so that row's contribution is *odd* under

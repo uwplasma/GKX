@@ -445,11 +445,6 @@ def _cmd_generate_geometry(args: argparse.Namespace) -> int:
     return 0
 
 
-# The plan's six commands are run, scan, estimate, plot, inspect and validate.
-# estimate, inspect and validate were previously reachable only as flags on the
-# equilibrium shorthand or not at all, which meant a user could not discover
-# them from `gkx --help`.
-
 _DEPRECATED_COMMANDS = {
     "run-runtime-linear": "run",
     "scan-runtime-linear": "scan",

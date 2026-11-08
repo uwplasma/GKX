@@ -293,10 +293,9 @@ def cached_jit(fn: Callable[..., Any]) -> Callable[..., Any]:
 
     Keys one executable on the jaxpr text, argument avals and a digest of the
     closed-over constants, which stay baked: the bits are ``jax.jit(fn)``'s.
-    As operands they also reuse across geometry but drift 6.5e-8 in float32.
-    The key is computed once per argument signature of this wrapper, not per
-    call: tracing, printing and hashing cost ~1 s for an imex RHS, and the
-    imex probes call one wrapper hundreds of times. ``call.key(*args)`` is that
+    The key is computed once per argument signature of this wrapper, avoiding
+    repeated tracing and constant hashing during implicit probes.
+    ``call.key(*args)`` is that
     digest, or ``None`` when ``fn`` closes over an outer trace.
     """
 
@@ -745,7 +744,8 @@ def run_explicit_diagnostic_scan(
     sampled_scan: bool,
     checkpoint: bool,
     sampled_scan_fn: SampledDiagnosticScanFn,
-) -> tuple[jnp.ndarray, tuple[Any, Any, Any]]:
+    _return_dt: bool = False,
+) -> Any:
     """Run the explicit diagnostic scan using sampled or dense retention."""
 
     scan_step = jax.checkpoint(step_fn) if checkpoint else step_fn
@@ -766,7 +766,11 @@ def run_explicit_diagnostic_scan(
             steps=steps,
             stride=stride,
         )
-        return G_final, scan_diag_out
+        return (
+            (G_final, scan_diag_out, _dt_last)
+            if _return_dt
+            else (G_final, scan_diag_out)
+        )
 
     idx = jnp.arange(steps, dtype=jnp.int32)
     (
@@ -778,7 +782,9 @@ def run_explicit_diagnostic_scan(
         idx,
         checkpoint=checkpoint,
     )
-    return G_final, scan_diag_out
+    return (
+        (G_final, scan_diag_out, _dt_last) if _return_dt else (G_final, scan_diag_out)
+    )
 
 
 __all__ = [

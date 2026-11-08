@@ -5,7 +5,7 @@ beta = 0.015) and solves the linear problem at ``k_y rho_i = 0.3``. Prints
 gamma and omega, saves the fit summary as JSON, and plots the potential trace and
 the eigenfunction. A few seconds on a laptop CPU. The kinetic ballooning mode
 needs kinetic electrons and (Nl, Nm) = (16, 48); ``case_full.toml`` is the
-GX-benchmark deck for it (Nz = 96; minutes on a GPU).
+GX comparison deck for it (Nz = 96).
 """
 
 import json

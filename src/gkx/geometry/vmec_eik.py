@@ -200,8 +200,7 @@ def generate_runtime_vmec_eik(
     default_cache_output = False
     if resolved_output is None and cfg.geometry.geometry_file is not None:
         resolved_output = cfg.geometry.geometry_file
-    # For runtime VMEC workflows, an explicit geometry_file is an output target,
-    # not a signal to reuse whatever happened to be on disk from a previous run.
+    # An explicit geometry_file selects the generated VMEC geometry output.
     backend = str(cfg.geometry.geometry_backend).strip().lower()
     if not backend:
         backend = "auto"

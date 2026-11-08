@@ -1741,7 +1741,6 @@ def test_run_runtime_scan_batch_validation_and_selection(
 def test_run_runtime_scan_default_parallel_config_keeps_serial_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     cfg = _base_cfg()
     calls: list[float] = []
 
@@ -1782,7 +1781,6 @@ def test_run_runtime_scan_default_parallel_config_keeps_serial_order(
 def test_run_runtime_scan_collects_quasilinear_payloads_and_worker_metadata(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     cfg = _base_cfg()
     calls: list[float] = []
 
@@ -1826,7 +1824,6 @@ def test_run_runtime_scan_collects_quasilinear_payloads_and_worker_metadata(
 def test_run_runtime_scan_parallel_config_requests_combined_ky_batch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-
     cfg = replace(
         _base_cfg(), parallel=RuntimeParallelConfig(strategy="combined_ky", axis="ky")
     )
@@ -1954,6 +1951,7 @@ def test_run_runtime_nonlinear_phiext_source_uses_diagnostics_path(
 
 def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_split(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     cfg = _nonlinear_cfg(
         time=replace(
@@ -1995,7 +1993,11 @@ def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_
     assert captured[0]["collision_scheme"] == "exp"
     assert captured[0]["fixed_mode_ky_index"] == 1
     assert captured[0]["fixed_mode_kx_index"] == 0
-    assert captured[0]["show_progress"] is True
+    assert all(call["show_progress"] is False for call in captured)
+    progress = capsys.readouterr().out
+    assert "t=0.2/0.35" in progress
+    assert "t=0.35/0.35" in progress
+    assert "elapsed=" in progress
     assert out.diagnostics is not None
     assert out.state is None
     assert out.fields is not None
@@ -2285,3 +2287,50 @@ def test_fit_settled_requires_two_growth_times_in_the_window(tmax, settled) -> N
         )
     assert out.gamma == pytest.approx(24.0, rel=1e-6)
     assert out.fit_settled is settled
+
+
+def test_saved_physical_cadence_preserves_native_summary_and_result(
+    tmp_path, monkeypatch
+):
+    import json
+    from gkx.config import RuntimeConfig, RuntimeOutputConfig
+    from gkx.workflows.runtime import artifacts
+    from gkx.workflows.runtime.results import RuntimeNonlinearResult
+
+    diag = zero_field_diag(
+        np.asarray([0.3, 0.5, 0.8, 1.0]),
+        dt_t=np.asarray([0.1, 0.05, 0.1, 0.07]),
+        dt_mean=0.08,
+    )
+    result = RuntimeNonlinearResult(
+        t=diag.t, diagnostics=diag, state=np.ones((1, 2, 4, 3, 4, 4)), wall_seconds=2.0
+    )
+    cfg = RuntimeConfig(output=RuntimeOutputConfig(time_interval=0.5))
+    paths = artifacts.write_runtime_nonlinear_artifacts(
+        tmp_path / "coarse.csv", result, cfg
+    )
+    rows = np.genfromtxt(paths["diagnostics"], delimiter=",", names=True)
+    np.testing.assert_allclose(rows["t"], [0.5, 1.0])
+    np.testing.assert_allclose(rows["dt"], [0.05, 0.07])
+    summary = json.loads(Path(paths["summary"]).read_text())
+    assert summary["n_samples"] == 4
+    assert summary["dt_mean"] == float(diag.dt_mean)
+    assert result.diagnostics is diag
+    captured = []
+
+    def write_netcdf(out, selected, config):
+        captured.append(selected)
+        return {}
+
+    monkeypatch.setattr(artifacts, "_write_nonlinear_netcdf_outputs", write_netcdf)
+    paths = artifacts.write_runtime_nonlinear_artifacts(
+        tmp_path / "coarse.out.nc", result, cfg
+    )
+    np.testing.assert_allclose(captured[0].t, [0.5, 1.0])
+    assert captured[0].state is result.state
+    assert json.loads(Path(paths["summary"]).read_text())["n_samples"] == 4
+
+    with pytest.raises(ValueError, match="requires nonlinear diagnostics"):
+        artifacts.write_runtime_nonlinear_artifacts(
+            tmp_path / "missing.csv", replace(result, diagnostics=None), cfg
+        )

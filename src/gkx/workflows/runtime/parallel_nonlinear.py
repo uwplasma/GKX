@@ -1,55 +1,41 @@
-"""Route the runtime ``[parallel]`` policy into the nonlinear solver path.
+"""Route nonlinear parallel policy without dropping requested behavior.
 
-``RuntimeParallelConfig`` used to be read only by :mod:`gkx.workflows.linear`,
-so a nonlinear TOML could ask for a sharded run and silently get a serial one.
-This module is the nonlinear half of that routing, and it is deliberately
-narrow about what it will accept.
+``species_hermite`` uses the production species x Hermite mesh, replicating
+Laguerre, perpendicular and parallel spatial axes. Auto mode selects the
+largest compatible subset of the device budget; explicit counts fail closed
+when they cannot factor. Status reports selected and budgeted devices.
 
-Supported today: ``strategy = "shard_map"`` with ``axis = "species_hermite"``
-(the production decomposition -- a ``(species, hermite)`` mesh with the
-perpendicular plane, Laguerre and ``z`` replicated) or ``axis = "ky"`` (kept as
-a routing diagnostic). The ``ky`` route does not partition the work: the
-diagnostic integrator's initial-state projection (``setup.project_state`` in
-:mod:`gkx.solvers_nonlinear_diagnostics`) returns the state replicated, so the
-compiled scan's input is ``{replicated}`` on every device (read from the
-optimized HLO on JAX 0.10.2), and forcing the ``ky`` split inside the jit
-instead fails on XLA:CPU, whose FFT rejects the layout the partitioner's
-all-gather leaves it. Any device count is therefore accepted on ``ky``,
-including one that does not divide ``Nyc``. ``auto = true`` picks the species x Hermite mesh from the
-visible devices and reports which one it chose. In both cases the whole
-nonlinear state is placed on the mesh and the ordinary production integrator
-runs on it, so the operator is the production nonlinear RHS rather than a
-reduced stand-in; the audited ``shard_map`` route with named collectives is
-:func:`gkx.parallel.integrators.integrate_nonlinear_species_hermite`. Every
-other strategy/axis combination raises instead of falling back to serial.
+Named collectives serve explicit ``rk2``/``rk3``/``rk4``/``rk4-pi``/``sspx3``
+runs with production diagnostics, adaptive chunks, saturation checks and progress.
+Fixed-step diagnostics-off runs retain the final-state scan where supported.
+Diagnosed preparation reuses the same backend with ``strict_identity=False``;
+model overrides remain unsupported. Active collisions, sources, fixed modes,
+checkpointing, additional state sharding, unequal species moment counts and
+reflectionless closures retain the ordinary solver. Uniform moment stamps must
+match the normalized state. Fallback reports whole-state placement and does not
+imply distributed RHS work.
 
-``axis = "z"`` is rejected for two independent reasons, both measured on this
-stack rather than assumed:
+``ky`` is a single-process placement diagnostic with replicated work. FFT axes
+remain local; unsupported strategies and axes raise with their reasons.
 
-* the production parallel-streaming derivative is a spectral FFT along ``z``
-  (:func:`gkx.operators.linear.streaming.grad_z_periodic`), so a whole-state
-  ``z`` shard does not survive SPMD partitioning;
-* the former ``gkx.operators.nonlinear.device_z`` route was a reduced
-  diagnostic operator -- the ``-{phi,g}`` bracket with a model field solve, no
-  streaming, mirror, curvature, collisions, or species axis -- so routing a
-  production run through it would have answered a different physics question.
-
-Routing is fail-closed on numerical identity. With ``strict_identity = true``
-the same run is also executed serially and the two answers must agree, or
-:class:`NonlinearParallelIdentityError` is raised. Agreement is allclose-style:
-the maximum absolute error is within ``atol`` or the maximum relative error
-(scaled by ``max(|reference|, atol)``) is within ``rtol``.
+``strict_identity`` compares serial state and transport traces, accepting a
+maximum absolute error within ``atol`` or maximum scaled relative error within
+``rtol``. Multi-process callers must initialize JAX externally and enter on
+every rank; the selected mesh must include each process. Explicit global state
+returns gather the full array to every host. Identity checks compare local
+shards and exchange only error scalars.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Callable
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jax.sharding import NamedSharding, PartitionSpec
+from jax.experimental.multihost_utils import process_allgather
 
 from gkx.parallel.state import resolve_state_sharding
 from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
@@ -95,9 +81,6 @@ _Z_AXIS_REASON = (
     + "."
 )
 
-# Scalar traces compared alongside the final state. These are the runtime
-# diagnostics a nonlinear run is actually read for, so a route that reproduced
-# the state but not the transport traces would still fail the gate.
 _IDENTITY_TRACE_FIELDS = ("Wg_t", "Wphi_t", "heat_flux_t", "particle_flux_t")
 
 
@@ -123,7 +106,7 @@ class NonlinearParallelPlan:
 
     @property
     def device_count(self) -> int:
-        return len(self.devices)
+        return int(getattr(self.mesh_plan, "num_devices", len(self.devices)))
 
     @property
     def mesh_shape(self) -> tuple[int, int]:
@@ -150,7 +133,7 @@ class NonlinearParallelPlan:
         return (
             f"shard_map nonlinear route on a {chosen}species x Hermite mesh "
             f"({ns_chunks} species x {nm_chunks} Hermite) across "
-            f"{self.device_count} devices, shard "
+            f"{self.device_count} of {len(self.devices)} devices, shard "
             f"{tuple(self.mesh_plan.shard_shape)}, collectives: {collectives} "
             f"(strict_identity={strict})"
         )
@@ -159,6 +142,14 @@ class NonlinearParallelPlan:
 def _normalized(value: Any, default: str) -> str:
     text = str(default if value is None else value).strip().lower()
     return text.replace("-", "_")
+
+
+def _process_balanced_devices(devices: Any) -> tuple[Any, ...]:
+    groups = [
+        [device for device in devices if device.process_index == process]
+        for process in range(jax.process_count())
+    ]
+    return tuple(device for group in zip(*groups) for device in group)
 
 
 def _reject_independent_worker_options(parallel: Any) -> None:
@@ -211,6 +202,10 @@ def resolve_nonlinear_parallel_plan(parallel: Any) -> NonlinearParallelPlan | No
             f"{_SUPPORT_SUMMARY.capitalize()}."
         )
     _reject_independent_worker_options(parallel)
+    if axis == "ky" and jax.process_count() > 1:
+        raise NonlinearParallelRoutingError(
+            "axis='ky' is a single-process placement diagnostic"
+        )
 
     try:
         devices = tuple(
@@ -222,6 +217,8 @@ def resolve_nonlinear_parallel_plan(parallel: Any) -> NonlinearParallelPlan | No
         raise NonlinearParallelRoutingError(
             f"[parallel] num_devices is not satisfiable: {exc}"
         ) from exc
+    if bool(getattr(parallel, "auto", False)) and jax.process_count() > 1:
+        devices = _process_balanced_devices(jax.devices())[: len(devices)]
     if len(devices) < 2:
         raise NonlinearParallelRoutingError(
             "the sharded nonlinear route needs at least two JAX devices, but "
@@ -240,12 +237,7 @@ def resolve_nonlinear_parallel_plan(parallel: Any) -> NonlinearParallelPlan | No
 def resolve_species_hermite_mesh(
     state: Any, plan: NonlinearParallelPlan
 ) -> NonlinearParallelPlan:
-    """Attach the ``(species, hermite)`` mesh a state and device count imply.
-
-    Failure is a routing error naming the device counts that *do* factor, so a
-    user who asked for three devices is told which numbers work rather than
-    only which one did not.
-    """
+    """Attach the requested mesh, selecting a feasible subset only in auto mode."""
 
     from gkx.parallel.velocity_plan import (
         build_species_hermite_mesh_plan,
@@ -253,22 +245,46 @@ def resolve_species_hermite_mesh(
     )
 
     shape = tuple(int(x) for x in state.shape)
-    try:
-        mesh_plan = build_species_hermite_mesh_plan(
-            shape, num_devices=plan.device_count
+    if len(shape) not in (5, 6) or min(shape) < 1:
+        raise NonlinearParallelRoutingError(
+            f"expected a nonempty 5D or 6D state, got {shape}"
         )
+    ns = shape[0] if len(shape) == 6 else 1
+    nm = shape[2] if len(shape) == 6 else shape[1]
+    balanced = plan.auto and jax.process_count() > 1
+    devices = _process_balanced_devices(plan.devices) if balanced else plan.devices
+    count = len(devices)
+    if plan.auto:
+        feasible = species_hermite_device_counts(ns, nm, limit=count)
+        count = max(
+            (
+                n
+                for n in feasible
+                if n >= 2 and (not balanced or n % jax.process_count() == 0)
+            ),
+            default=count,
+        )
+    if jax.process_count() > 1 and {d.process_index for d in devices[:count]} != set(
+        range(jax.process_count())
+    ):
+        raise NonlinearParallelRoutingError(
+            "the nonlinear mesh must include a device from every initialized process"
+        )
+    try:
+        mesh_plan = build_species_hermite_mesh_plan(shape, num_devices=count)
     except ValueError as exc:
-        ns = shape[0] if len(shape) == 6 else 1
-        nm = shape[2] if len(shape) == 6 else shape[1]
         supported = species_hermite_device_counts(ns, nm)
         raise NonlinearParallelRoutingError(
             f"[parallel] axis='species_hermite' cannot factor "
-            f"{plan.device_count} devices over Ns={ns}, Nm={nm}: {exc}. "
+            f"{count} devices over Ns={ns}, Nm={nm}: {exc}. "
             "Species are factored first and the Hermite remainder must divide "
             "Nm exactly, so this grid supports "
             f"{', '.join(str(count) for count in supported)} devices."
         ) from exc
-    return replace(plan, mesh_plan=mesh_plan)
+    if balanced:
+        selected = tuple(sorted(devices[:count], key=lambda d: d.process_index))
+        devices = selected + tuple(d for d in plan.devices if d not in selected)
+    return replace(plan, mesh_plan=mesh_plan, devices=devices)
 
 
 def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
@@ -286,7 +302,7 @@ def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
         return stage_from_host(
             state,
             resolve_species_hermite_sharding(
-                state, resolved.mesh_plan, devices=list(plan.devices)
+                state, resolved.mesh_plan, devices=list(resolved.devices)
             ),
         )
 
@@ -305,8 +321,7 @@ def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
     # ``Ny`` on a two-sided axis and ``Nyc = 1 + Ny//2`` on a ``ky >= 0`` one
     # (gkx.core_ky_layout), and ``Nyc`` is odd whenever ``Ny`` is a multiple
     # of four. JAX places an array only in equal shares, so an extent the
-    # devices do not divide enters replicated on the same mesh (SHARD-PAD,
-    # plan F.6). That is not a weaker run than the divisible case: the
+    # devices do not divide enters replicated on the same mesh. The
     # integrator's initial-state projection hands the scan a replicated state
     # either way, so this route integrates the whole state on every device
     # whatever the extent (see the module docstring).
@@ -355,15 +370,24 @@ def assert_nonlinear_parallel_identity(
         sharded_diagnostics=sharded_diagnostics,
     ):
         reference = np.asarray(jax.device_get(jnp.asarray(serial_value)))
-        candidate = np.asarray(jax.device_get(jnp.asarray(sharded_value)))
+        candidate = jnp.asarray(sharded_value)
+        errors = np.zeros(2)
         if reference.shape != candidate.shape:
-            abs_error = rel_error = float("inf")
+            errors[:] = np.inf
         else:
-            error = np.abs(candidate - reference)
-            abs_error = float(np.max(error))
-            rel_error = float(
-                np.max(error / np.maximum(np.abs(reference), float(plan.atol)))
-            )
+            for shard in candidate.addressable_shards:
+                local_reference = reference[shard.index]
+                error = np.abs(np.asarray(shard.data) - local_reference)
+                errors = np.maximum(
+                    errors,
+                    [
+                        np.max(error),
+                        np.max(error / np.maximum(np.abs(local_reference), plan.atol)),
+                    ],
+                )
+        if jax.process_count() > 1:
+            errors = np.max(process_allgather(errors).reshape(-1, 2), axis=0)
+        abs_error, rel_error = map(float, errors)
         if not (abs_error <= float(plan.atol) or rel_error <= float(plan.rtol)):
             failures.append(
                 f"{name} (max_abs={abs_error:.6e}, max_rel={rel_error:.6e})"
@@ -376,6 +400,145 @@ def assert_nonlinear_parallel_identity(
         + ", ".join(failures)
         + ". The sharded result is discarded rather than returned."
     )
+
+
+def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
+    """Check shared named-collective explicit physics and runtime limits."""
+
+    return (
+        plan.axis == "species_hermite"
+        and not policy.fixed_mode_on
+        and not policy.source_on
+        and not cfg.time.checkpoint
+        and not cfg.time.collision_split
+        and not cfg.time.state_sharding
+        and (method is None or method == cfg.time.method)
+        and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3", "rk4-pi"}
+        and all(
+            sp.Nl in (None, ctx.G0.shape[1])
+            and sp.Nm in (None, ctx.G0.shape[2])
+            and sp.hermite_closure == "hypercollision"
+            for sp in cfg.species
+            if sp.kinetic
+        )
+        and (
+            float(ctx.terms.collisions) == 0.0
+            or not np.any(np.asarray(ctx.params.nu) != 0.0)
+        )
+    )
+
+
+def _species_hermite_diagnostic_rhs(
+    prepared, policies, params, *, plan, compressed_real_fft, laguerre_mode
+):
+    """Build the staged named RHS for the shared production diagnostic scan."""
+
+    from gkx.parallel.integrators import _prepare_species_hermite_rhs
+
+    return _prepare_species_hermite_rhs(
+        prepared.G0,
+        prepared.cache,
+        params,
+        terms=policies.collision_policy.rhs_terms,
+        plan=plan.mesh_plan,
+        devices=plan.devices,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+    )
+
+
+def _integrate_species_hermite_final_state(
+    cfg: Any,
+    ctx: Any,
+    policy: Any,
+    *,
+    method: str | None,
+    plan: NonlinearParallelPlan,
+    status: Any,
+    prepare: Callable[[], Any] | None = None,
+) -> Any:
+    """Use named collectives only when every requested policy is supported."""
+
+    if (
+        policy.diagnostics_on
+        or not cfg.time.fixed_dt
+        or (method or cfg.time.method) == "rk4-pi"
+        or str(cfg.time.run_to).strip().lower() != "t_max"
+        or policy.show_progress
+        or cfg.time.progress_bar
+        or (prepare is not None and plan.strict_identity)
+        or not _supports_species_hermite_policy(
+            cfg, ctx, policy, method=method, plan=plan
+        )
+    ):
+        return None
+    from gkx.operators.linear.cache_builder import build_linear_cache
+    from gkx.parallel.integrators import _prepare_nonlinear_species_hermite
+    from gkx.terms.assembly import compute_fields_cached
+
+    status("using named species-Hermite collectives for the fixed-step trajectory")
+    prepared = prepare() if prepare is not None else None
+    cache = (
+        prepared.cache
+        if prepared is not None
+        else build_linear_cache(ctx.grid, ctx.geom, ctx.params, *ctx.G0.shape[1:3])
+    )
+    params, terms = ctx.params, ctx.terms
+
+    advance = _prepare_nonlinear_species_hermite(
+        ctx.G0,
+        cache,
+        params,
+        dt=ctx.dt,
+        steps=ctx.steps,
+        method=cfg.time.method,
+        terms=terms,
+        plan=plan.mesh_plan,
+        devices=plan.devices,
+        compressed_real_fft=cfg.time.compressed_real_fft,
+        laguerre_mode=policy.laguerre_mode,
+    )
+
+    if prepared is not None:
+        from gkx.parallel.integrators import stage_from_host
+        from gkx.parallel.state import resolve_species_hermite_sharding
+
+        sharding = resolve_species_hermite_sharding(
+            prepared.initial_state, plan.mesh_plan, devices=plan.devices
+        )
+        shape, dtype = prepared.initial_state.shape, prepared.initial_state.dtype
+
+        @jax.jit
+        def run_raw(state, advance):
+            final = advance(state).state
+            fields = compute_fields_cached(final, cache, params, terms=terms)
+            empty = jnp.empty((0,), dtype=jnp.real(final).dtype)
+            return final, (None, empty, empty), fields
+
+        def execute(state, time_horizon=None):
+            if time_horizon is not None or state.shape != shape:
+                raise ValueError(
+                    "parallel preparation requires its fixed shape and horizon"
+                )
+            state = jnp.asarray(state, dtype=dtype)
+            return run_raw(stage_from_host(state, sharding), advance)
+
+        def reject_dynamic(*_args):
+            raise ValueError("parallel preparation does not support model overrides")
+
+        return replace(
+            prepared,
+            initial_state=stage_from_host(prepared.initial_state, sharding),
+            _run_raw=execute,
+            _run_dynamic_raw=reject_dynamic,
+        )
+    sharded_state = advance(ctx.G0).state
+    if not bool(jnp.all(jnp.isfinite(sharded_state))):
+        raise FloatingPointError(
+            "species-Hermite integration produced a non-finite state"
+        )
+    fields = compute_fields_cached(sharded_state, cache, ctx.params, terms=ctx.terms)
+    return sharded_state, fields
 
 
 __all__ = [

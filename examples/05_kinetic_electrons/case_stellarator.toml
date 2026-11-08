@@ -1,18 +1,9 @@
 schema_version = 1
 
-# Nonlinear ITG with kinetic electrons in the Landreman-Paul (2021) precise
-# quasi-axisymmetric stellarator, flux tube at s = 0.64, tutorial resolution
-# (16x16x32, (Nl, Nm) = (4, 16)). run.py solves the wout once with vmex when it
-# is missing. dt and t_max follow the same rules as case.toml: the CFL
-# controller is bound by electron streaming, beta = 1e-4 with A_parallel
-# removes the electrostatic omega_H limit, and the default cfl = 0.9 is stable
-# (omega_stream = 454 measured, against the GX estimate 264). imex-ars3 at
-# dt = 0.05 gives the same saturated heat flux within its error bar; on this
-# small grid RK3 is as fast once the factor build (30 s) is counted. The
-# tutorial horizon (t = 0.3) covers the start of the linear phase only.
-#
-# Production (GPU, hours): Nx = Ny = 96, Nz = 48-64, Nl = 4, Nm = 16,
-# t_max = 400, run_to = "saturation".
+# Tutorial nonlinear kinetic-electron ITG in the Landreman-Paul (2021)
+# precise quasi-axisymmetric stellarator at s = 0.64. The geometry is solved
+# when absent. CFL control includes electron streaming and field response;
+# the tutorial horizon covers the start of the linear phase only.
 
 [[species]]
 name = "ion"
@@ -48,7 +39,10 @@ ntheta = 32
 nperiod = 1
 
 [time]
-# Nonlinear rate kept from GKX < 2.6 (damp_ends_amp = 0.1 read as a rate).
+# Optional runtime controls; intervals use normalized time, like t_max.
+# chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
+# diagnostics_interval = 0.05  # Overrides the step-stride cadence.
+# Explicit nonlinear end-damping rate.
 damp_ends_rate = 0.1
 t_max = 0.3
 dt = 0.05
@@ -117,3 +111,7 @@ nonlinear = 1.0
 ky = 0.047619047619047616
 Nl = 4
 Nm = 16
+
+[output]
+# Optional saved-record cadence in the same time units as time.t_max.
+# time_interval = 0.1  # nsave and nstep_restart keep step-based checkpoints.

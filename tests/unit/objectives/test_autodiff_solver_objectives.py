@@ -41,7 +41,7 @@ from gkx.diagnostics.quasilinear_transport import (
 )
 import sys
 from types import SimpleNamespace
-import csv
+import ast
 import py_compile
 import re
 
@@ -1491,7 +1491,6 @@ def _fake_solver_rows(scale: float = 1.0) -> jnp.ndarray:
 
 
 def test_vmex_transport_objective_reduces_fake_solver_rows(monkeypatch) -> None:
-
     calls: list[dict[str, object]] = []
     growth_calls: list[dict[str, object]] = []
     rows = _fake_solver_rows()
@@ -1540,7 +1539,6 @@ def test_vmex_transport_objective_reduces_fake_solver_rows(monkeypatch) -> None:
 def test_vmex_transport_surface_chunking_matches_unchunked_weighted_mean(
     monkeypatch,
 ) -> None:
-
     def fake_geom(*_args, **_kwargs):
         return _fake_geometry()
 
@@ -1592,7 +1590,6 @@ def test_vmex_transport_surface_chunking_matches_unchunked_weighted_mean(
 def test_vmex_transport_objective_nonlinear_proxy_is_positive_and_exported(
     monkeypatch,
 ) -> None:
-
     scale = {"value": 1.0}
 
     def fake_geom(*_args, **_kwargs):
@@ -1631,7 +1628,6 @@ def test_vmex_transport_objective_nonlinear_proxy_is_positive_and_exported(
 def test_vmex_transport_objective_transform_scales_large_residuals(
     monkeypatch,
 ) -> None:
-
     def fake_geom(*_args, **_kwargs):
         return _fake_geometry()
 
@@ -1733,7 +1729,6 @@ def test_vmex_transport_config_rejects_underresolved_boozer_modes() -> None:
 def test_module_search_root_handles_paths_and_missing_modules(
     monkeypatch, tmp_path
 ) -> None:
-
     namespace_root = tmp_path / "namespace_backend"
     namespace_root.mkdir()
     namespace_module = ModuleType("namespace_backend")
@@ -1770,7 +1765,6 @@ def test_static_grid_options_rejects_invalid_ky_values(
     ky_values: tuple[float, ...],
     message: str,
 ) -> None:
-
     with pytest.raises(ValueError, match=message):
         transport_tables._static_grid_options_from_ky_values(ky_values, min_ny=3)
 
@@ -1802,7 +1796,6 @@ def test_vmex_transport_config_rejects_invalid_edges(
 
 
 def test_transport_feature_table_rejects_empty_sample_rows() -> None:
-
     config = SimpleNamespace(
         sample_set=SimpleNamespace(surfaces=(), alphas=(0.0,), ky_values=(0.2,)),
         kind="growth",
@@ -1820,7 +1813,6 @@ def test_transport_feature_table_rejects_empty_sample_rows() -> None:
 
 
 def test_quasilinear_flux_uses_geometry_transport_weights(monkeypatch) -> None:
-
     def fake_geom(*_args, **_kwargs):
         return _fake_geometry()
 
@@ -1849,19 +1841,6 @@ def test_quasilinear_flux_uses_geometry_transport_weights(monkeypatch) -> None:
 ROOT = REPO_ROOT
 EXAMPLES = ROOT / "examples" / "10_vmex_optimization"
 QA_SCRIPT = EXAMPLES / "run.py"
-TRANSPORT_SUMMARY = ROOT / "docs" / "_static" / "qa_transport_summary.csv"
-TRANSPORT_TRACES = ROOT / "docs" / "_static" / "qa_transport_traces.csv"
-TRANSPORT_TIMESERIES = ROOT / "docs" / "_static" / "qa_transport_nominal_timeseries.csv"
-
-
-def _transport_summary() -> dict[str, dict[str, float]]:
-    with TRANSPORT_SUMMARY.open(encoding="utf-8", newline="") as stream:
-        return {
-            row["case"]: {
-                key: float(value) for key, value in row.items() if key != "case"
-            }
-            for row in csv.DictReader(stream)
-        }
 
 
 def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
@@ -1886,19 +1865,30 @@ def test_vmex_style_qa_script_appends_physical_autodiff_transport() -> None:
     assert "(turbulent_transport, 0.0, transport_weight)," in text
     assert "result = least_squares(" in text
     assert "def report(label, local_equilibrium):" in text
-
-
-def test_docs_name_the_single_qa_autodiff_script() -> None:
-    docs = [
-        ROOT / "README.md",
-        ROOT / "docs" / "stellarator_optimization.rst",
-        EXAMPLES / "README.md",
+    nodes = [
+        node
+        for node in ast.parse(text).body
+        if getattr(node, "name", None) == "initial_state"
+        or any(getattr(t, "id", None) == "grid" for t in getattr(node, "targets", ()))
     ]
-    for path in docs:
-        text = path.read_text(encoding="utf-8")
-        assert "QA_optimization.py" in text, path
+    scope = dict(gkx=gkx, jnp=jnp, NX=8, NY=8, NZ=8, NL=2, NM=4)
+    module = ast.Module(body=nodes, type_ignores=[])
+    exec(compile(module, str(QA_SCRIPT), "exec"), scope)
+    state, grid = np.asarray(scope["initial_state"]()), scope["grid"]
+    assert state.shape[-3:] == (grid.ky.size, grid.kx.size, grid.z.size)
+    reverse = (-np.arange(8)) % 8
+    partner = np.take(np.take(state, reverse, axis=-3), reverse, axis=-2)
+    np.testing.assert_array_equal(state, np.conj(partner))
 
+
+def test_docs_link_the_runnable_qa_autodiff_example() -> None:
+    for path in (ROOT / "README.md", ROOT / "docs/stellarator_optimization.rst"):
+        assert "examples/10_vmex_optimization/run.py" in path.read_text(
+            encoding="utf-8"
+        )
     examples_readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
+    assert "[run.py](run.py)" in examples_readme
+    assert QA_SCRIPT.is_file()
     assert "exact discrete differentiation" in re.sub(r"\s+", " ", examples_readme)
 
 
@@ -1916,48 +1906,20 @@ def test_docs_scope_vmex_transport_optimizer_claims() -> None:
         assert "post-saturation" in normalized, path
 
 
-def test_readme_qa_figures_and_reproduction_inputs_are_checked_in() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
-    figures = (
-        "nonlinear_autodiff_validation.png",
-        "qa_transport_equilibria.png",
-        "qa_transport_reduction.svg",
-    )
-    for filename in figures:
-        path = ROOT / "docs" / "_static" / filename
-        assert f"docs/_static/{filename}" in readme
-        assert path.stat().st_size > 0
-    equilibria = ROOT / "docs" / "_static" / "qa_transport_equilibria.png"
-    assert equilibria.stat().st_size < 100_000
-    assert equilibria.read_bytes()[25] == 3  # indexed-color PNG
+def test_qa_example_keeps_the_input_needed_to_reproduce_the_workflow() -> None:
+    import ast
 
-    for filename in (
-        "input.qa_transport_baseline",
-        "input.qa_transport_candidate",
-    ):
-        assert (EXAMPLES / filename).is_file()
-        assert filename in docs
-
-    with TRANSPORT_TIMESERIES.open(encoding="utf-8", newline="") as stream:
-        rows = list(csv.DictReader(stream))
-    time = np.asarray([float(row["time"]) for row in rows])
-    values = np.asarray(
-        [
-            [
-                float(row["baseline_mean"]),
-                float(row["baseline_sem"]),
-                float(row["candidate_mean"]),
-                float(row["candidate_sem"]),
-            ]
-            for row in rows
-        ]
+    script = QA_SCRIPT.read_text(encoding="utf-8")
+    seed = "input.minimal_seed_nfp2"
+    assert seed in script
+    assert (ROOT / "examples/vmec" / seed).is_file()
+    tree = ast.parse(script)
+    assert any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "from_file"
+        for node in ast.walk(tree)
     )
-    assert len(rows) == 301
-    assert np.all(np.diff(time) > 0.0)
-    assert time[0] < 1.0 and time[-1] > 1499.0
-    assert np.all(np.isfinite(values))
-    assert np.all(values[:, (1, 3)] >= 0.0)
 
 
 def test_optimization_examples_document_user_customization_knobs() -> None:
@@ -1972,107 +1934,17 @@ def test_optimization_examples_document_user_customization_knobs() -> None:
     assert "least_squares" in examples_readme
 
 
-def test_readme_uses_solved_vmec_qa_geometry_not_reduced_surface_panel() -> None:
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
-    manuscript = (ROOT / "docs" / "manuscript_figures.rst").read_text(encoding="utf-8")
-    normalized_readme = re.sub(r"\s+", " ", readme)
-
-    # The README presents the production method, not a reduced proxy panel.
-    assert "docs/_static/qa_itg_optimization_summary_panel.png" not in readme
-    assert "docs/_static/vmex_qa_solved_boundary_boozer_panel.png" not in readme
-    assert "docs/_static/stellarator_itg_optimization_comparison.png" not in readme
-    assert "docs/_static/stellarator_itg_optimization_uq.png" not in readme
-    assert "independent matched runs validate" not in normalized_readme.lower()
-    assert "preliminary 12.26% reduction" in normalized_readme.lower()
-    assert "not statistically resolved" in normalized_readme.lower()
-    assert "replicated" in normalized_readme.lower()
-    assert "post-saturation" in normalized_readme.lower()
-
-    assert "QA_optimization.py" in docs
-    assert (
-        "nonlinear_heat_flux_window" not in docs or "physical heat-flux window" in docs
+def test_readme_scopes_qa_claims_to_finite_window_derivatives() -> None:
+    readme = " ".join((ROOT / "README.md").read_text(encoding="utf-8").split())
+    docs = " ".join(
+        (ROOT / "docs/stellarator_optimization.rst").read_text(encoding="utf-8").split()
     )
-    assert ".. figure:: _static/stellarator_itg_optimization_comparison.png" not in docs
+    manuscript = " ".join(
+        (ROOT / "docs/manuscript_figures.rst").read_text(encoding="utf-8").split()
+    )
+    assert "finite post-saturation window" in readme
+    assert "finite differences across perturbation sizes" in readme
+    assert "independent long simulations" in readme
     assert "screening diagnostics" in docs
-    assert (
-        "current artifact bases: ``docs/_static/stellarator_itg_optimization_comparison.png``"
-        not in manuscript
-    )
-    assert "is not a solved-geometry optimization figure" in manuscript
-    assert (
-        "production QA optimization examples are the VMEC-JAX-style scripts"
-        in manuscript
-    )
-
-
-def test_reduced_surface_comparison_is_not_current_primary_optimization_figure() -> (
-    None
-):
-    release_contract = (
-        ROOT / "benchmarks" / "references" / "gkx_1_7_release_contract.json"
-    ).read_text(encoding="utf-8")
-    examples_readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
-    docs = (ROOT / "docs" / "stellarator_optimization.rst").read_text(encoding="utf-8")
-
-    reduced_png = '"docs/_static/stellarator_itg_optimization_comparison.png"'
-    assert reduced_png not in release_contract
-    assert "stellarator_itg_growth_optimization.py" not in examples_readme
-    assert "reduced_stellarator_itg" not in examples_readme
-    assert "screening diagnostics" in re.sub(r"\s+", " ", docs)
-
-
-def test_matched_qa_transport_evidence_fails_closed() -> None:
-    """Keep the preliminary campaign reproducible without promoting it."""
-    rows = _transport_summary()
-    assert set(rows) == {
-        "nominal",
-        "dt04",
-        "dt025",
-        "perp12",
-        "perp20",
-        "perp24",
-        "perp24long",
-        "z16",
-        "z32",
-        "v36",
-        "v612",
-    }
-    assert all(np.isfinite(value) for row in rows.values() for value in row.values())
-    with TRANSPORT_TRACES.open(encoding="utf-8", newline="") as stream:
-        traces = list(csv.DictReader(stream))
-    for row in rows.values():
-        assert row["p_hyper_m"] == min(20, max(int(row["nm"]) // 2, 1))
-    for case, row in rows.items():
-        case_traces = [trace for trace in traces if trace["case"] == case]
-        pairs = int(row["pairs"])
-        assert len(case_traces) == 2 * pairs
-        for design in ("baseline", "candidate"):
-            seeds = {
-                int(trace["seed"]) for trace in case_traces if trace["design"] == design
-            }
-            assert seeds == set(range(pairs))
-        assert all(float(trace["tau"]) > 0.0 for trace in case_traces)
-        assert all(float(trace["neff"]) > 0.0 for trace in case_traces)
-        assert all(
-            int(trace["stationary"]) == int(abs(float(trace["trend_percent"])) <= 20.0)
-            for trace in case_traces
-        )
-        assert row["stationary_traces"] == sum(
-            int(trace["stationary"]) for trace in case_traces
-        )
-        assert (
-            row["nonstationary_traces"] == len(case_traces) - row["stationary_traces"]
-        )
-        assert row["resolved_spectra_available"] == 0.0
-        assert row["promotion_ready"] == 0.0
-
-    nominal = rows["nominal"]
-    assert nominal["pairs"] == 24
-    assert nominal["positive_pairs"] == nominal["pairs"]
-    assert nominal["ci95_low_percent"] > 0.0
-    assert nominal["minimum_window_in_tau"] > 10.0
-    assert nominal["stationary_traces"] == 44
-    assert nominal["nonstationary_traces"] == 4
-    assert nominal["all_traces_stationary"] == 0.0
-    assert rows["z32"]["all_traces_stationary"] == 1.0
+    assert "finite-difference check" in manuscript
+    assert "differentiated window" in manuscript

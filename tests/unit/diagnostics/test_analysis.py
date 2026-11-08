@@ -1609,10 +1609,20 @@ def test_heat_flux_time_figure_from_arrays(tmp_path):
 
 def test_heat_flux_time_figure_from_csv_sidecar(tmp_path):
     base = _write_csv_sidecar(tmp_path)
+    base.with_suffix(".summary.json").write_text(
+        '{"saturation":{"window_tmin":0.1,"window_tmax":0.3,'
+        '"mean":7.25,"sem":0.125,"saturated":true}}'
+    )
     out = tmp_path / "heat_flux_csv.png"
-    fig, _axes = heat_flux_time_figure(
+    fig, axes = heat_flux_time_figure(
         base.with_suffix(".diagnostics.csv"), window=(0.1, 0.3), out=out
     )
+    assert "7.25" in axes[0].texts[-1].get_text()
+    assert "recorded SEM" in axes[0].texts[-1].get_text()
+    assert "sample IID SEM" in axes[1].texts[-1].get_text()
+    plt.close(fig)
+    fig, axes = heat_flux_time_figure(base, window=(0.2, 0.3))
+    assert "sample IID SEM" in axes[0].texts[-1].get_text()
     plt.close(fig)
     assert out.exists()
 

@@ -191,8 +191,8 @@ The reference diagnostic contract defines the perpendicular metric as
 - ``kperp2_bmag = True`` (include the :math:`B^{-2}` factor in :math:`k_\perp^2`)
 - ``bessel_bmag_power = 0`` (no extra :math:`B` scaling inside the Bessel argument)
 
-The Cyclone base case defaults use this setting, and
-``scripts/comparison/compare_gx_rhs_terms.py compare`` (retired; :ref:`retired-generators`) assumes it.
+The Cyclone base case defaults use this setting. Match both factors when
+comparing with another code.
 
 Sign conventions
 ----------------

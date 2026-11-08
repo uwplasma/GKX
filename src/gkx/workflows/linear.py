@@ -637,19 +637,7 @@ def _run_linear_runtime_branch(
         sample_stride=sample_stride,
     )
     _validate_parallel_linear_time_path(ctx, time_config)
-    # ``explicit_time`` used to be excluded from the CFL hint, which left the
-    # one linear path that advances a *fixed* step explicitly as the only one
-    # that overflowed without saying why. Measured on the shipped Cyclone deck
-    # at (Nz,Nl,Nm)=(96,4,8) with the TimeConfig defaults (rk2, dt=0.1,
-    # fixed_dt=True): ``solver="time"`` warns "requested dt=0.1 exceeds the
-    # estimated CFL-stable step 0.01281 (max linear frequency 70.25)" and then
-    # raises FloatingPointError, while ``solver="explicit_time"`` raised the
-    # same FloatingPointError with no warning at all. The hint is therefore
-    # extended to that path, and only where the step really is fixed: with
-    # ``fixed_dt=False`` the same deck and dt integrate cleanly (rk2 gamma
-    # 0.10126899, rk4 0.10125984 against the certified 0.10128645), so warning
-    # about the adaptive controller's initial guess would be a false positive.
-    # The clause is additive -- every warning that fired before still fires.
+    # Apply CFL warnings to fixed-step explicit integration.
     fixed = bool(getattr(time_config, "fixed_dt", True))
     if dt is None and not fixed and ctx.solver_key != "explicit_time":
         # No dt chosen: this fixed-step route has no controller, so take the
@@ -733,6 +721,14 @@ def run_runtime_linear(
 
     ``kx_target`` picks the fitted kx (nearest grid value; default kx = 0).
     """
+    if (
+        cfg.time.chunk_steps is not None
+        or cfg.time.diagnostics_interval is not None
+        or cfg.output.time_interval is not None
+    ):
+        raise ValueError(
+            "chunk_steps and physical-time intervals require nonlinear runtime execution"
+        )
 
     cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
     _status(status_callback, "building runtime geometry")

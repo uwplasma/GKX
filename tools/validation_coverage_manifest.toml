@@ -48,9 +48,7 @@ next_tests = [
   "value_and_grad against a prepared nonlinear objective, once the differentiable prepared path lands",
   "scan over ky returns the same result as the standalone runtime scan",
 ]
-artifact_paths = [
-  "docs/api.rst",
-]
+artifact_paths = ["docs/api.rst"]
 
 [[modules]]
 module = "gkx.api.__init__"
@@ -76,10 +74,7 @@ fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
   "tests/unit/parallel/test_parallel_core.py",
 ]
-artifact_paths = [
-  "docs/design.rst",
-  "docs/api.rst",
-]
+artifact_paths = ["docs/design.rst", "docs/api.rst"]
 next_tests = [
   "add a dedicated public API exact-order regression test if future export churn increases",
   "move advanced users toward domain imports while keeping top-level imports stable through the next release",
@@ -107,9 +102,7 @@ fast_tests = [
   "tests/unit/core/test_core_numerics.py",
   "tests/unit/operators/test_operator_kernels.py",
 ]
-artifact_paths = [
-  "docs/_static/collision_operator_verification.json",
-]
+artifact_paths = []
 next_tests = [
   "retain conservation, null-space, entropy, and finite-wavelength tests for every new collision model",
 ]
@@ -154,10 +147,7 @@ fast_tests = [
   "tests/integration/runtime/test_runtime_runner.py",
   "tests/integration/runtime/test_runtime_artifacts.py",
 ]
-artifact_paths = [
-  "docs/_static/validation_gate_index.json",
-  "docs/_static/w7x_exact_state_audit.json",
-]
+artifact_paths = []
 next_tests = [
   "split remaining runtime orchestration helpers behind compatibility exports",
   "add branch coverage for fixed_dt/adaptive/restart output handoff paths",
@@ -191,10 +181,7 @@ fast_tests = [
   "tests/integration/runtime/test_cli.py",
   "tests/integration/runtime/test_runtime_artifacts.py",
 ]
-artifact_paths = [
-  "docs/_static/validation_gate_index.json",
-  "docs/_static/w7x_exact_state_audit.json",
-]
+artifact_paths = []
 next_tests = [
   "keep scan/progress/artifact owner modules covered by runtime helper and artifact tests",
   "split CLI plotting/output dispatch once CLI ownership is available in a later tranche",
@@ -240,11 +227,7 @@ fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/operators/test_terms_fields.py",
 ]
-artifact_paths = [
-  "docs/_static/cyclone_resolution_observed_order.json",
-  "docs/_static/kbm_branch_gate_summary.json",
-  "docs/_static/w7x_eigenfunction_reference_overlay_ky0p3000.png",
-]
+artifact_paths = ["docs/_static/w7x_eigenfunction_reference_overlay_ky0p3000.png"]
 next_tests = [
   "extract field-solve and diagnostic helpers and preserve public imports",
   "replace remaining convergence pilots with monotone velocity-space sweeps",
@@ -278,10 +261,7 @@ fast_tests = [
   "tests/unit/operators/test_operator_kernels.py",
   "tests/unit/geometry/test_geometry.py",
 ]
-artifact_paths = [
-  "docs/_static/cyclone_resolution_observed_order.json",
-  "docs/_static/w7x_eigenfunction_reference_overlay_ky0p3000.png",
-]
+artifact_paths = ["docs/_static/w7x_eigenfunction_reference_overlay_ky0p3000.png"]
 next_tests = [
   "add direct cache-construction fixtures for sampled geometry, linked geometry, and multispecies damping paths",
   "keep gkx.linear public cache exports documented while developer helpers live in operators.linear",
@@ -312,18 +292,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/operators/test_operator_kernels.py",
 ]
-artifact_paths = [
-  "docs/_static/collision_operator_verification.json",
-  "docs/_static/collision_operator_verification.png",
-  "docs/_static/collision_response_convergence.json",
-  "docs/_static/collision_response_convergence.csv",
-  "docs/_static/collision_response_convergence.png",
-  "docs/_static/collision_response_convergence.pdf",
-  "docs/_static/collision_finite_wavelength_generation_hierarchy.json",
-  "docs/_static/collision_finite_wavelength_itg_convergence.json",
-  "docs/_static/collision_finite_wavelength_itg_convergence.png",
-  "docs/_static/collision_finite_wavelength_zonal_b_grid_pilot.json",
-]
+artifact_paths = ["docs/_static/collision_operator_verification.png", "docs/_static/collision_response_convergence.png", "docs/_static/collision_response_convergence.pdf", "docs/_static/collision_finite_wavelength_itg_convergence.png"]
 next_tests = [
   "test fixed-particle-position conservation only if a pre-gyroaverage particle operator is implemented",
   "require finite-b ITG and collisional zonal-response gates before input-file promotion",
@@ -352,9 +321,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/operators/test_operator_kernels.py",
 ]
-artifact_paths = [
-  "docs/_static/collision_operator_verification.json",
-]
+artifact_paths = []
 next_tests = [
   "retain exact table/runtimes identities whenever a new table layout is added",
 ]
@@ -383,10 +350,7 @@ fast_tests = [
   "tests/unit/parallel/test_parallel_linear_velocity.py",
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
-artifact_paths = [
-  "docs/_static/cyclone_resolution_observed_order.json",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = []
 next_tests = [
   "add direct RHS-owner tests after linear time integration moves out of the public facade",
   "keep gkx.linear public RHS exports documented while implementation lives in operators.linear.rhs",
@@ -416,10 +380,7 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/solvers/test_time_integrators.py",
 ]
-artifact_paths = [
-  "docs/_static/cyclone_resolution_observed_order.json",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = []
 next_tests = [
   "add direct owner-module tests for GMRES failure metadata if exposed in a future public solver report",
   "keep the linear implicit helper public exports available on the top-level gkx API",
@@ -448,10 +409,7 @@ fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/integration/runtime/test_runtime_runner.py",
 ]
-artifact_paths = [
-  "docs/_static/cyclone_resolution_observed_order.json",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = []
 next_tests = [
   "add direct owner-module coverage for progress callback emission once callback policy is split",
   "keep gkx.linear public integrate_linear exports documented while implementation lives in solvers.linear.integrators",
@@ -480,10 +438,7 @@ fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/operators/test_terms_fields.py",
 ]
-artifact_paths = [
-  "docs/_static/hermite_streaming_ladder_gate.json",
-  "docs/_static/electrostatic_field_reduce_gate.json",
-]
+artifact_paths = []
 next_tests = [
   "add direct finite-difference checks for grad_z_periodic and streaming_term on analytic waves",
   "keep gkx.linear public moment exports documented while developer helpers live in operators.linear",
@@ -511,10 +466,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/linear/test_linear.py",
 ]
-artifact_paths = [
-  "docs/_static/cyclone_resolution_observed_order.json",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = []
 next_tests = [
   "add direct pytree round-trip tests for LinearParams and LinearTerms after any dataclass field changes",
   "keep gkx.linear public parameter exports documented while developer helpers live in operators.linear",
@@ -542,10 +494,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/linear/test_linear.py",
 ]
-artifact_paths = [
-  "docs/_static/cyclone_resolution_observed_order.json",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = []
 next_tests = [
   "add minimal direct linked-chain fixtures independent of full cache construction",
   "preserve profiler labels when linked derivative kernels are split further",
@@ -579,10 +528,7 @@ fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/parallel/test_parallel_linear_velocity.py",
 ]
-artifact_paths = [
-  "docs/_static/linear_rhs_streaming_gate.json",
-  "docs/_static/linear_rhs_electrostatic_slices_gate.json",
-]
+artifact_paths = []
 next_tests = [
   "keep gkx.linear public parallel exports documented while developer helpers live in solvers.linear",
   "extend dispatch-policy tests when new velocity or domain-parallel backends are promoted",
@@ -629,18 +575,7 @@ fast_tests = [
   "tests/unit/operators/test_terms_fields.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
-artifact_paths = [
-  "docs/_static/nonlinear_window_statistics.json",
-  "docs/_static/nonlinear_w7x_gate_summary.json",
-  "docs/_static/nonlinear_kbm_gate_summary.json",
-  "docs/_static/w7x_fluctuation_spectrum_panel.json",
-  "docs/_static/tem_branch_parity_audit.json",
-  "docs/_static/w7x_tem_extension_status.json",
-  "docs/_static/nonlinear_domain_parallel_identity_gate.json",
-  "docs/_static/nonlinear_domain_parallel_identity_gate.png",
-  "docs/_static/nonlinear_spectral_communication_identity_gate.json",
-  "docs/_static/nonlinear_spectral_communication_identity_gate.png",
-]
+artifact_paths = ["docs/_static/nonlinear_domain_parallel_identity_gate.png", "docs/_static/nonlinear_spectral_communication_identity_gate.png"]
 next_tests = [
   "keep nonlinear state-integration and diagnostic-integration owner-module tests on the fast path",
   "add more unit coverage for resolved spectral diagnostics",
@@ -676,10 +611,7 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
-artifact_paths = [
-  "docs/_static/nonlinear_domain_parallel_identity_gate.json",
-  "docs/_static/nonlinear_spectral_communication_identity_gate.json",
-]
+artifact_paths = []
 next_tests = [
   "add direct free-energy reduced-limit checks for nonlinear bracket conservation",
   "add physical transport-window identity tests when production nonlinear decomposition is promoted",
@@ -710,10 +642,7 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
-artifact_paths = [
-  "docs/_static/nonlinear_window_statistics.json",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = []
 next_tests = [
   "add direct reduced free-energy balance checks after the diagnostic energy convention is split from integration scans",
   "add explicit-versus-IMEX diagnostic tuple equality checks on a shared manufactured state",
@@ -743,10 +672,7 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
-artifact_paths = [
-  "docs/_static/nonlinear_window_statistics.json",
-  "docs/_static/nonlinear_domain_parallel_identity_gate.json",
-]
+artifact_paths = []
 next_tests = [
   "add observed-order manufactured-time-path checks for promoted explicit methods",
   "add physical transport-window identity tests after explicit scan orchestration is split",
@@ -779,10 +705,7 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
-artifact_paths = [
-  "docs/_static/nonlinear_window_statistics.json",
-  "docs/_static/full_nonlinear_rhs_trace_summary.json",
-]
+artifact_paths = []
 next_tests = [
   "add preconditioned IMEX solve residual checks with a manufactured linear operator",
   "add explicit-versus-IMEX diagnostic parity checks in a linearized nonlinear-off limit",
@@ -816,10 +739,7 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear.py",
 ]
-artifact_paths = [
-  "docs/_static/nonlinear_window_statistics.json",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = []
 next_tests = [
   "keep the nonlinear helper public exports object-identical on the top-level gkx API",
   "add direct helper parity coverage when the IMEX diagnostics loop is split further",
@@ -850,10 +770,7 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear.py",
 ]
-artifact_paths = [
-  "docs/_static/nonlinear_window_statistics.json",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = []
 next_tests = [
   "keep collision split helper behavior object-identical through the nonlinear compatibility facade until the next major API cleanup",
 ]
@@ -880,10 +797,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
-artifact_paths = [
-  "docs/_static/nonlinear_window_statistics.json",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = []
 next_tests = [
   "keep projection helper behavior object-identical through the nonlinear compatibility facade until the next major API cleanup",
 ]
@@ -915,19 +829,7 @@ fast_tests = [
   "tests/unit/quasilinear/test_quasilinear.py",
   "tests/unit/geometry/test_geometry.py",
 ]
-artifact_paths = [
-  "docs/_static/quasilinear_cyclone_spectrum.png",
-  "docs/_static/quasilinear_hsx_spectrum.png",
-  "docs/_static/quasilinear_w7x_spectrum.png",
-  "docs/_static/quasilinear_saturation_rule_sweep.json",
-  "docs/_static/quasilinear_shape_aware_saturation.json",
-  "docs/_static/quasilinear_candidate_uncertainty.json",
-  "docs/_static/quasilinear_dataset_sufficiency.json",
-  "docs/_static/quasilinear_model_selection_status.json",
-  "docs/_static/quasilinear_model_selection_status.png",
-  "docs/_static/quasilinear_holdout_gap_report.json",
-  "docs/_static/quasilinear_holdout_gap_report.png",
-]
+artifact_paths = ["docs/_static/quasilinear_cyclone_spectrum.png", "docs/_static/quasilinear_hsx_spectrum.png", "docs/_static/quasilinear_w7x_spectrum.png", "docs/_static/quasilinear_model_selection_status.png", "docs/_static/quasilinear_holdout_gap_report.png"]
 next_tests = [
   "add at least two more converged electrostatic nonlinear holdout windows before promoting richer saturation candidates",
   "add electromagnetic quasilinear channel tests before using KBM in calibration reports",
@@ -958,11 +860,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/validation/benchmarks/test_benchmarking.py",
 ]
-artifact_paths = [
-  "docs/_static/benchmark_core_linear_atlas.png",
-  "docs/_static/benchmark_core_nonlinear_atlas.png",
-  "docs/_static/validation_gate_index.json",
-]
+artifact_paths = ["docs/_static/benchmark_core_linear_atlas.png", "docs/_static/benchmark_core_nonlinear_atlas.png"]
 next_tests = [
   "add manifest-backed tests that every published benchmark figure has a gate source",
 ]
@@ -995,10 +893,7 @@ fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
   "tests/tools/comparison/test_reference_comparison_tools.py",
 ]
-artifact_paths = [
-  "docs/_static/w7x_exact_state_audit.json",
-  "docs/_static/w7x_zonal_contract_audit.json",
-]
+artifact_paths = []
 next_tests = [
   "add direct tests for every public diagnostic written to NetCDF",
 ]
@@ -1027,11 +922,7 @@ fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
   "tests/integration/examples/test_examples.py",
 ]
-artifact_paths = [
-  "docs/_static/autodiff_inverse_growth.png",
-  "docs/_static/autodiff_inverse_twomode.png",
-  "docs/_static/differentiable_geometry_bridge.png",
-]
+artifact_paths = ["docs/_static/autodiff_inverse_growth.png", "docs/_static/autodiff_inverse_twomode.png", "docs/_static/differentiable_geometry_bridge.png"]
 next_tests = [
   "add tangent-linear checks for differentiated nonlinear transport observables",
   "promote geometry-parameter sensitivity checks from geometry observables to growth-rate and transport observables",
@@ -1063,9 +954,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/geometry/test_geometry.py",
 ]
-artifact_paths = [
-  "docs/_static/vmec_boozer_parity_matrix.png",
-]
+artifact_paths = ["docs/_static/vmec_boozer_parity_matrix.png"]
 next_tests = [
   "add analytic Miller-like sampled geometry parity checks in the core facade shard",
   "add imported-geometry cache stress tests after broader VMEC/eik cache fixtures are available",
@@ -1100,11 +989,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/geometry/test_geometry.py",
 ]
-artifact_paths = [
-  "docs/_static/w7x_exact_state_audit.json",
-  "docs/_static/w7x_linear_t2_scan.csv",
-  "docs/_static/hsx_linear_t2_scan.csv",
-]
+artifact_paths = []
 next_tests = [
   "add vmex in-memory parity fixtures after the core refactor lands",
   "add a multi-process VMEC cache stress test when the slow backend is available in CI",
@@ -1145,14 +1030,7 @@ fast_tests = [
   "tests/unit/objectives/test_differentiable_geometry_objectives.py",
   "tests/unit/geometry/test_geometry.py",
 ]
-artifact_paths = [
-  "docs/_static/w7x_exact_state_audit.json",
-  "docs/_static/w7x_linear_t2_scan.csv",
-  "docs/_static/differentiable_geometry_bridge.json",
-  "docs/_static/differentiable_geometry_bridge.png",
-  "docs/_static/vmec_boozer_parity_matrix.json",
-  "docs/_static/vmec_boozer_parity_matrix.png",
-]
+artifact_paths = ["docs/_static/differentiable_geometry_bridge.png", "docs/_static/vmec_boozer_parity_matrix.png"]
 next_tests = [
   "generalize the mode-21 VMEC/Boozer parity matrix to finite-beta pressure-correction drift terms",
   "promote the finite-difference geometry-gradient check from geometry observables to linear growth observables",
@@ -1183,10 +1061,7 @@ fast_tests = [
   "tests/integration/runtime/test_cli.py",
   "tests/unit/diagnostics/test_analysis.py",
 ]
-artifact_paths = [
-  "docs/_static/benchmark_readme_panel.png",
-  "docs/_static/runtime_memory_benchmark.png",
-]
+artifact_paths = ["docs/_static/benchmark_readme_panel.png", "docs/_static/runtime_memory_benchmark.png"]
 next_tests = [
   "add compatibility tests for reading the current shipped artifact schema",
   "keep orchestration free of format-specific serialization policy",
@@ -1212,9 +1087,7 @@ fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
   "tests/integration/runtime/test_runtime_runner.py",
 ]
-artifact_paths = [
-  "docs/_static/benchmark_readme_panel.png",
-]
+artifact_paths = ["docs/_static/benchmark_readme_panel.png"]
 next_tests = [
   "add import contract tests for any future artifact package submodule",
 ]
@@ -1245,10 +1118,7 @@ fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
   "tests/integration/runtime/test_runtime_runner.py",
 ]
-artifact_paths = [
-  "docs/_static/benchmark_readme_panel.png",
-  "docs/_static/runtime_memory_benchmark.png",
-]
+artifact_paths = ["docs/_static/benchmark_readme_panel.png", "docs/_static/runtime_memory_benchmark.png"]
 next_tests = [
   "add backward-compatible reload tests for older linear summary and quasilinear spectrum bundles",
   "add a direct malformed-shape flattening test for multi-channel diagnostic CSV output",
@@ -1277,10 +1147,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
 ]
-artifact_paths = [
-  "docs/_static/benchmark_readme_panel.png",
-  "docs/_static/runtime_memory_benchmark.png",
-]
+artifact_paths = ["docs/_static/benchmark_readme_panel.png", "docs/_static/runtime_memory_benchmark.png"]
 next_tests = [
   "add a restart-layout roundtrip test for multispecies non-square kx/ky grids",
   "add a direct active-axis regression using a known dealiased spectrum fixture",
@@ -1307,10 +1174,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
 ]
-artifact_paths = [
-  "docs/_static/benchmark_readme_panel.png",
-  "docs/_static/runtime_memory_benchmark.png",
-]
+artifact_paths = ["docs/_static/benchmark_readme_panel.png", "docs/_static/runtime_memory_benchmark.png"]
 next_tests = [
   "add an end-to-end NetCDF reload-to-plot regression for a shipped nonlinear fixture",
   "add multi-species finite-beta NetCDF schema tests before publication artifact freeze",
@@ -1334,7 +1198,7 @@ coverage_priority = "medium"
 coverage_target_percent = 90.0
 reference_anchors = [
   "JAX pmap/pjit/sharding documentation and production scan/ensemble workflows",
-  "multi-CPU local and multi-GPU office scaling sweeps",
+  "multi-CPU local and multi-GPU scaling sweeps",
 ]
 physics_contracts = [
   "parallel execution is numerically identical to serial execution for independent cases",
@@ -1350,29 +1214,7 @@ fast_tests = [
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/parallel/test_parallel_linear_velocity.py",
 ]
-artifact_paths = [
-  "docs/_static/scaling_speedup_data.csv",
-  "docs/_static/scaling_speedup.png",
-  "docs/_static/parallel_ky_scan_gate.json",
-  "docs/_static/parallel_ky_scan_gate.png",
-  "docs/_static/nonlinear_sharding_profile.json",
-  "docs/_static/nonlinear_sharding_profile_office_gpu.json",
-  "docs/_static/nonlinear_sharding_profile_office_gpu_benchmark_grid.json",
-  "docs/_static/nonlinear_sharding_profile_office_gpu_physical.json",
-  "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
-  "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.csv",
-  "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png",
-    "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
-  "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.csv",
-  "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.png",
-    "docs/_static/nonlinear_sharding_strong_scaling_large.json",
-  "docs/_static/nonlinear_sharding_strong_scaling_large.csv",
-  "docs/_static/nonlinear_sharding_strong_scaling_large.png",
-  "docs/_static/nonlinear_sharding_production_speedup_gate.json",
-  "docs/_static/nonlinear_sharding_production_speedup_gate.csv",
-    "docs/_static/parallelization_completion_status.json",
-  "docs/_static/parallelization_completion_status.png",
-  ]
+artifact_paths = ["docs/_static/scaling_speedup.png", "docs/_static/parallel_ky_scan_gate.png", "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png", "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.png", "docs/_static/nonlinear_sharding_strong_scaling_large.png", "docs/_static/parallelization_completion_status.png"]
 next_tests = [
   "promote scripts/profiling/profile_nonlinear_sharding.py to a benchmark-size nonlinear identity/profile artifact once the bounded two-GPU gate is replaced by a matched runtime sweep",
   "design a dedicated z-axis FFT communication/layout gate before exposing z sharding through nonlinear TimeConfig",
@@ -1402,10 +1244,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
-artifact_paths = [
-  "docs/_static/solver_objective_gradient_gate.json",
-  "docs/_static/solver_objective_gradient_gate.png",
-]
+artifact_paths = ["docs/_static/solver_objective_gradient_gate.png"]
 next_tests = [
   "add multi-root branch-near-degeneracy stress tests before using new objective families in optimization",
   "record branch-gap statistics in every promoted VMEC/Boozer optimizer artifact",
@@ -1434,10 +1273,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
-artifact_paths = [
-  "docs/_static/solver_objective_gradient_gate.json",
-  "docs/_static/solver_objective_gradient_gate.png",
-]
+artifact_paths = ["docs/_static/solver_objective_gradient_gate.png"]
 next_tests = [
   "add objective-vector regression rows for additional ky and moment resolutions",
   "add branch-audited quasilinear objective-vector checks before broad optimizer promotion",
@@ -1468,10 +1304,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
-artifact_paths = [
-  "docs/_static/vmex_transport_gradient_diagnostic.json",
-  "docs/_static/vmec_boundary_transport_landscape_rbc11_full.json",
-]
+artifact_paths = []
 next_tests = [
   "add direct ObjectiveTerm metadata fixtures for every transform and transport kind",
   "add real VMEC/Boozer fixture coverage for every supported transport objective kind",
@@ -1502,49 +1335,9 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/parallel/test_parallel_core.py",
 ]
-artifact_paths = [
-  "docs/_static/parallel_ky_scan_gate.json",
-  "docs/_static/parallel_ky_scan_gate.png",
-  "docs/_static/independent_ky_scan_scaling_large.json",
-  "docs/_static/independent_ky_scan_scaling_large.csv",
-  "docs/_static/independent_ky_scan_scaling_large.png",
-    "docs/_static/independent_ky_scan_scaling_cpu_large.json",
-  "docs/_static/independent_ky_scan_scaling_cpu_large.csv",
-  "docs/_static/independent_ky_scan_scaling_cpu_large.png",
-    "docs/_static/independent_ky_scan_scaling_gpu_large.json",
-  "docs/_static/independent_ky_scan_scaling_gpu_large.csv",
-  "docs/_static/independent_ky_scan_scaling_gpu_large.png",
-    "docs/_static/quasilinear_uq_ensemble_scaling_large.json",
-  "docs/_static/quasilinear_uq_ensemble_scaling_large.csv",
-  "docs/_static/quasilinear_uq_ensemble_scaling_large.png",
-    "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.json",
-  "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.csv",
-  "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.png",
-    "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.json",
-  "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.csv",
-  "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.png",
-    "docs/_static/parallelization_completion_status.json",
-  "docs/_static/parallelization_completion_status.png",
-    "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.json",
-  "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.csv",
-  "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png",
-    "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.json",
-  "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.csv",
-  "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.png",
-    "docs/_static/nonlinear_sharding_strong_scaling_large.json",
-  "docs/_static/nonlinear_sharding_strong_scaling_large.csv",
-  "docs/_static/nonlinear_sharding_strong_scaling_large.png",
-  "docs/_static/nonlinear_sharding_production_speedup_gate.json",
-  "docs/_static/nonlinear_sharding_production_speedup_gate.csv",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.json",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.csv",
-  "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png",
-    "docs/_static/linear_rhs_parallel_slices_sweep.json",
-  "docs/_static/linear_rhs_parallel_slices_sweep.csv",
-  "docs/_static/linear_rhs_parallel_slices_sweep.png",
-  ]
+artifact_paths = ["docs/_static/parallel_ky_scan_gate.png", "docs/_static/independent_ky_scan_scaling_large.png", "docs/_static/independent_ky_scan_scaling_cpu_large.png", "docs/_static/independent_ky_scan_scaling_gpu_large.png", "docs/_static/quasilinear_uq_ensemble_scaling_large.png", "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.png", "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.png", "docs/_static/parallelization_completion_status.png", "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png", "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.png", "docs/_static/nonlinear_sharding_strong_scaling_large.png", "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png", "docs/_static/linear_rhs_parallel_slices_sweep.png"]
 next_tests = [
-  "add office two-GPU identity and speedup gates for UQ ensembles",
+  "add two-GPU identity and speedup gates for UQ ensembles",
 ]
 
 [[modules]]
@@ -1570,12 +1363,7 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/diagnostics/test_analysis.py",
 ]
-artifact_paths = [
-  "docs/_static/landau_damping_validation.png",
-  "docs/_static/recurrence_hermite_closure.png",
-  "docs/_static/benchmark_linear_parity.png",
-  "docs/_static/runtime_memory_benchmark.png",
-]
+artifact_paths = ["docs/_static/landau_damping_validation.png", "docs/_static/recurrence_hermite_closure.png", "docs/_static/benchmark_linear_parity.png", "docs/_static/runtime_memory_benchmark.png"]
 next_tests = [
   "assert rc_context leaves rcParams unchanged after the context exits",
 ]
@@ -1611,12 +1399,7 @@ fast_tests = [
   "tests/integration/examples/test_examples.py",
   "tests/tools/comparison/test_reference_comparison_tools.py",
 ]
-artifact_paths = [
-  "docs/_static/autodiff_inverse_growth_summary.json",
-  "docs/_static/autodiff_inverse_twomode_summary.json",
-  "benchmarks/references/gkx_1_7_release_contract.json",
-  "docs/_static/comparison/reference_publication_panel.png",
-]
+artifact_paths = ["docs/_static/comparison/reference_publication_panel.png"]
 next_tests = [
   "add finite-difference/tangent checks to autodiff figure scripts",
   "add image-content smoke tests for key publication panels where practical",

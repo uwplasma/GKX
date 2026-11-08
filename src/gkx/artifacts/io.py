@@ -425,10 +425,7 @@ def _runtime_linear_summary(result: Any) -> dict[str, Any]:
             result.z is not None and result.eigenfunction is not None
         ),
         "has_quasilinear": bool(getattr(result, "quasilinear", None) is not None),
-        # Solver status, with the same key names the in-memory result reports.
-        # A saved run used to carry no convergence channel at all, so a reader
-        # could not tell a certified eigenpair or a converged implicit scan from
-        # an unchecked one (queue row Q29).
+        # Preserve the in-memory convergence status in saved summaries.
         **eigen_status_payload(getattr(result, "eigen_status", None)),
         **implicit_solve_payload(getattr(result, "implicit_solve", None)),
     }
@@ -556,11 +553,11 @@ def _nonlinear_summary(result: Any) -> dict[str, Any]:
         "kx_selected": None
         if result.kx_selected is None
         else float(result.kx_selected),
-        "n_state_shape": None
+        "n_state_shape": getattr(result, "_state_shape", None)
         if result.state is None
         else list(np.asarray(result.state).shape),
         # Every implicit GMRES solve of an IMEX run, as the in-memory result
-        # reports it; None for explicit methods (queue row Q29).
+        # reports it; None for explicit methods.
         **implicit_solve_payload(getattr(result, "implicit_solve", None)),
     }
     if diag is not None:
@@ -599,7 +596,7 @@ def _nonlinear_summary(result: Any) -> dict[str, Any]:
 
 
 def write_runtime_nonlinear_table_artifacts(
-    out: str | Path, result: Any
+    out: str | Path, result: Any, *, _diagnostics: SimulationDiagnostics | None = None
 ) -> dict[str, str]:
     """Write non-NetCDF nonlinear summary/diagnostics/state artifacts."""
 
@@ -616,7 +613,7 @@ def write_runtime_nonlinear_table_artifacts(
 
     _write_json(summary_path, _nonlinear_summary(result))
     paths = {"summary": str(summary_path)}
-    diag: SimulationDiagnostics | None = result.diagnostics
+    diag = result.diagnostics if _diagnostics is None else _diagnostics
     if diag is not None:
         cols = [
             _flatten_series(np.asarray(diag.t)),
@@ -789,7 +786,7 @@ def load_netcdf_restart_state(
     ``Nyc = 1 + Ny // 2``.  The file itself is unchanged by the layout: it has
     always stored the dealiased ``ky >= 0`` block, which is why a run started
     on either axis can continue from a file written by the other, and why a
-    2.1.0 restart still loads (plan 5.3 N3, queue row Q10).
+    2.1.0 restart still loads.
     """
 
     try:
@@ -906,6 +903,13 @@ def load_nonlinear_netcdf_diagnostics(path: str | Path) -> SimulationDiagnostics
         grids = root.groups["Grids"]
         diag_group = root.groups["Diagnostics"]
         time_vals = np.asarray(grids.variables["time"][:], dtype=np.float64)
+        dt_t = (
+            np.asarray(diag_group.variables["dt_t"][:], dtype=np.float64)
+            if "dt_t" in diag_group.variables
+            else None
+        )
+        if dt_t is not None and dt_t.shape != time_vals.shape:
+            raise ValueError("native NetCDF timesteps must match the time records")
         wg_st = np.asarray(diag_group.variables["Wg_st"][:], dtype=np.float32)
         wphi_st = np.asarray(diag_group.variables["Wphi_st"][:], dtype=np.float32)
         wapar_st = np.asarray(diag_group.variables["Wapar_st"][:], dtype=np.float32)
@@ -920,11 +924,12 @@ def load_nonlinear_netcdf_diagnostics(path: str | Path) -> SimulationDiagnostics
         }
     if turb_heat_st is None:
         turb_heat_st = np.zeros_like(heat_st)
-    dt_t = (
-        np.diff(np.concatenate(([0.0], time_vals)))
-        if time_vals.size
-        else np.asarray([], dtype=np.float64)
-    )
+    if dt_t is None:
+        dt_t = (
+            np.diff(np.concatenate(([0.0], time_vals)))
+            if time_vals.size
+            else np.asarray([], dtype=np.float64)
+        )
     dt_mean = np.asarray(
         np.mean(dt_t[dt_t > 0.0]) if np.any(dt_t > 0.0) else 0.0, dtype=np.float64
     )

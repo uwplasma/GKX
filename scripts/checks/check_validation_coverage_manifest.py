@@ -508,9 +508,13 @@ def validate_manifest(
             resolved = _repo_path(test_path)
             _validate_fast_test_path(resolved, test_path, module)
 
-        artifacts = _as_nonempty_list(
-            entry.get("artifact_paths"), "artifact_paths", module
-        )
+        artifacts = entry.get("artifact_paths", [])
+        if not isinstance(artifacts, list) or not all(
+            isinstance(item, str) and item for item in artifacts
+        ):
+            raise ValueError(
+                f"{module}: artifact_paths must be a list of nonempty strings"
+            )
         _reject_duplicate_values(artifacts, "artifact_paths", module)
         rendered = [
             artifact

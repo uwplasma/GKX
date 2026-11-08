@@ -41,7 +41,7 @@ _VMEC_METRIC_OBSERVABLE_NAMES = (
     "g_sp_rms",
     "g_tp_rms",
 )
-# Order of the campaign's ``_field_line_tensor_observable_fn`` (#327).
+# Order of the field-line tensor observable vector.
 _VMEC_FIELD_LINE_OBSERVABLE_NAMES = (
     "mean_bmag",
     "epsilon",

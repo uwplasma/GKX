@@ -77,37 +77,12 @@ steps in blocks of length :math:`B` and retains block boundaries:
    M(B)=O(N/B+B),\qquad B=\lceil\sqrt N\rceil,
    \qquad M=O(\sqrt N).
 
-Measured on one host, the same 16x16x16 Cyclone case and the same 1024-step
-float32 window of ``nonlinear_heat_flux_window``, XLA temporary memory falls
-from 7.82 GB to 187 MB on the CPU and from 7.80 GB to 148 MB on an RTX A4000 --
-42x and 53x. Runtime rises by 1.92x and 1.77x respectively: rematerialization is
-the trade. The blocked and plain values and gradients agree to single-precision
-round-off, which the profiler asserts before it reports anything.
-
-The step-checkpoint policy is what sets the ceiling: its temporary memory grows
-linearly with the window and is already 7.8 GB at 1024 steps, while the block
-policy grows as :math:`\sqrt N`.
-
-That nested schedule runs every forward step three times. When
-``adjoint_memory_budget_bytes`` (default 4 GiB) admits it, the window keeps one
-block's step residuals instead of rematerializing each step, so the forward
-runs twice; the block length :math:`B=\sqrt{N S/R}` minimizes
-:math:`(N/B)S+BR` for carry size :math:`S` and step-residual size :math:`R`,
-read from the abstract pullback before compiling. Measured on an RTX A4000,
-float32, value plus ``d/d tprim``, interleaved A/B:
-
-========================  ==========  =========  ==============  ============
-grid, steps, ``ky``       nested (s)  block (s)  temp nested     temp block
-========================  ==========  =========  ==============  ============
-16x16x16, 1024, half      3.23        2.20       55 MiB          288 MiB
-32x32x24, 256, half       3.62        2.80       170 MiB         816 MiB
-32x32x24, 1024, full      20.6        16.2       583 MiB         3.00 GiB
-========================  ==========  =========  ==============  ============
-
-Gradients agree to 1e-7 (float32) and 1e-16 (float64). The estimate is within
-3% of XLA's temporary size (2.92 vs 3.00 GiB). Tubes that share a grid are one
-``jax.vmap`` over their states and geometry: eight 8x8x16 tubes cost 0.63 s
-each for a 1024-step value and gradient, against 1.92 s one at a time.
+Checkpointing trades additional forward evaluations for lower memory use.
+When ``adjoint_memory_budget_bytes`` (default 4 GiB) admits it, the window
+retains one block's step residuals. The block length
+:math:`B=\sqrt{NS/R}` minimizes :math:`(N/B)S+BR`, where :math:`S` is the
+carry size and :math:`R` the step-residual size inferred from the abstract
+pullback. Benchmark memory and runtime on the intended grid and backend.
 
 Spectral zero mode
 ------------------
@@ -187,84 +162,20 @@ tolerance, so remeasure it for a new case and then pass
 ``examples/10_vmex_optimization/run.py`` runs at exactly 1024, one rung
 below the departure.
 
-Regenerating the evidence
--------------------------
+Verification and scope
+----------------------
 
-Every number on this page and on the figure below is written by one of three
-generators; the figure builder reads their JSON rather than carrying literals.
+Compare autodiff with centered finite differences across several perturbation
+sizes and window lengths. Verify blocked and plain adjoints on the same
+initial state before using checkpointing for a larger case. Repeat relevant
+checks in the precision and device layout used by the production run.
 
-.. code-block:: bash
-
-   # (i) AD-vs-FD ladder and the divergence knee (right panel)
-   python scripts/campaigns/nonlinear_saturated_state.py --nx 16 --ny 16 --nz 16 \
-       --state-out tools_out/cyclone16_saturated.npz
-   python scripts/campaigns/nonlinear_gradient_window.py --nx 16 --ny 16 --nz 16 \
-       --saturated-state tools_out/cyclone16_saturated.npz \
-       --min-window 64 --max-window 2048 --fd-step 1e-5 \
-       --output docs/_static/nonlinear_heat_flux_gradient_window_rk3.json
-
-   # (ii) checkpoint memory profile (left panel), once per device
-   python scripts/profiling/profile_nonlinear_adjoint_checkpointing.py \
-       --nx 16 --ny 16 --nz 16 --steps 1024 --precision 32 \
-       --output docs/_static/nonlinear_adjoint_checkpointing_gpu32.json
-
-   # (iii) CPU/GPU parity on one fixed case, once per device, then compare
-   python scripts/profiling/profile_nonlinear_window_device_parity.py \
-       --output tools_out/window_parity_cpu.json
-   python scripts/profiling/profile_nonlinear_window_device_parity.py \
-       --compare tools_out/window_parity_cpu.json tools_out/window_parity_gpu.json
-
-   python scripts/artifacts/build_nonlinear_autodiff_figure.py
-
-Cost scales linearly in the window: the ladder's longest rung and the
-step-checkpoint arm of the memory profile dominate, and the step-checkpoint arm
-needs device memory linear in ``--steps`` (7.8 GB at 1024). ``--steps 64`` is a
-smoke test of every path of the memory profiler. The parity case is small.
-
-Evidence and scope
-------------------
-
-The physical Cyclone heat-flux gradient passes the declared
-:math:`10^{-6}` centered-finite-difference gate through 1024 RK3 steps; the
-1024-step relative discrepancy is :math:`2.7\times10^{-9}`. At 2048 steps the
-discrepancy is :math:`2.5\times10^{-5}` and fails that gate, which brackets the
-trajectory-specific divergence knee.
-
-These results establish a finite-window derivative and local descent. They do
-not establish an infinite-time turbulent derivative. The historical QA campaign
-has a preliminary 24-pair reduction interval of 10.64--13.88%, but it is not
-promotion evidence: 4 of 48 nominal traces fail the per-trace final-drift test,
-and no resolved transport spectra were saved. Its traces predate the periodic
-hypercollision correction and require regeneration for the current operator.
-The audit and next-run contract
-are in :doc:`stellarator_optimization`.
-
-Device parity
--------------
-
-One fixed case -- 16x16x8, kinetic electrons at :math:`m_e/m_i=2.7\times10^{-4}`,
-finite :math:`\beta` with ``apar`` and ``bpar``, RK3, float64, host-drawn seed --
-differentiated on three environments. The recorded values are in
-``docs/_static/nonlinear_window_device_parity.json``:
-
-.. list-table::
-   :header-rows: 1
-
-   * - compared
-     - isolates
-     - relative gradient difference
-   * - office CPU vs RTX A4000, both jax 0.11.1
-     - device only
-     - :math:`1.5\times10^{-15}`
-   * - laptop CPU (jax 0.9.2) vs RTX A4000 (jax 0.11.1)
-     - device, architecture and jax version
-     - :math:`7.7\times10^{-16}`
-   * - laptop CPU (jax 0.9.2) vs office CPU (jax 0.11.1)
-     - architecture and jax version, device fixed
-     - :math:`2.3\times10^{-15}`
-
-All three are float64 round-off. The first row is the like-for-like device
-comparison: same host, same jax, same case, only the backend differs.
+A finite-window gradient describes the selected discrete trajectory. Chaotic
+trajectory separation can invalidate a finite-difference comparison as the
+window grows. Choose a window with stable agreement and assess any proposed
+design change with independent long runs, replicated seeds, per-trace
+stationarity and resolved transport spectra. See
+:doc:`stellarator_optimization` for the uncertainty estimator.
 
 Tests
 -----

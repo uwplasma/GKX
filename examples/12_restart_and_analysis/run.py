@@ -37,7 +37,9 @@ OUTPUT.mkdir(parents=True, exist_ok=True)
 first = gkx.solve(
     case, steps=STEPS_PER_LEG, return_state=True, **options, show_progress=True
 )
-restart_file = write_netcdf_restart_state(OUTPUT / "leg1.restart.bin", first.state)
+restart_file = write_netcdf_restart_state(
+    OUTPUT / "leg1.restart.bin", first.state, ny_full=case.grid.Ny
+)
 restarted = case.replace(init=replace(case.init, init_file=str(restart_file.resolve())))
 second = gkx.solve(restarted, steps=STEPS_PER_LEG, **options, show_progress=True)
 reference = gkx.solve(case, steps=2 * STEPS_PER_LEG, **options, show_progress=True)

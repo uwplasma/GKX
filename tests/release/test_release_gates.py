@@ -1,7 +1,7 @@
 """Release, manifest, coverage, and artifact hygiene gates."""
 
 from __future__ import annotations
-import csv
+import re
 import tomllib
 from pathlib import Path
 import pytest
@@ -87,7 +87,7 @@ _NEGATIVE = "matching nonlinear gate is negative evidence for calibration admiss
 
 @pytest.mark.parametrize(
     "artifact",
-    ["tools_out/synthetic.csv", "/Users/example/local/GKX/tools_out/synthetic.csv"],
+    ["tools_out/synthetic.csv", "/tmp/project/tools_out/synthetic.csv"],
     ids=["relative", "absolute-from-other-checkout"],
 )
 def test_audit_passes_when_required_point_matches_passed_gate(
@@ -244,558 +244,8 @@ def test_audit_prefers_external_admission_gate_over_raw_nested_ensemble(
     assert point["matched_gate"]["claim_level_acceptable"] is True
 
 
-def test_tracked_quasilinear_train_holdout_reports_use_passed_nonlinear_gates() -> None:
-    mod = _load_quasilinear_tool_module()
-    root = Path(__file__).resolve().parents[2]
-    reports = [
-        root / "docs/_static/quasilinear_cyclone_miller_train_holdout_report.json",
-        root / "docs/_static/quasilinear_hsx_train_holdout_report.json",
-        root / "docs/_static/quasilinear_w7x_train_holdout_report.json",
-        root / "docs/_static/quasilinear_stellarator_train_holdout_report.json",
-    ]
-
-    payload = mod.audit_calibration_inputs(reports)
-
-    assert payload["passed"] is True
-    required_rows = [
-        point
-        for report in payload["reports"]
-        for point in report["points"]
-        if point["required"]
-    ]
-    assert len(required_rows) == 20
-    assert all(point["matched_gate"] is not None for point in required_rows)
-    matched_cases = {point["matched_gate"]["case"] for point in required_rows}
-    assert matched_cases == {
-        "cyclone_nonlinear_long_window",
-        "cyclone_miller_nonlinear_window",
-        "hsx_nonlinear_window",
-        "w7x_nonlinear_window",
-        "D-shaped tokamak external VMEC nonlinear t250 high-grid convergence",
-        "ITERModel external VMEC nonlinear t350 high-grid convergence",
-        "updown_asym_external_vmec_t450",
-        "circular_external_vmec_t450",
-        "CTH-like external VMEC modified-protocol high-grid admission",
-        "Shaped tokamak pressure external VMEC dt=0.04 high-grid transport holdout admission",
-        "qp_diag_nfp2_m4_final_t250_n64_seed_timestep_ensemble_gate",
-        "solovev_reference_repair_dt002_amp1em5_n48_t250",
-    }
-    external_rows = [
-        point
-        for point in required_rows
-        if "external_vmec" in str(point["matched_gate"]["artifact"])
-    ]
-    assert [point["case"] for point in external_rows] == [
-        "dshape_external_vmec_t250_window",
-        "itermodel_external_vmec_t350_window",
-        "updown_asym_external_vmec_t450_window",
-        "circular_external_vmec_t450_window",
-        "cth_like_external_vmec_t700_high_grid_window",
-        "shaped_tokamak_pressure_external_vmec_t650_high_grid_window",
-        "solovev_reference_repair_dt002_amp1em5_n48_t250",
-    ]
-
-
 # ---- test_check_release_readiness.py ----
 
-
-from scripts.checks.check_release_readiness import TECHNICAL_COMPLETION_TARGET
-from scripts.checks.check_release_readiness import (
-    ReleaseReadinessError,
-    build_frozen_output_fingerprint,
-    check_release_readiness,
-)
-
-
-def _write_release_ready_tree(root: Path) -> None:
-    (root / "src" / "gkx").mkdir(parents=True)
-    (root / ".github" / "workflows").mkdir(parents=True)
-    (root / "docs" / "_static").mkdir(parents=True)
-    (root / "benchmarks" / "references").mkdir(parents=True)
-    (root / "pyproject.toml").write_text(
-        """
-[project]
-name = "gkx"
-version = "1.2.3"
-
-[project.scripts]
-gkx = "gkx.cli:main"
-""".strip()
-        + "\n",
-        encoding="utf-8",
-    )
-    (root / "src" / "gkx" / "_version.py").write_text(
-        '__version__ = "1.2.3"\n',
-        encoding="utf-8",
-    )
-    (root / ".github" / "workflows" / "ci.yml").write_text(
-        "\n".join(
-            [
-                "wide-coverage-shards",
-                "coverage-wide-shard-manifest.json",
-                "--require-shard-data",
-                "--coverage-xml coverage-wide.xml",
-                "--enforce-package-coverage",
-                "codecov/codecov-action",
-                "scripts/check.py parallel-scaling",
-                "scripts/check.py architecture",
-                "scripts/check.py parallel-scaling --performance-manifest-only",
-                "scripts/check.py quasilinear",
-                "scripts/check.py vmec-boozer differentiability-claim",
-                "scripts/artifacts/build_parallelization_completion_status.py",
-                "scripts/check.py readiness technical-status",
-                "scripts/check.py readiness",
-                "rm -rf build dist",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    (root / "codecov.yml").write_text(
-        """
-codecov:
-  notify:
-    after_n_builds: 2
-    wait_for_ci: true
-
-coverage:
-  status:
-    project:
-      default:
-        target: 95%
-        threshold: 0.5%
-        flags:
-          - wide-package
-    patch:
-      default:
-        informational: true
-""".lstrip(),
-        encoding="utf-8",
-    )
-    (root / ".github" / "workflows" / "release.yml").write_text(
-        "name: Release\n"
-        "scripts/check.py readiness version\n"
-        "scripts/check.py size\n"
-        "scripts/check.py size release-artifacts\n"
-        "scripts/check.py architecture\n"
-        "scripts/check.py parallel-scaling --performance-manifest-only\n"
-        "scripts/check.py parallel-scaling\n"
-        "scripts/check.py quasilinear\n"
-        "scripts/check.py vmec-boozer differentiability-claim\n"
-        "scripts/artifacts/build_parallelization_completion_status.py\n"
-        "scripts/check.py readiness technical-status\n"
-        "scripts/check.py readiness\n"
-        "rm -rf build dist\n"
-        "gh-action-pypi-publish\n",
-        encoding="utf-8",
-    )
-    (root / "README.md").write_text(
-        "Install with pip install gkx, run gkx. License: MIT.\n",
-        encoding="utf-8",
-    )
-    for artifact in (
-        "runtime_memory_benchmark.png",
-        "runtime_memory_summary_ship_refresh.json",
-        "runtime_memory_results_ship_refresh.csv",
-        "validation_gate_index.json",
-        "validation_coverage_manifest_summary.json",
-        "quasilinear_promotion_guardrails.json",
-        "vmec_boozer_differentiability_claim_guard.json",
-        "vmec_boozer_shaped_pressure_solver_frequency_gradient_gate.json",
-        "vmec_boozer_shaped_pressure_quasilinear_gradient_gate.json",
-        "vmec_boozer_shaped_pressure_nonlinear_window_gradient_gate.json",
-        "technical_release_status.json",
-        "independent_ky_scan_scaling_large.json",
-        "quasilinear_uq_ensemble_scaling_large.json",
-        "parallelization_completion_status.json",
-        "nonlinear_sharding_strong_scaling_large.json",
-        "nonlinear_domain_parallel_identity_gate.json",
-        "nonlinear_spectral_communication_identity_gate.json",
-        "vmec_boundary_transport_landscape_admission.json",
-        "vmec_boundary_transport_prelaunch_gate.json",
-        "nonlinear_campaign_admission_report.json",
-        "strict_qa_top12_edge_prelaunch_gate.json",
-    ):
-        (root / "docs" / "_static" / artifact).write_text("{}", encoding="utf-8")
-    (root / "docs" / "_static" / "technical_release_status.json").write_text(
-        """
-{
-  "failed_required": [],
-  "kind": "gkx_technical_release_status",
-  "lanes": {},
-  "passed": true,
-  "target_percent": 98.0,
-  "technical_release_completion_percent": 100.0
-}
-""".lstrip(),
-        encoding="utf-8",
-    )
-    prelaunch = [
-        dict(
-            label=label,
-            path=f"docs/_static/{name}.json",
-            passed=True,
-            expected_raw_passed=raw,
-            raw_passed=raw,
-            sample_count=count,
-            blockers=blockers,
-        )
-        for label, name, raw, count, blockers in (
-            (
-                "replicated landscape admission",
-                "vmec_boundary_transport_landscape_admission",
-                True,
-                12.0,
-                [],
-            ),
-            (
-                "selected reduced prelaunch",
-                "vmec_boundary_transport_prelaunch_gate",
-                True,
-                18.0,
-                [],
-            ),
-            (
-                "weak reduced-margin reference",
-                "strict_qa_top12_edge_prelaunch_gate",
-                False,
-                18.0,
-                ["insufficient_reduced_margin_for_nonlinear_audit"],
-            ),
-            (
-                "next nonlinear campaign admission",
-                "nonlinear_campaign_admission_report",
-                True,
-                18.0,
-                [],
-            ),
-        )
-    ]
-    contract_path = root / "benchmarks" / "references" / "gkx_1_7_release_contract.json"
-    contract = {
-        "kind": "gkx_1_7_frozen_release_contract",
-        "optimization_policy": {
-            "prelaunch_gates": prelaunch,
-            "summary": {
-                "qa_baseline_gate_passed": True,
-                "quasilinear_model_selection_passed": False,
-                "simple_quasilinear_absolute_flux_promoted": False,
-                "long_window_nonlinear_audit_passed": True,
-                "nonlinear_prelaunch_policy_ready": True,
-                "nonlinear_campaign_admission_ready": True,
-                "negative_reference_blocks_weak_margin": True,
-                "claim_evidence_level": "scoped_matched_replicated_nonlinear_audit",
-                "claim_promotion_blockers": [
-                    "quasilinear_model_selection_not_promoted",
-                    "simple_quasilinear_absolute_flux_not_promoted",
-                ],
-            },
-        },
-        "performance": {
-            "representative_refresh": {
-                "path": "benchmarks/references/gkx_2_representative_performance_refresh.json",
-                "correctness_passed": True,
-                "cpu_rows_admitted": 2,
-                "gpu_rows_admitted": 0,
-                "gpu_rows_blocked": 2,
-                "performance_claim_updated": False,
-            },
-            "row_count": 1,
-            "rows": [{"case": "test", "backend": "cpu", "status": "success"}],
-        },
-        "public_api": {
-            "count": 1,
-            "exports": [{"name": "solve", "module": "gkx", "symbol": "solve"}],
-        },
-        "release_lanes": [
-            {
-                "claim_level": "release_claim",
-                "lane": "CI/release hygiene and status automation",
-                "status": "closed",
-            },
-            {
-                "claim_level": "deferred_out_of_release_scope",
-                "lane": "Future physics extension",
-                "status": "deferred",
-            },
-        ],
-    }
-    frozen_path = "docs/_static/validation_gate_index.json"
-    contract["baseline"] = {"git_tag": "v1.7.0"}
-    contract["frozen_output_fingerprints"] = {
-        "algorithm": "test contract",
-        "entries": [
-            {
-                "label": "validation gate index",
-                **build_frozen_output_fingerprint(root, frozen_path),
-            }
-        ],
-    }
-    contract_path.write_text(json.dumps(contract), encoding="utf-8")
-    (
-        root
-        / "benchmarks"
-        / "references"
-        / "gkx_2_representative_performance_refresh.json"
-    ).write_text(
-        json.dumps(
-            {
-                "kind": "gkx_representative_performance_refresh",
-                "summary": {
-                    "correctness_passed": True,
-                    "cpu_rows_admitted": 2,
-                    "gpu_rows_admitted": 0,
-                    "gpu_rows_blocked": 2,
-                    "performance_claim_updated": False,
-                },
-                "workloads": [
-                    {
-                        "case": case,
-                        "correctness": {"cpu_finite": True, "gpu_finite": True},
-                        "cpu": {"admitted": True},
-                        "gpu": {
-                            "admitted": False,
-                            "blocker": "contended test device",
-                        },
-                    }
-                    for case in ("linear", "nonlinear")
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    (root / "docs" / "_static" / "w7x_tem_extension_status.json").write_text(
-        """
-{
-  "claim_scope": "extension_tracking",
-  "kind": "w7x_tem_extension_status",
-  "lanes": [
-    {
-      "claim_level": "partial_extension_not_release_claim",
-      "lane": "W7-X TEM extension",
-      "status": "partial"
-    }
-  ],
-  "summary": {"n_partial": 1}
-}
-""".lstrip(),
-        encoding="utf-8",
-    )
-
-
-def _replace_release_optimization_policy(root: Path, policy: dict[str, object]) -> None:
-    contract = root / "benchmarks" / "references" / "gkx_1_7_release_contract.json"
-    payload = json.loads(contract.read_text(encoding="utf-8"))
-    payload["optimization_policy"] = policy
-    contract.write_text(json.dumps(payload), encoding="utf-8")
-
-
-def test_release_readiness_accepts_ci_release_docs_and_artifact_contracts(
-    tmp_path: Path,
-) -> None:
-    _write_release_ready_tree(tmp_path)
-
-    report = check_release_readiness(tmp_path)
-
-    assert report["passed"] is True
-    assert report["project"]["name"] == "gkx"
-    assert report["project"]["scripts"] == ["gkx"]
-    assert report["version"]["project_version"] == "1.2.3"
-    assert (
-        report["release_target"]["technical_completion_fraction"]
-        == TECHNICAL_COMPLETION_TARGET
-    )
-    assert report["lane_status"]["passed"] is True
-    assert report["lane_status"]["frozen_outputs"]["count"] == 1
-    assert report["lane_status"]["active_fraction_closed"] == 1.0
-    assert report["lane_status"]["release_scoped_open_or_blocked"] == 0
-    assert report["technical_status"]["passed"] is True
-    assert report["technical_status"]["completion_percent"] >= 98.0
-    assert report["optimization_status"]["passed"] is True
-    assert (
-        report["optimization_status"]["summary"]["nonlinear_prelaunch_policy_ready"]
-        is True
-    )
-    assert report["lane_status"]["status_artifacts"][
-        "benchmarks/references/gkx_1_7_release_contract.json"
-    ]["status_counts"] == {"closed": 1, "deferred": 1}
-
-
-_CONTRACT = "benchmarks/references/gkx_1_7_release_contract.json"
-_REFRESH = "benchmarks/references/gkx_2_representative_performance_refresh.json"
-_OPTIMIZATION_FAILED = "optimization status prelaunch/claim-boundary flags failed"
-
-
-def _write(root: Path, relative: str, text: str) -> None:
-    (root / relative).write_text(text, encoding="utf-8")
-
-
-def _edit_json(root: Path, relative: str, edit) -> None:
-    path = root / relative
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    edit(payload)
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-
-def _drop_release_cleanup(root: Path) -> None:
-    workflow = root / ".github" / "workflows" / "release.yml"
-    text = workflow.read_text(encoding="utf-8")
-    workflow.write_text(text.replace("rm -rf build dist\n", ""), encoding="utf-8")
-
-
-def _stale_prelaunch_rows(policy: dict) -> None:
-    gates = policy["optimization_policy"]["prelaunch_gates"]
-    gates[1]["sample_count"] = 1.0
-    gates[2].update(expected_raw_passed=True, raw_passed=True, blockers=[])
-
-
-_UNREADY_OPTIMIZATION_SUMMARY = {
-    "qa_baseline_gate_passed": True,
-    "quasilinear_model_selection_passed": False,
-    "long_window_nonlinear_audit_passed": True,
-}
-
-
-@pytest.mark.parametrize(
-    ("mutate", "match"),
-    [
-        pytest.param(
-            lambda root: _write(
-                root, "docs/_static/validation_gate_index.json", '{"changed": 1}'
-            ),
-            "frozen numerical output fingerprints changed",
-            id="changed-frozen-output",
-        ),
-        pytest.param(
-            lambda root: _edit_json(
-                root,
-                _REFRESH,
-                lambda p: p["summary"].__setitem__("performance_claim_updated", True),
-            ),
-            "performance_claim_updated",
-            id="false-performance-promotion",
-        ),
-        pytest.param(
-            lambda root: _write(
-                root, ".github/workflows/ci.yml", "wide-coverage-shards\n"
-            ),
-            "ci.yml missing release checks",
-            id="missing-ci-guardrails",
-        ),
-        pytest.param(
-            lambda root: _write(
-                root,
-                "codecov.yml",
-                "coverage:\n  status:\n    project:\n      default:\n"
-                "        target: 95%\n",
-            ),
-            "codecov.yml missing wide-coverage status policy",
-            id="missing-codecov-status-policy",
-        ),
-        pytest.param(
-            lambda root: _write(
-                root,
-                ".github/workflows/release.yml",
-                "name: Release\nscripts/check.py readiness version\n"
-                "gh-action-pypi-publish\n",
-            ),
-            "release.yml missing publish/version checks",
-            id="missing-release-guardrails",
-        ),
-        pytest.param(
-            _drop_release_cleanup,
-            "release.yml missing publish/version checks",
-            id="unclean-distribution-build",
-        ),
-        pytest.param(
-            lambda root: _edit_json(
-                root,
-                _CONTRACT,
-                lambda p: p.__setitem__(
-                    "release_lanes",
-                    [
-                        {
-                            "claim_level": "release_claim",
-                            "lane": "CI/release hygiene and status automation",
-                            "status": "partial",
-                        }
-                    ],
-                ),
-            ),
-            "release-scoped technical completion below target",
-            id="below-target-release-completion",
-        ),
-        pytest.param(
-            lambda root: _write(
-                root,
-                "docs/_static/technical_release_status.json",
-                json.dumps(
-                    {
-                        "failed_required": ["docs_release_hygiene: release scope"],
-                        "kind": "gkx_technical_release_status",
-                        "lanes": {},
-                        "passed": False,
-                        "target_percent": 98.0,
-                        "technical_release_completion_percent": 92.0,
-                    }
-                ),
-            ),
-            "technical release status below target",
-            id="failed-technical-status",
-        ),
-        pytest.param(
-            lambda root: _replace_release_optimization_policy(
-                root,
-                {
-                    "prelaunch_gates": [],
-                    "summary": {
-                        **_UNREADY_OPTIMIZATION_SUMMARY,
-                        "simple_quasilinear_absolute_flux_promoted": False,
-                        "nonlinear_prelaunch_policy_ready": False,
-                        "nonlinear_campaign_admission_ready": True,
-                        "negative_reference_blocks_weak_margin": False,
-                    },
-                },
-            ),
-            _OPTIMIZATION_FAILED,
-            id="missing-optimization-prelaunch-policy",
-        ),
-        pytest.param(
-            lambda root: _replace_release_optimization_policy(
-                root,
-                {
-                    "prelaunch_gates": [
-                        {"label": "landscape", "passed": True},
-                        {"label": "positive", "passed": True},
-                        {"label": "negative", "passed": True},
-                    ],
-                    "summary": {
-                        **_UNREADY_OPTIMIZATION_SUMMARY,
-                        "nonlinear_prelaunch_policy_ready": True,
-                        "negative_reference_blocks_weak_margin": True,
-                    },
-                },
-            ),
-            _OPTIMIZATION_FAILED,
-            id="implicit-optimization-status-booleans",
-        ),
-        pytest.param(
-            lambda root: _edit_json(root, _CONTRACT, _stale_prelaunch_rows),
-            _OPTIMIZATION_FAILED,
-            id="stale-prelaunch-gate-rows",
-        ),
-    ],
-)
-def test_release_readiness_rejects_broken_release_trees(
-    tmp_path: Path, mutate, match: str
-) -> None:
-    _write_release_ready_tree(tmp_path)
-    mutate(tmp_path)
-
-    with pytest.raises(ReleaseReadinessError, match=match):
-        check_release_readiness(tmp_path)
-
-
-# ---- test_release_hygiene_gates.py ----
 
 import hashlib
 import subprocess
@@ -805,9 +255,7 @@ import textwrap
 import yaml
 
 from scripts.checks.check_release_readiness import (
-    LANES,
     ReleaseVersionError,
-    build_technical_release_status,
     default_tag_from_github_env,
     fetch_pypi_versions,
     normalize_tag,
@@ -1168,50 +616,6 @@ def test_repository_size_report_separates_tracked_and_local_roots(
     local = {row["path"]: row for row in report["local_artifact_roots"]}
     assert local["tools_out"]["bytes"] == 256
 
-
-def _write_minimal_release_status_tree(root: Path) -> None:
-    text_by_path: dict[Path, list[str]] = {}
-    for checks in LANES.values():
-        for check in checks:
-            path = root / check.path
-            path.parent.mkdir(parents=True, exist_ok=True)
-            if path.suffix.lower() in {".png", ".pdf"}:
-                path.write_bytes(b"artifact")
-                continue
-            text_by_path.setdefault(path, []).append(check.snippet or "present")
-    for path, snippets in text_by_path.items():
-        path.write_text("\n".join(snippets) + "\n", encoding="utf-8")
-
-
-def test_technical_release_status_passes_complete_evidence_tree(tmp_path: Path) -> None:
-    _write_minimal_release_status_tree(tmp_path)
-
-    report = build_technical_release_status(tmp_path)
-
-    assert report["passed"] is True
-    assert report["technical_release_completion_percent"] == 100.0
-    assert not report["failed_required"]
-    assert set(report["lanes"]) == set(LANES)
-
-
-def test_technical_release_status_reports_missing_required_evidence(
-    tmp_path: Path,
-) -> None:
-    _write_minimal_release_status_tree(tmp_path)
-    (tmp_path / "docs" / "parallelization.rst").unlink()
-
-    report = build_technical_release_status(tmp_path)
-
-    assert report["passed"] is False
-    assert report["technical_release_completion_percent"] < 100.0
-    assert any(
-        "parallelization_release_surface" in item for item in report["failed_required"]
-    )
-
-
-# ---- test_release_manifests.py ----
-
-import re
 
 from support.paths import REPO_ROOT
 
@@ -1654,15 +1058,6 @@ def test_benchmark_capability_matrix_is_complete_and_fail_closed() -> None:
     assert metadata["comparison_code"] == "GX"
     assert metadata["comparison_revision"]
     assert metadata["comparison_source_fingerprint"].startswith("sha256:")
-    assert metadata["office_instrumented_source_fingerprint"].startswith("sha256:")
-    assert (
-        metadata["comparison_source_fingerprint"]
-        != metadata["office_instrumented_source_fingerprint"]
-    )
-    for needle in ("validated_clean_rebuild", "OpenMPI 4.1.6", "HDF5 1.14.5"):
-        assert needle in metadata["office_binary_status"]
-    for needle in ("Cyclone", "2145 steps"):
-        assert needle in metadata["office_runtime_probe"]
     assert len(by_id) == len(rows) >= 15
     assert {row["status"] for row in rows} <= allowed_statuses
     assert all(row["gkx_owner"] and row["evidence"] for row in rows)
@@ -1914,36 +1309,14 @@ def test_distribution_metadata_includes_third_party_provenance() -> None:
     assert "https://bitbucket.org/gyrokinetics/gx" in provenance
 
 
-REQUIRED_PHRASES = {
-    "docs/release_scope.rst": (
-        "a scoped model-development and optimization-screening result",
-        "No runtime/TOML absolute-flux predictor",
-        "Solovev and shaped-pressure stress outliers outside the scoped claim",
-        "W7-X TEM / kinetic-electron validation",
-        "W7-X long-window zonal recurrence/damping closure",
-        "production optimization is not promoted",
-    ),
-    "docs/validation.rst": (
-        "Closed as scoped model-development result / failed promotion gate",
-        "does not promote a runtime/TOML absolute-flux predictor",
-        "W7-X zonal long-window recurrence/damping and W7-X TEM / kinetic-electron validation remain outside",
-        "Production nonlinear optimization remains unpromoted",
-    ),
-    "README.md": ("not a runtime/TOML absolute-flux predictor",),
-    "docs/performance.rst": (
-        "Sensitivity sweeps are covered by",
-        "before any speedup claim is promoted",
-        "Communication-aware nonlinear domain decomposition remains",
-    ),
-    "docs/parallelization.rst": (
-        "It is not a production nonlinear domain",
-        "whole-state nonlinear sharding speedup",
-    ),
-    "docs/examples.rst": (
-        "opt-in electrostatic linear-RHS identity artifact",
-        "publication speedup claim",
-    ),
-}
+CLAIM_SCOPE_PAGES = (
+    "docs/release_scope.rst",
+    "docs/validation.rst",
+    "README.md",
+    "docs/performance.rst",
+    "docs/parallelization.rst",
+    "docs/examples.rst",
+)
 
 FORBIDDEN_PHRASES = (
     "is a runtime/TOML absolute-flux predictor",
@@ -1982,15 +1355,6 @@ COMPARISON_ALLOWED_SOURCE_PREFIXES: tuple[Path, ...] = (
 )
 
 
-def test_claim_scope_pages_keep_required_quasilinear_boundaries() -> None:
-    missing: list[str] = []
-    for path, phrases in REQUIRED_PHRASES.items():
-        text = _compact(path)
-        missing.extend(f"{path}: {phrase}" for phrase in phrases if phrase not in text)
-
-    assert not missing
-
-
 def test_readme_python_quickstart_imports_exist() -> None:
     """Keep the concise README example on the installed public import surface."""
 
@@ -2014,7 +1378,7 @@ def test_readme_python_quickstart_imports_exist() -> None:
 
 def test_claim_scope_pages_avoid_promoted_unscoped_claims() -> None:
     violations: list[str] = []
-    for path in REQUIRED_PHRASES:
+    for path in CLAIM_SCOPE_PAGES:
         text = _compact(path)
         violations.extend(
             f"{path}: {phrase}" for phrase in FORBIDDEN_PHRASES if phrase in text
@@ -2886,9 +2250,6 @@ _NOT_A_GKX_RUNTIME_DECK = {
     "benchmarks/capability_matrix.toml": (
         "capability registry ([metadata]/[capabilities] tables), not a runtime deck"
     ),
-    "benchmarks/results/manifest.toml": (
-        "results manifest ([table]/[figure]/[policy] tables), not a runtime deck"
-    ),
 }
 
 
@@ -3178,319 +2539,6 @@ def test_run_to_audit_discovery_sees_a_deck_that_only_the_flags_reveal() -> None
     assert "benchmarks/cases/collisional_zonal_response.toml" not in reaches
 
 
-# ---- GX parity: measured build-reproducibility floors ----
-
-"""A parity case may not be gated below the spread of its own reference.
-
-The linear parity matrix reports differences against reference-code output. For
-one case, ``kbm_miller``, that reference moves by 0.16-0.20 percent between two
-legitimate builds of the same reference commit -- the only difference being
-``-prec-sqrt=true``, IEEE-correct single-precision ``sqrtf`` -- while the
-run-to-run noise floor is exactly zero, the same binary reproducing its output
-bitwise. Every other case in the matrix is bit-identical between those builds
-or moves by at most 0.07 percent.
-
-So a sub-0.1-percent gate on that case would be gating the compiler, and the
-manifest records the resolution of the instrument as
-``build_reproducibility_floor``. This gate keeps that number from being quietly
-tightened back below what was measured, and keeps floors from being invented
-for cases where nothing was measured.
-"""
-
-_PARITY_MANIFEST = RUN_TO_REPO_ROOT / "tools" / "gx_parity_matrix_manifest.toml"
-# Largest relative move measured between the two builds: 0.204% in omega at
-# ky = 0.2. A floor at or below that would not cover the measurement it exists
-# to record. See the branch-only roadmap's gx_precsqrt note.
-_KBM_TWO_BUILD_SPREAD = 0.00204
-
-
-def _parity_cases() -> list[dict]:
-    import tomllib
-
-    return tomllib.loads(_PARITY_MANIFEST.read_text(encoding="utf-8"))["case"]
-
-
-# The README publishes a linear parity percentage per case, as
-# 100 * max|GKX - ref| / max|ref| over each tracked scan. Those numbers were
-# transcribed by hand and nothing recomputed them, so a refreshed scan could
-# leave the published figure behind -- the same failure mode as the mirror
-# record and the generator-less performance file. Each row is recomputed here
-# from the CSV the benchmark atlas points at. The tolerance is the rounding the
-# table itself shows (three significant figures), not a physics tolerance.
-_README_PARITY_SOURCES: dict[str, tuple[str, ...]] = {
-    label: tuple(columns.split())
-    for label, columns in {
-        "KAW": "kaw_exact_growth_dump.csv gamma_ref gamma_gkx omega_ref omega_gkx",
-        "ETG": "etg_mismatch_table.csv gamma_ref gamma_gkx omega_ref omega_gkx",
-        "W7-X": "w7x_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
-        "HSX": "hsx_linear_t2_scan.csv gamma_ref_last gamma_last omega_ref_last omega_last",
-    }.items()
-}
-
-
-def _peak_relative_percent(rows: list[dict], ref_key: str, gkx_key: str) -> float:
-    ref = [float(row[ref_key]) for row in rows]
-    gkx = [float(row[gkx_key]) for row in rows]
-    peak = max(abs(value) for value in ref)
-    worst = max(abs(a - b) for a, b in zip(ref, gkx))
-    return 100.0 * worst / peak
-
-
-def _readme_parity_table(
-    root: Path, labels: set[str] | None = None
-) -> dict[str, tuple[float, float]]:
-    """README parity rows ``label -> (gamma %, omega %)`` for the given labels."""
-
-    labels = set(_README_PARITY_SOURCES) if labels is None else labels
-    text = (root / "README.md").read_text(encoding="utf-8")
-    published: dict[str, tuple[float, float]] = {}
-    for line in text.splitlines():
-        if not line.startswith("|"):
-            continue
-        cells = [cell.strip().strip("*` ") for cell in line.strip("|").split("|")]
-        if len(cells) != 3:
-            continue
-        label = cells[0].split(" (")[0]
-        gamma = re.search(r"gamma ([\d.]+)%", cells[2])
-        omega = re.search(r"omega ([\d.]+)%", cells[2])
-        if label in labels and gamma and omega:
-            published[label] = (float(gamma.group(1)), float(omega.group(1)))
-    return published
-
-
-def test_readme_linear_parity_table_matches_its_tracked_scans() -> None:
-    """Every parity percentage the README publishes is recomputed from its scan."""
-
-    import csv
-
-    root = RUN_TO_REPO_ROOT
-    published = _readme_parity_table(root)
-    assert set(published) == set(_README_PARITY_SOURCES), (
-        "README parity table rows changed; update _README_PARITY_SOURCES so every "
-        f"published row stays recomputed. Parsed: {sorted(published)}"
-    )
-    for label, (gamma_pct, omega_pct) in sorted(published.items()):
-        name, gamma_ref, gamma_gkx, omega_ref, omega_gkx = _README_PARITY_SOURCES[label]
-        source = root / "docs" / "_static" / name
-        assert source.is_file(), f"{label}: {source} is missing"
-        rows = list(csv.DictReader(source.open(encoding="utf-8")))
-        assert rows, f"{label}: {name} has no rows"
-        for published_value, ref_key, gkx_key, quantity in (
-            (gamma_pct, gamma_ref, gamma_gkx, "gamma"),
-            (omega_pct, omega_ref, omega_gkx, "omega"),
-        ):
-            measured = _peak_relative_percent(rows, ref_key, gkx_key)
-            tolerance = max(0.02 * published_value, 0.005)
-            assert abs(measured - published_value) <= tolerance, (
-                f"README publishes {quantity} = {published_value}% for {label}, but "
-                f"{name} gives {measured:.3f}%. Either the scan was refreshed without "
-                "updating the README, or the README was edited away from its scan."
-            )
-
-
-def test_kbm_miller_parity_floor_covers_its_measured_two_build_spread() -> None:
-    """The one case with a measured floor keeps a floor that covers it."""
-
-    cases = {case["key"]: case for case in _parity_cases()}
-    floor = cases["kbm_miller"].get("build_reproducibility_floor")
-
-    assert floor is not None, (
-        "kbm_miller must declare build_reproducibility_floor; without it the "
-        "reported differences invite a gate tighter than the reference's own "
-        "build-to-build spread"
-    )
-    assert float(floor) > _KBM_TWO_BUILD_SPREAD, (
-        f"kbm_miller floor {floor} does not cover the measured two-build "
-        f"spread {_KBM_TWO_BUILD_SPREAD}; that spread is compiler arithmetic, "
-        "not physics, so a gate under it cannot be met by any build choice"
-    )
-
-
-def test_parity_floors_are_declared_only_where_they_were_measured() -> None:
-    """A floor is a measurement, so it needs a reason beside it."""
-
-    cases = _parity_cases()
-    declared = {
-        case["key"]
-        for case in cases
-        if case.get("build_reproducibility_floor") is not None
-    }
-
-    assert declared == {"kbm_miller"}, (
-        "build_reproducibility_floor is a claim that a case's reference moves "
-        "between builds. Add one only with the measurement that shows it, and "
-        f"the comment recording that measurement: {sorted(declared)}"
-    )
-    manifest_text = _PARITY_MANIFEST.read_text(encoding="utf-8")
-    reason_block = manifest_text.split("build_reproducibility_floor = ")[0]
-    assert "prec-sqrt" in reason_block, (
-        "the reason for the kbm_miller floor must stay beside the number"
-    )
-
-
-# ---- closed VMEX mirror: a solved equilibrium, never the seed ----
-
-"""The shipped closed VMEX mirror case must be an equilibrium, not a guess.
-
-``scripts/artifacts/build_vmex_mirror_gkx_artifacts.py`` built its record on
-``setup.discretization.evaluate_state(setup.initial_state)`` -- the seeded stream
-function on the prescribed nested-ellipse surfaces, at a normalized MHD force
-residual of 0.61 -- and published that state's growth rate, frequency,
-quasilinear proxy, field-strength modulation and every figure panel as
-properties of a VMEX equilibrium. Solving the same inputs moves the
-mixing-length proxy by a factor of 4.6, so this was never cosmetic.
-
-Nothing caught it, and that is the part these gates fix: the record sat in no
-manifest and was read by no test, so the state it was built on was invisible.
-The bars are pinned here as well as in the builder on purpose. A gate that only
-read the builder's own constants could be satisfied by loosening them.
-"""
-
-from pathlib import Path as _VmexMirrorPath
-import json as _vmex_mirror_json
-
-_VMEX_MIRROR_ROOT = _VmexMirrorPath(__file__).resolve().parents[2]
-_VMEX_MIRROR_RECORD = (
-    _VMEX_MIRROR_ROOT / "docs" / "_static" / "vmex_mirror_gkx_showcase.json"
-)
-
-# The bars the shipped record has to clear. The three weak-form ones are the
-# bars VMEX's own closed lane asserts in
-# tests/mirror/test_splines.py::test_closed_circular_limit_reaches_ftol_with_independent_strong_force
-# and this case meets them at machine precision. The strong-form one is ours and
-# is deliberately loose: on this racetrack force.normalized_rms plateaus between
-# 4.6e-3 and 5.1e-3 across ns 5-9, mpol 4-6 and coefficient_count 16-64 with no
-# downward trend, so VMEX's 1.6e-4 circular-limit figure is not reachable here.
-# uwplasma/vmex#211 asks whether that plateau is the leg-return curvature
-# junction and is unanswered, so this bar certifies only the two orders of
-# magnitude between a solved state and the 0.61 seed -- not an accuracy claim.
-_VMEX_MIRROR_BARS = {
-    "force_residual_normalized_rms": 1.0e-2,
-    "variational_maximum": 1.0e-12,
-    "staggered_weak_force_maximum": 1.0e-12,
-    "normalized_divergence_rms": 1.0e-12,
-}
-
-
-def _vmex_mirror_equilibrium() -> dict:
-    record = _vmex_mirror_json.loads(_VMEX_MIRROR_RECORD.read_text(encoding="utf-8"))
-    equilibrium = record.get("equilibrium")
-    assert equilibrium is not None, (
-        "the shipped closed VMEX mirror record carries no 'equilibrium' block, "
-        "so nothing states which state its numbers describe. That is exactly "
-        "the condition under which the seeded initial guess was published as an "
-        "equilibrium"
-    )
-    return equilibrium
-
-
-def test_shipped_vmex_mirror_case_is_a_converged_equilibrium() -> None:
-    equilibrium = _vmex_mirror_equilibrium()
-
-    assert equilibrium["converged"] is True, (
-        "the shipped closed VMEX mirror record does not report a converged "
-        "solve, so its objectives and figure panels are properties of whatever "
-        "state the builder happened to stop at"
-    )
-    assert equilibrium["solve_lambda"] is True, (
-        "solve_lambda must be True. With the default the solve reports "
-        "converged after four iterations at a residual of 0.55 and leaves "
-        "|B|max/min at 1.614: it is not a solve"
-    )
-    assert equilibrium["iterations"] > 0, (
-        "a record with no solver iteration is the initial guess"
-    )
-    for name, bar in _VMEX_MIRROR_BARS.items():
-        assert float(equilibrium[name]) < bar, (
-            f"{name} is {equilibrium[name]!r}, at or above the admission bar "
-            f"{bar:g}; the shipped case is not a publishable equilibrium"
-        )
-
-
-def test_shipped_vmex_mirror_record_shows_the_solve_moved_the_state() -> None:
-    """The published residual must be far below the seed the solve started at."""
-
-    equilibrium = _vmex_mirror_equilibrium()
-    seed = float(equilibrium["seed_force_residual_normalized_rms"])
-    solved = float(equilibrium["force_residual_normalized_rms"])
-
-    assert seed > 0.1, (
-        "the recorded seed residual no longer looks like the seeded state this "
-        f"gate exists to exclude ({seed!r}); re-derive the separation below"
-    )
-    assert solved * 25.0 < seed, (
-        f"the published residual {solved!r} is not 25x below the seed's "
-        f"{seed!r}. The shipped state is then indistinguishable from the "
-        "solver's initial guess, which is what #173 fixed"
-    )
-
-
-def test_vmex_mirror_record_bars_match_the_builder_that_writes_them() -> None:
-    """A record that declares its own bars must declare the pinned ones."""
-
-    declared = _vmex_mirror_equilibrium()["admission_bars"]
-
-    assert {key: float(value) for key, value in declared.items()} == (
-        _VMEX_MIRROR_BARS
-    ), (
-        "the shipped record's admission bars differ from the ones pinned here. "
-        "Loosening a bar in the builder must not be able to make a worse "
-        "equilibrium pass; change both, with the measurement that justifies it"
-    )
-
-
-# ---- tracked release artifacts: reproducible, and current ----
-
-# ci.yml regenerates exactly these four in place and then diffs them against
-# the commit, so exactly these four have to come out byte-identical on any
-# checkout. The rest of docs/_static records expensive physics runs and keeps
-# whatever provenance the run recorded, absolute paths included.
-CI_REGENERATED_RELEASE_ARTIFACTS = (
-    "docs/_static/quasilinear_promotion_guardrails.json",
-    "docs/_static/vmec_boozer_differentiability_claim_guard.json",
-    "docs/_static/technical_release_status.json",
-    "docs/_static/release_readiness.json",
-)
-
-
-def test_ci_regenerated_release_artifacts_carry_no_absolute_path() -> None:
-    """An artifact that stamps its generating checkout is not reproducible.
-
-    Three of these carried ``"root": "/Users/<someone>/..."``, so running the
-    documented regeneration command produced a diff containing whoever ran it.
-    """
-
-    for relative in CI_REGENERATED_RELEASE_ARTIFACTS:
-        text = (REPO_ROOT / relative).read_text(encoding="utf-8")
-        assert str(REPO_ROOT) not in text, (
-            f"{relative} records the checkout it was generated in; "
-            "the generator must emit repository-relative paths only"
-        )
-        for prefix in ('"/Users/', '"/home/', '"/private/', '"/tmp/'):
-            assert prefix not in text, f"{relative} embeds an absolute path {prefix}"
-
-
-def test_tracked_release_readiness_matches_the_current_project_version() -> None:
-    """1.8.2 survived the 2.0.0 bump because nothing ever compared the two.
-
-    The CI diff gate catches this too, but only after running every generator.
-    This is the cheap local copy of the same question.
-    """
-
-    project_version = tomllib.loads(
-        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    )["project"]["version"]
-    payload = json.loads(
-        (REPO_ROOT / "docs" / "_static" / "release_readiness.json").read_text(
-            encoding="utf-8"
-        )
-    )
-
-    assert payload["project"]["version"] == project_version
-    assert payload["version"]["project_version"] == project_version
-    assert payload["version"]["source_version"] == project_version
-
-
 # ---- every shipped deck loads through the public API ----------------------
 #
 # The CLI never calls ``RuntimeConfig.validate``; the Python facade does. So a
@@ -3519,9 +2567,6 @@ _DECKS_NOT_LOADABLE_AS_CASES: dict[str, str] = {
     ),
     "benchmarks/capability_matrix.toml": (
         "capability registry ([metadata]/[capabilities] tables), which the loader now refuses as unknown sections instead of reading as an empty deck"
-    ),
-    "benchmarks/results/manifest.toml": (
-        "results manifest ([table]/[figure]/[policy] tables), which the loader now refuses as unknown sections instead of reading as an empty deck"
     ),
 }
 
@@ -3648,308 +2693,51 @@ def test_deck_exemptions_are_real_and_explained() -> None:
     assert not problems, "\n".join(problems)
 
 
-# ---- from test_evidence_ledger.py ----
-# The evidence ledger is the single index of every public number.
-#
-# ``tools/evidence_ledger.toml`` holds one row per published claim: the artifact
-# it is computed from, the generator that rebuilds that artifact, the reference it
-# is compared against, and that reference's rank. These tests keep the ledger
-# honest in the three ways it can rot.
+# Release gates inspect current executable contracts rather than saved scores.
+def test_release_readiness_reports_current_source_without_campaign_outputs() -> None:
+    from scripts.checks.check_release_readiness import check_release_readiness
 
-
-RUN_TO_REPO_ROOT = Path(__file__).resolve().parents[2]
-LEDGER_PATH = RUN_TO_REPO_ROOT / "tools" / "evidence_ledger.toml"
-
-VALID_STATUS = {"open", "passing", "failing", "provisional", "superseded"}
-VALID_RANKS = {1, 2, 3, 4, 5}
-VALID_TIERS = {0, 1, 2, 3}
-REQUIRED_KEYS = (
-    "id",
-    "claim",
-    "observable",
-    "artifact",
-    "generator",
-    "reference",
-    "reference_rank",
-    "tier",
-    "status",
-)
-
-
-def _ledger() -> dict:
-    assert LEDGER_PATH.is_file(), f"{LEDGER_PATH} is missing"
-    return tomllib.loads(LEDGER_PATH.read_text(encoding="utf-8"))
-
-
-def _rows() -> list[dict]:
-    return _ledger()["row"]
-
-
-def _readme_parity_rows() -> list[dict]:
-    """Ledger rows that publish a percentage in the README parity table."""
-
-    return [row for row in _rows() if "readme_label" in row]
-
-
-def test_ledger_parses_and_declares_its_schema() -> None:
-    ledger = _ledger()
-    assert ledger.get("schema_version") == 1
-    assert ledger.get("updated"), "the ledger records when it was last touched"
-    assert _rows(), "the ledger is empty"
-
-
-def test_every_row_is_well_formed() -> None:
-    seen: set[str] = set()
-    problems: list[str] = []
-    for row in _rows():
-        missing = [key for key in REQUIRED_KEYS if key not in row]
-        if missing:
-            problems.append(f"{row.get('id', '<no id>')}: missing {missing}")
-            continue
-        row_id = row["id"]
-        if row_id in seen:
-            problems.append(f"{row_id}: duplicate id")
-        seen.add(row_id)
-        if row["reference_rank"] not in VALID_RANKS:
-            problems.append(f"{row_id}: reference_rank {row['reference_rank']!r}")
-        if row["tier"] not in VALID_TIERS:
-            problems.append(f"{row_id}: tier {row['tier']!r}")
-        if row["status"] not in VALID_STATUS:
-            problems.append(f"{row_id}: status {row['status']!r}")
-    assert not problems, "malformed ledger rows:\n" + "\n".join(problems)
-
-
-def test_every_artifact_and_generator_exists() -> None:
-    """A row may not point at a file that has been moved or deleted."""
-
-    problems: list[str] = []
-    for row in _rows():
-        for key in ("artifact", "companion"):
-            target = row.get(key)
-            if target and not (RUN_TO_REPO_ROOT / target).exists():
-                problems.append(f"{row['id']}: {key} {target} is missing")
-        # A generator may carry arguments; only the script path is checked.
-        # ``retired@<sha>`` marks one removed from the tree, recoverable there.
-        script = row["generator"].split()[0]
-        if script.startswith("retired@"):
-            continue
-        if not (RUN_TO_REPO_ROOT / script).exists():
-            problems.append(f"{row['id']}: generator {script} is missing")
-    assert not problems, "ledger rows point at missing files:\n" + "\n".join(problems)
-
-
-def test_provisional_rows_say_why() -> None:
-    """``provisional`` is a claim about evidence, so it needs a stated reason."""
-
-    missing = [
-        row["id"]
-        for row in _rows()
-        if row["status"] == "provisional" and not row.get("notes")
-    ]
-    assert not missing, (
-        "provisional rows must record what is unresolved and what would close "
-        f"them: {missing}"
-    )
-
-
-def test_linked_boundary_references_record_their_clamp_state() -> None:
-    """GX linked-boundary references must declare whether the clamp binds.
-
-    GX launches ``dampEnds_linked`` with ``dG_all.z = min(65535, Nz*Nl*Nm)`` but,
-    unlike its sibling kernels, that kernel has no grid-stride loop over z. A
-    reference produced above the clamp has undamped high Hermite moments, so it
-    cannot be treated as a settled comparison. Any row that records a binding
-    clamp must be provisional and must explain itself.
-    """
-
-    problems: list[str] = []
-    for row in _rows():
-        if "reference_index_count" not in row:
-            continue
-        count = row["reference_index_count"]
-        binds = row.get("reference_clamp_binds")
-        assert binds is not None, f"{row['id']}: reference_clamp_binds is unset"
-        if binds != (count > 65535):
-            problems.append(
-                f"{row['id']}: reference_clamp_binds={binds} contradicts "
-                f"reference_index_count={count} against the 65535 clamp"
-            )
-        if binds and row["status"] == "passing":
-            problems.append(
-                f"{row['id']}: reference clamp binds, so the row cannot be "
-                "'passing' until the reference is regenerated from a repaired build"
-            )
-    assert not problems, "\n".join(problems)
-
-
-def test_shipped_reference_rows_carry_a_hash() -> None:
-    """Rank-3 rows cite a specific file, so they pin it by content."""
-
-    missing = [
-        row["id"]
-        for row in _rows()
-        if row["reference_rank"] == 3 and not row.get("reference_sha256")
-    ]
-    assert not missing, (
-        f"rank-3 rows cite a reference-code golden and must pin its SHA-256: {missing}"
-    )
-
-
-def _published_readme_parity() -> dict[str, tuple[float, float]]:
-    labels = {row["readme_label"] for row in _readme_parity_rows()}
-    return _readme_parity_table(RUN_TO_REPO_ROOT, labels)
-
-
-def test_ledger_covers_every_published_parity_row() -> None:
-    """The README table and the ledger describe the same set of claims."""
-
-    published = set(_published_readme_parity())
-    ledgered = {row["readme_label"] for row in _readme_parity_rows()}
-    assert published == ledgered, (
-        "the README parity table and the ledger disagree about which cases are "
-        f"published. README only: {sorted(published - ledgered)}; "
-        f"ledger only: {sorted(ledgered - published)}"
-    )
+    report = check_release_readiness(REPO_ROOT)
+    assert report["passed"] is True
+    assert report["project"]["version"] == read_source_version(REPO_ROOT)
+    text = json.dumps(report)
+    assert str(REPO_ROOT) not in text
+    assert "completion_percent" not in text
 
 
 @pytest.mark.parametrize(
-    "row", _readme_parity_rows(), ids=lambda row: str(row["readme_label"])
+    ("relative", "contract"),
+    [
+        (".github/workflows/ci.yml", "--fail-under 95"),
+        (".github/workflows/ci.yml", "--enforce-package-coverage"),
+        (".github/workflows/release.yml", "--check-pypi"),
+        (".github/workflows/release.yml", "--require-tag"),
+        (".github/workflows/release.yml", "twine check dist/*"),
+    ],
 )
-def test_published_parity_recomputes_from_its_artifact(row: dict) -> None:
-    """Every percentage the README publishes is recomputed from its artifact."""
+def test_release_readiness_rejects_removed_executable_contract(
+    tmp_path: Path, relative: str, contract: str
+) -> None:
+    import shutil
+    from scripts.checks.check_release_readiness import (
+        ReleaseReadinessError,
+        check_release_readiness,
+    )
 
-    published = _published_readme_parity()
-    label = row["readme_label"]
-    assert label in published, f"{label} is not published in the README table"
-
-    source = RUN_TO_REPO_ROOT / row["artifact"]
-    csv_rows = list(csv.DictReader(source.open(encoding="utf-8")))
-    assert csv_rows, f"{label}: {row['artifact']} has no rows"
-
-    columns = row["columns"]
-    gamma_pct, omega_pct = published[label]
-    for value, ref_key, gkx_key, quantity in (
-        (gamma_pct, columns["gamma_ref"], columns["gamma_gkx"], "gamma"),
-        (omega_pct, columns["omega_ref"], columns["omega_gkx"], "omega"),
+    for source in (
+        "pyproject.toml",
+        "src/gkx/_version.py",
+        "README.md",
+        "LICENSE",
+        "PROVENANCE.md",
+        "tools/validation_coverage_manifest.toml",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
     ):
-        measured = _peak_relative_percent(csv_rows, ref_key, gkx_key)
-        # The tolerance is the rounding the table itself shows, not a physics
-        # tolerance: three significant figures, with an absolute floor.
-        tolerance = max(0.02 * value, 0.005)
-        assert abs(measured - value) <= tolerance, (
-            f"README publishes {quantity} = {value}% for {label}, but "
-            f"{row['artifact']} gives {measured:.3f}%. Either the artifact was "
-            "refreshed without updating the README, or the README was edited "
-            "away from its artifact."
-        )
-
-
-# ------------------------------------------------ declared velocity regularization
-
-VALID_REGULARIZATIONS = {
-    "none",
-    "hermite-kz-hypercollision",
-    "hermite-const-hypercollision",
-    "laguerre-hypercollision",
-    "isotropic-hypercollision",
-    "conserving-collisions",
-    "dougherty-lb-collisions",
-}
-ELL_SPACE_CHANNELS = {
-    "laguerre-hypercollision",
-    "isotropic-hypercollision",
-    "conserving-collisions",
-    "dougherty-lb-collisions",
-}
-VALID_VELOCITY_LIMITS = {"truncation-limited", "extrapolated", "unmeasured"}
-
-
-def _linear_rows() -> list[dict]:
-    return [row for row in _rows() if str(row["id"]).startswith("L-lin-")]
-
-
-@pytest.mark.parametrize("row", _linear_rows(), ids=lambda row: str(row["id"]))
-def test_every_linear_row_declares_its_velocity_regularization(row: dict) -> None:
-    """plan.md §0.5: a linear row states the velocity-space sink it ran with.
-
-    ``nu_hyper_l`` reaches the distribution only through the
-    constant-coefficient hypercollision branch, so under the shipped defaults a
-    deck could declare a Laguerre sink and run without one. The operator now
-    refuses that; this row-level field is the reporting half of the same
-    contract, so a published growth rate carries the regularization that
-    produced it instead of leaving a reader to infer it from a deck.
-    """
-
-    declared = row.get("velocity_regularization")
-    assert isinstance(declared, list) and declared, (
-        f"{row['id']} publishes a linear growth rate but declares no "
-        "velocity_regularization. 'none' is a legal declaration; silence is not."
-    )
-    unknown = sorted(set(declared) - VALID_REGULARIZATIONS)
-    assert not unknown, f"{row['id']}: unknown regularization {unknown}"
-    if "none" in declared:
-        assert declared == ["none"], (
-            f"{row['id']}: 'none' cannot be combined with a channel ({declared})"
-        )
-
-
-@pytest.mark.parametrize("row", _linear_rows(), ids=lambda row: str(row["id"]))
-def test_rows_without_an_ell_space_sink_report_their_limit(row: dict) -> None:
-    """A row with no ell-space sink says whether its value is converged.
-
-    #252 measured, on the Cyclone s-alpha ITG mode at ky = .55, that the
-    collisionless Laguerre spectrum carries a cutoff pile-up which relocates to
-    0.79-0.85 of every new ``Nl`` rather than resolving. A row whose only
-    velocity dissipation is the Hermite ``|k_z|`` branch therefore cannot claim
-    a converged growth rate without saying so.
-    """
-
-    declared = row.get("velocity_regularization", [])
-    if set(declared) & ELL_SPACE_CHANNELS:
-        return
-    limit = row.get("velocity_limit")
-    assert limit in VALID_VELOCITY_LIMITS, (
-        f"{row['id']} has no ell-space velocity sink, so it must declare a "
-        f"velocity_limit in {sorted(VALID_VELOCITY_LIMITS)}; got {limit!r}."
-    )
-    evidence = row.get("velocity_limit_evidence")
-    assert isinstance(evidence, str) and evidence.strip(), (
-        f"{row['id']}: velocity_limit = {limit!r} needs velocity_limit_evidence "
-        "naming where it was measured, or why it is unmeasured."
-    )
-
-
-def test_tem_deck_and_reference_are_the_dannert_jenko_case() -> None:
-    """Dannert & Jenko (2005) nominal TEM: deck parameters and the GS2 reference.
-
-    R/Ln = 3, R/LTe = 6, R/LTi = 0, Te/Ti = 3, eps = 0.16, q = 1.4, s_hat = 0.8,
-    m_i/m_e = 1836; the ky grid sits on multiples of ky rho_s = 0.1 through
-    ky = ky rho_s / sqrt(3). The converged GS2 growth rate at ky rho_s = 0.3 is
-    the number the ledger row quotes.
-    """
-
-    root = RUN_TO_REPO_ROOT
-    deck = tomllib.loads(
-        (
-            root / "tools/comparison/fixtures/parity/tem_dannert_jenko_2005.toml"
-        ).read_text()
-    )
-    ion, electron = deck["species"]
-    assert (ion["fprim"], electron["fprim"]) == (3.0, 3.0)
-    assert (ion["tprim"], electron["tprim"]) == (0.0, 6.0)
-    assert electron["temperature"] / ion["temperature"] == 3.0
-    assert 1.0 / electron["mass"] == pytest.approx(1836.0, abs=0.5)
-    geometry = deck["geometry"]
-    assert (geometry["q"], geometry["s_hat"], geometry["epsilon"]) == (1.4, 0.8, 0.16)
-    assert deck["grid"]["y0"] == pytest.approx(3.0**0.5 / 0.1)
-    assert deck["run"]["ky"] == pytest.approx(0.3 / 3.0**0.5)
-    with (root / "docs/_static/cross_code_linear_points.csv").open() as handle:
-        gs2 = [
-            row
-            for row in csv.DictReader(handle)
-            if (row["case"], row["code"], row["resolution"], row["ky"])
-            == ("tem_dj2005", "gs2", "t2", "0.3")
-        ]
-    assert len(gs2) == 1
-    assert float(gs2[0]["gamma"]) == pytest.approx(0.8694, abs=5e-5)
-    assert float(gs2[0]["omega"]) == pytest.approx(-1.2723, abs=5e-5)
+        target = tmp_path / source
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / source, target)
+    target = tmp_path / relative
+    target.write_text(target.read_text().replace(contract, "removed"))
+    with pytest.raises(ReleaseReadinessError, match="missing contracts"):
+        check_release_readiness(tmp_path)

@@ -1,7 +1,7 @@
 schema_version = 1
 
 # Cyclone ITG with the gyrokinetic (finite-Larmor) Coulomb collision operator,
-# tutorial resolution: seconds per collision model on a laptop CPU. The moment
+# tutorial resolution. The moment
 # collision operators use the tabulated eight-moment basis (Nl, Nm) = (2, 4)
 # and the fixed-step integrator (solver = "time"). case_full.toml runs the same
 # physics to t_max = 120 for a converged growth rate.

@@ -1,10 +1,5 @@
 """The ``pr3-cm`` structured preconditioner for shift-invert Krylov solves.
 
-Q7 (#236) measured this design on the exact assembled operator and adopted it as
-the §5.1 L4 preconditioner; Q21 (#255) measured an exact solve for its z-local
-block; Q26 (#257) recorded that neither had ever been written into ``src``.
-This module is that code.
-
 The design
 ----------
 ``pr3-cm`` is a right preconditioner for ``B = A - sigma I``. It splits the
@@ -28,29 +23,23 @@ sweeps between them:
 With ``s1 = sigma/2 - alpha`` (so ``2 s1 + 2 alpha = sigma``) one
 Peaceman-Rachford double sweep of ``(S~ - s1)`` and ``(D~ - s1)`` costs one
 solve of each half and no operator application at all; ``pr3-cm`` is three such
-sweeps started from zero. Q7 measured 30/45/88/164 GMRES iterations to 1e-5
-from the pilot to ``(Nz, Nl, Nm) = (96, 8, 24)``, where the shipped
-``hermite-line`` preconditioner no longer converges at all.
+sweeps started from zero.
 
 The z-local block
 -----------------
-Q21 established, and :func:`check_block_structure` re-checks at every build,
-that the z-local block is **exactly** block-tridiagonal in the Laguerre index
+At every build, :func:`check_block_structure` checks that the z-local block
+is block-tridiagonal in the Laguerre index
 with ``Nm x Nm`` blocks once the field term is removed, and that the field term
 itself is **exactly** rank one per ``(kx, z)``. So ``D~ - s1`` is solved exactly
 by block-Thomas in the Laguerre index plus one Sherman-Morrison correction,
-which is the same preconditioner to round-off -- Q21 measured the two solves
-agreeing to 4.4e-16, with every iteration count unchanged.
+which preserves the dense preconditioner to round-off.
 
 Off-diagonal Laguerre couplings are banded in Hermite: their drift blocks
-preserve ``m``, while mirror blocks couple neighboring orders. On this tested
-operator the measured half-width is 1, and the
-elimination therefore stores ``Nl Nm^2`` Schur inverses plus ``2 Nl (2p+1) Nm``
-coupling diagonals rather than the ``3 Nl Nm^2`` of a dense-band factorization
--- 1.5x smaller at ``Nl Nm = 36`` rising to 2.7x at 768, where the dense
-``(Nl Nm)^2`` inverse is 3.0x and 14.2x larger. The half-width is measured, never
-assumed; a coupling too wide for the band to pay for itself sends the build to
-the dense fallback with the measured width recorded.
+preserve ``m``, while mirror blocks couple neighboring orders. The
+elimination stores ``Nl Nm^2`` Schur inverses plus ``2 Nl (2p+1) Nm``
+coupling diagonals rather than the ``3 Nl Nm^2`` of a dense-band factorization.
+The half-width is checked at setup; wide couplings select the dense fallback
+with the width recorded in metadata.
 
 :func:`solvax.block_thomas_factor_ops` owns the Schur elimination: that is the
 numerically delicate half, and its operator-coupling contract is exactly the
@@ -117,19 +106,11 @@ PR3_PRECOND_NAMES: frozenset[str] = frozenset(
 )
 PR3_BLOCK_SOLVE_CHOICES: tuple[str, ...] = ("auto", "block-thomas", "dense")
 
-# Number of Peaceman-Rachford double sweeps. Q7 measured one, two and three and
-# adopted three: two costs 1.5x the iterations of three at every rung it ran
-# (66 against 45 at (32,8,16), 245 against 164 at (96,8,24)) for 2/3 of the
-# apply, and one ("adi-cm") does not converge at the production chain at all.
-# It is a constant rather than a config field because no measurement supports a
-# fourth sweep and the name of the preconditioner states the number.
+# Number of Peaceman-Rachford double sweeps specified by the preconditioner name.
 PR3_SWEEPS: int = 3
 
-# The exact solve is used only when the block really is l-tridiagonal plus rank
-# one. Q21 measured the off-tridiagonal entries at exactly 0.0 against a block
-# norm of 74.7, and the rank-one singular-value ratio at <= 5.3e-14; these
-# thresholds are far above that and far below anything a genuinely dense or
-# genuinely rank-two block could produce.
+# Accept the structured solve only when off-tridiagonal couplings and the
+# second field singular value are negligible relative to their reference scales.
 _TRIDIAGONAL_RELATIVE_TOL: float = 1.0e-10
 _RANK_ONE_RATIO_TOL: float = 1.0e-8
 # The block representation must reproduce the z-local operator itself. This is
@@ -141,11 +122,8 @@ _LOCALITY_DEFECT_TOL: float = 1.0e-8
 # +-1. This threshold is also floored at the probe precision below, because at
 # float32 a structurally absent diagonal can carry probe round-off.
 _COUPLING_BAND_TOL: float = 1.0e-13
-# These are float64 values. The probes run at the ambient JAX precision, and
-# in float32 round-off alone puts the defect and the rank-one ratio at ~0.6 eps
-# (6.7e-8, 6.0e-8), so each is floored at this many eps of the probe dtype:
-# inert in float64 (1.4e-14), 7.6e-6 in float32. For the off-band check that is
-# 20x below the measured 1.5e-4 Laguerre coupling at nu = 0.01.
+# Probes use the ambient JAX precision. Floor structural tolerances at this
+# multiple of dtype epsilon so float32 round-off does not reject valid blocks.
 _ROUNDOFF_EPS_MULTIPLE: float = 64.0
 
 
@@ -550,10 +528,8 @@ def _block_thomas_substitute(
     SOLVAX runs them as ``lax.scan``s because that is what keeps *its* solve
     transposable on JAX releases before 0.10. GKX only ever applies this
     preconditioner forwards and never differentiates through it, so it does not
-    need that property, and at the Laguerre block counts this operator has it
-    costs real time: a scan of this recurrence is 1.6x to 1.9x slower than the
-    unrolled form at ``Nl`` of 6 to 16 on CPU, which is why SOLVAX's own
-    stored-band solve unrolls for block counts in this range as well.
+    need that property. Unrolling avoids scan overhead for the small, static
+    Laguerre block count.
     """
 
     inverses = factors.blocks  # (nblocks, Nl, Nm, Nm), Delta_a^-1
@@ -592,12 +568,10 @@ def pr3_alpha_from_symbol_bounds(
     term_cfg: TermConfig,
     blocks: np.ndarray,
 ) -> tuple[float, dict[str, float]]:
-    """Q7's scalar rule ``alpha = -sqrt(s1 d)`` from the two halves' symbols.
+    """Scalar rule ``alpha = -sqrt(s1 d)`` from the two halves' symbols.
 
     ``s1`` is the streaming-plus-hypercollision symbol bound at the smallest
-    non-zero ``|kz|`` and ``d`` the spectral radius of the ``D~`` blocks. Q7
-    measured this scalar as good as a per-rung scan at ``Nz = 96`` and 1.2x
-    worse at ``(64, 8, 32)``, and rejected per-``kz`` parameters outright.
+    non-zero ``|kz|`` and ``d`` the spectral radius of the ``D~`` blocks.
     """
 
     from gkx.solvers_linear_implicit import (

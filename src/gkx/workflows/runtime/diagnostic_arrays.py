@@ -196,6 +196,74 @@ def stride_runtime_diagnostics(
     if keep_last and (indices.size == 0 or indices[-1] != np.asarray(diag.t).size - 1):
         indices = np.append(indices, np.asarray(diag.t).size - 1)
 
+    return _take_runtime_diagnostics(diag, indices)
+
+
+def _time_sample_runtime_diagnostics(
+    diag: SimulationDiagnostics,
+    interval: float,
+    *,
+    previous_time: float = 0.0,
+    time_offset: float = 0.0,
+    keep_last: bool = True,
+) -> SimulationDiagnostics:
+    """Keep actual accepted samples crossing global physical-time thresholds."""
+
+    indices = _physical_time_indices(
+        diag.t,
+        interval,
+        previous_time=previous_time,
+        time_offset=time_offset,
+        keep_last=keep_last,
+    )
+    return _take_runtime_diagnostics(diag, indices)
+
+
+def _physical_time_indices(
+    times: Any,
+    interval: float,
+    *,
+    previous_time: float = 0.0,
+    time_offset: float = 0.0,
+    keep_last: bool = True,
+) -> np.ndarray:
+    """Return accepted-row indices for a physical-time cadence."""
+
+    if not np.isfinite(interval) or interval <= 0:
+        raise ValueError("diagnostic interval must be finite and positive")
+    local_times = np.asarray(times)
+    times = np.asarray(local_times, dtype=float) + time_offset
+    if times.size == 0:
+        return np.asarray([], dtype=int)
+    if not np.isfinite(times).all() or np.any(np.diff(times) < 0):
+        raise ValueError("diagnostic times must be finite and nondecreasing")
+    eps = np.finfo(
+        local_times.dtype if np.issubdtype(local_times.dtype, np.inexact) else float
+    ).eps
+    tolerance = 8 * eps * np.maximum(np.abs(times), interval)
+    with np.errstate(over="ignore"):
+        buckets = np.floor((times + tolerance) / interval)
+    with np.errstate(over="ignore"):
+        previous_bucket = np.floor(
+            (previous_time + 8 * eps * max(abs(previous_time), interval)) / interval
+        )
+    prior = np.maximum.accumulate(np.concatenate(([previous_bucket], buckets[:-1])))
+    distinct = np.concatenate(([True], np.diff(times) > 0))
+    crossed = (buckets > prior) | (
+        np.diff(np.concatenate(([previous_time], times))) >= interval
+    )
+    indices = np.flatnonzero(crossed & (times > previous_time) & distinct)
+    final_index = np.flatnonzero(distinct)[-1]
+    if keep_last and (indices.size == 0 or indices[-1] != final_index):
+        indices = np.append(indices, final_index)
+    return indices
+
+
+def _take_runtime_diagnostics(
+    diag: SimulationDiagnostics, indices: np.ndarray
+) -> SimulationDiagnostics:
+    """Select aligned scalar, species and resolved diagnostic rows."""
+
     def _take(arr: np.ndarray | jnp.ndarray) -> np.ndarray:
         return np.asarray(arr)[indices, ...].copy()
 

@@ -179,7 +179,7 @@ def build_spectral_grid(
 
     ``FULL`` is the two-sided ``fftfreq`` axis of length ``Ny``.  ``HALF``
     keeps the ``Nyc = 1 + Ny // 2`` non-negative rows, which is the layout a
-    half-spectrum evolved state uses (plan 5.3 N3); the grid still records the
+    half-spectrum evolved state uses; the grid still records the
     full length in :attr:`SpectralGrid.ny_full`, because ``Nyc`` alone cannot
     supply it.
 

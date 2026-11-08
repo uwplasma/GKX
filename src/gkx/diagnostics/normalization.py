@@ -1,7 +1,6 @@
 """Canonical normalization contracts for benchmark families.
 
-This module centralizes the case-level calibration knobs that were previously
-spread across benchmark runners and tool scripts.
+Case-level calibration parameters are shared by benchmark runners and tools.
 """
 
 from __future__ import annotations

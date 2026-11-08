@@ -126,10 +126,7 @@ The Schur elimination is SOLVAX ``block_thomas_factor_ops`` (hence
 ``solvax>=0.29.0``).  GKX keeps the Hermite-banded coupling action, an
 unrolled forward substitution pinned bitwise to SOLVAX
 ``block_thomas_solve_ops`` on the same factors, and the Sherman--Morrison
-correction.  Against the previous in-tree factors, full applies agree to
-``7.1e-16``--``8.9e-16`` and factor storage is 1.43x--2.61x smaller over
-``Nl*Nm = 36..768`` (``plan/log.md``, 2026-09-20).  The record supports no
-speed claim.
+correction.
 
 The structural checks (z-locality, rank one, off-tridiagonal and Hermite-band
 width) are floored at ``64 * eps`` of the probe precision: inert in float64,

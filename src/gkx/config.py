@@ -94,18 +94,14 @@ class GridConfig:
     nperiod: int | None = None
     zp: int | None = None
     #: Layout of the ``ky`` axis of every spectral array built from this grid
-    #: (:mod:`gkx.core_ky_layout`, plan 5.3 N3).  ``"half"`` -- the default --
+    #: (:mod:`gkx.core_ky_layout`).  ``"half"`` -- the default --
     #: stores the ``Nyc = 1 + Ny // 2`` non-negative rows and lets the reality
     #: condition hold by construction; ``"full"`` stores the two-sided
     #: ``fftfreq`` axis of length ``Ny`` and rebuilds the negative rows in the
     #: bracket and after every stage.  ``Ny`` means the same thing in both: the
     #: length of the physical ``y`` axis, and therefore the resolution of the
-    #: run.  The physics, the resolution and the published output do not depend
-    #: on the choice: nonlinear diagnostics agree to round-off (2e-16 in x64,
-    #: 2e-7 in float32), the window gradient is bitwise equal, and ``"half"``
-    #: is faster (an RK3 step 0.54-0.60x of the two-sided time on CPU, 0.65x on
-    #: an RTX A4000; the checkpointed window gradient 0.68-0.72x) with 12-25%
-    #: less memory.
+    #: run. Both layouts represent the same physical state; half storage omits
+    #: conjugate rows and reconstructs their contribution in diagnostics.
     ky_layout: str = "half"
 
     def __post_init__(self) -> None:
@@ -144,6 +140,8 @@ class TimeConfig:
     fixed_dt: bool = None  # type: ignore[assignment]
     sample_stride: int = 1
     diagnostics_stride: int = 1
+    chunk_steps: int | None = None
+    diagnostics_interval: float | None = None
     diagnostics: bool = True
     save_state: bool = False
     checkpoint: bool = False
@@ -183,6 +181,18 @@ class TimeConfig:
         ):
             if getattr(self, name) is None:
                 object.__setattr__(self, name, value)
+        if self.chunk_steps is not None and (
+            isinstance(self.chunk_steps, bool)
+            or not isinstance(self.chunk_steps, int)
+            or self.chunk_steps < 1
+        ):
+            raise ValueError("time.chunk_steps must be a positive integer")
+        if self.diagnostics_interval is not None and (
+            isinstance(self.diagnostics_interval, bool)
+            or not math.isfinite(self.diagnostics_interval)
+            or self.diagnostics_interval <= 0
+        ):
+            raise ValueError("time.diagnostics_interval must be finite and positive")
         rate = self.damp_ends_rate
         if rate is not None and (not math.isfinite(rate) or rate < 0.0):
             raise ValueError("time.damp_ends_rate must be finite and nonnegative")
@@ -666,6 +676,15 @@ class RuntimeOutputConfig:
     plots: bool = True
     restart_scale: float = 1.0
     nsave: int = 10000
+    time_interval: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.time_interval is not None and (
+            isinstance(self.time_interval, bool)
+            or not math.isfinite(self.time_interval)
+            or self.time_interval <= 0
+        ):
+            raise ValueError("output.time_interval must be finite and positive")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
