@@ -207,7 +207,8 @@ recursive = true
 # 69891 -> 70013: dougherty e-i collision operator, measured after merging main.
 # 70013 -> 70061: nonlinear CFL factors and explicit chunk retry.
 # 70061 -> 70069: paired-gradient bracket transform, documented in place, measured after merging main.
-baseline = 70069
+# 70069 -> 70073: paired-gradient bracket transform, documented in place, measured after merging main.
+baseline = 70073
 target = 45000
 
 [[line_budget_policy.counts]]
