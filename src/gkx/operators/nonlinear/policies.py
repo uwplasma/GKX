@@ -161,7 +161,8 @@ def _build_time_step_limits(
     cfl: float,
     cfl_fac: float | None,
     real_dtype: Any,
-    resolve_cfl_fac_fn: Callable[[str, float | None], float],
+    resolve_cfl_fac_fn: Callable[[str, float | None, int], float],
+    moments: int,
 ) -> _TimeStepLimits:
     dt_init = jnp.asarray(dt, dtype=real_dtype)
     progress_total = (
@@ -175,7 +176,9 @@ def _build_time_step_limits(
         dt_min=jnp.asarray(dt_min, dtype=real_dtype),
         dt_max=jnp.asarray(dt if dt_max is None else dt_max, dtype=real_dtype),
         cfl=jnp.asarray(cfl, dtype=real_dtype),
-        cfl_fac=jnp.asarray(resolve_cfl_fac_fn(method, cfl_fac), dtype=real_dtype),
+        cfl_fac=jnp.asarray(
+            resolve_cfl_fac_fn(method, cfl_fac, moments), dtype=real_dtype
+        ),
     )
 
 
@@ -386,7 +389,7 @@ def build_nonlinear_time_step_policy(
     cfl_fac: float | None,
     compressed_real_fft: bool,
     real_dtype: Any,
-    resolve_cfl_fac_fn: Callable[[str, float | None], float],
+    resolve_cfl_fac_fn: Callable[[str, float | None, int], float],
     linear_frequency_bound_fn: Callable[..., Any],
     laguerre_velocity_max_fn: Callable[..., float],
     cfl_frequency_components_fn: Callable[..., tuple[jnp.ndarray, jnp.ndarray]],
@@ -404,6 +407,7 @@ def build_nonlinear_time_step_policy(
         cfl_fac=cfl_fac,
         real_dtype=real_dtype,
         resolve_cfl_fac_fn=resolve_cfl_fac_fn,
+        moments=int(cache.l.shape[0]) * int(cache.m.shape[1]),
     )
     if fixed_dt:
 

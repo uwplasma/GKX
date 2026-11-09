@@ -2272,7 +2272,12 @@ def _cached_explicit_diagnostics(
 ):
     # Caller-owned cache: model and policy stay fixed for this trajectory.
     # Only state, controller and horizon operands change between chunks.
-    key = (int(steps), time_horizon is None, bool(options.get("show_progress", False)))
+    key = (
+        int(steps),
+        time_horizon is None,
+        bool(options.get("show_progress", False)),
+        options.get("cfl_fac"),  # a retry at a smaller factor recompiles once
+    )
     prepared = compile_cache.get(key)
     if prepared is None:
         prepared = prepare_nonlinear_explicit_diagnostics(

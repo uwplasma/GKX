@@ -61,8 +61,8 @@ stability polynomial is explicit midpoint's. Nonlinear runs use an explicit
 scheme (``rk2``, ``rk3``, ``rk4``, ``sspx3``),
 ``imex`` (linear operator implicit by GMRES, bracket explicit) or the opt-in
 ``imex-ars3`` (:doc:`guidance`). The CFL prefactor ``cfl_fac`` is 1.73 for
-``rk3``/``sspx3``, 2.82 for ``rk4``, 1.0 otherwise; nonlinear runs use 2.3 for
-``rk3`` and 3.0 for ``rk4`` (:doc:`inputs`). Reverse derivatives of the
+``rk3``/``sspx3``, 2.82 for ``rk4``, 1.0 otherwise; nonlinear runs use 2.1 for
+``rk3`` and 2.7 for ``rk4``, lower at large ``Nl * Nm`` (:doc:`inputs`). Reverse derivatives of the
 IMEX route use the converged-system implicit derivative.
 
 .. _first-run-defaults:

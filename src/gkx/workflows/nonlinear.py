@@ -90,6 +90,7 @@ def build_runtime_nonlinear_diagnostics_kwargs(
     external_phi: float | None,
     resolved_diagnostics: bool,
     show_progress: bool,
+    moments: int = 0,
 ) -> dict[str, Any]:
     """Keep fixed-window and adaptive diagnostic routes on one physics policy."""
 
@@ -113,7 +114,7 @@ def build_runtime_nonlinear_diagnostics_kwargs(
         dt_min=float(cfg.time.dt_min),
         dt_max=cfg.time.dt_max,
         cfl=float(cfg.time.cfl),
-        cfl_fac=resolve_nonlinear_cfl_fac(method_use, cfg.time.cfl_fac),
+        cfl_fac=resolve_nonlinear_cfl_fac(method_use, cfg.time.cfl_fac, moments),
         collision_split=bool(cfg.time.collision_split),
         collision_scheme=str(cfg.time.collision_scheme),
         implicit_restart=int(cfg.time.implicit_restart),
@@ -426,10 +427,12 @@ def _diagnostic_kwargs(
         external_phi=policy.external_phi,
         resolved_diagnostics=policy.resolved_diagnostics,
         show_progress=show_progress,
+        moments=int(ctx.G0.shape[-5] * ctx.G0.shape[-4]),
     )
 
 
 _RUN_TO_VALUES = ("saturation", "t_max")
+CFL_RETRY_FLOOR = 0.125  # at most three halvings of the CFL factor
 
 
 def _saturation_stop_condition(
@@ -487,7 +490,7 @@ def _nonlinear_cfl_margin(
     wmax = float(np.sum(omega))
     if not np.isfinite(wmax) or wmax <= 0.0:
         return None
-    cfl_fac = resolve_nonlinear_cfl_fac(str(cfg.time.method), cfg.time.cfl_fac)
+    cfl_fac = resolve_nonlinear_cfl_fac(str(cfg.time.method), cfg.time.cfl_fac, Nl * Nm)
     bound = cfl_fac * float(cfg.time.cfl) / wmax
     return bound, float(ctx.dt) / bound, omega
 
@@ -626,10 +629,17 @@ def _run_chunked_diagnostics(
             t_chunk, diag_chunk, G_next, fields_next = integrate(G_chunk, kwargs)
             ok = bool(jnp.isfinite(G_next).all())
             if not imex:
-                if ok or cfg.time.fixed_dt or control["cfl_scale"] < 0.2:
+                wg = np.asarray(diag_chunk.Wg_t)  # 1e4x energy in one chunk is runaway
+                ok = ok and bool(np.isfinite(wg).all()) and wg.max() < 1e4 * wg[0]
+                if ok or cfg.time.fixed_dt or control["cfl_scale"] <= CFL_RETRY_FLOOR:
                     break
                 control["cfl_scale"] *= 0.5  # redo the chunk at half the CFL factor
                 kwargs["cfl_fac"] *= 0.5
+                warnings.warn(
+                    f"explicit chunk unstable; cfl_fac halved to {kwargs['cfl_fac']:.3g}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 control["next_dt"] = next_dt
                 continue
             if ok:  # an end-of-chunk error estimate far over rtol: unstable
