@@ -52,6 +52,26 @@ def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
     return float(cfl_fac)
 
 
+# Explicit nonlinear steppers: 60% of the smallest largest-stable factor measured at
+# Nl*Nm <= 32 (rk3 3.45, rk4 4.5). The edge then falls with the moment count; the
+# exponent keeps the default below 0.65 of every measured edge (PR #452).
+NONLINEAR_CFL_FAC = {"rk3": 2.1, "rk4": 2.7}
+NONLINEAR_CFL_MOMENTS = 32
+
+
+def resolve_nonlinear_cfl_fac(
+    method: str, cfl_fac: float | None, moments: int = 0
+) -> float:
+    """Resolve the CFL prefactor of a nonlinear run with ``moments = Nl * Nm``."""
+
+    if cfl_fac is not None:
+        return float(cfl_fac)
+    base = NONLINEAR_CFL_FAC.get(method.strip().lower())
+    if base is None:
+        return resolve_cfl_fac(method, None)
+    return base * min(1.0, (NONLINEAR_CFL_MOMENTS / max(moments, 1)) ** 0.6)
+
+
 @dataclass(frozen=True)
 class InitializationConfig:
     """Initialization options for linear runs."""
@@ -455,6 +475,7 @@ __all__ = [
     "method_error",
     "explicit_method_default_cfl_fac",
     "resolve_cfl_fac",
+    "resolve_nonlinear_cfl_fac",
 ]
 
 

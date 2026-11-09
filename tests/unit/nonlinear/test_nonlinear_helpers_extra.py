@@ -2624,6 +2624,70 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
         assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05
 
 
+def test_explicit_chunk_retries_at_half_cfl_fac_on_non_finite_state(monkeypatch):
+    """A non-finite or runaway chunk is redone at half the CFL factor, and it sticks."""
+    import gkx
+    import gkx.workflows.nonlinear as workflow
+
+    real = workflow.integrate_nonlinear_explicit_diagnostics_state
+    seen, steps = [], []
+
+    def flaky(G, *args, **kwargs):
+        seen.append(kwargs["cfl_fac"])
+        t, diag, G_next, fields = real(G, *args, **kwargs)
+        steps.append(float(np.asarray(diag.dt_t)[0]))
+        if kwargs["cfl_fac"] > 2.0:  # non-finite, then a finite 1e6x energy jump
+            G_next = G_next * jnp.nan
+        elif kwargs["cfl_fac"] > 1.0:
+            wg = jnp.asarray(diag.Wg_t)
+            diag = replace(diag, Wg_t=jnp.concatenate([wg, 1e6 * wg]))
+        return t, diag, G_next, fields
+
+    monkeypatch.setattr(
+        workflow, "integrate_nonlinear_explicit_diagnostics_state", flaky
+    )
+    deck = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = deck.replace(
+        grid=replace(deck.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            deck.time,
+            method="rk3",
+            fixed_dt=False,
+            dt_max=10.0,
+            cfl_fac=3.0,
+            t_max=0.5,
+            chunk_steps=2,
+            run_to="t_max",
+        ),
+    )
+    d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
+    assert seen[:3] == [3.0, 1.5, 0.75]
+    assert steps[2] == pytest.approx(
+        steps[1] / 2
+    )  # the smaller factor reaches the step
+    assert max(seen[3:]) == 0.75
+    assert np.isfinite(np.asarray(d.Wg_t)).all()
+
+
+def test_nonlinear_cfl_fac_defaults_sit_below_the_measured_edge():
+    from gkx.config import resolve_cfl_fac, resolve_nonlinear_cfl_fac
+
+    # Smallest largest-stable factor over the 2026-11 sweep (Cyclone, Miller, circular,
+    # QA/HSX/W7-X VMEC, R/LT 9-12, beta 0.01-0.03, s_hat 2, Ny 128, ETG, kinetic
+    # electrons, KBM), by moments Nl * Nm: PR #452.
+    measured_edge = {
+        "rk3": {16: 3.45, 32: 3.45, 64: 2.16, 128: 2.11},
+        "rk4": {16: 4.5, 32: 4.5, 64: 3.38, 128: 3.17},
+    }
+    for method, edges in measured_edge.items():
+        for moments, edge in edges.items():
+            assert resolve_nonlinear_cfl_fac(method, None, moments) <= 0.65 * edge
+    assert resolve_nonlinear_cfl_fac("rk3", None, 32) == 2.1
+    assert resolve_nonlinear_cfl_fac("rk4-pi", None, 512) == 2.82
+    assert resolve_nonlinear_cfl_fac("rk3", 1.0, 512) == 1.0
+    assert resolve_cfl_fac("rk3", None) == pytest.approx(1.73)  # linear runs keep it
+
+
 def _cadence_diag(times, values=None):
     times = np.asarray(times)
     values = times if values is None else np.asarray(values)

@@ -113,6 +113,11 @@ resolution, timestep policy, collisions and diagnostic definitions. The
 checks; [conventions](docs/conventions.rst) gives cross-code conversions.
 Agreement at one finite resolution supports that configuration and observable.
 
+`benchmarks/cases/cyclone_nonlinear_t400.toml` (64x64x24, (Nl, Nm) = (4, 8)) is a
+speed benchmark, not a converged calculation: the saturated heat flux is
+Q = 8.6 at Nx = 64 and 4.8 at Nx = 192, and (4, 8) overestimates the linear
+growth rate by 9 to 86% at ky = 0.3 to 0.5.
+
 References include the [GX code paper](https://doi.org/10.1017/S0022377822000617)
 and the [W7-X stella–GENE benchmark](https://doi.org/10.1017/S0022377822000393).
 Use their declared models and analysis protocols when reconstructing a

@@ -200,7 +200,14 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
 - ``fixed_dt = false`` with ``cfl`` (default ``0.9``) and optional
   ``cfl_fac`` / ``dt_min`` / ``dt_max``: CFL-controlled steps. When ``cfl_fac``
   is omitted, ``rk3``/``sspx3`` use ``1.73``, ``rk4`` uses ``2.82``, and other
-  methods ``1.0``. Adaptive runs record ``dt_t`` (per-sample step history) and
+  methods ``1.0``. Nonlinear runs use ``2.1`` for ``rk3`` and ``2.7`` for
+  ``rk4`` up to ``Nl * Nm = 32``, and those values times ``(32 / (Nl * Nm))**0.6``
+  beyond: about 60% of the smallest largest-stable factor measured (``rk3`` 3.5,
+  ``rk4`` 4.5 at ``Nl * Nm <= 32``; 2.1 and 3.2 at 128, where the explicit
+  bound underestimates the spectral radius). A nonlinear chunk that ends non-finite
+  or whose free energy grows more than 10^4-fold is redone at half the factor
+  with a warning, and the smaller factor is kept (three halvings at most,
+  adaptive runs only). Adaptive runs record ``dt_t`` (per-sample step history) and
   ``dt_mean`` (average effective step). The nonlinear adaptive ``dt`` estimate
   combines the linear frequency cap with the instantaneous nonlinear cap.
   Leaving ``dt_max`` unset keeps ``dt_max = dt``; raise it explicitly only
