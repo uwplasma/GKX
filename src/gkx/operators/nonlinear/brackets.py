@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, Callable, Sequence
 
 import jax.numpy as jnp
-import numpy as np
 from jax import lax
 
 from gkx.core_grid import real_fft_ordered_kx
@@ -190,21 +189,26 @@ def _spectral_bracket_half_core(
     # self-conjugate row averages itself with its partner (the Hermitian part in
     # ``kx``, as a real transform keeps).  Stored rows read the Nyquist ``kx``
     # column as ``+|kx|``, partners as signed, and the Nyquist ``ky`` as ``+|ky|``.
+    # Only the rows that need a partner are gathered along ``kx``: a gather of
+    # the whole state is fused by XLA into the linear term's relayout of it.
     scale = ifft_scale / (ny * nx)
     ky_half = jnp.abs(ky[: ny // 2 + 1, :1])
-    own = scale * (imag * real_fft_ordered_kx(kx)[None, :] - ky_half)
-    mirror = scale * (imag * kx[:1] + ky_half)
-    own_weight = np.ones((ky_half.shape[0], 1, 1))
-    own_weight[list(self_conjugate_rows(ny))] = 0.5
+    own = (scale * (imag * real_fft_ordered_kx(kx)[None, :] - ky_half))[..., None]
+    mirror = (scale * (imag * kx[:1] + ky_half))[..., None]
+    pairs = slice(1, paired_row_limit(ny))
     kx_order = conjugate_kx_order(nx)
 
     def gradient_fft(f: jnp.ndarray) -> jnp.ndarray:
         f = to_half(f, ny_full=ny)
-        partner = _broadcast_grid(mirror, f.ndim) * jnp.conj(f[..., kx_order, :])
-        stored = own_weight * _broadcast_grid(own, f.ndim) * f
-        stored += (1.0 - own_weight) * partner
-        reflected = partner[..., 1 : paired_row_limit(ny), :, :][..., ::-1, :, :]
-        spectrum = jnp.concatenate([stored, reflected], axis=-3)
+        stored = own * f
+        for row in self_conjugate_rows(ny):
+            mine = f[..., row : row + 1, :, :]
+            partner = mirror[row] * jnp.conj(mine[..., kx_order, :])
+            stored = stored.at[..., row : row + 1, :, :].add(
+                (partner - own[row] * mine) / 2
+            )
+        reflected = mirror[pairs] * jnp.conj(f[..., pairs, :, :][..., kx_order, :])
+        spectrum = jnp.concatenate([stored, reflected[..., ::-1, :, :]], axis=-3)
         return jnp.fft.fft2(jnp.conj(spectrum), axes=(-3, -2))  # conj(d_x f + i d_y f)
 
     z_G, z_chi = gradient_fft(G_hat), gradient_fft(chi_hat)
