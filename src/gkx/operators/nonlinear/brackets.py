@@ -140,10 +140,11 @@ def _spectral_bracket_half_core(
     """Return the bracket on the ``ky >= 0`` rows, with ``(ny_full, nx)``.
 
     This is the whole pseudo-spectral kernel: both operands are read on their
-    non-negative rows, their gradients are transformed together with one
-    complex FFT each, multiplied in real space, and the product is
-    transformed back with ``rfft2``, which lands it on ``Nyc = 1 + Ny // 2`` rows.  Nothing in it needs the negative half, so it
-    is the primitive the ``ky >= 0`` state layout calls directly;
+    non-negative rows, the two gradient components of each are transformed
+    together with one complex FFT, multiplied in real space, and the product is
+    transformed back with ``rfft2``, which lands it on ``Nyc = 1 + Ny // 2``
+    rows.  Nothing in it needs the negative half stored, so it is the primitive
+    the ``ky >= 0`` state layout calls directly;
     :func:`_spectral_bracket_real_fft_core` is this function plus the widening
     that a two-sided state still requires.
 
@@ -177,7 +178,6 @@ def _spectral_bracket_half_core(
     ifft_scale, fft_scale = _fft_scales(
         ky_grid, real_dtype=real_dtype, fft_norm=fft_norm, ny_full=ny
     )
-
     nx = int(kx.shape[1])
 
     # Both gradient components of a real field come out of one complex FFT: with
