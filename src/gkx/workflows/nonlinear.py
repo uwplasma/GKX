@@ -630,7 +630,7 @@ def _run_chunked_diagnostics(
             ok = bool(jnp.isfinite(G_next).all())
             if not imex:
                 wg = np.asarray(diag_chunk.Wg_t)  # 1e4x energy in one chunk is runaway
-                ok = ok and bool(np.isfinite(wg).all()) and wg.max() < 1e4 * wg[0]
+                ok = ok and bool(np.isfinite(wg).all()) and wg.max() <= 1e4 * wg[0]
                 if ok or cfg.time.fixed_dt or control["cfl_scale"] <= CFL_RETRY_FLOOR:
                     break
                 control["cfl_scale"] *= 0.5  # redo the chunk at half the CFL factor
