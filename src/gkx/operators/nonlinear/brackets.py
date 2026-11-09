@@ -8,11 +8,11 @@ import jax.numpy as jnp
 import numpy as np
 from jax import lax
 
-from gkx.core_grid import real_fft_mesh, real_fft_ordered_kx
+from gkx.core_grid import real_fft_ordered_kx
 from gkx.core_ky_layout import (
+    conjugate_kx_order,
     half_dealias_mask,
     is_half,
-    conjugate_kx_order,
     paired_row_limit,
     self_conjugate_rows,
     to_full,
@@ -141,9 +141,9 @@ def _spectral_bracket_half_core(
     """Return the bracket on the ``ky >= 0`` rows, with ``(ny_full, nx)``.
 
     This is the whole pseudo-spectral kernel: both operands are read on their
-    non-negative rows, transformed with ``irfft2``, multiplied in real space,
-    and transformed back with ``rfft2``, which lands the product back on
-    ``Nyc = 1 + Ny // 2`` rows.  Nothing in it needs the negative half, so it
+    non-negative rows, their gradients are transformed together with one
+    complex FFT each, multiplied in real space, and the product is
+    transformed back with ``rfft2``, which lands it on ``Nyc = 1 + Ny // 2`` rows.  Nothing in it needs the negative half, so it
     is the primitive the ``ky >= 0`` state layout calls directly;
     :func:`_spectral_bracket_real_fft_core` is this function plus the widening
     that a two-sided state still requires.
@@ -152,7 +152,7 @@ def _spectral_bracket_half_core(
     whenever the operands are already in the half layout, because ``Nyc`` alone
     cannot say how long its own full axis is (:mod:`gkx.core_ky_layout`).
     Omitting it on a half operand is not a shape error -- the slice, the
-    ``irfft2`` length and the mask all still compose -- it just computes the
+    transform length and the mask all still compose -- it just computes the
     bracket of a different grid, which is why the argument is explicit rather
     than inferred.
     """
@@ -179,54 +179,41 @@ def _spectral_bracket_half_core(
         ky_grid, real_dtype=real_dtype, fft_norm=fft_norm, ny_full=ny
     )
 
-    if is_half(rows, ny_full):
-        # The operands already carry the ``ky >= 0`` rows, so only the ``kx``
-        # axis needs the real-FFT ordering: ``irfft2`` transforms ``ky``, which
-        # leaves ``kx`` two-sided, and its Nyquist column's derivative
-        # multiplier has to be taken with a positive sign there exactly as on a
-        # full-axis operand.  ``real_fft_mesh`` cannot be reused because its
-        # ``ky`` reduction would slice this axis a second time.
-        kx_1d = real_fft_ordered_kx(kx)
-        ky_nyc, kx_nyc = jnp.meshgrid(ky[:, 0], kx_1d, indexing="ij")
-    else:
-        _, _ky_half, kx_nyc, ky_nyc = real_fft_mesh(kx, ky)
-    G_nyc = to_half(G_hat, ny_full=ny)
-    chi_nyc = to_half(chi_hat, ny_full=ny)
-    axes = (-2, -3)
+    nx = int(kx.shape[1])
 
     # Both gradient components of a real field come out of one complex FFT: with
     # ``Z = d_x f + i d_y f`` the two-sided spectrum is ``i (kx + i ky) F``, so
-    # ``Re Z`` and ``Im Z`` are the two components.  The inverse transform is a
-    # forward FFT of the conjugate, which XLA runs without the 1/N rescale and
-    # operand copy that its inverse real transforms add, and the bracket
-    # ``d_x G d_y chi - d_y G d_x chi`` is ``Im(conj(Z_G) Z_chi)``.
-    #
-    # The negative rows are the conjugate partners of the stored ones.  A
-    # self-conjugate row is its own partner, and averaging the two terms keeps
-    # what a real inverse transform keeps (the Hermitian part in ``kx``).  The
-    # partner takes the signed ``kx``: the Nyquist column is ``+|kx|`` only on
-    # the stored rows, as a real transform treats it.
-    nx = int(kx.shape[1])
+    # the bracket ``d_x G d_y chi - d_y G d_x chi`` is ``Im(conj(Z_G) Z_chi)``.
+    # The inverse transform is a forward FFT of the conjugate, which XLA runs
+    # without the 1/N rescale and operand copy its inverse real transforms add.
+    # The negative rows are the conjugate partners of the stored ones; a
+    # self-conjugate row averages itself with its partner (the Hermitian part in
+    # ``kx``, as a real transform keeps).  Stored rows read the Nyquist ``kx``
+    # column as ``+|kx|``, partners as signed.
     scale = ifft_scale / (ny * nx)
-    own = scale * (imag * kx_nyc[0][None, :] - ky_nyc[:, :1])
-    mirror = scale * (imag * kx[0][None, :] + ky_nyc[:, :1])
-    self_conjugate = np.isin(np.arange(own.shape[0]), self_conjugate_rows(ny))[:, None]
+    ky_half = ky[: ny // 2 + 1, :1]
+    own = scale * (imag * real_fft_ordered_kx(kx)[None, :] - ky_half)
+    mirror = scale * (imag * kx[:1] + ky_half)
+    rows = np.arange(ky_half.shape[0])
+    own_weight = np.where(np.isin(rows, self_conjugate_rows(ny)), 0.5, 1.0)[
+        :, None, None
+    ]
     kx_order = conjugate_kx_order(nx)
 
-    def gradient_fft(f_nyc: jnp.ndarray) -> jnp.ndarray:
-        partner = _broadcast_grid(mirror, f_nyc.ndim) * jnp.conj(f_nyc[..., kx_order, :])
-        stored = _broadcast_grid(own, f_nyc.ndim) * f_nyc
-        stored = jnp.where(self_conjugate[..., None], 0.5 * (stored + partner), stored)
+    def gradient_fft(f: jnp.ndarray) -> jnp.ndarray:
+        f = to_half(f, ny_full=ny)
+        partner = _broadcast_grid(mirror, f.ndim) * jnp.conj(f[..., kx_order, :])
+        stored = own_weight * _broadcast_grid(own, f.ndim) * f
+        stored += (1.0 - own_weight) * partner
         reflected = partner[..., 1 : paired_row_limit(ny), :, :][..., ::-1, :, :]
         spectrum = jnp.concatenate([stored, reflected], axis=-3)
         return jnp.fft.fft2(jnp.conj(spectrum), axes=(-3, -2))  # conj(d_x f + i d_y f)
 
-    z_G = gradient_fft(G_nyc)
-    z_chi = gradient_fft(chi_nyc)
+    z_G, z_chi = gradient_fft(G_hat), gradient_fft(chi_hat)
     bracket = jnp.imag((z_G[None, ...] if multiple_fields else z_G) * jnp.conj(z_chi))
     if combine is not None:  # linear in the real-space products: one forward FFT
         bracket = combine(bracket)
-    positive_ky = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
+    positive_ky = jnp.fft.rfft2(bracket, axes=(-2, -3)) * fft_scale
     positive_ky *= _broadcast_mask(
         half_dealias_mask(mask, ny_full=ny), positive_ky.ndim
     )
