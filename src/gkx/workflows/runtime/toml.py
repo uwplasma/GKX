@@ -6,7 +6,7 @@ import dataclasses
 import difflib
 import hashlib
 from dataclasses import is_dataclass, replace
-from typing import Any, Callable, cast
+from typing import Any, Callable, Sequence, cast
 import os
 from pathlib import Path
 
@@ -64,13 +64,51 @@ def describe_binary_input(path: Path) -> str | None:
     return None
 
 
+_SET_OVERRIDES: list[str] = []
+
+
+def extract_set_overrides(argv: Sequence[str]) -> list[str]:
+    """Remove ``--set section.key=value`` pairs from ``argv``; later loads apply them."""
+
+    rest: list[str] = []
+    _SET_OVERRIDES.clear()
+    items = iter(argv)
+    for arg in items:
+        if arg == "--set":
+            _SET_OVERRIDES.append(next(items, ""))
+        elif arg.startswith("--set="):
+            _SET_OVERRIDES.append(arg[6:])
+        else:
+            rest.append(arg)
+    return rest
+
+
+def _apply_set_overrides(data: dict) -> dict:
+    for item in _SET_OVERRIDES:
+        key, eq, text = item.partition("=")
+        if not eq or not key.strip():
+            raise ValueError(f"--set expects section.key=value, got {item!r}")
+        try:  # TOML syntax (numbers, booleans, lists); anything else is a string
+            value = tomllib.loads(f"v = {text}")["v"]
+        except tomllib.TOMLDecodeError:
+            value = text
+        *tables, leaf = key.strip().split(".")
+        node = data
+        for name in tables:
+            node = node.setdefault(name, {})
+            if not isinstance(node, dict):
+                raise ValueError(f"--set {key}: {name!r} is not a TOML table")
+        node[leaf] = value
+    return data
+
+
 def load_toml(path: str | Path) -> dict:
     """Load TOML, naming common binary formats instead of reporting byte offsets."""
 
     path = Path(path)
     try:
         with path.open("rb") as f:
-            return tomllib.load(f)
+            return _apply_set_overrides(tomllib.load(f))
     except UnicodeDecodeError as exc:
         binary = describe_binary_input(path)
         if binary is not None:
