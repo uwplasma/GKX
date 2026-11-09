@@ -189,15 +189,13 @@ def _spectral_bracket_half_core(
     # The negative rows are the conjugate partners of the stored ones; a
     # self-conjugate row averages itself with its partner (the Hermitian part in
     # ``kx``, as a real transform keeps).  Stored rows read the Nyquist ``kx``
-    # column as ``+|kx|``, partners as signed.
+    # column as ``+|kx|``, partners as signed, and the Nyquist ``ky`` as ``+|ky|``.
     scale = ifft_scale / (ny * nx)
-    ky_half = ky[: ny // 2 + 1, :1]
+    ky_half = jnp.abs(ky[: ny // 2 + 1, :1])
     own = scale * (imag * real_fft_ordered_kx(kx)[None, :] - ky_half)
     mirror = scale * (imag * kx[:1] + ky_half)
-    rows = np.arange(ky_half.shape[0])
-    own_weight = np.where(np.isin(rows, self_conjugate_rows(ny)), 0.5, 1.0)[
-        :, None, None
-    ]
+    own_weight = np.ones((ky_half.shape[0], 1, 1))
+    own_weight[list(self_conjugate_rows(ny))] = 0.5
     kx_order = conjugate_kx_order(nx)
 
     def gradient_fft(f: jnp.ndarray) -> jnp.ndarray:
@@ -217,7 +215,7 @@ def _spectral_bracket_half_core(
     positive_ky *= _broadcast_mask(
         half_dealias_mask(mask, ny_full=ny), positive_ky.ndim
     )
-    return positive_ky, ny, int(kx.shape[1])
+    return positive_ky, ny, nx
 
 
 def _spectral_bracket_real_fft_core(
