@@ -2612,7 +2612,7 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
     d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
     assert controllers  # Require the IMEX controller to execute.
     if chunk_steps is not None:
-        np.testing.assert_allclose(d.t, [0.01, 0.03, 0.05, 0.08, 0.1], atol=1e-12)
+        np.testing.assert_allclose(d.t, [0.03, 0.05, 0.08, 0.1], atol=1e-12)
     dt = np.asarray(d.dt_t)
     assert np.isfinite(np.asarray(d.Wg_t)).all()
     if dt_max is not None:
@@ -2745,7 +2745,7 @@ def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition)
         time_offset=3.0,
         progress_t_max=4.0,
     )
-    expected = np.asarray([0.1, 0.3, 0.5, 0.8, 1.0])
+    expected = np.asarray([0.3, 0.5, 0.8, 1.0])
     np.testing.assert_allclose(result.diagnostics.t, expected, atol=1e-14)
     np.testing.assert_allclose(result.diagnostics.heat_flux_t, expected, atol=1e-14)
     np.testing.assert_allclose(result.diagnostics.resolved.Phi2_kxt[:, 0], expected)
@@ -2763,18 +2763,14 @@ def test_physical_cadence_deduplicates_crossings_and_keeps_final(dtype):
 
     diag = _cadence_diag(np.asarray([0.1, 0.9, 1.0], dtype=dtype))
     selected = _time_sample_runtime_diagnostics(diag, 0.2)
-    np.testing.assert_allclose(selected.t, [0.1, 0.9, 1.0])  # first chunk keeps t0
+    np.testing.assert_allclose(selected.t, [0.9, 1.0])
     final_only = _time_sample_runtime_diagnostics(diag, 2.0)
-    np.testing.assert_allclose(final_only.t, [0.1, 1.0])
-    later = _time_sample_runtime_diagnostics(diag, 0.2, previous_time=0.05)
-    np.testing.assert_allclose(later.t, [0.9, 1.0])
+    np.testing.assert_allclose(final_only.t, [1.0])
     boundary = _cadence_diag(np.asarray([0.25, 0.25, 0.5], dtype=dtype))
     selected = _time_sample_runtime_diagnostics(boundary, 0.25, previous_time=0.25)
     np.testing.assert_allclose(selected.t, [0.5])
     exact = _cadence_diag(np.asarray([0.1, 0.2, 0.3], dtype=dtype))
     np.testing.assert_allclose(_time_sample_runtime_diagnostics(exact, 0.1).t, exact.t)
-    first = _time_sample_runtime_diagnostics(_cadence_diag([0.1, 0.2]), 1.0)
-    np.testing.assert_allclose(first.t, [0.1, 0.2])
 
 
 def test_physical_cadence_keeps_the_accepted_terminal_row_before_padding():
@@ -2782,13 +2778,13 @@ def test_physical_cadence_keeps_the_accepted_terminal_row_before_padding():
 
     diag = replace(_cadence_diag([0.1, 0.3, 0.3]), dt_t=np.asarray([0.1, 0.2, 0.0]))
     selected = _time_sample_runtime_diagnostics(diag, 0.25)
-    np.testing.assert_allclose(selected.t, [0.1, 0.3])
-    np.testing.assert_allclose(selected.dt_t, [0.1, 0.2])
+    np.testing.assert_allclose(selected.t, [0.3])
+    np.testing.assert_allclose(selected.dt_t, [0.2])
     diag = _cadence_diag(np.arange(1, 11) / 10)
     selected = _time_sample_runtime_diagnostics(
         diag, 0.25, previous_time=1.13, time_offset=1.13
     )
-    np.testing.assert_allclose(selected.t, [0.1, 0.2, 0.4, 0.7, 0.9, 1.0])
+    np.testing.assert_allclose(selected.t, [0.2, 0.4, 0.7, 0.9, 1.0])
 
 
 def test_chunk_runaway_ignores_small_seeds_and_zero_start():

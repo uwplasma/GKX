@@ -252,7 +252,6 @@ def _physical_time_indices(
     crossed = (buckets > prior) | (
         np.diff(np.concatenate(([previous_time], times))) >= interval
     )
-    crossed[0] |= previous_time == time_offset  # the first chunk keeps its first sample
     indices = np.flatnonzero(crossed & (times > previous_time) & distinct)
     final_index = np.flatnonzero(distinct)[-1]
     if keep_last and (indices.size == 0 or indices[-1] != final_index):
