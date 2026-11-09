@@ -5,10 +5,19 @@ from __future__ import annotations
 from typing import Any, Callable, Sequence
 
 import jax.numpy as jnp
+import numpy as np
 from jax import lax
 
 from gkx.core_grid import real_fft_mesh, real_fft_ordered_kx
-from gkx.core_ky_layout import half_dealias_mask, is_half, to_full, to_half
+from gkx.core_ky_layout import (
+    half_dealias_mask,
+    is_half,
+    conjugate_kx_order,
+    paired_row_limit,
+    self_conjugate_rows,
+    to_full,
+    to_half,
+)
 
 
 def _fft2_xy(x: jnp.ndarray) -> jnp.ndarray:
@@ -185,22 +194,36 @@ def _spectral_bracket_half_core(
     chi_nyc = to_half(chi_hat, ny_full=ny)
     axes = (-2, -3)
 
-    kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
-    ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
-    grad_G = jnp.stack([imag * kx_b * G_nyc, imag * ky_b * G_nyc], axis=0)
-    grad_G = jnp.fft.irfft2(grad_G, s=(kx.shape[1], ny), axes=axes) * ifft_scale
-    dG_dx, dG_dy = grad_G
+    # Both gradient components of a real field come out of one complex FFT: with
+    # ``Z = d_x f + i d_y f`` the two-sided spectrum is ``i (kx + i ky) F``, so
+    # ``Re Z`` and ``Im Z`` are the two components.  The inverse transform is a
+    # forward FFT of the conjugate, which XLA runs without the 1/N rescale and
+    # operand copy that its inverse real transforms add, and the bracket
+    # ``d_x G d_y chi - d_y G d_x chi`` is ``Im(conj(Z_G) Z_chi)``.
+    #
+    # The negative rows are the conjugate partners of the stored ones.  A
+    # self-conjugate row is its own partner, and averaging the two terms keeps
+    # what a real inverse transform keeps (the Hermitian part in ``kx``).  The
+    # partner takes the signed ``kx``: the Nyquist column is ``+|kx|`` only on
+    # the stored rows, as a real transform treats it.
+    nx = int(kx.shape[1])
+    scale = ifft_scale / (ny * nx)
+    own = scale * (imag * kx_nyc[0][None, :] - ky_nyc[:, :1])
+    mirror = scale * (imag * kx[0][None, :] + ky_nyc[:, :1])
+    self_conjugate = np.isin(np.arange(own.shape[0]), self_conjugate_rows(ny))[:, None]
+    kx_order = conjugate_kx_order(nx)
 
-    kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
-    ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
-    grad_chi = jnp.stack([imag * kx_chi * chi_nyc, imag * ky_chi * chi_nyc], axis=0)
-    grad_chi = jnp.fft.irfft2(grad_chi, s=(kx.shape[1], ny), axes=axes) * ifft_scale
-    dchi_dx, dchi_dy = grad_chi
+    def gradient_fft(f_nyc: jnp.ndarray) -> jnp.ndarray:
+        partner = _broadcast_grid(mirror, f_nyc.ndim) * jnp.conj(f_nyc[..., kx_order, :])
+        stored = _broadcast_grid(own, f_nyc.ndim) * f_nyc
+        stored = jnp.where(self_conjugate[..., None], 0.5 * (stored + partner), stored)
+        reflected = partner[..., 1 : paired_row_limit(ny), :, :][..., ::-1, :, :]
+        spectrum = jnp.concatenate([stored, reflected], axis=-3)
+        return jnp.fft.fft2(jnp.conj(spectrum), axes=(-3, -2))  # conj(d_x f + i d_y f)
 
-    if multiple_fields:
-        bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
-    else:
-        bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
+    z_G = gradient_fft(G_nyc)
+    z_chi = gradient_fft(chi_nyc)
+    bracket = jnp.imag((z_G[None, ...] if multiple_fields else z_G) * jnp.conj(z_chi))
     if combine is not None:  # linear in the real-space products: one forward FFT
         bracket = combine(bracket)
     positive_ky = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
