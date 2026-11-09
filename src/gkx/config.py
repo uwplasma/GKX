@@ -69,7 +69,9 @@ def resolve_nonlinear_cfl_fac(
     base = NONLINEAR_CFL_FAC.get(method.strip().lower())
     if base is None:
         return resolve_cfl_fac(method, None)
-    return base * min(1.0, (NONLINEAR_CFL_MOMENTS / max(moments, 1)) ** 0.6)
+    # The scaling stops at the old rk3 default 1.73 (0.824 of the rk3 base, same for rk4).
+    scale = (NONLINEAR_CFL_MOMENTS / max(moments, 1)) ** 0.6
+    return base * min(1.0, max(scale, 1.73 / 2.1))
 
 
 @dataclass(frozen=True)

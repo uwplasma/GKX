@@ -2612,7 +2612,7 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
     d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
     assert controllers  # Require the IMEX controller to execute.
     if chunk_steps is not None:
-        np.testing.assert_allclose(d.t, [0.03, 0.05, 0.08, 0.1], atol=1e-12)
+        np.testing.assert_allclose(d.t, [0.01, 0.03, 0.05, 0.08, 0.1], atol=1e-12)
     dt = np.asarray(d.dt_t)
     assert np.isfinite(np.asarray(d.Wg_t)).all()
     if dt_max is not None:
@@ -2636,11 +2636,11 @@ def test_explicit_chunk_retries_at_half_cfl_fac_on_non_finite_state(monkeypatch)
         seen.append(kwargs["cfl_fac"])
         t, diag, G_next, fields = real(G, *args, **kwargs)
         steps.append(float(np.asarray(diag.dt_t)[0]))
-        if kwargs["cfl_fac"] > 2.0:  # non-finite, then a finite 1e6x energy jump
+        if kwargs["cfl_fac"] > 2.0:  # non-finite, then a finite energy jump past 1e3
             G_next = G_next * jnp.nan
         elif kwargs["cfl_fac"] > 1.0:
             wg = jnp.asarray(diag.Wg_t)
-            diag = replace(diag, Wg_t=jnp.concatenate([wg, 1e6 * wg]))
+            diag = replace(diag, Wg_t=jnp.concatenate([wg, 1e6 * wg + 1e4]))
         return t, diag, G_next, fields
 
     monkeypatch.setattr(
@@ -2681,7 +2681,12 @@ def test_nonlinear_cfl_fac_defaults_sit_below_the_measured_edge():
     }
     for method, edges in measured_edge.items():
         for moments, edge in edges.items():
-            assert resolve_nonlinear_cfl_fac(method, None, moments) <= 0.65 * edge
+            fac = resolve_nonlinear_cfl_fac(method, None, moments)
+            assert fac <= 0.85 * edge  # the floor trades margin for step count
+    assert resolve_nonlinear_cfl_fac("rk3", None, 4096) == pytest.approx(1.73)
+    assert resolve_nonlinear_cfl_fac("rk4", None, 4096) == pytest.approx(
+        2.7 * 1.73 / 2.1
+    )
     assert resolve_nonlinear_cfl_fac("rk3", None, 32) == 2.1
     assert resolve_nonlinear_cfl_fac("rk4-pi", None, 512) == 2.82
     assert resolve_nonlinear_cfl_fac("rk3", 1.0, 512) == 1.0
@@ -2740,7 +2745,7 @@ def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition)
         time_offset=3.0,
         progress_t_max=4.0,
     )
-    expected = np.asarray([0.3, 0.5, 0.8, 1.0])
+    expected = np.asarray([0.1, 0.3, 0.5, 0.8, 1.0])
     np.testing.assert_allclose(result.diagnostics.t, expected, atol=1e-14)
     np.testing.assert_allclose(result.diagnostics.heat_flux_t, expected, atol=1e-14)
     np.testing.assert_allclose(result.diagnostics.resolved.Phi2_kxt[:, 0], expected)
@@ -2758,14 +2763,18 @@ def test_physical_cadence_deduplicates_crossings_and_keeps_final(dtype):
 
     diag = _cadence_diag(np.asarray([0.1, 0.9, 1.0], dtype=dtype))
     selected = _time_sample_runtime_diagnostics(diag, 0.2)
-    np.testing.assert_allclose(selected.t, [0.9, 1.0])
+    np.testing.assert_allclose(selected.t, [0.1, 0.9, 1.0])  # first chunk keeps t0
     final_only = _time_sample_runtime_diagnostics(diag, 2.0)
-    np.testing.assert_allclose(final_only.t, [1.0])
+    np.testing.assert_allclose(final_only.t, [0.1, 1.0])
+    later = _time_sample_runtime_diagnostics(diag, 0.2, previous_time=0.05)
+    np.testing.assert_allclose(later.t, [0.9, 1.0])
     boundary = _cadence_diag(np.asarray([0.25, 0.25, 0.5], dtype=dtype))
     selected = _time_sample_runtime_diagnostics(boundary, 0.25, previous_time=0.25)
     np.testing.assert_allclose(selected.t, [0.5])
     exact = _cadence_diag(np.asarray([0.1, 0.2, 0.3], dtype=dtype))
     np.testing.assert_allclose(_time_sample_runtime_diagnostics(exact, 0.1).t, exact.t)
+    first = _time_sample_runtime_diagnostics(_cadence_diag([0.1, 0.2]), 1.0)
+    np.testing.assert_allclose(first.t, [0.1, 0.2])
 
 
 def test_physical_cadence_keeps_the_accepted_terminal_row_before_padding():
@@ -2773,10 +2782,61 @@ def test_physical_cadence_keeps_the_accepted_terminal_row_before_padding():
 
     diag = replace(_cadence_diag([0.1, 0.3, 0.3]), dt_t=np.asarray([0.1, 0.2, 0.0]))
     selected = _time_sample_runtime_diagnostics(diag, 0.25)
-    np.testing.assert_allclose(selected.t, [0.3])
-    np.testing.assert_allclose(selected.dt_t, [0.2])
+    np.testing.assert_allclose(selected.t, [0.1, 0.3])
+    np.testing.assert_allclose(selected.dt_t, [0.1, 0.2])
     diag = _cadence_diag(np.arange(1, 11) / 10)
     selected = _time_sample_runtime_diagnostics(
         diag, 0.25, previous_time=1.13, time_offset=1.13
     )
-    np.testing.assert_allclose(selected.t, [0.2, 0.4, 0.7, 0.9, 1.0])
+    np.testing.assert_allclose(selected.t, [0.1, 0.2, 0.4, 0.7, 0.9, 1.0])
+
+
+def test_chunk_runaway_ignores_small_seeds_and_zero_start():
+    from gkx.workflows.nonlinear import _chunk_runaway
+
+    assert not _chunk_runaway(np.asarray([1e-12, 1e-6]))  # linear growth, tiny seed
+    assert not _chunk_runaway(np.asarray([0.0, 5.0]))  # no starting energy to compare
+    assert not _chunk_runaway(np.asarray([-1.0, 1e9]))
+    assert _chunk_runaway(np.asarray([1.0, 1e5]))
+    assert _chunk_runaway(np.asarray([1.0, np.nan]))
+    assert _chunk_runaway(np.asarray([0.0, np.inf]))
+
+
+def test_second_solve_reuses_executables():
+    """Repeated solves of one deck compile nothing: scans are digest-keyed."""
+    import jax.monitoring
+    import gkx
+
+    count = [0]
+
+    def listener(event, duration, **kwargs):
+        count[0] += event == "/jax/core/compile/backend_compile_duration"
+
+    jax.monitoring.register_event_duration_secs_listener(listener)
+    linear = gkx.load(REPO_ROOT / "examples/01_linear_tokamak/case.toml")
+    linear = linear.replace(
+        grid=replace(linear.grid, Nz=8, ntheta=8),
+        time=replace(linear.time, t_max=1.0),
+    )
+    nonlinear = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    nonlinear = nonlinear.replace(
+        grid=replace(nonlinear.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            nonlinear.time,
+            method="rk3",
+            fixed_dt=False,
+            dt_max=10.0,
+            t_max=0.5,
+            chunk_steps=3,
+            run_to="t_max",
+        ),
+    )
+    solves = (
+        lambda: gkx.solve(linear, ky_target=0.3, Nl=2, Nm=3),
+        lambda: gkx.solve(nonlinear, ky_target=nonlinear.run.ky, Nl=2, Nm=3),
+    )
+    for solve in solves:
+        solve()
+        count[0] = 0
+        solve()
+        assert count[0] == 0
