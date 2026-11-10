@@ -2,7 +2,7 @@
 
 The decks of the gallery name no stepper. A nonlinear deck without ``dt`` runs with
 ``method = "auto"``: adaptive ``rk4-pi``, or ``lawson-rk4-pi`` (the magnetic drift advanced
-exactly) where the drift is at least 55% of the linear CFL bound. This script runs the
+exactly) where the drift is at least 56% of the linear CFL bound. This script runs the
 tutorial Cyclone deck of ``03_nonlinear_tokamak`` with that default and with the choices a
 caller can pin: either error-controlled stepper, an explicit ``cfl_fac``, and a fixed-step
 ``rk2``. It prints the steps and wall time of each and plots the step histories. At the

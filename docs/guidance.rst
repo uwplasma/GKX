@@ -18,7 +18,7 @@ What you get when you change nothing, and when to change it.
      - Default
      - Change it when
    * - Time stepper
-     - no ``dt`` (deck): nonlinear ``auto``, which is ``lawson-rk4-pi`` where the drift is at least 55% of the linear CFL bound and ``rk4-pi`` elsewhere (:ref:`where it pays <lawson-limits>`); nonlinear kinetic electrons at :math:`\beta \le 3\times10^{-4}` ``imex-ark3`` (adaptive, falls back to ``rk4-pi`` with a warning if its factor check refuses); linear and bare ``TimeConfig()`` ``rk4`` + CFL. A ``dt`` gives ``rk2`` at that step
+     - no ``dt`` (deck): nonlinear ``auto``, which is ``lawson-rk4-pi`` where the drift is at least 56% of the linear CFL bound and ``rk4-pi`` elsewhere (:ref:`where it pays <lawson-limits>`); nonlinear kinetic electrons at :math:`\beta \le 3\times10^{-4}` ``imex-ark3`` (adaptive, falls back to ``rk4-pi`` with a warning if its factor check refuses); linear and bare ``TimeConfig()`` ``rk4`` + CFL. A ``dt`` gives ``rk2`` at that step
      - a published step (``rk3`` at fixed ``dt``); a stepper you want regardless of the rule (:ref:`advanced pins <advanced-steppers>`); the speedups are in the table below
    * - Linear growth rates
      - ``solver`` ``auto``: banded shift-invert, else ``adaptive``, certified

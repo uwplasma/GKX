@@ -163,22 +163,79 @@ gain is smaller: 1.5 times fewer steps on Cyclone, Miller and EM
 
 .. _lawson-limits:
 
-*Where it pays.* Against ``rk4-pi``, the nonlinear default, a run to
-:math:`t = 100\text{--}150` takes 0.92 (Cyclone), 0.78 (Miller), 0.90 (EM
-:math:`\beta = 0.01`) and 0.49 (:math:`(8, 16)`) of the wall time, and 0.99
-(W7-X QI), 1.03 (HSX) and 1.06 (kinetic electrons, :math:`\beta = 0.015`);
-the saturated flux agrees within the seed scatter on the Cyclone-family decks
-and with kinetic electrons, and the W7-X QI window to 1%. The HSX window
-(:math:`t = 50\text{--}100`, before saturation, two seeds) is 4% higher with
-``lawson-rk4-pi``, which this run length does not resolve. Because the
-gain depends on how much of the CFL bound is drift (it grows with
-:math:`N_l N_m`, since the drift scales as :math:`N_m` and streaming as
-:math:`\sqrt{N_m}`) and falls to nothing where electron streaming sets the step,
-``rk4-pi`` stays the default and the ``lawson-*`` methods are opt-in. The error
-estimate of ``lawson-rk4-pi`` is larger than the plain one at equal step, so it
-gives back part of the step the exponential frees. The methods need the
-Laguerre-coefficient basis and one moment layout for all species, and run only
-on the explicit diagnostic route, not on the sheared-coordinate one.
+*Where it pays, and the automatic choice.* ``method = "auto"``, the default of a
+nonlinear deck with no ``dt``, reads the linear frequency bound of the run (radial
+and binormal drift, parallel streaming; diamagnetic drive left out) and takes
+``lawson-rk4-pi`` when the drift share
+:math:`(\omega_x + \omega_y)/(\omega_x + \omega_y + \omega_\parallel)` is at least 0.56,
+and ``rk4-pi`` otherwise. The drift share is the part of the explicit step limit the
+exponential removes; below about one half the step the controller chooses is limited
+by accuracy or by the :math:`E\times B` rate, and the dearer step (the two transforms
+and the phases, +8% to +28%) does not pay. The sharded routes and decks with
+per-species moment counts take ``rk4-pi``. The threshold sits between the
+measured losses and wins in the table: the Cyclone ladder (:math:`N_l N_m` from 8 to
+32) loses at a share of 0.556 and wins at 0.577.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Deck
+     - drift share
+     - choice
+     - steps ``rk4-pi`` / ``lawson-rk4-pi``
+     - wall, ``lawson-rk4-pi`` / ``rk4-pi``
+   * - Cyclone, (2, 4) to (4, 4)
+     - 0.49 to 0.53
+     - ``rk4-pi``
+     - 1.17, 1.13, 1.02 (t = 100, CPU)
+     - slower (CPU, not timed on GPU)
+   * - Cyclone, (4, 6)
+     - 0.556
+     - ``rk4-pi``
+     - 1.26 (t = 150)
+     - 1.32 (29 s against 22 s)
+   * - Cyclone s-alpha, (4, 8)
+     - 0.58
+     - ``lawson-rk4-pi``
+     - 1.46
+     - 0.89
+   * - Cyclone Miller
+     - 0.71
+     - ``lawson-rk4-pi``
+     - 1.51
+     - 0.78
+   * - Cyclone EM :math:`\beta` 0.01
+     - 0.58
+     - ``lawson-rk4-pi``
+     - 1.55
+     - 0.90
+   * - Cyclone, (8, 16)
+     - 0.66
+     - ``lawson-rk4-pi``
+     - 2.59
+     - 0.49
+   * - W7-X QI
+     - 0.48
+     - ``rk4-pi``
+     - 1.14
+     - 0.99
+   * - HSX (QHS)
+     - 0.49
+     - ``rk4-pi``
+     - 1.18 (t = 100), 0.54 (t = 400)
+     - 1.24 (t = 100)
+   * - kinetic electrons, :math:`\beta` 0.015
+     - 0.01
+     - ``rk4-pi``
+     - 1.0
+     - 1.06
+
+The saturated flux agrees within the seed scatter on the Cyclone-family decks, with
+kinetic electrons and on W7-X QI (1%). The HSX flux was measured to saturation: four seeds each, :math:`t = 400`, window from the first crossing of the second-half median (not before :math:`0.2\,t_\mathrm{end}`), Sokal correlation-time errors, 7.13 +- 0.19 for ``rk4-pi`` and 6.79 +- 0.05 for ``lawson-rk4-pi`` (seed-to-seed standard errors; the paired difference is -0.34 +- 0.15, 1.7 standard errors, of the opposite sign to the 4% excess of a shorter window). At saturation ``lawson-rk4-pi`` takes 1.85 times more steps than ``rk4-pi`` on HSX: the error estimate, not the CFL bound, sets its step, which is why the rule leaves stellarator decks on ``rk4-pi``. The error estimate of
+``lawson-rk4-pi`` is larger than the plain one at equal step, so where accuracy sets
+the step it takes more steps than ``rk4-pi``. The methods need the Laguerre-coefficient
+basis and one moment layout for all species, and run only on the explicit diagnostic
+route, not on the sharded or sheared-coordinate ones.
 
 .. _first-run-defaults:
 

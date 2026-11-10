@@ -688,7 +688,7 @@ coverage_target_percent = 95.0
 reference_anchors = [
   "integrating-factor (Lawson) forms of rk3, rk4 and rk4-pi that advance the curvature and grad-B drift exactly",
   "Cyclone t = 400 heat flux of the lawson steppers against rk3, rk4 and rk4-pi over four seeds",
-  "method = auto takes lawson-rk4-pi where the drift is at least 55% of the linear CFL bound; wall time and HSX saturated flux against rk4-pi",
+  "method = auto takes lawson-rk4-pi where the drift is at least 56% of the linear CFL bound; wall time and HSX saturated flux against rk4-pi",
 ]
 physics_contracts = [
   "the drift exponential equals expm of the truncated production curvature plus grad-B operator",
