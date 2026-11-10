@@ -7,8 +7,16 @@ from typing import Any, Callable, Sequence
 import jax.numpy as jnp
 from jax import lax
 
-from gkx.core_grid import real_fft_mesh, real_fft_ordered_kx
-from gkx.core_ky_layout import half_dealias_mask, is_half, to_full, to_half
+from gkx.core_grid import real_fft_ordered_kx
+from gkx.core_ky_layout import (
+    conjugate_kx_order,
+    half_dealias_mask,
+    is_half,
+    paired_row_limit,
+    self_conjugate_rows,
+    to_full,
+    to_half,
+)
 
 
 def _fft2_xy(x: jnp.ndarray) -> jnp.ndarray:
@@ -132,10 +140,11 @@ def _spectral_bracket_half_core(
     """Return the bracket on the ``ky >= 0`` rows, with ``(ny_full, nx)``.
 
     This is the whole pseudo-spectral kernel: both operands are read on their
-    non-negative rows, transformed with ``irfft2``, multiplied in real space,
-    and transformed back with ``rfft2``, which lands the product back on
-    ``Nyc = 1 + Ny // 2`` rows.  Nothing in it needs the negative half, so it
-    is the primitive the ``ky >= 0`` state layout calls directly;
+    non-negative rows, the two gradient components of each are transformed
+    together with one complex FFT, multiplied in real space, and the product is
+    transformed back with ``rfft2``, which lands it on ``Nyc = 1 + Ny // 2``
+    rows.  Nothing in it needs the negative half stored, so it is the primitive
+    the ``ky >= 0`` state layout calls directly;
     :func:`_spectral_bracket_real_fft_core` is this function plus the widening
     that a two-sided state still requires.
 
@@ -143,7 +152,7 @@ def _spectral_bracket_half_core(
     whenever the operands are already in the half layout, because ``Nyc`` alone
     cannot say how long its own full axis is (:mod:`gkx.core_ky_layout`).
     Omitting it on a half operand is not a shape error -- the slice, the
-    ``irfft2`` length and the mask all still compose -- it just computes the
+    transform length and the mask all still compose -- it just computes the
     bracket of a different grid, which is why the argument is explicit rather
     than inferred.
     """
@@ -169,45 +178,48 @@ def _spectral_bracket_half_core(
     ifft_scale, fft_scale = _fft_scales(
         ky_grid, real_dtype=real_dtype, fft_norm=fft_norm, ny_full=ny
     )
+    nx = int(kx.shape[1])
 
-    if is_half(rows, ny_full):
-        # The operands already carry the ``ky >= 0`` rows, so only the ``kx``
-        # axis needs the real-FFT ordering: ``irfft2`` transforms ``ky``, which
-        # leaves ``kx`` two-sided, and its Nyquist column's derivative
-        # multiplier has to be taken with a positive sign there exactly as on a
-        # full-axis operand.  ``real_fft_mesh`` cannot be reused because its
-        # ``ky`` reduction would slice this axis a second time.
-        kx_1d = real_fft_ordered_kx(kx)
-        ky_nyc, kx_nyc = jnp.meshgrid(ky[:, 0], kx_1d, indexing="ij")
-    else:
-        _, _ky_half, kx_nyc, ky_nyc = real_fft_mesh(kx, ky)
-    G_nyc = to_half(G_hat, ny_full=ny)
-    chi_nyc = to_half(chi_hat, ny_full=ny)
-    axes = (-2, -3)
+    # Both gradient components of a real field come out of one complex FFT: with
+    # ``Z = d_x f + i d_y f`` the two-sided spectrum is ``i (kx + i ky) F``, so
+    # the bracket ``d_x G d_y chi - d_y G d_x chi`` is ``Im(conj(Z_G) Z_chi)``.
+    # The inverse transform is a forward FFT of the conjugate, which XLA runs
+    # without the 1/N rescale and operand copy its inverse real transforms add.
+    # The negative rows are the conjugate partners of the stored ones; a
+    # self-conjugate row averages itself with its partner (the Hermitian part in
+    # ``kx``, as a real transform keeps).  Stored rows read the Nyquist ``kx``
+    # column as ``+|kx|``, partners as signed, and the Nyquist ``ky`` as ``+|ky|``.
+    # Only the rows that need a partner are gathered along ``kx``: a gather of
+    # the whole state is fused by XLA into the linear term's relayout of it.
+    scale = ifft_scale / (ny * nx)
+    ky_half = jnp.abs(ky[: ny // 2 + 1, :1])
+    own = (scale * (imag * real_fft_ordered_kx(kx)[None, :] - ky_half))[..., None]
+    mirror = (scale * (imag * kx[:1] + ky_half))[..., None]
+    pairs = slice(1, paired_row_limit(ny))
+    kx_order = conjugate_kx_order(nx)
 
-    kx_b = _broadcast_grid(kx_nyc, G_nyc.ndim)
-    ky_b = _broadcast_grid(ky_nyc, G_nyc.ndim)
-    grad_G = jnp.stack([imag * kx_b * G_nyc, imag * ky_b * G_nyc], axis=0)
-    grad_G = jnp.fft.irfft2(grad_G, s=(kx.shape[1], ny), axes=axes) * ifft_scale
-    dG_dx, dG_dy = grad_G
+    def gradient_fft(f: jnp.ndarray) -> jnp.ndarray:
+        f = to_half(f, ny_full=ny)
+        stored = own * f
+        for row in self_conjugate_rows(ny):
+            mine = f[..., row : row + 1, :, :]
+            partner = mirror[row] * jnp.conj(mine[..., kx_order, :])
+            stored = stored.at[..., row : row + 1, :, :].add(
+                (partner - own[row] * mine) / 2
+            )
+        reflected = mirror[pairs] * jnp.conj(f[..., pairs, :, :][..., kx_order, :])
+        spectrum = jnp.concatenate([stored, reflected[..., ::-1, :, :]], axis=-3)
+        return jnp.fft.fft2(jnp.conj(spectrum), axes=(-3, -2))  # conj(d_x f + i d_y f)
 
-    kx_chi = _broadcast_grid(kx_nyc, chi_nyc.ndim)
-    ky_chi = _broadcast_grid(ky_nyc, chi_nyc.ndim)
-    grad_chi = jnp.stack([imag * kx_chi * chi_nyc, imag * ky_chi * chi_nyc], axis=0)
-    grad_chi = jnp.fft.irfft2(grad_chi, s=(kx.shape[1], ny), axes=axes) * ifft_scale
-    dchi_dx, dchi_dy = grad_chi
-
-    if multiple_fields:
-        bracket = dG_dx[None, ...] * dchi_dy - dG_dy[None, ...] * dchi_dx
-    else:
-        bracket = dG_dx * dchi_dy - dG_dy * dchi_dx
+    z_G, z_chi = gradient_fft(G_hat), gradient_fft(chi_hat)
+    bracket = jnp.imag((z_G[None, ...] if multiple_fields else z_G) * jnp.conj(z_chi))
     if combine is not None:  # linear in the real-space products: one forward FFT
         bracket = combine(bracket)
-    positive_ky = jnp.fft.rfft2(bracket, axes=axes) * fft_scale
+    positive_ky = jnp.fft.rfft2(bracket, axes=(-2, -3)) * fft_scale
     positive_ky *= _broadcast_mask(
         half_dealias_mask(mask, ny_full=ny), positive_ky.ndim
     )
-    return positive_ky, ny, int(kx.shape[1])
+    return positive_ky, ny, nx
 
 
 def _spectral_bracket_real_fft_core(
