@@ -23,6 +23,28 @@ differentiable on CPUs and GPUs.
 - **Optimize with it:** the heat flux, growth rate or quasilinear flux is an
   objective in VMEX stellarator shape optimization.
 
+## Comparison with GX, GS2 and stella
+
+<img src="docs/_static/four_code_linear.png" width="860" alt="Growth rate, real frequency and growth-rate deviation from GKX for GKX, GX, GS2 and stella: Cyclone with adiabatic and kinetic electrons, a finite-beta scan, and W7-X">
+
+<img src="docs/_static/four_code_speed.png" width="860" alt="Growth-rate error against time to solution, nonlinear Cyclone heat-flux traces and wall times for the four codes">
+
+GKX, GX, GS2 and stella solve the same flux-tube problems in GX units: circular Miller Cyclone (`a/L_T = 2.49`, `a/L_n = 0.8`, `q = 1.4`, `s_hat = 0.8`) with adiabatic or kinetic electrons (`T_e = T_i`, `m_i/m_e = 3670`), and the W7-X standard VMEC configuration (torflux 0.64, adiabatic electrons). GS2 and stella use `sqrt(2T/m)` as the reference speed, so their `gamma`, `omega` and `k_y` are converted with `gamma_GX = sqrt(2) gamma_GS2` and `k_y,GX = k_y,GS2/sqrt(2)`. Each code is shown at its own converged velocity-space and parallel resolution. With adiabatic electrons the converged growth rates at `k_y rho_i = 0.3` are 0.1255 (GKX), 0.1255 (GX), 0.1254 (GS2) and 0.1252 (stella); GKX and GX share the Hermite-Laguerre model and agree to 0.1% for `k_y rho_i >= 0.2`, while GS2 and stella agree with each other and sit below them by 1% at `k_y rho_i = 0.4` and by 3.5% at 0.6. With kinetic electrons GKX and GX agree to 0.2%, GS2 and stella lie within 6% of them in `gamma`, and GS2 reports a real frequency 7% (`k_y rho_i = 0.3`) to 14% (0.2) below the others. In the `A_parallel` scan at `k_y rho_i = 0.3` all three codes that include it show ITG stabilization up to `beta_ref = 0.01` and the kinetic ballooning branch above it; GS2 is within 1% of GKX and GX up to `beta_ref = 0.01` and 5-6% lower on the ballooning branch. On W7-X, GKX and GX agree to 0.1% and stella lies 2-4% below for `k_y rho_i >= 1`; at `k_y rho_i <= 0.6` several modes are nearly degenerate, the fitted branch depends on the code, and the three do not agree. At matched accuracy the GKX initial-value route on one RTX A4000 takes 4.2 s per `k_y` (10 s with compilation) against 47 s for GX on the same GPU and 24 s for GS2 and 29 s for stella on 4 cores; the nonlinear Cyclone heat flux of the GX-paper deck is `Q_i = 6.9 +- 0.2` (GKX) and `6.6 +- 0.3` (GX) in gyro-Bohm units, against 7.2 +- 0.8 published for GX, in 523 s and 1610 s. GS2 and stella nonlinear runs and a stella electromagnetic scan are not part of this comparison; the GPU was shared with other jobs throughout.
+
+| Cyclone, adiabatic electrons, `k_y rho_i = 0.3` | Resolution | DOF per `k_y` | `gamma` (own converged) | Time per `k_y` |
+| --- | --- | --- | --- | --- |
+| GKX, RTX A4000 | `(Nl, Nm) = (12, 32)`, `Nz = 144` | 55,296 | 0.1255 | 4.2 s (10 s with compilation) |
+| GX, RTX A4000 | `(12, 32)`, `Nz = 144` | 55,296 | 0.1255 | 47 s |
+| GS2, 4 cores | 48 `theta` per `2 pi` x 3, 16 energies, 41 pitch angles | 190,240 | 0.1255 | 24 s |
+| stella, 4 cores | `nzed = 48` x 3, `nvgrid = 24`, `nmu = 12` | 83,520 | 0.1252 | 29 s |
+
+| Nonlinear Cyclone, adiabatic electrons | Resolution | DOF | `Q_i / Q_gB`, `t = 80 .. 400` | Wall time to `t = 400` |
+| --- | --- | --- | --- | --- |
+| GKX, RTX A4000 | `(Nx, Ny, Nz) = (192, 64, 24)`, `(Nl, Nm) = (4, 8)` | 2,145,792 | 6.9 +- 0.2 | 523 s |
+| GX, RTX A4000 | same | 2,145,792 | 6.6 +- 0.3 | 1610 s (from the step rate) |
+
+The linear rows list the cheapest resolution whose growth rate stays within 1% of the code's own highest-resolution value over `k_y rho_i = 0.2` to `0.5`; the time is one `k_y` to `t v_ti/a = 60` (GS2 and stella: the same physical time), and the GKX and GX values come from the initial-value route (the certified eigensolver takes 43 s at `(12, 32)` on the same GPU; see [guidance](docs/guidance.rst)). DOF counts parallel points times velocity points of one kinetic species. GKX and GX run in single precision. `docs/figures/four_code_comparison.json` holds every plotted value and `python docs/figures/four_code_comparison.py` redraws both figures from it.
+
 <img src="docs/_static/turbulence_loop.webp" width="720" alt="Saturated ITG turbulence on a Cyclone flux tube, shown as a perpendicular cut and as the field-aligned tube">
 
 Illustration of ITG turbulence on a Cyclone flux tube
