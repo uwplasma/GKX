@@ -305,25 +305,41 @@ name = "ion"
         load_runtime_from_toml(path)
 
 
-def test_every_shipped_deck_chooses_its_own_step() -> None:
-    """The guard that makes the pairing change inert for shipped decks.
+# Decks that leave the step to the CFL controller and the stepper to the default
+# (``method = "auto"`` for adiabatic nonlinear decks, ``imex-ark3`` for low-beta
+# kinetic electrons). Every other shipped deck pins ``dt``: linear fits and parity
+# runs reproduce a published step. A deck joins or leaves this set on purpose.
+_DEFAULT_STEPPER_DECKS = {
+    "benchmarks/cases/circular_vmec_nonlinear.toml",
+    "benchmarks/cases/cyclone_nonlinear_miller.toml",
+    "benchmarks/cases/cyclone_nonlinear_t400.toml",
+    "benchmarks/cases/w7x_nonlinear_imported_geometry.toml",
+    "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml",
+    "examples/03_nonlinear_tokamak/case.toml",
+    "examples/03_nonlinear_tokamak/case_full.toml",
+    "examples/04_nonlinear_stellarator/case.toml",
+    "examples/04_nonlinear_stellarator/case_full.toml",
+    "examples/05_kinetic_electrons/case.toml",
+    "examples/05_kinetic_electrons/case_stellarator.toml",
+    "examples/common_input.toml",
+}
 
-    If a deck ever ships without ``dt``, it silently moves onto the CFL
-    controller and its recorded numbers move with it. This test is what makes
-    that a deliberate act rather than an accident.
-    """
+
+def test_only_the_default_stepper_decks_leave_the_step_to_the_controller() -> None:
+    """A deck that ships without ``dt`` moves onto the CFL controller and the default
+    stepper; this test makes that a deliberate act rather than an accident."""
 
     import tomllib
 
-    missing = []
+    missing = set()
     for deck in _maintained_decks():
         data = tomllib.loads(deck.read_text(encoding="utf-8"))
         if "schema_version" not in data and "grid" not in data:
             continue  # not a GKX runtime deck (e.g. a GX-schema reference file)
         table = data.get("time")
         if isinstance(table, dict) and "dt" not in table:
-            missing.append(str(deck.relative_to(REPO_ROOT)))
-    assert missing == []
+            missing.add(str(deck.relative_to(REPO_ROOT)))
+    assert missing == _DEFAULT_STEPPER_DECKS
 
 
 def test_load_runtime_from_toml_roundtrip(tmp_path: Path) -> None:

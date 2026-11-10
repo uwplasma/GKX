@@ -1015,7 +1015,9 @@ def test_state_shape_follows_the_case_grid(nonlinear) -> None:
     case = _linear_case()
     if nonlinear:
         case = gkx.load(_repo_root() / "examples/05_kinetic_electrons/case.toml")
-        case = dataclasses.replace(case, grid=GridConfig(Nx=4, Ny=4, Nz=8))
+        # The deck's default adaptive imex-ark3 cannot be prepared: pin the explicit step.
+        time = dataclasses.replace(case.time, method="rk4-pi")
+        case = dataclasses.replace(case, grid=GridConfig(Nx=4, Ny=4, Nz=8), time=time)
     with jax.enable_x64(False):
         prepared = prepare_simulation(case, Nl=4, Nm=8, dt=1e-5, steps=2)
     if nonlinear:
@@ -2745,9 +2747,11 @@ def test_deck_default_stepper_follows_run_type() -> None:
 
     nl = {"nonlinear": True, "adiabatic_electrons": True}
     ke = {"nonlinear": True, "adiabatic_electrons": False, "beta": 1.0e-4}
-    assert norm(None, nl)["method"] == "rk4-pi"
+    assert (
+        norm(None, nl)["method"] == "auto"
+    )  # run-time choice: rk4-pi or lawson-rk4-pi
     assert norm(None, ke)["method"] == "imex-ark3"
-    assert norm(None, {**ke, "beta": 0.015})["method"] == "rk4-pi"
+    assert norm(None, {**ke, "beta": 0.015})["method"] == "auto"
     assert norm(None, {"nonlinear": False})["method"] == "rk4"
     assert norm({"dt": 0.1}, ke)["method"] == "rk2"
     assert norm({"method": "rk3"}, ke)["method"] == "rk3"

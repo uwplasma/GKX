@@ -59,6 +59,7 @@ SMOKE_OUTPUTS: dict[str, tuple[str, str]] = {
     ),
     "11_parallel_scan/run.py": ("summary.json", "parallel_scan.png"),
     "12_restart_and_analysis/run.py": ("summary.json", "restart_and_analysis.png"),
+    "13_advanced_time_stepping/run.py": ("summary.json", "advanced_steppers.png"),
 }
 
 # Editable constants turned down for the smoke run (name -> Python expression).
@@ -198,6 +199,7 @@ def test_gallery_layout_matches_the_numbered_groups():
         "10_vmex_optimization",
         "11_parallel_scan",
         "12_restart_and_analysis",
+        "13_advanced_time_stepping",
     ]
     extra = {p.name for p in EXAMPLES.iterdir() if p.is_dir()} - set(GROUPS)
     # vmec/ holds the shared VMEC input decks; outputs/ is a user's run directory.

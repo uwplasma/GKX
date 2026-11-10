@@ -2839,8 +2839,7 @@ def test_lawson_drift_factor_is_the_matrix_exponential_of_the_truncated_operator
         x = np.random.default_rng(0).standard_normal((2, size))
         x = (x[0] + 1j * x[1]).reshape(shape)
         eigen = factor.forward(jnp.asarray(x))
-        phase_c, phase_b = factor.phases(h)
-        got = np.asarray(factor.inverse(eigen * phase_c * phase_b)).reshape(-1)
+        got = np.asarray(factor.inverse(factor.rotate(eigen, h))).reshape(-1)
         want = expm(h * operator) @ x.reshape(-1)
         assert np.linalg.norm(got - want) < 1e-12 * np.linalg.norm(want)
         np.testing.assert_allclose(np.asarray(factor.inverse(eigen)), x, atol=1e-13)
@@ -2889,3 +2888,56 @@ def test_lawson_cfl_bound_leaves_out_the_drift_frequencies():
     assert omega[False][0] > 0.0 and omega[False][1] > 0.0
     np.testing.assert_array_equal(omega[True][:2], 0.0)
     assert omega[True][2] == omega[False][2] > 0.0
+
+
+@pytest.mark.parametrize(
+    ("omega", "sharded", "method"),
+    [
+        # Linear frequency bounds (radial drift, binormal drift, streaming) measured on
+        # the decks of the Lawson study, with the faster stepper of each.
+        ([10.5, 13.3, 17.5], False, "lawson-rk4-pi"),  # Cyclone (4, 8)
+        ([31.4, 11.6, 17.4], False, "lawson-rk4-pi"),  # Cyclone Miller
+        ([21.1, 26.7, 24.7], False, "lawson-rk4-pi"),  # Cyclone (8, 16)
+        ([15.5, 14.0, 31.6], False, "rk4-pi"),  # W7-X QI
+        ([8.6, 9.4, 18.8], False, "rk4-pi"),  # HSX
+        ([4.6, 5.7, 1001.5], False, "rk4-pi"),  # kinetic electrons
+        ([10.5, 13.3, 17.5], True, "rk4-pi"),  # the sharded routes keep rk4-pi
+        (None, False, "rk4-pi"),  # no bound available
+    ],
+)
+def test_auto_stepper_follows_the_drift_share_of_the_cfl_bound(omega, sharded, method):
+    from gkx.config import RuntimeConfig, TimeConfig
+    from gkx.workflows.nonlinear import _resolve_auto_stepper
+
+    cfg = RuntimeConfig(time=TimeConfig(method="auto"))
+    messages: list[str] = []
+    out = _resolve_auto_stepper(
+        cfg,
+        None if omega is None else np.asarray(omega),
+        exact_drift_ok=not sharded,
+        status=messages.append,
+    )
+    assert out.time.method == method
+    assert method in messages[0]
+
+
+def test_auto_stepper_runs_through_the_nonlinear_workflow(monkeypatch):
+    import gkx
+    import gkx.workflows.nonlinear as workflow
+
+    case = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = case.replace(
+        grid=replace(case.grid, Nx=8, Ny=8, Nz=8, ntheta=8),
+        time=replace(case.time, method="auto", t_max=0.3, run_to="t_max"),
+    )
+    seen = {}
+    for share in (0.99, 0.0):  # the threshold decides; the run follows it
+        monkeypatch.setattr(workflow, "LAWSON_DRIFT_SHARE", share)
+        messages: list[str] = []
+        out = workflow.run_runtime_nonlinear(
+            case, Nl=2, Nm=4, status_callback=messages.append
+        )
+        seen[share] = next(m for m in messages if m.startswith("stepper auto"))
+        assert np.isfinite(np.asarray(out.diagnostics.Wg_t)).all()
+    assert "stepper auto: rk4-pi" in seen[0.99]
+    assert "stepper auto: lawson-rk4-pi" in seen[0.0]

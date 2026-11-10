@@ -127,15 +127,7 @@ def _explicit_stage_update(
     """Advance one nonlinear explicit method before final projection/dtype cast."""
 
     if method in LAWSON_METHODS:
-        return lawson_step(
-            G,
-            dG,
-            dt_local,
-            method=method,
-            factor=rhs_fn.drift_factor,  # type: ignore[attr-defined]
-            rhs_fn=rhs_fn,
-            project_state=project_state,
-        )[0]
+        return lawson_step(G, dG, dt_local, method, rhs_fn, project_state)[0]
     if method in {"imex-ars3", "imex-ark3"}:
         chain_linear = getattr(rhs_fn, "chain_implicit_linear", None)
         if chain_linear is None:
@@ -200,25 +192,10 @@ def advance_rk4_pi_state(
 
     def attempt(dt: jnp.ndarray, k1: jnp.ndarray):
         if method in LAWSON_METHODS:
-            G_new, err = lawson_step(
-                G,
-                k1,
-                dt,
-                method=method,
-                factor=rhs.drift_factor,  # type: ignore[attr-defined]
-                rhs_fn=rhs,
-                project_state=project,
-            )
+            G_new, err = lawson_step(G, k1, dt, method, rhs, project)
         else:
-            G_new, err, _ = erk_step(
-                lambda _t, y: _rhs_value(rhs, y),
-                0.0,
-                G,
-                dt,
-                RK4_2,
-                k1=k1,
-                project=project,
-            )
+            f = lambda _t, y: _rhs_value(rhs, y)  # noqa: E731
+            G_new, err, _ = erk_step(f, 0.0, G, dt, RK4_2, k1=k1, project=project)
         G_new = jnp.asarray(project_state(G_new), dtype=state_dtype)
         ratio = jnp.sqrt(jnp.sum(jnp.abs(err) ** 2) / jnp.sum(jnp.abs(G_new) ** 2))
         en = ratio / _PI_RTOL

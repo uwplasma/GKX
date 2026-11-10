@@ -18,8 +18,8 @@ What you get when you change nothing, and when to change it.
      - Default
      - Change it when
    * - Time stepper
-     - no ``dt`` (deck): nonlinear ``rk4-pi``; nonlinear kinetic electrons at :math:`\beta \le 3\times10^{-4}` ``imex-ark3`` (adaptive, falls back to ``rk4-pi`` with a warning if its factor check refuses); linear and bare ``TimeConfig()`` ``rk4`` + CFL. A ``dt`` gives ``rk2`` at that step
-     - a published step (``rk3`` at fixed ``dt``); the speedups are in the table below
+     - no ``dt`` (deck): nonlinear ``auto``, which is ``lawson-rk4-pi`` where the drift is at least 55% of the linear CFL bound and ``rk4-pi`` elsewhere (:ref:`where it pays <lawson-limits>`); nonlinear kinetic electrons at :math:`\beta \le 3\times10^{-4}` ``imex-ark3`` (adaptive, falls back to ``rk4-pi`` with a warning if its factor check refuses); linear and bare ``TimeConfig()`` ``rk4`` + CFL. A ``dt`` gives ``rk2`` at that step
+     - a published step (``rk3`` at fixed ``dt``); a stepper you want regardless of the rule (:ref:`advanced pins <advanced-steppers>`); the speedups are in the table below
    * - Linear growth rates
      - ``solver`` ``auto``: banded shift-invert, else ``adaptive``, certified
      - one mode of a hard branch (``shift-invert``)
@@ -45,7 +45,9 @@ What you get when you change nothing, and when to change it.
 Default stepper: measured cost
 ------------------------------
 
-Deck with no ``dt`` and no ``method`` against ``rk4`` + CFL, one A4000, float32,
+Deck with no ``dt`` and no ``method``, measured with ``rk4-pi`` (the rule that now
+selects ``lawson-rk4-pi`` where it pays came later, :ref:`where it pays <lawson-limits>`), against
+``rk4`` + CFL, one A4000, float32,
 wall time including setup, heat flux over the saturated window (transient
 dropped; error is :math:`\sigma/\sqrt{n_\mathrm{eff}}` with the Sokal
 correlation time, at least 20 correlation times).
@@ -103,12 +105,15 @@ the field response) and :math:`R` the drifts, mirror, drive and collisions.
    * - ``rk4`` + CFL (linear default without ``dt``)
      - any deck; the controller sets the step from the stiffest explicit term
      - step follows electron streaming when electrons are kinetic
-   * - ``rk4-pi`` (nonlinear default without ``dt``)
+   * - ``auto`` (nonlinear default without ``dt``)
+     - ``lawson-rk4-pi`` or ``rk4-pi`` from the drift share of the linear CFL bound, chosen at the start of the run
+     - the choice is printed; pin a stepper to override it
+   * - ``rk4-pi``
      - RK4 with an embedded error estimate and an I controller
      - 1 to 2x fewer steps than ``rk4`` + CFL at the same flux
-   * - ``lawson-rk3``, ``lawson-rk4``, ``lawson-rk4-pi`` (opt-in)
+   * - ``lawson-rk3``, ``lawson-rk4``, ``lawson-rk4-pi``
      - the curvature and grad-B drift advanced exactly (:ref:`lawson-steppers`): tokamak decks and large ``Nl * Nm``, where the drift sets the CFL step
-     - 1.5 to 2.5 times fewer steps than ``rk4-pi`` and 0.5 to 0.9 of its wall time on Cyclone, Miller, EM and (8, 16); no gain on HSX, W7-X QI or with kinetic electrons
+     - 1.5 to 2.5 times fewer steps than ``rk4-pi`` and 0.5 to 0.9 of its wall time on Cyclone, Miller, EM and (8, 16); no gain, or a loss, on HSX, W7-X QI or with kinetic electrons
    * - ``imex-ark3`` (adaptive, nonlinear kinetic electrons at low beta)
      - chunk-level adaptive step, no electron-streaming limit
      - refuses decks whose factor check fails (some stellarators); no gain at :math:`\beta \gtrsim 10^{-3}`
@@ -124,6 +129,19 @@ the field response) and :math:`R` the drifts, mirror, drive and collisions.
    * - ``solver = "krylov"``/``"adaptive"``
      - linear growth rates: no time step at all
      - one mode per solve
+
+.. _advanced-steppers:
+
+**Advanced options.** The defaults need none of these; each is a deliberate pin.
+``method = "rk4-pi"`` or ``"lawson-rk4-pi"`` fixes the stepper whatever the rule
+chooses (the Lawson methods also accept ``cfl_fac``, and ``lawson-rk3`` and
+``lawson-rk4`` exist for comparison with ``rk3`` and ``rk4``); a ``dt`` with
+``fixed_dt = true`` fixes the step, which a restart that must reproduce an
+uninterrupted run needs (``examples/12_restart_and_analysis``); ``imex-ars3``
+takes a fixed ``dt`` chosen by hand; the sharded routes take ``rk4-pi``.
+``examples/13_advanced_time_stepping`` runs the pins side by side and
+``examples/05_kinetic_electrons`` compares the implicit and explicit steppers
+with kinetic electrons.
 
 **Accuracy of the adaptive IMEX step.** ``imex-ark3`` keeps the embedded
 ARK3(2) error of each step below ``rtol`` = 1e-3 of the state norm. Against

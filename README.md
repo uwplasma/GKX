@@ -85,7 +85,7 @@ identity checks, and eigenmode and finite-window gradient limitations.
 | Perpendicular velocity (opt-in) | nodal `mu` grid: `[run] mu_vperp_max = 4.0`, `Nl` = nodes | linear runs; check node count, velocity extent and agreement with the Laguerre representation ([numerics](docs/numerics.rst)) |
 | Collisions | linearized Landau | conserving, H-theorem; Dougherty, Sugama alternatives ([operators](docs/operators.rst)) |
 | End damping | one rate, `[time] damp_ends_rate` | same on every route; no time step enters ([numerics](docs/numerics.rst)) |
-| Time stepping | no `dt`: nonlinear `rk4-pi`, or adaptive `imex-ark3` for kinetic electrons at beta <= 3e-4; linear `rk4` + CFL | a `dt` gives `rk2` at that step; `fixed_dt = false` keeps the controller's stepper ([method guidance](docs/guidance.rst)) |
+| Time stepping | no `dt`: nonlinear `auto` (`lawson-rk4-pi` where the magnetic drift is at least 55% of the linear CFL bound, else `rk4-pi`), or adaptive `imex-ark3` for kinetic electrons at beta <= 3e-4; linear `rk4` + CFL | a `dt` gives `rk2` at that step; `fixed_dt = false` keeps the controller's stepper ([method guidance](docs/guidance.rst)) |
 | Eigensolver | `auto`: banded direct shift-invert where it fits, else Arnoldi on the time-advance map; every pair certified | matrix-free shift-invert opt-in ([algorithms](docs/algorithms.rst)) |
 | SOLVAX | `solvax>=0.35.0` | provides the sparse eigensolver and the `rk4-pi` stepper; installed with `pip install gkx` |
 | `ky` layout | `half`: the `1 + Ny//2` non-negative rows | `[grid] ky_layout = "full"` stores the two-sided axis; check equivalent states and diagnostics when comparing layouts |

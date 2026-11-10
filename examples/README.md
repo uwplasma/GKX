@@ -27,6 +27,7 @@ python examples/01_linear_tokamak/run.py
 | [`10_vmex_optimization/`](10_vmex_optimization) | VMEX QA optimization with a nonlinear heat-flux objective |
 | [`11_parallel_scan/`](11_parallel_scan) | parallel `k_y` scan, checked against serial |
 | [`12_restart_and_analysis/`](12_restart_and_analysis) | restart a nonlinear run, average the joined trace |
+| [`13_advanced_time_stepping/`](13_advanced_time_stepping) | advanced: pin the nonlinear stepper (`rk4-pi`, `lawson-rk4-pi`, fixed step) against the default |
 
 Steps 02, 04 and 05 (stellarator) need a VMEC `wout` from [`vmec/`](vmec). If
 it is missing, the script solves it once with `vmex` (`pip install vmex`) or stops with a message. `vmec/generate_wouts.sh` builds all

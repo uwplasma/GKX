@@ -33,11 +33,8 @@ nperiod = 1
 # Explicit nonlinear end-damping rate.
 damp_ends_rate = 0.1
 t_max = 10.0
-dt = 0.05
-method = "rk3"
 sample_stride = 10
 diagnostics_stride = 10
-fixed_dt = true
 # A fixed tutorial horizon, not a run to saturation.
 run_to = "t_max"
 compressed_real_fft = true
@@ -89,7 +86,6 @@ diagnostic_norm = "rho_star"
 ky = 0.3
 Nl = 2
 Nm = 4
-steps = 200
 
 [output]
 # Optional saved-record cadence in the same time units as time.t_max.
