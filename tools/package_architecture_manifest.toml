@@ -208,8 +208,8 @@ recursive = true
 # 70013 -> 70061: nonlinear CFL factors and explicit chunk retry.
 # 70061 -> 70069: paired-gradient bracket transform, documented in place, measured after merging main.
 # 70069 -> 70073: paired-gradient bracket transform, documented in place, measured after merging main.
-# 70073 -> 70110: cached solve executables, runaway criterion, CFL floor.
-baseline = 70110
+# 70073 -> 70109: cached solve executables, runaway criterion, CFL floor.
+baseline = 70109
 target = 45000
 
 [[line_budget_policy.counts]]
