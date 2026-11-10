@@ -39,7 +39,9 @@ summary, steps_dt = {}, {}
 for label, pin in PINS.items():
     run_case = case.replace(time=replace(case.time, **pin))
     start = time.perf_counter()
-    result = gkx.solve(run_case, ky_target=case.run.ky, Nl=NL, Nm=NM, show_progress=True)
+    result = gkx.solve(
+        run_case, ky_target=case.run.ky, Nl=NL, Nm=NM, show_progress=True
+    )
     wall = time.perf_counter() - start
     d = result.diagnostics
     t, dt = np.asarray(d.t), np.asarray(d.dt_t)
@@ -50,7 +52,9 @@ for label, pin in PINS.items():
         "steps": int(round(t[-1] / dt.mean())),
         "free_energy_final": float(np.asarray(d.Wg_t)[-1]),
     }
-    print(f"{label}: {summary[label]['steps']} steps, mean dt {dt.mean():.3f}, {wall:.1f} s")
+    print(
+        f"{label}: {summary[label]['steps']} steps, mean dt {dt.mean():.3f}, {wall:.1f} s"
+    )
 
 (OUTPUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 fig, ax = plt.subplots(figsize=(6.0, 3.8))
