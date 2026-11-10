@@ -209,8 +209,8 @@ pattern = "*.py"
 recursive = true
 # 69891 -> 70013: dougherty e-i collision operator, measured after merging main.
 # 70013 -> 70061: nonlinear CFL factors and explicit chunk retry.
-# 70061 -> 70303: Lawson integrating-factor steppers.
-baseline = 70303
+# 70061 -> 70310: Lawson integrating-factor steppers.
+baseline = 70310
 target = 45000
 
 [[line_budget_policy.counts]]

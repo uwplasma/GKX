@@ -14,6 +14,8 @@ drift leaves the explicit stability limit.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import reduce
+import operator
 from typing import Any, Callable, NamedTuple
 
 import jax
@@ -187,8 +189,13 @@ def lawson_step(
         ns.append(slope(y, dy))
 
     def combine(weights: tuple[float, ...]) -> jnp.ndarray:
-        return sum(
-            (h * wj) * move(ns[j], 1.0 - tab.c[j]) for j, wj in enumerate(weights) if wj
+        return reduce(
+            operator.add,
+            [
+                (h * wj) * move(ns[j], 1.0 - tab.c[j])
+                for j, wj in enumerate(weights)
+                if wj
+            ],
         )
 
     w_new = move(w, 1.0) + combine(tab.b)
