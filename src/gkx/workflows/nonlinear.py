@@ -433,6 +433,15 @@ def _diagnostic_kwargs(
 
 _RUN_TO_VALUES = ("saturation", "t_max")
 CFL_RETRY_FLOOR = 0.125  # at most three halvings of the CFL factor
+RUNAWAY_RISE, RUNAWAY_ENERGY = 1e4, 1e3
+
+
+def _chunk_runaway(wg: np.ndarray) -> bool:
+    """Non-finite free energy, or a 1e4-fold rise from a positive start to above 1e3."""
+
+    if not np.isfinite(wg).all():
+        return True
+    return bool(wg[0] > 0 and wg.max() > max(RUNAWAY_RISE * wg[0], RUNAWAY_ENERGY))
 
 
 def _saturation_stop_condition(
@@ -618,8 +627,9 @@ def _run_chunked_diagnostics(
             control["op"] = refactor_chain_implicit_linear(
                 control["op"], control["dt"], free=True
             )
-        elif (not imex and not step_capped) or remaining_time <= steps_now * dt_cap:
-            kwargs["time_horizon"] = remaining_time
+        elif not imex:  # one signature: the horizon is inf until the last chunk
+            last = not step_capped or remaining_time <= steps_now * dt_cap
+            kwargs["time_horizon"] = remaining_time if last else float("inf")
         kwargs["compile_cache"] = compile_cache
         kwargs["cfl_fac"] *= control["cfl_scale"]
         next_dt = control["next_dt"]
@@ -629,9 +639,16 @@ def _run_chunked_diagnostics(
             t_chunk, diag_chunk, G_next, fields_next = integrate(G_chunk, kwargs)
             ok = bool(jnp.isfinite(G_next).all())
             if not imex:
-                wg = np.asarray(diag_chunk.Wg_t)  # 1e4x energy in one chunk is runaway
-                ok = ok and bool(np.isfinite(wg).all()) and wg.max() <= 1e4 * wg[0]
-                if ok or cfg.time.fixed_dt or control["cfl_scale"] <= CFL_RETRY_FLOOR:
+                ok = ok and not _chunk_runaway(np.asarray(diag_chunk.Wg_t))
+                if ok or cfg.time.fixed_dt:
+                    break
+                if control["cfl_scale"] <= CFL_RETRY_FLOOR:
+                    warnings.warn(
+                        "explicit chunk still unstable at the smallest cfl_fac "
+                        f"{kwargs['cfl_fac']:.3g}; the result is unreliable",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
                     break
                 control["cfl_scale"] *= 0.5  # redo the chunk at half the CFL factor
                 kwargs["cfl_fac"] *= 0.5
@@ -640,7 +657,9 @@ def _run_chunked_diagnostics(
                     RuntimeWarning,
                     stacklevel=2,
                 )
-                control["next_dt"] = next_dt
+                control["next_dt"] = jnp.zeros_like(
+                    next_dt
+                )  # re-derive dt at the new CFL
                 continue
             if ok:  # an end-of-chunk error estimate far over rtol: unstable
                 dt_new = control["ctl"].propose(control["op"], G_next)

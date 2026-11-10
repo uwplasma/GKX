@@ -1253,17 +1253,27 @@ def prepare_explicit_nonlinear_diagnostics_impl(
             named_sharding.mesh, jax.sharding.PartitionSpec()
         )
         output_shardings = (None, replicated, replicated, replicated)
+
+    # Digest-keyed executables survive re-preparation on the same deck.
+    exe = (
+        cached_jit
+        if output_shardings is None
+        else partial(jax.jit, out_shardings=output_shardings)
+    )
+    run_exec = exe(
+        lambda state, horizon, chain, dt: run_raw(state, horizon, chain, dt, named_rhs)
+    )
+
+    def run_keyed(initial_state, time_horizon=None, chain=None, initial_dt=None):
+        return run_exec(initial_state, time_horizon, chain, initial_dt)
+
     return PreparedExplicitNonlinearDiagnostics(
         initial_state=components.prepared.G0,
         geometry=components.prepared.setup.geom,
         cache=components.prepared.cache,
         params=params,
-        _run_raw=partial(
-            jax.jit(run_raw, out_shardings=output_shardings),
-            chain=chain,
-            rhs_fn=named_rhs,
-        ),
-        _run_dynamic_raw=jax.jit(run_dynamic_raw, out_shardings=output_shardings),
+        _run_raw=partial(run_keyed, chain=chain),
+        _run_dynamic_raw=exe(run_dynamic_raw),
         _finalize=finalize_nonlinear_scan_diagnostics,
         stride=stride,
         sampled_scan=sampled_scan,
