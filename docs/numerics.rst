@@ -159,7 +159,9 @@ gain is smaller: 1.5 times fewer steps on Cyclone, Miller and EM
 :math:`\beta = 0.01` decks, 2.5 at :math:`(8, 16)`, 1.1 on HSX and W7-X QI,
 1.0 with kinetic electrons. The two transforms and the phases cost 12% to 28%
 (``lawson-rk3``, ``lawson-rk4``) per step at :math:`(4, 8)` and 8% to 12% at
-:math:`(8, 16)` on a 64x64x24 box (quiet GPU, two passes).
+:math:`(8, 16)` on a 64x64x24 box (quiet GPU, two passes). On the current tree (paired-FFT
+bracket, ``erk_step`` form of the step) the same ratio read 1.35 at :math:`(4, 8)` (three alternating
+passes) and 1.2 at :math:`(8, 16)` on a GPU shared with other jobs.
 
 .. _lawson-limits:
 
