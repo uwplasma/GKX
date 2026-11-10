@@ -2678,12 +2678,18 @@ def test_nonlinear_cfl_fac_defaults_sit_below_the_measured_edge():
     measured_edge = {
         "rk3": {16: 3.45, 32: 3.45, 64: 2.16, 128: 2.11},
         "rk4": {16: 4.5, 32: 4.5, 64: 3.38, 128: 3.17},
+        # The integrating-factor steppers (Cyclone, EM beta 0.01, Miller, HSX, W7-X QI;
+        # kinetic electrons at 64 moments, Cyclone (8, 16) at 128): PR "Lawson".
+        "lawson-rk3": {32: 3.88, 64: 2.75, 128: 3.375},
+        "lawson-rk4": {32: 3.94, 64: 3.94, 128: 3.375},
     }
     for method, edges in measured_edge.items():
         for moments, edge in edges.items():
             assert resolve_nonlinear_cfl_fac(method, None, moments) <= 0.65 * edge
     assert resolve_nonlinear_cfl_fac("rk3", None, 32) == 2.1
     assert resolve_nonlinear_cfl_fac("rk4-pi", None, 512) == 2.82
+    assert resolve_nonlinear_cfl_fac("lawson-rk4-pi", None, 512) == 2.82
+    assert resolve_nonlinear_cfl_fac("lawson-rk3", None, 32) == 2.5
     assert resolve_nonlinear_cfl_fac("rk3", 1.0, 512) == 1.0
     assert resolve_cfl_fac("rk3", None) == pytest.approx(1.73)  # linear runs keep it
 
@@ -2780,3 +2786,106 @@ def test_physical_cadence_keeps_the_accepted_terminal_row_before_padding():
         diag, 0.25, previous_time=1.13, time_offset=1.13
     )
     np.testing.assert_allclose(selected.t, [0.2, 0.4, 0.7, 0.9, 1.0])
+
+
+def _lawson_box(nl, nm, n=4):
+    import gkx
+
+    case = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = case.replace(grid=replace(case.grid, Nx=n, Ny=n, Nz=n, ntheta=n))
+    geom = rt.build_runtime_geometry(case)
+    grid = build_spectral_grid(apply_geometry_grid_defaults(geom, case.grid))
+    params = rt.build_runtime_linear_params(case, Nm=nm, geom=geom)
+    cache = build_linear_cache(
+        grid, ensure_flux_tube_geometry_data(geom, grid.z), params, nl, nm
+    )
+    return case, grid, geom, params, cache
+
+
+@pytest.mark.parametrize("kron_moments", [0, 128], ids=["separable", "dense"])
+def test_lawson_drift_factor_is_the_matrix_exponential_of_the_truncated_operator(
+    monkeypatch, kron_moments
+):
+    """exp(h L_d) from the eigenbasis equals ``expm`` of the production drift operator."""
+    import gkx.solvers_nonlinear_lawson as lawson
+    from scipy.linalg import expm
+    from gkx.terms.linear_terms import drift_contributions
+
+    monkeypatch.setattr(lawson, "_KRON_MOMENTS", kron_moments)
+    with jax.enable_x64(True):
+        nl, nm = 3, 5
+        case, _grid, _geom, params, cache = _lawson_box(nl, nm)
+        terms = rt.build_runtime_term_config(case)
+        factor = lawson.build_drift_factor(cache, params, terms, 1, jnp.float64)
+        shape = (1, nl, nm, *cache.cv_d.shape)
+        size = int(np.prod(shape))
+        ones, zero = jnp.ones(()), jnp.zeros(())
+
+        def drift(x):  # the production curvature + grad-B terms, mirror off
+            _, curv, gradb = drift_contributions(
+                x.reshape(shape),
+                cache,
+                vth=jnp.ones(1),
+                tz=jnp.asarray(params.tz).reshape(1),
+                omega_d_scale=params.omega_d_scale,
+                weights=(zero, ones, ones),
+                imag=jnp.asarray(1j),
+            )
+            return np.asarray(curv + gradb).reshape(-1)
+
+        eye = jnp.eye(size, dtype=jnp.complex128)
+        operator = np.stack([drift(eye[i]) for i in range(size)], axis=1)
+        h = 40.0 / np.abs(np.linalg.eigvals(operator)).max()  # |h L_d| = 40
+        x = np.random.default_rng(0).standard_normal((2, size))
+        x = (x[0] + 1j * x[1]).reshape(shape)
+        eigen = factor.forward(jnp.asarray(x))
+        phase_c, phase_b = factor.phases(h)
+        got = np.asarray(factor.inverse(eigen * phase_c * phase_b)).reshape(-1)
+        want = expm(h * operator) @ x.reshape(-1)
+        assert np.linalg.norm(got - want) < 1e-12 * np.linalg.norm(want)
+        np.testing.assert_allclose(np.asarray(factor.inverse(eigen)), x, atol=1e-13)
+
+
+@pytest.mark.parametrize("method", ["rk3", "rk4"])
+def test_lawson_steppers_follow_the_explicit_ones_at_a_small_step(method):
+    """At a step far inside both stability limits the two routes integrate one system."""
+    import gkx
+
+    case = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = case.replace(
+        grid=replace(case.grid, Nx=8, Ny=8, Nz=8, ntheta=8),
+        init=replace(case.init, init_amp=0.05),  # the bracket is not negligible
+    )
+    wg = {}
+    for name in (method, f"lawson-{method}"):
+        time = replace(
+            case.time, method=name, dt=0.01, fixed_dt=True, t_max=0.4, run_to="t_max"
+        )
+        out = gkx.solve(case.replace(time=time), ky_target=case.run.ky, Nl=3, Nm=6)
+        wg[name] = np.asarray(out.diagnostics.Wg_t)
+    assert np.ptp(wg[method]) > 0.01 * wg[method][0]
+    np.testing.assert_allclose(wg[f"lawson-{method}"], wg[method], rtol=2e-4)
+
+
+def test_lawson_cfl_bound_leaves_out_the_drift_frequencies():
+    from gkx.operators.nonlinear.policies import _build_nonlinear_cfl_bounds
+    from gkx.solvers_nonlinear_diagnostics import _laguerre_velocity_max
+    from gkx.solvers_time_explicit import _linear_frequency_bound
+
+    _case, grid, geom, params, cache = _lawson_box(2, 4, n=8)
+    omega = {}
+    for exact in (False, True):
+        bounds = _build_nonlinear_cfl_bounds(
+            grid,
+            ensure_flux_tube_geometry_data(geom, grid.z),
+            params,
+            cache,
+            real_dtype=jnp.float32,
+            linear_frequency_bound_fn=_linear_frequency_bound,
+            laguerre_velocity_max_fn=_laguerre_velocity_max,
+            drift_exact=exact,
+        )
+        omega[exact] = np.asarray(bounds.linear_omega)
+    assert omega[False][0] > 0.0 and omega[False][1] > 0.0
+    np.testing.assert_array_equal(omega[True][:2], 0.0)
+    assert omega[True][2] == omega[False][2] > 0.0

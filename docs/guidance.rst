@@ -106,6 +106,9 @@ the field response) and :math:`R` the drifts, mirror, drive and collisions.
    * - ``rk4-pi`` (nonlinear default without ``dt``)
      - RK4 with an embedded error estimate and an I controller
      - 1 to 2x fewer steps than ``rk4`` + CFL at the same flux
+   * - ``lawson-rk3``, ``lawson-rk4``, ``lawson-rk4-pi`` (opt-in)
+     - the curvature and grad-B drift advanced exactly (:ref:`lawson-steppers`): tokamak decks and large ``Nl * Nm``, where the drift sets the CFL step
+     - 1.5 to 2.5 times fewer steps than ``rk4-pi`` and 0.5 to 0.9 of its wall time on Cyclone, Miller, EM and (8, 16); no gain on HSX, W7-X QI or with kinetic electrons
    * - ``imex-ark3`` (adaptive, nonlinear kinetic electrons at low beta)
      - chunk-level adaptive step, no electron-streaming limit
      - refuses decks whose factor check fails (some stellarators); no gain at :math:`\beta \gtrsim 10^{-3}`

@@ -679,6 +679,33 @@ next_tests = [
 ]
 
 [[modules]]
+module = "gkx.solvers_nonlinear_lawson"
+path = "src/gkx/solvers_nonlinear_lawson.py"
+owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
+status = "active"
+coverage_priority = "high"
+coverage_target_percent = 95.0
+reference_anchors = [
+  "integrating-factor (Lawson) forms of rk3, rk4 and rk4-pi that advance the curvature and grad-B drift exactly",
+  "Cyclone t = 400 heat flux of the lawson steppers against rk3, rk4 and rk4-pi over four seeds",
+]
+physics_contracts = [
+  "the drift exponential equals expm of the truncated production curvature plus grad-B operator",
+  "linear growth rate and frequency match the plain steppers at a converged step",
+]
+numerics_contracts = [
+  "the Hermite and Laguerre eigenvector transforms are orthogonal, so the embedded error norm is unchanged",
+  "a lawson step at a small step follows the plain step on the same system",
+]
+fast_tests = [
+  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
+]
+artifact_paths = []
+next_tests = [
+  "add observed-order checks of the lawson tableaux on a manufactured nonlinear problem",
+]
+
+[[modules]]
 module = "gkx.solvers_nonlinear_imex"
 path = "src/gkx/solvers_nonlinear_imex.py"
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"

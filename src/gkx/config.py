@@ -16,7 +16,7 @@ REFERENCE_MASS_RATIO: float = 1.0 / REFERENCE_ELECTRON_MASS
 def explicit_method_default_cfl_fac(method: str) -> float:
     """Return the reference explicit-method CFL prefactor for a given method."""
 
-    method_key = method.strip().lower()
+    method_key = method.strip().lower().removeprefix("lawson-")
     if method_key in {"rk3", "sspx3"}:
         return 1.73
     if method_key in {"rk4", "rk4-pi"}:
@@ -55,8 +55,12 @@ def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
 # Explicit nonlinear steppers: 60% of the smallest largest-stable factor measured at
 # Nl*Nm <= 32 (rk3 3.45, rk4 4.5). The edge then falls with the moment count; the
 # exponent keeps the default below 0.65 of every measured edge (PR #452).
-NONLINEAR_CFL_FAC = {"rk3": 2.1, "rk4": 2.7}
+# The integrating-factor steppers (gkx.solvers_nonlinear_lawson) advance the magnetic drift
+# exactly, so their bound has no drift frequency; their factors are 65% of the smallest
+# edge measured at Nl*Nm <= 32 (lawson-rk3 3.9, lawson-rk4 3.9; 2.75 and 3.9 at 64 moments).
+NONLINEAR_CFL_FAC = {"rk3": 2.1, "rk4": 2.7, "lawson-rk3": 2.5, "lawson-rk4": 2.5}
 NONLINEAR_CFL_MOMENTS = 32
+LAWSON_METHODS = frozenset({"lawson-rk3", "lawson-rk4", "lawson-rk4-pi"})
 
 
 def resolve_nonlinear_cfl_fac(

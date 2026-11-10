@@ -65,6 +65,121 @@ scheme (``rk2``, ``rk3``, ``rk4``, ``sspx3``),
 ``rk3`` and 2.7 for ``rk4``, lower at large ``Nl * Nm`` (:doc:`inputs`). Reverse derivatives of the
 IMEX route use the converged-system implicit derivative.
 
+.. _lawson-steppers:
+
+Integrating-factor steppers
+---------------------------
+
+The curvature and grad-B drift is diagonal in :math:`(s, k_y, k_x, z)` and
+couples only neighbouring Hermite and Laguerre moments. For species :math:`s`
+
+.. math::
+
+   \partial_t g = L_d g + N(g), \qquad L_d = -i\left[a(s,k_y,k_x,z)\,C\otimes I + b(s,k_y,k_x,z)\,I\otimes B\right],
+
+where :math:`a = t_{z,s}\,\omega_d\,(k_y\,\mathrm{cv} + k_x\,\mathrm{cv}_0)` and
+:math:`b` likewise from the grad-B coefficients carry both the binormal and the
+radial drift (:math:`t_{z,s} = T_s/Z_s`), :math:`C`
+is the Hermite curvature matrix (:math:`C_{mm} = 2m+1`,
+:math:`C_{m,m+2} = \sqrt{(m+1)(m+2)}`) and :math:`B` the Laguerre grad-B matrix
+(:math:`B_{ll} = 2l+1`, :math:`B_{l,l+1} = l+1`), and :math:`N` is the rest of the
+right-hand side: streaming, mirror force, the field response of the drift,
+diamagnetic drive, dissipation and the :math:`E\times B` bracket. Both matrices
+are real symmetric after truncation, so :math:`C = V_c\,\mathrm{diag}(c)\,V_c^{T}`,
+:math:`B = V_b\,\mathrm{diag}(\beta)\,V_b^{T}` hold exactly for the truncated
+operator, and
+
+.. math::
+
+   e^{-ih\,(aC + bB)} = (V_b\otimes V_c)\;\mathrm{diag}\!\left[e^{-ih\,(a c_j + b \beta_k)}\right](V_b\otimes V_c)^{T}
+
+is a diagonal phase between two orthogonal moment transforms, with no
+truncation error beyond the truncation of the operator itself. ``lawson-rk3``
+(Heun's third-order method), ``lawson-rk4`` and ``lawson-rk4-pi`` (RK4 with
+the embedded midpoint error estimate) are the Lawson forms of ``rk3``,
+``rk4`` and ``rk4-pi``: with :math:`E(\theta) = e^{\theta h L_d}` and
+:math:`N_j = F(Y_j) - L_d Y_j`, stage :math:`i` is
+:math:`Y_i = E^{c_i} y + h\sum_j a_{ij} E^{c_i - c_j} N_j` and the update is
+:math:`E y + h\sum_j b_j E^{1-c_j} N_j`. The transforms are applied through the
+production curvature and grad-B routines' matrices, so the exponential equals
+``expm`` of the production operator to round-off (tested), and the phases are
+rebuilt from the step each time, so an adaptive step costs one pair of
+exponentials. Because the drift is advanced exactly, the CFL bound of these
+methods leaves out the radial and binormal drift frequencies and keeps the
+streaming rate and the :math:`E\times B` rate; the diamagnetic drive was
+already outside the nonlinear bound.
+
+Measured on one A4000 (float32) against the plain steppers. Cyclone, 64x64x24,
+:math:`(N_l, N_m) = (4, 8)`, :math:`t = 400`, four seeds; :math:`Q` is the
+saturated heat flux with the standard error over seeds.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Stepper
+     - ``cfl_fac``
+     - steps
+     - :math:`Q`
+   * - ``rk4`` (reference)
+     - 0.9
+     - 20410
+     - 8.85 +- 0.17
+   * - ``rk3``, ``rk4``, ``rk4-pi``
+     - 2.1, 2.7, 2.82
+     - 8745, 6810, 3487
+     - 8.83 +- 0.10, 8.76 +- 0.18, 8.74 +- 0.12
+   * - ``lawson-rk3``
+     - 2.5
+     - 4227
+     - 9.07 +- 0.12
+   * - ``lawson-rk4``
+     - 2.5, 3.5
+     - 4220, 3014
+     - 8.97 +- 0.04, 8.84 +- 0.10
+   * - ``lawson-rk4-pi``
+     - 2.82
+     - 2388
+     - 8.86 +- 0.03
+
+The linear growth rate and frequency of the selected mode agree with ``rk4``
+at :math:`h = 0.02` to :math:`2\times10^{-5}` (Cyclone, :math:`k_y = 0.3`,
+:math:`\gamma = 0.09656`, ``lawson-rk3`` and ``lawson-rk4`` up to :math:`h = 0.1`)
+and to :math:`5\times10^{-4}` in :math:`\gamma`, :math:`1.3\times10^{-3}` in
+:math:`\omega` (QHS, :math:`k_y = 0.4`, ``lawson-rk4`` at :math:`h = 0.1`).
+The largest stable ``cfl_fac`` (bisection, finite, peak :math:`Q` below twice
+the first stable run's, mean step within 30% of the CFL step) is 3.9 to 5.2 for
+``lawson-rk3`` and 3.9 to 4.8 for ``lawson-rk4`` at :math:`N_lN_m = 32`
+(Cyclone, EM :math:`\beta = 0.01`, Miller, HSX, W7-X QI), 2.75 and 3.9 with
+kinetic electrons at 64 moments and 3.4 for both at 128. At that edge the mean
+step is 1.7 to 3.5 times that of ``rk3``/``rk4`` on the tokamak decks, 1.2 to
+1.5 times on the stellarator decks, and 1.0 with kinetic electrons, where the
+electron streaming rate, which the exponential does not touch, sets the step.
+The ``rk4-pi`` step is error-controlled and capped at twice the CFL step, so its
+gain is smaller: 1.5 times fewer steps on Cyclone, Miller and EM
+:math:`\beta = 0.01` decks, 2.5 at :math:`(8, 16)`, 1.1 on HSX and W7-X QI,
+1.0 with kinetic electrons. The two transforms and the phases cost 12% to 28%
+(``lawson-rk3``, ``lawson-rk4``) per step at :math:`(4, 8)` and 8% to 12% at
+:math:`(8, 16)` on a 64x64x24 box (quiet GPU, two passes).
+
+.. _lawson-limits:
+
+*Where it pays.* Against ``rk4-pi``, the nonlinear default, a run to
+:math:`t = 100\text{--}150` takes 0.92 (Cyclone), 0.78 (Miller), 0.90 (EM
+:math:`\beta = 0.01`) and 0.49 (:math:`(8, 16)`) of the wall time, and 0.99
+(W7-X QI), 1.03 (HSX) and 1.06 (kinetic electrons, :math:`\beta = 0.015`);
+the saturated flux agrees within the seed scatter on the Cyclone-family decks
+and with kinetic electrons, and the W7-X QI window to 1%. The HSX window
+(:math:`t = 50\text{--}100`, before saturation, two seeds) is 4% higher with
+``lawson-rk4-pi``, which this run length does not resolve. Because the
+gain depends on how much of the CFL bound is drift (it grows with
+:math:`N_l N_m`, since the drift scales as :math:`N_m` and streaming as
+:math:`\sqrt{N_m}`) and falls to nothing where electron streaming sets the step,
+``rk4-pi`` stays the default and the ``lawson-*`` methods are opt-in. The error
+estimate of ``lawson-rk4-pi`` is larger than the plain one at equal step, so it
+gives back part of the step the exponential frees. The methods need the
+Laguerre-coefficient basis and one moment layout for all species, and run only
+on the explicit diagnostic route, not on the sheared-coordinate one.
+
 .. _first-run-defaults:
 
 What a first run gets

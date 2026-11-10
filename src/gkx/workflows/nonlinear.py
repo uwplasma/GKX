@@ -34,7 +34,7 @@ from gkx.solvers_time_explicit import (
     FIXED_DT_CFL_WARN_RATIO,
     _laguerre_velocity_max,
 )
-from gkx.config import RuntimeConfig, resolve_nonlinear_cfl_fac
+from gkx.config import LAWSON_METHODS, RuntimeConfig, resolve_nonlinear_cfl_fac
 from gkx.solvers_nonlinear_diagnostics import (
     _continue_nonlinear_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
@@ -487,6 +487,8 @@ def _nonlinear_cfl_margin(
         )
     except Exception:
         return None
+    if str(cfg.time.method) in LAWSON_METHODS:  # the drift is advanced exactly
+        omega[:2] = 0.0
     wmax = float(np.sum(omega))
     if not np.isfinite(wmax) or wmax <= 0.0:
         return None
@@ -557,7 +559,9 @@ def _run_chunked_diagnostics(
         "next_dt": jnp.asarray(0.0, dtype=jnp.real(ctx.G0).dtype),
         "cfl_scale": 1.0,
     }
-    continue_pi = not cfg.time.fixed_dt and (method or cfg.time.method) == "rk4-pi"
+    continue_pi = not cfg.time.fixed_dt and (method or cfg.time.method).endswith(
+        "rk4-pi"
+    )
     if imex:
         chunk_steps = cfg.time.chunk_steps or 32
 

@@ -215,6 +215,17 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
 - ``method = "rk4-pi"`` (nonlinear, ``fixed_dt = false``): RK4 whose step is
   chosen from an embedded error estimate and capped at twice the CFL step; see
   :doc:`solvers`. ``cfl_fac`` defaults to ``2.82`` as for ``rk4``.
+- ``method = "lawson-rk3"``, ``"lawson-rk4"`` or ``"lawson-rk4-pi"`` (nonlinear,
+  explicit diagnostics): the integrating-factor forms of ``rk3``, ``rk4`` and
+  ``rk4-pi``, which advance the curvature and grad-B drift exactly
+  (:ref:`lawson-steppers`). The CFL bound drops the radial and binormal drift
+  frequencies and keeps streaming and the :math:`E\times B` rate, so the step
+  is 1.7 to 3.5 times that of the plain stepper on adiabatic tokamak decks and 1.2
+  to 1.5 times on stellarator decks, and unchanged where electron streaming
+  sets it. ``cfl_fac`` defaults to ``2.5`` for ``lawson-rk3`` and ``lawson-rk4``
+  (scaled with ``Nl * Nm`` like the other explicit nonlinear methods) and ``2.82``
+  for ``lawson-rk4-pi``. They need one ``(Nl, Nm)`` for all species and the
+  Laguerre-coefficient basis, and raise otherwise.
 - ``laguerre_nonlinear_mode``: ``"grid"`` (reference quadrature, default) or
   ``"spectral"`` (spectral ``Jl`` without the quadrature transform) for the
   Laguerre handling in nonlinear brackets.
