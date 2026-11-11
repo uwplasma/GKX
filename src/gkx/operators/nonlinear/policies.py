@@ -206,7 +206,7 @@ def measured_streaming_frequency(
     nl: int,
     nm: int,
     hypercollisions: float = 0.0,
-    end_damping: bool = False,
+    absorber_vs: float | None = None,
 ) -> float:
     """Largest |eigenvalue| of parallel streaming plus the field solve.
 
@@ -220,11 +220,13 @@ def measured_streaming_frequency(
     applies, restricted to ky >= 0 (the two-sided layout rebuilds ky < 0 from
     them). ``hypercollisions=1`` keeps the hypercollision damping, which for
     kinetic electrons (kz-dependent, ~ v_te k_z) is as large as the streaming
-    rate and bounds an explicit linear step too. ``end_damping=True`` adds the
-    end absorber, which damps ``h`` and so is amplified far past ``nu_end`` by the
-    field solve (|lambda| = 2.8e5 at the default rate 598 on the Cyclone
-    kinetic-electron deck). Otherwise only for decks with a light kinetic species
-    (v_t ratio > 4); returns 0 otherwise or when the cache is traced.
+    rate and bounds an explicit linear step too. ``absorber_vs`` (an analytic
+    streaming bound) adds the end absorber, which damps ``h`` and so is amplified
+    far past ``nu_end`` by the field solve (|lambda| = 2.8e5 at the default rate
+    598 on the Cyclone kinetic-electron deck); it is skipped when even a gain of
+    500 (light species) or 4 on its rate stays below that bound. Otherwise only
+    for decks with a light kinetic species (v_t ratio > 4); returns 0 otherwise or
+    when the cache is traced.
     """
 
     vth = np.abs(np.atleast_1d(np.asarray(params.vth, dtype=float)))
@@ -232,8 +234,15 @@ def measured_streaming_frequency(
         isinstance(leaf, jax.core.Tracer) for leaf in jax.tree_util.tree_leaves(cache)
     ):
         return 0.0
-    absorber = end_damping and float(np.max(np.asarray(cache.damp_profile))) > 0.0
-    if not (absorber or (vth.size > 1 and float(vth.max()) > 4.0 * float(vth.min()))):
+    light = vth.size > 1 and float(vth.max()) > 4.0 * float(vth.min())
+    absorber = False
+    if absorber_vs is not None:
+        z_extent = cache.dz * cache.damp_profile.shape[-1]
+        rate = float(np.max(np.asarray(cache.damp_profile))) * float(
+            params.end_damping_rate(z_extent, cache.damp_profile.dtype)
+        )
+        absorber = rate > 0.0 and (500.0 if light else 4.0) * rate >= absorber_vs
+    if not (absorber or light):
         return 0.0
     terms = TermConfig(
         mirror=0.0,
@@ -307,7 +316,9 @@ def _build_nonlinear_cfl_bounds(
     # (x2 with adiabatic electrons, x470 with kinetic ones): measure it, never ``nu_end``.
     linear_omega[2] = max(
         linear_omega[2],
-        measured_streaming_frequency(params, cache, nl=nl, nm=nm, end_damping=True),
+        measured_streaming_frequency(
+            params, cache, nl=nl, nm=nm, absorber_vs=linear_omega[2]
+        ),
     )
     if drift_exact:  # the drift is advanced exactly: no explicit limit
         linear_omega[:2] = 0.0

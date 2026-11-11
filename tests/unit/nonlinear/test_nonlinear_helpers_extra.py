@@ -2362,16 +2362,14 @@ def test_measured_streaming_frequency_includes_the_amplified_end_absorber():
 
     radius = np.max(np.abs(np.linalg.eigvals(_ke_dense(op, shape, jnp.complex64))))
     measured = measured_streaming_frequency(
-        params, cache, nl=KE_NL, nm=KE_NM, end_damping=True
+        params, cache, nl=KE_NL, nm=KE_NM, absorber_vs=0.0
     )
     assert measured > 100.0
     np.testing.assert_allclose(measured, radius, rtol=1e-3)
     # a periodic box has no absorber and keeps the streaming-only radius
     quiet = replace(cache, damp_profile=jnp.zeros_like(cache.damp_profile))
     assert (
-        measured_streaming_frequency(
-            params, quiet, nl=KE_NL, nm=KE_NM, end_damping=True
-        )
+        measured_streaming_frequency(params, quiet, nl=KE_NL, nm=KE_NM, absorber_vs=0.0)
         < measured
     )
 
