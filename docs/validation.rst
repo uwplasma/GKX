@@ -393,12 +393,16 @@ puts the limit at :math:`0.2587\pm0.0006` for :math:`\nu=0.05`, 3% below GS2's
 0.2666. At the other collision frequencies the high-order points are 0.2197 at
 :math:`\nu=0.1` (GS2 0.2304) and 0.3095 at :math:`\nu=0.01` (GS2 0.3217), the latter
 still rising by 0.019 from :math:`(8,24)`: the weaker the collisions, the less
-they regularise, and :math:`\nu=0.01` is not converged. The collisionless rate does not converge on the same scale: its
-increments over the last three doublings are 0.0149, 0.0136, 0.0060. Taking the
-last ratio, 0.44, as the common ratio of the remaining increments gives 0.345
-(0.349 for a ratio of 0.6), so the best estimate is :math:`0.347\pm0.005`,
-4% below GS2's 0.3625 with a gap that these runs do not close. The limit of the
-ratio is :math:`0.2587/0.347=0.745\pm0.01`, against GS2's 0.736. The drift of
+they regularise, and :math:`\nu=0.01` is not converged. The collisionless rate does not converge on the same scale: its increments
+over the last three doublings of :math:`N_lN_m` are 0.0149, 0.0136, 0.0060.
+It converges in the Hermite index: at :math:`N_m=32`, :math:`N_l=12` and 16 give
+0.3208 and 0.3200 (-0.3%). A power law :math:`\gamma_\infty-AN_m^{-p}` through
+any three of the last four points has :math:`p\approx1.3` and
+:math:`\gamma_\infty=0.353` to 0.355; a geometric continuation of the last
+increments gives 0.345 to 0.349, and 0.37 if taken per doubling of
+:math:`N_m`. The estimate is :math:`0.354\pm0.010`, which contains GS2's 0.3625
+(2.4% above it) but does not fix it. The limit of the ratio is
+:math:`0.2587/0.354=0.73\pm0.02`, against GS2's 0.736. The drift of
 the ratio with resolution (0.872 to 0.759) is therefore the collisionless rate
 converging, not the collisional reduction changing: collisions regularise the
 velocity-space structure that the collisionless mode develops, and the
@@ -429,9 +433,9 @@ pointer``); the field part alone runs.
 What the comparison supports. Collisions lower the growth rate in all three
 codes by the same order, and with the Landau-like models the absolute
 collisional rate agrees across codes to 3% (GKX 0.2587, stella's Fokker-Planck
-test part 0.2575 at its second grid, GS2 0.2666); the collisionless rates differ by 5% at
-the best resolution run (GKX 0.347, stella 0.341 at its finest and still rising,
-GS2 0.3625). The reduction depends on the model: GKX ``lenard_bernstein`` and
+test part 0.2575 at its second grid, GS2 0.2666); the collisionless rates differ by 6% at
+the best resolution run (GKX 0.340, estimated limit 0.354 +- 0.010; stella 0.341 at its
+finest and still rising; GS2 0.3625). The reduction depends on the model: GKX ``lenard_bernstein`` and
 stella's Dougherty operator are the same model and agree to 5% at :math:`(4,8)`
 and :math:`\nu=0.05`, and GS2 with ``zeff = 0`` gives 0.2999 (0.828) there; the
 electron-ion scattering of GS2's ``zeff = 1`` and of the Landau operator makes
