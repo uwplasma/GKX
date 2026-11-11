@@ -590,6 +590,40 @@ def test_repository_size_manifest_gates_large_files(
         assert any("large.bin" in failure for failure in report["failures"])
 
 
+def test_private_reference_scan_flags_machine_paths_and_handles(
+    tmp_path: Path,
+) -> None:
+    mod = load_release_tool("check_repository_size_manifest")
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    # Built from fragments so this test file is not itself a hit.
+    leaks = {
+        "path.txt": "run from /" + "Users/someone/work\n",
+        "tmp.txt": "scratch at /private" + "/tmp/job\n",
+        "handle.md": "see github.com/roger" + "iojorge/private-repo\n",
+        "trailer.txt": "Co-Auth" + "ored-By: Cla" + "ude <x@example.org>\n",
+        "banner.md": "Generated " + "with [Tool](https://example.org)\n",
+        "tool.md": "written with Chat" + "GPT and Open" + "AI\n",
+        "ok.txt": "cache in ~/.cache and /tmp/x and /home/runner/work\n"
+        "an agent moves the cursor; the list is generated with numpy\n",
+        "CITATION.cff": "url: github.com/roger" + "iojorge\n",
+    }
+    for name, text in leaks.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+
+    hits = mod.find_private_references(tmp_path)
+
+    assert sorted(hits) == [
+        "banner.md:1: tool attribution",
+        "handle.md:1: personal handle",
+        "path.txt:1: machine path",
+        "tmp.txt:1: machine path",
+        "tool.md:1: tool attribution",
+        "trailer.txt:1: tool attribution",
+    ]
+    assert mod.find_private_references(REPO_ROOT) == []
+
+
 def test_repository_size_report_separates_tracked_and_local_roots(
     tmp_path: Path,
 ) -> None:
