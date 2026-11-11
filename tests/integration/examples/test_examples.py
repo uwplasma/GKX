@@ -66,7 +66,10 @@ SMOKE_OUTPUTS: dict[str, tuple[str, str]] = {
 SMOKE_KNOBS: dict[str, dict[str, str]] = {
     "01_linear_tokamak/run.py": {"KY": "[0.2, 0.3]"},
     "02_linear_stellarator/run.py": {"KY": "[0.4, 0.6]"},
-    "07_collisions/run.py": {"MODELS": '("lenard_bernstein", "coulomb_finite_kperp")'},
+    "07_collisions/run.py": {
+        "MODELS": '("sugama", "coulomb_finite_kperp")',
+        "NU": "(0.05,)",
+    },
     "08_quasilinear/run.py": {"KY": "[0.2, 0.3]"},
     "09_autodiff/run.py": {"STEPS": "60", "GN_STEPS": "3"},
     "05_kinetic_electrons/run.py": {"T_MAX": "0.05"},

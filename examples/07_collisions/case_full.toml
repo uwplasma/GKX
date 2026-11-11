@@ -5,19 +5,16 @@ schema_version = 1
 #   JAX_ENABLE_X64=1 gkx examples/07_collisions/case_full.toml
 #
 # Swap [time] collision_operator to compare the shipped models:
-#   "lenard_bernstein"      conserving diagonal relaxation (the built-in term)
-#   "sugama"                drift-kinetic Sugama          (Frei 2022, C6a-C6f)
-#   "improved_sugama"       improved drift-kinetic Sugama (Frei 2022, + C103)
-#   "landau"                linearized Landau, drift-kinetic (default)
+#   "landau"                linearized Landau, drift-kinetic (default, any Nl, Nm)
+#   "sugama"                Sugama et al. 2009            (any Nl, Nm)
+#   "improved_sugama"       Sugama et al. 2019            (any Nl, Nm)
+#   "lenard_bernstein"      conserving diagonal relaxation
 #   "coulomb_finite_kperp"  gyrokinetic Coulomb           (Frei 2021, 3.47-3.50)
 #
-# Two constraints apply to the moment operators:
-#   * (Nl, Nm) must be the tabulated (J+1, P+1) basis: (2, 4), or (3, 6) for
-#     the 18-moment finite-Larmor table. The transposed (4, 2) has the same
-#     moment count but pairs the coefficients with the wrong moments, and is
-#     refused.
-#   * They run on the fixed-step cached integrator, so solver = "time";
-#     the Krylov and explicit_time paths do not carry them and refuse them.
+# The first four run at any (Nl, Nm) on every solver (time, krylov, ...).
+# "coulomb_finite_kperp" is tabulated, so it needs (Nl, Nm) = (J+1, P+1) of a
+# shipped table, (2, 4) or (3, 6) (the transposed (4, 2) is refused), and the
+# fixed-step integrator: solver = "time".
 
 [[species]]
 name = "ion"

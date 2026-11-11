@@ -39,20 +39,13 @@ from gkx.operators.linear import (
     apply_collision_moment_matrix,
     apply_finite_wavelength_coulomb_moment_operator,
     apply_multispecies_collision_moment_matrix,
-    assemble_drift_kinetic_improved_sugama_matrix,
-    assemble_drift_kinetic_sugama_matrix,
-    collision_operator_from_config,
-    DriftKineticMomentCollisionOperator,
     EqualSpeciesFiniteWavelengthCoulombOperator,
     EqualSpeciesFiniteWavelengthSugamaOperator,
     FiniteWavelengthCoulombOperator,
     TabulatedMultispeciesCollisionOperator,
-    drift_kinetic_improved_sugama_pair_matrices,
-    drift_kinetic_sugama_pair_matrices,
     interpolate_collision_moment_matrix,
     interpolate_collision_diagonal_table,
     interpolate_collision_pair_table,
-    load_collision_moment_matrix,
     parallel_electric_field_source,
     solve_driven_collision_response,
 )
@@ -63,8 +56,14 @@ from gkx.operators.linear.dissipation import (
 )
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.terms.config import FieldState, TermConfig
-from gkx.terms.linear_terms import (
+from support.reference_physics import (
+    DriftKineticMomentCollisionOperator,
+    assemble_drift_kinetic_improved_sugama_matrix,
+    assemble_drift_kinetic_sugama_matrix,
+    drift_kinetic_improved_sugama_pair_matrices,
+    drift_kinetic_sugama_pair_matrices,
     drift_kinetic_sugama_six_moment_contribution,
+    load_collision_moment_matrix,
 )
 from gkx.runtime import (
     run_runtime_scan,
@@ -77,11 +76,6 @@ from gkx.config import (
     RuntimeTermsConfig,
 )
 from gkx.operators.linear.dissipation import hypercollisions_contribution
-import hashlib
-import io
-import json
-from importlib import resources
-from gkx.operators.linear import collisions
 import gkx.operators as operators
 import gkx.operators.linear as linear_operators
 import gkx.operators.nonlinear as nonlinear_operators
@@ -2065,100 +2059,6 @@ def test_linear_params_roundtrips_the_new_rate_through_the_pytree() -> None:
 # contract (checksum/shape provenance, moment-axis shapes, species axes, grid
 
 
-def _fake_resource_files(payload: bytes, metadata_text: str):
-    """Return a stand-in for ``importlib.resources.files`` over fixed bytes."""
-
-    class _Leaf:
-        def __init__(self, *, data: bytes | None = None, text: str | None = None):
-            self._data = data
-            self._text = text
-
-        def read_bytes(self) -> bytes:
-            assert self._data is not None
-            return self._data
-
-        def read_text(self, encoding: str = "utf-8") -> str:
-            assert self._text is not None
-            return self._text
-
-    class _DataRoot:
-        def joinpath(self, name: str) -> _Leaf:
-            if name.endswith(".npy"):
-                return _Leaf(data=payload)
-            return _Leaf(text=metadata_text)
-
-    class _Package:
-        def joinpath(self, name: str) -> _DataRoot:
-            return _DataRoot()
-
-    def _files(package: str) -> _Package:
-        return _Package()
-
-    return _files
-
-
-def test_collision_matrix_bundle_rejects_corrupt_provenance(monkeypatch) -> None:
-    """The cached bundle fails closed on checksum, shape, and layout mismatches."""
-
-    real_payload = (
-        resources.files("gkx")
-        .joinpath("data")
-        .joinpath(collisions._COLLISION_MATRIX_DATA)
-        .read_bytes()
-    )
-    metadata_file = (
-        resources.files("gkx")
-        .joinpath("data")
-        .joinpath(collisions._COLLISION_MATRIX_METADATA)
-    )
-    real_metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
-
-    # Checksum branch: genuine coefficients, metadata advertising a wrong hash.
-    corrupt_hash_metadata = json.dumps(
-        {"sha256": "0" * 64, "shape": [3, 8, 8], "models": ["sugama"]}
-    )
-    monkeypatch.setattr(
-        collisions.resources,
-        "files",
-        _fake_resource_files(real_payload, corrupt_hash_metadata),
-    )
-    collisions._collision_matrix_bundle.cache_clear()
-    with pytest.raises(ValueError, match="checksum does not match metadata"):
-        collisions._collision_matrix_bundle()
-
-    # Shape branch: matching checksum but a payload whose array shape disagrees
-    # with the declared (3, 8, 8) provenance.
-    buffer = io.BytesIO()
-    np.save(buffer, np.zeros((2, 2), dtype=np.float64))
-    mismatched_payload = buffer.getvalue()
-    honest_hash = hashlib.sha256(mismatched_payload).hexdigest()
-    wrong_shape_metadata = json.dumps(
-        {"sha256": honest_hash, "shape": [3, 8, 8], "models": ["sugama"]}
-    )
-    monkeypatch.setattr(
-        collisions.resources,
-        "files",
-        _fake_resource_files(mismatched_payload, wrong_shape_metadata),
-    )
-    collisions._collision_matrix_bundle.cache_clear()
-    with pytest.raises(ValueError, match="shape does not match metadata"):
-        collisions._collision_matrix_bundle()
-
-    # Layout branch: genuine coefficients declaring the transposed (Nl, Nm).
-    transposed_metadata = json.dumps({**real_metadata, "Nl": 4, "Nm": 2})
-    monkeypatch.setattr(
-        collisions.resources,
-        "files",
-        _fake_resource_files(real_payload, transposed_metadata),
-    )
-    collisions._collision_matrix_bundle.cache_clear()
-    with pytest.raises(ValueError, match="moment layout does not match metadata"):
-        collisions._collision_matrix_bundle()
-
-    # Drop the poisoned (empty) cache so downstream tests reload real data.
-    collisions._collision_matrix_bundle.cache_clear()
-
-
 def test_sugama_pair_matrices_reject_nonpositive_temperature_ratio() -> None:
     """A positive mass ratio still requires a positive temperature ratio."""
 
@@ -2198,7 +2098,7 @@ def test_collision_operators_round_trip_through_pytree() -> None:
     """Registered collision operators flatten and unflatten without data loss."""
 
     dense = DriftKineticMomentCollisionOperator(
-        jnp.asarray(collisions.load_collision_moment_matrix("sugama"))
+        jnp.asarray(load_collision_moment_matrix("sugama"))
     )
     dense_leaves, dense_treedef = jax.tree_util.tree_flatten(dense)
     assert len(dense_leaves) == 1
@@ -2414,34 +2314,6 @@ def test_nonlinear_operator_package_reexports_diagnostic_implementation() -> Non
         nonlinear_operators.make_nonlinear_diagnostic_tuple_fn
         is operator_diagnostics.make_nonlinear_diagnostic_tuple_fn
     )
-
-
-@pytest.mark.parametrize("model", ["sugama", "improved_sugama"])
-def test_per_species_nu_keeps_multispecies_conservation(model: str) -> None:
-    """Unequal species prefactors must not unbalance the (a,b)/(b,a) exchange.
-
-    Momentum and energy leave species a through C_ab and arrive in b through
-    C_ba; that balance holds only if both ordered pairs carry one prefactor.
-    """
-
-    density = jnp.asarray([1.3, 0.7])
-    mass = jnp.asarray([2.0, 1.0])
-    temperature = jnp.asarray([1.2, 0.8])
-    operator = collision_operator_from_config(
-        model,
-        density=density,
-        mass=mass,
-        temperature=temperature,
-        nu=jnp.asarray([1.0, 3.0]),
-    )
-    state = (jnp.arange(16.0).reshape(2, 2, 4, 1, 1, 1) + 0.13j).astype(jnp.complex64)
-    contribution = apply_multispecies_collision_moment_matrix(state, operator.matrix)
-    rates = multispecies_collision_invariant_rates(
-        contribution, density=density, mass=mass, temperature=temperature
-    )
-    np.testing.assert_allclose(rates.particle_density, 0.0, atol=1.0e-5)
-    np.testing.assert_allclose(rates.total_parallel_momentum, 0.0, atol=1.0e-5)
-    np.testing.assert_allclose(rates.total_thermal_energy, 0.0, atol=1.0e-4)
 
 
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])

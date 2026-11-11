@@ -175,7 +175,8 @@ class LinearParams:
     bpar_beta_scale: float = 0.5
     damp_ends_rate: float | jnp.ndarray | None = None
     #: Built-in collision kernel: ``"landau"`` (linearized Landau, drift-kinetic
-    #: limit; the default, as in the runtime) or ``"dougherty"`` (conserving
+    #: limit; the default, as in the runtime), ``"sugama"``, ``"improved_sugama"``
+    #: (same block-sparse machinery) or ``"dougherty"`` (conserving
     #: Lenard-Bernstein form).
     collision_model: str = "landau"
     #: Perpendicular velocity representation. ``None`` keeps the Laguerre
@@ -522,7 +523,7 @@ def _resolve_implicit_preconditioner(
 
 
 #: Operators applied inside the linear RHS from the cache (every solver path);
-#: the others are moment operators handed to the fixed-step integrator.
+#: the others are finite-wavelength tables handed to the fixed-step integrator.
 #: ``coulomb`` is a compatibility alias of ``landau``, which reproduces the
 #: retired eight-moment table of Frei, Ernst & Ricci (2022) at half its nu.
 BUILTIN_COLLISION_OPERATORS: tuple[str, ...] = (
@@ -530,7 +531,34 @@ BUILTIN_COLLISION_OPERATORS: tuple[str, ...] = (
     "lenard_bernstein",
     "landau",
     "coulomb",
+    "sugama",
+    "improved_sugama",
 )
+#: ``LinearParams.collision_model`` values served by the block-sparse
+#: Legendre-Sonine operators (everything else is the diagonal Dougherty term).
+BLOCK_COLLISION_MODELS: tuple[str, ...] = ("landau", "sugama", "improved_sugama")
+
+
+def collision_model_for(operator: str) -> str:
+    """Map a ``collision_operator`` name to the cache-level ``collision_model``."""
+
+    key = str(operator).strip().lower()
+    key = "landau" if key == "coulomb" else key
+    return key if key in BLOCK_COLLISION_MODELS else "dougherty"
+
+
+def params_for_collision_operator(params: LinearParams, operator: str) -> LinearParams:
+    """Return ``params`` with the cache kernel a Sugama ``collision_operator`` names.
+
+    The Landau/Dougherty choice rides on ``LinearParams.collision_model`` (set
+    from the deck by the runtime); the Sugama models are selected by name here
+    so the ``*_from_config`` entry points cannot run Landau under a Sugama label.
+    """
+
+    key = str(operator).strip().lower()
+    return replace(params, collision_model=key) if "sugama" in key else params
+
+
 COLLISION_OPERATOR_NAMES: tuple[str, ...] = (
     "none",
     "lenard_bernstein",
