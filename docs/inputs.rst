@@ -402,18 +402,13 @@ reaches ``t_max`` (or saturates, below). With ``fixed_dt = true`` and no
 ``--steps``, the step count is ``round(t_max / dt)``.
 
 Diagnosed nonlinear runs stop at saturation by default (``[time] run_to =
-"saturation"``): the runtime integrates in chunks and, after each chunk, tests
-the accumulated heat-flux trace with spin-up excluded. It stops once the
-autocorrelation-corrected relative SEM of the windowed mean is at or below
-``saturation_rel_sem``, the retained window has at least 256 samples and spans
-at least 20 integrated autocorrelation times, any larger
-``saturation_min_window`` is met, and the first and second halves agree within
-twice their combined SEM. The third and fourth quarters must also agree on
-that scale, to check for late drift hidden by agreeing full-window halves.
-The same two drift-consistency checks are applied to the
-electrostatic field energy ``Wphi`` and gyrokinetic free energy ``Wg``. These
-operational finite-sample safeguards provide neither a universal sequential-
-confidence guarantee nor qualification for irregular adaptive-time sampling.
+"saturation"``): the runtime integrates in chunks and, from ``saturation_t_min``
+on, assesses the accumulated per-species heat-flux trace in physical time every
+``max(25, 5%)`` of the elapsed time. The transient is cut with MSER, the mean
+error is a batch-means SEM, and the window must be free of drift for every
+species and for the total (:ref:`saturation-stop`). The verdict is reported as a
+status string: ``saturated``, ``growing``, ``quiescent``, ``drifting``,
+``intermittent``, ``unconfirmed``, ``too_short`` or ``cap_reached:<status>``.
 ``t_max`` remains the hard cap, so a run that never saturates integrates the
 full horizon.
 Nonfinite or non-increasing retained timestamps cannot produce a saturation
@@ -617,22 +612,17 @@ Notable runtime-only keys:
   zero by construction is not a horizon. Which shipped decks do that, and the
   measurement clearing the rest to run under the default, are held by the
   ``run_to`` audit in ``tests/release/test_release_gates.py``.
-* ``[time] saturation_rel_sem``: target relative standard error of the mean on
-  the windowed heat flux (default ``0.05``, i.e. 5%). The SEM is corrected for
-  autocorrelation using a first-negative-lag truncation estimate (function
-  ``sokal_autocorrelation_time``). It is not a calibrated sequential
-  confidence guarantee. Fixed-horizon AR(1) coverage and a drifting-prefix
-  rejection control are tested in
-  ``tests/unit/quasilinear/test_quasilinear.py``.
-* ``[time] saturation_min_window``: minimum averaging-window span in time
-  units before a run may stop. The effective requirement is the larger of this
-  value and twenty integrated autocorrelation times; omitting it retains the
-  correlation-time floor. Every accepted window also retains at least 256
-  samples. These are finite-sample safeguards calibrated on regularly sampled
-  synthetic traces, not a guarantee for irregular adaptive-time sampling or
-  arbitrary nonstationarity. Agreement is checked between the full-window
-  halves and between the two terminal quarters, for heat flux and both energy
-  guards; a small SEM alone does not establish stationarity.
+* ``[time] saturation_rel_sem``: largest relative standard error of the
+  windowed heat-flux mean, from batch means, that still counts as saturated
+  (default ``0.10``).
+* ``[time] saturation_t_min``: run time in ``a/v_t`` before any ``saturated``
+  verdict (default ``800``; the Landreman 2025 GX database, CGYRO and GENE
+  averaging windows are 500-1000). Capped at ``t_max`` for shorter runs.
+* ``[time] saturation_drift_rel``: tolerated change of the window mean, as a
+  fraction of its scale, across the averaging window (default ``0.10``). A trend
+  must also be two standard errors from zero to count.
+  These are finite-sample safeguards, not a calibrated sequential confidence
+  guarantee; see :ref:`saturation-stop`.
 * ``[time] nstep_restart``: when writing a nonlinear NetCDF bundle,
   checkpoint every ``nstep_restart`` steps instead of waiting for the end of
   the run. This is useful for long adaptive runs and batch jobs.
