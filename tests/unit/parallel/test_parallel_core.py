@@ -2043,3 +2043,155 @@ def _assert_nonlinear_sharding_identity_artifact(payload: dict) -> None:
         assert result["max_rel_phi_error"] == 0.0
         assert result["max_abs_rhs_error"] == 0.0
         assert result["max_rel_rhs_error"] == 0.0
+
+
+# --- GPU smoke tests for the self-hosted GPU runner (``pytest -m gpu``) --------
+# Small, bounded linear slab problems; each compares the default device with the
+# CPU backend, so a wrong GPU kernel or a float32 fallback shows as a mismatch.
+# No nonlinear case: it is far outside the one-minute budget.
+# ``GKX_GPU_TESTS_ALLOW_CPU=1`` runs them on a CPU-only machine.
+
+_NL, _NM = 2, 4
+
+
+def _require_gpu() -> None:
+    import os
+
+    if os.environ.get("GKX_GPU_TESTS_ALLOW_CPU") == "1":
+        return
+    assert jax.default_backend() == "gpu", jax.devices()
+
+
+def _terms():
+    from gkx.operators.linear.params import LinearTerms
+
+    zeros = dict.fromkeys(
+        (
+            "streaming",
+            "mirror",
+            "curvature",
+            "gradb",
+            "diamagnetic",
+            "collisions",
+            "hypercollisions",
+            "hyperdiffusion",
+            "end_damping",
+            "apar",
+            "bpar",
+        ),
+        0.0,
+    )
+    zeros.update(streaming=1.0, diamagnetic=1.0, collisions=1.0)
+    return LinearTerms(**zeros)
+
+
+def _case():
+    import jax.numpy as jnp
+    import numpy as np
+
+    from gkx.config import GridConfig
+    from gkx.core_grid import build_spectral_grid
+    from gkx.geometry import SlabGeometry
+    from gkx.operators.linear.cache_builder import build_linear_cache
+    from gkx.operators.linear.params import LinearParams
+
+    grid = build_spectral_grid(
+        GridConfig(Nx=1, Ny=4, Nz=8, Lx=2.0 * np.pi, Ly=4.0 * np.pi)
+    )
+    params = LinearParams(
+        charge_sign=jnp.asarray([1.0]),
+        density=jnp.asarray([1.0]),
+        mass=jnp.asarray([1.0]),
+        temp=jnp.asarray([1.0]),
+        tau_e=1.0,
+        vth=jnp.asarray([1.0]),
+        rho=jnp.asarray([1.0]),
+        tz=jnp.asarray([1.0]),
+        kpar_scale=0.1,
+        fprim=jnp.asarray([1.0]),
+        tprim=jnp.asarray([3.0]),
+        nu=jnp.asarray([0.1]),
+    )
+    geom = SlabGeometry(s_hat=0.0, z0=10.0)
+    cache = build_linear_cache(grid, geom, params, Nl=_NL, Nm=_NM)
+    shape = (1, _NL, _NM, int(grid.ky.size), 1, 8)
+    phase = np.exp(1j * np.asarray(grid.z))
+    g0 = np.zeros(shape, dtype=complex)
+    g0[0, 0, 0, 1, 0] = phase
+    g0[0, 0, 1, 1, 0] = 0.5 * phase
+    return grid, geom, params, cache, jnp.asarray(g0)
+
+
+@pytest.mark.gpu
+def test_gpu_backend_and_float64() -> None:
+    import jax.numpy as jnp
+
+    _require_gpu()
+    assert jax.config.read("jax_enable_x64")
+    x = jnp.arange(4.0) * 0.5
+    assert x.dtype == jnp.float64
+    assert float(jnp.sum(x)) == 3.0
+
+
+@pytest.mark.gpu
+def test_gpu_fft_roundtrip_float64() -> None:
+    import jax.numpy as jnp
+    import numpy as np
+
+    _require_gpu()
+    rng = np.random.default_rng(0)
+    a = rng.standard_normal((6, 8, 16)) + 1j * rng.standard_normal((6, 8, 16))
+    back = jnp.fft.ifftn(jnp.fft.fftn(jnp.asarray(a)))
+    assert back.dtype == jnp.complex128
+    assert np.max(np.abs(np.asarray(back) - a)) < 1e-12
+    ref = np.fft.fftn(a)
+    got = np.asarray(jnp.fft.fftn(jnp.asarray(a)))
+    assert np.max(np.abs(got - ref)) < 1e-10 * np.max(np.abs(ref))
+
+
+@pytest.mark.gpu
+def test_gpu_linear_rhs_matches_cpu() -> None:
+    import numpy as np
+
+    from gkx.operators.linear.rhs import linear_rhs_cached
+
+    _require_gpu()
+    _, _, params, cache, g0 = _case()
+    dg, phi = linear_rhs_cached(g0, cache, params, _terms())
+    cpu = jax.devices("cpu")[0]
+    with jax.default_device(cpu):
+        _, _, params_c, cache_c, g0_c = _case()
+        dg_c, phi_c = linear_rhs_cached(g0_c, cache_c, params_c, _terms())
+    assert np.all(np.isfinite(np.asarray(dg)))
+    assert np.max(np.abs(np.asarray(dg) - np.asarray(dg_c))) < 1e-10
+    assert np.max(np.abs(np.asarray(phi) - np.asarray(phi_c))) < 1e-10
+
+
+@pytest.mark.gpu
+def test_gpu_rk4_linear_window_matches_cpu() -> None:
+    import numpy as np
+
+    from gkx.solvers_linear_integrators import integrate_linear
+
+    _require_gpu()
+    grid, geom, params, cache, g0 = _case()
+    out = integrate_linear(
+        g0, grid, geom, params, 0.01, 5, method="rk4", cache=cache, terms=_terms()
+    )[0]
+    cpu = jax.devices("cpu")[0]
+    with jax.default_device(cpu):
+        grid_c, geom_c, params_c, cache_c, g0_c = _case()
+        ref = integrate_linear(
+            g0_c,
+            grid_c,
+            geom_c,
+            params_c,
+            0.01,
+            5,
+            method="rk4",
+            cache=cache_c,
+            terms=_terms(),
+        )[0]
+    a, b = np.asarray(out), np.asarray(ref)
+    assert np.all(np.isfinite(a))
+    assert np.max(np.abs(a - b)) < 1e-9 * max(1.0, np.max(np.abs(b)))

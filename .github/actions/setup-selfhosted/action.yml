@@ -1,0 +1,34 @@
+name: Set up GKX (self-hosted)
+description: >-
+  Python and the package with its dev extra in a per-workspace uv virtualenv, so
+  a shared self-hosted machine is never written outside the job's workspace.
+  GPU runs add the CUDA 12 wheels of JAX.
+inputs:
+  python-version:
+    description: Python version to install.
+    default: "3.11"
+  cuda:
+    description: Install jax[cuda12] when "true".
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v10.2.0
+      with:
+        python-version: ${{ inputs.python-version }}
+        enable-cache: false
+
+    - name: Install GKX with the dev extra
+      shell: bash
+      run: |
+        uv venv --python "${{ inputs.python-version }}" "$GITHUB_WORKSPACE/.venv"
+        echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+        echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
+        echo "PYTHONPATH=$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/src" >> "$GITHUB_ENV"
+        export VIRTUAL_ENV="$GITHUB_WORKSPACE/.venv"
+        if [ "${{ inputs.cuda }}" = "true" ]; then
+          uv pip install -e ".[dev]" "jax[cuda12]"
+        else
+          uv pip install -e ".[dev]"
+        fi
+        "$VIRTUAL_ENV/bin/python" -c "import jax, jaxlib, numpy; print('jax', jax.__version__, 'jaxlib', jaxlib.__version__, 'numpy', numpy.__version__)"
