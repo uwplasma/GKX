@@ -377,23 +377,32 @@ def test_ci_wide_coverage_matrix_matches_the_shard_count() -> None:
     root = Path(__file__).resolve().parents[2]
     workflow = yaml.safe_load((root / ".github" / "workflows" / "ci.yml").read_text())
     wide_job = workflow["jobs"]["wide-coverage-shards"]
-    wide_shards = wide_job["strategy"]["matrix"]["shard"]
-    shard_count = len(wide_shards)
-    assert wide_shards == list(range(1, shard_count + 1))
+    matrix_expr = wide_job["strategy"]["matrix"]["shard"]
+    # Pull requests pack the planner into fewer shards; pushes keep the full set.
+    pr_shards, full_shards = (
+        json.loads(text) for text in re.findall(r"'(\[[0-9,]+\])'", matrix_expr)
+    )
+    shard_count = len(full_shards)
+    assert full_shards == list(range(1, shard_count + 1))
+    assert pr_shards == list(range(1, len(pr_shards) + 1))
+    shards_env = f"&& {len(pr_shards)} || {shard_count}"
+    assert shards_env in wide_job["env"]["SHARDS"]
 
     shard_step = next(
         step
         for step in wide_job["steps"]
         if "Wide package coverage" in step.get("name", "")
     )
+    combine_job = workflow["jobs"]["wide-coverage"]
     combine_step = next(
         step
-        for step in workflow["jobs"]["wide-coverage"]["steps"]
+        for step in combine_job["steps"]
         if step.get("name") == "Combine wide package coverage"
     )
-    assert f"/{shard_count}" in shard_step["name"]
-    assert f"--shards {shard_count}" in shard_step["run"]
-    assert f"--shards {shard_count}" in combine_step["run"]
+    assert shards_env in combine_job["env"]["SHARDS"]
+    assert "/${{ env.SHARDS }}" in shard_step["name"]
+    assert '--shards "$SHARDS"' in shard_step["run"]
+    assert '--shards "$SHARDS"' in combine_step["run"]
 
 
 def _release_artifact_manifest(

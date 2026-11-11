@@ -61,8 +61,8 @@ jobs:
     # the whole suite: collection is where an import that does not exist on the
     # floor actually fails. A bounded unit subset then runs for real, because
     # an old-jax API difference only shows when the code executes.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macOS, uwplasma-cpu]
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:
@@ -155,8 +155,8 @@ jobs:
           mypy
 
   adaptive-eigensolver:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macOS, uwplasma-cpu]
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
@@ -180,8 +180,8 @@ jobs:
             -k "adaptive or biorthogonal or experimental_solvax_eigen_contract or banded"
 
   fast-coverage:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macOS, uwplasma-cpu]
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
@@ -263,21 +263,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        # Pull requests pack the same planner into 3 shards so the shared Mac
+        # runners see 3 jobs; pushes, schedules and dispatches keep all 8.
+        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[1,2,3]' || '[1,2,3,4,5,6,7,8]') }}
+    env:
+      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 8 }}
 
     steps:
       - uses: actions/checkout@v6
 
       - uses: ./.github/actions/setup-selfhosted
 
-      - name: Wide package coverage shard ${{ matrix.shard }}/8
+      - name: Wide package coverage shard ${{ matrix.shard }}/${{ env.SHARDS }}
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
         run: |
           python scripts/check.py test-gates wide-coverage \
-            --shards 8 \
+            --shards "$SHARDS" \
             --workers 3 \
             --timeout 1500 \
             --only-shard "${{ matrix.shard }}" \
@@ -320,6 +324,8 @@ jobs:
     # Every other job checks out and installs for itself, so ordering them
     # bought nothing and cost the signal from everything downstream.
     needs: wide-coverage-shards
+    env:
+      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 8 }}
 
     steps:
       - uses: actions/checkout@v6
@@ -341,7 +347,7 @@ jobs:
         run: |
           find coverage-wide-artifacts -name '*.tgz' -print -exec tar -xzf {} \;
           python scripts/check.py test-gates wide-coverage \
-            --shards 8 \
+            --shards "$SHARDS" \
             --combine-only \
             --require-shard-data \
             --shard-manifest coverage-wide-shard-manifest.json \
@@ -377,8 +383,8 @@ jobs:
           use_oidc: true
 
   docs-and-packaging:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macOS, uwplasma-cpu]
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
     timeout-minutes: 40
 
     steps:
