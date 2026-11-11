@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Callable
 
 import jax.numpy as jnp
@@ -189,6 +190,15 @@ def _build_time_step_limits(
 _STREAMING_ARNOLDI_STEPS = 30
 
 
+@partial(jax.jit, static_argnames="shape")
+def _streaming_operator(G, *, keep, cache, params, terms, shape):
+    from gkx.terms.assembly import assemble_rhs_cached
+
+    return keep * assemble_rhs_cached(keep * G, cache, params, terms=terms)[0].reshape(
+        shape
+    )
+
+
 def measured_streaming_frequency(
     params: LinearParams,
     cache: LinearCache,
@@ -196,6 +206,7 @@ def measured_streaming_frequency(
     nl: int,
     nm: int,
     hypercollisions: float = 0.0,
+    end_damping: bool = False,
 ) -> float:
     """Largest |eigenvalue| of parallel streaming plus the field solve.
 
@@ -209,20 +220,21 @@ def measured_streaming_frequency(
     applies, restricted to ky >= 0 (the two-sided layout rebuilds ky < 0 from
     them). ``hypercollisions=1`` keeps the hypercollision damping, which for
     kinetic electrons (kz-dependent, ~ v_te k_z) is as large as the streaming
-    rate and bounds an explicit linear step too. Only for decks with a light
-    kinetic species (v_t ratio > 4), where streaming sets the step; returns 0
-    otherwise or when the cache is traced.
+    rate and bounds an explicit linear step too. ``end_damping=True`` adds the
+    end absorber, which damps ``h`` and so is amplified far past ``nu_end`` by the
+    field solve (|lambda| = 2.8e5 at the default rate 598 on the Cyclone
+    kinetic-electron deck). Otherwise only for decks with a light kinetic species
+    (v_t ratio > 4); returns 0 otherwise or when the cache is traced.
     """
 
     vth = np.abs(np.atleast_1d(np.asarray(params.vth, dtype=float)))
-    if vth.size < 2 or nm < 2 or float(vth.max()) <= 4.0 * float(vth.min()):
-        return 0.0
-    if any(
+    if nm < 2 or any(
         isinstance(leaf, jax.core.Tracer) for leaf in jax.tree_util.tree_leaves(cache)
     ):
         return 0.0
-    from gkx.terms.assembly import assemble_rhs_cached
-
+    absorber = end_damping and float(np.max(np.asarray(cache.damp_profile))) > 0.0
+    if not (absorber or (vth.size > 1 and float(vth.max()) > 4.0 * float(vth.min()))):
+        return 0.0
     terms = TermConfig(
         mirror=0.0,
         curvature=0.0,
@@ -230,7 +242,7 @@ def measured_streaming_frequency(
         diamagnetic=0.0,
         collisions=0.0,
         hypercollisions=hypercollisions,
-        end_damping=0.0,
+        end_damping=float(absorber),
     )
     ky = np.asarray(cache.ky)
     keep = jnp.asarray((ky >= 0.0)[:, None, None], dtype=jnp.result_type(float))
@@ -243,13 +255,14 @@ def measured_streaming_frequency(
         int(np.asarray(cache.kz).size),
     )
     dtype = jnp.result_type(1j * jnp.zeros((), jnp.result_type(float)))
-    op = jax.jit(
-        lambda G: (
-            keep
-            * assemble_rhs_cached(keep * G, cache, params, terms=terms)[0].reshape(
-                shape
-            )
-        )
+
+    op = partial(
+        _streaming_operator,
+        keep=keep,
+        cache=cache,
+        params=params,
+        terms=terms,
+        shape=shape,
     )
     k = _STREAMING_ARNOLDI_STEPS
     v = jax.random.normal(jax.random.PRNGKey(0), shape).astype(dtype) * keep
@@ -290,8 +303,11 @@ def _build_nonlinear_cfl_bounds(
         ),
         dtype=float,
     )
+    # The end absorber damps the non-adiabatic h, so the field solve amplifies it
+    # (x2 with adiabatic electrons, x470 with kinetic ones): measure it, never ``nu_end``.
     linear_omega[2] = max(
-        linear_omega[2], measured_streaming_frequency(params, cache, nl=nl, nm=nm)
+        linear_omega[2],
+        measured_streaming_frequency(params, cache, nl=nl, nm=nm, end_damping=True),
     )
     if drift_exact:  # the drift is advanced exactly: no explicit limit
         linear_omega[:2] = 0.0
