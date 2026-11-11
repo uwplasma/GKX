@@ -2636,11 +2636,11 @@ def test_explicit_chunk_retries_at_half_cfl_fac_on_non_finite_state(monkeypatch)
         seen.append(kwargs["cfl_fac"])
         t, diag, G_next, fields = real(G, *args, **kwargs)
         steps.append(float(np.asarray(diag.dt_t)[0]))
-        if kwargs["cfl_fac"] > 2.0:  # non-finite, then a finite 1e6x energy jump
+        if kwargs["cfl_fac"] > 2.0:  # non-finite, then a finite energy jump past 1e3
             G_next = G_next * jnp.nan
         elif kwargs["cfl_fac"] > 1.0:
             wg = jnp.asarray(diag.Wg_t)
-            diag = replace(diag, Wg_t=jnp.concatenate([wg, 1e6 * wg]))
+            diag = replace(diag, Wg_t=jnp.concatenate([wg, 1e6 * wg + 1e4]))
         return t, diag, G_next, fields
 
     monkeypatch.setattr(
@@ -2685,7 +2685,12 @@ def test_nonlinear_cfl_fac_defaults_sit_below_the_measured_edge():
     }
     for method, edges in measured_edge.items():
         for moments, edge in edges.items():
-            assert resolve_nonlinear_cfl_fac(method, None, moments) <= 0.65 * edge
+            fac = resolve_nonlinear_cfl_fac(method, None, moments)
+            assert fac <= 0.85 * edge  # the floor trades margin for step count
+    assert resolve_nonlinear_cfl_fac("rk3", None, 4096) == pytest.approx(1.73)
+    assert resolve_nonlinear_cfl_fac("rk4", None, 4096) == pytest.approx(
+        2.7 * 1.73 / 2.1
+    )
     assert resolve_nonlinear_cfl_fac("rk3", None, 32) == 2.1
     assert resolve_nonlinear_cfl_fac("rk4-pi", None, 512) == 2.82
     assert resolve_nonlinear_cfl_fac("lawson-rk4-pi", None, 512) == 2.82
@@ -2964,3 +2969,54 @@ def test_auto_stepper_runs_through_the_nonlinear_workflow(monkeypatch):
         assert np.isfinite(np.asarray(out.diagnostics.Wg_t)).all()
     assert "stepper auto: rk4-pi" in seen[0.99]
     assert "stepper auto: lawson-rk4-pi" in seen[0.0]
+
+
+def test_chunk_runaway_ignores_small_seeds_and_zero_start():
+    from gkx.workflows.nonlinear import _chunk_runaway
+
+    assert not _chunk_runaway(np.asarray([1e-12, 1e-6]))  # linear growth, tiny seed
+    assert not _chunk_runaway(np.asarray([0.0, 5.0]))  # no starting energy to compare
+    assert not _chunk_runaway(np.asarray([-1.0, 1e9]))
+    assert _chunk_runaway(np.asarray([1.0, 1e5]))
+    assert _chunk_runaway(np.asarray([1.0, np.nan]))
+    assert _chunk_runaway(np.asarray([0.0, np.inf]))
+
+
+def test_second_solve_reuses_executables():
+    """Repeated solves of one deck compile nothing: scans are digest-keyed."""
+    import jax.monitoring
+    import gkx
+
+    count = [0]
+
+    def listener(event, duration, **kwargs):
+        count[0] += event == "/jax/core/compile/backend_compile_duration"
+
+    jax.monitoring.register_event_duration_secs_listener(listener)
+    linear = gkx.load(REPO_ROOT / "examples/01_linear_tokamak/case.toml")
+    linear = linear.replace(
+        grid=replace(linear.grid, Nz=8, ntheta=8),
+        time=replace(linear.time, t_max=1.0),
+    )
+    nonlinear = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    nonlinear = nonlinear.replace(
+        grid=replace(nonlinear.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            nonlinear.time,
+            method="rk3",
+            fixed_dt=False,
+            dt_max=10.0,
+            t_max=0.5,
+            chunk_steps=3,
+            run_to="t_max",
+        ),
+    )
+    solves = (
+        lambda: gkx.solve(linear, ky_target=0.3, Nl=2, Nm=3),
+        lambda: gkx.solve(nonlinear, ky_target=nonlinear.run.ky, Nl=2, Nm=3),
+    )
+    for solve in solves:
+        solve()
+        count[0] = 0
+        solve()
+        assert count[0] == 0

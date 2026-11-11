@@ -451,11 +451,11 @@ physical eigenpair residual and compare solver routes before using a result.
 Runtime sections
 ----------------
 
-``load_runtime_from_toml`` reads these tables. Unknown keys in ``[grid]``,
-``[time]``, ``[geometry]`` and ``[init]`` are ignored (the removed Diffrax
-``[time]`` keys are refused). An unknown key in ``[[species]]``, ``[physics]``,
-``[collisions]``, ``[normalization]``, ``[terms]``, ``[expert]``, ``[output]``,
-``[quasilinear]`` or ``[parallel]`` raises ``TypeError``. ``[run]``, ``[scan]``
+``load_runtime_from_toml`` reads these tables. An unknown key in ``[grid]``,
+``[time]``, ``[geometry]`` or ``[init]`` raises ``ValueError`` (so do the
+removed Diffrax ``[time]`` keys). An unknown key in ``[[species]]``,
+``[physics]``, ``[collisions]``, ``[normalization]``, ``[terms]``, ``[expert]``,
+``[output]``, ``[quasilinear]`` or ``[parallel]`` raises ``TypeError``. ``[run]``, ``[scan]``
 and ``[fit]`` are read by the commands that use them.
 
 * ``schema_version`` (document root; see `Schema compatibility`_)

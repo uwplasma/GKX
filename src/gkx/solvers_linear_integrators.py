@@ -41,6 +41,7 @@ from gkx.solvers_linear_parallel import (
     linear_rhs_parallel_cached,
 )
 from gkx.config import method_error
+from gkx.solvers_nonlinear_explicit import cached_jit
 from gkx.solvers_time_explicit import (
     _linear_explicit_stage_update,
     _linear_native_step,
@@ -902,7 +903,9 @@ def _every_step_scan(
         )
         return (G_out, stats), outputs
 
-    return jax.lax.scan(step, (G0, initial_stats), jnp.arange(steps))
+    return cached_jit(
+        lambda G, stats: jax.lax.scan(step, (G, stats), jnp.arange(steps))
+    )(G0, initial_stats)
 
 
 def _strided_sample_scan(
@@ -948,7 +951,9 @@ def _strided_sample_scan(
         return (G_out, stats), outputs
 
     num_samples = steps // sample_stride
-    return jax.lax.scan(sample_step, (G0, initial_stats), jnp.arange(num_samples))
+    return cached_jit(
+        lambda G, stats: jax.lax.scan(sample_step, (G, stats), jnp.arange(num_samples))
+    )(G0, initial_stats)
 
 
 def integrate_linear_diagnostics(
