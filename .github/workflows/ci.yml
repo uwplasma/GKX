@@ -492,7 +492,7 @@ jobs:
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
         run: |
-          pytest -q -x -m gpu tests/unit/parallel/test_parallel_core.py
+          pytest -q -x --durations=5 -m gpu tests/unit/parallel/test_parallel_core.py
 
   ci-required:
     # One aggregate check for branch protection to require. The jobs above are

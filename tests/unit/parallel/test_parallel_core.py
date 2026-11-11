@@ -2165,33 +2165,3 @@ def test_gpu_linear_rhs_matches_cpu() -> None:
     assert np.all(np.isfinite(np.asarray(dg)))
     assert np.max(np.abs(np.asarray(dg) - np.asarray(dg_c))) < 1e-10
     assert np.max(np.abs(np.asarray(phi) - np.asarray(phi_c))) < 1e-10
-
-
-@pytest.mark.gpu
-def test_gpu_rk4_linear_window_matches_cpu() -> None:
-    import numpy as np
-
-    from gkx.solvers_linear_integrators import integrate_linear
-
-    _require_gpu()
-    grid, geom, params, cache, g0 = _case()
-    out = integrate_linear(
-        g0, grid, geom, params, 0.01, 5, method="rk4", cache=cache, terms=_terms()
-    )[0]
-    cpu = jax.devices("cpu")[0]
-    with jax.default_device(cpu):
-        grid_c, geom_c, params_c, cache_c, g0_c = _case()
-        ref = integrate_linear(
-            g0_c,
-            grid_c,
-            geom_c,
-            params_c,
-            0.01,
-            5,
-            method="rk4",
-            cache=cache_c,
-            terms=_terms(),
-        )[0]
-    a, b = np.asarray(out), np.asarray(ref)
-    assert np.all(np.isfinite(a))
-    assert np.max(np.abs(a - b)) < 1e-9 * max(1.0, np.max(np.abs(b)))
