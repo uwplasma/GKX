@@ -2049,7 +2049,9 @@ def _assert_nonlinear_sharding_identity_artifact(payload: dict) -> None:
 # Small, bounded linear slab problems; each compares the default device with the
 # CPU backend, so a wrong GPU kernel or a float32 fallback shows as a mismatch.
 # No nonlinear case: it is far outside the one-minute budget.
-# ``GKX_GPU_TESTS_ALLOW_CPU=1`` runs them on a CPU-only machine.
+# They skip without a GPU; ``GKX_REQUIRE_GPU=1`` (set in the GPU job) makes a
+# missing GPU a failure. ``GKX_GPU_TESTS_ALLOW_CPU=1`` runs them on a CPU-only
+# machine.
 
 _NL, _NM = 2, 4
 
@@ -2059,7 +2061,10 @@ def _require_gpu() -> None:
 
     if os.environ.get("GKX_GPU_TESTS_ALLOW_CPU") == "1":
         return
-    assert jax.default_backend() == "gpu", jax.devices()
+    if jax.default_backend() != "gpu":
+        if os.environ.get("GKX_REQUIRE_GPU") == "1":
+            raise AssertionError(jax.devices())
+        pytest.skip("no GPU backend")
 
 
 def _terms():
