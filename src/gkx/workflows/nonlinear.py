@@ -25,12 +25,12 @@ from gkx.diagnostics.saturation import (
 from gkx.geometry import apply_geometry_grid_defaults
 from gkx.operators.linear.linked import project_to_linked_cover
 from gkx.operators.nonlinear.policies import bracket_cfl_rate
-from gkx.solvers_nonlinear_imex import (
+from gkx.solvers.nonlinear.imex import (
     IMEX_CHAIN_METHODS,
     ImexDtControl,
     refactor_chain_implicit_linear,
 )
-from gkx.solvers_time_explicit import (
+from gkx.solvers.time_explicit import (
     FIXED_DT_CFL_WARN_RATIO,
     _laguerre_velocity_max,
 )
@@ -41,12 +41,12 @@ from gkx.config import (
     RuntimeConfig,
     resolve_nonlinear_cfl_fac,
 )
-from gkx.solvers_nonlinear_diagnostics import (
+from gkx.solvers.nonlinear.diagnostics import (
     _continue_nonlinear_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
     prepare_nonlinear_explicit_diagnostics,
 )
-from gkx.solvers_time_runners import integrate_nonlinear_from_config
+from gkx.solvers.time_runners import integrate_nonlinear_from_config
 from gkx.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
 from gkx.workflows.runtime.diagnostic_arrays import (
     validate_finite_runtime_diagnostics,
@@ -531,7 +531,7 @@ def _nonlinear_cfl_margin(
     """Estimate the adaptive no-diamagnetic-drive CFL bound when available."""
 
     from gkx.geometry import ensure_flux_tube_geometry_data
-    from gkx.solvers_time_explicit import _linear_frequency_bound
+    from gkx.solvers.time_explicit import _linear_frequency_bound
 
     try:
         geom = ensure_flux_tube_geometry_data(ctx.geom, ctx.grid.z)

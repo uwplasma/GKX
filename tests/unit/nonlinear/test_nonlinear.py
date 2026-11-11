@@ -24,19 +24,19 @@ from gkx.operators.nonlinear.projection import _make_compressed_real_fft_project
 from gkx.operators.nonlinear.rhs import (
     nonlinear_rhs_cached_impl,
 )
-from gkx.solvers_nonlinear_diagnostics import (
+from gkx.solvers.nonlinear.diagnostics import (
     integrate_nonlinear_explicit_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
     prepare_nonlinear_explicit_diagnostics,
 )
-from gkx.solvers_nonlinear_diagnostics import (
+from gkx.solvers.nonlinear.diagnostics import (
     ADJOINT_MEMORY_BUDGET_BYTES,
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
     nonlinear_heat_flux_window,
 )
-from gkx.solvers_time_explicit import _linear_frequency_bound
+from gkx.solvers.time_explicit import _linear_frequency_bound
 from gkx.terms.config import FieldState
 from gkx.terms.config import TermConfig
 from types import SimpleNamespace
@@ -1313,7 +1313,7 @@ def test_adaptive_time_step_run_compiles_and_matches_the_eager_trajectory() -> N
     the tube spans) that has no derivative in the first place.
     """
 
-    from gkx.solvers_nonlinear_diagnostics import (
+    from gkx.solvers.nonlinear.diagnostics import (
         integrate_nonlinear_sheared_transport,
     )
 

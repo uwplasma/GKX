@@ -212,10 +212,10 @@ The same rule holds at the library entry points that accept a caller-built
 state: ``PreparedSimulation.solve(initial_state=...)`` on the object
 ``gkx.prepare`` returns,
 ``integrate_nonlinear_explicit_diagnostics_state``, the differentiable
-objective :func:`~gkx.solvers_nonlinear_diagnostics.nonlinear_heat_flux_window`,
+objective :func:`~gkx.solvers.nonlinear.diagnostics.nonlinear_heat_flux_window`,
 and the raw drivers
-:func:`~gkx.solvers_nonlinear_diagnostics.integrate_nonlinear` and
-:func:`~gkx.solvers_nonlinear_diagnostics.integrate_nonlinear_cached`.
+:func:`~gkx.solvers.nonlinear.diagnostics.integrate_nonlinear` and
+:func:`~gkx.solvers.nonlinear.diagnostics.integrate_nonlinear_cached`.
 Each **projects** the state onto the linked chain cover; none rejects it.  At
 the raw drivers the projection runs once, in ``integrate_nonlinear_cached``
 (``integrate_nonlinear`` builds a cache and delegates), before the scan is
@@ -335,8 +335,8 @@ Runtime results carry the status of the solve that produced them:
   which are ``None`` where no such solve ran.  ``*.summary.json`` (written by a
   prefix run, by the ``--out`` JSON form and as the sidecar of a NetCDF bundle)
   records the same keys.  Both read
-  :func:`~gkx.solvers_linear_implicit.implicit_solve_payload` and
-  ``gkx.solvers_linear_krylov.eigen_status_payload``, so they cannot drift
+  :func:`~gkx.solvers.linear.implicit.implicit_solve_payload` and
+  ``gkx.solvers.linear.krylov.eigen_status_payload``, so they cannot drift
   apart.
 
 The time scans carry ``ImplicitSolveStats``, four scalars, through
@@ -359,7 +359,7 @@ and ``integrate_nonlinear_sheared_transport`` accept
 ``return_solve_stats=True`` and append the stats (``None`` for methods without
 an implicit solve).  ``integrate_nonlinear_sheared_transport`` returns them as
 the trace's ``solve_stats`` field.  A caller that wants the runtime's refusal
-applies :func:`~gkx.solvers_linear_implicit.require_converged_implicit_solves`
+applies :func:`~gkx.solvers.linear.implicit.require_converged_implicit_solves`
 to the stats.
 
 **Cost.**  Callers that do not request the stats compile the same graph, because
@@ -401,7 +401,7 @@ that one graph and keeps the out-of-jit placement under ``--route eager-scan``.
 One adjoint window graph
 ------------------------
 
-:func:`~gkx.solvers_nonlinear_diagnostics.nonlinear_heat_flux_window`, the
+:func:`~gkx.solvers.nonlinear.diagnostics.nonlinear_heat_flux_window`, the
 route a transport optimization takes, runs its differentiated scan as one
 ``jax.jit`` graph that is compiled once and reused for matching shapes, dtypes,
 topology and static options (GKX 2.3.0; earlier releases recompiled on every

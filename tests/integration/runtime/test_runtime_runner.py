@@ -18,8 +18,8 @@ from gkx.config import (
 from gkx.core_grid import build_spectral_grid
 from gkx.core_ky_layout import source_ny_full
 from gkx.diagnostics import SimulationDiagnostics, ResolvedDiagnostics
-from gkx.solvers_linear_implicit import ImplicitSolveStats
-from gkx.solvers_linear_krylov import EigenSolveStatus
+from gkx.solvers.linear.implicit import ImplicitSolveStats
+from gkx.solvers.linear.krylov import EigenSolveStatus
 from gkx.diagnostics.modes import ModeSelection
 from gkx.geometry import (
     SAlphaGeometry,
@@ -592,7 +592,7 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     """
 
     from gkx.operators.linear.params import linear_terms_to_term_config
-    from gkx.solvers_linear_krylov_algorithms import _apply_operator
+    from gkx.solvers.linear.krylov_algorithms import _apply_operator
     from gkx.core_grid import select_ky_grid
     from gkx.diagnostics.modes import select_ky_index
 
@@ -1012,7 +1012,7 @@ def test_prepare_runtime_nonlinear_reuses_existing_execution_contract(
     monkeypatch, checkpoint, compressed_real_fft, ky_layout
 ) -> None:
     from unittest.mock import Mock
-    from gkx import solvers_nonlinear_diagnostics as nd
+    from gkx.solvers.nonlinear import diagnostics as nd
 
     factory = Mock(wraps=nd.prepare_nonlinear_explicit_diagnostics)
     patch_runtime(monkeypatch, "prepare_nonlinear_explicit_diagnostics", factory)
@@ -1568,7 +1568,7 @@ def test_runtime_nonlinear_adaptive_dt(method, monkeypatch) -> None:
     t_arr = np.asarray(res.diagnostics.t)
     assert np.all(np.diff(t_arr) > 0)
 
-    import gkx.solvers_nonlinear_diagnostics as backend
+    import gkx.solvers.nonlinear.diagnostics as backend
 
     prepare = backend._cached_explicit_diagnostics
     calls = []
@@ -2248,7 +2248,7 @@ def test_run_linear_case_uses_toml_output_path(
 def test_run_linear_case_toml_velocity_auto_reaches_parallel_rhs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    import gkx.solvers_linear_integrators as linear_integrators
+    import gkx.solvers.linear.integrators as linear_integrators
 
     cfg_path = tmp_path / "velocity_auto.toml"
     cfg_path.write_text(

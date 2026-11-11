@@ -52,7 +52,9 @@ path = "src/gkx"
 pattern = "*.py"
 recursive = true
 # 124 -> 125: Lawson integrating-factor steppers.
-baseline = 125
+# 125 -> 128: the package markers of gkx.solvers, gkx.solvers.linear and gkx.solvers.nonlinear
+# replace sixteen flat solvers_* modules; no other file is added.
+baseline = 128
 target = 45
 
 [[topology_policy.counts]]
@@ -147,13 +149,13 @@ public_facades = [
 ]
 
 [[complexity_policy.exceptions]]
-path = "solvers_nonlinear_imex.py"
+path = "solvers/nonlinear/imex.py"
 baseline_lines = 1958
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
 [[complexity_policy.exceptions]]
-path = "solvers_nonlinear_diagnostics.py"
+path = "solvers/nonlinear/diagnostics.py"
 # 3524 -> 3529: the explicit chunk cache key carries the CFL factor.
 # 3529 -> 3539: the prepared scan runs through the digest-keyed executable cache.
 # 3539 -> 3542: Lawson integrating-factor steppers.
@@ -162,7 +164,7 @@ target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
 [[complexity_policy.exceptions]]
-path = "solvers_time_explicit.py"
+path = "solvers/time_explicit.py"
 baseline_lines = 1701
 target_lines = 1200
 reason = "The CFL estimate, the one-step kernels and the linear explicit drivers are one integrator; the offcuts had a single consumer."

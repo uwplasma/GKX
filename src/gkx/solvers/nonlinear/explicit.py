@@ -19,7 +19,7 @@ from gkx.config import LAWSON_METHODS, method_error
 import numpy as np
 from solvax.ode import RK4_2, PIController, erk_step, step_factor
 
-from gkx.solvers_nonlinear_lawson import lawson_step
+from gkx.solvers.nonlinear.lawson import lawson_step
 
 RhsFn = Callable[..., tuple[jnp.ndarray, object]]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]

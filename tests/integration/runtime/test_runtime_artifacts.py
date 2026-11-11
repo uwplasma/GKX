@@ -73,7 +73,7 @@ from gkx.runtime import (
     RuntimeLinearResult,
     RuntimeNonlinearResult,
 )
-from gkx.solvers_time_explicit import (
+from gkx.solvers.time_explicit import (
     ExplicitTimeConfig,
     _apply_completed_step_state_mask,
     _growth_rate_mode_mask,
@@ -143,7 +143,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import gkx.artifacts.nonlinear_netcdf as nonlinear_netcdf
 import gkx.operators.moments as diagnostics_moments
-import gkx.solvers_time_explicit as explicit_time_integrators
+import gkx.solvers.time_explicit as explicit_time_integrators
 import gkx.workflows.runtime.artifacts as runtime_artifacts
 import jax.numpy as jnp
 import json
@@ -2748,8 +2748,8 @@ def test_saved_linear_summary_carries_the_result_solver_status(
 ) -> None:
     """A run read back from disk must have the same convergence channel."""
 
-    from gkx.solvers_linear_implicit import ImplicitSolveSummary
-    from gkx.solvers_linear_krylov import EigenSolveStatus
+    from gkx.solvers.linear.implicit import ImplicitSolveSummary
+    from gkx.solvers.linear.krylov import EigenSolveStatus
 
     result = _linear_result(
         eigen_status=EigenSolveStatus(
@@ -2803,7 +2803,7 @@ def test_saved_linear_summary_reports_no_status_as_null(tmp_path: Path) -> None:
 
 
 def test_saved_nonlinear_summary_carries_the_imex_solve_status() -> None:
-    from gkx.solvers_linear_implicit import ImplicitSolveSummary
+    from gkx.solvers.linear.implicit import ImplicitSolveSummary
 
     def summary_of(**extra):
         return _nonlinear_summary(

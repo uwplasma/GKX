@@ -82,12 +82,12 @@ from gkx.operators.nonlinear.rhs import (
     nonlinear_em_term_cached_impl,
     nonlinear_rhs_cached_impl,
 )
-from gkx.solvers_linear_implicit import (
+from gkx.solvers.linear.implicit import (
     ImplicitSolveStats,
     _build_implicit_operator,
     _empty_implicit_solve_stats,
 )
-from gkx.solvers_nonlinear_explicit import (
+from gkx.solvers.nonlinear.explicit import (
     advance_explicit_nonlinear_state,
     cached_jit,
     checkpointed_explicit_scan,
@@ -95,8 +95,8 @@ from gkx.solvers_nonlinear_explicit import (
     make_explicit_diagnostic_step,
     run_explicit_diagnostic_scan,
 )
-from gkx.solvers_nonlinear_lawson import attach_drift_factor
-from gkx.solvers_nonlinear_imex import (
+from gkx.solvers.nonlinear.lawson import attach_drift_factor
+from gkx.solvers.nonlinear.imex import (
     DiagnosticFn,
     DiagnosticStepFn,
     NonlinearTermFn,
@@ -113,7 +113,7 @@ from gkx.solvers_nonlinear_imex import (
     solve_imex_step,
     solve_imex_step_with_stats,
 )
-from gkx.solvers_time_explicit import (
+from gkx.solvers.time_explicit import (
     _diagnostic_midplane_index,
     _instantaneous_growth_rate_step,
     _laguerre_velocity_max,
@@ -807,7 +807,7 @@ def _attach_chain_implicit_linear(
 ) -> Callable[..., Any]:
     """Return ``rhs_fn`` carrying the per-chain implicit operator of imex-ars*."""
 
-    from gkx.solvers_nonlinear_imex import build_chain_implicit_linear
+    from gkx.solvers.nonlinear.imex import build_chain_implicit_linear
 
     if not fixed_dt:
         raise ValueError(
@@ -2396,9 +2396,9 @@ def integrate_nonlinear_imex_diagnostics(
     Returns ``(t, diagnostics)``, or ``(t, diagnostics, stats)`` with
     ``return_solve_stats=True``. The scan cannot raise on a starved inner
     budget, so ``stats``
-    (:class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`) is this route's
+    (:class:`~gkx.solvers.linear.implicit.ImplicitSolveStats`) is this route's
     convergence channel; a host-side caller turns it into a refusal with
-    :func:`~gkx.solvers_linear_implicit.require_converged_implicit_solves`.
+    :func:`~gkx.solvers.linear.implicit.require_converged_implicit_solves`.
     """
 
     options = _options_from_scope(locals(), _IMEX_DIAGNOSTIC_OPTION_KEYS)
@@ -3328,11 +3328,11 @@ def integrate_nonlinear_sheared(
     equivalent canonical shearing-coordinate representation.
 
     ``return_solve_stats=True`` appends the implicit solve summary of a
-    ``method="imex"`` run (:class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`,
+    ``method="imex"`` run (:class:`~gkx.solvers.linear.implicit.ImplicitSolveStats`,
     ``None`` for the explicit methods). The traced scan cannot raise on a
     starved inner budget, so this is the convergence channel; a host-side caller
     turns it into a refusal with
-    :func:`~gkx.solvers_linear_implicit.require_converged_implicit_solves`.
+    :func:`~gkx.solvers.linear.implicit.require_converged_implicit_solves`.
     """
 
     final_state, fields, solve_stats = _integrate_nonlinear_sheared_scan(
@@ -3471,7 +3471,7 @@ def integrate_nonlinear_imex_cached(
 
     Returns ``(G_out, fields_t)``, or ``(G_out, fields_t, stats)`` with
     ``return_solve_stats=True``; ``stats`` is the carried
-    :class:`~gkx.solvers_linear_implicit.ImplicitSolveStats` of every solve.
+    :class:`~gkx.solvers.linear.implicit.ImplicitSolveStats` of every solve.
     """
 
     term_cfg = terms or TermConfig()

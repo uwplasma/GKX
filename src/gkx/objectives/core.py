@@ -26,11 +26,11 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers_linear_krylov import (
+from gkx.solvers.linear.krylov import (
     adaptive_propagator_eigenpair,
     certifiable_residual_tolerance,
 )
-from gkx.solvers_linear_krylov_algorithms import build_shift_invert_preconditioner
+from gkx.solvers.linear.krylov_algorithms import build_shift_invert_preconditioner
 
 
 SOLVER_OBJECTIVE_NAMES = (

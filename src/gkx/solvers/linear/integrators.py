@@ -27,7 +27,7 @@ from gkx.operators.linear.params import (
     _x64_enabled,
 )
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers_linear_implicit import (
+from gkx.solvers.linear.implicit import (
     _integrate_linear_implicit_cached,
     _validate_implicit_sample_policy,
     _ImplicitSolveOptions,
@@ -36,13 +36,13 @@ from gkx.solvers_linear_implicit import (
     _build_implicit_solve_step,
     _empty_implicit_solve_stats,
 )
-from gkx.solvers_linear_parallel import (
+from gkx.solvers.linear.parallel import (
     _is_electrostatic_field_terms,
     linear_rhs_parallel_cached,
 )
 from gkx.config import method_error
-from gkx.solvers_nonlinear_explicit import cached_jit
-from gkx.solvers_time_explicit import (
+from gkx.solvers.nonlinear.explicit import cached_jit
+from gkx.solvers.time_explicit import (
     _linear_explicit_stage_update,
     _linear_native_step,
 )
@@ -358,7 +358,7 @@ def _dispatch_parallel_linear(
             "mixed species-Hermite integration is currently gated for RK2"
         )
     if route_axis in {"s", "species"}:
-        from gkx.solvers_linear_parallel_electrostatic import (
+        from gkx.solvers.linear.parallel_electrostatic import (
             prepare_electrostatic_species_inputs,
         )
 
@@ -384,7 +384,7 @@ def _dispatch_parallel_linear(
             force_electrostatic_fields=force_electrostatic_fields,
         )
     if route_axis in {"species_hermite", "s_m", "mixed"}:
-        from gkx.solvers_linear_parallel_streaming import (
+        from gkx.solvers.linear.parallel_streaming import (
             prepare_electrostatic_species_hermite_state,
         )
 
@@ -426,7 +426,7 @@ def _integrate_species_sharded_explicit(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Advance one species per device inside a named-collective ``pmap``."""
 
-    from gkx.solvers_linear_parallel_common import (
+    from gkx.solvers.linear.parallel_common import (
         _is_electrostatic_field_terms,
         _is_electrostatic_slice_terms,
         _resolve_parallel_devices,
@@ -624,7 +624,7 @@ def integrate_linear(
     """Time integrate the linear system using a fixed-step scheme.
 
     ``return_solve_stats=True`` appends the convergence summary of the implicit
-    GMRES solves (:class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`) for
+    GMRES solves (:class:`~gkx.solvers.linear.implicit.ImplicitSolveStats`) for
     ``method="implicit"`` and ``None`` for methods without an implicit solve.
     """
     if return_solve_stats and method != "implicit":
@@ -984,7 +984,7 @@ def integrate_linear_diagnostics(
 
     ``record_hl_energy`` appends ``hl_t``. ``return_solve_stats=True`` appends
     the implicit GMRES convergence summary as the last element
-    (:class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`, or ``None`` for
+    (:class:`~gkx.solvers.linear.implicit.ImplicitSolveStats`, or ``None`` for
     methods without an implicit solve).
     """
 
