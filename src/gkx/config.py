@@ -55,17 +55,12 @@ def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
 # Explicit nonlinear steppers: 60% of the smallest largest-stable factor measured at
 # Nl*Nm <= 32 (rk3 3.45, rk4 4.5). The edge then falls with the moment count; the
 # exponent keeps the default below 0.65 of every measured edge (PR #452).
-# The integrating-factor steppers (gkx.solvers_nonlinear_lawson) advance the magnetic drift
-# exactly, so their bound has no drift frequency; their factors are 65% of the smallest
-# edge measured at Nl*Nm <= 32 (lawson-rk3 3.9, lawson-rk4 3.9; 2.75 and 3.9 at 64 moments).
+# Lawson steppers (drift advanced exactly): 65% of the smallest edge at Nl*Nm <= 32 (3.9).
 NONLINEAR_CFL_FAC = {"rk3": 2.1, "rk4": 2.7, "lawson-rk3": 2.5, "lawson-rk4": 2.5}
 NONLINEAR_CFL_MOMENTS = 32
 LAWSON_METHODS = frozenset({"lawson-rk3", "lawson-rk4", "lawson-rk4-pi"})
-# ``method = "auto"`` takes ``lawson-rk4-pi`` when both hold: the magnetic drift is at least
-# LAWSON_DRIFT_SHARE of the linear frequency bound (radial + binormal drift over drift +
-# streaming), so the exact drift removes most of the explicit step limit; and the step cap
-# (``dt_max``, else ``dt``) is at least LAWSON_CAP_OVER_BOUND times the ``rk4-pi`` bound step,
-# so that limit, not the cap, is what holds ``rk4-pi`` back. Together they pay for the dearer step.
+# ``auto`` takes ``lawson-rk4-pi`` when the drift is at least LAWSON_DRIFT_SHARE of the linear
+# frequency bound and the step cap (``dt_max``, else ``dt``) is LAWSON_CAP_OVER_BOUND times the bound.
 LAWSON_DRIFT_SHARE = 0.56
 LAWSON_CAP_OVER_BOUND = 2.6
 
