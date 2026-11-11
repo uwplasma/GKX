@@ -35,6 +35,7 @@ from gkx.solvers_time_explicit import (
     _laguerre_velocity_max,
 )
 from gkx.config import (
+    LAWSON_CAP_OVER_BOUND,
     LAWSON_DRIFT_SHARE,
     LAWSON_METHODS,
     RuntimeConfig,
@@ -352,10 +353,12 @@ def _prepare_context(
         adaptive_chunked=steps is None and not bool(cfg.time.fixed_dt),
     )
     if cfg.time.method == "auto":
-        margin = _nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm)
+        pi = replace(cfg, time=replace(cfg.time, method="rk4-pi"))
+        cap = float(cfg.time.dt_max or ctx.dt)
+        margin = _nonlinear_cfl_margin(pi, ctx, Nl=Nl, Nm=Nm)
         cfg = _resolve_auto_stepper(
             cfg,
-            None if margin is None else margin[2],
+            None if margin is None else (margin[0], cap / margin[0], margin[2]),
             exact_drift_ok=not sharded and params.moments is None,
             status=status,
         )
@@ -485,18 +488,31 @@ def _saturation_stop_condition(
 
 def _resolve_auto_stepper(
     cfg: RuntimeConfig,
-    omega: np.ndarray | None,
+    margin: tuple[float, float, np.ndarray] | None,
     *,
     exact_drift_ok: bool,
     status: Callable[[str], None],
 ) -> RuntimeConfig:
-    """Replace ``method = "auto"``: ``lawson-rk4-pi`` where the drift share of the bound pays."""
+    """Replace ``method = "auto"`` by ``lawson-rk4-pi`` or ``rk4-pi``.
 
-    share = 0.0 if omega is None else float(omega[:2].sum() / omega.sum())
-    method = (
-        "lawson-rk4-pi" if exact_drift_ok and share >= LAWSON_DRIFT_SHARE else "rk4-pi"
+    ``margin`` is (``rk4-pi`` bound step, step cap over it, frequency bound ``(radial drift,
+    binormal drift, streaming)``): the exact drift pays where it is most of the bound and
+    the cap is well above the bound step.
+    """
+
+    share = cap_ratio = 0.0
+    if margin is not None:
+        share, cap_ratio = float(margin[2][:2].sum() / margin[2].sum()), margin[1]
+    lawson = (
+        exact_drift_ok
+        and share >= LAWSON_DRIFT_SHARE
+        and cap_ratio >= LAWSON_CAP_OVER_BOUND
     )
-    status(f"stepper auto: {method} (drift is {100 * share:.0f}% of the CFL bound)")
+    method = "lawson-rk4-pi" if lawson else "rk4-pi"
+    status(
+        f"stepper auto: {method} (drift is {100 * share:.0f}% of the CFL bound, "
+        f"step cap is {cap_ratio:.1f}x the bound step)"
+    )
     return replace(cfg, time=replace(cfg.time, method=method))
 
 

@@ -18,7 +18,7 @@ What you get when you change nothing, and when to change it.
      - Default
      - Change it when
    * - Time stepper
-     - no ``dt`` (deck): nonlinear ``auto``, which is ``lawson-rk4-pi`` where the drift is at least 56% of the linear CFL bound and ``rk4-pi`` elsewhere (:ref:`where it pays <lawson-limits>`); nonlinear kinetic electrons at :math:`\beta \le 3\times10^{-4}` ``imex-ark3`` (adaptive, falls back to ``rk4-pi`` with a warning if its factor check refuses); linear and bare ``TimeConfig()`` ``rk4`` + CFL. A ``dt`` gives ``rk2`` at that step
+     - no ``dt`` (deck): nonlinear ``auto``, which is ``lawson-rk4-pi`` where the drift is at least 56% of the linear CFL bound and the step cap is at least 2.6 times the ``rk4-pi`` bound step, ``rk4-pi`` elsewhere (:ref:`where it pays <lawson-limits>`); nonlinear kinetic electrons at :math:`\beta \le 3\times10^{-4}` ``imex-ark3`` (adaptive, falls back to ``rk4-pi`` with a warning if its factor check refuses); linear and bare ``TimeConfig()`` ``rk4`` + CFL. A ``dt`` gives ``rk2`` at that step
      - a published step (``rk3`` at fixed ``dt``); a stepper you want regardless of the rule (:ref:`advanced pins <advanced-steppers>`); the speedups are in the table below
    * - Linear growth rates
      - ``solver`` ``auto``: banded shift-invert, else ``adaptive``, certified
@@ -106,7 +106,7 @@ the field response) and :math:`R` the drifts, mirror, drive and collisions.
      - any deck; the controller sets the step from the stiffest explicit term
      - step follows electron streaming when electrons are kinetic
    * - ``auto`` (nonlinear default without ``dt``)
-     - ``lawson-rk4-pi`` or ``rk4-pi`` from the drift share of the linear CFL bound, chosen at the start of the run
+     - ``lawson-rk4-pi`` or ``rk4-pi`` from the drift share of the linear CFL bound and the step cap, chosen at the start of the run
      - the choice is printed; pin a stepper to override it
    * - ``rk4-pi``
      - RK4 with an embedded error estimate and an I controller

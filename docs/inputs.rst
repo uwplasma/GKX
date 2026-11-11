@@ -214,8 +214,10 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
   when you trade strict comparison matching for throughput.
 - ``method = "auto"`` (the default of a nonlinear deck with no ``dt``): the run
   takes ``lawson-rk4-pi`` where the radial and binormal drift frequencies are at
-  least 56% of the linear frequency bound (drift plus streaming) and ``rk4-pi``
-  elsewhere. It prints the choice and the share (``stepper auto: ...``). The sharded
+  least 56% of the linear frequency bound (drift plus streaming) and the step cap
+  (``dt_max``, else ``dt``) is at least 2.6 times the ``rk4-pi`` bound step, and
+  ``rk4-pi`` elsewhere. It prints the choice, the share and the ratio
+  (``stepper auto: ...``). The sharded
   routes (``[parallel]``, ``state_sharding``) and decks with per-species moment
   counts take ``rk4-pi``. Kinetic electrons at :math:`\beta \le 3\times10^{-4}`
   default to ``imex-ark3`` instead.

@@ -2891,21 +2891,34 @@ def test_lawson_cfl_bound_leaves_out_the_drift_frequencies():
 
 
 @pytest.mark.parametrize(
-    ("omega", "sharded", "method"),
+    ("omega", "cap_ratio", "sharded", "method"),
     [
-        # Linear frequency bounds (radial drift, binormal drift, streaming) measured on
-        # the decks of the Lawson study, with the faster stepper of each.
-        ([10.5, 13.3, 17.5], False, "lawson-rk4-pi"),  # Cyclone (4, 8)
-        ([31.4, 11.6, 17.4], False, "lawson-rk4-pi"),  # Cyclone Miller
-        ([21.1, 26.7, 24.7], False, "lawson-rk4-pi"),  # Cyclone (8, 16)
-        ([15.5, 14.0, 31.6], False, "rk4-pi"),  # W7-X QI
-        ([8.6, 9.4, 18.8], False, "rk4-pi"),  # HSX
-        ([4.6, 5.7, 1001.5], False, "rk4-pi"),  # kinetic electrons
-        ([10.5, 13.3, 17.5], True, "rk4-pi"),  # the sharded routes keep rk4-pi
-        (None, False, "rk4-pi"),  # no bound available
+        # Frequency bounds (radial drift, binormal drift, streaming) and step cap over the
+        # rk4-pi bound step measured on the decks of the Lawson study (cap dt = 0.1 unless
+        # noted), with the faster stepper of each.
+        ([21.1, 26.7, 24.7], 2.86, False, "lawson-rk4-pi"),  # Cyclone (8, 16)
+        ([19.2, 24.2, 24.7], 2.68, False, "lawson-rk4-pi"),  # Cyclone (4, 16)
+        ([62.9, 23.3, 24.7], 4.37, False, "lawson-rk4-pi"),  # Miller (8, 16)
+        ([774.3, 4839.2, 1416.4], 2.78, False, "lawson-rk4-pi"),  # ETG, dt_max 0.001
+        (
+            [10.5, 13.3, 17.5],
+            16.3,
+            False,
+            "lawson-rk4-pi",
+        ),  # Cyclone (4, 8), cap lifted
+        ([10.5, 13.3, 17.5], 1.63, False, "rk4-pi"),  # Cyclone (4, 8): the cap binds
+        ([8.4, 10.6, 15.1], 1.34, False, "rk4-pi"),  # Cyclone (4, 6)
+        ([31.4, 11.6, 17.4], 2.38, False, "rk4-pi"),  # Cyclone Miller
+        ([15.5, 14.0, 31.6], 2.41, False, "rk4-pi"),  # W7-X QI
+        ([8.6, 9.4, 18.8], 1.45, False, "rk4-pi"),  # HSX
+        ([17.3, 18.9, 26.6], 2.48, False, "rk4-pi"),  # HSX (8, 16)
+        ([4.6, 5.7, 1001.5], 90.0, False, "rk4-pi"),  # kinetic electrons: streaming
+        ([21.1, 26.7, 24.7], 2.86, True, "rk4-pi"),  # the sharded routes keep rk4-pi
     ],
 )
-def test_auto_stepper_follows_the_drift_share_of_the_cfl_bound(omega, sharded, method):
+def test_auto_stepper_follows_the_drift_share_and_the_step_cap(
+    omega, cap_ratio, sharded, method
+):
     from gkx.config import RuntimeConfig, TimeConfig
     from gkx.workflows.nonlinear import _resolve_auto_stepper
 
@@ -2913,12 +2926,21 @@ def test_auto_stepper_follows_the_drift_share_of_the_cfl_bound(omega, sharded, m
     messages: list[str] = []
     out = _resolve_auto_stepper(
         cfg,
-        None if omega is None else np.asarray(omega),
+        (0.05, cap_ratio, np.asarray(omega)),
         exact_drift_ok=not sharded,
         status=messages.append,
     )
     assert out.time.method == method
     assert method in messages[0]
+
+
+def test_auto_stepper_without_a_bound_takes_rk4_pi():
+    from gkx.config import RuntimeConfig, TimeConfig
+    from gkx.workflows.nonlinear import _resolve_auto_stepper
+
+    cfg = RuntimeConfig(time=TimeConfig(method="auto"))
+    out = _resolve_auto_stepper(cfg, None, exact_drift_ok=True, status=lambda _: None)
+    assert out.time.method == "rk4-pi"
 
 
 def test_auto_stepper_runs_through_the_nonlinear_workflow(monkeypatch):
@@ -2931,8 +2953,9 @@ def test_auto_stepper_runs_through_the_nonlinear_workflow(monkeypatch):
         time=replace(case.time, method="auto", t_max=0.3, run_to="t_max"),
     )
     seen = {}
-    for share in (0.99, 0.0):  # the threshold decides; the run follows it
+    for share in (0.99, 0.0):  # the thresholds decide; the run follows them
         monkeypatch.setattr(workflow, "LAWSON_DRIFT_SHARE", share)
+        monkeypatch.setattr(workflow, "LAWSON_CAP_OVER_BOUND", share)
         messages: list[str] = []
         out = workflow.run_runtime_nonlinear(
             case, Nl=2, Nm=4, status_callback=messages.append

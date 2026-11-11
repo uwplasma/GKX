@@ -61,10 +61,13 @@ def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
 NONLINEAR_CFL_FAC = {"rk3": 2.1, "rk4": 2.7, "lawson-rk3": 2.5, "lawson-rk4": 2.5}
 NONLINEAR_CFL_MOMENTS = 32
 LAWSON_METHODS = frozenset({"lawson-rk3", "lawson-rk4", "lawson-rk4-pi"})
-# ``method = "auto"`` takes ``lawson-rk4-pi`` when the magnetic drift is at least this share
-# of the linear frequency bound (radial + binormal drift over drift + streaming): the exact
-# drift then removes most of the explicit step limit, enough to pay for its dearer step.
+# ``method = "auto"`` takes ``lawson-rk4-pi`` when both hold: the magnetic drift is at least
+# LAWSON_DRIFT_SHARE of the linear frequency bound (radial + binormal drift over drift +
+# streaming), so the exact drift removes most of the explicit step limit; and the step cap
+# (``dt_max``, else ``dt``) is at least LAWSON_CAP_OVER_BOUND times the ``rk4-pi`` bound step,
+# so that limit, not the cap, is what holds ``rk4-pi`` back. Together they pay for the dearer step.
 LAWSON_DRIFT_SHARE = 0.56
+LAWSON_CAP_OVER_BOUND = 2.6
 
 
 def resolve_nonlinear_cfl_fac(
