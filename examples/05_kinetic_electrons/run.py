@@ -1,19 +1,20 @@
 """Nonlinear turbulence with kinetic electrons: a tokamak and a stellarator.
 
-Runs ``case.toml`` (Cyclone base case, s-alpha) -- once with the explicit
-CFL-controlled step and once with the opt-in implicit linear step
-``imex-ars3`` -- and ``case_stellarator.toml``
+Runs ``case.toml`` (Cyclone base case, s-alpha) and ``case_stellarator.toml``
 (Landreman-Paul precise QA, VMEC flux tube at s = 0.64) with kinetic ions and
-electrons at the physical mass ratio and beta = 1e-4. Both decks let the CFL
-controller choose dt; with kinetic electrons it is set by electron parallel
-streaming, and the script prints that bound next to the ion drift rate. It
-saves the per-species heat-flux traces and the step history and plots them.
-The stellarator needs a wout, solved once with vmex when it is missing
-(``pip install vmex``; minutes on a CPU) and skipped when neither exists.
-About a minute per case on a laptop CPU at the tutorial horizon (t = 0.3, the
-start of the linear phase). Set ``T_MAX`` to 150 or more to reach the
-saturated state shown in the README figure; see the decks for production
-resolution and for how dt and t_max were chosen.
+electrons at the physical mass ratio and beta = 1e-4. The decks name no stepper:
+at this beta the default is the adaptive ``imex-ark3``, which treats parallel
+streaming and the field response implicitly, so the step is set by the ion
+drift and the bracket and not by the electron streaming rate. The tokamak is
+also run with two pinned steppers (advanced options): explicit ``rk4-pi``, whose
+step is set by electron streaming, which the script prints next to the ion drift
+rate, and fixed-step ``imex-ars3``. It saves the per-species heat-flux traces and
+the step history and plots them. The stellarator needs a wout, solved once with
+vmex when it is missing (``pip install vmex``; minutes on a CPU) and skipped when
+neither exists. About a minute per case on a laptop CPU at the tutorial horizon
+(t = 0.3, the start of the linear phase). Set ``T_MAX`` to 150 or more to reach
+the saturated state shown in the README figure; see the decks for production
+resolution and for how t_max was chosen.
 """
 
 import importlib.util
@@ -32,16 +33,22 @@ import gkx
 HERE = Path(__file__).parent
 CASES = {
     "tokamak": HERE / "case.toml",
+    "tokamak, explicit rk4-pi": HERE / "case.toml",
     "tokamak, imex-ars3": HERE / "case.toml",
     "stellarator": HERE / "case_stellarator.toml",
 }
-# Implicit linear step (opt-in): parallel streaming and the field response are
-# solved per twist-shift chain with the electron mirror (drifts and the bracket
-# stay explicit),
-# so dt is set by the explicit terms instead of the electron streaming CFL.
-# Fixed dt only; 0.05 reproduced the explicit run's saturated heat flux on
-# this deck at Nx = Ny = 16 and 32.
-IMEX_TIME = {"method": "imex-ars3", "fixed_dt": True, "dt": 0.05, "dt_max": 0.05}
+# Advanced: pinned steppers. ``imex-ars3`` solves the same implicit linear step at a
+# fixed dt; 0.05 reproduced the explicit run's saturated heat flux on this deck at
+# Nx = Ny = 16 and 32.
+PINNED = {
+    "tokamak, explicit rk4-pi": {"method": "rk4-pi"},
+    "tokamak, imex-ars3": {
+        "method": "imex-ars3",
+        "fixed_dt": True,
+        "dt": 0.05,
+        "dt_max": 0.05,
+    },
+}
 VMEC_INPUT = HERE.parent / "vmec" / "input.LandremanPaul2021_QA_lowres"
 OUTPUT = Path("outputs/05_kinetic_electrons")
 T_MAX = None  # None keeps each deck's t_max
@@ -50,8 +57,8 @@ OUTPUT.mkdir(parents=True, exist_ok=True)
 summary, traces = {}, {}
 for label, path in CASES.items():
     case = gkx.load(path)
-    if "imex" in label:
-        case = case.replace(time=replace(case.time, **IMEX_TIME))
+    if label in PINNED:
+        case = case.replace(time=replace(case.time, **PINNED[label]))
     if T_MAX is not None:
         case = case.replace(time=replace(case.time, t_max=T_MAX))
     if case.geometry.model == "vmec":
@@ -79,14 +86,14 @@ for label, path in CASES.items():
     t, dt = np.asarray(d.t), np.asarray(d.dt_t)
     q = np.asarray(d.heat_flux_species_t)  # (time, species): ion, electron
     scales = np.asarray(d.cfl_scales if d.cfl_scales is not None else [], float)[:3]
-    # A fixed-dt (imex) run has no CFL controller and reports no bound.
+    # A run without the explicit CFL controller reports no bound.
     cfl = dict(zip(("drift_x", "drift_y", "streaming"), scales.tolist()))
     cfl = {k: v for k, v in cfl.items() if np.isfinite(v)}
     bound = (
         f"omega_stream = {cfl['streaming']:.0f} vs omega_drift = "
         f"{max(cfl['drift_x'], cfl['drift_y']):.2f}"
         if len(cfl) == 3
-        else "fixed dt, implicit linear step"
+        else "implicit linear step"
     )
     print(
         f"{label}: t_final = {t[-1]:.3f}, mean dt = {dt.mean():.2e}, {bound}, "

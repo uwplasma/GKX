@@ -16,7 +16,7 @@ REFERENCE_MASS_RATIO: float = 1.0 / REFERENCE_ELECTRON_MASS
 def explicit_method_default_cfl_fac(method: str) -> float:
     """Return the reference explicit-method CFL prefactor for a given method."""
 
-    method_key = method.strip().lower()
+    method_key = method.strip().lower().removeprefix("lawson-")
     if method_key in {"rk3", "sspx3"}:
         return 1.73
     if method_key in {"rk4", "rk4-pi"}:
@@ -55,8 +55,14 @@ def resolve_cfl_fac(method: str, cfl_fac: float | None) -> float:
 # Explicit nonlinear steppers: 60% of the smallest largest-stable factor measured at
 # Nl*Nm <= 32 (rk3 3.45, rk4 4.5). The edge then falls with the moment count; the
 # exponent keeps the default below 0.65 of every measured edge (PR #452).
-NONLINEAR_CFL_FAC = {"rk3": 2.1, "rk4": 2.7}
+# Lawson steppers (drift advanced exactly): 65% of the smallest edge at Nl*Nm <= 32 (3.9).
+NONLINEAR_CFL_FAC = {"rk3": 2.1, "rk4": 2.7, "lawson-rk3": 2.5, "lawson-rk4": 2.5}
 NONLINEAR_CFL_MOMENTS = 32
+LAWSON_METHODS = frozenset({"lawson-rk3", "lawson-rk4", "lawson-rk4-pi"})
+# ``auto`` takes ``lawson-rk4-pi`` when the drift is at least LAWSON_DRIFT_SHARE of the linear
+# frequency bound and the step cap (``dt_max``, else ``dt``) is LAWSON_CAP_OVER_BOUND times the bound.
+LAWSON_DRIFT_SHARE = 0.56
+LAWSON_CAP_OVER_BOUND = 2.6
 
 
 def resolve_nonlinear_cfl_fac(
@@ -69,7 +75,9 @@ def resolve_nonlinear_cfl_fac(
     base = NONLINEAR_CFL_FAC.get(method.strip().lower())
     if base is None:
         return resolve_cfl_fac(method, None)
-    return base * min(1.0, (NONLINEAR_CFL_MOMENTS / max(moments, 1)) ** 0.6)
+    # The scaling stops at the old rk3 default 1.73 (0.824 of the rk3 base, same for rk4).
+    scale = (NONLINEAR_CFL_MOMENTS / max(moments, 1)) ** 0.6
+    return base * min(1.0, max(scale, 1.73 / 2.1))
 
 
 @dataclass(frozen=True)

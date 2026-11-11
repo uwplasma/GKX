@@ -51,7 +51,8 @@ name = "installable_source_python_files"
 path = "src/gkx"
 pattern = "*.py"
 recursive = true
-baseline = 124
+# 124 -> 125: Lawson integrating-factor steppers.
+baseline = 125
 target = 45
 
 [[topology_policy.counts]]
@@ -154,7 +155,9 @@ reason = "The chain factor, its probes and its solve share one block layout; spl
 [[complexity_policy.exceptions]]
 path = "solvers_nonlinear_diagnostics.py"
 # 3524 -> 3529: the explicit chunk cache key carries the CFL factor.
-baseline_lines = 3529
+# 3529 -> 3539: the prepared scan runs through the digest-keyed executable cache.
+# 3539 -> 3542: Lawson integrating-factor steppers.
+baseline_lines = 3542
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -185,7 +188,10 @@ reason = "Public runtime facade; the overage is the exploded __all__ list, so sh
 [[complexity_policy.exceptions]]
 path = "workflows/nonlinear.py"
 # 1192 -> 1210: explicit chunk retry at half the CFL factor.
-baseline_lines = 1210
+# 1210 -> 1229: runaway criterion, retry warning and uniform chunk horizon.
+# 1229 -> 1283: Lawson integrating-factor steppers and the automatic choice (drift share and
+# step cap) between lawson-rk4-pi and rk4-pi.
+baseline_lines = 1283
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -208,7 +214,10 @@ recursive = true
 # 70013 -> 70061: nonlinear CFL factors and explicit chunk retry.
 # 70061 -> 70069: paired-gradient bracket transform, documented in place, measured after merging main.
 # 70069 -> 70073: paired-gradient bracket transform, documented in place, measured after merging main.
-baseline = 70073
+# 70073 -> 70109: cached solve executables, runaway criterion, CFL floor.
+# 70109 -> 70332: Lawson integrating-factor steppers and the automatic choice between
+# lawson-rk4-pi and rk4-pi.
+baseline = 70332
 target = 45000
 
 [[line_budget_policy.counts]]

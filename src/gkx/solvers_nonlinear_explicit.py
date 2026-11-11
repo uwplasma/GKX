@@ -15,9 +15,11 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 
-from gkx.config import method_error
+from gkx.config import LAWSON_METHODS, method_error
 import numpy as np
 from solvax.ode import RK4_2, PIController, erk_step, step_factor
+
+from gkx.solvers_nonlinear_lawson import lawson_step
 
 RhsFn = Callable[..., tuple[jnp.ndarray, object]]
 ProjectFn = Callable[[jnp.ndarray], jnp.ndarray]
@@ -51,7 +53,7 @@ _PI_REDO = 3.0
 _PI_CONTROL = PIController(k_i=1.0, k_p=0.0, safety=0.9, fac_min=0.5, fac_max=1.3)
 
 _NONLINEAR_METHODS = frozenset(
-    {"rk2", "rk3", "rk4", "rk4-pi", "sspx3", "imex-ars3", "imex-ark3"}
+    {"rk2", "rk3", "rk4", "rk4-pi", "sspx3", "imex-ars3", "imex-ark3"} | LAWSON_METHODS
 )
 
 
@@ -124,6 +126,8 @@ def _explicit_stage_update(
 ) -> jnp.ndarray:
     """Advance one nonlinear explicit method before final projection/dtype cast."""
 
+    if method in LAWSON_METHODS:
+        return lawson_step(G, dG, dt_local, method, rhs_fn, project_state)[0]
     if method in {"imex-ars3", "imex-ark3"}:
         chain_linear = getattr(rhs_fn, "chain_implicit_linear", None)
         if chain_linear is None:
@@ -167,9 +171,8 @@ def _materialized(rhs_fn: RhsFn, project_state: ProjectFn) -> tuple[RhsFn, Proje
     def materialized_projection(state: jnp.ndarray) -> jnp.ndarray:
         return _materialize(project_state(state))
 
-    materialized_rhs.chain_implicit_linear = getattr(  # type: ignore[attr-defined]
-        rhs_fn, "chain_implicit_linear", None
-    )
+    for name in ("chain_implicit_linear", "drift_factor"):
+        setattr(materialized_rhs, name, getattr(rhs_fn, name, None))
     return materialized_rhs, materialized_projection
 
 
@@ -181,15 +184,18 @@ def advance_rk4_pi_state(
     rhs_fn: RhsFn,
     project_state: ProjectFn,
     state_dtype: jnp.dtype,
+    method: str = "rk4-pi",
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """One ``rk4-pi`` step: returns ``(G_new, dt_used, dt_next)``."""
+    """One ``rk4-pi`` (or ``lawson-rk4-pi``) step: ``(G_new, dt_used, dt_next)``."""
 
     rhs, project = _materialized(rhs_fn, project_state)
 
     def attempt(dt: jnp.ndarray, k1: jnp.ndarray):
-        G_new, err, _ = erk_step(
-            lambda _t, y: _rhs_value(rhs, y), 0.0, G, dt, RK4_2, k1=k1, project=project
-        )
+        if method in LAWSON_METHODS:
+            G_new, err = lawson_step(G, k1, dt, method, rhs, project)
+        else:
+            f = lambda _t, y: _rhs_value(rhs, y)  # noqa: E731
+            G_new, err, _ = erk_step(f, 0.0, G, dt, RK4_2, k1=k1, project=project)
         G_new = jnp.asarray(project_state(G_new), dtype=state_dtype)
         ratio = jnp.sqrt(jnp.sum(jnp.abs(err) ** 2) / jnp.sum(jnp.abs(G_new) ** 2))
         en = ratio / _PI_RTOL
@@ -565,7 +571,7 @@ def _advance_explicit_diagnostic_state(
     chain = getattr(rhs_fn, "chain_implicit_linear", None)
     if chain is not None:  # the factor's dt, which the chunk controller sets
         dt_local = jnp.asarray(chain.dt, dtype=real_dtype)
-    scales = time_step_policy.cfl_scales if method == "rk4-pi" else None
+    scales = time_step_policy.cfl_scales if method.endswith("rk4-pi") else None
     if scales is not None:
         dt_local = jnp.minimum(
             jnp.asarray(dt_prev, real_dtype), jnp.minimum(_PI_CAP * dt_local, scales[5])
@@ -581,6 +587,7 @@ def _advance_explicit_diagnostic_state(
             rhs_fn=rhs_fn,
             project_state=project_state,
             state_dtype=state_dtype,
+            method=method,
         )
     else:
         G_new = advance_explicit_nonlinear_state(

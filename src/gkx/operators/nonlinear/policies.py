@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import jax
 import numpy as np
 
+from gkx.config import LAWSON_METHODS
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape, real_fft_mesh
 from gkx.core_ky_layout import HALF, source_ky_layout, source_ny_full
 from gkx.solvers_linear_implicit import _build_implicit_operator
@@ -280,6 +281,7 @@ def _build_nonlinear_cfl_bounds(
     real_dtype: Any,
     linear_frequency_bound_fn: Callable[..., Any],
     laguerre_velocity_max_fn: Callable[..., float],
+    drift_exact: bool = False,
 ) -> _NonlinearCFLBounds:
     nl, nm = int(cache.l.shape[0]), int(cache.m.shape[1])
     linear_omega = np.array(
@@ -291,6 +293,8 @@ def _build_nonlinear_cfl_bounds(
     linear_omega[2] = max(
         linear_omega[2], measured_streaming_frequency(params, cache, nl=nl, nm=nm)
     )
+    if drift_exact:  # the drift is advanced exactly: no explicit limit
+        linear_omega[:2] = 0.0
     return _NonlinearCFLBounds(
         **_bracket_bounds(grid, params, cache, real_dtype, laguerre_velocity_max_fn),
         linear_omega=jnp.asarray(linear_omega, dtype=real_dtype),
@@ -427,6 +431,7 @@ def build_nonlinear_time_step_policy(
         real_dtype=real_dtype,
         linear_frequency_bound_fn=linear_frequency_bound_fn,
         laguerre_velocity_max_fn=laguerre_velocity_max_fn,
+        drift_exact=method in LAWSON_METHODS,
     )
     update_dt = _make_nonlinear_dt_update(
         grid,

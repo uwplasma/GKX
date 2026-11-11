@@ -17,7 +17,6 @@ import gkx
 
 CASE = Path(__file__).with_name("case.toml")
 OUTPUT = Path("outputs/03_nonlinear_tokamak")
-STEPS = None  # None keeps the deck's [run] steps
 
 case = gkx.load(CASE)
 grid = case.grid
@@ -30,7 +29,6 @@ result = gkx.solve(
     ky_target=case.run.ky,
     Nl=case.run.Nl,
     Nm=case.run.Nm,
-    steps=STEPS or case.run.steps,
     show_progress=True,
 )
 diagnostics = result.diagnostics
