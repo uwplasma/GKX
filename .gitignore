@@ -6,7 +6,10 @@ __pycache__/
 venv/
 env/
 .env
+.env.*
 .envrc
+*.pem
+*.key
 build/
 dist/
 *.egg-info/
@@ -45,8 +48,6 @@ benchmarks/references/*.json
 
 # Editor and interactive notebook state
 .ipynb_checkpoints/
-.cursorignore
-.cursorindexingignore
 __marimo__/
 marimo/_static/
 marimo/_lsp/
