@@ -1076,7 +1076,7 @@ def test_certified_candidate_lift_requests_exact_dot_precision() -> None:
         for eqn in walk(jaxpr):
             frames = getattr(eqn.source_info.traceback, "frames", []) or []
             if any(
-                "solvers.linear.adaptive_propagator" in getattr(f, "file_name", "")
+                "solvers/linear/adaptive_propagator" in getattr(f, "file_name", "")
                 for f in frames
             ):
                 found.append(eqn.params["precision"])
@@ -2254,10 +2254,11 @@ def test_propagator_candidate_lift_pins_exact_dot_precision(candidates: int) -> 
     lifts = [
         precision
         for origin, precision in found
-        # The propagator lift lives in solvers/linear/adaptive_propagator.py.
+        # The propagator lift lives in solvers/linear/adaptive_propagator.py; _origin
+        # reports the file basename, not the module path.
         # This filter selects which contractions the precision guard inspects,
         # so a stale prefix makes the guard silently vacuous rather than failing.
-        if origin.startswith("solvers.linear.adaptive_propagator")
+        if origin.startswith("adaptive_propagator.py")
     ]
     assert lifts, "the candidate lift lowered to no matrix dot; the guard is vacuous"
     assert all(precision == EXACT for precision in lifts), (
