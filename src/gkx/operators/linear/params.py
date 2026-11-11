@@ -547,7 +547,9 @@ def collision_model_for(operator: str) -> str:
     return key if key in BLOCK_COLLISION_MODELS else "dougherty"
 
 
-def params_for_collision_operator(params: LinearParams, operator: str) -> LinearParams:
+def params_for_collision_operator(
+    params: LinearParams, operator: str | None
+) -> LinearParams:
     """Return ``params`` with the cache kernel a Sugama ``collision_operator`` names.
 
     The Landau/Dougherty choice rides on ``LinearParams.collision_model`` (set
