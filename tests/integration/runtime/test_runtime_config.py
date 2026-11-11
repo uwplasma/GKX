@@ -197,6 +197,22 @@ def test_runtime_toml_rejects_removed_diffrax_time_keys(tmp_path: Path) -> None:
     assert cfg.time.method == "rk4"
 
 
+def test_runtime_toml_removed_keys_load_at_their_old_default_and_refuse_others(
+    tmp_path: Path,
+) -> None:
+    """Resolved decks of older versions carry removed keys at their old value."""
+
+    path = tmp_path / "case.toml"
+    path.write_text(
+        "schema_version = 1\n[physics]\nz_ion = 1.0\n[time]\nsave_state = false\n",
+        encoding="utf-8",
+    )
+    load_runtime_from_toml(path)
+    path.write_text("schema_version = 1\n[physics]\ntau_fac = 2.0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"\[physics\] tau_fac"):
+        load_runtime_from_toml(path)
+
+
 def test_runtime_toml_rejects_misspelled_keys_and_sections(tmp_path: Path) -> None:
     """A misspelled deck key must fail, not silently run the default physics.
 
@@ -403,7 +419,6 @@ axis = "ky"
 batch_size = 3
 num_devices = 2
 strict_identity = true
-profile = true
 backend = "auto"
 """
     )
@@ -441,7 +456,6 @@ backend = "auto"
             "parallel.batch_size": 3,
             "parallel.num_devices": 2,
             "parallel.strict_identity": True,
-            "parallel.profile": True,
             "species[1].charge": -1.0,
         },
     )
@@ -566,7 +580,6 @@ _SHIPPED_DECK_CONTRACTS = {
                 REPO_ROOT / "examples" / "vmec" / "wout_NuhrenbergZille_1988_QHS.nc"
             ).resolve()
         ),
-        "cfg.geometry.geometry_helper_python": None,
         "cfg.geometry.torflux": 0.64,
         "cfg.physics.nonlinear": True,
         "cfg.physics.adiabatic_electrons": True,
@@ -579,7 +592,6 @@ _SHIPPED_DECK_CONTRACTS = {
     "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml": {
         "cfg.geometry.model": "vmec",
         "cfg.geometry.vmec_file": str(_QI_WOUT.resolve()),
-        "cfg.geometry.geometry_helper_python": None,
         "cfg.geometry.torflux": 0.64,
         "cfg.physics.nonlinear": True,
         "cfg.physics.adiabatic_electrons": True,

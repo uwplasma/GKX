@@ -218,7 +218,8 @@ recursive = true
 # 70109 -> 70332: Lawson integrating-factor steppers and the automatic choice between
 # lawson-rk4-pi and rk4-pi.
 # 70332 -> 70078: physical-time saturation detector replaces the window/guard stop gates.
-baseline = 70078
+# 70078 -> 70090: removed-key mechanism, measured after dropping the inert keys
+baseline = 70090
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -171,7 +171,6 @@ class TimeConfig:
     chunk_steps: int | None = None
     diagnostics_interval: float | None = None
     diagnostics: bool = True
-    save_state: bool = False
     checkpoint: bool = False
     implicit_restart: int = 20
     implicit_preconditioner: str | None = None
@@ -237,7 +236,6 @@ class GeometryConfig:
     geometry_backend: str = "auto"
     geometry_file: str | None = None
     vmec_file: str | None = None
-    geometry_helper_python: str | None = None
     rhoc: float = 0.5
     R_geo: float | None = None
     shift: float = 0.0
@@ -253,7 +251,6 @@ class GeometryConfig:
     include_shear_variation: bool = False
     include_pressure_variation: bool = False
     betaprim: float | None = None
-    geometry_helper_repo: str | None = None
     q: float = 1.4
     s_hat: float = 0.8
     z0: float | None = None
@@ -272,7 +269,6 @@ class GeometryConfig:
         geometry_backend: str = "auto",
         geometry_file: str | None = None,
         vmec_file: str | None = None,
-        geometry_helper_python: str | None = None,
         rhoc: float = 0.5,
         R_geo: float | None = None,
         shift: float = 0.0,
@@ -288,7 +284,6 @@ class GeometryConfig:
         include_shear_variation: bool = False,
         include_pressure_variation: bool = False,
         betaprim: float | None = None,
-        geometry_helper_repo: str | None = None,
         q: float = 1.4,
         s_hat: float = 0.8,
         z0: float | None = None,
@@ -306,7 +301,6 @@ class GeometryConfig:
             "geometry_backend": geometry_backend,
             "geometry_file": geometry_file,
             "vmec_file": vmec_file,
-            "geometry_helper_python": geometry_helper_python,
             "rhoc": rhoc,
             "R_geo": R_geo,
             "shift": shift,
@@ -322,7 +316,6 @@ class GeometryConfig:
             "include_shear_variation": include_shear_variation,
             "include_pressure_variation": include_pressure_variation,
             "betaprim": betaprim,
-            "geometry_helper_repo": geometry_helper_repo,
             "q": q,
             "s_hat": s_hat,
             "z0": z0,
@@ -545,8 +538,6 @@ class RuntimePhysicsConfig:
     adiabatic_electrons: bool = True
     adiabatic_ions: bool = False
     tau_e: float = 1.0
-    tau_fac: float | None = None
-    z_ion: float = 1.0
     beta: float = 0.0
     collisions: bool = True
     hypercollisions: bool = True
@@ -668,7 +659,6 @@ class RuntimeExpertConfig:
     fixed_mode: bool = False
     iky_fixed: int | None = None
     ikx_fixed: int | None = None
-    dealias_kz: bool = False
     source: str = "default"
     phi_ext: float = 0.0
 
@@ -731,10 +721,7 @@ class RuntimeQuasilinearConfig:
     csat: float = 1.0
     gamma_floor: float = 0.0
     include_stable_modes: bool = False
-    delta_ky: str | float = "auto"
-    species: str = "all"
     channels: Tuple[str, ...] = ("es",)
-    write_spectrum: bool = True
     output_path: str | None = None
 
     def __post_init__(self) -> None:
@@ -777,7 +764,6 @@ class RuntimeParallelConfig:
     batch_size: int | None = None
     num_devices: int | None = None
     strict_identity: bool = True
-    profile: bool = False
     backend: str = "auto"
     auto: bool = False
 

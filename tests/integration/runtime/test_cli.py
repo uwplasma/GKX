@@ -197,8 +197,7 @@ def test_cli_geometry_routes_vmec_and_miller_backends(
 ) -> None:
     @dataclass(frozen=True)
     class _GeometryConfig:
-        geometry_helper_python: str | None = None
-        geometry_helper_repo: str | None = None
+        pass
 
     @dataclass(frozen=True)
     class _RuntimeConfig:
@@ -1491,9 +1490,6 @@ def test_finalize_runtime_linear_quasilinear_contract(
     assert calls["metadata"] == {
         "runtime_config_enabled": True,
         "solver": "krylov",
-        "delta_ky": cfg.quasilinear.delta_ky,
-        "species_selection": cfg.quasilinear.species,
-        "write_spectrum": cfg.quasilinear.write_spectrum,
     }
     assert statuses == [
         "computing quasilinear transport weights",

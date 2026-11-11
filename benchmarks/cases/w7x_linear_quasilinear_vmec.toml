@@ -102,7 +102,6 @@ csat = 1.0
 gamma_floor = 0.0
 include_stable_modes = false
 channels = ["es"]
-write_spectrum = true
 
 [run]
 ky = 0.047619047619047616

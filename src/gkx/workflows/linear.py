@@ -334,8 +334,6 @@ def _resolve_linear_time_config(
         raise ValueError(
             "return_state/quasilinear diagnostics are not supported with solver='explicit_time'"
         )
-    if ctx.return_state_effective:
-        tcfg = replace(tcfg, save_state=True)
     return tcfg
 
 

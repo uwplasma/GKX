@@ -127,6 +127,12 @@ schema. The removed Diffrax keys (``use_diffrax``, ``diffrax_solver``,
 ``diffrax_adaptive``, ``diffrax_rtol``, ``diffrax_atol``,
 ``diffrax_max_steps``) in ``[time]`` are refused with the native replacement
 named in the error.
+Keys that no code read are removed from the schema (``geometry_helper_python``,
+``geometry_helper_repo``, ``tau_fac``, ``z_ion``, ``dealias_kz``, ``save_state``,
+``[parallel] profile`` and ``[quasilinear] species``, ``delta_ky``,
+``write_spectrum``). A deck from an earlier version that carries one at the
+value that version wrote still loads; any other value is refused with the key
+named.
 
 Quasilinear diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -292,8 +298,7 @@ In that mode GKX calls the VMEC geometry helper to generate a
 matching ``*.eik.nc`` file on demand, then immediately reuses the same imported
 geometry path as the VMEC examples. Set ``vmec_file`` plus the flux-tube keys
 ``torflux``, ``npol`` and optionally ``alpha``. ``geometry_file`` can be used
-as an explicit output path for the generated ``*.eik.nc`` file, and
-``geometry_helper_repo`` can point to a non-default helper checkout if needed.
+as an explicit output path for the generated ``*.eik.nc`` file.
 The VMEC path uses the ``booz_xform_jax`` backend, which is installed with
 GKX; ``GKX_BOOZ_XFORM_JAX_PATH`` or ``BOOZ_XFORM_JAX_PATH`` point to a source
 checkout instead. This is the recommended imported-geometry route for new
@@ -303,8 +308,6 @@ with ``vmex input.<case>`` before running the examples.
 ``vmec_file`` supports ``$ENV_VAR`` expansion, and relative paths are resolved
 against the TOML directory first. Command-line overrides are resolved from the
 shell working directory.
-Use ``geometry_helper_repo`` and ``geometry_helper_python`` when an imported
-geometry helper checkout or interpreter must be selected explicitly.
 When ``geometry_file`` is set for ``model = "vmec"``, GKX regenerates
 that target instead of reusing a stale file from an older VMEC conversion.
 For VMEC ``fix aspect`` runs, GKX follows the helper default contract and
@@ -323,9 +326,7 @@ ratio explicitly when reproducing a benchmark; the separate ``epsilon`` field
 belongs to analytic geometry metadata and does not replace the surface radius.
 ``geometry_file`` can be used as an explicit output path for the generated
 Miller ``*.eiknc.nc`` file. Existing output is reused by default; pass
-``--force`` to ``gkx geometry miller`` to regenerate it. The
-``geometry_helper_python`` and ``geometry_helper_repo`` settings apply to VMEC
-helper discovery, not to this in-package Miller backend.
+``--force`` to ``gkx geometry miller`` to regenerate it.
 
 Executable path overrides
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -442,6 +443,381 @@ Python driver
 
 The canonical KBM TOML is a controlled comparison input. Inspect the
 physical eigenpair residual and compare solver routes before using a result.
+
+Parameter reference
+-------------------
+
+Every key a deck accepts, by table. ``unset`` is an absent value that the
+loader or the run resolves, as the meaning says. A key outside these lists
+raises an error that names the nearest valid spelling.
+``examples/reference_inputs`` holds decks that set every key of a run kind at
+its default.
+
+``[[species]]``
+^^^^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``name``","str","``""ion""``","Species label."
+   "``charge``","float","``1.0``","Charge in units of the proton charge."
+   "``mass``","float","``1.0``","Mass over the reference ion mass."
+   "``density``","float","``1.0``","Density over the reference density."
+   "``temperature``","float","``1.0``","Temperature over the reference temperature."
+   "``tprim``","float","``2.49``","Temperature gradient ``a/L_T``."
+   "``fprim``","float","``0.8``","Density gradient ``a/L_n``."
+   "``nu``","float","``0.0``","Collision frequency."
+   "``kinetic``","bool","``true``","Evolve the species kinetically; ``false`` leaves it adiabatic."
+   "``Nl``","int","unset","Laguerre moments this species keeps, at most the state's ``Nl``."
+   "``Nm``","int","unset","Hermite moments this species keeps, at most the state's ``Nm``."
+   "``hermite_closure``","str","``""hypercollision""``","End of the Hermite ladder: ``hypercollision`` or ``reflectionless``."
+
+``[grid]``
+^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``Nx``","int","``48``","Radial (x) grid points, so the number of kx modes."
+   "``Ny``","int","``48``","Binormal (y) grid points; the half layout stores ``1 + Ny//2`` rows."
+   "``Nz``","int","``64``","Points along the field line when ``ntheta`` is unset."
+   "``Lx``","float","``62.8``","Radial box length in rho_i; sets the kx spacing ``2 pi / Lx``."
+   "``Ly``","float","``62.8``","Binormal box length in rho_i; used for the ky spacing when ``y0`` is unset."
+   "``boundary``","str","``""periodic""``","Parallel boundary: ``periodic``, ``linked`` (twist and shift), or for VMEC ``fix aspect``, ``exact periodic``, ``continuous drifts``."
+   "``jtwist``","int","unset","Twist-and-shift integer linking kx modes; taken from the geometry when unset."
+   "``non_twist``","bool","``false``","Use the non-twisting flux-tube boundary with local-shear drift terms."
+   "``kxfac``","float","``1.0``","Factor on the twist-shift kx shift, ``2 pi zp kxfac s_hat``."
+   "``z_min``","float","``-3.141592653589793``","Lower end of the field-line coordinate when ``ntheta`` is unset."
+   "``z_max``","float","``3.141592653589793``","Upper end of the field-line coordinate when ``ntheta`` is unset."
+   "``y0``","float","unset","Binormal box parameter; the ky spacing is ``1/y0``. Overrides ``Ly``."
+   "``ntheta``","int","unset","Points per poloidal turn; sets ``Nz = ntheta * zp`` and the span ``+-pi zp``."
+   "``nperiod``","int","unset","Poloidal turns kept on each side of the centre; gives ``zp = 2 nperiod - 1``."
+   "``zp``","int","unset","Number of ``2 pi`` segments along the field line; derived from ``nperiod`` when unset."
+   "``ky_layout``","str","``""half""``","``half`` stores the non-negative ky rows, ``full`` the two-sided axis; results agree."
+
+``[time]``
+^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``t_max``","float","``100.0``","End time in ``a/v_ti``; the hard cap when ``run_to = """"saturation""""``."
+   "``dt``","float","``0.1``","Fixed step, or the starting step of the CFL controller; setting it selects ``rk2`` at that step."
+   "``method``","str","``rk4``, ``auto`` if nonlinear","Integrator: ``rk2``, ``rk3``, ``sspx3``, ``rk4``, ``rk4-pi``, ``lawson-*``, ``imex``, ``imex2``, ``imex-ars3``, ``imex-ark3``, or ``auto``."
+   "``fixed_dt``","bool","``false``","Keep ``dt`` fixed; ``false`` lets the CFL controller choose the step."
+   "``sample_stride``","int","``1``","Steps between stored time samples."
+   "``diagnostics_stride``","int","``1``","Steps between nonlinear diagnostic rows."
+   "``chunk_steps``","int","unset","Nonlinear steps per chunk; 128 explicit, 32 adaptive IMEX when unset."
+   "``diagnostics_interval``","float","unset","Simulation-time interval between nonlinear diagnostic rows; overrides the strides."
+   "``diagnostics``","bool","``true``","Compute nonlinear diagnostics (``--no-diagnostics`` turns them off)."
+   "``checkpoint``","bool","``false``","Rematerialize fixed-step nonlinear scans in reverse mode to save memory."
+   "``implicit_restart``","int","``20``","GMRES restart length of implicit solves."
+   "``implicit_preconditioner``","str","unset","Preconditioner of implicit solves; the solver default when unset."
+   "``state_sharding``","str","unset","Shard the state over devices along ``auto``, ``ky``, ``kx``, ``z``, ``l``, ``m`` or ``species``."
+   "``progress_bar``","bool","``false``","Print progress with elapsed time and ETA."
+   "``dt_min``","float","``1e-07``","Smallest step the CFL controller may take."
+   "``dt_max``","float","unset","Largest step the controller may take; ``dt`` when unset."
+   "``cfl``","float","``0.9``","CFL safety factor of the step controller."
+   "``cfl_fac``","float","unset","Stability prefactor of the CFL bound; per-method, moment-scaled default."
+   "``nstep_restart``","int","unset","Write a restart checkpoint every this many steps."
+   "``collision_split``","bool","``false``","Advance the diagonal hypercollisions in a split sub-step."
+   "``collision_scheme``","str","``""implicit""``","Split update: ``implicit``, ``exp``, ``sts`` or ``rkc``."
+   "``collision_operator``","str","``""landau""``","Collision model: ``landau``, ``none``, ``lenard_bernstein``, ``sugama``, ``improved_sugama``, ``coulomb``, ``coulomb_finite_kperp``."
+   "``compressed_real_fft``","bool","``true``","Evaluate the nonlinear bracket on the half spectrum with paired real FFTs."
+   "``nonlinear_dealias``","bool","``true``","Apply the 2/3 dealiasing mask to the nonlinear term."
+   "``laguerre_nonlinear_mode``","str","``""grid""``","Laguerre treatment of the bracket: ``grid`` or ``spectral``."
+   "``run_to``","str","``""saturation""``","Nonlinear stop: ``saturation`` ends the run at a stationary heat flux, ``t_max`` runs the full horizon."
+   "``saturation_rel_sem``","float","``0.1``","Largest relative standard error of the windowed heat-flux mean that counts as saturated."
+   "``saturation_t_min``","float","``800.0``","Run time before any saturated verdict."
+   "``saturation_drift_rel``","float","``0.1``","Tolerated relative drift of the window mean."
+   "``damp_ends_rate``","float","unset","Field-line end-absorber rate in ``v_ti/a``; the 30-transit rule when unset, 0 turns it off."
+
+``[geometry]``
+^^^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``model``","str","``""s-alpha""``","Geometry: ``s-alpha``, ``miller``, ``slab``, ``vmec``, ``imported-netcdf``."
+   "``geometry_backend``","str","``""auto""``","Backend that builds the Miller or VMEC field-line geometry; ``auto`` picks one."
+   "``geometry_file``","str","unset","Imported ``*.eik.nc`` file, or the output path of a generated one."
+   "``vmec_file``","str","unset","VMEC or VMEX ``wout`` file for ``model = """"vmec""""``."
+   "``rhoc``","float","``0.5``","Miller flux-surface minor radius over ``a``."
+   "``R_geo``","float","unset","Miller reference major radius; ``R0`` when unset."
+   "``shift``","float","``0.0``","Miller Shafranov shift derivative."
+   "``akappa``","float","``1.0``","Miller elongation."
+   "``akappri``","float","``0.0``","Miller elongation radial derivative."
+   "``tri``","float","``0.0``","Miller triangularity."
+   "``tripri``","float","``0.0``","Miller triangularity radial derivative."
+   "``torflux``","float","unset","Normalized toroidal flux of the VMEC surface."
+   "``npol``","float","unset","Poloidal turns of the VMEC flux tube."
+   "``npol_min``","float","unset","Smallest ``theta/pi`` accepted for the VMEC boundary-cut crossing."
+   "``isaxisym``","bool","``false``","Treat the VMEC equilibrium as axisymmetric."
+   "``which_crossing``","int","unset","Index of the boundary-cut crossing used by a VMEC cut."
+   "``include_shear_variation``","bool","``false``","Apply the local-equilibrium shear-variation correction to VMEC geometry."
+   "``include_pressure_variation``","bool","``false``","Apply the local-equilibrium pressure-variation correction to VMEC geometry."
+   "``betaprim``","float","unset","Pressure gradient ``d beta/d rho`` of the local equilibrium."
+   "``q``","float","``1.4``","Safety factor of the analytic geometry."
+   "``s_hat``","float","``0.8``","Magnetic shear of the analytic geometry."
+   "``z0``","float","unset","Slab length; sets ``gradpar = 1/z0``."
+   "``zero_shat``","bool","``false``","Slab with zero shear."
+   "``epsilon``","float","``0.18``","Inverse aspect ratio of the ``s-alpha`` model."
+   "``R0``","float","``1.0``","Major radius over ``a``."
+   "``B0``","float","``1.0``","Magnetic field on axis."
+   "``alpha``","float","``0.0``","Field-line label of the VMEC flux tube."
+   "``drift_scale``","float","``1.0``","Magnetic-drift convention: 1 standard, 2 doubled."
+   "``kperp2_bmag``","bool","``true``","Include the ``1/B^2`` factor in ``k_perp^2``."
+   "``bessel_bmag_power``","float","``0.0``","Power of ``1/B`` in the Bessel argument."
+
+``[init]``
+^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``init_field``","str","``""density""``","Seeded field: ``density``, ``upar``, ``tpar``, ``tperp``, ``qpar``, ``qperp``, ``phi`` or ``all``."
+   "``init_amp``","float","``1e-05``","Initial amplitude."
+   "``init_single``","bool","``true``","Seed only the selected ``(ky, kx)`` mode; ``false`` seeds every retained mode."
+   "``random_seed``","int","``22``","Seed of the random initial condition."
+   "``gaussian_init``","bool","``false``","Gaussian envelope along the field line instead of random phases."
+   "``gaussian_width``","float","``0.5``","Width of the Gaussian envelope."
+   "``gaussian_envelope_constant``","float","``1.0``","Constant part of the Gaussian envelope."
+   "``gaussian_envelope_sine``","float","``0.0``","Sine part of the Gaussian envelope."
+   "``kpar_init``","float","``0.0``","Parallel wavenumber of the seed."
+   "``init_file``","str","unset","Saved state to start from."
+   "``init_file_scale``","float","``1.0``","Factor applied to the loaded state."
+   "``init_file_mode``","str","``""replace""``","``replace`` the analytic seed by the loaded state, or ``add`` it."
+   "``init_electrons_only``","bool","``false``","Seed only the electron species."
+
+``[physics]``
+^^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``reduced_model``","str","``""gyrokinetic""``","Physics family; ``gyrokinetic`` is the only one supported."
+   "``linear``","bool","``true``","Linear run."
+   "``nonlinear``","bool","``false``","Nonlinear run; exclusive with ``linear``."
+   "``electrostatic``","bool","``true``","Solve for ``phi``."
+   "``electromagnetic``","bool","``false``","Solve for the electromagnetic fields selected by ``use_apar`` and ``use_bpar``."
+   "``use_apar``","bool","``false``","Keep ``A_parallel`` when ``electromagnetic`` and ``beta > 0``."
+   "``use_bpar``","bool","``false``","Keep ``B_parallel`` when ``electromagnetic``."
+   "``adiabatic_electrons``","bool","``true``","Boltzmann electron response."
+   "``adiabatic_ions``","bool","``false``","Boltzmann ion response; no kinetic ion species."
+   "``tau_e``","float","``1.0``","Adiabatic-species temperature ratio ``T_i/T_e``."
+   "``beta``","float","``0.0``","Reference plasma beta."
+   "``collisions``","bool","``true``","Enable the collision operator."
+   "``hypercollisions``","bool","``true``","Enable the hypercollision damping of high moments."
+
+``[collisions]``
+^^^^^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``nu_hermite``","float","``1.0``","Hermite coefficient of the Lenard-Bernstein eigenvalue."
+   "``nu_laguerre``","float","``2.0``","Laguerre coefficient of the Lenard-Bernstein eigenvalue."
+   "``nu_hyper``","float","``0.0``","Isotropic hypercollision amplitude."
+   "``p_hyper``","float","``4.0``","Isotropic hypercollision exponent."
+   "``nu_hyper_l``","float","``0.0``","Laguerre hypercollision amplitude (constant branch only)."
+   "``nu_hyper_m``","float","``1.0``","Hermite hypercollision amplitude."
+   "``nu_hyper_m_const``","float","unset","Hermite amplitude of the constant branch; ``nu_hyper_m`` when unset."
+   "``nu_hyper_lm``","float","``0.0``","Mixed Laguerre-Hermite hypercollision amplitude (constant branch only)."
+   "``p_hyper_l``","float","``6.0``","Laguerre hypercollision exponent."
+   "``p_hyper_m``","float","unset","Hermite hypercollision exponent; ``min(20, Nm/2)`` when unset."
+   "``p_hyper_lm``","float","``6.0``","Mixed hypercollision exponent."
+   "``D_hyper``","float","``0.0``","Perpendicular hyperdiffusion amplitude."
+   "``p_hyper_kperp``","float","``2.0``","Perpendicular hyperdiffusion exponent."
+   "``hypercollisions_const``","float","``0.0``","Weight of the constant-coefficient hypercollision branch."
+   "``hypercollisions_kz``","float","``1.0``","Weight of the ``|k_z|`` hypercollision branch."
+   "``damp_ends_amp``","float","unset","Removed spelling of the end-damping strength; refused unless 0."
+   "``damp_ends_widthfrac``","float","``0.125``","End-damping layer width as a fraction of the chain."
+   "``damp_ends_scale_by_dt``","bool","``false``","Removed; refused when true."
+   "``electron_ion``","bool","``false``","Scoped beta = 0 electron-ion collision terms with fixed ion flow."
+
+``[normalization]``
+^^^^^^^^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``contract``","str","``""cyclone""``","Normalization contract: ``cyclone``, ``etg``, ``kinetic``, ``tem`` or ``kbm``."
+   "``rho_star``","float","unset","Rescales the operator wavenumbers."
+   "``omega_d_scale``","float","unset","Factor on the magnetic-drift frequency."
+   "``omega_star_scale``","float","unset","Factor on the diamagnetic drive."
+   "``diagnostic_norm``","str","``""rho_star""``","Growth-rate and frequency normalization of the diagnostics: ``rho_star`` or ``none``."
+   "``flux_scale``","float","``1.0``","Factor on heat and particle flux diagnostics."
+   "``wphi_scale``","float","``1.0``","Factor on the ``Wphi`` diagnostic."
+
+``[terms]``
+^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``streaming``","float","``1.0``","Weight of the parallel streaming term."
+   "``mirror``","float","``1.0``","Weight of the mirror term."
+   "``curvature``","float","``1.0``","Weight of the curvature drift."
+   "``gradb``","float","``1.0``","Weight of the grad-B drift."
+   "``diamagnetic``","float","``1.0``","Weight of the diamagnetic drive."
+   "``collisions``","float","``1.0``","Weight of the collision operator."
+   "``hypercollisions``","float","``1.0``","Weight of the hypercollisions."
+   "``hyperdiffusion``","float","``0.0``","Weight of the perpendicular hyperdiffusion."
+   "``end_damping``","float","``1.0``","Weight of the end damping."
+   "``apar``","float","``1.0``","Weight of ``A_parallel``."
+   "``bpar``","float","``1.0``","Weight of ``B_parallel``."
+   "``nonlinear``","float","``0.0``","Weight of the nonlinear term."
+
+``[expert]``
+^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``fixed_mode``","bool","``false``","Hold one Fourier mode frozen during nonlinear evolution."
+   "``iky_fixed``","int","unset","ky index of the frozen mode."
+   "``ikx_fixed``","int","unset","kx index of the frozen mode."
+   "``source``","str","``""default""``","External forcing: ``default`` or ``phiext_full``."
+   "``phi_ext``","float","``0.0``","Amplitude of the external ``phi`` source."
+
+``[output]``
+^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``path``","str","unset","Output prefix, or ``*.out.nc`` for a nonlinear NetCDF bundle."
+   "``restart``","bool","``false``","Require a restart file and resume from it."
+   "``restart_if_exists``","bool","``false``","Resume from a restart file when one exists."
+   "``save_for_restart``","bool","``true``","Write ``*.restart.nc`` with a nonlinear bundle."
+   "``restart_to_file``","str","unset","Explicit restart output path."
+   "``restart_from_file``","str","unset","Explicit restart input path."
+   "``restart_with_perturb``","bool","``false``","Add a fresh analytic seed to the loaded state."
+   "``append_on_restart``","bool","``true``","Append the continued history to the existing ``*.out.nc``."
+   "``warm_start``","bool","``false``","Seed each point of a scan from the previous one."
+   "``resolved_diagnostics``","bool","``true``","Keep mode-resolved spectra in the nonlinear history."
+   "``plots``","bool","``true``","Draw the run's figures beside its output."
+   "``restart_scale``","float","``1.0``","Factor applied to the loaded restart state."
+   "``nsave``","int","``10000``","Checkpoint cadence in steps when ``nstep_restart`` is unset."
+   "``time_interval``","float","unset","Simulation-time interval between rows written to CSV and NetCDF history."
+
+``[quasilinear]``
+^^^^^^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``enabled``","bool","``false``","Compute quasilinear transport weights."
+   "``mode``","str","``""weights""``","``weights`` or ``saturated``."
+   "``saturation_rule``","str","``""none""``","``none``, ``mixing_length`` or ``lapillonne_2011``."
+   "``amplitude_normalization``","str","``""phi_rms""``","Mode amplitude: ``phi_rms``, ``phi_midplane`` or ``field_energy``."
+   "``kperp_average``","str","``""phi_weighted""``","Weighting of ``k_perp^2``; only ``phi_weighted``."
+   "``csat``","float","``1.0``","Saturation constant."
+   "``gamma_floor``","float","``0.0``","Growth rate below which a mode is excluded."
+   "``include_stable_modes``","bool","``false``","Keep stable modes in the weights."
+   "``channels``","list of str","``[""es""]``","Transport channels; only ``es``."
+   "``output_path``","str","unset","Prefix of the quasilinear output files; ``[output] path`` when unset."
+
+``[parallel]``
+^^^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``strategy``","str","``""serial""``","``serial``, ``batch``, ``combined_ky``, ``device_batch``, ``pmap``, ``pjit``, ``shard_map``, ``state`` or ``velocity``."
+   "``axis``","str","``""ky""``","Decomposed axis: ``ky`` or ``species_hermite``."
+   "``batch_size``","int","unset","Points per batch."
+   "``num_devices``","int","unset","Workers or devices to use."
+   "``strict_identity``","bool","``true``","Check the parallel result against the serial one."
+   "``backend``","str","``""auto""``","Worker kind (``thread``, ``process``) or velocity route; ``auto`` picks."
+   "``auto``","bool","``false``","Resolve to ``shard_map`` over ``species_hermite`` from the visible devices."
+
+``[run]``
+^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``Nl``","int","unset","Laguerre moments; the resolution-guided fallback when unset."
+   "``Nm``","int","unset","Hermite moments; the resolution-guided fallback when unset."
+   "``diagnostics``","bool","unset","Compute diagnostics of a nonlinear run."
+   "``dt``","float","unset","Step of the run; overrides ``[time] dt``."
+   "``fit_signal``","str","unset","Signal the growth rate is fitted to: ``auto``, ``phi``, ``density``."
+   "``kx``","float","unset","Radial wavenumber of the fitted mode; 0 when unset."
+   "``ky``","float","unset","Binormal wavenumber of a single linear run; 0.3 when unset."
+   "``laguerre_mode``","str","unset","Laguerre treatment of the nonlinear bracket for this run."
+   "``method``","str","unset","Integrator of the run; overrides ``[time] method``."
+   "``mu_vperp_max``","float","unset","Nodal magnetic-moment grid with this velocity cutoff instead of Laguerre."
+   "``sample_stride``","int","unset","Steps between stored samples; overrides ``[time] sample_stride``."
+   "``solver``","str","unset","Linear solver: ``auto``, ``time``, ``krylov``, ``explicit_time``."
+   "``steps``","int","unset","Number of steps; with ``dt`` sets ``t_max``."
+
+``[scan]``
+^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``Nl``","int","unset","Laguerre moments of the scan."
+   "``Nm``","int","unset","Hermite moments of the scan."
+   "``dt``","float","unset","Step of the scan."
+   "``fit_signal``","str","unset","Signal the growth rate is fitted to."
+   "``ky``","float","unset","List of ky values to scan."
+   "``method``","str","unset","Integrator of the scan."
+   "``sample_stride``","int","unset","Steps between stored samples."
+   "``solver``","str","unset","Linear solver of the scan."
+   "``steps``","int","unset","Steps per scan point."
+   "``warm_start``","bool","unset","Seed each ky from the previous one."
+
+``[fit]``
+^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``auto_window``","bool","``true``","Choose the fit window from the signal."
+   "``fit_signal``","str","``""auto""``","Signal the growth rate is fitted to."
+   "``growth_weight``","float","``0.2``","Weight of growth over stationarity in the window score."
+   "``min_amp_fraction``","float","``0.0``","Smallest amplitude, relative to the peak, the window may start at."
+   "``min_points``","int","``40``","Fewest samples in the window."
+   "``mode_method``","str","``""project""``","Mode extraction: ``project``, ``svd``, ``z_index`` or ``max``."
+   "``require_positive``","bool","``true``","Reject a window with no positive growth."
+   "``start_fraction``","float","``0.2``","Fraction of the signal skipped before the window."
+   "``tmax``","float","unset","End of a manual fit window."
+   "``tmin``","float","unset","Start of a manual fit window."
+   "``window_fraction``","float","``0.4``","Fraction of the signal in the automatic window."
+   "``window_method``","str","``""stationary""``","Window selection: ``stationary``, ``loglinear`` or ``fixed``."
+
+``[damping_reference]``
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. csv-table::
+   :header: "Key", "Type", "Default", "Meaning"
+   :widths: 18, 9, 14, 59
+
+   "``source``","str","required","Path of the legacy deck that was converted."
+   "``sha256``","str","required","SHA-256 of that deck."
+   "``route``","str","required","``fixed_linear`` or ``timestep_free``."
+   "``amplitude``","float","required","Legacy ``damp_ends_amp``."
+   "``dt_input``","float","required","Legacy input timestep."
+   "``dt_step``","float","required","Actual reference step of a fixed linear route; 0 for ``timestep_free``."
+   "``scale_by_dt``","bool","required","Legacy ``damp_ends_scale_by_dt`` flag."
 
 Runtime sections
 ----------------
@@ -714,7 +1090,6 @@ serial by default:
    batch_size = 2
    num_devices = 2
    strict_identity = true
-   profile = false
    backend = "auto"
 
 Accepted strategies are ``"serial"``, ``"batch"``,

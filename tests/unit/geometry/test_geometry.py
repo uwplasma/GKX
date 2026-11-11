@@ -1196,9 +1196,6 @@ def test_vmec_roundtrip_gate_is_deterministic(tmp_path: Path) -> None:
     if not vmec_file:
         pytest.skip("Set GKX_VMEC_FILE to enable VMEC roundtrip parity gate.")
 
-    geometry_helper_repo = (
-        os.environ.get("GKX_GEOMETRY_HELPER_REPO", "").strip() or None
-    )
     cfg = _vmec_runtime_cfg(tmp_path)
     cfg = replace(
         cfg,
@@ -1209,7 +1206,6 @@ def test_vmec_roundtrip_gate_is_deterministic(tmp_path: Path) -> None:
             geometry_file=None,
             npol=1.0,
             alpha=0.0,
-            geometry_helper_repo=geometry_helper_repo,
         ),
     )
 
