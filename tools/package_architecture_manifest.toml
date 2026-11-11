@@ -221,9 +221,10 @@ recursive = true
 # 70073 -> 70109: cached solve executables, runaway criterion, CFL floor.
 # 70109 -> 70332: Lawson integrating-factor steppers and the automatic choice between
 # lawson-rk4-pi and rk4-pi.
-# 70332 -> 70403: phase-1 split of the diagnostics driver (module header and export list of
+# 70332 -> 70078: physical-time saturation detector replaces the window/guard stop gates.
+# 70078 -> 70149: phase-1 split of the diagnostics driver (module header and export list of
 # transport_window.py; no code added).
-baseline = 70403
+baseline = 70149
 target = 45000
 
 [[line_budget_policy.counts]]

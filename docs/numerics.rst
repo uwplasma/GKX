@@ -318,40 +318,85 @@ Saturation stop policy
 
 A diagnosed nonlinear run with ``run_to = "saturation"`` (the default)
 integrates in chunks and asks
-:func:`gkx.diagnostics.saturation.saturation_stop_decision` after each whether
-the heat-flux trace supports a mean. It stops when every gate passes, or at
-``t_max``, without claiming saturation. Spin-up is removed up to the first
-crossing of the trace's own median. The window mean's standard error uses the
-Sokal integrated autocorrelation time :math:`\tau`:
-:math:`\mathrm{SEM} = s/\sqrt{n_\mathrm{eff}}`,
-:math:`n_\mathrm{eff} = \min(n,\; n\,\Delta t/(2\tau))`. All of these must hold:
+:func:`gkx.diagnostics.saturation.assess_saturation` for a verdict on the
+accumulated per-species heat-flux trace. It stops when the verdict is
+``saturated`` and otherwise runs to ``t_max``, where the status is recorded as
+``cap_reached:<status>``.
+
+The assessment works in physical time, so it does not depend on the step size,
+the diagnostic cadence or the mass ratio. The trace is resampled onto a uniform
+grid (at most :math:`0.5\,a/v_t` wide) by integrating the piecewise-linear
+signal, and looked at every :math:`\max(25,\,5\%\ \text{of the elapsed time})`
+:math:`a/v_t`, not every chunk. The start-up transient is not located by a
+threshold crossing. It is cut by MSER [White97]_: the truncation point, over at
+most the first 35% of the trace, that minimises the variance of the remaining
+block means per retained block. This removes the post-linear overshoot as well
+as the growth phase. On the retained window:
+
+#. :math:`\tau` is the integrated autocorrelation time with Sokal's automatic
+   window :math:`M \ge 5\tau` [Sokal97]_.
+#. The standard error comes from batch means [Flegal08]_ with blocks of at
+   least :math:`4\tau` and at least ten blocks, so the block means are close to
+   independent. A window with fewer than ten blocks has no error estimate.
+#. Drift is the ordinary-least-squares slope of the block means. It is flagged
+   when the change across the window exceeds ``saturation_drift_rel`` (10%) of
+   the scale and the slope is more than two standard errors from zero.
+#. Every species and the total must pass. The scale is
+   :math:`\max(|\text{mean}|,\ 0.2\sum_s|\text{mean}_s|)`, so a total that
+   cancels between ion and electron channels is judged against the channels.
+#. The same verdict must already have held when the last 20% of the window was
+   absent, with means that agree within two combined standard errors.
+
+``Wphi`` and ``Wg`` are no longer stop gates: with a physical-time window the
+flux drift test covers what they were guarding, and they sat at their own
+transients in the cases that never converged.
 
 .. list-table::
    :header-rows: 1
-   :widths: 34 66
+   :widths: 22 78
 
-   * - Gate (reason recorded when it fails)
-     - Condition
-   * - ``tau_ac_unresolved``
-     - the autocorrelation crosses zero inside the window and :math:`\tau > \Delta t`
-   * - retained samples
-     - at least 256 after spin-up
-   * - ``window_below_min_window``
-     - window span at least :math:`20\tau` and ``saturation_min_window``
-   * - ``rel_sem_above_threshold``
-     - :math:`\mathrm{SEM}/|\text{mean}| \le` ``saturation_rel_sem`` (0.05)
-   * - ``window_not_stationary``
-     - first- and second-half means agree within twice their combined SEM
-   * - ``guard_not_stationary``, ``Wg_guard_not_stationary``
-     - the same half-window test for ``Wphi`` and ``Wg``
-   * - ``flux_indistinguishable_from_zero``
-     - :math:`|\text{mean}| > 10^{-9}`
+   * - ``status``
+     - Meaning
+   * - ``too_short``
+     - less than ``saturation_t_min`` has run, or the window after the cut is
+       shorter than 250 :math:`a/v_t`
+   * - ``growing``
+     - the quarter means of the whole trace keep rising, the last by more than
+       50% and the one before by more than 20% (linear phase or slow saturation)
+   * - ``quiescent``
+     - the last quarter has decayed below 1% of the peak (linearly stable); the
+       mean is not reported
+   * - ``drifting``
+     - the window mean is moving, per item 3
+   * - ``intermittent``
+     - the window is shorter than :math:`30\tau`, has fewer than ten blocks, or
+       the relative SEM exceeds ``saturation_rel_sem`` (10%)
+   * - ``unconfirmed``
+     - passes now but failed the 80%-prefix check of item 5
+   * - ``saturated``
+     - all gates pass; ``mean`` and ``sem`` are the window mean and its batch-means
+       standard error
+   * - ``cap_reached:<status>``
+     - ``t_max`` was reached without ``saturated``
 
-These are finite-sample safeguards, not a sequential-confidence guarantee, and
-are not qualified for irregular adaptive sampling. The decision and its
-reasons are written under ``saturation`` in the summary JSON. A prepared
-simulation (``gkx.prepare``) compiles a fixed length, so it refuses
-``run_to = "saturation"`` unless given ``steps=N``.
+Nothing is called saturated before ``saturation_t_min = 800`` :math:`a/v_t`.
+Published practice is of that order: the GX stellarator flux database of
+Landreman et al. (2025) discards :math:`t<150` and runs to 800 :math:`a/v_t`,
+CGYRO production runs use at least 500 :math:`a/c_s`, and GENE averaging windows
+are of order 1000. A run with ``t_max`` below ``saturation_t_min`` can still
+report ``saturated`` at its cap. The Oberparleiter et al. stopping rule
+[Oberparleiter16]_ motivates stopping on an error estimate rather than a
+fixed time.
+
+These are finite-sample safeguards, not a sequential-confidence guarantee. On
+stationary synthetic traces the quoted SEM covers the true mean about 85% of
+the time at two standard errors (nominal 95%), because the transient cut and the
+verdict are chosen from the same data. The status is written as ``status`` under
+``saturation`` in the summary JSON and printed by the executable, next to
+``saturated``, ``mean``, ``sem``, ``rel_sem``, ``tau_ac`` and the window
+``window_tmin``/``window_tmax``. A prepared simulation (``gkx.prepare``)
+compiles a fixed length, so it refuses ``run_to = "saturation"`` unless given
+``steps=N``.
 
 Distributed state sharding
 --------------------------

@@ -298,6 +298,7 @@ class RuntimeNonlinearResult(_ResultArtifacts):
             "kx_selected": self.kx_selected,
             "wall_seconds": self.wall_seconds,
             "saturated": saturation.get("saturated"),
+            "saturation_status": saturation.get("status"),
             "heat_flux_mean": saturation.get("mean"),
             "heat_flux_sem": saturation.get("sem"),
             "window_tmin": saturation.get("window_tmin"),

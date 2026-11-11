@@ -3246,11 +3246,11 @@ def test_run_adaptive_runtime_chunk_loop_stops_early_on_stop_condition() -> None
     )
     seen: list[int] = []
 
-    def stop_condition(t, heat_flux, wphi, wg):
+    def stop_condition(t, heat_flux, final):
         # The check sees the accumulated unstrided traces on the global axis.
         np.testing.assert_allclose(t, 0.5 + 0.5 * np.arange(t.size))
-        assert heat_flux.shape == t.shape and wphi.shape == t.shape
-        assert wg.shape == t.shape
+        assert heat_flux.shape == t.shape
+        assert not final
         seen.append(int(t.size))
         return {"stop": t.size >= 4, "saturated": t.size >= 4, "mean": 0.0}
 
@@ -3306,16 +3306,11 @@ def test_saturation_stop_condition_defaults_on_for_diagnosed_nonlinear_runs() ->
     assert cfg.time.run_to == "saturation"
     stop = _saturation_stop_condition(cfg, ctx, policy)
     assert stop is not None
-    time = np.arange(16.0)
-    with pytest.raises(ValueError, match="free_energy_guard"):
-        stop(time, np.ones_like(time), np.ones_like(time), np.ones(15))
-    time = np.cumsum(np.where(np.arange(1024) % 2, 0.02, 0.01))
-    decision = stop(time, time, 2 * time, 3 * time)
-    assert decision["analysis"]["n_window_unit"] == "complete_bins"
-    assert decision["mean"] == pytest.approx(
-        (decision["window_tmin"] + decision["window_tmax"]) / 2
-    )
-    assert decision["saturated"] is False
+    time = np.arange(0.0, 100.0, 0.5)
+    decision = stop(time, np.ones_like(time), False)
+    assert decision["status"] == "too_short" and decision["stop"] is False
+    # At the cap the verdict is reported with its reason, and the run ends.
+    assert stop(time, np.ones_like(time), True)["status"] == "cap_reached:too_short"
 
 
 @pytest.mark.parametrize(

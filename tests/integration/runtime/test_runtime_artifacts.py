@@ -2837,11 +2837,22 @@ def test_artifact_checkpoint_helpers_cover_their_early_returns() -> None:
 
     from gkx.workflows.runtime import artifacts as art
 
-    assert "no measurable window (no_window)" in art._format_saturation_summary(
+    assert "unknown (no measurable window)" in art._format_saturation_summary(
         {"mean": None}
     )
-    assert "drift" in art._format_saturation_summary(
-        {"mean": None, "reasons": ["drift"]}
+    assert "growing" in art._format_saturation_summary(
+        {"mean": None, "status": "cap_reached:growing"}
+    )
+    assert "n/a" in art._format_saturation_summary(
+        dict(
+            mean=1.0,
+            sem=None,
+            rel_sem=None,
+            tau_ac=2.0,
+            window_tmin=0.0,
+            window_tmax=9.0,
+            status="intermittent",
+        )
     )
     assert art._next_runtime_chunk_steps(remaining_steps=7, checkpoint_steps=None) == 7
     assert art._next_runtime_chunk_steps(remaining_steps=None, checkpoint_steps=5) == 5

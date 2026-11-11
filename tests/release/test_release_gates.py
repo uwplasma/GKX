@@ -2183,7 +2183,7 @@ Measurement protocol for the cleared decks: run the deck's own configuration
 through ``run_runtime_nonlinear`` for its first saturation chunk -- 128 steps or
 the deck's whole budget, whichever is smaller, one diagnostic sample per step,
 which is what ``_run_chunked_diagnostics`` does -- and evaluate
-``saturation_stop_decision`` on the resulting trace. That reproduces the first
+``assess_saturation`` on the resulting trace. That reproduces the first
 decision the chunk loop would make, which is where a premature stop lands.
 """
 
@@ -2338,19 +2338,17 @@ def test_decks_cleared_for_the_default_carry_their_measurement() -> None:
     """A deck cleared to run under the default records what cleared it.
 
     The evidence has to name the gate that refused the first-chunk stop, in the
-    vocabulary ``saturation_stop_decision`` reports, so that "measured, looked
+    vocabulary ``assess_saturation`` reports, so that "measured, looked
     fine" cannot pass for a measurement.
     """
 
     refusal_gates = {
-        "flux_indistinguishable_from_zero",
-        "tau_ac_unresolved",
-        "window_below_min_window",
-        "rel_sem_above_threshold",
-        "window_not_stationary",
-        "guard_not_stationary",
-        "trace_shorter_than_min_samples",
-        "post_spinup_window_too_short",
+        "too_short",
+        "growing",
+        "quiescent",
+        "drifting",
+        "intermittent",
+        "unconfirmed",
     }
     for relative, evidence in sorted(_RUN_TO_DEFAULT_CLEARED.items()):
         assert _deck_run_to(relative) is None, (

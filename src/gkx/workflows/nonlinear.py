@@ -17,11 +17,7 @@ from jax.experimental.multihost_utils import process_allgather
 
 from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.modes import select_ky_index
-from gkx.diagnostics.saturation import (
-    SaturationStopConfig,
-    _physical_saturation_stop_decision,
-    saturation_stop_decision,
-)
+from gkx.diagnostics.saturation import SaturationStopConfig, make_saturation_check
 from gkx.geometry import apply_geometry_grid_defaults
 from gkx.operators.linear.linked import project_to_linked_cover
 from gkx.operators.nonlinear.policies import bracket_cfl_rate
@@ -458,12 +454,17 @@ def _chunk_runaway(wg: np.ndarray) -> bool:
 
     if not np.isfinite(wg).all():
         return True
-    return bool(wg[0] > 0 and wg.max() > max(RUNAWAY_RISE * wg[0], RUNAWAY_ENERGY))
+    return bool(
+        wg.size and wg[0] > 0 and wg.max() > max(RUNAWAY_RISE * wg[0], RUNAWAY_ENERGY)
+    )
+
+
+_MIN_SATURATION_STEPS = 256
 
 
 def _saturation_stop_condition(
     cfg: RuntimeConfig, ctx: _RunContext, policy: _DiagnosticPolicy
-) -> Callable[[Any, Any, Any, Any], dict[str, Any]] | None:
+) -> Callable[[Any, Any, bool], dict[str, Any]] | None:
     """Build a diagnostic stop check when the run can reach its sample floor."""
 
     run_to = str(cfg.time.run_to).strip().lower()
@@ -471,28 +472,17 @@ def _saturation_stop_condition(
         raise ValueError(f"unknown [time] run_to '{cfg.time.run_to}'")
     if run_to != "saturation" or not policy.diagnostics_on:
         return None
-    stop_cfg = SaturationStopConfig(
-        rel_sem=float(cfg.time.saturation_rel_sem),
-        min_window=(
-            None
-            if cfg.time.saturation_min_window is None
-            else float(cfg.time.saturation_min_window)
-        ),
-    )
     # The chunked route records one diagnostic sample per step.
-    if not ctx.adaptive_chunked and int(ctx.steps) < max(int(stop_cfg.min_samples), 8):
+    if not ctx.adaptive_chunked and int(ctx.steps) < _MIN_SATURATION_STEPS:
         return None
-
-    def check(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
-        if not cfg.time.fixed_dt:
-            return _physical_saturation_stop_decision(
-                t, heat_flux, wphi, wg, config=stop_cfg
-            )
-        return saturation_stop_decision(
-            t, heat_flux, guard=wphi, free_energy_guard=wg, config=stop_cfg
-        )
-
-    return check
+    return make_saturation_check(
+        SaturationStopConfig(
+            t_min=float(cfg.time.saturation_t_min),
+            rel_sem=float(cfg.time.saturation_rel_sem),
+            drift_rel=float(cfg.time.saturation_drift_rel),
+        ),
+        float(cfg.time.t_max),
+    )
 
 
 def _resolve_auto_stepper(
@@ -596,7 +586,7 @@ def _run_chunked_diagnostics(
     *,
     method: str | None,
     status: Callable[[str], None],
-    stop_condition: Callable[[Any, Any, Any, Any], dict[str, Any]] | None,
+    stop_condition: Callable[[Any, Any, bool], dict[str, Any]] | None,
     rhs_factory: Callable[..., Any] | None = None,
     compile_cache: dict[Any, Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
@@ -734,16 +724,18 @@ def _run_chunked_diagnostics(
         steps_left -= steps_now
         return t_chunk, diag_chunk, G_next, fields_next
 
-    def loop_stop(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
+    def loop_stop(t: Any, q: Any, final: bool) -> dict[str, Any]:
         assert stop_condition is not None
-        decision = stop_condition(t, heat_flux, wphi, wg)
-        # Exhausting the step budget stops without claiming saturation.
-        stop = bool(decision.get("saturated")) or (step_capped and steps_left <= 0)
+        # Exhausting the step budget ends the run at the cap.
+        final = final or (step_capped and steps_left <= 0)
+        decision = stop_condition(t, q, final)
+        stop = bool(decision.get("saturated")) or final
         return {**decision, "stop": stop}
 
     chunk_result = run_adaptive_runtime_chunk_loop(
         integrate_chunk=run_chunk,
         t_max=step_bound * ctx.steps if step_capped else float(cfg.time.t_max),
+        horizon_slack=0.25 * step_bound if step_capped else 0.0,
         chunk_steps=chunk_steps,
         label="nonlinear",
         show_progress=policy.show_progress,
@@ -799,8 +791,9 @@ def _run_diagnostics(
     ):
         if stop_condition is not None:
             status(
-                "run_to=saturation: heat-flux convergence with stationary Wphi/Wg "
-                f"(rel_sem<={float(cfg.time.saturation_rel_sem):.6g})"
+                "run_to=saturation: physical-time heat-flux saturation "
+                f"(t_min={float(cfg.time.saturation_t_min):.6g}, "
+                f"rel_sem<={float(cfg.time.saturation_rel_sem):.6g})"
             )
         try:
             return _run_chunked_diagnostics(

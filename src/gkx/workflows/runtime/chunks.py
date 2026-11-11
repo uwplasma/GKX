@@ -213,10 +213,9 @@ def run_adaptive_runtime_chunk_loop(
     progress_t_max: float | None = None,
     progress_wall_start: float | None = None,
     max_chunks: int = 100000,
+    horizon_slack: float = 0.0,
     spill_dir: Path | None = None,
-    stop_condition: Callable[
-        [np.ndarray, np.ndarray, np.ndarray, np.ndarray], dict[str, Any]
-    ]
+    stop_condition: Callable[[np.ndarray, np.ndarray, bool], dict[str, Any]]
     | None = None,
 ) -> AdaptiveChunkResult:
     """Run to a stop or ``t_max``; check unstrided traces between chunks."""
@@ -232,7 +231,7 @@ def run_adaptive_runtime_chunk_loop(
     samples_seen = 0
     diag_chunks: list[SimulationDiagnostics] = []
     # Stop checks retain the unstrided scalar traces.
-    trace_chunks: list[tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = []
+    trace_chunks: list[tuple[np.ndarray, np.ndarray]] = []
     stop_decision: dict[str, Any] | None = None
     spill_paths: list[Path] = []
     if spill_dir is not None:
@@ -259,8 +258,12 @@ def run_adaptive_runtime_chunk_loop(
         diag_chunk = _chunk_diagnostics_to_host(diag_chunk)
         diag_chunk = _offset_chunk_diagnostics_time(diag_chunk, offset=t_elapsed)
         time_dtype = np.asarray(diag_chunk.t).dtype
+        # horizon_slack: a fixed step budget can end short of t_max by the
+        # rounding error summed over thousands of steps.
         time_tol = max(
-            _TIME_PROGRESS_EPS, 8.0 * np.finfo(time_dtype).eps * max(float(t_max), 1.0)
+            _TIME_PROGRESS_EPS,
+            8.0 * np.finfo(time_dtype).eps * max(float(t_max), 1.0),
+            horizon_slack,
         )
         terminal = np.flatnonzero(np.asarray(diag_chunk.t) >= float(t_max) - time_tol)
         if terminal.size:
@@ -284,25 +287,20 @@ def run_adaptive_runtime_chunk_loop(
             )
         previous_time = t_elapsed
         t_elapsed = t_next
-        if stop_condition is not None:
-            trace_chunks.append(
-                (
-                    np.asarray(diag_chunk.t),
-                    np.asarray(diag_chunk.heat_flux_t, dtype=float),
-                    np.asarray(diag_chunk.Wphi_t, dtype=float),
-                    np.asarray(diag_chunk.Wg_t, dtype=float),
-                )
-            )
+        reached_horizon = t_elapsed >= float(t_max) - time_tol
         stop_now = False
         if stop_condition is not None:
+            species = diag_chunk.heat_flux_species_t
+            flux = diag_chunk.heat_flux_t if species is None else species
+            trace_chunks.append(
+                (np.asarray(diag_chunk.t), np.asarray(flux, dtype=float))
+            )
             stop_decision = stop_condition(
                 np.concatenate([chunk[0] for chunk in trace_chunks]),
                 np.concatenate([chunk[1] for chunk in trace_chunks]),
-                np.concatenate([chunk[2] for chunk in trace_chunks]),
-                np.concatenate([chunk[3] for chunk in trace_chunks]),
+                reached_horizon,
             )
             stop_now = bool(stop_decision.get("stop"))
-        reached_horizon = t_elapsed >= float(t_max) - time_tol
         chunk_samples = int(np.asarray(diag_chunk.t).shape[0])
         if diagnostics_interval is not None:
             diag_chunk = _time_sample_runtime_diagnostics(

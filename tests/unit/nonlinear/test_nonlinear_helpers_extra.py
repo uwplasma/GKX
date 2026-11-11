@@ -2626,6 +2626,52 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
         assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05
 
 
+def test_fixed_step_budget_ending_short_of_t_max_adds_no_empty_chunk():
+    """Regression: dt=0.05 over 8000 steps sums to t_max - 1e-10, not t_max.
+
+    The loop then asked for a zero-step chunk and the runaway check raised on
+    its empty ``Wg_t`` (a ``diagnostics_interval`` run made the same chunk
+    empty). The Cyclone deck is shrunk only in grid and moments.
+    """
+    import gkx
+    from gkx.workflows.nonlinear import _chunk_runaway
+
+    assert _chunk_runaway(np.empty(0)) is False
+    deck = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case_full.toml")
+    case = deck.replace(
+        grid=replace(deck.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            deck.time,
+            fixed_dt=True,
+            dt=0.05,
+            dt_max=0.05,
+            t_max=400.0,
+            diagnostics_interval=0.5,
+            run_to="t_max",
+        ),
+    )
+    d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
+    assert len(d.t) == 800 and float(d.t[-1]) == pytest.approx(400.0, abs=1e-6)
+
+
+def test_chunk_loop_horizon_slack_ends_a_run_that_stops_just_short():
+    chunk = [0.5, 1.0 - 1e-9]  # each chunk is relative to its own start
+    times = iter([chunk, chunk])
+
+    def integrate(_show_progress, remaining):
+        t = np.asarray(next(times))
+        return t, _cadence_diag(t, t), object(), object()
+
+    kw = dict(t_max=2.0, chunk_steps=2, label="slack")
+    done = run_adaptive_runtime_chunk_loop(
+        integrate_chunk=integrate, horizon_slack=1e-6, **kw
+    )
+    assert len(done.diagnostics.t) == 4
+    with pytest.raises(StopIteration):  # without slack it asks for a third chunk
+        times = iter([chunk, chunk])
+        run_adaptive_runtime_chunk_loop(integrate_chunk=integrate, **kw)
+
+
 def test_explicit_chunk_retries_at_half_cfl_fac_on_non_finite_state(monkeypatch):
     """A non-finite or runaway chunk is redone at half the CFL factor, and it sticks."""
     import gkx
@@ -2736,7 +2782,7 @@ def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition)
         cursor = stop
         return diag.t, diag, object(), object()
 
-    def monitor(t, q, wphi, wg):
+    def monitor(t, q, final):
         monitoring.append((t.copy(), q.copy()))
         return {"stop": False}
 
