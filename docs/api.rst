@@ -502,6 +502,13 @@ Nonlinear Explicit Step
    :members:
    :private-members:
 
+Nonlinear Integrating-Factor Step
+---------------------------------
+
+.. automodule:: gkx.solvers_nonlinear_lawson
+   :members:
+   :private-members:
+
 Nonlinear State Integration
 ---------------------------
 

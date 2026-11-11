@@ -64,7 +64,7 @@ priori value (0.05 is stable at 32x32 and non-finite at t = 15 at 64x64;
 tutorial grids it does not pay.  Choose it, with ``dt`` from the kinetic
 electron deck notes, for long kinetic-electron runs at 32x32 and above.
 
-``rk4-pi`` is RK4 with an error-controlled step (opt-in, ``fixed_dt = false``).
+``rk4-pi`` is RK4 with an error-controlled step (the nonlinear default with ``fixed_dt = false``; ``method = "auto"`` runs its integrating-factor form ``lawson-rk4-pi`` where the drift share of the CFL bound and the step cap make that faster, :ref:`where it pays <lawson-limits>`).
 The embedded solution is the explicit midpoint rule built from the RK4 stages,
 so the error estimate costs no extra right-hand side.  The step follows an I
 controller on :math:`\|e\|/(10^{-2}\|G\|)` (safety 0.9, growth <= 1.3), is

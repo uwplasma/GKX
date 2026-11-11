@@ -50,7 +50,6 @@ result = gkx.solve(
     ky_target=case.run.ky,
     Nl=case.run.Nl,
     Nm=case.run.Nm,
-    steps=case.run.steps,
     show_progress=True,
 )
 diagnostics = result.diagnostics

@@ -15,7 +15,7 @@ import warnings
 from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, Callable, NamedTuple, cast
-from gkx.config import method_error, resolve_nonlinear_cfl_fac
+from gkx.config import LAWSON_METHODS, method_error, resolve_nonlinear_cfl_fac
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
 from gkx.core_ky_layout import source_ny_full
 from gkx.diagnostics_contract import ResolvedDiagnostics, SimulationDiagnostics
@@ -95,6 +95,7 @@ from gkx.solvers_nonlinear_explicit import (
     make_explicit_diagnostic_step,
     run_explicit_diagnostic_scan,
 )
+from gkx.solvers_nonlinear_lawson import attach_drift_factor
 from gkx.solvers_nonlinear_imex import (
     DiagnosticFn,
     DiagnosticStepFn,
@@ -897,6 +898,8 @@ def _build_explicit_scan_closures(
             laguerre_mode=options.laguerre_mode,
             external_phi=options.external_phi,
         )
+    if options.method in LAWSON_METHODS:
+        rhs_fn = attach_drift_factor(rhs_fn, prepared, params, chain_terms)
     if options.method in {"imex-ars3", "imex-ark3"}:
         rhs_fn = _attach_chain_implicit_linear(
             rhs_fn,

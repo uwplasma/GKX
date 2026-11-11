@@ -214,3 +214,15 @@ A long nonlinear run is split into legs: the first writes its state and the
 second starts from it (``[init] init_file``). The plot overlays the joined run
 on an uninterrupted one and marks the averaging window. :doc:`outputs` lists
 every stored variable.
+
+13. Advanced: choose the time stepper
+-------------------------------------
+
+.. code-block:: bash
+
+   python examples/13_advanced_time_stepping/run.py
+
+The tutorial decks name no stepper. This script runs the Cyclone tutorial with the
+default and with pinned steppers (``rk4-pi``, ``lawson-rk4-pi``, an explicit
+``cfl_fac``, a fixed-step ``rk2``) and prints the steps and wall time of each.
+:doc:`guidance` explains when to pin one.

@@ -46,14 +46,15 @@ nperiod = 2
 damp_ends_rate = 0.0
 t_max = 0.5
 dt = 0.001
-method = "rk4"
+method = "auto"
 sample_stride = 5
 diagnostics_stride = 5
 compressed_real_fft = true
 laguerre_nonlinear_mode = "grid"
-# Adaptive stepping enforces the explicit CFL bound from parallel streaming
-# and binormal drift. dt_max caps the accepted timestep; inspect the returned
-# times and diagnostics when changing resolution or the requested horizon.
+# Adaptive stepping enforces the explicit CFL bound. auto takes lawson-rk4-pi here (the
+# binormal drift is 80% of the bound, so advancing it exactly removes most of the limit).
+# dt_max caps the accepted timestep; inspect the returned times and diagnostics when
+# changing resolution or the requested horizon.
 fixed_dt = false
 dt_max = 0.001
 

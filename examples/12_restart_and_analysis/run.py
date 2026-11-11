@@ -31,6 +31,9 @@ STEPS_PER_LEG = 100
 AVERAGE_FRACTION = 0.5  # fraction of the joined trace used for the flux average
 
 case = gkx.load(CASE)
+# A restart reproduces the uninterrupted run only at a fixed step: the adaptive
+# controller's step history is not part of the restart file.
+case = case.replace(time=replace(case.time, dt=0.05, method="rk3", fixed_dt=True))
 options = dict(ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm)
 OUTPUT.mkdir(parents=True, exist_ok=True)
 

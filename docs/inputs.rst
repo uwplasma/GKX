@@ -212,9 +212,28 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
   combines the linear frequency cap with the instantaneous nonlinear cap.
   Leaving ``dt_max`` unset keeps ``dt_max = dt``; raise it explicitly only
   when you trade strict comparison matching for throughput.
+- ``method = "auto"`` (the default of a nonlinear deck with no ``dt``): the run
+  takes ``lawson-rk4-pi`` where the radial and binormal drift frequencies are at
+  least 56% of the linear frequency bound (drift plus streaming) and the step cap
+  (``dt_max``, else ``dt``) is at least 2.6 times the ``rk4-pi`` bound step, and
+  ``rk4-pi`` elsewhere. It prints the choice, the share and the ratio
+  (``stepper auto: ...``). The sharded
+  routes (``[parallel]``, ``state_sharding``) and decks with per-species moment
+  counts take ``rk4-pi``. Kinetic electrons at :math:`\beta \le 3\times10^{-4}`
+  default to ``imex-ark3`` instead.
 - ``method = "rk4-pi"`` (nonlinear, ``fixed_dt = false``): RK4 whose step is
   chosen from an embedded error estimate and capped at twice the CFL step; see
   :doc:`solvers`. ``cfl_fac`` defaults to ``2.82`` as for ``rk4``.
+- ``method = "lawson-rk3"``, ``"lawson-rk4"`` or ``"lawson-rk4-pi"`` (nonlinear,
+  explicit diagnostics): the integrating-factor forms of ``rk3``, ``rk4`` and
+  ``rk4-pi``, which advance the curvature and grad-B drift exactly
+  (:ref:`lawson-steppers`). ``auto`` selects ``lawson-rk4-pi``; name a ``lawson-*``
+  method to force it. The CFL bound drops the radial and binormal drift
+  frequencies and keeps streaming and the :math:`E\times B` rate. ``cfl_fac``
+  defaults to ``2.5`` for ``lawson-rk3`` and ``lawson-rk4`` (scaled with
+  ``Nl * Nm`` like the other explicit nonlinear methods) and ``2.82`` for
+  ``lawson-rk4-pi``. They need one ``(Nl, Nm)`` for all species and the
+  Laguerre-coefficient basis, and raise otherwise.
 - ``laguerre_nonlinear_mode``: ``"grid"`` (reference quadrature, default) or
   ``"spectral"`` (spectral ``Jl`` without the quadrature transform) for the
   Laguerre handling in nonlinear brackets.
