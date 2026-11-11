@@ -38,6 +38,266 @@ branch identity and conditioning. Increase velocity and spatial resolution,
 and vary timestep, domain and numerical regularization independently.
 Residual certification is an algebraic check on the chosen discretization.
 
+Zonal-flow response
+-------------------
+
+``benchmarks/cases/collisional_zonal_response.toml`` is the Rosenbluth-Hinton
+protocol [RH98]_: a linear run at :math:`k_y=0`, :math:`k_x\rho_i=0.05`, with
+adiabatic electrons, :math:`q=1.4`, :math:`\hat s=0.5`, :math:`\epsilon=0.1`
+and an initial ion density perturbation uniform along the line. The observable
+is the flux-surface average :math:`\langle\phi\rangle(t)/\langle\phi\rangle(0)`,
+the Jacobian-weighted sum over :math:`z` of ``RuntimeLinearResult.field_history``
+built by :func:`gkx.diagnostics.modes.zonal_response`, which also supplies the
+:math:`t=0` value. The fit ``signal`` of the result is the midplane value of
+one point of the line and is not this quantity.
+
+Collisionless residual. The formula :math:`1/(1+1.6\,q^2/\sqrt\epsilon)` gives
+0.0916. The GAM-averaged residual over :math:`t\in[100,300]`, which averages
+whole GAM periods (:math:`\omega_{\rm GAM}=1.007\,v_t/a`, undamped at this
+:math:`q`), converges from above as the velocity space is resolved:
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`(N_l,N_m)`
+     - (4, 8)
+     - (6, 16)
+     - (8, 24)
+     - (12, 36)
+     - formula
+   * - residual
+     - 0.117
+     - 0.100
+     - 0.095
+     - 0.093
+     - 0.0916
+
+At :math:`(8,24)` the residual at :math:`\epsilon=0.05, 0.1, 0.2` is 0.0757,
+0.0953, 0.1234 against 0.0666, 0.0916, 0.1248, and at :math:`k_x\rho_i=0.025`
+and 0.05 it is 0.0947 and 0.0953. The formula is the :math:`\epsilon\to0`
+limit at :math:`k_x\rho_\theta\ll1`; the comparison at other :math:`\epsilon`
+is at fixed velocity resolution, which is coarser for the narrower trapped region.
+
+Collisional damping. All four operators of :doc:`operators` act on the same
+initial state and relax :math:`\langle\phi\rangle` to a common level of about
+0.006 of its initial value, sixteen times below the collisionless residual and
+independent of :math:`\nu` and of the operator. An exponential-plus-constant
+fit over :math:`t\ge50` gives the decay rate: 0.0059, 0.0064 and 0.0134 at
+:math:`\nu=0.005` for ``landau``, ``sugama`` (``improved_sugama`` equal) and
+``lenard_bernstein``, and 0.0202, 0.0222 and 0.0332 at :math:`\nu=0.02`. The
+block operators decay at about :math:`\nu` to :math:`1.3\,\nu`; the
+Lenard-Bernstein operator, whose rate does not depend on the energy, faster.
+GAM-averaged :math:`\langle\phi\rangle/\langle\phi\rangle(0)` at
+:math:`(N_l,N_m)=(6,16)`, :math:`\epsilon=0.1`:
+
+.. list-table::
+   :header-rows: 1
+
+   * - operator
+     - :math:`\nu`
+     - [50, 100]
+     - [100, 150]
+     - [150, 200]
+     - [200, 300]
+     - [300, 400]
+   * - landau
+     - 0.005
+     - 0.0613
+     - 0.0462
+     - 0.0346
+     - 0.0251
+     - 0.0169
+   * - sugama
+     - 0.005
+     - 0.0589
+     - 0.0432
+     - 0.0315
+     - 0.0222
+     - 0.0146
+   * - improved_sugama
+     - 0.005
+     - 0.0589
+     - 0.0432
+     - 0.0315
+     - 0.0222
+     - 0.0147
+   * - lenard_bernstein
+     - 0.005
+     - 0.0376
+     - 0.0222
+     - 0.0145
+     - 0.0095
+     - 0.0071
+   * - landau
+     - 0.02
+     - 0.0221
+     - 0.0116
+     - 0.0082
+     - 0.0067
+     - 0.0061
+   * - sugama
+     - 0.02
+     - 0.0201
+     - 0.0104
+     - 0.0075
+     - 0.0064
+     - 0.0059
+   * - lenard_bernstein
+     - 0.02
+     - 0.0116
+     - 0.0076
+     - 0.0066
+     - 0.0061
+     - 0.0057
+   * - landau
+     - 0.05
+     - 0.0104
+     - 0.0071
+     - 0.0064
+     - 0.0062
+     - 0.0060
+   * - lenard_bernstein
+     - 0.05
+     - 0.0097
+     - 0.0074
+     - 0.0065
+     - 0.0058
+     - 0.0052
+
+The level at :math:`\nu=0.02` is 0.0100, 0.0067, 0.0064 at :math:`(N_l,N_m)=(4,8),
+(6,16), (8,24)`. The decay rate and the common level are not compared with the
+banana-regime theory of Hinton and Rosenbluth (1999) or with Xiao, Catto and
+Molvig; the comparison needs their formulas for this :math:`q`, :math:`\epsilon`
+and collision-frequency definition.
+
+``lenard_bernstein`` takes its damping from ``nu_hermite`` and ``nu_laguerre``,
+which this deck sets to zero for the block operators. Without them its
+conservation terms alone have eigenvalues of :math:`+\nu` and :math:`+2\nu` and
+:math:`\langle\phi\rangle` grows exponentially (228-fold over 300 time units at
+:math:`\nu=0.02`); the case is refused when a run combines that operator,
+nonzero ``nu`` and both coefficients at zero. Set ``nu_hermite = 1`` and
+``nu_laguerre = 2``.
+
+Collisional trapped-electron mode
+---------------------------------
+
+``benchmarks/cases/tem_collisional.toml`` is a kinetic-electron mode on the
+Cyclone Miller surface (:math:`q=1.4`, :math:`\hat s=0.8`, :math:`r/a=0.5`,
+:math:`R/a=2.77778`) with :math:`T_e=T_i`, :math:`m_i/m_e=3670`,
+:math:`a/L_{Te}=2.49`, :math:`a/L_n=2` and no ion temperature gradient. Its
+fastest mode has :math:`\omega<0` (electron direction). Species ``nu`` is the
+self-collision frequency in GKX units, :math:`\nu_i=\nu_e\sqrt{m_e/m_i}`; the
+scan variable is :math:`\nu\equiv\nu_e`.
+
+The three codes use different linear collision models:
+
+- GS2 (8.2.1, ``collision_model = "default"``): Lorentz pitch-angle scattering
+  plus energy diffusion with the energy-dependent Coulomb frequencies, number,
+  momentum and energy restoring terms, and electron-ion scattering through
+  ``zeff = 1``. ``vnewk`` is in units of :math:`\sqrt{2T/m}/a`, so
+  ``vnewk`` :math:`=\nu/\sqrt2` for the electrons and the same factor for the ions.
+- stella (master, ``collision_model = "dougherty"``): energy-independent
+  Dougherty operator in :math:`(v_\parallel,\mu)` with momentum and energy
+  conservation, self-species only. ``vnew_ref`` is the ion ``vnewk``;
+  electrons get :math:`\mathtt{vnew\_ref}/\sqrt{m_e}`.
+- GKX: ``landau`` and ``sugama`` models and ``lenard_bernstein`` of
+  :doc:`operators`. ``lenard_bernstein`` is the model of the stella operator;
+  ``landau`` of the GS2 one, which is a Lorentz plus diffusion approximation of it.
+
+Units follow the Cyclone four-code convention: :math:`k_y^{\rm GKX}=k_y^{\rm GS2}/\sqrt2`,
+:math:`\gamma^{\rm GKX}=\sqrt2\,\gamma^{\rm GS2}`, :math:`\nu=\sqrt2\,\mathtt{vnewk}`.
+
+Collisionless growth rate at :math:`k_y\rho_i=0.3` (the first column is the
+collisionless value at the resolution that column's values are reported at).
+GS2 is converged in its grids (``ntheta = 64``, ``nperiod = 4``, ``negrid = 24``,
+``ngauss = 12`` agrees with the production grid to 0.03%); stella and GKX are not:
+
+.. list-table::
+   :header-rows: 1
+
+   * - code, resolution
+     - :math:`\gamma`
+   * - GS2
+     - 0.3625
+   * - stella, ``nzed`` 32 / 48 / 64 (``nperiod`` 2 / 3 / 4), ``nvgrid`` 16 / 24 / 32, ``nmu`` 8 / 12 / 16
+     - 0.2997 / 0.3290 / 0.3405
+   * - GKX :math:`(N_l,N_m)=(4,8),(6,16),(8,24),(12,32)`
+     - 0.2739, 0.2875, 0.3059, 0.3208
+
+Growth rate with collisions, :math:`k_y\rho_i=0.3`, in parentheses the ratio to
+the collisionless rate of the same code and resolution:
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`\nu`
+     - GS2
+     - stella
+     - GKX landau (4,8)
+     - (6,16)
+     - (8,24)
+     - (12,32)
+     - GKX lenard_bernstein (4,8)
+   * - 0.01
+     - 0.3217 (0.888)
+     - 0.2879 (0.961)
+     - 0.2656 (0.970)
+     -
+     - 0.2909 (0.951)
+     -
+     - 0.2673 (0.976)
+   * - 0.05
+     - 0.2666 (0.736)
+     - 0.2498 (0.833)
+     - 0.2388 (0.872)
+     - 0.2423 (0.843)
+     - 0.2495 (0.816)
+     - 0.2548 (0.794)
+     - 0.2389 (0.872)
+   * - 0.1
+     - 0.2304 (0.636)
+     - 0.2132 (0.711)
+     - 0.2130 (0.778)
+     - 0.2098 (0.730)
+     -
+     -
+     - 0.2056 (0.751)
+
+At :math:`(4,8)` the Sugama and improved Sugama models give 0.2651, 0.2371 and
+0.2098 at :math:`\nu=0.01, 0.05, 0.1` (improved Sugama identical to four
+digits), the Landau operator 0.2656, 0.2388, 0.2130. At :math:`k_y\rho_i=0.5`
+(collisionless 0.5208 GS2, 0.4605 stella, 0.4269 GKX at :math:`(4,8)`) the ratios at
+:math:`\nu=0.01, 0.05, 0.1` are 0.927, 0.811, 0.730 (GS2), 0.975, 0.888, 0.803 (stella) and 0.975, 0.897, 0.825
+(GKX landau, :math:`(4,8)`; lenard_bernstein 0.980, 0.908, 0.828).
+
+What the comparison supports. Collisions lower the growth rate in all three
+codes, by the same order. The collisionless rate differs by up to 17% between
+the codes at the resolutions run (GS2 0.362, stella 0.341 and GKX 0.321 at
+their finest), with GKX and stella still rising with resolution. The collisional
+reduction depends on the model. GKX ``lenard_bernstein`` and stella's Dougherty
+operator are the same model and agree to 5% at :math:`(4,8)` and
+:math:`\nu=0.05`. GS2 with ``zeff = 0``, which leaves the electron
+self-collisions only, gives 0.2999 (0.828) there, in line with both; the
+electron-ion scattering that GS2's ``zeff = 1`` and the Landau operator carry
+makes the reduction larger, 0.736 for GS2. The GKX ``landau`` ratio moves
+towards that value as :math:`(N_l,N_m)` grows, 0.872, 0.843, 0.816, 0.794. This
+is consistent with a pitch-angle frequency that grows as :math:`1/x^3` towards
+low energy, where the trapped electrons that drive the mode sit, which a
+Hermite-Laguerre basis resolves only at high order. The absolute rates of the
+three codes at one converged resolution, and the high-order limit of the GKX
+collisional reduction, are not established here.
+
+Adiabatic-electron Cyclone ITG (:math:`k_y\rho_i=0.3`, ion collisions only) is
+the single-species check of the frequency conversion. The growth rate over its
+collisionless value at :math:`\nu=0.1, 0.2, 0.5` is 0.873, 0.731, 0.453 for GKX
+``lenard_bernstein`` (Krylov, :math:`(8,24)`, equal to :math:`(4,8)` to 0.01) and
+0.867, 0.660, 0.175 for stella (the two larger values on the finer grid). The
+two agree at :math:`\nu=0.1` and part at larger :math:`\nu`; the cause is not
+identified, and the gap persists at :math:`k_y\rho_i=0.15`, where stella gives
+0.103 and GKX 0.263 at :math:`\nu=0.5`. GS2's default model raises the ITG growth
+rate at small :math:`\nu` as GKX ``landau`` does: 1.049 and 1.037 at
+:math:`\nu=0.1, 0.2` against 1.052 and 1.066 at :math:`(6,16)`.
+
 Cross-code protocol
 -------------------
 

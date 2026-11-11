@@ -43,6 +43,10 @@ References
    Physical Review Letters 83, 3645 (1999).
    `DOI <https://doi.org/10.1103/PhysRevLett.83.3645>`__.
 
+.. [RH98] M. N. Rosenbluth and F. L. Hinton, "Poloidal flow driven by
+   ion-temperature-gradient turbulence in tokamaks," Physical Review Letters
+   80, 724 (1998). `DOI <https://doi.org/10.1103/PhysRevLett.80.724>`__.
+
 .. [Dorland00] W. Dorland, F. Jenko, M. Kotschenreuther, and B. N. Rogers,
    "Electron temperature gradient turbulence," Physical Review Letters 85,
    5579 (2000). `DOI <https://doi.org/10.1103/PhysRevLett.85.5579>`__.

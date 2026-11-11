@@ -498,6 +498,12 @@ reconstructs the low moments
 and a temperature-like correction :math:`\bar{T}` from ``m=0`` and ``m=2``, and
 adds them back only into the ``m=0,1,2`` channels.
 
+The damping coefficients ``nu_hermite`` and ``nu_laguerre`` belong to this
+model alone; the block operators ignore them. With both at zero and a nonzero
+``nu`` the conservation terms stay and the damping they balance is gone, which
+leaves eigenvalues of about :math:`+\nu` and :math:`+2\nu` in the energy and
+momentum channels, so the runtime refuses that combination.
+
 This is a conserving Lenard--Bernstein/Dougherty-like model, not a complete
 linearized gyrokinetic Landau operator. Its low-order field-particle correction
 matters: the operator cannot be represented by a diagonal damping array alone.

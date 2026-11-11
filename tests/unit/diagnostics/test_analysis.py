@@ -2236,3 +2236,26 @@ def test_recorded_gkx_traces(name: str, status: str) -> None:
     if status == "saturated":
         assert r["mean"] == pytest.approx(31.4, rel=0.03)
         assert r["window_tmin"] > 50.0
+
+
+def test_zonal_response_is_the_jacobian_average_normalized_at_t0() -> None:
+    from gkx.diagnostics.modes import zonal_response
+
+    t = 0.1 * np.arange(1, 6)
+    z = np.linspace(-np.pi, np.pi, 8, endpoint=False)
+    jac = 1.0 + 0.3 * np.cos(z)
+    mean = 2.0 + 0.5 * t + 0.1 * t**2
+    ripple = 0.7 - t + 0.3 * t**2
+    phi = np.zeros((t.size, 1, 3, z.size), dtype=complex)
+    phi[:, 0, 1, :] = mean[:, None] + ripple[:, None] * np.cos(z)[None, :]
+    phi[:, 0, 2, :] = 1.0e3  # another kx must not leak in
+    cos_avg = float(jac @ np.cos(z) / jac.sum())
+
+    time, ratio = zonal_response(t, phi, ModeSelection(0, 1), jac)
+
+    # The first saved sample is not t = 0; the quadratic history is recovered exactly.
+    def exact(s):
+        return (2.0 + 0.5 * s + 0.1 * s**2) + (0.7 - s + 0.3 * s**2) * cos_avg
+
+    np.testing.assert_allclose(time, np.concatenate(([0.0], t)))
+    np.testing.assert_allclose(ratio, exact(np.concatenate(([0.0], t))) / exact(0.0))

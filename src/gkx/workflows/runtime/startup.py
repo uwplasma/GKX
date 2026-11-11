@@ -506,6 +506,15 @@ def build_runtime_linear_params(
         hypercollisions_const=float(cfg.collisions.hypercollisions_const),
         hypercollisions_kz=float(cfg.collisions.hypercollisions_kz),
     )
+    model = collision_model_for(cfg.time.collision_operator)
+    damping = cfg.collisions.nu_hermite or cfg.collisions.nu_laguerre
+    if model == "dougherty" and not damping and cfg.physics.collisions:
+        if cfg.terms.collisions and any(s.nu > 0.0 for s in cfg.species):
+            raise ValueError(
+                "Lenard-Bernstein with nu_hermite = nu_laguerre = 0 keeps its "
+                "conservation terms without the damping they balance and grows at "
+                "about nu; set nu_hermite = 1, nu_laguerre = 2 or use another operator"
+            )
     return replace(
         params,
         _nu_ei=nu_ei,
@@ -520,7 +529,7 @@ def build_runtime_linear_params(
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
         damp_ends_rate=_runtime_damp_ends_rate(cfg),
         mu_vperp_max=cfg.run.mu_vperp_max,
-        collision_model=collision_model_for(cfg.time.collision_operator),
+        collision_model=model,
     )
 
 
