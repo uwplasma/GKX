@@ -543,6 +543,7 @@ path = "src/gkx/solvers/nonlinear/diagnostics.py"
 owned_modules = [
   "gkx.operators.nonlinear.brackets",
   "gkx.terms.nonlinear",
+  "gkx.solvers.nonlinear.transport_window",
 ]
 owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport windows"
 status = "active"

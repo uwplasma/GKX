@@ -52,9 +52,10 @@ path = "src/gkx"
 pattern = "*.py"
 recursive = true
 # 124 -> 125: Lawson integrating-factor steppers.
-# 125 -> 128: the package markers of gkx.solvers, gkx.solvers.linear and gkx.solvers.nonlinear
-# replace sixteen flat solvers_* modules; no other file is added.
-baseline = 128
+# 125 -> 128: the three package markers of gkx.solvers, gkx.solvers.linear and gkx.solvers.nonlinear
+# replace sixteen flat solvers_* modules; 128 -> 129: the saturated-window heat flux and sheared
+# transport drivers leave solvers/nonlinear/diagnostics.py for solvers/nonlinear/transport_window.py.
+baseline = 129
 target = 45
 
 [[topology_policy.counts]]
@@ -159,7 +160,8 @@ path = "solvers/nonlinear/diagnostics.py"
 # 3524 -> 3529: the explicit chunk cache key carries the CFL factor.
 # 3529 -> 3539: the prepared scan runs through the digest-keyed executable cache.
 # 3539 -> 3542: Lawson integrating-factor steppers.
-baseline_lines = 3542
+# 3542 -> 2747: the saturated-window heat flux and sheared drivers moved to transport_window.py.
+baseline_lines = 2747
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -219,7 +221,9 @@ recursive = true
 # 70073 -> 70109: cached solve executables, runaway criterion, CFL floor.
 # 70109 -> 70332: Lawson integrating-factor steppers and the automatic choice between
 # lawson-rk4-pi and rk4-pi.
-baseline = 70332
+# 70332 -> 70403: phase-1 split of the diagnostics driver (module header and export list of
+# transport_window.py; no code added).
+baseline = 70403
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -34,8 +34,8 @@ from gkx.solvers.nonlinear.diagnostics import (
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
-    nonlinear_heat_flux_window,
 )
+from gkx.solvers.nonlinear.transport_window import nonlinear_heat_flux_window
 from gkx.solvers.time_explicit import _linear_frequency_bound
 from gkx.terms.config import FieldState
 from gkx.terms.config import TermConfig
@@ -1313,7 +1313,7 @@ def test_adaptive_time_step_run_compiles_and_matches_the_eager_trajectory() -> N
     the tube spans) that has no derivative in the first place.
     """
 
-    from gkx.solvers.nonlinear.diagnostics import (
+    from gkx.solvers.nonlinear.transport_window import (
         integrate_nonlinear_sheared_transport,
     )
 

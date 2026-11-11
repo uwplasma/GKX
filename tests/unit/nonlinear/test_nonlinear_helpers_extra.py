@@ -75,12 +75,14 @@ from gkx.operators.nonlinear.projection import (
 import gkx.solvers.nonlinear.diagnostics as nonlinear_state_integration_mod
 from gkx.solvers.nonlinear.diagnostics import (
     DIVERGENCE_KNEE_STEPS,
-    nonlinear_heat_flux_window,
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
+)
+from gkx.solvers.nonlinear.transport_window import (
     integrate_nonlinear_sheared,
     integrate_nonlinear_sheared_transport,
+    nonlinear_heat_flux_window,
 )
 from gkx.terms.config import FieldState
 from gkx.workflows.runtime import chunks as runtime_chunks
