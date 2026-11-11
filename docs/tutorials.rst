@@ -237,6 +237,7 @@ default and with pinned steppers (``rk4-pi``, ``lawson-rk4-pi``, an explicit
 Ions keep :math:`(N_l, N_m) = (2, 8)` and electrons :math:`(4, 16)`
 (:ref:`per-species-moments`). With ``[parallel] axis = "species_hermite"`` each
 species' Hermite axis is cut at its own size, so every device carries the same
-share of both. The script runs the case on one device and on two (host CPU
-devices stand in for GPUs), prints the entries per device and checks the final
-states agree (:doc:`parallelization`).
+share of both, on the default run (CFL step, saved diagnostics). The script
+runs the case on one device and on two (host CPU devices stand in for GPUs),
+prints the entries per device and checks the final states and heat-flux traces
+agree (:doc:`parallelization`).

@@ -129,6 +129,19 @@ class _ExplicitPreparedState:
     G0: jnp.ndarray
     state_dtype: Any
     real_dtype: Any
+    layout: Any = None  # a named route's packed carry (``GroupedLayout``)
+
+    @property
+    def fields_fn(self) -> Callable[..., Any]:
+        return compute_fields_cached if self.layout is None else self.layout.fields
+
+
+def _with_layout(prepared: _ExplicitPreparedState, rhs_fn: Any):
+    """``prepared`` carrying ``rhs_fn`` as its packed layout, when it is one."""
+
+    return (
+        replace(prepared, layout=rhs_fn) if getattr(rhs_fn, "packed", 0) else prepared
+    )
 
 
 @dataclass(frozen=True)
@@ -213,6 +226,7 @@ class PreparedExplicitNonlinearDiagnostics:
     _retain_diagnostics: (
         Callable[[SimulationDiagnostics], SimulationDiagnostics] | None
     ) = None
+    unpack: Callable[[jnp.ndarray], jnp.ndarray] | None = None  # packed carry -> state
 
     def run_arrays(
         self,
@@ -234,6 +248,9 @@ class PreparedExplicitNonlinearDiagnostics:
         ``time_horizon`` (adaptive runs) stops stepping once the run time
         reaches it. It is a traced operand, so changing it between calls
         reuses the compiled scan; it overrides any prepared horizon.
+
+        The final state has the run's extent: a named route's packed carry is
+        unpacked here.
         """
 
         if self._retention_interval is not None:
@@ -277,9 +294,8 @@ class PreparedExplicitNonlinearDiagnostics:
                 )
             )
         if geometry is None and cache is None:
-            if time_horizon is None:
-                return self._run_raw(jnp.asarray(state))[:3]
-            return self._run_raw(jnp.asarray(state), jnp.asarray(time_horizon))[:3]
+            horizon = () if time_horizon is None else (jnp.asarray(time_horizon),)
+            return self._unpack_arrays(self._run_raw(jnp.asarray(state), *horizon))
         if time_horizon is not None:
             raise ValueError("time_horizon cannot be combined with dynamic inputs")
         if not self.fixed_dt:
@@ -287,9 +303,11 @@ class PreparedExplicitNonlinearDiagnostics:
         geometry_use = self.geometry if geometry is None else geometry
         cache_use = self.cache if cache is None else cache
         params_use = self.params if params is None else params
-        return self._run_dynamic_raw(
-            jnp.asarray(state), geometry_use, cache_use, params_use
-        )[:3]
+        return self._unpack_arrays(
+            self._run_dynamic_raw(
+                jnp.asarray(state), geometry_use, cache_use, params_use
+            )
+        )
 
     @property
     def chain(self) -> Any:
@@ -355,6 +373,13 @@ class PreparedExplicitNonlinearDiagnostics:
             time_horizon=time_horizon,
         )
         return self._finalize_arrays(G_final, scan_diag_out, fields_final)
+
+    def unpacked(self, state: jnp.ndarray) -> jnp.ndarray:
+        """``state`` at the run's extent, whether or not it is a packed carry."""
+        return state if self.unpack is None else self.unpack(state)
+
+    def _unpack_arrays(self, out):
+        return (self.unpacked(out[0]), *out[1:3])
 
     def _finalize_arrays(self, G_final, scan_diag_out, fields_final):
         diag, t, dt_series = scan_diag_out
@@ -535,7 +560,9 @@ def _make_explicit_diagnostic_callable(
 ) -> Callable[..., Any]:
     """Return the state-to-diagnostic tuple closure for explicit scans."""
 
-    return make_nonlinear_diagnostic_tuple_fn(
+    layout = prepared.layout
+    kernels = _nonlinear_diagnostic_kernels()
+    diagnostic = make_nonlinear_diagnostic_tuple_fn(
         grid=grid,
         cache=prepared.cache,
         params=params,
@@ -550,8 +577,9 @@ def _make_explicit_diagnostic_callable(
         flux_scale=flux_scale,
         wphi_scale=wphi_scale,
         resolved_diagnostics=resolved_diagnostics,
-        kernels=_nonlinear_diagnostic_kernels(),
+        kernels=kernels if layout is None else layout.kernels(kernels),
     )
+    return diagnostic if layout is None else layout.diagnostics(diagnostic)
 
 
 def _make_explicit_scan_step(
@@ -578,7 +606,7 @@ def _make_explicit_scan_step(
         state_dtype=prepared.state_dtype,
         real_dtype=prepared.real_dtype,
         time_step_policy=policies.time_step_policy,
-        compute_fields_fn=compute_fields_cached,
+        compute_fields_fn=prepared.fields_fn,
         cache=prepared.cache,
         params=params,
         term_cfg=prepared.term_cfg,
@@ -670,9 +698,12 @@ def _run_explicit_diagnostic_scan_raw(
 ) -> tuple[jnp.ndarray, tuple[Any, Any, Any], FieldState, jnp.ndarray]:
     """Run the device scan and return raw arrays for outside-JIT packaging."""
 
-    G0 = prepared.project_state(jnp.asarray(initial_state, dtype=prepared.state_dtype))
+    G0 = jnp.asarray(initial_state, dtype=prepared.state_dtype)
+    if prepared.layout is not None:
+        G0 = prepared.layout.pack(G0)
+    G0 = prepared.project_state(G0)
 
-    fields0 = compute_fields_cached(
+    fields0 = prepared.fields_fn(
         G0,
         prepared.cache,
         params,
@@ -706,7 +737,7 @@ def _run_explicit_diagnostic_scan_raw(
         _return_dt=True,
     )
 
-    fields_final = compute_fields_cached(
+    fields_final = prepared.fields_fn(
         G_final,
         prepared.cache,
         params,
@@ -1128,10 +1159,11 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         initial_dt: jnp.ndarray | None = None,
         rhs_fn: Any = None,
     ) -> tuple[Any, Any, Any, Any]:
-        step = components.step
+        step, diagnose = components.step, components.compute_diag_from_state
+        prepared = _with_layout(components.prepared, rhs_fn)
         if rhs_fn is not None:
-            step, _ = _build_explicit_scan_closures(
-                components.prepared,
+            step, diagnose = _build_explicit_scan_closures(
+                prepared,
                 components.policies,
                 grid,
                 params,
@@ -1142,10 +1174,10 @@ def prepare_explicit_nonlinear_diagnostics_impl(
             if time_horizon is not None:
                 step = step.with_horizon(time_horizon=time_horizon)  # type: ignore[attr-defined]
             return _run_explicit_diagnostic_scan_raw(
-                components.prepared,
+                prepared,
                 components.policies,
                 step,
-                components.compute_diag_from_state,
+                diagnose,
                 params,
                 initial_state=initial_state,
                 steps=steps,
@@ -1218,6 +1250,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
             if _rhs_factory is not None
             else None
         )
+        dynamic_prepared = _with_layout(dynamic_prepared, dynamic_rhs)
         dynamic_step, dynamic_diagnostics = _build_explicit_scan_closures(
             dynamic_prepared,
             dynamic_policies,
@@ -1275,6 +1308,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         fixed_dt=options.fixed_dt,
         cfl_scales=getattr(components.policies.time_step_policy, "cfl_scales", None),
         cover_mask=components.cover_mask,
+        unpack=getattr(named_rhs, "unpack", None),
     )
 
 
@@ -2302,12 +2336,18 @@ def _continue_nonlinear_diagnostics(
     dt,
     steps,
     time_horizon=None,
+    template=None,
     **options,
 ):
-    """Continue a runtime chunk with its controller operand, without state mutation."""
+    """Continue a runtime chunk with its controller operand, without state mutation.
 
+    ``G0`` may be a named route's packed carry; ``template`` is then a state of
+    the run's own layout, which sizes the executable.
+    """
+
+    shape_of = G0 if template is None else template
     prepared = _cached_explicit_diagnostics(
-        G0, grid, geom, params, dt, steps, compile_cache, time_horizon, options
+        shape_of, grid, geom, params, dt, steps, compile_cache, time_horizon, options
     )
     G_final, arrays, fields, dt_next = prepared._run_raw(
         project_to_linked_cover(jnp.asarray(G0), prepared.cover_mask),

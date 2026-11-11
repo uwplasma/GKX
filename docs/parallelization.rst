@@ -61,7 +61,7 @@ prepared topology constraints described in :doc:`api`.
 Active physical collisions, sources, fixed-mode restrictions, checkpointing,
 additional state sharding and reflectionless closures use the ordinary solver
 with whole-state placement. IMEX policies also
-use that fallback. Status messages identify this placement; it does not establish
+use that fallback; its status line names the stepper. Status messages identify this placement; it does not establish
 distributed RHS work. Unsupported strategies or axes still raise.
 Adaptive chain IMEX and generic ``imex`` preparation are refused. Changing a
 method or collision model changes the numerical problem and requires its own
@@ -84,14 +84,25 @@ array, so the stepper and the field reduction are those of the uniform mesh.
 
 Every group's :math:`N_m` must be divisible by :math:`D` and leave blocks of at
 least two moments; a count that does not divide raises and names the device
-counts that do. The route serves the fixed-step final-state scan: ``rk2``,
-``rk3``, ``rk4`` and ``sspx3`` with ``fixed_dt = true``, ``run_to = "t_max"``,
-no diagnostics, and no progress output, and the library entry point
-``integrate_nonlinear_species_hermite`` with its fused scalar traces. Diagnosed,
-adaptive and ``rk4-pi`` runs, IMEX methods and the linear routes keep the
-whole-state placement; the diagnosed route would repack the state on every
-right-hand side. The run status line reports the groups and the entries per
-device; ``examples/14_multi_device_species`` prints the split.
+counts that do. The packed array is the carry of the scan on every explicit
+route. The right-hand side, the field solve and the step-size controller run
+on it, and so do the diagnostics: each device reduces its own blocks, and one
+``psum`` per sample delivers the leading Hermite rows (what heat flux, particle
+flux and turbulent heating read) and one the free-energy spectra, while field
+energies, potential spectra, growth rates and the CFL step follow from the
+replicated fields. No step gathers the state, and the compiled loop contains no
+``all-gather``. The state is unpacked to the :math:`(N_s, N_l, N_m)` extent only
+when a run returns it. The served runs are ``rk2``, ``rk3``, ``rk4``, ``sspx3``
+and ``rk4-pi``, fixed-step or adaptive, with saved diagnostics, chunks, a
+saturation stop and progress output, and the library entry point
+``integrate_nonlinear_species_hermite`` with its fused scalar traces.
+
+IMEX methods keep the whole-state placement. Each step solves an implicit
+linear system, which needs a matrix-free operator and a preconditioner that act
+on the packed array with the same Hermite halo and field reduction; those do
+not exist, and the status line says so. The linear routes keep their own
+placement. The run status line reports the groups and the entries per device;
+``examples/14_multi_device_species`` prints the split.
 
 ``strict_identity`` defaults to true. It compares the parallel result with a
 serial execution, including the final state and energy and transport traces.

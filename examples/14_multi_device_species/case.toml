@@ -4,8 +4,9 @@ schema_version = 1
 # The two species keep different numbers of velocity moments: the electrons
 # the state's (Nl, Nm) = (4, 16) from [run], the ions fewer. A multi-device run
 # cuts each species' Hermite axis at its own size, so every device carries the
-# same share of both (run.py sets the parallel block). Collisions are off: the
-# sharded explicit route does not apply them.
+# same share of both (run.py sets the parallel block). The run is the default
+# one: the CFL controller sets the step and diagnostics are saved. Collisions
+# are off: the sharded explicit route does not apply them.
 
 [[species]]
 name = "ion"
@@ -17,7 +18,7 @@ Nm = 8
 [[species]]
 name = "electron"
 charge = -1.0
-mass = 0.01      # heavier than physical so the fixed step below stays short
+mass = 0.01      # heavier than physical so the CFL step stays long
 tprim = 2.49
 fprim = 0.8      # ... electrons keep the state's (4, 16)
 
@@ -30,12 +31,10 @@ Ly = 62.8
 boundary = "periodic"
 
 [time]
-method = "rk2"      # explicit steppers take the sharded route
-fixed_dt = true
-dt = 0.002
-t_max = 0.02
-run_to = "t_max"    # the sharded final-state route stops at t_max
-sample_stride = 10
+method = "rk4"      # explicit: kinetic electrons default to imex-ark3, which keeps
+                    # the whole-state placement (no sharded implicit solve)
+t_max = 0.1         # no dt, no fixed_dt: the CFL controller sets the step
+run_to = "t_max"    # stop at t_max instead of at heat-flux saturation
 progress_bar = false
 
 [geometry]

@@ -162,7 +162,8 @@ path = "solvers/nonlinear/diagnostics.py"
 # 3529 -> 3539: the prepared scan runs through the digest-keyed executable cache.
 # 3539 -> 3542: Lawson integrating-factor steppers.
 # 3542 -> 2747: the saturated-window heat flux and sheared drivers moved to transport_window.py.
-baseline_lines = 2747
+# 2747 -> 2787: the packed carry of a named route (fields, diagnostics, unpack) joins the scan.
+baseline_lines = 2787
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -226,7 +227,8 @@ recursive = true
 # 70078 -> 70149: phase-1 split of the diagnostics driver (module header and export list of
 # transport_window.py; no code added).
 # 70149 -> 70598: species groups of unequal moment counts on the Hermite-sharded nonlinear route (measured).
-baseline = 70598
+# 70598 -> 70931: the packed carry of those groups on the diagnosed, adaptive and chunked scan (measured).
+baseline = 70931
 target = 45000
 
 [[line_budget_policy.counts]]

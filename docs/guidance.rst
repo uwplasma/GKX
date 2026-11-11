@@ -607,9 +607,9 @@ large when the state's ``Nl`` is set by the ions. Uniform counts give the same
 factor to round-off (solve 2e-14 relative, collision sub-step bitwise). On a
 loaded 10-core CPU the 32x32x16 ions (8, 16) build took 254 s against 3819 s
 padded (16 against 9 GB resident). The state and restart
-arrays keep the ``[run]`` extents (zeros above a species' count). Hermite-sharded
-routes, a custom collision operator and the per-term diagnostics refuse unequal
-counts with ``NotImplementedError``.
+arrays keep the ``[run]`` extents (zeros above a species' count). A directly
+called Hermite-sharded RHS, a custom collision operator and the per-term
+diagnostics refuse unequal counts with ``NotImplementedError``.
 
 Kinetic electrons
 -----------------

@@ -2445,7 +2445,6 @@ _CFL_MARGIN_MEASURED: dict[str, float] = {
     "benchmarks/cases/kbm_nonlinear_short_lockin.toml": 0.18,
     "benchmarks/cases/kbm_nonlinear_t100.toml": 0.90,
     "benchmarks/cases/kbm_nonlinear_t100_nx4ny8_dt9e4.toml": 0.65,
-    "examples/14_multi_device_species/case.toml": 0.30,
 }
 
 # Decks over FIXED_DT_CFL_WARN_RATIO that ship anyway, and the failure each one
@@ -2472,6 +2471,7 @@ _CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = dict.fromkeys(
         "examples/04_nonlinear_stellarator/case_full.toml",
         "benchmarks/cases/w7x_nonlinear_imported_geometry.toml",
         "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml",
+        "examples/14_multi_device_species/case.toml",
     ),
     "fixed_dt = false: adaptive dt",
 )

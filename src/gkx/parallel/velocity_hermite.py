@@ -406,6 +406,26 @@ def hermite_halo_interior(
     return _slice_axis(extended, axis, depth, -depth)
 
 
+def hermite_head_terms(local: Any, index: Any, rows: int) -> Any:
+    """This shard's share of the leading ``rows`` global Hermite rows (pre-reduction)."""
+
+    import jax.numpy as jnp
+
+    return jnp.concatenate(
+        [
+            jnp.sum(
+                jnp.where(
+                    (index == row).reshape((1, 1, index.shape[0], 1, 1, 1)), local, 0
+                ),
+                axis=2,
+                keepdims=True,
+            )
+            for row in range(int(rows))
+        ],
+        axis=2,
+    )
+
+
 def hermite_field_moment_head(
     local: Any, *, index: Any, chunks: int, axis_name: str, rows: int = 2
 ) -> Any:
@@ -423,28 +443,17 @@ def hermite_field_moment_head(
     """
 
     import jax
-    import jax.numpy as jnp
 
-    blocks = int(chunks)
-    if blocks < 2:
+    if int(chunks) < 2:
         return _slice_axis(local, 2, 0, int(rows))
-    selected = [
-        jnp.sum(
-            jnp.where(
-                (index == row).reshape((1, 1, index.shape[0], 1, 1, 1)), local, 0
-            ),
-            axis=2,
-            keepdims=True,
-        )
-        for row in range(int(rows))
-    ]
-    return jax.lax.psum(jnp.concatenate(selected, axis=2), axis_name)
+    return jax.lax.psum(hermite_head_terms(local, index, rows), axis_name)
 
 
 __all__ = [
     "HERMITE_CACHE_AXES",
     "hermite_cache_partition_specs",
     "hermite_field_moment_head",
+    "hermite_head_terms",
     "hermite_halo_extend",
     "hermite_halo_interior",
     "hermite_neighbor_reference",

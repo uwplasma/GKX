@@ -51,6 +51,7 @@ from gkx.workflows.runtime.parallel_nonlinear import (
     NonlinearParallelPlan,
     _integrate_species_hermite_final_state,
     _supports_species_hermite_policy,
+    whole_state_reason,
     _species_hermite_diagnostic_rhs,
     assert_nonlinear_parallel_identity,
     resolve_nonlinear_parallel_plan,
@@ -624,6 +625,7 @@ def _run_chunked_diagnostics(
                 ctx.geom,
                 ctx.params,
                 initial_dt=control["next_dt"] if continue_pi else None,
+                template=None if rhs_factory is None else ctx.G0,
                 **kwargs,
             )
         else:
@@ -752,10 +754,13 @@ def _run_chunked_diagnostics(
         stop_condition=None if stop_condition is None else loop_stop,
     )
     diag = chunk_result.diagnostics
+    state = chunk_result.state
+    if rhs_factory is not None:  # a named route carries a packed state
+        state = next(iter(compile_cache.values())).unpacked(state)
     return (
         jnp.asarray(diag.t),
         diag,
-        chunk_result.state,
+        state,
         chunk_result.fields,
         chunk_result.stop_decision,
     )
@@ -1000,7 +1005,9 @@ def _run_sharded(
     if (
         (prepare is None or policy.diagnostics_on)
         and (policy.diagnostics_on or not cfg.time.fixed_dt or policy.show_progress)
-        and _supports_species_hermite_policy(cfg, ctx, policy, method=method, plan=plan)
+        and _supports_species_hermite_policy(
+            cfg, ctx, policy, method=method, plan=plan, unequal_ok=True
+        )
     ):
         rhs_factory = partial(
             _species_hermite_diagnostic_rhs,
@@ -1025,9 +1032,7 @@ def _run_sharded(
                 raise ValueError("unsupported fixed-step parallel preparation policy")
             return named
         if named is None:
-            status(
-                "using whole-state placement; named collectives do not support these settings"
-            )
+            status(whole_state_reason(method or cfg.time.method))
             sharded_ctx = replace(ctx, G0=shard_nonlinear_state(ctx.G0, plan))
             result, sharded_state = _run_once(
                 cfg, sharded_ctx, policy, method=method, status=status

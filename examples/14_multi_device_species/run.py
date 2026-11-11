@@ -7,10 +7,17 @@ the electron device with 64 entries to the ion device's 16. It cuts the Hermite
 axis of *each* species group into one block per device, so a device holds
 ``ns * nl * nm / devices`` entries of every group: 40 each on two devices, whatever
 the counts. The blocks exchange a width-2 Hermite halo and one field reduction per
-right-hand side. The script runs the case on one device and then sharded, prints
-where the work went, and checks that the final states agree. Two host CPU devices
-stand in for two GPUs; the flag below creates them and is not needed on a machine
-with two or more GPUs. A few seconds on a laptop CPU.
+right-hand side.
+
+The run is the default one: the CFL controller sets the step and the diagnostics
+are saved. The sharded run keeps the blocks as its state for the whole run. Each
+device reduces its own blocks for the diagnostics (heat flux, free energy) and one
+small reduction combines them, so no step gathers the state; it is unpacked to the
+``(Nl, Nm)`` extent only when the run returns. The script runs the case on one
+device and then sharded, prints where the work went, and checks that the final
+states and the heat-flux traces agree. Two host CPU devices stand in for two GPUs;
+the flag below creates them and is not needed on a machine with two or more GPUs.
+A few seconds on a laptop CPU.
 """
 
 import json
@@ -52,9 +59,7 @@ print(
     " on the busiest)"
 )
 
-options = dict(
-    ky_target=run.ky, Nl=run.Nl, Nm=run.Nm, diagnostics=False, return_state=True
-)
+options = dict(ky_target=run.ky, Nl=run.Nl, Nm=run.Nm, return_state=True)
 serial = gkx.solve(case, **options)  # the deck as shipped is serial
 
 if len(jax.devices()) < DEVICES:
@@ -81,7 +86,11 @@ for line in messages:
 
 state, reference = np.asarray(sharded.state), np.asarray(serial.state)
 difference = float(np.max(np.abs(state - reference)))
+flux, flux_reference = sharded.diagnostics.heat_flux_t, serial.diagnostics.heat_flux_t
+flux_difference = float(np.max(np.abs(flux - flux_reference)) / np.max(flux_reference))
+print(f"{len(sharded.t)} adaptive steps to t = {sharded.t[-1]:.3g}")
 print(f"largest difference from the serial state: {difference:.2e}")
+print(f"largest difference of the heat-flux trace, relative: {flux_difference:.2e}")
 for i, (name, (nl, nm)) in enumerate(counts.items()):
     kept = np.abs(state[i, :nl, :nm]).max()
     above = max(
@@ -95,16 +104,23 @@ summary = {
     "devices": DEVICES,
     "entries_per_device": total / DEVICES,
     "entries_per_device_padded": padded / DEVICES,
+    "steps": len(sharded.t),
     "max_abs_difference_from_serial": difference,
+    "heat_flux_relative_difference_from_serial": flux_difference,
 }
 (OUTPUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-fig, ax = plt.subplots(figsize=(6.0, 3.4))
+fig, (left, ax) = plt.subplots(1, 2, figsize=(9.0, 3.4))
+left.plot(serial.t, flux_reference, "-", label="one device")
+left.plot(sharded.t, flux, "o", ms=4, label=f"{DEVICES} devices")
+left.set(xlabel="t", ylabel="heat flux", title="Saved diagnostic")
+left.legend(frameon=False)
 hermite = np.abs(state).sum(axis=(1, 3, 4, 5))  # (species, Hermite order)
 for i, name in enumerate(counts):
     ax.semilogy(np.arange(hermite.shape[1]), hermite[i] + 1e-30, "o-", label=name)
 ax.set(xlabel="Hermite order m", ylabel=r"$\sum |G|$", title="Hermite spectrum")
 ax.legend(frameon=False)
-ax.grid(alpha=0.3)
+for axis in (left, ax):
+    axis.grid(alpha=0.3)
 fig.tight_layout()
 fig.savefig(OUTPUT / "multi_device_species.png", dpi=150)
 print(f"wrote {OUTPUT}/summary.json and {OUTPUT}/multi_device_species.png")

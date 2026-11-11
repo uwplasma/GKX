@@ -12,12 +12,17 @@ the entries per device, so the stepper, the projector and the scan carry see the
 single array they see on the uniform mesh. The field solve and the
 magnetic-flutter halo are the uniform route's (:mod:`gkx.parallel.integrators`);
 each group's right-hand side runs on its own exact-size cache.
+
+:class:`GroupedLayout` is the same packed array as the carry of the diagnosed
+(adaptive, chunked, progress) scan: the right-hand side, field solve and
+diagnostics run on it with in-shard reductions, and the state is unpacked to
+the ``(Ns, Nl, Nm)`` extent only for output.
 """
 
 from __future__ import annotations
 
-from dataclasses import replace
-from typing import Any
+from dataclasses import dataclass, replace
+from typing import Any, Callable, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -28,6 +33,7 @@ from gkx.operators.linear.cache_arrays import moment_runs
 from gkx.parallel import integrators as base
 from gkx.parallel.velocity_hermite import (
     hermite_cache_partition_specs,
+    hermite_head_terms,
     hermite_window_cache_arrays,
     hermite_window_indices,
 )
@@ -74,26 +80,33 @@ def _unpack(packed, runs, blocks, rest, *, shape=None):
     return slabs if shape is None else out
 
 
-def prepare_grouped_hermite(
+@dataclass(frozen=True)
+class _Stage:
+    """Operands staged once on the Hermite mesh, and the shard-local right-hand side."""
+
+    runs: list
+    blocks: int
+    mesh: Any
+    resolved: Any
+    sharded: tuple
+    specs: tuple
+    group_params: list
+    local_rhs: Callable[..., Any]  # (local, *sharded) -> dG, fields, head, slabs
+
+
+def _stage(
     G0,
     cache,
     params,
     *,
-    dt,
-    steps,
-    method_key,
     term_cfg,
-    grid,
-    vol_fac,
-    flux_fac,
     plan,
     devices,
     num_devices,
     compressed_real_fft,
     laguerre_mode,
+    head_rows,
 ):
-    """Stage the operands once; return the trajectory callable of ``base``."""
-
     from gkx.parallel.velocity_plan import grouped_hermite_device_counts
     from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
 
@@ -122,11 +135,8 @@ def prepare_grouped_hermite(
     depth = int(resolved.hermite_ghost_depth)
     base._reject_unsharded_hermite_terms(term_cfg, params, resolved)
     mesh = Mesh(np.array(device_list[:blocks], dtype=object), ("m",))
-    state_dtype = G0.dtype
-    real_dtype = jnp.real(jnp.empty((), dtype=state_dtype)).dtype
     rest = tuple(G0.shape[3:])
-    record = vol_fac is not None and flux_fac is not None
-    head_rows = base._DIAGNOSTIC_MOMENT_ROWS if record else 2
+    real_dtype = jnp.real(jnp.empty((), dtype=G0.dtype)).dtype
     linear_cfg = replace(term_cfg, nonlinear=0.0)
     rate = params.end_damping_rate(cache.dz * cache.damp_profile.shape[-1], real_dtype)
     group_params = [
@@ -146,7 +156,7 @@ def prepare_grouped_hermite(
         for v, s in zip(leaves, specs, strict=True)
     )
 
-    def local_step(local, *rest_leaves):
+    def local_rhs(local, *rest_leaves):
         slabs = _unpack(local, runs, blocks, rest)
         pos, heads, kwargs = 0, [], []
         for c, slab, (_, _, nl, nm, _), names, p in zip(
@@ -183,10 +193,52 @@ def prepare_grouped_hermite(
             ).reshape(-1, *rest)
             for slab, kw in zip(slabs, kwargs, strict=True)
         ]
-        dG = jnp.concatenate(dG, axis=0)
+        return jnp.concatenate(dG, axis=0), fields, head, slabs
+
+    return _Stage(
+        runs, blocks, mesh, resolved, sharded, tuple(specs), group_params, local_rhs
+    )
+
+
+def prepare_grouped_hermite(
+    G0,
+    cache,
+    params,
+    *,
+    dt,
+    steps,
+    method_key,
+    term_cfg,
+    grid,
+    vol_fac,
+    flux_fac,
+    plan,
+    devices,
+    num_devices,
+    compressed_real_fft,
+    laguerre_mode,
+):
+    """Stage the operands once; return the trajectory callable of ``base``."""
+
+    record = vol_fac is not None and flux_fac is not None
+    st = _stage(
+        G0,
+        cache,
+        params,
+        term_cfg=term_cfg,
+        plan=plan,
+        devices=devices,
+        num_devices=num_devices,
+        compressed_real_fft=compressed_real_fft,
+        laguerre_mode=laguerre_mode,
+        head_rows=base._DIAGNOSTIC_MOMENT_ROWS if record else 2,
+    )
+
+    def local_step(local, *leaves):
+        dG, fields, head, slabs = st.local_rhs(local, *leaves)
         scalars = (
             base._fused_scalar_diagnostics(
-                list(zip(slabs, group_params, strict=True)),
+                list(zip(slabs, st.group_params, strict=True)),
                 head,
                 fields,
                 cache,
@@ -204,11 +256,11 @@ def prepare_grouped_hermite(
 
     compiled, sharding = base._scan_program(
         local_step,
-        tuple(specs),
-        mesh,
+        st.specs,
+        st.mesh,
         PartitionSpec("m"),
         cache=cache,
-        state_dtype=state_dtype,
+        state_dtype=G0.dtype,
         dt=dt,
         steps=steps,
         method_key=method_key,
@@ -216,14 +268,208 @@ def prepare_grouped_hermite(
         record=record,
         axis_names={"m"},
     )
+    runs, blocks, rest = st.runs, st.blocks, tuple(G0.shape[3:])
 
     def execute(operands, value):
-        packed = _pack(jnp.asarray(value, dtype=state_dtype), runs, blocks)
+        packed = _pack(jnp.asarray(value, dtype=G0.dtype), runs, blocks)
         final, stacked = compiled(base.stage_from_host(packed, sharding), *operands)
         traces = dict(zip(base._TRACE_NAMES, stacked, strict=True)) if record else {}
         state = _unpack(final, runs, blocks, rest, shape=tuple(G0.shape))
         return base.SpeciesHermiteRun(
-            state=state, traces=traces, plan=resolved, mesh_shape=(1, blocks)
+            state=state, traces=traces, plan=st.resolved, mesh_shape=(1, blocks)
         )
 
-    return jax.tree_util.Partial(execute, sharded)
+    return jax.tree_util.Partial(execute, st.sharded)
+
+
+class _View(NamedTuple):
+    """What the diagnostic kernels receive for the packed state."""
+
+    packed: Any  # the (D * R, ky, kx, z) carry
+    head: Any  # its leading Hermite rows, complete on every device
+
+    @property
+    def shape(self):
+        return self.head.shape
+
+    @property
+    def ndim(self):
+        return self.head.ndim
+
+
+class GroupedLayout:
+    """Packed carry of the diagnosed scan, callable as its right-hand side.
+
+    ``layout(P)`` returns ``(dP, fields)`` like the uniform named right-hand
+    side; ``fields``, ``pack`` and ``unpack`` complete the interface. The
+    diagnostics run in-shard on the packed array: the moment head (the rows
+    heat flux, particle flux and heating read) and the free-energy spectra are
+    reduced with one ``psum`` each, and every other term is a function of the
+    replicated fields. No step gathers the state.
+    """
+
+    packed = True
+
+    def __init__(self, G0, cache, params, *, term_cfg, plan, **options):
+        st = _stage(
+            G0,
+            cache,
+            params,
+            term_cfg=term_cfg,
+            plan=plan.mesh_plan,
+            devices=plan.devices,
+            num_devices=None,
+            head_rows=2,
+            **options,
+        )
+        self._st, self.operands = st, st.sharded
+        self.shape = tuple(G0.shape)
+        self.sharding = NamedSharding(st.mesh, PartitionSpec("m"))
+        rest = self.rest = self.shape[3:]
+        runs, blocks = st.runs, st.blocks
+        real_dtype = jnp.real(jnp.empty((), dtype=G0.dtype)).dtype
+        Nl, Nm = self.shape[1:3]
+
+        def region(fn, ins, out):
+            return jax.shard_map(
+                fn,
+                mesh=st.mesh,
+                in_specs=ins,
+                out_specs=out,
+                axis_names={"m"},
+                check_vma=base._CHECK_VMA,
+            )
+
+        def terms(local, rows):
+            """Each group's share of the leading ``rows`` Hermite rows."""
+
+            at = jax.lax.axis_index("m")
+            return [
+                hermite_head_terms(
+                    s, at * (nm // blocks) + jnp.arange(nm // blocks), rows
+                )
+                for s, (*_, nm, _) in zip(_unpack(local, runs, blocks, rest), runs)
+            ]
+
+        def padded(parts):
+            return jnp.concatenate(
+                [
+                    jnp.pad(h, [(0, 0), (0, Nl - nl)] + [(0, 0)] * 4)
+                    for h, (_, _, nl, _, _) in zip(parts, runs)
+                ]
+            )
+
+        def rhs(local, *leaves):
+            dG, fields, *_ = st.local_rhs(local, *leaves)
+            return dG, fields
+
+        def fields(local):
+            parts = jax.lax.psum(terms(local, 2), "m")
+            return base._local_fields(
+                padded(parts), cache, params, term_cfg, real_dtype, None
+            )
+
+        def heads(local, previous):
+            new, old = jax.lax.psum((terms(local, 4), terms(previous, 2)), "m")
+            return padded(new), padded(old)
+
+        spec = PartitionSpec("m")
+        self._rhs = region(rhs, (spec, *st.specs), (spec, PartitionSpec()))
+        self._fields = region(fields, spec, PartitionSpec())
+        self._heads = region(heads, (spec, spec), PartitionSpec())
+
+        def free_energy(kernel, grid, vol_fac, use_dealias):
+            def local(local):
+                at = jax.lax.axis_index("m")
+                out = [
+                    kernel(s, grid, p, vol_fac, use_dealias=use_dealias)
+                    for s, p in zip(_unpack(local, runs, blocks, rest), st.group_params)
+                ]
+                if not isinstance(out[0], tuple):
+                    return jax.lax.psum(sum(out), "m")
+                *spectra, lm = zip(*out)
+                # (ns, Nm_local, nl) -> its place in the (ns, Nm, Nl) extent
+                lm = [
+                    jnp.pad(
+                        jax.lax.dynamic_update_slice(
+                            jnp.zeros((x.shape[0], nm, x.shape[2]), x.dtype),
+                            x,
+                            (0 * at, at * (nm // blocks), 0 * at),
+                        ),
+                        [(0, 0), (0, Nm - nm), (0, Nl - nl)],
+                    )
+                    for x, (_, _, nl, nm, _) in zip(lm, runs)
+                ]
+                return jax.lax.psum(
+                    (*(jnp.concatenate(x) for x in spectra), jnp.concatenate(lm)), "m"
+                )
+
+            return lambda view: region(local, spec, PartitionSpec())(view.packed)
+
+        self._free_energy = free_energy
+
+    def __call__(self, G):
+        return self._rhs(G, *self.operands)
+
+    def fields(self, G, *_, **__):
+        return self._fields(G)
+
+    def pack(self, G):
+        if G.ndim != len(self.shape):
+            return G
+        packed = _pack(G, self._st.runs, self._st.blocks)
+        return jax.lax.with_sharding_constraint(packed, self.sharding)
+
+    def unpack(self, G):
+        if G.ndim == len(self.shape):
+            return G
+        return _unpack(G, self._st.runs, self._st.blocks, self.rest, shape=self.shape)
+
+    def kernels(self, base_kernels):
+        """The diagnostic kernels, reading the packed state through :class:`_View`."""
+
+        def energy(kernel):
+            return lambda G, grid, params, vol_fac, *, use_dealias: self._free_energy(
+                kernel, grid, vol_fac, use_dealias
+            )(G)
+
+        def flux(kernel):  # reads the moment head
+            return lambda G, *a, **k: kernel(G.head, *a, **k)
+
+        def heating(kernel):  # reads the heads of both states
+            return lambda G, old, *a, **k: kernel(G.head, old.head, *a, **k)
+
+        wrappers = {
+            **dict.fromkeys(
+                ("distribution_free_energy", "distribution_free_energy_resolved"),
+                energy,
+            ),
+            **dict.fromkeys(
+                (
+                    "heat_flux_species",
+                    "heat_flux_channel_resolved_species",
+                    "particle_flux_species",
+                    "particle_flux_channel_resolved_species",
+                ),
+                flux,
+            ),
+            **dict.fromkeys(
+                ("turbulent_heating_species", "turbulent_heating_resolved_species"),
+                heating,
+            ),
+        }
+        return replace(
+            base_kernels,
+            **{n: w(getattr(base_kernels, n)) for n, w in wrappers.items()},
+        )
+
+    def diagnostics(self, diagnostic):
+        """``diagnostic`` (built on :meth:`kernels`) as a function of packed states."""
+
+        def compute(G, fields, previous, previous_fields, dt):
+            head, old = self._heads(G, previous)
+            return diagnostic(
+                _View(G, head), fields, _View(previous, old), previous_fields, dt
+            )
+
+        return compute

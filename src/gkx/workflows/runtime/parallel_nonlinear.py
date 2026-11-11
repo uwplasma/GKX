@@ -11,11 +11,12 @@ Fixed-step diagnostics-off runs retain the final-state scan where supported.
 Diagnosed preparation reuses the same backend with ``strict_identity=False``;
 model overrides remain unsupported. Active collisions, sources, fixed modes,
 checkpointing, additional state sharding and reflectionless closures retain the
-ordinary solver. Species with unequal moment counts take the fixed-step
-final-state scan on a Hermite mesh that cuts each species group at its own size
-(:mod:`gkx.parallel.grouped_hermite`); diagnosed, adaptive and progress runs
-retain the ordinary solver for them. Uniform moment stamps must match the
-normalized state. Fallback reports whole-state placement and does not imply
+ordinary solver. Species with unequal moment counts run on a Hermite mesh that
+cuts each species group at its own size (:mod:`gkx.parallel.grouped_hermite`):
+the fixed-step final-state scan, and the diagnosed, adaptive, chunked and
+progress runs, which carry the packed state and unpack it only for output.
+IMEX steppers retain the whole-state placement. Uniform moment stamps must
+match the normalized state. Fallback reports whole-state placement and does not imply
 distributed RHS work.
 
 ``ky`` is a single-process placement diagnostic with replicated work. FFT axes
@@ -59,6 +60,12 @@ _SPECIES_HERMITE_ALIASES = {
     "m",
     "hermite",
 }
+
+# Steppers the named collectives advance. The IMEX family solves an implicit
+# linear system every step, which needs a sharded operator and preconditioner
+# on the species x Hermite mesh; those do not exist, so IMEX runs keep the
+# whole-state placement.
+NAMED_METHODS = frozenset({"rk2", "rk3", "rk4", "sspx3", "rk4-pi"})
 
 # Same convention as the device-z identity gates, so a nonlinear routing failure
 # and a device-z gate failure mean the same thing.
@@ -153,6 +160,18 @@ class NonlinearParallelPlan:
             f"{self.device_count} of {len(self.devices)} devices, {shard}, "
             f"collectives: {collectives} (strict_identity={strict})"
         )
+
+
+def whole_state_reason(method: str) -> str:
+    """The status line for a run the named collectives do not advance."""
+
+    why = "do not support these settings"
+    if method not in NAMED_METHODS:
+        why = (
+            f"advance only {', '.join(sorted(NAMED_METHODS))}, not '{method}' (an "
+            "implicit stepper needs a sharded operator and preconditioner)"
+        )
+    return f"using whole-state placement; named collectives {why}"
 
 
 def _normalized(value: Any, default: str) -> str:
@@ -473,7 +492,7 @@ def _supports_species_hermite_policy(
         and not cfg.time.collision_split
         and not cfg.time.state_sharding
         and (method is None or method == cfg.time.method)
-        and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3", "rk4-pi"}
+        and cfg.time.method in NAMED_METHODS
         and (uniform or (unequal_ok and plan.groups is not None))
         and all(
             sp.hermite_closure == "hypercollision" for sp in cfg.species if sp.kinetic
@@ -492,6 +511,19 @@ def _species_hermite_diagnostic_rhs(
 
     from gkx.parallel.integrators import _prepare_species_hermite_rhs
 
+    if plan.groups:  # species keep unequal counts: the carry is the packed layout
+        from gkx.parallel.grouped_hermite import GroupedLayout
+
+        layout = GroupedLayout(
+            prepared.G0,
+            prepared.cache,
+            params,
+            term_cfg=policies.collision_policy.rhs_terms,
+            plan=plan,
+            compressed_real_fft=compressed_real_fft,
+            laguerre_mode=laguerre_mode,
+        )
+        return layout, layout.sharding
     return _prepare_species_hermite_rhs(
         prepared.G0,
         prepared.cache,
@@ -603,6 +635,7 @@ __all__ = [
     "IDENTITY_RTOL",
     "SUPPORTED_NONLINEAR_AXES",
     "SUPPORTED_NONLINEAR_STRATEGIES",
+    "NAMED_METHODS",
     "NonlinearParallelIdentityError",
     "NonlinearParallelPlan",
     "NonlinearParallelRoutingError",

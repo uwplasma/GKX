@@ -3403,3 +3403,151 @@ def test_runtime_routes_unequal_counts_through_the_grouped_mesh(devices):
     ref, got = np.asarray(serial.state), np.asarray(sharded.state)
     assert np.max(np.abs(ref)) > 0.0
     np.testing.assert_allclose(got, ref, rtol=0.0, atol=5.0e-6)
+
+
+# ---- the diagnosed, adaptive, chunked run keeps the packed carry end to end ----
+
+
+def _diagnosed_case(beta, method):
+    """The unequal-count case on the default route: CFL step, saved diagnostics."""
+
+    from gkx.config import TimeConfig
+
+    cfg = _unequal_runtime_case()
+    physics = replace(cfg.physics, beta=beta)
+    if beta:
+        physics = replace(
+            physics, electrostatic=False, electromagnetic=True, use_apar=True
+        )
+    time = TimeConfig(
+        t_max=0.1, dt=0.01, method=method, fixed_dt=False, dt_max=0.5, run_to="t_max"
+    )
+    return replace(cfg, physics=physics, time=replace(time, chunk_steps=2))
+
+
+def _parallel(cfg, devices, **options):
+    from gkx.config import RuntimeParallelConfig
+
+    parallel = RuntimeParallelConfig(
+        strategy="shard_map", axis="species_hermite", num_devices=devices, **options
+    )
+    return replace(cfg, parallel=parallel)
+
+
+@pytest.mark.parametrize(
+    ("devices", "beta", "method"),
+    [(2, 0.0, "rk4"), (4, 0.01, "rk4"), (4, 0.0, "rk4-pi"), (2, 0.01, "rk4-pi")],
+    ids=["es-2-rk4", "em-4-rk4", "es-4-rk4pi", "em-2-rk4pi"],
+)
+def test_diagnosed_adaptive_unequal_run_matches_the_serial_run(devices, beta, method):
+    from gkx.workflows.nonlinear import run_runtime_nonlinear
+
+    if len(jax.devices()) < devices:
+        pytest.skip("needs the requested device count")
+    cfg = _diagnosed_case(beta, method)
+    options = dict(ky_target=0.2, Nl=3, Nm=16, return_state=True)
+    serial = run_runtime_nonlinear(cfg, **options)
+    messages = []
+    sharded = run_runtime_nonlinear(
+        _parallel(cfg, devices, strict_identity=False),
+        status_callback=messages.append,
+        show_progress=method == "rk4-pi",
+        **options,
+    )
+    assert any("species groups" in m and "own size" in m for m in messages)
+    assert any("named species-Hermite RHS" in m for m in messages)
+    np.testing.assert_allclose(sharded.t, serial.t, rtol=1e-6)
+    assert np.all(np.diff(serial.t) > 0) and len(serial.t) >= 3
+    np.testing.assert_allclose(sharded.state, serial.state, rtol=0.0, atol=5.0e-6)
+    assert np.asarray(serial.state).shape == (2, 3, 16, 5, 4, 16)
+    one, two = sharded.diagnostics, serial.diagnostics
+    assert np.max(np.abs(np.asarray(two.Wphi_t))) > 0.0
+    assert np.max(np.abs(np.asarray(two.heat_flux_species_t))) > 0.0
+    pairs = [
+        (v, getattr(two, k))
+        for k, v in vars(one).items()
+        if k != "resolved" and v is not None
+    ]
+    pairs += [(v, getattr(two.resolved, k)) for k, v in vars(one.resolved).items()]
+    for candidate, reference in pairs:
+        np.testing.assert_allclose(candidate, reference, rtol=1e-4, atol=5e-6)
+
+
+def _loop_bodies(hlo):
+    """The text of every computation a ``while`` body reaches, from compiled HLO."""
+
+    import re
+
+    blocks = {
+        m.group(1): m.group(2)
+        for m in re.finditer(
+            r"^(?:ENTRY )?%?([\w.\-]+) [^\n]*\{\n(.*?)^\}", hlo, re.M | re.S
+        )
+    }
+    todo = [m for t in blocks.values() for m in re.findall(r"body=%?([\w.\-]+)", t)]
+    seen, text = set(), []
+    while todo:
+        name = todo.pop()
+        if name in seen or name not in blocks:
+            continue
+        seen.add(name)
+        text.append(blocks[name])
+        todo += re.findall(
+            r"(?:body|condition|to_apply|calls)=%?([\w.\-]+)", blocks[name]
+        )
+    return "\n".join(text)
+
+
+@pytest.mark.parametrize("devices", [2, 4])
+def test_diagnosed_unequal_scan_never_gathers_the_state(devices):
+    import gkx
+    from gkx.config import TimeConfig
+
+    if len(jax.devices()) < devices:
+        pytest.skip("needs the requested device count")
+    cfg = _diagnosed_case(0.01, "rk4")
+    time = TimeConfig(t_max=0.04, dt=0.01, method="rk4", fixed_dt=True)
+    model = gkx.prepare(
+        _parallel(replace(cfg, time=time), devices, strict_identity=False),
+        ky_target=0.2,
+        Nl=3,
+        Nm=16,
+        steps=3,
+    )
+    backend = model._backend
+    assert backend.unpack is not None  # the packed layout is the carry
+    hlo = jax.jit(backend._run_raw).lower(backend.initial_state).compile().as_text()
+    body = _loop_bodies(hlo)
+    assert "all-reduce" in body and "collective-permute" in body
+    assert "all-gather" not in hlo and "all-to-all" not in hlo
+
+
+def test_diagnosed_fixed_step_unequal_run_keeps_the_strided_samples():
+    from gkx.workflows.nonlinear import run_runtime_nonlinear
+
+    if len(jax.devices()) < 2:
+        pytest.skip("needs two devices")
+    cfg = _unequal_runtime_case()
+    options = dict(
+        ky_target=0.2, Nl=3, Nm=16, steps=5, sample_stride=3, diagnostics_stride=2
+    )
+    serial = run_runtime_nonlinear(cfg, return_state=True, **options)
+    sharded = run_runtime_nonlinear(
+        _parallel(cfg, 2, strict_identity=False), return_state=True, **options
+    )
+    np.testing.assert_allclose(sharded.t, serial.t)
+    np.testing.assert_allclose(sharded.state, serial.state, rtol=0.0, atol=5.0e-6)
+    for name in ("Wg_t", "Wphi_t", "heat_flux_species_t", "particle_flux_t"):
+        candidate = np.asarray(getattr(sharded.diagnostics, name))
+        reference = np.asarray(getattr(serial.diagnostics, name))
+        np.testing.assert_allclose(candidate, reference, rtol=1e-4, atol=5e-6)
+
+
+def test_implicit_steppers_say_why_they_keep_the_whole_state_placement():
+    from gkx.workflows.runtime.parallel_nonlinear import (
+        whole_state_reason as _whole_state_reason,
+    )
+
+    assert "imex-ark3" in _whole_state_reason("imex-ark3")
+    assert "sharded operator and preconditioner" in _whole_state_reason("imex-ark3")
+    assert "imex" not in _whole_state_reason("rk4")

@@ -696,12 +696,13 @@ dominated by electron physics. Check the growth rate or the heat flux against
 the next larger counts of that species, as for ``[run]`` (:doc:`guidance`).
 
 *Several devices.* With ``[parallel] strategy = "shard_map"`` and
-``axis = "species_hermite"`` the fixed-step final-state route cuts each species
-group's Hermite axis into one block per device, so a device advances
+``axis = "species_hermite"`` the default run (adaptive step, saved diagnostics,
+progress) and the fixed-step final-state route cut each species group's Hermite
+axis into one block per device, so a device advances
 :math:`\sum_g n_g N_{l,g} N_{m,g}/D` entries whatever the counts; each group's
 ``Nm`` must divide by the device count (:ref:`unequal-moment-mesh`;
-``examples/14_multi_device_species``). Other sharded routes keep the whole-state
-placement for unequal counts.
+``examples/14_multi_device_species``). ``imex-ark3`` and ``imex-ars3`` keep the
+whole-state placement for unequal counts.
 
 *Not supported.* The Hermite-sharded RHS called directly with unequal counts, a
 custom collision operator and the per-term diagnostic RHS raise
@@ -739,8 +740,8 @@ Species with unequal ``[[species]] Nl`` / ``Nm`` run on the same mesh request:
 own size, one block per device, so the work per device is balanced whatever the
 counts. Each group's ``Nm`` must divide by ``num_devices`` (blocks of at least
 two moments); otherwise the run keeps the whole-state placement, and the status
-line says which. This applies to the fixed-step explicit final-state route
-(:ref:`unequal-moment-mesh`).
+line says which. This applies to the explicit steppers ``rk2``, ``rk3``,
+``rk4``, ``sspx3`` and ``rk4-pi``, diagnosed or not (:ref:`unequal-moment-mesh`).
 
 For runtime ``k_y`` scans, ``strategy = "batch"`` with ``axis = "ky"`` selects
 the production independent-worker path. ``num_devices`` is interpreted as the
