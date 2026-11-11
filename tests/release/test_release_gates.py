@@ -2183,7 +2183,7 @@ Measurement protocol for the cleared decks: run the deck's own configuration
 through ``run_runtime_nonlinear`` for its first saturation chunk -- 128 steps or
 the deck's whole budget, whichever is smaller, one diagnostic sample per step,
 which is what ``_run_chunked_diagnostics`` does -- and evaluate
-``saturation_stop_decision`` on the resulting trace. That reproduces the first
+``assess_saturation`` on the resulting trace. That reproduces the first
 decision the chunk loop would make, which is where a premature stop lands.
 """
 
@@ -2194,7 +2194,7 @@ _RUN_TO_REQUIRED = {
     "benchmarks/cases/miller_zonal_response.toml": "t_max",
     "benchmarks/cases/w7x_zonal_response_vmec.toml": "t_max",
     "benchmarks/cases/secondary_slab.toml": "t_max",
-    # Gallery tutorial decks: a fixed few-hundred-step window, never saturated.
+    # Gallery tutorial decks: a fixed short horizon, never saturated.
     "examples/03_nonlinear_tokamak/case.toml": "t_max",
     "examples/04_nonlinear_stellarator/case.toml": "t_max",
     "examples/05_kinetic_electrons/case.toml": "t_max",
@@ -2338,19 +2338,17 @@ def test_decks_cleared_for_the_default_carry_their_measurement() -> None:
     """A deck cleared to run under the default records what cleared it.
 
     The evidence has to name the gate that refused the first-chunk stop, in the
-    vocabulary ``saturation_stop_decision`` reports, so that "measured, looked
+    vocabulary ``assess_saturation`` reports, so that "measured, looked
     fine" cannot pass for a measurement.
     """
 
     refusal_gates = {
-        "flux_indistinguishable_from_zero",
-        "tau_ac_unresolved",
-        "window_below_min_window",
-        "rel_sem_above_threshold",
-        "window_not_stationary",
-        "guard_not_stationary",
-        "trace_shorter_than_min_samples",
-        "post_spinup_window_too_short",
+        "too_short",
+        "growing",
+        "quiescent",
+        "drifting",
+        "intermittent",
+        "unconfirmed",
     }
     for relative, evidence in sorted(_RUN_TO_DEFAULT_CLEARED.items()):
         assert _deck_run_to(relative) is None, (
@@ -2412,9 +2410,6 @@ _CFL_MARGIN_MEASURED: dict[str, float] = {
     "benchmarks/cases/kbm_nonlinear_short_lockin.toml": 0.18,
     "benchmarks/cases/kbm_nonlinear_t100.toml": 0.90,
     "benchmarks/cases/kbm_nonlinear_t100_nx4ny8_dt9e4.toml": 0.65,
-    # Gallery tutorial decks, measured at their [run] (Nl, Nm) = (2, 4).
-    "examples/03_nonlinear_tokamak/case.toml": 0.35,
-    "examples/04_nonlinear_stellarator/case.toml": 0.33,
 }
 
 # Decks over FIXED_DT_CFL_WARN_RATIO that ship anyway, and the failure each one
@@ -2429,6 +2424,8 @@ _CFL_MARGIN_OVER_BOUND: dict[str, str] = {}
 _CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = dict.fromkeys(
     (
         "examples/common_input.toml",
+        "examples/03_nonlinear_tokamak/case.toml",
+        "examples/04_nonlinear_stellarator/case.toml",
         "examples/05_kinetic_electrons/case.toml",
         "examples/05_kinetic_electrons/case_stellarator.toml",
         "benchmarks/cases/circular_vmec_nonlinear.toml",
@@ -2632,6 +2629,10 @@ def _prepare_failure(relative: str) -> str | None:
             return "saturation"
         if isinstance(error, FileNotFoundError):
             return "missing geometry file"
+        if (
+            "set fixed_dt = true" in text
+        ):  # the default imex-ark3 of low-beta kinetic electrons
+            return "adaptive imex"
         return f"{type(error).__name__}"
     return None
 
@@ -2664,7 +2665,7 @@ def test_a_saturation_deck_can_still_be_prepared_with_an_explicit_length() -> No
 def test_prepare_refusals_are_only_the_known_kinds() -> None:
     """No shipped deck may fail ``prepare`` for a reason nobody has looked at."""
 
-    known = {"saturation", "missing geometry file"}
+    known = {"saturation", "missing geometry file", "adaptive imex"}
     surprises: list[str] = []
     for relative in _shipped_decks():
         if relative in _DECKS_NOT_LOADABLE_AS_CASES:
@@ -2674,10 +2675,11 @@ def test_prepare_refusals_are_only_the_known_kinds() -> None:
             surprises.append(f"{relative}: {reason}")
 
     assert not surprises, (
-        "shipped decks fail gkx.prepare for reasons outside the two understood "
+        "shipped decks fail gkx.prepare for reasons outside the understood "
         "kinds -- a deck that stops at saturation, which prepare refuses by "
-        "design and now explains, and a deck whose geometry file is not "
-        "tracked:\n" + "\n".join(surprises)
+        "design and now explains, a deck whose geometry file is not tracked, "
+        "and a low-beta kinetic-electron deck whose default adaptive imex-ark3 "
+        "needs a fixed step to prepare:\n" + "\n".join(surprises)
     )
 
 

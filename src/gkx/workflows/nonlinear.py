@@ -17,11 +17,7 @@ from jax.experimental.multihost_utils import process_allgather
 
 from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.modes import select_ky_index
-from gkx.diagnostics.saturation import (
-    SaturationStopConfig,
-    _physical_saturation_stop_decision,
-    saturation_stop_decision,
-)
+from gkx.diagnostics.saturation import SaturationStopConfig, make_saturation_check
 from gkx.geometry import apply_geometry_grid_defaults
 from gkx.operators.linear.linked import project_to_linked_cover
 from gkx.operators.nonlinear.policies import bracket_cfl_rate
@@ -34,7 +30,13 @@ from gkx.solvers_time_explicit import (
     FIXED_DT_CFL_WARN_RATIO,
     _laguerre_velocity_max,
 )
-from gkx.config import RuntimeConfig, resolve_nonlinear_cfl_fac
+from gkx.config import (
+    LAWSON_CAP_OVER_BOUND,
+    LAWSON_DRIFT_SHARE,
+    LAWSON_METHODS,
+    RuntimeConfig,
+    resolve_nonlinear_cfl_fac,
+)
 from gkx.solvers_nonlinear_diagnostics import (
     _continue_nonlinear_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
@@ -299,7 +301,8 @@ def _prepare_context(
     dt: float | None,
     steps: int | None,
     status: Callable[[str], None],
-) -> _RunContext:
+    sharded: bool = False,
+) -> tuple[_RunContext, RuntimeConfig]:
     geom = build_runtime_geometry(cfg)
     status("building spectral grid")
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
@@ -345,9 +348,19 @@ def _prepare_context(
         steps=int(_infer_runtime_nonlinear_steps(cfg, dt=dt_val, steps=steps)),
         adaptive_chunked=steps is None and not bool(cfg.time.fixed_dt),
     )
+    if cfg.time.method == "auto":
+        pi = replace(cfg, time=replace(cfg.time, method="rk4-pi"))
+        cap = float(cfg.time.dt_max or ctx.dt)
+        margin = _nonlinear_cfl_margin(pi, ctx, Nl=Nl, Nm=Nm)
+        cfg = _resolve_auto_stepper(
+            cfg,
+            None if margin is None else (margin[0], cap / margin[0], margin[2]),
+            exact_drift_ok=not sharded and params.moments is None,
+            status=status,
+        )
     # Report an unsafe fixed step before integration.
     _report_nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm, status=status)
-    return ctx
+    return ctx, cfg
 
 
 def _diagnostic_policy(
@@ -433,11 +446,25 @@ def _diagnostic_kwargs(
 
 _RUN_TO_VALUES = ("saturation", "t_max")
 CFL_RETRY_FLOOR = 0.125  # at most three halvings of the CFL factor
+RUNAWAY_RISE, RUNAWAY_ENERGY = 1e4, 1e3
+
+
+def _chunk_runaway(wg: np.ndarray) -> bool:
+    """Non-finite free energy, or a 1e4-fold rise from a positive start to above 1e3."""
+
+    if not np.isfinite(wg).all():
+        return True
+    return bool(
+        wg.size and wg[0] > 0 and wg.max() > max(RUNAWAY_RISE * wg[0], RUNAWAY_ENERGY)
+    )
+
+
+_MIN_SATURATION_STEPS = 256
 
 
 def _saturation_stop_condition(
     cfg: RuntimeConfig, ctx: _RunContext, policy: _DiagnosticPolicy
-) -> Callable[[Any, Any, Any, Any], dict[str, Any]] | None:
+) -> Callable[[Any, Any, bool], dict[str, Any]] | None:
     """Build a diagnostic stop check when the run can reach its sample floor."""
 
     run_to = str(cfg.time.run_to).strip().lower()
@@ -445,28 +472,47 @@ def _saturation_stop_condition(
         raise ValueError(f"unknown [time] run_to '{cfg.time.run_to}'")
     if run_to != "saturation" or not policy.diagnostics_on:
         return None
-    stop_cfg = SaturationStopConfig(
-        rel_sem=float(cfg.time.saturation_rel_sem),
-        min_window=(
-            None
-            if cfg.time.saturation_min_window is None
-            else float(cfg.time.saturation_min_window)
-        ),
-    )
     # The chunked route records one diagnostic sample per step.
-    if not ctx.adaptive_chunked and int(ctx.steps) < max(int(stop_cfg.min_samples), 8):
+    if not ctx.adaptive_chunked and int(ctx.steps) < _MIN_SATURATION_STEPS:
         return None
+    return make_saturation_check(
+        SaturationStopConfig(
+            t_min=float(cfg.time.saturation_t_min),
+            rel_sem=float(cfg.time.saturation_rel_sem),
+            drift_rel=float(cfg.time.saturation_drift_rel),
+        ),
+        float(cfg.time.t_max),
+    )
 
-    def check(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
-        if not cfg.time.fixed_dt:
-            return _physical_saturation_stop_decision(
-                t, heat_flux, wphi, wg, config=stop_cfg
-            )
-        return saturation_stop_decision(
-            t, heat_flux, guard=wphi, free_energy_guard=wg, config=stop_cfg
-        )
 
-    return check
+def _resolve_auto_stepper(
+    cfg: RuntimeConfig,
+    margin: tuple[float, float, np.ndarray] | None,
+    *,
+    exact_drift_ok: bool,
+    status: Callable[[str], None],
+) -> RuntimeConfig:
+    """Replace ``method = "auto"`` by ``lawson-rk4-pi`` or ``rk4-pi``.
+
+    ``margin`` is (``rk4-pi`` bound step, step cap over it, frequency bound ``(radial drift,
+    binormal drift, streaming)``): the exact drift pays where it is most of the bound and
+    the cap is well above the bound step.
+    """
+
+    share = cap_ratio = 0.0
+    if margin is not None:
+        share, cap_ratio = float(margin[2][:2].sum() / margin[2].sum()), margin[1]
+    lawson = (
+        exact_drift_ok
+        and share >= LAWSON_DRIFT_SHARE
+        and cap_ratio >= LAWSON_CAP_OVER_BOUND
+    )
+    method = "lawson-rk4-pi" if lawson else "rk4-pi"
+    status(
+        f"stepper auto: {method} (drift is {100 * share:.0f}% of the CFL bound, "
+        f"step cap is {cap_ratio:.1f}x the bound step)"
+    )
+    return replace(cfg, time=replace(cfg.time, method=method))
 
 
 def _nonlinear_cfl_margin(
@@ -487,6 +533,8 @@ def _nonlinear_cfl_margin(
         )
     except Exception:
         return None
+    if str(cfg.time.method) in LAWSON_METHODS:  # the drift is advanced exactly
+        omega[:2] = 0.0
     wmax = float(np.sum(omega))
     if not np.isfinite(wmax) or wmax <= 0.0:
         return None
@@ -538,7 +586,7 @@ def _run_chunked_diagnostics(
     *,
     method: str | None,
     status: Callable[[str], None],
-    stop_condition: Callable[[Any, Any, Any, Any], dict[str, Any]] | None,
+    stop_condition: Callable[[Any, Any, bool], dict[str, Any]] | None,
     rhs_factory: Callable[..., Any] | None = None,
     compile_cache: dict[Any, Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
@@ -557,7 +605,9 @@ def _run_chunked_diagnostics(
         "next_dt": jnp.asarray(0.0, dtype=jnp.real(ctx.G0).dtype),
         "cfl_scale": 1.0,
     }
-    continue_pi = not cfg.time.fixed_dt and (method or cfg.time.method) == "rk4-pi"
+    continue_pi = not cfg.time.fixed_dt and (method or cfg.time.method).endswith(
+        "rk4-pi"
+    )
     if imex:
         chunk_steps = cfg.time.chunk_steps or 32
 
@@ -618,8 +668,9 @@ def _run_chunked_diagnostics(
             control["op"] = refactor_chain_implicit_linear(
                 control["op"], control["dt"], free=True
             )
-        elif (not imex and not step_capped) or remaining_time <= steps_now * dt_cap:
-            kwargs["time_horizon"] = remaining_time
+        elif not imex or "op" not in control:  # horizon: inf until the last chunk
+            last = not step_capped or remaining_time <= steps_now * dt_cap
+            kwargs["time_horizon"] = remaining_time if last else float("inf")
         kwargs["compile_cache"] = compile_cache
         kwargs["cfl_fac"] *= control["cfl_scale"]
         next_dt = control["next_dt"]
@@ -629,9 +680,16 @@ def _run_chunked_diagnostics(
             t_chunk, diag_chunk, G_next, fields_next = integrate(G_chunk, kwargs)
             ok = bool(jnp.isfinite(G_next).all())
             if not imex:
-                wg = np.asarray(diag_chunk.Wg_t)  # 1e4x energy in one chunk is runaway
-                ok = ok and bool(np.isfinite(wg).all()) and wg.max() <= 1e4 * wg[0]
-                if ok or cfg.time.fixed_dt or control["cfl_scale"] <= CFL_RETRY_FLOOR:
+                ok = ok and not _chunk_runaway(np.asarray(diag_chunk.Wg_t))
+                if ok or cfg.time.fixed_dt:
+                    break
+                if control["cfl_scale"] <= CFL_RETRY_FLOOR:
+                    warnings.warn(
+                        "explicit chunk still unstable at the smallest cfl_fac "
+                        f"{kwargs['cfl_fac']:.3g}; the result is unreliable",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
                     break
                 control["cfl_scale"] *= 0.5  # redo the chunk at half the CFL factor
                 kwargs["cfl_fac"] *= 0.5
@@ -640,7 +698,9 @@ def _run_chunked_diagnostics(
                     RuntimeWarning,
                     stacklevel=2,
                 )
-                control["next_dt"] = next_dt
+                control["next_dt"] = jnp.zeros_like(
+                    next_dt
+                )  # re-derive dt at the new CFL
                 continue
             if ok:  # an end-of-chunk error estimate far over rtol: unstable
                 dt_new = control["ctl"].propose(control["op"], G_next)
@@ -664,16 +724,18 @@ def _run_chunked_diagnostics(
         steps_left -= steps_now
         return t_chunk, diag_chunk, G_next, fields_next
 
-    def loop_stop(t: Any, heat_flux: Any, wphi: Any, wg: Any) -> dict[str, Any]:
+    def loop_stop(t: Any, q: Any, final: bool) -> dict[str, Any]:
         assert stop_condition is not None
-        decision = stop_condition(t, heat_flux, wphi, wg)
-        # Exhausting the step budget stops without claiming saturation.
-        stop = bool(decision.get("saturated")) or (step_capped and steps_left <= 0)
+        # Exhausting the step budget ends the run at the cap.
+        final = final or (step_capped and steps_left <= 0)
+        decision = stop_condition(t, q, final)
+        stop = bool(decision.get("saturated")) or final
         return {**decision, "stop": stop}
 
     chunk_result = run_adaptive_runtime_chunk_loop(
         integrate_chunk=run_chunk,
         t_max=step_bound * ctx.steps if step_capped else float(cfg.time.t_max),
+        horizon_slack=0.25 * step_bound if step_capped else 0.0,
         chunk_steps=chunk_steps,
         label="nonlinear",
         show_progress=policy.show_progress,
@@ -729,8 +791,9 @@ def _run_diagnostics(
     ):
         if stop_condition is not None:
             status(
-                "run_to=saturation: heat-flux convergence with stationary Wphi/Wg "
-                f"(rel_sem<={float(cfg.time.saturation_rel_sem):.6g})"
+                "run_to=saturation: physical-time heat-flux saturation "
+                f"(t_min={float(cfg.time.saturation_t_min):.6g}, "
+                f"rel_sem<={float(cfg.time.saturation_rel_sem):.6g})"
             )
         try:
             return _run_chunked_diagnostics(
@@ -1053,7 +1116,7 @@ def run_runtime_nonlinear(
         if status_callback is not None
         else (print if show_progress else lambda _message: None)
     )
-    ctx = _prepare_context(
+    ctx, cfg = _prepare_context(
         cfg,
         ky_target=ky_target,
         kx_target=kx_target,
@@ -1062,7 +1125,10 @@ def run_runtime_nonlinear(
         dt=dt,
         steps=steps,
         status=status,
+        sharded=plan is not None or cfg.time.state_sharding is not None,
     )
+    if method == "auto":
+        method = cfg.time.method
     ctx = replace(ctx, progress=_progress)
     policy = _diagnostic_policy(
         cfg,

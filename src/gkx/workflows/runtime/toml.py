@@ -323,7 +323,9 @@ def _default_nonlinear_stepper(physics: Any) -> str:
 
     Kinetic electrons at low beta: adaptive ``imex-ark3`` (the electron streaming
     CFL is gone; falls back to ``rk4-pi`` where the factor check refuses it).
-    Everything else: ``rk4-pi`` (about 2x fewer steps than ``rk4`` + CFL).
+    Everything else: ``auto``, which the run resolves to ``lawson-rk4-pi`` where the drift
+    is most of the linear CFL bound and to ``rk4-pi`` elsewhere (about 2x fewer steps than
+    ``rk4`` + CFL).
     """
 
     ph = physics if isinstance(physics, dict) else {}
@@ -331,7 +333,7 @@ def _default_nonlinear_stepper(physics: Any) -> str:
     return (
         "imex-ark3"
         if kinetic_electrons and float(ph.get("beta", 0.0)) <= _IMEX_BETA_MAX
-        else "rk4-pi"
+        else "auto"
     )
 
 

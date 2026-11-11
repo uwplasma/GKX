@@ -2624,6 +2624,52 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
         assert dt[-1] > 1.2 * dt[0]  # the linear phase allows far more than 0.05
 
 
+def test_fixed_step_budget_ending_short_of_t_max_adds_no_empty_chunk():
+    """Regression: dt=0.05 over 8000 steps sums to t_max - 1e-10, not t_max.
+
+    The loop then asked for a zero-step chunk and the runaway check raised on
+    its empty ``Wg_t`` (a ``diagnostics_interval`` run made the same chunk
+    empty). The Cyclone deck is shrunk only in grid and moments.
+    """
+    import gkx
+    from gkx.workflows.nonlinear import _chunk_runaway
+
+    assert _chunk_runaway(np.empty(0)) is False
+    deck = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case_full.toml")
+    case = deck.replace(
+        grid=replace(deck.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            deck.time,
+            fixed_dt=True,
+            dt=0.05,
+            dt_max=0.05,
+            t_max=400.0,
+            diagnostics_interval=0.5,
+            run_to="t_max",
+        ),
+    )
+    d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics
+    assert len(d.t) == 800 and float(d.t[-1]) == pytest.approx(400.0, abs=1e-6)
+
+
+def test_chunk_loop_horizon_slack_ends_a_run_that_stops_just_short():
+    chunk = [0.5, 1.0 - 1e-9]  # each chunk is relative to its own start
+    times = iter([chunk, chunk])
+
+    def integrate(_show_progress, remaining):
+        t = np.asarray(next(times))
+        return t, _cadence_diag(t, t), object(), object()
+
+    kw = dict(t_max=2.0, chunk_steps=2, label="slack")
+    done = run_adaptive_runtime_chunk_loop(
+        integrate_chunk=integrate, horizon_slack=1e-6, **kw
+    )
+    assert len(done.diagnostics.t) == 4
+    with pytest.raises(StopIteration):  # without slack it asks for a third chunk
+        times = iter([chunk, chunk])
+        run_adaptive_runtime_chunk_loop(integrate_chunk=integrate, **kw)
+
+
 def test_explicit_chunk_retries_at_half_cfl_fac_on_non_finite_state(monkeypatch):
     """A non-finite or runaway chunk is redone at half the CFL factor, and it sticks."""
     import gkx
@@ -2636,11 +2682,11 @@ def test_explicit_chunk_retries_at_half_cfl_fac_on_non_finite_state(monkeypatch)
         seen.append(kwargs["cfl_fac"])
         t, diag, G_next, fields = real(G, *args, **kwargs)
         steps.append(float(np.asarray(diag.dt_t)[0]))
-        if kwargs["cfl_fac"] > 2.0:  # non-finite, then a finite 1e6x energy jump
+        if kwargs["cfl_fac"] > 2.0:  # non-finite, then a finite energy jump past 1e3
             G_next = G_next * jnp.nan
         elif kwargs["cfl_fac"] > 1.0:
             wg = jnp.asarray(diag.Wg_t)
-            diag = replace(diag, Wg_t=jnp.concatenate([wg, 1e6 * wg]))
+            diag = replace(diag, Wg_t=jnp.concatenate([wg, 1e6 * wg + 1e4]))
         return t, diag, G_next, fields
 
     monkeypatch.setattr(
@@ -2678,12 +2724,23 @@ def test_nonlinear_cfl_fac_defaults_sit_below_the_measured_edge():
     measured_edge = {
         "rk3": {16: 3.45, 32: 3.45, 64: 2.16, 128: 2.11},
         "rk4": {16: 4.5, 32: 4.5, 64: 3.38, 128: 3.17},
+        # The integrating-factor steppers (Cyclone, EM beta 0.01, Miller, HSX, W7-X QI;
+        # kinetic electrons at 64 moments, Cyclone (8, 16) at 128): PR "Lawson".
+        "lawson-rk3": {32: 3.88, 64: 2.75, 128: 3.375},
+        "lawson-rk4": {32: 3.94, 64: 3.94, 128: 3.375},
     }
     for method, edges in measured_edge.items():
         for moments, edge in edges.items():
-            assert resolve_nonlinear_cfl_fac(method, None, moments) <= 0.65 * edge
+            fac = resolve_nonlinear_cfl_fac(method, None, moments)
+            assert fac <= 0.85 * edge  # the floor trades margin for step count
+    assert resolve_nonlinear_cfl_fac("rk3", None, 4096) == pytest.approx(1.73)
+    assert resolve_nonlinear_cfl_fac("rk4", None, 4096) == pytest.approx(
+        2.7 * 1.73 / 2.1
+    )
     assert resolve_nonlinear_cfl_fac("rk3", None, 32) == 2.1
     assert resolve_nonlinear_cfl_fac("rk4-pi", None, 512) == 2.82
+    assert resolve_nonlinear_cfl_fac("lawson-rk4-pi", None, 512) == 2.82
+    assert resolve_nonlinear_cfl_fac("lawson-rk3", None, 32) == 2.5
     assert resolve_nonlinear_cfl_fac("rk3", 1.0, 512) == 1.0
     assert resolve_cfl_fac("rk3", None) == pytest.approx(1.73)  # linear runs keep it
 
@@ -2723,7 +2780,7 @@ def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition)
         cursor = stop
         return diag.t, diag, object(), object()
 
-    def monitor(t, q, wphi, wg):
+    def monitor(t, q, final):
         monitoring.append((t.copy(), q.copy()))
         return {"stop": False}
 
@@ -2780,3 +2837,232 @@ def test_physical_cadence_keeps_the_accepted_terminal_row_before_padding():
         diag, 0.25, previous_time=1.13, time_offset=1.13
     )
     np.testing.assert_allclose(selected.t, [0.2, 0.4, 0.7, 0.9, 1.0])
+
+
+def _lawson_box(nl, nm, n=4):
+    import gkx
+
+    case = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = case.replace(grid=replace(case.grid, Nx=n, Ny=n, Nz=n, ntheta=n))
+    geom = rt.build_runtime_geometry(case)
+    grid = build_spectral_grid(apply_geometry_grid_defaults(geom, case.grid))
+    params = rt.build_runtime_linear_params(case, Nm=nm, geom=geom)
+    cache = build_linear_cache(
+        grid, ensure_flux_tube_geometry_data(geom, grid.z), params, nl, nm
+    )
+    return case, grid, geom, params, cache
+
+
+@pytest.mark.parametrize("kron_moments", [0, 128], ids=["separable", "dense"])
+def test_lawson_drift_factor_is_the_matrix_exponential_of_the_truncated_operator(
+    monkeypatch, kron_moments
+):
+    """exp(h L_d) from the eigenbasis equals ``expm`` of the production drift operator."""
+    import gkx.solvers_nonlinear_lawson as lawson
+    from scipy.linalg import expm
+    from gkx.terms.linear_terms import drift_contributions
+
+    monkeypatch.setattr(lawson, "_KRON_MOMENTS", kron_moments)
+    with jax.enable_x64(True):
+        nl, nm = 3, 5
+        case, _grid, _geom, params, cache = _lawson_box(nl, nm)
+        terms = rt.build_runtime_term_config(case)
+        factor = lawson.build_drift_factor(cache, params, terms, 1, jnp.float64)
+        shape = (1, nl, nm, *cache.cv_d.shape)
+        size = int(np.prod(shape))
+        ones, zero = jnp.ones(()), jnp.zeros(())
+
+        def drift(x):  # the production curvature + grad-B terms, mirror off
+            _, curv, gradb = drift_contributions(
+                x.reshape(shape),
+                cache,
+                vth=jnp.ones(1),
+                tz=jnp.asarray(params.tz).reshape(1),
+                omega_d_scale=params.omega_d_scale,
+                weights=(zero, ones, ones),
+                imag=jnp.asarray(1j),
+            )
+            return np.asarray(curv + gradb).reshape(-1)
+
+        eye = jnp.eye(size, dtype=jnp.complex128)
+        operator = np.stack([drift(eye[i]) for i in range(size)], axis=1)
+        h = 40.0 / np.abs(np.linalg.eigvals(operator)).max()  # |h L_d| = 40
+        x = np.random.default_rng(0).standard_normal((2, size))
+        x = (x[0] + 1j * x[1]).reshape(shape)
+        eigen = factor.forward(jnp.asarray(x))
+        got = np.asarray(factor.inverse(factor.rotate(eigen, h))).reshape(-1)
+        want = expm(h * operator) @ x.reshape(-1)
+        assert np.linalg.norm(got - want) < 1e-12 * np.linalg.norm(want)
+        np.testing.assert_allclose(np.asarray(factor.inverse(eigen)), x, atol=1e-13)
+
+
+@pytest.mark.parametrize("method", ["rk3", "rk4"])
+def test_lawson_steppers_follow_the_explicit_ones_at_a_small_step(method):
+    """At a step far inside both stability limits the two routes integrate one system."""
+    import gkx
+
+    case = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = case.replace(
+        grid=replace(case.grid, Nx=8, Ny=8, Nz=8, ntheta=8),
+        init=replace(case.init, init_amp=0.05),  # the bracket is not negligible
+    )
+    wg = {}
+    for name in (method, f"lawson-{method}"):
+        time = replace(
+            case.time, method=name, dt=0.01, fixed_dt=True, t_max=0.4, run_to="t_max"
+        )
+        out = gkx.solve(case.replace(time=time), ky_target=case.run.ky, Nl=3, Nm=6)
+        wg[name] = np.asarray(out.diagnostics.Wg_t)
+    assert np.ptp(wg[method]) > 0.01 * wg[method][0]
+    np.testing.assert_allclose(wg[f"lawson-{method}"], wg[method], rtol=2e-4)
+
+
+def test_lawson_cfl_bound_leaves_out_the_drift_frequencies():
+    from gkx.operators.nonlinear.policies import _build_nonlinear_cfl_bounds
+    from gkx.solvers_nonlinear_diagnostics import _laguerre_velocity_max
+    from gkx.solvers_time_explicit import _linear_frequency_bound
+
+    _case, grid, geom, params, cache = _lawson_box(2, 4, n=8)
+    omega = {}
+    for exact in (False, True):
+        bounds = _build_nonlinear_cfl_bounds(
+            grid,
+            ensure_flux_tube_geometry_data(geom, grid.z),
+            params,
+            cache,
+            real_dtype=jnp.float32,
+            linear_frequency_bound_fn=_linear_frequency_bound,
+            laguerre_velocity_max_fn=_laguerre_velocity_max,
+            drift_exact=exact,
+        )
+        omega[exact] = np.asarray(bounds.linear_omega)
+    assert omega[False][0] > 0.0 and omega[False][1] > 0.0
+    np.testing.assert_array_equal(omega[True][:2], 0.0)
+    assert omega[True][2] == omega[False][2] > 0.0
+
+
+@pytest.mark.parametrize(
+    ("omega", "cap_ratio", "sharded", "method"),
+    [
+        # Frequency bounds (radial drift, binormal drift, streaming) and step cap over the
+        # rk4-pi bound step measured on the decks of the Lawson study (cap dt = 0.1 unless
+        # noted), with the faster stepper of each.
+        ([21.1, 26.7, 24.7], 2.86, False, "lawson-rk4-pi"),  # Cyclone (8, 16)
+        ([19.2, 24.2, 24.7], 2.68, False, "lawson-rk4-pi"),  # Cyclone (4, 16)
+        ([62.9, 23.3, 24.7], 4.37, False, "lawson-rk4-pi"),  # Miller (8, 16)
+        ([774.3, 4839.2, 1416.4], 2.78, False, "lawson-rk4-pi"),  # ETG, dt_max 0.001
+        (
+            [10.5, 13.3, 17.5],
+            16.3,
+            False,
+            "lawson-rk4-pi",
+        ),  # Cyclone (4, 8), cap lifted
+        ([10.5, 13.3, 17.5], 1.63, False, "rk4-pi"),  # Cyclone (4, 8): the cap binds
+        ([8.4, 10.6, 15.1], 1.34, False, "rk4-pi"),  # Cyclone (4, 6)
+        ([31.4, 11.6, 17.4], 2.38, False, "rk4-pi"),  # Cyclone Miller
+        ([15.5, 14.0, 31.6], 2.41, False, "rk4-pi"),  # W7-X QI
+        ([8.6, 9.4, 18.8], 1.45, False, "rk4-pi"),  # HSX
+        ([17.3, 18.9, 26.6], 2.48, False, "rk4-pi"),  # HSX (8, 16)
+        ([4.6, 5.7, 1001.5], 90.0, False, "rk4-pi"),  # kinetic electrons: streaming
+        ([21.1, 26.7, 24.7], 2.86, True, "rk4-pi"),  # the sharded routes keep rk4-pi
+    ],
+)
+def test_auto_stepper_follows_the_drift_share_and_the_step_cap(
+    omega, cap_ratio, sharded, method
+):
+    from gkx.config import RuntimeConfig, TimeConfig
+    from gkx.workflows.nonlinear import _resolve_auto_stepper
+
+    cfg = RuntimeConfig(time=TimeConfig(method="auto"))
+    messages: list[str] = []
+    out = _resolve_auto_stepper(
+        cfg,
+        (0.05, cap_ratio, np.asarray(omega)),
+        exact_drift_ok=not sharded,
+        status=messages.append,
+    )
+    assert out.time.method == method
+    assert method in messages[0]
+
+
+def test_auto_stepper_without_a_bound_takes_rk4_pi():
+    from gkx.config import RuntimeConfig, TimeConfig
+    from gkx.workflows.nonlinear import _resolve_auto_stepper
+
+    cfg = RuntimeConfig(time=TimeConfig(method="auto"))
+    out = _resolve_auto_stepper(cfg, None, exact_drift_ok=True, status=lambda _: None)
+    assert out.time.method == "rk4-pi"
+
+
+def test_auto_stepper_runs_through_the_nonlinear_workflow(monkeypatch):
+    import gkx
+    import gkx.workflows.nonlinear as workflow
+
+    case = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    case = case.replace(
+        grid=replace(case.grid, Nx=8, Ny=8, Nz=8, ntheta=8),
+        time=replace(case.time, method="auto", t_max=0.3, run_to="t_max"),
+    )
+    seen = {}
+    for share in (0.99, 0.0):  # the thresholds decide; the run follows them
+        monkeypatch.setattr(workflow, "LAWSON_DRIFT_SHARE", share)
+        monkeypatch.setattr(workflow, "LAWSON_CAP_OVER_BOUND", share)
+        messages: list[str] = []
+        out = workflow.run_runtime_nonlinear(
+            case, Nl=2, Nm=4, status_callback=messages.append
+        )
+        seen[share] = next(m for m in messages if m.startswith("stepper auto"))
+        assert np.isfinite(np.asarray(out.diagnostics.Wg_t)).all()
+    assert "stepper auto: rk4-pi" in seen[0.99]
+    assert "stepper auto: lawson-rk4-pi" in seen[0.0]
+
+
+def test_chunk_runaway_ignores_small_seeds_and_zero_start():
+    from gkx.workflows.nonlinear import _chunk_runaway
+
+    assert not _chunk_runaway(np.asarray([1e-12, 1e-6]))  # linear growth, tiny seed
+    assert not _chunk_runaway(np.asarray([0.0, 5.0]))  # no starting energy to compare
+    assert not _chunk_runaway(np.asarray([-1.0, 1e9]))
+    assert _chunk_runaway(np.asarray([1.0, 1e5]))
+    assert _chunk_runaway(np.asarray([1.0, np.nan]))
+    assert _chunk_runaway(np.asarray([0.0, np.inf]))
+
+
+def test_second_solve_reuses_executables():
+    """Repeated solves of one deck compile nothing: scans are digest-keyed."""
+    import jax.monitoring
+    import gkx
+
+    count = [0]
+
+    def listener(event, duration, **kwargs):
+        count[0] += event == "/jax/core/compile/backend_compile_duration"
+
+    jax.monitoring.register_event_duration_secs_listener(listener)
+    linear = gkx.load(REPO_ROOT / "examples/01_linear_tokamak/case.toml")
+    linear = linear.replace(
+        grid=replace(linear.grid, Nz=8, ntheta=8),
+        time=replace(linear.time, t_max=1.0),
+    )
+    nonlinear = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
+    nonlinear = nonlinear.replace(
+        grid=replace(nonlinear.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
+        time=replace(
+            nonlinear.time,
+            method="rk3",
+            fixed_dt=False,
+            dt_max=10.0,
+            t_max=0.5,
+            chunk_steps=3,
+            run_to="t_max",
+        ),
+    )
+    solves = (
+        lambda: gkx.solve(linear, ky_target=0.3, Nl=2, Nm=3),
+        lambda: gkx.solve(nonlinear, ky_target=nonlinear.run.ky, Nl=2, Nm=3),
+    )
+    for solve in solves:
+        solve()
+        count[0] = 0
+        solve()
+        assert count[0] == 0

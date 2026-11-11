@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from gkx.config import GridConfig
 from gkx.config import InitializationConfig, TimeConfig
-from gkx.core_grid import build_spectral_grid, real_fft_mesh
+from gkx.core_grid import build_spectral_grid, real_fft_mesh, real_fft_ordered_kx
+from gkx.core_ky_layout import ky_row_weights
 from gkx.core_velocity import (
     _laguerre_bpar_correction,
     _laguerre_bpar_correction_precomputed,
@@ -21,6 +22,7 @@ from gkx.operators.nonlinear.brackets import (
     _broadcast_mask,
     _broadcast_to_G,
     _spectral_bracket,
+    _spectral_bracket_multi_real_fft,
     _stack_fields,
 )
 from scripts.checks._gates.validation_gates import (
@@ -833,6 +835,75 @@ def test_compressed_real_fft_bracket_match_odd_ny():
         bracket_hat_ref,
         rtol=1.0e-4,
         atol=2.0e-5,
+    )
+
+
+@pytest.mark.parametrize("ny", (8, 9))
+def test_half_layout_bracket_matches_real_transforms_and_conserves_free_energy(ny):
+    """The paired-gradient kernel equals the separate real transforms.
+
+    The state is dealiased, as the evolved one always is, and the check runs
+    through the summed multi-field path so the shared forward transform is
+    covered too.  The free-energy rate ``<G*, {G, chi}>`` of the bracket of a
+    distribution with a field vanishes, which is checked on the half-spectrum
+    with the row weights that reconstruct the two-sided sum.
+    """
+
+    nx, nz = 12, 3
+    grid = build_spectral_grid(
+        GridConfig(Nx=nx, Ny=ny, Nz=nz, Lx=2.0 * np.pi, Ly=2.0 * np.pi),
+        ky_layout="half",
+    )
+    nyc = ny // 2 + 1
+    mask = np.asarray(grid.dealias_mask)[:, :, None]
+    rng = np.random.default_rng(5)
+
+    def spectrum(*lead):
+        shape = (*lead, nyc, nx, nz)
+        field = rng.normal(size=shape) + 1j * rng.normal(size=shape)
+        return field * mask  # dealiased modes only
+
+    G, chi = spectrum(1, 2, 3), np.stack([spectrum(1, 2, 1), spectrum(1, 2, 1)])
+    kwargs = dict(
+        kx_grid=grid.kx_grid,
+        ky_grid=grid.ky_grid,
+        dealias_mask=grid.dealias_mask,
+        kxfac=jnp.asarray(1.0),
+        ny_full=ny,
+    )
+    got = _spectral_bracket_multi_real_fft(
+        jnp.asarray(G),
+        jnp.asarray(chi),
+        combine=lambda products: products[0] - 2.0 * products[1],
+        **kwargs,
+    )
+
+    kx_nyc = np.asarray(real_fft_ordered_kx(grid.kx_grid))[None, :, None]
+    ky_nyc = np.asarray(grid.ky_grid)[:, :1, None]
+
+    def gradient(f):
+        return tuple(
+            np.fft.irfft2(1j * k * f, s=(nx, ny), axes=(-2, -3)) * nx * ny
+            for k in (kx_nyc, ky_nyc)
+        )
+
+    dG_dx, dG_dy = gradient(G)
+    products = [
+        dG_dx * dchi_dy - dG_dy * dchi_dx
+        for dchi_dx, dchi_dy in (gradient(c) for c in chi)
+    ]
+    reference = np.fft.rfft2(products[0] - 2.0 * products[1], axes=(-2, -3)) / (nx * ny)
+    reference = reference * mask
+    scale = np.max(np.abs(reference))
+    tol = 1.0e-11 if got.dtype == jnp.complex128 else 2.0e-5
+    assert scale > 0.0
+    np.testing.assert_allclose(np.asarray(got), reference, rtol=0.0, atol=tol * scale)
+
+    rate = _spectral_bracket(jnp.asarray(G), jnp.asarray(chi[0]), **kwargs)
+    weights = np.asarray(ky_row_weights(ny))[:, None, None]
+    free_energy_rate = np.sum(weights * np.real(np.conj(G) * np.asarray(rate)))
+    assert abs(free_energy_rate) < tol * np.sum(
+        weights * np.abs(np.conj(G) * np.asarray(rate))
     )
 
 

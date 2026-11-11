@@ -228,19 +228,16 @@ def print_nonlinear_run_summary(result: Any) -> bool:
 def _format_saturation_summary(saturation: Mapping[str, Any]) -> str:
     """Format the measured saturation window for the executable summary."""
 
+    status = saturation.get("status", "unknown")
     if saturation.get("mean") is None:
-        reasons = ",".join(saturation.get("reasons", ())) or "no_window"
-        return f"saturation: no measurable window ({reasons})"
-    label = (
-        "stopped at saturation"
-        if saturation.get("saturated")
-        else "not saturated by the time horizon"
-    )
+        return f"saturation: {status} (no measurable window)"
+    label = "stopped at saturation" if saturation.get("saturated") else status
+    sem, rel_sem = saturation["sem"], saturation["rel_sem"]
     return (
         f"saturation: {label} "
         f"window=[{saturation['window_tmin']:.6g},{saturation['window_tmax']:.6g}] "
-        f"heat_flux={saturation['mean']:.6g}+/-{saturation['sem']:.6g} "
-        f"rel_sem={saturation['rel_sem']:.6g} "
+        f"heat_flux={saturation['mean']:.6g}+/-{'n/a' if sem is None else format(sem, '.6g')} "
+        f"rel_sem={'n/a' if rel_sem is None else format(rel_sem, '.6g')} "
         f"tau_ac={saturation['tau_ac']:.6g}"
     )
 
