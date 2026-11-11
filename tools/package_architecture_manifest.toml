@@ -224,7 +224,8 @@ recursive = true
 # 70332 -> 70078: physical-time saturation detector replaces the window/guard stop gates.
 # 70078 -> 70149: phase-1 split of the diagnostics driver (module header and export list of
 # transport_window.py; no code added).
-baseline = 70149
+# 70149 -> 70150: the last IMEX chunk keeps the shared compiled scan.
+baseline = 70150
 target = 45000
 
 [[line_budget_policy.counts]]
