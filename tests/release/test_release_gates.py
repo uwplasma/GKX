@@ -600,7 +600,11 @@ def test_private_reference_scan_flags_machine_paths_and_handles(
         "path.txt": "run from /" + "Users/someone/work\n",
         "tmp.txt": "scratch at /private" + "/tmp/job\n",
         "handle.md": "see github.com/roger" + "iojorge/private-repo\n",
-        "ok.txt": "cache in ~/.cache and /tmp/x and /home/runner/work\n",
+        "trailer.txt": "Co-Auth" + "ored-By: Cla" + "ude <x@example.org>\n",
+        "banner.md": "Generated " + "with [Tool](https://example.org)\n",
+        "tool.md": "written with Chat" + "GPT and Open" + "AI\n",
+        "ok.txt": "cache in ~/.cache and /tmp/x and /home/runner/work\n"
+        "an agent moves the cursor; the list is generated with numpy\n",
         "CITATION.cff": "url: github.com/roger" + "iojorge\n",
     }
     for name, text in leaks.items():
@@ -610,9 +614,12 @@ def test_private_reference_scan_flags_machine_paths_and_handles(
     hits = mod.find_private_references(tmp_path)
 
     assert sorted(hits) == [
+        "banner.md:1: tool attribution",
         "handle.md:1: personal handle",
         "path.txt:1: machine path",
         "tmp.txt:1: machine path",
+        "tool.md:1: tool attribution",
+        "trailer.txt:1: tool attribution",
     ]
     assert mod.find_private_references(REPO_ROOT) == []
 

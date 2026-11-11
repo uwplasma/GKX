@@ -81,6 +81,14 @@ PRIVATE_REFERENCE_PATTERNS: dict[str, re.Pattern[str]] = {
         r"\bgh[pousr]_[A-Za-z0-9]{30,}|\bAKIA[0-9A-Z]{16}\b"
         r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
     ),
+    # Tool or vendor attribution and co-author trailers. Plain words such as
+    # "agent" or "cursor" are legitimate technical vocabulary and are not matched.
+    "tool attribution": re.compile(
+        r"\b(?:claude|anthropic|chatgpt|openai|codex|copilot)\b"
+        r"|co-authored-by|generated with \[|\U0001F916"
+        r"|\bAI[- ](?:assisted|generated|co-?author)",
+        re.IGNORECASE,
+    ),
 }
 PRIVATE_REFERENCE_SELF = "scripts/checks/check_repository_size_manifest.py"
 PRIVATE_REFERENCE_HANDLE_EXEMPT = ("CITATION.cff", "LICENSE", "pyproject.toml")
