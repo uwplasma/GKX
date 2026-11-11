@@ -665,11 +665,12 @@ Common deck
 -----------
 
 ``examples/common_input.toml`` names only the keys that differ from the defaults.
-Every deck of ``examples/`` and ``benchmarks/`` starts from it, and a comment
-on or above each line that departs from its stepper or end-damping choice says
-why. Two choices were measured for it: the end-damping rate and the linear
-time stepping. Raw results: one A4000 (nonlinear, float32) and a laptop CPU
-(linear, float64), November 2026.
+The decks of ``examples/`` start from it. In ``examples/``, ``benchmarks/`` and
+the parity fixtures, a comment on or above each pinned end-damping rate and
+each departure from the stepper of its kind says why. Two choices were measured
+for the common deck: the end-damping rate and the linear time stepping. Setup:
+one A4000 (nonlinear, float32) and a laptop CPU (linear, float64), November
+2026.
 
 **End-damping rate.** The common deck leaves ``damp_ends_rate`` unset, so the
 rate is 30 e-folds per thermal transit of the fastest kinetic species across
@@ -716,12 +717,12 @@ the layer; the decks that used to pin 0.1 now leave it unset.
      - step halves at 29.5
    * - Kinetic electrons, 16x16x16, ES, ``t = 20``
      - 2.3e4 +- 4e3 (4 min)
-     - not finished after 40 min
+     - 2.5e-6, no runaway (one seed, 73 min, mean step 1e-5)
      -
      - explicit ``rk4-pi``
    * - KBM :math:`\beta` = 0.015, 16x16x16, ``t = 60``
      - 6.1e3 +- 2e2 (2 min)
-     - not finished after 60 min
+     - not finished after 2 hours
      -
      - explicit ``rk4-pi``
 
@@ -822,10 +823,13 @@ For kinetic electrons the default rule is on a plateau: :math:`\gamma` at
   0.3. For kinetic electrons at ``nperiod = 1`` the default rate is 598, which
   holds an explicit ``rk4-pi`` step to 5e-4, at least 5 times smaller than the
   electron-streaming step. The two kinetic-electron rows took 2 to 4 minutes
-  pinned and did not finish in 40 to 60 minutes with the default rule. The
+  pinned; with the default rule the electrostatic run took 73 minutes (mean step
+  1e-5) and the KBM run did not finish in 2 hours. The
   default ``imex-ark3`` of kinetic electrons at
   :math:`\beta \le 3\times10^{-4}` advances the layer implicitly
-  with the rest of the stiff terms (:doc:`examples`), so the limit does not apply to it.
+  with the rest of the stiff terms (:doc:`examples`), so the limit does not apply
+  to it: the tutorial deck runs at the same step, 0.1, with either rate. On a
+  4x4x8 grid its error estimate does see the rate (mean step 0.041 against 0.063).
 * Pins that remain, each with a comment: the GX-matching rates of
   ``tools/comparison/fixtures/parity``; the fixed-step KBM replays of
   ``benchmarks/cases/kbm_nonlinear*.toml`` (recorded at 0.1, CFL margin gated
@@ -878,10 +882,12 @@ warm wall time per solve against the certified eigenpair (``solver = "krylov"``)
      - horizon, not stepper
 
 **Decision.** The tutorials with ``solver = "time"`` (01, 06, 07) keep fixed
-``rk2``: the same :math:`\gamma` as ``rk4`` + CFL to 0.05% at 0.5 to 0.6 times
-the wall time, and the run warns when ``dt`` exceeds the CFL-stable step. A
-deck with no ``dt`` keeps ``rk4`` + CFL, because the controller needs no
-tuning. The growth rate is limited by the horizon, not by the stepper: the time
+``rk2``: the same :math:`\gamma` as ``rk4`` + CFL to 0.05% (:math:`\omega` to
+0.1%) at 0.5 to 0.6 times the wall time, and the run warns when ``dt`` exceeds
+the CFL-stable step. ``solver = "auto"`` runs the deck's own time route first
+(plus under 0.05 s on the tutorials), so its :math:`\gamma` is that route's; it
+reaches the eigensolver only when the fit is rejected. A deck with no ``dt``
+keeps ``rk4`` + CFL, because the controller needs no tuning. The growth rate is limited by the horizon, not by the stepper: the time
 route needs :math:`\gamma t_{max} \gtrsim 7`, so the tutorials whose
 :math:`t_{max}` = 20 cannot reach it (08, 11) or have too weak a mode (02) now
 use ``solver = "krylov"``, and 07, which has no eigensolver for its operator,

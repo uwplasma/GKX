@@ -4,8 +4,8 @@ schema_version = 1
 # the case behind `gkx wout_XXX.nc`. The CLI fills in [geometry].vmec_file from
 # the wout argument and writes the resolved deck next to the run outputs
 # (<wout-stem>/gkx.toml). Only the keys that differ from the defaults appear;
-# examples/reference_inputs lists every key. The other decks of examples/ and
-# benchmarks/ start from this one and comment each line that deviates from it.
+# examples/reference_inputs lists every key. The decks of examples/ start from this
+# one and comment each stepper or end-damping choice that deviates from it.
 # src/gkx/data/common_input.toml is a symlink to this file.
 
 [[species]]
