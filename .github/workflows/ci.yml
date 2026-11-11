@@ -12,9 +12,10 @@ on:
         default: false
         type: boolean
 
+# Read-only by default; only the two jobs that upload to Codecov over OIDC
+# request id-token below.
 permissions:
   contents: read
-  id-token: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -29,9 +30,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.11"
 
@@ -65,7 +68,9 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
         with:
@@ -144,7 +149,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
 
@@ -159,7 +166,9 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
         with:
@@ -183,9 +192,14 @@ jobs:
   fast-coverage:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
         with:
@@ -245,7 +259,7 @@ jobs:
           PY
 
       - name: Upload fast coverage report
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
         with:
           files: coverage-fast.xml
           flags: fast-surface
@@ -268,7 +282,9 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
         with:
@@ -309,7 +325,7 @@ jobs:
           tar -czf "coverage-wide-shard-${{ matrix.shard }}.tgz" -C coverage-shard .
 
       - name: Upload coverage shard data
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: coverage-wide-shard-${{ matrix.shard }}
           path: coverage-wide-shard-${{ matrix.shard }}.tgz
@@ -318,6 +334,9 @@ jobs:
   wide-coverage:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     timeout-minutes: 15
     # The only remaining ``needs`` in this workflow, and the only real one: this
     # job downloads the ``.coverage`` shard artifacts the matrix above uploads.
@@ -326,12 +345,14 @@ jobs:
     needs: wide-coverage-shards
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
 
       - name: Download wide coverage shard data
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
         with:
           pattern: coverage-wide-shard-*
           path: coverage-wide-artifacts
@@ -358,7 +379,7 @@ jobs:
 
       - name: Upload wide coverage shard manifest
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: coverage-wide-shard-manifest
           path: coverage-wide-shard-manifest.json
@@ -366,14 +387,14 @@ jobs:
 
       - name: Upload validation coverage manifest summary
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: validation-coverage-manifest-summary
           path: docs/_static/validation_coverage_manifest_summary.json
           if-no-files-found: ignore
 
       - name: Upload wide coverage report
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
         with:
           files: coverage-wide.xml
           flags: wide-package
@@ -385,7 +406,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
         with:
@@ -506,7 +529,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
 

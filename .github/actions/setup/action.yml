@@ -15,13 +15,13 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-python@v6
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
       with:
         python-version: ${{ inputs.python-version }}
 
     # uv resolves and installs the same requirement set as pip in ~10 s from a
     # warm cache; pip took ~35 s per job with its own cache warm.
-    - uses: astral-sh/setup-uv@v10.2.0
+    - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
       with:
         enable-cache: true
         cache-dependency-glob: pyproject.toml
@@ -51,7 +51,7 @@ runs:
         } >> "$GITHUB_ENV"
 
     - if: inputs.jax-cache != ''
-      uses: actions/cache@v5
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25  # v5
       with:
         path: ~/.cache/gkx-ci-jax
         key: jax-${{ env.JAX_VERSION }}-${{ inputs.jax-cache }}-${{ hashFiles('src/**/*.py', 'tests/**/*.py') }}

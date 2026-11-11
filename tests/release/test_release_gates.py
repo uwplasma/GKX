@@ -590,6 +590,33 @@ def test_repository_size_manifest_gates_large_files(
         assert any("large.bin" in failure for failure in report["failures"])
 
 
+def test_private_reference_scan_flags_machine_paths_and_handles(
+    tmp_path: Path,
+) -> None:
+    mod = load_release_tool("check_repository_size_manifest")
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    # Built from fragments so this test file is not itself a hit.
+    leaks = {
+        "path.txt": "run from /" + "Users/someone/work\n",
+        "tmp.txt": "scratch at /private" + "/tmp/job\n",
+        "handle.md": "see github.com/roger" + "iojorge/private-repo\n",
+        "ok.txt": "cache in ~/.cache and /tmp/x and /home/runner/work\n",
+        "CITATION.cff": "url: github.com/roger" + "iojorge\n",
+    }
+    for name, text in leaks.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+
+    hits = mod.find_private_references(tmp_path)
+
+    assert sorted(hits) == [
+        "handle.md:1: personal handle",
+        "path.txt:1: machine path",
+        "tmp.txt:1: machine path",
+    ]
+    assert mod.find_private_references(REPO_ROOT) == []
+
+
 def test_repository_size_report_separates_tracked_and_local_roots(
     tmp_path: Path,
 ) -> None:

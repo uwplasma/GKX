@@ -8,6 +8,7 @@ from collections import defaultdict
 import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any
@@ -65,6 +66,46 @@ def _tracked_paths(root: Path) -> list[Path]:
     )
     raw = proc.stdout.split(b"\0")
     return [Path(item.decode()) for item in raw if item]
+
+
+# Text that must never be tracked: machine-local paths, personal handles and
+# credential-shaped strings. The author's public name stays legitimate in the
+# metadata files below, which are exempt from the handle pattern only.
+PRIVATE_REFERENCE_PATTERNS: dict[str, re.Pattern[str]] = {
+    "machine path": re.compile(
+        r"/Users/\w|/home/(?!runner\b)\w|/private/(?:tmp|var)\b|/data\d+/"
+        r"|/scratch\d*/|\b[A-Za-z]:\\(?:Users|home)\b"
+    ),
+    "personal handle": re.compile(r"\b(?:rogeriojorge|rjorge)\b"),
+    "credential": re.compile(
+        r"\bgh[pousr]_[A-Za-z0-9]{30,}|\bAKIA[0-9A-Z]{16}\b"
+        r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    ),
+}
+PRIVATE_REFERENCE_SELF = "scripts/checks/check_repository_size_manifest.py"
+PRIVATE_REFERENCE_HANDLE_EXEMPT = ("CITATION.cff", "LICENSE", "pyproject.toml")
+
+
+def find_private_references(root: str | Path = ROOT) -> list[str]:
+    """Return ``path:line: kind`` for tracked text that leaks private context."""
+
+    root_path = Path(root).resolve()
+    hits: list[str] = []
+    for rel in _tracked_paths(root_path):
+        name = rel.as_posix()
+        if name == PRIVATE_REFERENCE_SELF:
+            continue
+        try:
+            text = (root_path / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue  # binary or missing: text chunks are checked by size policy
+        for kind, pattern in PRIVATE_REFERENCE_PATTERNS.items():
+            if kind == "personal handle" and name in PRIVATE_REFERENCE_HANDLE_EXEMPT:
+                continue
+            for number, line in enumerate(text.splitlines(), start=1):
+                if pattern.search(line):
+                    hits.append(f"{name}:{number}: {kind}")
+    return hits
 
 
 def _category(path: Path) -> str:
@@ -284,6 +325,11 @@ def check_repository_size_manifest(
                 threshold=threshold,
             )
         )
+
+    failures.extend(
+        f"private reference in tracked text, {hit}"
+        for hit in find_private_references(root_path)
+    )
 
     return {
         "kind": "repository_size_manifest_check",

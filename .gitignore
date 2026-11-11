@@ -6,7 +6,10 @@ __pycache__/
 venv/
 env/
 .env
+.env.*
 .envrc
+*.pem
+*.key
 build/
 dist/
 *.egg-info/
