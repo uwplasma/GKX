@@ -1,8 +1,15 @@
 """Analysis helper tests for mode extraction and fit windows."""
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
+from gkx.diagnostics.saturation import (
+    SaturationStopConfig,
+    assess_saturation,
+    make_saturation_check,
+)
 from gkx.diagnostics.analysis import (
     ModeSelection,
     _log_amp_phase,
@@ -2072,3 +2079,160 @@ def test_sokal_autocorrelation_time_of_a_cosine_is_its_quarter_period_integral()
     assert tau == pytest.approx(period / (2.0 * np.pi), rel=0.02)
     assert sokal_autocorrelation_time(np.ones(16), dt)[:2] == (0.0, 1)
     assert integrated_autocorrelation_time(np.cos(2.0 * np.pi * t / period), dt) == tau
+
+
+# ---- saturation detector: synthetic regimes, the stop schedule, recorded traces ----
+
+T = np.arange(0.0, 1000.0, 0.5)
+
+
+def _ou(n: int, h: float, tau: float, rng) -> np.ndarray:
+    a = np.exp(-h / tau)
+    e = rng.normal(size=n) * np.sqrt(1 - a * a)
+    x = np.empty(n)
+    x[0] = rng.normal()
+    for i in range(1, n):
+        x[i] = a * x[i - 1] + e[i]
+    return x
+
+
+def _lognormal(tau=10.0, sig=0.25, seed=3, t=T) -> np.ndarray:
+    x = _ou(t.size, t[1] - t[0], tau, np.random.default_rng(seed))
+    return np.exp(sig * x - sig**2 / 2)
+
+
+def _status(q, t=T, **kw) -> str:
+    return assess_saturation(t, q, SaturationStopConfig(**kw))["status"]
+
+
+def test_plateau_is_saturated_with_a_mean_inside_its_error() -> None:
+    r = assess_saturation(T, 1.0 * _lognormal(sig=0.3))
+    assert r["status"] == "saturated" and r["saturated"] is True
+    assert abs(r["mean"] - 1.0) < 3 * r["sem"]
+    assert r["window_tmin"] >= 0.0 and r["window_tmax"] == pytest.approx(T[-1])
+
+
+def test_post_linear_spike_is_cut_from_the_window() -> None:
+    q = np.where(T < 60, 0.003 * np.exp(T / 6), 1 + 3 * np.exp(-(T - 60) / 40))
+    r = assess_saturation(T, q * _lognormal(sig=0.3))
+    assert r["status"] == "saturated"
+    assert r["t_start"] > 100.0  # the spike and its decay are not averaged
+    assert abs(r["mean"] - 1.0) < 3 * r["sem"] + 0.05
+
+
+def test_late_rise_is_not_called_saturated_and_early_look_is_refused() -> None:
+    rise = (1.5 + 0.8 * np.clip((T - 700) / 150, 0, 1)) * _lognormal()
+    assert _status(rise) != "saturated"
+    early = T < 690  # the plateau before the rise looks stationary ...
+    assert _status(rise[early], T[early], t_min=300.0) == "saturated"
+    assert _status(rise[early], T[early]) == "too_short"  # ... but t_min refuses it
+
+
+@pytest.mark.parametrize(
+    ("slope", "expected"), [(0.5, {"drifting"}), (0.04, {"saturated"})]
+)
+def test_linear_drift_threshold(slope: float, expected: set) -> None:
+    assert _status((1 + slope * T / 1000) * _lognormal()) in expected
+
+
+def test_error_rates_over_seeds() -> None:
+    """Fixed-seed rates: a plateau passes most of the time, drifting traces never."""
+    plateau = [_status(_lognormal(sig=0.3, seed=s)) for s in range(20)]
+    rise = [
+        _status((1.5 + 0.8 * np.clip((T - 700) / 150, 0, 1)) * _lognormal(seed=s))
+        for s in range(20)
+    ]
+    drift = [_status((1 + 0.5 * T / 1000) * _lognormal(seed=s)) for s in range(20)]
+    assert plateau.count("saturated") >= 15
+    assert "saturated" not in rise and "saturated" not in drift
+
+
+def test_growth_decay_and_bursts_are_named() -> None:
+    assert _status(1e-4 * np.exp(0.02 * T) * _lognormal(5, 0.1)) == "growing"
+    assert _status(0.002 * T + 1e-3) in {"growing", "drifting"}
+    assert _status(0.5 * np.exp(-T / 50) * _lognormal(5, 0.1) + 1e-6) == "quiescent"
+    rng = np.random.default_rng(3)
+    q = np.ones(T.size)
+    for tb in rng.uniform(0, 1000, 12):
+        q += 12 * np.exp(-np.clip(T - tb, 0, None) / 6) * (T >= tb)
+    assert _status(q * _lognormal(3, 0.1, seed=3)) != "saturated"
+
+
+def test_empty_and_identically_zero_traces_are_not_saturated() -> None:
+    assert assess_saturation([0.0], [1.0])["status"] == "too_short"
+    assert _status(np.zeros(T.size)) == "quiescent"  # zonal-response style: Q = 0
+
+
+def test_species_are_gated_individually_and_cancellation_is_safe() -> None:
+    ion = 2 * _lognormal(10, 0.15, seed=4)
+    ele = -1.8 * _lognormal(10, 0.15, seed=5)
+    assert _status(np.c_[ion, ele]) == "saturated"  # sum ~ 0.2, scale uses |species|
+    drifting_electron = ele * (1 + 0.6 * T / 1000)
+    assert _status(np.c_[ion, drifting_electron]) == "drifting"
+
+
+def test_verdict_does_not_depend_on_the_sampling() -> None:
+    base = _lognormal(sig=0.3, seed=6)
+    rng = np.random.default_rng(7)
+    t = np.cumsum(5e-3 * rng.uniform(0.5, 1.5, 200_000))  # irregular, ~1000 a/v_t
+    q = np.interp(t, T, base) * (1 + 0.2 * np.sin(2 * np.pi * t / 0.05))
+    a = assess_saturation(t, q)  # fast ripple, 5e-3 steps
+    b = assess_saturation(T, base)  # the same signal sampled every 0.5
+    assert a["status"] == b["status"]
+    assert abs(a["mean"] - b["mean"]) < 3 * max(a["sem"] or 0, b["sem"] or 0)
+
+
+def test_check_waits_for_t_min_then_stops_on_a_plateau() -> None:
+    q = _lognormal(sig=0.3)
+    check = make_saturation_check(SaturationStopConfig(), t_cap=1000.0)
+    stop = None
+    for i in range(127, T.size, 128):
+        d = check(T[: i + 1], q[: i + 1], False)
+        if d["stop"]:
+            stop = T[i]
+            break
+    assert stop is not None and stop >= 800.0 and d["status"] == "saturated"
+
+
+def test_check_reports_the_status_when_the_cap_is_reached() -> None:
+    q = (1 + 0.5 * T / 1000) * _lognormal()
+    check = make_saturation_check(SaturationStopConfig(), t_cap=1000.0)
+    assert check(T, q, False)["status"] == "drifting"
+    assert check(T, q, True)["status"] == "cap_reached:drifting"
+    short = make_saturation_check(SaturationStopConfig(), t_cap=100.0)
+    assert short(T[:200], q[:200], True)["status"].startswith("cap_reached:")
+
+
+def test_check_does_not_reassess_between_looks() -> None:
+    check = make_saturation_check(SaturationStopConfig(), t_cap=1000.0)
+    q = _lognormal()
+    first = check(T[:1700], q[:1700], False)  # t = 850: first look
+    assert check(T[:1710], q[:1710], False) is first  # 5 a/v_t later: no new look
+    assert check(T[:1900], q[:1900], False) is not first  # 50 a/v_t later: new look
+
+
+_TRACES = Path(__file__).with_name("saturation_traces.csv")
+
+
+def _recorded(name: str) -> tuple[np.ndarray, np.ndarray]:
+    rows = [r.split(",") for r in _TRACES.read_text().splitlines()[1:]]
+    pick = [(float(t), float(q)) for n, t, q in rows if n == name]
+    return tuple(np.array(c) for c in zip(*pick))  # type: ignore[return-value]
+
+
+@pytest.mark.parametrize(
+    ("name", "status"),
+    [
+        ("cyclone", "saturated"),  # Cyclone, adiabatic electrons: Q ~ 31
+        ("growing", "growing"),  # stellarator case still rising at t = 1000
+        ("quiescent", "quiescent"),  # linearly stable, Q ~ 1e-8
+        ("intermittent", "intermittent"),  # correlation time too long for the window
+    ],
+)
+def test_recorded_gkx_traces(name: str, status: str) -> None:
+    t, q = _recorded(name)
+    r = assess_saturation(t, q)
+    assert r["status"] == status
+    if status == "saturated":
+        assert r["mean"] == pytest.approx(31.4, rel=0.03)
+        assert r["window_tmin"] > 50.0

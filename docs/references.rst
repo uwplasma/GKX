@@ -166,6 +166,14 @@ References
    foundations and new algorithms," in *Functional Integration*, pp. 131--192
    (1997). `DOI <https://doi.org/10.1007/978-1-4899-0319-8_6>`__.
 
+.. [White97] K. P. White Jr., "An effective truncation heuristic for bias
+   reduction in simulation output," Simulation 69, 323 (1997).
+   `DOI <https://doi.org/10.1177/003754979706900601>`__.
+
+.. [Flegal08] J. M. Flegal, M. Haran, and G. L. Jones, "Markov chain Monte
+   Carlo: Can we trust the third significant figure?" Statistical Science 23,
+   250 (2008). `DOI <https://doi.org/10.1214/08-STS257>`__.
+
 .. [Pueschel16] M. J. Pueschel, B. J. Faber, J. Citrin, C. C. Hegna,
    P. W. Terry, and D. R. Hatch, "Stellarator Turbulence: Subdominant
    Eigenmodes and Quasilinear Modeling," Physical Review Letters 116, 085001
