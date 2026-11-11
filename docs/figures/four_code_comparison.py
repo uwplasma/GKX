@@ -28,12 +28,12 @@ MARK = {"GKX": "o", "GX": "s", "GS2": "^", "stella": "D"}
 SIZE = {"GKX": 6.5, "GX": 5.0, "GS2": 5.0, "stella": 4.5}
 CODES = ("GKX", "GX", "GS2", "stella")
 RC = {
-    "font.size": 7.5,
-    "axes.titlesize": 8.0,
-    "axes.labelsize": 7.5,
-    "legend.fontsize": 7.5,
-    "xtick.labelsize": 7,
-    "ytick.labelsize": 7,
+    "font.size": 8.5,
+    "axes.titlesize": 9.0,
+    "axes.labelsize": 8.5,
+    "legend.fontsize": 9.0,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
     "lines.linewidth": 1.1,
     "axes.titlepad": 5.0,
     "savefig.dpi": 220,
@@ -61,19 +61,19 @@ def _plot(ax, code, x, y, **kw):
 
 def linear_figure(d: dict) -> plt.Figure:
     cases = [
-        ("cyclone_ad", "Cyclone, adiabatic electrons", 6),
-        ("cyclone_ke", "Cyclone, kinetic electrons", 8),
-        ("em", r"Cyclone, kinetic e, A$_\parallel$", 16),
-        ("w7x_ad", "W7-X, adiabatic electrons", 40),
+        ("cyclone_ad", "(a) Cyclone, adiabatic e", 6),
+        ("cyclone_ke", "(b) Cyclone, kinetic e", 8),
+        ("em", r"(c) kinetic e, A$_\parallel$", 16),
+        ("w7x_ad", "(d) W7-X, adiabatic e", 40),
     ]
     fig, axs = plt.subplots(
         3,
         4,
-        figsize=(8.0, 4.7),
+        figsize=(8.0, 5.2),
         sharex="col",
         gridspec_kw={
             "hspace": 0.14,
-            "wspace": 0.45,
+            "wspace": 0.62,
             "height_ratios": [1.0, 0.75, 0.55],
         },
     )
@@ -134,178 +134,164 @@ def linear_figure(d: dict) -> plt.Figure:
     return fig
 
 
+def _fmt_time(s: float) -> str:
+    if s < 100:
+        return f"{s:.1f} s" if s < 10 else f"{s:.0f} s"
+    if s < 5400:
+        return f"{s / 60:.0f} min"
+    return f"{s / 3600:.1f} h" if s < 36000 else f"{s / 3600:.0f} h"
+
+
+def _dof(n: float) -> str:
+    return f"{n / 1e6:.1f} M" if n >= 1e6 else f"{round(n / 1e3):,} k"
+
+
+def _bars(ax, rows, xlim, ticks, note_fn):
+    """Horizontal log-scale bars, one row per code, with a text note at each bar end."""
+    for k, r in enumerate(rows):
+        y = len(rows) - 1 - k
+        c = r["code"]
+        done = r.get("measured_s", r["t"])
+        ax.barh(y, done, left=xlim[0], height=0.62, color=COLOR[c], zorder=3)
+        if r["t"] > done * 1.02:  # extrapolated part
+            ax.barh(
+                y,
+                r["t"] - done,
+                left=done,
+                height=0.62,
+                facecolor="white",
+                edgecolor=COLOR[c],
+                hatch="////",
+                lw=1.0,
+                zorder=3,
+            )
+        top, sub = note_fn(r)
+        ax.text(
+            r["t"] * 1.3,
+            y + 0.13,
+            top,
+            va="center",
+            ha="left",
+            fontsize=10.5,
+            fontweight="bold",
+            color="#111111",
+        )
+        ax.text(
+            r["t"] * 1.3,
+            y - 0.21,
+            sub,
+            va="center",
+            ha="left",
+            fontsize=8.5,
+            color="#444444",
+        )
+    ax.set_yticks(range(len(rows)))
+    ax.set_yticklabels(
+        [f"{r['code']}\n{r['hardware']}" for r in rows[::-1]], fontsize=9.5
+    )
+    ax.set_ylim(-0.6, len(rows) - 0.4)
+    ax.set_xscale("log")
+    ax.set_xlim(*xlim)
+    ax.set_xticks([t for t, _ in ticks])
+    ax.set_xticklabels([n for _, n in ticks])
+    ax.minorticks_off()
+    ax.tick_params(axis="y", length=0)
+    ax.grid(False, axis="y")
+    ax.grid(alpha=0.3, lw=0.5, axis="x", zorder=0)
+    ax.spines["left"].set_visible(False)
+
+
 def speed_figure(d: dict) -> plt.Figure:
     fig, axs = plt.subplots(
         1,
-        3,
-        figsize=(8.0, 2.75),
-        gridspec_kw={"wspace": 0.42, "width_ratios": [1.0, 1.0, 0.95]},
+        2,
+        figsize=(8.0, 3.3),
+        gridspec_kw={"wspace": 0.62, "left": 0.115, "right": 0.985, "bottom": 0.2},
     )
-    # (a) accuracy against time-to-solution, Cyclone adiabatic, k_y rho_i = 0.3
-    ax = axs[0]
-    conv = d["convergence"]["cyclone_ad_ky0.3"]
-    floor = 0.02
-    for c in CODES:
-        pts = conv[c]
-        err = [max(abs(e["err_pct"]), floor) for e in pts]
-        t = [e["t"] if c in ("GKX", "GX") else e["t4"] for e in pts]
-        ax.plot(t, err, ls="-", lw=0.7, color=COLOR[c], alpha=0.55, zorder=1)
-        ax.plot(
-            t,
-            err,
-            ls="none",
-            marker=MARK[c],
-            ms=SIZE[c],
-            color=COLOR[c],
-            mfc="white" if c == "GX" else COLOR[c],
-            mew=1.1 if c == "GX" else 0.0,
-            zorder=3,
-            label=c,
-        )
-        if c == "GKX":
-            ax.plot(
-                [e["t_cold"] for e in pts],
-                err,
-                ls="none",
-                marker="o",
-                ms=3.2,
-                mfc="white",
-                mec=COLOR[c],
-                mew=0.8,
-                zorder=2,
+    lin = d["timing"]["linear"]
+    _bars(
+        axs[0],
+        lin,
+        (1.0, 700.0),
+        [(1, "1 s"), (10, "10 s"), (100, "100 s")],
+        lambda r: (
+            _fmt_time(r["t"]),
+            f"{_dof(r['dof'])} DOF"
+            + (
+                f", {_fmt_time(r['t_compile'])} with compile"
+                if r.get("t_compile")
+                else ""
+            ),
+        ),
+    )
+    axs[0].set_title(
+        "Linear: one $k_y$, 1% growth-rate accuracy", loc="left", fontsize=10.5
+    )
+    axs[0].set_xlabel("wall time (log scale)")
+    nl = d["timing"]["nonlinear"]
+
+    def nl_note(r):
+        if r.get("cores"):
+            return (
+                "~" + _fmt_time(r["t"]),
+                f"{r['core_hours']:,.0f} core-h; run to $t$ = {r['t_reached']:.0f}",
             )
-        elif c != "GX":
-            ax.plot(
-                [e["t1"] for e in pts],
-                err,
-                ls="none",
-                marker=MARK[c],
-                ms=3.5,
-                mfc="white",
-                mec=COLOR[c],
-                mew=0.8,
-                zorder=1,
-            )
-    ax.axhline(1.0, color="#555555", lw=0.7, ls=(0, (2, 2)))
-    ax.text(
-        0.97,
-        0.97,
-        "open markers:\nGKX with compilation,\nGS2 and stella on 1 core",
-        transform=ax.transAxes,
-        fontsize=5.6,
-        va="top",
-        ha="right",
-        color="#444444",
+        return _fmt_time(r["t"]), f"$Q_i$ = {r['Q']:.1f} $\\pm$ {r['sem']:.1f}"
+
+    _bars(
+        axs[1],
+        nl,
+        (60.0, 3.0e6),
+        [
+            (60, "1 min"),
+            (600, "10 min"),
+            (3600, "1 h"),
+            (36000, "10 h"),
+            (360000, "100 h"),
+        ],
+        nl_note,
     )
-    ax.text(
-        0.97,
-        1.12,
-        "1 %",
-        fontsize=6.5,
-        color="#555555",
-        ha="right",
-        va="bottom",
-        transform=ax.get_yaxis_transform(),
+    axs[1].set_title(
+        "Nonlinear Cyclone, to $t\\,v_{ti}/a = 400$", loc="left", fontsize=10.5
     )
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("time to solution (s)")
-    ax.set_ylabel(r"$|\gamma-\gamma_{\rm conv}|/\gamma_{\rm conv}$ (%)")
-    ax.set_title(r"Cyclone, $k_y\rho_i=0.3$", loc="left")
-    ax.set_ylim(floor * 0.8, 8)
-    ax.grid(alpha=0.3, lw=0.4, which="both")
-    # (b) nonlinear heat flux
-    ax = axs[1]
+    axs[1].set_xlabel("wall time (log scale); hatched = extrapolated from step rate")
+    return fig
+
+
+def trace_figure(d: dict) -> plt.Figure:
+    """Nonlinear Cyclone heat flux against time for the four codes."""
     nl = d["nonlinear"]["cyclone_ad"]
-    for c in ("GX", "GKX"):
+    fig, ax = plt.subplots(
+        figsize=(8.0, 2.7),
+        gridspec_kw={"bottom": 0.2, "left": 0.08, "right": 0.985, "top": 0.9},
+    )
+    for c in ("GX", "GKX", "GS2", "stella"):
         r = nl[c]
         ax.plot(
             r["trace_t"],
             r["trace_q"],
             color=COLOR[c],
-            lw=0.7,
-            alpha=0.75,
-            label=f"{c}  $Q$ = {r['Q']:.1f} $\\pm$ {r['sem']:.1f}",
-        )
-        ax.axhspan(
-            r["Q"] - r["sem"],
-            r["Q"] + r["sem"],
-            xmin=0.0,
-            xmax=1.0,
-            color=COLOR[c],
-            alpha=0.12,
-            lw=0,
+            lw=1.6 if c == "GKX" else 1.1,
+            ls="-" if c in ("GKX", "GS2", "stella") else "--",
+            alpha=0.95 if c == "GKX" else 0.85,
+            label=c,
+            zorder=3 if c == "GKX" else 2,
         )
     lit = nl["literature"]
-    ax.errorbar(
-        [415],
-        [lit["GX_paper_Q"]],
-        yerr=[lit["GX_paper_err"]],
-        fmt="none",
-        ecolor="#333333",
-        elinewidth=1.4,
-        capsize=2.5,
-        zorder=5,
-        clip_on=False,
+    ax.axhspan(
+        lit["GX_paper_Q"] - lit["GX_paper_err"],
+        lit["GX_paper_Q"] + lit["GX_paper_err"],
+        color="#999999",
+        alpha=0.25,
+        lw=0,
+        label="GX paper, $t\\leq 1000$",
     )
-    ax.text(
-        420,
-        9.4,
-        "GX paper\n7.2 $\\pm$ 0.8",
-        fontsize=6.3,
-        ha="right",
-        va="center",
-        color="#333333",
-    )
-    ax.set_xlim(0, 425)
-    ax.set_ylim(0, 12)
-    ax.set_xlabel(r"$t\, v_{ti}/a$")
+    ax.set_xlim(0, 200)
+    ax.set_ylim(0, 30)
+    ax.set_xlabel(r"$t\,v_{ti}/a$")
     ax.set_ylabel(r"$Q_i/Q_{\rm gB}$")
-    ax.set_title("Cyclone nonlinear, adiabatic e", loc="left")
-    ax.legend(loc="upper left", frameon=False, handlelength=1.4)
-    ax.grid(alpha=0.3, lw=0.4)
-    # (c) time to solution bars
-    ax = axs[2]
-    tl = d["timing"]
-    groups = [
-        (
-            "linear, $k_y\\rho_i=0.3$\n(first rung within 1 %\nover $k_y\\rho_i$ = 0.2-0.5)",
-            tl["linear_scan_grade"],
-        ),
-        ("nonlinear to\n$t\\,v_{ti}/a=400$", tl["nonlinear"]),
-    ]
-    x0 = 0
-    ticks, labs = [], []
-    for gname, items in groups:
-        for i, it in enumerate(items):
-            ax.bar(
-                x0 + i,
-                it["t"],
-                color=COLOR[it["code"]],
-                width=0.8,
-                hatch=it.get("hatch"),
-                edgecolor="white",
-                lw=0.5,
-            )
-            ax.text(
-                x0 + i,
-                it["t"] * 1.12,
-                it["label"],
-                ha="center",
-                va="bottom",
-                fontsize=5.8,
-                rotation=90,
-            )
-        ticks.append(x0 + (len(items) - 1) / 2)
-        labs.append(gname)
-        x0 += len(items) + 1
-    ax.set_yscale("log")
-    ax.set_ylim(1, 8000)
-    ax.set_xticks(ticks)
-    ax.set_xticklabels(labs, fontsize=6.3)
-    ax.set_ylabel("wall time (s)")
-    ax.set_title("Time to solution", loc="left")
-    ax.grid(alpha=0.3, lw=0.4, axis="y", which="both")
+    ax.grid(alpha=0.3, lw=0.5)
+    ax.legend(ncol=5, frameon=False, loc="upper right", fontsize=9)
     return fig
 
 
@@ -321,6 +307,7 @@ def main() -> None:
     with figure_style(**RC):
         save_figure(linear_figure(d), out / "four_code_linear.png", palette_colors=96)
         save_figure(speed_figure(d), out / "four_code_speed.png", palette_colors=96)
+        save_figure(trace_figure(d), out / "four_code_traces.png", palette_colors=96)
 
 
 if __name__ == "__main__":
