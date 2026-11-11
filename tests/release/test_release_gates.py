@@ -1519,6 +1519,29 @@ def test_reference_decks_set_every_key_at_its_default(deck: Path) -> None:
     assert {"grid", "time", "geometry", "physics", "collisions", "terms"} <= set(data)
 
 
+def test_a_pinned_end_damping_rate_says_why() -> None:
+    """Decks and examples leave ``damp_ends_rate`` to the default rule or comment the pin."""
+
+    pinned = re.compile(r"\s*damp_ends_rate\s*=")
+    bare: list[str] = []
+    for base, pattern in (
+        ("examples", "*.toml"),
+        ("examples", "*.py"),
+        ("benchmarks", "*.toml"),
+        ("tools/comparison/fixtures", "*.toml"),
+    ):
+        for path in sorted((ROOT / base).rglob(pattern)):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            bare.extend(
+                f"{path.relative_to(ROOT)}:{number + 1}"
+                for number, line in enumerate(lines)
+                if pinned.match(line)
+                and "#" not in line
+                and not (number and lines[number - 1].lstrip().startswith("#"))
+            )
+    assert not bare, bare
+
+
 def test_claim_scope_pages_avoid_promoted_unscoped_claims() -> None:
     violations: list[str] = []
     for path in CLAIM_SCOPE_PAGES:

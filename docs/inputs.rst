@@ -451,7 +451,9 @@ Every key a deck accepts, by table. ``unset`` is an absent value that the
 loader or the run resolves, as the meaning says. A key outside these lists
 raises an error that names the nearest valid spelling.
 ``examples/reference_inputs`` holds decks that set every key of a run kind at
-its default.
+its default. ``examples/common_input.toml`` lists only the keys that differ from
+the defaults; the other shipped decks start from it and comment each departure
+from its stepper and end-damping choice (:ref:`common-deck`).
 
 ``[[species]]``
 ^^^^^^^^^^^^^^^

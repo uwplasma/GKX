@@ -1,7 +1,8 @@
 schema_version = 1
 
 # Speed benchmark at 64x64x24 and (Nl, Nm) = (4, 8); not a converged heat flux
-# (Q = 8.6 here, 4.8 at Nx = 192). See docs/examples.rst.
+# (Q = 7.3 here, 5.2 at Nx = 192; 9.1 and 5.0 with the end damping pinned at 0.1).
+# See docs/examples.rst.
 
 [[species]]
 name = "ion"
@@ -25,8 +26,6 @@ ntheta = 24
 nperiod = 1
 
 [time]
-# Explicit nonlinear end-damping rate.
-damp_ends_rate = 0.1
 t_max = 400.0
 sample_stride = 20
 diagnostics_stride = 20

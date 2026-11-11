@@ -1,9 +1,11 @@
 schema_version = 1
 
 # Cyclone ITG with the mixing-length quasilinear diagnostic, tutorial
-# resolution (explicit time solver, Nz = 16, (Nl, Nm) = (2, 4)). The saturated
+# resolution (Krylov eigensolver, Nz = 16, (Nl, Nm) = (2, 4)). The saturated
 # flux is uncalibrated: it ranks spectra, it does not predict absolute flux.
-# case_full.toml uses the Krylov eigensolver at (Nl, Nm) = (8, 8).
+# case_full.toml uses the same solver at (Nl, Nm) = (8, 8).
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 [[species]]
 name = "ion"
 charge = 1.0
@@ -22,12 +24,6 @@ Nz = 16
 Lx = 62.8
 Ly = 62.8
 boundary = "periodic"
-
-[time]
-t_max = 20.0
-dt = 0.05
-method = "rk2"
-sample_stride = 1
 
 [geometry]
 q = 1.4
@@ -90,4 +86,5 @@ channels = ["es"]
 ky = 0.3
 Nl = 2
 Nm = 4
-solver = "time"
+# An eigenpair, not a time fit: a 20-unit rk2 run reads gamma 19% low at ky 0.2 to 0.3.
+solver = "krylov"

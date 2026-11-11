@@ -161,7 +161,9 @@ runs). The GPU and the CPU were shared with other jobs throughout.
   default CFL control; stella keeps 0.02.
 
 GKX reaches ``t v_ti/a = 400`` in 523 s (``Q_i = 6.9 +- 0.2``) and GX in 1610 s
-(``6.6 +- 0.3``; the paper gives 7.2 +- 0.8). GS2 and stella take 2.3 and 2.0 s
+(``6.6 +- 0.3``; the paper gives 7.2 +- 0.8). The GKX run pinned the end damping
+at 0.1; the default rate gives ``6.8 +- 0.2`` over two seeds
+(:ref:`common-deck`). GS2 and stella take 2.3 and 2.0 s
 per step on 8 ranks. In 5.9 h (47 core-hours each) they reach ``t = 100`` and
 ``140``; at that step rate and time step they need about 33 h and 16 h (264 and
 128 core-hours) for ``t = 400``. These full-length times are extrapolations,
@@ -172,9 +174,9 @@ left the relaxation. The heat flux uses the same estimator for every code.
 
 **Speed benchmark deck.** ``benchmarks/cases/cyclone_nonlinear_t400.toml``
 (64x64x24, ``(Nl, Nm) = (4, 8)``) measures speed; it is not a converged
-calculation. The saturated heat flux is ``Q = 8.6`` at ``Nx = 64`` and 4.8 at
-``Nx = 192``, and ``(4, 8)`` overestimates the linear growth rate by 9 to 86%
-at ``k_y = 0.3`` to 0.5.
+calculation. The saturated heat flux is ``Q = 7.3`` at ``Nx = 64`` and 5.2 at
+``Nx = 192`` (9.1 and 5.0 with the end damping pinned at 0.1), and ``(4, 8)``
+overestimates the linear growth rate by 9 to 86% at ``k_y = 0.3`` to 0.5.
 
 Nonlinear transport
 -------------------

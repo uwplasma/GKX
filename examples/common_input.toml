@@ -1,42 +1,33 @@
 schema_version = 1
 
-# GKX default stellarator input deck used by the `gkx wout_XXX.nc` shorthand.
-# The CLI fills in [geometry].vmec_file from the wout argument and writes the
-# fully-resolved copy next to the run outputs (<wout-stem>/gkx.toml).
-# Numerics follow the validated nonlinear VMEC examples in
-# examples/04_nonlinear_stellarator/case_full.toml and benchmarks/cases/ (HSX and
-# W7-X adiabatic-electron ITG).
-# This file is single-sourced: src/gkx/data/common_input.toml is a symlink here
-# so the packaged copy can never diverge.
+# The common deck: nonlinear adiabatic-electron ITG in a stellarator flux tube,
+# the case behind `gkx wout_XXX.nc`. The CLI fills in [geometry].vmec_file from
+# the wout argument and writes the resolved deck next to the run outputs
+# (<wout-stem>/gkx.toml). Only the keys that differ from the defaults appear;
+# examples/reference_inputs lists every key. The other decks of examples/ and
+# benchmarks/ start from this one and comment each line that deviates from it.
+# src/gkx/data/common_input.toml is a symlink to this file.
 
 [[species]]
-name = "ion"
-charge = 1.0
-mass = 1.0
-density = 1.0
-temperature = 1.0
 tprim = 3.0
 fprim = 1.0
 nu = 0.01
-kinetic = true
 
 [grid]
 Nx = 96
 Ny = 96
 Nz = 48
-Lx = 62.8
-Ly = 62.8
 boundary = "fix aspect"
 y0 = 14.0  # dky*rho = 0.071, the published W7-X spacing; scan-calibrated
 ntheta = 48
 nperiod = 1
 
 [time]
-# Optional runtime controls; intervals use normalized time, like t_max.
+# No dt, method or damp_ends_rate: the CFL controller picks the stepper (auto)
+# and the end-damping rate is 30 thermal transits per layer; the measurements
+# are in docs/guidance.rst (End damping, Common deck).
 # chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
 # diagnostics_interval = 5.0  # Overrides the step-stride cadence.
-# Explicit nonlinear end-damping rate.
-damp_ends_rate = 0.1
 # Use a fixed horizon until the saturation rule passes independent validation.
 t_max = 200.0
 sample_stride = 50
@@ -46,51 +37,24 @@ diagnostics_stride = 50
 model = "vmec"
 # vmec_file is injected by the CLI from the wout positional or --vmec/--vmex.
 torflux = 0.64
-alpha = 0.0
 npol = 1.0
 
 [init]
-init_field = "density"
 init_amp = 1e-3
-gaussian_init = false
 init_single = false
 
 [physics]
 linear = false
 nonlinear = true
-electrostatic = true
-electromagnetic = false
-adiabatic_electrons = true
-adiabatic_ions = false
-tau_e = 1.0
-beta = 0.0
-collisions = true
-hypercollisions = true
 
 [collisions]
-nu_hermite = 1.0
-nu_laguerre = 2.0
-nu_hyper = 0.0
-p_hyper = 4.0
-hypercollisions_const = 0.0
-hypercollisions_kz = 1.0
 D_hyper = 0.05
-damp_ends_widthfrac = 0.125
 
 [normalization]
 contract = "kinetic"
-diagnostic_norm = "rho_star"
 
 [terms]
-streaming = 1.0
-mirror = 1.0
-curvature = 1.0
-gradb = 1.0
-diamagnetic = 1.0
-collisions = 1.0
-hypercollisions = 1.0
 hyperdiffusion = 1.0
-end_damping = 1.0
 apar = 0.0
 bpar = 0.0
 nonlinear = 1.0

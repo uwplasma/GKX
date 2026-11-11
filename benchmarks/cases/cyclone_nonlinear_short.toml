@@ -22,6 +22,8 @@ ntheta = 24
 nperiod = 1
 
 [time]
+# Off, with damp_ends_widthfrac = 0 and p_hyper = 2 below: the short comparison replay
+# (t_max = 5, no collisions) fixes its dissipation by hand (docs/examples.rst).
 damp_ends_rate = 0.0
 t_max = 5.0
 dt = 0.05

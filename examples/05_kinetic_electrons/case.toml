@@ -3,6 +3,8 @@ schema_version = 1
 # Tutorial nonlinear Cyclone ITG with kinetic electrons. The horizon covers
 # the start of the linear phase. CFL control includes electron streaming
 # and the electromagnetic field response; transport requires a longer run.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"
@@ -39,8 +41,6 @@ nperiod = 1
 # Optional runtime controls; intervals use normalized time, like t_max.
 # chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
 # diagnostics_interval = 0.05  # Overrides the step-stride cadence.
-# Explicit nonlinear end-damping rate.
-damp_ends_rate = 0.1
 t_max = 0.3
 sample_stride = 10
 diagnostics_stride = 10

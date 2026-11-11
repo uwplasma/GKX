@@ -3,6 +3,8 @@ schema_version = 1
 # Runtime benchmark example.
 # Use JAX_ENABLE_X64=1 when reproducing tracked parity-sensitive outputs.
 # Leave it unset for faster exploratory runs with the default precision policy.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"
@@ -38,6 +40,7 @@ ntheta = 32
 nperiod = 2
 
 [time]
+# Read only by the time-route benchmark tests; solver = "krylov" below needs no time loop.
 t_max = 4.0
 dt = 0.001
 method = "imex2"
