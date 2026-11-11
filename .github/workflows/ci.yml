@@ -258,7 +258,7 @@ jobs:
     # CPU devices get four of them from the same planner. There is no separate
     # uncovered test lane: it ran the same tests a second time.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macOS, uwplasma-cpu]
+    runs-on: [self-hosted, uwplasma-cpu]
     timeout-minutes: 60
     strategy:
       fail-fast: false
