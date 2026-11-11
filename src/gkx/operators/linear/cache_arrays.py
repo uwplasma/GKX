@@ -154,6 +154,29 @@ def with_mu_grid(cache: Any, params: LinearParams) -> Any:
     )
 
 
+def moment_runs(
+    moments: tuple | None, Nl: int, Nm: int
+) -> list[tuple[int, int, int, int, float]]:
+    """``(a, b, nl, nm, p_hyper_m)`` of each run of species ``a:b`` keeping one ``(nl, nm)``.
+
+    ``None`` entries keep the state's ``(Nl, Nm)``; the list is empty without ``moments``.
+    """
+
+    rows = [
+        (Nl if nl is None else nl, Nm if nm is None else nm, p)
+        for nl, nm, p in moments or ()
+    ]
+    if any(nl > Nl or nm > Nm for nl, nm, _ in rows):
+        raise ValueError(f"a species keeps more moments than the state ({Nl}, {Nm})")
+    runs: list[list[int]] = []
+    for i, row in enumerate(rows):
+        if runs and rows[runs[-1][0]] == row:
+            runs[-1][1] = i + 1
+        else:
+            runs.append([i, i + 1])
+    return [(a, b, *rows[a]) for a, b in runs]
+
+
 def with_species_groups(
     cache: Any,
     params: LinearParams,
@@ -168,30 +191,17 @@ def with_species_groups(
     Identity when ``params.moments`` is ``None`` or every species keeps the state's.
     """
 
-    if params.moments is None:
-        return cache
     Nl, Nm = cache.Jl.shape[1], cache.m.size
-    rows = [
-        (Nl if nl is None else nl, Nm if nm is None else nm, p)
-        for nl, nm, p in params.moments
-    ]
-    if any(nl > Nl or nm > Nm for nl, nm, _ in rows):
-        raise ValueError(f"a species keeps more moments than the state ({Nl}, {Nm})")
-    if all(r[:2] == (Nl, Nm) for r in rows):
+    runs = moment_runs(params.moments, Nl, Nm)
+    if all(r[2:4] == (Nl, Nm) for r in runs):
         return cache
-    if params.mu_vperp_max is not None and any(r[0] != Nl for r in rows):
+    if params.mu_vperp_max is not None and any(r[2] != Nl for r in runs):
         raise ValueError("a species cannot keep fewer Laguerre nodes on the mu grid")
-    runs: list[list[int]] = []
-    for i, row in enumerate(rows):
-        if runs and rows[runs[-1][0]] == row:
-            runs[-1][1] = i + 1
-        else:
-            runs.append([i, i + 1])
     groups = tuple(
-        build(*args, params.species_slice(a, b, p_hyper_m=rows[a][2]), *rows[a][:2])
-        for a, b in runs
+        build(*args, params.species_slice(a, b, p_hyper_m=p), nl, nm)
+        for a, b, nl, nm, p in runs
     )
-    nl = np.array([r[0] for r in rows])
+    nl = np.array([r[2] for r in runs for _ in range(r[1] - r[0])])
     keep = np.arange(Nl)[None, :, None, None, None] < nl[:, None, None, None, None]
     return replace(cache, Jl=cache.Jl * keep, JlB=cache.JlB * keep, groups=groups)
 

@@ -995,7 +995,7 @@ def _run_sharded(
     """Run the sharded nonlinear route, fail-closed against the serial answer."""
 
     if plan.axis == "species_hermite":
-        plan = resolve_species_hermite_mesh(ctx.G0, plan)
+        plan = resolve_species_hermite_mesh(ctx.G0, plan, ctx.params.moments)
     status(f"routing nonlinear run through {plan.describe()}")
     if (
         (prepare is None or policy.diagnostics_on)

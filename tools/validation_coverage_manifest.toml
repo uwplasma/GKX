@@ -1216,6 +1216,7 @@ next_tests = [
 module = "gkx.parallel.state"
 path = "src/gkx/parallel/state.py"
 owned_modules = [
+  "gkx.parallel.grouped_hermite",
   "gkx.parallel.integrators",
   "gkx.callbacks",
   "gkx.parallel.velocity",

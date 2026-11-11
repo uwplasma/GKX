@@ -55,7 +55,8 @@ recursive = true
 # 125 -> 128: the three package markers of gkx.solvers, gkx.solvers.linear and gkx.solvers.nonlinear
 # replace sixteen flat solvers_* modules; 128 -> 129: the saturated-window heat flux and sheared
 # transport drivers leave solvers/nonlinear/diagnostics.py for solvers/nonlinear/transport_window.py.
-baseline = 129
+# 129 -> 130: parallel/grouped_hermite.py, the Hermite mesh for species with unequal moment counts.
+baseline = 130
 target = 45
 
 [[topology_policy.counts]]
@@ -224,7 +225,8 @@ recursive = true
 # 70332 -> 70078: physical-time saturation detector replaces the window/guard stop gates.
 # 70078 -> 70149: phase-1 split of the diagnostics driver (module header and export list of
 # transport_window.py; no code added).
-baseline = 70149
+# 70149 -> 70598: species groups of unequal moment counts on the Hermite-sharded nonlinear route (measured).
+baseline = 70598
 target = 45000
 
 [[line_budget_policy.counts]]

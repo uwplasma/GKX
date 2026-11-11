@@ -226,3 +226,17 @@ The tutorial decks name no stepper. This script runs the Cyclone tutorial with t
 default and with pinned steppers (``rk4-pi``, ``lawson-rk4-pi``, an explicit
 ``cfl_fac``, a fixed-step ``rk2``) and prints the steps and wall time of each.
 :doc:`guidance` explains when to pin one.
+
+14. Advanced: species with different velocity resolution on several devices
+---------------------------------------------------------------------------
+
+.. code-block:: bash
+
+   python examples/14_multi_device_species/run.py
+
+Ions keep :math:`(N_l, N_m) = (2, 8)` and electrons :math:`(4, 16)`
+(:ref:`per-species-moments`). With ``[parallel] axis = "species_hermite"`` each
+species' Hermite axis is cut at its own size, so every device carries the same
+share of both. The script runs the case on one device and on two (host CPU
+devices stand in for GPUs), prints the entries per device and checks the final
+states agree (:doc:`parallelization`).

@@ -3182,3 +3182,224 @@ def test_magnetic_flutter_uses_cross_shard_hermite_neighbors(ns, nm, ky_layout):
         assert float(scale) > 0.0
         error = jnp.linalg.norm(observed - reference) / scale
         assert float(error) < (1e-9 if jax.config.x64_enabled else 5e-5)
+
+
+# ---- species with unequal (Nl, Nm) on the Hermite-sharded nonlinear route ----
+
+from gkx.config import CycloneBaseCase, GridConfig
+from gkx.core_grid import build_spectral_grid
+from gkx.geometry import SAlphaGeometry
+from gkx.operators.linear.cache_arrays import keep_moments
+from gkx.operators.linear.cache_builder import build_linear_cache
+from gkx.operators.moments import fieldline_quadrature_weights
+from gkx.parallel.integrators import integrate_nonlinear_species_hermite
+from gkx.parallel.velocity_plan import (
+    build_grouped_hermite_mesh_plan,
+    grouped_hermite_device_counts,
+)
+from gkx.solvers.nonlinear.diagnostics import nonlinear_rhs_cached
+from gkx.terms.config import TermConfig
+
+# ion keeps (2, 8) and electron (3, 16) of a (3, 16) state
+UNEQUAL_MOMENTS = ((2, 8, 4.0), (3, 16, 8.0))
+
+
+def _unequal_problem(beta):
+    n, nl, nm = 4, 3, 16
+    grid = build_spectral_grid(
+        GridConfig(Nx=n, Ny=n, Nz=n, Lx=6.0, Ly=6.0, boundary="periodic")
+    )
+    geom = SAlphaGeometry.from_config(CycloneBaseCase().geometry)
+    params = LinearParams(
+        beta=beta,
+        fapar=float(beta != 0.0),
+        tau_e=0.0,
+        charge_sign=jnp.asarray([1.0, -1.0]),
+        density=jnp.asarray([1.0, 1.0]),
+        mass=jnp.asarray([1.0, 1.0 / 1836.0]),
+        temp=jnp.asarray([1.0, 1.0]),
+        vth=jnp.asarray([1.0, 42.0]),
+        rho=jnp.asarray([1.0, 0.023]),
+        tprim=jnp.asarray([6.9, 0.0]),
+        tprim_e=jnp.asarray([0.0, 6.9]),
+        fprim=jnp.asarray([2.2, 2.2]),
+        tz=jnp.asarray([1.0, -1.0]),
+        moments=UNEQUAL_MOMENTS,
+    )
+    cache = build_linear_cache(grid, geom, params, nl, nm)
+    shape = (2, nl, nm, grid.ky.size, grid.kx.size, grid.z.size)
+    rng = np.random.default_rng(0)
+    state = 1e-3 * (rng.standard_normal(shape) + 1j * rng.standard_normal(shape))
+    state = keep_moments(jnp.asarray(state, dtype=jnp.complex64), UNEQUAL_MOMENTS)
+    return state, cache, params, grid, *fieldline_quadrature_weights(geom, grid)
+
+
+def _unequal_serial(state, cache, params, terms, steps, dt, grid=None, weights=None):
+    """The same explicit RK2 trajectory on one device: final state and scalar traces."""
+
+    from gkx.core_ky_layout import source_ny_full
+    from gkx.operators.fluxes import heat_flux_species, particle_flux_species
+    from gkx.operators.moments import (
+        distribution_free_energy,
+        electrostatic_field_energy,
+    )
+    from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
+
+    project = _make_compressed_real_fft_projector(
+        ny_full=source_ny_full(cache), nx=int(cache.kx.size), rows=int(cache.ky.size)
+    )
+    h = jnp.asarray(dt, jnp.float32)
+
+    def step(carry, _):
+        v = project(carry).astype(jnp.complex64)
+        k1, fields = nonlinear_rhs_cached(v, cache, params, terms)
+        mid = project(v + 0.5 * h * k1).astype(jnp.complex64)
+        k2, _ = nonlinear_rhs_cached(mid, cache, params, terms)
+        nxt = project(v + h * k2).astype(jnp.complex64)
+        if grid is None:
+            return nxt, None
+        vol_fac, flux_fac = weights
+        head, zero = v[:, :, :4], jnp.zeros_like(fields.phi)
+        apar = zero if fields.apar is None else fields.apar
+        bpar = zero if fields.bpar is None else fields.bpar
+        args = (head, fields.phi, apar, bpar, cache, grid, params, flux_fac)
+        return nxt, (
+            distribution_free_energy(v, grid, params, vol_fac),
+            electrostatic_field_energy(fields.phi, cache, params, vol_fac),
+            jnp.sum(heat_flux_species(*args)),
+            jnp.sum(particle_flux_species(*args)),
+        )
+
+    return jax.lax.scan(jax.jit(step), state, xs=None, length=steps)
+
+
+@pytest.mark.parametrize("devices", [2, 4])
+@pytest.mark.parametrize("beta", [0.0, 0.01], ids=["es", "em"])
+def test_unequal_counts_match_the_serial_run(devices, beta):
+    if len(jax.devices()) < devices:
+        pytest.skip("needs the requested device count")
+    state, cache, params, grid, vol_fac, flux_fac = _unequal_problem(beta)
+    state = 300.0 * state  # large enough for the nonlinear bracket to matter
+    assert cache.groups is not None and len(cache.groups) == 2
+    em = float(beta != 0.0)
+    terms = TermConfig(nonlinear=1.0, apar=em, bpar=em)
+    steps, dt = 3, 1.0e-3
+    reference, traces = _unequal_serial(
+        state, cache, params, terms, steps, dt, grid, (vol_fac, flux_fac)
+    )
+    linear, _ = _unequal_serial(
+        state, cache, params, replace(terms, nonlinear=0.0), steps, dt
+    )
+    run = integrate_nonlinear_species_hermite(
+        state,
+        cache,
+        params,
+        dt=dt,
+        steps=steps,
+        terms=terms,
+        grid=grid,
+        vol_fac=vol_fac,
+        flux_fac=flux_fac,
+        num_devices=devices,
+    )
+    assert run.mesh_shape == (1, devices)
+    got, ref = np.asarray(run.state), np.asarray(reference)
+    assert np.max(np.abs(ref - np.asarray(linear))) > 1e-3  # the bracket acted
+    assert np.max(np.abs(got - ref)) < 5.0e-6
+    # the moments a species does not keep stay zero
+    np.testing.assert_array_equal(got[0, 2:], 0.0)
+    np.testing.assert_array_equal(got[0, :, 8:], 0.0)
+    for name, expected in zip(run.traces, traces, strict=True):
+        np.testing.assert_allclose(run.traces[name], expected, rtol=1e-4, atol=1e-6)
+        assert np.max(np.abs(run.traces[name])) > 0.0
+
+
+def test_work_per_device_is_balanced_whatever_the_counts():
+    shapes = [(1, 2, 8), (1, 3, 16)]
+    for devices in (2, 4):
+        plan = build_grouped_hermite_mesh_plan(shapes, num_devices=devices)
+        assert (plan.chunks["s"], plan.chunks["m"]) == (1, devices)
+    assert grouped_hermite_device_counts(shapes, limit=8) == (1, 2, 4)
+    with pytest.raises(ValueError, match="not exactly divisible"):
+        build_grouped_hermite_mesh_plan(shapes, num_devices=3)
+    from gkx.parallel.grouped_hermite import device_cost
+
+    # a species-per-device split of the padded state costs 3 * 16 on each
+    # device; the grouped split costs the sum over species of nl * nm / D
+    assert device_cost(shapes, 2) == (2 * 8 + 3 * 16) / 2
+
+
+def test_a_hermite_count_the_devices_do_not_divide_names_the_counts_that_work():
+    state, cache, params, grid, vol_fac, flux_fac = _unequal_problem(0.0)
+    if len(jax.devices()) < 3:
+        pytest.skip("needs three devices")
+    with pytest.raises(ValueError, match=r"supports \(1, 2, 4\) devices"):
+        integrate_nonlinear_species_hermite(
+            state,
+            cache,
+            params,
+            dt=1e-3,
+            steps=1,
+            terms=TermConfig(nonlinear=1.0, apar=0.0, bpar=0.0),
+            num_devices=3,
+        )
+
+
+def _unequal_runtime_case():
+    from gkx.config import (
+        GeometryConfig,
+        InitializationConfig,
+        RuntimeConfig,
+        RuntimeNormalizationConfig,
+        RuntimePhysicsConfig,
+        RuntimeSpeciesConfig,
+        RuntimeTermsConfig,
+        TimeConfig,
+    )
+
+    return RuntimeConfig(
+        grid=GridConfig(Nx=4, Ny=8, Nz=16, Lx=31.4, Ly=31.4, boundary="periodic"),
+        time=TimeConfig(
+            t_max=0.05, dt=0.01, method="rk2", fixed_dt=True, run_to="t_max"
+        ),
+        geometry=GeometryConfig(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778),
+        init=InitializationConfig(init_field="density", init_amp=1.0e-2),
+        species=(
+            RuntimeSpeciesConfig(name="ion", Nl=2, Nm=8),
+            RuntimeSpeciesConfig(name="electron", charge=-1.0, mass=0.1),
+        ),
+        normalization=RuntimeNormalizationConfig(contract="cyclone"),
+        physics=RuntimePhysicsConfig(
+            linear=False, nonlinear=True, adiabatic_electrons=False
+        ),
+        terms=RuntimeTermsConfig(
+            nonlinear=1.0, collisions=0.0, hypercollisions=0.0, end_damping=0.0
+        ),
+    )
+
+
+@pytest.mark.parametrize("devices", [2, 4])
+def test_runtime_routes_unequal_counts_through_the_grouped_mesh(devices):
+    from gkx.config import RuntimeParallelConfig
+    from gkx.workflows.nonlinear import run_runtime_nonlinear
+
+    if len(jax.devices()) < devices:
+        pytest.skip("needs the requested device count")
+    cfg = _unequal_runtime_case()
+    options = dict(ky_target=0.2, Nl=3, Nm=16, steps=5, diagnostics=False)
+    serial = run_runtime_nonlinear(cfg, return_state=True, **options)
+    messages = []
+    parallel = RuntimeParallelConfig(
+        strategy="shard_map", axis="species_hermite", num_devices=devices
+    )
+    sharded = run_runtime_nonlinear(
+        replace(cfg, parallel=parallel),
+        return_state=True,
+        status_callback=messages.append,
+        **options,
+    )
+    assert any("species groups" in m and "own size" in m for m in messages)
+    assert any("named species-Hermite collectives" in m for m in messages)
+    ref, got = np.asarray(serial.state), np.asarray(sharded.state)
+    assert np.max(np.abs(ref)) > 0.0
+    np.testing.assert_allclose(got, ref, rtol=0.0, atol=5.0e-6)

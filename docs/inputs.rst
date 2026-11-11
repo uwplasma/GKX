@@ -695,8 +695,17 @@ EM mode, the ion ``Nl`` for large ``ky rho_i``; lower the ion ``Nm`` for a case
 dominated by electron physics. Check the growth rate or the heat flux against
 the next larger counts of that species, as for ``[run]`` (:doc:`guidance`).
 
-*Not supported.* Hermite-sharded routes, a custom collision operator and the
-per-term diagnostic RHS raise ``NotImplementedError`` with unequal counts;
+*Several devices.* With ``[parallel] strategy = "shard_map"`` and
+``axis = "species_hermite"`` the fixed-step final-state route cuts each species
+group's Hermite axis into one block per device, so a device advances
+:math:`\sum_g n_g N_{l,g} N_{m,g}/D` entries whatever the counts; each group's
+``Nm`` must divide by the device count (:ref:`unequal-moment-mesh`;
+``examples/14_multi_device_species``). Other sharded routes keep the whole-state
+placement for unequal counts.
+
+*Not supported.* The Hermite-sharded RHS called directly with unequal counts, a
+custom collision operator and the per-term diagnostic RHS raise
+``NotImplementedError`` with unequal counts;
 ``mu_vperp_max`` refuses a species with fewer Laguerre nodes. ``imex-ars3`` and
 ``imex-ark3`` factor and solve each species group at its own counts.
 
@@ -724,6 +733,14 @@ for ``"combined_ky"`` (the combined-``k_y`` time-integration scan path), and
 ``"none"``/``"off"`` are aliases for ``"serial"``. Quasilinear scan artifacts
 require per-``k_y`` evaluation. ``auto = true`` resolves to
 ``strategy = "shard_map"`` with ``axis = "species_hermite"``.
+
+Species with unequal ``[[species]] Nl`` / ``Nm`` run on the same mesh request:
+``axis = "species_hermite"`` then cuts each species group's Hermite axis at its
+own size, one block per device, so the work per device is balanced whatever the
+counts. Each group's ``Nm`` must divide by ``num_devices`` (blocks of at least
+two moments); otherwise the run keeps the whole-state placement, and the status
+line says which. This applies to the fixed-step explicit final-state route
+(:ref:`unequal-moment-mesh`).
 
 For runtime ``k_y`` scans, ``strategy = "batch"`` with ``axis = "ky"`` selects
 the production independent-worker path. ``num_devices`` is interpreted as the

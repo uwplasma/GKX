@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any, Sequence
 
 import numpy as np
@@ -271,6 +271,53 @@ def build_species_hermite_mesh_plan(
         ),
         load_balance=1.0,
     )
+
+
+def build_grouped_hermite_mesh_plan(
+    groups: Sequence[tuple[int, int, int]],
+    *,
+    num_devices: int,
+    hermite_ghost_depth: int = 2,
+) -> VelocityShardingPlan:
+    """Split every species group's Hermite axis over all ``num_devices``.
+
+    ``groups`` lists ``(ns, nl, nm)`` for each run of species that keeps one
+    ``(nl, nm)``. Each group is cut into ``num_devices`` equal Hermite blocks of
+    its *own* ``nm``, so a device holds ``ns * nl * nm / num_devices`` entries of
+    every group and the work is balanced whatever the counts. Every ``nm`` must
+    divide exactly and leave a block at least ``hermite_ghost_depth`` wide.
+    """
+
+    plans = [
+        build_species_hermite_mesh_plan(
+            (1, nl, nm, 1, 1, 1),
+            num_devices=num_devices,
+            hermite_ghost_depth=hermite_ghost_depth,
+        )
+        for _, nl, nm in groups
+    ]
+    ns = sum(g[0] for g in groups)
+    nl, nm = max(g[1] for g in groups), max(g[2] for g in groups)
+    return replace(
+        plans[0],
+        state_shape=(ns, nl, nm, 1, 1, 1),
+        shard_shape=(ns, nl, nm // int(num_devices), 1, 1, 1),
+    )
+
+
+def grouped_hermite_device_counts(
+    groups: Sequence[tuple[int, int, int]], *, limit: int = 64
+) -> tuple[int, ...]:
+    """Return the device counts :func:`build_grouped_hermite_mesh_plan` accepts."""
+
+    counts = []
+    for total in range(1, int(limit) + 1):
+        try:
+            build_grouped_hermite_mesh_plan(groups, num_devices=total)
+        except ValueError:
+            continue
+        counts.append(total)
+    return tuple(counts)
 
 
 __all__ = [

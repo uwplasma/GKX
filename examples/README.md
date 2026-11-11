@@ -28,6 +28,7 @@ python examples/01_linear_tokamak/run.py
 | [`11_parallel_scan/`](11_parallel_scan) | parallel `k_y` scan, checked against serial |
 | [`12_restart_and_analysis/`](12_restart_and_analysis) | restart a nonlinear run, average the joined trace |
 | [`13_advanced_time_stepping/`](13_advanced_time_stepping) | advanced: pin the nonlinear stepper (`rk4-pi`, `lawson-rk4-pi`, fixed step) against the default |
+| [`14_multi_device_species/`](14_multi_device_species) | advanced: ions and electrons with different velocity resolution on two devices, work split per device |
 
 Steps 02, 04 and 05 (stellarator) need a VMEC `wout` from [`vmec/`](vmec). If
 it is missing, the script solves it once with `vmex` (`pip install vmex`) or stops with a message. `vmec/generate_wouts.sh` builds all

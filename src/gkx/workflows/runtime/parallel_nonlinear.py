@@ -10,10 +10,13 @@ runs with production diagnostics, adaptive chunks, saturation checks and progres
 Fixed-step diagnostics-off runs retain the final-state scan where supported.
 Diagnosed preparation reuses the same backend with ``strict_identity=False``;
 model overrides remain unsupported. Active collisions, sources, fixed modes,
-checkpointing, additional state sharding, unequal species moment counts and
-reflectionless closures retain the ordinary solver. Uniform moment stamps must
-match the normalized state. Fallback reports whole-state placement and does not
-imply distributed RHS work.
+checkpointing, additional state sharding and reflectionless closures retain the
+ordinary solver. Species with unequal moment counts take the fixed-step
+final-state scan on a Hermite mesh that cuts each species group at its own size
+(:mod:`gkx.parallel.grouped_hermite`); diagnosed, adaptive and progress runs
+retain the ordinary solver for them. Uniform moment stamps must match the
+normalized state. Fallback reports whole-state placement and does not imply
+distributed RHS work.
 
 ``ky`` is a single-process placement diagnostic with replicated work. FFT axes
 remain local; unsupported strategies and axes raise with their reasons.
@@ -29,6 +32,7 @@ shards and exchange only error scalars.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from types import SimpleNamespace
 from typing import Any, Callable
 
 import jax
@@ -103,6 +107,8 @@ class NonlinearParallelPlan:
     rtol: float = IDENTITY_RTOL
     mesh_plan: Any | None = None
     auto: bool = False
+    #: ``(ns, nl, nm)`` per species group when the mesh cuts each at its own size.
+    groups: tuple[tuple[int, int, int], ...] | None = None
 
     @property
     def device_count(self) -> int:
@@ -130,12 +136,22 @@ class NonlinearParallelPlan:
         collectives = "field psum" + (
             f", width-{halo} Hermite ppermute" if nm_chunks > 1 else ", no halo"
         )
+        if self.groups:
+            from gkx.parallel.grouped_hermite import device_cost
+
+            shard = (
+                f"each of {len(self.groups)} species groups (ns, nl, nm) "
+                f"{list(self.groups)} cut at its own size, "
+                f"{device_cost(list(self.groups), self.device_count):g} Nl*Nm "
+                "entries per device"
+            )
+        else:
+            shard = f"shard {tuple(self.mesh_plan.shard_shape)}"
         return (
             f"shard_map nonlinear route on a {chosen}species x Hermite mesh "
             f"({ns_chunks} species x {nm_chunks} Hermite) across "
-            f"{self.device_count} of {len(self.devices)} devices, shard "
-            f"{tuple(self.mesh_plan.shard_shape)}, collectives: {collectives} "
-            f"(strict_identity={strict})"
+            f"{self.device_count} of {len(self.devices)} devices, {shard}, "
+            f"collectives: {collectives} (strict_identity={strict})"
         )
 
 
@@ -234,15 +250,33 @@ def resolve_nonlinear_parallel_plan(parallel: Any) -> NonlinearParallelPlan | No
     )
 
 
+def _unequal_groups(state: Any, moments: Any) -> list[tuple[int, int, int]] | None:
+    """``(ns, nl, nm)`` per group when species keep unequal counts, else ``None``."""
+
+    from gkx.parallel.grouped_hermite import group_shapes
+
+    shapes = group_shapes(SimpleNamespace(moments=moments), *state.shape[1:3])
+    return shapes if any(g[1:] != tuple(state.shape[1:3]) for g in shapes) else None
+
+
 def resolve_species_hermite_mesh(
-    state: Any, plan: NonlinearParallelPlan
+    state: Any, plan: NonlinearParallelPlan, moments: Any = None
 ) -> NonlinearParallelPlan:
-    """Attach the requested mesh, selecting a feasible subset only in auto mode."""
+    """Attach the requested mesh, selecting a feasible subset only in auto mode.
+
+    Species that keep unequal ``moments`` get a Hermite-only mesh that cuts every
+    group at its own size (:mod:`gkx.parallel.grouped_hermite`) when the counts
+    divide; otherwise the padded-state mesh below places the whole state.
+    """
 
     from gkx.parallel.velocity_plan import (
+        build_grouped_hermite_mesh_plan,
         build_species_hermite_mesh_plan,
+        grouped_hermite_device_counts,
         species_hermite_device_counts,
     )
+
+    groups = _unequal_groups(state, moments) if moments is not None else None
 
     shape = tuple(int(x) for x in state.shape)
     if len(shape) not in (5, 6) or min(shape) < 1:
@@ -255,7 +289,11 @@ def resolve_species_hermite_mesh(
     devices = _process_balanced_devices(plan.devices) if balanced else plan.devices
     count = len(devices)
     if plan.auto:
-        feasible = species_hermite_device_counts(ns, nm, limit=count)
+        feasible = (
+            grouped_hermite_device_counts(groups, limit=count)
+            if groups
+            else species_hermite_device_counts(ns, nm, limit=count)
+        )
         count = max(
             (
                 n
@@ -271,7 +309,13 @@ def resolve_species_hermite_mesh(
             "the nonlinear mesh must include a device from every initialized process"
         )
     try:
-        mesh_plan = build_species_hermite_mesh_plan(shape, num_devices=count)
+        try:
+            if not groups:
+                raise ValueError
+            mesh_plan = build_grouped_hermite_mesh_plan(groups, num_devices=count)
+        except ValueError:
+            groups = None
+            mesh_plan = build_species_hermite_mesh_plan(shape, num_devices=count)
     except ValueError as exc:
         supported = species_hermite_device_counts(ns, nm)
         raise NonlinearParallelRoutingError(
@@ -284,7 +328,12 @@ def resolve_species_hermite_mesh(
     if balanced:
         selected = tuple(sorted(devices[:count], key=lambda d: d.process_index))
         devices = selected + tuple(d for d in plan.devices if d not in selected)
-    return replace(plan, mesh_plan=mesh_plan, devices=devices)
+    return replace(
+        plan,
+        mesh_plan=mesh_plan,
+        devices=devices,
+        groups=tuple(groups) if groups else None,
+    )
 
 
 def shard_nonlinear_state(state: Any, plan: NonlinearParallelPlan) -> Any:
@@ -402,9 +451,20 @@ def assert_nonlinear_parallel_identity(
     )
 
 
-def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
-    """Check shared named-collective explicit physics and runtime limits."""
+def _supports_species_hermite_policy(
+    cfg, ctx, policy, *, method, plan, unequal_ok=False
+):
+    """Check shared named-collective explicit physics and runtime limits.
 
+    ``unequal_ok`` admits species with unequal moment counts, which only the
+    fixed-step final-state route serves (on a grouped mesh plan).
+    """
+
+    uniform = all(
+        sp.Nl in (None, ctx.G0.shape[1]) and sp.Nm in (None, ctx.G0.shape[2])
+        for sp in cfg.species
+        if sp.kinetic
+    )
     return (
         plan.axis == "species_hermite"
         and not policy.fixed_mode_on
@@ -414,12 +474,9 @@ def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
         and not cfg.time.state_sharding
         and (method is None or method == cfg.time.method)
         and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3", "rk4-pi"}
+        and (uniform or (unequal_ok and plan.groups is not None))
         and all(
-            sp.Nl in (None, ctx.G0.shape[1])
-            and sp.Nm in (None, ctx.G0.shape[2])
-            and sp.hermite_closure == "hypercollision"
-            for sp in cfg.species
-            if sp.kinetic
+            sp.hermite_closure == "hypercollision" for sp in cfg.species if sp.kinetic
         )
         and (
             float(ctx.terms.collisions) == 0.0
@@ -468,7 +525,7 @@ def _integrate_species_hermite_final_state(
         or cfg.time.progress_bar
         or (prepare is not None and plan.strict_identity)
         or not _supports_species_hermite_policy(
-            cfg, ctx, policy, method=method, plan=plan
+            cfg, ctx, policy, method=method, plan=plan, unequal_ok=True
         )
     ):
         return None

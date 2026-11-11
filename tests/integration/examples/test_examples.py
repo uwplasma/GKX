@@ -39,6 +39,17 @@ def _needs_vmex_or_wout() -> str | None:
     )
 
 
+def _needs_two_devices() -> str | None:
+    import jax
+
+    if len(jax.devices()) >= 2:
+        return None
+    return (
+        "needs two JAX devices; start the run with "
+        "XLA_FLAGS=--xla_force_host_platform_device_count=2"
+    )
+
+
 # relative script -> (summary JSON, figure) it must write under outputs/.
 SMOKE_OUTPUTS: dict[str, tuple[str, str]] = {
     "01_linear_tokamak/run.py": ("summary.json", "linear_tokamak.png"),
@@ -60,6 +71,7 @@ SMOKE_OUTPUTS: dict[str, tuple[str, str]] = {
     "11_parallel_scan/run.py": ("summary.json", "parallel_scan.png"),
     "12_restart_and_analysis/run.py": ("summary.json", "restart_and_analysis.png"),
     "13_advanced_time_stepping/run.py": ("summary.json", "advanced_steppers.png"),
+    "14_multi_device_species/run.py": ("summary.json", "multi_device_species.png"),
 }
 
 # Editable constants turned down for the smoke run (name -> Python expression).
@@ -77,6 +89,7 @@ SMOKE_KNOBS: dict[str, dict[str, str]] = {
 # Scripts that cannot run in a bounded CPU lane (reason, or a callable that
 # returns a reason when the requirement is missing and None when it is met).
 SMOKE_SKIPS: dict[str, object] = {
+    "14_multi_device_species/run.py": _needs_two_devices,
     "02_linear_stellarator/run.py": _needs_vmex_or_wout,
     "04_nonlinear_stellarator/run.py": _needs_vmex_or_wout,
     "10_vmex_optimization/run.py": (
@@ -200,6 +213,7 @@ def test_gallery_layout_matches_the_numbered_groups():
         "11_parallel_scan",
         "12_restart_and_analysis",
         "13_advanced_time_stepping",
+        "14_multi_device_species",
     ]
     extra = {p.name for p in EXAMPLES.iterdir() if p.is_dir()} - set(GROUPS)
     # vmec/ holds the shared VMEC input decks; outputs/ is a user's run directory.
