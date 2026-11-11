@@ -29,10 +29,7 @@ ntheta = 48
 nperiod = 1
 
 [time]
-# 400 steps: a smoke length, not a converged rate. The lowest ky is damped and its
-# modes beat: gamma is -0.02 at t = 2 and -0.04 +- 0.01 over t = 10-70 (14000 steps,
-# 30 CPU-min). solver = "krylov" certifies the eigenpair but had not finished after
-# an hour of CPU at this size.
+# Unused by the Krylov solver below; the time route needs t_max of several hundred.
 t_max = 2.0
 dt = 0.005
 method = "rk4"
@@ -110,7 +107,11 @@ channels = ["es"]
 write_spectrum = true
 
 [run]
-ky = 0.047619047619047616
+# ky = 8/21 is unstable; the lowest ky, 1/21, is damped (gamma = -0.04). solver = "krylov" certifies the
+# eigenpair in about two minutes on a CPU (gamma = 0.0837, omega = 0.0783). The time
+# route beats two modes: gamma is 0.0775 at t_max = 150 and 0.0814 at 250, and
+# Nx = 32 or 48 gives 0.0747 or 0.0819, so the radial grid stays at 96.
+ky = 0.38095238095238093
 Nl = 4
 Nm = 8
-solver = "time"
+solver = "krylov"
