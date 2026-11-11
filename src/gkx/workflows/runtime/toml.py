@@ -91,7 +91,10 @@ def _apply_set_overrides(data: dict) -> dict:
         try:  # TOML syntax (numbers, booleans, lists); anything else is a string
             value = tomllib.loads(f"v = {text}")["v"]
         except tomllib.TOMLDecodeError:
-            value = text
+            try:  # "100." and ".5" are floats to Python and strings to TOML
+                value = float(text)
+            except ValueError:
+                value = text
         *tables, leaf = key.strip().split(".")
         node = data
         for name in tables:
