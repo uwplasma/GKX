@@ -504,6 +504,14 @@ model alone; the block operators ignore them. With both at zero and a nonzero
 leaves eigenvalues of about :math:`+\nu` and :math:`+2\nu` in the energy and
 momentum channels, so the runtime refuses that combination.
 
+The finite-:math:`k_\perp` terms are the exact gyroaveraged Dougherty operator:
+``test_lenard_bernstein_spectrum_is_the_gyroaveraged_dougherty_operator``
+builds it by quadrature from the particle-space flow and temperature of
+:math:`\delta f=h\,e^{-i\mathbf k\cdot\boldsymbol\rho}` (restoring functions
+:math:`v_\parallel J_0`, :math:`v_\perp J_1`, :math:`(v^2-3/2)J_0`) and the
+runtime operator has the same leading eigenvalues to :math:`10^{-8}` at
+:math:`b=0,\,0.5,\,2`.
+
 This is a conserving Lenard--Bernstein/Dougherty-like model, not a complete
 linearized gyrokinetic Landau operator. Its low-order field-particle correction
 matters: the operator cannot be represented by a diagonal damping array alone.

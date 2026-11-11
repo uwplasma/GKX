@@ -2682,3 +2682,86 @@ def test_collisional_tem_growth_rate_by_operator(operator, gamma) -> None:
     run = gkx.solve(case, ky_target=0.3, Nl=4, Nm=8, solver="time", show_progress=False)
     assert run.gamma == pytest.approx(gamma, rel=0.01)
     assert run.omega < 0.0  # electron diamagnetic direction
+
+
+def _gyroaveraged_dougherty_matrix(b: float, nl: int, nm: int) -> np.ndarray:
+    """Dougherty operator on ``delta f = h exp(-i k.rho)``, gyroaveraged at fixed guiding centre.
+
+    The diagonal is ``-(2 l + m + b)`` and the three restoring terms are the
+    rank-one ones built from the particle-space flow and temperature of
+    ``delta f``: ``v_par J0``, ``v_perp J1`` and ``(v^2 - 3/2) J0`` times the same
+    moments of ``h``. Velocities are in ``sqrt(2T/m)``, so the Bessel argument is
+    ``sqrt(2 b s)`` at ``s = v_perp^2``. Plain Laguerre basis (the runtime carries
+    ``(-1)**l`` times these coefficients; spectra do not depend on it).
+    """
+
+    from scipy.special import eval_hermite, eval_laguerre, gammaln, j0, j1
+    from scipy.special import roots_hermite, roots_laguerre
+
+    t, wt = roots_hermite(120)
+    s, ws = roots_laguerre(120)
+    psi = np.array(
+        [
+            eval_hermite(m, t) / np.exp(0.5 * (m * np.log(2.0) + gammaln(m + 1)))
+            for m in range(nm)
+        ]
+    )
+    lag = np.array([eval_laguerre(k, s) for k in range(nl)])
+    a = np.sqrt(2.0 * b * s)
+
+    def coefficients(shape: np.ndarray) -> np.ndarray:
+        return np.einsum(
+            "mt,ls,ts,t,s->lm", psi, lag, shape, wt / np.sqrt(np.pi), ws
+        ).ravel()
+
+    v, sp = t[:, None], s[None, :]
+    flow = coefficients(v * j0(a)[None, :] + 0.0 * sp)
+    perp = coefficients(np.sqrt(s)[None, :] * j1(a)[None, :] + 0.0 * v)
+    heat = coefficients((v**2 + sp - 1.5) * j0(a)[None, :])
+    diagonal = np.array([2 * k + m + b for k in range(nl) for m in range(nm)])
+    return -np.diag(diagonal) + 2 * (
+        np.outer(flow, flow) + np.outer(perp, perp) + (2.0 / 3.0) * np.outer(heat, heat)
+    )
+
+
+@pytest.mark.parametrize("b", [0.0, 0.5, 2.0])
+def test_lenard_bernstein_spectrum_is_the_gyroaveraged_dougherty_operator(b) -> None:
+    """The built-in operator has the spectrum of the exact gyroaveraged Dougherty model.
+
+    The reference is built from quadrature, independently of the Hermite-Laguerre
+    transcription of Frei et al. (2021) that the runtime applies: the largest
+    eight eigenvalues agree to 1e-8 (1e-4 in float32) at ``b = 0, 0.5, 2`` (``b = k_perp^2 rho^2``,
+    ``rho = sqrt(T/m)/Omega``). This is what fixes the finite-``k_perp``
+    restoring terms, including the perpendicular-flow one, against a second
+    implementation of the same model."""
+
+    from gkx.core_velocity import J_l_all
+    from gkx.operators.linear.dissipation import collisions_contribution
+    from gkx.operators.linear.moments import lenard_bernstein_eigenvalues
+
+    nl = nm = 10
+    jl = J_l_all(jnp.asarray(b), nl - 1).reshape(1, nl, 1, 1, 1)
+    jlb = jl + jnp.concatenate([jnp.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+    lam = lenard_bernstein_eigenvalues(nl, nm, 1.0, 2.0)
+    runtime = np.zeros((nl * nm, nl * nm))
+    for i in range(nl * nm):
+        state = np.zeros((1, nl, nm, 1, 1, 1))
+        state.flat[i] = 1.0
+        runtime[:, i] = np.asarray(
+            collisions_contribution(
+                jnp.asarray(state),
+                G=jnp.asarray(state),
+                Jl=jl,
+                JlB=jlb,
+                b=jnp.full((1, 1, 1, 1), b),
+                nu=jnp.ones(1),
+                lb_lam=lam,
+                weight=jnp.asarray(1.0),
+            )
+        ).ravel()
+    top = lambda m: np.sort(np.linalg.eigvals(m).real)[::-1][:8]  # noqa: E731
+    np.testing.assert_allclose(
+        top(runtime),
+        top(_gyroaveraged_dougherty_matrix(b, 2 * nl, nm)),
+        atol=1.0e-8 if jnp.zeros(1).dtype == jnp.float64 else 1.0e-4,
+    )
