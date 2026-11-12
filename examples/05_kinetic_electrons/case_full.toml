@@ -101,6 +101,9 @@ apar = 1.0
 bpar = 0.0
 nonlinear = 0.0
 
+# Both species use these counts, as the benchmark contract requires. A deck that
+# names none gets ions (12, 32) and electrons (6, 48): 672 moments per point
+# against 768 here; set [[species]] Nl/Nm to choose (docs/guidance.rst).
 [run]
 ky = 0.3
 Nl = 12

@@ -3,6 +3,7 @@ schema_version = 1
 # Tutorial nonlinear Cyclone ITG with kinetic electrons. The horizon covers
 # the start of the linear phase. CFL control includes electron streaming
 # and the electromagnetic field response; transport requires a longer run.
+# Each species keeps its own Laguerre (Nl) and Hermite (Nm) moments.
 
 [[species]]
 name = "ion"
@@ -13,6 +14,8 @@ temperature = 1.0
 tprim = 2.49
 fprim = 0.8
 kinetic = true
+Nl = 4  # ion Laguerre: finite Larmor radius, the ions' perpendicular physics
+Nm = 8  # ion Hermite: slow parallel streaming phase-mixes over few moments
 
 [[species]]
 name = "electron"
@@ -23,6 +26,8 @@ temperature = 1.0
 tprim = 2.49
 fprim = 0.8
 kinetic = true
+Nl = 4  # electron Laguerre: the electron Larmor radius is tiny, a few suffice
+Nm = 16  # electron Hermite: fast streaming and trapped electrons need many
 
 [grid]
 Nx = 16
@@ -95,7 +100,7 @@ diagnostic_norm = "rho_star"
 
 [run]
 ky = 0.3
-Nl = 4
+Nl = 4  # the state holds the largest count of any species
 Nm = 16
 
 [output]

@@ -2,7 +2,10 @@
 
 Runs ``case.toml`` (Cyclone base case, s-alpha) and ``case_stellarator.toml``
 (Landreman-Paul precise QA, VMEC flux tube at s = 0.64) with kinetic ions and
-electrons at the physical mass ratio and beta = 1e-4. The decks name no stepper:
+electrons at the physical mass ratio and beta = 1e-4. Each species keeps its own
+Laguerre and Hermite counts (``[[species]] Nl``, ``Nm`` in the deck); the script
+prints them with the cost against uniform counts and runs the tokamak with both,
+whose heat fluxes agree. The decks name no stepper:
 at this beta the default is the adaptive ``imex-ark3``, which treats parallel
 streaming and the field response implicitly, so the step is set by the ion
 drift and the bracket and not by the electron streaming rate. The tokamak is
@@ -33,6 +36,7 @@ import gkx
 HERE = Path(__file__).parent
 CASES = {
     "tokamak": HERE / "case.toml",
+    "tokamak, uniform counts": HERE / "case.toml",
     "tokamak, explicit rk4-pi": HERE / "case.toml",
     "tokamak, imex-ars3": HERE / "case.toml",
     "stellarator": HERE / "case_stellarator.toml",
@@ -57,6 +61,12 @@ OUTPUT.mkdir(parents=True, exist_ok=True)
 summary, traces = {}, {}
 for label, path in CASES.items():
     case = gkx.load(path)
+    if (
+        "uniform" in label
+    ):  # every species at the [run] counts, the largest of any species
+        case = case.replace(
+            species=tuple(replace(s, Nl=None, Nm=None) for s in case.species)
+        )
     if label in PINNED:
         case = case.replace(time=replace(case.time, **PINNED[label]))
     if T_MAX is not None:
@@ -79,6 +89,13 @@ for label, path in CASES.items():
             )
             if not wout.exists():
                 raise SystemExit(f"vmex did not write {wout.name}")
+    kept = {s.name: (s.Nl or case.run.Nl, s.Nm or case.run.Nm) for s in case.species}
+    cost = sum(nl * nm for nl, nm in kept.values())  # moments per grid point
+    uniform = len(kept) * case.run.Nl * case.run.Nm
+    counts = ", ".join(f"{n} {nl} x {nm}" for n, (nl, nm) in kept.items())
+    print(
+        f"{label}: {counts} (Nl x Nm); {cost} moments per grid point, {uniform / cost:.2f}x fewer than uniform ({uniform})"
+    )
     result = gkx.solve(
         case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm, show_progress=True
     )
@@ -96,12 +113,14 @@ for label, path in CASES.items():
         else "implicit linear step"
     )
     print(
-        f"{label}: t_final = {t[-1]:.3f}, mean dt = {dt.mean():.2e}, {bound}, "
-        f"Q_i = {q[-1, 0]:.3e}, Q_e = {q[-1, 1]:.3e}"
+        f"  t_final = {t[-1]:.3f}, mean dt = {dt.mean():.2e}, "
+        f"{bound}, Q_i = {q[-1, 0]:.3e}, Q_e = {q[-1, 1]:.3e}"
     )
     traces[label] = (t, q, dt)
     summary[label] = {
         **result.summary(),
+        "moments_per_species": kept,
+        "moments_per_grid_point": [cost, uniform],
         "dt_mean": float(dt.mean()),
         "cfl_omega": cfl,
         "heat_flux_final": q[-1].tolist(),

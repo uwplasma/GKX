@@ -27,7 +27,7 @@ What you get when you change nothing, and when to change it.
      - ``half`` (``1 + Ny//2`` rows)
      - ``full`` only to read a two-sided array from an older run
    * - Velocity space
-     - linear (12, 24), nonlinear (4, 8); with kinetic electrons per species: linear ions (12, 32), electrons (6, 48), nonlinear (4, 16) for both species
+     - linear (12, 24), nonlinear (4, 8); with kinetic electrons per species: linear ions (12, 32), electrons (6, 48), nonlinear ions (4, 8), electrons (4, 16)
      - a deck or call that names ``Nl``/``Nm``; TEM, KBM: see the sections below
    * - Collisions
      - linearized Landau; hypercollisions on the last Hermite moments
@@ -503,34 +503,183 @@ moments per grid point against 1152 for uniform (12, 48) and 1536 for
 (12, 64). Smaller counts (ions (8, 24), electrons (4, 32)) are within 1% on the
 ITG and stellarator decks and 12% low on the TEM deck.
 
-Nonlinear: (4, 16) for both species is the fallback. Against uniform (8, 32)
-the heat-flux window mean (t = 50-100, Cyclone with kinetic electrons,
-32x32x16, ``imex-ars3``, one realization) is:
+Nonlinear: ions (4, 8) and electrons (4, 16) are the fallback. The ions keep the
+count of the ion-only fallback; the electrons keep the Hermite moments that
+their fast streaming and trapped orbits use. The table is a scan of both
+species around that point: Cyclone with kinetic electrons,
+:math:`m_e/m_i = 1/1836`, electrostatic, 32x32x16, the default ``imex-ark3``,
+:math:`Q_i` and :math:`Q_e` averaged over t = 30-120 (the flux is stationary
+from t = 30), two random seeds per row where the count column says so. Each
+entry is the mean over the seeds with the Sokal standard error of the run (the
+larger of that and the seed spread when there are two seeds); the difference is
+against ions (8, 32) and electrons (6, 48), whose error it includes. Two seeds of
+the same counts differ by 3.7% in :math:`Q_i`, which is the resolution of the
+scan.
 
 .. list-table::
    :header-rows: 1
+   :widths: 24 10 8 12 14 12 14
 
-   * - Counts
+   * - Ions / electrons, :math:`(N_l, N_m)`
+     - Moments per point
+     - Seeds
      - :math:`Q_i`
+     - Against reference
      - :math:`Q_e`
-   * - uniform (4, 8) (the old fallback)
-     - +12.5%
-     - +9.5%
-   * - uniform (4, 16)
-     - -0.4%
-     - +2.4%
-   * - ions (4, 8), electrons (4, 16)
-     - +5.6%
-     - +4.2%
-   * - ions (8, 24), electrons (4, 32)
-     - -0.8%
-     - +2.0%
-   * - ions (8, 16), electrons (4, 32)
-     - -0.2%
-     - +3.1%
+     - Against reference
+   * - (8, 32) / (6, 48)
+     - 544
+     - 1
+     - 695 +- 14
+     - +0.0 +- 2.9%
+     - 1258 +- 20
+     - +0.0 +- 2.2%
+   * - (4, 16) / (4, 16)
+     - 128
+     - 2
+     - 716 +- 13
+     - +3.1 +- 2.7%
+     - 1268 +- 15
+     - +0.9 +- 2.0%
+   * - (4, 8) / (4, 16)
+     - 96
+     - 2
+     - 715 +- 12
+     - +3.0 +- 2.7%
+     - 1277 +- 14
+     - +1.5 +- 1.9%
+   * - (4, 8) / (4, 8)
+     - 64
+     - 1
+     - 738 +- 26
+     - +6.3 +- 4.2%
+     - 1308 +- 30
+     - +4.0 +- 2.9%
+   * - (4, 8) / (2, 8)
+     - 48
+     - 1
+     - 707 +- 13
+     - +1.8 +- 2.8%
+     - 1267 +- 16
+     - +0.8 +- 2.0%
+   * - (4, 16) / (2, 16)
+     - 96
+     - 1
+     - 723 +- 14
+     - +4.1 +- 2.9%
+     - 1298 +- 14
+     - +3.2 +- 1.9%
+   * - (4, 16) / (6, 16)
+     - 160
+     - 1
+     - 677 +- 10
+     - -2.5 +- 2.5%
+     - 1271 +- 12
+     - +1.1 +- 1.9%
+   * - (4, 16) / (4, 8)
+     - 96
+     - 2
+     - 696 +- 36
+     - +0.2 +- 5.5%
+     - 1245 +- 13
+     - -1.0 +- 1.9%
+   * - (4, 16) / (2, 8)
+     - 80
+     - 2
+     - 706 +- 15
+     - +1.6 +- 3.0%
+     - 1252 +- 13
+     - -0.5 +- 1.9%
+   * - (4, 16) / (4, 24)
+     - 160
+     - 1
+     - 684 +- 26
+     - -1.5 +- 4.3%
+     - 1294 +- 17
+     - +2.9 +- 2.1%
+   * - (4, 16) / (6, 24)
+     - 208
+     - 1
+     - 668 +- 34
+     - -3.9 +- 5.4%
+     - 1257 +- 25
+     - -0.1 +- 2.5%
+   * - (4, 16) / (2, 24)
+     - 112
+     - 1
+     - 716 +- 16
+     - +3.1 +- 3.1%
+     - 1284 +- 16
+     - +2.1 +- 2.0%
+   * - (4, 16) / (6, 8)
+     - 112
+     - 1
+     - 726 +- 9
+     - +4.6 +- 2.5%
+     - 1264 +- 16
+     - +0.5 +- 2.0%
+   * - (6, 16) / (4, 16)
+     - 160
+     - 1
+     - 724 +- 15
+     - +4.2 +- 3.0%
+     - 1295 +- 19
+     - +3.0 +- 2.2%
+   * - (6, 8) / (4, 16)
+     - 112
+     - 1
+     - 720 +- 18
+     - +3.7 +- 3.3%
+     - 1282 +- 15
+     - +2.0 +- 2.0%
 
-One window mean moves by 5-10% with the window start, so differences below that
-are not resolved; the old (4, 8) is outside it.
+Every pair is within 6.3% of the reference in both fluxes, and neither the
+electron :math:`N_l` (2 to 6), the electron :math:`N_m` (8 to 24) nor the ion
+:math:`N_l` and :math:`N_m` shows a trend larger than the scatter. The
+fallback has the reference's fluxes to within 3.0% and 1.5%, as the uniform
+(4, 16) it replaces does (3.1%, 0.9%), with 96 moments per point instead of
+128. Uniform (4, 8), the generic fallback, is the least accurate pair in the
+table (+6.3% and +4.0%, one seed) and is not used. Smaller electron counts
+(ions (4, 8), electrons (2, 8): 48 moments) are also inside the scatter; they
+are not adopted because the scan is electrostatic at one :math:`k_y` range and
+the electromagnetic check below is a single seed.
+
+The electromagnetic deck of ``examples/05_kinetic_electrons`` (:math:`\beta`
+1e-4 with :math:`A_\parallel`, :math:`m_e/m_i = 2.7\times10^{-4}`, 32x32x16, same
+window) against uniform (4, 16):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 10 8 12 14 12 14
+
+   * - Ions / electrons, :math:`(N_l, N_m)`
+     - Moments per point
+     - Seeds
+     - :math:`Q_i`
+     - Against uniform (4, 16)
+     - :math:`Q_e`
+     - Against uniform (4, 16)
+   * - (4, 16) / (4, 16)
+     - 128
+     - 1
+     - 472 +- 13
+     - +0.0 +- 3.9%
+     - 675 +- 18
+     - +0.0 +- 3.8%
+   * - (4, 8) / (4, 16)
+     - 96
+     - 1
+     - 453 +- 16
+     - -3.9 +- 4.4%
+     - 625 +- 18
+     - -7.4 +- 3.8%
+   * - (4, 8) / (4, 8)
+     - 64
+     - 1
+     - 505 +- 12
+     - +7.1 +- 3.8%
+     - 699 +- 19
+     - +3.5 +- 3.8%
 
 **Cost of per-species counts.** One A4000, float32, 64x64x24, explicit ``rk3`` at
 a fixed step (time per step from a long and a short run), peak device memory:
@@ -560,7 +709,11 @@ a fixed step (time per step from a long and a short run), peak device memory:
 One right-hand side at (12, 48): 147.6 ms and 5.5 GB uniform, 86.5 ms and
 3.1 GB with ions (12, 32) and electrons (6, 48). Small states are launch-bound
 (two groups launch twice the kernels), so the gain grows with the state. The
-state arrays keep the ``[run]`` extents, which sets the floor on memory.
+state arrays keep the ``[run]`` extents, which sets the floor on memory. At
+64x64x24 and (4, 16) that floor is 52 MB (two species, complex64) of the 0.67 GB
+peak: the peak is the right-hand-side temporaries, which the groups already
+shrink, and storing each species at its own counts would save 13 MB more, so
+the state stays dense.
 
 **Implicit (IMEX) factor.** ``imex-ars3``/``imex-ark3`` build the block-Thomas
 factor, its field coupling and the collision sub-step per species group, at the

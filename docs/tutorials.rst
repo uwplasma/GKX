@@ -120,7 +120,12 @@ enters and both species carry heat flux. Electrons stream
 :math:`\sqrt{m_i/m_e}\approx60` times faster than ions, so the CFL step is set
 by electron streaming. The script plots :math:`Q_i`, :math:`Q_e` and
 :math:`\Delta t(t)`, and runs the tokamak again with the implicit ``imex-ars3``
-step, which removes that limit. :doc:`guidance` says when to use which, and how
+step, which removes that limit. The deck gives each species its own velocity
+resolution: ions (4, 8), because they stream slowly and their Larmor radius
+needs Laguerre moments, not Hermite; electrons (4, 16), because their fast
+streaming and trapped orbits need the Hermite moments. The script prints the
+moments per grid point against uniform counts and runs the tokamak with both;
+the heat fluxes agree. :doc:`guidance` says when to use which, and how
 to check the end-damping rate.
 
 6. Electromagnetic
