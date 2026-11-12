@@ -721,33 +721,26 @@ peak: the peak is the right-hand-side temporaries, which the groups already
 shrink, and storing each species at its own counts would save 13 MB more, so
 the state stays dense.
 
-The default kinetic-electron stepper is implicit, and there the ion Hermite count
-matters more than in the explicit step. A shared A4000, float32, 64x64x24, fixed
-step ``imex-ars3`` at ``dt`` 0.05 (the factor and the solve of ``imex-ark3``),
-time per step from runs of 5 and 45 steps after a warm-up, the counts
-alternated in two repetitions (the card was loaded, so compare within a
-repetition):
+**Cost of the new fallback.** The model is the sum over species of
+:math:`N_l N_m`: 96 against 128 moments per point, so a step should cost about
+1.33 times less, and the compiled step agrees. XLA cost analysis of the
+``imex-ars3`` step body (CPU lowering, uniform against the fallback) gives at
+16x16x16 4.55e7 against 3.40e7 flops (0.75) and 1.13e8 against 0.86e8 bytes
+accessed (0.76), and at 32x32x16 1.83e8 against 1.37e8 flops (0.75) and 4.68e8
+against 3.53e8 bytes (0.75). The factor build is not smaller: its flops fall by
+4% (1.81e10 to 1.74e10 at 32x32x16), because the electron blocks dominate it. Peak device memory falls
+from 0.77 to 0.59 GB (explicit ``rk3``) and from 5.6 to 5.1 GB (``imex-ars3``) at
+64x64x24.
 
-.. list-table::
-   :header-rows: 1
-
-   * - Counts
-     - ms per step, repetition 1 / 2
-     - Peak memory
-   * - uniform (4, 16)
-     - 393 / 199
-     - 5.6 GB
-   * - ions (4, 8), electrons (4, 16)
-     - 143 (2.75x) / 82 (2.43x)
-     - 5.1 GB
-   * - ions (4, 8), electrons (2, 8)
-     - 179 / 129
-     - 1.7 GB
-
-Cutting the electron counts as well saves memory (1.7 GB) and, in this
-measurement, no time. In the explicit ``rk3`` step at the same size the split is
-not resolved on that loaded card (22.1, 35.9 and 23.4 ms against 22.3, 22.5 and
-23.9 ms uniform), and its peak memory is 0.59 against 0.77 GB.
+Measured step times on a shared A4000 do not resolve that 1.33x. Fixed-step
+``imex-ars3``, ``dt`` 0.05, time per step from runs of two lengths after a
+warm-up, uniform (4, 16) against ions (4, 8) with electrons (4, 16), repetitions
+alternated: 64x64x24, 393 and 199 ms against 143 and 82 ms; 32x32x16, 19.3 and
+16.9 ms against 28.0 and 53.9 ms. The same configuration varies by 2 to 3 times
+between repetitions while the card is loaded, more than the effect, so no
+speedup is quoted beyond the model and the unloaded explicit-step measurement in
+the table above. Ions (4, 8) with electrons (2, 8) used 1.7 GB at 64x64x24 and
+were not faster there (179 and 129 ms).
 
 **Implicit (IMEX) factor.** ``imex-ars3``/``imex-ark3`` build the block-Thomas
 factor, its field coupling and the collision sub-step per species group, at the
