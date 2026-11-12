@@ -25,8 +25,8 @@ from gkx.diagnostics.modes import (
 from gkx.diagnostics.normalization import apply_diagnostic_normalization
 from gkx.geometry import apply_geometry_grid_defaults
 from gkx.parallel import independent_map
-from gkx.solvers_linear_integrators import integrate_linear_diagnostics
-from gkx.solvers_linear_krylov import KrylovConfig
+from gkx.solvers.linear.integrators import integrate_linear_diagnostics
+from gkx.solvers.linear.krylov import KrylovConfig
 from gkx.workflows.linear import _normalize_linear_solver_name, run_runtime_linear
 from gkx.workflows.runtime.diagnostics import (
     _RuntimeLinearFitOptions,
@@ -538,7 +538,7 @@ def _run_batch_diagnostics(
     *,
     show_progress: bool,
 ) -> _BatchDiagnostics:
-    from gkx.solvers_time_runners import _resolve_config_collision_operator
+    from gkx.solvers.time_runners import _resolve_config_collision_operator
 
     steps_val = int(round(tcfg.t_max / tcfg.dt))
     # The runtime linear scan is the path the executable takes, so the TOML

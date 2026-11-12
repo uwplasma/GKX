@@ -38,7 +38,7 @@ from jax.sharding import NamedSharding, PartitionSpec
 from jax.experimental.multihost_utils import process_allgather
 
 from gkx.parallel.state import resolve_state_sharding
-from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
+from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
 
 SUPPORTED_NONLINEAR_STRATEGIES = ("serial", "shard_map")
 SUPPORTED_NONLINEAR_AXES = ("ky", "species_hermite")

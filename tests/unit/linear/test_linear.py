@@ -28,7 +28,7 @@ from gkx.operators.linear.moments import (
 )
 from gkx.operators.linear.params import LinearParams, LinearTerms
 from gkx.operators.linear.rhs import linear_rhs, linear_rhs_cached
-from gkx.solvers_linear_integrators import (
+from gkx.solvers.linear.integrators import (
     integrate_linear,
     integrate_linear_diagnostics,
 )
@@ -36,8 +36,8 @@ from gkx.operators.linear.linked import _build_linked_fft_maps
 from gkx.operators.linear.params import _x64_enabled
 from gkx.operators.linear.streaming import grad_z_linked_fft
 from gkx.core_velocity import J_l_all
-from gkx.solvers_linear_krylov import dominant_eigenpair
-from gkx.solvers_linear_implicit import _build_implicit_operator
+from gkx.solvers.linear.krylov import dominant_eigenpair
+from gkx.solvers.linear.implicit import _build_implicit_operator
 from gkx.terms.linear_terms import (
     collision_invariant_rates,
     collision_quadratic_rate,
@@ -55,7 +55,7 @@ from types import SimpleNamespace
 from gkx.geometry import FluxTubeGeometryData
 from gkx.core_velocity import _gyro_bessel_factors
 import gkx.operators.linear as linear_cache
-import gkx.solvers_linear_implicit as linear_implicit
+import gkx.solvers.linear.implicit as linear_implicit
 import gkx.operators.linear.dissipation as linear_dissipation
 import gkx.terms.linear_terms as linear_terms
 from gkx.operators.linear.cache_arrays import (
@@ -75,7 +75,7 @@ from gkx.operators.linear.linked import (
     _signed_to_index,
 )
 from gkx.operators.linear.moments import lenard_bernstein_eigenvalues
-from gkx.solvers_linear_krylov_algorithms import _linked_covered_mode_mask
+from gkx.solvers.linear.krylov_algorithms import _linked_covered_mode_mask
 from gkx.operators.linear.params import (
     linear_terms_to_term_config,
     term_config_to_linear_terms,
@@ -86,16 +86,16 @@ from gkx.operators.linear.params import (
     _is_tracer,
     _resolve_implicit_preconditioner,
 )
-from gkx.solvers_linear_integrators import (
+from gkx.solvers.linear.integrators import (
     _integrate_linear_cached_impl,
 )
-from gkx.solvers_linear_parallel import (
+from gkx.solvers.linear.parallel import (
     _is_electrostatic_field_terms,
     _is_electrostatic_slice_terms,
     _is_streaming_only_terms,
     _resolve_parallel_devices,
 )
-from gkx.solvers_linear_implicit import (
+from gkx.solvers.linear.implicit import (
     _integrate_linear_implicit_cached,
 )
 from gkx.terms.config import FieldState, TermConfig
@@ -1209,7 +1209,7 @@ def test_end_damping_rk_stability_polynomial_and_tangent(method, order, dt):
     from math import factorial
     from types import SimpleNamespace
 
-    from gkx.solvers_time_explicit import _linear_native_step
+    from gkx.solvers.time_explicit import _linear_native_step
     from gkx.terms.assembly import _scalar_params
 
     cache = SimpleNamespace(dz=jnp.asarray(1.0), damp_profile=jnp.zeros(8))
@@ -2638,7 +2638,7 @@ def test_linear_rhs_rejects_invalid_state_rank() -> None:
 
 def test_build_implicit_operator_handles_species_squeeze(monkeypatch) -> None:
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.hypercollision_kz_coefficient", lambda *args: 0.0
+        "gkx.solvers.linear.implicit.hypercollision_kz_coefficient", lambda *args: 0.0
     )
     G0 = jnp.zeros((2, 2, 1, 1, 2), dtype=jnp.complex64)
     cache = SimpleNamespace(
@@ -2660,11 +2660,11 @@ def test_build_implicit_operator_handles_species_squeeze(monkeypatch) -> None:
         kpar_scale=1.0,
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.hypercollision_damping",
+        "gkx.solvers.linear.implicit.hypercollision_damping",
         lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.linear_rhs_cached",
+        "gkx.solvers.linear.implicit.linear_rhs_cached",
         lambda G, cache, params, **kwargs: (jnp.ones_like(G), None),
     )
 
@@ -2690,7 +2690,7 @@ def test_build_implicit_operator_handles_species_squeeze(monkeypatch) -> None:
 
 def test_build_implicit_operator_preconditioner_aliases_and_errors(monkeypatch) -> None:
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.hypercollision_kz_coefficient", lambda *args: 0.0
+        "gkx.solvers.linear.implicit.hypercollision_kz_coefficient", lambda *args: 0.0
     )
     G0 = jnp.zeros((1, 2, 2, 1, 1, 2), dtype=jnp.complex64)
     cache = SimpleNamespace(
@@ -2715,11 +2715,11 @@ def test_build_implicit_operator_preconditioner_aliases_and_errors(monkeypatch) 
         kpar_scale=1.0,
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.hypercollision_damping",
+        "gkx.solvers.linear.implicit.hypercollision_damping",
         lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.linear_rhs_cached",
+        "gkx.solvers.linear.implicit.linear_rhs_cached",
         lambda G, cache, params, **kwargs: (jnp.ones_like(G), None),
     )
 
@@ -2767,7 +2767,7 @@ def test_build_implicit_operator_linked_hermite_line_preconditioner(
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.hypercollision_kz_coefficient", lambda *args: 0.0
+        "gkx.solvers.linear.implicit.hypercollision_kz_coefficient", lambda *args: 0.0
     )
     G0 = jnp.zeros((1, 1, 2, 1, 1, 2), dtype=jnp.complex64)
     kz_link = 2.0 * jnp.pi * jnp.fft.fftfreq(2, d=1.0)
@@ -2793,11 +2793,11 @@ def test_build_implicit_operator_linked_hermite_line_preconditioner(
         kpar_scale=1.0,
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.hypercollision_damping",
+        "gkx.solvers.linear.implicit.hypercollision_damping",
         lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.linear_rhs_cached",
+        "gkx.solvers.linear.implicit.linear_rhs_cached",
         lambda G, cache, params, **kwargs: (jnp.ones_like(G), None),
     )
 
@@ -2839,7 +2839,7 @@ def test_integrate_linear_wrapper_enables_electrostatic_field_specialization(
     captured: dict[str, bool] = {}
 
     monkeypatch.setattr(
-        "gkx.solvers_linear_integrators.build_linear_cache",
+        "gkx.solvers.linear.integrators.build_linear_cache",
         lambda *args, **kwargs: "cache",
     )
 
@@ -2848,7 +2848,7 @@ def test_integrate_linear_wrapper_enables_electrostatic_field_specialization(
         return "G", "phi"
 
     monkeypatch.setattr(
-        "gkx.solvers_linear_integrators._integrate_linear_cached", _fake_cached
+        "gkx.solvers.linear.integrators._integrate_linear_cached", _fake_cached
     )
 
     assert integrate_linear(
@@ -2881,7 +2881,7 @@ def test_integrate_linear_wrapper_does_not_force_electrostatic_when_em_terms_ena
     captured: dict[str, bool] = {}
 
     monkeypatch.setattr(
-        "gkx.solvers_linear_integrators.build_linear_cache",
+        "gkx.solvers.linear.integrators.build_linear_cache",
         lambda *args, **kwargs: "cache",
     )
 
@@ -2890,7 +2890,7 @@ def test_integrate_linear_wrapper_does_not_force_electrostatic_when_em_terms_ena
         return "G", "phi"
 
     monkeypatch.setattr(
-        "gkx.solvers_linear_integrators._integrate_linear_cached", _fake_cached
+        "gkx.solvers.linear.integrators._integrate_linear_cached", _fake_cached
     )
 
     kwargs = {} if terms is None else {"terms": terms}
@@ -2984,11 +2984,11 @@ def test_integrate_linear_cached_impl_invalid_and_sampled(monkeypatch) -> None:
     cache = SimpleNamespace(lb_lam=jnp.zeros((2, 2, 1, 1, 2), dtype=jnp.float32))
     params = SimpleNamespace(nu=0.0)
     monkeypatch.setattr(
-        "gkx.solvers_linear_integrators.hypercollision_damping",
+        "gkx.solvers.linear.integrators.hypercollision_damping",
         lambda cache, params, dtype: jnp.zeros_like(cache.lb_lam, dtype=dtype),
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_integrators.linear_rhs_cached",
+        "gkx.solvers.linear.integrators.linear_rhs_cached",
         lambda G, cache, params, **kwargs: (
             jnp.ones_like(G),
             jnp.zeros((1, 1, 2), dtype=jnp.complex64),
@@ -3017,7 +3017,7 @@ def test_integrate_linear_implicit_cached_sampled_path(monkeypatch) -> None:
     params = SimpleNamespace()
 
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit._build_implicit_operator",
+        "gkx.solvers.linear.implicit._build_implicit_operator",
         lambda *args, **kwargs: (
             G0,
             G0.shape,
@@ -3029,7 +3029,7 @@ def test_integrate_linear_implicit_cached_sampled_path(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.gmres",
+        "gkx.solvers.linear.implicit.gmres",
         lambda matvec, rhs, **kwargs: SimpleNamespace(
             x=rhs,
             converged=True,
@@ -3038,7 +3038,7 @@ def test_integrate_linear_implicit_cached_sampled_path(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_implicit.linear_rhs_cached",
+        "gkx.solvers.linear.implicit.linear_rhs_cached",
         lambda G, cache, params, **kwargs: (
             jnp.ones_like(G),
             jnp.ones((1, 1, 2), dtype=jnp.complex64),
@@ -3224,11 +3224,11 @@ def test_integrate_linear_cached_impl_observed_order_against_exact_solution(
     G0 = jnp.asarray([[[[[1.0 + 0.25j]]]]], dtype=jnp.complex64)
     params = LinearParams(nu=0.0)
     monkeypatch.setattr(
-        "gkx.solvers_linear_integrators.hypercollision_damping",
+        "gkx.solvers.linear.integrators.hypercollision_damping",
         lambda cache, params, dtype: jnp.ones_like(cache.lb_lam, dtype=dtype) * damping,
     )
     monkeypatch.setattr(
-        "gkx.solvers_linear_integrators.linear_rhs_cached",
+        "gkx.solvers.linear.integrators.linear_rhs_cached",
         lambda G, cache, params, **kwargs: (
             jnp.asarray(rate * G, dtype=G.dtype),
             jnp.asarray(G[0, 0], dtype=G.dtype),
@@ -3257,7 +3257,7 @@ def test_integrate_linear_cached_impl_observed_order_against_exact_solution(
 
 
 def test_imex2_observed_order_for_noncommuting_split() -> None:
-    from gkx.solvers_time_explicit import _linear_native_step
+    from gkx.solvers.time_explicit import _linear_native_step
 
     explicit = np.asarray([[0.0, 1.0], [-0.4, 0.2]])
     damping = np.asarray([0.3, 1.1])

@@ -34,7 +34,7 @@ tracking, transport windows and physics gates stay in GKX. Module names are in
 Time integration algorithms
 ---------------------------
 
-Linear integrators (:func:`gkx.solvers_linear_integrators.integrate_linear`)
+Linear integrators (:func:`gkx.solvers.linear.integrators.integrate_linear`)
 share the cached operator data of
 :func:`gkx.operators.linear.cache_builder.build_linear_cache`:
 
@@ -572,7 +572,7 @@ first right-hand side of the outer Arnoldi (Cyclone, ``(Nz, Nl, Nm) = (96, 4,
 0.299 (``pr3-cm``); only ``pr3-cm`` converges unrestarted (9.9e-5 in 252
 iterations), so raise ``shift_restart`` and ``shift_maxiter`` together.
 
-``pr3-cm`` (``solvers_linear_precond_pr3.py``) splits the operator into two
+``pr3-cm`` (``solvers/linear/preconditioner.py``) splits the operator into two
 halves, each invertible in closed form, and sweeps between them. The Hermite
 line solve inverts streaming, hypercollisions and the *z*-mean of the drift.
 The rest (exact :math:`\omega_d(z)`, mirror, drive, end damping, collisions,
