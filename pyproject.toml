@@ -112,6 +112,12 @@ markers = [
   "slow: long-running literature or artifact validation tests kept out of bounded release coverage shards",
 ]
 
+[tool.coverage.run]
+relative_files = true
+
+[tool.coverage.paths]
+source = ["src/gkx", "*/src/gkx"]
+
 [tool.ruff]
 # Markdown is out of scope for the formatter. ruff 0.16 reformats Python code
 # fences inside .md, which rewrites the README's hand-tuned examples: compact
