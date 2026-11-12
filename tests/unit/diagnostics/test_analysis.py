@@ -2259,3 +2259,13 @@ def test_zonal_response_is_the_jacobian_average_normalized_at_t0() -> None:
 
     np.testing.assert_allclose(time, np.concatenate(([0.0], t)))
     np.testing.assert_allclose(ratio, exact(np.concatenate(([0.0], t))) / exact(0.0))
+
+
+@pytest.mark.parametrize("samples", [0, 1, 2])
+def test_zonal_response_needs_three_samples(samples) -> None:
+    from gkx.diagnostics.modes import zonal_response
+
+    t = 0.1 * np.arange(1, samples + 1)
+    phi = np.ones((samples, 1, 3, 4), dtype=complex)
+    with pytest.raises(ValueError, match="at least 3"):
+        zonal_response(t, phi, ModeSelection(0, 1), np.ones(4))

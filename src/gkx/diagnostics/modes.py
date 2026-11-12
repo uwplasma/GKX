@@ -222,6 +222,10 @@ def zonal_response(
     the ``t = 0`` point prepended.
     """
 
+    if np.shape(t)[0] < 3 or np.shape(phi_t)[0] < 3:
+        raise ValueError(
+            "zonal_response needs at least 3 saved samples to extrapolate t = 0"
+        )
     w = np.asarray(jacobian, dtype=float)
     w = w / w.sum()
     avg = np.asarray(phi_t)[:, selection.ky_index, selection.kx_index, :] @ w

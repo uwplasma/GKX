@@ -231,7 +231,8 @@ recursive = true
 # 70070 -> 70112: `--set section.key=value` deck overrides in the executable.
 # 70112 -> 70124: removed-key mechanism, measured after merging main.
 # 70124 -> 69673: the block Landau/Sugama operators replace the dense collision tables; measured.
-baseline = 69673
+# 69673 -> 69711: zonal_response diagnostic and the explicit Lenard-Bernstein damping check, measured.
+baseline = 69711
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -240,7 +241,8 @@ path = "tests"
 pattern = "*.py"
 recursive = true
 # 64954 -> 64266: tests of the retired collision tables removed; measured.
-baseline = 64266
+# 64266 -> 64589: collision validation gates and the refusal/zonal_response tests, measured.
+baseline = 64589
 target = 35000
 
 [[line_budget_policy.counts]]

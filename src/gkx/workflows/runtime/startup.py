@@ -507,13 +507,13 @@ def build_runtime_linear_params(
         hypercollisions_kz=float(cfg.collisions.hypercollisions_kz),
     )
     model = collision_model_for(cfg.time.collision_operator)
-    damping = cfg.collisions.nu_hermite or cfg.collisions.nu_laguerre
-    if model == "dougherty" and not damping and cfg.physics.collisions:
+    damping = (float(cfg.collisions.nu_hermite), float(cfg.collisions.nu_laguerre))
+    damped = np.isfinite(damping).all() and min(damping) >= 0.0 < max(damping)
+    if model == "dougherty" and not damped and cfg.physics.collisions:
         if cfg.terms.collisions and any(s.nu > 0.0 for s in cfg.species):
             raise ValueError(
-                "Lenard-Bernstein with nu_hermite = nu_laguerre = 0 keeps its "
-                "conservation terms without the damping they balance and grows at "
-                "about nu; set nu_hermite = 1, nu_laguerre = 2 or use another operator"
+                "Lenard-Bernstein grows at about nu without damping; set nu_hermite "
+                f"and nu_laguerre finite, non-negative, one positive (got {damping})"
             )
     return replace(
         params,

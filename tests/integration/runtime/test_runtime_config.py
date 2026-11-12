@@ -1257,3 +1257,43 @@ def test_short_field_line_warns_only_below_threshold():
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         RuntimeConfig(grid=GridConfig(nperiod=2)).validate()
+
+
+def _lenard_bernstein_runtime(nus, nu_hermite, nu_laguerre):
+    from gkx.workflows.runtime.startup import (
+        build_runtime_geometry,
+        build_runtime_linear_params,
+    )
+
+    cfg, _ = load_runtime_from_toml(REPO_ROOT / "examples/07_collisions/case.toml")
+    ion = cfg.species[0]
+    species = tuple(replace(ion, nu=nu) for nu in nus)
+    cfg = replace(
+        cfg,
+        species=species,
+        time=replace(cfg.time, collision_operator="lenard_bernstein"),
+        collisions=replace(
+            cfg.collisions, nu_hermite=nu_hermite, nu_laguerre=nu_laguerre
+        ),
+    )
+    return build_runtime_linear_params(cfg, Nm=4, geom=build_runtime_geometry(cfg))
+
+
+@pytest.mark.parametrize(
+    ("nu_hermite", "nu_laguerre"),
+    [(0.0, 0.0), (-1.0, 2.0), (1.0, -2.0), (float("nan"), 2.0), (1.0, float("inf"))],
+)
+def test_lenard_bernstein_refuses_missing_or_invalid_damping(nu_hermite, nu_laguerre):
+    with pytest.raises(ValueError, match="Lenard-Bernstein"):
+        _lenard_bernstein_runtime((0.05,), nu_hermite, nu_laguerre)
+
+
+def test_lenard_bernstein_refusal_covers_every_species():
+    # The first species has nu = 0; the second one still collides.
+    with pytest.raises(ValueError, match="Lenard-Bernstein"):
+        _lenard_bernstein_runtime((0.0, 0.05), 0.0, 0.0)
+    # No species collides, so there is nothing to refuse.
+    params = _lenard_bernstein_runtime((0.0, 0.0), 0.0, 0.0)
+    assert params.collision_model == "dougherty"
+    # Valid damping passes.
+    assert _lenard_bernstein_runtime((0.0, 0.05), 1.0, 2.0).nu_hermite == 1.0

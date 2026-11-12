@@ -167,7 +167,11 @@ GAM-averaged :math:`\langle\phi\rangle/\langle\phi\rangle(0)` at
 The level at :math:`\nu=0.02` is 0.0100, 0.0067, 0.0064 at :math:`(N_l,N_m)=(4,8),
 (6,16), (8,24)`.
 
-Comparison with Hinton-Rosenbluth and Xiao-Catto-Molvig. The primary papers
+Comparison with Hinton-Rosenbluth and Xiao-Catto-Molvig. **Not validated.**
+The decay rate does not agree: at converged velocity resolution GKX is 2--3
+times slower than the formula, and which :math:`\nu_{ii}` the formula uses (a
+factor of two) is open. Only the long-time level and its independence of
+:math:`\nu` and of the operator are consistent with it. The primary papers
 [HR99]_ and [XCM07]_ could not be retrieved: the publisher, repository and
 mirror pages refused automated access. The formulas are read from two open
 papers that quote them, [XCD07]_ Eqs. (24)-(26) and [Frei21]_ Sec. 5.2
@@ -228,9 +232,10 @@ at :math:`t=60` against 0.0053; there the decay time is close to the GAM period
 and the formula, a single pole started at the residual, has no GAM transient to
 compare with. [Frei21]_ report agreement with the formula and with GENE at
 :math:`\nu_*=3.1`, which GKX does not reproduce at this setup. The agreement is
-therefore established only for :math:`\nu_*\lesssim0.3`, to about 10% at the
-finest resolution, and rests on reading :math:`\nu_{ii}`
-of the formula as the Braginskii one, which only the primary paper settles.
+therefore not established: the closeness of 10% at the finest resolution for
+:math:`\nu_*\lesssim0.3` holds only if :math:`\nu_{ii}` of the formula is read as
+the Braginskii one, which only the primary paper settles, and it fails at
+larger :math:`\nu_*`.
 The decay is not a single exponential; a fit of the moving average (level fixed
 at 0.0051) gives 1.14, 1.63, 1.75, 1.88 :math:`\nu` at the four resolutions,
 against :math:`3.80\times0.532=2.02\,\nu` for the formula.
@@ -240,8 +245,14 @@ which this deck sets to zero for the block operators. Without them its
 conservation terms alone have eigenvalues of :math:`+\nu` and :math:`+2\nu` and
 :math:`\langle\phi\rangle` grows exponentially (228-fold over 300 time units at
 :math:`\nu=0.02`); the case is refused when a run combines that operator,
-nonzero ``nu`` and both coefficients at zero. Set ``nu_hermite = 1`` and
-``nu_laguerre = 2``.
+nonzero ``nu`` and no positive damping, that is when ``nu_hermite`` and
+``nu_laguerre`` are both zero or either is negative, NaN or infinite. Set
+``nu_hermite = 1`` and ``nu_laguerre = 2``.
+
+The slow tests ``test_collisions_relax_the_zonal_flow_to_the_same_residual`` and
+``test_collisional_tem_growth_rate_by_operator`` are regression pins of GKX's own
+values (the 0.0063 level and the :math:`\nu_e=0.05` rates at :math:`(4,8)`), not
+comparisons with another code or a published number.
 
 Collisional trapped-electron mode
 ---------------------------------
@@ -268,6 +279,10 @@ The three codes use different linear collision models:
 - GKX: ``landau`` and ``sugama`` models and ``lenard_bernstein`` of
   :doc:`operators`. ``lenard_bernstein`` is the model of the stella operator;
   ``landau`` of the GS2 one, which is a Lorentz plus diffusion approximation of it.
+
+The GS2 and stella numbers on this page come from external runs. Their input files and raw outputs are not in the repository, so
+those columns cannot be regenerated from it; only the GKX values are
+reproducible here.
 
 Units follow the Cyclone four-code convention: :math:`k_y^{\rm GKX}=k_y^{\rm GS2}/\sqrt2`,
 :math:`\gamma^{\rm GKX}=\sqrt2\,\gamma^{\rm GS2}`, :math:`\nu=\sqrt2\,\mathtt{vnewk}`.
@@ -453,7 +468,8 @@ against 1.052 and 1.066 at :math:`(6,16)`.
 
 The gap is not the frequency convention, the velocity resolution or the
 damping; it sits in the finite-:math:`k_\perp` restoring terms. Both operators
-relax with eigenvalue :math:`-\nu(2\ell+m)`: stella's ``vnew_ref`` multiplies
+relax with eigenvalue :math:`-\nu(2\ell+m)`. The description of stella's term
+that follows is a reading of its source, not a run: ``vnew_ref`` multiplies
 :math:`\partial_{v_\parallel}(\tfrac12\partial_{v_\parallel}+v_\parallel)` and
 :math:`2\partial_{\hat\mu}(\hat\mu\partial_{\hat\mu}+\hat\mu)` in two
 successive implicit steps, each adding the gyrodiffusion
