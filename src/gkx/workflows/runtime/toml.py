@@ -6,7 +6,7 @@ import dataclasses
 import difflib
 import hashlib
 from dataclasses import is_dataclass, replace
-from typing import Any, Callable, cast
+from typing import Any, Callable, Sequence, cast
 import os
 from pathlib import Path
 
@@ -64,13 +64,54 @@ def describe_binary_input(path: Path) -> str | None:
     return None
 
 
+_SET_OVERRIDES: list[str] = []
+
+
+def extract_set_overrides(argv: Sequence[str]) -> list[str]:
+    """Remove ``--set section.key=value`` pairs from ``argv``; later loads apply them."""
+
+    rest: list[str] = []
+    _SET_OVERRIDES.clear()
+    items = iter(argv)
+    for arg in items:
+        if arg == "--set":
+            _SET_OVERRIDES.append(next(items, ""))
+        elif arg.startswith("--set="):
+            _SET_OVERRIDES.append(arg[6:])
+        else:
+            rest.append(arg)
+    return rest
+
+
+def _apply_set_overrides(data: dict) -> dict:
+    for item in _SET_OVERRIDES:
+        key, eq, text = item.partition("=")
+        if not eq or not key.strip():
+            raise ValueError(f"--set expects section.key=value, got {item!r}")
+        try:  # TOML syntax (numbers, booleans, lists); anything else is a string
+            value = tomllib.loads(f"v = {text}")["v"]
+        except tomllib.TOMLDecodeError:
+            try:  # "100." and ".5" are floats to Python and strings to TOML
+                value = float(text)
+            except ValueError:
+                value = text
+        *tables, leaf = key.strip().split(".")
+        node = data
+        for name in tables:
+            node = node.setdefault(name, {})
+            if not isinstance(node, dict):
+                raise ValueError(f"--set {key}: {name!r} is not a TOML table")
+        node[leaf] = value
+    return data
+
+
 def load_toml(path: str | Path) -> dict:
     """Load TOML, naming common binary formats instead of reporting byte offsets."""
 
     path = Path(path)
     try:
         with path.open("rb") as f:
-            return tomllib.load(f)
+            return _apply_set_overrides(tomllib.load(f))
     except UnicodeDecodeError as exc:
         binary = describe_binary_input(path)
         if binary is not None:
@@ -137,6 +178,36 @@ def _validate_removed_time_keys(data: dict[str, Any]) -> None:
         + details
         + "."
     )
+
+
+# Deck keys no code read, with the value older resolved decks wrote for each.
+_REMOVED_KEYS: dict[str, dict[str, Any]] = {
+    "geometry": {"geometry_helper_python": None, "geometry_helper_repo": None},
+    "physics": {"tau_fac": None, "z_ion": 1.0},
+    "expert": {"dealias_kz": False},
+    "time": {"save_state": False},
+    "parallel": {"profile": False},
+    "quasilinear": {"species": "all", "delta_ky": "auto", "write_spectrum": True},
+}
+
+
+def _drop_removed_keys(data: dict[str, Any]) -> None:
+    """Drop removed keys at their old value (older resolved decks write them); refuse others."""
+
+    gone = []
+    for section, keys in _REMOVED_KEYS.items():
+        table = data.get(section) or {}
+        gone += [
+            f"[{section}] {key}"
+            for key, old in keys.items()
+            if key in table and table.pop(key) != old
+        ]
+    if gone:
+        raise ValueError(
+            "removed deck key(s) that no code read: "
+            + ", ".join(gone)
+            + "; delete them (the temperature ratio is [physics] tau_e)"
+        )
 
 
 def toml_shorthand_command(data: dict[str, Any]) -> str:
@@ -403,6 +474,7 @@ def _resolve_runtime_config_paths(
 
     return replace(
         cfg,
+        source_dir=str(base_dir),
         geometry=replace(
             cfg.geometry,
             vmec_file=resolve_runtime_path(cfg.geometry.vmec_file, base_dir=base_dir),
@@ -444,6 +516,7 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     data = load_toml(path)
     _validate_runtime_schema_version(data)
     _validate_removed_time_keys(data)
+    _drop_removed_keys(data)
     reject_unknown_keys(str(path), data, RUNTIME_TOML_SECTIONS)
     for name, allowed in (("run", RUNTIME_RUN_KEYS), ("scan", RUNTIME_SCAN_KEYS)):
         if isinstance(data.get(name), dict):

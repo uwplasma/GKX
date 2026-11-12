@@ -4,6 +4,8 @@ schema_version = 1
 # species, adiabatic electrons. The resolution
 # is deliberately coarse (Nz = 16, Nl = 2, Nm = 4, gamma*t_max ~ 10), so growth
 # rates are qualitative. case_full.toml is the GX-matched literature deck.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"
@@ -19,11 +21,14 @@ Ly = 62.8
 boundary = "linked"
 y0 = 10.0  # ky spacing 1/y0 = 0.1
 ntheta = 16
+# Short field line: growth rates are not converged below nperiod = 2; see docs/guidance.rst.
 nperiod = 1
 
 [time]
 t_max = 80.0  # about 10 e-folds at ky 0.3
 dt = 0.025  # below the CFL-stable step at ky 0.4
+# rk2 at a fixed step: gamma within 0.05% of the eigensolver and of rk4 + CFL, in
+# 0.6x the time of rk4 + CFL (docs/guidance.rst, Linear time stepping).
 method = "rk2"
 sample_stride = 1
 

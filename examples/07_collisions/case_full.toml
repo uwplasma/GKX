@@ -15,6 +15,8 @@ schema_version = 1
 # "coulomb_finite_kperp" is tabulated, so it needs (Nl, Nm) = (J+1, P+1) of a
 # shipped table, (2, 4) or (3, 6) (the transposed (4, 2) is refused), and the
 # fixed-step integrator: solver = "time".
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"

@@ -477,104 +477,6 @@ def curvature_gradb_contribution(
     return -weight_curv * icv * curv - weight_gradb * igb * gradb
 
 
-# The drift terms shift ``H`` by up to two Hermite and one Laguerre index. XLA
-# lowers each shifted view as its own sweep of the state, and the Laguerre stride
-# exceeds the L2 cache, so every view costs a DRAM pass. ``fused_drift`` reads each
-# ``(l, m)`` neighbourhood once per tile (Pallas, on real and imaginary planes
-# because Triton has no complex dtype) and returns
-# ``-f1 M(H) - i f2 C(H) - i f3 B(H)`` with ``M``, ``C``, ``B`` the three terms
-# above, ``f`` real fields. The jnp terms stay the reference and the derivatives.
-# Stencil: (term, dl, dm, coefficient(l, m)).
-_STENCIL = (
-    (0, 0, 1, lambda ell, m: -jnp.sqrt(m + 1.0) * (ell + 1.0)),
-    (0, -1, 1, lambda ell, m: -jnp.sqrt(m + 1.0) * ell),
-    (0, 0, -1, lambda ell, m: jnp.sqrt(m) * ell),
-    (0, 1, -1, lambda ell, m: jnp.sqrt(m) * (ell + 1.0)),
-    (1, 0, 2, lambda ell, m: jnp.sqrt((m + 1.0) * (m + 2.0))),
-    (1, 0, 0, lambda ell, m: 2.0 * m + 1.0),
-    (1, 0, -2, lambda ell, m: jnp.sqrt(m * (m - 1.0))),
-    (2, 1, 0, lambda ell, m: ell + 1.0),
-    (2, 0, 0, lambda ell, m: 2.0 * ell + 1.0),
-    (2, -1, 0, lambda ell, m: ell),
-)
-
-
-def _kernel(hr, hi, f1, f2, f3, out_r, out_i, *, nl: int, nm: int):
-    """One program: every ``(l, m)`` row of one tile of flattened ``(x, z)`` points."""
-
-    a1, a2, a3 = f1[0, 0, :], f2[0, 0, :], f3[0, 0, :]
-
-    def row(index, _):
-        ell = jax.lax.div(index, nm)
-        m = index - ell * nm
-        fl, fm = ell.astype(a1.dtype), m.astype(a1.dtype)
-
-        def at(ref, dl, dm):  # zero outside the (l, m) box
-            inside = (0 <= ell + dl) & (ell + dl < nl) & (0 <= m + dm) & (m + dm < nm)
-            at_row = ref[
-                0, jnp.clip(ell + dl, 0, nl - 1), jnp.clip(m + dm, 0, nm - 1), 0, :
-            ]
-            return jnp.where(inside, at_row, 0.0)
-
-        acc = [[0.0, 0.0] for _ in range(3)]  # (re, im) of mirror, curvature, grad-B
-        for term, dl, dm, coeff in _STENCIL:
-            c = coeff(fl, fm)
-            acc[term][0] += c * at(hr, dl, dm)
-            acc[term][1] += c * at(hi, dl, dm)
-        (mr, mi), (cr, ci), (gr, gi) = acc
-        out_r[0, ell, m, 0, :] = -a1 * mr + a2 * ci + a3 * gi
-        out_i[0, ell, m, 0, :] = -a1 * mi - a2 * cr - a3 * gr
-        return 0
-
-    jax.lax.fori_loop(0, nl * nm, row, 0)
-
-
-def _pallas_drift(H, f1, f2, f3, *, interpret=False):
-    from jax.experimental import pallas as pl
-    from jax.experimental.pallas import triton as plgpu
-
-    ns, nl, nm, ny, nx, nz = H.shape
-    n = nx * nz
-    # Use a fixed tile width for the fused matrix-vector product.
-    block, warps = (64, 4) if H.dtype == jnp.complex64 else (512, 2)
-    block = min(block, 1 << (n - 1).bit_length())
-    pad = ((0, 0),) * 4 + ((0, -n % block),)
-    real = jnp.real(H).dtype
-    planes = [
-        jnp.pad(x.reshape(ns, nl, nm, ny, n), pad) for x in (jnp.real(H), jnp.imag(H))
-    ]
-    f1 = jnp.broadcast_to(f1, (ns, 1, nx, nz)).reshape(ns, 1, n)
-    f2, f3 = (
-        jnp.broadcast_to(f, (ns, ny, nx, nz)).reshape(ns, ny, n) for f in (f2, f3)
-    )
-    f1, f2, f3 = (jnp.pad(f.astype(real), pad[:3]) for f in (f1, f2, f3))
-    npad = n + pad[-1][1]
-    state = pl.BlockSpec((1, nl, nm, 1, block), lambda s, y, p: (s, 0, 0, y, p))
-    shared = pl.BlockSpec((1, 1, block), lambda s, y, p: (s, 0, p))
-    field = pl.BlockSpec((1, 1, block), lambda s, y, p: (s, y, p))
-    out_r, out_i = pl.pallas_call(
-        functools.partial(_kernel, nl=nl, nm=nm),
-        out_shape=[jax.ShapeDtypeStruct((ns, nl, nm, ny, npad), real)] * 2,
-        grid=(ns, ny, npad // block),
-        in_specs=[state, state, shared, field, field],
-        out_specs=[state, state],
-        interpret=interpret,
-        compiler_params=plgpu.CompilerParams(num_warps=warps),
-    )(*planes, f1, f2, f3)
-    return jax.lax.complex(out_r, out_i)[..., :n].reshape(H.shape)
-
-
-def _reference_drift(H, f1, f2, f3):
-    nl, nm = H.shape[1:3]
-    ell = jnp.arange(nl, dtype=f1.dtype)[:, None, None, None, None]
-    m = jnp.arange(nm, dtype=f1.dtype)[:, None, None, None]
-    mirror = mirror_term(H, ell, jnp.sqrt(m), jnp.sqrt(m + 1.0))
-    return -f1[:, None, None] * mirror - 1j * (
-        f2[:, None, None] * curvature_term(H, m)
-        + f3[:, None, None] * gradb_term(H, ell)
-    )
-
-
 def mu_energy(cache, ndim: int) -> jnp.ndarray:
     """Node energy ``mu_j B(z)`` of the mu grid, shaped ``(Nmu, 1, ..., Nz)`` with ``ndim`` axes."""
 
@@ -582,30 +484,12 @@ def mu_energy(cache, ndim: int) -> jnp.ndarray:
     return nodes * cache.bmag
 
 
-def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag, fuse=False):
-    """Mirror, curvature and grad-B terms; ``fuse`` returns their sum as the first.
-
-    ``weights`` is ``(mirror, curvature, grad-B)``. The fused sum is the form the
-    production RHS adds up; the separate terms serve the per-term diagnostics.
-    """
+def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag):
+    """Mirror, curvature and grad-B terms; ``weights`` is ``(mirror, curvature, grad-B)``."""
 
     w_mirror, w_curv, w_gradb = weights
     nodal = getattr(cache, "mu_grid", False)
     ell = mu_energy(cache, 5) if nodal else cache.l
-    if (
-        fuse
-        and not nodal
-        and all(jnp.ndim(w) == 0 for w in weights)
-        and drift_kernel_usable(H)
-    ):
-        tz_d = omega_d_scale * tz[:, None, None, None]
-        total = fused_drift(
-            H,
-            w_mirror * vth[:, None, None, None] * cache.bgrad,
-            w_curv * tz_d * cache.cv_d,
-            w_gradb * tz_d * cache.gb_d,
-        )
-        return total, jnp.zeros_like(total), jnp.zeros_like(total)
     mirror = mirror_contribution(
         H,
         vth=vth,
@@ -634,36 +518,6 @@ def drift_contributions(H, cache, *, vth, tz, omega_d_scale, weights, imag, fuse
         H, weight_curv=zero, weight_gradb=w_gradb, **kwargs
     )
     return mirror, curvature, gradb
-
-
-def drift_kernel_usable(H) -> bool:
-    """Whether :func:`fused_drift` applies: an NVIDIA GPU and a state worth tiling."""
-
-    nl, nm, _, nx, nz = H.shape[1:]
-    return (
-        jax.default_backend() == "gpu"
-        and "NVIDIA" in jax.devices()[0].device_kind
-        and nx * nz >= 64
-        and nl * nm <= 256
-    )
-
-
-@jax.custom_jvp
-def fused_drift(H, f1, f2, f3):
-    """Return ``-f1 M(H) - i f2 C(H) - i f3 B(H)`` for ``H`` of shape ``(Ns, Nl, Nm, Ny, Nx, Nz)``.
-
-    ``f1`` broadcasts to ``(Ns, 1, Nx, Nz)``; ``f2`` and ``f3`` to ``(Ns, Ny, Nx, Nz)``.
-    """
-
-    return _pallas_drift(H, f1, f2, f3)
-
-
-@fused_drift.defjvp
-def _fused_drift_jvp(primals, tangents):
-    tangents = tuple(
-        jnp.zeros_like(p) if t is None else t for p, t in zip(primals, tangents)
-    )
-    return fused_drift(*primals), jax.jvp(_reference_drift, primals, tangents)[1]
 
 
 def _laguerre_gradient_profile(
