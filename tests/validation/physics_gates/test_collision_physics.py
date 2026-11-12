@@ -2002,7 +2002,7 @@ def test_period_rms_damping_ignores_a_slowly_drifting_offset() -> None:
 #
 # The demo is the first thing most people run, so the number it prints is the
 # first evidence anyone has about whether this code works. It is a coarse
-# small configuration on purpose (Nl = 16, Nm = 28, Nz = 24), chosen to reproduce
+# small configuration on purpose (Nl = 16, Nm = 48, Nz = 24), chosen to reproduce
 # the GX Cyclone reference to 2%; the eigenvalue of the operator the demo builds
 # is the number it must print.
 # What is not fine is printing a growth rate that disagrees with it. At the

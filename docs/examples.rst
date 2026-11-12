@@ -355,8 +355,8 @@ then average the flux over at least 100-200 more, or set
 ``run_to = "saturation"`` to stop once the mean has converged.
 
 **Resolution.** The nonlinear tutorial decks use (Nl, Nm) = (2, 4) and 16x16 in the
-plane; the linear Cyclone deck uses (16, 28), the smallest velocity grid within
-2% of the reference. Production runs use 64-96 points in x and y, Nz = 24-64, Nl = 4 and
+plane; the linear Cyclone deck uses (16, 48), the smallest velocity grid within
+2% of the reference and of the next larger Nm. Production runs use 64-96 points in x and y, Nz = 24-64, Nl = 4 and
 Nm = 8-16 on a GPU; check the heat flux against the next Nm before quoting it.
 
 ``benchmarks/cases/cyclone_nonlinear_t400.toml`` (64x64x24, (Nl, Nm) = (4, 8))

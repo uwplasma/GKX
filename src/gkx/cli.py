@@ -36,19 +36,20 @@ from gkx.workflows.runtime.commands import (
 # The demo is the first thing most people run, so it reports a number that can
 # be checked rather than a fast one that cannot. Its resolution is the cheapest
 # that reproduces the tabulated Cyclone reference (src/gkx/data/cyclone_reference_adiabatic.csv)
-# to within 2% in gamma and omega at ky = 0.2, 0.3 and 0.4: Nl = 16, Nm = 28 on a
-# two-period field line (an earlier Nl = 7, Nm = 14 demo printed gamma 11% high).
-# dt sits under the estimated CFL bound of 0.0102 and 9500 steps reach t = 95,
-# past the gamma * t_max >= 7 the fitter asks for, so the run emits no warnings.
+# to within 2% in gamma and omega at ky = 0.2, 0.3 and 0.4: Nl = 16, Nm = 48 on a
+# two-period field line, also within 2% of Nm = 52 (an earlier Nl = 7, Nm = 14 demo
+# printed gamma 11% high). dt sits under the estimated CFL bound and 12000 steps
+# reach t = 96, past
+# the gamma * t_max >= 7 the fitter asks for, so the run emits no warnings.
 # tests/validation/physics_gates/test_collision_physics.py pins the agreement with the eigenvalue and with the reference.
 DEFAULT_DEMO_SETTINGS: dict[str, float | int | str] = {
     "ky": 0.3,
     "Nl": 16,
-    "Nm": 28,
+    "Nm": 48,
     "solver": "time",
     "method": "rk4",
-    "dt": 0.01,
-    "steps": 9500,
+    "dt": 0.008,
+    "steps": 12000,
     "sample_stride": 50,
     "fit_signal": "phi",
 }
