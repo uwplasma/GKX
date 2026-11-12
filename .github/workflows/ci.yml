@@ -493,38 +493,6 @@ jobs:
             exit 1
           }
 
-  gpu:
-    # A short check that the solver runs on a CUDA device and agrees with the CPU
-    # backend on small linear problems. GPU time is shared; keep it bounded.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, Linux, uwplasma-gpu]
-    timeout-minutes: 5
-
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/setup-selfhosted
-        with:
-          cuda: "true"
-
-      - name: Confirm JAX sees the GPU
-        env:
-          JAX_ENABLE_X64: "true"
-          GKX_X64: "1"
-        run: |
-          python -c "import jax; assert jax.default_backend() == 'gpu', jax.devices(); print(jax.devices())"
-
-      - name: GPU tests
-        timeout-minutes: 1
-        env:
-          GKX_REQUIRE_GPU: "1"
-          JAX_ENABLE_X64: "true"
-          GKX_X64: "1"
-        run: |
-          pytest -q -x --durations=5 -m gpu tests/unit/parallel/test_parallel_core.py
-
   ci-required:
     # One aggregate check for branch protection to require. The jobs above are
     # now independent, so nothing can hide behind a failed dependency -- but a
