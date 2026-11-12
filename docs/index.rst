@@ -56,6 +56,7 @@ way; :doc:`validation` holds the evidence.
    differentiable_eigensolver
    nonlinear_autodiff
    parallelization
+   sharded_imex_scope
 
 .. toctree::
    :maxdepth: 1

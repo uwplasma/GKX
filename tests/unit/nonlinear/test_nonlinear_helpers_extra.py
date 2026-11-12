@@ -3068,3 +3068,47 @@ def test_second_solve_reuses_executables():
         count[0] = 0
         solve()
         assert count[0] == 0
+
+
+def test_absorber_exponential_is_the_matrix_exponential_and_outlives_rk4():
+    """The matrix-free ``exp(h A)`` of the field-coupled absorber (prototype) is the dense one."""
+    import sys
+
+    import scipy.linalg as sla
+
+    sys.path.insert(0, str(REPO_ROOT / "benchmarks" / "absorber"))
+    from absorber_exponential import build_absorber_exponential, lawson_rk4
+
+    cfg, params, cache, shape = _tiny_kinetic_electron_box(nl=1, nm=2)
+    params = replace(params, damp_ends_rate=600.0)
+    terms = rt.build_runtime_term_config(cfg)
+    off = dict.fromkeys(
+        "streaming mirror curvature gradb diamagnetic collisions hypercollisions".split(),
+        0.0,
+    )
+    fields = {"apar": terms.apar, "bpar": terms.bpar}
+    absorb = TermConfig(**{**off, **fields})
+    stream = TermConfig(**{**off, "streaming": 1.0, "end_damping": 0.0, **fields})
+
+    def dense(t):
+        op = lambda g: assemble_rhs_cached(g, cache, params, terms=t)[0]  # noqa: E731
+        return _ke_dense(op, shape, jnp.complex64).astype(complex)
+
+    a, s = dense(absorb), dense(stream)
+    expo = build_absorber_exponential(cache, params, absorb, shape, jnp.complex64)
+    rng = np.random.default_rng(0)
+    g = jnp.asarray(rng.normal(size=shape) + 1j * rng.normal(size=shape), jnp.complex64)
+    h = 1.0e-4  # h rho(A + S) > 10: far outside the explicit interval
+    assert h * np.abs(np.linalg.eigvals(s + a)).max() > 10.0
+    want = (sla.expm(h * a) @ np.asarray(g, complex).reshape(-1)).reshape(shape)
+    np.testing.assert_allclose(
+        np.asarray(expo(g, h)), want, atol=2e-4 * np.abs(want).max()
+    )
+    rhs = lambda x: assemble_rhs_cached(x, cache, params, terms=stream)[0]  # noqa: E731
+    state = g
+    for _ in range(20):
+        state = lawson_rk4(state, h, rhs, expo)
+    exact = (sla.expm(20 * h * (s + a)) @ np.asarray(g, complex).reshape(-1)).reshape(
+        shape
+    )
+    assert np.linalg.norm(np.asarray(state) - exact) < 0.05 * np.linalg.norm(exact)

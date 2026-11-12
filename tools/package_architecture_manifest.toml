@@ -236,7 +236,7 @@ name = "test_python_lines"
 path = "tests"
 pattern = "*.py"
 recursive = true
-baseline = 64954
+baseline = 64998
 target = 35000
 
 [[line_budget_policy.counts]]
