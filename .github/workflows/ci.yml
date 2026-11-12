@@ -4,6 +4,11 @@ on:
   push:
     branches: [main, master]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  # The wide-coverage shards are too heavy to repeat on every pull-request
+  # push. They run on main, nightly and on demand.
+  schedule:
+    - cron: "17 7 * * *"
   workflow_dispatch:
     inputs:
       run_nightly:
@@ -26,7 +31,7 @@ concurrency:
 
 jobs:
   repo-hygiene:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
 
     steps:
@@ -63,7 +68,7 @@ jobs:
     # the whole suite: collection is where an import that does not exist on the
     # floor actually fails. A bounded unit subset then runs for real, because
     # an old-jax API difference only shows when the code executes.
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -145,7 +150,7 @@ jobs:
             -k "tomllib or toml_shim or repo_hygiene_gates"
 
   mypy:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
 
     steps:
@@ -161,7 +166,7 @@ jobs:
           mypy
 
   adaptive-eigensolver:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -190,7 +195,7 @@ jobs:
             -k "adaptive or biorthogonal or experimental_solvax_eigen_contract or banded"
 
   fast-coverage:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -267,13 +272,14 @@ jobs:
           use_oidc: true
 
   wide-coverage-shards:
+    # Runs on push to main, nightly and manual dispatch, not on pull requests.
     # The test lane. Every test not marked ``slow`` runs here exactly once, at
     # float64, under coverage; the shards are packed on measured per-file cost
     # by scripts/checks/run_test_gates.py and each runs its files across four
     # pytest-xdist workers, one per runner core. The files that need logical
     # CPU devices get four of them from the same planner. There is no separate
     # uncovered test lane: it ran the same tests a second time.
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -332,7 +338,7 @@ jobs:
           if-no-files-found: error
 
   wide-coverage:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -402,7 +408,7 @@ jobs:
           use_oidc: true
 
   docs-and-packaging:
-    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
 
     steps:
@@ -503,7 +509,11 @@ jobs:
     #
     # ``nightly-full`` is deliberately absent: it is skipped by design on
     # pull_request and push.
-    if: always()
+    #
+    # On a pull request the two wide-coverage jobs are skipped by design (they
+    # run on main and nightly), so only those two may be skipped there. A draft
+    # pull request skips every job, this one included.
+    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     needs:
       - repo-hygiene
@@ -517,11 +527,29 @@ jobs:
 
     steps:
       - name: Every gate must have reported success
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
-          echo "gate results: ${{ join(needs.*.result, ' ') }}"
-          echo "A required gate did not succeed. A skipped or cancelled gate is not a pass."
-          exit 1
+          python - <<'PY'
+          import json
+          import os
+          import sys
+
+          needs = json.loads(os.environ["NEEDS_JSON"])
+          pull_request = os.environ["EVENT_NAME"] == "pull_request"
+          optional = {"wide-coverage-shards", "wide-coverage"} if pull_request else set()
+          bad = {}
+          for name, data in needs.items():
+              result = data.get("result")
+              if result == "success" or (result == "skipped" and name in optional):
+                  continue
+              bad[name] = result
+          print("gate results:", {n: d.get("result") for n, d in needs.items()})
+          if bad:
+              print(f"A required gate did not succeed: {bad}. A skipped or cancelled gate is not a pass.")
+              sys.exit(1)
+          PY
 
   nightly-full:
     if: github.event_name == 'workflow_dispatch' && inputs.run_nightly
