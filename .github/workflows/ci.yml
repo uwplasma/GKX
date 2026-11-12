@@ -12,9 +12,10 @@ on:
         default: false
         type: boolean
 
+# Read-only by default; only the two jobs that upload to Codecov over OIDC
+# request id-token below.
 permissions:
   contents: read
-  id-token: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -27,12 +28,13 @@ jobs:
   repo-hygiene:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
         with:
           python-version: "3.11"
 
@@ -52,7 +54,7 @@ jobs:
           python scripts/check.py size release-artifacts
           python scripts/check.py readiness version
           python scripts/check.py architecture
-          python scripts/check.py readiness --out-json "$RUNNER_TEMP/release_readiness.json"
+          python scripts/check.py readiness --out-json /tmp/release_readiness.json
 
   python-floor:
     # Every other job pins 3.11, which is why a stdlib-only-from-3.11 import
@@ -63,14 +65,17 @@ jobs:
     # an old-jax API difference only shows when the code executes.
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
-      - uses: ./.github/actions/setup-selfhosted
+      - uses: ./.github/actions/setup
         with:
           python-version: "3.10"
+          jax-cache: python-floor
 
       - name: Confirm the floor really is the floor
         run: |
@@ -101,7 +106,7 @@ jobs:
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
         run: |
-          pytest -q -n 3 --disable-warnings -m "not slow" \
+          pytest -q -n 4 --disable-warnings -m "not slow" \
             tests/unit/core \
             tests/unit/solvers/test_linear_krylov_core.py \
             tests/unit/parallel/test_parallel_linear_velocity.py \
@@ -142,10 +147,11 @@ jobs:
   mypy:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
 
@@ -157,12 +163,16 @@ jobs:
   adaptive-eigensolver:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
-      - uses: ./.github/actions/setup-selfhosted
+      - uses: ./.github/actions/setup
+        with:
+          jax-cache: adaptive-eigensolver
 
       - name: Paired eigenmode and implicit-AD gates
         env:
@@ -182,12 +192,18 @@ jobs:
   fast-coverage:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
-      - uses: ./.github/actions/setup-selfhosted
+      - uses: ./.github/actions/setup
+        with:
+          jax-cache: fast-coverage
 
       - name: Release-surface coverage (>=95%)
         env:
@@ -243,7 +259,7 @@ jobs:
           PY
 
       - name: Upload fast coverage report
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
         with:
           files: coverage-fast.xml
           flags: fast-surface
@@ -257,32 +273,32 @@ jobs:
     # pytest-xdist workers, one per runner core. The files that need logical
     # CPU devices get four of them from the same planner. There is no separate
     # uncovered test lane: it ran the same tests a second time.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, uwplasma-cpu]
-    timeout-minutes: 60
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        # Pull requests pack the same planner into 3 shards so the shared Mac
-        # runners see 3 jobs; pushes, schedules and dispatches keep all 8.
-        shard: ${{ fromJSON(github.event_name == 'pull_request' && '[1,2,3]' || '[1,2,3,4,5,6,7,8]') }}
-    env:
-      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 8 }}
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
-      - uses: ./.github/actions/setup-selfhosted
+      - uses: ./.github/actions/setup
+        with:
+          jax-cache: wide-${{ matrix.shard }}-of-8
 
-      - name: Wide package coverage shard ${{ matrix.shard }}/${{ env.SHARDS }}
+      - name: Wide package coverage shard ${{ matrix.shard }}/8
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
         run: |
           python scripts/check.py test-gates wide-coverage \
-            --shards "$SHARDS" \
-            --workers 3 \
+            --shards 8 \
+            --workers 4 \
             --timeout 1500 \
             --only-shard "${{ matrix.shard }}" \
             --skip-combine \
@@ -309,7 +325,7 @@ jobs:
           tar -czf "coverage-wide-shard-${{ matrix.shard }}.tgz" -C coverage-shard .
 
       - name: Upload coverage shard data
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: coverage-wide-shard-${{ matrix.shard }}
           path: coverage-wide-shard-${{ matrix.shard }}.tgz
@@ -318,22 +334,25 @@ jobs:
   wide-coverage:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     timeout-minutes: 15
     # The only remaining ``needs`` in this workflow, and the only real one: this
     # job downloads the ``.coverage`` shard artifacts the matrix above uploads.
     # Every other job checks out and installs for itself, so ordering them
     # bought nothing and cost the signal from everything downstream.
     needs: wide-coverage-shards
-    env:
-      SHARDS: ${{ github.event_name == 'pull_request' && 3 || 8 }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
 
       - name: Download wide coverage shard data
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
         with:
           pattern: coverage-wide-shard-*
           path: coverage-wide-artifacts
@@ -347,7 +366,7 @@ jobs:
         run: |
           find coverage-wide-artifacts -name '*.tgz' -print -exec tar -xzf {} \;
           python scripts/check.py test-gates wide-coverage \
-            --shards "$SHARDS" \
+            --shards 8 \
             --combine-only \
             --require-shard-data \
             --shard-manifest coverage-wide-shard-manifest.json \
@@ -360,7 +379,7 @@ jobs:
 
       - name: Upload wide coverage shard manifest
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: coverage-wide-shard-manifest
           path: coverage-wide-shard-manifest.json
@@ -368,14 +387,14 @@ jobs:
 
       - name: Upload validation coverage manifest summary
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: validation-coverage-manifest-summary
           path: docs/_static/validation_coverage_manifest_summary.json
           if-no-files-found: ignore
 
       - name: Upload wide coverage report
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v6
         with:
           files: coverage-wide.xml
           flags: wide-package
@@ -385,12 +404,15 @@ jobs:
   docs-and-packaging:
     if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
-      - uses: ./.github/actions/setup-selfhosted
+      - uses: ./.github/actions/setup
+        with:
+          jax-cache: docs-and-packaging
 
       - name: Build docs
         run: |
@@ -408,13 +430,10 @@ jobs:
 
       - name: Smoke-test installed wheel
         run: |
-          # setup-selfhosted exports PYTHONPATH for the source tree; drop it so
-          # the wheel is what gets imported.
-          unset PYTHONPATH
-          python -m venv "$RUNNER_TEMP"/gkx-wheel-smoke
-          "$RUNNER_TEMP"/gkx-wheel-smoke/bin/pip install dist/*.whl
-          cd "$RUNNER_TEMP"
-          "$RUNNER_TEMP"/gkx-wheel-smoke/bin/python - <<'PY'
+          python -m venv /tmp/gkx-wheel-smoke
+          /tmp/gkx-wheel-smoke/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/gkx-wheel-smoke/bin/python - <<'PY'
           import gkx
           import gkx.parallel
           from importlib.util import find_spec
@@ -430,8 +449,8 @@ jobs:
           assert find_spec("gkx.geometry.vmec_boundary_collection") is None
           print(gkx.__version__)
           PY
-          "$RUNNER_TEMP"/gkx-wheel-smoke/bin/gkx --help >/dev/null
-          "$RUNNER_TEMP"/gkx-wheel-smoke/bin/gkx --help >/dev/null
+          /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
+          /tmp/gkx-wheel-smoke/bin/gkx --help >/dev/null
 
       # The Phase D gate asks that a fresh user can install and complete a first
       # linear and nonlinear run from the docs. Everything above proves the
@@ -448,11 +467,10 @@ jobs:
       # run, which is worth fixing in the docs rather than working around here.
       - name: Documented first run from the installed wheel
         run: |
-          unset PYTHONPATH
-          rm -rf "$RUNNER_TEMP"/gkx-first-run
-          mkdir -p "$RUNNER_TEMP"/gkx-first-run
-          cd "$RUNNER_TEMP"/gkx-first-run
-          "$RUNNER_TEMP"/gkx-wheel-smoke/bin/gkx
+          rm -rf /tmp/gkx-first-run
+          mkdir -p /tmp/gkx-first-run
+          cd /tmp/gkx-first-run
+          /tmp/gkx-wheel-smoke/bin/gkx
           for artifact in \
             gkx_default_linear.toml \
             gkx_default_linear.summary.json \
@@ -466,11 +484,11 @@ jobs:
             }
           done
           cd "$GITHUB_WORKSPACE"
-          "$RUNNER_TEMP"/gkx-wheel-smoke/bin/gkx run-runtime-nonlinear \
+          /tmp/gkx-wheel-smoke/bin/gkx run-runtime-nonlinear \
             --config examples/03_nonlinear_tokamak/case_full.toml \
             --steps 50 \
-            --out "$RUNNER_TEMP"/gkx-first-run/cyclone_nonlinear.out.nc
-          test -s "$RUNNER_TEMP"/gkx-first-run/cyclone_nonlinear.out.nc || {
+            --out /tmp/gkx-first-run/cyclone_nonlinear.out.nc
+          test -s /tmp/gkx-first-run/cyclone_nonlinear.out.nc || {
             echo "quickstart.rst promises a nonlinear output bundle; none was written"
             exit 1
           }
@@ -483,7 +501,9 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup-selfhosted
         with:
@@ -511,8 +531,7 @@ jobs:
     # job that never reported can still read as green: GitHub scores a skipped
     # or cancelled check as satisfied for a required status check, which is how
     # a cancelled run and a mypy-blocked matrix both passed for #62. This job
-    # is red when any gate failed or was cancelled. A skipped gate is accepted:
-    # the self-hosted jobs are skipped on fork pull requests by design.
+    # is red unless every gate reported success, so "no signal" is a failure.
     #
     # ``nightly-full`` is deliberately absent: it is skipped by design on
     # pull_request and push.
@@ -527,14 +546,13 @@ jobs:
       - wide-coverage-shards
       - wide-coverage
       - docs-and-packaging
-    timeout-minutes: 5
 
     steps:
       - name: Every gate must have reported success
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
         run: |
           echo "gate results: ${{ join(needs.*.result, ' ') }}"
-          echo "A required gate failed or was cancelled. Jobs on self-hosted runners are skipped on fork PRs, which is accepted."
+          echo "A required gate did not succeed. A skipped or cancelled gate is not a pass."
           exit 1
 
   nightly-full:
@@ -543,7 +561,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803  # v6
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/setup
 

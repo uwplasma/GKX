@@ -5,6 +5,8 @@ schema_version = 1
 # 200 fixed steps). The flux tube is sampled from a VMEC wout at s = 0.64;
 # run.py generates the wout with vmex when it is missing. The run shows the
 # linear phase only. case_full.toml is the 96x96x48 production deck.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 [[species]]
 name = "ion"
 charge = 1.0
@@ -31,8 +33,6 @@ nperiod = 1
 # Optional runtime controls; intervals use normalized time, like t_max.
 # chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
 # diagnostics_interval = 0.5  # Overrides the step-stride cadence.
-# Explicit nonlinear end-damping rate.
-damp_ends_rate = 0.1
 t_max = 10.0
 sample_stride = 10
 diagnostics_stride = 10
@@ -44,6 +44,7 @@ model = "vmec"
 vmec_file = "../vmec/wout_NuhrenbergZille_1988_QHS.nc"
 torflux = 0.64
 alpha = 0.0
+# Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
 npol = 1.0
 
 [init]

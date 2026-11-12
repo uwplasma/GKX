@@ -30,6 +30,7 @@ Ly = 62.8
 boundary = "periodic"
 
 [time]
+# Off: ky = 0 zonal chains carry no end damping.
 damp_ends_rate = 0.0
 # run_to must stay "t_max": this is a zero-gradient relaxation benchmark whose
 # heat flux is identically ~0, so the default run_to = "saturation" declares the

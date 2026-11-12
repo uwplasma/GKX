@@ -7,7 +7,7 @@ linear operator into two halves that are each invertible in closed form and
 sweeps between them:
 
 ``S~``  streaming and hypercollisions, **plus the z-mean of the drift
-        diagonal**. This is exactly what :func:`gkx.solvers_linear_implicit.
+        diagonal**. This is exactly what :func:`gkx.solvers.linear.implicit.
         _build_shifted_hermite_preconditioner` inverts when it is handed the
         deck's terms with collisions switched off: its Hermite line solve is
         spectral in the parallel coordinate and tridiagonal in the Hermite
@@ -294,7 +294,7 @@ def _z_mean_drift_diagonal(
     ``dt = 1``, which inverts to the drift diagonal alone.
     """
 
-    from gkx.solvers_linear_implicit import (
+    from gkx.solvers.linear.implicit import (
         _build_implicit_preconditioner_data,
         _prepare_implicit_state,
     )
@@ -574,7 +574,7 @@ def pr3_alpha_from_symbol_bounds(
     non-zero ``|kz|`` and ``d`` the spectral radius of the ``D~`` blocks.
     """
 
-    from gkx.solvers_linear_implicit import (
+    from gkx.solvers.linear.implicit import (
         _build_implicit_preconditioner_data,
         _prepare_implicit_state,
     )
@@ -871,7 +871,7 @@ def build_pr3_apply(
     that no residual has to be recomputed.
     """
 
-    from gkx.solvers_linear_implicit import _build_shifted_hermite_preconditioner
+    from gkx.solvers.linear.implicit import _build_shifted_hermite_preconditioner
 
     shape = _block_shape(tuple(int(s) for s in v0.shape))
     nl, nm = shape[1], shape[2]

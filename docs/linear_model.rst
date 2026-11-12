@@ -169,7 +169,7 @@ Numerical realization
 - explicit ``rk2``/``rk4`` time stepping, at a fixed step or under the CFL
   controller (:class:`gkx.config.TimeConfig`)
 - the matrix-free ``adaptive`` Krylov eigensolver, the
-  :class:`gkx.solvers_linear_krylov.KrylovConfig` default, with shift-invert
+  :class:`gkx.solvers.linear.krylov.KrylovConfig` default, with shift-invert
   selectable
 
 Benchmark contract

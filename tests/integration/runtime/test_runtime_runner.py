@@ -18,8 +18,8 @@ from gkx.config import (
 from gkx.core_grid import build_spectral_grid
 from gkx.core_ky_layout import source_ny_full
 from gkx.diagnostics import SimulationDiagnostics, ResolvedDiagnostics
-from gkx.solvers_linear_implicit import ImplicitSolveStats
-from gkx.solvers_linear_krylov import EigenSolveStatus
+from gkx.solvers.linear.implicit import ImplicitSolveStats
+from gkx.solvers.linear.krylov import EigenSolveStatus
 from gkx.diagnostics.modes import ModeSelection
 from gkx.geometry import (
     SAlphaGeometry,
@@ -592,7 +592,7 @@ def test_runtime_linear_cyclone_krylov_matches_time_solver_growth() -> None:
     """
 
     from gkx.operators.linear.params import linear_terms_to_term_config
-    from gkx.solvers_linear_krylov_algorithms import _apply_operator
+    from gkx.solvers.linear.krylov_algorithms import _apply_operator
     from gkx.core_grid import select_ky_grid
     from gkx.diagnostics.modes import select_ky_index
 
@@ -1012,7 +1012,7 @@ def test_prepare_runtime_nonlinear_reuses_existing_execution_contract(
     monkeypatch, checkpoint, compressed_real_fft, ky_layout
 ) -> None:
     from unittest.mock import Mock
-    from gkx import solvers_nonlinear_diagnostics as nd
+    from gkx.solvers.nonlinear import diagnostics as nd
 
     factory = Mock(wraps=nd.prepare_nonlinear_explicit_diagnostics)
     patch_runtime(monkeypatch, "prepare_nonlinear_explicit_diagnostics", factory)
@@ -1568,7 +1568,7 @@ def test_runtime_nonlinear_adaptive_dt(method, monkeypatch) -> None:
     t_arr = np.asarray(res.diagnostics.t)
     assert np.all(np.diff(t_arr) > 0)
 
-    import gkx.solvers_nonlinear_diagnostics as backend
+    import gkx.solvers.nonlinear.diagnostics as backend
 
     prepare = backend._cached_explicit_diagnostics
     calls = []
@@ -2248,7 +2248,7 @@ def test_run_linear_case_uses_toml_output_path(
 def test_run_linear_case_toml_velocity_auto_reaches_parallel_rhs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    import gkx.solvers_linear_integrators as linear_integrators
+    import gkx.solvers.linear.integrators as linear_integrators
 
     cfg_path = tmp_path / "velocity_auto.toml"
     cfg_path.write_text(
@@ -3871,3 +3871,33 @@ def test_runtime_linear_kinetic_electron_time_route_without_dt_is_finite() -> No
     krylov = run_runtime_linear(cfg, solver="krylov", **kw)
     assert np.isfinite(time.gamma)
     assert time.gamma == pytest.approx(krylov.gamma, rel=0.08)
+
+
+def test_runtime_imex_chunks_share_one_scan_and_end_on_a_short_final_chunk() -> None:
+    # A chunk after the first reused no scan, rebuilt its own factor and then
+    # failed on the retuned one (UnexpectedTracerError) from the third chunk on.
+    cfg, _ = load_runtime_from_toml(
+        REPO_ROOT / "examples/05_kinetic_electrons/case.toml"
+    )
+    cfg = replace(cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8))
+    # The weak layer the deck used to pin: the default rate makes the factor too
+    # ill-conditioned for the 1e-3 chunk comparison below.
+    cfg = replace(cfg, time=replace(cfg.time, damp_ends_rate=0.1))
+
+    def run(t_max: float, chunk_steps: int):
+        time = replace(cfg.time, t_max=t_max, dt_max=0.1, chunk_steps=chunk_steps)
+        return run_runtime_nonlinear(
+            replace(cfg, time=time), Nl=2, Nm=4, return_state=True
+        )
+
+    one, two = run(0.6, 6), run(0.6, 3)  # the step stays 0.1: same steps
+    # Equal to rounding (2e-12 of the peak in float64; the factor is ill-conditioned).
+    peak = float(np.abs(one.state).max())
+    np.testing.assert_allclose(two.state, one.state, rtol=0, atol=1e-3 * peak)
+    # The step grows 0.1 -> 0.14 -> 0.22 between chunks; the fourth is short.
+    adaptive = replace(cfg.time, t_max=2.0, chunk_steps=4)
+    short = run_runtime_nonlinear(
+        replace(cfg, time=adaptive), Nl=2, Nm=4, return_state=True
+    )
+    assert short.t[-1] == pytest.approx(2.0)
+    assert np.isfinite(short.state).all()

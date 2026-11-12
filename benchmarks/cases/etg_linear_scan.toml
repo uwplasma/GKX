@@ -27,6 +27,8 @@ ntheta = 32
 nperiod = 2
 
 [time]
+# Off, with damp_ends_widthfrac = 0 below: the electron-scale mode is localized in the line
+# (a layer at the default rate moves gamma by 0.07% at ky = 15; docs/guidance.rst, Common deck).
 damp_ends_rate = 0.0
 t_max = 2.0
 dt = 0.00016

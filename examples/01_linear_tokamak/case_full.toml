@@ -4,6 +4,8 @@ schema_version = 1
 # For parity-sensitive reproduction against tracked reference outputs, run with:
 #   JAX_ENABLE_X64=1 gkx examples/01_linear_tokamak/case_full.toml
 # For faster exploratory runs, omit JAX_ENABLE_X64 and use the default precision policy.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"

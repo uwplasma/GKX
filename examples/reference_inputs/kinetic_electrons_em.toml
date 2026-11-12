@@ -1,0 +1,235 @@
+# Nonlinear Cyclone run with kinetic electrons and A_parallel at beta = 1e-4.
+# Every key of the run kind at its default, one comment per key.
+# `case:` marks a value that differs from the default; commented keys are unset.
+# tests/release/test_release_gates.py keeps this file equal to the defaults.
+
+schema_version = 1
+
+[[species]]
+name = "ion"  # Species label
+charge = 1.0  # Charge in units of the proton charge
+mass = 1.0  # Mass over the reference ion mass
+density = 1.0  # Density over the reference density
+temperature = 1.0  # Temperature over the reference temperature
+tprim = 2.49  # Temperature gradient a/L_T
+fprim = 0.8  # Density gradient a/L_n
+nu = 0.0  # Collision frequency
+kinetic = true  # Evolve the species kinetically; false leaves it adiabatic
+# Nl = (unset)  Laguerre moments this species keeps, at most the state's Nl
+# Nm = (unset)  Hermite moments this species keeps, at most the state's Nm
+hermite_closure = "hypercollision"  # End of the Hermite ladder: hypercollision or reflectionless
+
+[[species]]
+name = "electron"  # case: Species label
+charge = -1.0  # case: Charge in units of the proton charge
+mass = 0.00027  # case: Mass over the reference ion mass
+density = 1.0  # Density over the reference density
+temperature = 1.0  # Temperature over the reference temperature
+tprim = 2.49  # Temperature gradient a/L_T
+fprim = 0.8  # Density gradient a/L_n
+nu = 0.0  # Collision frequency
+kinetic = true  # Evolve the species kinetically; false leaves it adiabatic
+# Nl = (unset)  Laguerre moments this species keeps, at most the state's Nl
+# Nm = (unset)  Hermite moments this species keeps, at most the state's Nm
+hermite_closure = "hypercollision"  # End of the Hermite ladder: hypercollision or reflectionless
+
+[grid]
+Nx = 64  # case: Radial (x) grid points, so the number of kx modes
+Ny = 64  # case: Binormal (y) grid points; the half layout stores 1 + Ny//2 rows
+Nz = 24  # case: Points along the field line when ntheta is unset
+Lx = 176.25000339052914  # case: Radial box length in rho_i; sets the kx spacing 2 pi / Lx
+Ly = 62.8  # Binormal box length in rho_i; used for the ky spacing when y0 is unset
+boundary = "linked"  # case: Parallel boundary: periodic, linked (twist and shift), or for VMEC fix aspect, exact periodic, continuous drifts
+# jtwist = (unset)  Twist-and-shift integer linking kx modes; taken from the geometry when unset
+non_twist = false  # Use the non-twisting flux-tube boundary with local-shear drift terms
+kxfac = 1.0  # Factor on the twist-shift kx shift, 2 pi zp kxfac s_hat
+z_min = -3.141592653589793  # Lower end of the field-line coordinate when ntheta is unset
+z_max = 3.141592653589793  # Upper end of the field-line coordinate when ntheta is unset
+y0 = 28.2  # case: Binormal box parameter; the ky spacing is 1/y0. Overrides Ly
+ntheta = 24  # case: Points per poloidal turn; sets Nz = ntheta * zp and the span +-pi zp
+nperiod = 1  # case: Poloidal turns kept on each side of the centre; gives zp = 2 nperiod - 1
+# zp = (unset)  Number of 2 pi segments along the field line; derived from nperiod when unset
+ky_layout = "half"  # half stores the non-negative ky rows, full the two-sided axis; results agree
+
+[time]
+t_max = 100.0  # End time in a/v_ti; the hard cap when run_to = "saturation"
+dt = 0.1  # Fixed step, or the starting step of the CFL controller; setting it selects rk2 at that step
+method = "imex-ark3"  # case: Integrator: rk2, rk3, sspx3, rk4, rk4-pi, lawson-*, imex, imex2, imex-ars3, imex-ark3, or auto
+fixed_dt = false  # Keep dt fixed; false lets the CFL controller choose the step
+sample_stride = 1  # Steps between stored time samples
+diagnostics_stride = 1  # Steps between nonlinear diagnostic rows
+# chunk_steps = (unset)  Nonlinear steps per chunk; 128 explicit, 32 adaptive IMEX when unset
+# diagnostics_interval = (unset)  Simulation-time interval between nonlinear diagnostic rows; overrides the strides
+diagnostics = true  # Compute nonlinear diagnostics (--no-diagnostics turns them off)
+checkpoint = false  # Rematerialize fixed-step nonlinear scans in reverse mode to save memory
+implicit_restart = 20  # GMRES restart length of implicit solves
+# implicit_preconditioner = (unset)  Preconditioner of implicit solves; the solver default when unset
+# state_sharding = (unset)  Shard the state over devices along auto, ky, kx, z, l, m or species
+progress_bar = false  # Print progress with elapsed time and ETA
+dt_min = 1e-07  # Smallest step the CFL controller may take
+# dt_max = (unset)  Largest step the controller may take; dt when unset
+cfl = 0.9  # CFL safety factor of the step controller
+# cfl_fac = (unset)  Stability prefactor of the CFL bound; per-method, moment-scaled default
+# nstep_restart = (unset)  Write a restart checkpoint every this many steps
+collision_split = false  # Advance the diagonal hypercollisions in a split sub-step
+collision_scheme = "implicit"  # Split update: implicit, exp, sts or rkc
+collision_operator = "landau"  # Collision model: landau, none, lenard_bernstein, sugama, improved_sugama, coulomb, coulomb_finite_kperp
+compressed_real_fft = true  # Evaluate the nonlinear bracket on the half spectrum with paired real FFTs
+nonlinear_dealias = true  # Apply the 2/3 dealiasing mask to the nonlinear term
+laguerre_nonlinear_mode = "grid"  # Laguerre treatment of the bracket: grid or spectral
+run_to = "saturation"  # Nonlinear stop: saturation ends the run at a stationary heat flux, t_max runs the full horizon
+saturation_rel_sem = 0.1  # Largest relative standard error of the windowed heat-flux mean that counts as saturated
+saturation_t_min = 800.0  # Run time before any saturated verdict
+saturation_drift_rel = 0.1  # Tolerated relative drift of the window mean
+# damp_ends_rate = (unset)  Field-line end-absorber rate in v_ti/a; the 30-transit rule when unset, 0 turns it off
+
+[geometry]
+model = "s-alpha"  # Geometry: s-alpha, miller, slab, vmec, imported-netcdf
+geometry_backend = "auto"  # Backend that builds the Miller or VMEC field-line geometry; auto picks one
+# geometry_file = (unset)  Imported *.eik.nc file, or the output path of a generated one
+# vmec_file = (unset)  VMEC or VMEX wout file for model = "vmec"
+rhoc = 0.5  # Miller flux-surface minor radius over a
+# R_geo = (unset)  Miller reference major radius; R0 when unset
+shift = 0.0  # Miller Shafranov shift derivative
+akappa = 1.0  # Miller elongation
+akappri = 0.0  # Miller elongation radial derivative
+tri = 0.0  # Miller triangularity
+tripri = 0.0  # Miller triangularity radial derivative
+# torflux = (unset)  Normalized toroidal flux of the VMEC surface
+# npol = (unset)  Poloidal turns of the VMEC flux tube
+# npol_min = (unset)  Smallest theta/pi accepted for the VMEC boundary-cut crossing
+isaxisym = false  # Treat the VMEC equilibrium as axisymmetric
+# which_crossing = (unset)  Index of the boundary-cut crossing used by a VMEC cut
+include_shear_variation = false  # Apply the local-equilibrium shear-variation correction to VMEC geometry
+include_pressure_variation = false  # Apply the local-equilibrium pressure-variation correction to VMEC geometry
+# betaprim = (unset)  Pressure gradient d beta/d rho of the local equilibrium
+q = 1.4  # Safety factor of the analytic geometry
+s_hat = 0.8  # Magnetic shear of the analytic geometry
+# z0 = (unset)  Slab length; sets gradpar = 1/z0
+zero_shat = false  # Slab with zero shear
+epsilon = 0.18  # Inverse aspect ratio of the s-alpha model
+R0 = 2.77778  # case: Major radius over a
+B0 = 1.0  # Magnetic field on axis
+alpha = 0.0  # Field-line label of the VMEC flux tube
+drift_scale = 1.0  # Magnetic-drift convention: 1 standard, 2 doubled
+kperp2_bmag = true  # Include the 1/B^2 factor in k_perp^2
+bessel_bmag_power = 0.0  # Power of 1/B in the Bessel argument
+
+[init]
+init_field = "density"  # Seeded field: density, upar, tpar, tperp, qpar, qperp, phi or all
+init_amp = 0.001  # case: Initial amplitude
+init_single = false  # case: Seed only the selected (ky, kx) mode; false seeds every retained mode
+random_seed = 22  # Seed of the random initial condition
+gaussian_init = false  # Gaussian envelope along the field line instead of random phases
+gaussian_width = 0.5  # Width of the Gaussian envelope
+gaussian_envelope_constant = 1.0  # Constant part of the Gaussian envelope
+gaussian_envelope_sine = 0.0  # Sine part of the Gaussian envelope
+kpar_init = 0.0  # Parallel wavenumber of the seed
+# init_file = (unset)  Saved state to start from
+init_file_scale = 1.0  # Factor applied to the loaded state
+init_file_mode = "replace"  # replace the analytic seed by the loaded state, or add it
+init_electrons_only = false  # Seed only the electron species
+
+[physics]
+reduced_model = "gyrokinetic"  # Physics family; gyrokinetic is the only one supported
+linear = false  # case: Linear run
+nonlinear = true  # case: Nonlinear run; exclusive with linear
+electrostatic = false  # case: Solve for phi
+electromagnetic = true  # case: Solve for the electromagnetic fields selected by use_apar and use_bpar
+use_apar = true  # case: Keep A_parallel when electromagnetic and beta > 0
+use_bpar = false  # Keep B_parallel when electromagnetic
+adiabatic_electrons = false  # case: Boltzmann electron response
+adiabatic_ions = false  # Boltzmann ion response; no kinetic ion species
+tau_e = 1.0  # Adiabatic-species temperature ratio T_i/T_e
+beta = 0.0001  # case: Reference plasma beta
+collisions = true  # Enable the collision operator
+hypercollisions = true  # Enable the hypercollision damping of high moments
+
+[collisions]
+nu_hermite = 1.0  # Hermite coefficient of the Lenard-Bernstein eigenvalue
+nu_laguerre = 2.0  # Laguerre coefficient of the Lenard-Bernstein eigenvalue
+nu_hyper = 0.0  # Isotropic hypercollision amplitude
+p_hyper = 4.0  # Isotropic hypercollision exponent
+nu_hyper_l = 0.0  # Laguerre hypercollision amplitude (constant branch only)
+nu_hyper_m = 1.0  # Hermite hypercollision amplitude
+# nu_hyper_m_const = (unset)  Hermite amplitude of the constant branch; nu_hyper_m when unset
+nu_hyper_lm = 0.0  # Mixed Laguerre-Hermite hypercollision amplitude (constant branch only)
+p_hyper_l = 6.0  # Laguerre hypercollision exponent
+# p_hyper_m = (unset)  Hermite hypercollision exponent; min(20, Nm/2) when unset
+p_hyper_lm = 6.0  # Mixed hypercollision exponent
+D_hyper = 0.05  # case: Perpendicular hyperdiffusion amplitude
+p_hyper_kperp = 2.0  # Perpendicular hyperdiffusion exponent
+hypercollisions_const = 0.0  # Weight of the constant-coefficient hypercollision branch
+hypercollisions_kz = 1.0  # Weight of the |k_z| hypercollision branch
+damp_ends_widthfrac = 0.125  # End-damping layer width as a fraction of the chain
+electron_ion = false  # Scoped beta = 0 electron-ion collision terms with fixed ion flow
+
+[normalization]
+contract = "cyclone"  # Normalization contract: cyclone, etg, kinetic, tem or kbm
+# rho_star = (unset)  Rescales the operator wavenumbers
+# omega_d_scale = (unset)  Factor on the magnetic-drift frequency
+# omega_star_scale = (unset)  Factor on the diamagnetic drive
+diagnostic_norm = "rho_star"  # Growth-rate and frequency normalization of the diagnostics: rho_star or none
+flux_scale = 1.0  # Factor on heat and particle flux diagnostics
+wphi_scale = 1.0  # Factor on the Wphi diagnostic
+
+[terms]
+streaming = 1.0  # Weight of the parallel streaming term
+mirror = 1.0  # Weight of the mirror term
+curvature = 1.0  # Weight of the curvature drift
+gradb = 1.0  # Weight of the grad-B drift
+diamagnetic = 1.0  # Weight of the diamagnetic drive
+collisions = 1.0  # Weight of the collision operator
+hypercollisions = 1.0  # Weight of the hypercollisions
+hyperdiffusion = 1.0  # case: Weight of the perpendicular hyperdiffusion
+end_damping = 1.0  # Weight of the end damping
+apar = 1.0  # Weight of A_parallel
+bpar = 1.0  # Weight of B_parallel
+nonlinear = 1.0  # case: Weight of the nonlinear term
+
+[expert]
+fixed_mode = false  # Hold one Fourier mode frozen during nonlinear evolution
+# iky_fixed = (unset)  ky index of the frozen mode
+# ikx_fixed = (unset)  kx index of the frozen mode
+source = "default"  # External forcing: default or phiext_full
+phi_ext = 0.0  # Amplitude of the external phi source
+
+[output]
+# path = (unset)  Output prefix, or *.out.nc for a nonlinear NetCDF bundle
+restart = false  # Require a restart file and resume from it
+restart_if_exists = false  # Resume from a restart file when one exists
+save_for_restart = true  # Write *.restart.nc with a nonlinear bundle
+# restart_to_file = (unset)  Explicit restart output path
+# restart_from_file = (unset)  Explicit restart input path
+restart_with_perturb = false  # Add a fresh analytic seed to the loaded state
+append_on_restart = true  # Append the continued history to the existing *.out.nc
+warm_start = false  # Seed each point of a scan from the previous one
+resolved_diagnostics = true  # Keep mode-resolved spectra in the nonlinear history
+plots = true  # Draw the run's figures beside its output
+restart_scale = 1.0  # Factor applied to the loaded restart state
+nsave = 10000  # Checkpoint cadence in steps when nstep_restart is unset
+# time_interval = (unset)  Simulation-time interval between rows written to CSV and NetCDF history
+
+[parallel]
+strategy = "serial"  # serial, batch, combined_ky, device_batch, pmap, pjit, shard_map, state or velocity
+axis = "ky"  # Decomposed axis: ky or species_hermite
+# batch_size = (unset)  Points per batch
+# num_devices = (unset)  Workers or devices to use
+strict_identity = true  # Check the parallel result against the serial one
+backend = "auto"  # Worker kind (thread, process) or velocity route; auto picks
+auto = false  # Resolve to shard_map over species_hermite from the visible devices
+
+[run]
+ky = 0.3  # Binormal wavenumber of a single linear run; 0.3 when unset
+Nl = 4  # Laguerre moments; the resolution-guided fallback when unset
+Nm = 8  # Hermite moments; the resolution-guided fallback when unset
+# mu_vperp_max = (unset)  Nodal magnetic-moment grid with this velocity cutoff instead of Laguerre
+# solver = (unset)  Linear solver: auto, time, krylov, explicit_time
+# method = (unset)  Integrator of the run; overrides [time] method
+# dt = (unset)  Step of the run; overrides [time] dt
+# steps = (unset)  Number of steps; with dt sets t_max
+# kx = (unset)  Radial wavenumber of the fitted mode; 0 when unset
+# sample_stride = (unset)  Steps between stored samples; overrides [time] sample_stride
+# fit_signal = (unset)  Signal the growth rate is fitted to: auto, phi, density
+# diagnostics = (unset)  Compute diagnostics of a nonlinear run
+# laguerre_mode = (unset)  Laguerre treatment of the nonlinear bracket for this run

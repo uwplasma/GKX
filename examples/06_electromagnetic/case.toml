@@ -4,6 +4,8 @@ schema_version = 1
 # adiabatic electrons at tutorial resolution. This is
 # the electromagnetic ITG branch; the kinetic ballooning mode needs kinetic
 # electrons and Nm = 48, which is case_full.toml (Nz = 96, Nl = 16, Nm = 48).
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"
@@ -29,9 +31,10 @@ nperiod = 2
 
 [time]
 t_max = 80.0  # about 8 e-folds at ky 0.3
-dt = 0.01  # initial step; the CFL controller sets the rest
-method = "rk4"
-fixed_dt = false
+dt = 0.01  # the run warns when ky or beta push it past the CFL-stable step (0.0085 at ky 0.6)
+# rk2 at a fixed step: gamma within 0.1% of the eigensolver and of rk4 + CFL, in 0.5x the
+# time of rk4 + CFL (docs/guidance.rst, Linear time stepping).
+method = "rk2"
 sample_stride = 2
 
 [geometry]

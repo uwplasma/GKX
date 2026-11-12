@@ -121,7 +121,7 @@ reference is and where it came from; that is usually the whole question.
 
 ## Provenance and authorship
 
-Commits are authored by the contributor. Do not add AI co-author trailers, and
+Commits are authored by the contributor. Do not add co-author trailers, and
 do not remove upstream credit from vendored or adapted code. Pin companion
 versions (VMEX, ESSOS, SOLVAX, JAX) when a result depends on them.
 

@@ -38,6 +38,9 @@ ntheta = 32
 nperiod = 2
 
 [time]
+# Off, with damp_ends_widthfrac = 0 below, as the provisional literature case is set up. Kinetic
+# electrons need the default layer to converge (docs/guidance.rst, Common deck): promote this
+# case only with it.
 damp_ends_rate = 0.0
 t_max = 8.0
 dt = 0.0005

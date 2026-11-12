@@ -72,7 +72,7 @@ Start at ``gkx.load`` and ``gkx.solve`` and follow the call down:
   ``workflows/nonlinear.py``; ``cli.py`` wraps both.
 - ``terms/`` and ``operators/``: the gyrokinetic equation (fields, streaming,
   drifts, collisions, :math:`E\times B`).
-- ``solvers_*.py``: time integrators, Krylov and shift-invert eigensolvers,
+- ``solvers/``: time integrators, Krylov and shift-invert eigensolvers,
   nonlinear explicit and IMEX steps.
 - ``geometry/``: s-alpha, slab, Miller, VMEC/VMEX flux tubes and the
   differentiable bridge.
@@ -145,15 +145,15 @@ Equations to code
      - ``terms/nonlinear.py``, ``operators/nonlinear/``
      - ``unit/nonlinear/test_nonlinear_exb.py``
    * - Linear integrators and implicit solves
-     - ``solvers_linear_integrators.py``, ``solvers_time_explicit*.py``,
-       ``solvers_linear_implicit.py``
+     - ``solvers/linear/integrators.py``, ``solvers/time_*.py``,
+       ``solvers/linear/implicit.py``
      - ``unit/solvers/test_time_integrators.py``
    * - Eigenmodes: Krylov, shift-invert, adaptive propagator
-     - ``solvers_linear_krylov*.py``, ``solvers_linear_precond_pr3.py``,
-       ``solvers_linear_adaptive_propagator.py``
+     - ``solvers/linear/krylov*.py``, ``solvers/linear/preconditioner.py``,
+       ``solvers/linear/adaptive_propagator.py``
      - ``unit/solvers/test_linear_krylov_core.py``
    * - Nonlinear integrators (explicit, IMEX)
-     - ``solvers_nonlinear_*.py``
+     - ``solvers/nonlinear/*.py``
      - ``unit/nonlinear/test_nonlinear.py``
    * - Free energy, spectra, fluxes
      - ``operators/moments.py``, ``operators/fluxes.py``
