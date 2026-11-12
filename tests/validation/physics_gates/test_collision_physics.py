@@ -2026,7 +2026,8 @@ def _demo_case(tmp_path):
     return deck
 
 
-def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None:
+@pytest.mark.parametrize("ky", [0.3, 0.4])
+def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path, ky) -> None:
     from gkx.cli import DEFAULT_DEMO_SETTINGS
     from gkx.runtime import (
         run_runtime_linear,
@@ -2037,7 +2038,7 @@ def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None
     cfg, _data = load_runtime_from_toml(_demo_case(tmp_path))
 
     shared = dict(
-        ky_target=float(settings["ky"]),
+        ky_target=ky,
         Nl=int(settings["Nl"]),
         Nm=int(settings["Nm"]),
     )
@@ -2062,7 +2063,7 @@ def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None
         "bound, it prints a biased growth rate. Restore dt and steps rather "
         "than widening this tolerance."
     )
-    reference = _cyclone_reference(0.3)
+    reference = _cyclone_reference(ky)
     assert abs(integrated.gamma / reference[0] - 1.0) < 0.02
     assert abs(integrated.omega / reference[1] - 1.0) < 0.02
 
