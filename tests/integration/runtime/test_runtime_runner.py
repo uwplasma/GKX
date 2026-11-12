@@ -3871,3 +3871,30 @@ def test_runtime_linear_kinetic_electron_time_route_without_dt_is_finite() -> No
     krylov = run_runtime_linear(cfg, solver="krylov", **kw)
     assert np.isfinite(time.gamma)
     assert time.gamma == pytest.approx(krylov.gamma, rel=0.08)
+
+
+def test_runtime_imex_chunks_share_one_scan_and_end_on_a_short_final_chunk() -> None:
+    # A chunk after the first reused no scan, rebuilt its own factor and then
+    # failed on the retuned one (UnexpectedTracerError) from the third chunk on.
+    cfg, _ = load_runtime_from_toml(
+        REPO_ROOT / "examples/05_kinetic_electrons/case.toml"
+    )
+    cfg = replace(cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8))
+
+    def run(t_max: float, chunk_steps: int):
+        time = replace(cfg.time, t_max=t_max, dt_max=0.1, chunk_steps=chunk_steps)
+        return run_runtime_nonlinear(
+            replace(cfg, time=time), Nl=2, Nm=4, return_state=True
+        )
+
+    one, two = run(0.6, 6), run(0.6, 3)  # the step stays 0.1: same steps
+    # Equal to rounding (2e-12 of the peak in float64; the factor is ill-conditioned).
+    peak = float(np.abs(one.state).max())
+    np.testing.assert_allclose(two.state, one.state, rtol=0, atol=1e-3 * peak)
+    # The step grows 0.1 -> 0.14 -> 0.22 between chunks; the fourth is short.
+    adaptive = replace(cfg.time, t_max=2.0, chunk_steps=4)
+    short = run_runtime_nonlinear(
+        replace(cfg, time=adaptive), Nl=2, Nm=4, return_state=True
+    )
+    assert short.t[-1] == pytest.approx(2.0)
+    assert np.isfinite(short.state).all()
