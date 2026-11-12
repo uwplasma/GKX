@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict
 import dataclasses
 from pathlib import Path
+
+from gkx.case_paths import anchor_case_paths, field_line_errors, warn_short_field_line
 from typing import Mapping, Tuple
 
 REFERENCE_ELECTRON_MASS: float = 2.7e-4
@@ -926,6 +928,7 @@ class RuntimeConfig:
     parallel: RuntimeParallelConfig = RuntimeParallelConfig()
     run: RuntimeRunConfig = RuntimeRunConfig()
     damping_reference: EndDampingReference | None = None
+    source_dir: str | None = dataclasses.field(default=None, compare=False, repr=False)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -956,12 +959,12 @@ class RuntimeConfig:
         """Return a validated copy with ``changes`` applied.
 
         The dataclass is frozen, so this is the supported way to derive a case.
-        The copy is validated before it is returned: a scan that builds cases in
-        a loop should fail on the case it built, not several stages later inside
-        a compiled kernel.
+        The copy is validated before it is returned, so a scan fails on the case
+        it built, and relative file paths resolve against the deck directory.
         """
 
         updated = dataclasses.replace(self, **changes)
+        updated = anchor_case_paths(updated, self.source_dir)
         updated.validate()
         return updated
 
@@ -1052,12 +1055,7 @@ class RuntimeConfig:
         return tuple(ion.charge * s.nu if s.charge < 0 else 0.0 for s in self.species)
 
     def validate(self) -> "RuntimeConfig":
-        """Check cross-section consistency and return ``self``.
-
-        Each section already validates its own fields in ``__post_init__``.
-        What no section can see is a disagreement between sections, which is
-        what this checks.
-        """
+        """Check disagreements between sections and return ``self``."""
 
         errors: list[str] = []
         if not self.species:
@@ -1087,8 +1085,10 @@ class RuntimeConfig:
             errors.append("time.t_max must be positive")
         if self.geometry.model == "vmec" and not self.geometry.vmec_file:
             errors.append("geometry.model = 'vmec' requires geometry.vmec_file")
+        errors.extend(field_line_errors(self))
         if errors:
             raise ValueError("invalid case: " + "; ".join(errors))
+        warn_short_field_line(self)
         return self
 
     def summary(self) -> Dict[str, Any]:

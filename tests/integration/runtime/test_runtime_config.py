@@ -644,7 +644,7 @@ _SHIPPED_DECK_CONTRACTS = {
         "cfg.geometry.alpha": 0.0,
         "cfg.geometry.R0": 5.485,
         "cfg.grid.boundary": "linked",
-        "cfg.grid.nperiod": 4,
+        "cfg.grid.nperiod": None,
         "cfg.grid.Nz": 256,
         "cfg.init.gaussian_init": True,
         "cfg.init.gaussian_width": 1.0,
@@ -1209,3 +1209,51 @@ def test_nonlinear_example_optional_time_controls_parse(relative, tmp_path):
         output=replace(defaults.output, time_interval=enabled.output.time_interval),
     )
     assert enabled.to_dict() == expected.to_dict()
+
+
+def _vmec_deck(tmp_path, grid_extra="", geometry_extra="npol = 1.0"):
+    deck = tmp_path / "deck" / "case.toml"
+    deck.parent.mkdir(parents=True, exist_ok=True)
+    deck.write_text(
+        f'[grid]\n{grid_extra}\n[geometry]\nmodel = "vmec"\nvmec_file = "w.nc"\n'
+        f"torflux = 0.5\n{geometry_extra}\n"
+    )
+    return deck
+
+
+def test_relative_vmec_file_override_resolves_against_deck_directory(tmp_path):
+    from gkx.config import GeometryConfig
+    from gkx.workflows.runtime.toml import load
+
+    case = load(_vmec_deck(tmp_path))
+    deck_dir = (tmp_path / "deck").resolve()
+    assert case.geometry.vmec_file == str(deck_dir / "w.nc")
+    other = case.replace(geometry=replace(case.geometry, vmec_file="sub/x.nc"))
+    assert other.geometry.vmec_file == str(deck_dir / "sub" / "x.nc")
+    absolute = str((tmp_path / "abs.nc").resolve())
+    kept = case.replace(geometry=replace(case.geometry, vmec_file=absolute))
+    assert kept.geometry.vmec_file == absolute
+    assert isinstance(case.geometry, GeometryConfig)
+
+
+def test_vmec_nperiod_conflicting_with_npol_is_rejected(tmp_path):
+    from gkx.workflows.runtime.toml import load
+
+    case = load(_vmec_deck(tmp_path, grid_extra="nperiod = 4"))
+    with pytest.raises(ValueError, match="geometry.npol"):
+        case.validate()
+    ok = load(_vmec_deck(tmp_path / "x", grid_extra="nperiod = 1"))
+    with pytest.warns(RuntimeWarning, match="short field line"):
+        ok.validate()
+
+
+def test_short_field_line_warns_only_below_threshold():
+    import warnings
+
+    from gkx.config import GridConfig, RuntimeConfig
+
+    with pytest.warns(RuntimeWarning, match="nperiod = 1"):
+        RuntimeConfig(grid=GridConfig(nperiod=1)).validate()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        RuntimeConfig(grid=GridConfig(nperiod=2)).validate()

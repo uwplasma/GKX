@@ -20,12 +20,12 @@ kinetic = true
 [grid]
 Nx = 6
 Ny = 4
-# Nz and nperiod below are inert for this deck and are kept only to record the
-# intent. model = "vmec" builds the parallel grid from ntheta and
+# Nz below is inert for this deck and is kept only to record the intent. model = "vmec" builds the parallel grid from ntheta and
 # [geometry] npol, and apply_geometry_grid_defaults then overwrites Nz, z_min,
-# z_max from the sampled theta and sets ntheta = nperiod = zp = None. The run is
+# z_max from the sampled theta and sets ntheta = zp = None. The run is
 # therefore 64 parallel points over one poloidal turn, not 256 over four:
-# Nz = 64, 128, 256, 512 give bit-identical traces, as do nperiod = 1 and 4.
+# Nz = 64, 128, 256, 512 give bit-identical traces. grid.nperiod is rejected for
+# model = "vmec"; the line length is [geometry] npol.
 # The reference the panel is compared against uses 512 points over nperiod = 4,
 # so closing that gap means raising ntheta and npol, not Nz.
 Nz = 256
@@ -34,7 +34,6 @@ Ly = 62.8
 boundary = "linked"
 y0 = 10.0
 ntheta = 64
-nperiod = 4
 
 [time]
 # Off: ky = 0 zonal chains carry no end damping.
@@ -64,6 +63,7 @@ model = "vmec"
 vmec_file = "../../examples/vmec/wout_nfp3_QI_fixed_resolution_final.nc"
 torflux = 0.64
 alpha = 0.0
+# Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
 npol = 1.0
 R0 = 5.485
 

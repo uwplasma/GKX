@@ -389,6 +389,11 @@ Resolution
   asks for, with the reason.
 - **Parallel.** :math:`N_z` = 24-64 per field-period segment, and
   ``nperiod >= 2`` for any linear run with linked boundaries.
+- **Field-line length.** Use ``npol >= 3`` for VMEC and ``nperiod >= 2`` for
+  analytic geometry. Shorter lines give a wrong growth rate at every end-damping
+  rate (errors of 30-80% in the common-deck study), and a stellarator rate still
+  moves at ``npol = 4``: repeat at a longer line and compare. GKX warns when a
+  case is validated with a shorter line.
 - **Check.** The heat flux or growth rate changes less than your tolerance
   when :math:`N_m` doubles.
 

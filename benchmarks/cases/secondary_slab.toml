@@ -20,6 +20,7 @@ Ly = 62.83185307179586
 boundary = "periodic"
 y0 = 10.0
 ntheta = 8
+# Short field line: growth rates are not converged below nperiod = 2; see docs/guidance.rst.
 nperiod = 1
 
 [time]

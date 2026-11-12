@@ -37,6 +37,7 @@ diagnostics_stride = 50
 model = "vmec"
 # vmec_file is injected by the CLI from the wout positional or --vmec/--vmex.
 torflux = 0.64
+# Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
 npol = 1.0
 
 [init]
