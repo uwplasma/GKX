@@ -550,11 +550,11 @@ is the resolution of the scan.
      - +1.5 +- 1.9%
    * - (4, 8) / (4, 8)
      - 64
-     - 1
-     - 738 +- 26
-     - +6.3 +- 4.2%
-     - 1308 +- 30
-     - +4.0 +- 2.9%
+     - 2
+     - 730 +- 17
+     - +5.1 +- 3.2%
+     - 1284 +- 24
+     - +2.1 +- 2.5%
    * - (4, 8) / (2, 8)
      - 48
      - 1
@@ -633,19 +633,20 @@ is the resolution of the scan.
      - 1282 +- 15
      - +2.0 +- 2.0%
 
-Every pair is within 6.3% of the reference in both fluxes, and neither the
-electron :math:`N_l` (2 to 6), the electron :math:`N_m` (8 to 24) nor the ion
-:math:`N_l` and :math:`N_m` shows a trend larger than that scatter. The
-fallback agrees with the reference to 3.0% and 1.5% and with the uniform
-(4, 16) it replaces (3.1% and 0.9%), with 96 moments per point instead of 128.
-Uniform (4, 8), the generic fallback, is the least accurate pair in the table
-(+6.3% and +4.0%, one seed) and is not used. Ions (4, 8) with electrons (2, 8),
-48 moments per point, also sit inside the scatter; they are not adopted because
-this scan is electrostatic and one seed deep there.
+Every pair is within 5.1% (:math:`Q_i`) and 3.2% (:math:`Q_e`) of the reference,
+and neither the electron :math:`N_l` (2 to 6), the electron :math:`N_m` (8 to
+24) nor the ion :math:`N_l` and :math:`N_m` shows a trend larger than that
+scatter. The fallback agrees with the reference to 3.0% and 1.5%, as the
+uniform (4, 16) it replaces does (3.1% and 0.9%), with 96 moments per point
+instead of 128. Uniform (4, 8), the generic fallback, has the largest offset in
+:math:`Q_i` (+5.1%) and is not used. Ions (4, 8) with electrons (2, 8), 48
+moments per point, are also inside the scatter; they are not adopted because
+this row is one seed, electrostatic, and the linear electron growth rates
+need more than two Laguerre moments and sixteen Hermite ones (above).
 
 The electromagnetic deck of ``examples/05_kinetic_electrons`` (:math:`\beta`
 1e-4 with :math:`A_\parallel`, :math:`m_e/m_i = 2.7\times10^{-4}`, 32x32x16,
-same window) against uniform (4, 16), two seeds where marked:
+same window) against uniform (4, 16):
 
 .. list-table::
    :header-rows: 1
@@ -719,6 +720,34 @@ state arrays keep the ``[run]`` extents, which sets the floor on memory. At
 peak: the peak is the right-hand-side temporaries, which the groups already
 shrink, and storing each species at its own counts would save 13 MB more, so
 the state stays dense.
+
+The default kinetic-electron stepper is implicit, and there the ion Hermite count
+matters more than in the explicit step. A shared A4000, float32, 64x64x24, fixed
+step ``imex-ars3`` at ``dt`` 0.05 (the factor and the solve of ``imex-ark3``),
+time per step from runs of 5 and 45 steps after a warm-up, the counts
+alternated in two repetitions (the card was loaded, so compare within a
+repetition):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Counts
+     - ms per step, repetition 1 / 2
+     - Peak memory
+   * - uniform (4, 16)
+     - 393 / 199
+     - 5.6 GB
+   * - ions (4, 8), electrons (4, 16)
+     - 143 (2.75x) / 82 (2.43x)
+     - 5.1 GB
+   * - ions (4, 8), electrons (2, 8)
+     - 179 / 129
+     - 1.7 GB
+
+Cutting the electron counts as well saves memory (1.7 GB) and, in this
+measurement, no time. In the explicit ``rk3`` step at the same size the split is
+not resolved on that loaded card (22.1, 35.9 and 23.4 ms against 22.3, 22.5 and
+23.9 ms uniform), and its peak memory is 0.59 against 0.77 GB.
 
 **Implicit (IMEX) factor.** ``imex-ars3``/``imex-ark3`` build the block-Thomas
 factor, its field coupling and the collision sub-step per species group, at the
