@@ -668,7 +668,8 @@ def _run_chunked_diagnostics(
             control["op"] = refactor_chain_implicit_linear(
                 control["op"], control["dt"], free=True
             )
-        elif not imex or "op" not in control:  # horizon: inf until the last chunk
+            kwargs["time_horizon"] = float("inf")  # the first chunk's scan again
+        else:  # horizon: inf until the last chunk
             last = not step_capped or remaining_time <= steps_now * dt_cap
             kwargs["time_horizon"] = remaining_time if last else float("inf")
         kwargs["compile_cache"] = compile_cache
