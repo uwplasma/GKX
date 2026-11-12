@@ -1424,6 +1424,8 @@ def _deck_defaults() -> dict[str, dict[str, object]]:
     cfg = RuntimeConfig()
     tables: dict[str, dict[str, object]] = {}
     for field in dataclasses.fields(cfg):
+        if field.name == "source_dir":  # the deck's directory, set by the loader
+            continue
         table = cfg.species[0] if field.name == "species" else getattr(cfg, field.name)
         if table is None:
             table = EndDampingReference
