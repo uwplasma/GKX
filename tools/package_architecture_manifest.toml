@@ -228,7 +228,8 @@ recursive = true
 # 70149 -> 70150: IMEX chunk scan fix.
 # 70150 -> 69996: the Pallas drift kernel is removed; the jnp drift terms serve every backend.
 # 69996 -> 70070: gkx.case_paths (deck-relative overrides, field-line length checks).
-baseline = 70070
+# 70070 -> 70112: `--set section.key=value` deck overrides in the executable.
+baseline = 70112
 target = 45000
 
 [[line_budget_policy.counts]]

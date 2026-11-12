@@ -2334,3 +2334,22 @@ def test_saved_physical_cadence_preserves_native_summary_and_result(
         artifacts.write_runtime_nonlinear_artifacts(
             tmp_path / "missing.csv", replace(result, diagnostics=None), cfg
         )
+
+
+def test_set_overrides_replace_deck_values(tmp_path):
+    from gkx.workflows.runtime.toml import extract_set_overrides, load_toml
+
+    deck = tmp_path / "case.toml"
+    deck.write_text('[run]\nNl = 4\n[physics]\nadiabatic = "x"\n', encoding="utf-8")
+    rest = extract_set_overrides(
+        ["case.toml", "--set", "run.Nl=8", "--set=physics.adiabatic=yes"]
+        + ["--set", "new.v=[1, 2]", "--set", "new.f=100.", "--dt", "1"]
+    )
+    try:
+        data = load_toml(deck)
+        assert rest == ["case.toml", "--dt", "1"]
+        assert data["run"]["Nl"] == 8 and data["physics"]["adiabatic"] == "yes"
+        assert data["new"]["v"] == [1, 2] and data["new"]["f"] == 100.0
+    finally:
+        extract_set_overrides([])
+    assert load_toml(deck)["run"]["Nl"] == 4

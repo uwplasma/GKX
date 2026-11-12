@@ -351,6 +351,10 @@ only; it does not change ``[geometry].model``. For imported-geometry configs,
 that file is the imported EIK/NetCDF input. For ``model = "vmec"``, it remains
 the generated EIK target/cache path.
 
+``--set section.key=value`` replaces any deck entry for one invocation, for
+example ``gkx case.toml --set run.Nl=8 --set grid.Ny=64``. The value uses TOML
+syntax (numbers, booleans, lists); anything else is read as a string.
+
 Solver and fit-signal keys
 --------------------------
 
