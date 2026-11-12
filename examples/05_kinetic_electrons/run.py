@@ -49,7 +49,6 @@ PINNED = {
     "tokamak, explicit rk4-pi": {"method": "rk4-pi", "damp_ends_rate": 0.1},
     "tokamak, imex-ars3": {
         "method": "imex-ars3",
-        "damp_ends_rate": 0.1,
         "fixed_dt": True,
         "dt": 0.05,
         "dt_max": 0.05,
