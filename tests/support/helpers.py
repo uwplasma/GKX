@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.diagnostics.analysis import ModeSelection
 from gkx.runtime import RuntimeLinearResult, RuntimeNonlinearResult
@@ -223,6 +224,13 @@ def patch_nonlinear_setup(
         lambda *args, **kwargs: np.zeros(
             (1, 3, 4, grid.ky.size, grid.kx.size, grid.z.size), dtype=np.complex64
         ),
+    )
+
+
+def uniform_moments(case: Any) -> Any:
+    """The case with every species at the state's ``(Nl, Nm)``, whatever the deck keeps per species."""
+    return replace(
+        case, species=tuple(replace(s, Nl=None, Nm=None) for s in case.species)
     )
 
 

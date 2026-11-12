@@ -94,7 +94,7 @@ from scripts.checks._gates.nonlinear_replicates import (
 from types import SimpleNamespace
 import gc
 import pytest
-from support.helpers import only_terms, patch_attrs, spectral_grid
+from support.helpers import only_terms, patch_attrs, spectral_grid, uniform_moments
 
 
 def _em_cache() -> SimpleNamespace:
@@ -2291,7 +2291,7 @@ def _tiny_kinetic_electron_box(
     nm: int = KE_NM,
     ion_counts=None,
 ):
-    cfg = load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    cfg = uniform_moments(load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml"))
     cfg = replace(
         cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8, ntheta=8, ky_layout=layout)
     )
@@ -2476,7 +2476,9 @@ def test_chain_imex_dt_is_not_bound_by_the_electron_collision_rate():
     """nu_e rho(C) dt = 7: past the explicit bound, finite with the sub-step."""
     import gkx
 
-    deck = gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    deck = uniform_moments(
+        gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    )
     ion, electron = deck.species
     case = deck.replace(
         species=(replace(ion, nu=0.6), replace(electron, nu=36.5)),
@@ -2597,7 +2599,9 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
 
     monkeypatch.setattr(workflow, "ImexDtControl", controller)
 
-    deck = gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    deck = uniform_moments(
+        gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    )
     case = deck.replace(
         grid=replace(deck.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
         time=replace(
