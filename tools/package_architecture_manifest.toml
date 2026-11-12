@@ -224,8 +224,9 @@ recursive = true
 # 70332 -> 70078: physical-time saturation detector replaces the window/guard stop gates.
 # 70078 -> 70149: phase-1 split of the diagnostics driver (module header and export list of
 # transport_window.py; no code added).
-# 70149 -> 69995: the Pallas drift kernel is removed; the jnp drift terms serve every backend.
-baseline = 69995
+# 70149 -> 70150: IMEX chunk scan fix.
+# 70150 -> 69996: the Pallas drift kernel is removed; the jnp drift terms serve every backend.
+baseline = 69996
 target = 45000
 
 [[line_budget_policy.counts]]
