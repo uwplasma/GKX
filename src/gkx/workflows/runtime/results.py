@@ -12,12 +12,12 @@ from collections.abc import Sequence
 from gkx.diagnostics.modes import ModeSelection
 from gkx.diagnostics import SimulationDiagnostics
 from gkx.terms.config import FieldState
-from gkx.solvers_linear_implicit import (
+from gkx.solvers.linear.implicit import (
     implicit_solve_payload,
     ImplicitSolveSummary,
     require_converged_implicit_solves,
 )
-from gkx.solvers_linear_krylov import eigen_status_payload
+from gkx.solvers.linear.krylov import eigen_status_payload
 
 
 _IMPLICIT_SOLVE_METHODS = {
@@ -48,8 +48,8 @@ def checked_solve_summary(
 
 
 if TYPE_CHECKING:
-    from gkx.solvers_linear_implicit import ImplicitSolveSummary
-    from gkx.solvers_linear_krylov import EigenSolveStatus
+    from gkx.solvers.linear.implicit import ImplicitSolveSummary
+    from gkx.solvers.linear.krylov import EigenSolveStatus
 
 
 def _dataset_payload(

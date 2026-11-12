@@ -39,8 +39,8 @@ from gkx.workflows.runtime.diagnostic_arrays import (
     timestep_cost_payload,
     validate_finite_runtime_diagnostics,
 )
-from gkx.solvers_linear_implicit import implicit_solve_payload
-from gkx.solvers_linear_krylov import eigen_status_payload
+from gkx.solvers.linear.implicit import implicit_solve_payload
+from gkx.solvers.linear.krylov import eigen_status_payload
 
 _RUNTIME_FIELD_NAMES = ("phi", "apar", "bpar")
 

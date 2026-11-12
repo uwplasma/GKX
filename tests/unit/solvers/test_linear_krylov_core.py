@@ -23,16 +23,16 @@ from gkx.operators.linear.params import (
     build_linear_params,
     linear_terms_to_term_config,
 )
-import gkx.solvers_linear_implicit as implicit
+import gkx.solvers.linear.implicit as implicit
 from support.helpers import requires_paired_solvax
 from types import SimpleNamespace
 import inspect
 import re
-import gkx.solvers_linear_adaptive_propagator as ap
-import gkx.solvers_linear_krylov as lk
-import gkx.solvers_linear_krylov_algorithms as ka
-import gkx.solvers_linear_adaptive_propagator as kp
-import gkx.solvers_linear_precond_pr3 as pr3
+import gkx.solvers.linear.adaptive_propagator as ap
+import gkx.solvers.linear.krylov as lk
+import gkx.solvers.linear.krylov_algorithms as ka
+import gkx.solvers.linear.adaptive_propagator as kp
+import gkx.solvers.linear.preconditioner as pr3
 import gc
 
 import jax
@@ -54,7 +54,7 @@ from gkx.runtime import (
     build_runtime_linear_params,
     build_runtime_linear_terms,
 )
-from gkx.solvers_linear_krylov import adaptive_propagator_eigenpair, dominant_eigenpair
+from gkx.solvers.linear.krylov import adaptive_propagator_eigenpair, dominant_eigenpair
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 
 
@@ -1076,7 +1076,7 @@ def test_certified_candidate_lift_requests_exact_dot_precision() -> None:
         for eqn in walk(jaxpr):
             frames = getattr(eqn.source_info.traceback, "frames", []) or []
             if any(
-                "solvers_linear_adaptive_propagator" in getattr(f, "file_name", "")
+                "solvers/linear/adaptive_propagator" in getattr(f, "file_name", "")
                 for f in frames
             ):
                 found.append(eqn.params["precision"])
@@ -2254,10 +2254,11 @@ def test_propagator_candidate_lift_pins_exact_dot_precision(candidates: int) -> 
     lifts = [
         precision
         for origin, precision in found
-        # The propagator lift lives in solvers_linear_adaptive_propagator.py.
+        # The propagator lift lives in solvers/linear/adaptive_propagator.py; _origin
+        # reports the file basename, not the module path.
         # This filter selects which contractions the precision guard inspects,
         # so a stale prefix makes the guard silently vacuous rather than failing.
-        if origin.startswith("solvers_linear_adaptive_propagator")
+        if origin.startswith("adaptive_propagator.py")
     ]
     assert lifts, "the candidate lift lowered to no matrix dot; the guard is vacuous"
     assert all(precision == EXACT for precision in lifts), (
@@ -2716,7 +2717,7 @@ import json, sys
 import numpy as np
 import jax, jax.numpy as jnp
 assert not jax.config.read("jax_enable_x64")
-import gkx.solvers_linear_precond_pr3 as pr3
+import gkx.solvers.linear.preconditioner as pr3
 from unit.solvers.test_linear_krylov_core import (
     _pr3_setup, _PR3_SIGMA, test_pr3_refuses_a_rank_two_field_part,
 )
@@ -3120,7 +3121,7 @@ def test_linked_pilot_eigenpair_is_unchanged_on_linked_chain_modes(
     the certified target.
     """
 
-    import gkx.solvers_linear_krylov as krylov
+    import gkx.solvers.linear.krylov as krylov
     from gkx.workflows.linear import _prepare_linear_runtime_context
 
     runtime, _ = load_runtime_from_toml(

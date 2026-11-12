@@ -23,8 +23,8 @@ from gkx.operators.linear.params import (
     _SPECIES_PARAM_NAMES,
 )
 from gkx.config import method_error
-from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
-from gkx.solvers_nonlinear_explicit import _explicit_stage_update
+from gkx.solvers.nonlinear.diagnostics import nonlinear_rhs_cached
+from gkx.solvers.nonlinear.explicit import _explicit_stage_update
 from gkx.core_ky_layout import source_ny_full
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.terms.config import FieldState, TermConfig
@@ -715,7 +715,7 @@ def _resolve_species_hermite_placement(
         species_hermite_state_spec,
     )
     from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
-    from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
+    from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
 
     if G0.ndim != 6:
         raise ValueError(

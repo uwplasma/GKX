@@ -21,7 +21,7 @@ from gkx.operators.linear.params import (
     LinearTerms,
     linear_terms_to_term_config,
 )
-from gkx.solvers_linear_krylov_algorithms import (
+from gkx.solvers.linear.krylov_algorithms import (
     _apply_operator,
     _linked_covered_mode_mask,
     _omega_scale,
