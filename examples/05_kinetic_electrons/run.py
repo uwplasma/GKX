@@ -37,11 +37,14 @@ CASES = {
     "tokamak, imex-ars3": HERE / "case.toml",
     "stellarator": HERE / "case_stellarator.toml",
 }
-# Advanced: pinned steppers, both with the weak end-damping rate 0.1, valid only at this
-# short horizon: at the default rate the field response amplifies the absorber about
-# 470x and holds the explicit step near 1e-5. ``imex-ars3`` solves the same implicit
-# linear step at a fixed dt; 0.05 reproduced the explicit run's saturated heat flux on
-# this deck at Nx = Ny = 16 and 32.
+# Advanced: pinned steppers. ``imex-ars3`` solves the same implicit linear step at a
+# fixed dt; 0.05 reproduced the explicit run's saturated heat flux on this deck at
+# Nx = Ny = 16 and 32.
+# Both pins fix damp_ends_rate = 0.1 so that they compare steppers at one operator, as the
+# measurement above did. The default rate of this deck is 598, and an explicit step must
+# keep rate * dt below about 0.3, which would cut the rk4-pi step to 5e-4. The rate 0.1 is
+# not converged for electrons (docs/guidance.rst, End damping): these runs compare steps,
+# not heat fluxes.
 PINNED = {
     "tokamak, explicit rk4-pi": {"method": "rk4-pi", "damp_ends_rate": 0.1},
     "tokamak, imex-ars3": {
@@ -50,6 +53,7 @@ PINNED = {
         "fixed_dt": True,
         "dt": 0.05,
         "dt_max": 0.05,
+        "damp_ends_rate": 0.1,
     },
 }
 VMEC_INPUT = HERE.parent / "vmec" / "input.LandremanPaul2021_QA_lowres"

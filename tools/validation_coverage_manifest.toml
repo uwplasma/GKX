@@ -199,6 +199,7 @@ owned_modules = [
   "gkx.diagnostics.modes",
   "gkx.core_velocity",
   "gkx.core_grid",
+  "gkx.case_paths",
   "gkx.core_ky_layout",
   "gkx.solvers.linear.adaptive_propagator",
   "gkx.solvers.linear.krylov_algorithms",

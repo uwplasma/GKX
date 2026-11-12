@@ -34,7 +34,9 @@ ntheta = 32
 nperiod = 2
 
 [time]
-# Explicit nonlinear end-damping rate.
+# Pinned at 0.1: this fixed-step replay is recorded at that rate and its CFL margin is
+# gated in tests/release. With kinetic electrons only the default rule converges
+# (docs/guidance.rst, End damping), so a new run leaves the rate unset.
 damp_ends_rate = 0.1
 t_max = 100.0
 dt = 0.0009

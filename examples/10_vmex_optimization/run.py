@@ -113,6 +113,8 @@ def parameters(local_geometry):
         hypercollisions_kz=1.0,
         D_hyper=0.05,
         p_hyper_kperp=2.0,
+        # Pinned: the recorded single-tube campaign (README.md) ran at 0.1; a new objective
+        # leaves it unset for the default rule (docs/guidance.rst, End damping).
         damp_ends_rate=0.1,
         damp_ends_widthfrac=0.125,
     )
@@ -160,6 +162,8 @@ def saturate(equilibrium):
         parameters(local_geometry),
         DT,
         plan.steps,
+        # Fixed-step rk3, not the CFL-controlled default: the window is differentiated step by
+        # step, so the step count must not depend on the state.
         method="rk3",
         terms=terms,
         checkpoint=False,
@@ -188,7 +192,7 @@ def turbulent_transport(state, runtime):
         DT,
         WINDOW_STEPS,
         terms=terms,
-        method="rk3",
+        method="rk3",  # fixed step, as above
     )
 
 

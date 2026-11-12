@@ -4,6 +4,8 @@ schema_version = 1
 # precise quasi-axisymmetric stellarator at s = 0.64. The geometry is solved
 # when absent. CFL control includes electron streaming and field response;
 # the tutorial horizon covers the start of the linear phase only.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"
@@ -55,6 +57,7 @@ model = "vmec"
 vmec_file = "../vmec/wout_LandremanPaul2021_QA_lowres.nc"
 torflux = 0.64
 alpha = 0.0
+# Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
 npol = 1.0
 
 [init]
