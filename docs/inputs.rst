@@ -301,8 +301,13 @@ stellarator cases. The shipped VMEC TOMLs
 point to locally generated files under ``examples/vmec``; generate those files
 with ``vmex input.<case>`` before running the examples.
 ``vmec_file`` supports ``$ENV_VAR`` expansion, and relative paths are resolved
-against the TOML directory first. Command-line overrides are resolved from the
-shell working directory.
+against the TOML directory, including a path set later through
+``case.replace(...)`` on a case loaded with ``gkx.load``. Command-line
+overrides are resolved from the shell working directory.
+For ``model = "vmec"`` the field-line length is ``geometry.npol``. ``grid.nperiod``
+only supplies ``npol = 2 * nperiod - 1`` when ``npol`` is unset; a deck that sets
+both with different values is rejected, because the grid is rebuilt from the
+sampled geometry and ``nperiod`` would be ignored.
 Use ``geometry_helper_repo`` and ``geometry_helper_python`` when an imported
 geometry helper checkout or interpreter must be selected explicitly.
 When ``geometry_file`` is set for ``model = "vmec"``, GKX regenerates

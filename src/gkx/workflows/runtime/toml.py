@@ -444,6 +444,7 @@ def _resolve_runtime_config_paths(
 
     return replace(
         cfg,
+        source_dir=str(base_dir),
         geometry=replace(
             cfg.geometry,
             vmec_file=resolve_runtime_path(cfg.geometry.vmec_file, base_dir=base_dir),
