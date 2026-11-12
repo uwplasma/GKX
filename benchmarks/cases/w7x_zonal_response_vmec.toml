@@ -36,6 +36,7 @@ y0 = 10.0
 ntheta = 64
 
 [time]
+# Off: ky = 0 zonal chains carry no end damping.
 damp_ends_rate = 0.0
 # Integrate the zero-gradient zonal-flow relaxation through the full horizon.
 # With tprim = fprim = 0, heat flux cannot diagnose completion; the observable

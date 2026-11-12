@@ -1410,6 +1410,140 @@ def test_readme_python_quickstart_imports_exist() -> None:
         assert name is not None
 
 
+def _deck_defaults() -> dict[str, dict[str, object]]:
+    """Every table a deck accepts -> {key: default}; ``None`` marks an unset default."""
+
+    import dataclasses
+    import inspect
+
+    from gkx.config import EndDampingReference, RuntimeConfig
+    from gkx.workflows.linear import run_runtime_linear
+    from gkx.workflows.runtime import toml as deck_loader
+    from gkx.workflows.runtime.commands import RUNTIME_CASE_FIT_KEYS
+
+    cfg = RuntimeConfig()
+    tables: dict[str, dict[str, object]] = {}
+    for field in dataclasses.fields(cfg):
+        if field.name == "source_dir":  # the deck's directory, set by the loader
+            continue
+        table = cfg.species[0] if field.name == "species" else getattr(cfg, field.name)
+        if table is None:
+            table = EndDampingReference
+        tables[field.name] = {
+            f.name: getattr(table, f.name, None) for f in dataclasses.fields(table)
+        }
+    tables["run"] |= dict.fromkeys(deck_loader.RUNTIME_RUN_KEYS)
+    tables["scan"] = dict.fromkeys(deck_loader.RUNTIME_SCAN_KEYS)
+    params = inspect.signature(run_runtime_linear).parameters
+    tables["fit"] = {k: params[k].default for k in RUNTIME_CASE_FIT_KEYS}
+    assert set(tables) == set(deck_loader.RUNTIME_TOML_SECTIONS) - {"schema_version"}
+    return tables
+
+
+def test_inputs_reference_documents_exactly_the_deck_keys() -> None:
+    """docs/inputs.rst lists every key a deck accepts, with its default, and no other."""
+
+    import csv
+
+    text = (ROOT / "docs" / "inputs.rst").read_text(encoding="utf-8")
+    body = text.split("Parameter reference\n-", 1)[1].split("\nRuntime sections\n-", 1)[
+        0
+    ]
+    parts = re.split(r"\n``\[+(\w+)\]+``\n\^+\n", "\n" + body)
+    documented = {
+        name: {
+            row[0].strip("`"): row[2].strip("`")
+            for row in csv.reader(
+                line.strip() for line in block.splitlines() if line.startswith('   "')
+            )
+        }
+        for name, block in zip(parts[1::2], parts[2::2])
+    }
+    defaults = _deck_defaults()
+    assert {n: set(rows) for n, rows in documented.items()} == {
+        n: set(keys) for n, keys in defaults.items()
+    }
+    for name, rows in documented.items():
+        for key, cell in rows.items():
+            if cell == "required":
+                continue
+            try:
+                value = cell if cell == "unset" else tomllib.loads(f"v = {cell}")["v"]
+            except tomllib.TOMLDecodeError:
+                continue  # a described default such as "rk4, auto if nonlinear"
+            expected = defaults[name][key]
+            if cell == "unset":
+                expected, value = expected is None, True
+            elif isinstance(expected, tuple):
+                expected = list(expected)
+            assert value == expected, f"[{name}] {key}: documented {cell}"
+
+
+@pytest.mark.parametrize(
+    "deck",
+    sorted((ROOT / "examples" / "reference_inputs").glob("*.toml")),
+    ids=lambda p: p.stem,
+)
+def test_reference_decks_set_every_key_at_its_default(deck: Path) -> None:
+    """A reference deck names each key; only lines marked ``case:`` leave the default."""
+
+    from gkx.workflows.runtime.toml import load_runtime_from_toml
+
+    cfg, data = load_runtime_from_toml(deck)
+    cfg.validate()
+    defaults = _deck_defaults()
+    section, entry = "", -1
+    cased: set[tuple[str, int, str]] = set()
+    unset: dict[tuple[str, int], set[str]] = {}
+    for line in deck.read_text(encoding="utf-8").splitlines():
+        if head := re.match(r"\[\[?(\w+)\]\]?$", line):
+            section = head[1]
+            entry = entry + 1 if section == "species" else 0
+        elif found := re.match(r"# (\w+) = \(unset\)", line):
+            unset.setdefault((section, entry), set()).add(found[1])
+        elif found := re.match(r"(\w+) = .*# case:", line):
+            cased.add((section, entry, found[1]))
+    legacy = {"damp_ends_amp", "damp_ends_scale_by_dt"}
+    for name in set(data) - {"schema_version"}:
+        for index, table in enumerate(
+            data[name] if name == "species" else [data[name]]
+        ):
+            known = defaults[name]
+            assert set(table) | unset.get((name, index), set()) == set(known) - legacy
+            if name in ("run", "fit"):
+                continue
+            for key, value in table.items():
+                default = known[key]
+                differs = value != (
+                    list(default) if isinstance(default, tuple) else default
+                )
+                assert differs == ((name, index, key) in cased), f"[{name}] {key}"
+    assert {"grid", "time", "geometry", "physics", "collisions", "terms"} <= set(data)
+
+
+def test_a_pinned_end_damping_rate_says_why() -> None:
+    """Decks and examples leave ``damp_ends_rate`` to the default rule or comment the pin."""
+
+    pinned = re.compile(r"\s*damp_ends_rate\s*=")
+    bare: list[str] = []
+    for base, pattern in (
+        ("examples", "*.toml"),
+        ("examples", "*.py"),
+        ("benchmarks", "*.toml"),
+        ("tools/comparison/fixtures", "*.toml"),
+    ):
+        for path in sorted((ROOT / base).rglob(pattern)):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            bare.extend(
+                f"{path.relative_to(ROOT)}:{number + 1}"
+                for number, line in enumerate(lines)
+                if pinned.match(line)
+                and "#" not in line
+                and not (number and lines[number - 1].lstrip().startswith("#"))
+            )
+    assert not bare, bare
+
+
 def test_claim_scope_pages_avoid_promoted_unscoped_claims() -> None:
     violations: list[str] = []
     for path in CLAIM_SCOPE_PAGES:
@@ -2264,6 +2398,9 @@ _RUN_TO_AUDIT_PENDING = {
     "examples/04_nonlinear_stellarator/case_full.toml",
     "benchmarks/cases/w7x_nonlinear_imported_geometry.toml",
     "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml",
+    # Reference decks at the defaults: the Cyclone turbulence case, unmeasured.
+    "examples/reference_inputs/nonlinear.toml",
+    "examples/reference_inputs/kinetic_electrons_em.toml",
 }
 
 # Decks that ship as linear but are promoted into the nonlinear runtime by a
@@ -2470,6 +2607,8 @@ _CFL_MARGIN_NOT_APPLICABLE: dict[str, str] = dict.fromkeys(
         "examples/04_nonlinear_stellarator/case_full.toml",
         "benchmarks/cases/w7x_nonlinear_imported_geometry.toml",
         "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml",
+        "examples/reference_inputs/nonlinear.toml",
+        "examples/reference_inputs/kinetic_electrons_em.toml",
     ),
     "fixed_dt = false: adaptive dt",
 )

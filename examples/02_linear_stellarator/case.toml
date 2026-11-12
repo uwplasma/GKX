@@ -5,6 +5,8 @@ schema_version = 1
 # sampled from a VMEC wout at s = 0.64 through booz_xform_jax; run.py
 # generates the wout with vmex when it is missing. Adiabatic electrons.
 # case_full.toml is the 96x96x48 quasilinear-audit deck.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 [[species]]
 name = "ion"
 charge = 1.0
@@ -28,6 +30,8 @@ ntheta = 32
 nperiod = 1
 
 [time]
+# Read only by a time-route run. The growth rate comes from solver = "krylov" below: 20 time
+# units are too short for a fit here (27 to 380% off at ky 0.2 to 0.6).
 t_max = 20.0
 dt = 0.01
 method = "rk4"

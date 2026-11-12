@@ -33,8 +33,8 @@ What you get when you change nothing, and when to change it.
      - linearized Landau; hypercollisions on the last Hermite moments
      - ``nu = 0`` collisionless runs keep the hypercollisions
    * - End damping
-     - one rate, ``damp_ends_rate``, on every route
-     - never with the step size; see :doc:`numerics`
+     - one rate, ``damp_ends_rate``, on every route; unset in the common deck (30 thermal transits per layer)
+     - never with the step size; kinetic electrons need the default rule (:ref:`common-deck`, :doc:`numerics`)
    * - Precision
      - ``float32``
      - ``float64`` for eigensolves, conditioning and residual checks
@@ -663,6 +663,248 @@ species across the end layer, and every run prints it. Below about 1 e-fold
 the kinetic-electron and KBM rates are not converged. Rerun at 3x above and
 below the printed rate and at ``nperiod + 1``; a converged rate moves by less
 than its tolerance in all three (:ref:`end-damping`).
+
+.. _common-deck:
+
+Common deck
+-----------
+
+``examples/common_input.toml`` names only the keys that differ from the defaults.
+The decks of ``examples/`` start from it. In ``examples/``, ``benchmarks/`` and
+the parity fixtures, a comment on or above each pinned end-damping rate and
+each departure from the stepper of its kind says why. Two choices were measured
+for the common deck: the end-damping rate and the linear time stepping. Setup:
+one A4000 (nonlinear, float32) and a laptop CPU (linear, float64), November
+2026.
+
+**End-damping rate.** The common deck leaves ``damp_ends_rate`` unset, so the
+rate is 30 e-folds per thermal transit of the fastest kinetic species across
+the layer; the decks that used to pin 0.1 now leave it unset.
+
+.. list-table:: Nonlinear heat flux, ``damp_ends_rate = 0.1`` against the default rule
+   :header-rows: 1
+   :widths: 30 20 16 22 12
+
+   * - Case (grid, ``(Nl, Nm)``)
+     - 0.1
+     - Default rule
+     - Default over 0.1
+     - Note
+   * - Cyclone s-alpha, 64x64x24, (4, 8), ``t = 400``
+     - 9.08 +- 0.12
+     - 7.29 +- 0.18 (:math:`\nu` = 9.8)
+     - -20%
+     - unconverged in ``Nx``
+   * - Cyclone s-alpha, 192x64x24
+     - 4.96 +- 0.13
+     - 5.16 +- 0.08
+     - +4%
+     -
+   * - Cyclone Miller, 192x64x24
+     - 6.67 +- 0.11
+     - 6.81 +- 0.19
+     - +2%
+     -
+   * - HSX-like QHS, 96x96x48, ``t = 300``
+     - 6.95 +- 0.10
+     - 7.17 +- 0.10
+     - +3%
+     -
+   * - W7-X-like QI, 96x96x48, ``t = 300``
+     - 5.85 +- 0.18
+     - 5.33 +- 0.20
+     - -9%
+     - windows not stationary
+   * - Cyclone s-alpha 64x64x24, rate scan
+     - rate 0: 9.57; 0.1: 9.08; 3.3: 7.00; 9.8: 7.29; 29.5: 7.20
+     -
+     -
+     - step halves at 29.5
+   * - Kinetic electrons, 16x16x16, ES, ``t = 20``
+     - 2.3e4 +- 4e3 (4 min)
+     - 2.5e-6, no runaway (one seed, 73 min, mean step 1e-5)
+     -
+     - explicit ``rk4-pi``
+   * - KBM :math:`\beta` = 0.015, 16x16x16, ``t = 60``
+     - 6.1e3 +- 2e2 (2 min)
+     - not finished after 2 hours
+     -
+     - explicit ``rk4-pi``
+
+Heat fluxes are the mean over the saturated window, :math:`Q_i/Q_{GB}`, with the
+Sokal standard error (transient dropped at the first crossing of the
+second-half median, at least 20 correlation times); the rows with two seeds pool
+them. Run-to-run scatter of one seed is 0.1 to 0.3.
+
+.. list-table:: Linear :math:`\gamma` against the converged line, ``k_y`` = 0.2 to 0.6
+   :header-rows: 1
+   :widths: 30 14 18 18 20
+
+   * - Case (``(Nl, Nm)`` = (4, 8); (4, 16) with electrons)
+     - Line
+     - Default rule
+     - 0.1
+     - Off
+   * - s-alpha and Miller, adiabatic electrons
+     - ``nperiod`` 1
+     - -7 to +3%
+     - +2 to +27%
+     - +2 to +37%
+   * -
+     - 2
+     - <= 0.2%
+     - <= 0.2%
+     - <= 0.3%
+   * -
+     - 3
+     - < 0.01%
+     - < 0.01%
+     - 0 (reference)
+   * - HSX-like QHS, ``k_y`` = 0.4
+     - ``npol`` 1, 2
+     - -28%, -11%
+     - -15%, -10%
+     - -3%, +10%
+   * -
+     - 3
+     - +0.3%
+     - +0.2%
+     - 0 (reference)
+   * - W7-X-like QI, ``k_y`` = 0.4
+     - ``npol`` 1, 2
+     - -12%, -47%
+     - -50%, -4%
+     - -31%, +33%
+   * -
+     - 3
+     - +0.6%
+     - +0.2%
+     - 0 (reference)
+   * - Kinetic electrons, ES, ``k_y`` = 0.2 to 0.6
+     - ``nperiod`` 2
+     - -0.3 to -6%
+     - spurious: -1356 to +463%
+     - spurious: +73 to +492%
+   * - Kinetic electrons, :math:`\beta` = 1e-4, ``k_y`` = 0.4
+     - ``nperiod`` 2
+     - -0.3%
+     - +97%
+     -
+   * - KBM :math:`\beta` = 0.015, ``k_y`` = 0.2
+     - ``nperiod`` 1, 2
+     - -82%, -6.7%
+     - spurious: +170%, -46%
+     - not run
+
+Errors are against ``nperiod = 3`` (``npol = 3``) with the rate off, or with the
+default rule where the rate off is spurious (kinetic electrons). Doubling
+``ntheta`` from 32 to 64 moves :math:`\gamma` by less than 0.01% in every case.
+For kinetic electrons the default rule is on a plateau: :math:`\gamma` at
+:math:`k_y` = 0.4 moves by 0.4% for a rate between 1/3 and 10 times the default
+(66 to 1990), is 2% high at a rate of 10, and is wrong at 1 and below. The KBM
+:math:`\gamma` moves by 0.8% between 1/3 and 3 times the default.
+
+**Decision.**
+
+* One value for the common deck: the default rule, with no pin. At converged
+  line length and radial resolution it agrees with 0.1 to 9% or better, within
+  two standard errors (linear: 2% or less at ``nperiod``/``npol`` 3; nonlinear:
+  +4%, +2%, +3% and -9% on Cyclone, Miller, HSX and QI), and it costs no extra
+  steps with adiabatic electrons: the mean step is 0.0998 against 0.0996 on
+  Cyclone.
+* The rate has to be the default rule, not 0.1, wherever kinetic electrons are
+  present. Without a layer the electron streaming reflects at the line ends and
+  the linear problem returns spurious unstable modes; the nonlinear runs
+  reach :math:`Q` of 10^3 to 10^4. A rate of 1 or below does not hold the
+  electrons either; 10 is within 2%.
+* Short lines are not rescued by any rate. At ``nperiod = 1`` (``npol`` below 3
+  for the stellarators) :math:`\gamma` changes by tens of percent with the
+  rate, and the answer without a layer is also unconverged. Use ``nperiod`` of
+  at least 2 for linear tokamak runs and ``npol`` of at least 3 for
+  stellarators. The stellarator :math:`\gamma` still moves with the line at
+  ``npol`` 4 (+39% QHS, -25% QI) at every rate, so check the next value
+  (:ref:`end-damping`).
+* Cost: an explicit stepper must keep rate :math:`\times\ \Delta t` below about
+  0.3. For kinetic electrons at ``nperiod = 1`` the default rate is 598, which
+  holds an explicit ``rk4-pi`` step to 5e-4, at least 5 times smaller than the
+  electron-streaming step. The two kinetic-electron rows took 2 to 4 minutes
+  pinned; with the default rule the electrostatic run took 73 minutes (mean step
+  1e-5) and the KBM run did not finish in 2 hours. The
+  default ``imex-ark3`` of kinetic electrons at
+  :math:`\beta \le 3\times10^{-4}` advances the layer implicitly
+  with the rest of the stiff terms (:doc:`examples`), so the limit does not apply
+  to it: the tutorial deck runs at the same step, 0.1, with either rate. On a
+  4x4x8 grid its error estimate does see the rate (mean step 0.041 against 0.063).
+* Pins that remain, each with a comment: the GX-matching rates of
+  ``tools/comparison/fixtures/parity``; the fixed-step KBM replays of
+  ``benchmarks/cases/kbm_nonlinear*.toml`` (recorded at 0.1, CFL margin gated
+  in ``tests/release``); the explicit pins of ``examples/05_kinetic_electrons``
+  (the step comparison); ``examples/10_vmex_optimization`` (recorded campaign);
+  and rate 0 where the case has no field-line ends or no layer (zonal and
+  periodic decks, the electron-scale ETG and the provisional TEM deck).
+
+**Linear time stepping.** Tutorial resolution, default precision, laptop CPU,
+warm wall time per solve against the certified eigenpair (``solver = "krylov"``).
+
+.. list-table:: Fixed ``rk2`` and ``rk4`` + CFL against the eigensolver
+   :header-rows: 1
+   :widths: 30 17 17 17 19
+
+   * - Deck
+     - ``rk2``, fixed ``dt``
+     - ``rk4`` + CFL
+     - Eigensolver (banded, adaptive)
+     - Note
+   * - 01 s-alpha ITG, (2, 4), ``t = 80``
+     - 0.05% max, 0.16 s
+     - 0.04% max, 0.28 s
+     - 0.83 s, 0.10 s
+     - cold 0.17 s against 0.71 s
+   * - 06 EM, :math:`\beta` = 0.015, (4, 8), ``t = 80``
+     - 0.08% max, 0.58 s
+     - 0.08% max, 1.13 s
+     - 3.4 s, 0.77 s
+     -
+   * - 01 ``case_full``, (8, 16), ``t = 150``
+     - 0.03%, 9.6 s
+     - 0.03%, 19.8 s
+     - 23.9 s, 14.3 s
+     -
+   * - 07 Coulomb operator, ``t = 20`` against 60
+     - 9% low at 20
+     - same
+     - no eigensolver for this operator
+     - ``t`` 60: 0.06% of ``t`` 200
+   * - 08 quasilinear, 11 scan, ``t = 20``
+     - 20 to 38% low
+     - same
+     - 1.2 s, 0.20 s
+     - horizon, not stepper
+   * - 02 stellarator, ``t = 20``
+     - 27 to 380% off
+     - same
+     - 0.95 s, 0.14 s
+     - horizon, not stepper
+
+**Decision.** The tutorials with ``solver = "time"`` (01, 06, 07) keep fixed
+``rk2``: the same :math:`\gamma` as ``rk4`` + CFL to 0.05% (:math:`\omega` to
+0.1%) at 0.5 to 0.6 times the wall time, and the run warns when ``dt`` exceeds
+the CFL-stable step. ``solver = "auto"`` runs the deck's own time route first
+(plus under 0.05 s on the tutorials), so its :math:`\gamma` is that route's; it
+reaches the eigensolver only when the fit is rejected. A deck with no ``dt``
+keeps ``rk4`` + CFL, because the controller needs no tuning. The growth rate is limited by the horizon, not by the stepper: the time
+route needs :math:`\gamma t_{max} \gtrsim 7`, so the tutorials whose
+:math:`t_{max}` = 20 cannot reach it (08, 11) or have too weak a mode (02) now
+use ``solver = "krylov"``, and 07, which has no eigensolver for its operator,
+runs to ``t = 60``. Research and parity decks keep the stepper of the reference
+they reproduce.
+
+**Cases built in Python.** A nonlinear case built from ``RuntimeConfig`` with no
+``dt`` runs ``rk4`` + CFL: the TOML loader, which sees the physics, is the only
+place that selects ``auto`` or ``imex-ark3``. The two are not merged because
+``TimeConfig`` is shared with the linear routes, which accept only the plain
+schemes. Set ``method = "auto"`` on the case (``replace(case.time, method="auto")``)
+to get the deck behavior; the run prints the stepper it chose.
 
 Collisions
 ----------

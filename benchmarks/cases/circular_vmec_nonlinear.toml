@@ -26,8 +26,6 @@ ntheta = 24
 nperiod = 1
 
 [time]
-# Explicit nonlinear end-damping rate.
-damp_ends_rate = 0.1
 t_max = 20.4
 sample_stride = 10
 diagnostics_stride = 10

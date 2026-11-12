@@ -2488,6 +2488,9 @@ def test_chain_imex_dt_is_not_bound_by_the_electron_collision_rate():
             dt=0.05,
             t_max=2.0,
             run_to="t_max",
+            # The weak layer the deck used to pin: the default rate (598) damps the
+            # explicit-collision blow-up this test needs.
+            damp_ends_rate=0.1,
         ),
     )
 
@@ -2609,6 +2612,9 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
             t_max=horizon,
             chunk_steps=chunk_steps,
             diagnostics_interval=0.025 if chunk_steps is not None else None,
+            # The weak layer the deck used to pin: on this 4x4x8 grid the default rate (598)
+            # keeps the error-controlled step at or below 0.05 and dt never grows.
+            damp_ends_rate=0.1,
         ),
     )
     d = gkx.solve(case, ky_target=case.run.ky, Nl=2, Nm=3).diagnostics

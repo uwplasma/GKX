@@ -5,6 +5,8 @@ schema_version = 1
 # bounded linear spectrum used for quasilinear calibration audits. The
 # uncalibrated mixing-length output is a model diagnostic and must be compared
 # against nonlinear windows before making absolute-flux claims.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"
@@ -29,6 +31,8 @@ ntheta = 48
 nperiod = 1
 
 [time]
+# A bounded run for the quasilinear audit: 2 time units is under one e-folding at gamma ~ 0.1,
+# so a time-route growth rate is not converged. Use solver = "krylov" for a rate.
 t_max = 2.0
 dt = 0.005
 method = "rk4"
@@ -104,7 +108,6 @@ csat = 1.0
 gamma_floor = 0.0
 include_stable_modes = false
 channels = ["es"]
-write_spectrum = true
 
 [run]
 ky = 0.047619047619047616

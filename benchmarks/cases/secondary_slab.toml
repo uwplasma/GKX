@@ -24,6 +24,7 @@ ntheta = 8
 nperiod = 1
 
 [time]
+# Off: the boundary is periodic, so there are no field-line ends to absorb at.
 damp_ends_rate = 0.0
 # run_to must stay "t_max". This deck ships as the stage-1 linear seed, but
 # scripts/benchmarks/secondary_slab_workflow.py promotes it through

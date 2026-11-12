@@ -180,6 +180,36 @@ def _validate_removed_time_keys(data: dict[str, Any]) -> None:
     )
 
 
+# Deck keys no code read, with the value older resolved decks wrote for each.
+_REMOVED_KEYS: dict[str, dict[str, Any]] = {
+    "geometry": {"geometry_helper_python": None, "geometry_helper_repo": None},
+    "physics": {"tau_fac": None, "z_ion": 1.0},
+    "expert": {"dealias_kz": False},
+    "time": {"save_state": False},
+    "parallel": {"profile": False},
+    "quasilinear": {"species": "all", "delta_ky": "auto", "write_spectrum": True},
+}
+
+
+def _drop_removed_keys(data: dict[str, Any]) -> None:
+    """Drop removed keys at their old value (older resolved decks write them); refuse others."""
+
+    gone = []
+    for section, keys in _REMOVED_KEYS.items():
+        table = data.get(section) or {}
+        gone += [
+            f"[{section}] {key}"
+            for key, old in keys.items()
+            if key in table and table.pop(key) != old
+        ]
+    if gone:
+        raise ValueError(
+            "removed deck key(s) that no code read: "
+            + ", ".join(gone)
+            + "; delete them (the temperature ratio is [physics] tau_e)"
+        )
+
+
 def toml_shorthand_command(data: dict[str, Any]) -> str:
     """Return the executable command used for direct TOML path shorthand."""
 
@@ -486,6 +516,7 @@ def load_runtime_from_toml(path: str | Path) -> tuple[RuntimeConfig, dict]:
     data = load_toml(path)
     _validate_runtime_schema_version(data)
     _validate_removed_time_keys(data)
+    _drop_removed_keys(data)
     reject_unknown_keys(str(path), data, RUNTIME_TOML_SECTIONS)
     for name, allowed in (("run", RUNTIME_RUN_KEYS), ("scan", RUNTIME_SCAN_KEYS)):
         if isinstance(data.get(name), dict):

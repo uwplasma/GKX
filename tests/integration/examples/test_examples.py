@@ -202,8 +202,9 @@ def test_gallery_layout_matches_the_numbered_groups():
         "13_advanced_time_stepping",
     ]
     extra = {p.name for p in EXAMPLES.iterdir() if p.is_dir()} - set(GROUPS)
-    # vmec/ holds the shared VMEC input decks; outputs/ is a user's run directory.
-    assert extra <= {"vmec", "outputs", "__pycache__"}
+    # vmec/ holds the shared VMEC input decks, reference_inputs/ the every-key decks;
+    # outputs/ is a user's run directory.
+    assert extra <= {"vmec", "reference_inputs", "outputs", "__pycache__"}
     for group in GROUPS:
         assert (EXAMPLES / group / "run.py").is_file(), group
     index = (EXAMPLES / "README.md").read_text(encoding="utf-8")
