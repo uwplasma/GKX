@@ -231,7 +231,8 @@ recursive = true
 # 70070 -> 70112: `--set section.key=value` deck overrides in the executable.
 # 70112 -> 70124: removed-key mechanism, measured after merging main.
 # 70124 -> 70151: explicit CFL bound measures the end absorber (compile-cached Arnoldi).
-baseline = 70151
+# 70151 -> 70157: gain bound comment + jit note in measured_streaming_frequency.
+baseline = 70157
 target = 45000
 
 [[line_budget_policy.counts]]

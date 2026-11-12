@@ -190,6 +190,7 @@ def _build_time_step_limits(
 _STREAMING_ARNOLDI_STEPS = 30
 
 
+# TermConfig float leaves are traced here: no Python branches on them.
 @partial(jax.jit, static_argnames="shape")
 def _streaming_operator(G, *, keep, cache, params, terms, shape):
     from gkx.terms.assembly import assemble_rhs_cached
@@ -224,7 +225,7 @@ def measured_streaming_frequency(
     streaming bound) adds the end absorber, which damps ``h`` and so is amplified
     far past ``nu_end`` by the field solve (|lambda| = 2.8e5 at the default rate
     598 on the Cyclone kinetic-electron deck); it is skipped when even a gain of
-    500 (light species) or 4 on its rate stays below that bound. Otherwise only
+    5000 (light species) or 40 on its rate stays below that bound. Otherwise only
     for decks with a light kinetic species (v_t ratio > 4); returns 0 otherwise or
     when the cache is traced.
     """
@@ -241,7 +242,12 @@ def measured_streaming_frequency(
         rate = float(np.max(np.asarray(cache.damp_profile))) * float(
             params.end_damping_rate(z_extent, cache.damp_profile.dtype)
         )
-        absorber = rate > 0.0 and (500.0 if light else 4.0) * rate >= absorber_vs
+        # Gain bound on the field-solve amplification of the absorber rate:
+        # measured 470 on Cyclone at m_e/m_i = 1/1836 (x473 at rate 598). The bound
+        # is generous because an unnecessary Arnoldi costs about 2 s while a wrong
+        # skip leaves the explicit step too large and gives NaN.
+        gain = 5000.0 if light else 40.0
+        absorber = rate > 0.0 and gain * rate >= absorber_vs
     if not (absorber or light):
         return 0.0
     terms = TermConfig(

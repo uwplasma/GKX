@@ -2374,6 +2374,33 @@ def test_measured_streaming_frequency_includes_the_amplified_end_absorber():
     )
 
 
+def test_measured_streaming_frequency_skips_the_absorber_below_the_gain_bound():
+    _, params, cache, _ = _tiny_kinetic_electron_box()
+    params = replace(params, damp_ends_rate=100.0)
+    base = measured_streaming_frequency(params, cache, nl=KE_NL, nm=KE_NM)
+    # rate * gain (5000, light species) stays below the analytic bound: no absorber
+    skipped = measured_streaming_frequency(
+        params, cache, nl=KE_NL, nm=KE_NM, absorber_vs=1.0e12
+    )
+    assert skipped == base
+    with_absorber = measured_streaming_frequency(
+        params, cache, nl=KE_NL, nm=KE_NM, absorber_vs=0.0
+    )
+    assert with_absorber > base
+
+
+def test_measured_streaming_frequency_zero_damp_profile_keeps_streaming_only():
+    _, params, cache, _ = _tiny_kinetic_electron_box()
+    quiet = replace(cache, damp_profile=jnp.zeros_like(cache.damp_profile))
+    base = measured_streaming_frequency(params, quiet, nl=KE_NL, nm=KE_NM)
+    assert base > 0.0  # light species: streaming-only measure still runs
+    # rate == 0 must not select the absorber even though 0 >= absorber_vs holds
+    assert (
+        measured_streaming_frequency(params, quiet, nl=KE_NL, nm=KE_NM, absorber_vs=0.0)
+        == base
+    )
+
+
 @pytest.mark.parametrize("method", ["rk4", "rk4-pi"])
 def test_explicit_step_respects_a_large_end_damping_rate(method):
     """A stiff absorber keeps the adaptive explicit run finite and inside RK4's real axis."""
