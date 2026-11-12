@@ -42,6 +42,7 @@ model = "vmec"
 vmec_file = "../../examples/vmec/wout_nfp3_QI_fixed_resolution_final.nc"
 torflux = 0.64
 alpha = 0.0
+# Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
 npol = 1.0
 
 [init]

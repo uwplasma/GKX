@@ -54,8 +54,9 @@ recursive = true
 # 124 -> 125: Lawson integrating-factor steppers.
 # 125 -> 128: the three package markers of gkx.solvers, gkx.solvers.linear and gkx.solvers.nonlinear
 # replace sixteen flat solvers_* modules; 128 -> 129: the saturated-window heat flux and sheared
-# transport drivers leave solvers/nonlinear/diagnostics.py for solvers/nonlinear/transport_window.py.
-baseline = 129
+# transport drivers leave solvers/nonlinear/diagnostics.py for solvers/nonlinear/transport_window.py;
+# 129 -> 130: gkx.case_paths (deck-relative overrides, field-line length checks).
+baseline = 130
 target = 45
 
 [[topology_policy.counts]]
@@ -226,7 +227,8 @@ recursive = true
 # transport_window.py; no code added).
 # 70149 -> 70150: IMEX chunk scan fix.
 # 70150 -> 69996: the Pallas drift kernel is removed; the jnp drift terms serve every backend.
-baseline = 69996
+# 69996 -> 70070: gkx.case_paths (deck-relative overrides, field-line length checks).
+baseline = 70070
 target = 45000
 
 [[line_budget_policy.counts]]

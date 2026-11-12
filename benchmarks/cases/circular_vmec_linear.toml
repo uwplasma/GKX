@@ -24,7 +24,6 @@ Ly = 62.8
 boundary = "linked"
 y0 = 20.0
 ntheta = 32
-nperiod = 2
 
 [time]
 t_max = 10.0
@@ -37,6 +36,7 @@ model = "vmec"
 vmec_file = "../../examples/vmec/wout_circular_tokamak.nc"
 torflux = 0.64
 alpha = 0.0
+# Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
 npol = 1.0
 R0 = 2.77778
 
