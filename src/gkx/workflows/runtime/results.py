@@ -136,6 +136,8 @@ class RuntimeLinearResult(_ResultArtifacts):
     state: np.ndarray | None = None
     z: np.ndarray | None = None
     eigenfunction: np.ndarray | None = None
+    # |B|, grad-B and curvature drift on ``z``, shape (3, Nz); drawn by the figure.
+    field_line: np.ndarray | None = None
     fit_window_tmin: float | None = None
     fit_window_tmax: float | None = None
     fit_signal_used: str | None = None

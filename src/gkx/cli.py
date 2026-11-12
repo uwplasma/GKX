@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+import numpy as np
+
 from gkx.workflows.runtime import (
     wout as runtime_wout,
 )
@@ -16,10 +18,6 @@ from gkx.workflows.runtime.toml import (
     load_toml,
 )
 from gkx._version import __version__
-from gkx.artifacts.plotting import (
-    linear_runtime_panel_figure,
-    plot_saved_output,
-)
 from gkx.geometry.miller_eik import generate_runtime_miller_eik
 from gkx.geometry.vmec_eik import generate_runtime_vmec_eik
 from gkx.artifacts.io import write_runtime_linear_artifacts
@@ -185,22 +183,19 @@ def _status(message: str) -> None:
 def _print_intro(toml_path: Path) -> None:
     settings = DEFAULT_DEMO_SETTINGS
     print(
-        "No input specified; running the default Cyclone initial-value demo.",
+        "gkx: no input given, running the built-in Cyclone ITG demo "
+        f"(ky={settings['ky']}, Nl={settings['Nl']}, Nm={settings['Nm']}, "
+        f"{settings['method']}, {settings['steps']} steps; about 15 s).",
         flush=True,
     )
-    print(
-        "The first run includes JAX compilation; progress reports elapsed time and ETA.",
-        flush=True,
-    )
-    print(
-        f"ky={settings['ky']} Nl={settings['Nl']} Nm={settings['Nm']} "
-        f"method={settings['method']} dt={settings['dt']} steps={settings['steps']}",
-        flush=True,
-    )
-    print(f"wrote reproducible input: {toml_path}", flush=True)
+    print(f"gkx: input written to {toml_path}", flush=True)
 
 
-def _write_plot(result: Any) -> Path:
+def _write_plot(result: Any, reference: Any) -> Path:
+    import matplotlib.pyplot as plt
+
+    from gkx.artifacts.plotting import linear_runtime_panel_figure
+
     path = default_demo_plot_path()
     fig, _axes = linear_runtime_panel_figure(
         t=result.t,
@@ -209,17 +204,21 @@ def _write_plot(result: Any) -> Path:
         eigenfunction=result.eigenfunction,
         gamma=float(result.gamma),
         omega=float(result.omega),
-        title="GKX default Cyclone initial-value demo",
+        ky=float(result.ky),
+        field_line=result.field_line,
+        fit_window=(result.fit_window_tmin, result.fit_window_tmax),
+        reference=reference,
+        title="GKX Cyclone base case: ITG with adiabatic electrons",
     )
-    fig.savefig(path, dpi=220, bbox_inches="tight")
-    import matplotlib.pyplot as plt
-
+    fig.savefig(path, dpi=160)
     plt.close(fig)
     return path
 
 
-def run_default_linear_demo() -> int:
+def run_default_linear_demo(*, show: bool = False) -> int:
     """Run one small runtime case and write its TOML, data, and figure locally."""
+
+    from gkx.benchmarking_shared import load_cyclone_reference
 
     settings = DEFAULT_DEMO_SETTINGS
     toml_path = default_demo_toml_path()
@@ -243,14 +242,23 @@ def run_default_linear_demo() -> int:
         **fit,
     )
     paths = write_runtime_linear_artifacts(default_demo_artifact_base(), result)
-    plot_path = _write_plot(result)
-    print(
-        f"gamma={float(result.gamma):.6f} omega={float(result.omega):.6f}", flush=True
+    ref = load_cyclone_reference()
+    plot_path = _write_plot(result, ref)
+    ref_gamma, ref_omega = (
+        np.interp(result.ky, ref.ky, y) for y in (ref.gamma, ref.omega)
     )
-    for path in paths.values():
+    print(
+        f"\nky = {result.ky:.2f}: gamma = {result.gamma:.4f}, omega = {result.omega:.4f}"
+        f" (reference {ref_gamma:.4f}, {ref_omega:.4f})",
+        flush=True,
+    )
+    for path in (*paths.values(), plot_path):
         print(f"saved {path}", flush=True)
-    print(f"saved {plot_path}", flush=True)
-    print(f"rerun with: gkx {toml_path} --progress", flush=True)
+    print(f"rerun with: gkx {toml_path} --plot", flush=True)
+    if show:
+        from gkx.artifacts.plotting import show_saved_figures
+
+        show_saved_figures([plot_path])
     return 0
 
 
@@ -295,6 +303,11 @@ def _add_plot_flags(cmd: argparse.ArgumentParser) -> None:
         "--no-plots",
         action="store_true",
         help="Skip the figures a completed run writes beside its output",
+    )
+    cmd.add_argument(
+        "--plot",
+        action="store_true",
+        help="Also open the figures in a window (they are always saved as PNG)",
     )
 
 
@@ -682,9 +695,11 @@ def main() -> int:
     # while a user edits a TOML, and it is the case that was paying a full
     # cold compile every time. See gkx.compilation_cache.
     enable_persistent_compilation_cache()
-    if not argv:
-        return run_default_linear_demo()
+    if not argv or argv == ["--plot"]:
+        return run_default_linear_demo(show=bool(argv))
     if argv[0] in {"plot", "--plot"}:
+        from gkx.artifacts.plotting import plot_saved_output
+
         return plot_saved_output_command(argv, plot_saved_output=plot_saved_output)
 
     shorthand_args = _direct_config_shorthand_args(argv)

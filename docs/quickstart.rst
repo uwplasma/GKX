@@ -37,14 +37,17 @@ The demo is the Cyclone s-alpha ITG case at ``ky = 0.3`` with
 ``Nl = 16`` Laguerre and ``Nm = 48`` Hermite moments on a two-period field
 line (``Nz = 24``), integrated with ``rk4`` at ``dt = 0.008`` for 12000 steps
 (``t = 96``). It prints ``gamma = 0.0928`` and ``omega = 0.2816`` against the
-reference 0.0930 and 0.2820, and takes about fifteen seconds on a laptop CPU. The plot is the standard two-panel linear view: the log-scale
-``|\phi|^2`` time history with fitted ``(\gamma, \omega)`` on the left, and
-the normalized real/imaginary eigenfunction on the right. To rerun the same
-numerical case explicitly:
+reference 0.0930 and 0.2820, and takes about fifteen seconds on a laptop CPU.
+The figure has four panels: the log-scale ``|\phi|^2`` history with the fit
+window and fitted ``(\gamma, \omega)``, the normalized eigenfunction along the
+field line, ``|B|`` and the magnetic drift on the same line, and
+``(\gamma, \omega)`` against the tabulated reference over ``ky``. ``gkx --plot``
+also opens it in a window. To rerun the same numerical case explicitly:
+
 
 .. code-block:: bash
 
-   gkx gkx_default_linear.toml --progress
+   gkx gkx_default_linear.toml --plot --progress
 
 A short nonlinear run (50 steps of the Cyclone nonlinear deck) and a re-plot
 of either output:

@@ -456,14 +456,25 @@ def _write_runtime_linear_eigenfunction(base: Path, result: Any) -> str | None:
         return None
     eig_path = Path(f"{base}.eigenfunction.csv")
     eig = np.asarray(result.eigenfunction)
+    line = getattr(result, "field_line", None)
+    extra = [] if line is None else list(np.asarray(line, dtype=float))
     _write_csv(
         eig_path,
-        headers=["z", "eigen_real", "eigen_imag", "eigen_abs"],
+        headers=[
+            "z",
+            "eigen_real",
+            "eigen_imag",
+            "eigen_abs",
+            "bmag",
+            "gbdrift",
+            "cvdrift",
+        ][: 4 + len(extra)],
         cols=[
             np.asarray(result.z, dtype=float),
             np.real(eig),
             np.imag(eig),
             np.abs(eig),
+            *extra,
         ],
     )
     return str(eig_path)

@@ -230,7 +230,8 @@ recursive = true
 # 69996 -> 70070: gkx.case_paths (deck-relative overrides, field-line length checks).
 # 70070 -> 70112: `--set section.key=value` deck overrides in the executable.
 # 70112 -> 70124: removed-key mechanism, measured after merging main.
-baseline = 70124
+# 70124 -> 70247: `--plot` and the four-panel linear summary figure (growth, eigenfunction, field-line geometry, reference).
+baseline = 70247
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -381,11 +381,15 @@ def _prepare_runtime_command_config(
     return cfg, data
 
 
-def runtime_output_path(args: Any, cfg: RuntimeConfig) -> str | None:
+def runtime_output_path(
+    args: Any, cfg: RuntimeConfig, *, default_suffix: str = ""
+) -> str | None:
     """Return the executable output path override or TOML output path."""
 
     if getattr(args, "out", None) is not None:
         return str(args.out)
+    if cfg.output.path is None and getattr(args, "plot", False):
+        return Path(args.config).stem + default_suffix  # --plot needs outputs to draw
     return cfg.output.path
 
 
@@ -470,6 +474,7 @@ def auto_plot_runtime_outputs(
     paths: Mapping[str, str],
     *,
     enabled: bool,
+    show: bool = False,
 ) -> list[str]:
     """Draw and announce the figure set for a run that has finished writing.
 
@@ -490,6 +495,10 @@ def auto_plot_runtime_outputs(
         return []
     for figure in written:
         print(f"saved {figure}")
+    if show:
+        from gkx.artifacts.plotting import show_saved_figures
+
+        show_saved_figures(written)
     return written
 
 
@@ -612,6 +621,7 @@ def run_runtime_linear_command(args: Any) -> int:
         "linear",
         written.get("linear", {}),
         enabled=should_write_plots(args, cfg),
+        show=bool(getattr(args, "plot", False)),
     )
     return 0
 
@@ -653,6 +663,7 @@ def scan_runtime_linear_command(args: Any) -> int:
         "linear_scan",
         written,
         enabled=should_write_plots(args, cfg),
+        show=bool(getattr(args, "plot", False)),
     )
     return 0
 
@@ -684,7 +695,7 @@ def run_runtime_nonlinear_command(args: Any) -> int:
         show_progress=opts.show_progress,
     )
 
-    out_path = runtime_output_path(args, cfg)
+    out_path = runtime_output_path(args, cfg, default_suffix=".out.nc")
     kx = run_cfg.get("kx")
     result, paths = run_runtime_nonlinear_with_artifacts(
         cfg,
@@ -710,6 +721,7 @@ def run_runtime_nonlinear_command(args: Any) -> int:
         "nonlinear",
         paths if out_path is not None else {},
         enabled=should_write_plots(args, cfg),
+        show=bool(getattr(args, "plot", False)),
     )
     return 0
 

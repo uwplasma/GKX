@@ -143,9 +143,8 @@ def test_cli_without_args_runs_default_demo(
         return fake_result
 
     patch_runtime(monkeypatch, "run_runtime_linear", _fake_run)
-    patch_runtime(
-        monkeypatch,
-        "linear_runtime_panel_figure",
+    monkeypatch.setattr(
+        "gkx.artifacts.plotting.linear_runtime_panel_figure",
         lambda **_kwargs: (_FakeFigure(), None),
     )
     monkeypatch.setattr("matplotlib.pyplot.close", lambda *_args, **_kwargs: None)
@@ -154,13 +153,38 @@ def test_cli_without_args_runs_default_demo(
     code = main()
     out = capsys.readouterr().out
     assert code == 0
-    assert "No input specified" in out
+    assert "no input given" in out
     assert run_kwargs["solver"] == "time"
     assert run_kwargs["sample_stride"] == 50
     assert run_kwargs["show_progress"] is True
     assert (tmp_path / "gkx_default_linear.png").exists()
     assert (tmp_path / "gkx_default_linear.toml").exists()
     assert (tmp_path / "gkx_default_linear.summary.json").exists()
+
+
+def test_cli_plot_flag_draws_the_linear_summary_page(monkeypatch, tmp_path) -> None:
+    """``--plot`` writes the multi-panel figure, geometry panel included."""
+
+    monkeypatch.chdir(tmp_path)
+    z = np.linspace(-np.pi, np.pi, 16)
+    result = RuntimeLinearResult(
+        ky=0.3,
+        gamma=0.1,
+        omega=0.3,
+        selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
+        t=np.linspace(0.1, 1.0, 8),
+        signal=np.exp((0.1 - 0.3j) * np.linspace(0.1, 1.0, 8)),
+        z=z,
+        eigenfunction=np.exp(-(z**2)) + 0j,
+        field_line=np.stack([1 + 0.1 * np.cos(z), np.cos(z), np.sin(z)]),
+    )
+    patch_runtime(monkeypatch, "run_runtime_linear", lambda _cfg, **_kw: result)
+    patch_runtime(
+        monkeypatch, "load_runtime_from_toml", lambda _p: (RuntimeConfig(), {})
+    )
+    monkeypatch.setattr(sys, "argv", ["gkx", "run", "--config", "case.toml", "--plot"])
+    assert main() == 0
+    assert (tmp_path / "case.plot.png").stat().st_size > 10_000
 
 
 def test_cli_global_plot_renders_linear_scan_bundle(

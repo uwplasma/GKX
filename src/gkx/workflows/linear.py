@@ -55,6 +55,22 @@ def _normalize_linear_solver_name(solver: str) -> str:
     return solver_key
 
 
+def _field_line(geom: Any, theta: Any) -> np.ndarray | None:
+    """|B|, grad-B drift and curvature drift along the field line, shape (3, Nz).
+
+    None for a sampled geometry whose own grid is not the solver's ``theta``.
+    """
+
+    try:
+        cv, gb, _cv0, _gb0 = geom.drift_coeffs(theta)
+        rows = (geom.bmag(theta), gb, cv)
+    except ValueError:
+        return None
+    return np.stack(
+        [np.broadcast_to(np.asarray(r, float), np.shape(theta)) for r in rows]
+    )
+
+
 @dataclass(frozen=True)
 class _LinearRuntimeContext:
     cfg: RuntimeConfig
@@ -566,6 +582,7 @@ def _fit_linear_time_series(
         else np.asarray(trajectory.g_last),
         z=fit_result.z,
         eigenfunction=fit_result.eigenfunction,
+        field_line=_field_line(ctx.geom, ctx.grid.z),
         fit_window_tmin=fit_result.fit_window_tmin,
         fit_window_tmax=fit_result.fit_window_tmax,
         fit_signal_used=fit_result.fit_signal_used,
