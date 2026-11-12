@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -313,8 +313,7 @@ def linear_runtime_panel_figure(
     line = None if field_line is None else np.asarray(field_line, dtype=float)
     if line is not None and line.shape[-1] != np.size(z):
         line = None
-    show_ref = reference is not None and ky is not None
-    n = 2 + (line is not None) + show_ref
+    n = 2 + (line is not None) + (reference is not None and ky is not None)
     rows, cols = (2, 2) if n == 4 else (1, n)
     z = np.asarray(z, dtype=float)
     with figure_style():
@@ -361,7 +360,7 @@ def linear_runtime_panel_figure(
             a.set_ylabel("code units")
             a.legend(loc="upper center", ncols=2)
 
-        if show_ref:
+        if reference is not None and ky is not None:
             a = next(ax)
             style = {**REFERENCE_STYLE, "linewidth": 1.4}
             for y, ls, name in (
@@ -557,7 +556,7 @@ def _load_linear_bundle(
     names = ("bmag", "gbdrift", "cvdrift")
     line = (
         np.stack([eigen[k] for k in names])
-        if set(names) <= set(eigen.dtype.names)
+        if set(names) <= set(eigen.dtype.names or ())
         else None
     )
     return summary, t, signal, z, eig, line
@@ -715,7 +714,7 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
     return out_path
 
 
-def show_saved_figures(paths: list[str | Path]) -> None:
+def show_saved_figures(paths: Sequence[str | Path]) -> None:
     """Open saved PNG figures in a window; a no-op on a non-interactive backend."""
 
     if plt.get_backend().lower() == "agg":
