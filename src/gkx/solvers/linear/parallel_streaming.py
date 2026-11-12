@@ -15,7 +15,7 @@ from gkx.operators.linear.params import (
     _is_tracer,
     linear_terms_to_term_config,
 )
-from gkx.solvers_linear_parallel_common import _resolve_parallel_devices
+from gkx.solvers.linear.parallel_common import _resolve_parallel_devices
 from gkx.core_ky_layout import source_ny_full
 
 

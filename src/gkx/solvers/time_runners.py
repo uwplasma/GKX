@@ -7,7 +7,7 @@ from typing import Any, cast
 from gkx.config import TimeConfig
 from gkx.geometry import FluxTubeGeometryLike
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
-from gkx.solvers_linear_integrators import integrate_linear
+from gkx.solvers.linear.integrators import integrate_linear
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
@@ -15,10 +15,10 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
 )
-from gkx.solvers_nonlinear_diagnostics import integrate_nonlinear
+from gkx.solvers.nonlinear.diagnostics import integrate_nonlinear
 from gkx.parallel.state import resolve_state_sharding
 from gkx.parallel.integrators import integrate_nonlinear_sharded
-from gkx.solvers_time_explicit import _reject_unsupported_config_collision_operator
+from gkx.solvers.time_explicit import _reject_unsupported_config_collision_operator
 from gkx.terms.config import TermConfig
 
 

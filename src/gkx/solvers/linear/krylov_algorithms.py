@@ -20,13 +20,13 @@ from gkx.operators.linear.linked import (
     project_to_linked_cover,
 )
 from gkx.operators.linear.params import LinearParams
-from gkx.solvers_linear_precond_pr3 import (
+from gkx.solvers.linear.preconditioner import (
     PR3_PRECOND_NAMES,
     Pr3Factors,
     _apply_operator,
     _assemble_rhs_cached_novjp,
 )
-from gkx.solvers_time_explicit import _linear_native_step
+from gkx.solvers.time_explicit import _linear_native_step
 from gkx.terms.config import TermConfig
 
 
@@ -236,13 +236,13 @@ def build_shift_invert_preconditioner(
     raises. This used to return ``(None, None)`` for those too, so a typo
     disabled preconditioning while the solve reported itself as preconditioned.
     ``"auto"`` must not arrive here -- it is a real policy resolved one level up
-    by :func:`gkx.solvers_linear_krylov._automatic_shift_preconditioner`, and
+    by :func:`gkx.solvers.linear.krylov._automatic_shift_preconditioner`, and
     mapping it to ``"damping"`` would hand a damping diagonal to a caller that
     asked for a physics-aware line solve.
 
     ``pr3-cm`` is the one mode with host-side setup: its z-local blocks cost
     ``Nl * Nm`` operator probes and a factorization, built once per shift by
-    :func:`gkx.solvers_linear_precond_pr3.build_pr3_factors` and passed in as
+    :func:`gkx.solvers.linear.preconditioner.build_pr3_factors` and passed in as
     ``factors`` rather than traced. Asking for it without them raises.
     """
 
@@ -256,7 +256,7 @@ def build_shift_invert_preconditioner(
                 "factors from build_pr3_factors; reaching here without them "
                 "means the caller bypassed _shift_invert_branch"
             )
-        from gkx.solvers_linear_precond_pr3 import build_pr3_apply
+        from gkx.solvers.linear.preconditioner import build_pr3_apply
 
         return None, build_pr3_apply(v, cache, params, term_cfg, factors)
     if mode_key not in SHIFT_PRECOND_NAMES:
@@ -282,7 +282,7 @@ def build_shift_invert_preconditioner(
 
     # Import lazily to keep the core operator module independent of the
     # implicit integration policy at import time.
-    from gkx.solvers_linear_implicit import (
+    from gkx.solvers.linear.implicit import (
         _build_field_corrected_shifted_preconditioner,
         _build_shifted_hermite_preconditioner,
     )

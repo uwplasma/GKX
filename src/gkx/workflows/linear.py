@@ -20,9 +20,9 @@ from gkx.diagnostics.modes import select_ky_index
 from gkx.diagnostics.normalization import apply_diagnostic_normalization
 from gkx.geometry import apply_geometry_grid_defaults
 from gkx.operators.linear.cache_builder import build_linear_cache
-from gkx.solvers_linear_integrators import integrate_linear_diagnostics
-from gkx.solvers_linear_krylov import KrylovConfig, dominant_eigenpair
-from gkx.solvers_time_runners import integrate_linear_from_config
+from gkx.solvers.linear.integrators import integrate_linear_diagnostics
+from gkx.solvers.linear.krylov import KrylovConfig, dominant_eigenpair
+from gkx.solvers.time_runners import integrate_linear_from_config
 from gkx.workflows.runtime.diagnostics import (
     _fit_signal_key,
     finalize_runtime_linear_quasilinear,
@@ -42,7 +42,7 @@ from gkx.workflows.runtime.results import (
     checked_solve_summary,
     solve_stats_request,
 )
-from gkx.solvers_time_explicit import integrate_linear_explicit_from_config
+from gkx.solvers.time_explicit import integrate_linear_explicit_from_config
 
 
 _StatusCallback = Callable[[str], None] | None
@@ -250,7 +250,7 @@ def _run_krylov_linear(
     krylov_cfg: Any | None,
     status_callback: _StatusCallback,
 ) -> tuple[float, float, np.ndarray, Any]:
-    from gkx.solvers_time_explicit import _reject_unsupported_config_collision_operator
+    from gkx.solvers.time_explicit import _reject_unsupported_config_collision_operator
 
     # The eigen solve cannot carry a moment operator; refuse, don't run as LB.
     _reject_unsupported_config_collision_operator(
@@ -342,7 +342,7 @@ def _warn_if_linear_dt_exceeds_cfl(
 ) -> float | None:
     """Delegate the fixed-step CFL hint to the module that owns the bound."""
 
-    from gkx.solvers_time_explicit import warn_if_fixed_dt_exceeds_cfl
+    from gkx.solvers.time_explicit import warn_if_fixed_dt_exceeds_cfl
 
     return warn_if_fixed_dt_exceeds_cfl(
         grid=ctx.grid,
@@ -375,7 +375,7 @@ def _integrate_linear_density_path(
     n_steps: int,
     show_progress: bool,
 ) -> _LinearTrajectory:
-    from gkx.solvers_time_runners import _resolve_config_collision_operator
+    from gkx.solvers.time_runners import _resolve_config_collision_operator
 
     # This is the executable's density-diagnostic path, so the TOML
     # collision_operator selection has to be resolved here as well as on the

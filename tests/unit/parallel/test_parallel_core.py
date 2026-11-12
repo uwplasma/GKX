@@ -1448,7 +1448,7 @@ def test_time_state_sharding_matches_serial(
     the result was read, so the test reads both outputs back.
     """
 
-    import gkx.solvers_time_runners as runners
+    import gkx.solvers.time_runners as runners
     from gkx.parallel.state import resolve_state_sharding
 
     _require_devices(num_devices)

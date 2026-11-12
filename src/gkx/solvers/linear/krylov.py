@@ -15,14 +15,14 @@ from gkx.operators.linear.params import (
     linear_terms_to_term_config,
     term_config_to_linear_terms,
 )
-from gkx.solvers_linear_adaptive_propagator import (
+from gkx.solvers.linear.adaptive_propagator import (
     AdaptivePropagatorSolution as AdaptivePropagatorSolution,
     adaptive_propagator_eigenpair,
     banded_fits,
     banded_ritz_pairs,
     certifiable_residual_tolerance,
 )
-from gkx.solvers_linear_krylov_algorithms import (
+from gkx.solvers.linear.krylov_algorithms import (
     _advance_imex2,
     _apply_operator,
     _assemble_rhs_cached_novjp,
@@ -32,7 +32,7 @@ from gkx.solvers_linear_krylov_algorithms import (
     _project_to_linked_cover,
     _require_linked_cover_seed,
 )
-from gkx.solvers_linear_krylov_algorithms import (
+from gkx.solvers.linear.krylov_algorithms import (
     InnerSolveStats,
     _arnoldi,
     _shift_invert_eigenpair_with_inner_stats,
@@ -47,7 +47,7 @@ from gkx.solvers_linear_krylov_algorithms import (
     dominant_eigenpair_power,
     dominant_eigenpair_propagator_cached,
 )
-from gkx.solvers_linear_precond_pr3 import PR3_PRECOND_NAMES, build_pr3_factors
+from gkx.solvers.linear.preconditioner import PR3_PRECOND_NAMES, build_pr3_factors
 
 
 @dataclass(frozen=True)

@@ -1,8 +1,8 @@
 """Time-advance schemes: linear explicit tableaus, nonlinear explicit, IMEX.
 
 One module for everything that steps the state forward. The linear half covers
-gkx.solvers_time_explicit -- native tableaus, adaptive-CFL controls, progress and
-error paths. The nonlinear half covers gkx.solvers_nonlinear: the per-stage
+gkx.solvers.time_explicit -- native tableaus, adaptive-CFL controls, progress and
+error paths. The nonlinear half covers gkx.solvers.nonlinear: the per-stage
 explicit update and its method dispatch, the checkpointed scan whose block
 schedule must not change the discrete RK map, and the IMEX split, which lives
 here rather than with the linear solver because it reuses the same
@@ -17,7 +17,7 @@ from __future__ import annotations
 from scripts.checks._gates.validation_gates import (
     estimate_observed_order,
 )
-from gkx.solvers_nonlinear_explicit import (
+from gkx.solvers.nonlinear.explicit import (
     _checkpoint_block_size,
     block_checkpoint_plan,
     advance_explicit_nonlinear_state,
@@ -27,23 +27,23 @@ from gkx.solvers_nonlinear_explicit import (
     make_explicit_diagnostic_step,
     run_explicit_diagnostic_scan,
 )
-from gkx.solvers_nonlinear_imex import (
+from gkx.solvers.nonlinear.imex import (
     advance_imex_nonlinear_state,
     imex_fixed_point_guess,
     make_imex_diagnostic_step,
     solve_imex_step,
 )
-from gkx.solvers_time_explicit import (
+from gkx.solvers.time_explicit import (
     _linear_explicit_stage_update,
     _linear_native_step,
 )
 from gkx.terms.config import FieldState
 from types import SimpleNamespace
-import gkx.solvers_linear_implicit as implicit_linear
-import gkx.solvers_linear_krylov_algorithms as krylov_algorithms
-import gkx.solvers_nonlinear_imex as imex_module
-import gkx.solvers_time_explicit as eti
-import gkx.solvers_time_explicit as explicit_diagnostics
+import gkx.solvers.linear.implicit as implicit_linear
+import gkx.solvers.linear.krylov_algorithms as krylov_algorithms
+import gkx.solvers.nonlinear.imex as imex_module
+import gkx.solvers.time_explicit as eti
+import gkx.solvers.time_explicit as explicit_diagnostics
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -57,12 +57,12 @@ from gkx.parallel.integrators import (
     integrate_linear_sharded,
     integrate_nonlinear_sharded,
 )
-from gkx.solvers_time_runners import (
+from gkx.solvers.time_runners import (
     integrate_linear_from_config,
     integrate_nonlinear_from_config,
 )
 import dataclasses
-import gkx.solvers_time_runners as runners
+import gkx.solvers.time_runners as runners
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 
 
