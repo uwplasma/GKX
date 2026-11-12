@@ -5,6 +5,8 @@ schema_version = 1
 # This is the linear benchmark deck (scripts/benchmarks, test_benchmarking);
 # run.py does not load it. For linear growth rates prefer solver = "krylov",
 # which needs no time step and so no electron-streaming CFL.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"
@@ -40,6 +42,7 @@ ntheta = 32
 nperiod = 2
 
 [time]
+# Fixed rk4 at the step of the linear benchmark test (scripts/benchmarks, test_benchmarking).
 t_max = 40.0
 dt = 0.0008
 method = "rk4"

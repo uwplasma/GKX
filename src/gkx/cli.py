@@ -11,6 +11,7 @@ from gkx.workflows.runtime import (
     wout as runtime_wout,
 )
 from gkx.workflows.runtime.toml import (
+    extract_set_overrides,
     load_runtime_from_toml,
     load_toml,
 )
@@ -675,7 +676,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    argv = sys.argv[1:]
+    argv = extract_set_overrides(sys.argv[1:])
     # Every executable path that can compile gets the persistent cache, before
     # any solver is built. Re-running an unchanged case is the common case
     # while a user edits a TOML, and it is the case that was paying a full
@@ -693,7 +694,7 @@ def main() -> int:
         return args.func(args)
 
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.cmd is None:
         return run_default_linear_demo()
     return args.func(args)

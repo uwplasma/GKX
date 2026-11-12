@@ -5,6 +5,8 @@ schema_version = 1
 # the GX reference (src/gkx/data/cyclone_reference_adiabatic.csv) and of the next
 # larger Nm, at ky = 0.2, 0.3 and 0.4. case_full.toml is the GX-matched
 # literature deck (24 ky values, minutes).
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"
@@ -24,7 +26,7 @@ nperiod = 2  # a one-period line is 2-37% off in gamma
 
 [time]
 t_max = 96.0  # 7 e-folds at ky 0.2; shorter horizons keep the transient in the fit
-dt = 0.008  # below the CFL-stable step at Nm = 48  # ky = 0.4 gamma is -3.8, -3.1, -2.0, -0.7, +0.3% at Nm = 32, 40, 44, 48, 52; Nm = 28 is only a lucky cancellation
+dt = 0.008  # below the CFL-stable step at Nm = 48
 method = "rk4"  # rk2 is unstable at this Nm
 sample_stride = 50  # 12000 steps, 240 samples
 

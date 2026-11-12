@@ -18,6 +18,8 @@ schema_version = 1
 #     refused.
 #   * They run on the fixed-step cached integrator, so solver = "time";
 #     the Krylov and explicit_time paths do not carry them and refuse them.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"

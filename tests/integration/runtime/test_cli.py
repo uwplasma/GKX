@@ -197,8 +197,7 @@ def test_cli_geometry_routes_vmec_and_miller_backends(
 ) -> None:
     @dataclass(frozen=True)
     class _GeometryConfig:
-        geometry_helper_python: str | None = None
-        geometry_helper_repo: str | None = None
+        pass
 
     @dataclass(frozen=True)
     class _RuntimeConfig:
@@ -1491,9 +1490,6 @@ def test_finalize_runtime_linear_quasilinear_contract(
     assert calls["metadata"] == {
         "runtime_config_enabled": True,
         "solver": "krylov",
-        "delta_ky": cfg.quasilinear.delta_ky,
-        "species_selection": cfg.quasilinear.species,
-        "write_spectrum": cfg.quasilinear.write_spectrum,
     }
     assert statuses == [
         "computing quasilinear transport weights",
@@ -2334,3 +2330,22 @@ def test_saved_physical_cadence_preserves_native_summary_and_result(
         artifacts.write_runtime_nonlinear_artifacts(
             tmp_path / "missing.csv", replace(result, diagnostics=None), cfg
         )
+
+
+def test_set_overrides_replace_deck_values(tmp_path):
+    from gkx.workflows.runtime.toml import extract_set_overrides, load_toml
+
+    deck = tmp_path / "case.toml"
+    deck.write_text('[run]\nNl = 4\n[physics]\nadiabatic = "x"\n', encoding="utf-8")
+    rest = extract_set_overrides(
+        ["case.toml", "--set", "run.Nl=8", "--set=physics.adiabatic=yes"]
+        + ["--set", "new.v=[1, 2]", "--set", "new.f=100.", "--dt", "1"]
+    )
+    try:
+        data = load_toml(deck)
+        assert rest == ["case.toml", "--dt", "1"]
+        assert data["run"]["Nl"] == 8 and data["physics"]["adiabatic"] == "yes"
+        assert data["new"]["v"] == [1, 2] and data["new"]["f"] == 100.0
+    finally:
+        extract_set_overrides([])
+    assert load_toml(deck)["run"]["Nl"] == 4

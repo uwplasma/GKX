@@ -19,9 +19,12 @@ Ly = 62.8
 boundary = "linked"
 y0 = 28.2
 ntheta = 24
+# Short field line: growth rates are not converged below nperiod = 2; see docs/guidance.rst.
 nperiod = 1
 
 [time]
+# Off, with damp_ends_widthfrac = 0 and p_hyper = 2 below: the short comparison replay
+# (t_max = 5, no collisions) fixes its dissipation by hand (docs/examples.rst).
 damp_ends_rate = 0.0
 t_max = 5.0
 dt = 0.05
