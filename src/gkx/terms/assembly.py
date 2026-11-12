@@ -458,7 +458,6 @@ def _drift_contributions(
     scalars: _ScalarParams,
     weights: _TermWeights,
     imag: jnp.ndarray,
-    fuse: bool = False,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     return drift_contributions(
         H,
@@ -468,7 +467,6 @@ def _drift_contributions(
         omega_d_scale=scalars.omega_d_scale,
         weights=(weights.mirror, weights.curvature, weights.gradb),
         imag=imag,
-        fuse=fuse,
     )
 
 
@@ -740,12 +738,8 @@ def _rhs_term_contributions(
     *,
     skip_dissipation: bool = False,
     hermite_window: HermiteWindow | None = None,
-    fuse_drift: bool = False,
 ) -> dict[str, jnp.ndarray]:
-    """Return named RHS contributions in the fixed diagnostic sum convention.
-
-    ``fuse_drift`` returns the drift terms summed as ``mirror`` (the others zero).
-    """
+    """Return named RHS contributions in the fixed diagnostic sum convention."""
 
     mirror, curvature, gradb = _drift_contributions(
         rhs_fields.H,
@@ -754,7 +748,6 @@ def _rhs_term_contributions(
         scalars,
         weights,
         state.imag,
-        fuse=fuse_drift and hermite_window is None,
     )
     shared = (
         None
@@ -837,7 +830,6 @@ def _assemble_normalized_rhs(
         rhs_fields,
         skip_dissipation=skip_dissipation,
         hermite_window=hermite_window,
-        fuse_drift=True,
     )
     dG = _sum_rhs_terms(contrib)
     if state.squeeze_species:

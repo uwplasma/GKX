@@ -225,8 +225,9 @@ recursive = true
 # 70078 -> 70149: phase-1 split of the diagnostics driver (module header and export list of
 # transport_window.py; no code added).
 # 70149 -> 70150: IMEX chunk scan fix.
-# 70150 -> 70192: `--set section.key=value` deck overrides in the executable.
-baseline = 70192
+# 70150 -> 69996: the Pallas drift kernel is removed; the jnp drift terms serve every backend.
+# 69996 -> 70038: `--set section.key=value` deck overrides in the executable.
+baseline = 70038
 target = 45000
 
 [[line_budget_policy.counts]]
