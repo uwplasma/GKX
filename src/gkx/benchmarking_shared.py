@@ -16,7 +16,7 @@ from gkx.diagnostics.normalization import (
     KINETIC_NORMALIZATION,
     TEM_NORMALIZATION,
 )
-from gkx.solvers_linear_krylov import KrylovConfig
+from gkx.solvers.linear.krylov import KrylovConfig
 
 CYCLONE_OMEGA_D_SCALE = CYCLONE_NORMALIZATION.omega_d_scale
 

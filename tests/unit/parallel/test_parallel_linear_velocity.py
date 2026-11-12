@@ -10,10 +10,10 @@ from types import SimpleNamespace
 import jax.numpy as jnp
 import pytest
 
-import gkx.solvers_linear_parallel as linear_parallel
-import gkx.solvers_linear_parallel_common as linear_parallel_common
-import gkx.solvers_linear_parallel_electrostatic as linear_parallel_electrostatic
-import gkx.solvers_linear_parallel_streaming as linear_parallel_streaming
+import gkx.solvers.linear.parallel as linear_parallel
+import gkx.solvers.linear.parallel_common as linear_parallel_common
+import gkx.solvers.linear.parallel_electrostatic as linear_parallel_electrostatic
+import gkx.solvers.linear.parallel_streaming as linear_parallel_streaming
 from gkx.operators.linear.params import LinearParams, LinearTerms
 
 
@@ -845,7 +845,7 @@ def _small_kinetic_electron_problem(*, linked: bool = False):
 
 def test_mixed_species_hermite_linked_operator_matches_serial_trajectory() -> None:
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers_linear_integrators import integrate_linear
+    from gkx.solvers.linear.integrators import integrate_linear
 
     devices = jax.devices()
     if len(devices) < 4:
@@ -1084,7 +1084,7 @@ def test_species_sharded_phi_matches_production_quasineutrality() -> None:
 @pytest.mark.parametrize("rate", [None, 0.4])
 def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route(rate):
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers_linear_integrators import integrate_linear
+    from gkx.solvers.linear.integrators import integrate_linear
 
     devices = jax.devices()
     if len(devices) < 4:
@@ -1434,7 +1434,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
     )
     assert_species_close(routed_rhs, expected_rhs, rtol=3e-5, atol=3e-5)
 
-    from gkx.solvers_linear_integrators import integrate_linear
+    from gkx.solvers.linear.integrators import integrate_linear
 
     serial_state, serial_phi = integrate_linear(
         state,
@@ -1605,7 +1605,7 @@ def test_species_sharded_linear_rhs_matches_serial_production_route() -> None:
 
 @pytest.mark.parametrize("jit", [False, True])
 def test_species_pmap_electromagnetic_trajectory_matches_serial(jit: bool) -> None:
-    from gkx.solvers_linear_integrators import integrate_linear
+    from gkx.solvers.linear.integrators import integrate_linear
     from gkx.operators.linear.params import linear_terms_to_term_config
     from gkx.terms.assembly import compute_fields_cached
 
@@ -1675,7 +1675,7 @@ def test_species_pmap_electromagnetic_trajectory_matches_serial(jit: bool) -> No
 
 
 def test_species_pmap_collision_preserves_long_wavelength_moments() -> None:
-    from gkx.solvers_linear_integrators import integrate_linear
+    from gkx.solvers.linear.integrators import integrate_linear
     from gkx.operators.linear.dissipation import _laguerre_temperature_coupling
 
     if len(jax.devices()) < 2:
@@ -1749,7 +1749,7 @@ def test_species_pmap_collision_preserves_long_wavelength_moments() -> None:
 
 
 def test_species_pmap_parameter_gradient_matches_centered_difference() -> None:
-    from gkx.solvers_linear_integrators import integrate_linear
+    from gkx.solvers.linear.integrators import integrate_linear
 
     devices = jax.devices()
     if len(devices) < 2:
@@ -2384,7 +2384,7 @@ def test_linear_rhs_parallel_cached_streaming_only_matches_serial_call_graph() -
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
     from gkx.config import RuntimeParallelConfig
 
     cfg = CycloneBaseCase(
@@ -2446,7 +2446,7 @@ def test_linear_rhs_parallel_cached_electrostatic_streaming_matches_serial_call_
     from gkx.operators.linear.cache_builder import build_linear_cache
     from gkx.operators.linear.params import LinearParams, LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
     from gkx.config import RuntimeParallelConfig
 
     cfg = CycloneBaseCase(
@@ -2513,7 +2513,7 @@ def test_linear_rhs_parallel_cached_electrostatic_linear_slices_match_serial_cal
 ):
     from gkx.operators.linear.params import LinearTerms
     from gkx.operators.linear.rhs import linear_rhs_cached
-    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
     from gkx.config import RuntimeParallelConfig
 
     state, cache, params = _small_periodic_field_problem()
@@ -2569,7 +2569,7 @@ def test_linear_rhs_parallel_cached_electrostatic_linear_slices_rejects_ungated_
     None
 ):
     from gkx.operators.linear.params import LinearParams, LinearTerms
-    from gkx.solvers_linear_parallel import linear_rhs_parallel_cached
+    from gkx.solvers.linear.parallel import linear_rhs_parallel_cached
     from gkx.config import RuntimeParallelConfig
 
     class Cache:
@@ -3040,7 +3040,7 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial(
     from gkx.operators.nonlinear.projection import _make_hermitian_projector
     from gkx.parallel.integrators import integrate_nonlinear_species_hermite
     from gkx.parallel.velocity_plan import build_species_hermite_mesh_plan
-    from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
+    from gkx.solvers.nonlinear.diagnostics import nonlinear_rhs_cached
     from gkx.terms.config import TermConfig
 
     if len(jax.devices()) < num_devices:
@@ -3115,7 +3115,7 @@ def test_species_hermite_trajectory_and_fused_traces_match_serial(
 @pytest.mark.parametrize("ky_layout", ["half", "full"])
 def test_magnetic_flutter_uses_cross_shard_hermite_neighbors(ns, nm, ky_layout):
     from gkx.parallel.integrators import _prepare_species_hermite_rhs
-    from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
+    from gkx.solvers.nonlinear.diagnostics import nonlinear_rhs_cached
     from gkx.terms.config import TermConfig
 
     count = 2 * ns

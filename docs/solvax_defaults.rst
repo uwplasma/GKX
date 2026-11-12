@@ -14,9 +14,9 @@ certification gates and branch selection stay in GKX.
      - where GKX calls it
    * - ``gmres``
      - backward-Euler implicit linear stepping
-       (``gkx.solvers_linear_implicit``); the nonlinear IMEX field solve
-       (``gkx.solvers_nonlinear_imex``); every shifted inner solve of
-       shift-invert Arnoldi (``gkx.solvers_linear_krylov_algorithms``); the
+       (``gkx.solvers.linear.implicit``); the nonlinear IMEX field solve
+       (``gkx.solvers.nonlinear.imex``); every shifted inner solve of
+       shift-invert Arnoldi (``gkx.solvers.linear.krylov_algorithms``); the
        propagator fixed-point solve of the adaptive eigenpair sensitivity
        (``gkx.objectives.core``)
    * - ``KrylovSolution``
@@ -24,18 +24,18 @@ certification gates and branch selection stay in GKX.
        ``ImplicitSolveStats``
    * - ``linear_solve``
      - IMEX implicit solve and its implicit-function-theorem adjoint
-       (``gkx.solvers_nonlinear_imex``)
+       (``gkx.solvers.nonlinear.imex``)
    * - ``tridiagonal_solve``
-     - batched Hermite-line inverse (``gkx.solvers_linear_implicit``), used by
+     - batched Hermite-line inverse (``gkx.solvers.linear.implicit``), used by
        the implicit time-step preconditioner and by the ``hermite-line`` and
        ``field-corrected`` shift-invert preconditioners
    * - ``block_thomas_factor_ops``
      - Schur elimination of the z-local block in the ``pr3-cm`` preconditioner
-       (``gkx.solvers_linear_precond_pr3``); GKX's forward substitution is
+       (``gkx.solvers.linear.preconditioner``); GKX's forward substitution is
        pinned bitwise to ``block_thomas_solve_ops`` on the same factors
    * - ``estimate_rk4_timestep``, ``adaptive_eigenpair``
      - stable-step estimate and residual-certified propagator eigensolve behind
-       ``method="adaptive"`` (``gkx.solvers_linear_adaptive_propagator``)
+       ``method="adaptive"`` (``gkx.solvers.linear.adaptive_propagator``)
    * - ``exponential_eigenpairs``
      - optional exponential-Krylov filter of the adaptive eigensolve and of the
        differentiable eigenpair's adjoint candidates
@@ -46,7 +46,7 @@ certification gates and branch selection stay in GKX.
    * - ``sparse_operator_matrix``, ``SpluFactorization``,
        ``sparse_eigenpairs``
      - bounded-batch sparse assembly, shifted factorization and eigenpairs of
-       ``method="sparse_shift_invert"`` (``gkx.solvers_linear_krylov``)
+       ``method="sparse_shift_invert"`` (``gkx.solvers.linear.krylov``)
    * - ``sparse_eigenvalue``
      - host-factored sparse eigenvalues near a shift for
        ``solver_growth_rate_from_geometry(eigensolver="sparse-direct")``

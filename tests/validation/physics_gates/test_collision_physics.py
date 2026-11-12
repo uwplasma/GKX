@@ -32,11 +32,11 @@ from gkx.operators.linear.collisions import (
 )
 from gkx.operators.linear.params import LinearParams
 from gkx.operators.linear.rhs import linear_rhs_cached
-from gkx.solvers_time_runners import _resolve_config_collision_operator
+from gkx.solvers.time_runners import _resolve_config_collision_operator
 from gkx.config import GeometryConfig
 from gkx.core_grid import select_ky_grid
 from gkx.operators.linear.params import LinearTerms, linear_params_for_geometry
-from gkx.solvers_linear_integrators import integrate_linear_diagnostics
+from gkx.solvers.linear.integrators import integrate_linear_diagnostics
 import math
 import matplotlib.pyplot as plt
 from PIL import Image

@@ -1806,11 +1806,11 @@ def test_repository_validation_manifest_is_well_formed() -> None:
     for module in (
         "gkx.terms.assembly",
         "gkx.operators.linear.cache_builder",
-        "gkx.solvers_linear_parallel",
+        "gkx.solvers.linear.parallel",
         "gkx.operators.nonlinear.rhs",
         "gkx.operators.nonlinear.diagnostic_state",
-        "gkx.solvers_nonlinear_explicit",
-        "gkx.solvers_nonlinear_imex",
+        "gkx.solvers.nonlinear.explicit",
+        "gkx.solvers.nonlinear.imex",
     ):
         assert rows[module]["coverage_target_percent"] == 95.0, module
     assert rows["gkx.operators.linear.cache_builder"]["n_owned_modules"] == 2
@@ -1820,11 +1820,11 @@ def test_repository_validation_manifest_is_well_formed() -> None:
         ("gkx.operators.linear.params", "n_physics_contracts"),
         ("gkx.operators.nonlinear.rhs", "n_numerics_contracts"),
         ("gkx.operators.nonlinear.diagnostic_state", "n_physics_contracts"),
-        ("gkx.solvers_nonlinear_explicit", "n_numerics_contracts"),
-        ("gkx.solvers_nonlinear_imex", "n_physics_contracts"),
+        ("gkx.solvers.nonlinear.explicit", "n_numerics_contracts"),
+        ("gkx.solvers.nonlinear.imex", "n_physics_contracts"),
     ):
         assert rows[module][key] >= 2, (module, key)
-    assert "gkx.solvers_nonlinear_diagnostics" in summary["high_priority_open"]
+    assert "gkx.solvers.nonlinear.diagnostics" in summary["high_priority_open"]
 
 
 def test_validation_manifest_main_writes_summary_json(tmp_path: Path) -> None:
@@ -2519,7 +2519,7 @@ def test_recorded_cfl_margins_are_under_the_warn_ratio() -> None:
     bound would have failed here on the commit that introduced them.
     """
 
-    from gkx.solvers_time_explicit import FIXED_DT_CFL_WARN_RATIO
+    from gkx.solvers.time_explicit import FIXED_DT_CFL_WARN_RATIO
 
     for relative, margin in sorted(_CFL_MARGIN_MEASURED.items()):
         if margin <= FIXED_DT_CFL_WARN_RATIO:
@@ -2546,7 +2546,7 @@ def test_the_cfl_warn_ratio_sits_between_the_measured_good_and_bad_decks() -> No
     deck known to be fine, so moving it needs new measurements, not an edit.
     """
 
-    from gkx.solvers_time_explicit import FIXED_DT_CFL_WARN_RATIO
+    from gkx.solvers.time_explicit import FIXED_DT_CFL_WARN_RATIO
 
     assert 1.33 < FIXED_DT_CFL_WARN_RATIO < 1.60
 

@@ -13,15 +13,15 @@ from gkx.geometry.core import apply_geometry_grid_defaults
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.dissipation import multispecies_collision_invariant_rates
 from gkx.operators.nonlinear.policies import measured_streaming_frequency
-from gkx.solvers_nonlinear_imex import (
+from gkx.solvers.nonlinear.imex import (
     ARS_TABLEAUX,
     build_chain_implicit_linear,
     collisions_bind,
     refactor_chain_implicit_linear,
 )
 from gkx.operators.linear.cache_arrays import keep_moments
-from gkx.solvers_nonlinear_diagnostics import species_moments, stiff_linear_split
-from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
+from gkx.solvers.nonlinear.diagnostics import species_moments, stiff_linear_split
+from gkx.solvers.nonlinear.diagnostics import nonlinear_rhs_cached
 from gkx.terms.assembly import assemble_rhs_cached, compute_fields_cached
 from gkx.terms.config import TermConfig
 from gkx.workflows.runtime.toml import load
@@ -50,7 +50,7 @@ from gkx.operators.nonlinear import projection as nonlinear_projection
 from gkx.operators.nonlinear.collisions import (
     _collision_damping,
 )
-from gkx.solvers_nonlinear_diagnostics import (
+from gkx.solvers.nonlinear.diagnostics import (
     _pack_resolved_diagnostics,
     _sample_indices_with_final,
     build_nonlinear_simulation_diagnostics,
@@ -72,15 +72,17 @@ from gkx.operators.nonlinear.projection import (
     _make_hermitian_projector,
     _make_nonlinear_state_projector,
 )
-import gkx.solvers_nonlinear_diagnostics as nonlinear_state_integration_mod
-from gkx.solvers_nonlinear_diagnostics import (
+import gkx.solvers.nonlinear.diagnostics as nonlinear_state_integration_mod
+from gkx.solvers.nonlinear.diagnostics import (
     DIVERGENCE_KNEE_STEPS,
-    nonlinear_heat_flux_window,
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
+)
+from gkx.solvers.nonlinear.transport_window import (
     integrate_nonlinear_sheared,
     integrate_nonlinear_sheared_transport,
+    nonlinear_heat_flux_window,
 )
 from gkx.terms.config import FieldState
 from gkx.workflows.runtime import chunks as runtime_chunks
@@ -1027,8 +1029,8 @@ def test_nonlinear_cfl_frequency_components_recovers_spectral_gradient_cfl() -> 
     )
 
 
-_SI = "gkx.solvers_nonlinear_diagnostics"
-_DI = "gkx.solvers_nonlinear_diagnostics"
+_SI = "gkx.solvers.nonlinear.diagnostics"
+_DI = "gkx.solvers.nonlinear.diagnostics"
 
 
 def _diag_call(fn, G0=None, **kwargs):
@@ -1430,7 +1432,7 @@ def test_integrate_nonlinear_imex_cached_shape_mismatch_and_zero_nonlinear(
 
     gmres_calls: list[int] = []
     monkeypatch.setattr(
-        "gkx.solvers_nonlinear_imex.gmres",
+        "gkx.solvers.nonlinear.imex.gmres",
         lambda matvec, rhs, **kwargs: SimpleNamespace(
             x=gmres_calls.append(rhs.size) or rhs,
             converged=True,
@@ -2011,7 +2013,7 @@ def test_electromagnetic_window_actually_solves_apar_and_bpar(case_grid):
     """Guard the EM rows: a silently electrostatic field solve would still pass FD."""
 
     from gkx.operators.linear.cache_builder import build_linear_cache
-    from gkx.solvers_nonlinear_diagnostics import nonlinear_rhs_cached
+    from gkx.solvers.nonlinear.diagnostics import nonlinear_rhs_cached
 
     grid, geom = case_grid
     params = LinearParams(beta=0.02, fapar=1.0)
@@ -2114,7 +2116,7 @@ def _q29_runner(ky_layout, route, method="imex"):
 def test_sheared_imex_carries_unconverged_solves_to_the_host_gate(ky_layout) -> None:
     """A starved inner budget is visible on the sheared IMEX route and refused."""
 
-    from gkx.solvers_linear_implicit import require_converged_implicit_solves
+    from gkx.solvers.linear.implicit import require_converged_implicit_solves
 
     run_route = _q29_runner(ky_layout, integrate_nonlinear_sheared)
 
@@ -2139,7 +2141,7 @@ def test_sheared_imex_carries_unconverged_solves_to_the_host_gate(ky_layout) -> 
 def test_sheared_transport_trace_carries_the_same_status(ky_layout) -> None:
     """The transport door reports through the trace it already returns."""
 
-    from gkx.solvers_linear_implicit import require_converged_implicit_solves
+    from gkx.solvers.linear.implicit import require_converged_implicit_solves
 
     run = _q29_runner(ky_layout, integrate_nonlinear_sheared_transport)
     trace = run(return_solve_stats=True, **_Q29_STARVED_BUDGET)
@@ -2522,7 +2524,7 @@ def test_second_identical_solve_compiles_nothing_and_repeats_bits():
 
 
 def test_cached_jit_falls_back_under_an_outer_trace_and_evicts(monkeypatch):
-    import gkx.solvers_nonlinear_explicit as explicit
+    import gkx.solvers.nonlinear.explicit as explicit
 
     def outer(a):
         return explicit.cached_jit(lambda x: x * a)(jnp.ones(3)).sum()
@@ -2534,7 +2536,7 @@ def test_cached_jit_falls_back_under_an_outer_trace_and_evicts(monkeypatch):
 
 
 def test_cached_jit_traces_once_per_argument_signature(monkeypatch):
-    import gkx.solvers_nonlinear_explicit as explicit
+    import gkx.solvers.nonlinear.explicit as explicit
 
     traced = []
     make_jaxpr = jax.make_jaxpr
@@ -2858,7 +2860,7 @@ def test_lawson_drift_factor_is_the_matrix_exponential_of_the_truncated_operator
     monkeypatch, kron_moments
 ):
     """exp(h L_d) from the eigenbasis equals ``expm`` of the production drift operator."""
-    import gkx.solvers_nonlinear_lawson as lawson
+    import gkx.solvers.nonlinear.lawson as lawson
     from scipy.linalg import expm
     from gkx.terms.linear_terms import drift_contributions
 
@@ -2919,8 +2921,8 @@ def test_lawson_steppers_follow_the_explicit_ones_at_a_small_step(method):
 
 def test_lawson_cfl_bound_leaves_out_the_drift_frequencies():
     from gkx.operators.nonlinear.policies import _build_nonlinear_cfl_bounds
-    from gkx.solvers_nonlinear_diagnostics import _laguerre_velocity_max
-    from gkx.solvers_time_explicit import _linear_frequency_bound
+    from gkx.solvers.nonlinear.diagnostics import _laguerre_velocity_max
+    from gkx.solvers.time_explicit import _linear_frequency_bound
 
     _case, grid, geom, params, cache = _lawson_box(2, 4, n=8)
     omega = {}

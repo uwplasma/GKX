@@ -12,7 +12,7 @@ import numpy as np
 from gkx.config import LAWSON_METHODS
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape, real_fft_mesh
 from gkx.core_ky_layout import HALF, source_ky_layout, source_ny_full
-from gkx.solvers_linear_implicit import _build_implicit_operator
+from gkx.solvers.linear.implicit import _build_implicit_operator
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
     LinearParams,

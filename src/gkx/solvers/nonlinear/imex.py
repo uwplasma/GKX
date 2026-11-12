@@ -15,14 +15,14 @@ from dataclasses import dataclass
 from functools import partial
 from solvax import KrylovSolution, gmres, linear_solve
 from typing import Any, Callable, Sequence
-from gkx.solvers_linear_implicit import (
+from gkx.solvers.linear.implicit import (
     ImplicitSolveStats,
     _GmresStatus,
     _empty_implicit_solve_stats,
     _fold_implicit_solve_stats,
     _gmres_iteration_budget,
 )
-from gkx.solvers_nonlinear_explicit import (
+from gkx.solvers.nonlinear.explicit import (
     _SSPX3_ADT,
     _SSPX3_W1,
     _SSPX3_W2,
@@ -1819,7 +1819,7 @@ def make_imex_diagnostic_step(
     """Build one IMEX diagnostic scan step with injected runtime seams.
 
     With ``solve_step_with_stats`` the carry grows one
-    :class:`~gkx.solvers_linear_implicit.ImplicitSolveStats` leaf and every
+    :class:`~gkx.solvers.linear.implicit.ImplicitSolveStats` leaf and every
     implicit solve folds into it, which is how this route gets a convergence
     channel a traced step cannot raise on. Without it the step
     keeps exactly the five-element carry, and the same solve, it had.
@@ -1911,7 +1911,7 @@ def run_imex_diagnostic_scan(
     """Run the fixed-step IMEX diagnostic scan.
 
     ``return_solve_stats=True`` appends the carry's trailing
-    :class:`~gkx.solvers_linear_implicit.ImplicitSolveStats`, or ``None`` when
+    :class:`~gkx.solvers.linear.implicit.ImplicitSolveStats`, or ``None`` when
     the step was built without one. A caller that does not ask never reads the
     leaf, so XLA drops the status arithmetic and the compiled scan is the graph
     it was before.
