@@ -27,8 +27,11 @@ WIDE_COVERAGE_SECONDS: dict[str, float] = {
     "test_linear.py": 320,
     "test_runtime_runner.py": 200,
     "test_autodiff_solver_objectives.py": 200,
-    "test_examples.py": 150,
-    "test_linear_krylov_core.py": 60,
+    "test_examples.py": 270,
+    "test_linear_krylov_core.py": 435,
+    "test_collision_physics.py": 300,
+    "test_terms_fields.py": 225,
+    "test_time_integrators.py": 95,
 }
 DEFAULT_TEST_SECONDS = 15.0
 
