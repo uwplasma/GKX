@@ -44,6 +44,7 @@ def figure(d: dict) -> plt.Figure:
                 d["gkx_landau_high_resolution"],
                 marker="o",
                 mfc="white",
+                mew=1.3,
                 color=GKX_COLORS["blue"],
                 ls=":",
                 label="GKX landau, highest resolution",
