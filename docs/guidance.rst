@@ -505,16 +505,16 @@ ITG and stellarator decks and 12% low on the TEM deck.
 
 Nonlinear: ions (4, 8) and electrons (4, 16) are the fallback. The ions keep the
 count of the ion-only fallback; the electrons keep the Hermite moments that
-their fast streaming and trapped orbits use. The table is a scan of both
-species around that point: Cyclone with kinetic electrons,
-:math:`m_e/m_i = 1/1836`, electrostatic, 32x32x16, the default ``imex-ark3``,
-:math:`Q_i` and :math:`Q_e` averaged over t = 30-120 (the flux is stationary
-from t = 30), two random seeds per row where the count column says so. Each
-entry is the mean over the seeds with the Sokal standard error of the run (the
-larger of that and the seed spread when there are two seeds); the difference is
-against ions (8, 32) and electrons (6, 48), whose error it includes. Two seeds of
-the same counts differ by 3.7% in :math:`Q_i`, which is the resolution of the
-scan.
+their fast streaming and trapped orbits use. The table scans both species
+around that point: Cyclone with kinetic electrons, :math:`m_e/m_i = 1/1836`,
+electrostatic, 32x32x16, the default ``imex-ark3``, :math:`Q_i` and :math:`Q_e`
+averaged over t = 30-120 (the flux is stationary from t = 30), with one or two
+random seeds as the Seeds column says. Each entry is the mean over the seeds
+with the Sokal standard error of each run (the larger of that and the seed
+spread when there are two seeds); the difference is against ions (8, 32) and
+electrons (6, 48), and its error includes the reference's. Two seeds of
+(4, 16) / (4, 16) differ by 3.7% in :math:`Q_i` and 0.4% in :math:`Q_e`, which
+is the resolution of the scan.
 
 .. list-table::
    :header-rows: 1
@@ -635,18 +635,17 @@ scan.
 
 Every pair is within 6.3% of the reference in both fluxes, and neither the
 electron :math:`N_l` (2 to 6), the electron :math:`N_m` (8 to 24) nor the ion
-:math:`N_l` and :math:`N_m` shows a trend larger than the scatter. The
-fallback has the reference's fluxes to within 3.0% and 1.5%, as the uniform
-(4, 16) it replaces does (3.1%, 0.9%), with 96 moments per point instead of
-128. Uniform (4, 8), the generic fallback, is the least accurate pair in the
-table (+6.3% and +4.0%, one seed) and is not used. Smaller electron counts
-(ions (4, 8), electrons (2, 8): 48 moments) are also inside the scatter; they
-are not adopted because the scan is electrostatic at one :math:`k_y` range and
-the electromagnetic check below is a single seed.
+:math:`N_l` and :math:`N_m` shows a trend larger than that scatter. The
+fallback agrees with the reference to 3.0% and 1.5% and with the uniform
+(4, 16) it replaces (3.1% and 0.9%), with 96 moments per point instead of 128.
+Uniform (4, 8), the generic fallback, is the least accurate pair in the table
+(+6.3% and +4.0%, one seed) and is not used. Ions (4, 8) with electrons (2, 8),
+48 moments per point, also sit inside the scatter; they are not adopted because
+this scan is electrostatic and one seed deep there.
 
 The electromagnetic deck of ``examples/05_kinetic_electrons`` (:math:`\beta`
-1e-4 with :math:`A_\parallel`, :math:`m_e/m_i = 2.7\times10^{-4}`, 32x32x16, same
-window) against uniform (4, 16):
+1e-4 with :math:`A_\parallel`, :math:`m_e/m_i = 2.7\times10^{-4}`, 32x32x16,
+same window) against uniform (4, 16), two seeds where marked:
 
 .. list-table::
    :header-rows: 1
@@ -661,25 +660,31 @@ window) against uniform (4, 16):
      - Against uniform (4, 16)
    * - (4, 16) / (4, 16)
      - 128
-     - 1
-     - 472 +- 13
-     - +0.0 +- 3.9%
-     - 675 +- 18
-     - +0.0 +- 3.8%
+     - 2
+     - 467 +- 10
+     - +0.0 +- 2.9%
+     - 669 +- 13
+     - +0.0 +- 2.8%
    * - (4, 8) / (4, 16)
      - 96
-     - 1
-     - 453 +- 16
-     - -3.9 +- 4.4%
-     - 625 +- 18
-     - -7.4 +- 3.8%
+     - 2
+     - 465 +- 15
+     - -0.6 +- 3.7%
+     - 657 +- 32
+     - -1.7 +- 5.2%
    * - (4, 8) / (4, 8)
      - 64
      - 1
      - 505 +- 12
-     - +7.1 +- 3.8%
+     - +8.0 +- 3.4%
      - 699 +- 19
-     - +3.5 +- 3.8%
+     - +4.5 +- 3.4%
+
+The fallback is within 1.7% of the uniform (4, 16) in both fluxes, inside the
+error of 3-5%; uniform (4, 8) is +8.0% and +4.5% in one seed. The scans do not
+cover a stellarator, a larger :math:`k_y` range or a collisional deck, where
+the ion :math:`N_l` and the electron :math:`N_m` named in the deck should be
+checked as for any resolution.
 
 **Cost of per-species counts.** One A4000, float32, 64x64x24, explicit ``rk3`` at
 a fixed step (time per step from a long and a short run), peak device memory:
