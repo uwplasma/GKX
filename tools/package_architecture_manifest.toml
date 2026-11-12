@@ -230,7 +230,8 @@ recursive = true
 # 69996 -> 70070: gkx.case_paths (deck-relative overrides, field-line length checks).
 # 70070 -> 70112: `--set section.key=value` deck overrides in the executable.
 # 70112 -> 70124: removed-key mechanism, measured after merging main.
-baseline = 70124
+# 70124 -> 69673: the block Landau/Sugama operators replace the dense collision tables; measured.
+baseline = 69673
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -238,7 +239,8 @@ name = "test_python_lines"
 path = "tests"
 pattern = "*.py"
 recursive = true
-baseline = 64954
+# 64954 -> 64266: tests of the retired collision tables removed; measured.
+baseline = 64266
 target = 35000
 
 [[line_budget_policy.counts]]

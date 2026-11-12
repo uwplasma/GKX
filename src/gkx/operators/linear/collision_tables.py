@@ -420,7 +420,7 @@ def _sonine_norm(l: int, k: np.ndarray) -> np.ndarray:  # noqa: E741
 
 
 @lru_cache(maxsize=8)
-def _hermite_laguerre_to_legendre_sonine(nl: int, nm: int) -> tuple[np.ndarray, list]:
+def _hermite_laguerre_to_legendre_sonine(nl: int, nm: int) -> tuple[np.ndarray, tuple]:
     from scipy.special import roots_genlaguerre, roots_hermite
 
     degree = (nm - 1) + 2 * (nl - 1)
@@ -445,7 +445,8 @@ def _hermite_laguerre_to_legendre_sonine(nl: int, nm: int) -> tuple[np.ndarray, 
         sonine.append(norm * solid[l] * _laguerre_values(r2, count, l + 0.5))
         labels += [l] * count
     transform = np.einsum("aij,bij,ij->ab", hl, np.concatenate(sonine), weight)
-    return transform, labels
+    transform.setflags(write=False)
+    return transform, tuple(labels)
 
 
 def _composite_gauss(xmax: float, scale: float, fine: float):

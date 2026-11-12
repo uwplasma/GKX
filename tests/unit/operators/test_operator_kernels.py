@@ -14,6 +14,18 @@ from scipy.special import eval_genlaguerre, eval_laguerre, j0, j1, jv
 from scipy.special import roots_hermite, roots_laguerre
 
 from gkx.config import GridConfig
+from pathlib import Path
+
+from gkx.operators.linear.collision_tables import (
+    _hermite_laguerre_to_legendre_sonine,
+    landau_blocks_for,
+    linearized_landau_factors,
+    linearized_landau_pair_matrices,
+)
+from gkx.operators.linear.params import (
+    collision_model_for,
+    params_for_collision_operator,
+)
 from gkx.operators.collision import CollisionContext
 from gkx.core_grid import build_spectral_grid
 from gkx.core_velocity import (
@@ -2881,3 +2893,110 @@ def test_mu_grid_collisional_growth_rate_matches_laguerre():
     mu = gkx.solve(nodal, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
     assert 0.03 < laguerre.gamma < 0.1
     assert abs(mu.gamma - laguerre.gamma) < 0.03 * laguerre.gamma
+
+
+# ---- edge cases of the Landau/Sugama block operators ----
+
+SUGAMA_MODELS = ("sugama", "improved_sugama")
+COLLISION_CASE = (
+    Path(__file__).resolve().parents[3] / "examples/07_collisions/case.toml"
+)
+
+
+def _collision_invariants(nl: int, nm: int) -> tuple[np.ndarray, ...]:
+    density, momentum, energy = (np.zeros(nl * nm) for _ in range(3))
+    density[0] = 1.0
+    momentum[nl] = 1.0
+    energy[2 * nl], energy[1] = 1.0 / np.sqrt(2.0), 1.0
+    return density, momentum, energy
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+@pytest.mark.parametrize("layout", [(1, 1), (1, 2)])
+def test_sugama_needs_enough_moments(layout, model) -> None:
+    """(Nm - 1) + 2 (Nl - 1) >= 2 is required; smaller layouts are refused."""
+
+    with pytest.raises(ValueError, match=">= 2"):
+        linearized_landau_factors(*layout, model=model)
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_lowest_order_layout_conserves(model) -> None:
+    test, field = linearized_landau_pair_matrices(2, 3, model=model)
+    matrix = test + field
+    scale = np.abs(matrix).max()
+    for vector in _collision_invariants(2, 3):
+        assert np.abs(matrix @ vector).max() < 1e-12 * scale
+        assert np.abs(vector @ matrix).max() < 1e-12 * scale
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_float32_blocks_are_finite_and_conserve(model) -> None:
+    params = LinearParams(nu=0.1, collision_model=model)
+    blocks = landau_blocks_for(params, 4, 8, jnp.float32)
+    assert blocks is not None
+    leaves = jax.tree_util.tree_leaves(blocks)
+    assert all(np.all(np.isfinite(np.asarray(a))) for a in leaves)
+    assert all(
+        a.dtype == jnp.float32 for a in leaves if np.issubdtype(a.dtype, np.floating)
+    )
+    test, field = linearized_landau_pair_matrices(4, 8, model=model)
+    matrix = (test + field).astype(np.float32)
+    scale = np.abs(matrix).max()
+    for vector in _collision_invariants(4, 8):
+        assert np.abs(matrix @ vector.astype(np.float32)).max() < 1e-5 * scale
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_zero_nu_builds_no_blocks(model) -> None:
+    assert (
+        landau_blocks_for(
+            LinearParams(nu=0.0, collision_model=model), 4, 8, jnp.float32
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_zero_nu_runs_through_the_runtime(model) -> None:
+    import gkx
+
+    case = gkx.load(COLLISION_CASE)
+    case = case.replace(
+        species=tuple(replace(s, nu=0.0) for s in case.species),
+        time=replace(case.time, collision_operator=model),
+    )
+    result = gkx.solve(case, ky_target=0.3, Nl=4, Nm=8, solver="krylov")
+    assert np.isfinite(result.gamma)
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_single_species_solve(model) -> None:
+    import gkx
+
+    case = gkx.load(COLLISION_CASE)
+    assert len(case.species) == 1
+    case = case.replace(
+        species=tuple(replace(s, nu=0.2) for s in case.species),
+        time=replace(case.time, collision_operator=model),
+    )
+    result = gkx.solve(case, ky_target=0.3, Nl=4, Nm=8, solver="krylov")
+    assert np.isfinite(result.gamma)
+
+
+def test_hermite_laguerre_table_is_read_only() -> None:
+    transform, labels = _hermite_laguerre_to_legendre_sonine(2, 3)
+    assert isinstance(labels, tuple)
+    assert not transform.flags.writeable
+
+
+def test_operator_names_select_models_exactly() -> None:
+    base = LinearParams(nu=0.1)
+    assert params_for_collision_operator(base, "sugama").collision_model == "sugama"
+    assert (
+        params_for_collision_operator(base, " Improved_Sugama ").collision_model
+        == "improved_sugama"
+    )
+    for name in ("landau", "lenard_bernstein", "not_a_sugama_variant", None):
+        assert params_for_collision_operator(base, name) is base
+    assert collision_model_for("coulomb") == "landau"

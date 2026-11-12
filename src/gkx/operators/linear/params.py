@@ -557,8 +557,10 @@ def params_for_collision_operator(
     so the ``*_from_config`` entry points cannot run Landau under a Sugama label.
     """
 
-    key = str(operator).strip().lower()
-    return replace(params, collision_model=key) if "sugama" in key else params
+    model = collision_model_for(str(operator))
+    if model in ("sugama", "improved_sugama"):
+        return replace(params, collision_model=model)
+    return params
 
 
 COLLISION_OPERATOR_NAMES: tuple[str, ...] = (

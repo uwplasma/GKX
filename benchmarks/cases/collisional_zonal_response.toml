@@ -1,7 +1,8 @@
 schema_version = 1
 
 # Frei, Ernst & Ricci, Phys. Plasmas 29, 093902 (2022), Figure 12.
-# Supply a generated P24/J10 Coulomb or Sugama collision matrix for the solve.
+# Select the collision operator (landau, sugama, improved_sugama) with `collision_operator`;
+# lenard_bernstein needs nonzero nu_hermite/nu_laguerre.
 # This input fixes the common geometry, initial perturbation and timestep.
 
 [[species]]
