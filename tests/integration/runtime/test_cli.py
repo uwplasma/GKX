@@ -156,7 +156,7 @@ def test_cli_without_args_runs_default_demo(
     assert code == 0
     assert "No input specified" in out
     assert run_kwargs["solver"] == "time"
-    assert run_kwargs["sample_stride"] == 5
+    assert run_kwargs["sample_stride"] == 50
     assert run_kwargs["show_progress"] is True
     assert (tmp_path / "gkx_default_linear.png").exists()
     assert (tmp_path / "gkx_default_linear.toml").exists()

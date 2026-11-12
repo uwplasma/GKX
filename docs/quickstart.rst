@@ -34,9 +34,10 @@ artifacts in the current directory:
 - ``gkx_default_linear.png``
 
 The demo is the Cyclone s-alpha ITG case at ``ky = 0.3`` with
-``Nl = 7`` Laguerre and ``Nm = 14`` Hermite moments, integrated with ``rk4`` at
-``dt = 0.02`` for 4000 steps (``t = 80``); it takes about ten seconds on a
-laptop CPU. The plot is the standard two-panel linear view: the log-scale
+``Nl = 16`` Laguerre and ``Nm = 28`` Hermite moments on a two-period field
+line (``Nz = 24``), integrated with ``rk4`` at ``dt = 0.01`` for 9500 steps
+(``t = 95``). It prints ``gamma = 0.0929`` and ``omega = 0.280`` against the
+reference 0.0930 and 0.282, and takes about ten seconds on a laptop CPU. The plot is the standard two-panel linear view: the log-scale
 ``|\phi|^2`` time history with fitted ``(\gamma, \omega)`` on the left, and
 the normalized real/imaginary eigenfunction on the right. To rerun the same
 numerical case explicitly:
@@ -187,10 +188,10 @@ Python demo
    # gkx_default_linear.toml is written by the no-argument ``gkx`` run above.
    config, _ = load_runtime_from_toml("gkx_default_linear.toml")
    result = run_runtime_linear(
-       config, ky_target=0.3, Nl=7, Nm=14, solver="time", fit_signal="phi"
+       config, ky_target=0.3, Nl=16, Nm=28, solver="time", fit_signal="phi"
    )
 
-   print(result.gamma, result.omega)  # gamma about 0.103
+   print(result.gamma, result.omega)  # gamma about 0.093
 
 ``run_runtime_linear`` does not read the deck's ``[run]`` table; pass ``Nl``,
 ``Nm`` and ``solver`` explicitly. With no ``Nl``/``Nm`` it falls back to
@@ -206,8 +207,10 @@ Run from TOML
    gkx examples/01_linear_tokamak/case.toml
    python examples/01_linear_tokamak/run.py   # the same case as a scripted k_y scan
 
-Both finish in seconds; ``case_full.toml`` beside them is the production-length
-literature deck.
+Both take about ten seconds per ``k_y`` and reproduce the reference growth rate
+and frequency to 2% at ``k_y = 0.2``, 0.3 and 0.4 (:math:`\gamma` 0.0753, 0.0929
+and 0.0802; the reference is 0.0750, 0.0930 and 0.0809). ``case_full.toml``
+beside them is the production-length literature deck.
 
 Figure generation
 -----------------

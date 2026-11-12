@@ -1,9 +1,10 @@
 schema_version = 1
 
-# Cyclone base case ITG, tutorial resolution: s-alpha geometry, one kinetic ion
-# species, adiabatic electrons. The resolution
-# is deliberately coarse (Nz = 16, Nl = 2, Nm = 4, gamma*t_max ~ 10), so growth
-# rates are qualitative. case_full.toml is the GX-matched literature deck.
+# Cyclone base case ITG: s-alpha geometry, one kinetic ion species, adiabatic
+# electrons. The cheapest resolution that keeps gamma and omega within 2% of the
+# GX reference (src/gkx/data/cyclone_reference_adiabatic.csv) at ky = 0.2, 0.3
+# and 0.4; about ten seconds on a laptop CPU. case_full.toml is the GX-matched
+# literature deck (Nl = 16, Nm = 48; minutes).
 
 [[species]]
 name = "ion"
@@ -13,19 +14,19 @@ fprim = 0.8   # a/L_n
 [grid]
 Nx = 1
 Ny = 12
-Nz = 16
+Nz = 24  # 24 and 32 points agree to 0.5% in gamma; 16 is 5% off at ky 0.4
 Lx = 62.8
 Ly = 62.8
 boundary = "linked"
 y0 = 10.0  # ky spacing 1/y0 = 0.1
-ntheta = 16
-nperiod = 1
+ntheta = 12  # 12 geometry points per period for Nz = 24
+nperiod = 2  # a one-period line is 2-37% off in gamma
 
 [time]
-t_max = 80.0  # about 10 e-folds at ky 0.3
-dt = 0.025  # below the CFL-stable step at ky 0.4
-method = "rk2"
-sample_stride = 1
+t_max = 95.0  # 7 e-folds at ky 0.2; shorter horizons keep the transient in the fit
+dt = 0.01  # the CFL-stable step is 0.0102 at Nm = 28
+method = "rk4"  # rk2 is unstable at this Nm
+sample_stride = 50  # 9500 steps, 190 samples
 
 [geometry]
 q = 1.4
@@ -50,6 +51,6 @@ tau_e = 1.0
 contract = "cyclone"
 
 [run]
-Nl = 2
-Nm = 4
+Nl = 16  # Nl = 8 is 6-17% high in gamma, Nl = 12 is 3-5% low
+Nm = 28  # gamma converges non-monotonically in Nm: 20, 24 and 32 are 4-6% off at ky = 0.4
 solver = "time"

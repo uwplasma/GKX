@@ -34,24 +34,22 @@ from gkx.workflows.runtime.commands import (
 
 
 # The demo is the first thing most people run, so it reports a number that can
-# be checked rather than a fast one that cannot. At dt = 0.03 over 500 steps it
-# printed gamma = 0.089982 against a certified Krylov eigenvalue of 0.103263 at
-# these same settings -- 12.9 percent low -- and emitted four warnings saying so:
-# the step exceeded the estimated CFL bound of 0.02197, and 15 time units gave
-# only 1.34 e-foldings to fit. Both are fixed by construction here. dt sits
-# under the CFL bound, and 4000 steps reach t = 80, which is past the
-# gamma * t_max >= 7 the fitter asks for. The run costs about 7 s instead of
-# 3 s and lands within 0.02 percent of the eigenvalue with no warnings.
-# tests/validation/physics_gates/test_collision_physics.py pins that agreement.
+# be checked rather than a fast one that cannot. Its resolution is the cheapest
+# that reproduces the tabulated Cyclone reference (src/gkx/data/cyclone_reference_adiabatic.csv)
+# to within 2% in gamma and omega at ky = 0.2, 0.3 and 0.4: Nl = 16, Nm = 28 on a
+# two-period field line (an earlier Nl = 7, Nm = 14 demo printed gamma 11% high).
+# dt sits under the estimated CFL bound of 0.0102 and 9500 steps reach t = 95,
+# past the gamma * t_max >= 7 the fitter asks for, so the run emits no warnings.
+# tests/validation/physics_gates/test_collision_physics.py pins the agreement with the eigenvalue and with the reference.
 DEFAULT_DEMO_SETTINGS: dict[str, float | int | str] = {
     "ky": 0.3,
-    "Nl": 7,
-    "Nm": 14,
+    "Nl": 16,
+    "Nm": 28,
     "solver": "time",
     "method": "rk4",
-    "dt": 0.02,
-    "steps": 4000,
-    "sample_stride": 5,
+    "dt": 0.01,
+    "steps": 9500,
+    "sample_stride": 50,
     "fit_signal": "phi",
 }
 
@@ -95,12 +93,12 @@ kinetic = true
 [grid]
 Nx = 1
 Ny = 24
-Nz = 96
+Nz = 24
 Lx = 62.8
 Ly = 62.8
 boundary = "linked"
 y0 = 20.0
-ntheta = 32
+ntheta = 12
 nperiod = 2
 
 [time]
