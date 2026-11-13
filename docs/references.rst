@@ -222,6 +222,12 @@ References
    equilibria," Physics of Fluids 26, 3553 (1983).
    `DOI <https://doi.org/10.1063/1.864116>`__.
 
+.. [Landreman25] M. Landreman, J. Y. Choi, C. Alves, P. Balaprakash, M. Churchill,
+   R. Conlin, and G. Roberg-Clark, "How does ion temperature gradient turbulence
+   depend on magnetic geometry? Insights from data and machine learning,"
+   Journal of Plasma Physics 91, E120 (2025).
+   `DOI <https://doi.org/10.1017/S0022377825100536>`__.
+
 .. [LandremanPaul22] M. Landreman and E. Paul, "Magnetic Fields with Precise
    Quasisymmetry for Plasma Confinement," Physical Review Letters 128, 035001
    (2022). `DOI <https://doi.org/10.1103/PhysRevLett.128.035001>`__.
