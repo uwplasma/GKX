@@ -21,6 +21,9 @@ runs:
     - name: Install GKX with the dev extra
       shell: bash
       run: |
+        # Persistent runners keep ~/.matplotlib between jobs; a font cache that
+        # points into an earlier job's deleted venv makes every plot fail.
+        echo "MPLCONFIGDIR=$RUNNER_TEMP/mplconfig" >> "$GITHUB_ENV"
         echo "UV_SYSTEM_PYTHON=0" >> "$GITHUB_ENV"
         export UV_SYSTEM_PYTHON=0
         uv venv --python "${{ inputs.python-version }}" "$GITHUB_WORKSPACE/.venv"
