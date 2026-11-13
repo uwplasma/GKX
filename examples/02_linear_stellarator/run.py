@@ -1,17 +1,19 @@
-"""Linear ITG growth-rate scan in a quasi-helically symmetric stellarator.
+"""Linear ITG growth rates in a quasi-helically symmetric stellarator.
 
-Loads ``case.toml``: an HSX-like quasi-helically symmetric equilibrium
-(Nuhrenberg & Zille 1988) whose flux tube at s = 0.64 is sampled from a VMEC
-wout through booz_xform_jax. If the wout is missing it is solved once with
-vmex (``pip install vmex``; several minutes on a CPU) and written to
-``examples/vmec/``. The script then scans ``k_y``, prints gamma and omega,
-saves JSON and CSV, and plots the spectrum and the eigenfunction along the
-field line. One to two minutes on a CPU once the wout exists; tutorial
-resolution, so the rates are qualitative. ``case_full.toml`` is the
+Fast path: ``case.toml`` is an HSX-like equilibrium (Nuhrenberg and Zille 1988)
+whose flux tube at s = 0.64 is cut from a VMEC wout. If the wout is missing it
+is solved once with vmex (``pip install vmex``, several minutes on a CPU) and
+written to ``examples/vmec/``. ``gkx.scan`` gives the rates; the eigenfunction
+comes from a time run at the fastest-growing ``k_y``, long enough for the mode
+to emerge from the initial transient. There is no research path here: the
+tutorial resolution makes the rates qualitative, and ``case_full.toml`` is the
 96x96x48 quasilinear-audit deck.
+
+Prints gamma and omega for each ``k_y``. Writes ``summary.json``, the scan files
+and ``linear_stellarator.png`` to ``outputs/02_linear_stellarator``. One to two
+minutes on a laptop CPU once the wout exists.
 """
 
-import importlib.util
 import json
 import os
 import subprocess
@@ -28,43 +30,38 @@ CASE = Path(__file__).with_name("case.toml")
 VMEC_INPUT = Path(__file__).parents[1] / "vmec" / "input.NuhrenbergZille_1988_QHS"
 OUTPUT = Path("outputs/02_linear_stellarator")
 KY = [0.2, 0.4, 0.6, 0.8]  # k_y rho_i
-PEAK_T_MAX = 120.0  # time run for the eigenfunction at the fastest-growing k_y
+PEAK_T_MAX = 240.0  # time run for the eigenfunction at the fastest-growing k_y
 
+# ---- Fast path ----
 case = gkx.load(CASE)
 wout = Path(case.geometry.vmec_file)
-if not wout.exists():  # solve the equilibrium once (minutes on a CPU)
-    if importlib.util.find_spec("vmex") is None:
-        raise SystemExit(f"{wout.name} is missing: pip install vmex, then rerun")
+if (
+    not wout.exists()
+):  # vmex exits with status 2 on a loose tolerance but still writes it
     print(f"solving {VMEC_INPUT.name} with vmex to create {wout.name}")
-    # vmex exits with status 2 on a loose tolerance but still writes the wout
     subprocess.run(
         [sys.executable, "-m", "vmex", VMEC_INPUT.name],
         cwd=VMEC_INPUT.parent,
-        env={**os.environ, "JAX_PLATFORMS": "cpu"},  # CPU: no GPU memory contention
+        env={**os.environ, "JAX_PLATFORMS": "cpu"},
     )
-    if not wout.exists():
-        raise SystemExit(f"vmex did not write {wout.name}")
-print(
-    f"geometry {case.geometry.model}: {wout.name}, s = {case.geometry.torflux}, alpha = {case.geometry.alpha}"
-)
+if not wout.exists():
+    raise SystemExit(f"{wout.name} is missing: pip install vmex, then rerun")
 
-scan = gkx.scan(
-    case, KY, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver, show_progress=True
-)
+run = dict(
+    Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
+)  # the deck's [run] block
+scan = gkx.scan(case, KY, **run, show_progress=True)
 peak_ky = float(scan.ky[int(np.argmax(scan.gamma))])
-# The eigenfunction comes from a time run, long enough for the mode to emerge
-# from the initial transient; the rates above are certified eigenvalues.
 peak = gkx.solve(
     case.replace(time=replace(case.time, t_max=PEAK_T_MAX)),
     ky_target=peak_ky,
-    Nl=case.run.Nl,
-    Nm=case.run.Nm,
-    solver="time",
+    **{**run, "solver": "time"},
     show_progress=True,
 )
 for ky, gamma, omega in zip(scan.ky, scan.gamma, scan.omega):
     print(f"ky = {ky:.2f}: gamma = {gamma:+.5f}, omega = {omega:+.5f}")
 
+# ---- Outputs ----
 OUTPUT.mkdir(parents=True, exist_ok=True)
 scan.save(OUTPUT / "scan")
 summary = {
@@ -77,6 +74,7 @@ summary = {
 }
 (OUTPUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 
+gkx.set_plot_style()
 fig, (ax_gamma, ax_mode) = plt.subplots(1, 2, figsize=(9.5, 3.6))
 ax_gamma.plot(scan.ky, scan.gamma, "o-", label=r"$\gamma$")
 ax_gamma.plot(scan.ky, scan.omega, "s--", label=r"$\omega$")
@@ -91,8 +89,6 @@ ax_mode.set(
     ylabel=r"$|\phi|/|\phi|_{\max}$",
     title=f"Eigenfunction, $k_y\\rho_i$={peak_ky:.1f}",
 )
-for ax in (ax_gamma, ax_mode):
-    ax.grid(alpha=0.3)
 fig.tight_layout()
 fig.savefig(OUTPUT / "linear_stellarator.png", dpi=150)
 print(f"wrote {OUTPUT}/summary.json and {OUTPUT}/linear_stellarator.png")

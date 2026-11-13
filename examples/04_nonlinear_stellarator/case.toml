@@ -27,7 +27,7 @@ Ly = 62.8
 boundary = "fix aspect"
 y0 = 21.0
 ntheta = 32
-nperiod = 1
+nperiod = 2
 
 [time]
 # Optional runtime controls; intervals use normalized time, like t_max.
@@ -44,8 +44,6 @@ model = "vmec"
 vmec_file = "../vmec/wout_NuhrenbergZille_1988_QHS.nc"
 torflux = 0.64
 alpha = 0.0
-# Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
-npol = 1.0
 
 [init]
 init_field = "density"

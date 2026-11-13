@@ -1173,7 +1173,7 @@ For kinetic electrons the default rule is on a plateau: :math:`\gamma` at
   and rate 0 where the case has no field-line ends or no layer (zonal and
   periodic decks, the electron-scale ETG and the provisional TEM deck).
 
-**Linear time stepping.** Tutorial resolution, default precision, laptop CPU,
+**Linear time stepping.** Resolution as listed, default precision, laptop CPU,
 warm wall time per solve against the certified eigenpair (``solver = "krylov"``).
 
 .. list-table:: Fixed ``rk2`` and ``rk4`` + CFL against the eigensolver
@@ -1185,11 +1185,11 @@ warm wall time per solve against the certified eigenpair (``solver = "krylov"``)
      - ``rk4`` + CFL
      - Eigensolver (banded, adaptive)
      - Note
-   * - 01 s-alpha ITG, (2, 4), ``t = 80``
-     - 0.05% max, 0.16 s
-     - 0.04% max, 0.28 s
-     - 0.83 s, 0.10 s
-     - cold 0.17 s against 0.71 s
+   * - 01 s-alpha ITG, (16, 48), ``t = 96``
+     - unstable at Nm = 48
+     - fixed ``rk4``, ``dt`` 0.008: 0.08% in gamma, 0.02% in omega, 87 s (the deck)
+     - 107 s cold (180 s on a second, loaded run; the machine was at load 35)
+     - ky = 0.3, float64; ``rk4`` + CFL not re-measured
    * - 06 EM, :math:`\beta` = 0.015, (4, 8), ``t = 80``
      - 0.08% max, 0.58 s
      - 0.08% max, 1.13 s
@@ -1201,10 +1201,10 @@ warm wall time per solve against the certified eigenpair (``solver = "krylov"``)
      - 23.9 s, 14.3 s
      -
    * - 07 Coulomb operator, ``t = 20`` against 60
-     - 9% low at 20
+     - 2% high at 20
      - same
      - no eigensolver for this operator
-     - ``t`` 60: 0.06% of ``t`` 200
+     - ``t`` 60: 0.003% of ``t`` 200
    * - 08 quasilinear, 11 scan, ``t = 20``
      - 20 to 38% low
      - same
@@ -1216,8 +1216,8 @@ warm wall time per solve against the certified eigenpair (``solver = "krylov"``)
      - 0.95 s, 0.14 s
      - horizon, not stepper
 
-**Decision.** The tutorials with ``solver = "time"`` (01, 06, 07) keep fixed
-``rk2``: the same :math:`\gamma` as ``rk4`` + CFL to 0.05% (:math:`\omega` to
+**Decision.** The tutorials with ``solver = "time"`` (06, 07) keep fixed
+``rk2`` (01 uses fixed ``rk4`` at its Nm = 48, where ``rk2`` is unstable): the same :math:`\gamma` as ``rk4`` + CFL to 0.05% (:math:`\omega` to
 0.1%) at 0.5 to 0.6 times the wall time, and the run warns when ``dt`` exceeds
 the CFL-stable step. ``solver = "auto"`` runs the deck's own time route first
 (plus under 0.05 s on the tutorials), so its :math:`\gamma` is that route's; it

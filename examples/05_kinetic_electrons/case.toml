@@ -40,8 +40,7 @@ Ly = 62.8
 boundary = "linked"
 y0 = 28.2
 ntheta = 16
-# Short field line: growth rates are not converged below nperiod = 2; see docs/guidance.rst.
-nperiod = 1
+nperiod = 2
 
 [time]
 # Optional runtime controls; intervals use normalized time, like t_max.

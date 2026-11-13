@@ -350,7 +350,7 @@ non-Hermitian eigenvectors unless the caller opts in through
 ``lax_linalg.eig(..., enable_eigvec_derivs=True)`` (``jax >= 0.10.1``); the
 implicit left/right path is the validation route for quasilinear observables.
 
-``examples/08_quasilinear/implicit_sensitivity.py`` applies it to
+The research path of ``examples/08_quasilinear/run.py`` applies it to
 a small Cyclone linear-RHS fixture. The differentiated observable is
 :math:`[\gamma, \omega, k_{\perp,\mathrm{eff}}^2, \widehat{Q}_i,
 Q_i^{(\mathrm{ML})}]`, where :math:`Q_i^{(\mathrm{ML})}` is the uncalibrated
@@ -359,7 +359,7 @@ branch, and inspect the eigenvalue gap before interpreting the derivative.
 
 .. code-block:: bash
 
-   python examples/08_quasilinear/implicit_sensitivity.py
+   python examples/08_quasilinear/run.py
 
 Tests
 -----

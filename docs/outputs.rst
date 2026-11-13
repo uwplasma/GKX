@@ -248,8 +248,10 @@ nonlinear figure set is:
 
 A CSV diagnostics sidecar carries time traces only, so it gets the summary and
 the flux traces. A linear point and a ``ky`` scan each write
-``<base>.plot.png``. Pass ``--no-plots``, or set ``[output] plots = false``,
-to skip them. Plotting never affects a run's exit status: a failure prints a
+``<base>.plot.png``; a linear point adds the field-line geometry. ``--plot``
+also opens the figures in a window, and writes them beside the current
+directory when the deck sets no output path. Pass ``--no-plots``, or set
+``[output] plots = false``, to skip them. Plotting never affects a run's exit status: a failure prints a
 warning and leaves the saved simulation untouched.
 
 Alongside a NetCDF bundle the runtime also writes ``<base>.summary.json``,

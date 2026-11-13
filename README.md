@@ -51,7 +51,7 @@ optimization.
 gkx wout_circular_tokamak.nc --estimate   # size the grid, explain it, exit
 gkx wout_circular_tokamak.nc              # nonlinear ITG run to saturation
 gkx plot wout_circular_tokamak/gkx.out.nc # replot a saved bundle
-gkx examples/01_linear_tokamak/case.toml  # any TOML deck
+gkx examples/01_linear_tokamak/case.toml --plot  # any TOML deck; --plot opens the figures
 ```
 
 A run stops when heat flux, field energy and free energy are stationary, or
@@ -102,6 +102,16 @@ Collisional trapped-electron mode at k_y rho_i = 0.3 on the
 `benchmarks/cases/tem_collisional.toml` deck. At (Nl, Nm) = (4, 8) the four
 operators lie within 4% of one another; GKX is not converged there. Redraw with
 `python docs/figures/collision_operators.py`.
+
+<img src="docs/_static/collision_validation.png" width="860" alt="Left: GKX landau collisional trapped-electron mode growth rate against velocity-space size, with GS2 and stella. Right: zonal-flow damping of the four GKX operators against the Xiao-Catto-Molvig formula">
+
+The collisional growth rate of `landau` converges to 0.2587 +- 0.0006, 3% below
+GS2 (0.2666) and 0.5% above stella's Fokker-Planck test part (0.2575 at its
+second grid); the ratio to the collisionless rate is 0.73 +- 0.02 against GS2's
+0.736. The zonal flow relaxes to 0.006 of its initial value for every
+operator, against 0.0051 from the formula, which the decay rate matches to
+about 10% only below a neoclassical collisionality of 0.3, at the finest resolution
+([validation](docs/validation.rst)).
 
 ## Derivatives and optimization
 

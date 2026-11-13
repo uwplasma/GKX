@@ -27,12 +27,11 @@ Ly = 62.8
 boundary = "linked"
 y0 = 10.0
 ntheta = 16
-# Short field line: growth rates are not converged below nperiod = 2; see docs/guidance.rst.
-nperiod = 1
+nperiod = 2
 
 [time]
 # Time route: coulomb_finite_kperp has no eigensolver. t_max = 60 reads gamma within
-# 0.06% of t_max = 200 (20 reads 9% low); rk2 at this dt and rk4 + CFL agree to 1e-5.
+# 0.003% of t_max = 200 (20 reads 2% high); rk2 at this dt and rk4 + CFL agree to 1e-5.
 t_max = 60.0
 dt = 0.01
 method = "rk2"

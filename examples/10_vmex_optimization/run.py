@@ -1,36 +1,42 @@
-#!/usr/bin/env python
-"""Vacuum QA optimization with physical nonlinear GKX heat flux.
+"""Vacuum QA stellarator optimization with a nonlinear GKX heat-flux objective.
 
-Requires ``pip install vmex``; the seed deck is ``examples/vmec/input.minimal_seed_nfp2``.
-The default ladder (five boundary-mode
-stages, 8,000 saturation steps per refresh) is an expensive research
-calculation meant for a GPU; ``VMEX_EXAMPLES_CI=1`` selects a tiny CPU wiring
-run that does not reach saturation. Writes the
-per-stage objective history ``summary.json``, ``input.QA_GKX_optimized``,
-``wout_QA_GKX_optimized.nc`` and the vmex equilibrium plots to
-``outputs/10_vmex_optimization``. See README.md in this directory for the scope of the result.
+Research path only: this is a campaign, not a quick run. VMEX optimizes the
+boundary of the seed deck ``examples/vmec/input.minimal_seed_nfp2`` in five
+boundary-mode stages for quasisymmetry, aspect ratio and mean iota, and an extra
+objective term adds the ion heat flux of a GKX nonlinear run. The flux is the
+average over a post-saturation window, differentiated step by step with a fixed
+step rk3 integrator; the saturated state itself is detached and refreshed once per
+accepted stage. The equilibrium is vacuum; ``A_OVER_LT`` and ``A_OVER_LN`` supply
+the gyrokinetic drive (GKX uses a/L, not R/L). SciPy's ``least_squares`` consumes
+the residuals and their analytic Jacobian. README.md in this directory states the
+scope of the result and lists the maintained VMEX turbulence examples.
+
+The default ladder (8,000 saturation steps per stage) is meant for a GPU. Set
+``WIRING_RUN = True`` for a tiny CPU run that checks the wiring and does not reach
+saturation. Requires ``pip install vmex``.
+
+Prints one line per stage. Writes ``summary.json``, ``vmex_optimization.png``,
+``input.QA_GKX_optimized``, ``wout_QA_GKX_optimized.nc`` and the vmex equilibrium
+plots to ``outputs/10_vmex_optimization``.
 """
 
-from dataclasses import replace
 import json
-import os
+from dataclasses import replace
 from pathlib import Path
 
 import jax.numpy as jnp
+import matplotlib.pyplot as plt
 import numpy as np
-from scipy.optimize import least_squares
-
-import gkx
-from gkx.workflows.runtime.warm_start import (
-    SaturationRefreshPolicy,
-    SaturationWarmStart,
-    flux_tube_signature,
-)
 import vmex as vj
+from scipy.optimize import least_squares
 from vmex import optimize as opt
 from vmex.core import turbulence
 
-nfp = 2
+import gkx
+
+SEED = Path(__file__).parents[1] / "vmec" / "input.minimal_seed_nfp2"
+OUTPUT = Path("outputs/10_vmex_optimization")
+WIRING_RUN = False
 SURFACES = np.linspace(0.1, 1.0, 10)
 MAX_MODES, MAX_NFEV = [1, 2, 3, 4, 5], [10, 20, 40, 80, 120]
 ASPECT_TARGET, IOTA_TARGET = 6.0, 0.42
@@ -38,26 +44,19 @@ MINIMUM_MPOL = 5
 SEED_PERTURBATION = 0.01
 QA_PRIORITY, ASPECT_PRIORITY, IOTA_PRIORITY = 1.0e3, 1.0e3, 1.0e5
 TRANSPORT_PRIORITY = 20.0
-
-# Finite ITG drive: GKX uses a/L, not R/L.
 A_OVER_LT, A_OVER_LN = 3.0, 1.0
 NX, NY, NZ, NL, NM = 8, 8, 16, 4, 8
 DT, SATURATION_STEPS, WINDOW_STEPS = 0.05, 8_000, 1_024
 
-ci_smoke = os.environ.get("VMEX_EXAMPLES_CI") == "1"
-if ci_smoke:
-    MAX_MODES, MAX_NFEV = [1], [2]
-    MINIMUM_MPOL = 3
-    NX, NY, NZ, NM = 4, 4, 8, 3
-    SATURATION_STEPS, WINDOW_STEPS = 2, 2
-
-DATA = Path(__file__).parents[1] / "vmec" / "input.minimal_seed_nfp2"
-inp = vj.VmecInput.from_file(DATA)
+# ---- Setup ----
+inp = vj.VmecInput.from_file(SEED)
 rbc, zbs = inp.rbc.copy(), inp.zbs.copy()
 rbc[inp.ntor + 1, 1] += SEED_PERTURBATION
 zbs[inp.ntor + 1, 1] += SEED_PERTURBATION
 inp = replace(inp, rbc=rbc, zbs=zbs, am=np.zeros_like(inp.am), pres_scale=0.0)
-if ci_smoke:
+if WIRING_RUN:
+    MAX_MODES, MAX_NFEV, MINIMUM_MPOL = [1], [2], 3
+    NX, NY, NZ, NM, SATURATION_STEPS, WINDOW_STEPS = 4, 4, 8, 3, 2, 2
     inp = replace(
         inp,
         ns_array=np.asarray([11]),
@@ -120,48 +119,17 @@ def parameters(local_geometry):
     )
 
 
-# Spin-up warm start, wired but not switched on. The saturated state is still
-# detached and still refreshed exactly where it always was -- once per accepted
-# VMEX stage -- so the objective remains a fixed function of (state, runtime)
-# for the whole of each stage and never becomes a function of the optimizer's
-# within-stage history. What a warm spin-up would change is only the cost of
-# producing the refreshed state: a stage that barely moved the flux tube could
-# reseed from the previous saturated state instead of climbing out of a 1e-3
-# seed again, on a quarter of the step budget. The policy restores the full
-# cold spin-up as soon as the geometry moves by more than `geometry_tolerance`,
-# or after `max_reuse` consecutive warm spin-ups, so a run of individually
-# small steps cannot drift away from the attractor.
-#
-# `max_reuse=0` disables it, so this script's numbers are exactly what they
-# were. Raise it to opt in. It is off by default because the saving is real but
-# its cost has not been measured here: a shortened spin-up still has to
-# re-equilibrate to the new geometry, and whether a quarter budget suffices is
-# a question about this objective's sensitivity that only a full optimization
-# run answers. Turn it on alongside a comparison against a `max_reuse=0` run.
-saturation_warm_start = SaturationWarmStart(
-    policy=SaturationRefreshPolicy(
-        max_reuse=0, geometry_tolerance=0.05, warm_step_fraction=0.25
-    )
-)
-
-
 def saturate(equilibrium):
+    """Saturated nonlinear state on the equilibrium's flux tube, detached from the optimizer."""
+
     local_geometry = geometry(equilibrium.state, equilibrium.runtime)
-    signature = flux_tube_signature(local_geometry)
-    plan = saturation_warm_start.plan(signature, cold_steps=SATURATION_STEPS)
-    seed = initial_state() if plan.seed is None else jnp.asarray(plan.seed)
-    print(
-        f"saturation spin-up: {'warm' if plan.warm else 'cold'} seed, "
-        f"{plan.steps} steps ({plan.reason or 'first spin-up'})",
-        flush=True,
-    )
-    state = gkx.integrate_nonlinear(
-        seed,
+    return gkx.integrate_nonlinear(
+        initial_state(),
         grid,
         local_geometry,
         parameters(local_geometry),
         DT,
-        plan.steps,
+        SATURATION_STEPS,
         # Fixed-step rk3, not the CFL-controlled default: the window is differentiated step by
         # step, so the step count must not depend on the state.
         method="rk3",
@@ -169,19 +137,10 @@ def saturate(equilibrium):
         checkpoint=False,
         return_fields=False,
     )
-    saturation_warm_start.record(state, signature, warm=plan.warm)
-    return state
-
-
-print("solving vacuum seed equilibrium", flush=True)
-equilibrium = opt.solve_equilibrium(inp)
-print("running GKX saturation", flush=True)
-saturated_state = saturate(equilibrium)
-qs = opt.QuasisymmetryRatioResidual(SURFACES, helicity_m=1, helicity_n=0)
 
 
 def turbulent_transport(state, runtime):
-    """Actual GKX heat flux, differentiated through the post-saturation window."""
+    """GKX heat flux, differentiated through the post-saturation window."""
 
     local_geometry = geometry(state, runtime)
     return gkx.nonlinear_heat_flux_window(
@@ -192,20 +151,24 @@ def turbulent_transport(state, runtime):
         DT,
         WINDOW_STEPS,
         terms=terms,
-        method="rk3",  # fixed step, as above
+        method="rk3",
     )
 
 
+# ---- Research path: boundary-mode ladder ----
+print("solving the seed equilibrium and its GKX saturation", flush=True)
+equilibrium = opt.solve_equilibrium(inp)
+saturated_state = saturate(equilibrium)
+qs = opt.QuasisymmetryRatioResidual(SURFACES, helicity_m=1, helicity_n=0)
 seed_flux = float(turbulent_transport(equilibrium.state, equilibrium.runtime))
-flux_scale = max(abs(seed_flux), 1.0e-4 if ci_smoke else 1.0e-12)
-transport_weight = TRANSPORT_PRIORITY / (flux_scale * flux_scale)
+flux_scale = max(abs(seed_flux), 1.0e-4 if WIRING_RUN else 1.0e-12)
+transport_weight = TRANSPORT_PRIORITY / flux_scale**2
 objective_function_terms = [
     (qs, 0.0, QA_PRIORITY),
     (opt.aspect_ratio, ASPECT_TARGET, ASPECT_PRIORITY),
     (opt.mean_iota, IOTA_TARGET, IOTA_PRIORITY),
     (turbulent_transport, 0.0, transport_weight),
 ]
-
 
 history = []
 
@@ -228,7 +191,6 @@ def report(label, local_equilibrium):
         f"iota={values['mean iota']:.4f}, GKX Q={values['GKX Q']:.6e}"
     )
     history.append({"stage": label, **values})
-    return values
 
 
 for max_mode, max_nfev in zip(MAX_MODES, MAX_NFEV):
@@ -258,20 +220,28 @@ for max_mode, max_nfev in zip(MAX_MODES, MAX_NFEV):
     equilibrium = problem.equilibrium_from_x(result.x)
     saturated_state = saturate(equilibrium)
     report(f"mode {max_mode}", equilibrium)
+print(f"\nGKX Q {seed_flux:.3e} -> {history[-1]['GKX Q']:.3e}")
 
-final_total = report("final", equilibrium)["QS total"]
-final_flux = float(turbulent_transport(equilibrium.state, equilibrium.runtime))
-print(f"\nQS total {final_total:.3e}; GKX Q {seed_flux:.3e} -> {final_flux:.3e}")
-OUTPUT = Path("outputs/10_vmex_optimization")
+# ---- Outputs ----
 OUTPUT.mkdir(parents=True, exist_ok=True)
 (OUTPUT / "summary.json").write_text(json.dumps(history, indent=2) + "\n")
+gkx.set_plot_style()
+fig, (ax_qs, ax_q) = plt.subplots(1, 2, figsize=(9.0, 3.6))
+stages = [row["stage"] for row in history]
+ax_qs.semilogy(stages, [row["QS total"] for row in history], "o-")
+ax_qs.set(ylabel="QS total", title="Quasisymmetry error")
+ax_q.plot(stages, [row["GKX Q"] for row in history], "o-")
+ax_q.axhline(seed_flux, color="0.5", linestyle="--", label="seed")
+ax_q.set(ylabel=r"$Q_i/Q_{GB}$", title="Post-saturation heat flux")
+ax_q.legend(frameon=False)
+fig.tight_layout()
+fig.savefig(OUTPUT / "vmex_optimization.png", dpi=150)
 input_path = inp.to_indata(str(OUTPUT / "input.QA_GKX_optimized"))
 wout_path = vj.write_wout(str(OUTPUT / "wout_QA_GKX_optimized.nc"), equilibrium.wout)
-print(f"wrote {OUTPUT}/summary.json")
-print(f"wrote {input_path}")
-print(f"wrote {wout_path}")
+print(
+    f"wrote {OUTPUT}/summary.json, vmex_optimization.png, {input_path} and {wout_path}"
+)
 try:
-    for path in vj.plot_wout(wout_path, OUTPUT).values():
-        print(f"wrote {path}")
+    vj.plot_wout(wout_path, OUTPUT)
 except (ImportError, ValueError) as error:
     print(f"skipped optional equilibrium plots: {error}")

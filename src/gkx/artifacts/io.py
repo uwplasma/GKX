@@ -80,10 +80,18 @@ def _flatten_series(series: np.ndarray) -> np.ndarray:
     return np.mean(arr, axis=1)
 
 
+def _json_scalar(value: Any) -> Any:
+    # NumPy scalars (np.bool_, np.float64) from diagnostics are not JSON-native.
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f"{type(value).__name__} is not JSON serializable")
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     _ensure_parent(path)
     path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(payload, indent=2, sort_keys=True, default=_json_scalar) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -456,14 +464,25 @@ def _write_runtime_linear_eigenfunction(base: Path, result: Any) -> str | None:
         return None
     eig_path = Path(f"{base}.eigenfunction.csv")
     eig = np.asarray(result.eigenfunction)
+    line = getattr(result, "field_line", None)
+    extra = [] if line is None else list(np.asarray(line, dtype=float))
     _write_csv(
         eig_path,
-        headers=["z", "eigen_real", "eigen_imag", "eigen_abs"],
+        headers=[
+            "z",
+            "eigen_real",
+            "eigen_imag",
+            "eigen_abs",
+            "bmag",
+            "gbdrift",
+            "cvdrift",
+        ][: 4 + len(extra)],
         cols=[
             np.asarray(result.z, dtype=float),
             np.real(eig),
             np.imag(eig),
             np.abs(eig),
+            *extra,
         ],
     )
     return str(eig_path)
