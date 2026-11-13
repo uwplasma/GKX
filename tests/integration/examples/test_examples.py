@@ -60,11 +60,18 @@ SMOKE_OUTPUTS: dict[str, tuple[str, str]] = {
     "11_parallel_scan/run.py": ("summary.json", "parallel_scan.png"),
     "12_restart_and_analysis/run.py": ("summary.json", "restart_and_analysis.png"),
     "13_advanced_time_stepping/run.py": ("summary.json", "advanced_steppers.png"),
+    "14_zonal_flows/run.py": ("summary.json", "zonal_flows.png"),
 }
 
 # Editable constants turned down for the smoke run (name -> Python expression).
 SMOKE_KNOBS: dict[str, dict[str, str]] = {
-    "01_linear_tokamak/run.py": {"KY": "[0.2, 0.3]", "RESOLUTIONS": "[(4, 8)]"},
+    "01_linear_tokamak/run.py": {
+        "KY": "[0.2, 0.3]",
+        "RESOLUTIONS": "[(4, 8)]",
+        "SHAPES": '{"circular": {}, "delta 0.3": {"tri": 0.3}}',
+    },
+    "03_nonlinear_tokamak/run.py": {"SAT_T_MAX": "30.0", "SAT_T_MIN": "10.0"},
+    "14_zonal_flows/run.py": {"T_MAX": "40.0", "OPERATORS": '("landau",)'},
     "02_linear_stellarator/run.py": {"KY": "[0.4, 0.6]"},
     "07_collisions/run.py": {
         "MODELS": '("sugama", "coulomb_finite_kperp")',
@@ -200,6 +207,7 @@ def test_gallery_layout_matches_the_numbered_groups():
         "11_parallel_scan",
         "12_restart_and_analysis",
         "13_advanced_time_stepping",
+        "14_zonal_flows",
     ]
     extra = {p.name for p in EXAMPLES.iterdir() if p.is_dir()} - set(GROUPS)
     # vmec/ holds the shared VMEC input decks, reference_inputs/ the every-key decks;

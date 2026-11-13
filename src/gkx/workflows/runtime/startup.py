@@ -375,8 +375,8 @@ def _resolve_runtime_hl_dims(
             _RUNTIME_NONLINEAR_HL_FALLBACK if nonlinear else _RUNTIME_LINEAR_HL_FALLBACK
         )
         return cfg.with_species_fallback(
-            int(fallback[0] if Nl is None else Nl),
-            int(fallback[1] if Nm is None else Nm),
+            int(Nl or cfg.run.Nl or fallback[0]),  # argument, deck [run], fallback
+            int(Nm or cfg.run.Nm or fallback[1]),
             _SPECIES_HL_FALLBACK,
         )
     _raise_unsupported_reduced_model(cfg)

@@ -1079,7 +1079,7 @@ def prepare(case: RuntimeConfig, **options: Any) -> Any:
 def run_runtime_nonlinear(
     cfg: RuntimeConfig,
     *,
-    ky_target: float = 0.3,
+    ky_target: float | None = None,
     kx_target: float | None = None,
     Nl: int | None = None,
     Nm: int | None = None,
@@ -1100,9 +1100,12 @@ def run_runtime_nonlinear(
     """Run a nonlinear point using the unified runtime config path.
 
     ``prepare_only`` returns the compiled prepared simulation instead (the
-    :func:`prepare` path).
+    :func:`prepare` path). ``ky_target``, ``kx_target``, ``Nl`` and ``Nm`` default to the deck's
+    ``[run]`` block, then to 0.3 and the runtime fallback.
     """
 
+    ky_target = cfg.run.ky or 0.3 if ky_target is None else ky_target
+    kx_target = cfg.run.kx if kx_target is None else kx_target
     if method is not None:
         cfg = replace(cfg, time=replace(cfg.time, method=method))
     cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm, nonlinear=True)

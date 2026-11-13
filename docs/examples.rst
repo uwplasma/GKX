@@ -24,6 +24,7 @@ Tokamak cases
    gkx benchmarks/cases/etg_linear_scan.toml
    gkx benchmarks/cases/kaw_linear.toml
    python examples/06_electromagnetic/run.py
+   python examples/14_zonal_flows/run.py
    gkx benchmarks/cases/kbm_nonlinear.toml
    gkx benchmarks/cases/cyclone_nonlinear_miller.toml
 

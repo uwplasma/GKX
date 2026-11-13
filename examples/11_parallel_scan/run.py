@@ -25,10 +25,7 @@ KY = [0.1, 0.2, 0.3, 0.4]  # k_y rho_i points, one worker task each
 
 # ---- Fast path ----
 case = gkx.load(CASE)
-run = dict(
-    Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
-)  # the deck's [run] block
-parallel = gkx.scan(case, KY, **run, show_progress=True)
+parallel = gkx.scan(case, KY, show_progress=True)
 info = parallel.parallel or {}
 for ky, gamma, omega in zip(parallel.ky, parallel.gamma, parallel.omega):
     print(f"ky = {ky:.2f}: gamma = {gamma:+.5f}, omega = {omega:+.5f}")
@@ -38,9 +35,7 @@ print(
 )
 
 # ---- Research path: the serial scan as a reference ----
-serial = gkx.scan(
-    case.replace(parallel=replace(case.parallel, strategy="serial")), KY, **run
-)
+serial = gkx.scan(case.replace(parallel=replace(case.parallel, strategy="serial")), KY)
 identical = bool(
     np.array_equal(parallel.gamma, serial.gamma)
     and np.array_equal(parallel.omega, serial.omega)
