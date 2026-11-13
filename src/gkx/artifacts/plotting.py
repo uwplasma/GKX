@@ -305,7 +305,7 @@ def linear_runtime_panel_figure(
     """Summary page of one linear run.
 
     Panels: growth history with the fit window, the eigenfunction along the
-    field line, ``field_line`` = (|B|, grad-B drift, curvature drift) on ``z``
+    field line, ``field_line`` = (``|B|``, grad-B drift, curvature drift) on ``z``
     when the run saved it, and, with ``ky`` and ``reference``, gamma and omega
     against the tabulated reference curve.
     """

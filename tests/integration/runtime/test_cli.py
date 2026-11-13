@@ -187,6 +187,33 @@ def test_cli_plot_flag_draws_the_linear_summary_page(monkeypatch, tmp_path) -> N
     assert (tmp_path / "case.plot.png").stat().st_size > 10_000
 
 
+def test_linear_panel_figure_optional_panels_and_degenerate_eigenfunction() -> None:
+    """Fit window, reference panel, bad field line and imaginary-only eigenfunction."""
+
+    import matplotlib.pyplot as plt
+
+    from gkx.artifacts.plotting import linear_runtime_panel_figure
+    from gkx.benchmarking_shared import CycloneReference
+
+    z = np.linspace(-np.pi, np.pi, 8)
+    t = np.linspace(0.1, 1.0, 6)
+    ref = CycloneReference(
+        ky=np.array([0.2, 0.4]), omega=np.array([0.1, 0.2]), gamma=np.array([0.05, 0.1])
+    )
+    kw = {"t": t, "signal": np.exp(0.1 * t) + 0j, "z": z, "gamma": 0.1, "omega": 0.2}
+    for eig, line, n in ((1j * np.cos(z), np.ones((3, 5)), 3), (0 * z, None, 3)):
+        fig, axes = linear_runtime_panel_figure(
+            eigenfunction=eig,
+            field_line=line,
+            ky=0.3,
+            reference=ref,
+            fit_window=(0.2, 0.8),
+            **kw,
+        )
+        assert len(axes) == n
+        plt.close(fig)
+
+
 def test_cli_global_plot_renders_linear_scan_bundle(
     capsys, monkeypatch, tmp_path: Path
 ) -> None:
