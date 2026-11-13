@@ -23,7 +23,12 @@ LINES = (  # key, label, color, marker
     ("sugama", "GKX sugama, improved_sugama", GKX_COLORS["orange"], "s"),
     ("lenard_bernstein", "GKX lenard_bernstein", GKX_COLORS["purple"], "v"),
 )
-RC = {"font.size": 8.5, "axes.titlesize": 9.0, "legend.fontsize": 7.5, "savefig.dpi": 200}
+RC = {
+    "font.size": 8.5,
+    "axes.titlesize": 9.0,
+    "legend.fontsize": 7.5,
+    "savefig.dpi": 200,
+}
 
 
 def figure(d: dict) -> plt.Figure:
@@ -32,7 +37,13 @@ def figure(d: dict) -> plt.Figure:
     for ax, ratio in zip(axes, (False, True)):
         scale = (lambda y: np.asarray(y, float) / y[0]) if ratio else np.asarray
         for key, label, color, marker in LINES:
-            ax.plot(nu, scale(d["gkx_4_8"][key]), marker=marker, color=color, label=label + " (4,8)")
+            ax.plot(
+                nu,
+                scale(d["gkx_4_8"][key]),
+                marker=marker,
+                color=color,
+                label=label + " (4,8)",
+            )
         for key, label, color, marker in (
             ("gs2", "GS2", GKX_COLORS["green"], "^"),
             ("stella", "stella", GKX_COLORS["vermillion"], "D"),
@@ -60,12 +71,16 @@ def figure(d: dict) -> plt.Figure:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default=str(ROOT / "docs/figures/collision_operators.json"))
+    ap.add_argument(
+        "--data", default=str(ROOT / "docs/figures/collision_operators.json")
+    )
     ap.add_argument("--out", default=str(ROOT / "docs/_static"))
     args = ap.parse_args()
     d = json.loads(Path(args.data).read_text())
     with figure_style(**RC):
-        save_figure(figure(d), Path(args.out) / "collision_operators.png", palette_colors=96)
+        save_figure(
+            figure(d), Path(args.out) / "collision_operators.png", palette_colors=96
+        )
 
 
 if __name__ == "__main__":

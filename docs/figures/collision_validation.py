@@ -19,7 +19,12 @@ import numpy as np
 from gkx.artifacts.figure_style import GKX_COLORS, figure_style, save_figure
 
 ROOT = Path(__file__).resolve().parents[2]
-RC = {"font.size": 8.5, "axes.titlesize": 9.0, "legend.fontsize": 7.5, "savefig.dpi": 200}
+RC = {
+    "font.size": 8.5,
+    "axes.titlesize": 9.0,
+    "legend.fontsize": 7.5,
+    "savefig.dpi": 200,
+}
 
 
 def formula(t, q, eps, nu):
@@ -41,7 +46,12 @@ def figure(d: dict) -> plt.Figure:
     ax.plot(n, tem["gkx_landau"], "o-", color=GKX_COLORS["blue"], label="GKX landau")
     for key, label, color, marker in (
         ("gs2", "GS2", GKX_COLORS["green"], "^"),
-        ("stella_fokker_planck_test_part", "stella Fokker-Planck test part", GKX_COLORS["vermillion"], "D"),
+        (
+            "stella_fokker_planck_test_part",
+            "stella Fokker-Planck test part",
+            GKX_COLORS["vermillion"],
+            "D",
+        ),
         ("stella_dougherty", "stella Dougherty", GKX_COLORS["purple"], "v"),
     ):
         ax.axhline(tem[key], color=color, ls="--", lw=1.0, label=label)
@@ -60,10 +70,26 @@ def figure(d: dict) -> plt.Figure:
         ("sugama", GKX_COLORS["orange"], "s"),
         ("lenard_bernstein", GKX_COLORS["purple"], "v"),
     ):
-        bx.plot(mid, z["gkx_6_16"][key], marker=marker, color=color, label=f"GKX {key} (6,16)")
-    bx.plot(z["gkx_24_64"]["t"], z["gkx_24_64"]["landau"], "o", mfc="white", mew=1.3, color=GKX_COLORS["blue"], label="GKX landau (24,64)")
+        bx.plot(
+            mid,
+            z["gkx_6_16"][key],
+            marker=marker,
+            color=color,
+            label=f"GKX {key} (6,16)",
+        )
+    bx.plot(
+        z["gkx_24_64"]["t"],
+        z["gkx_24_64"]["landau"],
+        "o",
+        mfc="white",
+        mew=1.3,
+        color=GKX_COLORS["blue"],
+        label="GKX landau (24,64)",
+    )
     t = np.linspace(40, 400, 200)
-    bx.plot(t, formula(t, z["q"], z["epsilon"], z["nu"]), "k--", lw=1.0, label="formula")
+    bx.plot(
+        t, formula(t, z["q"], z["epsilon"], z["nu"]), "k--", lw=1.0, label="formula"
+    )
     bx.set(
         yscale="log",
         xlabel=r"$t\,v_{ti}/a$",
@@ -79,12 +105,16 @@ def figure(d: dict) -> plt.Figure:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default=str(ROOT / "docs/figures/collision_validation.json"))
+    ap.add_argument(
+        "--data", default=str(ROOT / "docs/figures/collision_validation.json")
+    )
     ap.add_argument("--out", default=str(ROOT / "docs/_static"))
     args = ap.parse_args()
     d = json.loads(Path(args.data).read_text())
     with figure_style(**RC):
-        save_figure(figure(d), Path(args.out) / "collision_validation.png", palette_colors=96)
+        save_figure(
+            figure(d), Path(args.out) / "collision_validation.png", palette_colors=96
+        )
 
 
 if __name__ == "__main__":
