@@ -5,12 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from gkx.artifacts.figure_style import _artifact_base, set_plot_style
+from gkx.artifacts.figure_style import (
+    GKX_COLORS,
+    REFERENCE_STYLE,
+    _artifact_base,
+    figure_style,
+    panel_label,
+    set_plot_style,
+)
 from gkx.benchmarking_shared import CycloneReference, CycloneScanResult
 from gkx.diagnostics.growth_rates import fit_growth_rate
 
@@ -289,59 +296,97 @@ def linear_runtime_panel_figure(
     eigenfunction: np.ndarray,
     gamma: float,
     omega: float,
+    ky: float | None = None,
+    field_line: np.ndarray | None = None,
+    fit_window: tuple[float | None, float | None] = (None, None),
+    reference: CycloneReference | None = None,
     title: str = "GKX Linear Runtime",
 ) -> Tuple[plt.Figure, np.ndarray]:
-    """Create the default two-panel linear runtime plot."""
+    """Summary page of one linear run.
 
-    set_plot_style()
-    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.1))
-    ax0, ax1 = axes
+    Panels: growth history with the fit window, the eigenfunction along the
+    field line, ``field_line`` = (``|B|``, grad-B drift, curvature drift) on ``z``
+    when the run saved it, and, with ``ky`` and ``reference``, gamma and omega
+    against the tabulated reference curve.
+    """
 
-    signal_arr = np.asarray(signal, dtype=np.complex128)
-    amp2 = np.maximum(np.abs(signal_arr) ** 2, 1.0e-30)
-    ax0.plot(np.asarray(t, dtype=float), amp2, color="#0f4c81", linewidth=2.4)
-    ax0.set_yscale("log")
-    ax0.set_xlabel("t")
-    ax0.set_ylabel(r"$|\phi|^2$")
-    ax0.set_title("Linear growth history")
-    ax0.text(
-        0.04,
-        0.96,
-        rf"$\gamma={gamma:.5f}$" + "\n" + rf"$\omega={omega:.5f}$",
-        transform=ax0.transAxes,
-        va="top",
-        ha="left",
-        bbox={
-            "boxstyle": "round,pad=0.3",
-            "facecolor": "white",
-            "alpha": 0.9,
-            "edgecolor": "#cccccc",
-        },
-    )
+    line = None if field_line is None else np.asarray(field_line, dtype=float)
+    if line is not None and line.shape[-1] != np.size(z):
+        line = None
+    n = 2 + (line is not None) + (reference is not None and ky is not None)
+    rows, cols = (2, 2) if n == 4 else (1, n)
+    z = np.asarray(z, dtype=float)
+    with figure_style():
+        fig, axes = plt.subplots(
+            rows, cols, figsize=(5.2 * cols, 4.2 * rows), layout="constrained"
+        )
+        axes = np.atleast_1d(axes).ravel()
+        ax = iter(axes)
 
-    eigen_norm = _normalize_by_real_max(eigenfunction)
-    ax1.plot(
-        np.asarray(z, dtype=float),
-        np.real(eigen_norm),
-        color="#0f4c81",
-        linewidth=2.4,
-        label="Re",
-    )
-    ax1.plot(
-        np.asarray(z, dtype=float),
-        np.imag(eigen_norm),
-        color="#c44e52",
-        linewidth=2.2,
-        linestyle="--",
-        label="Im",
-    )
-    ax1.set_xlabel(r"$\theta$")
-    ax1.set_ylabel(r"$\phi / \max |\Re(\phi)|$")
-    ax1.set_title("Eigenfunction")
-    ax1.legend(loc="best", frameon=False)
+        a = next(ax)
+        amp2 = np.maximum(np.abs(np.asarray(signal)) ** 2, 1.0e-30)
+        a.plot(np.asarray(t, dtype=float), amp2, color=GKX_COLORS["blue"])
+        if None not in fit_window:
+            a.axvspan(*fit_window, color=GKX_COLORS["orange"], alpha=0.18, lw=0)
+        a.set_yscale("log")
+        a.set(xlabel=r"$t\,v_{ti}/a$", ylabel=r"$|\phi|^2$", title="Growth history")
+        a.text(
+            0.04,
+            0.96,
+            rf"$\gamma={gamma:.4f}$" + "\n" + rf"$\omega={omega:.4f}$",
+            transform=a.transAxes,
+            va="top",
+            bbox={"boxstyle": "round,pad=0.3", "fc": "white", "ec": "#cccccc"},
+        )
 
-    fig.suptitle(title, y=1.02)
-    fig.tight_layout()
+        a = next(ax)
+        eig = _normalize_by_real_max(eigenfunction)
+        a.plot(z, np.real(eig), color=GKX_COLORS["blue"], label="Re")
+        a.plot(z, np.imag(eig), color=GKX_COLORS["vermillion"], ls="--", label="Im")
+        a.plot(z, np.abs(eig), color=GKX_COLORS["grey"], lw=1.2, label=r"$|\phi|$")
+        a.set(xlabel=r"$\theta$", ylabel=r"$\phi/\max|\Re\phi|$", title="Eigenfunction")
+        a.legend(loc="upper right")
+
+        if line is not None:
+            a = next(ax)
+            for y, name, color, ls in zip(
+                line,
+                (r"$B/B_0$", "grad-B drift", "curvature drift"),
+                (GKX_COLORS["blue"], GKX_COLORS["vermillion"], GKX_COLORS["green"]),
+                ("-", "-", "--"),
+            ):
+                a.plot(z, y, color=color, ls=ls, label=name)
+            a.set(xlabel=r"$\theta$", title="Field-line geometry")
+            a.set_ylabel("code units")
+            a.legend(loc="upper center", ncols=2)
+
+        if reference is not None and ky is not None:
+            a = next(ax)
+            style = {**REFERENCE_STYLE, "linewidth": 1.4}
+            for y, ls, name in (
+                (reference.gamma, "--", "gamma"),
+                (reference.omega, ":", "omega"),
+            ):
+                a.plot(
+                    reference.ky,
+                    y,
+                    **{**style, "linestyle": ls},
+                    label=rf"reference $\{name}$",
+                )
+            for y, mark, color, name in (
+                (gamma, "o", "blue", "gamma"),
+                (omega, "s", "vermillion", "omega"),
+            ):
+                a.plot(
+                    ky, y, mark, color=GKX_COLORS[color], ms=8, label=rf"GKX $\{name}$"
+                )
+            a.set(xlabel=r"$k_y\rho_i$", ylabel=r"$\gamma,\ \omega\ [v_{ti}/a]$")
+            a.set_title("Growth rate and frequency")
+            a.legend(loc="upper left")
+
+        for letter, a in zip("abcd", axes):
+            panel_label(a, f"({letter})")
+        fig.suptitle(title)
     return fig, axes
 
 
@@ -446,6 +491,9 @@ def linear_result_figure(result: Any) -> Tuple[plt.Figure, np.ndarray]:
             eigenfunction=result.eigenfunction,
             gamma=result.gamma,
             omega=result.omega,
+            ky=result.ky,
+            field_line=result.field_line,
+            fit_window=(result.fit_window_tmin, result.fit_window_tmax),
         )
     panel = LinearValidationPanel(
         name="GKX",
@@ -489,7 +537,7 @@ def _sidecar(base: Path, suffix: str) -> Path:
 
 def _load_linear_bundle(
     base: Path,
-) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray | None]:
     summary = json.loads(_sidecar(base, ".summary.json").read_text(encoding="utf-8"))
     timeseries = np.genfromtxt(
         _sidecar(base, ".timeseries.csv"), delimiter=",", names=True, dtype=float
@@ -505,7 +553,13 @@ def _load_linear_bundle(
     eig = np.asarray(eigen["eigen_real"], dtype=float) + 1j * np.asarray(
         eigen["eigen_imag"], dtype=float
     )
-    return summary, t, signal, z, eig
+    names = ("bmag", "gbdrift", "cvdrift")
+    line = (
+        np.stack([eigen[k] for k in names])
+        if set(names) <= set(eigen.dtype.names or ())
+        else None
+    )
+    return summary, t, signal, z, eig, line
 
 
 def _load_linear_scan_bundle(
@@ -618,7 +672,7 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         kind = summary.get("kind")
         if kind == "linear":
-            _summary, t, signal, z, eig = _load_linear_bundle(base)
+            _summary, t, signal, z, eig, line = _load_linear_bundle(base)
             fig, _axes = linear_runtime_panel_figure(
                 t=t,
                 signal=signal,
@@ -626,6 +680,11 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
                 eigenfunction=eig,
                 gamma=float(summary["gamma"]),
                 omega=float(summary["omega"]),
+                field_line=line,
+                fit_window=(
+                    summary.get("fit_window_tmin"),
+                    summary.get("fit_window_tmax"),
+                ),
                 title=f"GKX linear runtime: {base.name}",
             )
         elif kind == "linear_scan":
@@ -655,6 +714,18 @@ def plot_saved_output(path: str | Path, *, out: str | Path | None = None) -> Pat
     return out_path
 
 
+def show_saved_figures(paths: Sequence[str | Path]) -> None:
+    """Open saved PNG figures in a window; a no-op on a non-interactive backend."""
+
+    if plt.get_backend().lower() == "agg":
+        return
+    for path in paths:
+        fig = plt.figure(figsize=(12, 6))
+        fig.add_axes((0, 0, 1, 1)).axis("off")
+        fig.axes[0].imshow(plt.imread(path))
+    plt.show()
+
+
 __all__ = [
     "LinearValidationPanel",
     "cyclone_comparison_figure",
@@ -666,4 +737,5 @@ __all__ = [
     "plot_saved_output",
     "scan_comparison_figure",
     "set_plot_style",
+    "show_saved_figures",
 ]
