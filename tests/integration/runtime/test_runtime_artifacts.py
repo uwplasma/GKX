@@ -2955,3 +2955,15 @@ def test_physical_output_cadence_preserves_checkpointed_solver_result(tmp_path):
             ),
             cfg,
         )
+
+
+def test_write_json_accepts_numpy_scalars_and_rejects_other_objects(tmp_path) -> None:
+    import json
+
+    from gkx.artifacts.io import _write_json
+
+    path = tmp_path / "summary.json"
+    _write_json(path, {"saturated": np.bool_(False), "mean": np.float64(7.2)})
+    assert json.loads(path.read_text()) == {"saturated": False, "mean": 7.2}
+    with pytest.raises(TypeError, match="object is not JSON serializable"):
+        _write_json(path, {"bad": object()})
