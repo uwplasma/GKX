@@ -904,7 +904,7 @@ def test_cli_global_plot_titles_gx_data_as_gx(tmp_path: Path) -> None:
         plt.close(fig)
 
 
-def test_compilation_cache_directory_honours_the_environment(tmp_path: Path) -> None:
+def test_compilation_cache_defaults_and_opt_outs(tmp_path: Path) -> None:
     import gkx.compilation_cache as cache
 
     override = tmp_path / "elsewhere"
@@ -912,23 +912,22 @@ def test_compilation_cache_directory_honours_the_environment(tmp_path: Path) -> 
         cache.compilation_cache_directory({cache.DIRECTORY_ENV_VAR: str(override)})
         == override
     )
-    # No override: the repository-local .cache/gkx tree, matching where
-    # generated *.eik.nc geometry already lives.
+    xdg = cache.compilation_cache_directory({"XDG_CACHE_HOME": str(tmp_path)})
+    assert xdg == tmp_path / "gkx" / "jax"
     assert cache.compilation_cache_directory({}).parts[-3:] == (".cache", "gkx", "jax")
-
-
-def test_compilation_cache_can_be_switched_off(tmp_path: Path) -> None:
-    import gkx.compilation_cache as cache
 
     assert cache.compilation_cache_enabled({}) is True
     for value in ("0", "off", "false", "no"):
         assert cache.compilation_cache_enabled({cache.ENABLE_ENV_VAR: value}) is False
-    assert (
-        cache.enable_persistent_compilation_cache(
-            {cache.ENABLE_ENV_VAR: "0", cache.DIRECTORY_ENV_VAR: str(tmp_path)}
-        )
-        is None
-    )
+    off = {cache.ENABLE_ENV_VAR: "0", cache.DIRECTORY_ENV_VAR: str(tmp_path / "a")}
+    assert cache.enable_persistent_compilation_cache(off) is None
+    # A cache directory the user already set through JAX is left alone.
+    mine = {
+        cache.DIRECTORY_ENV_VAR: str(tmp_path / "b"),
+        "JAX_COMPILATION_CACHE_DIR": "x",
+    }
+    assert cache.enable_persistent_compilation_cache(mine) is None
+    assert not (tmp_path / "a").exists() and not (tmp_path / "b").exists()
 
 
 def _write_tiny_wout(path: Path) -> Path:

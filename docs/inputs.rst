@@ -542,7 +542,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``laguerre_nonlinear_mode``","str","``""grid""``","Laguerre treatment of the bracket: ``grid`` or ``spectral``."
    "``run_to``","str","``""saturation""``","Nonlinear stop: ``saturation`` ends the run at a stationary heat flux, ``t_max`` runs the full horizon."
    "``saturation_rel_sem``","float","``0.1``","Largest relative standard error of the windowed heat-flux mean that counts as saturated."
-   "``saturation_t_min``","float","``800.0``","Run time before any saturated verdict."
+   "``saturation_t_min``","float","unset","Run time before any saturated verdict; ``min(800, 0.95 t_max)`` when unset."
    "``saturation_drift_rel``","float","``0.1``","Tolerated relative drift of the window mean."
    "``damp_ends_rate``","float","unset","Field-line end-absorber rate in ``v_ti/a``; the 30-transit rule when unset, 0 turns it off."
 
@@ -1003,8 +1003,9 @@ Notable runtime-only keys:
   windowed heat-flux mean, from batch means, that still counts as saturated
   (default ``0.10``).
 * ``[time] saturation_t_min``: run time in ``a/v_t`` before any ``saturated``
-  verdict (default ``800``; the Landreman 2025 GX database, CGYRO and GENE
-  averaging windows are 500-1000). Capped at ``t_max`` for shorter runs.
+  verdict (default ``min(800, 0.95 t_max)``; the Landreman 2025 GX database,
+  CGYRO and GENE averaging windows are 500-1000). A value above ``t_max``
+  warns, because only the last 5% of the run can then be called saturated.
 * ``[time] saturation_drift_rel``: tolerated change of the window mean, as a
   fraction of its scale, across the averaging window (default ``0.10``). A trend
   must also be two standard errors from zero to count.
