@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from functools import partial
 
 from gkx.workflows.runtime import wout as runtime_wout
 from gkx import config as gkx_config
@@ -931,7 +932,6 @@ def test_electron_ion_rates_scope_and_refusals() -> None:
         RuntimeCollisionConfig,
         RuntimePhysicsConfig,
         RuntimeRunConfig,
-        RuntimeSpeciesConfig,
     )
 
     assert RuntimeConfig()._electron_ion_rates() is None
@@ -1296,6 +1296,43 @@ def test_nearest_index_from_candidates_locks_retained_mode_tie_order() -> None:
         _nearest_index_from_candidates(np.asarray([]), 1.0, np.asarray([0]))
     with pytest.raises(ValueError, match="candidate indices"):
         _nearest_index_from_candidates(values, 1.0, np.asarray([], dtype=int))
+
+
+def test_nonlinear_mode_selection_respects_the_dealias_mask() -> None:
+    from gkx.workflows import nonlinear as nl
+
+    ky, kx = np.array([0.0, 0.5, 1.0]), np.array([-1.0, 0.0, 1.0])
+    mask = np.array([[True, True, False], [False, False, False], [True, True, True]])
+    grid = SimpleNamespace(ky=ky, kx=kx, dealias_mask=mask)
+    # Row 1 keeps no kx: it is not a candidate ky, and an empty row falls back to all kx.
+    np.testing.assert_array_equal(nl._active_ky_indices(mask, 3), [0, 2])
+    np.testing.assert_array_equal(
+        nl._active_ky_indices(np.zeros((3, 3), bool), 3), [0, 1, 2]
+    )
+    np.testing.assert_array_equal(nl._active_kx_indices(mask, 0, 3), [0, 1])
+    np.testing.assert_array_equal(nl._active_kx_indices(mask, 1, 3), [0, 1, 2])
+    pick = partial(nl._select_nonlinear_mode_indices, grid)
+    assert pick(ky_target=0.5, kx_target=None, use_dealias_mask=False) == (1, 1)
+    assert pick(ky_target=0.5, kx_target=None, use_dealias_mask=True) == (0, 1)
+    assert pick(ky_target=1.0, kx_target=0.9, use_dealias_mask=True) == (2, 2)
+    with pytest.raises(ValueError, match="dealias_mask shape"):
+        nl._validate_dealias_mask_shape(mask, ky_size=3, kx_size=2)
+
+
+def test_nonlinear_runaway_detector_and_run_to_validation() -> None:
+    from gkx.config import TimeConfig
+    from gkx.workflows import nonlinear as nl
+
+    assert nl._chunk_runaway(np.array([1.0, np.nan]))
+    assert nl._chunk_runaway(np.array([1.0, 5.0e4]))
+    assert not nl._chunk_runaway(np.array([1.0, 9.0e2]))  # below the energy floor
+    assert not nl._chunk_runaway(np.array([0.0, 5.0e4]))  # zero start is no baseline
+    assert not nl._chunk_runaway(np.array([]))
+    cfg = RuntimeConfig(time=TimeConfig(run_to="forever"))
+    with pytest.raises(ValueError, match="unknown .time. run_to"):
+        nl._saturation_stop_condition(cfg, None, None)
+    with pytest.raises(ValueError, match="nonlinear physics"):
+        nl.prepare(RuntimeConfig())  # the default case is linear
 
 
 def test_runtime_independent_parallel_plan_serializes_argument_policy() -> None:
