@@ -344,68 +344,6 @@ def _collision_moment_correction(
     return corr
 
 
-def _drift_kinetic_six_moment_contribution(
-    state: jnp.ndarray,
-    *,
-    nu: jnp.ndarray,
-    weight: jnp.ndarray,
-    thermal_coefficients: tuple[float, float, float],
-    heat_coefficients: tuple[float, float, float],
-) -> jnp.ndarray:
-    value = jnp.asarray(state)
-    if value.ndim not in {5, 6}:
-        raise ValueError("collision state must have five or six dimensions")
-    expanded = value[None, ...] if value.ndim == 5 else value
-    if expanded.shape[1] < 2 or expanded.shape[2] < 4:
-        raise ValueError("six-moment collision model requires Nl >= 2 and Nm >= 4")
-
-    ns = int(expanded.shape[0])
-    real_dtype = jnp.real(expanded).dtype
-    rate = _species_collision_frequency(nu, ns=ns, dtype=real_dtype)
-    rate = rate[(slice(None),) + (None,) * (expanded.ndim - 1)]
-    inverse_sqrt_pi = 1.0 / jnp.sqrt(jnp.asarray(jnp.pi, dtype=real_dtype))
-    thermal = jnp.asarray(thermal_coefficients, dtype=real_dtype) * inverse_sqrt_pi
-    heat = jnp.asarray(heat_coefficients, dtype=real_dtype) * inverse_sqrt_pi
-
-    result = jnp.zeros_like(expanded)
-    result = result.at[:, 0, 2].set(
-        thermal[0] * expanded[:, 0, 2] + thermal[1] * expanded[:, 1, 0]
-    )
-    result = result.at[:, 1, 0].set(
-        thermal[1] * expanded[:, 0, 2] + thermal[2] * expanded[:, 1, 0]
-    )
-    result = result.at[:, 0, 3].set(
-        heat[0] * expanded[:, 0, 3] + heat[1] * expanded[:, 1, 1]
-    )
-    result = result.at[:, 1, 1].set(
-        heat[1] * expanded[:, 0, 3] + heat[2] * expanded[:, 1, 1]
-    )
-    result = jnp.asarray(weight, dtype=real_dtype) * rate * result
-    return result[0] if value.ndim == 5 else result
-
-
-def drift_kinetic_sugama_six_moment_contribution(
-    state: jnp.ndarray,
-    *,
-    nu: jnp.ndarray,
-    weight: jnp.ndarray = jnp.asarray(1.0),
-) -> jnp.ndarray:
-    """Apply Frei, Ernst & Ricci (2022), equations (C6a)--(C6f)."""
-
-    sqrt_two = 2.0**0.5
-    return _drift_kinetic_six_moment_contribution(
-        state,
-        nu=nu,
-        weight=weight,
-        thermal_coefficients=(-64 * sqrt_two / 45, 64 / 45, -32 * sqrt_two / 45),
-        heat_coefficients=(
-            -361.0 * sqrt_two / 175.0,
-            208.0 / (175.0 * 3.0**0.5),
-            -1187.0 * sqrt_two / 525.0,
-        ),
-    )
-
-
 def _mu_conserving(base, H, Jl, JlB, b, nu, x):
     """``base`` plus the momentum, energy and perpendicular-flow terms of the Dougherty operator.
 
@@ -1057,7 +995,6 @@ __all__ = [
     "collision_invariant_rates",
     "collision_quadratic_rate",
     "collisions_contribution",
-    "drift_kinetic_sugama_six_moment_contribution",
     "end_damping_contribution",
     "hypercollisions_contribution",
     "hyperdiffusion_contribution",

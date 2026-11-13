@@ -262,10 +262,8 @@ def _resolve_velocity_resolution(
     """Return the ``(Nl, Nm)`` a later ``solve`` will actually build.
 
     Precedence is explicit argument, then the deck's ``[run]`` table, then the
-    runtime's own default for this kind of case. Reporting anything else makes
-    ``print_summary`` describe a calculation that will not be run: before the
-    ``[run]`` table was carried on the case, preparing the shipped Cyclone deck
-    reported ``4, 8`` for a deck that asks for ``16, 48``.
+    runtime's own default for this kind of case. The runtime is built at these
+    counts, so ``print_summary`` describes the calculation that runs.
     """
 
     default_l, default_m = _runtime_resolution_defaults().get(kind, (4, 8))
@@ -291,6 +289,7 @@ def prepare_simulation(case: Any, **options: Any) -> PreparedSimulation:
     case.validate()
     kind = _case_kind(case)
     n_laguerre, n_hermite = _resolve_velocity_resolution(case, kind, options)
+    options.update(Nl=n_laguerre, Nm=n_hermite)
     backend = None
     shape = _state_shape(case, n_laguerre=n_laguerre, n_hermite=n_hermite)
     if kind == "nonlinear":

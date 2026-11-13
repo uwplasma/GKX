@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from support.helpers import patch_runtime
+from support.helpers import patch_runtime, uniform_moments
 
 import io
 import dataclasses
@@ -1014,7 +1014,9 @@ def test_prepared_is_frozen_so_topology_cannot_drift_from_its_metadata() -> None
 def test_state_shape_follows_the_case_grid(nonlinear) -> None:
     case = _linear_case()
     if nonlinear:
-        case = gkx.load(_repo_root() / "examples/05_kinetic_electrons/case.toml")
+        case = uniform_moments(
+            gkx.load(_repo_root() / "examples/05_kinetic_electrons/case.toml")
+        )
         # The deck's default adaptive imex-ark3 cannot be prepared: pin the explicit step.
         time = dataclasses.replace(case.time, method="rk4-pi")
         case = dataclasses.replace(case, grid=GridConfig(Nx=4, Ny=4, Nz=8), time=time)

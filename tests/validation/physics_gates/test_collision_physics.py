@@ -24,11 +24,11 @@ from gkx.core_grid import build_spectral_grid
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.collision_tables import _finite_wavelength_coulomb_bundle
-from gkx.operators.linear.collisions import (
+from gkx.operators.linear.collisions import solve_driven_collision_response
+from support.reference_physics import (
     assemble_drift_kinetic_improved_sugama_matrix,
     assemble_drift_kinetic_sugama_matrix,
     load_collision_moment_matrix,
-    solve_driven_collision_response,
 )
 from gkx.operators.linear.params import LinearParams
 from gkx.operators.linear.rhs import linear_rhs_cached
@@ -2091,6 +2091,9 @@ from gkx.operators.linear.collision_tables import (  # noqa: E402
 from gkx.operators.linear.collisions import (  # noqa: E402
     apply_linearized_landau,
     apply_multispecies_collision_moment_matrix,
+)
+from support.reference_physics import (  # noqa: E402
+    drift_kinetic_improved_sugama_pair_matrices,
     drift_kinetic_sugama_pair_matrices,
 )
 
@@ -2105,9 +2108,13 @@ def _invariant_vectors(nl: int, nm: int) -> tuple[np.ndarray, ...]:
     return density, momentum, energy
 
 
+BLOCK_MODELS = ("landau", "sugama", "improved_sugama")
+
+
+@pytest.mark.parametrize("model", BLOCK_MODELS)
 @pytest.mark.parametrize("layout", [(2, 4), (4, 8), (6, 12)])
-def test_landau_conserves_and_obeys_the_h_theorem(layout) -> None:
-    test, field = linearized_landau_pair_matrices(*layout)
+def test_landau_conserves_and_obeys_the_h_theorem(layout, model) -> None:
+    test, field = linearized_landau_pair_matrices(*layout, model=model)
     matrix = test + field
     scale = np.abs(matrix).max()
     for vector in _invariant_vectors(*layout):
@@ -2144,6 +2151,191 @@ def test_landau_test_part_equals_sugama_at_equal_temperature(mass_ratio) -> None
     landau = 2.0 * linearized_landau_pair_matrices(2, 4, mass_ratio, 1.0)[0]
     kept = sugama != 0.0
     assert np.abs(landau[kept] - sugama[kept]).max() < 1e-12 * np.abs(sugama).max()
+
+
+MASS_TEMPERATURE_RATIOS = (
+    (1.0, 1.0),
+    (1.0, 3.0),
+    (2.0, 0.5),
+    (5.446623093681917e-4, 1.0),
+    (5.446623093681917e-4, 3.0),
+    (1836.0, 0.3),
+)
+
+
+@pytest.mark.parametrize("model", ["sugama", "improved_sugama"])
+@pytest.mark.parametrize("mass_ratio, temperature_ratio", MASS_TEMPERATURE_RATIOS)
+def test_sugama_models_reproduce_the_published_appendix_c_coefficients(
+    model, mass_ratio, temperature_ratio
+) -> None:
+    """Frei, Ernst & Ricci (2022) Appendix C, test and field, at every mass and T ratio.
+
+    The tables are the six-moment truncation (zero outside it); GKX's frequency
+    is half of theirs.
+    """
+
+    published = (
+        drift_kinetic_sugama_pair_matrices
+        if model == "sugama"
+        else drift_kinetic_improved_sugama_pair_matrices
+    )
+    with jax.enable_x64(True):
+        expected = [
+            np.asarray(m)
+            for m in published(
+                jnp.asarray(mass_ratio, dtype=jnp.float64),
+                jnp.asarray(temperature_ratio, dtype=jnp.float64),
+            )
+        ]
+    computed = linearized_landau_pair_matrices(
+        2, 4, mass_ratio, temperature_ratio, model=model
+    )
+    for table, matrix in zip(expected, computed):
+        kept = table != 0.0
+        assert kept.sum() > 10
+        assert (
+            np.abs(2.0 * matrix[kept] - table[kept]).max() < 1e-11 * np.abs(table).max()
+        )
+
+
+def _species_operator(model, masses, temperatures, densities, layout=(4, 8)):
+    """Dense multispecies operator with self-consistent rates (Z = 1) and weights."""
+
+    masses, temperatures, densities = map(np.asarray, (masses, temperatures, densities))
+    pairs = linearized_landau_species_matrices(*layout, masses, temperatures, model)
+    rate = densities / (np.sqrt(masses) * temperatures**1.5)
+    pair = rate[:, None] * densities[None, :] / densities[:, None]
+    size, n = len(masses), layout[0] * layout[1]
+    matrix = np.zeros((size * n, size * n))
+    for a in range(size):
+        for b in range(size):
+            matrix[a * n : (a + 1) * n, b * n : (b + 1) * n] += (
+                pair[a, b] * pairs[1][a, b]
+            )
+            matrix[a * n : (a + 1) * n, a * n : (a + 1) * n] += (
+                pair[a, b] * pairs[0][a, b]
+            )
+    return matrix, np.repeat(densities * temperatures, n), n
+
+
+SPECIES_SETS = (
+    ([1.0, 5.446623093681917e-4], [1.0, 3.0], [1.0, 1.0]),
+    ([1.0, 4.0], [1.0, 0.7], [1.0, 0.6]),
+    ([1.0, 5.446623093681917e-4, 4.0], [1.0, 3.0, 0.7], [1.0, 1.0, 0.6]),
+)
+
+
+@pytest.mark.parametrize("model", BLOCK_MODELS)
+@pytest.mark.parametrize("masses, temperatures, densities", SPECIES_SETS)
+def test_multispecies_models_conserve_every_invariant(
+    model, masses, temperatures, densities
+) -> None:
+    """Particles per species, and momentum and energy summed over species."""
+
+    matrix, _, n = _species_operator(model, masses, temperatures, densities)
+    scale = np.abs(matrix).max()
+    for a in range(len(masses)):  # each species' density
+        assert np.abs(matrix[a * n]).max() < 1e-12 * scale
+    _, momentum, energy = _invariant_vectors(4, 8)
+    for vector, weight in (
+        (momentum, np.sqrt(2.0 * np.asarray(masses) * temperatures) * densities),
+        (energy, np.asarray(temperatures) * densities),
+    ):
+        left = np.concatenate([w * vector for w in weight])
+        assert np.abs(left @ matrix).max() < 1e-12 * scale
+
+
+@pytest.mark.parametrize("masses, temperatures, densities", SPECIES_SETS)
+def test_sugama_is_self_adjoint_and_dissipative_between_unlike_species(
+    masses, temperatures, densities
+) -> None:
+    """Sugama et al. (2009): the H-theorem holds exactly for unequal m and T.
+
+    With entropy weights n_a T_a the whole operator is symmetric, and its null
+    space is one density per species plus momentum and energy.
+    """
+
+    matrix, weight, _ = _species_operator("sugama", masses, temperatures, densities)
+    weighted = weight[:, None] * matrix
+    scale = np.abs(weighted).max()
+    assert np.abs(weighted - weighted.T).max() < 1e-12 * scale
+    eigenvalues = np.linalg.eigvalsh(weighted)
+    assert eigenvalues.max() < 1e-12 * scale
+    assert int(np.sum(eigenvalues > -1e-9 * scale)) == len(masses) + 2
+
+
+def test_improved_sugama_keeps_the_h_theorem_at_equal_temperature() -> None:
+    masses, temperatures, densities = [1.0, 4.0, 0.25], [1.0] * 3, [1.0, 0.5, 0.8]
+    matrix, weight, _ = _species_operator(
+        "improved_sugama", masses, temperatures, densities
+    )
+    weighted = weight[:, None] * matrix
+    scale = np.abs(weighted).max()
+    assert np.abs(weighted - weighted.T).max() < 1e-12 * scale
+    assert np.linalg.eigvalsh(weighted).max() < 1e-12 * scale
+
+
+@pytest.mark.parametrize("model", BLOCK_MODELS)
+def test_lorentz_electron_ion_momentum_relaxation_is_analytic(model) -> None:
+    """Electrons on infinitely heavy ions lose momentum at 4 nu / (3 sqrt(pi))."""
+
+    test, _ = linearized_landau_pair_matrices(4, 8, 1.0e-12, 1.0, model=model)
+    momentum = _invariant_vectors(4, 8)[1]
+    assert momentum @ test @ momentum == pytest.approx(
+        -4.0 / (3.0 * np.sqrt(np.pi)), rel=1e-9
+    )
+
+
+def test_spitzer_harm_conductivity_of_the_three_block_models() -> None:
+    """gamma_E(Z) against Spitzer & Harm (1953): improved Sugama closes most of the gap.
+
+    Recorded 2026-11-11: landau within 0.4%; sugama 3-12% low; improved sugama
+    1.7-3.5% high (Sugama et al. 2019 report the same direction of improvement).
+    """
+
+    nl, hermite = 4, 12
+    errors = {}
+    for model in BLOCK_MODELS:
+        self_test, self_field = linearized_landau_pair_matrices(
+            nl, hermite, model=model
+        )
+        ion_test = linearized_landau_pair_matrices(
+            nl, hermite, 1.0e-8, 1.0, model=model
+        )[0]
+        blocks = (self_test, self_field, ion_test)
+        errors[model] = {
+            charge: spitzer_harm_ratio(blocks, nl - 1, float(charge)) / published - 1.0
+            for charge, published in SPITZER_HARM_GAMMA_E.items()
+        }
+    assert max(abs(e) for e in errors["landau"].values()) < 0.005
+    assert (
+        -0.125 < min(errors["sugama"].values())
+        and max(errors["sugama"].values()) < -0.03
+    )
+    assert 0.0 < min(errors["improved_sugama"].values())
+    assert max(errors["improved_sugama"].values()) < 0.04
+    for charge in SPITZER_HARM_GAMMA_E:
+        assert abs(errors["improved_sugama"][charge]) < abs(errors["sugama"][charge])
+
+
+@pytest.mark.parametrize("model", ["sugama", "improved_sugama"])
+def test_sugama_models_run_through_the_krylov_and_time_solvers(model) -> None:
+    """The cached operator serves every solver path: both give the same growth rate."""
+
+    import gkx
+
+    case = gkx.load(
+        Path(__file__).resolve().parents[3] / "examples/07_collisions/case.toml"
+    )
+    case = case.replace(
+        species=tuple(dataclasses.replace(s, nu=0.2) for s in case.species),
+        time=dataclasses.replace(case.time, collision_operator=model, t_max=60.0),
+    )
+    growth = {
+        solver: gkx.solve(case, ky_target=0.3, Nl=4, Nm=8, solver=solver).gamma
+        for solver in ("krylov", "time")
+    }
+    assert growth["krylov"] == pytest.approx(growth["time"], rel=0.03)
 
 
 def test_electron_ion_exchange_conserves_momentum_and_energy() -> None:

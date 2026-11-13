@@ -27,6 +27,7 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     _x64_enabled,
+    collision_model_for,
     linear_terms_to_term_config,
     Species,
     build_linear_params,
@@ -352,10 +353,10 @@ _RUNTIME_LINEAR_HL_FALLBACK = (12, 24)
 # A nonlinear run without Nl/Nm starts coarse; resolution is the deck's call.
 _RUNTIME_NONLINEAR_HL_FALLBACK = (4, 8)
 # Kinetic-electron decks that name no resolution take these instead, (slower species,
-# faster species) -- docs/guidance.rst, "Velocity space per species".
+# faster species); the nonlinear ions keep the ion-only fallback (docs/guidance.rst).
 _SPECIES_HL_FALLBACK = {
     _RUNTIME_LINEAR_HL_FALLBACK: ((12, 32), (6, 48)),
-    _RUNTIME_NONLINEAR_HL_FALLBACK: ((4, 16), (4, 16)),
+    _RUNTIME_NONLINEAR_HL_FALLBACK: ((4, 8), (4, 48)),
 }
 
 
@@ -519,11 +520,7 @@ def build_runtime_linear_params(
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
         damp_ends_rate=_runtime_damp_ends_rate(cfg),
         mu_vperp_max=cfg.run.mu_vperp_max,
-        collision_model=(
-            "landau"
-            if str(cfg.time.collision_operator).strip().lower() in ("landau", "coulomb")
-            else "dougherty"
-        ),
+        collision_model=collision_model_for(cfg.time.collision_operator),
     )
 
 

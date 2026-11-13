@@ -27,7 +27,7 @@ What you get when you change nothing, and when to change it.
      - ``half`` (``1 + Ny//2`` rows)
      - ``full`` only to read a two-sided array from an older run
    * - Velocity space
-     - linear (12, 24), nonlinear (4, 8); with kinetic electrons per species: linear ions (12, 32), electrons (6, 48), nonlinear (4, 16) for both species
+     - linear (12, 24), nonlinear (4, 8); with kinetic electrons per species: linear ions (12, 32), electrons (6, 48), nonlinear ions (4, 8), electrons (4, 48)
      - a deck or call that names ``Nl``/``Nm``; TEM, KBM: see the sections below
    * - Collisions
      - linearized Landau; hypercollisions on the last Hermite moments
@@ -508,34 +508,339 @@ moments per grid point against 1152 for uniform (12, 48) and 1536 for
 (12, 64). Smaller counts (ions (8, 24), electrons (4, 32)) are within 1% on the
 ITG and stellarator decks and 12% low on the TEM deck.
 
-Nonlinear: (4, 16) for both species is the fallback. Against uniform (8, 32)
-the heat-flux window mean (t = 50-100, Cyclone with kinetic electrons,
-32x32x16, ``imex-ars3``, one realization) is:
+Nonlinear: ions (4, 8) and electrons (4, 48) are the fallback. The ions keep the
+count of the ion-only fallback; the electrons keep the Hermite count of the
+linear fallback. Three scans support it, each against ions (8, 32) and
+electrons (6, 48). A Cyclone tokamak does not resolve the electron Hermite
+count between 8 and 24; a stellarator and a finite-:math:`\beta` tokamak
+do, and need 48. The first scan is Cyclone with kinetic electrons,
+:math:`m_e/m_i = 1/1836`, electrostatic, 32x32x16, the default ``imex-ark3``,
+:math:`Q_i` and :math:`Q_e` averaged over t = 30-120 (the flux is stationary
+from t = 30), with one or two random seeds as the Seeds column says. Each
+entry is the mean over the seeds with the Sokal standard error of each run
+(the larger of that and the seed spread when there are two seeds); the
+difference is against the reference, and its error includes the reference's.
+Two seeds of (4, 16) / (4, 16) differ by 3.7% in :math:`Q_i` and 0.4% in
+:math:`Q_e`, which is the resolution of the scan.
 
 .. list-table::
    :header-rows: 1
+   :widths: 24 10 8 12 14 12 14
 
-   * - Counts
+   * - Ions / electrons, :math:`(N_l, N_m)`
+     - Moments per point
+     - Seeds
      - :math:`Q_i`
+     - Against reference
      - :math:`Q_e`
-   * - uniform (4, 8) (the old fallback)
-     - +12.5%
-     - +9.5%
-   * - uniform (4, 16)
-     - -0.4%
-     - +2.4%
-   * - ions (4, 8), electrons (4, 16)
-     - +5.6%
-     - +4.2%
-   * - ions (8, 24), electrons (4, 32)
-     - -0.8%
-     - +2.0%
-   * - ions (8, 16), electrons (4, 32)
-     - -0.2%
-     - +3.1%
+     - Against reference
+   * - (8, 32) / (6, 48)
+     - 544
+     - 1
+     - 695 +- 14
+     - +0.0 +- 2.9%
+     - 1258 +- 20
+     - +0.0 +- 2.2%
+   * - (4, 16) / (4, 16)
+     - 128
+     - 2
+     - 716 +- 13
+     - +3.1 +- 2.7%
+     - 1268 +- 15
+     - +0.9 +- 2.0%
+   * - (4, 8) / (4, 16)
+     - 96
+     - 2
+     - 715 +- 12
+     - +3.0 +- 2.7%
+     - 1277 +- 14
+     - +1.5 +- 1.9%
+   * - (4, 8) / (4, 8)
+     - 64
+     - 2
+     - 730 +- 17
+     - +5.1 +- 3.2%
+     - 1284 +- 24
+     - +2.1 +- 2.5%
+   * - (4, 8) / (2, 8)
+     - 48
+     - 1
+     - 707 +- 13
+     - +1.8 +- 2.8%
+     - 1267 +- 16
+     - +0.8 +- 2.0%
+   * - (4, 16) / (2, 16)
+     - 96
+     - 1
+     - 723 +- 14
+     - +4.1 +- 2.9%
+     - 1298 +- 14
+     - +3.2 +- 1.9%
+   * - (4, 16) / (6, 16)
+     - 160
+     - 1
+     - 677 +- 10
+     - -2.5 +- 2.5%
+     - 1271 +- 12
+     - +1.1 +- 1.9%
+   * - (4, 16) / (4, 8)
+     - 96
+     - 2
+     - 696 +- 36
+     - +0.2 +- 5.5%
+     - 1245 +- 13
+     - -1.0 +- 1.9%
+   * - (4, 16) / (2, 8)
+     - 80
+     - 2
+     - 706 +- 15
+     - +1.6 +- 3.0%
+     - 1252 +- 13
+     - -0.5 +- 1.9%
+   * - (4, 16) / (4, 24)
+     - 160
+     - 1
+     - 684 +- 26
+     - -1.5 +- 4.3%
+     - 1294 +- 17
+     - +2.9 +- 2.1%
+   * - (4, 16) / (6, 24)
+     - 208
+     - 1
+     - 668 +- 34
+     - -3.9 +- 5.4%
+     - 1257 +- 25
+     - -0.1 +- 2.5%
+   * - (4, 16) / (2, 24)
+     - 112
+     - 1
+     - 716 +- 16
+     - +3.1 +- 3.1%
+     - 1284 +- 16
+     - +2.1 +- 2.0%
+   * - (4, 16) / (6, 8)
+     - 112
+     - 1
+     - 726 +- 9
+     - +4.6 +- 2.5%
+     - 1264 +- 16
+     - +0.5 +- 2.0%
+   * - (6, 16) / (4, 16)
+     - 160
+     - 1
+     - 724 +- 15
+     - +4.2 +- 3.0%
+     - 1295 +- 19
+     - +3.0 +- 2.2%
+   * - (6, 8) / (4, 16)
+     - 112
+     - 1
+     - 720 +- 18
+     - +3.7 +- 3.3%
+     - 1282 +- 15
+     - +2.0 +- 2.0%
 
-One window mean moves by 5-10% with the window start, so differences below that
-are not resolved; the old (4, 8) is outside it.
+Every pair is within 5.1% (:math:`Q_i`) and 3.2% (:math:`Q_e`) of the reference,
+and neither the electron :math:`N_l` (2 to 6), the electron :math:`N_m` (8 to
+24) nor the ion :math:`N_l` and :math:`N_m` shows a trend larger than that
+scatter. Ions (4, 8) with electrons (4, 16), 96 moments per point, agree with
+the reference to 3.0% and 1.5%, as uniform (4, 16) does (3.1% and 0.9%).
+Uniform (4, 8) has the largest offset in :math:`Q_i` (+5.1%). Ions (4, 8) with
+electrons (2, 8), 48 moments per point, are also inside the scatter; the
+linear electron growth rates need more than two Laguerre moments and sixteen
+Hermite ones (above).
+
+The electromagnetic deck of ``examples/05_kinetic_electrons`` (:math:`\beta`
+1e-4 with :math:`A_\parallel`, :math:`m_e/m_i = 2.7\times10^{-4}`, 32x32x16,
+same window) against uniform (4, 16):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 10 8 12 14 12 14
+
+   * - Ions / electrons, :math:`(N_l, N_m)`
+     - Moments per point
+     - Seeds
+     - :math:`Q_i`
+     - Against uniform (4, 16)
+     - :math:`Q_e`
+     - Against uniform (4, 16)
+   * - (4, 16) / (4, 16)
+     - 128
+     - 2
+     - 467 +- 10
+     - +0.0 +- 2.9%
+     - 669 +- 13
+     - +0.0 +- 2.8%
+   * - (4, 8) / (4, 16)
+     - 96
+     - 2
+     - 465 +- 15
+     - -0.6 +- 3.7%
+     - 657 +- 32
+     - -1.7 +- 5.2%
+   * - (4, 8) / (4, 8)
+     - 64
+     - 1
+     - 505 +- 12
+     - +8.0 +- 3.4%
+     - 699 +- 19
+     - +4.5 +- 3.4%
+
+Ions (4, 8) with electrons (4, 16) are within 1.7% of the uniform (4, 16) in
+both fluxes, inside the error of 3-5%; uniform (4, 8) is +8.0% and +4.5% in
+one seed. At :math:`\beta = 10^{-4}` the field-line tilt by :math:`A_\parallel`
+is negligible, and so is the electron Hermite count between 8 and 24. On the
+tutorial deck (16x16x16, default damping, t = 250-600, two seeds) electrons
+(4, 48) give :math:`Q_i` = 21.8 +- 1.7 and :math:`Q_e` = 3.55 +- 0.33 against
+18.5 +- 1.5 and 2.93 +- 0.27 for (4, 16): +18 +- 12% and +21 +- 15%, within two
+standard errors. The two decks that follow show where the count matters.
+
+**Stellarator.** The Landreman-Paul quasi-axisymmetric deck of
+``examples/05_kinetic_electrons`` (VMEC flux tube at s = 0.64, 16x16x32,
+:math:`\beta = 10^{-4}`, :math:`a/L_T = 4.5` for both species, the default
+``imex-ark3`` and end damping, the deck's short field line ``npol`` = 1 for every
+count) over t = 60-300, three seeds. The flux of this small box does not stay
+stationary: at the deck's own :math:`a/L_T = 3` it decays after t = 600, and at
+4.5 one of two seeds falls to a low-transport state near t = 500. The comparison
+therefore uses the first saturated window. The electron Hermite count sets the flux: 16
+gives 30% less, 32 gives 12% less, and 48 agrees with the reference. The ion
+:math:`N_l` and :math:`N_m` and the electron :math:`N_l` change nothing beyond
+the error.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 10 8 12 14 12 14
+
+   * - Ions / electrons, :math:`(N_l, N_m)`
+     - Moments per point
+     - Seeds
+     - :math:`Q_i`
+     - Against reference
+     - :math:`Q_e`
+     - Against reference
+   * - (8, 32) / (6, 48)
+     - 544
+     - 3
+     - 296.4 +- 13.5
+     - reference
+     - 194.1 +- 10.3
+     - reference
+   * - (6, 16) / (6, 32)
+     - 288
+     - 3
+     - 290.4 +- 9.7
+     - -2.0 +- 5.5%
+     - 191.5 +- 7.9
+     - -1.3 +- 6.6%
+   * - (4, 8) / (4, 48)
+     - 224
+     - 3
+     - 306.1 +- 12.1
+     - +3.2 +- 6.2%
+     - 199.4 +- 8.4
+     - +2.7 +- 7.0%
+   * - (4, 8) / (4, 32)
+     - 160
+     - 3
+     - 262.1 +- 16.2
+     - -11.6 +- 6.8%
+     - 166.5 +- 11.0
+     - -14.2 +- 7.3%
+   * - (4, 16) / (4, 16)
+     - 128
+     - 3
+     - 215.7 +- 22.1
+     - -27.3 +- 8.2%
+     - 138.1 +- 13.8
+     - -28.8 +- 8.0%
+   * - (4, 8) / (6, 16)
+     - 128
+     - 3
+     - 218.4 +- 16.9
+     - -26.3 +- 6.6%
+     - 139.0 +- 12.4
+     - -28.4 +- 7.4%
+   * - (6, 8) / (4, 16)
+     - 112
+     - 3
+     - 201.4 +- 11.8
+     - -32.1 +- 5.0%
+     - 128.7 +- 7.5
+     - -33.7 +- 5.3%
+   * - (4, 8) / (4, 16)
+     - 96
+     - 3
+     - 206.3 +- 17.0
+     - -30.4 +- 6.6%
+     - 132.7 +- 10.9
+     - -31.6 +- 6.7%
+
+**Finite beta.** The Cyclone deck at :math:`\beta = 10^{-2}` with
+:math:`A_\parallel` (16x16x16, t = 250-600, two seeds). The electron heat flux
+needs the Hermite moments more than anywhere above: 16 gives 75% less, 32
+gives 44% less (47% with electron :math:`N_l` 6 and ion :math:`N_m` 16), and 48
+agrees with the reference within its error.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 10 8 12 14 12 14
+
+   * - Ions / electrons, :math:`(N_l, N_m)`
+     - Moments per point
+     - Seeds
+     - :math:`Q_i`
+     - Against reference
+     - :math:`Q_e`
+     - Against reference
+   * - (8, 32) / (6, 48)
+     - 544
+     - 2
+     - 18.8 +- 2.4
+     - reference
+     - 12.5 +- 3.5
+     - reference
+   * - (6, 16) / (6, 32)
+     - 288
+     - 2
+     - 15.6 +- 2.3
+     - -17.3 +- 16.2%
+     - 6.7 +- 1.1
+     - -46.9 +- 17.1%
+   * - (4, 8) / (4, 48)
+     - 224
+     - 2
+     - 16.9 +- 1.2
+     - -10.4 +- 13.2%
+     - 11.3 +- 2.6
+     - -9.6 +- 32.6%
+   * - (4, 8) / (4, 32)
+     - 160
+     - 2
+     - 19.7 +- 0.8
+     - +4.4 +- 14.0%
+     - 7.0 +- 0.8
+     - -43.8 +- 17.0%
+   * - (4, 16) / (4, 16)
+     - 128
+     - 2
+     - 11.3 +- 1.0
+     - -39.8 +- 9.4%
+     - 2.8 +- 0.2
+     - -77.8 +- 6.4%
+   * - (4, 8) / (4, 16)
+     - 96
+     - 2
+     - 12.5 +- 1.7
+     - -33.5 +- 12.4%
+     - 3.1 +- 0.2
+     - -75.4 +- 7.1%
+
+Electrons (4, 48) are the smallest count tested that matches the reference in
+all three decks, and the ions (4, 8) are indifferent in all of them. The scans
+do not cover a larger :math:`k_y` range, a collisional deck, a TEM-dominated or
+KBM deck or a longer field line, where the electron :math:`N_m` named in the
+deck should be checked as for any resolution.
 
 **Cost of per-species counts.** One A4000, float32, 64x64x24, explicit ``rk3`` at
 a fixed step (time per step from a long and a short run), peak device memory:
@@ -565,7 +870,26 @@ a fixed step (time per step from a long and a short run), peak device memory:
 One right-hand side at (12, 48): 147.6 ms and 5.5 GB uniform, 86.5 ms and
 3.1 GB with ions (12, 32) and electrons (6, 48). Small states are launch-bound
 (two groups launch twice the kernels), so the gain grows with the state. The
-state arrays keep the ``[run]`` extents, which sets the floor on memory.
+state arrays keep the ``[run]`` extents, which sets the floor on memory. At
+64x64x24 and (4, 16) that floor is 52 MB (two species, complex64) of the 0.67 GB
+peak: the peak is the right-hand-side temporaries, which the groups already
+shrink, and storing each species at its own counts would save 13 MB more, so
+the state stays dense.
+
+**Cost of the fallback.** Ions (4, 8) with electrons (4, 48) carry 224 moments
+per grid point, against 96 for electrons (4, 16) and 544 for the reference, and
+take a smaller step because the resolved electron physics stiffens the
+remainder (mean ``dt`` 0.24 against 0.31 on the stellarator, 0.078 against 0.142
+at :math:`\beta = 10^{-2}`). Wall time of one run after the first seed, when the
+implicit factor is already compiled, on one A4000 shared with other jobs
+(repetitions vary by 2 to 3 times, so read the ratios to within that): the
+stellarator over t = 320 takes 216 s with electrons (4, 16), 617 s with the
+fallback and 712 s with the reference; the finite-beta tokamak over t = 600
+takes 276, 1608 and 2814 s. The fallback costs 3 and 6 times the cheaper
+counts and 0.9 and 0.6 times the reference, for fluxes that agree with it. The
+first run of a deck also builds the implicit factor, whose electron blocks grow
+with :math:`N_m^2`: 1296 s against 350 s on the stellarator and 3867 s against
+425 s at finite beta, on a host with a load average near 40.
 
 **Implicit (IMEX) factor.** ``imex-ars3``/``imex-ark3`` build the block-Thomas
 factor, its field coupling and the collision sub-step per species group, at the
