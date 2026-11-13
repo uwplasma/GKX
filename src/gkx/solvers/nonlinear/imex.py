@@ -14,7 +14,7 @@ import numpy as np
 from dataclasses import dataclass
 from functools import partial
 from solvax import KrylovSolution, gmres, linear_solve
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, cast
 from gkx.solvers.linear.implicit import (
     ImplicitSolveStats,
     _GmresStatus,
@@ -1193,7 +1193,7 @@ def _probe_columns(idx, nz: int, make: Callable, probe: Callable, take: Callable
 
     make_all = cached_jit(jax.vmap(make_all))
     takes = [cached_jit(jax.vmap(partial(take, k, x))) for k, x in idx]
-    cols: list[list] = [[] for _ in idx]
+    cols: list[Any] = [None] * len(idx)
     # An RHS assembly holds ~9 states of intermediates: 8 probes of a 64x64,
     # (8, 16) state asked for 10 GB. Fewer per call above 0.4 GB of states.
     one = jax.eval_shape(lambda j: probe(make_all(j)), jnp.arange(1))
@@ -1203,12 +1203,16 @@ def _probe_columns(idx, nz: int, make: Callable, probe: Callable, take: Callable
         out = probe(make_all(jnp.arange(j0, j0 + batch)))
         for g, n in enumerate(ns):
             if j0 < n:
-                # Host-side: all groups' probed blocks at once are ~3x the factor.
-                cols[g].append(jax.device_get(takes[g](out)))
-    return [
-        jax.tree.map(lambda *a, n=n: np.concatenate(a)[:n], *c)
-        for c, n in zip(cols, ns)
-    ]
+                # Host-side, filled in place: all groups' blocks are ~3x the factor.
+                got = jax.device_get(takes[g](out))
+                if cols[g] is None:
+                    cols[g] = jax.tree.map(
+                        lambda a, n=n: np.empty((n, *a.shape[1:]), a.dtype), got
+                    )
+                k = min(batch, n - j0)
+                for c, a in zip(jax.tree.leaves(cols[g]), jax.tree.leaves(got)):
+                    c[j0 : j0 + k] = a[:k]
+    return cols
 
 
 def _probe_stiff_blocks(idx, probe_s, probe_u, zero, zero_f, act, rows_m, spec, dims):
@@ -1264,7 +1268,9 @@ def _probe_stiff_blocks(idx, probe_s, probe_u, zero, zero_f, act, rows_m, spec, 
                 dd = np.where(dd > 0, dd, 1.0)
                 for ai, b, rows in zip(a, (lo, up), (sg + 1, sg - 1)):
                     ok = (rows >= 0) & (rows < gm)
-                    num = np.einsum("csij,jcslmi->cslm", d.conj(), b)
+                    num = np.einsum(
+                        "csij,jcslmi->cslm", d.conj(), b, dtype=np.complex128
+                    )
                     ai[:, :, :, rows[ok]] = (num / dd)[..., ok]
     u_parts = []
     for f in act:
@@ -1331,8 +1337,7 @@ def _factor_chunked(sel, e, gdt, chunk_bytes: float = 4e8):
     parts = np.array_split(
         np.arange(c), int(min(c, max(1, -(-sum(b.nbytes for b in sel) // chunk_bytes))))
     )
-    axes = (1, 0, 1, 1)  # the chain axis of dinv, D, lo, up
-    full: Any = None
+    axes, full = (1, 0, 1, 1), cast(Any, None)  # chain axis of dinv, D, lo, up
     for ix in parts:
         a, b = int(ix[0]), int(ix[-1]) + 1
         fac = _thomas_factor(*[jnp.asarray(x[a:b]) for x in sel], *e, gdt)
@@ -1348,7 +1353,6 @@ def _factor_chunked(sel, e, gdt, chunk_bytes: float = 4e8):
 
 
 def _refactor_group(g: _ChainGroup, raw, gdt, rows_m, cols_m, dims) -> _ChainGroup:
-    """Factor one chain group at ``gdt`` from its probed (host) blocks."""
     factors = tuple(_factor_chunked(blocks, e, gdt) for blocks, e in raw)
     cap, dr, dc = _capacitance(factors, g.u, g.w, gdt, rows_m, cols_m, dims)
     return dataclasses.replace(g, factors=factors, cap=cap, dr=dr, dc=dc)

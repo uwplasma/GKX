@@ -152,7 +152,7 @@ public_facades = [
 
 [[complexity_policy.exceptions]]
 path = "solvers/nonlinear/imex.py"
-baseline_lines = 1962  # 1966 -> 1962: the Thomas factor and solve are scans; the host keeps D and scalars, not three block sets
+baseline_lines = 1966  # unchanged: scan Thomas factor and slim host blocks replace the unrolled loops and the block sets
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -238,8 +238,8 @@ recursive = true
 # 69846 -> 69844: plotting docstring literal fix.
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
-# 69890 -> 69888: scan Thomas factor, slim host blocks, persistent cache from the Python API.
-baseline = 69888
+# 69890 -> 69892: persistent cache from the Python API; the imex.py factor changes net to zero.
+baseline = 69892
 target = 45000
 
 [[line_budget_policy.counts]]
