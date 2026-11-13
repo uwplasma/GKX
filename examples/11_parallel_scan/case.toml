@@ -21,8 +21,7 @@ Ly = 62.8
 boundary = "linked"
 y0 = 10.0
 ntheta = 16
-# Short field line: growth rates are not converged below nperiod = 2; see docs/guidance.rst.
-nperiod = 1
+nperiod = 2
 
 [geometry]
 q = 1.4
@@ -39,7 +38,7 @@ adiabatic_electrons = true
 [run]
 Nl = 2
 Nm = 4
-# An eigenpair, not a time fit: a 20-unit rk2 run reads gamma 19 to 38% low.
+# An eigenpair, not a time fit: a 20-unit rk2 run reads gamma 20 to 66% low.
 solver = "krylov"
 
 [parallel]

@@ -1195,10 +1195,10 @@ warm wall time per solve against the certified eigenpair (``solver = "krylov"``)
      - 23.9 s, 14.3 s
      -
    * - 07 Coulomb operator, ``t = 20`` against 60
-     - 9% low at 20
+     - 2% high at 20
      - same
      - no eigensolver for this operator
-     - ``t`` 60: 0.06% of ``t`` 200
+     - ``t`` 60: 0.003% of ``t`` 200
    * - 08 quasilinear, 11 scan, ``t = 20``
      - 20 to 38% low
      - same
