@@ -237,7 +237,8 @@ recursive = true
 # 69718 -> 69846: `--plot` and the four-panel linear summary figure (growth, eigenfunction, field-line geometry, reference).
 # 69846 -> 69844: plotting docstring literal fix.
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
-baseline = 69882
+# 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
+baseline = 69890
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -251,7 +252,8 @@ recursive = true
 # 64388 -> 64427: --plot smoke test and the demo message test.
 # 64427 -> 64454: panel-figure optional-branch coverage test.
 # 64454 -> 64777: collision validation gates and refusal/zonal_response tests, measured.
-baseline = 64777
+# 64777 -> 64789: numpy-scalar JSON writer test.
+baseline = 64789
 target = 35000
 
 [[line_budget_policy.counts]]
