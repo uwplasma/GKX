@@ -1,9 +1,12 @@
 # Examples
 
 One directory per step of the [tutorial](../docs/tutorials.rst); read and run
-them in order. Each `run.py` has the same shape: imports, editable parameters
-at the top, a run that prints its progress, then printed, saved and plotted
-results under `./outputs/NN_*`. Run from any directory:
+them in order. Each `run.py` is a plain top-to-bottom script with the same
+layout: a docstring, editable constants in capitals, a fast path (the deck run
+through `gkx.solve` or `gkx.scan` with no tuning), a research path where one
+exists (convergence, eigensolver, autodiff or stepper checks, labelled in the
+script), then `summary.json` and one figure in `./outputs/NN_*`. Run from any
+directory:
 
 ```bash
 python examples/01_linear_tokamak/run.py
@@ -15,15 +18,15 @@ python examples/01_linear_tokamak/run.py
 
 | Directory | What it shows |
 |---|---|
-| [`01_linear_tokamak/`](01_linear_tokamak) | Cyclone ITG growth-rate scan and eigenfunction |
+| [`01_linear_tokamak/`](01_linear_tokamak) | Cyclone ITG growth-rate scan and eigenfunction; velocity-resolution and eigensolver check |
 | [`02_linear_stellarator/`](02_linear_stellarator) | the same in an HSX-like VMEC stellarator |
 | [`03_nonlinear_tokamak/`](03_nonlinear_tokamak) | nonlinear Cyclone ITG |
 | [`04_nonlinear_stellarator/`](04_nonlinear_stellarator) | nonlinear ITG in the stellarator flux tube |
 | [`05_kinetic_electrons/`](05_kinetic_electrons) | kinetic electrons, tokamak and QA stellarator, per-species `Nl`/`Nm`, explicit and `imex-ars3` |
 | [`06_electromagnetic/`](06_electromagnetic) | kinetic ballooning mode with A_parallel |
 | [`07_collisions/`](07_collisions) | every collision operator on one ITG case |
-| [`08_quasilinear/`](08_quasilinear) | quasilinear spectrum; implicit eigenpair sensitivities |
-| [`09_autodiff/`](09_autodiff) | recover gradients from two modes by autodiff |
+| [`08_quasilinear/`](08_quasilinear) | quasilinear spectrum; implicit eigenpair derivatives of its observables |
+| [`09_autodiff/`](09_autodiff) | autodiff Jacobian of the growth rates, and a gradient inverse problem |
 | [`10_vmex_optimization/`](10_vmex_optimization) | VMEX QA optimization with a nonlinear heat-flux objective |
 | [`11_parallel_scan/`](11_parallel_scan) | parallel `k_y` scan, checked against serial |
 | [`12_restart_and_analysis/`](12_restart_and_analysis) | restart a nonlinear run, average the joined trace |

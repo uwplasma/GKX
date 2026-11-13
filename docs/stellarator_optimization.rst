@@ -144,8 +144,8 @@ Run
    pip install -e /path/to/VMEX
    python examples/10_vmex_optimization/run.py
 
-Use a GPU for the default saturation and 1024-step differentiated windows. A short
-``VMEX_EXAMPLES_CI=1`` mode checks the complete solver/derivative path.
+Use a GPU for the default saturation and 1024-step differentiated windows. ``WIRING_RUN = True`` in the script runs a short
+CPU case that checks the complete solver/derivative path.
 
 Outputs are the optimized VMEC input and WOUT plus standard VMEX equilibrium
 plots. SciPy prints the objective history during the run.

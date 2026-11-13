@@ -251,7 +251,8 @@ recursive = true
 # 64388 -> 64427: --plot smoke test and the demo message test.
 # 64427 -> 64454: panel-figure optional-branch coverage test.
 # 64454 -> 64777: collision validation gates and refusal/zonal_response tests, measured.
-baseline = 64777
+# 64777 -> 64782: example gallery style check; example 10 smoke gated on vmex.
+baseline = 64782
 target = 35000
 
 [[line_budget_policy.counts]]
