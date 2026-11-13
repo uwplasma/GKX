@@ -27,6 +27,7 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     _x64_enabled,
+    collision_model_for,
     linear_terms_to_term_config,
     Species,
     build_linear_params,
@@ -519,11 +520,7 @@ def build_runtime_linear_params(
         damp_ends_widthfrac=float(cfg.collisions.damp_ends_widthfrac),
         damp_ends_rate=_runtime_damp_ends_rate(cfg),
         mu_vperp_max=cfg.run.mu_vperp_max,
-        collision_model=(
-            "landau"
-            if str(cfg.time.collision_operator).strip().lower() in ("landau", "coulomb")
-            else "dougherty"
-        ),
+        collision_model=collision_model_for(cfg.time.collision_operator),
     )
 
 

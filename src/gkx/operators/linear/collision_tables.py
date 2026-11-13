@@ -25,6 +25,7 @@ from gkx.operators.linear.collisions import (
     interpolate_collision_diagonal_table,
 )
 from gkx.operators.linear.params import (
+    BLOCK_COLLISION_MODELS,
     BUILTIN_COLLISION_OPERATORS,
     COLLISION_OPERATOR_NAMES,
 )
@@ -334,80 +335,30 @@ def collision_operator_from_config(
 ) -> CollisionOperator | None:
     """Resolve a TOML ``collision_operator`` name to a solver collision operator.
 
-    The built-in names (``"none"``, ``"lenard_bernstein"``, ``"landau"`` and
-    its alias ``"coulomb"``) return ``None``: the linear RHS applies them from
-    the cache. ``"sugama"`` and ``"improved_sugama"`` build the dense
-    drift-kinetic Hermite-Laguerre moment operator (Frei, Ernst & Ricci 2022)
-    that replaces the built-in term. ``density``/``mass``/``temperature`` are
-    the per-species normalizations (length ``n_species``).
-
-    The assembled matrices carry only the dimensionless pair scaling
-    ``n_b / (sqrt(m_a) T_a**1.5)``; the common collisionality prefactor is the
-    caller's responsibility, so ``nu`` is applied here. It is the same ``nu``
-    that sets the strength of the built-in Lenard-Bernstein term, which keeps
-    every model on one collisionality axis.
+    ``"none"``, ``"lenard_bernstein"``, ``"landau"``, ``"sugama"``,
+    ``"improved_sugama"`` and the alias ``"coulomb"`` return ``None``: the linear
+    RHS applies them from the cache at any ``(Nl, Nm)``. ``"coulomb_finite_kperp"``
+    builds the tabulated gyrokinetic Coulomb operator (Frei et al. 2021), which
+    replaces the built-in term and runs on the fixed-step integrator.
+    ``density``/``mass``/``temperature`` are the per-species normalizations and
+    ``nu`` the collisionality that scales the dimensionless table.
     """
-
-    from gkx.operators.linear.collisions import (
-        DriftKineticMomentCollisionOperator,
-        _assemble_drift_kinetic_sugama_matrix,
-        drift_kinetic_improved_sugama_pair_matrices,
-        drift_kinetic_sugama_pair_matrices,
-    )
 
     key = name.strip().lower()
     if key in BUILTIN_COLLISION_OPERATORS:
         return None
-
-    collisionality = jnp.asarray(nu)
-    if collisionality.ndim > 1:
-        raise ValueError("nu must be a scalar or a per-species vector")
-    if collisionality.ndim == 1 and key in ("sugama", "improved_sugama"):
-        # The test part of C_ab sits in the diagonal block, so the prefactor
-        # must enter each ordered pair before that sum. Species prefactors
-        # nu_a ~ Z_a^4 give the pair prefactor Z_a^2 Z_b^2 = sqrt(nu_a nu_b),
-        # symmetric, so (a, b) and (b, a) still exchange momentum and energy.
-        pairs = (
-            drift_kinetic_sugama_pair_matrices
-            if key == "sugama"
-            else drift_kinetic_improved_sugama_pair_matrices
-        )
-        return DriftKineticMomentCollisionOperator(
-            _assemble_drift_kinetic_sugama_matrix(
-                density,
-                mass,
-                temperature,
-                pairs,
-                pair_scale=jnp.sqrt(collisionality[:, None] * collisionality),
-            )
-        )
-    if collisionality.ndim == 1:
-        # Single-species models: the vector is that species' prefactor.
-        collisionality = collisionality.reshape((-1, 1, 1, 1))
-
-    if key == "sugama":
-        operator = DriftKineticMomentCollisionOperator.from_species(
-            density, mass, temperature
-        )
-    elif key == "improved_sugama":
-        operator = DriftKineticMomentCollisionOperator.from_improved_species(
-            density, mass, temperature
-        )
-    elif key == "coulomb_finite_kperp":
-        finite = build_finite_wavelength_coulomb_operator(
-            density, mass, temperature, moments
-        )
-        scale = (
-            jnp.reshape(jnp.asarray(nu), ())
-            if jnp.asarray(nu).ndim == 0
-            else (jnp.asarray(nu).reshape((-1, 1)))
-        )
-        return dataclasses.replace(finite, pair_frequency=finite.pair_frequency * scale)
-    else:
+    if key != "coulomb_finite_kperp":
         raise ValueError(
             f"collision_operator must be one of {COLLISION_OPERATOR_NAMES}"
         )
-    return DriftKineticMomentCollisionOperator(operator.matrix * collisionality)
+    finite = build_finite_wavelength_coulomb_operator(
+        density, mass, temperature, moments
+    )
+    scale = jnp.asarray(nu)
+    if scale.ndim > 1:
+        raise ValueError("nu must be a scalar or a per-species vector")
+    scale = scale.reshape(() if scale.ndim == 0 else (-1, 1))
+    return dataclasses.replace(finite, pair_frequency=finite.pair_frequency * scale)
 
 
 # ---- Linearized Landau operator at any Hermite-Laguerre resolution ----
@@ -468,7 +419,8 @@ def _sonine_norm(l: int, k: np.ndarray) -> np.ndarray:  # noqa: E741
     )
 
 
-def _hermite_laguerre_to_legendre_sonine(nl: int, nm: int) -> tuple[np.ndarray, list]:
+@lru_cache(maxsize=8)
+def _hermite_laguerre_to_legendre_sonine(nl: int, nm: int) -> tuple[np.ndarray, tuple]:
     from scipy.special import roots_genlaguerre, roots_hermite
 
     degree = (nm - 1) + 2 * (nl - 1)
@@ -493,7 +445,8 @@ def _hermite_laguerre_to_legendre_sonine(nl: int, nm: int) -> tuple[np.ndarray, 
         sonine.append(norm * solid[l] * _laguerre_values(r2, count, l + 0.5))
         labels += [l] * count
     transform = np.einsum("aij,bij,ij->ab", hl, np.concatenate(sonine), weight)
-    return transform, labels
+    transform.setflags(write=False)
+    return transform, tuple(labels)
 
 
 def _composite_gauss(xmax: float, scale: float, fine: float):
@@ -537,19 +490,94 @@ def _sonine_radial(x: np.ndarray, l: int, count: int, scale: float = 1.0):  # no
 
 
 def linearized_landau_pair_matrices(
-    nl: int, nm: int, mass_ratio: float = 1.0, temperature_ratio: float = 1.0
+    nl: int,
+    nm: int,
+    mass_ratio: float = 1.0,
+    temperature_ratio: float = 1.0,
+    model: str = "landau",
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return the dense ``(test, field)`` Hermite-Laguerre matrices of one pair."""
 
     convention, test, field = linearized_landau_factors(
-        nl, nm, mass_ratio, temperature_ratio
+        nl, nm, mass_ratio, temperature_ratio, model
     )
     return convention @ test @ convention.T, convention @ field @ convention.T
 
 
-@lru_cache(maxsize=32)
 def linearized_landau_factors(
-    nl: int, nm: int, mass_ratio: float = 1.0, temperature_ratio: float = 1.0
+    nl: int,
+    nm: int,
+    mass_ratio: float = 1.0,
+    temperature_ratio: float = 1.0,
+    model: str = "landau",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    r"""Return ``(T, test, field)`` of the ``model`` pair operator, ``T @ block @ T.T``.
+
+    ``model`` is ``"landau"`` (:func:`_landau_parts`), ``"sugama"`` or
+    ``"improved_sugama"`` (:func:`_sugama_parts`); all three are block diagonal
+    in the Legendre index and share the runtime machinery.
+    """
+
+    mu, tau = float(mass_ratio), float(temperature_ratio)
+    if mu <= 0.0 or tau <= 0.0:
+        raise ValueError("mass_ratio and temperature_ratio must be positive")
+    if model == "landau":
+        return _landau_parts(nl, nm, mu, tau, True)
+    if model not in ("sugama", "improved_sugama"):
+        raise ValueError(f"unknown collision model {model!r}")
+    transform, test, field = _sugama_parts(nl, nm, mu, tau)
+    if model == "improved_sugama":
+        # Sugama et al. (2019): exact Landau elements in the l = 1 heat-flux plane.
+        labels = _hermite_laguerre_to_legendre_sonine(nl, nm)[1]
+        plane = np.zeros(len(labels))
+        first = labels.index(1)
+        plane[first : first + min(2, labels.count(1))] = 1.0
+        _, exact_test, exact_field = _landau_parts(nl, nm, mu, tau, True)
+        test = test + plane[:, None] * (exact_test - test) * plane
+        field = field + plane[:, None] * (exact_field - field) * plane
+    return transform, test, field
+
+
+@lru_cache(maxsize=32)
+def _sugama_parts(
+    nl: int, nm: int, mu: float, tau: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    r"""Sugama et al. (2009) ``(T, test, field)`` in the Legendre-Sonine blocks.
+
+    With :math:`P` the projector on the momentum (``l=1, k=0``) and energy
+    (``l=0, k=1``) functions, :math:`\theta_{ab} = (\tau + \chi^2)/(1 + \chi^2)`
+    and :math:`\chi^2 = T_a m_b/(T_b m_a)`, the test part is
+    :math:`C^T = \Lambda C^S \Lambda` with
+    :math:`\Lambda = 1 + (\sqrt{\theta_{ab}} - 1)P`. The field part is rank one
+    in each of the two functions, :math:`F = -\sum_i w_i\,C^T_{ab} e_i\,
+    (C^T_{ba} e_i)^{\mathsf T}/(e_i^{\mathsf T} C^T_{ab} e_i)`, with weights
+    :math:`w = T_a/T_b` (momentum) and :math:`\sqrt{m_aT_a/(m_bT_b)}` (energy)
+    fixed by exact conservation of the pair sum.
+    """
+
+    labels = _hermite_laguerre_to_legendre_sonine(nl, nm)[1]
+    if 1 not in labels or labels.count(0) < 2:
+        raise ValueError("Sugama operators need (Nm - 1) + 2 (Nl - 1) >= 2")
+    modes = (labels.index(1), labels.index(0) + 1)  # (l=1, k=0), (l=0, k=1)
+
+    def tilted(mu: float, tau: float):
+        transform, test, _ = _landau_parts(nl, nm, mu, tau, False)
+        chi2 = tau / mu
+        scale = np.ones(len(labels))
+        scale[list(modes)] = np.sqrt((tau + chi2) / (1 + chi2))
+        return transform, scale[:, None] * test * scale
+
+    transform, test = tilted(mu, tau)
+    back = tilted(1.0 / mu, 1.0 / tau)[1]
+    field = np.zeros_like(test)
+    for mode, weight in zip(modes, (tau, np.sqrt(mu * tau))):
+        field -= weight * np.outer(test[:, mode], back[:, mode]) / test[mode, mode]
+    return transform, test, field
+
+
+@lru_cache(maxsize=32)
+def _landau_parts(
+    nl: int, nm: int, mass_ratio: float, temperature_ratio: float, exact: bool
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     r"""Return ``(T, test, field)``: the pair operator is ``T @ block @ T.T``.
 
@@ -565,14 +593,14 @@ def linearized_landau_factors(
     ``p*Nl + j`` order and signed-Laguerre convention. Particles, momentum and
     energy are conserved exactly by the pair sum; the like-species matrix is
     symmetric negative semidefinite (H-theorem). With ``T_a != T_b`` the
-    operator still conserves but is no longer self-adjoint.
+    operator still conserves but is no longer self-adjoint. ``exact=False`` drops
+    the ``(1 - T_a/T_b)`` term of the test part and skips the field part: the
+    Sugama test operator :math:`C^S`.
     """
 
     from scipy.special import erf, roots_legendre
 
-    mu, tau = float(mass_ratio), float(temperature_ratio)
-    if mu <= 0.0 or tau <= 0.0:
-        raise ValueError("mass_ratio and temperature_ratio must be positive")
+    mu, tau = mass_ratio, temperature_ratio
     transform, labels = _hermite_laguerre_to_legendre_sonine(nl, nm)
     degree = (nm - 1) + 2 * (nl - 1)
     extent = np.sqrt(4.0 * degree + 120.0)
@@ -581,7 +609,7 @@ def linearized_landau_factors(
     y = x / s
     chandrasekhar = (erf(y) - 2 * y * np.exp(-y * y) / np.sqrt(np.pi)) / (2 * y * y)
     d_par, d_perp = 2 * chandrasekhar / x, (erf(y) - chandrasekhar) / x
-    drift = 2 * chandrasekhar * (1.0 - tau)  # vanishes at equal temperatures
+    drift = 2 * chandrasekhar * (1.0 - tau) * exact  # vanishes at equal temperatures
     t, wt = roots_legendre(48)
     t, wt = (t + 1) / 2, wt / 2
     v, wv = _composite_gauss(s * extent, s, s)
@@ -599,39 +627,42 @@ def linearized_landau_factors(
         )
         test += np.einsum("x,kx,qx->kq", outer * drift, dpsi, r)
 
-        def perturbed(points: np.ndarray) -> np.ndarray:
-            radial = _sonine_radial(points.ravel(), l, count, s)[0]
-            gauss = np.exp(-0.5 * (points.ravel() / s) ** 2) * np.pi**-1.5 / s**3
-            return (radial * gauss).reshape((count,) + points.shape)
+        if exact:
 
-        # Rosenbluth multipoles as integrals of bounded kernel ratios.
-        span = np.minimum(x, s * extent)[:, None]
-        inner = span * t[None, :]
-        below = perturbed(inner) * ((inner / x[:, None]) ** (l + 1) * inner * span)
-        t1 = np.einsum("qxt,t->qx", below, wt)
-        t2 = np.einsum("qxt,xt,t->qx", below, inner**2, wt)
-        inner = x[:, None] + v[None, :]
-        above = perturbed(inner) * ((x[:, None] / inner) ** l * inner)
-        t3 = np.einsum("qxv,v->qx", above, wv)
-        t4 = np.einsum("qxv,xv,v->qx", above, inner**2, wv)
-        odd = 1.0 / (2 * l - 1)
-        even = (l + 1) * (l + 2) / (2 * l + 3)
-        potentials = c * (
-            -2 * (t1 + t3)
-            + 2 * (mu - 1) * (l * t3 - (l + 1) * t1)
-            + 2 * (even * (t2 + x**2 * t3) - l * (l - 1) * odd * (x**2 * t1 + t4))
-        )
-        source = 4 * np.pi * mu * perturbed(x) + potentials
-        field = np.einsum("x,kx,qx->kq", outer * np.exp(-0.5 * x**2), r, source)
+            def perturbed(points: np.ndarray) -> np.ndarray:
+                radial = _sonine_radial(points.ravel(), l, count, s)[0]
+                gauss = np.exp(-0.5 * (points.ravel() / s) ** 2) * np.pi**-1.5 / s**3
+                return (radial * gauss).reshape((count,) + points.shape)
+
+            # Rosenbluth multipoles as integrals of bounded kernel ratios.
+            span = np.minimum(x, s * extent)[:, None]
+            inner = span * t[None, :]
+            below = perturbed(inner) * ((inner / x[:, None]) ** (l + 1) * inner * span)
+            t1 = np.einsum("qxt,t->qx", below, wt)
+            t2 = np.einsum("qxt,xt,t->qx", below, inner**2, wt)
+            inner = x[:, None] + v[None, :]
+            above = perturbed(inner) * ((x[:, None] / inner) ** l * inner)
+            t3 = np.einsum("qxv,v->qx", above, wv)
+            t4 = np.einsum("qxv,xv,v->qx", above, inner**2, wv)
+            odd = 1.0 / (2 * l - 1)
+            even = (l + 1) * (l + 2) / (2 * l + 3)
+            potentials = c * (
+                -2 * (t1 + t3)
+                + 2 * (mu - 1) * (l * t3 - (l + 1) * t1)
+                + 2 * (even * (t2 + x**2 * t3) - l * (l - 1) * odd * (x**2 * t1 + t4))
+            )
+            source = 4 * np.pi * mu * perturbed(x) + potentials
+            field = np.einsum("x,kx,qx->kq", outer * np.exp(-0.5 * x**2), r, source)
         index = np.flatnonzero(moment_l == l)
         blocks[0][np.ix_(index, index)] = test
-        blocks[1][np.ix_(index, index)] = field
+        if exact:
+            blocks[1][np.ix_(index, index)] = field
     sign = (-1.0) ** (np.arange(nl * nm) % nl)
     return transform * sign[:, None], blocks[0], blocks[1]
 
 
 def linearized_landau_species_matrices(
-    nl: int, nm: int, mass: Any, temperature: Any
+    nl: int, nm: int, mass: Any, temperature: Any, model: str = "landau"
 ) -> np.ndarray:
     """Stack the dense unit-frequency ``(test, field)`` pairs as ``(2, s, s, n, n)``."""
 
@@ -643,7 +674,9 @@ def linearized_landau_species_matrices(
         [
             np.stack(
                 [
-                    np.stack(linearized_landau_pair_matrices(nl, nm, ma / mb, ta / tb))
+                    np.stack(
+                        linearized_landau_pair_matrices(nl, nm, ma / mb, ta / tb, model)
+                    )
                     for mb, tb in zip(masses, temps)
                 ],
                 axis=1,
@@ -681,7 +714,9 @@ def _padded_batches(blocks: list, pads: tuple[int, ...], fill: tuple[int, ...]):
     ]
 
 
-def linearized_landau_blocks(nl: int, nm: int, mass: Any, temperature: Any):
+def linearized_landau_blocks(
+    nl: int, nm: int, mass: Any, temperature: Any, model: str = "landau"
+):
     """Build :class:`~gkx.operators.linear.collisions.LandauBlocks` for a species set."""
 
     from gkx.operators.linear.collisions import LandauBlocks
@@ -692,7 +727,7 @@ def linearized_landau_blocks(nl: int, nm: int, mass: Any, temperature: Any):
     )
     factors = [
         [
-            linearized_landau_factors(nl, nm, ma / mb, ta / tb)
+            linearized_landau_factors(nl, nm, ma / mb, ta / tb, model)
             for mb, tb in zip(masses, temps)
         ]
         for ma, ta in zip(masses, temps)
@@ -781,16 +816,18 @@ def linearized_landau_blocks(nl: int, nm: int, mass: Any, temperature: Any):
 def landau_blocks_for(params: Any, nl: int, nm: int, dtype: Any):
     """Return the run's :class:`LandauBlocks` in ``dtype``, or ``None`` when unused.
 
-    They are built unless the model is not ``landau`` or every ``nu`` is a
+    They are built unless the model is ``dougherty`` or every ``nu`` is a
     concrete zero.
     """
 
     nu = params.nu
-    if params.collision_model != "landau" or (
+    if params.collision_model not in BLOCK_COLLISION_MODELS or (
         not isinstance(nu, jax.core.Tracer) and not np.any(np.asarray(nu) != 0.0)
     ):
         return None
-    blocks = linearized_landau_blocks(nl, nm, params.mass, params.temp)
+    blocks = linearized_landau_blocks(
+        nl, nm, params.mass, params.temp, params.collision_model
+    )
     return jax.tree_util.tree_map(
         lambda a: a.astype(dtype) if np.issubdtype(a.dtype, np.floating) else a, blocks
     )

@@ -1454,7 +1454,7 @@ def test_integrate_nonlinear_from_config_rejects_ungated_z_state_sharding():
 
 
 def test_integrate_linear_from_config_applies_selected_collision_operator():
-    """A selected moment operator must change the linear evolution."""
+    """Selecting a Sugama model changes the evolution relative to Landau, at any basis."""
 
     grid_cfg = GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0)
     cfg = CycloneBaseCase(
@@ -1465,30 +1465,27 @@ def test_integrate_linear_from_config_applies_selected_collision_operator():
     geom = SAlphaGeometry.from_config(cfg.geometry)
     params = LinearParams(nu=0.05)
 
-    def evolve(name):
+    def evolve(name, nl=4, nm=8):
         time_cfg = dataclasses.replace(cfg.time, collision_operator=name)
-        # (Nl, Nm) must be the (J+1, P+1) basis of the drift-kinetic matrix.
         G = jnp.zeros(
-            (2, 4, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
+            (nl, nm, int(grid.ky.size), cfg.grid.Nx, cfg.grid.Nz), dtype=jnp.complex128
         )
-        G = G.at[0, 0, 1, 0, :].set(1.0e-3)
+        G = G.at[0, 0, 1, 0, :].set(1.0e-3).at[0, 1, 1, 0, :].set(2.0e-3)
         return integrate_linear_from_config(G, grid, geom, params, time_cfg)[0]
 
-    baseline = evolve("lenard_bernstein")
-    sugama = evolve("sugama")
-    improved = evolve("improved_sugama")
+    landau, coulomb = evolve("landau"), evolve("coulomb")
+    sugama, improved = evolve("sugama"), evolve("improved_sugama")
 
-    # "none" and "lenard_bernstein" both keep the built-in diagonal term.
-    assert jnp.allclose(baseline, evolve("none"))
-    # Each moment operator replaces that term, so all three must differ.
-    assert not jnp.allclose(baseline, sugama)
-    assert not jnp.allclose(baseline, improved)
+    assert jnp.allclose(landau, coulomb)  # alias
+    for model in (sugama, improved):
+        assert jnp.all(jnp.isfinite(model))
+        assert not jnp.allclose(landau, model)
     assert not jnp.allclose(sugama, improved)
-    assert jnp.all(jnp.isfinite(sugama)) and jnp.all(jnp.isfinite(improved))
+    assert jnp.all(jnp.isfinite(evolve("sugama", 2, 4)))  # Appendix C basis too
 
 
 def test_integrate_linear_from_config_requires_the_table_moment_basis():
-    """Only the table's (Nl, Nm) = (J+1, P+1) = (2, 4) may run.
+    """Only the Coulomb table's (Nl, Nm) = (J+1, P+1) = (2, 4) may run.
 
     The transposed (4, 2) has the right moment count, so without the check it
     ran silently on the wrong moments (the state is packed m*Nl + l).
@@ -1496,7 +1493,9 @@ def test_integrate_linear_from_config_requires_the_table_moment_basis():
 
     cfg = CycloneBaseCase(
         grid=GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=6.0, ky_layout="full"),
-        time=TimeConfig(t_max=0.1, dt=0.05, method="rk2", collision_operator="sugama"),
+        time=TimeConfig(
+            t_max=0.1, dt=0.05, method="rk2", collision_operator="coulomb_finite_kperp"
+        ),
     )
     grid = build_spectral_grid(cfg.grid)
     geom = SAlphaGeometry.from_config(cfg.geometry)
@@ -1507,9 +1506,10 @@ def test_integrate_linear_from_config_requires_the_table_moment_basis():
         G = G.at[0, 0, 1, 0, :].set(1.0e-3)
         return integrate_linear_from_config(G, grid, geom, params, cfg.time)[0]
 
-    for nl, nm in ((3, 3), (4, 2)):
-        with pytest.raises(ValueError, match=r"8-moment basis \(Nl, Nm\) = \(2, 4\)"):
-            run(nl, nm)
+    with pytest.raises(ValueError, match="no shipped finite-wavelength Coulomb table"):
+        run(3, 3)
+    with pytest.raises(ValueError, match=r"8-moment basis \(Nl, Nm\) = \(2, 4\)"):
+        run(4, 2)
     with pytest.raises(ValueError, match="Set Nl=2, Nm=4"):
         run(4, 2)
     assert jnp.all(jnp.isfinite(run(2, 4)))
@@ -1543,7 +1543,7 @@ def test_krylov_and_explicit_runtime_refuse_a_moment_collision_operator():
     cfg = dataclasses.replace(
         base,
         grid=dataclasses.replace(base.grid, Nx=1, Ny=4, Nz=8, boundary="periodic"),
-        time=dataclasses.replace(base.time, collision_operator="sugama"),
+        time=dataclasses.replace(base.time, collision_operator="coulomb_finite_kperp"),
         species=(RuntimeSpeciesConfig(name="ion"),),
     )
     for solver, path in (
@@ -1569,7 +1569,7 @@ def test_config_collision_operator_rejects_unsupported_solver_paths(monkeypatch)
             dt=0.1,
             method="rk2",
             state_sharding="ky",
-            collision_operator="sugama",
+            collision_operator="coulomb_finite_kperp",
         ),
     )
     grid = build_spectral_grid(cfg.grid)

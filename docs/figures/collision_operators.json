@@ -1,0 +1,18 @@
+{
+"meta": {
+"problem": "collisional trapped-electron mode of benchmarks/cases/tem_collisional.toml, k_y rho_i = 0.3, kinetic electrons, m_i/m_e = 3670",
+"units": "GX/GKX: GS2 gamma x sqrt(2), nu = sqrt(2) vnewk",
+"gkx": "gamma from the Krylov eigenvalue solve and the fixed-step integrator at (Nl, Nm); high_resolution is the highest-resolution run of each point: (24,64) at nu = 0 and 0.05, (16,48) at nu = 0.01 and 0.1",
+"gs2": "8.2.1 collision_model = default, zeff = 1",
+"stella": "master, collision_model = dougherty, nzed 32, nvgrid 16, nmu 8"
+},
+"nu": [0.0, 0.01, 0.05, 0.1],
+"gkx_4_8": {
+"landau": [0.2739, 0.2656, 0.2388, 0.2130],
+"lenard_bernstein": [0.2739, 0.2673, 0.2389, 0.2056],
+"sugama": [0.2739, 0.2651, 0.2371, 0.2098]
+},
+"gkx_landau_high_resolution": [0.3404, 0.3095, 0.2582, 0.2197],
+"gs2": [0.3625, 0.3217, 0.2666, 0.2304],
+"stella": [0.2997, 0.2879, 0.2498, 0.2132]
+}

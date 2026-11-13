@@ -129,17 +129,17 @@ evidence = "must pass species-coupled particle, total momentum, total energy, nu
 id = "drift_kinetic_advanced_six_moment_operators"
 group = "optional_extension"
 status = "validated_scoped"
-gkx_owner = "gkx.operators.linear drift-kinetic original/improved-Sugama and Coulomb equations, multispecies pair matrices, and checked table application"
+gkx_owner = "gkx.operators.linear.collision_tables Landau, Sugama and improved-Sugama block operators and the checked finite-wavelength tables; the Appendix C closed forms are the oracle in tests/support/reference_physics.py"
 comparison_owner = "published analytic six-gyromoment matrices"
 evidence = "Frei, Ernst & Ricci (2022) Appendix C equations 101-105 and C9; exact original/improved-Sugama and Coulomb equal/unequal-species coefficients, particle/total-momentum/total-energy conservation, unequal-species relaxation, equal-temperature matrix-wide dissipation, improved heat-flow proximity to Coulomb, generated-table checksum/direct identity, device-side kperp interpolation/spatial application, physical finite-b held-out interpolation convergence, JVP/finite-difference gates, and a fail-closed short-wave ITG probe"
 
 [[capabilities]]
 id = "linearized_sugama_or_coulomb_collisions"
 group = "optional_extension"
-status = "planned_research_lane"
-gkx_owner = "validated reduced original/improved-Sugama equation slices plus future full-hierarchy coefficient implementation"
-comparison_owner = "not a complete shipped capability"
-evidence = "requires field-particle terms, conservation, conductivity, zonal damping, and collisional-ITG benchmarks"
+status = "validated_scoped"
+gkx_owner = "gkx.operators.linear.collision_tables linearized Landau, Sugama and improved-Sugama operators at any (Nl, Nm), multispecies, on every solver path"
+comparison_owner = "Sugama et al. (2009, 2019); Frei et al. (2021, 2022); Spitzer & Harm (1953)"
+evidence = "exact density/momentum/energy conservation and H-theorem at three resolutions, Sugama self-adjointness between unlike species and temperatures, Appendix C original/improved coefficients to 1e-11, Spitzer-Harm conductivity (landau 0.4%, sugama 12% low, improved sugama 3.5% high), Lorentz electron-ion relaxation rate, Krylov/time-integration agreement; scoped to the drift-kinetic limit (finite k_perp is coulomb_finite_kperp, one species)"
 
 [[capabilities]]
 id = "independent_scan_and_ensemble_parallelism"
