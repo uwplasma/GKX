@@ -1,0 +1,121 @@
+schema_version = 1
+
+# Collisional trapped-electron mode: Cyclone Miller geometry (q = 1.4,
+# s_hat = 0.8, r/a = 0.5, R/a = 2.77778), kinetic electrons at m_i/m_e = 3670,
+# T_e = T_i, a/L_Te = 2.49, a/L_n = 2, no ion temperature gradient. Species
+# ``nu`` is the self-collision frequency in GKX units; the ion value is the
+# electron one times sqrt(m_e/m_i). Set it per species and choose
+# ``[time] collision_operator`` (landau, sugama, improved_sugama,
+# lenard_bernstein). The GS2 and stella inputs of the comparison in
+# docs/validation.rst use vnewk_e = nu_e / sqrt(2).
+
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 0.0
+fprim = 2.0
+nu = 0.0
+kinetic = true
+
+[[species]]
+name = "electron"
+charge = -1.0
+mass = 2.724795640327e-4
+density = 1.0
+temperature = 1.0
+tprim = 2.49
+fprim = 2.0
+nu = 0.0
+kinetic = true
+
+[grid]
+Nx = 1
+Ny = 24
+Nz = 96
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 20.0
+ntheta = 32
+nperiod = 2
+
+[time]
+t_max = 40.0
+dt = 0.002
+method = "rk4"
+sample_stride = 20
+fixed_dt = true
+progress_bar = false
+
+[geometry]
+model = "miller"
+rhoc = 0.5
+q = 1.4
+s_hat = 0.8
+R0 = 2.77778
+R_geo = 2.77778
+shift = 0.0
+akappa = 1.0
+akappri = 0.0
+tri = 0.0
+tripri = 0.0
+betaprim = 0.0
+
+[init]
+init_field = "density"
+init_amp = 1.0e-10
+gaussian_init = true
+gaussian_width = 0.5
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = true
+electromagnetic = false
+adiabatic_electrons = false
+tau_e = 1.0
+collisions = true
+hypercollisions = true
+
+[collisions]
+nu_hermite = 1.0
+nu_laguerre = 2.0
+nu_hyper = 0.0
+p_hyper = 4.0
+hypercollisions_const = 0.0
+hypercollisions_kz = 1.0
+damp_ends_widthfrac = 0.125
+
+[normalization]
+contract = "cyclone"
+diagnostic_norm = "none"
+
+[terms]
+streaming = 1.0
+mirror = 1.0
+curvature = 1.0
+gradb = 1.0
+diamagnetic = 1.0
+collisions = 1.0
+hypercollisions = 1.0
+end_damping = 1.0
+apar = 0.0
+bpar = 0.0
+nonlinear = 0.0
+
+[run]
+ky = 0.3
+Nl = 4
+Nm = 8
+solver = "time"
+
+[fit]
+auto_window = true
+window_fraction = 0.3
+start_fraction = 0.58
+min_points = 80
+min_amp_fraction = 0.05
+mode_method = "z_index"

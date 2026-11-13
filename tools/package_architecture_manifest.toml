@@ -152,7 +152,7 @@ public_facades = [
 
 [[complexity_policy.exceptions]]
 path = "solvers/nonlinear/imex.py"
-baseline_lines = 1958
+baseline_lines = 1966  # +8: cached_jit wrappers around the dt probe and the unit-moment maps
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -230,7 +230,10 @@ recursive = true
 # 69996 -> 70070: gkx.case_paths (deck-relative overrides, field-line length checks).
 # 70070 -> 70112: `--set section.key=value` deck overrides in the executable.
 # 70112 -> 70124: removed-key mechanism, measured after merging main.
-baseline = 70124
+# 70124 -> 70135: cached_jit on the IMEX dt probe and unit-moment maps.
+# 70135 -> 69684: the block Landau/Sugama operators replace the dense collision tables; measured.
+# 69684 -> 69717: CFL bound measures the end absorber (gain-bounded skip).
+baseline = 69717
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -238,7 +241,9 @@ name = "test_python_lines"
 path = "tests"
 pattern = "*.py"
 recursive = true
-baseline = 64954
+# 64954 -> 64266: tests of the retired collision tables removed; measured.
+# 64266 -> 64372: absorber gain-bound tests.
+baseline = 64372
 target = 35000
 
 [[line_budget_policy.counts]]

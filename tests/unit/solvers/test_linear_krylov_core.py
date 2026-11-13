@@ -2938,6 +2938,37 @@ def _use_cached_vmec_eik(runtime, *, finest: bool = False):
     )
 
 
+def _generated_vmec_eik(runtime, tmp_path):
+    """Generate this runtime's own geometry from its wout, never reuse a cache entry.
+
+    ``.cache/gkx/vmec_eik`` holds whatever earlier runs generated, keyed on the wout's
+    mtime and the whole request, so a cached fixture is some other deck's geometry
+    and the dominant eigenpair of some of them does not certify.
+    """
+
+    from gkx.geometry.imported_vmec import internal_vmec_backend_available
+    from gkx.geometry.vmec_eik import generate_runtime_vmec_eik
+
+    if runtime.geometry.model != "vmec":
+        return runtime
+    if (
+        runtime.geometry.vmec_file is None
+        or not Path(runtime.geometry.vmec_file).exists()
+    ):
+        pytest.skip(
+            "VMEC integration needs its wout (vmex input.NAME in examples/vmec)"
+        )
+    if not internal_vmec_backend_available():
+        pytest.skip("VMEC integration needs booz_xform_jax")
+    out = generate_runtime_vmec_eik(runtime, output_path=tmp_path / "geometry.eik.nc")
+    return replace(
+        runtime,
+        geometry=replace(
+            runtime.geometry, model="imported-eik", geometry_file=str(out)
+        ),
+    )
+
+
 @pytest.mark.parametrize(
     ("_name", "relative_path", "enable_bpar"),
     _PHYSICS_CASES,
@@ -2948,6 +2979,7 @@ def test_adaptive_observables_match_dense_across_physics(
     _name: str,
     relative_path: str,
     enable_bpar: bool,
+    tmp_path: Path,
 ) -> None:
     """Cover branch, field, species, boundary, and geometry dispatch."""
 
@@ -2962,7 +2994,7 @@ def test_adaptive_observables_match_dense_across_physics(
             nperiod=1 if runtime.grid.nperiod is not None else None,
         ),
     )
-    runtime = _use_cached_vmec_eik(runtime)
+    runtime = _generated_vmec_eik(runtime, tmp_path)
     if runtime.geometry.model == "imported-eik":
         from gkx.geometry import load_imported_geometry_netcdf
 
@@ -3025,7 +3057,7 @@ def test_adaptive_observables_match_dense_across_physics(
                 adaptive_config,
                 exponential_krylov_dim=128,
                 exponential_horizon=10.0,
-                max_restarts=2,
+                max_restarts=6,
             ),
         )
         np.testing.assert_allclose(exponential, dense, rtol=1.0e-8, atol=1.0e-9)
