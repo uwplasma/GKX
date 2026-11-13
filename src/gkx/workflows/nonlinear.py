@@ -15,6 +15,7 @@ import numpy as np
 from jax import tree_util
 from jax.experimental.multihost_utils import process_allgather
 
+from gkx.compilation_cache import enable_persistent_compilation_cache
 from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.modes import select_ky_index
 from gkx.diagnostics.saturation import SaturationStopConfig, make_saturation_check
@@ -1103,6 +1104,7 @@ def run_runtime_nonlinear(
     :func:`prepare` path).
     """
 
+    enable_persistent_compilation_cache()
     if method is not None:
         cfg = replace(cfg, time=replace(cfg.time, method=method))
     cfg, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm, nonlinear=True)

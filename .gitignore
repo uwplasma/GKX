@@ -51,3 +51,4 @@ benchmarks/references/*.json
 __marimo__/
 marimo/_static/
 marimo/_lsp/
+.cache/
