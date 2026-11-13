@@ -242,7 +242,8 @@ path = "tests"
 pattern = "*.py"
 recursive = true
 # 64954 -> 64266: tests of the retired collision tables removed; measured.
-baseline = 64266
+# 64266 -> 64372: absorber gain-bound tests.
+baseline = 64372
 target = 35000
 
 [[line_budget_policy.counts]]
