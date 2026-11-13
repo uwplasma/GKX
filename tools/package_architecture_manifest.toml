@@ -255,7 +255,8 @@ recursive = true
 # 64454 -> 64777: collision validation gates and refusal/zonal_response tests, measured.
 # 64777 -> 64789: numpy-scalar JSON writer test.
 # 64789 -> 64794: example gallery style check; example 10 smoke gated on vmex.
-baseline = 64794
+# 64794 -> 64804: fixed step longer than t_max test; example 05 smoke grid knob.
+baseline = 64804
 target = 35000
 
 [[line_budget_policy.counts]]

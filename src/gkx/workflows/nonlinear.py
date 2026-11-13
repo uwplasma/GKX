@@ -231,7 +231,7 @@ def _infer_runtime_nonlinear_steps(
         dt_cap = float(cfg.time.dt_max) if cfg.time.dt_max is not None else float(dt)
         steps_val = int(np.ceil(float(cfg.time.t_max) / max(dt_cap, 1.0e-12)))
     if steps_val < 1:
-        raise ValueError("steps must be >= 1")
+        raise ValueError(f"steps must be >= 1: t_max={cfg.time.t_max} < dt={dt}")
     return steps_val
 
 
