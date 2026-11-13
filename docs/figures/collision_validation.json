@@ -1,0 +1,26 @@
+{
+"meta": {
+"tem": "benchmarks/cases/tem_collisional.toml, k_y rho_i = 0.3, nu_e = 0.05, GKX landau at (Nl, Nm); GS2 8.2.1 default model and stella master, GKX units",
+"zonal": "benchmarks/cases/collisional_zonal_response.toml, q = 1.4, eps = 0.1, k_x rho_i = 0.05, nu = 0.005; GKX window means of <phi>/<phi>(0) at (6,16) and values at (24,64); formula of Xiao, Catto and Molvig as quoted in docs/validation.rst with the Braginskii nu_ii = 0.532 nu"
+},
+"tem": {
+"resolution": [[4, 8], [6, 16], [8, 24], [12, 32], [16, 48], [24, 64]],
+"gkx_landau": [0.2388, 0.2423, 0.2495, 0.2548, 0.2574, 0.2582],
+"limit": [0.2587, 0.0006],
+"gs2": 0.2666,
+"stella_dougherty": 0.2498,
+"stella_fokker_planck_test_part": 0.2575
+},
+"zonal": {
+"q": 1.4,
+"epsilon": 0.1,
+"nu": 0.005,
+"windows": [[50, 100], [100, 150], [150, 200], [200, 300], [300, 400]],
+"gkx_6_16": {
+"landau": [0.0613, 0.0462, 0.0346, 0.0251, 0.0169],
+"sugama": [0.0589, 0.0432, 0.0315, 0.0222, 0.0146],
+"lenard_bernstein": [0.0376, 0.0222, 0.0145, 0.0095, 0.0071]
+},
+"gkx_24_64": {"t": [50, 100, 200, 300], "landau": [0.042, 0.029, 0.015, 0.010]}
+}
+}

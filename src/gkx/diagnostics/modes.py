@@ -205,6 +205,34 @@ def normalize_eigenfunction(eigenfunction: np.ndarray, z: np.ndarray) -> np.ndar
     return eigenfunction / scale
 
 
+def zonal_response(
+    t: np.ndarray,
+    phi_t: np.ndarray,
+    selection: ModeSelection,
+    jacobian: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(t, <phi>(t) / <phi>(0))`` for a zonal (``k_y = 0``) mode.
+
+    ``<phi>`` is the flux-surface average, the sum over ``z`` weighted by the
+    geometry Jacobian, of the potential history at the selected ``k_x``; it is
+    what the Rosenbluth-Hinton residual and the collisional zonal damping are
+    stated for, unlike the midplane value in ``RuntimeLinearResult.signal``.
+    Saved samples start at the first sampling time, so ``<phi>(0)`` is the
+    quadratic extrapolation of the first three, and the trace is returned with
+    the ``t = 0`` point prepended.
+    """
+
+    if np.shape(t)[0] < 3 or np.shape(phi_t)[0] < 3:
+        raise ValueError(
+            "zonal_response needs at least 3 saved samples to extrapolate t = 0"
+        )
+    w = np.asarray(jacobian, dtype=float)
+    w = w / w.sum()
+    avg = np.asarray(phi_t)[:, selection.ky_index, selection.kx_index, :] @ w
+    p0 = 3.0 * avg[0] - 3.0 * avg[1] + avg[2]
+    return np.concatenate(([0.0], t)), np.concatenate(([1.0], avg / p0))
+
+
 __all__ = [
     "EigenfunctionComparisonMetrics",
     "ModeSelection",
@@ -213,4 +241,5 @@ __all__ = [
     "extract_mode_time_series",
     "normalize_eigenfunction",
     "select_ky_index",
+    "zonal_response",
 ]

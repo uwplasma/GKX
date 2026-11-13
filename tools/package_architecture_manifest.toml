@@ -236,7 +236,8 @@ recursive = true
 # 69717 -> 69718: prepare builds the runtime at the resolved (Nl, Nm).
 # 69718 -> 69846: `--plot` and the four-panel linear summary figure (growth, eigenfunction, field-line geometry, reference).
 # 69846 -> 69844: plotting docstring literal fix.
-baseline = 69844
+# 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
+baseline = 69882
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -249,7 +250,8 @@ recursive = true
 # 64372 -> 64388: tests load example 05 at uniform counts (uniform_moments helper).
 # 64388 -> 64427: --plot smoke test and the demo message test.
 # 64427 -> 64454: panel-figure optional-branch coverage test.
-baseline = 64454
+# 64454 -> 64777: collision validation gates and refusal/zonal_response tests, measured.
+baseline = 64777
 target = 35000
 
 [[line_budget_policy.counts]]

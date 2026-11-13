@@ -43,6 +43,27 @@ References
    Physical Review Letters 83, 3645 (1999).
    `DOI <https://doi.org/10.1103/PhysRevLett.83.3645>`__.
 
+.. [RH98] M. N. Rosenbluth and F. L. Hinton, "Poloidal flow driven by
+   ion-temperature-gradient turbulence in tokamaks," Physical Review Letters
+   80, 724 (1998). `DOI <https://doi.org/10.1103/PhysRevLett.80.724>`__.
+
+.. [HR99] F. L. Hinton and M. N. Rosenbluth, "Dynamics of axisymmetric
+   E x B perturbations in toroidal plasmas," Plasma Physics and Controlled
+   Fusion 41, A653 (1999).
+
+.. [XCM07] Y. Xiao, P. J. Catto, and K. Molvig, "Collisional damping for
+   ion temperature gradient mode driven zonal flow," Physics of Plasmas 14,
+   032302 (2007).
+
+.. [XCD07] Y. Xiao, P. J. Catto, and W. Dorland, "Effects of finite poloidal
+   gyroradius, shaping, and collisions on the zonal flow residual," Physics of
+   Plasmas 14, 055910 (2007).
+
+.. [Frei21] B. J. Frei, J. Ball, A. C. D. Hoffmann, R. Jorge, P. Ricci, and
+   L. Stenger, "Development of advanced linearized gyrokinetic collision
+   operators using a moment approach," Journal of Plasma Physics (2021),
+   arXiv:2104.11480.
+
 .. [Dorland00] W. Dorland, F. Jenko, M. Kotschenreuther, and B. N. Rogers,
    "Electron temperature gradient turbulence," Physical Review Letters 85,
    5579 (2000). `DOI <https://doi.org/10.1103/PhysRevLett.85.5579>`__.
