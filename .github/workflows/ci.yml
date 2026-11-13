@@ -284,9 +284,10 @@ jobs:
     # Runs on push to main, nightly and manual dispatch, not on pull requests.
     # The test lane. Every test not marked ``slow`` runs here exactly once, at
     # float64, under coverage; the shards are packed on measured per-file cost
-    # by scripts/checks/run_test_gates.py and each runs its files across four
-    # pytest-xdist workers, one per runner core. The files that need logical
-    # CPU devices get four of them from the same planner. There is no separate
+    # by scripts/checks/run_test_gates.py and each runs its files across
+    # pytest-xdist workers: four on self-hosted, three on hosted runners, which
+    # were killed mid-shard at four (about 3.8 GB per worker). The files that
+    # need logical CPU devices get four of them from the same planner. There is no separate
     # uncovered test lane: it ran the same tests a second time.
     if: github.event_name != 'pull_request'
     # Shards 1-3 run on the org's Mac runners, the other five stay hosted.
@@ -318,7 +319,7 @@ jobs:
         run: |
           python scripts/check.py test-gates wide-coverage \
             --shards 8 \
-            --workers 4 \
+            --workers ${{ runner.environment == 'self-hosted' && 4 || 3 }} \
             --timeout 1500 \
             --only-shard "${{ matrix.shard }}" \
             --skip-combine \
