@@ -28,7 +28,7 @@ CASE = Path(__file__).with_name("case.toml")
 VMEC_INPUT = Path(__file__).parents[1] / "vmec" / "input.NuhrenbergZille_1988_QHS"
 OUTPUT = Path("outputs/02_linear_stellarator")
 KY = [0.2, 0.4, 0.6, 0.8]  # k_y rho_i
-PEAK_T_MAX = 120.0  # time run for the eigenfunction at the fastest-growing k_y
+PEAK_T_MAX = 240.0  # time run for the eigenfunction at the fastest-growing k_y
 
 case = gkx.load(CASE)
 wout = Path(case.geometry.vmec_file)
