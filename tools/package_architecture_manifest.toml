@@ -232,7 +232,8 @@ recursive = true
 # 70112 -> 70124: removed-key mechanism, measured after merging main.
 # 70124 -> 70135: cached_jit on the IMEX dt probe and unit-moment maps.
 # 70135 -> 69684: the block Landau/Sugama operators replace the dense collision tables; measured.
-baseline = 69684
+# 69684 -> 69717: CFL bound measures the end absorber (gain-bounded skip).
+baseline = 69717
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -241,7 +242,8 @@ path = "tests"
 pattern = "*.py"
 recursive = true
 # 64954 -> 64266: tests of the retired collision tables removed; measured.
-baseline = 64266
+# 64266 -> 64372: absorber gain-bound tests.
+baseline = 64372
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -44,6 +44,9 @@ nperiod = 1
 # Optional runtime controls; intervals use normalized time, like t_max.
 # chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
 # diagnostics_interval = 0.05  # Overrides the step-stride cadence.
+# End damping takes the default rate (about 600, 30 transits of the electron
+# thermal speed per layer). A weak fixed rate of 0.1 lets the tokamak deck of this
+# example grow without bound (Q reaches 1e4 by t = 20 against 1e-6 at the default).
 t_max = 0.3
 sample_stride = 10
 diagnostics_stride = 10
