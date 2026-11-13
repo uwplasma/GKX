@@ -17,6 +17,8 @@ tprim = 3.0
 fprim = 1.0
 nu = 0.01
 kinetic = true
+Nl = 4  # ion Laguerre: finite Larmor radius
+Nm = 8  # ion Hermite: slow parallel streaming
 
 [[species]]
 name = "electron"
@@ -28,6 +30,8 @@ tprim = 3.0
 fprim = 1.0
 nu = 0.0
 kinetic = true
+Nl = 4  # electron Laguerre: tiny Larmor radius
+Nm = 48  # electron Hermite: fast streaming and trapped electrons need many
 
 [grid]
 Nx = 16
@@ -44,6 +48,9 @@ nperiod = 1
 # Optional runtime controls; intervals use normalized time, like t_max.
 # chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
 # diagnostics_interval = 0.05  # Overrides the step-stride cadence.
+# End damping takes the default rate (about 600, 30 transits of the electron
+# thermal speed per layer). A weak fixed rate of 0.1 lets the tokamak deck of this
+# example grow without bound (Q reaches 1e4 by t = 20 against 1e-6 at the default).
 t_max = 0.3
 sample_stride = 10
 diagnostics_stride = 10
@@ -107,7 +114,7 @@ nonlinear = 1.0
 [run]
 ky = 0.047619047619047616
 Nl = 4
-Nm = 16
+Nm = 48
 
 [output]
 # Optional saved-record cadence in the same time units as time.t_max.

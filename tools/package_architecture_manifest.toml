@@ -232,8 +232,10 @@ recursive = true
 # 70112 -> 70124: removed-key mechanism, measured after merging main.
 # 70124 -> 70135: cached_jit on the IMEX dt probe and unit-moment maps.
 # 70135 -> 69684: the block Landau/Sugama operators replace the dense collision tables; measured.
-# 69684 -> 69722: zonal_response diagnostic and the explicit Lenard-Bernstein damping check, measured.
-baseline = 69722
+# 69684 -> 69717: CFL bound measures the end absorber (gain-bounded skip).
+# 69717 -> 69718: prepare builds the runtime at the resolved (Nl, Nm).
+# 69718 -> 69754: zonal_response and the explicit Lenard-Bernstein check, measured.
+baseline = 69754
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -242,8 +244,10 @@ path = "tests"
 pattern = "*.py"
 recursive = true
 # 64954 -> 64266: tests of the retired collision tables removed; measured.
-# 64266 -> 64589: collision validation gates and the refusal/zonal_response tests, measured.
-baseline = 64589
+# 64266 -> 64372: absorber gain-bound tests.
+# 64372 -> 64388: tests load example 05 at uniform counts (uniform_moments helper).
+# 64388 -> 64711: collision validation gates and refusal/zonal_response tests, measured.
+baseline = 64711
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -94,7 +94,7 @@ from scripts.checks._gates.nonlinear_replicates import (
 from types import SimpleNamespace
 import gc
 import pytest
-from support.helpers import only_terms, patch_attrs, spectral_grid
+from support.helpers import only_terms, patch_attrs, spectral_grid, uniform_moments
 
 
 def _em_cache() -> SimpleNamespace:
@@ -2291,7 +2291,7 @@ def _tiny_kinetic_electron_box(
     nm: int = KE_NM,
     ion_counts=None,
 ):
-    cfg = load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    cfg = uniform_moments(load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml"))
     cfg = replace(
         cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8, ntheta=8, ky_layout=layout)
     )
@@ -2345,6 +2345,80 @@ def test_measured_streaming_frequency_skips_adiabatic_like_decks():
     _, params, cache, _ = _tiny_kinetic_electron_box()
     heavy = replace(params, vth=jnp.ones_like(jnp.asarray(params.vth)))
     assert measured_streaming_frequency(heavy, cache, nl=KE_NL, nm=KE_NM) == 0.0
+
+
+def test_measured_streaming_frequency_includes_the_amplified_end_absorber():
+    """The absorber damps h, so the field solve lifts its radius far above ``nu_end``."""
+    _, params, cache, shape = _tiny_kinetic_electron_box()
+    params = replace(params, damp_ends_rate=100.0)
+    terms = TermConfig(
+        **dict.fromkeys(
+            "mirror curvature gradb diamagnetic collisions hypercollisions".split(), 0.0
+        )
+    )
+
+    def op(G):
+        return assemble_rhs_cached(G, cache, params, terms=terms)[0]
+
+    radius = np.max(np.abs(np.linalg.eigvals(_ke_dense(op, shape, jnp.complex64))))
+    measured = measured_streaming_frequency(
+        params, cache, nl=KE_NL, nm=KE_NM, absorber_vs=0.0
+    )
+    assert measured > 100.0
+    np.testing.assert_allclose(measured, radius, rtol=1e-3)
+    # a periodic box has no absorber and keeps the streaming-only radius
+    quiet = replace(cache, damp_profile=jnp.zeros_like(cache.damp_profile))
+    assert (
+        measured_streaming_frequency(params, quiet, nl=KE_NL, nm=KE_NM, absorber_vs=0.0)
+        < measured
+    )
+
+
+def test_measured_streaming_frequency_skips_the_absorber_below_the_gain_bound():
+    _, params, cache, _ = _tiny_kinetic_electron_box()
+    params = replace(params, damp_ends_rate=100.0)
+    base = measured_streaming_frequency(params, cache, nl=KE_NL, nm=KE_NM)
+    # rate * gain (5000, light species) stays below the analytic bound: no absorber
+    skipped = measured_streaming_frequency(
+        params, cache, nl=KE_NL, nm=KE_NM, absorber_vs=1.0e12
+    )
+    assert skipped == base
+    with_absorber = measured_streaming_frequency(
+        params, cache, nl=KE_NL, nm=KE_NM, absorber_vs=0.0
+    )
+    assert with_absorber > base
+
+
+def test_measured_streaming_frequency_zero_damp_profile_keeps_streaming_only():
+    _, params, cache, _ = _tiny_kinetic_electron_box()
+    quiet = replace(cache, damp_profile=jnp.zeros_like(cache.damp_profile))
+    base = measured_streaming_frequency(params, quiet, nl=KE_NL, nm=KE_NM)
+    assert base > 0.0  # light species: streaming-only measure still runs
+    # rate == 0 must not select the absorber even though 0 >= absorber_vs holds
+    assert (
+        measured_streaming_frequency(params, quiet, nl=KE_NL, nm=KE_NM, absorber_vs=0.0)
+        == base
+    )
+
+
+@pytest.mark.parametrize("method", ["rk4", "rk4-pi"])
+def test_explicit_step_respects_a_large_end_damping_rate(method):
+    """A stiff absorber keeps the adaptive explicit run finite and inside RK4's real axis."""
+    import gkx
+
+    cfg, *_ = _tiny_kinetic_electron_box()
+    time = replace(
+        cfg.time, method=method, damp_ends_rate=600.0, t_max=2.0e-4, run_to="t_max"
+    )
+    out = gkx.solve(cfg.replace(time=time), ky_target=cfg.run.ky, Nl=KE_NL, Nm=KE_NM)
+    d = out.diagnostics
+    assert np.isfinite(np.asarray(d.heat_flux_species_t)).all()
+    radius = float(np.asarray(d.cfl_scales)[2])  # streaming + absorber, measured
+    assert radius > 600.0
+    cap = 2.785 * (
+        2.0 if method.endswith("pi") else 1.0
+    )  # rk4-pi may take 2x the CFL step
+    assert float(np.max(np.asarray(d.dt_t))) * radius <= cap
 
 
 def test_chain_solve_inverts_the_stiff_linear_operator():
@@ -2476,7 +2550,9 @@ def test_chain_imex_dt_is_not_bound_by_the_electron_collision_rate():
     """nu_e rho(C) dt = 7: past the explicit bound, finite with the sub-step."""
     import gkx
 
-    deck = gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    deck = uniform_moments(
+        gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    )
     ion, electron = deck.species
     case = deck.replace(
         species=(replace(ion, nu=0.6), replace(electron, nu=36.5)),
@@ -2600,7 +2676,9 @@ def test_adaptive_chain_imex_grows_dt_between_chunks(
 
     monkeypatch.setattr(workflow, "ImexDtControl", controller)
 
-    deck = gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    deck = uniform_moments(
+        gkx.load(REPO_ROOT / "examples/05_kinetic_electrons/case.toml")
+    )
     case = deck.replace(
         grid=replace(deck.grid, Nx=4, Ny=4, Nz=8, ntheta=8),
         time=replace(

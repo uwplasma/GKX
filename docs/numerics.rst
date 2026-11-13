@@ -517,6 +517,12 @@ A GX nonlinear run applies :math:`A/\Delta t` at its own step, so matching it
 means setting ``damp_ends_rate`` to :math:`A/\Delta t_{GX}`. Match the same
 absorbing-layer policy before comparing transport.
 
+The absorber damps the non-adiabatic :math:`h`, so the field solve amplifies its
+largest eigenvalue past :math:`\nu_{end}` (about 2x with adiabatic electrons, about
+470x on the kinetic-electron Cyclone deck). The explicit nonlinear steppers
+measure that eigenvalue by Arnoldi, with streaming, and bound the step by it, so
+a large rate buys a proportionally small step rather than a non-finite run.
+
 Vary the end-damping rate and parallel domain together when checking a linked
 boundary. Report the rate, width and timestep policy in cross-code comparisons.
 An absorbing layer is a numerical regularization and its influence must be

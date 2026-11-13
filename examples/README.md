@@ -19,7 +19,7 @@ python examples/01_linear_tokamak/run.py
 | [`02_linear_stellarator/`](02_linear_stellarator) | the same in an HSX-like VMEC stellarator |
 | [`03_nonlinear_tokamak/`](03_nonlinear_tokamak) | nonlinear Cyclone ITG |
 | [`04_nonlinear_stellarator/`](04_nonlinear_stellarator) | nonlinear ITG in the stellarator flux tube |
-| [`05_kinetic_electrons/`](05_kinetic_electrons) | kinetic electrons, tokamak and QA stellarator, explicit and `imex-ars3` |
+| [`05_kinetic_electrons/`](05_kinetic_electrons) | kinetic electrons, tokamak and QA stellarator, per-species `Nl`/`Nm`, explicit and `imex-ars3` |
 | [`06_electromagnetic/`](06_electromagnetic) | kinetic ballooning mode with A_parallel |
 | [`07_collisions/`](07_collisions) | every collision operator on one ITG case |
 | [`08_quasilinear/`](08_quasilinear) | quasilinear spectrum; implicit eigenpair sensitivities |

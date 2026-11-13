@@ -98,6 +98,8 @@ apar = 1.0
 bpar = 0.0
 nonlinear = 0.0
 
+# Both species use these counts, as the benchmark contract requires. The KBM has
+# not been scanned per species; [[species]] Nl/Nm would set them (docs/guidance.rst).
 [run]
 ky = 0.3
 Nl = 16
