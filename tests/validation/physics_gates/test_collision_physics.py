@@ -2002,8 +2002,9 @@ def test_period_rms_damping_ignores_a_slowly_drifting_offset() -> None:
 #
 # The demo is the first thing most people run, so the number it prints is the
 # first evidence anyone has about whether this code works. It is a coarse
-# configuration on purpose (Nl = 7, Nm = 14), which is fine: coarse has a right
-# answer too, and that answer is the eigenvalue of the operator the demo builds.
+# small configuration on purpose (Nl = 16, Nm = 48, Nz = 24), chosen to reproduce
+# the GX Cyclone reference to 2%; the eigenvalue of the operator the demo builds
+# is the number it must print.
 # What is not fine is printing a growth rate that disagrees with it. At the
 # original dt = 0.03 over 500 steps the demo printed 0.089982 against a
 # certified 0.103263, 12.9 percent low, and said so in four warnings that a
@@ -2025,7 +2026,8 @@ def _demo_case(tmp_path):
     return deck
 
 
-def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None:
+@pytest.mark.parametrize("ky", [0.3, 0.4])
+def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path, ky) -> None:
     from gkx.cli import DEFAULT_DEMO_SETTINGS
     from gkx.runtime import (
         run_runtime_linear,
@@ -2036,7 +2038,7 @@ def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None
     cfg, _data = load_runtime_from_toml(_demo_case(tmp_path))
 
     shared = dict(
-        ky_target=float(settings["ky"]),
+        ky_target=ky,
         Nl=int(settings["Nl"]),
         Nm=int(settings["Nm"]),
     )
@@ -2061,6 +2063,19 @@ def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path) -> None
         "bound, it prints a biased growth rate. Restore dt and steps rather "
         "than widening this tolerance."
     )
+    reference = _cyclone_reference(ky)
+    assert abs(integrated.gamma / reference[0] - 1.0) < 0.02
+    assert abs(integrated.omega / reference[1] - 1.0) < 0.02
+
+
+def _cyclone_reference(ky: float) -> tuple[float, float]:
+    """GX (gamma, omega) of the Cyclone adiabatic-electron case at ``ky``."""
+
+    from gkx.benchmarking_shared import load_cyclone_reference
+
+    ref = load_cyclone_reference()
+    index = int(abs(ref.ky - ky).argmin())
+    return float(ref.gamma[index]), float(ref.omega[index])
 
 
 # ---- linearized Landau operator at any resolution ----

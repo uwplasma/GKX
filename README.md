@@ -51,7 +51,7 @@ optimization.
 gkx wout_circular_tokamak.nc --estimate   # size the grid, explain it, exit
 gkx wout_circular_tokamak.nc              # nonlinear ITG run to saturation
 gkx plot wout_circular_tokamak/gkx.out.nc # replot a saved bundle
-gkx examples/01_linear_tokamak/case.toml  # any TOML deck
+gkx examples/01_linear_tokamak/case.toml --plot  # any TOML deck; --plot opens the figures
 ```
 
 A run stops when heat flux, field energy and free energy are stationary, or
