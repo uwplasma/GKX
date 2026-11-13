@@ -325,7 +325,8 @@ jobs:
             --pytest-arg=-o \
             --pytest-arg=addopts= \
             --pytest-arg=-m \
-            --pytest-arg="not slow"
+            --pytest-arg="not slow" \
+            --pytest-arg=--durations=25
 
       - name: Package coverage shard data
         run: |

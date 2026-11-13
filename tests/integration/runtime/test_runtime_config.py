@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from gkx.workflows.runtime import wout as runtime_wout
+from gkx import config as gkx_config
 from gkx.config import (
     RuntimeConfig,
     RuntimeParallelConfig,
@@ -900,6 +901,352 @@ def test_estimate_flag_defaults_to_standard() -> None:
     assert runtime_wout._pop_estimate_flag(args) == "standard"
     assert args == ["--out", "x", "--progress"]
     assert runtime_wout._pop_estimate_flag(args) is None
+
+
+def _electron_ion_case(**changes) -> RuntimeConfig:
+    from gkx.config import (
+        RuntimeCollisionConfig,
+        RuntimePhysicsConfig,
+        RuntimeSpeciesConfig,
+        RuntimeTermsConfig,
+        TimeConfig,
+    )
+
+    species = (
+        RuntimeSpeciesConfig(charge=1.0, mass=1.0, density=1.0, nu=0.1),
+        RuntimeSpeciesConfig(charge=-1.0, mass=0.01, density=1.0, nu=0.2),
+    )
+    base = dict(
+        species=species,
+        physics=RuntimePhysicsConfig(adiabatic_electrons=False),
+        collisions=RuntimeCollisionConfig(electron_ion=True),
+        terms=RuntimeTermsConfig(),
+        time=TimeConfig(collision_operator="none"),
+    )
+    return RuntimeConfig(**{**base, **changes})
+
+
+def test_electron_ion_rates_scope_and_refusals() -> None:
+    from gkx.config import (
+        RuntimeCollisionConfig,
+        RuntimePhysicsConfig,
+        RuntimeRunConfig,
+        RuntimeSpeciesConfig,
+    )
+
+    assert RuntimeConfig()._electron_ion_rates() is None
+    assert _electron_ion_case()._electron_ion_rates() == (0.0, 0.2)
+    ion, electron = _electron_ion_case().species
+    physics = RuntimePhysicsConfig(adiabatic_electrons=False)
+    cases = {
+        "one kinetic ion": dict(species=(ion,)),
+        "finite positive": dict(
+            species=(ion, replace(electron, mass=0.0)),
+        ),
+        "kinetic, quasineutral": dict(species=(ion, replace(electron, density=2.0))),
+        "beta=0 only": dict(physics=replace(physics, beta=1.0e-3)),
+        "standard Dougherty": dict(
+            collisions=RuntimeCollisionConfig(nu_hermite=2.0, electron_ion=True)
+        ),
+        "unsharded": dict(run=RuntimeRunConfig(mu_vperp_max=4.0)),
+        "uniform": dict(species=(ion, replace(electron, Nl=2))),
+    }
+    for match, changes in cases.items():
+        with pytest.raises(ValueError, match=match):
+            _electron_ion_case(**changes)._electron_ion_rates()
+
+
+@pytest.mark.parametrize(
+    ("cls", "kwargs", "match"),
+    [
+        ("GridConfig", dict(ky_layout="sideways"), "ky_layout"),
+        ("TimeConfig", dict(chunk_steps=0), "chunk_steps"),
+        ("TimeConfig", dict(chunk_steps=True), "chunk_steps"),
+        ("TimeConfig", dict(chunk_steps=2.5), "chunk_steps"),
+        ("TimeConfig", dict(diagnostics_interval=0.0), "diagnostics_interval"),
+        ("TimeConfig", dict(diagnostics_interval=float("nan")), "diagnostics_interval"),
+        ("TimeConfig", dict(damp_ends_rate=-1.0), "damp_ends_rate"),
+        ("TimeConfig", dict(damp_ends_rate=float("inf")), "damp_ends_rate"),
+        ("RuntimeSpeciesConfig", dict(Nm=0), "positive integer"),
+        ("RuntimeSpeciesConfig", dict(hermite_closure="open"), "hermite_closure"),
+        ("RuntimeOutputConfig", dict(time_interval=-1.0), "time_interval"),
+        ("RuntimeRunConfig", dict(steps=0), r"\[run\] steps"),
+        ("RuntimeParallelConfig", dict(strategy="mpi"), "Unknown parallel strategy"),
+        ("RuntimeParallelConfig", dict(axis=" "), "nonempty"),
+        ("RuntimeParallelConfig", dict(auto=True, strategy="batch"), "conflicts"),
+        ("RuntimeParallelConfig", dict(auto=True, axis="kx"), "conflicts"),
+        ("RuntimeParallelConfig", dict(batch_size=0), "batch_size"),
+        ("RuntimeParallelConfig", dict(num_devices=0), "num_devices"),
+        ("RuntimeCollisionConfig", dict(nu_hyper_l=0.5), "Laguerre hypercollision"),
+    ],
+)
+def test_config_sections_refuse_bad_inputs(cls, kwargs, match) -> None:
+    with pytest.raises(ValueError, match=match):
+        getattr(gkx_config, cls)(**kwargs)
+
+
+def test_config_normalises_spelling_and_derives_the_step_policy() -> None:
+    assert gkx_config.GridConfig(ky_layout=" FULL ").ky_layout == "full"
+    # No dt: the CFL controller picks the step with rk4. A chosen dt is fixed, rk2.
+    assert (gkx_config.TimeConfig().method, gkx_config.TimeConfig().fixed_dt) == (
+        "rk4",
+        False,
+    )
+    chosen = gkx_config.TimeConfig(dt=0.05)
+    assert (chosen.method, chosen.fixed_dt) == ("rk2", True)
+    assert gkx_config.TimeConfig(dt=0.05, fixed_dt=False).method == "rk4"
+    assert gkx_config.RuntimeQuasilinearConfig(channels="es").channels == ("es",)
+    parallel = gkx_config.RuntimeParallelConfig(
+        auto=True, strategy="serial", axis="s_m"
+    )
+    assert (parallel.strategy, parallel.axis) == ("shard_map", "species_hermite")
+    run = gkx_config.RuntimeRunConfig(Nl="4", ky=1, steps=None)
+    assert (run.Nl, run.ky, run.is_empty()) == (4, 1.0, False)
+    assert gkx_config.RuntimeRunConfig().is_empty()
+
+
+def test_cfl_prefactors_follow_the_stepper_and_fall_with_the_moment_count() -> None:
+    for method, fac in (
+        ("rk3", 1.73),
+        ("lawson-rk4", 2.82),
+        ("RK4-PI", 2.82),
+        ("rk2", 1.0),
+    ):
+        assert gkx_config.explicit_method_default_cfl_fac(method) == fac
+    assert gkx_config.resolve_cfl_fac("rk4", 0.3) == 0.3
+    assert gkx_config.resolve_nonlinear_cfl_fac("rk4", 0.3, 999) == 0.3
+    assert (
+        gkx_config.resolve_nonlinear_cfl_fac("rk2", None, 999) == 1.0
+    )  # no measured edge
+    rk4 = [
+        gkx_config.resolve_nonlinear_cfl_fac("rk4", None, m) for m in (1, 32, 40, 10**6)
+    ]
+    assert rk4[0] == rk4[1] > rk4[2] > rk4[3] > 0.0  # moment scaling, floored
+    assert rk4[3] == pytest.approx(rk4[1] * 1.73 / 2.1)
+    assert "retired" in str(gkx_config.method_error("Euler", ("rk2",)))
+    assert "must be one of" in str(gkx_config.method_error("nope", ("rk2",)))
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        dict(source=""),
+        dict(sha256="A" * 64),
+        dict(route="adaptive"),
+        dict(scale_by_dt="yes"),
+        dict(amplitude=-1.0),
+        dict(dt_input=0.0),
+        dict(route="timestep_free", dt_step=0.5),
+        dict(amplitude=1.0e308, dt_input=1.0e-10),
+    ],
+)
+def test_end_damping_reference_validates_its_provenance(changes) -> None:
+    ok = dict(
+        source="ref",
+        sha256="0" * 64,
+        route="fixed_linear",
+        amplitude=1.0,
+        dt_input=0.5,
+        dt_step=0.25,
+        scale_by_dt=True,
+    )
+    assert gkx_config.EndDampingReference(**ok).rate == pytest.approx(8.0)
+    with pytest.raises(ValueError):
+        gkx_config.EndDampingReference(**{**ok, **changes})
+    free = gkx_config.EndDampingReference(
+        **{**ok, "route": "timestep_free", "dt_step": 0.0}
+    )
+    assert free.rate == pytest.approx(2.0)
+
+
+def test_case_validation_collects_every_disagreement() -> None:
+    from gkx.config import (
+        GeometryConfig,
+        RuntimeCollisionConfig,
+        RuntimePhysicsConfig,
+        RuntimeTermsConfig,
+        TimeConfig,
+    )
+
+    bad = RuntimeConfig(
+        species=(),
+        physics=RuntimePhysicsConfig(
+            linear=True, nonlinear=True, hypercollisions=False
+        ),
+        collisions=RuntimeCollisionConfig(nu_hyper_l=0.5, hypercollisions_const=1.0),
+        terms=RuntimeTermsConfig(hypercollisions=0.0),
+        time=TimeConfig(dt=-1.0, t_max=0.0),
+        geometry=GeometryConfig(model="vmec", vmec_file=None),
+    )
+    with pytest.raises(ValueError, match="invalid case") as err:
+        bad.validate()
+    for fragment in (
+        "at least one species",
+        "at least one kinetic",
+        "cannot both be true",
+        "physics.hypercollisions = true",
+        "nonzero terms.hypercollisions",
+        "time.dt must be positive",
+        "time.t_max must be positive",
+        "vmec_file",
+    ):
+        assert fragment in str(err.value)
+
+
+def test_deck_writer_refuses_unserialisable_values_and_skips_nulls() -> None:
+    text = gkx_config.deck_text({"a": 1, "skip": None, "tab": {"x": (1, 2), "y": None}})
+    assert text == "a = 1\n\n[tab]\nx = [1, 2]\n"
+    with pytest.raises(TypeError, match="unsupported"):
+        gkx_config.deck_text({"a": object()})
+
+
+_THETA = np.linspace(0.0, 2.0 * np.pi, 64, endpoint=False)
+
+
+@pytest.mark.parametrize(
+    ("bmag", "wells"),
+    [
+        (np.cos(2 * _THETA), 2),  # two full-depth wells
+        (np.cos(_THETA) + 0.02 * np.cos(9 * _THETA), 1),  # ripple below 10% of range
+        (np.ones(64), 1),  # no |B| range
+        (np.arange(3.0), 1),  # too few points to resolve a well
+        (np.array([]), 1),
+        (np.arange(16.0), 1),  # monotone: the only extremum pair wraps around
+    ],
+)
+def test_bmag_well_count_ignores_shallow_ripple_and_degenerate_traces(bmag, wells):
+    assert runtime_wout._count_bmag_wells(bmag) == wells
+
+
+@pytest.mark.parametrize("closed", [True, False])
+def test_geometry_features_drop_the_closed_interval_endpoint(closed):
+    n = 8
+    geom = SimpleNamespace(
+        theta_closed_interval=closed,
+        gds2_profile=np.full(n, 4.0),
+        gds22_profile=np.full(n, 9.0),
+        bmag_profile=np.linspace(1.0, 2.0, n),
+        s_hat=-1.5,
+        q=1.4,
+        nfp=3,
+    )
+    feats = runtime_wout.geometry_features(geom, zp=3.0)
+    # rms |grad x| = sqrt(9)/|shat|, max |grad y| = sqrt(4)
+    assert feats.anisotropy == pytest.approx(3.0 / 1.5 / 2.0)
+    assert (feats.shat, feats.q, feats.nfp, feats.zp) == (-1.5, 1.4, 3, 3.0)
+    assert feats.bmag_wells == 1
+    assert runtime_wout.geometry_class(feats) == "stellarator"
+
+
+def test_estimator_rejects_unknown_tier_and_saturates_the_ladder():
+    feats = GeometryFeatures(
+        anisotropy=0.1, shat=0.8, q=1.4, nfp=1, bmag_wells=1, zp=1.0
+    )
+    with pytest.raises(ValueError, match="target_error"):
+        ky_max_target(feats, "fast")
+    assert perp_points_for(1.0e-3, 4.4) == PERP_LADDER[-1]
+
+
+def test_estimate_resolution_from_an_analytic_flux_tube(monkeypatch) -> None:
+    from gkx.config import CycloneBaseCase
+    from gkx.geometry import SAlphaGeometry
+
+    from gkx.geometry.core import ensure_flux_tube_geometry_data
+
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(CycloneBaseCase().geometry),
+        np.linspace(-np.pi, np.pi, 32, endpoint=False),
+    )
+    monkeypatch.setattr(runtime_wout, "build_runtime_geometry", lambda cfg: geom)
+    est = runtime_wout.estimate_resolution("wout_case.nc", torflux=0.5)
+    assert est["torflux"] == 0.5
+    assert 0.0 < est["dt"] <= 0.1
+    assert est["nx"] == est["ny"] in PERP_LADDER
+    table = runtime_wout.format_estimate_table(est)
+    assert table.splitlines()[0].startswith("geometry: shat=")
+    assert all(f"{key:>6} =" in table for key in ("nx", "nz", "nm", "dt", "t_max"))
+
+
+def test_wout_flag_parsing_and_output_prefix_rules(tmp_path, monkeypatch) -> None:
+    args = ["--vmex=a.nc", "run", "--vmec", "b.nc"]
+    assert runtime_wout.extract_wout_flag_value(args) == "b.nc"
+    assert args == ["run"]
+    with pytest.raises(SystemExit, match="requires an equilibrium FILE"):
+        runtime_wout.extract_wout_flag_value(["--vmec"])
+
+    assert runtime_wout._flag_value(["--out=x", "--n"], "--out") == "x"
+    assert runtime_wout._flag_value(["--out"], "--out") is None
+    monkeypatch.chdir(tmp_path)
+    wout = tmp_path / "wout_case.nc"
+    assert runtime_wout._resolved_output_prefix({}, [], wout) == (
+        tmp_path / "wout_case" / "gkx",
+        False,
+    )
+    assert runtime_wout._resolved_output_prefix(
+        {"output": {"path": "deck_out"}}, [], wout
+    ) == (Path("deck_out"), True)
+    prefix = Path("p")
+    assert runtime_wout._resolved_output_target(
+        prefix, explicit=False, linear=False
+    ) == Path("p.out.nc")
+    assert (
+        runtime_wout._resolved_output_target(prefix, explicit=True, linear=False)
+        == prefix
+    )
+    assert (
+        runtime_wout._resolved_output_target(prefix, explicit=False, linear=True)
+        == prefix
+    )
+
+
+def test_linear_scan_defaults_keep_a_small_step_and_a_user_scan() -> None:
+    data = {"time": {"dt": 0.005}, "scan": {"ky": [0.3]}}
+    runtime_wout._apply_linear_scan_defaults(data)
+    assert data["time"]["dt"] == 0.005 and data["scan"]["ky"] == [0.3]
+    assert data["physics"] == {"linear": True, "nonlinear": False}
+    data = {"time": {"dt": 0.1}}
+    runtime_wout._apply_linear_scan_defaults(data)
+    assert data["time"]["dt"] == runtime_wout.LINEAR_SCAN_DT
+
+
+def test_wout_file_detection_and_class_defaults_on_unreadable_files(
+    tmp_path, capsys
+) -> None:
+    junk = tmp_path / "wout_junk.nc"
+    junk.write_bytes(b"not netcdf")
+    assert runtime_wout.is_wout_file(junk) is False
+    assert runtime_wout.is_wout_file(tmp_path / "x.txt") is False
+    assert runtime_wout._wout_nfp(junk) is None
+    data: dict = {}
+    runtime_wout._apply_class_resolution_defaults(data, junk)
+    assert data == {} and capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize(
+    ("nfp", "grid", "word"), [(1, 64, "tokamak"), (5, 96, "stellarator")]
+)
+def test_class_defaults_follow_the_field_period_count(
+    monkeypatch, capsys, nfp, grid, word
+):
+    monkeypatch.setattr(runtime_wout, "_wout_nfp", lambda path: nfp)
+    data = {"grid": {"Nx": 96, "Ny": 96}}
+    runtime_wout._apply_class_resolution_defaults(data, Path("w.nc"))
+    assert data["grid"] == {"Nx": grid, "Ny": grid}
+    assert word in capsys.readouterr().out
+
+
+def test_default_deck_falls_back_to_examples_and_then_fails(monkeypatch) -> None:
+    real = Path.is_file
+    packaged = runtime_wout.resources.files("gkx").joinpath("data/common_input.toml")
+    monkeypatch.setattr(
+        Path,
+        "is_file",
+        lambda self: False if str(self) == str(packaged) else real(self),
+    )
+    assert runtime_wout.default_wout_deck_path().parent.name == "examples"
+    monkeypatch.setattr(Path, "is_file", lambda self: False)
+    with pytest.raises(FileNotFoundError, match="common_input.toml"):
+        runtime_wout.default_wout_deck_path()
 
 
 def _scan_wouts_dir() -> Path | None:
