@@ -188,9 +188,6 @@ def finalize_runtime_linear_quasilinear(
             metadata={
                 "runtime_config_enabled": True,
                 "solver": solver_name,
-                "delta_ky": ql_cfg.delta_ky,
-                "species_selection": ql_cfg.species,
-                "write_spectrum": bool(ql_cfg.write_spectrum),
             },
         ).to_dict()
         if status_callback is not None:

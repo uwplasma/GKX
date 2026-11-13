@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict
 import dataclasses
 from pathlib import Path
+
+from gkx.case_paths import anchor_case_paths, field_line_errors, warn_short_field_line
 from typing import Mapping, Tuple
 
 REFERENCE_ELECTRON_MASS: float = 2.7e-4
@@ -171,7 +173,6 @@ class TimeConfig:
     chunk_steps: int | None = None
     diagnostics_interval: float | None = None
     diagnostics: bool = True
-    save_state: bool = False
     checkpoint: bool = False
     implicit_restart: int = 20
     implicit_preconditioner: str | None = None
@@ -237,7 +238,6 @@ class GeometryConfig:
     geometry_backend: str = "auto"
     geometry_file: str | None = None
     vmec_file: str | None = None
-    geometry_helper_python: str | None = None
     rhoc: float = 0.5
     R_geo: float | None = None
     shift: float = 0.0
@@ -253,7 +253,6 @@ class GeometryConfig:
     include_shear_variation: bool = False
     include_pressure_variation: bool = False
     betaprim: float | None = None
-    geometry_helper_repo: str | None = None
     q: float = 1.4
     s_hat: float = 0.8
     z0: float | None = None
@@ -272,7 +271,6 @@ class GeometryConfig:
         geometry_backend: str = "auto",
         geometry_file: str | None = None,
         vmec_file: str | None = None,
-        geometry_helper_python: str | None = None,
         rhoc: float = 0.5,
         R_geo: float | None = None,
         shift: float = 0.0,
@@ -288,7 +286,6 @@ class GeometryConfig:
         include_shear_variation: bool = False,
         include_pressure_variation: bool = False,
         betaprim: float | None = None,
-        geometry_helper_repo: str | None = None,
         q: float = 1.4,
         s_hat: float = 0.8,
         z0: float | None = None,
@@ -306,7 +303,6 @@ class GeometryConfig:
             "geometry_backend": geometry_backend,
             "geometry_file": geometry_file,
             "vmec_file": vmec_file,
-            "geometry_helper_python": geometry_helper_python,
             "rhoc": rhoc,
             "R_geo": R_geo,
             "shift": shift,
@@ -322,7 +318,6 @@ class GeometryConfig:
             "include_shear_variation": include_shear_variation,
             "include_pressure_variation": include_pressure_variation,
             "betaprim": betaprim,
-            "geometry_helper_repo": geometry_helper_repo,
             "q": q,
             "s_hat": s_hat,
             "z0": z0,
@@ -545,8 +540,6 @@ class RuntimePhysicsConfig:
     adiabatic_electrons: bool = True
     adiabatic_ions: bool = False
     tau_e: float = 1.0
-    tau_fac: float | None = None
-    z_ion: float = 1.0
     beta: float = 0.0
     collisions: bool = True
     hypercollisions: bool = True
@@ -668,7 +661,6 @@ class RuntimeExpertConfig:
     fixed_mode: bool = False
     iky_fixed: int | None = None
     ikx_fixed: int | None = None
-    dealias_kz: bool = False
     source: str = "default"
     phi_ext: float = 0.0
 
@@ -731,10 +723,7 @@ class RuntimeQuasilinearConfig:
     csat: float = 1.0
     gamma_floor: float = 0.0
     include_stable_modes: bool = False
-    delta_ky: str | float = "auto"
-    species: str = "all"
     channels: Tuple[str, ...] = ("es",)
-    write_spectrum: bool = True
     output_path: str | None = None
 
     def __post_init__(self) -> None:
@@ -777,7 +766,6 @@ class RuntimeParallelConfig:
     batch_size: int | None = None
     num_devices: int | None = None
     strict_identity: bool = True
-    profile: bool = False
     backend: str = "auto"
     auto: bool = False
 
@@ -940,6 +928,7 @@ class RuntimeConfig:
     parallel: RuntimeParallelConfig = RuntimeParallelConfig()
     run: RuntimeRunConfig = RuntimeRunConfig()
     damping_reference: EndDampingReference | None = None
+    source_dir: str | None = dataclasses.field(default=None, compare=False, repr=False)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -970,12 +959,12 @@ class RuntimeConfig:
         """Return a validated copy with ``changes`` applied.
 
         The dataclass is frozen, so this is the supported way to derive a case.
-        The copy is validated before it is returned: a scan that builds cases in
-        a loop should fail on the case it built, not several stages later inside
-        a compiled kernel.
+        The copy is validated before it is returned, so a scan fails on the case
+        it built, and relative file paths resolve against the deck directory.
         """
 
         updated = dataclasses.replace(self, **changes)
+        updated = anchor_case_paths(updated, self.source_dir)
         updated.validate()
         return updated
 
@@ -1066,12 +1055,7 @@ class RuntimeConfig:
         return tuple(ion.charge * s.nu if s.charge < 0 else 0.0 for s in self.species)
 
     def validate(self) -> "RuntimeConfig":
-        """Check cross-section consistency and return ``self``.
-
-        Each section already validates its own fields in ``__post_init__``.
-        What no section can see is a disagreement between sections, which is
-        what this checks.
-        """
+        """Check disagreements between sections and return ``self``."""
 
         errors: list[str] = []
         if not self.species:
@@ -1101,8 +1085,10 @@ class RuntimeConfig:
             errors.append("time.t_max must be positive")
         if self.geometry.model == "vmec" and not self.geometry.vmec_file:
             errors.append("geometry.model = 'vmec' requires geometry.vmec_file")
+        errors.extend(field_line_errors(self))
         if errors:
             raise ValueError("invalid case: " + "; ".join(errors))
+        warn_short_field_line(self)
         return self
 
     def summary(self) -> Dict[str, Any]:

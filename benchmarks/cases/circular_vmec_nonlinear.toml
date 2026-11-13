@@ -26,8 +26,6 @@ ntheta = 24
 nperiod = 1
 
 [time]
-# Explicit nonlinear end-damping rate.
-damp_ends_rate = 0.1
 t_max = 20.4
 sample_stride = 10
 diagnostics_stride = 10
@@ -39,6 +37,7 @@ model = "vmec"
 vmec_file = "../../examples/vmec/wout_circular_tokamak.nc"
 torflux = 0.64
 alpha = 0.0
+# Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
 npol = 1.0
 R0 = 2.77778
 

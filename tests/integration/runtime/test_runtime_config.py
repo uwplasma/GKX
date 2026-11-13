@@ -197,6 +197,22 @@ def test_runtime_toml_rejects_removed_diffrax_time_keys(tmp_path: Path) -> None:
     assert cfg.time.method == "rk4"
 
 
+def test_runtime_toml_removed_keys_load_at_their_old_default_and_refuse_others(
+    tmp_path: Path,
+) -> None:
+    """Resolved decks of older versions carry removed keys at their old value."""
+
+    path = tmp_path / "case.toml"
+    path.write_text(
+        "schema_version = 1\n[physics]\nz_ion = 1.0\n[time]\nsave_state = false\n",
+        encoding="utf-8",
+    )
+    load_runtime_from_toml(path)
+    path.write_text("schema_version = 1\n[physics]\ntau_fac = 2.0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"\[physics\] tau_fac"):
+        load_runtime_from_toml(path)
+
+
 def test_runtime_toml_rejects_misspelled_keys_and_sections(tmp_path: Path) -> None:
     """A misspelled deck key must fail, not silently run the default physics.
 
@@ -403,7 +419,6 @@ axis = "ky"
 batch_size = 3
 num_devices = 2
 strict_identity = true
-profile = true
 backend = "auto"
 """
     )
@@ -441,7 +456,6 @@ backend = "auto"
             "parallel.batch_size": 3,
             "parallel.num_devices": 2,
             "parallel.strict_identity": True,
-            "parallel.profile": True,
             "species[1].charge": -1.0,
         },
     )
@@ -566,7 +580,6 @@ _SHIPPED_DECK_CONTRACTS = {
                 REPO_ROOT / "examples" / "vmec" / "wout_NuhrenbergZille_1988_QHS.nc"
             ).resolve()
         ),
-        "cfg.geometry.geometry_helper_python": None,
         "cfg.geometry.torflux": 0.64,
         "cfg.physics.nonlinear": True,
         "cfg.physics.adiabatic_electrons": True,
@@ -579,7 +592,6 @@ _SHIPPED_DECK_CONTRACTS = {
     "benchmarks/cases/w7x_nonlinear_vmec_geometry.toml": {
         "cfg.geometry.model": "vmec",
         "cfg.geometry.vmec_file": str(_QI_WOUT.resolve()),
-        "cfg.geometry.geometry_helper_python": None,
         "cfg.geometry.torflux": 0.64,
         "cfg.physics.nonlinear": True,
         "cfg.physics.adiabatic_electrons": True,
@@ -632,7 +644,7 @@ _SHIPPED_DECK_CONTRACTS = {
         "cfg.geometry.alpha": 0.0,
         "cfg.geometry.R0": 5.485,
         "cfg.grid.boundary": "linked",
-        "cfg.grid.nperiod": 4,
+        "cfg.grid.nperiod": None,
         "cfg.grid.Nz": 256,
         "cfg.init.gaussian_init": True,
         "cfg.init.gaussian_width": 1.0,
@@ -1197,3 +1209,51 @@ def test_nonlinear_example_optional_time_controls_parse(relative, tmp_path):
         output=replace(defaults.output, time_interval=enabled.output.time_interval),
     )
     assert enabled.to_dict() == expected.to_dict()
+
+
+def _vmec_deck(tmp_path, grid_extra="", geometry_extra="npol = 1.0"):
+    deck = tmp_path / "deck" / "case.toml"
+    deck.parent.mkdir(parents=True, exist_ok=True)
+    deck.write_text(
+        f'[grid]\n{grid_extra}\n[geometry]\nmodel = "vmec"\nvmec_file = "w.nc"\n'
+        f"torflux = 0.5\n{geometry_extra}\n"
+    )
+    return deck
+
+
+def test_relative_vmec_file_override_resolves_against_deck_directory(tmp_path):
+    from gkx.config import GeometryConfig
+    from gkx.workflows.runtime.toml import load
+
+    case = load(_vmec_deck(tmp_path))
+    deck_dir = (tmp_path / "deck").resolve()
+    assert case.geometry.vmec_file == str(deck_dir / "w.nc")
+    other = case.replace(geometry=replace(case.geometry, vmec_file="sub/x.nc"))
+    assert other.geometry.vmec_file == str(deck_dir / "sub" / "x.nc")
+    absolute = str((tmp_path / "abs.nc").resolve())
+    kept = case.replace(geometry=replace(case.geometry, vmec_file=absolute))
+    assert kept.geometry.vmec_file == absolute
+    assert isinstance(case.geometry, GeometryConfig)
+
+
+def test_vmec_nperiod_conflicting_with_npol_is_rejected(tmp_path):
+    from gkx.workflows.runtime.toml import load
+
+    case = load(_vmec_deck(tmp_path, grid_extra="nperiod = 4"))
+    with pytest.raises(ValueError, match="geometry.npol"):
+        case.validate()
+    ok = load(_vmec_deck(tmp_path / "x", grid_extra="nperiod = 1"))
+    with pytest.warns(RuntimeWarning, match="short field line"):
+        ok.validate()
+
+
+def test_short_field_line_warns_only_below_threshold():
+    import warnings
+
+    from gkx.config import GridConfig, RuntimeConfig
+
+    with pytest.warns(RuntimeWarning, match="nperiod = 1"):
+        RuntimeConfig(grid=GridConfig(nperiod=1)).validate()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        RuntimeConfig(grid=GridConfig(nperiod=2)).validate()

@@ -360,7 +360,8 @@ Nm = 8-16 on a GPU; check the heat flux against the next Nm before quoting it.
 
 ``benchmarks/cases/cyclone_nonlinear_t400.toml`` (64x64x24, (Nl, Nm) = (4, 8))
 is a speed benchmark, not a converged calculation. Its saturated heat flux is
-Q = 8.6 at Nx = 64 and 4.8 at Nx = 192, and (4, 8) overestimates the linear
+Q = 7.3 at Nx = 64 and 5.2 at Nx = 192 (9.1 and 5.0 with the end damping pinned at 0.1;
+two seeds, :ref:`common-deck`), and (4, 8) overestimates the linear
 growth rate by 9 to 86% at ky = 0.3 to 0.5. Quote transport from a resolution
 scan, not from this deck.
 

@@ -3882,6 +3882,9 @@ def test_runtime_imex_chunks_share_one_scan_and_end_on_a_short_final_chunk() -> 
     )
     cfg = uniform_moments(cfg)
     cfg = replace(cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8))
+    # The weak layer the deck used to pin: the default rate makes the factor too
+    # ill-conditioned for the 1e-3 chunk comparison below.
+    cfg = replace(cfg, time=replace(cfg.time, damp_ends_rate=0.1))
 
     def run(t_max: float, chunk_steps: int):
         time = replace(cfg.time, t_max=t_max, dt_max=0.1, chunk_steps=chunk_steps)

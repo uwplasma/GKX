@@ -381,7 +381,7 @@ transients in the cases that never converged.
 
 Nothing is called saturated before ``saturation_t_min = 800`` :math:`a/v_t`.
 Published practice is of that order: the GX stellarator flux database of
-Landreman et al. (2025) discards :math:`t<150` and runs to 800 :math:`a/v_t`,
+Landreman et al. [Landreman25]_ discards :math:`t<150` and runs to 800 :math:`a/v_t`,
 CGYRO production runs use at least 500 :math:`a/c_s`, and GENE averaging windows
 are of order 1000. A run with ``t_max`` below ``saturation_t_min`` can still
 report ``saturated`` at its cap. The Oberparleiter et al. stopping rule
@@ -516,6 +516,12 @@ directions, so GKX keeps GX's layer and fixes only its units.
 A GX nonlinear run applies :math:`A/\Delta t` at its own step, so matching it
 means setting ``damp_ends_rate`` to :math:`A/\Delta t_{GX}`. Match the same
 absorbing-layer policy before comparing transport.
+
+The absorber damps the non-adiabatic :math:`h`, so the field solve amplifies its
+largest eigenvalue past :math:`\nu_{end}` (about 2x with adiabatic electrons, about
+470x on the kinetic-electron Cyclone deck). The explicit nonlinear steppers
+measure that eigenvalue by Arnoldi, with streaming, and bound the step by it, so
+a large rate buys a proportionally small step rather than a non-finite run.
 
 Vary the end-damping rate and parallel domain together when checking a linked
 boundary. Report the rate, width and timestep policy in cross-code comparisons.

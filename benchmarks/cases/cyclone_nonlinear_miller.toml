@@ -19,11 +19,10 @@ Ly = 62.8
 boundary = "linked"
 y0 = 28.2
 ntheta = 24
+# Short field line: growth rates are not converged below nperiod = 2; see docs/guidance.rst.
 nperiod = 1
 
 [time]
-# Explicit nonlinear end-damping rate.
-damp_ends_rate = 0.1
 t_max = 400.0
 sample_stride = 20
 diagnostics_stride = 20

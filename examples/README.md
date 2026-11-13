@@ -31,7 +31,10 @@ python examples/01_linear_tokamak/run.py
 
 Steps 02, 04 and 05 (stellarator) need a VMEC `wout` from [`vmec/`](vmec). If
 it is missing, the script solves it once with `vmex` (`pip install vmex`) or stops with a message. `vmec/generate_wouts.sh` builds all
-of them. `common_input.toml` is the deck behind `gkx wout_XXX.nc`.
+of them. `common_input.toml` is the deck behind `gkx wout_XXX.nc`; it lists only the keys that differ from the defaults, and the decks here start from it and comment each departure from its stepper and end-damping choice.
+[`reference_inputs/`](reference_inputs) holds a linear, a nonlinear and a
+kinetic-electron electromagnetic deck that set every key at its default, one
+comment per key; `docs/inputs.rst` lists the keys.
 
 Validation decks (GX parity, convergence ladders) live in
 [`benchmarks/cases/`](../benchmarks/cases). Every script is run at tutorial

@@ -5,6 +5,8 @@ schema_version = 1
 # bounded linear spectrum used for quasilinear calibration audits. The
 # uncalibrated mixing-length output is a model diagnostic and must be compared
 # against nonlinear windows before making absolute-flux claims.
+# Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
+# below are the case; a departure from its stepper or end-damping choice has its own comment.
 
 [[species]]
 name = "ion"
@@ -29,6 +31,7 @@ ntheta = 48
 nperiod = 1
 
 [time]
+# Unused by the Krylov solver below; the time route needs t_max of several hundred.
 t_max = 2.0
 dt = 0.005
 method = "rk4"
@@ -43,6 +46,7 @@ model = "vmec"
 vmec_file = "../vmec/wout_NuhrenbergZille_1988_QHS.nc"
 torflux = 0.64
 alpha = 0.0
+# Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
 npol = 1.0
 
 [init]
@@ -103,10 +107,13 @@ csat = 1.0
 gamma_floor = 0.0
 include_stable_modes = false
 channels = ["es"]
-write_spectrum = true
 
 [run]
-ky = 0.047619047619047616
+# ky = 8/21 is unstable; the lowest ky, 1/21, is damped (gamma = -0.04). solver = "krylov" certifies the
+# eigenpair in about two minutes on a CPU (gamma = 0.0837, omega = 0.0783). The time
+# route beats two modes: gamma is 0.0775 at t_max = 150 and 0.0814 at 250, and
+# Nx = 32 or 48 gives 0.0747 or 0.0819, so the radial grid stays at 96.
+ky = 0.38095238095238093
 Nl = 4
 Nm = 8
-solver = "time"
+solver = "krylov"
