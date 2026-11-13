@@ -5,6 +5,7 @@ schema_version = 1
 # and the electromagnetic field response; transport requires a longer run.
 # Starts from examples/common_input.toml: the species, geometry, grid, resolution and horizon
 # below are the case; a departure from its stepper or end-damping choice has its own comment.
+# Each species keeps its own Laguerre (Nl) and Hermite (Nm) moments.
 
 [[species]]
 name = "ion"
@@ -15,6 +16,8 @@ temperature = 1.0
 tprim = 2.49
 fprim = 0.8
 kinetic = true
+Nl = 4  # ion Laguerre: finite Larmor radius, the ions' perpendicular physics
+Nm = 8  # ion Hermite: slow parallel streaming phase-mixes over few moments
 
 [[species]]
 name = "electron"
@@ -25,6 +28,8 @@ temperature = 1.0
 tprim = 2.49
 fprim = 0.8
 kinetic = true
+Nl = 4  # electron Laguerre: the electron Larmor radius is tiny, a few suffice
+Nm = 48  # electron Hermite: fast streaming and trapped electrons need many
 
 [grid]
 Nx = 16
@@ -99,8 +104,8 @@ diagnostic_norm = "rho_star"
 
 [run]
 ky = 0.3
-Nl = 4
-Nm = 16
+Nl = 4  # the state holds the largest count of any species
+Nm = 48
 
 [output]
 # Optional saved-record cadence in the same time units as time.t_max.

@@ -353,10 +353,10 @@ _RUNTIME_LINEAR_HL_FALLBACK = (12, 24)
 # A nonlinear run without Nl/Nm starts coarse; resolution is the deck's call.
 _RUNTIME_NONLINEAR_HL_FALLBACK = (4, 8)
 # Kinetic-electron decks that name no resolution take these instead, (slower species,
-# faster species) -- docs/guidance.rst, "Velocity space per species".
+# faster species); the nonlinear ions keep the ion-only fallback (docs/guidance.rst).
 _SPECIES_HL_FALLBACK = {
     _RUNTIME_LINEAR_HL_FALLBACK: ((12, 32), (6, 48)),
-    _RUNTIME_NONLINEAR_HL_FALLBACK: ((4, 16), (4, 16)),
+    _RUNTIME_NONLINEAR_HL_FALLBACK: ((4, 8), (4, 48)),
 }
 
 

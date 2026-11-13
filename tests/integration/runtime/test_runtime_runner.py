@@ -92,7 +92,7 @@ from gkx.workflows.runtime.orchestration_scan import (
 from gkx.workflows.runtime.results import RuntimeParameterScanResult
 from gkx.workflows.runtime.toml import load_runtime_from_toml
 from pathlib import Path
-from support.helpers import requires_paired_solvax
+from support.helpers import requires_paired_solvax, uniform_moments
 from support.paths import REPO_ROOT
 from types import SimpleNamespace
 import gkx.workflows.runtime.startup as startup
@@ -3860,6 +3860,7 @@ def test_runtime_linear_kinetic_electron_time_route_without_dt_is_finite() -> No
     cfg, _ = load_runtime_from_toml(
         REPO_ROOT / "examples/05_kinetic_electrons/case.toml"
     )
+    cfg = uniform_moments(cfg)
     cfg = replace(
         cfg,
         time=TimeConfig(t_max=12.0, sample_stride=10, damp_ends_rate=0.1),
@@ -3879,6 +3880,7 @@ def test_runtime_imex_chunks_share_one_scan_and_end_on_a_short_final_chunk() -> 
     cfg, _ = load_runtime_from_toml(
         REPO_ROOT / "examples/05_kinetic_electrons/case.toml"
     )
+    cfg = uniform_moments(cfg)
     cfg = replace(cfg, grid=replace(cfg.grid, Nx=4, Ny=4, Nz=8))
     # The weak layer the deck used to pin: the default rate makes the factor too
     # ill-conditioned for the 1e-3 chunk comparison below.

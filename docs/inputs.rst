@@ -1059,7 +1059,7 @@ prints ``species moments: ion 12 x 32, electron 6 x 48`` beside ``moments``.
 *Fallback.* A deck with two kinetic species whose thermal speeds differ by
 a factor of 4 or more (kinetic electrons) that names no ``Nl`` or ``Nm``, in
 ``[run]``, on the call or in a species table, takes per-species counts: linear
-ions (12, 32) and electrons (6, 48); nonlinear (4, 16) for both. The rule keys on the resolved pair being the generic fallback, so
+ions (12, 32) and electrons (6, 48); nonlinear ions (4, 8) and electrons (4, 48). The rule keys on the resolved pair being the generic fallback, so
 naming exactly (12, 24) (linear) or (4, 8) (nonlinear) is read as naming none;
 name any other pair, or any species count, to turn it off. The evidence is in
 :doc:`guidance`.
