@@ -62,6 +62,7 @@ PINNED = {
 VMEC_INPUT = HERE.parent / "vmec" / "input.LandremanPaul2021_QA_lowres"
 OUTPUT = Path("outputs/05_kinetic_electrons")
 T_MAX = None  # None keeps each deck's t_max
+GRID = {}  # overrides of the deck [grid] entries, e.g. {"nperiod": 1}
 
 OUTPUT.mkdir(parents=True, exist_ok=True)
 summary, traces = {}, {}
@@ -75,6 +76,7 @@ for label, path in CASES.items():
         )
     if label in PINNED:
         case = case.replace(time=replace(case.time, **PINNED[label]))
+    case = case.replace(grid=replace(case.grid, **GRID))
     if T_MAX is not None:
         case = case.replace(time=replace(case.time, t_max=T_MAX))
     if case.geometry.model == "vmec":

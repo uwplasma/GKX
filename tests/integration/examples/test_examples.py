@@ -72,7 +72,10 @@ SMOKE_KNOBS: dict[str, dict[str, str]] = {
     },
     "08_quasilinear/run.py": {"KY": "[0.2, 0.3]"},
     "09_autodiff/run.py": {"STEPS": "60", "GN_STEPS": "3"},
-    "05_kinetic_electrons/run.py": {"T_MAX": "0.05"},
+    "05_kinetic_electrons/run.py": {
+        "T_MAX": "0.05",
+        "GRID": '{"nperiod": 1, "Nx": 8, "Nz": 16, "ntheta": 16}',
+    },
     "11_parallel_scan/run.py": {"KY": "[0.2, 0.3]"},
     "12_restart_and_analysis/run.py": {"STEPS_PER_LEG": "40"},
 }
