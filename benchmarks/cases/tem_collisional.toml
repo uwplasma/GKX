@@ -8,6 +8,8 @@ schema_version = 1
 # ``[time] collision_operator`` (landau, sugama, improved_sugama,
 # lenard_bernstein). The GS2 and stella inputs of the comparison in
 # docs/validation.rst use vnewk_e = nu_e / sqrt(2).
+# The deck is a speed choice: at nu = 0 gamma needs electron Nm of 96 or more
+# and nperiod of 4 or more to converge (docs/guidance.rst, Resolution).
 
 [[species]]
 name = "ion"
