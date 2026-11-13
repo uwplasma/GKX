@@ -238,7 +238,8 @@ recursive = true
 # 69846 -> 69844: plotting docstring literal fix.
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
-baseline = 69890
+# 69890 -> 69893: fixed linear step over the CFL warn ratio is refused.
+baseline = 69893
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -255,7 +256,8 @@ recursive = true
 # 64777 -> 64789: numpy-scalar JSON writer test.
 # 64789 -> 64794: example gallery style check; example 10 smoke gated on vmex.
 # 64794 -> 64804: fixed step longer than t_max test; example 05 smoke grid knob.
-baseline = 64804
+# 64804 -> 64807: over-CFL linear step is refused, test updated.
+baseline = 64807
 target = 35000
 
 [[line_budget_policy.counts]]

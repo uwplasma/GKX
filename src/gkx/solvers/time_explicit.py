@@ -1381,6 +1381,7 @@ def warn_if_fixed_dt_exceeds_cfl(
     imex methods only treat damping implicitly), so the explicit-time frequency
     bound applies to them too. An over-CFL dt overflows the trajectory, and the
     growth fit then fails loudly; this names the cause before the run starts.
+    A fixed step over ``FIXED_DT_CFL_WARN_RATIO`` times the bound raises.
     Returns the CFL-stable step, or None when it cannot be bounded. ``measure``
     adds the Arnoldi radius (one cache build) for kinetic-electron decks.
 
@@ -1408,14 +1409,16 @@ def warn_if_fixed_dt_exceeds_cfl(
         return None
     cfl_fac = resolve_cfl_fac(str(tcfg.method), tcfg.cfl_fac)
     dt_stable = cfl_fac * float(tcfg.cfl) / wmax
-    if float(tcfg.dt) > dt_stable:
-        warnings.warn(
-            f"requested dt={float(tcfg.dt):.4g} exceeds the estimated "
-            f"CFL-stable step {dt_stable:.4g} (max linear frequency "
-            f"{wmax:.4g}); the integration may overflow -- reduce dt",
-            RuntimeWarning,
-            stacklevel=2,
+    ratio = float(tcfg.dt) / dt_stable
+    if ratio > 1.0:
+        msg = (
+            f"requested dt={float(tcfg.dt):.4g} exceeds the estimated CFL-stable "
+            f"step {dt_stable:.4g} (max linear frequency {wmax:.4g}, growing as "
+            "sqrt(Nm)); the integration may overflow -- reduce dt"
         )
+        if ratio > FIXED_DT_CFL_WARN_RATIO and bool(tcfg.fixed_dt):
+            raise ValueError(msg)
+        warnings.warn(msg, RuntimeWarning, stacklevel=2)
     return dt_stable
 
 
