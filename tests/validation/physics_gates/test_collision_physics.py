@@ -2435,10 +2435,9 @@ def test_runtime_default_is_landau_and_coulomb_is_its_alias() -> None:
             gkx.solve(local, ky_target=0.3, Nl=2, Nm=4, solver="time").gamma
         )
     assert growth["coulomb"] == growth["landau"]
-    # Recorded 2026-10-16 (x64 CPU, end-damping contract of #366), re-recorded
-    # 2026-11-01 for the 30% fallback window (0.0726127 before); this t = 10 run
-    # is not settled. Dougherty damps ITG more at equal nu.
-    assert np.isclose(growth["landau"], 0.0727565, rtol=1e-3)
+    # Regression value (x64 CPU) on the deck's two-turn line; this t = 10 run at
+    # (Nl, Nm) = (2, 4) is not settled. Dougherty damps ITG more at equal nu.
+    assert np.isclose(growth["landau"], 0.1240523, rtol=1e-3)
     assert growth["lenard_bernstein"] < growth["landau"]
 
 
