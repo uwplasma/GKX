@@ -440,7 +440,7 @@ checked-in autodiff examples for parameter sensitivities:
 .. code-block:: bash
 
    python examples/09_autodiff/run.py
-   python examples/08_quasilinear/implicit_sensitivity.py
+   python examples/08_quasilinear/run.py   # implicit eigenpair derivatives, second half
 
 Differentiable optimization examples
 ------------------------------------
@@ -455,7 +455,8 @@ physical GKX heat-flux tuple appended to the objective list:
 ``run.py`` mirrors VMEX's boundary-mode ladder, preserves its
 ``A=6`` and mean-``iota=0.42`` targets, and adds the checkpointed nonlinear
 heat-flux derivative. The equilibrium is vacuum; finite ``a/L_T`` and ``a/L_n``
-drive GKX. Edit the top-level constants to set resolution and run length.
+drive GKX. Edit the top-level constants to set resolution and run length, or
+set ``WIRING_RUN = True`` for a tiny CPU check.
 
 The optimizer window starts from a detached saturated state and supplies a
 local design derivative. Evaluate a candidate with independent long runs,
@@ -472,7 +473,7 @@ surface/field-line artifacts and matched baseline/optimized long
 post-transient nonlinear windows, not startup traces or reduced-window
 estimators.
 
-``examples/09_autodiff/run.py`` writes a summary JSON and sweep CSVs beside the
+``examples/09_autodiff/run.py`` writes a summary JSON, sweeps included, beside the
 figure. One observed mode does not identify both gradients; two modes do,
 which is why the gallery uses the two-mode construction.
 
