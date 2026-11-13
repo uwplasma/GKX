@@ -2269,3 +2269,73 @@ def test_zonal_response_needs_three_samples(samples) -> None:
     phi = np.ones((samples, 1, 3, 4), dtype=complex)
     with pytest.raises(ValueError, match="at least 3"):
         zonal_response(t, phi, ModeSelection(0, 1), np.ones(4))
+
+
+def test_run_summary_spectral_potential_transform_checks_its_layout() -> None:
+    from gkx.artifacts.run_summary import _as_real_space, potential_real_space
+
+    nkx, ny, nz = 4, 6, 2
+    phi = np.zeros((ny // 2 + 1, nkx, nz), dtype=complex)
+    phi[0, 0, :] = 1.0  # the mean mode: phi(x, y, z) is a constant, scale = ny*nkx
+    for arg in (phi, np.concatenate([phi, phi[1:-1][::-1].conj()])):
+        real = potential_real_space(arg, ny_full=ny)
+        assert real.shape == (nkx, ny, nz)
+        np.testing.assert_allclose(real, 1.0)
+    assert potential_real_space(np.ones((4, 3, 2), dtype=complex)).shape == (3, 4, 2)
+    with pytest.raises(ValueError, match="shape"):
+        potential_real_space(phi[0])
+    with pytest.raises(ValueError, match="ky rows"):
+        potential_real_space(phi[:2], ny_full=ny)
+    assert _as_real_space(np.ones((2, 3, 4), dtype=int)).dtype == float
+    with pytest.raises(ValueError, match="real space"):
+        _as_real_space(np.ones((3, 4)))
+
+
+def test_run_summary_plot_helpers_refuse_bad_shapes_and_read_loose_inputs(tmp_path):
+    import matplotlib.pyplot as plt
+    from types import SimpleNamespace
+
+    from gkx.artifacts import run_summary as rs
+
+    assert rs._grid_extent(None) is None
+    assert rs._grid_extent(SimpleNamespace(x0=1.0)) is None
+    assert rs._grid_extent(SimpleNamespace(x0=1.0, y0=2.0)) == pytest.approx(
+        (2 * np.pi, 4 * np.pi)
+    )
+    assert rs._decade_factor(float("nan")) == (1.0, "")
+    assert rs._decade_factor(0.5) == (1.0, "")
+    factor, label = rs._decade_factor(2.0e5)
+    assert factor == 1.0e5 and "10^{5}" in label
+    assert rs._axis_extent(None) is None and rs._axis_extent(np.array([1.0])) is None
+    assert rs._axis_extent(np.array([0.0, 1.0, 2.0])) == 3.0
+
+    _fig, ax = plt.subplots()
+    with pytest.raises(ValueError, match="2D"):
+        rs.draw_phi_xy_cut(ax, np.zeros((2, 3, 4)), scale=1.0)
+    with pytest.raises(ValueError, match="x, y, z"):
+        rs.draw_flux_tube_3d(ax, np.zeros((2, 3)), SimpleNamespace(), scale=1.0)
+    plt.close("all")
+
+    group = SimpleNamespace(variables={"a": np.array([]), "b": np.array([1.0, np.nan])})
+    assert rs._scalar(None, "a", 2.0) == 2.0
+    assert rs._scalar(group, "missing", 2.0) == 2.0
+    assert rs._profile(group, "b") is None and rs._profile(None, "b") is None
+
+    base = tmp_path / "run.out.nc"
+    assert rs._read_deck(base) == (None, None)
+    (tmp_path / "run.toml").write_text("not = [valid", encoding="utf-8")
+    assert rs._read_deck(base) == (None, tmp_path / "run.toml")
+    assert rs._root_resolution(tmp_path / "run.csv") == {}
+
+
+def test_run_summary_resolution_and_species_lines_fall_back_gracefully() -> None:
+    from gkx.artifacts.run_summary import _resolution_lines
+
+    assert _resolution_lines(None, {}) == []
+    lines = dict(
+        _resolution_lines(
+            {"species": [{"name": "e", "Nm": 16}]}, {"nlaguerre": 4, "nhermite": 8}
+        )
+    )
+    assert lines["moments"] == "Nl x Nm = 4 x 8"
+    assert lines["species moments"] == "e 4 x 16"
