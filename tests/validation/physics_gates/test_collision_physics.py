@@ -2530,3 +2530,253 @@ def test_species_closure_replaces_that_species_kz_hypercollisions() -> None:
     assert parsed is not None and parsed[0].hermite_closure == "reflectionless"
     with pytest.raises(ValueError, match="hermite_closure"):
         RuntimeSpeciesConfig(hermite_closure="reflectionles")
+
+
+def test_lenard_bernstein_refuses_a_deck_that_drops_its_damping() -> None:
+    """The collisional zonal deck zeroes ``nu_hermite``/``nu_laguerre`` because the
+    block operators ignore them; the Lenard-Bernstein operator reads them, and
+    without them its conservation terms alone have eigenvalues of about ``+nu``
+    and ``+2 nu`` (a run grew 228-fold over 300 time units at ``nu = 0.02``)."""
+
+    import gkx
+    from gkx.runtime import build_runtime_geometry, build_runtime_linear_params
+
+    case = gkx.load(
+        Path(__file__).resolve().parents[3]
+        / "benchmarks/cases/collisional_zonal_response.toml"
+    )
+    base = case.replace(
+        species=tuple(dataclasses.replace(s, nu=0.02) for s in case.species),
+        physics=dataclasses.replace(case.physics, collisions=True),
+    )
+
+    def build(case):
+        return build_runtime_linear_params(
+            case, Nm=4, geom=build_runtime_geometry(case)
+        )
+
+    for model in ("landau", "sugama", "improved_sugama"):
+        build(
+            base.replace(time=dataclasses.replace(base.time, collision_operator=model))
+        )
+    lb = base.replace(
+        time=dataclasses.replace(base.time, collision_operator="lenard_bernstein")
+    )
+    with pytest.raises(ValueError, match="Lenard-Bernstein"):
+        build(lb)
+    build(
+        lb.replace(
+            collisions=dataclasses.replace(
+                lb.collisions, nu_hermite=1.0, nu_laguerre=2.0
+            )
+        )
+    )
+
+
+def _zonal_trace(operator: str, nu: float, t_max: float, Nl: int = 6, Nm: int = 16):
+    """``<phi>(t) / <phi>(0)`` of the Rosenbluth-Hinton deck (q = 1.4, eps = 0.1,
+    k_x rho_i = 0.05, adiabatic electrons) for one collision operator."""
+
+    import gkx
+    from gkx.diagnostics.modes import zonal_response
+    from gkx.geometry import ensure_flux_tube_geometry_data
+    from gkx.runtime import build_runtime_geometry
+
+    case = gkx.load(
+        Path(__file__).resolve().parents[3]
+        / "benchmarks/cases/collisional_zonal_response.toml"
+    )
+    lb = operator == "lenard_bernstein"
+    case = case.replace(
+        species=tuple(dataclasses.replace(s, nu=nu) for s in case.species),
+        physics=dataclasses.replace(case.physics, collisions=nu > 0),
+        time=dataclasses.replace(
+            case.time, collision_operator=operator, t_max=t_max, progress_bar=False
+        ),
+        collisions=dataclasses.replace(
+            case.collisions,
+            nu_hermite=1.0 if lb else 0.0,
+            nu_laguerre=2.0 if lb else 0.0,
+        ),
+    )
+    run = gkx.solve(
+        case,
+        ky_target=0.0,
+        kx_target=0.05,
+        Nl=Nl,
+        Nm=Nm,
+        solver="time",
+        show_progress=False,
+    )
+    z = jnp.asarray(run.z)
+    jacobian = np.asarray(
+        ensure_flux_tube_geometry_data(build_runtime_geometry(case), z).jacobian(z)
+    )
+    t, response = zonal_response(run.t, run.field_history, run.selection, jacobian)
+    return t, response.real
+
+
+def _gam_period_and_mean(t, x, t0, t1):
+    """GAM period from the rising zero crossings, and the mean of ``x`` over the
+    whole number of periods in ``[t0, t1)`` (the residual, with the GAM averaged
+    out)."""
+
+    keep = t > 20.0
+    tt, xx = t[keep], x[keep] - x[keep].mean()
+    up = np.flatnonzero((xx[:-1] < 0) & (xx[1:] >= 0))
+    crossing = tt[up] - xx[up] * (tt[up + 1] - tt[up]) / (xx[up + 1] - xx[up])
+    period = float(np.mean(np.diff(crossing)))
+    n = int((t1 - t0) // period)
+    window = (t >= t0) & (t < t0 + n * period)
+    return period, float(x[window].mean())
+
+
+def test_collisionless_zonal_residual_and_gam_of_the_miller_deck() -> None:
+    """Rosenbluth & Hinton (1998): residual ``1 / (1 + 1.6 q^2 / sqrt(eps))``.
+
+    ``q = 1.4``, ``eps = 0.1`` give 0.0916. At ``(Nl, Nm) = (4, 8), (6, 16),
+    (8, 24)`` the GAM-averaged residual is 0.117, 0.100, 0.096 (still falling
+    towards the formula, which holds for ``eps -> 0``); it is independent of
+    ``k_x`` between 0.05 and 0.025 to 1%. The GAM is undamped at this ``q``.
+    """
+
+    t, x = _zonal_trace("landau", 0.0, 150.0)
+    period, residual = _gam_period_and_mean(t, x, 50.0, 150.0)
+    assert 2.0 * np.pi / period == pytest.approx(1.007, abs=0.03)
+    assert residual == pytest.approx(
+        1.0 / (1.0 + 1.6 * 1.4**2 / np.sqrt(0.1)), rel=0.12
+    )
+    assert np.abs(x[t > 100.0]).max() > 0.3  # no GAM damping at q = 1.4
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "operator", ["landau", "sugama", "improved_sugama", "lenard_bernstein"]
+)
+def test_collisions_relax_the_zonal_flow_to_the_same_residual(operator) -> None:
+    """At ``nu = 0.05`` every operator takes the 0.096 residual to 0.006 (a
+    sixteenth) by ``t = 150``, and the level does not depend on the operator."""
+
+    t, x = _zonal_trace(operator, 0.05, 200.0)
+    _, residual = _gam_period_and_mean(t, x, 150.0, 200.0)
+    assert residual == pytest.approx(0.0063, abs=0.0010)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("operator", "gamma"),
+    [
+        ("landau", 0.2388),
+        ("sugama", 0.2371),
+        ("improved_sugama", 0.2371),
+        ("lenard_bernstein", 0.2389),
+    ],
+)
+def test_collisional_tem_growth_rate_by_operator(operator, gamma) -> None:
+    """Kinetic-electron TEM (``benchmarks/cases/tem_collisional.toml``), ``k_y = 0.3``,
+    ``nu_e = 0.05``, ``(Nl, Nm) = (4, 8)``: every operator lowers the collisionless
+    0.2739 by 13% (14% for the Sugama models). The velocity space is far from
+    converged for kinetic electrons -- the collisionless rate is 0.288, 0.306,
+    0.321 at ``(6, 16)``, ``(8, 24)``, ``(12, 32)`` -- but the reduction is stable:
+    0.843 of the collisionless value at ``(6, 16)``, 0.872 at ``(4, 8)``."""
+
+    import gkx
+
+    case = gkx.load(
+        Path(__file__).resolve().parents[3] / "benchmarks/cases/tem_collisional.toml"
+    )
+    ion, electron = case.species
+    nu = 0.05
+    case = case.replace(
+        species=(
+            dataclasses.replace(ion, nu=nu * electron.mass**0.5),
+            dataclasses.replace(electron, nu=nu),
+        ),
+        time=dataclasses.replace(case.time, collision_operator=operator),
+    )
+    run = gkx.solve(case, ky_target=0.3, Nl=4, Nm=8, solver="time", show_progress=False)
+    assert run.gamma == pytest.approx(gamma, rel=0.01)
+    assert run.omega < 0.0  # electron diamagnetic direction
+
+
+def _gyroaveraged_dougherty_matrix(b: float, nl: int, nm: int) -> np.ndarray:
+    """Dougherty operator on ``delta f = h exp(-i k.rho)``, gyroaveraged at fixed guiding centre.
+
+    The diagonal is ``-(2 l + m + b)`` and the three restoring terms are the
+    rank-one ones built from the particle-space flow and temperature of
+    ``delta f``: ``v_par J0``, ``v_perp J1`` and ``(v^2 - 3/2) J0`` times the same
+    moments of ``h``. Velocities are in ``sqrt(2T/m)``, so the Bessel argument is
+    ``sqrt(2 b s)`` at ``s = v_perp^2``. Plain Laguerre basis (the runtime carries
+    ``(-1)**l`` times these coefficients; spectra do not depend on it).
+    """
+
+    from scipy.special import eval_hermite, eval_laguerre, gammaln, j0, j1
+    from scipy.special import roots_hermite, roots_laguerre
+
+    t, wt = roots_hermite(120)
+    s, ws = roots_laguerre(120)
+    psi = np.array(
+        [
+            eval_hermite(m, t) / np.exp(0.5 * (m * np.log(2.0) + gammaln(m + 1)))
+            for m in range(nm)
+        ]
+    )
+    lag = np.array([eval_laguerre(k, s) for k in range(nl)])
+    a = np.sqrt(2.0 * b * s)
+
+    def coefficients(shape: np.ndarray) -> np.ndarray:
+        return np.einsum(
+            "mt,ls,ts,t,s->lm", psi, lag, shape, wt / np.sqrt(np.pi), ws
+        ).ravel()
+
+    v, sp = t[:, None], s[None, :]
+    flow = coefficients(v * j0(a)[None, :] + 0.0 * sp)
+    perp = coefficients(np.sqrt(s)[None, :] * j1(a)[None, :] + 0.0 * v)
+    heat = coefficients((v**2 + sp - 1.5) * j0(a)[None, :])
+    diagonal = np.array([2 * k + m + b for k in range(nl) for m in range(nm)])
+    return -np.diag(diagonal) + 2 * (
+        np.outer(flow, flow) + np.outer(perp, perp) + (2.0 / 3.0) * np.outer(heat, heat)
+    )
+
+
+@pytest.mark.parametrize("b", [0.0, 0.5, 2.0])
+def test_lenard_bernstein_spectrum_is_the_gyroaveraged_dougherty_operator(b) -> None:
+    """The built-in operator has the spectrum of the exact gyroaveraged Dougherty model.
+
+    The reference is built from quadrature, independently of the Hermite-Laguerre
+    transcription of Frei et al. (2021) that the runtime applies: the largest
+    eight eigenvalues agree to 1e-8 (1e-4 in float32) at ``b = 0, 0.5, 2`` (``b = k_perp^2 rho^2``,
+    ``rho = sqrt(T/m)/Omega``). This is what fixes the finite-``k_perp``
+    restoring terms, including the perpendicular-flow one, against a second
+    implementation of the same model."""
+
+    from gkx.core_velocity import J_l_all
+    from gkx.operators.linear.dissipation import collisions_contribution
+    from gkx.operators.linear.moments import lenard_bernstein_eigenvalues
+
+    nl = nm = 10
+    jl = J_l_all(jnp.asarray(b), nl - 1).reshape(1, nl, 1, 1, 1)
+    jlb = jl + jnp.concatenate([jnp.zeros_like(jl[:, :1]), jl[:, :-1]], axis=1)
+    lam = lenard_bernstein_eigenvalues(nl, nm, 1.0, 2.0)
+    runtime = np.zeros((nl * nm, nl * nm))
+    for i in range(nl * nm):
+        state = np.zeros((1, nl, nm, 1, 1, 1))
+        state.flat[i] = 1.0
+        runtime[:, i] = np.asarray(
+            collisions_contribution(
+                jnp.asarray(state),
+                G=jnp.asarray(state),
+                Jl=jl,
+                JlB=jlb,
+                b=jnp.full((1, 1, 1, 1), b),
+                nu=jnp.ones(1),
+                lb_lam=lam,
+                weight=jnp.asarray(1.0),
+            )
+        ).ravel()
+    top = lambda m: np.sort(np.linalg.eigvals(m).real)[::-1][:8]  # noqa: E731
+    np.testing.assert_allclose(
+        top(runtime),
+        top(_gyroaveraged_dougherty_matrix(b, 2 * nl, nm)),
+        atol=1.0e-8 if jnp.zeros(1).dtype == jnp.float64 else 1.0e-4,
+    )
