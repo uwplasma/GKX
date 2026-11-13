@@ -1,10 +1,10 @@
 schema_version = 1
 
 # Cyclone base case ITG in Miller geometry: the s-alpha deck case.toml with the flux surface built
-# from its Miller shape (rhoc = r/a = 0.5, R0/a = 2.77778, q = 1.4, s_hat = 0.8). Circular with no
-# Shafranov shift (shift = 0) and no shaping, it is the s-alpha surface up to the exact Miller
-# metric; raise akappa (elongation) and tri (triangularity) to shape it. Everything else, the
-# resolution included, is case.toml's.
+# from its Miller shape (rhoc = r/a = 0.5, R0/a = 2.77778, q = 1.4, s_hat = 0.8), circular with
+# no Shafranov shift. The exact Miller metric and drifts give gamma = 0.127, omega = 0.214 at
+# ky = 0.3 and (Nl, Nm) = (16, 48), against the s-alpha 0.093 and 0.282. Raise akappa (elongation)
+# and tri (triangularity) to shape it. Everything else, the resolution included, is case.toml's.
 
 [[species]]
 name = "ion"

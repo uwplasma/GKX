@@ -9,9 +9,10 @@ far coarser resolutions are from the deck's and whether the two solvers agree.
 
 A second research step re-solves the peak mode in Miller geometry
 (``case_miller.toml``, the same deck with the flux surface built from its Miller
-shape): circular, which reproduces the s-alpha rates, and the shapes in ``SHAPES``
-(elongation ``akappa``, triangularity ``tri``), at the last resolution of
-``RESOLUTIONS``.
+shape): circular, which differs from the s-alpha rates because Miller keeps the exact
+metric and drifts (gamma 0.127 against 0.093 at k_y = 0.3 for (Nl, Nm) = (16, 48)), and
+the shapes in ``SHAPES`` (elongation ``akappa``, triangularity ``tri``), all with the
+Krylov solver at the last resolution of ``RESOLUTIONS``.
 
 Prints gamma and omega for each ``k_y``, the convergence table and the Miller
 rates. Writes ``summary.json``, the scan files and ``linear_tokamak.png`` to
@@ -62,11 +63,11 @@ miller_case = gkx.load(CASE_MILLER)
 miller = {}
 for label, shape in SHAPES.items():
     shaped = miller_case.replace(geometry=replace(miller_case.geometry, **shape))
-    r = gkx.solve(shaped, ky_target=peak_ky, Nl=nl, Nm=nm, solver="time")
+    r = gkx.solve(shaped, ky_target=peak_ky, Nl=nl, Nm=nm, solver="krylov")
     miller[label] = {"gamma": r.gamma, "omega": r.omega}
     print(f"Miller {label:>9}: gamma = {r.gamma:+.5f}, omega = {r.omega:+.5f}")
 s_alpha = next(
-    c for c in convergence if (c["Nl"], c["Nm"], c["solver"]) == (nl, nm, "time")
+    c for c in convergence if (c["Nl"], c["Nm"], c["solver"]) == (nl, nm, "krylov")
 )
 print(
     f"s-alpha reference      : gamma = {s_alpha['gamma']:+.5f}, omega = {s_alpha['omega']:+.5f}"

@@ -51,8 +51,8 @@ def zonal_trace(case):
 
 
 def gam_average(t, x, t_min):
-    """GAM angular frequency and the mean of ``x`` over whole GAM periods after ``t_min``."""
-    late = t > 20.0
+    """GAM angular frequency, and the mean of ``x`` over whole GAM periods after ``t_min``."""
+    late = t > t_min
     tt, xx = t[late], x[late] - x[late].mean()
     up = np.flatnonzero((xx[:-1] < 0) & (xx[1:] >= 0))  # rising zero crossings
     cross = tt[up] - xx[up] * (tt[up + 1] - tt[up]) / (xx[up + 1] - xx[up])

@@ -64,8 +64,9 @@ centred on the outboard midplane where curvature is unfavourable.
 
 ``case_miller.toml`` is the same deck in Miller geometry (``[geometry] model =
 "miller"``, :doc:`geometry`). The research path of the script solves the peak mode
-there: circular with no shift it reproduces the s-alpha rates, and ``SHAPES``
-adds elongation and triangularity.
+there, circular and with the elongation and triangularity in ``SHAPES``. The exact
+Miller metric and drifts do not reproduce the s-alpha rates (:math:`\gamma=0.127` against
+0.093 at :math:`k_y\rho_i=0.3`, :math:`(N_l,N_m)=(16,48)`).
 
 The same decks run from the shell; ``examples/README.md`` lists the ``gkx run``,
 ``gkx scan`` and ``gkx validate`` forms and their overrides.

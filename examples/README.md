@@ -46,13 +46,14 @@ Every `case.toml` also runs from the shell, with the same `[run]` defaults:
 
 ```bash
 gkx examples/06_electromagnetic/case.toml                   # one linear point or a nonlinear run
+gkx examples/06_electromagnetic/case.toml --set physics.beta=0.01 --set run.ky=0.4   # any key
 gkx run --config examples/01_linear_tokamak/case.toml --ky 0.2 --Nl 8 --Nm 24 --solver krylov
 gkx scan --config examples/01_linear_tokamak/case.toml --ky-values 0.2,0.3,0.4 --out outputs/scan
 gkx run --config examples/03_nonlinear_tokamak/case.toml --until-saturated --out outputs/nl
 gkx validate examples/03_nonlinear_tokamak/case.toml        # check it is runnable
 ```
 
-`--out PREFIX` names the outputs (`PREFIX.summary.json`, `.timeseries.csv` or `.diagnostics.csv`, and PNG figures). A flag overrides the deck's `[run]` value for that call; `--plot` also opens the figures in
+`--out PREFIX` names the outputs (`PREFIX.summary.json`, `.timeseries.csv` or `.diagnostics.csv`, and PNG figures). `--set section.key=value` overrides any deck key for that call. A flag overrides the deck's `[run]` value; `--plot` also opens the figures in
 a window, `--no-plots` skips the PNGs. `gkx run --help` lists the flags. The Python scripts
 do the same through `gkx.solve` and `gkx.scan`.
 
