@@ -80,10 +80,18 @@ def _flatten_series(series: np.ndarray) -> np.ndarray:
     return np.mean(arr, axis=1)
 
 
+def _json_scalar(value: Any) -> Any:
+    # NumPy scalars (np.bool_, np.float64) from diagnostics are not JSON-native.
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f"{type(value).__name__} is not JSON serializable")
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     _ensure_parent(path)
     path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(payload, indent=2, sort_keys=True, default=_json_scalar) + "\n",
+        encoding="utf-8",
     )
 
 
