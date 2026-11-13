@@ -13,7 +13,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: astral-sh/setup-uv@v10.2.0
+    - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
       with:
         python-version: ${{ inputs.python-version }}
         enable-cache: false
@@ -21,6 +21,11 @@ runs:
     - name: Install GKX with the dev extra
       shell: bash
       run: |
+        # Persistent runners keep ~/.matplotlib between jobs; a font cache that
+        # points into an earlier job's deleted venv makes every plot fail.
+        echo "MPLCONFIGDIR=$RUNNER_TEMP/mplconfig" >> "$GITHUB_ENV"
+        echo "UV_SYSTEM_PYTHON=0" >> "$GITHUB_ENV"
+        export UV_SYSTEM_PYTHON=0
         uv venv --python "${{ inputs.python-version }}" "$GITHUB_WORKSPACE/.venv"
         echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
         echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> "$GITHUB_ENV"
