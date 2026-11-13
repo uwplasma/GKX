@@ -381,7 +381,7 @@ transients in the cases that never converged.
 
 Nothing is called saturated before ``saturation_t_min = 800`` :math:`a/v_t`.
 Published practice is of that order: the GX stellarator flux database of
-Landreman et al. (2025) discards :math:`t<150` and runs to 800 :math:`a/v_t`,
+Landreman et al. [Landreman25]_ discards :math:`t<150` and runs to 800 :math:`a/v_t`,
 CGYRO production runs use at least 500 :math:`a/c_s`, and GENE averaging windows
 are of order 1000. A run with ``t_max`` below ``saturation_t_min`` can still
 report ``saturated`` at its cap. The Oberparleiter et al. stopping rule

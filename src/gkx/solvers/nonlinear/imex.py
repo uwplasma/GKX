@@ -1416,10 +1416,10 @@ class ImexDtControl:
             rel = jnp.linalg.norm(err) / (self.rtol * jnp.linalg.norm(G) + 1e-30)
             return rel, cfl_rate(fields)
 
-        self._probe = jax.jit(probe)
+        self._probe = cached_jit(probe)
         scale = 1.0e-8  # rhs(s v) / s is linear in v to O(s |v|^2)
 
-        @jax.jit
+        @cached_jit
         def remainder(op, v):  # on projected states: the ky < 0 rows are rebuilt
             v = project(v)
             return project(rhs(scale * v)[0] / scale - op.linear(v))
@@ -1554,18 +1554,22 @@ def build_chain_implicit_linear(
 
     # Q: the field solve is local in (ky, kx, z), so one unit moment per
     # (s, l, m) slot over every mode gives all of its weights.
-    w_all = jax.lax.map(
-        lambda i: fld(
-            jnp.broadcast_to(
-                jnp.zeros(ns * nl * nm, dtype)
-                .at[i]
-                .set(1)
-                .reshape(ns, nl, nm, 1, 1, 1),
-                shape,
-            )
-        ),
-        jnp.arange(ns * nl * nm),
-    ).reshape(ns, nl, nm, *zero_f.shape)  # (s, l, m, nf, ky, kx, z)
+    def unit_fields():
+        return jax.lax.map(
+            lambda i: fld(
+                jnp.broadcast_to(
+                    jnp.zeros(ns * nl * nm, dtype)
+                    .at[i]
+                    .set(1)
+                    .reshape(ns, nl, nm, 1, 1, 1),
+                    shape,
+                )
+            ),
+            jnp.arange(ns * nl * nm),
+        )
+
+    w_all = cached_jit(unit_fields)()
+    w_all = w_all.reshape(ns, nl, nm, *zero_f.shape)  # (s, l, m, nf, ky, kx, z)
     w_np = np.abs(np.asarray(w_all))
     act = np.nonzero(w_np.max(axis=(0, 1, 2, 4, 5, 6)) > 0)[0]
     cols_m = tuple(int(m) for m in np.nonzero(w_np.max(axis=(0, 1, 3, 4, 5, 6)) > 0)[0])
@@ -1587,15 +1591,22 @@ def build_chain_implicit_linear(
     if mirror_rhs is not None:
         mir = cached_jit(mirror_rhs)
         r0, c0 = np.argwhere(modes)[-1]
+
         # z- and mode-local, the same at every mode: one probe per slot.
-        ef = jax.lax.map(
-            lambda i: mir(
-                jnp.zeros(ns * nl * nm, dtype).at[i].set(1).reshape(ns, nl, nm, 1, 1, 1)
-                * jnp.ones(shape, dtype),
-                zero_f,
-            )[..., r0, c0, :],
-            jnp.arange(ns * nl * nm),
-        )
+        def unit_mirror():
+            return jax.lax.map(
+                lambda i: mir(
+                    jnp.zeros(ns * nl * nm, dtype)
+                    .at[i]
+                    .set(1)
+                    .reshape(ns, nl, nm, 1, 1, 1)
+                    * jnp.ones(shape, dtype),
+                    zero_f,
+                )[..., r0, c0, :],
+                jnp.arange(ns * nl * nm),
+            )
+
+        ef = cached_jit(unit_mirror)()
         ef = np.asarray(ef).reshape(ns, nl, nm, ns, nl, nm, nz)
         mono = [i for i in range(ns) if np.abs(ef[i, :, :, i]).max() > 0]
         e_lo, e_up = (np.zeros((ns, nm, nl, nl, nz), ef.dtype) for _ in range(2))
