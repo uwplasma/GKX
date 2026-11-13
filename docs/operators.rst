@@ -186,10 +186,10 @@ Controls:
 Collisions
 ----------
 
-GKX ships six collision models. The ``collision_operator`` key in the
+GKX ships these collision models. The ``collision_operator`` key in the
 ``[time]`` section of a TOML input selects one, and
 :func:`gkx.operators.linear.collision_tables.collision_operator_from_config`
-builds the same operator from Python:
+resolves the same name from Python:
 
 .. list-table::
    :header-rows: 1
@@ -201,41 +201,108 @@ builds the same operator from Python:
    * - ``landau`` (default)
      - Linearized Landau (Fokker-Planck), drift-kinetic limit, any ``(Nl, Nm)``
      - built in, described below
+   * - ``sugama``
+     - Sugama model: Landau test part, momentum- and energy-restoring field
+       part, exact for unlike species and temperatures, any ``(Nl, Nm)``
+     - Sugama et al. (2009); Frei, Ernst & Ricci (2022)
+   * - ``improved_sugama``
+     - ``sugama`` with the exact Landau matrix elements in the ``l = 1``
+       heat-flux plane, any ``(Nl, Nm)``
+     - Sugama et al. (2019); Frei, Ernst & Ricci (2022)
    * - ``none``, ``lenard_bernstein``
      - Conserving diagonal Lenard-Bernstein/Dougherty relaxation
      - built in, described below
-   * - ``sugama``
-     - Drift-kinetic Sugama, conservative by construction
-     - Frei, Ernst & Ricci (2022), Eqs. (C6a)--(C6f)
-   * - ``improved_sugama``
-     - Improved Sugama, corrected Pfirsch-Schlüter friction
-     - Sugama et al. (2019); Frei, Ernst & Ricci (2022)
    * - ``coulomb``
      - Alias of ``landau``. The eight-moment table of Frei, Ernst & Ricci
        (2022), Eqs. (C9a)--(C9f), it replaced is the same operator with twice
        GKX's collision frequency
      - shipped data kept as a regression reference
    * - ``coulomb_finite_kperp``
-     - Gyrokinetic Coulomb retaining finite :math:`k_\perp`
+     - Gyrokinetic Coulomb retaining finite :math:`k_\perp`, one species
      - Frei, Ball, Hoffmann, Jorge, Ricci & Stenger (2021), Eqs. (3.47)--(3.50)
 
-``landau``, ``none`` and ``lenard_bernstein`` are applied inside the linear
-RHS from the cache, so every solver path (fixed-step, CFL-controlled, Krylov,
-IMEX, nonlinear) uses them; Hermite-sharded runs refuse ``landau``.
-``none`` and ``lenard_bernstein`` keep the built-in diagonal term described in
-this section. The three moment operators *replace* that term with a dense
-Hermite-Laguerre matrix. The solver switches the diagonal contribution off
-exactly when a moment operator is active, so collisions are never counted twice.
+``landau``, ``sugama``, ``improved_sugama``, ``none`` and ``lenard_bernstein``
+are applied inside the linear RHS from the cache, so every solver path
+(fixed-step, CFL-controlled, Krylov, IMEX, nonlinear) uses them at any
+``(Nl, Nm)``; Hermite-sharded runs refuse the first three, which couple all
+Hermite moments. Python callers that pass ``LinearParams`` and a ``TimeConfig``
+to an ``integrate_*_from_config`` function get the model the
+``collision_operator`` names. ``none`` and ``lenard_bernstein`` keep the
+built-in diagonal term described in this section.
 
-Two constraints follow from the tabulated coefficients. The run's basis must
-be a shipped table's ``(Nl, Nm) = (J+1, P+1)``: ``(2, 4)`` for the eight-moment
-tables, or ``(3, 6)`` for the 18-moment finite-Larmor table. Matching ``Nl*Nm``
-is not enough: the tables are Hermite-major, so the transposed ``(4, 2)`` would
-pair every coefficient with the wrong moment, and it is refused. The operators
-run on the fixed-step cached integrator. The sharded, Krylov eigenvalue, and
+``coulomb_finite_kperp`` is the one tabulated operator and *replaces* that
+term with a dense Hermite-Laguerre matrix; the solver switches the diagonal
+contribution off exactly when it is active, so collisions are never counted
+twice. Two constraints follow from the tabulated coefficients. The run's basis
+must be a shipped table's ``(Nl, Nm) = (J+1, P+1)``: ``(2, 4)`` for the
+eight-moment table, or ``(3, 6)`` for the 18-moment one. Matching ``Nl*Nm`` is
+not enough: the tables are Hermite-major, so the transposed ``(4, 2)`` would
+pair every coefficient with the wrong moment, and it is refused. The operator
+runs on the fixed-step cached integrator; the sharded, Krylov eigenvalue, and
 CFL-controlled ``explicit_time`` paths raise rather than silently substituting
-the diagonal term. The Coulomb tables are generated at unit mass and temperature ratio, so a
-multispecies request is refused rather than extrapolated.
+the diagonal term. The Coulomb tables are generated at unit mass and temperature
+ratio, so a multispecies request is refused rather than extrapolated; use
+``sugama``, ``improved_sugama`` or ``landau`` for multispecies runs.
+
+How to choose
+^^^^^^^^^^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 20 20 20 20
+
+   * -
+     - ``lenard_bernstein``
+     - ``landau``
+     - ``sugama``
+     - ``improved_sugama``
+   * - Conserves density, momentum, energy
+     - yes, per species (restoring terms)
+     - yes, pairwise
+     - yes, pairwise
+     - yes, pairwise
+   * - H-theorem, equal temperatures
+     - yes
+     - yes
+     - yes
+     - yes
+   * - H-theorem, :math:`T_a\neq T_b`
+     - not applicable
+     - not self-adjoint
+     - exact (entropy weights :math:`n_aT_a`)
+     - violated at :math:`O(10^{-3})` for 4:1 masses
+   * - Spitzer-Harm conductivity, :math:`Z=1`
+     - not a Landau operator
+     - 0.2% low
+     - 12% low
+     - 2% high
+   * - RHS cost, :math:`(N_l,N_m)=(8,24)`
+     - 0.7 ms
+     - 1.4 ms
+     - 1.4 ms
+     - 1.4 ms
+   * - Build cost once per run, :math:`(16,48)`
+     - none
+     - 19 s
+     - 5 s
+     - 19 s
+
+The costs are one jitted linear RHS on a ``Nx=1, Ny=16, Nz=32`` grid on a laptop
+CPU in float64; at :math:`(16,48)` the three block operators and the diagonal
+term are all within 5--8 ms, and the build is a per-pair quadrature done once
+per species pair on the host.
+
+Use ``landau`` unless there is a reason not to: it is the exact linearized
+operator in the drift-kinetic limit and the default. Use ``sugama`` to compare
+against codes or papers that employ the Sugama model, or for its exact
+self-adjointness between unlike species at different temperatures.
+``improved_sugama`` is the Sugama model corrected where it is least accurate,
+the heat flux and thermal friction (``l = 1``); it tracks ``landau`` at high
+collisionality. ``lenard_bernstein`` is the cheapest choice and relaxes every
+Hermite-Laguerre moment at a fixed rate, which changes the physics of
+collisional damping and of the passing-trapped boundary layer; it does not
+approximate the Landau operator quantitatively. All four share the collision
+frequency convention below, so ``nu`` means the same thing for each.
 
 Linearized Landau operator (default)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -310,6 +377,82 @@ Not included: finite-:math:`k_\perp` (gyroaveraging) terms, which
 ``coulomb_finite_kperp`` carries for one species at fixed tabulated
 resolutions. The matrix depends on mass and temperature ratios through a
 host-side build, so it is not differentiated with respect to them.
+
+Sugama and improved Sugama operators
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The Sugama model (Sugama, Watanabe & Nunami 2009) keeps the Rosenbluth
+pitch-angle and energy diffusion of the Landau test part, :math:`C^S`, and
+replaces the field-particle part by two rank-one terms that restore momentum
+and energy. GKX builds it in the same Legendre-Sonine blocks as the Landau
+operator, so it runs at any ``(Nl, Nm)``, on every solver path, and for any
+number of species. With :math:`\tau=T_a/T_b`, :math:`\sigma=m_a/m_b`,
+:math:`\chi^2=\tau/\sigma` and :math:`\theta_{ab}=(\tau+\chi^2)/(1+\chi^2)`, the
+test part of the ordered pair is
+
+.. math::
+
+   C^T_{ab} = \Lambda_{ab}\,C^S_{ab}\,\Lambda_{ab},\qquad
+   \Lambda_{ab} = 1 + \big(\sqrt{\theta_{ab}} - 1\big)P,
+
+where :math:`P` projects on the momentum function :math:`x\xi` and the energy
+function :math:`x^2-3/2`. The field part is
+
+.. math::
+
+   C^F_{ab} = -\sum_{i\in\{\rm mom,\,en\}} w_i\,
+   \frac{(C^T_{ab}e_i)(C^T_{ba}e_i)^{\mathsf T}}{e_i^{\mathsf T}C^T_{ab}e_i},
+   \qquad w_{\rm mom} = \tau,\quad w_{\rm en}=\sqrt{\sigma\tau},
+
+with the weights fixed by exact conservation of the pair sum. The product
+:math:`\Lambda C^S\Lambda` reproduces the three correction terms
+:math:`X^1+X^2+X^3` of the paper, and the construction reproduces every
+Appendix-C coefficient of Frei, Ernst & Ricci (2022), original and improved,
+test and field, to a relative ``1e-11``, for equal and unequal masses and
+temperatures.
+
+``improved_sugama`` replaces the test and field matrices in the two-dimensional
+``l = 1`` plane spanned by the momentum and heat-flux functions :math:`x\xi` and
+:math:`x(x^2-5/2)\xi` with the exact Landau ones, so the friction and the
+parallel heat conduction that set the classical transport coefficients in the
+collisional regime are exact. The rule is read off Appendix C of Frei, Ernst &
+Ricci (2022), where the lowest-order improved model of Sugama et al. (2019)
+is tabulated: it reproduces all those coefficients, which cover the
+``l = 1`` functions of degree 1 and 3 (the test also covers unequal masses and
+temperatures). At higher resolution GKX applies the same rule; Appendix C says
+nothing about the remaining ``l = 1`` functions, and the Spitzer-Harm
+conductivity below is the independent check.
+
+What is verified (``tests/validation/physics_gates/test_collision_physics.py``):
+
+- density, parallel momentum and energy are exact null vectors (``1e-13``) of
+  the like-species pair sum, which is symmetric negative semidefinite with
+  exactly three zero eigenvalues, for ``landau``, ``sugama`` and
+  ``improved_sugama`` at :math:`(N_l,N_m)=(2,4),(4,8),(6,12)`;
+- for any mix of masses and temperatures, ``sugama`` is self-adjoint with
+  entropy weights :math:`n_aT_a` and negative semidefinite, with one null
+  vector per species plus momentum and energy; the pairwise exchange of
+  momentum and energy is exact for all three models, including hot electrons
+  on cold ions;
+- the electron-ion momentum relaxation rate in the Lorentz limit is
+  :math:`-4/(3\sqrt\pi)\,\nu_{ei}` for all three models;
+- the Spitzer-Harm conductivity ratio :math:`\gamma_E(Z)` is within 0.5% for
+  ``landau``, within 12.5% (low) for ``sugama`` and within 4% (high) for
+  ``improved_sugama``, which is closer than ``sugama`` for every :math:`Z`;
+- ``sugama`` and ``improved_sugama`` give the same growth rate by the Krylov
+  eigenvalue solver and by time integration.
+
+Two limits are inherited from the Landau operator and apply to
+``improved_sugama`` at :math:`T_a\neq T_b`: the thermal equilibration
+:math:`C(F_a,F_b)` is dropped, as in all delta-f codes, and the exact Landau
+elements break the self-adjointness that ``sugama`` keeps. Conservation stays
+exact; the H-theorem is violated by a small amount, a largest symmetrized
+eigenvalue of :math:`+6\times10^{-6}` of the operator scale for electrons and
+ions at :math:`T_e/T_i=3`, and :math:`+2\times10^{-3}` for a 4:1 mass ratio at
+:math:`T_a/T_b=0.7`. Use ``sugama`` when exact entropy balance between species
+at different temperatures matters more than the heat-flux coefficients.
+Finite :math:`k_\perp` is not included: use ``coulomb_finite_kperp`` for one
+species.
 
 Collision frequency
 ^^^^^^^^^^^^^^^^^^^
@@ -406,9 +549,11 @@ remains ``false``.
 Structural verification of the moment operators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Every shipped matrix is asserted against the published closed forms, not only
-against internal consistency. All twelve Appendix-C coefficients of Frei, Ernst
-& Ricci (2022) (six Coulomb, six Sugama) reproduce, for example
+Every shipped operator is asserted against the published closed forms, not only
+against internal consistency. The Appendix-C matrices of Frei, Ernst & Ricci
+(2022) (six Coulomb, six original-Sugama and six improved-Sugama coefficients)
+are written out in ``tests/support/reference_physics.py``; the Landau, Sugama and
+improved-Sugama operators reproduce, for example
 
 .. math::
 
@@ -571,24 +716,12 @@ for verification and model development. None of them has a TOML selector.
 
    * - API
      - What it is
-   * - ``drift_kinetic_sugama_six_moment_contribution``
-     - The like-species six-gyromoment Sugama matrix of Appendix C, Eqs.
-       (C6a)--(C6f); zero outside the six-moment projection.
-   * - ``load_collision_moment_matrix``, ``apply_collision_moment_matrix``,
+   * - ``apply_collision_moment_matrix``,
        ``interpolate_collision_moment_matrix``,
        ``apply_multispecies_collision_moment_matrix``
-     - Checksummed package-data tables and their JAX application, including
-       per-species and ordered target/source pair tables interpolated in
-       :math:`k_\perp` on device.
-   * - ``drift_kinetic_sugama_pair_matrices``,
-       ``drift_kinetic_improved_sugama_pair_matrices``,
-       ``assemble_drift_kinetic_sugama_matrix``,
-       ``assemble_drift_kinetic_improved_sugama_matrix``,
-       ``DriftKineticMomentCollisionOperator``
-     - Multispecies drift-kinetic original and improved Sugama on the
-       eight-mode space (Appendix C, Eqs. (C4)--(C5) and (101)--(102)), with
-       directed frequency :math:`\nu_{ab}\propto n_b/(\sqrt{m_a}T_a^{3/2})`.
-       This is what the ``sugama`` and ``improved_sugama`` selectors build.
+     - JAX application of dense moment matrices, including per-species and
+       ordered target/source pair tables interpolated in :math:`k_\perp` on
+       device.
    * - ``TabulatedMultispeciesCollisionOperator``,
        ``FiniteWavelengthCoulombOperator``,
        ``EqualSpeciesFiniteWavelengthCoulombOperator``,
@@ -621,6 +754,9 @@ References: `Frei et al. (2021) <https://arxiv.org/abs/2104.11480>`_,
 `Frei, Ernst & Ricci (2022) <https://arxiv.org/abs/2202.06293>`_,
 `Abel et al. (2008) <https://arxiv.org/abs/0808.1300>`_ (the conservation,
 null-space, adjointness and H-theorem requirements),
+Sugama, Watanabe & Nunami, Phys. Plasmas 16, 112503 (2009) (the Sugama model),
+Sugama, Matsuoka, Satake, Nunami & Watanabe, Phys. Plasmas 26, 102108 (2019)
+(the improved model),
 `Jorge, Ricci & Loureiro (2017) <https://arxiv.org/abs/1709.01411>`_ and
 `Jorge, Frei & Ricci (2019) <https://arxiv.org/abs/1906.03252>`_ (the basis
 transforms), and the

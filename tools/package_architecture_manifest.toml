@@ -230,10 +230,10 @@ recursive = true
 # 69996 -> 70070: gkx.case_paths (deck-relative overrides, field-line length checks).
 # 70070 -> 70112: `--set section.key=value` deck overrides in the executable.
 # 70112 -> 70124: removed-key mechanism, measured after merging main.
-# 70124 -> 70151: explicit CFL bound measures the end absorber (compile-cached Arnoldi).
-# 70151 -> 70157: gain bound comment + jit note in measured_streaming_frequency.
-# 70157 -> 70168: cached_jit on the IMEX dt probe and unit-moment maps.
-baseline = 70168
+# 70124 -> 70135: cached_jit on the IMEX dt probe and unit-moment maps.
+# 70135 -> 69684: the block Landau/Sugama operators replace the dense collision tables; measured.
+# 69684 -> 69717: CFL bound measures the end absorber (gain-bounded skip).
+baseline = 69717
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -241,7 +241,8 @@ name = "test_python_lines"
 path = "tests"
 pattern = "*.py"
 recursive = true
-baseline = 64954
+# 64954 -> 64266: tests of the retired collision tables removed; measured.
+baseline = 64266
 target = 35000
 
 [[line_budget_policy.counts]]

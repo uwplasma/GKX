@@ -14,6 +14,18 @@ from scipy.special import eval_genlaguerre, eval_laguerre, j0, j1, jv
 from scipy.special import roots_hermite, roots_laguerre
 
 from gkx.config import GridConfig
+from pathlib import Path
+
+from gkx.operators.linear.collision_tables import (
+    _hermite_laguerre_to_legendre_sonine,
+    landau_blocks_for,
+    linearized_landau_factors,
+    linearized_landau_pair_matrices,
+)
+from gkx.operators.linear.params import (
+    collision_model_for,
+    params_for_collision_operator,
+)
 from gkx.operators.collision import CollisionContext
 from gkx.core_grid import build_spectral_grid
 from gkx.core_velocity import (
@@ -37,20 +49,13 @@ from gkx.operators.linear import (
     apply_collision_moment_matrix,
     apply_finite_wavelength_coulomb_moment_operator,
     apply_multispecies_collision_moment_matrix,
-    assemble_drift_kinetic_improved_sugama_matrix,
-    assemble_drift_kinetic_sugama_matrix,
-    collision_operator_from_config,
-    DriftKineticMomentCollisionOperator,
     EqualSpeciesFiniteWavelengthCoulombOperator,
     EqualSpeciesFiniteWavelengthSugamaOperator,
     FiniteWavelengthCoulombOperator,
     TabulatedMultispeciesCollisionOperator,
-    drift_kinetic_improved_sugama_pair_matrices,
-    drift_kinetic_sugama_pair_matrices,
     interpolate_collision_moment_matrix,
     interpolate_collision_diagonal_table,
     interpolate_collision_pair_table,
-    load_collision_moment_matrix,
     parallel_electric_field_source,
     solve_driven_collision_response,
 )
@@ -61,8 +66,14 @@ from gkx.operators.linear.dissipation import (
 )
 from gkx.terms.assembly import assemble_rhs_cached
 from gkx.terms.config import FieldState, TermConfig
-from gkx.terms.linear_terms import (
+from support.reference_physics import (
+    DriftKineticMomentCollisionOperator,
+    assemble_drift_kinetic_improved_sugama_matrix,
+    assemble_drift_kinetic_sugama_matrix,
+    drift_kinetic_improved_sugama_pair_matrices,
+    drift_kinetic_sugama_pair_matrices,
     drift_kinetic_sugama_six_moment_contribution,
+    load_collision_moment_matrix,
 )
 from gkx.runtime import (
     run_runtime_scan,
@@ -75,11 +86,6 @@ from gkx.config import (
     RuntimeTermsConfig,
 )
 from gkx.operators.linear.dissipation import hypercollisions_contribution
-import hashlib
-import io
-import json
-from importlib import resources
-from gkx.operators.linear import collisions
 import gkx.operators as operators
 import gkx.operators.linear as linear_operators
 import gkx.operators.nonlinear as nonlinear_operators
@@ -2063,100 +2069,6 @@ def test_linear_params_roundtrips_the_new_rate_through_the_pytree() -> None:
 # contract (checksum/shape provenance, moment-axis shapes, species axes, grid
 
 
-def _fake_resource_files(payload: bytes, metadata_text: str):
-    """Return a stand-in for ``importlib.resources.files`` over fixed bytes."""
-
-    class _Leaf:
-        def __init__(self, *, data: bytes | None = None, text: str | None = None):
-            self._data = data
-            self._text = text
-
-        def read_bytes(self) -> bytes:
-            assert self._data is not None
-            return self._data
-
-        def read_text(self, encoding: str = "utf-8") -> str:
-            assert self._text is not None
-            return self._text
-
-    class _DataRoot:
-        def joinpath(self, name: str) -> _Leaf:
-            if name.endswith(".npy"):
-                return _Leaf(data=payload)
-            return _Leaf(text=metadata_text)
-
-    class _Package:
-        def joinpath(self, name: str) -> _DataRoot:
-            return _DataRoot()
-
-    def _files(package: str) -> _Package:
-        return _Package()
-
-    return _files
-
-
-def test_collision_matrix_bundle_rejects_corrupt_provenance(monkeypatch) -> None:
-    """The cached bundle fails closed on checksum, shape, and layout mismatches."""
-
-    real_payload = (
-        resources.files("gkx")
-        .joinpath("data")
-        .joinpath(collisions._COLLISION_MATRIX_DATA)
-        .read_bytes()
-    )
-    metadata_file = (
-        resources.files("gkx")
-        .joinpath("data")
-        .joinpath(collisions._COLLISION_MATRIX_METADATA)
-    )
-    real_metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
-
-    # Checksum branch: genuine coefficients, metadata advertising a wrong hash.
-    corrupt_hash_metadata = json.dumps(
-        {"sha256": "0" * 64, "shape": [3, 8, 8], "models": ["sugama"]}
-    )
-    monkeypatch.setattr(
-        collisions.resources,
-        "files",
-        _fake_resource_files(real_payload, corrupt_hash_metadata),
-    )
-    collisions._collision_matrix_bundle.cache_clear()
-    with pytest.raises(ValueError, match="checksum does not match metadata"):
-        collisions._collision_matrix_bundle()
-
-    # Shape branch: matching checksum but a payload whose array shape disagrees
-    # with the declared (3, 8, 8) provenance.
-    buffer = io.BytesIO()
-    np.save(buffer, np.zeros((2, 2), dtype=np.float64))
-    mismatched_payload = buffer.getvalue()
-    honest_hash = hashlib.sha256(mismatched_payload).hexdigest()
-    wrong_shape_metadata = json.dumps(
-        {"sha256": honest_hash, "shape": [3, 8, 8], "models": ["sugama"]}
-    )
-    monkeypatch.setattr(
-        collisions.resources,
-        "files",
-        _fake_resource_files(mismatched_payload, wrong_shape_metadata),
-    )
-    collisions._collision_matrix_bundle.cache_clear()
-    with pytest.raises(ValueError, match="shape does not match metadata"):
-        collisions._collision_matrix_bundle()
-
-    # Layout branch: genuine coefficients declaring the transposed (Nl, Nm).
-    transposed_metadata = json.dumps({**real_metadata, "Nl": 4, "Nm": 2})
-    monkeypatch.setattr(
-        collisions.resources,
-        "files",
-        _fake_resource_files(real_payload, transposed_metadata),
-    )
-    collisions._collision_matrix_bundle.cache_clear()
-    with pytest.raises(ValueError, match="moment layout does not match metadata"):
-        collisions._collision_matrix_bundle()
-
-    # Drop the poisoned (empty) cache so downstream tests reload real data.
-    collisions._collision_matrix_bundle.cache_clear()
-
-
 def test_sugama_pair_matrices_reject_nonpositive_temperature_ratio() -> None:
     """A positive mass ratio still requires a positive temperature ratio."""
 
@@ -2196,7 +2108,7 @@ def test_collision_operators_round_trip_through_pytree() -> None:
     """Registered collision operators flatten and unflatten without data loss."""
 
     dense = DriftKineticMomentCollisionOperator(
-        jnp.asarray(collisions.load_collision_moment_matrix("sugama"))
+        jnp.asarray(load_collision_moment_matrix("sugama"))
     )
     dense_leaves, dense_treedef = jax.tree_util.tree_flatten(dense)
     assert len(dense_leaves) == 1
@@ -2412,34 +2324,6 @@ def test_nonlinear_operator_package_reexports_diagnostic_implementation() -> Non
         nonlinear_operators.make_nonlinear_diagnostic_tuple_fn
         is operator_diagnostics.make_nonlinear_diagnostic_tuple_fn
     )
-
-
-@pytest.mark.parametrize("model", ["sugama", "improved_sugama"])
-def test_per_species_nu_keeps_multispecies_conservation(model: str) -> None:
-    """Unequal species prefactors must not unbalance the (a,b)/(b,a) exchange.
-
-    Momentum and energy leave species a through C_ab and arrive in b through
-    C_ba; that balance holds only if both ordered pairs carry one prefactor.
-    """
-
-    density = jnp.asarray([1.3, 0.7])
-    mass = jnp.asarray([2.0, 1.0])
-    temperature = jnp.asarray([1.2, 0.8])
-    operator = collision_operator_from_config(
-        model,
-        density=density,
-        mass=mass,
-        temperature=temperature,
-        nu=jnp.asarray([1.0, 3.0]),
-    )
-    state = (jnp.arange(16.0).reshape(2, 2, 4, 1, 1, 1) + 0.13j).astype(jnp.complex64)
-    contribution = apply_multispecies_collision_moment_matrix(state, operator.matrix)
-    rates = multispecies_collision_invariant_rates(
-        contribution, density=density, mass=mass, temperature=temperature
-    )
-    np.testing.assert_allclose(rates.particle_density, 0.0, atol=1.0e-5)
-    np.testing.assert_allclose(rates.total_parallel_momentum, 0.0, atol=1.0e-5)
-    np.testing.assert_allclose(rates.total_thermal_energy, 0.0, atol=1.0e-4)
 
 
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float64])
@@ -3009,3 +2893,110 @@ def test_mu_grid_collisional_growth_rate_matches_laguerre():
     mu = gkx.solve(nodal, ky_target=0.3, Nl=8, Nm=8, solver="krylov")
     assert 0.03 < laguerre.gamma < 0.1
     assert abs(mu.gamma - laguerre.gamma) < 0.03 * laguerre.gamma
+
+
+# ---- edge cases of the Landau/Sugama block operators ----
+
+SUGAMA_MODELS = ("sugama", "improved_sugama")
+COLLISION_CASE = (
+    Path(__file__).resolve().parents[3] / "examples/07_collisions/case.toml"
+)
+
+
+def _collision_invariants(nl: int, nm: int) -> tuple[np.ndarray, ...]:
+    density, momentum, energy = (np.zeros(nl * nm) for _ in range(3))
+    density[0] = 1.0
+    momentum[nl] = 1.0
+    energy[2 * nl], energy[1] = 1.0 / np.sqrt(2.0), 1.0
+    return density, momentum, energy
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+@pytest.mark.parametrize("layout", [(1, 1), (1, 2)])
+def test_sugama_needs_enough_moments(layout, model) -> None:
+    """(Nm - 1) + 2 (Nl - 1) >= 2 is required; smaller layouts are refused."""
+
+    with pytest.raises(ValueError, match=">= 2"):
+        linearized_landau_factors(*layout, model=model)
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_lowest_order_layout_conserves(model) -> None:
+    test, field = linearized_landau_pair_matrices(2, 3, model=model)
+    matrix = test + field
+    scale = np.abs(matrix).max()
+    for vector in _collision_invariants(2, 3):
+        assert np.abs(matrix @ vector).max() < 1e-12 * scale
+        assert np.abs(vector @ matrix).max() < 1e-12 * scale
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_float32_blocks_are_finite_and_conserve(model) -> None:
+    params = LinearParams(nu=0.1, collision_model=model)
+    blocks = landau_blocks_for(params, 4, 8, jnp.float32)
+    assert blocks is not None
+    leaves = jax.tree_util.tree_leaves(blocks)
+    assert all(np.all(np.isfinite(np.asarray(a))) for a in leaves)
+    assert all(
+        a.dtype == jnp.float32 for a in leaves if np.issubdtype(a.dtype, np.floating)
+    )
+    test, field = linearized_landau_pair_matrices(4, 8, model=model)
+    matrix = (test + field).astype(np.float32)
+    scale = np.abs(matrix).max()
+    for vector in _collision_invariants(4, 8):
+        assert np.abs(matrix @ vector.astype(np.float32)).max() < 1e-5 * scale
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_zero_nu_builds_no_blocks(model) -> None:
+    assert (
+        landau_blocks_for(
+            LinearParams(nu=0.0, collision_model=model), 4, 8, jnp.float32
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_zero_nu_runs_through_the_runtime(model) -> None:
+    import gkx
+
+    case = gkx.load(COLLISION_CASE)
+    case = case.replace(
+        species=tuple(replace(s, nu=0.0) for s in case.species),
+        time=replace(case.time, collision_operator=model),
+    )
+    result = gkx.solve(case, ky_target=0.3, Nl=4, Nm=8, solver="krylov")
+    assert np.isfinite(result.gamma)
+
+
+@pytest.mark.parametrize("model", SUGAMA_MODELS)
+def test_single_species_solve(model) -> None:
+    import gkx
+
+    case = gkx.load(COLLISION_CASE)
+    assert len(case.species) == 1
+    case = case.replace(
+        species=tuple(replace(s, nu=0.2) for s in case.species),
+        time=replace(case.time, collision_operator=model),
+    )
+    result = gkx.solve(case, ky_target=0.3, Nl=4, Nm=8, solver="krylov")
+    assert np.isfinite(result.gamma)
+
+
+def test_hermite_laguerre_table_is_read_only() -> None:
+    transform, labels = _hermite_laguerre_to_legendre_sonine(2, 3)
+    assert isinstance(labels, tuple)
+    assert not transform.flags.writeable
+
+
+def test_operator_names_select_models_exactly() -> None:
+    base = LinearParams(nu=0.1)
+    assert params_for_collision_operator(base, "sugama").collision_model == "sugama"
+    assert (
+        params_for_collision_operator(base, " Improved_Sugama ").collision_model
+        == "improved_sugama"
+    )
+    for name in ("landau", "lenard_bernstein", "not_a_sugama_variant", None):
+        assert params_for_collision_operator(base, name) is base
+    assert collision_model_for("coulomb") == "landau"

@@ -43,9 +43,9 @@ from gkx.terms.linear_terms import (
     collision_quadratic_rate,
     collisions_contribution,
     conservative_full_f_dougherty_cross_moments,
-    drift_kinetic_sugama_six_moment_contribution,
     multispecies_collision_invariant_rates,
 )
+from support.reference_physics import drift_kinetic_sugama_six_moment_contribution
 from scripts.checks._gates.validation_gates import (
     drift_kinetic_dougherty_contribution,
 )

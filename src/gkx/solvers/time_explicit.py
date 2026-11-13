@@ -25,6 +25,7 @@ from gkx.operators.linear.params import (
     LinearParams,
     LinearTerms,
     linear_terms_to_term_config,
+    params_for_collision_operator,
 )
 from gkx.operators.moments import (
     distribution_free_energy,
@@ -516,6 +517,9 @@ def integrate_linear_explicit_from_config(
         _reject_unsupported_config_collision_operator(
             time_cfg, "CFL-controlled explicit", remedy='set solver = "time"'
         )
+    params = params_for_collision_operator(
+        params, getattr(time_cfg, "collision_operator", None)
+    )
     explicit_cfg = ExplicitTimeConfig(
         dt=float(time_cfg.dt),
         t_max=float(time_cfg.t_max),

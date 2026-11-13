@@ -14,6 +14,7 @@ from gkx.operators.linear.params import (
     BUILTIN_COLLISION_OPERATORS,
     LinearParams,
     LinearTerms,
+    params_for_collision_operator,
 )
 from gkx.solvers.nonlinear.diagnostics import integrate_nonlinear
 from gkx.parallel.state import resolve_state_sharding
@@ -36,10 +37,10 @@ def _resolve_config_collision_operator(
 ):
     """Build the moment collision operator selected by ``TimeConfig``.
 
-    Returns ``None`` for ``"none"``/``"lenard_bernstein"``, which keeps the
-    built-in diagonal Lenard-Bernstein term in the linear RHS. ``"sugama"`` and
-    ``"improved_sugama"`` return the dense drift-kinetic Hermite-Laguerre moment
-    operator that replaces that diagonal term.
+    Returns ``None`` for the operators the linear RHS applies from the cache
+    (Lenard-Bernstein, Landau, Sugama, improved Sugama).
+    ``"coulomb_finite_kperp"`` returns the tabulated operator that replaces
+    that term.
     """
 
     import jax.numpy as jnp
@@ -88,17 +89,12 @@ def _moment_count(G0) -> int:
 
 
 def _operator_moment_layout(operator) -> tuple[int, int] | None:
-    """Return the ``(Nl, Nm) = (J+1, P+1)`` basis a tabulated operator acts on."""
+    """Return the ``(Nl, Nm) = (J+1, P+1)`` basis a finite-wavelength table acts on."""
 
     from gkx.operators.linear.collision_tables import (
         finite_wavelength_coulomb_metadata,
     )
-    from gkx.operators.linear.collisions import DRIFT_KINETIC_MOMENT_LAYOUT
 
-    # Drift-kinetic operators carry one dense matrix; the finite-wavelength
-    # operators carry Bessel-argument-indexed test/field tables instead.
-    if getattr(operator, "matrix", None) is not None:
-        return DRIFT_KINETIC_MOMENT_LAYOUT
     table = getattr(operator, "test_table", None)
     if table is None:
         return None
@@ -109,10 +105,9 @@ def _operator_moment_layout(operator) -> tuple[int, int] | None:
 def _check_moment_basis_matches_operator(operator, name: str, G0) -> None:
     """Reject a moment basis the tabulated collision matrix cannot act on.
 
-    The drift-kinetic Sugama matrices are the fixed truncation of Frei, Ernst &
-    Ricci (2022), Appendix C, and the Coulomb tables ship at fixed orders, so
-    each applies to one ``(Nl, Nm)``. The tables are Hermite-major: a transposed
-    basis with the right moment count runs silently on the wrong moments.
+    The finite-wavelength Coulomb tables ship at fixed orders, so each applies
+    to one ``(Nl, Nm)``. The tables are Hermite-major: a transposed basis with
+    the right moment count runs silently on the wrong moments.
     """
 
     if operator is None or G0 is None:
@@ -171,6 +166,7 @@ def integrate_linear_from_config(
     """
 
     steps = _steps_from_time(time_cfg)
+    params = params_for_collision_operator(params, time_cfg.collision_operator)
     show_progress_use = bool(
         time_cfg.progress_bar if show_progress is None else show_progress
     )
@@ -214,6 +210,7 @@ def integrate_nonlinear_from_config(
     """
 
     steps = _steps_from_time(time_cfg)
+    params = params_for_collision_operator(params, time_cfg.collision_operator)
     show_progress_use = bool(
         time_cfg.progress_bar if show_progress is None else show_progress
     )
