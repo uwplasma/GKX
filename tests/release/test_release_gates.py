@@ -1101,7 +1101,7 @@ def test_benchmark_capability_matrix_is_complete_and_fail_closed() -> None:
             "conserving_lenard_bernstein_dougherty_like_collisions",
             "validated_limited_model",
         ),
-        ("linearized_sugama_or_coulomb_collisions", "planned_research_lane"),
+        ("linearized_sugama_or_coulomb_collisions", "validated_scoped"),
         ("species_hermite_multi_device_decomposition", "planned"),
         ("equilibrium_exb_flow_shear", "planned_research_lane"),
         ("specialized_reduced_equation_sets", "not_shipped"),

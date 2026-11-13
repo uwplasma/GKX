@@ -231,7 +231,8 @@ recursive = true
 # 70070 -> 70112: `--set section.key=value` deck overrides in the executable.
 # 70112 -> 70124: removed-key mechanism, measured after merging main.
 # 70124 -> 70135: cached_jit on the IMEX dt probe and unit-moment maps.
-baseline = 70135
+# 70135 -> 69684: the block Landau/Sugama operators replace the dense collision tables; measured.
+baseline = 69684
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -239,7 +240,8 @@ name = "test_python_lines"
 path = "tests"
 pattern = "*.py"
 recursive = true
-baseline = 64954
+# 64954 -> 64266: tests of the retired collision tables removed; measured.
+baseline = 64266
 target = 35000
 
 [[line_budget_policy.counts]]

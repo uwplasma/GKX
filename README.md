@@ -85,6 +85,24 @@ every key at its default.
 [Guidance](docs/guidance.rst) says what to set for kinetic electrons and
 electromagnetic runs, and how to check it.
 
+## Collision operators
+
+`collision_operator` in `[time]` selects the model; `nu` sets the collision
+frequency for all of them ([operators](docs/operators.rst)).
+
+- `landau` (default): the linearized Landau operator, exact in the drift-kinetic limit. Use it unless a comparison calls for another model.
+- `sugama`: Landau test part with momentum- and energy-restoring field part, self-adjoint between unlike species and temperatures. Use it to compare with codes that use this model.
+- `improved_sugama`: `sugama` with the exact Landau heat-flux and friction terms; it tracks `landau` at high collisionality.
+- `lenard_bernstein`: conserving Lenard-Bernstein/Dougherty relaxation, the cheapest model. It captures collisional damping qualitatively, not the Landau operator.
+- `coulomb_finite_kperp`: tabulated gyrokinetic Coulomb operator with finite k_perp, for one species.
+
+<img src="docs/_static/collision_operators.png" width="860" alt="Collisional trapped-electron mode growth rate against collisionality for the GKX landau, sugama, improved_sugama and lenard_bernstein operators, GS2 and stella, and its reduction relative to the collisionless rate">
+
+Collisional trapped-electron mode at k_y rho_i = 0.3 on the
+`benchmarks/cases/tem_collisional.toml` deck. At (Nl, Nm) = (4, 8) the four
+operators lie within 4% of one another; GKX is not converged there. Redraw with
+`python docs/figures/collision_operators.py`.
+
 ## Derivatives and optimization
 
 Eigenvalue derivatives use `dλ/dp = wᴴ(dA/dp)v / (wᴴv)` with residual, overlap

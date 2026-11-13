@@ -211,7 +211,8 @@ def check_mu_grid_params(params: LinearParams) -> None:
     if any(_is_tracer(v) for v in (params.nu, params.nu_hyper, params.nu_hyper_l)):
         return
     refused = {
-        "nu with collision_model='landau'": params.collision_model != "dougherty"
+        f"nu with collision_model={params.collision_model!r}": params.collision_model
+        != "dougherty"
         and np.any(np.asarray(params.nu) != 0.0),
         "nu_hyper": params.nu_hyper != 0.0,
         "nu_hyper_l": params.nu_hyper_l != 0.0,
@@ -220,7 +221,8 @@ def check_mu_grid_params(params: LinearParams) -> None:
     }
     if bad := [name for name, hit in refused.items() if hit]:
         raise NotImplementedError(
-            f"the nodal mu grid has no collision operator and no Laguerre-index "
+            f"the nodal mu grid has no collision operator "
+            f"(collision_model={params.collision_model!r}) and no Laguerre-index "
             f"dissipation; set {', '.join(bad)} to zero"
         )
 
