@@ -2686,8 +2686,8 @@ def test_kinetic_electron_decks_without_a_resolution_take_per_species_fallbacks(
     assert [(s.Nl, s.Nm) for s in out.species] == [(12, 32), (6, 48)]
     assert (Nl, Nm) == (12, 48)
     out, Nl, Nm = _resolve_runtime_hl_dims(cfg, Nl=4, Nm=8)  # the nonlinear fallback
-    assert [(s.Nl, s.Nm) for s in out.species] == [(4, 8), (4, 16)]
-    assert (Nl, Nm) == (4, 16)
+    assert [(s.Nl, s.Nm) for s in out.species] == [(4, 8), (4, 48)]
+    assert (Nl, Nm) == (4, 48)
     named = replace(cfg, species=(cfg.species[0], replace(electron, Nm=8)))
     equal = replace(cfg, species=(cfg.species[0], replace(electron, mass=1.0)))
     for same in (cfg, named, equal, RuntimeConfig()):

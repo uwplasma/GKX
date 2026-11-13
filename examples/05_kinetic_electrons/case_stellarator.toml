@@ -29,7 +29,7 @@ fprim = 1.0
 nu = 0.0
 kinetic = true
 Nl = 4  # electron Laguerre: tiny Larmor radius
-Nm = 16  # electron Hermite: fast streaming and trapped electrons
+Nm = 48  # electron Hermite: fast streaming and trapped electrons need many
 
 [grid]
 Nx = 16
@@ -110,7 +110,7 @@ nonlinear = 1.0
 [run]
 ky = 0.047619047619047616
 Nl = 4
-Nm = 16
+Nm = 48
 
 [output]
 # Optional saved-record cadence in the same time units as time.t_max.

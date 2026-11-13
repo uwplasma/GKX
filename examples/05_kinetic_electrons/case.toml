@@ -27,7 +27,7 @@ tprim = 2.49
 fprim = 0.8
 kinetic = true
 Nl = 4  # electron Laguerre: the electron Larmor radius is tiny, a few suffice
-Nm = 16  # electron Hermite: fast streaming and trapped electrons need many
+Nm = 48  # electron Hermite: fast streaming and trapped electrons need many
 
 [grid]
 Nx = 16
@@ -101,7 +101,7 @@ diagnostic_norm = "rho_star"
 [run]
 ky = 0.3
 Nl = 4  # the state holds the largest count of any species
-Nm = 16
+Nm = 48
 
 [output]
 # Optional saved-record cadence in the same time units as time.t_max.

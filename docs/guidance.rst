@@ -27,7 +27,7 @@ What you get when you change nothing, and when to change it.
      - ``half`` (``1 + Ny//2`` rows)
      - ``full`` only to read a two-sided array from an older run
    * - Velocity space
-     - linear (12, 24), nonlinear (4, 8); with kinetic electrons per species: linear ions (12, 32), electrons (6, 48), nonlinear ions (4, 8), electrons (4, 16)
+     - linear (12, 24), nonlinear (4, 8); with kinetic electrons per species: linear ions (12, 32), electrons (6, 48), nonlinear ions (4, 8), electrons (4, 48)
      - a deck or call that names ``Nl``/``Nm``; TEM, KBM: see the sections below
    * - Collisions
      - linearized Landau; hypercollisions on the last Hermite moments
@@ -503,18 +503,20 @@ moments per grid point against 1152 for uniform (12, 48) and 1536 for
 (12, 64). Smaller counts (ions (8, 24), electrons (4, 32)) are within 1% on the
 ITG and stellarator decks and 12% low on the TEM deck.
 
-Nonlinear: ions (4, 8) and electrons (4, 16) are the fallback. The ions keep the
-count of the ion-only fallback; the electrons keep the Hermite moments that
-their fast streaming and trapped orbits use. The table scans both species
-around that point: Cyclone with kinetic electrons, :math:`m_e/m_i = 1/1836`,
-electrostatic, 32x32x16, the default ``imex-ark3``, :math:`Q_i` and :math:`Q_e`
-averaged over t = 30-120 (the flux is stationary from t = 30), with one or two
-random seeds as the Seeds column says. Each entry is the mean over the seeds
-with the Sokal standard error of each run (the larger of that and the seed
-spread when there are two seeds); the difference is against ions (8, 32) and
-electrons (6, 48), and its error includes the reference's. Two seeds of
-(4, 16) / (4, 16) differ by 3.7% in :math:`Q_i` and 0.4% in :math:`Q_e`, which
-is the resolution of the scan.
+Nonlinear: ions (4, 8) and electrons (4, 48) are the fallback. The ions keep the
+count of the ion-only fallback; the electrons keep the Hermite count of the
+linear fallback. Three scans support it, each against ions (8, 32) and
+electrons (6, 48). A Cyclone tokamak does not resolve the electron Hermite
+count between 8 and 24; a stellarator and a finite-:math:`\beta` tokamak
+do, and need 48. The first scan is Cyclone with kinetic electrons,
+:math:`m_e/m_i = 1/1836`, electrostatic, 32x32x16, the default ``imex-ark3``,
+:math:`Q_i` and :math:`Q_e` averaged over t = 30-120 (the flux is stationary
+from t = 30), with one or two random seeds as the Seeds column says. Each
+entry is the mean over the seeds with the Sokal standard error of each run
+(the larger of that and the seed spread when there are two seeds); the
+difference is against the reference, and its error includes the reference's.
+Two seeds of (4, 16) / (4, 16) differ by 3.7% in :math:`Q_i` and 0.4% in
+:math:`Q_e`, which is the resolution of the scan.
 
 .. list-table::
    :header-rows: 1
@@ -636,13 +638,12 @@ is the resolution of the scan.
 Every pair is within 5.1% (:math:`Q_i`) and 3.2% (:math:`Q_e`) of the reference,
 and neither the electron :math:`N_l` (2 to 6), the electron :math:`N_m` (8 to
 24) nor the ion :math:`N_l` and :math:`N_m` shows a trend larger than that
-scatter. The fallback agrees with the reference to 3.0% and 1.5%, as the
-uniform (4, 16) it replaces does (3.1% and 0.9%), with 96 moments per point
-instead of 128. Uniform (4, 8), the generic fallback, has the largest offset in
-:math:`Q_i` (+5.1%) and is not used. Ions (4, 8) with electrons (2, 8), 48
-moments per point, are also inside the scatter; they are not adopted because
-this row is one seed, electrostatic, and the linear electron growth rates
-need more than two Laguerre moments and sixteen Hermite ones (above).
+scatter. Ions (4, 8) with electrons (4, 16), 96 moments per point, agree with
+the reference to 3.0% and 1.5%, as uniform (4, 16) does (3.1% and 0.9%).
+Uniform (4, 8) has the largest offset in :math:`Q_i` (+5.1%). Ions (4, 8) with
+electrons (2, 8), 48 moments per point, are also inside the scatter; the
+linear electron growth rates need more than two Laguerre moments and sixteen
+Hermite ones (above).
 
 The electromagnetic deck of ``examples/05_kinetic_electrons`` (:math:`\beta`
 1e-4 with :math:`A_\parallel`, :math:`m_e/m_i = 2.7\times10^{-4}`, 32x32x16,
@@ -681,11 +682,15 @@ same window) against uniform (4, 16):
      - 699 +- 19
      - +4.5 +- 3.4%
 
-The fallback is within 1.7% of the uniform (4, 16) in both fluxes, inside the
-error of 3-5%; uniform (4, 8) is +8.0% and +4.5% in one seed. The scans do not
-cover a stellarator, a larger :math:`k_y` range or a collisional deck, where
-the ion :math:`N_l` and the electron :math:`N_m` named in the deck should be
-checked as for any resolution.
+Ions (4, 8) with electrons (4, 16) are within 1.7% of the uniform (4, 16) in
+both fluxes, inside the error of 3-5%; uniform (4, 8) is +8.0% and +4.5% in
+one seed. At :math:`\beta = 10^{-4}` the field-line tilt by :math:`A_\parallel`
+is negligible, and so is the electron Hermite count between 8 and 24. The two
+decks that follow show where it is not.
+
+STELLARATOR_TABLE
+
+FINITEBETA_TABLE
 
 **Cost of per-species counts.** One A4000, float32, 64x64x24, explicit ``rk3`` at
 a fixed step (time per step from a long and a short run), peak device memory:

@@ -355,7 +355,7 @@ _RUNTIME_NONLINEAR_HL_FALLBACK = (4, 8)
 # faster species); the nonlinear ions keep the ion-only fallback (docs/guidance.rst).
 _SPECIES_HL_FALLBACK = {
     _RUNTIME_LINEAR_HL_FALLBACK: ((12, 32), (6, 48)),
-    _RUNTIME_NONLINEAR_HL_FALLBACK: ((4, 8), (4, 16)),
+    _RUNTIME_NONLINEAR_HL_FALLBACK: ((4, 8), (4, 48)),
 }
 
 
