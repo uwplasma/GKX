@@ -3128,7 +3128,7 @@ def test_second_solve_reuses_executables():
     linear = gkx.load(REPO_ROOT / "examples/01_linear_tokamak/case.toml")
     linear = linear.replace(
         grid=replace(linear.grid, Nz=8, ntheta=8),
-        time=replace(linear.time, t_max=1.0),
+        time=replace(linear.time, t_max=1.0, sample_stride=5),
     )
     nonlinear = gkx.load(REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml")
     nonlinear = nonlinear.replace(

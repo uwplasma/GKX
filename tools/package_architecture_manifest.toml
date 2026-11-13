@@ -234,7 +234,9 @@ recursive = true
 # 70135 -> 69684: the block Landau/Sugama operators replace the dense collision tables; measured.
 # 69684 -> 69717: CFL bound measures the end absorber (gain-bounded skip).
 # 69717 -> 69718: prepare builds the runtime at the resolved (Nl, Nm).
-baseline = 69718
+# 69718 -> 69846: `--plot` and the four-panel linear summary figure (growth, eigenfunction, field-line geometry, reference).
+# 69846 -> 69844: plotting docstring literal fix.
+baseline = 69844
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -245,7 +247,9 @@ recursive = true
 # 64954 -> 64266: tests of the retired collision tables removed; measured.
 # 64266 -> 64372: absorber gain-bound tests.
 # 64372 -> 64388: tests load example 05 at uniform counts (uniform_moments helper).
-baseline = 64388
+# 64388 -> 64427: --plot smoke test and the demo message test.
+# 64427 -> 64454: panel-figure optional-branch coverage test.
+baseline = 64454
 target = 35000
 
 [[line_budget_policy.counts]]

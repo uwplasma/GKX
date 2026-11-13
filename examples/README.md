@@ -9,7 +9,7 @@ results under `./outputs/NN_*`. Run from any directory:
 python examples/01_linear_tokamak/run.py
 ```
 
-`case.toml` uses tutorial resolution.
+`case.toml` uses a small resolution; its header comment states the accuracy.
 `case_full.toml`, where present, is the literature-resolution deck; run it with
 `gkx case_full.toml`. Full decks are not run in CI.
 
