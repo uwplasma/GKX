@@ -47,7 +47,6 @@ WIDE_COVERAGE_LOGICAL_CPU_DEVICES = {
     # Merged by ARCH-B (#300): the runner and sharding-profile tests now live
     # in these files and still need the multi-device branch.
     "test_time_integrators.py": 4,
-    "test_reference_comparison_tools.py": 4,
 }
 
 #: Files split into this many contiguous node-ID chunks, each scheduled as its

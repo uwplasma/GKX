@@ -372,8 +372,7 @@ The fast suite covers:
 * summary and species artifact serialization, and ordered worker scans;
 * AD-versus-finite-difference checks of ``quasilinear_feature_objective`` and
   of isolated-eigenvalue and implicit eigenpair sensitivities on small dense
-  GKX linear-RHS fixtures;
-* the promotion guardrail described below.
+  GKX linear-RHS fixtures.
 
 Calibration reports
 -------------------
@@ -406,17 +405,12 @@ where :math:`q_j^{\rm raw}` is the unscaled spectrum sum and
    \right\rangle_{\rm holdout}
    \le 0.35 .
 
-Window metadata comes from ``scripts.checks._gates.transport_windows`` or
-``scripts/checks/check_nonlinear_transport_gates.py convergence`` and records the
+Window metadata comes from ``scripts.checks._gates.transport_windows`` and records the
 transient cutoff, late-window mean and standard deviation, running-mean drift,
 block-bootstrap SEM, sample counts and source provenance. Replicated windows are
-combined with ``scripts.checks._gates.transport_windows.nonlinear_window_ensemble_report``
-(command line: ``check_nonlinear_transport_gates.py ensemble``), which requires
-every input window to be promotion-ready and checks the relative spread of the
-late-window means and the combined SEM. ``check_nonlinear_transport_gates.py
-matched-windows`` compares two passed windows, for example with and without an
-intervention, and reports the relative reduction with its quadrature-SEM
-separation.
+combined with ``scripts.checks._gates.transport_windows.nonlinear_window_ensemble_report``,
+which requires every input window to be promotion-ready and checks the relative
+spread of the late-window means and the combined SEM.
 
 The report builder rejects points whose rule differs from the report's
 ``saturation_rule``, non-finite predictions or window means, negative window
