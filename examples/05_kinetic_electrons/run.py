@@ -42,6 +42,7 @@ HERE = Path(__file__).parent
 VMEC_INPUT = HERE.parent / "vmec" / "input.LandremanPaul2021_QA_lowres"
 OUTPUT = Path("outputs/05_kinetic_electrons")
 T_MAX = None  # None keeps each deck's t_max
+GRID = {}  # overrides of the deck [grid] entries, e.g. {"nperiod": 1}
 # label -> (deck, [time] overrides, uniform counts)
 FAST = {
     "tokamak": ("case.toml", {}, False),
@@ -77,6 +78,7 @@ for label, (deck, pin, uniform) in {**FAST, **RESEARCH}.items():
             species=tuple(replace(s, Nl=None, Nm=None) for s in case.species)
         )
     case = case.replace(time=replace(case.time, **pin))
+    case = case.replace(grid=replace(case.grid, **GRID))
     if T_MAX is not None:
         case = case.replace(time=replace(case.time, t_max=T_MAX))
     if case.geometry.model == "vmec":
