@@ -36,7 +36,7 @@ def solve_stats_request(method: Any, *, kind: str) -> dict[str, Any]:
 def checked_solve_summary(
     outputs: Sequence[Any], request: dict[str, Any], *, label: str
 ) -> ImplicitSolveSummary | None:
-    """Fail closed on the stats a requested integrator appended last.
+    """Raise on the stats a requested integrator appended last.
 
     Returns ``None`` when no stats were requested, so explicit runs keep a null
     status rather than a fabricated converged one.

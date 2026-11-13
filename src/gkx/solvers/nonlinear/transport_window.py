@@ -200,7 +200,7 @@ def nonlinear_heat_flux_window(
 ) -> jnp.ndarray:
     r"""Mean physical heat flux over a differentiable nonlinear window.
 
-    ``saturated_state`` is deliberately detached: first run GKX to saturation,
+    ``saturated_state`` is detached: first run GKX to saturation,
     then differentiate this finite window through ``geom`` and ``params``.
     Reverse-mode AD follows the exact discrete Runge--Kutta map. Block
     checkpointing retains :math:`O(\sqrt{N})` distribution states instead of

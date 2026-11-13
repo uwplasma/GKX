@@ -238,7 +238,8 @@ recursive = true
 # 69846 -> 69844: plotting docstring literal fix.
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
-baseline = 69890
+# 69890 -> 69880: docstring and comment prose edits.
+baseline = 69880
 target = 45000
 
 [[line_budget_policy.counts]]

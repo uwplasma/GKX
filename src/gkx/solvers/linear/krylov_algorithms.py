@@ -233,8 +233,8 @@ def build_shift_invert_preconditioner(
     """Build the preconditioner used inside shift-invert Krylov GMRES solves.
 
     ``None``/``"none"`` are the explicit opt-outs; any other unrecognized name
-    raises. This used to return ``(None, None)`` for those too, so a typo
-    disabled preconditioning while the solve reported itself as preconditioned.
+    raises, so a typo cannot disable preconditioning while the solve reports
+    itself as preconditioned.
     ``"auto"`` must not arrive here -- it is a real policy resolved one level up
     by :func:`gkx.solvers.linear.krylov._automatic_shift_preconditioner`, and
     mapping it to ``"damping"`` would hand a damping diagonal to a caller that

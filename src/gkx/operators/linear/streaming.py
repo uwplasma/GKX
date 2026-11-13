@@ -171,7 +171,7 @@ def _restore_linked_real_fft_conjugates(
 
     On a half-spectrum state there are no negative rows and this
     is the identity, returning the *same object* so the graph is unchanged. The
-    fill must not merely be skipped but recognized as inapplicable: ``(-j) % Nyc``
+    fill has to be recognized as inapplicable, not just skipped: ``(-j) % Nyc``
     is a different positive row, not a partner, so running the two-sided rule on
     a half axis would conjugate-mirror one physical mode onto another. Telling
     the two apart needs ``ny_full``; see :mod:`gkx.core_ky_layout`.

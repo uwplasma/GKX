@@ -48,7 +48,7 @@ Laguerre (magnetic moment) basis. For a single species, the expansion is
    \mathcal{L}_\ell(\mu B/T)\mathcal{H}_m(v_\parallel/v_{th}),
 
 where the normalized velocity basis includes the chosen Laguerre sign and
-Hermite normalization. Its **projected gyroaverage coefficient**, not the
+Hermite normalization. Its projected gyroaverage coefficient, not the
 Laguerre polynomial evaluated at the wavenumber, is
 
 .. math::

@@ -45,7 +45,7 @@ What you get when you change nothing, and when to change it.
 Default stepper: measured cost
 ------------------------------
 
-Deck with no ``dt`` and no ``method``, measured with ``rk4-pi`` (the rule that now
+Deck with no ``dt`` and no ``method``, measured with ``rk4-pi`` (the rule that
 selects ``lawson-rk4-pi`` where it pays came later, :ref:`where it pays <lawson-limits>`), against
 ``rk4`` + CFL, one A4000, float32,
 wall time including setup, heat flux over the saturated window (transient
@@ -132,7 +132,7 @@ the field response) and :math:`R` the drifts, mirror, drive and collisions.
 
 .. _advanced-steppers:
 
-**Advanced options.** The defaults need none of these; each is a deliberate pin.
+The defaults need none of the options below; each pins a choice.
 ``method = "rk4-pi"`` or ``"lawson-rk4-pi"`` fixes the stepper whatever the rule
 chooses (the Lawson methods also accept ``cfl_fac``, and ``lawson-rk3`` and
 ``lawson-rk4`` exist for comparison with ``rk3`` and ``rk4``); a ``dt`` with
@@ -143,7 +143,7 @@ takes a fixed ``dt`` chosen by hand; the sharded routes take ``rk4-pi``.
 ``examples/05_kinetic_electrons`` compares the implicit and explicit steppers
 with kinetic electrons.
 
-**Accuracy of the adaptive IMEX step.** ``imex-ark3`` keeps the embedded
+The adaptive ``imex-ark3`` step keeps the embedded
 ARK3(2) error of each step below ``rtol`` = 1e-3 of the state norm. Against
 ``rk4-pi`` (Cyclone, kinetic electrons, :math:`m_e/m_i` = 1/1836, 32x32x16,
 (4, 16), t = 120, A4000, heat-flux window mean over t = 30-120 with the Sokal
@@ -233,7 +233,7 @@ constant (``dt`` bound ``17 / w_nl``) does not change the first-burst error: 2.5
 t = 21 (0.6% at 22), while 0.1 and 0.15 go non-finite at the burst, so a fixed
 step needs the margin the adaptive controller gives.
 
-**Why IMEX helps.** With kinetic electrons the explicit step is set by
+IMEX helps because with kinetic electrons the explicit step is set by
 electron streaming, :math:`\Delta t \lesssim 1/(v_{te}k_{z,\max})`, about
 :math:`\sqrt{m_i/m_e}\approx 60` times shorter than the ion scale. In
 ``imex-ars3`` the operator :math:`S` is inverted exactly per twist-shift chain
@@ -243,12 +243,12 @@ electrons at 64x64x24 this gave 10x shorter time to solution than RK3 at the
 same heat flux. At a 16x16 tutorial grid or a small QA deck it does not pay:
 the factor build dominates.
 
-**Choosing the IMEX step.** ``dt`` is not found by a controller. 0.05 is
+The IMEX ``dt`` is not found by a controller. 0.05 is
 stable at 32x32x16 and non-finite at 64x64x24, where 0.035 and 0.025 work.
 Rerun at half the step and compare the heat flux. Set
 ``XLA_PYTHON_CLIENT_PREALLOCATE=false`` on a GPU.
 
-**Collisions in the IMEX step.** Explicit ARK3 is stable to
+In the IMEX step, explicit ARK3 is stable to
 :math:`\rho(C)\,\mathrm{d}t \approx 2.5`, with :math:`\rho(C)` the spectral
 radius of the Landau matrix: :math:`\nu_e` times 2.9, 8.7, 16 and 24 at
 :math:`(N_l, N_m)` = (2, 4), (4, 8), (4, 16) and (8, 16). With
@@ -379,22 +379,22 @@ check refuses them with or without the sub-step.
 Resolution
 ----------
 
-- **Velocity space.** Linear runs default to :math:`(N_l, N_m) = (12, 24)`,
+- Velocity space. Linear runs default to :math:`(N_l, N_m) = (12, 24)`,
   nonlinear runs to (4, 8). Vary :math:`N_m` first. Kinetic electrons and TEM
   need more: TEM growth rates still change at (16, 48).
-- **Per species.** A kinetic-electron deck that names no resolution gives the
+- Per species. A kinetic-electron deck that names no resolution gives the
   ions and the electrons their own counts; see `Velocity space per species`_.
-- **Perpendicular.** Nonlinear production runs use 64-96 points in
+- Perpendicular. Nonlinear production runs use 64-96 points in
   :math:`x` and :math:`y`; ``gkx --estimate`` prints the grid the geometry
   asks for, with the reason.
-- **Parallel.** :math:`N_z` = 24-64 per field-period segment, and
+- Parallel. :math:`N_z` = 24-64 per field-period segment, and
   ``nperiod >= 2`` for any linear run with linked boundaries.
-- **Field-line length.** Use ``npol >= 3`` for VMEC and ``nperiod >= 2`` for
+- Field-line length. Use ``npol >= 3`` for VMEC and ``nperiod >= 2`` for
   analytic geometry. Shorter lines give a wrong growth rate at every end-damping
   rate (errors of 30-80% in the common-deck study), and a stellarator rate still
   moves at ``npol = 4``: repeat at a longer line and compare. GKX warns when a
   case is validated with a shorter line.
-- **Check.** The heat flux or growth rate changes less than your tolerance
+- Check. The heat flux or growth rate changes less than your tolerance
   when :math:`N_m` doubles.
 
 Velocity space per species
@@ -406,7 +406,7 @@ pays the larger for each. ``[[species]] Nl`` and ``Nm`` (:ref:`inputs
 each at that size, so the cost is the sum over species of
 :math:`N_l N_m` rather than :math:`N_s \max N_l \max N_m`.
 
-**What each species needs** (Cyclone s-alpha, :math:`m_e/m_i = 2.7\times10^{-4}`,
+What each species needs (Cyclone s-alpha, :math:`m_e/m_i = 2.7\times10^{-4}`,
 :math:`\beta = 10^{-4}`, :math:`N_z = 32`, certified Krylov eigenvalue at
 :math:`k_y\rho_i = 0.3`; the other species held at (12, 48); reference uniform
 (12, 64), :math:`\gamma = 0.1394`):
@@ -471,7 +471,7 @@ ones. This branch keeps a scatter of a few percent for ion :math:`N_l` between
 :math:`k_y\rho_i = 0.3`, so judge a choice by the table below, not by one
 entry.
 
-**Fallback and check.** Ions (12, 32), electrons (6, 48) against the uniform
+Fallback and check. Ions (12, 32), electrons (6, 48) against the uniform
 (12, 64) reference (uniform (12, 48) is within 0.3% on the ITG point):
 
 .. list-table::
@@ -696,7 +696,7 @@ tutorial deck (16x16x16, default damping, t = 250-600, two seeds) electrons
 18.5 +- 1.5 and 2.93 +- 0.27 for (4, 16): +18 +- 12% and +21 +- 15%, within two
 standard errors. The two decks that follow show where the count matters.
 
-**Stellarator.** The Landreman-Paul quasi-axisymmetric deck of
+Stellarator. The Landreman-Paul quasi-axisymmetric deck of
 ``examples/05_kinetic_electrons`` (VMEC flux tube at s = 0.64, 16x16x32,
 :math:`\beta = 10^{-4}`, :math:`a/L_T = 4.5` for both species, the default
 ``imex-ark3`` and end damping, the deck's short field line ``npol`` = 1 for every
@@ -776,7 +776,7 @@ the error.
      - 132.7 +- 10.9
      - -31.6 +- 6.7%
 
-**Finite beta.** The Cyclone deck at :math:`\beta = 10^{-2}` with
+Finite beta. The Cyclone deck at :math:`\beta = 10^{-2}` with
 :math:`A_\parallel` (16x16x16, t = 250-600, two seeds). The electron heat flux
 needs the Hermite moments more than anywhere above: 16 gives 75% less, 32
 gives 44% less (47% with electron :math:`N_l` 6 and ion :math:`N_m` 16), and 48
@@ -842,7 +842,7 @@ do not cover a larger :math:`k_y` range, a collisional deck, a TEM-dominated or
 KBM deck or a longer field line, where the electron :math:`N_m` named in the
 deck should be checked as for any resolution.
 
-**Cost of per-species counts.** One A4000, float32, 64x64x24, explicit ``rk3`` at
+Cost of per-species counts. One A4000, float32, 64x64x24, explicit ``rk3`` at
 a fixed step (time per step from a long and a short run), peak device memory:
 
 .. list-table::
@@ -876,7 +876,7 @@ peak: the peak is the right-hand-side temporaries, which the groups already
 shrink, and storing each species at its own counts would save 13 MB more, so
 the state stays dense.
 
-**Cost of the fallback.** Ions (4, 8) with electrons (4, 48) carry 224 moments
+Cost of the fallback. Ions (4, 8) with electrons (4, 48) carry 224 moments
 per grid point, against 96 for electrons (4, 16) and 544 for the reference, and
 take a smaller step because the resolved electron physics stiffens the
 remainder (mean ``dt`` 0.24 against 0.31 on the stellarator, 0.078 against 0.142
@@ -891,7 +891,7 @@ first run of a deck also builds the implicit factor, whose electron blocks grow
 with :math:`N_m^2`: 1296 s against 350 s on the stellarator and 3867 s against
 425 s at finite beta, on a host with a load average near 40.
 
-**Implicit (IMEX) factor.** ``imex-ars3``/``imex-ark3`` build the block-Thomas
+Implicit (IMEX) factor. ``imex-ars3``/``imex-ark3`` build the block-Thomas
 factor, its field coupling and the collision sub-step per species group, at the
 counts each species keeps (zero rows above them stay the identity), so memory and
 solve time follow the counts. One A4000, float32, state at the ``[run]`` counts,
@@ -952,7 +952,7 @@ Kinetic electrons
 - Time: allow :math:`10/\gamma` for the linear phase, saturation by
   :math:`t\approx 60`-100, then 100-200 for the average, or
   ``run_to = "saturation"``.
-- **Check.** Rerun with ``damp_ends_rate`` 3x up and down and with
+- Check. Rerun with ``damp_ends_rate`` 3x up and down and with
   ``nperiod + 1`` (below).
 
 Electromagnetic and KBM
@@ -1001,9 +1001,9 @@ for the common deck: the end-damping rate and the linear time stepping. Setup:
 one A4000 (nonlinear, float32) and a laptop CPU (linear, float64), November
 2026.
 
-**End-damping rate.** The common deck leaves ``damp_ends_rate`` unset, so the
+End-damping rate. The common deck leaves ``damp_ends_rate`` unset, so the
 rate is 30 e-folds per thermal transit of the fastest kinetic species across
-the layer; the decks that used to pin 0.1 now leave it unset.
+the layer; the decks that pinned 0.1 leave it unset.
 
 .. list-table:: Nonlinear heat flux, ``damp_ends_rate = 0.1`` against the default rule
    :header-rows: 1
@@ -1128,7 +1128,7 @@ For kinetic electrons the default rule is on a plateau: :math:`\gamma` at
 (66 to 1990), is 2% high at a rate of 10, and is wrong at 1 and below. The KBM
 :math:`\gamma` moves by 0.8% between 1/3 and 3 times the default.
 
-**Decision.**
+Decision.
 
 * One value for the common deck: the default rule, with no pin. At converged
   line length and radial resolution it agrees with 0.1 to 9% or better, within
@@ -1167,7 +1167,7 @@ For kinetic electrons the default rule is on a plateau: :math:`\gamma` at
   and rate 0 where the case has no field-line ends or no layer (zonal and
   periodic decks, the electron-scale ETG and the provisional TEM deck).
 
-**Linear time stepping.** Resolution as listed, default precision, laptop CPU,
+Linear time stepping. Resolution as listed, default precision, laptop CPU,
 warm wall time per solve against the certified eigenpair (``solver = "krylov"``).
 
 .. list-table:: Fixed ``rk2`` and ``rk4`` + CFL against the eigensolver
@@ -1210,7 +1210,7 @@ warm wall time per solve against the certified eigenpair (``solver = "krylov"``)
      - 0.95 s, 0.14 s
      - horizon, not stepper
 
-**Decision.** The tutorials with ``solver = "time"`` (06, 07) keep fixed
+Decision. The tutorials with ``solver = "time"`` (06, 07) keep fixed
 ``rk2`` (01 uses fixed ``rk4`` at its Nm = 48, where ``rk2`` is unstable): the same :math:`\gamma` as ``rk4`` + CFL to 0.05% (:math:`\omega` to
 0.1%) at 0.5 to 0.6 times the wall time, and the run warns when ``dt`` exceeds
 the CFL-stable step. ``solver = "auto"`` runs the deck's own time route first
@@ -1218,12 +1218,12 @@ the CFL-stable step. ``solver = "auto"`` runs the deck's own time route first
 reaches the eigensolver only when the fit is rejected. A deck with no ``dt``
 keeps ``rk4`` + CFL, because the controller needs no tuning. The growth rate is limited by the horizon, not by the stepper: the time
 route needs :math:`\gamma t_{max} \gtrsim 7`, so the tutorials whose
-:math:`t_{max}` = 20 cannot reach it (08, 11) or have too weak a mode (02) now
+:math:`t_{max}` = 20 cannot reach it (08, 11) or have too weak a mode (02)
 use ``solver = "krylov"``, and 07, which has no eigensolver for its operator,
 runs to ``t = 60``. Research and parity decks keep the stepper of the reference
 they reproduce.
 
-**Cases built in Python.** A nonlinear case built from ``RuntimeConfig`` with no
+Cases built in Python. A nonlinear case built from ``RuntimeConfig`` with no
 ``dt`` runs ``rk4`` + CFL: the TOML loader, which sees the physics, is the only
 place that selects ``auto`` or ``imex-ark3``. The two are not merged because
 ``TimeConfig`` is shared with the linear routes, which accept only the plain

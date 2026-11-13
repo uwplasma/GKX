@@ -286,8 +286,8 @@ and the GKX mirror coefficient is
    bgrad=L_{ref}\frac{\boldsymbol B\cdot\nabla|B|}{|B|^2}
         =gradpar\,\partial_z\ln|B|.
 
-This is a local-Maxwellian delta-f calculation on a **closed periodic mirror
-hybrid**. It is not an open-mirror end-loss model. Joining VMEX's open end cuts
+This is a local-Maxwellian delta-f calculation on a closed periodic mirror
+hybrid. It is not an open-mirror end-loss model. Joining VMEX's open end cuts
 would omit absorbing/sheath boundaries, sources, ambipolar-potential
 formation, collisions that replenish the loss cone, and the non-Maxwellian
 background ordering those calculations require. The full derivation,
@@ -426,7 +426,7 @@ contract. The path is
 ``SpectralState -> Boozer tables -> booz_xform_jax -> FluxTubeGeometryData``
 and does not write or reload ``*.eik.nc`` files. The file-backed VMEC/EIK route
 is the runtime import path for ordinary examples, but not the path for
-end-to-end differentiable optimization.
+differentiable optimization of the whole chain.
 
 The wrapper is an API boundary, not a new physics claim. It inherits the
 ``mboz,nboz >= 21`` and equal-arc parity requirements of the VMEC/Boozer

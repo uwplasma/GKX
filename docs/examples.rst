@@ -93,7 +93,7 @@ lanes:
    gkx examples/01_linear_tokamak/case_full.toml
 
 ``examples/06_electromagnetic/case_full.toml`` is retained as the canonical operator input for controlled
-comparison studies. Its experimental shift-invert path fails closed while the
+comparison studies. Its experimental shift-invert path raises while the
 full-resolution physical residual exceeds the documented acceptance gate; use
 the reviewed comparison driver above for the promoted KBM result.
 
@@ -224,7 +224,7 @@ stellarator (``case_stellarator.toml``, a VMEC flux tube at :math:`s=0.64`).
    python examples/05_kinetic_electrons/run.py
    gkx examples/05_kinetic_electrons/case.toml
 
-**Choosing dt.** Leave ``fixed_dt = false``: the CFL controller takes the
+Choosing dt. Leave ``fixed_dt = false``: the CFL controller takes the
 largest linear frequency on the grid. With kinetic electrons that is electron
 parallel streaming, :math:`\sim v_{te}k_{z,\max}`, about
 :math:`\sqrt{m_i/m_e}\approx 60` times the ion rate. For decks with a light
@@ -265,7 +265,7 @@ dominant linear eigenvalue of the tutorial linear deck moves by
 :math:`2\times10^{-4}` between :math:`\beta=10^{-6}` and :math:`10^{-4}`
 (0.62478 and 0.62492).
 
-**Implicit linear step (opt-in).** ``method = "imex-ars3"`` with
+Implicit linear step (opt-in). ``method = "imex-ars3"`` with
 ``fixed_dt = true`` removes the streaming limit. Only the stiff terms are
 implicit -- parallel streaming with its dissipation (end damping,
 hypercollisions, hyperdiffusion), the field response and the electron mirror
@@ -349,12 +349,12 @@ times the memory); the linear step map is then stable to :math:`\Delta t\approx1
 32x32x16 and 0.07 at 64x64x16, (4, 8), where 0.2 and 0.1 went non-finite at
 :math:`t=24` and 15.6.
 
-**Choosing t_max** (units of :math:`a/v_{ti}`): the linear phase lasts about
+Choosing t_max (units of :math:`a/v_{ti}`): the linear phase lasts about
 :math:`10/\gamma`, 20-40 here; saturation follows by :math:`t\approx60`-100;
 then average the flux over at least 100-200 more, or set
 ``run_to = "saturation"`` to stop once the mean has converged.
 
-**Resolution.** The nonlinear tutorial decks use (Nl, Nm) = (2, 4) and 16x16 in the
+Resolution. The nonlinear tutorial decks use (Nl, Nm) = (2, 4) and 16x16 in the
 plane; the linear Cyclone deck uses (16, 48), the smallest velocity grid within
 2% of the reference and of the next larger Nm. Production runs use 64-96 points in x and y, Nz = 24-64, Nl = 4 and
 Nm = 8-16 on a GPU; check the heat flux against the next Nm before quoting it.

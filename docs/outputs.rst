@@ -206,7 +206,7 @@ Behavior of the main restart controls:
 - ``save_for_restart``: emit the checkpoint file during nonlinear runs
 - ``time.nstep_restart`` or ``output.nsave``: choose checkpoint cadence in steps
 
-For long adaptive jobs, the usual user-facing pattern is simply to rerun the
+For long adaptive jobs, the usual pattern is to rerun the
 same nonlinear command. If ``restart_if_exists = true`` and the checkpoint is
 present, the runtime resumes from ``*.restart.nc`` and keeps growing the
 history in ``*.out.nc``.
@@ -273,7 +273,7 @@ command:
 file carries -- ``Phi^2(t)``, the fluxes, and the ``ky`` spectrum when present
 -- with a title that names GX, so a panel lifted into a slide cannot be
 mistaken for GKX data. On GKX's own nonlinear bundle it rebuilds the whole
-figure set listed above, not only the single panel.
+figure set listed above.
 
 From Python, ``gkx.artifacts.plotting.plot_saved_output(path, out=None)`` draws
 the same overview figure; ``examples/12_restart_and_analysis/run.py`` shows a

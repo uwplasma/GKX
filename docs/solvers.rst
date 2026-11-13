@@ -182,7 +182,7 @@ conditions seed only the dealiased ``1 + 2 * ((Nx - 1) // 3)`` kx rows, which
 the chains cover, so nothing GKX builds is changed; periodic decks and
 full-cover linked grids have no mask.
 
-The mask is applied **at intake only**.  The chains are closed under the whole
+The mask is applied at intake only.  The chains are closed under the whole
 right-hand side: a state that is zero outside them has a right-hand side that
 is exactly zero there, in the linear operator and in the nonlinear bracket,
 whose output the two-thirds mask restricts to the covered rows on a full grid.
@@ -216,7 +216,7 @@ objective :func:`~gkx.solvers.nonlinear.transport_window.nonlinear_heat_flux_win
 and the raw drivers
 :func:`~gkx.solvers.nonlinear.diagnostics.integrate_nonlinear` and
 :func:`~gkx.solvers.nonlinear.diagnostics.integrate_nonlinear_cached`.
-Each **projects** the state onto the linked chain cover; none rejects it.  At
+Each projects the state onto the linked chain cover; none rejects it.  At
 the raw drivers the projection runs once, in ``integrate_nonlinear_cached``
 (``integrate_nonlinear`` builds a cache and delegates), before the scan is
 built: one ``where`` whose instruction count does not grow with ``steps``.
@@ -231,7 +231,7 @@ What the projection does and does not change:
 
 * it is a ``where`` against a mask fixed by the deck's topology, never a branch
   on the state's values, so it holds under ``jit`` and reverse-mode AD;
-* the cotangent of a supplied state is **exactly zero** on the off-chain rows
+* the cotangent of a supplied state is exactly zero on the off-chain rows
   and bitwise unchanged on the chain rows;
 * ``nonlinear_heat_flux_window`` keeps its gradient contract (the saturated
   state is detached; only ``geom`` and ``params`` carry derivatives); the
@@ -240,7 +240,7 @@ What the projection does and does not change:
 * periodic decks and full-cover linked grids get ``None`` and the same state
   object back.
 
-On a **full** nonlinear grid the chain cover equals the two-thirds dealias
+On a full nonlinear grid the chain cover equals the two-thirds dealias
 mask, so free energy and spectra already exclude off-chain rows; what the
 projection protects is the bracket.  On a linked Cyclone grid at Nx8/Ny8/Nz16
 with a saturated-amplitude broadband state, one right-hand side's chain rows
@@ -272,12 +272,11 @@ returns a pair above its original-operator residual gate
 * a zero or non-finite eigenvector has infinite residual, so a breakdown that
   returns ``(0, 0)`` cannot pass any gate.
 
-``KrylovConfig.method`` previously defaulted to ``"propagator"`` and
-``dominant_eigenpair(method=...)`` to ``"power"``; both returned unchecked
-pairs, and on the linked Cyclone deck a bare ``KrylovConfig()`` returned the
-wrong branch with relative residual 0.98--1.00.  Code that relies on the raw
-routes must now name the method, and pass ``certify=False`` if it knowingly
-accepts an unconverged pair.
+The raw ``"propagator"`` (``KrylovConfig.method``) and ``"power"``
+(``dominant_eigenpair(method=...)``) routes return unchecked pairs; on the
+linked Cyclone deck the propagator route lands on the wrong branch with
+relative residual 0.98--1.00. Code that relies on the raw routes must name the
+method, and pass ``certify=False`` if it knowingly accepts an unconverged pair.
 
 Why the default is not ``pr3-cm`` shift-invert
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -345,7 +344,7 @@ The IMEX diagnostics and sheared IMEX scans fold one ``ImplicitSolveStats``
 leaf per implicit solve (three per step under ``sspx3``); the explicit sheared
 methods keep their carry unchanged.
 
-**Non-convergence fails closed at the host boundary.**  A traced step cannot
+Non-convergence raises at the host boundary.  A traced step cannot
 raise, so ``run_runtime_linear`` and ``run_runtime_nonlinear`` check the
 carried stats after the scan returns and raise ``RuntimeError`` with the
 unconverged count, the maximum relative residual and the maximum iterations.
@@ -362,7 +361,7 @@ the trace's ``solve_stats`` field.  A caller that wants the runtime's refusal
 applies :func:`~gkx.solvers.linear.implicit.require_converged_implicit_solves`
 to the stats.
 
-**Cost.**  Callers that do not request the stats compile the same graph, because
+Cost.  Callers that do not request the stats compile the same graph, because
 XLA removes the unused carry.  Requesting them reads SOLVAX's recomputed true
 residual, one operator application per implicit solve, plus about twenty
 instructions of scalar folds.  On a 4x4x8, Nl=2, Nm=4 implicit linear scan the
@@ -375,8 +374,8 @@ One nonlinear diagnostics graph
 ``gkx.prepare`` keeps a compiled scan and runs it through ``simulation.solve()``;
 ``integrate_nonlinear_explicit_diagnostics_state`` is the function entry point,
 and the one ``run_runtime_nonlinear`` reaches on its fixed-window, chunked and
-sharded routes.  **Both compile the same jitted graph and return bitwise
-identical arrays for the same inputs**, in ``float32`` and under
+sharded routes.  Both compile the same jitted graph and return bitwise
+identical arrays for the same inputs, in ``float32`` and under
 ``JAX_ENABLE_X64``.  Compare them with exact equality;
 ``tests/unit/nonlinear/test_nonlinear.py`` does, over every output array, for
 RK3 and RK4 and for fixed and adaptive steps.  Value and reverse-mode gradient
@@ -388,7 +387,7 @@ function entry point takes the dtype it is handed.  Scaling ``G0`` by a
 ``float64`` scalar under ``JAX_ENABLE_X64`` and feeding it to only one of them
 runs the two at different precisions.
 
-**Cost.**  Nothing to opt into, and no step costs more.  On the shipped Cyclone
+Cost.  Nothing to opt into, and no step costs more.  On the shipped Cyclone
 deck at 32x32x24, Nl=2, Nm=4, against a scan compiled outside ``jit``: RK3
 ``copy`` ops fall from 226 to 85 and the bytes written by copies and
 concatenates rise 0.47%; the graph carries its cache, parameter and policy
@@ -409,7 +408,7 @@ call).  Host-side work stays outside the graph: the linked cache build (its
 ``jtwist`` is an integer read off the shear), the quadrature weights, the
 chain-cover projection of the supplied state, and the Hermitian projector's
 ``ky`` layout, which crosses the boundary as a hashable signature.  Every array
-is an **argument**, not a captured constant, so the same executable serves the
+is an argument, not a captured constant, so the same executable serves the
 next geometry an optimizer proposes.
 
 Shipped Cyclone deck at 16x16x12, Nl=2, Nm=4, six-step RK3 window
@@ -424,15 +423,15 @@ three timed calls:
      - compilations per call
      - wall per call
    * - two-sided
-     - 13 -> **0**
-     - 4.92-5.36 s -> 0.139-0.141 s (**37x**)
+     - 13 -> 0
+     - 4.92-5.36 s -> 0.139-0.141 s (37x)
    * - half-spectrum
-     - 13 -> **0**
-     - 7.04-7.36 s -> 0.112-0.116 s (**63x**)
+     - 13 -> 0
+     - 7.04-7.36 s -> 0.112-0.116 s (63x)
 
 The first call also falls, 11.0 s to 7.3 s and 12.4 s to 6.8 s.
 
-**Identity.**  Value and both adjoint components are bitwise unchanged against
+Identity.  Value and both adjoint components are bitwise unchanged against
 the per-call route in 20 of 26 gate configurations (every one using the default
 ``checkpoint=True`` except RK2 under x64), across RK2/RK3/RK4, two-sided and
 half ``ky``, a window tail, the uncompressed FFT path, exact Laguerre
