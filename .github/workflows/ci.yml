@@ -26,8 +26,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Pull-request pushes supersede each other. Main pushes and the nightly run
+  # carry the only wide-coverage results, so they queue instead of cancelling.
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   repo-hygiene:
@@ -197,8 +199,8 @@ jobs:
   fast-coverage:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     # Heaviest pull-request lane: on the org's Mac runners for pushes and
-    # same-repo pull requests. Fork pull requests never reach them.
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","uwplasma-cpu"]') || 'ubuntu-latest' }}
+    # same-repo pull requests. Fork and Dependabot pull requests never reach them.
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') && fromJSON('["self-hosted","uwplasma-cpu"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
     permissions:
       contents: read
