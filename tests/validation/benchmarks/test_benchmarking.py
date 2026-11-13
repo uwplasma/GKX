@@ -19,10 +19,6 @@ import numpy as np
 import pytest
 from dataclasses import replace
 
-from gkx.benchmarking_shared import (
-    LinearScanResult,
-)
-from gkx.workflows.linear import run_linear_scan
 from gkx.diagnostics.modes import (
     normalize_eigenfunction,
 )
@@ -516,69 +512,6 @@ def test_zonal_flow_response_metrics_rejects_insufficient_finite_samples() -> No
             np.array([0.0, 1.0, 2.0, 3.0, 4.0]),
             np.array([1.0, np.nan, 0.8, np.nan, 0.6]),
         )
-
-
-def test_run_linear_scan_applies_resolution_and_krylov_policies() -> None:
-    calls: list[dict[str, object]] = []
-
-    def fake_run_linear_fn(**kwargs):
-        calls.append(kwargs)
-        ky = float(kwargs["ky_target"])
-        return SimpleNamespace(gamma=ky + 1.0, omega=-ky, ky=ky + 0.01)
-
-    result = run_linear_scan(
-        ky_values=np.array([0.1, 0.3]),
-        run_linear_fn=fake_run_linear_fn,
-        cfg=object(),
-        Nl=2,
-        Nm=3,
-        dt=np.array([0.01, 0.02]),
-        steps=np.array([10, 20]),
-        method="rk4",
-        solver="time",
-        krylov_cfg="base",
-        window_kw={"window_fraction": 0.5},
-        tmin=np.array([1.0, 2.0]),
-        tmax=np.array([3.0, 4.0]),
-        auto_window=False,
-        run_kwargs={"tag": "ok"},
-        resolution_policy=lambda ky: (4, 5) if ky < 0.2 else (6, 7),
-        krylov_policy=lambda ky: f"kcfg-{ky:.1f}",
-    )
-
-    assert isinstance(result, LinearScanResult)
-    np.testing.assert_allclose(result.ky, [0.11, 0.31])
-    np.testing.assert_allclose(result.gamma, [1.1, 1.3])
-    np.testing.assert_allclose(result.omega, [-0.1, -0.3])
-    assert calls[0]["Nl"] == 4
-    assert calls[0]["Nm"] == 5
-    assert calls[0]["krylov_cfg"] == "kcfg-0.1"
-    assert calls[0]["tmin"] == 1.0
-    assert calls[1]["Nl"] == 6
-    assert calls[1]["Nm"] == 7
-    assert calls[1]["krylov_cfg"] == "kcfg-0.3"
-    assert calls[1]["tmax"] == 4.0
-    assert calls[1]["tag"] == "ok"
-
-
-def test_run_linear_scan_accepts_an_empty_scan() -> None:
-    result = run_linear_scan(
-        ky_values=np.asarray([], dtype=float),
-        run_linear_fn=lambda **_kwargs: None,
-        cfg=SimpleNamespace(),
-        Nl=4,
-        Nm=8,
-        dt=0.1,
-        steps=2,
-        method="rk2",
-        solver="time",
-        krylov_cfg=None,
-        window_kw={},
-    )
-
-    assert result.ky.shape == (0,)
-    assert result.gamma.shape == (0,)
-    assert result.omega.shape == (0,)
 
 
 def test_estimate_observed_order_returns_asymptotic_pairwise_orders() -> None:

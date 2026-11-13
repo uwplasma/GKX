@@ -482,14 +482,6 @@ class VMEXTransportObjectiveConfig:
     surface_chunk_size: int = 0
     validate_finite: bool = True
 
-    @property
-    def gradient_scope(self) -> str:
-        """Return the differentiated part of this objective."""
-
-        if self.kind == "growth":
-            return "eigenvalue_growth_ad"
-        return "eigenvalue_growth_ad_with_geometry_transport_weights"
-
     def __post_init__(self) -> None:
         if self.kind not in (
             "growth",
