@@ -39,6 +39,12 @@ def _needs_vmex_or_wout() -> str | None:
     )
 
 
+def _needs_vmex() -> str | None:
+    if importlib.util.find_spec("vmex") is not None:
+        return None
+    return "needs vmex (pip install vmex), which CI does not install"
+
+
 # relative script -> (summary JSON, figure) it must write under outputs/.
 SMOKE_OUTPUTS: dict[str, tuple[str, str]] = {
     "01_linear_tokamak/run.py": ("summary.json", "linear_tokamak.png"),
@@ -49,14 +55,8 @@ SMOKE_OUTPUTS: dict[str, tuple[str, str]] = {
     "06_electromagnetic/run.py": ("summary.json", "electromagnetic.png"),
     "07_collisions/run.py": ("summary.json", "collisions.png"),
     "08_quasilinear/run.py": ("summary.json", "quasilinear.png"),
-    "08_quasilinear/implicit_sensitivity.py": (
-        "quasilinear_implicit_sensitivity.json",
-        "quasilinear_implicit_sensitivity.png",
-    ),
-    "09_autodiff/run.py": (
-        "autodiff_inverse_twomode_summary.json",
-        "autodiff_inverse_twomode.png",
-    ),
+    "09_autodiff/run.py": ("summary.json", "autodiff.png"),
+    "10_vmex_optimization/run.py": ("summary.json", "vmex_optimization.png"),
     "11_parallel_scan/run.py": ("summary.json", "parallel_scan.png"),
     "12_restart_and_analysis/run.py": ("summary.json", "restart_and_analysis.png"),
     "13_advanced_time_stepping/run.py": ("summary.json", "advanced_steppers.png"),
@@ -64,7 +64,7 @@ SMOKE_OUTPUTS: dict[str, tuple[str, str]] = {
 
 # Editable constants turned down for the smoke run (name -> Python expression).
 SMOKE_KNOBS: dict[str, dict[str, str]] = {
-    "01_linear_tokamak/run.py": {"KY": "[0.2, 0.3]"},
+    "01_linear_tokamak/run.py": {"KY": "[0.2, 0.3]", "RESOLUTIONS": "[(4, 8)]"},
     "02_linear_stellarator/run.py": {"KY": "[0.4, 0.6]"},
     "07_collisions/run.py": {
         "MODELS": '("sugama", "coulomb_finite_kperp")',
@@ -77,6 +77,7 @@ SMOKE_KNOBS: dict[str, dict[str, str]] = {
         "GRID": '{"nperiod": 1, "Nx": 8, "Nz": 16, "ntheta": 16}',
     },
     "11_parallel_scan/run.py": {"KY": "[0.2, 0.3]"},
+    "10_vmex_optimization/run.py": {"WIRING_RUN": "True"},
     "12_restart_and_analysis/run.py": {"STEPS_PER_LEG": "40"},
 }
 
@@ -85,11 +86,7 @@ SMOKE_KNOBS: dict[str, dict[str, str]] = {
 SMOKE_SKIPS: dict[str, object] = {
     "02_linear_stellarator/run.py": _needs_vmex_or_wout,
     "04_nonlinear_stellarator/run.py": _needs_vmex_or_wout,
-    "10_vmex_optimization/run.py": (
-        "needs vmex and its source-checkout seed deck "
-        "examples/data/input.minimal_seed_nfp2; the default ladder is a GPU "
-        "research calculation"
-    ),
+    "10_vmex_optimization/run.py": _needs_vmex,
 }
 
 
@@ -225,7 +222,15 @@ def test_gallery_script_follows_the_example_style(relative):
     assert ast.get_docstring(tree), (
         f"{relative} needs a module docstring with runtime and device"
     )
-    assert "argparse" not in text
+    assert "argparse" not in text and "sys.argv" not in text
+    names = {
+        t.id
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        for t in node.targets
+        if isinstance(t, ast.Name)
+    }
+    assert "OUTPUT" in names, f"{relative} needs an OUTPUT constant"
     functions = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
     assert not functions & {"main", "_main"}, f"{relative} defines a main()"
     assert not any(

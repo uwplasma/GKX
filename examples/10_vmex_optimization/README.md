@@ -57,17 +57,16 @@ pip install vmex
 python examples/10_vmex_optimization/run.py
 ```
 
-This is an expensive research calculation. `VMEX_EXAMPLES_CI=1` selects a
+This is an expensive research calculation. `WIRING_RUN = True` selects a
 tiny wiring smoke test, not saturation. Controls: `SATURATION_STEPS`,
 `WINDOW_STEPS`, `DT`, `NX,NY,NZ,NL,NM`.
 
-## Warm restart and derivatives
+## Derivatives
 
-The existing `SaturationWarmStart` policy is wired but **disabled**
-(`max_reuse=0`). It can reuse distribution amplitude between accepted stages;
-it does not change refresh points during a local objective evaluation.
-Its 5% geometry threshold and quarter-spin-up budget are heuristics.
-A warm-start speedup at the same accuracy has **not** been established.
+The script refreshes the saturated state cold, once per accepted stage.
+`gkx.workflows.runtime.warm_start.SaturationWarmStart` can reseed a stage from
+the previous saturated state, but a warm-start speedup at the same accuracy has
+not been established, so the script does not use it.
 
 The nonlinear objective detaches the initial distribution and differentiates a
 fixed RK window. It is not the exact derivative of long-time mean transport.

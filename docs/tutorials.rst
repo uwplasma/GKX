@@ -2,9 +2,10 @@ Tutorial
 ========
 
 Twelve steps, from a first run to a stellarator optimization. Step *N* is
-the directory ``examples/NN_*``. Each has one ``run.py``: imports, parameters
-at the top, a run that prints its progress, then printed, saved and plotted
-results under ``./outputs/NN_*``. Deck-driven steps also have a tutorial
+the directory ``examples/NN_*``. Each has one ``run.py`` with the same layout: a docstring, editable
+constants, a fast path (the deck run with no tuning), a research path where one
+exists (convergence, eigensolver, autodiff and stepper checks) and the outputs
+(``summary.json`` and one figure under ``./outputs/NN_*``). Deck-driven steps also have a tutorial
 ``case.toml`` (seconds to a minute on a laptop CPU) and, where it applies, a
 literature-resolution ``case_full.toml``. Tutorial decks are coarse: the
 numbers show the workflow, not converged physics.
@@ -161,12 +162,11 @@ and verification: :doc:`operators`.
 .. code-block:: bash
 
    python examples/08_quasilinear/run.py
-   python examples/08_quasilinear/implicit_sensitivity.py
 
 A linear scan gives the flux per unit amplitude :math:`Q/|\phi|^2` at each
 :math:`k_y`. A mixing-length rule :math:`|\phi|^2\sim\gamma/\langle k_\perp^2\rangle`
 turns it into a saturated estimate. The rule is uncalibrated: it ranks spectra
-and designs, and does not predict absolute flux. The second script
+and designs, and does not predict absolute flux. The research half of the script
 differentiates these observables through the eigenpair and checks them against
 finite differences (:doc:`quasilinear`).
 
@@ -189,7 +189,7 @@ parameter path, and autodiff against finite-difference Jacobians
 .. code-block:: bash
 
    pip install vmex
-   VMEX_EXAMPLES_CI=1 python examples/10_vmex_optimization/run.py   # wiring run
+   python examples/10_vmex_optimization/run.py   # set WIRING_RUN = True first for a tiny CPU check
 
 Adds the nonlinear heat flux, differentiated through a post-saturation window,
 to a VMEX quasi-axisymmetry objective and optimizes the boundary in stages. It
