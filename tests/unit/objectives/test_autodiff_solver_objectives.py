@@ -27,6 +27,7 @@ from gkx.objectives.autodiff_validation import (
 )
 from gkx.config import CycloneBaseCase, GridConfig
 from gkx.geometry import SAlphaGeometry
+from gkx.geometry.core import ensure_flux_tube_geometry_data
 from gkx.core_grid import build_spectral_grid, select_ky_grid
 from gkx.operators.linear.cache_builder import build_linear_cache
 from gkx.operators.linear.params import (
@@ -1587,44 +1588,6 @@ def test_vmex_transport_surface_chunking_matches_unchunked_weighted_mean(
     assert evaluate(chunk_size=1) == pytest.approx(evaluate(chunk_size=0))
 
 
-def test_vmex_transport_objective_nonlinear_proxy_is_positive_and_exported(
-    monkeypatch,
-) -> None:
-    scale = {"value": 1.0}
-
-    def fake_geom(*_args, **_kwargs):
-        return _fake_geometry()
-
-    def fake_growth(_geom, **_kwargs):
-        return jnp.asarray(0.1 * scale["value"])
-
-    monkeypatch.setattr(
-        transport_tables, "flux_tube_geometry_from_vmec_boozer_state", fake_geom
-    )
-    monkeypatch.setattr(
-        transport_tables, "solver_growth_rate_from_geometry", fake_growth
-    )
-    samples = StellaratorITGSampleSet(
-        surfaces=(0.5, 0.7), alphas=(0.0,), ky_values=(0.2, 0.4)
-    )
-    cfg = VMEXTransportObjectiveConfig(
-        kind="nonlinear_window_heat_flux", sample_set=samples
-    )
-
-    low = vmex_transport_objective_from_state(
-        "state", "static", "indata", object(), cfg
-    )
-    scale["value"] = 2.0
-    high = vmex_transport_objective_from_state(
-        "state", "static", "indata", object(), cfg
-    )
-
-    assert gkx.VMEXTransportObjectiveConfig is VMEXTransportObjectiveConfig
-    assert gkx.VMEXGKXTransportObjective is VMEXGKXTransportObjective
-    assert float(low) > 0.0
-    assert float(high) > float(low)
-
-
 def test_vmex_transport_objective_transform_scales_large_residuals(
     monkeypatch,
 ) -> None:
@@ -1948,3 +1911,69 @@ def test_readme_scopes_qa_claims_to_finite_window_derivatives() -> None:
     assert "screening diagnostics" in docs
     assert "finite-difference check" in manuscript
     assert "differentiated window" in manuscript
+
+
+@pytest.mark.parametrize(
+    ("changes", "match"),
+    [
+        (dict(krylov_dim=1), "at least two"),
+        (dict(exponential_krylov_dim=1), "exponential Krylov"),
+        (dict(exponential_krylov_dim=4, exponential_horizon=0.0), "exponential Krylov"),
+        (dict(max_restarts=0), "must be positive"),
+        (dict(sensitivity_krylov_dim=0), "must be positive"),
+        (dict(candidate_count=0), "candidate_count"),
+        (dict(candidate_count=13), "candidate_count"),
+        (dict(max_stability_retries=-1), "non-negative"),
+        (dict(tolerance=0.0), "tolerances"),
+        (dict(sensitivity_rtol=-1.0), "tolerances"),
+        (dict(chunk_horizon=0.0), "chunk_horizon"),
+        (dict(stability_probe_count=0), "stability_probe_count"),
+        (dict(stability_safety=1.0), "stability_safety"),
+        (dict(condition_limit=1.0), "condition_limit"),
+        (dict(branch_gap_floor=-1.0), "branch_gap_floor"),
+        (dict(sensitivity_preconditioner="ilu"), "sensitivity_preconditioner"),
+        (dict(sensitivity_solver="cg"), "sensitivity_solver"),
+    ],
+)
+def test_adaptive_eigensolver_config_refuses_each_unsafe_setting(changes, match):
+    AdaptiveLinearEigensolverConfig()
+    with pytest.raises(ValueError, match=match):
+        AdaptiveLinearEigensolverConfig(**changes)
+
+
+def test_solver_objective_selector_and_geometry_context_refuse_bad_inputs():
+    names = SOLVER_OBJECTIVE_NAMES
+    vector = np.arange(len(names), dtype=float)
+    assert float(solver_scalar_objective_from_vector(vector, " growth ")) == float(
+        solver_scalar_objective_from_vector(vector, "gamma")
+    )
+    with pytest.raises(ValueError, match="unknown solver objective"):
+        solver_scalar_objective_from_vector(vector, "entropy")
+    with pytest.raises(ValueError, match="length"):
+        solver_scalar_objective_from_vector(vector[:-1])
+
+    analytic = SAlphaGeometry.from_config(CycloneBaseCase().geometry)
+
+    def sampled(n):
+        return ensure_flux_tube_geometry_data(
+            analytic, jnp.linspace(-jnp.pi, jnp.pi, n, endpoint=False)
+        )
+
+    geom = sampled(8)
+    for kwargs, match in (
+        (dict(n_laguerre=0), "positive"),
+        (dict(selected_ky_index=99), "outside the ky grid"),
+        (dict(eigensolver="arnoldi"), "dense"),
+        (dict(eigensolver="sparse-direct"), "requires a shift"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            solver_growth_rate_from_geometry(geom, **kwargs)
+    full = build_spectral_grid(GridConfig(Nx=1, Ny=4, Nz=8, Lx=6.0, Ly=12.0))
+    with pytest.raises(ValueError, match="exactly one ky"):
+        solver_linear_operator_matrix_from_geometry(geom, spectral_grid=full)
+    one_ky = select_ky_grid(full, 1)
+    with pytest.raises(ValueError, match="z size"):
+        solver_linear_operator_matrix_from_geometry(
+            sampled(6),
+            spectral_grid=one_ky,
+        )

@@ -138,7 +138,7 @@ jobs:
           JAX_ENABLE_X64: "false"
           GKX_X64: "0"
         run: |
-          pytest -q -rf --maxfail=20 tests/unit/nonlinear/test_nonlinear_helpers_extra.py \
+          pytest -q -rf --maxfail=20 tests/unit/nonlinear/test_nonlinear.py \
             -k "window_gradient_matches_centered_finite_difference or block_checkpointed_window_matches_plain_reverse_pass"
 
       - name: Portability gates
@@ -219,7 +219,7 @@ jobs:
       - uses: ./.github/actions/setup-selfhosted
         if: runner.environment == 'self-hosted'
 
-      - name: Release-surface coverage (>=95%)
+      - name: Release-surface coverage (>=95% of lines)
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
@@ -325,7 +325,8 @@ jobs:
             --pytest-arg=-o \
             --pytest-arg=addopts= \
             --pytest-arg=-m \
-            --pytest-arg="not slow"
+            --pytest-arg="not slow" \
+            --pytest-arg=--durations=25
 
       - name: Package coverage shard data
         run: |

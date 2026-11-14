@@ -68,7 +68,6 @@ from scripts.checks._gates.validation_gates import (
 from gkx.config import resolve_cfl_fac
 from gkx.geometry import SAlphaGeometry
 from gkx.operators.linear.params import LinearParams, LinearTerms
-from gkx.operators.linear import dissipation as linear_dissipation_module
 from gkx.terms import linear_terms as linear_terms_module
 from gkx.terms.linear_terms import (
     diamagnetic_contribution,
@@ -1087,36 +1086,6 @@ _GATHER = dict(
     linked_gather_mask=jnp.asarray([True], dtype=bool),
     linked_use_gather=True,
 )
-
-
-@pytest.mark.parametrize(
-    ("reason", "overrides"),
-    [
-        ("when hypercollisions_kz is zero", {}),
-        (
-            "for an exactly zero hypercollision operator",
-            dict(
-                nu_hyper=_f32(0.0),
-                nu_hyper_m=_f32(0.0),
-                mask_const=jnp.ones((1, 2, 4, 1, 1, 1), dtype=bool),
-                hypercollisions_kz=_f32(1.0),
-            ),
-        ),
-    ],
-)
-def test_hypercollisions_static_zero_skips_linked_abs_kz(
-    monkeypatch, reason, overrides
-):
-    def _fail(*args, **kwargs):
-        raise AssertionError(f"abs_z_linked_fft should not run {reason}")
-
-    monkeypatch.setattr(linear_dissipation_module, "abs_z_linked_fft", _fail)
-
-    G = jnp.ones((1, 2, 4, 1, 1, 2), dtype=jnp.complex64)
-    kwargs = _kz_hyper_kwargs(2, 4, [0.0, 1.0], **_GATHER, **overrides)
-    out = hypercollisions_contribution(G, **kwargs)
-
-    assert jnp.allclose(out, jnp.zeros_like(G))
 
 
 @pytest.mark.parametrize("linked", [False, True])

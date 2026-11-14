@@ -381,7 +381,7 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
+  "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/solvers/test_time_integrators.py",
 ]
 artifact_paths = []
@@ -578,7 +578,6 @@ fast_tests = [
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear_exb.py",
   "tests/unit/operators/test_terms_fields.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = ["docs/_static/nonlinear_domain_parallel_identity_gate.png", "docs/_static/nonlinear_spectral_communication_identity_gate.png"]
 next_tests = [
@@ -614,7 +613,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
 next_tests = [
@@ -645,7 +643,6 @@ numerics_contracts = [
 ]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
 next_tests = [
@@ -675,7 +672,6 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
 next_tests = [
@@ -704,7 +700,7 @@ numerics_contracts = [
   "a lawson step at a small step follows the plain step on the same system",
 ]
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
+  "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
 next_tests = [
@@ -736,7 +732,6 @@ numerics_contracts = [
 fast_tests = [
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
 next_tests = [
@@ -769,7 +764,6 @@ numerics_contracts = [
   "prebuilt nonlinear IMEX operators preserve dtype, shape, and preconditioner metadata",
 ]
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
@@ -800,7 +794,6 @@ numerics_contracts = [
   "species-squeezed damping preserves the state layout used by single-species nonlinear scans",
 ]
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
@@ -828,7 +821,7 @@ numerics_contracts = [
   "composed nonlinear-state projection applies fixed-mode preservation before Hermitian completion",
 ]
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
+  "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
 next_tests = [

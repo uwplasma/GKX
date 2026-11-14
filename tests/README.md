@@ -6,7 +6,7 @@ artifact schemas. It is not an archive of every historical branch or one-off
 tool wrapper.
 
 The refactor target is fewer than 100 Python test files while preserving at
-least 95% package-wide coverage and the physics/numerics gates used for release.
+least 95% package-wide line and branch coverage and the physics/numerics gates used for release.
 
 ## Ownership
 

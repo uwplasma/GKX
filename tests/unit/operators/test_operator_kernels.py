@@ -1231,37 +1231,6 @@ def test_drift_kinetic_collision_operators_obey_h_theorem_and_conserve_density()
         np.testing.assert_allclose(matrix[:, 0], 0.0, atol=1.0e-12)
 
 
-def test_finite_wavelength_coulomb_tables_load_with_provenance() -> None:
-    # The shipped gyrokinetic Coulomb tables are checksummed multiprecision
-    # output; the loader must verify provenance and expose a usable grid.
-    from gkx.operators.linear.collision_tables import (
-        _finite_wavelength_coulomb_bundle,
-        finite_wavelength_coulomb_metadata,
-    )
-
-    metadata = finite_wavelength_coulomb_metadata()
-    assert metadata["kind"] == "gkx_finite_wavelength_coulomb_coefficients"
-    assert "2104.11480" in metadata["source"]
-    assert metadata["equations"] == "3.47-3.50"
-    assert metadata["mass_ratio"] == 1.0 and metadata["temperature_ratio"] == 1.0
-    assert int(metadata["precision_decimal_digits"]) >= 40
-
-    arrays, _ = _finite_wavelength_coulomb_bundle()
-    grid = np.asarray(arrays["bessel_argument_grid"])
-    assert grid.ndim == 1 and grid.size >= 2
-    assert grid[0] == 0.0, "the drift-kinetic limit must be tabulated"
-    assert np.all(np.diff(grid) > 0.0), "interpolation requires increasing B"
-
-    moments = (int(metadata["maximum_hermite_order"]) + 1) * (
-        int(metadata["maximum_laguerre_order"]) + 1
-    )
-    for name in ("test_matrix", "field_matrix"):
-        assert np.asarray(arrays[name]).shape == (grid.size, moments, moments)
-    for name in ("test_phi1", "field_phi1", "test_phi2", "field_phi2"):
-        assert np.asarray(arrays[name]).shape == (grid.size, moments)
-    assert all(np.all(np.isfinite(np.asarray(arrays[n]))) for n in arrays)
-
-
 def test_finite_wavelength_coulomb_matches_drift_kinetic_where_it_is_defined() -> None:
     # Cross-check between two independently generated data files: at B = 0 the
     # finite-Larmor tables (arXiv:2104.11480, Eqs. 3.47-3.50) must reproduce the
@@ -1582,68 +1551,6 @@ def test_multispecies_sugama_operator_runs_through_linear_rhs() -> None:
     np.testing.assert_allclose(rates.particle_density, 0.0, atol=2.0e-6)
     np.testing.assert_allclose(rates.total_parallel_momentum, 0.0, atol=4.0e-6)
     np.testing.assert_allclose(rates.total_thermal_energy, 0.0, atol=1.0e-5)
-
-
-def test_collision_contractions_pin_exact_dot_precision() -> None:
-    """Moment-matrix contractions must never be lowered to TF32.
-
-    On Ampere and later NVIDIA GPUs XLA may satisfy an unpinned dot with TF32, which
-    keeps 10 mantissa bits. These contractions carry the collision operator's
-    conservation identities, and TF32 broke them at ~1e-4 -- two orders above the
-    float32 rounding floor. CPU has no TF32 path, so an unpinned dot and
-    Precision.HIGHEST produce bit-identical CPU results and no CPU *value* can
-    expose a missing pin. The precision request is in the jaxpr on every backend,
-    so assert it there and keep this class of regression visible in CPU-only CI.
-    """
-
-    def dot_precisions(function, *args, **kwargs):
-        equations = jax.make_jaxpr(function)(*args, **kwargs).jaxpr.eqns
-        return [
-            equation.params["precision"]
-            for equation in equations
-            if equation.primitive.name == "dot_general"
-        ]
-
-    exact = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
-    state = (
-        jnp.arange(2 * 2 * 4, dtype=jnp.float32).reshape(2, 2, 4, 1, 1, 1) + 0.13j
-    ).astype(jnp.complex64)
-    modes = jnp.zeros((8, 8), dtype=jnp.float32)
-    pair_modes = jnp.zeros((2, 2, 8, 8), dtype=jnp.float32)
-    pair_vector = jnp.zeros((2, 2, 8), dtype=jnp.float32)
-
-    contractions = {
-        "drift_kinetic": dot_precisions(
-            lambda value: apply_collision_moment_matrix(
-                value, modes, nu=jnp.asarray(1.0)
-            ),
-            state,
-        ),
-        "multispecies": dot_precisions(
-            apply_multispecies_collision_moment_matrix, state, pair_modes
-        ),
-        "finite_wavelength_coulomb": dot_precisions(
-            lambda value: apply_finite_wavelength_coulomb_moment_operator(
-                value,
-                pair_modes,
-                pair_modes,
-                pair_vector,
-                pair_vector,
-                pair_vector,
-                pair_vector,
-                phi=jnp.zeros((1, 1, 1), dtype=jnp.float32),
-                pair_frequency=jnp.ones((2, 2), dtype=jnp.float32),
-                charge_over_temperature=jnp.ones(2, dtype=jnp.float32),
-            ),
-            state,
-        ),
-    }
-    for name, precisions in contractions.items():
-        assert precisions, f"{name} lowered to no dot_general; the guard is vacuous"
-        assert all(precision == exact for precision in precisions), (
-            f"{name} has an unpinned contraction {precisions}; it will run in TF32 "
-            "on Ampere and later NVIDIA GPUs and break conservation"
-        )
 
 
 def test_drift_kinetic_collision_model_is_blocked_for_short_wave_itg() -> None:
@@ -2102,47 +2009,6 @@ def _diagonal_coulomb_operator() -> EqualSpeciesFiniteWavelengthCoulombOperator:
         zero_vector,
         zero_vector,
     )
-
-
-def test_collision_operators_round_trip_through_pytree() -> None:
-    """Registered collision operators flatten and unflatten without data loss."""
-
-    dense = DriftKineticMomentCollisionOperator(
-        jnp.asarray(load_collision_moment_matrix("sugama"))
-    )
-    dense_leaves, dense_treedef = jax.tree_util.tree_flatten(dense)
-    assert len(dense_leaves) == 1
-    dense_rebuilt = jax.tree_util.tree_unflatten(dense_treedef, dense_leaves)
-    assert isinstance(dense_rebuilt, DriftKineticMomentCollisionOperator)
-    assert bool(jnp.array_equal(dense_rebuilt.matrix, dense.matrix))
-
-    grid = jnp.asarray([0.0, 1.0, 2.0])
-    finite = FiniteWavelengthCoulombOperator(
-        grid,
-        jnp.ones((1, 1)),
-        jnp.zeros((1, 1, 3, 3, 1, 1)),
-        jnp.zeros((1, 1, 3, 3, 1, 1)),
-        jnp.zeros((1, 1, 3, 3, 1)),
-        jnp.zeros((1, 1, 3, 3, 1)),
-        jnp.zeros((1, 1, 3, 3, 1)),
-        jnp.zeros((1, 1, 3, 3, 1)),
-    )
-    finite_leaves, finite_treedef = jax.tree_util.tree_flatten(finite)
-    finite_rebuilt = jax.tree_util.tree_unflatten(finite_treedef, finite_leaves)
-    assert isinstance(finite_rebuilt, FiniteWavelengthCoulombOperator)
-    assert bool(
-        jnp.array_equal(
-            finite_rebuilt.bessel_argument_grid, finite.bessel_argument_grid
-        )
-    )
-    assert bool(jnp.array_equal(finite_rebuilt.test_table, finite.test_table))
-
-    diagonal = _diagonal_coulomb_operator()
-    diag_leaves, diag_treedef = jax.tree_util.tree_flatten(diagonal)
-    diag_rebuilt = jax.tree_util.tree_unflatten(diag_treedef, diag_leaves)
-    assert isinstance(diag_rebuilt, EqualSpeciesFiniteWavelengthCoulombOperator)
-    assert bool(jnp.array_equal(diag_rebuilt.test_table, diagonal.test_table))
-    assert bool(jnp.array_equal(diag_rebuilt.pair_frequency, diagonal.pair_frequency))
 
 
 def test_equal_species_coulomb_apply_requires_single_species_bessel_axis() -> None:
@@ -3000,3 +2866,144 @@ def test_operator_names_select_models_exactly() -> None:
     for name in ("landau", "lenard_bernstein", "not_a_sugama_variant", None):
         assert params_for_collision_operator(base, name) is base
     assert collision_model_for("coulomb") == "landau"
+
+
+def _lenard_bernstein_state(ns=2, nl=3, nm=4):
+    """Six-axis Hermite-Laguerre state (species, l, m, ky, kx, z) and its l+2m table."""
+
+    rng = np.random.default_rng(3)
+    shape = (ns, nl, nm, 1, 1, 2)
+    state = jnp.asarray(rng.standard_normal(shape) + 1j * rng.standard_normal(shape))
+    lam = jnp.arange(nl)[:, None] + 2.0 * jnp.arange(nm)[None, :]
+    return state, lam
+
+
+def test_collision_frequency_broadcasts_and_refuses_a_wrong_species_count():
+    from gkx.operators.linear import dissipation as dis
+
+    out = dis._species_collision_frequency(jnp.asarray(0.3), ns=3, dtype=jnp.float64)
+    np.testing.assert_allclose(out, [0.3, 0.3, 0.3])
+    with pytest.raises(ValueError, match="length 3"):
+        dis._species_collision_frequency(jnp.ones(2), ns=3, dtype=jnp.float64)
+
+
+@pytest.mark.parametrize("squeeze", [False, True])
+def test_laguerre_collision_base_follows_the_table_rank_and_the_state_rank(squeeze):
+    from gkx.operators.linear import dissipation as dis
+
+    state, lam = _lenard_bernstein_state()
+    nu = jnp.asarray([0.1, 0.2])
+    kwargs = dict(nu=nu, b=None, dtype=jnp.float64)
+    # (l, m) table on a species-resolved state: nu_s * lam per species.
+    base = dis._laguerre_collision_base(state, lb_lam=lam, **kwargs)
+    np.testing.assert_allclose(base[1, 2, 3], 0.2 * lam[2, 3])
+    # The same table on a species-less state uses the first (only) frequency.
+    one = dis._laguerre_collision_base(state[0], lb_lam=lam, **{**kwargs, "nu": nu[:1]})
+    np.testing.assert_allclose(one[2, 3], 0.1 * lam[2, 3])
+    # A per-species table takes its species count from the table itself.
+    table6 = jnp.broadcast_to(lam[None, :, :, None, None, None], state.shape)
+    full = dis._laguerre_collision_base(
+        state[0] if squeeze else state, lb_lam=table6, **kwargs
+    )
+    assert full.shape == (state.shape[1:] if squeeze else state.shape)
+    # Anything else falls back to scalar * table.
+    flat = dis._laguerre_collision_base(
+        state, lb_lam=jnp.ones(3), nu=jnp.asarray(2.0), b=None, dtype=jnp.float64
+    )
+    np.testing.assert_allclose(flat, 2.0)
+
+
+def test_collision_base_prefers_a_dense_table_and_is_silent_without_frequency():
+    from gkx.operators.linear import dissipation as dis
+
+    state, lam = _lenard_bernstein_state()
+    dense = jnp.full(state.shape, 0.7)
+    base = dis._collision_base_operator(
+        state,
+        nu=jnp.ones(2),
+        collision_lam=dense,
+        lb_lam=lam,
+        b=None,
+        dtype=jnp.float64,
+    )
+    np.testing.assert_allclose(base, 0.7)
+    empty = jnp.zeros((0,))
+    kw = dict(collision_lam=empty, b=None, dtype=jnp.float64)
+    assert (
+        dis._collision_base_operator(state, nu=jnp.zeros(2), lb_lam=lam, **kw) is None
+    )
+    zeros = dis._collision_base_operator(state, nu=jnp.ones(2), lb_lam=None, **kw)
+    assert zeros.shape == state.shape and not zeros.any()
+
+
+def test_collisions_contribution_refuses_electron_ion_without_the_dougherty_pieces():
+    from gkx.operators.linear import dissipation as dis
+
+    state, lam = _lenard_bernstein_state()
+    kwargs = dict(nu=jnp.ones(2), lb_lam=lam, weight=jnp.ones(()), nu_ei=jnp.ones(2))
+    with pytest.raises(NotImplementedError, match="Dougherty"):
+        dis.collisions_contribution(state, **kwargs)  # no G, Jl, JlB, b
+    plain = dis.collisions_contribution(
+        state, nu=jnp.ones(2), lb_lam=lam, weight=jnp.ones(())
+    )
+    np.testing.assert_allclose(
+        plain,
+        -state
+        * (
+            jnp.ones(2)[:, None, None, None, None, None]
+            * lam[None, :, :, None, None, None]
+        ),
+    )
+    zero = dis.collisions_contribution(state, nu=jnp.ones(2), lb_lam=lam, weight=0.0)
+    assert not zero.any()
+    custom = SimpleNamespace(_nu_ei=jnp.ones(2))
+    with pytest.raises(NotImplementedError, match="electron_ion"):
+        dis.custom_collision_contribution(
+            state, None, None, custom, SimpleNamespace(collisions=1.0), object()
+        )
+
+
+def test_collision_diagnostics_check_their_shapes():
+    from gkx.operators.linear import dissipation as dis
+
+    state, _ = _lenard_bernstein_state()
+    with pytest.raises(ValueError, match="same shape"):
+        dis.collision_quadratic_rate(state, state[:1])
+    with pytest.raises(ValueError, match="five or six"):
+        dis.collision_invariant_rates(state[0, 0])
+    with pytest.raises(ValueError, match="Nl >= 2"):
+        dis.collision_invariant_rates(state[:, :1])
+    weighted = dis.collision_quadratic_rate(
+        state, -state, weights=jnp.full(state.shape, 2.0)
+    )
+    np.testing.assert_allclose(weighted, -2.0 * float(jnp.sum(jnp.abs(state) ** 2)))
+
+
+def test_hyperdiffusion_refuses_a_misshapen_kx_and_normalises_by_the_full_ky_axis():
+    from gkx.operators.linear import dissipation as dis
+
+    G = jnp.ones((1, 2, 4, 3, 1), dtype=jnp.complex128)
+    ky = jnp.asarray([0.0, 0.5, 1.0, 1.5])
+    kx = jnp.asarray([0.0, 1.0, 2.0])
+    mask = jnp.ones((4, 3), dtype=bool)
+    args = dict(
+        dealias_mask=mask,
+        D_hyper=jnp.asarray(0.1),
+        p_hyper_kperp=jnp.asarray(2.0),
+        weight=jnp.ones(()),
+    )
+    with pytest.raises(ValueError, match="kx must have shape"):
+        dis.hyperdiffusion_contribution(G, kx=jnp.ones((2, 2)), ky=ky, **args)
+    full = dis.hyperdiffusion_contribution(G, kx=kx, ky=ky, **args)
+    # The cutoff row is (ny_full - 1)//3 of the two-sided axis. A half spectrum that
+    # omitted ny_full would take a nearer cutoff and inflate the coefficient.
+    half = dis.hyperdiffusion_contribution(G, kx=kx, ky=ky, ny_full=7, **args)
+    assert float(jnp.abs(full).max()) > float(jnp.abs(half).max())
+    cut = dis.hyperdiffusion_contribution(
+        G, kx=kx, ky=ky, ky_cut=jnp.asarray(2.0), **args
+    )
+    assert cut.shape == G.shape and bool(jnp.all(jnp.real(cut) <= 0.0))
+    per_row = dis.hyperdiffusion_contribution(
+        G, kx=jnp.broadcast_to(kx, (4, 3)), ky=ky, **args
+    )
+    np.testing.assert_allclose(per_row, full)

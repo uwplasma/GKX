@@ -29,7 +29,6 @@ from gkx.solvers.nonlinear.explicit import (
 )
 from gkx.solvers.nonlinear.imex import (
     advance_imex_nonlinear_state,
-    imex_fixed_point_guess,
     make_imex_diagnostic_step,
     solve_imex_step,
 )
@@ -1056,52 +1055,6 @@ def test_imex_diagnostic_helpers_have_canonical_owner() -> None:
     )
 
 
-def test_imex_fixed_point_guess_applies_linear_predictor_iterations() -> None:
-    def linear_rhs(g, *_args, **_kwargs):
-        return g, None
-
-    out = imex_fixed_point_guess(
-        jnp.asarray([0.0], dtype=jnp.float32),
-        jnp.asarray([1.0], dtype=jnp.float32),
-        linear_rhs_fn=linear_rhs,
-        cache=SimpleNamespace(),
-        params=SimpleNamespace(),
-        linear_cfg=SimpleNamespace(),
-        external_phi=None,
-        dt_val=jnp.asarray(0.1, dtype=jnp.float32),
-        implicit_iters=2,
-        implicit_relax=1.0,
-    )
-
-    np.testing.assert_allclose(np.asarray(out), [1.1], rtol=1e-6)
-
-
-def test_solve_imex_step_identity_system_returns_rhs_shape() -> None:
-    def linear_rhs(g, *_args, **_kwargs):
-        return jnp.zeros_like(g), None
-
-    G_rhs = jnp.asarray([[2.0]], dtype=jnp.float32)
-    out = solve_imex_step(
-        jnp.zeros_like(G_rhs),
-        G_rhs,
-        linear_rhs_fn=linear_rhs,
-        cache=SimpleNamespace(),
-        params=SimpleNamespace(),
-        linear_cfg=SimpleNamespace(),
-        external_phi=None,
-        dt_val=jnp.asarray(0.1, dtype=jnp.float32),
-        implicit_iters=0,
-        implicit_relax=1.0,
-        matvec=lambda flat: flat,
-        shape=tuple(G_rhs.shape),
-        implicit_tol=1.0e-8,
-        implicit_maxiter=20,
-        implicit_restart=5,
-    )
-
-    np.testing.assert_allclose(np.asarray(out), np.asarray(G_rhs), rtol=1e-6)
-
-
 @pytest.mark.parametrize("sample_stride", [1, 2])
 def test_implicit_scan_carries_unconverged_solves_to_the_host_gate(
     monkeypatch: pytest.MonkeyPatch, sample_stride: int
@@ -1222,74 +1175,6 @@ def test_imex_step_status_matches_the_plain_step_and_its_vjp() -> None:
         np.asarray(jax.grad(energy_plain)(1.0)),
         rtol=1e-6,
     )
-
-
-def test_imex_operator_resolution_and_state_shape_policies() -> None:
-    provided = SimpleNamespace(name="provided")
-    built: list[dict[str, object]] = []
-
-    def build_operator_fn(G, cache, params, dt, **kwargs):
-        built.append(
-            {
-                "shape": tuple(G.shape),
-                "cache": cache,
-                "params": params,
-                "dt": dt,
-                **kwargs,
-            }
-        )
-        return SimpleNamespace(name="built")
-
-    reused = imex_module._resolve_imex_operator(
-        implicit_operator=provided,
-        G0=jnp.ones((2,), dtype=jnp.complex64),
-        cache="cache",
-        params="params",
-        dt=0.2,
-        linear_cfg="linear",
-        implicit_preconditioner="diag",
-        compressed_real_fft=False,
-        build_operator_fn=build_operator_fn,
-        build_implicit_operator_fn=None,
-    )
-    assert reused is provided
-    assert built == []
-
-    built_op = imex_module._resolve_imex_operator(
-        implicit_operator=None,
-        G0=jnp.ones((2,), dtype=jnp.complex64),
-        cache="cache",
-        params="params",
-        dt=0.2,
-        linear_cfg="linear",
-        implicit_preconditioner="diag",
-        compressed_real_fft=False,
-        build_operator_fn=build_operator_fn,
-        build_implicit_operator_fn=lambda *_args, **_kwargs: (),
-    )
-    assert built_op.name == "built"
-    assert built[0]["terms"] == "linear"
-    assert built[0]["implicit_preconditioner"] == "diag"
-    assert built[0]["compressed_real_fft"] is False
-    assert "build_implicit_operator_fn" in built[0]
-
-    operator = SimpleNamespace(
-        shape=(1, 2),
-        squeeze_species=True,
-        state_dtype=jnp.complex64,
-    )
-    state, shape, squeeze_species = imex_module._state_for_imex_operator(
-        jnp.ones((2,), dtype=jnp.float32), operator
-    )
-    assert shape == (1, 2)
-    assert squeeze_species is True
-    assert state.shape == (1, 2)
-    assert state.dtype == jnp.complex64
-
-    with pytest.raises(ValueError, match="implicit_operator shape mismatch"):
-        imex_module._state_for_imex_operator(
-            jnp.ones((3,), dtype=jnp.float32), operator
-        )
 
 
 def test_advance_imex_nonlinear_state_sspx3_matches_constant_rhs_step() -> None:

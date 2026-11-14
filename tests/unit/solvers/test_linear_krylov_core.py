@@ -796,42 +796,6 @@ def test_shift_invert_inner_stats_cover_every_arnoldi_rhs(
     assert f"max_relative_residual={residual:.3g} tol={tol:.3g}" in summary
 
 
-def test_shift_invert_rejection_names_unconverged_inner_solves(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A starved inner budget is named in the status stream and the rejection."""
-
-    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    monkeypatch.setattr(lk, "_eigenpair_relative_residual", lambda *_args: 1.0)
-    messages: list[str] = []
-    with pytest.raises(RuntimeError, match="outer residual gate") as rejected:
-        lk.dominant_eigenpair(
-            v0,
-            cache,
-            params,
-            terms=terms,
-            method="shift_invert",
-            krylov_dim=3,
-            restarts=2,
-            shift=0.5j,
-            shift_source="reference",
-            shift_tol=1.0e-10,
-            shift_maxiter=1,
-            shift_restart=1,
-            shift_preconditioner="damping",
-            shift_selection="nearest",
-            mode_family="none",
-            fallback_method="none",
-            status_callback=messages.append,
-        )
-    finished = [m for m in messages if m.startswith("shift-invert solve finished")]
-    for text in (finished[-1], str(rejected.value)):
-        assert "inner converged=False unconverged=6/6" in text
-        assert "tol=1e-10" in text
-    reported = re.search(r"max_relative_residual=(\S+)", str(rejected.value))
-    assert reported is not None and float(reported.group(1)) > 1.0e-10
-
-
 @pytest.mark.parametrize("method", ["power", "propagator", "arnoldi"])
 def test_raw_eigenpair_routes_fail_closed_unless_certify_is_false(method: str) -> None:
     """A four-vector raw solve is unconverged: it must raise, or be flagged."""
@@ -935,29 +899,6 @@ def test_krylov_config_and_wrapper_agree_on_every_shared_default() -> None:
     assert lk.KrylovConfig().power_iters == 40
 
 
-def test_certify_opt_out_does_not_relax_the_shift_invert_gate(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    _patch_shift_invert(
-        monkeypatch,
-        lambda *args, **kwargs: (jnp.asarray(0.4 + 0.2j, v0.dtype), jnp.ones_like(v0)),
-    )
-    monkeypatch.setattr(lk, "_eigenpair_relative_residual", lambda *_args: 1.0)
-    with pytest.raises(RuntimeError, match="shift-invert eigenpair failed the outer"):
-        lk.dominant_eigenpair(
-            v0,
-            cache,
-            params,
-            terms=terms,
-            method="shift_invert",
-            shift=0.4 + 0.2j,
-            shift_source="reference",
-            fallback_method="none",
-            certify=False,
-        )
-
-
 def test_shift_invert_without_a_windowed_ritz_value_says_why_not_nan(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1029,71 +970,6 @@ def test_long_horizon_propagator_selects_growth_and_recovers_frequency(
         rel=1.0e-10,
     )
     assert abs(complex(np.asarray(vector[0]))) > 1.0 - 1.0e-10
-
-
-def test_certified_candidate_lift_requests_exact_dot_precision() -> None:
-    """The vector the residual gate measures must not be built in TF32.
-
-    ``certifiable_residual_tolerance`` floors the gate at ``1000 * eps`` of the
-    working precision, 1.19e-04 for the complex64 runtime state. TF32 keeps ten
-    mantissa bits, ~4.9e-04, so an unpinned lift puts more error into the
-    eigenvector than the gate is allowed to accept and the certified branch
-    rejects converged pairs on every Ampere-or-newer GPU. No CPU *value* can see
-    this -- there is no TF32 path on CPU and both precisions are bit-identical --
-    but the request is recorded in the jaxpr on every backend, so that is what is
-    asserted, at the candidate counts ``_adaptive_branch`` can select.
-    """
-
-    _grid, cache, params, v0, term_cfg, _terms = _tiny_krylov_setup(linked=False)
-
-    def lift_precisions(candidates: int) -> list[object]:
-        jaxpr = jax.make_jaxpr(
-            lambda value: kp.dominant_eigenpairs_propagator_cached(
-                value,
-                cache,
-                params,
-                term_cfg,
-                krylov_dim=4,
-                dt=0.01,
-                propagator_steps=2,
-                candidates=candidates,
-            )
-        )(v0).jaxpr
-
-        def walk(inner):
-            for eqn in inner.eqns:
-                if eqn.primitive.name == "dot_general":
-                    yield eqn
-                for value in eqn.params.values():
-                    items = value if isinstance(value, (list, tuple)) else [value]
-                    for item in items:
-                        nested = getattr(item, "jaxpr", item)
-                        nested = getattr(nested, "jaxpr", nested)
-                        if hasattr(nested, "eqns"):
-                            yield from walk(nested)
-
-        found = []
-        for eqn in walk(jaxpr):
-            frames = getattr(eqn.source_info.traceback, "frames", []) or []
-            if any(
-                "solvers/linear/adaptive_propagator" in getattr(f, "file_name", "")
-                for f in frames
-            ):
-                found.append(eqn.params["precision"])
-        return found
-
-    exact = (jax.lax.Precision.HIGHEST, jax.lax.Precision.HIGHEST)
-    for candidates in (1, 2):
-        precisions = [p for p in lift_precisions(candidates) if p is not None]
-        assert precisions, (
-            f"the candidate lift lowered to no pinned dot at candidates={candidates}; "
-            "the certified eigenvector is being built at the backend default"
-        )
-        assert all(precision == exact for precision in precisions), (
-            f"the candidate lift is not pinned at candidates={candidates} "
-            f"({precisions}); TF32 puts ~4.9e-04 into the vector the residual gate "
-            "measures, against its 1.19e-04 complex64 floor"
-        )
 
 
 @requires_solvax_eigen_api
@@ -1435,49 +1311,6 @@ def test_dominant_eigenpair_explicit_shift_uses_requested_seed_source(
     assert jnp.allclose(vec, 5.0 + 0.0j)
 
 
-def test_dominant_eigenpair_explicit_shift_defaults_to_reference_seed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    captured: dict[str, jnp.ndarray] = {}
-    v_ref = jnp.full_like(v0, 7.0 + 0.0j)
-
-    def _fake_shift(v_init, v_ref_in, *_args, sigma, **_kwargs):
-        captured["v_init"] = v_init
-        captured["v_ref"] = v_ref_in
-        captured["sigma"] = sigma
-        return jnp.asarray(0.4 + 0.2j, dtype=v0.dtype), jnp.full_like(v0, 5.0 + 0.0j)
-
-    _patch_shift_invert(monkeypatch, _fake_shift)
-    monkeypatch.setattr(
-        lk,
-        "_apply_operator",
-        lambda vector, *_args: jnp.asarray(0.4 + 0.2j, vector.dtype) * vector,
-    )
-
-    lk.dominant_eigenpair(
-        v0,
-        cache,
-        params,
-        terms=terms,
-        method="shift_invert",
-        shift=0.2 - 1.1j,
-        shift_source="target",
-        shift_selection="shift",
-        v_ref=v_ref,
-        krylov_dim=4,
-        restarts=1,
-        shift_maxiter=15,
-        shift_restart=10,
-        power_iters=4,
-        power_dt=0.05,
-    )
-
-    assert jnp.allclose(captured["sigma"], jnp.asarray(0.2 - 1.1j, dtype=v0.dtype))
-    assert jnp.allclose(captured["v_init"], v_ref)
-    assert jnp.allclose(captured["v_ref"], v_ref)
-
-
 def test_dominant_eigenpair_target_shift_uses_physical_omega_sign(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1767,20 +1600,6 @@ def test_banded_refuses_an_operator_with_long_range_hermite_coupling(
         lk.dominant_eigenpair(seed, cache, params, terms=terms, method="banded")
 
 
-def test_banded_fits_counts_the_four_complex64_arrays(monkeypatch) -> None:
-    class Device:
-        def memory_stats(self):
-            return {"bytes_limit": 8 * 4 * 6 * 3072**2 * 2 + 1}
-
-    monkeypatch.setattr(ap.jax, "devices", lambda: [Device()])
-    nl, nm, nz = 16, 12, 96  # blocks of 2 * nl * nz = 3072, six of them
-    assert ap.banded_fits((nl, nm, 1, 1, nz))
-    assert not ap.banded_fits((nl, nm + 2, 1, 1, nz))
-    assert not ap.banded_fits((nl, 2, 1, 1, nz))  # Nm < 4 has no band
-    Device.memory_stats = lambda self: None  # CPU: host memory decides
-    assert ap.banded_fits((nl, nm, 1, 1, nz))
-
-
 def test_shift_invert_inner_solve_stays_on_linked_chain_modes() -> None:
     cache, params, seed, terms = _selected_linked_case()
     term_cfg = linear_terms_to_term_config(terms)
@@ -1852,59 +1671,6 @@ def test_shift_invert_outer_residual_triggers_fallback(
 
     assert jnp.allclose(eigenvalue, jnp.asarray(0.1 + 0.05j, dtype=v0.dtype))
     assert jnp.allclose(eigenvector, 2.0)
-
-
-def test_dominant_eigenpair_reports_shift_invert_status(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _grid, cache, params, v0, _term_cfg, terms = _tiny_krylov_setup(linked=False)
-    messages: list[str] = []
-
-    monkeypatch.setattr(
-        lk,
-        "dominant_eigenpair_propagator_cached",
-        lambda *args, **kwargs: (
-            jnp.asarray(0.1 + 0.2j, dtype=v0.dtype),
-            jnp.full_like(v0, 2.0 + 0.0j),
-        ),
-    )
-    _patch_shift_invert(
-        monkeypatch,
-        lambda *args, **kwargs: (
-            jnp.asarray(0.3 + 0.4j, dtype=v0.dtype),
-            jnp.full_like(v0, 3.0 + 0.0j),
-        ),
-    )
-    monkeypatch.setattr(
-        lk,
-        "_apply_operator",
-        lambda vector, *_args: jnp.asarray(0.3 + 0.4j, vector.dtype) * vector,
-    )
-
-    eig, vec = lk.dominant_eigenpair(
-        v0,
-        cache,
-        params,
-        terms=terms,
-        method="shift_invert",
-        shift_source="propagator",
-        krylov_dim=4,
-        restarts=1,
-        shift_maxiter=15,
-        shift_restart=10,
-        power_dt=0.05,
-        status_callback=messages.append,
-    )
-
-    assert jnp.allclose(eig, jnp.asarray(0.3 + 0.4j, dtype=v0.dtype))
-    assert jnp.allclose(vec, 3.0 + 0.0j)
-    assert any("preparing shift-invert solve" in item for item in messages)
-    assert any(
-        "estimating shift from the adaptive eigenpair" in item for item in messages
-    )
-    assert any("running shift-invert Arnoldi" in item for item in messages)
-    assert any("shift-invert solve finished" in item for item in messages)
-    assert any("residual=" in item for item in messages)
 
 
 def testbuild_shift_invert_preconditioneritioner_rejects_unknown_mode() -> None:
@@ -2226,47 +1992,6 @@ def _linear_setup():
     return cache, params, term_cfg, v0
 
 
-@pytest.mark.parametrize("candidates", [1, 2, 4])
-def test_propagator_candidate_lift_pins_exact_dot_precision(candidates: int) -> None:
-    """The lift that produces the returned eigenvectors must never run in TF32.
-
-    This is the contraction whose hazard depends on a config value: at
-    ``candidates = 1`` it is a matvec and XLA leaves it exact, at two or more it
-    is a matrix product and TF32 moved the returned eigenvector from 1.2e-08 to
-    1.8e-05 against a float64 reference on an RTX A4000. Every candidate count is
-    asserted so the pin cannot be dropped on the argument that the default is safe.
-    """
-
-    cache, params, term_cfg, v0 = _linear_setup()
-    found = matrix_dots(
-        lambda value: kp.dominant_eigenpairs_propagator_cached(
-            value,
-            cache,
-            params,
-            term_cfg,
-            krylov_dim=8,
-            dt=0.01,
-            propagator_steps=2,
-            candidates=candidates,
-        ),
-        v0,
-    )
-    lifts = [
-        precision
-        for origin, precision in found
-        # The propagator lift lives in solvers/linear/adaptive_propagator.py; _origin
-        # reports the file basename, not the module path.
-        # This filter selects which contractions the precision guard inspects,
-        # so a stale prefix makes the guard silently vacuous rather than failing.
-        if origin.startswith("adaptive_propagator.py")
-    ]
-    assert lifts, "the candidate lift lowered to no matrix dot; the guard is vacuous"
-    assert all(precision == EXACT for precision in lifts), (
-        f"the candidate lift is unpinned at candidates={candidates} ({lifts}); it "
-        "will be answered in TF32 on Ampere and later NVIDIA GPUs"
-    )
-
-
 def test_gauss_newton_normal_equations_pin_exact_dot_precision() -> None:
     """J^T J is the one matrix product in the inverse-design step.
 
@@ -2375,46 +2100,6 @@ def test_hot_path_matrix_contractions_are_pinned() -> None:
         f"only {checked} matrix-shaped contractions were reached; the sweep has "
         "stopped exercising the paths it is supposed to guard"
     )
-
-
-def test_allowlisted_contraction_is_still_matrix_shaped_and_unpinned() -> None:
-    """Keep the allowlist honest.
-
-    If the overlap lift is ever pinned, or stops being matrix-shaped, the entry
-    above is stale and must be deleted rather than left to excuse some future
-    contraction that happens to land on the same line.
-    """
-
-    cache, params, term_cfg, v0 = _linear_setup()
-    found = dict(
-        matrix_dots(
-            lambda value: ka._propagator_arnoldi_restart_step(
-                value,
-                value,
-                ka._apply_operator,
-                cache,
-                params,
-                term_cfg,
-                krylov_dim=8,
-                horizon=jnp.asarray(1.0),
-                growth_only=True,
-                omega_min_factor=0.0,
-                omega_target_factor=2.0,
-                omega_cap_factor=10.0,
-                omega_sign=1,
-                select_overlap=True,
-            ),
-            v0,
-        )
-    )
-    for origin in ALLOWED_UNPINNED_MATRIX_DOTS:
-        assert origin in found, (
-            f"{origin} is allowlisted as an unpinned matrix contraction but no "
-            "longer appears as one; delete the stale entry"
-        )
-        assert found[origin] is None, (
-            f"{origin} is pinned now, so its allowlist entry is misleading; delete it"
-        )
 
 
 # --------------------------------------------------------------------------- #

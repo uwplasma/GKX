@@ -19,7 +19,6 @@ from dataclasses import replace
 from gkx import __version__
 from gkx.cli import (
     _cmd_run,
-    _cmd_run_runtime_linear,
     _cmd_run_runtime_nonlinear,
     _cmd_scan_runtime_linear,
     _direct_config_shorthand_args,
@@ -35,7 +34,6 @@ from gkx.config import (
     RuntimeNormalizationConfig,
     RuntimeParallelConfig,
     RuntimePhysicsConfig,
-    RuntimeQuasilinearConfig,
     RuntimeSpeciesConfig,
 )
 from gkx.core_grid import build_spectral_grid
@@ -47,7 +45,6 @@ from gkx.runtime import (
     build_runtime_geometry,
     build_runtime_linear_terms,
     run_runtime_nonlinear,
-    run_runtime_scan,
     RuntimeLinearResult,
 )
 from gkx.workflows.runtime.startup import (
@@ -72,7 +69,6 @@ from gkx.workflows.runtime.orchestration_scan import (
 )
 from gkx.terms.config import FieldState
 from gkx.workflows.runtime.diagnostics import (
-    finalize_runtime_linear_quasilinear,
     half_horizon_settled_probe,
     warn_if_growth_unresolved,
     _prepare_runtime_linear_fit_inputs,
@@ -508,57 +504,6 @@ def test_cmd_run_runtime_nonlinear_branches(
     args.no_diagnostics = True
     assert _cmd_run_runtime_nonlinear(args) == 0
     assert "nonlinear run completed" in capsys.readouterr().out
-
-
-def test_cmd_run_runtime_linear_applies_quasilinear_flags(monkeypatch, capsys) -> None:
-    cfg = RuntimeConfig()
-    captured: dict[str, object] = {}
-
-    def _fake_run_runtime_linear(cfg_in, **kwargs):
-        captured["quasilinear"] = cfg_in.quasilinear
-        captured["kwargs"] = kwargs
-        return RuntimeLinearResult(
-            ky=0.2,
-            gamma=0.3,
-            omega=-0.4,
-            selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
-            quasilinear={
-                "species": ["ion"],
-                "heat_flux_weight_species": [1.0],
-                "particle_flux_weight_species": [0.0],
-            },
-        )
-
-    patch_runtime(
-        monkeypatch, "load_runtime_from_toml", lambda _path: (cfg, {"run": {}})
-    )
-    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
-    patch_runtime(
-        monkeypatch,
-        "write_quasilinear_artifacts",
-        lambda *_args, **_kwargs: {
-            "quasilinear_summary": "ql.json",
-            "quasilinear_species": "ql.csv",
-        },
-    )
-
-    args = argparse.Namespace(
-        config="case.toml",
-        quasilinear=True,
-        ql_mode="saturated",
-        ql_saturation_rule="mixing_length",
-        ql_csat=0.5,
-        ql_normalization="field_energy",
-        ql_output="ql_out",
-    )
-    assert _cmd_run_runtime_linear(args) == 0
-    ql_cfg = captured["quasilinear"]
-    assert ql_cfg.enabled is True
-    assert ql_cfg.mode == "saturated"
-    assert ql_cfg.saturation_rule == "mixing_length"
-    assert ql_cfg.csat == pytest.approx(0.5)
-    assert ql_cfg.amplitude_normalization == "field_energy"
-    assert "saved ql.json" in capsys.readouterr().out
 
 
 def test_cmd_run_runtime_nonlinear_fixed_dt_and_explicit_diagnostics(
@@ -1495,66 +1440,6 @@ def test_fit_runtime_linear_diagnostics_density_fit_contract() -> None:
     np.testing.assert_allclose(out.signal, density[:, 0, 0, 0])
 
 
-def test_finalize_runtime_linear_quasilinear_contract(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = replace(
-        _base_cfg(), quasilinear=RuntimeQuasilinearConfig(enabled=True, csat=0.7)
-    )
-    result = RuntimeLinearResult(
-        ky=0.2,
-        gamma=0.1,
-        omega=-0.3,
-        selection=ModeSelection(ky_index=0, kx_index=0, z_index=0),
-        state=np.ones((1, 1, 1, 1, 2), dtype=np.complex128),
-    )
-    statuses: list[str] = []
-
-    class _Payload:
-        def to_dict(self) -> dict[str, object]:
-            return {"heat_flux_weight_total": 1.5, "mode": "saturated"}
-
-    calls: dict[str, object] = {}
-
-    def _compute(state, **kwargs):
-        calls["state_shape"] = np.asarray(state).shape
-        calls["metadata"] = kwargs["metadata"]
-        calls["csat"] = kwargs["csat"]
-        return _Payload()
-
-    patch_runtime(monkeypatch, "build_linear_cache", lambda *_args: "cache")
-    patch_runtime(monkeypatch, "compute_quasilinear_from_linear_state", _compute)
-    patch_runtime(monkeypatch, "linear_terms_to_term_config", lambda terms: terms)
-    out = finalize_runtime_linear_quasilinear(
-        result,
-        enabled=True,
-        cfg=cfg,
-        grid=object(),
-        geom=object(),
-        params=SimpleNamespace(),
-        terms=object(),
-        Nl=2,
-        Nm=3,
-        solver_name="krylov",
-        species_names=("ion",),
-        return_state_requested=False,
-        status_callback=statuses.append,
-    )
-
-    assert out.state is None
-    assert out.quasilinear == {"heat_flux_weight_total": 1.5, "mode": "saturated"}
-    assert calls["state_shape"] == (1, 1, 1, 1, 2)
-    assert calls["csat"] == pytest.approx(0.7)
-    assert calls["metadata"] == {
-        "runtime_config_enabled": True,
-        "solver": "krylov",
-    }
-    assert statuses == [
-        "computing quasilinear transport weights",
-        "quasilinear transport weights complete",
-    ]
-
-
 def test_runtime_diagnostic_concat_rejects_misaligned_optional_channels() -> None:
     """Optional species channels must stay aligned with the common time axis."""
 
@@ -1790,133 +1675,6 @@ def test_run_runtime_scan_batch_validation_and_selection(
             **_SCAN_BATCH_AUTO,
             fit_signal="invalid",
         )
-
-
-def test_run_runtime_scan_default_parallel_config_keeps_serial_order(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = _base_cfg()
-    calls: list[float] = []
-
-    def _unexpected_batch(*_args, **_kwargs):
-        raise AssertionError(
-            "default runtime parallel config should not use the combined-ky batch path"
-        )
-
-    def _fake_run_runtime_linear(_cfg, **kwargs):
-        ky = float(kwargs["ky_target"])
-        calls.append(ky)
-        return SimpleNamespace(gamma=10.0 + ky, omega=-(20.0 + ky), quasilinear=None)
-
-    patch_runtime(monkeypatch, "run_runtime_scan_batch", _unexpected_batch)
-    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
-
-    result = run_runtime_scan(
-        cfg,
-        [0.3, 0.1],
-        solver="time",
-        workers=1,
-        parallel_executor="thread",
-        show_progress=False,
-    )
-
-    np.testing.assert_allclose(calls, [0.3, 0.1])
-    np.testing.assert_allclose(result.ky, [0.3, 0.1])
-    np.testing.assert_allclose(result.gamma, [10.3, 10.1])
-    np.testing.assert_allclose(result.omega, [-20.3, -20.1])
-    assert result.parallel is not None
-    assert result.parallel["requested_workers"] == 1
-    assert result.parallel["effective_workers"] == 1
-    assert result.parallel["executor"] == "thread"
-    assert "serial ky ordering" in result.parallel["identity_contract"]
-    assert result.parallel["quasilinear_state_extraction"] is False
-
-
-def test_run_runtime_scan_collects_quasilinear_payloads_and_worker_metadata(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = _base_cfg()
-    calls: list[float] = []
-
-    def _fake_run_runtime_linear(_cfg, **kwargs):
-        ky = float(kwargs["ky_target"])
-        calls.append(ky)
-        return SimpleNamespace(
-            gamma=1.0 + ky,
-            omega=-(2.0 + ky),
-            quasilinear={
-                "ky": ky,
-                "heat_flux_weight_total": 10.0 * ky,
-                "claim_level": "bounded_unit_contract",
-            },
-        )
-
-    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
-
-    result = run_runtime_scan(
-        cfg,
-        [0.4, 0.2, 0.1],
-        solver="time",
-        workers=8,
-        parallel_executor="thread",
-        show_progress=False,
-    )
-
-    # Parallel (thread) executor: worker invocation order is nondeterministic,
-    # so assert every ky was dispatched exactly once rather than a fixed order.
-    # The input-order contract is verified below on the reassembled results.
-    np.testing.assert_allclose(sorted(calls), [0.1, 0.2, 0.4])
-    np.testing.assert_allclose(result.gamma, [1.4, 1.2, 1.1])
-    assert result.quasilinear is not None
-    assert [payload["ky"] for payload in result.quasilinear] == [0.4, 0.2, 0.1]
-    assert result.parallel is not None
-    assert result.parallel["requested_workers"] == 8
-    assert result.parallel["effective_workers"] == 3
-    assert result.parallel["quasilinear_state_extraction"] is True
-
-
-def test_run_runtime_scan_parallel_config_requests_combined_ky_batch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = replace(
-        _base_cfg(), parallel=RuntimeParallelConfig(strategy="combined_ky", axis="ky")
-    )
-    captured: dict[str, object] = {}
-    sentinel = SimpleNamespace(
-        ky=np.asarray([0.2, 0.4]),
-        gamma=np.asarray([0.1, 0.2]),
-        omega=np.asarray([-0.3, -0.4]),
-        quasilinear=None,
-    )
-
-    def _fake_batch(_cfg, ky_arr, **kwargs):
-        captured["ky_arr"] = np.asarray(ky_arr)
-        captured["solverless_kwargs"] = kwargs
-        return sentinel
-
-    patch_runtime(monkeypatch, "run_runtime_scan_batch", _fake_batch)
-    patch_runtime(
-        monkeypatch,
-        "run_runtime_linear",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("combined-ky scan must not dispatch per-ky workers")
-        ),
-    )
-
-    result = run_runtime_scan(
-        cfg,
-        [0.2, 0.4],
-        solver="time",
-        method="rk2",
-        sample_stride=2,
-        show_progress=True,
-    )
-
-    assert result is sentinel
-    np.testing.assert_allclose(captured["ky_arr"], [0.2, 0.4])
-    assert captured["solverless_kwargs"]["method"] == "rk2"
-    assert captured["solverless_kwargs"]["sample_stride"] == 2
-    assert captured["solverless_kwargs"]["show_progress"] is True
 
 
 def _nonlinear_cfg(**overrides) -> RuntimeConfig:

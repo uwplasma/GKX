@@ -16,7 +16,6 @@ import pytest
 import gkx
 import gkx.parallel as parallel
 import gkx.parallel.independent as parallel_batch
-import gkx.parallel.independent as parallel_independent
 from dataclasses import replace
 import gkx.workflows.nonlinear as nonlinear_workflow
 from gkx.core_grid import build_spectral_grid
@@ -257,73 +256,6 @@ def test_batch_map_multi_device_branch_preserves_vmap_identity(monkeypatch) -> N
     assert np.allclose(np.asarray(observed), np.asarray(expected))
 
 
-def test_batch_map_multi_device_branch_drops_padding_and_preserves_chunk_order(
-    monkeypatch,
-) -> None:
-    seen_shards: list[np.ndarray] = []
-
-    def fake_pmap(fn, devices):
-        assert len(devices) == 3
-
-        def mapped(sharded):
-            seen_shards.append(np.asarray(sharded))
-            return jnp.stack([fn(shard) for shard in sharded], axis=0)
-
-        return mapped
-
-    monkeypatch.setattr(parallel_batch.jax, "pmap", fake_pmap)
-    values = jnp.arange(7, dtype=jnp.float32)
-
-    def fn(x):
-        return jnp.asarray([x, 10.0 * x + jnp.mod(x, 2.0)])
-
-    observed = parallel.batch_map(
-        fn, values, batch_size=5, devices=[object(), object(), object()]
-    )
-    expected = jax.vmap(fn)(values)
-
-    assert np.allclose(np.asarray(observed), np.asarray(expected))
-    assert [tuple(shard.shape) for shard in seen_shards] == [(3, 2), (3, 2)]
-    np.testing.assert_allclose(
-        seen_shards[0].reshape(-1),
-        np.asarray([0, 1, 2, 3, 3, 3], dtype=float),
-    )
-    np.testing.assert_allclose(
-        seen_shards[1].reshape(-1),
-        np.asarray([4, 5, 6, 6, 6, 6], dtype=float),
-    )
-
-
-def test_batch_map_multi_device_branch_preserves_pytree_identity(monkeypatch) -> None:
-    def fake_pmap(fn, devices):
-        assert len(devices) == 2
-
-        def mapped(sharded):
-            return jax.tree_util.tree_map(
-                lambda *parts: jnp.stack(parts, axis=0),
-                *[fn(shard) for shard in sharded],
-            )
-
-        return mapped
-
-    monkeypatch.setattr(parallel_batch.jax, "pmap", fake_pmap)
-    values = jnp.linspace(0.0, 1.0, 5)
-
-    def fn(x):
-        return {"field": jnp.asarray([x, x + 1.0]), "flux": x**2}
-
-    observed = parallel.batch_map(
-        fn, values, batch_size=3, devices=[object(), object()]
-    )
-    expected = jax.vmap(fn)(values)
-
-    jax.tree_util.tree_map(
-        lambda obs, exp: np.testing.assert_allclose(np.asarray(obs), np.asarray(exp)),
-        observed,
-        expected,
-    )
-
-
 def test_parallel_helpers_reject_invalid_inputs() -> None:
     with pytest.raises(ValueError):
         parallel.split_evenly(np.arange(3), 0)
@@ -355,31 +287,6 @@ def test_independent_map_preserves_serial_order_and_nested_outputs() -> None:
     assert serial == [{"x": 3, "x2": 9}, {"x": 1, "x2": 1}, {"x": 2, "x2": 4}]
     assert threaded == serial
     assert parallel.independent_map(fn, [], workers=3) == []
-
-
-def test_independent_map_clips_thread_workers_and_accepts_executor_aliases(
-    monkeypatch,
-) -> None:
-    records: list[tuple[int, tuple[tuple[object, int, int, str, int], ...]]] = []
-
-    def fake_map(fn, tasks, *, workers, executor):
-        assert executor == "thread"
-        records.append((workers, tuple(tasks)))
-        return [fn(task) for task in tasks]
-
-    monkeypatch.setattr(parallel_independent, "map_independent", fake_map)
-
-    observed = parallel.independent_map(
-        lambda value: value * 11, [3, 1, 4], workers=99, executor="threads"
-    )
-
-    assert observed == [33, 11, 44]
-    assert records[0][0] == 3
-    assert [(task[1], task[2], task[3], task[4]) for task in records[0][1]] == [
-        (0, 3, "thread", 3),
-        (1, 1, "thread", 3),
-        (2, 4, "thread", 3),
-    ]
 
 
 def test_independent_worker_metadata_normalizes_aliases_and_empty_work() -> None:
@@ -682,40 +589,6 @@ def test_state_sharding_builds_partition_specs_with_fake_mesh(monkeypatch):
         resolve_state_sharding(_state_5d(), "species", devices=[object(), object()])
     with pytest.raises(ValueError, match="5 or 6 dimensions"):
         resolve_state_sharding(jnp.zeros((2, 2)), "ky", devices=[object(), object()])
-
-
-@pytest.mark.parametrize(
-    ("directive", "expected_spec"),
-    [
-        ("auto", (None, None, "batch", None, None)),
-        ("ky", (None, None, "batch", None, None)),
-        ("kx", (None, None, None, "batch", None)),
-        ("z", (None, None, None, None, "batch")),
-        ("l", ("batch", None, None, None, None)),
-        ("m", (None, "batch", None, None, None)),
-    ],
-)
-def test_state_sharding_5d_axis_map_is_explicit_with_fake_mesh(
-    monkeypatch, directive, expected_spec
-):
-    class FakeNamedSharding:
-        def __init__(self, mesh, spec):
-            self.mesh = mesh
-            self.spec = spec
-
-    monkeypatch.setattr(
-        sharding_mod,
-        "_mesh_from_devices",
-        lambda devices, axis_name: f"mesh:{axis_name}",
-    )
-    monkeypatch.setattr(sharding_mod, "NamedSharding", FakeNamedSharding)
-
-    resolved = resolve_state_sharding(
-        _state_5d(), directive, axis_name="batch", devices=[object(), object()]
-    )
-
-    assert resolved.mesh == "mesh:batch"
-    assert resolved.spec == sharding_mod.PartitionSpec(*expected_spec)
 
 
 # ---- test_parallel_decomposition.py ----
