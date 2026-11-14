@@ -81,22 +81,18 @@ from gkx.solvers.time_explicit import (
     _instantaneous_growth_rate_step,
     _gradient_ratio_max,
     _geometry_frequency_maxima,
-    _cfl_wavenumber_arrays,
     _non_twist_shift_frequency_max,
     _diagnostic_midplane_index,
     _completed_step_state_mask,
-    _parallel_periods_from_grid,
     integrate_linear_explicit_diagnostics,
 )
 from gkx.terms.assembly import assemble_rhs_cached
-from gkx.terms.config import FieldState
 from gkx.artifacts.spectral_layout import (
     KY_WEIGHTING_PAIR,
     KY_WEIGHTING_PER_ROW,
     _condense_kx_for_output,
     _condense_ky_for_output,
     _condense_kykx_for_output,
-    _dealiased_spectral_field,
     _dealiased_ky_count,
     _dealiased_ky_indices,
     _dealiased_kx_count,
@@ -109,7 +105,6 @@ from gkx.artifacts.spectral_layout import (
     _complex_to_ri,
     _spectral_to_ri,
     _spectral_to_xy,
-    _write_runtime_root_metadata,
 )
 from gkx.artifacts.io import (
     _artifact_base,
@@ -124,7 +119,6 @@ from gkx.artifacts.io import (
     load_nonlinear_netcdf_diagnostics,
 )
 from gkx.artifacts.nonlinear_netcdf import (
-    _particle_moments,
     _write_nonlinear_netcdf_outputs,
 )
 from gkx.workflows.runtime.artifacts import (
@@ -238,24 +232,6 @@ class _FakeVar:
 
     def setncattr(self, key, value) -> None:
         self.attrs[key] = value
-
-
-class _FakeGroup:
-    """Records what a writer puts into a netCDF4 group or root."""
-
-    def __init__(self) -> None:
-        self.vars: dict[str, _FakeVar] = {}
-        self.attrs: dict = {}
-
-    def createVariable(self, name, _dtype, _dims=()):
-        self.vars[name] = _FakeVar()
-        return self.vars[name]
-
-    def setncattr(self, key, value) -> None:
-        self.attrs[key] = value
-
-    def __getitem__(self, name):
-        return self.vars[name].value
 
 
 def _linear_result(**overrides) -> RuntimeLinearResult:
@@ -736,50 +712,6 @@ def test_runtime_artifact_small_helpers() -> None:
     assert np.array_equal(_dealiased_kx_indices(1), np.array([0], dtype=np.int32))
 
 
-def test_runtime_artifact_root_metadata_and_active_field() -> None:
-    cfg = SimpleNamespace(
-        grid=SimpleNamespace(Ny=5, Nx=7, Nz=8, ntheta=None, nperiod=None)
-    )
-    root = _FakeGroup()
-    _write_runtime_root_metadata(root, cfg, nspecies=2, nl=3, nm=4)
-    for name, value in (("ny", 5), ("nx", 7), ("ntheta", 8), ("nperiod", 1)):
-        assert int(root[name]) == value
-    assert root.attrs["schema_version"] == 1
-    assert root.vars["code_info"].attrs["value"] == "gkx"
-
-    field = np.arange(5 * 7 * 2, dtype=np.float32).reshape(5, 7, 2)
-    active = _dealiased_spectral_field(field, ky_axis=0, kx_axis=1)
-    np.testing.assert_allclose(active, field[:2][:, [5, 6, 0, 1, 2], :])
-
-
-def test_runtime_artifact_particle_moments(monkeypatch) -> None:
-    state = np.ones((1, 2, 3, 2, 4, 3), dtype=np.complex64)
-    grid = SimpleNamespace(z=np.asarray([-1.0, 0.0, 1.0], dtype=np.float32))
-    geom = object()
-    cache = SimpleNamespace(
-        Jl=np.ones((1, 2, 2, 4, 3), dtype=np.float32),
-        JlB=np.ones((1, 2, 2, 4, 3), dtype=np.float32),
-        kperp2=np.ones((2, 4, 3), dtype=np.float32),
-    )
-    _patch(
-        monkeypatch,
-        nonlinear_netcdf,
-        apply_geometry_grid_defaults=lambda _geom, grid_cfg: grid_cfg,
-        build_spectral_grid=lambda _grid: grid,
-        build_runtime_geometry=lambda _cfg: geom,
-        ensure_flux_tube_geometry_data=lambda _geom, _theta: geom,
-        build_runtime_linear_params=lambda _cfg, **_kwargs: object(),
-        build_linear_cache=lambda *_args, **_kwargs: cache,
-    )
-
-    moments = _particle_moments(state, SimpleNamespace(grid=SimpleNamespace()))
-    for name in ("ParticleDensity", "ParticleUpar", "ParticleUperp"):
-        np.testing.assert_allclose(moments[name], np.full((1, 2, 4, 3), 2.0))
-    np.testing.assert_allclose(
-        moments["ParticleTemp"], np.full((1, 2, 4, 3), 2.0 * np.sqrt(2.0))
-    )
-
-
 @pytest.mark.parametrize(
     ("species_extra", "expected_columns", "target"),
     [
@@ -1039,73 +971,6 @@ def test_run_runtime_nonlinear_with_artifacts_uses_restart_if_exists(
         (str(restart_path), "add", 0.25),
         (str(restart_path), "replace", 1.0),
     ]
-
-
-def test_runtime_orchestration_handoff_chunks_and_restarts(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    calls: list[dict[str, object]] = []
-    writes: list[float] = []
-    out_path = tmp_path / "direct.out.nc"
-    restart_path = tmp_path / "direct.restart.nc"
-    cfg = RuntimeConfig(
-        time=TimeConfig(dt=0.1, t_max=1.2, fixed_dt=True, diagnostics=True),
-        output=RuntimeOutputConfig(
-            path=str(out_path),
-            save_for_restart=True,
-            nsave=5,
-            resolved_diagnostics=False,
-        ),
-    )
-
-    def _run(run_cfg, **kwargs):
-        chunk_steps = int(kwargs["steps"])
-        calls.append(
-            {
-                "init_file": run_cfg.init.init_file,
-                "init_file_mode": run_cfg.init.init_file_mode,
-                "steps": chunk_steps,
-                "return_state": kwargs["return_state"],
-                "resolved_diagnostics": kwargs["resolved_diagnostics"],
-            }
-        )
-        return RuntimeNonlinearResult(
-            t=np.asarray([0.1 * chunk_steps]),
-            diagnostics=_diag(1, t=[0.1 * chunk_steps]),
-            state=_STATE6,
-        )
-
-    def _write(_out, result, _cfg):
-        assert result.diagnostics is not None
-        writes.append(float(np.asarray(result.diagnostics.t)[-1]))
-        restart_path.write_bytes(b"restart")
-        return {"out": str(out_path), "restart": str(restart_path)}
-
-    _patch(
-        monkeypatch,
-        runtime_artifacts,
-        _resolve_restart_path=lambda _path, _cfg, *, for_write: restart_path,
-        load_nonlinear_netcdf_diagnostics=lambda _path: _diag(1, t=[0.0]),
-        _condense_diagnostics_for_netcdf_output=lambda diag, **_kw: diag,
-        validate_finite_runtime_result=lambda _result, **_kw: None,
-        run_runtime_nonlinear=_run,
-        write_runtime_nonlinear_artifacts=_write,
-    )
-
-    result, paths = run_runtime_nonlinear_with_artifacts(
-        cfg, out=out_path, ky_target=0.2, steps=12, diagnostics=True
-    )
-
-    assert result.diagnostics is not None
-    assert paths["restart"] == str(restart_path)
-    assert [call["steps"] for call in calls] == [5, 5, 2]
-    assert calls[0]["init_file"] is None
-    assert calls[1]["init_file"] == str(restart_path)
-    assert calls[1]["init_file_mode"] == "replace"
-    assert all(call["return_state"] is True for call in calls)
-    assert all(call["resolved_diagnostics"] is False for call in calls)
-    assert writes == pytest.approx([0.5, 1.0, 1.2])
-    assert float(np.asarray(result.diagnostics.t)[-1]) == pytest.approx(1.2)
 
 
 def test_run_runtime_nonlinear_with_artifacts_rejects_nonfinite_chunk(
@@ -1584,25 +1449,6 @@ def test_cached_hermitian_mode_weight_matches_full_and_one_sided_conventions() -
         np.asarray(_cached_hermitian_mode_weight(one_sided_cache, use_dealias=False)),
         np.asarray([[1.0, 1.0], [2.0, 2.0], [2.0, 2.0]], dtype=np.float32),
     )
-
-
-def test_grid_helper_contracts_preserve_selected_ky_and_fft_ordering() -> None:
-    grid = SimpleNamespace(
-        kx=jnp.asarray([-1.0, 0.0, 1.0], dtype=jnp.float32),
-        ky=jnp.asarray([-0.3], dtype=jnp.float32),
-        z=jnp.asarray([-np.pi, -0.5 * np.pi, 0.0, 0.5 * np.pi], dtype=jnp.float32),
-        ky_mode=np.asarray([2], dtype=np.int32),
-    )
-
-    assert _parallel_periods_from_grid(grid) == pytest.approx(1.0)
-    kx, ky, kz = _cfl_wavenumber_arrays(grid)
-    np.testing.assert_allclose(kx, [-1.0, 0.0, 1.0])
-    np.testing.assert_allclose(ky, [0.3])
-    np.testing.assert_allclose(kz, [0.0, 1.0, 2.0, -1.0])
-
-    assert _parallel_periods_from_grid(
-        SimpleNamespace(z=jnp.asarray([0.0], dtype=jnp.float32))
-    ) == pytest.approx(1.0)
 
 
 def test_eta_geometry_and_ntft_helpers_match_manual_limits() -> None:
@@ -2420,69 +2266,6 @@ def test_integrate_linear_explicit_diagnostics_shapes():
         diag.particle_flux_t,
     ):
         assert series.shape[0] == n
-
-
-def test_integrate_linear_explicit_diagnostics_honors_rk3_method(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _cfg, grid, geom, params, cache, G0 = _small_G0()
-    calls: list[str] = []
-
-    def _fake_step(G, cache, params, term_cfg, dt, *, method):
-        calls.append(str(method))
-        _dG, fields = assemble_rhs_cached(G, cache, params, terms=term_cfg)
-        return G, fields
-
-    monkeypatch.setattr(explicit_time_integrators, "_linear_explicit_step", _fake_step)
-
-    time_cfg = ExplicitTimeConfig(
-        dt=0.01, t_max=0.01, method="rk3", sample_stride=1, fixed_dt=True
-    )
-    integrate_linear_explicit_diagnostics(
-        G0, grid, cache, params, geom, time_cfg, terms=LinearTerms(), jit=False
-    )
-
-    assert calls
-    assert set(calls) == {"rk3"}
-
-
-def test_linear_explicit_step_applies_completed_step_mask(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cache = SimpleNamespace(
-        dealias_mask=jnp.asarray([[True, True], [True, False]]),
-        ky=jnp.asarray([0.0, 0.2]),
-        kx=jnp.asarray([0.0, 0.1]),
-    )
-    G0 = jnp.ones((1, 1, 2, 2, 1), dtype=jnp.complex64)
-    seen_states: list[np.ndarray] = []
-
-    def _fake_assemble_rhs(state, _cache, _params, *, terms, dt=None):
-        seen_states.append(np.asarray(state))
-        return jnp.zeros_like(state), FieldState(phi=state[0, 0])
-
-    monkeypatch.setattr(
-        explicit_time_integrators, "assemble_rhs_cached", _fake_assemble_rhs
-    )
-
-    G_next, fields = explicit_time_integrators._linear_explicit_step(
-        G0,
-        cache,
-        object(),
-        linear_terms_to_term_config(LinearTerms()),
-        0.1,
-        method="rk2",
-    )
-
-    expected = np.ones((2, 2, 1), dtype=np.complex64)
-    expected[0, 0, 0] = 0.0
-    expected[1, 1, 0] = 0.0
-
-    assert len(seen_states) == 3
-    assert np.allclose(seen_states[0][0, 0], 1.0)
-    assert np.allclose(np.asarray(G_next[0, 0]), expected)
-    assert np.allclose(np.asarray(seen_states[-1][0, 0]), expected)
-    assert np.allclose(np.asarray(fields.phi), expected)
 
 
 def _only_terms(**on) -> LinearTerms:

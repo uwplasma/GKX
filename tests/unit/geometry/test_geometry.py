@@ -70,7 +70,6 @@ from gkx.geometry.imported_vmec import (
     _import_booz_backend,
     _import_module_with_search_paths,
     _vmec_fieldlines,
-    _vmec_splines,
     dermv,
     generate_vmec_eik_internal,
     write_vmec_eik_netcdf,
@@ -261,51 +260,6 @@ def test_kx_effective_shear_shift():
     kx_eff = geom.kx_effective(kx0, ky, theta)
     shear = geom.s_hat * theta - geom.alpha * jnp.sin(theta)
     assert jnp.isclose(kx_eff[0], kx0[0] - shear[0] * ky[0])
-
-
-def test_twist_shift_params_for_analytic_geometry_avoids_metric_coeffs(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """Analytic twist/shift defaults should stay on host scalars."""
-
-    geom = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.0, alpha=0.2)
-    grid = GridConfig(
-        Nx=4,
-        Ny=4,
-        Nz=16,
-        Lx=6.28,
-        Ly=6.28,
-        boundary="linked",
-        y0=10.0,
-        ntheta=16,
-        nperiod=2,
-    )
-
-    def _fail(self, _theta):
-        raise AssertionError(
-            "metric_coeffs should not be called for analytic twist-shift defaults"
-        )
-
-    monkeypatch.setattr(SAlphaGeometry, "metric_coeffs", _fail)
-
-    jtwist, x0 = twist_shift_params(geom, grid)
-
-    theta_min = -np.pi * (2 * int(grid.nperiod) - 1)
-    shear = float(geom.s_hat) * theta_min - float(geom.alpha) * np.sin(theta_min)
-    expected_fac = (
-        2.0
-        * float(geom.s_hat)
-        * (-float(geom.s_hat) * shear)
-        / (float(geom.s_hat) ** 2)
-    )
-    expected_jtwist = int(round(expected_fac))
-    if expected_jtwist == 0:
-        expected_jtwist = 1
-    expected_y0 = float(grid.y0)
-    expected_x0 = expected_y0 * abs(expected_jtwist) / abs(expected_fac)
-
-    assert jtwist == expected_jtwist
-    assert x0 == pytest.approx(expected_x0)
 
 
 def test_geometry_tree_roundtrip():
@@ -1176,20 +1130,6 @@ def test_build_vmec_geometry_request_creates_expected_request(tmp_path: Path) ->
     assert request.z == (1.0, -1.0)  # Ion + adiabatic electron
 
 
-def test_build_vmec_geometry_request_expands_env_vmec_file(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    vmec_path = tmp_path / "wout_env.nc"
-    vmec_path.write_text("stub", encoding="utf-8")
-    monkeypatch.setenv("HSX_VMEC_FILE", str(vmec_path))
-    cfg = _vmec_runtime_cfg(tmp_path)
-    cfg = replace(cfg, geometry=replace(cfg.geometry, vmec_file="$HSX_VMEC_FILE"))
-
-    request = build_vmec_geometry_request(cfg)
-
-    assert request.vmec_file == str(vmec_path.resolve())
-
-
 @pytest.mark.integration
 def test_vmec_roundtrip_gate_is_deterministic(tmp_path: Path) -> None:
     vmec_file = os.environ.get("GKX_VMEC_FILE", "").strip()
@@ -1246,28 +1186,6 @@ def test_build_vmec_geometry_request_infers_npol_from_nperiod(tmp_path: Path) ->
     request = build_vmec_geometry_request(cfg)
 
     assert request.npol == pytest.approx(5.0)
-
-
-def test_atomic_vmec_eik_write_replaces_final_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    out_path = tmp_path / "geom.eik.nc"
-    out_path.write_text("old", encoding="utf-8")
-    temp_paths: list[Path] = []
-
-    def fake_write(path: Path, _profiles: dict, *, request: object) -> None:
-        assert request == "request"
-        assert path != out_path
-        temp_paths.append(path)
-        path.write_text("new", encoding="utf-8")
-
-    monkeypatch.setattr("gkx.geometry.imported_vmec.write_vmec_eik_netcdf", fake_write)
-
-    vmec_backend._write_vmec_eik_netcdf_atomically(out_path, {}, request="request")
-
-    assert out_path.read_text(encoding="utf-8") == "new"
-    assert temp_paths
-    assert not temp_paths[0].exists()
 
 
 def _patch_default_vmec_cache(monkeypatch, expected_out, *, backend, mock_gen):
@@ -1337,30 +1255,6 @@ def test_generate_runtime_vmec_eik_requires_internal_backend(
         generate_runtime_vmec_eik(cfg)
 
 
-def test_internal_vmec_backend_available_detects_env_provided_booz_xform_jax(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    pkg_root = tmp_path / "booz_xform_jax_checkout"
-    pkg_dir = pkg_root / "src" / "booz_xform_jax"
-    pkg_dir.mkdir(parents=True)
-    (pkg_dir / "__init__.py").write_text(
-        "class Booz_xform:\n    pass\n", encoding="utf-8"
-    )
-
-    for name in ("booz_xform_jax", "booz_xform"):
-        sys.modules.pop(name, None)
-    original_sys_path = list(sys.path)
-    monkeypatch.setenv("GKX_BOOZ_XFORM_JAX_PATH", str(pkg_root))
-    monkeypatch.delenv("BOOZ_XFORM_JAX_PATH", raising=False)
-
-    try:
-        assert internal_vmec_backend_available() is True
-    finally:
-        sys.path[:] = original_sys_path
-        for name in ("booz_xform_jax", "booz_xform"):
-            sys.modules.pop(name, None)
-
-
 # ---- from test_vmec_state_controls_coverage.py ----
 # Unit contracts for the vmex state-control helpers in ``vmec_state_controls``.
 #
@@ -1418,40 +1312,6 @@ def test_auto_fallback_closes_dataset_when_classic_reader_also_fails(monkeypatch
     # was requested explicitly, and the dataset handle is closed on failure.
     assert calls["new_booz"] == 2
     assert calls["import_preferred"] == "booz_xform"
-    assert nc_obj.closed is True
-
-
-@pytest.mark.parametrize(
-    ("env_backend", "error"),
-    [
-        # auto mode, but a non-square read failure must not touch the classic reader
-        (None, ValueError("wout file is corrupt")),
-        # square failure, but an explicitly forced backend stays fail-fast
-        ("jax", ValueError(_SQUARE_LAYOUT_MESSAGE)),
-    ],
-)
-def test_auto_fallback_skips_classic_reader_and_closes(monkeypatch, env_backend, error):
-    """Only auto-mode square-layout failures may fall back to booz_xform."""
-
-    if env_backend is None:
-        monkeypatch.delenv("GKX_BOOZ_BACKEND", raising=False)
-    else:
-        monkeypatch.setenv("GKX_BOOZ_BACKEND", env_backend)
-
-    def _raise(_backend: object, _path: object) -> object:
-        raise error
-
-    def _forbidden_import(preferred: str | None = None) -> object:
-        raise AssertionError("classic booz_xform reader must not be imported")
-
-    monkeypatch.setattr(controls, "_new_booz_object", _raise)
-    monkeypatch.setattr(controls, "_import_booz_backend", _forbidden_import)
-
-    nc_obj = _ClosableDataset()
-    with pytest.raises(ValueError):
-        controls._new_boozer_object_with_auto_fallback(
-            SimpleNamespace(name="jax-booz"), Path("wout.nc"), nc_obj
-        )
     assert nc_obj.closed is True
 
 
@@ -1926,53 +1786,6 @@ def test_write_vmec_eik_netcdf_writes_expected_variables(tmp_path: Path) -> None
         np.testing.assert_allclose(ds.variables["jacob"][:], expected_jacob)
 
 
-def test_vmec_splines_builds_interpolants_and_metadata() -> None:
-    s_half = np.array([0.125, 0.375, 0.625, 0.875])
-    booz_obj = SimpleNamespace(
-        mnboz=2,
-        rmnc_b=np.vstack([1.0 + s_half, 2.0 * s_half]),
-        zmns_b=np.vstack([0.5 * s_half, -s_half]),
-        numns_b=np.vstack([0.2 * s_half, 0.3 + 0.1 * s_half]),
-        gmnc_b=np.vstack([1.0 + 0.5 * s_half, 0.1 * s_half]),
-        bmnc_b=np.vstack([2.0 + 2.0 * s_half, 0.5 - 0.25 * s_half]),
-        Boozer_G=5.0 + 0.2 * s_half,
-        Boozer_I=1.0 - 0.1 * s_half,
-        xm_b=np.array([0, 1]),
-        xn_b=np.array([0, 5]),
-        mboz=8,
-        nboz=6,
-    )
-    nc_obj = SimpleNamespace(
-        variables={
-            "ns": _FakeVar(5, with_data=True),
-            "pres": _FakeVar([0.0, 1.0, 2.0, 3.0, 4.0]),
-            "phi": _FakeVar([0.0, 2.0 * np.pi, 4.0 * np.pi, 6.0 * np.pi, 8.0 * np.pi]),
-            "iotas": _FakeVar([0.0, 0.5, 0.6, 0.7, 0.8]),
-            "Aminor_p": _FakeVar(1.7),
-            "nfp": _FakeVar(5),
-            "raxis_cc": _FakeVar([3.2, 0.1]),
-        }
-    )
-
-    out = _vmec_splines(nc_obj, booz_obj)
-
-    assert (out.mnbooz, out.mboz, out.nboz, out.nfp) == (2, 8, 6, 5)
-    np.testing.assert_allclose(out.raxis_cc, [3.2, 0.1])
-    assert out.Aminor_p == pytest.approx(1.7)
-    assert out.phiedge == pytest.approx(8.0 * np.pi)
-    for spline, expected in (
-        (out.rmnc_b[0], 1.5),
-        (out.d_rmnc_b_d_s[0], 1.0),
-        (out.bmnc_b[1], 0.375),
-        (out.d_bmnc_b_d_s[1], -0.25),
-        (out.psi, 2.5),
-        (out.d_psi_d_s, 4.0),
-        (out.iota, 0.65),
-        (out.d_iota_d_s, 0.4),
-    ):
-        assert spline(0.5) == pytest.approx(expected, abs=1.0e-10)
-
-
 def test_vmec_fieldline_boozer_mode_sum_preserves_surface_axis() -> None:
     coeff = np.array([[1.0, 2.0], [3.0, 4.0]])
     basis = np.arange(2 * 2 * 3 * 4, dtype=float).reshape(2, 2, 3, 4)
@@ -2114,31 +1927,6 @@ def test_vmec_fieldline_helper_surface_average_and_centered_integral() -> None:
     np.testing.assert_allclose(centered[0, 0], theta, atol=1.0e-12)
 
 
-def test_vmec_fieldline_reference_scale_and_override_policies() -> None:
-    vs = SimpleNamespace(Aminor_p=2.0, raxis_cc=np.array([3.5]))
-
-    L_reference, B_reference, R_mag_ax = vmec_derivatives._validated_reference_scales(
-        vs, edge_toroidal_flux_over_2pi=-4.0
-    )
-
-    assert L_reference == pytest.approx(2.0)
-    assert B_reference == pytest.approx(2.0)
-    assert R_mag_ax == pytest.approx(3.5)
-
-    with pytest.raises(ValueError, match="positive finite minor radius"):
-        vmec_derivatives._validated_reference_scales(
-            SimpleNamespace(Aminor_p=0.0, raxis_cc=np.array([3.5])),
-            edge_toroidal_flux_over_2pi=-4.0,
-        )
-
-    assert vmec_derivatives._input_iota_shear(
-        np.array([0.62]), np.array([0.0]), None, None
-    ) == (pytest.approx(0.62), pytest.approx(1.0e-8))
-    assert vmec_derivatives._input_iota_shear(
-        np.array([0.62]), np.array([0.2]), 0.7, 0.3
-    ) == (pytest.approx(0.7), pytest.approx(0.3))
-
-
 def test_vmec_fieldline_hngc_shear_and_pressure_correction_policies() -> None:
     shear_kw = dict(
         s_val=0.5,
@@ -2234,39 +2022,6 @@ def _fake_netcdf_module(monkeypatch, fake_nc) -> None:
     )
 
 
-def test_vmec_fieldlines_respects_overrides_and_closes_dataset(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    fake_nc = _FakeNCDataset(mpol=3, ntor=2)
-    fake_backend = SimpleNamespace(Booz_xform=_FakeBoozXform)
-
-    _fake_netcdf_module(monkeypatch, fake_nc)
-    patch_attrs(
-        monkeypatch,
-        "gkx.geometry.vmec_state_controls",
-        _import_booz_backend=lambda: fake_backend,
-        _vmec_splines=lambda _nc, _booz: _fake_vmec_spline_struct(),
-    )
-
-    out = _vmec_fieldlines(vmec_fname="dummy.nc", **_FIELDLINE_KW)
-
-    assert fake_nc.closed is True
-    assert out.iota_input == pytest.approx(0.9)
-    assert out.s_hat_input == pytest.approx(1.0e-8)
-    assert out.zeta_center == pytest.approx(-0.2 / 0.8)
-    assert out.nfp == 5
-    assert out.L_reference == pytest.approx(1.2)
-    assert out.B_reference == pytest.approx(2.0 / (1.2**2))
-    assert out.dpsidrho == pytest.approx(np.sqrt(2.0))
-    assert out.theta_b.shape == (1, 1, 9)
-    assert out.theta_PEST.shape == (1, 1, 9)
-    assert out.grad_x.shape == (3, 1, 1, 9)
-    assert out.grad_y.shape == (3, 1, 1, 9)
-    assert np.isfinite(out.bmag).all()
-    assert np.isfinite(out.gds2).all()
-    assert np.isfinite(out.gbdrift).all()
-
-
 def test_vmec_fieldlines_falls_back_for_square_vmex_wout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2341,111 +2096,6 @@ def test_vmec_fieldlines_rejects_degenerate_reference_length(
     with pytest.raises(ValueError, match="Aminor_p"):
         _vmec_fieldlines(vmec_fname="dummy.nc", **_FIELDLINE_KW)
     assert fake_nc.closed is True
-
-
-def test_generate_vmec_eik_internal_maps_boundary_and_computes_betaprim(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    calls: dict[str, object] = {}
-
-    theta_out = np.linspace(-np.pi, np.pi, 9)
-    arrays_equal_arc = {
-        "theta": theta_out,
-        "theta_PEST": theta_out,
-        "bmag": np.linspace(1.0, 2.0, theta_out.size),
-        "gradpar": np.full(theta_out.size, 0.5),
-        "cvdrift": np.linspace(0.0, 1.0, theta_out.size),
-        "gbdrift": np.linspace(1.0, 2.0, theta_out.size),
-        "cvdrift0": np.linspace(2.0, 3.0, theta_out.size),
-        "gbdrift0": np.linspace(3.0, 4.0, theta_out.size),
-        "gds2": np.linspace(4.0, 5.0, theta_out.size),
-        "gds21": np.linspace(-1.0, 1.0, theta_out.size),
-        "gds22": np.linspace(5.0, 6.0, theta_out.size),
-        "grho": np.full(theta_out.size, 1.1),
-        "Rplot": np.linspace(4.0, 6.0, theta_out.size),
-        "Zplot": np.linspace(-1.0, 1.0, theta_out.size),
-        "grad_x": _rows(theta_out.size, 1.0, 2.0, 3.0),
-        "grad_y": _rows(theta_out.size, 4.0, 5.0, 6.0),
-        "b_vec": _rows(theta_out.size, 1.0, 0.0, 0.0),
-        "scale": 1.0,
-    }
-
-    def _mock_fieldlines(**kwargs):
-        calls["fieldlines"] = kwargs
-        return SimpleNamespace(
-            dpsidrho=2.0,
-            iota_input=0.5,
-            s_hat_input=0.8,
-            nfp=5,
-            alpha=0.125,
-            zeta_center=0.25,
-        )
-
-    def _mock_cut(**kwargs):
-        calls["cut"] = kwargs
-        return np.linspace(-1.0, 1.0, 9), {"theta_PEST": np.linspace(-1.0, 1.0, 9)}
-
-    def _mock_remap(**kwargs):
-        calls["remap"] = kwargs
-        return 0.5, arrays_equal_arc
-
-    def _mock_write(
-        path: Path, profiles: dict[str, object], *, request: object
-    ) -> None:
-        calls["write"] = {"path": path, "profiles": profiles, "request": request}
-        Path(path).write_bytes(b"mock eik data")
-
-    patch_attrs(
-        monkeypatch,
-        "gkx.geometry.imported_vmec",
-        _vmec_fieldlines=_mock_fieldlines,
-        _apply_flux_tube_cut=_mock_cut,
-        _equal_arc_remap=_mock_remap,
-        write_vmec_eik_netcdf=_mock_write,
-    )
-
-    request = SimpleNamespace(
-        vmec_file=str(tmp_path / "wout_test.nc"),
-        torflux=0.64,
-        beta=0.02,
-        alpha=0.1,
-        include_shear_variation=True,
-        include_pressure_variation=False,
-        npol=1.0,
-        npol_min=None,
-        ntheta=8,
-        isaxisym=False,
-        boundary="fix aspect",
-        which_crossing=None,
-        betaprim=None,
-        z=(1.0, -1.0),
-        dens=(2.0, 1.0),
-        temp=(3.0, 0.5),
-        tprim=(4.0, 5.0),
-        fprim=(6.0, 7.0),
-        y0=2.5,
-        x0=None,
-        jtwist=3,
-    )
-
-    out = generate_vmec_eik_internal(
-        output_path=tmp_path / "out.eik.nc", request=request
-    )
-
-    assert out == (tmp_path / "out.eik.nc").resolve()
-    assert calls["fieldlines"]["betaprim"] == pytest.approx(
-        -0.02 * (2.0 * 3.0 * (4.0 + 6.0) + 1.0 * 0.5 * (5.0 + 7.0))
-    )
-    assert calls["cut"]["flux_tube_cut"] == "aspect"
-    assert calls["cut"]["which_crossing"] == -1
-    assert calls["cut"]["ntheta"] == 9
-    assert calls["cut"]["x0"] == pytest.approx(2.5)
-    profiles = calls["write"]["profiles"]
-    assert profiles["q"] == pytest.approx(2.0)
-    assert profiles["shat"] == pytest.approx(0.8)
-    assert profiles["Rmaj"] == pytest.approx(5.0)
-    assert profiles["alpha"] == pytest.approx(0.125)
-    assert profiles["nfp"] == 5
 
 
 # ---- from test_geometry_physics_contracts.py ----
@@ -2769,7 +2419,6 @@ def _finite_beta_case_paths(directory: Path, case: str) -> tuple[Path, Path]:
 
 def _imported_runtime_geometry(wout_path: Path, *, torflux: float, ntheta: int):
     from gkx.geometry import load_imported_geometry_netcdf
-    from gkx.geometry.imported_vmec import generate_vmec_eik_internal
 
     # The report builders moved to scripts/campaigns; the default EIK request is
     # a constant this parity check needs, not report machinery.

@@ -22,8 +22,7 @@ COVERAGE_DATA_RE = re.compile(r"^\.coverage\.shard-(?P<shard>[0-9]+)\.")
 #: ``DEFAULT_TEST_SECONDS``. Re-measure when a shard drifts far from the rest.
 WIDE_COVERAGE_SECONDS: dict[str, float] = {
     "test_parallel_linear_velocity.py": 855,
-    "test_nonlinear.py": 925,
-    "test_nonlinear_helpers_extra.py": 595,
+    "test_nonlinear.py": 1400,
     "test_linear.py": 320,
     "test_runtime_runner.py": 200,
     "test_autodiff_solver_objectives.py": 200,

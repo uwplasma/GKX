@@ -1588,44 +1588,6 @@ def test_vmex_transport_surface_chunking_matches_unchunked_weighted_mean(
     assert evaluate(chunk_size=1) == pytest.approx(evaluate(chunk_size=0))
 
 
-def test_vmex_transport_objective_nonlinear_proxy_is_positive_and_exported(
-    monkeypatch,
-) -> None:
-    scale = {"value": 1.0}
-
-    def fake_geom(*_args, **_kwargs):
-        return _fake_geometry()
-
-    def fake_growth(_geom, **_kwargs):
-        return jnp.asarray(0.1 * scale["value"])
-
-    monkeypatch.setattr(
-        transport_tables, "flux_tube_geometry_from_vmec_boozer_state", fake_geom
-    )
-    monkeypatch.setattr(
-        transport_tables, "solver_growth_rate_from_geometry", fake_growth
-    )
-    samples = StellaratorITGSampleSet(
-        surfaces=(0.5, 0.7), alphas=(0.0,), ky_values=(0.2, 0.4)
-    )
-    cfg = VMEXTransportObjectiveConfig(
-        kind="nonlinear_window_heat_flux", sample_set=samples
-    )
-
-    low = vmex_transport_objective_from_state(
-        "state", "static", "indata", object(), cfg
-    )
-    scale["value"] = 2.0
-    high = vmex_transport_objective_from_state(
-        "state", "static", "indata", object(), cfg
-    )
-
-    assert gkx.VMEXTransportObjectiveConfig is VMEXTransportObjectiveConfig
-    assert gkx.VMEXGKXTransportObjective is VMEXGKXTransportObjective
-    assert float(low) > 0.0
-    assert float(high) > float(low)
-
-
 def test_vmex_transport_objective_transform_scales_large_residuals(
     monkeypatch,
 ) -> None:

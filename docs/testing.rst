@@ -71,7 +71,7 @@ Representative contracts and where they live:
 - Nonlinear bracket sign, real-FFT path, flutter, electromagnetic split:
   ``tests/unit/nonlinear/test_nonlinear_exb.py``; Hermitian projection, RK
   variants, collision splitting, IMEX, flow-shear remap and window-gradient
-  checks: ``tests/unit/nonlinear/test_nonlinear_helpers_extra.py``.
+  checks: ``tests/unit/nonlinear/test_nonlinear.py``.
 - Serial-vs-parallel numerical identity: ``tests/unit/parallel/``.
 
 Running tests
