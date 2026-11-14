@@ -701,7 +701,7 @@ def run_runtime_scan(
     *,
     Nl: int | None = None,
     Nm: int | None = None,
-    solver: str = "auto",
+    solver: str | None = None,
     method: str | None = None,
     dt: float | None = None,
     steps: int | None = None,
@@ -732,6 +732,7 @@ def run_runtime_scan(
 
     ky_arr = np.asarray(ky_values, dtype=float)
     cfg, Nl_use, Nm_use = _resolve_runtime_hl_dims(cfg, Nl=Nl, Nm=Nm)
+    solver = cfg.run.solver or "auto" if solver is None else solver
     solver_key = _normalize_linear_solver_name(solver)
     options = _RuntimeScanOptions(
         method=method,

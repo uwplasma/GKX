@@ -7,13 +7,21 @@ scan. Research path: re-solve the most unstable mode with the time integrator an
 the Krylov eigensolver at each velocity resolution in ``RESOLUTIONS``, to see how
 far coarser resolutions are from the deck's and whether the two solvers agree.
 
-Prints gamma and omega for each ``k_y`` and the convergence table. Writes
-``summary.json``, the scan files and ``linear_tokamak.png`` to
+A second research step re-solves the peak mode in Miller geometry
+(``case_miller.toml``, the same deck with the flux surface built from its Miller
+shape): circular, which differs from the s-alpha rates because Miller keeps the exact
+metric and drifts (gamma 0.127 against 0.093 at k_y = 0.3 for (Nl, Nm) = (16, 48)), and
+the shapes in ``SHAPES`` (elongation ``akappa``, triangularity ``tri``), all with the
+Krylov solver at the last resolution of ``RESOLUTIONS``.
+
+Prints gamma and omega for each ``k_y``, the convergence table and the Miller
+rates. Writes ``summary.json``, the scan files and ``linear_tokamak.png`` to
 ``outputs/01_linear_tokamak``. A few minutes on a laptop CPU. Set ``CASE`` to
 ``case_full.toml`` for the literature resolution.
 """
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -22,19 +30,18 @@ import numpy as np
 import gkx
 
 CASE = Path(__file__).with_name("case.toml")
+CASE_MILLER = Path(__file__).with_name("case_miller.toml")
 OUTPUT = Path("outputs/01_linear_tokamak")
 KY = [0.2, 0.3, 0.4]  # k_y rho_i
 RESOLUTIONS = [(8, 24), (16, 48)]  # (Nl, Nm) of the research path
 SOLVERS = ("time", "krylov")
+SHAPES = {"circular": {}, "kappa 1.5": {"akappa": 1.5}, "delta 0.3": {"tri": 0.3}}
 
 # ---- Fast path ----
 case = gkx.load(CASE)
-run = dict(
-    Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
-)  # the deck's [run] block
-scan = gkx.scan(case, KY, **run, show_progress=True)
+scan = gkx.scan(case, KY, show_progress=True)
 peak_ky = float(scan.ky[int(np.argmax(scan.gamma))])
-peak = gkx.solve(case, ky_target=peak_ky, **run, show_progress=True)
+peak = gkx.solve(case, ky_target=peak_ky, show_progress=True)
 for ky, gamma, omega in zip(scan.ky, scan.gamma, scan.omega):
     print(f"ky = {ky:.2f}: gamma = {gamma:+.5f}, omega = {omega:+.5f}")
 
@@ -50,6 +57,22 @@ for nl, nm in RESOLUTIONS:
             f"Nl, Nm = {nl}, {nm} {solver:>7}: gamma = {r.gamma:+.5f}, omega = {r.omega:+.5f}"
         )
 
+# ---- Research path: Miller geometry ----
+nl, nm = RESOLUTIONS[-1]
+miller_case = gkx.load(CASE_MILLER)
+miller = {}
+for label, shape in SHAPES.items():
+    shaped = miller_case.replace(geometry=replace(miller_case.geometry, **shape))
+    r = gkx.solve(shaped, ky_target=peak_ky, Nl=nl, Nm=nm, solver="krylov")
+    miller[label] = {"gamma": r.gamma, "omega": r.omega}
+    print(f"Miller {label:>9}: gamma = {r.gamma:+.5f}, omega = {r.omega:+.5f}")
+s_alpha = next(
+    c for c in convergence if (c["Nl"], c["Nm"], c["solver"]) == (nl, nm, "krylov")
+)
+print(
+    f"s-alpha reference      : gamma = {s_alpha['gamma']:+.5f}, omega = {s_alpha['omega']:+.5f}"
+)
+
 # ---- Outputs ----
 OUTPUT.mkdir(parents=True, exist_ok=True)
 scan.save(OUTPUT / "scan")
@@ -60,6 +83,7 @@ summary = {
     "omega": np.asarray(scan.omega).tolist(),
     "peak": peak.summary(),
     "convergence": convergence,
+    "miller": miller,
 }
 (OUTPUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 
@@ -67,6 +91,9 @@ gkx.set_plot_style()
 fig, (ax_gamma, ax_omega, ax_mode) = plt.subplots(1, 3, figsize=(12.0, 3.6))
 ax_gamma.plot(scan.ky, scan.gamma, "o-")
 ax_gamma.set(xlabel=r"$k_y\rho_i$", ylabel=r"$\gamma\,a/v_{ti}$", title="Growth rate")
+for label, r in miller.items():
+    ax_gamma.plot(peak_ky, r["gamma"], "x", label=f"Miller {label}")
+ax_gamma.legend(frameon=False, fontsize="small")
 ax_omega.plot(scan.ky, scan.omega, "s-", color="tab:orange")
 ax_omega.set(
     xlabel=r"$k_y\rho_i$", ylabel=r"$\omega\,a/v_{ti}$", title="Real frequency"

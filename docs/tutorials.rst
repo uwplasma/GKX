@@ -1,9 +1,9 @@
 Tutorial
 ========
 
-Twelve steps, from a first run to a stellarator optimization. Step *N* is
+Fourteen steps, from a first run to a stellarator optimization. Step *N* is
 the directory ``examples/NN_*``. Each has one ``run.py`` with the same layout: a docstring, editable
-constants, a fast path (the deck run with no tuning), a research path where one
+constants, a fast path (the deck run with no tuning: ``ky``, ``kx``, ``Nl``, ``Nm`` and ``solver`` come from the deck's ``[run]`` block), a research path where one
 exists (convergence, eigensolver, autodiff and stepper checks) and the outputs
 (``summary.json`` and one figure under ``./outputs/NN_*``). Deck-driven steps also have a tutorial
 ``case.toml`` (seconds to a minute on a laptop CPU) and, where it applies, a
@@ -60,9 +60,16 @@ settled (extend ``t_max``).
 The plot shows :math:`\gamma(k_y)`, which peaks near
 :math:`k_y\rho_i\approx0.3`, :math:`\omega(k_y)` (positive for ITG in GKX's
 sign convention, :doc:`conventions`) and the eigenfunction, a ballooning mode
-centred on the outboard midplane where curvature is unfavourable. To use
-Miller instead of s-alpha geometry, set ``[geometry] model = "miller"``
-(:doc:`geometry`).
+centred on the outboard midplane where curvature is unfavourable.
+
+``case_miller.toml`` is the same deck in Miller geometry (``[geometry] model =
+"miller"``, :doc:`geometry`). The research path of the script solves the peak mode
+there, circular and with the elongation and triangularity in ``SHAPES``. The exact
+Miller metric and drifts do not reproduce the s-alpha rates (:math:`\gamma=0.127` against
+0.093 at :math:`k_y\rho_i=0.3`, :math:`(N_l,N_m)=(16,48)`).
+
+The same decks run from the shell; ``examples/README.md`` lists the ``gkx run``,
+``gkx scan`` and ``gkx validate`` forms and their overrides.
 
 2. Stellarator geometry
 -----------------------
@@ -97,6 +104,12 @@ instabilities grow, drive zonal flows and saturate into turbulence. The figure
 shows field amplitude and energies (growth, then a plateau) and the heat flux
 :math:`Q_i/Q_{GB}`. A transport number is the time average over the saturated
 part; the tutorial horizon stops before saturation.
+
+The research path runs the same box with ``[time] run_to = "saturation"``: the run
+stops when the heat-flux window passes the saturation test and reports the verdict
+(``saturated``, ``growing``, ``drifting``, ``intermittent`` and others) with the
+window mean and its batch-means standard error. Quote the mean only for a
+``saturated`` verdict (:doc:`numerics`).
 
 4. Nonlinear turbulence, stellarator
 ------------------------------------
@@ -217,8 +230,10 @@ result equals the serial scan; the script checks this (:doc:`parallelization`).
 
 A long nonlinear run is split into legs: the first writes its state and the
 second starts from it (``[init] init_file``). The plot overlays the joined run
-on an uninterrupted one and marks the averaging window. :doc:`outputs` lists
-every stored variable.
+on an uninterrupted one and marks the averaging window. The saturation test
+classifies the joined trace: the tutorial trace is still growing, so the script
+prints the plain mean with no error bar instead of a naive standard error.
+:doc:`outputs` lists every stored variable.
 
 13. Advanced: choose the time stepper
 -------------------------------------
@@ -230,4 +245,23 @@ every stored variable.
 The tutorial decks name no stepper. This script runs the Cyclone tutorial with the
 default and with pinned steppers (``rk4-pi``, ``lawson-rk4-pi``, an explicit
 ``cfl_fac``, a fixed-step ``rk2``) and prints the steps and wall time of each.
-:doc:`guidance` explains when to pin one.
+:doc:`guidance` explains when to pin one. The script ends with ``gkx.prepare``,
+which compiles a nonlinear run once so that repeated ``solve`` calls skip the
+compilation.
+
+14. Zonal flows
+---------------
+
+.. code-block:: bash
+
+   python examples/14_zonal_flows/run.py
+
+The Rosenbluth-Hinton protocol: a density perturbation at :math:`k_y=0`,
+:math:`k_x\rho_i=0.05` in a :math:`q=1.4`, :math:`\epsilon=0.1` tokamak with
+adiabatic electrons. The flux-surface average :math:`\langle\phi\rangle(t)/\langle\phi\rangle(0)`
+oscillates at the geodesic acoustic mode (:math:`\omega_{\rm GAM}\approx1.007\,v_{ti}/a`)
+and settles to the residual :math:`1/(1+1.6\,q^2/\sqrt\epsilon)=0.0916`; the script prints
+the GAM-averaged residual next to it (0.099 at :math:`(N_l,N_m)=(6,16)`, which falls
+towards the formula as velocity space is resolved). The research path adds collisions:
+every operator relaxes the residual to about 0.006 at :math:`\nu a/v_{ti}=0.05`
+(:doc:`validation`).

@@ -50,10 +50,7 @@ TABULATED = {"coulomb_finite_kperp": (2, 4, "time")}  # (Nl, Nm, solver)
 
 # ---- Fast path ----
 case = gkx.load(CASE)
-run = dict(
-    ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
-)
-default = gkx.solve(case, **run, show_progress=True)
+default = gkx.solve(case, show_progress=True)
 print(f"default operator: gamma = {default.gamma:+.5f}, omega = {default.omega:+.5f}")
 
 # ---- Research path: every operator at every collisionality ----
@@ -67,7 +64,9 @@ for nu in NU:
         )
         result = gkx.solve(
             local,
-            **{**run, "Nl": nl, "Nm": nm, "solver": solver},
+            Nl=nl,
+            Nm=nm,
+            solver=solver,
             mode_method="z_index",
             show_progress=True,
         )

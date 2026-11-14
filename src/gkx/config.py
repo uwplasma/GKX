@@ -828,6 +828,7 @@ class RuntimeRunConfig:
     """
 
     ky: float | None = None
+    kx: float | None = None
     Nl: int | None = None
     Nm: int | None = None
     #: Nodal magnetic-moment grid instead of the Laguerre expansion: its
@@ -848,7 +849,7 @@ class RuntimeRunConfig:
             if coerced <= 0:
                 raise ValueError(f"[run] {name} must be a positive integer")
             object.__setattr__(self, name, coerced)
-        for name in ("ky", "dt", "mu_vperp_max"):
+        for name in ("ky", "kx", "dt", "mu_vperp_max"):
             value = getattr(self, name)
             if value is not None:
                 object.__setattr__(self, name, float(value))
