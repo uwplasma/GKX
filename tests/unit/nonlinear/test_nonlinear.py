@@ -1200,7 +1200,18 @@ def test_compressed_real_fft_heat_flux_window_gradient_matches_finite_difference
     )
     result = subprocess.run(
         [sys.executable, "-c", code, __file__, boundary],
-        env=dict(os.environ, JAX_ENABLE_X64="false", GKX_X64="0"),
+        env=dict(
+            os.environ,
+            JAX_ENABLE_X64="false",
+            GKX_X64="0",
+            # the file imports tests/support when run as a script
+            PYTHONPATH=os.pathsep.join(
+                [
+                    str(Path(__file__).resolve().parents[2]),
+                    os.environ.get("PYTHONPATH", ""),
+                ]
+            ),
+        ),
         capture_output=True,
         text=True,
         timeout=180,
