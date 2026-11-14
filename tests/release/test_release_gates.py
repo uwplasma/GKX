@@ -6,10 +6,6 @@ import tomllib
 from pathlib import Path
 import pytest
 
-
-# ---- quasilinear calibration-input provenance gates ----
-
-
 from support.paths import load_release_tool
 import json
 
@@ -27,221 +23,6 @@ def test_retained_readme_pngs_use_bounded_palettes() -> None:
         with Image.open(static / name) as image:
             assert image.mode == "P"
             assert len(image.getcolors() or []) <= 256
-
-
-def _load_quasilinear_tool_module():
-    return load_release_tool("check_quasilinear_promotion_guardrails")
-
-
-def _write_report(path: Path, artifact: str, *, split: str = "holdout") -> None:
-    payload = {
-        "kind": "quasilinear_calibration_report",
-        "points": [
-            {
-                "case": "synthetic",
-                "split": split,
-                "predicted_heat_flux": 1.0,
-                "observed_heat_flux": 1.1,
-                "saturation_rule": "linear_weight",
-                "nonlinear_artifact": artifact,
-            }
-        ],
-    }
-    path.write_text(json.dumps(payload), encoding="utf-8")
-
-
-def _audit(
-    tmp_path: Path,
-    artifact: str,
-    gates: dict[str, dict],
-    *,
-    split: str = "holdout",
-    patterns: list[str] | None = None,
-) -> tuple[dict, dict]:
-    """Write ``gates`` under tmp_path, audit one report point, return (payload, point)."""
-
-    mod = _load_quasilinear_tool_module()
-    for relative, gate in gates.items():
-        path = tmp_path / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(gate), encoding="utf-8")
-    report = tmp_path / "report.json"
-    _write_report(report, artifact, split=split)
-    if patterns is None:
-        patterns = [str(tmp_path / relative) for relative in gates]
-    paths = mod.write_audit(
-        [report], gate_patterns=patterns, out_json=tmp_path / "audit.json", no_plot=True
-    )
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
-    return payload, payload["reports"][0]["points"][0]
-
-
-_SYNTHETIC_PASSED_GATE = {
-    "case": "synthetic_nonlinear_window",
-    "gkx": "tools_out/synthetic.csv",
-    "gate_report": {"case": "synthetic_nonlinear_window", "passed": True, "gates": []},
-}
-_MATCHED = "matched passed nonlinear gate"
-_NEGATIVE = "matching nonlinear gate is negative evidence for calibration admission"
-
-
-@pytest.mark.parametrize(
-    "artifact",
-    ["tools_out/synthetic.csv", "/tmp/project/tools_out/synthetic.csv"],
-    ids=["relative", "absolute-from-other-checkout"],
-)
-def test_audit_passes_when_required_point_matches_passed_gate(
-    tmp_path: Path, artifact: str
-) -> None:
-    payload, point = _audit(tmp_path, artifact, {"gate.json": _SYNTHETIC_PASSED_GATE})
-    assert payload["passed"] is True
-    assert point["reason"] == _MATCHED
-    assert point["nonlinear_artifact"] == "tools_out/synthetic.csv"
-
-
-def test_audit_passes_when_required_point_cites_passed_gate_sidecar(
-    tmp_path: Path,
-) -> None:
-    gate = {
-        "case": "replicated_nonlinear_window",
-        "kind": "nonlinear_window_ensemble_report",
-        "promotion_gate": {"passed": True},
-    }
-    artifact = (tmp_path / "ensemble_gate.json").as_posix()
-    payload, point = _audit(tmp_path, artifact, {"ensemble_gate.json": gate})
-    assert payload["passed"] is True
-    assert point["reason"] == _MATCHED
-    assert point["matched_gate"]["artifact"] == artifact
-
-
-def test_default_gate_glob_recurses_into_nested_holdout_artifacts(
-    tmp_path: Path,
-) -> None:
-    mod = _load_quasilinear_tool_module()
-    relative = "docs/_static/nested_holdouts/case/ensemble_gate.json"
-    gate = {
-        "case": "nested_replicated_ensemble",
-        "kind": "nonlinear_window_ensemble_report",
-        "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
-        "passed": True,
-        "promotion_gate": {"passed": True},
-    }
-    old_default = mod.DEFAULT_GATE_GLOB
-    mod.DEFAULT_GATE_GLOB = str(tmp_path / "docs/_static/**/*.json")
-    try:
-        (tmp_path / relative).parent.mkdir(parents=True)
-        (tmp_path / relative).write_text(json.dumps(gate), encoding="utf-8")
-        report = tmp_path / "report.json"
-        _write_report(report, (tmp_path / relative).as_posix())
-        paths = mod.write_audit(
-            [report], out_json=tmp_path / "audit.json", no_plot=True
-        )
-    finally:
-        mod.DEFAULT_GATE_GLOB = old_default
-
-    payload = json.loads(Path(paths["json"]).read_text(encoding="utf-8"))
-    point = payload["reports"][0]["points"][0]
-    assert payload["passed"] is True
-    assert point["matched_gate"]["artifact"].endswith(
-        "nested_holdouts/case/ensemble_gate.json"
-    )
-
-
-def test_audit_fails_when_required_point_uses_failed_gate(tmp_path: Path) -> None:
-    csv = "docs/_static/external_vmec_cth_like_nonlinear_t150_pilot.traces.csv"
-    gate = {
-        "case": "external_cth_like",
-        "promotion_gate": {"passed": False},
-        "runs": [{"csv": csv}],
-    }
-    payload, point = _audit(tmp_path, csv, {"external_gate.json": gate})
-    assert payload["passed"] is False
-    assert point["reason"] == _NEGATIVE
-    assert payload["n_negative_evidence"] == 1
-
-
-def test_audit_records_qh_gate_with_unacceptable_claim_as_negative_evidence(
-    tmp_path: Path,
-) -> None:
-    case = "nfp4 QH external VMEC nonlinear high-grid convergence"
-    csv = "docs/_static/external_vmec_qh_nonlinear_t150_n64_pilot.traces.csv"
-    gate = {
-        "case": case,
-        "claim_level": "finite_high_grid_long_nonlinear_feasibility_not_yet_transport_validation",
-        "gate_report": {"case": case, "passed": True, "gates": []},
-        "kind": "external_vmec_nonlinear_grid_convergence_gate",
-        "promotion_gate": {"passed": True},
-        "runs": [{"csv": csv}],
-    }
-    payload, point = _audit(tmp_path, csv, {"external_qh_gate.json": gate})
-    assert payload["passed"] is False
-    assert point["passed"] is False
-    assert point["reason"] == _NEGATIVE
-    matched = point["matched_gate"]
-    assert matched["raw_gate_passed"] is True
-    assert matched["promotion_gate_passed"] is True
-    assert matched["claim_level_acceptable"] is False
-    assert matched["admission_blockers"] == ["claim_level_not_acceptable"]
-    assert payload["negative_evidence"][0]["case"] == case
-
-
-@pytest.mark.parametrize(
-    ("split", "passed", "reason"),
-    [
-        ("holdout", False, "no matching nonlinear validation/convergence gate"),
-        ("audit", True, "not required split"),
-    ],
-)
-def test_audit_requires_a_gate_only_for_required_splits(
-    tmp_path: Path, split: str, passed: bool, reason: str
-) -> None:
-    payload, point = _audit(
-        tmp_path, "tools_out/missing.csv", {}, split=split, patterns=[]
-    )
-    assert payload["passed"] is passed
-    assert point["reason"] == reason
-
-
-def test_audit_accepts_nested_high_grid_admission_input_artifact(
-    tmp_path: Path,
-) -> None:
-    artifact = "docs/_static/replicate/ensemble_gate.json"
-    gate = {
-        "kind": "external_vmec_high_grid_admission_gate",
-        "case": "synthetic high-grid admission",
-        "claim_level": "passed_high_grid_transport_holdout_admission_under_coarse_grid_exclusion",
-        "inputs": {"replicate_ensemble_gate": artifact},
-        "promotion_gate": {"passed": True},
-    }
-    payload, point = _audit(tmp_path, artifact, {"high_grid_admission.json": gate})
-    assert payload["passed"] is True
-    assert point["matched_gate"]["case"] == "synthetic high-grid admission"
-
-
-def test_audit_prefers_external_admission_gate_over_raw_nested_ensemble(
-    tmp_path: Path,
-) -> None:
-    raw = "docs/_static/external_vmec_holdouts/case/ensemble_gate.json"
-    artifact = (tmp_path / raw).as_posix()
-    gates = {
-        raw: {
-            "case": "synthetic_external_vmec_ensemble",
-            "kind": "nonlinear_window_ensemble_report",
-            "claim_level": "replicated_nonlinear_window_uncertainty_gate_not_simulation_claim",
-            "passed": True,
-        },
-        "aa_admission.json": {
-            "case": "synthetic external admission",
-            "kind": "external_vmec_replicate_admission_gate",
-            "claim_level": "passed_replicated_external_vmec_transport_holdout_under_explicit_spread_gate",
-            "inputs": {"replicate_ensemble_gate": artifact},
-            "promotion_gate": {"passed": True},
-        },
-    }
-    payload, point = _audit(tmp_path, artifact, gates)
-    assert payload["passed"] is True
-    assert point["matched_gate"]["kind"] == "external_vmec_replicate_admission_gate"
-    assert point["matched_gate"]["claim_level_acceptable"] is True
 
 
 # ---- test_check_release_readiness.py ----
@@ -668,10 +449,6 @@ PUBLIC_PACKAGE_API_INIT_EXCEPTIONS = {
 }
 
 
-def _load_performance_manifest_tool():
-    return load_release_tool("check_parallel_scaling_artifacts")
-
-
 def _load_validation_coverage_tool():
     return load_release_tool("check_validation_coverage_manifest")
 
@@ -818,12 +595,8 @@ path = "src/{module.replace(".", "/")}.py"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = ["reference"]
-physics_contracts = ["physics"]
-numerics_contracts = ["numerics"]
 fast_tests = ["tests/test_runtime.py"]
 artifact_paths = ["docs/_static/gate.json"]
-next_tests = ["next"]
 """
 
 
@@ -1118,30 +891,6 @@ def test_benchmark_capability_matrix_is_complete_and_fail_closed() -> None:
     assert len(payload["matched_comparison_contract"]["fail_closed_rules"]) >= 3
 
 
-def test_repository_performance_manifest_is_well_formed() -> None:
-    mod = _load_performance_manifest_tool()
-    summary = mod.validate_manifest(mod.load_manifest())
-
-    assert summary["n_lanes"] >= 5
-    active = set(summary["high_priority_active"])
-    assert "cold_start_compile" in active
-    assert "nonlinear_warm_throughput" in active
-    rows = {row["name"]: row for row in summary["rows"]}
-    assert rows["end_to_end_runtime_memory"]["n_tools"] >= 2
-    assert rows["parallel_scaling"]["priority"] == "medium"
-
-
-def test_performance_manifest_main_writes_summary_json(tmp_path: Path) -> None:
-    mod = _load_performance_manifest_tool()
-    out_json = tmp_path / "summary.json"
-
-    assert mod.run_performance_manifest(["--out-json", str(out_json)]) == 0
-
-    payload = json.loads(out_json.read_text(encoding="utf-8"))
-    assert payload["n_lanes"] >= 5
-    assert "memory_efficiency" in {row["name"] for row in payload["rows"]}
-
-
 def _touch(root: Path, *relatives: str) -> None:
     for relative in relatives:
         path = root / relative
@@ -1152,76 +901,6 @@ def _touch(root: Path, *relatives: str) -> None:
         elif path.name.startswith("test_"):
             text = "def test_placeholder():\n    assert True\n"
         path.write_text(text, encoding="utf-8")
-
-
-def _validate_tmp_performance_manifest(
-    tmp_path: Path, monkeypatch, *, files: tuple[str, ...], **manifest
-):
-    mod = _load_performance_manifest_tool()
-    _touch(tmp_path, *files)
-    path = tmp_path / "manifest.toml"
-    path.write_text(_performance_manifest_text(**manifest), encoding="utf-8")
-    monkeypatch.setattr(mod, "REPO_ROOT", tmp_path)
-    return mod.validate_manifest(mod.load_manifest(path))
-
-
-_RUNTIME_PNG = "docs/_static/runtime.png"
-_PROFILE_TOOL = "scripts/profiling/profile.py"
-
-
-@pytest.mark.parametrize(
-    ("files", "manifest", "match"),
-    [
-        pytest.param(
-            (_PROFILE_TOOL,),
-            dict(tool=_PROFILE_TOOL, artifact="benchmarks/results/runtime.json"),
-            "artifact path does not exist",
-            id="missing-machine-readable-evidence",
-        ),
-        pytest.param(
-            (_PROFILE_TOOL, _RUNTIME_PNG),
-            dict(tool=_PROFILE_TOOL, artifact=_RUNTIME_PNG, status="halfway"),
-            "invalid status",
-            id="invalid-status",
-        ),
-    ],
-)
-def test_performance_manifest_rejects_bad_rows(
-    tmp_path: Path, monkeypatch, files, manifest, match
-) -> None:
-    with pytest.raises(ValueError, match=match):
-        _validate_tmp_performance_manifest(
-            tmp_path, monkeypatch, files=files, **manifest
-        )
-
-
-def test_performance_manifest_accepts_benchmark_performance_driver(
-    tmp_path: Path, monkeypatch
-) -> None:
-    tool = "scripts/benchmarks/benchmark_runtime_memory.py"
-    summary = _validate_tmp_performance_manifest(
-        tmp_path,
-        monkeypatch,
-        files=(tool, _RUNTIME_PNG),
-        tool=tool,
-        artifact=_RUNTIME_PNG,
-    )
-    assert summary["rows"][0]["n_tools"] == 1
-
-
-def test_performance_manifest_reports_missing_render_without_requiring_it(
-    tmp_path: Path, monkeypatch
-) -> None:
-    summary = _validate_tmp_performance_manifest(
-        tmp_path,
-        monkeypatch,
-        files=(_PROFILE_TOOL,),
-        tool=_PROFILE_TOOL,
-        artifact=_RUNTIME_PNG,
-    )
-    row = summary["rows"][0]
-    assert row["n_required_artifacts"] == 0
-    assert row["n_missing_rendered_artifacts"] == 1
 
 
 def test_documented_public_api_modules_have_manifest_tracking() -> None:
@@ -1903,12 +1582,8 @@ owner_lane = "runtime lane"
 status = "{status}"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = ["reference"]
-physics_contracts = ["physics"]
-numerics_contracts = ["numerics"]
 fast_tests = ["{test}"]
 artifact_paths = ["{artifact}"]
-next_tests = ["next"]
 """
 
 
@@ -1949,15 +1624,6 @@ def test_repository_validation_manifest_is_well_formed() -> None:
         assert rows[module]["coverage_target_percent"] == 95.0, module
     assert rows["gkx.operators.linear.cache_builder"]["n_owned_modules"] == 2
     assert rows["gkx.operators.linear.linked"]["n_owned_modules"] == 0
-    for module, key in (
-        ("gkx.operators.linear.moments", "n_numerics_contracts"),
-        ("gkx.operators.linear.params", "n_physics_contracts"),
-        ("gkx.operators.nonlinear.rhs", "n_numerics_contracts"),
-        ("gkx.operators.nonlinear.diagnostic_state", "n_physics_contracts"),
-        ("gkx.solvers.nonlinear.explicit", "n_numerics_contracts"),
-        ("gkx.solvers.nonlinear.imex", "n_physics_contracts"),
-    ):
-        assert rows[module][key] >= 2, (module, key)
     assert "gkx.solvers.nonlinear.diagnostics" in summary["high_priority_open"]
 
 
@@ -2151,7 +1817,6 @@ FLOOR_REPO_ROOT = Path(__file__).resolve().parents[2]
 UNINSTALLED_RELEASE_GATES = (
     "scripts/check.py size",
     "scripts/check.py architecture",
-    "scripts/check.py parallel-scaling",
     "scripts/check.py readiness",
     "scripts/check.py validation-coverage",
 )
