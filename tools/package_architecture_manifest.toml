@@ -152,7 +152,7 @@ public_facades = [
 
 [[complexity_policy.exceptions]]
 path = "solvers/nonlinear/imex.py"
-baseline_lines = 1966  # +8: cached_jit wrappers around the dt probe and the unit-moment maps
+baseline_lines = 1966  # unchanged: scan Thomas factor and slim host blocks replace the unrolled loops and the block sets
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -239,7 +239,8 @@ recursive = true
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
-baseline = 69893
+# 69893 -> 69895: persistent cache from the Python API; the imex.py factor changes net to zero.
+baseline = 69895
 target = 45000
 
 [[line_budget_policy.counts]]
