@@ -47,7 +47,7 @@ implied by the requested tolerance.
 Near a growth-rate crossing, candidate vectors may be selected by overlap with
 the previous right mode or by biorthogonal overlap with its left mode.  The
 overlap, complex spectral gap, residual, and eigenpair condition number
-(``condition_limit``, default ``1e8``) are independent fail-closed gates.  Only
+(``condition_limit``, default ``1e8``) are independent gates, each of which rejects the pair on failure.  Only
 the residual gates carry a precision floor: the overlap and gap gates compare
 normalized ``O(1)`` quantities, which resolve identically at either precision.
 
@@ -96,7 +96,7 @@ one sensitivity solve rather than an iteration tape.  GKX rejects exceptional
 or poorly separated modes (``branch_gap_floor``, ``condition_limit``) because a
 single-mode derivative is then not well defined.  A value-only call does not
 compute the left mode; that cost is paid only when reverse mode requests the
-custom VJP.  The sensitivity solve fails closed: a solve that misses its
+custom VJP.  The sensitivity solve is checked: a solve that misses its
 acceptance returns NaN rather than an inaccurate gradient.
 
 Dense rule for forward-mode Jacobians
@@ -142,7 +142,7 @@ and it factors on the CPU.
 Velocity resolution
 -------------------
 
-Residual convergence for each finite matrix is **not** velocity-space
+Residual convergence for each finite matrix is not velocity-space
 convergence.  On a collisionless hard truncation the leading eigenvalue drifts
 with ``(Nl, Nm)``, and explicit stability is set by the high-moment
 streaming/mirror spectrum, so the matrix-free cold path stays opt-in and
@@ -197,7 +197,7 @@ Pass continuation data between nearby design points and keep the residual,
 overlap, gap, conditioning, and velocity-resolution checks active throughout
 an optimization campaign.
 
-For a supplied continuation shift, use the fail-closed cold policy directly:
+For a supplied continuation shift, use the cold policy directly:
 
 .. code-block:: python
 

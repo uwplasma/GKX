@@ -454,7 +454,7 @@ class IndependentWorkerMetadata:
 
 @dataclass(frozen=True)
 class IndependentEnsembleProvenanceReport:
-    """End-to-end provenance gate for independent UQ/optimization ensembles."""
+    """Provenance gate for independent UQ/optimization ensembles."""
 
     kind: str
     workload: str
@@ -616,7 +616,7 @@ def _probe_exception_metadata(
         )
         metadata["passed"] = passed
         return passed, metadata
-    except Exception as exc:  # pragma: no cover - defensive fail-closed path
+    except Exception as exc:  # pragma: no cover - defensive failure path
         return False, {
             "passed": False,
             "unexpected_type": type(exc).__name__,

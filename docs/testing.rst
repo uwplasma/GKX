@@ -91,7 +91,7 @@ Markers:
 - ``slow``: excluded by default *and* by the wide-coverage shards, so a
   ``slow`` test leaves the coverage denominator. Do not use it for a test that
   only takes a minute.
-- ``integration``: a label for end-to-end tests; it does not deselect anything.
+- ``integration``: a label for whole-pipeline tests; it does not deselect anything.
 - ``gpu``: exercises a device-specific execution path.
 
 For a bounded local loop, use the per-file runner. It applies a per-file

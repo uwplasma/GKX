@@ -898,7 +898,7 @@ def _adaptive_branch(
     cfg: KrylovConfig,
     status_callback: _StatusCallback,
 ) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
-    """Run the residual-certified adaptive eigensolve; fail closed on rejection.
+    """Run the residual-certified adaptive eigensolve; raise on rejection.
 
     Unlike the raw propagator/power/arnoldi branches, this path never returns
     an uncertified pair: the eigenvalue is either certified against the

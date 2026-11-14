@@ -461,7 +461,7 @@ def _fused_scalar_diagnostics(
 ):
     """Return the four gated scalar traces from state the RHS already built.
 
-    Fused deliberately. Recomputing these outside the timed route costs up to
+    Fused: recomputing these outside the timed route costs up to
     118x the step because the observable path re-runs the bracket; here they are
     reductions over arrays that are already resident, followed by one scalar
     ``psum`` each. ``Wg`` reduces over both mesh axes (every shard owns a
@@ -511,7 +511,7 @@ def _fused_scalar_diagnostics(
 def _mesh_owner_mask(mesh_axes, like):
     """Return 1 on the first Hermite block and 0 elsewhere, varying over the mesh.
 
-    The trivially-true species factor is deliberate: it makes the mask -- and so
+    The trivially-true species factor makes the mask -- and so
     the masked scalar -- formally vary over both mesh axes, which is what lets a
     single ``psum`` over the whole mesh type-check for a quantity that is
     already Hermite-complete.
@@ -650,10 +650,10 @@ def _species_hermite_local_rhs(
 
 
 def stage_from_host(value: Any, sharding: Any) -> Any:
-    """Reuse equivalent layouts; use host placement for genuine repartitioning.
+    """Reuse equivalent layouts; use host placement for true repartitioning.
 
     Direct device-to-mesh resharding of a committed single-device array failed
-    the two-GPU identity gate. Keep host placement for genuine repartitioning.
+    the two-GPU identity gate. Keep host placement for true repartitioning.
 
     Equivalent layouts retain the same shards/devices. Normalizing only their
     metadata avoids host fetches after linked-cover projection, including across
@@ -682,7 +682,7 @@ def stage_from_host(value: Any, sharding: Any) -> Any:
 
 
 def _reject_unsharded_hermite_terms(term_cfg, params, plan) -> None:
-    """Fail closed on the one term family a split Hermite axis cannot serve yet.
+    """Raise on the one term family a split Hermite axis cannot serve yet.
 
     The conserving-collision correction reads the ``m = 0, 1, 2`` moments of the
     *local* slab. Those are the global moments only on the Hermite block that

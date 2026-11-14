@@ -2,7 +2,7 @@
 
 ``species_hermite`` uses the production species x Hermite mesh, replicating
 Laguerre, perpendicular and parallel spatial axes. Auto mode selects the
-largest compatible subset of the device budget; explicit counts fail closed
+largest compatible subset of the device budget; explicit counts raise
 when they cannot factor. Status reports selected and budgeted devices.
 
 Named collectives serve explicit ``rk2``/``rk3``/``rk4``/``rk4-pi``/``sspx3``

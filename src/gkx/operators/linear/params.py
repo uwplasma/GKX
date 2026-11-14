@@ -463,7 +463,7 @@ def _x64_enabled() -> bool:
 
 
 def _host_values_or_none(x) -> np.ndarray | None:
-    """Return ``x`` as host values, or ``None`` when it is genuinely traced.
+    """Return ``x`` as host values, or ``None`` when it is traced.
 
     Read the argument itself, never a ``jnp`` copy of it. Inside a trace every
     ``jnp`` call stages out, so ``jnp.asarray(-1.0)`` is a tracer even for a

@@ -145,7 +145,7 @@ def _validate_runtime_schema_version(data: dict[str, Any]) -> None:
 # otherwise run on a different integrator without saying so.
 _REMOVED_TIME_KEYS: dict[str, str] = {
     "use_diffrax": (
-        "the native explicit integrator is now the only time-integration owner; "
+        "the native explicit integrator is the only time-integration owner; "
         'delete the key and select the scheme with method = "rk2"/"rk3"/"rk4"'
     ),
     "diffrax_solver": (

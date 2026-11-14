@@ -16,17 +16,17 @@ Unified Runtime Schema
 Resolution and time-step defaults
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- **Velocity resolution.** When neither the call nor the deck names
+- Velocity resolution. When neither the call nor the deck names
   ``Nl`` (Laguerre) and ``Nm`` (Hermite), the fallback is
   ``(Nl, Nm) = (12, 24)`` for linear runs and ``(4, 8)`` for nonlinear runs;
   a deck with kinetic electrons gets per-species counts instead (see
   :ref:`per-species-moments`). Set both explicitly for any result you report.
-- **ky layout.** ``[grid] ky_layout = "half"`` (default) stores the ``1 + Ny // 2``
+- ky layout. ``[grid] ky_layout = "half"`` (default) stores the ``1 + Ny // 2``
   non-negative rows; ``"full"`` stores the two-sided ``ky`` axis of length
   ``Ny`` (``gkx.core_ky_layout``). Results do not depend on the choice: they
   agree to round-off, and ``"half"`` is faster and smaller, in the nonlinear
   step and in the heat-flux window gradient.
-- **Time stepping.** A deck that sets ``[time] dt`` runs ``rk2`` at that fixed
+- Time stepping. A deck that sets ``[time] dt`` runs ``rk2`` at that fixed
   step unless it names another ``method``. A deck without ``dt`` gets
   ``method = "rk4"`` with ``fixed_dt = false``: the CFL controller chooses the
   step with ``cfl = 0.9``. An explicit ``method`` or ``fixed_dt`` in the deck
@@ -35,14 +35,14 @@ Resolution and time-step defaults
 Runtime precision
 ^^^^^^^^^^^^^^^^^
 
-The default is **float32** (``complex64`` states).
+The default is float32 (``complex64`` states).
 ``JAX_ENABLE_X64=true``, set before JAX is imported, selects double precision.
 The runtime's own initial state is then built in ``complex128``, so the Krylov
 basis, the eigenvector and the certification gate are all float64. This is what
 the shipped decks mean when their header says to run them under
 ``JAX_ENABLE_X64`` for parity reproduction.
 
-What x64 buys is the **gate**, not necessarily the eigenvalue.
+What x64 buys is the gate, not necessarily the eigenvalue.
 ``certifiable_residual_tolerance`` floors the eigenpair residual gate at
 ``1e3 * eps(dtype)``, so a float32 run certifies against 1.19e-4 while a float64
 run certifies against 1e-9. Use float64 when the number you are quoting has to
@@ -52,7 +52,7 @@ A float64 run on a deck too coarse to support a certifiable eigenpair raises
 instead of returning an uncertified number. If that happens, raise the
 velocity resolution (``Nl``, ``Nm``).
 
-``GKX_X64`` is a **test-harness** variable, not a runtime switch: it only selects
+``GKX_X64`` is a test-harness variable, not a runtime switch: it only selects
 the precision banner in ``tests/conftest.py``. Setting it without
 ``JAX_ENABLE_X64`` does not change any run's precision.
 
@@ -153,7 +153,7 @@ directly from the final linear state or Krylov eigenvector:
    include_stable_modes = false
    channels = ["es"]
 
-The validated output level is **linear weights** plus optional
+The validated output level is linear weights plus optional
 uncalibrated electrostatic saturation rules. Electromagnetic quasilinear
 channels are rejected. The runtime writes
 ``*.quasilinear.summary.json`` and ``*.quasilinear_species.csv`` when
@@ -875,7 +875,7 @@ Notable runtime-only keys:
   (default ``0.125``).
 * ``[physics] reduced_model``: physics-family selector for runtime inputs.
   The maintained runtime supports full gyrokinetics via ``"gyrokinetic"``
-  and its full-GK aliases. Non-promoted reduced-model values fail closed with
+  and its full-GK aliases. Non-promoted reduced-model values raise
   ``NotImplementedError`` instead of silently routing through the wrong equations.
 * ``[collisions] damp_ends_amp`` (removed): a positive value without
   ``damp_ends_rate`` on a non-periodic deck is refused, because GKX < 2.6 read
@@ -909,7 +909,7 @@ Notable runtime-only keys:
 * ``[collisions] nu_hyper_l`` / ``nu_hyper_m`` / ``nu_hyper_lm`` and
   ``p_hyper_l`` / ``p_hyper_m`` / ``p_hyper_lm``: Laguerre-only,
   Hermite-only, and mixed hypercollision channels.
-  ``nu_hyper_l`` and ``nu_hyper_lm`` act **only** in the constant-coefficient
+  ``nu_hyper_l`` and ``nu_hyper_lm`` act only in the constant-coefficient
   branch -- the :math:`|k_z|` kernel carries no Laguerre index -- so a deck
   that declares either while ``hypercollisions_const = 0.0`` (the default) is
   refused rather than run without the sink it asked for. Case validation also
@@ -1244,7 +1244,7 @@ you asked for:
 * ``--batch-ky`` and ``[parallel] strategy = "combined_ky"``, which already
   integrate every ``ky`` in one pass and so have nothing to carry.
 
-**Two things to know before switching it on.** First, on a *fixed* horizon a
+Two things to know before switching it on. First, on a *fixed* horizon a
 warm-seeded time integration reports a different growth rate than a cold one,
 because it has removed a startup transient the cold run still contains; the two
 agree only once the horizon is long enough that both are converged, which is
@@ -1264,7 +1264,7 @@ For the explicit equations attached to these controls, see :doc:`operators`.
 Explicit reference migration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For a **resolved legacy deck** with a known execution route:
+For a resolved legacy deck with a known execution route:
 
 .. code-block:: python
 
@@ -1295,9 +1295,9 @@ Let :math:`s=1` for the old true scaling flag and :math:`s=0` otherwise:
      1, & \text{timestep-free RHS}.
    \end{cases}
 
-This preserves the isolated RHS and RK stage map **at the reference step**.
+This preserves the isolated RHS and RK stage map at the reference step.
 Subsequent timestep refinement holds :math:`\nu_{ref}` fixed; it does not
 preserve the legacy per-step model at every timestep. Adaptive linear sources,
 conflicting ``run.dt`` overrides and already-converted decks are rejected.
 Resolve any command-line timestep override into the source deck first.
-This is provenance and algebraic equivalence, **not benchmark recertification**.
+This is provenance and algebraic equivalence, not benchmark recertification.

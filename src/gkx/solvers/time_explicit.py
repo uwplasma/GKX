@@ -1053,7 +1053,7 @@ def _geometry_frequency_maxima(
     # axis and an analytic geometry evaluates it with ``jnp``, which stages out
     # inside a trace; the maxima below then could not be read back, so an
     # adaptive-dt run refused under ``jit`` for a geometry that was never
-    # traced. Genuinely traced geometry stays traced here and is named below.
+    # traced. Traced geometry stays traced here and is named below.
     with jax.ensure_compile_time_eval():
         theta_j = jnp.asarray(theta)
         cv_j, gb_j, cv0_j, gb0_j = geom.drift_coeffs(theta_j)

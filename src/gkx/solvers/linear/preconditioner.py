@@ -325,7 +325,7 @@ def check_block_structure(
     ``coupling_halfwidth`` is the Hermite half-width of the two Laguerre
     couplings: how far off its own diagonal the ``l -> l +- 1`` block reaches in
     the Hermite index. The banded storage pays for itself while ``2p+1 <= Nm``,
-    so this is a third fallback condition and not only a diagnostic.
+    so this is a third fallback condition as well as a diagnostic.
     """
 
     view = no_phi.reshape(no_phi.shape[0], nl, nm, nl, nm)

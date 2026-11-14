@@ -312,7 +312,7 @@ def _runtime_model_key(cfg: RuntimeConfig) -> str:
 
 
 def _raise_unsupported_reduced_model(cfg: RuntimeConfig) -> NoReturn:
-    """Fail closed unless the promoted full gyrokinetic runtime is selected."""
+    """Raise unless the promoted full gyrokinetic runtime is selected."""
 
     raise ValueError(
         f"Unknown physics.reduced_model={cfg.physics.reduced_model!r}. "

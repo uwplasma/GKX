@@ -239,7 +239,8 @@ recursive = true
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
-baseline = 69893
+# 69893 -> 69883: docstring and comment prose edits.
+baseline = 69883
 target = 45000
 
 [[line_budget_policy.counts]]

@@ -66,15 +66,14 @@ _SOLVER_OBJECTIVE_ALIASES = {
 def _default_gradient_linear_params(geometry: Any | None = None) -> LinearParams:
     """Cyclone drive plus the Hermite closure a truncated basis requires.
 
-    The drive is in the units the operator consumes, ``a/L``. It used to be
-    6.9 and 2.2, which are the same case expressed as ``R/L``: the objective was
-    running at ``R/a = 2.78`` times the intended gradient.
+    The drive is in the units the operator consumes, ``a/L`` (6.9 and 2.2 would be
+    the same case in ``R/L``, ``R/a = 2.78`` times the intended gradient).
 
-    Every dissipation amplitude used to be zero, leaving the truncated Hermite
-    hierarchy with no velocity-space dissipation: the whole spectrum then sits on
+    The dissipation amplitudes are nonzero. With none, the truncated Hermite
+    hierarchy has no velocity-space dissipation: the whole spectrum sits on
     the imaginary axis at zero drive, ``argmax(Re lambda)`` is floored at zero or
-    above, and **the objective cannot report a stable design**. Where the
-    physical branch is weak it returned a marginal mode at ``|omega|`` of 20-90
+    above, and the objective cannot report a stable design. Where the
+    physical branch is weak it returns a marginal mode at ``|omega|`` of 20-90
     instead. ``test_collision_physics`` pins the numbers.
 
     Hyperdiffusion must not be used for this. This path runs one selected ``k_y``
@@ -148,7 +147,7 @@ class _LinearTransportWeights:
 
 @dataclass(frozen=True)
 class AdaptiveLinearEigensolverConfig:
-    """Fail-closed settings for the differentiable matrix-free objective path."""
+    """Settings for the differentiable matrix-free objective path; unconverged solves are rejected."""
 
     krylov_dim: int = 24
     restart_krylov_dim: int = 12
@@ -166,8 +165,8 @@ class AdaptiveLinearEigensolverConfig:
     exponential_horizon: float = 5.0
     adjoint_krylov_dim: int = 24
     adjoint_max_restarts: int = 200
-    # Gates the implicit-gradient linear solve, whose acceptance fails closed to
-    # NaN, so it carries the same working-dtype noise floor as ``tolerance``.
+    # Gates the implicit-gradient linear solve, whose acceptance returns NaN on
+    # rejection, so it carries the same working-dtype noise floor as ``tolerance``.
     sensitivity_rtol: float = 1.0e-8
     sensitivity_restart: int = 200
     sensitivity_max_restarts: int = 4
@@ -606,8 +605,8 @@ def _matrix_free_dominant_linear_branch(
         # while retaining an O(n) matrix-free operator.
         from solvax import gmres
 
-        # The acceptance below is fail-closed to NaN, so an unreachable
-        # threshold does not merely loosen the gradient, it deletes it. The
+        # The acceptance below returns NaN on rejection, so an unreachable
+        # threshold deletes the gradient. The
         # inner solve keeps aiming a decade tighter than the acceptance.
         accept_rtol = certifiable_residual_tolerance(config.sensitivity_rtol, rhs.dtype)
         solve_rtol = certifiable_residual_tolerance(
@@ -709,8 +708,8 @@ def solver_scalar_objective_from_vector(
 ) -> jnp.ndarray:
     """Select one scalar objective from ``SOLVER_OBJECTIVE_NAMES``.
 
-    This tiny selector keeps optimizer code honest about which scalar is being
-    minimized. It also centralizes aliases used by the examples:
+    This tiny selector names the scalar being
+    minimized and centralizes aliases used by the examples:
     ``growth -> gamma``, ``frequency -> omega``, and
     ``quasilinear_flux -> mixing_length_heat_flux_proxy``.
     """

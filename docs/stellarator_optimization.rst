@@ -133,7 +133,7 @@ The transport residual is normalized by the seed flux,
    w_Q = \frac{w_{priority}}{Q_{seed}^2},
 
 so its priority is not set accidentally by diagnostic units. The QA, aspect,
-iota, and transport priorities are deliberately visible beside
+iota, and transport priorities are visible beside
 the physics and resolution constants.
 
 Run
@@ -218,7 +218,7 @@ trace means:
       +\left(\frac{\sigma_{c,i}}{\bar Q_{b,i}}\right)^2
       \right\}\right]^{1/2}.
 
-The reported interval is deliberately conservative,
+The reported interval is conservative,
 
 .. math::
 
