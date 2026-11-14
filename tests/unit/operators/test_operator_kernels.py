@@ -3000,3 +3000,144 @@ def test_operator_names_select_models_exactly() -> None:
     for name in ("landau", "lenard_bernstein", "not_a_sugama_variant", None):
         assert params_for_collision_operator(base, name) is base
     assert collision_model_for("coulomb") == "landau"
+
+
+def _lenard_bernstein_state(ns=2, nl=3, nm=4):
+    """Six-axis Hermite-Laguerre state (species, l, m, ky, kx, z) and its l+2m table."""
+
+    rng = np.random.default_rng(3)
+    shape = (ns, nl, nm, 1, 1, 2)
+    state = jnp.asarray(rng.standard_normal(shape) + 1j * rng.standard_normal(shape))
+    lam = jnp.arange(nl)[:, None] + 2.0 * jnp.arange(nm)[None, :]
+    return state, lam
+
+
+def test_collision_frequency_broadcasts_and_refuses_a_wrong_species_count():
+    from gkx.operators.linear import dissipation as dis
+
+    out = dis._species_collision_frequency(jnp.asarray(0.3), ns=3, dtype=jnp.float64)
+    np.testing.assert_allclose(out, [0.3, 0.3, 0.3])
+    with pytest.raises(ValueError, match="length 3"):
+        dis._species_collision_frequency(jnp.ones(2), ns=3, dtype=jnp.float64)
+
+
+@pytest.mark.parametrize("squeeze", [False, True])
+def test_laguerre_collision_base_follows_the_table_rank_and_the_state_rank(squeeze):
+    from gkx.operators.linear import dissipation as dis
+
+    state, lam = _lenard_bernstein_state()
+    nu = jnp.asarray([0.1, 0.2])
+    kwargs = dict(nu=nu, b=None, dtype=jnp.float64)
+    # (l, m) table on a species-resolved state: nu_s * lam per species.
+    base = dis._laguerre_collision_base(state, lb_lam=lam, **kwargs)
+    np.testing.assert_allclose(base[1, 2, 3], 0.2 * lam[2, 3])
+    # The same table on a species-less state uses the first (only) frequency.
+    one = dis._laguerre_collision_base(state[0], lb_lam=lam, **{**kwargs, "nu": nu[:1]})
+    np.testing.assert_allclose(one[2, 3], 0.1 * lam[2, 3])
+    # A per-species table takes its species count from the table itself.
+    table6 = jnp.broadcast_to(lam[None, :, :, None, None, None], state.shape)
+    full = dis._laguerre_collision_base(
+        state[0] if squeeze else state, lb_lam=table6, **kwargs
+    )
+    assert full.shape == (state.shape[1:] if squeeze else state.shape)
+    # Anything else falls back to scalar * table.
+    flat = dis._laguerre_collision_base(
+        state, lb_lam=jnp.ones(3), nu=jnp.asarray(2.0), b=None, dtype=jnp.float64
+    )
+    np.testing.assert_allclose(flat, 2.0)
+
+
+def test_collision_base_prefers_a_dense_table_and_is_silent_without_frequency():
+    from gkx.operators.linear import dissipation as dis
+
+    state, lam = _lenard_bernstein_state()
+    dense = jnp.full(state.shape, 0.7)
+    base = dis._collision_base_operator(
+        state,
+        nu=jnp.ones(2),
+        collision_lam=dense,
+        lb_lam=lam,
+        b=None,
+        dtype=jnp.float64,
+    )
+    np.testing.assert_allclose(base, 0.7)
+    empty = jnp.zeros((0,))
+    kw = dict(collision_lam=empty, b=None, dtype=jnp.float64)
+    assert (
+        dis._collision_base_operator(state, nu=jnp.zeros(2), lb_lam=lam, **kw) is None
+    )
+    zeros = dis._collision_base_operator(state, nu=jnp.ones(2), lb_lam=None, **kw)
+    assert zeros.shape == state.shape and not zeros.any()
+
+
+def test_collisions_contribution_refuses_electron_ion_without_the_dougherty_pieces():
+    from gkx.operators.linear import dissipation as dis
+
+    state, lam = _lenard_bernstein_state()
+    kwargs = dict(nu=jnp.ones(2), lb_lam=lam, weight=jnp.ones(()), nu_ei=jnp.ones(2))
+    with pytest.raises(NotImplementedError, match="Dougherty"):
+        dis.collisions_contribution(state, **kwargs)  # no G, Jl, JlB, b
+    plain = dis.collisions_contribution(
+        state, nu=jnp.ones(2), lb_lam=lam, weight=jnp.ones(())
+    )
+    np.testing.assert_allclose(
+        plain,
+        -state
+        * (
+            jnp.ones(2)[:, None, None, None, None, None]
+            * lam[None, :, :, None, None, None]
+        ),
+    )
+    zero = dis.collisions_contribution(state, nu=jnp.ones(2), lb_lam=lam, weight=0.0)
+    assert not zero.any()
+    custom = SimpleNamespace(_nu_ei=jnp.ones(2))
+    with pytest.raises(NotImplementedError, match="electron_ion"):
+        dis.custom_collision_contribution(
+            state, None, None, custom, SimpleNamespace(collisions=1.0), object()
+        )
+
+
+def test_collision_diagnostics_check_their_shapes():
+    from gkx.operators.linear import dissipation as dis
+
+    state, _ = _lenard_bernstein_state()
+    with pytest.raises(ValueError, match="same shape"):
+        dis.collision_quadratic_rate(state, state[:1])
+    with pytest.raises(ValueError, match="five or six"):
+        dis.collision_invariant_rates(state[0, 0])
+    with pytest.raises(ValueError, match="Nl >= 2"):
+        dis.collision_invariant_rates(state[:, :1])
+    weighted = dis.collision_quadratic_rate(
+        state, -state, weights=jnp.full(state.shape, 2.0)
+    )
+    np.testing.assert_allclose(weighted, -2.0 * float(jnp.sum(jnp.abs(state) ** 2)))
+
+
+def test_hyperdiffusion_refuses_a_misshapen_kx_and_normalises_by_the_full_ky_axis():
+    from gkx.operators.linear import dissipation as dis
+
+    G = jnp.ones((1, 2, 4, 3, 1), dtype=jnp.complex128)
+    ky = jnp.asarray([0.0, 0.5, 1.0, 1.5])
+    kx = jnp.asarray([0.0, 1.0, 2.0])
+    mask = jnp.ones((4, 3), dtype=bool)
+    args = dict(
+        dealias_mask=mask,
+        D_hyper=jnp.asarray(0.1),
+        p_hyper_kperp=jnp.asarray(2.0),
+        weight=jnp.ones(()),
+    )
+    with pytest.raises(ValueError, match="kx must have shape"):
+        dis.hyperdiffusion_contribution(G, kx=jnp.ones((2, 2)), ky=ky, **args)
+    full = dis.hyperdiffusion_contribution(G, kx=kx, ky=ky, **args)
+    # The cutoff row is (ny_full - 1)//3 of the two-sided axis. A half spectrum that
+    # omitted ny_full would take a nearer cutoff and inflate the coefficient.
+    half = dis.hyperdiffusion_contribution(G, kx=kx, ky=ky, ny_full=7, **args)
+    assert float(jnp.abs(full).max()) > float(jnp.abs(half).max())
+    cut = dis.hyperdiffusion_contribution(
+        G, kx=kx, ky=ky, ky_cut=jnp.asarray(2.0), **args
+    )
+    assert cut.shape == G.shape and bool(jnp.all(jnp.real(cut) <= 0.0))
+    per_row = dis.hyperdiffusion_contribution(
+        G, kx=jnp.broadcast_to(kx, (4, 3)), ky=ky, **args
+    )
+    np.testing.assert_allclose(per_row, full)
