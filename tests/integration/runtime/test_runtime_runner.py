@@ -3865,7 +3865,10 @@ def test_runtime_linear_kinetic_electron_time_route_without_dt_is_finite() -> No
         cfg,
         time=TimeConfig(t_max=12.0, sample_stride=10, damp_ends_rate=0.1),
         physics=replace(cfg.physics, linear=True, nonlinear=False),
-        grid=replace(cfg.grid, Nx=1, Ny=22, Nz=16),
+        # One poloidal turn: the deck's two (#478) leave a slow mode within 20% of the
+        # dominant one, which the 6 <= t <= 12 window has not yet shed (gamma 0.161
+        # against the eigenvalue 0.202; the dt does not matter, 0.001 gives the same).
+        grid=replace(cfg.grid, Nx=1, Ny=22, Nz=16, nperiod=1),
     )
     kw = dict(ky_target=0.3, Nl=2, Nm=4, auto_window=False, tmin=6.0, tmax=12.0)
     time = run_runtime_linear(cfg, solver="time", **kw)
