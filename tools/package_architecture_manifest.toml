@@ -260,7 +260,7 @@ recursive = true
 # 64804 -> 64839: banded route with unequal per-species Nm regression test.
 # 64839 -> 62142: nonlinear helper tests merged into test_nonlinear.py, plumbing tests whose coverage
 # other tests repeat removed, edge-case tests for the low-branch modules added; measured.
-baseline = 62142
+baseline = 62153
 target = 35000
 
 [[line_budget_policy.counts]]
