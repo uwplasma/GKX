@@ -15,6 +15,7 @@ import numpy as np
 from jax.typing import DTypeLike
 from functools import partial
 
+from gkx.operators.linear.cache_arrays import keep_moments
 from gkx.operators.linear.cache_model import LinearCache
 from gkx.operators.linear.params import (
     LinearParams,
@@ -720,7 +721,9 @@ def _banded_ritz_pairs(
     )
 
     # The blocks are the operator only if it is Hermite-banded: compare on a random vector.
-    noise = np.random.default_rng(0).standard_normal((2, size)) * keep.reshape(-1)
+    # Slots a species does not keep are zero rows (eigenvalue 0): start off them.
+    live = keep_moments(jnp.ones(shape), params.moments) * keep
+    noise = np.random.default_rng(0).standard_normal((2, size)) * live.reshape(-1)
     probe = jnp.asarray(noise[0] + 1j * noise[1], v0.dtype)
     expected = jnp.append(apply(probe), 0)[safe]
     mismatch = jnp.linalg.norm(

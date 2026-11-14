@@ -3361,3 +3361,39 @@ def test_pr3_z_block_couples_kinetic_species_through_the_field() -> None:
             pr3.build_pr3_factors(v0, cache, params, term_cfg, _PR3_SIGMA)
     finally:
         pr3._block_shape = original
+
+
+def test_banded_route_ignores_moments_a_species_does_not_keep() -> None:
+    """Unequal per-species Nm: the banded route sees only the moments each species keeps.
+
+    The slots above a species' Nm are zero rows of the operator (eigenvalue 0). A start
+    vector that touched them pulled the stepped state's Rayleigh quotient off the mode
+    (0.13 against 0.29 on the full TEM deck), which moved the shift onto the zero modes
+    and sent the route to the adaptive fallback. The whole operator of this small case is
+    dense-solved for the shift, so that estimate is the exact fastest eigenvalue.
+    """
+    import dataclasses
+    import gkx
+
+    case = load_runtime_from_toml(Path("benchmarks/cases/tem_collisional.toml"))[0]
+    case = dataclasses.replace(
+        case,
+        grid=dataclasses.replace(case.grid, Nz=16, ntheta=8, nperiod=1),
+        species=tuple(
+            dataclasses.replace(s, Nl=2, Nm=m) for s, m in zip(case.species, (4, 16))
+        ),
+    )
+    notes: list[str] = []
+    result = gkx.solve(
+        case, ky_target=0.3, Nl=2, Nm=16, solver="krylov", status_callback=notes.append
+    )
+
+    def value(key: str) -> complex:
+        line = next(n for n in notes if key in n)
+        return complex(line.replace("=", ": ").split(": ")[-1])
+
+    exact = value("dense truncation")
+    assert not any("failed" in n for n in notes)
+    assert abs(value("Rayleigh quotient") - exact) < 0.03 * abs(exact)
+    np.testing.assert_allclose(result.gamma, exact.real, rtol=1e-3)
+    np.testing.assert_allclose(result.omega, -exact.imag, rtol=1e-3)
