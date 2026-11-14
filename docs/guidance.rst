@@ -381,7 +381,13 @@ Resolution
 
 - **Velocity space.** Linear runs default to :math:`(N_l, N_m) = (12, 24)`,
   nonlinear runs to (4, 8). Vary :math:`N_m` first. Kinetic electrons and TEM
-  need more: TEM growth rates still change at (16, 48).
+  need more: TEM growth rates still change at (16, 48). On
+  ``benchmarks/cases/tem_collisional.toml`` at :math:`\nu = 0` (Krylov, float64,
+  :math:`N_l = 6`, ``nperiod = 2``) :math:`\gamma` is 0.306, 0.331, 0.341, 0.349,
+  0.353 for :math:`N_m` = 24, 48, 64, 96, 128, with the extrapolation near 0.36;
+  :math:`N_l` 6 to 8 and :math:`N_z` per turn 24 to 48 move it by less than 1%,
+  and ``nperiod`` 2 to 5 by 5%, so the deck's (4, 8) value 0.274 is a speed
+  choice and not a converged rate.
 - **Per species.** A kinetic-electron deck that names no resolution gives the
   ions and the electrons their own counts; see `Velocity space per species`_.
 - **Perpendicular.** Nonlinear production runs use 64-96 points in
