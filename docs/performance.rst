@@ -6,6 +6,16 @@ Compilation cost depends on array shapes, method and static operator choices.
 Changing those choices can trigger recompilation. Keep compilation and steady
 execution time separate when comparing configurations.
 
+Compilation cache
+-----------------
+
+``import gkx`` turns on JAX's persistent compilation cache in
+``$XDG_CACHE_HOME/gkx/jax`` (``~/.cache/gkx/jax``), so a repeated case skips
+compilation. On a nonlinear run the first chunk took 7:03 without the cache and
+1:32 with it for kinetic electrons, and 18 s against 6 s for adiabatic electrons.
+Set ``GKX_JAX_CACHE=0`` to turn it off and ``GKX_JAX_CACHE_DIR`` to move it; a
+directory you set through ``JAX_COMPILATION_CACHE_DIR`` or ``jax.config`` is kept.
+
 Measuring execution
 -------------------
 

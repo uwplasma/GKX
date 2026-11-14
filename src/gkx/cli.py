@@ -22,7 +22,6 @@ from gkx.geometry.miller_eik import generate_runtime_miller_eik
 from gkx.geometry.vmec_eik import generate_runtime_vmec_eik
 from gkx.artifacts.io import write_runtime_linear_artifacts
 from gkx.workflows.linear import run_runtime_linear
-from gkx.compilation_cache import enable_persistent_compilation_cache
 from gkx.workflows.runtime.commands import (
     attach_preloaded_runtime_config,
     plot_saved_output_command,
@@ -690,11 +689,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     argv = extract_set_overrides(sys.argv[1:])
-    # Every executable path that can compile gets the persistent cache, before
-    # any solver is built. Re-running an unchanged case is the common case
-    # while a user edits a TOML, and it is the case that was paying a full
-    # cold compile every time. See gkx.compilation_cache.
-    enable_persistent_compilation_cache()
     if not argv or argv == ["--plot"]:
         return run_default_linear_demo(show=bool(argv))
     if argv[0] in {"plot", "--plot"}:

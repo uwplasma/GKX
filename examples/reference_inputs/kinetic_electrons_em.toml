@@ -79,7 +79,7 @@ nonlinear_dealias = true  # Apply the 2/3 dealiasing mask to the nonlinear term
 laguerre_nonlinear_mode = "grid"  # Laguerre treatment of the bracket: grid or spectral
 run_to = "saturation"  # Nonlinear stop: saturation ends the run at a stationary heat flux, t_max runs the full horizon
 saturation_rel_sem = 0.1  # Largest relative standard error of the windowed heat-flux mean that counts as saturated
-saturation_t_min = 800.0  # Run time before any saturated verdict
+# saturation_t_min = (unset)  Run time before any saturated verdict; min(800, 0.95 t_max) when unset
 saturation_drift_rel = 0.1  # Tolerated relative drift of the window mean
 # damp_ends_rate = (unset)  Field-line end-absorber rate in v_ti/a; the 30-transit rule when unset, 0 turns it off
 

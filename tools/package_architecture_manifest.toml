@@ -239,7 +239,8 @@ recursive = true
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
-baseline = 69893
+# 69893 -> 69873: cache module without the repo-local directory logic, saturation 30 tau rule removed, import-time cache install.
+baseline = 69873
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -257,7 +258,8 @@ recursive = true
 # 64789 -> 64794: example gallery style check; example 10 smoke gated on vmex.
 # 64794 -> 64804: fixed step longer than t_max test; example 05 smoke grid knob.
 # 64804 -> 64839: banded route with unequal per-species Nm regression test.
-baseline = 64839
+# 64839 -> 64853: default-cache opt-out test, short-t_max saturation test.
+baseline = 64853
 target = 35000
 
 [[line_budget_policy.counts]]
