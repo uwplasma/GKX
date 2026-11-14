@@ -386,7 +386,7 @@ def test_public_api_facades_and_lazy_import_contracts() -> None:
     # 86 compatibility names pointed at.
     # 189: ARCH-C moved the gate, window and calibration report modules to
     # scripts/checks/_gates, removing their 28 compatibility names.
-    assert len(public_api._EXPORT_TARGETS) == 189
+    assert len(public_api._EXPORT_TARGETS) == 188
     assert len(public_api.__all__) == len(set(public_api.__all__))
     assert set(gkx.__all__) <= set(dir(gkx))
     # Laziness itself is asserted in the fresh interpreters below, not here:

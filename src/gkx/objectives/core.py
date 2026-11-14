@@ -66,16 +66,10 @@ _SOLVER_OBJECTIVE_ALIASES = {
 def _default_gradient_linear_params(geometry: Any | None = None) -> LinearParams:
     """Cyclone drive plus the Hermite closure a truncated basis requires.
 
-    The drive is in the units the operator consumes, ``a/L``. It used to be
-    6.9 and 2.2, which are the same case expressed as ``R/L``: the objective was
-    running at ``R/a = 2.78`` times the intended gradient.
-
-    Every dissipation amplitude used to be zero, leaving the truncated Hermite
-    hierarchy with no velocity-space dissipation: the whole spectrum then sits on
-    the imaginary axis at zero drive, ``argmax(Re lambda)`` is floored at zero or
-    above, and **the objective cannot report a stable design**. Where the
-    physical branch is weak it returned a marginal mode at ``|omega|`` of 20-90
-    instead. ``test_collision_physics`` pins the numbers.
+    The drive is in the units the operator consumes, ``a/L``. The dissipation
+    amplitudes are nonzero: without velocity-space dissipation the truncated
+    Hermite spectrum sits on the imaginary axis at zero drive and the objective
+    cannot report a stable design (``test_collision_physics`` pins the numbers).
 
     Hyperdiffusion must not be used for this. This path runs one selected ``k_y``
     with ``nx = 1``, so ``kperp^2_max`` *is* ``kperp^2`` in

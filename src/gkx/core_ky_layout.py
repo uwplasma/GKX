@@ -386,7 +386,7 @@ def self_conjugate_row_mask(ky: Any, *, ny_full: int | None = None) -> Any:
     cannot be recognized from a non-negative axis alone (see the module
     docstring on why ``Nyc`` does not determine ``Ny``), so ``ny_full`` has to
     be supplied for it to be found.  Without it the mask names only the zonal
-    row, which is what every caller did before this function existed.
+    row.
     """
 
     arr = jnp.asarray(ky)
