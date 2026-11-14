@@ -1369,6 +1369,13 @@ def test_runtime_mode_index_selection_and_step_inference() -> None:
         )
 
 
+def test_fixed_step_longer_than_t_max_names_both() -> None:
+    cfg = _base_cfg()
+    short = replace(cfg, time=replace(cfg.time, fixed_dt=True, t_max=0.01))
+    with pytest.raises(ValueError, match=r"t_max=0\.01 .*dt=0\.05"):
+        _infer_runtime_nonlinear_steps(short, dt=0.05, steps=None)
+
+
 def test_runtime_diagnostic_slice_stride_concat() -> None:
     diag = _diag()
     sliced = _slice_runtime_diagnostics(diag, 1)
