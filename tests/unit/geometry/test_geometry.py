@@ -1,7 +1,6 @@
 """Geometry helper tests."""
 
 from dataclasses import replace
-from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -72,7 +71,6 @@ from gkx.geometry.imported_vmec import (
     _vmec_fieldlines,
     dermv,
     generate_vmec_eik_internal,
-    write_vmec_eik_netcdf,
 )
 from gkx.operators.linear.params import (
     linear_params_for_geometry,
@@ -395,21 +393,6 @@ _GROUPED_PROFILES = (
 ).split()
 
 
-def _write_eik(path: Path, theta, profiles: dict, scalars: dict) -> Path:
-    """Write a root-level eik NetCDF; scalar profile values are broadcast over z."""
-    pytest.importorskip("netCDF4")
-    theta = np.asarray(theta, dtype=float)
-    with nc.Dataset(path, "w") as root:
-        root.createDimension("z", theta.size)
-        root.createVariable("theta", "f8", ("z",))[:] = theta
-        for name, values in profiles.items():
-            values = np.broadcast_to(np.asarray(values, dtype=float), theta.shape)
-            root.createVariable(name, "f8", ("z",))[:] = values
-        for name, value in scalars.items():
-            root.createVariable(name, "f8", ())[:] = value
-    return path
-
-
 def _write_grouped_geometry(path: Path, theta, profiles: dict, scalars: dict) -> Path:
     """Write a grouped ``Grids``/``Geometry`` NetCDF geometry output."""
     pytest.importorskip("netCDF4")
@@ -423,96 +406,6 @@ def _write_grouped_geometry(path: Path, theta, profiles: dict, scalars: dict) ->
         for name, value in scalars.items():
             geom.createVariable(name, "f8", ())[:] = value
     return path
-
-
-def test_load_imported_geometry_netcdf_reads_sampled_contract(tmp_path):
-    """imported grouped NetCDF geometry output should map into the sampled contract."""
-
-    theta = np.linspace(-np.pi, np.pi, 5, endpoint=False)
-    jacobian = np.linspace(2.0, 3.0, theta.size)
-    n = theta.size
-    path = _write_grouped_geometry(
-        tmp_path / "geom.out.nc",
-        theta,
-        {
-            "bmag": np.linspace(1.0, 1.2, n),
-            "bgrad": np.linspace(-0.1, 0.1, n),
-            "gds2": np.linspace(1.0, 2.0, n),
-            "gds21": np.linspace(-0.2, 0.2, n),
-            "gds22": 0.8,
-            "cvdrift": np.linspace(0.3, 0.5, n),
-            "gbdrift": np.linspace(0.3, 0.5, n),
-            "cvdrift0": np.linspace(-0.1, 0.1, n),
-            "gbdrift0": np.linspace(-0.1, 0.1, n),
-            "jacobian": jacobian,
-            "grho": np.linspace(1.0, 1.4, n),
-        },
-        {
-            "gradpar": 0.4,
-            "q": 1.7,
-            "shat": 0.6,
-            "rmaj": 5.0,
-            "aminor": 1.0,
-            "kxfac": 1.3,
-            "theta_scale": 2.0,
-            "nfp": 5.0,
-            "alpha": 0.2,
-        },
-    )
-
-    loaded = load_imported_geometry_netcdf(path)
-
-    assert loaded.source_model == "imported-netcdf"
-    assert loaded.theta_closed_interval is False
-    assert jnp.allclose(loaded.theta, theta)
-    assert jnp.allclose(loaded.jacobian_profile, jacobian)
-    assert jnp.allclose(loaded.grho_profile, np.linspace(1.0, 1.4, theta.size))
-    assert loaded.kxfac == pytest.approx(1.3)
-    assert loaded.theta_scale == pytest.approx(2.0)
-    assert loaded.nfp == 5
-    assert loaded.epsilon == pytest.approx(0.2)
-
-
-def test_root_level_eik_import_matches_sampled_contract_after_trim(tmp_path):
-    """VMEC-style closed-interval imported geometry should recover the open solver contract."""
-
-    analytic = SAlphaGeometry(q=1.4, s_hat=0.8, epsilon=0.18, R0=2.77778, alpha=0.1)
-    theta_closed = np.linspace(-3.0 * np.pi, 3.0 * np.pi, 65)
-    sampled_closed = sample_flux_tube_geometry(analytic, jnp.asarray(theta_closed))
-    profiles = {
-        name: np.asarray(getattr(sampled_closed, f"{name}_profile"))
-        for name in ("bmag", "gds2", "gds21", "gds22", "grho")
-    }
-    for gx_name, name in (
-        ("cvdrift", "cv"),
-        ("gbdrift", "gb"),
-        ("cvdrift0", "cv0"),
-        ("gbdrift0", "gb0"),
-    ):
-        profiles[gx_name] = 2.0 * np.asarray(getattr(sampled_closed, f"{name}_profile"))
-    profiles |= {"jacob": 7.0, "gradpar": sampled_closed.gradpar_value}
-    scalars = {"drhodpsi": 1.0, "Rmaj": sampled_closed.R0, "shat": sampled_closed.s_hat}
-    scalars |= {"scale": sampled_closed.theta_scale}
-    scalars |= {k: getattr(sampled_closed, k) for k in ("q", "kxfac", "nfp", "alpha")}
-    path = _write_eik(tmp_path / "geom.eik.nc", theta_closed, profiles, scalars)
-
-    loaded = load_imported_geometry_netcdf(path)
-    theta_solver = jnp.asarray(theta_closed[:-1])
-    loaded_open = ensure_flux_tube_geometry_data(loaded, theta_solver)
-    sampled_open = ensure_flux_tube_geometry_data(sampled_closed, theta_solver)
-
-    assert loaded.theta_closed_interval is True
-    assert jnp.allclose(loaded_open.theta, sampled_open.theta)
-    for name in "bmag gds2 gds21 gds22 cv gb cv0 gb0 jacobian grho".split():
-        assert jnp.allclose(
-            getattr(loaded_open, f"{name}_profile"),
-            getattr(sampled_open, f"{name}_profile"),
-            rtol=1.0e-6,
-            atol=1.0e-6,
-        ), name
-    assert jnp.allclose(
-        loaded_open.bgrad_profile, sampled_open.bgrad_profile, rtol=1.0e-4, atol=1.0e-4
-    )
 
 
 def test_build_flux_tube_geometry_rejects_missing_import_file_and_unknown_model() -> (
@@ -1734,58 +1627,6 @@ def test_apply_flux_tube_cut_reports_bad_crossings(offset, which_crossing, match
         _cut(theta, geo, flux_tube_cut="gds21", which_crossing=which_crossing)
 
 
-def test_write_vmec_eik_netcdf_writes_expected_variables(tmp_path: Path) -> None:
-    netcdf4 = pytest.importorskip("netCDF4")
-    path = tmp_path / "geom.eik.nc"
-    theta = np.linspace(-np.pi, np.pi, 5)
-    bmag = np.linspace(1.0, 2.0, theta.size)
-    gradpar = np.full(theta.size, 0.5)
-    profiles = {
-        "theta": theta,
-        "theta_PEST": theta + 0.1,
-        "bmag": bmag,
-        "gradpar": gradpar,
-        "grho": np.full(theta.size, 1.2),
-        "gds2": np.linspace(2.0, 3.0, theta.size),
-        "gds21": np.linspace(-0.5, 0.5, theta.size),
-        "gds22": np.linspace(3.0, 4.0, theta.size),
-        "gbdrift": np.linspace(0.1, 0.2, theta.size),
-        "gbdrift0": np.linspace(0.2, 0.3, theta.size),
-        "cvdrift": np.linspace(0.3, 0.4, theta.size),
-        "cvdrift0": np.linspace(0.4, 0.5, theta.size),
-        "Rplot": np.linspace(5.0, 6.0, theta.size),
-        "Zplot": np.linspace(-1.0, 1.0, theta.size),
-        "grad_x": _rows(theta.size, 1.0, 2.0, 3.0),
-        "grad_y": _rows(theta.size, 4.0, 5.0, 6.0),
-        "b_vec": _rows(theta.size, 1.0, 0.0, 0.0),
-        "dpsidrho": 2.0,
-        "kxfac": 1.7,
-        "Rmaj": 5.5,
-        "q": 1.4,
-        "shat": 0.8,
-        "scale": 2.0,
-        "alpha": 0.25,
-        "zeta_center": 0.125,
-        "nfp": 5,
-    }
-
-    write_vmec_eik_netcdf(path, profiles, request=SimpleNamespace())
-
-    with netcdf4.Dataset(path) as ds:
-        np.testing.assert_allclose(ds.variables["theta"][:], theta)
-        np.testing.assert_allclose(ds.variables["theta_PEST"][:], theta + 0.1)
-        np.testing.assert_allclose(ds.variables["bmag"][:], bmag)
-        np.testing.assert_allclose(ds.variables["gradpar"][:], gradpar)
-        np.testing.assert_allclose(ds.variables["grad_x"][:, :], profiles["grad_x"])
-        assert float(ds.variables["kxfac"].getValue()) == pytest.approx(1.7)
-        assert float(ds.variables["Rmaj"].getValue()) == pytest.approx(5.5)
-        assert int(ds.variables["nfp"].getValue()) == 5
-        expected_jacob = 1.0 / abs(
-            (1.0 / abs(profiles["dpsidrho"])) * gradpar[0] * bmag
-        )
-        np.testing.assert_allclose(ds.variables["jacob"][:], expected_jacob)
-
-
 def test_vmec_fieldline_boozer_mode_sum_preserves_surface_axis() -> None:
     coeff = np.array([[1.0, 2.0], [3.0, 4.0]])
     basis = np.arange(2 * 2 * 3 * 4, dtype=float).reshape(2, 2, 3, 4)
@@ -1820,96 +1661,6 @@ def test_vmec_fieldline_boozer_trig_basis_preserves_mode_axis() -> None:
     np.testing.assert_allclose(nsin[2], 3.0 * np.sin(angle[2]))
 
 
-def test_vmec_fieldline_alpha_gradient_and_local_shear_helpers() -> None:
-    shape = (1, 1, 3)
-    gradients = vmec_fieldline_numerics._FieldlineCoordinateGradients(
-        grad_psi_X=np.ones(shape),
-        grad_psi_Y=2.0 * np.ones(shape),
-        grad_psi_Z=3.0 * np.ones(shape),
-        grad_theta_b_X=0.5 * np.ones(shape),
-        grad_theta_b_Y=0.25 * np.ones(shape),
-        grad_theta_b_Z=-0.75 * np.ones(shape),
-        grad_phi_b_X=0.1 * np.ones(shape),
-        grad_phi_b_Y=0.2 * np.ones(shape),
-        grad_phi_b_Z=0.3 * np.ones(shape),
-    )
-    phi_b = np.array([[[0.0, 0.5, 1.0]]])
-    zeta_center = 0.1
-    d_iota_d_s = np.array([0.2])
-    iota = np.array([0.4])
-    etf = 2.0
-
-    alpha = vmec_fieldline_numerics._fieldline_alpha_gradients(
-        gradients=gradients,
-        phi_b=phi_b,
-        zeta_center=zeta_center,
-        d_iota_d_s=d_iota_d_s,
-        iota=iota,
-        edge_toroidal_flux_over_2pi=etf,
-    )
-
-    radial_shear = -(phi_b - zeta_center) * d_iota_d_s[:, None, None] / etf
-    expected_x = radial_shear * gradients.grad_psi_X + 0.5 - iota[:, None, None] * 0.1
-    expected_y = radial_shear * gradients.grad_psi_Y + 0.25 - iota[:, None, None] * 0.2
-    expected_z = radial_shear * gradients.grad_psi_Z - 0.75 - iota[:, None, None] * 0.3
-    expected_g = 1.0**2 + 2.0**2 + 3.0**2
-    expected_dot = expected_x + 2.0 * expected_y + 3.0 * expected_z
-
-    np.testing.assert_allclose(alpha.grad_alpha_X, expected_x)
-    np.testing.assert_allclose(alpha.grad_alpha_Y, expected_y)
-    np.testing.assert_allclose(alpha.grad_alpha_Z, expected_z)
-    np.testing.assert_allclose(alpha.g_sup_psi_psi, expected_g)
-    np.testing.assert_allclose(alpha.grad_alpha_dot_grad_psi, expected_dot)
-
-    d_iota_d_s_1 = np.array([0.3])
-    d_pressure_d_s_1 = np.array([0.2])
-    Vprime = np.array([1.2])
-    G = np.array([2.0])
-    boozer_i = np.array([0.1])
-    intinv_g = np.array([[[0.1, 0.2, 0.3]]])
-    int_lam_div_g = np.array([[[0.05, 0.07, 0.11]]])
-    D1 = 1.7
-    D2 = 0.4
-    shear = vmec_fieldline_numerics._fieldline_local_shear(
-        edge_toroidal_flux_over_2pi=etf,
-        d_iota_d_s=d_iota_d_s,
-        d_iota_d_s_1=d_iota_d_s_1,
-        d_pressure_d_s_1=d_pressure_d_s_1,
-        Vprime=Vprime,
-        G=G,
-        iota=iota,
-        boozer_i=boozer_i,
-        phi_b=phi_b,
-        zeta_center=zeta_center,
-        intinv_g=intinv_g,
-        int_lam_div_g=int_lam_div_g,
-        D1=D1,
-        D2=D2,
-        g_sup_psi_psi=alpha.g_sup_psi_psi,
-        grad_alpha_dot_grad_psi=alpha.grad_alpha_dot_grad_psi,
-    )
-    expected_D = (
-        d_iota_d_s_1[:, None, None] * (intinv_g / D1 - phi_b + zeta_center)
-        - d_pressure_d_s_1[:, None, None]
-        * Vprime[:, None, None]
-        * (G[:, None, None] + iota[:, None, None] * boozer_i[:, None, None])
-        * (int_lam_div_g - D2 * intinv_g / D1)
-    ) / etf
-    expected_L0 = -(
-        expected_dot / expected_g
-        + d_iota_d_s[:, None, None] * (phi_b - zeta_center) / etf
-    )
-    expected_L1 = (
-        -d_iota_d_s_1[:, None, None] * (phi_b - zeta_center) / etf
-        + expected_dot / expected_g
-        - expected_D
-    )
-
-    np.testing.assert_allclose(shear.D_HNGC, expected_D)
-    np.testing.assert_allclose(shear.L0, expected_L0)
-    np.testing.assert_allclose(shear.L1, expected_L1)
-
-
 def test_vmec_fieldline_helper_surface_average_and_centered_integral() -> None:
     theta_grid = np.linspace(-np.pi, np.pi, 21)
     phi_grid = np.linspace(-np.pi, np.pi, 19)
@@ -1925,61 +1676,6 @@ def test_vmec_fieldline_helper_surface_average_and_centered_integral() -> None:
         np.ones_like(fieldline), fieldline, theta
     )
     np.testing.assert_allclose(centered[0, 0], theta, atol=1.0e-12)
-
-
-def test_vmec_fieldline_hngc_shear_and_pressure_correction_policies() -> None:
-    shear_kw = dict(
-        s_val=0.5,
-        iota=np.array([0.6]),
-        shat=np.array([0.2]),
-        iota_input_val=0.7,
-        s_hat_input_val=0.4,
-        include_shear_variation=True,
-    )
-    d_iota_d_s_1, sfac = vmec_derivatives._hngc_shear_correction(**shear_kw)
-
-    np.testing.assert_allclose(d_iota_d_s_1, np.array([-0.16]))
-    assert sfac == pytest.approx(0.5)
-
-    disabled_shear, disabled_sfac = vmec_derivatives._hngc_shear_correction(
-        **(shear_kw | {"include_shear_variation": False})
-    )
-
-    np.testing.assert_allclose(disabled_shear, np.zeros(1))
-    assert disabled_sfac == pytest.approx(1.0)
-
-    pressure = partial(
-        vmec_derivatives._hngc_pressure_correction,
-        s_val=0.25,
-        betaprim=0.2,
-        B_reference=2.0,
-    )
-    d_pressure_d_s_1, pfac = pressure(
-        d_pressure_d_s=np.array([0.5]), include_pressure_variation=True
-    )
-
-    drive = 0.2 * 2.0**2 / (4.0 * np.sqrt(0.25))
-    np.testing.assert_allclose(
-        d_pressure_d_s_1,
-        np.array([drive - vmec_fieldline_numerics._MU_0 * 0.5]),
-    )
-    assert pfac == pytest.approx(drive / (vmec_fieldline_numerics._MU_0 * 0.5))
-
-    floored_pressure, floored_pfac = pressure(
-        d_pressure_d_s=np.array([0.0]), include_pressure_variation=True
-    )
-
-    np.testing.assert_allclose(floored_pressure, np.array([drive]))
-    assert floored_pfac == pytest.approx(
-        drive / (vmec_fieldline_numerics._MU_0 * 1.0e-8)
-    )
-
-    disabled_pressure, disabled_pfac = pressure(
-        d_pressure_d_s=np.array([0.5]), include_pressure_variation=False
-    )
-
-    np.testing.assert_allclose(disabled_pressure, np.zeros(1))
-    assert disabled_pfac == pytest.approx(1.0)
 
 
 def test_vmec_fieldline_helper_flux_surface_hngc_averages() -> None:

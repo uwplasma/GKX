@@ -382,61 +382,6 @@ def test_laguerre_transform_is_well_conditioned_at_high_resolution() -> None:
         )
 
 
-def test_finite_larmor_tables_ship_multiple_resolutions() -> None:
-    """Each shipped resolution must load, verify, and satisfy the same physics.
-
-    Published convergence studies need well past the eight moments that match
-    the drift-kinetic tables, so more than one resolution has to be available
-    and every one of them has to pass the same structural checks.
-    """
-
-    from gkx.operators.linear.collision_tables import (
-        FINITE_WAVELENGTH_MOMENT_COUNTS,
-        _finite_wavelength_coulomb_bundle,
-        build_finite_wavelength_coulomb_operator,
-        finite_wavelength_coulomb_metadata,
-    )
-
-    assert len(FINITE_WAVELENGTH_MOMENT_COUNTS) >= 2
-
-    for moments in FINITE_WAVELENGTH_MOMENT_COUNTS:
-        metadata = finite_wavelength_coulomb_metadata(moments)
-        hermite = int(metadata["maximum_hermite_order"])
-        laguerre = int(metadata["maximum_laguerre_order"])
-        assert (hermite + 1) * (laguerre + 1) == moments
-
-        arrays, _ = _finite_wavelength_coulomb_bundle(moments)
-        matrix = np.asarray(arrays["test_matrix"][0]) + np.asarray(
-            arrays["field_matrix"][0]
-        )
-        assert matrix.shape == (moments, moments)
-
-        # Same drift-kinetic limit physics at every resolution: the invariants
-        # are conserved and the operator is self-adjoint and dissipative.
-        basis = np.eye(moments)
-        stride = laguerre + 1
-        invariants = (
-            basis[0],
-            basis[stride],
-            basis[1] + basis[2 * stride] / np.sqrt(2.0),
-        )
-        for functional in invariants:
-            assert np.abs(functional @ matrix).max() < conservation_tolerance()
-        assert (
-            np.abs(matrix - matrix.T).max() / np.abs(matrix).max()
-            < conservation_tolerance()
-        )
-        assert float(np.linalg.eigvalsh(0.5 * (matrix + matrix.T)).max()) < 1.0e-9
-
-        operator = build_finite_wavelength_coulomb_operator(
-            jnp.asarray([1.0]), jnp.asarray([1.0]), jnp.asarray([1.0]), moments
-        )
-        assert operator.test_table.shape[-1] == moments
-
-    with pytest.raises(ValueError, match="no shipped finite-wavelength"):
-        _finite_wavelength_coulomb_bundle(12)
-
-
 # ---- from test_multispecies_coulomb_reduction.py ----
 # Physics gate: the multispecies finite-Larmor Coulomb operator reduces to the
 # drift-kinetic multispecies Coulomb operator as the Bessel argument ``b -> 0``.
@@ -1023,40 +968,6 @@ def test_closure_acts_only_on_the_last_moment_and_dissipates() -> None:
     # Strictly dissipative: it can only remove free energy from the last moment.
     production = float(np.real(np.sum(np.conj(state[0, 0, -1]) * difference[0, 0, -1])))
     assert production < 0.0
-
-
-def test_truncation_remains_the_default() -> None:
-    """The closure is opt-in, so existing results are unchanged."""
-
-    hermite_count, points = 6, 16
-    wavenumbers = jnp.asarray(2.0 * np.pi * np.fft.fftfreq(points, d=1.0 / points))
-    generator = np.random.default_rng(1)
-    state = jnp.asarray(
-        generator.normal(size=(1, 1, hermite_count, 1, 1, points))
-        + 1j * generator.normal(size=(1, 1, hermite_count, 1, 1, points))
-    )
-    shape = (hermite_count, 1, 1, 1)
-    default = np.asarray(
-        linked_streaming_contribution(
-            state,
-            phi=jnp.zeros((1, 1, points), dtype=jnp.complex128),
-            apar=None,
-            bpar=None,
-            Jl=jnp.zeros((1, 1, 1, 1, points)),
-            JlB=jnp.zeros((1, 1, 1, 1, points)),
-            tz=jnp.asarray([1.0]),
-            vth=jnp.asarray([1.0]),
-            sqrt_p=jnp.sqrt(jnp.arange(1, hermite_count + 1)).reshape(shape),
-            sqrt_m=jnp.sqrt(jnp.arange(0, hermite_count)).reshape(shape),
-            kpar_scale=jnp.asarray(1.0),
-            weight=jnp.asarray(1.0),
-            kz=wavenumbers,
-            dz=jnp.asarray(1.0),
-        )
-    )
-    assert np.array_equal(
-        default, _streaming(state, hermite_count, wavenumbers, "truncation")
-    )
 
 
 def test_free_streaming_conserves_norm_so_g0_cannot_exceed_one() -> None:

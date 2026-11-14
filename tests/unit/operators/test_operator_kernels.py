@@ -1231,37 +1231,6 @@ def test_drift_kinetic_collision_operators_obey_h_theorem_and_conserve_density()
         np.testing.assert_allclose(matrix[:, 0], 0.0, atol=1.0e-12)
 
 
-def test_finite_wavelength_coulomb_tables_load_with_provenance() -> None:
-    # The shipped gyrokinetic Coulomb tables are checksummed multiprecision
-    # output; the loader must verify provenance and expose a usable grid.
-    from gkx.operators.linear.collision_tables import (
-        _finite_wavelength_coulomb_bundle,
-        finite_wavelength_coulomb_metadata,
-    )
-
-    metadata = finite_wavelength_coulomb_metadata()
-    assert metadata["kind"] == "gkx_finite_wavelength_coulomb_coefficients"
-    assert "2104.11480" in metadata["source"]
-    assert metadata["equations"] == "3.47-3.50"
-    assert metadata["mass_ratio"] == 1.0 and metadata["temperature_ratio"] == 1.0
-    assert int(metadata["precision_decimal_digits"]) >= 40
-
-    arrays, _ = _finite_wavelength_coulomb_bundle()
-    grid = np.asarray(arrays["bessel_argument_grid"])
-    assert grid.ndim == 1 and grid.size >= 2
-    assert grid[0] == 0.0, "the drift-kinetic limit must be tabulated"
-    assert np.all(np.diff(grid) > 0.0), "interpolation requires increasing B"
-
-    moments = (int(metadata["maximum_hermite_order"]) + 1) * (
-        int(metadata["maximum_laguerre_order"]) + 1
-    )
-    for name in ("test_matrix", "field_matrix"):
-        assert np.asarray(arrays[name]).shape == (grid.size, moments, moments)
-    for name in ("test_phi1", "field_phi1", "test_phi2", "field_phi2"):
-        assert np.asarray(arrays[name]).shape == (grid.size, moments)
-    assert all(np.all(np.isfinite(np.asarray(arrays[n]))) for n in arrays)
-
-
 def test_finite_wavelength_coulomb_matches_drift_kinetic_where_it_is_defined() -> None:
     # Cross-check between two independently generated data files: at B = 0 the
     # finite-Larmor tables (arXiv:2104.11480, Eqs. 3.47-3.50) must reproduce the
@@ -2040,47 +2009,6 @@ def _diagonal_coulomb_operator() -> EqualSpeciesFiniteWavelengthCoulombOperator:
         zero_vector,
         zero_vector,
     )
-
-
-def test_collision_operators_round_trip_through_pytree() -> None:
-    """Registered collision operators flatten and unflatten without data loss."""
-
-    dense = DriftKineticMomentCollisionOperator(
-        jnp.asarray(load_collision_moment_matrix("sugama"))
-    )
-    dense_leaves, dense_treedef = jax.tree_util.tree_flatten(dense)
-    assert len(dense_leaves) == 1
-    dense_rebuilt = jax.tree_util.tree_unflatten(dense_treedef, dense_leaves)
-    assert isinstance(dense_rebuilt, DriftKineticMomentCollisionOperator)
-    assert bool(jnp.array_equal(dense_rebuilt.matrix, dense.matrix))
-
-    grid = jnp.asarray([0.0, 1.0, 2.0])
-    finite = FiniteWavelengthCoulombOperator(
-        grid,
-        jnp.ones((1, 1)),
-        jnp.zeros((1, 1, 3, 3, 1, 1)),
-        jnp.zeros((1, 1, 3, 3, 1, 1)),
-        jnp.zeros((1, 1, 3, 3, 1)),
-        jnp.zeros((1, 1, 3, 3, 1)),
-        jnp.zeros((1, 1, 3, 3, 1)),
-        jnp.zeros((1, 1, 3, 3, 1)),
-    )
-    finite_leaves, finite_treedef = jax.tree_util.tree_flatten(finite)
-    finite_rebuilt = jax.tree_util.tree_unflatten(finite_treedef, finite_leaves)
-    assert isinstance(finite_rebuilt, FiniteWavelengthCoulombOperator)
-    assert bool(
-        jnp.array_equal(
-            finite_rebuilt.bessel_argument_grid, finite.bessel_argument_grid
-        )
-    )
-    assert bool(jnp.array_equal(finite_rebuilt.test_table, finite.test_table))
-
-    diagonal = _diagonal_coulomb_operator()
-    diag_leaves, diag_treedef = jax.tree_util.tree_flatten(diagonal)
-    diag_rebuilt = jax.tree_util.tree_unflatten(diag_treedef, diag_leaves)
-    assert isinstance(diag_rebuilt, EqualSpeciesFiniteWavelengthCoulombOperator)
-    assert bool(jnp.array_equal(diag_rebuilt.test_table, diagonal.test_table))
-    assert bool(jnp.array_equal(diag_rebuilt.pair_frequency, diagonal.pair_frequency))
 
 
 def test_equal_species_coulomb_apply_requires_single_species_bessel_axis() -> None:

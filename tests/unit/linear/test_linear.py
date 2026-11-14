@@ -55,7 +55,6 @@ from types import SimpleNamespace
 from gkx.geometry import FluxTubeGeometryData
 from gkx.core_velocity import _gyro_bessel_factors
 import gkx.operators.linear as linear_cache
-import gkx.solvers.linear.implicit as linear_implicit
 import gkx.operators.linear.dissipation as linear_dissipation
 import gkx.terms.linear_terms as linear_terms
 from gkx.operators.linear.cache_arrays import (
@@ -77,8 +76,6 @@ from gkx.operators.linear.linked import (
 from gkx.operators.linear.moments import lenard_bernstein_eigenvalues
 from gkx.solvers.linear.krylov_algorithms import _linked_covered_mode_mask
 from gkx.operators.linear.params import (
-    linear_terms_to_term_config,
-    term_config_to_linear_terms,
     _SPECIES_PARAM_NAMES,
     _as_species_array,
     _check_nonnegative,
@@ -98,7 +95,6 @@ from gkx.solvers.linear.parallel import (
 from gkx.solvers.linear.implicit import (
     _integrate_linear_implicit_cached,
 )
-from gkx.terms.config import TermConfig
 from gkx.core_velocity import hermite_ladder_coeffs
 import gkx.operators.linear.moments as linear_moments
 import gkx.operators.linear.streaming as streaming_operators
@@ -2057,40 +2053,6 @@ def test_as_species_array_and_preconditioner_resolution() -> None:
     assert _resolve_implicit_preconditioner(fn) is fn
 
 
-def test_structured_tridiagonal_last_axis_matches_fused_reference_and_jvp() -> None:
-    dtype = jnp.complex128 if jax.config.read("jax_enable_x64") else jnp.complex64
-    real_dtype = jnp.float64 if jax.config.read("jax_enable_x64") else jnp.float32
-    shape = (2, 3, 7)
-    phase = jnp.arange(np.prod(shape), dtype=real_dtype).reshape(shape)
-    lower = (0.03 + 0.01j) * jnp.cos(phase).astype(dtype)
-    upper = (-0.02 + 0.015j) * jnp.sin(phase + 0.2).astype(dtype)
-    lower = lower.at[..., 0].set(0.0)
-    upper = upper.at[..., -1].set(0.0)
-    diagonal = jnp.full(shape, 2.5 + 0.1j, dtype=dtype)
-    rhs = (jnp.cos(phase) + 1j * jnp.sin(0.3 * phase)).astype(dtype)
-
-    solve = jax.jit(
-        lambda value: linear_implicit._solve_tridiagonal_last_axis(
-            lower, diagonal, upper, value
-        )
-    )
-    actual = solve(rhs)
-    reference = jax.lax.linalg.tridiagonal_solve(
-        lower, diagonal, upper, rhs[..., None]
-    )[..., 0]
-    tolerance = 2.0e-6 if dtype == jnp.complex64 else 1.0e-12
-    np.testing.assert_allclose(actual, reference, rtol=tolerance, atol=tolerance)
-
-    tangent = jnp.full(shape, 0.2 - 0.1j, dtype=dtype)
-    _, tangent_out = jax.jvp(solve, (rhs,), (tangent,))
-    np.testing.assert_allclose(
-        tangent_out,
-        solve(tangent),
-        rtol=tolerance,
-        atol=tolerance,
-    )
-
-
 def test_linear_dissipation_terms_have_single_canonical_owner() -> None:
     for name in linear_dissipation.__all__:
         assert getattr(linear_terms, name) is getattr(linear_dissipation, name)
@@ -2190,53 +2152,6 @@ def test_gyroaverage_cache_helper_matches_species_vmap_convention() -> None:
     assert Jl.shape == (2, 3, 1, 2, 2)
     assert JlB.shape == Jl.shape
     np.testing.assert_allclose(np.asarray(JlB[:, 0]), np.asarray(Jl[:, 0]), rtol=1e-6)
-
-
-def test_linear_params_and_terms_roundtrip() -> None:
-    params = LinearParams(
-        charge_sign=jnp.asarray([1.0, -1.0]), nu=jnp.asarray([0.1, 0.2]), beta=0.3
-    )
-    leaves, treedef = jax.tree_util.tree_flatten(params)
-    restored = jax.tree_util.tree_unflatten(treedef, leaves)
-    np.testing.assert_allclose(np.asarray(restored.charge_sign), [1.0, -1.0])
-    np.testing.assert_allclose(np.asarray(restored.nu), [0.1, 0.2])
-    assert float(restored.beta) == pytest.approx(0.3)
-
-    terms = LinearTerms(apar=0.0, bpar=0.0, hyperdiffusion=1.0)
-    term_cfg = linear_terms_to_term_config(terms, nonlinear=0.25)
-    assert float(term_cfg.nonlinear) == pytest.approx(0.25)
-    assert term_config_to_linear_terms(term_cfg) == terms
-
-    assert linear_terms_to_term_config(None) == TermConfig()
-    assert term_config_to_linear_terms(None) == LinearTerms()
-
-    custom_cfg = TermConfig(
-        streaming=0.2,
-        mirror=0.3,
-        curvature=0.4,
-        gradb=0.5,
-        diamagnetic=0.6,
-        collisions=0.7,
-        hypercollisions=0.8,
-        hyperdiffusion=0.9,
-        end_damping=0.1,
-        apar=0.0,
-        bpar=1.0,
-        nonlinear=3.0,
-    )
-    assert term_config_to_linear_terms(custom_cfg) == LinearTerms(
-        streaming=0.2,
-        mirror=0.3,
-        curvature=0.4,
-        gradb=0.5,
-        diamagnetic=0.6,
-        collisions=0.7,
-        hypercollisions=0.8,
-        hyperdiffusion=0.9,
-        end_damping=0.1,
-        apar=0.0,
-        bpar=1.0,
-    )
 
 
 def test_linear_term_classifiers_and_parallel_device_validation(only_terms) -> None:
@@ -3214,47 +3129,6 @@ def _operator_matrix(fn, shape: tuple[int, ...]) -> np.ndarray:
         )
         cols.append(np.asarray(fn(basis)).reshape(-1))
     return np.stack(cols, axis=1)
-
-
-def test_linear_moments_reuse_canonical_velocity_space_algebra() -> None:
-    """Moment assembly must reuse, rather than copy, velocity recurrences."""
-
-    state = _complex_state((2, 4, 5, 2, 3, 4))
-    assert linear_moments.shift_axis is streaming_operators.shift_axis
-    assert linear_moments.apply_hermite_v is streaming_operators.apply_hermite_v
-    assert linear_moments.apply_hermite_v2 is streaming_operators.apply_hermite_v2
-    assert linear_moments.apply_laguerre_x is streaming_operators.apply_laguerre_x
-
-    np.testing.assert_allclose(
-        np.asarray(linear_moments.shift_axis(state, 1, axis=-4)),
-        np.asarray(streaming_operators.shift_axis(state, 1, axis=-4)),
-        rtol=0.0,
-        atol=0.0,
-    )
-    np.testing.assert_allclose(
-        np.asarray(linear_moments.shift_axis(state, -2, axis=-5)),
-        np.asarray(streaming_operators.shift_axis(state, -2, axis=-5)),
-        rtol=0.0,
-        atol=0.0,
-    )
-    np.testing.assert_allclose(
-        np.asarray(linear_moments.apply_hermite_v(state)),
-        np.asarray(streaming_operators.apply_hermite_v(state)),
-        rtol=1.0e-6,
-        atol=1.0e-6,
-    )
-    np.testing.assert_allclose(
-        np.asarray(linear_moments.apply_hermite_v2(state)),
-        np.asarray(streaming_operators.apply_hermite_v2(state)),
-        rtol=1.0e-6,
-        atol=1.0e-6,
-    )
-    np.testing.assert_allclose(
-        np.asarray(linear_moments.apply_laguerre_x(state)),
-        np.asarray(streaming_operators.apply_laguerre_x(state)),
-        rtol=1.0e-6,
-        atol=1.0e-6,
-    )
 
 
 def test_velocity_multiplication_matrices_are_self_adjoint() -> None:

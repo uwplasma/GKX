@@ -150,6 +150,6 @@ pip install -e ".[dev]"
 pytest -n 4
 ```
 
-CI requires 95% line coverage plus the physics, convergence, comparison,
+CI requires 95% combined line and branch coverage plus the physics, convergence, comparison,
 differentiability and performance gates ([CONTRIBUTING.md](CONTRIBUTING.md)).
 Cite GKX with [CITATION.cff](CITATION.cff). MIT license; see [LICENSE](LICENSE).

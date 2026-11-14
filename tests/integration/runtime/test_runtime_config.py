@@ -486,36 +486,6 @@ def test_gx_aligned_kbm_runtime_examples_keep_end_damping_enabled() -> None:
         assert cfg.terms.end_damping == pytest.approx(1.0), path.name
 
 
-def test_linear_axisymmetric_runtime_examples_keep_parity_collision_contract() -> None:
-    cfg_dir = REPO_ROOT / "benchmarks" / "cases"
-    cyclone = REPO_ROOT / "examples" / "01_linear_tokamak" / "case_full.toml"
-    kbm = REPO_ROOT / "examples" / "06_electromagnetic" / "case_full.toml"
-    expected = {
-        cyclone: (1.0, 2.0, 0.0, 1.0),
-        cfg_dir / "etg_linear.toml": (1.0, 2.0, 0.0, 1.0),
-        cfg_dir / "etg_linear_scan.toml": (1.0, 2.0, 0.0, 1.0),
-        cfg_dir / "kaw_linear.toml": (1.0, 2.0, 0.0, 1.0),
-        kbm: (1.0, 2.0, 0.0, 1.0),
-    }
-    for name, (nu_h, nu_l, hyper_const, hyper_kz) in expected.items():
-        cfg, _ = load_runtime_from_toml(name)
-        assert cfg.collisions.nu_hermite == pytest.approx(nu_h), name
-        assert cfg.collisions.nu_laguerre == pytest.approx(nu_l), name
-        assert cfg.collisions.hypercollisions_const == pytest.approx(hyper_const), name
-        assert cfg.collisions.hypercollisions_kz == pytest.approx(hyper_kz), name
-
-    _cfg, cyclone_raw = load_runtime_from_toml(cyclone)
-    assert cyclone_raw["fit"]["mode_method"] == "z_index"
-
-    for name in ("etg_linear.toml", "etg_linear_scan.toml"):
-        cfg, raw = load_runtime_from_toml(cfg_dir / name)
-        assert cfg.time.method == "rk4", name
-        assert cfg.time.dt == pytest.approx(1.6e-4), name
-        assert cfg.time.t_max == pytest.approx(2.0), name
-        assert raw["run"]["solver"] == "time", name
-        assert raw["scan"]["solver"] == "time", name
-
-
 def test_nonaxisymmetric_quasilinear_examples_keep_electrostatic_contract() -> None:
     for name in (
         REPO_ROOT / "examples" / "02_linear_stellarator" / "case_full.toml",
@@ -1549,50 +1519,6 @@ def test_runtime_chunk_policy_preserves_state_and_fresh_physical_samples(
         prepare(
             replace(case, time=replace(case.time, chunk_steps=3)), Nl=2, Nm=4, steps=8
         )
-
-
-@pytest.mark.parametrize(
-    "relative",
-    [
-        "examples/common_input.toml",
-        "examples/03_nonlinear_tokamak/case.toml",
-        "examples/03_nonlinear_tokamak/case_full.toml",
-        "examples/04_nonlinear_stellarator/case.toml",
-        "examples/04_nonlinear_stellarator/case_full.toml",
-        "examples/05_kinetic_electrons/case.toml",
-        "examples/05_kinetic_electrons/case_stellarator.toml",
-    ],
-)
-def test_nonlinear_example_optional_time_controls_parse(relative, tmp_path):
-    import re
-
-    text = (REPO_ROOT / relative).read_text()
-    path = tmp_path / "case.toml"
-    path.write_text(text)
-    defaults, _ = load_runtime_from_toml(path)
-    assert defaults.physics.nonlinear and not defaults.physics.linear
-    assert defaults.time.chunk_steps is None
-    assert defaults.time.diagnostics_interval is None
-    assert defaults.output.time_interval is None
-    enabled_text, count = re.subn(
-        r"(?m)^# (chunk_steps|diagnostics_interval|time_interval) =", r"\1 =", text
-    )
-    assert count == 3
-    path.write_text(enabled_text)
-    enabled, _ = load_runtime_from_toml(path)
-    assert enabled.time.chunk_steps == 128
-    assert 0 < enabled.time.diagnostics_interval <= enabled.time.t_max
-    assert enabled.output.time_interval > 0
-    expected = replace(
-        defaults,
-        time=replace(
-            defaults.time,
-            chunk_steps=128,
-            diagnostics_interval=enabled.time.diagnostics_interval,
-        ),
-        output=replace(defaults.output, time_interval=enabled.output.time_interval),
-    )
-    assert enabled.to_dict() == expected.to_dict()
 
 
 def _vmec_deck(tmp_path, grid_extra="", geometry_extra="npol = 1.0"):

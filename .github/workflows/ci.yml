@@ -219,7 +219,7 @@ jobs:
       - uses: ./.github/actions/setup-selfhosted
         if: runner.environment == 'self-hosted'
 
-      - name: Release-surface coverage (>=95%)
+      - name: Release-surface coverage (>=95% of lines)
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
