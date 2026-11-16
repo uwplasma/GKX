@@ -241,7 +241,8 @@ recursive = true
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
 # 69893 -> 69942: collisions once per explicit step (split policy).
-baseline = 69942
+# 69942 -> 69949: rk4-pi takes no dt_max cap when it is unset.
+baseline = 69949
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -260,7 +261,8 @@ recursive = true
 # 64794 -> 64804: fixed step longer than t_max test; example 05 smoke grid knob.
 # 64804 -> 64839: banded route with unequal per-species Nm regression test.
 # 64839 -> 64827: once-per-step collision test replaces the RK-stage comparison.
-baseline = 64827
+# 64827 -> 64835: rk4-pi unset dt_max test.
+baseline = 64835
 target = 35000
 
 [[line_budget_policy.counts]]

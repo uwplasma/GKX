@@ -839,6 +839,14 @@ def test_nonlinear_adaptive_default_dt_max_matches_requested_dt():
     dt_t = np.asarray(diag.dt_t, dtype=float)
     assert dt_t.size > 0
     assert np.nanmax(dt_t) <= 0.05 + 1.0e-6
+    from gkx.operators.nonlinear.policies import _build_time_step_limits
+
+    kw = dict(dt=0.05, steps=3, fixed_dt=False, dt_min=1e-7, dt_max=None, cfl=1.0)
+    kw |= dict(cfl_fac=None, real_dtype=jnp.float32, moments=4)
+    limits = _build_time_step_limits(
+        method="rk4-pi", resolve_cfl_fac_fn=lambda *_: 1.0, **kw
+    )
+    assert float(limits.dt_max) == np.inf  # bounded by 2x CFL and its error estimate
 
 
 def test_nonlinear_adaptive_dt_includes_linear_frequency_cap():

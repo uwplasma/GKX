@@ -216,8 +216,9 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
   adaptive runs only). Adaptive runs record ``dt_t`` (per-sample step history) and
   ``dt_mean`` (average effective step). The nonlinear adaptive ``dt`` estimate
   combines the linear frequency cap with the instantaneous nonlinear cap.
-  Leaving ``dt_max`` unset keeps ``dt_max = dt``; raise it explicitly only
-  when you trade strict comparison matching for throughput.
+  Left unset, ``dt_max`` is ``dt`` for the fixed-tableau methods. The
+  error-controlled ``rk4-pi`` and ``lawson-rk4-pi`` take no cap beyond twice
+  the CFL step and their error estimate, so ``dt`` is only their first step.
 - ``method = "auto"`` (the default of a nonlinear deck with no ``dt``): the run
   takes ``lawson-rk4-pi`` where the radial and binormal drift frequencies are at
   least 56% of the linear frequency bound (drift plus streaming) and the step cap
@@ -534,7 +535,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``state_sharding``","str","unset","Shard the state over devices along ``auto``, ``ky``, ``kx``, ``z``, ``l``, ``m`` or ``species``."
    "``progress_bar``","bool","``false``","Print progress with elapsed time and ETA."
    "``dt_min``","float","``1e-07``","Smallest step the CFL controller may take."
-   "``dt_max``","float","unset","Largest step the controller may take; ``dt`` when unset."
+   "``dt_max``","float","unset","Largest step the controller may take; unset: ``dt``, or no cap for ``rk4-pi`` and ``lawson-rk4-pi``."
    "``cfl``","float","``0.9``","CFL safety factor of the step controller."
    "``cfl_fac``","float","unset","Stability prefactor of the CFL bound; per-method, moment-scaled default."
    "``nstep_restart``","int","unset","Write a restart checkpoint every this many steps."
