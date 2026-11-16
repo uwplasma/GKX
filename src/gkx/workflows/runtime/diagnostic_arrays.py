@@ -142,10 +142,8 @@ def slice_runtime_diagnostics(
     Wg_t = np.asarray(diag.Wg_t)[:stop]
     Wphi_t = np.asarray(diag.Wphi_t)[:stop]
     Wapar_t = np.asarray(diag.Wapar_t)[:stop]
-    if dt_t.size == 0:
-        dt_mean = np.asarray(0.0, dtype=float)
-    else:
-        dt_mean = np.asarray(np.mean(dt_t), dtype=float)
+    taken = dt_t[dt_t > 0.0]  # a rejected rk4-pi step records dt = 0
+    dt_mean = np.asarray(np.mean(taken) if taken.size else 0.0, dtype=float)
     return SimulationDiagnostics(
         t=np.asarray(diag.t)[:stop],
         dt_t=dt_t,
@@ -285,10 +283,8 @@ def _take_runtime_diagnostics(
     Wg_t = _take(diag.Wg_t)
     Wphi_t = _take(diag.Wphi_t)
     Wapar_t = _take(diag.Wapar_t)
-    if dt_t.size == 0:
-        dt_mean = np.asarray(0.0, dtype=float)
-    else:
-        dt_mean = np.asarray(np.mean(dt_t), dtype=float)
+    taken = dt_t[dt_t > 0.0]  # a rejected rk4-pi step records dt = 0
+    dt_mean = np.asarray(np.mean(taken) if taken.size else 0.0, dtype=float)
     return SimulationDiagnostics(
         t=_take(diag.t),
         dt_t=dt_t,
@@ -428,7 +424,10 @@ def _steps_over(t: np.ndarray, dt: np.ndarray) -> float:
     every term is exactly one and the sum is ``len(t) - 1``.
     """
 
-    return 0.0 if t.size < 2 else float(np.sum(np.diff(t) / dt[1:]))
+    if t.size < 2:
+        return 0.0
+    gap, step = np.diff(t), dt[1:]
+    return float(np.sum(gap[step > 0.0] / step[step > 0.0]))
 
 
 def _rate_in_window(t: np.ndarray, dt: np.ndarray, lo: float, hi: float) -> float:
