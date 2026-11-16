@@ -255,9 +255,13 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
   execution. Treat it as a correctness-gated option unless the run also has a
   matched scaling artifact.
 
-Diagonal nonlinear hypercollision splitting is enabled with
-``collision_split = true``. The conserving collision operator remains in the
-RHS because its field-particle correction is not diagonal. The
+With ``collision_split`` (on by default for the explicit steppers) the
+collision operator and the hypercollisions leave the Runge--Kutta stages and
+act once per step, after it: one forward-Euler step of the conserving operator,
+field-particle corrections included, then the diagonal hypercollision update.
+With :math:`\nu \Delta t \sim 10^{-3}` the splitting error is far below the
+step error, and the operator is evaluated once instead of once per stage. The
+chain IMEX methods keep the conserving operator in the RHS. The
 ``collision_scheme`` key selects the hypercollision update:
 ``implicit`` (backward-Euler), ``exp`` (exact diagonal exponential), and
 ``sts``/``rkc`` aliases (treated as stabilized explicit/exponential updates for
@@ -534,7 +538,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``cfl``","float","``0.9``","CFL safety factor of the step controller."
    "``cfl_fac``","float","unset","Stability prefactor of the CFL bound; per-method, moment-scaled default."
    "``nstep_restart``","int","unset","Write a restart checkpoint every this many steps."
-   "``collision_split``","bool","``false``","Advance the diagonal hypercollisions in a split sub-step."
+   "``collision_split``","bool","unset","Apply collisions and hypercollisions once per step, after it. Unset: on for explicit steppers, off for IMEX."
    "``collision_scheme``","str","``""implicit""``","Split update: ``implicit``, ``exp``, ``sts`` or ``rkc``."
    "``collision_operator``","str","``""landau""``","Collision model: ``landau``, ``none``, ``lenard_bernstein``, ``sugama``, ``improved_sugama``, ``coulomb``, ``coulomb_finite_kperp``."
    "``compressed_real_fft``","bool","``true``","Evaluate the nonlinear bracket on the half spectrum with paired real FFTs."

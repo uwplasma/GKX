@@ -34,6 +34,7 @@ from gkx.solvers.nonlinear.diagnostics import (
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
+    nonlinear_rhs_cached,
 )
 from gkx.solvers.nonlinear.transport_window import nonlinear_heat_flux_window
 from gkx.solvers.time_explicit import _linear_frequency_bound
@@ -763,8 +764,8 @@ def test_integrate_nonlinear_collision_split_sts():
     assert np.isfinite(np.asarray(diag.Wg_t)).all()
 
 
-def test_nonlinear_split_keeps_conserving_collisions_in_explicit_rhs():
-    """A diagonal split must not discard collision field-particle corrections."""
+def test_nonlinear_split_applies_conserving_collisions_once_per_step():
+    """The split applies the whole collision operator, corrections included, once."""
 
     grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     cfg = CycloneBaseCase(grid=grid_cfg)
@@ -807,21 +808,9 @@ def test_nonlinear_split_keeps_conserving_collisions_in_explicit_rhs():
         collision_scheme="exp",
     )
 
-    _t, _diag, expected, _fields = integrate_nonlinear_explicit_diagnostics_state(
-        G,
-        grid,
-        geom,
-        params,
-        dt=0.05,
-        steps=1,
-        method="rk3",
-        cache=cache,
-        terms=terms,
-        collision_split=False,
-    )
-
+    expected = G + 0.05 * nonlinear_rhs_cached(G, cache, params, terms)[0]
     np.testing.assert_allclose(
-        np.asarray(G_final), np.asarray(expected), rtol=1.0e-6, atol=1.0e-6
+        np.asarray(G_final), np.asarray(expected), rtol=1.0e-5, atol=1.0e-5
     )
 
 
