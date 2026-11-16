@@ -89,6 +89,7 @@ from gkx.solvers.nonlinear.explicit import (
 )
 from gkx.solvers.nonlinear.lawson import attach_drift_factor
 from gkx.solvers.nonlinear.imex import (
+    IMEX_CHAIN_METHODS,
     DiagnosticFn,
     DiagnosticStepFn,
     NonlinearTermFn,
@@ -490,6 +491,7 @@ def _build_explicit_runtime_policies(
         squeeze_species=prepared.G0.ndim == 5,
         collision_split=collision_split,
         collision_damping_fn=_collision_damping,
+        split_collisions=method not in IMEX_CHAIN_METHODS,
     )
     return _ExplicitRuntimePolicies(
         time_step_policy=time_step_policy,
@@ -592,9 +594,33 @@ def _make_explicit_scan_step(
         use_collision_split=policies.collision_policy.active,
         damping=policies.collision_policy.damping,
         collision_scheme=collision_scheme,
-        apply_collision_split_fn=_apply_collision_split,
+        apply_collision_split_fn=_explicit_collision_split_fn(
+            policies.collision_policy.collision_terms,
+            prepared.cache,
+            params,
+            external_phi,
+        ),
         time_horizon=time_horizon,
     )
+
+
+def _explicit_collision_split_fn(
+    collision_terms: TermConfig | None,
+    cache: Any,
+    params: LinearParams,
+    external_phi: jnp.ndarray | float | None,
+) -> Callable[..., jnp.ndarray]:
+    """Split update: one forward-Euler collision step, then the diagonal damping."""
+
+    def apply(G, damping, dt_local, scheme):
+        if collision_terms is not None:
+            dC, _ = nonlinear_rhs_cached(
+                G, cache, params, collision_terms, external_phi=external_phi
+            )
+            G = G + dt_local * dC.astype(G.dtype)
+        return G if damping is None else _apply_collision_split(G, damping, dt_local, scheme)
+
+    return apply
 
 
 def _run_explicit_diagnostic_scan_and_finalize(

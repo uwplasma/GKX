@@ -532,7 +532,7 @@ def _apply_explicit_collision_split(
 ) -> jnp.ndarray:
     """Apply the optional post-step collision split used by diagnostics."""
 
-    if not use_collision_split or damping is None:
+    if not use_collision_split:
         return G_new
     if apply_collision_split_fn is None:
         raise ValueError(

@@ -183,7 +183,8 @@ class TimeConfig:
     cfl: float = 0.9
     cfl_fac: float | None = None
     nstep_restart: int | None = None
-    collision_split: bool = False
+    # None: on for the explicit steppers (collisions once per step), off for IMEX.
+    collision_split: bool | None = None
     collision_scheme: str = "implicit"
     collision_operator: str = "landau"
     compressed_real_fft: bool = True

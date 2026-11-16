@@ -141,6 +141,8 @@ class NonlinearCollisionSplitPolicy:
     active: bool
     rhs_terms: TermConfig
     damping: jnp.ndarray | None
+    # The collision operator alone, applied once per step (explicit steppers).
+    collision_terms: TermConfig | None = None
 
 
 def _collision_damping(
@@ -174,22 +176,37 @@ def build_nonlinear_collision_split_policy(
     squeeze_species: bool,
     collision_split: bool,
     collision_damping_fn: Callable[..., jnp.ndarray] = _collision_damping,
+    split_collisions: bool = False,
 ) -> NonlinearCollisionSplitPolicy:
-    """Build collision splitting weights and RHS terms for nonlinear scans."""
+    """Build collision splitting weights and RHS terms for nonlinear scans.
 
-    active = bool(collision_split) and float(term_cfg.hypercollisions) != 0.0
-    rhs_terms = replace(term_cfg, hypercollisions=0.0) if active else term_cfg
-    damping = (
-        collision_damping_fn(
+    ``split_collisions`` also takes the conserving collision operator out of the
+    RHS stages; the explicit steppers then apply it once per step (Lie split).
+    """
+
+    hyper = bool(collision_split) and float(term_cfg.hypercollisions) != 0.0
+    coll = (
+        bool(collision_split)
+        and split_collisions
+        and float(term_cfg.collisions) != 0.0
+        and (np.any(np.asarray(params.nu) != 0.0) or params._nu_ei is not None)
+    )
+    rhs_terms = replace(
+        term_cfg,
+        hypercollisions=0.0 if hyper else term_cfg.hypercollisions,
+        collisions=0.0 if coll else term_cfg.collisions,
+    )
+    keep = ("collisions", "apar", "bpar")
+    off = {f: 0.0 for f in rhs_terms.__dataclass_fields__ if f not in keep}
+    return NonlinearCollisionSplitPolicy(
+        active=hyper or coll,
+        rhs_terms=rhs_terms,
+        damping=collision_damping_fn(
             cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species
         )
-        if active
-        else None
-    )
-    return NonlinearCollisionSplitPolicy(
-        active=active,
-        rhs_terms=rhs_terms,
-        damping=damping,
+        if hyper
+        else None,
+        collision_terms=replace(term_cfg, **off) if coll else None,
     )
 
 

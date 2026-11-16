@@ -410,7 +410,7 @@ def _supports_species_hermite_policy(cfg, ctx, policy, *, method, plan):
         and not policy.fixed_mode_on
         and not policy.source_on
         and not cfg.time.checkpoint
-        and not cfg.time.collision_split
+        and cfg.time.collision_split is not True
         and not cfg.time.state_sharding
         and (method is None or method == cfg.time.method)
         and cfg.time.method in {"rk2", "rk3", "rk4", "sspx3", "rk4-pi"}
