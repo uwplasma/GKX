@@ -2855,7 +2855,7 @@ def _cadence_diag(times, values=None):
 def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition):
     times = np.arange(1, 11, dtype=float) / 10
     cursor = 0
-    flags, messages, monitoring = [], [], []
+    flags, messages, monitoring, reports = [], [], [], []
 
     def integrate(show_progress, remaining):
         nonlocal cursor
@@ -2880,6 +2880,7 @@ def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition)
         stop_condition=monitor,
         show_progress=True,
         status_callback=messages.append,
+        progress=lambda *args: reports.append(args),
         time_offset=3.0,
         progress_t_max=4.0,
     )
@@ -2892,7 +2893,7 @@ def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition)
     np.testing.assert_allclose(monitoring[-1][1], times)
     assert flags and not any(flags)
     assert "from t=3 up to t_max=4" in messages[0]
-    assert "t=4/4" in messages[-1] and "elapsed=" in messages[-1]
+    assert reports[-1][:2] == (4.0, 4.0) and reports[-1][2].shape == (1,)
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])

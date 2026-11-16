@@ -131,6 +131,8 @@ def _coerce_nonlinear_source(
 ) -> tuple[Any, np.ndarray | None, np.ndarray | None, str]:
     """Return ``(diagnostics, ky, kx, source_kind)`` for any accepted source."""
 
+    if getattr(source, "diagnostics", None) is not None:  # a runtime result
+        return source.diagnostics, None, None, "memory"
     if isinstance(source, (str, Path)):
         path = Path(source)
         if _is_netcdf_bundle_path(path):
@@ -324,6 +326,10 @@ def heat_flux_time_figure(
             )
             for ax in panel_axes:
                 ax.axvspan(tmin, tmax, color=GKX_COLORS["grey"], alpha=0.16, zorder=0)
+            if np.isfinite(q_sem):
+                ax_q.axhspan(
+                    q_mean - q_sem, q_mean + q_sem, color=GKX_COLORS["blue"], alpha=0.25
+                )
             annotate_reference(
                 ax_q,
                 rf"$\langle Q \rangle = {q_mean:.3g} \pm {q_sem:.2g}$"

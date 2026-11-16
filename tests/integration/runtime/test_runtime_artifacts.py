@@ -19,6 +19,7 @@ from gkx.artifacts.io import (
 from support.reference_physics import (
     _build_initial_condition,
 )
+from gkx.workflows.runtime.chunks import ProgressReporter
 from gkx.config import CycloneBaseCase
 from gkx.config import GridConfig, TimeConfig
 from gkx.config import InitializationConfig
@@ -2917,7 +2918,7 @@ def test_physical_output_cadence_preserves_checkpointed_solver_result(tmp_path):
         Nl=2,
         Nm=4,
         steps=8,
-        status_callback=messages.append,
+        status_callback=ProgressReporter(messages.append, interval=0),
     )
     np.testing.assert_allclose(native.t, [0.003, 0.005, 0.008], atol=1e-14)
     np.testing.assert_array_equal(coarse.t, native.t)
@@ -2941,10 +2942,7 @@ def test_physical_output_cadence_preserves_checkpointed_solver_result(tmp_path):
         Path(coarse_paths["restart"]).read_bytes()
         == Path(native_paths["restart"]).read_bytes()
     )
-    progress = [
-        line for line in messages if line.startswith("completed nonlinear chunk")
-    ]
-    assert "t=0.008/0.008" in progress[-1]
+    assert any("t=0.008/0.008" in line for line in messages)
 
     with pytest.raises(ValueError, match="timesteps must match"):
         write_runtime_nonlinear_artifacts(
