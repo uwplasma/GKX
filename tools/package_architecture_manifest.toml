@@ -162,7 +162,8 @@ path = "solvers/nonlinear/diagnostics.py"
 # 3529 -> 3539: the prepared scan runs through the digest-keyed executable cache.
 # 3539 -> 3542: Lawson integrating-factor steppers.
 # 3542 -> 2747: the saturated-window heat flux and sheared drivers moved to transport_window.py.
-baseline_lines = 2747
+# 2747 -> 2777: collisions once per explicit step.
+baseline_lines = 2777
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
