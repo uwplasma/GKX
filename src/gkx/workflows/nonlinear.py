@@ -117,11 +117,7 @@ def build_runtime_nonlinear_diagnostics_kwargs(
         dt_max=cfg.time.dt_max,
         cfl=float(cfg.time.cfl),
         cfl_fac=resolve_nonlinear_cfl_fac(method_use, cfg.time.cfl_fac, moments),
-        collision_split=(
-            method_use not in IMEX_CHAIN_METHODS | {"imex"}
-            if cfg.time.collision_split is None
-            else bool(cfg.time.collision_split)
-        ),
+        collision_split=cfg.time.collision_split,
         collision_scheme=str(cfg.time.collision_scheme),
         implicit_restart=int(cfg.time.implicit_restart),
         implicit_preconditioner=cfg.time.implicit_preconditioner,

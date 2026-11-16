@@ -255,13 +255,13 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
   execution. Treat it as a correctness-gated option unless the run also has a
   matched scaling artifact.
 
-With ``collision_split`` (on by default for the explicit steppers) the
-collision operator and the hypercollisions leave the Runge--Kutta stages and
-act once per step, after it: one forward-Euler step of the conserving operator,
-field-particle corrections included, then the diagonal hypercollision update.
-With :math:`\nu \Delta t \sim 10^{-3}` the splitting error is far below the
-step error, and the operator is evaluated once instead of once per stage. The
-chain IMEX methods keep the conserving operator in the RHS. The
+Unless ``collision_split = false``, the explicit steppers take the
+conserving collision operator out of the Runge--Kutta stages and apply it once
+per step, after it, as one forward-Euler step with its field-particle
+corrections. With :math:`\nu \Delta t \sim 10^{-3}` the splitting error is
+far below the step error, and the operator is evaluated once instead of once
+per stage. The chain IMEX methods keep it in the RHS. ``collision_split =
+true`` also splits the diagonal hypercollisions; the
 ``collision_scheme`` key selects the hypercollision update:
 ``implicit`` (backward-Euler), ``exp`` (exact diagonal exponential), and
 ``sts``/``rkc`` aliases (treated as stabilized explicit/exponential updates for
@@ -538,7 +538,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``cfl``","float","``0.9``","CFL safety factor of the step controller."
    "``cfl_fac``","float","unset","Stability prefactor of the CFL bound; per-method, moment-scaled default."
    "``nstep_restart``","int","unset","Write a restart checkpoint every this many steps."
-   "``collision_split``","bool","unset","Apply collisions and hypercollisions once per step, after it. Unset: on for explicit steppers, off for IMEX."
+   "``collision_split``","bool","unset","Unset: explicit steppers apply the collision operator once per step. ``true`` also splits the hypercollisions; ``false`` splits neither."
    "``collision_scheme``","str","``""implicit""``","Split update: ``implicit``, ``exp``, ``sts`` or ``rkc``."
    "``collision_operator``","str","``""landau""``","Collision model: ``landau``, ``none``, ``lenard_bernstein``, ``sugama``, ``improved_sugama``, ``coulomb``, ``coulomb_finite_kperp``."
    "``compressed_real_fft``","bool","``true``","Evaluate the nonlinear bracket on the half spectrum with paired real FFTs."

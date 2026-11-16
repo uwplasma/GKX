@@ -183,7 +183,7 @@ class TimeConfig:
     cfl: float = 0.9
     cfl_fac: float | None = None
     nstep_restart: int | None = None
-    # None: on for the explicit steppers (collisions once per step), off for IMEX.
+    # None: the explicit steppers apply the collision operator once per step.
     collision_split: bool | None = None
     collision_scheme: str = "implicit"
     collision_operator: str = "landau"

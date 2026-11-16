@@ -174,19 +174,20 @@ def build_nonlinear_collision_split_policy(
     real_dtype: jnp.dtype,
     *,
     squeeze_species: bool,
-    collision_split: bool,
+    collision_split: bool | None,
     collision_damping_fn: Callable[..., jnp.ndarray] = _collision_damping,
     split_collisions: bool = False,
 ) -> NonlinearCollisionSplitPolicy:
     """Build collision splitting weights and RHS terms for nonlinear scans.
 
-    ``split_collisions`` also takes the conserving collision operator out of the
-    RHS stages; the explicit steppers then apply it once per step (Lie split).
+    ``True`` splits the diagonal hypercollisions. With ``split_collisions`` (the
+    explicit steppers) ``True`` or ``None`` also takes the conserving collision
+    operator out of the stages, to be applied once per step (Lie split).
     """
 
-    hyper = bool(collision_split) and float(term_cfg.hypercollisions) != 0.0
+    hyper = collision_split is True and float(term_cfg.hypercollisions) != 0.0
     coll = (
-        bool(collision_split)
+        collision_split is not False
         and split_collisions
         and float(term_cfg.collisions) != 0.0
         and (np.any(np.asarray(params.nu) != 0.0) or params._nu_ei is not None)

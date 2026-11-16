@@ -2003,21 +2003,6 @@ def test_run_runtime_nonlinear_phiext_source_uses_diagnostics_path(
     assert out.phi2 is not None
 
 
-def test_collision_split_defaults_on_for_explicit_steppers_only() -> None:
-    from gkx.workflows.nonlinear import build_runtime_nonlinear_diagnostics_kwargs
-
-    cfg, ids = _nonlinear_cfg(), dict(ky_index=0, kx_index=0)
-    kw = dict(dt=0.1, steps=1, term_config=None, sample_stride=1, **ids)
-    kw |= dict(diagnostics_stride=1, laguerre_mode="grid", fixed_dt=False)
-    kw |= dict(fixed_mode_ky_index=None, fixed_mode_kx_index=None, external_phi=None)
-    kw |= dict(resolved_diagnostics=False, show_progress=False)
-    split = {
-        m: build_runtime_nonlinear_diagnostics_kwargs(cfg, method=m, **kw)
-        for m in ("rk4-pi", "lawson-rk4-pi", "imex", "imex-ars3")
-    }
-    assert [split[m]["collision_split"] for m in split] == [True, True, False, False]
-
-
 def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_split(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

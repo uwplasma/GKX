@@ -692,10 +692,10 @@ operations stay differentiable. ``context.fields`` carries ``phi``, ``apar``,
 and ``bpar``; ``context.hamiltonian`` follows the same enabled-field policy as
 the gyrokinetic RHS.
 
-The ``[time] collision_split`` policy, on by default for the explicit
-steppers, applies the conserving collision term (one forward-Euler step, with
-its field-particle corrections) and the diagonal hypercollisions once per step
-after the Runge--Kutta stages; the chain IMEX steps (``imex-ars3``, ``imex-ark3``)
+Unless ``[time] collision_split = false``, the explicit steppers apply the
+conserving collision term once per step after the Runge--Kutta stages (one
+forward-Euler step, with its field-particle corrections); ``true`` also splits
+the diagonal hypercollisions. The chain IMEX steps (``imex-ars3``, ``imex-ark3``)
 advance the Landau operator by a local backward-Euler sub-step instead
 (``collision_scheme = "implicit"``) when the explicit collision bound would
 bind, which removes :math:`\nu_e` from the step-size bound (:doc:`guidance`).

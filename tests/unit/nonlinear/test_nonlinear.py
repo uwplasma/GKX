@@ -804,8 +804,7 @@ def test_nonlinear_split_applies_conserving_collisions_once_per_step():
         method="rk3",
         cache=cache,
         terms=terms,
-        collision_split=True,
-        collision_scheme="exp",
+        collision_split=None,  # the deck default
     )
 
     expected = G + 0.05 * nonlinear_rhs_cached(G, cache, params, terms)[0]
