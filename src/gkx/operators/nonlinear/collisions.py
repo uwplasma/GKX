@@ -190,7 +190,7 @@ def build_nonlinear_collision_split_policy(
         collision_split is not False
         and split_collisions
         and float(term_cfg.collisions) != 0.0
-        and (np.any(np.asarray(params.nu) != 0.0) or params._nu_ei is not None)
+        and (bool(np.any(np.asarray(params.nu) != 0.0)) or params._nu_ei is not None)
     )
     rhs_terms = replace(
         term_cfg,
