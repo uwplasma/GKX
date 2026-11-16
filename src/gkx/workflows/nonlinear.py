@@ -800,6 +800,7 @@ def _run_diagnostics(
         or cfg.time.chunk_steps is not None
         or cfg.time.diagnostics_interval is not None
         or ctx.progress is not None
+        or hasattr(status, "update")
     ):
         if stop_condition is not None:
             status(

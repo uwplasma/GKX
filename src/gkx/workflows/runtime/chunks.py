@@ -59,11 +59,18 @@ class ProgressReporter:
     ) -> None:
         self.emit = emit or (lambda message: print(message, flush=True))
         self.interval, self.window, self.clock = interval, window, clock
-        self.start = clock()
+        self.start: float | None = None  # set by the first message
         self._last: float | None = None
         self._points: deque[tuple[float, float]] = deque()
 
+    def _begin(self, now: float) -> float:
+        """Elapsed time counts from the first message of the solve."""
+
+        self.start = now if self.start is None else self.start
+        return self.start
+
     def __call__(self, message: str) -> None:
+        self._begin(self.clock())
         self.emit(message)
 
     def update(
@@ -72,11 +79,16 @@ class ProgressReporter:
         """Record the simulation time reached; print when ``interval`` has passed."""
 
         now = self.clock()
+        self._begin(now)
         pts = self._points
         pts.append((now, t))
         while len(pts) > 2 and now - pts[1][0] >= self.window:
             pts.popleft()
-        if self._last is not None and now - self._last < self.interval and t < t_max:
+        if (
+            self._last is not None
+            and now - self._last < self.interval
+            and t < t_max * (1 - 1e-6)
+        ):
             return
         self._last = now
         (w0, t0), rate = pts[0], 0.0
@@ -85,7 +97,7 @@ class ProgressReporter:
         eta = _format_duration((t_max - t) / rate) if rate > 0 else "--:--"
         print_q = ", ".join(f"{float(x):.3g}" for x in q)
         self.emit(
-            f"{_format_duration(now - self.start)}  t={t:.6g}/{t_max:.6g}  "
+            f"{_format_duration(now - self._begin(now))}  t={t:.6g}/{t_max:.6g}  "
             f"{100 * min(t / t_max, 1):3.0f}%  eta {eta}  Q={print_q}  "
             f"{_flux_status(decision)}"
         )
@@ -104,7 +116,7 @@ class ProgressReporter:
             else f"Q={sat['mean']:.4g}{'' if sem is None else f'+-{sem:.2g}'} ({sat['status']})"
         )
         self.emit(
-            f"done in {_format_duration(self.clock() - self.start)}: "
+            f"done in {_format_duration(self.clock() - self._begin(self.clock()))}: "
             f"t={t_end:.6g}, {steps} steps, {q}"
         )
         if plot is not None:

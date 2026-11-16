@@ -20,6 +20,7 @@ from support.reference_physics import (
     _build_initial_condition,
 )
 from gkx.workflows.runtime.chunks import ProgressReporter
+from gkx.workflows.nonlinear import run_runtime_nonlinear
 from gkx.config import CycloneBaseCase
 from gkx.config import GridConfig, TimeConfig
 from gkx.config import InitializationConfig
@@ -2943,6 +2944,17 @@ def test_physical_output_cadence_preserves_checkpointed_solver_result(tmp_path):
         == Path(native_paths["restart"]).read_bytes()
     )
     assert any("t=0.008/0.008" in line for line in messages)
+    # A fixed-step run without an output cadence reports through the same path.
+    fixed = []
+    run_runtime_nonlinear(
+        cfg,
+        ky_target=0.3,
+        Nl=2,
+        Nm=4,
+        steps=8,
+        status_callback=ProgressReporter(fixed.append, interval=0),
+    )
+    assert any("t=0.008/0.008" in line for line in fixed)
 
     with pytest.raises(ValueError, match="timesteps must match"):
         write_runtime_nonlinear_artifacts(
