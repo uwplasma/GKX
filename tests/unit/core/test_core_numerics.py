@@ -570,11 +570,13 @@ def test_gkx3_workflow_contracts_delegate_to_existing_owners(
 
 
 # Progress callback contracts.
-def test_emit_progress_reports_one_based_step_once() -> None:
+def test_emit_progress_reports_one_based_step_once(monkeypatch) -> None:
     buf = io.StringIO()
+    monkeypatch.setattr(buf, "flush", lambda: buf.write("<flushed>"))
     with redirect_stdout(buf):
         _emit_progress(4, 5, 1.0, -2.0, 3.0, 4.0, sim_time=2.0, sim_total=2.5)
     out = buf.getvalue().strip()
+    assert out.endswith("<flushed>")
     assert out.startswith("[gkx:segment]")
     assert "step=5/5" in out
     assert "progress=100.0%" in out
