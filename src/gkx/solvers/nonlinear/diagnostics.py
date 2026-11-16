@@ -618,7 +618,11 @@ def _explicit_collision_split_fn(
                 G, cache, params, collision_terms, external_phi=external_phi
             )
             G = G + dt_local * dC.astype(G.dtype)
-        return G if damping is None else _apply_collision_split(G, damping, dt_local, scheme)
+        return (
+            G
+            if damping is None
+            else _apply_collision_split(G, damping, dt_local, scheme)
+        )
 
     return apply
 
