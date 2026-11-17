@@ -370,7 +370,7 @@ transients in the cases that never converged.
      - the window mean is moving, per item 3
    * - ``intermittent``
      - the window is shorter than :math:`30\tau`, has fewer than ten blocks, or
-       the relative SEM exceeds ``saturation_rel_sem`` (10%)
+       the relative SEM exceeds ``saturation_rel_sem`` (5%)
    * - ``unconfirmed``
      - passes now but failed the 80%-prefix check of item 5
    * - ``saturated``
@@ -379,14 +379,23 @@ transients in the cases that never converged.
    * - ``cap_reached:<status>``
      - ``t_max`` was reached without ``saturated``
 
-Nothing is called saturated before ``saturation_t_min = 800`` :math:`a/v_t`.
-Published practice is of that order: the GX stellarator flux database of
-Landreman et al. [Landreman25]_ discards :math:`t<150` and runs to 800 :math:`a/v_t`,
-CGYRO production runs use at least 500 :math:`a/c_s`, and GENE averaging windows
-are of order 1000. A run with ``t_max`` below ``saturation_t_min`` can still
-report ``saturated`` at its cap. The Oberparleiter et al. stopping rule
-[Oberparleiter16]_ motivates stopping on an error estimate rather than a
-fixed time.
+Nothing is called saturated before ``saturation_t_min = 300`` :math:`a/v_t`,
+and the run stops once the relative SEM is under ``saturation_rel_sem`` (5%).
+The other gates (ten blocks of four correlation times, a window of 30
+correlation times, the confirmation step) usually bind first, so the quoted
+SEM at the stop is 2-3%. The Oberparleiter et al. stopping rule
+[Oberparleiter16]_ motivates stopping on an error estimate rather than a fixed
+time. Published practice runs longer: the GX stellarator flux database of
+Landreman et al. [Landreman25]_ discards :math:`t<150` and runs to 800
+:math:`a/v_t`, CGYRO production runs use at least 500 :math:`a/c_s`, and GENE
+averaging windows are of order 1000. Lowering ``saturation_t_min`` from 800 to
+300 moved the stop of the QA turbulence run of :ref:`turbulence-defaults` from
+801 to 481 with a mean 0.9% from the full 1000 window. On 100 synthetic
+lognormal traces shaped like the measured ones (relative spread 11%,
+correlation time 7.5) 97% of the stopped means lie within 5% of the true mean
+with ``saturation_t_min = 300`` and 99% with 800; with a 15% spread and a
+correlation time of 15 the fractions are 84% and 86%. A run with ``t_max``
+below ``saturation_t_min`` can still report ``saturated`` at its cap.
 
 These are finite-sample safeguards, not a sequential-confidence guarantee. On
 stationary synthetic traces the quoted SEM covers the true mean about 85% of

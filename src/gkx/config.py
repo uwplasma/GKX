@@ -193,8 +193,8 @@ class TimeConfig:
     # physical-time heat-flux detector says saturated (t_max is the hard cap);
     # "t_max" integrates the full horizon. Linear runs ignore these keys.
     run_to: str = "saturation"
-    saturation_rel_sem: float = 0.10
-    saturation_t_min: float = 800.0
+    saturation_rel_sem: float = 0.05
+    saturation_t_min: float = 300.0
     saturation_drift_rel: float = 0.10
     damp_ends_rate: float | None = None
 

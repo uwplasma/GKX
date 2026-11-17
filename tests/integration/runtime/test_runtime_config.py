@@ -1167,6 +1167,20 @@ def test_runtime_chunk_policy_preserves_state_and_fresh_physical_samples(
         )
 
 
+def test_the_common_deck_is_the_documented_turbulence_default(tmp_path) -> None:
+    """``gkx wout.nc`` runs the measured 5% default (docs/guidance.rst)."""
+
+    path = tmp_path / "case.toml"
+    path.write_text((REPO_ROOT / "examples/common_input.toml").read_text())
+    cfg, _ = load_runtime_from_toml(path)
+    g, t = cfg.grid, cfg.time
+    assert (g.Nx, g.Ny, g.Nz, cfg.run.Nl, cfg.run.Nm) == (96, 96, 48, 6, 12)
+    assert (t.run_to, t.saturation_rel_sem, t.saturation_t_min) == ("saturation", 0.05, 300.0)
+    assert (t.t_max, t.sample_stride, t.diagnostics_stride) == (1500.0, 10, 10)
+    doc = (REPO_ROOT / "docs/guidance.rst").read_text()
+    assert "96x96x48, (6, 12)" in doc and "saturation_rel_sem = 0.05" in doc
+
+
 @pytest.mark.parametrize(
     "relative",
     [
