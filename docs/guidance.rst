@@ -1328,7 +1328,7 @@ The QA runs go to ``t = 600`` unless marked. GX gives 7.2 +- 0.8 at (4, 8) and
   5 :math:`a/v_t` the QA (6, 12) trace was still ``intermittent`` at 600, so
   the common deck samples every 10 steps.
 * Cost of the QA default: about 18 minutes on one A4000 (481 :math:`a/v_t` at
-  2.11 s plus 65 s of compilation). On 8 CPU threads (36-core Xeon, load 20 to
+  2.11 s plus 65 s of compilation). On 8 CPU threads (Xeon W-2295, load 20 to
   30) a step takes 13.7 s, about 19 hours for the same run; use a GPU.
 
 Not measured here: the hyperdiffusion coefficient, the CFL factor, the box
