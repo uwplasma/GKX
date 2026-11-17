@@ -1308,6 +1308,10 @@ MSER-cut window with the batch-means standard error.
      - 6.83 +- 0.15
      - -4% +- 4%
      - 0.78
+   * - Same, ``t = 1500``, stop rule
+     - 6.75 +- 0.12 at ``t = 1000``
+     - -5%
+     - 1.46 (shared card)
 
 The QA runs go to ``t = 600`` unless marked. GX gives 7.2 +- 0.8 at (4, 8) and
 7.3 +- 0.9 at (8, 16) on the Cyclone deck (:doc:`validation`).
@@ -1322,8 +1326,10 @@ The QA runs go to ``t = 600`` unless marked. GX gives 7.2 +- 0.8 at (4, 8) and
   17%, so no cheaper grid fits inside the 5%.
 * The stop rule ends the run at a 5% standard error, not before ``t = 300``.
   On QA at (6, 12) it stops at ``t = 481`` with 5.36 +- 0.16. The Cyclone
-  trace has a correlation time of 13 to 16 and does not pass the
-  ten-block gate by ``t = 800``; give it a cap of at least 1500.
+  trace has a correlation time of 13 to 16; the rule calls it saturated at
+  ``t = 1000`` (6.75 +- 0.12). Past that the Cyclone flux is not stationary:
+  its 100-wide means fall from 6.5 to 3.7 by ``t = 1500`` and the rule reports
+  ``drifting``. A Cyclone average depends on where it stops.
 * The stop rule needs about one sample per :math:`a/v_t`. With samples every
   5 :math:`a/v_t` the QA (6, 12) trace was still ``intermittent`` at 600, so
   the common deck samples every 10 steps.
