@@ -1308,7 +1308,11 @@ MSER-cut window with the batch-means standard error.
      - 6.83 +- 0.15
      - -4% +- 4%
      - 0.78
-   * - Same, ``t = 1500``, stop rule
+   * - Cyclone Miller, 192x64x24, (6, 12), ``t = 800``
+     - 6.06 +- 0.22
+     - -15%
+     - 4.9 (shared card)
+   * - Same as (4, 8), ``t = 1500``, stop rule
      - 6.75 +- 0.12 at ``t = 1000``
      - -5%
      - 1.46 (shared card)
@@ -1320,7 +1324,13 @@ The QA runs go to ``t = 600`` unless marked. GX gives 7.2 +- 0.8 at (4, 8) and
 
 * Velocity resolution is the largest error on the stellarator: (4, 8) is 12%
   high and both counts matter, so the common deck takes (6, 12), the cheapest
-  pair within 5% of (8, 16). The Cyclone deck is within 5% at (4, 8), as in GX.
+  pair within 5% of (8, 16).
+* Cyclone does not reach 5% at any resolution tried. (4, 8), (6, 12) and
+  (8, 16) give 6.8, 6.1 and 7.1: the differences exceed the standard errors and
+  are not ordered by resolution, so the time average of this deck varies by
+  about 15% between 400-wide windows, more than its batch-means error says.
+  Separating resolution from that variation needs several seeds or much
+  longer windows, which was not done.
 * The configuration grid stays at 96x96x48. Dropping ``Nz`` to 32 moves
   :math:`Q` by 4%, ``Ny`` to 64 by 6%, ``Nx`` to 64 by 15% and 64x64x32 by
   17%, so no cheaper grid fits inside the 5%.
