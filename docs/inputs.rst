@@ -540,6 +540,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``cfl_fac``","float","unset","Stability prefactor of the CFL bound; per-method, moment-scaled default."
    "``nstep_restart``","int","unset","Write a restart checkpoint every this many steps."
    "``collision_split``","bool","unset","Unset: explicit steppers apply the collision operator once per step. ``true`` also splits the hypercollisions; ``false`` splits neither."
+   "``collision_interval``","int","``1``","Explicit steppers apply the split collision operator every this many steps, with that many times the step."
    "``collision_scheme``","str","``""implicit""``","Split update: ``implicit``, ``exp``, ``sts`` or ``rkc``."
    "``collision_operator``","str","``""landau""``","Collision model: ``landau``, ``none``, ``lenard_bernstein``, ``sugama``, ``improved_sugama``, ``coulomb``, ``coulomb_finite_kperp``."
    "``compressed_real_fft``","bool","``true``","Evaluate the nonlinear bracket on the half spectrum with paired real FFTs."
