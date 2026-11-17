@@ -1288,6 +1288,14 @@ MSER-cut window with the batch-means standard error.
      - 5.87 +- 0.09
      - -4% against (4, 8) at 48
      -
+   * - QA, 64x96x48, (4, 8)
+     - 6.99 +- 0.19
+     - +15% against (4, 8) at 96x96x48
+     - 1.48 (shared card)
+   * - QA, 96x64x48, (4, 8)
+     - 6.45 +- 0.12
+     - +6% against (4, 8) at 96x96x48
+     - 1.47 (shared card)
    * - QA, 64x64x32, (4, 8)
      - 7.16 +- 0.13
      - +17% against (4, 8) at 96x96x48
@@ -1310,7 +1318,8 @@ The QA runs go to ``t = 600`` unless marked. GX gives 7.2 +- 0.8 at (4, 8) and
   high and both counts matter, so the common deck takes (6, 12), the cheapest
   pair within 5% of (8, 16). The Cyclone deck is within 5% at (4, 8), as in GX.
 * The configuration grid stays at 96x96x48. Dropping ``Nz`` to 32 moves
-  :math:`Q` by 4% and 64x64x32 by 17%, so no cheaper grid fits inside the 5%.
+  :math:`Q` by 4%, ``Ny`` to 64 by 6%, ``Nx`` to 64 by 15% and 64x64x32 by
+  17%, so no cheaper grid fits inside the 5%.
 * The stop rule ends the run at a 5% standard error, not before ``t = 300``.
   On QA at (6, 12) it stops at ``t = 481`` with 5.36 +- 0.16. The Cyclone
   trace has a correlation time of 13 to 16 and does not pass the
@@ -1319,7 +1328,8 @@ The QA runs go to ``t = 600`` unless marked. GX gives 7.2 +- 0.8 at (4, 8) and
   5 :math:`a/v_t` the QA (6, 12) trace was still ``intermittent`` at 600, so
   the common deck samples every 10 steps.
 * Cost of the QA default: about 18 minutes on one A4000 (481 :math:`a/v_t` at
-  2.11 s plus 65 s of compilation).
+  2.11 s plus 65 s of compilation). On 8 CPU threads (36-core Xeon, load 20 to
+  30) a step takes 13.7 s, about 19 hours for the same run; use a GPU.
 
 Not measured here: the hyperdiffusion coefficient, the CFL factor, the box
 size and float64 at these resolutions.
