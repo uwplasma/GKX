@@ -1236,6 +1236,94 @@ place that selects ``auto`` or ``imex-ark3``. The two are not merged because
 schemes. Set ``method = "auto"`` on the case (``replace(case.time, method="auto")``)
 to get the deck behavior; the run prints the stepper it chose.
 
+.. _turbulence-defaults:
+
+Turbulence defaults
+-------------------
+
+The defaults are set so that a nonlinear run reports a time-averaged heat flux
+within 5% of the converged value. The error has two parts: the statistical
+error of the time average and the resolution bias. ``run_to = "saturation"``
+with ``saturation_rel_sem = 0.05`` and ``saturation_t_min = 300`` controls the
+first; the common deck's 96x96x48, (6, 12) controls the second for a
+stellarator tube. Setup: Landreman-Paul QA (``torflux`` 0.64, ``y0`` 14,
+:math:`\nu` = 0.01) and the Miller Cyclone deck of the GX paper
+(``benchmarks/cases/cyclone_nonlinear_miller.toml``), one A4000, float32,
+November 2026. "Converged" is (8, 16) at the deck's grid. Means are over the
+MSER-cut window with the batch-means standard error.
+
+.. list-table:: Heat flux against resolution
+   :header-rows: 1
+   :widths: 34 20 14 16
+
+   * - Case, grid, (Nl, Nm)
+     - :math:`Q_i/Q_{GB}`
+     - Bias
+     - A4000 s per :math:`a/v_t`
+   * - QA, 96x96x48, (8, 16), ``t = 1000``
+     - 5.44 +- 0.08
+     - reference
+     - 3.68
+   * - QA, 96x96x48, (8, 12)
+     - 5.40 +- 0.13
+     - -1%
+     - 2.66
+   * - QA, 96x96x48, (6, 12)
+     - 5.38 +- 0.15
+     - -1%
+     - 2.11
+   * - QA, 96x96x48, (8, 8)
+     - 5.65 +- 0.13
+     - +4%
+     - 1.78
+   * - QA, 96x96x48, (4, 16)
+     - 5.86 +- 0.14
+     - +8%
+     - 2.25
+   * - QA, 96x96x48, (4, 8), ``t = 1200``
+     - 6.10 +- 0.10
+     - +12%
+     - 1.0
+   * - QA, 96x96x32, (4, 8)
+     - 5.87 +- 0.09
+     - -4% against (4, 8) at 48
+     -
+   * - QA, 64x64x32, (4, 8)
+     - 7.16 +- 0.13
+     - +17% against (4, 8) at 96x96x48
+     - 0.24
+   * - Cyclone Miller, 192x64x24, (8, 16), ``t = 600``
+     - 7.11 +- 0.21
+     - reference
+     - 3.5 (shared card)
+   * - Cyclone Miller, 192x64x24, (4, 8), ``t = 800``
+     - 6.83 +- 0.15
+     - -4% +- 4%
+     - 0.78
+
+The QA runs go to ``t = 600`` unless marked. GX gives 7.2 +- 0.8 at (4, 8) and
+7.3 +- 0.9 at (8, 16) on the Cyclone deck (:doc:`validation`).
+
+**Decision.**
+
+* Velocity resolution is the largest error on the stellarator: (4, 8) is 12%
+  high and both counts matter, so the common deck takes (6, 12), the cheapest
+  pair within 5% of (8, 16). The Cyclone deck is within 5% at (4, 8), as in GX.
+* The configuration grid stays at 96x96x48. Dropping ``Nz`` to 32 moves
+  :math:`Q` by 4% and 64x64x32 by 17%, so no cheaper grid fits inside the 5%.
+* The stop rule ends the run at a 5% standard error, not before ``t = 300``.
+  On QA at (6, 12) it stops at ``t = 481`` with 5.36 +- 0.16. The Cyclone
+  trace has a correlation time of 13 to 16 and does not pass the
+  ten-block gate by ``t = 800``; give it a cap of at least 1500.
+* The stop rule needs about one sample per :math:`a/v_t`. With samples every
+  5 :math:`a/v_t` the QA (6, 12) trace was still ``intermittent`` at 600, so
+  the common deck samples every 10 steps.
+* Cost of the QA default: about 18 minutes on one A4000 (481 :math:`a/v_t` at
+  2.11 s plus 65 s of compilation).
+
+Not measured here: the hyperdiffusion coefficient, the CFL factor, the box
+size and float64 at these resolutions.
+
 Collisions
 ----------
 

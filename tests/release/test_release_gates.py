@@ -2375,7 +2375,7 @@ _RUN_TO_DEFAULT_CLEARED: dict[str, str] = {
     # QA wout, 96x96x48, (6, 12), A4000 float32, sampled every a/v_t: too_short
     # until 300, then intermittent; saturated at 481 with Q = 5.36 +- 0.16
     # against 5.38 over 56..600 (docs/guidance.rst, Turbulence defaults).
-    "examples/common_input.toml": "first chunk too_short; saturated at t = 481",
+    "examples/common_input.toml": "first chunk refused as too_short and saturated at t = 481",
 }
 
 # Decks that reach the nonlinear runtime and have NOT been measured yet. This
