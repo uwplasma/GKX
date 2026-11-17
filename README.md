@@ -11,8 +11,10 @@
 GKX is a JAX gyrokinetic solver for tokamak and stellarator flux tubes. It
 reads a VMEC or VMEX equilibrium, or builds an analytic Miller or s-alpha
 geometry, and computes linear stability and nonlinear turbulence in a
-Hermite-Laguerre velocity basis. The whole path, equilibrium included, is
-differentiable on CPUs and GPUs.
+Hermite-Laguerre velocity basis. Linear growth rates and fixed-step nonlinear
+heat-flux windows are differentiable, equilibrium included, and the tests
+compare those gradients with finite differences on CPU. The adaptive-step
+nonlinear run and its saturation stop are not differentiated.
 
 **Comparison across gyrokinetic codes**
 
