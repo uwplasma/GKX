@@ -162,6 +162,7 @@ class _ExplicitDiagnosticOptions:
     cfl_fac: float | None
     collision_split: bool
     collision_scheme: str
+    collision_interval: int
     fixed_mode_ky_index: int | None
     fixed_mode_kx_index: int | None
     external_phi: jnp.ndarray | float | None
@@ -570,6 +571,7 @@ def _make_explicit_scan_step(
     external_phi: jnp.ndarray | float | None,
     collision_scheme: str,
     time_horizon: float | None,
+    collision_interval: int = 1,
 ) -> Callable[..., Any]:
     """Build the explicit scan-step closure from prepared policies."""
 
@@ -601,6 +603,7 @@ def _make_explicit_scan_step(
             external_phi,
         ),
         time_horizon=time_horizon,
+        collision_interval=collision_interval,
     )
 
 
@@ -959,6 +962,7 @@ def _build_explicit_scan_closures(
         steps=options.steps,
         external_phi=options.external_phi,
         collision_scheme=options.collision_scheme,
+        collision_interval=options.collision_interval,
     )
     step = make_step(time_horizon=options.time_horizon)
     # The adaptive chunk loop changes only the horizon between chunks; this
@@ -1109,6 +1113,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
@@ -1338,6 +1343,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
@@ -2107,6 +2113,7 @@ _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
     "cfl_fac",
     "collision_split",
     "collision_scheme",
+    "collision_interval",
     "implicit_tol",
     "implicit_maxiter",
     "implicit_iters",
@@ -2130,6 +2137,7 @@ _IMEX_DIAGNOSTIC_OPTION_KEYS = tuple(
         "time_horizon",
         "cfl",
         "cfl_fac",
+        "collision_interval",
         "resolved_diagnostics",
     }
 )
@@ -2192,6 +2200,7 @@ def integrate_nonlinear_explicit_diagnostics(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
@@ -2267,6 +2276,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
