@@ -1175,8 +1175,9 @@ def test_the_common_deck_is_the_documented_turbulence_default(tmp_path) -> None:
     cfg, _ = load_runtime_from_toml(path)
     g, t = cfg.grid, cfg.time
     assert (g.Nx, g.Ny, g.Nz, cfg.run.Nl, cfg.run.Nm) == (96, 96, 48, 6, 12)
-    assert (t.run_to, t.saturation_rel_sem, t.saturation_t_min) == ("saturation", 0.05, 300.0)
-    assert (t.t_max, t.sample_stride, t.diagnostics_stride) == (1500.0, 10, 10)
+    stop = (t.run_to, t.saturation_rel_sem, t.saturation_t_min, t.t_max)
+    assert stop == ("saturation", 0.05, 300.0, 1500.0)
+    assert (t.sample_stride, t.diagnostics_stride) == (10, 10)
     doc = (REPO_ROOT / "docs/guidance.rst").read_text()
     assert "96x96x48, (6, 12)" in doc and "saturation_rel_sem = 0.05" in doc
 

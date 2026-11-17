@@ -2125,7 +2125,8 @@ def test_late_rise_is_not_called_saturated_and_early_look_is_refused() -> None:
     assert _status(rise) != "saturated"
     early = T < 690  # the plateau before the rise looks stationary ...
     assert _status(rise[early], T[early]) == "saturated"
-    assert _status(rise[early], T[early], t_min=800.0) == "too_short"  # ... a long t_min refuses it
+    # ... but a long t_min refuses it
+    assert _status(rise[early], T[early], t_min=800.0) == "too_short"
 
 
 @pytest.mark.parametrize(
