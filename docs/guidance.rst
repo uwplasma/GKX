@@ -1280,8 +1280,8 @@ MSER-cut window with the batch-means standard error.
      - 5.86 +- 0.14
      - +8%
      - 2.25
-   * - QA, 96x96x48, (4, 8), ``t = 1200``
-     - 6.10 +- 0.10
+   * - QA, 96x96x48, (4, 8), ``t = 1200`` and a second run to 600
+     - 6.10 +- 0.10, 6.11 +- 0.15
      - +12%
      - 1.0
    * - QA, 96x96x32, (4, 8)
