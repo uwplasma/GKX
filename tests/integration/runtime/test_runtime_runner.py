@@ -653,8 +653,8 @@ def test_runtime_scan_batch_matches_serial() -> None:
         Nm=6,
         solver="time",
         method="rk2",
-        dt=0.01,
-        steps=10,
+        dt=0.005,  # under the CFL bound 0.006
+        steps=20,
         fit_signal="phi",
     )
     batched = run_runtime_scan(
@@ -664,8 +664,8 @@ def test_runtime_scan_batch_matches_serial() -> None:
         Nm=6,
         solver="time",
         method="rk2",
-        dt=0.01,
-        steps=10,
+        dt=0.005,  # under the CFL bound 0.006
+        steps=20,
         fit_signal="phi",
         batch_ky=True,
     )
