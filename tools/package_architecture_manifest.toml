@@ -239,7 +239,8 @@ recursive = true
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
-baseline = 69893
+# 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
+baseline = 69896
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -259,7 +260,8 @@ recursive = true
 # 64804 -> 64839: banded route with unequal per-species Nm regression test.
 # 64839 -> 64843: example 01 smoke knobs formatted over four lines.
 # 64843 -> 64846: reason for the kinetic-electron time-route nperiod = 1 pin.
-baseline = 64846
+# 64846 -> 64850: merged with main (#491).
+baseline = 64850
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -3777,7 +3777,7 @@ def test_runtime_seed_is_built_in_the_working_precision() -> None:
         ("explicit_time", False, False),
     ],
 )
-def test_over_cfl_fixed_step_warns_on_every_linear_path(
+def test_over_cfl_fixed_step_is_refused_on_every_linear_path(
     solver: str, fixed_dt: bool, expect_warning: bool
 ) -> None:
     """The fixed-step CFL hint must not skip ``explicit_time``.
@@ -3805,12 +3805,16 @@ def test_over_cfl_fixed_step_warns_on_every_linear_path(
     )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        try:
-            run_runtime_linear(cfg, Nl=2, Nm=4, solver=solver)
-        except Exception:  # noqa: BLE001 - an over-CFL step may also overflow
-            pass
-    hits = [w for w in caught if "exceeds the estimated" in str(w.message)]
-    assert bool(hits) is expect_warning
+        if expect_warning:
+            # dt = 5 is far past 1.5x the bound: refused before any step, naming the stable dt.
+            with pytest.raises(ValueError, match="CFL-stable step 0.1094"):
+                run_runtime_linear(cfg, Nl=2, Nm=4, solver=solver)
+        else:
+            try:
+                run_runtime_linear(cfg, Nl=2, Nm=4, solver=solver)
+            except Exception:  # noqa: BLE001 - an over-CFL step may also overflow
+                pass
+    assert not [w for w in caught if "exceeds the estimated" in str(w.message)]
 
 
 def test_zero_species_nu_admits_declared_custom_collisions() -> None:

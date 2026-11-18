@@ -46,7 +46,7 @@ nperiod = 2
 
 [time]
 t_max = 40.0
-dt = 0.002
+dt = 0.0005
 method = "rk4"
 sample_stride = 20
 fixed_dt = true
