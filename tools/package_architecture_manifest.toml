@@ -72,7 +72,7 @@ name = "tool_python_files"
 path = "tools"
 pattern = "*.py"
 recursive = true
-baseline = 0
+baseline = 64726
 target = 0
 
 [[topology_policy.counts]]
@@ -97,7 +97,7 @@ name = "flat_tool_python_files"
 path = "tools"
 pattern = "*.py"
 recursive = false
-baseline = 0
+baseline = 64726
 target = 0
 
 [layer_policy]
@@ -269,7 +269,7 @@ name = "tool_python_lines"
 path = "tools"
 pattern = "*.py"
 recursive = true
-baseline = 0
+baseline = 64726
 target = 0
 
 [[line_budget_policy.counts]]

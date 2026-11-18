@@ -127,16 +127,6 @@ class EigenSolveStatus:
     certified: bool
     inner: dict[str, Any] | None = None
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "method": self.method,
-            "route": self.route,
-            "residual": self.residual,
-            "tolerance": self.tolerance,
-            "certified": self.certified,
-            "inner": None if self.inner is None else dict(self.inner),
-        }
-
 
 def eigen_status_payload(status: EigenSolveStatus | None) -> dict[str, Any]:
     """Flatten an eigen solve status into scalar keys; ``None`` when none ran.
