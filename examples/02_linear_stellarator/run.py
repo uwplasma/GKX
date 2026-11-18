@@ -47,15 +47,12 @@ if (
 if not wout.exists():
     raise SystemExit(f"{wout.name} is missing: pip install vmex, then rerun")
 
-run = dict(
-    Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
-)  # the deck's [run] block
-scan = gkx.scan(case, KY, **run, show_progress=True)
+scan = gkx.scan(case, KY, show_progress=True)
 peak_ky = float(scan.ky[int(np.argmax(scan.gamma))])
 peak = gkx.solve(
     case.replace(time=replace(case.time, t_max=PEAK_T_MAX)),
     ky_target=peak_ky,
-    **{**run, "solver": "time"},
+    solver="time",
     show_progress=True,
 )
 for ky, gamma, omega in zip(scan.ky, scan.gamma, scan.omega):
