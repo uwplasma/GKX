@@ -479,10 +479,13 @@ def _saturation_stop_condition(
     # The chunked route records one diagnostic sample per step.
     if not ctx.adaptive_chunked and int(ctx.steps) < _MIN_SATURATION_STEPS:
         return None
+<<<<<<< HEAD
     return _saturation_check(cfg)
 
 
 def _saturation_check(cfg: RuntimeConfig) -> Callable[[Any, Any, bool], dict[str, Any]]:
+=======
+>>>>>>> origin/feat/progress-reporter
     t_max, t_min = float(cfg.time.t_max), cfg.time.saturation_t_min
     if t_min is not None and t_min > t_max:
         warnings.warn(
@@ -490,13 +493,17 @@ def _saturation_check(cfg: RuntimeConfig) -> Callable[[Any, Any, bool], dict[str
             "the saturated verdict is only possible within the last 5% of t_max",
             stacklevel=2,
         )
+    return _saturation_check(cfg)
+
+
+def _saturation_check(cfg: RuntimeConfig) -> Callable[[Any, Any, bool], dict[str, Any]]:
     sat = SaturationStopConfig(
         rel_sem=float(cfg.time.saturation_rel_sem),
         drift_rel=float(cfg.time.saturation_drift_rel),
     )
-    if t_min is not None:
-        sat = replace(sat, t_min=float(t_min))
-    return make_saturation_check(sat, t_max)
+    if cfg.time.saturation_t_min is not None:
+        sat = replace(sat, t_min=float(cfg.time.saturation_t_min))
+    return make_saturation_check(sat, float(cfg.time.t_max))
 
 
 def _resolve_auto_stepper(
