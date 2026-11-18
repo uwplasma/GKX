@@ -435,7 +435,7 @@ def _booz_xform_unavailable_report(
     nboz: int,
     error: str | None = None,
 ) -> dict[str, object]:
-    """Pack the fail-closed Boozer bridge report used when the backend is absent."""
+    """Pack the Boozer bridge report used when the backend is absent."""
 
     report: dict[str, object] = {
         "available": False,
@@ -572,7 +572,7 @@ def booz_xform_spectral_sensitivity_report(  # pragma: no cover
 ) -> dict[str, object]:
     """Validate a real ``booz_xform_jax`` spectral derivative when available.
 
-    This is a deliberately tiny Boozer-transform gate. It constructs an
+    This is a tiny Boozer-transform gate. It constructs an
     axisymmetric one-surface VMEC-to-Boozer input bundle, runs the real
     ``booz_xform_jax`` functional API, and checks the derivative of a Boozer
     magnetic-spectrum norm with respect to a magnetic-ripple coefficient against

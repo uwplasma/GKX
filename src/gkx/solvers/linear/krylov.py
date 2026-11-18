@@ -127,16 +127,6 @@ class EigenSolveStatus:
     certified: bool
     inner: dict[str, Any] | None = None
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "method": self.method,
-            "route": self.route,
-            "residual": self.residual,
-            "tolerance": self.tolerance,
-            "certified": self.certified,
-            "inner": None if self.inner is None else dict(self.inner),
-        }
-
 
 def eigen_status_payload(status: EigenSolveStatus | None) -> dict[str, Any]:
     """Flatten an eigen solve status into scalar keys; ``None`` when none ran.
@@ -898,7 +888,7 @@ def _adaptive_branch(
     cfg: KrylovConfig,
     status_callback: _StatusCallback,
 ) -> tuple[jnp.ndarray, jnp.ndarray, EigenSolveStatus]:
-    """Run the residual-certified adaptive eigensolve; fail closed on rejection.
+    """Run the residual-certified adaptive eigensolve; raise on rejection.
 
     Unlike the raw propagator/power/arnoldi branches, this path never returns
     an uncertified pair: the eigenvalue is either certified against the

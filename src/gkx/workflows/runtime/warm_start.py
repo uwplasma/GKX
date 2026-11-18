@@ -262,8 +262,8 @@ class SaturationPlan:
 class SaturationWarmStart:
     """Decide, and record, whether an optimizer iteration may reuse saturation.
 
-    This deliberately does not change *when* the saturated state is refreshed.
-    Callers refresh it at the same points they always did -- accepted stages --
+    This does not change *when* the saturated state is refreshed.
+    Callers refresh it at the same points as without it -- accepted stages --
     so the objective stays a fixed function of its inputs for the whole of each
     stage and never becomes a function of the optimizer's within-stage history.
     What changes is only the cost of producing the refreshed state.

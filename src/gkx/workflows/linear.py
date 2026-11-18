@@ -9,7 +9,7 @@ from typing import Any, Callable
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.benchmarking_shared import LinearRunResult, LinearScanResult, _midplane_index
+from gkx.benchmarking_shared import _midplane_index
 from gkx.diagnostics.modes import (
     ModeSelection,
 )
@@ -785,62 +785,3 @@ def run_runtime_linear(
         show_progress=show_progress,
         status_callback=status_callback,
     )
-
-
-def _indexed_control(value: float | int | np.ndarray | None, index: int, cast):
-    if isinstance(value, np.ndarray):
-        return cast(value[index])
-    return None if value is None else cast(value)
-
-
-def run_linear_scan(
-    *,
-    ky_values: np.ndarray,
-    run_linear_fn: Callable[..., LinearRunResult],
-    cfg: Any,
-    Nl: int,
-    Nm: int,
-    dt: float | np.ndarray,
-    steps: int | np.ndarray,
-    method: str,
-    solver: str,
-    krylov_cfg: Any,
-    window_kw: dict[str, Any],
-    tmin: float | np.ndarray | None = None,
-    tmax: float | np.ndarray | None = None,
-    auto_window: bool = True,
-    run_kwargs: dict[str, Any] | None = None,
-    resolution_policy: Callable[[float], tuple[int, int]] | None = None,
-    krylov_policy: Callable[[float], object] | None = None,
-) -> LinearScanResult:
-    """Run a deterministic pointwise linear scan over ``ky_values``."""
-
-    rows: list[tuple[float, float, float]] = []
-    for index, ky in enumerate(np.asarray(ky_values, dtype=float)):
-        n_l, n_m = (
-            resolution_policy(float(ky)) if resolution_policy is not None else (Nl, Nm)
-        )
-        result = run_linear_fn(
-            ky_target=float(ky),
-            cfg=cfg,
-            Nl=int(n_l),
-            Nm=int(n_m),
-            dt=_indexed_control(dt, index, float),
-            steps=_indexed_control(steps, index, int),
-            method=method,
-            solver=solver,
-            krylov_cfg=(
-                krylov_policy(float(ky)) if krylov_policy is not None else krylov_cfg
-            ),
-            auto_window=auto_window,
-            tmin=_indexed_control(tmin, index, float),
-            tmax=_indexed_control(tmax, index, float),
-            **window_kw,
-            **(run_kwargs or {}),
-        )
-        rows.append((float(result.ky), float(result.gamma), float(result.omega)))
-    if not rows:
-        empty = np.asarray([], dtype=float)
-        return LinearScanResult(ky=empty, gamma=empty.copy(), omega=empty.copy())
-    values = np.asarray(rows, dtype=float)
-    return LinearScanResult(ky=values[:, 0], gamma=values[:, 1], omega=values[:, 2])
