@@ -187,13 +187,6 @@ class LinearRunResult:
     omega_t: np.ndarray | None = None
 
 
-@dataclass(frozen=True)
-class LinearScanResult:
-    ky: np.ndarray
-    gamma: np.ndarray
-    omega: np.ndarray
-
-
 def _load_csv_reference(filename: str) -> CycloneReference:
     data_path = resources.files("gkx").joinpath("data", filename)
     arr = np.loadtxt(str(data_path), delimiter=",", skiprows=1)
@@ -265,7 +258,6 @@ __all__ = [
     "CycloneReference",
     "CycloneScanResult",
     "LinearRunResult",
-    "LinearScanResult",
     "_load_csv_reference",
     "load_cyclone_reference",
     "load_cyclone_reference_kinetic",
