@@ -193,7 +193,6 @@ _EXPORT_TARGETS: dict[str, tuple[str, str]] = {
     'solver_scalar_objective_from_vector': ('gkx.objectives.core', 'solver_scalar_objective_from_vector'),
     'vmex_transport_objective_from_state': ('gkx.objectives.vmec_transport', 'vmex_transport_objective_from_state'),
     'normalize_eigenfunction': ('gkx.diagnostics.modes', 'normalize_eigenfunction'),
-    'run_linear_scan': ('gkx.workflows.linear', 'run_linear_scan'),
     'ModeSelection': ('gkx.diagnostics.analysis', 'ModeSelection'),
     'extract_mode': ('gkx.diagnostics.analysis', 'extract_mode'),
     'extract_mode_time_series': ('gkx.diagnostics.analysis', 'extract_mode_time_series'),

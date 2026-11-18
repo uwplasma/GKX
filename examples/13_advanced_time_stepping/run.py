@@ -13,6 +13,11 @@ stepper, an explicit ``cfl_fac`` and a fixed-step ``rk2``. Pins change cost, not
 the statistics of the saturated state; fix the step only to reproduce a published
 run.
 
+Last, ``gkx.prepare`` builds the default run once (nonlinear cases): ``warmup``
+compiles it and later ``solve`` calls reuse the compiled step, which is what a
+parameter study over initial states or repeated timings wants. The script prints the
+compile time and the time of a repeat solve.
+
 Prints the steps and wall time of each run. Writes ``summary.json`` and
 ``advanced_steppers.png`` (step histories) to ``outputs/13_advanced_time_stepping``.
 About a minute on a laptop CPU.
@@ -46,7 +51,6 @@ for label, pin in PINS.items():
     start = time.perf_counter()
     result = gkx.solve(
         case.replace(time=replace(case.time, **pin)),
-        ky_target=case.run.ky,
         Nl=NL,
         Nm=NM,
         show_progress=True,
@@ -64,6 +68,16 @@ for label, pin in PINS.items():
     print(
         f"{label}: {summary[label]['steps']} steps, mean dt {dt.mean():.3f}, {wall:.1f} s"
     )
+
+sim = gkx.prepare(case, Nl=NL, Nm=NM)
+start = time.perf_counter()
+sim.warmup()  # compile and run once
+compile_s = time.perf_counter() - start
+start = time.perf_counter()
+sim.solve()  # reuses the compiled step
+repeat_s = time.perf_counter() - start
+summary["prepared"] = {"warmup_s": compile_s, "repeat_solve_s": repeat_s}
+print(f"gkx.prepare: warmup {compile_s:.1f} s, repeat solve {repeat_s:.1f} s")
 
 # ---- Outputs ----
 OUTPUT.mkdir(parents=True, exist_ok=True)

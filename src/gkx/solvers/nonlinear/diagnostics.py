@@ -162,6 +162,7 @@ class _ExplicitDiagnosticOptions:
     cfl_fac: float | None
     collision_split: bool
     collision_scheme: str
+    collision_interval: int
     fixed_mode_ky_index: int | None
     fixed_mode_kx_index: int | None
     external_phi: jnp.ndarray | float | None
@@ -379,9 +380,28 @@ _EXPLICIT_OPTION_FIELDS = tuple(_ExplicitDiagnosticOptions.__annotations__)
 def _explicit_options_from_values(values: dict[str, Any]) -> _ExplicitDiagnosticOptions:
     """Pack public keyword values into a single internal options object."""
 
-    return _ExplicitDiagnosticOptions(
+    options = _ExplicitDiagnosticOptions(
         **{key: values[key] for key in _EXPLICIT_OPTION_FIELDS}
     )
+    interval = options.collision_interval
+    if (
+        not isinstance(interval, (int, np.integer))
+        or isinstance(interval, bool)
+        or interval < 1
+    ):
+        raise ValueError("collision_interval must be a positive integer")
+    if interval > 1:
+        if (
+            not options.fixed_dt
+            or options.time_horizon is not None
+            or options.method in IMEX_CHAIN_METHODS
+        ):
+            raise ValueError(
+                "collision_interval > 1 requires a fixed-step explicit scan without a time horizon"
+            )
+        if options.steps % interval:
+            raise ValueError("collision_interval must divide the number of steps")
+    return options
 
 
 def _prepare_explicit_diagnostic_state(
@@ -570,6 +590,7 @@ def _make_explicit_scan_step(
     external_phi: jnp.ndarray | float | None,
     collision_scheme: str,
     time_horizon: float | None,
+    collision_interval: int = 1,
 ) -> Callable[..., Any]:
     """Build the explicit scan-step closure from prepared policies."""
 
@@ -601,6 +622,7 @@ def _make_explicit_scan_step(
             external_phi,
         ),
         time_horizon=time_horizon,
+        collision_interval=collision_interval,
     )
 
 
@@ -959,6 +981,7 @@ def _build_explicit_scan_closures(
         steps=options.steps,
         external_phi=options.external_phi,
         collision_scheme=options.collision_scheme,
+        collision_interval=options.collision_interval,
     )
     step = make_step(time_horizon=options.time_horizon)
     # The adaptive chunk loop changes only the horizon between chunks; this
@@ -1040,6 +1063,8 @@ def _build_explicit_scan_components(
         compressed_real_fft=options.compressed_real_fft,
         collision_split=options.collision_split,
     )
+    if options.collision_interval > 1 and not policies.collision_policy.active:
+        raise ValueError("collision_interval > 1 requires an active collision split")
     step, compute_diag_from_state = _build_explicit_scan_closures(
         prepared,
         policies,
@@ -1109,6 +1134,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
@@ -1158,6 +1184,8 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         initial_dt: jnp.ndarray | None = None,
         rhs_fn: Any = None,
     ) -> tuple[Any, Any, Any, Any]:
+        if options.collision_interval > 1 and time_horizon is not None:
+            raise ValueError("collision_interval > 1 does not support a time horizon")
         step = components.step
         if rhs_fn is not None:
             step, _ = _build_explicit_scan_closures(
@@ -1338,6 +1366,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
@@ -2107,6 +2136,7 @@ _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
     "cfl_fac",
     "collision_split",
     "collision_scheme",
+    "collision_interval",
     "implicit_tol",
     "implicit_maxiter",
     "implicit_iters",
@@ -2130,6 +2160,7 @@ _IMEX_DIAGNOSTIC_OPTION_KEYS = tuple(
         "time_horizon",
         "cfl",
         "cfl_fac",
+        "collision_interval",
         "resolved_diagnostics",
     }
 )
@@ -2192,6 +2223,7 @@ def integrate_nonlinear_explicit_diagnostics(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
@@ -2212,6 +2244,8 @@ def integrate_nonlinear_explicit_diagnostics(
     """
 
     if method in _IMEX_METHODS:
+        if collision_interval != 1:
+            raise ValueError("collision_interval must be 1 for IMEX")
         return integrate_nonlinear_imex_diagnostics(
             G0,
             grid,
@@ -2267,6 +2301,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,

@@ -159,9 +159,7 @@ class TimeConfig:
     than ``rk2`` because its CFL prefactor is 2.82 against 1.0
     (``gkx.workflows.runtime.toml._normalize_time_overrides`` carries the
     measurement). ``dt``, ``method`` and ``fixed_dt`` default to ``None`` and are
-    resolved in ``__post_init__``; an explicit value always wins. Before this,
-    a bare ``TimeConfig()`` was ``rk2`` at a fixed ``dt = 0.1``, which overflows
-    on most decks.
+    resolved in ``__post_init__``; an explicit value always wins.
     """
 
     t_max: float = 100.0
@@ -185,6 +183,8 @@ class TimeConfig:
     nstep_restart: int | None = None
     # None: the explicit steppers apply the collision operator once per step.
     collision_split: bool | None = None
+    # Explicit steppers: apply the split collision operator every N steps.
+    collision_interval: int = 1
     collision_scheme: str = "implicit"
     collision_operator: str = "landau"
     compressed_real_fft: bool = True
@@ -195,7 +195,7 @@ class TimeConfig:
     # "t_max" integrates the full horizon. Linear runs ignore these keys.
     run_to: str = "saturation"
     saturation_rel_sem: float = 0.10
-    saturation_t_min: float = 800.0
+    saturation_t_min: float | None = None  # None: min(800, 0.95 t_max)
     saturation_drift_rel: float = 0.10
     damp_ends_rate: float | None = None
 
@@ -820,15 +820,14 @@ class RuntimeRunConfig:
     These are per-call selections rather than physical model parameters, which
     is why they sit apart from the physics sections. They are still part of the
     case: a deck that asks for ``Nl = 16, Nm = 48`` and a prepared simulation
-    that quietly builds ``4, 8`` are not the same calculation, and before this
-    section existed the loader dropped the table on the floor, so nothing
-    downstream could tell the difference.
+    that quietly builds ``4, 8`` are not the same calculation.
 
     ``None`` means the deck did not say, and the caller or the runtime default
     decides. It is distinct from a value the deck chose.
     """
 
     ky: float | None = None
+    kx: float | None = None
     Nl: int | None = None
     Nm: int | None = None
     #: Nodal magnetic-moment grid instead of the Laguerre expansion: its
@@ -849,7 +848,7 @@ class RuntimeRunConfig:
             if coerced <= 0:
                 raise ValueError(f"[run] {name} must be a positive integer")
             object.__setattr__(self, name, coerced)
-        for name in ("ky", "dt", "mu_vperp_max"):
+        for name in ("ky", "kx", "dt", "mu_vperp_max"):
             value = getattr(self, name)
             if value is not None:
                 object.__setattr__(self, name, float(value))
