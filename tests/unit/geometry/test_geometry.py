@@ -51,6 +51,8 @@ from gkx.config import (
     RuntimePhysicsConfig,
     RuntimeSpeciesConfig,
 )
+from gkx.workflows.runtime.toml import load_runtime_from_toml
+from gkx.geometry.vmec_eik import _convert_equilibrium as convert_equilibrium
 from gkx.geometry.vmec_eik import (
     build_vmec_geometry_request,
     generate_runtime_vmec_eik,
@@ -3475,3 +3477,101 @@ def test_vmec_field_reversal_is_a_radial_mirror_with_signed_outward_flux(
         use_custom_vjp=False,
     )
     assert np.max(np.abs(kx_mirror(rhs_f) - np.asarray(rhs_b))) > 1e-4 * scale
+
+
+# ---- DESC and GVEC equilibria through a wout ----
+
+DATA = Path(__file__).parents[2] / "support" / "data" / "stellarator_equilibria"
+DECK = """
+schema_version = 1
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 3.0
+fprim = 1.0
+nu = 0.0
+kinetic = true
+[grid]
+Nx = 1
+Ny = 12
+Nz = 32
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 5.0
+ntheta = 32
+[geometry]
+model = "{model}"
+vmec_file = "{path}"
+torflux = 0.5
+npol = 1.0
+[physics]
+adiabatic_electrons = true
+"""
+# Peak-normalised tolerances against the VMEC eik.nc of the same equilibrium
+# (qa_small_vmec.eik.nc, vmex wout, nfp = 2 QA, s = 0.5). The drift terms carry
+# the radial derivative of B, the quantity a DESC fit or a GVEC spline of the
+# VMEC surfaces reproduces least well.
+TOL = {
+    "desc": dict(
+        bmag=2e-3, gradpar=2e-3, gds2=1e-2, gds21=1e-2, gds22=1e-2, gbdrift=0.1
+    ),
+    "gvec": dict(
+        bmag=5e-3, gradpar=5e-3, gds2=1e-2, gds21=1e-2, gds22=1e-2, gbdrift=0.04
+    ),
+}
+FILES = {"desc": "qa_small.desc.h5", "gvec": "gvec/GVEC_State_0000_00000000.dat"}
+
+
+@pytest.mark.parametrize("model", ["desc", "gvec"])
+def test_flux_tube_matches_vmec(model: str, tmp_path: Path) -> None:
+    pytest.importorskip("desc" if model == "desc" else "gvec")
+    wout = convert_equilibrium(model, DATA / FILES[model], tmp_path, ns=12)
+    deck = tmp_path / "case.toml"
+    deck.write_text(DECK.format(model="vmec", path=wout))
+    cfg, _ = load_runtime_from_toml(deck)
+    eik = generate_runtime_vmec_eik(
+        cfg, output_path=tmp_path / "geo.eik.nc", force=True
+    )
+    with nc.Dataset(eik) as got, nc.Dataset(DATA / "qa_small_vmec.eik.nc") as ref:
+        assert float(got["q"][:]) == pytest.approx(float(ref["q"][:]), rel=1e-5)
+        for name, tol in TOL[model].items():
+            a, b = np.asarray(got[name][:]), np.asarray(ref[name][:])
+            assert np.max(np.abs(a - b)) / np.max(np.abs(b)) < tol, name
+
+
+def test_runtime_routes_desc_and_gvec_through_vmec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = {}
+
+    def fake(model: str, path: str, cache: Path) -> Path:
+        seen["model"] = model
+        return DATA / "qa_small_vmec.eik.nc"  # unused: the pipeline is stubbed below
+
+    def stub(*, output_path, request):
+        seen["vmec_file"] = request.vmec_file
+        return Path(output_path)
+
+    monkeypatch.setattr("gkx.geometry.vmec_eik._convert_equilibrium", fake)
+    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", stub)
+    monkeypatch.setattr(
+        "gkx.geometry.vmec_eik.internal_vmec_backend_available", lambda: True
+    )
+    for model in ("desc", "gvec"):
+        deck = tmp_path / f"{model}.toml"
+        deck.write_text(DECK.format(model=model, path=DATA / FILES[model]))
+        cfg, _ = load_runtime_from_toml(deck)
+        generate_runtime_vmec_eik(
+            replace(cfg), output_path=tmp_path / "g.eik.nc", force=True
+        )
+        assert seen["model"] == model
+        assert seen["vmec_file"].endswith("qa_small_vmec.eik.nc")
+
+
+def test_missing_path_is_an_error(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="requires an equilibrium file"):
+        convert_equilibrium("desc", None, tmp_path)

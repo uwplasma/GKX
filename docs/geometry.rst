@@ -180,6 +180,34 @@ The shipped runtime decks point to relative ``wout_*.nc`` paths under
 ``examples/vmec/generate_wouts.sh`` or a single ``vmex input.<case>`` command;
 ``--vmec-file`` overrides the path for a machine-specific equilibrium.
 
+DESC and GVEC equilibria
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+``geometry.model = "desc"`` takes a DESC equilibrium (``.h5``) and
+``geometry.model = "gvec"`` a GVEC state file (``GVEC_State_*.dat``, with its
+``parameter.ini`` beside it). The path goes in ``geometry.vmec_file``; the other
+``[geometry]`` keys (``torflux``, ``alpha``, ``npol``) mean what they mean for
+VMEC. GKX samples the equilibrium on 16 flux surfaces in the code's own
+straight-field-line angles, Fourier analyses ``R``, ``Z``, ``lambda``, ``|B|`` and
+the covariant ``B`` components in the VMEC convention, and writes a
+stellarator-symmetric WOUT in the ``*.eik.nc`` cache directory
+(``gkx.geometry.vmec_eik``). From there the VMEC bridge above produces
+every coefficient, so DESC and GVEC runs use the same Boozer transform, the
+same flux-tube cut and the same equal-arc remapping as VMEC runs. GVEC runs
+with ``zeta = -phi``; the converter flips the signs of iota, the toroidal flux
+and the covariant ``B_zeta`` to match. Both packages are optional
+(``pip install "gkx[desc]"`` or ``"gkx[gvec]"``) and are imported only when the
+model is selected. Asymmetric equilibria are not supported.
+
+``tests/unit/geometry/test_geometry.py`` converts a small quasi-axisymmetric
+equilibrium, solved with ``vmex``, to a DESC fit and to a GVEC state and compares
+the flux tube with the VMEC one. Geometry from a DESC fit of VMEC surfaces
+agrees to about 1e-3 in ``bmag`` and ``gradpar``, 6e-3 in the metric and up to
+7% (peak-normalised) in the drift terms, which depend on the radial derivative
+of ``|B|``; the GVEC state agrees to 2.5e-3 in ``bmag`` and the metric, 2% in
+the drifts. Treat the drift agreement as that of the fit, not of the converter:
+it improves as the DESC radial resolution is raised.
+
 When ``booz_xform_jax`` is not installed into the active environment, point
 GKX at it through ``BOOZ_XFORM_JAX_PATH`` or ``GKX_BOOZ_XFORM_JAX_PATH``. The
 JAX backend is preferred; a ``booz_xform`` install is used only as an automatic
