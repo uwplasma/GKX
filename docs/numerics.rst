@@ -369,8 +369,9 @@ transients in the cases that never converged.
    * - ``drifting``
      - the window mean is moving, per item 3
    * - ``intermittent``
-     - the window is shorter than :math:`30\tau`, has fewer than ten blocks, or
-       the relative SEM exceeds ``saturation_rel_sem`` (10%)
+     - the window holds fewer than ten blocks of at least :math:`4\tau` (so it is
+       longer than :math:`40\tau`), or the relative SEM exceeds
+       ``saturation_rel_sem`` (10%)
    * - ``unconfirmed``
      - passes now but failed the 80%-prefix check of item 5
    * - ``saturated``
@@ -379,12 +380,14 @@ transients in the cases that never converged.
    * - ``cap_reached:<status>``
      - ``t_max`` was reached without ``saturated``
 
-Nothing is called saturated before ``saturation_t_min = 800`` :math:`a/v_t`.
+Nothing is called saturated before ``saturation_t_min``, which defaults to
+:math:`\min(800, 0.95\,t_{max})` :math:`a/v_t`; the shortest window, 250, shrinks
+to :math:`t_{max}/4` on a short run.
 Published practice is of that order: the GX stellarator flux database of
 Landreman et al. [Landreman25]_ discards :math:`t<150` and runs to 800 :math:`a/v_t`,
 CGYRO production runs use at least 500 :math:`a/c_s`, and GENE averaging windows
-are of order 1000. A run with ``t_max`` below ``saturation_t_min`` can still
-report ``saturated`` at its cap. The Oberparleiter et al. stopping rule
+are of order 1000. Lowering the floor to half of ``t_max`` was tried on the recorded traces and
+called B11, whose heat flux rises about 40% later, saturated at 576. The Oberparleiter et al. stopping rule
 [Oberparleiter16]_ motivates stopping on an error estimate rather than a
 fixed time.
 

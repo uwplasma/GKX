@@ -4,6 +4,9 @@ import os
 import sys
 from pathlib import Path
 
+# Tests compile in-process; a shared on-disk cache would only add cross-run state.
+os.environ.setdefault("GKX_JAX_CACHE", "0")
+
 TESTS_ROOT = Path(__file__).resolve().parent
 ROOT = TESTS_ROOT.parent
 SRC = ROOT / "src"
