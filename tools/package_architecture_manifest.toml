@@ -202,8 +202,9 @@ path = "workflows/nonlinear.py"
 # 1210 -> 1229: runaway criterion, retry warning and uniform chunk horizon.
 # 1229 -> 1283: Lawson integrating-factor steppers and the automatic choice (drift share and
 # step cap) between lawson-rk4-pi and rk4-pi.
-# 1283 -> 1291: reject collision intervals on unsupported runtime routes.
-# 1291 -> 1302: merged with main (#489, #487).
+# 1283 -> 1285: merged with main (#489).
+# 1285 -> 1288: merged with main (#487).
+# 1288 -> 1302: collision interval guards after merging main.
 baseline_lines = 1302
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
@@ -247,11 +248,10 @@ recursive = true
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
-# 69893 -> 69942: collisions once per explicit step (split policy).
-# 69942 -> 69977: collision_interval option.
-# 69977 -> 70022: validate collision intervals at scan, runtime and restart entry points.
-# 70022 -> 70025: merged with main (fixed linear step over the CFL warn ratio is refused).
-baseline = 70025
+# 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
+# Merged collision split and interval guards fit the main baseline at 69884 lines.
+# 69896 -> 69959: collision rate bound and step cap.
+baseline = 69959
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -269,11 +269,11 @@ recursive = true
 # 64789 -> 64794: example gallery style check; example 10 smoke gated on vmex.
 # 64794 -> 64804: fixed step longer than t_max test; example 05 smoke grid knob.
 # 64804 -> 64839: banded route with unequal per-species Nm regression test.
-# 64839 -> 64827: once-per-step collision test replaces the RK-stage comparison.
-# 64827 -> 64851: collision_interval test.
-# 64851 -> 64910: collision_interval acceptance and refusal regressions.
-# 64910 -> 64921: merged with main (smoke knobs, nperiod pin reason, #491).
-baseline = 64921
+# 64839 -> 64843: example 01 smoke knobs formatted over four lines.
+# 64843 -> 64846: reason for the kinetic-electron time-route nperiod = 1 pin.
+# 64846 -> 64850: merged with main (#491).
+# Collision split and interval regressions fit the main baseline at 57927 lines.
+baseline = 64850
 target = 35000
 
 [[line_budget_policy.counts]]
