@@ -695,7 +695,11 @@ the gyrokinetic RHS.
 Unless ``[time] collision_split = false``, the explicit steppers apply the
 conserving collision term once per step after the Runge--Kutta stages (one
 forward-Euler step, with its field-particle corrections); ``true`` also splits
-the diagonal hypercollisions. The chain IMEX steps (``imex-ars3``, ``imex-ark3``)
+the diagonal hypercollisions. The largest collision eigenvalue :math:`\lambda`
+(power iteration at start-up; :math:`\lambda \approx 19\nu` for a (4, 48)
+electron species) caps an adaptive step at :math:`1/\lambda`; a fixed step
+above that keeps the collisions in the stages, or is refused with
+``collision_split = true``. The chain IMEX steps (``imex-ars3``, ``imex-ark3``)
 advance the Landau operator by a local backward-Euler sub-step instead
 (``collision_scheme = "implicit"``) when the explicit collision bound would
 bind, which removes :math:`\nu_e` from the step-size bound (:doc:`guidance`).

@@ -260,7 +260,10 @@ conserving collision operator out of the Runge--Kutta stages and apply it once
 per step, after it, as one forward-Euler step with its field-particle
 corrections. With :math:`\nu \Delta t \sim 10^{-3}` the splitting error is
 far below the step error, and the operator is evaluated once instead of once
-per stage. The chain IMEX methods keep it in the RHS. ``collision_split =
+per stage. Forward Euler needs :math:`\Delta t |\lambda| < 2`; an adaptive step is
+capped at :math:`1/|\lambda|` (largest collision eigenvalue, measured at start-up),
+and a fixed step above it keeps the operator in the stages. The chain IMEX methods
+keep it in the RHS. ``collision_split =
 true`` also splits the diagonal hypercollisions; the
 ``collision_scheme`` key selects the hypercollision update:
 ``implicit`` (backward-Euler), ``exp`` (exact diagonal exponential), and
