@@ -103,9 +103,7 @@ for label, (deck, pin, uniform) in {**FAST, **RESEARCH}.items():
         f"{label}: {counts} (Nl x Nm); {cost} moments per grid point, "
         f"{uniform_cost / cost:.2f}x fewer than uniform ({uniform_cost})"
     )
-    result = gkx.solve(
-        case, ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm, show_progress=True
-    )
+    result = gkx.solve(case, show_progress=True)
     d = result.diagnostics
     t, dt = np.asarray(d.t), np.asarray(d.dt_t)
     q = np.asarray(d.heat_flux_species_t)  # (time, species): ion, electron

@@ -46,10 +46,7 @@ PARAMETERS = (r"$a/L_n$", r"$a/L_{Ti}$")
 
 # ---- Fast path ----
 case = gkx.load(CASE)
-run = dict(
-    Nl=case.run.Nl, Nm=case.run.Nm, solver=case.run.solver
-)  # the deck's [run] block
-scan = gkx.scan(case, KY, **run, show_progress=True)
+scan = gkx.scan(case, KY, show_progress=True)
 weight = np.array([p["heat_flux_weight_total"] for p in scan.quasilinear])
 kperp2 = np.array([p["kperp_eff2"] for p in scan.quasilinear])
 flux = np.array([p["saturated_heat_flux_total"] for p in scan.quasilinear])

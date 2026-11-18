@@ -1,25 +1,24 @@
-"""Persistent JAX compilation cache for the GKX executable.
+"""Persistent JAX compilation cache, on by default.
 
-The executable reuses compiled kernels across processes. Set ``GKX_JAX_CACHE=0``
-to disable caching or ``GKX_JAX_CACHE_DIR`` to select a directory. The default
-is ``.cache/gkx/jax`` beside the source tree, with ``~/.cache/gkx/jax`` as the
-fallback for read-only installations.
+Compiled kernels are reused across processes, which cuts the first chunk of a
+nonlinear run several-fold. ``import gkx`` installs the cache. Set
+``GKX_JAX_CACHE=0`` to disable it and ``GKX_JAX_CACHE_DIR`` to choose the
+directory. The default is ``$XDG_CACHE_HOME/gkx/jax`` (``~/.cache/gkx/jax``),
+separated by JAX version. A cache directory the user already configured, through
+``JAX_COMPILATION_CACHE_DIR`` or ``jax.config``, is left alone.
 
 JAX keys entries by the compiled program, compilation options and device.
-Directories are also separated by JAX version. Unwritable or corrupt entries
-fall back to compilation. Delete unused cache entries to reclaim disk space.
+Unwritable or corrupt entries fall back to compilation. Delete the directory to
+reclaim disk space.
 """
 
 from __future__ import annotations
 
 import os
+from importlib import metadata
 from pathlib import Path
 import sys
 from typing import Mapping
-
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_DEFAULT_CACHE_ROOT = _REPO_ROOT / ".cache" / "gkx" / "jax"
-_FALLBACK_CACHE_ROOT = Path.home() / ".cache" / "gkx" / "jax"
 
 ENABLE_ENV_VAR = "GKX_JAX_CACHE"
 DIRECTORY_ENV_VAR = "GKX_JAX_CACHE_DIR"
@@ -35,40 +34,15 @@ def compilation_cache_enabled(env: Mapping[str, str] | None = None) -> bool:
     return raw not in _FALSEY
 
 
-def _writable_root(root: Path) -> bool:
-    """Return whether ``root`` can be created and written to."""
-
-    try:
-        root.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        return False
-    return os.access(root, os.W_OK)
-
-
 def compilation_cache_directory(env: Mapping[str, str] | None = None) -> Path:
-    """Return the directory that should hold persisted executables.
-
-    An explicit ``GKX_JAX_CACHE_DIR`` wins and is used verbatim. Otherwise the
-    repository-local ``.cache/gkx/jax`` is preferred so the cache is discarded
-    with the checkout, with ``~/.cache/gkx/jax`` as the fallback for installs
-    whose package tree is not writable.
-    """
+    """Return the cache directory: ``GKX_JAX_CACHE_DIR`` or the XDG user cache."""
 
     environ = os.environ if env is None else env
     override = str(environ.get(DIRECTORY_ENV_VAR, "")).strip()
     if override:
         return Path(override).expanduser()
-    if _writable_root(_DEFAULT_CACHE_ROOT):
-        return _DEFAULT_CACHE_ROOT
-    return _FALLBACK_CACHE_ROOT
-
-
-def _versioned_cache_directory(root: Path) -> Path:
-    """Namespace a cache root by the installed JAX version."""
-
-    import jax
-
-    return root / f"jax-{jax.__version__}"
+    xdg = str(environ.get("XDG_CACHE_HOME", "")).strip()
+    return (Path(xdg) if xdg else Path.home() / ".cache") / "gkx" / "jax"
 
 
 def enable_persistent_compilation_cache(
@@ -76,27 +50,31 @@ def enable_persistent_compilation_cache(
 ) -> Path | None:
     """Point JAX at a persistent compilation cache; return the directory used.
 
-    Returns ``None`` when the cache is disabled by ``GKX_JAX_CACHE``, when JAX
-    is not importable, or when the directory cannot be prepared. Never raises:
-    a cache is an optimization, and losing it must not lose a run.
+    Returns ``None`` when the cache is disabled, when the user already set a JAX
+    cache directory, or when the directory cannot be prepared. Never raises: a
+    cache is an optimization, and losing it must not lose a run.
     """
 
-    if not compilation_cache_enabled(env):
+    environ = os.environ if env is None else env
+    if not compilation_cache_enabled(environ) or environ.get(
+        "JAX_COMPILATION_CACHE_DIR"
+    ):
         return None
     try:
-        import jax
-
-        directory = _versioned_cache_directory(compilation_cache_directory(env))
+        directory = compilation_cache_directory(environ)
+        if DIRECTORY_ENV_VAR not in environ:
+            directory /= f"jax-{metadata.version('jax')}"
         directory.mkdir(parents=True, exist_ok=True)
-        jax.config.update("jax_compilation_cache_dir", str(directory))
-        jax.config.update("jax_enable_compilation_cache", True)
-        # Persist short kernel compilations as well as the fused scan, so a
-        # repeated case can reuse the complete compiled workload.
-        jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
+        jax = sys.modules.get("jax")
+        if jax is None:  # JAX reads these when it is first imported
+            os.environ["JAX_COMPILATION_CACHE_DIR"] = str(directory)
+            os.environ.setdefault("JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS", "0")
+        elif not jax.config.jax_compilation_cache_dir:
+            jax.config.update("jax_compilation_cache_dir", str(directory))
+            jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.0)
+        else:
+            return None
     except Exception as exc:  # pragma: no cover - depends on the environment
-        # Say so rather than failing silently: a cache that did not install is
-        # a run that will keep paying a cold compile, and the user should know
-        # which of the two they are getting.
         print(
             f"warning: persistent compilation cache disabled ({exc}); "
             f"set {ENABLE_ENV_VAR}=0 to silence this",

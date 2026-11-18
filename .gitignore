@@ -34,6 +34,8 @@ tools_out/
 *.mp4
 *.png
 *.npz
+# Reference flux-tube fixture used by the DESC/GVEC conversion tests
+!tests/support/data/stellarator_equilibria/qa_small_vmec.eik.nc
 # Required source collision tables
 !src/gkx/data/*.npz
 # Generated documentation media; tracked illustrations remain versioned
@@ -51,3 +53,4 @@ benchmarks/references/*.json
 __marimo__/
 marimo/_static/
 marimo/_lsp/
+.cache/
