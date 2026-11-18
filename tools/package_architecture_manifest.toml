@@ -273,7 +273,7 @@ recursive = true
 # 64839 -> 64843: example 01 smoke knobs formatted over four lines.
 # 64843 -> 64846: reason for the kinetic-electron time-route nperiod = 1 pin.
 # 64846 -> 64850: merged with main (#491).
-# Collision split and interval regressions fit the main baseline at 57927 lines.
+# Collision split, interval and rk4-pi cap regressions fit the main baseline at 57935 lines.
 baseline = 64850
 target = 35000
 
