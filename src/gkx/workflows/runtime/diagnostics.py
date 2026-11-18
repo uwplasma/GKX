@@ -126,14 +126,6 @@ class _RuntimeLinearFitOptions:
     min_amp_fraction: float
     window_method: str
 
-    def fit_fields(self) -> dict[str, Any]:
-        """Return only the shared fit keywords, including from subclasses."""
-
-        return {
-            name: getattr(self, name)
-            for name in _RuntimeLinearFitOptions.__annotations__
-        }
-
 
 def finalize_runtime_linear_quasilinear(
     result: RuntimeLinearResult,
@@ -602,7 +594,7 @@ def fit_runtime_linear_diagnostics(
         tmin=fit.fit_window_tmin,
         tmax=fit.fit_window_tmax,
     )
-    if fit_settled and fit.gamma > 0.0:  # fail closed: >= 2 fitted and seen e-folds
+    if fit_settled and fit.gamma > 0.0:  # conservative: >= 2 fitted and seen e-folds
         t_w, lo, hi = inputs.t, fit.fit_window_tmin, fit.fit_window_tmax
         log_amp = np.log(np.abs(np.asarray(fit.signal)) + 1e-300)
         ends = (t_w[0] if lo is None else lo, t_w[-1] if hi is None else hi)

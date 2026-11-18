@@ -3777,7 +3777,7 @@ def test_runtime_seed_is_built_in_the_working_precision() -> None:
         ("explicit_time", False, False),
     ],
 )
-def test_over_cfl_fixed_step_warns_on_every_linear_path(
+def test_over_cfl_fixed_step_is_refused_on_every_linear_path(
     solver: str, fixed_dt: bool, expect_warning: bool
 ) -> None:
     """The fixed-step CFL hint must not skip ``explicit_time``.
@@ -3805,12 +3805,16 @@ def test_over_cfl_fixed_step_warns_on_every_linear_path(
     )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        try:
-            run_runtime_linear(cfg, Nl=2, Nm=4, solver=solver)
-        except Exception:  # noqa: BLE001 - an over-CFL step may also overflow
-            pass
-    hits = [w for w in caught if "exceeds the estimated" in str(w.message)]
-    assert bool(hits) is expect_warning
+        if expect_warning:
+            # dt = 5 is far past 1.5x the bound: refused before any step, naming the stable dt.
+            with pytest.raises(ValueError, match="CFL-stable step 0.1094"):
+                run_runtime_linear(cfg, Nl=2, Nm=4, solver=solver)
+        else:
+            try:
+                run_runtime_linear(cfg, Nl=2, Nm=4, solver=solver)
+            except Exception:  # noqa: BLE001 - an over-CFL step may also overflow
+                pass
+    assert not [w for w in caught if "exceeds the estimated" in str(w.message)]
 
 
 def test_zero_species_nu_admits_declared_custom_collisions() -> None:
@@ -3855,8 +3859,8 @@ def test_zero_species_nu_admits_declared_custom_collisions() -> None:
 
 
 def test_runtime_linear_kinetic_electron_time_route_without_dt_is_finite() -> None:
-    # No dt: the fixed-step time route used dt = 0.1, far over the electron
-    # streaming CFL (~700), and overflowed; it now takes the CFL-stable step.
+    # No dt: the time route used dt = 0.1, far over the electron CFL (~700), and
+    # overflowed; it takes the CFL-stable step. nperiod 1: the deck's 2 is unsettled by t=12.
     cfg, _ = load_runtime_from_toml(
         REPO_ROOT / "examples/05_kinetic_electrons/case.toml"
     )
@@ -3865,7 +3869,10 @@ def test_runtime_linear_kinetic_electron_time_route_without_dt_is_finite() -> No
         cfg,
         time=TimeConfig(t_max=12.0, sample_stride=10, damp_ends_rate=0.1),
         physics=replace(cfg.physics, linear=True, nonlinear=False),
-        grid=replace(cfg.grid, Nx=1, Ny=22, Nz=16),
+        # One poloidal turn: the deck's two (#478) leave a slow mode within 20% of the
+        # dominant one, which the 6 <= t <= 12 window has not yet shed (gamma 0.161
+        # against the eigenvalue 0.202; the dt does not matter, 0.001 gives the same).
+        grid=replace(cfg.grid, Nx=1, Ny=22, Nz=16, nperiod=1),
     )
     kw = dict(ky_target=0.3, Nl=2, Nm=4, auto_window=False, tmin=6.0, tmax=12.0)
     time = run_runtime_linear(cfg, solver="time", **kw)

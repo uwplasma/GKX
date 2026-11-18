@@ -255,7 +255,7 @@ def _combined_ky_scan_requested(
 # examples/11_parallel_scan deck died in the worker with NotImplementedError under
 # ``strategy="batch"``; ``device_batch``, ``pmap`` and ``pjit`` were measured
 # failing in the same worker with the same error, so they are neutralised the
-# same way. ``combined_ky`` belongs here too and is not merely defensive: it
+# same way. ``combined_ky`` belongs here too and is needed: it
 # routes away only for ``axis="ky"``, so ``axis="hermite"`` reaches this helper
 # and was measured failing here as well.
 _SCAN_LEVEL_WORKER_STRATEGIES = frozenset(
@@ -267,7 +267,7 @@ _SCAN_LEVEL_WORKER_STRATEGIES = frozenset(
 # implements. ``state`` and ``shard_map`` name velocity-space decompositions the
 # linear RHS has no route for yet -- ``shard_map`` with ``axis="species_hermite"``
 # is the production nonlinear route -- so forwarding them makes the solver refuse
-# on its own terms, which is the honest answer. Neutralising them would answer a
+# on its own terms, which reports the limit. Neutralising them would answer a
 # sharding request with an unsharded run and report success.
 _SOLVER_LEVEL_WORKER_STRATEGIES = frozenset(
     {"serial", "shard_map", "state", "velocity"}
