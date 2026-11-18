@@ -64,8 +64,9 @@ name = "test_python_files"
 path = "tests"
 pattern = "*.py"
 recursive = true
-baseline = 30
-target = 30
+# 30 -> 29: test_reference_comparison_tools.py removed with the portfolio and holdout gate it tested.
+baseline = 29
+target = 29
 
 [[topology_policy.counts]]
 name = "tool_python_files"
@@ -80,8 +81,9 @@ name = "developer_script_python_files"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 16
-target = 12
+# 16 -> 10: the four checkers no CI job invokes and two gate libraries behind them are removed.
+baseline = 10
+target = 10
 
 
 [[topology_policy.counts]]
@@ -277,5 +279,6 @@ name = "developer_script_python_lines"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 16459
-target = 16444
+# 16459 -> 7581: dead checker scripts removed (see scripts/check.py subcommands).
+baseline = 7581
+target = 7581

@@ -88,9 +88,6 @@ from gkx.terms.config import FieldState
 from gkx.workflows.runtime import chunks as runtime_chunks
 from gkx.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
 from pathlib import Path
-from scripts.checks._gates.nonlinear_replicates import (
-    nonlinear_replicate_spread_report,
-)
 from types import SimpleNamespace
 import gc
 import pytest
@@ -1581,94 +1578,6 @@ def test_strided_chunks_own_their_samples(
         "alive in the chunk list until the final concatenation and the per-chunk "
         f"stride frees nothing: {aliased}"
     )
-
-
-# ---- from test_nonlinear_replicate_diagnostics.py ----
-
-
-def _replicate_rows(*rows, **extra) -> list[dict[str, object]]:
-    return [
-        {
-            "index": index,
-            "late_mean": mean,
-            "source_artifact": f"case_{label}_heat_flux_trace.csv",
-            **extra,
-        }
-        for index, (mean, label) in enumerate(rows)
-    ]
-
-
-_READY = dict(passed=True, promotion_ready=True)
-
-
-def test_replicate_spread_report_identifies_mixed_seed_timestep_spread() -> None:
-    report = nonlinear_replicate_spread_report(
-        [
-            {
-                "case": "qa_ess_nonlinear_gradient_plus_delta_t900_ensemble",
-                "passed": False,
-                "statistics": {
-                    "ensemble_mean": 10.0,
-                    "mean_rel_spread": 0.30,
-                    "combined_sem_rel": 0.04,
-                },
-                "config": {"max_mean_rel_spread": 0.15},
-                "rows": _replicate_rows(
-                    (10.0, "seed31"),
-                    (11.5, "seed32"),
-                    (8.5, "dt0p04"),
-                    sem=0.2,
-                    **_READY,
-                ),
-            }
-        ]
-    )
-
-    assert report["passed"] is False
-    assert report["summary"]["failed_states"] == ["plus_delta"]
-    row = report["state_rows"][0]
-    assert row["classification"] == "mixed_seed_timestep_spread"
-    assert row["high_variant_axis"] == "seed"
-    assert row["low_variant_axis"] == "timestep"
-    assert "Do not add same-bracket replicas blindly" in row["recommendation"]
-
-
-def test_replicate_spread_report_passes_with_small_seed_spread() -> None:
-    report = nonlinear_replicate_spread_report(
-        [
-            {
-                "case": "qa_ess_nonlinear_gradient_baseline_t900_ensemble",
-                "passed": True,
-                "statistics": {
-                    "ensemble_mean": 10.0,
-                    "mean_rel_spread": 0.02,
-                    "combined_sem_rel": 0.04,
-                },
-                "rows": _replicate_rows((9.9, "seed31"), (10.1, "seed32"), **_READY),
-            }
-        ]
-    )
-
-    assert report["passed"] is True
-    assert report["state_rows"][0]["classification"] == "passed_replicate_spread_gate"
-
-
-def test_replicate_spread_report_preserves_joint_seed_timestep_labels() -> None:
-    report = nonlinear_replicate_spread_report(
-        [
-            {
-                "case": "qa_ess_nonlinear_gradient_plus_delta_t900_ensemble",
-                "passed": False,
-                "statistics": {"ensemble_mean": 10.0, "mean_rel_spread": 0.30},
-                "rows": _replicate_rows(
-                    (11.5, "seed32_dt0p04"), (8.5, "seed22_dt0p05")
-                ),
-            }
-        ]
-    )
-
-    assert report["replicate_rows"][0]["variant_label"] == "seed32_dt0p04"
-    assert report["replicate_rows"][0]["variant_axis"] == "seed_timestep"
 
 
 # ---- from test_nonlinear_window_gradient_matrix.py ----
