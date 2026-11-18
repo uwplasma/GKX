@@ -142,7 +142,7 @@ class _LinearTransportWeights:
 
 @dataclass(frozen=True)
 class AdaptiveLinearEigensolverConfig:
-    """Fail-closed settings for the differentiable matrix-free objective path."""
+    """Settings for the differentiable matrix-free objective path; unconverged solves are rejected."""
 
     krylov_dim: int = 24
     restart_krylov_dim: int = 12
@@ -160,8 +160,8 @@ class AdaptiveLinearEigensolverConfig:
     exponential_horizon: float = 5.0
     adjoint_krylov_dim: int = 24
     adjoint_max_restarts: int = 200
-    # Gates the implicit-gradient linear solve, whose acceptance fails closed to
-    # NaN, so it carries the same working-dtype noise floor as ``tolerance``.
+    # Gates the implicit-gradient linear solve, whose acceptance returns NaN on
+    # rejection, so it carries the same working-dtype noise floor as ``tolerance``.
     sensitivity_rtol: float = 1.0e-8
     sensitivity_restart: int = 200
     sensitivity_max_restarts: int = 4
@@ -600,8 +600,8 @@ def _matrix_free_dominant_linear_branch(
         # while retaining an O(n) matrix-free operator.
         from solvax import gmres
 
-        # The acceptance below is fail-closed to NaN, so an unreachable
-        # threshold does not merely loosen the gradient, it deletes it. The
+        # The acceptance below returns NaN on rejection, so an unreachable
+        # threshold deletes the gradient. The
         # inner solve keeps aiming a decade tighter than the acceptance.
         accept_rtol = certifiable_residual_tolerance(config.sensitivity_rtol, rhs.dtype)
         solve_rtol = certifiable_residual_tolerance(
@@ -703,8 +703,8 @@ def solver_scalar_objective_from_vector(
 ) -> jnp.ndarray:
     """Select one scalar objective from ``SOLVER_OBJECTIVE_NAMES``.
 
-    This tiny selector keeps optimizer code honest about which scalar is being
-    minimized. It also centralizes aliases used by the examples:
+    This tiny selector names the scalar being
+    minimized and centralizes aliases used by the examples:
     ``growth -> gamma``, ``frequency -> omega``, and
     ``quasilinear_flux -> mixing_length_heat_flux_proxy``.
     """
