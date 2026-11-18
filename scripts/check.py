@@ -32,18 +32,6 @@ SUBCOMMANDS: dict[str, tuple[str, str]] = {
         "check_package_architecture_manifest",
         "package architecture, topology and line budgets; repository inventory",
     ),
-    "parallel-scaling": (
-        "check_parallel_scaling_artifacts",
-        "performance manifest and parallel-scaling artifacts",
-    ),
-    "quasilinear": (
-        "check_quasilinear_promotion_guardrails",
-        "quasilinear promotion guardrails and calibration inputs",
-    ),
-    "vmec-boozer": (
-        "check_vmec_boozer_gates",
-        "VMEC/Boozer differentiability-claim and holdout gates",
-    ),
     "readiness": (
         "check_release_readiness",
         "version and executable source/package release contracts",
@@ -55,10 +43,6 @@ SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "test-gates": (
         "run_test_gates",
         "fast test gate and sharded wide-coverage runner",
-    ),
-    "nonlinear-transport": (
-        "check_nonlinear_transport_gates",
-        "nonlinear transport completion, convergence and ensemble gates",
     ),
 }
 

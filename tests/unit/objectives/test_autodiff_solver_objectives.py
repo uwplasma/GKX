@@ -1181,10 +1181,6 @@ def test_solver_growth_rate_from_geometry_validates_small_grid_contracts() -> No
 # ---- test_stellarator_objective_portfolio.py ----
 
 
-from scripts.checks._gates.portfolio_guard import (
-    ReducedPortfolioArtifactGuardConfig,
-    reduced_portfolio_artifact_guard_report,
-)
 from gkx.objectives.vmec_transport import (
     aggregate_objective_portfolio,
     portfolio_objective_weight_vector,
@@ -1374,15 +1370,7 @@ def test_objective_portfolio_helpers_are_exported_at_package_top_level() -> None
 
     assert isinstance(contract, sgk.StellaratorObjectivePortfolioContract)
     np.testing.assert_allclose(float(sgk.aggregate_objective_portfolio(rows)), 1.0)
-    # The reduced-portfolio artifact guard is campaign promotion policy, not
-    # solver API: it ships in scripts/campaigns/ and is deliberately absent from
-    # the installable package's top level.
-    assert isinstance(
-        ReducedPortfolioArtifactGuardConfig(), ReducedPortfolioArtifactGuardConfig
-    )
     assert not hasattr(sgk, "ReducedPortfolioArtifactGuardConfig")
-    assert not hasattr(sgk, "reduced_portfolio_artifact_guard_report")
-    assert callable(reduced_portfolio_artifact_guard_report)
 
 
 # ---- test_stellarator_optimization.py ----

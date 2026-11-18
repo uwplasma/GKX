@@ -31,25 +31,8 @@ owner_lane = "public prepared-simulation object"
 status = "closed"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "reusable compiled-simulation objects in differentiable scientific libraries",
-  "public API contract in the GKX 3 plan, section 7.3",
-]
-physics_contracts = [
-  "preparing a case and solving it directly take the same runtime path, so a prepared solve cannot report different physics than an unprepared one",
-  "a prepared object refuses a parameterised solve rather than silently solving a different problem",
-]
-numerics_contracts = [
-  "reported state shape follows the case grid and the resolved Laguerre and Hermite counts",
-  "the memory estimate is declared a floor rather than a ceiling, because it does not model diagnostic buffers",
-]
 fast_tests = [
   "tests/unit/core/test_core_numerics.py",
-]
-next_tests = [
-  "a prepared nonlinear solve reproduces the unprepared solve bit for bit",
-  "value_and_grad against a prepared nonlinear objective, once the differentiable prepared path lands",
-  "scan over ky returns the same result as the standalone runtime scan",
 ]
 artifact_paths = ["docs/api.rst"]
 
@@ -60,28 +43,12 @@ owner_lane = "compact lazy public API registry"
 status = "closed"
 coverage_priority = "low"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "stable public package API documented in docs/api.rst",
-  "Python package facade conventions for scientific libraries",
-]
-physics_contracts = [
-  "top-level imports remain a stable convenience layer while implementation modules own physics behavior",
-  "the API facade re-exports promoted configuration, geometry, solver, validation, parallelization, objective, and plotting symbols without changing numerical kernels",
-]
-numerics_contracts = [
-  "public export order and membership are preserved across the compact registry refactor",
-  "public-object identity for benchmark, objective, parallel, runtime, and validation exports is checked by focused import tests",
-]
 fast_tests = [
   "tests/unit/core/test_core_numerics.py",
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
   "tests/unit/parallel/test_parallel_core.py",
 ]
 artifact_paths = ["docs/design.rst", "docs/api.rst"]
-next_tests = [
-  "add a dedicated public API exact-order regression test if future export churn increases",
-  "move advanced users toward domain imports while keeping top-level imports stable through the next release",
-]
 [[modules]]
 module = "gkx.operators.collision"
 path = "src/gkx/operators/collision.py"
@@ -89,26 +56,11 @@ owner_lane = "shared gyrokinetic collision-operator interface"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Abel et al. (2008) gyrokinetic collision-operator conservation requirements",
-  "structural JAX-compatible operator interfaces",
-]
-physics_contracts = [
-  "collision operators receive both evolved distribution G and post-field Hamiltonian response H",
-  "split operators expose a finite-time update only when the collision model supports one",
-]
-numerics_contracts = [
-  "operator output preserves solver-state shape and JAX transformability",
-  "structural runtime checks distinguish RHS-only and split-step collision models",
-]
 fast_tests = [
   "tests/unit/core/test_core_numerics.py",
   "tests/unit/operators/test_operator_kernels.py",
 ]
 artifact_paths = []
-next_tests = [
-  "retain conservation, null-space, entropy, and finite-wavelength tests for every new collision model",
-]
 
 [[modules]]
 module = "gkx.runtime"
@@ -132,18 +84,6 @@ owner_lane = "runtime orchestration, executable behavior, restart/output contrac
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "runtime diagnostics and exact-state parity audits",
-  "Cyclone Base Case and W7-X/HSX runtime artifact regressions",
-]
-physics_contracts = [
-  "runtime inputs preserve configured geometry, species, fields, and diagnostics",
-  "restart continuation preserves final samples and signed zonal diagnostics",
-]
-numerics_contracts = [
-  "adaptive and fixed-step time paths report equivalent sampled diagnostics within gate tolerances",
-  "nonfinite diagnostic chunks abort artifact generation instead of silently writing corrupt panels",
-]
 fast_tests = [
   "tests/integration/runtime/test_runtime_config.py",
   "tests/integration/runtime/test_cli.py",
@@ -151,10 +91,6 @@ fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
 ]
 artifact_paths = []
-next_tests = [
-  "split remaining runtime orchestration helpers behind compatibility exports",
-  "add branch coverage for fixed_dt/adaptive/restart output handoff paths",
-]
 
 [[modules]]
 module = "gkx.workflows.runtime.orchestration_scan"
@@ -168,27 +104,11 @@ owner_lane = "runtime progress, scan batching, and nonlinear artifact handoff or
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "adaptive runtime progress and restart output contracts",
-  "combined-ky runtime scan and nonlinear checkpoint artifact regressions",
-]
-physics_contracts = [
-  "orchestration helpers preserve the selected runtime geometry, species, and monitored diagnostic policy supplied by callers",
-  "nonlinear restart handoff preserves cumulative diagnostics without promoting new physics claims",
-]
-numerics_contracts = [
-  "progress and ETA reporting stays deterministic for finite and near-zero progress fractions",
-  "checkpointed nonlinear artifact handoff validates finite chunks before writing restart or output artifacts",
-]
 fast_tests = [
   "tests/integration/runtime/test_cli.py",
   "tests/integration/runtime/test_runtime_artifacts.py",
 ]
 artifact_paths = []
-next_tests = [
-  "keep scan/progress/artifact owner modules covered by runtime helper and artifact tests",
-  "split CLI plotting/output dispatch once CLI ownership is available in a later tranche",
-]
 
 [[modules]]
 module = "gkx.terms.assembly"
@@ -215,27 +135,11 @@ owner_lane = "linear gyrokinetic operators, field solve, growth/frequency diagno
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Cyclone Base Case linear ITG benchmark",
-  "KBM branch-continuity and W7-X stella/GENE linear benchmark observables",
-]
-physics_contracts = [
-  "late-time growth and real-frequency fits are invariant under harmless phase/sign changes",
-  "eigenfunction overlays compare normalized complex structure, not only scalar growth rates",
-]
-numerics_contracts = [
-  "Hermite-Laguerre recurrence operators satisfy ladder identities",
-  "velocity-space and field-line resolution studies use observed-order gates",
-]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/operators/test_terms_fields.py",
 ]
 artifact_paths = ["docs/_static/w7x_eigenfunction_reference_overlay_ky0p3000.png"]
-next_tests = [
-  "extract field-solve and diagnostic helpers and preserve public imports",
-  "replace remaining convergence pilots with monotone velocity-space sweeps",
-]
 
 [[modules]]
 module = "gkx.operators.linear.cache_builder"
@@ -248,28 +152,12 @@ owner_lane = "linear geometry cache construction and damping factors"
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Hermite-Laguerre gyroaverage and polarization cache contracts",
-  "linked-boundary and nonlinear-dealias cache construction used by linear and nonlinear parity lanes",
-]
-physics_contracts = [
-  "cached gyroaverages, drifts, magnetic geometry, and damping factors preserve the operator seen by RHS kernels",
-  "species-dependent collision and hypercollision factors keep the intended multi-species broadcast semantics",
-]
-numerics_contracts = [
-  "LinearCache remains a stable JAX pytree with deterministic flatten/unflatten ordering",
-  "cache builders preserve dtype policy, linked-boundary metadata, dealias masks, and moment-space array shapes",
-]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/operators/test_operator_kernels.py",
   "tests/unit/geometry/test_geometry.py",
 ]
 artifact_paths = ["docs/_static/w7x_eigenfunction_reference_overlay_ky0p3000.png"]
-next_tests = [
-  "add direct cache-construction fixtures for sampled geometry, linked geometry, and multispecies damping paths",
-  "keep gkx.linear public cache exports documented while developer helpers live in operators.linear",
-]
 
 [[modules]]
 module = "gkx.operators.linear.collisions"
@@ -278,29 +166,10 @@ owner_lane = "linearized collision matrices, finite-wavelength pair interpolatio
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Frei et al. (2021) gyro-moment linearized Coulomb and Sugama operators",
-  "Frei, Ernst, and Ricci (2022) improved Sugama operator",
-  "Abel et al. (2008) and Barnes et al. (2009) gyrokinetic collision-operator constraints",
-]
-physics_contracts = [
-  "ordered target/source finite-wavelength blocks use distinct target and source gyroaverages",
-  "test and field blocks act on gyrocenter moments while four polarization vectors couple to the solved potential without double counting the pullback",
-  "like-species polarization cancellation, finite-b classical gyro-diffusion, and drift-kinetic invariant boundaries hold at their derived limits",
-]
-numerics_contracts = [
-  "shared, per-species, and ordered-pair tables interpolate and differentiate on device with explicit spatial semantics",
-  "runtime pair contractions agree with an independent species-loop oracle under eager, JIT, and tangent execution",
-  "the collision protocol is identical through the complete cache-backed linear RHS seam",
-]
 fast_tests = [
   "tests/unit/operators/test_operator_kernels.py",
 ]
 artifact_paths = ["docs/_static/collision_operator_verification.png", "docs/_static/collision_response_convergence.png", "docs/_static/collision_response_convergence.pdf", "docs/_static/collision_finite_wavelength_itg_convergence.png"]
-next_tests = [
-  "test fixed-particle-position conservation only if a pre-gyroaverage particle operator is implemented",
-  "require finite-b ITG and collisional zonal-response gates before input-file promotion",
-]
 
 [[modules]]
 module = "gkx.operators.linear.collision_tables"
@@ -309,26 +178,10 @@ owner_lane = "generic tabulated multispecies collision matrices and interpolatio
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Frei et al. (2021) gyro-moment finite-wavelength collision blocks",
-  "JAX differentiable array-programming and interpolation semantics",
-]
-physics_contracts = [
-  "target/source species tables retain explicit ordered-pair axes",
-  "tabulated matrices act on the post-field Hamiltonian under the declared finite-wavelength convention",
-]
-numerics_contracts = [
-  "shared, per-species, and ordered-pair tables interpolate on device with explicit spatial axes",
-  "malformed grids, species axes, and nonsquare matrices fail closed",
-  "JVP interpolation agrees with centered finite differences",
-]
 fast_tests = [
   "tests/unit/operators/test_operator_kernels.py",
 ]
 artifact_paths = []
-next_tests = [
-  "retain exact table/runtimes identities whenever a new table layout is added",
-]
 
 [[modules]]
 module = "gkx.operators.linear.rhs"
@@ -337,28 +190,12 @@ owner_lane = "linear RHS assembly entry points and cache-backed field solve disp
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Hermite-Laguerre linear gyrokinetic RHS contracts",
-  "electrostatic and electromagnetic term assembly used by linear, nonlinear, and solver-gradient lanes",
-]
-physics_contracts = [
-  "grid/geometry RHS construction builds the same cache-backed operator as direct cached calls",
-  "term toggles route through the modular term assembly without changing field-solve physics",
-]
-numerics_contracts = [
-  "5D and 6D state validation preserves single-species and multi-species semantics",
-  "jit and non-jit RHS dispatch return identical state and phi shapes with deterministic dtype policy",
-]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/parallel/test_parallel_linear_velocity.py",
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add direct RHS-owner tests after linear time integration moves out of the public facade",
-  "keep gkx.linear public RHS exports documented while implementation lives in operators.linear.rhs",
-]
 
 [[modules]]
 module = "gkx.solvers.linear.implicit"
@@ -367,28 +204,12 @@ owner_lane = "implicit linear operator and GMRES integration policy"
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "matrix-free implicit linear gyrokinetic solves",
-  "Hermite-line and diagonal preconditioner contracts used by linked-boundary stability runs",
-]
-physics_contracts = [
-  "implicit linear solves apply the same cache-backed gyrokinetic operator and term weights as explicit RHS assembly",
-  "nonlinear IMEX paths reuse the same implicit linear operator builder rather than a duplicated operator convention",
-]
-numerics_contracts = [
-  "preconditioner aliases map deterministically to diagonal, damping, PAS, Hermite-line, and identity policies",
-  "sampled implicit integration preserves shape, dtype, species squeezing, and finite sampled field diagnostics",
-]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/solvers/test_time_integrators.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add direct owner-module tests for GMRES failure metadata if exposed in a future public solver report",
-  "keep the linear implicit helper public exports available on the top-level gkx API",
-]
 
 [[modules]]
 module = "gkx.solvers.linear.integrators"
@@ -397,27 +218,11 @@ owner_lane = "linear fixed-step integration, implicit dispatch, and diagnostic s
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "observed-order checks for explicit and IMEX linear time paths",
-  "late-time linear diagnostic sampling used by benchmark and validation workflows",
-]
-physics_contracts = [
-  "linear time integration advances the same cache-backed RHS and term weights exposed by the public linear API",
-  "diagnostic sampling reports phi, density, and Hermite-Laguerre energy without changing the evolved state convention",
-]
-numerics_contracts = [
-  "explicit RK, SSPX3, IMEX, sampled, donated-buffer, and parallel-dispatch paths preserve shape, dtype, and sample count",
-  "observed-order gates exercise RK2, RK4, SSPX3, IMEX, and IMEX2 against manufactured exact solutions",
-]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/integration/runtime/test_runtime_runner.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add direct owner-module coverage for progress callback emission once callback policy is split",
-  "keep gkx.linear public integrate_linear exports documented while implementation lives in solvers.linear.integrators",
-]
 
 [[modules]]
 module = "gkx.operators.linear.moments"
@@ -426,27 +231,11 @@ owner_lane = "Hermite-Laguerre moment operators and field-coupling primitives"
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Hermite-Laguerre ladder representation of the linear gyrokinetic equation",
-  "electrostatic quasineutrality and gyrokinetic variable construction used by linear and nonlinear RHS assembly",
-]
-physics_contracts = [
-  "velocity-space ladder operators preserve Hermite/Laguerre recurrence identities",
-  "field-coupled H construction applies phi, A_parallel, and B_parallel to the intended moment channels",
-]
-numerics_contracts = [
-  "zero-padded moment shifts remain non-periodic and shape preserving",
-  "quasineutrality protects zero denominators and preserves multi-species broadcasting",
-]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/operators/test_terms_fields.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add direct finite-difference checks for grad_z_periodic and streaming_term on analytic waves",
-  "keep gkx.linear public moment exports documented while developer helpers live in operators.linear",
-]
 
 [[modules]]
 module = "gkx.operators.linear.params"
@@ -455,26 +244,10 @@ owner_lane = "linear parameter pytrees, term toggles, and validation/coercion he
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Hermite-Laguerre linear operator parameter contracts",
-  "runtime and benchmark term-toggle conversion policies",
-]
-physics_contracts = [
-  "linear species and field parameters remain explicit JAX pytrees",
-  "term toggles map one-to-one to modular operator term weights",
-]
-numerics_contracts = [
-  "scalar and species-array parameters coerce to deterministic shapes",
-  "positive/nonnegative validation rejects invalid host values while allowing traced autodiff values",
-]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add direct pytree round-trip tests for LinearParams and LinearTerms after any dataclass field changes",
-  "keep gkx.linear public parameter exports documented while developer helpers live in operators.linear",
-]
 
 [[modules]]
 module = "gkx.operators.linear.linked"
@@ -483,26 +256,10 @@ owner_lane = "linked-boundary FFT maps and end-damping profiles"
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "field-aligned linked-boundary linear operator contracts",
-  "linked-end damping used by Cyclone and stellarator parity lanes",
-]
-physics_contracts = [
-  "linked chains preserve the intended ky/kx mirror symmetry for field-aligned domains",
-  "linked end damping remains explicit and separate from physical collisions",
-]
-numerics_contracts = [
-  "signed Fourier indices map to FFT storage indices deterministically",
-  "linked FFT kz arrays and damping profiles preserve chain length and endpoint behavior",
-]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add minimal direct linked-chain fixtures independent of full cache construction",
-  "preserve profiler labels when linked derivative kernels are split further",
-]
 
 [[modules]]
 module = "gkx.solvers.linear.parallel"
@@ -516,27 +273,11 @@ owner_lane = "gated velocity-parallel linear RHS dispatch and Hermite shard-map 
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "linear RHS streaming and electrostatic-slice identity gates",
-  "disabled-by-default runtime velocity parallelization policy",
-]
-physics_contracts = [
-  "parallel RHS routes preserve the same electrostatic field solve and linear term weights as serial RHS assembly",
-  "unsupported collision, electromagnetic, linked-boundary, and non-Hermite-axis cases fail closed rather than changing physics",
-]
-numerics_contracts = [
-  "serial fallback remains an exact alias for gkx.operators.linear.rhs.linear_rhs_cached",
-  "Hermite-sharded streaming and electrostatic-slice routes preserve shape, dtype, and phi identity gates",
-]
 fast_tests = [
   "tests/unit/linear/test_linear.py",
   "tests/unit/parallel/test_parallel_linear_velocity.py",
 ]
 artifact_paths = []
-next_tests = [
-  "keep gkx.linear public parallel exports documented while developer helpers live in solvers.linear",
-  "extend dispatch-policy tests when new velocity or domain-parallel backends are promoted",
-]
 
 [[modules]]
 module = "gkx.solvers.nonlinear.diagnostics"
@@ -550,29 +291,6 @@ owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport win
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Cyclone and Cyclone-Miller nonlinear transport-window comparison artifacts",
-  "KBM, HSX, and W7-X nonlinear parity envelopes from independent-code comparisons",
-  "explicit nonlinear diagnostic scans used by transport-window audits",
-  "IMEX nonlinear diagnostic scans used by semi-implicit transport-window audits",
-  "nonlinear diagnostic kernels patched at module level by debug and parity tests",
-]
-physics_contracts = [
-  "nonlinear acceptance uses window statistics rather than one-time samples",
-  "mode-resolved Wphi and heat-flux spectra localize transport mismatches",
-  "the post-saturation adjoint differentiates the physical total heat flux",
-  "explicit and IMEX diagnostic integration assemble gamma, omega, energy, heat-flux, particle-flux, and resolved spectra from one state convention",
-  "module-level diagnostic kernels preserve the same observable definitions as cached nonlinear RHS runs",
-]
-numerics_contracts = [
-  "Poisson-bracket paths preserve expected antisymmetry in reduced tests",
-  "late-time fixed-mode frequency diagnostics remain conditioned when amplitudes are small",
-  "blocked and plain discrete adjoints preserve values and gradients",
-  "fixed and adaptive explicit diagnostic paths share one time-step policy and projection convention",
-  "IMEX diagnostic paths keep the nonlinear term explicit and the linear solve implicit while sharing diagnostic assembly",
-  "sampled diagnostic scans preserve final-time samples and resolved-diagnostic axis lengths",
-  "branch choices stay explicit while traced state arrays remain JAX-transformable",
-]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/solvers/test_time_integrators.py",
@@ -581,15 +299,6 @@ fast_tests = [
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = ["docs/_static/nonlinear_domain_parallel_identity_gate.png", "docs/_static/nonlinear_spectral_communication_identity_gate.png"]
-next_tests = [
-  "keep nonlinear state-integration and diagnostic-integration owner-module tests on the fast path",
-  "add more unit coverage for resolved spectral diagnostics",
-  "add reduced free-energy/conservation tests for nonlinear-only limits",
-  "extend spectral communication gates from split/reassemble identity to runtime distributed FFT routing",
-  "close TEM branch/frequency parity before kinetic-electron W7-X nonlinear gates",
-  "add manufactured explicit diagnostic observed-order checks after the remaining facade wrappers are split",
-  "add explicit diagnostic transport-window identity checks for production nonlinear decomposition",
-]
 
 [[modules]]
 module = "gkx.operators.nonlinear.rhs"
@@ -598,29 +307,11 @@ owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport win
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Cyclone, KBM, HSX, and W7-X nonlinear transport-window validation artifacts",
-  "electrostatic and electromagnetic nonlinear RHS decomposition tests",
-]
-physics_contracts = [
-  "zero nonlinear coefficient must leave the physical bracket inactive",
-  "disabled electromagnetic channels must be pruned before bracket assembly",
-  "IMEX explicit nonlinear terms reuse the same electromagnetic bracket payload convention as the cached nonlinear RHS",
-]
-numerics_contracts = [
-  "electrostatic RHS path is selected when apar and bpar are statically zero",
-  "bracket payload preserves dtype, Hermite-Laguerre transforms, dealiased masks, and laguerre-mode routing",
-  "zero-nonlinearity IMEX terms bypass field solves and return an exact zero state-shaped array",
-]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add direct free-energy reduced-limit checks for nonlinear bracket conservation",
-  "add physical transport-window identity tests when production nonlinear decomposition is promoted",
-]
 
 [[modules]]
 module = "gkx.operators.nonlinear.diagnostic_state"
@@ -629,29 +320,11 @@ owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport win
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "resolved nonlinear diagnostic schemas used by transport-window audits",
-  "explicit and IMEX nonlinear diagnostic scan parity contracts",
-]
-physics_contracts = [
-  "late-time gamma, omega, energy, particle-flux, and heat-flux observables are assembled from the same state convention in explicit and IMEX paths",
-  "resolved spectral diagnostics preserve the documented packing order for heat-flux and free-energy audits",
-  "explicit and IMEX scan policies use the same state-to-diagnostic closure factory",
-]
-numerics_contracts = [
-  "disabled resolved diagnostics use scalar kernels without allocating resolved spectra",
-  "injected kernels preserve debug seams while keeping implementation pure-array and JAX-transformable",
-  "closure construction binds static diagnostic metadata once while leaving state arrays JAX-transformable",
-]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add direct reduced free-energy balance checks after the diagnostic energy convention is split from integration scans",
-  "add explicit-versus-IMEX diagnostic tuple equality checks on a shared manufactured state",
-]
 
 [[modules]]
 module = "gkx.solvers.nonlinear.explicit"
@@ -660,28 +333,12 @@ owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport win
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "explicit nonlinear RK/SSP/K10 time stepping used by transport-window audits",
-  "adaptive nonlinear diagnostic runs that compare gamma/omega between diagnostic strides",
-]
-physics_contracts = [
-  "explicit one-step policy preserves the projected spectral state convention after each stage",
-  "diagnostic gamma/omega updates remain tied to the previous time step rather than sparse diagnostic output",
-]
-numerics_contracts = [
-  "constant-RHS RK methods reduce to the expected first-order update over one step",
-  "state dtype and projection are applied after the final stage for scan-carry stability",
-]
 fast_tests = [
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add observed-order manufactured-time-path checks for promoted explicit methods",
-  "add physical transport-window identity tests after explicit scan orchestration is split",
-]
 
 [[modules]]
 module = "gkx.solvers.nonlinear.lawson"
@@ -690,26 +347,10 @@ owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport win
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "integrating-factor (Lawson) forms of rk3, rk4 and rk4-pi that advance the curvature and grad-B drift exactly",
-  "Cyclone t = 400 heat flux of the lawson steppers against rk3, rk4 and rk4-pi over four seeds",
-  "method = auto takes lawson-rk4-pi where the drift is at least 56% of the linear CFL bound; wall time and HSX saturated flux against rk4-pi",
-]
-physics_contracts = [
-  "the drift exponential equals expm of the truncated production curvature plus grad-B operator",
-  "linear growth rate and frequency match the plain steppers at a converged step",
-]
-numerics_contracts = [
-  "the Hermite and Laguerre eigenvector transforms are orthogonal, so the embedded error norm is unchanged",
-  "a lawson step at a small step follows the plain step on the same system",
-]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add observed-order checks of the lawson tableaux on a manufactured nonlinear problem",
-]
 
 [[modules]]
 module = "gkx.solvers.nonlinear.imex"
@@ -718,31 +359,12 @@ owner_lane = "nonlinear bracket, collisions, resolved diagnostics, transport win
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "semi-implicit nonlinear diagnostics and cached IMEX transport paths",
-  "operator dtype preservation under x64 and prebuilt-operator reuse tests",
-]
-physics_contracts = [
-  "IMEX solve policy keeps the nonlinear term explicit and the linear operator implicit",
-  "cached and diagnostic IMEX paths share the same fixed-point predictor, GMRES route, and SSPX3 stage composition",
-  "cached and diagnostic IMEX paths construct nonlinear-term closures through the same injected kernel convention",
-]
-numerics_contracts = [
-  "identity linear systems return the RHS with the expected state shape",
-  "solve-step factories forward tolerances, restart policy, preconditioner, and matrix-free operator metadata unchanged",
-  "fixed-point predictor applies the configured iteration count and relaxation exactly",
-  "constant-RHS SSPX3 stage composition gives the same one-step update as the exact constant derivative",
-]
 fast_tests = [
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add preconditioned IMEX solve residual checks with a manufactured linear operator",
-  "add explicit-versus-IMEX diagnostic parity checks in a linearized nonlinear-off limit",
-]
 
 [[modules]]
 module = "gkx.operators.nonlinear.policies"
@@ -751,32 +373,11 @@ owner_lane = "nonlinear diagnostic setup, time-step policy, fixed-mode omega mas
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "adaptive nonlinear CFL bounds used by long fixed/adaptive transport windows",
-  "shared nonlinear diagnostic setup used by explicit and IMEX scan paths",
-  "fixed-mode nonlinear diagnostics and omega masks",
-  "reusable IMEX solves",
-]
-physics_contracts = [
-  "adaptive time-step policy combines linear frequency bounds and nonlinear E cross B CFL bounds before clipping",
-  "diagnostic setup preserves caller-selected geometry, field-line weights, monitored z index, and fixed-mode policy",
-  "explicit and IMEX diagnostic scans share the same composed fixed-mode/Hermitian projection convention",
-]
-numerics_contracts = [
-  "fixed-step policy returns the previous step unchanged while adaptive policy respects dt_min and dt_max",
-  "cache construction infers Hermite and Laguerre moment counts from species and non-species nonlinear states",
-  "diagnostic omega masks keep only unique real-FFT modes before gamma/omega reductions",
-  "prebuilt nonlinear IMEX operators preserve dtype, shape, and preconditioner metadata",
-]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
-next_tests = [
-  "keep the nonlinear helper public exports object-identical on the top-level gkx API",
-  "add direct helper parity coverage when the IMEX diagnostics loop is split further",
-]
 
 [[modules]]
 module = "gkx.operators.nonlinear.collisions"
@@ -785,28 +386,11 @@ owner_lane = "nonlinear collision and hypercollision split policy"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "long nonlinear transport windows use split collision and hypercollision updates to avoid mixing diagonal damping with explicit bracket stability limits",
-  "explicit and IMEX nonlinear scans share identical collision-split damping weights and update formulas",
-]
-physics_contracts = [
-  "collision and hypercollision weights remain explicit before split updates are applied",
-  "inactive collision splitting leaves the RHS term configuration unchanged",
-  "active collision splitting removes collision terms from the explicit RHS and returns a diagonal damping tensor",
-]
-numerics_contracts = [
-  "implicit and IMEX split updates use the same diagonal backward-Euler formula",
-  "explicit, STS, and RKC split updates use the same diagonal exponential formula",
-  "species-squeezed damping preserves the state layout used by single-species nonlinear scans",
-]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
-next_tests = [
-  "keep collision split helper behavior object-identical through the nonlinear compatibility facade until the next major API cleanup",
-]
 
 [[modules]]
 module = "gkx.operators.nonlinear.projection"
@@ -815,25 +399,10 @@ owner_lane = "nonlinear fixed-mode and compressed-real-FFT state projections"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "compressed real-FFT nonlinear diagnostics use unique positive-ky modes while reconstructing the Hermitian state",
-  "fixed-mode nonlinear frequency diagnostics preserve the monitored Fourier block exactly",
-]
-physics_contracts = [
-  "fixed-mode projection preserves the selected Fourier block exactly before diagnostic reductions",
-  "Hermitian projection reconstructs negative ky modes by complex conjugation and reversed kx indexing",
-]
-numerics_contracts = [
-  "projection helpers are shape-preserving and no-op when the input layout does not require a projection",
-  "composed nonlinear-state projection applies fixed-mode preservation before Hermitian completion",
-]
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
-next_tests = [
-  "keep projection helper behavior object-identical through the nonlinear compatibility facade until the next major API cleanup",
-]
 
 [[modules]]
 module = "gkx.diagnostics.quasilinear_transport"
@@ -845,28 +414,11 @@ owner_lane = "linear-response quasilinear weights and saturation-model diagnosti
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "mixing-length and quasilinear transport diagnostics used in reduced turbulent transport modeling",
-  "linear-spectrum shape and saturation-rule validation before absolute nonlinear-flux claims",
-]
-physics_contracts = [
-  "linear heat and particle weights are diagnostics until nonlinear train/holdout gates promote a saturation rule",
-  "electrostatic quasilinear channels cannot be reused for electromagnetic KBM claims without field-channel calibration",
-  "spectrum-shape gates compare normalized resolved spectra separately from absolute-flux calibration",
-]
-numerics_contracts = [
-  "signed growth rates, positive-growth floors, and kperp floors are handled deterministically",
-  "candidate models must beat null baselines and pass data-volume/conditioning gates before runtime exposure",
-]
 fast_tests = [
   "tests/unit/quasilinear/test_quasilinear.py",
   "tests/unit/geometry/test_geometry.py",
 ]
 artifact_paths = ["docs/_static/quasilinear_cyclone_spectrum.png", "docs/_static/quasilinear_hsx_spectrum.png", "docs/_static/quasilinear_w7x_spectrum.png", "docs/_static/quasilinear_model_selection_status.png", "docs/_static/quasilinear_holdout_gap_report.png"]
-next_tests = [
-  "add at least two more converged electrostatic nonlinear holdout windows before promoting richer saturation candidates",
-  "add electromagnetic quasilinear channel tests before using KBM in calibration reports",
-]
 
 [[modules]]
 module = "gkx.benchmarking_shared"
@@ -878,25 +430,10 @@ owner_lane = "reference loading, fit policies, and comparison-gate inputs"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Cyclone Base Case and Dimits-shift benchmark literature",
-  "ETG, TEM, KBM, W7-X, HSX, and nonlinear GX comparison artifacts",
-]
-physics_contracts = [
-  "benchmark cases expose explicit observable, window, tolerance, and reference source",
-  "near-marginal and branch-followed cases report ambiguity instead of hiding it",
-]
-numerics_contracts = [
-  "growth-rate fallback policy is deterministic and tested on synthetic signals",
-  "runtime scan results preserve ky ordering, finite filtering, and table schema",
-]
 fast_tests = [
   "tests/validation/benchmarks/test_benchmarking.py",
 ]
 artifact_paths = ["docs/_static/benchmark_core_linear_atlas.png", "docs/_static/benchmark_core_nonlinear_atlas.png"]
-next_tests = [
-  "add manifest-backed tests that every published benchmark figure has a gate source",
-]
 
 [[modules]]
 module = "gkx.operators.moments"
@@ -910,26 +447,10 @@ owner_lane = "quadrature, energy, transport-channel, resolved, and metadata diag
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "reference-code exact-state diagnostics for scalar and resolved W7-X nonlinear quantities",
-  "W7-X stella/GENE zonal-flow benchmark observable definitions",
-]
-physics_contracts = [
-  "diagnostic normalizations match the documented flux and free-energy conventions",
-  "signed zonal mode and line diagnostics are preserved separately from energy proxies",
-]
-numerics_contracts = [
-  "zero-denominator and zero-reference metrics report finite/null JSON values explicitly",
-  "resolved diagnostic reductions preserve shape and mode indexing",
-]
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
-  "tests/tools/comparison/test_reference_comparison_tools.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add direct tests for every public diagnostic written to NetCDF",
-]
 
 [[modules]]
 module = "gkx.objectives.autodiff_validation"
@@ -938,28 +459,11 @@ owner_lane = "autodiff inverse, sensitivity-map, and UQ covariance validation"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 98.0
-reference_anchors = [
-  "JAX autodiff finite-difference/tangent consistency checks",
-  "Gyaradax-style inverse and uncertainty quantification workflows",
-]
-physics_contracts = [
-  "observable derivatives report conditioning and rank before optimization claims",
-  "covariance metadata distinguishes identifiable inverse problems from local sensitivity demos",
-]
-numerics_contracts = [
-  "Gauss-Newton covariance is symmetric positive semidefinite under regularized normal equations",
-  "finite-difference and autodiff Jacobians agree within explicit tolerances",
-  "finite-difference helper ownership lives with the objective autodiff validation utilities",
-]
 fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
   "tests/integration/examples/test_examples.py",
 ]
 artifact_paths = ["docs/_static/autodiff_inverse_growth.png", "docs/_static/autodiff_inverse_twomode.png", "docs/_static/differentiable_geometry_bridge.png"]
-next_tests = [
-  "add tangent-linear checks for differentiated nonlinear transport observables",
-  "promote geometry-parameter sensitivity checks from geometry observables to growth-rate and transport observables",
-]
 
 [[modules]]
 module = "gkx.geometry.core"
@@ -972,26 +476,10 @@ owner_lane = "analytic, slab, sampled, and imported flux-tube geometry contracts
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Cyclone s-alpha geometry metric and drift conventions",
-  "imported eik/NetCDF flux-tube geometry arrays",
-]
-physics_contracts = [
-  "analytic and imported geometry paths expose the same solver-facing FluxTubeGeometryData contract",
-  "zero-shear promotion and twist-shift defaults preserve the intended boundary condition semantics",
-]
-numerics_contracts = [
-  "periodic spectral bgrad reconstruction is shape-checked and finite",
-  "sampled theta grids reject mismatched solver coordinates and trim closed imported intervals only when appropriate",
-]
 fast_tests = [
   "tests/unit/geometry/test_geometry.py",
 ]
 artifact_paths = ["docs/_static/vmec_boozer_parity_matrix.png"]
-next_tests = [
-  "add analytic Miller-like sampled geometry parity checks in the core facade shard",
-  "add imported-geometry cache stress tests after broader VMEC/eik cache fixtures are available",
-]
 
 [[modules]]
 module = "gkx.geometry.imported_vmec"
@@ -1006,27 +494,10 @@ owner_lane = "VMEC import/remap geometry and future differentiable geometry brid
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "W7-X and HSX imported-geometry GX parity lanes",
-  "planned vmex and booz_xform_jax differentiable-geometry bridge",
-]
-physics_contracts = [
-  "metric, curvature, and magnetic-field arrays preserve flux-tube conventions",
-  "VMEC-file and future in-memory vmex paths produce equivalent geometry contracts",
-]
-numerics_contracts = [
-  "periodic remaps and interpolation preserve shape, handedness, and finite values",
-  "roundtrip geometry gates report max and RMS field mismatches",
-  "default VMEC eik cache reuse and atomic writes prevent partial-file races in parallel sweeps",
-]
 fast_tests = [
   "tests/unit/geometry/test_geometry.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add vmex in-memory parity fixtures after the core refactor lands",
-  "add a multi-process VMEC cache stress test when the slow backend is available in CI",
-]
 
 [[modules]]
 module = "gkx.geometry.differentiable"
@@ -1046,28 +517,11 @@ owner_lane = "in-memory vmex/booz_xform_jax bridge into the flux-tube geometry c
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "vmex differentiable VMEC fixed-boundary state and wout-like output APIs",
-  "booz_xform_jax in-memory read_wout_data and jax_api Boozer transform path",
-]
-physics_contracts = [
-  "differentiable geometry backends must produce the same solver-ready metric and drift arrays as imported VMEC/eik files",
-  "stellarator optimization claims require geometry parity and gradient checks before publication",
-]
-numerics_contracts = [
-  "in-memory geometry arrays must be finite, one-dimensional, shape-aligned, and use a constant gradpar field-line contract",
-  "optional backend discovery must not force vmex or booz_xform_jax imports on users who only run analytic geometry",
-  "JAX-traced geometry mappings must preserve autodiff and match central finite differences for geometry observables",
-]
 fast_tests = [
   "tests/unit/objectives/test_differentiable_geometry_objectives.py",
   "tests/unit/geometry/test_geometry.py",
 ]
 artifact_paths = ["docs/_static/differentiable_geometry_bridge.png", "docs/_static/vmec_boozer_parity_matrix.png"]
-next_tests = [
-  "generalize the mode-21 VMEC/Boozer parity matrix to finite-beta pressure-correction drift terms",
-  "promote the finite-difference geometry-gradient check from geometry observables to linear growth observables",
-]
 
 [[modules]]
 module = "gkx.workflows.runtime.artifacts"
@@ -1076,18 +530,6 @@ owner_lane = "runtime orchestration of artifact serialization"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "publication panel scripts and docs artifact refresh workflow",
-  "runtime examples for linear, nonlinear, Miller, VMEC, autodiff, and plotting",
-]
-physics_contracts = [
-  "artifact metadata records model, fields, species, geometry, and diagnostics needed to reproduce figures",
-  "plotting from output files is independent of the run process",
-]
-numerics_contracts = [
-  "sample stride and final-sample policies preserve late-time metrics",
-  "JSON summaries are strict and avoid nonfinite values",
-]
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
   "tests/integration/runtime/test_runtime_runner.py",
@@ -1095,10 +537,6 @@ fast_tests = [
   "tests/unit/diagnostics/test_analysis.py",
 ]
 artifact_paths = ["docs/_static/benchmark_readme_panel.png", "docs/_static/runtime_memory_benchmark.png"]
-next_tests = [
-  "add compatibility tests for reading the current shipped artifact schema",
-  "keep orchestration free of format-specific serialization policy",
-]
 
 [[modules]]
 module = "gkx.artifacts.__init__"
@@ -1107,23 +545,11 @@ owner_lane = "linear, nonlinear, restart, and diagnostic artifact IO"
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "public artifact writer imports documented in docs/api.rst",
-]
-physics_contracts = [
-  "artifact package exports only serialization/reload helpers and does not run solver side effects",
-]
-numerics_contracts = [
-  "package imports preserve identity with implementation modules and legacy facades",
-]
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
   "tests/integration/runtime/test_runtime_runner.py",
 ]
 artifact_paths = ["docs/_static/benchmark_readme_panel.png"]
-next_tests = [
-  "add import contract tests for any future artifact package submodule",
-]
 
 [[modules]]
 module = "gkx.artifacts.io"
@@ -1132,31 +558,11 @@ owner_lane = "artifact schema, NetCDF output, JSON summaries, and plot reload pa
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "publication panel scripts and docs artifact refresh workflow",
-  "runtime examples for linear, nonlinear, Miller, VMEC, autodiff, and plotting",
-]
-physics_contracts = [
-  "artifact path normalization preserves documented output bundles for linear, nonlinear, and quasilinear runs",
-  "state arrays are persisted next to summary/time-series artifacts without changing solver results",
-  "artifact validation rejects nonfinite nonlinear state, field, and diagnostic payloads before persisted output is trusted",
-]
-numerics_contracts = [
-  "CSV writers preserve column order and finite numeric arrays used by plotting reload tests",
-  "series flattening preserves scalar time traces and averages higher-rank diagnostic channels only along non-time axes",
-  "finite-value checks cover optional arrays without forcing diagnostics-free runs to materialize missing data",
-  "restart packing and diagnostic reload preserve dealiased spectral dimensions and complex phase",
-]
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
   "tests/integration/runtime/test_runtime_runner.py",
 ]
 artifact_paths = ["docs/_static/benchmark_readme_panel.png", "docs/_static/runtime_memory_benchmark.png"]
-next_tests = [
-  "add backward-compatible reload tests for older linear summary and quasilinear spectrum bundles",
-  "add a direct malformed-shape flattening test for multi-channel diagnostic CSV output",
-  "add direct finite-value rejection tests for future field containers",
-]
 
 [[modules]]
 module = "gkx.artifacts.spectral_layout"
@@ -1165,26 +571,10 @@ owner_lane = "artifact schema, NetCDF output, JSON summaries, and plot reload pa
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "dealiased spectral-axis output conventions used by NetCDF comparison artifacts",
-  "restart append and nonlinear resolved-diagnostic schema tests",
-]
-physics_contracts = [
-  "active kx/ky axis selection preserves the resolved nonlinear fields used in benchmark comparison plots",
-  "restart and field real/imag packing preserves species, Laguerre, Hermite, theta, kx, and ky axis semantics",
-]
-numerics_contracts = [
-  "condensed kx, ky, and ky-kx output helpers reject ambiguous full-vs-active axis lengths",
-  "spectral complex arrays are converted to deterministic float32 real/imag layout before NetCDF writes",
-]
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
 ]
 artifact_paths = ["docs/_static/benchmark_readme_panel.png", "docs/_static/runtime_memory_benchmark.png"]
-next_tests = [
-  "add a restart-layout roundtrip test for multispecies non-square kx/ky grids",
-  "add a direct active-axis regression using a known dealiased spectrum fixture",
-]
 
 [[modules]]
 module = "gkx.artifacts.nonlinear_netcdf"
@@ -1193,25 +583,10 @@ owner_lane = "nonlinear NetCDF output-bundle orchestrator"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "nonlinear NetCDF output used by restart, comparison, and publication artifact workflows",
-  "runtime examples for nonlinear Miller, VMEC, and benchmark comparison outputs",
-]
-physics_contracts = [
-  "NetCDF outputs preserve geometry profiles, diagnostic-history schema, restart state, and final-field big-file diagnostics",
-  "particle moment exports use the same geometry-implied grid and linear cache contract as the nonlinear solver",
-]
-numerics_contracts = [
-  "restart and big-file outputs retain deterministic real/imag layout and finite final-time metadata",
-]
 fast_tests = [
   "tests/integration/runtime/test_runtime_artifacts.py",
 ]
 artifact_paths = ["docs/_static/benchmark_readme_panel.png", "docs/_static/runtime_memory_benchmark.png"]
-next_tests = [
-  "add an end-to-end NetCDF reload-to-plot regression for a shipped nonlinear fixture",
-  "add multi-species finite-beta NetCDF schema tests before publication artifact freeze",
-]
 
 [[modules]]
 module = "gkx.parallel.state"
@@ -1229,30 +604,12 @@ owner_lane = "JAX parallelization policy for CPU/GPU scans and ensemble workload
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 90.0
-reference_anchors = [
-  "JAX pmap/pjit/sharding documentation and production scan/ensemble workflows",
-  "multi-CPU local and multi-GPU scaling sweeps",
-]
-physics_contracts = [
-  "parallel execution is numerically identical to serial execution for independent cases",
-  "scan, UQ, and sensitivity batches preserve case ordering and metadata",
-]
-numerics_contracts = [
-  "device-count fallbacks are deterministic on one-device machines",
-  "fixed-step nonlinear state sharding preserves the serial final state before any speedup claim is made",
-  "strong-scaling panels separate compile, transfer, and warm runtime",
-]
 fast_tests = [
   "tests/unit/parallel/test_parallel_core.py",
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/parallel/test_parallel_linear_velocity.py",
 ]
 artifact_paths = ["docs/_static/scaling_speedup.png", "docs/_static/parallel_ky_scan_gate.png", "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png", "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.png", "docs/_static/nonlinear_sharding_strong_scaling_large.png", "docs/_static/parallelization_completion_status.png"]
-next_tests = [
-  "promote scripts/profiling/profile_nonlinear_sharding.py to a benchmark-size nonlinear identity/profile artifact once the bounded two-GPU gate is replaced by a matched runtime sweep",
-  "design a dedicated z-axis FFT communication/layout gate before exposing z sharding through nonlinear TimeConfig",
-  "add UQ ensemble parallelization gate using the same identity-policy format",
-]
 
 [[modules]]
 module = "gkx.objectives.eigen"
@@ -1261,27 +618,10 @@ owner_lane = "production solver-objective geometry-gradient validation"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "implicit left/right non-Hermitian eigenpair sensitivity theory",
-  "finite-difference branch-continuity validation for eigenvalue objectives",
-]
-physics_contracts = [
-  "dominant-growth derivatives are valid only on locally isolated eigenvalue branches",
-  "branch-locality diagnostics must distinguish max-real branch switching from nearest-branch local finite differences",
-]
-numerics_contracts = [
-  "implicit eigenpair sensitivities use a biorthogonal left/right normalization",
-  "dominant real eigenvalue VJP matches central finite differences on isolated non-Hermitian branches",
-  "branch gap, slope difference, and finite eigenvalue guards fail closed before optimization promotion",
-]
 fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
 artifact_paths = ["docs/_static/solver_objective_gradient_gate.png"]
-next_tests = [
-  "add multi-root branch-near-degeneracy stress tests before using new objective families in optimization",
-  "record branch-gap statistics in every promoted VMEC/Boozer optimizer artifact",
-]
 
 [[modules]]
 module = "gkx.objectives.core"
@@ -1290,27 +630,10 @@ owner_lane = "production solver-objective geometry-gradient validation"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "linear gyrokinetic eigenvalue growth-rate and frequency objectives",
-  "mixing-length and quasilinear proxy construction from linear eigenmodes",
-]
-physics_contracts = [
-  "solver-objective vectors expose growth, frequency, effective kperp, heat/particle weights, and an explicitly scoped mixing-length proxy",
-  "growth-rate objectives use the same linear RHS operator materialized for branch-locality and finite-difference gates",
-]
-numerics_contracts = [
-  "linear operator materialization must match the growth-rate path exactly",
-  "selected ky rows and moment counts fail closed when outside the resolved grid",
-  "scalar objective aliases map to canonical objective-vector entries with length validation",
-]
 fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
 artifact_paths = ["docs/_static/solver_objective_gradient_gate.png"]
-next_tests = [
-  "add objective-vector regression rows for additional ky and moment resolutions",
-  "add branch-audited quasilinear objective-vector checks before broad optimizer promotion",
-]
 
 [[modules]]
 module = "gkx.objectives.vmec_transport"
@@ -1319,29 +642,10 @@ owner_lane = "VMEC-JAX transport objective configuration, sample tables, reducti
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "VMEC-JAX fixed-boundary optimization coupled to local gyrokinetic transport objectives",
-  "Boozer-resolution guardrails for paper-facing stellarator optimization",
-  "multi-surface and multi-field-line stellarator transport screening",
-]
-physics_contracts = [
-  "configuration must keep growth, quasilinear, and reduced nonlinear-window scopes explicit",
-  "Boozer grids below the documented mode threshold fail closed before optimization",
-  "reduced nonlinear-window proxies do not imply converged turbulent heat-flux claims",
-]
-numerics_contracts = [
-  "objective transforms and scales are finite, positive, and explicit",
-  "optional backend paths are pinned reproducibly when imported VMEC-JAX/Boozer modules are already active",
-  "ky samples map uniquely and surface chunking preserves weighted reductions",
-]
 fast_tests = [
   "tests/unit/objectives/test_autodiff_solver_objectives.py",
 ]
 artifact_paths = []
-next_tests = [
-  "add direct ObjectiveTerm metadata fixtures for every transform and transport kind",
-  "add real VMEC/Boozer fixture coverage for every supported transport objective kind",
-]
 
 [[modules]]
 module = "gkx.parallel.__init__"
@@ -1353,25 +657,10 @@ owner_lane = "production ky/batch scan and UQ ensemble parallelization"
 status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "JAX vmap/pmap independent batch workflows",
-  "multi-device linear scan and UQ ensemble scaling targets",
-]
-physics_contracts = [
-  "parallel ky scans and UQ ensembles preserve serial ordering and numerical identity",
-  "nonlinear domain sharding remains out of release scope until communication gates exist",
-]
-numerics_contracts = [
-  "single-device fallback matches vmap exactly",
-  "multi-device batches pad only by edge repetition and drop padded outputs deterministically",
-]
 fast_tests = [
   "tests/unit/parallel/test_parallel_core.py",
 ]
 artifact_paths = ["docs/_static/parallel_ky_scan_gate.png", "docs/_static/independent_ky_scan_scaling_large.png", "docs/_static/independent_ky_scan_scaling_cpu_large.png", "docs/_static/independent_ky_scan_scaling_gpu_large.png", "docs/_static/quasilinear_uq_ensemble_scaling_large.png", "docs/_static/quasilinear_uq_ensemble_scaling_cpu_large.png", "docs/_static/quasilinear_uq_ensemble_scaling_gpu_large.png", "docs/_static/parallelization_completion_status.png", "docs/_static/nonlinear_sharding_strong_scaling_cpu_large.png", "docs/_static/nonlinear_sharding_strong_scaling_gpu_xlarge.png", "docs/_static/nonlinear_sharding_strong_scaling_large.png", "docs/_static/nonlinear_device_z_pencil_transport_gpu2_observable_split_profile.png", "docs/_static/linear_rhs_parallel_slices_sweep.png"]
-next_tests = [
-  "add two-GPU identity and speedup gates for UQ ensembles",
-]
 
 [[modules]]
 module = "gkx.artifacts.figure_style"
@@ -1380,26 +669,10 @@ owner_lane = "single house style for every generated README and documentation fi
 status = "active"
 coverage_priority = "low"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "Okabe & Ito (2008) colour-blind safe qualitative palette",
-  "README/docs validation figure stack",
-]
-physics_contracts = [
-  "every published/analytic reference is drawn in one fixed style so it is never mistaken for data",
-  "annotate_reference keeps the literature anchor inside the figure, so a panel lifted into a slide carries its source",
-]
-numerics_contracts = [
-  "style is applied through rc_context, so importing the module never mutates a user's global matplotlib state",
-  "palette ordering is monotone in luminance and survives greyscale printing",
-  "font sizes, dpi, and export settings are deterministic across every generated figure",
-]
 fast_tests = [
   "tests/unit/diagnostics/test_analysis.py",
 ]
 artifact_paths = ["docs/_static/landau_damping_validation.png", "docs/_static/recurrence_hermite_closure.png", "docs/_static/benchmark_linear_parity.png", "docs/_static/runtime_memory_benchmark.png"]
-next_tests = [
-  "assert rc_context leaves rcParams unchanged after the context exits",
-]
 
 [[modules]]
 module = "gkx.artifacts.plotting"
@@ -1414,26 +687,8 @@ owner_lane = "publication plotting for benchmarks, diagnostics, saved outputs, a
 status = "active"
 coverage_priority = "medium"
 coverage_target_percent = 95.0
-reference_anchors = [
-  "README/docs publication panels and manuscript figure stack",
-  "autodiff inverse/UQ validation figures",
-]
-physics_contracts = [
-  "figures reveal overlapping reference and GKX curves instead of hiding parity",
-  "captions and metadata state target, method, and result for every validation panel",
-]
-numerics_contracts = [
-  "log/linear axes and normalized eigenfunctions are chosen by observable type",
-  "font sizes, grid alpha, and dpi are deterministic across generated figures",
-  "empty panels are removed instead of shipped",
-]
 fast_tests = [
   "tests/unit/diagnostics/test_analysis.py",
   "tests/integration/examples/test_examples.py",
-  "tests/tools/comparison/test_reference_comparison_tools.py",
 ]
 artifact_paths = ["docs/_static/comparison/reference_publication_panel.png"]
-next_tests = [
-  "add finite-difference/tangent checks to autodiff figure scripts",
-  "add image-content smoke tests for key publication panels where practical",
-]
