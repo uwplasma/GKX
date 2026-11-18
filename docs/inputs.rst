@@ -777,6 +777,9 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``solver``","str","unset","Linear solver: ``auto``, ``time``, ``krylov``, ``explicit_time``."
    "``steps``","int","unset","Number of steps; with ``dt`` sets ``t_max``."
 
+``gkx.solve`` and ``gkx.scan`` take ``ky``, ``kx``, ``Nl``, ``Nm`` and ``solver`` from this
+table when the call does not pass them; an argument passed to the call wins.
+
 ``[scan]``
 ^^^^^^^^^^
 

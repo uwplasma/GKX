@@ -1297,3 +1297,70 @@ def test_lenard_bernstein_refusal_covers_every_species():
     assert params.collision_model == "dougherty"
     # Valid damping passes.
     assert _lenard_bernstein_runtime((0.0, 0.05), 1.0, 2.0).nu_hermite == 1.0
+
+
+class _Stop(Exception):
+    pass
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected"),
+    [
+        ({}, (0.4, 3, 5, "time")),  # the deck's [run] block
+        (dict(ky_target=0.2, Nl=2, Nm=4, solver="krylov"), (0.2, 2, 4, "krylov")),
+        ({"Nl": 2}, (0.4, 2, 5, "time")),  # explicit arguments win key by key
+    ],
+)
+def test_deck_run_block_is_the_default_and_explicit_arguments_win(
+    monkeypatch, kwargs, expected
+) -> None:
+    """gkx.solve and gkx.scan take ky, Nl, Nm and solver from ``[run]`` unless told."""
+
+    import gkx
+    from gkx.workflows import linear, nonlinear
+    from gkx.workflows.runtime import orchestration_scan
+
+    case = gkx.load(REPO_ROOT / "examples" / "01_linear_tokamak" / "case.toml")
+    case = replace(case, run=replace(case.run, ky=0.4, Nl=3, Nm=5, solver="time"))
+    seen: dict = {}
+
+    def stop(*_args, **kw):
+        seen.update(kw)
+        raise _Stop
+
+    monkeypatch.setattr(linear, "_prepare_linear_runtime_context", stop)
+    with pytest.raises(_Stop):
+        gkx.solve(case, **kwargs)
+    ky, nl, nm, solver = expected
+    assert (
+        seen["ky_target"],
+        seen["n_laguerre"],
+        seen["n_hermite"],
+        seen["solver"],
+    ) == (ky, nl, nm, solver)
+
+    # scan: the resolution is fixed before any geometry is built.
+    resolve = orchestration_scan._resolve_runtime_hl_dims
+
+    def resolve_then_stop(cfg, **kw):
+        seen["scan"] = resolve(cfg, **kw)[1:]
+        raise _Stop
+
+    monkeypatch.setattr(
+        orchestration_scan, "_resolve_runtime_hl_dims", resolve_then_stop
+    )
+    with pytest.raises(_Stop):
+        gkx.scan(case, [0.3], **{k: v for k, v in kwargs.items() if k != "ky_target"})
+    assert seen["scan"] == expected[1:3]
+
+    # nonlinear: ky and (Nl, Nm); a deck with no [run] block keeps the fallbacks.
+    monkeypatch.setattr(nonlinear, "_prepare_context", stop)
+    nl_case = replace(case, physics=replace(case.physics, nonlinear=True, linear=False))
+    with pytest.raises(_Stop):
+        gkx.solve(nl_case, **{k: v for k, v in kwargs.items() if k != "solver"})
+    assert (seen["ky_target"], seen["Nl"], seen["Nm"]) == expected[:3]
+    seen.clear()
+    bare = replace(nl_case, run=replace(nl_case.run, ky=None, Nl=None, Nm=None))
+    with pytest.raises(_Stop):
+        gkx.solve(bare)
+    assert (seen["ky_target"], seen["Nl"], seen["Nm"]) == (0.3, 4, 8)
