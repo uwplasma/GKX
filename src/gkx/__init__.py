@@ -7,6 +7,7 @@ from importlib import import_module
 from typing import Any
 
 from gkx._version import __version__
+from gkx.compilation_cache import enable_persistent_compilation_cache
 
 
 def _cpu_thread_defaults() -> None:
@@ -38,6 +39,7 @@ def _cpu_thread_defaults() -> None:
 
 
 _cpu_thread_defaults()
+enable_persistent_compilation_cache()
 
 _api = import_module("gkx.api")
 __all__ = list(_api.__all__)

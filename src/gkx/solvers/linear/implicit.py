@@ -123,15 +123,6 @@ class ImplicitSolveSummary:
             unconverged_solves=int(np.asarray(stats.unconverged_solves)),
         )
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "converged": self.converged,
-            "max_relative_residual": self.max_relative_residual,
-            "max_iterations": self.max_iterations,
-            "solves": self.solves,
-            "unconverged_solves": self.unconverged_solves,
-        }
-
 
 def implicit_solve_payload(summary: ImplicitSolveSummary | None) -> dict[str, Any]:
     """Flatten an implicit-solve summary into scalar keys; ``None`` when none ran.
@@ -157,7 +148,7 @@ def implicit_solve_payload(summary: ImplicitSolveSummary | None) -> dict[str, An
 def require_converged_implicit_solves(
     stats: ImplicitSolveStats, *, label: str
 ) -> ImplicitSolveSummary:
-    """Fail closed at the host boundary when any implicit solve did not converge.
+    """Raise at the host boundary when any implicit solve did not converge.
 
     The traced scans cannot raise, so they carry :class:`ImplicitSolveStats` and
     the runtime checks it here, as the eigen gates do for their residuals.

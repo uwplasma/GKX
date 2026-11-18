@@ -171,7 +171,7 @@ def ky_layout_of(rows: int, ny_full: int | None) -> KyLayout:
     :data:`FULL`, which is what every consumer assumed before the half state
     existed and is correct for any selection that carries its own wavenumbers.
 
-    ``Ny = 1`` and ``Ny = 2`` are deliberately reported as :data:`FULL` even
+    ``Ny = 1`` and ``Ny = 2`` are reported as :data:`FULL` even
     though ``Nyc`` equals ``Ny`` there: the two layouts coincide, and the
     widening and the conjugate restore are both the identity, so calling the
     axis full keeps the untouched code path.
@@ -386,7 +386,7 @@ def self_conjugate_row_mask(ky: Any, *, ny_full: int | None = None) -> Any:
     cannot be recognized from a non-negative axis alone (see the module
     docstring on why ``Nyc`` does not determine ``Ny``), so ``ny_full`` has to
     be supplied for it to be found.  Without it the mask names only the zonal
-    row, which is what every caller did before this function existed.
+    row.
     """
 
     arr = jnp.asarray(ky)
