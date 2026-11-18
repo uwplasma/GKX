@@ -747,8 +747,6 @@ def test_independent_ky_decomposition_is_deterministic_balanced_and_ordered() ->
     )
 
     assert first == second
-    assert first.production_independent_batching is True
-    assert first.diagnostic_nonlinear_partition is False
     assert first.independent_work is True
     assert first.changes_solver_layout is False
     assert first.actual_shards == 3

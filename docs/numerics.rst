@@ -38,12 +38,12 @@ Linear integrators (:func:`gkx.solvers.linear.integrators.integrate_linear`)
 share the cached operator data of
 :func:`gkx.operators.linear.cache_builder.build_linear_cache`:
 
-- **Explicit** ``rk2``, ``rk4``, ``sspx3``; **CFL-controlled**
+- Explicit ``rk2``, ``rk4``, ``sspx3``; CFL-controlled
   (``integrate_linear_explicit``), which recomputes the step from the linear
   max-frequency estimate (defaults ``rk4``, ``fixed_dt=False``, ``cfl=0.9``).
-- **Diagonal IMEX** ``imex`` (first order) and ``imex2``: diagonal collision
+- Diagonal IMEX ``imex`` (first order) and ``imex2``: diagonal collision
   and hypercollision damping implicit, everything else explicit.
-- **Backward Euler + GMRES** ``implicit``, with the physical preconditioner
+- Backward Euler + GMRES ``implicit``, with the physical preconditioner
   named in ``implicit_preconditioner``.
 
 ``imex2`` is the `ARS(2,2,2) split <https://doi.org/10.1016/S0168-9274(97)00056-1>`_.
@@ -161,7 +161,7 @@ gain is smaller (step cap lifted): 1.5 times fewer steps on Cyclone, Miller and 
 (``lawson-rk3``, ``lawson-rk4``) per step at :math:`(4, 8)` and 8% to 12% at
 :math:`(8, 16)` on a 64x64x24 box (quiet GPU, two passes, before the paired-FFT bracket).
 On the current tree the cost per step of ``lawson-rk4-pi`` against ``rk4-pi``, read from
-the end-to-end runs of the table below (setup subtracted, a GPU shared with another job
+the full runs of the table below (setup subtracted, a GPU shared with another job
 throughout), is 1.1 to 1.3 times (median 1.2, 12 of 14 decks; one deck read 1.9 and one 0.6).
 
 .. _lawson-limits:
@@ -282,20 +282,20 @@ What a first run gets
 Defaults for a deck that leaves a choice open, each backed by a
 load-independent measurement (:ref:`q28-defaults`):
 
-- **Eigen route:** ``auto``, banded direct shift-invert where it fits, else
+- Eigen route: ``auto``, banded direct shift-invert where it fits, else
   ``adaptive``, the residual-certified propagator eigensolve (:doc:`solvers`).
-- **Precision:** ``complex64``. On ``01_linear_tokamak/case_full.toml`` float32
+- Precision: ``complex64``. On ``01_linear_tokamak/case_full.toml`` float32
   gives :math:`\gamma = 0.09309106` against float64's :math:`0.09309117`
   (1.2e-6 relative); ``JAX_ENABLE_X64=true`` applies the float64 certification
   gate (1e-9 against 1.19e-4) at about 17% more memory.
-- **Step:** a deck that sets ``[time] dt`` keeps ``rk2`` at that step; a deck
+- Step: a deck that sets ``[time] dt`` keeps ``rk2`` at that step; a deck
   without ``dt`` gets ``rk4`` with the CFL controller. Fixed-step linear paths
   warn when ``dt`` exceeds the CFL estimate.
-- **Resolution:** ``(Nl, Nm) = (12, 24)`` linear, ``(4, 8)`` nonlinear, a
+- Resolution: ``(Nl, Nm) = (12, 24)`` linear, ``(4, 8)`` nonlinear, a
   starting point and not a convergence statement.
-- **Nonlinear horizon:** diagnosed runs stop at saturation, with ``t_max`` as
+- Nonlinear horizon: diagnosed runs stop at saturation, with ``t_max`` as
   the cap (:ref:`saturation-stop`).
-- **Unchanged:** two-thirds dealiasing; ``collisions`` and ``hypercollisions``
+- Unchanged: two-thirds dealiasing; ``collisions`` and ``hypercollisions``
   enabled as terms with per-species ``nu = 0``; the persistent compilation
   cache on, so a second run skips compilation; the CPU FFT thread pool stays
   on (single-threaded measured 8--10% slower).
@@ -347,8 +347,8 @@ as the growth phase. On the retained window:
 #. The same verdict must already have held when the last 20% of the window was
    absent, with means that agree within two combined standard errors.
 
-``Wphi`` and ``Wg`` are no longer stop gates: with a physical-time window the
-flux drift test covers what they were guarding, and they sat at their own
+``Wphi`` and ``Wg`` are not stop gates: with a physical-time window the
+flux drift test covers what they would guard, and they sat at their own
 transients in the cases that never converged.
 
 .. list-table::
@@ -492,7 +492,7 @@ at each end of every non-zonal chain:
 with :math:`L_w` = ``damp_ends_widthfrac`` (0.125) of the chain. The damped
 quantity is the non-adiabatic :math:`h`, as in GX.
 
-**Contract.** :math:`\nu_{end}` is a rate in :math:`v_{ti}/a` units and the
+Contract. :math:`\nu_{end}` is a rate in :math:`v_{ti}/a` units and the
 same on every route: time integration (any step, fixed or adaptive), Krylov,
 eigen, shift-invert and nonlinear. No timestep enters. ``[time]
 damp_ends_rate`` sets it. The default is
@@ -506,7 +506,7 @@ layer of one segment (:math:`L_z` is the stored :math:`z` extent). Each run
 prints the rate it uses (``end damping: rate ...``). A deck that sets only the
 legacy ``damp_ends_amp`` is refused.
 
-**Why a rate.** GX applies ``damp_ends_amp/dt`` (before February 2023,
+Why a rate. GX applies ``damp_ends_amp/dt`` (before February 2023,
 :math:`5 v_{max}/L`). Read as a rate, :math:`A/\Delta t` makes a timestep-free
 eigenvalue depend on a step it does not have. GS2 [KRT95]_ and stella [BPL19]_
 need no absorber (upwinded implicit streaming sets :math:`h = 0` for incoming
@@ -546,29 +546,29 @@ also when a linear run keeps only a subset of ``ky`` rows.
 Linear solver options
 ---------------------
 
-- **Batched ``ky`` scans:** ``ky_batch>1`` integrates several ``ky`` at once;
+- Batched ``ky`` scans: ``ky_batch>1`` integrates several ``ky`` at once;
   ``fixed_batch_shape=True`` pads the last batch to avoid recompiling.
-- **Implicit preconditioners** (``implicit_preconditioner``): ``"auto"``/
+- Implicit preconditioners (``implicit_preconditioner``): ``"auto"``/
   ``"diag"``/``"physics"``/``"block"``, ``"damping"``, ``"pas"``,
   ``"pas-coarse"``, ``"hermite-line"``, ``"hermite-line-coarse"``,
   ``"identity"``.
-- **Shift-invert preconditioners** (``KrylovConfig.shift_preconditioner``):
+- Shift-invert preconditioners (``KrylovConfig.shift_preconditioner``):
   ``"damping"``; ``"hermite-line"`` (FFT in :math:`z` plus a tridiagonal
   Hermite solve of the diagonal-plus-streaming symbol, :math:`O(n)`);
   ``"field-corrected"`` (the line plus the exact field response by a Woodbury
   capacitance solve); ``"pr3-cm"`` (below). ``"auto"`` is ``"pr3-cm"`` with the
   inner FGMRES raised to restart 150 and maxiter 600 (:doc:`algorithms`).
-- **Acceptance:** every shift-invert pair is checked against the matrix-free
+- Acceptance: every shift-invert pair is checked against the matrix-free
   relative residual
   :math:`\lVert Av-\lambda v\rVert/\max(\lVert Av\rVert,|\lambda|\lVert v\rVert)`
   with ``shift_outer_residual_tol`` (``1e-6``); rejected pairs raise. The
   eigenvalue is refreshed as the physical Rayleigh quotient.
-- **Branch selection:** ``KrylovConfig.mode_family`` (``"cyclone"``, ``"etg"``,
+- Branch selection: ``KrylovConfig.mode_family`` (``"cyclone"``, ``"etg"``,
   ``"kbm"``) and ``shift_selection``; ``fallback_method`` defaults to
   ``"propagator"``. Retained-Ritz thick restarts, projected Jacobi--Davidson
   and reduced Schur complements were tried for interior KBM eigenpairs, all
   chose the wrong branch, and none is shipped.
-- **Reusable IMEX operators:** ``build_nonlinear_imex_operator`` prebuilds the
+- Reusable IMEX operators: ``build_nonlinear_imex_operator`` prebuilds the
   matrix-free operator for ``integrate_nonlinear_imex_cached``.
 
 The inner solves are right-preconditioned FGMRES started from zero. On the
@@ -667,12 +667,12 @@ energy returns to the low moments as recurrence at
 grows only as :math:`\sqrt{M}`, the end of the ladder must absorb. GKX has two
 treatments.
 
-**Hypercollisions** (default, ``[physics] hypercollisions = true``) damp a band
+Hypercollisions (default, ``[physics] hypercollisions = true``) damp a band
 of high moments with the :math:`|k_z|`-scaled branch
 :math:`\propto \nu_{hyper,m}|k_z|(m/M)^{p_m}` (``nu_hyper_m``, ``p_hyper_m``;
 :doc:`operators`).
 
-**Reflectionless closure** (opt-in per species with ``[[species]]
+Reflectionless closure (opt-in per species with ``[[species]]
 hermite_closure = "reflectionless"``, ``LinearParams.closure``; in the Python
 streaming kernel ``hermite_closure="reflectionless"``) applies the
 outgoing-wave condition of
@@ -778,7 +778,7 @@ trapped-electron or ETG growth rate matters to a few percent, and compare it
 with the default at two ``Nm`` before trusting either. Keep the default for
 ions, for any species at ``Nm`` :math:`\ge` 48 (the gain is 1 to 2 %, below
 what a pinned baseline tolerates), and wherever a reference deck sets
-hypercollisions deliberately. It is not on by default for kinetic electrons:
+hypercollisions on purpose. It is not on by default for kinetic electrons:
 at ``Nm`` 16 the growth rate is still 27 to 43 % below GS2 with it (29 to
 48 % without), and the remainder, 2 to 9 % at ``Nm`` 96, is resolution of the
 trapped-passing structure (``Nm`` 192 still moves). The closure costs nothing

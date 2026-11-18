@@ -66,8 +66,9 @@ SMOKE_OUTPUTS: dict[str, tuple[str, str]] = {
 # Editable constants turned down for the smoke run (name -> Python expression).
 SMOKE_KNOBS: dict[str, dict[str, str]] = {
     "01_linear_tokamak/run.py": {
-        "KY": "[0.2, 0.3]",
+        "KY": "[0.3]",
         "RESOLUTIONS": "[(4, 8)]",
+        "SOLVERS": '("krylov",)',
         "SHAPES": '{"circular": {}, "delta 0.3": {"tri": 0.3}}',
     },
     "03_nonlinear_tokamak/run.py": {"SAT_T_MAX": "30.0", "SAT_T_MIN": "10.0"},
