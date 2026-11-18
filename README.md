@@ -14,7 +14,7 @@ geometry, and computes linear stability and nonlinear turbulence in a
 Hermite-Laguerre velocity basis. The whole path, equilibrium included, is
 differentiable on CPUs and GPUs.
 
-**Comparison across gyrokinetic codes**
+## Comparison across gyrokinetic codes
 
 <img src="docs/_static/four_code_linear.png" width="860" alt="Growth rate, real frequency and growth-rate deviation from GKX for GKX, GX, GS2 and stella: Cyclone with adiabatic and kinetic electrons, a finite-beta scan, and W7-X">
 
@@ -137,7 +137,7 @@ Saturated ITG turbulence on a Cyclone flux tube
 
 ## Documentation and development
 
-Documentation: **[gkx.readthedocs.io](https://gkx.readthedocs.io)**. Start with
+Documentation: [gkx.readthedocs.io](https://gkx.readthedocs.io). Start with
 the [tutorial](docs/tutorials.rst) and the [guidance](docs/guidance.rst);
 validation and cross-code protocols are in [validation](docs/validation.rst),
 performance and parallel execution in [performance](docs/performance.rst) and

@@ -475,14 +475,20 @@ def _saturation_stop_condition(
     # The chunked route records one diagnostic sample per step.
     if not ctx.adaptive_chunked and int(ctx.steps) < _MIN_SATURATION_STEPS:
         return None
-    return make_saturation_check(
-        SaturationStopConfig(
-            t_min=float(cfg.time.saturation_t_min),
-            rel_sem=float(cfg.time.saturation_rel_sem),
-            drift_rel=float(cfg.time.saturation_drift_rel),
-        ),
-        float(cfg.time.t_max),
+    t_max, t_min = float(cfg.time.t_max), cfg.time.saturation_t_min
+    if t_min is not None and t_min > t_max:
+        warnings.warn(
+            f"[time] saturation_t_min={t_min:g} exceeds t_max={t_max:g}; "
+            "the saturated verdict is only possible within the last 5% of t_max",
+            stacklevel=2,
+        )
+    sat = SaturationStopConfig(
+        rel_sem=float(cfg.time.saturation_rel_sem),
+        drift_rel=float(cfg.time.saturation_drift_rel),
     )
+    if t_min is not None:
+        sat = replace(sat, t_min=float(t_min))
+    return make_saturation_check(sat, t_max)
 
 
 def _resolve_auto_stepper(
@@ -793,7 +799,7 @@ def _run_diagnostics(
         if stop_condition is not None:
             status(
                 "run_to=saturation: physical-time heat-flux saturation "
-                f"(t_min={float(cfg.time.saturation_t_min):.6g}, "
+                f"(t_min={cfg.time.saturation_t_min or 'auto'}, "
                 f"rel_sem<={float(cfg.time.saturation_rel_sem):.6g})"
             )
         try:
@@ -993,7 +999,7 @@ def _run_sharded(
     plan: NonlinearParallelPlan,
     prepare: Callable[..., Any] | None = None,
 ) -> Any:
-    """Run the sharded nonlinear route, fail-closed against the serial answer."""
+    """Run the sharded nonlinear route and check it against the serial answer."""
 
     if plan.axis == "species_hermite":
         plan = resolve_species_hermite_mesh(ctx.G0, plan)

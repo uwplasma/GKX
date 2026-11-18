@@ -64,7 +64,7 @@ name = "test_python_files"
 path = "tests"
 pattern = "*.py"
 recursive = true
-# 30 -> 29: test_nonlinear_helpers_extra.py merged into test_nonlinear.py.
+# 30 -> 29: test_reference_comparison_tools.py removed with the portfolio and holdout gate it tested.
 baseline = 29
 target = 29
 
@@ -73,7 +73,7 @@ name = "tool_python_files"
 path = "tools"
 pattern = "*.py"
 recursive = true
-baseline = 0
+baseline = 64726
 target = 0
 
 [[topology_policy.counts]]
@@ -81,8 +81,9 @@ name = "developer_script_python_files"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 16
-target = 12
+# 16 -> 10: the four checkers no CI job invokes and two gate libraries behind them are removed.
+baseline = 10
+target = 10
 
 
 [[topology_policy.counts]]
@@ -98,7 +99,7 @@ name = "flat_tool_python_files"
 path = "tools"
 pattern = "*.py"
 recursive = false
-baseline = 0
+baseline = 64726
 target = 0
 
 [layer_policy]
@@ -240,7 +241,8 @@ recursive = true
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
-baseline = 69893
+# 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
+baseline = 69896
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -258,9 +260,10 @@ recursive = true
 # 64789 -> 64794: example gallery style check; example 10 smoke gated on vmex.
 # 64794 -> 64804: fixed step longer than t_max test; example 05 smoke grid knob.
 # 64804 -> 64839: banded route with unequal per-species Nm regression test.
-# 64839 -> 62142: nonlinear helper tests merged into test_nonlinear.py, plumbing tests whose coverage
-# other tests repeat removed, edge-case tests for the low-branch modules added; measured.
-baseline = 62153
+# 64839 -> 64843: example 01 smoke knobs formatted over four lines.
+# 64843 -> 64846: reason for the kinetic-electron time-route nperiod = 1 pin.
+# 64846 -> 64850: merged with main (#491).
+baseline = 64850
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -268,7 +271,7 @@ name = "tool_python_lines"
 path = "tools"
 pattern = "*.py"
 recursive = true
-baseline = 0
+baseline = 64726
 target = 0
 
 [[line_budget_policy.counts]]
@@ -276,5 +279,6 @@ name = "developer_script_python_lines"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 16459
-target = 16444
+# 16459 -> 7581: dead checker scripts removed (see scripts/check.py subcommands).
+baseline = 7581
+target = 7581

@@ -1,7 +1,6 @@
 """Runtime diagnostic array validation, composition, and cost summaries.
 
-These helpers operate on already-sampled diagnostic payloads. They deliberately
-stay host-side: runtime drivers use them to fail fast on invalid artifacts, to
+These helpers operate on already-sampled diagnostic payloads. They stay host-side: runtime drivers use them to fail fast on invalid artifacts, to
 combine adaptive chunks without mixing that array bookkeeping into the
 linear-fit and quasilinear-finalization code, and to summarise what a run's
 simulated time cost before the payload is handed to the artifact writers.
@@ -554,7 +553,7 @@ def _json_safe(value: Any) -> Any:
     """Replace non-finite floats with ``None`` so the summary stays valid JSON.
 
     ``NaN`` and ``Infinity`` are Python-json extensions that strict parsers
-    reject, and the cost block is deliberately full of ratios that are
+    reject, and the cost block is full of ratios that are
     undefined on a degenerate run.
     """
 

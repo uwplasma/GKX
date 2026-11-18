@@ -2203,6 +2203,18 @@ def test_check_reports_the_status_when_the_cap_is_reached() -> None:
     assert short(T[:200], q[:200], True)["status"].startswith("cap_reached:")
 
 
+def test_default_floor_and_window_shrink_to_a_short_t_max() -> None:
+    """A t_max=100 deck can saturate, and a growing trace there still cannot."""
+    t = T[:200]  # t < 100
+    flat = _lognormal(tau=1.0, sig=0.3, t=T)[:200]
+    assert make_saturation_check(SaturationStopConfig(), 100.0)(t, flat, True)[
+        "saturated"
+    ]
+    grow = np.exp(t / 30) * flat
+    grown = make_saturation_check(SaturationStopConfig(), 100.0)(t, grow, True)
+    assert grown["status"] == "cap_reached:growing"
+
+
 def test_check_does_not_reassess_between_looks() -> None:
     check = make_saturation_check(SaturationStopConfig(), t_cap=1000.0)
     q = _lognormal()
