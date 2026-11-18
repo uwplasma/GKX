@@ -258,7 +258,8 @@ recursive = true
 # 64794 -> 64804: fixed step longer than t_max test; example 05 smoke grid knob.
 # 64804 -> 64839: banded route with unequal per-species Nm regression test.
 # 64839 -> 64843: example 01 smoke knobs formatted over four lines.
-baseline = 64843
+# 64843 -> 64846: reason for the kinetic-electron time-route nperiod = 1 pin.
+baseline = 64846
 target = 35000
 
 [[line_budget_policy.counts]]
