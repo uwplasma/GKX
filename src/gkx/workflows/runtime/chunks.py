@@ -80,6 +80,8 @@ class ProgressReporter:
 
         now = self.clock()
         self._begin(now)
+        if not t_max > 0:  # zero-length run: nothing to report
+            return
         pts = self._points
         pts.append((now, t))
         while len(pts) > 2 and now - pts[1][0] >= self.window:
@@ -107,12 +109,14 @@ class ProgressReporter:
 
         sat = result.saturation or {}
         diag = result.diagnostics
-        t_end = float(result.t[-1])
-        steps = round(t_end / float(diag.dt_mean)) if diag is not None else 0
+        t = np.asarray(result.t, dtype=float)
+        t_end = float(t[-1]) if t.size else 0.0
+        dt = float(getattr(diag, "dt_mean", 0.0) or 0.0)
+        steps = round(t_end / dt) if np.isfinite(dt) and dt > 0 else 0
         sem = sat.get("sem")
         q = (
             "no saturation estimate"
-            if sat.get("mean") is None
+            if sat.get("mean") is None or not np.isfinite(sat["mean"])
             else f"Q={sat['mean']:.4g}{'' if sem is None else f'+-{sem:.2g}'} ({sat['status']})"
         )
         self.emit(
@@ -122,7 +126,12 @@ class ProgressReporter:
         if plot is not None:
             from gkx.artifacts.run_figures import plot_nonlinear_result
 
-            for path in plot_nonlinear_result(result, plot, ky=ky):
+            try:
+                paths = plot_nonlinear_result(result, plot, ky=ky)
+            except Exception as exc:  # a headless or broken backend never aborts a run
+                self.emit(f"could not write the result plot: {exc}")
+                paths = []
+            for path in paths:
                 self.emit(f"saved {path}")
 
 

@@ -4290,6 +4290,37 @@ def _cadence_diag(times, values=None):
     )
 
 
+@pytest.mark.parametrize(("stop_at", "n_reports"), [(None, 1), (0.4, 2)])
+def test_progress_reports_first_chunk_horizon_and_saturation_stop(stop_at, n_reports):
+    times, cursor, reports = np.arange(1, 11, dtype=float) / 10, [0], []
+
+    def integrate(show_progress, remaining):
+        lo, hi = cursor[0], min(cursor[0] + (10 if stop_at is None else 2), 10)
+        cursor[0] = hi
+        offset = 0.0 if lo == 0 else times[lo - 1]
+        diag = _cadence_diag(times[lo:hi] - offset, times[lo:hi])
+        return diag.t, diag, object(), object()
+
+    def monitor(t, q, final):
+        return {
+            "stop": stop_at is not None and t[-1] >= stop_at,
+            "mean": 1.0,
+            "sem": 0.1,
+        }
+
+    run_adaptive_runtime_chunk_loop(
+        integrate_chunk=integrate,
+        t_max=1.0,
+        chunk_steps=2,
+        label="edge",
+        stop_condition=monitor,
+        progress=lambda *args: reports.append(args),
+    )
+    assert len(reports) == n_reports
+    assert reports[-1][0] == pytest.approx(1.0 if stop_at is None else stop_at)
+    assert reports[-1][3]["mean"] == 1.0
+
+
 @pytest.mark.parametrize("partition", [1, 3, 7])
 def test_physical_cadence_keeps_fresh_samples_across_chunk_partitions(partition):
     times = np.arange(1, 11, dtype=float) / 10

@@ -643,6 +643,40 @@ def test_progress_reporter_throttles_reports_and_plots(tmp_path) -> None:
     assert (tmp_path / "run.flux_time.png").stat().st_size > 0
 
 
+def test_progress_reporter_edge_cases(tmp_path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from gkx.workflows.runtime.chunks import ProgressReporter, _flux_status
+
+    lines = []
+    rep = ProgressReporter(lines.append, interval=2.0, clock=lambda: 5.0)
+    rep.update(0.0, 0.0, np.array([1.0]))  # zero-length run: silent, no division
+    assert lines == []
+    rep.update(3.0, 3.0, np.array([np.nan]), dict(mean=np.nan, sem=None))  # NaN flux
+    assert "100%" in lines[0] and "Q=nan" in lines[0] and "transient" in lines[0]
+    rep.update(1.0, 3.0, np.array([1.0]))  # throttled after a line, not the last
+    assert len(lines) == 1
+    assert _flux_status(dict(mean=1.0, sem=0.1, status="growing")) == "transient"
+
+    empty = SimpleNamespace(t=np.zeros(0), diagnostics=None, saturation=None)
+    rep.finish(empty)  # no samples at all
+    assert lines[-1] == "done in 00:00: t=0, 0 steps, no saturation estimate"
+    nan = SimpleNamespace(
+        t=np.array([2.0]),
+        diagnostics=SimpleNamespace(dt_mean=np.nan),
+        saturation=dict(mean=np.nan, sem=np.nan, status="quiescent"),
+    )
+    rep.finish(nan)
+    assert lines[-1].endswith("t=2, 0 steps, no saturation estimate")
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("no display")
+
+    monkeypatch.setattr("gkx.artifacts.run_figures.plot_nonlinear_result", boom)
+    rep.finish(nan, plot=tmp_path / "x")  # plotting failure is contained
+    assert lines[-1] == "could not write the result plot: no display"
+
+
 def test_emit_progress_handles_time_variants_and_metric_labels(monkeypatch) -> None:
     ticks = iter([10.0, 12.0])
     monkeypatch.setattr("gkx.callbacks.time.perf_counter", lambda: next(ticks))
