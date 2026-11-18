@@ -2234,10 +2234,9 @@ driver-promoted deck that is the promoted value, not the deck's own.
 _CFL_MARGIN_MEASURED: dict[str, float] = {
     "benchmarks/cases/miller_zonal_response.toml": 0.46,
     "benchmarks/cases/w7x_zonal_response_vmec.toml": 0.65,
-    # Promoted: build_secondary_stage2_config replaces the deck's dt = 1.0 with
+    # Promoted: build_secondary_stage2_config replaces the deck's dt = 0.05 with
     # dt = 0.01 before the nonlinear stage, so the deck's own dt is the linear
-    # seed stage's and is not what this audit is about. The seed stage is 13.08x
-    # over the linear bound and is covered by the linear runtime's own warning.
+    # seed stage's (0.65x the linear bound) and is not what this audit is about.
     "benchmarks/cases/secondary_slab.toml": 0.13,
     "benchmarks/cases/cyclone_nonlinear_short.toml": 1.33,
     "benchmarks/cases/kbm_nonlinear.toml": 0.18,
