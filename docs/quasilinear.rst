@@ -5,11 +5,11 @@ GKX computes quasilinear transport diagnostics from a linear eigenstate or a
 late-time linear state. The linear diagnostic and the saturation model are kept
 separate:
 
-* **linear weights** are amplitude-normalized heat and particle fluxes computed
+* linear weights are amplitude-normalized heat and particle fluxes computed
   with the same diagnostic kernels as runtime simulations;
-* **saturation rules** are named, serialized model assumptions that convert a
+* saturation rules are named, serialized model assumptions that convert a
   linear mode into a trend-level saturated estimate;
-* **calibrated absolute flux** requires nonlinear training and holdout
+* calibrated absolute flux requires nonlinear training and holdout
   validation and cannot be inferred from an uncalibrated rule.
 
 Scope

@@ -44,7 +44,7 @@ CPU and GPU runs
 CPU thread pools, process workers and device batching compete for host
 resources. Measure worker counts on the target machine. For GPU runs, record
 the accelerator model, software versions, precision and whether other jobs
-share the device. Transfer and output costs belong in end-to-end timing when
+share the device. Transfer and output costs belong in the timing when
 they are part of the intended workflow.
 
 Profiler and benchmark drivers write generated summaries, traces and plots to

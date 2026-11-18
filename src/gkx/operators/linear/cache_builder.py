@@ -279,9 +279,8 @@ def _host_edge_scalar(value: Any, *, dtype: Any = None) -> float | None:
     ``profile[0]`` both return tracers even when the operand is a host
     constant. Asking after such a round trip reports every concrete geometry
     as traced and refuses twist-shift caches that are perfectly resolvable;
-    ``numpy`` answers from the buffer and only genuinely traced geometry
-    reaches the refusal. ``dtype`` reproduces the cast the round trip used to
-    apply, so the value read here is the value the cache was built from.
+    ``numpy`` answers from the buffer and only traced geometry
+    reaches the refusal. ``dtype`` reproduces the cast the round trip applies, so the value read here is the value the cache was built from.
     """
 
     if _is_tracer(value):

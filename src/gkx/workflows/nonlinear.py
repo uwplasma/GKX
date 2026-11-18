@@ -993,7 +993,7 @@ def _run_sharded(
     plan: NonlinearParallelPlan,
     prepare: Callable[..., Any] | None = None,
 ) -> Any:
-    """Run the sharded nonlinear route, fail-closed against the serial answer."""
+    """Run the sharded nonlinear route and check it against the serial answer."""
 
     if plan.axis == "species_hermite":
         plan = resolve_species_hermite_mesh(ctx.G0, plan)
