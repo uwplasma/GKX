@@ -479,13 +479,6 @@ def _saturation_stop_condition(
     # The chunked route records one diagnostic sample per step.
     if not ctx.adaptive_chunked and int(ctx.steps) < _MIN_SATURATION_STEPS:
         return None
-<<<<<<< HEAD
-    return _saturation_check(cfg)
-
-
-def _saturation_check(cfg: RuntimeConfig) -> Callable[[Any, Any, bool], dict[str, Any]]:
-=======
->>>>>>> origin/feat/progress-reporter
     t_max, t_min = float(cfg.time.t_max), cfg.time.saturation_t_min
     if t_min is not None and t_min > t_max:
         warnings.warn(
