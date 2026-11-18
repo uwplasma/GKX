@@ -64,7 +64,7 @@ class NonlinearWindowMetrics:
     phi_mode_envelope_max: float | None
     # Correlation statistics. heat_flux_stderr divides by n_eff, not nsamples,
     # because turbulence outputs are not independent draws. Defaults are
-    # fail-closed so a hand-built object cannot pass a statistical gate by
+    # conservative so a hand-built object cannot pass a statistical gate by
     # omission; windowed_nonlinear_metrics always sets them.
     heat_flux_tau_ac: float = 0.0
     window_in_tau_ac: float = 0.0
