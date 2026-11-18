@@ -577,6 +577,7 @@ def _advance_explicit_diagnostic_state(
     apply_collision_split_fn: CollisionSplitFn | None,
     max_dt: jnp.ndarray | None = None,
     collision_interval: int = 1,
+    collision_dt_cap: float | None = None,
     idx: Any = 0,
 ) -> tuple[jnp.ndarray, Any, jnp.ndarray, jnp.ndarray]:
     """Advance one explicit diagnostic state and compute its new fields."""
@@ -595,6 +596,8 @@ def _advance_explicit_diagnostic_state(
         )
     if max_dt is not None:
         dt_local = jnp.minimum(dt_local, jnp.maximum(max_dt, 0.0))
+    if collision_dt_cap is not None:  # forward-Euler stability of the split update
+        dt_local = jnp.minimum(dt_local, collision_dt_cap)
     dt_next = dt_local
     if scales is not None:
         G_new, dt_local, dt_next = advance_rk4_pi_state(
@@ -688,6 +691,7 @@ def make_explicit_diagnostic_step(
     apply_collision_split_fn: CollisionSplitFn | None = None,
     time_horizon: float | None = None,
     collision_interval: int = 1,
+    collision_dt_cap: float | None = None,
 ) -> DiagnosticStepFn:
     """Build one explicit diagnostic scan step with injected runtime seams."""
 
@@ -718,6 +722,7 @@ def make_explicit_diagnostic_step(
                 apply_collision_split_fn=apply_collision_split_fn,
                 max_dt=max_dt,
                 collision_interval=collision_interval,
+                collision_dt_cap=collision_dt_cap,
                 idx=idx,
             )
             diag = _select_explicit_diagnostic(

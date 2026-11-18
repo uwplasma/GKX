@@ -167,7 +167,8 @@ path = "solvers/nonlinear/diagnostics.py"
 # 2747 -> 2777: collisions once per explicit step.
 # 2777 -> 2787: collision_interval option.
 # 2787 -> 2812: validate collision intervals for prepared and direct scans.
-baseline_lines = 2812
+# 2812 -> 2848: collision rate bound caps the step (adaptive) or keeps collisions in the stages (fixed).
+baseline_lines = 2848
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 

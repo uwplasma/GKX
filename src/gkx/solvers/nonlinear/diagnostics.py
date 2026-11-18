@@ -52,8 +52,10 @@ from gkx.operators.moments import (
     zonal_phi_mode_kxt,
 )
 from gkx.operators.nonlinear.collisions import (
+    NonlinearCollisionSplitPolicy,
     _apply_collision_split,
     _collision_damping,
+    collision_rate_bound,
 )
 from gkx.operators.nonlinear.diagnostic_state import (
     NonlinearDiagnosticKernels,
@@ -374,6 +376,8 @@ class PreparedExplicitNonlinearDiagnostics:
         return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
 
 
+# Largest dt * |eigenvalue| of the once-per-step collision update (Euler's limit is 2).
+_COLLISION_EULER_LIMIT = 1.0
 _EXPLICIT_OPTION_FIELDS = tuple(_ExplicitDiagnosticOptions.__annotations__)
 
 
@@ -472,6 +476,7 @@ def _build_explicit_runtime_policies(
     cfl_fac: float | None,
     compressed_real_fft: bool,
     collision_split: bool,
+    collision_interval: int = 1,
 ) -> _ExplicitRuntimePolicies:
     """Build timestep and collision-splitting policies for explicit scans."""
 
@@ -503,16 +508,40 @@ def _build_explicit_runtime_policies(
         laguerre_velocity_max_fn=_laguerre_velocity_max,
         cfl_frequency_components_fn=cfl_components,
     )
-    collision_policy = build_nonlinear_collision_split_policy(
-        prepared.cache,
-        params,
-        prepared.term_cfg,
-        prepared.real_dtype,
-        squeeze_species=prepared.G0.ndim == 5,
-        collision_split=collision_split,
-        collision_damping_fn=_collision_damping,
-        split_collisions=method not in IMEX_CHAIN_METHODS,
-    )
+
+    def build_policy(split: bool | None) -> NonlinearCollisionSplitPolicy:
+        return build_nonlinear_collision_split_policy(
+            prepared.cache,
+            params,
+            prepared.term_cfg,
+            prepared.real_dtype,
+            squeeze_species=prepared.G0.ndim == 5,
+            collision_split=split,
+            collision_damping_fn=_collision_damping,
+            split_collisions=method not in IMEX_CHAIN_METHODS,
+        )
+
+    collision_policy = build_policy(collision_split)
+    leaves = jax.tree_util.tree_leaves((prepared.cache, params))
+    if collision_policy.collision_terms is not None and not any(
+        isinstance(x, jax.core.Tracer) for x in leaves
+    ):
+        # Forward Euler once per step is stable for dt * rate < 2, and no CFL bound
+        # includes the collision rate (it grows with Nm and a light species' nu).
+        terms, cache = collision_policy.collision_terms, prepared.cache
+        rate = collision_rate_bound(
+            lambda G: nonlinear_rhs_cached(G, cache, params, terms)[0].astype(G.dtype),
+            prepared.G0,
+        )
+        if not fixed_dt or rate * collision_interval * dt <= _COLLISION_EULER_LIMIT:
+            collision_policy = replace(collision_policy, rate=rate)
+        elif collision_split is None:  # fixed step too long for it: back in the stages
+            collision_policy = build_policy(False)
+        else:
+            raise ValueError(
+                f"collision_split = true: dt * collision rate = {rate * dt:.3g} exceeds "
+                f"{_COLLISION_EULER_LIMIT} (forward Euler); reduce dt or unset it"
+            )
     return _ExplicitRuntimePolicies(
         time_step_policy=time_step_policy,
         collision_policy=collision_policy,
@@ -623,6 +652,12 @@ def _make_explicit_scan_step(
         ),
         time_horizon=time_horizon,
         collision_interval=collision_interval,
+        collision_dt_cap=(
+            _COLLISION_EULER_LIMIT
+            / (policies.collision_policy.rate * collision_interval)
+            if policies.collision_policy.rate > 0.0
+            else None
+        ),
     )
 
 
@@ -1062,6 +1097,7 @@ def _build_explicit_scan_components(
         cfl_fac=options.cfl_fac,
         compressed_real_fft=options.compressed_real_fft,
         collision_split=options.collision_split,
+        collision_interval=options.collision_interval,
     )
     if options.collision_interval > 1 and not policies.collision_policy.active:
         raise ValueError("collision_interval > 1 requires an active collision split")

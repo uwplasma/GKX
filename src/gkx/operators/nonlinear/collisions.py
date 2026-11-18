@@ -22,6 +22,7 @@ __all__ = [
     "_apply_collision_split",
     "_collision_damping",
     "build_nonlinear_collision_split_policy",
+    "collision_rate_bound",
 ]
 
 
@@ -143,6 +144,39 @@ class NonlinearCollisionSplitPolicy:
     damping: jnp.ndarray | None
     # The collision operator alone, applied once per step (explicit steppers).
     collision_terms: TermConfig | None = None
+    # Bound on the largest |eigenvalue| of that operator (0: not measured).
+    rate: float = 0.0
+
+
+def collision_rate_bound(
+    apply: Callable[[jnp.ndarray], jnp.ndarray],
+    like: jnp.ndarray,
+    *,
+    iterations: int = 30,
+    margin: float = 1.25,
+) -> float:
+    """Largest |eigenvalue| of the linear operator ``apply``, by power iteration.
+
+    The collision spectrum is real and negative with well-separated large
+    eigenvalues (they grow with the Hermite and Laguerre index), so the norm ratio
+    converges from below within a few tens of applications; ``margin`` covers the
+    remainder. Forward Euler on ``apply`` is stable for ``dt * rate < 2``.
+    """
+
+    key = jax.random.PRNGKey(0)
+    v = jax.random.normal(key, like.shape, dtype=jnp.real(like).dtype).astype(
+        like.dtype
+    )
+    run = jax.jit(apply)
+    rate = 0.0
+    for _ in range(iterations):
+        v = v / jnp.linalg.norm(v)
+        w = run(v)
+        rate = float(jnp.linalg.norm(w))
+        if rate == 0.0:
+            break
+        v = w
+    return margin * rate
 
 
 def _collision_damping(
