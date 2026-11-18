@@ -118,8 +118,9 @@ def build_runtime_nonlinear_diagnostics_kwargs(
         dt_max=cfg.time.dt_max,
         cfl=float(cfg.time.cfl),
         cfl_fac=resolve_nonlinear_cfl_fac(method_use, cfg.time.cfl_fac, moments),
-        collision_split=bool(cfg.time.collision_split),
+        collision_split=cfg.time.collision_split,
         collision_scheme=str(cfg.time.collision_scheme),
+        collision_interval=cfg.time.collision_interval,
         implicit_restart=int(cfg.time.implicit_restart),
         implicit_preconditioner=cfg.time.implicit_preconditioner,
         fixed_mode_ky_index=fixed_mode_ky_index,
@@ -1152,6 +1153,19 @@ def run_runtime_nonlinear(
         return_state=return_state,
         show_progress=show_progress,
     )
+    if cfg.time.collision_interval != 1 and (
+        not cfg.time.fixed_dt
+        or not policy.requires_diagnostic_path
+        or cfg.time.chunk_steps is not None
+        or cfg.time.diagnostics_interval is not None
+        or str(cfg.time.run_to).strip().lower() != "t_max"
+        or ctx.progress is not None
+        or plan is not None
+        or cfg.time.state_sharding is not None
+    ):
+        raise ValueError(
+            "collision_interval other than 1 requires a single fixed-step diagnostic scan"
+        )
     if not policy.diagnostics_on and (
         cfg.time.diagnostics_interval is not None or cfg.time.chunk_steps is not None
     ):

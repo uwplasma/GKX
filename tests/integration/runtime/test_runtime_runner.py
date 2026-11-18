@@ -3691,3 +3691,62 @@ def test_runtime_imex_chunks_share_one_scan_and_end_on_a_short_final_chunk() -> 
     )
     assert short.t[-1] == pytest.approx(2.0)
     assert np.isfinite(short.state).all()
+
+
+def _collision_interval_cfg() -> RuntimeConfig:
+    base = _nonlinear_ion_cfg()
+    return replace(
+        base,
+        time=replace(
+            base.time,
+            fixed_dt=True,
+            run_to="t_max",
+            collision_interval=3,
+            collision_split=True,
+        ),
+        terms=replace(base.terms, hypercollisions=1.0),
+    )
+
+
+@pytest.mark.parametrize(
+    "time_options,steps,error",
+    [
+        ({"fixed_dt": False}, 6, "single fixed-step diagnostic scan"),
+        ({"chunk_steps": 2}, 6, "single fixed-step diagnostic scan"),
+        ({"diagnostics_interval": 0.01}, 6, "single fixed-step diagnostic scan"),
+        ({"run_to": "saturation"}, 6, "single fixed-step diagnostic scan"),
+        ({"method": "imex-ark3"}, 6, "fixed-step explicit scan"),
+        ({}, 4, "must divide the number of steps"),
+        ({"collision_interval": 0}, 6, "positive integer"),
+        ({"collision_interval": 2.5}, 6, "positive integer"),
+        ({"collision_split": False}, 6, "active collision split"),
+    ],
+)
+def test_collision_interval_rejects_unsupported_discrete_maps(
+    time_options, steps, error
+) -> None:
+    cfg = _collision_interval_cfg()
+    cfg = replace(cfg, time=replace(cfg.time, **time_options))
+    with pytest.raises(ValueError, match=error):
+        run_runtime_nonlinear(cfg, steps=steps, Nl=2, Nm=2)
+
+
+def test_collision_interval_fixed_scan_rejects_horizon_override() -> None:
+    cfg = _collision_interval_cfg()
+    kwargs = dict(steps=6, Nl=2, Nm=2, diagnostics=True, resolved_diagnostics=False)
+    prepared = prepare(cfg, **kwargs)
+    t, _, state, _ = prepared.run()
+    direct = run_runtime_nonlinear(cfg, return_state=True, **kwargs)
+    np.testing.assert_allclose(t, np.arange(1, 7) * cfg.time.dt)
+    np.testing.assert_allclose(state, direct.state)
+    with pytest.raises(ValueError, match="does not support a time horizon"):
+        prepared.run(time_horizon=0.025)
+
+
+def test_collision_interval_rejects_checkpointing(tmp_path) -> None:
+    cfg = _collision_interval_cfg()
+    cfg = replace(cfg, time=replace(cfg.time, nstep_restart=2))
+    with pytest.raises(ValueError, match="does not support checkpoint/restart"):
+        run_runtime_nonlinear_with_artifacts(
+            cfg, ky_target=0.2, Nl=2, Nm=2, steps=6, out=tmp_path / "test.out.nc"
+        )
