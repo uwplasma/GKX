@@ -17,8 +17,7 @@ least 95% package-wide coverage and the physics/numerics gates used for release.
 - `validation/`: literature-anchored physics gates, convergence checks,
   benchmark comparisons, nonlinear transport windows, quasilinear calibration,
   and stellarator validation policy.
-- `tools/`: tests for GKX diagnostics and comparison helpers. The release
-  checkers live in `scripts/checks/` and are tested from `release/`.
+- The release checkers live in `scripts/checks/` and are tested from `release/`.
 - `release/`: bounded repository-policy gates used by CI or release readiness.
 - `support/`: shared test helpers that are not part of the package API.
 
