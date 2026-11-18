@@ -705,10 +705,10 @@ def _run_linear_runtime_branch(
 def run_runtime_linear(
     cfg: RuntimeConfig,
     *,
-    ky_target: float = 0.3,
+    ky_target: float | None = None,
     Nl: int | None = None,
     Nm: int | None = None,
-    solver: str = "auto",
+    solver: str | None = None,
     method: str | None = None,
     dt: float | None = None,
     steps: int | None = None,
@@ -735,7 +735,12 @@ def run_runtime_linear(
     """Run one linear point from a case-agnostic runtime config.
 
     ``kx_target`` picks the fitted kx (nearest grid value; default kx = 0).
+    ``ky_target``, ``kx_target``, ``Nl``, ``Nm`` and ``solver`` default to the deck's ``[run]``
+    block, then to 0.3, the runtime fallback and ``"auto"``.
     """
+    ky_target = cfg.run.ky or 0.3 if ky_target is None else ky_target
+    kx_target = cfg.run.kx if kx_target is None else kx_target
+    solver = cfg.run.solver or "auto" if solver is None else solver
     if (
         cfg.time.chunk_steps is not None
         or cfg.time.diagnostics_interval is not None
