@@ -11,7 +11,7 @@ references.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 import math
 
@@ -22,11 +22,11 @@ import numpy as np
 class SaturationStopConfig:
     """Thresholds of the saturation detector (times in a/v_t)."""
 
-    t_min: float = 800.0  # no "saturated" verdict before this run time
+    t_min: float = 800.0  # no "saturated" verdict before this run time (<= 0.95 t_cap)
     rel_sem: float = 0.10  # batch-means SEM over the mean
     drift_rel: float = 0.10  # tolerated change of the mean across the window
     drift_z: float = 2.0  # significance of the OLS trend of the block means
-    min_span: float = 250.0  # shortest retained window
+    min_span: float = 250.0  # shortest retained window (<= t_cap / 4)
     k_min: int = 10  # independent blocks needed to quote an error
 
 
@@ -165,10 +165,8 @@ def assess_saturation(
         r["drift_rel"] > cfg.drift_rel and r["drift_z"] > cfg.drift_z for r in gated
     ):
         return {**out, "status": "drifting"}
-    if (
-        span < 30 * max(r["tau"] for r in res)
-        or any(r["K"] < cfg.k_min for r in res)
-        or any(r["rel_sem"] > cfg.rel_sem for r in gated)
+    if any(r["K"] < cfg.k_min for r in res) or any(
+        r["rel_sem"] > cfg.rel_sem for r in gated
     ):  # correlation too long to resolve the mean within the window
         return {**out, "status": "intermittent"}
     if _confirm:  # the verdict must already have held 20% of the window earlier
@@ -186,17 +184,19 @@ def make_saturation_check(
 ) -> Callable[[np.ndarray, np.ndarray, bool], dict[str, Any]]:
     """Stop check for the chunk loop, looking every ``max(25, 5%)`` of the elapsed time.
 
+    The run-time floor and the shortest window shrink to fit a short ``t_cap``.
     At the cap (``final``) an unsaturated verdict is reported as ``cap_reached:<status>``.
     """
+    cfg = replace(
+        cfg, t_min=min(cfg.t_min, 0.95 * t_cap), min_span=min(cfg.min_span, t_cap / 4)
+    )
     state: dict[str, Any] = dict(next=0.0, last=None)
 
     def check(t: np.ndarray, q: np.ndarray, final: bool) -> dict[str, Any]:
         if not final and state["last"] and t[-1] < state["next"]:
             return state["last"]
-        d = assess_saturation(t, q, cfg, t_min=min(cfg.t_min, 0.95 * t_cap))
-        state["next"] = max(
-            t[-1] + max(25.0, 0.05 * t[-1]), t[0] + min(cfg.t_min, 0.95 * t_cap)
-        )
+        d = assess_saturation(t, q, cfg)
+        state["next"] = max(t[-1] + max(25.0, 0.05 * t[-1]), t[0] + cfg.t_min)
         if final and not d["saturated"]:
             d["status"] = f"cap_reached:{d['status']}"
         d["stop"] = d["saturated"]

@@ -93,7 +93,7 @@ not linear growth alone. The
 differentiability row is a statement about design intent rather than a
 deficiency, since both other codes predate the current autodiff tooling.
 
-GKX's velocity representation is deliberately the same family as GX, which is
+GKX's velocity representation is the same family as GX, which is
 what makes GX the closest parity reference; the differences that matter for
 verification are the collision hierarchy and the differentiable geometry path.
 

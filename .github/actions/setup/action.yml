@@ -47,6 +47,7 @@ runs:
           echo "JAX_COMPILATION_CACHE_DIR=$dir"
           echo "GKX_JAX_CACHE_DIR=$dir"
           echo "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0"
+          echo "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=0"
           echo "JAX_VERSION=$(python -c 'import jax; print(jax.__version__)')"
         } >> "$GITHUB_ENV"
 
