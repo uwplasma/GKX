@@ -167,7 +167,7 @@ GAM-averaged :math:`\langle\phi\rangle/\langle\phi\rangle(0)` at
 The level at :math:`\nu=0.02` is 0.0100, 0.0067, 0.0064 at :math:`(N_l,N_m)=(4,8),
 (6,16), (8,24)`.
 
-Comparison with Hinton-Rosenbluth and Xiao-Catto-Molvig. **Not validated.**
+Comparison with Hinton-Rosenbluth and Xiao-Catto-Molvig. Not validated.
 The decay rate does not agree: at converged velocity resolution GKX is 2--3
 times slower than the formula, and which :math:`\nu_{ii}` the formula uses (a
 factor of two) is open. Only the long-time level and its independence of
@@ -583,7 +583,7 @@ The raw runs are not scripted in the repository. The GKX decks are in
 ``benchmarks/cases`` and ``examples``; the GX, GS2 and stella columns need
 those codes installed and the settings listed here.
 
-**Problems and units.** Circular Miller Cyclone (``a/L_T = 2.49``,
+Problems and units. Circular Miller Cyclone (``a/L_T = 2.49``,
 ``a/L_n = 0.8``, ``q = 1.4``, ``s_hat = 0.8``) with adiabatic or kinetic
 electrons (``T_e = T_i``, ``m_i/m_e = 3670``), and the W7-X standard VMEC
 configuration (torflux 0.64, adiabatic electrons), all in GX units. GS2 and
@@ -592,7 +592,7 @@ stella use ``sqrt(2T/m)`` as the reference speed; their ``gamma``, ``omega``,
 ``k_y,GX = k_y,GS2/sqrt(2)``, ``t_GX = t_GS2/sqrt(2)`` and
 ``Q_GX = 2 sqrt(2) Q_GS2``.
 
-**Linear growth rates.** Each code runs at its own converged resolution: the
+Linear growth rates. Each code runs at its own converged resolution: the
 cheapest whose growth rate stays within 1% of the code's highest-resolution
 value over ``k_y rho_i = 0.2`` to ``0.5``.
 
@@ -609,7 +609,7 @@ and 5-6% lower on the ballooning branch above it. On W7-X, stella is 2-4% below
 for ``k_y rho_i >= 1``; for ``k_y rho_i <= 0.6`` near-degenerate modes make the
 fitted branch depend on the code.
 
-**Cost.** The linear time is one ``k_y`` to ``t v_ti/a = 60`` (GS2 and stella:
+Cost. The linear time is one ``k_y`` to ``t v_ti/a = 60`` (GS2 and stella:
 the same physical time), taken from the initial-value route for GKX and GX. The
 certified eigensolver takes 43 s at ``(12, 32)`` on the same GPU
 (:doc:`guidance`). GKX and GX ran on one RTX A4000, GS2 and stella on MPI ranks
@@ -656,7 +656,7 @@ runs). The GPU and the CPU were shared with other jobs throughout.
      - 6.1 +- 0.8 over ``t = 104 .. 140``, not converged
      - 0.1252
 
-**Nonlinear Cyclone.** The deck of the GX paper uses
+Nonlinear Cyclone. The deck of the GX paper uses
 ``(Nx, Ny, Nz) = (192, 64, 24)``, ``y0 = 28.2`` and adiabatic electrons, with
 127 x 22 Fourier modes.
 
@@ -682,7 +682,7 @@ follows. The stella mean over ``t = 104 .. 140`` is 6.1 +- 0.8 (GKX 7.3, GX 6.7
 over the same interval) but spans five autocorrelation times, and GS2 has not
 left the relaxation. The heat flux uses the same estimator for every code.
 
-**Speed benchmark deck.** ``benchmarks/cases/cyclone_nonlinear_t400.toml``
+Speed benchmark deck. ``benchmarks/cases/cyclone_nonlinear_t400.toml``
 (64x64x24, ``(Nl, Nm) = (4, 8)``) measures speed; it is not a converged
 calculation. The saturated heat flux is ``Q = 7.3`` at ``Nx = 64`` and 5.2 at
 ``Nx = 192`` (9.1 and 5.0 with the end damping pinned at 0.1), and ``(4, 8)``

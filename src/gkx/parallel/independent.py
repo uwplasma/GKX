@@ -72,18 +72,6 @@ class DecompositionContract:
     state_shape: tuple[int, ...] | None = None
     axis: int | None = None
 
-    @property
-    def production_independent_batching(self) -> bool:
-        """Whether this contract is for production independent-work batching."""
-
-        return self.claim_level == "production_independent_batching"
-
-    @property
-    def diagnostic_nonlinear_partition(self) -> bool:
-        """Whether this contract is diagnostic nonlinear-domain metadata."""
-
-        return self.claim_level == "diagnostic_nonlinear_domain_partition"
-
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of the contract."""
 
@@ -454,7 +442,7 @@ class IndependentWorkerMetadata:
 
 @dataclass(frozen=True)
 class IndependentEnsembleProvenanceReport:
-    """End-to-end provenance gate for independent UQ/optimization ensembles."""
+    """Provenance gate for independent UQ/optimization ensembles."""
 
     kind: str
     workload: str
@@ -616,7 +604,7 @@ def _probe_exception_metadata(
         )
         metadata["passed"] = passed
         return passed, metadata
-    except Exception as exc:  # pragma: no cover - defensive fail-closed path
+    except Exception as exc:  # pragma: no cover - defensive failure path
         return False, {
             "passed": False,
             "unexpected_type": type(exc).__name__,
