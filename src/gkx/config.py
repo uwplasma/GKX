@@ -159,8 +159,7 @@ class TimeConfig:
     than ``rk2`` because its CFL prefactor is 2.82 against 1.0
     (``gkx.workflows.runtime.toml._normalize_time_overrides`` carries the
     measurement). ``dt``, ``method`` and ``fixed_dt`` default to ``None`` and are
-    resolved in ``__post_init__``; an explicit value always wins. A fixed
-    ``rk2`` at ``dt = 0.1`` overflows on most decks, so it is not the default.
+    resolved in ``__post_init__``; an explicit value always wins.
     """
 
     t_max: float = 100.0
@@ -818,7 +817,7 @@ class RuntimeRunConfig:
     These are per-call selections rather than physical model parameters, which
     is why they sit apart from the physics sections. They are still part of the
     case: a deck that asks for ``Nl = 16, Nm = 48`` and a prepared simulation
-    that quietly builds ``4, 8`` are not the same calculation, so the loader keeps the table.
+    that quietly builds ``4, 8`` are not the same calculation.
 
     ``None`` means the deck did not say, and the caller or the runtime default
     decides. It is distinct from a value the deck chose.

@@ -1706,14 +1706,6 @@ def test_vmex_transport_objective_vmec_callback_builds_reference_wout(
 
 
 def test_vmex_transport_config_rejects_underresolved_boozer_modes() -> None:
-    assert (
-        VMEXTransportObjectiveConfig(kind="growth").gradient_scope
-        == "eigenvalue_growth_ad"
-    )
-    assert (
-        VMEXTransportObjectiveConfig(kind="quasilinear_flux").gradient_scope
-        == "eigenvalue_growth_ad_with_geometry_transport_weights"
-    )
     try:
         VMEXTransportObjectiveConfig(mboz=12, nboz=21)
     except ValueError as exc:

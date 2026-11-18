@@ -1,7 +1,6 @@
 """The public prepared-simulation object.
 
-:class:`PreparedSimulation` is the public object the API contract
-describes: it accepts linear and nonlinear cases, carries the static
+:class:`PreparedSimulation` is the public object ``gkx.prepare`` returns: it accepts linear and nonlinear cases, carries the static
 topology and the compilation and cache metadata that decide whether a second
 call is cheap, and exposes typed ``solve``, ``scan``, ``value_and_grad``,
 ``warmup``, ``estimate_memory`` and ``summary``.
