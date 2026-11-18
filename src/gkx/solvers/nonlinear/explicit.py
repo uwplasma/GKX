@@ -46,7 +46,8 @@ _SSPX3_W3 = (1.0 / _SSPX3_ADT) - 1.0 - _SSPX3_W2 * (_SSPX3_W1 + 1.0)
 # rk4-pi: RK4 with the embedded explicit-midpoint error estimate (no extra RHS)
 # and an I controller on the step. The estimate is relative to ||G||; the step is
 # capped at ``_PI_CAP`` times the CFL step and a step with estimate > ``_PI_REDO``
-# is redone once at the controller's smaller step.
+# is rejected: the state is kept, no time passes, and the next step retries at the
+# controller's smaller step.
 _PI_RTOL = 1.0e-2
 _PI_CAP = 2.0
 _PI_REDO = 3.0
@@ -202,18 +203,9 @@ def advance_rk4_pi_state(
         return G_new, en, step_factor(_PI_CONTROL, en, 1.0, RK4_2.embedded_order)
 
     G_new, en, fac = attempt(dt_local, _materialize(dG))
-
-    def redo(_):
-        dt = dt_local * fac
-        G_redo, _en, fac_redo = attempt(dt, _materialize(dG))
-        return G_redo, dt, dt * fac_redo
-
-    return jax.lax.cond(
-        en > _PI_REDO,
-        redo,
-        lambda _: (G_new, dt_local, dt_local * fac),
-        None,
-    )
+    reject = en > _PI_REDO
+    G_kept = jnp.where(reject, jnp.asarray(G, dtype=state_dtype), G_new)
+    return G_kept, jnp.where(reject, 0.0, dt_local), dt_local * fac
 
 
 def advance_explicit_nonlinear_state(
