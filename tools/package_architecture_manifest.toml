@@ -64,15 +64,16 @@ name = "test_python_files"
 path = "tests"
 pattern = "*.py"
 recursive = true
-baseline = 30
-target = 30
+# 30 -> 29: test_reference_comparison_tools.py removed with the portfolio and holdout gate it tested.
+baseline = 29
+target = 29
 
 [[topology_policy.counts]]
 name = "tool_python_files"
 path = "tools"
 pattern = "*.py"
 recursive = true
-baseline = 0
+baseline = 64726
 target = 0
 
 [[topology_policy.counts]]
@@ -80,8 +81,9 @@ name = "developer_script_python_files"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 16
-target = 12
+# 16 -> 10: the four checkers no CI job invokes and two gate libraries behind them are removed.
+baseline = 10
+target = 10
 
 
 [[topology_policy.counts]]
@@ -97,7 +99,7 @@ name = "flat_tool_python_files"
 path = "tools"
 pattern = "*.py"
 recursive = false
-baseline = 0
+baseline = 64726
 target = 0
 
 [layer_policy]
@@ -152,7 +154,7 @@ public_facades = [
 
 [[complexity_policy.exceptions]]
 path = "solvers/nonlinear/imex.py"
-baseline_lines = 1966  # +8: cached_jit wrappers around the dt probe and the unit-moment maps
+baseline_lines = 1966  # unchanged: scan Thomas factor and slim host blocks replace the unrolled loops and the block sets
 target_lines = 1200
 reason = "The chain factor, its probes and its solve share one block layout; splitting the mirror blocks out would leave a helper with one consumer."
 
@@ -196,8 +198,10 @@ path = "workflows/nonlinear.py"
 # 1210 -> 1229: runaway criterion, retry warning and uniform chunk horizon.
 # 1229 -> 1283: Lawson integrating-factor steppers and the automatic choice (drift share and
 # step cap) between lawson-rk4-pi and rk4-pi.
-# 1283 -> 1289: progress reporter hookup and the saturation monitor.
-baseline_lines = 1289
+# 1283 -> 1285: merged with main (#489).
+# 1285 -> 1288: merged with main (#487).
+# 1288 -> 1300: progress reporter hookup and the saturation monitor.
+baseline_lines = 1300
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -240,8 +244,8 @@ recursive = true
 # 69844 -> 69882: zonal_response and the explicit Lenard-Bernstein check, measured.
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
-# 69893 -> 70003: nonlinear progress reporter, result plot and the monitor hookup.
-baseline = 70003
+# 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
+baseline = 69896
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -259,9 +263,10 @@ recursive = true
 # 64789 -> 64794: example gallery style check; example 10 smoke gated on vmex.
 # 64794 -> 64804: fixed step longer than t_max test; example 05 smoke grid knob.
 # 64804 -> 64839: banded route with unequal per-species Nm regression test.
-# 64839 -> 64903: progress reporter tests.
-# 64903 -> 64904: ky flux-spectrum panel without a kx axis.
-baseline = 64904
+# 64839 -> 64843: example 01 smoke knobs formatted over four lines.
+# 64843 -> 64846: reason for the kinetic-electron time-route nperiod = 1 pin.
+# 64846 -> 64850: merged with main (#491).
+baseline = 64850
 target = 35000
 
 [[line_budget_policy.counts]]
@@ -269,7 +274,7 @@ name = "tool_python_lines"
 path = "tools"
 pattern = "*.py"
 recursive = true
-baseline = 0
+baseline = 64726
 target = 0
 
 [[line_budget_policy.counts]]
@@ -277,5 +282,6 @@ name = "developer_script_python_lines"
 path = "scripts"
 pattern = "*.py"
 recursive = true
-baseline = 16459
-target = 16444
+# 16459 -> 7581: dead checker scripts removed (see scripts/check.py subcommands).
+baseline = 7581
+target = 7581
