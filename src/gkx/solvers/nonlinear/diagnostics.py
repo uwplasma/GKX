@@ -380,9 +380,28 @@ _EXPLICIT_OPTION_FIELDS = tuple(_ExplicitDiagnosticOptions.__annotations__)
 def _explicit_options_from_values(values: dict[str, Any]) -> _ExplicitDiagnosticOptions:
     """Pack public keyword values into a single internal options object."""
 
-    return _ExplicitDiagnosticOptions(
+    options = _ExplicitDiagnosticOptions(
         **{key: values[key] for key in _EXPLICIT_OPTION_FIELDS}
     )
+    interval = options.collision_interval
+    if (
+        not isinstance(interval, (int, np.integer))
+        or isinstance(interval, bool)
+        or interval < 1
+    ):
+        raise ValueError("collision_interval must be a positive integer")
+    if interval > 1:
+        if (
+            not options.fixed_dt
+            or options.time_horizon is not None
+            or options.method in IMEX_CHAIN_METHODS
+        ):
+            raise ValueError(
+                "collision_interval > 1 requires a fixed-step explicit scan without a time horizon"
+            )
+        if options.steps % interval:
+            raise ValueError("collision_interval must divide the number of steps")
+    return options
 
 
 def _prepare_explicit_diagnostic_state(
@@ -1044,6 +1063,8 @@ def _build_explicit_scan_components(
         compressed_real_fft=options.compressed_real_fft,
         collision_split=options.collision_split,
     )
+    if options.collision_interval > 1 and not policies.collision_policy.active:
+        raise ValueError("collision_interval > 1 requires an active collision split")
     step, compute_diag_from_state = _build_explicit_scan_closures(
         prepared,
         policies,
@@ -1163,6 +1184,8 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         initial_dt: jnp.ndarray | None = None,
         rhs_fn: Any = None,
     ) -> tuple[Any, Any, Any, Any]:
+        if options.collision_interval > 1 and time_horizon is not None:
+            raise ValueError("collision_interval > 1 does not support a time horizon")
         step = components.step
         if rhs_fn is not None:
             step, _ = _build_explicit_scan_closures(
@@ -2221,6 +2244,8 @@ def integrate_nonlinear_explicit_diagnostics(
     """
 
     if method in _IMEX_METHODS:
+        if collision_interval != 1:
+            raise ValueError("collision_interval must be 1 for IMEX")
         return integrate_nonlinear_imex_diagnostics(
             G0,
             grid,
