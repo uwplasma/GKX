@@ -662,7 +662,7 @@ def test_rk4_pi_state_keeps_a_stable_step_and_grows_it() -> None:
     assert float(dt_next) == pytest.approx(0.013, rel=1e-5)  # fac_max = 1.3
 
 
-def test_rk4_pi_state_redoes_a_step_past_the_stability_limit() -> None:
+def test_rk4_pi_state_rejects_a_step_past_the_stability_limit() -> None:
     G = jnp.asarray([1.0 + 0.0j], dtype=jnp.complex64)
     dt = jnp.asarray(3.0, dtype=jnp.float32)  # omega dt = 3 > 2.82
     rhs_fn = _oscillator_rhs(1.0)
@@ -674,9 +674,12 @@ def test_rk4_pi_state_redoes_a_step_past_the_stability_limit() -> None:
         project_state=lambda s: s,
         state_dtype=jnp.complex64,
     )
-    assert float(dt_used) == pytest.approx(1.5)  # fac_min = 0.5
-    assert abs(complex(G_new[0])) < 1.5
-    assert float(dt_next) < float(dt)
+    assert float(dt_used) == 0.0  # rejected: the state is kept
+    assert complex(G_new[0]) == 1.0
+    assert float(dt_next) == pytest.approx(1.5)  # retried at fac_min = 0.5
+    from gkx.workflows.runtime.diagnostic_arrays import _steps_over
+
+    assert _steps_over(np.array([0.0, 0.0, 0.2]), np.array([0.0, 0.0, 0.1])) == 2.0
 
 
 def test_rk4_pi_diagnostic_step_carries_the_proposal_and_honors_the_cap() -> None:
