@@ -112,14 +112,15 @@ jobs:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
+          # Pull requests run the core unit tests on the floor; main, nightly
+          # and manual runs add the solver, parallel and objective files.
+          FLOOR_TESTS: ${{ github.event_name == 'pull_request' && 'tests/unit/core' || 'tests/unit/core tests/unit/solvers/test_linear_krylov_core.py tests/unit/parallel/test_parallel_linear_velocity.py tests/unit/objectives/test_autodiff_solver_objectives.py' }}
         run: |
-          pytest -q -n 4 --disable-warnings -m "not slow" \
-            tests/unit/core \
-            tests/unit/solvers/test_linear_krylov_core.py \
-            tests/unit/parallel/test_parallel_linear_velocity.py \
-            tests/unit/objectives/test_autodiff_solver_objectives.py
+          # shellcheck disable=SC2086
+          pytest -q -n 4 --disable-warnings -m "not slow" $FLOOR_TESTS
 
       - name: Default-f32 compressed nonlinear gradient (isolated backend failures)
+        if: github.event_name != 'pull_request'
         env:
           MPLBACKEND: Agg
           JAX_ENABLE_X64: "false"
@@ -129,6 +130,7 @@ jobs:
             -k compressed_real_fft_heat_flux_window_gradient_matches_finite_difference
 
       - name: Default-f32 nonlinear window-gradient matrix
+        if: github.event_name != 'pull_request'
         # nonlinear-core runs this matrix in float64. Here the float32 adjoint,
         # the documented default, is checked against a float64 centered
         # difference evaluated in the same process, and the blocked checkpoint

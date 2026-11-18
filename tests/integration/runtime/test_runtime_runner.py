@@ -3855,8 +3855,8 @@ def test_zero_species_nu_admits_declared_custom_collisions() -> None:
 
 
 def test_runtime_linear_kinetic_electron_time_route_without_dt_is_finite() -> None:
-    # No dt: the fixed-step time route used dt = 0.1, far over the electron
-    # streaming CFL (~700), and overflowed; it now takes the CFL-stable step.
+    # No dt: the time route used dt = 0.1, far over the electron CFL (~700), and
+    # overflowed; it takes the CFL-stable step. nperiod 1: the deck's 2 is unsettled by t=12.
     cfg, _ = load_runtime_from_toml(
         REPO_ROOT / "examples/05_kinetic_electrons/case.toml"
     )
@@ -3865,7 +3865,7 @@ def test_runtime_linear_kinetic_electron_time_route_without_dt_is_finite() -> No
         cfg,
         time=TimeConfig(t_max=12.0, sample_stride=10, damp_ends_rate=0.1),
         physics=replace(cfg.physics, linear=True, nonlinear=False),
-        grid=replace(cfg.grid, Nx=1, Ny=22, Nz=16),
+        grid=replace(cfg.grid, Nx=1, Ny=22, Nz=16, nperiod=1),
     )
     kw = dict(ky_target=0.3, Nl=2, Nm=4, auto_window=False, tmin=6.0, tmax=12.0)
     time = run_runtime_linear(cfg, solver="time", **kw)
