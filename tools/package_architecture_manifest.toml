@@ -260,7 +260,8 @@ recursive = true
 # 64794 -> 64804: fixed step longer than t_max test; example 05 smoke grid knob.
 # 64804 -> 64839: banded route with unequal per-species Nm regression test.
 # 64839 -> 64903: progress reporter tests.
-baseline = 64903
+# 64903 -> 64904: ky flux-spectrum panel without a kx axis.
+baseline = 64904
 target = 35000
 
 [[line_budget_policy.counts]]

@@ -616,7 +616,7 @@ def flux_spectra_figure(
     mask, tmin, tmax = _time_window(np.asarray(diag.t, dtype=float), window)
 
     found: list[tuple[str, np.ndarray, np.ndarray]] = []
-    if heat_ky is not None:
+    if heat_ky is not None and (panels is None or "ky" in panels):
         avg = _window_average(heat_ky, mask)  # (species, ky)
         axis = _spectral_axis_or_error(
             ky if ky is not None else ky_file,
@@ -625,7 +625,7 @@ def flux_spectra_figure(
             name="flux_spectra_figure",
         )
         found.append(("ky", axis, avg))
-    if heat_kx is not None:
+    if heat_kx is not None and (panels is None or "kx" in panels):
         avg = _window_average(heat_kx, mask)  # (species, kx)
         axis = _spectral_axis_or_error(
             kx if kx is not None else kx_file,

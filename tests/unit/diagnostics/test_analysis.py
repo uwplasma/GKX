@@ -1699,6 +1699,7 @@ def test_flux_spectra_figure_from_memory_arrays(tmp_path):
     fig, _axes = flux_spectra_figure(diag, ky=ky, kx=kx, window=(10.0, 30.0), out=out)
     plt.close(fig)
     assert out.exists()
+    plt.close(flux_spectra_figure(diag, ky=ky, panels=("ky",))[0])  # no kx axis needed
 
 
 def test_phi2_spectra_figure_from_memory_arrays(tmp_path):
