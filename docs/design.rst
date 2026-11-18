@@ -7,14 +7,14 @@ cost; the cost is stated next to it. Measurements are in :doc:`algorithms`.
 Design choices
 --------------
 
-**Flux tube.** The gyrokinetic equation is solved in a thin tube that follows
+Flux tube. The gyrokinetic equation is solved in a thin tube that follows
 one field line. It resolves the turbulence scale at a small fraction of the
 cost of a surface or volume. The price: profile variation across the tube is
 neglected, and the parallel ends need a boundary condition. GKX uses
 twist-and-shift linking, solved on the modes each chain couples. For a
 stellarator, tubes at several ``alpha`` sample a surface.
 
-**Hermite-Laguerre velocity space.** The distribution is expanded in Hermite
+Hermite-Laguerre velocity space. The distribution is expanded in Hermite
 polynomials in :math:`v_\parallel` and Laguerre polynomials in :math:`\mu`.
 The gyroaverage becomes a sum and low-order moments are fluid quantities, so a
 coarse truncation is a model, not an under-resolved grid. The cost: a
@@ -22,40 +22,40 @@ truncated Hermite ladder reflects free energy from its last moment, so GKX
 damps the highest moments with hypercollisions and says so. GX uses the same
 representation, which makes it the closest parity reference.
 
-**JAX.** One code path for CPU and GPU, and exact derivatives of the
+JAX. One code path for CPU and GPU, and exact derivatives of the
 discretized equations, including the equilibrium when VMEX supplies it.
 Reverse mode through an iterative solve is replaced by implicit rules
 (eigenpairs) and checkpointed adjoints (time windows). The costs: compile time
 on the first call (cached afterwards), static shapes, and ``float32`` graphs
 that are not always bitwise reproducible.
 
-**Time stepping.** The nonlinear step is explicit Runge-Kutta with a CFL
+Time stepping. The nonlinear step is explicit Runge-Kutta with a CFL
 controller, because the :math:`E\times B` bracket changes every step. Stiff
 linear terms can be implicit (``imex``, ``imex-ars3``); see :doc:`guidance`
 for when. Linear growth rates come from the eigensolvers, which are faster and
 certified.
 
-**Collisions.** The default is the linearized Landau operator, built from
+Collisions. The default is the linearized Landau operator, built from
 Rosenbluth potentials in the Hermite-Laguerre basis. It conserves particles,
 momentum and energy, satisfies the H-theorem, and works at any resolution and
 species set. Lenard-Bernstein/Dougherty, Sugama and Coulomb variants remain
 selectable (:doc:`operators`).
 
-**End damping.** Linked chains need an absorber at the field-line ends. One
+End damping. Linked chains need an absorber at the field-line ends. One
 rate, ``[time] damp_ends_rate``, applies on every route and no time step
 enters it (:ref:`end-damping`).
 
-**Eigensolver.** The default is ``auto``: a Hermite-banded direct shift-invert where its
+Eigensolver. The default is ``auto``: a Hermite-banded direct shift-invert where its
 blocks fit in memory, else the residual-certified Arnoldi on the time-advance
 map (``adaptive``). Matrix-free shift-invert is opt-in for a chosen branch
 (:doc:`solvers`, :doc:`algorithms`).
 
-**Certify, do not trust.** Every eigenpair is checked against the unprojected
+Certify, do not trust. Every eigenpair is checked against the unprojected
 operator, and a failed check is an error. Under-resolved or unsaturated runs
 warn. The test suite checks numerical contracts; physical comparisons need
 reproducible inputs and convergence studies (:doc:`validation`).
 
-**:math:`k_y` layouts.** Fields are real, so negative :math:`k_y` is the
+:math:`k_y` layouts. Fields are real, so negative :math:`k_y` is the
 conjugate of positive. ``full`` (default) stores both halves; ``half`` stores
 :math:`k_y\ge0`. On CPU ``half`` runs an RK3 step in 0.54--0.60 of the time,
 but the checkpointed gradient takes 1.28 times as long. One module,

@@ -52,8 +52,10 @@ from gkx.operators.moments import (
     zonal_phi_mode_kxt,
 )
 from gkx.operators.nonlinear.collisions import (
+    NonlinearCollisionSplitPolicy,
     _apply_collision_split,
     _collision_damping,
+    collision_rate_bound,
 )
 from gkx.operators.nonlinear.diagnostic_state import (
     NonlinearDiagnosticKernels,
@@ -162,6 +164,7 @@ class _ExplicitDiagnosticOptions:
     cfl_fac: float | None
     collision_split: bool
     collision_scheme: str
+    collision_interval: int
     fixed_mode_ky_index: int | None
     fixed_mode_kx_index: int | None
     external_phi: jnp.ndarray | float | None
@@ -373,15 +376,36 @@ class PreparedExplicitNonlinearDiagnostics:
         return jnp.asarray(diag_out.t), diag_out, G_final, fields_final
 
 
+# Largest dt * |eigenvalue| of the once-per-step collision update (Euler's limit is 2).
+_COLLISION_EULER_LIMIT = 1.0
 _EXPLICIT_OPTION_FIELDS = tuple(_ExplicitDiagnosticOptions.__annotations__)
 
 
 def _explicit_options_from_values(values: dict[str, Any]) -> _ExplicitDiagnosticOptions:
     """Pack public keyword values into a single internal options object."""
 
-    return _ExplicitDiagnosticOptions(
+    options = _ExplicitDiagnosticOptions(
         **{key: values[key] for key in _EXPLICIT_OPTION_FIELDS}
     )
+    interval = options.collision_interval
+    if (
+        not isinstance(interval, (int, np.integer))
+        or isinstance(interval, bool)
+        or interval < 1
+    ):
+        raise ValueError("collision_interval must be a positive integer")
+    if interval > 1:
+        if (
+            not options.fixed_dt
+            or options.time_horizon is not None
+            or options.method in IMEX_CHAIN_METHODS
+        ):
+            raise ValueError(
+                "collision_interval > 1 requires a fixed-step explicit scan without a time horizon"
+            )
+        if options.steps % interval:
+            raise ValueError("collision_interval must divide the number of steps")
+    return options
 
 
 def _prepare_explicit_diagnostic_state(
@@ -452,6 +476,7 @@ def _build_explicit_runtime_policies(
     cfl_fac: float | None,
     compressed_real_fft: bool,
     collision_split: bool,
+    collision_interval: int = 1,
 ) -> _ExplicitRuntimePolicies:
     """Build timestep and collision-splitting policies for explicit scans."""
 
@@ -483,16 +508,40 @@ def _build_explicit_runtime_policies(
         laguerre_velocity_max_fn=_laguerre_velocity_max,
         cfl_frequency_components_fn=cfl_components,
     )
-    collision_policy = build_nonlinear_collision_split_policy(
-        prepared.cache,
-        params,
-        prepared.term_cfg,
-        prepared.real_dtype,
-        squeeze_species=prepared.G0.ndim == 5,
-        collision_split=collision_split,
-        collision_damping_fn=_collision_damping,
-        split_collisions=method not in IMEX_CHAIN_METHODS,
-    )
+
+    def build_policy(split: bool | None) -> NonlinearCollisionSplitPolicy:
+        return build_nonlinear_collision_split_policy(
+            prepared.cache,
+            params,
+            prepared.term_cfg,
+            prepared.real_dtype,
+            squeeze_species=prepared.G0.ndim == 5,
+            collision_split=split,
+            collision_damping_fn=_collision_damping,
+            split_collisions=method not in IMEX_CHAIN_METHODS,
+        )
+
+    collision_policy = build_policy(collision_split)
+    leaves = jax.tree_util.tree_leaves((prepared.cache, params))
+    if collision_policy.collision_terms is not None and not any(
+        isinstance(x, jax.core.Tracer) for x in leaves
+    ):
+        # Forward Euler once per step is stable for dt * rate < 2, and no CFL bound
+        # includes the collision rate (it grows with Nm and a light species' nu).
+        terms, cache = collision_policy.collision_terms, prepared.cache
+        rate = collision_rate_bound(
+            lambda G: nonlinear_rhs_cached(G, cache, params, terms)[0].astype(G.dtype),
+            prepared.G0,
+        )
+        if not fixed_dt or rate * collision_interval * dt <= _COLLISION_EULER_LIMIT:
+            collision_policy = replace(collision_policy, rate=rate)
+        elif collision_split is None:  # fixed step too long for it: back in the stages
+            collision_policy = build_policy(False)
+        else:
+            raise ValueError(
+                f"collision_split = true: dt * collision rate = {rate * dt:.3g} exceeds "
+                f"{_COLLISION_EULER_LIMIT} (forward Euler); reduce dt or unset it"
+            )
     return _ExplicitRuntimePolicies(
         time_step_policy=time_step_policy,
         collision_policy=collision_policy,
@@ -570,6 +619,7 @@ def _make_explicit_scan_step(
     external_phi: jnp.ndarray | float | None,
     collision_scheme: str,
     time_horizon: float | None,
+    collision_interval: int = 1,
 ) -> Callable[..., Any]:
     """Build the explicit scan-step closure from prepared policies."""
 
@@ -601,6 +651,13 @@ def _make_explicit_scan_step(
             external_phi,
         ),
         time_horizon=time_horizon,
+        collision_interval=collision_interval,
+        collision_dt_cap=(
+            _COLLISION_EULER_LIMIT
+            / (policies.collision_policy.rate * collision_interval)
+            if policies.collision_policy.rate > 0.0
+            else None
+        ),
     )
 
 
@@ -959,6 +1016,7 @@ def _build_explicit_scan_closures(
         steps=options.steps,
         external_phi=options.external_phi,
         collision_scheme=options.collision_scheme,
+        collision_interval=options.collision_interval,
     )
     step = make_step(time_horizon=options.time_horizon)
     # The adaptive chunk loop changes only the horizon between chunks; this
@@ -1039,7 +1097,10 @@ def _build_explicit_scan_components(
         cfl_fac=options.cfl_fac,
         compressed_real_fft=options.compressed_real_fft,
         collision_split=options.collision_split,
+        collision_interval=options.collision_interval,
     )
+    if options.collision_interval > 1 and not policies.collision_policy.active:
+        raise ValueError("collision_interval > 1 requires an active collision split")
     step, compute_diag_from_state = _build_explicit_scan_closures(
         prepared,
         policies,
@@ -1109,6 +1170,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
@@ -1158,6 +1220,8 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         initial_dt: jnp.ndarray | None = None,
         rhs_fn: Any = None,
     ) -> tuple[Any, Any, Any, Any]:
+        if options.collision_interval > 1 and time_horizon is not None:
+            raise ValueError("collision_interval > 1 does not support a time horizon")
         step = components.step
         if rhs_fn is not None:
             step, _ = _build_explicit_scan_closures(
@@ -1338,6 +1402,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
@@ -2107,6 +2172,7 @@ _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
     "cfl_fac",
     "collision_split",
     "collision_scheme",
+    "collision_interval",
     "implicit_tol",
     "implicit_maxiter",
     "implicit_iters",
@@ -2130,6 +2196,7 @@ _IMEX_DIAGNOSTIC_OPTION_KEYS = tuple(
         "time_horizon",
         "cfl",
         "cfl_fac",
+        "collision_interval",
         "resolved_diagnostics",
     }
 )
@@ -2192,6 +2259,7 @@ def integrate_nonlinear_explicit_diagnostics(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,
@@ -2212,6 +2280,8 @@ def integrate_nonlinear_explicit_diagnostics(
     """
 
     if method in _IMEX_METHODS:
+        if collision_interval != 1:
+            raise ValueError("collision_interval must be 1 for IMEX")
         return integrate_nonlinear_imex_diagnostics(
             G0,
             grid,
@@ -2267,6 +2337,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
     cfl_fac: float | None = None,
     collision_split: bool = False,
     collision_scheme: str = "implicit",
+    collision_interval: int = 1,
     implicit_tol: float = 1.0e-6,
     implicit_maxiter: int = 200,
     implicit_iters: int = 3,

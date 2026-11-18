@@ -86,8 +86,7 @@ def _is_static_zero(value: Any, dtype: jnp.dtype | None = None) -> bool:
     answers "not statically zero" for every term of every jitted run. That
     turned off every fast path this predicate exists to select -- the
     electrostatic RHS for an electrostatic ``TermConfig`` above all -- exactly
-    where it pays. ``numpy`` answers from the buffer, so only a genuinely
-    traced switch is unknowable. ``dtype`` reproduces the cast the round trip
+    where it pays. ``numpy`` answers from the buffer, so only a traced switch is unknowable. ``dtype`` reproduces the cast the round trip
     applied, keeping an amplitude that underflows to zero in the operator's
     own precision a static zero here too.
     """

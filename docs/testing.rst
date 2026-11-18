@@ -13,7 +13,7 @@ it checks one of:
 - a regression for a bug found in parity, restart, runtime, plotting, or
   geometry-adapter work.
 
-The package-wide coverage target is 95%, enforced on the combined wide-coverage
+The package-wide coverage target is 95% of lines and branches, enforced on the combined wide-coverage
 run (see `CI and release checks`_). Coverage is a guardrail; the physics and numerics
 contracts above are the objective.
 
@@ -71,7 +71,7 @@ Representative contracts and where they live:
 - Nonlinear bracket sign, real-FFT path, flutter, electromagnetic split:
   ``tests/unit/nonlinear/test_nonlinear_exb.py``; Hermitian projection, RK
   variants, collision splitting, IMEX, flow-shear remap and window-gradient
-  checks: ``tests/unit/nonlinear/test_nonlinear_helpers_extra.py``.
+  checks: ``tests/unit/nonlinear/test_nonlinear.py``.
 - Serial-vs-parallel numerical identity: ``tests/unit/parallel/``.
 
 Running tests
@@ -91,7 +91,7 @@ Markers:
 - ``slow``: excluded by default *and* by the wide-coverage shards, so a
   ``slow`` test leaves the coverage denominator. Do not use it for a test that
   only takes a minute.
-- ``integration``: a label for end-to-end tests; it does not deselect anything.
+- ``integration``: a label for whole-pipeline tests; it does not deselect anything.
 - ``gpu``: exercises a device-specific execution path.
 
 For a bounded local loop, use the per-file runner. It applies a per-file
@@ -118,7 +118,7 @@ CI and release checks
 ---------------------
 
 CI runs the full test groups and combines 8 wide-coverage shards. The package
-coverage requirement is 95%; keep numerical and physical contracts in the
+coverage requirement is 95% of lines and branches; keep numerical and physical contracts in the
 coverage run rather than replacing them with generated-result assertions.
 
 After combining coverage data, enforce the source coverage gate:

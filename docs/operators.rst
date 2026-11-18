@@ -563,7 +563,7 @@ remains ``false``.
 Structural verification of the moment operators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Every shipped operator is asserted against the published closed forms, not only
+Every shipped operator is asserted against the published closed forms as well as
 against internal consistency. The Appendix-C matrices of Frei, Ernst & Ricci
 (2022) (six Coulomb, six original-Sugama and six improved-Sugama coefficients)
 are written out in ``tests/support/reference_physics.py``; the Landau, Sugama and
@@ -695,7 +695,11 @@ the gyrokinetic RHS.
 Unless ``[time] collision_split = false``, the explicit steppers apply the
 conserving collision term once per step after the Runge--Kutta stages (one
 forward-Euler step, with its field-particle corrections); ``true`` also splits
-the diagonal hypercollisions. The chain IMEX steps (``imex-ars3``, ``imex-ark3``)
+the diagonal hypercollisions. The largest collision eigenvalue :math:`\lambda`
+(power iteration at start-up; :math:`\lambda \approx 19\nu` for a (4, 48)
+electron species) caps an adaptive step at :math:`1/\lambda`; a fixed step
+above that keeps the collisions in the stages, or is refused with
+``collision_split = true``. The chain IMEX steps (``imex-ars3``, ``imex-ark3``)
 advance the Landau operator by a local backward-Euler sub-step instead
 (``collision_scheme = "implicit"``) when the explicit collision bound would
 bind, which removes :math:`\nu_e` from the step-size bound (:doc:`guidance`).
@@ -828,11 +832,11 @@ Controls, and the branch each one reaches:
      - isotropic
      - always applied; defaults ``0.0`` / ``4.0``
    * - ``nu_hyper_l`` / ``p_hyper_l``
-     - constant **only**
+     - constant only
      - the Laguerre channel. The :math:`|k_z|` kernel has no :math:`\ell`
        index, so this knob needs ``hypercollisions_const = 1``
    * - ``nu_hyper_lm`` / ``p_hyper_lm``
-     - constant **only**
+     - constant only
      - mixed channel, same restriction
    * - ``nu_hyper_m`` / ``p_hyper_m``
      - both
@@ -841,7 +845,7 @@ Controls, and the branch each one reaches:
    * - ``nu_hyper_m_const``
      - constant only
      - per-branch Hermite rate. ``None`` (default) reuses ``nu_hyper_m``;
-       ``0.0`` gives a **pure Laguerre sink** beside an unchanged
+       ``0.0`` gives a pure Laguerre sink beside an unchanged
        :math:`|k_z|` Hermite branch, so Hermite is not damped twice
    * - ``hypercollisions_const`` / ``hypercollisions_kz``
      - branch switches
@@ -875,7 +879,7 @@ Declared velocity-space regularization
 --------------------------------------
 
 Because ``nu_hyper_l`` is branch-bound, a deck that set it under the runtime
-defaults would have run with **no** Laguerre sink. That is an error:
+defaults would have run with no Laguerre sink. That is an error:
 :class:`~gkx.config.RuntimeCollisionConfig` refuses a nonzero ``nu_hyper_l`` or
 ``nu_hyper_lm`` while ``hypercollisions_const = 0.0``, and names the two ways
 to fix it. Cross-section case validation also refuses those channels when
@@ -885,14 +889,14 @@ regularization either acts or the run stops; it is never silently discarded.
 
 This matters beyond configuration hygiene. For the Cyclone s-:math:`\alpha`
 adiabatic-electron ITG mode at :math:`k_y \rho_i = 0.55`, certified eigenpairs
-show that the collisionless growth rate is **not** converged in Laguerre
+show that the collisionless growth rate is not converged in Laguerre
 resolution: the eigenvector carries a cutoff pile-up that relocates to
 0.79--0.85 of every new ``Nl`` instead of resolving, and the only ladder that
 converges is the one with enough velocity-space dissipation to remove it. A
 collisionless growth rate at such a point is a truncation value, not a
 converged number.
 
-**Contract.** Every collisionless linear row published from GKX declares the
+Contract. Every collisionless linear row published from GKX declares the
 velocity-space regularization it used, and reports the
 :math:`\nu \to 0` (or :math:`\nu_{hyper} \to 0`) extrapolation rather than a
 single regularized number. ``none`` is a legal declaration and the common one
