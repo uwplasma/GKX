@@ -562,6 +562,78 @@ def test_vmex_boozer_surface_stencil_indices_remain_static_under_ad() -> None:
     np.testing.assert_allclose(derivative, 6.0)
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "state_shape", "error", "match"),
+    [
+        (dict(ntheta=3), (6, 4), ValueError, "ntheta"),
+        (dict(mboz=20), (6, 4), ValueError, "mboz and nboz"),
+        (dict(nboz=20), (6, 4), ValueError, "mboz and nboz"),
+        ({}, (6,), RuntimeError, "two-dimensional"),
+        ({}, (2, 4), RuntimeError, "three radial"),
+        (dict(surface_index=0), (6, 4), ValueError, "interior"),
+        (dict(surface_index=5), (6, 4), ValueError, "interior"),
+        (dict(torflux=1.0), (6, 4), ValueError, "torflux"),
+        (dict(surface_stencil_width=2), (6, 4), ValueError, "stencil"),
+    ],
+)
+def test_boozer_core_request_refuses_bad_resolution_and_surface(
+    kwargs, state_shape, error, match
+) -> None:
+    base = dict(
+        surface_index=None,
+        torflux=None,
+        ntheta=8,
+        mboz=21,
+        nboz=21,
+        surface_stencil_width=None,
+    )
+    state = types.SimpleNamespace(R_cos=np.zeros(state_shape))
+    with pytest.raises(error, match=match):
+        vmec_boozer_core._resolve_boozer_core_request(state, **{**base, **kwargs})
+    request = vmec_boozer_core._resolve_boozer_core_request(
+        types.SimpleNamespace(R_cos=np.zeros((6, 4))), **base
+    )
+    assert (request.surface_index, request.ns_full) == (3, 6)
+    assert request.torflux == pytest.approx(3.0 / 5.0)
+
+
+def test_boozer_core_helpers_clamp_stencils_and_refuse_unsupported_inputs() -> None:
+    core = vmec_boozer_core
+    assert core._grid_mode_limits(8, 6) == (3, 2)
+    assert core._grid_mode_limits(1, 1) == (0, 0)
+    assert (
+        core._surface_indices_for_stencil(
+            surface_stencil_width=None, ns_full=6, torflux=0.5
+        )
+        is None
+    )
+    # A stencil wider than the half mesh shrinks to it; an edge target slides inward.
+    np.testing.assert_array_equal(
+        core._surface_indices_for_stencil(
+            surface_stencil_width=9, ns_full=6, torflux=0.5
+        ),
+        np.arange(5),
+    )
+    np.testing.assert_array_equal(
+        core._surface_indices_for_stencil(
+            surface_stencil_width=3, ns_full=10, torflux=0.99
+        ),
+        [6, 7, 8],
+    )
+    lasym = types.SimpleNamespace(resolution=types.SimpleNamespace(lasym=True))
+    with pytest.raises(NotImplementedError, match="symmetric"):
+        core._boozer_xform_inputs_from_state(
+            None, lasym, inp=None, wout=None, boozer_tables_mod=None, ns_full=6
+        )
+    for bmnc, match in ((np.zeros(4), "shape"), (np.zeros((1, 4)), "two radial")):
+        with pytest.raises(RuntimeError, match=match):
+            core._boozer_surface_grid(
+                {"bmnc_b": bmnc}, base_dtype=jnp.float64, ns_full=6
+            )
+    with pytest.raises(ValueError, match="unknown VMEC/Boozer case"):
+        core.resolve_vmex_case_input_path("no_such_case_anywhere")
+
+
 def _differentiable_mapping(params: jnp.ndarray) -> dict[str, object]:
     theta = jnp.linspace(-jnp.pi, jnp.pi, 16, endpoint=False)
     ripple, elongation = params

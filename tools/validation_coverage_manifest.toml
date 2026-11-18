@@ -206,7 +206,7 @@ coverage_priority = "medium"
 coverage_target_percent = 95.0
 fast_tests = [
   "tests/unit/linear/test_linear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
+  "tests/unit/nonlinear/test_nonlinear.py",
   "tests/unit/solvers/test_time_integrators.py",
 ]
 artifact_paths = []
@@ -296,7 +296,6 @@ fast_tests = [
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear_exb.py",
   "tests/unit/operators/test_terms_fields.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = ["docs/_static/nonlinear_domain_parallel_identity_gate.png", "docs/_static/nonlinear_spectral_communication_identity_gate.png"]
 
@@ -309,7 +308,6 @@ coverage_priority = "high"
 coverage_target_percent = 95.0
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
 
@@ -322,7 +320,6 @@ coverage_priority = "high"
 coverage_target_percent = 95.0
 fast_tests = [
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
 
@@ -336,7 +333,6 @@ coverage_target_percent = 95.0
 fast_tests = [
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
 
@@ -348,7 +344,7 @@ status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
+  "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
 
@@ -362,7 +358,6 @@ coverage_target_percent = 95.0
 fast_tests = [
   "tests/unit/solvers/test_time_integrators.py",
   "tests/unit/nonlinear/test_nonlinear.py",
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
 ]
 artifact_paths = []
 
@@ -374,7 +369,6 @@ status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
@@ -387,7 +381,6 @@ status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
   "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
@@ -400,7 +393,7 @@ status = "active"
 coverage_priority = "high"
 coverage_target_percent = 95.0
 fast_tests = [
-  "tests/unit/nonlinear/test_nonlinear_helpers_extra.py",
+  "tests/unit/nonlinear/test_nonlinear.py",
 ]
 artifact_paths = []
 

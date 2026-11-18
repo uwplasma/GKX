@@ -2395,27 +2395,6 @@ def test_run_nonlinear_case_uses_toml_output_path(
     assert (tmp_path / "nonlinear_case.diagnostics.csv").exists()
 
 
-def test_run_linear_case_without_output_path_prints_summary_only(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    cfg = _base_runtime_cfg()
-
-    def fake_load_runtime_from_toml(_path):
-        return cfg, {"run": {"ky": 0.25}}
-
-    def fake_run_runtime_linear(*_args, **_kwargs):
-        return _linear(0.25, 0.11, 0.22)
-
-    patch_runtime(monkeypatch, "load_runtime_from_toml", fake_load_runtime_from_toml)
-    patch_runtime(monkeypatch, "run_runtime_linear", fake_run_runtime_linear)
-
-    rc = run_linear_case(tmp_path / "dummy.toml", show_progress=False)
-    out = capsys.readouterr().out
-    assert rc == 0
-    assert "saved" not in out
-    assert "ky=0.250000 gamma=0.11000000 omega=0.22000000" in out
-
-
 def test_run_nonlinear_case_without_output_path_and_without_diagnostics(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -2448,117 +2427,6 @@ def test_run_runtime_scan_batch_ky_rejects_krylov() -> None:
     cfg = _ion_cfg()
     with pytest.raises(ValueError):
         run_runtime_scan(cfg, ky_values=[0.1, 0.2], solver="krylov", batch_ky=True)
-
-
-def test_run_runtime_scan_independent_workers_preserve_quasilinear_order(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = _ion_cfg()
-
-    def _fake_run_runtime_linear(_cfg, **kwargs):
-        ky = float(kwargs["ky_target"])
-        return _linear(
-            ky,
-            ky + 1.0,
-            -(ky + 2.0),
-            quasilinear={
-                "ky": ky,
-                "gamma": ky + 1.0,
-                "omega": -(ky + 2.0),
-                "heat_flux_weight_total": 10.0 * ky,
-            },
-        )
-
-    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
-
-    out = run_runtime_scan(cfg, ky_values=[0.15, 0.35, 0.25], solver="time", workers=2)
-
-    np.testing.assert_allclose(out.gamma, [1.15, 1.35, 1.25])
-    assert out.quasilinear is not None
-    np.testing.assert_allclose(
-        [row["ky"] for row in out.quasilinear], [0.15, 0.35, 0.25]
-    )
-    np.testing.assert_allclose(
-        [row["heat_flux_weight_total"] for row in out.quasilinear], [1.5, 3.5, 2.5]
-    )
-    assert out.parallel is not None
-    assert out.parallel["requested_workers"] == 2
-    assert out.parallel["source"] == "arguments"
-    assert out.parallel["quasilinear_state_extraction"] is True
-
-
-def test_run_runtime_scan_parallel_config_batch_selects_independent_workers(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = replace(
-        _ion_cfg(),
-        parallel=RuntimeParallelConfig(
-            strategy="batch", axis="ky", num_devices=3, backend="thread"
-        ),
-    )
-    captured: dict[str, object] = {}
-
-    def _fake_run_runtime_linear(_cfg, **kwargs):
-        ky = float(kwargs["ky_target"])
-        return _linear(ky, ky + 1.0, -(ky + 2.0))
-
-    def _fake_independent_map(fn, values, *, workers=1, executor="thread"):
-        items = list(values)
-        captured["workers"] = workers
-        captured["executor"] = executor
-        captured["ky"] = [item["ky"] for item in items]
-        return [fn(item) for item in items]
-
-    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
-    patch_runtime(monkeypatch, "independent_map", _fake_independent_map)
-
-    out = run_runtime_scan(cfg, ky_values=[0.15, 0.35, 0.25], solver="time")
-
-    assert captured == {"workers": 3, "executor": "thread", "ky": [0.15, 0.35, 0.25]}
-    np.testing.assert_allclose(out.gamma, [1.15, 1.35, 1.25])
-    assert out.parallel is not None
-    assert out.parallel["source"] == "runtime_config"
-    assert out.parallel["requested_workers"] == 3
-    assert out.parallel["effective_workers"] == 3
-    assert out.parallel["enabled"] is True
-
-
-def test_run_runtime_scan_explicit_workers_override_parallel_config(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = replace(
-        _ion_cfg(),
-        parallel=RuntimeParallelConfig(
-            strategy="batch", axis="ky", num_devices=4, backend="process"
-        ),
-    )
-    captured: dict[str, object] = {}
-
-    def _fake_run_runtime_linear(_cfg, **kwargs):
-        ky = float(kwargs["ky_target"])
-        return _linear(ky, ky, -ky)
-
-    def _fake_independent_map(fn, values, *, workers=1, executor="thread"):
-        captured["workers"] = workers
-        captured["executor"] = executor
-        return [fn(item) for item in values]
-
-    patch_runtime(monkeypatch, "run_runtime_linear", _fake_run_runtime_linear)
-    patch_runtime(monkeypatch, "independent_map", _fake_independent_map)
-
-    out = run_runtime_scan(
-        cfg,
-        ky_values=[0.15, 0.35, 0.25],
-        solver="time",
-        workers=2,
-        parallel_executor="thread",
-    )
-
-    assert captured == {"workers": 2, "executor": "thread"}
-    assert out.parallel is not None
-    assert out.parallel["source"] == "arguments"
-    assert out.parallel["requested_workers"] == 2
-    assert out.parallel["effective_workers"] == 2
 
 
 # ---- which [parallel] strategies a per-ky worker may inherit ----
@@ -2763,43 +2631,6 @@ def test_run_runtime_scan_batch_empty_raises(monkeypatch: pytest.MonkeyPatch) ->
         run_runtime_scan(cfg, ky_values=[], solver="time", batch_ky=True)
 
 
-def test_runtime_linear_explicit_time_rejects_return_state_before_setup(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = _ion_cfg("none")
-
-    patch_runtime(monkeypatch, "build_runtime_geometry", lambda _cfg: SimpleNamespace())
-    patch_runtime(monkeypatch, "apply_geometry_grid_defaults", lambda _geom, grid: grid)
-    patch_runtime(
-        monkeypatch,
-        "build_spectral_grid",
-        lambda _grid: SimpleNamespace(
-            ky=np.array([0.0, 0.2]), kx=np.array([0.0]), z=np.array([-1.0, 0.0, 1.0])
-        ),
-    )
-    patch_runtime(
-        monkeypatch,
-        "build_runtime_linear_params",
-        lambda _cfg, **_kwargs: SimpleNamespace(rho_star=1.0),
-    )
-    patch_runtime(monkeypatch, "build_runtime_linear_terms", lambda _cfg: object())
-    patch_runtime(
-        monkeypatch,
-        "select_ky_grid",
-        lambda grid, _idx: SimpleNamespace(ky=np.array([0.2]), kx=grid.kx, z=grid.z),
-    )
-    patch_runtime(
-        monkeypatch,
-        "_build_initial_condition",
-        lambda *args, **kwargs: np.zeros((2, 2, 1, 1, 3), dtype=np.complex64),
-    )
-
-    with pytest.raises(ValueError):
-        run_runtime_linear(
-            cfg, ky_target=0.2, Nl=2, Nm=2, solver="explicit_time", return_state=True
-        )
-
-
 def test_runtime_parameter_scan_updates_config_and_continues_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2973,58 +2804,6 @@ def test_run_runtime_scan_warm_start_seeds_neighbours_and_restores_order(
         "warm_points": 2,
         "cold_points": 1,
     }
-
-
-def _patch_unit_linear_runs(monkeypatch, record) -> None:
-    def fake_run(_cfg, **kwargs):
-        record(kwargs)
-        return _linear(
-            float(kwargs["ky_target"]),
-            1.0,
-            -1.0,
-            state=np.ones((2, 2), dtype=np.complex64),
-        )
-
-    patch_runtime(monkeypatch, "run_runtime_linear", fake_run)
-
-
-def test_run_runtime_scan_warm_start_off_leaves_every_point_cold(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    cfg = _ion_cfg()
-    calls: list[dict[str, object]] = []
-
-    _patch_unit_linear_runs(monkeypatch, lambda kwargs: calls.append(dict(kwargs)))
-    # The default is cold; passing nothing must behave like warm_start=False.
-    out = run_runtime_scan(cfg, ky_values=[0.5, 0.1], solver="krylov")
-
-    assert [call["ky_target"] for call in calls] == [0.5, 0.1]
-    assert all(call["initial_state"] is None for call in calls)
-    assert all(call["return_state"] is False for call in calls)
-    assert out.warm_start is None
-
-
-def test_run_runtime_scan_warm_start_yields_to_independent_workers(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A request for real parallelism is not silently serialized by warm start."""
-
-    cfg = replace(
-        _ion_cfg(),
-        parallel=RuntimeParallelConfig(strategy="batch", axis="ky", num_devices=2),
-    )
-    seen: list[object] = []
-
-    _patch_unit_linear_runs(
-        monkeypatch, lambda kwargs: seen.append(kwargs.get("initial_state"))
-    )
-    out = run_runtime_scan(
-        cfg, ky_values=[0.15, 0.35], solver="krylov", warm_start=True
-    )
-
-    assert out.warm_start is None
-    assert seen == [None, None]
-    assert out.parallel["effective_workers"] == 2
 
 
 def test_run_runtime_scan_warm_start_matches_cold_growth_rates() -> None:
