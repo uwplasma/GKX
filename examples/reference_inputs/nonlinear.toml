@@ -58,6 +58,7 @@ cfl = 0.9  # CFL safety factor of the step controller
 # cfl_fac = (unset)  Stability prefactor of the CFL bound; per-method, moment-scaled default
 # nstep_restart = (unset)  Write a restart checkpoint every this many steps
 # collision_split = (unset)  Explicit steppers apply collisions once per step; true also splits hypercollisions, false neither
+collision_interval = 1  # Explicit steppers apply the split collision operator every this many steps
 collision_scheme = "implicit"  # Split update: implicit, exp, sts or rkc
 collision_operator = "landau"  # Collision model: landau, none, lenard_bernstein, sugama, improved_sugama, coulomb, coulomb_finite_kperp
 compressed_real_fft = true  # Evaluate the nonlinear bracket on the half spectrum with paired real FFTs
