@@ -41,10 +41,7 @@ if (
 if not wout.exists():
     raise SystemExit(f"{wout.name} is missing: pip install vmex, then rerun")
 
-run = dict(
-    ky_target=case.run.ky, Nl=case.run.Nl, Nm=case.run.Nm
-)  # the deck's [run] block
-result = gkx.solve(case, **run, show_progress=True)
+result = gkx.solve(case, show_progress=True)
 d = result.diagnostics
 free_energy, heat_flux = np.asarray(d.Wg_t), np.asarray(d.heat_flux_t)
 print(f"t_final = {float(d.t[-1]):.2f}")

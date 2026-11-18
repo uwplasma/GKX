@@ -211,7 +211,7 @@ def build_species_hermite_mesh_plan(
     species are factored first, the Hermite remainder must divide the moment
     count *exactly*, and the local moment count must be at least the ghost
     depth so a width-``hermite_ghost_depth`` halo is satisfiable from nearest
-    neighbours alone. Anything else fails closed -- a padded Hermite axis would
+    neighbours alone. Anything else raises: a padded Hermite axis would
     put a shard's ghost rows outside its neighbour, which is a wrong answer
     rather than a slow one.
     """
