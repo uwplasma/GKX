@@ -2124,8 +2124,9 @@ def test_late_rise_is_not_called_saturated_and_early_look_is_refused() -> None:
     rise = (1.5 + 0.8 * np.clip((T - 700) / 150, 0, 1)) * _lognormal()
     assert _status(rise) != "saturated"
     early = T < 690  # the plateau before the rise looks stationary ...
-    assert _status(rise[early], T[early], t_min=300.0) == "saturated"
-    assert _status(rise[early], T[early]) == "too_short"  # ... but t_min refuses it
+    assert _status(rise[early], T[early]) == "saturated"
+    # ... but a long t_min refuses it
+    assert _status(rise[early], T[early], t_min=800.0) == "too_short"
 
 
 @pytest.mark.parametrize(
@@ -2166,7 +2167,8 @@ def test_empty_and_identically_zero_traces_are_not_saturated() -> None:
 def test_species_are_gated_individually_and_cancellation_is_safe() -> None:
     ion = 2 * _lognormal(10, 0.15, seed=4)
     ele = -1.8 * _lognormal(10, 0.15, seed=5)
-    assert _status(np.c_[ion, ele]) == "saturated"  # sum ~ 0.2, scale uses |species|
+    both = np.c_[ion, ele]  # sum ~ 0.2, scale uses |species|
+    assert _status(both, rel_sem=0.1) == "saturated"
     drifting_electron = ele * (1 + 0.6 * T / 1000)
     assert _status(np.c_[ion, drifting_electron]) == "drifting"
 
@@ -2183,15 +2185,19 @@ def test_verdict_does_not_depend_on_the_sampling() -> None:
 
 
 def test_check_waits_for_t_min_then_stops_on_a_plateau() -> None:
-    q = _lognormal(sig=0.3)
-    check = make_saturation_check(SaturationStopConfig(), t_cap=1000.0)
+    """The default rule: no stop before t_min, then a 5% error bar and the mean."""
+    cfg = SaturationStopConfig()
+    assert (cfg.rel_sem, cfg.t_min) == (0.05, 300.0)
+    q = 6.0 * _lognormal(tau=7.5, sig=0.11)  # spread and correlation of the QA run
+    check = make_saturation_check(cfg, t_cap=1000.0)
     stop = None
     for i in range(127, T.size, 128):
         d = check(T[: i + 1], q[: i + 1], False)
         if d["stop"]:
             stop = T[i]
             break
-    assert stop is not None and stop >= 800.0 and d["status"] == "saturated"
+    assert stop is not None and 300.0 <= stop < 800.0 and d["status"] == "saturated"
+    assert d["rel_sem"] <= 0.05 and abs(d["mean"] / 6.0 - 1.0) < 0.05
 
 
 def test_check_reports_the_status_when_the_cap_is_reached() -> None:
