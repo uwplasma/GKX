@@ -244,8 +244,8 @@ recursive = true
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
 # 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
-# 69896 -> 70041: DESC and GVEC equilibria written as a wout for the VMEC pipeline (measured).
-baseline = 70041
+# 69896 -> 70042: DESC and GVEC equilibria written as a wout for the VMEC pipeline (measured).
+baseline = 70042
 target = 45000
 
 [[line_budget_policy.counts]]
