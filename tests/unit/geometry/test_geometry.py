@@ -2841,7 +2841,7 @@ def test_runtime_routes_desc_and_gvec_through_vmec(
 
     def fake(model: str, path: str, cache: Path) -> Path:
         seen["model"] = model
-        return DATA / "qa_small_vmec.eik.nc"  # unused: the pipeline is stubbed below
+        return DATA / "qa_small_vmec.json"  # unused: the pipeline is stubbed below
 
     def stub(*, output_path, request):
         seen["vmec_file"] = request.vmec_file
@@ -2860,7 +2860,7 @@ def test_runtime_routes_desc_and_gvec_through_vmec(
             replace(cfg), output_path=tmp_path / "g.eik.nc", force=True
         )
         assert seen["model"] == model
-        assert seen["vmec_file"].endswith("qa_small_vmec.eik.nc")
+        assert seen["vmec_file"].endswith("qa_small_vmec.json")
 
 
 def test_missing_path_is_an_error(tmp_path: Path) -> None:
