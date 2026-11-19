@@ -1081,8 +1081,7 @@ def test_species_sharded_phi_matches_production_quasineutrality() -> None:
     )
 
 
-@pytest.mark.parametrize("rate", [None, 0.4])
-def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route(rate):
+def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route():
     from gkx.operators.linear.rhs import linear_rhs_cached
     from gkx.solvers.linear.integrators import integrate_linear
 
@@ -1198,7 +1197,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
         hypercollisions_const=1.0,
         hypercollisions_kz=0.4,
         D_hyper=0.02,
-        damp_ends_rate=rate,
+        damp_ends_rate=0.4,
         nu=jnp.asarray([0.1, 0.2]),
     )
     dissipative_cache = replace(
@@ -1206,6 +1205,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
         damp_profile=jnp.linspace(0.2, 1.0, cache.damp_profile.size),
     )
     dissipation_cases = {
+        "end_damping_default_rate": replace(zero_terms, end_damping=1.0),
         "conserving_collisions": replace(zero_terms, collisions=1.0),
         "hypercollisions": replace(zero_terms, hypercollisions=1.0),
         "hyperdiffusion": replace(zero_terms, hyperdiffusion=1.0),
@@ -1219,10 +1219,15 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
         ),
     }
     for name, active_terms in dissipation_cases.items():
+        case_params = (
+            replace(dissipative_params, damp_ends_rate=None)
+            if name == "end_damping_default_rate"
+            else dissipative_params
+        )
         expected_term_rhs, expected_term_phi = linear_rhs_cached(
             state,
             dissipative_cache,
-            dissipative_params,
+            case_params,
             terms=active_terms,
             use_jit=False,
             use_custom_vjp=False,
@@ -1233,7 +1238,7 @@ def test_mixed_species_hermite_electrostatic_rhs_matches_serial_production_route
             return linear_parallel_streaming.linear_rhs_electrostatic_species_hermite_sharded(
                 value,
                 dissipative_cache,
-                dissipative_params,
+                case_params,
                 terms=active_terms,
                 devices=devices[:4],
             )

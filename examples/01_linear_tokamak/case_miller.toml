@@ -1,0 +1,64 @@
+schema_version = 1
+
+# Cyclone base case ITG in Miller geometry: the s-alpha deck case.toml with the flux surface built
+# from its Miller shape (rhoc = r/a = 0.5, R0/a = 2.77778, q = 1.4, s_hat = 0.8), circular with
+# no Shafranov shift. The exact Miller metric and drifts give gamma = 0.127, omega = 0.214 at
+# ky = 0.3 and (Nl, Nm) = (16, 48), against the s-alpha 0.093 and 0.282. Raise akappa (elongation)
+# and tri (triangularity) to shape it. Everything else, the resolution included, is case.toml's.
+
+[[species]]
+name = "ion"
+tprim = 2.49  # a/L_Ti
+fprim = 0.8   # a/L_n
+
+[grid]
+Nx = 1
+Ny = 12
+Nz = 24  # 24 and 32 points agree to 0.5% in gamma; 16 is 5% off at ky 0.4
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 10.0  # ky spacing 1/y0 = 0.1
+ntheta = 12  # 12 geometry points per period for Nz = 24
+nperiod = 2  # a one-period line is 2-37% off in gamma
+
+[time]
+t_max = 96.0  # 7 e-folds at ky 0.2; shorter horizons keep the transient in the fit
+dt = 0.008  # below the CFL-stable step at Nm = 48
+method = "rk4"  # rk2 is unstable at this Nm
+sample_stride = 50  # 12000 steps, 240 samples
+
+[geometry]
+model = "miller"
+rhoc = 0.5
+q = 1.4
+s_hat = 0.8
+R0 = 2.77778
+R_geo = 2.77778
+shift = 0.0  # Shafranov shift gradient dR0/dr
+akappa = 1.0  # elongation
+akappri = 0.0  # d kappa / dr
+tri = 0.0  # triangularity (sin delta)
+tripri = 0.0  # d delta / dr
+betaprim = 0.0
+
+[init]
+init_field = "density"
+init_amp = 1.0e-10
+gaussian_init = true
+gaussian_width = 0.5
+
+[physics]
+linear = true
+nonlinear = false
+electrostatic = true
+adiabatic_electrons = true
+tau_e = 1.0
+
+[normalization]
+contract = "cyclone"
+
+[run]
+Nl = 16  # Nl = 8 is 6-17% high in gamma, Nl = 12 is 3-5% low
+Nm = 48  # ky = 0.4 gamma is -3.8, -3.1, -2.0, -0.7, +0.3% at Nm = 32, 40, 44, 48, 52; Nm = 28 is only a lucky cancellation
+solver = "time"

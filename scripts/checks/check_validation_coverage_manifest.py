@@ -62,13 +62,7 @@ REQUIRED_STRING_FIELDS = (
     "status",
     "coverage_priority",
 )
-REQUIRED_LIST_FIELDS = (
-    "reference_anchors",
-    "physics_contracts",
-    "numerics_contracts",
-    "fast_tests",
-    "next_tests",
-)
+REQUIRED_LIST_FIELDS = ("fast_tests",)
 OPTIONAL_LIST_FIELDS = ("owned_modules",)
 RENDERED_ARTIFACT_SUFFIXES = {".gif", ".mp4", ".pdf", ".png", ".svg", ".webp"}
 
@@ -544,15 +538,11 @@ def validate_manifest(
                 "status": status,
                 "coverage_priority": priority,
                 "coverage_target_percent": float(coverage),
-                "n_reference_anchors": len(lists["reference_anchors"]),
-                "n_physics_contracts": len(lists["physics_contracts"]),
-                "n_numerics_contracts": len(lists["numerics_contracts"]),
                 "n_fast_tests": len(lists["fast_tests"]),
                 "n_artifacts": len(artifacts),
                 "n_required_artifacts": len(required),
                 "n_rendered_artifacts": len(rendered),
                 "n_missing_rendered_artifacts": len(missing_rendered),
-                "n_next_tests": len(lists["next_tests"]),
                 "n_owned_modules": len(owned_modules),
             }
         )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
 import hashlib
+import importlib
 import json
 import os
 import math
@@ -454,6 +455,12 @@ def gvec_to_wout(state_file: str | Path, out: str | Path, *, ns: int = 16) -> Pa
     if not params.exists():
         params = next(state_file.parent.glob("*.ini"), params)
     st = gvec.load_state(params, state_file)
+    if [st.parameters.get(f"{k}_sin_cos") for k in ("X1", "X2", "LA")] != [
+        "_cos_",
+        "_sin_",
+        "_sin_",
+    ]:
+        raise ValueError("GVEC geometry requires a stellarator-symmetric state")
     mpol, ntor = st.get_mn_max("X1")
     mpol += 1
 
@@ -521,4 +528,15 @@ def _convert_equilibrium(
         )
     src = Path(os.path.expandvars(str(path))).expanduser()
     to_wout = {"desc": desc_to_wout, "gvec": gvec_to_wout}[model]
-    return _cached(src, model, lambda out: to_wout(src, out, **kw), cache / "wout")
+
+    def convert(out: Path) -> Path:
+        try:
+            importlib.import_module(model)
+        except ImportError as err:
+            raise ImportError(
+                f"geometry.model = '{model}' needs the optional package: "
+                f"pip install 'gkx[{model}]'"
+            ) from err
+        return to_wout(src, out, **kw)
+
+    return _cached(src, model, convert, cache / "wout")

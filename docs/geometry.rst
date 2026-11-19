@@ -199,14 +199,23 @@ and the covariant ``B_zeta`` to match. Both packages are optional
 (``pip install "gkx[desc]"`` or ``"gkx[gvec]"``) and are imported only when the
 model is selected. Asymmetric equilibria are not supported.
 
-``tests/unit/geometry/test_geometry.py`` converts a small quasi-axisymmetric
-equilibrium, solved with ``vmex``, to a DESC fit and to a GVEC state and compares
-the flux tube with the VMEC one. Geometry from a DESC fit of VMEC surfaces
-agrees to about 1e-3 in ``bmag`` and ``gradpar``, 6e-3 in the metric and up to
-7% (peak-normalised) in the drift terms, which depend on the radial derivative
-of ``|B|``; the GVEC state agrees to 2.5e-3 in ``bmag`` and the metric, 2% in
-the drifts. Treat the drift agreement as that of the fit, not of the converter:
-it improves as the DESC radial resolution is raised.
+Validated on the Landreman-Paul precise QA (nfp 2, s = 0.5) and a finite-beta
+D-shaped tokamak against the VMEC wout the DESC fit (L = 16) and the GVEC state
+were made from. Peak-normalised differences: GVEC 1e-3 to 2.5e-3 in ``bmag``,
+``gradpar``, the metric and the drifts for the QA, below 7e-4 for the tokamak;
+DESC 5e-4 to 1.5e-3 in ``bmag``, ``gradpar`` and the metric, but 9% (QA) and 3%
+(tokamak) in ``gbdrift`` and ``cvdrift``. The drifts carry the radial derivative
+of ``|B|``, which the DESC fit of the VMEC surfaces reproduces least well, so
+that is the accuracy of the fit, not of the converter. Sixteen surfaces are
+enough: 16, 32 and 48 differ by less than 3e-4. The linear growth rate at
+``ky = 0.3`` agrees to 0.01% with GVEC and to 0.5% (tokamak) and 2.4% (QA) with DESC.
+The tests run on small fixtures and are skipped when the optional packages are
+missing.
+
+The path is not differentiable: the equilibrium is converted once, outside JAX,
+to a wout file, so gradients with respect to the DESC or GVEC equilibrium
+parameters do not flow through it. Gradients with respect to the flux-tube and
+physics inputs of the VMEC bridge are unchanged.
 
 When ``booz_xform_jax`` is not installed into the active environment, point
 GKX at it through ``BOOZ_XFORM_JAX_PATH`` or ``GKX_BOOZ_XFORM_JAX_PATH``. The
@@ -314,8 +323,8 @@ and the GKX mirror coefficient is
    bgrad=L_{ref}\frac{\boldsymbol B\cdot\nabla|B|}{|B|^2}
         =gradpar\,\partial_z\ln|B|.
 
-This is a local-Maxwellian delta-f calculation on a **closed periodic mirror
-hybrid**. It is not an open-mirror end-loss model. Joining VMEX's open end cuts
+This is a local-Maxwellian delta-f calculation on a closed periodic mirror
+hybrid. It is not an open-mirror end-loss model. Joining VMEX's open end cuts
 would omit absorbing/sheath boundaries, sources, ambipolar-potential
 formation, collisions that replenish the loss cone, and the non-Maxwellian
 background ordering those calculations require. The full derivation,
@@ -454,7 +463,7 @@ contract. The path is
 ``SpectralState -> Boozer tables -> booz_xform_jax -> FluxTubeGeometryData``
 and does not write or reload ``*.eik.nc`` files. The file-backed VMEC/EIK route
 is the runtime import path for ordinary examples, but not the path for
-end-to-end differentiable optimization.
+differentiable optimization of the whole chain.
 
 The wrapper is an API boundary, not a new physics claim. It inherits the
 ``mboz,nboz >= 21`` and equal-arc parity requirements of the VMEC/Boozer
