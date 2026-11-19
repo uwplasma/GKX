@@ -244,7 +244,8 @@ recursive = true
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
 # 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
-baseline = 69896
+# 69896 -> 70042: DESC and GVEC equilibria written as a wout for the VMEC pipeline (measured).
+baseline = 70042
 target = 45000
 
 [[line_budget_policy.counts]]
@@ -265,6 +266,7 @@ recursive = true
 # 64839 -> 64843: example 01 smoke knobs formatted over four lines.
 # 64843 -> 64846: reason for the kinetic-electron time-route nperiod = 1 pin.
 # 64846 -> 64850: merged with main (#491).
+# DESC and GVEC conversion tests fit the main baseline at 57957 lines.
 baseline = 64850
 target = 35000
 

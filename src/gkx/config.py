@@ -1080,8 +1080,13 @@ class RuntimeConfig:
             errors.append("time.dt must be positive")
         if float(self.time.t_max) <= 0.0:
             errors.append("time.t_max must be positive")
-        if self.geometry.model == "vmec" and not self.geometry.vmec_file:
-            errors.append("geometry.model = 'vmec' requires geometry.vmec_file")
+        if (
+            self.geometry.model in {"vmec", "desc", "gvec"}
+            and not self.geometry.vmec_file
+        ):
+            errors.append(
+                f"geometry.model = '{self.geometry.model}' requires geometry.vmec_file"
+            )
         errors.extend(field_line_errors(self))
         if errors:
             raise ValueError("invalid case: " + "; ".join(errors))
