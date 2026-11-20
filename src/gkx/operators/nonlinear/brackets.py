@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any, Callable, Sequence
 
 import jax.numpy as jnp
@@ -12,6 +13,8 @@ from gkx.core_ky_layout import (
     conjugate_kx_order,
     half_dealias_mask,
     is_half,
+    kept_block,
+    pad_kept_block,
     paired_row_limit,
     self_conjugate_rows,
     to_full,
@@ -134,6 +137,7 @@ def _spectral_bracket_half_core(
     fft_norm: float | None = None,
     radial_phase: jnp.ndarray | None = None,
     ny_full: int | None = None,
+    nx_full: int | None = None,
     multiple_fields: bool,
     combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
 ) -> tuple[jnp.ndarray, int, int]:
@@ -155,6 +159,11 @@ def _spectral_bracket_half_core(
     transform length and the mask all still compose -- it just computes the
     bracket of a different grid, which is why the argument is explicit rather
     than inferred.
+
+    ``nx_full`` marks operands that hold only the kept 2/3 block
+    (:func:`gkx.operators.linear.cache_model.compact_cache`): they and the
+    gradient multipliers are zero-padded to ``Nyc x nx_full`` for the transforms
+    and the product is cut back to the block, which is the dealias mask.
     """
 
     complex_dtype = jnp.result_type(G_hat, chi_hat, jnp.complex64)
@@ -175,10 +184,14 @@ def _spectral_bracket_half_core(
         kx = kx - kx[:, :1]
     rows = int(ky.shape[0])
     ny = rows if ny_full is None else int(ny_full)
+    nkx = int(kx.shape[1])
+    nx = nkx if nx_full is None else int(nx_full)
     ifft_scale, fft_scale = _fft_scales(
-        ky_grid, real_dtype=real_dtype, fft_norm=fft_norm, ny_full=ny
+        ky_grid,
+        real_dtype=real_dtype,
+        fft_norm=float(ny * nx) if fft_norm is None and nx != nkx else fft_norm,
+        ny_full=ny,
     )
-    nx = int(kx.shape[1])
 
     # Both gradient components of a real field come out of one complex FFT: with
     # ``Z = d_x f + i d_y f`` the two-sided spectrum is ``i (kx + i ky) F``, so
@@ -195,11 +208,15 @@ def _spectral_bracket_half_core(
     ky_half = jnp.abs(ky[: ny // 2 + 1, :1])
     own = (scale * (imag * real_fft_ordered_kx(kx)[None, :] - ky_half))[..., None]
     mirror = (scale * (imag * kx[:1] + ky_half))[..., None]
+    pad = (
+        (lambda f: f) if nx == nkx else partial(pad_kept_block, rows=ny // 2 + 1, nx=nx)
+    )
+    own, mirror = pad(own), pad(mirror)
     pairs = slice(1, paired_row_limit(ny))
     kx_order = conjugate_kx_order(nx)
 
     def gradient_fft(f: jnp.ndarray) -> jnp.ndarray:
-        f = to_half(f, ny_full=ny)
+        f = to_half(pad(f), ny_full=ny)
         stored = own * f
         for row in self_conjugate_rows(ny):
             mine = f[..., row : row + 1, :, :]
@@ -216,10 +233,12 @@ def _spectral_bracket_half_core(
     if combine is not None:  # linear in the real-space products: one forward FFT
         bracket = combine(bracket)
     positive_ky = jnp.fft.rfft2(bracket, axes=(-2, -3)) * fft_scale
-    positive_ky *= _broadcast_mask(
-        half_dealias_mask(mask, ny_full=ny), positive_ky.ndim
-    )
-    return positive_ky, ny, nx
+    if nx != nkx:
+        positive_ky = kept_block(positive_ky, rows=rows, nkx=nkx)
+    else:
+        mask = half_dealias_mask(mask, ny_full=ny)
+    positive_ky *= _broadcast_mask(mask, positive_ky.ndim)
+    return positive_ky, ny, nkx
 
 
 def _spectral_bracket_real_fft_core(
@@ -259,6 +278,7 @@ def _spectral_bracket_full_core(
     fft_norm: float | None = None,
     radial_phase: jnp.ndarray | None = None,
     ny_full: int | None = None,
+    nx_full: int | None = None,
     multiple_fields: bool,
     combine: Callable[[jnp.ndarray], jnp.ndarray] | None = None,
 ) -> jnp.ndarray:
@@ -270,7 +290,7 @@ def _spectral_bracket_full_core(
     silently compute the bracket of a different field.
     """
 
-    if is_half(int(jnp.asarray(ky_grid).shape[0]), ny_full):
+    if is_half(int(jnp.asarray(ky_grid).shape[0]), ny_full) or nx_full is not None:
         raise ValueError(
             "the full-complex bracket needs the two-sided ky axis; this grid "
             "stores the ky >= 0 half. Use the compressed real-FFT bracket "

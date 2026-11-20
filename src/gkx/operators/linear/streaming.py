@@ -79,7 +79,8 @@ def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.n
         ny_full is None
         or out.ndim < 3
         or out.shape[-1] % 2
-        or out.shape[-3] not in (int(ny_full), nyc_from_ny(ny_full))
+        # the full axis, its half, or the kept 2/3 block of the half
+        or nyc_from_ny(ny_full) < out.shape[-3] != int(ny_full)
     ):
         return out
     ny = int(ny_full)

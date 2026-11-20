@@ -920,6 +920,7 @@ def hyperdiffusion_contribution(
     weight: jnp.ndarray,
     ny_full: int | None = None,
     ky_cut: jnp.ndarray | None = None,
+    nx_full: int | None = None,
 ) -> jnp.ndarray:
     """Hyperdiffusion in k_perp following Laguerre-Hermite conventions.
 
@@ -930,7 +931,9 @@ def hyperdiffusion_contribution(
     ``Dfac`` by ``4 ** p_hyper_kperp`` with no shape error to show for it.
     A row selection does not contain that row at all, so it passes the
     parent's ``|ky|`` there as ``ky_cut``; normalizing by the selected row's
-    own ``ky`` would hand every scanned mode the full ``D_hyper``.
+    own ``ky`` would hand every scanned mode the full ``D_hyper``. ``nx_full``
+    does the same for ``kx`` on the kept 2/3 block, whose column ``(Nx - 1) // 3``
+    is the parent's.
     """
 
     real_dtype = jnp.real(G).dtype
@@ -948,7 +951,7 @@ def hyperdiffusion_contribution(
 
     nx = int(dealias_mask.shape[1])
     ny = int(ky.size)
-    kx_idx = max((nx - 1) // 3, 0)
+    kx_idx = max(((nx if nx_full is None else int(nx_full)) - 1) // 3, 0)
     ky_idx = min(max(((ny if ny_full is None else int(ny_full)) - 1) // 3, 0), ny - 1)
     kx2_max = kx2[kx_idx] if kx2.ndim == 1 else kx2[ky_idx, kx_idx]
     ky2_max = ky2[ky_idx] if ky_cut is None else ky_cut * ky_cut

@@ -63,12 +63,14 @@ __all__ = [
     "half_twothirds_mask",
     "hermitian_mode_weights",
     "is_half",
+    "kept_block",
     "ky_layout_of",
     "ky_row_weights",
     "negative_ky_block",
     "ny_full_candidates",
     "nyc_from_ny",
     "nyquist_row",
+    "pad_kept_block",
     "rows_for_layout",
     "source_ky_layout",
     "source_ny_full",
@@ -183,7 +185,7 @@ def ky_layout_of(rows: int, ny_full: int | None) -> KyLayout:
     count = int(rows)
     if count == ny:
         return FULL
-    if count == nyc_from_ny(ny):
+    if count <= nyc_from_ny(ny):  # fewer rows: the kept block of the half axis
         return HALF
     raise ValueError(
         f"spectral axis has {count} ky rows, which is neither the full axis "
@@ -308,6 +310,47 @@ def to_full(
         positive_ky, ny_full=ny, nx=nx, conjugate_kx=conjugate_kx
     )
     return _xp(positive_ky).concatenate([positive_ky, negative], axis=KY_AXIS)
+
+
+def kept_block(array: Any, *, rows: int | None, nkx: int, axis: int = KY_AXIS) -> Any:
+    """Return the first ``rows`` ``ky`` rows and the ``nkx`` modes ``|n| <= nkx // 2``.
+
+    ``axis`` is the ``ky`` axis and ``axis + 1`` the ``kx`` axis in FFT order;
+    ``rows=None`` keeps every row (a ``kx``-only array then passes ``axis``
+    of its ``kx`` axis minus one). The result keeps the FFT order of ``nkx``.
+    """
+
+    xp, a = _xp(array), axis % array.ndim
+    nx, half = int(array.shape[a + 1]), (nkx + 1) // 2
+    cut = [slice(None)] * array.ndim
+    if rows is not None:
+        cut[a] = slice(0, rows)
+    head, tail = list(cut), list(cut)
+    head[a + 1], tail[a + 1] = slice(0, half), slice(nx - (nkx - half), nx)
+    return xp.concatenate([array[tuple(head)], array[tuple(tail)]], axis=a + 1)
+
+
+def pad_kept_block(block: Any, *, rows: int, nx: int, axis: int = KY_AXIS) -> Any:
+    """Inverse of :func:`kept_block`: zero-pad to ``rows`` x ``nx`` by concatenation.
+
+    Concatenation, not an indexed scatter, which XLA ran 4.7x slower in complex128.
+    """
+
+    xp, a = _xp(block), axis % block.ndim
+    nkx = int(block.shape[a + 1])
+    half = (nkx + 1) // 2
+
+    def part(start: int, stop: int) -> Any:
+        return block[(slice(None),) * (a + 1) + (slice(start, stop),)]
+
+    def zeros(axis_: int, count: int, like: Any) -> Any:
+        shape = list(like.shape)
+        shape[axis_] = count
+        return xp.zeros(shape, dtype=like.dtype)
+
+    wide = [part(0, half), zeros(a + 1, nx - nkx, block), part(half, nkx)]
+    wide = xp.concatenate(wide, axis=a + 1)
+    return xp.concatenate([wide, zeros(a, rows - int(block.shape[a]), wide)], axis=a)
 
 
 def _set_ky_row(state: Any, row: int, block: Any) -> Any:
