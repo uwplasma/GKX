@@ -8,7 +8,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 
-from gkx.core_ky_layout import kept_block
+from gkx.core_ky_layout import kept_block, kept_rows
 
 
 @dataclass(frozen=True)
@@ -276,7 +276,7 @@ def compact_cache(cache: LinearCache) -> LinearCache:
     """
 
     ny, nx = int(cache.ky.shape[0]), int(cache.kx.shape[0])
-    rows, nkx = 1 + (int(cache.ny_full) - 1) // 3, 1 + 2 * ((nx - 1) // 3)
+    rows, nkx = kept_rows(cache.ny_full), 1 + 2 * ((nx - 1) // 3)
 
     def block(x: Any) -> Any:
         axis = x.ndim - 3 if x.ndim >= 3 else 0

@@ -64,6 +64,7 @@ __all__ = [
     "hermitian_mode_weights",
     "is_half",
     "kept_block",
+    "kept_rows",
     "ky_layout_of",
     "ky_row_weights",
     "negative_ky_block",
@@ -185,7 +186,7 @@ def ky_layout_of(rows: int, ny_full: int | None) -> KyLayout:
     count = int(rows)
     if count == ny:
         return FULL
-    if count <= nyc_from_ny(ny):  # fewer rows: the kept block of the half axis
+    if count in (nyc_from_ny(ny), kept_rows(ny)):  # or the kept 2/3 block of it
         return HALF
     raise ValueError(
         f"spectral axis has {count} ky rows, which is neither the full axis "
@@ -310,6 +311,12 @@ def to_full(
         positive_ky, ny_full=ny, nx=nx, conjugate_kx=conjugate_kx
     )
     return _xp(positive_ky).concatenate([positive_ky, negative], axis=KY_AXIS)
+
+
+def kept_rows(ny_full: int) -> int:
+    """Return the ``ky >= 0`` rows the 2/3 rule keeps, ``0 .. (Ny - 1) // 3``."""
+
+    return 1 + (int(ny_full) - 1) // 3
 
 
 def kept_block(array: Any, *, rows: int | None, nkx: int, axis: int = KY_AXIS) -> Any:

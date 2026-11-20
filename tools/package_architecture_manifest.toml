@@ -246,8 +246,8 @@ recursive = true
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
 # 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
-# 69896 -> 69954: time.compact_modes, the kept-mode explicit step (main was at 69747).
-baseline = 69954
+# 69896 -> 69961: time.compact_modes, the kept-mode explicit step (main was at 69747).
+baseline = 69961
 target = 45000
 
 [[line_budget_policy.counts]]
