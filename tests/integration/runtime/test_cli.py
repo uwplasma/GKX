@@ -2164,3 +2164,44 @@ def test_set_overrides_replace_deck_values(tmp_path):
     finally:
         extract_set_overrides([])
     assert load_toml(deck)["run"]["Nl"] == 4
+
+
+def _restart_cli(deck: Path, out: Path, steps: int, *, x64: bool) -> None:
+    import os
+    import subprocess
+
+    env = {
+        k: v for k, v in os.environ.items() if k not in {"JAX_ENABLE_X64", "GKX_X64"}
+    }
+    if x64:
+        env.update(JAX_ENABLE_X64="true", GKX_X64="1")
+    env["PYTHONPATH"] = str(Path(__import__("gkx").__file__).parents[1])
+    cmd = [sys.executable, "-m", "gkx.cli", "run", "--config", str(deck)]
+    cmd += ["--method", "rk3", "--dt", "0.05", "--steps", str(steps)]
+    cmd += ["--out", str(out), "--no-plots", "--no-progress"]
+    subprocess.run(cmd, env=env, check=True, capture_output=True, timeout=600)
+
+
+@pytest.mark.parametrize("x64", [True, False], ids=["float64", "float32"])
+def test_cli_split_restart_equals_uninterrupted_run(tmp_path: Path, x64: bool) -> None:
+    """A fixed-step run split 100 + 100 through the restart file is the 200-step run.
+
+    Exact identity: rk3 at fixed dt is the same sequence of floating-point
+    operations whether or not the state passes through the file, provided the
+    file keeps the run's precision. Before the file stored f8, a float64 run lost
+    its low bits at the join (relative 5.1e-8 on this deck).
+    """
+
+    from netCDF4 import Dataset
+
+    deck = tmp_path / "case.toml"
+    deck.write_text(
+        (REPO_ROOT / "examples/03_nonlinear_tokamak/case.toml").read_text()
+        + "save_for_restart = true\nrestart_if_exists = true\n"
+    )
+    _restart_cli(deck, tmp_path / "one" / "run.out.nc", 200, x64=x64)
+    for _ in range(2):
+        _restart_cli(deck, tmp_path / "two" / "run.out.nc", 100, x64=x64)
+    g = [Dataset(tmp_path / leg / "run.restart.nc")["G"][:] for leg in ("one", "two")]
+    np.testing.assert_array_equal(g[1], g[0])
+    assert g[0].dtype == (np.float64 if x64 else np.float32)

@@ -960,9 +960,9 @@ def _write_restart_netcdf(
         root.createDimension("Nkx", restart_state_layout.shape[4])
         root.createDimension("Nky", restart_state_layout.shape[5])
         root.createDimension("ri", 2)
-        root.createVariable(
-            "G", "f4", ("Nspecies", "Nm", "Nl", "Nz", "Nkx", "Nky", "ri")
-        )[:, :, :, :, :, :, :] = restart_state_layout
+        root.createVariable("G", restart_state_layout.dtype, tuple(root.dimensions))[
+            :, :, :, :, :, :, :
+        ] = restart_state_layout
         time_last = float(time_vals[-1]) if time_vals.size else 0.0
         root.createVariable("time", "f8", ())[:] = time_last
     return str(path)
