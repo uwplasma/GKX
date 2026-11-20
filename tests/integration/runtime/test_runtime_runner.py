@@ -3085,7 +3085,9 @@ def test_saturation_stop_condition_defaults_on_for_diagnosed_nonlinear_runs() ->
     assert cfg.time.run_to == "saturation"
     stop = _saturation_stop_condition(cfg, ctx, policy)
     assert stop is not None
-    time = np.arange(0.0, 100.0, 0.5)
+    # The floor follows the default horizon: min(800, 0.95 * t_max) = 95 at t_max = 100
+    # (make_saturation_check), so a trace that ends before it is too short.
+    time = np.arange(0.0, 0.9 * cfg.time.t_max, 0.5)
     decision = stop(time, np.ones_like(time), False)
     assert decision["status"] == "too_short" and decision["stop"] is False
     # At the cap the verdict is reported with its reason, and the run ends.
