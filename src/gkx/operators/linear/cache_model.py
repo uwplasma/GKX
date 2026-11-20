@@ -292,7 +292,7 @@ def compact_cache(cache: LinearCache) -> LinearCache:
         renumber(jnp.asarray(i, dtype=jnp.int32)) for i in cache.linked_indices
     )
     flat = jnp.concatenate([i.reshape(-1) for i in linked])
-    if int(flat.size) != rows * nkx:
+    if not jnp.array_equal(jnp.sort(flat), jnp.arange(rows * nkx)):
         raise ValueError("compact_modes: the linked chains do not cover the kept block")
     return replace(
         cache,

@@ -4561,16 +4561,30 @@ def _compact_modes_deck(method: str = "rk4-pi", **time):
 
 
 @pytest.mark.parametrize("method", ["rk4-pi", "rk3"])
-def test_compact_modes_step_is_identical_to_the_full_grid_step(method):
+def test_compact_modes_step_is_identical_to_the_full_grid_step(method, monkeypatch):
     """Identity between two code paths, flag on and off, over about 40 steps."""
     from gkx.runtime import run_runtime_nonlinear
+    from gkx.solvers.nonlinear import diagnostics as step_module
+
+    built = []
+    compact_cache = step_module.compact_cache
+
+    def counting(cache):
+        built.append(compact_cache(cache))
+        return built[-1]
+
+    monkeypatch.setattr(step_module, "compact_cache", counting)
 
     def run(compact):
         cfg = _compact_modes_deck(method, compact_modes=compact)
         options = dict(Nl=2, Nm=4, return_state=True, resolved_diagnostics=False)
         return run_runtime_nonlinear(cfg, **options)
 
-    full, compact = run(False), run(True)
+    full = run(False)
+    assert not built  # the flag off never builds the compact cache
+    compact = run(True)
+    # The flag reached the step: it ran on the 4 x 7 kept block of the 7 x 12 grid.
+    assert built and (built[-1].ky.size, built[-1].kx.size) == (4, 7)
     d_full, d_compact = full.diagnostics, compact.diagnostics
     assert np.asarray(d_full.t).size > 30
     assert compact.state.shape == full.state.shape
