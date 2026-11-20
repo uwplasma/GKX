@@ -161,6 +161,9 @@ def test_ci_wide_coverage_matrix_matches_the_shard_count() -> None:
     wide_shards = wide_job["strategy"]["matrix"]["shard"]
     shard_count = len(wide_shards)
     assert wide_shards == list(range(1, shard_count + 1))
+    groups = wide_job["strategy"]["matrix"]["include"]
+    assert sorted(group["shard"] for group in groups) == wide_shards
+    assert all(group["tests"].strip() for group in groups)
 
     shard_step = next(
         step
@@ -173,7 +176,7 @@ def test_ci_wide_coverage_matrix_matches_the_shard_count() -> None:
         if step.get("name") == "Combine wide package coverage"
     )
     assert f"/{shard_count}" in shard_step["name"]
-    assert f"--shards {shard_count}" in shard_step["run"]
+    assert "matrix.tests" in shard_step["run"]
     assert f"--shards {shard_count}" in combine_step["run"]
 
 
