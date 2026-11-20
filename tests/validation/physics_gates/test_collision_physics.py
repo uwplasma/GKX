@@ -1095,6 +1095,7 @@ def test_collisionless_hermite_spectrum_is_purely_real() -> None:
     assert collisional.real.min() < -1.0e-3
 
 
+@pytest.mark.slow
 @_LANDAU_NEEDS_FLOAT64
 @pytest.mark.parametrize(
     ("te_over_ti", "guess", "gamma_tolerance", "omega_tolerance"),
@@ -1937,6 +1938,7 @@ def _demo_case(tmp_path):
     return deck
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("ky", [0.3, 0.4])
 def test_the_demo_reports_the_eigenvalue_of_the_case_it_builds(tmp_path, ky) -> None:
     from gkx.cli import DEFAULT_DEMO_SETTINGS

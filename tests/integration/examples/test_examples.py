@@ -160,7 +160,19 @@ def _headless_matplotlib():
             matplotlib.use(previous, force=True)
 
 
-@pytest.mark.parametrize("relative", sorted(SMOKE_OUTPUTS))
+#: Gallery runs over 60 s on a hosted runner; they run in the slow tier.
+SLOW_EXAMPLES = {"01_linear_tokamak/run.py", "05_kinetic_electrons/run.py"}
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        pytest.param(relative, marks=pytest.mark.slow)
+        if relative in SLOW_EXAMPLES
+        else relative
+        for relative in sorted(SMOKE_OUTPUTS)
+    ],
+)
 def test_gallery_example_runs_and_writes_outputs(relative, tmp_path, monkeypatch):
     reason = _skip_reason(relative)
     if reason:
