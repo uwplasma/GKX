@@ -127,12 +127,19 @@ def _optional_profile(
     return default
 
 
+# Smallest |gradpar| (units of 1/L_ref) of a field line that winds; iota near 0 gives 3e-14.
+_GRADPAR_MIN = 1.0e-8
+
+
 def _gradpar_value(gradpar: jnp.ndarray, *, validate_finite: bool) -> Any:
     if _is_traced(gradpar):
-        return jnp.mean(gradpar)
+        value = jnp.mean(gradpar)
+        return jnp.where(jnp.abs(value) < _GRADPAR_MIN, jnp.nan, value)
 
     gradpar_values = np.asarray(gradpar)
     value = float(np.mean(gradpar_values))
+    if abs(value) < _GRADPAR_MIN:
+        raise ValueError(f"|gradpar| = {abs(value):.3g} is below {_GRADPAR_MIN:g}")
     if validate_finite and not np.allclose(
         gradpar_values, value, rtol=1.0e-5, atol=1.0e-7
     ):
@@ -186,6 +193,7 @@ def flux_tube_geometry_from_mapping(
     theta = _array(data, "theta", validate_finite=validate_finite)
     ntheta = _theta_sample_count(theta)
     arrays = _required_profiles(data, ntheta, validate_finite=validate_finite)
+    gradpar = _gradpar_value(arrays["gradpar"], validate_finite=validate_finite)
     jacobian = _optional_profile(
         data,
         "jacobian",
@@ -196,12 +204,15 @@ def flux_tube_geometry_from_mapping(
     grho = _optional_profile(
         data, "grho", ntheta, jnp.ones_like(theta), validate_finite=validate_finite
     )
+    arrays.update(jacobian=jacobian, grho=grho)
+    if _is_traced(gradpar):  # a trace cannot raise: a vanishing gradpar gives NaN
+        arrays = {
+            k: jnp.where(jnp.isnan(gradpar), jnp.nan, v) for k, v in arrays.items()
+        }
 
     return FluxTubeGeometryData(
         theta=theta,
-        gradpar_value=_gradpar_value(
-            arrays["gradpar"], validate_finite=validate_finite
-        ),
+        gradpar_value=gradpar,
         bmag_profile=arrays["bmag"],
         bgrad_profile=arrays["bgrad"],
         gds2_profile=arrays["gds2"],
@@ -211,8 +222,8 @@ def flux_tube_geometry_from_mapping(
         gb_profile=arrays["gbdrift"],
         cv0_profile=arrays["cvdrift0"],
         gb0_profile=arrays["gbdrift0"],
-        jacobian_profile=jacobian,
-        grho_profile=grho,
+        jacobian_profile=arrays["jacobian"],
+        grho_profile=arrays["grho"],
         **_scalar_metadata(data, validate_finite=validate_finite),
         nfp=_positive_nfp(data),
         kperp2_bmag=bool(data.get("kperp2_bmag", True)),

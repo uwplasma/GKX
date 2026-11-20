@@ -260,6 +260,40 @@ def test_flux_tube_geometry_from_mapping_rejects_bad_contracts() -> None:
         flux_tube_geometry_from_mapping(bad)
 
 
+def _vacuum_torus_mapping(gradpar: float) -> dict[str, object]:
+    """Large-aspect vacuum torus, B = B0 R0 / R (epsilon = 0.1).
+
+    With iota = 0 the field is purely toroidal, so b.grad(theta) = 0 exactly.
+    """
+
+    mapping = _sample_mapping()
+    theta = np.asarray(mapping["theta"])
+    mapping["bmag"] = 1.0 / (1.0 + 0.1 * np.cos(theta))
+    mapping["gradpar"] = gradpar * np.ones_like(theta)
+    return mapping
+
+
+def test_flux_tube_geometry_from_mapping_refuses_vanishing_gradpar() -> None:
+    # gradient_measurements 2.6: gradpar 3e-14 at iota near 0 was accepted silently.
+    with pytest.raises(ValueError, match="gradpar"):
+        flux_tube_geometry_from_mapping(_vacuum_torus_mapping(0.0))
+
+    def observables(gradpar):
+        mapping = _vacuum_torus_mapping(0.0)
+        mapping["gradpar"] = gradpar * jnp.ones_like(jnp.asarray(mapping["theta"]))
+        geom = flux_tube_geometry_from_mapping(mapping, validate_finite=False)
+        return jnp.append(flux_tube_geometry_observables(geom), geom.gradpar_value)
+
+    traced = jax.jit(observables)
+    assert np.all(np.isnan(np.asarray(traced(0.0))))
+    # Seeded QA mapping of the same report: gradpar = 0.0345 is unchanged.
+    out = np.asarray(traced(0.0345))
+    assert np.all(np.isfinite(out))
+    assert out[-1] == pytest.approx(0.0345, rel=1e-6)
+    geom = flux_tube_geometry_from_mapping(_vacuum_torus_mapping(0.0345))
+    assert geom.gradpar() == pytest.approx(0.0345, rel=1e-12)
+
+
 def test_differentiable_backend_path_helpers_prefer_configured_checkout(
     tmp_path: Path, monkeypatch
 ) -> None:
