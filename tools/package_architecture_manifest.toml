@@ -164,7 +164,8 @@ path = "solvers/nonlinear/diagnostics.py"
 # 3529 -> 3539: the prepared scan runs through the digest-keyed executable cache.
 # 3539 -> 3542: Lawson integrating-factor steppers.
 # 3542 -> 2747: the saturated-window heat flux and sheared drivers moved to transport_window.py.
-baseline_lines = 2747
+# 2747 -> 2817: the compact-mode explicit step (time.compact_modes) and its refusals.
+baseline_lines = 2817
 target_lines = 1200
 reason = "The explicit and IMEX diagnostic drivers, the state integrators and the cached RHS share one set of kernels and options; the split modules only forwarded names to each other."
 
@@ -200,7 +201,8 @@ path = "workflows/nonlinear.py"
 # step cap) between lawson-rk4-pi and rk4-pi.
 # 1283 -> 1285: merged with main (#489).
 # 1285 -> 1288: merged with main (#487).
-baseline_lines = 1288
+# 1288 -> 1289: time.compact_modes passed to the explicit diagnostics.
+baseline_lines = 1289
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
@@ -244,7 +246,8 @@ recursive = true
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
 # 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
-baseline = 69896
+# 69896 -> 69961: time.compact_modes, the kept-mode explicit step (main was at 69747).
+baseline = 69961
 target = 45000
 
 [[line_budget_policy.counts]]

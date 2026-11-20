@@ -105,6 +105,7 @@ def build_runtime_nonlinear_diagnostics_kwargs(
         terms=term_config,
         checkpoint=bool(cfg.time.checkpoint),
         compressed_real_fft=bool(cfg.time.compressed_real_fft),
+        compact_modes=bool(cfg.time.compact_modes),
         sample_stride=int(sample_stride),
         diagnostics_stride=int(diagnostics_stride),
         use_dealias_mask=bool(cfg.time.nonlinear_dealias),

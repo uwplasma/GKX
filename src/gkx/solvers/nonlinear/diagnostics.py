@@ -17,7 +17,7 @@ from functools import partial
 from typing import Any, Callable, NamedTuple, cast
 from gkx.config import LAWSON_METHODS, resolve_nonlinear_cfl_fac
 from gkx.core_grid import SpectralGrid, _gyrokinetic_moment_shape
-from gkx.core_ky_layout import source_ny_full
+from gkx.core_ky_layout import kept_block, pad_kept_block, source_ny_full
 from gkx.diagnostics_contract import ResolvedDiagnostics, SimulationDiagnostics
 from gkx.geometry import FluxTubeGeometryLike, ensure_flux_tube_geometry_data
 from gkx.operators.collision import CollisionOperator
@@ -29,7 +29,7 @@ from gkx.operators.fluxes import (
 from gkx.operators.linear.cache_builder import (
     build_linear_cache,
 )
-from gkx.operators.linear.cache_model import LinearCache
+from gkx.operators.linear.cache_model import LinearCache, compact_cache
 from gkx.operators.linear.linked import (
     linked_cover_mask_from_cache,
     mask_supplied_state,
@@ -166,6 +166,7 @@ class _ExplicitDiagnosticOptions:
     external_phi: jnp.ndarray | float | None
     resolved_diagnostics: bool
     show_progress: bool
+    compact_modes: bool
 
 
 @dataclass(frozen=True)
@@ -685,15 +686,19 @@ def _run_explicit_diagnostic_scan_raw(
     )
     if initial_dt is not None:
         dt0 = jnp.where(initial_dt == 0.0, dt0, initial_dt)
-    diag_zero = cached_jit(compute_diag_from_state)(G0, fields0, G0, fields0, dt0)
+    block = getattr(compute_diag_from_state, "kept_block", None)
+    G0_step, fields0_step = (G0, fields0) if block is None else block[0]((G0, fields0))
+    diag_zero = cached_jit(compute_diag_from_state)(
+        G0_step, fields0_step, G0_step, fields0_step, dt0
+    )
     stride = int(max(sample_stride, diagnostics_stride, 1))
     sampled_scan = stride > 1 and jax.default_backend() != "cpu"
     G_final, scan_diag_out, dt_next = run_explicit_diagnostic_scan(
         step,
         (
-            G0,
-            G0,
-            fields0,
+            G0_step,
+            G0_step,
+            fields0_step,
             diag_zero,
             jnp.asarray(0.0, dtype=prepared.real_dtype),
             dt0,
@@ -705,7 +710,7 @@ def _run_explicit_diagnostic_scan_raw(
         sampled_scan_fn=run_sampled_explicit_diagnostic_scan,
         _return_dt=True,
     )
-
+    G_final = G_final if block is None else block[1](G_final)
     fields_final = compute_fields_cached(
         G_final,
         prepared.cache,
@@ -848,6 +853,21 @@ def _build_explicit_scan_closures(
 ) -> tuple[Callable[..., Any], Callable[..., Any]]:
     """Build diagnostic scan closures after state and policies are prepared."""
 
+    full = prepared
+    if options.compact_modes:  # the step carries only the kept (ky, kx) block
+        prepared = replace(prepared, cache=compact_cache(prepared.cache))
+        rows, nkx = prepared.cache.ky.size, prepared.cache.kx.size
+        nyc, nx = full.cache.ky.size, full.cache.kx.size
+        cut = partial(jax.tree.map, partial(kept_block, rows=rows, nkx=nkx))
+        pad = partial(jax.tree.map, partial(pad_kept_block, rows=nyc, nx=nx))
+        update_dt = policies.time_step_policy.update_dt
+        policies = replace(
+            policies,
+            time_step_policy=replace(
+                policies.time_step_policy,
+                update_dt=lambda fields, dt: update_dt(pad(fields), dt),
+            ),
+        )
     chain_terms = policies.collision_policy.rhs_terms
     # Chain IMEX: when explicit collisions would bound dt, the Landau operator is
     # a local implicit sub-step instead of part of the RHS.
@@ -904,7 +924,7 @@ def _build_explicit_scan_closures(
             implicit_collisions=implicit_collisions,
         )
     compute_diag_from_state = _make_explicit_diagnostic_callable(
-        prepared,
+        full,
         grid,
         params=params,
         omega_ky_index=options.omega_ky_index,
@@ -913,6 +933,13 @@ def _build_explicit_scan_closures(
         wphi_scale=options.wphi_scale,
         resolved_diagnostics=options.resolved_diagnostics,
     )
+    if options.compact_modes:  # diagnostics read the full grid
+        diagnose = compute_diag_from_state
+
+        def compute_diag_from_state(G, fields, G_prev, fields_prev, dt):
+            return diagnose(*pad((G, fields, G_prev, fields_prev)), dt)
+
+        compute_diag_from_state.kept_block = (cut, pad)  # type: ignore[attr-defined]
     make_step = partial(
         _make_explicit_scan_step,
         prepared,
@@ -995,6 +1022,8 @@ def _build_explicit_scan_components(
     # full-cover decks get ``None`` and the same object back.
     cover_mask = linked_cover_mask_from_cache(prepared.cache)
     prepared = replace(prepared, G0=project_to_linked_cover(prepared.G0, cover_mask))
+    if options.compact_modes:
+        _refuse_uncovered_compact_modes(prepared, params, options)
     policies = _build_explicit_runtime_policies(
         prepared,
         grid,
@@ -1024,6 +1053,37 @@ def _build_explicit_scan_components(
         compute_diag_from_state=compute_diag_from_state,
         cover_mask=cover_mask,
     )
+
+
+def _refuse_uncovered_compact_modes(
+    prepared: _ExplicitPreparedState,
+    params: LinearParams,
+    options: _ExplicitDiagnosticOptions,
+) -> None:
+    """Name every input of this run that the compact-mode step does not cover."""
+
+    cache, terms = prepared.cache, prepared.term_cfg
+    rows = int(cache.ky.shape[0])
+    uncovered = {
+        f"time.method = {options.method!r}": options.method
+        not in {"rk3", "rk4", "rk4-pi"},
+        "kinetic electrons": bool(np.any(np.asarray(params.charge_sign) < 0.0)),
+        "electromagnetic fields": not (
+            _is_static_zero(terms.apar) and _is_static_zero(terms.bpar)
+        ),
+        "a periodic boundary": not (cache.use_twist_shift and cache.linked_indices),
+        'grid.ky_layout = "full"': cache.ny_full is None or rows == cache.ny_full,
+        "the non-twisting flux tube": cache.ntft_m0 is not None,
+        "per-species moment counts": cache.groups is not None,
+        "Landau or Sugama collision blocks": cache.landau_pairs is not None,
+        "time.collision_split": options.collision_split,
+        "time.compressed_real_fft = false": not options.compressed_real_fft,
+        "a fixed mode or an external field": options.fixed_mode_ky_index is not None
+        or options.external_phi is not None,
+    }
+    named = [name for name, hit in uncovered.items() if hit]
+    if named:
+        raise ValueError(f"time.compact_modes does not support {', '.join(named)}")
 
 
 def _run_explicit_scan_components(
@@ -1090,6 +1150,7 @@ def prepare_explicit_nonlinear_diagnostics_impl(
     external_phi: jnp.ndarray | float | None = None,
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
+    compact_modes: bool = False,
     _rhs_factory: Callable[..., Any] | None = None,
 ) -> PreparedExplicitNonlinearDiagnostics:
     """Prepare one compile-stable explicit nonlinear diagnostic simulation."""
@@ -1103,6 +1164,8 @@ def prepare_explicit_nonlinear_diagnostics_impl(
         or fixed_mode_kx_index is not None
     ):
         raise ValueError("named diagnostics require supported explicit policy")
+    if compact_modes and _rhs_factory is not None:
+        raise ValueError("time.compact_modes does not support time.state_sharding")
     options = _explicit_options_from_values(locals())
     components = _build_explicit_scan_components(
         G0,
@@ -1319,6 +1382,7 @@ def _integrate_nonlinear_explicit_diagnostics_impl(
     external_phi: jnp.ndarray | float | None = None,
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
+    compact_modes: bool = False,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Integrate an explicit nonlinear run and return diagnostics plus final state."""
 
@@ -2088,6 +2152,7 @@ _EXPLICIT_DIAGNOSTIC_OPTION_KEYS = (
     "external_phi",
     "resolved_diagnostics",
     "show_progress",
+    "compact_modes",
 )
 _IMEX_DIAGNOSTIC_OPTION_KEYS = tuple(
     key
@@ -2101,6 +2166,7 @@ _IMEX_DIAGNOSTIC_OPTION_KEYS = tuple(
         "cfl",
         "cfl_fac",
         "resolved_diagnostics",
+        "compact_modes",
     }
 )
 
@@ -2173,6 +2239,7 @@ def integrate_nonlinear_explicit_diagnostics(
     external_phi: jnp.ndarray | float | None = None,
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
+    compact_modes: bool = False,
     return_solve_stats: bool = False,
 ) -> tuple[Any, ...]:
     """Integrate nonlinear system and return runtime diagnostics.
@@ -2182,6 +2249,8 @@ def integrate_nonlinear_explicit_diagnostics(
     """
 
     if method in _IMEX_METHODS:
+        if compact_modes:
+            raise ValueError(f"time.compact_modes does not support method {method!r}")
         return integrate_nonlinear_imex_diagnostics(
             G0,
             grid,
@@ -2248,6 +2317,7 @@ def integrate_nonlinear_explicit_diagnostics_state(
     external_phi: jnp.ndarray | float | None = None,
     resolved_diagnostics: bool = True,
     show_progress: bool = False,
+    compact_modes: bool = False,
     compile_cache: dict[Any, Any] | None = None,
 ) -> tuple[jnp.ndarray, SimulationDiagnostics, jnp.ndarray, FieldState]:
     """Return diagnostics and final state using the prepared reference graph.

@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gkx.core_ky_layout import is_half, nyc_from_ny
+from gkx.core_ky_layout import is_half, kept_rows, nyc_from_ny
 from gkx.core_velocity import hermite_ladder_coeffs
 
 # One positivity guard for the whole linear operator. The local copy asked
@@ -79,7 +79,8 @@ def _real_fft_nyquist_derivative(out: jnp.ndarray, ny_full: int | None) -> jnp.n
         ny_full is None
         or out.ndim < 3
         or out.shape[-1] % 2
-        or out.shape[-3] not in (int(ny_full), nyc_from_ny(ny_full))
+        # the full axis, its half, or the kept 2/3 block of the half
+        or out.shape[-3] not in (int(ny_full), nyc_from_ny(ny_full), kept_rows(ny_full))
     ):
         return out
     ny = int(ny_full)

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass, field as dataclass_field, replace
 from typing import Any
 
 import jax
 import jax.numpy as jnp
+
+from gkx.core_ky_layout import kept_block, kept_rows
 
 
 @dataclass(frozen=True)
@@ -118,6 +120,9 @@ class LinearCache:
     #: ``None`` when ``ky`` holds that row itself (see
     #: :attr:`gkx.core_grid.SpectralGrid.ky_cut`).
     ky_cut: jnp.ndarray | None = None
+    #: Length of the ``kx`` axis the bracket transforms, when the cache holds only
+    #: the kept 2/3 block (:func:`compact_cache`); ``None`` otherwise.
+    nx_full: int | None = None
     #: Non-twisting flux tube radial index shift ``m0(ky, z)``: row ``kx`` at
     #: ``z`` holds ballooning mode ``kx + m0``. ``None`` off that geometry.
     ntft_m0: jnp.ndarray | None = None
@@ -206,6 +211,7 @@ class LinearCache:
             self.linked_use_gather,
             self.ny_full,
             self.mu_grid,
+            self.nx_full,
         )
         return children, aux_data
 
@@ -221,6 +227,7 @@ class LinearCache:
             linked_use_gather,
             ny_full,
             mu_grid,
+            nx_full,
         ) = aux_data
         base_count = 50
         base_children = list(children[:base_count])
@@ -241,9 +248,62 @@ class LinearCache:
             linked_use_gather=linked_use_gather,
             ny_full=ny_full,
             mu_grid=mu_grid,
+            nx_full=nx_full,
             ky_cut=children[-5],
             ntft_m0=children[-4],
             landau_pairs=children[-3],
             mu_lb=children[-2],
             groups=children[-1],
         )
+
+
+# Fields with a (ky, kx) pair as their last two axes or before the z axis.
+_KYKX_FIELDS = (
+    "Jl", "b", "kperp2", "omega_d", "cv_d", "gb_d", "mask0", "kx_grid", "ky_grid",
+    "dealias_mask", "linked_damp_profile", "JlB", "laguerre_j0",
+    "laguerre_j1_over_alpha",
+)  # fmt: skip
+
+
+def compact_cache(cache: LinearCache) -> LinearCache:
+    """The cache restricted to the kept 2/3 block of a half-``ky`` linked grid.
+
+    Rows ``0 .. (Ny - 1) // 3`` and kx modes ``|n| <= (Nx - 1) // 3``: the modes
+    the dealias mask keeps and the linked chains visit. The chain indices
+    ``ky + Ny * kx`` are renumbered onto the block, which they cover exactly, so
+    the chain output is a full-cover permutation. ``nx_full`` keeps the bracket
+    transform length.
+    """
+
+    ny, nx = int(cache.ky.shape[0]), int(cache.kx.shape[0])
+    rows, nkx = kept_rows(cache.ny_full), 1 + 2 * ((nx - 1) // 3)
+
+    def block(x: Any) -> Any:
+        axis = x.ndim - 3 if x.ndim >= 3 else 0
+        if tuple(x.shape[axis : axis + 2]) != (ny, nx):
+            raise ValueError(f"cache field of shape {x.shape} is not on the grid")
+        return kept_block(x, rows=rows, nkx=nkx, axis=axis)
+
+    def renumber(idx: Any) -> Any:
+        ky, kx = jnp.mod(idx, ny), idx // ny
+        return ky + rows * jnp.where(kx >= (nkx + 1) // 2, kx - (nx - nkx), kx)
+
+    linked = tuple(
+        renumber(jnp.asarray(i, dtype=jnp.int32)) for i in cache.linked_indices
+    )
+    flat = jnp.concatenate([i.reshape(-1) for i in linked])
+    if not jnp.array_equal(jnp.sort(flat), jnp.arange(rows * nkx)):
+        raise ValueError("compact_modes: the linked chains do not cover the kept block")
+    return replace(
+        cache,
+        **{name: block(getattr(cache, name)) for name in _KYKX_FIELDS},
+        ky=cache.ky[:rows],
+        kx=kept_block(cache.kx[None], rows=None, nkx=nkx, axis=0)[0],
+        linked_indices=linked,
+        linked_inverse_permutation=jnp.argsort(flat).astype(jnp.int32),
+        linked_full_cover=True,
+        linked_use_gather=False,
+        linked_gather_map=jnp.asarray([], dtype=jnp.int32),
+        linked_gather_mask=jnp.asarray([], dtype=bool),
+        nx_full=nx,
+    )

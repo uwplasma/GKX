@@ -70,6 +70,7 @@ class _NonlinearBracketContext:
     compressed_real_fft: bool
     ny_full: int | None
     radial_phase: jnp.ndarray | None
+    nx_full: int | None = None
 
 
 def _prepare_nonlinear_inputs(
@@ -310,6 +311,7 @@ def _bracket_kwargs(c: _NonlinearBracketContext) -> dict:
         "kxfac": c.kxfac,
         "radial_phase": c.radial_phase,
         "ny_full": c.ny_full,
+        "nx_full": c.nx_full,
     }
 
 
@@ -403,6 +405,7 @@ def nonlinear_em_contribution(
     ny_full: int | None = None,
     laguerre_mode: str = "grid",
     radial_phase: jnp.ndarray | None = None,
+    nx_full: int | None = None,
 ) -> jnp.ndarray:
     """Nonlinear E×B + flutter contribution using Laguerre gyroaveraging.
 
@@ -443,6 +446,7 @@ def nonlinear_em_contribution(
         compressed_real_fft=compressed_real_fft,
         ny_full=ny_full,
         radial_phase=radial_phase,
+        nx_full=nx_full,
     )
     if path.laguerre is not None:
         return _laguerre_contribution_from_prepared(

@@ -185,6 +185,9 @@ class TimeConfig:
     collision_scheme: str = "implicit"
     collision_operator: str = "landau"
     compressed_real_fft: bool = True
+    # Experimental: the explicit nonlinear step carries only the kept 2/3 (ky, kx)
+    # block and zero-pads it for the bracket transforms; same results.
+    compact_modes: bool = False
     nonlinear_dealias: bool = True
     laguerre_nonlinear_mode: str = "grid"
     # Nonlinear stop policy. "saturation" (default) ends a diagnosed run once the
