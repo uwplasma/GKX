@@ -1272,3 +1272,137 @@ def _base_cfg() -> RuntimeConfig:
             init_field="density", init_amp=1.0, gaussian_init=False, init_single=True
         ),
     )
+
+
+# ---- equilibrium ExB flow shear (``[physics] exb_shear``) ----
+
+
+def test_shearing_wave_is_exact_in_real_space():
+    # A passive wave psi = a exp(i ky y) is advected to exp(i ky (y - gamma_E x t)):
+    # its radial wavenumber is -ky gamma_E t, however many cells it has crossed.
+    grid = build_spectral_grid(GridConfig(Nx=32, Ny=8, Nz=4, Lx=40.0, Ly=20.0))
+    kx, ky = np.asarray(grid.kx), np.asarray(grid.ky)
+    state = np.zeros((1, 1, ky.size, kx.size, 4), dtype=complex)
+    state[0, 0, 1, int(np.argmin(abs(kx))), :] = 1.0
+    x = 2.0 * np.pi * 40.0 * np.arange(kx.size) / kx.size / (2.0 * np.pi)
+    rate = 0.05
+    for time in (3.0, 7.7, 12.0):
+        up = advance_shearing_coordinates(
+            jnp.asarray(state),
+            kx=grid.kx,
+            ky=grid.ky,
+            x0=grid.x0,
+            shear_rate=rate,
+            previous_time=0.0,
+            time=time,
+        )
+        modes = np.asarray(up.state)[0, 0, 1, :, 0]
+        field = np.exp(1j * np.outer(x, kx)) @ modes * np.asarray(up.phase)[1]
+        expected = np.exp(-1j * ky[1] * rate * time * x)
+        np.testing.assert_allclose(field, expected, atol=1e-12)
+        assert int(up.cumulative_mode_shift[1]) != 0 or time < 4.0
+
+
+def test_exb_shear_deck_key_and_zonal_modes_unsheared():
+    from dataclasses import replace
+
+    from gkx.config import RuntimePhysicsConfig
+
+    assert RuntimePhysicsConfig().exb_shear == 0.0
+    case = RuntimeConfig(
+        species=(RuntimeSpeciesConfig(name="ion"),),
+        physics=RuntimePhysicsConfig(linear=True, nonlinear=False, exb_shear=0.1),
+    )
+    with pytest.raises(ValueError, match="exb_shear needs physics.nonlinear"):
+        case.validate()
+    # The ky = 0 row carries no shear: a zonal mode stays on its radial mode.
+    grid = build_spectral_grid(GridConfig(Nx=16, Ny=8, Nz=4, Lx=40.0, Ly=20.0))
+    zonal = jnp.ones((1, 1, grid.ky.size, grid.kx.size, 4), dtype=complex)
+    up = advance_shearing_coordinates(
+        zonal,
+        kx=grid.kx,
+        ky=grid.ky,
+        x0=grid.x0,
+        shear_rate=0.3,
+        previous_time=0.0,
+        time=9.0,
+    )
+    np.testing.assert_array_equal(np.asarray(up.state[0, 0, 0]), 1.0)
+    assert float(jnp.abs(up.effective_kx[0] - grid.kx).max()) == 0.0
+    del replace
+
+
+def _floquet_rate(shear: float) -> float:
+    from dataclasses import replace
+
+    import gkx
+
+    case = gkx.load("examples/03_nonlinear_tokamak/case.toml")
+    case = replace(
+        case,
+        grid=replace(case.grid, Nx=16, Ny=4, Nz=8, Lx=60.0, y0=3.333),
+        time=replace(
+            case.time,
+            t_max=20.0,
+            fixed_dt=True,
+            dt=0.05,
+            method="rk3",
+            sample_stride=1,
+            diagnostics_stride=1,
+        ),
+        init=replace(case.init, init_single=True, init_amp=1e-6),
+        terms=replace(case.terms, nonlinear=0.0),
+        physics=replace(case.physics, exb_shear=shear),
+        run=replace(case.run, Nl=2, Nm=4, ky=0.3, kx=0.0),
+    )
+    result = gkx.solve(case)
+    t = np.asarray(result.diagnostics.t)
+    log_q = np.log(np.abs(np.asarray(result.diagnostics.heat_flux_t)))
+    late = t >= 12.0
+    return float(np.polyfit(t[late], log_q[late], 1)[0] / 2.0)
+
+
+def test_linear_floquet_growth_falls_with_shear_and_is_even_in_sign():
+    # Cyclone ITG, ky = 0.3, kx = 0 start: shear sweeps the mode to large kx
+    # where it is damped; up-down symmetry makes the growth even in gamma_E.
+    # (Pre-shear growth ~0.14 a/v_t; the shear values are in a/v_t units.)
+    base, plus, minus = (_floquet_rate(g) for g in (0.0, 0.05, -0.05))
+    assert base > 0.10
+    assert plus < base - 0.05
+    assert abs(plus - minus) < 0.02
+
+
+def test_growth_is_differentiable_in_exb_shear():
+    from gkx.config import CycloneBaseCase
+    from gkx.geometry import SAlphaGeometry, ensure_flux_tube_geometry_data
+    from gkx.operators.linear.params import LinearParams
+    from gkx.solvers.nonlinear.transport_window import integrate_nonlinear_sheared
+    from gkx.terms.config import TermConfig
+
+    cfg = CycloneBaseCase(grid=GridConfig(Nx=4, Ny=4, Nz=4, Lx=20.0, Ly=20.0))
+    grid = build_spectral_grid(cfg.grid)
+    geom = ensure_flux_tube_geometry_data(
+        SAlphaGeometry.from_config(cfg.geometry), grid.z
+    )
+    shape = (1, 2, grid.ky.size, grid.kx.size, grid.z.size)
+    state = jnp.zeros(shape, dtype=jnp.complex128).at[:, :, 1, 0, :].set(1.0)
+
+    def flux(rate):
+        _, fields = integrate_nonlinear_sheared(
+            state,
+            grid,
+            geom,
+            LinearParams(nu=0.05),
+            0.05,
+            6,
+            shear_rate=rate,
+            terms=TermConfig(nonlinear=0.0),
+            differentiable=True,
+        )
+        return jnp.sum(jnp.abs(fields.phi[-1]) ** 2)
+
+    rate, h = 0.9, 1e-5
+    grad = float(jax.grad(flux)(rate))
+    fd = float((flux(rate + h) - flux(rate - h)) / (2 * h))
+    assert np.isfinite(grad) and grad != 0.0
+    np.testing.assert_allclose(grad, fd, rtol=2e-3)

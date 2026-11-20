@@ -458,24 +458,32 @@ heat-flux window value and gradient; ``"half"`` runs the window gradient in 0.68
 Equilibrium-flow shearing coordinates
 -------------------------------------
 
-A research path, not an input option.
+``[physics] exb_shear`` is the equilibrium :math:`E\times B` shearing rate
+:math:`\gamma_E` in :math:`v_{ti}/a`, with the GX ``g_exb`` convention: a wave
+follows :math:`k_x^*(t) = k_x(0) - k_y\gamma_E t`. The default 0
+leaves the run on the unsheared integrators and costs nothing.
 :func:`gkx.operators.nonlinear.projection.advance_shearing_coordinates`
-follows :math:`k_x^*(t) = k_x(0) - k_y\gamma_E t`. When the displacement
-crosses half a radial cell the state moves to the nearest :math:`k_x`, the
-sub-cell residual is kept in the wavenumber and the phase
-:math:`\exp(i\,\delta k_x x)` (the corrected remap of [McMillan19]_), and
-modes leaving the two-thirds band are zeroed. The remap is piecewise constant
-with a stopped tangent; wavenumbers and phases stay differentiable between
-remaps. Non-twist tubes are refused. There is no parallel-velocity-gradient
-drive [Schekochihin12]_ [Ball19]_. Shear is expected to decorrelate turbulence
-once the shearing rate exceeds the instability rate [Biglari90]_ [Waltz95]_;
-the gate below tests that. Integrators:
-``integrate_nonlinear_sheared`` (RK2, RK3, fixed-step IMEX) and
+does the update. When the displacement crosses half a radial cell the state
+moves to the nearest :math:`k_x`, the sub-cell residual is kept in the
+wavenumber and the phase :math:`\exp(i\,\delta k_x x)` (the corrected remap of
+[McMillan19]_), and modes leaving the two-thirds band are zeroed. The residual
+:math:`k_x^*` enters the field solve, the gyroaverages, the drifts and the
+nonlinear bracket at every Runge--Kutta stage, so the discrete remap is the only
+approximation. The remap is piecewise constant with a stopped tangent;
+wavenumbers and phases stay differentiable between remaps, so the heat flux has
+a gradient with respect to ``exb_shear``. Non-twist tubes are refused. There is no
+parallel-velocity-gradient drive [Schekochihin12]_ [Ball19]_ (GX carries none
+either). Shear is expected to decorrelate turbulence once the shearing rate exceeds
+the instability rate [Biglari90]_ [Waltz95]_.
+
+A sheared deck needs ``physics.nonlinear = true``. Set ``terms.nonlinear = 0`` for
+the linear time-dependent (Floquet) problem, whose growth rate is read from the
+slope of the heat flux. The run uses rk2, rk3 or imex (any other ``[time] method``
+runs rk3), goes to ``t_max`` rather than to saturation, and records time and heat
+flux only; it runs on one device and refuses ``collision_split``. The same
+integrators are available as ``integrate_nonlinear_sheared`` and
 ``integrate_nonlinear_sheared_transport``. Treatment effects are judged with
 ``matched_nonlinear_transport_report``, not by comparing two chaotic traces.
-
-Flow shear remains a research API. Validate its response with matched,
-stationary windows and resolution studies before assigning a physical effect.
 
 .. _end-damping:
 

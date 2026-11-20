@@ -200,7 +200,8 @@ path = "workflows/nonlinear.py"
 # step cap) between lawson-rk4-pi and rk4-pi.
 # 1283 -> 1285: merged with main (#489).
 # 1285 -> 1288: merged with main (#487).
-baseline_lines = 1288
+# 1288 -> 1385: [physics] exb_shear route (shearing-coordinate run, result assembly).
+baseline_lines = 1385
 target_lines = 1000
 reason = "One nonlinear-runtime dispatcher keeps the solver branches reporting the same result contract; reduce the per-branch duplication rather than splitting the dispatcher."
 
