@@ -556,6 +556,7 @@ def test_block_checkpointed_nonlinear_heat_flux_gradient_matches_finite_differen
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("ky_layout", ["full", "half"])
 def test_block_only_adjoint_schedule_keeps_the_window_gradient(ky_layout: str):
     """Dropping the inner remat changes cost, not the value or either gradient.
