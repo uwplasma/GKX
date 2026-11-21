@@ -115,6 +115,54 @@ operator, against 0.0051 from the formula, which the decay rate matches to
 about 10% only below a neoclassical collisionality of 0.3, at the finest resolution
 ([validation](docs/validation.rst)).
 
+## Flow shear and imposed zonal flows
+
+`exb_shear` in `[physics]` sets the equilibrium ExB shearing rate gamma_E in
+units of v_t/a with v_t = sqrt(T/m); multiply a GS2 or stella value in
+v_th/a (v_th = sqrt(2T/m)) by sqrt(2). The sign is the GX `g_exb` one: a wave
+follows kx*(t) = kx - ky gamma_E t. The default 0 leaves the run on the unsheared
+integrators. A nonzero value runs in shearing coordinates: the field solve,
+gyroaverages, drifts and the bracket phase use the continuous kx*, and the state
+is remapped to the nearest kx cell, which is the one approximation
+([numerics](docs/numerics.rst)). A uniform radial electric field is only a
+Doppler shift and changes no flux in a flux tube; the shear is what acts.
+
+`zonal_flow` in `[physics]` imposes a static zonal potential phi_ext(x) as cosine
+amplitudes or an `x phi_ext` file. It enters the nonlinear ExB advection only,
+so the flow is frozen and does not respond to the turbulence. Use `exb_shear` for
+a flow that varies slowly across the box and `zonal_flow` for one that changes
+over a width comparable to it. The local shearing rate of a profile is
+d2(phi_ext)/dx2, with the sign of `exb_shear`.
+
+<img src="docs/_static/flow_shear.png" width="520" alt="Cyclone adiabatic-electron ion heat flux against the shearing rate for GKX and GX at nx = 192 and nx = 64, each point restarted from saturated unsheared turbulence">
+
+Cyclone with adiabatic electrons, each point restarted from a saturated
+gamma_E = 0 state and averaged over the last half of 250 time units, one seed.
+At nx = 192 the flux falls to 7% of the unsheared value at gamma_E = 0.2 in GKX
+(0.34 against 4.93) and to 6% in GX (0.26 against 4.46); the codes agree to
+10-25% without a common-state baseline. At nx = 64 the flux is higher and the
+two codes differ more, so sheared runs need a wider kx extent than unsheared ones.
+A run from noise near gamma_E > gamma_max/3 may not ignite within `t_max`, so start
+from a saturated unsheared state (`[output] restart`). Redraw with
+`python docs/figures/flow_shear.py`.
+
+<img src="docs/_static/zonal_flow.png" width="860" alt="Cyclone ion heat flux against the peak shear of an imposed sinusoidal zonal flow with four periods across the box, for two seeds; the flux against local shear; and the potential with and without the flow">
+
+A sinusoidal flow of four periods across the box (Lx = 176 rho) on the same case,
+restarted from saturated turbulence. The peak imposed shear 0.05, 0.1 and 0.2
+(rms 0.035, 0.07 and 0.14, the last close to the linear growth rate) reduces the
+flux from 7.4-7.7 to 6.0, 4.9 and 3.8, the two seeds agreeing to 5%. The flux
+is nearly uniform in x: it is 2-3% higher where the shear is weak than where it is
+strong. Each run is stationary to within 7% between its two halves. Regenerate the data with
+`python docs/figures/flow_shear.py --run` on a GPU.
+
+Limits: no parallel-velocity-gradient drive, a sheared run records the heat flux
+only and runs on one device, and `jax.grad` of the field energy after a sheared run
+with respect to `exb_shear` agrees with a central difference to 2e-3
+(`tests/unit/nonlinear/test_nonlinear_exb.py`). For a DKX field, form gamma_E from
+a smoothed radial fit of E_r; which form of the derivative is right in GKX's
+coordinates is not settled ([numerics](docs/numerics.rst)).
+
 ## Derivatives and optimization
 
 Eigenvalue derivatives use `dλ/dp = wᴴ(dA/dp)v / (wᴴv)` with residual, overlap

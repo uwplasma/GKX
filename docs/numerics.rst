@@ -523,6 +523,25 @@ the sign of ``exb_shear``: a packet at :math:`x_0` acquires
 evolve under the turbulent Reynolds stress; keep :math:`L_x` an integer number of
 flow wavelengths and read the result as the response to a frozen flow.
 
+Choosing the input, and where the flow comes from
+-------------------------------------------------
+
+A uniform radial electric field is a Doppler shift :math:`k_y V_E` in a flux
+tube and changes no flux, so only the shear acts. Use ``exb_shear`` when the flow
+varies slowly across the box: the shearing rate then has one value, and a box of
+a few hundred :math:`\rho_{ref}` sees a linear :math:`V_E(x)`. Use
+``zonal_flow`` when the flow changes over a width comparable to the box (a few
+periods across it, or sign changes), where one shearing rate is a poor model.
+Neither includes the parallel-velocity-gradient drive, ``zonal_flow`` is frozen
+rather than evolved with the turbulence, and a sheared run records the heat flux
+only.
+
+For a neoclassical field from DKX, take :math:`E_r(r)` on a smoothed radial fit
+(ambipolar roots can switch branch, so check the sensitivity to the fit) and
+form :math:`\gamma_E` from its radial derivative in the units above. Whether the
+Hahm-Burrell term :math:`(1-\hat s)E_r/r` belongs in the shearing rate in GKX's
+flux-tube coordinates is not settled here, and no value is claimed for it.
+
 .. _end-damping:
 
 Parallel boundary and end damping
