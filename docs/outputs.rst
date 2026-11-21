@@ -206,10 +206,12 @@ Behavior of the main restart controls:
 - ``save_for_restart``: emit the checkpoint file during nonlinear runs
 - ``time.nstep_restart`` or ``output.nsave``: choose checkpoint cadence in steps
 
-For long adaptive jobs, the usual pattern is to rerun the
-same nonlinear command. If ``restart_if_exists = true`` and the checkpoint is
-present, the runtime resumes from ``*.restart.nc`` and keeps growing the
-history in ``*.out.nc``.
+For long jobs, the usual pattern is to rerun the same nonlinear command. If
+``restart_if_exists = true`` and the checkpoint is present, the runtime resumes
+from ``*.restart.nc`` and runs on to ``t_max``, the end time on the time axis of
+``*.out.nc``, for fixed and adaptive steps alike. Raise ``t_max`` to continue a
+finished run, or pass ``--steps N`` to add ``N`` steps; a rerun already at
+``t_max`` does nothing and says so.
 
 Plotting diagnostics
 --------------------
