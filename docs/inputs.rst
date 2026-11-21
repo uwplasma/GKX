@@ -623,6 +623,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``adiabatic_ions``","bool","``false``","Boltzmann ion response; no kinetic ion species."
    "``tau_e``","float","``1.0``","Adiabatic-species temperature ratio ``T_i/T_e``."
    "``beta``","float","``0.0``","Reference plasma beta."
+   "``exb_shear``","float","``0.0``","Equilibrium ExB shearing rate ``gamma_E`` in ``v_ti/a`` (GX ``g_exb`` sign); nonzero selects the shearing-coordinate integrator, see :doc:`numerics`."
    "``collisions``","bool","``true``","Enable the collision operator."
    "``hypercollisions``","bool","``true``","Enable the hypercollision damping of high moments."
 
