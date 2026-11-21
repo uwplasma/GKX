@@ -330,6 +330,17 @@ class GeometryConfig:
         }
         for name, value in values.items():
             object.__setattr__(self, name, value)
+        finite = ("q", "s_hat", "epsilon", "R0", "rhoc")
+        for name in (*finite, "shift", "akappa", "akappri", "tri", "tripri"):
+            if not math.isfinite(values[name]):
+                raise ValueError(f"geometry.{name} must be finite, got {values[name]}")
+        if q == 0.0:
+            raise ValueError("geometry.q must be nonzero")
+        if R0 <= 0.0:
+            raise ValueError(f"geometry.R0 must be positive, got {R0}")
+        analytic = str(model).strip().lower().replace("_", "-")
+        if analytic in {"s-alpha", "salpha", "analytic"} and not 0.0 < epsilon < 1.0:
+            raise ValueError(f"geometry.epsilon must lie in (0, 1), got {epsilon}")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
