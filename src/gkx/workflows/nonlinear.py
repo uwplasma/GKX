@@ -47,6 +47,7 @@ from gkx.solvers.time_runners import integrate_nonlinear_from_config
 from gkx.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
 from gkx.workflows.runtime.diagnostic_arrays import (
     validate_finite_runtime_diagnostics,
+    validate_runtime_growth,
 )
 from gkx.workflows.runtime.parallel_nonlinear import (
     NonlinearParallelPlan,
@@ -262,6 +263,7 @@ class _RunContext:
     steps: int
     adaptive_chunked: bool
     progress: tuple[float, float, float] | None = None
+    gamma_max: float | None = None  # analytic CFL frequency of a fixed-step run
 
 
 @dataclass(frozen=True)
@@ -360,7 +362,8 @@ def _prepare_context(
             status=status,
         )
     # Report an unsafe fixed step before integration.
-    _report_nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm, status=status)
+    gamma_max = _report_nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm, status=status)
+    ctx = replace(ctx, gamma_max=gamma_max if cfg.time.fixed_dt else None)
     return ctx, cfg
 
 
@@ -557,15 +560,15 @@ def _report_nonlinear_cfl_margin(
     Nl: int,
     Nm: int,
     status: Callable[[str], None],
-) -> None:
+) -> float | None:
     """Report the CFL margin because fixed steps bypass adaptive enforcement.
 
-    Keep unsafe deck choices visible in logs and artifact metadata.
+    Keep unsafe deck choices visible in logs; return the analytic CFL frequency.
     """
 
     margin = _nonlinear_cfl_margin(cfg, ctx, Nl=Nl, Nm=Nm)
     if margin is None:
-        return
+        return None
     bound, ratio, omega = margin
     total = float(np.sum(omega))
     status(
@@ -573,17 +576,18 @@ def _report_nonlinear_cfl_margin(
         f"(streaming {100.0 * float(omega[2]) / total:.0f}% of the bound)"
     )
     if not bool(cfg.time.fixed_dt) or ratio <= FIXED_DT_CFL_WARN_RATIO:
-        return
+        return total
     warnings.warn(
         f"fixed dt={ctx.dt:.4g} is {ratio:.2f}x the explicit CFL bound "
         f"{bound:.4g} for this case (max linear frequency {total:.4g}, of which "
         f"parallel streaming is {float(omega[2]):.4g}). fixed_dt = true means "
-        "nothing reduces the step, so the trajectory is expected to overflow "
-        f"and the run to fail on non-finite diagnostics. Reduce dt below "
+        "nothing reduces the step; the run raises when the free energy grows "
+        "faster than a stable step allows or turns non-finite. Reduce dt below "
         f"{bound:.3g}, or lower Nm: the streaming bound scales as sqrt(Nm)",
         RuntimeWarning,
         stacklevel=2,
     )
+    return total
 
 
 def _run_chunked_diagnostics(
@@ -689,6 +693,7 @@ def _run_chunked_diagnostics(
             ok = bool(jnp.isfinite(G_next).all())
             if not imex:
                 ok = ok and not _chunk_runaway(np.asarray(diag_chunk.Wg_t))
+                validate_runtime_growth(diag_chunk, ctx.gamma_max)
                 if ok or cfg.time.fixed_dt:
                     break
                 if control["cfl_scale"] <= CFL_RETRY_FLOOR:
@@ -858,6 +863,7 @@ def _run_diagnostics(
             raise RuntimeError("named diagnosed integration requires diagnostics")
         diag = named_diag
     validate_finite_runtime_diagnostics(diag, label="fixed-step nonlinear run")
+    validate_runtime_growth(diag, ctx.gamma_max)
     return t, diag, G_final, fields_final, None
 
 
