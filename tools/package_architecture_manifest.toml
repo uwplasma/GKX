@@ -247,7 +247,8 @@ recursive = true
 # 69882 -> 69890: JSON writer accepts numpy scalars (saturation summary crash).
 # 69890 -> 69893: banded route starts off the moments a species does not keep.
 # 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
-baseline = 69896
+# 69896 -> 69921: exb_shear route and zonal_flow (measured with both merged).
+baseline = 69921
 target = 45000
 
 [[line_budget_policy.counts]]
