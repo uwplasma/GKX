@@ -199,8 +199,9 @@ def _restart_to_netcdf_layout(
     state_arr = _take_axis(state_arr, ky_idx, axis=3)
     state_arr = _take_axis(state_arr, kx_idx, axis=4)
     packed = np.transpose(state_arr, (0, 2, 1, 5, 4, 3))
+    real = np.float64 if packed.dtype == np.complex128 else np.float32
     return np.stack([np.real(packed), np.imag(packed)], axis=-1).astype(
-        np.float32, copy=False
+        real, copy=False
     )
 
 

@@ -2425,7 +2425,7 @@ def _write_restart_G(path: Path, data: np.ndarray) -> None:
     with Dataset(path, "w") as root:
         for name, size in zip(_RESTART_DIMS, data.shape, strict=True):
             root.createDimension(name, size)
-        root.createVariable("G", "f4", _RESTART_DIMS)[:] = data
+        root.createVariable("G", data.dtype.str[1:], _RESTART_DIMS)[:] = data
 
 
 def test_load_netcdf_restart_state_accepts_full_ky_reduced_kx_layout(
@@ -2446,6 +2446,13 @@ def test_load_netcdf_restart_state_accepts_full_ky_reduced_kx_layout(
     assert state[0, 0, 0, 1, 3, 0] == np.complex64(1.5 + 0.0j)
     assert state[0, 0, 0, 3, 1, 1] == np.complex64(0.0 - 0.25j)
     assert state[0, 0, 0, 1, 0, 0] == np.complex64(0.0 + 0.0j)
+    # GX writes f4 and loads as complex64; a float64 GKX run writes f8, which
+    # loads as complex128 so the run resumes in its own precision.
+    assert state.dtype == np.complex64
+    _write_restart_G(path, data.astype(np.float64) + 1e-12)
+    wide = load_netcdf_restart_state(path, nspecies=1, Nl=2, Nm=2, ny=4, nx=4, nz=3)
+    assert wide.dtype == np.complex128
+    assert wide[0, 0, 0, 1, 3, 0] == 1.5 + 1e-12 + 1e-12j
 
 
 def test_raw_restart_writer_and_positive_ky_expansion(tmp_path: Path) -> None:
@@ -2460,6 +2467,15 @@ def test_raw_restart_writer_and_positive_ky_expansion(tmp_path: Path) -> None:
 
     assert path.exists()
     np.testing.assert_allclose(loaded, state)
+    from gkx.workflows.runtime.startup import _load_initial_state_from_file
+
+    # complex64 and complex128 files of the same state differ only in bytes.
+    sizes = dict(nspecies=1, Nl=1, Nm=1, ny=3, nx=2, nz=2)
+    for dtype in (np.complex64, np.complex128):
+        path = write_netcdf_restart_state(tmp_path / "s.bin", state.astype(dtype))
+        back = _load_initial_state_from_file(path, **sizes, ky_layout="full")
+        assert back.dtype == dtype
+        np.testing.assert_array_equal(back, state)
     assert full.shape == (1, 1, 1, 4, 2, 2)
     np.testing.assert_allclose(full[..., :3, :, :], state)
 
