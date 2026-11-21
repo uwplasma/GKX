@@ -149,6 +149,7 @@ class AdaptiveChunkResult:
 
 
 _TIME_PROGRESS_EPS = 1.0e-12
+_MAX_STALLED_CHUNKS = 8
 
 
 def _chunk_diagnostics_to_host(diag: SimulationDiagnostics) -> SimulationDiagnostics:
@@ -250,8 +251,10 @@ def _next_elapsed_time(
     """Validate and return the accumulated end time for one adaptive chunk."""
 
     t_next = _chunk_end_time(diag, label=label, chunk_index=chunk_index)
-    if t_next <= float(previous_elapsed) + _TIME_PROGRESS_EPS:
-        raise RuntimeError(f"adaptive {label} runtime made no time-step progress")
+    if t_next < float(previous_elapsed) - _TIME_PROGRESS_EPS:
+        raise RuntimeError(
+            f"adaptive {label} chunk {int(chunk_index)} moved time backwards"
+        )
     return t_next
 
 
@@ -291,6 +294,7 @@ def run_adaptive_runtime_chunk_loop(
 
     state_chunk = None
     t_elapsed = 0.0
+    stalled = 0
     stride = _effective_diagnostics_stride(diagnostics_stride)
     # Preserve the global stride phase across chunks.
     samples_seen = 0
@@ -341,6 +345,16 @@ def run_adaptive_runtime_chunk_loop(
             label=label,
             chunk_index=chunk_index,
         )
+        # A chunk whose steps were all rejected (rk4-pi keeps the state and retries
+        # at a smaller step) ends where it started; only a run of them is a stall.
+        if t_next <= t_elapsed + _TIME_PROGRESS_EPS:
+            stalled += 1
+            if stalled > _MAX_STALLED_CHUNKS:
+                raise RuntimeError(
+                    f"adaptive {label} runtime made no time-step progress"
+                )
+            continue
+        stalled = 0
         if t_next > float(t_max) + time_tol:
             raise RuntimeError(
                 f"adaptive {label} chunk {chunk_index} crossed t_max; "
