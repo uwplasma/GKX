@@ -339,8 +339,8 @@ class GeometryConfig:
         if R0 <= 0.0:
             raise ValueError(f"geometry.R0 must be positive, got {R0}")
         analytic = str(model).strip().lower().replace("_", "-")
-        if analytic in {"s-alpha", "salpha", "analytic"} and not 0.0 < epsilon < 1.0:
-            raise ValueError(f"geometry.epsilon must lie in (0, 1), got {epsilon}")
+        if analytic in {"s-alpha", "salpha", "analytic"} and not 0.0 <= epsilon < 1.0:
+            raise ValueError(f"geometry.epsilon must lie in [0, 1), got {epsilon}")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
