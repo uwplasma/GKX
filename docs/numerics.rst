@@ -477,13 +477,22 @@ either). Shear is expected to decorrelate turbulence once the shearing rate exce
 the instability rate [Biglari90]_ [Waltz95]_.
 
 A sheared deck needs ``physics.nonlinear = true``. Set ``terms.nonlinear = 0`` for
-the linear time-dependent (Floquet) problem, whose growth rate is read from the
-slope of the heat flux. The run uses rk2, rk3 or imex (any other ``[time] method``
-runs rk3), goes to ``t_max`` rather than to saturation, and records time and heat
-flux only; it runs on one device and refuses ``collision_split``. The same
-integrators are available as ``integrate_nonlinear_sheared`` and
-``integrate_nonlinear_sheared_transport``. Treatment effects are judged with
-``matched_nonlinear_transport_report``, not by comparing two chaotic traces.
+the linear time-dependent (Floquet) problem. The run uses rk2, rk3 or imex (any
+other ``[time] method`` runs rk3), goes to ``t_max`` rather than to saturation,
+and records time and heat flux only; it runs on one device and refuses
+``collision_split``. A restart (``[output] restart``) loads the saved state and
+restarts the shearing time at 0, as GX does. The same integrators are available
+as ``integrate_nonlinear_sheared`` and ``integrate_nonlinear_sheared_transport``.
+Treatment effects are judged with ``matched_nonlinear_transport_report``, not by
+comparing two chaotic traces.
+
+Two practical limits. Shear moves every mode toward larger :math:`|k_x|`, so a
+sheared run needs a wider :math:`k_x` extent than the unsheared one (Cyclone at
+``gamma_E = 0.05``: ``Nx = 64`` stays dead from noise, ``Nx >= 128`` ignites). And
+once ``gamma_E`` exceeds roughly a third of the linear growth rate, a run from
+noise may not ignite within ``t_max``: the Floquet modes are linearly stable and
+the turbulence is sustained only nonlinearly. Start from a saturated unsheared
+state instead (restart a ``gamma_E = 0`` run).
 
 .. _end-damping:
 

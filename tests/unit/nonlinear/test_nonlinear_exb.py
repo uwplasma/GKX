@@ -1332,10 +1332,11 @@ def test_exb_shear_deck_key_and_zonal_modes_unsheared():
     del replace
 
 
-def _floquet_rate(shear: float) -> float:
+def _sheared_flux(shear: float, *, restart=None):
     from dataclasses import replace
 
     import gkx
+    from gkx.workflows.runtime.artifacts import run_runtime_nonlinear_with_artifacts
 
     case = gkx.load("examples/03_nonlinear_tokamak/case.toml")
     case = replace(
@@ -1343,7 +1344,7 @@ def _floquet_rate(shear: float) -> float:
         grid=replace(case.grid, Nx=16, Ny=4, Nz=8, Lx=60.0, y0=3.333),
         time=replace(
             case.time,
-            t_max=20.0,
+            t_max=20.0 if restart is None else 2.0,
             fixed_dt=True,
             dt=0.05,
             method="rk3",
@@ -1355,21 +1356,31 @@ def _floquet_rate(shear: float) -> float:
         physics=replace(case.physics, exb_shear=shear),
         run=replace(case.run, Nl=2, Nm=4, ky=0.3, kx=0.0),
     )
-    result = gkx.solve(case)
-    t = np.asarray(result.diagnostics.t)
-    log_q = np.log(np.abs(np.asarray(result.diagnostics.heat_flux_t)))
-    late = t >= 12.0
-    return float(np.polyfit(t[late], log_q[late], 1)[0] / 2.0)
+    if restart is None:
+        return np.asarray(gkx.solve(case).diagnostics.heat_flux_t)
+    out = restart / "run.out.nc"
+    first, _ = run_runtime_nonlinear_with_artifacts(case, out=out, ky_target=0.3)
+    resumed = replace(case, output=replace(case.output, restart=True))
+    second, _ = run_runtime_nonlinear_with_artifacts(resumed, out=out, ky_target=0.3)
+    return np.asarray(first.diagnostics.heat_flux_t), np.asarray(
+        second.diagnostics.heat_flux_t
+    )
 
 
-def test_linear_floquet_growth_falls_with_shear_and_is_even_in_sign():
-    # Cyclone ITG, ky = 0.3, kx = 0 start: shear sweeps the mode to large kx
-    # where it is damped; up-down symmetry makes the growth even in gamma_E.
-    # (Pre-shear growth ~0.14 a/v_t; the shear values are in a/v_t units.)
-    base, plus, minus = (_floquet_rate(g) for g in (0.0, 0.05, -0.05))
-    assert base > 0.10
-    assert plus < base - 0.05
-    assert abs(plus - minus) < 0.02
+def test_linear_sheared_amplitude_is_suppressed_and_even_in_sign():
+    # Cyclone ITG, ky = 0.3, kx = 0 start: shear carries the mode to large kx,
+    # where it is damped, so the sheared flux after a fixed time is far below the
+    # unsheared one; up-down symmetry makes it even in gamma_E.
+    base, plus, minus = (_sheared_flux(g)[-1] for g in (0.0, 0.1, -0.1))
+    assert plus < 1e-2 * base
+    np.testing.assert_allclose(plus, minus, rtol=0.15)
+
+
+def test_sheared_run_restarts_from_its_final_state(tmp_path):
+    # The restart carries the state; the shearing origin restarts at t = 0.
+    first, second = _sheared_flux(0.1, restart=tmp_path)
+    assert second[0] > 10 * first[0]
+    np.testing.assert_allclose(second[0], first[-1], rtol=0.05)
 
 
 def test_growth_is_differentiable_in_exb_shear():

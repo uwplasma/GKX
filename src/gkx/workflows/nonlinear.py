@@ -965,13 +965,16 @@ def _diagnostic_run_result(
 def _run_sheared(
     cfg: RuntimeConfig,
     ctx: _RunContext,
+    policy: _DiagnosticPolicy,
     status: Callable[[str], None],
 ) -> tuple[RuntimeNonlinearResult, Any]:
     """Integrate with the equilibrium ExB shear ``[physics] exb_shear``.
 
     Shearing coordinates, rk2/rk3/imex (other methods run rk3). The run records
     time and heat flux, goes to ``t_max`` and does not stop at saturation.
-    Adaptive steps run in fixed-size chunks.
+    Adaptive steps run in fixed-size chunks. A restart (``[init] init_file``,
+    set by the artifact layer from ``[output] restart``) enters through ``ctx.G0``
+    and the shearing time restarts at 0.
     """
 
     if cfg.time.collision_split:
@@ -1014,7 +1017,8 @@ def _run_sheared(
         dt = float(np.diff(times[-1][-2:])[0]) if times[-1].size > 1 else dt
         if fixed:
             break
-    t_arr, q_s = np.concatenate(times), np.concatenate(flux)
+    t_arr = np.concatenate(times)
+    q_s = np.concatenate(flux).reshape(t_arr.size, -1)
     zeros: dict[str, Any] = dict.fromkeys(
         (
             "gamma_t",
@@ -1031,17 +1035,17 @@ def _run_sheared(
         t=t_arr,
         dt_t=np.gradient(t_arr),
         dt_mean=np.asarray(np.mean(np.diff(t_arr, prepend=0.0))),
-        heat_flux_t=q_s.reshape(t_arr.size, -1).sum(axis=-1),
-        heat_flux_species_t=q_s if q_s.ndim > 1 else None,
+        heat_flux_t=q_s.sum(axis=-1),
+        heat_flux_species_t=q_s,
+        particle_flux_species_t=np.zeros_like(q_s),
+        turbulent_heating_t=np.zeros_like(t_arr),
+        turbulent_heating_species_t=np.zeros_like(q_s),
         **zeros,
     )
     validate_finite_runtime_diagnostics(diag, label="sheared nonlinear run")
-    policy = _DiagnosticPolicy(
-        True, 1, 1, "grid", False, None, None, None, False, False, False
-    )
     result = _result(
         ctx,
-        policy,
+        replace(policy, diagnostics_on=True),
         t=t_arr,
         diagnostics=diag,
         fields=None,
@@ -1061,7 +1065,7 @@ def _run_once(
     rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[RuntimeNonlinearResult, Any]:
     if cfg.physics.exb_shear != 0.0:
-        return _run_sheared(cfg, ctx, status)
+        return _run_sheared(cfg, ctx, policy, status)
     if (
         not policy.requires_diagnostic_path
         and cfg.time.fixed_dt
