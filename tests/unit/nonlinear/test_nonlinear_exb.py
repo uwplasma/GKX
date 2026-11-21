@@ -1385,6 +1385,11 @@ def test_zonal_flow_off_is_bitwise_and_profile_projection(tmp_path):
         np.asarray(_bracket_rhs(state, cache, params)),
     )
     assert zonal_flow_modes((), grid) is None
+    assert zonal_flow_modes([0.3], grid).dtype == jnp.result_type(grid.kx, 1j)
+    with pytest.raises(ValueError, match="built box"):
+        zonal_flow_modes(
+            np.column_stack([np.linspace(0, 90.3, 50), np.zeros(50)]), grid
+        )
     # A sampled profile (mean included) projects to the same modes as the cosines.
     length = 2.0 * np.pi / abs(float(np.asarray(grid.kx)[1]))
     xs = np.linspace(0.0, length, 301)

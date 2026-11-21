@@ -105,10 +105,19 @@ def zonal_flow_modes(spec: Any, grid: Any) -> jnp.ndarray | None:
     else:
         points = max(256, 8 * kx.size)
         length = 2.0 * np.pi / dkx
+        extent = float(spec[-1, 0] - spec[0, 0])
+        if abs(extent - length) > 0.01 * length:
+            raise ValueError(
+                f"zonal_flow profile spans {extent:.4g} rho_ref but the built box "
+                f"is Lx = {length:.4g}; resample the profile onto that box"
+            )
         grid_x = np.arange(points) * length / points
         values = np.interp(grid_x, spec[:, 0] - spec[0, 0], spec[:, 1], period=length)
         coeff = np.fft.fft(values)[n % points] / points
-    return jnp.asarray(np.where(n == 0, 0.0, coeff), dtype=jnp.complex128)
+    dtype = jnp.result_type(
+        jnp.asarray(grid.kx), 1j
+    )  # complex64 on f32, else complex128
+    return jnp.asarray(np.where(n == 0, 0.0, coeff), dtype=dtype)
 
 
 def nonlinear_rhs_cached_impl(
