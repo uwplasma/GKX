@@ -19,6 +19,7 @@ from gkx.operators.nonlinear.diagnostic_state import (
     compute_nonlinear_diagnostic_tuple,
     make_nonlinear_diagnostic_tuple_fn,
 )
+from gkx.operators.nonlinear.collisions import collision_rate_bound
 from gkx.operators.nonlinear.policies import build_nonlinear_imex_operator
 from gkx.operators.nonlinear.projection import _make_compressed_real_fft_projector
 from gkx.operators.nonlinear.rhs import (
@@ -34,6 +35,7 @@ from gkx.solvers.nonlinear.diagnostics import (
     integrate_nonlinear,
     integrate_nonlinear_cached,
     integrate_nonlinear_imex_cached,
+    nonlinear_rhs_cached,
 )
 from gkx.solvers.nonlinear.transport_window import nonlinear_heat_flux_window
 from gkx.solvers.time_explicit import _linear_frequency_bound
@@ -763,8 +765,8 @@ def test_integrate_nonlinear_collision_split_sts():
     assert np.isfinite(np.asarray(diag.Wg_t)).all()
 
 
-def test_nonlinear_split_keeps_conserving_collisions_in_explicit_rhs():
-    """A diagonal split must not discard collision field-particle corrections."""
+def test_nonlinear_split_applies_conserving_collisions_once_per_step():
+    """The split applies the whole collision operator, corrections included, once."""
 
     grid_cfg = GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0)
     cfg = CycloneBaseCase(grid=grid_cfg)
@@ -803,26 +805,81 @@ def test_nonlinear_split_keeps_conserving_collisions_in_explicit_rhs():
         method="rk3",
         cache=cache,
         terms=terms,
-        collision_split=True,
-        collision_scheme="exp",
+        collision_split=None,  # the deck default
     )
 
-    _t, _diag, expected, _fields = integrate_nonlinear_explicit_diagnostics_state(
-        G,
-        grid,
-        geom,
-        params,
-        dt=0.05,
-        steps=1,
-        method="rk3",
-        cache=cache,
-        terms=terms,
-        collision_split=False,
-    )
-
+    expected = G + 0.05 * nonlinear_rhs_cached(G, cache, params, terms)[0]
     np.testing.assert_allclose(
-        np.asarray(G_final), np.asarray(expected), rtol=1.0e-6, atol=1.0e-6
+        np.asarray(G_final), np.asarray(expected), rtol=1.0e-5, atol=1.0e-5
     )
+
+
+def _collision_only_setup(nu: float):
+    grid = build_spectral_grid(GridConfig(Nx=2, Ny=2, Nz=4, Lx=6.0, Ly=6.0))
+    geom = SAlphaGeometry.from_config(CycloneBaseCase().geometry)
+    params = LinearParams(nu=nu)
+    cache = build_linear_cache(grid, geom, params, Nl=2, Nm=4)
+    G = jnp.ones((2, 4, 2, 2, 4), dtype=jnp.complex64)
+    off = dict.fromkeys(TermConfig.__dataclass_fields__, 0.0)
+    terms = TermConfig(**{**off, "collisions": 1.0})
+    return grid, geom, params, cache, G, terms
+
+
+def test_collision_rate_bound_finds_the_largest_eigenvalue():
+    """Power iteration on a diagonal operator with spectrum -1..-5 (plus nothing)."""
+
+    diag = -jnp.arange(1.0, 6.0)
+    like = jnp.ones((5,), dtype=jnp.complex64)
+    rate = collision_rate_bound(lambda v: diag * v, like)
+    assert 5.0 <= rate <= 1.3 * 5.0
+    assert collision_rate_bound(lambda v: 0.0 * v, like) == 0.0
+
+
+def test_collision_split_adaptive_step_stays_inside_forward_euler_limit():
+    """Strong collisions cap the step at 1 / rate; the run stays finite and decays."""
+
+    grid, geom, params, cache, G, terms = _collision_only_setup(nu=40.0)
+    t, _diag, G_final, _ = integrate_nonlinear_explicit_diagnostics_state(
+        G, grid, geom, params, dt=0.1, steps=4, method="rk4", cache=cache,
+        terms=terms, fixed_dt=False, collision_split=None,
+    )  # fmt: skip
+    rate = collision_rate_bound(
+        lambda v: nonlinear_rhs_cached(v, cache, params, terms)[0], G
+    )
+    dts = np.diff(np.concatenate([[0.0], np.asarray(t)]))
+    assert rate * 0.1 > 1.0  # the unguarded step would be outside the cap
+    assert np.all(dts <= 1.0 / rate * (1 + 1e-5))
+    assert np.isfinite(np.asarray(G_final)).all()
+    assert np.linalg.norm(G_final) < np.linalg.norm(G)
+
+
+def test_collision_split_fixed_step_over_the_limit_stays_in_the_stages_or_refuses():
+    """Default: the stages carry collisions; ``collision_split = true``: refuse."""
+
+    grid, geom, params, cache, G, terms = _collision_only_setup(nu=40.0)
+    kw = dict(dt=0.1, steps=1, method="rk4", cache=cache, terms=terms, fixed_dt=True)
+    _t, _d, G_stage, _ = integrate_nonlinear_explicit_diagnostics_state(
+        G, grid, geom, params, collision_split=None, **kw
+    )
+    _t, _d, G_ref, _ = integrate_nonlinear_explicit_diagnostics_state(
+        G, grid, geom, params, collision_split=False, **kw
+    )
+    np.testing.assert_allclose(np.asarray(G_stage), np.asarray(G_ref))
+    with pytest.raises(ValueError, match="forward Euler"):
+        integrate_nonlinear_explicit_diagnostics_state(
+            G, grid, geom, params, collision_split=True, **kw
+        )
+
+
+def test_collision_split_without_collisions_or_with_mild_ones_is_unchanged():
+    """nu = 0 has no split operator; a small nu*dt takes the split, uncapped."""
+
+    grid, geom, params, cache, G, terms = _collision_only_setup(nu=0.0)
+    _t, _d, G_out, _ = integrate_nonlinear_explicit_diagnostics_state(
+        G, grid, geom, params, dt=0.1, steps=2, method="rk4", cache=cache,
+        terms=terms, fixed_dt=True, collision_split=None,
+    )  # fmt: skip
+    np.testing.assert_allclose(np.asarray(G_out), np.asarray(G))
 
 
 def test_nonlinear_adaptive_default_dt_max_matches_requested_dt():
@@ -2050,7 +2107,6 @@ from gkx.solvers.nonlinear.imex import (
 )
 from gkx.operators.linear.cache_arrays import keep_moments
 from gkx.solvers.nonlinear.diagnostics import species_moments, stiff_linear_split
-from gkx.solvers.nonlinear.diagnostics import nonlinear_rhs_cached
 from gkx.terms.assembly import assemble_rhs_cached, compute_fields_cached
 from gkx.terms.config import TermConfig
 from gkx.workflows.runtime.toml import load

@@ -181,7 +181,10 @@ class TimeConfig:
     cfl: float = 0.9
     cfl_fac: float | None = None
     nstep_restart: int | None = None
-    collision_split: bool = False
+    # None: the explicit steppers apply the collision operator once per step.
+    collision_split: bool | None = None
+    # Explicit steppers: apply the split collision operator every N steps.
+    collision_interval: int = 1
     collision_scheme: str = "implicit"
     collision_operator: str = "landau"
     compressed_real_fft: bool = True
