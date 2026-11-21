@@ -624,6 +624,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``tau_e``","float","``1.0``","Adiabatic-species temperature ratio ``T_i/T_e``."
    "``beta``","float","``0.0``","Reference plasma beta."
    "``exb_shear``","float","``0.0``","Equilibrium ExB shearing rate ``gamma_E`` in ``v_ti/a`` (GX ``g_exb`` sign); nonzero selects the shearing-coordinate integrator, see :doc:`numerics`."
+   "``zonal_flow``","list or str","``[]``","Imposed static zonal potential in the nonlinear ExB advection only, as cosine amplitudes ``a_n`` (``phi_ext = sum a_n cos(2 pi n x/Lx)``) or the path of a two-column ``x phi_ext`` text file spanning the built box (a profile of another length is refused and the error reports the built ``Lx``; the linked boundary can change the deck's ``Lx``); see :doc:`numerics`. Needs ``nonlinear = true``."
    "``collisions``","bool","``true``","Enable the collision operator."
    "``hypercollisions``","bool","``true``","Enable the hypercollision damping of high moments."
 

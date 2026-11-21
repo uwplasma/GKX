@@ -494,6 +494,35 @@ noise may not ignite within ``t_max``: the Floquet modes are linearly stable and
 the turbulence is sustained only nonlinearly. Start from a saturated unsheared
 state instead (restart a ``gamma_E = 0`` run).
 
+Imposed zonal flow
+------------------
+
+``[physics] zonal_flow`` adds a static, flux-surface-constant potential
+:math:`\phi_{ext}(x)` (:math:`k_y=0`) to :math:`\phi` in the nonlinear
+:math:`E\times B` bracket and nowhere else: it advects :math:`g` but is not part of
+the field solve, the linear terms or the diagnostics. It works on every
+unsharded nonlinear route; the default (empty) adds nothing. A list gives cosine
+amplitudes :math:`a_n` of :math:`\phi_{ext}=\sum_n a_n\cos(2\pi n x/L_x)`. A text
+file path gives two columns, :math:`x` in :math:`\rho_{ref}` across the box and
+:math:`\phi_{ext}`; it is interpolated linearly, treated as periodic over the
+box the grid has (:math:`2\pi/\Delta k_x`, which the linked boundary may adjust)
+and projected on the grid's :math:`k_x` harmonics. Make the profile periodic
+before passing it. Its mean is dropped, since a uniform flow is a Doppler
+shift. From Python, assign a list or an array (an ``(N, 2)`` array is a
+profile) to ``physics.zonal_flow``, or set ``params.zonal_flow`` to the
+coefficients of :func:`gkx.operators.nonlinear.rhs.zonal_flow_modes`.
+
+Units are those of the bracket: :math:`\phi` is :math:`(e\phi/T_{ref})(a/\rho_{ref})`,
+:math:`x` and :math:`y` are in :math:`\rho_{ref}`, time in :math:`a/v_t`. A mode
+:math:`g\propto e^{ik_y y}` is advected as :math:`\partial_t g=-i k_y V_y(x) g`
+with :math:`V_y=\partial_x\phi_{ext}` (gyroaveraged by :math:`J_0` at each flow
+harmonic; times ``kxfac`` for non-Cyclone normalisations), and the equivalent local
+shearing rate is :math:`\gamma_E(x)=\partial_x V_y=\partial_x^2\phi_{ext}`, with
+the sign of ``exb_shear``: a packet at :math:`x_0` acquires
+:math:`k_x^*=-k_y\gamma_E(x_0)t`. This is a prescribed profile, so it does not
+evolve under the turbulent Reynolds stress; keep :math:`L_x` an integer number of
+flow wavelengths and read the result as the response to a frozen flow.
+
 .. _end-damping:
 
 Parallel boundary and end damping
