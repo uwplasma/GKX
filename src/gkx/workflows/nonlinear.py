@@ -73,6 +73,7 @@ from gkx.workflows.runtime.startup import (
     end_damping_status,
     build_runtime_term_config,
 )
+from gkx.operators.nonlinear.rhs import zonal_flow_modes
 
 
 def build_runtime_nonlinear_diagnostics_kwargs(
@@ -309,6 +310,8 @@ def _prepare_context(
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
     status("building runtime nonlinear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
+    if (zonal := zonal_flow_modes(cfg.physics.zonal_flow, grid)) is not None:
+        params = replace(params, zonal_flow=zonal)
     if getattr(params, "mu_vperp_max", None) is not None:
         raise NotImplementedError("[run] mu_vperp_max is linear only")
     terms = build_runtime_term_config(cfg)
@@ -1123,6 +1126,8 @@ def run_runtime_nonlinear(
     # Resolved before any geometry or grid work so an unroutable [parallel]
     # request fails immediately instead of after a long serial run.
     plan = resolve_nonlinear_parallel_plan(cfg.parallel)
+    if np.size(cfg.physics.zonal_flow) and plan is not None:
+        raise NotImplementedError("zonal_flow does not support [parallel] sharding")
     status = (
         status_callback
         if status_callback is not None

@@ -142,6 +142,7 @@ adiabatic_electrons = false  # case: Boltzmann electron response
 adiabatic_ions = false  # Boltzmann ion response; no kinetic ion species
 tau_e = 1.0  # Adiabatic-species temperature ratio T_i/T_e
 beta = 0.0001  # case: Reference plasma beta
+zonal_flow = []  # Imposed static zonal potential in the nonlinear ExB advection only: cosine amplitudes or an x-phi file path; nonlinear runs only
 collisions = true  # Enable the collision operator
 hypercollisions = true  # Enable the hypercollision damping of high moments
 
