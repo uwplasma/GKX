@@ -155,7 +155,7 @@ def collision_rate_bound(
     iterations: int = 30,
     margin: float = 1.25,
 ) -> float:
-    """Largest |eigenvalue| of the linear operator ``apply``, by power iteration.
+    """Largest ``|eigenvalue|`` of the linear operator ``apply``, by power iteration.
 
     The collision spectrum is real and negative with well-separated large
     eigenvalues (they grow with the Hermite and Laguerre index), so the norm ratio
