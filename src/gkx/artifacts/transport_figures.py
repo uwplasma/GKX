@@ -131,6 +131,8 @@ def _coerce_nonlinear_source(
 ) -> tuple[Any, np.ndarray | None, np.ndarray | None, str]:
     """Return ``(diagnostics, ky, kx, source_kind)`` for any accepted source."""
 
+    if getattr(source, "diagnostics", None) is not None:  # a runtime result
+        return source.diagnostics, None, None, "memory"
     if isinstance(source, (str, Path)):
         path = Path(source)
         if _is_netcdf_bundle_path(path):
@@ -324,6 +326,10 @@ def heat_flux_time_figure(
             )
             for ax in panel_axes:
                 ax.axvspan(tmin, tmax, color=GKX_COLORS["grey"], alpha=0.16, zorder=0)
+            if np.isfinite(q_sem):
+                ax_q.axhspan(
+                    q_mean - q_sem, q_mean + q_sem, color=GKX_COLORS["blue"], alpha=0.25
+                )
             annotate_reference(
                 ax_q,
                 rf"$\langle Q \rangle = {q_mean:.3g} \pm {q_sem:.2g}$"
@@ -610,7 +616,7 @@ def flux_spectra_figure(
     mask, tmin, tmax = _time_window(np.asarray(diag.t, dtype=float), window)
 
     found: list[tuple[str, np.ndarray, np.ndarray]] = []
-    if heat_ky is not None:
+    if heat_ky is not None and (panels is None or "ky" in panels):
         avg = _window_average(heat_ky, mask)  # (species, ky)
         axis = _spectral_axis_or_error(
             ky if ky is not None else ky_file,
@@ -619,7 +625,7 @@ def flux_spectra_figure(
             name="flux_spectra_figure",
         )
         found.append(("ky", axis, avg))
-    if heat_kx is not None:
+    if heat_kx is not None and (panels is None or "kx" in panels):
         avg = _window_average(heat_kx, mask)  # (species, kx)
         axis = _spectral_axis_or_error(
             kx if kx is not None else kx_file,

@@ -2950,10 +2950,13 @@ def test_adaptive_chunk_time_helper_rejects_empty_or_stalled_chunks() -> None:
     with pytest.raises(RuntimeError, match="chunk 1 produced no time samples"):
         _next_elapsed_time(_diag([]), previous_elapsed=0.0, label="test", chunk_index=1)
 
-    with pytest.raises(RuntimeError, match="made no time-step progress"):
+    with pytest.raises(RuntimeError, match="chunk 1 moved time backwards"):
         _next_elapsed_time(
-            _diag([1.0]), previous_elapsed=1.0, label="test", chunk_index=1
+            _diag([0.5]), previous_elapsed=1.0, label="test", chunk_index=1
         )
+    assert _next_elapsed_time(
+        _diag([1.0]), previous_elapsed=1.0, label="test", chunk_index=1
+    ) == pytest.approx(1.0)
 
 
 def test_run_adaptive_runtime_chunk_loop_keeps_exact_terminal_sample_with_stride() -> (
@@ -2988,6 +2991,19 @@ def test_run_adaptive_runtime_chunk_loop_rejects_horizon_overshoot() -> None:
             chunk_steps=8,
             label="test",
         )
+
+
+def test_run_adaptive_runtime_chunk_loop_retries_a_rejected_only_chunk() -> None:
+    # rk4-pi keeps the state on a rejected step: a one-step chunk ends where it began.
+    chunks = iter([_chunk([0.0], 1.0), _chunk([1.0], 2.0)])
+    result = run_adaptive_runtime_chunk_loop(
+        integrate_chunk=lambda _show_progress, _remaining_time: next(chunks),
+        t_max=1.0,
+        chunk_steps=1,
+        label="test",
+    )
+    np.testing.assert_allclose(np.asarray(result.diagnostics.t), [1.0])
+    np.testing.assert_allclose(np.asarray(result.state), [2.0])
 
 
 def test_run_adaptive_runtime_chunk_loop_rejects_stalled_time_progress() -> None:
@@ -3081,6 +3097,8 @@ def _stop_policy_inputs(*, steps: int, diagnostics_on: bool = True):
 
 def test_saturation_stop_condition_defaults_on_for_diagnosed_nonlinear_runs() -> None:
     cfg, ctx, policy = _stop_policy_inputs(steps=4000)
+    # Use a long horizon so short-run clipping cannot lower the saturation floor.
+    cfg = replace(cfg, time=replace(cfg.time, t_max=1000.0))
 
     assert cfg.time.run_to == "saturation"
     stop = _saturation_stop_condition(cfg, ctx, policy)
