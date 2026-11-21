@@ -853,6 +853,22 @@ def test_collision_split_adaptive_step_stays_inside_forward_euler_limit():
     assert np.linalg.norm(G_final) < np.linalg.norm(G)
 
 
+def test_rk4_pi_without_dt_max_still_obeys_the_collision_limit():
+    """An unset dt_max does not lift the forward-Euler bound of the collision split."""
+
+    grid, geom, params, cache, G, terms = _collision_only_setup(nu=40.0)
+    t, _diag, G_final, _ = integrate_nonlinear_explicit_diagnostics_state(
+        G, grid, geom, params, dt=0.1, steps=4, method="rk4-pi", cache=cache,
+        terms=terms, fixed_dt=False, collision_split=None,
+    )  # fmt: skip
+    rate = collision_rate_bound(
+        lambda v: nonlinear_rhs_cached(v, cache, params, terms)[0], G
+    )
+    dts = np.diff(np.concatenate([[0.0], np.asarray(t)]))
+    assert np.all(dts <= 1.0 / rate * (1 + 1e-5))
+    assert np.isfinite(np.asarray(G_final)).all()
+
+
 def test_collision_split_fixed_step_over_the_limit_stays_in_the_stages_or_refuses():
     """Default: the stages carry collisions; ``collision_split = true``: refuse."""
 
@@ -908,6 +924,14 @@ def test_nonlinear_adaptive_default_dt_max_matches_requested_dt():
     dt_t = np.asarray(diag.dt_t, dtype=float)
     assert dt_t.size > 0
     assert np.nanmax(dt_t) <= 0.05 + 1.0e-6
+    from gkx.operators.nonlinear.policies import _build_time_step_limits
+
+    kw = dict(dt=0.05, steps=3, fixed_dt=False, dt_min=1e-7, dt_max=None, cfl=1.0)
+    kw |= dict(cfl_fac=None, real_dtype=jnp.float32, moments=4)
+    limits = _build_time_step_limits(
+        method="rk4-pi", resolve_cfl_fac_fn=lambda *_: 1.0, **kw
+    )
+    assert float(limits.dt_max) == np.inf  # bounded by 2x CFL and its error estimate
 
 
 def test_nonlinear_adaptive_dt_includes_linear_frequency_cap():

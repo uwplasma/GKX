@@ -252,7 +252,8 @@ recursive = true
 # 69893 -> 69896: fixed linear step over the CFL warn ratio is refused.
 # Progress reporting and the monitor fit the main baseline at 69865 lines.
 # 69896 -> 70084: merged with main (#496).
-baseline = 70084
+# 70084 -> 70091: merged with main (#499).
+baseline = 70091
 target = 45000
 
 [[line_budget_policy.counts]]
