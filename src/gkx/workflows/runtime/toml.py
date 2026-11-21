@@ -463,6 +463,11 @@ def _runtime_species_from_toml(
     for item in species_raw:
         if not isinstance(item, dict):
             raise TypeError("Each [[species]] entry must be a table")
+        reject_unknown_keys(
+            f"[[species]] {item.get('name', len(species))!r}",
+            item,
+            RuntimeSpeciesConfig.__dataclass_fields__,
+        )
         species.append(RuntimeSpeciesConfig(**item))
     return tuple(species) if species else None
 
