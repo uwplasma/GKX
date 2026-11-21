@@ -623,6 +623,7 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``adiabatic_ions``","bool","``false``","Boltzmann ion response; no kinetic ion species."
    "``tau_e``","float","``1.0``","Adiabatic-species temperature ratio ``T_i/T_e``."
    "``beta``","float","``0.0``","Reference plasma beta."
+   "``zonal_flow``","list or str","``[]``","Imposed static zonal potential in the nonlinear ExB advection only, as cosine amplitudes ``a_n`` (``phi_ext = sum a_n cos(2 pi n x/Lx)``) or the path of a two-column ``x phi_ext`` text file; see :doc:`numerics`. Needs ``nonlinear = true``."
    "``collisions``","bool","``true``","Enable the collision operator."
    "``hypercollisions``","bool","``true``","Enable the hypercollision damping of high moments."
 

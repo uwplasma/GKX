@@ -192,6 +192,10 @@ class LinearParams:
     moments: tuple[tuple[int | None, int | None, float], ...] | None = None
     #: Internal beta=0 e-i rates; self-collision ``nu`` is unchanged.
     _nu_ei: tuple[float, ...] | jnp.ndarray | None = None
+    #: Static zonal potential (``ky = 0``, flux-surface constant) as one complex
+    #: coefficient per ``kx`` mode, added to ``phi`` in the nonlinear E x B bracket
+    #: only (:func:`gkx.operators.nonlinear.rhs.zonal_flow_modes`); ``None`` costs nothing.
+    zonal_flow: jnp.ndarray | None = None
 
     def species_slice(self, a: int, b: int, **overrides: Any) -> "LinearParams":
         """The parameters of species ``a:b`` of a ``moments`` run, with ``overrides``."""
@@ -283,14 +287,16 @@ class LinearParams:
             self.bpar_beta_scale,
             self.damp_ends_rate,
             self._nu_ei,
+            self.zonal_flow,
         )
         return children, (self.collision_model, self.mu_vperp_max, self.moments)
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(
-            *children[:-1],
-            _nu_ei=children[-1],
+            *children[:-2],
+            _nu_ei=children[-2],
+            zonal_flow=children[-1],
             collision_model=aux_data[0],
             mu_vperp_max=aux_data[1],
             moments=aux_data[2],
