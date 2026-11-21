@@ -326,6 +326,13 @@ def resolve_nonlinear_artifact_policy(
         elif int(getattr(cfg.output, "nsave", 0)) > 0:
             checkpoint_steps = int(cfg.output.nsave)
 
+    if cfg.time.collision_interval != 1 and (
+        checkpoint_steps is not None or resume_requested
+    ):
+        raise ValueError(
+            "collision_interval other than 1 does not support checkpoint/restart"
+        )
+
     return NonlinearArtifactPolicy(
         out_path=out_path,
         netcdf_output_target=netcdf_output_target,
