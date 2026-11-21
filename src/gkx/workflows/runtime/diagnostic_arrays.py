@@ -113,8 +113,8 @@ def validate_finite_runtime_diagnostics(
 
 
 # Wg may grow by at most exp(WG_GROWTH_LIMIT * gamma_max * dt) between samples.
-# Shipped decks at a stable step reach 0.010 at most; the tutorial deck at 1.5x
-# its rk4 stability edge reaches 0.57 within five steps.
+# Shipped decks at a stable step reach 0.075 at most (stellarator tutorial; 0.12
+# with its temperature gradient doubled); unstable steps measured give 0.42 up.
 WG_GROWTH_LIMIT = 0.25
 
 
