@@ -44,7 +44,10 @@ from gkx.solvers.nonlinear.diagnostics import (
     prepare_nonlinear_explicit_diagnostics,
 )
 from gkx.solvers.time_runners import integrate_nonlinear_from_config
-from gkx.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
+from gkx.workflows.runtime.chunks import (
+    ProgressReporter,
+    run_adaptive_runtime_chunk_loop,
+)
 from gkx.workflows.runtime.diagnostic_arrays import (
     validate_finite_runtime_diagnostics,
 )
@@ -261,7 +264,7 @@ class _RunContext:
     dt: float
     steps: int
     adaptive_chunked: bool
-    progress: tuple[float, float, float] | None = None
+    progress: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -483,13 +486,17 @@ def _saturation_stop_condition(
             "the saturated verdict is only possible within the last 5% of t_max",
             stacklevel=2,
         )
+    return _saturation_check(cfg)
+
+
+def _saturation_check(cfg: RuntimeConfig) -> Callable[[Any, Any, bool], dict[str, Any]]:
     sat = SaturationStopConfig(
         rel_sem=float(cfg.time.saturation_rel_sem),
         drift_rel=float(cfg.time.saturation_drift_rel),
     )
-    if t_min is not None:
-        sat = replace(sat, t_min=float(t_min))
-    return make_saturation_check(sat, t_max)
+    if cfg.time.saturation_t_min is not None:
+        sat = replace(sat, t_min=float(cfg.time.saturation_t_min))
+    return make_saturation_check(sat, float(cfg.time.t_max))
 
 
 def _resolve_auto_stepper(
@@ -740,6 +747,7 @@ def _run_chunked_diagnostics(
         stop = bool(decision.get("saturated")) or final
         return {**decision, "stop": stop}
 
+    progress = getattr(status, "update", None)
     chunk_result = run_adaptive_runtime_chunk_loop(
         integrate_chunk=run_chunk,
         t_max=step_bound * ctx.steps if step_capped else float(cfg.time.t_max),
@@ -752,7 +760,10 @@ def _run_chunked_diagnostics(
         diagnostics_interval=cfg.time.diagnostics_interval,
         time_offset=0.0 if ctx.progress is None else ctx.progress[0],
         progress_t_max=None if ctx.progress is None else ctx.progress[1],
-        progress_wall_start=None if ctx.progress is None else ctx.progress[2],
+        progress=progress,
+        # Progress lines report the detector's verdict even when the run is
+        # not set to stop at saturation.
+        monitor=_saturation_check(cfg) if progress and stop_condition is None else None,
         # Opt-in disk spill for runs whose strided diagnostics still outgrow host
         # RAM. Off by default because it trades wall time for peak memory; set
         # GKX_CHUNK_SPILL_DIR to a path to turn it on.
@@ -796,6 +807,7 @@ def _run_diagnostics(
         or cfg.time.chunk_steps is not None
         or cfg.time.diagnostics_interval is not None
         or ctx.progress is not None
+        or hasattr(status, "update")
     ):
         if stop_condition is not None:
             status(
@@ -1102,7 +1114,7 @@ def run_runtime_nonlinear(
     show_progress: bool = False,
     status_callback: Callable[[str], None] | None = None,
     prepare_only: bool = False,
-    _progress: tuple[float, float, float] | None = None,
+    _progress: tuple[float, float] | None = None,
 ) -> Any:
     """Run a nonlinear point using the unified runtime config path.
 
@@ -1126,7 +1138,7 @@ def run_runtime_nonlinear(
     status = (
         status_callback
         if status_callback is not None
-        else (print if show_progress else lambda _message: None)
+        else (ProgressReporter() if show_progress else lambda _message: None)
     )
     ctx, cfg = _prepare_context(
         cfg,

@@ -3097,6 +3097,8 @@ def _stop_policy_inputs(*, steps: int, diagnostics_on: bool = True):
 
 def test_saturation_stop_condition_defaults_on_for_diagnosed_nonlinear_runs() -> None:
     cfg, ctx, policy = _stop_policy_inputs(steps=4000)
+    # Use a long horizon so short-run clipping cannot lower the saturation floor.
+    cfg = replace(cfg, time=replace(cfg.time, t_max=1000.0))
 
     assert cfg.time.run_to == "saturation"
     stop = _saturation_stop_condition(cfg, ctx, policy)
