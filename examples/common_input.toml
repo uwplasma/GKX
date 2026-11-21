@@ -28,10 +28,13 @@ nperiod = 1  # z-grid turns 2*nperiod - 1 = 1; the VMEC line length is npol
 # are in docs/guidance.rst (End damping, Common deck).
 # chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
 # diagnostics_interval = 5.0  # Overrides the step-stride cadence.
-# Use a fixed horizon until the saturation rule passes independent validation.
-t_max = 200.0  # end time in a/v_ti; the cap when run_to = saturation
-sample_stride = 50  # steps between stored samples
-diagnostics_stride = 50  # steps between diagnostic rows
+# The heat-flux stop checks stationarity and a 5% relative standard error
+# (run_to = "saturation", saturation_rel_sem = 0.05); t_max is the cap. The rule
+# needs about one sample per a/v_t, ten steps here (docs/guidance.rst,
+# Turbulence defaults).
+t_max = 1500.0  # end time in a/v_ti; the cap when run_to = saturation
+sample_stride = 10  # steps between stored samples
+diagnostics_stride = 10  # steps between diagnostic rows
 
 [geometry]
 model = "vmec"
@@ -62,8 +65,9 @@ nonlinear = 1.0
 
 [run]
 ky = 0.07142857142857142  # 1/y0: the first finite ky of the y0 = 14 box
-Nl = 4  # Laguerre moments (v_perp); default 4
-Nm = 8  # Hermite moments (v_par); default 8
+# (6, 12): within 1% of (8, 16) on QA; (4, 8) is 12% high (docs/guidance.rst).
+Nl = 6  # Laguerre moments (v_perp)
+Nm = 12  # Hermite moments (v_par)
 
 [output]
 # Optional saved-record cadence in the same time units as time.t_max.

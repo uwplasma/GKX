@@ -42,9 +42,9 @@ nperiod = 2  # line of 2*nperiod - 1 = 3 turns; linear linked runs need nperiod 
 [time]
 # Read only by the time-route benchmark tests; solver = "krylov" below needs no time loop.
 t_max = 4.0  # end time in a/v_ti; unused by solver = krylov
-dt = 0.001  # fixed step in a/v_ti; 4000 steps to t_max
+dt = 0.0002  # fixed step in a/v_ti, under the CFL bound 0.00024 at (16, 48); 0.001 overflows
 method = "imex2"  # 2nd-order implicit-explicit
-sample_stride = 2  # steps between stored samples; 2000 samples
+sample_stride = 2  # steps between stored samples
 
 [geometry]
 q = 1.4
