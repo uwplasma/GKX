@@ -458,24 +458,89 @@ heat-flux window value and gradient; ``"half"`` runs the window gradient in 0.68
 Equilibrium-flow shearing coordinates
 -------------------------------------
 
-A research path, not an input option.
+``[physics] exb_shear`` is the equilibrium :math:`E\times B` shearing rate
+:math:`\gamma_E` in :math:`v_{ti}/a`, with the GX ``g_exb`` convention: a wave
+follows :math:`k_x^*(t) = k_x(0) - k_y\gamma_E t`. The default 0
+leaves the run on the unsheared integrators and costs nothing.
 :func:`gkx.operators.nonlinear.projection.advance_shearing_coordinates`
-follows :math:`k_x^*(t) = k_x(0) - k_y\gamma_E t`. When the displacement
-crosses half a radial cell the state moves to the nearest :math:`k_x`, the
-sub-cell residual is kept in the wavenumber and the phase
-:math:`\exp(i\,\delta k_x x)` (the corrected remap of [McMillan19]_), and
-modes leaving the two-thirds band are zeroed. The remap is piecewise constant
-with a stopped tangent; wavenumbers and phases stay differentiable between
-remaps. Non-twist tubes are refused. There is no parallel-velocity-gradient
-drive [Schekochihin12]_ [Ball19]_. Shear is expected to decorrelate turbulence
-once the shearing rate exceeds the instability rate [Biglari90]_ [Waltz95]_;
-the gate below tests that. Integrators:
-``integrate_nonlinear_sheared`` (RK2, RK3, fixed-step IMEX) and
-``integrate_nonlinear_sheared_transport``. Treatment effects are judged with
-``matched_nonlinear_transport_report``, not by comparing two chaotic traces.
+does the update. When the displacement crosses half a radial cell the state
+moves to the nearest :math:`k_x`, the sub-cell residual is kept in the
+wavenumber and the phase :math:`\exp(i\,\delta k_x x)` (the corrected remap of
+[McMillan19]_), and modes leaving the two-thirds band are zeroed. The residual
+:math:`k_x^*` enters the field solve, the gyroaverages, the drifts and the
+nonlinear bracket at every Runge--Kutta stage, so the discrete remap is the only
+approximation. The remap is piecewise constant with a stopped tangent;
+wavenumbers and phases stay differentiable between remaps, so the heat flux has
+a gradient with respect to ``exb_shear``. Non-twist tubes are refused. There is no
+parallel-velocity-gradient drive [Schekochihin12]_ [Ball19]_ (GX carries none
+either). Shear is expected to decorrelate turbulence once the shearing rate exceeds
+the instability rate [Biglari90]_ [Waltz95]_.
 
-Flow shear remains a research API. Validate its response with matched,
-stationary windows and resolution studies before assigning a physical effect.
+A sheared deck needs ``physics.nonlinear = true``. Set ``terms.nonlinear = 0`` for
+the linear time-dependent (Floquet) problem. The run uses rk2, rk3 or imex (any
+other ``[time] method`` runs rk3), goes to ``t_max`` rather than to saturation,
+and records time and heat flux only; it runs on one device and refuses
+``collision_split``. A restart (``[output] restart``) loads the saved state and
+restarts the shearing time at 0, as GX does. The same integrators are available
+as ``integrate_nonlinear_sheared`` and ``integrate_nonlinear_sheared_transport``.
+Treatment effects are judged with ``matched_nonlinear_transport_report``, not by
+comparing two chaotic traces.
+
+Two practical limits. Shear moves every mode toward larger :math:`|k_x|`, so a
+sheared run needs a wider :math:`k_x` extent than the unsheared one (Cyclone at
+``gamma_E = 0.05``: ``Nx = 64`` stays dead from noise, ``Nx >= 128`` ignites). And
+once ``gamma_E`` exceeds roughly a third of the linear growth rate, a run from
+noise may not ignite within ``t_max``: the Floquet modes are linearly stable and
+the turbulence is sustained only nonlinearly. Start from a saturated unsheared
+state instead (restart a ``gamma_E = 0`` run).
+
+Imposed zonal flow
+------------------
+
+``[physics] zonal_flow`` adds a static, flux-surface-constant potential
+:math:`\phi_{ext}(x)` (:math:`k_y=0`) to :math:`\phi` in the nonlinear
+:math:`E\times B` bracket and nowhere else: it advects :math:`g` but is not part of
+the field solve, the linear terms or the diagnostics. It works on every
+unsharded nonlinear route; the default (empty) adds nothing. A list gives cosine
+amplitudes :math:`a_n` of :math:`\phi_{ext}=\sum_n a_n\cos(2\pi n x/L_x)`. A text
+file path gives two columns, :math:`x` in :math:`\rho_{ref}` across the box and
+:math:`\phi_{ext}`; it is interpolated linearly, treated as periodic over the
+box the grid has (:math:`2\pi/\Delta k_x`, which the linked boundary may adjust)
+and projected on the grid's :math:`k_x` harmonics. Make the profile periodic
+before passing it. Its mean is dropped, since a uniform flow is a Doppler
+shift. From Python, assign a list or an array (an ``(N, 2)`` array is a
+profile) to ``physics.zonal_flow``, or set ``params.zonal_flow`` to the
+coefficients of :func:`gkx.operators.nonlinear.rhs.zonal_flow_modes`.
+
+Units are those of the bracket: :math:`\phi` is :math:`(e\phi/T_{ref})(a/\rho_{ref})`,
+:math:`x` and :math:`y` are in :math:`\rho_{ref}`, time in :math:`a/v_t`. A mode
+:math:`g\propto e^{ik_y y}` is advected as :math:`\partial_t g=-i k_y V_y(x) g`
+with :math:`V_y=\partial_x\phi_{ext}` (gyroaveraged by :math:`J_0` at each flow
+harmonic; times ``kxfac`` for non-Cyclone normalisations), and the equivalent local
+shearing rate is :math:`\gamma_E(x)=\partial_x V_y=\partial_x^2\phi_{ext}`, with
+the sign of ``exb_shear``: a packet at :math:`x_0` acquires
+:math:`k_x^*=-k_y\gamma_E(x_0)t`. This is a prescribed profile, so it does not
+evolve under the turbulent Reynolds stress; keep :math:`L_x` an integer number of
+flow wavelengths and read the result as the response to a frozen flow.
+
+Choosing the input, and where the flow comes from
+-------------------------------------------------
+
+A uniform radial electric field is a Doppler shift :math:`k_y V_E` in a flux
+tube and changes no flux, so only the shear acts. Use ``exb_shear`` when the flow
+varies slowly across the box: the shearing rate then has one value, and a box of
+a few hundred :math:`\rho_{ref}` sees a linear :math:`V_E(x)`. Use
+``zonal_flow`` when the flow changes over a width comparable to the box (a few
+periods across it, or sign changes), where one shearing rate is a poor model.
+Neither includes the parallel-velocity-gradient drive, ``zonal_flow`` is frozen
+rather than evolved with the turbulence, and a sheared run records the heat flux
+only.
+
+For a neoclassical field from DKX, take :math:`E_r(r)` on a smoothed radial fit
+(ambipolar roots can switch branch, so check the sensitivity to the fit) and
+form :math:`\gamma_E` from its radial derivative in the units above. Whether the
+Hahm-Burrell term :math:`(1-\hat s)E_r/r` belongs in the shearing rate in GKX's
+flux-tube coordinates is not settled here, and no value is claimed for it.
 
 .. _end-damping:
 

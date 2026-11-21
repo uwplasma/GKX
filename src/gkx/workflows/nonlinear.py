@@ -18,6 +18,7 @@ from jax.experimental.multihost_utils import process_allgather
 from gkx.compilation_cache import enable_persistent_compilation_cache
 from gkx.core_grid import SpectralGrid, build_spectral_grid
 from gkx.diagnostics.modes import select_ky_index
+from gkx.diagnostics_contract import SimulationDiagnostics
 from gkx.diagnostics.saturation import SaturationStopConfig, make_saturation_check
 from gkx.geometry import apply_geometry_grid_defaults
 from gkx.operators.linear.linked import project_to_linked_cover
@@ -42,6 +43,9 @@ from gkx.solvers.nonlinear.diagnostics import (
     _continue_nonlinear_diagnostics,
     integrate_nonlinear_explicit_diagnostics_state,
     prepare_nonlinear_explicit_diagnostics,
+)
+from gkx.solvers.nonlinear.transport_window import (
+    integrate_nonlinear_sheared_transport,
 )
 from gkx.solvers.time_runners import integrate_nonlinear_from_config
 from gkx.workflows.runtime.chunks import run_adaptive_runtime_chunk_loop
@@ -73,6 +77,7 @@ from gkx.workflows.runtime.startup import (
     end_damping_status,
     build_runtime_term_config,
 )
+from gkx.operators.nonlinear.rhs import zonal_flow_modes
 
 
 def build_runtime_nonlinear_diagnostics_kwargs(
@@ -309,6 +314,8 @@ def _prepare_context(
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
     status("building runtime nonlinear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
+    if (zonal := zonal_flow_modes(cfg.physics.zonal_flow, grid)) is not None:
+        params = replace(params, zonal_flow=zonal)
     if getattr(params, "mu_vperp_max", None) is not None:
         raise NotImplementedError("[run] mu_vperp_max is linear only")
     terms = build_runtime_term_config(cfg)
@@ -958,6 +965,99 @@ def _diagnostic_run_result(
     )
 
 
+def _run_sheared(
+    cfg: RuntimeConfig,
+    ctx: _RunContext,
+    policy: _DiagnosticPolicy,
+    status: Callable[[str], None],
+) -> tuple[RuntimeNonlinearResult, Any]:
+    """Integrate with the equilibrium ExB shear ``[physics] exb_shear``.
+
+    Shearing coordinates, rk2/rk3/imex (other methods run rk3). The run records
+    time and heat flux, goes to ``t_max`` and does not stop at saturation.
+    Adaptive steps run in fixed-size chunks. A restart (``[init] init_file``,
+    set by the artifact layer from ``[output] restart``) enters through ``ctx.G0``
+    and the shearing time restarts at 0.
+    """
+
+    if cfg.time.collision_split:
+        raise NotImplementedError("exb_shear does not support collision_split")
+    method = cfg.time.method if cfg.time.method in ("rk2", "rk3", "imex") else "rk3"
+    fixed, t_max = bool(cfg.time.fixed_dt), float(cfg.time.t_max)
+    status(f"ExB shear {cfg.physics.exb_shear:.6g} v_ti/a, {method}, fixed_dt={fixed}")
+    run = partial(
+        integrate_nonlinear_sheared_transport,
+        grid=ctx.grid,
+        geom=ctx.geom,
+        params=ctx.params,
+        shear_rate=cfg.physics.exb_shear,
+        method=method,
+        terms=ctx.terms,
+        compressed_real_fft=bool(cfg.time.compressed_real_fft),
+        flux_scale=float(cfg.normalization.flux_scale),
+        differentiable=False,
+        fixed_dt=fixed,
+        dt_min=float(cfg.time.dt_min),
+        dt_max=cfg.time.dt_max,
+        cfl=float(cfg.time.cfl),
+        cfl_fac=resolve_nonlinear_cfl_fac(
+            method, cfg.time.cfl_fac, int(ctx.G0.shape[-5] * ctx.G0.shape[-4])
+        ),
+    )
+    state, times, flux, t, dt = ctx.G0, [], [], 0.0, ctx.dt
+    while t < t_max * (1.0 - 1.0e-9):
+        trace = run(
+            state,
+            dt=dt,
+            steps=ctx.steps if fixed else 256,
+            initial_time=t,
+            initial_dt=dt,
+        )
+        state = trace.final_state
+        times.append(np.asarray(trace.time))
+        flux.append(np.asarray(trace.heat_flux))
+        t = float(times[-1][-1])
+        dt = float(np.diff(times[-1][-2:])[0]) if times[-1].size > 1 else dt
+        if fixed:
+            break
+    t_arr = np.concatenate(times)
+    q_s = np.concatenate(flux).reshape(t_arr.size, -1)
+    zeros: dict[str, Any] = dict.fromkeys(
+        (
+            "gamma_t",
+            "omega_t",
+            "Wg_t",
+            "Wphi_t",
+            "Wapar_t",
+            "particle_flux_t",
+            "energy_t",
+        ),
+        np.zeros_like(t_arr),
+    )
+    diag = SimulationDiagnostics(
+        t=t_arr,
+        dt_t=np.gradient(t_arr),
+        dt_mean=np.asarray(np.mean(np.diff(t_arr, prepend=0.0))),
+        heat_flux_t=q_s.sum(axis=-1),
+        heat_flux_species_t=q_s,
+        particle_flux_species_t=np.zeros_like(q_s),
+        turbulent_heating_t=np.zeros_like(t_arr),
+        turbulent_heating_species_t=np.zeros_like(q_s),
+        **zeros,
+    )
+    validate_finite_runtime_diagnostics(diag, label="sheared nonlinear run")
+    result = _result(
+        ctx,
+        replace(policy, diagnostics_on=True),
+        t=t_arr,
+        diagnostics=diag,
+        fields=None,
+        state=state,
+        summarize_fields=False,
+    )
+    return result, state
+
+
 def _run_once(
     cfg: RuntimeConfig,
     ctx: _RunContext,
@@ -967,6 +1067,8 @@ def _run_once(
     status: Callable[[str], None],
     rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[RuntimeNonlinearResult, Any]:
+    if cfg.physics.exb_shear != 0.0:
+        return _run_sheared(cfg, ctx, policy, status)
     if (
         not policy.requires_diagnostic_path
         and cfg.time.fixed_dt
@@ -1123,6 +1225,10 @@ def run_runtime_nonlinear(
     # Resolved before any geometry or grid work so an unroutable [parallel]
     # request fails immediately instead of after a long serial run.
     plan = resolve_nonlinear_parallel_plan(cfg.parallel)
+    if cfg.physics.exb_shear != 0.0 and (prepare_only or plan is not None):
+        raise NotImplementedError("exb_shear runs through gkx.solve on one device")
+    if np.size(cfg.physics.zonal_flow) and plan is not None:
+        raise NotImplementedError("zonal_flow does not support [parallel] sharding")
     status = (
         status_callback
         if status_callback is not None

@@ -407,6 +407,7 @@ def _load_restart_history(
         policy.netcdf_output_target
         and resume_requested
         and bool(getattr(cfg.output, "append_on_restart", True))
+        and cfg.physics.exb_shear == 0.0  # a sheared run records no resolved spectra
     ):
         return None, False
     assert policy.out_path is not None
