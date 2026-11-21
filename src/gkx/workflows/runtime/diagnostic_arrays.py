@@ -34,6 +34,7 @@ __all__ = [
     "timestep_cost_payload",
     "timestep_cost_report",
     "validate_finite_runtime_diagnostics",
+    "validate_runtime_growth",
 ]
 
 
@@ -108,6 +109,39 @@ def validate_finite_runtime_diagnostics(
             t_text = f" at t={float(t_arr[sample]):.6g}"
         raise RuntimeError(
             f"{label} produced non-finite diagnostics in resolved.{field.name} at sample {sample}{t_text}"
+        )
+
+
+# Wg may grow by at most exp(WG_GROWTH_LIMIT * gamma_max * dt) between samples.
+# Shipped decks at a stable step reach 0.010 at most; the tutorial deck at 1.5x
+# its rk4 stability edge reaches 0.57 within five steps.
+WG_GROWTH_LIMIT = 0.25
+
+
+def validate_runtime_growth(
+    diag: SimulationDiagnostics, gamma_max: float | None, label: str = "fixed-step run"
+) -> None:
+    """Raise if ``Wg`` grows between two samples faster than a stable step allows.
+
+    ``gamma_max`` is the analytic CFL frequency of the deck. An unstable fixed
+    step can grow by many decades and still return finite diagnostics.
+    """
+
+    if gamma_max is None or not gamma_max > 0.0:
+        return
+    t = np.asarray(diag.t, dtype=float)
+    wg = np.asarray(diag.Wg_t, dtype=float).reshape(t.size, -1).sum(axis=1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        growth = np.log(wg[1:] / wg[:-1])
+    limit = WG_GROWTH_LIMIT * gamma_max * np.diff(t)
+    bad = np.flatnonzero(np.isfinite(growth) & (growth > limit))
+    if bad.size:
+        i = int(bad[0]) + 1
+        raise RuntimeError(
+            f"{label}: Wg grew by a factor {np.exp(growth[i - 1]):.3g} from sample "
+            f"{i - 1} to sample {i} at t={t[i]:.6g}, above "
+            f"exp({WG_GROWTH_LIMIT} gamma_max dt) with gamma_max={gamma_max:.4g}; "
+            "the fixed step is unstable, reduce dt"
         )
 
 
