@@ -543,6 +543,10 @@ class RuntimePhysicsConfig:
     collisions: bool = True
     hypercollisions: bool = True
 
+    def __post_init__(self) -> None:
+        if isinstance(self.zonal_flow, list):  # a TOML list round-trips as a tuple
+            object.__setattr__(self, "zonal_flow", tuple(self.zonal_flow))
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 

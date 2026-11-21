@@ -310,7 +310,8 @@ def _prepare_context(
     grid = build_spectral_grid(apply_geometry_grid_defaults(geom, cfg.grid))
     status("building runtime nonlinear parameters")
     params = build_runtime_linear_params(cfg, Nm=Nm, geom=geom)
-    params = replace(params, zonal_flow=zonal_flow_modes(cfg.physics.zonal_flow, grid))
+    if (zonal := zonal_flow_modes(cfg.physics.zonal_flow, grid)) is not None:
+        params = replace(params, zonal_flow=zonal)
     if getattr(params, "mu_vperp_max", None) is not None:
         raise NotImplementedError("[run] mu_vperp_max is linear only")
     terms = build_runtime_term_config(cfg)
