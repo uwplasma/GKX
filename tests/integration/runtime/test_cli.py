@@ -528,7 +528,8 @@ def test_cmd_run_runtime_nonlinear_fixed_dt_and_explicit_diagnostics(
     patch_runtime(monkeypatch, "run_runtime_nonlinear_with_artifacts", _runner)
     args = argparse.Namespace(config="case.toml", diagnostics=True)
     assert _cmd_run_runtime_nonlinear(args) == 0
-    assert captured["steps"] == 5
+    # Without --steps the runner counts to t_max, which is absolute on a resume.
+    assert captured["steps"] is None
     assert captured["diagnostics"] is True
 
 
