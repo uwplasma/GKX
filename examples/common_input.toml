@@ -14,13 +14,13 @@ fprim = 1.0
 nu = 0.01
 
 [grid]
-Nx = 96
-Ny = 96
-Nz = 48
-boundary = "fix aspect"
+Nx = 96  # radial points = kx modes; production range 64-96 (docs/guidance.rst)
+Ny = 96  # binormal points: 49 ky rows in steps of 0.0714
+Nz = 48  # unused while ntheta is set: the line holds ntheta*(2*nperiod - 1) = 48 points
+boundary = "fix aspect"  # VMEC flux-tube boundary (fix aspect, docs/inputs.rst)
 y0 = 14.0  # dky*rho = 0.071, the published W7-X spacing; scan-calibrated
-ntheta = 48
-nperiod = 1
+ntheta = 48  # points per poloidal turn; the z grid has 48 points
+nperiod = 1  # z-grid turns 2*nperiod - 1 = 1; the VMEC line length is npol
 
 [time]
 # No dt, method or damp_ends_rate: the CFL controller picks the stepper (auto)
@@ -32,16 +32,16 @@ nperiod = 1
 # (run_to = "saturation", saturation_rel_sem = 0.05); t_max is the cap. The rule
 # needs about one sample per a/v_t, ten steps here (docs/guidance.rst,
 # Turbulence defaults).
-t_max = 1500.0
-sample_stride = 10
-diagnostics_stride = 10
+t_max = 1500.0  # end time in a/v_ti; the cap when run_to = saturation
+sample_stride = 10  # steps between stored samples
+diagnostics_stride = 10  # steps between diagnostic rows
 
 [geometry]
 model = "vmec"
 # vmec_file is injected by the CLI from the wout positional or --vmec/--vmex.
 torflux = 0.64
 # Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
-npol = 1.0
+npol = 1.0  # VMEC line length in poloidal turns; a speed choice, docs/guidance.rst advises npol >= 3 for converged rates
 
 [init]
 init_amp = 1e-3
@@ -66,8 +66,8 @@ nonlinear = 1.0
 [run]
 ky = 0.07142857142857142  # 1/y0: the first finite ky of the y0 = 14 box
 # (6, 12): within 1% of (8, 16) on QA; (4, 8) is 12% high (docs/guidance.rst).
-Nl = 6
-Nm = 12
+Nl = 6  # Laguerre moments (v_perp)
+Nm = 12  # Hermite moments (v_par)
 
 [output]
 # Optional saved-record cadence in the same time units as time.t_max.

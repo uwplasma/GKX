@@ -29,22 +29,22 @@ nu = 0.0
 kinetic = true
 
 [grid]
-Nx = 1
-Ny = 12
-Nz = 96
-Lx = 62.8
-Ly = 62.8
-boundary = "linked"
-y0 = 10.0
-ntheta = 32
-nperiod = 2
+Nx = 1  # radial points = kx modes; 1 = the single kx = 0 mode, right for a linear run (nonlinear needs a radial box)
+Ny = 12  # binormal points: 7 ky rows, 0 to 0.6 in steps of 0.1; [run] ky picks one
+Nz = 96  # unused while ntheta is set: the line holds ntheta*(2*nperiod - 1) = 96 points
+Lx = 62.8  # radial box length in rho_i; unused at Nx = 1 (the kx spacing is 2 pi/Lx)
+Ly = 62.8  # unused while y0 is set (y0 sets the ky spacing)
+boundary = "linked"  # twist-and-shift parallel boundary (links kx rows when Nx > 1)
+y0 = 10.0  # ky spacing 1/y0 = 0.1, the lowest finite ky
+ntheta = 32  # points per poloidal turn; the z grid has 96 points
+nperiod = 2  # line of 2*nperiod - 1 = 3 turns; linear linked runs need nperiod >= 2 (docs/guidance.rst)
 
 [time]
 # Read only by the time-route benchmark tests; solver = "krylov" below needs no time loop.
-t_max = 4.0
-dt = 0.0002  # under the CFL bound 0.00024 at (16, 48); 0.001 overflows
-method = "imex2"
-sample_stride = 2
+t_max = 4.0  # end time in a/v_ti; unused by solver = krylov
+dt = 0.0002  # fixed step in a/v_ti, under the CFL bound 0.00024 at (16, 48); 0.001 overflows
+method = "imex2"  # 2nd-order implicit-explicit
+sample_stride = 2  # steps between stored samples
 
 [geometry]
 q = 1.4
@@ -101,13 +101,13 @@ nonlinear = 0.0
 # Both species use these counts, as the benchmark contract requires. The KBM has
 # not been scanned per species; [[species]] Nl/Nm would set them (docs/guidance.rst).
 [run]
-ky = 0.3
-Nl = 16
-Nm = 48
+ky = 0.3  # k_y rho_i of the single mode, the nearest grid row (spacing 0.1)
+Nl = 16  # Laguerre moments (v_perp); default 12
+Nm = 48  # Hermite moments (v_par); default 24
 # This experimental shift-invert path fails closed unless its physical
 # eigenpair residual passes. Use the benchmark comparison driver for the
 # promoted KBM result.
-solver = "krylov"
+solver = "krylov"  # eigenpair of the linear operator
 
 [scan]
 ky = [0.1, 0.2, 0.3, 0.4, 0.5]
