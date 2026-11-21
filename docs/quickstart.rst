@@ -161,6 +161,10 @@ with ``--vmec-file`` pointing to the corresponding benchmark ``wout_*.nc``.
 A ``wout`` file can also be run directly: ``gkx wout_XXX.nc`` resolves a default
 deck, writes the resolved input and all outputs under ``./<wout-stem>/``, and
 ``gkx my_input.toml wout_XXX.nc`` runs an edited deck against that equilibrium.
+The default deck targets a 5% relative standard error on the mean heat flux and prints
+:math:`Q \pm` SEM; on the QA equilibrium that is about 18 minutes on one
+A4000 GPU (:ref:`turbulence-defaults`). Set ``--set time.saturation_rel_sem=0.1``
+for a coarser answer sooner.
 
 Geometry path overrides
 -----------------------
