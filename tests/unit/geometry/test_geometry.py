@@ -1019,7 +1019,7 @@ def test_build_vmec_geometry_request_creates_expected_request(tmp_path: Path) ->
     assert request.vmec_file == str(Path(cfg.geometry.vmec_file).resolve())
     assert request.torflux == 0.64
     assert request.npol == 2.0
-    assert request.ntheta == 32
+    assert request.ntheta == 64  # grid.ntheta = 32 points per turn, two turns
     assert request.alpha == 0.1
     assert request.y0 == pytest.approx(10.0)
     assert request.z == (1.0, -1.0)  # Ion + adiabatic electron

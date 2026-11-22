@@ -100,7 +100,9 @@ def build_vmec_geometry_request(cfg: RuntimeConfig) -> VmecGeometryRequest:
     # Match imported VMEC defaults: unless the user exposes an explicit VMEC x0 control,
     # leave x0 unset so the geometry helper chooses the flux-tube cut.
     x0 = None
-    ntheta = int(cfg.grid.ntheta) if cfg.grid.ntheta is not None else int(cfg.grid.Nz)
+    npol = _infer_vmec_npol(cfg)
+    # ``grid.ntheta`` counts points per poloidal turn; the line holds ``npol`` turns.
+    ntheta = round(int(cfg.grid.ntheta) * npol) if cfg.grid.ntheta else int(cfg.grid.Nz)
     if ntheta < 2:
         raise ValueError("VMEC geometry generation requires ntheta >= 2")
 
@@ -133,7 +135,7 @@ def build_vmec_geometry_request(cfg: RuntimeConfig) -> VmecGeometryRequest:
         beta=beta,
         alpha=float(cfg.geometry.alpha),
         torflux=float(cfg.geometry.torflux),
-        npol=_infer_vmec_npol(cfg),
+        npol=npol,
         npol_min=None
         if cfg.geometry.npol_min is None
         else float(cfg.geometry.npol_min),

@@ -393,8 +393,13 @@ Resolution
 - Perpendicular. Nonlinear production runs use 64-96 points in
   :math:`x` and :math:`y`; ``gkx --estimate`` prints the grid the geometry
   asks for, with the reason.
-- Parallel. :math:`N_z` = 24-64 per field-period segment, and
-  ``nperiod >= 2`` for any linear run with linked boundaries.
+- Parallel. ``ntheta`` counts points per poloidal turn, so a VMEC line holds
+  ``ntheta * npol`` of them (``Nz`` is a total and is ignored when ``ntheta`` is
+  set). Use 48 per turn, and for a stellarator at least 16 per field period
+  (``16 nfp / |iota|``). Linear growth rates of two tokamaks and three
+  stellarators (nfp 2 to 6) move by 1% or less from 48 to 96 points per turn and
+  by 1-5% at 24; the nfp 3 and nfp 6 stellarators leave the physical branch
+  below 16-32. ``nperiod >= 2`` for any linear run with linked boundaries.
 - Field-line length. Use ``npol >= 3`` for VMEC and ``nperiod >= 2`` for
   analytic geometry. Shorter lines give a wrong growth rate at every end-damping
   rate (errors of 30-80% in the common-deck study), and a stellarator rate still
