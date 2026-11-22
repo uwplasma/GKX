@@ -19,23 +19,23 @@ nu = 0.01
 kinetic = true
 
 [grid]
-Nx = 16
-Ny = 16
-Nz = 32
-Lx = 62.8
-Ly = 62.8
-boundary = "fix aspect"
-y0 = 21.0
-ntheta = 32
-nperiod = 2
+Nx = 16  # radial points = kx modes, spacing 2 pi/Lx = 0.1; 16 is a tutorial size, production runs use 64-96 (docs/guidance.rst)
+Ny = 16  # binormal points: 9 ky rows in steps of 0.0476; production runs use 64-96 (docs/guidance.rst)
+Nz = 32  # unused while ntheta is set: the line holds ntheta*(2*nperiod - 1) = 96 points
+Lx = 62.8  # radial box length in rho_i; kx spacing 2 pi/Lx = 0.1
+Ly = 62.8  # unused while y0 is set (y0 sets the ky spacing)
+boundary = "fix aspect"  # VMEC flux-tube boundary (fix aspect, docs/inputs.rst)
+y0 = 21.0  # ky spacing 1/y0 = 0.0476, the lowest finite ky
+ntheta = 32  # points per poloidal turn; the z grid has 96 points
+nperiod = 2  # supplies the VMEC line length npol = 2*nperiod - 1 = 3 turns (npol unset)
 
 [time]
 # Optional runtime controls; intervals use normalized time, like t_max.
 # chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
 # diagnostics_interval = 0.5  # Overrides the step-stride cadence.
-t_max = 10.0
-sample_stride = 10
-diagnostics_stride = 10
+t_max = 10.0  # end time in a/v_ti; a fixed tutorial horizon, not a saturated state
+sample_stride = 10  # steps between stored samples
+diagnostics_stride = 10  # steps between diagnostic rows
 # A fixed tutorial horizon, not a run to saturation.
 run_to = "t_max"
 
@@ -92,9 +92,9 @@ bpar = 0.0
 nonlinear = 1.0
 
 [run]
-ky = 0.047619047619047616
-Nl = 2
-Nm = 4
+ky = 0.047619047619047616  # k_y rho_i of the selected mode, the nearest dealiased row (spacing 0.0476)
+Nl = 2  # Laguerre moments (v_perp); default 4; tutorial size
+Nm = 4  # Hermite moments (v_par); default 8; tutorial size
 
 [output]
 # Optional saved-record cadence in the same time units as time.t_max.

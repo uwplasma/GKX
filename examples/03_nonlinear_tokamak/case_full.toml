@@ -15,24 +15,24 @@ fprim = 0.8
 kinetic = true
 
 [grid]
-Nx = 64
-Ny = 64
-Nz = 24
-Lx = 176.25000339052914
-Ly = 62.8
-boundary = "linked"
-y0 = 28.2
-ntheta = 24
+Nx = 64  # radial points = kx modes, spacing 2 pi/Lx = 0.0356; production range 64-96 (docs/guidance.rst)
+Ny = 64  # binormal points: 33 ky rows in steps of 0.0355
+Nz = 24  # unused while ntheta is set: the line holds ntheta*(2*nperiod - 1) = 24 points
+Lx = 176.25000339052914  # radial box length in rho_i; kx spacing 2 pi/Lx = 0.0356
+Ly = 62.8  # unused while y0 is set (y0 sets the ky spacing)
+boundary = "linked"  # twist-and-shift parallel boundary (links kx rows when Nx > 1)
+y0 = 28.2  # ky spacing 1/y0 = 0.0355, the lowest finite ky
+ntheta = 24  # points per poloidal turn; the z grid has 24 points
 # Short field line: growth rates are not converged below nperiod = 2; see docs/guidance.rst.
-nperiod = 1
+nperiod = 1  # line of 2*nperiod - 1 = 1 turn
 
 [time]
 # Optional runtime controls; intervals use normalized time, like t_max.
 # chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
 # diagnostics_interval = 0.1  # Overrides the step-stride cadence.
-t_max = 20.4
-sample_stride = 10
-diagnostics_stride = 10
+t_max = 20.4  # end time in a/v_ti; the cap when run_to = saturation
+sample_stride = 10  # steps between stored samples
+diagnostics_stride = 10  # steps between diagnostic rows
 compressed_real_fft = true
 laguerre_nonlinear_mode = "grid"
 
@@ -79,9 +79,9 @@ contract = "cyclone"
 diagnostic_norm = "rho_star"
 
 [run]
-ky = 0.3
-Nl = 4
-Nm = 8
+ky = 0.3  # k_y rho_i of the selected mode, the nearest dealiased row (spacing 0.0355)
+Nl = 4  # Laguerre moments (v_perp); default 4
+Nm = 8  # Hermite moments (v_par); default 8
 steps = 200
 
 [output]
