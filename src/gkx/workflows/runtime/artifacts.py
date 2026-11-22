@@ -326,6 +326,13 @@ def resolve_nonlinear_artifact_policy(
         elif int(getattr(cfg.output, "nsave", 0)) > 0:
             checkpoint_steps = int(cfg.output.nsave)
 
+    if cfg.time.collision_interval != 1 and (
+        checkpoint_steps is not None or resume_requested
+    ):
+        raise ValueError(
+            "collision_interval other than 1 does not support checkpoint/restart"
+        )
+
     return NonlinearArtifactPolicy(
         out_path=out_path,
         netcdf_output_target=netcdf_output_target,
@@ -520,7 +527,7 @@ def _run_runtime_nonlinear_chunk(
     policy: NonlinearArtifactPolicy,
     options: _NonlinearArtifactRunOptions,
     chunk_steps: int | None,
-    progress: tuple[float, float, float] | None = None,
+    progress: tuple[float, float] | None = None,
 ) -> RuntimeNonlinearResult:
     """Run one chunk and include compilation in its measured wall time."""
 
@@ -605,7 +612,6 @@ def _run_artifact_checkpoint_loop(
     result_final: RuntimeNonlinearResult | None = None
     paths: dict[str, str] = {}
     wall_total = 0.0
-    progress_wall_start = time.perf_counter()
     progress_t_max = time_offset + (
         float(remaining_steps) * float(options.dt or cfg.time.dt)
         if remaining_steps is not None
@@ -621,7 +627,7 @@ def _run_artifact_checkpoint_loop(
             policy=policy,
             options=options,
             chunk_steps=chunk_steps,
-            progress=(time_offset, progress_t_max, progress_wall_start)
+            progress=(time_offset, progress_t_max)
             if policy.diagnostics_on
             and (options.show_progress or cfg.time.diagnostics_interval is not None)
             and (policy.checkpoint_steps is not None or time_offset != 0)

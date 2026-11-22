@@ -87,6 +87,9 @@ dev = [
 assets = [
   "Pillow",
 ]
+# Geometry inputs: a DESC equilibrium (.h5) or a GVEC state, see docs/geometry.rst.
+desc = ["desc-opt"]
+gvec = ["gvec"]
 validation = [
   "pandas",
 ]
@@ -153,6 +156,9 @@ exclude = ["legacy_archive", "examples", "docs"]
 module = [
   "booz_xform",
   "booz_xform_jax",
+  "desc",
+  "desc.*",
+  "gvec",
   "netCDF4",
   "pandas",
   "scipy",
