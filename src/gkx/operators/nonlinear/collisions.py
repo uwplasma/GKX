@@ -22,6 +22,7 @@ __all__ = [
     "_apply_collision_split",
     "_collision_damping",
     "build_nonlinear_collision_split_policy",
+    "collision_rate_bound",
 ]
 
 
@@ -141,6 +142,41 @@ class NonlinearCollisionSplitPolicy:
     active: bool
     rhs_terms: TermConfig
     damping: jnp.ndarray | None
+    # The collision operator alone, applied once per step (explicit steppers).
+    collision_terms: TermConfig | None = None
+    # Bound on the largest |eigenvalue| of that operator (0: not measured).
+    rate: float = 0.0
+
+
+def collision_rate_bound(
+    apply: Callable[[jnp.ndarray], jnp.ndarray],
+    like: jnp.ndarray,
+    *,
+    iterations: int = 30,
+    margin: float = 1.25,
+) -> float:
+    """Largest ``|eigenvalue|`` of the linear operator ``apply``, by power iteration.
+
+    The collision spectrum is real and negative with well-separated large
+    eigenvalues (they grow with the Hermite and Laguerre index), so the norm ratio
+    converges from below within a few tens of applications; ``margin`` covers the
+    remainder. Forward Euler on ``apply`` is stable for ``dt * rate < 2``.
+    """
+
+    key = jax.random.PRNGKey(0)
+    v = jax.random.normal(key, like.shape, dtype=jnp.real(like).dtype).astype(
+        like.dtype
+    )
+    run = jax.jit(apply)
+    rate = 0.0
+    for _ in range(iterations):
+        v = v / jnp.linalg.norm(v)
+        w = run(v)
+        rate = float(jnp.linalg.norm(w))
+        if rate == 0.0:
+            break
+        v = w
+    return margin * rate
 
 
 def _collision_damping(
@@ -172,24 +208,40 @@ def build_nonlinear_collision_split_policy(
     real_dtype: jnp.dtype,
     *,
     squeeze_species: bool,
-    collision_split: bool,
+    collision_split: bool | None,
     collision_damping_fn: Callable[..., jnp.ndarray] = _collision_damping,
+    split_collisions: bool = False,
 ) -> NonlinearCollisionSplitPolicy:
-    """Build collision splitting weights and RHS terms for nonlinear scans."""
+    """Build collision splitting weights and RHS terms for nonlinear scans.
 
-    active = bool(collision_split) and float(term_cfg.hypercollisions) != 0.0
-    rhs_terms = replace(term_cfg, hypercollisions=0.0) if active else term_cfg
-    damping = (
-        collision_damping_fn(
+    ``True`` splits the diagonal hypercollisions. With ``split_collisions`` (the
+    explicit steppers) ``True`` or ``None`` also takes the conserving collision
+    operator out of the stages, to be applied once per step (Lie split).
+    """
+
+    hyper = collision_split is True and float(term_cfg.hypercollisions) != 0.0
+    coll = (
+        collision_split is not False
+        and split_collisions
+        and float(term_cfg.collisions) != 0.0
+        and (bool(np.any(np.asarray(params.nu) != 0.0)) or params._nu_ei is not None)
+    )
+    rhs_terms = replace(
+        term_cfg,
+        hypercollisions=0.0 if hyper else term_cfg.hypercollisions,
+        collisions=0.0 if coll else term_cfg.collisions,
+    )
+    keep = ("collisions", "apar", "bpar")
+    off = {f: 0.0 for f in rhs_terms.__dataclass_fields__ if f not in keep}
+    return NonlinearCollisionSplitPolicy(
+        active=hyper or coll,
+        rhs_terms=rhs_terms,
+        damping=collision_damping_fn(
             cache, params, term_cfg, real_dtype, squeeze_species=squeeze_species
         )
-        if active
-        else None
-    )
-    return NonlinearCollisionSplitPolicy(
-        active=active,
-        rhs_terms=rhs_terms,
-        damping=damping,
+        if hyper
+        else None,
+        collision_terms=replace(term_cfg, **off) if coll else None,
     )
 
 

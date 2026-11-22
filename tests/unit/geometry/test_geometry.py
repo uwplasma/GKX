@@ -50,6 +50,9 @@ from gkx.config import (
     RuntimePhysicsConfig,
     RuntimeSpeciesConfig,
 )
+from gkx.workflows.runtime.toml import load_runtime_from_toml
+from gkx.geometry.vmec_eik import _convert_equilibrium as convert_equilibrium
+from gkx.geometry.vmec_eik import desc_to_wout, gvec_to_wout, write_wout
 from gkx.geometry.vmec_eik import (
     build_vmec_geometry_request,
     generate_runtime_vmec_eik,
@@ -2632,3 +2635,234 @@ def test_vmec_field_reversal_is_a_radial_mirror_with_signed_outward_flux(
         use_custom_vjp=False,
     )
     assert np.max(np.abs(kx_mirror(rhs_f) - np.asarray(rhs_b))) > 1e-4 * scale
+
+
+# ---- DESC and GVEC equilibria through a wout ----
+
+DATA = Path(__file__).parents[2] / "support" / "data" / "stellarator_equilibria"
+DECK = """
+schema_version = 1
+[[species]]
+name = "ion"
+charge = 1.0
+mass = 1.0
+density = 1.0
+temperature = 1.0
+tprim = 3.0
+fprim = 1.0
+nu = 0.0
+kinetic = true
+[grid]
+Nx = 1
+Ny = 12
+Nz = 32
+Lx = 62.8
+Ly = 62.8
+boundary = "linked"
+y0 = 5.0
+ntheta = 32
+[geometry]
+model = "{model}"
+vmec_file = "{path}"
+torflux = {torflux}
+npol = 1.0
+[physics]
+adiabatic_electrons = true
+"""
+# Reference: the VMEC flux tube (s = 0.5; q also at s = 0 and 1) of a vmex
+# Landreman-Paul QA wout with mpol = ntor = 5, nfp = 2. DESC fits (L = 16, M = N = 5)
+# and GVEC converts that wout. Peak-normalised tolerances; the drift terms carry the
+# radial derivative of B, which a DESC fit of the VMEC surfaces reproduces least well.
+REF = json.loads((DATA / "qa_small_vmec.json").read_text())
+TOL = {
+    "desc": dict(
+        bmag=1e-3, gradpar=1e-3, gds2=3e-3, gds21=3e-3, gds22=3e-3, gbdrift=0.08
+    ),
+    "gvec": dict(
+        bmag=5e-3, gradpar=3e-3, gds2=5e-3, gds21=5e-3, gds22=5e-3, gbdrift=1e-2
+    ),
+}
+FILES = {"desc": "qa_small.desc.h5", "gvec": "gvec/GVEC_State_0000_00000000.dat"}
+
+
+@pytest.fixture(scope="module", params=["desc", "gvec"])
+def converted(request, tmp_path_factory: pytest.TempPathFactory):
+    model = request.param
+    pytest.importorskip(model)
+    cache = tmp_path_factory.mktemp(model)
+    return model, convert_equilibrium(model, DATA / FILES[model], cache), cache
+
+
+def _tube(wout: Path, torflux: float, tmp: Path) -> nc.Dataset:
+    deck = tmp / f"case_{torflux}.toml"
+    deck.write_text(DECK.format(model="vmec", path=wout, torflux=torflux))
+    cfg, _ = load_runtime_from_toml(deck)
+    return nc.Dataset(
+        generate_runtime_vmec_eik(
+            cfg, output_path=tmp / f"{torflux}.eik.nc", force=True
+        )
+    )
+
+
+def test_flux_tube_matches_vmec(converted) -> None:
+    model, wout, cache = converted
+    with _tube(wout, 0.5, cache) as got:
+        ref = REF["0.5"]
+        assert float(got["q"][:]) == pytest.approx(ref["q"], rel=1e-5)
+        for name, tol in TOL[model].items():
+            a, b = np.asarray(got[name][:]), np.asarray(ref[name])
+            assert np.max(np.abs(a - b)) / np.max(np.abs(b)) < tol, name
+
+
+@pytest.mark.parametrize("torflux", [0.0, 1.0])
+def test_torflux_at_the_boundaries_is_finite_and_matches_vmec_q(
+    converted, torflux: float
+) -> None:
+    _, wout, cache = converted
+    with _tube(wout, torflux, cache) as got:
+        assert float(got["q"][:]) == pytest.approx(REF[str(torflux)]["q"], rel=2e-3)
+        assert np.all(np.isfinite(np.asarray(got["gds2"][:])))
+
+
+def test_gvec_signs_follow_vmec_convention(converted) -> None:
+    model, wout, _ = converted
+    if model != "gvec":
+        pytest.skip("DESC and VMEC carry their own iota sign; q is checked above")
+    with nc.Dataset(
+        wout
+    ) as w:  # GVEC runs with zeta = -phi: iota and phi stay positive
+        assert float(w["phi"][-1]) > 0.0
+        assert np.all(np.asarray(w["iotas"][1:]) > 0.0)
+        assert 1.0 / float(w["iotas"][8]) == pytest.approx(REF["0.5"]["q"], rel=5e-2)
+
+
+def test_write_wout_of_a_circular_tokamak_gives_the_analytic_flux_tube(
+    tmp_path: Path,
+) -> None:
+    """Large-aspect circular tokamak (R0 = 6, a = 1, iota = 0.5): q = 1/iota, B ~ 1/R."""
+
+    r0, a, iota = 6.0, 1.0, 0.5
+
+    def sample(fields, s, th, ze):
+        r = a * np.sqrt(s)[:, None, None] * np.ones((1, len(th), len(ze)))
+        T = th[None, :, None]
+        R = r0 + r * np.cos(T)
+        full = dict(R=R, Z=r * np.sin(T), lam=0 * R, B=r0 / R, Bv=r0 + 0 * R)
+        full["Bu"] = r**2 * iota / r0  # B_theta = r^2 iota / R0
+        return {k: full[k] for k in fields}
+
+    wout = write_wout(
+        tmp_path / "wout.nc",
+        nfp=1,
+        mpol=3,
+        ntor=0,
+        ns=12,
+        sample=sample,
+        iota=lambda s: iota + 0 * s,
+        pres=lambda s: 0 * s,
+        phiedge=np.pi * a**2,
+        aminor=a,
+        raxis=r0,
+    )
+    with _tube(wout, 0.5, tmp_path) as got:
+        assert float(got["q"][:]) == pytest.approx(1 / iota, rel=1e-6)
+        bmag = np.asarray(got["bmag"][:])
+        rr = a * np.sqrt(0.5)
+        assert np.max(bmag) / np.min(bmag) == pytest.approx(
+            (r0 + rr) / (r0 - rr), rel=1e-3
+        )
+
+
+def test_conversion_is_cached_by_path_size_and_mtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = []
+
+    def fake(src: Path, out: Path) -> Path:
+        calls.append(out)
+        out.write_text("wout")
+        return out
+
+    monkeypatch.setattr("gkx.geometry.vmec_eik.desc_to_wout", fake)
+    monkeypatch.setattr("gkx.geometry.vmec_eik.importlib.import_module", lambda m: None)
+    src = tmp_path / "eq.h5"
+    src.write_text("a")
+    first = convert_equilibrium("desc", src, tmp_path)
+    assert convert_equilibrium("desc", src, tmp_path) == first and len(calls) == 1
+    os.utime(src, ns=(1, 1))  # same size, new mtime
+    second = convert_equilibrium("desc", src, tmp_path)
+    assert second != first and len(calls) == 2
+    src.write_text("bb")  # new size
+    assert convert_equilibrium("desc", src, tmp_path) not in (first, second)
+    assert len(calls) == 3
+
+
+def test_missing_equilibrium_file_is_an_error(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="nope.h5"):
+        convert_equilibrium("desc", tmp_path / "nope.h5", tmp_path)
+
+
+@pytest.mark.parametrize("model", ["desc", "gvec"])
+def test_missing_optional_package_names_the_extra(
+    model: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(sys.modules, model, None)
+    src = tmp_path / "eq"
+    src.write_text("x")
+    with pytest.raises(ImportError, match=rf"gkx\[{model}\]"):
+        convert_equilibrium(model, src, tmp_path)
+
+
+def test_asymmetric_desc_equilibrium_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytest.importorskip("desc")
+    monkeypatch.setattr("desc.io.load", lambda path: SimpleNamespace(sym=False))
+    with pytest.raises(ValueError, match="stellarator-symmetric"):
+        desc_to_wout(DATA / FILES["desc"], tmp_path / "w.nc")
+
+
+def test_asymmetric_gvec_state_is_refused(tmp_path: Path) -> None:
+    pytest.importorskip("gvec")
+    state = tmp_path / "GVEC_State_0000_00000000.dat"
+    state.write_bytes((DATA / FILES["gvec"]).read_bytes())
+    ini = (DATA / "gvec" / "parameter.ini").read_text()
+    (tmp_path / "parameter.ini").write_text(
+        ini.replace("X1_sin_cos = _cos_", "X1_sin_cos = _sincos_")
+    )
+    with pytest.raises(ValueError, match="stellarator-symmetric"):
+        gvec_to_wout(state, tmp_path / "w.nc")
+
+
+def test_runtime_routes_desc_and_gvec_through_vmec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = {}
+
+    def fake(model: str, path: str, cache: Path) -> Path:
+        seen["model"] = model
+        return DATA / "qa_small_vmec.json"  # unused: the pipeline is stubbed below
+
+    def stub(*, output_path, request):
+        seen["vmec_file"] = request.vmec_file
+        return Path(output_path)
+
+    monkeypatch.setattr("gkx.geometry.vmec_eik._convert_equilibrium", fake)
+    monkeypatch.setattr("gkx.geometry.vmec_eik.generate_vmec_eik_internal", stub)
+    monkeypatch.setattr(
+        "gkx.geometry.vmec_eik.internal_vmec_backend_available", lambda: True
+    )
+    for model in ("desc", "gvec"):
+        deck = tmp_path / f"{model}.toml"
+        deck.write_text(DECK.format(model=model, path=DATA / FILES[model], torflux=0.5))
+        cfg, _ = load_runtime_from_toml(deck)
+        generate_runtime_vmec_eik(
+            replace(cfg), output_path=tmp_path / "g.eik.nc", force=True
+        )
+        assert seen["model"] == model
+        assert seen["vmec_file"].endswith("qa_small_vmec.json")
+
+
+def test_missing_path_is_an_error(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="requires an equilibrium file"):
+        convert_equilibrium("desc", None, tmp_path)
