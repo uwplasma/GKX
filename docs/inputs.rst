@@ -216,8 +216,10 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
   adaptive runs only). Adaptive runs record ``dt_t`` (per-sample step history) and
   ``dt_mean`` (average effective step). The nonlinear adaptive ``dt`` estimate
   combines the linear frequency cap with the instantaneous nonlinear cap.
-  Leaving ``dt_max`` unset keeps ``dt_max = dt``; raise it explicitly only
-  when you trade strict comparison matching for throughput.
+  Left unset, ``dt_max`` is ``dt`` for the fixed-tableau methods. The
+  error-controlled ``rk4-pi`` and ``lawson-rk4-pi`` take no cap beyond twice
+  the CFL step, their error estimate and the collision split's forward-Euler limit
+  (:math:`1/|\lambda|`, measured at start-up), so ``dt`` is only their first step.
 - ``method = "auto"`` (the default of a nonlinear deck with no ``dt``): the run
   takes ``lawson-rk4-pi`` where the radial and binormal drift frequencies are at
   least 56% of the linear frequency bound (drift plus streaming) and the step cap
@@ -255,9 +257,16 @@ Keys in ``[time]`` besides ``t_max``, ``dt`` and ``method``:
   execution. Treat it as a correctness-gated option unless the run also has a
   matched scaling artifact.
 
-Diagonal nonlinear hypercollision splitting is enabled with
-``collision_split = true``. The conserving collision operator remains in the
-RHS because its field-particle correction is not diagonal. The
+Unless ``collision_split = false``, the explicit steppers take the
+conserving collision operator out of the Runge--Kutta stages and apply it once
+per step, after it, as one forward-Euler step with its field-particle
+corrections. With :math:`\nu \Delta t \sim 10^{-3}` the splitting error is
+far below the step error, and the operator is evaluated once instead of once
+per stage. Forward Euler needs :math:`\Delta t |\lambda| < 2`; an adaptive step is
+capped at :math:`1/|\lambda|` (largest collision eigenvalue, measured at start-up),
+and a fixed step above it keeps the operator in the stages. The chain IMEX methods
+keep it in the RHS. ``collision_split =
+true`` also splits the diagonal hypercollisions; the
 ``collision_scheme`` key selects the hypercollision update:
 ``implicit`` (backward-Euler), ``exp`` (exact diagonal exponential), and
 ``sts``/``rkc`` aliases (treated as stabilized explicit/exponential updates for
@@ -530,19 +539,20 @@ rates and departures from the stepper carry a comment (:ref:`common-deck`).
    "``state_sharding``","str","unset","Shard the state over devices along ``auto``, ``ky``, ``kx``, ``z``, ``l``, ``m`` or ``species``."
    "``progress_bar``","bool","``false``","Print progress with elapsed time and ETA."
    "``dt_min``","float","``1e-07``","Smallest step the CFL controller may take."
-   "``dt_max``","float","unset","Largest step the controller may take; ``dt`` when unset."
+   "``dt_max``","float","unset","Largest step the controller may take; unset: ``dt``, or no cap for ``rk4-pi`` and ``lawson-rk4-pi``."
    "``cfl``","float","``0.9``","CFL safety factor of the step controller."
    "``cfl_fac``","float","unset","Stability prefactor of the CFL bound; per-method, moment-scaled default."
    "``nstep_restart``","int","unset","Write a restart checkpoint every this many steps."
-   "``collision_split``","bool","``false``","Advance the diagonal hypercollisions in a split sub-step."
+   "``collision_split``","bool","unset","Unset: explicit steppers apply the collision operator once per step. ``true`` also splits the hypercollisions; ``false`` splits neither."
+   "``collision_interval``","int","``1``","Apply the split collision operator every N steps with N times the step. N > 1 requires a single fixed-step diagnostic scan with an active explicit collision split and a step count divisible by N. Adaptive horizons, host chunks, checkpoint/restart and sharding require N = 1."
    "``collision_scheme``","str","``""implicit""``","Split update: ``implicit``, ``exp``, ``sts`` or ``rkc``."
    "``collision_operator``","str","``""landau""``","Collision model: ``landau``, ``none``, ``lenard_bernstein``, ``sugama``, ``improved_sugama``, ``coulomb``, ``coulomb_finite_kperp``."
    "``compressed_real_fft``","bool","``true``","Evaluate the nonlinear bracket on the half spectrum with paired real FFTs."
    "``nonlinear_dealias``","bool","``true``","Apply the 2/3 dealiasing mask to the nonlinear term."
    "``laguerre_nonlinear_mode``","str","``""grid""``","Laguerre treatment of the bracket: ``grid`` or ``spectral``."
    "``run_to``","str","``""saturation""``","Nonlinear stop: ``saturation`` ends the run at a stationary heat flux, ``t_max`` runs the full horizon."
-   "``saturation_rel_sem``","float","``0.1``","Largest relative standard error of the windowed heat-flux mean that counts as saturated."
-   "``saturation_t_min``","float","unset","Run time before any saturated verdict; ``min(800, 0.95 t_max)`` when unset."
+   "``saturation_rel_sem``","float","``0.05``","Largest relative standard error of the windowed heat-flux mean that counts as saturated."
+   "``saturation_t_min``","float","unset","Run time before any saturated verdict; ``min(300, 0.95 t_max)`` when unset."
    "``saturation_drift_rel``","float","``0.1``","Tolerated relative drift of the window mean."
    "``damp_ends_rate``","float","unset","Field-line end-absorber rate in ``v_ti/a``; the 30-transit rule when unset, 0 turns it off."
 
@@ -1005,11 +1015,11 @@ Notable runtime-only keys:
   ``run_to`` audit in ``tests/release/test_release_gates.py``.
 * ``[time] saturation_rel_sem``: largest relative standard error of the
   windowed heat-flux mean, from batch means, that still counts as saturated
-  (default ``0.10``).
+  (default ``0.05``).
 * ``[time] saturation_t_min``: run time in ``a/v_t`` before any ``saturated``
-  verdict (default ``min(800, 0.95 t_max)``; the Landreman 2025 GX database,
-  CGYRO and GENE averaging windows are 500-1000). A value above ``t_max``
-  warns, because only the last 5% of the run can then be called saturated.
+  verdict (default ``min(300, 0.95 t_max)``; see :ref:`saturation-stop`).
+  A value above ``t_max`` warns, because only the last 5% of the run can
+  then be called saturated.
 * ``[time] saturation_drift_rel``: tolerated change of the window mean, as a
   fraction of its scale, across the averaging window (default ``0.10``). A trend
   must also be two standard errors from zero to count.
