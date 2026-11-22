@@ -16,23 +16,23 @@ nu = 0.01
 kinetic = true
 
 [grid]
-Nx = 96
-Ny = 96
-Nz = 48
-Lx = 62.8
-Ly = 62.8
-boundary = "fix aspect"
-y0 = 21.0
-ntheta = 48
-nperiod = 1
+Nx = 96  # radial points = kx modes, spacing 2 pi/Lx = 0.1; production range 64-96 (docs/guidance.rst)
+Ny = 96  # binormal points: 49 ky rows in steps of 0.0476
+Nz = 48  # unused while ntheta is set: the line holds ntheta*(2*nperiod - 1) = 48 points
+Lx = 62.8  # radial box length in rho_i; kx spacing 2 pi/Lx = 0.1
+Ly = 62.8  # unused while y0 is set (y0 sets the ky spacing)
+boundary = "fix aspect"  # VMEC flux-tube boundary (fix aspect, docs/inputs.rst)
+y0 = 21.0  # ky spacing 1/y0 = 0.0476, the lowest finite ky
+ntheta = 48  # points per poloidal turn; the z grid has 48 points
+nperiod = 1  # z-grid turns 2*nperiod - 1 = 1; the VMEC line length is npol
 
 [time]
 # Optional runtime controls; intervals use normalized time, like t_max.
 # chunk_steps = 128  # Defaults: 128 explicit steps, 32 adaptive IMEX steps.
 # diagnostics_interval = 5.0  # Overrides the step-stride cadence.
-t_max = 200.0
-sample_stride = 50
-diagnostics_stride = 50
+t_max = 200.0  # end time in a/v_ti; the cap when run_to = saturation
+sample_stride = 50  # steps between stored samples
+diagnostics_stride = 50  # steps between diagnostic rows
 
 [geometry]
 model = "vmec"
@@ -41,7 +41,7 @@ vmec_file = "../vmec/wout_NuhrenbergZille_1988_QHS.nc"
 torflux = 0.64
 alpha = 0.0
 # Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
-npol = 1.0
+npol = 1.0  # VMEC line length in poloidal turns; a speed choice, docs/guidance.rst advises npol >= 3 for converged rates
 
 [init]
 init_field = "density"
@@ -90,9 +90,9 @@ bpar = 0.0
 nonlinear = 1.0
 
 [run]
-ky = 0.047619047619047616
-Nl = 4
-Nm = 8
+ky = 0.047619047619047616  # k_y rho_i of the selected mode, the nearest dealiased row (spacing 0.0476)
+Nl = 4  # Laguerre moments (v_perp); default 4
+Nm = 8  # Hermite moments (v_par); default 8
 
 [output]
 # Optional saved-record cadence in the same time units as time.t_max.
