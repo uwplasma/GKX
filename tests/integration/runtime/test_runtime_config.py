@@ -1549,6 +1549,68 @@ def test_runtime_chunk_policy_preserves_state_and_fresh_physical_samples(
         )
 
 
+def test_the_common_deck_is_the_documented_turbulence_default(tmp_path) -> None:
+    """``gkx wout.nc`` runs the measured 5% default (docs/guidance.rst)."""
+
+    path = tmp_path / "case.toml"
+    path.write_text((REPO_ROOT / "examples/common_input.toml").read_text())
+    cfg, _ = load_runtime_from_toml(path)
+    g, t = cfg.grid, cfg.time
+    assert (g.Nx, g.Ny, g.Nz, cfg.run.Nl, cfg.run.Nm) == (96, 96, 48, 6, 12)
+    from gkx.diagnostics.saturation import SaturationStopConfig
+
+    stop = (t.run_to, t.saturation_rel_sem, t.saturation_t_min, t.t_max)
+    assert stop == ("saturation", 0.05, None, 1500.0)
+    assert SaturationStopConfig().t_min == 300.0
+    assert (t.sample_stride, t.diagnostics_stride) == (10, 10)
+    doc = (REPO_ROOT / "docs/guidance.rst").read_text()
+    assert "96x96x48, (6, 12)" in doc and "saturation_rel_sem = 0.05" in doc
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "examples/common_input.toml",
+        "examples/03_nonlinear_tokamak/case.toml",
+        "examples/03_nonlinear_tokamak/case_full.toml",
+        "examples/04_nonlinear_stellarator/case.toml",
+        "examples/04_nonlinear_stellarator/case_full.toml",
+        "examples/05_kinetic_electrons/case.toml",
+        "examples/05_kinetic_electrons/case_stellarator.toml",
+    ],
+)
+def test_nonlinear_example_optional_time_controls_parse(relative, tmp_path):
+    import re
+
+    text = (REPO_ROOT / relative).read_text()
+    path = tmp_path / "case.toml"
+    path.write_text(text)
+    defaults, _ = load_runtime_from_toml(path)
+    assert defaults.physics.nonlinear and not defaults.physics.linear
+    assert defaults.time.chunk_steps is None
+    assert defaults.time.diagnostics_interval is None
+    assert defaults.output.time_interval is None
+    enabled_text, count = re.subn(
+        r"(?m)^# (chunk_steps|diagnostics_interval|time_interval) =", r"\1 =", text
+    )
+    assert count == 3
+    path.write_text(enabled_text)
+    enabled, _ = load_runtime_from_toml(path)
+    assert enabled.time.chunk_steps == 128
+    assert 0 < enabled.time.diagnostics_interval <= enabled.time.t_max
+    assert enabled.output.time_interval > 0
+    expected = replace(
+        defaults,
+        time=replace(
+            defaults.time,
+            chunk_steps=128,
+            diagnostics_interval=enabled.time.diagnostics_interval,
+        ),
+        output=replace(defaults.output, time_interval=enabled.output.time_interval),
+    )
+    assert enabled.to_dict() == expected.to_dict()
+
+
 def _vmec_deck(tmp_path, grid_extra="", geometry_extra="npol = 1.0"):
     deck = tmp_path / "deck" / "case.toml"
     deck.parent.mkdir(parents=True, exist_ok=True)
