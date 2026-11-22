@@ -79,8 +79,20 @@ Progress and output files
 
 When progress output is enabled (on a TTY, or with ``--progress``), the
 executable prints step/time progress, wall elapsed time, and an estimated
-wall-clock time remaining. Adaptive nonlinear runs also report chunk-level
-elapsed/ETA updates.
+wall-clock time remaining. A nonlinear run prints one line about every two
+seconds with the elapsed time, ``t / t_max`` in ``a/v_ti``, the percentage, the
+remaining time, the current heat flux of each species and the saturation
+detector's verdict (``transient``, ``saturating: Q=7.1+-0.4`` or
+``saturated``), then a summary line. From Python, pass the same reporter to
+``gkx.solve`` and finish with one call that also writes the flux figure:
+
+.. code-block:: python
+
+   from gkx.workflows.runtime.chunks import ProgressReporter
+
+   reporter = ProgressReporter()
+   result = gkx.solve(case, status_callback=reporter)
+   reporter.finish(result, plot="out/run", ky=ky)  # plot and ky are optional
 
 When ``--out`` is a plain prefix, single-point runs write a JSON summary plus
 CSV sidecars under that prefix. If the nonlinear target ends in ``.out.nc`` or
@@ -152,6 +164,10 @@ with ``--vmec-file`` pointing to the corresponding benchmark ``wout_*.nc``.
 A ``wout`` file can also be run directly: ``gkx wout_XXX.nc`` resolves a default
 deck, writes the resolved input and all outputs under ``./<wout-stem>/``, and
 ``gkx my_input.toml wout_XXX.nc`` runs an edited deck against that equilibrium.
+The default deck targets a 5% relative standard error on the mean heat flux and prints
+:math:`Q \pm` SEM; on the QA equilibrium that is about 18 minutes on one
+A4000 GPU (:ref:`turbulence-defaults`). Set ``--set time.saturation_rel_sem=0.1``
+for a coarser answer sooner.
 
 Geometry path overrides
 -----------------------

@@ -1809,7 +1809,7 @@ def test_run_runtime_nonlinear_adaptive_chunk_forwards_fixed_mode_and_collision_
     progress = capsys.readouterr().out
     assert "t=0.2/0.35" in progress
     assert "t=0.35/0.35" in progress
-    assert "elapsed=" in progress
+    assert "eta" in progress
     assert out.diagnostics is not None
     assert out.state is None
     assert out.fields is not None

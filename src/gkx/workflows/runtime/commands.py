@@ -16,6 +16,7 @@ from gkx.artifacts.io import (
 )
 from gkx.workflows.linear import run_runtime_linear
 from gkx.workflows.nonlinear import run_runtime_nonlinear
+from gkx.workflows.runtime.chunks import ProgressReporter
 from gkx.workflows.runtime.orchestration_scan import run_runtime_scan
 from gkx.workflows.runtime.toml import (
     load_runtime_from_toml,
@@ -690,6 +691,8 @@ def run_runtime_nonlinear_command(args: Any) -> int:
 
     out_path = runtime_output_path(args, cfg, default_suffix=".out.nc")
     kx = run_cfg.get("kx")
+    status = _status_printer("runtime")
+    reporter = ProgressReporter(status) if opts.show_progress else None
     result, paths = run_runtime_nonlinear_with_artifacts(
         cfg,
         out=out_path,
@@ -705,10 +708,12 @@ def run_runtime_nonlinear_command(args: Any) -> int:
         laguerre_mode=opts.laguerre_mode,
         diagnostics=opts.diagnostics,
         show_progress=opts.show_progress,
-        status_callback=_status_printer("runtime"),
+        status_callback=reporter or status,
     )
     if not print_nonlinear_run_summary(result):
         return 0
+    if reporter is not None:
+        reporter.finish(result)
     print_nonlinear_command_outputs(paths, enabled=out_path is not None)
     auto_plot_runtime_outputs(
         "nonlinear",

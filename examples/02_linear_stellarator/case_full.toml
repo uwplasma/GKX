@@ -20,23 +20,23 @@ nu = 0.01
 kinetic = true
 
 [grid]
-Nx = 96
-Ny = 96
-Nz = 48
-Lx = 62.8
-Ly = 62.8
-boundary = "fix aspect"
-y0 = 21.0
-ntheta = 48
-nperiod = 1
+Nx = 96  # radial points = kx modes; 96 because the boundary links kx rows (see the [run] note)
+Ny = 96  # binormal points: 49 ky rows, 0 to 2.29 in steps of 0.0476; [run] ky picks one
+Nz = 48  # unused while ntheta is set: the line holds ntheta*(2*nperiod - 1) = 48 points
+Lx = 62.8  # radial box length in rho_i; kx spacing 2 pi/Lx = 0.1
+Ly = 62.8  # unused while y0 is set (y0 sets the ky spacing)
+boundary = "fix aspect"  # VMEC flux-tube boundary (fix aspect, docs/inputs.rst)
+y0 = 21.0  # ky spacing 1/y0 = 0.0476, the lowest finite ky
+ntheta = 48  # points per poloidal turn; the z grid has 48 points
+nperiod = 1  # z-grid turns 2*nperiod - 1 = 1; the VMEC line length is npol
 
 [time]
 # Unused by the Krylov solver below; the time route needs t_max of several hundred.
-t_max = 2.0
-dt = 0.005
-method = "rk4"
-sample_stride = 1
-fixed_dt = true
+t_max = 2.0  # end time in a/v_ti; unused by solver = krylov
+dt = 0.005  # fixed step in a/v_ti; 400 steps to t_max
+method = "rk4"  # explicit 4th-order Runge-Kutta
+sample_stride = 1  # steps between stored samples; 400 samples
+fixed_dt = true  # true = constant dt; false = the CFL controller picks it
 
 [geometry]
 model = "vmec"
@@ -47,7 +47,7 @@ vmec_file = "../vmec/wout_NuhrenbergZille_1988_QHS.nc"
 torflux = 0.64
 alpha = 0.0
 # Short field line: growth rates are not converged below npol = 3; see docs/guidance.rst.
-npol = 1.0
+npol = 1.0  # VMEC line length in poloidal turns; a speed choice, docs/guidance.rst advises npol >= 3 for converged rates
 
 [init]
 init_field = "density"
@@ -113,7 +113,7 @@ channels = ["es"]
 # eigenpair in about two minutes on a CPU (gamma = 0.0837, omega = 0.0783). The time
 # route beats two modes: gamma is 0.0775 at t_max = 150 and 0.0814 at 250, and
 # Nx = 32 or 48 gives 0.0747 or 0.0819, so the radial grid stays at 96.
-ky = 0.38095238095238093
-Nl = 4
-Nm = 8
-solver = "krylov"
+ky = 0.38095238095238093  # k_y rho_i of the single mode, the nearest grid row (spacing 0.0476)
+Nl = 4  # Laguerre moments (v_perp); default 12; below the default
+Nm = 8  # Hermite moments (v_par); default 24; below the default
+solver = "krylov"  # eigenpair of the linear operator
