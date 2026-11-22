@@ -533,9 +533,15 @@ def _resolve_auto_stepper(
 def _nonlinear_cfl_margin(
     cfg: RuntimeConfig, ctx: _RunContext, *, Nl: int, Nm: int
 ) -> tuple[float, float, np.ndarray] | None:
-    """Estimate the adaptive no-diamagnetic-drive CFL bound when available."""
+    """Estimate the adaptive no-diamagnetic-drive CFL bound when available.
+
+    A fixed explicit step also carries the end absorber, measured as the
+    adaptive controller does (``_build_nonlinear_cfl_bounds``).
+    """
 
     from gkx.geometry import ensure_flux_tube_geometry_data
+    from gkx.operators.linear.cache_builder import build_linear_cache
+    from gkx.operators.nonlinear.policies import measured_streaming_frequency
     from gkx.solvers.time_explicit import _linear_frequency_bound
 
     try:
@@ -546,6 +552,16 @@ def _nonlinear_cfl_margin(
             ),
             dtype=float,
         )
+        explicit = not str(cfg.time.method).startswith("imex")
+        if cfg.time.fixed_dt and explicit and float(ctx.terms.end_damping) != 0.0:
+            cache = build_linear_cache(ctx.grid, geom, ctx.params, Nl=Nl, Nm=Nm)
+            omega[2] = max(
+                omega[2],
+                measured_streaming_frequency(
+                    ctx.params, cache, nl=Nl, nm=Nm,
+                    absorber_vs=float(omega[2]), absorber_only=True,
+                ),
+            )  # fmt: skip
     except Exception:
         return None
     if str(cfg.time.method) in LAWSON_METHODS:  # the drift is advanced exactly

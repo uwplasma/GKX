@@ -3999,6 +3999,31 @@ def test_explicit_step_respects_a_large_end_damping_rate(method):
     assert float(np.max(np.asarray(d.dt_t))) * radius <= cap
 
 
+def test_fixed_step_cfl_bound_counts_the_end_absorber():
+    """rk4 at the reported fixed-step bound stays finite on a kinetic-electron box.
+
+    The field solve amplifies the end absorber far past its rate, so the analytic
+    streaming estimate alone reports a step that overflows within a few steps.
+    """
+    import gkx
+    from gkx.workflows.nonlinear import _nonlinear_cfl_margin, _prepare_context
+
+    cfg, *_ = _tiny_kinetic_electron_box()
+    time = replace(cfg.time, method="rk4", fixed_dt=True, damp_ends_rate=600.0)
+    cfg = cfg.replace(time=replace(time, dt=1.0e-6, run_to="t_max"))
+    ctx, _ = _prepare_context(
+        cfg, ky_target=cfg.run.ky, kx_target=None, Nl=KE_NL, Nm=KE_NM,
+        dt=None, steps=1, status=lambda _line: None,
+    )  # fmt: skip
+    bound, _ratio, omega = _nonlinear_cfl_margin(cfg, ctx, Nl=KE_NL, Nm=KE_NM)
+    assert omega[2] > 600.0
+    run = cfg.replace(time=replace(cfg.time, dt=bound, t_max=200 * bound))
+    out = gkx.solve(run, ky_target=cfg.run.ky, Nl=KE_NL, Nm=KE_NM)
+    wg = np.asarray(out.diagnostics.Wg_t)
+    wg = wg.reshape(wg.shape[0], -1).sum(axis=1)
+    assert np.isfinite(wg).all() and wg[-1] < 10.0 * wg[0]
+
+
 def test_chain_solve_inverts_the_stiff_linear_operator():
     cfg, params, cache, shape = _tiny_kinetic_electron_box()
     terms = rt.build_runtime_term_config(cfg)
