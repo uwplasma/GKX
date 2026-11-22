@@ -400,7 +400,7 @@ def runtime_geometry_config_for_builder(
     """Return the geometry config consumed by the flux-tube builder."""
 
     model = cfg.geometry.model.strip().lower()
-    if model == "vmec":
+    if model in {"vmec", "desc", "gvec"}:
         eik_path = vmec_eik_builder(cfg)
         return replace(cfg.geometry, model="vmec-eik", geometry_file=str(eik_path))
     if model == "miller":

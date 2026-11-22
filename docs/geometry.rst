@@ -180,6 +180,43 @@ The shipped runtime decks point to relative ``wout_*.nc`` paths under
 ``examples/vmec/generate_wouts.sh`` or a single ``vmex input.<case>`` command;
 ``--vmec-file`` overrides the path for a machine-specific equilibrium.
 
+DESC and GVEC equilibria
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+``geometry.model = "desc"`` takes a DESC equilibrium (``.h5``) and
+``geometry.model = "gvec"`` a GVEC state file (``GVEC_State_*.dat``, with its
+``parameter.ini`` beside it). The path goes in ``geometry.vmec_file``; the other
+``[geometry]`` keys (``torflux``, ``alpha``, ``npol``) mean what they mean for
+VMEC. GKX samples the equilibrium on 16 flux surfaces in the code's own
+straight-field-line angles, Fourier analyses ``R``, ``Z``, ``lambda``, ``|B|`` and
+the covariant ``B`` components in the VMEC convention, and writes a
+stellarator-symmetric WOUT in the ``*.eik.nc`` cache directory
+(``gkx.geometry.vmec_eik``). From there the VMEC bridge above produces
+every coefficient, so DESC and GVEC runs use the same Boozer transform, the
+same flux-tube cut and the same equal-arc remapping as VMEC runs. GVEC runs
+with ``zeta = -phi``; the converter flips the signs of iota, the toroidal flux
+and the covariant ``B_zeta`` to match. Both packages are optional
+(``pip install "gkx[desc]"`` or ``"gkx[gvec]"``) and are imported only when the
+model is selected. Asymmetric equilibria are not supported.
+
+Validated on the Landreman-Paul precise QA (nfp 2, s = 0.5) and a finite-beta
+D-shaped tokamak against the VMEC wout the DESC fit (L = 16) and the GVEC state
+were made from. Peak-normalised differences: GVEC 1e-3 to 2.5e-3 in ``bmag``,
+``gradpar``, the metric and the drifts for the QA, below 7e-4 for the tokamak;
+DESC 5e-4 to 1.5e-3 in ``bmag``, ``gradpar`` and the metric, but 9% (QA) and 3%
+(tokamak) in ``gbdrift`` and ``cvdrift``. The drifts carry the radial derivative
+of ``|B|``, which the DESC fit of the VMEC surfaces reproduces least well, so
+that is the accuracy of the fit, not of the converter. Sixteen surfaces are
+enough: 16, 32 and 48 differ by less than 3e-4. The linear growth rate at
+``ky = 0.3`` agrees to 0.01% with GVEC and to 0.5% (tokamak) and 2.4% (QA) with DESC.
+The tests run on small fixtures and are skipped when the optional packages are
+missing.
+
+The path is not differentiable: the equilibrium is converted once, outside JAX,
+to a wout file, so gradients with respect to the DESC or GVEC equilibrium
+parameters do not flow through it. Gradients with respect to the flux-tube and
+physics inputs of the VMEC bridge are unchanged.
+
 When ``booz_xform_jax`` is not installed into the active environment, point
 GKX at it through ``BOOZ_XFORM_JAX_PATH`` or ``GKX_BOOZ_XFORM_JAX_PATH``. The
 JAX backend is preferred; a ``booz_xform`` install is used only as an automatic

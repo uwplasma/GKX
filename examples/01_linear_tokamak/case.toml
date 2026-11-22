@@ -14,14 +14,14 @@ tprim = 2.49  # a/L_Ti
 fprim = 0.8   # a/L_n
 
 [grid]
-Nx = 1
-Ny = 12
-Nz = 24  # 24 and 32 points agree to 0.5% in gamma; 16 is 5% off at ky 0.4
-Lx = 62.8
-Ly = 62.8
-boundary = "linked"
+Nx = 1  # radial points = kx modes; 1 = the single kx = 0 mode, right for a linear run (nonlinear needs a radial box)
+Ny = 12  # binormal points: 7 ky rows, 0 to 0.6 in steps of 0.1; [run] ky picks one
+Nz = 24  # unused while ntheta is set: the line holds ntheta*(2*nperiod - 1) = 36 points
+Lx = 62.8  # radial box length in rho_i; unused at Nx = 1 (the kx spacing is 2 pi/Lx)
+Ly = 62.8  # unused while y0 is set (y0 sets the ky spacing)
+boundary = "linked"  # twist-and-shift parallel boundary (links kx rows when Nx > 1)
 y0 = 10.0  # ky spacing 1/y0 = 0.1
-ntheta = 12  # 12 geometry points per period for Nz = 24
+ntheta = 12  # points per poloidal turn (36 in all); gamma at ky 0.4 is 0.9% below ntheta = 24 and 4% above ntheta = 6 (Nl 8, Nm 24)
 nperiod = 2  # a one-period line is 2-37% off in gamma
 
 [time]
@@ -55,4 +55,4 @@ contract = "cyclone"
 [run]
 Nl = 16  # Nl = 8 is 6-17% high in gamma, Nl = 12 is 3-5% low
 Nm = 48  # ky = 0.4 gamma is -3.8, -3.1, -2.0, -0.7, +0.3% at Nm = 32, 40, 44, 48, 52; Nm = 28 is only a lucky cancellation
-solver = "time"
+solver = "time"  # fit a time run

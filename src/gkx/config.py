@@ -181,7 +181,10 @@ class TimeConfig:
     cfl: float = 0.9
     cfl_fac: float | None = None
     nstep_restart: int | None = None
-    collision_split: bool = False
+    # None: the explicit steppers apply the collision operator once per step.
+    collision_split: bool | None = None
+    # Explicit steppers: apply the split collision operator every N steps.
+    collision_interval: int = 1
     collision_scheme: str = "implicit"
     collision_operator: str = "landau"
     compressed_real_fft: bool = True
@@ -191,8 +194,8 @@ class TimeConfig:
     # physical-time heat-flux detector says saturated (t_max is the hard cap);
     # "t_max" integrates the full horizon. Linear runs ignore these keys.
     run_to: str = "saturation"
-    saturation_rel_sem: float = 0.10
-    saturation_t_min: float | None = None  # None: min(800, 0.95 t_max)
+    saturation_rel_sem: float = 0.05
+    saturation_t_min: float | None = None  # None: min(300, 0.95 t_max)
     saturation_drift_rel: float = 0.10
     damp_ends_rate: float | None = None
 
@@ -1080,8 +1083,13 @@ class RuntimeConfig:
             errors.append("time.dt must be positive")
         if float(self.time.t_max) <= 0.0:
             errors.append("time.t_max must be positive")
-        if self.geometry.model == "vmec" and not self.geometry.vmec_file:
-            errors.append("geometry.model = 'vmec' requires geometry.vmec_file")
+        if (
+            self.geometry.model in {"vmec", "desc", "gvec"}
+            and not self.geometry.vmec_file
+        ):
+            errors.append(
+                f"geometry.model = '{self.geometry.model}' requires geometry.vmec_file"
+            )
         errors.extend(field_line_errors(self))
         if errors:
             raise ValueError("invalid case: " + "; ".join(errors))
