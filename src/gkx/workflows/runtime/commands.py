@@ -289,13 +289,6 @@ def _resolve_nonlinear_command_options(
     Nl, Nm, method, dt, steps, sample_stride = _resolve_grid_time_options(
         args, run_cfg, cfg, _RUNTIME_NONLINEAR_HL_FALLBACK
     )
-    if steps is not None:
-        nonlinear_steps: int | None = steps
-    elif bool(cfg.time.fixed_dt):  # a --dt override sets the step count too
-        nonlinear_steps = int(round(cfg.time.t_max / (dt or cfg.time.dt)))
-    else:
-        nonlinear_steps = None
-
     if getattr(args, "no_diagnostics", False):
         diagnostics = False
     elif getattr(args, "diagnostics", False):
@@ -317,7 +310,7 @@ def _resolve_nonlinear_command_options(
         Nl=Nl,
         Nm=Nm,
         dt=dt if dt is not None else float(cfg.time.dt),
-        steps=nonlinear_steps,
+        steps=steps,  # None: the runner counts to the absolute t_max
         method=method if method is not None else str(cfg.time.method),
         sample_stride=sample_stride,
         diagnostics_stride=(

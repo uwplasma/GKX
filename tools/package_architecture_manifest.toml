@@ -256,7 +256,8 @@ recursive = true
 # 70084 -> 70091: merged with main (#499).
 # 70091 -> 70386: merged with main (#505).
 # 70386 -> 70391: IMEX refusal retried smaller; the stepper that ran is reported.
-baseline = 70391
+# 70391 -> 70401: t_max is the end time of a resumed run.
+baseline = 70401
 target = 45000
 
 [[line_budget_policy.counts]]

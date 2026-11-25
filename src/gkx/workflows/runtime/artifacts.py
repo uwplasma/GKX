@@ -614,7 +614,7 @@ def _run_artifact_checkpoint_loop(
     progress_t_max = time_offset + (
         float(remaining_steps) * float(options.dt or cfg.time.dt)
         if remaining_steps is not None
-        else float(cfg.time.t_max)
+        else float(cfg_run.time.t_max)
     )
     while True:
         chunk_steps = _next_runtime_chunk_steps(
@@ -725,6 +725,23 @@ def run_runtime_nonlinear_with_artifacts(
         policy,
         resume_requested=resume_requested,
     )
+    t_history = np.asarray([] if cumulative_diag is None else cumulative_diag.t)
+    if steps is None and t_history.size and float(t_history[-1]) > 0.0:
+        # t_max is the end time on the appended history's axis; only an explicit
+        # step count is relative. Half a step absorbs restart-time round-off.
+        dt_run = float(cfg.time.dt if dt is None else dt)
+        t_left = float(cfg.time.t_max) - float(t_history[-1])
+        if t_left < 0.5 * dt_run:
+            (status_callback or print)(
+                f"t = {float(t_history[-1]):.6g} already reaches "
+                f"t_max = {float(cfg.time.t_max):.6g}; nothing to run "
+                "(raise t_max or pass steps to continue)"
+            )
+            return RuntimeNonlinearResult(t=t_history, diagnostics=None), {}
+        if bool(cfg.time.fixed_dt):
+            policy = replace(policy, remaining_steps=round(t_left / dt_run))
+        else:
+            cfg_run = replace(cfg_run, time=replace(cfg_run.time, t_max=t_left))
     return _run_artifact_checkpoint_loop(
         cfg,
         cfg_run,

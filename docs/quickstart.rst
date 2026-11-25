@@ -123,7 +123,10 @@ To make the run restart-aware, add the restart controls directly to the TOML:
    append_on_restart = true
 
 Rerunning the same nonlinear command then resumes from the saved
-``*.restart.nc`` checkpoint and appends the continued history to ``*.out.nc``.
+``*.restart.nc`` checkpoint, runs on to ``t_max`` and appends the continued
+history to ``*.out.nc``. ``t_max`` is the end time, not a further interval:
+raise it to continue a finished run, or pass ``--steps N`` to add ``N`` steps.
+A rerun that is already at ``t_max`` does nothing and says so.
 See :doc:`outputs` for the variables in each file.
 
 Precision

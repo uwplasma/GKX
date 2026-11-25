@@ -3366,6 +3366,56 @@ def test_restart_gate_append_on_restart_preserves_full_history(tmp_path: Path) -
     )
 
 
+@pytest.mark.parametrize(("method", "fixed_dt"), [("rk3", True), ("rk4-pi", False)])
+def test_resume_with_same_deck_stops_at_absolute_t_max(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], method: str, fixed_dt: bool
+) -> None:
+    """``t_max`` is the end time of a resumed run, not a further interval.
+
+    A run to t = 5 resumed with the same deck and t_max = 10 ends at t = 10;
+    a further call has nothing left to run. Tolerance: half a step, so that
+    the round-off of a split fixed-step end time (9.99999999999998 against
+    10.000000000000007 uninterrupted) neither adds nor drops a step.
+    """
+
+    pytest.importorskip("netCDF4")
+    out_path = tmp_path / "resume.out.nc"
+    dt = 0.1
+    cfg = _restart_base_cfg()
+    cfg = replace(
+        cfg,
+        time=replace(
+            cfg.time,
+            t_max=5.0,
+            dt=dt,
+            dt_max=dt,
+            method=method,
+            fixed_dt=fixed_dt,
+            run_to="t_max",
+        ),
+        output=RuntimeOutputConfig(
+            path=str(out_path), restart_if_exists=True, append_on_restart=True
+        ),
+    )
+    run = dict(ky_target=0.2, kx_target=0.0, Nl=4, Nm=6, diagnostics=True)
+
+    first, _ = run_runtime_nonlinear_with_artifacts(cfg, out=out_path, **run)
+    assert abs(float(np.asarray(first.t)[-1]) - 5.0) <= 0.5 * dt
+
+    cfg = replace(cfg, time=replace(cfg.time, t_max=10.0))
+    second, _ = run_runtime_nonlinear_with_artifacts(cfg, out=out_path, **run)
+    t_end = float(np.asarray(second.t)[-1])
+    assert abs(t_end - 10.0) <= 0.5 * dt, f"resumed run ended at t = {t_end!r}"
+    saved = np.asarray(load_nonlinear_netcdf_diagnostics(out_path).t)
+    assert abs(float(saved[-1]) - 10.0) <= 0.5 * dt
+
+    capsys.readouterr()
+    third, paths = run_runtime_nonlinear_with_artifacts(cfg, out=out_path, **run)
+    assert paths == {} and third.diagnostics is None
+    assert "nothing to run" in capsys.readouterr().out
+    assert np.asarray(load_nonlinear_netcdf_diagnostics(out_path).t).size == saved.size
+
+
 def _linked_intake_cfg(boundary: str) -> RuntimeConfig:
     """A small linked (or periodic) deck whose chains leave kx rows uncovered."""
 
