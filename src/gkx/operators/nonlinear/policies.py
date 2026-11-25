@@ -215,6 +215,7 @@ def measured_streaming_frequency(
     nm: int,
     hypercollisions: float = 0.0,
     absorber_vs: float | None = None,
+    absorber_only: bool = False,
 ) -> float:
     """Largest |eigenvalue| of parallel streaming plus the field solve.
 
@@ -233,8 +234,8 @@ def measured_streaming_frequency(
     far past ``nu_end`` by the field solve (|lambda| = 2.8e5 at the default rate
     598 on the Cyclone kinetic-electron deck); it is skipped when even a gain of
     5000 (light species) or 40 on its rate stays below that bound. Otherwise only
-    for decks with a light kinetic species (v_t ratio > 4); returns 0 otherwise or
-    when the cache is traced.
+    for decks with a light kinetic species (v_t ratio > 4), and not even then with
+    ``absorber_only``; returns 0 otherwise or when the cache is traced.
     """
 
     vth = np.abs(np.atleast_1d(np.asarray(params.vth, dtype=float)))
@@ -255,7 +256,7 @@ def measured_streaming_frequency(
         # skip leaves the explicit step too large and gives NaN.
         gain = 5000.0 if light else 40.0
         absorber = rate > 0.0 and gain * rate >= absorber_vs
-    if not (absorber or light):
+    if not (absorber or light and not absorber_only):
         return 0.0
     terms = TermConfig(
         mirror=0.0,
