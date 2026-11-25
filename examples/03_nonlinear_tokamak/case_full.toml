@@ -58,6 +58,9 @@ tau_e = 1.0
 linear = false
 nonlinear = true
 beta = 0.0
+# Equilibrium ExB flow, off by default. To switch it on, restart from a saturated run and use Nx >= 128:
+# exb_shear = 0.1  # constant shearing rate gamma_E in v_t/a (typical 0.05 to 0.3), kx - ky gamma_E t
+# zonal_flow = [0.0, 0.0, 0.0, 0.4]  # static cosine amplitudes of phi_ext, n = 1, 2, ...; V_y = dphi/dx
 
 [collisions]
 D_hyper = 0.05

@@ -129,8 +129,8 @@ adiabatic_electrons = true  # Boltzmann electron response
 adiabatic_ions = false  # Boltzmann ion response; no kinetic ion species
 tau_e = 1.0  # Adiabatic-species temperature ratio T_i/T_e
 beta = 0.0  # Reference plasma beta
-exb_shear = 0.0  # Equilibrium ExB shearing rate gamma_E in v_ti/a (GX g_exb sign); nonzero selects the shearing-coordinate integrator
-zonal_flow = []  # Imposed static zonal potential in the nonlinear ExB advection only: cosine amplitudes or an x-phi file path; nonlinear runs only
+exb_shear = 0.0  # Constant ExB shearing rate gamma_E in v_t/a, v_t = sqrt(T/m); 0.0 is off, 0.05 to 0.3 typical; wave follows kx - ky gamma_E t (GX g_exb sign); restart from a saturated run and use Nx >= 128 on Cyclone
+zonal_flow = []  # Imposed static zonal potential phi_ext(x), off when empty; on: cosine amplitudes, e.g. [0.0, 0.0, 0.0, 0.4], or a two-column file of x in rho_ref and phi spanning the built Lx; V_y = dphi/dx, local shear d2phi/dx2; refused for sharded runs
 collisions = true  # Enable the collision operator
 hypercollisions = true  # Enable the hypercollision damping of high moments
 
