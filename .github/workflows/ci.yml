@@ -287,8 +287,7 @@ jobs:
     # The test lane. Every test not marked ``slow`` runs here exactly once, at
     # float64, under coverage; the shards are packed on measured per-file cost
     # by scripts/checks/run_test_gates.py and each runs its files across
-    # pytest-xdist workers: four on self-hosted, three on hosted runners, which
-    # were killed mid-shard at four (about 3.8 GB per worker). The files that
+    # pytest-xdist workers sized from the job's memory limit. The files that
     # need logical CPU devices get four of them from the same planner. There is no separate
     # uncovered test lane: it ran the same tests a second time.
     if: github.event_name != 'pull_request'
@@ -319,9 +318,15 @@ jobs:
           JAX_ENABLE_X64: "true"
           GKX_X64: "1"
         run: |
+          # One worker per 5 GB the job may use (cgroup limit, else physical
+          # memory), 1 to 4: the heaviest files peak at 6-8 GB per worker.
+          lim=$(cat "/sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup 2>/dev/null | head -1)/memory.max" 2>/dev/null || true)
+          case "$lim" in ''|max) lim=$(awk '/MemTotal/{print $2*1024}' /proc/meminfo 2>/dev/null || sysctl -n hw.memsize) ;; esac
+          workers=$(( lim / 5000000000 )); workers=$(( workers < 1 ? 1 : workers > 4 ? 4 : workers ))
+          echo "memory limit $(( lim / 1000000000 )) GB -> $workers workers"
           python scripts/check.py test-gates wide-coverage \
             --shards 8 \
-            --workers ${{ runner.environment == 'self-hosted' && 4 || 3 }} \
+            --workers "$workers" \
             --timeout 1500 \
             --only-shard "${{ matrix.shard }}" \
             --skip-combine \
