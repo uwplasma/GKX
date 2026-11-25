@@ -799,7 +799,7 @@ def _run_diagnostics(
     rhs_factory: Callable[..., Any] | None = None,
 ) -> tuple[Any, Any, Any, Any, dict[str, Any] | None]:
     status(
-        f"sample_stride={policy.sample_stride} "
+        f"integrator={method or cfg.time.method} sample_stride={policy.sample_stride} "
         f"diagnostics_stride={policy.diagnostics_stride} laguerre_mode={policy.laguerre_mode}"
     )
     stop_condition = _saturation_stop_condition(cfg, ctx, policy)
@@ -817,31 +817,15 @@ def _run_diagnostics(
                 f"(t_min={cfg.time.saturation_t_min or 'auto'}, "
                 f"rel_sem<={float(cfg.time.saturation_rel_sem):.6g})"
             )
-        try:
-            return _run_chunked_diagnostics(
-                cfg,
-                ctx,
-                policy,
-                method=method,
-                status=status,
-                stop_condition=stop_condition,
-                rhs_factory=rhs_factory,
-            )
-        except ValueError as exc:
-            if "implicit factor residual" not in str(exc) or cfg.time.fixed_dt:
-                raise
-            warnings.warn(
-                f"imex-ark3 refused ({exc}); falling back to rk4-pi", stacklevel=2
-            )
-            return _run_chunked_diagnostics(
-                cfg,
-                ctx,
-                policy,
-                method="rk4-pi",
-                status=status,
-                stop_condition=stop_condition,
-                rhs_factory=rhs_factory,
-            )
+        return _run_chunked_diagnostics(
+            cfg,
+            ctx,
+            policy,
+            method=method,
+            status=status,
+            stop_condition=stop_condition,
+            rhs_factory=rhs_factory,
+        )
     status(
         f"running nonlinear diagnostics integrator over {ctx.steps} steps with dt={ctx.dt:.6g}"
     )
@@ -986,11 +970,29 @@ def _run_once(
         and cfg.time.fixed_dt
         and cfg.time.method not in IMEX_CHAIN_METHODS
     ):
-        return _run_final_state(cfg, ctx, policy, status=status)
+        result, G_final = _run_final_state(cfg, ctx, policy, status=status)
+        return replace(result, integrator=cfg.time.method), G_final
 
-    t, diag, G_final, fields_final, saturation = _run_diagnostics(
-        cfg, ctx, policy, method=method, status=status, rhs_factory=rhs_factory
-    )
+    used, first = method or cfg.time.method, ctx
+    while True:
+        try:
+            t, diag, G_final, fields_final, saturation = _run_diagnostics(
+                cfg, first, policy, method=used, status=status, rhs_factory=rhs_factory
+            )
+            break
+        except ValueError as exc:
+            if "implicit factor residual" not in str(exc) or cfg.time.fixed_dt:
+                raise
+            # The factor is built at the first step, the deck's dt, not at the step
+            # the controller settles on: retry smaller before leaving the stepper.
+            if first.dt > ctx.dt / 16:
+                first = replace(first, dt=first.dt / 4)
+                status(f"{used} refused ({exc}); retrying at dt={first.dt:.3g}")
+                continue
+            message = f"{used} refused ({exc}); using rk4-pi"
+            warnings.warn(message, RuntimeWarning, stacklevel=2)
+            status(message)
+            used, first = "rk4-pi", ctx
     result = _diagnostic_run_result(
         ctx,
         policy,
@@ -1001,7 +1003,7 @@ def _run_once(
         saturation=saturation,
         status=status,
     )
-    return result, G_final
+    return replace(result, integrator=used), G_final
 
 
 def _run_sharded(
